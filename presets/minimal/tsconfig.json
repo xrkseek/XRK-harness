@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["preset.ts"],
+  "references": [
+    { "path": "../../packages/core/agent" },
+    { "path": "../../packages/core/session" },
+    { "path": "../../packages/core/system-prompt" },
+    { "path": "../../packages/core/tools" },
+    { "path": "../../packages/exec/fs" },
+    { "path": "../../packages/llm/llm" },
+    { "path": "../../packages/llm/replay" },
+    { "path": "../../packages/policy" },
+    { "path": "../../packages/server/loader" },
+    { "path": "../../packages/workspace" }
+  ]
+}

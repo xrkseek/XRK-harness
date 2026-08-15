@@ -1,0 +1,103 @@
+import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+  FACE_CONSOLE_BOOT,
+  XRK_APP_SHELL_BOOT,
+  createHttpServer,
+  injectBootIntoHtml,
+  resolveStaticPath,
+} from "../src/index.js";
+import { createMemorySessionStore, newSession } from "@xrkseek/core-session";
+import { createReplayAdapter } from "@xrkseek/llm-replay";
+import { createMinimalComposition } from "@xrkseek/preset-minimal";
+
+describe("boot inject", () => {
+  it("injects app-shell roster before </head>", () => {
+    const html = "<html><head><title>x</title></head><body></body></html>";
+    const out = injectBootIntoHtml(html, XRK_APP_SHELL_BOOT);
+    expect(out).toContain("__DSH_BOOT__");
+    expect(out).toContain("__XRK_BOOT__");
+    expect(out).toContain("xrk-app-shell");
+    expect(out.indexOf("__DSH_BOOT__")).toBeLessThan(out.indexOf("</head>"));
+  });
+
+  it("console boot still injectable", () => {
+    const out = injectBootIntoHtml("<head></head>", FACE_CONSOLE_BOOT);
+    expect(out).toContain("xrk-face-console");
+  });
+});
+
+describe("resolveStaticPath", () => {
+  it("blocks path escape", () => {
+    const root = path.resolve("/tmp/xrk-static-root");
+    expect(resolveStaticPath(root, "/../../etc/passwd")).toBeNull();
+  });
+
+  it("maps / to index.html", () => {
+    const root = path.resolve("/tmp/xrk-static-root");
+    const p = resolveStaticPath(root, "/");
+    expect(p?.endsWith(`index.html`)).toBe(true);
+  });
+});
+
+describe("http webStatic", () => {
+  it("serves index with boot inject without API key", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-web-"));
+    await writeFile(
+      path.join(dir, "index.html"),
+      "<!doctype html><html><head><title>XRK</title></head><body><div id='root'></div></body></html>",
+      "utf8",
+    );
+    await mkdir(path.join(dir, "assets"));
+    await writeFile(path.join(dir, "assets", "app.js"), "console.log(1)", "utf8");
+
+    const store = createMemorySessionStore();
+    newSession(store);
+    const http = createHttpServer({
+      host: "127.0.0.1",
+      port: 0,
+      apiKey: "secret",
+      corsOrigin: "*",
+      rateLimitPerMinute: 1000,
+      store,
+      ensureSession: (id) => id ?? store.list()[0]!,
+      resolveAgent: async (sessionId) =>
+        createMinimalComposition({
+          workspaceRoot: process.cwd(),
+          sessionStore: store,
+          sessionId,
+          assemble: true,
+          llm: createReplayAdapter([{ content: "x" }]),
+        }).createAgent(),
+      webStatic: {
+        root: dir,
+        transformIndex: (html) => injectBootIntoHtml(html, XRK_APP_SHELL_BOOT),
+      },
+    });
+
+    const { port } = await http.listen();
+    const base = `http://127.0.0.1:${port}`;
+
+    const index = await fetch(`${base}/`);
+    expect(index.status).toBe(200);
+    const text = await index.text();
+    expect(text).toContain("__DSH_BOOT__");
+    expect(text).toContain("xrk-app-shell");
+
+    const asset = await fetch(`${base}/assets/app.js`);
+    expect(asset.status).toBe(200);
+    expect(await asset.text()).toBe("console.log(1)");
+
+    // API still auth
+    const unauth = await fetch(`${base}/api/host.describe`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ rpcId: "1", payload: {} }),
+    });
+    expect(unauth.status).toBe(401);
+
+    await http.close();
+  });
+});

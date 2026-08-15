@@ -1,0 +1,31 @@
+import { toJSONL } from "@xrkseek/core-session";
+import { createHarnessComposition } from "@xrkseek/preset-harness";
+import { createMinimalComposition } from "@xrkseek/preset-minimal";
+import type { ParsedArgs } from "../parse-args.js";
+
+export async function runCommand(args: ParsedArgs): Promise<number> {
+  const composition =
+    args.preset === "harness" || args.preset === "server"
+      ? createHarnessComposition({
+          workspaceRoot: args.workspace,
+          presentation: args.presentation,
+        })
+      : args.preset === "minimal"
+        ? createMinimalComposition({ workspaceRoot: args.workspace })
+        : null;
+  if (!composition) {
+    throw new Error(
+      `unsupported preset: ${args.preset} (use minimal|harness|server)`,
+    );
+  }
+
+  const agent = await composition.createAgent();
+  const result = await agent.run({ text: args.prompt });
+
+  process.stdout.write(`${result.text}\n`);
+  if (process.env.XRK_DUMP_SESSION === "1") {
+    const events = composition.store.get(composition.sessionId).events;
+    process.stderr.write(toJSONL(events));
+  }
+  return 0;
+}

@@ -1,0 +1,15 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../agent-loop" },
+    { "path": "../session" },
+    { "path": "../tools" },
+    { "path": "../../llm/llm" }
+  ]
+}

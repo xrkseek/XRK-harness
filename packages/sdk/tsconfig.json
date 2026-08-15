@@ -1,0 +1,32 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../code-runtime" },
+    { "path": "../core/agent" },
+    { "path": "../core/agent-loop" },
+    { "path": "../core/session" },
+    { "path": "../core/system-prompt" },
+    { "path": "../core/tools" },
+    { "path": "../llm/llm" },
+    { "path": "../llm/replay" },
+    { "path": "../llm/openai-compatible" },
+    { "path": "../llm/deepseek" },
+    { "path": "../llm/registry" },
+    { "path": "../server/loader" },
+    { "path": "../server/config" },
+    { "path": "../server/host" },
+    { "path": "../server/http" },
+    { "path": "../workspace" },
+    { "path": "../policy" },
+    { "path": "../protocol" },
+    { "path": "../../presets/minimal" },
+    { "path": "../../presets/harness" },
+    { "path": "../../presets/server" }
+  ]
+}

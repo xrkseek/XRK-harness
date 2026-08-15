@@ -1,0 +1,120 @@
+import type { BrandEntry } from "./types.js";
+
+/** Locked BrandEntries for openai-chat (docs/llm-provider-presets.md). */
+export const OPENAI_CHAT_BRANDS: readonly BrandEntry[] = [
+  {
+    id: "openai",
+    displayName: "OpenAI",
+    protocol: "openai-chat",
+    baseUrl: "https://api.openai.com/v1",
+    path: "/chat/completions",
+    authMode: "bearer",
+    apiKeyEnv: "OPENAI_API_KEY",
+  },
+  {
+    id: "deepseek",
+    displayName: "DeepSeek（兼容面）",
+    protocol: "openai-chat",
+    baseUrl: "https://api.deepseek.com",
+    path: "/chat/completions",
+    authMode: "bearer",
+    apiKeyEnv: "DEEPSEEK_API_KEY",
+    defaultModel: "deepseek-chat",
+  },
+  {
+    id: "openrouter",
+    displayName: "OpenRouter",
+    protocol: "openai-chat",
+    baseUrl: "https://openrouter.ai/api/v1",
+    path: "/chat/completions",
+    authMode: "bearer",
+    apiKeyEnv: "OPENROUTER_API_KEY",
+  },
+  {
+    id: "groq",
+    displayName: "Groq",
+    protocol: "openai-chat",
+    baseUrl: "https://api.groq.com/openai/v1",
+    path: "/chat/completions",
+    authMode: "bearer",
+    apiKeyEnv: "GROQ_API_KEY",
+  },
+  {
+    id: "fireworks",
+    displayName: "Fireworks",
+    protocol: "openai-chat",
+    baseUrl: "https://api.fireworks.ai/inference/v1",
+    path: "/chat/completions",
+    authMode: "bearer",
+    apiKeyEnv: "FIREWORKS_API_KEY",
+  },
+  {
+    id: "together",
+    displayName: "Together",
+    protocol: "openai-chat",
+    baseUrl: "https://api.together.xyz/v1",
+    path: "/chat/completions",
+    authMode: "bearer",
+    apiKeyEnv: "TOGETHER_API_KEY",
+  },
+  {
+    id: "github-models",
+    displayName: "GitHub Models",
+    protocol: "openai-chat",
+    baseUrl: "https://models.inference.ai.azure.com",
+    path: "/chat/completions",
+    authMode: "bearer",
+    apiKeyEnv: "GITHUB_TOKEN",
+  },
+  {
+    id: "ollama",
+    displayName: "Ollama（OpenAI 兼容端口）",
+    protocol: "openai-chat",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    path: "/chat/completions",
+    authMode: "bearer",
+    notes: "Often no API key; full ollama protocol is R1",
+  },
+  {
+    id: "azure-openai",
+    displayName: "Azure OpenAI（简易）",
+    protocol: "openai-chat",
+    path: "/chat/completions",
+    authMode: "api-key",
+    apiKeyEnv: "AZURE_OPENAI_API_KEY",
+    notes: "baseUrl required; full Azure deployment path is R1",
+  },
+  {
+    id: "newapi",
+    displayName: "New API",
+    protocol: "openai-chat",
+    path: "/chat/completions",
+    authMode: "bearer",
+    apiKeyEnv: "NEWAPI_API_KEY",
+    notes: "Self-hosted; baseUrl required",
+  },
+  {
+    id: "cherryin",
+    displayName: "CherryIN",
+    protocol: "openai-chat",
+    path: "/chat/completions",
+    authMode: "bearer",
+    apiKeyEnv: "CHERRYIN_API_KEY",
+    notes: "Self-hosted; baseUrl required",
+  },
+  {
+    id: "custom",
+    displayName: "Custom OpenAI-compatible",
+    protocol: "openai-chat",
+    path: "/chat/completions",
+    authMode: "bearer",
+    apiKeyEnv: "OPENAI_API_KEY",
+    notes: "baseUrl required",
+  },
+];
+
+const byId = new Map(OPENAI_CHAT_BRANDS.map((b) => [b.id, b]));
+
+export function getOpenAiChatBrand(id: string): BrandEntry | undefined {
+  return byId.get(id.trim().toLowerCase());
+}

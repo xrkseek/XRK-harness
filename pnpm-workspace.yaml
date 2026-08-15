@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "packages/core/*"
+  - "packages/llm/*"
+  - "packages/exec/*"
+  - "packages/server/*"
+  - "presets/*"
+  - "examples/*"
+  - "extensions/*"

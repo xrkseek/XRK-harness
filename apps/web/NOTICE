@@ -1,0 +1,19 @@
+# NOTICE
+
+## DeepSeek Harness (MIT)
+
+Portions of the intended product Web UI (full client shell, boot model, slots)
+are derived from or designed to interoperate with:
+
+- https://github.com/deepseek-ai/deepseek-harness
+- Copyright (c) DeepSeek
+- License: MIT (see upstream `LICENSE`)
+
+This `apps/web` tree currently ships a **Face U1 console** for Host Face
+verification. The full DeepSeek client composition (Cordis + ui-*) will be
+integrated with attribution under ADR-0002 appendix — not as a second agent
+kernel.
+
+## XRK Harness
+
+Copyright (c) xrkseek / XRK Harness contributors.

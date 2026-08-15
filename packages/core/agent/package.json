@@ -1,0 +1,21 @@
+{
+  "name": "@xrkseek/core-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "dependencies": {
+    "@xrkseek/core-agent-loop": "workspace:*",
+    "@xrkseek/core-session": "workspace:*",
+    "@xrkseek/core-tools": "workspace:*",
+    "@xrkseek/llm": "workspace:*",
+    "@xrkseek/protocol": "workspace:*"
+  }
+}

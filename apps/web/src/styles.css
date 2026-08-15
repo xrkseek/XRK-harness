@@ -1,0 +1,344 @@
+:root {
+  --bg: #0f1419;
+  --fg: #e7ecf1;
+  --muted: #8b9aab;
+  --accent: #3d9cfd;
+  --panel: #1a222c;
+  --line: #2c3a48;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #1a3a55 0%, transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, #243018 0%, transparent 50%),
+    var(--bg);
+  color: var(--fg);
+}
+
+/* —— Face console verifier (?console=1) —— */
+
+.xrk-face-console {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 3rem 1.25rem 4rem;
+}
+
+.xrk-face-console h1 {
+  font-size: 2.4rem;
+  letter-spacing: -0.03em;
+  margin: 0 0 0.35rem;
+}
+
+.xrk-face-console p {
+  color: var(--muted);
+  margin: 0 0 1rem;
+  line-height: 1.45;
+}
+
+.xrk-face-console label {
+  margin-bottom: 0.75rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.xrk-face-console input {
+  width: min(100%, 22rem);
+  margin-left: 0.5rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--fg);
+}
+
+.xrk-face-console button {
+  margin: 0.75rem 0 1rem;
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #041018;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.xrk-face-console .session-meta {
+  color: var(--fg);
+  font-size: 0.9rem;
+}
+
+.xrk-face-console .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.xrk-face-console .actions button {
+  margin: 0;
+}
+
+.xrk-face-console h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+  color: var(--muted);
+}
+
+/* —— AppShell —— */
+
+.xrk-app-shell {
+  min-height: 100vh;
+}
+
+.xrk-boot-failed {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 3rem 1.25rem;
+}
+
+.xrk-boot-failed h1 {
+  font-size: 2.2rem;
+  letter-spacing: -0.03em;
+  margin: 0 0 0.5rem;
+}
+
+.shell-layout {
+  display: grid;
+  grid-template-columns: minmax(14rem, 18rem) 1fr;
+  grid-template-rows: 1fr auto;
+  grid-template-areas:
+    "sidebar main"
+    "status status";
+  min-height: 100vh;
+}
+
+.shell-chrome-sidebar {
+  grid-area: sidebar;
+  border-right: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+  padding: 1.25rem 1rem 2rem;
+  overflow: auto;
+}
+
+.shell-chrome-main {
+  grid-area: main;
+  padding: 1.25rem 1.5rem 2rem;
+  overflow: auto;
+  min-width: 0;
+}
+
+.shell-chrome-status {
+  grid-area: status;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0.55rem 1rem;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 70%, #000);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.shell-brand {
+  font-size: 1.85rem;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+
+.shell-brand-sub {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.shell-input {
+  display: block;
+  width: 100%;
+  margin: 0 0 0.5rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--fg);
+}
+
+.shell-input-wide {
+  max-width: 28rem;
+}
+
+.shell-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.shell-btn-row button,
+.xrk-app-shell button {
+  padding: 0.45rem 0.85rem;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #041018;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shell-sidebar h2,
+.shell-conversation h2 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 1rem 0 0.45rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.shell-session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shell-session-list li {
+  padding: 0.45rem 0.55rem;
+  margin-bottom: 0.25rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  border: 1px solid transparent;
+}
+
+.shell-session-list li:hover {
+  background: var(--panel);
+}
+
+.shell-session-list li.active {
+  border-color: var(--accent);
+  background: var(--panel);
+}
+
+.shell-session-list li.muted {
+  color: var(--muted);
+  cursor: default;
+}
+
+.shell-empty {
+  color: var(--muted);
+  margin-top: 2rem;
+}
+
+.shell-conversation label {
+  display: block;
+  margin-bottom: 0.65rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.shell-conversation .session-meta {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.shell-ws-meta {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.shell-ws-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 12rem;
+  overflow: auto;
+  font-size: 0.78rem;
+}
+
+.shell-ws-entries li {
+  padding: 0.15rem 0;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+}
+
+.shell-workspace {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.shell-settings {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.shell-settings select.shell-input {
+  appearance: auto;
+}
+
+.shell-status-line {
+  white-space: nowrap;
+}
+
+/* —— Shared trajectory / log —— */
+
+.trajectory {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+}
+
+.traj {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.traj-partial {
+  border-style: dashed;
+  color: #c5d4e3;
+}
+
+.log {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow: auto;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  min-height: 6rem;
+  max-height: 16rem;
+}
+
+@media (max-width: 720px) {
+  .shell-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "sidebar"
+      "main"
+      "status";
+  }
+
+  .shell-chrome-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    max-height: 40vh;
+  }
+}
