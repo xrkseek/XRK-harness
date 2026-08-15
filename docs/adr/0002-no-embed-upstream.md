@@ -2,7 +2,7 @@
 
 - **Status:** Accepted（附录 2026-08-15）
 - **Summary:** 不并入 Cordis / deepseek-harness / cline / opencode **agent 运行时** 源码树。调研取精华，规格与自研实现进本仓。
-- **See:** `AGENTS.md` 参考优先级 · [learn/deepseek-web-ui.md](../learn/deepseek-web-ui.md) · [design/2026-08-15-providers-and-web-ui.md](../design/2026-08-15-providers-and-web-ui.md)
+- **See:** `AGENTS.md` 参考优先级 · [learn/deepseek-web-ui.md](../learn/deepseek-web-ui.md) · [learn/cordis.md](../learn/cordis.md)（完整学透 · 不并核） · [design/2026-08-15-providers-and-web-ui.md](../design/2026-08-15-providers-and-web-ui.md)
 
 ## Appendix A — MIT UI / npm（允许）
 

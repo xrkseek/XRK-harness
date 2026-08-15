@@ -7,6 +7,7 @@
 | 域 | 包 / 入口 | 规格 |
 |----|-----------|------|
 | Kernel DI / bus / patch | `@xrkseek/kernel` | 包 README；覆盖率 ≥90% 进 check |
+| Compose Scope / Ordering | `@xrkseek/compose` | [compose-design](./superpowers/specs/2026-08-15-compose-design.md) · [ADR-0005](./adr/0005-compose-leaf.md) · C0 叶包（Host 接线 = C1） |
 | Session 事件 · validate · derive · admit | `@xrkseek/protocol` · `@xrkseek/core-session` | [session.md](./session.md) · [protocol-events.md](./protocol-events.md) |
 | Delivery queue/steer | session + HTTP | [session-delivery.md](./session-delivery.md) |
 | Agent · TurnLatch · safety | `@xrkseek/core-agent` | [session-api.md](./session-api.md) · [session-safety.md](./session-safety.md) |

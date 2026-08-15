@@ -22,9 +22,10 @@ TypeScript Agent Harness + Server Kit。宿主 **仅 TypeScript（Node）**。
 ## 依赖纪律
 
 - `apps` → `sdk` / `server` / `presets`
-- `sdk` / `server` / `presets` → `core*` / `llm` / `mcp` / `exec*` / `workspace` / `policy`
-- 能力叶与 `core*` → `kernel` / `protocol`
-- 禁止：server → 具体 llm 适配；core-agent → exec 实现；extensions → apps 内部
+- `sdk` / `server` / `presets` → `core*` / `llm` / `mcp` / `exec*` / `workspace` / `policy` / `compose`
+- 能力叶与 `core*` → `kernel` / `protocol` / `compose`
+- `compose` →（C0 零依赖；可选用 `kernel` 类型惯例，禁止反向）
+- 禁止：server → 具体 llm 适配；core-agent → exec 实现；extensions → apps 内部；`kernel` → `compose`
 
 ## 红线
 

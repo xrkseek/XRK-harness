@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/kernel" },
+    { "path": "packages/compose" },
     { "path": "packages/protocol" },
     { "path": "packages/core/agent" },
     { "path": "packages/core/agent-loop" },
