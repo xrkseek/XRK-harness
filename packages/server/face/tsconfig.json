@@ -1,0 +1,18 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../../core/agent" },
+    { "path": "../../core/session" },
+    { "path": "../../core/tools" },
+    { "path": "../../llm/registry" },
+    { "path": "../../policy" },
+    { "path": "../../protocol" },
+    { "path": "../../workspace" }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@xrkseek/preset-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./preset.ts",
+      "import": "./dist/preset.js",
+      "default": "./dist/preset.js"
+    }
+  },
+  "dependencies": {
+    "@xrkseek/core-agent": "workspace:*",
+    "@xrkseek/core-session": "workspace:*",
+    "@xrkseek/llm": "workspace:*",
+    "@xrkseek/llm-registry": "workspace:*",
+    "@xrkseek/llm-replay": "workspace:*",
+    "@xrkseek/policy": "workspace:*",
+    "@xrkseek/preset-harness": "workspace:*",
+    "@xrkseek/server-host": "workspace:*"
+  }
+}

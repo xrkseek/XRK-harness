@@ -1,0 +1,37 @@
+{
+  "name": "@xrkseek/harness",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "dependencies": {
+    "@xrkseek/code-runtime": "workspace:*",
+    "@xrkseek/core-agent": "workspace:*",
+    "@xrkseek/core-agent-loop": "workspace:*",
+    "@xrkseek/core-session": "workspace:*",
+    "@xrkseek/core-system-prompt": "workspace:*",
+    "@xrkseek/core-tools": "workspace:*",
+    "@xrkseek/llm": "workspace:*",
+    "@xrkseek/llm-replay": "workspace:*",
+    "@xrkseek/llm-openai-compatible": "workspace:*",
+    "@xrkseek/llm-deepseek": "workspace:*",
+    "@xrkseek/llm-registry": "workspace:*",
+    "@xrkseek/server-loader": "workspace:*",
+    "@xrkseek/preset-harness": "workspace:*",
+    "@xrkseek/preset-minimal": "workspace:*",
+    "@xrkseek/preset-server": "workspace:*",
+    "@xrkseek/policy": "workspace:*",
+    "@xrkseek/protocol": "workspace:*",
+    "@xrkseek/server-config": "workspace:*",
+    "@xrkseek/server-host": "workspace:*",
+    "@xrkseek/server-http": "workspace:*",
+    "@xrkseek/workspace": "workspace:*"
+  }
+}

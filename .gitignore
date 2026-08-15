@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+*.tsbuildinfo
+.xrk-harness/
+.xrk/tool-outputs/

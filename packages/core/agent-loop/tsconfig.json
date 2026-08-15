@@ -1,0 +1,16 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../session" },
+    { "path": "../system-prompt" },
+    { "path": "../tools" },
+    { "path": "../../llm/llm" },
+    { "path": "../../protocol" }
+  ]
+}

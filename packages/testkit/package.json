@@ -1,0 +1,21 @@
+{
+  "name": "@xrkseek/testkit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "dependencies": {
+    "@xrkseek/core-agent": "workspace:*",
+    "@xrkseek/llm": "workspace:*",
+    "@xrkseek/llm-replay": "workspace:*",
+    "@xrkseek/preset-harness": "workspace:*",
+    "@xrkseek/preset-minimal": "workspace:*"
+  }
+}

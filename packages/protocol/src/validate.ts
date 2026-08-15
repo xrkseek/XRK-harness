@@ -1,0 +1,348 @@
+import type {
+  CompactionReason,
+  SafetyNoticeKind,
+  SessionEvent,
+} from "./session-events.js";
+import { isPromptDelivery } from "./session-events.js";
+import type { ToolCall, ToolResult } from "./tools.js";
+
+const SAFETY_KINDS = new Set([
+  "loop_soft",
+  "loop_hard",
+  "mistake_limit",
+  "api_error",
+]);
+
+const COMPACTION_REASONS = new Set(["auto", "overflow", "manual"]);
+
+export class SessionEventParseError extends Error {
+  constructor(
+    message: string,
+    readonly path: string = "",
+  ) {
+    super(path ? `${path}: ${message}` : message);
+    this.name = "SessionEventParseError";
+  }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function reqString(
+  obj: Record<string, unknown>,
+  key: string,
+  path: string,
+): string {
+  const v = obj[key];
+  if (typeof v !== "string") {
+    throw new SessionEventParseError(`expected string "${key}"`, path);
+  }
+  return v;
+}
+
+function optString(
+  obj: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const v = obj[key];
+  if (v === undefined) return undefined;
+  if (typeof v !== "string") {
+    throw new SessionEventParseError(`expected string "${key}"`);
+  }
+  return v;
+}
+
+function optNumber(
+  obj: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const v = obj[key];
+  if (v === undefined) return undefined;
+  if (typeof v !== "number" || !Number.isFinite(v)) {
+    throw new SessionEventParseError(`expected number "${key}"`);
+  }
+  return v;
+}
+
+function parseToolCall(value: unknown, path: string): ToolCall {
+  if (!isObject(value)) {
+    throw new SessionEventParseError("expected tool call object", path);
+  }
+  return {
+    id: reqString(value, "id", path),
+    name: reqString(value, "name", path),
+    arguments: value.arguments,
+  };
+}
+
+function parseToolResult(value: unknown, path: string): ToolResult {
+  if (!isObject(value)) {
+    throw new SessionEventParseError("expected tool result object", path);
+  }
+  const isError = value.isError;
+  if (isError !== undefined && typeof isError !== "boolean") {
+    throw new SessionEventParseError("isError must be boolean", path);
+  }
+  return {
+    toolCallId: reqString(value, "toolCallId", path),
+    name: reqString(value, "name", path),
+    content: reqString(value, "content", path),
+    ...(isError === true ? { isError: true as const } : {}),
+  };
+}
+
+function parseToolCalls(
+  value: unknown,
+  path: string,
+): readonly ToolCall[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new SessionEventParseError("toolCalls must be array", path);
+  }
+  return value.map((c, i) => parseToolCall(c, `${path}[${i}]`));
+}
+
+/**
+ * Strict parse of an unknown value into a `SessionEvent`.
+ * Prefer this over the loose type-only `isSessionEvent` for I/O boundaries.
+ */
+export function parseSessionEvent(value: unknown): SessionEvent {
+  if (!isObject(value)) {
+    throw new SessionEventParseError("expected object");
+  }
+  const type = value.type;
+  if (typeof type !== "string") {
+    throw new SessionEventParseError("expected string type");
+  }
+  const ts = value.ts;
+  if (typeof ts !== "number" || !Number.isFinite(ts)) {
+    throw new SessionEventParseError("expected finite number ts");
+  }
+
+  switch (type) {
+    case "turn/start":
+    case "turn/end":
+      return {
+        type,
+        ts,
+        turnId: reqString(value, "turnId", type),
+      };
+    case "step/start":
+    case "step/end":
+      return {
+        type,
+        ts,
+        turnId: reqString(value, "turnId", type),
+        stepId: reqString(value, "stepId", type),
+      };
+    case "user/message": {
+      const rpcId = optString(value, "rpcId");
+      return {
+        type,
+        ts,
+        turnId: reqString(value, "turnId", type),
+        content: reqString(value, "content", type),
+        ...(rpcId !== undefined ? { rpcId } : {}),
+      };
+    }
+    case "assistant/chunk":
+      return {
+        type,
+        ts,
+        turnId: reqString(value, "turnId", type),
+        stepId: reqString(value, "stepId", type),
+        text: reqString(value, "text", type),
+      };
+    case "assistant/message": {
+      const toolCalls = parseToolCalls(value.toolCalls, `${type}.toolCalls`);
+      return {
+        type,
+        ts,
+        turnId: reqString(value, "turnId", type),
+        stepId: reqString(value, "stepId", type),
+        content: reqString(value, "content", type),
+        ...(toolCalls ? { toolCalls } : {}),
+      };
+    }
+    case "tool/call":
+      return {
+        type,
+        ts,
+        turnId: reqString(value, "turnId", type),
+        stepId: reqString(value, "stepId", type),
+        call: parseToolCall(value.call, `${type}.call`),
+      };
+    case "tool/result":
+      return {
+        type,
+        ts,
+        turnId: reqString(value, "turnId", type),
+        stepId: reqString(value, "stepId", type),
+        result: parseToolResult(value.result, `${type}.result`),
+      };
+    case "prompt/admitted": {
+      const delivery = value.delivery;
+      if (delivery !== undefined && !isPromptDelivery(delivery)) {
+        throw new SessionEventParseError(
+          'delivery must be "steer" | "queue"',
+          type,
+        );
+      }
+      return {
+        type,
+        ts,
+        admitId: reqString(value, "admitId", type),
+        content: reqString(value, "content", type),
+        ...(delivery === "steer" ? { delivery: "steer" as const } : {}),
+        // persist queue explicitly if client sent it
+        ...(delivery === "queue" ? { delivery: "queue" as const } : {}),
+      };
+    }
+    case "prompt/promoted":
+      return {
+        type,
+        ts,
+        admitId: reqString(value, "admitId", type),
+      };
+    case "prompt/withdrawn":
+      return {
+        type,
+        ts,
+        admitId: reqString(value, "admitId", type),
+      };
+    case "safety/notice": {
+      const kind = reqString(value, "kind", type);
+      if (!SAFETY_KINDS.has(kind)) {
+        throw new SessionEventParseError(`unknown safety kind "${kind}"`, type);
+      }
+      const toolName = optString(value, "toolName");
+      const count = optNumber(value, "count");
+      return {
+        type,
+        ts,
+        turnId: reqString(value, "turnId", type),
+        kind: kind as SafetyNoticeKind,
+        content: reqString(value, "content", type),
+        ...(toolName !== undefined ? { toolName } : {}),
+        ...(count !== undefined ? { count } : {}),
+      };
+    }
+    case "context/compaction": {
+      const reason = reqString(value, "reason", type);
+      if (!COMPACTION_REASONS.has(reason)) {
+        throw new SessionEventParseError(
+          `unknown compaction reason "${reason}"`,
+          type,
+        );
+      }
+      const turnId = optString(value, "turnId");
+      return {
+        type,
+        ts,
+        reason: reason as CompactionReason,
+        summary: reqString(value, "summary", type),
+        recent: reqString(value, "recent", type),
+        ...(turnId !== undefined ? { turnId } : {}),
+      };
+    }
+    case "session/title": {
+      const sourceRaw = value.source;
+      if (
+        sourceRaw === null ||
+        typeof sourceRaw !== "object" ||
+        !("kind" in sourceRaw)
+      ) {
+        throw new SessionEventParseError("source.kind required", type);
+      }
+      const kind = Reflect.get(sourceRaw, "kind");
+      if (kind !== "fallback" && kind !== "user") {
+        throw new SessionEventParseError(
+          'source.kind must be "fallback" | "user"',
+          type,
+        );
+      }
+      const messageSeqs = Reflect.get(value, "messageSeqs");
+      let seqs: readonly number[] | undefined;
+      if (messageSeqs !== undefined) {
+        if (
+          !Array.isArray(messageSeqs) ||
+          !messageSeqs.every((n) => typeof n === "number" && Number.isFinite(n))
+        ) {
+          throw new SessionEventParseError(
+            "messageSeqs must be number[]",
+            type,
+          );
+        }
+        seqs = messageSeqs as number[];
+      }
+      return {
+        type,
+        ts,
+        title: reqString(value, "title", type),
+        source: { kind },
+        ...(seqs !== undefined ? { messageSeqs: seqs } : {}),
+      };
+    }
+    case "approval/asked": {
+      const argsSummary = optString(value, "argsSummary");
+      const turnId = optString(value, "turnId");
+      const stepId = optString(value, "stepId");
+      return {
+        type,
+        ts,
+        approvalId: reqString(value, "approvalId", type),
+        toolCallId: reqString(value, "toolCallId", type),
+        toolName: reqString(value, "toolName", type),
+        reason: reqString(value, "reason", type),
+        ...(argsSummary !== undefined ? { argsSummary } : {}),
+        ...(turnId !== undefined ? { turnId } : {}),
+        ...(stepId !== undefined ? { stepId } : {}),
+      };
+    }
+    case "approval/decided": {
+      const decisionRaw = reqString(value, "decision", type);
+      if (decisionRaw !== "allow" && decisionRaw !== "deny") {
+        throw new SessionEventParseError(
+          'decision must be "allow" | "deny"',
+          type,
+        );
+      }
+      const sourceRaw = reqString(value, "source", type);
+      if (
+        sourceRaw !== "user" &&
+        sourceRaw !== "cancel" &&
+        sourceRaw !== "timeout"
+      ) {
+        throw new SessionEventParseError(
+          'source must be "user" | "cancel" | "timeout"',
+          type,
+        );
+      }
+      return {
+        type,
+        ts,
+        approvalId: reqString(value, "approvalId", type),
+        decision: decisionRaw,
+        source: sourceRaw,
+      };
+    }
+    default:
+      throw new SessionEventParseError(`unknown event type "${type}"`);
+  }
+}
+
+/** Throw `SessionEventParseError` if invalid; return typed event. */
+export function assertSessionEvent(value: unknown): SessionEvent {
+  return parseSessionEvent(value);
+}
+
+/** Soft check — true iff `parseSessionEvent` succeeds. */
+export function isValidSessionEvent(value: unknown): value is SessionEvent {
+  try {
+    parseSessionEvent(value);
+    return true;
+  } catch {
+    return false;
+  }
+}

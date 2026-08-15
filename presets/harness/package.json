@@ -1,0 +1,29 @@
+{
+  "name": "@xrkseek/preset-harness",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./preset.ts",
+      "import": "./dist/preset.js",
+      "default": "./dist/preset.js"
+    }
+  },
+  "dependencies": {
+    "@xrkseek/code-runtime": "workspace:*",
+    "@xrkseek/core-agent": "workspace:*",
+    "@xrkseek/core-session": "workspace:*",
+    "@xrkseek/core-system-prompt": "workspace:*",
+    "@xrkseek/core-tools": "workspace:*",
+    "@xrkseek/exec-fs": "workspace:*",
+    "@xrkseek/exec-sandbox": "workspace:*",
+    "@xrkseek/exec-shell": "workspace:*",
+    "@xrkseek/exec-subprocess": "workspace:*",
+    "@xrkseek/llm": "workspace:*",
+    "@xrkseek/llm-replay": "workspace:*",
+    "@xrkseek/policy": "workspace:*",
+    "@xrkseek/server-loader": "workspace:*",
+    "@xrkseek/workspace": "workspace:*"
+  }
+}

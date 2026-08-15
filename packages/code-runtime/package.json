@@ -1,0 +1,17 @@
+{
+  "name": "@xrkseek/code-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "dependencies": {
+    "@xrkseek/core-tools": "workspace:*"
+  }
+}

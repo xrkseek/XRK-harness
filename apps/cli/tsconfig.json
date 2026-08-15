@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../../packages/core/session" },
+    { "path": "../../packages/llm/registry" },
+    { "path": "../../packages/policy" },
+    { "path": "../../packages/server/config" },
+    { "path": "../../packages/server/host" },
+    { "path": "../../presets/minimal" },
+    { "path": "../../presets/harness" },
+    { "path": "../../presets/server" }
+  ]
+}
