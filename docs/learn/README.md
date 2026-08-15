@@ -27,6 +27,7 @@
 | [xrk-app-shell.md](./xrk-app-shell.md) | lc22 | BootComposition 花名册 · SlotRegistry chrome · AppShell |
 | [face-workspace.md](./face-workspace.md) | lc23 | Face U2 workspace.* ↔ `@xrkseek/workspace` |
 | [face-settings-credentials.md](./face-settings-credentials.md) | lc24 | settings.* · credentials vault（不入库） |
+| [cordis.md](./cordis.md) | lc25 | Cordis 时空可组合：**论文精读** · tutorial 1–7 习题 · vendor 对读；**不并核** |
 | ADR [0003](../adr/0003-session-long-loop-short.md) | lc7 | session 长寿 + loop 短寿 |
 | ADR [0004](../adr/0004-no-effect-runtime.md) | lc10 | 不引入 Effect 内核 |
 

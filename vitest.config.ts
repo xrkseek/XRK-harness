@@ -13,6 +13,7 @@ export default defineConfig({
   resolve: {
     alias: Object.fromEntries([
       pkg("kernel", "packages/kernel/src/index.ts"),
+      pkg("compose", "packages/compose/src/index.ts"),
       pkg("protocol", "packages/protocol/src/index.ts"),
       pkg("core-session", "packages/core/session/src/index.ts"),
       pkg("core-tools", "packages/core/tools/src/index.ts"),

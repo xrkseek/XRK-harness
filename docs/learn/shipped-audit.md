@@ -13,6 +13,7 @@
 | Plugin tools 接线 | Shipped | 无 | 静默 skip、假 kind |
 | Policy | Engine Shipped；主机半接 | 无 | hollow subject、空心 ask |
 | MCP | Empty | lc12 深读 | 正确示范 |
+| Cordis | **非目标（不并核）** | [lc25](./cordis.md) 深读 | 假懂 / 误把 Proxy ctx 引进 kernel |
 
 ## 已补笔记
 
@@ -22,13 +23,15 @@
 | lc13 | [plugin-tools-wire.md](./plugin-tools-wire.md) | 新建 |
 | lc14 | [policy-gates.md](./policy-gates.md) | 新建 |
 | lc12 | [mcp-protocol.md](./mcp-protocol.md) | 已有；继续作金标准 |
+| lc25 | [cordis.md](./cordis.md) | Cordis 时空可组合；对照本仓显式对象图 |
 
 ## 建议学习/改码顺序（仍先学）
 
-1. **Policy 主机绑定**（空洞最大）— 见 lc14 §5  
-2. **LLM 错误码 / 流式契约** — 见 lc11 §5（再碰 thinking）  
-3. **Plugin 冲突可见性** — 见 lc13 §5（再扩 kind）  
-4. **MCP Client** — lc12 §8 勾完再规格  
+1. ~~**Policy 主机绑定**~~ — lc14 主路径已接（ask/approval 见近切片）  
+2. **Cordis 标尺** — [lc25](./cordis.md)（跑完 DSH tutorial 七章；**不并核**）  
+3. **LLM 错误码 / 流式契约** — 见 lc11 §5（再碰 thinking）  
+4. **Plugin 冲突可见性** — 见 lc13 §5（再扩 kind）  
+5. **MCP Client** — lc12 §8 勾完再规格  
 
 ## 纪律
 

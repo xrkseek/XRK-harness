@@ -26,11 +26,11 @@
 │ core-session │ system-prompt    │ workspace · policy*   │
 ├──────────────┴──────────────────┴───────────────────────┤
 │  llm (+ replay) · exec-fs/shell/subprocess/sandbox       │
-│  code-runtime · mcp*                                     │
+│  code-runtime · mcp* · compose*                          │
 ├─────────────────────────────────────────────────────────┤
 │  kernel · protocol                                       │
 └─────────────────────────────────────────────────────────┘
-* = 空壳或薄壳，见 status.md
+* = 空壳或薄壳 / 叶包分期，见 status.md
 ```
 
 ## 真源与投影
@@ -62,7 +62,8 @@ continueTurn / drain
 
 | 包 | 职责 | 非目标 |
 |----|------|--------|
-| `kernel` | Context · Plugin · EventBus · applyPatches | 业务工具 / LLM |
+| `kernel` | Context · Plugin · EventBus · applyPatches | Fiber / Ordering / Cordis |
+| `compose` | Scope · effect · provide/inject · Ordering · isolate | Proxy · HMR · session 真源 |
 | `protocol` | ChatMessage · SessionEvent · ToolCall | 运行时逻辑 |
 | `core-session` | Store · derive · admit · latch · safety · compaction helpers | HTTP |
 | `core-tools` | Registry · Pipeline · guards · materialize · bound | fs 实现 |

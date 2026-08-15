@@ -38,10 +38,12 @@
 | [llm-provider-registry.md](./llm-provider-registry.md) | Provider Registry（resolve→create · 规格） |
 | [llm-provider-presets.md](./llm-provider-presets.md) | BrandEntries 初表（从属 Registry） |
 
-### Plans
+### Plans / Specs
 
 | 计划 | 内容 |
 |------|------|
+| [superpowers/specs/2026-08-15-compose-design.md](./superpowers/specs/2026-08-15-compose-design.md) | `@xrkseek/compose` 底层设计（Accepted · C0） |
+| [superpowers/plans/2026-08-15-compose-c0.md](./superpowers/plans/2026-08-15-compose-c0.md) | Compose C0 实现计划 |
 | [superpowers/plans/2026-08-15-llm-provider-registry-r0.md](./superpowers/plans/2026-08-15-llm-provider-registry-r0.md) | Registry R0 实现 |
 | [superpowers/plans/2026-08-15-host-face-u1.md](./superpowers/plans/2026-08-15-host-face-u1.md) | Host Face U1 实现 |
 
