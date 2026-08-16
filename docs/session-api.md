@@ -1,8 +1,8 @@
 # Session API（newSession · admit · continueTurn）
 
-对齐 ADR-0003 / OpenCode admit≠execute（见 [learn/opencode-session-runner.md](./learn/opencode-session-runner.md)）。**无 Effect · 无 SQLite inbox**——pending 用事件 `prompt/admitted` / `prompt/promoted`。
+对齐 [ADR-0003](./adr/0003-session-long-loop-short.md)：admit ≠ execute。pending 用事件 `prompt/admitted` / `prompt/promoted`（无独立 inbox 表）。
 
-插话 vs 排队两档（steer / queue）见 [session-delivery.md](./session-delivery.md)。默认 `admit` = **queue（FIFO）**；可带 `delivery: "steer"`。空 `continueTurn` 走 `promoteAdmitsForTurn`：**全部 pending steer 合并进一轮**（一份 maxSteps），否则 promote 一条 queue。`promoteNextAdmit` 仍可单条 promote（steer 优先）。HTTP `POST .../admit` 已透传 `delivery`。
+插话 vs 排队见 [session-delivery.md](./session-delivery.md)。默认 `admit` = **queue（FIFO）**；可带 `delivery: "steer"`。空 `continueTurn` 走 `promoteAdmitsForTurn`：**全部 pending steer 合并进一轮**，否则 promote 一条 queue。HTTP `POST .../admit` 透传 `delivery`。
 
 ## 产品语义
 

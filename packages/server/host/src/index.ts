@@ -25,6 +25,9 @@ import {
 import { access } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import path from "node:path";
+import { createHostAgentCache } from "./agent-cache.js";
+
+export { createHostAgentCache, HOST_PLUGINS_KEY } from "./agent-cache.js";
 
 async function resolveOfficeAgentSeedDir(
   workspaceRoot: string,
@@ -90,13 +93,14 @@ export function createHostManager(): HostManager {
       const id = `host_${++seq}`;
       const store = createMemorySessionStore();
       const loader = createPluginLoader();
-      const agents = new Map<string, AgentHandle>();
-      const lastDrainResult = new Map<string, AgentRunResult>();
 
       let loadedPluginIds: string[] = [];
       if (config.runtime.pluginsDir) {
         loadedPluginIds = [...(await loader.loadAll(config.runtime.pluginsDir))];
       }
+
+      const agentCache = createHostAgentCache(loader.list(), { hostId: id });
+      const lastDrainResult = new Map<string, AgentRunResult>();
 
       const ensureSession = (sid?: string) => newSession(store, sid).id;
 
@@ -104,9 +108,8 @@ export function createHostManager(): HostManager {
 
       const resolveAgent = async (sessionId: string) => {
         // Cache composition binding only — never treat AgentHandle as transcript source (ADR-0003).
-        let agent = agents.get(sessionId);
-        if (!agent) {
-          agent = await factory({
+        return agentCache.resolve(sessionId, async () => {
+          const agent = await factory({
             sessionId,
             store,
             workspaceRoot: config.runtime.workspaceRoot,
@@ -115,9 +118,8 @@ export function createHostManager(): HostManager {
           if (faceBox.approvals) {
             agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
           }
-          agents.set(sessionId, agent);
-        }
-        return agent;
+          return agent;
+        });
       };
 
       const hub: SessionDrainHub = createSessionDrainHub({
@@ -182,9 +184,7 @@ export function createHostManager(): HostManager {
           ? { seedTemplateDirs: { "office-agent": officeAgent } }
           : {}),
         ...(policy ? { policy } : {}),
-        invalidateAgent: (sessionId) => {
-          agents.delete(sessionId);
-        },
+        invalidateAgent: (sessionId) => agentCache.invalidate(sessionId),
         drain: {
           wake: (sessionId) => drain.wake(sessionId),
           cancel: (sessionId) => drain.cancel(sessionId),
@@ -265,6 +265,7 @@ export function createHostManager(): HostManager {
         async stop() {
           status = "stopped";
           await http.close();
+          await agentCache.dispose();
           for (const p of loader.list()) {
             await loader.unregister(p.id);
           }

@@ -1,11 +1,10 @@
 # @xrkseek/server-face
 
-DeepSeek-compatible **Host Face** (U1): unary RPC + dual WS under `/api/face/*`.
+**Host Face**：Unary RPC + 双 WebSocket（`/api/face/*` 与原生 `/api/<method>`，method 须含 `.`）。
 
-- Spec: [docs/host-face.md](../../../docs/host-face.md)
-- Does **not** replace REST `/api/sessions` — parallel protocol face
-- SPA / `__DSH_BOOT__` not included (follow-on)
+- 规格：[docs/host-face.md](../../../docs/host-face.md)
+- 与 REST `/api/sessions` 并行，共用 session 真源
 
 ```ts
-import { createFaceRuntime, createFaceOnlyServer, handleFaceHttpRequest } from "@xrkseek/server-face";
+import { createFaceRuntime, tryHandleFaceHttp, attachFaceUpgrades } from "@xrkseek/server-face";
 ```

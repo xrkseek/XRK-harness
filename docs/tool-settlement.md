@@ -4,7 +4,7 @@
 
 底层不变量：**每个 `tool/call`（及未落 call 的 `assistant.toolCalls`）必须有配对 `tool/result`，才可进入下一轮模型请求。**
 
-对照 OpenCode `failInterruptedTools` — 崩溃/中止后禁止默默重放副作用；先写失败结果再 assemble。
+崩溃/中止后禁止默默重放副作用：先写失败 `tool/result` 再 assemble。
 
 ### API（`@xrkseek/core-session`）
 
@@ -20,10 +20,9 @@
 
 ## 并行 settle（step 内多 call）
 
-对照 OpenCode Runner：`FiberSet` eager settle → await 全部再 continuation。  
-本仓 **无 Effect**；默认 `toolSettle: "parallel"`。
+默认 `toolSettle: "parallel"`：step 内多 call 先耐久写齐，再并行/串行 settle，全部完成后再 continuation。
 
-### 双屏障（相对 Fiber 完成序发布的升级）
+### 双屏障
 
 ```text
 1. 依次 append 全部 tool/call     ← barrier（先耐久、再副作用）
@@ -32,11 +31,8 @@
 4. batch safety/notice + additionalContexts
 ```
 
-| | OpenCode | XRK |
-|--|----------|-----|
-| 启动 | Fiber eager | `Promise.all`（parallel） |
-| result 日志序 | 随完成发布，可能乱序 | **固定为 call 序** |
-| 可关 | — | `toolSettle: "serial"` |
+- parallel：`Promise.all` 执行；**result 日志序固定为 call 序**
+- 可关：`toolSettle: "serial"`
 
 ```ts
 runTurn({ …, toolSettle: "parallel" }); // default

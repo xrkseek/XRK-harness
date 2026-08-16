@@ -67,6 +67,13 @@ export interface Scope {
 
   activate(setup?: () => void | Promise<void>): Promise<void>;
 
+  /**
+   * When deps are satisfied, activate (if still Pending) then run `handler`.
+   * If already Active, runs `handler` immediately.
+   * Returns disposer that cancels the waiter.
+   */
+  whenReady(handler: () => void | Promise<void>): Disposer;
+
   dispose(): Promise<void>;
 
   /** Debug tree of effect labels (C0). */

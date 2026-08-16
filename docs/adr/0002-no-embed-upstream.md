@@ -1,19 +1,24 @@
-# ADR-0002: Do not embed upstream source trees
+# ADR-0002: 不 vendor 第三方 agent 运行时
 
-- **Status:** Accepted（附录 2026-08-15）
-- **Summary:** 不并入 Cordis / deepseek-harness / cline / opencode **agent 运行时** 源码树。调研取精华，规格与自研实现进本仓。
-- **See:** `AGENTS.md` 参考优先级 · [learn/deepseek-web-ui.md](../learn/deepseek-web-ui.md) · [learn/cordis.md](../learn/cordis.md)（完整学透 · 不并核） · [design/2026-08-15-providers-and-web-ui.md](../design/2026-08-15-providers-and-web-ui.md)
+- **Status:** Accepted
+- **Date:** 2026-08-15
+- **Tags:** boundaries, licensing
 
-## Appendix A — MIT UI / npm（允许）
+## Context
 
-在不把上游 **运行时** 当作本仓第二内核的前提下，允许：
+本仓要保持可审计的自研内核边界：session / loop / tools / host 必须是本仓规格与实现，不能把外部 agent 运行时整树拷进 `packages/` 冒充自研。
 
-1. **归因移植** DeepSeek Harness Web UI（MIT）：本仓 `apps/web` 可复制/改编壳层代码，须保留 Copyright DeepSeek 与许可声明（NOTICE / 文件头）。
-2. **npm 依赖** 公开的 `@deepseek-ai/*`（或等价 MIT 包），并在仓库 NOTICE 中列出。
-3. 自研 **适配层** 将本仓 HTTP/session 接到上游 UI 期望的协议形状。
+## Decision
 
-仍禁止：
+**禁止**将第三方 agent / harness **运行时源码树**并入本仓作为第二内核或 `kernel` / `core*` 依赖。
 
-- 无声明整树 vendor 上游 agent/kernel/Cordis，冒充自研内核；
-- 让 `core*` / `kernel` 依赖上游运行时包；
-- 用「UI 移植」名义把 Host ACP/RPC 整面替换成本仓未规格化的第二协议而不写文档。
+允许：
+
+- 合法许可证下的 **归因移植**（须 NOTICE / 文件头）用于 UI 壳等非内核面
+- 公开 npm 依赖，并在 NOTICE 列出
+- 自研适配层对接外部协议形状（规格写在本仓 `docs/`）
+
+## Consequences
+
+- 产品叙事与实现均以本仓为准
+- 学习对照留在维护者本地 / IDE Canvas，不进公开「参考清单」文档

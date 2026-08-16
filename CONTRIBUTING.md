@@ -27,11 +27,11 @@ pnpm check
 
 ```text
 apps → sdk / server / presets
-sdk · server · presets → core* / llm / mcp / exec* / workspace / policy
-能力叶 · core* → kernel / protocol
+sdk · server · presets → core* / llm / mcp / exec* / workspace / policy / compose
+能力叶 · core* → kernel / protocol / compose
 ```
 
-禁止：server → 具体 llm 适配；core-agent → exec 实现；extensions → apps 内部；presets 写业务逻辑。
+禁止：server → 具体 llm 适配；core-agent → exec 实现；extensions → apps 内部；presets 写业务逻辑；`kernel` → `compose`。
 
 ## 改契约时
 
@@ -42,7 +42,7 @@ sdk · server · presets → core* / llm / mcp / exec* / workspace / policy
 | Preset 选项 | `docs/profiles.md` · `docs/workspace-inject.md` · preset README |
 | 新能力是否可依赖 | `docs/status.md` |
 
-空壳包（`@xrkseek/mcp`、`apps/web`）在实现前 **只** 更新 status/README「未开工」，勿写假 API。
+空壳包（`@xrkseek/mcp`）在实现前 **只** 更新 status/README「未开工」，勿写假 API。
 
 ## 扩展常见路径
 

@@ -68,8 +68,8 @@ export interface FaceRuntime {
   readonly policy?: PolicyEngine;
   /** Human approval waiters (tool policy `ask`). */
   readonly approvals: FaceApprovalBroker;
-  /** Drop cached agent when preset changes (host wires). */
-  invalidateAgent?(sessionId: string): void;
+  /** Drop cached agent when preset changes (host wires). May be async (compose dispose). */
+  invalidateAgent?(sessionId: string): void | Promise<void>;
   /** Publish store appends as mux session/event. */
   watchSession(sessionId: string): void;
   publishQueue(sessionId: string): void;

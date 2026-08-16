@@ -1,6 +1,6 @@
 # Session safety（mistake · loop）
 
-Session 旁路，**不**写进 `runTurn` 内核。对照 [learn/cline-mistake-loop-safety.md](./learn/cline-mistake-loop-safety.md)、ADR-0003。
+Session 旁路，**不**写进 `runTurn` 内核。见 [ADR-0003](./adr/0003-session-long-loop-short.md)。
 
 ## 组件
 
@@ -9,9 +9,9 @@ Session 旁路，**不**写进 `runTurn` 内核。对照 [learn/cline-mistake-lo
 | **LoopDetection** | soft=3 · hard=5 | 同名+同参连打；soft/hard → 耐久 `safety/notice`；hard → deny + mistake `forceAtLimit` + 可中止 turn |
 | **MistakeTracker** | max=6 | **turn 结束**时：全工具失败 +1；有成功则清零；触顶 → `SessionSafetyLimitError` + `safety/notice` |
 
-## 事件（相对 Cline 的升级）
+## 事件
 
-Cline 把 recovery 写成普通 user 文本。本仓用 **`safety/notice`**：
+本仓用 **`safety/notice`**（非普通 user 文本）承载 recovery：
 
 | kind | 含义 |
 |------|------|

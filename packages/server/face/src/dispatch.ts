@@ -685,7 +685,7 @@ const agentPresetSelect: FaceHandler = async (runtime, _rpcId, payload) => {
     };
   }
   runtime.sessionAgentPresets.set(sessionId, agentPreset);
-  runtime.invalidateAgent?.(sessionId);
+  await runtime.invalidateAgent?.(sessionId);
   return { ok: true, value: { sessionId, agentPreset } };
 };
 

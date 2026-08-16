@@ -28,15 +28,13 @@ tool/call (session, by loop)
 9. **Batch** — after all `tool/result` in a step: first `safety/notice` (FIFO), then `additionalContexts` as `user/message`. Multi-call settle defaults to **parallel** with call/result barriers (see [tool-settlement.md](./tool-settlement.md)).
 10. **Materialize** — each provider step freezes the tool table (`materializeTools`); settle uses the snapshot. Live replace → `Stale tool call`. Catalog `omitNames` ≠ execution auth (guards still own deny).
 
-## vs DeepSeek Harness
+## Notes
 
-This repo keeps the same *stage names* and monotonic-guard idea, but:
-
-- No Cordis / global proxy bus — pipeline is an explicit `ToolPipeline` object.
-- Approval is a single hook, not a full UI protocol (M1).
-- Sandbox argv wrap is a real `MonotonicGuard` on `exec-sandbox` (bash tool); other tools abstain.
-- Metrics are counters on context only (no exporter yet).
+- Pipeline is an explicit `ToolPipeline` object (no global proxy bus).
+- Approval is a single hook (`ask`); Host Face wires UI via `approval/*`.
+- Sandbox argv wrap is a `MonotonicGuard` on `exec-sandbox`.
 - Output bound (+ optional workspace persist) is an explicit stage after finalize.
+
 ## API sketch
 
 ```ts
