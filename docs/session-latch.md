@@ -1,6 +1,6 @@
 # Session latch
 
-Promise 门闩（**无 Effect**）。对照 OpenCode `SessionRunCoordinator` / Cline `running`；决策见 [ADR-0003](./adr/0003-session-long-loop-short.md)、[ADR-0004](./adr/0004-no-effect-runtime.md)。
+Promise 门闩（无代数效应运行时）。决策见 [ADR-0003](./adr/0003-session-long-loop-short.md)、[ADR-0004](./adr/0004-no-effect-runtime.md)。
 
 ## `createTurnLatch`（已接 `createAgent`）
 
@@ -18,9 +18,7 @@ Promise 门闩（**无 Effect**）。对照 OpenCode `SessionRunCoordinator` / C
 | `wake(sessionId)` | idle → `drain(force=false)`；busy → **至多一个** follow-up |
 | `cancel(sessionId)` | abort、清 wake、等待清理 |
 
-**Host**（`createHostManager`）持有 hub；drain body = 循环 `continueTurn()` 直到无 pending admit。
-
-相对 OpenCode：同语义（join / coalesce wake），实现为纯 Promise Map，无 Fiber。
+**Host**（`createHostManager`）持有 hub；drain body = 循环 `continueTurn()` 直到无 pending admit。实现为纯 Promise Map。
 
 ## HTTP 产品切分
 

@@ -1,6 +1,6 @@
 # office-agent
 
-Minimal product seed migrated from AGT `agents/workspace/` (desensitized).
+产品种子模板：注入到 workspace 的 `.xrk` / 人格与 recipes。
 
 ## Files
 
@@ -9,12 +9,12 @@ Minimal product seed migrated from AGT `agents/workspace/` (desensitized).
 | `SOUL.md` | Persona / principles |
 | `USER.md` | User preferences |
 | `IDENTITY.md` | Display identity |
-| `AGENTS.md` | Product workspace rules (not repo AGENTS.md) |
+| `AGENTS.md` | Product workspace rules（非仓库根 AGENTS.md） |
 | `TOOLS.md` | Local notes |
 | `assistant.md` / `rules.md` / `subagents.md` | Injector inputs |
 | `recipes/*.yaml` | Slash recipes |
 
-## Sync into a workspace
+## Sync
 
 ```ts
 import { createWorkspaceInjector } from "@xrkseek/workspace";
@@ -27,4 +27,4 @@ const inj = createWorkspaceInjector({
 await inj.syncSeeds(path.join("templates", "office-agent"));
 ```
 
-See `docs/migrate-from-agt.md`.
+见 [docs/workspace-inject.md](../../docs/workspace-inject.md)。

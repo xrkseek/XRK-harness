@@ -1,46 +1,28 @@
 # LLM OpenAI-compatible
 
-`@xrkseek/llm-openai-compatible` — thin `LlmAdapter` over **Chat Completions** HTTP.
+`@xrkseek/llm-openai-compatible` — Chat Completions HTTP 适配（`LlmAdapter`）。
 
-## Steal from bar / AGT（精华 · 不并源码）
+## 行为
 
-| 吸取 | 本仓落地 |
-|------|----------|
-| `baseUrl` + `/chat/completions` 拼接 | `buildOpenAiCompatibleEndpoint` |
-| `bearer` / `api-key` / 自定义 header 鉴权 | `authMode` |
-| tools → `type: function` schema | 请求映射 |
-| `tool_calls` 缺 id 时兜底 | `call_${i}_…` |
-| 上下文溢出 → 可恢复错误 | `ContextOverflowError`（供 loop compaction） |
+- `baseUrl` + `/chat/completions`
+- `bearer` / `api-key` / 自定义 header
+- tools → `function` schema；缺 id 时兜底
+- 上下文溢出 → `ContextOverflowError`（供 compaction）
 
-**不取（本切片）：** SSE 流式、vision、stripToolTraces、proxy、厂商专用 body 分叉（DeepSeek 薄预设见 [llm-deepseek.md](./llm-deepseek.md)；`thinking` 等后置）。
-
-## API
+本切片不含：SSE 流式、vision、厂商专用 body 分叉（DeepSeek 预设见 [llm-deepseek.md](./llm-deepseek.md)）。
 
 ```ts
 import { createOpenAiCompatibleAdapter } from "@xrkseek/llm-openai-compatible";
 
 const llm = createOpenAiCompatibleAdapter({
-  baseUrl: process.env.OPENAI_BASE_URL!, // e.g. https://api.openai.com/v1
+  baseUrl: process.env.OPENAI_BASE_URL!,
   apiKey: process.env.OPENAI_API_KEY,
   model: "gpt-4o-mini",
-  // authMode?: "bearer" | "api-key" | "header"
-  // path?: "/chat/completions"
-  // fetch?: custom // tests
 });
-
-// plug into preset:
-createMinimalComposition({ workspaceRoot, llm });
 ```
 
-密钥只从宿主 env / 调用方传入——**永不入库**。
+密钥由宿主传入，**不入库**。测例用 mock `fetch`。
 
-## Tests
+## 相关
 
-无真实密钥：注入 mock `fetch`（见包内测例）。行为锁：消息/工具映射、鉴权头、overflow。
-
-## Related
-
-- Interface: `@xrkseek/llm`  
-- Replay（CI）: `@xrkseek/llm-replay`  
-- DeepSeek 默认：[`@xrkseek/llm-deepseek`](./llm-deepseek.md)  
-- [status.md](./status.md) · [profiles.md](./profiles.md) · [references.md](./references.md)
+`@xrkseek/llm` · `@xrkseek/llm-replay` · [llm-deepseek.md](./llm-deepseek.md) · [status.md](./status.md)

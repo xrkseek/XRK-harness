@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   bindDisposable,
   ComposeInjectError,
@@ -201,6 +201,26 @@ describe("bindDisposable", () => {
     });
     await root.dispose();
     expect(live).toBe(false);
+  });
+});
+
+describe("whenReady", () => {
+  it("activates after late provide", async () => {
+    const root = createRootScope();
+    const child = root.child({ depend: [{ name: "llm" }] });
+    let fired = false;
+    child.whenReady(() => {
+      fired = true;
+    });
+    expect(child.state).toBe(ScopeState.Pending);
+    expect(fired).toBe(false);
+    root.provide("llm", { ok: true });
+    // whenReady kick is async after provide notify
+    await vi.waitFor(() => {
+      expect(child.state).toBe(ScopeState.Active);
+      expect(fired).toBe(true);
+    });
+    await root.dispose();
   });
 });
 

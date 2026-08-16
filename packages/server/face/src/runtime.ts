@@ -51,7 +51,7 @@ export interface CreateFaceRuntimeOptions {
   readonly projections?: FaceProjectionRegistry;
   readonly skipDefaultProjections?: boolean;
   readonly loadSlashRecipes?: SlashRecipesLoader;
-  readonly invalidateAgent?: (sessionId: string) => void;
+  readonly invalidateAgent?: (sessionId: string) => void | Promise<void>;
   /** Public host runtime snapshot for settings.get (no secrets). */
   readonly hostPublic?: FaceHostPublicSettings;
   /** Initial Host API key from env (vault may override). */

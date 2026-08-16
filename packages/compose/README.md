@@ -1,23 +1,24 @@
 # @xrkseek/compose
 
-Spatiotemporal composition leaf: reversible effects, reactive deps, Ordering, isolate realms — **without** Cordis Proxy or Effect-TS.
+可逆 effect · 依赖 inject · Ordering · isolate — 显式 TS 叶包（无 Proxy）。
 
 ## Public API
 
-- `createRootScope` — Active root
-- `Scope.depend` / `activate` — hard deps; missing → stay `Pending`
-- `Scope.provide` / `inject` / `tryInject` — realm-keyed bindings
-- `Scope.effect` — LIFO disposers
-- `Scope.child({ isolate, depend })` — child scopes + isolate labels
-- `Scope.dispose` — Ordering (consumers → children → effects); inertia-safe
-- `bindDisposable` — register an unsubscribe as an effect
+- `createRootScope`
+- `Scope.depend` / `activate` / `whenReady`
+- `provide` / `inject` / `tryInject`
+- `effect` · `child` · `dispose`
+- `bindDisposable`
+
+## Host（C1）
+
+`createHostAgentCache`：session agent 依赖 `host.plugins`；`invalidate` / `stop` 按 Ordering 卸装。
 
 ## Non-goals
 
-- Cordis / `@deepseek-ai/cordis` compatibility
-- Proxy god `ctx`, HMR, Loader
-- Session / agent-loop semantics (Host wiring = C1)
+- Proxy 上帝对象 · HMR  
+- session / agent-loop 语义（由 core* 拥有）
 
 ## Spec
 
-[docs/superpowers/specs/2026-08-15-compose-design.md](../../docs/superpowers/specs/2026-08-15-compose-design.md) · [ADR-0005](../../docs/adr/0005-compose-leaf.md)
+[docs/compose.md](../../docs/compose.md) · [ADR-0005](../../docs/adr/0005-compose-leaf.md)

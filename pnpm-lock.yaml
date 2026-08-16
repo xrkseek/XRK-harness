@@ -85,6 +85,8 @@ importers:
         specifier: workspace:*
         version: link:../core/tools
 
+  packages/compose: {}
+
   packages/core/agent:
     dependencies:
       '@xrkseek/core-agent-loop':
@@ -334,6 +336,9 @@ importers:
 
   packages/server/host:
     dependencies:
+      '@xrkseek/compose':
+        specifier: workspace:*
+        version: link:../../compose
       '@xrkseek/core-agent':
         specifier: workspace:*
         version: link:../../core/agent

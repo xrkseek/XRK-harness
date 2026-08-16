@@ -45,7 +45,7 @@ HTTP：`createHostManager` + `loadHostConfig` + preset factory — 见 CLI `serv
 
 ## 非目标
 
-- 不重新导出空壳 MCP；DeepSeek 为 openai-compatible 薄预设（无厂商 body 分叉）  
+- 不重新导出空壳 MCP；DeepSeek 包为 openai-compatible 预设（无独立 body 分叉）  
 - 不替代 CLI；CLI 在 `@xrkseek/harness-cli`  
 
 ## 文档

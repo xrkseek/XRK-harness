@@ -33,6 +33,7 @@ let nextId = 1;
 /** Shared registry for one root tree. */
 class BindingRegistry {
   readonly map = new Map<string, Binding>();
+  readonly waiters = new Set<() => void>();
 
   get(key: string): Binding | undefined {
     return this.map.get(key);
@@ -43,10 +44,24 @@ class BindingRegistry {
       throw new ComposeStateError(`binding already provided: ${key}`);
     }
     this.map.set(key, binding);
+    this.notify();
   }
 
   delete(key: string): void {
     this.map.delete(key);
+  }
+
+  onProvide(fn: () => void): Disposer {
+    this.waiters.add(fn);
+    return () => {
+      this.waiters.delete(fn);
+    };
+  }
+
+  private notify(): void {
+    for (const fn of [...this.waiters]) {
+      fn();
+    }
   }
 }
 
@@ -255,6 +270,70 @@ export class ScopeImpl implements Scope {
       this.failReason = err;
       throw err;
     }
+  }
+
+  whenReady(handler: () => void | Promise<void>): Disposer {
+    if (
+      this.state === ScopeState.Disposed ||
+      this.state === ScopeState.Unloading ||
+      this.state === ScopeState.Failed
+    ) {
+      throw new ComposeStateError(
+        `whenReady() on scope "${this.id}" in state ${this.state}`,
+      );
+    }
+
+    let cancelled = false;
+    let gate: Promise<void> | undefined;
+
+    const kick = (): void => {
+      if (cancelled || gate) return;
+
+      if (this.state === ScopeState.Active) {
+        gate = (async () => {
+          try {
+            if (cancelled) return;
+            await handler();
+            cancelled = true;
+            void off();
+          } finally {
+            gate = undefined;
+          }
+        })();
+        void gate.catch(() => undefined);
+        return;
+      }
+
+      if (
+        this.state !== ScopeState.Pending &&
+        this.state !== ScopeState.Loading
+      ) {
+        return;
+      }
+      // Sync gate: do not hold `gate` while still waiting on deps (notify race).
+      if (!this.depsSatisfied()) return;
+
+      gate = (async () => {
+        try {
+          if (cancelled) return;
+          await this.activate();
+          if (cancelled || this.state !== ScopeState.Active) return;
+          await handler();
+          cancelled = true;
+          void off();
+        } finally {
+          gate = undefined;
+        }
+      })();
+      void gate.catch(() => undefined);
+    };
+
+    const off = this.registry.onProvide(kick);
+    kick();
+    return () => {
+      cancelled = true;
+      void off();
+    };
   }
 
   async dispose(): Promise<void> {

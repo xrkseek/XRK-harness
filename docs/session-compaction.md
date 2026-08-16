@@ -1,7 +1,6 @@
 # Session compaction
 
-对照 OpenCode `SessionCompaction`：换 **active 窗口**，**不删** append-only 日志。  
-决策见 [learn/opencode-projector-derive.md](./learn/opencode-projector-derive.md)、absorb #9。
+换 **active 窗口**，**不删** append-only 日志。
 
 ## 事件
 
@@ -46,11 +45,8 @@ runTurn({
 
 未配置 `compaction` 时不做恢复。
 
-## 相对 OpenCode
-
-| | OpenCode | XRK |
-|--|----------|-----|
-| 运行时 | Effect Fiber | plain async |
-| 窗口 | message 表 seq | `deriveMessages` 读时 fold |
-| 模板 | 固定 SUMMARY_TEMPLATE | 自研短骨架（同「固定结构」精华） |
-| 默认 | 模型 context 限制驱动 | **opt-in** `compaction: {…}` |
+| 项 | 本仓 |
+|----|------|
+| 运行时 | plain async |
+| 窗口 | `deriveMessages` 读时 fold |
+| 默认 | **opt-in** `compaction: {…}` |

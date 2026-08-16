@@ -11,10 +11,10 @@ Explicit DI context, plugins, event bus (emit / waterfall / serial), and config 
 
 ## Non-goals
 
-- Cordis compatibility
+- Scope / Ordering（见 `@xrkseek/compose`）
 - Global runtime / god object
 - Business tools or LLM adapters
 
 ## Status
 
-M0 / S4 implementation. Kernel coverage ≥90% is gated by `pnpm test:kernel-coverage` (also part of `pnpm check`).
+Kernel coverage ≥90% 由 `pnpm test:kernel-coverage`（含于 `pnpm check`）门禁。

@@ -1,7 +1,7 @@
 # Session Delivery（steer · queue）
 
 产品规格：用户输入如何进入 inbox，以及何时被 promote 进 turn。  
-对照 OpenCode V2（见 [learn/opencode-session-runner.md](./learn/opencode-session-runner.md) §3）；**无 Effect · 无独立 inbox 表**——仍用 `prompt/admitted` / `prompt/promoted` 事件。
+真源仍为 `prompt/admitted` / `prompt/promoted` 事件（无独立 inbox 表）。
 
 ---
 
@@ -12,7 +12,7 @@
 | **queue** | 「下一题，等这轮做完再答」 | 不插话；continuation 未结束时 **不 promote** |
 | **steer** | 「插话纠正 / 改方向」 | 可在 **安全的 turn 边界** promote；可打断「本来要 idle」的节奏 |
 
-与 Cline 单通道 `continue` 不同：两档是一等公民产品语义，不是 UI 文案差异。
+与「单通道 continue」不同：两档是一等公民产品语义，不是 UI 文案差异。
 
 ---
 
