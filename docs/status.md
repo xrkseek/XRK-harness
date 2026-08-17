@@ -18,18 +18,20 @@
 
 | 域 | 说明 |
 |----|------|
-| Host Face ↔ 产品 Web | 侧栏 / settings / 队列与 inbox wire 已接；**浏览器 E2E 未勾** |
-| 产品 Web | 静态壳可挂；对话窗流式 / 工具卡待硬刷验收 |
+| Host Face ↔ 产品 Web | 侧栏 / settings / 队列 / search / skill.list / openPath 已接；**浏览器 E2E 未勾** |
+| 产品 Web | 静态壳可挂；对话窗流式 / 工具卡待硬刷验收（bar 已 pull 到 rc.7，待 re-capture） |
 | 核心打磨 | `run` / `serve` 可用 ≠ 边界与错误面打磨完成 |
 | 进程插件 | `tools` + `prompt` 已接线；`channel` / `policy` / `llm` 保留未自动接线 |
+| `@xrkseek/mcp` | **M0** + Host `XRK_MCP_SERVERS`（须 `XRK_MCP_ALLOW=1` 或 policy allow） |
 
 ## 未做
 
 | 域 | 说明 |
 |----|------|
-| `@xrkseek/mcp` | `export {}` |
 | Compose C2 · Registry R1+ · Face U3 | 未开工 |
-| Face NI 方法 | 见 [host-face.md](./host-face.md) 表 |
+| Face NI | `session.attachment`（须扩协议 ContentBlock）· Goal · agentPreset 创作面 · discoverModels |
+| MCP 进阶 | HTTP transport · 重连 · Face MCP 设置 UI |
+| AGT 融合待落 | MEMORY 工具 · trigger microagents · office skills 包 · toolScan |
 
 ## 依赖纪律
 
@@ -39,4 +41,4 @@ presets / sdk / server → core* | llm | mcp | exec* | workspace | policy | comp
 core* / 能力叶 → kernel | protocol | compose
 ```
 
-[AGENTS.md](../AGENTS.md) · [learn.md](./learn.md)
+[AGENTS.md](../AGENTS.md) · [learn.md](./learn.md) · [modules/](./modules/README.md)

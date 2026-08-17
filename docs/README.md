@@ -7,11 +7,11 @@
 | 角色 | 顺序 |
 |------|------|
 | 集成 | [status.md](./status.md) → [architecture.md](./architecture.md) → [packages/sdk/README](../packages/sdk/README.md) → [session.md](./session.md) · [http-api.md](./http-api.md) |
-| Host / CLI | [host-preset.md](./host-preset.md) · [profiles.md](./profiles.md) · [plugin-loader.md](./plugin-loader.md) · [host-face.md](./host-face.md) |
+| Host / CLI | [host-preset.md](./host-preset.md) · [profiles.md](./profiles.md) · [host-face.md](./host-face.md) · [modules/](./modules/README.md) · [plugin-loader.md](./plugin-loader.md) |
 | 工具 / exec | [tool-pipeline.md](./tool-pipeline.md) · [seams.md](./seams.md) |
 | 安全 | [security-checklist.md](./security-checklist.md) · [policy.md](./policy.md) |
 | 贡献 | [../CONTRIBUTING.md](../CONTRIBUTING.md) · [testing.md](./testing.md) |
-| 维护者 | [learn.md](./learn.md) |
+| 维护者 | [learn.md](./learn.md) · **[modules/](./modules/README.md)**（文件级笔记） |
 | 决策 | [adr/](./adr/README.md) |
 
 ## 规格索引
@@ -29,6 +29,7 @@
 | [session-compaction.md](./session-compaction.md) | compaction · overflow |
 | [http-api.md](./http-api.md) | HTTP / SSE / env |
 | [host-face.md](./host-face.md) | Host Face（RPC + 双 WS） |
+| [modules/](./modules/README.md) | **文件级模块笔记**（Face · Host · loader · MCP） |
 | [host-preset.md](./host-preset.md) | Host vs preset |
 | [profiles.md](./profiles.md) | Preset 选型 |
 | [plugin-loader.md](./plugin-loader.md) | 插件 discover / load |
@@ -67,9 +68,11 @@
 | [security-checklist.md](./security-checklist.md) | 安全控制 |
 | [publishing.md](./publishing.md) | 发包边界 |
 | [learn.md](./learn.md) | 学习笔记（公开） |
+| [modules/](./modules/README.md) | 实现笔记：文件地图 · 不变量 · 排障 |
 
 ## 同步规则
 
 1. 改公共契约 → 同 PR 更新对应 `docs/*`。  
 2. 包 README 写导出与非目标；细节链到本目录。  
-3. 空壳包必须标明 **empty shell**，禁止假 API。
+3. 空壳包必须标明 **empty shell**，禁止假 API。  
+4. 改 `@xrkseek/server-face|host|loader` 或 `@xrkseek/mcp` 的文件职责 → 同步 [modules/](./modules/README.md) 对应页。

@@ -18,6 +18,7 @@
     { "path": "../llm/openai-compatible" },
     { "path": "../llm/deepseek" },
     { "path": "../llm/registry" },
+    { "path": "../mcp" },
     { "path": "../server/loader" },
     { "path": "../server/config" },
     { "path": "../server/host" },

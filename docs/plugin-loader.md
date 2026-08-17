@@ -113,4 +113,4 @@ XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js serve
 - 插件覆盖同名 builtin / 保留 prompt id  
 - 保留 kind 的自动接线（先登记，后补 apply*）
 
-相关：[compose.md](./compose.md) · [learn.md](./learn.md) · [status.md](./status.md)
+相关：[compose.md](./compose.md) · [learn.md](./learn.md) · [status.md](./status.md) · **[modules/server-loader.md](./modules/server-loader.md)**

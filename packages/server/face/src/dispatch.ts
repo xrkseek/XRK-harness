@@ -34,6 +34,8 @@ import {
   hostCreateDirectory,
   hostListDirectory,
 } from "./host-directory.js";
+import { canOpenNativePath, hostOpenPath } from "./host-open-path.js";
+import { skillList } from "./skill-list.js";
 import { parseSearchQuery, searchSessions } from "./session-search.js";
 import {
   AdmitNotPendingError,
@@ -75,7 +77,7 @@ const hostDescribe: FaceHandler = async (runtime) => {
       ...(first ? { provider: first.id } : {}),
       ...(brand?.defaultModel ? { model: brand.defaultModel } : {}),
       attachedSessions: runtime.store.list().length,
-      canOpenPath: false,
+      canOpenPath: canOpenNativePath(),
     },
   };
 };
@@ -794,7 +796,7 @@ const HANDLERS: Record<string, FaceHandler> = {
     hostListDirectory(payload),
   "host.createDirectory": async (_runtime, _rpcId, payload) =>
     hostCreateDirectory(payload),
-  "host.openPath": notImplemented,
+  "host.openPath": async (_runtime, _rpcId, payload) => hostOpenPath(payload),
   "session.create": sessionCreate,
   "session.list": sessionList,
   "session.history": sessionHistory,
@@ -846,8 +848,9 @@ const HANDLERS: Record<string, FaceHandler> = {
     credentialsSet(runtime, payload),
   "credentials.unset": async (runtime, _rpcId, payload) =>
     credentialsUnset(runtime, payload),
-  /** Empty catalog until skills are wired. */
-  "skill.list": async () => ({ ok: true, value: { skills: [] as unknown[] } }),
+  // Skills from workspace .xrk/skills/<id>/SKILL.md (AGT-style).
+  "skill.list": async (runtime, _rpcId, payload) =>
+    skillList(runtime.workspaceRoot, payload),
   /** Empty child catalog until subagent Face is wired. */
   "subagent.list": async () => ({
     ok: true,

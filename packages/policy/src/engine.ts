@@ -10,7 +10,7 @@ import type {
 const DEFAULT_VERDICTS: Record<PolicySubjectKind, PolicyVerdict> = {
   "tool.call": "allow",
   "provider.use": "allow",
-  /** MCP package is an empty shell — refuse connect until a real client exists. */
+  /** MCP client M0 exists; connect still defaults to deny until host allows. */
   "mcp.connect": "deny",
 };
 
@@ -22,7 +22,7 @@ export interface CreatePolicyEngineOptions {
 
 function defaultReason(kind: PolicySubjectKind, verdict: PolicyVerdict): string {
   if (kind === "mcp.connect" && verdict === "deny") {
-    return "mcp.connect denied (MCP client not shipped)";
+    return "mcp.connect denied by default";
   }
   return `default ${verdict} for ${kind}`;
 }

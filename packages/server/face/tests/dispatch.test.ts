@@ -62,7 +62,7 @@ describe("face dispatch", () => {
     if (d.result.ok) {
       expect(d.result.value).toMatchObject({
         version: "test",
-        canOpenPath: false,
+        canOpenPath: true,
       });
     }
     const fork = await dispatchFaceMethod(runtime, "session.fork", "r2", {});

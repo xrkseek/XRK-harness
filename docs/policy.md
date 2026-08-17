@@ -16,7 +16,7 @@ First matching rule wins; else per-kind defaults:
 |------|---------|
 | `tool.call` | allow |
 | `provider.use` | allow |
-| `mcp.connect` | **deny** (MCP client empty shell) |
+| `mcp.connect` | **deny**（M0 client 已存在；须显式 allow） |
 
 ## Programmatic API
 
@@ -88,12 +88,12 @@ assertPolicyAllow(engine, { kind: "provider.use", providerId: llm.id });
 | Face ask | `approval/asked|decided` + `session.respondApproval`；Host 挂 `setApprovalHandler` |
 | Preset `policy?` | tool `onPre(createPolicyToolPre)` |
 
-MCP connect 默认 deny；Client 仍空壳。
+MCP connect 默认 deny；Client **M0 能跑**；Host 可用 `XRK_MCP_SERVERS` + `XRK_MCP_ALLOW=1` 拉起。
 
 ## Not shipped
 
 - YAML / TOML rulesets  
-- Real MCP client（默认仍 deny）  
+- MCP streamable-http / 重连 / Face MCP 设置 UI  
 - Policy 热重载  
 - 审批超时自动 decide（仅 abort→cancel）
 

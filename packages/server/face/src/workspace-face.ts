@@ -11,6 +11,7 @@ import {
 } from "@xrkseek/workspace";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
+import { canOpenNativePath } from "./host-open-path.js";
 
 const MAX_LIST_ENTRIES = 200;
 const MAX_LIST_DEPTH = 5;
@@ -120,7 +121,7 @@ export async function workspaceDescribe(
       root,
       productDir,
       productExists,
-      canOpenPath: false,
+      canOpenPath: canOpenNativePath(),
       seedTemplates: templates,
     },
   };

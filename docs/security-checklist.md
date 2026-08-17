@@ -23,7 +23,7 @@
 
 | 项 | 状态 |
 |----|------|
-| MCP 统一 handleToolCall 门禁 | `@xrkseek/mcp` 空壳；`mcp.connect` 默认 deny |
+| MCP 统一 handleToolCall 门禁 | Client M0 + Host `XRK_MCP_*` 接线已有；**默认仍 deny**（须 `XRK_MCP_ALLOW=1` 或 policy allow） |
 | 完整 policy 文件 schema | **v1 JSON 已有**（`policyRulesetJsonSchema`）；无热加载 / YAML |
 | Ask / 审批 UI | `ask` → pipeline `onApproval`；无 UI；HTTP 无人工审批流 |
 | TLS 终止 | 由反向代理负责 |
@@ -37,4 +37,4 @@
 3. 新增危险工具：先 guard / sandbox，再注册。  
 4. 变更安全相关行为 → 更新本页 + 加锁测。
 
-相关：[http-api.md](./http-api.md) · [tool-pipeline.md](./tool-pipeline.md) · [policy.md](./policy.md) · [seams.md](./seams.md) · [status.md](./status.md)
+相关：[http-api.md](./http-api.md) · [tool-pipeline.md](./tool-pipeline.md) · [policy.md](./policy.md) · [modules/mcp.md](./modules/mcp.md) · [status.md](./status.md)

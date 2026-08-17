@@ -1,7 +1,4 @@
-import type {
-  PromptSection,
-  SystemPromptAssembler,
-} from "@xrkseek/core-system-prompt";
+import type { PromptSection, SystemPromptAssembler } from "@xrkseek/core-system-prompt";
 import type { PluginPromptSection, RegisteredPlugin } from "./types.js";
 import { PLUGIN_KINDS } from "./kinds.js";
 
@@ -30,10 +27,7 @@ function toSection(raw: PluginPromptSection): PromptSection {
   return {
     id: raw.id,
     ...(raw.order !== undefined ? { order: raw.order } : {}),
-    content:
-      typeof content === "function"
-        ? content
-        : () => content,
+    content: typeof content === "function" ? content : () => content,
   };
 }
 

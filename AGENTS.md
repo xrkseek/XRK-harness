@@ -37,4 +37,5 @@ TypeScript Agent Harness + Server Kit。宿主 **仅 TypeScript（Node ≥26）*
 - 入口：[docs/README.md](./docs/README.md)
 - 能力矩阵：[docs/status.md](./docs/status.md)
 - 学习笔记：[docs/learn.md](./docs/learn.md)
+- **模块文件地图**：[docs/modules/](./docs/modules/README.md)（改 Face/Host/loader/MCP 先读对应页）
 - 贡献：[CONTRIBUTING.md](./CONTRIBUTING.md)
