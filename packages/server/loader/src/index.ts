@@ -26,7 +26,6 @@ export {
   wireCompositionPrompts,
   type AppliedPluginPrompt,
   type ApplyPromptPluginsResult,
-  type PluginPromptSection,
   type SkippedPluginPrompt,
 } from "./prompt.js";
 

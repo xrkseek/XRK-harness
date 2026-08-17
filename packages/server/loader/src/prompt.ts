@@ -5,8 +5,6 @@ import type {
 import type { PluginPromptSection, RegisteredPlugin } from "./types.js";
 import { PLUGIN_KINDS } from "./kinds.js";
 
-export type { PluginPromptSection } from "./types.js";
-
 export interface AppliedPluginPrompt {
   readonly pluginId: string;
   readonly sectionId: string;

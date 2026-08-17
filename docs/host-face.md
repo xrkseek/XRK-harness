@@ -21,11 +21,11 @@
 
 | 状态 | 方法 |
 |------|------|
-| 能跑 | `host.describe` · `host.listDirectory` · `host.createDirectory` · `session.create/list/history/prompt/cancel/models/selectModel/rename/updateQueue/fork/respondApproval` · `agentPreset.list/select` · `workspace.list/create/rename/archiveSession` · `workspace.describe/listProduct/previewInject/syncSeeds` · `settings.get/set/describe/mutate/update/replace` · `credentials.list/describe/set/unset` · `llm.providers/models` |
+| 能跑 | `host.describe` · `host.listDirectory` · `host.createDirectory` · `session.create/list/history/search/prompt/cancel/models/selectModel/rename/updateQueue/fork/respondApproval` · `agentPreset.list/select` · `workspace.list/create/rename/archiveSession` · `workspace.describe/listProduct/previewInject/syncSeeds` · `settings.get/set/describe/mutate/update/replace` · `credentials.list/describe/set/unset` · `llm.providers/models` |
 | 软降级 | `host.pickDirectory` → `{ path: null }`（browse 用 listDirectory）· `skill.list` / `subagent.list` → 空目录 |
-| 未做（NI） | `host.openPath` · `session.attachment/search` · `settings.openDocument` · `workspace.delete/insert*` · `agentPreset` 创作面 · `llm.discoverModels` · `goal.*` · subagent 写路径 |
+| 未做（NI） | `host.openPath` · `session.attachment` · `settings.openDocument` · `workspace.delete/insert*` · `agentPreset` 创作面 · `llm.discoverModels` · `goal.*` · subagent 写路径 |
 
-Wire：`session/queue` 带完整 `message` 块；`prompt/*` → mux/history `agent/inbox/spliced`；mux 重连对有 pending 的 session 补发 queue 基线。
+Wire：`session/queue` 带完整 `message` 块；`prompt/*` → mux/history `agent/inbox/spliced`；mux 重连对有 pending 的 session 补发 queue 基线。`session.search` 为内存扫 `user/message` + `assistant/message`（上限 20，`hasMore`）。
 
 Policy：`XRK_POLICY_FILE` → `provider.use`；ask → `approval/*` + `session.respondApproval`。见 [policy.md](./policy.md)。
 

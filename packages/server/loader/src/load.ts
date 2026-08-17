@@ -1,9 +1,8 @@
 import { realpath } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import type { ToolDefinition } from "@xrkseek/core-tools";
-import type { RegisteredPlugin } from "./types.js";
+import type { RegisteredPlugin, PluginPromptSection } from "./types.js";
 import type { DiscoveryHit } from "./manifest.js";
-import type { PluginPromptSection } from "./prompt.js";
 
 function asToolDefinition(value: unknown, label: string): ToolDefinition {
   if (!value || typeof value !== "object") {
