@@ -74,7 +74,14 @@ function parseMcpServersJson(raw: string): HostRuntimeConfig["mcpServers"] {
   if (!Array.isArray(parsed)) {
     throw new Error("XRK_MCP_SERVERS must be a JSON array");
   }
-  const out: NonNullable<HostRuntimeConfig["mcpServers"]> = [];
+  type McpServerSpec = {
+    serverName: string;
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+    cwd?: string;
+  };
+  const out: McpServerSpec[] = [];
   for (const row of parsed) {
     if (!row || typeof row !== "object") continue;
     const o = row as Record<string, unknown>;
@@ -118,7 +125,7 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
     ...input.defaults,
   };
 
-  const runtime: HostRuntimeConfig = {
+  const runtime = {
     host: String(env.XRK_HOST ?? defaults.host),
     port: num(env.XRK_PORT, defaults.port),
     workspaceRoot: String(env.XRK_WORKSPACE ?? defaults.workspaceRoot),
@@ -151,9 +158,9 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
         }
       : {}),
     ...(env.XRK_MCP_ALLOW === "1" || env.XRK_MCP_ALLOW === "true"
-      ? { mcpAllowConnect: true }
+      ? { mcpAllowConnect: true as const }
       : {}),
-  };
+  } as HostRuntimeConfig;
 
   const patch = { ...(input.patch ?? {}) };
   const mutable = runtime as {

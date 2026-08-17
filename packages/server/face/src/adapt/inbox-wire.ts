@@ -3,14 +3,28 @@
  * Coordinates are computed by replaying pending lists.
  */
 
-import type { SessionEvent } from "@xrkseek/protocol";
+import type { MessageContent, SessionEvent } from "@xrkseek/protocol";
+import { asContentBlocks } from "@xrkseek/protocol";
 
 export type InboxTarget = "next-turn" | "next-step";
 
 export interface DshWireUserMessage {
   readonly id: string;
   readonly role: "user";
-  readonly content: readonly { readonly type: "text"; readonly text: string }[];
+  readonly content: readonly (
+    | { readonly type: "text"; readonly text: string }
+    | {
+        readonly type: "image";
+        readonly attachment: {
+          readonly attachmentId: string;
+          readonly mediaType: string;
+          readonly bytes: number;
+          readonly width: number;
+          readonly height: number;
+          readonly name?: string;
+        };
+      }
+  )[];
   readonly source: {
     readonly kind: "user";
     readonly rpcId?: string;
@@ -27,13 +41,17 @@ export interface DshInboxSplice {
 
 function userMessage(
   id: string,
-  content: string,
+  content: MessageContent,
   rpcId?: string,
 ): DshWireUserMessage {
   return {
     id,
     role: "user",
-    content: [{ type: "text", text: content }],
+    content: asContentBlocks(content).map((block) =>
+      block.type === "text"
+        ? { type: "text" as const, text: block.text }
+        : { type: "image" as const, attachment: { ...block.attachment } },
+    ),
     source: {
       kind: "user",
       ...(rpcId !== undefined && rpcId !== "" ? { rpcId } : {}),

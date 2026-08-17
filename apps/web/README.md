@@ -14,7 +14,7 @@ pnpm --filter @xrkseek/harness-web build
 pnpm --filter @xrkseek/harness-web dev   # 代理到 :8787
 ```
 
-完整产品聊天壳由 `serve` 托管的 web dist 提供（见 Host / CLI）。
+完整产品聊天壳：仓库内 [apps/web-static](../web-static/)（`serve` 默认托管）。
 
 ## License
 
