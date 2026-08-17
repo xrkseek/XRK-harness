@@ -94,7 +94,6 @@ HTTP/WS (attach-http)
 | `tests/inbox-wire.test.ts` | splice 投影 |
 | `tests/dispatch.test.ts` | 路由烟测 |
 
-## 已知 NI / 下一刀
+## 已知 NI
 
-- `session.attachment`：授权读图字节（须事件引用 + AttachmentStore）；图 prompt 须 `inputModalities` 含 `image`
-- `llm.discoverModels` · Goal · agentPreset 创作面 · `workspace.delete/insert*`
+- `llm.discoverModels` · `goal.*` · agentPreset 创作面 · `workspace.delete/insert*` · `settings.openDocument`

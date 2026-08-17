@@ -1,7 +1,6 @@
 # Status（能力矩阵）
 
-> 与实现对齐。三态：**能跑 / 未稳 / 未做**。基线：2026-08。  
-> 产品：XRK-Harness（自研）。
+三态：**能跑 / 未稳 / 未做**。与代码对齐。
 
 ## 能跑
 
@@ -13,32 +12,31 @@
 | HTTP + Host + Face 主路径 | `server-*` | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
 | LLM replay / OpenAI 兼容 / Registry R0 | `llm-*` | [llm-provider-registry.md](./llm-provider-registry.md) |
 | Presets / SDK | `presets/*` · `@xrkseek/harness` | [profiles.md](./profiles.md) |
+| MCP M0 | `@xrkseek/mcp` + Host `XRK_MCP_*`（默认 deny） | [policy.md](./policy.md) |
+| Attachment | `@xrkseek/attachment` + Face `session.attachment`（Host 默认 text-only） | [host-face.md](./host-face.md) |
 
 ## 未稳
 
 | 域 | 说明 |
 |----|------|
-| Host Face ↔ 产品 Web | 侧栏 / settings / 队列 / search / skill.list / openPath 已接；**浏览器 E2E 未勾** |
-| 产品 Web | 静态壳可挂；对话窗流式 / 工具卡待硬刷验收（bar 已 pull 到 rc.7，待 re-capture） |
-| 核心打磨 | `run` / `serve` 可用 ≠ 边界与错误面打磨完成 |
-| 进程插件 | `tools` + `prompt` 已接线；`channel` / `policy` / `llm` 保留未自动接线 |
-| `@xrkseek/mcp` | **M0** + Host `XRK_MCP_SERVERS`（须 `XRK_MCP_ALLOW=1` 或 policy allow） |
-| `@xrkseek/attachment` | 内存仓 + Face `session.attachment`；Host 默认 text-only（图须 modality） |
+| Host Face ↔ 产品 Web | 侧栏 / settings / 队列 / search / skill.list / openPath 已接；浏览器 E2E 未勾 |
+| 产品 Web | 静态壳可挂；流式 / 工具卡硬刷未验收 |
+| 进程插件 | `tools` + `prompt` 已接线；`channel` / `policy` / `llm` 未自动接线 |
 
 ## 未做
 
 | 域 | 说明 |
 |----|------|
 | Compose C2 · Registry R1+ · Face U3 | 未开工 |
-| Face NI | Goal · agentPreset 创作面 · discoverModels · **视觉 LLM 路由**（附件仓已有） |
+| Face NI | `goal.*` · agentPreset 创作面 · `llm.discoverModels` · `settings.openDocument` · `workspace.delete/insert*` |
+| 视觉模型路由 | 附件仓已有；无声明 `image` 的 LLM 适配路径 |
 | MCP 进阶 | HTTP transport · 重连 · Face MCP 设置 UI |
-| AGT 融合待落 | MEMORY 工具 · trigger microagents · office skills 包 · toolScan |
 
 ## 依赖纪律
 
 ```text
 apps → sdk | server | presets
-presets / sdk / server → core* | llm | mcp | exec* | workspace | policy | compose
+presets / sdk / server → core* | llm | mcp | attachment | exec* | workspace | policy | compose
 core* / 能力叶 → kernel | protocol | compose
 ```
 

@@ -15,4 +15,4 @@
 2. `saveImages`：先整批 validate，再写；validate 失败无部分提交。  
 3. Host Face：`inputModalities` 无 `image` → prompt 图在写盘前拒（`unsupported-modality`）。
 
-相关：[learn.md](../learn.md) · [modules/server-face.md](./server-face.md) · [protocol-events.md](../protocol-events.md)
+相关：[protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) · [server-face.md](./server-face.md)
