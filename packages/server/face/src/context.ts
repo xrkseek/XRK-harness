@@ -1,3 +1,4 @@
+import type { AttachmentStore } from "@xrkseek/attachment";
 import type { AgentHandle } from "@xrkseek/core-agent";
 import type { SessionRecord, SessionStore } from "@xrkseek/core-session";
 import type { ProviderRegistry } from "@xrkseek/llm-registry";
@@ -31,6 +32,13 @@ export interface FaceDrain {
 }
 
 export interface FaceRuntime {
+  /** Durable image blobs; omit → image prompt / session.attachment unavailable. */
+  readonly attachments?: AttachmentStore;
+  /**
+   * Declared input modalities for Host precheck (DSH-aligned).
+   * Default `["text"]` — images rejected before save unless `"image"` is listed.
+   */
+  readonly inputModalities?: readonly ("text" | "image")[];
   readonly store: SessionStore;
   ensureSession(id?: string): string;
   resolveAgent(sessionId: string): Promise<AgentHandle>;

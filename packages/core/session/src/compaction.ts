@@ -10,6 +10,7 @@ import type {
   ContextCompactionEvent,
   SessionEvent,
 } from "@xrkseek/protocol";
+import { flattenText } from "@xrkseek/protocol";
 
 export type { CompactionReason };
 
@@ -159,7 +160,7 @@ function foldChat(events: readonly SessionEvent[]): ChatMessage[] {
   for (const ev of events) {
     switch (ev.type) {
       case "user/message":
-        messages.push({ role: "user", content: ev.content });
+        messages.push({ role: "user", content: flattenText(ev.content) });
         break;
       case "safety/notice":
         messages.push({ role: "user", content: ev.content });

@@ -21,9 +21,16 @@ import {
 } from "@xrkseek/core-tools";
 import {
   isContextOverflowError,
+  UnsupportedContentError,
   type LlmAdapter,
 } from "@xrkseek/llm";
-import type { ChatMessage, SafetyNoticePayload, SessionEvent } from "@xrkseek/protocol";
+import type {
+  ChatMessage,
+  MessageContent,
+  SafetyNoticePayload,
+  SessionEvent,
+} from "@xrkseek/protocol";
+import { contentHasImage } from "@xrkseek/protocol";
 import { resolveCompactionOptions, runCompaction } from "./compaction.js";
 import {
   MAX_STEPS_PROMPT,
@@ -64,6 +71,11 @@ export interface AssembleOptions {
 export interface RunTurnInput {
   readonly sessionId: string;
   readonly userText: string;
+  /**
+   * Session log content for `user/message` (string or ContentBlock[]).
+   * Defaults to `userText`. Images are persisted as refs; text-only LLMs hard-fail.
+   */
+  readonly userContent?: MessageContent;
   readonly system?: string;
   readonly assemble?: AssembleOptions;
   readonly store: SessionStore;
@@ -215,15 +227,25 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   let overflowRecovered = false;
 
   let userText = input.userText;
+  let userContent: MessageContent = input.userContent ?? input.userText;
   let slashSystemExtra: string | undefined;
   if (input.assemble?.resolveSlash) {
     const resolved = await input.assemble.resolveSlash(userText);
     if (resolved) {
       userText = resolved.userPrompt;
+      if (typeof userContent === "string") {
+        userContent = userText;
+      }
       if (resolved.systemExtra?.trim()) {
         slashSystemExtra = resolved.systemExtra;
       }
     }
+  }
+
+  if (contentHasImage(userContent)) {
+    throw new UnsupportedContentError(
+      "image content is not supported on text-only LLM routes",
+    );
   }
 
   // Fail-before-retry: settle abandoned tools from a prior crash/abort so the
@@ -240,7 +262,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     type: "user/message",
     ts: now(),
     turnId,
-    content: userText,
+    content: userContent,
   });
 
   while (steps < maxSteps) {

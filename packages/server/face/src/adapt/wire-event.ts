@@ -6,7 +6,8 @@
  * otherwise fall back to wireNumericId hash for isolated unit tests.
  */
 
-import type { SessionEvent } from "@xrkseek/protocol";
+import type { MessageContent, SessionEvent } from "@xrkseek/protocol";
+import { asContentBlocks } from "@xrkseek/protocol";
 import {
   FaceInboxWireProjector,
   type DshInboxSplice,
@@ -60,8 +61,25 @@ export interface WireAdaptContext {
   readonly inbox?: FaceInboxWireProjector;
 }
 
-function textBlocks(text: string): readonly { type: "text"; text: string }[] {
-  return [{ type: "text", text }];
+function wireContentBlocks(content: MessageContent): readonly (
+  | { type: "text"; text: string }
+  | {
+      type: "image";
+      attachment: {
+        attachmentId: string;
+        mediaType: string;
+        bytes: number;
+        width: number;
+        height: number;
+        name?: string;
+      };
+    }
+)[] {
+  return asContentBlocks(content).map((block) =>
+    block.type === "text"
+      ? { type: "text" as const, text: block.text }
+      : { type: "image" as const, attachment: { ...block.attachment } },
+  );
 }
 
 /**
@@ -136,7 +154,7 @@ export function toDshWireSessionEvent(
         time,
         data: {
           id: event.turnId,
-          content: textBlocks(event.content),
+          content: wireContentBlocks(event.content),
           source: { kind: "user" },
           ...(event.rpcId ? { rpcId: event.rpcId } : {}),
         },

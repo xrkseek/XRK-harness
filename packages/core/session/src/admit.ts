@@ -1,5 +1,5 @@
-import type { SessionEvent, PromptDelivery } from "@xrkseek/protocol";
-import { isPromptDelivery } from "@xrkseek/protocol";
+import type { SessionEvent, PromptDelivery, MessageContent } from "@xrkseek/protocol";
+import { flattenText, isPromptDelivery, mergeMessageContents } from "@xrkseek/protocol";
 import type { SessionRecord, SessionStore } from "./index.js";
 
 /**
@@ -19,7 +19,7 @@ export class NoPendingAdmitError extends Error {
 export interface AdmitReceipt {
   readonly admitId: string;
   readonly sessionId: string;
-  readonly content: string;
+  readonly content: MessageContent;
   /** Effective delivery; omitted event field and `"queue"` both surface as `"queue"`. */
   readonly delivery: PromptDelivery;
 }
@@ -54,14 +54,18 @@ export function newSession(store: SessionStore, id?: string): SessionRecord {
   return store.create();
 }
 
-/** Record user text without running the model. Ignored by deriveMessages. */
+/** Record user text / content blocks without running the model. Ignored by deriveMessages. */
 export function admitPrompt(
   store: SessionStore,
   sessionId: string,
-  content: string,
+  content: MessageContent,
   options?: AdmitPromptOptions,
 ): AdmitReceipt {
-  if (!content || typeof content !== "string") {
+  const empty =
+    typeof content === "string"
+      ? content.length === 0
+      : !Array.isArray(content) || content.length === 0;
+  if (empty) {
     throw new Error("admit content required");
   }
   if (
@@ -161,8 +165,10 @@ export function promoteNextAdmit(
 }
 
 export interface PromoteForTurnResult {
-  /** Merged user text for `runTurn` (steers joined with blank lines). */
-  readonly content: string;
+  /** Merged user content for `runTurn` (steers joined). */
+  readonly content: MessageContent;
+  /** Flattened text for assemble / slash (images contribute nothing). */
+  readonly text: string;
   readonly delivery: PromptDelivery;
   readonly receipts: readonly AdmitReceipt[];
   /**
@@ -193,6 +199,7 @@ export function promoteAdmitsForTurn(
     const one = promoteNextAdmit(store, sessionId, options);
     return {
       content: one.content,
+      text: flattenText(one.content),
       delivery: "queue",
       receipts: [one],
       steerBatch: false,
@@ -207,8 +214,10 @@ export function promoteAdmitsForTurn(
     receipts.push(promoteNextAdmit(store, sessionId, options));
   }
 
+  const content = mergeMessageContents(receipts.map((r) => r.content));
   return {
-    content: receipts.map((r) => r.content).join("\n\n"),
+    content,
+    text: flattenText(content),
     delivery: "steer",
     receipts,
     steerBatch: true,

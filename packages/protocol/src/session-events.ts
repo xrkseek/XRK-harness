@@ -1,4 +1,5 @@
 import type { ToolCall, ToolResult } from "./tools.js";
+import type { MessageContent } from "./content.js";
 
 /** Append-only session facts (M0 minimal set). */
 
@@ -32,7 +33,8 @@ export interface StepEndEvent extends SessionEventBase {
 export interface UserMessageEvent extends SessionEventBase {
   readonly type: "user/message";
   readonly turnId: string;
-  readonly content: string;
+  /** Plain string (legacy) or ContentBlock[] (text + image refs). */
+  readonly content: MessageContent;
   /**
    * Face / client optimism id (echo of unary `rpcId` from `session.prompt`).
    * Ignored by `deriveMessages` — not model-visible.
@@ -99,7 +101,7 @@ export function parsePromptDelivery(
 export interface PromptAdmittedEvent extends SessionEventBase {
   readonly type: "prompt/admitted";
   readonly admitId: string;
-  readonly content: string;
+  readonly content: MessageContent;
   /**
    * Inbox delivery mode. Omitted ⇒ `"queue"` (FIFO; see docs/session-delivery.md).
    * `"steer"` = interrupt-at-turn-boundary (promote preferred over queue).

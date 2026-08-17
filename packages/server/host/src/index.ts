@@ -1,4 +1,5 @@
 import type { AgentHandle, AgentRunResult } from "@xrkseek/core-agent";
+import { createMemoryAttachmentStore } from "@xrkseek/attachment";
 import {
   createMemorySessionStore,
   createSessionDrainHub,
@@ -190,6 +191,9 @@ export function createHostManager(): HostManager {
         version: "0.0.0",
         defaultAgentPreset: config.runtime.preset,
         registry: createProviderRegistry(),
+        attachments: createMemoryAttachmentStore(),
+        // Vision routes not shipped yet — Host precheck rejects image prompts.
+        inputModalities: ["text"],
         hostPublic: {
           host: config.runtime.host,
           port: config.runtime.port,

@@ -5,6 +5,10 @@ import type {
 } from "./session-events.js";
 import { isPromptDelivery } from "./session-events.js";
 import type { ToolCall, ToolResult } from "./tools.js";
+import {
+  isContentBlock,
+  type MessageContent,
+} from "./content.js";
 
 const SAFETY_KINDS = new Set([
   "loop_soft",
@@ -103,6 +107,23 @@ function parseToolCalls(
   return value.map((c, i) => parseToolCall(c, `${path}[${i}]`));
 }
 
+function parseMessageContent(value: unknown, path: string): MessageContent {
+  if (typeof value === "string") return value;
+  if (!Array.isArray(value)) {
+    throw new SessionEventParseError(
+      "content must be string or ContentBlock[]",
+      path,
+    );
+  }
+  const blocks = value.map((block, i) => {
+    if (!isContentBlock(block)) {
+      throw new SessionEventParseError("invalid ContentBlock", `${path}[${i}]`);
+    }
+    return block;
+  });
+  return blocks;
+}
+
 /**
  * Strict parse of an unknown value into a `SessionEvent`.
  * Prefer this over the loose type-only `isSessionEvent` for I/O boundaries.
@@ -142,7 +163,7 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         type,
         ts,
         turnId: reqString(value, "turnId", type),
-        content: reqString(value, "content", type),
+        content: parseMessageContent(value.content, `${type}.content`),
         ...(rpcId !== undefined ? { rpcId } : {}),
       };
     }
@@ -193,7 +214,7 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         type,
         ts,
         admitId: reqString(value, "admitId", type),
-        content: reqString(value, "content", type),
+        content: parseMessageContent(value.content, `${type}.content`),
         ...(delivery === "steer" ? { delivery: "steer" as const } : {}),
         // persist queue explicitly if client sent it
         ...(delivery === "queue" ? { delivery: "queue" as const } : {}),

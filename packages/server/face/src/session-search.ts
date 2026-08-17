@@ -1,4 +1,5 @@
 import type { SessionEvent } from "@xrkseek/protocol";
+import { flattenText } from "@xrkseek/protocol";
 import type { SessionStore } from "@xrkseek/core-session";
 import type { FaceRpcResult } from "./types.js";
 
@@ -26,8 +27,9 @@ function truncateCodePoints(text: string, max: number): string {
 function extractSearchableTexts(events: readonly SessionEvent[]): string[] {
   const out: string[] = [];
   for (const e of events) {
-    if (e.type === "user/message" && typeof e.content === "string") {
-      out.push(e.content);
+    if (e.type === "user/message") {
+      const text = flattenText(e.content);
+      if (text) out.push(text);
     } else if (e.type === "assistant/message" && typeof e.content === "string") {
       out.push(e.content);
     }

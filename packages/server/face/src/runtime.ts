@@ -1,3 +1,4 @@
+import type { AttachmentStore } from "@xrkseek/attachment";
 import {
   forkSession,
   listPendingAdmits,
@@ -61,6 +62,10 @@ export interface CreateFaceRuntimeOptions {
   readonly uiSettings?: FaceUiSettings;
   /** Optional policy (XRK_POLICY_FILE / host) for provider.use. */
   readonly policy?: PolicyEngine;
+  /** Durable image store (default none → image RPCs unavailable). */
+  readonly attachments?: AttachmentStore;
+  /** Host input modalities; default text-only. */
+  readonly inputModalities?: readonly ("text" | "image")[];
 }
 
 /**
@@ -180,6 +185,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
 
   const runtime: FaceRuntime = {
     store,
+    ...(options.attachments !== undefined
+      ? { attachments: options.attachments }
+      : {}),
+    ...(options.inputModalities !== undefined
+      ? { inputModalities: options.inputModalities }
+      : {}),
     ensureSession(id) {
       if (id) {
         try {

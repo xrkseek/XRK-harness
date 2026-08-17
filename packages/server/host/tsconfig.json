@@ -7,6 +7,7 @@
   },
   "include": ["src/**/*.ts"],
   "references": [
+    { "path": "../../attachment" },
     { "path": "../../compose" },
     { "path": "../../core/agent" },
     { "path": "../../core/session" },

@@ -24,6 +24,7 @@
     "@xrkseek/llm-deepseek": "workspace:*",
     "@xrkseek/llm-registry": "workspace:*",
     "@xrkseek/mcp": "workspace:*",
+    "@xrkseek/attachment": "workspace:*",
     "@xrkseek/server-loader": "workspace:*",
     "@xrkseek/preset-harness": "workspace:*",
     "@xrkseek/preset-minimal": "workspace:*",

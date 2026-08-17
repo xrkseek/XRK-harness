@@ -19,6 +19,7 @@
     { "path": "../llm/deepseek" },
     { "path": "../llm/registry" },
     { "path": "../mcp" },
+    { "path": "../attachment" },
     { "path": "../server/loader" },
     { "path": "../server/config" },
     { "path": "../server/host" },
