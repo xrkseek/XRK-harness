@@ -34,6 +34,7 @@ import {
   hostCreateDirectory,
   hostListDirectory,
 } from "./host-directory.js";
+import { parseSearchQuery, searchSessions } from "./session-search.js";
 import {
   AdmitNotPendingError,
   admitPrompt,
@@ -223,6 +224,12 @@ const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       ...(projections ? { projections } : {}),
     },
   };
+};
+
+const sessionSearch: FaceHandler = async (runtime, _rpcId, payload) => {
+  const parsed = parseSearchQuery(payload);
+  if (!parsed.ok) return parsed;
+  return { ok: true, value: searchSessions(runtime.store, parsed.value) };
 };
 
 const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
@@ -791,6 +798,7 @@ const HANDLERS: Record<string, FaceHandler> = {
   "session.create": sessionCreate,
   "session.list": sessionList,
   "session.history": sessionHistory,
+  "session.search": sessionSearch,
   "session.prompt": sessionPrompt,
   "session.cancel": sessionCancel,
   "session.models": sessionModels,
@@ -847,7 +855,6 @@ const HANDLERS: Record<string, FaceHandler> = {
   }),
   // explicit not-implemented
   "session.attachment": notImplemented,
-  "session.search": notImplemented,
   "llm.discoverModels": notImplemented,
   "workspace.delete": notImplemented,
   "workspace.insertBefore": notImplemented,
