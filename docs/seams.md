@@ -1,6 +1,11 @@
-# Exec seams
+# Exec seams（XRK 落点）
 
-## Triad: Definition / Provider / Consumer
+> **能力缝基础规格：读 DSH 原文，不要用本页当精简替代。**  
+> [upstream/deepseek-harness/capability-seams.zh.md](./upstream/deepseek-harness/capability-seams.zh.md)
+
+## 本仓实现对照
+
+### Triad: Definition / Provider / Consumer
 
 | Layer | Role | Example (fs) |
 |-------|------|----------------|
@@ -14,7 +19,7 @@ const tools = createFsTools(stubFs); // 换 Provider，工具 schema 不变
 
 Built-in search（无 shell `rg`）：`fs.glob` / `fs.grep` → 工具名 `glob` / `grep`。
 
-## Dependency graph
+### Dependency graph
 
 ```text
 exec-fs  (independent)
@@ -23,19 +28,9 @@ exec-subprocess
 exec-sandbox         → createSandboxWrapGuard → pipeline guards
 ```
 
-## Sandbox
+### Sandbox / jobs
 
 `wrapArgv(argv) → argv'`。推荐栈：`WorkspaceSandbox(DenyList(Permissive))`。  
-接入：`pipeline.onGuard(createSandboxWrapGuard(sandbox))`。
+Background：`startJob` / `listJobs` / `killJob` — [shell-jobs.md](./shell-jobs.md)。
 
-## Background jobs
-
-`startJob` / `listJobs` / `killJob` — see [shell-jobs.md](./shell-jobs.md).
-
-`createBashTools` exposes `bash` (`background?`) · `bash_jobs` · `bash_kill`.
-
-## 扩展
-
-1. 新 IO：先扩 Definition，再 Provider，最后 Consumer 工具。  
-2. 单测：stub Provider + 逃逸用例（见 `packages/exec/fs/tests`）。  
-3. 不要在 `core-agent` 里 import exec 实现（依赖纪律）。
+扩展纪律：先 Definition → Provider → Consumer；单测 stub Provider + 逃逸用例。

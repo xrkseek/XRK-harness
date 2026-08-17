@@ -15,6 +15,37 @@ import {
 } from "@xrkseek/core-session";
 import { tryServeWebStatic } from "./static.js";
 
+const API_ONLY_LANDING = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>XRK-Harness</title>
+  <style>
+    :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+    body { max-width: 40rem; margin: 3rem auto; padding: 0 1.25rem; line-height: 1.5; }
+    code, pre { font-family: ui-monospace, monospace; font-size: 0.9em; }
+    pre { background: color-mix(in srgb, CanvasText 8%, Canvas); padding: 0.75rem 1rem; overflow: auto; }
+    a { color: inherit; }
+  </style>
+</head>
+<body>
+  <h1>XRK-Harness</h1>
+  <p>当前是 <strong>API Host</strong>（未挂 Web 静态）。对话走 HTTP / Face API。</p>
+  <ul>
+    <li><a href="/health"><code>GET /health</code></a></li>
+    <li><code>POST /api/chat</code> — JSON <code>{"message":"ping"}</code></li>
+    <li><code>POST /api/sessions</code> · admit · SSE — 见文档 http-api</li>
+  </ul>
+  <p>产品聊天壳（DSH fork，真源 XRKbar）：</p>
+  <pre>pnpm web:dsh:build
+pnpm web:dsh:capture
+node apps/cli/dist/bin.js serve --preset minimal --workspace .</pre>
+  <p>Face 验证台：构建 <code>apps/web</code> 后打开 <code>/?console=1</code>（非产品壳）。</p>
+</body>
+</html>
+`;
+
 export interface HttpChatRequest {
   readonly sessionId?: string;
   readonly message: string;
@@ -195,15 +226,20 @@ export function createHttpServer(
       return;
     }
 
-    if (!checkRate(req)) {
-      sendJson(res, 429, { error: "rate limit exceeded" }, cors);
-      return;
-    }
-
     // Public SPA (before /api auth)
     if (options.webStatic) {
       const served = await tryServeWebStatic(req, res, options.webStatic, cors);
       if (served) return;
+    } else if (
+      req.method === "GET" &&
+      (path === "/" || path === "/index.html")
+    ) {
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        ...cors,
+      });
+      res.end(API_ONLY_LANDING);
+      return;
     }
 
     const needsAuth = path.startsWith("/api/");
@@ -551,6 +587,8 @@ export function createHttpServer(
 export {
   FACE_CONSOLE_BOOT,
   XRK_APP_SHELL_BOOT,
+  loadBootManifestFromWebDist,
+  resolveWebBootManifest,
   bootInjectScript,
   injectBootIntoHtml,
   type WebBootEntry,

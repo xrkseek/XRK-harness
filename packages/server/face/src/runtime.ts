@@ -20,7 +20,7 @@ import {
   installDefaultFaceProjections,
   type FaceProjectionRegistry,
 } from "./projections/index.js";
-import { toMuxSessionEvent } from "./adapt/index.js";
+import { FaceInboxWireMaps, toMuxSessionEvent } from "./adapt/index.js";
 import { toQueueItems } from "./queue.js";
 import {
   defaultRecipesLoader,
@@ -28,12 +28,14 @@ import {
 } from "./slash.js";
 import {
   FaceCredentialVault,
+  FaceSettingsNamespaces,
   defaultUiSettings,
   type FaceHostPublicSettings,
   type FaceUiSettings,
 } from "./settings-credentials.js";
 import { FaceApprovalBroker } from "./approvals.js";
-
+import { FaceWorkspaceRegistry } from "./workspace-registry.js";
+import { FaceWireIdMaps } from "./adapt/wire-ids.js";
 export interface CreateFaceRuntimeOptions {
   readonly store: SessionStore;
   readonly resolveAgent: (sessionId: string) => Promise<AgentHandle>;
@@ -86,6 +88,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const pendingUserRpc = new Map<string, string>();
   const sessionModels = new Map<string, { provider: string; model: string }>();
   const sessionAgentPresets = new Map<string, string>();
+  const sessionCwds = new Map<string, string>();
+  const workspaces = new FaceWorkspaceRegistry(options.workspaceRoot);
+  const wireIds = new FaceWireIdMaps();
+  const inboxWire = new FaceInboxWireMaps(admitRpcMap);
 
   const titleBox: { controller: FaceTitleController | undefined } = {
     controller: undefined,
@@ -119,7 +125,15 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
 
     const frozen = originalAppend(id, next);
     const eventSeq = seq.next(id);
-    bus.publishMux(toMuxSessionEvent(id, frozen, eventSeq));
+    bus.publishMux(
+      toMuxSessionEvent(
+        id,
+        frozen,
+        eventSeq,
+        wireIds,
+        inboxWire.forSession(id),
+      ),
+    );
     projections.drive(id, frozen, eventSeq);
     if (frozen.type === "user/message" && !replayingLog) {
       titleBox.controller?.maybeFallbackFromUserMessage(
@@ -192,6 +206,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       ? { ...options.uiSettings }
       : defaultUiSettings(),
     credentials: new FaceCredentialVault(),
+    settingsNamespaces: new FaceSettingsNamespaces(),
     ...(options.hostPublic !== undefined
       ? { hostPublic: options.hostPublic }
       : {}),
@@ -209,6 +224,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     pendingUserRpc,
     sessionModels,
     sessionAgentPresets,
+    sessionCwds,
+    workspaces,
+    wireIds,
+    inboxWire,
     loadSlashRecipes,
     publishQueue(sessionId) {
       const pending = listPendingAdmits(

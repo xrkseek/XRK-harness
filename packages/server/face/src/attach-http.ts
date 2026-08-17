@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
-import { parseFaceRpcRequest } from "./envelope.js";
+import { parseFaceRpcRequest, serverRequestFrame } from "./envelope.js";
 
 export interface AttachFaceOptions {
   readonly apiKey: string;
@@ -144,32 +144,34 @@ export function attachFaceUpgrades(
   muxWss.on("connection", (ws: WebSocket) => {
     for (const sessionId of runtime.store.list()) {
       ws.send(
-        JSON.stringify({
-          rpcId: newRpcId(),
-          payload: {
+        JSON.stringify(
+          serverRequestFrame(newRpcId(), {
             type: "session/subscribed",
             sessionId,
             lastSeq: runtime.seq.last(sessionId),
-          },
-        }),
+          }),
+        ),
       );
       const pending = runtime.approvals.listPending(sessionId);
       if (pending.length > 0) {
         ws.send(
-          JSON.stringify({
-            rpcId: newRpcId(),
-            payload: {
+          JSON.stringify(
+            serverRequestFrame(newRpcId(), {
               type: "session/approvals",
               sessionId,
               items: [...pending],
-            },
-          }),
+            }),
+          ),
         );
       }
     }
     const off = runtime.bus.subscribeMux((rpcId, frame) => {
       if (ws.readyState === ws.OPEN) {
-        ws.send(JSON.stringify({ rpcId, payload: frame }));
+        ws.send(
+          JSON.stringify(
+            serverRequestFrame(rpcId, frame as { type: string } & Record<string, unknown>),
+          ),
+        );
       }
     });
     ws.on("close", off);
@@ -178,7 +180,11 @@ export function attachFaceUpgrades(
   hostWss.on("connection", (ws: WebSocket) => {
     const off = runtime.bus.subscribeHost((rpcId, frame) => {
       if (ws.readyState === ws.OPEN) {
-        ws.send(JSON.stringify({ rpcId, payload: frame }));
+        ws.send(
+          JSON.stringify(
+            serverRequestFrame(rpcId, frame as { type: string } & Record<string, unknown>),
+          ),
+        );
       }
     });
     ws.on("close", off);

@@ -101,3 +101,35 @@ describe("http webStatic", () => {
     await http.close();
   });
 });
+
+describe("http API-only landing", () => {
+  it("GET / returns HTML when webStatic unset", async () => {
+    const store = createMemorySessionStore();
+    newSession(store);
+    const http = createHttpServer({
+      host: "127.0.0.1",
+      port: 0,
+      apiKey: "",
+      corsOrigin: "*",
+      rateLimitPerMinute: 1000,
+      store,
+      ensureSession: (id) => id ?? store.list()[0]!,
+      resolveAgent: async (sessionId) =>
+        createMinimalComposition({
+          workspaceRoot: process.cwd(),
+          sessionStore: store,
+          sessionId,
+          assemble: true,
+          llm: createReplayAdapter([{ content: "x" }]),
+        }).createAgent(),
+    });
+    const { port } = await http.listen();
+    const res = await fetch(`http://127.0.0.1:${port}/`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/text\/html/);
+    const text = await res.text();
+    expect(text).toContain("XRK-Harness");
+    expect(text).toContain("/health");
+    await http.close();
+  });
+});

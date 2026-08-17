@@ -1,6 +1,9 @@
-# Tool pipeline
+# Tool pipeline（XRK 落点）
 
-Order (M1):
+> **工具执行管线基础规格：读 DSH 原文，不要用本页当精简替代。**  
+> [upstream/deepseek-harness/tool-execution-pipeline.zh.md](./upstream/deepseek-harness/tool-execution-pipeline.zh.md)
+
+## 本仓实现顺序（对照原文后的落点）
 
 ```text
 tool/call (session, by loop)
@@ -15,38 +18,17 @@ tool/call (session, by loop)
   → (batch) additionalContexts → user/message
 ```
 
-## Rules
+## 本仓硬规则（实现护栏）
 
-1. **`tool/call` before pre** — `runTurn` appends the call event, then enters the pipeline. Do not append call inside `runTool`.
-2. **Guards are monotonic** — once any guard returns `deny`, a later `allow` cannot upgrade it. `abstain` is neutral.
-3. **Pre outcomes** — `continue` (optional args rewrite), `deny` (skip body, error result), `ask` (approval hook; default deny if unset).
-4. **Execute** — around waterfall; `AbortSignal.timeout` when `timeoutMs` set; retries only for `transientError` up to `maxRetries`.
-5. **Post** — `accept` | `block` | `replace`. Use `addAdditionalContext` for generic batch user text; use `addSafetyNotice` for typed `safety/notice`.
-6. **Finalize** — may only change the `content` string.
-7. **Output bound** — after finalize, model-facing content is capped (default 2000 lines / 50KiB). Optional `persist` stores full text; session/log keeps the truncated view. Host presets use `createWorkspaceToolOutputPersist`. Disable with `createToolPipeline({ outputBound: false })`.
-8. **Result is frozen** — `Object.freeze`; mutation throws in strict mode.
-9. **Batch** — after all `tool/result` in a step: first `safety/notice` (FIFO), then `additionalContexts` as `user/message`. Multi-call settle defaults to **parallel** with call/result barriers (see [tool-settlement.md](./tool-settlement.md)).
-10. **Materialize** — each provider step freezes the tool table (`materializeTools`); settle uses the snapshot. Live replace → `Stale tool call`. Catalog `omitNames` ≠ execution auth (guards still own deny).
+1. **`tool/call` before pre** — `runTurn` 先 append call，再进 pipeline。  
+2. **Guards monotonic** — deny 粘性；`abstain` 中性。  
+3. **Pre** — `continue` | `deny` | `ask`（无 hook 默认 deny）。  
+4. **Execute** — around + `timeoutMs` + `transientError` 重试。  
+5. **Post** — `accept` | `block` | `replace`；safety / additionalContext 分批。  
+6. **Finalize** — 只改 `content` 字符串。  
+7. **Output bound** — 默认行/字节上限；可选 workspace persist。  
+8. **Result freeze** — `Object.freeze`。  
+9. **Settle** — 默认 parallel + 屏障；见 [tool-settlement.md](./tool-settlement.md)。  
+10. **Materialize** — settle 用冻结工具表。
 
-## Notes
-
-- Pipeline is an explicit `ToolPipeline` object (no global proxy bus).
-- Approval is a single hook (`ask`); Host Face wires UI via `approval/*`.
-- Sandbox argv wrap is a `MonotonicGuard` on `exec-sandbox`.
-- Output bound (+ optional workspace persist) is an explicit stage after finalize.
-
-## API sketch
-
-```ts
-const pipeline = createToolPipeline();
-pipeline.onPre(async (ctx) => ({ action: "continue", args: ctx.args }));
-pipeline.onGuard(createPolicyToolCallGuard(["shell"]));
-pipeline.onGuard(createWriteIntentGuard({ hasRead }));
-pipeline.onExecute(async (ctx, next) => { await next(); });
-pipeline.onPost(async (ctx) => {
-  addAdditionalContext(ctx, "note");
-  return { action: "accept" };
-});
-
-await runToolDetailed({ registry, call, pipeline });
-```
+Pipeline 是显式 `ToolPipeline` 对象（无全局 proxy）。审批 hook `ask` 由 Face `approval/*` 接线。

@@ -1,6 +1,13 @@
+_tmp_*/
 node_modules/
 dist/
 coverage/
+
+# DeepSeek Harness 参考树：真源在 Desktop\XRKbar\deepseek-harness，本仓仅 junction
+vendor/deepseek-harness/
+
+# Captured DSH SPA + plugins (regenerate via pnpm web:dsh:capture)
+vendor/dsh-web-static/
 .turbo/
 *.log
 .env

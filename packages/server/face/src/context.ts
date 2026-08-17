@@ -13,9 +13,13 @@ import { FACE_AGENT_PRESET_IDS } from "./presets-catalog.js";
 import type {
   FaceCredentialVault,
   FaceHostPublicSettings,
+  FaceSettingsNamespaces,
   FaceUiSettings,
 } from "./settings-credentials.js";
 import type { FaceApprovalBroker } from "./approvals.js";
+import type { FaceWorkspaceRegistry } from "./workspace-registry.js";
+import type { FaceWireIdMaps } from "./adapt/wire-ids.js";
+import type { FaceInboxWireMaps } from "./adapt/inbox-wire.js";
 
 /** @deprecated use FACE_AGENT_PRESET_IDS */
 export const U1_AGENT_PRESETS = FACE_AGENT_PRESET_IDS;
@@ -55,6 +59,14 @@ export interface FaceRuntime {
   readonly sessionModels: Map<string, { provider: string; model: string }>;
   /** sessionId → agentPreset id */
   readonly sessionAgentPresets: Map<string, string>;
+  /** sessionId → project cwd (DSH session.list / blank reuse). */
+  readonly sessionCwds: Map<string, string>;
+  /** DeepSeek workspace registry (in-memory). */
+  readonly workspaces: FaceWorkspaceRegistry;
+  /** Session-scoped turn/step numbers for DSH wire events. */
+  readonly wireIds: FaceWireIdMaps;
+  /** Session-scoped inbox splice projectors for live mux. */
+  readonly inboxWire: FaceInboxWireMaps;
   readonly loadSlashRecipes?: SlashRecipesLoader;
   /** Mutable UI prefs (theme/locale) — not secrets. */
   readonly uiSettings: FaceUiSettings;
@@ -62,6 +74,8 @@ export interface FaceRuntime {
   readonly hostPublic?: FaceHostPublicSettings;
   /** In-memory credential overrides — never session-logged. */
   readonly credentials: FaceCredentialVault;
+  /** DeepSeek-compatible settings namespaces (welcome notice, etc.). */
+  readonly settingsNamespaces: FaceSettingsNamespaces;
   /** Bootstrap Host API key from env/config (before vault override). */
   readonly bootstrapApiKey?: string;
   /** Optional policy engine (e.g. from XRK_POLICY_FILE) for provider.use gates. */

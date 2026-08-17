@@ -1,28 +1,24 @@
 # @xrkseek/harness-web
 
-**Status:** AppShell（BootComposition + SlotRegistry）— Face console 为 `?console=1` 验证器。
+**不是**产品聊天壳。产品 UI = XRKbar 的 DeepSeek Harness fork，经
+`pnpm web:dsh:capture` 落到 `vendor/dsh-web-static`，由 `serve` 托管。
 
-| Layer | Role |
-|-------|------|
-| AppShell | `BootGate` → chrome slots + `FaceSessionView` |
-| Face console | `?console=1` — Host Face RPC / mux |
-| Algorithms | `@xrkseek/web-runtime` |
-| Boot | `window.__XRK_BOOT__`（兼认 `__DSH_BOOT__`） |
-| Spec | [docs/host-face.md](../../docs/host-face.md) |
+本包只保留：
+
+| 路径 | 作用 |
+|------|------|
+| `/` | 说明页 + Logo |
+| `/?console=1` | Face RPC / mux 验证台 |
 
 ## Dev
 
 ```bash
 pnpm --filter @xrkseek/harness-web build
-# PowerShell:
-$env:XRK_WEB_DIST=(Resolve-Path .\apps\web\dist).Path
-# then serve via apps/cli
-
-pnpm --filter @xrkseek/harness-web dev
+pnpm --filter @xrkseek/harness-web dev   # 代理到 :8787
 ```
 
-Open `/` for AppShell；`/?console=1` for Face verifier.
+产品壳：`pnpm web:dsh:build` → `pnpm web:dsh:capture` → `serve`。
 
-## License / attribution
+## License
 
-See [NOTICE](./NOTICE).
+See [NOTICE](./NOTICE)。

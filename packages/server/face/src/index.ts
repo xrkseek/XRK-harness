@@ -10,6 +10,7 @@ export {
   errResponse,
   okResponse,
   parseFaceRpcRequest,
+  serverRequestFrame,
 } from "./envelope.js";
 export { createFaceBus, type FaceBus } from "./bus.js";
 export { createFaceSeqClock, type FaceSeqClock } from "./seq.js";
@@ -47,10 +48,19 @@ export {
 } from "./attach-http.js";
 export {
   EVENT_ISOMORPHISM,
+  FaceInboxWireMaps,
+  FaceInboxWireProjector,
+  FaceWireIdMaps,
   presentToolView,
+  toDshWireSessionEvent,
   toMuxSessionEvent,
   toWireHistoryEntry,
+  wireNumericId,
+  type DshInboxSplice,
+  type DshWireSessionEvent,
+  type DshWireUserMessage,
   type ToolEventView,
+  type WireAdaptContext,
   type WireHistoryEntry,
 } from "./adapt/index.js";
 export {
@@ -58,28 +68,57 @@ export {
   FACE_AGENT_PRESET_IDS,
   type AgentPresetInfo,
 } from "./presets-catalog.js";
-export { toQueueItems, type FaceQueueItem, type QueuePlacement } from "./queue.js";
+export {
+  toQueueItems,
+  type FaceQueueItem,
+  type FaceQueueMessage,
+  type QueuePlacement,
+} from "./queue.js";
 export {
   assertUnderRoot,
   listProductTree,
   resolveProductDir,
   PathEscapeError,
+  workspaceArchiveSessionDsh,
+  workspaceCreateDsh,
   workspaceDescribe,
+  workspaceListDsh,
   workspaceListProduct,
   workspacePreviewInject,
+  workspaceRenameDsh,
   workspaceSyncSeeds,
   type WorkspaceProductEntry,
 } from "./workspace-face.js";
 export {
+  FaceWorkspaceRegistry,
+  type FaceWorkspaceView,
+} from "./workspace-registry.js";
+export {
+  fullyQualified,
+  hostCreateDirectory,
+  hostListDirectory,
+  type DirectoryEntryView,
+  type DirectoryListingView,
+} from "./host-directory.js";
+export {
   FaceCredentialVault,
+  FaceSettingsNamespaces,
+  credentialsDescribe,
   credentialsList,
   credentialsSet,
+  credentialsUnset,
   defaultUiSettings,
   effectiveHostApiKey,
   listCredentialSlots,
+  settingsDescribeDsh,
   settingsGet,
+  settingsMutateDsh,
+  settingsReplaceDsh,
   settingsSet,
+  settingsUpdateDsh,
   type CredentialSlotView,
+  type DshSettingsNamespaceView,
+  type DshSettingsPathOp,
   type FaceHostPublicSettings,
   type FaceUiSettings,
   type UiTheme,

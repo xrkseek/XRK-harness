@@ -7,18 +7,33 @@ import { SessionTitleInvalidError } from "./projections/index.js";
 import { toWireHistoryEntry } from "./adapt/index.js";
 import { tryFaceSlashCommand } from "./slash.js";
 import { FACE_AGENT_PRESETS, FACE_AGENT_PRESET_IDS } from "./presets-catalog.js";
+import path from "node:path";
 import {
+  workspaceArchiveSessionDsh,
+  workspaceCreateDsh,
   workspaceDescribe,
+  workspaceListDsh,
   workspaceListProduct,
   workspacePreviewInject,
+  workspaceRenameDsh,
   workspaceSyncSeeds,
 } from "./workspace-face.js";
 import {
+  credentialsDescribe,
   credentialsList,
   credentialsSet,
+  credentialsUnset,
+  settingsDescribeDsh,
   settingsGet,
+  settingsMutateDsh,
+  settingsReplaceDsh,
   settingsSet,
+  settingsUpdateDsh,
 } from "./settings-credentials.js";
+import {
+  hostCreateDirectory,
+  hostListDirectory,
+} from "./host-directory.js";
 import {
   AdmitNotPendingError,
   admitPrompt,
@@ -46,13 +61,18 @@ const notImplemented: FaceHandler = async () => ({
 
 const hostDescribe: FaceHandler = async (runtime) => {
   const routable = runtime.registry.listRoutable();
+  const brands = runtime.registry.listBrands();
   const first = routable.find((r) => r.active) ?? routable[0];
+  const brand = first
+    ? brands.find((b) => b.id === first.id)
+    : undefined;
   return {
     ok: true,
     value: {
       version: runtime.version,
       cwd: runtime.workspaceRoot,
       ...(first ? { provider: first.id } : {}),
+      ...(brand?.defaultModel ? { model: brand.defaultModel } : {}),
       attachedSessions: runtime.store.list().length,
       canOpenPath: false,
     },
@@ -72,11 +92,28 @@ const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       },
     };
   }
+  const attach = runtime.workspaces.resolveAttachTarget({
+    ...(typeof p.workspaceId === "string"
+      ? { workspaceId: p.workspaceId.trim() }
+      : {}),
+    ...(typeof p.cwd === "string" ? { cwd: p.cwd.trim() } : {}),
+  });
+  if ("error" in attach) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: attach.error },
+    };
+  }
   const sessionId =
     typeof p.sessionId === "string" && p.sessionId.trim()
       ? runtime.ensureSession(p.sessionId.trim())
       : runtime.ensureSession();
   runtime.watchSession(sessionId);
+  runtime.sessionCwds.set(sessionId, attach.cwd);
+  const workspace = runtime.workspaces.attachSession(
+    sessionId,
+    attach.workspaceId,
+  );
   if (agentPreset) {
     runtime.sessionAgentPresets.set(sessionId, agentPreset);
   } else if (runtime.defaultAgentPreset) {
@@ -88,8 +125,15 @@ const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     type: "host/session-added",
     sessionId,
     blank: true,
+    cwd: attach.cwd,
     ...(bound ? { agentPreset: bound } : {}),
   });
+  if (workspace) {
+    runtime.bus.publishHost({
+      type: "host/workspace-changed",
+      workspace,
+    });
+  }
   return {
     ok: true,
     value: {
@@ -100,6 +144,7 @@ const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
 };
 
 const sessionList: FaceHandler = async (runtime) => {
+  const defaultCwd = path.resolve(runtime.workspaceRoot);
   const items = runtime.store.list().map((sessionId) => {
     const events = runtime.store.get(sessionId).events;
     const last = events[events.length - 1];
@@ -109,11 +154,15 @@ const sessionList: FaceHandler = async (runtime) => {
       meta?.blank ?? !events.some((e) => e.type === "turn/start");
     const lastPromptAt = meta?.lastPromptAt ?? null;
     const updatedAt = Math.max(last?.ts ?? 0, lastPromptAt ?? 0);
+    const cwd = runtime.sessionCwds.get(sessionId) ?? defaultCwd;
+    const agentPreset = runtime.sessionAgentPresets.get(sessionId);
     return {
       sessionId,
       updatedAt,
       running: runtime.drain.isActive(sessionId),
       blank,
+      cwd,
+      ...(agentPreset ? { agentPreset } : {}),
       title: snap.values.title ?? null,
       projections: {
         asOfSeq: snap.asOfSeq,
@@ -141,9 +190,13 @@ const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
     typeof p.maxMessages === "number" ? p.maxMessages : 100;
 
   // Face seq = 1-based index in full log
-  let indexed = events.map((event, i) => toWireHistoryEntry(event, i + 1));
+  const inbox = runtime.inboxWire.fresh();
+  const wireCtx = { sessionId, ids: runtime.wireIds, inbox };
+  let indexed = events.map((event, i) =>
+    toWireHistoryEntry(event, i + 1, wireCtx),
+  );
   if (beforeSeq !== undefined) {
-    indexed = indexed.filter((e) => e.seq < beforeSeq);
+    indexed = indexed.filter((e) => e.event.seq < beforeSeq);
   }
   const hasMore = indexed.length > maxMessages;
   if (hasMore) {
@@ -151,7 +204,7 @@ const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
   }
   // Align Face seq clock to at least max seen
   for (const row of indexed) {
-    while (runtime.seq.last(sessionId) < row.seq) {
+    while (runtime.seq.last(sessionId) < row.event.seq) {
       runtime.seq.next(sessionId);
     }
   }
@@ -209,11 +262,13 @@ const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
 
   runtime.watchSession(sessionId);
   const agent = await runtime.resolveAgent(sessionId);
-  const receipt = agent.admit(text, {
+  const admitId = `admit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  runtime.rpcAdmitMap.set(rpcId, admitId);
+  runtime.admitRpcMap.set(admitId, rpcId);
+  agent.admit(text, {
     delivery: mode === "steer" ? "steer" : "queue",
+    admitId,
   });
-  runtime.rpcAdmitMap.set(rpcId, receipt.admitId);
-  runtime.admitRpcMap.set(receipt.admitId, rpcId);
   runtime.publishQueue(sessionId);
   runtime.bus.publishHost({
     type: "host/session-status",
@@ -351,8 +406,17 @@ const sessionSelectModel: FaceHandler = async (runtime, _rpcId, payload) => {
       };
     }
   }
-  const selected = { provider, model };
-  runtime.sessionModels.set(sessionId, selected);
+  const selected = {
+    provider,
+    model,
+    ...(typeof p.reasoningEffort === "string" && p.reasoningEffort.trim()
+      ? { reasoningEffort: p.reasoningEffort.trim() }
+      : {}),
+  };
+  runtime.sessionModels.set(sessionId, {
+    provider: selected.provider,
+    model: selected.model,
+  });
   return { ok: true, value: { selected } };
 };
 
@@ -542,8 +606,8 @@ const sessionRename: FaceHandler = async (runtime, _rpcId, payload) => {
     };
   }
   try {
-    const title = runtime.titles.rename(sessionId, titleRaw);
-    return { ok: true, value: { title } };
+    const { title, seq } = runtime.titles.rename(sessionId, titleRaw);
+    return { ok: true, value: { title, seq } };
   } catch (err) {
     if (err instanceof SessionTitleInvalidError) {
       return {
@@ -596,10 +660,15 @@ const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) => {
       withdrawAdmit(runtime.store, sessionId, itemId);
       const rpc = runtime.admitRpcMap.get(itemId);
       runtime.admitRpcMap.delete(itemId);
-      const receipt = admitPrompt(runtime.store, sessionId, target.content, {
+      const admitId = `admit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      if (rpc) {
+        runtime.admitRpcMap.set(admitId, rpc);
+        runtime.rpcAdmitMap.set(rpc, admitId);
+      }
+      admitPrompt(runtime.store, sessionId, target.content, {
         delivery: "steer",
+        admitId,
       });
-      if (rpc) runtime.admitRpcMap.set(receipt.admitId, rpc);
     } else if (kind === "edit") {
       const content = (action as { content?: unknown }).content;
       if (!Array.isArray(content)) {
@@ -622,10 +691,15 @@ const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) => {
       withdrawAdmit(runtime.store, sessionId, itemId);
       const rpc = runtime.admitRpcMap.get(itemId);
       runtime.admitRpcMap.delete(itemId);
-      const receipt = admitPrompt(runtime.store, sessionId, text, {
+      const admitId = `admit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      if (rpc) {
+        runtime.admitRpcMap.set(admitId, rpc);
+        runtime.rpcAdmitMap.set(rpc, admitId);
+      }
+      admitPrompt(runtime.store, sessionId, text, {
         delivery: target.delivery,
+        admitId,
       });
-      if (rpc) runtime.admitRpcMap.set(receipt.admitId, rpc);
     } else {
       return {
         ok: false,
@@ -649,10 +723,23 @@ const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) => {
   return { ok: true, value: { accepted: true } };
 };
 
-const agentPresetList: FaceHandler = async () => ({
-  ok: true,
-  value: { items: FACE_AGENT_PRESETS },
-});
+const agentPresetList: FaceHandler = async (runtime) => {
+  const defaultId = runtime.defaultAgentPreset ?? "minimal";
+  return {
+    ok: true,
+    value: {
+      presets: FACE_AGENT_PRESETS.map((p) => ({
+        id: p.id,
+        trust: "system" as const,
+        isDefault: p.id === defaultId,
+        name: p.displayName,
+        description: p.description,
+      })),
+      authorable: false,
+      hasDocument: false,
+    },
+  };
+};
 
 const agentPresetSelect: FaceHandler = async (runtime, _rpcId, payload) => {
   const p = asRecord(payload);
@@ -691,6 +778,16 @@ const agentPresetSelect: FaceHandler = async (runtime, _rpcId, payload) => {
 
 const HANDLERS: Record<string, FaceHandler> = {
   "host.describe": hostDescribe,
+  /**
+   * No native OS chooser — cancel. Clients that need a path use
+   * host.listDirectory / host.createDirectory (browse picker).
+   */
+  "host.pickDirectory": async () => ({ ok: true, value: { path: null } }),
+  "host.listDirectory": async (_runtime, _rpcId, payload) =>
+    hostListDirectory(payload),
+  "host.createDirectory": async (_runtime, _rpcId, payload) =>
+    hostCreateDirectory(payload),
+  "host.openPath": notImplemented,
   "session.create": sessionCreate,
   "session.list": sessionList,
   "session.history": sessionHistory,
@@ -708,21 +805,53 @@ const HANDLERS: Record<string, FaceHandler> = {
   "llm.models": llmModels,
   "workspace.describe": async (runtime) => workspaceDescribe(runtime),
   "workspace.listProduct": async (runtime) => workspaceListProduct(runtime),
+  /** DeepSeek Web workspace registry (not product-tree listProduct). */
+  "workspace.list": async (runtime) => workspaceListDsh(runtime),
+  "workspace.create": async (runtime, _rpcId, payload) =>
+    workspaceCreateDsh(runtime, payload),
+  "workspace.rename": async (runtime, _rpcId, payload) =>
+    workspaceRenameDsh(runtime, payload),
+  "workspace.archiveSession": async (runtime, _rpcId, payload) =>
+    workspaceArchiveSessionDsh(runtime, payload),
   "workspace.previewInject": async (runtime, _rpcId, payload) =>
     workspacePreviewInject(runtime, payload),
   "workspace.syncSeeds": async (runtime, _rpcId, payload) =>
     workspaceSyncSeeds(runtime, payload),
   "settings.get": async (runtime, _rpcId, payload) =>
     settingsGet(runtime, payload),
+  /** DeepSeek Web: namespaces[] (welcome notice, etc.). */
+  "settings.describe": async (runtime) => settingsDescribeDsh(runtime),
+  "settings.mutate": async (runtime, _rpcId, payload) =>
+    settingsMutateDsh(runtime, payload),
+  "settings.update": async (runtime, _rpcId, payload) =>
+    settingsUpdateDsh(runtime, payload),
+  "settings.replace": async (runtime, _rpcId, payload) =>
+    settingsReplaceDsh(runtime, payload),
   "settings.set": async (runtime, _rpcId, payload) =>
     settingsSet(runtime, payload),
+  /** No native settings document opener on headless Face. */
+  "settings.openDocument": notImplemented,
   "credentials.list": async (runtime) => credentialsList(runtime),
+  "credentials.describe": async (runtime, _rpcId, payload) =>
+    credentialsDescribe(runtime, payload),
   "credentials.set": async (runtime, _rpcId, payload) =>
     credentialsSet(runtime, payload),
+  "credentials.unset": async (runtime, _rpcId, payload) =>
+    credentialsUnset(runtime, payload),
+  /** Empty catalog until skills are wired. */
+  "skill.list": async () => ({ ok: true, value: { skills: [] as unknown[] } }),
+  /** Empty child catalog until subagent Face is wired. */
+  "subagent.list": async () => ({
+    ok: true,
+    value: { entries: [] as unknown[], parentAvailable: true },
+  }),
   // explicit not-implemented
   "session.attachment": notImplemented,
   "session.search": notImplemented,
   "llm.discoverModels": notImplemented,
+  "workspace.delete": notImplemented,
+  "workspace.insertBefore": notImplemented,
+  "workspace.insertSessionBefore": notImplemented,
   "agentPreset.read": notImplemented,
   "agentPreset.copy": notImplemented,
   "agentPreset.openDocument": notImplemented,

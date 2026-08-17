@@ -1,10 +1,9 @@
 /**
  * Boot manifest wire (DeepSeek-compatible shape).
- * Host injects as `window.__DSH_BOOT__` (and alias `__XRK_BOOT__`).
- * @see docs/learn/xrk-app-shell.md
+ * Host injects `window.__DSH_BOOT__` (+ alias `__XRK_BOOT__`).
+ * Product chat UI uses captured DSH graph (`vendor/dsh-web-static/boot.json`).
+ * This app only seeds Face console boot for `?console=1` / Vite dev.
  */
-
-import { BOOT_ENTRY_IDS } from "./boot-composition.js";
 
 export interface WebBootEntry {
   readonly id: string;
@@ -25,20 +24,6 @@ declare global {
     __XRK_BOOT__?: WebBootManifest;
   }
 }
-
-export { BOOT_ENTRY_IDS } from "./boot-composition.js";
-
-/** Product AppShell graph (host tap + Vite seed). Local factories only. */
-export const XRK_APP_SHELL_BOOT: WebBootManifest = {
-  rev: "xrk-app-shell",
-  entries: BOOT_ENTRY_IDS.map((id) => ({
-    id: `@xrkseek/${id}`,
-    url: `/local/${id}`,
-    rev: "local",
-    inject: [],
-    immediately: true,
-  })),
-};
 
 /** Opt-in Face console verifier (`?console=1`). */
 export const FACE_CONSOLE_BOOT: WebBootManifest = {

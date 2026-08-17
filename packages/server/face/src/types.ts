@@ -12,7 +12,9 @@ export type FaceRpcResult<T> =
       readonly error: { readonly code: string; readonly message: string };
     };
 
+/** Unary response — includes DeepSeek `type: server-response` discriminator. */
 export interface FaceRpcResponse<T = unknown> {
+  readonly type: "server-response";
   readonly rpcId: RpcId;
   readonly result: FaceRpcResult<T>;
 }
@@ -55,6 +57,7 @@ export type HostFrame =
       readonly sessionId: string;
       readonly blank: boolean;
       readonly agentPreset?: string;
+      readonly cwd?: string;
     }
   | {
       readonly type: "host/session-status";
@@ -65,4 +68,19 @@ export type HostFrame =
       readonly type: "host/agent-error";
       readonly sessionId: string;
       readonly message: string;
+    }
+  | {
+      readonly type: "host/workspace-changed";
+      readonly workspace: {
+        readonly workspaceId: string;
+        readonly path: string;
+        readonly title: string;
+        readonly sessionIds: readonly string[];
+        readonly createdAt: string;
+        readonly updatedAt: string;
+      };
+    }
+  | {
+      readonly type: "host/archived-sessions-changed";
+      readonly archivedSessionIds: readonly string[];
     };

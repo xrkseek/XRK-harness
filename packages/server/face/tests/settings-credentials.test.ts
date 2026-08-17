@@ -110,6 +110,71 @@ describe("Face settings U2", () => {
       expect(readonlyHost.result.error.code).toBe("settings-readonly");
     }
   });
+
+  it("DSH describe/mutate supports ui-onboarding welcome ack", async () => {
+    const rt = runtime({ hostPublic: true });
+    const desc = await dispatchFaceMethod(rt, "settings.describe", "d1", {});
+    expect(desc.result.ok).toBe(true);
+    if (!desc.result.ok) return;
+    const v = desc.result.value as {
+      writable: boolean;
+      namespaces: { ns: string; value: unknown }[];
+    };
+    expect(v.writable).toBe(true);
+    expect(v.namespaces.some((n) => n.ns === "ui-onboarding")).toBe(true);
+
+    const mut = await dispatchFaceMethod(rt, "settings.mutate", "d2", {
+      ns: "ui-onboarding",
+      ops: [
+        {
+          op: "set",
+          path: ["welcomeNoticeVersion"],
+          value: "2026-08-17.xrk1",
+        },
+      ],
+    });
+    expect(mut.result.ok).toBe(true);
+    if (!mut.result.ok) return;
+    expect(mut.result.value).toMatchObject({
+      ns: "ui-onboarding",
+      value: { welcomeNoticeVersion: "2026-08-17.xrk1" },
+    });
+
+    const again = await dispatchFaceMethod(rt, "settings.describe", "d3", {});
+    expect(again.result.ok).toBe(true);
+    if (!again.result.ok) return;
+    const ns = (
+      again.result.value as {
+        namespaces: { ns: string; value: Record<string, unknown> }[];
+      }
+    ).namespaces.find((n) => n.ns === "ui-onboarding");
+    expect(ns?.value.welcomeNoticeVersion).toBe("2026-08-17.xrk1");
+  });
+
+  it("settings.replace replaces whole ns section", async () => {
+    const rt = runtime({ hostPublic: true });
+    const rep = await dispatchFaceMethod(rt, "settings.replace", "r1", {
+      ns: "ui-onboarding",
+      section: { welcomeNoticeVersion: "replaced.v1", extra: true },
+    });
+    expect(rep.result.ok).toBe(true);
+    if (!rep.result.ok) return;
+    expect(rep.result.value).toMatchObject({
+      ns: "ui-onboarding",
+      value: { welcomeNoticeVersion: "replaced.v1", extra: true },
+    });
+
+    const openDoc = await dispatchFaceMethod(
+      rt,
+      "settings.openDocument",
+      "od1",
+      {},
+    );
+    expect(openDoc.result.ok).toBe(false);
+    if (!openDoc.result.ok) {
+      expect(openDoc.result.error.code).toBe("not-implemented");
+    }
+  });
 });
 
 describe("Face credentials U2", () => {
@@ -171,5 +236,57 @@ describe("Face credentials U2", () => {
     const host = listCredentialSlots(rt, {}).find((s) => s.id === "host.apiKey");
     expect(host?.configured).toBe(true);
     expect(host?.source).toBe("env");
+  });
+
+  it("DSH credentials.describe + set by ref/env", async () => {
+    const rt = runtime({ bootstrapApiKey: "" });
+    const desc = await dispatchFaceMethod(rt, "credentials.describe", "cd1", {
+      refs: ["host.apiKey", "XRK_API_KEY", "unknown.ref"],
+    });
+    expect(desc.result.ok).toBe(true);
+    if (!desc.result.ok) return;
+    const v = desc.result.value as {
+      credentials: Record<
+        string,
+        { configured: boolean; writable: boolean; source?: string }
+      >;
+    };
+    expect(v.credentials["host.apiKey"]?.configured).toBe(false);
+    expect(v.credentials["host.apiKey"]?.writable).toBe(true);
+    expect(v.credentials["XRK_API_KEY"]?.configured).toBe(false);
+    expect(v.credentials["unknown.ref"]).toEqual({
+      configured: false,
+      writable: true,
+    });
+    expect(JSON.stringify(v)).not.toMatch(/sk-|secret/i);
+
+    const setByEnv = await dispatchFaceMethod(rt, "credentials.set", "cd2", {
+      ref: "XRK_API_KEY",
+      value: "via-env-ref",
+    });
+    expect(setByEnv.result.ok).toBe(true);
+    expect(effectiveHostApiKey(rt)).toBe("via-env-ref");
+
+    const again = await dispatchFaceMethod(rt, "credentials.describe", "cd3", {
+      refs: ["XRK_API_KEY"],
+    });
+    expect(again.result.ok).toBe(true);
+    if (!again.result.ok) return;
+    const creds = (
+      again.result.value as {
+        credentials: Record<string, { configured: boolean; source?: string }>;
+      }
+    ).credentials;
+    expect(creds["XRK_API_KEY"]?.configured).toBe(true);
+    expect(creds["XRK_API_KEY"]?.source).toBe("vault");
+
+    const unset = await dispatchFaceMethod(rt, "credentials.unset", "cd4", {
+      ref: "XRK_API_KEY",
+    });
+    expect(unset.result.ok).toBe(true);
+    if (unset.result.ok) {
+      expect(unset.result.value).toEqual({});
+    }
+    expect(effectiveHostApiKey(rt)).toBe("");
   });
 });

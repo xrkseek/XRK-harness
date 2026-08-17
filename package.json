@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=26"
   },
   "scripts": {
     "check": "node ./scripts/check.mjs",
@@ -14,11 +14,16 @@
 
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+
+    "web:dsh:install": "pnpm --dir ./vendor/deepseek-harness install",
+    "web:dsh:build": "pnpm --dir ./vendor/deepseek-harness run build",
+    "web:dsh": "pnpm --dir ./vendor/deepseek-harness exec dsh web",
+    "web:dsh:capture": "node ./scripts/capture-dsh-web.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/node": "^22.10.0",
+    "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "2.1.9",
     "eslint": "^10.8.1",
     "eslint-config-prettier": "^10.1.8",

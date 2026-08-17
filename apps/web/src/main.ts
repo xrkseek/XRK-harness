@@ -1,5 +1,10 @@
-import { FACE_CONSOLE_BOOT, XRK_APP_SHELL_BOOT } from "./boot-manifest.js";
-import { mountAppShell } from "./app-shell-entry.js";
+/**
+ * Product chat UI is the DeepSeek Harness fork (XRKbar) captured to
+ * `vendor/dsh-web-static` and served by `xrk-harness serve`.
+ * This Vite app only keeps the Face verifier console (`?console=1`).
+ */
+
+import { FACE_CONSOLE_BOOT } from "./boot-manifest.js";
 import { mountFaceConsole } from "./face-console.js";
 import "./styles.css";
 
@@ -10,16 +15,21 @@ const consoleMode =
   typeof window !== "undefined" &&
   new URLSearchParams(window.location.search).get("console") === "1";
 
-const seed = consoleMode ? FACE_CONSOLE_BOOT : XRK_APP_SHELL_BOOT;
-
 if (!window.__DSH_BOOT__ && !window.__XRK_BOOT__) {
-  // Dev vite: seed boot so readBootManifest works without host tap.
-  window.__XRK_BOOT__ = seed;
-  window.__DSH_BOOT__ = seed;
+  window.__XRK_BOOT__ = FACE_CONSOLE_BOOT;
+  window.__DSH_BOOT__ = FACE_CONSOLE_BOOT;
 }
 
 if (consoleMode) {
   mountFaceConsole(root);
 } else {
-  mountAppShell(root);
+  root.innerHTML = "";
+  root.className = "xrk-web-landing";
+  root.innerHTML = `
+    <img class="mark" src="/logo-plate.png" alt="XRK Harness" width="96" height="96" />
+    <h1>XRK Harness</h1>
+    <p>产品聊天壳走 <code>vendor/dsh-web-static</code>（DSH fork · XRKbar）。</p>
+    <p>本包仅保留 Face 验证台：<a href="/?console=1">/?console=1</a></p>
+    <p class="hint">serve 优先托管 dsh-web-static；先 <code>pnpm web:dsh:capture</code>。</p>
+  `;
 }

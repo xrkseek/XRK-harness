@@ -1,12 +1,26 @@
 import type { AdmitReceipt } from "@xrkseek/core-session";
 
-export type QueuePlacement = "queued" | "steering";
+/**
+ * Authoritative `session/queue` item — shape matches DSH
+ * `QueuedInboxItem` (host/apiproxy events.ts): id · placement · message.
+ */
+
+export type QueuePlacement = "queued" | "steering" | "context";
+
+export interface FaceQueueMessage {
+  readonly id: string;
+  readonly role: "user";
+  readonly content: readonly { readonly type: "text"; readonly text: string }[];
+  readonly source: {
+    readonly kind: "user";
+    readonly rpcId?: string;
+  };
+}
 
 export interface FaceQueueItem {
   readonly id: string;
   readonly placement: QueuePlacement;
-  readonly content: string;
-  readonly rpcId?: string;
+  readonly message: FaceQueueMessage;
 }
 
 export function toQueueItems(
@@ -18,8 +32,15 @@ export function toQueueItems(
     return {
       id: a.admitId,
       placement: a.delivery === "steer" ? "steering" : "queued",
-      content: a.content,
-      ...(rpcId !== undefined ? { rpcId } : {}),
+      message: {
+        id: a.admitId,
+        role: "user",
+        content: [{ type: "text", text: a.content }],
+        source: {
+          kind: "user",
+          ...(rpcId !== undefined ? { rpcId } : {}),
+        },
+      },
     };
   });
 }

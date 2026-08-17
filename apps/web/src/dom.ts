@@ -1,5 +1,5 @@
 /**
- * Shared DOM helpers for Face console + AppShell panels.
+ * Shared DOM helpers for Face console.
  */
 
 export function defaultBaseUrl(): string {

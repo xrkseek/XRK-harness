@@ -2,15 +2,18 @@
 
 产品规格与决策真源。实现以代码 + [status.md](./status.md) 为准。
 
+**基础 harness 规格（architecture / seams / pipeline / lifecycle …）以 XRKbar DeepSeek Harness 原文为准，已照搬至 [upstream/deepseek-harness/](./upstream/deepseek-harness/)。本仓同名短文只写 XRK 落点 + 指回原文，禁止二次精简创作。** Skills： [../.agents/skills/](../.agents/skills/)。
+
 ## 从哪读起
 
 | 角色 | 顺序 |
 |------|------|
-| 集成 | [status.md](./status.md) → [architecture.md](./architecture.md) → [packages/sdk/README](../packages/sdk/README.md) → [session.md](./session.md) · [http-api.md](./http-api.md) |
+| 集成 | [status.md](./status.md) → [architecture.md](./architecture.md)（先跟链读 upstream）→ [packages/sdk/README](../packages/sdk/README.md) → [session.md](./session.md) · [http-api.md](./http-api.md) |
 | Host / CLI | [host-preset.md](./host-preset.md) · [profiles.md](./profiles.md) · [plugin-loader.md](./plugin-loader.md) · [host-face.md](./host-face.md) |
-| 工具 / exec | [tool-pipeline.md](./tool-pipeline.md) · [seams.md](./seams.md) · [tool-settlement.md](./tool-settlement.md) |
+| 工具 / exec | [upstream tool-execution-pipeline.zh](./upstream/deepseek-harness/tool-execution-pipeline.zh.md) → [tool-pipeline.md](./tool-pipeline.md) · [seams.md](./seams.md) |
 | 安全 | [security-checklist.md](./security-checklist.md) · [policy.md](./policy.md) |
-| 贡献 | [../CONTRIBUTING.md](../CONTRIBUTING.md) · [testing.md](./testing.md) |
+| 贡献 | [../CONTRIBUTING.md](../CONTRIBUTING.md) · [testing.md](./testing.md)（upstream 另有 DSH testing 原文） |
+| 学习 / 合并 | [learn.md](./learn.md) |
 | 决策 | [adr/](./adr/README.md) |
 
 ## 规格索引

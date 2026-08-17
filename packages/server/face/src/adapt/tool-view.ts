@@ -1,23 +1,26 @@
 /**
  * Host-owned tool event views — non-persisted, recomputed on mux/history.
- * Durable log stays pure XRK SessionEvent (ADR / lc20).
+ * Shape matches DeepSeek `ToolEventView`: `{ for, view: { card, ... } }`.
  */
 
 import type { SessionEvent } from "@xrkseek/protocol";
 
 export type ToolEventView =
   | {
-      readonly kind: "tool-call";
-      readonly callId: string;
-      readonly name: string;
-      readonly argsPreview: string;
+      readonly for: "call";
+      readonly view: {
+        readonly card: "generic";
+        readonly title: string;
+        readonly content?: string;
+      };
     }
   | {
-      readonly kind: "tool-result";
-      readonly callId: string;
-      readonly name: string;
-      readonly ok: boolean;
-      readonly preview: string;
+      readonly for: "result";
+      readonly view: {
+        readonly card: "generic";
+        readonly title: string;
+        readonly content?: string;
+      };
     };
 
 const PREVIEW_MAX = 240;
@@ -39,19 +42,22 @@ export function presentToolView(
       argsPreview = "[unserializable]";
     }
     return {
-      kind: "tool-call",
-      callId: event.call.id,
-      name: event.call.name,
-      argsPreview,
+      for: "call",
+      view: {
+        card: "generic",
+        title: event.call.name,
+        content: argsPreview,
+      },
     };
   }
   if (event.type === "tool/result") {
     return {
-      kind: "tool-result",
-      callId: event.result.toolCallId,
-      name: event.result.name,
-      ok: !event.result.isError,
-      preview: previewText(event.result.content),
+      for: "result",
+      view: {
+        card: "generic",
+        title: event.result.name,
+        content: previewText(event.result.content),
+      },
     };
   }
   return undefined;

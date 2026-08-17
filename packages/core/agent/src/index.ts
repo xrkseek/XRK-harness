@@ -67,7 +67,7 @@ export interface AgentHandle {
    */
   admit(
     content: string,
-    options?: { readonly delivery?: PromptDelivery },
+    options?: { readonly delivery?: PromptDelivery; readonly admitId?: string },
   ): AdmitReceipt;
   /** Pending admits not yet promoted. */
   pendingAdmits(): readonly AdmitReceipt[];

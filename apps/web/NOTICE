@@ -1,19 +1,11 @@
 # NOTICE
 
-## DeepSeek Harness (MIT)
+## XRK Harness Web
 
-Portions of the intended product Web UI (full client shell, boot model, slots)
-are derived from or designed to interoperate with:
+Product UI is a secondary fork of **DeepSeek Harness** Web (MIT,
+Copyright DeepSeek). Upstream clone for reference lives in
+`Desktop/XRKbar/deepseek-harness` (with other harness trees). This repo
+junctions it at `vendor/deepseek-harness` and serves captured static at
+`vendor/dsh-web-static`.
 
-- https://github.com/deepseek-ai/deepseek-harness
-- Copyright (c) DeepSeek
-- License: MIT (see upstream `LICENSE`)
-
-This `apps/web` tree currently ships a **Face U1 console** for Host Face
-verification. The full DeepSeek client composition (Cordis + ui-*) will be
-integrated with attribution under ADR-0002 appendix — not as a second agent
-kernel.
-
-## XRK Harness
-
-Copyright (c) xrkseek / XRK Harness contributors.
+Brand mark: cut raster assets under `docs/assets/logo*.png` (no SVG redraw).

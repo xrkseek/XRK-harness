@@ -42,8 +42,8 @@ export class FaceTitleController {
     this.projections = options.projections;
   }
 
-  /** Explicit user rename — pins title. */
-  rename(sessionId: string, raw: string): string {
+  /** Explicit user rename — pins title; returns accepted title + Face seq. */
+  rename(sessionId: string, raw: string): { title: string; seq: number } {
     const title = normalizeSessionTitle(raw, this.maxTitleBytes);
     if (!title) {
       throw new SessionTitleInvalidError("title normalizes to empty");
@@ -55,7 +55,8 @@ export class FaceTitleController {
       source: { kind: "user" },
       messageSeqs: [],
     });
-    return title;
+    // Face seq = 1-based index in full log (same clock as session.history).
+    return { title, seq: this.getEvents(sessionId).length };
   }
 
   /**

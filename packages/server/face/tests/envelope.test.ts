@@ -19,12 +19,28 @@ describe("face envelope", () => {
 
   it("ok/err shapes", () => {
     expect(okResponse("r1", { accepted: true })).toEqual({
+      type: "server-response",
       rpcId: "r1",
       result: { ok: true, value: { accepted: true } },
     });
-    expect(errResponse("r1", "not-implemented", "x").result).toEqual({
-      ok: false,
-      error: { code: "not-implemented", message: "x" },
+    expect(errResponse("r1", "not-implemented", "x")).toEqual({
+      type: "server-response",
+      rpcId: "r1",
+      result: {
+        ok: false,
+        error: { code: "not-implemented", message: "x" },
+      },
     });
+  });
+
+  it("accepts DeepSeek client-request wire", () => {
+    expect(
+      parseFaceRpcRequest({
+        type: "client-request",
+        rpcId: "r2",
+        method: "session.list",
+        payload: {},
+      }),
+    ).toEqual({ rpcId: "r2", payload: {} });
   });
 });

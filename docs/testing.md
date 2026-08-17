@@ -14,6 +14,7 @@
 单独命令：
 
 ```bash
+pnpm build                # tsc -b（CLI / Node 跑 dist 前需要）
 pnpm test                 # vitest run
 pnpm test:kernel-coverage
 pnpm lint
