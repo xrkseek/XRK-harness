@@ -1,6 +1,7 @@
 # Status（能力矩阵）
 
-> 与实现对齐。三态：**能跑 / 未稳 / 未做**。基线：2026-08。
+> 与实现对齐。三态：**能跑 / 未稳 / 未做**。基线：2026-08。  
+> 产品：XRK-Harness（自研）。
 
 ## 能跑
 
@@ -17,9 +18,9 @@
 
 | 域 | 说明 |
 |----|------|
-| Host Face ↔ DSH Web | 侧栏/settings/inbox spliced·queue.message 已接；**浏览器 E2E 未勾** |
-| 产品 Web | `vendor/dsh-web-static` 可挂；对话窗/工具卡待硬刷 |
-| 核心打磨 | run/serve 可用 ≠ 边界/错误/对照 bar·AGT 完成 |
+| Host Face ↔ 产品 Web | 侧栏 / settings / 队列与 inbox wire 已接；**浏览器 E2E 未勾** |
+| 产品 Web | 静态壳可挂；对话窗流式 / 工具卡待硬刷验收 |
+| 核心打磨 | `run` / `serve` 可用 ≠ 边界与错误面打磨完成 |
 
 ## 未做
 
@@ -37,4 +38,4 @@ presets / sdk / server → core* | llm | mcp | exec* | workspace | policy | comp
 core* / 能力叶 → kernel | protocol | compose
 ```
 
-[AGENTS.md](../AGENTS.md) · 基础原文 [upstream/deepseek-harness](./upstream/deepseek-harness/)
+[AGENTS.md](../AGENTS.md) · [learn.md](./learn.md)

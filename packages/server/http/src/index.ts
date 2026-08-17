@@ -37,11 +37,11 @@ const API_ONLY_LANDING = `<!DOCTYPE html>
     <li><code>POST /api/chat</code> — JSON <code>{"message":"ping"}</code></li>
     <li><code>POST /api/sessions</code> · admit · SSE — 见文档 http-api</li>
   </ul>
-  <p>产品聊天壳（DSH fork，真源 XRKbar）：</p>
-  <pre>pnpm web:dsh:build
-pnpm web:dsh:capture
+  <p>挂上产品聊天壳：</p>
+  <pre>pnpm web:ui:build
+pnpm web:ui:capture
 node apps/cli/dist/bin.js serve --preset minimal --workspace .</pre>
-  <p>Face 验证台：构建 <code>apps/web</code> 后打开 <code>/?console=1</code>（非产品壳）。</p>
+  <p>Face 验证台：构建 <code>apps/web</code> 后打开 <code>/?console=1</code>。</p>
 </body>
 </html>
 `;

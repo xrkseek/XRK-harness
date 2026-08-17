@@ -141,7 +141,7 @@ for (const d of docs) {
 }
 write(
   path.join(root, "docs/adr/README.md"),
-  `# ADR\n\nArchitecture Decision Records.\n\n- ADR-0001: TypeScript-only host (no Go gateway)\n- ADR-0002: Do not embed Cordis / deepseek-harness source tree\n`,
+  `# ADR\n\nArchitecture Decision Records.\n\n- ADR-0001: TypeScript-only host (no Go gateway)\n- ADR-0002: Do not embed third-party agent runtime source trees\n`,
 );
 
 write(

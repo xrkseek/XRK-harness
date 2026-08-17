@@ -188,7 +188,7 @@ function buildAuthHeaders(
 
 /**
  * Thin OpenAI Chat Completions adapter (non-streaming).
- * Essence from XRKbar/AGT openai_compat: endpoint join, bearer/api-key auth,
+ * Essence: endpoint join, bearer/api-key auth,
  * tools as function schema, tool_calls normalize — no vision/SSE/proxy yet.
  */
 export function createOpenAiCompatibleAdapter(

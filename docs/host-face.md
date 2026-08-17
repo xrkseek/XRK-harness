@@ -2,8 +2,6 @@
 
 `@xrkseek/server-face`：Unary RPC + 双 WebSocket，与 REST `/api/sessions` 并行，共用 session 真源。
 
-基础契约对照 XRKbar DSH：[upstream/deepseek-harness/api-gateway.zh.md](./upstream/deepseek-harness/api-gateway.zh.md)。
-
 ## 目标
 
 1. Unary：`POST /api/<method>`（含 `.`）或 `/api/face/<method>`
@@ -27,7 +25,7 @@
 | 软降级 | `host.pickDirectory` → `{ path: null }`（browse 用 listDirectory）· `skill.list` / `subagent.list` → 空目录 |
 | 未做（NI） | `host.openPath` · `session.attachment/search` · `settings.openDocument` · `workspace.delete/insert*` · `agentPreset` 创作面 · `llm.discoverModels` · `goal.*` · subagent 写路径 |
 
-Wire：`session/queue` = DSH `QueuedInboxItem`（`message` 块）；`prompt/*` → mux/history `agent/inbox/spliced`（坐标按 bar `inbox.ts` 投影）。
+Wire：`session/queue` 带完整 `message` 块；会话 `prompt/*` 在 mux/history 投影为 `agent/inbox/spliced`（坐标按 pending 列表重放）。
 
 Policy：`XRK_POLICY_FILE` → `provider.use`；ask → `approval/*` + `session.respondApproval`。见 [policy.md](./policy.md)。
 
@@ -39,10 +37,10 @@ mode: queue | steer → admit（slash → recipe）→ wake drain（非阻塞）
 
 ## Boot
 
-- 优先 `vendor/dsh-web-static`（`boot.json` + `/plugins`）；`XRK_WEB_DIST` 可覆盖
-- 产品壳：XRKbar `deepseek-harness` → `pnpm web:dsh:capture`
+- 优先托管捕获的产品 Web 静态（`vendor/` 下 gitignore 产物；`XRK_WEB_DIST` 可覆盖）
+- 构建捕获：`pnpm web:ui:build` · `pnpm web:ui:capture`
 - `apps/web`：landing + `?console=1` Face console
 
 ## 相关
 
-[http-api.md](./http-api.md) · [status.md](./status.md) · Canvas `xrk-harness-polish-learn`
+[http-api.md](./http-api.md) · [status.md](./status.md)

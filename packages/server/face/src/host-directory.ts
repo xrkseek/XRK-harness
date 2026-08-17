@@ -1,8 +1,5 @@
 /**
- * Face host.listDirectory / host.createDirectory — shapes follow DSH
- * `packages/host/directory-picker-browse` (crumbs · entries · truncated).
- * Source of truth: XRKbar deepseek-harness; this is a port of the wire contract,
- * not a second design.
+ * Face host.listDirectory / host.createDirectory — crumbs · entries · truncated.
  */
 
 import { mkdir, opendir, stat } from "node:fs/promises";

@@ -1,7 +1,6 @@
 # @xrkseek/harness-web
 
-**不是**产品聊天壳。产品 UI = XRKbar 的 DeepSeek Harness fork，经
-`pnpm web:dsh:capture` 落到 `vendor/dsh-web-static`，由 `serve` 托管。
+本包不是完整产品聊天壳。完整壳由本地 UI 源构建捕获到 `vendor/web-static`（gitignore），再由 `serve` 托管。
 
 本包只保留：
 
@@ -17,7 +16,7 @@ pnpm --filter @xrkseek/harness-web build
 pnpm --filter @xrkseek/harness-web dev   # 代理到 :8787
 ```
 
-产品壳：`pnpm web:dsh:build` → `pnpm web:dsh:capture` → `serve`。
+产品壳：`pnpm web:ui:build` → `pnpm web:ui:capture` → `serve`。
 
 ## License
 

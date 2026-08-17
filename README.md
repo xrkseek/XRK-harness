@@ -19,11 +19,11 @@
 | 域 | 状态 |
 |----|------|
 | Kernel · Compose C0/C1 · Session · Agent · Exec · HTTP | 能跑 · 需持续打磨 |
-| Host Face | 主 RPC + DSH 侧栏适配 · Web E2E 未稳 |
-| 产品 Web | XRKbar DSH fork + capture · 接入打磨中 |
+| Host Face | 主 RPC / 侧栏 / 队列 wire 已接 · Web E2E 未稳 |
+| 产品 Web | 静态壳可挂 · 对话窗硬刷验收中 |
 | MCP · Compose C2 · Registry R1+ · Face U3 | 未做 |
 
-[docs/status.md](./docs/status.md) · Canvas `xrk-harness-polish-learn`
+[docs/status.md](./docs/status.md)
 
 ## 快速开始
 
@@ -35,10 +35,6 @@ pnpm build
 
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 node apps/cli/dist/bin.js serve --preset minimal --workspace .
-
-# 产品壳（XRKbar deepseek-harness）
-pnpm web:dsh:build
-pnpm web:dsh:capture
 ```
 
 示例：[examples/hello-agent](./examples/hello-agent) · HTTP：[docs/http-api.md](./docs/http-api.md)
@@ -50,17 +46,15 @@ pnpm web:dsh:capture
 - 模型可见输入必须可从 session 事件重建
 - 无全局 Proxy；组合用 `@xrkseek/compose`
 - presets 无业务逻辑；密钥不入库
-- 基础规格照搬 XRKbar `deepseek-harness`（见 [docs/upstream/deepseek-harness](./docs/upstream/deepseek-harness/)）
+- **自研**：仓库只含本产品；外项目对照不入库（见 [AGENTS.md](./AGENTS.md)）
 
 ## 布局
 
 ```text
 apps/cli · apps/web     CLI · Face console
-vendor/dsh-web-static   捕获的 DSH Web（gitignore）
 packages/*              kernel · compose · core* · llm · exec* · server · sdk
 presets/                minimal | harness | server
-docs/                   产品规格 · upstream 原文 · ADR
-.agents/skills/         DSH skills 照搬
+docs/                   产品规格 · ADR
 ```
 
 [AGENTS.md](./AGENTS.md) · [docs/architecture.md](./docs/architecture.md)

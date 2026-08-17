@@ -1,12 +1,11 @@
 /**
- * Capture DeepSeek Harness web dist + boot graph + /plugins bundles so XRK
- * `serve` can host the forked UI without Cordis webserver.
+ * Capture a built product-web dist + boot graph + /plugins into
+ * `vendor/web-static` for `xrk-harness serve` (gitignored).
  *
- * Usage (DSH already built):
- *   node scripts/capture-dsh-web.mjs
- *   # optional: DSH_WEB_URL=http://127.0.0.1:3080
+ * Expects a local UI source tree at `vendor/ui-src` (gitignore; maintainer link).
  *
- * Writes: vendor/dsh-web-static/{index.html assets, plugins/, boot.json}
+ *   pnpm web:ui:build
+ *   pnpm web:ui:capture
  */
 import { spawn } from "node:child_process";
 import {
@@ -22,10 +21,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DSH = path.join(ROOT, "vendor", "deepseek-harness");
-const OUT = path.join(ROOT, "vendor", "dsh-web-static");
-const DIST = path.join(DSH, "apps", "web", "dist");
-const URL_BASE = (process.env.DSH_WEB_URL ?? "http://127.0.0.1:3080").replace(
+const UI_SRC = path.join(ROOT, "vendor", "ui-src");
+const OUT = path.join(ROOT, "vendor", "web-static");
+const DIST = path.join(UI_SRC, "apps", "web", "dist");
+const URL_BASE = (process.env.XRK_UI_URL ?? "http://127.0.0.1:3080").replace(
   /\/$/,
   "",
 );
@@ -65,12 +64,12 @@ async function waitReady(timeoutMs = 90_000) {
     }
     await sleep(800);
   }
-  throw new Error(`dsh web not ready at ${URL_BASE}`);
+  throw new Error(`UI not ready at ${URL_BASE}`);
 }
 
 async function main() {
   if (!existsSync(path.join(DIST, "index.html"))) {
-    throw new Error(`missing ${DIST}/index.html — run pnpm web:dsh:build first`);
+    throw new Error(`missing ${DIST}/index.html — run pnpm web:ui:build first`);
   }
 
   let child;
@@ -80,7 +79,7 @@ async function main() {
   } catch {
     startedHere = true;
     child = spawn("pnpm", ["dsh", "web"], {
-      cwd: DSH,
+      cwd: UI_SRC,
       shell: true,
       stdio: "ignore",
       detached: false,
@@ -93,9 +92,8 @@ async function main() {
     mkdirSync(OUT, { recursive: true });
     cpSync(DIST, OUT, { recursive: true });
 
-    // Prefer freshly branded public assets if present on source tree
     for (const name of ["favicon.png", "logo.png", "logo-plate.png"]) {
-      const src = path.join(DSH, "apps", "web", "public", name);
+      const src = path.join(UI_SRC, "apps", "web", "public", name);
       if (existsSync(src)) copyFileSync(src, path.join(OUT, name));
     }
 
