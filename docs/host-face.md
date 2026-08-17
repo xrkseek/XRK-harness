@@ -42,7 +42,7 @@ mode: queue | steer → admit（slash → recipe）→ wake drain（非阻塞）
 ## Boot
 
 - 静态资源：`XRK_WEB_DIST` 可覆盖；未设置时 `serve` 自动寻找可用的 web dist
-- `apps/web`：landing + `?console=1` Face console
+- `apps/web`：自研聊天壳（默认）+ `?console=1` Face console；无 `dist` 时 `serve` 回退 `apps/web-static`
 
 ## 相关
 

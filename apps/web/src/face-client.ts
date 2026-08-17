@@ -32,9 +32,17 @@ export class FaceClient {
   }
 
   get muxWsUrl(): string {
+    return this.wsUrl("/api/events.mux");
+  }
+
+  get hostWsUrl(): string {
+    return this.wsUrl("/api/events.host");
+  }
+
+  private wsUrl(pathname: string): string {
     const u = new URL(this.baseUrl);
     u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
-    u.pathname = "/api/events.mux";
+    u.pathname = pathname;
     u.search = "";
     u.hash = "";
     return u.toString();
@@ -81,14 +89,23 @@ export class FaceClient {
    * cannot set WS Authorization headers).
    */
   openMux(onFrame: (frame: unknown) => void): WebSocket {
-    const ws = new WebSocket(this.muxWsUrl);
+    return this.openWs(this.muxWsUrl, onFrame);
+  }
+
+  /** Host event bus (`host/session-*`, workspace, …). */
+  openHost(onFrame: (frame: unknown) => void): WebSocket {
+    return this.openWs(this.hostWsUrl, onFrame);
+  }
+
+  private openWs(url: string, onFrame: (frame: unknown) => void): WebSocket {
+    const ws = new WebSocket(url);
     ws.addEventListener("message", (ev) => {
       try {
         const msg = JSON.parse(String(ev.data)) as {
           type?: string;
           payload?: unknown;
         };
-        // DeepSeek wire: server-request { method, payload }; legacy: { payload }
+        // Face wire: server-request { method, payload }; legacy: { payload }
         onFrame(msg.payload ?? msg);
       } catch {
         /* ignore malformed */

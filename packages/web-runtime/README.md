@@ -10,5 +10,6 @@
 | `ChunkFold` | `SessionEvent` → UI trajectory |
 | `SlotRegistry` | single/list/keyed/chain · cascade dispose |
 | `FaceSessionView` | mux/history → fold + projections |
+| `coerceSessionEvent` | Face/DSH wire envelope → SessionEvent |
 
 规格入口：[docs/host-face.md](../../docs/host-face.md) · [docs/status.md](../../docs/status.md)

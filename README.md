@@ -50,7 +50,7 @@ node apps/cli/dist/bin.js serve --preset minimal --workspace .
 ## 布局
 
 ```text
-apps/cli · apps/web · apps/web-static   CLI · 验证台 · 产品壳静态
+apps/cli · apps/web · apps/web-static   CLI · 自研壳(+console) · 捕获后备
 packages/*              kernel · compose · core* · llm · exec* · server · mcp · attachment · sdk
 presets/                minimal | harness | server
 docs/                   产品规格 · ADR
