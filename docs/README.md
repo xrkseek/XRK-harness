@@ -66,7 +66,7 @@
 | [testing.md](./testing.md) | `pnpm check` |
 | [security-checklist.md](./security-checklist.md) | 安全控制 |
 | [publishing.md](./publishing.md) | 发包边界 |
-| [learn.md](./learn.md) | 维护者笔记 |
+| [learn.md](./learn.md) | 学习笔记（公开） |
 
 ## 同步规则
 

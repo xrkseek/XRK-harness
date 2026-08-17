@@ -46,7 +46,6 @@ node apps/cli/dist/bin.js serve --preset minimal --workspace .
 - 模型可见输入必须可从 session 事件重建
 - 无全局 Proxy；组合用 `@xrkseek/compose`
 - presets 无业务逻辑；密钥不入库
-- **自研**：仓库只含本产品；外项目对照不入库（见 [AGENTS.md](./AGENTS.md)）
 
 ## 布局
 

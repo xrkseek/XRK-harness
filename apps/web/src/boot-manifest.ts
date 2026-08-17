@@ -1,7 +1,6 @@
 /**
  * Boot manifest for Face console / injected SPA.
  * Host injects `window.__XRK_BOOT__` (+ compatibility `__DSH_BOOT__`).
- * Product chat UI uses captured `vendor/web-static/boot.json`.
  */
 
 export interface WebBootEntry {
