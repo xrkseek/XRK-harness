@@ -1,11 +1,12 @@
 ---
-description: XRK 文档只写远程会有的内容；学习见 learn.md；本机笔记进 Canvas
+description: XRK 文档只写本仓已有行为；学习见 learn.md；本机笔记进 Canvas
 alwaysApply: true
 ---
 
 # 文档与学习
 
-- 产品名：**XRK-Harness**（`@xrkseek/*`）。产品文档用本仓口吻写清楚即可。
-- **学习**：公开笔记只写 [docs/learn.md](docs/learn.md)；不要在 AGENTS/README/status 里反复强调「不 vendor / 对照仓」。
-- **文档边界**：`docs/`、README、AGENTS 只写会进入远程仓库的内容。本机路径、gitignore 产物、`vendor/*`、临时脚本、个人对照清单 → 写进 Cursor Canvas，不要写进仓库文档。
+- 产品名：**XRK-Harness**（`@xrkseek/*`）。
+- **只写已有**：`docs/` / README / AGENTS 描述本仓已实现行为与真实 NI；禁止把未做能力、对照仓路线、教 Agent 怎么读文档的元规则写成产品规格。
+- **学习**：已落地要点写 [docs/learn.md](docs/learn.md)，保持短；细节实现地图在 [docs/modules/](docs/modules/README.md)。
+- **本机**：路径、gitignore 产物、对照清单 → Cursor Canvas，不进仓库文档。
 - Face / wire：用本仓术语（Face wire、session 事件）。
