@@ -48,7 +48,7 @@ describe("Face adapt / slash / queue / presets", () => {
     expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("user/message");
   });
 
-  it("presentToolView builds non-persisted tool cards", () => {
+  it("presentToolView builds DSH for/card tool views", () => {
     const view = presentToolView({
       type: "tool/call",
       ts: 1,
@@ -57,9 +57,8 @@ describe("Face adapt / slash / queue / presets", () => {
       call: { id: "c1", name: "bash", arguments: { cmd: "ls" } },
     });
     expect(view).toMatchObject({
-      kind: "tool-call",
-      callId: "c1",
-      name: "bash",
+      for: "call",
+      view: { card: "generic", title: "bash" },
     });
   });
 
@@ -142,6 +141,18 @@ describe("Face adapt / slash / queue / presets", () => {
 
     const list = await dispatchFaceMethod(runtime, "agentPreset.list", "l", {});
     expect(list.result.ok).toBe(true);
+    if (list.result.ok) {
+      const v = list.result.value as {
+        presets: { id: string; trust: string; isDefault: boolean; name?: string }[];
+        authorable: boolean;
+        hasDocument: boolean;
+      };
+      expect(v.authorable).toBe(false);
+      expect(v.hasDocument).toBe(false);
+      expect(v.presets.some((p) => p.id === "minimal")).toBe(true);
+      expect(v.presets.find((p) => p.id === "minimal")?.name).toBe("Minimal");
+      expect(v).not.toHaveProperty("items");
+    }
 
     const sel = await dispatchFaceMethod(runtime, "agentPreset.select", "s", {
       sessionId,
@@ -181,5 +192,73 @@ describe("Face adapt / slash / queue / presets", () => {
     if (user.type === "user/message") {
       expect(user.rpcId).toBe("rpc-xyz");
     }
+  });
+
+  it("prompt mux emits agent/inbox/spliced + session/queue.message", async () => {
+    const runtime = bareRuntime();
+    const mux: unknown[] = [];
+    runtime.bus.subscribeMux((_id, frame) => {
+      mux.push(frame);
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const prompt = await dispatchFaceMethod(runtime, "session.prompt", "rpc-live", {
+      sessionId,
+      mode: "queue",
+      content: [{ type: "text", text: "hold for queue" }],
+    });
+    expect(prompt.result.ok).toBe(true);
+
+    const spliced = mux.find(
+      (f) =>
+        (f as { type?: string; event?: { type?: string } }).type ===
+          "session/event" &&
+        (f as { event?: { type?: string } }).event?.type ===
+          "agent/inbox/spliced",
+    ) as
+      | {
+          event: {
+            type: string;
+            data: {
+              target: string;
+              start: number;
+              inserted: { id: string; role: string; source: { rpcId?: string } }[];
+            };
+          };
+        }
+      | undefined;
+    expect(spliced?.event.data).toMatchObject({
+      target: "next-turn",
+      start: 0,
+      inserted: [
+        {
+          role: "user",
+          source: { kind: "user", rpcId: "rpc-live" },
+        },
+      ],
+    });
+
+    const queue = mux.find(
+      (f) => (f as { type?: string }).type === "session/queue",
+    ) as
+      | {
+          items: {
+            id: string;
+            placement: string;
+            message: { content: { type: string; text: string }[] };
+          }[];
+        }
+      | undefined;
+    expect(queue?.items[0]).toMatchObject({
+      placement: "queued",
+      message: {
+        role: "user",
+        content: [{ type: "text", text: "hold for queue" }],
+        source: { kind: "user", rpcId: "rpc-live" },
+      },
+    });
+    expect(queue?.items[0]).not.toHaveProperty("content");
   });
 });

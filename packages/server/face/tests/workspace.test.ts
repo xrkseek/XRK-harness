@@ -145,4 +145,107 @@ describe("Face workspace U2", () => {
       expect(escape.result.error.code).toBe("path-escape");
     }
   });
+
+  it("workspace.list returns DSH registry shape (not product tree)", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-list-"));
+    const store = createMemorySessionStore();
+    store.create("sess_a");
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+
+    const listed = await dispatchFaceMethod(runtime, "workspace.list", "wl1", {});
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) return;
+    const v = listed.result.value as {
+      items: {
+        workspaceId: string;
+        path: string;
+        title: string;
+        sessionIds: string[];
+      }[];
+      archivedSessionIds: string[];
+    };
+    expect(v.archivedSessionIds).toEqual([]);
+    expect(v.items).toHaveLength(1);
+    expect(v.items[0]?.workspaceId).toBe("ws_default");
+    expect(v.items[0]?.path).toBe(path.resolve(root));
+    expect(v.items[0]?.title).toBe(path.basename(root));
+    expect(v.items[0]?.sessionIds).toContain("sess_a");
+    expect(v).not.toHaveProperty("entries");
+    expect(v).not.toHaveProperty("exists");
+  });
+
+  it("workspace.create · rename · archiveSession + session cwd attach", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-reg-"));
+    const other = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-other-"));
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+
+    const created = await dispatchFaceMethod(runtime, "workspace.create", "wc1", {
+      path: other,
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const ws = (
+      created.result.value as {
+        workspace: { workspaceId: string; path: string; title: string };
+        created: boolean;
+      }
+    ).workspace;
+    expect(created.result.value).toMatchObject({ created: true });
+    expect(ws.path).toBe(path.resolve(other));
+
+    const renamed = await dispatchFaceMethod(runtime, "workspace.rename", "wr1", {
+      workspaceId: ws.workspaceId,
+      title: "Other Box",
+    });
+    expect(renamed.result.ok).toBe(true);
+
+    const sess = await dispatchFaceMethod(runtime, "session.create", "sc1", {
+      workspaceId: ws.workspaceId,
+    });
+    expect(sess.result.ok).toBe(true);
+    if (!sess.result.ok) return;
+    const sessionId = (sess.result.value as { sessionId: string }).sessionId;
+    expect(runtime.sessionCwds.get(sessionId)).toBe(path.resolve(other));
+
+    const listed = await dispatchFaceMethod(runtime, "session.list", "sl1", {});
+    expect(listed.result.ok).toBe(true);
+    if (listed.result.ok) {
+      const item = (
+        listed.result.value as { items: { sessionId: string; cwd: string }[] }
+      ).items.find((i) => i.sessionId === sessionId);
+      expect(item?.cwd).toBe(path.resolve(other));
+    }
+
+    const archived = await dispatchFaceMethod(
+      runtime,
+      "workspace.archiveSession",
+      "wa1",
+      { sessionId },
+    );
+    expect(archived.result.ok).toBe(true);
+    if (archived.result.ok) {
+      expect(
+        (archived.result.value as { archivedSessionIds: string[] })
+          .archivedSessionIds,
+      ).toContain(sessionId);
+    }
+
+    const pick = await dispatchFaceMethod(runtime, "host.pickDirectory", "pd1", {});
+    expect(pick.result).toEqual({ ok: true, value: { path: null } });
+  });
 });

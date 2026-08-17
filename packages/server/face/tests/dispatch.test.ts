@@ -100,8 +100,17 @@ describe("face dispatch", () => {
     });
     expect(hist.result.ok).toBe(true);
     if (hist.result.ok) {
-      const events = (hist.result.value as { events: unknown[] }).events;
+      const events = (
+        hist.result.value as {
+          events: { event: { type: string; seq: number; time: number; data: unknown }; seq?: number }[];
+        }
+      ).events;
       expect(events.length).toBeGreaterThan(0);
+      expect(events[0]?.event.seq).toBeGreaterThan(0);
+      expect(typeof events[0]?.event.time).toBe("number");
+      expect(events[0]?.event).toHaveProperty("data");
+      // seq lives on DSH event; entry no longer mirrors top-level seq
+      expect(events[0]).not.toHaveProperty("seq");
       const projections = (
         hist.result.value as {
           projections?: { asOfSeq: number; values: Record<string, unknown> };
@@ -130,8 +139,13 @@ describe("face dispatch", () => {
     });
     expect(renamed.result).toEqual({
       ok: true,
-      value: { title: "Face Title" },
+      value: { title: "Face Title", seq: expect.any(Number) },
     });
+    if (renamed.result.ok) {
+      expect(
+        (renamed.result.value as { seq: number }).seq,
+      ).toBeGreaterThan(0);
+    }
     expect(runtime.projections.snapshot(sessionId).values.title).toBe(
       "Face Title",
     );

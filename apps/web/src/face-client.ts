@@ -54,7 +54,12 @@ export class FaceClient {
     const res = await this.fetchImpl(`${this.baseUrl}/api/${method}`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ rpcId, payload }),
+      body: JSON.stringify({
+        type: "client-request",
+        rpcId,
+        method,
+        payload,
+      }),
     });
     if (!res.ok) {
       return {
@@ -64,21 +69,27 @@ export class FaceClient {
       };
     }
     const body = (await res.json()) as {
+      type?: string;
+      rpcId?: string;
       result: FaceRpcResult<T>;
     };
-    return { ...body.result, rpcId };
+    return { ...body.result, rpcId: body.rpcId ?? rpcId };
   }
 
   /**
-   * Open mux WS. When API key is required, serve SPA same-origin so proxy
-   * auth applies (browsers cannot set WS Authorization headers).
+   * Open mux WS. Prefer same-origin when API key is required (browsers
+   * cannot set WS Authorization headers).
    */
   openMux(onFrame: (frame: unknown) => void): WebSocket {
     const ws = new WebSocket(this.muxWsUrl);
     ws.addEventListener("message", (ev) => {
       try {
-        const msg = JSON.parse(String(ev.data)) as { payload?: unknown };
-        if (msg.payload !== undefined) onFrame(msg.payload);
+        const msg = JSON.parse(String(ev.data)) as {
+          type?: string;
+          payload?: unknown;
+        };
+        // DeepSeek wire: server-request { method, payload }; legacy: { payload }
+        onFrame(msg.payload ?? msg);
       } catch {
         /* ignore malformed */
       }

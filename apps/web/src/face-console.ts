@@ -1,7 +1,5 @@
 /**
- * Face verifier console — **not** the product AppShell.
- * Highlights: FaceSessionView optimism · queue · tool views · SlotRegistry · presets.
- * Mount via `?console=1`.
+ * Face verifier console (`?console=1`). Product chat shell is DSH capture.
  */
 
 import {

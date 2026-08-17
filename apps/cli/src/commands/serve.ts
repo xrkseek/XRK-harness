@@ -7,8 +7,33 @@ import {
 import { createMinimalComposition } from "@xrkseek/preset-minimal";
 import { resolveLlmFromEnv } from "@xrkseek/llm-registry";
 import { createPolicyEngineFromFile, type PolicyEngine } from "@xrkseek/policy";
+import { access } from "node:fs/promises";
+import path from "node:path";
 import type { ParsedArgs } from "../parse-args.js";
 import type { AgentFactory } from "@xrkseek/server-host";
+
+/** Prefer env/patch; else auto-pick captured DSH UI, then `apps/web/dist`. */
+async function resolveWebDist(
+  configured: string | undefined,
+  workspaceRoot: string,
+): Promise<string | undefined> {
+  if (configured?.trim()) return path.resolve(configured.trim());
+  const candidates = [
+    path.resolve(workspaceRoot, "vendor", "dsh-web-static"),
+    path.resolve(process.cwd(), "vendor", "dsh-web-static"),
+    path.resolve(workspaceRoot, "apps", "web", "dist"),
+    path.resolve(process.cwd(), "apps", "web", "dist"),
+  ];
+  for (const dir of candidates) {
+    try {
+      await access(path.join(dir, "index.html"));
+      return dir;
+    } catch {
+      /* try next */
+    }
+  }
+  return undefined;
+}
 
 function factoryForPreset(
   preset: string,
@@ -58,6 +83,11 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     ? await createPolicyEngineFromFile(config.runtime.policyFile)
     : undefined;
 
+  const webDist = await resolveWebDist(
+    config.runtime.webDist,
+    config.runtime.workspaceRoot,
+  );
+
   const manager = createHostManager();
   const factory = factoryForPreset(
     preset,
@@ -67,7 +97,11 @@ export async function runServe(args: ParsedArgs): Promise<number> {
   const instance = await manager.spawn(
     {
       ...config,
-      runtime: { ...config.runtime, preset },
+      runtime: {
+        ...config.runtime,
+        preset,
+        ...(webDist ? { webDist } : {}),
+      },
     },
     factory,
   );
@@ -77,7 +111,7 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     `xrk-harness serve listening on http://${config.runtime.host}:${health.port}\n`,
   );
   process.stdout.write(
-    `preset=${preset} apiKey=${config.credentials.apiKey ? "set" : "off (dev)"}${policy ? " policy=on" : ""}\n`,
+    `preset=${preset} apiKey=${config.credentials.apiKey ? "set" : "off (dev)"}${policy ? " policy=on" : ""}${webDist ? ` web=${webDist}` : " web=api-landing"}\n`,
   );
 
   const shutdown = async () => {

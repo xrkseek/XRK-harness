@@ -9,7 +9,7 @@ import {
 import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { createPolicyEngineFromFile } from "@xrkseek/policy";
 import type { HostConfig } from "@xrkseek/server-config";
-import { createHttpServer, type HarnessHttpServer, XRK_APP_SHELL_BOOT, injectBootIntoHtml } from "@xrkseek/server-http";
+import { createHttpServer, type HarnessHttpServer, injectBootIntoHtml, resolveWebBootManifest } from "@xrkseek/server-http";
 import {
   attachFaceUpgrades,
   createFaceRuntime,
@@ -222,7 +222,10 @@ export function createHostManager(): HostManager {
               webStatic: {
                 root: config.runtime.webDist,
                 transformIndex: (html) =>
-                  injectBootIntoHtml(html, XRK_APP_SHELL_BOOT),
+                  injectBootIntoHtml(
+                    html,
+                    resolveWebBootManifest(config.runtime.webDist),
+                  ),
               },
             }
           : {}),

@@ -3,6 +3,9 @@
  * Browser globals: `window.__DSH_BOOT__` + alias `__XRK_BOOT__`.
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+
 export interface WebBootEntry {
   readonly id: string;
   readonly url: string;
@@ -16,7 +19,7 @@ export interface WebBootManifest {
   readonly entries: readonly WebBootEntry[];
 }
 
-/** Default product AppShell roster (local factories in apps/web). */
+/** Fallback when no captured DSH boot.json — Face console / legacy tests only. */
 export const XRK_APP_SHELL_BOOT: WebBootManifest = {
   rev: "xrk-app-shell",
   entries: [
@@ -58,6 +61,35 @@ export const FACE_CONSOLE_BOOT: WebBootManifest = {
   ],
 };
 
+/**
+ * Load captured DSH boot graph from `boot.json` next to a web dist root
+ * (produced by `scripts/capture-dsh-web.mjs`).
+ */
+export function loadBootManifestFromWebDist(
+  webDistRoot: string,
+): WebBootManifest | undefined {
+  const bootPath = path.join(path.resolve(webDistRoot), "boot.json");
+  if (!existsSync(bootPath)) return undefined;
+  try {
+    const raw = JSON.parse(readFileSync(bootPath, "utf8")) as unknown;
+    if (!raw || typeof raw !== "object") return undefined;
+    const o = raw as Record<string, unknown>;
+    if (typeof o.rev !== "string" || !Array.isArray(o.entries)) return undefined;
+    return raw as WebBootManifest;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Prefer captured DSH `boot.json`; else legacy console fallback roster. */
+export function resolveWebBootManifest(webDistRoot?: string): WebBootManifest {
+  if (webDistRoot) {
+    const captured = loadBootManifestFromWebDist(webDistRoot);
+    if (captured) return captured;
+  }
+  return XRK_APP_SHELL_BOOT;
+}
+
 export function bootInjectScript(manifest: WebBootManifest): string {
   const json = JSON.stringify(manifest);
   return `<script>window.__DSH_BOOT__=${json};window.__XRK_BOOT__=window.__DSH_BOOT__;</script>`;
@@ -70,9 +102,14 @@ export function injectBootIntoHtml(
 ): string {
   const script = bootInjectScript(manifest);
   const lower = html.toLowerCase();
-  const idx = lower.lastIndexOf("</head>");
+  // Strip any prior inject so capture+serve does not double-inject.
+  const stripped = html.replace(
+    /<script>\s*window\.__DSH_BOOT__[\s\S]*?<\/script>/i,
+    "",
+  );
+  const idx = stripped.toLowerCase().lastIndexOf("</head>");
   if (idx >= 0) {
-    return html.slice(0, idx) + script + html.slice(idx);
+    return stripped.slice(0, idx) + script + stripped.slice(idx);
   }
-  return script + html;
+  return script + stripped;
 }

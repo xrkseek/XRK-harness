@@ -289,3 +289,99 @@ export async function workspaceSyncSeeds(
     },
   };
 }
+
+/**
+ * DeepSeek `workspace.list` — registry of workspaces + archived sessions.
+ */
+export async function workspaceListDsh(
+  runtime: FaceRuntime,
+): Promise<FaceRpcResult<unknown>> {
+  return {
+    ok: true,
+    value: runtime.workspaces.list(runtime.store.list()),
+  };
+}
+
+export async function workspaceCreateDsh(
+  runtime: FaceRuntime,
+  payload: unknown,
+): Promise<FaceRpcResult<unknown>> {
+  const p =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const raw = typeof p.path === "string" ? p.path.trim() : "";
+  if (!raw) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "path required" },
+    };
+  }
+  const result = runtime.workspaces.create(raw);
+  runtime.bus.publishHost({
+    type: "host/workspace-changed",
+    workspace: result.workspace,
+  });
+  return { ok: true, value: result };
+}
+
+export async function workspaceRenameDsh(
+  runtime: FaceRuntime,
+  payload: unknown,
+): Promise<FaceRpcResult<unknown>> {
+  const p =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const workspaceId =
+    typeof p.workspaceId === "string" ? p.workspaceId.trim() : "";
+  const title = typeof p.title === "string" ? p.title : "";
+  if (!workspaceId || !title.trim()) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: "workspaceId and non-blank title required",
+      },
+    };
+  }
+  const workspace = runtime.workspaces.rename(workspaceId, title);
+  if (!workspace) {
+    return {
+      ok: false,
+      error: {
+        code: "workspace-not-found",
+        message: `unknown workspaceId: ${workspaceId}`,
+      },
+    };
+  }
+  runtime.bus.publishHost({
+    type: "host/workspace-changed",
+    workspace,
+  });
+  return { ok: true, value: { workspace } };
+}
+
+export async function workspaceArchiveSessionDsh(
+  runtime: FaceRuntime,
+  payload: unknown,
+): Promise<FaceRpcResult<unknown>> {
+  const p =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const sessionId =
+    typeof p.sessionId === "string" ? p.sessionId.trim() : "";
+  if (!sessionId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "sessionId required" },
+    };
+  }
+  const archivedSessionIds = runtime.workspaces.archiveSession(sessionId);
+  runtime.bus.publishHost({
+    type: "host/archived-sessions-changed",
+    archivedSessionIds,
+  });
+  return { ok: true, value: { archivedSessionIds } };
+}
