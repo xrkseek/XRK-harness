@@ -1,5 +1,6 @@
 /**
- * Face verifier console (`?console=1`). Product chat shell is DSH capture.
+ * Face verifier console (`?console=1`).
+ * Product chat shell: `shell/chat-shell.ts` (default route).
  */
 
 import {

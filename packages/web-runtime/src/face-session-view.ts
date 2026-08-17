@@ -3,7 +3,7 @@
  * Consumes Face mux frames and history baselines.
  */
 
-import { isValidSessionEvent } from "@xrkseek/protocol";
+import { coerceSessionEvent, wireSeq } from "./face-wire.js";
 import { ChunkFold } from "./chunk-fold.js";
 import { GenerationGuard } from "./generation-guard.js";
 import {
@@ -99,11 +99,13 @@ export class FaceSessionView {
     if (!this.gen.isCurrent(this.token)) return;
     this.fold.reset();
     for (const row of history.events) {
-      if (isValidSessionEvent(row.event)) {
-        this.fold.push(row.event);
+      const event = coerceSessionEvent(row.event);
+      if (event) {
+        this.fold.push(event);
         this.applyToolView(row.view);
       }
-      if (row.seq > this.lastSeq) this.lastSeq = row.seq;
+      const seq = typeof row.seq === "number" ? row.seq : wireSeq(row.event);
+      if (seq > this.lastSeq) this.lastSeq = seq;
     }
     if (history.projections) {
       this.projections.seed(history.projections);
@@ -128,8 +130,9 @@ export class FaceSessionView {
 
     if (f.type === "session/event") {
       if (f.sessionId !== this.sessionId) return;
-      if (isValidSessionEvent(f.event)) {
-        this.fold.push(f.event);
+      const event = coerceSessionEvent(f.event);
+      if (event) {
+        this.fold.push(event);
         this.applyToolView(f.view);
       }
       if (f.seq > this.lastSeq) this.lastSeq = f.seq;

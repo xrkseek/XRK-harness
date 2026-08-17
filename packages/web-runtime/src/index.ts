@@ -28,3 +28,9 @@ export type {
   FaceQueueItemView,
 } from "./face-session-view.js";
 export { FaceSessionView } from "./face-session-view.js";
+export {
+  coerceSessionEvent,
+  isFaceWireEnvelope,
+  wireSeq,
+  type FaceWireEnvelope,
+} from "./face-wire.js";

@@ -12,14 +12,17 @@ import path from "node:path";
 import type { ParsedArgs } from "../parse-args.js";
 import type { AgentFactory } from "@xrkseek/server-host";
 
-/** Prefer env/patch; else tracked product shell, then local capture, then `apps/web/dist`. */
+/** Prefer env/patch; else self-owned `apps/web/dist`, then capture shells. */
 async function resolveWebDist(
   configured: string | undefined,
   workspaceRoot: string,
 ): Promise<string | undefined> {
   if (configured?.trim()) return path.resolve(configured.trim());
   const candidates = [
-    // Tracked capture (committed product chat shell)
+    // Self-owned product shell (build: apps/web)
+    path.resolve(workspaceRoot, "apps", "web", "dist"),
+    path.resolve(process.cwd(), "apps", "web", "dist"),
+    // Tracked DSH capture (fallback UX reference)
     path.resolve(workspaceRoot, "apps", "web-static"),
     path.resolve(process.cwd(), "apps", "web-static"),
     // Local-only re-capture (gitignored)
@@ -27,8 +30,6 @@ async function resolveWebDist(
     path.resolve(process.cwd(), "vendor", "web-static"),
     path.resolve(workspaceRoot, "vendor", "dsh-web-static"),
     path.resolve(process.cwd(), "vendor", "dsh-web-static"),
-    path.resolve(workspaceRoot, "apps", "web", "dist"),
-    path.resolve(process.cwd(), "apps", "web", "dist"),
   ];
   for (const dir of candidates) {
     try {

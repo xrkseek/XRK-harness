@@ -11,6 +11,7 @@
 - **队列**：权威快照 `session/queue`；`prompt/*` → `agent/inbox/spliced`；mux 重连可补发 pending queue
 - **MCP M0**：stdio → `mcp__*` 工具；默认 `mcp.connect` deny；Host 经 `XRK_MCP_*` 接线
 - **附件**：`MessageContent` 可为块数组；`@xrkseek/attachment`；Face `session.attachment`；Host 默认 text-only（无 `image` modality 则拒图）；text-only LLM 遇图抛 `UnsupportedContentError`
+- **Web**：`apps/web` 自研壳（Face + `web-runtime`）；`apps/web-static` 为捕获后备；本机对照源在 `vendor/ui-src`（不入库）
 - **运行时**：Node ≥ 26
 
 细节：[architecture.md](./architecture.md) · [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) · [policy.md](./policy.md) · [modules/](./modules/README.md)
