@@ -62,8 +62,7 @@ export const FACE_CONSOLE_BOOT: WebBootManifest = {
 };
 
 /**
- * Load captured boot graph from `boot.json` next to a web dist root
- * (produced by `scripts/capture-web-static.mjs`).
+ * Load captured boot graph from `boot.json` next to a web dist root.
  */
 export function loadBootManifestFromWebDist(
   webDistRoot: string,

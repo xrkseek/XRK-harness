@@ -37,10 +37,8 @@ const API_ONLY_LANDING = `<!DOCTYPE html>
     <li><code>POST /api/chat</code> — JSON <code>{"message":"ping"}</code></li>
     <li><code>POST /api/sessions</code> · admit · SSE — 见文档 http-api</li>
   </ul>
-  <p>挂上产品聊天壳：</p>
-  <pre>pnpm web:ui:build
-pnpm web:ui:capture
-node apps/cli/dist/bin.js serve --preset minimal --workspace .</pre>
+  <p>挂上产品聊天壳后，用 <code>serve</code> 启动 Host。</p>
+  <pre>node apps/cli/dist/bin.js serve --preset minimal --workspace .</pre>
   <p>Face 验证台：构建 <code>apps/web</code> 后打开 <code>/?console=1</code>。</p>
 </body>
 </html>

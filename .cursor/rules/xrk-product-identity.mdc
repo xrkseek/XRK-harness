@@ -1,12 +1,11 @@
 ---
-description: XRK-Harness 提交面纯净；自研产品，无外项目残留
+description: XRK 文档只写远程会有的内容；学习见 learn.md；本机笔记进 Canvas
 alwaysApply: true
 ---
 
-# 产品身份与提交面
+# 文档与学习
 
-- 产品名：**XRK-Harness**（`@xrkseek/*`）。自研实现与自写产品文档。
-- **禁止入库**：外项目原文树、`docs/upstream`、外项目 skills dump、临时扫描目录/脚本、对照仓 junction 内容。
-- 维护者可在本机自行阅读对照仓；**不要**把外项目路径、简称、照搬说明写进 README / status / architecture 等产品文档。
-- 需要规格就写本仓 `docs/*` 正经文档，写清楚 XRK 怎么做。
-- Face / wire / 队列：用本仓类型与术语（Face wire、session 事件），不要用外项目品牌当对外叙事。
+- 产品名：**XRK-Harness**（`@xrkseek/*`）。产品文档用本仓口吻写清楚即可。
+- **学习**：公开笔记只写 [docs/learn.md](docs/learn.md)；不要在 AGENTS/README/status 里反复强调「不 vendor / 对照仓」。
+- **文档边界**：`docs/`、README、AGENTS 只写会进入远程仓库的内容。本机路径、gitignore 产物、`vendor/*`、临时脚本、个人对照清单 → 写进 Cursor Canvas，不要写进仓库文档。
+- Face / wire：用本仓术语（Face wire、session 事件）。

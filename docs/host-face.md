@@ -37,8 +37,7 @@ mode: queue | steer → admit（slash → recipe）→ wake drain（非阻塞）
 
 ## Boot
 
-- 优先托管捕获的产品 Web 静态（`vendor/` 下 gitignore 产物；`XRK_WEB_DIST` 可覆盖）
-- 构建捕获：`pnpm web:ui:build` · `pnpm web:ui:capture`
+- 静态资源：`XRK_WEB_DIST` 可覆盖；未设置时 `serve` 自动寻找可用的 web dist
 - `apps/web`：landing + `?console=1` Face console
 
 ## 相关
