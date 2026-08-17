@@ -26,7 +26,7 @@
 │ core-agent   │ core-agent-loop  │ core-tools            │
 │ core-session │ system-prompt    │ workspace · policy    │
 ├──────────────┴──────────────────┴───────────────────────┤
-│  llm · exec-* · code-runtime · compose · mcp*            │
+│  llm · exec-* · code-runtime · compose · mcp · attachment │
 ├─────────────────────────────────────────────────────────┤
 │  kernel · protocol                                       │
 └─────────────────────────────────────────────────────────┘
