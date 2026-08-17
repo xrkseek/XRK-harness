@@ -1,6 +1,6 @@
 /**
- * DeepSeek-compatible boot inject for SPA index.html.
- * Browser globals: `window.__DSH_BOOT__` + alias `__XRK_BOOT__`.
+ * Boot inject for product SPA index.html.
+ * Browser globals: `window.__XRK_BOOT__` (+ compatibility `__DSH_BOOT__`).
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -62,8 +62,8 @@ export const FACE_CONSOLE_BOOT: WebBootManifest = {
 };
 
 /**
- * Load captured DSH boot graph from `boot.json` next to a web dist root
- * (produced by `scripts/capture-dsh-web.mjs`).
+ * Load captured boot graph from `boot.json` next to a web dist root
+ * (produced by `scripts/capture-web-static.mjs`).
  */
 export function loadBootManifestFromWebDist(
   webDistRoot: string,

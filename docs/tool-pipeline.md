@@ -1,9 +1,4 @@
-# Tool pipeline（XRK 落点）
-
-> **工具执行管线基础规格：读 DSH 原文，不要用本页当精简替代。**  
-> [upstream/deepseek-harness/tool-execution-pipeline.zh.md](./upstream/deepseek-harness/tool-execution-pipeline.zh.md)
-
-## 本仓实现顺序（对照原文后的落点）
+# Tool pipeline
 
 ```text
 tool/call (session, by loop)
@@ -18,7 +13,7 @@ tool/call (session, by loop)
   → (batch) additionalContexts → user/message
 ```
 
-## 本仓硬规则（实现护栏）
+## 硬规则
 
 1. **`tool/call` before pre** — `runTurn` 先 append call，再进 pipeline。  
 2. **Guards monotonic** — deny 粘性；`abstain` 中性。  

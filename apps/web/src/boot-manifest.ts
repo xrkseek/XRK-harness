@@ -1,8 +1,7 @@
 /**
- * Boot manifest wire (DeepSeek-compatible shape).
- * Host injects `window.__DSH_BOOT__` (+ alias `__XRK_BOOT__`).
- * Product chat UI uses captured DSH graph (`vendor/dsh-web-static/boot.json`).
- * This app only seeds Face console boot for `?console=1` / Vite dev.
+ * Boot manifest for Face console / injected SPA.
+ * Host injects `window.__XRK_BOOT__` (+ compatibility `__DSH_BOOT__`).
+ * Product chat UI uses captured `vendor/web-static/boot.json`.
  */
 
 export interface WebBootEntry {

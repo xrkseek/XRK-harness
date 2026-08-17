@@ -16,10 +16,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
 
-    "web:dsh:install": "pnpm --dir ./vendor/deepseek-harness install",
-    "web:dsh:build": "pnpm --dir ./vendor/deepseek-harness run build",
-    "web:dsh": "pnpm --dir ./vendor/deepseek-harness exec dsh web",
-    "web:dsh:capture": "node ./scripts/capture-dsh-web.mjs"
+    "web:ui:install": "pnpm --dir ./vendor/ui-src install",
+    "web:ui:build": "pnpm --dir ./vendor/ui-src run build",
+    "web:ui": "pnpm --dir ./vendor/ui-src exec dsh web",
+    "web:ui:capture": "node ./scripts/capture-web-static.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

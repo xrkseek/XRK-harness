@@ -1,10 +1,6 @@
 /**
- * Map XRK prompt/* durable admits onto DSH `agent/inbox/spliced` wire data.
- *
- * Contract source: XRKbar deepseek-harness
- * `packages/core/agent/src/types.ts` + `inbox.ts` (target · start · removedCount ·
- * inserted · outcome). Coordinates are computed by replaying pending lists —
- * not invented stubs.
+ * Map XRK prompt/* durable admits onto Face wire `agent/inbox/spliced`.
+ * Coordinates are computed by replaying pending lists.
  */
 
 import type { SessionEvent } from "@xrkseek/protocol";

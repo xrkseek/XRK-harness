@@ -1,9 +1,4 @@
-# Exec seams（XRK 落点）
-
-> **能力缝基础规格：读 DSH 原文，不要用本页当精简替代。**  
-> [upstream/deepseek-harness/capability-seams.zh.md](./upstream/deepseek-harness/capability-seams.zh.md)
-
-## 本仓实现对照
+# Exec seams
 
 ### Triad: Definition / Provider / Consumer
 

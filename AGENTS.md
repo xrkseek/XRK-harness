@@ -4,11 +4,11 @@
 
 ## 产品
 
-TypeScript Agent Harness + Server Kit。宿主 **仅 TypeScript（Node ≥26）**。本仓实现与规格自洽，不 vendor 第三方 agent 运行时源码树。
+TypeScript Agent Harness + Server Kit。宿主 **仅 TypeScript（Node ≥26）**。本仓实现与规格自洽。
 
 ## 目录真源
 
-以本仓实际树与 [docs/architecture.md](./docs/architecture.md) 为准；**基础 harness 规格原文**在 [docs/upstream/deepseek-harness/](./docs/upstream/deepseek-harness/)（自 XRKbar 照搬）。改路径先改规格再改代码。
+以本仓实际树与 [docs/architecture.md](./docs/architecture.md) 为准。改路径先改规格再改代码。
 
 ## 依赖纪律
 
@@ -25,7 +25,8 @@ TypeScript Agent Harness + Server Kit。宿主 **仅 TypeScript（Node ≥26）*
 - 模型可见输入必须可从 session 事件重建
 - presets 无业务逻辑
 - 密钥不入库
-- **基础架构/seams/pipeline/写作 skills：以 XRKbar `deepseek-harness`（及 bar 内其它 harness）原文为真源，照搬合并；禁止二次精简创作**（见 [docs/learn.md](./docs/learn.md) · Canvas `xrk-harness-polish-learn`「真源纪律」）
+- **文档只写会进远程的内容**；本机临时路径、未跟踪产物、个人对照笔记放 Canvas，不写进 `docs/` / README
+- 学习收获写在 [docs/learn.md](./docs/learn.md)
 
 ## 完成定义（切片）
 
@@ -35,6 +36,5 @@ TypeScript Agent Harness + Server Kit。宿主 **仅 TypeScript（Node ≥26）*
 
 - 入口：[docs/README.md](./docs/README.md)
 - 能力矩阵：[docs/status.md](./docs/status.md)
-- 学习 / 合并真源：[docs/learn.md](./docs/learn.md)
+- 学习笔记：[docs/learn.md](./docs/learn.md)
 - 贡献：[CONTRIBUTING.md](./CONTRIBUTING.md)
-- 内部学习 / TODO 板：Cursor Canvas `xrk-harness-internal-docs` · `xrk-harness-polish-learn`（不入库）

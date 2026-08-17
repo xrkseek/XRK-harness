@@ -1,0 +1,12 @@
+---
+description: XRK-Harness 提交面纯净；自研产品，无外项目残留
+alwaysApply: true
+---
+
+# 产品身份与提交面
+
+- 产品名：**XRK-Harness**（`@xrkseek/*`）。自研实现与自写产品文档。
+- **禁止入库**：外项目原文树、`docs/upstream`、外项目 skills dump、临时扫描目录/脚本、对照仓 junction 内容。
+- 维护者可在本机自行阅读对照仓；**不要**把外项目路径、简称、照搬说明写进 README / status / architecture 等产品文档。
+- 需要规格就写本仓 `docs/*` 正经文档，写清楚 XRK 怎么做。
+- Face / wire / 队列：用本仓类型与术语（Face wire、session 事件），不要用外项目品牌当对外叙事。

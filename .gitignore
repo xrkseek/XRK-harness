@@ -3,11 +3,9 @@ node_modules/
 dist/
 coverage/
 
-# DeepSeek Harness 参考树：真源在 Desktop\XRKbar\deepseek-harness，本仓仅 junction
-vendor/deepseek-harness/
+# Local-only reference / capture (never commit contents)
+vendor/
 
-# Captured DSH SPA + plugins (regenerate via pnpm web:dsh:capture)
-vendor/dsh-web-static/
 .turbo/
 *.log
 .env
