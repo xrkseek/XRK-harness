@@ -60,9 +60,9 @@ describe("Face session.attachment / image prompt", () => {
   it("rejects image when route is text-only (default)", async () => {
     const { runtime } = face({ modalities: ["text"] });
     const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});
-    expect(created.ok).toBe(true);
-    const sessionId = (created as { value: { sessionId: string } }).value
-      .sessionId;
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) throw new Error("create failed");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
 
     const res = await dispatchFaceMethod(runtime, "session.prompt", "r1", {
       sessionId,
@@ -72,8 +72,8 @@ describe("Face session.attachment / image prompt", () => {
         { type: "image", mediaType: "image/png", data: PNG_B64 },
       ],
     });
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error.code).toBe("unsupported-modality");
+    expect(res.result.ok).toBe(false);
+    if (!res.result.ok) expect(res.result.error.code).toBe("unsupported-modality");
   });
 
   it("persists image refs then session.attachment returns base64", async () => {
@@ -81,8 +81,8 @@ describe("Face session.attachment / image prompt", () => {
       modalities: ["text", "image"],
     });
     const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});
-    const sessionId = (created as { value: { sessionId: string } }).value
-      .sessionId;
+    if (!created.result.ok) throw new Error("create failed");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
 
     const prompt = await dispatchFaceMethod(runtime, "session.prompt", "r1", {
       sessionId,
@@ -97,7 +97,7 @@ describe("Face session.attachment / image prompt", () => {
         },
       ],
     });
-    expect(prompt.ok).toBe(true);
+    expect(prompt.result.ok).toBe(true);
 
     const pending = listPendingAdmits(store.get(sessionId).events, sessionId);
     expect(pending).toHaveLength(1);
@@ -109,9 +109,9 @@ describe("Face session.attachment / image prompt", () => {
       sessionId,
       attachmentId: refs[0]!.attachmentId,
     });
-    expect(att.ok).toBe(true);
-    if (att.ok) {
-      const value = att.value as {
+    expect(att.result.ok).toBe(true);
+    if (att.result.ok) {
+      const value = att.result.value as {
         attachment: { mediaType: string; width: number; height: number };
         data: string;
       };
@@ -125,13 +125,13 @@ describe("Face session.attachment / image prompt", () => {
   it("denies attachment id not referenced by session", async () => {
     const { runtime } = face({ modalities: ["text", "image"] });
     const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});
-    const sessionId = (created as { value: { sessionId: string } }).value
-      .sessionId;
+    if (!created.result.ok) throw new Error("create failed");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
     const att = await dispatchFaceMethod(runtime, "session.attachment", "r1", {
       sessionId,
       attachmentId: "sha256:deadbeef",
     });
-    expect(att.ok).toBe(false);
-    if (!att.ok) expect(att.error.code).toBe("not-found");
+    expect(att.result.ok).toBe(false);
+    if (!att.result.ok) expect(att.result.error.code).toBe("not-found");
   });
 });

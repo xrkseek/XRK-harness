@@ -9,12 +9,11 @@ Append-only session facts (`@xrkseek/protocol`). Model-visible history is recons
 | `turn/start` · `turn/end` | `turnId` | Turn bracket |
 | `step/start` · `step/end` | `turnId`, `stepId` | Provider step |
 | `user/message` | `turnId`, `content` | `content`: `string` **或** `ContentBlock[]`（text / image+`ImageAttachmentRef`）；可选 `rpcId` |
-| `prompt/admitted` | `admitId`, `content` | 同上 MessageContent；可选 `delivery` |
 | `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta |
 | `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls` |
 | `tool/call` | `turnId`, `stepId`, `call` | Before pipeline body |
 | `tool/result` | `turnId`, `stepId`, `result` | Settled result |
-| `prompt/admitted` | `admitId`, `content` | Optional `delivery`: steer\|queue |
+| `prompt/admitted` | `admitId`, `content` | MessageContent（string \| blocks）；可选 `delivery`: steer\|queue |
 | `prompt/promoted` | `admitId` | Consumed into a turn (not yet chat) |
 | `prompt/withdrawn` | `admitId` | Inbox withdraw (edit/remove/steer rewrite) |
 | `safety/notice` | `turnId`, `kind`, `content` | loop_soft/hard · mistake_limit · api_error |

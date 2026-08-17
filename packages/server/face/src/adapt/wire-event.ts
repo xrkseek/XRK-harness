@@ -118,7 +118,7 @@ function stepNum(
 function assistantMessageContent(
   event: Extract<SessionEvent, { type: "assistant/message" }>,
 ): unknown[] {
-  const blocks: unknown[] = [...textBlocks(event.content)];
+  const blocks: unknown[] = [...wireContentBlocks(event.content)];
   for (const call of event.toolCalls ?? []) {
     let argsRaw: string;
     try {
@@ -228,7 +228,7 @@ export function toDshWireSessionEvent(
           message: {
             content: [
               {
-                content: textBlocks(event.result.content),
+                content: wireContentBlocks(event.result.content),
                 ...(event.result.isError ? { isError: true } : {}),
               },
             ],
