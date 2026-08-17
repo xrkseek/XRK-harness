@@ -1,6 +1,8 @@
 /**
  * Capture a built product-web dist + boot graph + /plugins into
- * `vendor/web-static` for `xrk-harness serve` (gitignored).
+ * `apps/web-static` (tracked) for `xrk-harness serve`.
+ *
+ * Also mirrors to `vendor/web-static` for local-only overrides (gitignored).
  *
  * Expects a local UI source tree at `vendor/ui-src` (gitignore; maintainer link).
  *
@@ -22,7 +24,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const UI_SRC = path.join(ROOT, "vendor", "ui-src");
-const OUT = path.join(ROOT, "vendor", "web-static");
+const OUT_TRACKED = path.join(ROOT, "apps", "web-static");
+const OUT_LOCAL = path.join(ROOT, "vendor", "web-static");
 const DIST = path.join(UI_SRC, "apps", "web", "dist");
 const URL_BASE = (process.env.XRK_UI_URL ?? "http://127.0.0.1:3080").replace(
   /\/$/,
@@ -88,33 +91,36 @@ async function main() {
   }
 
   try {
-    if (existsSync(OUT)) rmSync(OUT, { recursive: true, force: true });
-    mkdirSync(OUT, { recursive: true });
-    cpSync(DIST, OUT, { recursive: true });
-
-    for (const name of ["favicon.png", "logo.png", "logo-plate.png"]) {
-      const src = path.join(UI_SRC, "apps", "web", "public", name);
-      if (existsSync(src)) copyFileSync(src, path.join(OUT, name));
-    }
-
     const html = await fetchText(`${URL_BASE}/`);
     const boot = extractBoot(html);
-    writeFileSync(path.join(OUT, "boot.json"), JSON.stringify(boot, null, 2));
 
-    const pluginsRoot = path.join(OUT, "plugins");
-    mkdirSync(pluginsRoot, { recursive: true });
-    for (const entry of boot.entries ?? []) {
-      const urlPath = String(entry.url ?? "");
-      if (!urlPath.startsWith("/plugins/")) continue;
-      const clean = urlPath.split("?")[0];
-      const dest = path.join(OUT, clean.replace(/^\//, ""));
-      mkdirSync(path.dirname(dest), { recursive: true });
-      const buf = await fetchBuf(`${URL_BASE}${urlPath}`);
-      writeFileSync(dest, buf);
-      process.stdout.write(`plugin ${entry.id} → ${clean}\n`);
+    for (const OUT of [OUT_TRACKED, OUT_LOCAL]) {
+      if (existsSync(OUT)) rmSync(OUT, { recursive: true, force: true });
+      mkdirSync(OUT, { recursive: true });
+      cpSync(DIST, OUT, { recursive: true });
+
+      for (const name of ["favicon.png", "logo.png", "logo-plate.png"]) {
+        const src = path.join(UI_SRC, "apps", "web", "public", name);
+        if (existsSync(src)) copyFileSync(src, path.join(OUT, name));
+      }
+
+      writeFileSync(path.join(OUT, "boot.json"), JSON.stringify(boot, null, 2));
+
+      const pluginsRoot = path.join(OUT, "plugins");
+      mkdirSync(pluginsRoot, { recursive: true });
+      for (const entry of boot.entries ?? []) {
+        const urlPath = String(entry.url ?? "");
+        if (!urlPath.startsWith("/plugins/")) continue;
+        const clean = urlPath.split("?")[0];
+        const dest = path.join(OUT, clean.replace(/^\//, ""));
+        mkdirSync(path.dirname(dest), { recursive: true });
+        const buf = await fetchBuf(`${URL_BASE}${urlPath}`);
+        writeFileSync(dest, buf);
+        process.stdout.write(`plugin ${entry.id} → ${clean} (${path.basename(OUT)})\n`);
+      }
+
+      process.stdout.write(`wrote ${OUT} (rev=${boot.rev})\n`);
     }
-
-    process.stdout.write(`wrote ${OUT} (rev=${boot.rev})\n`);
   } finally {
     if (startedHere && child) {
       child.kill("SIGTERM");

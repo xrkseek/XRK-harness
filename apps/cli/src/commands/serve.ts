@@ -12,16 +12,19 @@ import path from "node:path";
 import type { ParsedArgs } from "../parse-args.js";
 import type { AgentFactory } from "@xrkseek/server-host";
 
-/** Prefer env/patch; else auto-pick captured product web, then `apps/web/dist`. */
+/** Prefer env/patch; else tracked product shell, then local capture, then `apps/web/dist`. */
 async function resolveWebDist(
   configured: string | undefined,
   workspaceRoot: string,
 ): Promise<string | undefined> {
   if (configured?.trim()) return path.resolve(configured.trim());
   const candidates = [
+    // Tracked capture (committed product chat shell)
+    path.resolve(workspaceRoot, "apps", "web-static"),
+    path.resolve(process.cwd(), "apps", "web-static"),
+    // Local-only re-capture (gitignored)
     path.resolve(workspaceRoot, "vendor", "web-static"),
     path.resolve(process.cwd(), "vendor", "web-static"),
-    // legacy local capture name (gitignore)
     path.resolve(workspaceRoot, "vendor", "dsh-web-static"),
     path.resolve(process.cwd(), "vendor", "dsh-web-static"),
     path.resolve(workspaceRoot, "apps", "web", "dist"),

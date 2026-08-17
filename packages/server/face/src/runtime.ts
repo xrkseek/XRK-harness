@@ -12,6 +12,7 @@ import {
 } from "@xrkseek/llm-registry";
 import type { PolicyEngine } from "@xrkseek/policy";
 import type { SessionEvent } from "@xrkseek/protocol";
+import { flattenText } from "@xrkseek/protocol";
 import { createFaceBus, type FaceBus } from "./bus.js";
 import type { FaceDrain, FaceRuntime } from "./context.js";
 import { createFaceSeqClock, type FaceSeqClock } from "./seq.js";
@@ -144,7 +145,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       titleBox.controller?.maybeFallbackFromUserMessage(
         id,
         eventSeq,
-        frozen.content,
+        flattenText(frozen.content),
       );
     }
     if (
