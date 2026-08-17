@@ -21,7 +21,7 @@
 2. Secrets never in published tarballs (`.npmignore` / `files` whitelist).
 3. Use changesets (to be added) for version bumps; changelog per package.
 4. `pnpm check` must be green before tag.
-5. Do not publish empty-shell packages (`mcp`, vendor llm stubs) as if complete — see [status.md](./status.md).
+5. Do not publish incomplete packages as complete (`mcp` is M0 only — see [status.md](./status.md)).
 
 ## Local pack smoke
 

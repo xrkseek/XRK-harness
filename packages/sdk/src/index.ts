@@ -130,6 +130,14 @@ export {
   policyRulesetJsonSchema,
 } from "@xrkseek/policy";
 export {
+  createMcpClient,
+  registerMcpTools,
+  publicToolName,
+  parsePublicToolName,
+  type McpClient,
+  type McpStdioOptions,
+} from "@xrkseek/mcp";
+export {
   parseSessionEvent,
   assertSessionEvent,
   isValidSessionEvent,

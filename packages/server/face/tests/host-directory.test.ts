@@ -86,7 +86,7 @@ describe("host directory (DSH browse shapes)", () => {
         provider?: string;
       };
       expect(v.version).toBe("test");
-      expect(v.canOpenPath).toBe(false);
+      expect(v.canOpenPath).toBe(true);
       if (v.provider) {
         expect(typeof v.model === "string" || v.model === undefined).toBe(true);
       }
@@ -112,9 +112,9 @@ describe("host directory (DSH browse shapes)", () => {
     const open = await dispatchFaceMethod(runtime, "host.openPath", "ho1", {
       path: root,
     });
-    expect(open.result.ok).toBe(false);
-    if (!open.result.ok) {
-      expect(open.result.error.code).toBe("not-implemented");
+    expect(open.result.ok).toBe(true);
+    if (open.result.ok) {
+      expect(open.result.value).toEqual({ opened: true });
     }
   });
 });

@@ -30,8 +30,25 @@
 - **`prompt/*` → `agent/inbox/spliced`**：坐标按 pending 重放
 - **mux 重连**：`session/subscribed` + 有 pending 时补发 `session/queue`
 - **主路径护栏**：`prompt → tool → cancel → policy ask`（`harness-path` 测）
+- **`session.search`**：内存扫 `user/message` + `assistant/message`（上限 20）
 
-细节见 [architecture.md](./architecture.md) · [tool-pipeline.md](./tool-pipeline.md) · [seams.md](./seams.md) · [host-face.md](./host-face.md)。
+## MCP M0
+
+- `@xrkseek/mcp`：stdio → `mcp__server__tool` → ToolRegistry；**默认 `mcp.connect` deny**
+- Host：`XRK_MCP_SERVERS` + `XRK_MCP_ALLOW=1`（或 policy allow）→ 合成 `kind: tools` 插件
+
+## 跟 DSH × 融 AGT × 自研（路线）
+
+立场：体量用本仓真能力堆；壳跟 bar 捕获；AGT 只融产品特色，不搬 Proxy/多语言宿主。
+
+| 波次 | 内容 | 状态 |
+|------|------|------|
+| 1 | search · MCP M0 · openPath · skill.list · Host MCP 接线 | 本轮 |
+| 2 | bar re-capture（rc.7 UI）· `session.attachment`（协议 ContentBlock） | 下一刀 |
+| 3 | AGT：office skills 包 · MEMORY · trigger microagents · toolScan | 排队 |
+| 4 | 硬刷 Web · 打磨边界 · 自研差异化 | 持续 |
+
+细节见 [architecture.md](./architecture.md) · [tool-pipeline.md](./tool-pipeline.md) · [seams.md](./seams.md) · [host-face.md](./host-face.md) · [policy.md](./policy.md) · **[modules/](./modules/README.md)**（文件级笔记）。
 
 ## 运行时
 

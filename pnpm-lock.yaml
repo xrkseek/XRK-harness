@@ -217,6 +217,12 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(zod@4.4.3)
+      '@xrkseek/core-tools':
+        specifier: workspace:*
+        version: link:../core/tools
+      '@xrkseek/policy':
+        specifier: workspace:*
+        version: link:../policy
 
   packages/policy:
     dependencies:
@@ -261,6 +267,9 @@ importers:
       '@xrkseek/llm-replay':
         specifier: workspace:*
         version: link:../llm/replay
+      '@xrkseek/mcp':
+        specifier: workspace:*
+        version: link:../mcp
       '@xrkseek/policy':
         specifier: workspace:*
         version: link:../policy
@@ -349,9 +358,15 @@ importers:
       '@xrkseek/core-session':
         specifier: workspace:*
         version: link:../../core/session
+      '@xrkseek/core-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
       '@xrkseek/llm-registry':
         specifier: workspace:*
         version: link:../../llm/registry
+      '@xrkseek/mcp':
+        specifier: workspace:*
+        version: link:../../mcp
       '@xrkseek/policy':
         specifier: workspace:*
         version: link:../../policy

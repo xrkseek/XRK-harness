@@ -38,6 +38,7 @@ Vitest 别名把 `@xrkseek/*` 指到各包 **src**（见根 `vitest.config.ts`�
 4. **Exec**：临时目录 `mkdtemp`；测路径逃逸与 stub Provider「换实现零改工具」。  
 5. **HTTP**：`createHostManager` + `XRK_PORT=0`；测后 `stopAll`。  
 6. **Preset**：`@xrkseek/testkit` 的 `makeHarness` 或直接 `createMinimalComposition`。  
+7. **Face / MCP**：改 RPC 或 MCP 接线后跑对应测锚（见 [modules/server-face.md](./modules/server-face.md) · [modules/mcp.md](./modules/mcp.md)）。
 
 ## 扩展覆盖率
 

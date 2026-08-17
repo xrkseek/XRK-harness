@@ -23,6 +23,7 @@
     "@xrkseek/llm-openai-compatible": "workspace:*",
     "@xrkseek/llm-deepseek": "workspace:*",
     "@xrkseek/llm-registry": "workspace:*",
+    "@xrkseek/mcp": "workspace:*",
     "@xrkseek/server-loader": "workspace:*",
     "@xrkseek/preset-harness": "workspace:*",
     "@xrkseek/preset-minimal": "workspace:*",

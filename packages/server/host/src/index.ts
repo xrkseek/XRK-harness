@@ -26,8 +26,14 @@ import { access } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import path from "node:path";
 import { createHostAgentCache } from "./agent-cache.js";
+import { loadMcpToolPlugins, parseMcpServersEnv } from "./mcp-wire.js";
 
 export { createHostAgentCache, HOST_PLUGINS_KEY } from "./agent-cache.js";
+export {
+  loadMcpToolPlugins,
+  parseMcpServersEnv,
+  type McpServerSpec,
+} from "./mcp-wire.js";
 
 async function resolveOfficeAgentSeedDir(
   workspaceRoot: string,
@@ -99,6 +105,26 @@ export function createHostManager(): HostManager {
         loadedPluginIds = [...(await loader.loadAll(config.runtime.pluginsDir))];
       }
 
+      const policy = config.runtime.policyFile
+        ? await createPolicyEngineFromFile(config.runtime.policyFile)
+        : undefined;
+
+      const mcpSpecs =
+        config.runtime.mcpServers ??
+        parseMcpServersEnv(process.env.XRK_MCP_SERVERS);
+      if (mcpSpecs.length > 0) {
+        const mcpPlugins = await loadMcpToolPlugins({
+          specs: mcpSpecs,
+          ...(policy ? { policy } : {}),
+          allowConnect: Boolean(config.runtime.mcpAllowConnect),
+        });
+        for (const p of mcpPlugins) {
+          if (loader.list().some((x) => x.id === p.id)) continue;
+          loader.register(p);
+          loadedPluginIds = [...loadedPluginIds, p.id];
+        }
+      }
+
       const agentCache = createHostAgentCache(loader.list(), { hostId: id });
       const lastDrainResult = new Map<string, AgentRunResult>();
 
@@ -157,9 +183,6 @@ export function createHostManager(): HostManager {
       const officeAgent = await resolveOfficeAgentSeedDir(
         config.runtime.workspaceRoot,
       );
-      const policy = config.runtime.policyFile
-        ? await createPolicyEngineFromFile(config.runtime.policyFile)
-        : undefined;
       const faceRuntime = createFaceRuntime({
         store,
         resolveAgent,

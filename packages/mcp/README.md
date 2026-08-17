@@ -1,9 +1,42 @@
 # @xrkseek/mcp
 
-MCP client 平面（本仓主要角色）；可选日后 local-as-MCP server。
+MCP client M0：stdio（或测试注入 transport）→ `listTools` / `callTool` → 可选挂到 `ToolRegistry`。
 
-**Status:** empty shell（`export {}`）— **禁止当产品依赖**。
+## Status
 
-权威协议：https://modelcontextprotocol.io/specification/2025-11-25/  
-门禁：`policy` 的 `mcp.connect` 默认 **deny**（[docs/policy.md](../../docs/policy.md)）。  
-状态：[docs/status.md](../../docs/status.md)。
+**能跑（M0）**：stdio · 命名 `mcp__<server>__<tool>` · `registerMcpTools` · **默认 `mcp.connect` deny**。  
+Host 接线：`XRK_MCP_SERVERS` + `XRK_MCP_ALLOW=1`（见 [server-host 模块笔记](../../docs/modules/server-host.md)）。  
+未做：streamable-http · 自动重连 · Face MCP 设置 UI。
+
+门禁见 [docs/policy.md](../../docs/policy.md)。状态：[docs/status.md](../../docs/status.md)。  
+**文件地图**：[docs/modules/mcp.md](../../docs/modules/mcp.md)。
+
+## API
+
+```ts
+import { createMcpClient, registerMcpTools } from "@xrkseek/mcp";
+import { createPolicyEngine } from "@xrkseek/policy";
+import { createToolRegistry } from "@xrkseek/core-tools";
+
+const policy = createPolicyEngine({
+  defaults: { "mcp.connect": "allow" }, // product default remains deny
+});
+
+const client = createMcpClient({
+  serverName: "fs",
+  command: "npx",
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  policy,
+});
+
+await client.connect();
+const registry = createToolRegistry();
+const wired = await registerMcpTools(registry, client);
+// … agent turn …
+wired.dispose();
+await client.dispose();
+```
+
+`connect()` 先 `assertPolicyAllow({ kind: "mcp.connect", serverId })`。显式同名工具优先，插件/MCP 不覆盖。
+
+协议：https://modelcontextprotocol.io/specification/2025-11-25/

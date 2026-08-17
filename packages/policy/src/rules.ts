@@ -105,7 +105,7 @@ export function denyMcpConnect(options?: {
 }): PolicyRule {
   const id = options?.id ?? "deny-mcp-connect";
   const reason =
-    options?.reason ?? "mcp.connect denied (MCP client not shipped)";
+    options?.reason ?? "mcp.connect denied by default";
   return {
     id,
     match(subject: PolicySubject): PolicyDecision | undefined {
