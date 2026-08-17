@@ -14,20 +14,20 @@
 
 ---
 
-## 进度（2026-08）
+## 进度
+
+以 [docs/status.md](./docs/status.md) 为准。摘要：
 
 | 域 | 状态 |
 |----|------|
-| Kernel · Compose C0/C1 · Session · Agent · Exec · HTTP | 能跑 · 需持续打磨 |
-| Host Face | 主 RPC / 侧栏 / 队列 wire 已接 · Web E2E 未稳 |
-| 产品 Web | 静态壳可挂 · 对话窗硬刷验收中 |
-| MCP · Compose C2 · Registry R1+ · Face U3 | 未做 |
-
-[docs/status.md](./docs/status.md)
+| Kernel · Compose · Session · Agent · Exec · HTTP · Host Face 主路径 | 能跑 |
+| MCP M0 · Attachment（Face `session.attachment`；Host 默认 text-only） | 能跑 |
+| Host Face ↔ 产品 Web · 浏览器 E2E | 未稳 |
+| Compose C2 · Registry R1+ · Face U3 · 视觉 LLM 路由 · MCP 进阶 | 未做 |
 
 ## 快速开始
 
-需要 **Node ≥26**（本机建议 `C:\Program Files\nodejs\node.exe`，勿用 Cursor 自带 Node 22 helper）。
+需要 **Node ≥26**。
 
 ```bash
 pnpm install
@@ -51,7 +51,7 @@ node apps/cli/dist/bin.js serve --preset minimal --workspace .
 
 ```text
 apps/cli · apps/web     CLI · Face console
-packages/*              kernel · compose · core* · llm · exec* · server · sdk
+packages/*              kernel · compose · core* · llm · exec* · server · mcp · attachment · sdk
 presets/                minimal | harness | server
 docs/                   产品规格 · ADR
 ```
