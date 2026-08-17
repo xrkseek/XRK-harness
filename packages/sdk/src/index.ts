@@ -21,6 +21,8 @@ export {
 export {
   ContextOverflowError,
   isContextOverflowError,
+  UnsupportedContentError,
+  isUnsupportedContentError,
 } from "@xrkseek/llm";
 export {
   createMemorySessionStore,
@@ -138,11 +140,23 @@ export {
   type McpStdioOptions,
 } from "@xrkseek/mcp";
 export {
+  createMemoryAttachmentStore,
+  AttachmentError,
+  isAttachmentError,
+  type AttachmentStore,
+} from "@xrkseek/attachment";
+export {
   parseSessionEvent,
   assertSessionEvent,
   isValidSessionEvent,
   isSessionEvent,
   sessionEventJsonSchema,
   parsePromptDelivery,
+  flattenText,
+  contentHasImage,
+  asContentBlocks,
   type SessionEvent,
+  type MessageContent,
+  type ContentBlock,
+  type ImageAttachmentRef,
 } from "@xrkseek/protocol";

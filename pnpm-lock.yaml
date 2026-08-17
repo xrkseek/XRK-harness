@@ -79,6 +79,12 @@ importers:
         specifier: ^6.0.0
         version: 6.4.3(@types/node@24.13.3)
 
+  packages/attachment:
+    dependencies:
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/code-runtime:
     dependencies:
       '@xrkseek/core-tools':
@@ -234,6 +240,9 @@ importers:
 
   packages/sdk:
     dependencies:
+      '@xrkseek/attachment':
+        specifier: workspace:*
+        version: link:../attachment
       '@xrkseek/code-runtime':
         specifier: workspace:*
         version: link:../code-runtime
@@ -312,6 +321,9 @@ importers:
 
   packages/server/face:
     dependencies:
+      '@xrkseek/attachment':
+        specifier: workspace:*
+        version: link:../../attachment
       '@xrkseek/core-agent':
         specifier: workspace:*
         version: link:../../core/agent
@@ -349,6 +361,9 @@ importers:
 
   packages/server/host:
     dependencies:
+      '@xrkseek/attachment':
+        specifier: workspace:*
+        version: link:../../attachment
       '@xrkseek/compose':
         specifier: workspace:*
         version: link:../../compose

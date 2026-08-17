@@ -8,7 +8,8 @@ Append-only session facts (`@xrkseek/protocol`). Model-visible history is recons
 |--------|-------------------------------|--------|
 | `turn/start` · `turn/end` | `turnId` | Turn bracket |
 | `step/start` · `step/end` | `turnId`, `stepId` | Provider step |
-| `user/message` | `turnId`, `content` | Optional `rpcId` (Face optimism; not model-visible) |
+| `user/message` | `turnId`, `content` | `content`: `string` **或** `ContentBlock[]`（text / image+`ImageAttachmentRef`）；可选 `rpcId` |
+| `prompt/admitted` | `admitId`, `content` | 同上 MessageContent；可选 `delivery` |
 | `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta |
 | `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls` |
 | `tool/call` | `turnId`, `stepId`, `call` | Before pipeline body |

@@ -12,6 +12,7 @@
   },
   "files": ["dist", "README.md"],
   "dependencies": {
+    "@xrkseek/attachment": "workspace:*",
     "@xrkseek/compose": "workspace:*",
     "@xrkseek/core-agent": "workspace:*",
     "@xrkseek/core-session": "workspace:*",

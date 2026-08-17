@@ -23,13 +23,14 @@
 | 核心打磨 | `run` / `serve` 可用 ≠ 边界与错误面打磨完成 |
 | 进程插件 | `tools` + `prompt` 已接线；`channel` / `policy` / `llm` 保留未自动接线 |
 | `@xrkseek/mcp` | **M0** + Host `XRK_MCP_SERVERS`（须 `XRK_MCP_ALLOW=1` 或 policy allow） |
+| `@xrkseek/attachment` | 内存仓 + Face `session.attachment`；Host 默认 text-only（图须 modality） |
 
 ## 未做
 
 | 域 | 说明 |
 |----|------|
 | Compose C2 · Registry R1+ · Face U3 | 未开工 |
-| Face NI | `session.attachment`（须扩协议 ContentBlock）· Goal · agentPreset 创作面 · discoverModels |
+| Face NI | Goal · agentPreset 创作面 · discoverModels · **视觉 LLM 路由**（附件仓已有） |
 | MCP 进阶 | HTTP transport · 重连 · Face MCP 设置 UI |
 | AGT 融合待落 | MEMORY 工具 · trigger microagents · office skills 包 · toolScan |
 

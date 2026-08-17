@@ -32,6 +32,19 @@ export function isContextOverflowError(err: unknown): boolean {
   return err instanceof ContextOverflowError;
 }
 
+/** Content block modality not supported by the active adapter/route. */
+export class UnsupportedContentError extends Error {
+  readonly code = "UNSUPPORTED_CONTENT";
+  constructor(message = "unsupported content") {
+    super(message);
+    this.name = "UnsupportedContentError";
+  }
+}
+
+export function isUnsupportedContentError(err: unknown): boolean {
+  return err instanceof UnsupportedContentError;
+}
+
 export interface LlmRegistry {
   register(adapter: LlmAdapter): void;
   get(id: string): LlmAdapter;

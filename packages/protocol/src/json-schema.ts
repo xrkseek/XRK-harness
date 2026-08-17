@@ -85,7 +85,61 @@ export const sessionEventJsonSchema = {
       properties: baseProps({
         type: { const: "user/message" },
         turnId: { type: "string" },
-        content: { type: "string" },
+        content: {
+          oneOf: [
+            { type: "string" },
+            {
+              type: "array",
+              items: {
+                oneOf: [
+                  {
+                    type: "object",
+                    required: ["type", "text"],
+                    properties: {
+                      type: { const: "text" },
+                      text: { type: "string" },
+                    },
+                    additionalProperties: false,
+                  },
+                  {
+                    type: "object",
+                    required: ["type", "attachment"],
+                    properties: {
+                      type: { const: "image" },
+                      attachment: {
+                        type: "object",
+                        required: [
+                          "attachmentId",
+                          "mediaType",
+                          "bytes",
+                          "width",
+                          "height",
+                        ],
+                        properties: {
+                          attachmentId: { type: "string" },
+                          mediaType: {
+                            enum: [
+                              "image/png",
+                              "image/jpeg",
+                              "image/webp",
+                              "image/gif",
+                            ],
+                          },
+                          bytes: { type: "number" },
+                          width: { type: "number" },
+                          height: { type: "number" },
+                          name: { type: "string" },
+                        },
+                        additionalProperties: false,
+                      },
+                    },
+                    additionalProperties: false,
+                  },
+                ],
+              },
+            },
+          ],
+        },
         rpcId: { type: "string" },
       }),
       additionalProperties: false,
@@ -141,7 +195,61 @@ export const sessionEventJsonSchema = {
       properties: baseProps({
         type: { const: "prompt/admitted" },
         admitId: { type: "string" },
-        content: { type: "string" },
+        content: {
+          oneOf: [
+            { type: "string" },
+            {
+              type: "array",
+              items: {
+                oneOf: [
+                  {
+                    type: "object",
+                    required: ["type", "text"],
+                    properties: {
+                      type: { const: "text" },
+                      text: { type: "string" },
+                    },
+                    additionalProperties: false,
+                  },
+                  {
+                    type: "object",
+                    required: ["type", "attachment"],
+                    properties: {
+                      type: { const: "image" },
+                      attachment: {
+                        type: "object",
+                        required: [
+                          "attachmentId",
+                          "mediaType",
+                          "bytes",
+                          "width",
+                          "height",
+                        ],
+                        properties: {
+                          attachmentId: { type: "string" },
+                          mediaType: {
+                            enum: [
+                              "image/png",
+                              "image/jpeg",
+                              "image/webp",
+                              "image/gif",
+                            ],
+                          },
+                          bytes: { type: "number" },
+                          width: { type: "number" },
+                          height: { type: "number" },
+                          name: { type: "string" },
+                        },
+                        additionalProperties: false,
+                      },
+                    },
+                    additionalProperties: false,
+                  },
+                ],
+              },
+            },
+          ],
+        },
         delivery: { enum: ["steer", "queue"] },
       }),
       additionalProperties: false,

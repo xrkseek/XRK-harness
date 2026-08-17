@@ -25,7 +25,7 @@ import {
   runTurn,
   type AssembleOptions,
 } from "@xrkseek/core-agent-loop";
-import type { PromptDelivery, SafetyNoticePayload } from "@xrkseek/protocol";
+import type { PromptDelivery, SafetyNoticePayload, MessageContent } from "@xrkseek/protocol";
 
 export { SessionBusyError } from "@xrkseek/core-session";
 export { NoPendingAdmitError } from "@xrkseek/core-session";
@@ -66,7 +66,7 @@ export interface AgentHandle {
    * Default delivery = queue; pass `{ delivery: "steer" }` to interrupt ahead of FIFO.
    */
   admit(
-    content: string,
+    content: MessageContent,
     options?: { readonly delivery?: PromptDelivery; readonly admitId?: string },
   ): AdmitReceipt;
   /** Pending admits not yet promoted. */
@@ -200,6 +200,7 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
   ): Promise<AgentRunResult> => {
     return latch.run(async (latchSignal) => {
       let userText = input.text?.trim() ? input.text : undefined;
+      let userContent: MessageContent | undefined = userText;
       let admitId: string | undefined;
       let admitIds: string[] | undefined;
       let steerBatch: boolean | undefined;
@@ -208,7 +209,8 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
           options.store,
           options.sessionId,
         );
-        userText = promoted.content;
+        userText = promoted.text;
+        userContent = promoted.content;
         admitId = promoted.receipts[0]?.admitId;
         admitIds = promoted.receipts.map((r) => r.admitId);
         if (promoted.steerBatch) steerBatch = true;
@@ -225,6 +227,7 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
           result = await runTurn({
             sessionId: options.sessionId,
             userText,
+            userContent: userContent ?? userText,
             store: options.store,
             llm: options.llm,
             tools: options.tools,

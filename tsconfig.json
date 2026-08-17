@@ -15,6 +15,7 @@
     { "path": "packages/llm/registry" },
     { "path": "packages/llm/replay" },
     { "path": "packages/mcp" },
+    { "path": "packages/attachment" },
     { "path": "packages/exec/fs" },
     { "path": "packages/exec/subprocess" },
     { "path": "packages/exec/shell" },

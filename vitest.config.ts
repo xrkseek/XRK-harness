@@ -33,6 +33,7 @@ export default defineConfig({
       pkg("policy", "packages/policy/src/index.ts"),
       pkg("code-runtime", "packages/code-runtime/src/index.ts"),
       pkg("mcp", "packages/mcp/src/index.ts"),
+      pkg("attachment", "packages/attachment/src/index.ts"),
       pkg("testkit", "packages/testkit/src/index.ts"),
       pkg("server-config", "packages/server/config/src/index.ts"),
       pkg("server-loader", "packages/server/loader/src/index.ts"),

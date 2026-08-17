@@ -6,6 +6,26 @@ export type {
   ToolMessage,
   UserMessage,
 } from "./messages.js";
+export type {
+  ContentBlock,
+  ImageAttachmentRef,
+  ImageBlock,
+  ImageMediaType,
+  MessageContent,
+  TextBlock,
+} from "./content.js";
+export {
+  asContentBlocks,
+  contentHasImage,
+  flattenText,
+  isContentBlock,
+  isImageAttachmentRef,
+  isImageBlock,
+  isImageMediaType,
+  isTextBlock,
+  listImageRefs,
+  mergeMessageContents,
+} from "./content.js";
 export {
   isSessionEvent,
   isPromptDelivery,

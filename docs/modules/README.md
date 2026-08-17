@@ -9,6 +9,7 @@
 | `@xrkseek/server-loader` | [server-loader.md](./server-loader.md) | [plugin-loader.md](../plugin-loader.md) |
 | `@xrkseek/server-config` | （薄：见 host 笔记 env 表） | [http-api.md](../http-api.md) |
 | `@xrkseek/mcp` | [mcp.md](./mcp.md) | [policy.md](../policy.md) |
+| `@xrkseek/attachment` | [attachment.md](./attachment.md) | [learn.md](../learn.md) · [protocol-events.md](../protocol-events.md) |
 
 ## 标准化定义（排错速查）
 

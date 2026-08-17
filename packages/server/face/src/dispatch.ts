@@ -37,6 +37,8 @@ import {
 import { canOpenNativePath, hostOpenPath } from "./host-open-path.js";
 import { skillList } from "./skill-list.js";
 import { parseSearchQuery, searchSessions } from "./session-search.js";
+import { durablePromptContent, type PromptWirePart } from "./durable-prompt.js";
+import { readSessionAttachment } from "./session-attachment.js";
 import {
   AdmitNotPendingError,
   admitPrompt,
@@ -251,22 +253,87 @@ const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
       error: { code: "invalid-mode", message: "mode must be queue|steer" },
     };
   }
-  type Part = { type?: string; text?: string };
-  const parts = content as Part[];
-  if (parts.some((x) => x?.type === "image")) {
+
+  const parts: PromptWirePart[] = [];
+  for (const raw of content) {
+    const x = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    if (x.type === "text" && typeof x.text === "string") {
+      parts.push({ type: "text", text: x.text });
+      continue;
+    }
+    if (x.type === "image") {
+      if (typeof x.mediaType !== "string" || typeof x.data !== "string") {
+        return {
+          ok: false,
+          error: {
+            code: "invalid-payload",
+            message: "image part requires mediaType + data",
+          },
+        };
+      }
+      parts.push({
+        type: "image",
+        mediaType: x.mediaType,
+        data: x.data,
+        ...(typeof x.name === "string" ? { name: x.name } : {}),
+      });
+      continue;
+    }
     return {
       ok: false,
-      error: { code: "not-implemented", message: "image parts" },
+      error: { code: "invalid-payload", message: "unknown content part" },
     };
   }
-  const text = parts
-    .filter((x) => x?.type === "text")
-    .map((x) => x.text ?? "")
-    .join("");
 
-  if (parts.length === 1 && parts[0]?.type === "text" && text.startsWith("/")) {
-    const slash = await tryFaceSlashCommand(text, runtime.loadSlashRecipes);
-    if (slash) return slash;
+  const hasImage = parts.some((x) => x.type === "image");
+  if (hasImage) {
+    if (!runtime.attachments) {
+      return {
+        ok: false,
+        error: {
+          code: "attachment-unavailable",
+          message: "attachment store not configured",
+        },
+      };
+    }
+    const modalities = runtime.inputModalities ?? ["text"];
+    if (!modalities.includes("image")) {
+      return {
+        ok: false,
+        error: {
+          code: "unsupported-modality",
+          message: "active route does not accept image input",
+        },
+      };
+    }
+  }
+
+  let admitContent;
+  if (hasImage) {
+    const durable = await durablePromptContent(parts, runtime.attachments!);
+    if (!durable.ok) {
+      return {
+        ok: false,
+        error: { code: durable.code, message: durable.message },
+      };
+    }
+    admitContent = durable.content;
+  } else {
+    const text = parts
+      .filter((x): x is Extract<PromptWirePart, { type: "text" }> => x.type === "text")
+      .map((x) => x.text)
+      .join("");
+    if (parts.length === 1 && parts[0]?.type === "text" && text.startsWith("/")) {
+      const slash = await tryFaceSlashCommand(text, runtime.loadSlashRecipes);
+      if (slash) return slash;
+    }
+    if (!text) {
+      return {
+        ok: false,
+        error: { code: "invalid-payload", message: "empty text" },
+      };
+    }
+    admitContent = text;
   }
 
   runtime.watchSession(sessionId);
@@ -274,10 +341,11 @@ const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   const admitId = `admit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   runtime.rpcAdmitMap.set(rpcId, admitId);
   runtime.admitRpcMap.set(admitId, rpcId);
-  agent.admit(text, {
+  agent.admit(admitContent, {
     delivery: mode === "steer" ? "steer" : "queue",
     admitId,
   });
+  runtime.pendingUserRpc.set(sessionId, rpcId);
   runtime.publishQueue(sessionId);
   runtime.bus.publishHost({
     type: "host/session-status",
@@ -856,8 +924,47 @@ const HANDLERS: Record<string, FaceHandler> = {
     ok: true,
     value: { entries: [] as unknown[], parentAvailable: true },
   }),
-  // explicit not-implemented
-  "session.attachment": notImplemented,
+  "session.attachment": async (runtime, _rpcId, payload) => {
+    const p = asRecord(payload);
+    const sessionId = String(p.sessionId ?? "");
+    const attachmentId = String(p.attachmentId ?? "");
+    if (!sessionId) {
+      return {
+        ok: false,
+        error: { code: "invalid-payload", message: "sessionId required" },
+      };
+    }
+    if (!runtime.attachments) {
+      return {
+        ok: false,
+        error: {
+          code: "attachment-unavailable",
+          message: "attachment store not configured",
+        },
+      };
+    }
+    let events;
+    try {
+      events = runtime.store.get(sessionId).events;
+    } catch {
+      return {
+        ok: false,
+        error: { code: "not-found", message: "session not found" },
+      };
+    }
+    const result = await readSessionAttachment({
+      events,
+      attachments: runtime.attachments,
+      attachmentId,
+    });
+    if (!result.ok) {
+      return {
+        ok: false,
+        error: { code: result.code, message: result.message },
+      };
+    }
+    return { ok: true, value: result.value };
+  },
   "llm.discoverModels": notImplemented,
   "workspace.delete": notImplemented,
   "workspace.insertBefore": notImplemented,
