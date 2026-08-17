@@ -21,6 +21,7 @@
 | Host Face ↔ 产品 Web | 侧栏 / settings / 队列与 inbox wire 已接；**浏览器 E2E 未勾** |
 | 产品 Web | 静态壳可挂；对话窗流式 / 工具卡待硬刷验收 |
 | 核心打磨 | `run` / `serve` 可用 ≠ 边界与错误面打磨完成 |
+| 进程插件 | `tools` + `prompt` 已接线；`channel` / `policy` / `llm` 保留未自动接线 |
 
 ## 未做
 

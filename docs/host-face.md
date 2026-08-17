@@ -25,7 +25,7 @@
 | 软降级 | `host.pickDirectory` → `{ path: null }`（browse 用 listDirectory）· `skill.list` / `subagent.list` → 空目录 |
 | 未做（NI） | `host.openPath` · `session.attachment/search` · `settings.openDocument` · `workspace.delete/insert*` · `agentPreset` 创作面 · `llm.discoverModels` · `goal.*` · subagent 写路径 |
 
-Wire：`session/queue` 带完整 `message` 块；会话 `prompt/*` 在 mux/history 投影为 `agent/inbox/spliced`（坐标按 pending 列表重放）。
+Wire：`session/queue` 带完整 `message` 块；`prompt/*` → mux/history `agent/inbox/spliced`；mux 重连对有 pending 的 session 补发 queue 基线。
 
 Policy：`XRK_POLICY_FILE` → `provider.use`；ask → `approval/*` + `session.respondApproval`。见 [policy.md](./policy.md)。
 

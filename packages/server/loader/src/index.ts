@@ -2,10 +2,16 @@ import { loadDiscoveryHit } from "./load.js";
 import { scanPluginDir, type DiscoveryHit } from "./manifest.js";
 import type { RegisteredPlugin } from "./types.js";
 
-export type { RegisteredPlugin } from "./types.js";
+export type { RegisteredPlugin, PluginPromptSection } from "./types.js";
 export type { DiscoveryHit, PluginManifest } from "./manifest.js";
 export { scanPluginDir } from "./manifest.js";
 export { loadPluginModule, loadDiscoveryHit } from "./load.js";
+export {
+  PLUGIN_KINDS,
+  RESERVED_PLUGIN_KINDS,
+  isKnownPluginKind,
+  type KnownPluginKind,
+} from "./kinds.js";
 export {
   applyToolsPlugins,
   isToolsPlugin,
@@ -14,6 +20,15 @@ export {
   type ApplyToolsPluginsResult,
   type SkippedPluginTool,
 } from "./tools.js";
+export {
+  applyPromptPlugins,
+  isPromptPlugin,
+  wireCompositionPrompts,
+  type AppliedPluginPrompt,
+  type ApplyPromptPluginsResult,
+  type PluginPromptSection,
+  type SkippedPluginPrompt,
+} from "./prompt.js";
 
 export interface PluginLoader {
   register(plugin: RegisteredPlugin): void;

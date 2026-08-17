@@ -1,16 +1,18 @@
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { createServer } from "node:http";
+import { listPendingAdmits } from "@xrkseek/core-session";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
 import { parseFaceRpcRequest, serverRequestFrame } from "./envelope.js";
+import { toQueueItems } from "./queue.js";
 
 export interface AttachFaceOptions {
   readonly apiKey: string;
   checkAuth(req: IncomingMessage): boolean;
 }
 
-/** DeepSeek-native + `/api/face/*` WS pathnames. */
+/** Face mux / host WS pathnames. */
 export const FACE_WS_PATHS = [
   "/api/face/events.mux",
   "/api/face/events.host",
@@ -152,14 +154,29 @@ export function attachFaceUpgrades(
           }),
         ),
       );
-      const pending = runtime.approvals.listPending(sessionId);
-      if (pending.length > 0) {
+      const pendingAdmits = listPendingAdmits(
+        runtime.store.get(sessionId).events,
+        sessionId,
+      );
+      if (pendingAdmits.length > 0) {
+        ws.send(
+          JSON.stringify(
+            serverRequestFrame(newRpcId(), {
+              type: "session/queue",
+              sessionId,
+              items: toQueueItems(pendingAdmits, runtime.admitRpcMap),
+            }),
+          ),
+        );
+      }
+      const pendingApprovals = runtime.approvals.listPending(sessionId);
+      if (pendingApprovals.length > 0) {
         ws.send(
           JSON.stringify(
             serverRequestFrame(newRpcId(), {
               type: "session/approvals",
               sessionId,
-              items: [...pending],
+              items: [...pendingApprovals],
             }),
           ),
         );

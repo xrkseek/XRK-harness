@@ -1,6 +1,25 @@
 # Plugin loader
 
-进程内插件登记与目录发现（`@xrkseek/server-loader`），以及 **`kind: tools` → Agent registry** 接线。
+进程内插件登记与目录发现（`@xrkseek/server-loader`）。**能力优先做成插件贡献**，再由 preset / Host 接线——不要为每个新能力单独开 Host 特例。
+
+## 两层插件
+
+| 层 | 包 | 作用 |
+|----|-----|------|
+| Kernel | `@xrkseek/kernel` `definePlugin` | Context DI · 事件 · 可逆 teardown |
+| Compose | `@xrkseek/compose` | Scope · Ordering · isolate |
+| Process | `@xrkseek/server-loader` | 目录发现 · kind 贡献 · Host 卸载 |
+
+## Kind（进程插件）
+
+| kind | 贡献 | 接线 |
+|------|------|------|
+| `tools` | `tools[]` | `wireCompositionTools` → ToolRegistry（显式同名优先） |
+| `prompt` | `promptSections[]` | `wireCompositionPrompts` → SystemPromptAssembler（`base` 等保留 id 优先） |
+
+保留（可发现、尚未自动接线）：`channel` · `policy` · `llm`。
+
+常量：`PLUGIN_KINDS` · `RESERVED_PLUGIN_KINDS`。
 
 ## API
 
@@ -9,33 +28,27 @@ import {
   createPluginLoader,
   applyToolsPlugins,
   wireCompositionTools,
+  wireCompositionPrompts,
+  PLUGIN_KINDS,
 } from "@xrkseek/server-loader";
-// or from @xrkseek/harness
 
 const loader = createPluginLoader();
-
-// Explicit
 loader.register({ id: "my", kind: "tools", tools: [/* ToolDefinition */] });
 await loader.unregister("my");
 
-// Discover (scan only — no import)
 const hits = await loader.discover("./extensions");
-
-// Import + register one
 await loader.load(hits[0]!);
-
-// Discover + load + register all (skip already registered ids)
 const ids = await loader.loadAll("./extensions");
 
-const registry = createToolRegistry();
-// builtins first…
 wireCompositionTools(registry, {
-  extraTools: [/* optional explicit extras */],
+  extraTools: [/* optional */],
   plugins: loader.list(),
 });
+wireCompositionPrompts(prompts, {
+  plugins: loader.list(),
+  reservedIds: ["base"],
+});
 ```
-
-合并规则：**显式（builtin / `extraTools`）同名优先** — 插件贡献若撞名则 skip（`explicit_wins`），不 replace。
 
 Host `stop` 会对已登记插件逐个 `unregister`（含 `dispose`）。
 
@@ -53,30 +66,11 @@ Host `stop` 会对已登记插件逐个 `unregister`（含 `dispose`）。
 }
 ```
 
-或 **`package.json`**:
+或 **`package.json`** 的 `xrkseek.plugin` 字段。
 
-```json
-{
-  "xrkseek": {
-    "plugin": {
-      "id": "example-tools",
-      "kind": "tools",
-      "entry": "./plugin.mjs"
-    }
-  }
-}
-```
-
-`discover(dir)`：
-
-1. 若 `dir` 自身有 manifest → 单插件  
-2. 否则扫描 **一级子目录** 中带 manifest 的项  
-
-`entry` 必须存在；解析为绝对路径。
+`discover(dir)`：目录自身有 manifest → 单插件；否则扫描一级子目录。
 
 ## 模块契约
-
-Entry 为 ESM，任选其一：
 
 | Export | 形状 |
 |--------|------|
@@ -84,46 +78,39 @@ Entry 为 ESM，任选其一：
 | `default` | 同上 factory |
 | `plugin` | `RegisteredPlugin` 常量 |
 
-`id` / `kind` 必须与 manifest 一致，否则 `load` 抛错。
+`id` / `kind` 必须与 manifest 一致。
 
 ```ts
 export interface RegisteredPlugin {
   readonly id: string;
   readonly kind: string;
-  /** kind === "tools" 时的 ToolDefinition 贡献 */
   readonly tools?: readonly ToolDefinition[];
+  readonly promptSections?: readonly {
+    id: string;
+    order?: number;
+    content: string | (() => string | Promise<string>);
+  }[];
   dispose?: () => void | Promise<void>;
 }
 ```
 
-`tools[]` 项须含 `name` · `description` · `parameters` · `execute`。
-
 ## 示例
 
-仓库内：`extensions/example-tools` — 贡献 `example_ping` → `"pong"`。
+`extensions/example-tools` — `kind: tools` → `example_ping`。
 
-## Host / preset wiring
+## Host / preset
 
-Set `XRK_PLUGINS_DIR` (or `loadHostConfig({ patch: { pluginsDir } })`).  
-On `createHostManager().spawn`:
-
-1. `loader.loadAll(pluginsDir)`  
-2. `AgentFactory` 收到 `plugins: loader.list()`  
-3. `createMinimalComposition` / `createHarnessComposition` / `createServerAgentFactory` 调用 `wireCompositionTools`
-
-`instance.loadedPluginIds` / `health().plugins` 列出已登记 id。
+`XRK_PLUGINS_DIR` → `loadAll` → factory 收到 `plugins` → minimal / harness 调用 `wireCompositionTools` + `wireCompositionPrompts`。
 
 ```bash
 XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js serve
 ```
 
-Optional preset `policy?: PolicyEngine` → `pipeline.onPre(createPolicyToolPre)`（见 [policy.md](./policy.md)）。
-
 ## 明确不做
 
 - 热重载 / watch  
 - 未声明入口的任意执行  
-- 插件覆盖同名 builtin（显式优先）  
-- 非 `tools` kind 的自动接线（其它 kind 仅登记，无贡献协议）
+- 插件覆盖同名 builtin / 保留 prompt id  
+- 保留 kind 的自动接线（先登记，后补 apply*）
 
-相关：[http-api.md](./http-api.md) · [status.md](./status.md) · CONTRIBUTING「扩展」。
+相关：[compose.md](./compose.md) · [learn.md](./learn.md) · [status.md](./status.md)

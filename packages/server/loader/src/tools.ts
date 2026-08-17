@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import type { RegisteredPlugin } from "./types.js";
+import { PLUGIN_KINDS } from "./kinds.js";
 
 export interface AppliedPluginTool {
   readonly pluginId: string;
@@ -18,7 +19,7 @@ export interface ApplyToolsPluginsResult {
 export function isToolsPlugin(
   plugin: RegisteredPlugin,
 ): plugin is RegisteredPlugin & { readonly kind: "tools" } {
-  return plugin.kind === "tools";
+  return plugin.kind === PLUGIN_KINDS.tools;
 }
 
 /**

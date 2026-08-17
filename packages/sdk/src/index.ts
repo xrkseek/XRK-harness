@@ -83,8 +83,14 @@ export {
   applyToolsPlugins,
   wireCompositionTools,
   isToolsPlugin,
+  applyPromptPlugins,
+  wireCompositionPrompts,
+  isPromptPlugin,
+  PLUGIN_KINDS,
+  RESERVED_PLUGIN_KINDS,
   type RegisteredPlugin,
   type ApplyToolsPluginsResult,
+  type ApplyPromptPluginsResult,
 } from "@xrkseek/server-loader";
 export type { LlmAdapter } from "@xrkseek/llm";
 export { loadHostConfig } from "@xrkseek/server-config";

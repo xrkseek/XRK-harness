@@ -34,7 +34,7 @@ HTTP：`createHostManager` + `loadHostConfig` + preset factory — 见 CLI `serv
 | Tools | `createToolRegistry` · `createToolPipeline` · `createStdTools` · `materializeTools` · `boundToolOutput` · `runTool` |
 | Prompt | `assembleThreeLayers` · `createSystemPromptAssembler` · `createOutboundPipeline` |
 | LLM | `LlmAdapter` · `createReplayAdapter` · `createOpenAiCompatibleAdapter` · `createDeepSeekAdapter` · `ContextOverflowError` |
-| Plugins | `createPluginLoader` · `applyToolsPlugins` · `wireCompositionTools` |
+| Plugins | `createPluginLoader` · `wireCompositionTools` / `Prompts` · `PLUGIN_KINDS` |
 | Workspace | `createWorkspaceInjector` · `resolveWorkspaceInject` · `createWorkspaceToolOutputPersist` · recipes |
 | Policy | `createPolicyEngine` · ruleset file load · `createPolicyToolPre` / `Guard` · `denyToolNames` |
 | Presets | `createMinimalComposition` · `createHarnessComposition` · `createServerComposition` / `createServerAgentFactory` |
