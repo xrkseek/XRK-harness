@@ -12,6 +12,7 @@
   },
   "files": ["dist", "README.md"],
   "dependencies": {
+    "@xrkseek/core-system-prompt": "workspace:*",
     "@xrkseek/core-tools": "workspace:*"
   }
 }

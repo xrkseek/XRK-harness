@@ -202,3 +202,54 @@ describe("plugin discover", () => {
     expect(out.content).toBe("pong");
   });
 });
+
+describe("prompt plugins", () => {
+  it("applies kind:prompt sections; base id wins", async () => {
+    const { createSystemPromptAssembler } = await import(
+      "@xrkseek/core-system-prompt"
+    );
+    const { applyPromptPlugins, PLUGIN_KINDS } = await import("../src/index.js");
+
+    const assembler = createSystemPromptAssembler();
+    assembler.register({
+      id: "base",
+      order: 0,
+      content: () => "BASE",
+    });
+
+    const result = applyPromptPlugins(
+      assembler,
+      [
+        {
+          id: "hint-plug",
+          kind: PLUGIN_KINDS.prompt,
+          promptSections: [
+            {
+              id: "base",
+              order: 1,
+              content: "SHOULD_SKIP",
+            },
+            {
+              id: "plugin.hint",
+              order: 10,
+              content: "HINT",
+            },
+          ],
+        },
+      ],
+      { reservedIds: new Set(["base"]) },
+    );
+
+    expect(result.applied).toEqual([
+      { pluginId: "hint-plug", sectionId: "plugin.hint" },
+    ]);
+    expect(result.skipped).toEqual([
+      {
+        pluginId: "hint-plug",
+        sectionId: "base",
+        reason: "explicit_wins",
+      },
+    ]);
+    expect(await assembler.assemble()).toBe("BASE\n\nHINT");
+  });
+});

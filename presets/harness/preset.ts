@@ -42,6 +42,7 @@ import {
 } from "@xrkseek/policy";
 import {
   wireCompositionTools,
+  wireCompositionPrompts,
   type RegisteredPlugin,
 } from "@xrkseek/server-loader";
 import path from "node:path";
@@ -210,6 +211,10 @@ export function createHarnessComposition(
     id: "base",
     order: 0,
     content: () => persona,
+  });
+  wireCompositionPrompts(prompts, {
+    ...(options.plugins ? { plugins: options.plugins } : {}),
+    reservedIds: ["base"],
   });
 
   const injectOpts = toInjectOptions(

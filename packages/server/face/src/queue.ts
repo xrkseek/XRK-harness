@@ -1,8 +1,7 @@
 import type { AdmitReceipt } from "@xrkseek/core-session";
 
 /**
- * Authoritative `session/queue` item — shape matches DSH
- * `QueuedInboxItem` (host/apiproxy events.ts): id · placement · message.
+ * Authoritative `session/queue` item: id · placement · message.
  */
 
 export type QueuePlacement = "queued" | "steering" | "context";
