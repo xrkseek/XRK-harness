@@ -1,7 +1,7 @@
 packages:
   - "apps/*"
   # Product shell source (DSH layout). Not a workspace member until
-  # self-contained; build via full DSH tree + XRK_UI_SRC. See apps/web/NOTICE.
+  # self-contained build of apps/web. See apps/web/NOTICE.
   - "!apps/web"
   - "packages/*"
   - "packages/core/*"

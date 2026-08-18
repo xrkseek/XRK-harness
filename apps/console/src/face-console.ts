@@ -1,6 +1,6 @@
 /**
  * Face verifier console (`?console=1`).
- * Product chat UI: `apps/web-static` capture; source `apps/web` + `packages/client`.
+ * Product chat UI: `apps/web` + `packages/client` → `apps/web/dist`.
  */
 
 import {

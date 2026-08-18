@@ -1,6 +1,6 @@
 /**
  * Landing + Face verifier (`?console=1`).
- * Product chat UI is the capture at `apps/web-static` (serve default).
+ * Product chat UI: `apps/web/dist` (serve default).
  */
 
 import { FACE_CONSOLE_BOOT } from "./boot-manifest.js";
@@ -29,7 +29,7 @@ if (consoleMode) {
   root.innerHTML = `
     <img class="mark" src="/logo-plate.png" alt="XRK Harness" width="96" height="96" />
     <h1>XRK Harness</h1>
-    <p>产品聊天壳由 <code>serve</code> 托管的 <code>apps/web-static</code>（DSH Web 捕获）提供。</p>
+    <p>产品聊天壳由 <code>serve</code> 托管的 <code>apps/web/dist</code> 提供。</p>
     <p>本包：Face 验证台 <a href="/?console=1">/?console=1</a></p>
   `;
 }

@@ -16,7 +16,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
 
-    "web:ui:capture": "node ./scripts/capture-web-static.mjs",
     "xrk": "node ./apps/cli/dist/bin.js",
     "serve": "node ./apps/cli/dist/bin.js serve"
   },

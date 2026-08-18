@@ -34,8 +34,7 @@ pnpm install
 pnpm build
 
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
-# 产品壳需本机捕获（gitignore，同 DSH apps/web/dist）：
-#   pnpm web:ui:build && pnpm web:ui:capture
+# 产品壳：编出 apps/web/dist 后 serve；否则回退 Face console
 node apps/cli/dist/bin.js serve --preset server --workspace .
 # or: pnpm serve   /   xrk-harness web --open
 ```

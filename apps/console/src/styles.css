@@ -52,7 +52,7 @@ textarea:disabled {
   cursor: not-allowed;
 }
 
-/* Landing (apps/web is Face console; product UI is web-static) */
+/* Landing (Face console); product UI is apps/web/dist */
 
 .xrk-web-landing {
   max-width: 28rem;

@@ -3,11 +3,7 @@ node_modules/
 dist/
 coverage/
 
-# Captured product shell (rebuild locally; same idea as DSH apps/web/dist)
-apps/web-static/**
-!apps/web-static/README.md
-
-# Compiled output under shell / client source trees
+# Shell / client build output (not source)
 apps/web/**/dist/
 packages/client/**/dist/
 packages/client/**/lib/

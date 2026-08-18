@@ -59,7 +59,7 @@
 | `sdk/` | `@xrkseek/harness` | 包 README |
 | `testkit/` | `@xrkseek/testkit` | [testing.md](../testing.md) |
 
-apps：`cli` · `web`（壳底稿）· `console`（Face 验证台）；捕获 `web-static`（gitignore）。`packages/client` 与 `apps/web` 成对。presets：`minimal` · `harness` · `server`。
+apps：`cli` · `web`（产品壳）· `console`（Face 验证台）。`packages/client` 与 `apps/web` 成对。presets：`minimal` · `harness` · `server`。
 
 ## 术语
 
