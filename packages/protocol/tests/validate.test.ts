@@ -246,6 +246,19 @@ describe("parseSessionEvent", () => {
         active: true,
       }),
     ).toMatchObject({ type: "plan/mode", active: true });
+    expect(
+      parseSessionEvent({
+        type: "feedback/record",
+        ts: 5,
+        text: "the diff view is unreadable",
+      }),
+    ).toMatchObject({
+      type: "feedback/record",
+      text: "the diff view is unreadable",
+    });
+    expect(() =>
+      parseSessionEvent({ type: "feedback/record", ts: 6, text: "  " }),
+    ).toThrow(/non-empty/);
   });
 });
 
@@ -279,6 +292,7 @@ describe("sessionEventJsonSchema", () => {
       "sandbox/mode",
       "approval/policy",
       "plan/mode",
+      "feedback/record",
     ];
     expect(types.sort()).toEqual([...expected].sort());
     expect(sessionEventJsonSchema.$id).toContain("session-event");

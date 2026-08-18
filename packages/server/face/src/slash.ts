@@ -83,6 +83,14 @@ export async function listFaceCommandDescriptors(
             description: "Compact older conversation history",
           },
         ]),
+    ...(used.has("export")
+      ? []
+      : [
+          {
+            name: "export",
+            description: "Download this Session log as a ZIP archive",
+          },
+        ]),
     ...(used.has("feedback")
       ? []
       : [
@@ -125,6 +133,7 @@ export async function listFaceCommandDescriptors(
   used.add("permission");
   used.add("plan");
   used.add("compact");
+  used.add("export");
   used.add("feedback");
   const fromRecipes = recipes
     .filter((r) => COMMAND_NAME.test(r.id) && !used.has(r.id))
@@ -224,6 +233,19 @@ export async function executeFaceCommand(
       runtime.drain.wake(sessionId);
     }
     return execution;
+  }
+
+  if (parsed.name === "export") {
+    if (parsed.rawInput.trim().length > 0) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: "The Web /export command does not accept a path.",
+      });
+    }
+    return appendCommandPair(runtime, sessionId, parsed, {
+      kind: "success",
+      text: "Session log download requested.",
+    });
   }
 
   if (parsed.name === "feedback") {

@@ -36,6 +36,7 @@ describe("Face adapt / slash / queue / presets", () => {
     expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("sandbox/mode");
     expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("approval/policy");
     expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("plan/mode");
+    expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("feedback/record");
   });
 
   it("presentToolView needs a tool lookup (no Face-side name switch)", () => {

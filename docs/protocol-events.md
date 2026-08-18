@@ -28,6 +28,7 @@ Append-only session facts (`@xrkseek/protocol`). Model-visible history is recons
 | `sandbox/mode` | `mode`（read-only\|workspace-write\|danger-full-access） | **Log-only** — 与 preset 同捆 |
 | `approval/policy` | `policy`（ask\|never） | **Log-only** — `never` 时审批自动放行 |
 | `plan/mode` | `active` | **Log-only** — Face `plan` 投影 · `/plan`；last-wins，缺省 inactive |
+| `feedback/record` | `text` | **Log-only** — `/feedback`；不进 `deriveMessages`；捕获壳无专用卡（wire `ignorable`） |
 
 ## Runtime validation
 

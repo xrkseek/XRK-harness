@@ -239,4 +239,22 @@ describe("Face DSH wire-event adapt", () => {
       data: { todos: [{ content: "ship", status: "in_progress" }] },
     });
   });
+
+  it("feedback/record is ignorable (shell has no dedicated card)", () => {
+    const wire = toDshWireSessionEvent(
+      {
+        type: "feedback/record",
+        ts: 40,
+        text: "the diff view is unreadable",
+      },
+      10,
+    );
+    expect(wire).toEqual({
+      type: "feedback/record",
+      seq: 10,
+      time: 40,
+      data: { text: "the diff view is unreadable" },
+      ignorable: true,
+    });
+  });
 });

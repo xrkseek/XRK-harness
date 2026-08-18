@@ -60,6 +60,15 @@ describe("commands/execute + list", () => {
           input: { hint: "text" },
         },
         {
+          name: "export",
+          description: "Download this Session log as a ZIP archive",
+        },
+        {
+          name: "feedback",
+          description: "Record feedback about this session",
+          input: { hint: "<text>" },
+        },
+        {
           name: "goal",
           description: "Set or replace the session goal",
           input: { hint: "objective" },
@@ -188,6 +197,15 @@ describe("commands/execute + list", () => {
         {
           name: "compact",
           description: "Compact older conversation history",
+        },
+        {
+          name: "export",
+          description: "Download this Session log as a ZIP archive",
+        },
+        {
+          name: "feedback",
+          description: "Record feedback about this session",
+          input: { hint: "<text>" },
         },
         {
           name: "goal",
@@ -389,6 +407,162 @@ describe("/compact", () => {
       type: "command/done",
       kind: "success",
       sourceEventSeq: events.indexOf(compaction!) + 1,
+    });
+  });
+});
+
+describe("/feedback", () => {
+  it("rejects empty and whitespace-only input without a record", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const expected = {
+      kind: "error",
+      text: "Feedback text is required. Usage: /feedback <text>",
+    };
+    for (const line of ["/feedback", "/feedback   \n\t "]) {
+      const exec = await dispatchFaceMethod(runtime, "commands/execute", "e", {
+        args: { agentId: sessionId, line },
+      });
+      expect(exec.result.ok).toBe(true);
+      if (!exec.result.ok) return;
+      expect(exec.result.value).toMatchObject({ result: expected });
+    }
+    const events = runtime.store.get(sessionId).events;
+    expect(events.filter((e) => e.type === "feedback/record")).toEqual([]);
+    expect(
+      events.filter((e) => e.type === "command/done").map((e) => e.kind),
+    ).toEqual(["error", "error"]);
+    for (const event of events) {
+      if (event.type === "command/run") {
+        expect(Object.hasOwn(event, "args")).toBe(false);
+      }
+    }
+  });
+
+  it("records trimmed text once and omits command/run args", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const exec = await dispatchFaceMethod(runtime, "commands/execute", "e", {
+      args: { agentId: sessionId, line: "/feedback  the diff view is unreadable " },
+    });
+    expect(exec.result.ok).toBe(true);
+    if (!exec.result.ok) return;
+    expect(exec.result.value).toMatchObject({
+      result: {
+        kind: "success",
+        text: `Feedback recorded for session ${sessionId}. Session sharing is not configured.`,
+      },
+    });
+
+    const events = runtime.store.get(sessionId).events;
+    expect(events.map((e) => e.type).slice(-3)).toEqual([
+      "command/run",
+      "feedback/record",
+      "command/done",
+    ]);
+    const run = events.findLast((e) => e.type === "command/run");
+    expect(run).toMatchObject({ type: "command/run", name: "feedback" });
+    expect(run && Object.hasOwn(run, "args")).toBe(false);
+    const record = events.find((e) => e.type === "feedback/record");
+    expect(record).toMatchObject({
+      type: "feedback/record",
+      text: "the diff view is unreadable",
+    });
+    const done = events.findLast((e) => e.type === "command/done");
+    expect(done).toMatchObject({
+      type: "command/done",
+      kind: "success",
+      sourceEventSeq: events.indexOf(record!) + 1,
+    });
+    expect(
+      JSON.stringify(events).match(/the diff view is unreadable/gu),
+    ).toHaveLength(1);
+  });
+
+  it("keeps command-like content and records each entry separately", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    await dispatchFaceMethod(runtime, "commands/execute", "e1", {
+      args: { agentId: sessionId, line: "/feedback /plan felt SLOW\n\ttwice today " },
+    });
+    await dispatchFaceMethod(runtime, "commands/execute", "e2", {
+      args: { agentId: sessionId, line: "/feedback second" },
+    });
+    const texts = runtime.store
+      .get(sessionId)
+      .events.filter((e) => e.type === "feedback/record")
+      .map((e) => e.text);
+    expect(texts).toEqual(["/plan felt SLOW\n\ttwice today", "second"]);
+  });
+
+  it("rejects overlong text without a record", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const exec = await dispatchFaceMethod(runtime, "commands/execute", "e", {
+      args: { agentId: sessionId, line: `/feedback ${"x".repeat(8193)}` },
+    });
+    expect(exec.result.ok).toBe(true);
+    if (!exec.result.ok) return;
+    expect(exec.result.value).toMatchObject({
+      result: {
+        kind: "error",
+        text: "Feedback text must be at most 8192 characters.",
+      },
+    });
+    expect(
+      runtime.store
+        .get(sessionId)
+        .events.filter((e) => e.type === "feedback/record"),
+    ).toEqual([]);
+  });
+});
+
+describe("/export", () => {
+  it("requests a download and logs a command pair without writing a ZIP", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const exec = await dispatchFaceMethod(runtime, "commands/execute", "e", {
+      args: { agentId: sessionId, line: "/export" },
+    });
+    expect(exec.result.ok).toBe(true);
+    if (!exec.result.ok) return;
+    expect(exec.result.value).toMatchObject({
+      result: {
+        kind: "success",
+        text: "Session log download requested.",
+      },
+    });
+    expect(runtime.store.get(sessionId).events.map((e) => e.type).slice(-2)).toEqual(
+      ["command/run", "command/done"],
+    );
+  });
+
+  it("rejects a path argument", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const exec = await dispatchFaceMethod(runtime, "commands/execute", "e", {
+      args: { agentId: sessionId, line: "/export output.zip" },
+    });
+    expect(exec.result.ok).toBe(true);
+    if (!exec.result.ok) return;
+    expect(exec.result.value).toMatchObject({
+      result: {
+        kind: "error",
+        text: "The Web /export command does not accept a path.",
+      },
     });
   });
 });

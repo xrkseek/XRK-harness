@@ -4,7 +4,7 @@ Stable DTOs for chat messages, tool calls, and append-only session events.
 
 ## Event set
 
-`turn/*` · `step/*` · `user/message` · `assistant/chunk|message` · `tool/call|result` · `prompt/admitted|promoted|withdrawn`（`delivery?`: steer|queue）· `safety/notice` · `context/compaction` · `session/title` · `approval/*` · `command/run|done`
+`turn/*` · `step/*` · `user/message` · `assistant/chunk|message` · `tool/call|result` · `prompt/admitted|promoted|withdrawn`（`delivery?`: steer|queue）· `safety/notice` · `context/compaction` · `session/title` · `approval/*` · `command/run|done` · `todo/write` · `permission/preset` · `sandbox/mode` · `approval/policy` · `plan/mode` · `feedback/record`
 
 See `docs/protocol-events.md`.
 
