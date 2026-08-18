@@ -9,10 +9,7 @@
   ],
   "references": [
     {
-      "path": "../../api/remotes/tsconfig.client.json"
-    },
-    {
-      "path": "../../../vendor/cordis"
+      "path": "../../cordis"
     },
     {
       "path": "../runtime"
@@ -33,10 +30,7 @@
       "path": "../web-react"
     },
     {
-      "path": "../../plan/plan-mode"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../stubs/dsh-invariants"
     }
   ]
 }

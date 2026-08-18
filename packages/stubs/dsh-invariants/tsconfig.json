@@ -1,0 +1,14 @@
+﻿{
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "lib/types",
+    "rootDir": ".",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "strict": true
+  },
+  "include": ["index.d.ts"]
+}

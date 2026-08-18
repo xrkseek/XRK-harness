@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": [],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@deepseek-ai/cordis": ["./packages/cordis/src"],
+      "@deepseek-ai/cosmokit": ["./packages/cosmokit/src"],
+      "@deepseek-ai/schemastery": ["./packages/schemastery/src"],
+      "@deepseek-ai/cordis-plugin-loader": ["./packages/cordis-loader/src"],
+      "@deepseek-ai/cordis-plugin-include": ["./packages/cordis-include/src"],
+      "@deepseek-ai/cordis-plugin-group": ["./packages/cordis-group/src"]
+    }
+  }
+}

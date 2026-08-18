@@ -12,7 +12,7 @@
       "path": "../locale"
     },
     {
-      "path": "../../../vendor/cordis"
+      "path": "../../cordis"
     },
     {
       "path": "../ui-slots"
@@ -30,7 +30,7 @@
       "path": "../ui-conversation"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../stubs/dsh-invariants"
     }
   ]
 }

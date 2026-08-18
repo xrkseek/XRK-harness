@@ -18,16 +18,7 @@
   ],
   "references": [
     {
-      "path": "../../attachment/attachment"
-    },
-    {
-      "path": "../../host/apiproxy"
-    },
-    {
-      "path": "../../host/webserver"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../stubs/dsh-invariants"
     }
   ]
 }

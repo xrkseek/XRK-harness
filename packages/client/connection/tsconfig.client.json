@@ -19,10 +19,7 @@
   ],
   "references": [
     {
-      "path": "../../../vendor/cordis"
-    },
-    {
-      "path": "../../attachment/attachment"
+      "path": "../../cordis"
     },
     {
       "path": "../../core/session"
@@ -31,19 +28,10 @@
       "path": "../../core/tools"
     },
     {
-      "path": "../../host/apiproxy"
-    },
-    {
-      "path": "../../interaction/commands"
-    },
-    {
       "path": "../../llm/llm"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
-      "path": "../../util/brand"
+      "path": "../../stubs/dsh-invariants"
     }
   ]
 }

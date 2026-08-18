@@ -12,13 +12,10 @@
       "path": "../locale"
     },
     {
-      "path": "../../../vendor/cordis"
+      "path": "../../cordis"
     },
     {
       "path": "../runtime"
-    },
-    {
-      "path": "../../test-support/client-runtime"
     },
     {
       "path": "../ui-conversation"
@@ -36,10 +33,7 @@
       "path": "../web-react"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
-      "path": "../../api/remotes/tsconfig.client.json"
+      "path": "../../stubs/dsh-invariants"
     }
   ]
 }

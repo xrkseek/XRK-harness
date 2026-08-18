@@ -4,4 +4,10 @@
 
 归因：[NOTICE](./NOTICE) · [UPSTREAM](./UPSTREAM)。本仓根 [LICENSE](../../LICENSE)。
 
-品牌在 `public/`。`serve` 托管本目录 `dist/`（gitignore）。暂不进 pnpm workspace；自包含编出未齐前，在对照仓编出后把产物放进本目录 `dist/`，或设 `XRK_WEB_DIST`。Face 验证台见 [`apps/console`](../console/)。
+品牌在 `public/`。编出：
+
+```bash
+pnpm --filter @deepseek-ai/dsh-web-frontend run build
+```
+
+得到 `dist/`（gitignore）。Cordis 薄栈：`packages/cordis*` · `cosmokit` · `schemastery`。缺的主机面包暂用 `packages/stubs/*`。完整产品壳还须 `boot.json` + `plugins/**/client.js`。Face 验证台见 [`apps/console`](../console/)。

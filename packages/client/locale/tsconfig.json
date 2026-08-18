@@ -18,13 +18,10 @@
       "path": "../ui-slots"
     },
     {
-      "path": "../../../vendor/cordis"
+      "path": "../../cordis"
     },
     {
-      "path": "../../settings/settings"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../stubs/dsh-invariants"
     },
     {
       "path": "../ui-settings"

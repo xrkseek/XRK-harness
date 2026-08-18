@@ -8,29 +8,28 @@
       "DOM",
       "DOM.Iterable"
     ],
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "src"
   ],
   "references": [
     {
-      "path": "../../../vendor/cordis"
+      "path": "../../cordis"
     },
     {
-      "path": "../../../vendor/loader"
+      "path": "../../cordis-loader"
     },
     {
       "path": "../modules"
     },
     {
-      "path": "../../host/webserver"
+      "path": "../../schemastery"
     },
     {
-      "path": "../../../vendor/schemastery"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../stubs/dsh-invariants"
     }
   ]
 }
