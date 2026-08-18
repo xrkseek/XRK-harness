@@ -9,7 +9,7 @@
   ],
   "references": [
     {
-      "path": "../../../vendor/cordis"
+      "path": "../../cordis"
     },
     {
       "path": "../ui-slots"
@@ -30,7 +30,7 @@
       "path": "../locale"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../stubs/dsh-invariants"
     }
   ]
 }

@@ -9,7 +9,7 @@
   ],
   "references": [
     {
-      "path": "../../../vendor/cordis"
+      "path": "../../cordis"
     },
     {
       "path": "../ui-slots"
@@ -30,13 +30,7 @@
       "path": "../locale"
     },
     {
-      "path": "../../settings/settings"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
-      "path": "../../api/remotes/tsconfig.client.json"
+      "path": "../../stubs/dsh-invariants"
     },
     {
       "path": "../ui-sidebar"

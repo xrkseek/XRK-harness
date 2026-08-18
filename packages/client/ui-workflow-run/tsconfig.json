@@ -9,7 +9,7 @@
   ],
   "references": [
     {
-      "path": "../../../vendor/cordis"
+      "path": "../../cordis"
     },
     {
       "path": "../locale"
@@ -30,13 +30,7 @@
       "path": "../../core/session"
     },
     {
-      "path": "../../workflow/workflow"
-    },
-    {
-      "path": "../../workflow/tool-workflow"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../stubs/dsh-invariants"
     }
   ]
 }

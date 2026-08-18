@@ -9,10 +9,7 @@
   ],
   "references": [
     {
-      "path": "../../attachment/attachment"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../stubs/dsh-invariants"
     },
     {
       "path": "../ui-primitives"

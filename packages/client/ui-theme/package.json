@@ -26,7 +26,7 @@
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
-    "./styles/*": "./lib/styles/*",
+    "./styles/*": "./src/styles/*",
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },

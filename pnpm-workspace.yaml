@@ -1,9 +1,8 @@
 packages:
   - "apps/*"
-  # Product shell source (DSH layout). Not a workspace member until
-  # self-contained build of apps/web. See apps/web/NOTICE.
-  - "!apps/web"
   - "packages/*"
+  - "packages/client/*"
+  - "packages/stubs/*"
   - "packages/core/*"
   - "packages/llm/*"
   - "packages/exec/*"
