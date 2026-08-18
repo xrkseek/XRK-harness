@@ -2,6 +2,7 @@ import type { AttachmentStore } from "@xrkseek/attachment";
 import type { AgentHandle } from "@xrkseek/core-agent";
 import type { SessionRecord, SessionStore } from "@xrkseek/core-session";
 import type { ToolDefinition } from "@xrkseek/core-tools";
+import type { JobView } from "./adapt/job-view.js";
 import type { ProviderRegistry } from "@xrkseek/llm-registry";
 import type { PolicyEngine } from "@xrkseek/policy";
 import type { FaceBus } from "./bus.js";
@@ -128,6 +129,12 @@ export interface FaceRuntime {
   watchSession(sessionId: string): void;
   publishQueue(sessionId: string): void;
   publishApprovals(sessionId: string): void;
+  /**
+   * DSH `session/jobs`. `undefined` = no registry (emit nothing).
+   * Empty array is a live set that just cleared (still pushed on change).
+   */
+  jobViewsFor(sessionId: string): JobView[] | undefined;
+  publishJobs(sessionId: string, opts?: { baseline?: boolean }): void;
   /**
    * Copy parent log into a new session without inventing title/fallback rows
    * (replay path).

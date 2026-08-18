@@ -24,6 +24,7 @@ import {
   type FaceProjectionRegistry,
 } from "./projections/index.js";
 import { FaceInboxWireMaps, FaceToolArgMaps, toMuxSessionEvent } from "./adapt/index.js";
+import { jobViews, type FaceJobsSource, type JobView } from "./adapt/job-view.js";
 import { toQueueItems } from "./queue.js";
 import type {
   FaceProcessPlugin,
@@ -87,6 +88,8 @@ export interface CreateFaceRuntimeOptions {
   readonly attachments?: AttachmentStore;
   /** Standing tool registry (preset layer) when no live agent is remembered. */
   readonly tools?: ToolRegistry;
+  /** Standing / unowned jobs (DSH `ctx.jobs` without an owner). */
+  readonly jobs?: FaceJobsSource;
   /** Host input modalities; default text-only. */
   readonly inputModalities?: readonly ("text" | "image")[];
   /** Optional JSON sidecar for parent→child links (JSONL session dir). */
@@ -129,6 +132,51 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const toolArgMaps = new FaceToolArgMaps();
   const inboxWire = new FaceInboxWireMaps(admitRpcMap);
   const rememberedTools = new Map<string, ToolRegistry>();
+  const rememberedJobs = new Map<string, NonNullable<AgentHandle["jobs"]>>();
+  const jobUnsubs = new Map<string, () => void>();
+
+  const hasJobsRegistry = (): boolean =>
+    options.jobs !== undefined || rememberedJobs.size > 0;
+
+  const listJobViews = (sessionId: string): JobView[] => {
+    const owned = rememberedJobs.get(sessionId)?.list() ?? [];
+    const unowned = options.jobs?.list() ?? [];
+    return jobViews([...unowned, ...owned]);
+  };
+
+  const jobViewsFor = (sessionId: string): JobView[] | undefined => {
+    if (!hasJobsRegistry()) return undefined;
+    return listJobViews(sessionId);
+  };
+
+  const publishJobs = (
+    sessionId: string,
+    opts?: { baseline?: boolean },
+  ): void => {
+    if (!hasJobsRegistry()) return;
+    const views = listJobViews(sessionId);
+    if (opts?.baseline && views.length === 0) return;
+    bus.publishMux({ type: "session/jobs", sessionId, jobs: views });
+  };
+
+  const bindAgentJobs = (
+    sessionId: string,
+    agent: AgentHandle,
+  ): void => {
+    jobUnsubs.get(sessionId)?.();
+    jobUnsubs.delete(sessionId);
+    if (!agent.jobs) {
+      rememberedJobs.delete(sessionId);
+      return;
+    }
+    rememberedJobs.set(sessionId, agent.jobs);
+    jobUnsubs.set(
+      sessionId,
+      agent.jobs.onJobsChanged(() => {
+        publishJobs(sessionId);
+      }),
+    );
+  };
 
   const getTool = (sessionId: string, name: string) => {
     const fromAgent = rememberedTools.get(sessionId)?.get(name);
@@ -145,15 +193,27 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const resolveAgent = async (sessionId: string) => {
     const agent = await options.resolveAgent(sessionId);
     if (agent.tools) rememberedTools.set(sessionId, agent.tools);
+    bindAgentJobs(sessionId, agent);
     return agent;
   };
 
   const invalidateAgent = options.invalidateAgent
     ? async (sessionId: string) => {
         rememberedTools.delete(sessionId);
+        jobUnsubs.get(sessionId)?.();
+        jobUnsubs.delete(sessionId);
+        rememberedJobs.delete(sessionId);
         await options.invalidateAgent!(sessionId);
       }
     : undefined;
+
+  if (options.jobs) {
+    options.jobs.onJobsChanged(() => {
+      for (const sessionId of store.list()) {
+        publishJobs(sessionId);
+      }
+    });
+  }
 
   const titleBox: { controller: FaceTitleController | undefined } = {
     controller: undefined,
@@ -335,8 +395,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         bus.publishMux(approvalRequestedFrame(item), item.rpcId);
       }
     },
-    watchSession(_sessionId) {
-      /* append fan-out is global */
+    jobViewsFor,
+    publishJobs,
+    watchSession(sessionId) {
+      publishJobs(sessionId, { baseline: true });
     },
     forkSession(sourceId, boundaryIndex, childId) {
       replayingLog = true;

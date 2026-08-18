@@ -236,6 +236,18 @@ export function attachFaceUpgrades(
           ),
         );
       }
+      const jobViews = runtime.jobViewsFor(sessionId);
+      if (jobViews && jobViews.length > 0) {
+        ws.send(
+          JSON.stringify(
+            serverRequestFrame(newRpcId(), {
+              type: "session/jobs",
+              sessionId,
+              jobs: jobViews,
+            }),
+          ),
+        );
+      }
       const snap = runtime.projections.snapshot(sessionId);
       for (const [key, value] of Object.entries(snap.values)) {
         ws.send(
