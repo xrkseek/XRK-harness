@@ -18,7 +18,7 @@
 | MCP | `@xrkseek/mcp`；Host `XRK_MCP_*` 或 Face `mcp.servers` 落盘（默认 deny） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) |
 | Attachment / 插件 | Face 附件；进程插件 `tools` · `prompt` · `commands` | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
 
-**对齐 DSH 的口径（诚实）**：内核主路径（session 事件 · 工具瀑布 · compose · PTY/jobs/web/lsp/fs）已可当日常 harness 用；**不是** DSH 二百插件全集的一对一替代。产品壳 = 捕获的 DSH Web（`apps/web-static`），内核不嵌 Cordis。
+**对齐 DSH 的口径（诚实）**：内核主路径（session 事件 · 工具瀑布 · compose · PTY/jobs/web/lsp/fs）已可当日常 harness 用；**不是** DSH 二百插件全集的一对一替代。产品壳 = 捕获的 DSH Web（本机 `apps/web-static`，不入库），内核不嵌 Cordis。
 
 ## 未稳
 
@@ -44,6 +44,6 @@ presets / sdk / server → core* | llm | mcp | attachment | exec* | workspace | 
 core* / 能力叶 → kernel | protocol | compose
 ```
 
-外壳（`apps/web-static`）可复用 DSH 捕获；内核不嵌 Cordis。GitHub 语言条里的 JS 主要来自该捕获产物（根目录 `.gitattributes` 已 `linguist-vendored`），不是误提交的 `packages/**/dist`。见 [AGENTS.md](../AGENTS.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)。
+外壳（本机 `apps/web-static`）可复用 DSH 捕获，与上游 `apps/web/dist` 一样不入库；内核不嵌 Cordis。见 [AGENTS.md](../AGENTS.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)。
 
 [learn.md](./learn.md) · [modules/](./modules/README.md)

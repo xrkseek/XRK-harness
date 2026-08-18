@@ -1,6 +1,6 @@
 # @xrkseek/harness-cli
 
-CLI 入口：`xrk-harness`（`apps/cli`）。产品聊天 UI 是捕获的 DSH Web（`apps/web-static`），不是自研壳。
+CLI 入口：`xrk-harness`（`apps/cli`）。产品聊天 UI 是本机捕获的 DSH Web（`apps/web-static`，不入库），不是自研壳。
 
 ## 命令
 
@@ -38,7 +38,7 @@ node apps/cli/dist/bin.js run --preset minimal "ping"
 node apps/cli/dist/bin.js doctor
 ```
 
-`serve` 按 **CLI 包位置** 找 `apps/web-static`，不把用户 `--workspace` 当成壳目录。
+`serve` 按 **CLI 包位置** 找本机 `apps/web-static`（无捕获则 Face console），不把用户 `--workspace` 当成壳目录。需要产品壳时：`pnpm web:ui:build && pnpm web:ui:capture`。
 
 ## 环境变量
 

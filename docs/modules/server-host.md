@@ -38,7 +38,7 @@
 | `XRK_API_KEY` | Face/HTTP 鉴权（空=开发免鉴权） |
 | `XRK_SESSIONS_DIR` | JSONL 会话目录；省略 = 内存 store（CLI `serve` 另有默认 `{workspace}/.xrk/sessions`） |
 | `XRK_PLUGINS_DIR` | 进程插件根；`web/` 子目录为客户端叠加（boot + `/plugins/…`） |
-| `XRK_WEB_DIST` | 静态壳（CLI 按包定位 `apps/web-static`） |
+| `XRK_WEB_DIST` | 静态壳（CLI 按包定位本机 `apps/web-static` 捕获） |
 | `XRK_POLICY_FILE` | policy JSON |
 | `XRK_MCP_SERVERS` | JSON 数组：`[{serverName,command,args?,env?,cwd?}]` 或 `[{serverName,url}]`；空则回退 `.xrk/host-settings.json` |
 | `XRK_MCP_ALLOW` | `1`/`true` → 本进程 mcp.connect 默认 allow |
@@ -65,7 +65,7 @@ Preset 须 `wireCompositionTools({ plugins })`（见 minimal/harness）。Host s
 |----|------|
 | `tests/mcp-wire.test.ts` | JSON 解析 · 默认 deny · host-settings.json |
 | `tests/http-chat.test.ts` | spawn · pluginsDir 接线 |
-| `tests/product-shell.test.ts` | 捕获壳 GET `/` · boot 无 cordis UI / HMR · plugin 200 · 首屏 RPC · manifest 名 · 欢迎文案 |
+| `tests/product-shell.test.ts` | 本机有捕获才跑：GET `/` · boot 无 cordis UI / HMR · plugin 200 · 首屏 RPC · manifest 名 · 欢迎文案 |
 | `tests/agent-cache.test.ts` | 卸序 |
 | `tests/standing-tools.test.ts` | minimal 无 bash；harness/server 有 bash presenter |
 

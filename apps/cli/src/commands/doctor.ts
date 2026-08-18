@@ -48,7 +48,7 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
   checks.push({
     name: "product-ui",
     ok: Boolean(web),
-    detail: web ?? "apps/web-static/index.html not found next to CLI",
+    detail: web ?? "no capture (pnpm web:ui:capture) — serve falls back to Face console",
   });
 
   const llm = Boolean(process.env.XRK_LLM_PRESET?.trim());
@@ -62,7 +62,12 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
 
   return {
     ok: checks
-      .filter((c) => c.name !== "llm-preset" && c.name !== "pnpm")
+      .filter(
+        (c) =>
+          c.name !== "llm-preset" &&
+          c.name !== "pnpm" &&
+          c.name !== "product-ui",
+      )
       .every((c) => c.ok),
     checks,
   };

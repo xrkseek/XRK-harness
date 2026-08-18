@@ -59,7 +59,7 @@
 | `sdk/` | `@xrkseek/harness` | 包 README |
 | `testkit/` | `@xrkseek/testkit` | [testing.md](../testing.md) |
 
-apps：`cli` · `web` · `web-static`。presets：`minimal` · `harness` · `server`。
+apps：`cli` · `web`；产品壳捕获 `web-static`（gitignore）。presets：`minimal` · `harness` · `server`。
 
 ## 术语
 

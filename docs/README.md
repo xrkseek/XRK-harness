@@ -18,7 +18,7 @@
 | 角色        | 顺序                                                                                                                                                                           |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 集成        | [status.md](./status.md) → [architecture.md](./architecture.md) → [packages/sdk/README](../packages/sdk/README.md) → [session.md](./session.md) · [http-api.md](./http-api.md) |
-| Host / CLI  | [host-preset.md](./host-preset.md) · [profiles.md](./profiles.md) · [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) · 产品壳 `apps/web-static` |
+| Host / CLI  | [host-preset.md](./host-preset.md) · [profiles.md](./profiles.md) · [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) · 产品壳本机 `apps/web-static` |
 | 工具 / exec | [tool-pipeline.md](./tool-pipeline.md) · [seams.md](./seams.md)                                                                                                                |
 | 安全        | [security-checklist.md](./security-checklist.md) · [policy.md](./policy.md)                                                                                                    |
 | 贡献        | [../CONTRIBUTING.md](../CONTRIBUTING.md) · [testing.md](./testing.md)                                                                                                          |

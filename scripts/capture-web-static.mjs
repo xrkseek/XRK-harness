@@ -1,8 +1,8 @@
 /**
  * Capture a built product-web dist + boot graph + /plugins into
- * `apps/web-static` (tracked) for `xrk-harness serve`.
+ * `apps/web-static` (gitignored, like DSH `apps/web/dist`) for `xrk-harness serve`.
  *
- * Also mirrors to `vendor/web-static` for local-only overrides (gitignored).
+ * Also mirrors to `vendor/web-static` (gitignored).
  *
  * Expects a local UI source tree at `vendor/ui-src` (gitignore; maintainer link).
  *
@@ -155,7 +155,18 @@ async function waitReady(timeoutMs = 90_000) {
   throw new Error(`UI not ready at ${URL_BASE}`);
 }
 
-async function main() {
+function resetCaptureOut(out, keepReadme) {
+  const readmePath = path.join(out, "README.md");
+  const readme =
+    keepReadme && existsSync(readmePath)
+      ? readFileSync(readmePath, "utf8")
+      : undefined;
+  if (existsSync(out)) rmSync(out, { recursive: true, force: true });
+  mkdirSync(out, { recursive: true });
+  return () => {
+    if (readme !== undefined) writeFileSync(readmePath, readme);
+  };
+}
   if (!existsSync(path.join(DIST, "index.html"))) {
     throw new Error(`missing ${DIST}/index.html — run pnpm web:ui:build first`);
   }
@@ -180,8 +191,7 @@ async function main() {
     const boot = extractBoot(html);
 
     for (const OUT of [OUT_TRACKED, OUT_LOCAL]) {
-      if (existsSync(OUT)) rmSync(OUT, { recursive: true, force: true });
-      mkdirSync(OUT, { recursive: true });
+      const restoreReadme = resetCaptureOut(OUT, OUT === OUT_TRACKED);
       cpSync(DIST, OUT, { recursive: true });
 
       for (const name of ["favicon.png", "logo.png", "logo-plate.png"]) {
@@ -205,6 +215,7 @@ async function main() {
       }
 
       brandCapturedShell(OUT);
+      restoreReadme();
       process.stdout.write(`wrote ${OUT} (rev=${boot.rev})\n`);
     }
   } finally {

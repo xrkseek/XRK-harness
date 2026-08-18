@@ -34,6 +34,8 @@ pnpm install
 pnpm build
 
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
+# 产品壳需本机捕获（gitignore，同 DSH apps/web/dist）：
+#   pnpm web:ui:build && pnpm web:ui:capture
 node apps/cli/dist/bin.js serve --preset server --workspace .
 # or: pnpm serve   /   xrk-harness web --open
 ```
@@ -53,7 +55,7 @@ node apps/cli/dist/bin.js serve --preset server --workspace .
 树与依赖：[docs/architecture.md](./docs/architecture.md)。包索引：[docs/modules/README.md](./docs/modules/README.md)。
 
 ```text
-apps/cli · apps/web · apps/web-static   CLI · Face console · 产品壳（DSH 捕获）
+apps/cli · apps/web · web-static（本地捕获，不入库）   CLI · Face console · 产品壳
 packages/*              33 个 @xrkseek 库（kernel · compose · core* · llm · exec* · server · mcp · …）
 presets/                minimal | harness | server
 docs/                   规格 · ADR · modules 文件地图

@@ -1,6 +1,6 @@
 /**
  * Face verifier console (`?console=1`).
- * Product chat UI: `apps/web-static` (DSH capture).
+ * Product chat UI: local `apps/web-static` (DSH capture, gitignored).
  */
 
 import {
