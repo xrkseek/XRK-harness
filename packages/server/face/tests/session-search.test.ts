@@ -166,6 +166,16 @@ describe("session.search", () => {
     expect(searchSessions(store, "unique-todo-token").items.map((i) => i.sessionId)).toEqual(
       [todos],
     );
+
+    const feedback = newSession(store).id;
+    store.append(feedback, {
+      type: "feedback/record",
+      ts: 4,
+      text: "unique-feedback-token the diff view is unreadable",
+    });
+    expect(
+      searchSessions(store, "unique-feedback-token").items.map((i) => i.sessionId),
+    ).toEqual([feedback]);
   });
 
   it("scans JSONL-backed sessions the same way", async () => {

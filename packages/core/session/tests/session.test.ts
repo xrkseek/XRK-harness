@@ -123,6 +123,14 @@ describe("deriveMessages + invariant", () => {
       { role: "user", content: "[system] repeated" },
     ]);
   });
+
+  it("skips feedback/record (log-only)", () => {
+    const events: SessionEvent[] = [
+      { type: "user/message", ts: 1, turnId: "t", content: "hi" },
+      { type: "feedback/record", ts: 2, text: "the diff view is unreadable" },
+    ];
+    expect(deriveMessages(events)).toEqual([{ role: "user", content: "hi" }]);
+  });
 });
 
 describe("jsonl", () => {

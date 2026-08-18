@@ -56,9 +56,9 @@ HTTP/WS (attach-http)
 | `queue.ts`           | `session/queue` 项形：`{id,placement,message}` | 勿退回扁平 `content`                           |
 | `approvals.ts`       | policy ask · `approvalRequestedFrame`      | 稳定 rpcId；`session.respondApproval` 仍可用 |
 | `questions.ts`       | DSH user-questions · `bindAskUserTool`     | `question/requested`；`questions[]` + `question`；respond 先审批后提问 |
-| `slash.ts`           | recipe catalog · `commands/execute`            | 插件 command 优先；内建 `/compact` · `/goal` · `/permission` · `/plan`；miss → `undefined`（不入账） |
+| `slash.ts`           | recipe catalog · `commands/execute`            | 插件 command 优先；内建 `/compact` · `/export` · `/feedback` · `/goal` · `/permission` · `/plan`；miss → `undefined`（不入账） |
 | `plugin-inventory.ts` | `pluginInventory/list` 投影                    | 进程插件 + boot；cordis = failed |
-| `session-search.ts`  | `session.search`                               | query 1..500 · 禁 NUL · 最多 20 · 最近活动优先 · 含 admit/safety |
+| `session-search.ts`  | `session.search`                               | query 1..500 · 禁 NUL · 最多 20 · 最近活动优先 · 含 admit/safety/command/todo/feedback |
 | `skill-list.ts`      | `skill.list`                                   | 扫 `.xrk/skills/<id>/SKILL.md`；要 `sessionId` |
 | `presets-catalog.ts` | agentPreset 列表常量                           | `read` 只读；创作面仍 NI                             |
 | `message-feedback.ts` | `messageFeedback/list/put/delete`             | 进程内 CAS；Typert 嵌套 ok；非 transcript |
@@ -127,7 +127,7 @@ HTTP/WS (attach-http)
 | `tests/tool-view.test.ts`        | lookup only；无 getTool 则没 view |
 | `tests/standing-tools.test.ts`   | 冷 history 用 standing registry，不 wake agent |
 | `tests/jobs.test.ts`             | `session/jobs` 基线非空才发；变更可推 `[]` |
-| `tests/commands.test.ts`         | `commands/list` · `commands/execute` · `/compact` · `pluginInventory/list` · Cordis stub |
+| `tests/commands.test.ts`         | `commands/list` · `commands/execute` · `/compact` · `/export` · `/feedback` · `pluginInventory/list` · Cordis stub |
 | `tests/wire.test.ts`             | respond 解析 · 路径                        |
 | `tests/rpc-error.test.ts`        | DSH 错误码映射                             |
 | `tests/approval.test.ts`         | ask → respondByRpcId                       |
