@@ -80,6 +80,27 @@ export interface AgentHandle {
   setApprovalHandler(handler: ApprovalHandler | undefined): void;
   /** Presenters live on the registry; Face `viewFor` looks up by name. */
   readonly tools?: ToolRegistry;
+  /**
+   * Background jobs for Face `session/jobs` (DSH `ctx.jobs` on the live agent).
+   * Omit → that agent contributes no task views.
+   */
+  readonly jobs?: {
+    list(): readonly {
+      readonly id: string;
+      readonly kind: string;
+      readonly label: string;
+      readonly status:
+        | "running"
+        | "stopping"
+        | "completed"
+        | "killed"
+        | "failed";
+      readonly detail?: string;
+      readonly startedAt: number;
+      readonly finishedAt?: number;
+    }[];
+    onJobsChanged(listener: () => void): () => void;
+  };
 }
 
 export interface CreateAgentOptions {
@@ -102,6 +123,8 @@ export interface CreateAgentOptions {
   readonly compaction?: false | CompactionOptions;
   /** Forwarded to runTurn for vision adapters. */
   readonly resolveImage?: LlmChatRequest["resolveImage"];
+  /** Optional Face `session/jobs` source (bash background jobs). */
+  readonly jobs?: AgentHandle["jobs"];
 }
 
 function mergeSignals(
@@ -381,6 +404,7 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
       pipeline.setApprovalHandler(handler);
     },
     tools: options.tools,
+    ...(options.jobs ? { jobs: options.jobs } : {}),
   };
 }
 

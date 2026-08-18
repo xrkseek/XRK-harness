@@ -66,6 +66,12 @@ export type MuxFrame =
       readonly sessionId: string;
       readonly items: readonly unknown[];
     }
+  /** DSH `session/jobs` — whole-set snapshot; omit baseline when empty. */
+  | {
+      readonly type: "session/jobs";
+      readonly sessionId: string;
+      readonly jobs: readonly unknown[];
+    }
   /** DSH Web 可应答审批（稳定 rpcId 在 server-request 信封上）。 */
   | {
       readonly type: "approval/requested";

@@ -28,7 +28,7 @@ import {
   createSandboxWrapGuard,
   createWorkspaceSandbox,
 } from "@xrkseek/exec-sandbox";
-import { createBashTools, createLocalShell } from "@xrkseek/exec-shell";
+import { createBashTools, createLocalShell, toJobView } from "@xrkseek/exec-shell";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
 import {
   createRunCodeTool,
@@ -270,6 +270,10 @@ export function createHarnessComposition(
         tools,
         pipeline,
         system,
+        jobs: {
+          list: () => shell.listJobsNow().map(toJobView),
+          onJobsChanged: (listener) => shell.onJobsChanged(listener),
+        },
         ...(useAssemble
           ? {
               assemble: {
