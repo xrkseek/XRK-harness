@@ -1,5 +1,6 @@
 import { mkdir, readFile, readdir, writeFile, access, stat } from "node:fs/promises";
 import path from "node:path";
+import { formatSkillCatalog, listSkills } from "./skills.js";
 
 export interface WorkspaceBudgetEvent {
   readonly type: "workspace/budget-truncation";
@@ -118,13 +119,13 @@ export function createWorkspaceInjector(
         if (t) blocks.push(`## Rules\n${t}`);
       }
 
-      // 4. skills directory cards (names only, not full text)
-      const skillsDir = path.join(productDir, "skills");
-      if (await exists(skillsDir)) {
-        const names = (await readdir(skillsDir)).sort();
-        const card = names.map((n) => `- ${n}`).join("\n");
-        const t = clip("skills", card, budget);
-        if (t) blocks.push(`## Skills\n${t}`);
+      // 4. skills directory cards (name + description; full body via `skill` tool)
+      const skillCards = formatSkillCatalog(
+        await listSkills({ productDir }),
+      );
+      if (skillCards) {
+        const t = clip("skills", skillCards, budget);
+        if (t) blocks.push(t);
       }
 
       // 5. subagents list
@@ -195,12 +196,29 @@ export {
 } from "./recipes.js";
 
 export {
+  createSlashResolver,
   mapSlashRestToValues,
   parseSlashCommand,
   tryApplySlashRecipe,
+  tryApplySlashSkill,
   type SlashCommand,
   type SlashRecipeResult,
 } from "./slash.js";
+
+export {
+  SKILL_TOOL_GUIDANCE,
+  formatSkillCatalog,
+  isSkillName,
+  listSkills,
+  listSkillsFromWorkspace,
+  loadSkill,
+  parseSkillMarkdown,
+  renderSkillContent,
+  type SkillDefinition,
+  type SkillSummary,
+} from "./skills.js";
+
+export { createSkillTools, presentSkillCall } from "./skill-tools.js";
 
 export {
   createWorkspaceToolOutputPersist,

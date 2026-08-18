@@ -1,4 +1,5 @@
 import { applyRecipe, type Recipe } from "./recipes.js";
+import { loadSkill, renderSkillContent } from "./skills.js";
 
 export interface SlashCommand {
   readonly id: string;
@@ -73,5 +74,41 @@ export function tryApplySlashRecipe(
     recipeId: recipe.id,
     userPrompt: applied.userPrompt,
     systemExtra: applied.systemExtra,
+  };
+}
+
+/**
+ * `/skill-name optional remainder`. Full body is prepended to the logged
+ * user prompt (session-reconstructable). Recipe ids win when both exist.
+ */
+export async function tryApplySlashSkill(
+  text: string,
+  productDir: string,
+): Promise<SlashRecipeResult | undefined> {
+  const parsed = parseSlashCommand(text);
+  if (!parsed) return undefined;
+  const skill = await loadSkill({ productDir, name: parsed.id });
+  if (!skill) return undefined;
+  const body = renderSkillContent(skill);
+  const userPrompt = parsed.rest ? `${body}\n\n${parsed.rest}` : body;
+  return {
+    recipeId: skill.name,
+    userPrompt,
+    systemExtra: "",
+  };
+}
+
+/** Recipe first, then skill. Used by presets as `assemble.resolveSlash`. */
+export function createSlashResolver(options: {
+  readonly productDir: string;
+  readonly recipes?: readonly Recipe[];
+}): (
+  raw: string,
+) => Promise<SlashRecipeResult | undefined> {
+  const recipes = options.recipes ?? [];
+  return async (raw) => {
+    const recipe = tryApplySlashRecipe(raw, recipes);
+    if (recipe) return recipe;
+    return tryApplySlashSkill(raw, options.productDir);
   };
 }

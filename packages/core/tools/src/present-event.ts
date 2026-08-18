@@ -38,6 +38,7 @@ export function presentToolEventView(
       const view = lookup.getTool(call.name)?.presentResult?.(call.args, {
         content: event.result.content,
         ...(event.result.isError ? { isError: true } : {}),
+        ...(event.result.meta !== undefined ? { meta: event.result.meta } : {}),
       });
       return view === undefined ? undefined : { for: "result", view };
     }

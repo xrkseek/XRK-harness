@@ -26,6 +26,8 @@ export type {
   ToolCallView,
   ToolEventView,
   ToolResultView,
+  WebFetchResultView,
+  WebSearchResultView,
 } from "@xrkseek/core-tools";
 
 export class FaceToolArgMaps {

@@ -13,7 +13,7 @@ Never injects the host repo’s root `AGENTS.md` (Coding Agent docs ≠ product 
 1. `assistant.md` / `ASSISTANT.md`  
 2. `context/*` (sorted)  
 3. `rules.md` / `RULES.md`  
-4. `skills/*` **names only** (cards)  
+4. `skills/*/SKILL.md` 卡片（name + description；全文走 `skill` 工具）  
 5. `subagents.md`
 
 Budget: char cap (default 32k) → `workspace/budget-truncation` events on the inject result (not session events yet).
@@ -48,6 +48,6 @@ const { blocks, events, seeded } = await resolveWorkspaceInject({
 
 Composition exposes `composition.workspace` (`WorkspaceInjector`) for manual sync/inject.
 
-Slash recipes (separate option `slashRecipes`) load `{productDir}/recipes` — see [slash-recipes.md](./slash-recipes.md).
+Slash: `{productDir}/recipes` plus `/skill-name` into the logged user prompt — see [slash-recipes.md](./slash-recipes.md). `slashRecipes: false` skips recipes only.
 
 See also: [host-preset.md](./host-preset.md), `templates/office-agent/README.md`.

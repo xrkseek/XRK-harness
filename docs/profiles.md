@@ -6,8 +6,8 @@
 
 | Preset | 平面 | 包含 | 适用 |
 |--------|------|------|------|
-| **minimal** | Session | fs 工具（read/write/edit/glob/grep）· write-intent · workspace inject · replay 默认 LLM | 本地烟测、示例、无 shell |
-| **harness** | Session | minimal 工具面 + bash + std（todo_write/ask_user/exit_plan_mode）· sandbox 栈 · 可选 `run_code` | 完整编码 Agent |
+| **minimal** | Session | fs 工具（read/write/edit/glob/grep）· **skill** · write-intent · workspace inject · replay 默认 LLM | 本地烟测、示例、无 shell |
+| **harness** | Session | minimal 工具面 + bash + std（todo_write/ask_user/exit_plan_mode）· **web_search / web_fetch** · **lsp** · **terminal_*** · **skill** · sandbox 栈 · 可选 `run_code` | 完整编码 Agent |
 | **server** | Host | HTTP host + agent factory → 通常挂 harness 组合 | `serve` |
 
 Host vs Session 平面：[host-preset.md](./host-preset.md)。
@@ -20,7 +20,7 @@ Host vs Session 平面：[host-preset.md](./host-preset.md)。
 | `llm` | replay 固定文案 | 实现 `LlmAdapter`；生产可用 openai-compatible / `createDeepSeekAdapter` |
 | `assemble` | `true` | 三层消息；`false` 则仅扁平 system |
 | `workspaceInject` | 随 assemble 开启 | `.xrk` → `workspaceBlocks`；`false` 关闭 |
-| `slashRecipes` | 随 assemble 开启 | `.xrk/recipes` → `/id` expand；`false` 关闭 |
+| `slashRecipes` | 随 assemble 开启 | `.xrk/recipes` → `/id` expand；`false` 只关 recipe，`/skill-name` 仍展开 |
 | `plugins` | 无 | host `loader.list()` / 显式 `RegisteredPlugin[]` → tools 接线 |
 | `extraTools` | 无 | 显式 ToolDefinition（同名冲突抛错） |
 | `policy` | 无 | `PolicyEngine` → `pipeline.onPre(createPolicyToolPre)` |
@@ -28,7 +28,7 @@ Host vs Session 平面：[host-preset.md](./host-preset.md)。
 | `sessionStore` / `sessionId` | 内存新建 | 注入既有 session |
 | `compaction` | `{}` | overflow 一次重试 + `/compact`；`false` 关 overflow（手动 compact 仍可用） |
 
-Harness 另有：`presentation: "tools" | "code"`（`code` 注册实验性 `run_code`）。
+Harness 另有：`presentation: "tools" | "code"`（`code` 注册实验性 `run_code`）；`webTools: false` 跳过 web 工具（默认开，见 [web-tools.md](./web-tools.md)）；`lspTools: false` 跳过 `lsp`（默认开，见 [lsp-tools.md](./lsp-tools.md)）；`ptyTools: false` 跳过 PTY 六件套（默认开，见 [pty-tools.md](./pty-tools.md)）。
 
 ## CLI
 

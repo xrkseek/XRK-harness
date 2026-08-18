@@ -12,7 +12,7 @@
 | [session-compaction.md](./session-compaction.md) | compaction · overflow 一次重试 |
 | [http-api.md](./http-api.md) | HTTP 形状 |
 | [workspace-inject.md](./workspace-inject.md) | `.xrk` → assemble.workspaceBlocks |
-| [slash-recipes.md](./slash-recipes.md) | `/recipe-id` 展开 |
+| [slash-recipes.md](./slash-recipes.md) | `/recipe-id` · `/skill-name` 展开 |
 | [policy.md](./policy.md) | tool/provider/mcp 门禁 |
 
 包：`@xrkseek/protocol` · `@xrkseek/core-session` · `@xrkseek/core-agent`。

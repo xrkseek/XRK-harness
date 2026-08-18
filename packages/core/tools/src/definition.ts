@@ -33,6 +33,8 @@ export interface ToolDefinition<TArgs = unknown> {
 export interface ToolResultContent {
   readonly content: string;
   readonly isError?: boolean;
+  /** Face presentation replay; copied onto session `tool/result`. */
+  readonly meta?: Readonly<Record<string, unknown>>;
 }
 
 export interface ToolRegistry {
@@ -82,6 +84,7 @@ export function normalizeToolResult(
     name,
     content: out.content,
     ...(out.isError ? { isError: true as const } : {}),
+    ...(out.meta !== undefined ? { meta: out.meta } : {}),
   };
 }
 

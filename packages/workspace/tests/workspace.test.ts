@@ -16,7 +16,12 @@ describe("WorkspaceInjector", () => {
     await writeFile(path.join(product, "assistant.md"), "A", "utf8");
     await writeFile(path.join(product, "context", "c1.md"), "C", "utf8");
     await writeFile(path.join(product, "rules.md"), "R", "utf8");
-    await writeFile(path.join(product, "skills", "skill-a"), "", "utf8");
+    await mkdir(path.join(product, "skills", "skill-a"), { recursive: true });
+    await writeFile(
+      path.join(product, "skills", "skill-a", "SKILL.md"),
+      "---\ndescription: Alpha\n---\n# A\n",
+      "utf8",
+    );
     await writeFile(path.join(product, "subagents.md"), "S", "utf8");
     await writeFile(path.join(root, "AGENTS.md"), "REPO AGENTS — must not inject", "utf8");
 
@@ -29,6 +34,7 @@ describe("WorkspaceInjector", () => {
       "## Skills",
       "## Subagents",
     ]);
+    expect(out.blocks.join("\n")).toContain("**skill-a**");
     expect(out.blocks.join("\n")).not.toContain("REPO AGENTS");
   });
 

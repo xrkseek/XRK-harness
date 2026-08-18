@@ -18,6 +18,9 @@
     "@xrkseek/core-session": "workspace:*",
     "@xrkseek/core-tools": "workspace:*",
     "@xrkseek/exec-fs": "workspace:*",
+    "@xrkseek/exec-web": "workspace:*",
+    "@xrkseek/exec-lsp": "workspace:*",
+    "@xrkseek/exec-pty": "workspace:*",
     "@xrkseek/exec-shell": "workspace:*",
     "@xrkseek/exec-subprocess": "workspace:*",
     "@xrkseek/llm-registry": "workspace:*",
@@ -26,7 +29,8 @@
     "@xrkseek/server-config": "workspace:*",
     "@xrkseek/server-face": "workspace:*",
     "@xrkseek/server-http": "workspace:*",
-    "@xrkseek/server-loader": "workspace:*"
+    "@xrkseek/server-loader": "workspace:*",
+    "@xrkseek/workspace": "workspace:*"
   },
   "devDependencies": {
     "@xrkseek/llm-replay": "workspace:*",

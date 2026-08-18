@@ -134,6 +134,11 @@ index.html 由 host 注入 `__DSH_BOOT__` / `__XRK_BOOT__`（`boot.json` merge `
 | `XRK_POLICY_FILE` | policy JSON |
 | `XRK_MCP_SERVERS` | MCP 服务器 JSON（`command` 或 `url`） |
 | `XRK_MCP_ALLOW` | `1`/`true` → 本进程 `mcp.connect` allow |
+| `XRK_TAVILY_API_KEY` | Tavily 搜索；缺省时 `web_search` 仍登记、execute 失败 |
+| `XRK_BRAVE_SEARCH_API_KEY` | Brave Search；与 Tavily 都有且未钉 provider 时用 Tavily |
+| `XRK_WEB_SEARCH_PROVIDER` | 可选 `tavily` \| `brave` |
+| `XRK_LSP_COMMAND` | 语言服务器可执行文件；缺省时 `lsp` 仍登记、execute 失败 |
+| `XRK_LSP_ARGS` | 可选参数（空白分隔或 JSON 字符串数组） |
 
 ## CLI
 

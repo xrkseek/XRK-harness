@@ -12,6 +12,11 @@ import {
 import { createFsLocalProvider, createFsTools } from "@xrkseek/exec-fs";
 import { createBashTools, createLocalShell } from "@xrkseek/exec-shell";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
+import { createWebTools } from "@xrkseek/exec-web";
+import { createLspTools } from "@xrkseek/exec-lsp";
+import { createPtyTools } from "@xrkseek/exec-pty";
+import { createSkillTools } from "@xrkseek/workspace";
+import path from "node:path";
 
 export function createStandingToolRegistry(options: {
   readonly workspaceRoot: string;
@@ -19,14 +24,27 @@ export function createStandingToolRegistry(options: {
 }): ToolRegistry {
   const tools = createToolRegistry();
   const fs = createFsLocalProvider({ root: options.workspaceRoot });
+  const productDir = path.join(options.workspaceRoot, ".xrk");
   for (const tool of createFsTools(fs)) tools.register(tool);
   for (const tool of createStdTools()) tools.register(tool);
+  for (const tool of createSkillTools({ productDir })) tools.register(tool);
   const preset = options.preset ?? "minimal";
   if (preset === "harness" || preset === "server") {
     const shell = createLocalShell({
       subprocess: createLocalSubprocess(),
     });
     for (const tool of createBashTools(shell)) tools.register(tool);
+    for (const tool of createWebTools()) tools.register(tool);
+    for (const tool of createLspTools({
+      workspaceRoot: options.workspaceRoot,
+    })) {
+      tools.register(tool);
+    }
+    for (const tool of createPtyTools({
+      workspaceRoot: options.workspaceRoot,
+    })) {
+      tools.register(tool);
+    }
   }
   return tools;
 }

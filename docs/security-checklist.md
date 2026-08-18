@@ -14,6 +14,10 @@
 | Write-intent | `createWriteIntentGuard` | 默认 `apply_edit` 须先 `read_file` |
 | Sandbox argv | `exec-sandbox` + guard | Workspace cwd + DenyList（如危险 rm） |
 | Path jail | `exec-fs` `resolveWithinRoot` | 拒绝对路径与 `..` 逃逸 |
+| Web URL 卫生 | `exec-web` `assertHttpUrl` | 仅 http(s)、拒凭据；字面量 loopback/RFC1918/link-local；不跟跨源跳转。**无** DNS 再绑定 |
+| LSP 路径 | `exec-lsp` `resolveWithinRoot` | 查询文件必须落在 `workspaceRoot` 内 |
+| PTY cwd | `exec-pty` `resolvePtyCwd` | `terminal_open` cwd 必须落在 `workspaceRoot` 内；拒绝对 shell `SIGKILL` |
+| PTY native | `node-pty@1.2.0-beta.15` | NAPI prebuild（对照 DSH）；不必 VS C++ 源码编。Win inspector 为 no-op |
 | Tool output bound | pipeline `bound` + persist | 大结果外溢到 `.xrk/tool-outputs/` |
 | Code worker | `code-runtime` | `run_code` 进 worker（实验） |
 | Safety loop/mistake | `core-session` safety | soft/hard notice；可 abort turn |
@@ -27,6 +31,7 @@
 | 完整 policy 文件 schema | **v1 JSON 已有**（`policyRulesetJsonSchema`）；无热加载 / YAML |
 | Ask / 审批 UI | `ask` → pipeline `onApproval`；无 UI；HTTP 无人工审批流 |
 | TLS 终止 | 由反向代理负责 |
+| Web DNS 再绑定 | `exec-web` 只拦字面量私网 host；解析到内网的公网名不拦 |
 | 多租户鉴权 / RBAC | 单 key |
 | 供应链 SBOM / 签名发布 | 见 publishing 路线 |
 

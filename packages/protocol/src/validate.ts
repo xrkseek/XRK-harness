@@ -88,11 +88,20 @@ function parseToolResult(value: unknown, path: string): ToolResult {
   if (isError !== undefined && typeof isError !== "boolean") {
     throw new SessionEventParseError("isError must be boolean", path);
   }
+  const meta = value.meta;
+  if (meta !== undefined) {
+    if (meta === null || typeof meta !== "object" || Array.isArray(meta)) {
+      throw new SessionEventParseError("meta must be a JSON object", path);
+    }
+  }
   return {
     toolCallId: reqString(value, "toolCallId", path),
     name: reqString(value, "name", path),
     content: reqString(value, "content", path),
     ...(isError === true ? { isError: true as const } : {}),
+    ...(meta !== undefined
+      ? { meta: meta as Readonly<Record<string, unknown>> }
+      : {}),
   };
 }
 

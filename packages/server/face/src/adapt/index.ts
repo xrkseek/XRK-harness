@@ -27,6 +27,9 @@ export {
 } from "./tool-view.js";
 export {
   jobViews,
+  formatJobCompletionNotice,
+  isSettledJobStatus,
+  JOB_COMPLETION_MAX_WAKES,
   type FaceJobsSource,
   type JobView,
   type JobViewStatus,

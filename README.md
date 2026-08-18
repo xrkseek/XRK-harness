@@ -54,7 +54,7 @@ node apps/cli/dist/bin.js serve --preset server --workspace .
 
 ```text
 apps/cli · apps/web · apps/web-static   CLI · Face console · 产品壳（DSH 捕获）
-packages/*              30 个 @xrkseek 库（kernel · compose · core* · llm · exec* · server · mcp · …）
+packages/*              33 个 @xrkseek 库（kernel · compose · core* · llm · exec* · server · mcp · …）
 presets/                minimal | harness | server
 docs/                   规格 · ADR · modules 文件地图
 ```

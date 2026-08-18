@@ -119,13 +119,35 @@ export {
   createRunCodeTool,
 } from "@xrkseek/code-runtime";
 export {
+  createDefaultWebAccess,
+  createWebTools,
+  createHttpFetchProvider,
+  WEB_SEARCH_MAX_RESULTS,
+} from "@xrkseek/exec-web";
+export {
+  createDefaultLspAccess,
+  createLspTools,
+  createStdioLspService,
+  LSP_PROMPT_TEXT,
+} from "@xrkseek/exec-lsp";
+export {
+  createDefaultPtyAccess,
+  createPtyTools,
+  createTerminalSessionService,
+  PTY_PROMPT_TEXT,
+} from "@xrkseek/exec-pty";
+export {
   createWorkspaceInjector,
   resolveWorkspaceInject,
   createWorkspaceToolOutputPersist,
   applyRecipe,
   parseRecipeYaml,
   tryApplySlashRecipe,
+  tryApplySlashSkill,
+  createSlashResolver,
   loadOfficeRecipes,
+  createSkillTools,
+  listSkillsFromWorkspace,
 } from "@xrkseek/workspace";
 export {
   createPolicyEngine,

@@ -111,4 +111,55 @@ describe("presentToolEventView (DSH viewFor)", () => {
       }),
     ).toBeUndefined();
   });
+
+  it("replays a web search card from tool/result meta", () => {
+    const tool: Pick<ToolDefinition, "presentCall" | "presentResult"> = {
+      presentResult: (_args, res) => {
+        const meta = res.meta as
+          | { sources: unknown; truncated: boolean; answer?: string }
+          | undefined;
+        if (!meta) return undefined;
+        return {
+          card: "web",
+          kind: "search",
+          title: "q",
+          sources: meta.sources as never,
+          truncated: meta.truncated,
+          ...(meta.answer !== undefined ? { answer: meta.answer } : {}),
+        };
+      },
+    };
+    const event: SessionEvent = {
+      type: "tool/result",
+      ts: 2,
+      turnId: "t",
+      stepId: "s",
+      result: {
+        toolCallId: "c1",
+        name: "web_search",
+        content: "Sources: …",
+        meta: {
+          sources: [{ url: "https://example.com/" }],
+          truncated: false,
+          answer: "hi",
+        },
+      },
+    };
+    expect(
+      presentToolEventView(event, {
+        getTool: () => tool,
+        argsFor: () => ({ name: "web_search", args: { query: "q" } }),
+      }),
+    ).toEqual({
+      for: "result",
+      view: {
+        card: "web",
+        kind: "search",
+        title: "q",
+        sources: [{ url: "https://example.com/" }],
+        truncated: false,
+        answer: "hi",
+      },
+    });
+  });
 });

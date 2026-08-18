@@ -24,7 +24,14 @@ import {
   type FaceProjectionRegistry,
 } from "./projections/index.js";
 import { FaceInboxWireMaps, FaceToolArgMaps, toMuxSessionEvent } from "./adapt/index.js";
-import { jobViews, type FaceJobsSource, type JobView } from "./adapt/job-view.js";
+import {
+  formatJobCompletionNotice,
+  isSettledJobStatus,
+  jobViews,
+  JOB_COMPLETION_MAX_WAKES,
+  type FaceJobsSource,
+  type JobView,
+} from "./adapt/job-view.js";
 import { toQueueItems } from "./queue.js";
 import type {
   FaceProcessPlugin,
@@ -98,6 +105,11 @@ export interface CreateFaceRuntimeOptions {
   readonly tools?: ToolRegistry;
   /** Standing / unowned jobs (DSH `ctx.jobs` without an owner). */
   readonly jobs?: FaceJobsSource;
+  /**
+   * When true, `/permission` refuses sandbox mode changes while PTY sessions
+   * are open or spawning (CV DSH terminal-bash sandbox fence).
+   */
+  readonly hasPtyActivity?: () => boolean;
   /** Host input modalities; default text-only. */
   readonly inputModalities?: readonly ("text" | "image")[];
   /** Optional JSON sidecar for parent→child links (JSONL session dir). */
@@ -142,6 +154,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const rememberedTools = new Map<string, ToolRegistry>();
   const rememberedJobs = new Map<string, NonNullable<AgentHandle["jobs"]>>();
   const jobUnsubs = new Map<string, () => void>();
+  /** Job ids already notified (or already settled at bind). */
+  const reportedJobIds = new Map<string, Set<string>>();
+  /** Consecutive completion-wakes since the last human-promoted admit. */
+  const spentWakes = new Map<string, number>();
+  const noticeAdmitIds = new Set<string>();
 
   const hasJobsRegistry = (): boolean =>
     options.jobs !== undefined || rememberedJobs.size > 0;
@@ -175,15 +192,58 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     jobUnsubs.delete(sessionId);
     if (!agent.jobs) {
       rememberedJobs.delete(sessionId);
+      reportedJobIds.delete(sessionId);
       return;
     }
     rememberedJobs.set(sessionId, agent.jobs);
+    const reported = new Set<string>();
+    for (const job of agent.jobs.list()) {
+      if (isSettledJobStatus(job.status)) reported.add(job.id);
+    }
+    reportedJobIds.set(sessionId, reported);
     jobUnsubs.set(
       sessionId,
       agent.jobs.onJobsChanged(() => {
         publishJobs(sessionId);
+        deliverOwnedJobCompletions(sessionId, agent);
       }),
     );
+  };
+
+  /**
+   * DSH tool-jobs `onJobDone`: idle + wake budget → followup (admit + wake);
+   * busy → inject (admit + wake, promotes at next turn entry); idle over budget
+   * → inject without followup (admit only; waits for other wake).
+   */
+  const deliverOwnedJobCompletions = (
+    sessionId: string,
+    agent: AgentHandle,
+  ): void => {
+    if (!agent.jobs) return;
+    const reported = reportedJobIds.get(sessionId) ?? new Set<string>();
+    for (const job of agent.jobs.list()) {
+      if (
+        !isSettledJobStatus(job.status) ||
+        reported.has(job.id) ||
+        job.reported === true
+      ) {
+        continue;
+      }
+      reported.add(job.id);
+      const idle = !agent.isBusy();
+      const spent = spentWakes.get(sessionId) ?? 0;
+      const followup = idle && spent < JOB_COMPLETION_MAX_WAKES;
+      if (followup) spentWakes.set(sessionId, spent + 1);
+      const receipt = agent.admit(
+        formatJobCompletionNotice(job, job.outputLimitBytes),
+        {
+          delivery: "queue",
+        },
+      );
+      noticeAdmitIds.add(receipt.admitId);
+      if (followup || !idle) options.drain.wake(sessionId);
+    }
+    reportedJobIds.set(sessionId, reported);
   };
 
   const getTool = (sessionId: string, name: string) => {
@@ -228,6 +288,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         jobUnsubs.get(sessionId)?.();
         jobUnsubs.delete(sessionId);
         rememberedJobs.delete(sessionId);
+        reportedJobIds.delete(sessionId);
+        spentWakes.delete(sessionId);
         await options.invalidateAgent!(sessionId);
       }
     : undefined;
@@ -289,6 +351,13 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         eventSeq,
         flattenText(frozen.content),
       );
+    }
+    if (frozen.type === "prompt/promoted") {
+      if (noticeAdmitIds.has(frozen.admitId)) {
+        noticeAdmitIds.delete(frozen.admitId);
+      } else {
+        spentWakes.delete(id);
+      }
     }
     if (
       frozen.type === "prompt/admitted" ||
@@ -438,6 +507,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       ? { defaultAgentPreset: options.defaultAgentPreset }
       : {}),
     ...(invalidateAgent ? { invalidateAgent } : {}),
+    ...(options.hasPtyActivity
+      ? { hasPtyActivity: options.hasPtyActivity }
+      : {}),
   };
   runtimeBox.current = runtime;
   goals.bind(runtime);

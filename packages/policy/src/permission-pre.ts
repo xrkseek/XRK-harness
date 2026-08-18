@@ -6,7 +6,13 @@ export const READ_ONLY_DENIED_TOOLS = new Set([
   "write_file",
   "bash",
   "bash_jobs",
+  "bash_kill",
+  "job_kill",
   "run_code",
+  "terminal_open",
+  "terminal_send",
+  "terminal_signal",
+  "terminal_close",
 ]);
 
 /** Pre-execute: deny write/shell tools under `sandbox/mode: read-only`. */

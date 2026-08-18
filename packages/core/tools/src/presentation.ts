@@ -118,13 +118,43 @@ export interface ReadResultView {
   readonly content?: readonly TextBlock[];
 }
 
+/** One citeable web-search source (DSH `WebSource`). */
+export interface WebSource {
+  readonly url: string;
+  readonly title?: string;
+  readonly snippet?: string;
+  readonly publishedAt?: string;
+}
+
+export interface WebSearchResultView {
+  readonly card: "web";
+  readonly kind: "search";
+  readonly title?: string;
+  readonly sources: readonly WebSource[];
+  readonly answer?: string;
+  readonly truncated: boolean;
+}
+
+export interface WebFetchResultView {
+  readonly card: "web";
+  readonly kind: "fetch";
+  readonly title?: string;
+  readonly url: string;
+  readonly statusCode: number;
+  readonly truncated: boolean;
+}
+
+export type WebResultView = WebSearchResultView | WebFetchResultView;
+
 export type ToolResultView =
   | GenericResultView
   | TerminalResultView
   | DiffResultView
   | SearchMatchesResultView
   | SearchPathsResultView
-  | ReadResultView;
+  | ReadResultView
+  | WebSearchResultView
+  | WebFetchResultView;
 
 export type ToolEventView =
   | { readonly for: "call"; readonly view: ToolCallView }
@@ -134,6 +164,7 @@ export type ToolEventView =
 export interface PresentableToolResult {
   readonly content: string;
   readonly isError?: boolean;
+  readonly meta?: Readonly<Record<string, unknown>>;
 }
 
 export type ParsedExitStatus =

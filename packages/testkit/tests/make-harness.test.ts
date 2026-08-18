@@ -21,6 +21,14 @@ describe("makeHarness", () => {
     const names = h.composition.tools.list().map((t) => t.name);
     expect(names).toContain("todo_write");
     expect(names).toContain("ask_user");
+    expect(names).toContain("web_search");
+    expect(names).toContain("web_fetch");
+    expect(names).toContain("skill");
+    expect(names).toContain("lsp");
+    expect(names).toContain("terminal_open");
+    expect(names).toContain("job_output");
+    expect(names).toContain("job_kill");
+    expect(names).toContain("job_list");
     expect(names).not.toContain("run_code");
   });
 
@@ -139,6 +147,56 @@ parameters:
     const userMsg = events.find((e) => e.type === "user/message");
     expect(userMsg && "content" in userMsg ? userMsg.content : "").toContain(
       "EXPANDED-USER",
+    );
+  });
+
+  it("slash skill expands into logged user message", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-skill-slash-"));
+    const dir = path.join(root, ".xrk", "skills", "office-ping");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      `---
+name: office-ping
+description: Ping
+---
+Do the ping.
+`,
+      "utf8",
+    );
+
+    let userText = "";
+    let systemText = "";
+    const llm = {
+      id: "skill-slash-cap",
+      async chat(req: {
+        messages: readonly { role: string; content: string }[];
+      }) {
+        systemText =
+          req.messages.find((m) => m.role === "system")?.content ?? "";
+        userText =
+          req.messages.find((m) => m.role === "user")?.content ?? "";
+        return { content: "ok" };
+      },
+    };
+
+    const composition = createMinimalComposition({
+      workspaceRoot: root,
+      llm,
+      workspaceInject: false,
+      slashRecipes: false,
+    });
+    const agent = await composition.createAgent();
+    await agent.continueTurn({ text: "/office-ping do this" });
+    expect(userText).toContain("<skill_content name=\"office-ping\">");
+    expect(userText).toContain("Do the ping.");
+    expect(userText).toContain("do this");
+    expect(systemText).not.toContain("## Recipe");
+
+    const events = composition.store.get(composition.sessionId).events;
+    const userMsg = events.find((e) => e.type === "user/message");
+    expect(userMsg && "content" in userMsg ? userMsg.content : "").toContain(
+      "<skill_content name=\"office-ping\">",
     );
   });
 });

@@ -33,7 +33,7 @@ Policy：`XRK_POLICY_FILE` → `provider.use`；ask → `approval/*` + `session.
 ## `session.prompt`
 
 ```text
-mode: queue | steer → admit（slash → recipe）→ wake drain（非阻塞）→ mux 流式
+mode: queue | steer → admit（slash → recipe / skill 写入 user）→ wake drain（非阻塞）→ mux 流式
 ```
 
 含图：须 `attachments` + `inputModalities` 含 `image`；先 `saveImages` 再 admit（失败不入账）。Host Face 默认 `text+image`。官方 DeepSeek 适配器未声明 `image` → loop 仍 `UnsupportedContentError`。`session.attachment` 仅返回本 session 事件引用过的 id。

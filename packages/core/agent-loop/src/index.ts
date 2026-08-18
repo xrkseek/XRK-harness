@@ -55,8 +55,8 @@ export interface AssembleOptions {
   /** When false, skip three-layer and use legacy system+history. Default true if assemble set. */
   readonly enabled?: boolean;
   /**
-   * Expand `/recipe-id …` before the user message is logged.
-   * Return undefined to keep raw text. Typically wired to workspace `tryApplySlashRecipe`.
+   * Expand `/id …` (recipe or skill) before the user message is logged.
+   * Return undefined to keep raw text. Typically wired to workspace `createSlashResolver`.
    */
   readonly resolveSlash?: (
     raw: string,

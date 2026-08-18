@@ -23,6 +23,7 @@ const toolResultSchema = {
     name: { type: "string" },
     content: { type: "string" },
     isError: { type: "boolean" },
+    meta: { type: "object" },
   },
   additionalProperties: false,
 } as const;

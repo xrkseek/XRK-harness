@@ -101,6 +101,7 @@ async function runFinalize(
   ctx.result = {
     content,
     ...(ctx.result.isError ? { isError: true as const } : {}),
+    ...(ctx.result.meta !== undefined ? { meta: ctx.result.meta } : {}),
   };
 }
 
@@ -271,6 +272,7 @@ export function createToolPipeline(
         ctx.result = {
           content: bounded.content,
           ...(ctx.result.isError ? { isError: true as const } : {}),
+          ...(ctx.result.meta !== undefined ? { meta: ctx.result.meta } : {}),
         };
         truncated = bounded.truncated;
         outputPaths = bounded.outputPaths;
