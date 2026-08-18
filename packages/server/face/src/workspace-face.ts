@@ -411,13 +411,18 @@ export async function workspaceDeleteDsh(
         : "workspace-move-invalid";
     return { ok: false, error: { code, message: result.reason } };
   }
-  const def = runtime.workspaces.get(runtime.workspaces.defaultId());
+  runtime.bus.publishHost({
+    type: "host/workspace-removed",
+    workspaceId,
+  });
+  const listed = runtime.workspaces.list(runtime.store.list());
+  const def = listed.items.find(
+    (w) => w.workspaceId === runtime.workspaces.defaultId(),
+  );
   if (def) {
     runtime.bus.publishHost({
       type: "host/workspace-changed",
-      workspace: runtime.workspaces.list(runtime.store.list()).items.find(
-        (w) => w.workspaceId === runtime.workspaces.defaultId(),
-      )!,
+      workspace: def,
     });
   }
   return {
@@ -425,7 +430,7 @@ export async function workspaceDeleteDsh(
     value: {
       workspaceId,
       movedSessionIds: result.movedSessionIds,
-      ...runtime.workspaces.list(runtime.store.list()),
+      ...listed,
     },
   };
 }
@@ -466,6 +471,10 @@ export async function workspaceInsertBeforeDsh(
     };
   }
   const listed = runtime.workspaces.list(runtime.store.list());
+  runtime.bus.publishHost({
+    type: "host/workspace-order-changed",
+    workspaceIds: listed.items.map((w) => w.workspaceId),
+  });
   return { ok: true, value: listed };
 }
 

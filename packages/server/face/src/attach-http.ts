@@ -9,6 +9,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
 import { approvalRequestedFrame } from "./approvals.js";
+import { questionRequestedFrame } from "./questions.js";
 import { toQueueItems } from "./queue.js";
 import {
   FACE_WS_PATHS,
@@ -233,6 +234,13 @@ export function attachFaceUpgrades(
         ws.send(
           JSON.stringify(
             serverRequestFrame(item.rpcId, approvalRequestedFrame(item)),
+          ),
+        );
+      }
+      for (const item of runtime.questions.listPending(sessionId)) {
+        ws.send(
+          JSON.stringify(
+            serverRequestFrame(item.rpcId, questionRequestedFrame(item)),
           ),
         );
       }

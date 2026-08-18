@@ -86,7 +86,44 @@ export type MuxFrame =
       readonly sessionId: string;
       readonly approvalId: string;
       readonly outcome: "allowed-once" | "rejected" | "cancelled" | "unavailable";
+    }
+  /** DSH `question/requested` — answerable server-request (rpcId on envelope). */
+  | {
+      readonly type: "question/requested";
+      readonly sessionId: string;
+      readonly questions: readonly FaceQuestionItem[];
+    }
+  | {
+      readonly type: "question/resolved";
+      readonly sessionId: string;
+      readonly questionRpcId: string;
+      readonly outcome: "answered" | "cancelled";
     };
+
+/** DSH `AskUserQuestionItem` (captured shell Zod). */
+export interface FaceQuestionItem {
+  readonly id: string;
+  readonly question: string;
+  readonly header?: string;
+  readonly detail?: string;
+  readonly options?: readonly {
+    readonly label: string;
+    readonly description?: string;
+  }[];
+  readonly multiSelect?: boolean;
+  readonly intent?: { readonly kind: "plan-review"; readonly approve: string };
+}
+
+/** DSH `AskUserQuestionAnswer`. */
+export interface FaceQuestionAnswer {
+  readonly answers: readonly FaceQuestionAnswerItem[];
+}
+
+export interface FaceQuestionAnswerItem {
+  readonly id: string;
+  readonly selected: readonly string[];
+  readonly custom?: string;
+}
 
 export type HostFrame =
   | {
@@ -95,6 +132,12 @@ export type HostFrame =
       readonly blank: boolean;
       readonly agentPreset?: string;
       readonly cwd?: string;
+      readonly parentSessionId?: string;
+      readonly origin?: "subagent";
+    }
+  | {
+      readonly type: "host/session-removed";
+      readonly sessionId: string;
     }
   | {
       readonly type: "host/session-status";
@@ -116,6 +159,14 @@ export type HostFrame =
         readonly createdAt: string;
         readonly updatedAt: string;
       };
+    }
+  | {
+      readonly type: "host/workspace-removed";
+      readonly workspaceId: string;
+    }
+  | {
+      readonly type: "host/workspace-order-changed";
+      readonly workspaceIds: readonly string[];
     }
   | {
       readonly type: "host/archived-sessions-changed";

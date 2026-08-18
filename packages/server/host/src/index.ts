@@ -22,11 +22,13 @@ import {
 } from "@xrkseek/server-http";
 import {
   attachFaceUpgrades,
+  bindAskUserTool,
   createFaceRuntime,
   effectiveHostApiKey,
   isLoopbackAddress,
   tryHandleFaceHttp,
   type FaceApprovalBroker,
+  type FaceQuestionBroker,
 } from "@xrkseek/server-face";
 import {
   createPluginLoader,
@@ -38,8 +40,10 @@ import type { IncomingMessage } from "node:http";
 import path from "node:path";
 import { createHostAgentCache } from "./agent-cache.js";
 import { loadMcpToolPlugins, parseMcpServersEnv } from "./mcp-wire.js";
+import { createStandingToolRegistry } from "./standing-tools.js";
 
 export { createHostAgentCache, HOST_PLUGINS_KEY } from "./agent-cache.js";
+export { createStandingToolRegistry } from "./standing-tools.js";
 export type { AgentResolveOpts, HostAgentCache } from "./agent-cache.js";
 export {
   loadMcpToolPlugins,
@@ -169,7 +173,10 @@ export function createHostManager(): HostManager {
 
       const ensureSession = (sid?: string) => newSession(store, sid).id;
 
-      const faceBox: { approvals?: FaceApprovalBroker } = {};
+      const faceBox: {
+        approvals?: FaceApprovalBroker;
+        questions?: FaceQuestionBroker;
+      } = {};
 
       const lineage: { parentOf: (sessionId: string) => string | undefined } = {
         parentOf: () => undefined,
@@ -196,6 +203,11 @@ export function createHostManager(): HostManager {
             });
             if (faceBox.approvals) {
               agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
+            }
+            if (faceBox.questions && agent.tools) {
+              bindAskUserTool(agent.tools, (q, signal) =>
+                faceBox.questions!.askText(sessionId, q, signal),
+              );
             }
             return agent;
           },
@@ -251,6 +263,10 @@ export function createHostManager(): HostManager {
         store,
         resolveAgent,
         workspaceRoot: config.runtime.workspaceRoot,
+        tools: createStandingToolRegistry({
+          workspaceRoot: config.runtime.workspaceRoot,
+          preset: config.runtime.preset,
+        }),
         version: "0.0.0",
         defaultAgentPreset: config.runtime.preset,
         registry: createProviderRegistry(),
@@ -296,6 +312,7 @@ export function createHostManager(): HostManager {
         },
       });
       faceBox.approvals = faceRuntime.approvals;
+      faceBox.questions = faceRuntime.questions;
       lineage.parentOf = (sessionId) =>
         faceRuntime.subagents.getByChild(sessionId)?.parentSessionId;
 

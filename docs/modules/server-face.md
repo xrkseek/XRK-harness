@@ -31,7 +31,7 @@ HTTP/WS (attach-http)
 | `wire/rpc-error.ts` | XRK code → DSH 闭集                    | 未知码折 `internal`         |
 | `wire/paths.ts`     | `/api/<method>` · WS · `/api/respond`  | 点号 unary；Typert `ns/method` 白名单 |
 | `wire/loopback.ts`  | 回环地址判定                           | 产品壳同源免 API key               |
-| `wire/respond.ts`   | 解析 `client-response` · 结算审批      | 回执 `accepted` / `reason`  |
+| `wire/respond.ts`   | 解析 `client-response` · 审批后提问    | 回执 `accepted` / `reason`；`cancelled` 走提问 |
 | `wire/http-io.ts`   | readBody / sendJson                    |                             |
 | `wire/index.ts`     | 接线导出                               |                             |
 
@@ -42,10 +42,10 @@ HTTP/WS (attach-http)
 | `index.ts`       | 包导出                       | 对外 API 面                                     |
 | `types.ts`       | `FaceRpcResult` · 帧类型     | handler=`FaceRpcFail`；线上=`FaceRpcError`      |
 | `context.ts`     | `FaceRuntime` 形状           | drain · store · maps · policy 可选              |
-| `runtime.ts`     | `createFaceRuntime`          | 组装 bus/seq/projections/approvals/inbox        |
+| `runtime.ts`     | `createFaceRuntime`          | 组装 bus/seq/projections/approvals/questions |
 | `dispatch.ts`    | **RPC 路由表**               | 未知 method → NI；新方法在此登记                |
-| `handlers/`      | 按域 handler                 | `session` · `host` · `catalog` · `remotes` · `cordis-stub` |
-| `attach-http.ts` | HTTP 挂载 + WS · mux 重连基线 | 调用 `wire/`；pending 补 queue / 审批           |
+| `handlers/`      | 按域 handler                 | `session` · `host` · `catalog` · `remotes` · `cordis-stub` · `session-added` |
+| `attach-http.ts` | HTTP 挂载 + WS · mux 重连基线 | pending 补 queue / 审批 / 提问 |
 | `bus.ts`         | mux/host 订阅扇出            | `publishMux(frame, rpcId?)` 审批用稳定 id       |
 | `seq.ts`         | Face 1-based seq 时钟        | 与 history 对齐                                 |
 
@@ -55,6 +55,7 @@ HTTP/WS (attach-http)
 | -------------------- | ---------------------------------------------- | ---------------------------------------------- |
 | `queue.ts`           | `session/queue` 项形：`{id,placement,message}` | 勿退回扁平 `content`                           |
 | `approvals.ts`       | policy ask · `approvalRequestedFrame`      | 稳定 rpcId；`session.respondApproval` 仍可用 |
+| `questions.ts`       | DSH user-questions · `bindAskUserTool`     | `question/requested`；`/api/respond` 先审批后提问 |
 | `slash.ts`           | recipe catalog · `commands/execute`            | 插件 command 优先；miss → `undefined`（不入账） |
 | `plugin-inventory.ts` | `pluginInventory/list` 投影                    | 进程插件 + boot；cordis = failed |
 | `session-search.ts`  | `session.search`                               | query 1..500 · 禁 NUL · 最多 20 · 最近活动优先 · 含 admit/safety |
@@ -74,7 +75,7 @@ HTTP/WS (attach-http)
 | `host-open-path.ts`       | `host.openPath` · `canOpenNativePath`   | 仅绝对路径；Win/mac/Linux 可开 |
 | `host-pick-directory.ts`  | `host.pickDirectory`                    | 系统选目录；取消 `null`；缺 picker 用 `directory-picker-unavailable` |
 | `workspace-face.ts`       | workspace.* Face                        | 路径不得逃出 root        |
-| `workspace-registry.ts`   | DSH 形 workspace 注册表                 |                          |
+| `workspace-registry.ts`   | DSH 形 workspace 注册表                 | `workspaceIdOf`；delete 发 removed；insertBefore 发 order |
 | `settings-credentials.ts` | settings.* · credentials.*              | 密钥不入库；openDocument 忽略客户端 path |
 | `dsh-schema.ts`           | settings namespace schemastery 信封     | `{ uid, refs }`；JSON Schema 壳读不了 |
 
@@ -120,13 +121,17 @@ HTTP/WS (attach-http)
 | `tests/session-export.test.ts`   | HEAD/GET ZIP · 子会话 · 附件           |
 | `tests/mux-baseline.test.ts`     | 重连 queue                   |
 | `tests/inbox-wire.test.ts`       | splice 投影                  |
-| `tests/tool-view.test.ts`        | terminal/read/diff/search 卡 · 错误回 generic |
+| `tests/tool-view.test.ts`        | lookup only；无 getTool 则没 view |
+| `tests/standing-tools.test.ts`   | 冷 history 用 standing registry，不 wake agent |
+| `tests/jobs.test.ts`             | `session/jobs` 基线非空才发；变更可推 `[]` |
 | `tests/commands.test.ts`         | `commands/list` · `commands/execute` · `pluginInventory/list` · Cordis stub |
 | `tests/wire.test.ts`             | respond 解析 · 路径                        |
 | `tests/rpc-error.test.ts`        | DSH 错误码映射                             |
 | `tests/approval.test.ts`         | ask → respondByRpcId                       |
+| `tests/questions.test.ts`        | question/requested · cancelled · ask_user bind · mux 重连 |
 | `tests/subagent.test.ts`         | create-with-parent · list/history/prompt/interrupt · fork 登记 |
 | `tests/workspace.test.ts`        | list/create/rename/archive · delete/insert* |
+| `tests/host-frames.test.ts`      | session-added 子会话字段 · workspace-removed / order-changed · fork |
 
 ## 已知诚实拒绝 / 空面
 

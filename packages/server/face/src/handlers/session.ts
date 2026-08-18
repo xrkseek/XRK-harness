@@ -13,6 +13,7 @@ import { SessionTitleInvalidError } from "../projections/index.js";
 import { parseSearchQuery, searchSessions } from "../session-search.js";
 import { durablePromptContent, type PromptWirePart } from "../durable-prompt.js";
 import { asRecord, type FaceHandler } from "./types.js";
+import { publishSessionAdded } from "./session-added.js";
 
 export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   const p = asRecord(payload);
@@ -96,13 +97,7 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   }
   const bound =
     runtime.sessionAgentPresets.get(sessionId) ?? agentPreset;
-  runtime.bus.publishHost({
-    type: "host/session-added",
-    sessionId,
-    blank: true,
-    cwd: attach.cwd,
-    ...(bound ? { agentPreset: bound } : {}),
-  });
+  publishSessionAdded(runtime, sessionId);
   if (workspace) {
     runtime.bus.publishHost({
       type: "host/workspace-changed",
@@ -547,6 +542,12 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
   }
 
   runtime.watchSession(child.id);
+  const parentCwd = runtime.sessionCwds.get(sessionId);
+  if (parentCwd) runtime.sessionCwds.set(child.id, parentCwd);
+  const parentWs =
+    runtime.workspaces.workspaceIdOf(sessionId) ??
+    runtime.workspaces.defaultId();
+  const workspace = runtime.workspaces.attachSession(child.id, parentWs);
   const title = runtime.projections.snapshot(sessionId).values.title;
   runtime.subagents.attach({
     parentSessionId: sessionId,
@@ -554,6 +555,13 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
     mode: "continuable",
     label: typeof title === "string" && title.trim() ? title.trim() : "fork",
   });
+  publishSessionAdded(runtime, child.id);
+  if (workspace) {
+    runtime.bus.publishHost({
+      type: "host/workspace-changed",
+      workspace,
+    });
+  }
   return {
     ok: true,
     value: {

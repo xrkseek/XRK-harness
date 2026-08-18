@@ -5,6 +5,9 @@ export type {
   FaceRpcRequest,
   FaceRpcResponse,
   FaceRpcResult,
+  FaceQuestionAnswer,
+  FaceQuestionAnswerItem,
+  FaceQuestionItem,
   HostFrame,
   MuxFrame,
   RpcId,
@@ -196,3 +199,13 @@ export {
   type FaceApprovalHooks,
   type PendingApprovalItem,
 } from "./approvals.js";
+export {
+  FaceQuestionBroker,
+  FaceQuestionError,
+  bindAskUserTool,
+  formatQuestionAnswer,
+  questionRequestedFrame,
+  questionResolvedFrame,
+  type FaceQuestionHooks,
+  type PendingQuestionItem,
+} from "./questions.js";

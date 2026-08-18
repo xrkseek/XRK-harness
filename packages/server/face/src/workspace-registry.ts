@@ -42,6 +42,11 @@ export class FaceWorkspaceRegistry {
     return "ws_default";
   }
 
+  /** Live (non-archived) workspace owning this session, if any. */
+  workspaceIdOf(sessionId: string): string | undefined {
+    return this.membership.get(sessionId);
+  }
+
   get(workspaceId: string): Omit<FaceWorkspaceView, "sessionIds"> | undefined {
     return this.workspaces.get(workspaceId);
   }
