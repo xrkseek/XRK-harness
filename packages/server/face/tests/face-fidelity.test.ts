@@ -190,6 +190,18 @@ describe("Face adapt / slash / queue / presets", () => {
       value: { sessionId, agentPreset: "harness" },
     });
     expect(runtime.sessionAgentPresets.get(sessionId)).toBe("harness");
+
+    const copy = await dispatchFaceMethod(runtime, "agentPreset.copy", "cp", {
+      agentPreset: "minimal",
+    });
+    expect(copy.result.ok).toBe(false);
+    if (!copy.result.ok) {
+      expect(copy.result.error.code).toBe("agent-preset-read-only");
+      expect(copy.result.error.details).toMatchObject({
+        agentPreset: "minimal",
+        reason: "authorable: false",
+      });
+    }
   });
 
   it("stamps rpcId onto user/message via promote path", () => {

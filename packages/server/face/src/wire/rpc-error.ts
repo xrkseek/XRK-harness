@@ -221,6 +221,19 @@ export function mapFaceRpcError(
         },
       };
 
+    case "agent-preset-read-only":
+      return {
+        code: "agent-preset-read-only",
+        message,
+        details: {
+          agentPreset:
+            typeof hint?.agentPreset === "string"
+              ? hint.agentPreset
+              : message,
+          reason: typeof hint?.reason === "string" ? hint.reason : message,
+        },
+      };
+
     case "queue-item-not-found":
       return {
         code: "queue-item-not-found",

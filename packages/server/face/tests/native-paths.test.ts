@@ -27,6 +27,7 @@ describe("faceMethodFromPath", () => {
     expect(faceMethodFromPath("/api/respond")).toBeUndefined();
     expect(faceMethodFromPath("/api/commands/execute")).toBe("commands/execute");
     expect(faceMethodFromPath("/api/goals/create")).toBe("goals/create");
+    expect(faceMethodFromPath("/api/goal.create")).toBe("goal.create");
     expect(faceMethodFromPath("/api/messageFeedback/put")).toBe(
       "messageFeedback/put",
     );

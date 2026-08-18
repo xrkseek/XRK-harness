@@ -13,6 +13,16 @@ describe("mapFaceRpcError", () => {
       message: "nope",
       details: {},
     });
+    expect(
+      mapFaceRpcError("agent-preset-read-only", "locked", {
+        agentPreset: "minimal",
+        reason: "authorable: false",
+      }),
+    ).toEqual({
+      code: "agent-preset-read-only",
+      message: "locked",
+      details: { agentPreset: "minimal", reason: "authorable: false" },
+    });
     expect(mapFaceRpcError("unsupported-modality", "text-only")).toEqual({
       code: "attachment-error",
       message: "unsupported-modality: text-only",

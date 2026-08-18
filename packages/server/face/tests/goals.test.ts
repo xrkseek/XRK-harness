@@ -155,4 +155,16 @@ describe("goals remotes", () => {
     };
     expect(snap.goal.id).toBe(saved?.id);
   });
+
+  it("accepts DSH dotted goal.create as an alias of goals/create", async () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const runtime = bareRuntime(store);
+    const created = await dispatchFaceMethod(runtime, "goal.create", "g-dot", {
+      sessionId: session.id,
+      objective: "dotted unary",
+    });
+    expect(created.result.ok).toBe(true);
+    expect(runtime.goals.get(session.id)?.objective).toBe("dotted unary");
+  });
 });

@@ -337,3 +337,33 @@ describe("pluginInventory/list", () => {
     });
   });
 });
+
+describe("DSH shell remotes that must not 404 / NI", () => {
+  it("dynamicCordisRunner/inventory is an empty list (no Cordis apply)", async () => {
+    const runtime = bareRuntime();
+    expect(faceMethodFromPath("/api/dynamicCordisRunner/inventory")).toBe(
+      "dynamicCordisRunner/inventory",
+    );
+    const listed = await dispatchFaceMethod(
+      runtime,
+      "dynamicCordisRunner/inventory",
+      "c0",
+      { args: {} },
+    );
+    expect(listed.result).toEqual({ ok: true, value: [] });
+
+    const stopped = await dispatchFaceMethod(
+      runtime,
+      "dynamicCordisRunner/stopFromPanel",
+      "c1",
+      { args: { agentId: "s", pluginId: "p" } },
+    );
+    expect(stopped.result.ok).toBe(true);
+    if (stopped.result.ok) {
+      expect(stopped.result.value).toMatchObject({
+        ok: false,
+        reason: "not-running",
+      });
+    }
+  });
+});

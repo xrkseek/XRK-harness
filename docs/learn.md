@@ -16,9 +16,10 @@
 - **模型发现**：Face `llm.discoverModels` 对 `settingsNs` `llm` / `llm-pi-ai` 发 openai-chat `GET /models`（draft，不落盘）；失败 `model-discovery-failed` 且 details 不含密钥
 - **设置文档**：`settings.openDocument` 忽略浏览器 path；优先 `XRK_POLICY_FILE`，否则写红acted `{productDir}/host-settings.json`；Win/macOS/Linux 用系统默认打开（单测注入 opener）
 - **会话搜索**：`session.search` 扫 user/assistant/admit/safety，按最近活动排序，JSONL 仓同一扫描（非 FTS）
-- **预设只读**：`agentPreset.read` 返回 catalog markdown；copy/remove 因 `authorable: false` 仍 NI
+- **预设只读**：`agentPreset.read` 返回 catalog markdown；copy/remove/openDocument 回 `agent-preset-read-only`（`authorable: false`）
 - **消息反馈**：`messageFeedback/list/put/delete` 进程内 CAS（不写 session 日志）；`messageId` = `{turnId}:{stepId}`
-- **Goal**：`/goal` 或 `goals/create` 写入投影 `goal` 并 admit；pause/resume/edit/clear 走 CAS；`turn/end` 在 `armed` 时续轮，满 `maxGoalRounds`（默认 8）则 `blocked`。Host 旁路 `{XRK_SESSIONS_DIR}/goals.json`。不是独立 Goal fiber
+- **Goal**：`/goal` 或 `goals/create`（及 DSH 点号 `goal.create`）写入投影 `goal` 并 admit；pause/resume/edit/clear 走 CAS；`turn/end` 在 `armed` 时续轮，满 `maxGoalRounds`（默认 8）则 `blocked`。Host 旁路 `{XRK_SESSIONS_DIR}/goals.json`。不是独立 Goal fiber
+- **Cordis 面板**：`dynamicCordisRunner/inventory` 空列表；stop/undefine 为 not-running / plugin-missing。不 `apply(ctx)`、不跑动态包
 - **会话导出**：`HEAD/GET /api/session.export?sessionId=` 返回 ZIP（`sessions/{id}.jsonl` + 子会话 + 附件）；壳先 HEAD 再下载。旁路 JSON 用 tmp+rename；ZIP 条目名剥 `..`
 - **MCP**：stdio + streamable-http → `mcp__*` 工具；默认 `mcp.connect` deny；Host 经 `XRK_MCP_*`（`command` 或 `url`）接线；HTTP 转发 SDK `reconnectionOptions`（SSE 恢复）；`tools/list_changed` → `registerMcpTools` 热同步 / Host 刷新 `plugin.tools` + `invalidateAll`（不是进程 supervisor / Face 设置 UI）
 - **外壳 / 内核**：产品壳 = `apps/web-static`（DSH Web 捕获，不自研平行聊天 UI）；对接层 = `packages/server/face/src/wire/`；内核仍是 session 事件真源 · 工具瀑布 · compose（不嵌 Cordis Host）；`apps/web` 为 `?console=1` 验证台

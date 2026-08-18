@@ -25,7 +25,7 @@ const REST_API_SEGMENTS = new Set(["sessions", "chat"]);
 
 /**
  * DSH Web `connection.rpc.call("/api", endpoint)` 会打的 Remote namespace。
- * 未实现的 endpoint 仍要认领，回合法 DSH 信封（NI → `internal`），禁止 HTTP 404。
+ * 未实现的 endpoint 仍要认领，回合法 DSH 信封，禁止 HTTP 404。
  */
 export const FACE_REMOTE_NAMESPACES = new Set([
   "commands",
