@@ -21,6 +21,8 @@ export interface ShellJobInfo {
   readonly exitCode?: number | null;
   readonly stdout?: string;
   readonly stderr?: string;
+  /** Epoch ms when the job left `running`; absent while live. */
+  readonly finishedAt?: number;
 }
 
 export interface ShellStartJobResult {
@@ -41,7 +43,11 @@ export interface ShellService {
     opts?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<ShellStartJobResult>;
   listJobs(): Promise<readonly ShellJobInfo[]>;
+  /** Sync snapshot for Face `session/jobs` (DSH `jobs.list` is sync). */
+  listJobsNow(): readonly ShellJobInfo[];
   killJob(id: string): Promise<void>;
+  /** DSH `onJobsChanged` — fires after register / settle / kill. */
+  onJobsChanged(listener: () => void): () => void;
 }
 
 export interface ShellLocalOptions {
@@ -88,6 +94,21 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
   const maxJobs = options.maxJobs ?? 64;
   const jobs = new Map<string, InternalJob>();
   const seq = { n: 0 };
+  const changed = new Set<() => void>();
+
+  function notifyChanged(): void {
+    for (const listener of [...changed]) {
+      try {
+        listener();
+      } catch {
+        /* DSH contains observer throws so a commit still lands. */
+      }
+    }
+  }
+
+  function listNow(): readonly ShellJobInfo[] {
+    return [...jobs.values()].map((j) => j.info);
+  }
 
   function pruneIfNeeded(): void {
     if (jobs.size <= maxJobs) return;
@@ -114,6 +135,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
     };
     jobs.set(id, { info, handle });
     pruneIfNeeded();
+    notifyChanged();
 
     void handle
       .result()
@@ -126,7 +148,9 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
           exitCode: r.exitCode,
           stdout: r.stdout,
           stderr: r.stderr,
+          finishedAt: Date.now(),
         };
+        notifyChanged();
       })
       .catch((err: unknown) => {
         const cur = jobs.get(id);
@@ -136,7 +160,9 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
           ...cur.info,
           status: "failed",
           stderr: message,
+          finishedAt: Date.now(),
         };
+        notifyChanged();
       });
 
     return {
@@ -175,7 +201,11 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
     },
 
     async listJobs() {
-      return [...jobs.values()].map((j) => j.info);
+      return listNow();
+    },
+
+    listJobsNow() {
+      return listNow();
     },
 
     async killJob(id) {
@@ -187,7 +217,19 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
         return;
       }
       job.handle.kill();
-      job.info = { ...job.info, status: "killed" };
+      job.info = {
+        ...job.info,
+        status: "killed",
+        finishedAt: Date.now(),
+      };
+      notifyChanged();
+    },
+
+    onJobsChanged(listener) {
+      changed.add(listener);
+      return () => {
+        changed.delete(listener);
+      };
     },
   };
 }
@@ -298,3 +340,4 @@ export function createBashTools(shell: ShellService): ToolDefinition[] {
 }
 
 export { presentBashCall, presentBashResult } from "./present.js";
+export { toJobView, type ShellJobView, type ShellJobViewInput } from "./job-view.js";
