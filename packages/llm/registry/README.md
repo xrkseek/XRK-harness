@@ -6,4 +6,4 @@ Not a bare constants table — call `createProviderRegistry()` then `resolve` / 
 
 Specs: [docs/llm-provider-registry.md](../../../docs/llm-provider-registry.md).
 
-**Non-goals (R1+):** Anthropic / Gemini / Azure official / DeepSeek thinking / discoverModels.
+**Non-goals (R1+):** Anthropic / Gemini / Azure official protocol packages.

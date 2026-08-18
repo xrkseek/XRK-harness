@@ -23,6 +23,7 @@ export interface ProviderRegistry {
       id?: string;
       fetch?: typeof fetch;
       model?: string;
+      inputModalities?: readonly ("text" | "image")[];
     },
   ): LlmAdapter;
   listBrands(): readonly BrandEntry[];
@@ -144,12 +145,16 @@ export function createProviderRegistry(
           `llm-registry: createAdapter unsupported protocol: ${binding.protocol}`,
         );
       }
+      const vision =
+        extras?.inputModalities ??
+        (binding.provider === "deepseek" ? ["text"] : ["text", "image"]);
       return createOpenAiCompatibleAdapter({
         id: extras?.id ?? binding.provider,
         baseUrl: binding.baseUrl,
         path: binding.path,
         authMode: binding.authMode,
         model: extras?.model ?? binding.model,
+        inputModalities: vision,
         ...(secrets.apiKey !== undefined ? { apiKey: secrets.apiKey } : {}),
         ...(extras?.fetch ? { fetch: extras.fetch } : {}),
       });

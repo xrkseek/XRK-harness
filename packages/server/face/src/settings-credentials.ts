@@ -2,8 +2,11 @@
  * Face U2 settings + credentials — public settings writable; secrets never logged / never on disk.
  */
 
+import { access, constants, mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
+import { canOpenNativePath, openNativePath } from "./host-open-path.js";
 
 export type UiTheme = "system" | "light" | "dark";
 
@@ -35,6 +38,48 @@ export interface CredentialSlotView {
 const UI_THEMES = new Set<UiTheme>(["system", "light", "dark"]);
 const MAX_LOCALE = 32;
 const MAX_SECRET = 8192;
+
+/** DSH locale plugin only ships `zh` | `en`. */
+function dshLocalePreference(locale: string): "zh" | "en" {
+  const lower = locale.trim().toLowerCase();
+  return lower.startsWith("zh") ? "zh" : "en";
+}
+
+const LOCALE_SCHEMA = {
+  type: "object",
+  properties: { preference: { type: "string" } },
+};
+const THEME_SCHEMA = {
+  type: "object",
+  properties: { preference: { type: "string" } },
+};
+
+function applyDshUiPref(
+  runtime: FaceRuntime,
+  ns: string,
+  value: Record<string, unknown>,
+): void {
+  if (ns === "ui") {
+    if (typeof value.theme === "string" && UI_THEMES.has(value.theme as UiTheme)) {
+      runtime.uiSettings.theme = value.theme as UiTheme;
+    }
+    if (typeof value.locale === "string" && value.locale.trim()) {
+      runtime.uiSettings.locale = value.locale.trim().slice(0, MAX_LOCALE);
+    }
+  }
+  if (ns === "ui-theme") {
+    const pref = value.preference;
+    if (typeof pref === "string" && UI_THEMES.has(pref as UiTheme)) {
+      runtime.uiSettings.theme = pref as UiTheme;
+    }
+  }
+  if (ns === "locale") {
+    const pref = value.preference;
+    if (typeof pref === "string" && pref.trim()) {
+      runtime.uiSettings.locale = pref.trim().slice(0, MAX_LOCALE);
+    }
+  }
+}
 
 export function defaultUiSettings(): FaceUiSettings {
   return { theme: "system", locale: "en" };
@@ -521,11 +566,12 @@ export class FaceSettingsNamespaces {
   view(
     ns: string,
     base: Record<string, unknown> = {},
+    schema: unknown = {},
   ): DshSettingsNamespaceView {
     const slot = this.ensure(ns);
     return {
       ns,
-      schema: {},
+      schema,
       value: { ...base, ...slot.user },
       base,
       user: { ...slot.user },
@@ -572,6 +618,16 @@ export async function settingsDescribeDsh(
       theme: runtime.uiSettings.theme,
       locale: runtime.uiSettings.locale,
     }),
+    runtime.settingsNamespaces.view(
+      "locale",
+      { preference: dshLocalePreference(runtime.uiSettings.locale) },
+      LOCALE_SCHEMA,
+    ),
+    runtime.settingsNamespaces.view(
+      "ui-theme",
+      { preference: runtime.uiSettings.theme },
+      THEME_SCHEMA,
+    ),
   ];
   if (runtime.hostPublic) {
     namespaces.push(
@@ -584,7 +640,7 @@ export async function settingsDescribeDsh(
     ok: true,
     value: {
       writable: true,
-      hasDocument: false,
+      hasDocument: true,
       namespaces,
     },
   };
@@ -629,16 +685,11 @@ export async function settingsMutateDsh(
       error: { code: result.code, message: result.message },
     };
   }
-  // Keep XRK uiSettings in sync when ns=ui
-  if (ns === "ui") {
-    const v = result.view.value as Record<string, unknown>;
-    if (typeof v.theme === "string" && UI_THEMES.has(v.theme as UiTheme)) {
-      runtime.uiSettings.theme = v.theme as UiTheme;
-    }
-    if (typeof v.locale === "string" && v.locale.trim()) {
-      runtime.uiSettings.locale = v.locale.trim().slice(0, MAX_LOCALE);
-    }
-  }
+  applyDshUiPref(
+    runtime,
+    ns,
+    result.view.value as Record<string, unknown>,
+  );
   return { ok: true, value: result.view };
 }
 
@@ -709,4 +760,81 @@ export async function settingsReplaceDsh(
       ? { expectedRevision: p.expectedRevision }
       : {}),
   });
+}
+
+async function fileExists(target: string): Promise<boolean> {
+  try {
+    await access(target, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Host-resolved settings document. Ignores any client-supplied path.
+ * Prefer `XRK_POLICY_FILE` when present; otherwise a redacted dump under `.xrk/`.
+ */
+export async function prepareSettingsDocument(
+  runtime: FaceRuntime,
+): Promise<string> {
+  const pinned = runtime.settingsDocumentPath?.trim();
+  if (pinned && path.isAbsolute(pinned) && (await fileExists(pinned))) {
+    return pinned;
+  }
+  const dir =
+    runtime.productDir ?? path.join(runtime.workspaceRoot, ".xrk");
+  await mkdir(dir, { recursive: true });
+  const dump = path.join(dir, "host-settings.json");
+  const body = {
+    note: "Redacted Host snapshot. Secrets are never written here.",
+    ui: runtime.uiSettings,
+    host: runtime.hostPublic ?? null,
+    policyFile: pinned && path.isAbsolute(pinned) ? pinned : null,
+  };
+  await writeFile(dump, `${JSON.stringify(body, null, 2)}\n`, "utf8");
+  return dump;
+}
+
+/**
+ * DeepSeek pathless `settings.openDocument`.
+ * Wire value is only `{ opened: true }` (DSH schema); non-desktop → NI.
+ */
+export async function settingsOpenDocument(
+  runtime: FaceRuntime,
+): Promise<FaceRpcResult<{ opened: true }>> {
+  let target: string;
+  try {
+    target = await prepareSettingsDocument(runtime);
+  } catch (err) {
+    return {
+      ok: false,
+      error: {
+        code: "internal",
+        message: `settings document preparation failed: ${err instanceof Error ? err.message : String(err)}`,
+      },
+    };
+  }
+  if (!canOpenNativePath()) {
+    return {
+      ok: false,
+      error: {
+        code: "not-implemented",
+        message: "settings.openDocument unsupported on this platform",
+      },
+    };
+  }
+  try {
+    const open = runtime.openNativePath ?? openNativePath;
+    await open(target);
+    return { ok: true, value: { opened: true } };
+  } catch (err) {
+    return {
+      ok: false,
+      error: {
+        code: "internal",
+        message: `settings document open failed: ${err instanceof Error ? err.message : String(err)}`,
+      },
+    };
+  }
 }

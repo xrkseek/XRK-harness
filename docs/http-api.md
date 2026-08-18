@@ -7,7 +7,8 @@ Base URL: `http://127.0.0.1:8787` (override with `XRK_HOST` / `XRK_PORT`).
 ## Auth
 
 - `/health` — **public**
-- `/api/*` — requires `Authorization: Bearer <XRK_API_KEY>` or `x-api-key` when `XRK_API_KEY` is set
+- REST `/api/sessions` · `/api/chat` — `Authorization: Bearer <XRK_API_KEY>` or `x-api-key` when `XRK_API_KEY` is set
+- Face `/api/<method>` · `/api/respond` · WS `/api/events.*` — 同上；本机回环且无头时放行（DSH Web 同源）
 - Empty `XRK_API_KEY` disables auth (dev only)
 
 ## Endpoints
@@ -96,21 +97,21 @@ SSE stream of session events (replays history, then live).
 | Method | Path | 说明 |
 |--------|------|------|
 | `POST` | `/api/face/<method>` | 前缀路径 |
-| `POST` | `/api/<method>` | DeepSeek 原生（`method` 含 `.`，如 `session.prompt`） |
+| `POST` | `/api/<method>` | DeepSeek 原生：点号（`session.prompt`）或 Typert（`commands/execute`） |
+| `GET` / `HEAD` | `/api/session.export` | 会话 ZIP（`sessionId` · `includeDescendants`）；壳先 HEAD |
 | WS | `/api/face/events.*` 或 `/api/events.*` | mux / host 只下行 |
 
 信封：`{ rpcId, payload }` → `{ rpcId, result }`。  
-U1 methods：`host.describe` · `session.create|list|history|prompt|cancel|models|selectModel` · `llm.providers|models`。详见 [host-face.md](./host-face.md)。
+U1 methods：`host.describe` · `session.create|list|history|prompt|cancel|models|selectModel` · `llm.providers|models|discoverModels`。详见 [host-face.md](./host-face.md)。
 
-Web：`apps/web` Face console。生产同端口托管：
+Web：默认托管 `apps/web-static`（DSH 产品壳）。`apps/web` 为 Face console（`?console=1`）。
 
 ```bash
-pnpm --filter @xrkseek/harness-web build
-XRK_WEB_DIST=apps/web/dist pnpm exec … serve
+node apps/cli/dist/bin.js serve --preset minimal --workspace .
 # open http://127.0.0.1:8787/
 ```
 
-index.html 由 host 注入 `__DSH_BOOT__` / `__XRK_BOOT__`（Face console 花名册）。
+index.html 由 host 注入 `__DSH_BOOT__` / `__XRK_BOOT__`（`boot.json`；可再 merge `{XRK_PLUGINS_DIR}/web/boot.json`）。缺失的 `/plugins/…` 返回 404（不回退 SPA）。
 
 ## Env
 
@@ -123,11 +124,15 @@ index.html 由 host 注入 `__DSH_BOOT__` / `__XRK_BOOT__`（Face console 花名
 | `XRK_PRESET` | `minimal` \| `harness` \| `server` |
 | `XRK_CORS_ORIGIN` | CORS origin (`*` default) |
 | `XRK_RATE_LIMIT` | requests / IP / minute |
-| `XRK_PLUGINS_DIR` | optional plugin root → `loadAll` + factory `plugins` → preset `wireCompositionTools` |
+| `XRK_PLUGINS_DIR` | optional plugin root → `loadAll` + factory `plugins` → preset `wireCompositionTools`；`web/` 为客户端叠加 |
 | `XRK_LLM_PRESET` | Provider Registry brand id (`openrouter`, `deepseek`, …) — see [llm-provider-registry.md](./llm-provider-registry.md) |
 | `XRK_LLM_MODEL` | optional model override when preset set |
 | `XRK_LLM_BASE_URL` | optional baseUrl override (required for `custom` / `newapi` / …) |
-| `XRK_WEB_DIST` | SPA dist root (e.g. `apps/web/dist`); public GET + boot inject |
+| `XRK_WEB_DIST` | SPA dist root（默认 `apps/web-static`）；public GET + boot inject |
+| `XRK_SESSIONS_DIR` | JSONL 会话目录（省略 = 内存）；旁路 `subagents.json` · `goals.json` |
+| `XRK_POLICY_FILE` | policy JSON |
+| `XRK_MCP_SERVERS` | MCP 服务器 JSON（`command` 或 `url`） |
+| `XRK_MCP_ALLOW` | `1`/`true` → 本进程 `mcp.connect` allow |
 
 ## CLI
 

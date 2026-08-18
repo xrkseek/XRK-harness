@@ -12,4 +12,4 @@ const llm = createReplayAdapter([
 ]);
 ```
 
-耗尽 fixture 会抛错。支持 `signal` abort。
+耗尽 fixture 会抛错。支持 `signal` abort。`{ enableStream: true }` 时切成 `reasoning-delta` / `text-delta`（loop 测 thinking 流用）。

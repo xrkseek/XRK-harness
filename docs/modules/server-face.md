@@ -14,48 +14,67 @@ Host Face：Unary RPC + mux/host 双 WebSocket。规格：[host-face.md](../host
 
 ```text
 HTTP/WS (attach-http)
+  → wire/（信封 · 错误码 · /api/respond · 路径）
   → dispatchFaceMethod (dispatch)
-    → handler（本文件或 *.ts）
+    → handler
       → SessionStore / AgentHandle / policy / projections
   → mux/host 帧（bus · seq · adapt/*）
 ```
 
 ## 文件地图
 
+### 接线层（`wire/`）— 对 DSH Web 的协议面
+
+| 文件                | 作用                                   | 关键契约                    |
+| ------------------- | -------------------------------------- | --------------------------- |
+| `wire/envelope.ts`  | unary 解析 · ok/err · `server-request` | 错误必含 `details`          |
+| `wire/rpc-error.ts` | XRK code → DSH 闭集                    | 未知码折 `internal`         |
+| `wire/paths.ts`     | `/api/<method>` · WS · `/api/respond`  | 点号 unary；Typert `ns/method` 白名单 |
+| `wire/loopback.ts`  | 回环地址判定                           | 产品壳同源免 API key               |
+| `wire/respond.ts`   | 解析 `client-response` · 结算审批      | 回执 `accepted` / `reason`  |
+| `wire/http-io.ts`   | readBody / sendJson                    |                             |
+| `wire/index.ts`     | 接线导出                               |                             |
+
 ### 入口与运行时
 
-| 文件             | 作用                                  | 关键契约                                      |
-| ---------------- | ------------------------------------- | --------------------------------------------- |
-| `index.ts`       | 包导出                                | 对外 API 面                                   |
-| `types.ts`       | `FaceRpcResult` · 帧类型              | 错误必须 `{ ok:false, error:{code,message} }` |
-| `envelope.ts`    | 请求解析 · ok/err 响应                | rpcId 回显                                    |
-| `context.ts`     | `FaceRuntime` 形状                    | drain · store · maps · policy 可选            |
-| `runtime.ts`     | `createFaceRuntime`                   | 组装 bus/seq/projections/approvals/inbox      |
-| `dispatch.ts`    | **RPC 路由表**                        | 未知 method → NI；新方法在此登记              |
-| `attach-http.ts` | HTTP 路径 + WS upgrade · mux 重连基线 | pending 时补 `session/queue`                  |
-| `bus.ts`         | mux/host 订阅扇出                     |                                               |
-| `seq.ts`         | Face 1-based seq 时钟                 | 与 history 对齐                               |
+| 文件             | 作用                         | 关键契约                                        |
+| ---------------- | ---------------------------- | ----------------------------------------------- |
+| `index.ts`       | 包导出                       | 对外 API 面                                     |
+| `types.ts`       | `FaceRpcResult` · 帧类型     | handler=`FaceRpcFail`；线上=`FaceRpcError`      |
+| `context.ts`     | `FaceRuntime` 形状           | drain · store · maps · policy 可选              |
+| `runtime.ts`     | `createFaceRuntime`          | 组装 bus/seq/projections/approvals/inbox        |
+| `dispatch.ts`    | **RPC 路由表**               | 未知 method → NI；新方法在此登记                |
+| `handlers/`      | 按域 handler                 | `session` · `host` · `catalog` · `remotes`      |
+| `attach-http.ts` | HTTP 挂载 + WS · mux 重连基线 | 调用 `wire/`；pending 补 queue / 审批           |
+| `bus.ts`         | mux/host 订阅扇出            | `publishMux(frame, rpcId?)` 审批用稳定 id       |
+| `seq.ts`         | Face 1-based seq 时钟        | 与 history 对齐                                 |
 
 ### 会话 / 队列 / 审批
 
 | 文件                 | 作用                                           | 关键契约                                       |
 | -------------------- | ---------------------------------------------- | ---------------------------------------------- |
 | `queue.ts`           | `session/queue` 项形：`{id,placement,message}` | 勿退回扁平 `content`                           |
-| `approvals.ts`       | policy ask · `respondApproval`                 | 与 agent `setApprovalHandler` 对齐             |
-| `slash.ts`           | Face 侧 slash / recipe                         |                                                |
-| `session-search.ts`  | `session.search`                               | query 1..500 · 禁 NUL · 最多 20 · `hasMore`    |
+| `approvals.ts`       | policy ask · `approvalRequestedFrame`      | 稳定 rpcId；`session.respondApproval` 仍可用 |
+| `slash.ts`           | recipe catalog · `commands/execute`            | 插件 command 优先；miss → `undefined`（不入账） |
+| `plugin-inventory.ts` | `pluginInventory/list` 投影                    | 进程插件 + boot；cordis = failed |
+| `session-search.ts`  | `session.search`                               | query 1..500 · 禁 NUL · 最多 20 · 最近活动优先 · 含 admit/safety |
 | `skill-list.ts`      | `skill.list`                                   | 扫 `.xrk/skills/<id>/SKILL.md`；要 `sessionId` |
-| `presets-catalog.ts` | agentPreset 列表常量                           | authorable 面仍 NI                             |
+| `presets-catalog.ts` | agentPreset 列表常量                           | `read` 只读；创作面仍 NI                             |
+| `message-feedback.ts` | `messageFeedback/list/put/delete`             | 进程内 CAS；Typert 嵌套 ok；非 transcript |
+| `goal-store.ts`       | `goals/*` + `/goal`                            | 投影 sidecar；turn/end 续轮；`goals.json` |
+| `json-sidecar.ts`     | JSON 旁路落盘                                  | tmp+rename；失败不抛进 Face RPC          |
+| `session-export.ts`   | `GET/HEAD /api/session.export`                 | ZIP store；忽略客户端任意 path           |
+| `zip-store.ts`        | 无压缩 ZIP                                     | 条目名剥 `..`；无第三方 zip 依赖         |
 
 ### Host 本地 / 工作区 / 设置
 
 | 文件                      | 作用                                    | 关键契约                 |
 | ------------------------- | --------------------------------------- | ------------------------ |
 | `host-directory.ts`       | list/createDirectory · `fullyQualified` | 绝对路径；条目上限       |
-| `host-open-path.ts`       | `host.openPath` · `canOpenNativePath`   | 仅绝对路径；桌面平台可开 |
+| `host-open-path.ts`       | `host.openPath` · `canOpenNativePath`   | 仅绝对路径；Win/mac/Linux 可开 |
 | `workspace-face.ts`       | workspace.* Face                        | 路径不得逃出 root        |
 | `workspace-registry.ts`   | DSH 形 workspace 注册表                 |                          |
-| `settings-credentials.ts` | settings.* · credentials.*              | 密钥不入库               |
+| `settings-credentials.ts` | settings.* · credentials.*              | 密钥不入库；openDocument 忽略客户端 path |
 
 ### Wire 适配（`adapt/`）
 
@@ -78,7 +97,7 @@ HTTP/WS (attach-http)
 
 ## RPC 登记纪律（防 bug）
 
-1. **新方法**：在 `dispatch.ts` `HANDLERS` 增加一项；能跑 / 软降级 / NI 三选一写进 `host-face.md`。
+1. **新方法**：在 `dispatch.ts` `HANDLERS` 增加一项（实现放 `handlers/`）；能跑 / 软降级 / NI 三选一写进 `host-face.md`。
 2. **注释**：对象字面量里的块注释**禁止**写含 `*/` 的 glob（如 `skills/*/x`），会截断注释导致语法炸。用行注释或写 `<id>`。
 3. **payload**：先校验再动 store；失败用稳定 `error.code`。
 4. **副作用**：prompt admit 前钉 `rpcId`↔`admitId`（inbox / queue 依赖）。
@@ -88,12 +107,20 @@ HTTP/WS (attach-http)
 | 测                               | 覆盖                         |
 | -------------------------------- | ---------------------------- |
 | `tests/harness-path.test.ts`     | prompt → tool → cancel → ask |
-| `tests/session-search.test.ts`   | search 校验 / 命中 / hasMore |
-| `tests/open-path-skills.test.ts` | canOpenPath · skill.list     |
+| `tests/session-search.test.ts`   | search 校验 / 命中 / 近因 / JSONL |
+| `tests/open-path-skills.test.ts` | canOpenPath 三端 · skill.list     |
+| `tests/message-feedback.test.ts` | list/put/delete CAS · 嵌套 Typert |
+| `tests/goals.test.ts`            | create/pause CAS · `/goal` · max rounds |
+| `tests/session-export.test.ts`   | HEAD/GET ZIP · 子会话 · 附件           |
 | `tests/mux-baseline.test.ts`     | 重连 queue                   |
 | `tests/inbox-wire.test.ts`       | splice 投影                  |
-| `tests/dispatch.test.ts`         | 路由烟测                     |
+| `tests/commands.test.ts`         | `commands/list` · `commands/execute` · `pluginInventory/list` |
+| `tests/wire.test.ts`             | respond 解析 · 路径                        |
+| `tests/rpc-error.test.ts`        | DSH 错误码映射                             |
+| `tests/approval.test.ts`         | ask → respondByRpcId                       |
+| `tests/subagent.test.ts`         | create-with-parent · list/history/prompt/interrupt · fork 登记 |
+| `tests/workspace.test.ts`        | list/create/rename/archive · delete/insert* |
 
 ## 已知 NI
 
-- `llm.discoverModels` · `goal.*` · agentPreset 创作面 · `workspace.delete/insert*` · `settings.openDocument`
+- agentPreset 创作面（copy / remove / openDocument）

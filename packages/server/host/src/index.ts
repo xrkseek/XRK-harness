@@ -1,6 +1,7 @@
 import type { AgentHandle, AgentRunResult } from "@xrkseek/core-agent";
 import { createMemoryAttachmentStore } from "@xrkseek/attachment";
 import {
+  createJsonlSessionStore,
   createMemorySessionStore,
   createSessionDrainHub,
   newSession,
@@ -10,11 +11,12 @@ import {
 import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { createPolicyEngineFromFile } from "@xrkseek/policy";
 import type { HostConfig } from "@xrkseek/server-config";
-import { createHttpServer, type HarnessHttpServer, injectBootIntoHtml, resolveWebBootManifest } from "@xrkseek/server-http";
+import { createHttpServer, type HarnessHttpServer, injectBootIntoHtml, loadBootManifestFromWebDist, mergeWebBootManifests, resolveWebBootManifest } from "@xrkseek/server-http";
 import {
   attachFaceUpgrades,
   createFaceRuntime,
   effectiveHostApiKey,
+  isLoopbackAddress,
   tryHandleFaceHttp,
   type FaceApprovalBroker,
 } from "@xrkseek/server-face";
@@ -30,6 +32,7 @@ import { createHostAgentCache } from "./agent-cache.js";
 import { loadMcpToolPlugins, parseMcpServersEnv } from "./mcp-wire.js";
 
 export { createHostAgentCache, HOST_PLUGINS_KEY } from "./agent-cache.js";
+export type { AgentResolveOpts, HostAgentCache } from "./agent-cache.js";
 export {
   loadMcpToolPlugins,
   parseMcpServersEnv,
@@ -48,12 +51,32 @@ async function resolveOfficeAgentSeedDir(
   }
 }
 
+/** `{pluginsDir}/web` overlay: extra client.js + optional `boot.json`. */
+async function resolveWebPluginOverlay(
+  pluginsDir: string | undefined,
+): Promise<string | undefined> {
+  if (!pluginsDir) return undefined;
+  const overlay = path.resolve(pluginsDir, "web");
+  try {
+    await access(overlay);
+    return overlay;
+  } catch {
+    return undefined;
+  }
+}
+
+export type AgentImageResolver = (
+  attachmentId: string,
+) => Promise<{ readonly mediaType: string; readonly data: Uint8Array }>;
+
 export type AgentFactory = (input: {
   sessionId: string;
   store: SessionStore;
   workspaceRoot: string;
   /** Plugins loaded by host (`XRK_PLUGINS_DIR` / register). Wire via `wireCompositionTools`. */
   plugins: readonly RegisteredPlugin[];
+  /** Attachment bytes for vision user content (Host memory store). */
+  resolveImage?: AgentImageResolver;
 }) => Promise<AgentHandle>;
 
 /** Host-side drain control (admit wake / resume join). */
@@ -98,7 +121,10 @@ export function createHostManager(): HostManager {
   return {
     async spawn(config, factory) {
       const id = `host_${++seq}`;
-      const store = createMemorySessionStore();
+      const sessionsDir = config.runtime.sessionsDir?.trim();
+      const store: SessionStore = sessionsDir
+        ? createJsonlSessionStore(sessionsDir)
+        : createMemorySessionStore();
       const loader = createPluginLoader();
 
       let loadedPluginIds: string[] = [];
@@ -113,11 +139,13 @@ export function createHostManager(): HostManager {
       const mcpSpecs =
         config.runtime.mcpServers ??
         parseMcpServersEnv(process.env.XRK_MCP_SERVERS);
+      let invalidateAgents: () => Promise<void> = async () => {};
       if (mcpSpecs.length > 0) {
         const mcpPlugins = await loadMcpToolPlugins({
           specs: mcpSpecs,
           ...(policy ? { policy } : {}),
           allowConnect: Boolean(config.runtime.mcpAllowConnect),
+          onToolsChanged: () => invalidateAgents(),
         });
         for (const p of mcpPlugins) {
           if (loader.list().some((x) => x.id === p.id)) continue;
@@ -127,26 +155,43 @@ export function createHostManager(): HostManager {
       }
 
       const agentCache = createHostAgentCache(loader.list(), { hostId: id });
+      invalidateAgents = () => agentCache.invalidateAll();
       const lastDrainResult = new Map<string, AgentRunResult>();
+      const attachments = createMemoryAttachmentStore();
 
       const ensureSession = (sid?: string) => newSession(store, sid).id;
 
       const faceBox: { approvals?: FaceApprovalBroker } = {};
 
+      const lineage: { parentOf: (sessionId: string) => string | undefined } = {
+        parentOf: () => undefined,
+      };
+
       const resolveAgent = async (sessionId: string) => {
         // Cache composition binding only — never treat AgentHandle as transcript source (ADR-0003).
-        return agentCache.resolve(sessionId, async () => {
-          const agent = await factory({
-            sessionId,
-            store,
-            workspaceRoot: config.runtime.workspaceRoot,
-            plugins: loader.list(),
-          });
-          if (faceBox.approvals) {
-            agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
-          }
-          return agent;
-        });
+        return agentCache.resolve(
+          sessionId,
+          async () => {
+            const agent = await factory({
+              sessionId,
+              store,
+              workspaceRoot: config.runtime.workspaceRoot,
+              plugins: loader.list(),
+              resolveImage: async (attachmentId) => {
+                const stored = await attachments.readImage(attachmentId);
+                return {
+                  mediaType: stored.ref.mediaType,
+                  data: stored.data,
+                };
+              },
+            });
+            if (faceBox.approvals) {
+              agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
+            }
+            return agent;
+          },
+          { parentSessionId: lineage.parentOf(sessionId) },
+        );
       };
 
       const hub: SessionDrainHub = createSessionDrainHub({
@@ -184,6 +229,13 @@ export function createHostManager(): HostManager {
       const officeAgent = await resolveOfficeAgentSeedDir(
         config.runtime.workspaceRoot,
       );
+      const webOverlay = await resolveWebPluginOverlay(
+        config.runtime.pluginsDir,
+      );
+      const boot = mergeWebBootManifests(
+        resolveWebBootManifest(config.runtime.webDist),
+        webOverlay ? loadBootManifestFromWebDist(webOverlay) : undefined,
+      );
       const faceRuntime = createFaceRuntime({
         store,
         resolveAgent,
@@ -191,9 +243,20 @@ export function createHostManager(): HostManager {
         version: "0.0.0",
         defaultAgentPreset: config.runtime.preset,
         registry: createProviderRegistry(),
-        attachments: createMemoryAttachmentStore(),
-        // Vision routes not shipped yet — Host precheck rejects image prompts.
-        inputModalities: ["text"],
+        attachments,
+        // Face admits images; adapter `inputModalities` still gates the LLM call.
+        // Official DeepSeek brand stays text-only at the adapter.
+        inputModalities: ["text", "image"],
+        ...(sessionsDir
+          ? {
+              subagentPersistPath: path.join(sessionsDir, "subagents.json"),
+              goalPersistPath: path.join(sessionsDir, "goals.json"),
+            }
+          : {}),
+        plugins: loader.list(),
+        ...(config.runtime.webDist
+          ? { webPlugins: boot.entries.map((e) => ({ id: e.id })) }
+          : {}),
         hostPublic: {
           host: config.runtime.host,
           port: config.runtime.port,
@@ -211,6 +274,9 @@ export function createHostManager(): HostManager {
           ? { seedTemplateDirs: { "office-agent": officeAgent } }
           : {}),
         ...(policy ? { policy } : {}),
+        ...(config.runtime.policyFile
+          ? { settingsDocumentPath: path.resolve(config.runtime.policyFile) }
+          : {}),
         invalidateAgent: (sessionId) => agentCache.invalidate(sessionId),
         drain: {
           wake: (sessionId) => drain.wake(sessionId),
@@ -219,8 +285,10 @@ export function createHostManager(): HostManager {
         },
       });
       faceBox.approvals = faceRuntime.approvals;
+      lineage.parentOf = (sessionId) =>
+        faceRuntime.subagents.getByChild(sessionId)?.parentSessionId;
 
-      const faceCheckAuth = (r: { headers: IncomingMessage["headers"] }) => {
+      const faceCheckAuth = (r: IncomingMessage) => {
         const expected = effectiveHostApiKey(faceRuntime);
         if (!expected) return true;
         const auth = r.headers.authorization;
@@ -231,7 +299,9 @@ export function createHostManager(): HostManager {
             : undefined;
         const key =
           bearer ?? (typeof headerKey === "string" ? headerKey : undefined);
-        return key === expected;
+        if (key === expected) return true;
+        // DSH Web 同源不带 Authorization；本机回环放行。
+        return !key && isLoopbackAddress(r.socket.remoteAddress);
       };
 
       const http = createHttpServer({
@@ -248,11 +318,9 @@ export function createHostManager(): HostManager {
           ? {
               webStatic: {
                 root: config.runtime.webDist,
-                transformIndex: (html) =>
-                  injectBootIntoHtml(
-                    html,
-                    resolveWebBootManifest(config.runtime.webDist),
-                  ),
+                ...(webOverlay ? { extraRoots: [webOverlay] } : {}),
+                transformIndex: (html: string) =>
+                  injectBootIntoHtml(html, boot),
               },
             }
           : {}),

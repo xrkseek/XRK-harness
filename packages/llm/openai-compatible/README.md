@@ -1,6 +1,6 @@
 # @xrkseek/llm-openai-compatible
 
-OpenAI-compatible Chat Completions → `LlmAdapter`（非流式）。
+OpenAI-compatible Chat Completions → `LlmAdapter`（`chat()` 非流 JSON；默认另暴露 `stream()` SSE）。
 
 ```ts
 import { createOpenAiCompatibleAdapter } from "@xrkseek/llm-openai-compatible";
@@ -9,6 +9,7 @@ const llm = createOpenAiCompatibleAdapter({
   baseUrl: "https://api.openai.com/v1",
   apiKey: process.env.OPENAI_API_KEY,
   model: "gpt-4o-mini",
+  inputModalities: ["text", "image"],
 });
 ```
 

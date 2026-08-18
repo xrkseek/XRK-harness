@@ -124,4 +124,136 @@ describe("openai-compatible adapter", () => {
     expect(out.content).toBe("ok");
     expect(saw).toBe("k");
   });
+
+  it("parses optional reasoning_content", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: "answer",
+                  reasoning_content: "step by step",
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        )) as unknown as typeof fetch,
+    });
+    const out = await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(out.content).toBe("answer");
+    expect(out.reasoning).toBe("step by step");
+  });
+
+  it("streams reasoning-delta then text-delta then done", async () => {
+    const payload = [
+      JSON.stringify({
+        choices: [{ delta: { reasoning_content: "th" } }],
+      }),
+      JSON.stringify({
+        choices: [{ delta: { reasoning_content: "ink" } }],
+      }),
+      JSON.stringify({
+        choices: [{ delta: { content: "ans" } }],
+      }),
+    ]
+      .map((row) => `data: ${row}\n\n`)
+      .join("");
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        new Response(`${payload}data: [DONE]\n\n`, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        })) as unknown as typeof fetch,
+    });
+    expect(llm.stream).toBeTypeOf("function");
+    const events: { type: string; index?: number; text?: string }[] = [];
+    for await (const ev of llm.stream!({
+      messages: [{ role: "user", content: "hi" }],
+    })) {
+      events.push(ev);
+    }
+    const reasoning = events.filter((e) => e.type === "reasoning-delta");
+    expect(reasoning.length).toBeGreaterThanOrEqual(2);
+    expect(reasoning[0]).toMatchObject({ index: 0, text: "th" });
+    expect(reasoning[1]).toMatchObject({ index: 0, text: "ink" });
+    expect(events.some((e) => e.type === "text-delta" && e.index === 1)).toBe(
+      true,
+    );
+    const done = events.at(-1);
+    expect(done).toMatchObject({
+      type: "done",
+      content: "ans",
+      reasoning: "think",
+    });
+  });
+
+  it("sends image_url data URLs when image modality is enabled", async () => {
+    const png = Uint8Array.from(
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    );
+    let body: {
+      messages: { role: string; content: unknown }[];
+    } | undefined;
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      inputModalities: ["text", "image"],
+      fetch: (async (_u, init) => {
+        body = JSON.parse(String(init?.body)) as typeof body;
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "ok" } }],
+          }),
+          { status: 200 },
+        );
+      }) as unknown as typeof fetch,
+    });
+    const out = await llm.chat({
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "see" },
+            {
+              type: "image",
+              attachment: {
+                attachmentId: "sha256:x",
+                mediaType: "image/png",
+                bytes: png.byteLength,
+                width: 1,
+                height: 1,
+              },
+            },
+          ],
+        },
+      ],
+      resolveImage: async () => ({ mediaType: "image/png", data: png }),
+    });
+    expect(out.content).toBe("ok");
+    const content = body?.messages[0]?.content;
+    expect(Array.isArray(content)).toBe(true);
+    expect(content).toEqual(
+      expect.arrayContaining([
+        { type: "text", text: "see" },
+        {
+          type: "image_url",
+          image_url: {
+            url: expect.stringMatching(/^data:image\/png;base64,/),
+          },
+        },
+      ]),
+    );
+  });
 });

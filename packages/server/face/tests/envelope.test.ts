@@ -3,7 +3,7 @@ import {
   errResponse,
   okResponse,
   parseFaceRpcRequest,
-} from "../src/envelope.js";
+} from "../src/wire/envelope.js";
 
 describe("face envelope", () => {
   it("parses rpcId + payload", () => {
@@ -28,7 +28,19 @@ describe("face envelope", () => {
       rpcId: "r1",
       result: {
         ok: false,
-        error: { code: "not-implemented", message: "x" },
+        error: { code: "internal", message: "x", details: {} },
+      },
+    });
+    expect(errResponse("r2", "session-not-found", "sid")).toEqual({
+      type: "server-response",
+      rpcId: "r2",
+      result: {
+        ok: false,
+        error: {
+          code: "session-not-found",
+          message: "sid",
+          details: { sessionId: "sid" },
+        },
       },
     });
   });

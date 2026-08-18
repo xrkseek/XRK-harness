@@ -12,17 +12,14 @@ import path from "node:path";
 import type { ParsedArgs } from "../parse-args.js";
 import type { AgentFactory } from "@xrkseek/server-host";
 
-/** Prefer env/patch; else self-owned `apps/web/dist`, then capture shells. */
+/** Prefer env/patch; else DSH product capture, then self-built apps/web. */
 async function resolveWebDist(
   configured: string | undefined,
   workspaceRoot: string,
 ): Promise<string | undefined> {
   if (configured?.trim()) return path.resolve(configured.trim());
   const candidates = [
-    // Self-owned product shell (build: apps/web)
-    path.resolve(workspaceRoot, "apps", "web", "dist"),
-    path.resolve(process.cwd(), "apps", "web", "dist"),
-    // Tracked DSH capture (fallback UX reference)
+    // Product UI = captured DSH web (tracked)
     path.resolve(workspaceRoot, "apps", "web-static"),
     path.resolve(process.cwd(), "apps", "web-static"),
     // Local-only re-capture (gitignored)
@@ -30,6 +27,9 @@ async function resolveWebDist(
     path.resolve(process.cwd(), "vendor", "web-static"),
     path.resolve(workspaceRoot, "vendor", "dsh-web-static"),
     path.resolve(process.cwd(), "vendor", "dsh-web-static"),
+    // Face console / thin landing (not the product chat shell)
+    path.resolve(workspaceRoot, "apps", "web", "dist"),
+    path.resolve(process.cwd(), "apps", "web", "dist"),
   ];
   for (const dir of candidates) {
     try {
@@ -54,7 +54,7 @@ function factoryForPreset(
     });
   }
   // minimal — prefer Registry env LLM when XRK_LLM_PRESET is set
-  return async ({ sessionId, store, workspaceRoot: root, plugins }) => {
+  return async ({ sessionId, store, workspaceRoot: root, plugins, resolveImage }) => {
     const fromEnv = resolveLlmFromEnv(process.env);
     const composition = createMinimalComposition({
       workspaceRoot: root || workspaceRoot,
@@ -64,6 +64,7 @@ function factoryForPreset(
       plugins,
       ...(fromEnv ? { llm: fromEnv.adapter } : {}),
       ...(policy ? { policy } : {}),
+      ...(resolveImage ? { resolveImage } : {}),
     });
     return composition.createAgent();
   };

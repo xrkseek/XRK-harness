@@ -32,9 +32,22 @@ function extractSearchableTexts(events: readonly SessionEvent[]): string[] {
       if (text) out.push(text);
     } else if (e.type === "assistant/message" && typeof e.content === "string") {
       out.push(e.content);
+    } else if (e.type === "prompt/admitted") {
+      const text = flattenText(e.content);
+      if (text) out.push(text);
+    } else if (e.type === "safety/notice" && typeof e.content === "string") {
+      out.push(e.content);
     }
   }
   return out;
+}
+
+function lastEventTs(events: readonly SessionEvent[]): number {
+  let max = 0;
+  for (const e of events) {
+    if (e.ts > max) max = e.ts;
+  }
+  return max;
 }
 
 function bestSnippet(texts: readonly string[], needle: string): string | undefined {
@@ -93,26 +106,30 @@ export function parseSearchQuery(payload: unknown): FaceRpcResult<string> {
 }
 
 /**
- * In-memory session search over `user/message` + `assistant/message`.
- * One hit per session; newest sessions first (store.list order preserved when possible).
+ * Session search over `user/message` + `assistant/message` + pending admits.
+ * One hit per session; newest activity first. JSONL Host store is already
+ * eager-loaded, so persisted sessions are in the same scan.
  */
 export function searchSessions(
   store: SessionStore,
   query: string,
 ): SessionSearchValue {
-  const hits: SessionSearchItem[] = [];
-  let overflow = false;
+  const hits: (SessionSearchItem & { readonly lastTs: number })[] = [];
 
   for (const sessionId of store.list()) {
-    const texts = extractSearchableTexts(store.get(sessionId).events);
-    const snippet = bestSnippet(texts, query);
+    const events = store.get(sessionId).events;
+    const snippet = bestSnippet(extractSearchableTexts(events), query);
     if (snippet === undefined) continue;
-    if (hits.length >= SESSION_SEARCH_RESULT_LIMIT) {
-      overflow = true;
-      break;
-    }
-    hits.push({ sessionId, snippet });
+    hits.push({ sessionId, snippet, lastTs: lastEventTs(events) });
   }
 
-  return { items: hits, hasMore: overflow };
+  hits.sort((a, b) => b.lastTs - a.lastTs || 0);
+  const hasMore = hits.length > SESSION_SEARCH_RESULT_LIMIT;
+  return {
+    items: hits.slice(0, SESSION_SEARCH_RESULT_LIMIT).map(({ sessionId, snippet }) => ({
+      sessionId,
+      snippet,
+    })),
+    hasMore,
+  };
 }

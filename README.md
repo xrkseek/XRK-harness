@@ -21,9 +21,9 @@
 | 域 | 状态 |
 |----|------|
 | Kernel · Compose · Session · Agent · Exec · HTTP · Host Face 主路径 | 能跑 |
-| MCP M0 · Attachment（Face `session.attachment`；Host 默认 text-only） | 能跑 |
+| MCP（stdio · HTTP · list_changed）· Attachment（Face 可图） | 能跑 |
 | Host Face ↔ 产品 Web · 浏览器 E2E | 未稳 |
-| Compose C2 · Registry R1+ · Face U3 · 视觉 LLM 路由 · MCP 进阶 | 未做 |
+| Registry R1 官方协议 · Face U3 NI · MCP 设置 UI | 未做 |
 
 ## 快速开始
 
@@ -49,14 +49,16 @@ node apps/cli/dist/bin.js serve --preset minimal --workspace .
 
 ## 布局
 
+树与依赖：[docs/architecture.md](./docs/architecture.md)。包索引：[docs/modules/README.md](./docs/modules/README.md)。
+
 ```text
-apps/cli · apps/web · apps/web-static   CLI · 自研壳(+console) · 捕获后备
-packages/*              kernel · compose · core* · llm · exec* · server · mcp · attachment · sdk
+apps/cli · apps/web · apps/web-static   CLI · Face console · 产品壳（DSH 捕获）
+packages/*              30 个 @xrkseek 库（kernel · compose · core* · llm · exec* · server · mcp · …）
 presets/                minimal | harness | server
-docs/                   产品规格 · ADR
+docs/                   规格 · ADR · modules 文件地图
 ```
 
-[AGENTS.md](./AGENTS.md) · [docs/architecture.md](./docs/architecture.md)
+[AGENTS.md](./AGENTS.md)
 
 ---
 

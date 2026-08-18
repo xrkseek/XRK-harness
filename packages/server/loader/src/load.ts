@@ -1,8 +1,12 @@
 import { realpath } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import type { ToolDefinition } from "@xrkseek/core-tools";
-import type { RegisteredPlugin, PluginPromptSection } from "./types.js";
-import type { DiscoveryHit } from "./manifest.js";
+import type {
+  RegisteredPlugin,
+  PluginPromptSection,
+  PluginCommand,
+} from "./types.js";
+import type { DiscoveryHit, PluginManifest } from "./manifest.js";
 
 function asToolDefinition(value: unknown, label: string): ToolDefinition {
   if (!value || typeof value !== "object") {
@@ -56,6 +60,41 @@ function asPromptSection(value: unknown, label: string): PluginPromptSection {
   };
 }
 
+const COMMAND_NAME = /^[a-z][a-z0-9_-]*$/u;
+
+function asCommand(value: unknown, label: string): PluginCommand {
+  if (!value || typeof value !== "object") {
+    throw new Error(`${label}: command must be an object`);
+  }
+  const o = value as Record<string, unknown>;
+  if (typeof o.name !== "string" || !COMMAND_NAME.test(o.name)) {
+    throw new Error(`${label}: command.name must match ${COMMAND_NAME}`);
+  }
+  if (typeof o.description !== "string") {
+    throw new Error(`${label}: command.description must be a string`);
+  }
+  if (typeof o.handler !== "function") {
+    throw new Error(`${label}: command.handler must be a function`);
+  }
+  let input: { hint: string } | undefined;
+  if (o.input !== undefined) {
+    if (!o.input || typeof o.input !== "object" || Array.isArray(o.input)) {
+      throw new Error(`${label}: command.input must be an object`);
+    }
+    const hint = (o.input as Record<string, unknown>).hint;
+    if (typeof hint !== "string") {
+      throw new Error(`${label}: command.input.hint must be a string`);
+    }
+    input = { hint };
+  }
+  return {
+    name: o.name,
+    description: o.description,
+    ...(input ? { input } : {}),
+    handler: o.handler as PluginCommand["handler"],
+  };
+}
+
 function asPlugin(value: unknown, label: string): RegisteredPlugin {
   if (!value || typeof value !== "object") {
     throw new Error(`${label}: expected plugin object`);
@@ -89,11 +128,20 @@ function asPlugin(value: unknown, label: string): RegisteredPlugin {
     );
   }
 
+  let commands: PluginCommand[] | undefined;
+  if (o.commands !== undefined) {
+    if (!Array.isArray(o.commands)) {
+      throw new Error(`${label}: commands must be an array`);
+    }
+    commands = o.commands.map((c, i) => asCommand(c, `${label}: commands[${i}]`));
+  }
+
   const base: RegisteredPlugin = {
     id: o.id,
     kind: o.kind,
     ...(tools ? { tools } : {}),
     ...(promptSections ? { promptSections } : {}),
+    ...(commands ? { commands } : {}),
   };
   if (typeof dispose === "function") {
     return {
@@ -143,9 +191,18 @@ export async function loadPluginModule(
   );
 }
 
+export function stubFromManifest(
+  manifest: Pick<PluginManifest, "id" | "kind">,
+): RegisteredPlugin {
+  return { id: manifest.id, kind: manifest.kind };
+}
+
 export async function loadDiscoveryHit(
   hit: DiscoveryHit,
 ): Promise<RegisteredPlugin> {
+  if (hit.manifest.skipLoad) {
+    return stubFromManifest(hit.manifest);
+  }
   const plugin = await loadPluginModule(hit.entry);
   if (plugin.id !== hit.manifest.id) {
     throw new Error(

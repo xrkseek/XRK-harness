@@ -23,7 +23,9 @@ export type DeepSeekAdapterOptions = Omit<
 
 /**
  * Thin DeepSeek adapter: defaults + openai-compatible wire.
- * No vendor body forks yet (`thinking` / reasoner extras postposed).
+ * Optional `reasoning` on chat responses when the vendor returns
+ * `reasoning_content`. Default `stream()` emits reasoning-delta.
+ * Does not declare image modality.
  */
 export function createDeepSeekAdapter(
   options: DeepSeekAdapterOptions,

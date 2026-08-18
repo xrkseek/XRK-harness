@@ -67,12 +67,8 @@ export type WorkspaceInjectOption =
 
 function ensureSession(store: SessionStore, id?: string): string {
   if (id) {
-    try {
-      store.get(id);
-      return id;
-    } catch {
-      return store.create(id).id;
-    }
+    if (store.has(id)) return id;
+    return store.create(id).id;
   }
   return store.create().id;
 }
@@ -104,6 +100,8 @@ export interface HarnessCompositionOptions {
   readonly plugins?: readonly RegisteredPlugin[];
   /** Optional policy engine → `pipeline.onPre(createPolicyToolPre)`. */
   readonly policy?: PolicyEngine;
+  /** Host vision: resolve attachment bytes for image user content. */
+  readonly resolveImage?: Parameters<typeof createAgent>[0]["resolveImage"];
 }
 
 export interface HarnessComposition {
@@ -280,6 +278,9 @@ export function createHarnessComposition(
                 ...(resolveSlash ? { resolveSlash } : {}),
               },
             }
+          : {}),
+        ...(options.resolveImage
+          ? { resolveImage: options.resolveImage }
           : {}),
       });
     },

@@ -8,16 +8,51 @@ export interface LlmChatRequest {
     parameters: Record<string, unknown>;
   }[];
   readonly signal?: AbortSignal;
+  /**
+   * Resolve image attachment bytes for multimodal user content.
+   * Required when messages contain image blocks.
+   */
+  readonly resolveImage?: (
+    attachmentId: string,
+  ) => Promise<{ readonly mediaType: string; readonly data: Uint8Array }>;
 }
 
 export interface LlmChatResponse {
   readonly content: string;
   readonly toolCalls?: readonly ToolCall[];
+  /** Optional model reasoning / thinking text when the vendor exposes it. */
+  readonly reasoning?: string;
 }
+
+/** Streaming events from OpenAI-compatible SSE (text + reasoning). */
+export type LlmStreamEvent =
+  | {
+      readonly type: "text-delta";
+      readonly index: number;
+      readonly text: string;
+    }
+  | {
+      readonly type: "reasoning-delta";
+      readonly index: number;
+      readonly text: string;
+    }
+  | {
+      readonly type: "done";
+      readonly content: string;
+      readonly reasoning?: string;
+      readonly toolCalls?: readonly ToolCall[];
+    };
 
 export interface LlmAdapter {
   readonly id: string;
+  /** Declared input modalities; default text-only. */
+  readonly inputModalities?: readonly ("text" | "image")[];
   chat(request: LlmChatRequest): Promise<LlmChatResponse>;
+  /**
+   * Optional SSE / incremental stream. When present, agent-loop prefers this
+   * and appends `assistant/chunk` events before `assistant/message`.
+   */
+  stream?(request: LlmChatRequest): AsyncIterable<LlmStreamEvent>;
 }
 
 /** Provider reported context window / token limit exceeded. */
@@ -68,5 +103,28 @@ export function createLlmRegistry(): LlmRegistry {
     list() {
       return [...adapters.values()];
     },
+  };
+}
+
+/** Collect a stream into a chat response (also used by chat wrappers). */
+export async function collectLlmStream(
+  stream: AsyncIterable<LlmStreamEvent>,
+): Promise<LlmChatResponse> {
+  let content = "";
+  let reasoning = "";
+  let toolCalls: readonly ToolCall[] | undefined;
+  for await (const ev of stream) {
+    if (ev.type === "text-delta") content += ev.text;
+    else if (ev.type === "reasoning-delta") reasoning += ev.text;
+    else if (ev.type === "done") {
+      content = ev.content || content;
+      if (ev.reasoning) reasoning = ev.reasoning;
+      if (ev.toolCalls) toolCalls = ev.toolCalls;
+    }
+  }
+  return {
+    content,
+    ...(reasoning.trim() ? { reasoning } : {}),
+    ...(toolCalls ? { toolCalls } : {}),
   };
 }

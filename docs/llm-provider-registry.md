@@ -15,7 +15,7 @@ listForUi() / catalog() → Face `llm.providers` · `session.models`
 
 ## 状态
 
-**R0 已交付**（openai-chat brands + env + Face 投影）。R1+ 官方协议包待做。见 [status.md](./status.md)。
+**R0 已交付**（openai-chat brands + env + Face 投影 + `discoverModels` GET `/models`）。R1+ 官方协议包待做。见 [status.md](./status.md)。
 
 ## 相关
 

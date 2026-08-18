@@ -29,7 +29,7 @@ pnpm check
 
 ```text
 apps → sdk / server / presets
-sdk · server · presets → core* / llm / mcp / exec* / workspace / policy / compose
+sdk · server · presets → core* / llm / mcp / attachment / exec* / workspace / policy / compose
 能力叶 · core* → kernel / protocol / compose
 ```
 
@@ -44,14 +44,14 @@ sdk · server · presets → core* / llm / mcp / exec* / workspace / policy / co
 | Preset 选项 | `docs/profiles.md` · `docs/workspace-inject.md` · preset README |
 | 新能力是否可依赖 | `docs/status.md` |
 
-空壳包（`@xrkseek/mcp`）在实现前 **只** 更新 status/README「未开工」，勿写假 API。
+空壳 / 未接线能力在实现前 **只** 更新 `docs/status.md`「未做」，勿写假 API。`@xrkseek/mcp` 已能跑（stdio · HTTP · `tools/list_changed` · 默认 deny）；勿再当空壳。
 
 ## 扩展常见路径
 
 1. **工具**：`createToolRegistry` + `ToolDefinition`；IO 走 `@xrkseek/exec-*` Provider。  
 2. **守卫**：`pipeline.onGuard`（单调）；可选 `policy` → `createPolicyToolPre`。  
 3. **Preset**：组合现有包；参考 `presets/minimal/preset.ts`。  
-4. **插件**：`extensions/*` + `kind: tools` + `tools[]`；host `XRK_PLUGINS_DIR` 自动接线。  
+4. **插件**：`extensions/*` + `kind: tools | prompt | commands`；host `XRK_PLUGINS_DIR` 自动接线。  
 5. **测例**：`packages/**/tests` · `presets/**/tests`；LLM 用 `@xrkseek/llm-replay`。  
 
 示例扩展：`extensions/example-tools`（`example_ping`；见 [docs/plugin-loader.md](./docs/plugin-loader.md)）。
@@ -64,5 +64,7 @@ sdk · server · presets → core* / llm / mcp / exec* / workspace / policy / co
 - 密钥（`.env`、真实 API key）永不入库  
 
 ## 文档入口
+
+分层见 [docs/README.md](./docs/README.md)。改契约必改对应规格 + [docs/status.md](./docs/status.md)。包落点见 [docs/modules/README.md](./docs/modules/README.md)。本机对照 / 体量板进 Cursor Canvas，不进 `docs/`。
 
 [docs/README.md](./docs/README.md) · [docs/status.md](./docs/status.md) · [docs/architecture.md](./docs/architecture.md)

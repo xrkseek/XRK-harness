@@ -44,6 +44,11 @@ export interface HostRuntimeConfig {
   }[];
   /** Env: `XRK_MCP_ALLOW=1` elevates mcp.connect default to allow for configured servers. */
   readonly mcpAllowConnect?: boolean;
+  /**
+   * JSONL session directory. Env: `XRK_SESSIONS_DIR`.
+   * Omit → in-memory store (process lifetime only).
+   */
+  readonly sessionsDir?: string;
 }
 
 export interface HostConfig {
@@ -160,6 +165,9 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
     ...(env.XRK_MCP_ALLOW === "1" || env.XRK_MCP_ALLOW === "true"
       ? { mcpAllowConnect: true as const }
       : {}),
+    ...(env.XRK_SESSIONS_DIR && String(env.XRK_SESSIONS_DIR).trim()
+      ? { sessionsDir: String(env.XRK_SESSIONS_DIR).trim() }
+      : {}),
   } as HostRuntimeConfig;
 
   const patch = { ...(input.patch ?? {}) };
@@ -171,6 +179,7 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
     pluginsDir?: string;
     webDist?: string;
     policyFile?: string;
+    sessionsDir?: string;
   };
   if (typeof patch.port === "number") mutable.port = patch.port;
   if (typeof patch.host === "string") mutable.host = patch.host;
@@ -197,6 +206,11 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
     const f = patch.policyFile.trim();
     if (f) mutable.policyFile = f;
     else delete mutable.policyFile;
+  }
+  if (typeof patch.sessionsDir === "string") {
+    const d = patch.sessionsDir.trim();
+    if (d) mutable.sessionsDir = d;
+    else delete mutable.sessionsDir;
   }
 
   return {

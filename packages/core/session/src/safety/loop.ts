@@ -1,6 +1,6 @@
 /**
  * Repeated identical tool-call detection (pure).
- * @see docs/learn/cline-mistake-loop-safety.md
+ * @see docs/session-safety.md
  */
 
 export interface LoopDetectionState {

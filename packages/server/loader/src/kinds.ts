@@ -11,6 +11,8 @@ export const PLUGIN_KINDS = {
   tools: "tools",
   /** System prompt sections → SystemPromptAssembler */
   prompt: "prompt",
+  /** Slash command contributions → Face `commands/list` + `commands/execute` */
+  commands: "commands",
 } as const;
 
 export type KnownPluginKind =
@@ -21,6 +23,8 @@ export const RESERVED_PLUGIN_KINDS = [
   "channel",
   "policy",
   "llm",
+  /** DSH Cordis host package: listed, never `import()` / `apply()`. */
+  "cordis",
 ] as const;
 
 export function isKnownPluginKind(kind: string): kind is KnownPluginKind {

@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
-import type { McpClient } from "./types.js";
+import type { McpClient, McpToolInfo } from "./types.js";
 import { publicToolName } from "./names.js";
 
 export interface AppliedMcpTool {
@@ -16,56 +16,133 @@ export interface RegisterMcpToolsResult {
   readonly skipped: readonly SkippedMcpTool[];
 }
 
+export interface RegisterMcpToolsOptions {
+  /**
+   * Re-sync ToolRegistry on `notifications/tools/list_changed` (default true).
+   * Fetch failures keep the previous applied generation.
+   */
+  readonly watch?: boolean;
+}
+
+/** Shared by `registerMcpTools` and Host `loadMcpToolPlugins`. */
+export function mcpToolDefinition(
+  client: McpClient,
+  info: McpToolInfo,
+): ToolDefinition {
+  return {
+    name: publicToolName(client.serverName, info.name),
+    description: info.description || `MCP tool ${info.name}`,
+    parameters: info.inputSchema,
+    async execute(args, signal) {
+      const result = await client.callTool(
+        info.name,
+        (args ?? {}) as Record<string, unknown>,
+        signal,
+      );
+      return {
+        content: result.content,
+        ...(result.isError ? { isError: true } : {}),
+      };
+    },
+  };
+}
+
 /**
  * Register MCP tools on a ToolRegistry under `mcp__<server>__<raw>`.
  * Explicit registry names win (skip, do not replace).
- * Returns disposer that unregisters applied tools only.
+ * By default watches `tools/list_changed` and re-syncs (fetch fail → keep last).
+ * Returns disposer that unregisters the current applied generation only.
  */
 export async function registerMcpTools(
   registry: ToolRegistry,
   client: McpClient,
+  options: RegisterMcpToolsOptions = {},
 ): Promise<RegisterMcpToolsResult & { dispose: () => void }> {
-  const tools = await client.listTools();
-  const applied: AppliedMcpTool[] = [];
-  const skipped: SkippedMcpTool[] = [];
+  const watch = options.watch !== false;
+  let applied: AppliedMcpTool[] = [];
+  let skipped: SkippedMcpTool[] = [];
+  let disposed = false;
+  let syncChain: Promise<void> = Promise.resolve();
 
-  for (const info of tools) {
-    const name = publicToolName(client.serverName, info.name);
-    if (registry.get(name)) {
-      skipped.push({
-        publicName: name,
-        rawName: info.name,
-        reason: "explicit_wins",
-      });
-      continue;
+  async function sync(): Promise<void> {
+    if (disposed) return;
+    const tools = await client.listTools();
+    if (disposed) return;
+
+    const owned = new Set(applied.map((a) => a.publicName));
+    const nextApplied: AppliedMcpTool[] = [];
+    const nextSkipped: SkippedMcpTool[] = [];
+    const keep = new Set<string>();
+
+    for (const info of tools) {
+      const name = publicToolName(client.serverName, info.name);
+      const existing = registry.get(name);
+      if (existing && !owned.has(name)) {
+        nextSkipped.push({
+          publicName: name,
+          rawName: info.name,
+          reason: "explicit_wins",
+        });
+        continue;
+      }
+      const def = mcpToolDefinition(client, info);
+      if (existing && owned.has(name)) {
+        registry.replace(def);
+      } else {
+        registry.register(def);
+      }
+      nextApplied.push({ publicName: name, rawName: info.name });
+      keep.add(name);
     }
-    const def: ToolDefinition = {
-      name,
-      description: info.description || `MCP tool ${info.name}`,
-      parameters: info.inputSchema,
-      async execute(args, signal) {
-        const result = await client.callTool(
-          info.name,
-          (args ?? {}) as Record<string, unknown>,
-          signal,
-        );
-        return {
-          content: result.content,
-          ...(result.isError ? { isError: true } : {}),
-        };
-      },
-    };
-    registry.register(def);
-    applied.push({ publicName: name, rawName: info.name });
+
+    if (disposed) {
+      for (const row of nextApplied) {
+        if (!owned.has(row.publicName)) registry.unregister(row.publicName);
+      }
+      return;
+    }
+
+    for (const prev of applied) {
+      if (!keep.has(prev.publicName)) {
+        registry.unregister(prev.publicName);
+      }
+    }
+
+    applied = nextApplied;
+    skipped = nextSkipped;
   }
 
+  await sync();
+
+  const unsub = watch
+    ? client.onToolsListChanged(() => {
+        syncChain = syncChain.then(async () => {
+          try {
+            await sync();
+          } catch {
+            /* keep previous generation */
+          }
+        });
+        return syncChain;
+      })
+    : () => {};
+
   return {
-    applied,
-    skipped,
+    get applied() {
+      return applied;
+    },
+    get skipped() {
+      return skipped;
+    },
     dispose() {
+      if (disposed) return;
+      disposed = true;
+      unsub();
       for (const a of applied) {
         registry.unregister(a.publicName);
       }
+      applied = [];
+      skipped = [];
     },
   };
 }

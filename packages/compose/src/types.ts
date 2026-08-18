@@ -34,6 +34,15 @@ export interface EffectMeta {
   children: EffectMeta[];
 }
 
+/**
+ * C2: wrap `inject` / `tryInject` resolution.
+ * Outer interceptor registered last runs first.
+ */
+export type InjectInterceptor = <T>(
+  ctx: { readonly key: ServiceKey; readonly label?: string },
+  next: () => T,
+) => T;
+
 export interface Scope {
   readonly id: string;
   readonly state: ScopeState;
@@ -64,6 +73,11 @@ export interface Scope {
   ): Disposer;
 
   child(opts?: { id?: string; isolate?: RealmRef[]; depend?: RealmRef[] }): Scope;
+
+  /**
+   * C2: register an inject interceptor (LIFO). Returns disposer.
+   */
+  interceptInject(interceptor: InjectInterceptor): Disposer;
 
   activate(setup?: () => void | Promise<void>): Promise<void>;
 

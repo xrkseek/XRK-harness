@@ -7,12 +7,18 @@
 - `createRootScope`
 - `Scope.depend` / `activate` / `whenReady`
 - `provide` / `inject` / `tryInject`
+- `interceptInject` · `openSubagentRealm`
 - `effect` · `child` · `dispose`
 - `bindDisposable`
 
 ## Host（C1）
 
 `createHostAgentCache`：session agent 依赖 `host.plugins`；`invalidate` / `stop` 按 Ordering 卸装。
+
+## Status
+
+- C0 叶包 · C1 Host agent-cache：**能跑**
+- C2 intercept + `openSubagentRealm`：**能跑**；Host 对子会话打开 realm（不负责 Face 登记）
 
 ## Non-goals
 

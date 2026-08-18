@@ -93,6 +93,16 @@ export interface FaceProjectionRegistry {
   snapshot(sessionId: string): ProjectionSnapshot;
   checkpoint(sessionId: string): ProjectionCheckpoint;
   keys(): readonly string[];
+  /**
+   * Host-computed overlay (e.g. `goal`). Included in snapshots and change feed.
+   * `null` is a published value; `undefined` removes the sidecar.
+   */
+  setSidecar(
+    sessionId: string,
+    key: string,
+    value: unknown,
+    seq: number,
+  ): void;
 }
 
 export function createFaceProjectionRegistry(
@@ -100,6 +110,7 @@ export function createFaceProjectionRegistry(
 ): FaceProjectionRegistry {
   const registrations = new Map<string, Registration>();
   const listeners = new Set<ProjectionChangeListener>();
+  const sidecars = new Map<string, Map<string, unknown>>();
 
   function buildCell(
     def: ErasedDefinition,
@@ -209,6 +220,10 @@ export function createFaceProjectionRegistry(
           registration.def.view(cell.state),
         );
       }
+      const extra = sidecars.get(sessionId);
+      if (extra) {
+        for (const [key, value] of extra) values[key] = value;
+      }
       const asOfSeq = events.length === 0 ? -1 : events.length;
       return { asOfSeq, values };
     },
@@ -227,7 +242,28 @@ export function createFaceProjectionRegistry(
     },
 
     keys() {
-      return [...registrations.keys()];
+      const extra = new Set<string>();
+      for (const map of sidecars.values()) {
+        for (const key of map.keys()) extra.add(key);
+      }
+      return [...new Set([...registrations.keys(), ...extra])];
+    },
+
+    setSidecar(sessionId, key, value, seq) {
+      let map = sidecars.get(sessionId);
+      if (value === undefined) {
+        map?.delete(key);
+        if (map && map.size === 0) sidecars.delete(sessionId);
+      } else {
+        if (!map) {
+          map = new Map();
+          sidecars.set(sessionId, map);
+        }
+        map.set(key, value);
+      }
+      for (const listener of listeners) {
+        listener(sessionId, key, value ?? null, seq);
+      }
     },
   };
 }

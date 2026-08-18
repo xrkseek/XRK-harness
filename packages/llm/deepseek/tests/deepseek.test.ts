@@ -27,6 +27,8 @@ describe("deepseek adapter", () => {
       fetch: fetchMock as unknown as typeof fetch,
     });
     expect(llm.id).toBe("deepseek");
+    expect(llm.inputModalities).toEqual(["text"]);
+    expect(llm.stream).toBeTypeOf("function");
 
     const out = await llm.chat({
       messages: [{ role: "user", content: "hi" }],

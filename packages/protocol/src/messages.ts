@@ -1,27 +1,28 @@
+import type { MessageContent } from "./content.js";
 import type { ToolCall } from "./tools.js";
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
 
-export interface ChatMessageBase {
-  readonly role: ChatRole;
+export interface SystemMessage {
+  readonly role: "system";
   readonly content: string;
 }
 
-export interface SystemMessage extends ChatMessageBase {
-  readonly role: "system";
-}
-
-export interface UserMessage extends ChatMessageBase {
+export interface UserMessage {
   readonly role: "user";
+  /** Plain string or ContentBlock[] (text + image refs). */
+  readonly content: MessageContent;
 }
 
-export interface AssistantMessage extends ChatMessageBase {
+export interface AssistantMessage {
   readonly role: "assistant";
+  readonly content: string;
   readonly toolCalls?: readonly ToolCall[];
 }
 
-export interface ToolMessage extends ChatMessageBase {
+export interface ToolMessage {
   readonly role: "tool";
+  readonly content: string;
   readonly toolCallId: string;
   readonly name?: string;
   readonly isError?: boolean;

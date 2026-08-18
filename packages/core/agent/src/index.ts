@@ -1,5 +1,5 @@
 import type { CompactionOptions } from "@xrkseek/core-session";
-import type { LlmAdapter } from "@xrkseek/llm";
+import type { LlmAdapter, LlmChatRequest } from "@xrkseek/llm";
 import {
   admitPrompt,
   createSessionSafety,
@@ -98,6 +98,8 @@ export interface CreateAgentOptions {
   readonly toolSettle?: "serial" | "parallel";
   /** Opt-in context compaction / one overflow retry. */
   readonly compaction?: false | CompactionOptions;
+  /** Forwarded to runTurn for vision adapters. */
+  readonly resolveImage?: LlmChatRequest["resolveImage"];
 }
 
 function mergeSignals(
@@ -243,6 +245,9 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
               : {}),
             ...(options.compaction !== undefined
               ? { compaction: options.compaction }
+              : {}),
+            ...(options.resolveImage
+              ? { resolveImage: options.resolveImage }
               : {}),
           });
         } catch (err) {

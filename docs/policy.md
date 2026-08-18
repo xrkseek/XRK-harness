@@ -88,12 +88,12 @@ assertPolicyAllow(engine, { kind: "provider.use", providerId: llm.id });
 | Face ask | `approval/asked|decided` + `session.respondApproval`；Host 挂 `setApprovalHandler` |
 | Preset `policy?` | tool `onPre(createPolicyToolPre)` |
 
-MCP connect 默认 deny；Client **M0 能跑**；Host 可用 `XRK_MCP_SERVERS` + `XRK_MCP_ALLOW=1` 拉起。
+MCP connect 默认 deny；Client **stdio + streamable-http 能跑**；Host 可用 `XRK_MCP_SERVERS`（`command` 或 `url`）+ `XRK_MCP_ALLOW=1` 拉起。
 
 ## Not shipped
 
 - YAML / TOML rulesets  
-- MCP streamable-http / 重连 / Face MCP 设置 UI  
+- MCP 自动重连 / Face MCP 设置 UI  
 - Policy 热重载  
 - 审批超时自动 decide（仅 abort→cancel）
 

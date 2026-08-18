@@ -23,9 +23,11 @@ export {
   isContextOverflowError,
   UnsupportedContentError,
   isUnsupportedContentError,
+  collectLlmStream,
 } from "@xrkseek/llm";
 export {
   createMemorySessionStore,
+  createJsonlSessionStore,
   createTurnLatch,
   createSessionDrainLatch,
   createSessionDrainHub,
@@ -75,10 +77,13 @@ export {
   createProviderRegistry,
   getOpenAiChatBrand,
   resolveLlmFromEnv,
+  discoverOpenAiChatModels,
+  ModelDiscoveryError,
   type BrandEntry,
   type ProviderBinding,
   type ProviderRegistry,
   type ResolveInput,
+  type DiscoveredLlmModel,
 } from "@xrkseek/llm-registry";
 export {
   createPluginLoader,
@@ -88,13 +93,18 @@ export {
   applyPromptPlugins,
   wireCompositionPrompts,
   isPromptPlugin,
+  collectPluginCommands,
+  isCommandsPlugin,
+  toPluginInventoryEntries,
   PLUGIN_KINDS,
   RESERVED_PLUGIN_KINDS,
   type RegisteredPlugin,
+  type PluginCommand,
+  type PluginInventoryEntry,
   type ApplyToolsPluginsResult,
   type ApplyPromptPluginsResult,
 } from "@xrkseek/server-loader";
-export type { LlmAdapter } from "@xrkseek/llm";
+export type { LlmAdapter, LlmChatRequest, LlmChatResponse, LlmStreamEvent } from "@xrkseek/llm";
 export { loadHostConfig } from "@xrkseek/server-config";
 export { createHostManager } from "@xrkseek/server-host";
 export { createHttpServer } from "@xrkseek/server-http";
@@ -138,6 +148,8 @@ export {
   parsePublicToolName,
   type McpClient,
   type McpStdioOptions,
+  type McpHttpOptions,
+  type McpHttpReconnectionOptions,
 } from "@xrkseek/mcp";
 export {
   createMemoryAttachmentStore,

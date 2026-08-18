@@ -131,7 +131,7 @@ describe("Face workspace U2", () => {
     );
     expect(badTemplate.result.ok).toBe(false);
     if (!badTemplate.result.ok) {
-      expect(badTemplate.result.error.code).toBe("seed-template-not-found");
+      expect(badTemplate.result.error.code).toBe("workspace-not-found");
     }
 
     const escape = await dispatchFaceMethod(
@@ -142,7 +142,7 @@ describe("Face workspace U2", () => {
     );
     expect(escape.result.ok).toBe(false);
     if (!escape.result.ok) {
-      expect(escape.result.error.code).toBe("path-escape");
+      expect(escape.result.error.code).toBe("workspace-invalid-path");
     }
   });
 
@@ -247,5 +247,78 @@ describe("Face workspace U2", () => {
 
     const pick = await dispatchFaceMethod(runtime, "host.pickDirectory", "pd1", {});
     expect(pick.result).toEqual({ ok: true, value: { path: null } });
+  });
+
+  it("workspace.delete · insertBefore · insertSessionBefore", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-ord-"));
+    const other = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-ord2-"));
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+
+    const created = await dispatchFaceMethod(runtime, "workspace.create", "c", {
+      path: other,
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const extraId = (
+      created.result.value as { workspace: { workspaceId: string } }
+    ).workspace.workspaceId;
+
+    const a = await dispatchFaceMethod(runtime, "session.create", "s1", {});
+    const b = await dispatchFaceMethod(runtime, "session.create", "s2", {
+      workspaceId: extraId,
+    });
+    expect(a.result.ok && b.result.ok).toBe(true);
+    if (!a.result.ok || !b.result.ok) return;
+    const sidA = (a.result.value as { sessionId: string }).sessionId;
+    const sidB = (b.result.value as { sessionId: string }).sessionId;
+
+    const moved = await dispatchFaceMethod(
+      runtime,
+      "workspace.insertSessionBefore",
+      "is",
+      { sessionId: sidB, beforeSessionId: sidA },
+    );
+    expect(moved.result.ok).toBe(true);
+
+    const reordered = await dispatchFaceMethod(
+      runtime,
+      "workspace.insertBefore",
+      "ib",
+      { workspaceId: extraId, beforeId: "ws_default" },
+    );
+    expect(reordered.result.ok).toBe(true);
+    if (reordered.result.ok) {
+      const items = (
+        reordered.result.value as { items: { workspaceId: string }[] }
+      ).items;
+      expect(items[0]?.workspaceId).toBe(extraId);
+    }
+
+    const deleted = await dispatchFaceMethod(runtime, "workspace.delete", "d", {
+      workspaceId: extraId,
+    });
+    expect(deleted.result.ok).toBe(true);
+    if (deleted.result.ok) {
+      const items = (
+        deleted.result.value as { items: { workspaceId: string }[] }
+      ).items;
+      expect(items.map((w) => w.workspaceId)).toEqual(["ws_default"]);
+    }
+
+    const refuseDefault = await dispatchFaceMethod(
+      runtime,
+      "workspace.delete",
+      "d2",
+      { workspaceId: "ws_default" },
+    );
+    expect(refuseDefault.result.ok).toBe(false);
   });
 });

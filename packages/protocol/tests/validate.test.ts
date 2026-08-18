@@ -36,6 +36,37 @@ describe("parseSessionEvent", () => {
     expect(isSessionEvent({ type: "user/message", ts: 1 })).toBe(true);
   });
 
+  it("parses assistant/chunk kind+index and message reasoning", () => {
+    const chunk = parseSessionEvent({
+      type: "assistant/chunk",
+      ts: 1,
+      turnId: "t",
+      stepId: "s",
+      text: "th",
+      kind: "reasoning",
+      index: 0,
+    });
+    expect(chunk).toMatchObject({
+      type: "assistant/chunk",
+      kind: "reasoning",
+      index: 0,
+      text: "th",
+    });
+    const msg = parseSessionEvent({
+      type: "assistant/message",
+      ts: 2,
+      turnId: "t",
+      stepId: "s",
+      content: "ans",
+      reasoning: "th",
+    });
+    expect(msg).toMatchObject({
+      type: "assistant/message",
+      content: "ans",
+      reasoning: "th",
+    });
+  });
+
   it("parses tool/call and tool/result", () => {
     const call = parseSessionEvent({
       type: "tool/call",
@@ -148,6 +179,30 @@ describe("parseSessionEvent", () => {
     });
     expect(decided.type).toBe("approval/decided");
   });
+
+  it("parses command/run and command/done (log-only)", () => {
+    const run = parseSessionEvent({
+      type: "command/run",
+      ts: 1,
+      commandId: "cmd_1",
+      name: "echo",
+      args: " hello",
+      source: { kind: "user" },
+    });
+    expect(run).toMatchObject({
+      type: "command/run",
+      name: "echo",
+      args: " hello",
+    });
+    const done = parseSessionEvent({
+      type: "command/done",
+      ts: 2,
+      commandId: "cmd_1",
+      kind: "success",
+      text: "hello",
+    });
+    expect(done).toMatchObject({ type: "command/done", kind: "success" });
+  });
 });
 
 describe("sessionEventJsonSchema", () => {
@@ -173,6 +228,8 @@ describe("sessionEventJsonSchema", () => {
       "session/title",
       "approval/asked",
       "approval/decided",
+      "command/run",
+      "command/done",
     ];
     expect(types.sort()).toEqual([...expected].sort());
     expect(sessionEventJsonSchema.$id).toContain("session-event");

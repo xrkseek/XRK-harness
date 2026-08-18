@@ -1,6 +1,7 @@
 /**
  * Face human-approval broker — session events are the durable truth;
- * in-memory waiters resolve `pipeline.setApprovalHandler` asks.
+ * mux pushes DSH `approval/requested` (stable rpcId) settled by POST /api/respond
+ * or `session.respondApproval`.
  */
 
 import { randomUUID } from "node:crypto";
@@ -10,10 +11,19 @@ import type {
   ToolPipelineContext,
 } from "@xrkseek/core-tools";
 import type { ApprovalDecisionSource } from "@xrkseek/protocol";
+import type { FaceRpcReceipt, MuxFrame } from "./types.js";
 
 const ARGS_SUMMARY_MAX = 480;
 
+export type ApprovalOutcomeWire =
+  | "allowed-once"
+  | "rejected"
+  | "cancelled"
+  | "unavailable";
+
 export interface PendingApprovalItem {
+  /** Stable server-request rpcId for DSH Web `/api/respond`. */
+  readonly rpcId: string;
   readonly approvalId: string;
   readonly sessionId: string;
   readonly toolCallId: string;
@@ -21,6 +31,15 @@ export interface PendingApprovalItem {
   readonly reason: string;
   readonly askedAt: number;
   readonly argsSummary?: string;
+}
+
+export interface FaceApprovalHooks {
+  onRequested(item: PendingApprovalItem): void;
+  onResolved(
+    sessionId: string,
+    approvalId: string,
+    outcome: ApprovalOutcomeWire,
+  ): void;
 }
 
 type Waiter = {
@@ -42,12 +61,17 @@ function summarizeArgs(args: unknown): string | undefined {
   }
 }
 
+function mintRpcId(): string {
+  return `aprpc_${randomUUID()}`;
+}
+
 export class FaceApprovalBroker {
   private readonly waiters = new Map<string, Waiter>();
+  private readonly byRpcId = new Map<string, string>();
 
   constructor(
     private readonly store: SessionStore,
-    private readonly onPendingChanged: (sessionId: string) => void,
+    private readonly hooks: FaceApprovalHooks,
   ) {}
 
   listPending(sessionId?: string): readonly PendingApprovalItem[] {
@@ -71,9 +95,11 @@ export class FaceApprovalBroker {
     reason: string,
   ): Promise<boolean> {
     const approvalId = `apr_${randomUUID()}`;
+    const rpcId = mintRpcId();
     const argsSummary = summarizeArgs(ctx.args);
     const askedAt = Date.now();
     const meta: PendingApprovalItem = {
+      rpcId,
       approvalId,
       sessionId,
       toolCallId: ctx.call.id,
@@ -111,16 +137,17 @@ export class FaceApprovalBroker {
       };
 
       this.waiters.set(approvalId, waiter);
-      this.onPendingChanged(sessionId);
+      this.byRpcId.set(rpcId, approvalId);
+      this.hooks.onRequested(meta);
 
       if (ctx.signal) {
         const onAbort = () => {
-          this.decide(sessionId, approvalId, "deny", "cancel");
+          this.decide(sessionId, approvalId, "deny", "cancel", "cancelled");
         };
         waiter.signal = ctx.signal;
         waiter.abortListener = onAbort;
         if (ctx.signal.aborted) {
-          this.decide(sessionId, approvalId, "deny", "cancel");
+          this.decide(sessionId, approvalId, "deny", "cancel", "cancelled");
           return;
         }
         ctx.signal.addEventListener("abort", onAbort, { once: true });
@@ -135,7 +162,55 @@ export class FaceApprovalBroker {
   ):
     | { readonly ok: true }
     | { readonly ok: false; readonly code: string; readonly message: string } {
-    return this.decide(sessionId, approvalId, decision, "user");
+    return this.decide(
+      sessionId,
+      approvalId,
+      decision,
+      "user",
+      decision === "allow" ? "allowed-once" : "rejected",
+    );
+  }
+
+  /**
+   * Settle via DSH `POST /api/respond` (rpcId correlation).
+   * @returns receipt shape consumed by the Web client.
+   */
+  respondByRpcId(rpcId: string, value: unknown): FaceRpcReceipt {
+    const approvalId = this.byRpcId.get(rpcId);
+    if (!approvalId) {
+      return { accepted: false, reason: "not-pending" };
+    }
+    const waiter = this.waiters.get(approvalId);
+    if (!waiter) {
+      return { accepted: false, reason: "not-pending" };
+    }
+
+    if (!value || typeof value !== "object") {
+      return { accepted: false, reason: "bad-response" };
+    }
+    const v = value as Record<string, unknown>;
+    if (typeof v.sessionId === "string" && v.sessionId !== waiter.sessionId) {
+      return { accepted: false, reason: "bad-response" };
+    }
+    if (typeof v.approvalId === "string" && v.approvalId !== approvalId) {
+      return { accepted: false, reason: "bad-response" };
+    }
+    const outcome = v.outcome;
+    if (outcome !== "allowed-once" && outcome !== "rejected") {
+      return { accepted: false, reason: "bad-response" };
+    }
+
+    const decided = this.decide(
+      waiter.sessionId,
+      approvalId,
+      outcome === "allowed-once" ? "allow" : "deny",
+      "user",
+      outcome,
+    );
+    if (!decided.ok) {
+      return { accepted: false, reason: "not-pending" };
+    }
+    return { accepted: true };
   }
 
   private decide(
@@ -143,6 +218,7 @@ export class FaceApprovalBroker {
     approvalId: string,
     decision: "allow" | "deny",
     source: ApprovalDecisionSource,
+    outcome: ApprovalOutcomeWire,
   ):
     | { readonly ok: true }
     | { readonly ok: false; readonly code: string; readonly message: string } {
@@ -163,6 +239,7 @@ export class FaceApprovalBroker {
     }
 
     this.waiters.delete(approvalId);
+    this.byRpcId.delete(waiter.meta.rpcId);
     this.store.append(sessionId, {
       type: "approval/decided",
       ts: Date.now(),
@@ -171,7 +248,34 @@ export class FaceApprovalBroker {
       source,
     });
     waiter.resolve(decision === "allow");
-    this.onPendingChanged(sessionId);
+    this.hooks.onResolved(sessionId, approvalId, outcome);
     return { ok: true };
   }
+}
+
+/** mux `approval/requested` 载荷（rpcId 走 bus/信封，不在 payload 里）。 */
+export function approvalRequestedFrame(
+  item: PendingApprovalItem,
+): Extract<MuxFrame, { type: "approval/requested" }> {
+  return {
+    type: "approval/requested",
+    sessionId: item.sessionId,
+    approvalId: item.approvalId,
+    toolName: item.toolName,
+    callId: item.toolCallId,
+    reason: item.reason,
+  };
+}
+
+export function approvalResolvedFrame(
+  sessionId: string,
+  approvalId: string,
+  outcome: ApprovalOutcomeWire,
+): Extract<MuxFrame, { type: "approval/resolved" }> {
+  return {
+    type: "approval/resolved",
+    sessionId,
+    approvalId,
+    outcome,
+  };
 }

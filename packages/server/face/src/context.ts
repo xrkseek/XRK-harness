@@ -9,6 +9,10 @@ import type {
   FaceProjectionRegistry,
   FaceTitleController,
 } from "./projections/index.js";
+import type {
+  FaceProcessPlugin,
+  FaceWebPlugin,
+} from "./plugin-inventory.js";
 import type { SlashRecipesLoader } from "./slash.js";
 import { FACE_AGENT_PRESET_IDS } from "./presets-catalog.js";
 import type {
@@ -19,6 +23,9 @@ import type {
 } from "./settings-credentials.js";
 import type { FaceApprovalBroker } from "./approvals.js";
 import type { FaceWorkspaceRegistry } from "./workspace-registry.js";
+import type { FaceSubagentRegistry } from "./subagent-registry.js";
+import type { FaceMessageFeedbackStore } from "./message-feedback.js";
+import type { FaceGoalStore } from "./goal-store.js";
 import type { FaceWireIdMaps } from "./adapt/wire-ids.js";
 import type { FaceInboxWireMaps } from "./adapt/inbox-wire.js";
 
@@ -71,11 +78,21 @@ export interface FaceRuntime {
   readonly sessionCwds: Map<string, string>;
   /** DeepSeek workspace registry (in-memory). */
   readonly workspaces: FaceWorkspaceRegistry;
+  /** Direct subagent children (fork / create-with-parent). */
+  readonly subagents: FaceSubagentRegistry;
+  /** Per-session assistant-message ratings (process-local CAS). */
+  readonly messageFeedback: FaceMessageFeedbackStore;
+  /** Per-session Goal sidecar (projection key `goal`). */
+  readonly goals: FaceGoalStore;
   /** Session-scoped turn/step numbers for DSH wire events. */
   readonly wireIds: FaceWireIdMaps;
   /** Session-scoped inbox splice projectors for live mux. */
   readonly inboxWire: FaceInboxWireMaps;
   readonly loadSlashRecipes?: SlashRecipesLoader;
+  /** Process plugins (`XRK_PLUGINS_DIR` / MCP) for inventory + slash. */
+  readonly plugins?: readonly FaceProcessPlugin[];
+  /** Product-shell `boot.json` entries (captured DSH client plugins). */
+  readonly webPlugins?: readonly FaceWebPlugin[];
   /** Mutable UI prefs (theme/locale) — not secrets. */
   readonly uiSettings: FaceUiSettings;
   /** Read-only host public snapshot (from host spawn). */
@@ -88,6 +105,13 @@ export interface FaceRuntime {
   readonly bootstrapApiKey?: string;
   /** Optional policy engine (e.g. from XRK_POLICY_FILE) for provider.use gates. */
   readonly policy?: PolicyEngine;
+  /**
+   * Absolute path to a local settings/policy document.
+   * Opened by `settings.openDocument` — request carries no filesystem path.
+   */
+  readonly settingsDocumentPath?: string;
+  /** Native opener; default platform `openNativePath`. */
+  openNativePath?(target: string): Promise<void>;
   /** Human approval waiters (tool policy `ask`). */
   readonly approvals: FaceApprovalBroker;
   /** Drop cached agent when preset changes (host wires). May be async (compose dispose). */

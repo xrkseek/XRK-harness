@@ -167,16 +167,27 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         ...(rpcId !== undefined ? { rpcId } : {}),
       };
     }
-    case "assistant/chunk":
+    case "assistant/chunk": {
+      const kindRaw = value.kind;
+      const kind =
+        kindRaw === "reasoning" || kindRaw === "text" ? kindRaw : undefined;
+      const index =
+        typeof value.index === "number" && Number.isFinite(value.index)
+          ? Math.floor(value.index)
+          : undefined;
       return {
         type,
         ts,
         turnId: reqString(value, "turnId", type),
         stepId: reqString(value, "stepId", type),
         text: reqString(value, "text", type),
+        ...(kind ? { kind } : {}),
+        ...(index !== undefined ? { index } : {}),
       };
+    }
     case "assistant/message": {
       const toolCalls = parseToolCalls(value.toolCalls, `${type}.toolCalls`);
+      const reasoning = optString(value, "reasoning");
       return {
         type,
         ts,
@@ -184,6 +195,7 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         stepId: reqString(value, "stepId", type),
         content: reqString(value, "content", type),
         ...(toolCalls ? { toolCalls } : {}),
+        ...(reasoning !== undefined ? { reasoning } : {}),
       };
     }
     case "tool/call":
@@ -346,6 +358,45 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         approvalId: reqString(value, "approvalId", type),
         decision: decisionRaw,
         source: sourceRaw,
+      };
+    }
+    case "command/run": {
+      const args = optString(value, "args");
+      const sourceRaw = value.source;
+      if (
+        sourceRaw === null ||
+        typeof sourceRaw !== "object" ||
+        !("kind" in sourceRaw) ||
+        Reflect.get(sourceRaw, "kind") !== "user"
+      ) {
+        throw new SessionEventParseError('source.kind must be "user"', type);
+      }
+      return {
+        type,
+        ts,
+        commandId: reqString(value, "commandId", type),
+        name: reqString(value, "name", type),
+        source: { kind: "user" },
+        ...(args !== undefined ? { args } : {}),
+      };
+    }
+    case "command/done": {
+      const kindRaw = reqString(value, "kind", type);
+      if (kindRaw !== "success" && kindRaw !== "error") {
+        throw new SessionEventParseError(
+          'kind must be "success" | "error"',
+          type,
+        );
+      }
+      const text = optString(value, "text");
+      const sourceEventSeq = optNumber(value, "sourceEventSeq");
+      return {
+        type,
+        ts,
+        commandId: reqString(value, "commandId", type),
+        kind: kindRaw,
+        ...(text !== undefined ? { text } : {}),
+        ...(sourceEventSeq !== undefined ? { sourceEventSeq } : {}),
       };
     }
     default:

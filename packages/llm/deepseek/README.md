@@ -3,7 +3,8 @@
 Thin `LlmAdapter` for DeepSeek’s **OpenAI-compatible** Chat Completions surface.
 
 Defaults: `https://api.deepseek.com` + model `deepseek-chat`. Implementation delegates to
-`@xrkseek/llm-openai-compatible` — no vendor body forks yet (`thinking` / reasoner extras later).
+`@xrkseek/llm-openai-compatible` — optional `reasoning` / SSE `reasoning-delta`. Does **not**
+declare image modality (official serialize rejects images).
 
 ```ts
 import { createDeepSeekAdapter } from "@xrkseek/llm-deepseek";

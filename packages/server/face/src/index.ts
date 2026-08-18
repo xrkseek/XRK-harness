@@ -1,4 +1,7 @@
 export type {
+  FaceRpcError,
+  FaceRpcFail,
+  FaceRpcReceipt,
   FaceRpcRequest,
   FaceRpcResponse,
   FaceRpcResult,
@@ -7,11 +10,25 @@ export type {
   RpcId,
 } from "./types.js";
 export {
+  DSH_RPC_ERROR_CODES,
+  FACE_REMOTE_NAMESPACES,
+  FACE_RESPOND_PATHS,
+  FACE_WS_PATHS,
   errResponse,
+  faceMethodFromPath,
+  isFaceHttpPath,
+  isFaceRespondPath,
+  isFaceWsPath,
+  isLoopbackAddress,
+  mapFaceRpcError,
   okResponse,
+  parseClientResponse,
   parseFaceRpcRequest,
   serverRequestFrame,
-} from "./envelope.js";
+  settleFaceRespond,
+  type DshRpcErrorCode,
+  type ParsedClientResponse,
+} from "./wire/index.js";
 export { createFaceBus, type FaceBus } from "./bus.js";
 export { createFaceSeqClock, type FaceSeqClock } from "./seq.js";
 export {
@@ -20,6 +37,31 @@ export {
   type FaceRuntime,
 } from "./context.js";
 export { createFaceRuntime, type CreateFaceRuntimeOptions } from "./runtime.js";
+export {
+  listFacePluginInventory,
+  type FacePluginInventoryEntry,
+  type FaceProcessPlugin,
+  type FaceWebPlugin,
+} from "./plugin-inventory.js";
+export {
+  FaceMessageFeedbackStore,
+  MESSAGE_FEEDBACK_NOTE_MAX_BYTES,
+  type MessageFeedbackItem,
+  type MessageFeedbackRating,
+} from "./message-feedback.js";
+export {
+  FaceGoalStore,
+  DEFAULT_MAX_GOAL_ROUNDS,
+  type GoalActivation,
+  type GoalPhase,
+  type GoalRef,
+  type GoalView,
+} from "./goal-store.js";
+export {
+  SESSION_EXPORT_PATHS,
+  isSessionExportPath,
+  sessionExportFilename,
+} from "./session-export.js";
 export { dispatchFaceMethod, getHandler } from "./dispatch.js";
 export {
   createFaceProjectionRegistry,
@@ -36,13 +78,10 @@ export {
   type SessionListMetadata,
 } from "./projections/index.js";
 export {
-  FACE_WS_PATHS,
   attachFaceToServer,
   attachFaceUpgrades,
   createFaceOnlyServer,
-  faceMethodFromPath,
   handleFaceHttpRequest,
-  isFaceWsPath,
   tryHandleFaceHttp,
   type AttachFaceOptions,
 } from "./attach-http.js";
@@ -81,7 +120,10 @@ export {
   PathEscapeError,
   workspaceArchiveSessionDsh,
   workspaceCreateDsh,
+  workspaceDeleteDsh,
   workspaceDescribe,
+  workspaceInsertBeforeDsh,
+  workspaceInsertSessionBeforeDsh,
   workspaceListDsh,
   workspaceListProduct,
   workspacePreviewInject,
@@ -93,6 +135,11 @@ export {
   FaceWorkspaceRegistry,
   type FaceWorkspaceView,
 } from "./workspace-registry.js";
+export {
+  FaceSubagentRegistry,
+  type FaceSubagentLink,
+  type SubagentMode,
+} from "./subagent-registry.js";
 export {
   fullyQualified,
   hostCreateDirectory,
@@ -116,6 +163,7 @@ export {
   settingsReplaceDsh,
   settingsSet,
   settingsUpdateDsh,
+  settingsOpenDocument,
   type CredentialSlotView,
   type DshSettingsNamespaceView,
   type DshSettingsPathOp,
@@ -125,5 +173,9 @@ export {
 } from "./settings-credentials.js";
 export {
   FaceApprovalBroker,
+  approvalRequestedFrame,
+  approvalResolvedFrame,
+  type ApprovalOutcomeWire,
+  type FaceApprovalHooks,
   type PendingApprovalItem,
 } from "./approvals.js";

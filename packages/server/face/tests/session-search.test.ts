@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
+  createJsonlSessionStore,
   createMemorySessionStore,
   newSession,
 } from "@xrkseek/core-session";
@@ -35,7 +39,7 @@ describe("session.search", () => {
       const res = await dispatchFaceMethod(runtime, "session.search", "q1", payload);
       expect(res.result.ok).toBe(false);
       if (!res.result.ok) {
-        expect(res.result.error.code).toBe("invalid-payload");
+        expect(res.result.error.code).toBe("bad-request");
       }
     }
   });
@@ -98,5 +102,61 @@ describe("session.search", () => {
     const result = searchSessions(store, "shared-token");
     expect(result.items).toHaveLength(SESSION_SEARCH_RESULT_LIMIT);
     expect(result.hasMore).toBe(true);
+  });
+
+  it("ranks newest activity first and hits pending admits", async () => {
+    const store = createMemorySessionStore();
+    const oldId = newSession(store).id;
+    const newId = newSession(store).id;
+    store.append(oldId, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t-old",
+      content: "shared-rank old",
+    });
+    store.append(newId, {
+      type: "user/message",
+      ts: 9,
+      turnId: "t-new",
+      content: "shared-rank new",
+    });
+    const result = searchSessions(store, "shared-rank");
+    expect(result.items.map((i) => i.sessionId)).toEqual([newId, oldId]);
+
+    const pending = newSession(store).id;
+    store.append(pending, {
+      type: "prompt/admitted",
+      ts: 10,
+      admitId: "a1",
+      content: "queued unique-admit-token",
+    });
+    const admitHit = searchSessions(store, "unique-admit-token");
+    expect(admitHit.items.map((i) => i.sessionId)).toEqual([pending]);
+
+    const notice = newSession(store).id;
+    store.append(notice, {
+      type: "safety/notice",
+      ts: 11,
+      turnId: "t-safe",
+      kind: "loop_hard",
+      content: "unique-safety-token fired",
+    });
+    const safetyHit = searchSessions(store, "unique-safety-token");
+    expect(safetyHit.items.map((i) => i.sessionId)).toEqual([notice]);
+  });
+
+  it("scans JSONL-backed sessions the same way", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-search-"));
+    const store = createJsonlSessionStore(dir);
+    const id = newSession(store).id;
+    store.append(id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t1",
+      content: "unique-jsonl-token on disk",
+    });
+    const reloaded = createJsonlSessionStore(dir);
+    const hit = searchSessions(reloaded, "unique-jsonl-token");
+    expect(hit.items.map((i) => i.sessionId)).toEqual([id]);
   });
 });

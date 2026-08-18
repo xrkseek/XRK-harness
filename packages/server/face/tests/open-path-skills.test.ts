@@ -27,6 +27,13 @@ function bareRuntime(workspaceRoot: string) {
 }
 
 describe("host.openPath + skill.list", () => {
+  it("treats Win / macOS / Linux as desktop openers", () => {
+    expect(canOpenNativePath("win32")).toBe(true);
+    expect(canOpenNativePath("darwin")).toBe(true);
+    expect(canOpenNativePath("linux")).toBe(true);
+    expect(canOpenNativePath("freebsd")).toBe(false);
+  });
+
   it("host.describe reports canOpenPath for desktop platforms", async () => {
     const runtime = bareRuntime(process.cwd());
     const d = await dispatchFaceMethod(runtime, "host.describe", "r1", {});
@@ -45,7 +52,7 @@ describe("host.openPath + skill.list", () => {
     });
     expect(res.result.ok).toBe(false);
     if (!res.result.ok) {
-      expect(res.result.error.code).toBe("invalid-payload");
+      expect(res.result.error.code).toBe("bad-request");
     }
   });
 

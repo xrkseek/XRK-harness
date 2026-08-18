@@ -8,8 +8,10 @@
 - `bearer` / `api-key` / 自定义 header
 - tools → `function` schema；缺 id 时兜底
 - 上下文溢出 → `ContextOverflowError`（供 compaction）
+- 默认 `stream()`：SSE `delta.reasoning_content` → `reasoning-delta`（index 0），`delta.content` → `text-delta`（index 1）；`chat()` 仍非流 JSON
+- `inputModalities` 含 `"image"` 时 user 块走 `image_url` data URL（须 `resolveImage`）。默认 text-only
 
-本切片不含：SSE 流式、vision、厂商专用 body 分叉（DeepSeek 预设见 [llm-deepseek.md](./llm-deepseek.md)）。
+厂商专用 body 分叉见 [llm-deepseek.md](./llm-deepseek.md)（官方 DeepSeek **不**标视觉）。
 
 ```ts
 import { createOpenAiCompatibleAdapter } from "@xrkseek/llm-openai-compatible";
