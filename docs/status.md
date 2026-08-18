@@ -9,7 +9,7 @@
 | Kernel / Compose C0·C1·C2 | `@xrkseek/kernel` · `@xrkseek/compose`；Host 子会话 `openSubagentRealm` | [architecture](./architecture.md) · [compose](./compose.md) · [ADR-0005](./adr/0005-compose-leaf.md) |
 | Session / Agent / Loop / Tools | `core-*`（`createJsonlSessionStore` + `XRK_SESSIONS_DIR`） | [session.md](./session.md) · [tool-pipeline.md](./tool-pipeline.md) |
 | Exec / Workspace / Policy | `exec-*` · `workspace` · `policy` | [seams.md](./seams.md) · [policy.md](./policy.md) |
-| HTTP + Host + Face 主路径 | `server-*`（66 unary，3 NI；`goals/*` + `goals.json`；`GET/HEAD /api/session.export`；openDocument · feedback） | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
+| HTTP + Host + Face 主路径 | `server-*`（DSH `goal.*` 别名；preset 创作 `agent-preset-read-only`；Cordis runner 空 inventory；`GET/HEAD /api/session.export`） | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
 | LLM replay / OpenAI 兼容 / Registry R0 | `llm-*`（SSE `reasoning-delta`/`text-delta`；openai-chat 非 DeepSeek 品牌可走图；`llm.discoverModels` → GET `/models`） | [llm-provider-registry.md](./llm-provider-registry.md) · [llm-openai-compatible.md](./llm-openai-compatible.md) |
 | Presets / SDK | `presets/*` · `@xrkseek/harness` | [profiles.md](./profiles.md) |
 | MCP | `@xrkseek/mcp` stdio + streamable-http；Host `XRK_MCP_*`（默认 deny）；HTTP 可传 SDK `reconnectionOptions`（SSE 恢复）；`tools/list_changed` 热同步 | [policy.md](./policy.md) · [modules/mcp.md](./modules/mcp.md) |
@@ -29,7 +29,6 @@
 | 域 | 说明 |
 | --- | --- |
 | Registry R1+ | 官方协议包（Anthropic / Gemini / Responses） |
-| Face U3 NI | agentPreset 创作面（copy/remove/openDocument；`authorable: false`） |
 | MCP 产品面 | Face MCP 设置 UI · 进程级 supervisor（`tools/list_changed` 与 HTTP SSE 恢复已接） |
 
 ## 依赖纪律

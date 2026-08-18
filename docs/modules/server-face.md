@@ -44,7 +44,7 @@ HTTP/WS (attach-http)
 | `context.ts`     | `FaceRuntime` 形状           | drain · store · maps · policy 可选              |
 | `runtime.ts`     | `createFaceRuntime`          | 组装 bus/seq/projections/approvals/inbox        |
 | `dispatch.ts`    | **RPC 路由表**               | 未知 method → NI；新方法在此登记                |
-| `handlers/`      | 按域 handler                 | `session` · `host` · `catalog` · `remotes`      |
+| `handlers/`      | 按域 handler                 | `session` · `host` · `catalog` · `remotes` · `cordis-stub` |
 | `attach-http.ts` | HTTP 挂载 + WS · mux 重连基线 | 调用 `wire/`；pending 补 queue / 审批           |
 | `bus.ts`         | mux/host 订阅扇出            | `publishMux(frame, rpcId?)` 审批用稳定 id       |
 | `seq.ts`         | Face 1-based seq 时钟        | 与 history 对齐                                 |
@@ -110,17 +110,20 @@ HTTP/WS (attach-http)
 | `tests/session-search.test.ts`   | search 校验 / 命中 / 近因 / JSONL |
 | `tests/open-path-skills.test.ts` | canOpenPath 三端 · skill.list     |
 | `tests/message-feedback.test.ts` | list/put/delete CAS · 嵌套 Typert |
-| `tests/goals.test.ts`            | create/pause CAS · `/goal` · max rounds |
+| `tests/goals.test.ts`            | create/pause CAS · `/goal` · `goal.create` 点号 |
+| `tests/face-fidelity.test.ts`    | preset `agent-preset-read-only` · 信封形 |
+| `tests/native-paths.test.ts`     | `/api/goal.create` · dual WS |
 | `tests/session-export.test.ts`   | HEAD/GET ZIP · 子会话 · 附件           |
 | `tests/mux-baseline.test.ts`     | 重连 queue                   |
 | `tests/inbox-wire.test.ts`       | splice 投影                  |
-| `tests/commands.test.ts`         | `commands/list` · `commands/execute` · `pluginInventory/list` |
+| `tests/commands.test.ts`         | `commands/list` · `commands/execute` · `pluginInventory/list` · Cordis stub |
 | `tests/wire.test.ts`             | respond 解析 · 路径                        |
 | `tests/rpc-error.test.ts`        | DSH 错误码映射                             |
 | `tests/approval.test.ts`         | ask → respondByRpcId                       |
 | `tests/subagent.test.ts`         | create-with-parent · list/history/prompt/interrupt · fork 登记 |
 | `tests/workspace.test.ts`        | list/create/rename/archive · delete/insert* |
 
-## 已知 NI
+## 已知诚实拒绝 / 空面
 
-- agentPreset 创作面（copy / remove / openDocument）
+- agentPreset 创作面（copy / remove / openDocument）→ `agent-preset-read-only`
+- `dynamicCordisRunner/*` → 空 inventory / no-op（不嵌 Cordis Host）

@@ -98,6 +98,20 @@ export const agentPresetSelect: FaceHandler = async (runtime, _rpcId, payload) =
   return { ok: true, value: { sessionId, agentPreset } };
 };
 
+/** DSH UI disables copy when `authorable: false`; if still called, use the closed error. */
+export const agentPresetReadOnly: FaceHandler = async (_runtime, _rpcId, payload) => {
+  const p = asRecord(payload);
+  const agentPreset = String(p.agentPreset ?? "").trim() || "unknown";
+  return {
+    ok: false,
+    error: {
+      code: "agent-preset-read-only",
+      message: "agent presets are not authorable on this host",
+      details: { agentPreset, reason: "authorable: false" },
+    },
+  };
+};
+
 export const llmProviders: FaceHandler = async (runtime) => {
   const routable = new Map(
     runtime.registry.listRoutable().map((r) => [r.id, r]),
@@ -251,15 +265,13 @@ export const sessionAttachment: FaceHandler = async (runtime, _rpcId, payload) =
       },
     };
   }
-  let events;
-  try {
-    events = runtime.store.get(sessionId).events;
-  } catch {
+  if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
       error: { code: "not-found", message: "session not found" },
     };
   }
+  const events = runtime.store.get(sessionId).events;
   const result = await readSessionAttachment({
     events,
     attachments: runtime.attachments,

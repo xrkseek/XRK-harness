@@ -27,3 +27,22 @@ export const notImplemented: FaceHandler = async () => ({
   ok: false,
   error: { code: "not-implemented", message: "not implemented in Face" },
 });
+
+/** Wrap `(runtime) => result` as a FaceHandler. */
+export function bindRuntime(
+  fn: (
+    runtime: FaceRuntime,
+  ) => FaceRpcResult<unknown> | Promise<FaceRpcResult<unknown>>,
+): FaceHandler {
+  return async (runtime) => fn(runtime);
+}
+
+/** Wrap `(runtime, payload) => result` as a FaceHandler. */
+export function bindPayload(
+  fn: (
+    runtime: FaceRuntime,
+    payload: unknown,
+  ) => FaceRpcResult<unknown> | Promise<FaceRpcResult<unknown>>,
+): FaceHandler {
+  return async (runtime, _rpcId, payload) => fn(runtime, payload);
+}

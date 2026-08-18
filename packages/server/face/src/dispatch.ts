@@ -28,7 +28,12 @@ import {
   settingsUpdateDsh,
 } from "./settings-credentials.js";
 import { skillList } from "./skill-list.js";
-import { notImplemented, type FaceHandler } from "./handlers/types.js";
+import {
+  bindPayload,
+  bindRuntime,
+  notImplemented,
+  type FaceHandler,
+} from "./handlers/types.js";
 import {
   hostCreateDirectoryHandler,
   hostDescribe,
@@ -53,10 +58,11 @@ import {
 import {
   agentPresetList,
   agentPresetRead,
+  agentPresetReadOnly,
   agentPresetSelect,
+  llmDiscoverModels,
   llmModels,
   llmProviders,
-  llmDiscoverModels,
   sessionAttachment,
 } from "./handlers/catalog.js";
 import {
@@ -81,6 +87,7 @@ import {
   goalsPause,
   goalsResume,
 } from "./handlers/goals.js";
+import { cordisRunnerHandler } from "./handlers/cordis-stub.js";
 
 const HANDLERS: Record<string, FaceHandler> = {
   "host.describe": hostDescribe,
@@ -104,57 +111,41 @@ const HANDLERS: Record<string, FaceHandler> = {
   "agentPreset.list": agentPresetList,
   "agentPreset.select": agentPresetSelect,
   "agentPreset.read": agentPresetRead,
+  "agentPreset.copy": agentPresetReadOnly,
+  "agentPreset.openDocument": agentPresetReadOnly,
+  "agentPreset.remove": agentPresetReadOnly,
   "llm.providers": llmProviders,
   "llm.models": llmModels,
   "llm.discoverModels": llmDiscoverModels,
-  "workspace.describe": async (runtime) => workspaceDescribe(runtime),
-  "workspace.listProduct": async (runtime) => workspaceListProduct(runtime),
-  "workspace.list": async (runtime) => workspaceListDsh(runtime),
-  "workspace.create": async (runtime, _rpcId, payload) =>
-    workspaceCreateDsh(runtime, payload),
-  "workspace.rename": async (runtime, _rpcId, payload) =>
-    workspaceRenameDsh(runtime, payload),
-  "workspace.archiveSession": async (runtime, _rpcId, payload) =>
-    workspaceArchiveSessionDsh(runtime, payload),
-  "workspace.delete": async (runtime, _rpcId, payload) =>
-    workspaceDeleteDsh(runtime, payload),
-  "workspace.insertBefore": async (runtime, _rpcId, payload) =>
-    workspaceInsertBeforeDsh(runtime, payload),
-  "workspace.insertSessionBefore": async (runtime, _rpcId, payload) =>
-    workspaceInsertSessionBeforeDsh(runtime, payload),
-  "workspace.previewInject": async (runtime, _rpcId, payload) =>
-    workspacePreviewInject(runtime, payload),
-  "workspace.syncSeeds": async (runtime, _rpcId, payload) =>
-    workspaceSyncSeeds(runtime, payload),
-  "settings.get": async (runtime, _rpcId, payload) =>
-    settingsGet(runtime, payload),
-  "settings.describe": async (runtime) => settingsDescribeDsh(runtime),
-  "settings.mutate": async (runtime, _rpcId, payload) =>
-    settingsMutateDsh(runtime, payload),
-  "settings.update": async (runtime, _rpcId, payload) =>
-    settingsUpdateDsh(runtime, payload),
-  "settings.replace": async (runtime, _rpcId, payload) =>
-    settingsReplaceDsh(runtime, payload),
-  "settings.set": async (runtime, _rpcId, payload) =>
-    settingsSet(runtime, payload),
-  "settings.openDocument": async (runtime) => settingsOpenDocument(runtime),
-  "credentials.list": async (runtime) => credentialsList(runtime),
-  "credentials.describe": async (runtime, _rpcId, payload) =>
-    credentialsDescribe(runtime, payload),
-  "credentials.set": async (runtime, _rpcId, payload) =>
-    credentialsSet(runtime, payload),
-  "credentials.unset": async (runtime, _rpcId, payload) =>
-    credentialsUnset(runtime, payload),
-  // Skills from workspace .xrk/skills/<id>/SKILL.md
-  "skill.list": async (runtime, _rpcId, payload) =>
+  "workspace.describe": bindRuntime(workspaceDescribe),
+  "workspace.listProduct": bindRuntime(workspaceListProduct),
+  "workspace.list": bindRuntime(workspaceListDsh),
+  "workspace.create": bindPayload(workspaceCreateDsh),
+  "workspace.rename": bindPayload(workspaceRenameDsh),
+  "workspace.archiveSession": bindPayload(workspaceArchiveSessionDsh),
+  "workspace.delete": bindPayload(workspaceDeleteDsh),
+  "workspace.insertBefore": bindPayload(workspaceInsertBeforeDsh),
+  "workspace.insertSessionBefore": bindPayload(workspaceInsertSessionBeforeDsh),
+  "workspace.previewInject": bindPayload(workspacePreviewInject),
+  "workspace.syncSeeds": bindPayload(workspaceSyncSeeds),
+  "settings.get": bindPayload(settingsGet),
+  "settings.describe": bindRuntime(settingsDescribeDsh),
+  "settings.mutate": bindPayload(settingsMutateDsh),
+  "settings.update": bindPayload(settingsUpdateDsh),
+  "settings.replace": bindPayload(settingsReplaceDsh),
+  "settings.set": bindPayload(settingsSet),
+  "settings.openDocument": bindRuntime(settingsOpenDocument),
+  "credentials.list": bindRuntime(credentialsList),
+  "credentials.describe": bindPayload(credentialsDescribe),
+  "credentials.set": bindPayload(credentialsSet),
+  "credentials.unset": bindPayload(credentialsUnset),
+  "skill.list": bindPayload((runtime, payload) =>
     skillList(runtime.workspaceRoot, payload),
+  ),
   "subagent.list": subagentList,
   "subagent.history": subagentHistory,
   "subagent.prompt": subagentPrompt,
   "subagent.interrupt": subagentInterrupt,
-  "agentPreset.copy": notImplemented,
-  "agentPreset.openDocument": notImplemented,
-  "agentPreset.remove": notImplemented,
   "commands/list": commandsList,
   "commands/execute": commandsExecute,
   "pluginInventory/list": pluginInventoryList,
@@ -167,10 +158,17 @@ const HANDLERS: Record<string, FaceHandler> = {
   "goals/resume": goalsResume,
   "goals/complete": goalsComplete,
   "goals/clear": goalsClear,
+  // DSH connection.api.goals.* posts dotted unary (shell remotes still use goals/).
+  "goal.create": goalsCreate,
+  "goal.edit": goalsEdit,
+  "goal.pause": goalsPause,
+  "goal.resume": goalsResume,
+  "goal.complete": goalsComplete,
+  "goal.clear": goalsClear,
 };
 
 export function getHandler(method: string): FaceHandler | undefined {
-  return HANDLERS[method];
+  return HANDLERS[method] ?? cordisRunnerHandler(method);
 }
 
 export async function dispatchFaceMethod(
@@ -179,7 +177,7 @@ export async function dispatchFaceMethod(
   rpcId: string,
   payload: unknown,
 ): Promise<FaceRpcResponse> {
-  const handler = HANDLERS[method] ?? notImplemented;
+  const handler = getHandler(method) ?? notImplemented;
   try {
     const result = await handler(runtime, rpcId, payload);
     if (result.ok) return okResponse(rpcId, result.value);
