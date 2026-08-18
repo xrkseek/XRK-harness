@@ -27,6 +27,7 @@ import {
   askToolNames,
   createPolicyToolPre,
   createPolicyToolGuard,
+  createReadOnlyToolPre,
   assertPolicyAllow,
 } from "@xrkseek/policy";
 
@@ -38,6 +39,8 @@ const engine = createPolicyEngine({
 });
 
 pipeline.onPre(createPolicyToolPre(engine));
+// Face `/permission read-only` → harness/minimal also mount:
+pipeline.onPre(createReadOnlyToolPre());
 pipeline.onGuard(createPolicyToolGuard(engine));
 assertPolicyAllow(engine, { kind: "provider.use", providerId: llm.id });
 ```

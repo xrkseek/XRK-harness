@@ -3,7 +3,9 @@
  * No Cordis — Host computes; mux carries higher-seq-wins values.
  */
 
-import type { SessionEvent } from "@xrkseek/protocol";
+import type { SessionEvent, TodoItem } from "@xrkseek/protocol";
+import type { PlanProjection } from "@xrkseek/protocol";
+import type { PermissionSelect } from "../permissions.js";
 
 /** Well-known projection keys owned by Face default units. */
 export interface FaceProjectionMap {
@@ -11,6 +13,12 @@ export interface FaceProjectionMap {
   readonly title: string | null;
   /** Sidebar list hint. */
   readonly sessionListMetadata: SessionListMetadata;
+  /** Standing plan (DSH TodoDock); null before write / after turn/start. */
+  readonly todos: TodoItem[] | null;
+  /** Permission select (DSH Access chip); folded from knob events. */
+  readonly permissions: PermissionSelect;
+  /** Plan-mode chip: logged active + pending `/plan` selection. */
+  readonly plan: PlanProjection;
 }
 
 export interface SessionListMetadata {

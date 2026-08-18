@@ -27,6 +27,7 @@ function runtime(opts?: {
   productDir?: string;
   settingsDocumentPath?: string;
   openNativePath?: (target: string) => Promise<void>;
+  plugins?: Parameters<typeof createFaceRuntime>[0]["plugins"];
 }) {
   const store = createMemorySessionStore();
   return createFaceRuntime({
@@ -46,6 +47,7 @@ function runtime(opts?: {
     ...(opts?.bootstrapApiKey !== undefined
       ? { bootstrapApiKey: opts.bootstrapApiKey }
       : {}),
+    ...(opts?.plugins !== undefined ? { plugins: opts.plugins } : {}),
     ...(opts?.hostPublic
       ? {
           hostPublic: {
@@ -142,13 +144,14 @@ describe("Face settings U2", () => {
     expect(v.namespaces.some((n) => n.ns === "ui-theme")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "permission")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "llm")).toBe(true);
+    expect(v.namespaces.some((n) => n.ns === "mcp")).toBe(true);
 
     const permission = v.namespaces.find((n) => n.ns === "permission") as {
       ns: string;
       value: { defaultPreset: string };
       schema: { uid: number; refs: Record<string, { type: string }> };
     };
-    expect(permission.value.defaultPreset).toBe("read-only");
+    expect(permission.value.defaultPreset).toBe("workspace-write");
     expect(permission.schema.uid).toBe(5);
     expect(permission.schema.refs["5"]?.type).toBe("object");
 
@@ -215,6 +218,51 @@ describe("Face settings U2", () => {
     expect(bad.result.ok).toBe(false);
     if (!bad.result.ok) {
       expect(bad.result.error.code).toBe("settings-rejected");
+    }
+  });
+
+  it("describe lists MCP inventory; mutate is read-only", async () => {
+    const rt = runtime({
+      plugins: [
+        {
+          id: "mcp:demo",
+          kind: "tools",
+          tools: [],
+        },
+        { id: "example-tools", kind: "tools" },
+      ],
+    });
+    const desc = await dispatchFaceMethod(rt, "settings.describe", "md", {});
+    expect(desc.result.ok).toBe(true);
+    if (!desc.result.ok) return;
+    const mcp = (
+      desc.result.value as {
+        namespaces: {
+          ns: string;
+          value: {
+            servers: { id: string; serverName: string; toolCount: number }[];
+            note: string;
+          };
+        }[];
+      }
+    ).namespaces.find((n) => n.ns === "mcp");
+    expect(mcp?.value.servers).toEqual([
+      {
+        id: "mcp:demo",
+        serverName: "demo",
+        kind: "tools",
+        toolCount: 0,
+      },
+    ]);
+    expect(mcp?.value.note).toContain("XRK_MCP_SERVERS");
+
+    const mut = await dispatchFaceMethod(rt, "settings.mutate", "mm", {
+      ns: "mcp",
+      ops: [{ op: "set", path: ["servers"], value: [] }],
+    });
+    expect(mut.result.ok).toBe(false);
+    if (!mut.result.ok) {
+      expect(mut.result.error.code).toBe("settings-rejected");
     }
   });
 

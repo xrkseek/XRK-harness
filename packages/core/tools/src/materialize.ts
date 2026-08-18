@@ -98,6 +98,7 @@ export function materializeTools(
           ),
           additionalContexts: [],
           safetyNotices: [],
+          toolEvents: [],
           stages: ["result"],
           skippedBody: true,
         };

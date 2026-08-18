@@ -31,6 +31,11 @@ describe("Face adapt / slash / queue / presets", () => {
   it("EVENT_ISOMORPHISM covers every SessionEvent type", () => {
     expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("prompt/withdrawn");
     expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("user/message");
+    expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("todo/write");
+    expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("permission/preset");
+    expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("sandbox/mode");
+    expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("approval/policy");
+    expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("plan/mode");
   });
 
   it("presentToolView needs a tool lookup (no Face-side name switch)", () => {
@@ -88,7 +93,13 @@ describe("Face adapt / slash / queue / presets", () => {
     });
     expect(
       runtime.store.get(sessionId).events.map((e) => e.type),
-    ).toEqual(["command/run", "command/done"]);
+    ).toEqual([
+      "permission/preset",
+      "sandbox/mode",
+      "approval/policy",
+      "command/run",
+      "command/done",
+    ]);
   });
 
   it("session.prompt unknown slash admits as text (shell command schema is success-only)", async () => {

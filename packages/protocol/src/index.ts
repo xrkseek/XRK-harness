@@ -53,12 +53,42 @@ export {
   type SessionTitleSource,
   type StepEndEvent,
   type StepStartEvent,
+  type TodoItem,
+  type TodoItemStatus,
+  type TodoWriteEvent,
+  type PermissionPresetEvent,
+  type SandboxModeEvent,
+  type ApprovalPolicyEvent,
+  type PlanModeEvent,
+  type SandboxMode,
+  type ApprovalPolicy,
   type ToolCallEvent,
   type ToolResultEvent,
   type TurnEndEvent,
   type TurnStartEvent,
   type UserMessageEvent,
 } from "./session-events.js";
+export {
+  EMPTY_PERMISSION_KNOBS,
+  applyPermissionKnobEvent,
+  effectiveApprovalPolicy,
+  effectiveSandboxMode,
+  foldPermissionKnobs,
+  shouldConfineSandbox,
+  type PermissionKnobState,
+} from "./permission-knobs.js";
+export {
+  DEFAULT_PLAN_POLICY_SECTION,
+  EMPTY_PLAN_UNIT,
+  applyPlanUnitEvent,
+  foldPlanMode,
+  foldPlanUnit,
+  hasOpenTurn,
+  pendingPlanTarget,
+  viewPlanProjection,
+  type PlanProjection,
+  type PlanUnitState,
+} from "./plan-mode.js";
 export type { ToolCall, ToolResult } from "./tools.js";
 export {
   sessionEventJsonSchema,

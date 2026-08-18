@@ -1,6 +1,7 @@
 import { createAgent, type AgentHandle } from "@xrkseek/core-agent";
 import {
   createMemorySessionStore,
+  type CompactionOptions,
   type SessionStore,
 } from "@xrkseek/core-session";
 import {
@@ -38,8 +39,13 @@ import type { LlmAdapter } from "@xrkseek/llm";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import {
   createPolicyToolPre,
+  createReadOnlyToolPre,
   type PolicyEngine,
 } from "@xrkseek/policy";
+import {
+  effectiveSandboxMode,
+  shouldConfineSandbox,
+} from "@xrkseek/protocol";
 import {
   wireCompositionTools,
   wireCompositionPrompts,
@@ -102,6 +108,11 @@ export interface HarnessCompositionOptions {
   readonly policy?: PolicyEngine;
   /** Host vision: resolve attachment bytes for image user content. */
   readonly resolveImage?: Parameters<typeof createAgent>[0]["resolveImage"];
+  /**
+   * Context compaction. Default `{}` enables overflow retry + `/compact`.
+   * `false` skips overflow retry; manual compact still works.
+   */
+  readonly compaction?: false | CompactionOptions;
 }
 
 export interface HarnessComposition {
@@ -166,19 +177,30 @@ export function createHarnessComposition(
   const toolOutputPersist = createWorkspaceToolOutputPersist({
     root: options.workspaceRoot,
   });
+  const store = options.sessionStore ?? createMemorySessionStore();
+  const sessionId = ensureSession(store, options.sessionId);
   const pipeline = createToolPipeline({
     outputBound: { persist: (full) => toolOutputPersist.persist(full) },
   });
   if (options.policy) {
     pipeline.onPre(createPolicyToolPre(options.policy));
   }
-  pipeline.onGuard(createSandboxWrapGuard(sandbox));
-  pipeline.onGuard(
-    createWriteIntentGuard({
-      hasRead: (p) => tracker.hasRead(p),
-      writeToolNames: ["apply_edit"],
-    }),
+  const sandboxMode = effectiveSandboxMode(
+    store.get(sessionId).events,
+    "workspace-write",
   );
+  if (sandboxMode === "read-only") {
+    pipeline.onPre(createReadOnlyToolPre());
+  }
+  if (shouldConfineSandbox(sandboxMode)) {
+    pipeline.onGuard(createSandboxWrapGuard(sandbox));
+    pipeline.onGuard(
+      createWriteIntentGuard({
+        hasRead: (p) => tracker.hasRead(p),
+        writeToolNames: ["apply_edit"],
+      }),
+    );
+  }
   pipeline.onPost(async (ctx) => {
     if (
       ctx.call.name === "read_file" &&
@@ -199,8 +221,6 @@ export function createHarnessComposition(
       },
     ]);
 
-  const store = options.sessionStore ?? createMemorySessionStore();
-  const sessionId = ensureSession(store, options.sessionId);
   const persona =
     options.system ??
     "You are a coding agent with filesystem and shell tools.";
@@ -286,6 +306,8 @@ export function createHarnessComposition(
         ...(options.resolveImage
           ? { resolveImage: options.resolveImage }
           : {}),
+        compaction:
+          options.compaction === false ? false : (options.compaction ?? {}),
       });
     },
     dumpConfig(patch = {}) {

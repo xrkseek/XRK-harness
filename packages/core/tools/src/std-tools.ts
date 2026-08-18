@@ -1,11 +1,49 @@
-import type { ToolDefinition } from "./definition.js";
+import type { TodoItem, TodoItemStatus } from "@xrkseek/protocol";
+import type { ToolDefinition, ToolExecuteExtras } from "./definition.js";
+
+export const EXIT_PLAN_MODE = "exit_plan_mode";
+export const PLAN_REVIEW_ID = "plan-review";
+export const PLAN_APPROVE_LABEL = "Approve";
+export const PLAN_KEEP_LABEL = "Keep planning";
+
+export interface PlanReviewAnswer {
+  readonly approved: boolean;
+  readonly feedback?: string;
+  readonly dismissed?: boolean;
+}
 
 export interface StdToolsOptions {
   /** Interactive ask; if unset, ask_user returns isError. */
   askUser?: (question: string) => Promise<string>;
+  /** Plan-mode gate for `exit_plan_mode`. Default: inactive. */
+  isPlanModeActive?: () => boolean;
+  /** Review channel for `exit_plan_mode`. */
+  askPlanReview?: (
+    plan: string,
+    signal?: AbortSignal,
+  ) => Promise<PlanReviewAnswer>;
 }
 
-/** Standard session tools: todo_write + ask_user. */
+const TODO_STATUSES = new Set<TodoItemStatus>([
+  "pending",
+  "in_progress",
+  "completed",
+]);
+
+function toWireTodos(
+  rows: { id: string; content: string; status: string }[],
+): TodoItem[] | undefined {
+  const out: TodoItem[] = [];
+  for (const t of rows) {
+    const content = t.content.trim();
+    if (!content) return undefined;
+    if (!TODO_STATUSES.has(t.status as TodoItemStatus)) return undefined;
+    out.push({ content, status: t.status as TodoItemStatus });
+  }
+  return out;
+}
+
+/** Standard session tools: todo_write + ask_user + exit_plan_mode. */
 export function createStdTools(
   options: StdToolsOptions = {},
 ): ToolDefinition[] {
@@ -32,7 +70,7 @@ export function createStdTools(
         },
         required: ["todos"],
       },
-      async execute(args) {
+      async execute(args, _signal, extras?: ToolExecuteExtras) {
         const a = args as {
           merge?: boolean;
           todos?: { id: string; content: string; status: string }[];
@@ -45,6 +83,10 @@ export function createStdTools(
           const i = todos.findIndex((x) => x.id === t.id);
           if (i >= 0) todos[i] = t;
           else todos.push(t);
+        }
+        const wire = toWireTodos(todos);
+        if (wire && extras) {
+          extras.emitToolEvent("todo/write", { todos: wire });
         }
         return { content: JSON.stringify(todos, null, 2) };
       },
@@ -146,5 +188,115 @@ export function createStdTools(
         return { content: answer };
       },
     },
+    createExitPlanModeTool({
+      isActive: () => options.isPlanModeActive?.() === true,
+      ...(options.askPlanReview
+        ? { askReview: options.askPlanReview }
+        : {}),
+    }),
   ];
+}
+
+const EXIT_DESCRIPTION =
+  "Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. " +
+  "Send the COMPLETE plan as markdown, starting with a # heading that names it. " +
+  "The user may approve (carry out the plan from your next step) or keep " +
+  "planning — their feedback comes back in the tool result; revise and present again.";
+
+/** The plan's first markdown heading (any level), or undefined when it has none. */
+export function firstPlanHeading(plan: string): string | undefined {
+  for (const line of plan.split("\n")) {
+    const match = /^#{1,6}\s+(.+?)\s*$/u.exec(line);
+    if (match) return match[1];
+  }
+  return undefined;
+}
+
+export function createExitPlanModeTool(options: {
+  isActive: () => boolean;
+  askReview?: (
+    plan: string,
+    signal?: AbortSignal,
+  ) => Promise<PlanReviewAnswer>;
+}): ToolDefinition {
+  return {
+    name: EXIT_PLAN_MODE,
+    description: EXIT_DESCRIPTION,
+    parameters: {
+      type: "object",
+      properties: {
+        plan: {
+          type: "string",
+          description:
+            "The complete plan, as markdown, starting with a # heading that names it.",
+        },
+      },
+      required: ["plan"],
+    },
+    presentCall: (args) => {
+      const plan = String((args as { plan?: unknown }).plan ?? "");
+      return {
+        card: "generic",
+        title: firstPlanHeading(plan) ?? "Plan",
+        kind: "other",
+        content: [{ type: "text", text: plan }],
+      };
+    },
+    presentResult: (_args, result) => ({
+      card: "generic",
+      title: "Plan review",
+      content: [{ type: "text" as const, text: result.content }],
+    }),
+    async execute(args, signal, extras?: ToolExecuteExtras) {
+      const plan = String((args as { plan?: unknown }).plan ?? "");
+      if (!options.isActive()) {
+        return {
+          content: `${EXIT_PLAN_MODE} is only available in plan mode`,
+          isError: true,
+        };
+      }
+      if (!/^#\s+\S/u.test(plan.trim())) {
+        return {
+          content: `${EXIT_PLAN_MODE} requires a non-empty markdown plan starting with a # heading`,
+          isError: true,
+        };
+      }
+      if (!options.askReview) {
+        return {
+          content:
+            "no user-questions channel is available to review the plan; ask the user to switch the session mode instead",
+          isError: true,
+        };
+      }
+      let review: PlanReviewAnswer;
+      try {
+        review = await options.askReview(plan, signal);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { content: msg, isError: true };
+      }
+      if (review.dismissed) {
+        return {
+          content:
+            "The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message.",
+          isError: true,
+        };
+      }
+      if (!review.approved) {
+        const feedback = review.feedback?.trim() ?? "";
+        return {
+          content:
+            feedback === ""
+              ? "The user chose to keep planning; revise the plan and present it again."
+              : `The user chose to keep planning; their feedback: ${feedback}`,
+          isError: true,
+        };
+      }
+      extras?.emitToolEvent("plan/mode", { active: false });
+      return {
+        content:
+          "Plan approved — plan mode exited; carry out the plan starting with your next step.",
+      };
+    },
+  };
 }

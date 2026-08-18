@@ -11,6 +11,7 @@ import type {
   ToolPipelineContext,
 } from "@xrkseek/core-tools";
 import type { ApprovalDecisionSource } from "@xrkseek/protocol";
+import { effectiveApprovalPolicy } from "@xrkseek/protocol";
 import type { FaceRpcReceipt, MuxFrame } from "./types.js";
 
 const ARGS_SUMMARY_MAX = 480;
@@ -86,7 +87,12 @@ export class FaceApprovalBroker {
 
   /** Pipeline `ApprovalHandler` bound to a session. */
   handlerFor(sessionId: string): ApprovalHandler {
-    return (ctx, reason) => this.request(sessionId, ctx, reason);
+    return async (ctx, reason) => {
+      if (effectiveApprovalPolicy(this.store.get(sessionId).events) === "never") {
+        return true;
+      }
+      return this.request(sessionId, ctx, reason);
+    };
   }
 
   async request(

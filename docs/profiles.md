@@ -7,7 +7,7 @@
 | Preset | 平面 | 包含 | 适用 |
 |--------|------|------|------|
 | **minimal** | Session | fs 工具（read/write/edit/glob/grep）· write-intent · workspace inject · replay 默认 LLM | 本地烟测、示例、无 shell |
-| **harness** | Session | minimal 工具面 + bash + std（todo_write/ask_user）· sandbox 栈 · 可选 `run_code` | 完整编码 Agent |
+| **harness** | Session | minimal 工具面 + bash + std（todo_write/ask_user/exit_plan_mode）· sandbox 栈 · 可选 `run_code` | 完整编码 Agent |
 | **server** | Host | HTTP host + agent factory → 通常挂 harness 组合 | `serve` |
 
 Host vs Session 平面：[host-preset.md](./host-preset.md)。
@@ -26,6 +26,7 @@ Host vs Session 平面：[host-preset.md](./host-preset.md)。
 | `policy` | 无 | `PolicyEngine` → `pipeline.onPre(createPolicyToolPre)` |
 | `system` | preset 默认人设 | 覆盖 persona |
 | `sessionStore` / `sessionId` | 内存新建 | 注入既有 session |
+| `compaction` | `{}` | overflow 一次重试 + `/compact`；`false` 关 overflow（手动 compact 仍可用） |
 
 Harness 另有：`presentation: "tools" | "code"`（`code` 注册实验性 `run_code`）。
 

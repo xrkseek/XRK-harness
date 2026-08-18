@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createAgent } from "@xrkseek/core-agent";
 import { createMemorySessionStore } from "@xrkseek/core-session";
+import { createToolRegistry } from "@xrkseek/core-tools";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import { faceMethodFromPath } from "../src/wire/index.js";
 import {
@@ -49,6 +51,10 @@ describe("commands/execute + list", () => {
     if (listed.result.ok) {
       expect(listed.result.value).toEqual([
         {
+          name: "compact",
+          description: "Compact older conversation history",
+        },
+        {
           name: "echo",
           description: "echo args",
           input: { hint: "text" },
@@ -57,6 +63,17 @@ describe("commands/execute + list", () => {
           name: "goal",
           description: "Set or replace the session goal",
           input: { hint: "objective" },
+        },
+        {
+          name: "permission",
+          description:
+            "Switch the permission preset (sandbox mode + approval policy)",
+          input: { hint: "<preset>" },
+        },
+        {
+          name: "plan",
+          description: "Enter or leave plan mode",
+          input: { hint: "[off|message]" },
         },
       ]);
     }
@@ -88,7 +105,13 @@ describe("commands/execute + list", () => {
     expect(value.result.text).toContain("hello world");
 
     const events = runtime.store.get(sessionId).events;
-    expect(events.map((e) => e.type)).toEqual(["command/run", "command/done"]);
+    expect(events.map((e) => e.type)).toEqual([
+      "permission/preset",
+      "sandbox/mode",
+      "approval/policy",
+      "command/run",
+      "command/done",
+    ]);
     expect(frames).toHaveLength(2);
     expect(frames).toMatchObject([
       {
@@ -115,7 +138,11 @@ describe("commands/execute + list", () => {
       expect(exec.result.ok).toBe(true);
       if (exec.result.ok) expect(exec.result.value).toBeUndefined();
     }
-    expect(runtime.store.get(sessionId).events).toHaveLength(0);
+    expect(runtime.store.get(sessionId).events.map((e) => e.type)).toEqual([
+      "permission/preset",
+      "sandbox/mode",
+      "approval/policy",
+    ]);
   });
 
   it("lists and executes plugin commands before recipes", async () => {
@@ -159,11 +186,26 @@ describe("commands/execute + list", () => {
     if (listed.result.ok) {
       expect(listed.result.value).toEqual([
         {
+          name: "compact",
+          description: "Compact older conversation history",
+        },
+        {
           name: "goal",
           description: "Set or replace the session goal",
           input: { hint: "objective" },
         },
+        {
+          name: "permission",
+          description:
+            "Switch the permission preset (sandbox mode + approval policy)",
+          input: { hint: "<preset>" },
+        },
         { name: "ping", description: "plugin ping" },
+        {
+          name: "plan",
+          description: "Enter or leave plan mode",
+          input: { hint: "[off|message]" },
+        },
       ]);
     }
 
@@ -211,6 +253,9 @@ describe("commands/execute + list", () => {
       });
     }
     expect(runtime.store.get(sessionId).events.map((e) => e.type)).toEqual([
+      "permission/preset",
+      "sandbox/mode",
+      "approval/policy",
       "command/run",
       "command/done",
     ]);
@@ -225,6 +270,126 @@ describe("commands/execute + list", () => {
     if (!exec.result.ok) {
       expect(exec.result.error.code).toBe("session-not-found");
     }
+  });
+});
+
+describe("/compact", () => {
+  it("rejects arguments", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const exec = await dispatchFaceMethod(runtime, "commands/execute", "e", {
+      args: { agentId: sessionId, line: "/compact extra" },
+    });
+    expect(exec.result.ok).toBe(true);
+    if (!exec.result.ok) return;
+    expect(exec.result.value).toMatchObject({
+      result: { kind: "error", text: "Usage: /compact (no arguments)" },
+    });
+  });
+
+  it("succeeds with no compactable history", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({
+      store,
+      loadSlashRecipes: async () => [],
+      resolveAgent: async (sessionId) =>
+        createAgent({
+          sessionId,
+          store,
+          llm: {
+            async chat() {
+              return { content: "## Objective\n- x", toolCalls: [] };
+            },
+          },
+          tools: createToolRegistry(),
+          compaction: { keepTokens: 1 },
+        }),
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const exec = await dispatchFaceMethod(runtime, "commands/execute", "e", {
+      args: { agentId: sessionId, line: "/compact" },
+    });
+    expect(exec.result.ok).toBe(true);
+    if (!exec.result.ok) return;
+    expect(exec.result.value).toMatchObject({
+      result: { kind: "success", text: "No compactable history yet." },
+    });
+  });
+
+  it("logs context/compaction reason manual and pins sourceEventSeq", async () => {
+    const store = createMemorySessionStore();
+    const agents = new Map<string, ReturnType<typeof createAgent>>();
+    const runtime = createBareFaceRuntime({
+      store,
+      loadSlashRecipes: async () => [],
+      resolveAgent: async (sessionId) => {
+        let agent = agents.get(sessionId);
+        if (!agent) {
+          agent = createAgent({
+            sessionId,
+            store,
+            llm: {
+              async chat() {
+                return {
+                  content: "## Objective\n- face-compact",
+                  toolCalls: [],
+                };
+              },
+            },
+            tools: createToolRegistry(),
+            compaction: { keepTokens: 1 },
+          });
+          agents.set(sessionId, agent);
+        }
+        return agent;
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    runtime.store.append(sessionId, {
+      type: "user/message",
+      ts: 10,
+      turnId: "t0",
+      content: "please remember this long thread",
+    });
+    runtime.store.append(sessionId, {
+      type: "assistant/message",
+      ts: 11,
+      turnId: "t0",
+      stepId: "s0",
+      content: "noted",
+    });
+
+    const exec = await dispatchFaceMethod(runtime, "commands/execute", "e", {
+      args: { agentId: sessionId, line: "/compact" },
+    });
+    expect(exec.result.ok).toBe(true);
+    if (!exec.result.ok) return;
+    expect(exec.result.value).toMatchObject({
+      result: { kind: "success" },
+    });
+    const text = (exec.result.value as { result: { text: string } }).result
+      .text;
+    expect(text).toMatch(/^Compacted \d+ history items \(~\d+ tokens\)\.$/);
+
+    const events = runtime.store.get(sessionId).events;
+    const compaction = events.find((e) => e.type === "context/compaction");
+    expect(compaction).toMatchObject({
+      type: "context/compaction",
+      reason: "manual",
+      summary: "## Objective\n- face-compact",
+    });
+    const done = events.find((e) => e.type === "command/done");
+    expect(done).toMatchObject({
+      type: "command/done",
+      kind: "success",
+      sourceEventSeq: events.indexOf(compaction!) + 1,
+    });
   });
 });
 

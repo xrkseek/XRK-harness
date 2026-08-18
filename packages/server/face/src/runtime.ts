@@ -45,6 +45,7 @@ import { FaceApprovalBroker, approvalRequestedFrame, approvalResolvedFrame } fro
 import {
   FaceQuestionBroker,
   bindAskUserTool,
+  bindExitPlanModeTool,
   formatQuestionAnswer,
   questionRequestedFrame,
   questionResolvedFrame,
@@ -212,6 +213,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       rememberedTools.set(sessionId, agent.tools);
       bindAskUserTool(agent.tools, (qs, signal) =>
         questions.ask(sessionId, qs, signal).then(formatQuestionAnswer),
+      );
+      bindExitPlanModeTool(agent.tools, store, sessionId, (qs, signal) =>
+        questions.ask(sessionId, qs, signal),
       );
     }
     bindAgentJobs(sessionId, agent);

@@ -222,4 +222,21 @@ describe("Face DSH wire-event adapt", () => {
     expect(bare.ignorable).toBe(true);
     expect(bare.type).toBe("prompt/admitted");
   });
+
+  it("todo/write carries data.todos (DSH standing-plan event)", () => {
+    const wire = toDshWireSessionEvent(
+      {
+        type: "todo/write",
+        ts: 30,
+        todos: [{ content: "ship", status: "in_progress" }],
+      },
+      9,
+    );
+    expect(wire).toEqual({
+      type: "todo/write",
+      seq: 9,
+      time: 30,
+      data: { todos: [{ content: "ship", status: "in_progress" }] },
+    });
+  });
 });

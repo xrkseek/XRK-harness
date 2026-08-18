@@ -399,6 +399,79 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         ...(sourceEventSeq !== undefined ? { sourceEventSeq } : {}),
       };
     }
+    case "todo/write": {
+      const todosRaw = value.todos;
+      if (!Array.isArray(todosRaw)) {
+        throw new SessionEventParseError("todos must be array", type);
+      }
+      const todos: {
+        content: string;
+        status: "pending" | "in_progress" | "completed";
+      }[] = [];
+      for (let i = 0; i < todosRaw.length; i++) {
+        const row = todosRaw[i];
+        if (row === null || typeof row !== "object") {
+          throw new SessionEventParseError("invalid todo item", `${type}[${i}]`);
+        }
+        const content = Reflect.get(row, "content");
+        const status = Reflect.get(row, "status");
+        if (typeof content !== "string" || !content.trim()) {
+          throw new SessionEventParseError(
+            "todo.content must be non-empty string",
+            `${type}[${i}]`,
+          );
+        }
+        if (
+          status !== "pending" &&
+          status !== "in_progress" &&
+          status !== "completed"
+        ) {
+          throw new SessionEventParseError(
+            'todo.status must be "pending" | "in_progress" | "completed"',
+            `${type}[${i}]`,
+          );
+        }
+        todos.push({ content: content.trim(), status });
+      }
+      return { type, ts, todos };
+    }
+    case "permission/preset":
+      return {
+        type,
+        ts,
+        preset: reqString(value, "preset", type),
+      };
+    case "sandbox/mode": {
+      const mode = reqString(value, "mode", type);
+      if (
+        mode !== "read-only" &&
+        mode !== "workspace-write" &&
+        mode !== "danger-full-access"
+      ) {
+        throw new SessionEventParseError(
+          'mode must be "read-only" | "workspace-write" | "danger-full-access"',
+          type,
+        );
+      }
+      return { type, ts, mode };
+    }
+    case "approval/policy": {
+      const policy = reqString(value, "policy", type);
+      if (policy !== "ask" && policy !== "never") {
+        throw new SessionEventParseError(
+          'policy must be "ask" | "never"',
+          type,
+        );
+      }
+      return { type, ts, policy };
+    }
+    case "plan/mode": {
+      const active = value.active;
+      if (typeof active !== "boolean") {
+        throw new SessionEventParseError("active must be boolean", type);
+      }
+      return { type, ts, active };
+    }
     default:
       throw new SessionEventParseError(`unknown event type "${type}"`);
   }

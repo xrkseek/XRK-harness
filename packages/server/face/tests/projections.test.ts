@@ -173,4 +173,96 @@ describe("createFaceRuntime projection wire", () => {
       ),
     ).toBe(true);
   });
+
+  it("todos standing plan: todo/write then clear on turn/start", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    installDefaultFaceProjections(registry);
+
+    const changes: { key: string; value: unknown }[] = [];
+    registry.onChanged((_id, key, value) => {
+      changes.push({ key, value });
+    });
+
+    const w = store.append(session.id, {
+      type: "todo/write",
+      ts: 1,
+      todos: [
+        { content: "ship todos projection", status: "in_progress" },
+        { content: "docs", status: "pending" },
+      ],
+    });
+    registry.drive(session.id, w, 1);
+    expect(registry.snapshot(session.id).values.todos).toEqual([
+      { content: "ship todos projection", status: "in_progress" },
+      { content: "docs", status: "pending" },
+    ]);
+    expect(changes.some((c) => c.key === "todos")).toBe(true);
+
+    const start = store.append(session.id, {
+      type: "turn/start",
+      ts: 2,
+      turnId: "t2",
+    });
+    registry.drive(session.id, start, 2);
+    expect(registry.snapshot(session.id).values.todos).toBeNull();
+  });
+
+  it("Face patched append publishes session/projection todos then clears on turn/start", () => {
+    const store = createMemorySessionStore();
+    const mux: { type?: string; key?: string; value?: unknown }[] = [];
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: {
+        wake() {},
+        async cancel() {},
+        isActive() {
+          return false;
+        },
+      },
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    runtime.bus.subscribeMux((_id, f) => mux.push(f as (typeof mux)[number]));
+
+    const created = store.create();
+    expect(runtime.projections.snapshot(created.id).values.todos).toBeNull();
+
+    store.append(created.id, {
+      type: "todo/write",
+      ts: 1,
+      todos: [{ content: "dock", status: "pending" }],
+    });
+    expect(runtime.projections.snapshot(created.id).values.todos).toEqual([
+      { content: "dock", status: "pending" },
+    ]);
+    expect(
+      mux.some(
+        (f) =>
+          f.type === "session/projection" &&
+          f.key === "todos" &&
+          Array.isArray(f.value),
+      ),
+    ).toBe(true);
+
+    store.append(created.id, {
+      type: "turn/start",
+      ts: 2,
+      turnId: "t1",
+    });
+    expect(runtime.projections.snapshot(created.id).values.todos).toBeNull();
+    expect(
+      mux.some(
+        (f) =>
+          f.type === "session/projection" &&
+          f.key === "todos" &&
+          f.value === null,
+      ),
+    ).toBe(true);
+  });
 });

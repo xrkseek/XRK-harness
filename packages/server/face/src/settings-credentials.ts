@@ -7,6 +7,7 @@ import path from "node:path";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import { canOpenNativePath, openNativePath } from "./host-open-path.js";
+import { publishRemoteEvent } from "./remote-event.js";
 import {
   DSH_EMPTY_OBJECT_SCHEMA,
   DSH_LLM_SCHEMA,
@@ -317,6 +318,14 @@ export async function settingsSet(
 
   runtime.uiSettings.theme = next.theme;
   runtime.uiSettings.locale = next.locale;
+  publishRemoteEvent(runtime.bus, "settings/document-updated", [
+    "ui-theme",
+    runtime.settingsNamespaces.view("ui-theme").revision,
+  ]);
+  publishRemoteEvent(runtime.bus, "settings/document-updated", [
+    "locale",
+    runtime.settingsNamespaces.view("locale").revision,
+  ]);
 
   return { ok: true, value: { scope: "ui", values: { ...runtime.uiSettings } } };
 }
@@ -343,6 +352,17 @@ function resolveCredentialSlotId(
   if (byId) return byId.id;
   const byEnv = slots.find((s) => s.envVar === refOrSlot);
   return byEnv?.id;
+}
+
+/** DSH `credentials/updated` uses CredentialRef (env var name when known). */
+function emitCredentialRemote(runtime: FaceRuntime, slotId: string): void {
+  const slot = listCredentialSlots(runtime).find((s) => s.id === slotId);
+  publishRemoteEvent(runtime.bus, "credentials/updated", [
+    slot?.envVar ?? slotId,
+  ]);
+  if (slotId.startsWith("llm.")) {
+    publishRemoteEvent(runtime.bus, "llm/adapters-updated", []);
+  }
 }
 
 /** DeepSeek `credentials.describe({ refs })` — never returns secret values. */
@@ -414,6 +434,7 @@ export async function credentialsSet(
   const clear = p.clear === true || p.value === null || p.value === "";
   if (clear) {
     runtime.credentials.set(slotId, null);
+    emitCredentialRemote(runtime, slotId);
     return {
       ok: true,
       value: {
@@ -448,6 +469,7 @@ export async function credentialsSet(
 
   runtime.credentials.set(slotId, p.value);
   const slot = listCredentialSlots(runtime).find((s) => s.id === slotId)!;
+  emitCredentialRemote(runtime, slotId);
   return {
     ok: true,
     value: {
@@ -487,6 +509,7 @@ export async function credentialsUnset(
     };
   }
   runtime.credentials.set(slotId, null);
+  emitCredentialRemote(runtime, slotId);
   return { ok: true, value: {} };
 }
 
@@ -654,6 +677,22 @@ function validateNamespaceValue(
   return undefined;
 }
 
+/** Read-only snapshot of Host MCP plugins (`id: mcp:<serverName>`). */
+function mcpInventoryValue(runtime: FaceRuntime): Record<string, unknown> {
+  const servers = (runtime.plugins ?? [])
+    .filter((p) => p.id.startsWith("mcp:"))
+    .map((p) => ({
+      id: p.id,
+      serverName: p.id.slice("mcp:".length),
+      kind: p.kind,
+      toolCount: p.tools?.length ?? 0,
+    }));
+  return {
+    servers,
+    note: "Configured via XRK_MCP_SERVERS; Face does not persist MCP settings.",
+  };
+}
+
 /** DeepSeek `settings.describe` — namespaces[] for Web welcome / forms. */
 export async function settingsDescribeDsh(
   runtime: FaceRuntime,
@@ -684,10 +723,15 @@ export async function settingsDescribeDsh(
     ),
     runtime.settingsNamespaces.view(
       "permission",
-      { defaultPreset: "read-only" },
+      { defaultPreset: "workspace-write" },
       DSH_PERMISSION_SCHEMA,
     ),
     runtime.settingsNamespaces.view("llm", { providers: {} }, DSH_LLM_SCHEMA),
+    runtime.settingsNamespaces.view(
+      "mcp",
+      mcpInventoryValue(runtime),
+      DSH_EMPTY_OBJECT_SCHEMA,
+    ),
   ];
   if (runtime.hostPublic) {
     namespaces.push(
@@ -728,6 +772,17 @@ export async function settingsMutateDsh(
       },
     };
   }
+  if (ns === "mcp") {
+    return {
+      ok: false,
+      error: {
+        code: "settings-readonly",
+        message:
+          "MCP is configured via XRK_MCP_SERVERS; Face does not persist MCP settings.",
+        details: { ns },
+      },
+    };
+  }
   const ops: DshSettingsPathOp[] = [];
   for (const raw of opsRaw) {
     if (!raw || typeof raw !== "object") continue;
@@ -752,6 +807,13 @@ export async function settingsMutateDsh(
     ns,
     result.view.value as Record<string, unknown>,
   );
+  publishRemoteEvent(runtime.bus, "settings/document-updated", [
+    ns,
+    result.view.revision,
+  ]);
+  if (ns === "llm") {
+    publishRemoteEvent(runtime.bus, "llm/adapters-updated", []);
+  }
   return { ok: true, value: result.view };
 }
 
@@ -887,8 +949,11 @@ export async function settingsOpenDocument(
     };
   }
   try {
-    const open = runtime.openNativePath ?? openNativePath;
-    await open(target);
+    if (runtime.openNativePath) {
+      await runtime.openNativePath(target);
+    } else {
+      await openNativePath(target);
+    }
     return { ok: true, value: { opened: true } };
   } catch (err) {
     return {

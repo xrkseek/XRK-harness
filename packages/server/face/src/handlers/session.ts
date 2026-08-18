@@ -14,6 +14,10 @@ import { parseSearchQuery, searchSessions } from "../session-search.js";
 import { durablePromptContent, type PromptWirePart } from "../durable-prompt.js";
 import { asRecord, type FaceHandler } from "./types.js";
 import { publishSessionAdded } from "./session-added.js";
+import {
+  defaultPermissionPreset,
+  pinInitialPermission,
+} from "../permissions.js";
 
 export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   const p = asRecord(payload);
@@ -97,6 +101,11 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   }
   const bound =
     runtime.sessionAgentPresets.get(sessionId) ?? agentPreset;
+  pinInitialPermission(
+    runtime.store,
+    sessionId,
+    defaultPermissionPreset(runtime),
+  );
   publishSessionAdded(runtime, sessionId);
   if (workspace) {
     runtime.bus.publishHost({

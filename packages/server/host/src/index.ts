@@ -23,6 +23,7 @@ import {
 import {
   attachFaceUpgrades,
   bindAskUserTool,
+  bindExitPlanModeTool,
   createFaceRuntime,
   effectiveHostApiKey,
   formatQuestionAnswer,
@@ -208,6 +209,9 @@ export function createHostManager(): HostManager {
             if (faceBox.questions && agent.tools) {
               bindAskUserTool(agent.tools, (qs, signal) =>
                 faceBox.questions!.ask(sessionId, qs, signal).then(formatQuestionAnswer),
+              );
+              bindExitPlanModeTool(agent.tools, store, sessionId, (qs, signal) =>
+                faceBox.questions!.ask(sessionId, qs, signal),
               );
             }
             return agent;

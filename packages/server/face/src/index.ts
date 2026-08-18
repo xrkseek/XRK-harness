@@ -67,6 +67,12 @@ export {
 } from "./session-export.js";
 export { dispatchFaceMethod, getHandler } from "./dispatch.js";
 export {
+  FACE_HOST_REMOTE_EVENTS,
+  publishRemoteEvent,
+  type FaceHostRemoteEvent,
+  type FaceRemoteArg,
+} from "./remote-event.js";
+export {
   createFaceProjectionRegistry,
   createTitleProjectionUnit,
   createSessionListMetadataUnit,
@@ -80,6 +86,26 @@ export {
   type ProjectionSnapshot,
   type SessionListMetadata,
 } from "./projections/index.js";
+export {
+  FACE_PERMISSION_TABLE,
+  CUSTOM_PERMISSION_PRESET,
+  applyPermissionPreset,
+  defaultPermissionPreset,
+  derivePermissionSelect,
+  permissionSelectFromEvents,
+  pinInitialPermission,
+  type PermissionPresetSpec,
+  type PermissionSelect,
+  type PermissionSelectOption,
+} from "./permissions.js";
+export {
+  commitPlanMode,
+  narratePlanCommand,
+  planWantedFromArgs,
+  previewPlanSet,
+  steerPlanMessage,
+  type PlanSetOutcome,
+} from "./plan-mode.js";
 export {
   attachFaceToServer,
   attachFaceUpgrades,
@@ -203,6 +229,7 @@ export {
   FaceQuestionBroker,
   FaceQuestionError,
   bindAskUserTool,
+  bindExitPlanModeTool,
   coerceAskUserQuestions,
   formatQuestionAnswer,
   questionRequestedFrame,

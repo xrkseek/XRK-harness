@@ -32,7 +32,14 @@ import type {
   SafetyNoticePayload,
   SessionEvent,
 } from "@xrkseek/protocol";
-import { contentHasImage, flattenText } from "@xrkseek/protocol";
+import {
+  contentHasImage,
+  flattenText,
+  parseSessionEvent,
+  DEFAULT_PLAN_POLICY_SECTION,
+  foldPlanMode,
+  pendingPlanTarget,
+} from "@xrkseek/protocol";
 import { resolveCompactionOptions, runCompaction } from "./compaction.js";
 import {
   MAX_STEPS_PROMPT,
@@ -126,6 +133,21 @@ function append(
   store.append(sessionId, event);
 }
 
+/** Commit a queued `/plan` selection before the next request assembly. */
+function commitPendingPlanMode(
+  store: SessionStore,
+  sessionId: string,
+  now: () => number,
+): void {
+  const target = pendingPlanTarget(store.get(sessionId).events);
+  if (target === null) return;
+  append(store, sessionId, {
+    type: "plan/mode",
+    ts: now(),
+    active: target,
+  });
+}
+
 function llmAllowsImage(llm: LlmAdapter): boolean {
   return (llm.inputModalities ?? ["text"]).includes("image");
 }
@@ -206,11 +228,15 @@ function buildModelRequest(input: {
 
   const useAssemble = input.assemble && input.assemble.enabled !== false;
   if (!useAssemble) {
+    const planExtra = foldPlanMode(input.events)
+      ? DEFAULT_PLAN_POLICY_SECTION
+      : "";
+    const system = [input.system, planExtra].filter((s) => s?.trim()).join("\n\n");
     const messages: ChatMessage[] = [];
-    if (input.system) messages.push({ role: "system", content: input.system });
+    if (system) messages.push({ role: "system", content: system });
     messages.push(...derived);
     return {
-      ...(input.system !== undefined ? { system: input.system } : {}),
+      ...(system ? { system } : {}),
       messages,
       tools: toolDefs,
     };
@@ -254,12 +280,17 @@ function buildModelRequest(input: {
       ...(input.assemble?.owner ? { owner: input.assemble.owner } : {}),
     },
     tools: toolDefs,
-    ...(input.assemble?.workspaceBlocks || input.slashSystemExtra
+    ...(input.assemble?.workspaceBlocks ||
+    input.slashSystemExtra ||
+    foldPlanMode(input.events)
       ? {
           workspaceBlocks: [
             ...(input.assemble?.workspaceBlocks ?? []),
             ...(input.slashSystemExtra?.trim()
               ? [`## Recipe\n${input.slashSystemExtra.trim()}`]
+              : []),
+            ...(foldPlanMode(input.events)
+              ? [DEFAULT_PLAN_POLICY_SECTION]
               : []),
           ],
         }
@@ -340,6 +371,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       throw new DOMException("aborted", "AbortError");
     }
     steps += 1;
+    commitPendingPlanMode(input.store, input.sessionId, now);
     const stepId = id("step");
     append(input.store, input.sessionId, {
       type: "step/start",
@@ -528,9 +560,24 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       ...(input.pipeline ? { pipeline: input.pipeline } : {}),
     });
 
-    // Barrier 2: tool/result in call order (not completion order).
+    // Barrier 2: tool side-events then tool/result in call order.
     for (let i = 0; i < calls.length; i++) {
       const outcome = outcomes[i]!;
+      for (const te of outcome.toolEvents) {
+        if (te.type !== "todo/write" && te.type !== "plan/mode") continue;
+        try {
+          const ev = parseSessionEvent({
+            type: te.type,
+            ts: now(),
+            ...(te.payload && typeof te.payload === "object"
+              ? te.payload
+              : {}),
+          });
+          append(input.store, input.sessionId, ev);
+        } catch {
+          // Invalid side payload — skip; tool/result still settles.
+        }
+      }
       append(input.store, input.sessionId, {
         type: "tool/result",
         ts: now(),

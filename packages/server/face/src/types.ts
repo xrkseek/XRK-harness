@@ -171,4 +171,10 @@ export type HostFrame =
   | {
       readonly type: "host/archived-sessions-changed";
       readonly archivedSessionIds: readonly string[];
+    }
+  | {
+      /** DSH `host/remote-event` — allowlisted Host events for `ctx.remote.$dispatch`. */
+      readonly type: "host/remote-event";
+      readonly event: string;
+      readonly args: readonly unknown[];
     };

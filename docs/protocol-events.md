@@ -23,6 +23,11 @@ Append-only session facts (`@xrkseek/protocol`). Model-visible history is recons
 | `approval/decided` | `approvalId`, `decision` (`allow`\|`deny`), `source` | `user` · `cancel` · `timeout` |
 | `command/run` | `commandId`, `name`, `source` (`user`) | **Log-only** — Face `commands/execute`；可选 `args` |
 | `command/done` | `commandId`, `kind` (`success`\|`error`) | **Log-only** — 可选 `text` · `sourceEventSeq` |
+| `todo/write` | `todos`（`content` + `status`） | **Log-only** — `todo_write` 工具；Face `todos` 投影；`turn/start` 清站立计划 |
+| `permission/preset` | `preset` | **Log-only** — Face `permissions` 投影 · `/permission` |
+| `sandbox/mode` | `mode`（read-only\|workspace-write\|danger-full-access） | **Log-only** — 与 preset 同捆 |
+| `approval/policy` | `policy`（ask\|never） | **Log-only** — `never` 时审批自动放行 |
+| `plan/mode` | `active` | **Log-only** — Face `plan` 投影 · `/plan`；last-wins，缺省 inactive |
 
 ## Runtime validation
 

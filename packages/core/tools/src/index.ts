@@ -4,6 +4,7 @@ export {
   freezeToolResult,
   normalizeToolResult,
   type ToolDefinition,
+  type ToolExecuteExtras,
   type ToolRegistry,
   type ToolResultContent,
 } from "./definition.js";
@@ -70,7 +71,17 @@ export {
   type ToolOutputBoundLimits,
 } from "./output-bound.js";
 export { runTool, runToolDetailed, type RunToolInput } from "./run-tool.js";
-export { createStdTools, type StdToolsOptions } from "./std-tools.js";
+export {
+  createStdTools,
+  createExitPlanModeTool,
+  firstPlanHeading,
+  EXIT_PLAN_MODE,
+  PLAN_REVIEW_ID,
+  PLAN_APPROVE_LABEL,
+  PLAN_KEEP_LABEL,
+  type StdToolsOptions,
+  type PlanReviewAnswer,
+} from "./std-tools.js";
 export {
   isTransientError,
   transientError,
