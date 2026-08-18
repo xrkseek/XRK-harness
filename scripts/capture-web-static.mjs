@@ -1,13 +1,10 @@
 /**
- * Capture a built product-web dist + boot graph + /plugins into
- * `apps/web-static` (gitignored, like DSH `apps/web/dist`) for `xrk-harness serve`.
+ * Capture built product-web dist + boot graph + /plugins into
+ * `apps/web-static` (gitignored) for `xrk-harness serve`.
  *
- * Also mirrors to `vendor/web-static` (gitignored).
- *
- * Expects a local UI source tree at `vendor/ui-src` (gitignore; maintainer link).
- *
- *   pnpm web:ui:build
- *   pnpm web:ui:capture
+ * Edit source in this repo: `apps/web` + `packages/client`.
+ * Build in a full DSH tree; set `XRK_UI_SRC` to that root, then:
+ *   XRK_UI_SRC=… pnpm web:ui:capture
  */
 import { spawn } from "node:child_process";
 import {
@@ -23,10 +20,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const UI_SRC = path.join(ROOT, "vendor", "ui-src");
-const OUT_TRACKED = path.join(ROOT, "apps", "web-static");
-const OUT_LOCAL = path.join(ROOT, "vendor", "web-static");
-const DIST = path.join(UI_SRC, "apps", "web", "dist");
+const UI_SRC = process.env.XRK_UI_SRC?.trim()
+  ? path.resolve(process.env.XRK_UI_SRC.trim())
+  : "";
+const OUT = path.join(ROOT, "apps", "web-static");
+const DIST = UI_SRC ? path.join(UI_SRC, "apps", "web", "dist") : "";
 const URL_BASE = (process.env.XRK_UI_URL ?? "http://127.0.0.1:3080").replace(
   /\/$/,
   "",
@@ -92,7 +90,6 @@ function patchPluginFile(filePath, brand) {
   if (after !== before) writeFileSync(filePath, after);
 }
 
-/** Product chrome that capture must re-apply (DSH dist names the PWA DeepSeek). */
 function brandCapturedShell(outDir) {
   const manifestPath = path.join(outDir, "manifest.webmanifest");
   if (existsSync(manifestPath)) {
@@ -155,20 +152,26 @@ async function waitReady(timeoutMs = 90_000) {
   throw new Error(`UI not ready at ${URL_BASE}`);
 }
 
-function resetCaptureOut(out, keepReadme) {
+function resetOut(out) {
   const readmePath = path.join(out, "README.md");
-  const readme =
-    keepReadme && existsSync(readmePath)
-      ? readFileSync(readmePath, "utf8")
-      : undefined;
+  const readme = existsSync(readmePath)
+    ? readFileSync(readmePath, "utf8")
+    : undefined;
   if (existsSync(out)) rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
   return () => {
     if (readme !== undefined) writeFileSync(readmePath, readme);
   };
 }
+
+async function main() {
+  if (!UI_SRC) {
+    throw new Error(
+      "XRK_UI_SRC required (full DSH checkout root used to run `dsh web`)",
+    );
+  }
   if (!existsSync(path.join(DIST, "index.html"))) {
-    throw new Error(`missing ${DIST}/index.html — run pnpm web:ui:build first`);
+    throw new Error(`missing ${DIST}/index.html — build the UI tree first`);
   }
 
   let child;
@@ -189,35 +192,32 @@ function resetCaptureOut(out, keepReadme) {
   try {
     const html = await fetchText(`${URL_BASE}/`);
     const boot = extractBoot(html);
+    const restoreReadme = resetOut(OUT);
+    cpSync(DIST, OUT, { recursive: true });
 
-    for (const OUT of [OUT_TRACKED, OUT_LOCAL]) {
-      const restoreReadme = resetCaptureOut(OUT, OUT === OUT_TRACKED);
-      cpSync(DIST, OUT, { recursive: true });
-
-      for (const name of ["favicon.png", "logo.png", "logo-plate.png"]) {
-        const src = path.join(UI_SRC, "apps", "web", "public", name);
-        if (existsSync(src)) copyFileSync(src, path.join(OUT, name));
-      }
-
-      writeFileSync(path.join(OUT, "boot.json"), JSON.stringify(boot, null, 2));
-
-      const pluginsRoot = path.join(OUT, "plugins");
-      mkdirSync(pluginsRoot, { recursive: true });
-      for (const entry of boot.entries ?? []) {
-        const urlPath = String(entry.url ?? "");
-        if (!urlPath.startsWith("/plugins/")) continue;
-        const clean = urlPath.split("?")[0];
-        const dest = path.join(OUT, clean.replace(/^\//, ""));
-        mkdirSync(path.dirname(dest), { recursive: true });
-        const buf = await fetchBuf(`${URL_BASE}${urlPath}`);
-        writeFileSync(dest, buf);
-        process.stdout.write(`plugin ${entry.id} → ${clean} (${path.basename(OUT)})\n`);
-      }
-
-      brandCapturedShell(OUT);
-      restoreReadme();
-      process.stdout.write(`wrote ${OUT} (rev=${boot.rev})\n`);
+    for (const name of ["favicon.png", "logo.png", "logo-plate.png"]) {
+      const src = path.join(UI_SRC, "apps", "web", "public", name);
+      if (existsSync(src)) copyFileSync(src, path.join(OUT, name));
     }
+
+    writeFileSync(path.join(OUT, "boot.json"), JSON.stringify(boot, null, 2));
+
+    const pluginsRoot = path.join(OUT, "plugins");
+    mkdirSync(pluginsRoot, { recursive: true });
+    for (const entry of boot.entries ?? []) {
+      const urlPath = String(entry.url ?? "");
+      if (!urlPath.startsWith("/plugins/")) continue;
+      const clean = urlPath.split("?")[0];
+      const dest = path.join(OUT, clean.replace(/^\//, ""));
+      mkdirSync(path.dirname(dest), { recursive: true });
+      const buf = await fetchBuf(`${URL_BASE}${urlPath}`);
+      writeFileSync(dest, buf);
+      process.stdout.write(`plugin ${entry.id} → ${clean}\n`);
+    }
+
+    brandCapturedShell(OUT);
+    restoreReadme();
+    process.stdout.write(`wrote ${OUT} (rev=${boot.rev})\n`);
   } finally {
     if (startedHere && child) {
       child.kill("SIGTERM");

@@ -12,4 +12,4 @@
 | `FaceSessionView` | mux/history → fold + projections |
 | `coerceSessionEvent` | Face/DSH wire envelope → SessionEvent |
 
-规格入口：[docs/host-face.md](../../docs/host-face.md) · [docs/status.md](../../docs/status.md)。本包是验证台算法，**不是**产品聊天壳（壳是本机 `apps/web-static` 捕获）。
+规格入口：[docs/host-face.md](../../docs/host-face.md) · [docs/status.md](../../docs/status.md)。本包是 `apps/console` 验证台算法，**不是**产品聊天壳（壳源码 `apps/web` + `packages/client`；serve 用 `apps/web-static` 捕获）。

@@ -18,7 +18,7 @@
 - **队列**：权威快照 `session/queue`；`prompt/*` → `agent/inbox/spliced`；mux 重连可补发 pending queue
 - **提问**：mux `question/requested`（rpcId = 问题 id）→ `/api/respond`（先审批后提问；`cancelled` 取消）。`ask_user` 支持自由文本 `question` 与 DSH 形 `questions[]`（options / multi_select / `intent.kind: plan-review`）；Face / Host bind 到 broker；mux 重连补 pending。无 UI 时工具仍可回 isError
 - **后台任务**：有 jobs 源才发 `session/jobs`；订阅基线只在集合非空时发（空集靠缺帧）；变更推全量快照（清空仍发 `[]`）。无主任务扇出到每个已列出会话。`JobView` 不含 `ownerSession` / `reported` / `outputLimitBytes`。Jobs 内核：`running`→`stopping`→终态、`bash-N` / `<kind>-N`、按 owner 并发上限 10、`dispose` teardown 置 `reported`；Host 共享 root + `createSessionScopedShell` 隔离（可见集未变则不转发 `onJobsChanged`）
-- **产品壳**：`apps/web-static` 是 DSH Web 捕获产物，与上游 `apps/web/dist` 一样 gitignore；本机 `pnpm web:ui:capture`。`packages/**/dist` 同样不入库
+- **产品壳**：二次创作底稿 `apps/web` + `packages/client`（tag `dsh-v0.1.0-rc.7`，无 dist）。捕获 `apps/web-static` gitignore。Face 验证台 `apps/console`。无 vendor。`packages/**/dist` 不入库
 - **附件 / 视觉**：`MessageContent` 可为块数组；`@xrkseek/attachment`；Face `session.attachment`；Host Face 默认 `text+image`。openai-compatible（Registry 非 DeepSeek 品牌）走 `image_url` data URL；官方 DeepSeek 适配器仍 text-only。适配器未声明 `image` 时 loop 抛 `UnsupportedContentError`
 - **LLM 流**：OpenAI 兼容适配器默认 `stream()`：SSE `reasoning_content` → `reasoning-delta`（index 0）、`content` → `text-delta`（index 1）；agent-loop 先 append `assistant/chunk` 再 `assistant/message`（可选 `reasoning`）。`chat()` 仍一次性 JSON。DeepSeek 官方适配器不标视觉
 - **模型发现**：Face `llm.discoverModels` 对 `settingsNs` `llm` / `llm-pi-ai` 发 openai-chat `GET /models`（draft，不落盘）；失败 `model-discovery-failed` 且 details 不含密钥
@@ -33,7 +33,7 @@
 - **会话导出**：`HEAD/GET /api/session.export?sessionId=` 返回 ZIP（`sessions/{id}.jsonl` + 子会话 + 附件）；壳先 HEAD 再下载。旁路 JSON 用 tmp+rename；ZIP 条目名剥 `..`
 - **MCP**：stdio + streamable-http → `mcp__*` 工具；默认 `mcp.connect` deny；Host 经 `XRK_MCP_*`（`command` 或 `url`）接线，空 env 时回退 `{workspace}/.xrk/host-settings.json` 的 `mcp.servers`；HTTP 转发 SDK `reconnectionOptions`（SSE 恢复）；`tools/list_changed` → `registerMcpTools` 热同步 / Host 刷新 `plugin.tools` + `invalidateAll`。Face `settings.mutate` 写 desired `servers`（禁 `env`）；`connected` 只读 overlay。不是进程 supervisor / 浏览器 MCP 设置壳硬刷
 - **工具卡**：工具声明 `presentCall` / `presentResult`；Face mux/history `viewFor` 只 lookup（抛错 / 缺 pairing / 无 presenter → 没 view，壳走 generic）。Host 把 preset standing 工具表交给 Face（冷 history 不 wake agent；DSH `ctx.tools.get` 的 standing 层）。`session.history` 冷回放：`assistant/message.reasoning` → wire `content` 首块 `type: "reasoning"`；bash / `terminal_*` 走 standing presenter。`bash` 模型文本用 DSH `[exit code: N]`。不写 session 日志；history 用同一次扫描的 call pairing。浏览器硬刷 thinking / 工具卡仍未勾 E2E
-- **外壳 / 内核**：产品壳 = 本机捕获的 DSH Web 静态面（`apps/web-static` gitignore）。关系是 MIT 二次创作底稿，不是 GitHub Fork，不对 deepseek-ai 提 PR。Host `applyXrkProductBootPolicy` 从 boot 去掉 Cordis 客户端面板与捕获壳 HMR。对接层 = `packages/server/face/src/wire/`；内核仍是 session 事件真源 · 工具瀑布 · compose（不嵌 Cordis Host）；`apps/web` 为 `?console=1` 验证台。Host 测：有捕获时 GET `/` 注入 `__DSH_BOOT__`、plugin 200、缺 plugin 404、boot 不含 cordis UI / HMR；无捕获则 skip
+- **外壳 / 内核**：产品壳底稿 = `apps/web` + `packages/client`（不是 GitHub Fork）。serve 托管本机捕获 `apps/web-static`；无捕获回退 `apps/console`。Host `applyXrkProductBootPolicy` 去 Cordis UI/HMR。对接层 = `packages/server/face/src/wire/`；内核 = session · 工具瀑布 · compose。Host 测：有捕获才跑壳首屏，否则 skip
 - **CLI**：`xrk-harness run | serve | web | doctor | dump-config`。`serve`/`web` 托管产品壳（按 CLI 包定位）；`--host`/`--port`/`--open`；拒绝 `0.0.0.0`。`run` 认 `XRK_LLM_PRESET`、位置参数与 stdin prompt
 - **运行时**：Node ≥ 26
 

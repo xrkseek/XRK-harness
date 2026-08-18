@@ -153,13 +153,13 @@ write(
   `# Contributing\n\n1. Read \`AGENTS.md\`\n2. Follow atomic WBS S1–S8\n3. \`pnpm check\` must pass\n4. Do not add Go host trees\n`,
 );
 write(
-  path.join(root, "apps/web/package.json"),
-  JSON.stringify({ name: "@xrkseek/harness-web", version: "0.0.0", private: true }, null, 2) +
+  path.join(root, "apps/console/package.json"),
+  JSON.stringify({ name: "@xrkseek/harness-console", version: "0.0.0", private: true }, null, 2) +
     "\n",
 );
 write(
-  path.join(root, "apps/web/README.md"),
-  `# @xrkseek/harness-web\n\nM3 console UI placeholder. Do not block M0–M2.\n`,
+  path.join(root, "apps/console/README.md"),
+  `# @xrkseek/harness-console\n\nFace verifier console. Product shell: apps/web + packages/client.\n`,
 );
 write(
   path.join(root, "examples/hello-agent/README.md"),

@@ -10,4 +10,4 @@ alwaysApply: true
 - **学习**：已落地要点写 [docs/learn.md](docs/learn.md)，保持短；细节实现地图在 [docs/modules/](docs/modules/README.md)。
 - **本机**：路径、gitignore 产物、对照清单 → Cursor Canvas，不进仓库文档。
 - Face / wire：用本仓术语（Face wire、session 事件）。
-- **外壳 / 内核**：产品壳以 DSH Web 为 MIT 二次创作底稿（不是 GitHub Fork，不对 deepseek-ai 提 PR）；当前落地是本机捕获面，产物不入库。可在本仓裁剪 boot / 品牌 / 文案。内核（session 事件 · 工具瀑布 · compose）不让渡、不嵌 Cordis Host。
+- **外壳 / 内核**：产品壳二次创作底稿 = `apps/web` + `packages/client`（不是 GitHub Fork，不对 deepseek-ai 提 PR）；捕获不入库；无 vendor。内核不让渡、不嵌 Cordis Host。

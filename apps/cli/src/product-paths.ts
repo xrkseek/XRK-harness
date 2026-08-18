@@ -1,6 +1,6 @@
 /**
- * Product shell is a local DSH capture (`apps/web-static`, gitignored like
- * upstream `apps/web/dist`). Recapture also lands under `vendor/` (gitignored).
+ * Product shell: local capture at `apps/web-static` (gitignored).
+ * Source: `apps/web` + `packages/client`. Fallback: `apps/console` dist.
  */
 import { access } from "node:fs/promises";
 import { readFileSync } from "node:fs";
@@ -37,11 +37,9 @@ export async function resolveProductWebDist(
 ): Promise<string | undefined> {
   if (configured?.trim()) return path.resolve(configured.trim());
   const apps = harnessAppsRoot();
-  const repo = path.resolve(apps, "..");
   const candidates = [
     path.join(apps, "web-static"),
-    path.join(repo, "vendor", "web-static"),
-    path.join(apps, "web", "dist"),
+    path.join(apps, "console", "dist"),
   ];
   for (const dir of candidates) {
     try {
