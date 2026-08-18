@@ -42,6 +42,12 @@ import {
   type FaceUiSettings,
 } from "./settings-credentials.js";
 import { FaceApprovalBroker, approvalRequestedFrame, approvalResolvedFrame } from "./approvals.js";
+import {
+  FaceQuestionBroker,
+  bindAskUserTool,
+  questionRequestedFrame,
+  questionResolvedFrame,
+} from "./questions.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import { FaceSubagentRegistry } from "./subagent-registry.js";
 import { FaceMessageFeedbackStore } from "./message-feedback.js";
@@ -190,9 +196,23 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     return undefined;
   };
 
+  const questions = new FaceQuestionBroker({
+    onRequested(item) {
+      bus.publishMux(questionRequestedFrame(item), item.rpcId);
+    },
+    onResolved(sessionId, questionRpcId, outcome) {
+      bus.publishMux(questionResolvedFrame(sessionId, questionRpcId, outcome));
+    },
+  });
+
   const resolveAgent = async (sessionId: string) => {
     const agent = await options.resolveAgent(sessionId);
-    if (agent.tools) rememberedTools.set(sessionId, agent.tools);
+    if (agent.tools) {
+      rememberedTools.set(sessionId, agent.tools);
+      bindAskUserTool(agent.tools, (q, signal) =>
+        questions.askText(sessionId, q, signal),
+      );
+    }
     bindAgentJobs(sessionId, agent);
     return agent;
   };
@@ -361,6 +381,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     projections,
     titles,
     approvals,
+    questions,
     rpcAdmitMap,
     admitRpcMap,
     pendingUserRpc,

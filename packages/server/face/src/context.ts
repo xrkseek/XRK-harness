@@ -24,6 +24,7 @@ import type {
   FaceUiSettings,
 } from "./settings-credentials.js";
 import type { FaceApprovalBroker } from "./approvals.js";
+import type { FaceQuestionBroker } from "./questions.js";
 import type { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import type { FaceSubagentRegistry } from "./subagent-registry.js";
 import type { FaceMessageFeedbackStore } from "./message-feedback.js";
@@ -123,6 +124,8 @@ export interface FaceRuntime {
   pickNativeDirectory?(signal: AbortSignal): Promise<string | null>;
   /** Human approval waiters (tool policy `ask`). */
   readonly approvals: FaceApprovalBroker;
+  /** DSH user-questions (`question/requested` + `/api/respond`). */
+  readonly questions: FaceQuestionBroker;
   /** Drop cached agent when preset changes (host wires). May be async (compose dispose). */
   invalidateAgent?(sessionId: string): void | Promise<void>;
   /** Publish store appends as mux session/event. */

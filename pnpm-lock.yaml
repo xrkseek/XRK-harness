@@ -376,6 +376,15 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+      '@xrkseek/exec-fs':
+        specifier: workspace:*
+        version: link:../../exec/fs
+      '@xrkseek/exec-shell':
+        specifier: workspace:*
+        version: link:../../exec/shell
+      '@xrkseek/exec-subprocess':
+        specifier: workspace:*
+        version: link:../../exec/subprocess
       '@xrkseek/llm-registry':
         specifier: workspace:*
         version: link:../../llm/registry

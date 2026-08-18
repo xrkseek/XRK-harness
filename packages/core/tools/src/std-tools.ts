@@ -63,6 +63,12 @@ export function createStdTools(
         properties: { question: { type: "string" } },
         required: ["question"],
       },
+      presentCall: (args) => ({
+        card: "generic",
+        title: String((args as { question?: string }).question ?? "Ask user"),
+        kind: "other",
+        rawInput: args,
+      }),
       async execute(args) {
         const q = String((args as { question?: string }).question ?? "");
         if (!options.askUser) {
