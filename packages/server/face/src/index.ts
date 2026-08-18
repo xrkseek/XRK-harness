@@ -203,6 +203,7 @@ export {
   FaceQuestionBroker,
   FaceQuestionError,
   bindAskUserTool,
+  coerceAskUserQuestions,
   formatQuestionAnswer,
   questionRequestedFrame,
   questionResolvedFrame,

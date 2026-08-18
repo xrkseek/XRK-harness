@@ -167,6 +167,101 @@ describe("Face question/requested (DSH user-questions)", () => {
     expect(out.result.isError).toBeUndefined();
   });
 
+  it("bindAskUserTool forwards questions[] options + multi_select", async () => {
+    const store = createMemorySessionStore();
+    const tools = createToolRegistry();
+    for (const t of createStdTools()) tools.register(t);
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () =>
+        ({
+          admit() {
+            throw new Error("unused");
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => false,
+          abort() {},
+          setApprovalHandler() {},
+          tools,
+        }) as never,
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    await runtime.resolveAgent(sessionId);
+
+    const run = runToolDetailed({
+      registry: tools,
+      call: {
+        id: "c2",
+        name: "ask_user",
+        arguments: {
+          questions: [
+            {
+              id: "pkg",
+              header: "Package manager",
+              question: "Which manager?",
+              options: [
+                { label: "pnpm", description: "workspaces" },
+                { label: "npm" },
+              ],
+            },
+            {
+              id: "scope",
+              question: "What to touch?",
+              multi_select: true,
+              options: [{ label: "tests" }, { label: "docs" }],
+            },
+          ],
+        },
+      },
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    const pending = runtime.questions.listPending(sessionId)[0]!;
+    expect(pending.questions).toEqual([
+      {
+        id: "pkg",
+        header: "Package manager",
+        question: "Which manager?",
+        options: [
+          { label: "pnpm", description: "workspaces" },
+          { label: "npm" },
+        ],
+      },
+      {
+        id: "scope",
+        question: "What to touch?",
+        multiSelect: true,
+        options: [{ label: "tests" }, { label: "docs" }],
+      },
+    ]);
+    expect(
+      settleFaceRespond(runtime, {
+        type: "client-response",
+        rpcId: pending.rpcId,
+        result: {
+          ok: true,
+          value: {
+            sessionId,
+            answer: {
+              answers: [
+                { id: "pkg", selected: ["pnpm"] },
+                { id: "scope", selected: ["tests", "docs"] },
+              ],
+            },
+          },
+        },
+      }),
+    ).toEqual({ accepted: true });
+    const out = await run;
+    expect(out.result.content).toBe("pnpm\ntests, docs");
+    expect(out.result.isError).toBeUndefined();
+  });
+
   it("mux reconnect replays pending question/requested", async () => {
     const store = createMemorySessionStore();
     const runtime = createFaceRuntime({

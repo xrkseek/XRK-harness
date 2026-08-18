@@ -264,10 +264,73 @@ export function questionResolvedFrame(
   };
 }
 
+/**
+ * Coerce `ask_user` args to DSH `AskUserQuestionItem[]`.
+ * Accepts free-text `{ question }` or `{ questions: [...] }` (`multi_select` → multiSelect).
+ */
+export function coerceAskUserQuestions(
+  args: unknown,
+): FaceQuestionItem[] | undefined {
+  if (!args || typeof args !== "object") return undefined;
+  const a = args as Record<string, unknown>;
+  if (Array.isArray(a.questions)) {
+    const out: FaceQuestionItem[] = [];
+    for (const row of a.questions) {
+      if (!row || typeof row !== "object") return undefined;
+      const r = row as Record<string, unknown>;
+      if (typeof r.id !== "string" || typeof r.question !== "string") {
+        return undefined;
+      }
+      const question = r.question.trim();
+      if (!question) return undefined;
+      let options:
+        | { readonly label: string; readonly description?: string }[]
+        | undefined;
+      if (r.options !== undefined) {
+        if (!Array.isArray(r.options)) return undefined;
+        options = [];
+        for (const o of r.options) {
+          if (!o || typeof o !== "object") return undefined;
+          const opt = o as Record<string, unknown>;
+          if (typeof opt.label !== "string" || !opt.label.trim()) {
+            return undefined;
+          }
+          options.push({
+            label: opt.label,
+            ...(typeof opt.description === "string"
+              ? { description: opt.description }
+              : {}),
+          });
+        }
+      }
+      const multiSelect =
+        r.multi_select === true || r.multiSelect === true ? true : undefined;
+      out.push({
+        id: r.id,
+        question,
+        ...(typeof r.header === "string" ? { header: r.header } : {}),
+        ...(typeof r.detail === "string" ? { detail: r.detail } : {}),
+        ...(options !== undefined ? { options } : {}),
+        ...(multiSelect ? { multiSelect } : {}),
+      });
+    }
+    return out.length > 0 ? out : undefined;
+  }
+  if (typeof a.question === "string") {
+    const q = a.question.trim();
+    if (!q) return undefined;
+    return [{ id: "q0", question: q }];
+  }
+  return undefined;
+}
+
 /** Point `ask_user` execute at Face questions (DSH web provider). */
 export function bindAskUserTool(
   tools: ToolRegistry,
-  askText: (question: string, signal?: AbortSignal) => Promise<string>,
+  ask: (
+    questions: readonly FaceQuestionItem[],
+    signal?: AbortSignal,
+  ) => Promise<string>,
 ): void {
   const prev = tools.get("ask_user");
   if (!prev) return;
@@ -278,12 +341,12 @@ export function bindAskUserTool(
     ...(prev.presentCall ? { presentCall: prev.presentCall } : {}),
     ...(prev.presentResult ? { presentResult: prev.presentResult } : {}),
     async execute(args, signal) {
-      const q = String((args as { question?: string }).question ?? "").trim();
-      if (!q) {
-        return { content: "ask_user: empty question", isError: true };
+      const questions = coerceAskUserQuestions(args);
+      if (!questions) {
+        return { content: "ask_user: empty or invalid questions", isError: true };
       }
       try {
-        return { content: await askText(q, signal) };
+        return { content: await ask(questions, signal) };
       } catch (err) {
         if (err instanceof FaceQuestionError) {
           return { content: err.message, isError: true };
