@@ -86,6 +86,7 @@ HTTP/WS (attach-http)
 | `adapt/wire-event.ts` | session 事件 → 壳 wire             |                                         |
 | `adapt/wire-ids.ts`   | 稳定数字 id 映射                   |                                         |
 | `adapt/tool-view.ts`  | 工具卡 lookup                         | `presentCall` / `presentResult` 在工具上；Face `viewFor` 软失败 |
+| `adapt/job-view.ts`   | `JobView` / `jobViews`                | mux `session/jobs`；基线非空才发；变更可推 `[]` |
 | `adapt/index.ts`      | 适配导出                           |                                         |
 
 ### 投影（`projections/`）

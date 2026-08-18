@@ -177,6 +177,7 @@ export function createHostManager(): HostManager {
 
       const resolveAgent = async (sessionId: string) => {
         // Cache composition binding only — never treat AgentHandle as transcript source (ADR-0003).
+        const parentSessionId = lineage.parentOf(sessionId);
         return agentCache.resolve(
           sessionId,
           async () => {
@@ -198,7 +199,7 @@ export function createHostManager(): HostManager {
             }
             return agent;
           },
-          { parentSessionId: lineage.parentOf(sessionId) },
+          parentSessionId ? { parentSessionId } : undefined,
         );
       };
 

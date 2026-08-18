@@ -11,6 +11,7 @@
 - **Subagent**：Face `list/history/prompt/interrupt` 能跑；`session.create({ parentSessionId })` 或 `session.fork` 登记子会话。Host agent-cache 对有父的会话走 `openSubagentRealm`（无 ACP / Cordis 外挂）
 - **进程插件**：`tools` · `prompt` · `commands` 已接线；`channel` / `policy` / `llm` 可发现、未自动接线；DSH Cordis 宿主包只登记 inventory stub（不 `apply`）；显式 / 保留 id 优先
 - **队列**：权威快照 `session/queue`；`prompt/*` → `agent/inbox/spliced`；mux 重连可补发 pending queue
+- **后台任务**：有 jobs 源才发 `session/jobs`；订阅基线只在集合非空时发（空集靠缺帧）；变更推全量快照（清空仍发 `[]`）。无主任务扇出到每个已列出会话。`JobView` 不含 `ownerSession` / `reported` / `outputLimitBytes`
 - **附件 / 视觉**：`MessageContent` 可为块数组；`@xrkseek/attachment`；Face `session.attachment`；Host Face 默认 `text+image`。openai-compatible（Registry 非 DeepSeek 品牌）走 `image_url` data URL；官方 DeepSeek 适配器仍 text-only。适配器未声明 `image` 时 loop 抛 `UnsupportedContentError`
 - **LLM 流**：OpenAI 兼容适配器默认 `stream()`：SSE `reasoning_content` → `reasoning-delta`（index 0）、`content` → `text-delta`（index 1）；agent-loop 先 append `assistant/chunk` 再 `assistant/message`（可选 `reasoning`）。`chat()` 仍一次性 JSON。DeepSeek 官方适配器不标视觉
 - **模型发现**：Face `llm.discoverModels` 对 `settingsNs` `llm` / `llm-pi-ai` 发 openai-chat `GET /models`（draft，不落盘）；失败 `model-discovery-failed` 且 details 不含密钥

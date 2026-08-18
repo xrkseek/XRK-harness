@@ -12,7 +12,7 @@ await shell.listJobs(); // [{ id, status: "running"|"exited"|"killed"|"failed", 
 await shell.killJob(id); // no-op if already finished; throws if unknown id
 ```
 
-`run()` stays foreground (await exit). Jobs are retained up to `maxJobs` (default 64); finished entries prune first when over cap.
+`run()` stays foreground (await exit). Jobs are retained up to `maxJobs` (default 64); finished entries prune first when over cap. `onJobsChanged` 在 register / settle / kill 后触发。`toJobView` 把 `exited` 映成 Face `completed`，detail 为 `exit code: N`。
 
 ## Tools (`createBashTools`)
 

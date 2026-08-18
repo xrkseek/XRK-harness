@@ -25,3 +25,9 @@ export {
   type ToolCallPairing,
   type ToolEventView,
 } from "./tool-view.js";
+export {
+  jobViews,
+  type FaceJobsSource,
+  type JobView,
+  type JobViewStatus,
+} from "./job-view.js";
