@@ -132,7 +132,7 @@ index.html 由 host 注入 `__DSH_BOOT__` / `__XRK_BOOT__`（`boot.json` merge `
 | `XRK_WEB_DIST` | SPA dist root（CLI 默认 `apps/web-static`，按 CLI 包定位） |
 | `XRK_SESSIONS_DIR` | JSONL 会话目录；CLI `serve` 省略时用 `{workspace}/.xrk/sessions`（`--no-persist` = 内存）；旁路 `subagents.json` · `goals.json` |
 | `XRK_POLICY_FILE` | policy JSON |
-| `XRK_MCP_SERVERS` | MCP 服务器 JSON（`command` 或 `url`） |
+| `XRK_MCP_SERVERS` | MCP 服务器 JSON（`command` 或 `url`）；空则回退 `.xrk/host-settings.json` |
 | `XRK_MCP_ALLOW` | `1`/`true` → 本进程 `mcp.connect` allow |
 | `XRK_TAVILY_API_KEY` | Tavily 搜索；缺省时 `web_search` 仍登记、execute 失败 |
 | `XRK_BRAVE_SEARCH_API_KEY` | Brave Search；与 Tavily 都有且未钉 provider 时用 Tavily |

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
-import { createBashTools, createLocalShell, toJobView } from "../src/index.js";
+import { createBashTools, createLocalShell, createSessionScopedShell, toJobView } from "../src/index.js";
 
 function sleepCmd(ms: number): string {
   return `node -e "setTimeout(()=>{},${ms})"`;
@@ -221,7 +221,7 @@ describe("shell background jobs", () => {
     ).toThrow(/disposed/);
   });
 
-  it("maxConcurrentJobs rejects over-admission", () => {
+  it("maxConcurrentJobs rejects over-admission in the same owner bucket", () => {
     const shell = createLocalShell({
       subprocess: createLocalSubprocess(),
       maxConcurrentJobs: 1,
@@ -254,6 +254,63 @@ describe("shell background jobs", () => {
       }),
     ).toThrow(/limit reached/);
     resolveDone({ status: "completed" });
+  });
+
+  it("session-scoped shell fences foreign jobs; concurrent limit is per owner", async () => {
+    const root = createLocalShell({
+      subprocess: createLocalSubprocess(),
+      maxConcurrentJobs: 1,
+    });
+    const a = createSessionScopedShell(root, "session-a");
+    const b = createSessionScopedShell(root, "session-b");
+    let resolveA!: (v: { status: "completed" | "killed" | "failed" }) => void;
+    const doneA = new Promise<{ status: "completed" | "killed" | "failed" }>(
+      (resolve) => {
+        resolveA = resolve;
+      },
+    );
+    const started = a.startManagedJob({
+      kind: "pty-send",
+      label: "owned-by-a",
+      run: () => ({
+        cancel() {},
+        done: doneA,
+        readOutput: () => "a",
+      }),
+    });
+    expect(a.listJobsNow()).toHaveLength(1);
+    expect(b.listJobsNow()).toHaveLength(0);
+    expect(() => b.readJobOutput(started.id)).toThrow(/another session/);
+
+    let resolveB!: (v: { status: "completed" | "killed" | "failed" }) => void;
+    const doneB = new Promise<{ status: "completed" | "killed" | "failed" }>(
+      (resolve) => {
+        resolveB = resolve;
+      },
+    );
+    // Different owner bucket — still admitted under limit 1.
+    const startedB = b.startManagedJob({
+      kind: "pty-send",
+      label: "owned-by-b",
+      run: () => ({
+        cancel() {},
+        done: doneB,
+        readOutput: () => "b",
+      }),
+    });
+    expect(startedB.id).toBe("pty-send-2");
+    expect(root.listJobsNow()).toHaveLength(2);
+    let foreignNotifies = 0;
+    const off = a.onJobsChanged(() => {
+      foreignNotifies += 1;
+    });
+    resolveB({ status: "completed" });
+    await b.waitJob(startedB.id, 1_000);
+    expect(foreignNotifies).toBe(0);
+    off();
+    resolveA({ status: "completed" });
+    await a.waitJob(started.id, 1_000);
+    await root.dispose();
   });
 
   it("job_output wait + job_kill match DSH names", async () => {

@@ -83,6 +83,40 @@ export const DSH_PERMISSION_SCHEMA: DshSchemaEnvelope = {
   },
 };
 
+/**
+ * Face MCP desired servers. `connected` is overlay from live plugins.
+ * Applies on next Host spawn (not a live supervisor).
+ */
+export const DSH_MCP_SCHEMA: DshSchemaEnvelope = {
+  uid: 9,
+  refs: {
+    1: { type: "string" },
+    2: { type: "array", inner: 1 },
+    3: {
+      type: "object",
+      dict: {
+        serverName: 1,
+        command: 1,
+        url: 1,
+        args: 2,
+        cwd: 1,
+      },
+    },
+    4: { type: "array", inner: 3 },
+    5: { type: "string" },
+    6: {
+      type: "object",
+      dict: { id: 1, serverName: 1, kind: 1, toolCount: 5 },
+    },
+    7: { type: "array", inner: 6 },
+    8: { type: "string" },
+    9: {
+      type: "object",
+      dict: { servers: 4, connected: 7, note: 8 },
+    },
+  },
+};
+
 /** `providers` is a dict so models page can probe `providers/<route>/api`. */
 export const DSH_LLM_SCHEMA: DshSchemaEnvelope = {
   uid: 8,

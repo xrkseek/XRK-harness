@@ -48,7 +48,7 @@ import {
   createSandboxWrapGuard,
   createWorkspaceSandbox,
 } from "@xrkseek/exec-sandbox";
-import { createBashTools, createLocalShell, toJobView, JOBS_PROMPT_TEXT } from "@xrkseek/exec-shell";
+import { createBashTools, createLocalShell, createSessionScopedShell, toJobView, JOBS_PROMPT_TEXT } from "@xrkseek/exec-shell";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
 import {
   createRunCodeTool,
@@ -145,6 +145,11 @@ export interface HarnessCompositionOptions {
    * `terminal_send` supports `run_in_background` via composition shell jobs (`pty-send`).
    */
   readonly ptyTools?: boolean | TerminalSessionService;
+  /**
+   * Shared jobs registry (Host). When set, composition scopes it by `sessionId`
+   * and does not dispose it — Host stop owns teardown.
+   */
+  readonly shell?: import("@xrkseek/exec-shell").ShellService;
   /** Optional policy engine → `pipeline.onPre(createPolicyToolPre)`. */
   readonly policy?: PolicyEngine;
   /** Host vision: resolve attachment bytes for image user content. */
@@ -197,8 +202,13 @@ export function createHarnessComposition(
 ): HarnessComposition {
   const fs =
     options.fs ?? createFsLocalProvider({ root: options.workspaceRoot });
-  const subprocess = createLocalSubprocess();
-  const shell = createLocalShell({ subprocess });
+  const sharedShell = options.shell;
+  const rootShell =
+    sharedShell ??
+    createLocalShell({ subprocess: createLocalSubprocess() });
+  const store = options.sessionStore ?? createMemorySessionStore();
+  const sessionId = ensureSession(store, options.sessionId);
+  const shell = createSessionScopedShell(rootShell, sessionId);
   const sandbox = createWorkspaceSandbox({
     root: options.workspaceRoot,
     inner: createDenyListSandbox(),
@@ -209,8 +219,6 @@ export function createHarnessComposition(
   );
   const productDir =
     injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
-  const store = options.sessionStore ?? createMemorySessionStore();
-  const sessionId = ensureSession(store, options.sessionId);
   const sandboxMode = effectiveSandboxMode(
     store.get(sessionId).events,
     "workspace-write",
@@ -455,7 +463,7 @@ export function createHarnessComposition(
       };
     },
     async dispose() {
-      await shell.dispose();
+      if (!sharedShell) await rootShell.dispose();
     },
   };
 }

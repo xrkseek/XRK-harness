@@ -77,7 +77,7 @@ HTTP/WS (attach-http)
 | `host-pick-directory.ts`  | `host.pickDirectory`                    | 系统选目录；取消 `null`；缺 picker 用 `directory-picker-unavailable` |
 | `workspace-face.ts`       | workspace.* Face                        | 路径不得逃出 root        |
 | `workspace-registry.ts`   | DSH 形 workspace 注册表                 | `workspaceIdOf`；delete 发 removed；insertBefore 发 order |
-| `settings-credentials.ts` | settings.* · credentials.*              | 密钥不入库；openDocument 忽略客户端 path；`mcp` namespace 只读 |
+| `settings-credentials.ts` | settings.* · credentials.*              | 密钥不入库；openDocument 忽略客户端 path；`mcp.servers` 落盘（禁 env）；`connected` overlay |
 | `dsh-schema.ts`           | settings namespace schemastery 信封     | `{ uid, refs }`；JSON Schema 壳读不了 |
 
 ### Wire 适配（`adapt/`）
