@@ -6,6 +6,7 @@ import {
   type SessionStore,
 } from "@xrkseek/core-session";
 import type { AgentHandle } from "@xrkseek/core-agent";
+import type { ToolRegistry } from "@xrkseek/core-tools";
 import {
   createProviderRegistry,
   type ProviderRegistry,
@@ -22,7 +23,7 @@ import {
   installDefaultFaceProjections,
   type FaceProjectionRegistry,
 } from "./projections/index.js";
-import { FaceInboxWireMaps, toMuxSessionEvent } from "./adapt/index.js";
+import { FaceInboxWireMaps, FaceToolArgMaps, toMuxSessionEvent } from "./adapt/index.js";
 import { toQueueItems } from "./queue.js";
 import type {
   FaceProcessPlugin,
@@ -80,8 +81,12 @@ export interface CreateFaceRuntimeOptions {
   readonly settingsDocumentPath?: string;
   /** Inject native opener (tests). Default `openNativePath`. */
   openNativePath?(target: string): Promise<void>;
+  /** Inject native folder chooser (tests). Default `pickNativeDirectory`. */
+  pickNativeDirectory?(signal: AbortSignal): Promise<string | null>;
   /** Durable image store (default none → image RPCs unavailable). */
   readonly attachments?: AttachmentStore;
+  /** Standing tool registry (preset layer) when no live agent is remembered. */
+  readonly tools?: ToolRegistry;
   /** Host input modalities; default text-only. */
   readonly inputModalities?: readonly ("text" | "image")[];
   /** Optional JSON sidecar for parent→child links (JSONL session dir). */
@@ -121,7 +126,34 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const messageFeedback = new FaceMessageFeedbackStore();
   const goals = new FaceGoalStore(options.goalPersistPath);
   const wireIds = new FaceWireIdMaps();
+  const toolArgMaps = new FaceToolArgMaps();
   const inboxWire = new FaceInboxWireMaps(admitRpcMap);
+  const rememberedTools = new Map<string, ToolRegistry>();
+
+  const getTool = (sessionId: string, name: string) => {
+    const fromAgent = rememberedTools.get(sessionId)?.get(name);
+    if (fromAgent) return fromAgent;
+    const fromStanding = options.tools?.get(name);
+    if (fromStanding) return fromStanding;
+    for (const plugin of options.plugins ?? []) {
+      const hit = plugin.tools?.find((t) => t.name === name);
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+
+  const resolveAgent = async (sessionId: string) => {
+    const agent = await options.resolveAgent(sessionId);
+    if (agent.tools) rememberedTools.set(sessionId, agent.tools);
+    return agent;
+  };
+
+  const invalidateAgent = options.invalidateAgent
+    ? async (sessionId: string) => {
+        rememberedTools.delete(sessionId);
+        await options.invalidateAgent!(sessionId);
+      }
+    : undefined;
 
   const titleBox: { controller: FaceTitleController | undefined } = {
     controller: undefined,
@@ -155,14 +187,15 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
 
     const frozen = originalAppend(id, next);
     const eventSeq = seq.next(id);
+    toolArgMaps.remember(id, frozen);
     bus.publishMux(
-      toMuxSessionEvent(
-        id,
-        frozen,
-        eventSeq,
-        wireIds,
-        inboxWire.forSession(id),
-      ),
+      toMuxSessionEvent(id, frozen, eventSeq, {
+        sessionId: id,
+        ids: wireIds,
+        inbox: inboxWire.forSession(id),
+        toolArgs: toolArgMaps.forSession(id),
+        getTool: (name) => getTool(id, name),
+      }),
     );
     projections.drive(id, frozen, eventSeq);
     if (frozen.type === "user/message" && !replayingLog) {
@@ -231,7 +264,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       }
       return newSession(store).id;
     },
-    resolveAgent: options.resolveAgent,
+    resolveAgent,
     drain: options.drain,
     registry: options.registry ?? createProviderRegistry(),
     workspaceRoot: options.workspaceRoot,
@@ -260,6 +293,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     ...(options.openNativePath !== undefined
       ? { openNativePath: options.openNativePath }
       : {}),
+    ...(options.pickNativeDirectory !== undefined
+      ? { pickNativeDirectory: options.pickNativeDirectory }
+      : {}),
     bus,
     seq,
     projections,
@@ -279,6 +315,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     inboxWire,
     loadSlashRecipes,
     ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
+    getTool,
     ...(options.webPlugins !== undefined
       ? { webPlugins: options.webPlugins }
       : {}),
@@ -312,9 +349,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     ...(options.defaultAgentPreset
       ? { defaultAgentPreset: options.defaultAgentPreset }
       : {}),
-    ...(options.invalidateAgent
-      ? { invalidateAgent: options.invalidateAgent }
-      : {}),
+    ...(invalidateAgent ? { invalidateAgent } : {}),
   };
   runtimeBox.current = runtime;
   goals.bind(runtime);

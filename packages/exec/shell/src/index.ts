@@ -1,5 +1,6 @@
 import type { ToolDefinition } from "@xrkseek/core-tools";
 import type { SubprocessHandle, SubprocessService } from "@xrkseek/exec-subprocess";
+import { presentBashCall, presentBashResult } from "./present.js";
 
 export type ShellBackend = "bash" | "cmd" | "pwsh";
 
@@ -191,14 +192,24 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
   };
 }
 
+/**
+ * Model-facing foreground text. Copied from `@deepseek-ai/dsh-tool-bash`
+ * `renderResult`: stderr section, then `[exit code: N]` last so `parseExitStatus`
+ * can split the pill. Non-zero exits are reported, not `isError`.
+ */
 function formatRun(out: ShellRunResult): string {
-  return [
-    out.stdout,
-    out.stderr ? `stderr:\n${out.stderr}` : "",
-    `exit=${out.exitCode ?? "?"}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  let body = out.stdout;
+  const err = out.stderr;
+  if (err.length > 0) {
+    if (body.length > 0 && !body.endsWith("\n")) body += "\n";
+    body += `[stderr]\n${err}`;
+  }
+  if (body.length === 0) body = "(no output)";
+  if (out.exitCode !== null && out.exitCode !== 0) {
+    if (!body.endsWith("\n")) body += "\n";
+    body += `[exit code: ${out.exitCode}]`;
+  }
+  return body;
 }
 
 export function createBashTools(shell: ShellService): ToolDefinition[] {
@@ -232,17 +243,14 @@ export function createBashTools(shell: ShellService): ToolDefinition[] {
           const out = await shell.run(command, undefined, {
             ...(signal ? { signal } : {}),
           });
-          return {
-            content: formatRun(out),
-            ...(out.exitCode !== 0 && out.exitCode !== null
-              ? { isError: true as const }
-              : {}),
-          };
+          return { content: formatRun(out) };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return { content: message, isError: true };
         }
       },
+      presentCall: presentBashCall,
+      presentResult: presentBashResult,
     },
     {
       name: "bash_jobs",
@@ -288,3 +296,5 @@ export function createBashTools(shell: ShellService): ToolDefinition[] {
     },
   ];
 }
+
+export { presentBashCall, presentBashResult } from "./present.js";

@@ -55,6 +55,28 @@ export function loadBootManifestFromWebDist(
   }
 }
 
+/**
+ * Client plugins this Host does not run. Files stay on disk (recapture / 404
+ * tests); omitting them from boot hides empty Cordis chrome and the captured
+ * Vite HMR client (it EventSources `/plugins/events`, which product serve
+ * does not expose).
+ */
+export const XRK_OMIT_CLIENT_PLUGIN_IDS = [
+  "@deepseek-ai/dsh-client-ui-cordis",
+  "@deepseek-ai/dsh-cordis-client-runner",
+  "@deepseek-ai/dsh-client-hmr",
+] as const;
+
+/** Drop product-omitted ids. Overlay cannot put them back. */
+export function applyXrkProductBootPolicy(
+  manifest: WebBootManifest,
+): WebBootManifest {
+  const omit = new Set<string>(XRK_OMIT_CLIENT_PLUGIN_IDS);
+  const entries = manifest.entries.filter((e) => !omit.has(e.id));
+  if (entries.length === manifest.entries.length) return manifest;
+  return { rev: manifest.rev, entries };
+}
+
 /** Prefer captured DSH `boot.json`; else legacy console fallback roster. */
 export function resolveWebBootManifest(webDistRoot?: string): WebBootManifest {
   if (webDistRoot) {

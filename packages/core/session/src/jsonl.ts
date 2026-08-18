@@ -7,13 +7,14 @@ export function toJSONL(events: readonly SessionEvent[]): string {
 
 export interface ParseJSONLResult {
   readonly events: SessionEvent[];
-  /** Last non-empty line was not JSON (typical crash mid-append). */
+  /** Last non-empty line was not a valid session event (crash mid-append or truncated). */
   readonly droppedTrailingIncomplete: boolean;
 }
 
 /**
  * Parse JSONL session events.
- * Trailing incomplete last line is dropped (durable reload); mid-file corrupt still throws.
+ * Trailing last line that is not JSON **or** fails event schema is dropped
+ * (durable reload after a crash mid-append). Mid-file corrupt still throws.
  */
 export function parseJSONL(text: string): ParseJSONLResult {
   const rawLines = text.split(/\r?\n/);
@@ -43,6 +44,9 @@ export function parseJSONL(text: string): ParseJSONLResult {
     try {
       events.push(assertSessionEvent(raw));
     } catch (err) {
+      if (last) {
+        return { events, droppedTrailingIncomplete: true };
+      }
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(`fromJSONL line ${display}: ${msg}`, { cause: err });
     }

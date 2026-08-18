@@ -7,6 +7,15 @@ import path from "node:path";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import { canOpenNativePath, openNativePath } from "./host-open-path.js";
+import {
+  DSH_EMPTY_OBJECT_SCHEMA,
+  DSH_LLM_SCHEMA,
+  DSH_LOCALE_SCHEMA,
+  DSH_ONBOARDING_SCHEMA,
+  DSH_PERMISSION_SCHEMA,
+  DSH_THEME_SCHEMA,
+  isFacePermissionPreset,
+} from "./dsh-schema.js";
 
 export type UiTheme = "system" | "light" | "dark";
 
@@ -45,14 +54,8 @@ function dshLocalePreference(locale: string): "zh" | "en" {
   return lower.startsWith("zh") ? "zh" : "en";
 }
 
-const LOCALE_SCHEMA = {
-  type: "object",
-  properties: { preference: { type: "string" } },
-};
-const THEME_SCHEMA = {
-  type: "object",
-  properties: { preference: { type: "string" } },
-};
+const LOCALE_SCHEMA = DSH_LOCALE_SCHEMA;
+const THEME_SCHEMA = DSH_THEME_SCHEMA;
 
 function applyDshUiPref(
   runtime: FaceRuntime,
@@ -551,13 +554,28 @@ function unsetAtPath(
 export class FaceSettingsNamespaces {
   private readonly map = new Map<
     string,
-    { user: Record<string, unknown>; revision: number }
+    {
+      user: Record<string, unknown>;
+      revision: number;
+      base: Record<string, unknown>;
+      schema: unknown;
+    }
   >();
 
-  ensure(ns: string): { user: Record<string, unknown>; revision: number } {
+  ensure(ns: string): {
+    user: Record<string, unknown>;
+    revision: number;
+    base: Record<string, unknown>;
+    schema: unknown;
+  } {
     let slot = this.map.get(ns);
     if (!slot) {
-      slot = { user: {}, revision: 0 };
+      slot = {
+        user: {},
+        revision: 0,
+        base: {},
+        schema: DSH_EMPTY_OBJECT_SCHEMA,
+      };
       this.map.set(ns, slot);
     }
     return slot;
@@ -565,15 +583,17 @@ export class FaceSettingsNamespaces {
 
   view(
     ns: string,
-    base: Record<string, unknown> = {},
-    schema: unknown = {},
+    base?: Record<string, unknown>,
+    schema?: unknown,
   ): DshSettingsNamespaceView {
     const slot = this.ensure(ns);
+    if (base !== undefined) slot.base = base;
+    if (schema !== undefined) slot.schema = schema;
     return {
       ns,
-      schema,
-      value: { ...base, ...slot.user },
-      base,
+      schema: slot.schema,
+      value: { ...slot.base, ...slot.user },
+      base: { ...slot.base },
       user: { ...slot.user },
       applies: "live",
       secrets: [],
@@ -599,13 +619,39 @@ export class FaceSettingsNamespaces {
         message: "expectedRevision mismatch",
       };
     }
+    const nextUser = { ...slot.user };
     for (const op of ops) {
-      if (op.op === "set") setAtPath(slot.user, op.path, op.value);
-      else unsetAtPath(slot.user, op.path);
+      if (op.op === "set") setAtPath(nextUser, op.path, op.value);
+      else unsetAtPath(nextUser, op.path);
     }
+    const merged = { ...slot.base, ...nextUser };
+    const invalid = validateNamespaceValue(ns, merged);
+    if (invalid) {
+      return { ok: false, code: "settings-invalid", message: invalid };
+    }
+    slot.user = nextUser;
     slot.revision += 1;
     return { ok: true, view: this.view(ns) };
   }
+}
+
+function validateNamespaceValue(
+  ns: string,
+  value: Record<string, unknown>,
+): string | undefined {
+  if (ns === "permission") {
+    const preset = value.defaultPreset;
+    if (preset !== undefined && !isFacePermissionPreset(preset)) {
+      return `unknown permission preset: ${String(preset)}`;
+    }
+  }
+  if (ns === "ui-theme") {
+    const pref = value.preference;
+    if (pref !== undefined && typeof pref === "string" && !UI_THEMES.has(pref as UiTheme)) {
+      return `unknown theme preference: ${pref}`;
+    }
+  }
+  return undefined;
 }
 
 /** DeepSeek `settings.describe` — namespaces[] for Web welcome / forms. */
@@ -613,11 +659,19 @@ export async function settingsDescribeDsh(
   runtime: FaceRuntime,
 ): Promise<FaceRpcResult<unknown>> {
   const namespaces: DshSettingsNamespaceView[] = [
-    runtime.settingsNamespaces.view("ui-onboarding"),
-    runtime.settingsNamespaces.view("ui", {
-      theme: runtime.uiSettings.theme,
-      locale: runtime.uiSettings.locale,
-    }),
+    runtime.settingsNamespaces.view(
+      "ui-onboarding",
+      {},
+      DSH_ONBOARDING_SCHEMA,
+    ),
+    runtime.settingsNamespaces.view(
+      "ui",
+      {
+        theme: runtime.uiSettings.theme,
+        locale: runtime.uiSettings.locale,
+      },
+      DSH_EMPTY_OBJECT_SCHEMA,
+    ),
     runtime.settingsNamespaces.view(
       "locale",
       { preference: dshLocalePreference(runtime.uiSettings.locale) },
@@ -628,12 +682,20 @@ export async function settingsDescribeDsh(
       { preference: runtime.uiSettings.theme },
       THEME_SCHEMA,
     ),
+    runtime.settingsNamespaces.view(
+      "permission",
+      { defaultPreset: "read-only" },
+      DSH_PERMISSION_SCHEMA,
+    ),
+    runtime.settingsNamespaces.view("llm", { providers: {} }, DSH_LLM_SCHEMA),
   ];
   if (runtime.hostPublic) {
     namespaces.push(
-      runtime.settingsNamespaces.view("host", {
-        ...runtime.hostPublic,
-      }),
+      runtime.settingsNamespaces.view(
+        "host",
+        { ...runtime.hostPublic },
+        DSH_EMPTY_OBJECT_SCHEMA,
+      ),
     );
   }
   return {
@@ -682,7 +744,7 @@ export async function settingsMutateDsh(
   if (!result.ok) {
     return {
       ok: false,
-      error: { code: result.code, message: result.message },
+      error: { code: result.code, message: result.message, details: { ns } },
     };
   }
   applyDshUiPref(

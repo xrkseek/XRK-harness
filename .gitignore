@@ -15,3 +15,5 @@ vendor/
 *.tsbuildinfo
 .xrk-harness/
 .xrk/tool-outputs/
+.xrk/sessions/
+.xrk/host-settings.json

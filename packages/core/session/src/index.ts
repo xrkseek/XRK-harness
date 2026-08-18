@@ -85,27 +85,13 @@ export {
 
 export type { SessionRecord, SessionStore } from "./store.js";
 import type { SessionRecord, SessionStore } from "./store.js";
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object") return value;
-  Object.freeze(value);
-  for (const v of Object.values(value as Record<string, unknown>)) {
-    if (v && typeof v === "object" && !Object.isFrozen(v)) {
-      deepFreeze(v);
-    }
-  }
-  return value;
-}
-
-function newId(): string {
-  return `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
+import { deepFreeze, newSessionId } from "./freeze.js";
 
 export function createMemorySessionStore(): SessionStore {
   const sessions = new Map<string, SessionEvent[]>();
 
   return {
-    create(id = newId()): SessionRecord {
+    create(id = newSessionId()): SessionRecord {
       if (sessions.has(id)) {
         throw new Error(`session already exists: ${id}`);
       }
@@ -184,6 +170,7 @@ export function assertModelVisible(
 
 export { fromJSONL, parseJSONL, toJSONL, type ParseJSONLResult } from "./jsonl.js";
 export { createJsonlSessionStore } from "./jsonl-store.js";
+export { writeTextFileAtomicSync } from "./atomic-write.js";
 
 export function forkSession(
   store: SessionStore,

@@ -78,6 +78,8 @@ export interface AgentHandle {
    * Host Face uses this to bridge `session.respondApproval`.
    */
   setApprovalHandler(handler: ApprovalHandler | undefined): void;
+  /** Presenters live on the registry; Face `viewFor` looks up by name. */
+  readonly tools?: ToolRegistry;
 }
 
 export interface CreateAgentOptions {
@@ -378,6 +380,7 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
     setApprovalHandler(handler) {
       pipeline.setApprovalHandler(handler);
     },
+    tools: options.tools,
   };
 }
 

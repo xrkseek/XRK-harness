@@ -23,7 +23,7 @@
 | Kernel · Compose · Session · Agent · Exec · HTTP · Host Face 主路径 | 能跑 |
 | MCP（stdio · HTTP · list_changed）· Attachment（Face 可图） | 能跑 |
 | Host Face ↔ 产品 Web · 浏览器 E2E | 未稳 |
-| Registry R1 官方协议 · Face U3 NI · MCP 设置 UI | 未做 |
+| Registry R1 官方协议 · MCP 设置 UI | 未做 |
 
 ## 快速开始
 
@@ -34,7 +34,8 @@ pnpm install
 pnpm build
 
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
-node apps/cli/dist/bin.js serve --preset minimal --workspace .
+node apps/cli/dist/bin.js serve --preset server --workspace .
+# or: pnpm serve   /   xrk-harness web --open
 ```
 
 示例：[examples/hello-agent](./examples/hello-agent) · HTTP：[docs/http-api.md](./docs/http-api.md)

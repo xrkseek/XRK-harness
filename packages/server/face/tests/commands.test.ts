@@ -1,17 +1,15 @@
 import { describe, expect, it } from "vitest";
-import {
-  createMemorySessionStore,
-  admitPrompt,
-} from "@xrkseek/core-session";
-import { createFaceRuntime } from "../src/runtime.js";
+import { createMemorySessionStore } from "@xrkseek/core-session";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import { faceMethodFromPath } from "../src/wire/index.js";
+import {
+  admittingAgentResolve,
+  createBareFaceRuntime,
+} from "./helpers/bare-runtime.js";
 
 function bareRuntime(store = createMemorySessionStore()) {
-  return createFaceRuntime({
+  return createBareFaceRuntime({
     store,
-    workspaceRoot: process.cwd(),
-    version: "test",
     loadSlashRecipes: async () => [
       {
         id: "echo",
@@ -22,21 +20,7 @@ function bareRuntime(store = createMemorySessionStore()) {
         instructions: "",
       },
     ],
-    drain: {
-      wake() {},
-      async cancel() {},
-      isActive() {
-        return false;
-      },
-    },
-    resolveAgent: async (sessionId) => ({
-      admit: (content, opts) => admitPrompt(store, sessionId, content, opts),
-      pendingAdmits: () => [],
-      continueTurn: async () => ({}) as never,
-      run: async () => ({}) as never,
-      isBusy: () => false,
-      abort() {},
-    }),
+    resolveAgent: admittingAgentResolve(store),
   });
 }
 
@@ -135,10 +119,8 @@ describe("commands/execute + list", () => {
   });
 
   it("lists and executes plugin commands before recipes", async () => {
-    const runtime = createFaceRuntime({
+    const runtime = createBareFaceRuntime({
       store: createMemorySessionStore(),
-      workspaceRoot: process.cwd(),
-      version: "test",
       loadSlashRecipes: async () => [
         {
           id: "ping",
@@ -165,21 +147,6 @@ describe("commands/execute + list", () => {
           ],
         },
       ],
-      drain: {
-        wake() {},
-        async cancel() {},
-        isActive() {
-          return false;
-        },
-      },
-      resolveAgent: async () => ({
-        admit: () => ({}) as never,
-        pendingAdmits: () => [],
-        continueTurn: async () => ({}) as never,
-        run: async () => ({}) as never,
-        isBusy: () => false,
-        abort() {},
-      }),
     });
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
     if (!created.result.ok) throw new Error("create");
@@ -212,10 +179,8 @@ describe("commands/execute + list", () => {
   });
 
   it("logs command/done error when a plugin handler throws", async () => {
-    const runtime = createFaceRuntime({
+    const runtime = createBareFaceRuntime({
       store: createMemorySessionStore(),
-      workspaceRoot: process.cwd(),
-      version: "test",
       loadSlashRecipes: async () => [],
       plugins: [
         {
@@ -232,21 +197,6 @@ describe("commands/execute + list", () => {
           ],
         },
       ],
-      drain: {
-        wake() {},
-        async cancel() {},
-        isActive() {
-          return false;
-        },
-      },
-      resolveAgent: async () => ({
-        admit: () => ({}) as never,
-        pendingAdmits: () => [],
-        continueTurn: async () => ({}) as never,
-        run: async () => ({}) as never,
-        isBusy: () => false,
-        abort() {},
-      }),
     });
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
     if (!created.result.ok) throw new Error("create");
@@ -280,30 +230,13 @@ describe("commands/execute + list", () => {
 
 describe("pluginInventory/list", () => {
   it("lists process plugins and boot entries; cordis stays failed", async () => {
-    const runtime = createFaceRuntime({
+    const runtime = createBareFaceRuntime({
       store: createMemorySessionStore(),
-      workspaceRoot: process.cwd(),
-      version: "test",
       plugins: [
         { id: "example-tools", kind: "tools" },
         { id: "community-cordis", kind: "cordis" },
       ],
       webPlugins: [{ id: "@deepseek-ai/dsh-client-runtime" }],
-      drain: {
-        wake() {},
-        async cancel() {},
-        isActive() {
-          return false;
-        },
-      },
-      resolveAgent: async () => ({
-        admit: () => ({}) as never,
-        pendingAdmits: () => [],
-        continueTurn: async () => ({}) as never,
-        run: async () => ({}) as never,
-        isBusy: () => false,
-        abort() {},
-      }),
     });
     const listed = await dispatchFaceMethod(
       runtime,

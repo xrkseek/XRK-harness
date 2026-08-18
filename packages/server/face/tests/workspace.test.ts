@@ -244,9 +244,6 @@ describe("Face workspace U2", () => {
           .archivedSessionIds,
       ).toContain(sessionId);
     }
-
-    const pick = await dispatchFaceMethod(runtime, "host.pickDirectory", "pd1", {});
-    expect(pick.result).toEqual({ ok: true, value: { path: null } });
   });
 
   it("workspace.delete · insertBefore · insertSessionBefore", async () => {

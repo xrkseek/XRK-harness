@@ -3,6 +3,7 @@ import {
   hostListDirectory,
 } from "../host-directory.js";
 import { canOpenNativePath, hostOpenPath } from "../host-open-path.js";
+import { hostPickDirectoryRpc } from "../host-pick-directory.js";
 import type { FaceHandler } from "./types.js";
 
 export const hostDescribe: FaceHandler = async (runtime) => {
@@ -25,10 +26,8 @@ export const hostDescribe: FaceHandler = async (runtime) => {
   };
 };
 
-export const hostPickDirectory: FaceHandler = async () => ({
-  ok: true,
-  value: { path: null },
-});
+export const hostPickDirectory: FaceHandler = async (runtime) =>
+  hostPickDirectoryRpc(runtime);
 
 export const hostListDirectoryHandler: FaceHandler = async (
   _runtime,

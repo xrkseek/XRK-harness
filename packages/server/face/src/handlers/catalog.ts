@@ -120,8 +120,9 @@ export const llmProviders: FaceHandler = async (runtime) => {
     provider: b.id,
     displayName: b.displayName,
     settingsNs: "llm",
-    settingsPath: [] as string[],
+    settingsPath: ["providers", b.id],
     active: routable.get(b.id)?.active ?? false,
+    declared: true,
   }));
   return { ok: true, value: { providers } };
 };

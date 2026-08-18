@@ -2,17 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   createMemorySessionStore,
   newSession,
-  admitPrompt,
 } from "@xrkseek/core-session";
-import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import { presentToolView, EVENT_ISOMORPHISM } from "../src/adapt/index.js";
+import {
+  admittingAgentResolve,
+  createBareFaceRuntime,
+} from "./helpers/bare-runtime.js";
 
 function bareRuntime(store = createMemorySessionStore()) {
-  return createFaceRuntime({
+  return createBareFaceRuntime({
     store,
-    workspaceRoot: process.cwd(),
-    version: "test",
     loadSlashRecipes: async () => [
       {
         id: "ping",
@@ -23,22 +23,7 @@ function bareRuntime(store = createMemorySessionStore()) {
         instructions: "",
       },
     ],
-    drain: {
-      wake() {},
-      async cancel() {},
-      isActive() {
-        return false;
-      },
-    },
-    resolveAgent: async (sessionId) => ({
-      admit: (content, opts) =>
-        admitPrompt(store, sessionId, content, opts),
-      pendingAdmits: () => [],
-      continueTurn: async () => ({}) as never,
-      run: async () => ({}) as never,
-      isBusy: () => false,
-      abort() {},
-    }),
+    resolveAgent: admittingAgentResolve(store),
   });
 }
 
@@ -48,18 +33,40 @@ describe("Face adapt / slash / queue / presets", () => {
     expect(Object.keys(EVENT_ISOMORPHISM).sort()).toContain("user/message");
   });
 
-  it("presentToolView builds DSH for/card tool views", () => {
-    const view = presentToolView({
-      type: "tool/call",
-      ts: 1,
-      turnId: "t",
-      stepId: "s",
-      call: { id: "c1", name: "bash", arguments: { cmd: "ls" } },
-    });
+  it("presentToolView needs a tool lookup (no Face-side name switch)", () => {
+    const view = presentToolView(
+      {
+        type: "tool/call",
+        ts: 1,
+        turnId: "t",
+        stepId: "s",
+        call: { id: "c1", name: "bash", arguments: { command: "ls" } },
+      },
+      {
+        getTool: (name) =>
+          name === "bash"
+            ? {
+                presentCall: (args) => ({
+                  card: "terminal",
+                  title: String((args as { command?: string }).command ?? ""),
+                }),
+              }
+            : undefined,
+      },
+    );
     expect(view).toMatchObject({
       for: "call",
-      view: { card: "generic", title: "bash" },
+      view: { card: "terminal", title: "ls" },
     });
+    expect(
+      presentToolView({
+        type: "tool/call",
+        ts: 1,
+        turnId: "t",
+        stepId: "s",
+        call: { id: "c1", name: "bash", arguments: { command: "ls" } },
+      }),
+    ).toBeUndefined();
   });
 
   it("session.prompt slash hits recipe without admit", async () => {
@@ -76,13 +83,15 @@ describe("Face adapt / slash / queue / presets", () => {
       ok: true,
       value: {
         accepted: true,
-        command: { kind: "success", text: "PONG_CMD", recipeId: "ping" },
+        command: { kind: "success", text: "PONG_CMD" },
       },
     });
-    expect(runtime.store.get(sessionId).events).toHaveLength(0);
+    expect(
+      runtime.store.get(sessionId).events.map((e) => e.type),
+    ).toEqual(["command/run", "command/done"]);
   });
 
-  it("session.prompt unknown slash is honest error command", async () => {
+  it("session.prompt unknown slash admits as text (shell command schema is success-only)", async () => {
     const runtime = bareRuntime();
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
     if (!created.result.ok) throw new Error("create");
@@ -92,13 +101,12 @@ describe("Face adapt / slash / queue / presets", () => {
       mode: "queue",
       content: [{ type: "text", text: "/nope" }],
     });
-    expect(slash.result.ok).toBe(true);
-    if (slash.result.ok) {
-      expect(slash.result.value).toMatchObject({
-        accepted: true,
-        command: { kind: "error" },
-      });
-    }
+    expect(slash.result).toEqual({ ok: true, value: { accepted: true } });
+    expect(
+      runtime.store
+        .get(sessionId)
+        .events.some((e) => e.type === "prompt/admitted"),
+    ).toBe(true);
   });
 
   it("updateQueue remove + agentPreset select", async () => {

@@ -1,3 +1,4 @@
+import type { ToolDefinition } from "@xrkseek/core-tools";
 import type { FaceRuntime } from "./context.js";
 
 /** DSH `pluginInventory/list` fiber phase. */
@@ -42,6 +43,8 @@ export interface FaceProcessPlugin {
   readonly id: string;
   readonly kind: string;
   readonly commands?: readonly FacePluginCommand[];
+  /** `kind: tools` contributions — Face `viewFor` standing lookup. */
+  readonly tools?: readonly ToolDefinition[];
 }
 
 /**

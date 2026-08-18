@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   FACE_CONSOLE_BOOT,
   XRK_APP_SHELL_BOOT,
+  applyXrkProductBootPolicy,
   createHttpServer,
   injectBootIntoHtml,
   mergeWebBootManifests,
@@ -49,6 +50,41 @@ describe("boot inject", () => {
     expect(merged.rev).toBe("base+extra");
     expect(merged.entries.map((e) => e.id)).toEqual(["keep", "swap", "added"]);
     expect(merged.entries.find((e) => e.id === "swap")?.url).toBe("/new.js");
+  });
+
+  it("product boot policy drops Cordis chrome and HMR ids", () => {
+    const filtered = applyXrkProductBootPolicy({
+      rev: "cap",
+      entries: [
+        {
+          id: "@deepseek-ai/dsh-client-runtime",
+          url: "/plugins/runtime.js",
+          rev: "1",
+          inject: [],
+        },
+        {
+          id: "@deepseek-ai/dsh-client-ui-cordis",
+          url: "/plugins/cordis.js",
+          rev: "1",
+          inject: [],
+        },
+        {
+          id: "@deepseek-ai/dsh-cordis-client-runner",
+          url: "/plugins/runner.js",
+          rev: "1",
+          inject: [],
+        },
+        {
+          id: "@deepseek-ai/dsh-client-hmr",
+          url: "/plugins/hmr.js",
+          rev: "1",
+          inject: [],
+        },
+      ],
+    });
+    expect(filtered.entries.map((e) => e.id)).toEqual([
+      "@deepseek-ai/dsh-client-runtime",
+    ]);
   });
 });
 

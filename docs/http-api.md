@@ -107,11 +107,12 @@ U1 methods：`host.describe` · `session.create|list|history|prompt|cancel|model
 Web：默认托管 `apps/web-static`（DSH 产品壳）。`apps/web` 为 Face console（`?console=1`）。
 
 ```bash
-node apps/cli/dist/bin.js serve --preset minimal --workspace .
+node apps/cli/dist/bin.js serve --preset server --workspace .
+# 同形：xrk-harness web --port 8080 --open
 # open http://127.0.0.1:8787/
 ```
 
-index.html 由 host 注入 `__DSH_BOOT__` / `__XRK_BOOT__`（`boot.json`；可再 merge `{XRK_PLUGINS_DIR}/web/boot.json`）。缺失的 `/plugins/…` 返回 404（不回退 SPA）。
+index.html 由 host 注入 `__DSH_BOOT__` / `__XRK_BOOT__`（`boot.json` merge `{XRK_PLUGINS_DIR}/web/boot.json` 后，再 `applyXrkProductBootPolicy` 去掉 Cordis 客户端 id 与捕获壳 HMR）。缺失的 `/plugins/…` 返回 404（不回退 SPA）。
 
 ## Env
 
@@ -128,8 +129,8 @@ index.html 由 host 注入 `__DSH_BOOT__` / `__XRK_BOOT__`（`boot.json`；可�
 | `XRK_LLM_PRESET` | Provider Registry brand id (`openrouter`, `deepseek`, …) — see [llm-provider-registry.md](./llm-provider-registry.md) |
 | `XRK_LLM_MODEL` | optional model override when preset set |
 | `XRK_LLM_BASE_URL` | optional baseUrl override (required for `custom` / `newapi` / …) |
-| `XRK_WEB_DIST` | SPA dist root（默认 `apps/web-static`）；public GET + boot inject |
-| `XRK_SESSIONS_DIR` | JSONL 会话目录（省略 = 内存）；旁路 `subagents.json` · `goals.json` |
+| `XRK_WEB_DIST` | SPA dist root（CLI 默认 `apps/web-static`，按 CLI 包定位） |
+| `XRK_SESSIONS_DIR` | JSONL 会话目录；CLI `serve` 省略时用 `{workspace}/.xrk/sessions`（`--no-persist` = 内存）；旁路 `subagents.json` · `goals.json` |
 | `XRK_POLICY_FILE` | policy JSON |
 | `XRK_MCP_SERVERS` | MCP 服务器 JSON（`command` 或 `url`） |
 | `XRK_MCP_ALLOW` | `1`/`true` → 本进程 `mcp.connect` allow |
@@ -137,5 +138,6 @@ index.html 由 host 注入 `__DSH_BOOT__` / `__XRK_BOOT__`（`boot.json`；可�
 ## CLI
 
 ```bash
-node apps/cli/dist/bin.js serve --preset minimal --workspace .
+node apps/cli/dist/bin.js serve --preset server --workspace .
+node apps/cli/dist/bin.js web --open
 ```

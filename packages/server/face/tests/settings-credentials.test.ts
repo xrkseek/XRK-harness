@@ -140,6 +140,24 @@ describe("Face settings U2", () => {
     expect(v.namespaces.some((n) => n.ns === "ui-onboarding")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "locale")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "ui-theme")).toBe(true);
+    expect(v.namespaces.some((n) => n.ns === "permission")).toBe(true);
+    expect(v.namespaces.some((n) => n.ns === "llm")).toBe(true);
+
+    const permission = v.namespaces.find((n) => n.ns === "permission") as {
+      ns: string;
+      value: { defaultPreset: string };
+      schema: { uid: number; refs: Record<string, { type: string }> };
+    };
+    expect(permission.value.defaultPreset).toBe("read-only");
+    expect(permission.schema.uid).toBe(5);
+    expect(permission.schema.refs["5"]?.type).toBe("object");
+
+    const locale = (
+      desc.result.value as {
+        namespaces: { ns: string; schema: { uid: number } }[];
+      }
+    ).namespaces.find((n) => n.ns === "locale");
+    expect(locale?.schema.uid).toBe(4);
 
     const mut = await dispatchFaceMethod(rt, "settings.mutate", "d2", {
       ns: "ui-onboarding",
@@ -167,6 +185,37 @@ describe("Face settings U2", () => {
       }
     ).namespaces.find((n) => n.ns === "ui-onboarding");
     expect(ns?.value.welcomeNoticeVersion).toBe("2026-08-17.xrk1");
+  });
+
+  it("permission mutate keeps schemastery envelope; rejects unknown preset", async () => {
+    const rt = runtime();
+    await dispatchFaceMethod(rt, "settings.describe", "pd", {});
+    const mut = await dispatchFaceMethod(rt, "settings.mutate", "pm", {
+      ns: "permission",
+      ops: [
+        {
+          op: "set",
+          path: ["defaultPreset"],
+          value: "workspace-write",
+        },
+      ],
+    });
+    expect(mut.result.ok).toBe(true);
+    if (!mut.result.ok) return;
+    expect(mut.result.value).toMatchObject({
+      ns: "permission",
+      value: { defaultPreset: "workspace-write" },
+      schema: { uid: 5 },
+    });
+
+    const bad = await dispatchFaceMethod(rt, "settings.mutate", "pb", {
+      ns: "permission",
+      ops: [{ op: "set", path: ["defaultPreset"], value: "yolo" }],
+    });
+    expect(bad.result.ok).toBe(false);
+    if (!bad.result.ok) {
+      expect(bad.result.error.code).toBe("settings-rejected");
+    }
   });
 
   it("settings.replace replaces whole ns section", async () => {

@@ -16,4 +16,4 @@ See [docs/session-latch.md](../../../docs/session-latch.md), [docs/session-api.m
 ## Store
 
 `createMemorySessionStore` — `append` runs `assertSessionEvent` then deep-freeze. `has(id)` 不抛。  
-`createJsonlSessionStore(dir)` — 每会话一个 `{id}.jsonl`；Host 经 `XRK_SESSIONS_DIR` 选用。hydrate 丢掉末行不完整 JSON 并回写该文件；中段损坏的文件跳过（不挡其它会话）。不是 FTS。
+`createJsonlSessionStore(dir)` — 每会话一个 `{id}.jsonl`；Host 经 `XRK_SESSIONS_DIR` 选用。hydrate 丢掉末行不完整 JSON **或** 末行事件 schema 失败并原子回写该文件；中段损坏的文件跳过（不挡其它会话）。不是 FTS。

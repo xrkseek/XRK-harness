@@ -1,5 +1,5 @@
 import { loadHostConfig } from "@xrkseek/server-config";
-import { createHostManager } from "@xrkseek/server-host";
+import { createHostManager, type AgentFactory } from "@xrkseek/server-host";
 import {
   createServerAgentFactory,
   createServerComposition,
@@ -7,39 +7,31 @@ import {
 import { createMinimalComposition } from "@xrkseek/preset-minimal";
 import { resolveLlmFromEnv } from "@xrkseek/llm-registry";
 import { createPolicyEngineFromFile, type PolicyEngine } from "@xrkseek/policy";
-import { access } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import path from "node:path";
-import type { ParsedArgs } from "../parse-args.js";
-import type { AgentFactory } from "@xrkseek/server-host";
+import { assertSafeHost, type ParsedArgs } from "../parse-args.js";
+import {
+  defaultSessionsDir,
+  resolveProductWebDist,
+} from "../product-paths.js";
 
-/** Prefer env/patch; else DSH product capture, then self-built apps/web. */
-async function resolveWebDist(
-  configured: string | undefined,
-  workspaceRoot: string,
-): Promise<string | undefined> {
-  if (configured?.trim()) return path.resolve(configured.trim());
-  const candidates = [
-    // Product UI = captured DSH web (tracked)
-    path.resolve(workspaceRoot, "apps", "web-static"),
-    path.resolve(process.cwd(), "apps", "web-static"),
-    // Local-only re-capture (gitignored)
-    path.resolve(workspaceRoot, "vendor", "web-static"),
-    path.resolve(process.cwd(), "vendor", "web-static"),
-    path.resolve(workspaceRoot, "vendor", "dsh-web-static"),
-    path.resolve(process.cwd(), "vendor", "dsh-web-static"),
-    // Face console / thin landing (not the product chat shell)
-    path.resolve(workspaceRoot, "apps", "web", "dist"),
-    path.resolve(process.cwd(), "apps", "web", "dist"),
-  ];
-  for (const dir of candidates) {
-    try {
-      await access(path.join(dir, "index.html"));
-      return dir;
-    } catch {
-      /* try next */
-    }
-  }
-  return undefined;
+function openProductUrl(url: string): void {
+  const platform = process.platform;
+  const child =
+    platform === "win32"
+      ? spawn("cmd.exe", ["/c", "start", "", url], {
+          detached: true,
+          stdio: "ignore",
+          windowsHide: true,
+        })
+      : spawn(platform === "darwin" ? "open" : "xdg-open", [url], {
+          detached: true,
+          stdio: "ignore",
+        });
+  child.once("error", (err) => {
+    process.stderr.write(`warn: could not open browser: ${err.message}\n`);
+  });
+  child.unref();
 }
 
 function factoryForPreset(
@@ -53,7 +45,6 @@ function factoryForPreset(
       ...(policy ? { policy } : {}),
     });
   }
-  // minimal — prefer Registry env LLM when XRK_LLM_PRESET is set
   return async ({ sessionId, store, workspaceRoot: root, plugins, resolveImage }) => {
     const fromEnv = resolveLlmFromEnv(process.env);
     const composition = createMinimalComposition({
@@ -71,15 +62,17 @@ function factoryForPreset(
 }
 
 export async function runServe(args: ParsedArgs): Promise<number> {
-  const config = loadHostConfig({
-    patch: {
-      ...args.patch,
-      workspaceRoot: args.workspace,
-      preset: args.preset,
-    },
-  });
+  const patch: Record<string, unknown> = {
+    ...args.patch,
+    workspaceRoot: args.workspace,
+    preset: args.preset,
+  };
+  if (args.host) patch.host = args.host;
+  if (args.port !== undefined) patch.port = args.port;
 
-  // allow --preset to override
+  const config = loadHostConfig({ patch });
+  assertSafeHost(config.runtime.host);
+
   const preset =
     args.preset === "minimal" ||
     args.preset === "harness" ||
@@ -91,10 +84,10 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     ? await createPolicyEngineFromFile(config.runtime.policyFile)
     : undefined;
 
-  const webDist = await resolveWebDist(
-    config.runtime.webDist,
-    config.runtime.workspaceRoot,
-  );
+  const webDist = await resolveProductWebDist(config.runtime.webDist);
+  const sessionsDir = args.persist
+    ? (config.runtime.sessionsDir?.trim() || defaultSessionsDir(config.runtime.workspaceRoot))
+    : undefined;
 
   const manager = createHostManager();
   const factory = factoryForPreset(
@@ -102,25 +95,37 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     config.runtime.workspaceRoot,
     policy,
   );
+  const runtime = {
+    ...config.runtime,
+    preset,
+    ...(webDist ? { webDist } : {}),
+  } as typeof config.runtime & { sessionsDir?: string };
+  if (sessionsDir) runtime.sessionsDir = sessionsDir;
+  else delete runtime.sessionsDir;
+
   const instance = await manager.spawn(
     {
       ...config,
-      runtime: {
-        ...config.runtime,
-        preset,
-        ...(webDist ? { webDist } : {}),
-      },
+      runtime,
     },
     factory,
   );
 
   const health = instance.health();
+  const port = health.port ?? config.runtime.port;
+  const origin = `http://${config.runtime.host}:${port}`;
+  process.stdout.write(`xrk-harness serve  ${origin}/\n`);
   process.stdout.write(
-    `xrk-harness serve listening on http://${config.runtime.host}:${health.port}\n`,
+    `  preset=${preset}  ui=${webDist ? path.basename(webDist) : "api-landing"}  sessions=${sessionsDir ?? "memory"}\n`,
   );
-  process.stdout.write(
-    `preset=${preset} apiKey=${config.credentials.apiKey ? "set" : "off (dev)"}${policy ? " policy=on" : ""}${webDist ? ` web=${webDist}` : " web=api-landing"}\n`,
-  );
+  if (config.credentials.apiKey) {
+    process.stdout.write("  apiKey=set\n");
+  }
+  if (policy) process.stdout.write("  policy=on\n");
+
+  if (args.open && webDist) {
+    openProductUrl(`${origin}/`);
+  }
 
   const shutdown = async () => {
     process.stdout.write("shutting down...\n");
@@ -134,7 +139,6 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     void shutdown();
   });
 
-  // keep alive
   await new Promise(() => {});
   return 0;
 }

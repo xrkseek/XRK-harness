@@ -7,6 +7,7 @@ import {
   forkSession,
   fromJSONL,
   ModelVisibleInvariantError,
+  parseJSONL,
   toJSONL,
 } from "../src/index.js";
 
@@ -130,9 +131,25 @@ describe("jsonl", () => {
     expect(fromJSONL(toJSONL(events))).toEqual(events);
   });
 
-  it("rejects invalid event lines", () => {
+  it("drops a trailing line that fails event schema", () => {
+    const parsed = parseJSONL(
+      '{"type":"user/message","ts":1,"turnId":"t"}\n',
+    );
+    expect(parsed.events).toEqual([]);
+    expect(parsed.droppedTrailingIncomplete).toBe(true);
+  });
+
+  it("rejects invalid event lines in the middle", () => {
+    const good = JSON.stringify({
+      type: "user/message",
+      ts: 1,
+      turnId: "t",
+      content: "ok",
+    });
     expect(() =>
-      fromJSONL('{"type":"user/message","ts":1,"turnId":"t"}\n'),
+      fromJSONL(
+        `${good}\n{"type":"user/message","ts":1,"turnId":"t"}\n${good}\n`,
+      ),
     ).toThrow(/content/);
   });
 
