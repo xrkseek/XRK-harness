@@ -73,6 +73,7 @@ HTTP/WS (attach-http)
 | ------------------------- | --------------------------------------- | ------------------------ |
 | `host-directory.ts`       | list/createDirectory · `fullyQualified` | 绝对路径；条目上限       |
 | `host-open-path.ts`       | `host.openPath` · `canOpenNativePath`   | 仅绝对路径；Win/mac/Linux 可开 |
+| `remote-event.ts`         | `host/remote-event` 白名单转发          | 无 Cordis inspect/run |
 | `host-pick-directory.ts`  | `host.pickDirectory`                    | 系统选目录；取消 `null`；缺 picker 用 `directory-picker-unavailable` |
 | `workspace-face.ts`       | workspace.* Face                        | 路径不得逃出 root        |
 | `workspace-registry.ts`   | DSH 形 workspace 注册表                 | `workspaceIdOf`；delete 发 removed；insertBefore 发 order |
@@ -133,7 +134,7 @@ HTTP/WS (attach-http)
 | `tests/questions.test.ts`        | question/requested · cancelled · ask_user bind · mux 重连 |
 | `tests/subagent.test.ts`         | create-with-parent · list/history/prompt/interrupt · fork 登记 |
 | `tests/workspace.test.ts`        | list/create/rename/archive · delete/insert* |
-| `tests/host-frames.test.ts`      | session-added 子会话字段 · workspace-removed / order-changed · fork |
+| `tests/host-frames.test.ts`      | session-added 子会话字段 · workspace-removed / order-changed · fork · `host/remote-event` |
 | `tests/projections.test.ts`      | title · list metadata · todos 站立计划（write 后 turn/start 清 null） |
 | `tests/permissions.test.ts`      | pin · `/permission` · never 自动放行 · read-only deny |
 | `tests/plan-mode.test.ts`        | `/plan` 提交 · suffix steer · exit_plan_mode plan-review |

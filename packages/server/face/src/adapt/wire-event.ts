@@ -41,6 +41,7 @@ export const EVENT_ISOMORPHISM = {
   "sandbox/mode": "sandbox/mode",
   "approval/policy": "approval/policy",
   "plan/mode": "plan/mode",
+  "feedback/record": "feedback/record",
 } as const satisfies Record<SessionEvent["type"], string>;
 
 /** DeepSeek SessionEvent envelope on the Face wire. */
@@ -313,6 +314,7 @@ export function toDshWireSessionEvent(
     case "sandbox/mode":
     case "approval/policy":
     case "plan/mode":
+    case "feedback/record":
       return {
         type: event.type,
         seq,

@@ -472,6 +472,13 @@ export function parseSessionEvent(value: unknown): SessionEvent {
       }
       return { type, ts, active };
     }
+    case "feedback/record": {
+      const text = reqString(value, "text", type);
+      if (!text.trim()) {
+        throw new SessionEventParseError("text must be non-empty", type);
+      }
+      return { type, ts, text };
+    }
     default:
       throw new SessionEventParseError(`unknown event type "${type}"`);
   }

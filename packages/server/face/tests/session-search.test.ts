@@ -135,6 +135,39 @@ describe("session.search", () => {
     expect(safetyHit.items.map((i) => i.sessionId)).toEqual([notice]);
   });
 
+  it("hits command text and standing todos", () => {
+    const store = createMemorySessionStore();
+    const cmd = newSession(store).id;
+    store.append(cmd, {
+      type: "command/run",
+      ts: 1,
+      commandId: "cmd_1",
+      name: "goal",
+      args: "unique-command-token",
+      source: { kind: "user" },
+    });
+    store.append(cmd, {
+      type: "command/done",
+      ts: 2,
+      commandId: "cmd_1",
+      kind: "success",
+      text: "goal g1",
+    });
+    expect(searchSessions(store, "unique-command-token").items.map((i) => i.sessionId)).toEqual(
+      [cmd],
+    );
+
+    const todos = newSession(store).id;
+    store.append(todos, {
+      type: "todo/write",
+      ts: 3,
+      todos: [{ content: "unique-todo-token migrate auth", status: "pending" }],
+    });
+    expect(searchSessions(store, "unique-todo-token").items.map((i) => i.sessionId)).toEqual(
+      [todos],
+    );
+  });
+
   it("scans JSONL-backed sessions the same way", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-search-"));
     const store = createJsonlSessionStore(dir);

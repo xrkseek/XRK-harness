@@ -153,3 +153,149 @@ describe("Face host stream (DSH host frames)", () => {
     });
   });
 });
+
+describe("host/remote-event", () => {
+  function runtime() {
+    const store = createMemorySessionStore();
+    return createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+  }
+
+  it("forwards credentials/updated on set and unset; unknown slot stays quiet", async () => {
+    const rt = runtime();
+    const host = collectHost(rt);
+    const ok = await dispatchFaceMethod(rt, "credentials.set", "c1", {
+      slotId: "host.apiKey",
+      value: "secret-test-key",
+    });
+    expect(ok.result.ok).toBe(true);
+    expect(host).toEqual([
+      {
+        type: "host/remote-event",
+        event: "credentials/updated",
+        args: ["XRK_API_KEY"],
+      },
+    ]);
+
+    host.length = 0;
+    const cleared = await dispatchFaceMethod(rt, "credentials.unset", "c2", {
+      ref: "XRK_API_KEY",
+    });
+    expect(cleared.result.ok).toBe(true);
+    expect(host).toEqual([
+      {
+        type: "host/remote-event",
+        event: "credentials/updated",
+        args: ["XRK_API_KEY"],
+      },
+    ]);
+
+    host.length = 0;
+    const unknown = await dispatchFaceMethod(rt, "credentials.set", "c3", {
+      slotId: "nope.key",
+      value: "x",
+    });
+    expect(unknown.result.ok).toBe(false);
+    expect(host).toEqual([]);
+  });
+
+  it("forwards llm/adapters-updated when an llm credential changes", async () => {
+    const rt = runtime();
+    const host = collectHost(rt);
+    const set = await dispatchFaceMethod(rt, "credentials.set", "c1", {
+      slotId: "llm.openai",
+      value: "sk-test",
+    });
+    expect(set.result.ok).toBe(true);
+    expect(host).toEqual([
+      {
+        type: "host/remote-event",
+        event: "credentials/updated",
+        args: ["OPENAI_API_KEY"],
+      },
+      {
+        type: "host/remote-event",
+        event: "llm/adapters-updated",
+        args: [],
+      },
+    ]);
+  });
+
+  it("forwards settings/document-updated on mutate; llm ns also adapters-updated", async () => {
+    const rt = runtime();
+    await dispatchFaceMethod(rt, "settings.describe", "d0", {});
+    const host = collectHost(rt);
+    const mut = await dispatchFaceMethod(rt, "settings.mutate", "m1", {
+      ns: "ui-onboarding",
+      ops: [
+        {
+          op: "set",
+          path: ["welcomeNoticeVersion"],
+          value: "2026-08-18.xrk",
+        },
+      ],
+    });
+    expect(mut.result.ok).toBe(true);
+    expect(host).toEqual([
+      {
+        type: "host/remote-event",
+        event: "settings/document-updated",
+        args: ["ui-onboarding", 1],
+      },
+    ]);
+
+    host.length = 0;
+    const llm = await dispatchFaceMethod(rt, "settings.mutate", "m2", {
+      ns: "llm",
+      ops: [{ op: "set", path: ["providers"], value: {} }],
+    });
+    expect(llm.result.ok).toBe(true);
+    expect(host).toEqual([
+      {
+        type: "host/remote-event",
+        event: "settings/document-updated",
+        args: ["llm", 1],
+      },
+      {
+        type: "host/remote-event",
+        event: "llm/adapters-updated",
+        args: [],
+      },
+    ]);
+
+    host.length = 0;
+    const rejected = await dispatchFaceMethod(rt, "settings.mutate", "m3", {
+      ns: "mcp",
+      ops: [{ op: "set", path: ["servers"], value: [] }],
+    });
+    expect(rejected.result.ok).toBe(false);
+    expect(host).toEqual([]);
+  });
+
+  it("forwards agent-preset/selected on select", async () => {
+    const rt = runtime();
+    const created = await dispatchFaceMethod(rt, "session.create", "s", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const host = collectHost(rt);
+    const sel = await dispatchFaceMethod(rt, "agentPreset.select", "p", {
+      sessionId,
+      agentPreset: "harness",
+    });
+    expect(sel.result.ok).toBe(true);
+    expect(host).toEqual([
+      {
+        type: "host/remote-event",
+        event: "agent-preset/selected",
+        args: [sessionId, "harness"],
+      },
+    ]);
+  });
+});
+

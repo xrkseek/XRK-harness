@@ -277,6 +277,12 @@ export interface PlanModeEvent extends SessionEventBase {
   readonly active: boolean;
 }
 
+/** Human session remark (DSH `feedback/record`). Log-only; not model-visible. */
+export interface FeedbackRecordEvent extends SessionEventBase {
+  readonly type: "feedback/record";
+  readonly text: string;
+}
+
 export type SessionEvent =
   | TurnStartEvent
   | TurnEndEvent
@@ -301,7 +307,8 @@ export type SessionEvent =
   | PermissionPresetEvent
   | SandboxModeEvent
   | ApprovalPolicyEvent
-  | PlanModeEvent;
+  | PlanModeEvent
+  | FeedbackRecordEvent;
 
 const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "turn/start",
@@ -328,6 +335,7 @@ const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "sandbox/mode",
   "approval/policy",
   "plan/mode",
+  "feedback/record",
 ]);
 
 /**

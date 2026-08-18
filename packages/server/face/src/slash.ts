@@ -83,6 +83,15 @@ export async function listFaceCommandDescriptors(
             description: "Compact older conversation history",
           },
         ]),
+    ...(used.has("feedback")
+      ? []
+      : [
+          {
+            name: "feedback",
+            description: "Record feedback about this session",
+            input: { hint: "<text>" },
+          },
+        ]),
     ...(used.has("goal")
       ? []
       : [
@@ -116,6 +125,7 @@ export async function listFaceCommandDescriptors(
   used.add("permission");
   used.add("plan");
   used.add("compact");
+  used.add("feedback");
   const fromRecipes = recipes
     .filter((r) => COMMAND_NAME.test(r.id) && !used.has(r.id))
     .map((r) => {
@@ -214,6 +224,66 @@ export async function executeFaceCommand(
       runtime.drain.wake(sessionId);
     }
     return execution;
+  }
+
+  if (parsed.name === "feedback") {
+    const text = parsed.rawInput.trim();
+    if (!text) {
+      return appendCommandPair(
+        runtime,
+        sessionId,
+        parsed,
+        {
+          kind: "error",
+          text: "Feedback text is required. Usage: /feedback <text>",
+        },
+        undefined,
+        null,
+      );
+    }
+    if (text.length > 8192) {
+      return appendCommandPair(
+        runtime,
+        sessionId,
+        parsed,
+        {
+          kind: "error",
+          text: "Feedback text must be at most 8192 characters.",
+        },
+        undefined,
+        null,
+      );
+    }
+    const commandId = mintCommandId();
+    const ts = Date.now();
+    runtime.store.append(sessionId, {
+      type: "command/run",
+      ts,
+      commandId,
+      name: "feedback",
+      source: { kind: "user" },
+    });
+    runtime.store.append(sessionId, {
+      type: "feedback/record",
+      ts: ts + 1,
+      text,
+    });
+    const summarySeq = runtime.store.get(sessionId).events.length;
+    runtime.store.append(sessionId, {
+      type: "command/done",
+      ts: ts + 2,
+      commandId,
+      kind: "success",
+      text: `Feedback recorded for session ${sessionId}. Session sharing is not configured.`,
+      sourceEventSeq: summarySeq,
+    });
+    return {
+      commandId,
+      result: {
+        kind: "success",
+        text: `Feedback recorded for session ${sessionId}. Session sharing is not configured.`,
+      },
+    };
   }
 
   if (parsed.name === "compact") {
@@ -315,17 +385,19 @@ function appendCommandPair(
   parsed: { readonly name: string; readonly rawInput: string },
   result: { kind: "success" | "error"; text?: string },
   commandId?: string,
-  args?: string,
+  args?: string | null,
   sourceEventSeq?: number,
 ): FaceCommandExecution {
   const id = commandId ?? mintCommandId();
   const ts = Date.now();
   const recorded =
-    args !== undefined
-      ? args
-      : parsed.rawInput
-        ? parsed.rawInput
-        : undefined;
+    args === null
+      ? undefined
+      : args !== undefined
+        ? args
+        : parsed.rawInput
+          ? parsed.rawInput
+          : undefined;
   runtime.store.append(sessionId, {
     type: "command/run",
     ts,

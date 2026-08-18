@@ -441,6 +441,15 @@ export const sessionEventJsonSchema = {
       }),
       additionalProperties: false,
     },
+    {
+      type: "object",
+      required: ["type", "ts", "text"],
+      properties: baseProps({
+        type: { const: "feedback/record" },
+        text: { type: "string" },
+      }),
+      additionalProperties: false,
+    },
   ],
 } as const;
 

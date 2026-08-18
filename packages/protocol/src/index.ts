@@ -60,6 +60,7 @@ export {
   type SandboxModeEvent,
   type ApprovalPolicyEvent,
   type PlanModeEvent,
+  type FeedbackRecordEvent,
   type SandboxMode,
   type ApprovalPolicy,
   type ToolCallEvent,
