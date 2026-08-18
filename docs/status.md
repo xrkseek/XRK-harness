@@ -18,7 +18,7 @@
 | MCP | `@xrkseek/mcp`；Host `XRK_MCP_*` 或 Face `mcp.servers` 落盘（默认 deny） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) |
 | Attachment / 插件 | Face 附件；进程插件 `tools` · `prompt` · `commands` | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
 
-**对齐 DSH 的口径（诚实）**：内核主路径（session 事件 · 工具瀑布 · compose · PTY/jobs/web/lsp/fs）已可当日常 harness 用；**不是** DSH 二百插件全集的一对一替代。产品壳 = 捕获的 DSH Web（本机 `apps/web-static`，不入库），内核不嵌 Cordis。
+**对齐 DSH 的口径（诚实）**：内核主路径已可当日常 harness 用；**不是** DSH 二百插件全集。产品壳底稿 = `apps/web` + `packages/client`；serve 用本机捕获 `apps/web-static`，内核不嵌 Cordis。
 
 ## 未稳
 
@@ -44,6 +44,6 @@ presets / sdk / server → core* | llm | mcp | attachment | exec* | workspace | 
 core* / 能力叶 → kernel | protocol | compose
 ```
 
-外壳（本机 `apps/web-static`）是 DSH Web 的 MIT 二次创作底稿的捕获面，不是 GitHub Fork；内核不嵌 Cordis。见 [AGENTS.md](../AGENTS.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)。
+外壳二次创作底稿：`apps/web` + `packages/client`。serve 用本机 `apps/web-static`（gitignore）。不是 GitHub Fork；无 vendor；内核不嵌 Cordis。见 [AGENTS.md](../AGENTS.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)。
 
 [learn.md](./learn.md) · [modules/](./modules/README.md)

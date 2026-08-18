@@ -3,25 +3,16 @@ node_modules/
 dist/
 coverage/
 
-# Local-only reference / capture (never commit contents)
-vendor/
-
-# Captured DSH Web shell — same as upstream `apps/web/dist/` (rebuild locally).
+# Captured product shell (rebuild locally; same idea as DSH apps/web/dist)
 apps/web-static/**
 !apps/web-static/README.md
 
-.turbo/
-*.log
-.env
-.env.*
-!.env.example
-.DS_Store
-*.tsbuildinfo
-.xrk-harness/
-.xrk/tool-outputs/
-.xrk/sessions/
-.xrk/host-settings.json
+# Compiled output under shell / client source trees
+apps/web/**/dist/
+packages/client/**/dist/
+packages/client/**/lib/
 
+.turbo/
 *.log
 .env
 .env.*

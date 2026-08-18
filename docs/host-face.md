@@ -40,9 +40,9 @@ mode: queue | steer → admit（slash → recipe / skill 写入 user）→ wake 
 
 ## Boot
 
-- 静态资源：`XRK_WEB_DIST` 可覆盖；未设置时 `serve` 找本机捕获的 `apps/web-static`（或 `vendor/web-static`），否则 Face console
-- `apps/web-static`：产品聊天壳（DSH Web 捕获产物，gitignore；Host 省略 Cordis 客户端与 HMR boot；PWA 名 XRK Harness）
-- `apps/web`：`?console=1` Face console（无 capture 时才回退）
+- 静态资源：`XRK_WEB_DIST` 可覆盖；未设置时 `serve` 找本机捕获的 `apps/web-static`，否则 `apps/console`
+- `apps/web-static`：产品聊天壳捕获（gitignore；Host 省略 Cordis 客户端与 HMR boot；PWA 名 XRK Harness）
+- 源码底稿：`apps/web` + `packages/client`；验证台：`apps/console`（`?console=1`）
 
 ## 相关
 

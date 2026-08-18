@@ -28,7 +28,8 @@
 
 ```text
 ┌─────────────────────────────────────────────────────────┐
-│  apps/cli · apps/web · 本机 web-static（产品壳捕获，不入库）     │
+│  apps/cli · apps/web（壳底稿）· apps/console · web-static（捕获） │
+│  packages/client（壳客户端包底稿）                              │
 ├─────────────────────────────────────────────────────────┤
 │  presets: minimal | harness | server   ← 只组合，无业务  │
 │  @xrkseek/harness (sdk)                                  │
@@ -51,10 +52,12 @@
 ```text
 XRK-harness/
 ├── apps/
-│   ├── cli/                 # @xrkseek/harness-cli · run / serve
-│   ├── web/                 # Face console（?console=1）
-│   └── web-static/          # 产品聊天壳捕获产物（gitignore；pnpm web:ui:capture）
+│   ├── cli/                 # @xrkseek/harness-cli
+│   ├── web/                 # 产品壳 Vite 入口（二次创作底稿）
+│   ├── console/             # Face 验证台（?console=1）
+│   └── web-static/          # 捕获产物（gitignore）
 ├── packages/
+│   ├── client/              # 壳客户端包底稿（与 apps/web 成对）
 │   ├── kernel/ · protocol/ · compose/
 │   ├── core/{agent,agent-loop,tools,session,system-prompt}/
 │   ├── llm/{llm,openai-compatible,deepseek,replay,registry}/
@@ -76,4 +79,4 @@ JSONL 会话目录（Host `XRK_SESSIONS_DIR`）：`{id}.jsonl` + 旁路 `subagen
 
 Host agent-cache：根会话 Scope `agent:{id}`；Face 已登记父会话的子会话走 `openSubagentRealm`（`subagent:{id}`）。
 
-Face 接线：`packages/server/face/src/wire/`（信封 · 路径 · respond）；RPC 表：`dispatch.ts`（点号 unary + Typert Remote + `goal.*` 别名 + Cordis 空 inventory）+ `GET/HEAD /api/session.export`。产品壳：本机 `apps/web-static`（`xrk-harness serve` / `web` 按 CLI 包定位，不跟用户 `--workspace`；无捕获则 Face console）。
+Face 接线：`packages/server/face/src/wire/`。产品壳源码 `apps/web` + `packages/client`；serve 托管本机 `apps/web-static`（无捕获 → `apps/console`）。

@@ -1,23 +1,7 @@
-# @xrkseek/harness-web
+# apps/web
 
-Face 验证台。**产品聊天 UI** 是本机捕获的 DSH Web：[`apps/web-static`](../web-static/)（gitignore）。
+产品聊天壳 Vite 入口（DSH Web 二次创作底稿，与 [`packages/client`](../../packages/client/) 成对）。
 
-| 路径 | 作用 |
-|------|------|
-| `/`（本包 dist） | 说明页（仅当 serve 未找到 web-static 时才落到这里） |
-| `/?console=1` | Face RPC / mux 验证台 |
+归因：[NOTICE](./NOTICE) · [UPSTREAM](./UPSTREAM)。本仓根 [LICENSE](../../LICENSE)。
 
-日常：有捕获时 `serve` 托管 `apps/web-static`。对照源本机 `vendor/ui-src`（gitignore）；重捕：`pnpm web:ui:build && pnpm web:ui:capture`。
-
-自研范围 = **Face Host 对接**（信封、审批 respond、Typert Remote、wire），不是重写 DSH UI。
-
-## Dev
-
-```bash
-pnpm --filter @xrkseek/harness-web build
-pnpm --filter @xrkseek/harness-web dev   # 代理到 :8787
-```
-
-## License
-
-See [NOTICE](./NOTICE)。
+不进 pnpm workspace；编出在完整 DSH 树，经 `XRK_UI_SRC` + `pnpm web:ui:capture` 写入 `apps/web-static`。Face 验证台见 [`apps/console`](../console/)。

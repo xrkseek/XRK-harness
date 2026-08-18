@@ -104,7 +104,7 @@ SSE stream of session events (replays history, then live).
 信封：`{ rpcId, payload }` → `{ rpcId, result }`。  
 U1 methods：`host.describe` · `session.create|list|history|prompt|cancel|models|selectModel` · `llm.providers|models|discoverModels`。详见 [host-face.md](./host-face.md)。
 
-Web：有捕获时托管 `apps/web-static`（DSH 产品壳，gitignore）。`apps/web` 为 Face console（`?console=1`）。
+Web：有捕获时托管 `apps/web-static`（gitignore）。源码底稿 `apps/web` + `packages/client`；无捕获回退 `apps/console`（`?console=1`）。
 
 ```bash
 node apps/cli/dist/bin.js serve --preset server --workspace .

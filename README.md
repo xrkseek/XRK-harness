@@ -55,8 +55,9 @@ node apps/cli/dist/bin.js serve --preset server --workspace .
 树与依赖：[docs/architecture.md](./docs/architecture.md)。包索引：[docs/modules/README.md](./docs/modules/README.md)。
 
 ```text
-apps/cli · apps/web · web-static（本地捕获，不入库）   CLI · Face console · 产品壳
-packages/*              33 个 @xrkseek 库（kernel · compose · core* · llm · exec* · server · mcp · …）
+apps/cli · apps/web · apps/console   CLI · 壳底稿 · Face 验证台
+packages/client         壳客户端包底稿（与 apps/web 成对）
+packages/*              @xrkseek 库（kernel · compose · core* · llm · exec* · server · …）
 presets/                minimal | harness | server
 docs/                   规格 · ADR · modules 文件地图
 ```

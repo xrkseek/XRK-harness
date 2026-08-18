@@ -1,11 +1,5 @@
 # NOTICE
 
-## XRK Harness Web
+`apps/web` + `packages/client` 是 **DeepSeek Harness** Web 客户端源码的定点拷贝（MIT，Copyright DeepSeek），在本仓做二次创作。本仓根目录 [LICENSE](../../LICENSE) 覆盖 XRK-Harness；DeepSeek 原文许可条件：保留版权声明与许可全文（上游 MIT 与本仓相同条款）。
 
-产品聊天壳以 **DeepSeek Harness** Web（MIT，Copyright DeepSeek）为底稿做二次创作。许可全文见上游 MIT License，须随拷贝保留。
-
-这不是 GitHub Fork：不跟踪 DSH 默认分支，不向 deepseek-ai 仓库提 PR。后续改动只进入本仓（XRK-Harness / `@xrkseek`）。
-
-当前仓库托管的是 Face 验证台（本目录）与本机捕获静态壳（`apps/web-static`，gitignore）。源码底稿入库后仍用本 NOTICE。
-
-品牌：`docs/assets/logo*.png`（栅格，不重绘 SVG）。
+不是 GitHub Fork：不跟踪 DSH 默认分支，不向 deepseek-ai 提 PR。定点见 [UPSTREAM](./UPSTREAM)。对照实现看本机 bar 仓，不设 vendor 联接。
