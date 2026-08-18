@@ -1,6 +1,6 @@
 /**
  * Landing + Face verifier (`?console=1`).
- * Product chat UI is the DSH capture at `apps/web-static` (serve default).
+ * Product chat UI is the local DSH capture at `apps/web-static` (serve default).
  */
 
 import { FACE_CONSOLE_BOOT } from "./boot-manifest.js";

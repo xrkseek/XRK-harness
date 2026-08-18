@@ -5,13 +5,13 @@ import path from "node:path";
 import { runDoctor } from "../src/commands/doctor.js";
 
 describe("cli doctor", () => {
-  it("passes node + workspace + product-ui in this repo", async () => {
+  it("passes node + workspace in this repo", async () => {
     const result = await runDoctor(process.cwd());
     const names = Object.fromEntries(result.checks.map((c) => [c.name, c]));
     expect(names.node?.ok).toBe(true);
     expect(names.node?.detail).toMatch(/need >=26/);
     expect(names.workspace?.ok).toBe(true);
-    expect(names["product-ui"]?.ok).toBe(true);
+    expect(names["product-ui"]).toBeDefined();
     expect(result.ok).toBe(true);
   });
 

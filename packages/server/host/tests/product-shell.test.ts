@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createMinimalComposition } from "@xrkseek/preset-minimal";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
@@ -7,6 +8,7 @@ import { loadHostConfig } from "@xrkseek/server-config";
 import { createHostManager } from "../src/index.js";
 
 const WEB_STATIC = path.resolve(process.cwd(), "apps", "web-static");
+const HAS_CAPTURE = existsSync(path.join(WEB_STATIC, "index.html"));
 
 async function faceRpc(
   base: string,
@@ -25,7 +27,7 @@ async function faceRpc(
   return body.result;
 }
 
-describe("product shell first paint", () => {
+describe.skipIf(!HAS_CAPTURE)("product shell first paint", () => {
   it(
     "serves captured DSH UI + boot inject + first-paint RPCs",
     async () => {

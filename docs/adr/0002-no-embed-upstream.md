@@ -12,7 +12,7 @@ session / loop / tools / host 是本仓产品内核，需要可审计、与本�
 
 内核能力在本仓实现与维护：**session 事件真源**、agent loop / 工具瀑布、compose / presets、进程插件 kind、Face 作为 wire 适配。
 
-外部协议可对接。吃人力的聊天壳在合法许可下**复用 DSH Web 捕获**（`@deepseek-ai/*` 包名不改），不另画平行聊天 UI。产品向裁剪与品牌（boot 省略空面、title / manifest）在本仓做；内核仍是 session 事件 · 工具瀑布 · compose。
+外部协议可对接。吃人力的聊天壳在合法许可下**复用 DSH Web 捕获**（`@deepseek-ai/*` 包名不改），不另画平行聊天 UI。捕获产物不入库（同 DSH `apps/web/dist`）。产品向裁剪与品牌（boot 省略空面、title / manifest）在本仓做；内核仍是 session 事件 · 工具瀑布 · compose。
 
 公开 npm 依赖须在 NOTICE 列出。
 

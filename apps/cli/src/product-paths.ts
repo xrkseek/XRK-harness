@@ -1,6 +1,6 @@
 /**
- * Product shell lives next to this CLI app (`apps/web-static`), not inside
- * the user's `--workspace`. Recapture under `vendor/` is gitignored.
+ * Product shell is a local DSH capture (`apps/web-static`, gitignored like
+ * upstream `apps/web/dist`). Recapture also lands under `vendor/` (gitignored).
  */
 import { access } from "node:fs/promises";
 import { readFileSync } from "node:fs";

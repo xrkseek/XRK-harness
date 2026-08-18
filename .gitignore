@@ -6,7 +6,22 @@ coverage/
 # Local-only reference / capture (never commit contents)
 vendor/
 
+# Captured DSH Web shell — same as upstream `apps/web/dist/` (rebuild locally).
+apps/web-static/**
+!apps/web-static/README.md
+
 .turbo/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+*.tsbuildinfo
+.xrk-harness/
+.xrk/tool-outputs/
+.xrk/sessions/
+.xrk/host-settings.json
+
 *.log
 .env
 .env.*

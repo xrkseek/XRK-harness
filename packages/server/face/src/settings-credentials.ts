@@ -132,8 +132,7 @@ export function listCredentialSlots(
 
   const hostEnv = "XRK_API_KEY";
   const hostVault = vault.peek("host.apiKey");
-  const hostEnvOk =
-    envHas(env, hostEnv) || Boolean(runtime.bootstrapApiKey?.trim());
+  const hostEnvOk = envHas(env, hostEnv) || Boolean(runtime.bootstrapApiKey?.trim());
   slots.push({
     id: "host.apiKey",
     label: "Host API key",
@@ -161,11 +160,7 @@ export function listCredentialSlots(
 
 /** Effective Host API key: vault override wins, else bootstrap env/config value. */
 export function effectiveHostApiKey(runtime: FaceRuntime): string {
-  return (
-    runtime.credentials.peek("host.apiKey") ??
-    runtime.bootstrapApiKey ??
-    ""
-  );
+  return runtime.credentials.peek("host.apiKey") ?? runtime.bootstrapApiKey ?? "";
 }
 
 export async function settingsGet(
@@ -173,9 +168,7 @@ export async function settingsGet(
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
   const p =
-    payload && typeof payload === "object"
-      ? (payload as Record<string, unknown>)
-      : {};
+    payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
   const scope =
     typeof p.scope === "string" && p.scope.trim() ? p.scope.trim() : undefined;
 
@@ -251,9 +244,7 @@ export async function settingsSet(
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
   const p =
-    payload && typeof payload === "object"
-      ? (payload as Record<string, unknown>)
-      : {};
+    payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
   const scope = typeof p.scope === "string" ? p.scope.trim() : "";
   const patch =
     p.patch && typeof p.patch === "object"
@@ -359,9 +350,7 @@ function resolveCredentialSlotId(
 /** DSH `credentials/updated` uses CredentialRef (env var name when known). */
 function emitCredentialRemote(runtime: FaceRuntime, slotId: string): void {
   const slot = listCredentialSlots(runtime).find((s) => s.id === slotId);
-  publishRemoteEvent(runtime.bus, "credentials/updated", [
-    slot?.envVar ?? slotId,
-  ]);
+  publishRemoteEvent(runtime.bus, "credentials/updated", [slot?.envVar ?? slotId]);
   if (slotId.startsWith("llm.")) {
     publishRemoteEvent(runtime.bus, "llm/adapters-updated", []);
   }
@@ -373,9 +362,7 @@ export async function credentialsDescribe(
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
   const p =
-    payload && typeof payload === "object"
-      ? (payload as Record<string, unknown>)
-      : {};
+    payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
   const refs = Array.isArray(p.refs)
     ? p.refs.filter((x): x is string => typeof x === "string" && x.trim() !== "")
     : [];
@@ -410,9 +397,7 @@ export async function credentialsSet(
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
   const p =
-    payload && typeof payload === "object"
-      ? (payload as Record<string, unknown>)
-      : {};
+    payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
   // DeepSeek: { ref, value } · XRK console: { slotId, value }
   const rawRef =
     typeof p.ref === "string"
@@ -443,8 +428,7 @@ export async function credentialsSet(
         slotId,
         configured: listCredentialSlots(runtime).find((s) => s.id === slotId)
           ?.configured,
-        source: listCredentialSlots(runtime).find((s) => s.id === slotId)
-          ?.source,
+        source: listCredentialSlots(runtime).find((s) => s.id === slotId)?.source,
         cleared: true,
       },
     };
@@ -489,9 +473,7 @@ export async function credentialsUnset(
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
   const p =
-    payload && typeof payload === "object"
-      ? (payload as Record<string, unknown>)
-      : {};
+    payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
   const rawRef =
     typeof p.ref === "string"
       ? p.ref.trim()
@@ -555,10 +537,7 @@ function setAtPath(
   cur[path[path.length - 1]!] = value;
 }
 
-function unsetAtPath(
-  root: Record<string, unknown>,
-  path: readonly string[],
-): void {
+function unsetAtPath(root: Record<string, unknown>, path: readonly string[]): void {
   if (path.length === 0) {
     for (const key of Object.keys(root)) delete root[key];
     return;
@@ -639,10 +618,7 @@ export class FaceSettingsNamespaces {
     | { ok: true; view: DshSettingsNamespaceView }
     | { ok: false; code: string; message: string } {
     const slot = this.ensure(ns);
-    if (
-      expectedRevision !== undefined &&
-      expectedRevision !== slot.revision
-    ) {
+    if (expectedRevision !== undefined && expectedRevision !== slot.revision) {
       return {
         ok: false,
         code: "settings-conflict",
@@ -677,7 +653,11 @@ function validateNamespaceValue(
   }
   if (ns === "ui-theme") {
     const pref = value.preference;
-    if (pref !== undefined && typeof pref === "string" && !UI_THEMES.has(pref as UiTheme)) {
+    if (
+      pref !== undefined &&
+      typeof pref === "string" &&
+      !UI_THEMES.has(pref as UiTheme)
+    ) {
       return `unknown theme preference: ${pref}`;
     }
   }
@@ -718,9 +698,7 @@ export function parseFaceMcpServers(raw: unknown): FaceMcpServerDraft[] {
       serverName,
       ...(url ? { url } : { command }),
       ...(Array.isArray(o.args) ? { args: o.args.map((a) => String(a)) } : {}),
-      ...(typeof o.cwd === "string" && o.cwd.trim()
-        ? { cwd: o.cwd.trim() }
-        : {}),
+      ...(typeof o.cwd === "string" && o.cwd.trim() ? { cwd: o.cwd.trim() } : {}),
     });
   }
   return out;
@@ -776,9 +754,7 @@ function mcpDescribeBase(runtime: FaceRuntime): Record<string, unknown> {
   };
 }
 
-function mcpMutateRejected(
-  ops: readonly DshSettingsPathOp[],
-): string | undefined {
+function mcpMutateRejected(ops: readonly DshSettingsPathOp[]): string | undefined {
   for (const op of ops) {
     if (op.path.length === 0) continue;
     if (op.path[0] !== "servers") {
@@ -793,11 +769,7 @@ export async function settingsDescribeDsh(
   runtime: FaceRuntime,
 ): Promise<FaceRpcResult<unknown>> {
   const namespaces: DshSettingsNamespaceView[] = [
-    runtime.settingsNamespaces.view(
-      "ui-onboarding",
-      {},
-      DSH_ONBOARDING_SCHEMA,
-    ),
+    runtime.settingsNamespaces.view("ui-onboarding", {}, DSH_ONBOARDING_SCHEMA),
     runtime.settingsNamespaces.view(
       "ui",
       {
@@ -854,9 +826,7 @@ export async function settingsMutateDsh(
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
   const p =
-    payload && typeof payload === "object"
-      ? (payload as Record<string, unknown>)
-      : {};
+    payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
   const ns = typeof p.ns === "string" ? p.ns.trim() : "";
   const opsRaw = Array.isArray(p.ops) ? p.ops : null;
   if (!ns || !opsRaw) {
@@ -896,11 +866,7 @@ export async function settingsMutateDsh(
       error: { code: result.code, message: result.message, details: { ns } },
     };
   }
-  applyDshUiPref(
-    runtime,
-    ns,
-    result.view.value as Record<string, unknown>,
-  );
+  applyDshUiPref(runtime, ns, result.view.value as Record<string, unknown>);
   publishRemoteEvent(runtime.bus, "settings/document-updated", [
     ns,
     result.view.revision,
@@ -932,9 +898,7 @@ export async function settingsUpdateDsh(
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
   const p =
-    payload && typeof payload === "object"
-      ? (payload as Record<string, unknown>)
-      : {};
+    payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
   const ns = typeof p.ns === "string" ? p.ns.trim() : "";
   const patch =
     p.patch && typeof p.patch === "object" && !Array.isArray(p.patch)
@@ -969,9 +933,7 @@ export async function settingsReplaceDsh(
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
   const p =
-    payload && typeof payload === "object"
-      ? (payload as Record<string, unknown>)
-      : {};
+    payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
   const ns = typeof p.ns === "string" ? p.ns.trim() : "";
   const section =
     p.section && typeof p.section === "object" && !Array.isArray(p.section)
@@ -1005,16 +967,13 @@ async function fileExists(target: string): Promise<boolean> {
 }
 
 function hostSettingsPath(runtime: FaceRuntime): string {
-  const dir =
-    runtime.productDir ?? path.join(runtime.workspaceRoot, ".xrk");
+  const dir = runtime.productDir ?? path.join(runtime.workspaceRoot, ".xrk");
   return path.join(dir, "host-settings.json");
 }
 
 function mcpServersFromRuntime(runtime: FaceRuntime): FaceMcpServerDraft[] {
   try {
-    return parseFaceMcpServers(
-      runtime.settingsNamespaces.ensure("mcp").user.servers,
-    );
+    return parseFaceMcpServers(runtime.settingsNamespaces.ensure("mcp").user.servers);
   } catch {
     return [];
   }
@@ -1056,8 +1015,7 @@ async function persistHostSettings(runtime: FaceRuntime): Promise<void> {
     ui: runtime.uiSettings,
     host: runtime.hostPublic ?? previous.host ?? null,
     policyFile:
-      runtime.settingsDocumentPath &&
-      path.isAbsolute(runtime.settingsDocumentPath)
+      runtime.settingsDocumentPath && path.isAbsolute(runtime.settingsDocumentPath)
         ? runtime.settingsDocumentPath
         : (previous.policyFile ?? null),
     mcp: { servers: mcpServersFromRuntime(runtime) },
@@ -1069,9 +1027,7 @@ async function persistHostSettings(runtime: FaceRuntime): Promise<void> {
  * Host-resolved settings document. Ignores any client-supplied path.
  * Prefer `XRK_POLICY_FILE` when present; otherwise a redacted dump under `.xrk/`.
  */
-export async function prepareSettingsDocument(
-  runtime: FaceRuntime,
-): Promise<string> {
+export async function prepareSettingsDocument(runtime: FaceRuntime): Promise<string> {
   const pinned = runtime.settingsDocumentPath?.trim();
   if (pinned && path.isAbsolute(pinned) && (await fileExists(pinned))) {
     return pinned;
