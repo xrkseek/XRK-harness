@@ -10,7 +10,7 @@
 - **Plan mode**：`/plan` · `/plan off` · `/plan <message>`（suffix steer）；idle 立即钉 `plan/mode`，开 turn 则下一 step 提交。`exit_plan_mode` 常驻工具表；仅 active 时走 plan-review 提问，批准后 side-event 退出。软引导，不改沙箱/审批
 - **能力缝**：Definition / Provider / Consumer
 - **Host Face**：Unary RPC + mux/host 双流；未实现方法 `not-implemented`
-- **Host 流**：`host/session-added` 对齐 DSH `sessionListFields`（子会话 `parentSessionId` + `origin: "subagent"`；`blank` = 无 `turn/start`）。`workspace.delete` → `host/workspace-removed`；`insertBefore` → `host/workspace-order-changed`。无 dispose，不发 `host/session-removed`
+- **Host 流**：`host/session-added` 对齐 DSH `sessionListFields`（子会话 `parentSessionId` + `origin: "subagent"`；`blank` = 无 `turn/start`）。`workspace.delete` → `host/workspace-removed`；`insertBefore` → `host/workspace-order-changed`。凭据 / 设置 / preset 真改发 `host/remote-event`（`credentials/updated` · `settings/document-updated` · `agent-preset/selected` · `llm/adapters-updated`）；不转发 Cordis inspect/run。无 dispose，不发 `host/session-removed`
 - **组合叶**：`@xrkseek/compose` C0·C1·C2（`interceptInject` / `openSubagentRealm`）能跑；presets 只接线
 - **Subagent**：Face `list/history/prompt/interrupt` 能跑；`session.create({ parentSessionId })` 或 `session.fork` 登记子会话。Host agent-cache 对有父的会话走 `openSubagentRealm`（无 ACP / Cordis 外挂）
 - **进程插件**：`tools` · `prompt` · `commands` 已接线；`channel` / `policy` / `llm` 可发现、未自动接线；DSH Cordis 宿主包只登记 inventory stub（不 `apply`）；显式 / 保留 id 优先
@@ -23,7 +23,7 @@
 - **设置文档**：`settings.openDocument` 忽略浏览器 path；优先 `XRK_POLICY_FILE`，否则写红acted `{productDir}/host-settings.json`；Win/macOS/Linux 用系统默认打开（单测注入 opener）。`settings.describe` 带 schemastery 形 `permission` / `llm` / `ui-theme` / `locale` / `ui-onboarding`（mutate 保留 schema；`permission.defaultPreset` 在 `session.create` 时钉 knobs，经 `/permission` 与 preset pipeline 真正改审批/沙箱）；`mcp` 为已连接 `mcp:*` 只读 inventory（mutate 拒绝）
 - **目录选择**：`host.pickDirectory` 弹系统选文件夹；取消 `{ path: null }`；缺 zenity/kdialog 或非桌面平台 `directory-picker-unavailable`（不是假取消）。Win 走 PowerShell STA `FolderBrowserDialog`（单测注入 picker，不弹框）
 - **斜杠**：`session.prompt` 已知命令回 `{ command: { kind: "success" } }`；未知 `/name` 当普通 prompt 入账（壳 Zod 不容 `kind: "error"`）；失败已知命令 `command-error`。内建 `/compact` 在 idle 时写 `context/compaction`（`reason: manual`），无历史则 success「No compactable history yet.」
-- **会话搜索**：`session.search` 扫 user/assistant/admit/safety，按最近活动排序，JSONL 仓同一扫描（非 FTS）
+- **会话搜索**：`session.search` 扫 user/assistant/admit/safety/command/todo，按最近活动排序，JSONL 仓同一扫描（非 FTS）
 - **预设只读**：`agentPreset.read` 返回 catalog markdown；copy/remove/openDocument 回 `agent-preset-read-only`（`authorable: false`）
 - **消息反馈**：`messageFeedback/list/put/delete` 进程内 CAS（不写 session 日志）；`messageId` = `{turnId}:{stepId}`
 - **Goal**：`/goal` 或 `goals/create`（及 DSH 点号 `goal.create`）写入投影 `goal` 并 admit；pause/resume/edit/clear 走 CAS；`turn/end` 在 `armed` 时续轮，满 `maxGoalRounds`（默认 8）则 `blocked`。Host 旁路 `{XRK_SESSIONS_DIR}/goals.json`。不是独立 Goal fiber

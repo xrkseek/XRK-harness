@@ -46,6 +46,8 @@ function extractSearchableTexts(events: readonly SessionEvent[]): string[] {
       for (const item of e.todos) {
         if (item.content) out.push(item.content);
       }
+    } else if (e.type === "feedback/record") {
+      out.push(e.text);
     }
   }
   return out;
@@ -119,6 +121,7 @@ export function parseSearchQuery(payload: unknown): FaceRpcResult<string> {
  * standing todos. One hit per session; newest activity first. JSONL Host
  * store is already eager-loaded, so persisted sessions are in the same scan.
  * Not SQLite FTS.
+ */
 export function searchSessions(
   store: SessionStore,
   query: string,
