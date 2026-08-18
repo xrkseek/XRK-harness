@@ -41,9 +41,11 @@ import { access } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import path from "node:path";
 import { createHostAgentCache } from "./agent-cache.js";
-import { loadMcpToolPlugins, parseMcpServersEnv } from "./mcp-wire.js";
+import { loadMcpToolPlugins, parseMcpServersEnv, readMcpServersFromHostSettings } from "./mcp-wire.js";
 import { createStandingToolRegistry } from "./standing-tools.js";
 import { createDefaultPtyAccess } from "@xrkseek/exec-pty";
+import { createLocalShell } from "@xrkseek/exec-shell";
+import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
 
 export { createHostAgentCache, HOST_PLUGINS_KEY } from "./agent-cache.js";
 export { createStandingToolRegistry } from "./standing-tools.js";
@@ -51,6 +53,7 @@ export type { AgentResolveOpts, HostAgentCache } from "./agent-cache.js";
 export {
   loadMcpToolPlugins,
   parseMcpServersEnv,
+  readMcpServersFromHostSettings,
   type McpServerSpec,
 } from "./mcp-wire.js";
 
@@ -80,6 +83,17 @@ async function resolveWebPluginOverlay(
   }
 }
 
+/** Env/config win; empty → Face dump `{workspace}/.xrk/host-settings.json`. */
+function resolveMcpSpecs(config: HostConfig) {
+  const configured =
+    config.runtime.mcpServers ??
+    parseMcpServersEnv(process.env.XRK_MCP_SERVERS);
+  if (configured.length > 0) return configured;
+  return readMcpServersFromHostSettings(
+    path.join(config.runtime.workspaceRoot, ".xrk", "host-settings.json"),
+  );
+}
+
 export type AgentImageResolver = (
   attachmentId: string,
 ) => Promise<{ readonly mediaType: string; readonly data: Uint8Array }>;
@@ -97,6 +111,11 @@ export type AgentFactory = (input: {
    * sandbox-mode fence and open sessions stay composition-true.
    */
   ptyService?: import("@xrkseek/exec-pty").TerminalSessionService;
+  /**
+   * Host-shared jobs registry (harness/server). Composition scopes by sessionId;
+   * Host stop disposes. Survives agent invalidate like PTY.
+   */
+  shellJobs?: import("@xrkseek/exec-shell").ShellService;
 }) => Promise<AgentHandle>;
 
 /** Host-side drain control (admit wake / resume join). */
@@ -156,9 +175,7 @@ export function createHostManager(): HostManager {
         ? await createPolicyEngineFromFile(config.runtime.policyFile)
         : undefined;
 
-      const mcpSpecs =
-        config.runtime.mcpServers ??
-        parseMcpServersEnv(process.env.XRK_MCP_SERVERS);
+      const mcpSpecs = resolveMcpSpecs(config);
       let invalidateAgents: () => Promise<void> = async () => {};
       if (mcpSpecs.length > 0) {
         const mcpPlugins = await loadMcpToolPlugins({
@@ -184,6 +201,11 @@ export function createHostManager(): HostManager {
           ? createDefaultPtyAccess({
               workspaceRoot: config.runtime.workspaceRoot,
             })
+          : undefined;
+
+      const sharedShell =
+        config.runtime.preset === "harness" || config.runtime.preset === "server"
+          ? createLocalShell({ subprocess: createLocalSubprocess() })
           : undefined;
 
       const ensureSession = (sid?: string) => newSession(store, sid).id;
@@ -216,6 +238,7 @@ export function createHostManager(): HostManager {
                 };
               },
               ...(sharedPty ? { ptyService: sharedPty.service } : {}),
+              ...(sharedShell ? { shellJobs: sharedShell } : {}),
             });
             if (faceBox.approvals) {
               agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
@@ -414,6 +437,13 @@ export function createHostManager(): HostManager {
           status = "stopped";
           await http.close();
           await agentCache.dispose();
+          if (sharedShell) {
+            try {
+              await sharedShell.dispose();
+            } catch {
+              // Host stop must continue even if jobs teardown partially fails.
+            }
+          }
           if (sharedPty) {
             try {
               await sharedPty.service.dispose();

@@ -2,7 +2,8 @@
  * Face U2 settings + credentials — public settings writable; secrets never logged / never on disk.
  */
 
-import { access, constants, mkdir, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { access, constants, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
@@ -12,6 +13,7 @@ import {
   DSH_EMPTY_OBJECT_SCHEMA,
   DSH_LLM_SCHEMA,
   DSH_LOCALE_SCHEMA,
+  DSH_MCP_SCHEMA,
   DSH_ONBOARDING_SCHEMA,
   DSH_PERMISSION_SCHEMA,
   DSH_THEME_SCHEMA,
@@ -572,7 +574,7 @@ function unsetAtPath(
 
 /**
  * Process-memory settings namespaces for DeepSeek Web (welcome notice, etc.).
- * Not file-backed — enough for loopback UI ack / live prefs.
+ * Most ns stay in memory; `mcp.servers` also persist to host-settings.json.
  */
 export class FaceSettingsNamespaces {
   private readonly map = new Map<
@@ -582,6 +584,7 @@ export class FaceSettingsNamespaces {
       revision: number;
       base: Record<string, unknown>;
       schema: unknown;
+      applies: "live" | "restart";
     }
   >();
 
@@ -590,6 +593,7 @@ export class FaceSettingsNamespaces {
     revision: number;
     base: Record<string, unknown>;
     schema: unknown;
+    applies: "live" | "restart";
   } {
     let slot = this.map.get(ns);
     if (!slot) {
@@ -598,6 +602,7 @@ export class FaceSettingsNamespaces {
         revision: 0,
         base: {},
         schema: DSH_EMPTY_OBJECT_SCHEMA,
+        applies: "live",
       };
       this.map.set(ns, slot);
     }
@@ -608,17 +613,19 @@ export class FaceSettingsNamespaces {
     ns: string,
     base?: Record<string, unknown>,
     schema?: unknown,
+    applies?: "live" | "restart",
   ): DshSettingsNamespaceView {
     const slot = this.ensure(ns);
     if (base !== undefined) slot.base = base;
     if (schema !== undefined) slot.schema = schema;
+    if (applies !== undefined) slot.applies = applies;
     return {
       ns,
       schema: slot.schema,
       value: { ...slot.base, ...slot.user },
       base: { ...slot.base },
       user: { ...slot.user },
-      applies: "live",
+      applies: slot.applies,
       secrets: [],
       revision: slot.revision,
     };
@@ -674,12 +681,84 @@ function validateNamespaceValue(
       return `unknown theme preference: ${pref}`;
     }
   }
+  if (ns === "mcp") {
+    return validateMcpServersValue(value.servers);
+  }
   return undefined;
 }
 
-/** Read-only snapshot of Host MCP plugins (`id: mcp:<serverName>`). */
-function mcpInventoryValue(runtime: FaceRuntime): Record<string, unknown> {
-  const servers = (runtime.plugins ?? [])
+export interface FaceMcpServerDraft {
+  readonly serverName: string;
+  readonly command?: string;
+  readonly url?: string;
+  readonly args?: readonly string[];
+  readonly cwd?: string;
+}
+
+/** Parse Face/host-settings MCP drafts. `env` is dropped (never copied). Mutate rejects env. */
+export function parseFaceMcpServers(raw: unknown): FaceMcpServerDraft[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) {
+    throw new Error("mcp.servers must be an array");
+  }
+  const out: FaceMcpServerDraft[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      throw new Error("mcp.servers entries must be objects");
+    }
+    const o = row as Record<string, unknown>;
+    const serverName = String(o.serverName ?? "").trim();
+    if (!serverName) throw new Error("mcp.servers entry needs serverName");
+    const url = typeof o.url === "string" ? o.url.trim() : "";
+    const command = typeof o.command === "string" ? o.command.trim() : "";
+    if (!url && !command) {
+      throw new Error("mcp.servers entry needs command or url");
+    }
+    out.push({
+      serverName,
+      ...(url ? { url } : { command }),
+      ...(Array.isArray(o.args) ? { args: o.args.map((a) => String(a)) } : {}),
+      ...(typeof o.cwd === "string" && o.cwd.trim()
+        ? { cwd: o.cwd.trim() }
+        : {}),
+    });
+  }
+  return out;
+}
+
+function mcpServersContainEnv(raw: unknown): boolean {
+  if (!Array.isArray(raw)) return false;
+  return raw.some(
+    (row) =>
+      row !== null &&
+      typeof row === "object" &&
+      !Array.isArray(row) &&
+      (row as { env?: unknown }).env !== undefined,
+  );
+}
+
+function validateMcpServersValue(raw: unknown): string | undefined {
+  if (mcpServersContainEnv(raw)) {
+    return "mcp.servers must not include env; use process environment / credentials";
+  }
+  try {
+    parseFaceMcpServers(raw);
+    return undefined;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
+const MCP_SETTINGS_NOTE =
+  "Desired servers persist in .xrk/host-settings.json and apply on the next Host spawn. Live connect still needs XRK_MCP_ALLOW=1 (or policy allow). Not a process supervisor.";
+
+function mcpConnected(runtime: FaceRuntime): readonly {
+  readonly id: string;
+  readonly serverName: string;
+  readonly kind: string;
+  readonly toolCount: number;
+}[] {
+  return (runtime.plugins ?? [])
     .filter((p) => p.id.startsWith("mcp:"))
     .map((p) => ({
       id: p.id,
@@ -687,10 +766,26 @@ function mcpInventoryValue(runtime: FaceRuntime): Record<string, unknown> {
       kind: p.kind,
       toolCount: p.tools?.length ?? 0,
     }));
+}
+
+function mcpDescribeBase(runtime: FaceRuntime): Record<string, unknown> {
   return {
-    servers,
-    note: "Configured via XRK_MCP_SERVERS; Face does not persist MCP settings.",
+    servers: [],
+    connected: mcpConnected(runtime),
+    note: MCP_SETTINGS_NOTE,
   };
+}
+
+function mcpMutateRejected(
+  ops: readonly DshSettingsPathOp[],
+): string | undefined {
+  for (const op of ops) {
+    if (op.path.length === 0) continue;
+    if (op.path[0] !== "servers") {
+      return "mcp only accepts servers (connected is live overlay)";
+    }
+  }
+  return undefined;
 }
 
 /** DeepSeek `settings.describe` — namespaces[] for Web welcome / forms. */
@@ -729,8 +824,9 @@ export async function settingsDescribeDsh(
     runtime.settingsNamespaces.view("llm", { providers: {} }, DSH_LLM_SCHEMA),
     runtime.settingsNamespaces.view(
       "mcp",
-      mcpInventoryValue(runtime),
-      DSH_EMPTY_OBJECT_SCHEMA,
+      mcpDescribeBase(runtime),
+      DSH_MCP_SCHEMA,
+      "restart",
     ),
   ];
   if (runtime.hostPublic) {
@@ -772,17 +868,6 @@ export async function settingsMutateDsh(
       },
     };
   }
-  if (ns === "mcp") {
-    return {
-      ok: false,
-      error: {
-        code: "settings-readonly",
-        message:
-          "MCP is configured via XRK_MCP_SERVERS; Face does not persist MCP settings.",
-        details: { ns },
-      },
-    };
-  }
   const ops: DshSettingsPathOp[] = [];
   for (const raw of opsRaw) {
     if (!raw || typeof raw !== "object") continue;
@@ -795,6 +880,15 @@ export async function settingsMutateDsh(
   }
   const expected =
     typeof p.expectedRevision === "number" ? p.expectedRevision : undefined;
+  if (ns === "mcp") {
+    const mcpReject = mcpMutateRejected(ops);
+    if (mcpReject) {
+      return {
+        ok: false,
+        error: { code: "settings-invalid", message: mcpReject, details: { ns } },
+      };
+    }
+  }
   const result = runtime.settingsNamespaces.mutate(ns, ops, expected);
   if (!result.ok) {
     return {
@@ -813,6 +907,21 @@ export async function settingsMutateDsh(
   ]);
   if (ns === "llm") {
     publishRemoteEvent(runtime.bus, "llm/adapters-updated", []);
+  }
+  if (ns === "mcp") {
+    const slot = runtime.settingsNamespaces.ensure("mcp");
+    slot.user = { servers: mcpServersFromRuntime(runtime) };
+    slot.applies = "restart";
+    await persistHostSettings(runtime);
+    return {
+      ok: true,
+      value: runtime.settingsNamespaces.view(
+        "mcp",
+        mcpDescribeBase(runtime),
+        DSH_MCP_SCHEMA,
+        "restart",
+      ),
+    };
   }
   return { ok: true, value: result.view };
 }
@@ -895,6 +1004,67 @@ async function fileExists(target: string): Promise<boolean> {
   }
 }
 
+function hostSettingsPath(runtime: FaceRuntime): string {
+  const dir =
+    runtime.productDir ?? path.join(runtime.workspaceRoot, ".xrk");
+  return path.join(dir, "host-settings.json");
+}
+
+function mcpServersFromRuntime(runtime: FaceRuntime): FaceMcpServerDraft[] {
+  try {
+    return parseFaceMcpServers(
+      runtime.settingsNamespaces.ensure("mcp").user.servers,
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** Load `{productDir}/host-settings.json` mcp.servers into the namespace user layer. */
+export function hydrateFaceHostSettings(runtime: FaceRuntime): void {
+  const file = hostSettingsPath(runtime);
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as {
+      mcp?: { servers?: unknown };
+    };
+    const servers = parseFaceMcpServers(parsed.mcp?.servers);
+    const slot = runtime.settingsNamespaces.ensure("mcp");
+    slot.user = { servers };
+    slot.applies = "restart";
+  } catch {
+    /* missing or malformed dump — next mutate rewrites */
+  }
+}
+
+async function persistHostSettings(runtime: FaceRuntime): Promise<void> {
+  const dump = hostSettingsPath(runtime);
+  await mkdir(path.dirname(dump), { recursive: true });
+  let previous: Record<string, unknown> = {};
+  if (await fileExists(dump)) {
+    try {
+      const parsed = JSON.parse(await readFile(dump, "utf8")) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        previous = parsed as Record<string, unknown>;
+      }
+    } catch {
+      previous = {};
+    }
+  }
+  const body = {
+    ...previous,
+    note: "Redacted Host snapshot. Secrets are never written here.",
+    ui: runtime.uiSettings,
+    host: runtime.hostPublic ?? previous.host ?? null,
+    policyFile:
+      runtime.settingsDocumentPath &&
+      path.isAbsolute(runtime.settingsDocumentPath)
+        ? runtime.settingsDocumentPath
+        : (previous.policyFile ?? null),
+    mcp: { servers: mcpServersFromRuntime(runtime) },
+  };
+  await writeFile(dump, `${JSON.stringify(body, null, 2)}\n`, "utf8");
+}
+
 /**
  * Host-resolved settings document. Ignores any client-supplied path.
  * Prefer `XRK_POLICY_FILE` when present; otherwise a redacted dump under `.xrk/`.
@@ -906,18 +1076,8 @@ export async function prepareSettingsDocument(
   if (pinned && path.isAbsolute(pinned) && (await fileExists(pinned))) {
     return pinned;
   }
-  const dir =
-    runtime.productDir ?? path.join(runtime.workspaceRoot, ".xrk");
-  await mkdir(dir, { recursive: true });
-  const dump = path.join(dir, "host-settings.json");
-  const body = {
-    note: "Redacted Host snapshot. Secrets are never written here.",
-    ui: runtime.uiSettings,
-    host: runtime.hostPublic ?? null,
-    policyFile: pinned && path.isAbsolute(pinned) ? pinned : null,
-  };
-  await writeFile(dump, `${JSON.stringify(body, null, 2)}\n`, "utf8");
-  return dump;
+  await persistHostSettings(runtime);
+  return hostSettingsPath(runtime);
 }
 
 /**

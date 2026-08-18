@@ -247,19 +247,6 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
     }
   }
 
-  function assertAccess(
-    job: InternalJob,
-    callerSessionId: string | undefined,
-  ): void {
-    if (
-      job.info.ownerSessionId !== undefined &&
-      callerSessionId !== undefined &&
-      job.info.ownerSessionId !== callerSessionId
-    ) {
-      throw new Error(`job ${job.info.id} belongs to another session`);
-    }
-  }
-
   function pruneIfNeeded(): void {
     if (jobs.size <= maxJobs) return;
     const finished = [...jobs.entries()].filter(
@@ -601,6 +588,85 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
       await Promise.all(all.map((j) => j.settled));
       jobs.clear();
       notifyChanged();
+    },
+  };
+}
+
+/**
+ * Session-scoped view over a shared jobs registry (CV DSH owner fence without Cordis).
+ * Stamps `ownerSessionId`, filters list, and rejects foreign kill/read/wait.
+ * `dispose()` is a no-op — only the root registry owns teardown.
+ */
+export function createSessionScopedShell(
+  shell: ShellService,
+  ownerSessionId: string,
+): ShellService {
+  const sid = ownerSessionId.trim();
+  if (!sid) throw new Error("ownerSessionId must be a non-empty string");
+
+  const visible = (job: ShellJobInfo): boolean =>
+    job.ownerSessionId === undefined || job.ownerSessionId === sid;
+
+  const expectVisible = (id: string): void => {
+    const job = shell.listJobsNow().find((j) => j.id === id);
+    if (!job) throw new Error(`shell job not found: ${id}`);
+    if (!visible(job)) {
+      throw new Error(`job ${id} belongs to another session`);
+    }
+  };
+
+  /** Visible-set fingerprint — skip notifies that only move another owner's jobs. */
+  const fingerprint = (): string =>
+    shell
+      .listJobsNow()
+      .filter(visible)
+      .map(
+        (j) =>
+          `${j.id}:${j.status}:${j.reported ? 1 : 0}:${j.finishedAt ?? 0}`,
+      )
+      .join("|");
+
+  return {
+    run: (command, cwd, opts) => shell.run(command, cwd, opts),
+    startJob: (command, cwd, opts) =>
+      shell.startJob(command, cwd, {
+        ...opts,
+        ownerSessionId: sid,
+      }),
+    startManagedJob: (spec) =>
+      shell.startManagedJob({
+        ...spec,
+        ownerSessionId: sid,
+      }),
+    listJobs: async () => shell.listJobsNow().filter(visible),
+    listJobsNow: () => shell.listJobsNow().filter(visible),
+    killJob: async (id, reason) => {
+      expectVisible(id);
+      return shell.killJob(id, reason);
+    },
+    readJobOutput: (id) => {
+      expectVisible(id);
+      return shell.readJobOutput(id);
+    },
+    waitJob: (id, timeoutMs, signal) => {
+      expectVisible(id);
+      return shell.waitJob(id, timeoutMs, signal);
+    },
+    markJobReported: (id) => {
+      expectVisible(id);
+      shell.markJobReported(id);
+    },
+    onJobsChanged: (listener) => {
+      let prev = fingerprint();
+      return shell.onJobsChanged(() => {
+        const next = fingerprint();
+        if (next === prev) return;
+        prev = next;
+        listener();
+      });
+    },
+    dispose: async () => {
+      /* session scope does not own the registry */
     },
   };
 }

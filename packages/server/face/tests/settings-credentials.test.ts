@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -221,8 +221,10 @@ describe("Face settings U2", () => {
     }
   });
 
-  it("describe lists MCP inventory; mutate is read-only", async () => {
+  it("describe lists MCP connected overlay; mutate persists desired servers", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-mcp-settings-"));
     const rt = runtime({
+      productDir: dir,
       plugins: [
         {
           id: "mcp:demo",
@@ -239,14 +241,18 @@ describe("Face settings U2", () => {
       desc.result.value as {
         namespaces: {
           ns: string;
+          applies: string;
           value: {
-            servers: { id: string; serverName: string; toolCount: number }[];
+            servers: unknown[];
+            connected: { id: string; serverName: string; toolCount: number }[];
             note: string;
           };
         }[];
       }
     ).namespaces.find((n) => n.ns === "mcp");
-    expect(mcp?.value.servers).toEqual([
+    expect(mcp?.applies).toBe("restart");
+    expect(mcp?.value.servers).toEqual([]);
+    expect(mcp?.value.connected).toEqual([
       {
         id: "mcp:demo",
         serverName: "demo",
@@ -254,15 +260,88 @@ describe("Face settings U2", () => {
         toolCount: 0,
       },
     ]);
-    expect(mcp?.value.note).toContain("XRK_MCP_SERVERS");
+    expect(mcp?.value.note).toContain("host-settings.json");
 
+    const draft = [
+      { serverName: "fs", command: "npx", args: ["-y", "mcp-server"] },
+    ];
     const mut = await dispatchFaceMethod(rt, "settings.mutate", "mm", {
       ns: "mcp",
-      ops: [{ op: "set", path: ["servers"], value: [] }],
+      ops: [{ op: "set", path: ["servers"], value: draft }],
     });
-    expect(mut.result.ok).toBe(false);
-    if (!mut.result.ok) {
-      expect(mut.result.error.code).toBe("settings-rejected");
+    expect(mut.result.ok).toBe(true);
+    if (!mut.result.ok) return;
+    expect(mut.result.value).toMatchObject({
+      ns: "mcp",
+      applies: "restart",
+      value: { servers: draft },
+    });
+    expect(
+      (mut.result.value as { value: { connected: { id: string }[] } }).value
+        .connected,
+    ).toEqual([
+      {
+        id: "mcp:demo",
+        serverName: "demo",
+        kind: "tools",
+        toolCount: 0,
+      },
+    ]);
+
+    const dumped = JSON.parse(
+      await readFile(path.join(dir, "host-settings.json"), "utf8"),
+    ) as { mcp: { servers: unknown } };
+    expect(dumped.mcp.servers).toEqual(draft);
+    expect(JSON.stringify(dumped)).not.toContain('"env"');
+
+    const reloaded = runtime({ productDir: dir });
+    const again = await dispatchFaceMethod(reloaded, "settings.describe", "md2", {});
+    expect(again.result.ok).toBe(true);
+    if (!again.result.ok) return;
+    const hydrated = (
+      again.result.value as {
+        namespaces: { ns: string; value: { servers: unknown[] } }[];
+      }
+    ).namespaces.find((n) => n.ns === "mcp");
+    expect(hydrated?.value.servers).toEqual(draft);
+
+    const withEnv = await dispatchFaceMethod(rt, "settings.mutate", "me", {
+      ns: "mcp",
+      ops: [
+        {
+          op: "set",
+          path: ["servers"],
+          value: [{ serverName: "x", command: "npx", env: { TOKEN: "secret" } }],
+        },
+      ],
+    });
+    expect(withEnv.result.ok).toBe(false);
+    if (!withEnv.result.ok) {
+      expect(withEnv.result.error.code).toBe("settings-rejected");
+    }
+
+    const overlay = await dispatchFaceMethod(rt, "settings.mutate", "mc", {
+      ns: "mcp",
+      ops: [{ op: "set", path: ["connected"], value: [] }],
+    });
+    expect(overlay.result.ok).toBe(false);
+    if (!overlay.result.ok) {
+      expect(overlay.result.error.code).toBe("settings-rejected");
+    }
+
+    const invalid = await dispatchFaceMethod(rt, "settings.mutate", "mi", {
+      ns: "mcp",
+      ops: [
+        {
+          op: "set",
+          path: ["servers"],
+          value: [{ serverName: "x" }],
+        },
+      ],
+    });
+    expect(invalid.result.ok).toBe(false);
+    if (!invalid.result.ok) {
+      expect(invalid.result.error.code).toBe("settings-rejected");
     }
   });
 

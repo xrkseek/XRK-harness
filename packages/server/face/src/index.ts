@@ -205,7 +205,9 @@ export {
   credentialsUnset,
   defaultUiSettings,
   effectiveHostApiKey,
+  hydrateFaceHostSettings,
   listCredentialSlots,
+  parseFaceMcpServers,
   settingsDescribeDsh,
   settingsGet,
   settingsMutateDsh,
@@ -217,6 +219,7 @@ export {
   type DshSettingsNamespaceView,
   type DshSettingsPathOp,
   type FaceHostPublicSettings,
+  type FaceMcpServerDraft,
   type FaceUiSettings,
   type UiTheme,
 } from "./settings-credentials.js";

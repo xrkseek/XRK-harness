@@ -35,7 +35,7 @@ export function createServerAgentFactory(
       },
     ]);
 
-  return async ({ sessionId, store, workspaceRoot, plugins, resolveImage, ptyService }) => {
+  return async ({ sessionId, store, workspaceRoot, plugins, resolveImage, ptyService, shellJobs }) => {
     const composition = createHarnessComposition({
       workspaceRoot: workspaceRoot || options.workspaceRoot,
       sessionStore: store,
@@ -46,6 +46,7 @@ export function createServerAgentFactory(
       ...(options.policy ? { policy: options.policy } : {}),
       ...(resolveImage ? { resolveImage } : {}),
       ...(ptyService ? { ptyTools: ptyService } : {}),
+      ...(shellJobs ? { shell: shellJobs } : {}),
     });
     return composition.createAgent();
   };

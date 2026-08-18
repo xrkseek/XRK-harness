@@ -29,7 +29,7 @@ await shell.killJob(id); // → stopping + reported，再由 producer settle
 await shell.dispose(); // teardown cancel 全量 → reported，清空
 ```
 
-生命周期：`running` → 可选 `stopping` → 唯一终态（`exited` | `killed` | `failed`）。`toJobView` 把 `exited` 映成 Face `completed`；`stopping` 原样上线。Wire `JobView` **不含** `reported` / `outputLimitBytes`；Agent `jobs.list` 可附带这两项供 Face 完成通知使用。
+Host（harness/server）共享一份 root registry；composition 用 `createSessionScopedShell(root, sessionId)` 盖 owner fence（list / kill / read / wait）。`maxConcurrentJobs` 按 **owner 桶**计数（与 DSH `maxConcurrentJobsPerOwner` 同语义）。Wire `JobView` **不含** `ownerSessionId` / `reported` / `outputLimitBytes`。
 
 ### `reported` / `statusLine` / `outputLimitBytes` / 并发
 
@@ -38,7 +38,7 @@ await shell.dispose(); // teardown cancel 全量 → reported，清空
 | `reported` | 终态读、等到 settle 的 `wait`、`kill`、`dispose` teardown 置位；有 live waiter 时 settle **先**置位再 `onJobsChanged` |
 | `statusLine` | `[status: completed, wait: stdin_read]`（detail 进 trailer） |
 | `outputLimitBytes` | producer 可选正整数；`job_output` / Face notice 按 UTF-8 裁 |
-| `maxConcurrentJobs` | 默认 10；拒绝超额 `start`（文案对齐 DSH） |
+| `maxConcurrentJobs` | 默认 10；**按 owner 桶**拒绝超额 `start`（文案对齐 DSH） |
 
 ## Tools (`createBashTools`)
 

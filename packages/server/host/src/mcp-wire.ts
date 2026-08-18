@@ -1,8 +1,10 @@
 /**
  * Host MCP wiring: env `XRK_MCP_SERVERS` (+ optional `XRK_MCP_ALLOW=1`).
  * Registers each connected server as a synthetic `kind: tools` plugin.
+ * Face `mcp.servers` in `{workspace}/.xrk/host-settings.json` apply when env/config are empty.
  */
 
+import { readFileSync } from "node:fs";
 import {
   createMcpClient,
   mcpToolDefinition,
@@ -77,6 +79,49 @@ export function parseMcpServersEnv(
             ),
           }
         : {}),
+      ...(typeof o.cwd === "string" && o.cwd.trim()
+        ? { cwd: o.cwd.trim() }
+        : {}),
+    });
+  }
+  return out;
+}
+
+/**
+ * Face dump `{ mcp.servers }` → Host specs. Env maps in the file are ignored
+ * (secrets stay in process env / credentials). Missing or malformed → [].
+ */
+export function readMcpServersFromHostSettings(
+  file: string,
+): readonly McpServerSpec[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return [];
+  }
+  const servers = (parsed as { mcp?: { servers?: unknown } }).mcp?.servers;
+  if (!Array.isArray(servers)) return [];
+  const out: McpServerSpec[] = [];
+  for (const row of servers) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+    const o = row as Record<string, unknown>;
+    const serverName = String(o.serverName ?? "").trim();
+    if (!serverName) continue;
+    const url = typeof o.url === "string" ? o.url.trim() : "";
+    if (url) {
+      out.push({ serverName, url });
+      continue;
+    }
+    const command = typeof o.command === "string" ? o.command.trim() : "";
+    if (!command) continue;
+    out.push({
+      serverName,
+      command,
+      ...(Array.isArray(o.args) ? { args: o.args.map((a) => String(a)) } : {}),
       ...(typeof o.cwd === "string" && o.cwd.trim()
         ? { cwd: o.cwd.trim() }
         : {}),

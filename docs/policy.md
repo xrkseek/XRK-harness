@@ -99,7 +99,7 @@ MCP connect 默认 deny；Client **stdio + streamable-http 能跑**；Host 可�
 ## Not shipped
 
 - YAML / TOML rulesets  
-- MCP 自动重连 / Face MCP 设置 UI  
+- MCP 进程级自动重连 / 浏览器 MCP 设置壳硬刷  
 - Policy 热重载  
 - 审批超时自动 decide（仅 abort→cancel）
 

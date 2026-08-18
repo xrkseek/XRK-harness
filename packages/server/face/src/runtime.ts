@@ -45,6 +45,7 @@ import {
   FaceCredentialVault,
   FaceSettingsNamespaces,
   defaultUiSettings,
+  hydrateFaceHostSettings,
   type FaceHostPublicSettings,
   type FaceUiSettings,
 } from "./settings-credentials.js";
@@ -513,5 +514,6 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   };
   runtimeBox.current = runtime;
   goals.bind(runtime);
+  hydrateFaceHostSettings(runtime);
   return runtime;
 }
