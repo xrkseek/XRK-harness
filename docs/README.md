@@ -1,13 +1,24 @@
 # Documentation
 
-产品规格入口。实现以代码 + [status.md](./status.md) 为准。
+产品规格入口。实现以代码 + [status.md](./status.md) 为准。只描述**本仓已有**行为。
+
+## 分层
+
+| 层 | 用途 |
+| --- | --- |
+| [status.md](./status.md) | 能力三态（能跑 / 未稳 / 未做） |
+| 本目录其它 `.md` | 契约：HTTP · Face · session · 工具 · LLM |
+| [modules/](./modules/README.md) | 30 包索引 + 大包文件地图 |
+| [architecture.md](./architecture.md) | 包平面 · 仓库树 |
+| [learn.md](./learn.md) | 已落地要点（短） |
+| Cursor Canvas | 对照仓 / 体量 / 本机路径（**不入库**） |
 
 ## 从哪读起
 
 | 角色        | 顺序                                                                                                                                                                           |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 集成        | [status.md](./status.md) → [architecture.md](./architecture.md) → [packages/sdk/README](../packages/sdk/README.md) → [session.md](./session.md) · [http-api.md](./http-api.md) |
-| Host / CLI  | [host-preset.md](./host-preset.md) · [profiles.md](./profiles.md) · [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md)                                    |
+| Host / CLI  | [host-preset.md](./host-preset.md) · [profiles.md](./profiles.md) · [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) · 产品壳 `apps/web-static` |
 | 工具 / exec | [tool-pipeline.md](./tool-pipeline.md) · [seams.md](./seams.md)                                                                                                                |
 | 安全        | [security-checklist.md](./security-checklist.md) · [policy.md](./policy.md)                                                                                                    |
 | 贡献        | [../CONTRIBUTING.md](../CONTRIBUTING.md) · [testing.md](./testing.md)                                                                                                          |
@@ -28,7 +39,7 @@
 | [session-safety.md](./session-safety.md)         | mistake · loop                    |
 | [session-compaction.md](./session-compaction.md) | compaction · overflow             |
 | [http-api.md](./http-api.md)                     | HTTP / SSE / env                  |
-| [host-face.md](./host-face.md)                   | Host Face（RPC + 双 WS）          |
+| [host-face.md](./host-face.md)                   | Host Face（RPC + 双 WS；goals · export） |
 | [host-preset.md](./host-preset.md)               | Host vs preset                    |
 | [profiles.md](./profiles.md)                     | Preset 选型                       |
 | [plugin-loader.md](./plugin-loader.md)           | 插件 discover / load              |
@@ -55,6 +66,7 @@
 | [workspace-inject.md](./workspace-inject.md)   | `.xrk` 注入                         |
 | [slash-recipes.md](./slash-recipes.md)         | `/recipe-id`                        |
 | [policy.md](./policy.md)                       | tool / provider / mcp 门禁          |
+| [modules/mcp.md](./modules/mcp.md)             | MCP client 文件地图                 |
 | [compose.md](./compose.md)                     | `@xrkseek/compose` Scope / Ordering |
 
 ### Meta

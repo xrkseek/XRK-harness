@@ -2,10 +2,16 @@ import { loadDiscoveryHit } from "./load.js";
 import { scanPluginDir, type DiscoveryHit } from "./manifest.js";
 import type { RegisteredPlugin } from "./types.js";
 
-export type { RegisteredPlugin, PluginPromptSection } from "./types.js";
+export type {
+  RegisteredPlugin,
+  PluginPromptSection,
+  PluginCommand,
+  PluginCommandContext,
+  PluginCommandResult,
+} from "./types.js";
 export type { DiscoveryHit, PluginManifest } from "./manifest.js";
 export { scanPluginDir } from "./manifest.js";
-export { loadPluginModule, loadDiscoveryHit } from "./load.js";
+export { loadPluginModule, loadDiscoveryHit, stubFromManifest } from "./load.js";
 export {
   PLUGIN_KINDS,
   RESERVED_PLUGIN_KINDS,
@@ -28,6 +34,15 @@ export {
   type ApplyPromptPluginsResult,
   type SkippedPluginPrompt,
 } from "./prompt.js";
+export {
+  collectPluginCommands,
+  isCommandsPlugin,
+} from "./commands.js";
+export {
+  toPluginInventoryEntries,
+  type PluginFiberPhase,
+  type PluginInventoryEntry,
+} from "./inventory.js";
 
 export interface PluginLoader {
   register(plugin: RegisteredPlugin): void;
@@ -35,10 +50,10 @@ export interface PluginLoader {
   list(): readonly RegisteredPlugin[];
   /**
    * Scan `dir` for plugin manifests (`xrk.plugin.json` or
-   * `package.json#xrkseek.plugin`). Does not import modules.
+   * `package.json` plugin fields). Does not import modules.
    */
   discover(dir: string): Promise<readonly DiscoveryHit[]>;
-  /** Import one discovery hit and register it. */
+  /** Import one discovery hit and register it (Cordis stubs skip import). */
   load(hit: DiscoveryHit): Promise<RegisteredPlugin>;
   /**
    * Discover + load + register every plugin under `dir`.

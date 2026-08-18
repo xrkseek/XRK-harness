@@ -1,8 +1,7 @@
 /**
  * Per-session map of {@link createSessionDrainLatch}.
  * Host holds one hub; drain bodies promote pending admits one-per-`continueTurn`
- * (OpenCode coordinator semantics without Effect — docs/session-delivery.md §3,
- * docs/learn/opencode-session-runner.md).
+ * (OpenCode coordinator semantics without Effect — docs/session-delivery.md §3).
  */
 
 import {

@@ -4,6 +4,11 @@ import {
   type Recipe,
 } from "@xrkseek/workspace";
 import type { FaceRpcResult } from "./types.js";
+import type { FaceRuntime } from "./context.js";
+import {
+  collectFacePluginCommands,
+  type FacePluginCommand,
+} from "./plugin-inventory.js";
 
 export type SlashRecipesLoader = () => Promise<readonly Recipe[]> | readonly Recipe[];
 
@@ -11,9 +16,179 @@ export function defaultRecipesLoader(workspaceRoot: string): SlashRecipesLoader 
   return () => loadOfficeRecipes(`${workspaceRoot}/.xrk/recipes`);
 }
 
+/** DSH command name (lowercase, no slash). */
+const COMMAND_NAME = /^[a-z][a-z0-9_-]*$/u;
+
+export interface FaceCommandDescriptor {
+  readonly name: string;
+  readonly description: string;
+  readonly input?: { readonly hint: string };
+}
+
+export interface FaceCommandExecution {
+  readonly commandId: string;
+  readonly result: {
+    readonly kind: "success" | "error";
+    readonly text?: string;
+  };
+}
+
 /**
- * Face-level slash: expand recipe → command slot; never admit.
- * Unknown `/id` → honest error (no fake success).
+ * Parse `/name` + remainder without normalizing trailing input.
+ * Unknown / non-command lines → undefined（与 DSH `parseCommand` 同形）.
+ */
+export function parseFaceCommandLine(
+  line: string,
+): { readonly name: string; readonly rawInput: string } | undefined {
+  const match = /^\/([a-z][a-z0-9_-]*)(?=$|[\t\n\r ])/u.exec(line);
+  const name = match?.[1];
+  if (!name) return undefined;
+  return { name, rawInput: line.slice(match[0].length) };
+}
+
+export async function listFaceCommandDescriptors(
+  loadRecipes: SlashRecipesLoader | undefined,
+  plugins?: FaceRuntime["plugins"],
+): Promise<readonly FaceCommandDescriptor[]> {
+  const pluginCommands = collectFacePluginCommands(plugins);
+  const used = new Set(pluginCommands.map((c) => c.name));
+  const fromPlugins: FaceCommandDescriptor[] = pluginCommands
+    .filter((c) => COMMAND_NAME.test(c.name))
+    .map((c) => ({
+      name: c.name,
+      description: c.description,
+      ...(c.input ? { input: c.input } : {}),
+    }));
+
+  const recipes = loadRecipes ? await loadRecipes() : [];
+  const builtins: FaceCommandDescriptor[] = used.has("goal")
+    ? []
+    : [
+        {
+          name: "goal",
+          description: "Set or replace the session goal",
+          input: { hint: "objective" },
+        },
+      ];
+  used.add("goal");
+  const fromRecipes = recipes
+    .filter((r) => COMMAND_NAME.test(r.id) && !used.has(r.id))
+    .map((r) => {
+      const hint = r.parameters.map((p) => p.name).join(" ");
+      return {
+        name: r.id,
+        description: r.description ?? r.title,
+        ...(hint ? { input: { hint } } : {}),
+      };
+    });
+
+  return [...fromPlugins, ...builtins, ...fromRecipes].sort((a, b) =>
+    a.name < b.name ? -1 : 1,
+  );
+}
+
+/**
+ * Execute a slash line: plugin command (first) or workspace recipe → log
+ * `command/run`+`command/done`. Miss (syntax / unknown name) → `undefined`
+ *（不入账，与 DSH 一致）.
+ */
+export async function executeFaceCommand(
+  runtime: FaceRuntime,
+  sessionId: string,
+  line: string,
+): Promise<FaceCommandExecution | undefined> {
+  const parsed = parseFaceCommandLine(line);
+  if (!parsed) return undefined;
+
+  const pluginHit = collectFacePluginCommands(runtime.plugins).find(
+    (c) => c.name === parsed.name,
+  );
+  if (pluginHit) {
+    return settlePluginCommand(runtime, sessionId, parsed, pluginHit);
+  }
+
+  if (parsed.name === "goal") {
+    const created = runtime.goals.create(sessionId, parsed.rawInput);
+    if (!created.ok) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: created.error.message,
+      });
+    }
+    return appendCommandPair(runtime, sessionId, parsed, {
+      kind: "success",
+      text: `goal ${created.value.ref.id}`,
+    });
+  }
+
+  const recipes = runtime.loadSlashRecipes
+    ? await runtime.loadSlashRecipes()
+    : [];
+  const hit = tryApplySlashRecipe(`/${parsed.name}${parsed.rawInput}`, recipes);
+  if (!hit) return undefined;
+
+  return appendCommandPair(runtime, sessionId, parsed, {
+    kind: "success",
+    text: hit.userPrompt,
+  });
+}
+
+function mintCommandId(): string {
+  return `cmd_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function settlePluginCommand(
+  runtime: FaceRuntime,
+  sessionId: string,
+  parsed: { readonly name: string; readonly rawInput: string },
+  command: FacePluginCommand,
+): Promise<FaceCommandExecution> {
+  const commandId = mintCommandId();
+  let result: { kind: "success" | "error"; text?: string };
+  try {
+    result = await command.handler({
+      sessionId,
+      rawInput: parsed.rawInput,
+      commandId,
+    });
+  } catch (err) {
+    result = {
+      kind: "error",
+      text: err instanceof Error ? err.message : String(err),
+    };
+  }
+  return appendCommandPair(runtime, sessionId, parsed, result, commandId);
+}
+
+function appendCommandPair(
+  runtime: FaceRuntime,
+  sessionId: string,
+  parsed: { readonly name: string; readonly rawInput: string },
+  result: { kind: "success" | "error"; text?: string },
+  commandId = mintCommandId(),
+): FaceCommandExecution {
+  const ts = Date.now();
+  runtime.store.append(sessionId, {
+    type: "command/run",
+    ts,
+    commandId,
+    name: parsed.name,
+    source: { kind: "user" },
+    ...(parsed.rawInput ? { args: parsed.rawInput } : {}),
+  });
+  runtime.store.append(sessionId, {
+    type: "command/done",
+    ts: ts + 1,
+    commandId,
+    kind: result.kind,
+    ...(result.text !== undefined ? { text: result.text } : {}),
+  });
+  return { commandId, result };
+}
+
+/**
+ * Face-level slash on `session.prompt`: expand recipe → command slot; never admit.
+ * Unknown `/id` → honest error (no fake success). Console / 旧路径。
  */
 export async function tryFaceSlashCommand(
   text: string,

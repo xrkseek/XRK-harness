@@ -2,7 +2,7 @@
 
 `@xrkseek/llm-deepseek` — DeepSeek Chat Completions 预设（基于 `@xrkseek/llm-openai-compatible`）。
 
-默认：`https://api.deepseek.com` · Bearer · 模型 `deepseek-chat`。无独立 thinking / SSE 分叉（后续加深另开切片）。
+默认：`https://api.deepseek.com` · Bearer · 模型 `deepseek-chat`。SSE thinking 流走 openai-compatible 适配器（`reasoning_content` → `reasoning-delta`）。**不**声明视觉 modality（官方 Chat Completions serialize 拒图）。
 
 ```ts
 import { createDeepSeekAdapter } from "@xrkseek/llm-deepseek";

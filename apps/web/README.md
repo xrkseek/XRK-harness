@@ -1,13 +1,15 @@
 # @xrkseek/harness-web
 
-自研产品聊天壳 + Face 验证台。
+Face 验证台。**产品聊天 UI** 是捕获的 DSH Web：[`apps/web-static`](../web-static/)。
 
 | 路径 | 作用 |
 |------|------|
-| `/` | 自研聊天壳（侧栏会话 · 轨迹 · 输入；Face + `@xrkseek/web-runtime`） |
+| `/`（本包 dist） | 说明页（仅当 serve 未找到 web-static 时才落到这里） |
 | `/?console=1` | Face RPC / mux 验证台 |
 
-对照参考：本机 `vendor/ui-src`（gitignore）与仓内捕获 [apps/web-static](../web-static/)——只借交互/wire 逻辑，不搬 DSH 插件图。
+日常：`serve` 默认托管 `apps/web-static`。对照源本机 `vendor/ui-src`（gitignore）；重捕：`pnpm web:ui:build && pnpm web:ui:capture`。
+
+自研范围 = **Face Host 对接**（信封、审批 respond、Typert Remote、wire），不是重写 DSH UI。
 
 ## Dev
 
@@ -15,8 +17,6 @@
 pnpm --filter @xrkseek/harness-web build
 pnpm --filter @xrkseek/harness-web dev   # 代理到 :8787
 ```
-
-`xrk-harness serve` 默认优先托管本包 `dist/`，其次才是 `apps/web-static`。
 
 ## License
 

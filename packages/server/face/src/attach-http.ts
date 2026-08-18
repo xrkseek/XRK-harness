@@ -1,78 +1,41 @@
+/**
+ * Face HTTP unary + mux/host WebSocket 挂载。
+ */
+
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { createServer } from "node:http";
 import { listPendingAdmits } from "@xrkseek/core-session";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
-import { parseFaceRpcRequest, serverRequestFrame } from "./envelope.js";
+import { approvalRequestedFrame } from "./approvals.js";
 import { toQueueItems } from "./queue.js";
+import {
+  FACE_WS_PATHS,
+  faceMethodFromPath,
+  isFaceRespondPath,
+  isFaceWsPath,
+  parseFaceRpcRequest,
+  readHttpBody,
+  sendJson,
+  serverRequestFrame,
+  settleFaceRespond,
+} from "./wire/index.js";
+import {
+  buildSessionExportZip,
+  isSessionExportPath,
+  sessionExportFilename,
+} from "./session-export.js";
 
 export interface AttachFaceOptions {
   readonly apiKey: string;
   checkAuth(req: IncomingMessage): boolean;
 }
 
-/** Face mux / host WS pathnames. */
-export const FACE_WS_PATHS = [
-  "/api/face/events.mux",
-  "/api/face/events.host",
-  "/api/events.mux",
-  "/api/events.host",
-] as const;
-
-function readBody(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (c) => chunks.push(Buffer.from(c)));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
-  });
-}
-
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  if (res.headersSent) return;
-  const data = JSON.stringify(body);
-  res.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "content-length": Buffer.byteLength(data),
-  });
-  res.end(data);
-}
+export { FACE_WS_PATHS, faceMethodFromPath, isFaceWsPath };
 
 /**
- * Resolve RPC method from pathname.
- * - `/api/face/session.prompt` (U1 prefix)
- * - `/api/session.prompt` (DeepSeek apiproxy shape — method must contain `.`
- *   so REST `/api/sessions` / `/api/chat` are never claimed)
- */
-export function faceMethodFromPath(pathname: string): string | undefined {
-  if (pathname.startsWith("/api/face/")) {
-    if (
-      pathname === "/api/face/events.mux" ||
-      pathname === "/api/face/events.host"
-    ) {
-      return undefined;
-    }
-    const method = decodeURIComponent(pathname.slice("/api/face/".length));
-    if (!method || method.includes("/")) return undefined;
-    return method;
-  }
-
-  if (!pathname.startsWith("/api/")) return undefined;
-  const rest = decodeURIComponent(pathname.slice("/api/".length));
-  if (!rest || rest.includes("/")) return undefined;
-  if (rest === "events.mux" || rest === "events.host") return undefined;
-  // Protect REST: sessions, chat, health-adjacent — no dot in segment
-  if (!rest.includes(".")) return undefined;
-  return rest;
-}
-
-export function isFaceWsPath(pathname: string): boolean {
-  return (FACE_WS_PATHS as readonly string[]).includes(pathname);
-}
-
-/**
- * If path is a Face unary route, owns the response and returns true.
+ * 若路径是 Face unary 或 `/api/respond`，接管响应并返回 true。
  */
 export function tryHandleFaceHttp(
   req: IncomingMessage,
@@ -81,6 +44,13 @@ export function tryHandleFaceHttp(
   options: AttachFaceOptions,
 ): boolean {
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  if (isFaceRespondPath(url.pathname)) {
+    return handleFaceRespond(req, res, runtime, options);
+  }
+  if (isSessionExportPath(url.pathname)) {
+    return handleSessionExport(req, res, runtime, options, url);
+  }
+
   const method = faceMethodFromPath(url.pathname);
   if (method === undefined) return false;
 
@@ -95,7 +65,7 @@ export function tryHandleFaceHttp(
 
   void (async () => {
     try {
-      const raw = await readBody(req);
+      const raw = await readHttpBody(req);
       const parsed = parseFaceRpcRequest(JSON.parse(raw || "{}") as unknown);
       const response = await dispatchFaceMethod(
         runtime,
@@ -104,6 +74,96 @@ export function tryHandleFaceHttp(
         parsed.payload,
       );
       sendJson(res, 200, response);
+    } catch (err) {
+      sendJson(res, 400, {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  })();
+  return true;
+}
+
+function handleSessionExport(
+  req: IncomingMessage,
+  res: ServerResponse,
+  runtime: FaceRuntime,
+  options: AttachFaceOptions,
+  url: URL,
+): boolean {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    sendJson(res, 405, { error: "method not allowed" });
+    return true;
+  }
+  if (!options.checkAuth(req)) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return true;
+  }
+  const sessionId = url.searchParams.get("sessionId")?.trim() ?? "";
+  if (!sessionId) {
+    sendJson(res, 400, { error: "sessionId required" });
+    return true;
+  }
+  if (!runtime.store.has(sessionId)) {
+    sendJson(res, 404, { error: "session not found" });
+    return true;
+  }
+  const includeDescendants = url.searchParams.get("includeDescendants") !== "false";
+  const filename = sessionExportFilename(sessionId);
+  const headers = {
+    "content-type": "application/zip",
+    "content-disposition": `attachment; filename="${filename}"`,
+    "cache-control": "no-store",
+  };
+  if (req.method === "HEAD") {
+    res.writeHead(200, headers);
+    res.end();
+    return true;
+  }
+  void (async () => {
+    try {
+      const zip = await buildSessionExportZip(
+        runtime,
+        sessionId,
+        includeDescendants,
+      );
+      res.writeHead(200, {
+        ...headers,
+        "content-length": zip.length,
+      });
+      res.end(zip);
+    } catch (err) {
+      if (res.headersSent) {
+        res.destroy();
+        return;
+      }
+      sendJson(res, 500, {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  })();
+  return true;
+}
+
+function handleFaceRespond(
+  req: IncomingMessage,
+  res: ServerResponse,
+  runtime: FaceRuntime,
+  options: AttachFaceOptions,
+): boolean {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "method not allowed" });
+    return true;
+  }
+  if (!options.checkAuth(req)) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return true;
+  }
+
+  void (async () => {
+    try {
+      const raw = await readHttpBody(req);
+      const body = JSON.parse(raw || "{}") as unknown;
+      sendJson(res, 200, settleFaceRespond(runtime, body));
     } catch (err) {
       sendJson(res, 400, {
         error: err instanceof Error ? err.message : String(err),
@@ -169,14 +229,23 @@ export function attachFaceUpgrades(
           ),
         );
       }
-      const pendingApprovals = runtime.approvals.listPending(sessionId);
-      if (pendingApprovals.length > 0) {
+      for (const item of runtime.approvals.listPending(sessionId)) {
+        ws.send(
+          JSON.stringify(
+            serverRequestFrame(item.rpcId, approvalRequestedFrame(item)),
+          ),
+        );
+      }
+      const snap = runtime.projections.snapshot(sessionId);
+      for (const [key, value] of Object.entries(snap.values)) {
         ws.send(
           JSON.stringify(
             serverRequestFrame(newRpcId(), {
-              type: "session/approvals",
+              type: "session/projection",
               sessionId,
-              items: [...pendingApprovals],
+              key,
+              value,
+              seq: snap.asOfSeq < 0 ? 0 : snap.asOfSeq,
             }),
           ),
         );
@@ -186,7 +255,10 @@ export function attachFaceUpgrades(
       if (ws.readyState === ws.OPEN) {
         ws.send(
           JSON.stringify(
-            serverRequestFrame(rpcId, frame as { type: string } & Record<string, unknown>),
+            serverRequestFrame(
+              rpcId,
+              frame as { type: string } & Record<string, unknown>,
+            ),
           ),
         );
       }
@@ -199,7 +271,10 @@ export function attachFaceUpgrades(
       if (ws.readyState === ws.OPEN) {
         ws.send(
           JSON.stringify(
-            serverRequestFrame(rpcId, frame as { type: string } & Record<string, unknown>),
+            serverRequestFrame(
+              rpcId,
+              frame as { type: string } & Record<string, unknown>,
+            ),
           ),
         );
       }
@@ -216,7 +291,7 @@ export function attachFaceUpgrades(
   };
 }
 
-/** Dedicated Face-only server (tests / optional sidecar). */
+/** 仅 Face 的测试/边车服务器。 */
 export function createFaceOnlyServer(
   runtime: FaceRuntime,
   options: AttachFaceOptions & { host?: string; port?: number },

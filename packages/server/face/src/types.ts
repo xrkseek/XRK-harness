@@ -5,19 +5,40 @@ export interface FaceRpcRequest<P = unknown> {
   readonly payload: P;
 }
 
+/** Handler-side fail. Wire always gets `details` via `errResponse`. */
+export type FaceRpcFail = {
+  readonly code: string;
+  readonly message: string;
+  readonly details?: Record<string, unknown>;
+};
+
+/** DSH Web Zod 要求：线上错误必须有 `details`。 */
+export type FaceRpcError = {
+  readonly code: string;
+  readonly message: string;
+  readonly details: Record<string, unknown>;
+};
+
 export type FaceRpcResult<T> =
   | { readonly ok: true; readonly value: T }
-  | {
-      readonly ok: false;
-      readonly error: { readonly code: string; readonly message: string };
-    };
+  | { readonly ok: false; readonly error: FaceRpcFail };
 
-/** Unary response — includes DeepSeek `type: server-response` discriminator. */
+/** Unary response — DeepSeek `type: server-response`. */
 export interface FaceRpcResponse<T = unknown> {
   readonly type: "server-response";
   readonly rpcId: RpcId;
-  readonly result: FaceRpcResult<T>;
+  readonly result:
+    | { readonly ok: true; readonly value: T }
+    | { readonly ok: false; readonly error: FaceRpcError };
 }
+
+/** DSH `POST /api/respond` 回执。 */
+export type FaceRpcReceipt =
+  | { readonly accepted: true }
+  | {
+      readonly accepted: false;
+      readonly reason: "not-pending" | "bad-response";
+    };
 
 export type MuxFrame =
   | {
@@ -45,10 +66,20 @@ export type MuxFrame =
       readonly sessionId: string;
       readonly items: readonly unknown[];
     }
+  /** DSH Web 可应答审批（稳定 rpcId 在 server-request 信封上）。 */
   | {
-      readonly type: "session/approvals";
+      readonly type: "approval/requested";
       readonly sessionId: string;
-      readonly items: readonly unknown[];
+      readonly approvalId: string;
+      readonly toolName: string;
+      readonly callId?: string;
+      readonly reason?: string;
+    }
+  | {
+      readonly type: "approval/resolved";
+      readonly sessionId: string;
+      readonly approvalId: string;
+      readonly outcome: "allowed-once" | "rejected" | "cancelled" | "unavailable";
     };
 
 export type HostFrame =

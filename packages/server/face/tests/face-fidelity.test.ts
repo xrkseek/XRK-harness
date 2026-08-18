@@ -154,6 +154,33 @@ describe("Face adapt / slash / queue / presets", () => {
       expect(v).not.toHaveProperty("items");
     }
 
+    const read = await dispatchFaceMethod(runtime, "agentPreset.read", "r", {
+      agentPreset: "minimal",
+    });
+    expect(read.result.ok).toBe(true);
+    if (read.result.ok) {
+      const row = read.result.value as {
+        agentPreset: string;
+        trust: string;
+        content: string;
+        name: string;
+      };
+      expect(row).toMatchObject({
+        agentPreset: "minimal",
+        trust: "system",
+        name: "Minimal",
+      });
+      expect(row.content).toContain("id: minimal");
+    }
+
+    const unknown = await dispatchFaceMethod(runtime, "agentPreset.read", "r2", {
+      agentPreset: "nope",
+    });
+    expect(unknown.result.ok).toBe(false);
+    if (!unknown.result.ok) {
+      expect(unknown.result.error.code).toBe("agent-preset-not-found");
+    }
+
     const sel = await dispatchFaceMethod(runtime, "agentPreset.select", "s", {
       sessionId,
       agentPreset: "harness",

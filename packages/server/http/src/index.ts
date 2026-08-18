@@ -13,7 +13,7 @@ import {
   SessionSafetyLimitError,
   type SessionStore,
 } from "@xrkseek/core-session";
-import { tryServeWebStatic } from "./static.js";
+import { tryServeWebStatic, type WebStaticOptions } from "./static.js";
 
 const API_ONLY_LANDING = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -121,10 +121,7 @@ export interface HttpServerOptions {
    * Optional SPA dist root. Public GET/HEAD (no API key).
    * `transformIndex` typically injects `__DSH_BOOT__`.
    */
-  readonly webStatic?: {
-    readonly root: string;
-    readonly transformIndex?: (html: string) => string;
-  };
+  readonly webStatic?: WebStaticOptions;
 }
 
 export interface HarnessHttpServer {
@@ -241,12 +238,13 @@ export function createHttpServer(
     }
 
     const needsAuth = path.startsWith("/api/");
-    if (needsAuth && !checkAuth(req)) {
-      sendJson(res, 401, { error: "unauthorized" }, cors);
+    // Face claims its own paths (including loopback product-shell auth).
+    if (options.tryHandleExtraApi?.(req, res)) {
       return;
     }
 
-    if (options.tryHandleExtraApi?.(req, res)) {
+    if (needsAuth && !checkAuth(req)) {
+      sendJson(res, 401, { error: "unauthorized" }, cors);
       return;
     }
 
@@ -587,6 +585,7 @@ export {
   XRK_APP_SHELL_BOOT,
   loadBootManifestFromWebDist,
   resolveWebBootManifest,
+  mergeWebBootManifests,
   bootInjectScript,
   injectBootIntoHtml,
   type WebBootEntry,

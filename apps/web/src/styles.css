@@ -52,183 +52,37 @@ textarea:disabled {
   cursor: not-allowed;
 }
 
-/* —— Product chat shell —— */
+/* Landing (apps/web is Face console; product UI is web-static) */
 
-.xrk-chat {
-  display: grid;
-  grid-template-columns: minmax(12rem, 16rem) 1fr;
-  height: 100%;
-  min-height: 100vh;
-  background:
-    radial-gradient(1200px 600px at 10% -10%, #fff8e0 0%, transparent 55%),
-    linear-gradient(180deg, var(--bg), #eae6db);
-}
-
-.xrk-chat-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem 0.85rem;
-  background: color-mix(in srgb, var(--sidebar) 88%, #fff);
-  border-right: 1px solid var(--line);
-}
-
-.xrk-chat-sidebar-top {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.xrk-chat-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-}
-
-.xrk-chat-brand img {
-  border-radius: 6px;
-}
-
-.xrk-chat-new,
-.xrk-chat-preset,
-.xrk-chat-header button,
-.xrk-chat-composer button {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  padding: 0.45rem 0.7rem;
-}
-
-.xrk-chat-new {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-color: color-mix(in srgb, var(--accent) 60%, #000);
-  font-weight: 600;
-}
-
-.xrk-chat-status {
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.xrk-chat-status[data-state="connected"] {
-  color: #2f6b3a;
-}
-
-.xrk-chat-status[data-state="failed"],
-.xrk-chat-status[data-state="reconnecting"] {
-  color: #8a4b1f;
-}
-
-.xrk-chat-sessions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  overflow: auto;
-  flex: 1;
-  min-height: 0;
-}
-
-.xrk-chat-session {
-  text-align: left;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  padding: 0.5rem 0.6rem;
-  color: var(--fg);
-}
-
-.xrk-chat-session:hover {
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
-}
-
-.xrk-chat-session.is-active {
-  border-color: var(--line);
-  background: var(--surface);
-}
-
-.xrk-chat-session.is-running::after {
-  content: " ·";
-  color: #2f6b3a;
-}
-
-.xrk-chat-main {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  min-width: 0;
-  min-height: 0;
-}
-
-.xrk-chat-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.9rem 1.25rem;
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
-}
-
-.xrk-chat-header h1 {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.xrk-chat-trajectory {
-  overflow: auto;
-  padding: 1.25rem 1.5rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-.xrk-chat-empty {
-  margin: 2rem auto;
-  color: var(--muted);
+.xrk-web-landing {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 4rem 1.5rem;
   text-align: center;
 }
 
-.xrk-chat-queue {
-  margin: 0 0 0.5rem;
-  font-size: 0.8rem;
-  color: var(--muted);
+.xrk-web-landing .mark {
+  display: block;
+  margin: 0 auto 1.25rem;
 }
 
-.xrk-chat-composer {
-  padding: 0.85rem 1.25rem 1.1rem;
-  border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface) 85%, transparent);
-}
-
-.xrk-chat-composer-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.6rem;
-  align-items: end;
-}
-
-.xrk-chat-composer textarea {
-  width: 100%;
-  resize: vertical;
-  min-height: 2.8rem;
-  max-height: 10rem;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface);
-}
-
-.xrk-chat-composer button[type="submit"] {
-  background: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 60%, #000);
+.xrk-web-landing h1 {
+  font-size: 1.5rem;
   font-weight: 600;
-  min-height: 2.8rem;
+  margin: 0 0 0.75rem;
+}
+
+.xrk-web-landing p {
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+.xrk-web-landing a {
+  color: var(--fg);
+}
+
+.xrk-web-landing code {
+  font-size: 0.9em;
 }
 
 /* Trajectory nodes (shell + console) */
@@ -354,15 +208,3 @@ textarea:disabled {
   font-size: 0.78rem;
 }
 
-@media (max-width: 720px) {
-  .xrk-chat {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-  }
-
-  .xrk-chat-sidebar {
-    border-right: none;
-    border-bottom: 1px solid var(--line);
-    max-height: 40vh;
-  }
-}

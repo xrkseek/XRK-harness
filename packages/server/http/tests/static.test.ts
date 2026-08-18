@@ -7,6 +7,7 @@ import {
   XRK_APP_SHELL_BOOT,
   createHttpServer,
   injectBootIntoHtml,
+  mergeWebBootManifests,
   resolveStaticPath,
 } from "../src/index.js";
 import { createMemorySessionStore, newSession } from "@xrkseek/core-session";
@@ -19,13 +20,35 @@ describe("boot inject", () => {
     const out = injectBootIntoHtml(html, XRK_APP_SHELL_BOOT);
     expect(out).toContain("__DSH_BOOT__");
     expect(out).toContain("__XRK_BOOT__");
-    expect(out).toContain("xrk-app-shell");
+    expect(out).toContain("xrk-face-console");
     expect(out.indexOf("__DSH_BOOT__")).toBeLessThan(out.indexOf("</head>"));
   });
 
   it("console boot still injectable", () => {
     const out = injectBootIntoHtml("<head></head>", FACE_CONSOLE_BOOT);
     expect(out).toContain("xrk-face-console");
+  });
+
+  it("mergeWebBootManifests lets extra ids replace", () => {
+    const merged = mergeWebBootManifests(
+      {
+        rev: "base",
+        entries: [
+          { id: "keep", url: "/a.js", rev: "1", inject: [] },
+          { id: "swap", url: "/old.js", rev: "1", inject: [] },
+        ],
+      },
+      {
+        rev: "extra",
+        entries: [
+          { id: "swap", url: "/new.js", rev: "2", inject: [] },
+          { id: "added", url: "/b.js", rev: "2", inject: [] },
+        ],
+      },
+    );
+    expect(merged.rev).toBe("base+extra");
+    expect(merged.entries.map((e) => e.id)).toEqual(["keep", "swap", "added"]);
+    expect(merged.entries.find((e) => e.id === "swap")?.url).toBe("/new.js");
   });
 });
 
@@ -84,7 +107,7 @@ describe("http webStatic", () => {
     expect(index.status).toBe(200);
     const text = await index.text();
     expect(text).toContain("__DSH_BOOT__");
-    expect(text).toContain("xrk-app-shell");
+    expect(text).toContain("xrk-face-console");
 
     const asset = await fetch(`${base}/assets/app.js`);
     expect(asset.status).toBe(200);
@@ -97,6 +120,55 @@ describe("http webStatic", () => {
       body: JSON.stringify({ rpcId: "1", payload: {} }),
     });
     expect(unauth.status).toBe(401);
+
+    await http.close();
+  });
+
+  it("serves extraRoots overlay and 404s missing /plugins/", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-web-"));
+    const overlay = await mkdtemp(path.join(tmpdir(), "xrk-overlay-"));
+    await writeFile(
+      path.join(dir, "index.html"),
+      "<!doctype html><html><head></head><body>app</body></html>",
+      "utf8",
+    );
+    const pluginDir = path.join(overlay, "plugins", "@acme", "extra");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(path.join(pluginDir, "client.js"), "export default 1", "utf8");
+
+    const store = createMemorySessionStore();
+    newSession(store);
+    const http = createHttpServer({
+      host: "127.0.0.1",
+      port: 0,
+      apiKey: "secret",
+      corsOrigin: "*",
+      rateLimitPerMinute: 1000,
+      store,
+      ensureSession: (id) => id ?? store.list()[0]!,
+      resolveAgent: async (sessionId) =>
+        createMinimalComposition({
+          workspaceRoot: process.cwd(),
+          sessionStore: store,
+          sessionId,
+          assemble: true,
+          llm: createReplayAdapter([{ content: "x" }]),
+        }).createAgent(),
+      webStatic: {
+        root: dir,
+        extraRoots: [overlay],
+      },
+    });
+
+    const { port } = await http.listen();
+    const base = `http://127.0.0.1:${port}`;
+
+    const extra = await fetch(`${base}/plugins/@acme/extra/client.js`);
+    expect(extra.status).toBe(200);
+    expect(await extra.text()).toBe("export default 1");
+
+    const missing = await fetch(`${base}/plugins/@acme/missing/client.js`);
+    expect(missing.status).toBe(404);
 
     await http.close();
   });

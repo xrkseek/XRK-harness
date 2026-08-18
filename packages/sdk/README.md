@@ -29,15 +29,15 @@ HTTP：`createHostManager` + `loadHostConfig` + preset factory — 见 CLI `serv
 |----|------------|
 | Agent | `createAgent` · `AgentHandle` · `SessionBusyError` · `SessionSafetyLimitError` |
 | Loop | `runTurn` · `settleToolBatch` · `runCompaction` |
-| Session | `createMemorySessionStore` · `newSession` · `admitPrompt` · `promoteAdmitsForTurn` · `deriveMessages` · latches · safety · dangling |
+| Session | `createMemorySessionStore` · `createJsonlSessionStore` · `has` · `newSession` · `admitPrompt` · `promoteAdmitsForTurn` · `deriveMessages` · latches · safety · dangling |
 | Protocol | `parseSessionEvent` · `sessionEventJsonSchema` · `parsePromptDelivery` |
 | Tools | `createToolRegistry` · `createToolPipeline` · `createStdTools` · `materializeTools` · `boundToolOutput` · `runTool` |
 | Prompt | `assembleThreeLayers` · `createSystemPromptAssembler` · `createOutboundPipeline` |
-| LLM | `LlmAdapter` · `createReplayAdapter` · `createOpenAiCompatibleAdapter` · `createDeepSeekAdapter` · `ContextOverflowError` |
-| Plugins | `createPluginLoader` · `wireCompositionTools` / `Prompts` · `PLUGIN_KINDS` |
+| LLM | `LlmAdapter` · `stream()` · `createReplayAdapter` · `createOpenAiCompatibleAdapter` · `createDeepSeekAdapter` · `collectLlmStream` |
+| Plugins | `createPluginLoader` · `wireCompositionTools` / `Prompts` · `collectPluginCommands` · `PLUGIN_KINDS` |
 | Workspace | `createWorkspaceInjector` · `resolveWorkspaceInject` · `createWorkspaceToolOutputPersist` · recipes |
 | Policy | `createPolicyEngine` · ruleset file load · `createPolicyToolPre` / `Guard` · `denyToolNames` |
-| MCP | `createMcpClient` · `registerMcpTools` · `publicToolName`（M0；默认 deny） |
+| MCP | `createMcpClient` · `registerMcpTools` · `publicToolName`（默认 deny；可 watch list_changed） |
 | Presets | `createMinimalComposition` · `createHarnessComposition` · `createServerComposition` / `createServerAgentFactory` |
 | Server | `loadHostConfig` · `createHostManager` · `createHttpServer` |
 | Code | `createWorkerCodeRuntime` · `createRunCodeTool` |
@@ -46,7 +46,7 @@ HTTP：`createHostManager` + `loadHostConfig` + preset factory — 见 CLI `serv
 
 ## 非目标
 
-- 不把 MCP M0 宣传成完整 Host 接线；DeepSeek 包为 openai-compatible 预设（无独立 body 分叉）  
+- 不把 MCP 宣传成 Face 设置 UI / 进程 supervisor；DeepSeek 包为 openai-compatible 预设（无独立 body 分叉）  
 - 不替代 CLI；CLI 在 `@xrkseek/harness-cli`  
 
 ## 文档

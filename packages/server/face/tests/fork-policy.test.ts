@@ -84,7 +84,7 @@ describe("Face session.fork", () => {
     });
     expect(clash.result.ok).toBe(false);
     if (!clash.result.ok) {
-      expect(clash.result.error.code).toBe("session-exists");
+      expect(clash.result.error.code).toBe("session-conflict");
     }
   });
 });
@@ -119,7 +119,7 @@ describe("Face policy provider.use", () => {
     });
     expect(denied.result.ok).toBe(false);
     if (!denied.result.ok) {
-      expect(denied.result.error.code).toBe("policy-denied");
+      expect(denied.result.error.code).toBe("model-unavailable");
     }
   });
 });

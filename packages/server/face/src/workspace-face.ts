@@ -386,3 +386,126 @@ export async function workspaceArchiveSessionDsh(
   });
   return { ok: true, value: { archivedSessionIds } };
 }
+
+export async function workspaceDeleteDsh(
+  runtime: FaceRuntime,
+  payload: unknown,
+): Promise<FaceRpcResult<unknown>> {
+  const p =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const workspaceId =
+    typeof p.workspaceId === "string" ? p.workspaceId.trim() : "";
+  if (!workspaceId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "workspaceId required" },
+    };
+  }
+  const result = runtime.workspaces.delete(workspaceId);
+  if (!result.ok) {
+    const code =
+      result.reason.startsWith("unknown")
+        ? "workspace-not-found"
+        : "workspace-move-invalid";
+    return { ok: false, error: { code, message: result.reason } };
+  }
+  const def = runtime.workspaces.get(runtime.workspaces.defaultId());
+  if (def) {
+    runtime.bus.publishHost({
+      type: "host/workspace-changed",
+      workspace: runtime.workspaces.list(runtime.store.list()).items.find(
+        (w) => w.workspaceId === runtime.workspaces.defaultId(),
+      )!,
+    });
+  }
+  return {
+    ok: true,
+    value: {
+      workspaceId,
+      movedSessionIds: result.movedSessionIds,
+      ...runtime.workspaces.list(runtime.store.list()),
+    },
+  };
+}
+
+export async function workspaceInsertBeforeDsh(
+  runtime: FaceRuntime,
+  payload: unknown,
+): Promise<FaceRpcResult<unknown>> {
+  const p =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const workspaceId =
+    typeof p.workspaceId === "string" ? p.workspaceId.trim() : "";
+  const beforeId =
+    typeof p.beforeId === "string"
+      ? p.beforeId.trim()
+      : typeof p.beforeWorkspaceId === "string"
+        ? p.beforeWorkspaceId.trim()
+        : "";
+  if (!workspaceId || !beforeId) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: "workspaceId and beforeId required",
+      },
+    };
+  }
+  const items = runtime.workspaces.insertBefore(workspaceId, beforeId);
+  if (!items) {
+    return {
+      ok: false,
+      error: {
+        code: "workspace-not-found",
+        message: "unknown workspaceId or beforeId",
+      },
+    };
+  }
+  const listed = runtime.workspaces.list(runtime.store.list());
+  return { ok: true, value: listed };
+}
+
+export async function workspaceInsertSessionBeforeDsh(
+  runtime: FaceRuntime,
+  payload: unknown,
+): Promise<FaceRpcResult<unknown>> {
+  const p =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const sessionId =
+    typeof p.sessionId === "string" ? p.sessionId.trim() : "";
+  const beforeSessionId =
+    typeof p.beforeSessionId === "string" ? p.beforeSessionId.trim() : "";
+  if (!sessionId || !beforeSessionId) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: "sessionId and beforeSessionId required",
+      },
+    };
+  }
+  const workspace = runtime.workspaces.insertSessionBefore(
+    sessionId,
+    beforeSessionId,
+  );
+  if (!workspace) {
+    return {
+      ok: false,
+      error: {
+        code: "workspace-not-found",
+        message: "session not in a live workspace",
+      },
+    };
+  }
+  runtime.bus.publishHost({
+    type: "host/workspace-changed",
+    workspace,
+  });
+  return { ok: true, value: { workspace } };
+}

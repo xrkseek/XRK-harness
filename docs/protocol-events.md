@@ -9,8 +9,8 @@ Append-only session facts (`@xrkseek/protocol`). Model-visible history is recons
 | `turn/start` · `turn/end` | `turnId` | Turn bracket |
 | `step/start` · `step/end` | `turnId`, `stepId` | Provider step |
 | `user/message` | `turnId`, `content` | `content`: `string` **或** `ContentBlock[]`（text / image+`ImageAttachmentRef`）；可选 `rpcId` |
-| `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta |
-| `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls` |
+| `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta；可选 `kind`：`text`\|`reasoning`；可选 `index`（reasoning=0、text=1 当两者都出现） |
+| `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls`；可选 `reasoning`（非 deriveMessages 可见） |
 | `tool/call` | `turnId`, `stepId`, `call` | Before pipeline body |
 | `tool/result` | `turnId`, `stepId`, `result` | Settled result |
 | `prompt/admitted` | `admitId`, `content` | MessageContent（string \| blocks）；可选 `delivery`: steer\|queue |
@@ -21,8 +21,8 @@ Append-only session facts (`@xrkseek/protocol`). Model-visible history is recons
 | `session/title` | `title`, `source` (`fallback`\|`user`) | **Log-only** — not in `deriveMessages`; Face projections |
 | `approval/asked` | `approvalId`, `toolCallId`, `toolName`, `reason` | **Log-only** — tool policy `ask`；可选 `argsSummary` |
 | `approval/decided` | `approvalId`, `decision` (`allow`\|`deny`), `source` | `user` · `cancel` · `timeout` |
-| `approval/asked` | `approvalId`, `toolCallId`, `toolName`, `reason` | **Log-only** — policy/pipeline ask; optional `argsSummary` |
-| `approval/decided` | `approvalId`, `decision` (`allow`\|`deny`), `source` | **Log-only** — `user` · `cancel` · `timeout` |
+| `command/run` | `commandId`, `name`, `source` (`user`) | **Log-only** — Face `commands/execute`；可选 `args` |
+| `command/done` | `commandId`, `kind` (`success`\|`error`) | **Log-only** — 可选 `text` · `sourceEventSeq` |
 
 ## Runtime validation
 

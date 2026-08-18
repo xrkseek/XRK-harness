@@ -71,6 +71,20 @@ describe("createProviderRegistry", () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 
+  it("openai adapter declares image; deepseek stays text-only", () => {
+    const reg = createProviderRegistry();
+    const openai = reg.createAdapter(
+      reg.resolve({ provider: "openai", model: "m" }),
+      {},
+    );
+    const deepseek = reg.createAdapter(
+      reg.resolve({ provider: "deepseek" }),
+      {},
+    );
+    expect(openai.inputModalities).toEqual(["text", "image"]);
+    expect(deepseek.inputModalities).toEqual(["text"]);
+  });
+
   it("listRoutable marks active when key present", () => {
     const reg = createProviderRegistry();
     const rows = reg.listRoutable({

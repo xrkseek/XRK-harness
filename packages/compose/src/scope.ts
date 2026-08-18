@@ -5,6 +5,7 @@ import {
   ScopeState,
   type Disposer,
   type EffectMeta,
+  type InjectInterceptor,
   type RealmRef,
   type Scope,
   type ServiceKey,
@@ -76,6 +77,8 @@ export class ScopeImpl implements Scope {
   readonly effects: EffectEntry[] = [];
   /** Keys this scope currently provides. */
   readonly providedKeys = new Set<string>();
+  /** C2 inject interceptors (registration order; last runs outermost). */
+  private readonly injectInterceptors: InjectInterceptor[] = [];
 
   state: ScopeState;
   failReason: unknown = undefined;
@@ -119,7 +122,7 @@ export class ScopeImpl implements Scope {
         `inject() requires Active, Loading, or Unloading (scope "${this.id}" is ${this.state})`,
       );
     }
-    const value = this.tryInject<T>(key, opts);
+    const value = this.resolveInjected<T>(key, opts);
     if (value === undefined && !this.hasBinding(key, opts)) {
       throw new ComposeInjectError(
         `service not found: ${keyLabel(key)} (scope "${this.id}")`,
@@ -129,17 +132,53 @@ export class ScopeImpl implements Scope {
   }
 
   tryInject<T>(key: ServiceKey, opts?: { label?: string }): T | undefined {
-    const rk = this.realmOf(key, opts);
-    const binding = this.lookupBinding(rk);
-    if (!binding) return undefined;
-    if (
-      this.state === ScopeState.Active ||
-      this.state === ScopeState.Loading ||
-      this.state === ScopeState.Unloading
-    ) {
-      binding.consumers.add(this);
-    }
-    return binding.value as T;
+    return this.resolveInjected<T>(key, opts);
+  }
+
+  interceptInject(interceptor: InjectInterceptor): Disposer {
+    this.assertNotTerminal();
+    this.injectInterceptors.push(interceptor);
+    let once = false;
+    return () => {
+      if (once) return;
+      once = true;
+      const idx = this.injectInterceptors.indexOf(interceptor);
+      if (idx >= 0) this.injectInterceptors.splice(idx, 1);
+    };
+  }
+
+  private resolveInjected<T>(
+    key: ServiceKey,
+    opts?: { label?: string },
+  ): T | undefined {
+    const label = opts?.label ?? this.resolveDefaultLabel(key);
+    const ctx =
+      label === undefined ? { key } : { key, label };
+
+    const lookup = (): T | undefined => {
+      const rk = this.realmOf(key, opts);
+      const binding = this.lookupBinding(rk);
+      if (!binding) return undefined;
+      if (
+        this.state === ScopeState.Active ||
+        this.state === ScopeState.Loading ||
+        this.state === ScopeState.Unloading
+      ) {
+        binding.consumers.add(this);
+      }
+      return binding.value as T;
+    };
+
+    if (this.injectInterceptors.length === 0) return lookup();
+
+    let i = this.injectInterceptors.length;
+    const run = (): T => {
+      if (i === 0) return lookup() as T;
+      i -= 1;
+      const interceptor = this.injectInterceptors[i]!;
+      return interceptor(ctx, run);
+    };
+    return run();
   }
 
   provide<T>(

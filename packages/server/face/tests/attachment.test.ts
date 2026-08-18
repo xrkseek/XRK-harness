@@ -73,7 +73,7 @@ describe("Face session.attachment / image prompt", () => {
       ],
     });
     expect(res.result.ok).toBe(false);
-    if (!res.result.ok) expect(res.result.error.code).toBe("unsupported-modality");
+    if (!res.result.ok) expect(res.result.error.code).toBe("attachment-error");
   });
 
   it("persists image refs then session.attachment returns base64", async () => {
@@ -132,6 +132,6 @@ describe("Face session.attachment / image prompt", () => {
       attachmentId: "sha256:deadbeef",
     });
     expect(att.result.ok).toBe(false);
-    if (!att.result.ok) expect(att.result.error.code).toBe("not-found");
+    if (!att.result.ok) expect(att.result.error.code).toBe("session-not-found");
   });
 });

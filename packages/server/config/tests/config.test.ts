@@ -29,10 +29,10 @@ describe("loadHostConfig", () => {
     expect(cfg.runtime.webDist).toBe("apps/web/dist");
   });
 
-  it("reads XRK_POLICY_FILE", () => {
+  it("reads XRK_SESSIONS_DIR", () => {
     const cfg = loadHostConfig({
-      env: { XRK_POLICY_FILE: "  ./policy.json  " },
+      env: { XRK_SESSIONS_DIR: "  ./.xrk/sessions  " },
     });
-    expect(cfg.runtime.policyFile).toBe("./policy.json");
+    expect(cfg.runtime.sessionsDir).toBe("./.xrk/sessions");
   });
 });

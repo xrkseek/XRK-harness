@@ -23,6 +23,8 @@ import {
   isContextOverflowError,
   UnsupportedContentError,
   type LlmAdapter,
+  type LlmChatRequest,
+  type LlmChatResponse,
 } from "@xrkseek/llm";
 import type {
   ChatMessage,
@@ -30,7 +32,7 @@ import type {
   SafetyNoticePayload,
   SessionEvent,
 } from "@xrkseek/protocol";
-import { contentHasImage } from "@xrkseek/protocol";
+import { contentHasImage, flattenText } from "@xrkseek/protocol";
 import { resolveCompactionOptions, runCompaction } from "./compaction.js";
 import {
   MAX_STEPS_PROMPT,
@@ -73,9 +75,15 @@ export interface RunTurnInput {
   readonly userText: string;
   /**
    * Session log content for `user/message` (string or ContentBlock[]).
-   * Defaults to `userText`. Images are persisted as refs; text-only LLMs hard-fail.
+   * Defaults to `userText`. Images are persisted as refs; adapter without
+   * `image` in `inputModalities` hard-fails.
    */
   readonly userContent?: MessageContent;
+  /**
+   * Resolve attachment bytes when user content includes image refs.
+   * Required by vision adapters; unused on text-only routes.
+   */
+  readonly resolveImage?: LlmChatRequest["resolveImage"];
   readonly system?: string;
   readonly assemble?: AssembleOptions;
   readonly store: SessionStore;
@@ -116,6 +124,62 @@ function append(
   event: SessionEvent,
 ): void {
   store.append(sessionId, event);
+}
+
+function llmAllowsImage(llm: LlmAdapter): boolean {
+  return (llm.inputModalities ?? ["text"]).includes("image");
+}
+
+function toLlmRequest(
+  input: RunTurnInput,
+  req: { messages: ChatMessage[]; tools: AssembledRequest["tools"] },
+): LlmChatRequest {
+  return {
+    messages: req.messages,
+    ...(req.tools.length ? { tools: req.tools } : {}),
+    ...(input.signal ? { signal: input.signal } : {}),
+    ...(input.resolveImage ? { resolveImage: input.resolveImage } : {}),
+  };
+}
+
+async function invokeLlm(
+  input: RunTurnInput,
+  req: { messages: ChatMessage[]; tools: AssembledRequest["tools"] },
+  onChunk: (chunk: {
+    kind: "text" | "reasoning";
+    index: number;
+    text: string;
+  }) => void,
+): Promise<LlmChatResponse> {
+  const request = toLlmRequest(input, req);
+  if (!input.llm.stream) {
+    return input.llm.chat(request);
+  }
+  let content = "";
+  let reasoning = "";
+  let toolCalls: LlmChatResponse["toolCalls"];
+  for await (const ev of input.llm.stream(request)) {
+    if (ev.type === "reasoning-delta") {
+      if (ev.text) {
+        reasoning += ev.text;
+        onChunk({ kind: "reasoning", index: ev.index, text: ev.text });
+      }
+    } else if (ev.type === "text-delta") {
+      if (ev.text) {
+        content += ev.text;
+        onChunk({ kind: "text", index: ev.index, text: ev.text });
+      }
+    } else if (ev.type === "done") {
+      content = ev.content || content;
+      if (ev.reasoning) reasoning = ev.reasoning;
+      if (ev.toolCalls) toolCalls = ev.toolCalls;
+    }
+  }
+  return {
+    content,
+    ...(reasoning.trim() ? { reasoning } : {}),
+    ...(toolCalls ? { toolCalls } : {}),
+  };
 }
 
 function buildModelRequest(input: {
@@ -159,9 +223,15 @@ function buildModelRequest(input: {
   let skeletonText = "";
   if (input.firstStep && history.length > 0) {
     const last = history[history.length - 1];
-    if (last?.role === "user" && last.content === input.userText) {
-      history = history.slice(0, -1);
-      skeletonText = input.userText;
+    if (last?.role === "user" && !contentHasImage(last.content)) {
+      const lastText =
+        typeof last.content === "string"
+          ? last.content
+          : flattenText(last.content);
+      if (lastText === input.userText) {
+        history = history.slice(0, -1);
+        skeletonText = input.userText;
+      }
     }
   }
 
@@ -242,7 +312,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     }
   }
 
-  if (contentHasImage(userContent)) {
+  if (contentHasImage(userContent) && !llmAllowsImage(input.llm)) {
     throw new UnsupportedContentError(
       "image content is not supported on text-only LLM routes",
     );
@@ -335,12 +405,23 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     assertModelVisible(snapEvents, deriveMessages(snapEvents));
 
     let response;
-    try {
-      response = await input.llm.chat({
-        messages: req.messages,
-        ...(req.tools.length ? { tools: req.tools } : {}),
-        ...(input.signal ? { signal: input.signal } : {}),
+    const onChunk = (chunk: {
+      kind: "text" | "reasoning";
+      index: number;
+      text: string;
+    }) => {
+      append(input.store, input.sessionId, {
+        type: "assistant/chunk",
+        ts: now(),
+        turnId,
+        stepId,
+        text: chunk.text,
+        kind: chunk.kind,
+        index: chunk.index,
       });
+    };
+    try {
+      response = await invokeLlm(input, req, onChunk);
     } catch (err) {
       if (
         compaction &&
@@ -361,11 +442,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         if (!did.compacted) throw err;
         req = buildReq();
         assertToolCallsSettled(input.store.get(input.sessionId).events);
-        response = await input.llm.chat({
-          messages: req.messages,
-          ...(req.tools.length ? { tools: req.tools } : {}),
-          ...(input.signal ? { signal: input.signal } : {}),
-        });
+        response = await invokeLlm(input, req, onChunk);
       } else {
         throw err;
       }
@@ -379,6 +456,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       stepId,
       content: response.content,
       ...(response.toolCalls ? { toolCalls: response.toolCalls } : {}),
+      ...(response.reasoning ? { reasoning: response.reasoning } : {}),
     });
 
     const calls = response.toolCalls ?? [];

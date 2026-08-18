@@ -1,8 +1,12 @@
-import type { FaceRpcRequest, FaceRpcResponse, RpcId } from "./types.js";
+/**
+ * Face unary / WS 信封（DSH 四象限 RPC）。
+ */
+
+import { mapFaceRpcError } from "./rpc-error.js";
+import type { FaceRpcRequest, FaceRpcResponse, RpcId } from "../types.js";
 
 /**
- * Parse Face unary body. Accepts DeepSeek wire (`type: client-request`) and
- * the thinner XRK shape (`rpcId` + `payload` only).
+ * 解析 unary body。接受 DSH `{ type: client-request }` 与瘦形 `{ rpcId, payload }`。
  */
 export function parseFaceRpcRequest(body: unknown): FaceRpcRequest {
   if (!body || typeof body !== "object") {
@@ -21,7 +25,7 @@ export function parseFaceRpcRequest(body: unknown): FaceRpcRequest {
   };
 }
 
-/** DeepSeek-compatible unary success envelope. */
+/** DSH unary 成功信封。 */
 export function okResponse<T>(rpcId: RpcId, value: T): FaceRpcResponse<T> {
   return {
     type: "server-response",
@@ -30,20 +34,22 @@ export function okResponse<T>(rpcId: RpcId, value: T): FaceRpcResponse<T> {
   };
 }
 
-/** DeepSeek-compatible unary error envelope. */
+/** DSH unary 失败信封；必含 `details`。 */
 export function errResponse(
   rpcId: RpcId,
   code: string,
   message: string,
+  details?: unknown,
 ): FaceRpcResponse<never> {
+  const error = mapFaceRpcError(code, message, details);
   return {
     type: "server-response",
     rpcId,
-    result: { ok: false, error: { code, message } },
+    result: { ok: false, error },
   };
 }
 
-/** DeepSeek WS downlink frame (`server-request` + method = payload.type). */
+/** DSH WS 下行：`server-request`，method = payload.type。 */
 export function serverRequestFrame(
   rpcId: RpcId,
   payload: { readonly type: string } & Record<string, unknown>,

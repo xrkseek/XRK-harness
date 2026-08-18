@@ -26,6 +26,20 @@ describe("compaction helpers", () => {
     expect(selected!.head.length).toBeGreaterThan(0);
   });
 
+  it("serializes user content blocks as text", () => {
+    const selected = selectHeadRecent(
+      [
+        {
+          role: "user",
+          content: [{ type: "text", text: "hello-block" }],
+        },
+      ],
+      8_000,
+    );
+    expect(selected).toBeDefined();
+    expect(selected!.recent).toContain("hello-block");
+  });
+
   it("buildCompactionPrompt includes template", () => {
     const p = buildCompactionPrompt({ head: "history" });
     expect(p).toContain("## Objective");

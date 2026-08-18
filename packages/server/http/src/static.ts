@@ -20,6 +20,8 @@ const MIME: Record<string, string> = {
 export interface WebStaticOptions {
   /** Absolute or cwd-relative dist root (e.g. apps/web/dist). */
   readonly root: string;
+  /** Extra dist roots tried when the primary file is missing (plugin overlay). */
+  readonly extraRoots?: readonly string[];
   /** Transform index.html (boot inject). */
   readonly transformIndex?: (html: string) => string;
 }
@@ -90,6 +92,30 @@ export async function tryServeWebStatic(
   }
 
   if (!st?.isFile()) {
+    for (const extra of options.extraRoots ?? []) {
+      const extraAbs = path.resolve(extra);
+      if (!existsSync(extraAbs)) continue;
+      const extraPath = resolveStaticPath(extraAbs, url.pathname);
+      if (!extraPath) continue;
+      try {
+        const extraSt = statSync(extraPath);
+        if (extraSt.isFile()) {
+          filePath = extraPath;
+          st = extraSt;
+          break;
+        }
+      } catch {
+        /* try next overlay */
+      }
+    }
+  }
+
+  if (!st?.isFile()) {
+    if (url.pathname.startsWith("/plugins/")) {
+      res.writeHead(404, extraHeaders);
+      res.end("not found");
+      return true;
+    }
     // SPA fallback: non-file GETs → index.html
     const indexPath = path.join(rootAbs, "index.html");
     if (!existsSync(indexPath)) return false;

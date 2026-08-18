@@ -24,6 +24,10 @@ import {
 } from "./projections/index.js";
 import { FaceInboxWireMaps, toMuxSessionEvent } from "./adapt/index.js";
 import { toQueueItems } from "./queue.js";
+import type {
+  FaceProcessPlugin,
+  FaceWebPlugin,
+} from "./plugin-inventory.js";
 import {
   defaultRecipesLoader,
   type SlashRecipesLoader,
@@ -35,8 +39,11 @@ import {
   type FaceHostPublicSettings,
   type FaceUiSettings,
 } from "./settings-credentials.js";
-import { FaceApprovalBroker } from "./approvals.js";
+import { FaceApprovalBroker, approvalRequestedFrame, approvalResolvedFrame } from "./approvals.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
+import { FaceSubagentRegistry } from "./subagent-registry.js";
+import { FaceMessageFeedbackStore } from "./message-feedback.js";
+import { FaceGoalStore } from "./goal-store.js";
 import { FaceWireIdMaps } from "./adapt/wire-ids.js";
 export interface CreateFaceRuntimeOptions {
   readonly store: SessionStore;
@@ -55,18 +62,32 @@ export interface CreateFaceRuntimeOptions {
   readonly projections?: FaceProjectionRegistry;
   readonly skipDefaultProjections?: boolean;
   readonly loadSlashRecipes?: SlashRecipesLoader;
+  /** Process plugins for `pluginInventory/list` + `commands/*`. */
+  readonly plugins?: readonly FaceProcessPlugin[];
+  /** Product-shell boot entries listed in inventory. */
+  readonly webPlugins?: readonly FaceWebPlugin[];
   readonly invalidateAgent?: (sessionId: string) => void | Promise<void>;
   /** Public host runtime snapshot for settings.get (no secrets). */
   readonly hostPublic?: FaceHostPublicSettings;
   /** Initial Host API key from env (vault may override). */
   readonly bootstrapApiKey?: string;
   readonly uiSettings?: FaceUiSettings;
-  /** Optional policy (XRK_POLICY_FILE / host) for provider.use. */
   readonly policy?: PolicyEngine;
+  /**
+   * Host-resolved settings document (e.g. `XRK_POLICY_FILE`).
+   * `settings.openDocument` never takes a browser path.
+   */
+  readonly settingsDocumentPath?: string;
+  /** Inject native opener (tests). Default `openNativePath`. */
+  openNativePath?(target: string): Promise<void>;
   /** Durable image store (default none → image RPCs unavailable). */
   readonly attachments?: AttachmentStore;
   /** Host input modalities; default text-only. */
   readonly inputModalities?: readonly ("text" | "image")[];
+  /** Optional JSON sidecar for parent→child links (JSONL session dir). */
+  readonly subagentPersistPath?: string;
+  /** Optional JSON sidecar for Face goals (JSONL session dir). */
+  readonly goalPersistPath?: string;
 }
 
 /**
@@ -96,6 +117,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const sessionAgentPresets = new Map<string, string>();
   const sessionCwds = new Map<string, string>();
   const workspaces = new FaceWorkspaceRegistry(options.workspaceRoot);
+  const subagents = new FaceSubagentRegistry(options.subagentPersistPath);
+  const messageFeedback = new FaceMessageFeedbackStore();
+  const goals = new FaceGoalStore(options.goalPersistPath);
   const wireIds = new FaceWireIdMaps();
   const inboxWire = new FaceInboxWireMaps(admitRpcMap);
 
@@ -155,6 +179,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     ) {
       runtimeBox.current?.publishQueue(id);
     }
+    if (frozen.type === "turn/end") {
+      runtimeBox.current?.goals.onTurnEnd(id);
+    }
     return frozen;
   };
 
@@ -180,8 +207,13 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const loadSlashRecipes =
     options.loadSlashRecipes ?? defaultRecipesLoader(options.workspaceRoot);
 
-  const approvals = new FaceApprovalBroker(store, (sessionId) => {
-    runtimeBox.current?.publishApprovals(sessionId);
+  const approvals = new FaceApprovalBroker(store, {
+    onRequested(item) {
+      bus.publishMux(approvalRequestedFrame(item), item.rpcId);
+    },
+    onResolved(sessionId, approvalId, outcome) {
+      bus.publishMux(approvalResolvedFrame(sessionId, approvalId, outcome));
+    },
   });
 
   const runtime: FaceRuntime = {
@@ -194,12 +226,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       : {}),
     ensureSession(id) {
       if (id) {
-        try {
-          store.get(id);
-          return id;
-        } catch {
-          return newSession(store, id).id;
-        }
+        if (store.has(id)) return id;
+        return newSession(store, id).id;
       }
       return newSession(store).id;
     },
@@ -226,6 +254,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       ? { bootstrapApiKey: options.bootstrapApiKey }
       : {}),
     ...(options.policy !== undefined ? { policy: options.policy } : {}),
+    ...(options.settingsDocumentPath !== undefined
+      ? { settingsDocumentPath: options.settingsDocumentPath }
+      : {}),
+    ...(options.openNativePath !== undefined
+      ? { openNativePath: options.openNativePath }
+      : {}),
     bus,
     seq,
     projections,
@@ -238,9 +272,16 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     sessionAgentPresets,
     sessionCwds,
     workspaces,
+    subagents,
+    messageFeedback,
+    goals,
     wireIds,
     inboxWire,
     loadSlashRecipes,
+    ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
+    ...(options.webPlugins !== undefined
+      ? { webPlugins: options.webPlugins }
+      : {}),
     publishQueue(sessionId) {
       const pending = listPendingAdmits(
         store.get(sessionId).events,
@@ -253,11 +294,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       });
     },
     publishApprovals(sessionId) {
-      bus.publishMux({
-        type: "session/approvals",
-        sessionId,
-        items: [...approvals.listPending(sessionId)],
-      });
+      for (const item of approvals.listPending(sessionId)) {
+        bus.publishMux(approvalRequestedFrame(item), item.rpcId);
+      }
     },
     watchSession(_sessionId) {
       /* append fan-out is global */
@@ -278,5 +317,6 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       : {}),
   };
   runtimeBox.current = runtime;
+  goals.bind(runtime);
   return runtime;
 }

@@ -24,6 +24,12 @@ describe("faceMethodFromPath", () => {
     expect(faceMethodFromPath("/api/sessions")).toBeUndefined();
     expect(faceMethodFromPath("/api/chat")).toBeUndefined();
     expect(faceMethodFromPath("/api/sessions/x/admit")).toBeUndefined();
+    expect(faceMethodFromPath("/api/respond")).toBeUndefined();
+    expect(faceMethodFromPath("/api/commands/execute")).toBe("commands/execute");
+    expect(faceMethodFromPath("/api/goals/create")).toBe("goals/create");
+    expect(faceMethodFromPath("/api/messageFeedback/put")).toBe(
+      "messageFeedback/put",
+    );
   });
 
   it("recognizes dual WS paths", () => {
@@ -142,6 +148,21 @@ describe("native DeepSeek paths over HTTP/WS", () => {
     expect(frames.length).toBeGreaterThan(0);
     const payload = (frames[0] as { payload: { type: string } }).payload;
     expect(payload.type).toBe("host/session-added");
+
+    const badRespond = await fetch(`${base}/api/respond`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer k",
+      },
+      body: JSON.stringify({ type: "client-request", rpcId: "nope" }),
+    });
+    expect(badRespond.status).toBe(200);
+    expect(await badRespond.json()).toEqual({
+      accepted: false,
+      reason: "bad-response",
+    });
+
     await face.close();
   });
 });

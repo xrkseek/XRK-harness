@@ -21,7 +21,7 @@ Details: [workspace-inject.md](./workspace-inject.md).
 ```bash
 pnpm check
 node apps/cli/dist/bin.js serve --preset minimal
-# optional plugins (tools auto-wire into registry):
+# optional plugins (tools / prompt / commands auto-wire):
 # XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js serve
 ```
 

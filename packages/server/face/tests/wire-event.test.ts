@@ -68,6 +68,43 @@ describe("Face DSH wire-event adapt", () => {
     });
   });
 
+  it("assistant/chunk kind=reasoning maps to reasoning-delta index 0", () => {
+    const wire = toDshWireSessionEvent(
+      {
+        type: "assistant/chunk",
+        ts: 11,
+        turnId: "t1",
+        stepId: "s1",
+        text: "think",
+        kind: "reasoning",
+        index: 0,
+      },
+      4,
+    );
+    expect(wire.data).toEqual({
+      turn: expect.any(Number),
+      step: expect.any(Number),
+      chunk: { type: "reasoning-delta", index: 0, text: "think" },
+    });
+  });
+
+  it("assistant/message prepends reasoning block when present", () => {
+    const wire = toDshWireSessionEvent(
+      {
+        type: "assistant/message",
+        ts: 12,
+        turnId: "t1",
+        stepId: "s1",
+        content: "done",
+        reasoning: "plan",
+      },
+      5,
+    );
+    const data = wire.data as { message: { content: { type: string; text?: string }[] } };
+    expect(data.message.content[0]).toEqual({ type: "reasoning", text: "plan" });
+    expect(data.message.content[1]).toEqual({ type: "text", text: "done" });
+  });
+
   it("assistant/message content includes text + tool-call blocks", () => {
     const wire = toDshWireSessionEvent(
       {

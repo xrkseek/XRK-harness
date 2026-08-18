@@ -1,6 +1,6 @@
 /**
  * Consecutive-failure tracker across turns (pure class).
- * @see docs/learn/cline-mistake-loop-safety.md
+ * @see docs/session-safety.md
  */
 
 export type MistakeReason =

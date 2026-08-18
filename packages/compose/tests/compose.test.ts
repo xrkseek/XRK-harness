@@ -4,6 +4,7 @@ import {
   ComposeInjectError,
   ComposeStateError,
   createRootScope,
+  openSubagentRealm,
   ScopeState,
 } from "../src/index.js";
 
@@ -221,6 +222,43 @@ describe("whenReady", () => {
       expect(fired).toBe(true);
     });
     await root.dispose();
+  });
+});
+
+describe("C2 interceptInject", () => {
+  it("wraps inject LIFO and disposer removes wrapper", async () => {
+    const root = createRootScope();
+    root.provide("svc", 1);
+    const order: string[] = [];
+    const stopOuter = root.interceptInject((ctx, next) => {
+      order.push(`outer:${String(ctx.key)}`);
+      return (next() as number) + 10;
+    });
+    root.interceptInject((_ctx, next) => {
+      order.push("inner");
+      return (next() as number) * 2;
+    });
+    expect(root.inject<number>("svc")).toBe(22);
+    expect(order).toEqual(["inner", "outer:svc"]);
+    stopOuter();
+    order.length = 0;
+    expect(root.inject<number>("svc")).toBe(2);
+    expect(order).toEqual(["inner"]);
+    await root.dispose();
+  });
+});
+
+describe("C2 openSubagentRealm", () => {
+  it("opens a child scope id under parent", async () => {
+    const root = createRootScope();
+    root.provide("host", { ok: true });
+    const realm = openSubagentRealm(root, { sessionId: "s1" });
+    expect(realm.id).toBe("subagent:s1");
+    expect(realm.parent).toBe(root);
+    await realm.activate();
+    expect(realm.inject("host")).toEqual({ ok: true });
+    await root.dispose();
+    expect(realm.state).toBe(ScopeState.Disposed);
   });
 });
 

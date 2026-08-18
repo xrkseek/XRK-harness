@@ -38,6 +38,39 @@ describe("createHostAgentCache", () => {
     await cache.dispose();
   });
 
+  it("invalidateAll drops every cached agent", async () => {
+    const cache = createHostAgentCache([]);
+    const a = fakeAgent();
+    const b = fakeAgent();
+    await cache.resolve("s1", async () => a);
+    await cache.resolve("s2", async () => b);
+    const { invalidateAll } = cache;
+    await invalidateAll();
+    expect(a.aborted).toBe(true);
+    expect(b.aborted).toBe(true);
+    const create = vi.fn(async () => fakeAgent());
+    await cache.resolve("s1", create);
+    expect(create).toHaveBeenCalledTimes(1);
+    await cache.dispose();
+  });
+
+  it("opens a nested subagent realm; invalidate parent aborts the child", async () => {
+    const cache = createHostAgentCache([]);
+    const parent = fakeAgent();
+    const child = fakeAgent();
+    await cache.resolve("p", async () => parent);
+    await cache.resolve("c", async () => child, { parentSessionId: "p" });
+
+    await cache.invalidate("p");
+    expect(parent.aborted).toBe(true);
+    expect(child.aborted).toBe(true);
+
+    const create = vi.fn(async () => fakeAgent());
+    await cache.resolve("c", create, { parentSessionId: "p" });
+    expect(create).toHaveBeenCalledTimes(1);
+    await cache.dispose();
+  });
+
   it("dispose aborts agents before withdrawing host.plugins", async () => {
     const cache = createHostAgentCache([]);
     const agent = fakeAgent();

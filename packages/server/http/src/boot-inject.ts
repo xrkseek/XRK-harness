@@ -19,35 +19,7 @@ export interface WebBootManifest {
   readonly entries: readonly WebBootEntry[];
 }
 
-/** Fallback when no captured DSH boot.json — Face console / legacy tests only. */
-export const XRK_APP_SHELL_BOOT: WebBootManifest = {
-  rev: "xrk-app-shell",
-  entries: [
-    {
-      id: "@xrkseek/connection",
-      url: "/local/connection",
-      rev: "local",
-      inject: [],
-      immediately: true,
-    },
-    {
-      id: "@xrkseek/face-client",
-      url: "/local/face-client",
-      rev: "local",
-      inject: [],
-      immediately: true,
-    },
-    {
-      id: "@xrkseek/layout-slots",
-      url: "/local/layout-slots",
-      rev: "local",
-      inject: [],
-      immediately: true,
-    },
-  ],
-};
-
-/** Opt-in Face console verifier graph. */
+/** Fallback when no captured DSH boot.json — Face console roster. */
 export const FACE_CONSOLE_BOOT: WebBootManifest = {
   rev: "xrk-face-console",
   entries: [
@@ -60,6 +32,9 @@ export const FACE_CONSOLE_BOOT: WebBootManifest = {
     },
   ],
 };
+
+/** @deprecated use FACE_CONSOLE_BOOT */
+export const XRK_APP_SHELL_BOOT = FACE_CONSOLE_BOOT;
 
 /**
  * Load captured boot graph from `boot.json` next to a web dist root.
@@ -86,7 +61,26 @@ export function resolveWebBootManifest(webDistRoot?: string): WebBootManifest {
     const captured = loadBootManifestFromWebDist(webDistRoot);
     if (captured) return captured;
   }
-  return XRK_APP_SHELL_BOOT;
+  return FACE_CONSOLE_BOOT;
+}
+
+/**
+ * Merge extra boot entries onto a base graph. Extra `id` replaces base.
+ * Used for `{pluginsDir}/web/boot.json` overlay.
+ */
+export function mergeWebBootManifests(
+  base: WebBootManifest,
+  extra?: WebBootManifest,
+): WebBootManifest {
+  if (!extra) return base;
+  const byId = new Map(base.entries.map((e) => [e.id, e]));
+  for (const entry of extra.entries) {
+    byId.set(entry.id, entry);
+  }
+  return {
+    rev: extra.rev ? `${base.rev}+${extra.rev}` : base.rev,
+    entries: [...byId.values()],
+  };
 }
 
 export function bootInjectScript(manifest: WebBootManifest): string {

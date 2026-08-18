@@ -1,7 +1,7 @@
 /**
  * Context compaction helpers — window swap, never delete the log.
  * LLM call lives in agent-loop (`runCompaction`); this module stays I/O-light.
- * @see docs/learn/opencode-projector-derive.md · OpenCode SessionCompaction
+ * @see docs/session-compaction.md
  */
 
 import type {
@@ -23,12 +23,17 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+function messagePlainText(m: ChatMessage): string {
+  if (m.role === "user") return flattenText(m.content);
+  return m.content ?? "";
+}
+
 export function estimateMessagesTokens(
   messages: readonly ChatMessage[],
 ): number {
   let n = 0;
   for (const m of messages) {
-    n += estimateTokens(String(m.content ?? ""));
+    n += estimateTokens(messagePlainText(m));
     if (m.role === "assistant" && m.toolCalls) {
       for (const c of m.toolCalls) {
         n += estimateTokens(c.name);
@@ -62,7 +67,7 @@ export const COMPACTION_SUMMARY_TEMPLATE = `Output exactly this Markdown structu
 - [path: why it matters, or "(none)"]`;
 
 function serializeMessage(m: ChatMessage): string {
-  if (m.role === "user") return `[User]: ${m.content}`;
+  if (m.role === "user") return `[User]: ${flattenText(m.content)}`;
   if (m.role === "assistant") {
     const parts = [`[Assistant]: ${m.content}`];
     if (m.toolCalls?.length) {
@@ -160,7 +165,7 @@ function foldChat(events: readonly SessionEvent[]): ChatMessage[] {
   for (const ev of events) {
     switch (ev.type) {
       case "user/message":
-        messages.push({ role: "user", content: flattenText(ev.content) });
+        messages.push({ role: "user", content: ev.content });
         break;
       case "safety/notice":
         messages.push({ role: "user", content: ev.content });

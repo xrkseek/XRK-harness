@@ -1,5 +1,5 @@
 /**
- * @xrkseek/mcp — MCP client M0 (stdio → ToolRegistry).
+ * @xrkseek/mcp — MCP client (stdio + streamable-http → ToolRegistry).
  * Default policy: mcp.connect deny. See docs/policy.md.
  */
 
@@ -8,7 +8,9 @@ export {
 } from "./client.js";
 export {
   registerMcpTools,
+  mcpToolDefinition,
   type AppliedMcpTool,
+  type RegisterMcpToolsOptions,
   type RegisterMcpToolsResult,
   type SkippedMcpTool,
 } from "./register.js";
@@ -21,6 +23,9 @@ export {
 export type {
   McpCallResult,
   McpClient,
+  McpClientOptions,
+  McpHttpOptions,
+  McpHttpReconnectionOptions,
   McpStdioOptions,
   McpToolInfo,
 } from "./types.js";

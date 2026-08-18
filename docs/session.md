@@ -16,3 +16,5 @@
 | [policy.md](./policy.md) | tool/provider/mcp 门禁 |
 
 包：`@xrkseek/protocol` · `@xrkseek/core-session` · `@xrkseek/core-agent`。
+
+JSONL 仓：`createJsonlSessionStore` hydrate 丢掉末行不完整 JSON 并回写；`SessionStore.has` 不抛。不是 FTS。

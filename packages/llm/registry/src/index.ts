@@ -17,3 +17,9 @@ export {
   type ProviderRegistry,
 } from "./registry.js";
 export { resolveLlmFromEnv } from "./from-env.js";
+export {
+  discoverOpenAiChatModels,
+  ModelDiscoveryError,
+  type DiscoverModelsRequest,
+  type DiscoveredLlmModel,
+} from "./discover.js";

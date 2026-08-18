@@ -1,7 +1,7 @@
 /**
  * Session execution latches (Promise-based).
  * Semantics from OpenCode SessionRunCoordinator / Cline running gate —
- * see docs/learn/opencode-session-runner.md and ADR-0003 / ADR-0004.
+ * see docs/session-latch.md and ADR-0003 / ADR-0004.
  * No Effect.
  */
 

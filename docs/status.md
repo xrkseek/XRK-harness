@@ -1,36 +1,36 @@
 # Status（能力矩阵）
 
-三态：**能跑 / 未稳 / 未做**。与代码对齐。
+三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 2026-08-18。
 
 ## 能跑
 
-| 域                                     | 包 / 入口                                                                | 规格                                                                       |
-| -------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| Kernel / Compose C0·C1                 | `@xrkseek/kernel` · `@xrkseek/compose`                                   | [architecture](./architecture.md) · [ADR-0005](./adr/0005-compose-leaf.md) |
-| Session / Agent / Loop / Tools         | `core-*`                                                                 | [session.md](./session.md) · [tool-pipeline.md](./tool-pipeline.md)        |
-| Exec / Workspace / Policy              | `exec-*` · `workspace` · `policy`                                        | [seams.md](./seams.md) · [policy.md](./policy.md)                          |
-| HTTP + Host + Face 主路径              | `server-*`                                                               | [http-api.md](./http-api.md) · [host-face.md](./host-face.md)              |
-| LLM replay / OpenAI 兼容 / Registry R0 | `llm-*`                                                                  | [llm-provider-registry.md](./llm-provider-registry.md)                     |
-| Presets / SDK                          | `presets/*` · `@xrkseek/harness`                                         | [profiles.md](./profiles.md)                                               |
-| MCP M0                                 | `@xrkseek/mcp` + Host `XRK_MCP_*`（默认 deny）                           | [policy.md](./policy.md)                                                   |
-| Attachment                             | `@xrkseek/attachment` + Face `session.attachment`（Host 默认 text-only） | [host-face.md](./host-face.md)                                             |
+| 域 | 包 / 入口 | 规格 |
+| --- | --- | --- |
+| Kernel / Compose C0·C1·C2 | `@xrkseek/kernel` · `@xrkseek/compose`；Host 子会话 `openSubagentRealm` | [architecture](./architecture.md) · [compose](./compose.md) · [ADR-0005](./adr/0005-compose-leaf.md) |
+| Session / Agent / Loop / Tools | `core-*`（`createJsonlSessionStore` + `XRK_SESSIONS_DIR`） | [session.md](./session.md) · [tool-pipeline.md](./tool-pipeline.md) |
+| Exec / Workspace / Policy | `exec-*` · `workspace` · `policy` | [seams.md](./seams.md) · [policy.md](./policy.md) |
+| HTTP + Host + Face 主路径 | `server-*`（66 unary，3 NI；`goals/*` + `goals.json`；`GET/HEAD /api/session.export`；openDocument · feedback） | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
+| LLM replay / OpenAI 兼容 / Registry R0 | `llm-*`（SSE `reasoning-delta`/`text-delta`；openai-chat 非 DeepSeek 品牌可走图；`llm.discoverModels` → GET `/models`） | [llm-provider-registry.md](./llm-provider-registry.md) · [llm-openai-compatible.md](./llm-openai-compatible.md) |
+| Presets / SDK | `presets/*` · `@xrkseek/harness` | [profiles.md](./profiles.md) |
+| MCP | `@xrkseek/mcp` stdio + streamable-http；Host `XRK_MCP_*`（默认 deny）；HTTP 可传 SDK `reconnectionOptions`（SSE 恢复）；`tools/list_changed` 热同步 | [policy.md](./policy.md) · [modules/mcp.md](./modules/mcp.md) |
+| Attachment / 视觉 | `@xrkseek/attachment` + Face `session.attachment`；Host Face `text+image`；适配器无 `image` 仍拒 | [host-face.md](./host-face.md) |
+| 进程插件 | `tools` · `prompt` · `commands` 已接线 | [plugin-loader.md](./plugin-loader.md) |
 
 ## 未稳
 
-| 域                   | 说明                                                                          |
-| -------------------- | ----------------------------------------------------------------------------- |
-| Host Face ↔ 产品 Web | 侧栏 / settings / 队列 / search / skill.list / openPath 已接；浏览器 E2E 未勾 |
-| 产品 Web             | 静态壳可挂；流式 / 工具卡硬刷未验收                                           |
-| 进程插件             | `tools` + `prompt` 已接线；`channel` / `policy` / `llm` 未自动接线            |
+| 域 | 说明 |
+| --- | --- |
+| Host Face ↔ 产品 Web | 侧栏 / settings / 队列 / search / skill.list / openPath / attachment 已接；浏览器硬刷 E2E 未勾 |
+| 产品 Web | 静态壳可挂；流式 / 工具卡硬刷未验收 |
+| 保留插件 kind | `channel` / `policy` / `llm` 可发现、未自动接线；Cordis 宿主包只登记 stub |
 
 ## 未做
 
-| 域                                  | 说明                                                                                                        |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Compose C2 · Registry R1+ · Face U3 | 未开工                                                                                                      |
-| Face NI                             | `goal.*` · agentPreset 创作面 · `llm.discoverModels` · `settings.openDocument` · `workspace.delete/insert*` |
-| 视觉模型路由                        | 附件仓已有；无声明 `image` 的 LLM 适配路径                                                                  |
-| MCP 进阶                            | HTTP transport · 重连 · Face MCP 设置 UI                                                                    |
+| 域 | 说明 |
+| --- | --- |
+| Registry R1+ | 官方协议包（Anthropic / Gemini / Responses） |
+| Face U3 NI | agentPreset 创作面（copy/remove/openDocument；`authorable: false`） |
+| MCP 产品面 | Face MCP 设置 UI · 进程级 supervisor（`tools/list_changed` 与 HTTP SSE 恢复已接） |
 
 ## 依赖纪律
 
@@ -40,4 +40,6 @@ presets / sdk / server → core* | llm | mcp | attachment | exec* | workspace | 
 core* / 能力叶 → kernel | protocol | compose
 ```
 
-[AGENTS.md](../AGENTS.md) · [learn.md](./learn.md) · [modules/](./modules/README.md)
+外壳（`apps/web-static`）可复用 DSH 捕获；内核不嵌 Cordis。见 [AGENTS.md](../AGENTS.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)。
+
+[learn.md](./learn.md) · [modules/](./modules/README.md)

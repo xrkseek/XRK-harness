@@ -25,6 +25,7 @@ TypeScript Agent Harness + Server Kit。宿主 **仅 TypeScript（Node ≥26）*
 - 密钥不入库
 - 文档只描述**本仓已有**行为；未实现的不要写成能力或路线清单
 - 本机临时路径 / 对照笔记 → Canvas，不进 `docs/` / README
+- **外壳可复用、内核不可让**：聊天 UI / 客户端插件等吃人力的面，用已捕获的 DSH Web（`apps/web-static`），不自研平行壳；session 事件真源 · TS 宿主 · 工具瀑布 · compose/presets 是本仓本质，Face 只对接 wire，不把 Cordis 嵌成 Host 内核
 
 ## 完成定义（切片）
 

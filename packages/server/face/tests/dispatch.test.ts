@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createMemorySessionStore,
   createSessionDrainHub,
@@ -68,7 +68,7 @@ describe("face dispatch", () => {
     const fork = await dispatchFaceMethod(runtime, "session.fork", "r2", {});
     expect(fork.result.ok).toBe(false);
     if (!fork.result.ok) {
-      expect(fork.result.error.code).toBe("invalid-payload");
+      expect(fork.result.error.code).toBe("bad-request");
     }
   });
 
@@ -249,6 +249,108 @@ describe("face dispatch", () => {
     if (providers.result.ok) {
       const list = (providers.result.value as { providers: { provider: string }[] }).providers;
       expect(list.some((p) => p.provider === "openrouter")).toBe(true);
+    }
+  });
+
+  it("subagent.list parentAvailable honesty", async () => {
+    const { runtime } = await harness();
+    const missing = await dispatchFaceMethod(runtime, "subagent.list", "sa0", {
+      parentSessionId: "no-such",
+    });
+    expect(missing.result.ok).toBe(true);
+    if (missing.result.ok) {
+      expect(missing.result.value).toEqual({
+        entries: [],
+        parentAvailable: false,
+      });
+    }
+
+    const created = await dispatchFaceMethod(runtime, "session.create", "sa1", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const listed = await dispatchFaceMethod(runtime, "subagent.list", "sa2", {
+      parentSessionId: sessionId,
+    });
+    expect(listed.result.ok).toBe(true);
+    if (listed.result.ok) {
+      expect(listed.result.value).toEqual({
+        entries: [],
+        parentAvailable: true,
+      });
+    }
+
+    const bad = await dispatchFaceMethod(runtime, "subagent.list", "sa3", {});
+    expect(bad.result.ok).toBe(false);
+  });
+
+  it("llm.discoverModels probes GET /models and never echoes the key", async () => {
+    const { runtime } = await harness();
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe("https://gateway.acme.example/v1/models");
+      expect(init?.headers).toMatchObject({ authorization: "Bearer probe-key" });
+      return new Response(
+        JSON.stringify({
+          data: [
+            { id: "acme-large", name: "Acme Large", context_window: 65536 },
+            { id: "acme-small" },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const res = await dispatchFaceMethod(runtime, "llm.discoverModels", "d1", {
+        settingsNs: "llm-pi-ai",
+        baseURL: "https://gateway.acme.example/v1",
+        api: "openai-completions",
+        apiKey: "probe-key",
+      });
+      expect(res.result.ok).toBe(true);
+      if (!res.result.ok) throw new Error("discover failed");
+      expect(res.result.value).toEqual({
+        models: [
+          { id: "acme-large", name: "Acme Large", contextWindow: 65536 },
+          { id: "acme-small" },
+        ],
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("no", { status: 401 })),
+    );
+    try {
+      const err = await dispatchFaceMethod(runtime, "llm.discoverModels", "d3", {
+        settingsNs: "llm",
+        baseURL: "https://gateway.acme.example/v1",
+        apiKey: "wrong",
+      });
+      expect(err.result.ok).toBe(false);
+      if (err.result.ok) throw new Error("expected fail");
+      expect(err.result.error.code).toBe("model-discovery-failed");
+      expect(err.result.error.message).toContain("401");
+      expect(JSON.stringify(err.result.error)).not.toContain("wrong");
+      expect(err.result.error.details).toEqual({
+        settingsNs: "llm",
+        baseURL: "https://gateway.acme.example/v1",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    const unknownNs = await dispatchFaceMethod(
+      runtime,
+      "llm.discoverModels",
+      "d4",
+      { settingsNs: "llm-absent", baseURL: "https://gateway.example/v1" },
+    );
+    expect(unknownNs.result.ok).toBe(false);
+    if (!unknownNs.result.ok) {
+      expect(unknownNs.result.error.code).toBe("model-discovery-failed");
+      expect(unknownNs.result.error.message).toContain("no model discovery");
     }
   });
 });

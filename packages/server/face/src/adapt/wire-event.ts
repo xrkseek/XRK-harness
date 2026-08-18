@@ -34,6 +34,8 @@ export const EVENT_ISOMORPHISM = {
   "session/title": "title",
   "approval/asked": "approval.asked",
   "approval/decided": "approval.decided",
+  "command/run": "command/run",
+  "command/done": "command/done",
 } as const satisfies Record<SessionEvent["type"], string>;
 
 /** DeepSeek SessionEvent envelope on the Face wire. */
@@ -118,7 +120,11 @@ function stepNum(
 function assistantMessageContent(
   event: Extract<SessionEvent, { type: "assistant/message" }>,
 ): unknown[] {
-  const blocks: unknown[] = [...wireContentBlocks(event.content)];
+  const blocks: unknown[] = [];
+  if (event.reasoning?.trim()) {
+    blocks.push({ type: "reasoning", text: event.reasoning });
+  }
+  blocks.push(...wireContentBlocks(event.content));
   for (const call of event.toolCalls ?? []) {
     let argsRaw: string;
     try {
@@ -167,7 +173,12 @@ export function toDshWireSessionEvent(
         data: {
           turn: turnNum(ctx, event.turnId),
           step: stepNum(ctx, event.turnId, event.stepId),
-          chunk: { type: "text-delta", index: 0, text: event.text },
+          chunk: {
+            type:
+              event.kind === "reasoning" ? "reasoning-delta" : "text-delta",
+            index: event.index ?? 0,
+            text: event.text,
+          },
         },
       };
     case "assistant/message":
@@ -248,6 +259,32 @@ export function toDshWireSessionEvent(
           title: event.title,
           messageSeqs: event.messageSeqs,
           source: event.source,
+        },
+      };
+    case "command/run":
+      return {
+        type: "command/run",
+        seq,
+        time,
+        data: {
+          commandId: event.commandId,
+          name: event.name,
+          source: event.source,
+          ...(event.args !== undefined ? { args: event.args } : {}),
+        },
+      };
+    case "command/done":
+      return {
+        type: "command/done",
+        seq,
+        time,
+        data: {
+          commandId: event.commandId,
+          kind: event.kind,
+          ...(event.text !== undefined ? { text: event.text } : {}),
+          ...(event.sourceEventSeq !== undefined
+            ? { sourceEventSeq: event.sourceEventSeq }
+            : {}),
         },
       };
     case "prompt/admitted":

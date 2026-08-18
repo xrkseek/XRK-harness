@@ -1,6 +1,8 @@
 # apps/web-static
 
-DSH 产品壳捕获产物（对照/后备）。`serve` 在缺少自研 `apps/web/dist` 时回退到本目录。
+产品聊天壳：DeepSeek Harness Web 的捕获产物（MIT，见 [NOTICE](../web/NOTICE)）。
+
+`xrk-harness serve` **默认优先**托管本目录。本仓只做 Face 对接；UI 观感以 DSH 为准。
 
 重新捕获（本机需 `vendor/ui-src`）：
 
@@ -9,4 +11,4 @@ pnpm web:ui:build
 pnpm web:ui:capture
 ```
 
-日常产品 UI 以 [apps/web](../web/) 自研壳为准。
+Face 验证台：[apps/web](../web/)（`?console=1`）。

@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import { createFaceRuntime } from "../src/runtime.js";
@@ -21,15 +24,25 @@ function drain(): FaceDrain {
 function runtime(opts?: {
   bootstrapApiKey?: string;
   hostPublic?: boolean;
+  productDir?: string;
+  settingsDocumentPath?: string;
+  openNativePath?: (target: string) => Promise<void>;
 }) {
   const store = createMemorySessionStore();
   return createFaceRuntime({
     store,
-    workspaceRoot: process.cwd(),
+    workspaceRoot: opts?.productDir ?? process.cwd(),
     drain: drain(),
     resolveAgent: async () => {
       throw new Error("unused");
     },
+    ...(opts?.productDir !== undefined ? { productDir: opts.productDir } : {}),
+    ...(opts?.settingsDocumentPath !== undefined
+      ? { settingsDocumentPath: opts.settingsDocumentPath }
+      : {}),
+    ...(opts?.openNativePath !== undefined
+      ? { openNativePath: opts.openNativePath }
+      : {}),
     ...(opts?.bootstrapApiKey !== undefined
       ? { bootstrapApiKey: opts.bootstrapApiKey }
       : {}),
@@ -98,7 +111,7 @@ describe("Face settings U2", () => {
     });
     expect(badTheme.result.ok).toBe(false);
     if (!badTheme.result.ok) {
-      expect(badTheme.result.error.code).toBe("settings-invalid");
+      expect(badTheme.result.error.code).toBe("settings-rejected");
     }
 
     const readonlyHost = await dispatchFaceMethod(rt, "settings.set", "s3", {
@@ -107,7 +120,7 @@ describe("Face settings U2", () => {
     });
     expect(readonlyHost.result.ok).toBe(false);
     if (!readonlyHost.result.ok) {
-      expect(readonlyHost.result.error.code).toBe("settings-readonly");
+      expect(readonlyHost.result.error.code).toBe("settings-rejected");
     }
   });
 
@@ -121,7 +134,12 @@ describe("Face settings U2", () => {
       namespaces: { ns: string; value: unknown }[];
     };
     expect(v.writable).toBe(true);
+    expect(
+      (desc.result.value as { hasDocument: boolean }).hasDocument,
+    ).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "ui-onboarding")).toBe(true);
+    expect(v.namespaces.some((n) => n.ns === "locale")).toBe(true);
+    expect(v.namespaces.some((n) => n.ns === "ui-theme")).toBe(true);
 
     const mut = await dispatchFaceMethod(rt, "settings.mutate", "d2", {
       ns: "ui-onboarding",
@@ -163,17 +181,48 @@ describe("Face settings U2", () => {
       ns: "ui-onboarding",
       value: { welcomeNoticeVersion: "replaced.v1", extra: true },
     });
+  });
 
+  it("settings.openDocument ignores client paths and uses Host dump", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-settings-"));
+    const opened: string[] = [];
+    const rt = runtime({
+      hostPublic: true,
+      productDir: dir,
+      openNativePath: async (target) => {
+        opened.push(target);
+      },
+    });
     const openDoc = await dispatchFaceMethod(
       rt,
       "settings.openDocument",
       "od1",
-      {},
+      { path: "C:\\Windows\\System32\\drivers\\etc\\hosts" },
     );
-    expect(openDoc.result.ok).toBe(false);
-    if (!openDoc.result.ok) {
-      expect(openDoc.result.error.code).toBe("not-implemented");
+    expect(openDoc.result.ok).toBe(true);
+    if (openDoc.result.ok) {
+      expect(openDoc.result.value).toEqual({ opened: true });
     }
+    expect(opened).toHaveLength(1);
+    expect(opened[0]).toBe(path.join(dir, "host-settings.json"));
+    expect(opened[0]!.toLowerCase()).not.toContain("system32");
+  });
+
+  it("settings.openDocument prefers an existing policy file", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-policy-"));
+    const policy = path.join(dir, "policy.json");
+    await writeFile(policy, "{}\n", "utf8");
+    const opened: string[] = [];
+    const rt = runtime({
+      settingsDocumentPath: policy,
+      productDir: dir,
+      openNativePath: async (target) => {
+        opened.push(target);
+      },
+    });
+    const openDoc = await dispatchFaceMethod(rt, "settings.openDocument", "od2", {});
+    expect(openDoc.result.ok).toBe(true);
+    expect(opened).toEqual([policy]);
   });
 });
 
@@ -226,7 +275,7 @@ describe("Face credentials U2", () => {
     });
     expect(unknown.result.ok).toBe(false);
     if (!unknown.result.ok) {
-      expect(unknown.result.error.code).toBe("credentials-slot-not-found");
+      expect(unknown.result.error.code).toBe("credential-rejected");
     }
   });
 

@@ -83,17 +83,8 @@ export {
   type SettleDanglingResult,
 } from "./dangling.js";
 
-export interface SessionRecord {
-  readonly id: string;
-  readonly events: readonly SessionEvent[];
-}
-
-export interface SessionStore {
-  create(id?: string): SessionRecord;
-  get(id: string): SessionRecord;
-  append(id: string, event: SessionEvent): SessionEvent;
-  list(): readonly string[];
-}
+export type { SessionRecord, SessionStore } from "./store.js";
+import type { SessionRecord, SessionStore } from "./store.js";
 
 function deepFreeze<T>(value: T): T {
   if (value === null || typeof value !== "object") return value;
@@ -128,6 +119,10 @@ export function createMemorySessionStore(): SessionStore {
         throw new Error(`session not found: ${id}`);
       }
       return { id, events: [...events] };
+    },
+
+    has(id: string): boolean {
+      return sessions.has(id);
     },
 
     append(id: string, event: SessionEvent): SessionEvent {
@@ -187,30 +182,8 @@ export function assertModelVisible(
   }
 }
 
-export function toJSONL(events: readonly SessionEvent[]): string {
-  return events.map((e) => JSON.stringify(e)).join("\n") + (events.length ? "\n" : "");
-}
-
-export function fromJSONL(text: string): SessionEvent[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  return lines.map((line, i) => {
-    let raw: unknown;
-    try {
-      raw = JSON.parse(line);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`fromJSONL line ${i + 1}: invalid JSON (${msg})`, {
-        cause: err,
-      });
-    }
-    try {
-      return assertSessionEvent(raw);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`fromJSONL line ${i + 1}: ${msg}`, { cause: err });
-    }
-  });
-}
+export { fromJSONL, parseJSONL, toJSONL, type ParseJSONLResult } from "./jsonl.js";
+export { createJsonlSessionStore } from "./jsonl-store.js";
 
 export function forkSession(
   store: SessionStore,

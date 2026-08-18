@@ -47,6 +47,10 @@ export interface AssistantChunkEvent extends SessionEventBase {
   readonly turnId: string;
   readonly stepId: string;
   readonly text: string;
+  /** Default `"text"`. Reasoning uses a separate Face mux chunk type. */
+  readonly kind?: "text" | "reasoning";
+  /** DSH StreamChunk index; reasoning=0 text=1 recommended when both appear. */
+  readonly index?: number;
 }
 
 export interface AssistantMessageEvent extends SessionEventBase {
@@ -55,6 +59,8 @@ export interface AssistantMessageEvent extends SessionEventBase {
   readonly stepId: string;
   readonly content: string;
   readonly toolCalls?: readonly ToolCall[];
+  /** Optional thinking text when the model exposed reasoning (not model-visible history). */
+  readonly reasoning?: string;
 }
 
 export interface ToolCallEvent extends SessionEventBase {
@@ -206,6 +212,29 @@ export interface ApprovalDecidedEvent extends SessionEventBase {
   readonly source: ApprovalDecisionSource;
 }
 
+/**
+ * Slash-command admission (Face `commands/execute`). Log-only — not
+ * model-visible. Pair with `command/done` via `commandId`.
+ */
+export type CommandSource = { readonly kind: "user" };
+
+export interface CommandRunEvent extends SessionEventBase {
+  readonly type: "command/run";
+  readonly commandId: string;
+  readonly name: string;
+  /** Verbatim text after the command name, including leading whitespace. */
+  readonly args?: string;
+  readonly source: CommandSource;
+}
+
+export interface CommandDoneEvent extends SessionEventBase {
+  readonly type: "command/done";
+  readonly commandId: string;
+  readonly kind: "success" | "error";
+  readonly text?: string;
+  readonly sourceEventSeq?: number;
+}
+
 export type SessionEvent =
   | TurnStartEvent
   | TurnEndEvent
@@ -223,7 +252,9 @@ export type SessionEvent =
   | ContextCompactionEvent
   | SessionTitleEvent
   | ApprovalAskedEvent
-  | ApprovalDecidedEvent;
+  | ApprovalDecidedEvent
+  | CommandRunEvent
+  | CommandDoneEvent;
 
 const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "turn/start",
@@ -243,6 +274,8 @@ const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "session/title",
   "approval/asked",
   "approval/decided",
+  "command/run",
+  "command/done",
 ]);
 
 /**

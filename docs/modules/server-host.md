@@ -9,19 +9,19 @@
 | 文件 | 作用 | 关键契约 |
 |------|------|----------|
 | `index.ts` | `createHostManager` · spawn/stop | AgentHandle 可缓存绑定，**不可**当 transcript |
-| `agent-cache.ts` | 按 session 缓存 agent · `host.plugins` Scope | invalidate 先 abort 再撤插件 |
-| `mcp-wire.ts` | `XRK_MCP_SERVERS` → 合成 `kind: tools` 插件 | 须 allow；id = `mcp:<serverName>` |
+| `agent-cache.ts` | 按 session 缓存 agent · `host.plugins` Scope | 根会话 `agent:{id}`；子会话 `openSubagentRealm`（`subagent:{id}`）；invalidate 父卸嵌套子 |
+| `mcp-wire.ts` | `XRK_MCP_SERVERS` → 合成 `kind: tools` 插件 | 须 allow；id = `mcp:<serverName>`；list_changed 刷新 tools + invalidateAll |
 
 配置在 `@xrkseek/server-config`（`loadHostConfig`）。
 
 ## Spawn 顺序（排障）
 
 ```text
-1. createMemorySessionStore + PluginLoader
+1. createMemorySessionStore 或 createJsonlSessionStore(XRK_SESSIONS_DIR) + PluginLoader
 2. loadAll(pluginsDir) 若配置
 3. loadMcpToolPlugins(mcpServers) 若配置且 policy/XRK_MCP_ALLOW 允许
 4. createHostAgentCache(loader.list())
-5. createFaceRuntime（policy · drain · seeds）
+5. createFaceRuntime（policy · drain · seeds · plugins · webPlugins · `subagents.json` · `goals.json`）
 6. createHttpServer + attachFace
 ```
 
@@ -35,10 +35,11 @@
 | `XRK_WORKSPACE` | workspaceRoot |
 | `XRK_PRESET` | minimal \| harness \| server |
 | `XRK_API_KEY` | Face/HTTP 鉴权（空=开发免鉴权） |
-| `XRK_PLUGINS_DIR` | 进程插件根 |
+| `XRK_SESSIONS_DIR` | JSONL 会话目录；省略 = 内存 store |
+| `XRK_PLUGINS_DIR` | 进程插件根；`web/` 子目录为客户端叠加（boot + `/plugins/…`） |
 | `XRK_WEB_DIST` | 静态壳 |
 | `XRK_POLICY_FILE` | policy JSON |
-| `XRK_MCP_SERVERS` | JSON 数组：`[{serverName,command,args?,env?,cwd?}]` |
+| `XRK_MCP_SERVERS` | JSON 数组：`[{serverName,command,args?,env?,cwd?}]` 或 `[{serverName,url}]` |
 | `XRK_MCP_ALLOW` | `1`/`true` → 本进程 mcp.connect 默认 allow |
 
 ## AgentFactory 输入
@@ -46,7 +47,8 @@
 ```ts
 {
   sessionId, store, workspaceRoot,
-  plugins: loader.list(), // 含目录插件 + mcp:* 
+  plugins: loader.list(), // 含目录插件 + mcp:*
+  resolveImage,            // Host 附件仓 → 视觉适配器
 }
 ```
 

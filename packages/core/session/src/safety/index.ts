@@ -1,6 +1,6 @@
 /**
  * Long-lived session safety trackers (pure). Pipeline wiring lives in core-agent.
- * @see docs/learn/cline-mistake-loop-safety.md
+ * @see docs/session-safety.md
  */
 
 import type { SafetyNoticePayload } from "@xrkseek/protocol";

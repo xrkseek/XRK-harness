@@ -41,6 +41,8 @@ describe("memory session store", () => {
       (ev as { content: string }).content = "mutated";
     }).toThrow();
     expect(store.get("a").events[0]?.type).toBe("user/message");
+    expect(store.has("a")).toBe(true);
+    expect(store.has("missing")).toBe(false);
   });
 
   it("rejects invalid events on append", () => {
@@ -132,6 +134,16 @@ describe("jsonl", () => {
     expect(() =>
       fromJSONL('{"type":"user/message","ts":1,"turnId":"t"}\n'),
     ).toThrow(/content/);
+  });
+
+  it("drops a trailing incomplete JSON line", () => {
+    const line = JSON.stringify({
+      type: "user/message",
+      ts: 1,
+      turnId: "t",
+      content: "ok",
+    });
+    expect(fromJSONL(`${line}\n{"type":`)).toHaveLength(1);
   });
 });
 
