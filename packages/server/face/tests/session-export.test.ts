@@ -4,27 +4,13 @@ import {
   newSession,
 } from "@xrkseek/core-session";
 import { createMemoryAttachmentStore } from "@xrkseek/attachment";
-import { createFaceRuntime } from "../src/runtime.js";
 import { createFaceOnlyServer } from "../src/attach-http.js";
 import { isSessionExportPath, buildSessionExportZip } from "../src/session-export.js";
 import { buildStoredZip, zipEntryName } from "../src/zip-store.js";
+import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
 
 function bareRuntime(store = createMemorySessionStore()) {
-  return createFaceRuntime({
-    store,
-    workspaceRoot: process.cwd(),
-    version: "test",
-    drain: {
-      wake() {},
-      async cancel() {},
-      isActive() {
-        return false;
-      },
-    },
-    resolveAgent: async () => {
-      throw new Error("unused");
-    },
-  });
+  return createBareFaceRuntime({ store });
 }
 
 describe("session.export", () => {
@@ -117,21 +103,9 @@ describe("session.export", () => {
         { type: "image", attachment: ref },
       ],
     });
-    const runtime = createFaceRuntime({
+    const runtime = createBareFaceRuntime({
       store,
       attachments,
-      workspaceRoot: process.cwd(),
-      version: "test",
-      drain: {
-        wake() {},
-        async cancel() {},
-        isActive() {
-          return false;
-        },
-      },
-      resolveAgent: async () => {
-        throw new Error("unused");
-      },
     });
     const face = createFaceOnlyServer(runtime, {
       apiKey: "k",

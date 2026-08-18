@@ -3,27 +3,13 @@ import {
   createMemorySessionStore,
   newSession,
 } from "@xrkseek/core-session";
-import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import { MESSAGE_FEEDBACK_NOTE_MAX_BYTES } from "../src/message-feedback.js";
 import { faceMethodFromPath } from "../src/wire/index.js";
+import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
 
 function bareRuntime(store = createMemorySessionStore()) {
-  return createFaceRuntime({
-    store,
-    workspaceRoot: process.cwd(),
-    version: "test",
-    drain: {
-      wake() {},
-      async cancel() {},
-      isActive() {
-        return false;
-      },
-    },
-    resolveAgent: async () => {
-      throw new Error("unused");
-    },
-  });
+  return createBareFaceRuntime({ store });
 }
 
 function appendAssistant(

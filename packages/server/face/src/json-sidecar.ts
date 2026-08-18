@@ -1,31 +1,12 @@
 /**
  * Best-effort JSON sidecar (goals / subagents). Persist must not fail Face RPC.
- * Write tmp then rename so a crash cannot leave a truncated JSON file.
+ * Delegates to session atomic replace so a crash cannot leave truncated JSON.
  */
 
-import { mkdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import path from "node:path";
+import { writeTextFileAtomicSync } from "@xrkseek/core-session";
 
 export function writeJsonSidecar(file: string, payload: unknown): void {
-  mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-  try {
-    renameSync(tmp, file);
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === "EEXIST" || code === "EPERM") {
-      unlinkSync(file);
-      renameSync(tmp, file);
-      return;
-    }
-    try {
-      unlinkSync(tmp);
-    } catch {
-      /* ignore */
-    }
-    throw err;
-  }
+  writeTextFileAtomicSync(file, `${JSON.stringify(payload, null, 2)}\n`);
 }
 
 export function tryWriteJsonSidecar(file: string, payload: unknown): void {

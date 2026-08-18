@@ -89,7 +89,10 @@ export {
   EVENT_ISOMORPHISM,
   FaceInboxWireMaps,
   FaceInboxWireProjector,
+  FaceToolArgMaps,
   FaceWireIdMaps,
+  collectToolCallArgs,
+  faceToolLookup,
   presentToolView,
   toDshWireSessionEvent,
   toMuxSessionEvent,
@@ -98,6 +101,8 @@ export {
   type DshInboxSplice,
   type DshWireSessionEvent,
   type DshWireUserMessage,
+  type PresentToolLookup,
+  type ToolCallPairing,
   type ToolEventView,
   type WireAdaptContext,
   type WireHistoryEntry,
@@ -147,6 +152,15 @@ export {
   type DirectoryEntryView,
   type DirectoryListingView,
 } from "./host-directory.js";
+export {
+  canPickNativeDirectory,
+  hostPickDirectoryRpc,
+  pickNativeDirectory,
+  WIN32_POWERSHELL_PICK,
+  type DirectoryPickerInternals,
+  type DirectoryPickerRunner,
+  type NativeDirectoryPicker,
+} from "./host-pick-directory.js";
 export {
   FaceCredentialVault,
   FaceSettingsNamespaces,

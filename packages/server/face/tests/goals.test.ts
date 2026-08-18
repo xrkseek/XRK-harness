@@ -7,28 +7,16 @@ import {
   listPendingAdmits,
   newSession,
 } from "@xrkseek/core-session";
-import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import { DEFAULT_MAX_GOAL_ROUNDS } from "../src/goal-store.js";
+import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
 
 function bareRuntime(
   store = createMemorySessionStore(),
   extra?: { goalPersistPath?: string },
 ) {
-  return createFaceRuntime({
+  return createBareFaceRuntime({
     store,
-    workspaceRoot: process.cwd(),
-    version: "test",
-    drain: {
-      wake() {},
-      async cancel() {},
-      isActive() {
-        return false;
-      },
-    },
-    resolveAgent: async () => {
-      throw new Error("unused");
-    },
     ...extra,
   });
 }

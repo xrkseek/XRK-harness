@@ -28,6 +28,13 @@ describe("mapFaceRpcError", () => {
       message: "unsupported-modality: text-only",
       details: { reason: "text-only" },
     });
+    expect(
+      mapFaceRpcError("directory-picker-unavailable", "no zenity"),
+    ).toEqual({
+      code: "directory-picker-unavailable",
+      message: "no zenity",
+      details: {},
+    });
   });
 
   it("keeps DSH codes and fills required details", () => {

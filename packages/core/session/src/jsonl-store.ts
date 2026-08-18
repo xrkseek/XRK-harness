@@ -1,26 +1,13 @@
-import { appendFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { SessionEvent } from "@xrkseek/protocol";
 import { assertSessionEvent } from "@xrkseek/protocol";
+import { writeTextFileAtomicSync } from "./atomic-write.js";
+import { deepFreeze, newSessionId } from "./freeze.js";
 import { parseJSONL, toJSONL } from "./jsonl.js";
 import type { SessionRecord, SessionStore } from "./store.js";
 
 const ID_RE = /^[A-Za-z0-9._-]+$/;
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object") return value;
-  Object.freeze(value);
-  for (const v of Object.values(value as Record<string, unknown>)) {
-    if (v && typeof v === "object" && !Object.isFrozen(v)) {
-      deepFreeze(v);
-    }
-  }
-  return value;
-}
-
-function newId(): string {
-  return `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
 
 function assertSafeId(id: string): string {
   if (!ID_RE.test(id)) {
@@ -56,7 +43,7 @@ export function createJsonlSessionStore(dir: string): SessionStore {
       const parsed = parseJSONL(text);
       sessions.set(id, parsed.events);
       if (parsed.droppedTrailingIncomplete) {
-        writeFileSync(file, toJSONL(parsed.events));
+        writeTextFileAtomicSync(file, toJSONL(parsed.events));
       }
     } catch {
       /* mid-file corrupt: skip this session so Host can still spawn */
@@ -64,13 +51,13 @@ export function createJsonlSessionStore(dir: string): SessionStore {
   }
 
   return {
-    create(id = newId()): SessionRecord {
+    create(id = newSessionId()): SessionRecord {
       const sid = assertSafeId(id);
       if (sessions.has(sid)) {
         throw new Error(`session already exists: ${sid}`);
       }
       sessions.set(sid, []);
-      writeFileSync(fileFor(sid), "");
+      writeTextFileAtomicSync(fileFor(sid), "");
       return { id: sid, events: [] };
     },
 

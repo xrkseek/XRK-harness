@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { helpText, parseArgs } from "../src/parse-args.js";
+import { defaultSessionsDir, harnessAppsRoot, resolveProductWebDist } from "../src/product-paths.js";
+import os from "node:os";
+import path from "node:path";
 
 describe("cli parseArgs", () => {
   it("parses run flags", () => {
@@ -17,8 +20,10 @@ describe("cli parseArgs", () => {
     expect(a.command).toBe("run");
     expect(a.preset).toBe("minimal");
     expect(a.prompt).toBe("hi");
+    expect(a.promptExplicit).toBe(true);
     expect(a.patch).toEqual({ debug: true });
     expect(a.presentation).toBe("tools");
+    expect(a.persist).toBe(true);
   });
 
   it("parses presentation code", () => {
@@ -26,7 +31,57 @@ describe("cli parseArgs", () => {
     expect(a.presentation).toBe("code");
   });
 
-  it("help text mentions doctor", () => {
+  it("treats web as serve", () => {
+    const a = parseArgs(["web", "--port", "8080", "--open"]);
+    expect(a.command).toBe("serve");
+    expect(a.port).toBe(8080);
+    expect(a.open).toBe(true);
+  });
+
+  it("takes positional prompt", () => {
+    const a = parseArgs(["run", "--preset", "minimal", "hello", "world"]);
+    expect(a.prompt).toBe("hello world");
+    expect(a.promptExplicit).toBe(true);
+  });
+
+  it("rejects 0.0.0.0", () => {
+    expect(() => parseArgs(["serve", "--host", "0.0.0.0"])).toThrow(/127\.0\.0\.1/);
+  });
+
+  it("parses --no-persist and --host", () => {
+    const a = parseArgs(["serve", "--no-persist", "--host", "127.0.0.1"]);
+    expect(a.persist).toBe(false);
+    expect(a.host).toBe("127.0.0.1");
+  });
+
+  it("help text mentions web and persist", () => {
     expect(helpText()).toContain("doctor");
+    expect(helpText()).toContain("web");
+    expect(helpText()).toContain("--no-persist");
+    expect(helpText()).toContain("127.0.0.1");
+  });
+
+  it("parses bare --version", () => {
+    const a = parseArgs(["--version"]);
+    expect(a.version).toBe(true);
+  });
+});
+
+describe("product paths", () => {
+  it("sessions default under workspace .xrk", () => {
+    const root = path.join(os.tmpdir(), "xrk-ws");
+    expect(defaultSessionsDir(root)).toBe(
+      path.join(path.resolve(root), ".xrk", "sessions"),
+    );
+  });
+
+  it("apps root sits next to cli package", () => {
+    expect(harnessAppsRoot()).toMatch(/apps$/);
+  });
+
+  it("finds captured product shell", async () => {
+    const dir = await resolveProductWebDist();
+    expect(dir).toBeTruthy();
+    expect(dir).toMatch(/web-static$/);
   });
 });

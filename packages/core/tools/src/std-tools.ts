@@ -48,6 +48,12 @@ export function createStdTools(
         }
         return { content: JSON.stringify(todos, null, 2) };
       },
+      presentCall: (args) => ({
+        card: "generic",
+        title: "Update todo list",
+        kind: "other",
+        rawInput: (args as { todos?: unknown }).todos,
+      }),
     },
     {
       name: "ask_user",

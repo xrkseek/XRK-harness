@@ -1,6 +1,7 @@
 import type { AttachmentStore } from "@xrkseek/attachment";
 import type { AgentHandle } from "@xrkseek/core-agent";
 import type { SessionRecord, SessionStore } from "@xrkseek/core-session";
+import type { ToolDefinition } from "@xrkseek/core-tools";
 import type { ProviderRegistry } from "@xrkseek/llm-registry";
 import type { PolicyEngine } from "@xrkseek/policy";
 import type { FaceBus } from "./bus.js";
@@ -91,6 +92,11 @@ export interface FaceRuntime {
   readonly loadSlashRecipes?: SlashRecipesLoader;
   /** Process plugins (`XRK_PLUGINS_DIR` / MCP) for inventory + slash. */
   readonly plugins?: readonly FaceProcessPlugin[];
+  /** Standing / remembered tool presenters (DSH `ctx.tools.get`). */
+  getTool?(
+    sessionId: string,
+    name: string,
+  ): Pick<ToolDefinition, "presentCall" | "presentResult"> | undefined;
   /** Product-shell `boot.json` entries (captured DSH client plugins). */
   readonly webPlugins?: readonly FaceWebPlugin[];
   /** Mutable UI prefs (theme/locale) — not secrets. */
@@ -112,6 +118,8 @@ export interface FaceRuntime {
   readonly settingsDocumentPath?: string;
   /** Native opener; default platform `openNativePath`. */
   openNativePath?(target: string): Promise<void>;
+  /** Native folder chooser; default platform `pickNativeDirectory`. Cancel → `null`. */
+  pickNativeDirectory?(signal: AbortSignal): Promise<string | null>;
   /** Human approval waiters (tool policy `ask`). */
   readonly approvals: FaceApprovalBroker;
   /** Drop cached agent when preset changes (host wires). May be async (compose dispose). */

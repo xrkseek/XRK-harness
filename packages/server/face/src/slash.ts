@@ -187,43 +187,40 @@ function appendCommandPair(
 }
 
 /**
- * Face-level slash on `session.prompt`: expand recipe → command slot; never admit.
- * Unknown `/id` → honest error (no fake success). Console / 旧路径。
+ * Face-level slash on `session.prompt`.
+ * DSH unary value only allows `command.kind: "success"` — unknown `/name`
+ * is not a command (admit as text). Failed known command → `command-error`.
  */
 export async function tryFaceSlashCommand(
+  runtime: FaceRuntime,
+  sessionId: string,
   text: string,
-  loadRecipes: SlashRecipesLoader | undefined,
 ): Promise<FaceRpcResult<{
   accepted: true;
-  command: { kind: "success" | "error"; text: string; recipeId?: string };
+  command?: { kind: "success"; text?: string };
 }> | undefined> {
   const trimmed = text.trim();
-  if (!trimmed.startsWith("/")) return undefined;
-  const recipes = loadRecipes ? await loadRecipes() : [];
-  const hit = tryApplySlashRecipe(trimmed, recipes);
-  if (hit) {
+  if (!parseFaceCommandLine(trimmed)) return undefined;
+  const execution = await executeFaceCommand(runtime, sessionId, trimmed);
+  if (!execution) return undefined;
+  if (execution.result.kind === "error") {
     return {
-      ok: true,
-      value: {
-        accepted: true,
-        command: {
-          kind: "success",
-          text: hit.userPrompt,
-          recipeId: hit.recipeId,
-        },
+      ok: false,
+      error: {
+        code: "command-error",
+        message: execution.result.text ?? "command failed",
       },
     };
   }
-  const id = trimmed.slice(1).split(/\s/)[0] ?? "";
   return {
     ok: true,
     value: {
       accepted: true,
       command: {
-        kind: "error",
-        text: id
-          ? `unknown slash recipe: ${id}`
-          : "invalid slash command",
+        kind: "success",
+        ...(execution.result.text !== undefined
+          ? { text: execution.result.text }
+          : {}),
       },
     },
   };

@@ -72,8 +72,8 @@ XRK-harness/
 └── scripts/
 ```
 
-JSONL 会话目录（Host `XRK_SESSIONS_DIR`）：`{id}.jsonl` + 旁路 `subagents.json` · `goals.json`。hydrate 丢掉末行不完整 JSON。
+JSONL 会话目录（Host `XRK_SESSIONS_DIR`）：`{id}.jsonl` + 旁路 `subagents.json` · `goals.json`。hydrate 丢掉末行不完整 JSON 或末行 schema 失败并原子回写。
 
 Host agent-cache：根会话 Scope `agent:{id}`；Face 已登记父会话的子会话走 `openSubagentRealm`（`subagent:{id}`）。
 
-Face 接线：`packages/server/face/src/wire/`（信封 · 路径 · respond）；RPC 表：`dispatch.ts`（66 个 unary，其中 3 个 agentPreset 创作为 NI）+ `GET/HEAD /api/session.export`。
+Face 接线：`packages/server/face/src/wire/`（信封 · 路径 · respond）；RPC 表：`dispatch.ts`（点号 unary + Typert Remote + `goal.*` 别名 + Cordis 空 inventory）+ `GET/HEAD /api/session.export`。产品壳：`apps/web-static`（`xrk-harness serve` / `web` 按 CLI 包定位，不跟用户 `--workspace`）。

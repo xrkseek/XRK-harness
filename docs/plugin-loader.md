@@ -117,7 +117,7 @@ export interface RegisteredPlugin {
 
 `XRK_PLUGINS_DIR` → `loadAll` → factory 收到 `plugins` → minimal / harness 调用 `wireCompositionTools` + `wireCompositionPrompts`；Face 读同一列表做 `pluginInventory/list` 与 slash。
 
-`{XRK_PLUGINS_DIR}/web/`：客户端叠加（可选 `boot.json` + 静态文件）。Host 把它 merge 进产品壳 boot，并作为 `extraRoots` 提供 `/plugins/…`。不作为进程插件扫描。
+`{XRK_PLUGINS_DIR}/web/`：客户端叠加（可选 `boot.json` + 静态文件）。Host 把它 merge 进产品壳 boot，再 `applyXrkProductBootPolicy`（Cordis 客户端 id 与 HMR 仍会被去掉），并作为 `extraRoots` 提供 `/plugins/…`。不作为进程插件扫描。
 
 ```bash
 XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js serve

@@ -583,6 +583,8 @@ export function createHttpServer(
 export {
   FACE_CONSOLE_BOOT,
   XRK_APP_SHELL_BOOT,
+  XRK_OMIT_CLIENT_PLUGIN_IDS,
+  applyXrkProductBootPolicy,
   loadBootManifestFromWebDist,
   resolveWebBootManifest,
   mergeWebBootManifests,

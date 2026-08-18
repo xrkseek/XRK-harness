@@ -145,12 +145,24 @@ describe("Face DSH wire-event adapt", () => {
       arguments: { cmd: "pwd" },
     });
     expect(wire.data).not.toHaveProperty("call");
-    expect(presentToolView(event)).toEqual({
+    expect(presentToolView(event)).toBeUndefined();
+    expect(
+      presentToolView(event, {
+        getTool: (name) =>
+          name === "bash"
+            ? {
+                presentCall: (args) => ({
+                  card: "terminal",
+                  title: String((args as { cmd?: string }).cmd ?? ""),
+                }),
+              }
+            : undefined,
+      }),
+    ).toEqual({
       for: "call",
       view: {
-        card: "generic",
-        title: "bash",
-        content: expect.stringContaining("pwd"),
+        card: "terminal",
+        title: "pwd",
       },
     });
   });

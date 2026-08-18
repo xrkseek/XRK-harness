@@ -19,7 +19,9 @@
     "web:ui:install": "pnpm --dir ./vendor/ui-src install",
     "web:ui:build": "pnpm --dir ./vendor/ui-src run build",
     "web:ui": "pnpm --dir ./vendor/ui-src exec dsh web",
-    "web:ui:capture": "node ./scripts/capture-web-static.mjs"
+    "web:ui:capture": "node ./scripts/capture-web-static.mjs",
+    "xrk": "node ./apps/cli/dist/bin.js",
+    "serve": "node ./apps/cli/dist/bin.js serve"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

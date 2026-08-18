@@ -8,6 +8,35 @@ export {
   type ToolResultContent,
 } from "./definition.js";
 export {
+  parseExitStatus,
+  type DiffCallView,
+  type DiffResultView,
+  type FileDiff,
+  type FileLocation,
+  type GenericCallView,
+  type GenericResultView,
+  type ParsedExitStatus,
+  type PresentableToolResult,
+  type ReadFileLine,
+  type ReadResultView,
+  type SearchFileMatches,
+  type SearchLineMatch,
+  type SearchMatchesResultView,
+  type SearchPathsResultView,
+  type TerminalCallView,
+  type TerminalResultView,
+  type TextBlock,
+  type ToolCallKind,
+  type ToolCallView,
+  type ToolEventView,
+  type ToolResultView,
+} from "./presentation.js";
+export {
+  presentToolEventView,
+  type PresentToolLookup,
+  type ToolCallPairing,
+} from "./present-event.js";
+export {
   createPolicyToolCallGuard,
   createReadTracker,
   createSandboxArgvWrapGuard,

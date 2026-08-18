@@ -17,4 +17,4 @@
 
 包：`@xrkseek/protocol` · `@xrkseek/core-session` · `@xrkseek/core-agent`。
 
-JSONL 仓：`createJsonlSessionStore` hydrate 丢掉末行不完整 JSON 并回写；`SessionStore.has` 不抛。不是 FTS。
+JSONL 仓：`createJsonlSessionStore` hydrate 丢掉末行不完整 JSON **或** 末行事件 schema 失败并原子回写；中段损坏跳过该文件；`SessionStore.has` 不抛。不是 FTS。

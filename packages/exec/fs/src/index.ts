@@ -14,6 +14,18 @@ import {
   type FsGrepHit,
   type FsGrepOptions,
 } from "./search.js";
+import {
+  presentEditCall,
+  presentEditResult,
+  presentGlobCall,
+  presentGlobResult,
+  presentGrepCall,
+  presentGrepResult,
+  presentReadCall,
+  presentReadResult,
+  presentWriteCall,
+  presentWriteResult,
+} from "./present.js";
 
 export { PathEscapeError, resolveWithinRoot } from "./paths.js";
 export {
@@ -23,6 +35,19 @@ export {
   type FsGrepHit,
   type FsGrepOptions,
 } from "./search.js";
+export {
+  langFromPath,
+  presentEditCall,
+  presentEditResult,
+  presentGlobCall,
+  presentGlobResult,
+  presentGrepCall,
+  presentGrepResult,
+  presentReadCall,
+  presentReadResult,
+  presentWriteCall,
+  presentWriteResult,
+} from "./present.js";
 
 export class EditWithoutOldError extends Error {
   constructor(message: string) {
@@ -183,6 +208,8 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
           return { content: message, isError: true };
         }
       },
+      presentCall: presentReadCall,
+      presentResult: presentReadResult,
     },
     {
       name: "write_file",
@@ -206,6 +233,8 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
           return { content: message, isError: true };
         }
       },
+      presentCall: presentWriteCall,
+      presentResult: presentWriteResult,
     },
     {
       name: "apply_edit",
@@ -238,6 +267,8 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
           return { content: message, isError: true };
         }
       },
+      presentCall: presentEditCall,
+      presentResult: presentEditResult,
     },
     {
       name: "glob",
@@ -267,6 +298,8 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
           return { content: message, isError: true };
         }
       },
+      presentCall: presentGlobCall,
+      presentResult: presentGlobResult,
     },
     {
       name: "grep",
@@ -311,6 +344,8 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
           return { content: message, isError: true };
         }
       },
+      presentCall: presentGrepCall,
+      presentResult: presentGrepResult,
     },
   ];
 }

@@ -16,4 +16,12 @@ export {
   type InboxTarget,
 } from "./inbox-wire.js";
 export { FaceWireIdMaps } from "./wire-ids.js";
-export { presentToolView, type ToolEventView } from "./tool-view.js";
+export {
+  presentToolView,
+  collectToolCallArgs,
+  FaceToolArgMaps,
+  faceToolLookup,
+  type PresentToolLookup,
+  type ToolCallPairing,
+  type ToolEventView,
+} from "./tool-view.js";

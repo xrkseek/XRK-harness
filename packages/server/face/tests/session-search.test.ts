@@ -8,27 +8,17 @@ import {
   newSession,
 } from "@xrkseek/core-session";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
-import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import {
   SESSION_SEARCH_RESULT_LIMIT,
   searchSessions,
 } from "../src/session-search.js";
+import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
 
 function bareRuntime(store = createMemorySessionStore()) {
-  return createFaceRuntime({
+  return createBareFaceRuntime({
     store,
-    workspaceRoot: process.cwd(),
-    version: "test",
     registry: createProviderRegistry(),
-    drain: {
-      wake: () => {},
-      cancel: () => {},
-      isActive: () => false,
-    },
-    resolveAgent: async () => {
-      throw new Error("unused");
-    },
   });
 }
 

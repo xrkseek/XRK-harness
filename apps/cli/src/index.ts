@@ -3,8 +3,9 @@ import { runDumpConfig } from "./commands/dump-config.js";
 import { runCommand } from "./commands/run.js";
 import { runServe } from "./commands/serve.js";
 import { helpText, parseArgs } from "./parse-args.js";
+import { readCliVersion } from "./product-paths.js";
 
-export { helpText, parseArgs };
+export { helpText, parseArgs, readCliVersion };
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   let args;
@@ -15,6 +16,11 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     console.error(`error: ${message}`);
     console.error(helpText());
     return 1;
+  }
+
+  if (args.version && !args.help) {
+    process.stdout.write(`${readCliVersion()}\n`);
+    return 0;
   }
 
   if (args.command === "help" || args.help) {

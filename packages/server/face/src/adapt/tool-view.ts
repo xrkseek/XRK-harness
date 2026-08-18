@@ -1,64 +1,86 @@
 /**
- * Host-owned tool event views — non-persisted, recomputed on mux/history.
- * Shape matches DeepSeek `ToolEventView`: `{ for, view: { card, ... } }`.
+ * Face tool-view: DSH apiproxy `viewFor` — lookup only.
+ * Cards come from each tool's `presentCall` / `presentResult`.
  */
 
 import type { SessionEvent } from "@xrkseek/protocol";
+import {
+  presentToolEventView,
+  type PresentToolLookup,
+  type ToolCallPairing,
+  type ToolEventView,
+} from "@xrkseek/core-tools";
 
-export type ToolEventView =
-  | {
-      readonly for: "call";
-      readonly view: {
-        readonly card: "generic";
-        readonly title: string;
-        readonly content?: string;
-      };
+export type {
+  DiffCallView,
+  DiffResultView,
+  GenericCallView,
+  GenericResultView,
+  PresentToolLookup,
+  ReadResultView,
+  SearchMatchesResultView,
+  SearchPathsResultView,
+  TerminalCallView,
+  TerminalResultView,
+  ToolCallPairing,
+  ToolCallView,
+  ToolEventView,
+  ToolResultView,
+} from "@xrkseek/core-tools";
+
+export class FaceToolArgMaps {
+  private readonly sessions = new Map<string, Map<string, ToolCallPairing>>();
+
+  remember(sessionId: string, event: SessionEvent): void {
+    if (event.type !== "tool/call") return;
+    this.forSession(sessionId).set(event.call.id, {
+      name: event.call.name,
+      args: event.call.arguments,
+    });
+  }
+
+  forSession(sessionId: string): Map<string, ToolCallPairing> {
+    let map = this.sessions.get(sessionId);
+    if (!map) {
+      map = new Map();
+      this.sessions.set(sessionId, map);
     }
-  | {
-      readonly for: "result";
-      readonly view: {
-        readonly card: "generic";
-        readonly title: string;
-        readonly content?: string;
-      };
-    };
-
-const PREVIEW_MAX = 240;
-
-function previewText(raw: string): string {
-  const t = raw.replace(/\s+/g, " ").trim();
-  if (t.length <= PREVIEW_MAX) return t;
-  return `${t.slice(0, PREVIEW_MAX - 1)}…`;
+    return map;
+  }
 }
 
+export function collectToolCallArgs(
+  events: readonly SessionEvent[],
+): Map<string, ToolCallPairing> {
+  const map = new Map<string, ToolCallPairing>();
+  for (const event of events) {
+    if (event.type === "tool/call") {
+      map.set(event.call.id, {
+        name: event.call.name,
+        args: event.call.arguments,
+      });
+    }
+  }
+  return map;
+}
+
+export function faceToolLookup(
+  getTool: PresentToolLookup["getTool"],
+  argsByCallId?: ReadonlyMap<string, ToolCallPairing>,
+): PresentToolLookup {
+  return {
+    getTool,
+    ...(argsByCallId
+      ? { argsFor: (callId: string) => argsByCallId.get(callId) }
+      : {}),
+  };
+}
+
+/** DSH `viewFor` — missing lookup / pairing / presenter → no view. */
 export function presentToolView(
   event: SessionEvent,
+  lookup?: PresentToolLookup,
 ): ToolEventView | undefined {
-  if (event.type === "tool/call") {
-    let argsPreview: string;
-    try {
-      argsPreview = previewText(JSON.stringify(event.call.arguments ?? {}));
-    } catch {
-      argsPreview = "[unserializable]";
-    }
-    return {
-      for: "call",
-      view: {
-        card: "generic",
-        title: event.call.name,
-        content: argsPreview,
-      },
-    };
-  }
-  if (event.type === "tool/result") {
-    return {
-      for: "result",
-      view: {
-        card: "generic",
-        title: event.result.name,
-        content: previewText(event.result.content),
-      },
-    };
-  }
-  return undefined;
+  if (!lookup) return undefined;
+  return presentToolEventView(event, lookup);
 }

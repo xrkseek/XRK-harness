@@ -15,6 +15,8 @@ const MIME: Record<string, string> = {
   ".map": "application/json",
   ".woff2": "font/woff2",
   ".txt": "text/plain; charset=utf-8",
+  ".webmanifest": "application/manifest+json",
+  ".webp": "image/webp",
 };
 
 export interface WebStaticOptions {

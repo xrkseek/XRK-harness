@@ -7,7 +7,7 @@ Host Face：Unary RPC + mux/host 双 WebSocket。规格：[host-face.md](../host
 | 做                                         | 不做                                       |
 | ------------------------------------------ | ------------------------------------------ |
 | 把 Host wire 接到 session / agent / policy | 不实现业务 agent loop（用 `resolveAgent`） |
-| 诚实 `not-implemented` / 软降级空目录      | 不静默假成功                               |
+| 诚实 `not-implemented` / 空 inventory stub     | 不静默假成功；选目录取消才 `path: null` |
 | wire 投影（inbox / tool view / queue）     | 不把 AgentHandle 当 transcript 真源        |
 
 ## 调用链（排障顺序）
@@ -62,7 +62,7 @@ HTTP/WS (attach-http)
 | `presets-catalog.ts` | agentPreset 列表常量                           | `read` 只读；创作面仍 NI                             |
 | `message-feedback.ts` | `messageFeedback/list/put/delete`             | 进程内 CAS；Typert 嵌套 ok；非 transcript |
 | `goal-store.ts`       | `goals/*` + `/goal`                            | 投影 sidecar；turn/end 续轮；`goals.json` |
-| `json-sidecar.ts`     | JSON 旁路落盘                                  | tmp+rename；失败不抛进 Face RPC          |
+| `json-sidecar.ts`     | JSON 旁路落盘                                  | `writeTextFileAtomicSync`；失败不抛进 Face RPC |
 | `session-export.ts`   | `GET/HEAD /api/session.export`                 | ZIP store；忽略客户端任意 path           |
 | `zip-store.ts`        | 无压缩 ZIP                                     | 条目名剥 `..`；无第三方 zip 依赖         |
 
@@ -72,9 +72,11 @@ HTTP/WS (attach-http)
 | ------------------------- | --------------------------------------- | ------------------------ |
 | `host-directory.ts`       | list/createDirectory · `fullyQualified` | 绝对路径；条目上限       |
 | `host-open-path.ts`       | `host.openPath` · `canOpenNativePath`   | 仅绝对路径；Win/mac/Linux 可开 |
+| `host-pick-directory.ts`  | `host.pickDirectory`                    | 系统选目录；取消 `null`；缺 picker 用 `directory-picker-unavailable` |
 | `workspace-face.ts`       | workspace.* Face                        | 路径不得逃出 root        |
 | `workspace-registry.ts`   | DSH 形 workspace 注册表                 |                          |
 | `settings-credentials.ts` | settings.* · credentials.*              | 密钥不入库；openDocument 忽略客户端 path |
+| `dsh-schema.ts`           | settings namespace schemastery 信封     | `{ uid, refs }`；JSON Schema 壳读不了 |
 
 ### Wire 适配（`adapt/`）
 
@@ -83,7 +85,7 @@ HTTP/WS (attach-http)
 | `adapt/inbox-wire.ts` | `prompt/*` → `agent/inbox/spliced` | 坐标按 pending **重放**，禁止瞎编 start |
 | `adapt/wire-event.ts` | session 事件 → 壳 wire             |                                         |
 | `adapt/wire-ids.ts`   | 稳定数字 id 映射                   |                                         |
-| `adapt/tool-view.ts`  | 工具卡投影                         |                                         |
+| `adapt/tool-view.ts`  | 工具卡 lookup                         | `presentCall` / `presentResult` 在工具上；Face `viewFor` 软失败 |
 | `adapt/index.ts`      | 适配导出                           |                                         |
 
 ### 投影（`projections/`）
@@ -109,6 +111,7 @@ HTTP/WS (attach-http)
 | `tests/harness-path.test.ts`     | prompt → tool → cancel → ask |
 | `tests/session-search.test.ts`   | search 校验 / 命中 / 近因 / JSONL |
 | `tests/open-path-skills.test.ts` | canOpenPath 三端 · skill.list     |
+| `tests/pick-directory.test.ts`   | 三端 picker 命令 / 取消 null / 注入 RPC |
 | `tests/message-feedback.test.ts` | list/put/delete CAS · 嵌套 Typert |
 | `tests/goals.test.ts`            | create/pause CAS · `/goal` · `goal.create` 点号 |
 | `tests/face-fidelity.test.ts`    | preset `agent-preset-read-only` · 信封形 |
@@ -116,6 +119,7 @@ HTTP/WS (attach-http)
 | `tests/session-export.test.ts`   | HEAD/GET ZIP · 子会话 · 附件           |
 | `tests/mux-baseline.test.ts`     | 重连 queue                   |
 | `tests/inbox-wire.test.ts`       | splice 投影                  |
+| `tests/tool-view.test.ts`        | terminal/read/diff/search 卡 · 错误回 generic |
 | `tests/commands.test.ts`         | `commands/list` · `commands/execute` · `pluginInventory/list` · Cordis stub |
 | `tests/wire.test.ts`             | respond 解析 · 路径                        |
 | `tests/rpc-error.test.ts`        | DSH 错误码映射                             |

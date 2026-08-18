@@ -7,7 +7,7 @@ import {
 } from "@xrkseek/core-session";
 import { assertPolicyAllow } from "@xrkseek/policy";
 import { U1_AGENT_PRESETS } from "../context.js";
-import { toWireHistoryEntry } from "../adapt/index.js";
+import { toWireHistoryEntry, collectToolCallArgs } from "../adapt/index.js";
 import { tryFaceSlashCommand } from "../slash.js";
 import { SessionTitleInvalidError } from "../projections/index.js";
 import { parseSearchQuery, searchSessions } from "../session-search.js";
@@ -172,7 +172,16 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
     typeof p.maxMessages === "number" ? p.maxMessages : 100;
 
   const inbox = runtime.inboxWire.fresh();
-  const wireCtx = { sessionId, ids: runtime.wireIds, inbox };
+  const toolArgs = collectToolCallArgs(events);
+  const wireCtx = {
+    sessionId,
+    ids: runtime.wireIds,
+    inbox,
+    toolArgs,
+    ...(runtime.getTool
+      ? { getTool: (name: string) => runtime.getTool!(sessionId, name) }
+      : {}),
+  };
   let indexed = events.map((event, i) =>
     toWireHistoryEntry(event, i + 1, wireCtx),
   );
@@ -299,7 +308,8 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
       .map((x) => x.text)
       .join("");
     if (parts.length === 1 && parts[0]?.type === "text" && text.startsWith("/")) {
-      const slash = await tryFaceSlashCommand(text, runtime.loadSlashRecipes);
+      runtime.watchSession(sessionId);
+      const slash = await tryFaceSlashCommand(runtime, sessionId, text);
       if (slash) return slash;
     }
     if (!text) {

@@ -260,6 +260,28 @@ describe("C2 openSubagentRealm", () => {
     await root.dispose();
     expect(realm.state).toBe(ScopeState.Disposed);
   });
+
+  it("rejects empty sessionId", () => {
+    const root = createRootScope();
+    expect(() => openSubagentRealm(root, { sessionId: "  " })).toThrow(
+      /sessionId required/,
+    );
+  });
+
+  it("can isolate a parent provide", async () => {
+    const root = createRootScope();
+    root.provide("fs", "host-fs");
+    const realm = openSubagentRealm(root, {
+      sessionId: "iso",
+      isolate: [{ name: "fs", label: "box" }],
+    });
+    await realm.activate(() => {
+      realm.provide("fs", "child-fs", { label: "box" });
+    });
+    expect(realm.inject<string>("fs")).toBe("child-fs");
+    expect(root.inject<string>("fs")).toBe("host-fs");
+    await root.dispose();
+  });
 });
 
 describe("activate failure", () => {

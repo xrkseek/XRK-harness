@@ -4,25 +4,16 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
-import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import { canOpenNativePath } from "../src/host-open-path.js";
 import { listSkillsFromWorkspace } from "../src/skill-list.js";
+import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
 
 function bareRuntime(workspaceRoot: string) {
-  return createFaceRuntime({
+  return createBareFaceRuntime({
     store: createMemorySessionStore(),
     workspaceRoot,
-    version: "test",
     registry: createProviderRegistry(),
-    drain: {
-      wake: () => {},
-      cancel: () => {},
-      isActive: () => false,
-    },
-    resolveAgent: async () => {
-      throw new Error("unused");
-    },
   });
 }
 

@@ -9,10 +9,10 @@
 import type { MessageContent, SessionEvent } from "@xrkseek/protocol";
 import { asContentBlocks } from "@xrkseek/protocol";
 import {
-  FaceInboxWireProjector,
+  type FaceInboxWireProjector,
   type DshInboxSplice,
 } from "./inbox-wire.js";
-import { presentToolView, type ToolEventView } from "./tool-view.js";
+import { presentToolView, type PresentToolLookup, type ToolEventView } from "./tool-view.js";
 import type { FaceWireIdMaps } from "./wire-ids.js";
 
 /** Published isomorphism keys (XRK type → wire role). */
@@ -61,6 +61,16 @@ export interface WireAdaptContext {
    * History builds a fresh projector; mux reuses the per-session instance.
    */
   readonly inbox?: FaceInboxWireProjector;
+  /**
+   * Call-id → { name, args } pairing for result-time presenters (DSH `argsFor`).
+   * History precomputes from the log; mux uses FaceToolArgMaps.
+   */
+  readonly toolArgs?: ReadonlyMap<
+    string,
+    { readonly name: string; readonly args: unknown }
+  >;
+  /** Tool presenter lookup (DSH `ctx.tools.get`). Omit → no view. */
+  readonly getTool?: PresentToolLookup["getTool"];
 }
 
 function wireContentBlocks(content: MessageContent): readonly (
@@ -329,12 +339,20 @@ function stripBase(event: SessionEvent): Record<string, unknown> {
   return copy;
 }
 
+function toolLookup(ctx?: WireAdaptContext): PresentToolLookup | undefined {
+  if (!ctx?.getTool) return undefined;
+  return {
+    getTool: ctx.getTool,
+    argsFor: (callId) => ctx.toolArgs?.get(callId),
+  };
+}
+
 export function toWireHistoryEntry(
   event: SessionEvent,
   seq: number,
   ctx?: WireAdaptContext,
 ): WireHistoryEntry {
-  const view = presentToolView(event);
+  const view = presentToolView(event, toolLookup(ctx));
   return {
     event: toDshWireSessionEvent(event, seq, ctx),
     ...(view ? { view } : {}),
@@ -345,8 +363,7 @@ export function toMuxSessionEvent(
   sessionId: string,
   event: SessionEvent,
   seq: number,
-  ids?: FaceWireIdMaps,
-  inbox?: FaceInboxWireProjector,
+  ctx?: WireAdaptContext,
 ): {
   readonly type: "session/event";
   readonly sessionId: string;
@@ -354,16 +371,18 @@ export function toMuxSessionEvent(
   readonly seq: number;
   readonly view?: ToolEventView;
 } {
-  const view = presentToolView(event);
-  const ctx: WireAdaptContext = {
+  const view = presentToolView(event, toolLookup(ctx));
+  const wireCtx: WireAdaptContext = {
     sessionId,
-    ...(ids ? { ids } : {}),
-    ...(inbox ? { inbox } : {}),
+    ...(ctx?.ids ? { ids: ctx.ids } : {}),
+    ...(ctx?.inbox ? { inbox: ctx.inbox } : {}),
+    ...(ctx?.toolArgs ? { toolArgs: ctx.toolArgs } : {}),
+    ...(ctx?.getTool ? { getTool: ctx.getTool } : {}),
   };
   return {
     type: "session/event",
     sessionId,
-    event: toDshWireSessionEvent(event, seq, ctx),
+    event: toDshWireSessionEvent(event, seq, wireCtx),
     seq,
     ...(view ? { view } : {}),
   };

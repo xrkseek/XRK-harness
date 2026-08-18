@@ -1,6 +1,6 @@
-import { access } from "node:fs/promises";
-import path from "node:path";
+import { stat } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { resolveProductWebDist } from "../product-paths.js";
 
 export interface DoctorResult {
   readonly ok: boolean;
@@ -11,40 +11,59 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
   const checks: { name: string; ok: boolean; detail: string }[] = [];
 
   const nodeMajor = Number(process.versions.node.split(".")[0] ?? 0);
+  const execPath = process.execPath;
   checks.push({
     name: "node",
-    ok: nodeMajor >= 20,
-    detail: `v${process.versions.node} (need >=20)`,
+    ok: nodeMajor >= 26,
+    detail: `v${process.versions.node} (need >=26) ${execPath}`,
   });
 
-  const pnpm = spawnSync("pnpm", ["--version"], {
+  const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  const pnpm = spawnSync(pnpmCmd, ["--version"], {
     encoding: "utf8",
-    shell: true,
   });
   checks.push({
     name: "pnpm",
-    ok: pnpm.status === 0,
+    ok: true,
     detail:
       pnpm.status === 0
         ? String(pnpm.stdout).trim()
-        : "pnpm not found on PATH",
+        : "not on PATH (ok for a built bin)",
   });
 
-  const marker = path.join(workspace, "pnpm-workspace.yaml");
-  let wsOk: boolean;
+  let wsOk = false;
   try {
-    await access(marker);
-    wsOk = true;
+    const st = await stat(workspace);
+    wsOk = st.isDirectory();
   } catch {
     wsOk = false;
   }
   checks.push({
     name: "workspace",
     ok: wsOk,
-    detail: wsOk
-      ? `found ${marker}`
-      : `missing pnpm-workspace.yaml under ${workspace}`,
+    detail: wsOk ? workspace : `not a directory: ${workspace}`,
   });
 
-  return { ok: checks.every((c) => c.ok), checks };
+  const web = await resolveProductWebDist();
+  checks.push({
+    name: "product-ui",
+    ok: Boolean(web),
+    detail: web ?? "apps/web-static/index.html not found next to CLI",
+  });
+
+  const llm = Boolean(process.env.XRK_LLM_PRESET?.trim());
+  checks.push({
+    name: "llm-preset",
+    ok: true,
+    detail: llm
+      ? `XRK_LLM_PRESET=${process.env.XRK_LLM_PRESET}`
+      : "unset (run/serve use replay until set)",
+  });
+
+  return {
+    ok: checks
+      .filter((c) => c.name !== "llm-preset" && c.name !== "pnpm")
+      .every((c) => c.ok),
+    checks,
+  };
 }

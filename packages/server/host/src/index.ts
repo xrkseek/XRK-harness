@@ -11,7 +11,15 @@ import {
 import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { createPolicyEngineFromFile } from "@xrkseek/policy";
 import type { HostConfig } from "@xrkseek/server-config";
-import { createHttpServer, type HarnessHttpServer, injectBootIntoHtml, loadBootManifestFromWebDist, mergeWebBootManifests, resolveWebBootManifest } from "@xrkseek/server-http";
+import {
+  applyXrkProductBootPolicy,
+  createHttpServer,
+  type HarnessHttpServer,
+  injectBootIntoHtml,
+  loadBootManifestFromWebDist,
+  mergeWebBootManifests,
+  resolveWebBootManifest,
+} from "@xrkseek/server-http";
 import {
   attachFaceUpgrades,
   createFaceRuntime,
@@ -232,9 +240,11 @@ export function createHostManager(): HostManager {
       const webOverlay = await resolveWebPluginOverlay(
         config.runtime.pluginsDir,
       );
-      const boot = mergeWebBootManifests(
-        resolveWebBootManifest(config.runtime.webDist),
-        webOverlay ? loadBootManifestFromWebDist(webOverlay) : undefined,
+      const boot = applyXrkProductBootPolicy(
+        mergeWebBootManifests(
+          resolveWebBootManifest(config.runtime.webDist),
+          webOverlay ? loadBootManifestFromWebDist(webOverlay) : undefined,
+        ),
       );
       const faceRuntime = createFaceRuntime({
         store,

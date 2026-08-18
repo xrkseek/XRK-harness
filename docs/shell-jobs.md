@@ -18,7 +18,7 @@ await shell.killJob(id); // no-op if already finished; throws if unknown id
 
 | Tool | Role |
 |------|------|
-| `bash` | `command` + optional `background: true` → start job, return id |
+| `bash` | `command` + optional `background: true` → start job, return id. Foreground 模型文本对齐 DSH：`[stderr]` 段 + 非零 `[exit code: N]`（不是 `isError`） |
 | `bash_jobs` | list jobs |
 | `bash_kill` | kill by id |
 
