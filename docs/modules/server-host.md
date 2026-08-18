@@ -38,7 +38,7 @@
 | `XRK_API_KEY` | Face/HTTP 鉴权（空=开发免鉴权） |
 | `XRK_SESSIONS_DIR` | JSONL 会话目录；省略 = 内存 store（CLI `serve` 另有默认 `{workspace}/.xrk/sessions`） |
 | `XRK_PLUGINS_DIR` | 进程插件根；`web/` 子目录为客户端叠加（boot + `/plugins/…`） |
-| `XRK_WEB_DIST` | 静态壳（CLI 按包定位本机 `apps/web-static` 捕获） |
+| `XRK_WEB_DIST` | 静态壳（CLI 默认 `apps/web/dist`） |
 | `XRK_POLICY_FILE` | policy JSON |
 | `XRK_MCP_SERVERS` | JSON 数组：`[{serverName,command,args?,env?,cwd?}]` 或 `[{serverName,url}]`；空则回退 `.xrk/host-settings.json` |
 | `XRK_MCP_ALLOW` | `1`/`true` → 本进程 mcp.connect 默认 allow |

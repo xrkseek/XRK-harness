@@ -1,6 +1,6 @@
 # @xrkseek/harness-cli
 
-CLI 入口：`xrk-harness`（`apps/cli`）。产品聊天 UI 是本机捕获（`apps/web-static`，不入库）；源码底稿 `apps/web` + `packages/client`。
+CLI 入口：`xrk-harness`（`apps/cli`）。产品聊天 UI = `apps/web/dist`；源码 `apps/web` + `packages/client`。
 
 ## 命令
 
@@ -38,7 +38,7 @@ node apps/cli/dist/bin.js run --preset minimal "ping"
 node apps/cli/dist/bin.js doctor
 ```
 
-`serve` 按 **CLI 包位置** 找本机 `apps/web-static`（无捕获则 `apps/console`），不把用户 `--workspace` 当成壳目录。捕获：在 bar 仓编出后设 `XRK_UI_SRC`，再 `pnpm web:ui:capture`。
+`serve` 按 **CLI 包位置** 找 `apps/web/dist`（无则 `apps/console`），不把用户 `--workspace` 当成壳目录。
 
 ## 环境变量
 
@@ -47,9 +47,3 @@ node apps/cli/dist/bin.js doctor
 `XRK_LLM_PRESET` · `XRK_SESSIONS_DIR` · `XRK_WEB_DIST` · `XRK_API_KEY` · `XRK_HOST` · `XRK_PORT` · `XRK_WORKSPACE` · `XRK_PRESET`
 
 调试：`XRK_DUMP_SESSION=1` 可在 run 路径向 stderr 打 session JSONL。
-
-会话 JSONL 与 `host-settings.json` 在 `.xrk/` 下，已 gitignore，不要提交。
-
-## 文档
-
-[docs/profiles.md](../../docs/profiles.md) · [docs/host-face.md](../../docs/host-face.md) · [examples/hello-agent](../../examples/hello-agent)

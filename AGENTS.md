@@ -25,7 +25,7 @@ TypeScript Agent Harness + Server Kit。宿主 **仅 TypeScript（Node ≥26）*
 - 密钥不入库
 - 文档只描述**本仓已有**行为；未实现的不要写成能力或路线清单
 - 本机临时路径 / 对照笔记 → Canvas，不进 `docs/` / README
-- **外壳可复用、内核不可让**：聊天 UI 二次创作底稿 = `apps/web` + `packages/client`（不是 GitHub Fork，不对 deepseek-ai 提 PR）。捕获 `apps/web-static` gitignore；Face 验证台 `apps/console`。无 vendor。session 事件真源 · TS 宿主 · 工具瀑布 · compose/presets 是本仓本质，Face 只对接 wire，不嵌 Cordis Host
+- **外壳可复用、内核不可让**：聊天 UI 二次创作 = `apps/web` + `packages/client`（不是 GitHub Fork，不对 deepseek-ai 提 PR）。Face 验证台 `apps/console`。无 vendor、无捕获目录。session 事件真源 · TS 宿主 · 工具瀑布 · compose/presets 是本仓本质，Face 只对接 wire，不嵌 Cordis Host
 
 ## 完成定义（切片）
 

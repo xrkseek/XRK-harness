@@ -48,7 +48,7 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
   checks.push({
     name: "product-ui",
     ok: Boolean(web),
-    detail: web ?? "no capture (pnpm web:ui:capture) — serve falls back to Face console",
+    detail: web ?? "no apps/web/dist — serve falls back to Face console",
   });
 
   const llm = Boolean(process.env.XRK_LLM_PRESET?.trim());

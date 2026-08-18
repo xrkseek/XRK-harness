@@ -1,6 +1,5 @@
 /**
- * Product shell: local capture at `apps/web-static` (gitignored).
- * Source: `apps/web` + `packages/client`. Fallback: `apps/console` dist.
+ * Product shell: `apps/web/dist` (build the shell source). Fallback: `apps/console/dist`.
  */
 import { access } from "node:fs/promises";
 import { readFileSync } from "node:fs";
@@ -38,7 +37,7 @@ export async function resolveProductWebDist(
   if (configured?.trim()) return path.resolve(configured.trim());
   const apps = harnessAppsRoot();
   const candidates = [
-    path.join(apps, "web-static"),
+    path.join(apps, "web", "dist"),
     path.join(apps, "console", "dist"),
   ];
   for (const dir of candidates) {

@@ -104,7 +104,7 @@ SSE stream of session events (replays history, then live).
 信封：`{ rpcId, payload }` → `{ rpcId, result }`。  
 U1 methods：`host.describe` · `session.create|list|history|prompt|cancel|models|selectModel` · `llm.providers|models|discoverModels`。详见 [host-face.md](./host-face.md)。
 
-Web：有捕获时托管 `apps/web-static`（gitignore）。源码底稿 `apps/web` + `packages/client`；无捕获回退 `apps/console`（`?console=1`）。
+Web：有 `apps/web/dist` 时托管产品壳。源码 `apps/web` + `packages/client`；无 dist 回退 `apps/console`（`?console=1`）。
 
 ```bash
 node apps/cli/dist/bin.js serve --preset server --workspace .
@@ -129,7 +129,7 @@ index.html 由 host 注入 `__DSH_BOOT__` / `__XRK_BOOT__`（`boot.json` merge `
 | `XRK_LLM_PRESET` | Provider Registry brand id (`openrouter`, `deepseek`, …) — see [llm-provider-registry.md](./llm-provider-registry.md) |
 | `XRK_LLM_MODEL` | optional model override when preset set |
 | `XRK_LLM_BASE_URL` | optional baseUrl override (required for `custom` / `newapi` / …) |
-| `XRK_WEB_DIST` | SPA dist root（CLI 默认本机 `apps/web-static` 捕获，按 CLI 包定位） |
+| `XRK_WEB_DIST` | SPA dist root（CLI 默认 `apps/web/dist`，否则 `apps/console/dist`） |
 | `XRK_SESSIONS_DIR` | JSONL 会话目录；CLI `serve` 省略时用 `{workspace}/.xrk/sessions`（`--no-persist` = 内存）；旁路 `subagents.json` · `goals.json` |
 | `XRK_POLICY_FILE` | policy JSON |
 | `XRK_MCP_SERVERS` | MCP 服务器 JSON（`command` 或 `url`）；空则回退 `.xrk/host-settings.json` |

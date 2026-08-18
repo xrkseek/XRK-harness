@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "DeepSeek Harness",
-  "short_name": "DSH",
+  "name": "XRK Harness",
+  "short_name": "XRK",
   "start_url": "/",
   "scope": "/",
   "display": "fullscreen",
@@ -10,6 +10,12 @@
       "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any"
     }
   ]

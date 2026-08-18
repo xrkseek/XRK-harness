@@ -18,14 +18,14 @@
 | MCP | `@xrkseek/mcp`；Host `XRK_MCP_*` 或 Face `mcp.servers` 落盘（默认 deny） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) |
 | Attachment / 插件 | Face 附件；进程插件 `tools` · `prompt` · `commands` | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
 
-**对齐 DSH 的口径（诚实）**：内核主路径已可当日常 harness 用；**不是** DSH 二百插件全集。产品壳底稿 = `apps/web` + `packages/client`；serve 用本机捕获 `apps/web-static`，内核不嵌 Cordis。
+**对齐 DSH 的口径（诚实）**：内核主路径已可当日常 harness 用；**不是** DSH 二百插件全集。产品壳 = `apps/web` + `packages/client`；serve 用 `apps/web/dist`，内核不嵌 Cordis。
 
 ## 未稳
 
 | 域 | 说明 |
 | --- | --- |
 | Host Face ↔ 产品 Web | 首屏 RPC + 静态壳有测；Face 冷 history 含 reasoning / standing 工具卡；浏览器硬刷 thinking / 工具卡仍未勾 E2E |
-| 产品 Web | 流式 / 工具卡浏览器硬刷未验收 |
+| 产品 Web | `apps/web/dist` 尚未自包含编出；浏览器硬刷未验收 |
 | 保留插件 kind | `channel` / `policy` / `llm` 可发现、未自动接线；Cordis 宿主包只登记 stub |
 
 ## 未做
@@ -44,6 +44,6 @@ presets / sdk / server → core* | llm | mcp | attachment | exec* | workspace | 
 core* / 能力叶 → kernel | protocol | compose
 ```
 
-外壳二次创作底稿：`apps/web` + `packages/client`。serve 用本机 `apps/web-static`（gitignore）。不是 GitHub Fork；无 vendor；内核不嵌 Cordis。见 [AGENTS.md](../AGENTS.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)。
+外壳二次创作：`apps/web` + `packages/client`。品牌：`apps/web/public`。serve 用 `apps/web/dist`（gitignore）。不是 GitHub Fork；无 vendor；内核不嵌 Cordis。见 [AGENTS.md](../AGENTS.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)。
 
 [learn.md](./learn.md) · [modules/](./modules/README.md)

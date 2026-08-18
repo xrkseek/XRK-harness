@@ -17,10 +17,10 @@ DSH Web 是 MIT。定点拷源码做二次创作合法，但 **GitHub Fork / 跟
 
 外壳：对 DSH Web 做 **MIT 二次创作**，不是 GitHub Fork。
 
-- 标准路径与 DSH 对齐：`apps/web` + `packages/client/*`（源码；无 dist/lib）
-- Face 验证台：`apps/console`
-- 捕获产物：`apps/web-static`（gitignore）
-- 无 vendor 联接；对照实现看本机 bar 仓（路径不进 docs）
+- 标准路径与 DSH 对齐：`apps/web` + `packages/client/*`（源码；serve 用 `apps/web/dist`）
+- 品牌：`apps/web/public`（XRK logo / PWA）
+- Face 验证台：`apps/console`（无 `web/dist` 时回退）
+- 无 vendor、无捕获目录；对照实现看本机 bar 仓（路径不进 docs）
 - 无 DSH upstream remote、**不对 deepseek-ai 提 PR**
 - 本仓根 [LICENSE](../../LICENSE)；DeepSeek 署名见 [apps/web/NOTICE](../../apps/web/NOTICE)
 
@@ -29,4 +29,4 @@ DSH Web 是 MIT。定点拷源码做二次创作合法，但 **GitHub Fork / 跟
 - 规格以本仓 `docs/` + 代码为准
 - Face 说 DSH 形 wire，真源仍是 session 事件
 - 产品 boot 省略 Cordis 客户端面板与捕获壳 HMR
-- `apps/web` / `packages/client` 暂不进 pnpm workspace（编出仍依赖完整 DSH 树 + `XRK_UI_SRC`）
+- `apps/web` / `packages/client` 暂不进 pnpm workspace（自包含编出尚未齐）

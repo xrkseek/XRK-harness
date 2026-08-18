@@ -79,9 +79,9 @@ describe("product paths", () => {
     expect(harnessAppsRoot()).toMatch(/apps$/);
   });
 
-  it("resolves a captured product shell when present", async () => {
+  it("resolves product shell dist when present", async () => {
     const dir = await resolveProductWebDist();
     if (!dir) return;
-    expect(dir).toMatch(/web-static$|[\\/]web[\\/]dist$/);
+    expect(dir).toMatch(/[\\/]web[\\/]dist$|[\\/]console[\\/]dist$/);
   });
 });

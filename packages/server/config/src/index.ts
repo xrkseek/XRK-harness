@@ -22,7 +22,7 @@ export interface HostRuntimeConfig {
   readonly pluginsDir?: string;
   /**
    * Optional SPA dist directory served by HTTP (public GET).
-   * Env: `XRK_WEB_DIST`. Default (CLI `serve`/`web`): local `apps/web-static` capture.
+   * Env: `XRK_WEB_DIST`. Default (CLI `serve`/`web`): `apps/web/dist`, else `apps/console/dist`.
    */
   readonly webDist?: string;
   /**

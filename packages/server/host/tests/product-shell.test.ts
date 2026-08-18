@@ -7,8 +7,8 @@ import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { loadHostConfig } from "@xrkseek/server-config";
 import { createHostManager } from "../src/index.js";
 
-const WEB_STATIC = path.resolve(process.cwd(), "apps", "web-static");
-const HAS_CAPTURE = existsSync(path.join(WEB_STATIC, "index.html"));
+const WEB_DIST = path.resolve(process.cwd(), "apps", "web", "dist");
+const HAS_SHELL = existsSync(path.join(WEB_DIST, "index.html"));
 
 async function faceRpc(
   base: string,
@@ -27,9 +27,9 @@ async function faceRpc(
   return body.result;
 }
 
-describe.skipIf(!HAS_CAPTURE)("product shell first paint", () => {
+describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
   it(
-    "serves captured DSH UI + boot inject + first-paint RPCs",
+    "serves apps/web/dist + boot inject + first-paint RPCs",
     async () => {
     const manager = createHostManager();
     const config = loadHostConfig({
@@ -40,7 +40,7 @@ describe.skipIf(!HAS_CAPTURE)("product shell first paint", () => {
       },
       patch: {
         workspaceRoot: process.cwd(),
-        webDist: WEB_STATIC,
+        webDist: WEB_DIST,
       },
     });
 
@@ -73,7 +73,7 @@ describe.skipIf(!HAS_CAPTURE)("product shell first paint", () => {
 
       const welcomeJs = await readFile(
         path.join(
-          WEB_STATIC,
+          WEB_DIST,
           "plugins",
           "@deepseek-ai",
           "dsh-client-ui-settings-models",
