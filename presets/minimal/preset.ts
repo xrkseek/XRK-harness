@@ -43,9 +43,11 @@ import path from "node:path";
 import {
   createWorkspaceInjector,
   createWorkspaceToolOutputPersist,
+  createSkillTools,
+  createSlashResolver,
   loadOfficeRecipes,
   resolveWorkspaceInject,
-  tryApplySlashRecipe,
+  SKILL_TOOL_GUIDANCE,
   type ResolveWorkspaceInjectOptions,
   type WorkspaceInjector,
 } from "@xrkseek/workspace";
@@ -79,8 +81,9 @@ export interface MinimalCompositionOptions {
    */
   readonly workspaceInject?: WorkspaceInjectOption;
   /**
-   * Load `{productDir}/recipes/*.yaml` and wire `/id …` expand on turns.
-   * Default: on when assemble is enabled. `false` skips; string = recipes dir.
+   * Load `{productDir}/recipes/*.yaml` for `/id …` expand on turns.
+   * Default: on when assemble is enabled. `false` skips recipes only;
+   * `/skill-name` still expands when assemble is on. string = recipes dir.
    * See docs/slash-recipes.md.
    */
   readonly slashRecipes?: boolean | string;
@@ -138,8 +141,17 @@ export function createMinimalComposition(
 ): MinimalComposition {
   const fs =
     options.fs ?? createFsLocalProvider({ root: options.workspaceRoot });
+  const injectOpts = toInjectOptions(
+    options.workspaceRoot,
+    options.workspaceInject,
+  );
+  const productDir =
+    injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
   const tools = createToolRegistry();
   for (const tool of createFsTools(fs)) {
+    tools.register(tool);
+  }
+  for (const tool of createSkillTools({ productDir })) {
     tools.register(tool);
   }
   wireCompositionTools(tools, {
@@ -197,22 +209,23 @@ export function createMinimalComposition(
 
   const persona =
     options.system ??
-    "You are a helpful coding agent with read_file, write_file, apply_edit, glob, grep.";
+    "You are a helpful coding agent with read_file, write_file, apply_edit, glob, grep, and skill.";
   const prompts = createSystemPromptAssembler();
   prompts.register({
     id: "base",
     order: 0,
     content: () => persona,
   });
+  prompts.register({
+    id: "tool:skill",
+    order: 112,
+    content: () => SKILL_TOOL_GUIDANCE,
+  });
   wireCompositionPrompts(prompts, {
     ...(options.plugins ? { plugins: options.plugins } : {}),
-    reservedIds: ["base"],
+    reservedIds: ["base", "tool:skill"],
   });
 
-  const injectOpts = toInjectOptions(
-    options.workspaceRoot,
-    options.workspaceInject,
-  );
   const workspace = createWorkspaceInjector({
     root: injectOpts.root,
     ...(injectOpts.productDir !== undefined
@@ -241,22 +254,15 @@ export function createMinimalComposition(
         const resolved = await resolveWorkspaceInject(injectOpts);
         workspaceBlocks = resolved.blocks;
       }
-      let resolveSlash:
-        | ((raw: string) => ReturnType<typeof tryApplySlashRecipe>)
-        | undefined;
+      const productDir =
+        injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
+      let recipes: Awaited<ReturnType<typeof loadOfficeRecipes>> = [];
       if (useAssemble && options.slashRecipes !== false) {
         const recipesDir =
           typeof options.slashRecipes === "string"
             ? options.slashRecipes
-            : path.join(
-                injectOpts.productDir ??
-                  path.join(injectOpts.root, ".xrk"),
-                "recipes",
-              );
-        const recipes = await loadOfficeRecipes(recipesDir);
-        if (recipes.length > 0) {
-          resolveSlash = (raw) => tryApplySlashRecipe(raw, recipes);
-        }
+            : path.join(productDir, "recipes");
+        recipes = await loadOfficeRecipes(recipesDir);
       }
       return createAgent({
         sessionId,
@@ -270,7 +276,7 @@ export function createMinimalComposition(
               assemble: {
                 persona: system,
                 ...(workspaceBlocks?.length ? { workspaceBlocks } : {}),
-                ...(resolveSlash ? { resolveSlash } : {}),
+                resolveSlash: createSlashResolver({ productDir, recipes }),
               },
             }
           : {}),

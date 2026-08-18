@@ -104,6 +104,10 @@ export interface AgentHandle {
       readonly detail?: string;
       readonly startedAt: number;
       readonly finishedAt?: number;
+      /** Internal — suppress Face completion notice after read/wait/kill. */
+      readonly reported?: boolean;
+      /** Producer UTF-8 cap for completion notice text. */
+      readonly outputLimitBytes?: number;
     }[];
     onJobsChanged(listener: () => void): () => void;
   };

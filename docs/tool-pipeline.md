@@ -22,7 +22,7 @@ tool/call (session, by loop)
 4. **Execute** — around + `timeoutMs` + `transientError` 重试；可选 `extras.emitToolEvent`。  
 5. **Post** — `accept` | `block` | `replace`；safety / additionalContext 分批。  
 6. **Finalize** — 只改 `content` 字符串。  
-7. **Output bound** — 默认行/字节上限；可选 workspace persist。  
+7. **Output bound** — 默认行/字节上限；可选 workspace persist。`result.meta` 透传（壳卡回放，不进 `deriveMessages`）。  
 8. **Result freeze** — `Object.freeze`。  
 9. **Side events** — `todo_write` / `exit_plan_mode` 等经 `emitToolEvent`；loop 校验后 append（不进 `deriveMessages`）。  
 10. **Settle** — 默认 parallel + 屏障；见 [tool-settlement.md](./tool-settlement.md)。  

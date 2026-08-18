@@ -10,5 +10,8 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md"]
+  "files": ["dist", "README.md"],
+  "dependencies": {
+    "@xrkseek/core-tools": "workspace:*"
+  }
 }

@@ -31,6 +31,10 @@ export {
   type ToolCallView,
   type ToolEventView,
   type ToolResultView,
+  type WebFetchResultView,
+  type WebResultView,
+  type WebSearchResultView,
+  type WebSource,
 } from "./presentation.js";
 export {
   presentToolEventView,

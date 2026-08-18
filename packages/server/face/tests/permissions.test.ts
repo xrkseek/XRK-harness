@@ -100,6 +100,34 @@ describe("Face permission presets", () => {
     ).toMatchObject({ currentValue: "danger-full-access" });
   });
 
+  it("refuses sandbox mode change while hasPtyActivity is true", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+      hasPtyActivity: () => true,
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const blocked = await dispatchFaceMethod(runtime, "commands/execute", "b", {
+      args: { agentId: sessionId, line: "/permission read-only" },
+    });
+    expect(blocked.result.ok).toBe(true);
+    if (blocked.result.ok) {
+      expect(blocked.result.value).toMatchObject({
+        result: {
+          kind: "error",
+          text: expect.stringContaining("cannot change sandbox mode"),
+        },
+      });
+    }
+    expect(
+      runtime.projections.snapshot(sessionId).values.permissions,
+    ).toMatchObject({ currentValue: "workspace-write" });
+  });
+
   it("approval never auto-allows without approval/requested", async () => {
     const store = createMemorySessionStore();
     const mux: unknown[] = [];

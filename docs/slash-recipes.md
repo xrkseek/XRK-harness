@@ -1,28 +1,31 @@
-# Slash recipes
+# Slash recipes and skills
 
-Expand `/recipe-id …` into model-visible user text + optional recipe instructions **before** `user/message` is logged.
+Expand `/id …` **before** `user/message` is logged. Recipe ids win when a skill has the same name.
 
 Hot path: `assemble.resolveSlash` inside `runTurn` (`@xrkseek/core-agent-loop`).  
-Recipe parse/apply: `@xrkseek/workspace` (`tryApplySlashRecipe`, `loadOfficeRecipes`).
+Parse/apply: `@xrkseek/workspace` (`createSlashResolver`, `tryApplySlashRecipe`, `tryApplySlashSkill`, `loadOfficeRecipes`).
 
 ## Behavior
 
-1. Text starts with `/id` and `id` matches a loaded recipe → expand.
-2. One required param → entire rest is that value; else `key=value` / `key: value` pairs.
-3. Unknown `/id` → leave raw text (no expand).
-4. Logged user content is the **expanded** prompt (model-visible ≡ session).
+1. Text starts with `/id` and `id` matches a loaded recipe → expand prompt + optional instructions.
+2. Else `id` matches `{productDir}/skills/<id>/SKILL.md` → prepend `<skill_content>` to the user prompt (`systemExtra` empty so it is not wrapped as `## Recipe`). Remainder after `/id` is kept after the body.
+3. One required recipe param → entire rest is that value; else `key=value` / `key: value` pairs.
+4. Unknown `/id` → leave raw text (no expand).
+5. Logged user content is the **expanded** prompt (model-visible ≡ session).
 
-Recipe instructions land as a `## Recipe` workspace block on the three-layer system string.
+Recipe instructions land as a `## Recipe` workspace block on the three-layer system string. Skill bodies do **not** — they are in the user event.
+
+Skill slash is **not** a Face command: unknown `/name` on `session.prompt` is admitted as text, then expanded here. `commands/list` / `commands/execute` still only cover builtins, process plugins, and recipes.
 
 ## Presets
 
-`minimal` / `harness` when `assemble !== false` and `slashRecipes !== false`:
+`minimal` / `harness` when `assemble !== false`:
 
 | Option | Meaning |
 |--------|---------|
-| omit / `true` | load `{productDir}/recipes/*.yaml` (default productDir `{root}/.xrk`) |
-| `false` | skip slash wire |
-| `string` | load that directory |
+| omit / `true` | load `{productDir}/recipes/*.yaml` (default productDir `{root}/.xrk`) plus skill slash |
+| `false` | skip recipe load; skill slash still wired |
+| `string` | load that recipes directory plus skill slash |
 
 Seed example: `templates/office-agent/recipes/daily-standup.yaml` via `syncSeedsFrom` or copy into `.xrk/recipes`.
 

@@ -41,6 +41,9 @@ const engine = createPolicyEngine({
 pipeline.onPre(createPolicyToolPre(engine));
 // Face `/permission read-only` → harness/minimal also mount:
 pipeline.onPre(createReadOnlyToolPre());
+// read-only denies apply_edit / write_file / bash / bash_jobs / bash_kill /
+// job_kill / run_code / terminal_open / terminal_send / terminal_signal /
+// terminal_close
 pipeline.onGuard(createPolicyToolGuard(engine));
 assertPolicyAllow(engine, { kind: "provider.use", providerId: llm.id });
 ```

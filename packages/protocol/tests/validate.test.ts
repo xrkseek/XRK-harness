@@ -92,6 +92,40 @@ describe("parseSessionEvent", () => {
     if (result.type === "tool/result") {
       expect(result.result.isError).toBe(true);
     }
+
+    const withMeta = parseSessionEvent({
+      type: "tool/result",
+      ts: 3,
+      turnId: "t",
+      stepId: "s",
+      result: {
+        toolCallId: "c1",
+        name: "web_search",
+        content: "Sources:",
+        meta: { truncated: false, sources: [{ url: "https://example.com" }] },
+      },
+    });
+    expect(withMeta).toMatchObject({
+      type: "tool/result",
+      result: {
+        name: "web_search",
+        meta: { truncated: false, sources: [{ url: "https://example.com" }] },
+      },
+    });
+    expect(() =>
+      parseSessionEvent({
+        type: "tool/result",
+        ts: 4,
+        turnId: "t",
+        stepId: "s",
+        result: {
+          toolCallId: "c1",
+          name: "web_search",
+          content: "x",
+          meta: [],
+        },
+      }),
+    ).toThrow(/meta must be a JSON object/);
   });
 
   it("parses prompt/admitted delivery", () => {

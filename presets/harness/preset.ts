@@ -25,11 +25,30 @@ import {
   type FsService,
 } from "@xrkseek/exec-fs";
 import {
+  WEB_FETCH_GUIDANCE,
+  WEB_SEARCH_GUIDANCE,
+  createDefaultWebAccess,
+  createWebTools,
+  type WebAccess,
+} from "@xrkseek/exec-web";
+import {
+  LSP_PROMPT_TEXT,
+  createDefaultLspAccess,
+  createLspTools,
+  type LspService,
+} from "@xrkseek/exec-lsp";
+import {
+  PTY_PROMPT_TEXT,
+  createDefaultPtyAccess,
+  createPtyTools,
+  type TerminalSessionService,
+} from "@xrkseek/exec-pty";
+import {
   createDenyListSandbox,
   createSandboxWrapGuard,
   createWorkspaceSandbox,
 } from "@xrkseek/exec-sandbox";
-import { createBashTools, createLocalShell, toJobView } from "@xrkseek/exec-shell";
+import { createBashTools, createLocalShell, toJobView, JOBS_PROMPT_TEXT } from "@xrkseek/exec-shell";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
 import {
   createRunCodeTool,
@@ -55,9 +74,11 @@ import path from "node:path";
 import {
   createWorkspaceInjector,
   createWorkspaceToolOutputPersist,
+  createSkillTools,
+  createSlashResolver,
   loadOfficeRecipes,
   resolveWorkspaceInject,
-  tryApplySlashRecipe,
+  SKILL_TOOL_GUIDANCE,
   type ResolveWorkspaceInjectOptions,
   type WorkspaceInjector,
 } from "@xrkseek/workspace";
@@ -95,8 +116,9 @@ export interface HarnessCompositionOptions {
    */
   readonly workspaceInject?: WorkspaceInjectOption;
   /**
-   * Load `{productDir}/recipes/*.yaml` and wire `/id …` expand on turns.
-   * Default: on when assemble is enabled. `false` skips; string = recipes dir.
+   * Load `{productDir}/recipes/*.yaml` for `/id …` expand on turns.
+   * Default: on when assemble is enabled. `false` skips recipes only;
+   * `/skill-name` still expands when assemble is on. string = recipes dir.
    * See docs/slash-recipes.md.
    */
   readonly slashRecipes?: boolean | string;
@@ -104,6 +126,25 @@ export interface HarnessCompositionOptions {
   readonly extraTools?: readonly ToolDefinition[];
   /** Host plugins — `kind: tools` merged after extras; explicit names win. */
   readonly plugins?: readonly RegisteredPlugin[];
+  /**
+   * Register `web_search` / `web_fetch`. Default: on (`createDefaultWebAccess`).
+   * `false` skips. Pass a `WebAccess` to inject search/fetch in tests.
+   */
+  readonly webTools?: boolean | WebAccess;
+  /**
+   * Register `lsp`. Default: on. `false` skips.
+   * Pass an `LspService` to inject in tests. No `XRK_LSP_COMMAND` → tool
+   * still visible, execute is an honest error.
+   */
+  readonly lspTools?: boolean | LspService;
+  /**
+   * Register PTY six-pack (`terminal_open/send/read/signal/close/list`).
+   * Default: on. `false` skips. Pass a `TerminalSessionService` to inject
+   * (Host shares one registry across agent invalidate for sandbox fence).
+   * Missing `node-pty` → tools still visible, `terminal_open` is an honest error.
+   * `terminal_send` supports `run_in_background` via composition shell jobs (`pty-send`).
+   */
+  readonly ptyTools?: boolean | TerminalSessionService;
   /** Optional policy engine → `pipeline.onPre(createPolicyToolPre)`. */
   readonly policy?: PolicyEngine;
   /** Host vision: resolve attachment bytes for image user content. */
@@ -129,6 +170,8 @@ export interface HarnessComposition {
   readonly prompts: SystemPromptAssembler;
   createAgent(): Promise<AgentHandle>;
   dumpConfig(patch?: Record<string, unknown>): Record<string, unknown>;
+  /** Cancel background jobs + await settlement (composition teardown). */
+  dispose(): Promise<void>;
 }
 
 function shouldInject(
@@ -160,11 +203,64 @@ export function createHarnessComposition(
     root: options.workspaceRoot,
     inner: createDenyListSandbox(),
   });
+  const injectOpts = toInjectOptions(
+    options.workspaceRoot,
+    options.workspaceInject,
+  );
+  const productDir =
+    injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
+  const store = options.sessionStore ?? createMemorySessionStore();
+  const sessionId = ensureSession(store, options.sessionId);
+  const sandboxMode = effectiveSandboxMode(
+    store.get(sessionId).events,
+    "workspace-write",
+  );
 
   const tools = createToolRegistry();
   for (const tool of createFsTools(fs)) tools.register(tool);
   for (const tool of createBashTools(shell)) tools.register(tool);
   for (const tool of createStdTools()) tools.register(tool);
+  for (const tool of createSkillTools({ productDir })) tools.register(tool);
+  if (options.webTools !== false) {
+    const access =
+      typeof options.webTools === "object"
+        ? options.webTools
+        : createDefaultWebAccess();
+    for (const tool of createWebTools(access)) tools.register(tool);
+  }
+  if (options.lspTools !== false) {
+    const service =
+      typeof options.lspTools === "object"
+        ? options.lspTools
+        : createDefaultLspAccess().service;
+    for (const tool of createLspTools({
+      workspaceRoot: options.workspaceRoot,
+      ...(service ? { service } : {}),
+    })) {
+      tools.register(tool);
+    }
+  }
+  if (options.ptyTools !== false) {
+    const service =
+      typeof options.ptyTools === "object"
+        ? options.ptyTools
+        : createDefaultPtyAccess({
+            workspaceRoot: options.workspaceRoot,
+            ...(shouldConfineSandbox(sandboxMode)
+              ? {
+                  wrapArgv: (argv, cwd) => sandbox.wrapArgv(argv, cwd),
+                }
+              : {}),
+          }).service;
+    for (const tool of createPtyTools({
+      workspaceRoot: options.workspaceRoot,
+      service,
+      jobs: shell,
+      ownerSessionId: sessionId,
+    })) {
+      tools.register(tool);
+    }
+  }
   if (options.presentation === "code") {
     tools.register(createRunCodeTool(createWorkerCodeRuntime()));
   }
@@ -177,18 +273,12 @@ export function createHarnessComposition(
   const toolOutputPersist = createWorkspaceToolOutputPersist({
     root: options.workspaceRoot,
   });
-  const store = options.sessionStore ?? createMemorySessionStore();
-  const sessionId = ensureSession(store, options.sessionId);
   const pipeline = createToolPipeline({
     outputBound: { persist: (full) => toolOutputPersist.persist(full) },
   });
   if (options.policy) {
     pipeline.onPre(createPolicyToolPre(options.policy));
   }
-  const sandboxMode = effectiveSandboxMode(
-    store.get(sessionId).events,
-    "workspace-write",
-  );
   if (sandboxMode === "read-only") {
     pipeline.onPre(createReadOnlyToolPre());
   }
@@ -223,22 +313,61 @@ export function createHarnessComposition(
 
   const persona =
     options.system ??
-    "You are a coding agent with filesystem and shell tools.";
+    "You are a coding agent with filesystem, shell, and web tools.";
   const prompts = createSystemPromptAssembler();
   prompts.register({
     id: "base",
     order: 0,
     content: () => persona,
   });
+  if (options.webTools !== false) {
+    prompts.register({
+      id: "tool:web_search",
+      order: 110,
+      content: () => WEB_SEARCH_GUIDANCE,
+    });
+    prompts.register({
+      id: "tool:web_fetch",
+      order: 111,
+      content: () => WEB_FETCH_GUIDANCE,
+    });
+  }
+  prompts.register({
+    id: "tool:skill",
+    order: 112,
+    content: () => SKILL_TOOL_GUIDANCE,
+  });
+  if (options.lspTools !== false) {
+    prompts.register({
+      id: "tool:lsp",
+      order: 113,
+      content: () => LSP_PROMPT_TEXT,
+    });
+  }
+  if (options.ptyTools !== false) {
+    prompts.register({
+      id: "tool:pty",
+      order: 114,
+      content: () => PTY_PROMPT_TEXT,
+    });
+  }
+  prompts.register({
+    id: "tool:jobs",
+    order: 106,
+    content: () => JOBS_PROMPT_TEXT,
+  });
   wireCompositionPrompts(prompts, {
     ...(options.plugins ? { plugins: options.plugins } : {}),
-    reservedIds: ["base"],
+    reservedIds: [
+      "base",
+      "tool:skill",
+      "tool:jobs",
+      ...(options.webTools !== false ? ["tool:web_search", "tool:web_fetch"] : []),
+      ...(options.lspTools !== false ? ["tool:lsp"] : []),
+      ...(options.ptyTools !== false ? ["tool:pty"] : []),
+    ],
   });
 
-  const injectOpts = toInjectOptions(
-    options.workspaceRoot,
-    options.workspaceInject,
-  );
   const workspace = createWorkspaceInjector({
     root: injectOpts.root,
     ...(injectOpts.productDir !== undefined
@@ -248,7 +377,7 @@ export function createHarnessComposition(
 
   return {
     id: presetId,
-    description: "Harness: fs + shell + sandbox + workspace inject",
+    description: "Harness: fs + shell + sandbox + web + lsp + pty + workspace inject",
     workspaceRoot: options.workspaceRoot,
     fs,
     workspace,
@@ -266,22 +395,15 @@ export function createHarnessComposition(
         const resolved = await resolveWorkspaceInject(injectOpts);
         workspaceBlocks = resolved.blocks;
       }
-      let resolveSlash:
-        | ((raw: string) => ReturnType<typeof tryApplySlashRecipe>)
-        | undefined;
+      const productDir =
+        injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
+      let recipes: Awaited<ReturnType<typeof loadOfficeRecipes>> = [];
       if (useAssemble && options.slashRecipes !== false) {
         const recipesDir =
           typeof options.slashRecipes === "string"
             ? options.slashRecipes
-            : path.join(
-                injectOpts.productDir ??
-                  path.join(injectOpts.root, ".xrk"),
-                "recipes",
-              );
-        const recipes = await loadOfficeRecipes(recipesDir);
-        if (recipes.length > 0) {
-          resolveSlash = (raw) => tryApplySlashRecipe(raw, recipes);
-        }
+            : path.join(productDir, "recipes");
+        recipes = await loadOfficeRecipes(recipesDir);
       }
       return createAgent({
         sessionId,
@@ -291,7 +413,14 @@ export function createHarnessComposition(
         pipeline,
         system,
         jobs: {
-          list: () => shell.listJobsNow().map(toJobView),
+          list: () =>
+            shell.listJobsNow().map((j) => ({
+              ...toJobView(j),
+              ...(j.reported ? { reported: true as const } : {}),
+              ...(j.outputLimitBytes !== undefined
+                ? { outputLimitBytes: j.outputLimitBytes }
+                : {}),
+            })),
           onJobsChanged: (listener) => shell.onJobsChanged(listener),
         },
         ...(useAssemble
@@ -299,7 +428,7 @@ export function createHarnessComposition(
               assemble: {
                 persona: system,
                 ...(workspaceBlocks?.length ? { workspaceBlocks } : {}),
-                ...(resolveSlash ? { resolveSlash } : {}),
+                resolveSlash: createSlashResolver({ productDir, recipes }),
               },
             }
           : {}),
@@ -324,6 +453,9 @@ export function createHarnessComposition(
         policy: Boolean(options.policy),
         ...patch,
       };
+    },
+    async dispose() {
+      await shell.dispose();
     },
   };
 }

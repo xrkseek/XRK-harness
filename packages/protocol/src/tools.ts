@@ -9,4 +9,9 @@ export interface ToolResult {
   readonly name: string;
   readonly content: string;
   readonly isError?: boolean;
+  /**
+   * Opaque presentation payload (DSH `output.presentationMeta`).
+   * Log-only for Face `viewFor` replay; not model-visible.
+   */
+  readonly meta?: Readonly<Record<string, unknown>>;
 }

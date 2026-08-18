@@ -294,4 +294,27 @@ describe("tool pipeline", () => {
     });
     expect(out.additionalContexts).toEqual(["ctx-a", "ctx-b"]);
   });
+
+  it("keeps presentation meta through finalize and output bound", async () => {
+    const reg = createToolRegistry();
+    reg.register({
+      name: "webby",
+      description: "w",
+      parameters: {},
+      async execute() {
+        return {
+          content: "hello",
+          meta: { kind: "search", truncated: false },
+        };
+      },
+    });
+    const out = await runToolDetailed({
+      registry: reg,
+      call: { id: "1", name: "webby", arguments: {} },
+    });
+    expect(out.result).toMatchObject({
+      content: "hello",
+      meta: { kind: "search", truncated: false },
+    });
+  });
 });

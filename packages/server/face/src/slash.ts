@@ -196,7 +196,11 @@ export async function executeFaceCommand(
         text: `current preset ${current} (available: ${FACE_PERMISSION_PRESETS.join(", ")})`,
       });
     }
-    const applied = applyPermissionPreset(runtime.store, sessionId, name);
+    const applied = applyPermissionPreset(runtime.store, sessionId, name, {
+      ...(runtime.hasPtyActivity
+        ? { hasPtyActivity: () => runtime.hasPtyActivity!() }
+        : {}),
+    });
     if (!applied.ok) {
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "error",

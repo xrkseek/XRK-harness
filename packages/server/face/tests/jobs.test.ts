@@ -7,6 +7,7 @@ import { WebSocket } from "ws";
 import {
   createFaceOnlyServer,
   createFaceRuntime,
+  formatJobCompletionNotice,
   jobViews,
   type FaceJobsSource,
   type JobView,
@@ -239,5 +240,238 @@ describe("session/jobs change pushes", () => {
     });
     jobs.set([runningJob({ label: "open to every caller" })]);
     expect(new Set(sessionIds).size).toBe(2);
+  });
+});
+
+describe("job completion notices (DSH tool-jobs wakeup)", () => {
+  it("formatJobCompletionNotice matches DSH copy", () => {
+    expect(
+      formatJobCompletionNotice({
+        id: "pty-send-1",
+        kind: "pty-send",
+        label: "pty-1: ls",
+        status: "completed",
+        detail: "wait: stdin_read",
+        startedAt: 1,
+        finishedAt: 2,
+      }),
+    ).toBe(
+      "background job pty-send-1 (pty-send: pty-1: ls) finished [status: completed, wait: stdin_read]. Read its output with job_output.",
+    );
+  });
+
+  it("idle agent: admit + wake on settle; already-settled at bind is silent", async () => {
+    const store = createMemorySessionStore();
+    const wakes: string[] = [];
+    const admits: { content: string; delivery?: string }[] = [];
+    let items: JobView[] = [
+      runningJob({ id: "prior-1", status: "completed", finishedAt: 2 }),
+    ];
+    const listeners = new Set<() => void>();
+    const agentJobs = {
+      list: () => items,
+      onJobsChanged(listener: () => void) {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    };
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      version: "test",
+      drain: {
+        wake(sessionId) {
+          wakes.push(sessionId);
+        },
+        async cancel() {},
+        isActive() {
+          return false;
+        },
+      },
+      resolveAgent: async (sessionId) =>
+        ({
+          admit: (content, opts) => {
+            const receipt = admitPrompt(store, sessionId, content, opts);
+            admits.push({
+              content: typeof content === "string" ? content : String(content),
+              ...(opts?.delivery ? { delivery: opts.delivery } : {}),
+            });
+            return receipt;
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => false,
+          abort() {},
+          setApprovalHandler() {},
+          jobs: agentJobs,
+        }) as never,
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    await runtime.resolveAgent(sessionId);
+    expect(admits).toEqual([]);
+
+    items = [
+      ...items,
+      {
+        id: "bash-2",
+        kind: "bash",
+        label: "echo hi",
+        status: "completed",
+        startedAt: 3,
+        finishedAt: 4,
+      },
+    ];
+    for (const listener of listeners) listener();
+    expect(admits).toHaveLength(1);
+    expect(admits[0]?.content).toContain("background job bash-2");
+    expect(wakes).toContain(sessionId);
+  });
+
+  it("skips notice when agent job already reported (read/wait/kill)", async () => {
+    const store = createMemorySessionStore();
+    const wakes: string[] = [];
+    const admits: string[] = [];
+    let items: Array<JobView & { reported?: boolean }> = [];
+    const listeners = new Set<() => void>();
+    const agentJobs = {
+      list: () => items,
+      onJobsChanged(listener: () => void) {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    };
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      version: "test",
+      drain: {
+        wake(sessionId) {
+          wakes.push(sessionId);
+        },
+        async cancel() {},
+        isActive() {
+          return false;
+        },
+      },
+      resolveAgent: async (sessionId) =>
+        ({
+          admit: (content, opts) => {
+            admits.push(typeof content === "string" ? content : String(content));
+            return admitPrompt(store, sessionId, content, opts);
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => false,
+          abort() {},
+          setApprovalHandler() {},
+          jobs: agentJobs,
+        }) as never,
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    await runtime.resolveAgent(sessionId);
+
+    items = [
+      {
+        id: "pty-send-1",
+        kind: "pty-send",
+        label: "pty-1: ls",
+        status: "completed",
+        detail: "wait: stdin_read",
+        startedAt: 1,
+        finishedAt: 2,
+        reported: true,
+      },
+    ];
+    for (const listener of listeners) listener();
+    expect(admits).toEqual([]);
+    expect(wakes).toEqual([]);
+  });
+
+  it("busy agent still wakes; over-budget idle admits without wake", async () => {
+    const store = createMemorySessionStore();
+    const wakes: string[] = [];
+    let busy = true;
+    let items: JobView[] = [];
+    const listeners = new Set<() => void>();
+    const agentJobs = {
+      list: () => items,
+      onJobsChanged(listener: () => void) {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    };
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      version: "test",
+      drain: {
+        wake(sessionId) {
+          wakes.push(sessionId);
+        },
+        async cancel() {},
+        isActive() {
+          return false;
+        },
+      },
+      resolveAgent: async (sessionId) =>
+        ({
+          admit: (content, opts) => admitPrompt(store, sessionId, content, opts),
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => busy,
+          abort() {},
+          setApprovalHandler() {},
+          jobs: agentJobs,
+        }) as never,
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    await runtime.resolveAgent(sessionId);
+
+    const settle = (id: string) => {
+      items = [
+        ...items.filter((j) => j.id !== id),
+        {
+          id,
+          kind: "bash",
+          label: id,
+          status: "completed" as const,
+          startedAt: 1,
+          finishedAt: 2,
+        },
+      ];
+      for (const listener of listeners) listener();
+    };
+
+    settle("b1");
+    expect(wakes.filter((s) => s === sessionId)).toHaveLength(1);
+
+    busy = false;
+    wakes.length = 0;
+    settle("b2");
+    settle("b3");
+    settle("b4");
+    expect(wakes.filter((s) => s === sessionId)).toHaveLength(3);
+    wakes.length = 0;
+    settle("b5");
+    expect(wakes.filter((s) => s === sessionId)).toHaveLength(0);
+    const pending = store
+      .get(sessionId)
+      .events.filter((e) => e.type === "prompt/admitted");
+    expect(pending.length).toBeGreaterThanOrEqual(5);
   });
 });

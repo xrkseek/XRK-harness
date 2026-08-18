@@ -10,7 +10,7 @@
 |------|------|----------|
 | `index.ts` | `createHostManager` · spawn/stop | AgentHandle 可缓存绑定，**不可**当 transcript |
 | `agent-cache.ts` | 按 session 缓存 agent · `host.plugins` Scope | 根会话 `agent:{id}`；子会话 `openSubagentRealm`（`subagent:{id}`）；invalidate 父卸嵌套子 |
-| `standing-tools.ts` | preset standing 工具表（Face `viewFor`） | 冷 history 不 resume agent；minimal = fs+std，harness/server 加 bash |
+| `standing-tools.ts` | preset standing 工具表（Face `viewFor`） | 冷 history 不 resume agent；minimal = fs+std+skill，harness/server 加 bash + web + lsp + pty |
 | `mcp-wire.ts` | `XRK_MCP_SERVERS` → 合成 `kind: tools` 插件 | 须 allow；id = `mcp:<serverName>`；list_changed 刷新 tools + invalidateAll |
 
 配置在 `@xrkseek/server-config`（`loadHostConfig`）。
@@ -42,6 +42,8 @@
 | `XRK_POLICY_FILE` | policy JSON |
 | `XRK_MCP_SERVERS` | JSON 数组：`[{serverName,command,args?,env?,cwd?}]` 或 `[{serverName,url}]` |
 | `XRK_MCP_ALLOW` | `1`/`true` → 本进程 mcp.connect 默认 allow |
+| `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY` | web_search；见 [web-tools.md](../web-tools.md) |
+| `XRK_LSP_COMMAND` / `XRK_LSP_ARGS` | `lsp` stdio 语言服务器；见 [lsp-tools.md](../lsp-tools.md) |
 
 ## AgentFactory 输入
 

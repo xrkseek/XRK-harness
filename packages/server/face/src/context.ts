@@ -128,6 +128,11 @@ export interface FaceRuntime {
   readonly questions: FaceQuestionBroker;
   /** Drop cached agent when preset changes (host wires). May be async (compose dispose). */
   invalidateAgent?(sessionId: string): void | Promise<void>;
+  /**
+   * When true, `/permission` refuses sandbox mode changes while PTY sessions
+   * are open or spawning (CV DSH terminal-bash sandbox fence).
+   */
+  hasPtyActivity?(): boolean;
   /** Publish store appends as mux session/event. */
   watchSession(sessionId: string): void;
   publishQueue(sessionId: string): void;

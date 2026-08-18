@@ -64,12 +64,13 @@ whenToUse: when testing skill.list
     );
 
     const listed = await listSkillsFromWorkspace(ws);
-    expect(listed).toEqual([
+    expect(listed).toMatchObject([
       {
         name: "office-ping",
         description: "Ping skill for tests",
         whenToUse: "when testing skill.list",
         modelInvocable: true,
+        dirName: "office-ping",
       },
     ]);
 

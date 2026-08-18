@@ -71,10 +71,21 @@ describe("bash presenters (DSH tool-bash)", () => {
       listJobsNow() {
         return [];
       },
-      async killJob() {},
+      async killJob() {
+        return "requested" as const;
+      },
+      startManagedJob() {
+        return { id: "pty-send-1" };
+      },
+      readJobOutput() {
+        return "";
+      },
+      async waitJob() {},
+      markJobReported() {},
       onJobsChanged() {
         return () => {};
       },
+      async dispose() {},
     };
     const bash = createBashTools(shell).find((t) => t.name === "bash")!;
     const out = await bash.execute({ command: "false" });

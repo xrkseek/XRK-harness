@@ -32,10 +32,13 @@ HTTP：`createHostManager` + `loadHostConfig` + preset factory — 见 CLI `serv
 | Session | `createMemorySessionStore` · `createJsonlSessionStore` · `has` · `newSession` · `admitPrompt` · `promoteAdmitsForTurn` · `deriveMessages` · latches · safety · dangling |
 | Protocol | `parseSessionEvent` · `sessionEventJsonSchema` · `parsePromptDelivery` |
 | Tools | `createToolRegistry` · `createToolPipeline` · `createStdTools` · `materializeTools` · `boundToolOutput` · `runTool` |
+| Web | `createWebTools` · `createDefaultWebAccess` · `createHttpFetchProvider` |
+| LSP | `createLspTools` · `createDefaultLspAccess` · `createStdioLspService` |
+| PTY | `createPtyTools` · `createDefaultPtyAccess` · `createTerminalSessionService` |
 | Prompt | `assembleThreeLayers` · `createSystemPromptAssembler` · `createOutboundPipeline` |
 | LLM | `LlmAdapter` · `stream()` · `createReplayAdapter` · `createOpenAiCompatibleAdapter` · `createDeepSeekAdapter` · `collectLlmStream` |
 | Plugins | `createPluginLoader` · `wireCompositionTools` / `Prompts` · `collectPluginCommands` · `PLUGIN_KINDS` |
-| Workspace | `createWorkspaceInjector` · `resolveWorkspaceInject` · `createWorkspaceToolOutputPersist` · recipes |
+| Workspace | `createWorkspaceInjector` · `resolveWorkspaceInject` · `createWorkspaceToolOutputPersist` · recipes · `createSlashResolver` · `createSkillTools` · `listSkillsFromWorkspace` |
 | Policy | `createPolicyEngine` · ruleset file load · `createPolicyToolPre` / `Guard` · `denyToolNames` |
 | MCP | `createMcpClient` · `registerMcpTools` · `publicToolName`（默认 deny；可 watch list_changed） |
 | Presets | `createMinimalComposition` · `createHarnessComposition` · `createServerComposition` / `createServerAgentFactory` |

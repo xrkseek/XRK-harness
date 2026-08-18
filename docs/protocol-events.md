@@ -12,7 +12,7 @@ Append-only session facts (`@xrkseek/protocol`). Model-visible history is recons
 | `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta；可选 `kind`：`text`\|`reasoning`；可选 `index`（reasoning=0、text=1 当两者都出现） |
 | `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls`；可选 `reasoning`（非 deriveMessages 可见） |
 | `tool/call` | `turnId`, `stepId`, `call` | Before pipeline body |
-| `tool/result` | `turnId`, `stepId`, `result` | Settled result |
+| `tool/result` | `turnId`, `stepId`, `result` | Settled result；`result.meta` 可选（壳卡回放，不进 `deriveMessages`） |
 | `prompt/admitted` | `admitId`, `content` | MessageContent（string \| blocks）；可选 `delivery`: steer\|queue |
 | `prompt/promoted` | `admitId` | Consumed into a turn (not yet chat) |
 | `prompt/withdrawn` | `admitId` | Inbox withdraw (edit/remove/steer rewrite) |

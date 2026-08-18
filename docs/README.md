@@ -8,7 +8,7 @@
 | --- | --- |
 | [status.md](./status.md) | 能力三态（能跑 / 未稳 / 未做） |
 | 本目录其它 `.md` | 契约：HTTP · Face · session · 工具 · LLM |
-| [modules/](./modules/README.md) | 30 包索引 + 大包文件地图 |
+| [modules/](./modules/README.md) | 33 包索引 + 大包文件地图 |
 | [architecture.md](./architecture.md) | 包平面 · 仓库树 |
 | [learn.md](./learn.md) | 已落地要点（短） |
 | Cursor Canvas | 对照仓 / 体量 / 本机路径（**不入库**） |
@@ -61,10 +61,13 @@
 | [tool-settlement.md](./tool-settlement.md)     | dangling · parallel settle          |
 | [tool-output-bound.md](./tool-output-bound.md) | 大结果 bound                        |
 | [seams.md](./seams.md)                         | Definition / Provider / Consumer    |
+| [web-tools.md](./web-tools.md)                 | `web_search` / `web_fetch`          |
+| [lsp-tools.md](./lsp-tools.md)                 | `lsp` 四操作导航                    |
+| [pty-tools.md](./pty-tools.md)                 | `terminal_*` 持久 PTY               |
 | [shell-jobs.md](./shell-jobs.md)               | shell 后台 job                      |
 | [code-mode.md](./code-mode.md)                 | `run_code` 实验面                   |
 | [workspace-inject.md](./workspace-inject.md)   | `.xrk` 注入                         |
-| [slash-recipes.md](./slash-recipes.md)         | `/recipe-id`                        |
+| [slash-recipes.md](./slash-recipes.md)         | `/recipe-id` · `/skill-name`        |
 | [policy.md](./policy.md)                       | tool / provider / mcp 门禁          |
 | [modules/mcp.md](./modules/mcp.md)             | MCP client 文件地图                 |
 | [compose.md](./compose.md)                     | `@xrkseek/compose` Scope / Ordering |

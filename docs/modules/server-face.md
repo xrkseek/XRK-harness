@@ -56,10 +56,10 @@ HTTP/WS (attach-http)
 | `queue.ts`           | `session/queue` 项形：`{id,placement,message}` | 勿退回扁平 `content`                           |
 | `approvals.ts`       | policy ask · `approvalRequestedFrame`      | 稳定 rpcId；`session.respondApproval` 仍可用 |
 | `questions.ts`       | DSH user-questions · `bindAskUserTool`     | `question/requested`；`questions[]` + `question`；respond 先审批后提问 |
-| `slash.ts`           | recipe catalog · `commands/execute`            | 插件 command 优先；内建 `/compact` · `/export` · `/feedback` · `/goal` · `/permission` · `/plan`；miss → `undefined`（不入账） |
+| `slash.ts`           | recipe catalog · `commands/execute`            | 插件 command 优先；内建 `/compact` · `/export` · `/feedback` · `/goal` · `/permission` · `/plan`；miss → `undefined`（当普通 prompt；skill 斜杠在 loop `resolveSlash`） |
 | `plugin-inventory.ts` | `pluginInventory/list` 投影                    | 进程插件 + boot；cordis = failed |
 | `session-search.ts`  | `session.search`                               | query 1..500 · 禁 NUL · 最多 20 · 最近活动优先 · 含 admit/safety/command/todo/feedback |
-| `skill-list.ts`      | `skill.list`                                   | 扫 `.xrk/skills/<id>/SKILL.md`；要 `sessionId` |
+| `skill-list.ts`      | `skill.list`                                   | 扫 `.xrk/skills/<id>/SKILL.md`（`@xrkseek/workspace`）；要 `sessionId`；模型加载走 `skill` 工具 |
 | `presets-catalog.ts` | agentPreset 列表常量                           | `read` 只读；创作面仍 NI                             |
 | `message-feedback.ts` | `messageFeedback/list/put/delete`             | 进程内 CAS；Typert 嵌套 ok；非 transcript |
 | `goal-store.ts`       | `goals/*` + `/goal`                            | 投影 sidecar；turn/end 续轮；`goals.json` |

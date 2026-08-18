@@ -13,6 +13,9 @@
     { "path": "../../core/session" },
     { "path": "../../core/tools" },
     { "path": "../../exec/fs" },
+    { "path": "../../exec/web" },
+    { "path": "../../exec/lsp" },
+    { "path": "../../exec/pty" },
     { "path": "../../exec/shell" },
     { "path": "../../exec/subprocess" },
     { "path": "../../llm/registry" },
@@ -21,6 +24,7 @@
     { "path": "../config" },
     { "path": "../face" },
     { "path": "../http" },
-    { "path": "../loader" }
+    { "path": "../loader" },
+    { "path": "../../workspace" }
   ]
 }

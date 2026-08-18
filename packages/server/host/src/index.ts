@@ -43,6 +43,7 @@ import path from "node:path";
 import { createHostAgentCache } from "./agent-cache.js";
 import { loadMcpToolPlugins, parseMcpServersEnv } from "./mcp-wire.js";
 import { createStandingToolRegistry } from "./standing-tools.js";
+import { createDefaultPtyAccess } from "@xrkseek/exec-pty";
 
 export { createHostAgentCache, HOST_PLUGINS_KEY } from "./agent-cache.js";
 export { createStandingToolRegistry } from "./standing-tools.js";
@@ -91,6 +92,11 @@ export type AgentFactory = (input: {
   plugins: readonly RegisteredPlugin[];
   /** Attachment bytes for vision user content (Host memory store). */
   resolveImage?: AgentImageResolver;
+  /**
+   * Host-shared PTY registry (harness/server). Survives agent invalidate so
+   * sandbox-mode fence and open sessions stay composition-true.
+   */
+  ptyService?: import("@xrkseek/exec-pty").TerminalSessionService;
 }) => Promise<AgentHandle>;
 
 /** Host-side drain control (admit wake / resume join). */
@@ -173,6 +179,13 @@ export function createHostManager(): HostManager {
       const lastDrainResult = new Map<string, AgentRunResult>();
       const attachments = createMemoryAttachmentStore();
 
+      const sharedPty =
+        config.runtime.preset === "harness" || config.runtime.preset === "server"
+          ? createDefaultPtyAccess({
+              workspaceRoot: config.runtime.workspaceRoot,
+            })
+          : undefined;
+
       const ensureSession = (sid?: string) => newSession(store, sid).id;
 
       const faceBox: {
@@ -202,6 +215,7 @@ export function createHostManager(): HostManager {
                   data: stored.data,
                 };
               },
+              ...(sharedPty ? { ptyService: sharedPty.service } : {}),
             });
             if (faceBox.approvals) {
               agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
@@ -310,6 +324,9 @@ export function createHostManager(): HostManager {
           ? { settingsDocumentPath: path.resolve(config.runtime.policyFile) }
           : {}),
         invalidateAgent: (sessionId) => agentCache.invalidate(sessionId),
+        ...(sharedPty
+          ? { hasPtyActivity: () => sharedPty.service.hasActivity() }
+          : {}),
         drain: {
           wake: (sessionId) => drain.wake(sessionId),
           cancel: (sessionId) => drain.cancel(sessionId),
@@ -397,6 +414,13 @@ export function createHostManager(): HostManager {
           status = "stopped";
           await http.close();
           await agentCache.dispose();
+          if (sharedPty) {
+            try {
+              await sharedPty.service.dispose();
+            } catch {
+              // Host stop must continue even if PTY cleanup partially fails.
+            }
+          }
           for (const p of loader.list()) {
             await loader.unregister(p.id);
           }

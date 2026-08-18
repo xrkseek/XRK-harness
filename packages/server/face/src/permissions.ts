@@ -186,11 +186,15 @@ export function pinInitialPermission(
 /**
  * Switch preset: append changed knobs only. Selecting the effective preset
  * again appends nothing.
+ *
+ * Optional `hasPtyActivity` fences sandbox mode changes while PTY sessions are
+ * open or spawning (CV DSH terminal-bash `ensureSandboxModeFence`).
  */
 export function applyPermissionPreset(
   store: SessionStore,
   sessionId: string,
   name: string,
+  options?: { readonly hasPtyActivity?: () => boolean },
 ):
   | { readonly ok: true; readonly changed: boolean }
   | { readonly ok: false; readonly message: string } {
@@ -205,6 +209,17 @@ export function applyPermissionPreset(
   if (current === name) return { ok: true, changed: false };
   const spec = FACE_PERMISSION_TABLE[name];
   const knobs = foldPermissionKnobs(events);
+  const currentSandbox =
+    knobs.sandbox ?? FACE_PERMISSION_TABLE["workspace-write"].sandbox;
+  if (
+    knobs.sandbox !== spec.sandbox &&
+    options?.hasPtyActivity?.() === true
+  ) {
+    return {
+      ok: false,
+      message: `cannot change sandbox mode from "${currentSandbox}" to "${spec.sandbox}" while persistent terminal sessions are open or being created; wait for creation to settle and close them first`,
+    };
+  }
   const ts = now();
   if (knobs.preset !== name) {
     store.append(sessionId, {

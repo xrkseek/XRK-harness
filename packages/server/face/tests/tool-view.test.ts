@@ -100,4 +100,64 @@ describe("Face tool-view lookup (DSH viewFor)", () => {
       }),
     ).toBeUndefined();
   });
+
+  it("replays a web search card from tool/result.meta", () => {
+    const web: Pick<ToolDefinition, "presentCall" | "presentResult"> = {
+      presentCall: (args) => ({
+        card: "generic",
+        title: String((args as { query?: string }).query ?? ""),
+        kind: "search",
+      }),
+      presentResult: (args, res) => {
+        const meta = res.meta as
+          | {
+              sources: readonly { url: string }[];
+              truncated: boolean;
+              answer?: string;
+            }
+          | undefined;
+        if (res.isError || !meta) return undefined;
+        return {
+          card: "web",
+          kind: "search",
+          title: String((args as { query?: string } | undefined)?.query ?? ""),
+          sources: meta.sources,
+          truncated: meta.truncated,
+          ...(meta.answer !== undefined ? { answer: meta.answer } : {}),
+        };
+      },
+    };
+    const event: SessionEvent = {
+      type: "tool/result",
+      ts: 2,
+      turnId: "t",
+      stepId: "s",
+      result: {
+        toolCallId: "c1",
+        name: "web_search",
+        content: "Sources: …",
+        meta: {
+          sources: [{ url: "https://example.com/" }],
+          truncated: false,
+          answer: "hi",
+        },
+      },
+    };
+    expect(
+      presentToolView(event, {
+        getTool: (name) => (name === "web_search" ? web : undefined),
+        argsFor: () => ({ name: "web_search", args: { query: "news" } }),
+      }),
+    ).toEqual({
+      for: "result",
+      view: {
+        card: "web",
+        kind: "search",
+        title: "news",
+        sources: [{ url: "https://example.com/" }],
+        truncated: false,
+        answer: "hi",
+      },
+    });
+  });
 });

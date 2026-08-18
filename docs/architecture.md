@@ -46,7 +46,7 @@
 
 ## 仓库树（与落盘对齐）
 
-30 个 `@xrkseek/*` 库包。改路径先改本树与 [status.md](./status.md)，再改代码。
+33 个 `@xrkseek/*` 库包。改路径先改本树与 [status.md](./status.md)，再改代码。
 
 ```text
 XRK-harness/
@@ -59,7 +59,7 @@ XRK-harness/
 │   ├── core/{agent,agent-loop,tools,session,system-prompt}/
 │   ├── llm/{llm,openai-compatible,deepseek,replay,registry}/
 │   ├── mcp/ · attachment/
-│   ├── exec/{fs,subprocess,shell,sandbox}/
+│   ├── exec/{fs,subprocess,shell,sandbox,web,lsp,pty}/
 │   ├── workspace/ · policy/ · code-runtime/ · web-runtime/
 │   ├── server/{http,loader,host,config,face}/
 │   ├── sdk/ · testkit/

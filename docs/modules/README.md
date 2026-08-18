@@ -19,7 +19,7 @@
 | `@xrkseek/mcp` | [mcp.md](./mcp.md) | [policy.md](../policy.md) |
 | `@xrkseek/attachment` | [attachment.md](./attachment.md) | [protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) |
 
-## 全包索引（30）
+## 全包索引（33）
 
 路径相对 `packages/`。未单列笔记的包以 README + `src/index.ts` 为准。
 
@@ -41,6 +41,9 @@
 | `mcp/` | `@xrkseek/mcp` | [mcp.md](./mcp.md) · [policy.md](../policy.md) |
 | `attachment/` | `@xrkseek/attachment` | [attachment.md](./attachment.md) |
 | `exec/fs/` | `@xrkseek/exec-fs` | [seams.md](../seams.md) |
+| `exec/web/` | `@xrkseek/exec-web` | [web-tools.md](../web-tools.md) · [seams.md](../seams.md) |
+| `exec/lsp/` | `@xrkseek/exec-lsp` | [lsp-tools.md](../lsp-tools.md) · [seams.md](../seams.md) |
+| `exec/pty/` | `@xrkseek/exec-pty` | [pty-tools.md](../pty-tools.md) · [seams.md](../seams.md) |
 | `exec/subprocess/` | `@xrkseek/exec-subprocess` | [seams.md](../seams.md) |
 | `exec/shell/` | `@xrkseek/exec-shell` | [shell-jobs.md](../shell-jobs.md) |
 | `exec/sandbox/` | `@xrkseek/exec-sandbox` | [seams.md](../seams.md) · [policy.md](../policy.md) |
