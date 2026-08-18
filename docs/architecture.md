@@ -7,7 +7,7 @@
 | ADR | 决策 |
 |-----|------|
 | [0001](./adr/0001-typescript-only-host.md) | 仅 TypeScript 宿主 |
-| [0002](./adr/0002-no-embed-upstream.md) | 内核本仓实现；外壳可复用 DSH Web 捕获 |
+| [0002](./adr/0002-no-embed-upstream.md) | 内核本仓实现；外壳 MIT 二次创作（非 GitHub Fork） |
 | [0003](./adr/0003-session-long-loop-short.md) | Session 长寿 · Loop 短寿 |
 | [0004](./adr/0004-no-effect-runtime.md) | 无代数效应运行时内核 |
 | [0005](./adr/0005-compose-leaf.md) | 组合叶包 `@xrkseek/compose` |

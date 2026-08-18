@@ -44,6 +44,6 @@ presets / sdk / server → core* | llm | mcp | attachment | exec* | workspace | 
 core* / 能力叶 → kernel | protocol | compose
 ```
 
-外壳（本机 `apps/web-static`）可复用 DSH 捕获，与上游 `apps/web/dist` 一样不入库；内核不嵌 Cordis。见 [AGENTS.md](../AGENTS.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)。
+外壳（本机 `apps/web-static`）是 DSH Web 的 MIT 二次创作底稿的捕获面，不是 GitHub Fork；内核不嵌 Cordis。见 [AGENTS.md](../AGENTS.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)。
 
 [learn.md](./learn.md) · [modules/](./modules/README.md)
