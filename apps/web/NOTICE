@@ -2,10 +2,10 @@
 
 ## XRK Harness Web
 
-Product UI is a secondary fork of **DeepSeek Harness** Web (MIT,
-Copyright DeepSeek). Upstream clone for reference lives in
-`Desktop/XRKbar/deepseek-harness` (with other harness trees). This repo
-junctions it at `vendor/deepseek-harness` and serves captured static at
-`vendor/dsh-web-static`.
+产品聊天壳以 **DeepSeek Harness** Web（MIT，Copyright DeepSeek）为底稿做二次创作。许可全文见上游 MIT License，须随拷贝保留。
 
-Brand mark: cut raster assets under `docs/assets/logo*.png` (no SVG redraw).
+这不是 GitHub Fork：不跟踪 DSH 默认分支，不向 deepseek-ai 仓库提 PR。后续改动只进入本仓（XRK-Harness / `@xrkseek`）。
+
+当前仓库托管的是 Face 验证台（本目录）与本机捕获静态壳（`apps/web-static`，gitignore）。源码底稿入库后仍用本 NOTICE。
+
+品牌：`docs/assets/logo*.png`（栅格，不重绘 SVG）。

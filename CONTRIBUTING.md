@@ -62,6 +62,7 @@ sdk · server · presets → core* / llm / mcp / attachment / exec* / workspace 
 - **不要**代提交，除非维护者明确要求  
 - Commit 勿带 Cursor co-author trailer（见用户/仓库规则）  
 - 密钥（`.env`、真实 API key）永不入库  
+- 外壳是 MIT 二次创作，**不要**向 deepseek-ai / DSH 仓库提 PR（见 [ADR-0002](./docs/adr/0002-no-embed-upstream.md)）  
 
 ## 文档入口
 

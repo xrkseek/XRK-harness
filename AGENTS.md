@@ -25,7 +25,7 @@ TypeScript Agent Harness + Server Kit。宿主 **仅 TypeScript（Node ≥26）*
 - 密钥不入库
 - 文档只描述**本仓已有**行为；未实现的不要写成能力或路线清单
 - 本机临时路径 / 对照笔记 → Canvas，不进 `docs/` / README
-- **外壳可复用、内核不可让**：聊天 UI 用已捕获的 DSH Web（本机 `apps/web-static`，gitignore，同 DSH `apps/web/dist`），不自研平行壳；可在本仓裁剪 boot（省略 Cordis 空面）与品牌。session 事件真源 · TS 宿主 · 工具瀑布 · compose/presets 是本仓本质，Face 只对接 wire，不把 Cordis 嵌成 Host 内核
+- **外壳可复用、内核不可让**：聊天 UI 以 DSH Web 为 MIT 二次创作底稿（不是 GitHub Fork，不对 deepseek-ai 提 PR）。当前产品壳是本机捕获（`apps/web-static` gitignore）；可裁剪 boot / 品牌。session 事件真源 · TS 宿主 · 工具瀑布 · compose/presets 是本仓本质，Face 只对接 wire，不把 Cordis 嵌成 Host 内核
 
 ## 完成定义（切片）
 
