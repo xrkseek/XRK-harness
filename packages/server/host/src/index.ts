@@ -25,6 +25,7 @@ import {
   bindAskUserTool,
   createFaceRuntime,
   effectiveHostApiKey,
+  formatQuestionAnswer,
   isLoopbackAddress,
   tryHandleFaceHttp,
   type FaceApprovalBroker,
@@ -205,8 +206,8 @@ export function createHostManager(): HostManager {
               agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
             }
             if (faceBox.questions && agent.tools) {
-              bindAskUserTool(agent.tools, (q, signal) =>
-                faceBox.questions!.askText(sessionId, q, signal),
+              bindAskUserTool(agent.tools, (qs, signal) =>
+                faceBox.questions!.ask(sessionId, qs, signal).then(formatQuestionAnswer),
               );
             }
             return agent;

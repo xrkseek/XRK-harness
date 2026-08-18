@@ -55,7 +55,7 @@ HTTP/WS (attach-http)
 | -------------------- | ---------------------------------------------- | ---------------------------------------------- |
 | `queue.ts`           | `session/queue` 项形：`{id,placement,message}` | 勿退回扁平 `content`                           |
 | `approvals.ts`       | policy ask · `approvalRequestedFrame`      | 稳定 rpcId；`session.respondApproval` 仍可用 |
-| `questions.ts`       | DSH user-questions · `bindAskUserTool`     | `question/requested`；`/api/respond` 先审批后提问 |
+| `questions.ts`       | DSH user-questions · `bindAskUserTool`     | `question/requested`；`questions[]` + `question`；respond 先审批后提问 |
 | `slash.ts`           | recipe catalog · `commands/execute`            | 插件 command 优先；miss → `undefined`（不入账） |
 | `plugin-inventory.ts` | `pluginInventory/list` 投影                    | 进程插件 + boot；cordis = failed |
 | `session-search.ts`  | `session.search`                               | query 1..500 · 禁 NUL · 最多 20 · 最近活动优先 · 含 admit/safety |

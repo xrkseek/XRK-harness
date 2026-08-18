@@ -45,6 +45,7 @@ import { FaceApprovalBroker, approvalRequestedFrame, approvalResolvedFrame } fro
 import {
   FaceQuestionBroker,
   bindAskUserTool,
+  formatQuestionAnswer,
   questionRequestedFrame,
   questionResolvedFrame,
 } from "./questions.js";
@@ -209,8 +210,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     const agent = await options.resolveAgent(sessionId);
     if (agent.tools) {
       rememberedTools.set(sessionId, agent.tools);
-      bindAskUserTool(agent.tools, (q, signal) =>
-        questions.askText(sessionId, q, signal),
+      bindAskUserTool(agent.tools, (qs, signal) =>
+        questions.ask(sessionId, qs, signal).then(formatQuestionAnswer),
       );
     }
     bindAgentJobs(sessionId, agent);
