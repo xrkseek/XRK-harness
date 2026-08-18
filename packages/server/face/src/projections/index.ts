@@ -15,6 +15,9 @@ export {
   type TitleProjectionState,
 } from "./units/title.js";
 export { createSessionListMetadataUnit } from "./units/session-list-metadata.js";
+export { createTodosProjectionUnit } from "./units/todos.js";
+export { createPermissionsProjectionUnit } from "./units/permissions.js";
+export { createPlanProjectionUnit } from "./units/plan.js";
 export {
   DEFAULT_FALLBACK_MAX_WORDS,
   DEFAULT_TITLE_MAX_BYTES,

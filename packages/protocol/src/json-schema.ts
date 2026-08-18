@@ -383,6 +383,64 @@ export const sessionEventJsonSchema = {
       }),
       additionalProperties: false,
     },
+    {
+      type: "object",
+      required: ["type", "ts", "todos"],
+      properties: baseProps({
+        type: { const: "todo/write" },
+        todos: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["content", "status"],
+            properties: {
+              content: { type: "string" },
+              status: { enum: ["pending", "in_progress", "completed"] },
+            },
+            additionalProperties: false,
+          },
+        },
+      }),
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      required: ["type", "ts", "preset"],
+      properties: baseProps({
+        type: { const: "permission/preset" },
+        preset: { type: "string" },
+      }),
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      required: ["type", "ts", "mode"],
+      properties: baseProps({
+        type: { const: "sandbox/mode" },
+        mode: {
+          enum: ["read-only", "workspace-write", "danger-full-access"],
+        },
+      }),
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      required: ["type", "ts", "policy"],
+      properties: baseProps({
+        type: { const: "approval/policy" },
+        policy: { enum: ["ask", "never"] },
+      }),
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      required: ["type", "ts", "active"],
+      properties: baseProps({
+        type: { const: "plan/mode" },
+        active: { type: "boolean" },
+      }),
+      additionalProperties: false,
+    },
   ],
 } as const;
 

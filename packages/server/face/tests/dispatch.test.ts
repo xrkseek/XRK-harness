@@ -124,6 +124,16 @@ describe("face dispatch", () => {
         projections?.values.title === null ||
           typeof projections?.values.title === "string",
       ).toBe(true);
+      expect(projections?.values.todos === null || Array.isArray(projections?.values.todos)).toBe(
+        true,
+      );
+      expect(projections?.values.permissions).toMatchObject({
+        currentValue: "workspace-write",
+      });
+      expect(projections?.values.plan).toEqual({
+        active: false,
+        pending: false,
+      });
     }
     expect(
       mux.some(

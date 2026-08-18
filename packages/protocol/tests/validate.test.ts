@@ -203,6 +203,50 @@ describe("parseSessionEvent", () => {
     });
     expect(done).toMatchObject({ type: "command/done", kind: "success" });
   });
+
+  it("parses todo/write (log-only standing plan)", () => {
+    const todos = parseSessionEvent({
+      type: "todo/write",
+      ts: 3,
+      todos: [{ content: "a", status: "pending" }],
+    });
+    expect(todos).toEqual({
+      type: "todo/write",
+      ts: 3,
+      todos: [{ content: "a", status: "pending" }],
+    });
+  });
+
+  it("parses permission knobs (log-only)", () => {
+    expect(
+      parseSessionEvent({
+        type: "permission/preset",
+        ts: 1,
+        preset: "workspace-write",
+      }),
+    ).toMatchObject({ type: "permission/preset", preset: "workspace-write" });
+    expect(
+      parseSessionEvent({
+        type: "sandbox/mode",
+        ts: 2,
+        mode: "read-only",
+      }),
+    ).toMatchObject({ type: "sandbox/mode", mode: "read-only" });
+    expect(
+      parseSessionEvent({
+        type: "approval/policy",
+        ts: 3,
+        policy: "never",
+      }),
+    ).toMatchObject({ type: "approval/policy", policy: "never" });
+    expect(
+      parseSessionEvent({
+        type: "plan/mode",
+        ts: 4,
+        active: true,
+      }),
+    ).toMatchObject({ type: "plan/mode", active: true });
+  });
 });
 
 describe("sessionEventJsonSchema", () => {
@@ -230,6 +274,11 @@ describe("sessionEventJsonSchema", () => {
       "approval/decided",
       "command/run",
       "command/done",
+      "todo/write",
+      "permission/preset",
+      "sandbox/mode",
+      "approval/policy",
+      "plan/mode",
     ];
     expect(types.sort()).toEqual([...expected].sort());
     expect(sessionEventJsonSchema.$id).toContain("session-event");

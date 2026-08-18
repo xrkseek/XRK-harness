@@ -29,6 +29,11 @@ export {
 } from "./pipeline.js";
 
 export {
+  READ_ONLY_DENIED_TOOLS,
+  createReadOnlyToolPre,
+} from "./permission-pre.js";
+
+export {
   POLICY_RULESET_VERSION,
   PolicyRulesetParseError,
   createPolicyEngineFromRuleset,

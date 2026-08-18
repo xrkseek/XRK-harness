@@ -36,6 +36,11 @@ export const EVENT_ISOMORPHISM = {
   "approval/decided": "approval.decided",
   "command/run": "command/run",
   "command/done": "command/done",
+  "todo/write": "todo/write",
+  "permission/preset": "permission/preset",
+  "sandbox/mode": "sandbox/mode",
+  "approval/policy": "approval/policy",
+  "plan/mode": "plan/mode",
 } as const satisfies Record<SessionEvent["type"], string>;
 
 /** DeepSeek SessionEvent envelope on the Face wire. */
@@ -296,6 +301,24 @@ export function toDshWireSessionEvent(
             ? { sourceEventSeq: event.sourceEventSeq }
             : {}),
         },
+      };
+    case "todo/write":
+      return {
+        type: "todo/write",
+        seq,
+        time,
+        data: { todos: event.todos },
+      };
+    case "permission/preset":
+    case "sandbox/mode":
+    case "approval/policy":
+    case "plan/mode":
+      return {
+        type: event.type,
+        seq,
+        time,
+        data: stripBase(event),
+        ignorable: true,
       };
     case "prompt/admitted":
     case "prompt/promoted":

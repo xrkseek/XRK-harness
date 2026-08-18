@@ -1,3 +1,4 @@
+import { foldPlanMode } from "@xrkseek/protocol";
 import {
   loadOfficeRecipes,
   tryApplySlashRecipe,
@@ -9,6 +10,18 @@ import {
   collectFacePluginCommands,
   type FacePluginCommand,
 } from "./plugin-inventory.js";
+import { FACE_PERMISSION_PRESETS } from "./dsh-schema.js";
+import {
+  applyPermissionPreset,
+  permissionSelectFromEvents,
+} from "./permissions.js";
+import {
+  commitPlanMode,
+  narratePlanCommand,
+  planWantedFromArgs,
+  previewPlanSet,
+  steerPlanMessage,
+} from "./plan-mode.js";
 
 export type SlashRecipesLoader = () => Promise<readonly Recipe[]> | readonly Recipe[];
 
@@ -61,16 +74,48 @@ export async function listFaceCommandDescriptors(
     }));
 
   const recipes = loadRecipes ? await loadRecipes() : [];
-  const builtins: FaceCommandDescriptor[] = used.has("goal")
-    ? []
-    : [
-        {
-          name: "goal",
-          description: "Set or replace the session goal",
-          input: { hint: "objective" },
-        },
-      ];
+  const builtins: FaceCommandDescriptor[] = [
+    ...(used.has("compact")
+      ? []
+      : [
+          {
+            name: "compact",
+            description: "Compact older conversation history",
+          },
+        ]),
+    ...(used.has("goal")
+      ? []
+      : [
+          {
+            name: "goal",
+            description: "Set or replace the session goal",
+            input: { hint: "objective" },
+          },
+        ]),
+    ...(used.has("permission")
+      ? []
+      : [
+          {
+            name: "permission",
+            description:
+              "Switch the permission preset (sandbox mode + approval policy)",
+            input: { hint: "<preset>" },
+          },
+        ]),
+    ...(used.has("plan")
+      ? []
+      : [
+          {
+            name: "plan",
+            description: "Enter or leave plan mode",
+            input: { hint: "[off|message]" },
+          },
+        ]),
+  ];
   used.add("goal");
+  used.add("permission");
+  used.add("plan");
+  used.add("compact");
   const fromRecipes = recipes
     .filter((r) => COMMAND_NAME.test(r.id) && !used.has(r.id))
     .map((r) => {
@@ -121,6 +166,110 @@ export async function executeFaceCommand(
     });
   }
 
+  if (parsed.name === "permission") {
+    const name = parsed.rawInput.trim();
+    if (name === "") {
+      const current = permissionSelectFromEvents(
+        runtime.store.get(sessionId).events,
+      ).currentValue;
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "success",
+        text: `current preset ${current} (available: ${FACE_PERMISSION_PRESETS.join(", ")})`,
+      });
+    }
+    const applied = applyPermissionPreset(runtime.store, sessionId, name);
+    if (!applied.ok) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: applied.message,
+      });
+    }
+    if (applied.changed) {
+      await runtime.invalidateAgent?.(sessionId);
+    }
+    return appendCommandPair(runtime, sessionId, parsed, {
+      kind: "success",
+      text: `preset ${name}`,
+    });
+  }
+
+  if (parsed.name === "plan") {
+    const wanted = planWantedFromArgs(parsed.rawInput);
+    const events = runtime.store.get(sessionId).events;
+    const loggedActive = foldPlanMode(events);
+    const outcome = previewPlanSet(events, wanted);
+    const text = narratePlanCommand(outcome, wanted, loggedActive);
+    const execution = appendCommandPair(
+      runtime,
+      sessionId,
+      parsed,
+      { kind: "success", text },
+      undefined,
+      parsed.rawInput,
+    );
+    if (outcome === "committed") {
+      commitPlanMode(runtime.store, sessionId, wanted);
+    }
+    if (steerPlanMessage(runtime.store, sessionId, parsed.rawInput)) {
+      runtime.drain.wake(sessionId);
+    }
+    return execution;
+  }
+
+  if (parsed.name === "compact") {
+    if (parsed.rawInput.trim().length > 0) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: "Usage: /compact (no arguments)",
+      });
+    }
+    const agent = await runtime.resolveAgent(sessionId);
+    if (agent.isBusy()) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: "Compaction is unavailable because this process has an active compaction, or the agent is not idle.",
+      });
+    }
+    if (!agent.compactNow) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: "Compaction is unavailable on this agent.",
+      });
+    }
+    try {
+      const out = await agent.compactNow();
+      if (!out.compacted) {
+        const text =
+          out.reason === "busy"
+            ? "Compaction is unavailable because this process has an active compaction, or the agent is not idle."
+            : out.reason === "summary"
+              ? "Compaction could not produce a useful summary. The conversation is unchanged."
+              : "No compactable history yet.";
+        return appendCommandPair(runtime, sessionId, parsed, {
+          kind: out.reason === "empty" ? "success" : "error",
+          text,
+        });
+      }
+      return appendCommandPair(
+        runtime,
+        sessionId,
+        parsed,
+        {
+          kind: "success",
+          text: `Compacted ${out.shadowedMessages ?? 0} history items (~${out.shadowedTokens ?? 0} tokens).`,
+        },
+        undefined,
+        undefined,
+        out.summarySeq,
+      );
+    } catch (err) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   const recipes = runtime.loadSlashRecipes
     ? await runtime.loadSlashRecipes()
     : [];
@@ -165,25 +314,35 @@ function appendCommandPair(
   sessionId: string,
   parsed: { readonly name: string; readonly rawInput: string },
   result: { kind: "success" | "error"; text?: string },
-  commandId = mintCommandId(),
+  commandId?: string,
+  args?: string,
+  sourceEventSeq?: number,
 ): FaceCommandExecution {
+  const id = commandId ?? mintCommandId();
   const ts = Date.now();
+  const recorded =
+    args !== undefined
+      ? args
+      : parsed.rawInput
+        ? parsed.rawInput
+        : undefined;
   runtime.store.append(sessionId, {
     type: "command/run",
     ts,
-    commandId,
+    commandId: id,
     name: parsed.name,
     source: { kind: "user" },
-    ...(parsed.rawInput ? { args: parsed.rawInput } : {}),
+    ...(recorded !== undefined ? { args: recorded } : {}),
   });
   runtime.store.append(sessionId, {
     type: "command/done",
     ts: ts + 1,
-    commandId,
+    commandId: id,
     kind: result.kind,
     ...(result.text !== undefined ? { text: result.text } : {}),
+    ...(sourceEventSeq !== undefined ? { sourceEventSeq } : {}),
   });
-  return { commandId, result };
+  return { commandId: id, result };
 }
 
 /**

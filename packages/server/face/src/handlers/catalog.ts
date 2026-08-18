@@ -2,6 +2,7 @@ import { discoverOpenAiChatModels } from "@xrkseek/llm-registry";
 import { FACE_AGENT_PRESETS, FACE_AGENT_PRESET_IDS } from "../presets-catalog.js";
 import { readSessionAttachment } from "../session-attachment.js";
 import { asRecord, type FaceHandler } from "./types.js";
+import { publishRemoteEvent } from "../remote-event.js";
 
 export const agentPresetList: FaceHandler = async (runtime) => {
   const defaultId = runtime.defaultAgentPreset ?? "minimal";
@@ -95,6 +96,10 @@ export const agentPresetSelect: FaceHandler = async (runtime, _rpcId, payload) =
   }
   runtime.sessionAgentPresets.set(sessionId, agentPreset);
   await runtime.invalidateAgent?.(sessionId);
+  publishRemoteEvent(runtime.bus, "agent-preset/selected", [
+    sessionId,
+    agentPreset,
+  ]);
   return { ok: true, value: { sessionId, agentPreset } };
 };
 

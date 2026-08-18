@@ -235,6 +235,48 @@ export interface CommandDoneEvent extends SessionEventBase {
   readonly sourceEventSeq?: number;
 }
 
+/** Standing plan snapshot (DSH `todo/write`); Face `todos` projection. */
+export type TodoItemStatus = "pending" | "in_progress" | "completed";
+
+export interface TodoItem {
+  readonly content: string;
+  readonly status: TodoItemStatus;
+}
+
+export interface TodoWriteEvent extends SessionEventBase {
+  readonly type: "todo/write";
+  readonly todos: readonly TodoItem[];
+}
+
+/** DSH permission-presets knob — log-only; Face `permissions` projection. */
+export type SandboxMode =
+  | "read-only"
+  | "workspace-write"
+  | "danger-full-access";
+
+export type ApprovalPolicy = "ask" | "never";
+
+export interface PermissionPresetEvent extends SessionEventBase {
+  readonly type: "permission/preset";
+  readonly preset: string;
+}
+
+export interface SandboxModeEvent extends SessionEventBase {
+  readonly type: "sandbox/mode";
+  readonly mode: SandboxMode;
+}
+
+export interface ApprovalPolicyEvent extends SessionEventBase {
+  readonly type: "approval/policy";
+  readonly policy: ApprovalPolicy;
+}
+
+/** DSH plan-mode — log-only; Face `plan` projection. Last one wins. */
+export interface PlanModeEvent extends SessionEventBase {
+  readonly type: "plan/mode";
+  readonly active: boolean;
+}
+
 export type SessionEvent =
   | TurnStartEvent
   | TurnEndEvent
@@ -254,7 +296,12 @@ export type SessionEvent =
   | ApprovalAskedEvent
   | ApprovalDecidedEvent
   | CommandRunEvent
-  | CommandDoneEvent;
+  | CommandDoneEvent
+  | TodoWriteEvent
+  | PermissionPresetEvent
+  | SandboxModeEvent
+  | ApprovalPolicyEvent
+  | PlanModeEvent;
 
 const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "turn/start",
@@ -276,6 +323,11 @@ const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "approval/decided",
   "command/run",
   "command/done",
+  "todo/write",
+  "permission/preset",
+  "sandbox/mode",
+  "approval/policy",
+  "plan/mode",
 ]);
 
 /**

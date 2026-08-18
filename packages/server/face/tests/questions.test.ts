@@ -262,6 +262,75 @@ describe("Face question/requested (DSH user-questions)", () => {
     expect(out.result.isError).toBeUndefined();
   });
 
+  it("bindAskUserTool forwards plan-review intent", async () => {
+    const store = createMemorySessionStore();
+    const tools = createToolRegistry();
+    for (const t of createStdTools()) tools.register(t);
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () =>
+        ({
+          admit() {
+            throw new Error("unused");
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => false,
+          abort() {},
+          setApprovalHandler() {},
+          tools,
+        }) as never,
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    await runtime.resolveAgent(sessionId);
+
+    const run = runToolDetailed({
+      registry: tools,
+      call: {
+        id: "c3",
+        name: "ask_user",
+        arguments: {
+          questions: [
+            {
+              id: "plan",
+              question: "Ship this plan?",
+              detail: "steps listed above",
+              options: [{ label: "Approve" }, { label: "Keep planning" }],
+              intent: { kind: "plan-review", approve: "Approve" },
+            },
+          ],
+        },
+      },
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    const pending = runtime.questions.listPending(sessionId)[0]!;
+    expect(pending.questions[0]?.intent).toEqual({
+      kind: "plan-review",
+      approve: "Approve",
+    });
+    expect(pending.questions[0]?.detail).toBe("steps listed above");
+    expect(
+      settleFaceRespond(runtime, {
+        type: "client-response",
+        rpcId: pending.rpcId,
+        result: {
+          ok: true,
+          value: {
+            sessionId,
+            answer: { answers: [{ id: "plan", selected: ["Approve"] }] },
+          },
+        },
+      }),
+    ).toEqual({ accepted: true });
+    const out = await run;
+    expect(out.result.content).toBe("Approve");
+  });
+
   it("mux reconnect replays pending question/requested", async () => {
     const store = createMemorySessionStore();
     const runtime = createFaceRuntime({

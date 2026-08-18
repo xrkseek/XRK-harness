@@ -96,7 +96,13 @@ function serializeMessage(m: ChatMessage): string {
 export function selectHeadRecent(
   messages: readonly ChatMessage[],
   keepTokens: number,
-): { readonly head: string; readonly recent: string } | undefined {
+):
+  | {
+      readonly head: string;
+      readonly recent: string;
+      readonly headMessageCount: number;
+    }
+  | undefined {
   const lines = messages.map(serializeMessage).filter(Boolean);
   if (lines.length === 0) return undefined;
 
@@ -115,6 +121,7 @@ export function selectHeadRecent(
   return {
     head: lines.slice(0, split).join("\n\n"),
     recent: lines.slice(split).join("\n\n"),
+    headMessageCount: split,
   };
 }
 

@@ -5,6 +5,14 @@
 
 import { randomUUID } from "node:crypto";
 import type { ToolRegistry } from "@xrkseek/core-tools";
+import {
+  PLAN_APPROVE_LABEL,
+  PLAN_KEEP_LABEL,
+  PLAN_REVIEW_ID,
+  createExitPlanModeTool,
+} from "@xrkseek/core-tools";
+import { foldPlanMode } from "@xrkseek/protocol";
+import type { SessionStore } from "@xrkseek/core-session";
 import type {
   FaceQuestionAnswer,
   FaceQuestionAnswerItem,
@@ -305,6 +313,17 @@ export function coerceAskUserQuestions(
       }
       const multiSelect =
         r.multi_select === true || r.multiSelect === true ? true : undefined;
+      let intent: FaceQuestionItem["intent"] | undefined;
+      if (r.intent !== undefined) {
+        if (!r.intent || typeof r.intent !== "object") return undefined;
+        const i = r.intent as Record<string, unknown>;
+        if (i.kind !== "plan-review" || typeof i.approve !== "string") {
+          return undefined;
+        }
+        const approve = i.approve.trim();
+        if (!approve) return undefined;
+        intent = { kind: "plan-review", approve };
+      }
       out.push({
         id: r.id,
         question,
@@ -312,6 +331,7 @@ export function coerceAskUserQuestions(
         ...(typeof r.detail === "string" ? { detail: r.detail } : {}),
         ...(options !== undefined ? { options } : {}),
         ...(multiSelect ? { multiSelect } : {}),
+        ...(intent ? { intent } : {}),
       });
     }
     return out.length > 0 ? out : undefined;
@@ -355,4 +375,66 @@ export function bindAskUserTool(
       }
     },
   });
+}
+
+function planReviewQuestions(plan: string): FaceQuestionItem[] {
+  return [
+    {
+      id: PLAN_REVIEW_ID,
+      header: "Plan review",
+      question: "Approve this plan and leave plan mode?",
+      detail: plan,
+      options: [
+        {
+          label: PLAN_APPROVE_LABEL,
+          description:
+            "Leave plan mode; the plan is carried out from the next step.",
+        },
+        {
+          label: PLAN_KEEP_LABEL,
+          description: "Stay in plan mode; feedback goes back to the model.",
+        },
+      ],
+      intent: { kind: "plan-review", approve: PLAN_APPROVE_LABEL },
+    },
+  ];
+}
+
+/** Point `exit_plan_mode` at Face questions + session fold. Always registered. */
+export function bindExitPlanModeTool(
+  tools: ToolRegistry,
+  store: SessionStore,
+  sessionId: string,
+  ask: (
+    questions: readonly FaceQuestionItem[],
+    signal?: AbortSignal,
+  ) => Promise<FaceQuestionAnswer>,
+): void {
+  const bound = createExitPlanModeTool({
+    isActive: () => foldPlanMode(store.get(sessionId).events),
+    async askReview(plan, signal) {
+      try {
+        const answer = await ask(planReviewQuestions(plan), signal);
+        const item = answer.answers.find((row) => row.id === PLAN_REVIEW_ID);
+        if (
+          item?.selected.length === 1 &&
+          item.selected[0] === PLAN_APPROVE_LABEL &&
+          item.custom === undefined
+        ) {
+          return { approved: true };
+        }
+        return {
+          approved: false,
+          ...(item?.custom !== undefined ? { feedback: item.custom } : {}),
+        };
+      } catch (err) {
+        if (err instanceof FaceQuestionError && err.code === "ASK_CANCELLED") {
+          return { approved: false, dismissed: true };
+        }
+        throw err;
+      }
+    },
+  });
+  if (tools.get("exit_plan_mode")) tools.replace(bound);
+  else tools.register(bound);
 }

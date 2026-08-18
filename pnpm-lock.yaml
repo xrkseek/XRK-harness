@@ -499,6 +499,9 @@ importers:
       '@xrkseek/policy':
         specifier: workspace:*
         version: link:../../packages/policy
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@xrkseek/server-loader':
         specifier: workspace:*
         version: link:../../packages/server/loader
@@ -532,6 +535,9 @@ importers:
       '@xrkseek/policy':
         specifier: workspace:*
         version: link:../../packages/policy
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@xrkseek/server-loader':
         specifier: workspace:*
         version: link:../../packages/server/loader

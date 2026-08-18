@@ -8,7 +8,12 @@ import {
   listPendingAdmits,
   promoteAdmitsForTurn,
   softLoopNotice,
+  SessionBusyError,
   SessionSafetyLimitError,
+  DEFAULT_COMPACTION_KEEP_TOKENS,
+  deriveMessagesUnwindowed,
+  estimateTokens,
+  selectHeadRecent,
   type AdmitReceipt,
   type SessionSafety,
   type SessionSafetyOptions,
@@ -22,6 +27,7 @@ import {
   type ToolRegistry,
 } from "@xrkseek/core-tools";
 import {
+  runCompaction,
   runTurn,
   type AssembleOptions,
 } from "@xrkseek/core-agent-loop";
@@ -101,6 +107,20 @@ export interface AgentHandle {
     }[];
     onJobsChanged(listener: () => void): () => void;
   };
+  /**
+   * Manual `/compact` (DSH command-compact). Idle-only; does not join model history.
+   */
+  compactNow?(
+    signal?: AbortSignal,
+  ): Promise<CompactNowResult>;
+}
+
+export interface CompactNowResult {
+  readonly compacted: boolean;
+  readonly reason?: "busy" | "empty" | "summary";
+  readonly shadowedMessages?: number;
+  readonly shadowedTokens?: number;
+  readonly summarySeq?: number;
 }
 
 export interface CreateAgentOptions {
@@ -405,6 +425,47 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
     },
     tools: options.tools,
     ...(options.jobs ? { jobs: options.jobs } : {}),
+    async compactNow(signal) {
+      try {
+        return await latch.run(async (latchSignal) => {
+          const keep =
+            (options.compaction !== false &&
+              options.compaction?.keepTokens) ||
+            DEFAULT_COMPACTION_KEEP_TOKENS;
+          const events = options.store.get(options.sessionId).events;
+          const selected = selectHeadRecent(
+            deriveMessagesUnwindowed(events),
+            keep,
+          );
+          if (!selected || selected.headMessageCount === 0) {
+            return { compacted: false as const, reason: "empty" as const };
+          }
+          const merged = mergeSignals(latchSignal, signal);
+          const result = await runCompaction({
+            store: options.store,
+            sessionId: options.sessionId,
+            llm: options.llm,
+            reason: "manual",
+            keepTokens: keep,
+            signal: merged,
+          });
+          if (!result.compacted) {
+            return { compacted: false as const, reason: "summary" as const };
+          }
+          return {
+            compacted: true as const,
+            shadowedMessages: selected.headMessageCount,
+            shadowedTokens: estimateTokens(selected.head),
+            summarySeq: options.store.get(options.sessionId).events.length,
+          };
+        });
+      } catch (err) {
+        if (err instanceof SessionBusyError) {
+          return { compacted: false, reason: "busy" };
+        }
+        throw err;
+      }
+    },
   };
 }
 

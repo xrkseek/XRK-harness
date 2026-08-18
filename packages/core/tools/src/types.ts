@@ -112,6 +112,8 @@ export interface RunToolOutcome {
   readonly result: ToolResult;
   readonly additionalContexts: readonly string[];
   readonly safetyNotices: readonly SafetyNoticePayload[];
+  /** Tool-owned side events (e.g. todo/write) for the agent loop to append. */
+  readonly toolEvents: readonly { type: string; payload: unknown }[];
   readonly stages: readonly PipelineStage[];
   readonly skippedBody: boolean;
   /** Set when model-facing content was truncated by output bound. */

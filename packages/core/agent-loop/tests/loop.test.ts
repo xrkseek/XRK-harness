@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createMemorySessionStore, deriveMessages } from "@xrkseek/core-session";
-import { createToolRegistry } from "@xrkseek/core-tools";
+import { createStdTools, createToolRegistry } from "@xrkseek/core-tools";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { runTurn } from "../src/index.js";
 
@@ -69,6 +69,97 @@ describe("runTurn", () => {
     expect(result.steps).toBe(2);
     const roles = deriveMessages(store.get(session.id).events).map((m) => m.role);
     expect(roles).toEqual(["user", "assistant", "tool", "assistant"]);
+  });
+
+  it("appends todo/write before tool/result; deriveMessages skips it", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    for (const t of createStdTools()) tools.register(t);
+    const llm = createReplayAdapter([
+      {
+        content: "",
+        toolCalls: [
+          {
+            id: "c1",
+            name: "todo_write",
+            arguments: {
+              todos: [{ id: "1", content: "ship", status: "in_progress" }],
+            },
+          },
+        ],
+      },
+      { content: "ok" },
+    ]);
+
+    await runTurn({
+      sessionId: session.id,
+      userText: "plan",
+      store,
+      llm,
+      tools,
+    });
+
+    const types = store.get(session.id).events.map((e) => e.type);
+    const writeAt = types.lastIndexOf("todo/write");
+    const resultAt = types.lastIndexOf("tool/result");
+    expect(writeAt).toBeGreaterThan(-1);
+    expect(resultAt).toBeGreaterThan(writeAt);
+    const write = store.get(session.id).events[writeAt];
+    expect(write).toMatchObject({
+      type: "todo/write",
+      todos: [{ content: "ship", status: "in_progress" }],
+    });
+    expect(deriveMessages(store.get(session.id).events).map((m) => m.role)).toEqual(
+      ["user", "assistant", "tool", "assistant"],
+    );
+  });
+
+  it("commits queued /plan at the next step and injects plan policy", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    store.append(session.id, {
+      type: "turn/start",
+      ts: 1,
+      turnId: "open",
+    });
+    store.append(session.id, {
+      type: "command/run",
+      ts: 2,
+      commandId: "cmd_plan",
+      name: "plan",
+      args: "",
+      source: { kind: "user" },
+    });
+    store.append(session.id, {
+      type: "turn/end",
+      ts: 3,
+      turnId: "open",
+    });
+
+    const captured: string[] = [];
+    const llm = createReplayAdapter([{ content: "ok" }]);
+    const orig = llm.chat.bind(llm);
+    llm.chat = async (req) => {
+      const sys = req.messages.find((m) => m.role === "system");
+      captured.push(typeof sys?.content === "string" ? sys.content : "");
+      return orig(req);
+    };
+
+    await runTurn({
+      sessionId: session.id,
+      userText: "go",
+      store,
+      llm,
+      tools: createToolRegistry(),
+    });
+
+    const types = store.get(session.id).events.map((e) => e.type);
+    const modeAt = types.lastIndexOf("plan/mode");
+    const stepAt = types.lastIndexOf("step/start");
+    expect(modeAt).toBeGreaterThan(-1);
+    expect(stepAt).toBeGreaterThan(modeAt);
+    expect(captured.some((s) => s.includes("plan mode"))).toBe(true);
   });
 
   it("respects abort signal", async () => {

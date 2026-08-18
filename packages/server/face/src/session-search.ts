@@ -37,6 +37,15 @@ function extractSearchableTexts(events: readonly SessionEvent[]): string[] {
       if (text) out.push(text);
     } else if (e.type === "safety/notice" && typeof e.content === "string") {
       out.push(e.content);
+    } else if (e.type === "command/run") {
+      out.push(e.name);
+      if (e.args) out.push(e.args);
+    } else if (e.type === "command/done" && typeof e.text === "string") {
+      out.push(e.text);
+    } else if (e.type === "todo/write") {
+      for (const item of e.todos) {
+        if (item.content) out.push(item.content);
+      }
     }
   }
   return out;
@@ -106,10 +115,10 @@ export function parseSearchQuery(payload: unknown): FaceRpcResult<string> {
 }
 
 /**
- * Session search over `user/message` + `assistant/message` + pending admits.
- * One hit per session; newest activity first. JSONL Host store is already
- * eager-loaded, so persisted sessions are in the same scan.
- */
+ * Session search over user/assistant/admit/safety plus command text and
+ * standing todos. One hit per session; newest activity first. JSONL Host
+ * store is already eager-loaded, so persisted sessions are in the same scan.
+ * Not SQLite FTS.
 export function searchSessions(
   store: SessionStore,
   query: string,

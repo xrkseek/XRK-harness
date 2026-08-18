@@ -19,6 +19,7 @@
     "@xrkseek/llm": "workspace:*",
     "@xrkseek/llm-replay": "workspace:*",
     "@xrkseek/policy": "workspace:*",
+    "@xrkseek/protocol": "workspace:*",
     "@xrkseek/server-loader": "workspace:*",
     "@xrkseek/workspace": "workspace:*"
   }

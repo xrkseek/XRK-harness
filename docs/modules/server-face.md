@@ -56,7 +56,7 @@ HTTP/WS (attach-http)
 | `queue.ts`           | `session/queue` 项形：`{id,placement,message}` | 勿退回扁平 `content`                           |
 | `approvals.ts`       | policy ask · `approvalRequestedFrame`      | 稳定 rpcId；`session.respondApproval` 仍可用 |
 | `questions.ts`       | DSH user-questions · `bindAskUserTool`     | `question/requested`；`questions[]` + `question`；respond 先审批后提问 |
-| `slash.ts`           | recipe catalog · `commands/execute`            | 插件 command 优先；miss → `undefined`（不入账） |
+| `slash.ts`           | recipe catalog · `commands/execute`            | 插件 command 优先；内建 `/compact` · `/goal` · `/permission` · `/plan`；miss → `undefined`（不入账） |
 | `plugin-inventory.ts` | `pluginInventory/list` 投影                    | 进程插件 + boot；cordis = failed |
 | `session-search.ts`  | `session.search`                               | query 1..500 · 禁 NUL · 最多 20 · 最近活动优先 · 含 admit/safety |
 | `skill-list.ts`      | `skill.list`                                   | 扫 `.xrk/skills/<id>/SKILL.md`；要 `sessionId` |
@@ -76,7 +76,7 @@ HTTP/WS (attach-http)
 | `host-pick-directory.ts`  | `host.pickDirectory`                    | 系统选目录；取消 `null`；缺 picker 用 `directory-picker-unavailable` |
 | `workspace-face.ts`       | workspace.* Face                        | 路径不得逃出 root        |
 | `workspace-registry.ts`   | DSH 形 workspace 注册表                 | `workspaceIdOf`；delete 发 removed；insertBefore 发 order |
-| `settings-credentials.ts` | settings.* · credentials.*              | 密钥不入库；openDocument 忽略客户端 path |
+| `settings-credentials.ts` | settings.* · credentials.*              | 密钥不入库；openDocument 忽略客户端 path；`mcp` namespace 只读 |
 | `dsh-schema.ts`           | settings namespace schemastery 信封     | `{ uid, refs }`；JSON Schema 壳读不了 |
 
 ### Wire 适配（`adapt/`）
@@ -96,8 +96,10 @@ HTTP/WS (attach-http)
 | --------------------------------------------------- | --------------------- |
 | `registry.ts`                                       | 投影注册表 · snapshot |
 | `title-controller.ts` / `title-normalize.ts`        | 标题                  |
-| `units/title.ts` · `units/session-list-metadata.ts` | 单元                  |
+| `units/title.ts` · `units/session-list-metadata.ts` · `units/todos.ts` · `units/permissions.ts` · `units/plan.ts` | 单元（todos = 站立计划；permissions = Access 芯片；plan = plan-mode 芯片） |
 | `install-defaults.ts`                               | 默认安装              |
+| `../permissions.ts`                                 | 预设表 · pin · `/permission` 写 knobs |
+| `../plan-mode.ts`                                   | `/plan` 选择预览 · idle 提交 `plan/mode` |
 
 ## RPC 登记纪律（防 bug）
 
@@ -124,7 +126,7 @@ HTTP/WS (attach-http)
 | `tests/tool-view.test.ts`        | lookup only；无 getTool 则没 view |
 | `tests/standing-tools.test.ts`   | 冷 history 用 standing registry，不 wake agent |
 | `tests/jobs.test.ts`             | `session/jobs` 基线非空才发；变更可推 `[]` |
-| `tests/commands.test.ts`         | `commands/list` · `commands/execute` · `pluginInventory/list` · Cordis stub |
+| `tests/commands.test.ts`         | `commands/list` · `commands/execute` · `/compact` · `pluginInventory/list` · Cordis stub |
 | `tests/wire.test.ts`             | respond 解析 · 路径                        |
 | `tests/rpc-error.test.ts`        | DSH 错误码映射                             |
 | `tests/approval.test.ts`         | ask → respondByRpcId                       |
@@ -132,6 +134,9 @@ HTTP/WS (attach-http)
 | `tests/subagent.test.ts`         | create-with-parent · list/history/prompt/interrupt · fork 登记 |
 | `tests/workspace.test.ts`        | list/create/rename/archive · delete/insert* |
 | `tests/host-frames.test.ts`      | session-added 子会话字段 · workspace-removed / order-changed · fork |
+| `tests/projections.test.ts`      | title · list metadata · todos 站立计划（write 后 turn/start 清 null） |
+| `tests/permissions.test.ts`      | pin · `/permission` · never 自动放行 · read-only deny |
+| `tests/plan-mode.test.ts`        | `/plan` 提交 · suffix steer · exit_plan_mode plan-review |
 
 ## 已知诚实拒绝 / 空面
 

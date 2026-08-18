@@ -116,7 +116,9 @@ async function executeBody(
   const body = async (): Promise<void> => {
     const signal = mergeSignals(ctx.signal, options.timeoutMs);
     ctx.metrics.calls += 1;
-    const out = await tool.execute(ctx.args, signal);
+    const out = await tool.execute(ctx.args, signal, {
+      emitToolEvent: (type, payload) => emitToolEvent(ctx, type, payload),
+    });
     ctx.result = out;
   };
 
@@ -288,6 +290,7 @@ export function createToolPipeline(
         result,
         additionalContexts: [...ctx.additionalContexts],
         safetyNotices: [...ctx.safetyNotices],
+        toolEvents: [...ctx.toolEvents],
         stages,
         skippedBody: ctx.skippedBody,
         ...(truncated ? { truncated: true } : {}),

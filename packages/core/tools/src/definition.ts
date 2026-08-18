@@ -5,11 +5,20 @@ import type {
   ToolResultView,
 } from "./presentation.js";
 
+/** Optional execute extras — pipeline wires `emitToolEvent` → session side events. */
+export interface ToolExecuteExtras {
+  emitToolEvent(type: string, payload: unknown): void;
+}
+
 export interface ToolDefinition<TArgs = unknown> {
   readonly name: string;
   readonly description: string;
   readonly parameters: Record<string, unknown>;
-  execute(args: TArgs, signal?: AbortSignal): Promise<ToolResultContent>;
+  execute(
+    args: TArgs,
+    signal?: AbortSignal,
+    extras?: ToolExecuteExtras,
+  ): Promise<ToolResultContent>;
   /**
    * Pure UI render intent. Soft-fail (return undefined / never throw) — Face
    * `viewFor` catches throws the same way DSH apiproxy does.
