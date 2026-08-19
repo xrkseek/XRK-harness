@@ -4,15 +4,16 @@
 
 ## 环境
 
-- Node ≥ 26（`.nvmrc`）。Windows 本机：`C:\Program Files\nodejs\node.exe`（当前 26.7）。勿把 Cursor helper Node 22 放在 PATH 前面。
+- Node ≥ 26（`.nvmrc` / `engines`）
 - pnpm 9（`packageManager` 字段锁定）
 
 ```bash
-# 确认
-node -v   # 应 ≥ v26
+node -v   # 应 ≥ v26；若 shell 仍是旧版，改用系统 Node 或调整 PATH
 pnpm install
 pnpm check
 ```
+
+首次跑通见 [docs/getting-started.md](./docs/getting-started.md)。
 
 ## `pnpm check` 做什么
 

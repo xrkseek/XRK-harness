@@ -16,7 +16,7 @@
 ```bash
 pnpm build                # tsc -b（CLI / Node 跑 dist 前需要）
 pnpm test                 # vitest run
-pnpm test:web             # Host-serve 产品壳硬刷（12 个 product-shell-*.e2e；需 dist + Chromium）
+pnpm test:web             # Host-serve 产品壳硬刷（product-shell-*.e2e；需 dist + Chromium）
 pnpm test:kernel-coverage
 pnpm lint
 pnpm format:check
@@ -42,7 +42,7 @@ Vitest 别名把 `@xrkseek/*` 指到各包 **src**（见根 `vitest.config.ts`�
 6. **产品壳浏览器硬刷**（不进 `pnpm check`）：`pnpm test:web` → `vitest.web.config.ts` 只收 `product-shell-*.e2e.ts` 这一条 Host-serve 车道（不要 glob 其余仍写 DSH Cordis scaffold 的文件）。Playwright 只在 `@xrkseek/web-frontend` 的 devDependency；`pnpm install` **不**下浏览器。要跑时：`pnpm --filter @xrkseek/web-frontend exec playwright install chromium`（Linux CI 才加 `--with-deps` 装系统库）。无 dist skip；有 dist 但没 Chromium 则失败，不静默 skip。
 7. **Preset**：`@xrkseek/testkit` 的 `makeHarness` 或直接 `createMinimalComposition`。
 8. **Face 闲置 runtime**：共用 `tests/helpers/bare-runtime.ts`（idle drain + unused/admit stub），不要每个文件再抄一份。
-9. **Node**：本地/CI 用系统 Node ≥26（Windows：`C:\Program Files\nodejs\node.exe`），勿用 Cursor helper Node 22。
+9. **Node**：本地/CI 用系统 Node ≥26；勿让 IDE 自带的旧 Node 抢 PATH。
 
 Vitest：一律 `import { describe, expect, it } from "vitest"`（`globals: false`）。
 

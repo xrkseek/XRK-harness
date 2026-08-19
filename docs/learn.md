@@ -38,4 +38,4 @@
 - **CLI**：`xrk-harness run | serve | web | doctor | dump-config`。`serve`/`web` 托管产品壳（按 CLI 包定位）；`--host`/`--port`/`--open`；拒绝 `0.0.0.0`。`run` 认 `XRK_LLM_PRESET`、位置参数与 stdin prompt
 - **运行时**：Node ≥ 26
 
-细节：[architecture.md](./architecture.md) · [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) · [policy.md](./policy.md) · [modules/](./modules/README.md)
+细节：[architecture.md](./architecture.md) · [getting-started.md](./getting-started.md) · [configuration.md](./configuration.md) · [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) · [policy.md](./policy.md) · [modules/](./modules/README.md)

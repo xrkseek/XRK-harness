@@ -1,6 +1,6 @@
 /** MCP desired-server card: edit draft servers; connected overlay stays read-only.
  *
- * Row chrome follows DSH Models `ModelListEditor` (XRKbar): compact bordered
+ * Row chrome follows DSH Models `ModelListEditor`: compact bordered
  * entries, primary grid + expandable secondary fields, pill add, glyph trash.
  */
 

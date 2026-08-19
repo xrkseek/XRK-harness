@@ -1,5 +1,5 @@
 /* MCP card list editor — layout mirrors DSH Models ModelListEditor
-   (XRKbar deepseek-harness), tokens match PluginCard / fields. */
+   (DSH Models reference), tokens match PluginCard / fields. */
 
 .block + .block {
   border-top: 1px solid var(--dsw-alias-border-l2);

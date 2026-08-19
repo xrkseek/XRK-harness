@@ -68,10 +68,8 @@ Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目�
 | 测 | 覆盖 |
 |----|------|
 | `packages/mcp/tests/mcp.test.ts` | 命名 · 默认 deny · InMemory ping · http 选项形 · register/dispose · list_changed 热同步 |
-| `packages/mcp/tests/reconnect.test.ts` | 代际重连 · 失败帽 · disabled · HTTP 默认不督 · dispose 取消退避 · 稳定窗口 |
-| `packages/server/host/tests/mcp-wire.test.ts` | env / host-settings · fingerprint · reconcile keep/remove/fail |
-| Face `settings-credentials` | mutate 落盘 · `applies: live`（有 `syncMcpServers`）/ `restart` |
+| `packages/mcp/tests/reconnect.test.ts` | 代际重连 · 失败帽 · disabled→gave-up · HTTP 默认督 · dispose 竞态 · 稳定窗口 |
+| `packages/server/host/tests/mcp-wire.test.ts` | env / host-settings · fingerprint · reconcile keep/remove/gave-up replace/fail |
+| Face `settings-credentials` | mutate 落盘 · `applies: live` · `connectFailures` |
 
-## 未做
-
-（本切片内 HTTP/stdio 进程级 supervisor、文件真源 mutate 热挂载、Plugins MCP 卡均已接。）
+本模块本切片能力已接；更长尾缺口见 [status.md](../status.md)。

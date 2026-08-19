@@ -91,7 +91,8 @@ export interface McpHttpOptions extends McpClientBase {
   readonly requestInit?: RequestInit;
   /**
    * Passed to SDK `StreamableHTTPClientTransport`.
-   * This is SSE stream resume, not Host process restart or Face MCP settings UI.
+   * SSE stream resume only — complementary to the process supervisor
+   * (`reconnect`, default enabled for HTTP too).
    */
   readonly reconnectionOptions?: McpHttpReconnectionOptions;
 }
