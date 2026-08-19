@@ -7,6 +7,7 @@ import path from "node:path";
 import { chromium, type Browser, type Page } from "playwright";
 import { createStdTools } from "@xrkseek/core-tools";
 import type { LlmAdapter } from "@xrkseek/llm";
+import type { PolicyEngine } from "@xrkseek/policy";
 import { createMinimalComposition } from "@xrkseek/preset-minimal";
 import { loadHostConfig } from "@xrkseek/server-config";
 import { createHostManager } from "@xrkseek/server-host";
@@ -49,6 +50,10 @@ export async function spawnProductShell(options: {
   workspaceRoot: string;
   llm: LlmAdapter;
   sessionsDir?: string;
+  /** Live-agent tool policy (Host still binds Face `setApprovalHandler`). */
+  policy?: PolicyEngine;
+  /** Process plugins root (`XRK_PLUGINS_DIR`). */
+  pluginsDir?: string;
 }): Promise<{
   manager: ReturnType<typeof createHostManager>;
   base: string;
@@ -64,6 +69,7 @@ export async function spawnProductShell(options: {
       workspaceRoot: options.workspaceRoot,
       webDist: WEB_DIST,
       ...(options.sessionsDir ? { sessionsDir: options.sessionsDir } : {}),
+      ...(options.pluginsDir ? { pluginsDir: options.pluginsDir } : {}),
     },
   });
 
@@ -80,6 +86,7 @@ export async function spawnProductShell(options: {
         llm: options.llm,
         assemble: true,
         extraTools: createStdTools(),
+        ...(options.policy ? { policy: options.policy } : {}),
       }).createAgent(),
   );
 
@@ -91,6 +98,8 @@ export async function spawnProductShell(options: {
 export async function spawnRegisteredWorkspace(options: {
   llm: LlmAdapter;
   label?: string;
+  policy?: PolicyEngine;
+  pluginsDir?: string;
 }): Promise<{
   manager: ReturnType<typeof createHostManager>;
   base: string;
@@ -109,6 +118,8 @@ export async function spawnRegisteredWorkspace(options: {
     workspaceRoot,
     sessionsDir,
     llm: options.llm,
+    ...(options.policy ? { policy: options.policy } : {}),
+    ...(options.pluginsDir ? { pluginsDir: options.pluginsDir } : {}),
   });
   const created = await faceRpc(base, "workspace.create", { path: workspaceDir });
   if (!created.ok) {

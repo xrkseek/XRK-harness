@@ -67,7 +67,15 @@ Preset 须 `wireCompositionTools({ plugins })`（见 minimal/harness）。Host s
 | `tests/http-chat.test.ts` | spawn · pluginsDir 接线 |
 | `tests/product-shell.test.ts` | 有完整 `apps/web/dist` 才跑：GET `/` · `__XRK_BOOT__` · 无 cordis UI / HMR · `/plugins/@xrkseek/client-runtime/client.js` 200 · Face 立即层 `xrk-typert-registry` · 首屏 RPC · manifest 名 · 欢迎文案 |
 | `apps/web/tests/product-shell-chrome.e2e.ts` | 不进 `pnpm check`。`pnpm test:web`：欢迎窗 / 侧栏「新建会话」/ wordmark |
-| `apps/web/tests/product-shell-stream.e2e.ts` | 不进 `pnpm check`。`pnpm test:web`：发一句 → JSONL `assistant/chunk` + `assistant/message`（浏览器属 web-frontend，见 [testing.md](../testing.md)） |
+| `apps/web/tests/product-shell-stream.e2e.ts` | 不进 `pnpm check`。发一句 → JSONL `assistant/chunk` + `assistant/message` |
+| `apps/web/tests/product-shell-tool.e2e.ts` | 不进 `pnpm check`。replay `todo_write` → `[data-tool]` + Trajectory + JSONL `todo/write`（live agent 挂 `createStdTools`） |
+| `apps/web/tests/product-shell-approval.e2e.ts` | 不进 `pnpm check`。policy ask → `[data-approval-key]` Allow once → `/api/respond` |
+| `apps/web/tests/product-shell-inventory.e2e.ts` | 不进 `pnpm check`。Settings → Plugins：进程插件 `example-tools` + boot `@xrkseek/client-runtime` |
+| `apps/web/tests/product-shell-question.e2e.ts` | 不进 `pnpm check`。replay `ask_user` → `[data-question-key]` 选选项 Submit → `/api/respond` |
+| `apps/web/tests/product-shell-thinking.e2e.ts` | 不进 `pnpm check`。replay `reasoning` 流 → `[data-variant="think"]` |
+| `apps/web/tests/product-shell-todo.e2e.ts` | 不进 `pnpm check`。`todo_write` → `[data-testid="todo-panel"]` |
+| `apps/web/tests/product-shell-access.e2e.ts` | 不进 `pnpm check`。Access chip → Read Only（`/permission`） |
+| `apps/web/tests/product-shell-plan.e2e.ts` | 不进 `pnpm check`。`/plan` → Plan chip + JSONL `plan/mode` |
 | `tests/agent-cache.test.ts` | 卸序 |
 | `tests/standing-tools.test.ts` | minimal 无 bash；harness/server 有 bash presenter |
 

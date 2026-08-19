@@ -16,7 +16,7 @@
 ```bash
 pnpm build                # tsc -b（CLI / Node 跑 dist 前需要）
 pnpm test                 # vitest run
-pnpm test:web             # 欢迎窗/侧栏/流式硬刷（需 dist + 已 install 的 Chromium）
+pnpm test:web             # Host-serve 产品壳硬刷（10 个 product-shell-*.e2e；需 dist + Chromium）
 pnpm test:kernel-coverage
 pnpm lint
 pnpm format:check
