@@ -12,6 +12,7 @@ describe("cli doctor", () => {
     expect(names.node?.detail).toMatch(/need >=26/);
     expect(names.workspace?.ok).toBe(true);
     expect(names["product-ui"]).toBeDefined();
+    expect(names["product-ui"]?.detail).not.toMatch(/Face console/i);
     expect(result.ok).toBe(true);
   });
 

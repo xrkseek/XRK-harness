@@ -12,7 +12,8 @@ import path from "node:path";
 import { assertSafeHost, type ParsedArgs } from "../parse-args.js";
 import {
   defaultSessionsDir,
-  resolveProductWebDist,
+  ensureProductWebDist,
+  repoRoot,
 } from "../product-paths.js";
 
 function openProductUrl(url: string): void {
@@ -84,7 +85,14 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     ? await createPolicyEngineFromFile(config.runtime.policyFile)
     : undefined;
 
-  const webDist = await resolveProductWebDist(config.runtime.webDist);
+  let webDist: string;
+  try {
+    webDist = await ensureProductWebDist(config.runtime.webDist);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`error: ${message}\n`);
+    return 1;
+  }
   const sessionsDir = args.persist
     ? (config.runtime.sessionsDir?.trim() || defaultSessionsDir(config.runtime.workspaceRoot))
     : undefined;
@@ -98,7 +106,7 @@ export async function runServe(args: ParsedArgs): Promise<number> {
   const runtime = {
     ...config.runtime,
     preset,
-    ...(webDist ? { webDist } : {}),
+    webDist,
   } as typeof config.runtime & { sessionsDir?: string };
   if (sessionsDir) runtime.sessionsDir = sessionsDir;
   else delete runtime.sessionsDir;
@@ -115,15 +123,16 @@ export async function runServe(args: ParsedArgs): Promise<number> {
   const port = health.port ?? config.runtime.port;
   const origin = `http://${config.runtime.host}:${port}`;
   process.stdout.write(`xrk-harness serve  ${origin}/\n`);
+  const uiRel = path.relative(repoRoot(), webDist) || webDist;
   process.stdout.write(
-    `  preset=${preset}  ui=${webDist ? path.basename(webDist) : "api-landing"}  sessions=${sessionsDir ?? "memory"}\n`,
+    `  preset=${preset}  ui=${uiRel}  sessions=${sessionsDir ?? "memory"}\n`,
   );
   if (config.credentials.apiKey) {
     process.stdout.write("  apiKey=set\n");
   }
   if (policy) process.stdout.write("  policy=on\n");
 
-  if (args.open && webDist) {
+  if (args.open) {
     openProductUrl(`${origin}/`);
   }
 

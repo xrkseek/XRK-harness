@@ -32,13 +32,14 @@ CLI 入口：`xrk-harness`（`apps/cli`）。产品聊天 UI = `apps/web/dist`�
 
 ```bash
 pnpm build
+pnpm web:build && pnpm client:bundle && pnpm web:assemble
 node apps/cli/dist/bin.js serve --preset server --workspace .
 node apps/cli/dist/bin.js web --port 8080 --open
 node apps/cli/dist/bin.js run --preset minimal "ping"
 node apps/cli/dist/bin.js doctor
 ```
 
-`serve` 按 **CLI 包位置** 找 `apps/web/dist`（可用 `XRK_WEB_DIST` 覆盖）。产品壳须先编出：`pnpm web:build` → `pnpm client:bundle` → `pnpm web:assemble`。
+`serve` 按 **CLI 包位置** 找 `apps/web/dist`（可用 `XRK_WEB_DIST` 覆盖）。缺默认 dist 时代跑 `web:build` → `client:bundle` → `web:assemble`。
 
 ## 环境变量
 

@@ -19,22 +19,7 @@ export interface WebBootManifest {
   readonly entries: readonly WebBootEntry[];
 }
 
-/** Fallback when no product `boot.json` is on disk — Face console roster. */
-export const FACE_CONSOLE_BOOT: WebBootManifest = {
-  rev: "xrk-face-console",
-  entries: [
-    {
-      id: "@xrkseek/face-console",
-      url: "/plugins/face-console.js",
-      rev: "local",
-      inject: [],
-      immediately: true,
-    },
-  ],
-};
-
-/** @deprecated use FACE_CONSOLE_BOOT */
-export const XRK_APP_SHELL_BOOT = FACE_CONSOLE_BOOT;
+const EMPTY_BOOT: WebBootManifest = { rev: "none", entries: [] };
 
 /**
  * Load captured boot graph from `boot.json` next to a web dist root.
@@ -55,12 +40,6 @@ export function loadBootManifestFromWebDist(
   }
 }
 
-/**
- * Client plugins this Host does not run. Files stay on disk (recapture / 404
- * tests); omitting them from boot hides empty Cordis chrome and the captured
- * Vite HMR client (it EventSources `/plugins/events`, which product serve
- * does not expose).
- */
 /** Historical Cordis UI / runner ids (no longer in-tree) plus HMR. */
 export const XRK_OMIT_CLIENT_PLUGIN_IDS = [
   "@xrkseek/client-ui-cordis",
@@ -78,13 +57,13 @@ export function applyXrkProductBootPolicy(
   return { rev: manifest.rev, entries };
 }
 
-/** Prefer product `boot.json` under webDist; else Face console fallback roster. */
+/** Product `boot.json` under webDist; otherwise empty (no console substitute). */
 export function resolveWebBootManifest(webDistRoot?: string): WebBootManifest {
   if (webDistRoot) {
     const captured = loadBootManifestFromWebDist(webDistRoot);
     if (captured) return captured;
   }
-  return FACE_CONSOLE_BOOT;
+  return EMPTY_BOOT;
 }
 
 /**
@@ -117,8 +96,6 @@ export function injectBootIntoHtml(
   manifest: WebBootManifest,
 ): string {
   const script = bootInjectScript(manifest);
-  const lower = html.toLowerCase();
-  // Strip any prior inject so capture+serve does not double-inject.
   const stripped = html.replace(
     /<script>\s*window\.__XRK_BOOT__[\s\S]*?<\/script>/i,
     "",

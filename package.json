@@ -25,7 +25,9 @@
     "client:bundle": "node ./scripts/bundle-client-js.mjs",
     "xrk": "node ./apps/cli/dist/bin.js",
     "serve": "node ./apps/cli/dist/bin.js serve",
-    "pack:smoke": "node ./scripts/pack-smoke.mjs"
+    "pack:smoke": "node ./scripts/pack-smoke.mjs",
+    "publish:surface": "node ./scripts/apply-publish-surface.mjs",
+    "release:prep": "node ./scripts/release.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

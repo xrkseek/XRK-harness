@@ -1,6 +1,12 @@
+import { existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
-import { resolveProductWebDist } from "../product-paths.js";
+import path from "node:path";
+import {
+  PRODUCT_SHELL_BUILD_HINT,
+  harnessAppsRoot,
+  resolveProductWebDist,
+} from "../product-paths.js";
 
 export interface DoctorResult {
   readonly ok: boolean;
@@ -48,7 +54,11 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
   checks.push({
     name: "product-ui",
     ok: Boolean(web),
-    detail: web ?? "no apps/web/dist — serve falls back to Face console",
+    detail:
+      web ??
+      (existsSync(path.join(harnessAppsRoot(), "web", "package.json"))
+        ? `missing — monorepo serve will build (${PRODUCT_SHELL_BUILD_HINT})`
+        : "missing — install @xrkseek/web-frontend or set XRK_WEB_DIST"),
   });
 
   const llm = Boolean(process.env.XRK_LLM_PRESET?.trim());

@@ -13,25 +13,9 @@
 [![pnpm](https://img.shields.io/badge/pnpm-9-blue.svg)](https://pnpm.io/)
 [![GitHub](https://img.shields.io/badge/github-xrkseek%2FXRK--harness-black.svg)](https://github.com/xrkseek/XRK-harness)
 
-[文档中心](./docs/README.md) · [能力矩阵](./docs/status.md) · [快速开始](./docs/getting-started.md) · [配置](./docs/configuration.md) · [贡献](./CONTRIBUTING.md)
+[文档中心](./docs/README.md) · [能力矩阵](./docs/status.md) · [配置](./docs/configuration.md) · [贡献](./CONTRIBUTING.md)
 
 </div>
-
----
-
-## 目录
-
-- [这是什么](#这是什么)
-- [如果你是第一次接触](#如果你是第一次接触)
-- [状态摘要](#状态摘要)
-- [快速开始](#快速开始)
-- [核心能力（按域）](#核心能力按域)
-- [仓库布局](#仓库布局)
-- [文档与开发指南](#文档与开发指南)
-- [测试与质量](#测试与质量)
-- [常见问题](#常见问题)
-- [贡献](#贡献)
-- [许可证](#许可证)
 
 ---
 
@@ -42,202 +26,128 @@ XRK-Harness（npm scope **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** �
 | 能力 | 说明 |
 |------|------|
 | **Session 为真源** | 对话与工具调用以 append-only 事件日志重建；turn / loop 短寿 |
-| **可组装** | `minimal` / `harness` / `server` preset **只接线、不写业务**；能力经 compose 与工具瀑布组合 |
-| **Host + Face** | HTTP / Unary RPC / 双 WebSocket；产品壳 = `apps/web` + `packages/client` |
-| **MCP** | stdio 与 streamable-http；文件真源下 Settings 落盘后可热挂载 |
+| **可组装** | `minimal` / `harness` / `server` preset **只接线、不写业务** |
+| **Host + Face** | HTTP / Unary RPC / 双 WebSocket；产品壳 `@xrkseek/web-frontend` |
+| **MCP** | stdio 与 streamable-http；Settings 落盘后可热挂载 |
 
-当前以 **clone 本仓** 使用为主。npm 公开发布尚未完成（全仓 `"private": true`）。能正式用到哪一层，见 **[docs/status.md](./docs/status.md)**（Tier A / B / C）。
+两条用法：**CLI**（`run`）或 **Web**（`web` / `serve`）。没有第三套「说明书页」UI。
+
+能力边界：[docs/status.md](./docs/status.md)。
 
 ---
 
-## 如果你是第一次接触
+## 运行
 
-| 你想… | 从这里开始 |
-|--------|------------|
-| **先跑起来**（无 API key） | 下文 [快速开始](#快速开始) · [docs/getting-started.md](./docs/getting-started.md) |
-| **知道能正式用多少** | [docs/status.md](./docs/status.md) |
-| **接真模型 / MCP / 端口** | [docs/configuration.md](./docs/configuration.md) |
-| **懂架构与包平面** | [docs/architecture.md](./docs/architecture.md) |
-| **接 HTTP / Face wire** | [docs/http-api.md](./docs/http-api.md) · [docs/host-face.md](./docs/host-face.md) |
-| **写工具 / 守卫 / 插件** | [docs/tool-pipeline.md](./docs/tool-pipeline.md) · [docs/seams.md](./docs/seams.md) · [docs/plugin-loader.md](./docs/plugin-loader.md) |
-| **改产品壳 UI** | `apps/web` + `packages/client` · [docs/host-face.md](./docs/host-face.md) |
-| **排障** | [docs/troubleshooting.md](./docs/troubleshooting.md) |
-| **贡献 / Coding Agent** | [CONTRIBUTING.md](./CONTRIBUTING.md) · **[AGENTS.md](./AGENTS.md)** |
-| **全索引** | [docs/README.md](./docs/README.md) |
+需要 **Node.js ≥26**。
+
+### 从 npm（推荐，对齐 DeepSeek Harness）
+
+发布到 registry 后：
+
+```sh
+npx @xrkseek/harness-cli web
+# 或：npx @xrkseek/harness-cli run --preset minimal --prompt "ping"
+```
+
+默认打开产品 Web（`@xrkseek/web-frontend` 自带 `dist`）。工作目录即 workspace。
+
+### 从源码（维护者）
+
+```sh
+pnpm install
+pnpm build
+pnpm web:build && pnpm client:bundle && pnpm web:assemble
+node apps/cli/dist/bin.js web --workspace .
+```
+
+`serve` / `web` 在 monorepo 里若缺 `apps/web/dist` 会代跑上面三步组装；npm 安装则直接用包内 `dist`。
+
+无密钥试跑：
+
+```sh
+node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
+```
+
+示例：[examples/hello-agent](./examples/hello-agent)。逐步说明：[docs/getting-started.md](./docs/getting-started.md)。
+
+### 接真模型
+
+```sh
+export XRK_LLM_PRESET=openrouter
+export OPENROUTER_API_KEY=…
+npx @xrkseek/harness-cli serve --preset harness --workspace .
+```
+
+见 [docs/configuration.md](./docs/configuration.md)。
 
 ---
 
 ## 状态摘要
 
-以 [docs/status.md](./docs/status.md) 为准。摘要：
-
 | 域 | 状态 |
 |----|------|
-| Kernel · Compose · Session · Agent · Exec · HTTP · Host Face | **能跑** |
-| MCP（stdio · HTTP · 热挂载 · Plugins 卡）· Attachment | **能跑** |
-| 产品 Web 全量组装 · 浏览器 E2E | **未稳**（硬刷进 `pnpm test:web`，不进 `pnpm check`） |
-| Registry 官方协议扩展 · npm 公开发布 | **未做** |
-
-诚实分层：**A** clone + 构建 + CLI / 产品壳 · **B** 浏览器硬刷 · **C** npm registry 尚不可用。
+| Kernel · Compose · Session · Agent · Exec · HTTP · Host Face · MCP | **能跑** |
+| 产品 Web · Host-serve E2E | **未稳**（`pnpm test:web`，不进 `pnpm check`） |
+| Registry 官方协议扩展（Anthropic / Gemini …） | **未做** |
+| npm 首发上架 | **发包面已备**（`0.1.0` · `publishConfig`）；须维护者 `npm publish` |
 
 ---
 
-## 快速开始
+## 如果你是第一次接触
 
-### 1. 前置
-
-| 项 | 要求 |
-|----|------|
-| Node.js | **≥ 26**（`engines` / `.nvmrc`） |
-| 包管理 | **pnpm 9**（根 `packageManager` 锁定） |
-
-```bash
-node -v    # ≥ v26
-pnpm -v
-```
-
-### 2. 克隆与构建
-
-对齐 DeepSeek Harness：clone → install → **build** → 再跑命令。产品 UI 额外组装 `apps/web/dist`（gitignore，需本机编出）。
-
-```bash
-git clone --depth=1 https://github.com/xrkseek/XRK-harness.git
-cd XRK-harness
-pnpm install
-pnpm build
-pnpm web:build && pnpm client:bundle && pnpm web:assemble
-```
-
-### 3. 跑起来
-
-```bash
-# 无 API key：单 turn（replay LLM）
-node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
-
-# HTTP + 产品壳（默认 http://127.0.0.1:8787/）
-node apps/cli/dist/bin.js serve --preset server --workspace .
-# 别名：pnpm serve   /   node apps/cli/dist/bin.js web --open
-```
-
-健康检查：`GET /health` → `{ "ok": true }`。
-
-示例：[examples/hello-agent](./examples/hello-agent)。逐步说明：[docs/getting-started.md](./docs/getting-started.md)。
-
-### 4. 接真模型（可选）
-
-```bash
-export XRK_LLM_PRESET=openrouter
-export OPENROUTER_API_KEY=…    # 密钥名由 brand 的 apiKeyEnv 决定
-node apps/cli/dist/bin.js serve --preset harness --workspace .
-```
-
-全集：[docs/configuration.md](./docs/configuration.md) · [docs/llm-provider-presets.md](./docs/llm-provider-presets.md)。
-
----
-
-## 核心能力（按域）
-
-| 域 | 你得到什么 | 规格 |
-|----|------------|------|
-| **Kernel / Compose** | 短寿 loop · C0–C2 组合叶 · 子会话 realm | [architecture](./docs/architecture.md) · [compose](./docs/compose.md) |
-| **Session / Agent** | JSONL 仓 · admit / turn · 可重建消息 | [session](./docs/session.md) · [session-api](./docs/session-api.md) |
-| **Tools / Exec** | 工具瀑布 · fs / bash / web / lsp / `terminal_*` · jobs | [tool-pipeline](./docs/tool-pipeline.md) · [seams](./docs/seams.md) |
-| **Policy** | tool / provider / mcp 门禁；默认 MCP deny | [policy](./docs/policy.md) |
-| **LLM** | Provider Registry（R0 openai-chat brands） | [llm-provider-registry](./docs/llm-provider-registry.md) |
-| **HTTP / Host / Face** | REST · SSE · Face RPC · mux/host 双流 | [http-api](./docs/http-api.md) · [host-face](./docs/host-face.md) |
-| **MCP** | stdio/HTTP · 重连 · Settings 热挂载 · Plugins 卡 | [modules/mcp](./docs/modules/mcp.md) |
-| **产品壳** | `apps/web` + `packages/client`（serve → `dist`） | [host-face](./docs/host-face.md) · [status](./docs/status.md) |
-| **CLI** | `run` · `serve` · `web` · `doctor` · `dump-config` | [apps/cli/README](./apps/cli/README.md) |
-| **Presets** | minimal / harness / server（只组合） | [profiles](./docs/profiles.md) |
-
-内核主路径可当日常 harness 用；**不是** DeepSeek Harness 二百插件全集。外壳二次创作在本仓，内核不嵌 Cordis Host。
+| 你想… | 打开 |
+|-------|------|
+| 安装 / 跑 | 上文 · [getting-started](./docs/getting-started.md) |
+| 能正式用多少 | [status](./docs/status.md) |
+| 环境变量 | [configuration](./docs/configuration.md) |
+| HTTP / Face | [http-api](./docs/http-api.md) · [host-face](./docs/host-face.md) |
+| 写工具 | [tool-pipeline](./docs/tool-pipeline.md) · [seams](./docs/seams.md) |
+| 排障 | [troubleshooting](./docs/troubleshooting.md) |
+| 贡献 / Agent | [CONTRIBUTING](./CONTRIBUTING.md) · [AGENTS.md](./AGENTS.md) |
+| 全索引 | [docs/README.md](./docs/README.md) |
 
 ---
 
 ## 仓库布局
 
 ```text
-apps/cli · apps/web · apps/console     CLI · 产品壳 · Face 验证台
-packages/client                        壳客户端包（与 apps/web 成对）
-packages/*                             @xrkseek 库（kernel · compose · core* · llm · mcp · server · …）
-presets/                               minimal | harness | server
-extensions/                            进程插件示例
-docs/                                  规格 · ADR · 模块地图
-examples/                              最小端到端示例
+apps/cli · apps/web              CLI · 产品壳（发布为 @xrkseek/harness-cli · web-frontend）
+packages/client                  壳客户端（组装进 web dist；默认不单独发）
+packages/* · presets/*           运行时库与 preset
+docs/                            规格 · ADR · 模块地图
 ```
-
-包平面与依赖边：[docs/architecture.md](./docs/architecture.md) · [docs/modules/](./docs/modules/README.md)。
-
----
-
-## 文档与开发指南
-
-**文档中心**：[docs/README.md](./docs/README.md)（属性分层 ·「我想…」 · 全量索引）
-
-| 领域 | 文档 |
-|------|------|
-| 入门 / 运维 | [getting-started](./docs/getting-started.md) · [configuration](./docs/configuration.md) · [troubleshooting](./docs/troubleshooting.md) · [status](./docs/status.md) |
-| Session / Host | [session*](./docs/session.md) · [http-api](./docs/http-api.md) · [host-face](./docs/host-face.md) · [host-preset](./docs/host-preset.md) · [plugin-loader](./docs/plugin-loader.md) |
-| LLM | [llm-provider-registry](./docs/llm-provider-registry.md) · [llm-openai-compatible](./docs/llm-openai-compatible.md) · [llm-deepseek](./docs/llm-deepseek.md) |
-| Tools / Workspace | [tool-pipeline](./docs/tool-pipeline.md) · [seams](./docs/seams.md) · [web/lsp/pty/shell-jobs](./docs/web-tools.md) · [policy](./docs/policy.md) · [workspace-inject](./docs/workspace-inject.md) |
-| 架构 / 决策 | [architecture](./docs/architecture.md) · [compose](./docs/compose.md) · [adr/](./docs/adr/README.md) |
-| 质量 / 发布 | [testing](./docs/testing.md) · [security-checklist](./docs/security-checklist.md) · [publishing](./docs/publishing.md) |
-| 包地图 | [modules/](./docs/modules/README.md) · [learn](./docs/learn.md)（已落地要点短读） |
-
-**Coding Agent / 维护者约定**（改哪里、红线、完成定义）：**[AGENTS.md](./AGENTS.md)** — 不替代产品文档。
 
 ---
 
 ## 测试与质量
 
-门禁与 CI 一致：`pnpm check`（需 **Node ≥26**）。
+`pnpm check`（Node ≥26）：`tsc -b` · eslint · vitest · kernel coverage ≥90%。
 
-| 步 | 命令 | 含义 |
-|----|------|------|
-| 类型 | `tsc -b` | 项目引用 |
-| 风格 | `eslint .` | 含 no-explicit-any、floating promises |
-| 单测 | `vitest run` | 全仓行为回归 |
-| 覆盖 | kernel ≥ 90% | `vitest.kernel.config.ts` |
-
-| 可选 | 命令 | 说明 |
-|------|------|------|
-| 产品壳硬刷 | `pnpm test:web` | Host-serve Playwright；**不进** `pnpm check`；需 `apps/web/dist` + Chromium |
-| 发包烟测 | `pnpm pack:smoke` | 抽样 pack；不发布、不改 `private` |
-
-详见 [docs/testing.md](./docs/testing.md) · [CONTRIBUTING.md](./CONTRIBUTING.md)。
+| 可选 | 命令 |
+|------|------|
+| 产品壳硬刷 | `pnpm test:web` |
+| 发包烟测 | `pnpm pack:smoke` · `pnpm release:prep` |
 
 ---
 
 ## 常见问题
 
-**Q: `serve` 打开后不像产品壳 / 静态资源 404？**  
-A: 先编出 `apps/web/dist`：`pnpm web:build && pnpm client:bundle && pnpm web:assemble`，再 `serve`。不要指望缺产物还能当正式 UI。详见 [getting-started](./docs/getting-started.md)。
-
-**Q: 如何接 OpenRouter / DeepSeek？**  
-A: 设 `XRK_LLM_PRESET` + 对应 `apiKeyEnv`（如 `OPENROUTER_API_KEY` / `DEEPSEEK_API_KEY`）。见 [configuration](./docs/configuration.md)。
+**Q: `serve` 没有 UI？**  
+A: npm 安装需带 `@xrkseek/web-frontend`；源码仓先 `web:build && client:bundle && web:assemble`。
 
 **Q: MCP 连不上？**  
-A: 默认 deny。开发可 `XRK_MCP_ALLOW=1`，或经 Settings → Plugins → MCP 落盘（文件真源时可热挂载）。见 [modules/mcp](./docs/modules/mcp.md)。
+A: 默认 deny → `XRK_MCP_ALLOW=1` 或 Settings → Plugins → MCP。
 
-**Q: 能 `npm install @xrkseek/harness` 吗？**  
-A: 尚不可用（Phase 0 全仓 private）。见 [publishing](./docs/publishing.md)。
+**Q: 能 `npm install @xrkseek/harness` 了吗？**  
+A: 发包面已准备；是否已上 registry 以 npm 为准。见 [publishing](./docs/publishing.md)。
 
-**Q: Node 版本报错 / PATH 里是 22？**  
-A: 换系统 Node ≥26；勿让 IDE 自带 Node 抢 PATH。见 [troubleshooting](./docs/troubleshooting.md)。
-
-更多症状表：[docs/troubleshooting.md](./docs/troubleshooting.md)。
+更多：[troubleshooting](./docs/troubleshooting.md)。
 
 ---
 
 ## 贡献
 
-欢迎 Issue / PR / 文档改进。
-
-- 环境与门禁：[CONTRIBUTING.md](./CONTRIBUTING.md)
-- 切片完成定义与依赖纪律：[AGENTS.md](./AGENTS.md)
-- 改契约时同步对应 `docs/*.md` + [status.md](./docs/status.md)
-
----
+[CONTRIBUTING.md](./CONTRIBUTING.md) · [AGENTS.md](./AGENTS.md)
 
 ## 许可证
 

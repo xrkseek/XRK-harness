@@ -1,16 +1,19 @@
 {
   "name": "@xrkseek/exec-pty",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md", "scripts"],
+  "files": [
+    "dist",
+    "README.md",
+    "scripts"
+  ],
   "scripts": {
     "postinstall": "node ./scripts/ensure-spawn-helper.mjs"
   },
@@ -19,5 +22,14 @@
   },
   "optionalDependencies": {
     "node-pty": "1.2.0-beta.15"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/exec/pty"
   }
 }

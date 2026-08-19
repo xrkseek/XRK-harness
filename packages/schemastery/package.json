@@ -1,14 +1,15 @@
 {
   "name": "@xrkseek/schemastery",
   "description": "Type driven schema validator",
-  "version": "3.18.1",
+  "version": "0.1.0",
+  "private": true,
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xrkseek/XRK-harness.git",
-    "directory": "vendor/schemastery"
+    "directory": "packages/schemastery"
   },
   "type": "module",
   "main": "lib/index.cjs",

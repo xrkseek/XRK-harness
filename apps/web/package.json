@@ -1,7 +1,7 @@
 {
   "name": "@xrkseek/web-frontend",
   "description": "Web application entry: vite build over the @xrkseek/client-web shell library; dist/ served by apps/cli `xrk-harness web`",
-  "version": "0.1.0-rc.7",
+  "version": "0.1.0",
   "publishConfig": {
     "access": "public"
   },
@@ -25,12 +25,10 @@
     "watch": "vite build --watch"
   },
   "license": "MIT",
-  "dependencies": {
+  "devDependencies": {
     "@xrkseek/client-web": "workspace:^",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
-  "devDependencies": {
+    "react-dom": "^18.2.0",
     "@xrkseek/cordis-plugin-group": "workspace:^",
     "@xrkseek/client-modules": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",

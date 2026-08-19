@@ -1,11 +1,10 @@
 {
   "name": "@xrkseek/preset-server",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./preset.ts",
+      "types": "./dist/preset.d.ts",
       "import": "./dist/preset.js",
       "default": "./dist/preset.js"
     }
@@ -19,5 +18,18 @@
     "@xrkseek/policy": "workspace:*",
     "@xrkseek/preset-harness": "workspace:*",
     "@xrkseek/server-host": "workspace:*"
-  }
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "presets/server"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

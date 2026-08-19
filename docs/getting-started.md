@@ -2,7 +2,7 @@
 
 本页面向**第一次 clone 本仓**的开发者。能力边界见 [status.md](./status.md)；环境变量全集见 [configuration.md](./configuration.md)。
 
-产品路径对齐 DeepSeek Harness：**install → build → 再跑**。要 Web UI 就先编出 `apps/web/dist`，再 `serve` / `web`。
+产品路径对齐 DeepSeek Harness：**install → build → 再跑**。要 Web UI 就编出 `apps/web/dist`，再 `serve` / `web`。缺产物时 CLI 会代跑组装，不另开一套 UI。
 
 ## 前置
 
@@ -57,12 +57,9 @@ node apps/cli/dist/bin.js serve --preset server --workspace .
 ```
 
 - 默认监听见 [http-api.md](./http-api.md)（常用 `127.0.0.1:8787`）
-- 静态根：`apps/web/dist`（可用 `XRK_WEB_DIST` 覆盖）
+- 静态根：`apps/web/dist`（可用 `XRK_WEB_DIST` 覆盖；覆盖路径不存在则报错，不代编）
+- 缺默认 dist 时：CLI 代跑 `web:build` + `client:bundle` + `web:assemble`
 - 健康检查：`GET /health` → `{ "ok": true }`
-
-缺 `apps/web/dist` 时：**先回到上一节把壳编出来**，不要当「没 UI 也能正式用」。
-
-Face 接线验证（维护者）：`apps/console`（`?console=1`）是独立验证台，不是产品入口。
 
 ## 接真模型
 

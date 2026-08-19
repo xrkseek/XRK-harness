@@ -16,6 +16,7 @@ const PACKAGES = [
   { name: "@xrkseek/harness", dir: "packages/sdk", tarballPrefix: "xrkseek-harness-" },
   { name: "@xrkseek/harness-cli", dir: "apps/cli", tarballPrefix: "xrkseek-harness-cli-" },
   { name: "@xrkseek/mcp", dir: "packages/mcp", tarballPrefix: "xrkseek-mcp-" },
+  { name: "@xrkseek/web-frontend", dir: "apps/web", tarballPrefix: "xrkseek-web-frontend-" },
 ];
 
 const FORBIDDEN = [

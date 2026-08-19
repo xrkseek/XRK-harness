@@ -3,31 +3,37 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  FACE_CONSOLE_BOOT,
-  XRK_APP_SHELL_BOOT,
   applyXrkProductBootPolicy,
   createHttpServer,
   injectBootIntoHtml,
   mergeWebBootManifests,
   resolveStaticPath,
+  type WebBootManifest,
 } from "../src/index.js";
 import { createMemorySessionStore, newSession } from "@xrkseek/core-session";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { createMinimalComposition } from "@xrkseek/preset-minimal";
 
-describe("boot inject", () => {
-  it("injects app-shell roster before </head>", () => {
-    const html = "<html><head><title>x</title></head><body></body></html>";
-    const out = injectBootIntoHtml(html, XRK_APP_SHELL_BOOT);
-    expect(out).toContain("__XRK_BOOT__");
-    expect(out).toContain("__XRK_BOOT__");
-    expect(out).toContain("xrk-face-console");
-    expect(out.indexOf("__XRK_BOOT__")).toBeLessThan(out.indexOf("</head>"));
-  });
+const TEST_BOOT: WebBootManifest = {
+  rev: "test",
+  entries: [
+    {
+      id: "@xrkseek/client-runtime",
+      url: "/plugins/@xrkseek/client-runtime/client.js",
+      rev: "1",
+      inject: [],
+      immediately: true,
+    },
+  ],
+};
 
-  it("console boot still injectable", () => {
-    const out = injectBootIntoHtml("<head></head>", FACE_CONSOLE_BOOT);
-    expect(out).toContain("xrk-face-console");
+describe("boot inject", () => {
+  it("injects roster before </head>", () => {
+    const html = "<html><head><title>x</title></head><body></body></html>";
+    const out = injectBootIntoHtml(html, TEST_BOOT);
+    expect(out).toContain("__XRK_BOOT__");
+    expect(out).toContain("@xrkseek/client-runtime");
+    expect(out.indexOf("__XRK_BOOT__")).toBeLessThan(out.indexOf("</head>"));
   });
 
   it("mergeWebBootManifests lets extra ids replace", () => {
@@ -132,7 +138,7 @@ describe("http webStatic", () => {
         }).createAgent(),
       webStatic: {
         root: dir,
-        transformIndex: (html) => injectBootIntoHtml(html, XRK_APP_SHELL_BOOT),
+        transformIndex: (html) => injectBootIntoHtml(html, TEST_BOOT),
       },
     });
 
@@ -143,7 +149,7 @@ describe("http webStatic", () => {
     expect(index.status).toBe(200);
     const text = await index.text();
     expect(text).toContain("__XRK_BOOT__");
-    expect(text).toContain("xrk-face-console");
+    expect(text).toContain("@xrkseek/client-runtime");
 
     const asset = await fetch(`${base}/assets/app.js`);
     expect(asset.status).toBe(200);
@@ -210,8 +216,8 @@ describe("http webStatic", () => {
   });
 });
 
-describe("http API-only landing", () => {
-  it("GET / returns HTML when webStatic unset", async () => {
+describe("http without webStatic", () => {
+  it("GET / is 404 when no product shell is mounted", async () => {
     const store = createMemorySessionStore();
     newSession(store);
     const http = createHttpServer({
@@ -233,11 +239,7 @@ describe("http API-only landing", () => {
     });
     const { port } = await http.listen();
     const res = await fetch(`http://127.0.0.1:${port}/`);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toMatch(/text\/html/);
-    const text = await res.text();
-    expect(text).toContain("XRK-Harness");
-    expect(text).toContain("/health");
+    expect(res.status).toBe(404);
     await http.close();
   });
 });

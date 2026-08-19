@@ -1,11 +1,10 @@
 {
   "name": "@xrkseek/mcp",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
@@ -18,5 +17,14 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@xrkseek/core-tools": "workspace:*",
     "@xrkseek/policy": "workspace:*"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/mcp"
   }
 }

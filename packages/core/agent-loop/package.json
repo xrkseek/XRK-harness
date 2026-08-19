@@ -1,16 +1,18 @@
 {
   "name": "@xrkseek/core-agent-loop",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "dependencies": {
     "@xrkseek/core-session": "workspace:*",
     "@xrkseek/core-system-prompt": "workspace:*",
@@ -21,5 +23,14 @@
   "devDependencies": {
     "@xrkseek/llm": "workspace:*",
     "@xrkseek/llm-replay": "workspace:*"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/core/agent-loop"
   }
 }
