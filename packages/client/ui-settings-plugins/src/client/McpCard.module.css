@@ -1,4 +1,4 @@
-/* MCP card — connected list + per-server forms (tokens match PluginCard / fields). */
+/* MCP card — flat rows (no nested bright frames), soft fields via fields.css. */
 
 .block + .block {
   border-top: 1px solid var(--dsw-alias-border-l2);
@@ -54,10 +54,7 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 6px 10px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-layer-1);
+  padding: 6px 0;
 }
 
 .connectedName {
@@ -93,15 +90,21 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 8px;
+  gap: 0;
+  margin-top: 4px;
 }
 
 .entry {
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-layer-1);
-  overflow: hidden;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  padding: 4px 0 8px;
+}
+
+.entry:first-child {
+  border-top: none;
+  padding-top: 0;
 }
 
 .entryHead {
@@ -109,13 +112,17 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-module-platform));
+  padding: 8px 0 0;
+  border: none;
+  background: transparent;
 }
 
 .entryTitle {
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 13px;
   font-weight: 600;
   line-height: 1.5;
@@ -125,16 +132,16 @@
 .remove {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   border: none;
   border-radius: 6px;
-  padding: 4px 8px;
+  padding: 0;
   background: transparent;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.5;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .remove:hover:not(:disabled) {
@@ -148,7 +155,95 @@
 }
 
 .entryBody {
-  padding: 0 12px 4px;
+  padding: 0;
+}
+
+.transport {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.transportLabel {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+.segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 2px;
+  border: 1px solid var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.segmentBtn,
+.segmentActive {
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.segmentBtn {
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.segmentActive {
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.segmentBtn:hover:not(:disabled),
+.segmentActive:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+}
+
+.segmentBtn:disabled,
+.segmentActive:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.transportHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.more {
+  display: inline-flex;
+  align-self: flex-start;
+  margin: 4px 0 8px;
+  border: none;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.more:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+}
+
+.more:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .add {
@@ -160,7 +255,7 @@
   height: 28px;
   margin-top: 8px;
   padding: 0 10px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 1px solid var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
   border-radius: 14px;
   background: transparent;
   color: var(--dsw-alias-label-primary);
