@@ -246,9 +246,7 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
                   },
                   done: operation.done.then(
                     (result) => ({
-                      status: (cancelRequested ? "killed" : "completed") as
-                        | "killed"
-                        | "completed",
+                      status: (cancelRequested ? "killed" : "completed"),
                       detail: sendDetail(result),
                     }),
                     (error: unknown) => ({

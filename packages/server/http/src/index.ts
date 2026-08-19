@@ -209,6 +209,11 @@ export function createHttpServer(
       return;
     }
 
+    if (needsAuth && !checkRate(req)) {
+      sendJson(res, 429, { error: "too many requests" }, cors);
+      return;
+    }
+
     try {
       // newSession
       if (req.method === "POST" && path === "/api/sessions") {

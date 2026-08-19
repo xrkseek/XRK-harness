@@ -82,7 +82,7 @@ function isAbortError(error: unknown): boolean {
     typeof error === "object" &&
     error !== null &&
     "name" in error &&
-    (error as { name: unknown }).name === "AbortError"
+    (error).name === "AbortError"
   );
 }
 
@@ -241,6 +241,7 @@ export async function pickNativeDirectory(
       if (isMissingCommand(error)) {
         throw new Error(
           "no supported native directory picker found (install zenity or kdialog)",
+          { cause: error },
         );
       }
       throw error;

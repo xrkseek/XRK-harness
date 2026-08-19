@@ -329,13 +329,7 @@ export async function spawnNodePtyTerminal(
     ) => PtyProcess;
   };
   try {
-    ptyMod = (await import("node-pty")) as unknown as {
-      spawn: (
-        file: string,
-        args: string[] | string,
-        opts: object,
-      ) => PtyProcess;
-    };
+    ptyMod = await import("node-pty");
   } catch (error) {
     throw new TerminalError(
       `node-pty is not available: ${error instanceof Error ? error.message : String(error)}`,

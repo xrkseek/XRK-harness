@@ -521,8 +521,9 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
           changed.delete(tick);
           clearTimeout(timer);
           signal?.removeEventListener("abort", onAbort);
-          if (err !== undefined) reject(err);
-          else resolve();
+          if (err !== undefined) {
+            reject(err instanceof Error ? err : new Error(String(err)));
+          } else resolve();
         };
         const onAbort = () => {
           const reason = signal?.reason;

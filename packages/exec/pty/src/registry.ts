@@ -5,13 +5,10 @@ import {
   type TerminalBackend,
   type TerminalBackendSession,
   type TerminalReadRequest,
-  type TerminalReadResult,
   type TerminalSendOperation,
-  type TerminalSendRequest,
   type TerminalSessionSnapshot,
   type TerminalSignal,
   type TerminalSignalResult,
-  type TerminalSpawnRequest,
   type TerminalSpawnResult,
 } from "./types.js";
 
@@ -249,9 +246,14 @@ export function createTerminalSessionService(): DisposableTerminalSessionService
           throw new AggregateError(
             [failure, rollbackFailure.error],
             "PTY spawn and rollback both failed",
+            { cause: error },
           );
         }
-        throw failure;
+        throw failure instanceof Error
+          ? failure
+          : new Error(String(failure), {
+              cause: failure,
+            });
       } finally {
         spawnReservation.release(cleanupFailure);
         releaseName();

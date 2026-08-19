@@ -185,7 +185,7 @@ export async function persistSettingsDocument(
 ): Promise<void> {
   const file = settingsYamlPath(runtime);
   await mkdir(path.dirname(file), { recursive: true });
-  let previous = loadYamlFile(file);
+  const previous = loadYamlFile(file);
   for (const spec of FACE_PRODUCT_SETTINGS_NAMESPACES) {
     if (spec.ns === "mcp") continue;
     const slot = namespaces.ensure(spec.ns);

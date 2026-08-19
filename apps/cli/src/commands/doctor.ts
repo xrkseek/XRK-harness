@@ -39,10 +39,9 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
 
   let wsOk = false;
   try {
-    const st = await stat(workspace);
-    wsOk = st.isDirectory();
+    wsOk = (await stat(workspace)).isDirectory();
   } catch {
-    wsOk = false;
+    /* missing or inaccessible */
   }
   checks.push({
     name: "workspace",

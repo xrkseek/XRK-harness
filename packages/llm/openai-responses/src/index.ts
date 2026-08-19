@@ -176,7 +176,7 @@ function parseResponse(json: unknown): LlmChatResponse {
           }
         }
       } else if (row.type === "function_call") {
-        let args: Record<string, unknown> = {};
+        let args: Record<string, unknown>;
         try {
           args = row.arguments
             ? (JSON.parse(row.arguments) as Record<string, unknown>)
@@ -285,7 +285,7 @@ async function* streamResponsesSse(
 
   const toolCalls: ToolCall[] = [];
   for (const [id, acc] of toolAcc) {
-    let args: Record<string, unknown> = {};
+    let args: Record<string, unknown>;
     try {
       args = acc.arguments
         ? (JSON.parse(acc.arguments) as Record<string, unknown>)

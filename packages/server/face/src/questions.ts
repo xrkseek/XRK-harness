@@ -358,8 +358,12 @@ export function bindAskUserTool(
     name: prev.name,
     description: prev.description,
     parameters: prev.parameters,
-    ...(prev.presentCall ? { presentCall: prev.presentCall } : {}),
-    ...(prev.presentResult ? { presentResult: prev.presentResult } : {}),
+    ...(prev.presentCall
+      ? { presentCall: prev.presentCall.bind(prev) }
+      : {}),
+    ...(prev.presentResult
+      ? { presentResult: prev.presentResult.bind(prev) }
+      : {}),
     async execute(args, signal) {
       const questions = coerceAskUserQuestions(args);
       if (!questions) {

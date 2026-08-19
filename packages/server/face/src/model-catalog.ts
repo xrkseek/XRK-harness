@@ -31,8 +31,8 @@ function mergedNamespace(
 ): Record<string, unknown> {
   const slot = runtime.settingsNamespaces.ensure(ns);
   return mergeLayers(
-    slot.base as Record<string, unknown>,
-    slot.user as Record<string, unknown>,
+    slot.base,
+    slot.user,
   );
 }
 
