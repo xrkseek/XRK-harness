@@ -31,7 +31,7 @@
 |------|------|
 | `XRK_PRESET` | `minimal` \| `harness` \| `server` |
 | `XRK_WORKSPACE` | workspace 根 |
-| `XRK_WEB_DIST` | 产品壳静态根；默认 `apps/web/dist`（须先 `web:build` + `client:bundle` + `web:assemble`） |
+| `XRK_WEB_DIST` | 产品壳静态根；默认 `apps/web/dist`。CLI `serve` 缺默认 dist 时代跑 `web:build` + `client:bundle` + `web:assemble`；本变量若设了则必须已存在 |
 | `XRK_SESSIONS_DIR` | JSONL 目录；Host 省略 = 内存（CLI serve 另有默认） |
 | `XRK_PLUGINS_DIR` | 进程插件根；`web/` 子目录为客户端叠加 |
 | `XRK_DUMP_SESSION` | 非空时 CLI run 向 stderr dump session（示例见 hello-agent） |

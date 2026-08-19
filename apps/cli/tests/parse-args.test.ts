@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { helpText, parseArgs } from "../src/parse-args.js";
-import { defaultSessionsDir, harnessAppsRoot, resolveProductWebDist } from "../src/product-paths.js";
+import { defaultSessionsDir, ensureProductWebDist, harnessAppsRoot, resolveProductWebDist } from "../src/product-paths.js";
 import os from "node:os";
 import path from "node:path";
 
@@ -82,6 +82,11 @@ describe("product paths", () => {
   it("resolves product shell dist when present", async () => {
     const dir = await resolveProductWebDist();
     if (!dir) return;
-    expect(dir).toMatch(/[\\/]web[\\/]dist$|[\\/]console[\\/]dist$/);
+    expect(dir.replaceAll("\\", "/")).toMatch(/\/web\/dist$/);
+  });
+
+  it("ensureProductWebDist rejects a missing configured path without building", async () => {
+    const missing = path.join(os.tmpdir(), "xrk-no-web-dist", String(Date.now()));
+    await expect(ensureProductWebDist(missing)).rejects.toThrow(/product UI not found/);
   });
 });

@@ -1,11 +1,10 @@
 {
   "name": "@xrkseek/preset-minimal",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./preset.ts",
+      "types": "./dist/preset.d.ts",
       "import": "./dist/preset.js",
       "default": "./dist/preset.js"
     }
@@ -22,5 +21,18 @@
     "@xrkseek/protocol": "workspace:*",
     "@xrkseek/server-loader": "workspace:*",
     "@xrkseek/workspace": "workspace:*"
-  }
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "presets/minimal"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }
