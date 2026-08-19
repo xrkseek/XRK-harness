@@ -116,4 +116,4 @@
 | [publishing.md](./publishing.md) | Release · GitHub Packages |
 | [modules/](./modules/README.md) | 包文件地图 |
 | [adr/](./adr/README.md) | 架构决策 |
-| [releases/](./releases/) | 发行说明（当前 [v0.1.4](./releases/v0.1.4.md)） |
+| [releases/](./releases/) | 发行说明（当前 [v0.1.5](./releases/v0.1.5.md)） |

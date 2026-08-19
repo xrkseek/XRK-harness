@@ -9,6 +9,43 @@ import type { FaceRpcResult } from "./types.js";
 
 const MAX_ENTRIES = 1000;
 
+/**
+ * Windows profile junctions / special folders that `opendir` often rejects with
+ * EPERM/EACCES. Hide them from browse listings so the picker does not offer
+ * dead ends (e.g. localized 「开始」菜单).
+ */
+const WIN32_HIDDEN_PROFILE_DIRS = new Set(
+  [
+    "Application Data",
+    "Cookies",
+    "Local Settings",
+    "My Documents",
+    "NetHood",
+    "PrintHood",
+    "Recent",
+    "SendTo",
+    "Start Menu",
+    "「开始」菜单",
+    "Templates",
+  ].map((name) => name.toLowerCase()),
+);
+
+function shouldHideDirent(name: string, platform: NodeJS.Platform): boolean {
+  if (platform !== "win32") return false;
+  return WIN32_HIDDEN_PROFILE_DIRS.has(name.toLowerCase());
+}
+
+function listErrorMessage(target: string, err: unknown): string {
+  const code =
+    err && typeof err === "object" && "code" in err
+      ? String((err as { code?: unknown }).code ?? "")
+      : "";
+  if (code === "EPERM" || code === "EACCES") {
+    return `cannot list ${target}: folder is protected by the OS (${code})`;
+  }
+  return `cannot list ${target}: ${err instanceof Error ? err.message : String(err)}`;
+}
+
 export interface DirectoryEntryView {
   readonly name: string;
   readonly path: string;
@@ -126,6 +163,7 @@ export async function hostListDirectory(
     const level = await opendir(target);
     for await (const dirent of level) {
       if (!dirent.isDirectory() && !dirent.isSymbolicLink()) continue;
+      if (shouldHideDirent(dirent.name, process.platform)) continue;
       if (
         boundedInsert(
           window,
@@ -145,7 +183,7 @@ export async function hostListDirectory(
       ok: false,
       error: {
         code: "directory-unreadable",
-        message: `cannot list ${target}: ${err instanceof Error ? err.message : String(err)}`,
+        message: listErrorMessage(target, err),
       },
     };
   }
