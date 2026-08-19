@@ -71,7 +71,7 @@ compose        → 零或薄依赖（禁止 kernel → compose）
 |----|------|------|
 | CLI | `apps/cli` | bin `xrk-harness` |
 | 产品壳 | `apps/web` + `packages/client/*` | serve 用 `apps/web/dist`（gitignore）；组装 `web:build` · `client:bundle` · `web:assemble` |
-| Face 验证台 | `apps/console` | 无 dist 时 Host 回退 |
+| Face 验证台 | `apps/console` | `?console=1`；维护者接线工具，**不是** `serve` 缺 dist 时的产品替代 |
 | SDK 表面 | `packages/sdk`（`@xrkseek/harness`） | 对外组合入口 |
 | Host 接线 | `packages/server/host` · `face` · `http` · `config` · `loader` | Face 只对接 wire |
 | Session / Agent / Tools | `packages/core-*` | 事件可重建；turn 短寿 |

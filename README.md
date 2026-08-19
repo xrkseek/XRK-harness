@@ -75,10 +75,10 @@ XRK-Harness（npm scope **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** �
 |----|------|
 | Kernel · Compose · Session · Agent · Exec · HTTP · Host Face | **能跑** |
 | MCP（stdio · HTTP · 热挂载 · Plugins 卡）· Attachment | **能跑** |
-| 产品 Web 全量组装 · 浏览器 E2E | **未稳**（需 `web:build` + `client:bundle` + `web:assemble`） |
+| 产品 Web 全量组装 · 浏览器 E2E | **未稳**（硬刷进 `pnpm test:web`，不进 `pnpm check`） |
 | Registry 官方协议扩展 · npm 公开发布 | **未做** |
 
-诚实分层：**A** clone 即用（CLI + Face + replay）· **B** 组装产品壳 · **C** npm registry 尚不可用。
+诚实分层：**A** clone + 构建 + CLI / 产品壳 · **B** 浏览器硬刷 · **C** npm registry 尚不可用。
 
 ---
 
@@ -96,56 +96,42 @@ node -v    # ≥ v26
 pnpm -v
 ```
 
-### 2. 克隆与安装
+### 2. 克隆与构建
+
+对齐 DeepSeek Harness：clone → install → **build** → 再跑命令。产品 UI 额外组装 `apps/web/dist`（gitignore，需本机编出）。
 
 ```bash
 git clone --depth=1 https://github.com/xrkseek/XRK-harness.git
 cd XRK-harness
 pnpm install
 pnpm build
+pnpm web:build && pnpm client:bundle && pnpm web:assemble
 ```
 
-### 3. 第一条命令（无 API key）
-
-`minimal` preset 使用 **replay LLM**，不需要密钥：
+### 3. 跑起来
 
 ```bash
+# 无 API key：单 turn（replay LLM）
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
-```
 
-示例说明：[examples/hello-agent](./examples/hello-agent)。
-
-### 4. 起 Host（HTTP + Face）
-
-```bash
+# HTTP + 产品壳（默认 http://127.0.0.1:8787/）
 node apps/cli/dist/bin.js serve --preset server --workspace .
-# 等价：pnpm serve
+# 别名：pnpm serve   /   node apps/cli/dist/bin.js web --open
 ```
-
-- 默认监听见 [docs/http-api.md](./docs/http-api.md)（常用 `127.0.0.1:8787`）
-- **未**编出 `apps/web/dist` → 回退 Face 验证台 `apps/console`
-- **已**组装产品壳 → 托管完整 Web UI
 
 健康检查：`GET /health` → `{ "ok": true }`。
 
-### 5. 接真模型（可选）
+示例：[examples/hello-agent](./examples/hello-agent)。逐步说明：[docs/getting-started.md](./docs/getting-started.md)。
+
+### 4. 接真模型（可选）
 
 ```bash
 export XRK_LLM_PRESET=openrouter
-export OPENROUTER_API_KEY=…    # 密钥名由 brand 的 apiKeyEnv 决定；见配置文档
+export OPENROUTER_API_KEY=…    # 密钥名由 brand 的 apiKeyEnv 决定
 node apps/cli/dist/bin.js serve --preset harness --workspace .
 ```
 
 全集：[docs/configuration.md](./docs/configuration.md) · [docs/llm-provider-presets.md](./docs/llm-provider-presets.md)。
-
-### 6. 产品壳（可选，Tier B）
-
-```bash
-pnpm web:build && pnpm client:bundle && pnpm web:assemble
-node apps/cli/dist/bin.js serve --preset server --workspace .
-```
-
-逐步说明与 MCP 开关：[docs/getting-started.md](./docs/getting-started.md)。
 
 ---
 
@@ -224,8 +210,8 @@ examples/                              最小端到端示例
 
 ## 常见问题
 
-**Q: `serve` 打开后是简陋页面？**  
-A: 未组装 `apps/web/dist`，Host 回退 `apps/console`。产品壳：`pnpm web:build && pnpm client:bundle && pnpm web:assemble`。
+**Q: `serve` 打开后不像产品壳 / 静态资源 404？**  
+A: 先编出 `apps/web/dist`：`pnpm web:build && pnpm client:bundle && pnpm web:assemble`，再 `serve`。不要指望缺产物还能当正式 UI。详见 [getting-started](./docs/getting-started.md)。
 
 **Q: 如何接 OpenRouter / DeepSeek？**  
 A: 设 `XRK_LLM_PRESET` + 对应 `apiKeyEnv`（如 `OPENROUTER_API_KEY` / `DEEPSEEK_API_KEY`）。见 [configuration](./docs/configuration.md)。

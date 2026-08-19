@@ -19,7 +19,7 @@ DSH Web 是 MIT。定点拷源码做二次创作合法，但 **GitHub Fork / 跟
 
 - 标准路径与 DSH 对齐：`apps/web` + `packages/client/*`（源码；serve 用 `apps/web/dist`）
 - 品牌：`apps/web/public`（XRK logo / PWA）
-- Face 验证台：`apps/console`（无 `web/dist` 时回退）
+- Face 验证台：`apps/console`（`?console=1`；维护者工具，非产品入口）
 - 无 vendor、无捕获目录；对照实现看本机 bar 仓（路径不进 docs）
 - 无 DSH upstream remote、**不对 deepseek-ai 提 PR**
 - 本仓根 [LICENSE](../../LICENSE)；DeepSeek 署名见 [apps/web/NOTICE](../../apps/web/NOTICE)

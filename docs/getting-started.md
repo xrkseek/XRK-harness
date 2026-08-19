@@ -2,6 +2,8 @@
 
 本页面向**第一次 clone 本仓**的开发者。能力边界见 [status.md](./status.md)；环境变量全集见 [configuration.md](./configuration.md)。
 
+产品路径对齐 DeepSeek Harness：**install → build → 再跑**。要 Web UI 就先编出 `apps/web/dist`，再 `serve` / `web`。
+
 ## 前置
 
 | 项 | 要求 |
@@ -10,67 +12,61 @@
 | 包管理 | **pnpm 9**（`packageManager` 锁定） |
 | 系统 | Windows / macOS / Linux |
 
-确认：
-
 ```bash
 node -v    # ≥ v26
 pnpm -v
 ```
 
-若 shell 里 `node` 仍是旧版（例如 IDE 自带的 Node 22），请改用系统安装的 Node ≥26，或把其 `bin` 放在 PATH 前面。
+若 shell 里 `node` 仍是旧版，改用系统 Node ≥26，或把其 `bin` 放在 PATH 前面。
 
 ## 安装与构建
 
 ```bash
-git clone https://github.com/xrkseek/XRK-harness.git
+git clone --depth=1 https://github.com/xrkseek/XRK-harness.git
 cd XRK-harness
 pnpm install
 pnpm build
+pnpm web:build && pnpm client:bundle && pnpm web:assemble
 ```
 
-可选门禁（与 CI 一致）：
+| 步 | 作用 |
+|----|------|
+| `pnpm build` | `tsc -b`：CLI / 库 `dist` |
+| `web:build` | 产品壳 Vite → `apps/web/dist` 基座 |
+| `client:bundle` | 客户端插件 `lib/client.js` |
+| `web:assemble` | 插件装进 `dist/plugins` + `boot.json` |
 
-```bash
-pnpm check
-```
+可选门禁：`pnpm check`（见 [testing.md](./testing.md)）。
 
-说明见 [testing.md](./testing.md)。
+## 单 turn（无 API key）
 
-## 第一条命令（无 API key）
-
-`minimal` preset 使用 **replay LLM**，不需要密钥：
+`minimal` preset 使用 **replay LLM**：
 
 ```bash
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 ```
 
-或：
+或 `pnpm exec xrk-harness run --preset minimal --prompt "ping"`。  
+示例：[examples/hello-agent](../examples/hello-agent)。
 
-```bash
-pnpm exec xrk-harness run --preset minimal --prompt "ping"
-```
-
-预期 stdout 含 replay 文案与工具列表说明。逐步示例：[examples/hello-agent](../examples/hello-agent)。
-
-## 起 Host（HTTP + Face）
+## Host + 产品壳
 
 ```bash
 node apps/cli/dist/bin.js serve --preset server --workspace .
-# 等价：pnpm serve
+# 等价：pnpm serve   /   xrk-harness web --open
 ```
 
 - 默认监听见 [http-api.md](./http-api.md)（常用 `127.0.0.1:8787`）
-- **未**编出 `apps/web/dist` 时：托管 Face 验证台 `apps/console`
-- **已**组装产品壳时：托管完整 Web UI
+- 静态根：`apps/web/dist`（可用 `XRK_WEB_DIST` 覆盖）
+- 健康检查：`GET /health` → `{ "ok": true }`
 
-健康检查：`GET /health` → `{ "ok": true }`。
+缺 `apps/web/dist` 时：**先回到上一节把壳编出来**，不要当「没 UI 也能正式用」。
+
+Face 接线验证（维护者）：`apps/console`（`?console=1`）是独立验证台，不是产品入口。
 
 ## 接真模型
 
-设置 Provider Registry 相关变量后，用 `harness` / `server` preset：
-
 ```bash
-# 示例：OpenRouter（密钥环境变量名由 brand 的 apiKeyEnv 决定）
 export XRK_LLM_PRESET=openrouter
 export OPENROUTER_API_KEY=…          # deepseek → DEEPSEEK_API_KEY；见 llm-provider-presets
 # 可选：XRK_LLM_MODEL · XRK_LLM_BASE_URL
@@ -80,25 +76,14 @@ node apps/cli/dist/bin.js serve --preset harness --workspace .
 
 详情：[configuration.md](./configuration.md) · [llm-provider-registry.md](./llm-provider-registry.md) · [llm-provider-presets.md](./llm-provider-presets.md)。
 
-## 产品壳（可选，Tier B）
-
-完整聊天 UI 需要组装静态资源（产物 gitignore，不入库）：
-
-```bash
-pnpm web:build
-pnpm client:bundle
-pnpm web:assemble
-node apps/cli/dist/bin.js serve --preset server --workspace .
-```
-
-浏览器硬刷（不进 `pnpm check`）：
+## 浏览器硬刷（可选）
 
 ```bash
 pnpm --filter @xrkseek/web-frontend exec playwright install chromium
 pnpm test:web
 ```
 
-网络代理若影响 `localhost`，跑测前清掉 `HTTP(S)_PROXY` / `ALL_PROXY`。说明：[troubleshooting.md](./troubleshooting.md)。
+不进 `pnpm check`。代理若劫持 `localhost`，测前清掉 `HTTP(S)_PROXY` / `ALL_PROXY`。见 [troubleshooting.md](./troubleshooting.md)。
 
 ## MCP（可选）
 

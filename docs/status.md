@@ -24,8 +24,8 @@
 
 | 层级 | 能做什么 | 前置 |
 | --- | --- | --- |
-| **A — clone 即用** | `pnpm install` + `pnpm check` 绿；`xrk-harness run --preset minimal`（replay，无 API key）；`serve`/`web` 回退 `apps/console`；Host Face RPC、MCP 文件真源热挂载、settings Plugins 卡 | Node ≥26；LLM 真跑需 `XRK_LLM_*` 或 replay preset |
-| **B — 需组装** | 完整产品 Web：`web:build` + `client:bundle` + `web:assemble` → `apps/web/dist`；`serve` 托管壳；`pnpm test:web`（13 条 Host-serve e2e，不进 `pnpm check`） | 另装 Chromium（`playwright install chromium`）；无 dist 时相关测 skip |
+| **A — clone 即用** | `pnpm install` + `pnpm build` + `pnpm check`；`xrk-harness run --preset minimal`（replay）；编出 `apps/web/dist` 后 `serve`/`web` 托管产品壳；Host Face RPC、MCP 文件真源热挂载、Plugins 卡 | Node ≥26；LLM 真跑需 `XRK_LLM_*` 或 replay；产品 UI 须 `web:build` + `client:bundle` + `web:assemble` |
+| **B — 浏览器硬刷** | `pnpm test:web`（Host-serve e2e，不进 `pnpm check`） | Chromium（`playwright install chromium`）；缺完整 dist 则相关测 skip |
 | **C — 未发布** | `npm install @xrkseek/harness` 一类**尚不可用** | 全仓 `"private": true`；无 changesets / CI release；见 [publishing.md](./publishing.md) |
 
 本地 pack 烟测（不发布）：`pnpm pack:smoke`（`tsc -b` 后 `pnpm pack` 抽样，查 tarball 无 `.env`）。入门：[getting-started.md](./getting-started.md) · 配置：[configuration.md](./configuration.md) · 排障：[troubleshooting.md](./troubleshooting.md)。
