@@ -152,12 +152,27 @@ function fromFaceWireEnvelope(wire: FaceWireEnvelope): SessionEvent | null {
       };
     }
     case "turn/start":
-    case "turn/end":
       return {
-        type: wire.type,
+        type: "turn/start",
         ts,
         turnId: idStr(data.turn ?? data.turnId, wire.seq, "t"),
       };
+    case "turn/end": {
+      const reasonRaw = data.reason;
+      if (
+        !reasonRaw ||
+        typeof reasonRaw !== "object" ||
+        typeof (reasonRaw as { kind?: unknown }).kind !== "string"
+      ) {
+        return null;
+      }
+      return {
+        type: "turn/end",
+        ts,
+        turnId: idStr(data.turn ?? data.turnId, wire.seq, "t"),
+        reason: reasonRaw as Extract<SessionEvent, { type: "turn/end" }>["reason"],
+      };
+    }
     case "step/start":
     case "step/end":
       return {

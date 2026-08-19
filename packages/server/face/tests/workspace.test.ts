@@ -318,4 +318,54 @@ describe("Face workspace U2", () => {
     );
     expect(refuseDefault.result.ok).toBe(false);
   });
+
+  it("workspace.create persists to workspaces.json and reloads", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-persist-"));
+    const other = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-persist-o-"));
+    const store = createMemorySessionStore();
+    const first = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(first, "workspace.create", "p1", {
+      path: other,
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const title = (
+      created.result.value as { workspace: { title: string; workspaceId: string } }
+    ).workspace.title;
+    await dispatchFaceMethod(first, "workspace.rename", "p2", {
+      workspaceId: (
+        created.result.value as { workspace: { workspaceId: string } }
+      ).workspace.workspaceId,
+      title: "Kept Workspace",
+    });
+
+    const { readFile } = await import("node:fs/promises");
+    const raw = await readFile(path.join(root, ".xrk", "workspaces.json"), "utf8");
+    expect(raw).toContain("Kept Workspace");
+
+    const second = createFaceRuntime({
+      store: createMemorySessionStore(),
+      workspaceRoot: root,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const listed = await dispatchFaceMethod(second, "workspace.list", "p3", {});
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) return;
+    const items = (
+      listed.result.value as { items: { title: string; path: string }[] }
+    ).items;
+    expect(items.some((w) => w.title === "Kept Workspace")).toBe(true);
+    expect(items.some((w) => w.path === path.resolve(other))).toBe(true);
+    expect(title).toBe(path.basename(other));
+  });
 });

@@ -75,20 +75,22 @@ if (process.env.XRK_RELEASE_SKIP_GH_RELEASE !== "1") {
   if (view.status === 0) {
     run("gh", ["release", "upload", tag, releaseTgz, "--clobber"], { env: ghEnv });
   } else {
-    run(
-      "gh",
-      ["release", "create", tag, releaseTgz, "--title", tag, "--generate-notes"],
-      { env: ghEnv },
-    );
+    const notesFile = path.join(ROOT, "docs", "releases", `${tag}.md`);
+    const createArgs = ["release", "create", tag, releaseTgz, "--title", tag];
+    if (existsSync(notesFile)) {
+      createArgs.push("--notes-file", notesFile);
+    } else {
+      createArgs.push("--generate-notes");
+    }
+    run("gh", createArgs, { env: ghEnv });
   }
 }
 
 if (process.env.XRK_RELEASE_SKIP_PACKAGES !== "1") {
   writeFileSync(
     path.join(STAGE, ".npmrc"),
-    `@xrkseek:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=${token}\n`,
+    "@xrkseek:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\n",
   );
-
   const pack = spawnSync(
     "npx",
     ["--yes", "npm@10.9.2", "pack"],

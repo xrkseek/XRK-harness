@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ContextOverflowError } from "@xrkseek/llm";
+import { ContextOverflowError, UnsupportedContentError } from "@xrkseek/llm";
 import {
   buildOpenAiCompatibleEndpoint,
   createOpenAiCompatibleAdapter,
@@ -93,6 +93,40 @@ describe("openai-compatible adapter", () => {
             error: { message: "This model's maximum context length is 8k" },
           }),
           { status: 400 },
+        )) as unknown as typeof fetch,
+    });
+    await expect(
+      llm.chat({ messages: [{ role: "user", content: "x" }] }),
+    ).rejects.toBeInstanceOf(ContextOverflowError);
+  });
+
+  it("throws UnsupportedContentError on HTTP 413 request body limits", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            error: { message: "Request entity too large: image payload" },
+          }),
+          { status: 413 },
+        )) as unknown as typeof fetch,
+    });
+    await expect(
+      llm.chat({ messages: [{ role: "user", content: "x" }] }),
+    ).rejects.toBeInstanceOf(UnsupportedContentError);
+  });
+
+  it("keeps 413 context overflow as ContextOverflowError", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            error: { message: "prompt is too long for context length" },
+          }),
+          { status: 413 },
         )) as unknown as typeof fetch,
     });
     await expect(

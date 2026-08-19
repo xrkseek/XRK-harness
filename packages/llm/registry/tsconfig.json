@@ -8,6 +8,10 @@
   "include": ["src/**/*.ts"],
   "references": [
     { "path": "../llm" },
-    { "path": "../openai-compatible" }
+    { "path": "../openai-compatible" },
+    { "path": "../anthropic" },
+    { "path": "../openai-responses" },
+    { "path": "../gemini" },
+    { "path": "../deepseek" }
   ]
 }

@@ -135,6 +135,7 @@ describe("runTurn", () => {
       type: "turn/end",
       ts: 3,
       turnId: "open",
+      reason: { kind: "completed" },
     });
 
     const captured: string[] = [];

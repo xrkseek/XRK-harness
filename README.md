@@ -43,11 +43,12 @@ XRK-Harness（npm scope **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** �
 ### 安装
 
 ```sh
+mkdir my-workspace && cd my-workspace
 npx @xrkseek/harness-cli web
 # 或：npx @xrkseek/harness-cli run --preset minimal --prompt "ping"
 ```
 
-工作目录即 workspace。Packages / 发行版见 [docs/publishing.md](./docs/publishing.md)。
+工作目录即 workspace；首次运行会在 `{workspace}/.xrk/` 创建本地设置与会话（**不入库**）。Packages / 发行版见 [docs/publishing.md](./docs/publishing.md)。从零步骤：[docs/getting-started.md](./docs/getting-started.md)。
 
 ### 从源码
 
@@ -60,7 +61,7 @@ node apps/cli/dist/bin.js web --workspace .
 
 `serve` / `web` 缺 `apps/web/dist` 时代编三步；打发行版与包：`pnpm release:stage` / `pnpm release`。
 
-无密钥试跑：
+仓库根 `.xrk/` 为本地 workspace 数据（gitignore）；示例见 `.xrk/*.example`。无密钥 smoke：
 
 ```sh
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
@@ -70,13 +71,14 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 
 ### 接真模型
 
+Settings → Credentials（推荐），或复制 `.xrk/.credentials.yaml.example`，或 env：
+
 ```sh
-export XRK_LLM_PRESET=openrouter
-export OPENROUTER_API_KEY=…
+export DEEPSEEK_API_KEY=…
 npx @xrkseek/harness-cli serve --preset harness --workspace .
 ```
 
-见 [docs/configuration.md](./docs/configuration.md)。
+见 [docs/configuration.md](./docs/configuration.md) · [docs/getting-started.md](./docs/getting-started.md)。
 
 ---
 
@@ -85,9 +87,9 @@ npx @xrkseek/harness-cli serve --preset harness --workspace .
 | 域 | 状态 |
 |----|------|
 | Kernel · Compose · Session · Agent · Exec · HTTP · Host Face · MCP | **能跑** |
+| LLM Registry R1（Anthropic / OpenAI Responses / Gemini） | **能跑** |
 | 产品 Web · Host-serve E2E | **未稳**（`pnpm test:web`，不进 `pnpm check`） |
-| Registry 官方协议扩展（Anthropic / Gemini …） | **未做** |
-| npm 首发上架 | **发包面已备**（`0.1.0` · `publishConfig`）；须维护者 `npm publish` |
+| CLI 发行 | **能跑**（`@xrkseek/harness-cli` · GitHub Release + Packages） |
 
 ---
 

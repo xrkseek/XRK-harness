@@ -19,7 +19,7 @@ export const OPENAI_CHAT_BRANDS: readonly BrandEntry[] = [
     path: "/chat/completions",
     authMode: "bearer",
     apiKeyEnv: "DEEPSEEK_API_KEY",
-    defaultModel: "deepseek-chat",
+    defaultModel: "deepseek-v4-flash",
   },
   {
     id: "openrouter",

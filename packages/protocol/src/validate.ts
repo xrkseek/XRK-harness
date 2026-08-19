@@ -152,12 +152,23 @@ export function parseSessionEvent(value: unknown): SessionEvent {
 
   switch (type) {
     case "turn/start":
-    case "turn/end":
       return {
         type,
         ts,
         turnId: reqString(value, "turnId", type),
       };
+    case "turn/end": {
+      const reasonRaw = value.reason;
+      if (!isObject(reasonRaw) || typeof reasonRaw.kind !== "string") {
+        throw new SessionEventParseError("reason must be an object with kind", type);
+      }
+      return {
+        type,
+        ts,
+        turnId: reqString(value, "turnId", type),
+        reason: reasonRaw as import("./session-events.js").TurnEndReason,
+      };
+    }
     case "step/start":
     case "step/end":
       return {
@@ -197,6 +208,17 @@ export function parseSessionEvent(value: unknown): SessionEvent {
     case "assistant/message": {
       const toolCalls = parseToolCalls(value.toolCalls, `${type}.toolCalls`);
       const reasoning = optString(value, "reasoning");
+      const interrupted =
+        value.interrupted === undefined
+          ? undefined
+          : value.interrupted === true
+            ? true
+            : (() => {
+                throw new SessionEventParseError(
+                  'expected boolean "interrupted"',
+                  type,
+                );
+              })();
       return {
         type,
         ts,
@@ -205,6 +227,7 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         content: reqString(value, "content", type),
         ...(toolCalls ? { toolCalls } : {}),
         ...(reasoning !== undefined ? { reasoning } : {}),
+        ...(interrupted !== undefined ? { interrupted } : {}),
       };
     }
     case "tool/call":
@@ -487,6 +510,62 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         throw new SessionEventParseError("text must be non-empty", type);
       }
       return { type, ts, text };
+    }
+    case "request/header": {
+      const reasonRaw = value.reason;
+      const reason =
+        reasonRaw === "initial" ||
+        reasonRaw === "resume" ||
+        reasonRaw === "change"
+          ? reasonRaw
+          : undefined;
+      if (!reason) {
+        throw new SessionEventParseError("invalid request/header reason", type);
+      }
+      const headerRaw = value.header;
+      if (!headerRaw || typeof headerRaw !== "object" || Array.isArray(headerRaw)) {
+        throw new SessionEventParseError("header required", type);
+      }
+      const configRaw = (headerRaw as { config?: unknown }).config;
+      if (!configRaw || typeof configRaw !== "object" || Array.isArray(configRaw)) {
+        throw new SessionEventParseError("header.config required", type);
+      }
+      const configRecord = configRaw as Record<string, unknown>;
+      const provider = reqString(configRecord, "provider", `${type}.config`);
+      const model = reqString(configRecord, "model", `${type}.config`);
+      const reasoningEffort = optString(configRecord, "reasoningEffort");
+      const adapterDefaultsRaw = (headerRaw as { adapterDefaults?: unknown })
+        .adapterDefaults;
+      let adapterDefaults:
+        | { reasoningEffort?: boolean; maxTokens?: boolean }
+        | undefined;
+      if (
+        adapterDefaultsRaw !== undefined &&
+        typeof adapterDefaultsRaw === "object" &&
+        !Array.isArray(adapterDefaultsRaw)
+      ) {
+        adapterDefaults = {};
+        const re = (adapterDefaultsRaw as { reasoningEffort?: unknown })
+          .reasoningEffort;
+        const mt = (adapterDefaultsRaw as { maxTokens?: unknown }).maxTokens;
+        if (re === true) adapterDefaults.reasoningEffort = true;
+        if (mt === true) adapterDefaults.maxTokens = true;
+        if (Object.keys(adapterDefaults).length === 0) adapterDefaults = undefined;
+      }
+      return {
+        type,
+        ts,
+        turnId: reqString(value, "turnId", type),
+        reason,
+        header: {
+          config: {
+            provider,
+            model,
+            ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+          },
+          ...(adapterDefaults ? { adapterDefaults } : {}),
+        },
+      };
     }
     default:
       throw new SessionEventParseError(`unknown event type "${type}"`);

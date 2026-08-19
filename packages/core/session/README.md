@@ -16,4 +16,4 @@ See [docs/session-latch.md](../../../docs/session-latch.md), [docs/session-api.m
 ## Store
 
 `createMemorySessionStore` — `append` runs `assertSessionEvent` then deep-freeze. `has(id)` 不抛。  
-`createJsonlSessionStore(dir)` — 每会话一个 `{id}.jsonl`；Host 经 `XRK_SESSIONS_DIR` 选用。hydrate 丢掉末行不完整 JSON **或** 末行事件 schema 失败并原子回写该文件；中段损坏的文件跳过（不挡其它会话）。不是 FTS。
+`createPersistentSessionStore(dir)` — 工作区 `{dir}/sessions.db`（WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · chunk 写批并物理 `text-chunks` · `flush()` · open-turn 崩溃修复）；Host 经 `XRK_SESSIONS_DIR` 默认选用；drain idle / `stop` 时 flush/close。ZIP 导出 `toPackedJSONL` + `.jsonl.zst` sidecar；`fromPackedJSONL` 可导入；`searchSessionIds` 供 Face `session.search`。

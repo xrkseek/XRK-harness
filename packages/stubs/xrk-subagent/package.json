@@ -1,7 +1,7 @@
-ï»¿{
+{
   "version": "0.0.0-stub",
   "name": "@xrkseek/xrk-subagent",
-  "description": "XRK stub â€” client-safe subagent projection vocabulary",
+  "description": "XRK stub ¡ª client-safe subagent projection vocabulary",
   "type": "module",
   "private": true,
   "main": "./index.js",

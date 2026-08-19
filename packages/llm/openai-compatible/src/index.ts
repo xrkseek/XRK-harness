@@ -1,3 +1,7 @@
+import {
+  offloadRequestImages,
+  DEFAULT_MAX_REQUEST_IMAGE_BYTES,
+} from "@xrkseek/attachment";
 import type {
   LlmAdapter,
   LlmChatRequest,
@@ -47,6 +51,8 @@ export interface OpenAiCompatibleOptions {
   readonly enableStream?: boolean;
   /** Declared modalities; default `["text"]`. Include `"image"` for vision wire. */
   readonly inputModalities?: readonly ("text" | "image")[];
+  /** Max inlined base64 image bytes per request (DSH rc.8 default 20MiB). */
+  readonly maxRequestImageBytes?: number;
 }
 
 type WireContentPart =
@@ -230,6 +236,24 @@ function looksLikeOverflow(status: number, bodyText: string): boolean {
   );
 }
 
+/** 413 / payload-too-large that is about request body or images, not context window. */
+function looksLikeRequestBodyLimit(status: number, bodyText: string): boolean {
+  if (status !== 413) return false;
+  if (looksLikeOverflow(status, bodyText)) return false;
+  const t = bodyText.toLowerCase();
+  return (
+    t.includes("payload") ||
+    t.includes("request entity") ||
+    t.includes("request body") ||
+    t.includes("content too large") ||
+    t.includes("entity too large") ||
+    t.includes("image") ||
+    t.includes("file size") ||
+    t.includes("too large") ||
+    t.trim() === ""
+  );
+}
+
 function buildAuthHeaders(
   options: OpenAiCompatibleOptions,
 ): Record<string, string> {
@@ -287,9 +311,12 @@ async function buildBody(
       }
     }
   }
+  const maxImageBytes =
+    options.maxRequestImageBytes ?? DEFAULT_MAX_REQUEST_IMAGE_BYTES;
+  const bounded = offloadRequestImages(request.messages, maxImageBytes);
   const body: Record<string, unknown> = {
     model: options.model,
-    messages: await toWireMessages(request.messages, request.resolveImage),
+    messages: await toWireMessages(bounded, request.resolveImage),
     stream,
   };
   const tools = toWireTools(request.tools);
@@ -488,6 +515,11 @@ export function createOpenAiCompatibleAdapter(
       if (looksLikeOverflow(res.status, text)) {
         throw new ContextOverflowError(
           `openai-compatible overflow (${res.status}): ${text.slice(0, 400)}`,
+        );
+      }
+      if (looksLikeRequestBodyLimit(res.status, text)) {
+        throw new UnsupportedContentError(
+          `openai-compatible request body too large (${res.status}): ${text.slice(0, 400)}`,
         );
       }
       throw new Error(

@@ -1,4 +1,5 @@
-tag: dsh-v0.1.0-rc.7
-commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
-copied: 2026-08-19
+tag: dsh-v0.1.0-rc.8
+commit: 141eb6fef83422698aef7a981029e843e8161534
+copied: 2026-08-20
 layout: apps/web · packages/client/* (source only)
+notes: kernel rc.8 ported (server/core); client targeted resync (interrupted UI, V4 models, e2e host); export text-chunks pack; full tree copy still manual

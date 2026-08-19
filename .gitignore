@@ -16,10 +16,15 @@ packages/stubs/**/lib/
 !.env.example
 .DS_Store
 *.tsbuildinfo
-.xrk-harness/
+
+# Workspace runtime — created on first serve/web; NEVER commit
+.xrk/.credentials.yaml
+.xrk/settings.yaml
+.xrk/workspaces.json
 .xrk/tool-outputs/
 .xrk/sessions/
 .xrk/host-settings.json
+.xrk-harness/
 
 # Release staging (fat CLI)
 .release/

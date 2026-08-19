@@ -25,6 +25,20 @@ export interface FaceProjectionMap {
    * Face has an AttachmentStore; constant per boot — no change frames.
    */
   readonly imageLimits: ImageAttachmentLimits;
+  /**
+   * Whole-log turn/step counts and wall times (DSH sessionStats).
+   * StatsLine reads this so paging cannot change the strip.
+   */
+  readonly sessionStats: {
+    readonly turns: number;
+    readonly steps: number;
+    readonly llmMs: number;
+    readonly toolMs: number;
+    readonly ttftMs: number;
+    readonly ttftSteps: number;
+    readonly decodeMs: number;
+    readonly decodeTokens: number;
+  };
 }
 
 export interface SessionListMetadata {

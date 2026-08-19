@@ -12,6 +12,13 @@ export interface ReplayAdapterOptions {
    * Default false — existing replay tests stay chat()-only.
    */
   readonly enableStream?: boolean;
+  /** Delay between stream deltas (ms). */
+  readonly streamDelayMs?: number;
+  /**
+   * When true, hang after deltas until the request aborts (cancel e2e).
+   * Ignored when `enableStream` is false.
+   */
+  readonly hangBeforeDone?: boolean;
 }
 
 function splitDeltas(
@@ -37,7 +44,26 @@ export function createReplayAdapter(
   const id = typeof idOrOpts === "string" ? idOrOpts : (idOrOpts.id ?? "replay");
   const enableStream =
     typeof idOrOpts === "object" && idOrOpts.enableStream === true;
+  const streamDelayMs =
+    typeof idOrOpts === "object" ? (idOrOpts.streamDelayMs ?? 0) : 0;
+  const hangBeforeDone =
+    typeof idOrOpts === "object" && idOrOpts.hangBeforeDone === true;
   let i = 0;
+
+  const delay = async (): Promise<void> => {
+    if (streamDelayMs <= 0) return;
+    await new Promise((r) => setTimeout(r, streamDelayMs));
+  };
+
+  const waitForAbort = (signal?: AbortSignal): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const onAbort = () => reject(new DOMException("aborted", "AbortError"));
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
 
   const take = (request: LlmChatRequest): LlmChatResponse => {
     if (request.signal?.aborted) {
@@ -65,8 +91,23 @@ export function createReplayAdapter(
       const next = take(request);
       const reasoning = next.reasoning ?? "";
       const textIndex = reasoning ? 1 : 0;
-      yield* splitDeltas("reasoning-delta", 0, reasoning);
-      yield* splitDeltas("text-delta", textIndex, next.content);
+      for (const ev of splitDeltas("reasoning-delta", 0, reasoning)) {
+        await delay();
+        if (request.signal?.aborted) {
+          throw new DOMException("aborted", "AbortError");
+        }
+        yield ev;
+      }
+      for (const ev of splitDeltas("text-delta", textIndex, next.content)) {
+        await delay();
+        if (request.signal?.aborted) {
+          throw new DOMException("aborted", "AbortError");
+        }
+        yield ev;
+      }
+      if (hangBeforeDone) {
+        await waitForAbort(request.signal);
+      }
       yield {
         type: "done",
         content: next.content,

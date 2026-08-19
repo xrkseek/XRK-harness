@@ -31,9 +31,11 @@ function runtime(opts?: {
   syncMcpServers?: Parameters<typeof createFaceRuntime>[0]["syncMcpServers"];
 }) {
   const store = createMemorySessionStore();
+  const root = opts?.productDir ?? path.join(tmpdir(), `xrk-face-test-${Date.now()}-${Math.random()}`);
   return createFaceRuntime({
     store,
-    workspaceRoot: opts?.productDir ?? process.cwd(),
+    workspaceRoot: root,
+    productDir: root,
     drain: drain(),
     resolveAgent: async () => {
       throw new Error("unused");
@@ -69,6 +71,36 @@ function runtime(opts?: {
 }
 
 describe("Face settings U2", () => {
+  it("agent-presets default persists to settings.yaml and list reflects it", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-agent-preset-"));
+    const rt = runtime({ productDir: dir, hostPublic: true });
+    const listBefore = await dispatchFaceMethod(rt, "agentPreset.list", "l0", {});
+    expect(listBefore.result.ok).toBe(true);
+    if (!listBefore.result.ok) return;
+    expect(
+      (listBefore.result.value as { presets: { id: string; isDefault: boolean }[] })
+        .presets.find((p) => p.id === "minimal")?.isDefault,
+    ).toBe(true);
+
+    const upd = await dispatchFaceMethod(rt, "settings.update", "u0", {
+      ns: "agent-presets",
+      patch: { default: "harness" },
+    });
+    expect(upd.result.ok).toBe(true);
+
+    const yaml = await readFile(path.join(dir, "settings.yaml"), "utf8");
+    expect(yaml).toContain("default: harness");
+
+    const listAfter = await dispatchFaceMethod(rt, "agentPreset.list", "l1", {});
+    expect(listAfter.result.ok).toBe(true);
+    if (!listAfter.result.ok) return;
+    const presets = (listAfter.result.value as {
+      presets: { id: string; isDefault: boolean }[];
+    }).presets;
+    expect(presets.find((p) => p.id === "harness")?.isDefault).toBe(true);
+    expect(presets.find((p) => p.id === "minimal")?.isDefault).toBe(false);
+  });
+
   it("get returns ui · host · llm scopes; set ui only", async () => {
     const rt = runtime({ hostPublic: true });
     const all = await dispatchFaceMethod(rt, "settings.get", "g1", {});
@@ -147,7 +179,8 @@ describe("Face settings U2", () => {
     expect(v.namespaces.some((n) => n.ns === "locale")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "ui-theme")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "permission")).toBe(true);
-    expect(v.namespaces.some((n) => n.ns === "llm")).toBe(true);
+    expect(v.namespaces.some((n) => n.ns === "llm-deepseek")).toBe(true);
+    expect(v.namespaces.some((n) => n.ns === "agent-presets")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "mcp")).toBe(true);
 
     const permission = v.namespaces.find((n) => n.ns === "permission") as {
@@ -482,7 +515,7 @@ describe("Face settings U2", () => {
       expect(openDoc.result.value).toEqual({ opened: true });
     }
     expect(opened).toHaveLength(1);
-    expect(opened[0]).toBe(path.join(dir, "host-settings.json"));
+    expect(opened[0]).toBe(path.join(dir, "settings.yaml"));
     expect(opened[0]!.toLowerCase()).not.toContain("system32");
   });
 
@@ -615,5 +648,76 @@ describe("Face credentials U2", () => {
       expect(unset.result.value).toEqual({});
     }
     expect(effectiveHostApiKey(rt)).toBe("");
+  });
+
+  it("session.models reads llm-deepseek models[] and selectModel persists agent-default-model", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-model-cat-"));
+    await writeFile(
+      path.join(dir, "settings.yaml"),
+      [
+        "locale:",
+        "  preference: zh",
+        "llm-deepseek:",
+        "  models:",
+        "    - id: deepseek-v4-flash",
+        "      name: DeepSeek Flash",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(dir, ".credentials.yaml"),
+      "DEEPSEEK_API_KEY: sk-test-select-model\n",
+      "utf8",
+    );
+    const rt = runtime({ productDir: dir });
+    const created = await dispatchFaceMethod(rt, "session.create", "mc0", {});
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const models = await dispatchFaceMethod(rt, "session.models", "mc1", {
+      sessionId,
+    });
+    expect(models.result.ok).toBe(true);
+    if (!models.result.ok) return;
+    const catalog = models.result.value as {
+      current: { provider: string; model: string };
+      groups: { id: string; models: { id: string; name: string }[] }[];
+    };
+    const deepseek = catalog.groups.find((g) => g.id === "deepseek");
+    expect(deepseek?.models.map((m) => m.id)).toContain("deepseek-v4-flash");
+    expect(deepseek?.models.some((m) => m.id === "default")).toBe(false);
+    expect(catalog.current.model).toBe("deepseek-v4-flash");
+
+    const desc = await dispatchFaceMethod(rt, "settings.describe", "mc2", {});
+    expect(desc.result.ok).toBe(true);
+    if (!desc.result.ok) return;
+    const locale = (
+      desc.result.value as {
+        namespaces: { ns: string; value: { preference?: string } }[];
+      }
+    ).namespaces.find((n) => n.ns === "locale");
+    expect(locale?.value.preference).toBe("zh");
+
+    const sel = await dispatchFaceMethod(rt, "session.selectModel", "mc3", {
+      sessionId,
+      provider: "deepseek",
+      model: "deepseek-v4-flash",
+    });
+    expect(sel.result.ok).toBe(true);
+    const yaml = await readFile(path.join(dir, "settings.yaml"), "utf8");
+    expect(yaml).toContain("agent-default-model:");
+    expect(yaml).toContain("provider: deepseek");
+    expect(yaml).toContain("model: deepseek-v4-flash");
+
+    const modelsAfter = await dispatchFaceMethod(rt, "session.models", "mc4", {
+      sessionId,
+    });
+    expect(modelsAfter.result.ok).toBe(true);
+    if (!modelsAfter.result.ok) return;
+    expect(
+      (modelsAfter.result.value as { routable: boolean }).routable,
+    ).toBe(true);
   });
 });

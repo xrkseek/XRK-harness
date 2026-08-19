@@ -10,7 +10,7 @@
 |------|------|------|----|------|
 | **产品入口** | 根 `README.md` | 所有人 | 是什么、状态摘要、最短跑通、文档索引 | Agent 红线、本机路径、对照仓笔记 |
 | **能力诚实** | [status.md](./status.md) | 集成 / 评估 | 能跑 / 未稳 / 未做 · 正式使用分层 | 路线图幻想、对照仓体量 |
-| **入门** | [getting-started.md](./getting-started.md) | 新贡献者 | 安装 · 首命令 · 壳组装 · MCP 开关 | 全量契约细节 |
+| **入门** | [getting-started.md](./getting-started.md) | 终端用户 / 新贡献者 | 零安装 · 源码 · 开发/生产分离 · 接模型 | 全量契约细节 |
 | **配置** | [configuration.md](./configuration.md) | 运维 / 集成 | 环境变量 · 落盘路径 | 密钥真值 |
 | **排障** | [troubleshooting.md](./troubleshooting.md) | 使用者 | 症状 → 处理 | 未证实 workaround |
 | **契约规格** | 本目录专题 `.md` | 集成 / 维护 | 已实现 HTTP · Face · session · 工具 · LLM | 「计划支持」清单当规格 |
@@ -113,5 +113,7 @@
 | [testing.md](./testing.md) | `pnpm check` |
 | [security-checklist.md](./security-checklist.md) | 安全控制 |
 | [learn.md](./learn.md) | 已落地要点（短） |
+| [publishing.md](./publishing.md) | Release · GitHub Packages |
 | [modules/](./modules/README.md) | 包文件地图 |
 | [adr/](./adr/README.md) | 架构决策 |
+| [releases/](./releases/) | 发行说明（当前 [v0.1.4](./releases/v0.1.4.md)） |

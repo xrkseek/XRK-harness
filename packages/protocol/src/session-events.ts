@@ -13,9 +13,19 @@ export interface TurnStartEvent extends SessionEventBase {
   readonly turnId: string;
 }
 
+/** Why a turn ended (DSH wire subset; merge-extensible at Face boundary). */
+export type TurnEndReason =
+  | { readonly kind: "completed" }
+  | { readonly kind: "aborted"; readonly reason?: unknown }
+  | { readonly kind: "error"; readonly error: unknown }
+  | { readonly kind: "max-tokens" }
+  | { readonly kind: "interrupted" }
+  | { readonly kind: "blocked" };
+
 export interface TurnEndEvent extends SessionEventBase {
   readonly type: "turn/end";
   readonly turnId: string;
+  readonly reason: TurnEndReason;
 }
 
 export interface StepStartEvent extends SessionEventBase {
@@ -61,6 +71,8 @@ export interface AssistantMessageEvent extends SessionEventBase {
   readonly toolCalls?: readonly ToolCall[];
   /** Optional thinking text when the model exposed reasoning (not model-visible history). */
   readonly reasoning?: string;
+  /** User cancelled mid-stream; prefix was finalized from logged chunks (DSH rc.8). */
+  readonly interrupted?: boolean;
 }
 
 export interface ToolCallEvent extends SessionEventBase {
@@ -283,6 +295,29 @@ export interface FeedbackRecordEvent extends SessionEventBase {
   readonly text: string;
 }
 
+/** Per-conversation LLM route snapshot (DSH `LlmCallConfig` subset). */
+export interface LlmRequestConfig {
+  readonly provider: string;
+  readonly model: string;
+  readonly reasoningEffort?: string;
+}
+
+export type RequestHeaderReason = "initial" | "resume" | "change";
+
+/** Non-history request envelope snapshot (DSH `request/header`). Not model-visible. */
+export interface RequestHeaderEvent extends SessionEventBase {
+  readonly type: "request/header";
+  readonly turnId: string;
+  readonly reason: RequestHeaderReason;
+  readonly header: {
+    readonly config: LlmRequestConfig;
+    readonly adapterDefaults?: {
+      readonly reasoningEffort?: boolean;
+      readonly maxTokens?: boolean;
+    };
+  };
+}
+
 export type SessionEvent =
   | TurnStartEvent
   | TurnEndEvent
@@ -308,7 +343,8 @@ export type SessionEvent =
   | SandboxModeEvent
   | ApprovalPolicyEvent
   | PlanModeEvent
-  | FeedbackRecordEvent;
+  | FeedbackRecordEvent
+  | RequestHeaderEvent;
 
 const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "turn/start",
@@ -336,6 +372,7 @@ const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "approval/policy",
   "plan/mode",
   "feedback/record",
+  "request/header",
 ]);
 
 /**

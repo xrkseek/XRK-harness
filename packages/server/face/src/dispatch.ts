@@ -139,9 +139,15 @@ const HANDLERS: Record<string, FaceHandler> = {
   "credentials.describe": bindPayload(credentialsDescribe),
   "credentials.set": bindPayload(credentialsSet),
   "credentials.unset": bindPayload(credentialsUnset),
-  "skill.list": bindPayload((runtime, payload) =>
-    skillList(runtime.workspaceRoot, payload),
-  ),
+  "skill.list": bindPayload((runtime, payload) => {
+    const sessionId = String(
+      (payload as Record<string, unknown> | null)?.sessionId ?? "",
+    ).trim();
+    const root =
+      (sessionId ? runtime.sessionCwds.get(sessionId) : undefined) ??
+      runtime.workspaceRoot;
+    return skillList(root, payload);
+  }),
   "subagent.list": subagentList,
   "subagent.history": subagentHistory,
   "subagent.prompt": subagentPrompt,

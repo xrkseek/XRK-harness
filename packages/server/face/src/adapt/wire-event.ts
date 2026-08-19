@@ -42,6 +42,7 @@ export const EVENT_ISOMORPHISM = {
   "approval/policy": "approval/policy",
   "plan/mode": "plan/mode",
   "feedback/record": "feedback/record",
+  "request/header": "request.header",
 } as const satisfies Record<SessionEvent["type"], string>;
 
 /** SessionEvent envelope on the Face wire. */
@@ -220,15 +221,25 @@ export function toFaceWireSessionEvent(
             content: assistantMessageContent(event),
             source: { provider: "xrk", model: "unknown" },
           },
+          ...(event.interrupted === true ? { interrupted: true } : {}),
         },
       };
     case "turn/start":
-    case "turn/end":
       return {
         type: event.type,
         seq,
         time,
         data: { turn: turnNum(ctx, event.turnId) },
+      };
+    case "turn/end":
+      return {
+        type: event.type,
+        seq,
+        time,
+        data: {
+          turn: turnNum(ctx, event.turnId),
+          reason: event.reason,
+        },
       };
     case "step/start":
     case "step/end":
@@ -326,6 +337,7 @@ export function toFaceWireSessionEvent(
     case "approval/policy":
     case "plan/mode":
     case "feedback/record":
+    case "request/header":
       return {
         type: event.type,
         seq,

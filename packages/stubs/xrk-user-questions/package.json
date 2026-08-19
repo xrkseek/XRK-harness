@@ -1,7 +1,7 @@
-ï»¿{
+{
   "version": "0.0.0-stub",
   "name": "@xrkseek/xrk-user-questions",
-  "description": "XRK stub â€” wire-safe ask-user question types for Face/client chains",
+  "description": "XRK stub ¡ª wire-safe ask-user question types for Face/client chains",
   "type": "module",
   "private": true,
   "main": "./index.js",

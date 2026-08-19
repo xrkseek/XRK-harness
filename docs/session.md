@@ -17,4 +17,4 @@
 
 包：`@xrkseek/protocol` · `@xrkseek/core-session` · `@xrkseek/core-agent`。
 
-JSONL 仓：`createJsonlSessionStore` hydrate 丢掉末行不完整 JSON **或** 末行事件 schema 失败并原子回写；中段损坏跳过该文件；`SessionStore.has` 不抛。不是 FTS。
+JSONL 导出：`toJSONL` / `fromJSONL` / `parseJSONL`；ZIP 导出用 `toPackedJSONL`（`text-chunks` 行压缩连续 `assistant/chunk`，≥3）+ 可选 `.jsonl.zst` sidecar；`fromPackedJSONL` / `parsePackedJSONL` / `fromPackedJSONLZstd` 可导入。**默认持久化** `createPersistentSessionStore` → `{XRK_SESSIONS_DIR}/sessions.db`（WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · chunk 写批并物理打包 `text-chunks` · `flush()` · open-turn 崩溃修复）。内存 API 仍为扁平 `SessionEvent[]`。`SessionStore.has` 不抛。`session.search` 持久化走 FTS 候选。

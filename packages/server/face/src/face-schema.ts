@@ -123,23 +123,6 @@ export const FACE_MCP_SCHEMA: FaceSchemaEnvelope = {
   },
 };
 
-/** `providers` is a dict so models page can probe `providers/<route>/api`. */
-export const FACE_LLM_SCHEMA: FaceSchemaEnvelope = {
-  uid: 8,
-  refs: {
-    1: { type: "const", value: "openai-chat" },
-    2: { type: "union", list: [1] },
-    3: { type: "string" },
-    4: { type: "string" },
-    5: {
-      type: "object",
-      dict: { api: 2, apiKeyEnv: 3, baseURL: 4 },
-    },
-    6: { type: "dict", inner: 5 },
-    8: { type: "object", dict: { providers: 6 } },
-  },
-};
-
 export function isFacePermissionPreset(
   value: unknown,
 ): value is FacePermissionPreset {

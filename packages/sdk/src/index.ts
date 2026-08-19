@@ -27,7 +27,7 @@ export {
 } from "@xrkseek/llm";
 export {
   createMemorySessionStore,
-  createJsonlSessionStore,
+  createPersistentSessionStore,
   createTurnLatch,
   createSessionDrainLatch,
   createSessionDrainHub,
@@ -70,16 +70,24 @@ export {
 } from "@xrkseek/core-tools";
 export { createReplayAdapter } from "@xrkseek/llm-replay";
 export { createOpenAiCompatibleAdapter } from "@xrkseek/llm-openai-compatible";
+export { createOpenAiResponsesAdapter } from "@xrkseek/llm-openai-responses";
+export { createAnthropicAdapter } from "@xrkseek/llm-anthropic";
+export { createGeminiAdapter } from "@xrkseek/llm-gemini";
 export { createDeepSeekAdapter } from "@xrkseek/llm-deepseek";
 export {
   OPENAI_CHAT_BRANDS,
+  R1_PROTOCOL_BRANDS,
+  DEFAULT_REGISTRY_BRANDS,
   REGISTRY_FALLBACK_MODEL,
   createProviderRegistry,
   getOpenAiChatBrand,
+  getR1Brand,
   resolveLlmFromEnv,
   discoverOpenAiChatModels,
   ModelDiscoveryError,
+  normalizeProtocolId,
   type BrandEntry,
+  type ProtocolId,
   type ProviderBinding,
   type ProviderRegistry,
   type ResolveInput,

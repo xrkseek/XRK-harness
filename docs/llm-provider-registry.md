@@ -15,7 +15,19 @@ listForUi() / catalog() → Face `llm.providers` · `session.models`
 
 ## 状态
 
-**R0 已交付**（openai-chat brands + env + Face 投影 + `discoverModels` GET `/models`）。R1+ 官方协议包待做。见 [status.md](./status.md)。
+**R0**：openai-chat brands + env + Face 投影 + `discoverModels` GET `/models`。  
+**R1 已交付**：官方协议包 + Registry 分发：
+
+| ProtocolId | 包 / 工厂 | Brand |
+|------------|-----------|-------|
+| `openai-chat` / `openai-completions` | `@xrkseek/llm-openai-compatible` | R0 brands |
+| `anthropic-messages` | `@xrkseek/llm-anthropic` | `anthropic` |
+| `openai-responses` | `@xrkseek/llm-openai-responses` | `openai-responses` |
+| `gemini-generate` | `@xrkseek/llm-gemini` | `gemini` |
+
+Face `llm-pi-ai.providers.*.api` 写入后经 `readProviderRoute` → `resolve({ protocol })` 选工厂；覆盖协议时用目标协议默认 path。
+
+见 [status.md](./status.md) · [llm-provider-presets.md](./llm-provider-presets.md)。
 
 ## 相关
 

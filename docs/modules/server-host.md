@@ -18,7 +18,7 @@
 ## Spawn 顺序（排障）
 
 ```text
-1. createMemorySessionStore 或 createJsonlSessionStore(XRK_SESSIONS_DIR) + PluginLoader
+1. createMemorySessionStore 或 createPersistentSessionStore(XRK_SESSIONS_DIR) + PluginLoader
 2. loadAll(pluginsDir) 若配置
 3. loadMcpToolPlugins(mcpServers) 若有 spec（env/config 或 host-settings.json）且 policy/XRK_MCP_ALLOW 允许
 4. createHostAgentCache(loader.list())
@@ -36,7 +36,7 @@
 | `XRK_WORKSPACE` | workspaceRoot |
 | `XRK_PRESET` | minimal \| harness \| server |
 | `XRK_API_KEY` | Face/HTTP 鉴权（空=开发免鉴权） |
-| `XRK_SESSIONS_DIR` | JSONL 会话目录；省略 = 内存 store（CLI `serve` 另有默认 `{workspace}/.xrk/sessions`） |
+| `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db`）；省略 = 内存 store（CLI `serve` 另有默认 `{workspace}/.xrk/sessions`） |
 | `XRK_PLUGINS_DIR` | 进程插件根；`web/` 子目录为客户端叠加（boot + `/plugins/…`） |
 | `XRK_WEB_DIST` | 静态壳覆盖；缺省见 CLI（`product-web/` 或 apps/web/dist） |
 | `XRK_POLICY_FILE` | policy JSON |
@@ -78,6 +78,7 @@ Preset 须 `wireCompositionTools({ plugins })`（见 minimal/harness）。Host s
 | `apps/web/tests/product-shell-plan.e2e.ts` | 不进 `pnpm check`。`/plan` → Plan chip + JSONL `plan/mode` |
 | `apps/web/tests/product-shell-plan-review.e2e.ts` | 不进 `pnpm check`。Host-serve：`exit_plan_mode` → Approve。Cordis scaffold 孪生：`plan-review.e2e.ts`（不进 `test:web`） |
 | `apps/web/tests/product-shell-export.e2e.ts` | 不进 `pnpm check`。Session log → HEAD `/api/session.export` + `xrk-session-*.zip` |
+| `apps/web/tests/product-shell-cancel.e2e.ts` | 不进 `pnpm check`。流式中 Stop → `assistant/message` interrupted + `turn/end` aborted |
 | `tests/agent-cache.test.ts` | 卸序 |
 | `tests/standing-tools.test.ts` | minimal 无 bash；harness/server 有 bash presenter |
 

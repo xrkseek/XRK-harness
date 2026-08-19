@@ -12,6 +12,7 @@ import {
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import { canOpenNativePath } from "./host-open-path.js";
+import { persistWorkspaceDoc } from "./workspace-store.js";
 
 const MAX_LIST_ENTRIES = 200;
 const MAX_LIST_DEPTH = 5;
@@ -319,6 +320,7 @@ export async function workspaceCreateFace(
     };
   }
   const result = runtime.workspaces.create(raw);
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
   runtime.bus.publishHost({
     type: "host/workspace-changed",
     workspace: result.workspace,
@@ -356,6 +358,7 @@ export async function workspaceRenameFace(
       },
     };
   }
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
   runtime.bus.publishHost({
     type: "host/workspace-changed",
     workspace,
@@ -411,6 +414,7 @@ export async function workspaceDeleteFace(
         : "workspace-move-invalid";
     return { ok: false, error: { code, message: result.reason } };
   }
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
   runtime.bus.publishHost({
     type: "host/workspace-removed",
     workspaceId,
@@ -470,6 +474,7 @@ export async function workspaceInsertBeforeFace(
       },
     };
   }
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
   const listed = runtime.workspaces.list(runtime.store.list());
   runtime.bus.publishHost({
     type: "host/workspace-order-changed",

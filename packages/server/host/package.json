@@ -25,6 +25,7 @@
     "@xrkseek/exec-pty": "workspace:*",
     "@xrkseek/exec-shell": "workspace:*",
     "@xrkseek/exec-subprocess": "workspace:*",
+    "@xrkseek/llm": "workspace:*",
     "@xrkseek/llm-registry": "workspace:*",
     "@xrkseek/mcp": "workspace:*",
     "@xrkseek/policy": "workspace:*",

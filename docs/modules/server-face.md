@@ -97,7 +97,7 @@ HTTP/WS (attach-http)
 | --------------------------------------------------- | --------------------- |
 | `registry.ts`                                       | 投影注册表 · snapshot |
 | `title-controller.ts` / `title-normalize.ts`        | 标题                  |
-| `units/title.ts` · `units/session-list-metadata.ts` · `units/todos.ts` · `units/permissions.ts` · `units/plan.ts` · `units/image-limits.ts` | 单元（todos = 站立计划；permissions = Access 芯片；plan = plan-mode 芯片；imageLimits = 附件摄入上限，有 AttachmentStore 才登记，boot 常量不推变更帧） |
+| `units/title.ts` · `units/session-list-metadata.ts` · `units/todos.ts` · `units/permissions.ts` · `units/plan.ts` · `units/image-limits.ts` · `units/session-stats.ts` | 单元（todos = 站立计划；permissions = Access 芯片；plan = plan-mode 芯片；imageLimits = 附件摄入上限，有 AttachmentStore 才登记，boot 常量不推变更帧；sessionStats = 全日志计数/墙钟） |
 | `install-defaults.ts`                               | 默认安装              |
 | `../permissions.ts`                                 | 预设表 · pin · `/permission` 写 knobs |
 | `../plan-mode.ts`                                   | `/plan` 选择预览 · idle 提交 `plan/mode` |
@@ -114,7 +114,7 @@ HTTP/WS (attach-http)
 | 测                               | 覆盖                         |
 | -------------------------------- | ---------------------------- |
 | `tests/harness-path.test.ts`     | prompt → tool → cancel → ask |
-| `tests/session-search.test.ts`   | search 校验 / 命中 / 近因 / JSONL |
+| `tests/session-search.test.ts`   | search 校验 / 命中 / 近因 / FTS 候选 |
 | `tests/open-path-skills.test.ts` | canOpenPath 三端 · skill.list     |
 | `tests/pick-directory.test.ts`   | 三端 picker 命令 / 取消 null / 注入 RPC |
 | `tests/message-feedback.test.ts` | list/put/delete CAS · 嵌套 Typert |
@@ -136,6 +136,7 @@ HTTP/WS (attach-http)
 | `tests/workspace.test.ts`        | list/create/rename/archive · delete/insert* |
 | `tests/host-frames.test.ts`      | session-added 子会话字段 · workspace-removed / order-changed · fork · `host/remote-event` |
 | `tests/projections.test.ts`      | title · list metadata · todos 站立计划（write 后 turn/start 清 null） |
+| `tests/session-stats.test.ts`    | sessionStats：step/end 计数 · llm/ttft/tool 墙钟 · 取消不计入 llmMs |
 | `tests/permissions.test.ts`      | pin · `/permission` · never 自动放行 · read-only deny |
 | `tests/plan-mode.test.ts`        | `/plan` 提交 · suffix steer · exit_plan_mode plan-review |
 

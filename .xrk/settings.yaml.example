@@ -1,0 +1,21 @@
+# Face settings for this workspace (gitignored copy: settings.yaml).
+# First run of serve/web creates settings.yaml automatically if missing.
+# Copy this file only when you want explicit defaults before first launch.
+
+agent-presets:
+  default: harness
+
+permission:
+  defaultPreset: read-only
+
+agent-default-model:
+  provider: deepseek
+  model: deepseek-v4-flash
+
+llm-deepseek:
+  baseURL: https://api.deepseek.com
+  models:
+    - id: deepseek-v4-flash
+      name: DeepSeek Chat
+      contextWindow: 64000
+      maxTokens: 8192

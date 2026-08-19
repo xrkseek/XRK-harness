@@ -21,7 +21,7 @@
 | Tool output bound | pipeline `bound` + persist | 大结果外溢到 `.xrk/tool-outputs/` |
 | Code worker | `code-runtime` | `run_code` 进 worker（实验） |
 | Safety loop/mistake | `core-session` safety | soft/hard notice；可 abort turn |
-| 密钥不入库 | publishing / gitignore | `.env*` 忽略；文档禁止提交真实 key |
+| 密钥不入库 | `.gitignore` + 示例模板 | `.env*` · `.xrk/.credentials.yaml` · `.xrk/settings.yaml` · `.xrk/workspaces.json` 忽略；仓内仅 `.env.example` · `.xrk/*.example` |
 
 ## 明确未做（勿宣传）
 
@@ -38,8 +38,9 @@
 ## 开发建议
 
 1. 生产环境 **必须** 设置非空 `XRK_API_KEY`，并收紧 CORS。  
-2. harness preset 默认挂 sandbox；minimal 无 shell——按威胁模型选型。  
-3. 新增危险工具：先 guard / sandbox，再注册。  
-4. 变更安全相关行为 → 更新本页 + 加锁测。
+2. **勿**把 `{workspace}/.xrk/.credentials.yaml` 提交进 git；若曾误提交，轮换所有已泄漏 key 并重写未推送历史。  
+3. harness preset 默认挂 sandbox；minimal 无 shell——按威胁模型选型。  
+4. 新增危险工具：先 guard / sandbox，再注册。  
+5. 变更安全相关行为 → 更新本页 + 加锁测。
 
 相关：[http-api.md](./http-api.md) · [tool-pipeline.md](./tool-pipeline.md) · [policy.md](./policy.md) · [modules/mcp.md](./modules/mcp.md) · [status.md](./status.md)

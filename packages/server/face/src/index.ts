@@ -198,6 +198,20 @@ export {
   type NativeDirectoryPicker,
 } from "./host-pick-directory.js";
 export {
+  resolveLlmForSession,
+  resolveLlmForSelection,
+  createSessionRoutingLlm,
+  FaceLlmResolveError,
+  type ResolvedFaceLlm,
+} from "./llm-resolve.js";
+export {
+  readProviderApiKey,
+  readProviderRoute,
+  providerHasUsableCredential,
+  type ProviderRouteContext,
+} from "./llm-provider-context.js";
+export { normalizeApiKey, type ApiKeyCheck } from "./llm-api-key.js";
+export {
   FaceCredentialVault,
   FaceSettingsNamespaces,
   credentialsDescribe,

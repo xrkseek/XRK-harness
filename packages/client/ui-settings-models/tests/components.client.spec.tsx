@@ -60,13 +60,13 @@ const DeepSeekConfig = Schema.object({
   })).default([
     {
       id: 'deepseek-v4-flash',
-      name: 'DeepSeek-V4-Flash',
+      name: 'DeepSeek V4 Flash',
       description: '',
       contextWindow: 1_000_000,
     },
     {
       id: 'deepseek-v4-pro',
-      name: 'DeepSeek-V4-Pro',
+      name: 'DeepSeek V4 Pro',
       description: '',
       contextWindow: 1_000_000,
     },
@@ -76,11 +76,11 @@ const DeepSeekConfig = Schema.object({
 const DEFAULT_DEEPSEEK_MODELS = [
   {
     id: 'deepseek-v4-flash',
-    name: 'DeepSeek-V4-Flash',
+    name: 'DeepSeek V4 Flash',
     description: 'Preserved hidden detail',
     contextWindow: 1_000_000,
   },
-  { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro', contextWindow: 1_000_000 },
+  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', contextWindow: 1_000_000 },
 ]
 
 function wireNamespaces(): SettingsNamespaceView[] {
@@ -92,10 +92,10 @@ function wireNamespaces(): SettingsNamespaceView[] {
         apiKeyEnv: 'DEEPSEEK_API_KEY',
         baseURL: 'https://base',
         defaultContextWindow: 1_000_000,
-        maxTokens: 256_000,
+        maxTokens: 384_000,
         models: DEFAULT_DEEPSEEK_MODELS,
       },
-      base: { defaultContextWindow: 1_000_000, maxTokens: 256_000, models: DEFAULT_DEEPSEEK_MODELS },
+      base: { defaultContextWindow: 1_000_000, maxTokens: 384_000, models: DEFAULT_DEEPSEEK_MODELS },
       user: { baseURL: 'https://base' },
       applies: 'live',
       secrets: [],

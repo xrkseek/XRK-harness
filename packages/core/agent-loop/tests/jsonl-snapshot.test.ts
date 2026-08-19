@@ -49,7 +49,7 @@ describe("session jsonl snapshot", () => {
         '{"type":"step/start","ts":3,"turnId":"turn_fixed","stepId":"step_fixed"}',
         '{"type":"assistant/message","ts":5,"turnId":"turn_fixed","stepId":"step_fixed","content":"pong"}',
         '{"type":"step/end","ts":6,"turnId":"turn_fixed","stepId":"step_fixed"}',
-        '{"type":"turn/end","ts":7,"turnId":"turn_fixed"}',
+        '{"type":"turn/end","ts":7,"turnId":"turn_fixed","reason":{"kind":"completed"}}',
         "",
       ].join("\n"),
     );

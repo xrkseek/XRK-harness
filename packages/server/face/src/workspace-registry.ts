@@ -1,6 +1,6 @@
 /**
- * In-memory workspace registry for Face (list/create/rename/archive).
- * Not durable across process restart — enough for product-shell sidebar wiring.
+ * Workspace registry for Face (list/create/rename/archive).
+ * Persists to `{harnessHome}/workspaces.json` via workspace-store.
  */
 
 import path from "node:path";
@@ -271,5 +271,90 @@ export class FaceWorkspaceRegistry {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+  }
+
+  exportState(): {
+    order: string[];
+    entries: Record<
+      string,
+      { path: string; title: string; createdAt: string; updatedAt: string }
+    >;
+    seq: number;
+  } {
+    const entries: Record<
+      string,
+      { path: string; title: string; createdAt: string; updatedAt: string }
+    > = {};
+    for (const [id, row] of this.workspaces) {
+      entries[id] = {
+        path: row.path,
+        title: row.title,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      };
+    }
+    return { order: [...this.order], entries, seq: this.seq };
+  }
+
+  importState(
+    doc: {
+      order: readonly string[];
+      entries: Readonly<
+        Record<
+          string,
+          { path: string; title: string; createdAt: string; updatedAt: string }
+        >
+      >;
+      seq: number;
+    },
+    fallbackRoot: string,
+  ): void {
+    this.workspaces.clear();
+    this.order.length = 0;
+    this.sessionOrder.clear();
+    this.membership.clear();
+    this.archived.clear();
+    this.seq = Math.max(0, doc.seq);
+
+    const root = path.resolve(fallbackRoot);
+    const defaultId = "ws_default";
+    const now = new Date().toISOString();
+    this.workspaces.set(defaultId, {
+      workspaceId: defaultId,
+      path: root,
+      title: path.basename(root) || "workspace",
+      createdAt: now,
+      updatedAt: now,
+    });
+    this.order.push(defaultId);
+    this.sessionOrder.set(defaultId, []);
+
+    for (const id of doc.order) {
+      if (id === defaultId) continue;
+      const row = doc.entries[id];
+      if (!row) continue;
+      this.workspaces.set(id, {
+        workspaceId: id,
+        path: path.resolve(row.path),
+        title: row.title,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      });
+      if (!this.order.includes(id)) this.order.push(id);
+      this.sessionOrder.set(id, []);
+    }
+
+    for (const [id, row] of Object.entries(doc.entries)) {
+      if (id === defaultId || this.workspaces.has(id)) continue;
+      this.workspaces.set(id, {
+        workspaceId: id,
+        path: path.resolve(row.path),
+        title: row.title,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      });
+      if (!this.order.includes(id)) this.order.push(id);
+      this.sessionOrder.set(id, []);
+    }
   }
 }

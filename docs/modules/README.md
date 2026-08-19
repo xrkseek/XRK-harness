@@ -35,6 +35,9 @@
 | `core/system-prompt/` | `@xrkseek/core-system-prompt` | [workspace-inject.md](../workspace-inject.md) |
 | `llm/llm/` | `@xrkseek/llm` | [llm-provider-registry.md](../llm-provider-registry.md) |
 | `llm/openai-compatible/` | `@xrkseek/llm-openai-compatible` | [llm-openai-compatible.md](../llm-openai-compatible.md) |
+| `llm/openai-responses/` | `@xrkseek/llm-openai-responses` | [llm-provider-registry.md](../llm-provider-registry.md) |
+| `llm/anthropic/` | `@xrkseek/llm-anthropic` | [llm-provider-registry.md](../llm-provider-registry.md) |
+| `llm/gemini/` | `@xrkseek/llm-gemini` | [llm-provider-registry.md](../llm-provider-registry.md) |
 | `llm/deepseek/` | `@xrkseek/llm-deepseek` | [llm-deepseek.md](../llm-deepseek.md) |
 | `llm/replay/` | `@xrkseek/llm-replay` | 测试夹具 |
 | `llm/registry/` | `@xrkseek/llm-registry` | [llm-provider-registry.md](../llm-provider-registry.md) |

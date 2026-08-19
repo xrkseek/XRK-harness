@@ -3,8 +3,8 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  createJsonlSessionStore,
   createMemorySessionStore,
+  createPersistentSessionStore,
   newSession,
 } from "@xrkseek/core-session";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
@@ -178,18 +178,23 @@ describe("session.search", () => {
     ).toEqual([feedback]);
   });
 
-  it("scans JSONL-backed sessions the same way", async () => {
+  it("scans SQLite-backed sessions the same way", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-search-"));
-    const store = createJsonlSessionStore(dir);
+    const store = createPersistentSessionStore(dir);
     const id = newSession(store).id;
     store.append(id, {
       type: "user/message",
       ts: 1,
       turnId: "t1",
-      content: "unique-jsonl-token on disk",
+      content: "unique-sqlite-token on disk",
     });
-    const reloaded = createJsonlSessionStore(dir);
-    const hit = searchSessions(reloaded, "unique-jsonl-token");
-    expect(hit.items.map((i) => i.sessionId)).toEqual([id]);
+    store.close();
+    const reloaded = createPersistentSessionStore(dir);
+    try {
+      const hit = searchSessions(reloaded, "unique-sqlite-token");
+      expect(hit.items.map((i) => i.sessionId)).toEqual([id]);
+    } finally {
+      reloaded.close();
+    }
   });
 });

@@ -1,7 +1,7 @@
-ï»¿{
+{
   "version": "0.0.0-stub",
   "name": "@xrkseek/xrk-host-webserver",
-  "description": "XRK stub â€” browser HTTP carrier types (webServer route registry) for Face/client host emit",
+  "description": "XRK stub ¡ª browser HTTP carrier types (webServer route registry) for Face/client host emit",
   "type": "module",
   "private": true,
   "main": "./index.js",

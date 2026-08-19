@@ -15,6 +15,8 @@ pnpm check
 
 首次跑通见 [docs/getting-started.md](./docs/getting-started.md)。
 
+**勿提交密钥**：`.xrk/.credentials.yaml`、`.xrk/settings.yaml`、`.env` 已在 `.gitignore`；仓内只保留 `.xrk/*.example` 与 `.env.example`。若误提交，轮换 key 并重写未推送历史。
+
 ## `pnpm check` 做什么
 
 见 [docs/testing.md](./docs/testing.md)。顺序：

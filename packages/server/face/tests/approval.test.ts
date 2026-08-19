@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import {
   createToolPipeline,
@@ -19,18 +22,24 @@ function drain(): FaceDrain {
   };
 }
 
+async function isolatedRuntime(store = createMemorySessionStore()) {
+  const root = await mkdtemp(path.join(tmpdir(), "xrk-face-approval-"));
+  return createFaceRuntime({
+    store,
+    workspaceRoot: root,
+    productDir: root,
+    drain: drain(),
+    resolveAgent: async () => {
+      throw new Error("unused");
+    },
+  });
+}
+
 describe("Face approval ask/respond", () => {
   it("request waits until session.respondApproval", async () => {
     const store = createMemorySessionStore();
     const mux: unknown[] = [];
-    const runtime = createFaceRuntime({
-      store,
-      workspaceRoot: process.cwd(),
-      drain: drain(),
-      resolveAgent: async () => {
-        throw new Error("unused");
-      },
-    });
+    const runtime = await isolatedRuntime(store);
     runtime.bus.subscribeMux((_id, frame) => mux.push(frame));
 
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
@@ -96,14 +105,7 @@ describe("Face approval ask/respond", () => {
 
   it("deny skips tool body", async () => {
     const store = createMemorySessionStore();
-    const runtime = createFaceRuntime({
-      store,
-      workspaceRoot: process.cwd(),
-      drain: drain(),
-      resolveAgent: async () => {
-        throw new Error("unused");
-      },
-    });
+    const runtime = await isolatedRuntime(store);
     const created = await dispatchFaceMethod(runtime, "session.create", "c2", {});
     expect(created.result.ok).toBe(true);
     if (!created.result.ok) return;
@@ -142,14 +144,7 @@ describe("Face approval ask/respond", () => {
   it("POST-equivalent respondByRpcId settles allow", async () => {
     const store = createMemorySessionStore();
     const mux: unknown[] = [];
-    const runtime = createFaceRuntime({
-      store,
-      workspaceRoot: process.cwd(),
-      drain: drain(),
-      resolveAgent: async () => {
-        throw new Error("unused");
-      },
-    });
+    const runtime = await isolatedRuntime(store);
     runtime.bus.subscribeMux((_id, frame) => mux.push(frame));
 
     const created = await dispatchFaceMethod(runtime, "session.create", "c3", {});

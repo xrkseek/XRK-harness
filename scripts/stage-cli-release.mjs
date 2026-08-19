@@ -34,6 +34,48 @@ function run(cmd, args, cwd = ROOT) {
   if (r.status !== 0) process.exit(r.status ?? 1);
 }
 
+/** pnpm deploy 用 junction；tar/npm 装完解析不到嵌套包。把 .pnpm 里的包抬到 node_modules 顶层。 */
+function hoistPnpmStore(nm) {
+  const pnpmDir = path.join(nm, ".pnpm");
+  if (!existsSync(pnpmDir)) return;
+  for (const virtual of readdirSync(pnpmDir)) {
+    const inner = path.join(pnpmDir, virtual, "node_modules");
+    if (!existsSync(inner)) continue;
+    for (const name of readdirSync(inner)) {
+      if (name === ".bin") continue;
+      const src = path.join(inner, name);
+      if (name.startsWith("@")) {
+        const scopeDest = path.join(nm, name);
+        mkdirSync(scopeDest, { recursive: true });
+        for (const pkg of readdirSync(src)) {
+          const dest = path.join(scopeDest, pkg);
+          rmSync(dest, { recursive: true, force: true });
+          cpSync(path.join(src, pkg), dest, { recursive: true, dereference: true });
+        }
+      } else {
+        const dest = path.join(nm, name);
+        rmSync(dest, { recursive: true, force: true });
+        cpSync(src, dest, { recursive: true, dereference: true });
+      }
+    }
+  }
+}
+
+function bundledNames(nm) {
+  const names = [];
+  for (const name of readdirSync(nm)) {
+    if (name.startsWith(".") || name === ".bin") continue;
+    const full = path.join(nm, name);
+    if (!statSync(full).isDirectory()) continue;
+    if (name.startsWith("@")) {
+      for (const pkg of readdirSync(full)) {
+        names.push(`${name}/${pkg}`);
+      }
+    } else names.push(name);
+  }
+  return names;
+}
+
 function walkPkgJson(dir, acc = []) {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules" || name === "dist" || name === "lib" || name.startsWith(".")) {
@@ -89,36 +131,36 @@ mkdirSync(path.join(ROOT, ".release"), { recursive: true });
 
 run("pnpm", ["--filter", "@xrkseek/harness-cli", "deploy", "--prod", STAGE]);
 
-const stagedPkgPath = path.join(STAGE, "package.json");
-const staged = JSON.parse(readFileSync(stagedPkgPath, "utf8").replace(/^\uFEFF/, ""));
-delete staged.private;
-delete staged.bundleDependencies;
-staged.publishConfig = {
-  access: "public",
-  registry: "https://npm.pkg.github.com",
-};
-
-for (const field of ["dependencies", "optionalDependencies"]) {
-  const deps = staged[field];
-  if (!deps || typeof deps !== "object") continue;
-  for (const [name, range] of Object.entries(deps)) {
-    if (typeof range !== "string" || !range.startsWith("workspace:")) continue;
-    const depPkg = path.join(STAGE, "node_modules", ...name.split("/"), "package.json");
-    if (!existsSync(depPkg)) {
-      console.error(`stage: missing ${depPkg} for ${name}`);
-      process.exit(1);
-    }
-    const v = JSON.parse(readFileSync(depPkg, "utf8").replace(/^\uFEFF/, "")).version;
-    deps[name] = typeof v === "string" ? v : "0.1.0";
-  }
-}
-staged.bundleDependencies = Object.keys(staged.dependencies ?? {});
-writeFileSync(stagedPkgPath, `${JSON.stringify(staged, null, 2)}\n`);
-
 if (!existsSync(path.join(STAGE, "product-web", "index.html"))) {
   console.error("stage: deploy missed product-web/");
   process.exit(1);
 }
+
+const stagedPkgPath = path.join(STAGE, "package.json");
+const staged = JSON.parse(readFileSync(stagedPkgPath, "utf8").replace(/^\uFEFF/, ""));
+delete staged.private;
+hoistPnpmStore(path.join(STAGE, "node_modules"));
+rmSync(path.join(STAGE, "node_modules", ".pnpm"), { recursive: true, force: true });
+
+const names = bundledNames(path.join(STAGE, "node_modules"));
+const dependencies = {};
+for (const n of names) {
+  const pj = path.join(STAGE, "node_modules", ...n.split("/"), "package.json");
+  let v = "0.0.0";
+  if (existsSync(pj)) {
+    const p = JSON.parse(readFileSync(pj, "utf8").replace(/^\uFEFF/, ""));
+    if (typeof p.version === "string") v = p.version;
+  }
+  dependencies[n] = v;
+}
+staged.dependencies = dependencies;
+staged.bundleDependencies = names;
+staged.files = ["dist", "product-web", "README.md"];
+staged.publishConfig = {
+  access: "public",
+  registry: "https://npm.pkg.github.com",
+};
+writeFileSync(stagedPkgPath, `${JSON.stringify(staged, null, 2)}\n`);
 
 const ver = typeof staged.version === "string" ? staged.version : "0.0.0";
 const releaseTgz = path.join(ROOT, ".release", `xrkseek-harness-cli-${ver}.tgz`);
