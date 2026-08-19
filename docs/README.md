@@ -17,7 +17,7 @@
 | **包地图** | [modules/](./modules/README.md) | 维护者 | 文件职责与测试锚点 | 教人怎么读文档的元规则 |
 | **决策** | [adr/](./adr/README.md) | 维护者 | 已采纳 ADR | 未立项 ADR |
 | **贡献门禁** | [../CONTRIBUTING.md](../CONTRIBUTING.md) · [testing.md](./testing.md) | 贡献者 | check 步骤 · 改契约同步表 | 个人机器绝对路径 |
-| **Agent 约定** | [../AGENTS.md](../AGENTS.md) | Cursor / 自动化 | 依赖纪律 · 红线 · 完成定义 | 面向终端用户的产品文案 |
+| **Agent 约定** | [../AGENTS.md](../AGENTS.md) | Cursor / 自动化 / 维护者 | 角色边界 · 按域放码 · 红线 · 完成定义 | 面向终端用户的安装教程（那是根 README） |
 | **本机对照** | Cursor Canvas（不入库） | 维护者本人 | 对照仓路径 · 体量 · 打磨 TODO | 进 `docs/` / README |
 
 ## 我想…
@@ -41,11 +41,12 @@
 
 | 角色 | 顺序 |
 |------|------|
-| 试用 / 集成 | status → getting-started → configuration → http-api · host-face |
-| Host / CLI | host-preset · profiles · plugin-loader · modules/server-host |
-| 工具作者 | tool-pipeline · seams · policy · web/lsp/pty/shell-jobs |
+| 试用 / 集成 | 根 [README](../README.md)「如果你是第一次接触」→ status → getting-started → configuration → http-api · host-face |
+| 能力叶 / 工具作者 | [AGENTS.md](../AGENTS.md) 角色表 → tool-pipeline · seams · policy · modules/ |
+| Host / Face | host-preset · profiles · plugin-loader · modules/server-host · host-face |
+| 产品壳 | host-face · `apps/web` · `packages/client` · status Tier B |
 | 安全 | security-checklist · policy |
-| 维护者 | architecture · learn · modules · adr · publishing |
+| 维护者 / Agent | [AGENTS.md](../AGENTS.md) · architecture · learn · modules · adr · publishing |
 
 ## 规格索引
 
