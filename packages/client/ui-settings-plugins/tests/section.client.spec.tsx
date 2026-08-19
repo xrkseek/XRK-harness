@@ -389,7 +389,13 @@ describe('McpCard', () => {
 
   it('shows connected overlay and server rows only once expanded', () => {
     renderMcp({
-      connected: [{ id: 'mcp:demo', serverName: 'demo', kind: 'tools', toolCount: 3 }],
+      connected: [{
+        id: 'mcp:demo',
+        serverName: 'demo',
+        kind: 'tools',
+        toolCount: 3,
+        status: 'reconnecting',
+      }],
       note: 'restart note',
     })
     expect(screen.getByText(en.mcpTitle)).toBeTruthy()
@@ -399,6 +405,7 @@ describe('McpCard', () => {
 
     expect(screen.getByText(en.mcpConnectedHeading)).toBeTruthy()
     expect(screen.getByText('demo')).toBeTruthy()
+    expect(screen.getByText(en.mcpStatusReconnecting)).toBeTruthy()
     expect(screen.getByText('restart note')).toBeTruthy()
     expect(screen.getByRole('button', { name: en.mcpAddServer })).toBeTruthy()
   })

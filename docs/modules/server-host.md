@@ -11,7 +11,7 @@
 | `index.ts` | `createHostManager` · spawn/stop | AgentHandle 可缓存绑定，**不可**当 transcript |
 | `agent-cache.ts` | 按 session 缓存 agent · `host.plugins` Scope | 根会话 `agent:{id}`；子会话 `openSubagentRealm`（`subagent:{id}`）；invalidate 父卸嵌套子 |
 | `standing-tools.ts` | preset standing 工具表（Face `viewFor`） | 冷 history 不 resume agent；minimal = fs+std+skill，harness/server 加 bash + web + lsp + pty |
-| `mcp-wire.ts` | `XRK_MCP_SERVERS` 或 `{workspace}/.xrk/host-settings.json` → 合成 `kind: tools` 插件 | 须 allow；id = `mcp:<serverName>`；list_changed 刷新 tools + invalidateAll；env/config 非空赢过文件 |
+| `mcp-wire.ts` | `XRK_MCP_SERVERS` 或 `{workspace}/.xrk/host-settings.json` → 合成 `kind: tools` 插件；文件真源时 Face mutate → `reconcileMcpToolPlugins` | 须 allow；id = `mcp:<serverName>`；stdio 有界重连；list_changed / gave-up 刷新 tools + invalidateAll；`mcpHealth` 供 Face overlay；env/config 非空赢过文件（无 live sync） |
 
 配置在 `@xrkseek/server-config`（`loadHostConfig`）。
 
@@ -22,7 +22,7 @@
 2. loadAll(pluginsDir) 若配置
 3. loadMcpToolPlugins(mcpServers) 若有 spec（env/config 或 host-settings.json）且 policy/XRK_MCP_ALLOW 允许
 4. createHostAgentCache(loader.list())
-5. createFaceRuntime（policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`）
+5. createFaceRuntime（policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`；文件真源 MCP 时 `syncMcpServers`）
 6. AgentFactory 内 `bindAskUserTool`（Face broker）；createHttpServer + attachFace
 ```
 
@@ -63,7 +63,7 @@ Preset 须 `wireCompositionTools({ plugins })`（见 minimal/harness）。Host s
 
 | 测 | 覆盖 |
 |----|------|
-| `tests/mcp-wire.test.ts` | JSON 解析 · 默认 deny · host-settings.json |
+| `tests/mcp-wire.test.ts` | JSON 解析 · 默认 deny · host-settings.json · fingerprint · reconcile |
 | `tests/http-chat.test.ts` | spawn · pluginsDir 接线 |
 | `tests/product-shell.test.ts` | 有完整 `apps/web/dist` 才跑：GET `/` · `__XRK_BOOT__` · 无 cordis UI / HMR · `/plugins/@xrkseek/client-runtime/client.js` 200 · Face 立即层 `xrk-typert-registry` · 首屏 RPC · manifest 名 · 欢迎文案 |
 | `apps/web/tests/product-shell-chrome.e2e.ts` | 不进 `pnpm check`。`pnpm test:web`：欢迎窗 / 侧栏「新建会话」/ wordmark |

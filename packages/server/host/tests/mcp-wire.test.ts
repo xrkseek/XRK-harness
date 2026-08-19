@@ -6,8 +6,14 @@ import { createPolicyEngine } from "@xrkseek/policy";
 import {
   parseMcpServersEnv,
   loadMcpToolPlugins,
+  mcpDraftsToSpecs,
+  mcpFingerprint,
   readMcpServersFromHostSettings,
+  reconcileMcpToolPlugins,
+  type McpRegisteredPlugin,
+  type McpServerSpec,
 } from "../src/mcp-wire.js";
+import type { RegisteredPlugin } from "@xrkseek/server-loader";
 
 describe("host mcp-wire", () => {
   it("parses XRK_MCP_SERVERS JSON", () => {
@@ -61,5 +67,87 @@ describe("host mcp-wire", () => {
     expect(readMcpServersFromHostSettings(path.join(dir, "missing.json"))).toEqual(
       [],
     );
+  });
+
+  it("fingerprints and drafts skip incomplete rows", () => {
+    const stdio: McpServerSpec = {
+      serverName: "fs",
+      command: "npx",
+      args: ["-y", "x"],
+      cwd: "/tmp",
+    };
+    expect(mcpFingerprint(stdio)).toBe(
+      JSON.stringify({ n: "fs", c: "npx", a: ["-y", "x"], d: "/tmp" }),
+    );
+    expect(mcpFingerprint({ serverName: "r", url: "https://x" })).toBe(
+      JSON.stringify({ n: "r", u: "https://x" }),
+    );
+    expect(
+      mcpDraftsToSpecs([
+        { serverName: "ok", command: "npx" },
+        { serverName: "skip" },
+        { serverName: "http", url: "https://example.com" },
+      ]),
+    ).toEqual([
+      { serverName: "ok", command: "npx" },
+      { serverName: "http", url: "https://example.com" },
+    ]);
+  });
+
+  it("reconcile keeps matching fingerprints and removes stale plugins", async () => {
+    const spec: McpServerSpec = { serverName: "keep", command: "npx" };
+    const keep: McpRegisteredPlugin = {
+      id: "mcp:keep",
+      kind: "tools",
+      tools: [],
+      mcpHealth: "connected",
+      mcpFingerprint: mcpFingerprint(spec),
+      async dispose() {},
+    };
+    const stale: McpRegisteredPlugin = {
+      id: "mcp:stale",
+      kind: "tools",
+      tools: [],
+      mcpHealth: "connected",
+      mcpFingerprint: mcpFingerprint({ serverName: "stale", command: "old" }),
+      async dispose() {},
+    };
+    const plugins: RegisteredPlugin[] = [keep, stale];
+    const result = await reconcileMcpToolPlugins({
+      desired: [spec],
+      list: () => plugins,
+      register: (plugin) => {
+        plugins.push(plugin);
+      },
+      unregister: async (id) => {
+        const i = plugins.findIndex((p) => p.id === id);
+        if (i < 0) return;
+        await plugins[i]?.dispose?.();
+        plugins.splice(i, 1);
+      },
+      allowConnect: true,
+    });
+    expect(result.kept).toEqual(["mcp:keep"]);
+    expect(result.removed).toEqual(["mcp:stale"]);
+    expect(result.added).toEqual([]);
+    expect(result.failures).toEqual([]);
+    expect(plugins.map((p) => p.id)).toEqual(["mcp:keep"]);
+  });
+
+  it("reconcile collects connect failures without aborting the batch", async () => {
+    const plugins: RegisteredPlugin[] = [];
+    const result = await reconcileMcpToolPlugins({
+      desired: [{ serverName: "nope", command: "xrk-mcp-missing-binary-xyz" }],
+      list: () => plugins,
+      register: (plugin) => {
+        plugins.push(plugin);
+      },
+      unregister: async () => {},
+      allowConnect: true,
+    });
+    expect(result.added).toEqual([]);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]?.serverName).toBe("nope");
+    expect(plugins).toEqual([]);
   });
 });

@@ -41,7 +41,14 @@ import { access } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import path from "node:path";
 import { createHostAgentCache } from "./agent-cache.js";
-import { loadMcpToolPlugins, parseMcpServersEnv, readMcpServersFromHostSettings } from "./mcp-wire.js";
+import {
+  loadMcpToolPlugins,
+  mcpDraftsToSpecs,
+  parseMcpServersEnv,
+  readMcpServersFromHostSettings,
+  reconcileMcpToolPlugins,
+  type McpServerDraft,
+} from "./mcp-wire.js";
 import { createStandingToolRegistry } from "./standing-tools.js";
 import { createDefaultPtyAccess } from "@xrkseek/exec-pty";
 import { createLocalShell } from "@xrkseek/exec-shell";
@@ -52,9 +59,15 @@ export { createStandingToolRegistry } from "./standing-tools.js";
 export type { AgentResolveOpts, HostAgentCache } from "./agent-cache.js";
 export {
   loadMcpToolPlugins,
+  mcpDraftsToSpecs,
+  mcpFingerprint,
   parseMcpServersEnv,
   readMcpServersFromHostSettings,
+  reconcileMcpToolPlugins,
+  type McpRegisteredPlugin,
+  type McpServerDraft,
   type McpServerSpec,
+  type ReconcileMcpResult,
 } from "./mcp-wire.js";
 
 async function resolveOfficeAgentSeedDir(
@@ -83,11 +96,17 @@ async function resolveWebPluginOverlay(
   }
 }
 
+/** Env/config MCP list (empty → Face host-settings.json is the source). */
+function configuredMcpSpecs(config: HostConfig) {
+  return (
+    config.runtime.mcpServers ??
+    parseMcpServersEnv(process.env.XRK_MCP_SERVERS)
+  );
+}
+
 /** Env/config win; empty → Face dump `{workspace}/.xrk/host-settings.json`. */
 function resolveMcpSpecs(config: HostConfig) {
-  const configured =
-    config.runtime.mcpServers ??
-    parseMcpServersEnv(process.env.XRK_MCP_SERVERS);
+  const configured = configuredMcpSpecs(config);
   if (configured.length > 0) return configured;
   return readMcpServersFromHostSettings(
     path.join(config.runtime.workspaceRoot, ".xrk", "host-settings.json"),
@@ -176,6 +195,7 @@ export function createHostManager(): HostManager {
         : undefined;
 
       const mcpSpecs = resolveMcpSpecs(config);
+      const mcpFileSourced = configuredMcpSpecs(config).length === 0;
       let invalidateAgents: () => Promise<void> = async () => {};
       if (mcpSpecs.length > 0) {
         const mcpPlugins = await loadMcpToolPlugins({
@@ -193,6 +213,11 @@ export function createHostManager(): HostManager {
 
       const agentCache = createHostAgentCache(loader.list(), { hostId: id });
       invalidateAgents = () => agentCache.invalidateAll();
+      /** Mutable Face inventory — Host splices after MCP reconcile. */
+      const facePlugins: RegisteredPlugin[] = [...loader.list()];
+      const refreshFacePlugins = () => {
+        facePlugins.splice(0, facePlugins.length, ...loader.list());
+      };
       const lastDrainResult = new Map<string, AgentRunResult>();
       const attachments = createMemoryAttachmentStore();
 
@@ -322,7 +347,34 @@ export function createHostManager(): HostManager {
               goalPersistPath: path.join(sessionsDir, "goals.json"),
             }
           : {}),
-        plugins: loader.list(),
+        plugins: facePlugins,
+        ...(mcpFileSourced
+          ? {
+              syncMcpServers: async (servers: readonly McpServerDraft[]) => {
+                await reconcileMcpToolPlugins({
+                  desired: mcpDraftsToSpecs(servers),
+                  list: () => loader.list(),
+                  register: (plugin) => {
+                    loader.register(plugin);
+                    if (!loadedPluginIds.includes(plugin.id)) {
+                      loadedPluginIds = [...loadedPluginIds, plugin.id];
+                    }
+                  },
+                  unregister: async (pluginId) => {
+                    await loader.unregister(pluginId);
+                    loadedPluginIds = loadedPluginIds.filter(
+                      (x) => x !== pluginId,
+                    );
+                  },
+                  ...(policy ? { policy } : {}),
+                  allowConnect: Boolean(config.runtime.mcpAllowConnect),
+                  onToolsChanged: () => invalidateAgents(),
+                });
+                refreshFacePlugins();
+                await invalidateAgents();
+              },
+            }
+          : {}),
         ...(config.runtime.webDist
           ? { webPlugins: boot.entries.map((e) => ({ id: e.id })) }
           : {}),
@@ -417,7 +469,9 @@ export function createHostManager(): HostManager {
         config,
         store,
         loader,
-        loadedPluginIds,
+        get loadedPluginIds() {
+          return loadedPluginIds;
+        },
         http,
         drain,
         get status() {

@@ -28,6 +28,7 @@ function runtime(opts?: {
   settingsDocumentPath?: string;
   openNativePath?: (target: string) => Promise<void>;
   plugins?: Parameters<typeof createFaceRuntime>[0]["plugins"];
+  syncMcpServers?: Parameters<typeof createFaceRuntime>[0]["syncMcpServers"];
 }) {
   const store = createMemorySessionStore();
   return createFaceRuntime({
@@ -38,6 +39,9 @@ function runtime(opts?: {
       throw new Error("unused");
     },
     ...(opts?.productDir !== undefined ? { productDir: opts.productDir } : {}),
+    ...(opts?.syncMcpServers !== undefined
+      ? { syncMcpServers: opts.syncMcpServers }
+      : {}),
     ...(opts?.settingsDocumentPath !== undefined
       ? { settingsDocumentPath: opts.settingsDocumentPath }
       : {}),
@@ -258,6 +262,7 @@ describe("Face settings U2", () => {
         serverName: "demo",
         kind: "tools",
         toolCount: 0,
+        status: "connected",
       },
     ]);
     expect(mcp?.value.note).toContain("host-settings.json");
@@ -285,6 +290,7 @@ describe("Face settings U2", () => {
         serverName: "demo",
         kind: "tools",
         toolCount: 0,
+        status: "connected",
       },
     ]);
 
@@ -343,6 +349,71 @@ describe("Face settings U2", () => {
     if (!invalid.result.ok) {
       expect(invalid.result.error.code).toBe("settings-rejected");
     }
+  });
+
+  it("mcp mutate applies live when Host syncMcpServers is wired", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-mcp-live-"));
+    const facePlugins: {
+      id: string;
+      kind: string;
+      tools: unknown[];
+      mcpHealth?: string;
+    }[] = [{ id: "mcp:demo", kind: "tools", tools: [] }];
+    const synced: unknown[] = [];
+    const rt = runtime({
+      productDir: dir,
+      plugins: facePlugins as Parameters<typeof createFaceRuntime>[0]["plugins"],
+      syncMcpServers: async (servers) => {
+        synced.push(...servers);
+        facePlugins.splice(
+          0,
+          facePlugins.length,
+          ...servers.map((s) => ({
+            id: `mcp:${s.serverName}`,
+            kind: "tools",
+            tools: [],
+            mcpHealth: "connected",
+          })),
+        );
+      },
+    });
+    const desc = await dispatchFaceMethod(rt, "settings.describe", "md-live", {});
+    expect(desc.result.ok).toBe(true);
+    if (!desc.result.ok) return;
+    const mcp = (
+      desc.result.value as {
+        namespaces: { ns: string; applies: string; value: { note: string } }[];
+      }
+    ).namespaces.find((n) => n.ns === "mcp");
+    expect(mcp?.applies).toBe("live");
+    expect(mcp?.value.note).toContain("remounts");
+
+    const draft = [
+      { serverName: "fs", command: "npx", args: ["-y", "mcp-server"] },
+    ];
+    const mut = await dispatchFaceMethod(rt, "settings.mutate", "mm-live", {
+      ns: "mcp",
+      ops: [{ op: "set", path: ["servers"], value: draft }],
+    });
+    expect(mut.result.ok).toBe(true);
+    if (!mut.result.ok) return;
+    expect(synced).toEqual(draft);
+    expect(mut.result.value).toMatchObject({
+      ns: "mcp",
+      applies: "live",
+      value: {
+        servers: draft,
+        connected: [
+          {
+            id: "mcp:fs",
+            serverName: "fs",
+            kind: "tools",
+            toolCount: 0,
+            status: "connected",
+          },
+        ],
+      },
+    });
   });
 
   it("settings.replace replaces whole ns section", async () => {

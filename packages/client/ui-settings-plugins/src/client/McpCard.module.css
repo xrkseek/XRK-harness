@@ -86,6 +86,16 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+.badgeError {
+  composes: badge;
+  color: var(--dsw-alias-label-error);
+}
+
+.badgeError {
+  composes: badge;
+  color: var(--dsw-alias-label-error);
+}
+
 .list {
   display: flex;
   flex-direction: column;

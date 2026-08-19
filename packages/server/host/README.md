@@ -16,7 +16,7 @@ const instance = await manager.spawn(config, async ({ sessionId, store, workspac
 
 若配置了 `runtime.pluginsDir`，spawn 时 `loader.loadAll`；见 `loadedPluginIds` / `health().plugins`。
 
-MCP：`XRK_MCP_SERVERS`（JSON 数组）+ `XRK_MCP_ALLOW=1`（或 policy allow `mcp.connect`）→ 注册为 `mcp:<serverName>` 的 `kind: tools` 插件。
+MCP：`XRK_MCP_SERVERS`（JSON 数组）+ `XRK_MCP_ALLOW=1`（或 policy allow `mcp.connect`）→ 注册为 `mcp:<serverName>` 的 `kind: tools` 插件。env 空时读 `.xrk/host-settings.json`，Face mutate 后热挂载。
 
 **文件级笔记**：[docs/modules/server-host.md](../../../docs/modules/server-host.md)。
 

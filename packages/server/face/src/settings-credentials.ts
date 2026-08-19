@@ -553,7 +553,8 @@ function unsetAtPath(root: Record<string, unknown>, path: readonly string[]): vo
 
 /**
  * Process-memory settings namespaces for Face (welcome notice, etc.).
- * Most ns stay in memory; `mcp.servers` also persist to host-settings.json.
+ * Most ns stay in memory; `mcp.servers` also persist to host-settings.json
+ * (and live-remount when Host wires `syncMcpServers`).
  */
 export class FaceSettingsNamespaces {
   private readonly map = new Map<
@@ -727,14 +728,34 @@ function validateMcpServersValue(raw: unknown): string | undefined {
   }
 }
 
-const MCP_SETTINGS_NOTE =
-  "Desired servers persist in .xrk/host-settings.json and apply on the next Host spawn. Live connect still needs XRK_MCP_ALLOW=1 (or policy allow). Not a process supervisor.";
+const MCP_SETTINGS_NOTE_RESTART =
+  "Desired servers persist in .xrk/host-settings.json and apply on the next Host spawn. Live connect still needs XRK_MCP_ALLOW=1 (or policy allow). Stdio crashes reconnect with bounded backoff; HTTP uses SDK SSE resume.";
+
+const MCP_SETTINGS_NOTE_LIVE =
+  "Desired servers persist in .xrk/host-settings.json; Host remounts MCP tools in this process. Connect still needs XRK_MCP_ALLOW=1 (or policy allow). Stdio crashes reconnect with bounded backoff; HTTP uses SDK SSE resume.";
+
+function mcpApplies(runtime: FaceRuntime): "live" | "restart" {
+  return typeof runtime.syncMcpServers === "function" ? "live" : "restart";
+}
+
+function mcpSettingsNote(runtime: FaceRuntime): string {
+  return mcpApplies(runtime) === "live"
+    ? MCP_SETTINGS_NOTE_LIVE
+    : MCP_SETTINGS_NOTE_RESTART;
+}
+
+function mcpHealthOf(plugin: { mcpHealth?: unknown }): "connected" | "reconnecting" | "gave-up" {
+  const raw = plugin.mcpHealth;
+  if (raw === "reconnecting" || raw === "gave-up" || raw === "connected") return raw;
+  return "connected";
+}
 
 function mcpConnected(runtime: FaceRuntime): readonly {
   readonly id: string;
   readonly serverName: string;
   readonly kind: string;
   readonly toolCount: number;
+  readonly status: "connected" | "reconnecting" | "gave-up";
 }[] {
   return (runtime.plugins ?? [])
     .filter((p) => p.id.startsWith("mcp:"))
@@ -743,6 +764,7 @@ function mcpConnected(runtime: FaceRuntime): readonly {
       serverName: p.id.slice("mcp:".length),
       kind: p.kind,
       toolCount: p.tools?.length ?? 0,
+      status: mcpHealthOf(p),
     }));
 }
 
@@ -750,7 +772,7 @@ function mcpDescribeBase(runtime: FaceRuntime): Record<string, unknown> {
   return {
     servers: [],
     connected: mcpConnected(runtime),
-    note: MCP_SETTINGS_NOTE,
+    note: mcpSettingsNote(runtime),
   };
 }
 
@@ -798,7 +820,7 @@ export async function settingsDescribeFace(
       "mcp",
       mcpDescribeBase(runtime),
       FACE_MCP_SCHEMA,
-      "restart",
+      mcpApplies(runtime),
     ),
   ];
   if (runtime.hostPublic) {
@@ -867,25 +889,35 @@ export async function settingsMutateFace(
     };
   }
   applyFaceUiPref(runtime, ns, result.view.value as Record<string, unknown>);
-  publishRemoteEvent(runtime.bus, "settings/document-updated", [
-    ns,
-    result.view.revision,
-  ]);
+  if (ns !== "mcp") {
+    publishRemoteEvent(runtime.bus, "settings/document-updated", [
+      ns,
+      result.view.revision,
+    ]);
+  }
   if (ns === "llm") {
     publishRemoteEvent(runtime.bus, "llm/adapters-updated", []);
   }
   if (ns === "mcp") {
+    const applies = mcpApplies(runtime);
     const slot = runtime.settingsNamespaces.ensure("mcp");
     slot.user = { servers: mcpServersFromRuntime(runtime) };
-    slot.applies = "restart";
+    slot.applies = applies;
     await persistHostSettings(runtime);
+    if (runtime.syncMcpServers) {
+      await runtime.syncMcpServers(mcpServersFromRuntime(runtime));
+    }
+    publishRemoteEvent(runtime.bus, "settings/document-updated", [
+      ns,
+      result.view.revision,
+    ]);
     return {
       ok: true,
       value: runtime.settingsNamespaces.view(
         "mcp",
         mcpDescribeBase(runtime),
         FACE_MCP_SCHEMA,
-        "restart",
+        applies,
       ),
     };
   }
@@ -989,7 +1021,7 @@ export function hydrateFaceHostSettings(runtime: FaceRuntime): void {
     const servers = parseFaceMcpServers(parsed.mcp?.servers);
     const slot = runtime.settingsNamespaces.ensure("mcp");
     slot.user = { servers };
-    slot.applies = "restart";
+    slot.applies = mcpApplies(runtime);
   } catch {
     /* missing or malformed dump — next mutate rewrites */
   }

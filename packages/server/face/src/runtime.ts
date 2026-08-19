@@ -47,6 +47,7 @@ import {
   defaultUiSettings,
   hydrateFaceHostSettings,
   type FaceHostPublicSettings,
+  type FaceMcpServerDraft,
   type FaceUiSettings,
 } from "./settings-credentials.js";
 import { FaceApprovalBroker, approvalRequestedFrame, approvalResolvedFrame } from "./approvals.js";
@@ -82,6 +83,11 @@ export interface CreateFaceRuntimeOptions {
   readonly loadSlashRecipes?: SlashRecipesLoader;
   /** Process plugins for `pluginInventory/list` + `commands/*`. */
   readonly plugins?: readonly FaceProcessPlugin[];
+  /**
+   * Host live-applies Face `mcp.servers` when MCP is sourced from
+   * host-settings.json (env empty).
+   */
+  readonly syncMcpServers?: (servers: readonly FaceMcpServerDraft[]) => Promise<void>;
   /** Product-shell boot entries listed in inventory. */
   readonly webPlugins?: readonly FaceWebPlugin[];
   readonly invalidateAgent?: (sessionId: string) => void | Promise<void>;
@@ -97,9 +103,9 @@ export interface CreateFaceRuntimeOptions {
    */
   readonly settingsDocumentPath?: string;
   /** Inject native opener (tests). Default `openNativePath`. */
-  openNativePath?(target: string): Promise<void>;
+  readonly openNativePath?: (target: string) => Promise<void>;
   /** Inject native folder chooser (tests). Default `pickNativeDirectory`. */
-  pickNativeDirectory?(signal: AbortSignal): Promise<string | null>;
+  readonly pickNativeDirectory?: (signal: AbortSignal) => Promise<string | null>;
   /** Durable image store (default none → image RPCs unavailable). */
   readonly attachments?: AttachmentStore;
   /** Standing tool registry (preset layer) when no live agent is remembered. */
@@ -475,6 +481,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     inboxWire,
     loadSlashRecipes,
     ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
+    ...(options.syncMcpServers !== undefined
+      ? { syncMcpServers: options.syncMcpServers }
+      : {}),
     getTool,
     ...(options.webPlugins !== undefined
       ? { webPlugins: options.webPlugins }

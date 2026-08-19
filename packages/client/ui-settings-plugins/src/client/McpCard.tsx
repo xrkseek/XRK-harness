@@ -67,17 +67,35 @@ export function McpCard(props: McpCardProps) {
           ? <p className={css.empty}>{t('mcpConnectedEmpty')}</p>
           : (
             <ul className={css.connectedList}>
-              {state.connected.map(entry => (
-                <li key={entry.id} className={css.connectedRow}>
-                  <span className={css.connectedName}>{entry.serverName}</span>
-                  <span className={css.badge}>{entry.kind}</span>
-                  <span className={css.badgeMuted}>
-                    {entry.toolCount}
-                    {' '}
-                    {t('mcpToolsLabel')}
-                  </span>
-                </li>
-              ))}
+              {state.connected.map(entry => {
+                const status = entry.status ?? 'connected'
+                const statusClass = status === 'gave-up'
+                  ? css.badgeError
+                  : status === 'reconnecting'
+                    ? css.badgeMuted
+                    : css.badge
+                const statusLabel = status === 'gave-up'
+                  ? t('mcpStatusGaveUp')
+                  : status === 'reconnecting'
+                    ? t('mcpStatusReconnecting')
+                    : t('mcpStatusConnected')
+                return (
+                  <li
+                    key={entry.id}
+                    className={css.connectedRow}
+                    data-mcp-status={status}
+                  >
+                    <span className={css.connectedName}>{entry.serverName}</span>
+                    <span className={statusClass}>{statusLabel}</span>
+                    <span className={css.badgeMuted}>{entry.kind}</span>
+                    <span className={css.badgeMuted}>
+                      {entry.toolCount}
+                      {' '}
+                      {t('mcpToolsLabel')}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           )}
       </section>

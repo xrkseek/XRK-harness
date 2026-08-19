@@ -62,12 +62,13 @@ export async function registerMcpTools(
   let applied: AppliedMcpTool[] = [];
   let skipped: SkippedMcpTool[] = [];
   let disposed = false;
+  let gaveUp = false;
   let syncChain: Promise<void> = Promise.resolve();
 
   async function sync(): Promise<void> {
-    if (disposed) return;
+    if (disposed || gaveUp) return;
     const tools = await client.listTools();
-    if (disposed) return;
+    if (disposed || gaveUp) return;
 
     const owned = new Set(applied.map((a) => a.publicName));
     const nextApplied: AppliedMcpTool[] = [];
@@ -95,7 +96,7 @@ export async function registerMcpTools(
       keep.add(name);
     }
 
-    if (disposed) {
+    if (disposed || gaveUp) {
       for (const row of nextApplied) {
         if (!owned.has(row.publicName)) registry.unregister(row.publicName);
       }
@@ -127,6 +128,18 @@ export async function registerMcpTools(
       })
     : () => {};
 
+  const unsubState = client.onConnectionState((state) => {
+    if (state.status !== "gave-up" || disposed) return;
+    gaveUp = true;
+    syncChain = syncChain.then(() => {
+      for (const a of applied) {
+        registry.unregister(a.publicName);
+      }
+      applied = [];
+      skipped = [];
+    });
+  });
+
   return {
     get applied() {
       return applied;
@@ -138,6 +151,7 @@ export async function registerMcpTools(
       if (disposed) return;
       disposed = true;
       unsub();
+      unsubState();
       for (const a of applied) {
         registry.unregister(a.publicName);
       }
