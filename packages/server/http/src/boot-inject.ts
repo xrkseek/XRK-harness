@@ -1,6 +1,6 @@
 /**
  * Boot inject for product SPA index.html.
- * Browser globals: `window.__XRK_BOOT__` (+ compatibility `__DSH_BOOT__`).
+ * Browser global: `window.__XRK_BOOT__`.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -62,9 +62,9 @@ export function loadBootManifestFromWebDist(
  * does not expose).
  */
 export const XRK_OMIT_CLIENT_PLUGIN_IDS = [
-  "@deepseek-ai/dsh-client-ui-cordis",
-  "@deepseek-ai/dsh-cordis-client-runner",
-  "@deepseek-ai/dsh-client-hmr",
+  "@xrkseek/client-ui-cordis",
+  "@xrkseek/xrk-cordis-client-runner",
+  "@xrkseek/client-hmr",
 ] as const;
 
 /** Drop product-omitted ids. Overlay cannot put them back. */
@@ -107,7 +107,7 @@ export function mergeWebBootManifests(
 
 export function bootInjectScript(manifest: WebBootManifest): string {
   const json = JSON.stringify(manifest);
-  return `<script>window.__DSH_BOOT__=${json};window.__XRK_BOOT__=window.__DSH_BOOT__;</script>`;
+  return `<script>window.__XRK_BOOT__=${json};</script>`;
 }
 
 /** Insert boot script before `</head>` (or prepend). */
@@ -119,7 +119,7 @@ export function injectBootIntoHtml(
   const lower = html.toLowerCase();
   // Strip any prior inject so capture+serve does not double-inject.
   const stripped = html.replace(
-    /<script>\s*window\.__DSH_BOOT__[\s\S]*?<\/script>/i,
+    /<script>\s*window\.__XRK_BOOT__[\s\S]*?<\/script>/i,
     "",
   );
   const idx = stripped.toLowerCase().lastIndexOf("</head>");

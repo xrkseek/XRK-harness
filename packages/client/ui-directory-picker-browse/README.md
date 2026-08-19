@@ -1,4 +1,4 @@
-# @deepseek-ai/dsh-client-ui-directory-picker-browse
+# @xrkseek/client-ui-directory-picker-browse
 
 English | [中文](README.zh.md)
 
@@ -8,7 +8,7 @@ The dialog is a 680×500 Miller-column view (clamped on short or narrow viewport
 
 Confirming a directory is the picked path and dismissing the dialog is the cancellation. Browse failures — an unreadable target, a create conflict — stay inside the dialog's own alert surfaces, so this occupant never drives the owner's `onError` arm; the owner keeps the workspace-creation error surface. Both registrations install through nested `slots.inject()` calls because either declaring entry may activate later or replace its declaration, and the dialog's copy is registered in this package's own locale namespace: the two dictionaries land as a unit, so a failed activation cannot squat one locale of the namespace.
 
-The node half is an empty `apply`: it exists so the plugin appears in the host cordis.yml and Loader, while the browser half ships through `exports["./client"]` and is discovered through the `dsh.client` manifest declaration.
+The node half is an empty `apply`: it exists so the plugin appears in the host cordis.yml and Loader, while the browser half ships through `exports["./client"]` and is discovered through the `xrk.client` manifest declaration.
 
 ## Model Experience
 

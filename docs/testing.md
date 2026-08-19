@@ -16,6 +16,7 @@
 ```bash
 pnpm build                # tsc -b（CLI / Node 跑 dist 前需要）
 pnpm test                 # vitest run
+pnpm test:web             # 欢迎窗/侧栏/流式硬刷（需 dist + 已 install 的 Chromium）
 pnpm test:kernel-coverage
 pnpm lint
 pnpm format:check
@@ -25,7 +26,8 @@ pnpm format:check
 
 ```text
 packages/<area>/tests/**/*.test.ts
-apps/**/tests/**/*.test.ts
+apps/**/tests/**/*.test.ts          # 进 pnpm check
+apps/web/tests/product-shell-*.e2e.ts        # 仅 pnpm test:web（Host-serve 车道）
 ```
 
 Vitest 别名把 `@xrkseek/*` 指到各包 **src**（见根 `vitest.config.ts`），测试直接打源码。
@@ -36,10 +38,11 @@ Vitest 别名把 `@xrkseek/*` 指到各包 **src**（见根 `vitest.config.ts`�
 2. **Session 真源**：断言优先对 `deriveMessages(events)` / 事件类型，而非内部可变数组。导入 JSONL 用 `fromJSONL`（内部 `assertSessionEvent`）。
 3. **Protocol**：跨边界未知值用 `parseSessionEvent`，勿只靠宽松的 `isSessionEvent`。
 4. **Exec**：临时目录 `mkdtemp`；测完 `rm({ recursive: true })`；测路径逃逸与 stub Provider「换实现零改工具」。
-5. **HTTP**：`createHostManager` + `XRK_PORT=0`；测后 `stopAll`。产品壳首屏：本机有 `apps/web/dist` 才跑；`host.describe` / `session.list` / plugin 200（缺 plugin 须 404 不回退 SPA）。无 dist skip。
-6. **Preset**：`@xrkseek/testkit` 的 `makeHarness` 或直接 `createMinimalComposition`。
-7. **Face 闲置 runtime**：共用 `tests/helpers/bare-runtime.ts`（idle drain + unused/admit stub），不要每个文件再抄一份。
-8. **Node**：本地/CI 用系统 Node ≥26（Windows：`C:\Program Files\nodejs\node.exe`），勿用 Cursor helper Node 22。
+5. **HTTP**：`createHostManager` + `XRK_PORT=0`；测后 `stopAll`。产品壳首屏：本机有 `apps/web/dist` 才跑；`host.describe` / `session.list` / `/plugins/@xrkseek/client-runtime/client.js` 200，boot 含 `xrk-typert-registry` · `xrk-api-gateway` · `xrk-api-remotes`（缺 plugin 须 404 不回退 SPA）。无 dist skip。裸 Vite：`apps/web/tests/vite-entry.test.ts` 断言 `serve` 拒绝并指向 `xrk-harness web`。
+6. **产品壳浏览器硬刷**（不进 `pnpm check`）：`pnpm test:web` → `vitest.web.config.ts` 只收 `product-shell-*.e2e.ts` 这一条 Host-serve 车道（不要 glob 其余仍写 DSH Cordis scaffold 的文件）。Playwright 只在 `@xrkseek/web-frontend` 的 devDependency；`pnpm install` **不**下浏览器。要跑时：`pnpm --filter @xrkseek/web-frontend exec playwright install chromium`（Linux CI 才加 `--with-deps` 装系统库）。无 dist skip；有 dist 但没 Chromium 则失败，不静默 skip。
+7. **Preset**：`@xrkseek/testkit` 的 `makeHarness` 或直接 `createMinimalComposition`。
+8. **Face 闲置 runtime**：共用 `tests/helpers/bare-runtime.ts`（idle drain + unused/admit stub），不要每个文件再抄一份。
+9. **Node**：本地/CI 用系统 Node ≥26（Windows：`C:\Program Files\nodejs\node.exe`），勿用 Cursor helper Node 22。
 
 Vitest：一律 `import { describe, expect, it } from "vitest"`（`globals: false`）。
 

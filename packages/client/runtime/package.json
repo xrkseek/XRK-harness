@@ -1,5 +1,5 @@
 {
-  "name": "@deepseek-ai/dsh-client-runtime",
+  "name": "@xrkseek/client-runtime",
   "description": "Client core services: SlotRegistry, SessionRuntime (scope tree + object layer)",
   "version": "0.1.0-rc.7",
   "publishConfig": {
@@ -7,7 +7,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
     "directory": "packages/client/runtime"
   },
   "type": "module",
@@ -29,12 +29,12 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
-  "dsh": {
+  "xrk": {
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-connection",
-        "@deepseek-ai/dsh-typert-registry",
-        "@deepseek-ai/dsh-api-remotes"
+        "@xrkseek/client-connection",
+        "@xrkseek/xrk-typert-registry",
+        "@xrkseek/xrk-api-remotes"
       ],
       "platform": "web",
       "immediately": true
@@ -42,36 +42,36 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/dsh-agent": "workspace:^",
-    "@deepseek-ai/dsh-attachment": "workspace:^",
-    "@deepseek-ai/dsh-client-connection": "workspace:^",
-    "@deepseek-ai/dsh-commands": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
-    "@deepseek-ai/dsh-host-apiproxy": "workspace:^",
-    "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/dsh-llm-retry": "workspace:^",
-    "@deepseek-ai/dsh-session": "workspace:^",
-    "@deepseek-ai/dsh-session-projection": "workspace:^",
-    "@deepseek-ai/dsh-session-title": "workspace:^",
-    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@xrkseek/xrk-agent": "workspace:^",
+    "@xrkseek/xrk-attachment": "workspace:^",
+    "@xrkseek/client-connection": "workspace:^",
+    "@xrkseek/xrk-commands": "workspace:^",
+    "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/xrk-host-apiproxy": "workspace:^",
+    "@xrkseek/xrk-llm": "workspace:^",
+    "@xrkseek/xrk-llm-retry": "workspace:^",
+    "@xrkseek/xrk-session": "workspace:^",
+    "@xrkseek/xrk-session-projection": "workspace:^",
+    "@xrkseek/xrk-session-title": "workspace:^",
+    "@xrkseek/xrk-tools": "workspace:^",
     "immer": "^10.1.1",
     "react": "^18.2.0",
     "zustand": "~4.4.7"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-api-remotes": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@deepseek-ai/dsh-typert-protocol": "workspace:^",
-    "@deepseek-ai/dsh-typert-registry": "workspace:^"
+    "@xrkseek/cordis": "workspace:^",
+    "@xrkseek/xrk-api-remotes": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "@xrkseek/xrk-typert-protocol": "workspace:^",
+    "@xrkseek/xrk-typert-registry": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-api-remotes": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@deepseek-ai/dsh-timeout": "workspace:^",
-    "@deepseek-ai/dsh-typert-protocol": "workspace:^",
-    "@deepseek-ai/dsh-typert-registry": "workspace:^",
+    "@xrkseek/cordis": "workspace:^",
+    "@xrkseek/xrk-api-remotes": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "@xrkseek/xrk-timeout": "workspace:^",
+    "@xrkseek/xrk-typert-protocol": "workspace:^",
+    "@xrkseek/xrk-typert-registry": "workspace:^",
     "@types/react": "~18.3.1"
   },
   "files": [

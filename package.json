@@ -10,12 +10,18 @@
     "check": "node ./scripts/check.mjs",
     "build": "node ./scripts/build.mjs",
     "test": "vitest run",
+    "test:web": "vitest run --config vitest.web.config.ts",
     "test:kernel-coverage": "vitest run --config vitest.kernel.config.ts --coverage",
 
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
 
+    "web:build": "pnpm --filter @xrkseek/web-frontend run build",
+    "web:assemble": "node ./scripts/assemble-web-dist.mjs",
+    "client:types": "node ./scripts/emit-client-types.mjs",
+    "stub:types": "node ./scripts/emit-stub-types.mjs",
+    "client:bundle": "node ./scripts/bundle-client-js.mjs",
     "xrk": "node ./apps/cli/dist/bin.js",
     "serve": "node ./apps/cli/dist/bin.js serve"
   },
@@ -26,6 +32,8 @@
     "eslint": "^10.8.1",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.6",
+    "lightningcss": "^1.32.0",
+    "tsdown": "^0.22.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.67.0",
     "vitest": "^2.1.8"

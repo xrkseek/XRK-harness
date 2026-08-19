@@ -8,7 +8,7 @@ import { FaceClient } from "../src/face-client.js";
 describe("boot-manifest", () => {
   it("inject script sets both boot globals", () => {
     const s = bootInjectScript(FACE_CONSOLE_BOOT);
-    expect(s).toContain("__DSH_BOOT__");
+    expect(s).toContain("__XRK_BOOT__");
     expect(s).toContain("__XRK_BOOT__");
     expect(s).toContain("xrk-face-console");
   });

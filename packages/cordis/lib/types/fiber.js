@@ -1,4 +1,4 @@
-import { defineProperty, isNullable } from '@deepseek-ai/cosmokit';
+import { defineProperty, isNullable } from '@xrkseek/cosmokit';
 import { Context } from "./context.js";
 import { buildOuterStack, composeError, DisposableList, getTraceable, isConstructor, isObject, symbols } from "./utils.js";
 const kValidationError = Symbol.for('ValidationError');

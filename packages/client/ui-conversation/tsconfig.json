@@ -2,51 +2,11 @@
   "extends": "../../../tsconfig.base.client.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "lib/types"
+    "outDir": "lib/types",
+    "paths": {}
   },
   "include": [
     "src"
-  ],
-  "references": [
-    {
-      "path": "../../cordis"
-    },
-    {
-      "path": "../ui-slots"
-    },
-    {
-      "path": "../ui-attachment"
-    },
-    {
-      "path": "../ui-primitives"
-    },
-    {
-      "path": "../web-react"
-    },
-    {
-      "path": "../runtime"
-    },
-    {
-      "path": "../../core/agent"
-    },
-    {
-      "path": "../../core/tools"
-    },
-    {
-      "path": "../ui-input-trigger"
-    },
-    {
-      "path": "../ui-layout"
-    },
-    {
-      "path": "../locale"
-    },
-    {
-      "path": "../../stubs/dsh-invariants"
-    },
-    {
-      "path": "../ui-settings"
-    }
   ],
   "exclude": [
     "**/*.legacy.*"

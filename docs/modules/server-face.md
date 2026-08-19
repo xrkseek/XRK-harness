@@ -97,7 +97,7 @@ HTTP/WS (attach-http)
 | --------------------------------------------------- | --------------------- |
 | `registry.ts`                                       | 投影注册表 · snapshot |
 | `title-controller.ts` / `title-normalize.ts`        | 标题                  |
-| `units/title.ts` · `units/session-list-metadata.ts` · `units/todos.ts` · `units/permissions.ts` · `units/plan.ts` | 单元（todos = 站立计划；permissions = Access 芯片；plan = plan-mode 芯片） |
+| `units/title.ts` · `units/session-list-metadata.ts` · `units/todos.ts` · `units/permissions.ts` · `units/plan.ts` · `units/image-limits.ts` | 单元（todos = 站立计划；permissions = Access 芯片；plan = plan-mode 芯片；imageLimits = 附件摄入上限，有 AttachmentStore 才登记，boot 常量不推变更帧） |
 | `install-defaults.ts`                               | 默认安装              |
 | `../permissions.ts`                                 | 预设表 · pin · `/permission` 写 knobs |
 | `../plan-mode.ts`                                   | `/plan` 选择预览 · idle 提交 `plan/mode` |

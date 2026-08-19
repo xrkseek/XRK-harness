@@ -1,16 +1,16 @@
 /** What the browser half registers, and that it all leaves with the fiber. */
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context } from '@xrkseek/cordis'
 import { describe, expect, it, vi } from 'vitest'
-import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
-import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
-import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { TestRemote, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
-import { SettingsScopeBinder } from '@deepseek-ai/dsh-client-ui-settings/client'
-import { apply, inject } from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
+import { resolveSlotLabel } from '@xrkseek/client-ui-slots'
+import { SlotRegistry } from '@xrkseek/client-runtime/client'
+import { LocaleRuntime } from '@xrkseek/client-locale/client'
+import { TestRemote, usePinnedBrowserLanguages } from '@xrkseek/client-test-runtime'
+import { SettingsScopeBinder } from '@xrkseek/client-ui-settings/client'
+import { apply, inject } from '@xrkseek/client-ui-settings-plugins/client'
 import type {
   ConfigurablePluginsTabFace, PluginsSettingsSectionInjected,
-} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
+} from '@xrkseek/client-ui-settings-plugins/client'
 
 // The service reads its initial locale from the browser; these specs assert
 // the shipped Chinese copy, so they state the browser they assume.

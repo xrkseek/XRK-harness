@@ -1,5 +1,5 @@
-import { Context, Service, type Fiber } from '@deepseek-ai/cordis';
-import { type Dict } from '@deepseek-ai/cosmokit';
+import { Context, Service, type Fiber } from '@xrkseek/cordis';
+import { type Dict } from '@xrkseek/cosmokit';
 import { ModuleLoader } from './internal.ts';
 import { Entry, type EntryOptions } from './config/entry.ts';
 import { EntryTree } from './config/tree.ts';
@@ -15,7 +15,7 @@ export * from './config/tree.ts';
 export * from './config/utils.ts';
 /** Re-export Node internal module loader compatibility types. */
 export * from './internal.ts';
-declare module '@deepseek-ai/cordis' {
+declare module '@xrkseek/cordis' {
     interface Events {
         'exit'(signal: NodeJS.Signals): Promise<void>;
         'loader/config-update'(): void;

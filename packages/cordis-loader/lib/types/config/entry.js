@@ -1,4 +1,4 @@
-import { deepEqual, isNullable } from '@deepseek-ai/cosmokit';
+import { deepEqual, isNullable } from '@xrkseek/cosmokit';
 import { EntryTree } from "./tree.js";
 import { evaluate, isJsExpr } from "./utils.js";
 function updateError(stage, options, cause) {

@@ -10,12 +10,12 @@ import * as React from 'react'
 import * as ReactJsxRuntime from 'react/jsx-runtime'
 import * as ReactDom from 'react-dom'
 import * as ReactDomClient from 'react-dom/client'
-import * as Cordis from '@deepseek-ai/cordis'
-import * as UiSlots from '@deepseek-ai/dsh-client-ui-slots'
-import * as WebReact from '@deepseek-ai/dsh-client-web-react'
-import * as UiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
-import * as UiAttachment from '@deepseek-ai/dsh-client-ui-attachment'
-import * as SchemaForm from '@deepseek-ai/dsh-client-schema-form'
+import * as Cordis from '@xrkseek/cordis'
+import * as UiSlots from '@xrkseek/client-ui-slots'
+import * as WebReact from '@xrkseek/client-web-react'
+import * as UiPrimitives from '@xrkseek/client-ui-primitives'
+import * as UiAttachment from '@xrkseek/client-ui-attachment'
+import * as SchemaForm from '@xrkseek/client-schema-form'
 import type { PlatformModule } from './platform.ts'
 
 /**
@@ -31,11 +31,11 @@ export function getStaticModules(): Record<string, unknown> {
     'react/jsx-runtime': ReactJsxRuntime,
     'react-dom': ReactDom,
     'react-dom/client': ReactDomClient,
-    '@deepseek-ai/cordis': Cordis,
-    '@deepseek-ai/dsh-client-ui-slots': UiSlots,
-    '@deepseek-ai/dsh-client-web-react': WebReact,
-    '@deepseek-ai/dsh-client-ui-primitives': UiPrimitives,
-    '@deepseek-ai/dsh-client-ui-attachment': UiAttachment,
-    '@deepseek-ai/dsh-client-schema-form': SchemaForm,
+    '@xrkseek/cordis': Cordis,
+    '@xrkseek/client-ui-slots': UiSlots,
+    '@xrkseek/client-web-react': WebReact,
+    '@xrkseek/client-ui-primitives': UiPrimitives,
+    '@xrkseek/client-ui-attachment': UiAttachment,
+    '@xrkseek/client-schema-form': SchemaForm,
   } satisfies Record<PlatformModule, unknown>
 }

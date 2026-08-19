@@ -1,4 +1,4 @@
-import { Context, Service } from '@deepseek-ai/cordis';
+import { Context, Service } from '@xrkseek/cordis';
 import { type EntryOptions } from './entry.ts';
 import { EntryTree } from './tree.ts';
 /** Runtime owner for a list of child loader entries. */

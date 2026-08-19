@@ -1,6 +1,6 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-client-runtime`.
- * @module @deepseek-ai/dsh-client-runtime/invariant
+ * Package-owned invariant companion for `@xrkseek/client-runtime`.
+ * @module @xrkseek/client-runtime/invariant
  */
 
 /* jscpd:ignore-start */
@@ -8,11 +8,11 @@
  * `keyof SlotMap & string` is the declare-merge key pattern: SlotMap is empty
  * in this compilation unit (intersection reads `never`) but consumers merge
  * keys in; the rule fires on the empty-map view, not on real redundancy. */
-import type { Context } from '@deepseek-ai/cordis'
-import type { SlotMap } from '@deepseek-ai/dsh-client-ui-slots'
-import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
+import type { Context } from '@xrkseek/cordis'
+import type { SlotMap } from '@xrkseek/client-ui-slots'
+import type { InvariantInstaller } from '@xrkseek/xrk-invariants'
 
-const PACKAGE_NAME = '@deepseek-ai/dsh-client-runtime'
+const PACKAGE_NAME = '@xrkseek/client-runtime'
 
 /** Cordis companion plugin name. */
 export const name = 'client-runtime-invariant'

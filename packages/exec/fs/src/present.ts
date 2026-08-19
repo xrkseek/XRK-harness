@@ -24,7 +24,7 @@ function strArg(
   return typeof v === "string" && v.length > 0 ? v : undefined;
 }
 
-/** Copied from `@deepseek-ai/dsh-tool-fs` `LANG_BY_EXTENSION`. */
+/** Copied from `@xrkseek/xrk-tool-fs` `LANG_BY_EXTENSION`. */
 const LANG_BY_EXTENSION: Readonly<Record<string, string>> = {
   ts: "ts",
   tsx: "tsx",
@@ -71,7 +71,7 @@ const LANG_BY_EXTENSION: Readonly<Record<string, string>> = {
   lua: "lua",
 };
 
-/** Copied from `@deepseek-ai/dsh-tool-fs` `langFromPath`. */
+/** Copied from `@xrkseek/xrk-tool-fs` `langFromPath`. */
 export function langFromPath(filePath: string): string | undefined {
   const base = filePath.slice(
     Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\")) + 1,
@@ -85,7 +85,7 @@ export function langFromPath(filePath: string): string | undefined {
 }
 
 /**
- * Copied from `@deepseek-ai/dsh-tool-fs` `read.presentCall` (`path` is this
+ * Copied from `@xrkseek/xrk-tool-fs` `read.presentCall` (`path` is this
  * repo's `file_path`; no offset/limit on read_file).
  */
 export function presentReadCall(args: unknown): GenericCallView | undefined {
@@ -130,7 +130,7 @@ export function presentReadResult(
   };
 }
 
-/** Copied from `@deepseek-ai/dsh-tool-fs` `write.presentCall` (`path` / `content`). */
+/** Copied from `@xrkseek/xrk-tool-fs` `write.presentCall` (`path` / `content`). */
 export function presentWriteCall(args: unknown): DiffCallView | undefined {
   const a = asArgs(args);
   const path = strArg(a, "path");
@@ -158,7 +158,7 @@ export function presentWriteResult(
   return { card: "diff", title: call.title, diffs: call.diffs };
 }
 
-/** Copied from `@deepseek-ai/dsh-tool-fs` `edit.presentCall` (`old_content` / `content`). */
+/** Copied from `@xrkseek/xrk-tool-fs` `edit.presentCall` (`old_content` / `content`). */
 export function presentEditCall(args: unknown): DiffCallView | undefined {
   const a = asArgs(args);
   const path = strArg(a, "path");
@@ -187,7 +187,7 @@ export function presentEditResult(
   return { card: "diff", title: call.title, diffs: call.diffs };
 }
 
-/** Copied from `@deepseek-ai/dsh-tool-fs-search` `presentGrepCall` (`glob` ≈ `include`). */
+/** Copied from `@xrkseek/xrk-tool-fs-search` `presentGrepCall` (`glob` ≈ `include`). */
 export function presentGrepCall(args: unknown): GenericCallView | undefined {
   const a = asArgs(args);
   const pattern = strArg(a, "pattern");
@@ -249,7 +249,7 @@ export function presentGrepResult(
   };
 }
 
-/** Copied from `@deepseek-ai/dsh-tool-fs-search` `presentGlobCall`. */
+/** Copied from `@xrkseek/xrk-tool-fs-search` `presentGlobCall`. */
 export function presentGlobCall(args: unknown): GenericCallView | undefined {
   const a = asArgs(args);
   const pattern = strArg(a, "pattern");

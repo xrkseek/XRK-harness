@@ -1,4 +1,4 @@
-import { defineProperty, hyphenate } from '@deepseek-ai/cosmokit';
+import { defineProperty, hyphenate } from '@xrkseek/cosmokit';
 import { createCallable, joinPrototype, symbols } from "./utils.js";
 /** Built-in placeholder formatters used by `Logger.format()`. */
 export const defaultFormatters = {

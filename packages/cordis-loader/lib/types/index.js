@@ -1,5 +1,5 @@
-import { Inject, Service } from '@deepseek-ai/cordis';
-import { defineProperty, isNullable } from '@deepseek-ai/cosmokit';
+import { Inject, Service } from '@xrkseek/cordis';
+import { defineProperty, isNullable } from '@xrkseek/cosmokit';
 import { ModuleLoader } from "./internal.js";
 import { Entry } from "./config/entry.js";
 import { EntryGroup } from "./config/group.js";

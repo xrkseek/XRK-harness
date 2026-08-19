@@ -6,8 +6,8 @@ var __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExte
     }
     return path;
 };
-import { EntryGroup, EntryTree, isJsExpr } from '@deepseek-ai/cordis-plugin-loader';
-import { Service } from '@deepseek-ai/cordis';
+import { EntryGroup, EntryTree, isJsExpr } from '@xrkseek/cordis-plugin-loader';
+import { Service } from '@xrkseek/cordis';
 import { extname } from 'node:path';
 import { access, constants, readFile, rename, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';

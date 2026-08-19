@@ -1,9 +1,9 @@
-import { Context } from '@deepseek-ai/cordis'
+import { Context } from '@xrkseek/cordis'
 import { describe, expect, it } from 'vitest'
-import { SettingsProvider, settingsNamespace, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import { SettingsProvider, settingsNamespace, type SettingsNamespace } from '@xrkseek/xrk-settings'
 import {
   LOCALE_SETTINGS_NAMESPACE, apply,
-} from '@deepseek-ai/dsh-client-locale'
+} from '@xrkseek/client-locale'
 
 class MemorySettings extends SettingsProvider {
   readonly writable = true

@@ -19,10 +19,10 @@ describe("boot inject", () => {
   it("injects app-shell roster before </head>", () => {
     const html = "<html><head><title>x</title></head><body></body></html>";
     const out = injectBootIntoHtml(html, XRK_APP_SHELL_BOOT);
-    expect(out).toContain("__DSH_BOOT__");
+    expect(out).toContain("__XRK_BOOT__");
     expect(out).toContain("__XRK_BOOT__");
     expect(out).toContain("xrk-face-console");
-    expect(out.indexOf("__DSH_BOOT__")).toBeLessThan(out.indexOf("</head>"));
+    expect(out.indexOf("__XRK_BOOT__")).toBeLessThan(out.indexOf("</head>"));
   });
 
   it("console boot still injectable", () => {
@@ -57,25 +57,25 @@ describe("boot inject", () => {
       rev: "cap",
       entries: [
         {
-          id: "@deepseek-ai/dsh-client-runtime",
+          id: "@xrkseek/client-runtime",
           url: "/plugins/runtime.js",
           rev: "1",
           inject: [],
         },
         {
-          id: "@deepseek-ai/dsh-client-ui-cordis",
+          id: "@xrkseek/client-ui-cordis",
           url: "/plugins/cordis.js",
           rev: "1",
           inject: [],
         },
         {
-          id: "@deepseek-ai/dsh-cordis-client-runner",
+          id: "@xrkseek/xrk-cordis-client-runner",
           url: "/plugins/runner.js",
           rev: "1",
           inject: [],
         },
         {
-          id: "@deepseek-ai/dsh-client-hmr",
+          id: "@xrkseek/client-hmr",
           url: "/plugins/hmr.js",
           rev: "1",
           inject: [],
@@ -83,7 +83,7 @@ describe("boot inject", () => {
       ],
     });
     expect(filtered.entries.map((e) => e.id)).toEqual([
-      "@deepseek-ai/dsh-client-runtime",
+      "@xrkseek/client-runtime",
     ]);
   });
 });
@@ -142,7 +142,7 @@ describe("http webStatic", () => {
     const index = await fetch(`${base}/`);
     expect(index.status).toBe(200);
     const text = await index.text();
-    expect(text).toContain("__DSH_BOOT__");
+    expect(text).toContain("__XRK_BOOT__");
     expect(text).toContain("xrk-face-console");
 
     const asset = await fetch(`${base}/assets/app.js`);

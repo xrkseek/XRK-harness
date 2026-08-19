@@ -1,0 +1,27 @@
+{
+  "name": "@xrkseek/xrk-typert-registry",
+  "description": "XRK Face Client Typert registry (contexts.registerClient). Not the DSH generated-schema registry.",
+  "version": "0.0.0-stub",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": {
+      "types": "./src/client/index.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "xrk": {
+    "client": {
+      "inject": [],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@xrkseek/cordis": "workspace:^",
+    "@xrkseek/xrk-typert-protocol": "workspace:^"
+  }
+}

@@ -65,7 +65,9 @@ Preset 须 `wireCompositionTools({ plugins })`（见 minimal/harness）。Host s
 |----|------|
 | `tests/mcp-wire.test.ts` | JSON 解析 · 默认 deny · host-settings.json |
 | `tests/http-chat.test.ts` | spawn · pluginsDir 接线 |
-| `tests/product-shell.test.ts` | 本机有捕获才跑：GET `/` · boot 无 cordis UI / HMR · plugin 200 · 首屏 RPC · manifest 名 · 欢迎文案 |
+| `tests/product-shell.test.ts` | 有完整 `apps/web/dist` 才跑：GET `/` · `__XRK_BOOT__` · 无 cordis UI / HMR · `/plugins/@xrkseek/client-runtime/client.js` 200 · Face 立即层 `xrk-typert-registry` · 首屏 RPC · manifest 名 · 欢迎文案 |
+| `apps/web/tests/product-shell-chrome.e2e.ts` | 不进 `pnpm check`。`pnpm test:web`：欢迎窗 / 侧栏「新建会话」/ wordmark |
+| `apps/web/tests/product-shell-stream.e2e.ts` | 不进 `pnpm check`。`pnpm test:web`：发一句 → JSONL `assistant/chunk` + `assistant/message`（浏览器属 web-frontend，见 [testing.md](../testing.md)） |
 | `tests/agent-cache.test.ts` | 卸序 |
 | `tests/standing-tools.test.ts` | minimal 无 bash；harness/server 有 bash presenter |
 

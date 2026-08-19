@@ -108,14 +108,14 @@ function packagePluginSource(pkg: Record<string, unknown>, pkgPath: string): str
 
 function hasCordisDep(deps: unknown): boolean {
   const rec = asRecord(deps);
-  return Boolean(rec && "@deepseek-ai/cordis" in rec);
+  return Boolean(rec && "@xrkseek/cordis" in rec);
 }
 
 function cordisStubManifest(
   pkg: Record<string, unknown>,
 ): PluginManifest | undefined {
   const name = typeof pkg.name === "string" ? pkg.name.trim() : "";
-  if (!name || name === "@deepseek-ai/cordis") return undefined;
+  if (!name || name === "@xrkseek/cordis") return undefined;
   if (
     !hasCordisDep(pkg.peerDependencies) &&
     !hasCordisDep(pkg.dependencies)
@@ -200,7 +200,7 @@ async function collectChildHits(
  *
  * Manifest: `xrk.plugin.json`, `package.json` `xrkseek.plugin` /
  * `dsh.plugin` / `deepseek.plugin`, or a Cordis-host stub (peer/dep
- * `@deepseek-ai/cordis`, `skipLoad`).
+ * `@xrkseek/cordis`, `skipLoad`).
  */
 export async function scanPluginDir(dir: string): Promise<readonly DiscoveryHit[]> {
   const root = path.resolve(dir);

@@ -1,5 +1,5 @@
-import { Context } from '@deepseek-ai/cordis';
-import { type Dict } from '@deepseek-ai/cosmokit';
+import { Context } from '@xrkseek/cordis';
+import { type Dict } from '@xrkseek/cosmokit';
 import { Entry, type EntryOptions } from './entry.ts';
 import { EntryGroup } from './group.ts';
 /** Mutable tree of loader entries. Persistence is supplied by subclasses. */

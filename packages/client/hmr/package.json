@@ -1,5 +1,5 @@
 {
-  "name": "@deepseek-ai/dsh-client-hmr",
+  "name": "@xrkseek/client-hmr",
   "description": "Dev-only hot-reload driver for script-loaded client entries: SSE rebuilt frames → invalidate/prefetch → fiber swap through the vendored Loader entry",
   "version": "0.1.0-rc.7",
   "publishConfig": {
@@ -7,7 +7,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
     "directory": "packages/client/hmr"
   },
   "type": "module",
@@ -29,7 +29,7 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
-  "dsh": {
+  "xrk": {
     "client": {
       "inject": [],
       "platform": "web",
@@ -38,21 +38,21 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/schemastery": "workspace:^"
+    "@xrkseek/schemastery": "workspace:^"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
-    "@deepseek-ai/dsh-client-modules": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^"
+    "@xrkseek/cordis-plugin-loader": "workspace:^",
+    "@xrkseek/client-modules": "workspace:^",
+    "@xrkseek/xrk-host-webserver": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "@xrkseek/cordis": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
-    "@deepseek-ai/dsh-client-modules": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^"
+    "@xrkseek/cordis-plugin-loader": "workspace:^",
+    "@xrkseek/client-modules": "workspace:^",
+    "@xrkseek/xrk-host-webserver": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "@xrkseek/cordis": "workspace:^"
   },
   "files": [
     "lib/index.js",

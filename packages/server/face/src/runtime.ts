@@ -136,7 +136,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     });
 
   if (!options.skipDefaultProjections && !options.projections) {
-    installDefaultFaceProjections(projections);
+    installDefaultFaceProjections(projections, {
+      ...(options.attachments
+        ? { imageLimits: options.attachments.imageLimits }
+        : {}),
+    });
   }
 
   const rpcAdmitMap = new Map<string, string>();

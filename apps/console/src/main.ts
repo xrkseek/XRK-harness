@@ -16,9 +16,9 @@ const params =
     : new URLSearchParams();
 const consoleMode = params.get("console") === "1";
 
-if (!window.__DSH_BOOT__ && !window.__XRK_BOOT__) {
+if (!window.__XRK_BOOT__ && !window.__XRK_BOOT__) {
   window.__XRK_BOOT__ = FACE_CONSOLE_BOOT;
-  window.__DSH_BOOT__ = FACE_CONSOLE_BOOT;
+  window.__XRK_BOOT__ = FACE_CONSOLE_BOOT;
 }
 
 if (consoleMode) {

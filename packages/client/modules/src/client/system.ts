@@ -6,7 +6,7 @@
  */
 import type {
   BootModuleRow, ClientModuleLoader, ClientModuleRecord,
-  ClientModuleSystemOptions, ClientPluginHandoff, DshWindow,
+  ClientModuleSystemOptions, ClientPluginHandoff, XrkWindow,
 } from './manifest.ts'
 
 /** Default bundle-load hook: same-origin external classic script. */
@@ -83,7 +83,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
       this.graphRows.set(row.id, row)
     }
 
-    const win = globalThis as DshWindow
+    const win = globalThis as XrkWindow
     if (win.__ModuleLoader__ !== undefined) throw new Error('client-modules: window.__ModuleLoader__ already installed (double boot?)')
     win.__ModuleLoader__ = {
       load: (handoff: ClientPluginHandoff): void => {

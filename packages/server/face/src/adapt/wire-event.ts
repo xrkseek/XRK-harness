@@ -50,6 +50,13 @@ export interface DshWireSessionEvent {
   readonly seq: number;
   readonly time: number;
   readonly data: unknown;
+  /**
+   * DSH surface marker. Client conversation fold only updates
+   * `assistant/message` / `tool/result` / `user/message` when this is `append`
+   * (see `isAppendSurfaceEvent`). XRK protocol events have no surfaceOp — Face
+   * stamps append on the three model-visible types at the wire boundary.
+   */
+  readonly surfaceOp?: "append" | { readonly op: "replace"; readonly start: number; readonly end: number };
   /** When true, DSH client fold may skip unknown / non-product events. */
   readonly ignorable?: true;
 }
@@ -77,6 +84,16 @@ export interface WireAdaptContext {
   >;
   /** Tool presenter lookup (DSH `ctx.tools.get`). Omit → no view. */
   readonly getTool?: PresentToolLookup["getTool"];
+}
+
+/** DSH `tool/call` / assistant tool-call block `arguments` is a JSON string. */
+function wireToolArguments(value: unknown): string {
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value ?? {});
+  } catch {
+    return "{}";
+  }
 }
 
 function wireContentBlocks(content: MessageContent): readonly (
@@ -142,20 +159,11 @@ function assistantMessageContent(
   }
   blocks.push(...wireContentBlocks(event.content));
   for (const call of event.toolCalls ?? []) {
-    let argsRaw: string;
-    try {
-      argsRaw =
-        typeof call.arguments === "string"
-          ? call.arguments
-          : JSON.stringify(call.arguments ?? {});
-    } catch {
-      argsRaw = "{}";
-    }
     blocks.push({
       type: "tool-call",
       id: call.id,
       name: call.name,
-      arguments: argsRaw,
+      arguments: wireToolArguments(call.arguments),
     });
   }
   return blocks;
@@ -174,6 +182,7 @@ export function toDshWireSessionEvent(
         type: "user/message",
         seq,
         time,
+        surfaceOp: "append",
         data: {
           id: event.turnId,
           content: wireContentBlocks(event.content),
@@ -202,6 +211,7 @@ export function toDshWireSessionEvent(
         type: "assistant/message",
         seq,
         time,
+        surfaceOp: "append",
         data: {
           turn: turnNum(ctx, event.turnId),
           step: stepNum(ctx, event.turnId, event.stepId),
@@ -239,7 +249,7 @@ export function toDshWireSessionEvent(
         data: {
           callId: event.call.id,
           name: event.call.name,
-          arguments: event.call.arguments ?? {},
+          arguments: wireToolArguments(event.call.arguments),
           turn: turnNum(ctx, event.turnId),
           step: stepNum(ctx, event.turnId, event.stepId),
         },
@@ -249,6 +259,7 @@ export function toDshWireSessionEvent(
         type: "tool/result",
         seq,
         time,
+        surfaceOp: "append",
         data: {
           turn: turnNum(ctx, event.turnId),
           step: stepNum(ctx, event.turnId, event.stepId),

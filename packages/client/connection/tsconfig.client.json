@@ -3,7 +3,8 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib/types",
-    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo",
+    "paths": {}
   },
   "files": [
     "src/api-path.ts",
@@ -16,22 +17,5 @@
     "src/client/web-api-client.ts",
     "src/loopback-hostname.ts",
     "src/rpc.ts"
-  ],
-  "references": [
-    {
-      "path": "../../cordis"
-    },
-    {
-      "path": "../../core/session"
-    },
-    {
-      "path": "../../core/tools"
-    },
-    {
-      "path": "../../llm/llm"
-    },
-    {
-      "path": "../../stubs/dsh-invariants"
-    }
   ]
 }

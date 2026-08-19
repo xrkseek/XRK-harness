@@ -3,7 +3,8 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib/types",
-    "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo"
+    "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo",
+    "paths": {}
   },
   "files": [
     "src/api-path.ts",
@@ -15,10 +16,5 @@
     "src/rpc-host.ts",
     "src/rpc.ts",
     "src/websocket-downlink.ts"
-  ],
-  "references": [
-    {
-      "path": "../../stubs/dsh-invariants"
-    }
   ]
 }

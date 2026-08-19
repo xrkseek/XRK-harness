@@ -1,6 +1,6 @@
 /**
  * Boot manifest for Face console / injected SPA.
- * Host injects `window.__XRK_BOOT__` (+ compatibility `__DSH_BOOT__`).
+ * Host injects `window.__XRK_BOOT__` (+ compatibility `__XRK_BOOT__`).
  */
 
 export interface WebBootEntry {
@@ -18,7 +18,7 @@ export interface WebBootManifest {
 
 declare global {
   interface Window {
-    __DSH_BOOT__?: WebBootManifest;
+    __XRK_BOOT__?: WebBootManifest;
     __XRK_BOOT__?: WebBootManifest;
   }
 }
@@ -39,11 +39,11 @@ export const FACE_CONSOLE_BOOT: WebBootManifest = {
 
 export function readBootManifest(): WebBootManifest | undefined {
   if (typeof window === "undefined") return undefined;
-  return window.__XRK_BOOT__ ?? window.__DSH_BOOT__;
+  return window.__XRK_BOOT__ ?? window.__XRK_BOOT__;
 }
 
 /** Script tag body for host index tap. */
 export function bootInjectScript(manifest: WebBootManifest): string {
   const json = JSON.stringify(manifest);
-  return `<script>window.__DSH_BOOT__=${json};window.__XRK_BOOT__=window.__DSH_BOOT__;</script>`;
+  return `<script>window.__XRK_BOOT__=${json};window.__XRK_BOOT__=window.__XRK_BOOT__;</script>`;
 }

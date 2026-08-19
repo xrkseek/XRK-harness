@@ -1,4 +1,4 @@
-# @deepseek-ai/dsh-client-ui-directory-picker-browse
+# @xrkseek/client-ui-directory-picker-browse
 
 [English](README.md) | 中文
 
@@ -8,7 +8,7 @@
 
 确认一个目录即为选中的路径，关闭对话框即为取消。浏览类失败——不可读的目标、创建冲突——都留在对话框自己的提示区内，因此本占位者从不驱动 owner 的 `onError` 分支；工作区创建的错误界面仍由 owner 持有。两处注册通过嵌套的 `slots.inject()` 安装，因为任一声明方条目都可能稍后激活或替换其声明；对话框文案注册在本包自己的 locale 命名空间下，两份字典作为一个单元落地，因此激活失败不会占住该命名空间的其中一种语言。
 
-node 半边是一个空 `apply`：它的存在只为让插件出现在 host 的 cordis.yml 与 Loader 中，浏览器半边经 `exports["./client"]` 出货，并通过 `dsh.client` 清单声明被发现。
+node 半边是一个空 `apply`：它的存在只为让插件出现在 host 的 cordis.yml 与 Loader 中，浏览器半边经 `exports["./client"]` 出货，并通过 `xrk.client` 清单声明被发现。
 
 ## 模型体验
 

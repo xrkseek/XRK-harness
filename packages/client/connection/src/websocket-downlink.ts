@@ -6,8 +6,8 @@ import type { Duplex } from 'node:stream'
 import WebSocket, { WebSocketServer } from 'ws'
 import type {
   ApiProxy, HostFrame, MuxFrame, RpcRequest, ServerRequest,
-} from '@deepseek-ai/dsh-host-apiproxy/api'
-import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api'
+} from '@xrkseek/xrk-host-apiproxy/api'
+import { RpcId } from '@xrkseek/xrk-host-apiproxy/api'
 
 type Frame = MuxFrame | HostFrame
 

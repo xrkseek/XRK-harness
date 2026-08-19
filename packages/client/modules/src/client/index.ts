@@ -7,16 +7,16 @@
  * providing it as `ctx.modules`. The kernel statically registers this module,
  * so the graph row for this package never triggers a real fetch — arrival is
  * a no-op against the already-registered entry.
- * @module @deepseek-ai/dsh-client-modules/client
+ * @module @xrkseek/client-modules/client
  */
-import type { Context } from '@deepseek-ai/cordis'
-import type { DshWindow } from './manifest.ts'
+import type { Context } from '@xrkseek/cordis'
+import type { XrkWindow } from './manifest.ts'
 
 export { ClientModuleSystem } from './system.ts'
 export { parseBootManifest } from './manifest.ts'
 export type {
   BootManifest, BootModuleRow, BootPluginRow, ClientModuleLoader, ClientModuleRecord,
-  ClientModuleSystemOptions, ClientPluginHandoff, DshWindow, WebBootEntry, WebBootGraph,
+  ClientModuleSystemOptions, ClientPluginHandoff, XrkWindow, WebBootEntry, WebBootGraph,
 } from './manifest.ts'
 
 /**
@@ -24,7 +24,7 @@ export type {
  * @param ctx - client root context.
  */
 export function apply(ctx: Context): void {
-  const modules = (globalThis as DshWindow).__DSH_MODULES__
+  const modules = (globalThis as XrkWindow).__DSH_MODULES__
   // The kernel writes the slot right after constructing the instance, before
   // any cordis entry exists — a missing slot means the kernel sequencing broke.
   if (modules === undefined) {

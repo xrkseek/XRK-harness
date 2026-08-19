@@ -1,5 +1,5 @@
 /**
- * Wire `JobView` (copied from `@deepseek-ai/dsh-host-apiproxy` `api/jobs.ts`).
+ * Wire `JobView` (copied from `@xrkseek/xrk-host-apiproxy` `api/jobs.ts`).
  * Registry internals (`ownerSession`, `reported`, `outputLimitBytes`) stay off
  * the wire — the mux frame's `sessionId` is the owner.
  */

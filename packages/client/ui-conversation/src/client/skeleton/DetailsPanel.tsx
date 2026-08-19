@@ -7,9 +7,9 @@
 // session snapshot — no data of its own.
 
 import { Fragment } from 'react'
-import { CodeBlock } from '@deepseek-ai/dsh-client-ui-primitives'
-import { shallowEqual } from '@deepseek-ai/dsh-client-runtime/client'
-import type { ConversationSnapshot, RunningToolCall, ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
+import { CodeBlock } from '@xrkseek/client-ui-primitives'
+import { shallowEqual } from '@xrkseek/client-runtime/client'
+import type { ConversationSnapshot, RunningToolCall, ToolCallBlock, ToolResultNode } from '@xrkseek/client-runtime/client'
 import type { DetailsSlotProps } from '../contract/slots.ts'
 import { findToolCall } from '../chat/tool-node-reader.ts'
 import css from './DetailsPanel.module.css'

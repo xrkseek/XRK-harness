@@ -1,4 +1,4 @@
-# @deepseek-ai/dsh-client-ui-workspace
+# @xrkseek/client-ui-workspace
 
 [English](README.md) | 中文
 

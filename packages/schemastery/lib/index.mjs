@@ -1,4 +1,4 @@
-import { Binary, clone, deepEqual, filterKeys, isNullable, isPlainObject, pick, valueMap } from "@deepseek-ai/cosmokit";
+import { Binary, clone, deepEqual, filterKeys, isNullable, isPlainObject, pick, valueMap } from "@xrkseek/cosmokit";
 //#region lib/types/index.js
 const kSchema = Symbol.for("schemastery");
 const kValidationError = Symbol.for("ValidationError");

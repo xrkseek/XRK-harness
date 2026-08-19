@@ -5,20 +5,20 @@
  * and opener wiring, and the plugin registrations' fiber-teardown removal
  * (HMR safety) against the real SlotRegistry.
  */
-import { Context } from '@deepseek-ai/cordis'
+import { Context } from '@xrkseek/cordis'
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ConversationEventRegistry, ConversationNodeAssembler, SlotRegistry,
-} from '@deepseek-ai/dsh-client-runtime/client'
+} from '@xrkseek/client-runtime/client'
 import type {
   ConversationEventInput, ConversationLocationDataStore, ConversationMatch, ConversationNodeDefinition,
   ConversationTimelineSnapshot, ConversationTurnDataMap, ConversationViewDefinition,
   ConversationViewNode, ToolResultNode, TurnLocation,
-} from '@deepseek-ai/dsh-client-runtime/client'
-import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
-import type { ChatFileMentions, TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { makeTranslate, stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
+} from '@xrkseek/client-runtime/client'
+import { apply as applyLocale, inject as localeInject } from '@xrkseek/client-locale/client'
+import type { ChatFileMentions, TurnTailOwnerProps } from '@xrkseek/client-ui-conversation/client'
+import { makeTranslate, stubSettingsScope } from '@xrkseek/client-test-runtime'
 import {
   fitProducedFiles, ProducedFiles, type ProducedFilesProps,
 } from '../src/client/ProducedFiles.tsx'
@@ -445,7 +445,7 @@ describe('package shells', () => {
       register: (pkg: string) => { registered.push(pkg); return () => {} },
     } as never)
     const dispose = await applyInvariant(ctx)
-    expect(registered).toEqual(['@deepseek-ai/dsh-client-ui-deliverables'])
+    expect(registered).toEqual(['@xrkseek/client-ui-deliverables'])
     expect(dispose).toBeTypeOf('function')
   })
 })

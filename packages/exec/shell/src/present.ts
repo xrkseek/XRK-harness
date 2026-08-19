@@ -9,7 +9,7 @@ import { parseExitStatus } from "@xrkseek/core-tools";
 
 /**
  * Present foreground calls as terminals and background starts as generic cards.
- * Copied from `@deepseek-ai/dsh-tool-bash` `presentBashCall` (`background` is
+ * Copied from `@xrkseek/xrk-tool-bash` `presentBashCall` (`background` is
  * this repo's `run_in_background`).
  */
 export function presentBashCall(
@@ -40,7 +40,7 @@ export function presentBashCall(
 /**
  * Present completed foreground output as a terminal; background acknowledgements
  * and execution errors use generic fenced output without an exit-status pill.
- * Copied from `@deepseek-ai/dsh-tool-bash` `presentBashResult`.
+ * Copied from `@xrkseek/xrk-tool-bash` `presentBashResult`.
  */
 export function presentBashResult(
   args: unknown,

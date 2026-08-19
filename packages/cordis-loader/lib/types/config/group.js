@@ -1,4 +1,4 @@
-import { Service } from '@deepseek-ai/cordis';
+import { Service } from '@xrkseek/cordis';
 import { Entry } from "./entry.js";
 /** Runtime owner for a list of child loader entries. */
 export class EntryGroup {

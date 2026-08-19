@@ -4,14 +4,14 @@
  * api-gateway's own coverage); each established connection generation emits
  * `connection/reset` for generation-scoped cache invalidation.
  */
-import { Context } from '@deepseek-ai/cordis'
+import { Context } from '@xrkseek/cordis'
 import { describe, expect, it } from 'vitest'
-import type { ConnectionHandle, ConnectionSinks } from '@deepseek-ai/dsh-api-remotes/client'
-import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
+import type { ConnectionHandle, ConnectionSinks } from '@xrkseek/xrk-api-remotes/client'
+import TypertRegistry from '@xrkseek/xrk-typert-registry'
 // Type-only: the api-remotes facade carries both the allowlist's selection seat
 // and the owner packages' `./types` declarations, which together give `$on` its
 // key face and per-event listener signatures.
-import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@xrkseek/xrk-api-remotes/client'
 import * as RuntimeClient from '../src/client/index.ts'
 import { FakeApiClient, fakeRemote } from './fake-api.client.ts'
 
