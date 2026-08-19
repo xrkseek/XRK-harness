@@ -41,6 +41,17 @@ describe("host directory (DSH browse shapes)", () => {
     expect(listed.value.crumbs.at(-1)?.path).toBe(listed.value.path);
   });
 
+  it("hides Windows protected profile junctions from listings", async () => {
+    if (process.platform !== "win32") return;
+    const listed = await hostListDirectory({});
+    expect(listed.ok).toBe(true);
+    if (!listed.ok) return;
+    const names = listed.value.entries.map((e) => e.name.toLowerCase());
+    expect(names).not.toContain("「开始」菜单".toLowerCase());
+    expect(names).not.toContain("start menu");
+    expect(names).not.toContain("application data");
+  });
+
   it("listDirectory + createDirectory round-trip", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-face-dir-"));
     const listed = await hostListDirectory({ path: root });
