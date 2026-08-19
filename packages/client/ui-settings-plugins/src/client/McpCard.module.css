@@ -1,5 +1,4 @@
-/* MCP card list editor — layout mirrors DSH Models ModelListEditor
-   (DSH Models reference), tokens match PluginCard / fields. */
+/* MCP card — connected list + per-server forms (tokens match PluginCard / fields). */
 
 .block + .block {
   border-top: 1px solid var(--dsw-alias-border-l2);
@@ -94,117 +93,62 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   margin-top: 8px;
 }
 
 .entry {
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 8px;
-  padding: 6px;
   background: var(--dsw-alias-bg-layer-1);
+  overflow: hidden;
 }
 
-.primary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(96px, 0.9fr) auto auto;
+.entryHead {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-module-platform));
 }
 
-.primary > * {
-  min-width: 0;
-}
-
-.input {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  font: inherit;
+.entryTitle {
+  margin: 0;
   font-size: 13px;
-  line-height: 22px;
-  background: var(--dsw-alias-bg-layer-1);
+  font-weight: 600;
+  line-height: 1.5;
   color: var(--dsw-alias-label-primary);
 }
 
-.input::placeholder {
-  color: var(--dsw-alias-label-dimmed);
-}
-
-.input:focus-visible {
-  outline: none;
-  border-color: var(--dsw-alias-brand-primary);
-}
-
-.input:disabled {
-  color: var(--dsw-alias-label-tertiary);
-  cursor: default;
-}
-
-.inputInvalid {
-  composes: input;
-  border-color: var(--dsw-alias-label-error);
-}
-
-select.input {
-  max-width: none;
-  cursor: pointer;
-}
-
-.iconButton {
-  box-sizing: border-box;
+.remove {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
+  gap: 4px;
   border: none;
   border-radius: 6px;
+  padding: 4px 8px;
   background: transparent;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
 }
 
-.iconButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-module-platform));
-  color: var(--dsw-alias-label-primary);
-}
-
-.iconButton:disabled {
-  cursor: default;
-  opacity: 0.4;
-}
-
-.iconButtonDanger:hover:not(:disabled) {
+.remove:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover-danger, var(--dsw-alias-bg-module-platform));
   color: var(--dsw-alias-state-error-primary, var(--dsw-alias-label-error));
 }
 
-.iconOpen {
-  transform: rotate(180deg);
+.remove:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
-.advanced {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 8px;
-  padding: 8px 4px 2px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.fieldLabel {
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
+.entryBody {
+  padding: 0 12px 4px;
 }
 
 .add {
@@ -233,15 +177,4 @@ select.input {
 .add:disabled {
   opacity: 0.4;
   cursor: default;
-}
-
-@media (max-width: 720px) {
-  .primary {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-  }
-
-  .primary .endpoint,
-  .primary .transport {
-    grid-column: 1 / -1;
-  }
 }

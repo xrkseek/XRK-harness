@@ -1,16 +1,15 @@
 /** MCP desired-server card: edit draft servers; connected overlay stays read-only.
  *
- * Row chrome follows DSH Models `ModelListEditor`: compact bordered
- * entries, primary grid + expandable secondary fields, pill add, glyph trash.
+ * Each server is a vertical form (label + control + hint), matching Bash /
+ * WebSearch cards and DSH settings posture — no placeholder-only primary row.
  */
 
-import { useEffect, useRef, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import {
-  IconChevronDownOutline14,
   IconPlusOutline16,
   IconTrashOutline16,
 } from '@xrkseek/client-ui-primitives'
+import fieldCss from './fields.module.css'
 import { PluginCard } from './PluginCard.tsx'
 import type { McpCardFace, McpServerRow, McpTransport } from './mcp-card-controller.ts'
 import type {} from './slot-contract.ts'
@@ -31,21 +30,6 @@ export function McpCard(props: McpCardProps) {
   const { t } = props
   const state = props.useMcpCard(snapshot => snapshot)
   const disabled = !state.writable
-  const [expanded, setExpanded] = useState<ReadonlySet<number>>(() => new Set())
-  const prevLen = useRef(state.rows.length)
-
-  // A newly appended row opens its advanced fields (args / cwd), matching DSH
-  // model-list posture where secondary capacity starts available after Add.
-  useEffect(() => {
-    if (state.rows.length > prevLen.current) {
-      setExpanded((current) => {
-        const next = new Set(current)
-        next.add(state.rows.length - 1)
-        return next
-      })
-    }
-    prevLen.current = state.rows.length
-  }, [state.rows.length])
 
   return (
     <PluginCard
@@ -112,27 +96,8 @@ export function McpCard(props: McpCardProps) {
                   index={index}
                   row={row}
                   disabled={disabled}
-                  open={expanded.has(index)}
-                  onToggle={() => {
-                    setExpanded((current) => {
-                      const next = new Set(current)
-                      if (next.has(index)) next.delete(index)
-                      else next.add(index)
-                      return next
-                    })
-                  }}
                   onEdit={props.editRow}
-                  onRemove={() => {
-                    props.removeRow(index)
-                    setExpanded((current) => {
-                      const next = new Set<number>()
-                      for (const at of current) {
-                        if (at < index) next.add(at)
-                        else if (at > index) next.add(at - 1)
-                      }
-                      return next
-                    })
-                  }}
+                  onRemove={() => { props.removeRow(index) }}
                 />
               ))}
             </div>
@@ -157,130 +122,162 @@ interface ServerEntryProps {
   index: number
   row: McpServerRow
   disabled: boolean
-  open: boolean
-  onToggle: () => void
   onEdit: McpCardFace['editRow']
   onRemove: () => void
 }
 
 function ServerEntry({
-  t, index, row, disabled, open, onToggle, onEdit, onRemove,
+  t, index, row, disabled, onEdit, onRemove,
 }: ServerEntryProps) {
   const n = String(index + 1)
+  const rowLabel = t('mcpServerRow').replace('{index}', n)
   const nameInvalid = row.serverName.trim() === ''
   const endpointInvalid = row.transport === 'http'
     ? row.url.trim() === ''
     : row.command.trim() === ''
+
   return (
-    <div className={css.entry}>
-      <div className={css.primary}>
-        <input
-          id={`plugin-config-mcp-name-${String(index)}`}
-          className={nameInvalid ? css.inputInvalid : css.input}
-          type="text"
-          value={row.serverName}
-          placeholder={t('mcpServerName')}
-          aria-label={`${t('mcpServerName')} ${n}`}
-          aria-invalid={nameInvalid || undefined}
-          disabled={disabled}
-          onChange={(event) => { onEdit(index, { serverName: event.target.value }) }}
-        />
-        {row.transport === 'http'
-          ? (
-            <input
-              id={`plugin-config-mcp-url-${String(index)}`}
-              className={`${endpointInvalid ? css.inputInvalid : css.input} ${css.endpoint}`}
-              type="text"
-              value={row.url}
-              placeholder={t('mcpUrl')}
-              aria-label={`${t('mcpUrl')} ${n}`}
-              aria-invalid={endpointInvalid || undefined}
-              disabled={disabled}
-              onChange={(event) => { onEdit(index, { url: event.target.value }) }}
-            />
-          )
-          : (
-            <input
-              id={`plugin-config-mcp-command-${String(index)}`}
-              className={`${endpointInvalid ? css.inputInvalid : css.input} ${css.endpoint}`}
-              type="text"
-              value={row.command}
-              placeholder={t('mcpCommand')}
-              aria-label={`${t('mcpCommand')} ${n}`}
-              aria-invalid={endpointInvalid || undefined}
-              disabled={disabled}
-              onChange={(event) => { onEdit(index, { command: event.target.value }) }}
-            />
-          )}
-        <select
-          id={`plugin-config-mcp-transport-${String(index)}`}
-          className={`${css.input} ${css.transport}`}
-          disabled={disabled}
-          value={row.transport}
-          aria-label={`${t('mcpTransport')} ${n}`}
-          onChange={(event) => {
-            onEdit(index, { transport: event.target.value as McpTransport })
-          }}
-        >
-          <option value="stdio">{t('mcpTransportStdio')}</option>
-          <option value="http">{t('mcpTransportHttp')}</option>
-        </select>
+    <article className={css.entry} aria-label={rowLabel}>
+      <div className={css.entryHead}>
+        <h4 className={css.entryTitle}>{rowLabel}</h4>
         <button
           type="button"
-          className={css.iconButton}
-          aria-label={`${t('mcpAdvanced')} ${n}`}
-          aria-expanded={open}
-          title={t('mcpAdvanced')}
-          onClick={onToggle}
-        >
-          <IconChevronDownOutline14
-            size={14}
-            className={open ? css.iconOpen : undefined}
-          />
-        </button>
-        <button
-          type="button"
-          className={`${css.iconButton} ${css.iconButtonDanger}`}
+          className={css.remove}
           aria-label={`${t('mcpRemoveServer')} ${n}`}
           title={t('mcpRemoveServer')}
           disabled={disabled}
           onClick={onRemove}
         >
           <IconTrashOutline16 size={14} />
+          {t('mcpRemoveServer')}
         </button>
       </div>
-      {open
-        ? (
-          <div className={css.advanced}>
-            <label className={css.field}>
-              <span className={css.fieldLabel}>{t('mcpArgs')}</span>
-              <input
+      <div className={css.entryBody}>
+        <McpTextField
+          id={`plugin-config-mcp-name-${String(index)}`}
+          label={t('mcpServerName')}
+          hint={t('mcpServerNameHint')}
+          value={row.serverName}
+          invalid={nameInvalid}
+          disabled={disabled}
+          onChange={(value) => { onEdit(index, { serverName: value }) }}
+        />
+        <McpSelectField
+          id={`plugin-config-mcp-transport-${String(index)}`}
+          label={t('mcpTransport')}
+          hint={t('mcpTransportHint')}
+          value={row.transport}
+          disabled={disabled}
+          options={[
+            { value: 'stdio', label: t('mcpTransportStdio') },
+            { value: 'http', label: t('mcpTransportHttp') },
+          ]}
+          onChange={(value) => { onEdit(index, { transport: value as McpTransport }) }}
+        />
+        {row.transport === 'http'
+          ? (
+            <McpTextField
+              id={`plugin-config-mcp-url-${String(index)}`}
+              label={t('mcpUrl')}
+              hint={t('mcpUrlHint')}
+              value={row.url}
+              invalid={endpointInvalid}
+              disabled={disabled}
+              onChange={(value) => { onEdit(index, { url: value }) }}
+            />
+          )
+          : (
+            <>
+              <McpTextField
+                id={`plugin-config-mcp-command-${String(index)}`}
+                label={t('mcpCommand')}
+                hint={t('mcpCommandHint')}
+                value={row.command}
+                invalid={endpointInvalid}
+                disabled={disabled}
+                onChange={(value) => { onEdit(index, { command: value }) }}
+              />
+              <McpTextField
                 id={`plugin-config-mcp-args-${String(index)}`}
-                className={css.input}
-                type="text"
+                label={t('mcpArgs')}
+                hint={t('mcpArgsHint')}
                 value={row.args}
-                placeholder={t('mcpArgsHint')}
-                aria-label={`${t('mcpArgs')} ${n}`}
                 disabled={disabled}
-                onChange={(event) => { onEdit(index, { args: event.target.value }) }}
+                onChange={(value) => { onEdit(index, { args: value }) }}
               />
-            </label>
-            <label className={css.field}>
-              <span className={css.fieldLabel}>{t('mcpCwd')}</span>
-              <input
+              <McpTextField
                 id={`plugin-config-mcp-cwd-${String(index)}`}
-                className={css.input}
-                type="text"
+                label={t('mcpCwd')}
+                hint={t('mcpCwdHint')}
                 value={row.cwd}
-                placeholder={t('mcpCwdHint')}
-                aria-label={`${t('mcpCwd')} ${n}`}
                 disabled={disabled}
-                onChange={(event) => { onEdit(index, { cwd: event.target.value }) }}
+                onChange={(value) => { onEdit(index, { cwd: value }) }}
               />
-            </label>
-          </div>
-        )
-        : null}
+            </>
+          )}
+      </div>
+    </article>
+  )
+}
+
+interface McpTextFieldProps {
+  id: string
+  label: string
+  hint: string
+  value: string
+  disabled: boolean
+  invalid?: boolean
+  onChange: (value: string) => void
+}
+
+function McpTextField({
+  id, label, hint, value, disabled, invalid = false, onChange,
+}: McpTextFieldProps) {
+  return (
+    <div className={fieldCss.field}>
+      <label className={fieldCss.label} htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        className={invalid ? fieldCss.inputInvalid : fieldCss.input}
+        type="text"
+        value={value}
+        disabled={disabled}
+        aria-invalid={invalid || undefined}
+        onChange={(event) => { onChange(event.target.value) }}
+      />
+      <p className={fieldCss.hint}>{hint}</p>
+    </div>
+  )
+}
+
+interface McpSelectFieldProps {
+  id: string
+  label: string
+  hint: string
+  value: string
+  disabled: boolean
+  options: readonly { readonly value: string; readonly label: string }[]
+  onChange: (value: string) => void
+}
+
+function McpSelectField({
+  id, label, hint, value, disabled, options, onChange,
+}: McpSelectFieldProps) {
+  return (
+    <div className={fieldCss.field}>
+      <label className={fieldCss.label} htmlFor={id}>{label}</label>
+      <select
+        id={id}
+        className={fieldCss.select}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => { onChange(event.target.value) }}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+      <p className={fieldCss.hint}>{hint}</p>
     </div>
   )
 }
