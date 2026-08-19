@@ -38,7 +38,7 @@ Host（harness/server）共享一份 root registry；composition 用 `createSess
 | `reported` | 终态读、等到 settle 的 `wait`、`kill`、`dispose` teardown 置位；有 live waiter 时 settle **先**置位再 `onJobsChanged` |
 | `statusLine` | `[status: completed, wait: stdin_read]`（detail 进 trailer） |
 | `outputLimitBytes` | producer 可选正整数；`job_output` / Face notice 按 UTF-8 裁 |
-| `maxConcurrentJobs` | 默认 10；**按 owner 桶**拒绝超额 `start`（文案对齐 DSH） |
+| `maxConcurrentJobs` | 默认 10；**按 owner 桶**拒绝超额 `start` |
 
 ## Tools (`createBashTools`)
 

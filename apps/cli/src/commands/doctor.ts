@@ -58,7 +58,7 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
       web ??
       (existsSync(path.join(harnessAppsRoot(), "web", "package.json"))
         ? `missing — monorepo serve will build (${PRODUCT_SHELL_BUILD_HINT})`
-        : "missing — install @xrkseek/web-frontend or set XRK_WEB_DIST"),
+        : "missing — reinstall CLI (product-web) or set XRK_WEB_DIST"),
   });
 
   const llm = Boolean(process.env.XRK_LLM_PRESET?.trim());

@@ -22,7 +22,7 @@ export interface HostRuntimeConfig {
   readonly pluginsDir?: string;
   /**
    * Optional SPA dist directory served by HTTP (public GET).
-   * Env: `XRK_WEB_DIST`. CLI `serve`/`web` default: `apps/web/dist`（缺则代跑 web:build + client:bundle + web:assemble）。
+   * Env: `XRK_WEB_DIST`. CLI resolves: override → package `product-web/` → monorepo `apps/web/dist`.
    */
   readonly webDist?: string;
   /**

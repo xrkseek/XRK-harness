@@ -2,9 +2,6 @@
   "name": "@xrkseek/client-ui-directory-picker-browse",
   "description": "In-app directory browsing surface: the workspace directory-flow owner rendering the host's listing and creation primitives",
   "version": "0.1.0-rc.7",
-  "publishConfig": {
-    "access": "public"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xrkseek/XRK-harness.git",
@@ -76,5 +73,6 @@
     "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
-  ]
+  ],
+  "private": true
 }

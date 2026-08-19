@@ -1,18 +1,15 @@
 /**
- * Product shell: packaged `@xrkseek/web-frontend/dist`, else monorepo `apps/web/dist`.
+ * Product shell: CLI-bundled `product-web/`, else monorepo `apps/web/dist`.
  */
 import { access } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const PRODUCT_SHELL_BUILD_HINT =
   "pnpm web:build && pnpm client:bundle && pnpm web:assemble";
-
-const requireFromHere = createRequire(import.meta.url);
 
 export function cliPackageRoot(): string {
   return path.resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -28,6 +25,11 @@ export function repoRoot(): string {
 
 export function isMonorepoCheckout(): boolean {
   return existsSync(path.join(harnessAppsRoot(), "web", "package.json"));
+}
+
+/** Assembled shell shipped inside the CLI package (npx / GitHub Release). */
+export function bundledProductWebDist(): string {
+  return path.join(cliPackageRoot(), "product-web");
 }
 
 export function defaultProductWebDist(): string {
@@ -60,15 +62,6 @@ async function distIfReady(dir: string): Promise<string | undefined> {
   }
 }
 
-function packagedWebFrontendDist(): string | undefined {
-  try {
-    const pkg = requireFromHere.resolve("@xrkseek/web-frontend/package.json");
-    return path.join(path.dirname(pkg), "dist");
-  } catch {
-    return undefined;
-  }
-}
-
 /** Resolve an existing product dist. Never `apps/console`. */
 export async function resolveProductWebDist(
   configured?: string,
@@ -76,11 +69,8 @@ export async function resolveProductWebDist(
   if (configured?.trim()) {
     return distIfReady(path.resolve(configured.trim()));
   }
-  const packaged = packagedWebFrontendDist();
-  if (packaged) {
-    const ready = await distIfReady(packaged);
-    if (ready) return ready;
-  }
+  const bundled = await distIfReady(bundledProductWebDist());
+  if (bundled) return bundled;
   return distIfReady(defaultProductWebDist());
 }
 
@@ -101,9 +91,9 @@ function runPnpmScript(script: string): void {
 
 /**
  * Ensure product UI exists.
- * - `configured` missing → error (no auto-build)
- * - npm install: use `@xrkseek/web-frontend/dist`
- * - git checkout: build `apps/web/dist` if missing
+ * - configured path missing → error
+ * - packaged CLI: `product-web/` next to package.json
+ * - monorepo: build `apps/web/dist` if missing
  */
 export async function ensureProductWebDist(
   configured?: string,
@@ -113,13 +103,13 @@ export async function ensureProductWebDist(
 
   if (configured?.trim()) {
     throw new Error(
-      `product UI not found at ${path.resolve(configured.trim())}\nFix XRK_WEB_DIST or install @xrkseek/web-frontend.`,
+      `product UI not found at ${path.resolve(configured.trim())}\nFix XRK_WEB_DIST.`,
     );
   }
 
   if (!isMonorepoCheckout()) {
     throw new Error(
-      `product UI missing. Install @xrkseek/web-frontend (npx @xrkseek/harness-cli web) or set XRK_WEB_DIST.`,
+      `product UI missing (no product-web/). Reinstall @xrkseek/harness-cli or set XRK_WEB_DIST.`,
     );
   }
 

@@ -86,16 +86,6 @@ importers:
         version: 6.4.3(@types/node@24.13.3)(lightningcss@1.33.0)
 
   apps/web:
-    dependencies:
-      '@xrkseek/client-web':
-        specifier: workspace:^
-        version: link:../../packages/client/web
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -118,6 +108,9 @@ importers:
       '@xrkseek/client-ui-slots':
         specifier: workspace:^
         version: link:../../packages/client/ui-slots
+      '@xrkseek/client-web':
+        specifier: workspace:^
+        version: link:../../packages/client/web
       '@xrkseek/client-web-react':
         specifier: workspace:^
         version: link:../../packages/client/web-react
@@ -136,6 +129,12 @@ importers:
       playwright:
         specifier: ^1.49.0
         version: 1.62.1
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

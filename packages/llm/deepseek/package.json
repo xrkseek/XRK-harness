@@ -18,12 +18,10 @@
     "@xrkseek/llm-openai-compatible": "workspace:*"
   },
   "license": "MIT",
-  "publishConfig": {
-    "access": "public"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xrkseek/XRK-harness.git",
     "directory": "packages/llm/deepseek"
-  }
+  },
+  "private": true
 }
