@@ -76,6 +76,9 @@ function stubClient(init: {
         handlers.delete(handler);
       };
     },
+    onConnectionState() {
+      return () => {};
+    },
     async dispose() {},
     async emitChanged() {
       for (const handler of [...handlers]) await handler();

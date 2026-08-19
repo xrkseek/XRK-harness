@@ -20,6 +20,7 @@ import { FACE_AGENT_PRESET_IDS } from "./presets-catalog.js";
 import type {
   FaceCredentialVault,
   FaceHostPublicSettings,
+  FaceMcpServerDraft,
   FaceSettingsNamespaces,
   FaceUiSettings,
 } from "./settings-credentials.js";
@@ -94,11 +95,16 @@ export interface FaceRuntime {
   readonly loadSlashRecipes?: SlashRecipesLoader;
   /** Process plugins (`XRK_PLUGINS_DIR` / MCP) for inventory + slash. */
   readonly plugins?: readonly FaceProcessPlugin[];
+  /**
+   * Host live-applies Face `mcp.servers` when MCP is sourced from
+   * host-settings.json (env empty). Absent → mutate stays `applies: restart`.
+   */
+  readonly syncMcpServers?: (servers: readonly FaceMcpServerDraft[]) => Promise<void>;
   /** Standing / remembered tool presenters (wire tools get). */
-  getTool?(
+  readonly getTool?: (
     sessionId: string,
     name: string,
-  ): Pick<ToolDefinition, "presentCall" | "presentResult"> | undefined;
+  ) => Pick<ToolDefinition, "presentCall" | "presentResult"> | undefined;
   /** Product-shell `boot.json` entries (assembled client plugins). */
   readonly webPlugins?: readonly FaceWebPlugin[];
   /** Mutable UI prefs (theme/locale) — not secrets. */

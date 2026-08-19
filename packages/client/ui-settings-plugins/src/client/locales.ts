@@ -17,6 +17,7 @@ export type PluginsSettingsLocaleKey =
   | 'mcpTransportStdio' | 'mcpTransportHttp' | 'mcpTransportHint'
   | 'mcpCommand' | 'mcpCommandHint' | 'mcpUrl' | 'mcpUrlHint'
   | 'mcpArgs' | 'mcpArgsHint' | 'mcpCwd' | 'mcpCwdHint' | 'mcpRowInvalid' | 'mcpToolsLabel'
+  | 'mcpStatusConnected' | 'mcpStatusReconnecting' | 'mcpStatusGaveUp'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -58,11 +59,11 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   webSearchMaxUses: 'Max searches per request',
   webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
   mcpTitle: 'MCP servers',
-  mcpDescription: 'Desired MCP servers for the next Host spawn (not live connect).',
+  mcpDescription: 'Desired MCP servers. Host remounts live when the settings file is the MCP source (empty XRK_MCP_SERVERS).',
   mcpConnectedHeading: 'Connected now',
   mcpConnectedEmpty: 'No MCP plugins are connected in this Host process.',
   mcpServersHeading: 'Desired servers',
-  mcpServersEmpty: 'No desired servers yet. Add one to persist a draft for the next spawn.',
+  mcpServersEmpty: 'No desired servers yet. Add one to save and remount.',
   mcpAddServer: 'Add server',
   mcpRemoveServer: 'Remove server',
   mcpAdvanced: 'Advanced',
@@ -83,6 +84,9 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   mcpCwdHint: 'Optional cwd for stdio spawn; leave blank for Host default.',
   mcpRowInvalid: 'Each server needs a name and either a command or URL.',
   mcpToolsLabel: 'tools',
+  mcpStatusConnected: 'Connected',
+  mcpStatusReconnecting: 'Reconnecting',
+  mcpStatusGaveUp: 'Gave up',
 }
 
 /** Simplified Chinese copy. */
@@ -125,11 +129,11 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   webSearchMaxUses: '单次请求最多搜索次数',
   webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
   mcpTitle: 'MCP 服务器',
-  mcpDescription: '下次 Host 启动时生效的期望 MCP 配置（不是即时连接）。',
+  mcpDescription: '期望 MCP 配置。当设置文件是 MCP 真源（空 XRK_MCP_SERVERS）时，Host 在本进程热挂载。',
   mcpConnectedHeading: '当前已连接',
   mcpConnectedEmpty: '本 Host 进程尚未连接任何 MCP 插件。',
   mcpServersHeading: '期望服务器',
-  mcpServersEmpty: '还没有期望配置。添加一条以在下次 spawn 时落盘。',
+  mcpServersEmpty: '还没有期望配置。添加一条以保存并热挂载。',
   mcpAddServer: '添加服务器',
   mcpRemoveServer: '移除服务器',
   mcpAdvanced: '高级',
@@ -150,4 +154,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   mcpCwdHint: 'stdio 可选 cwd；留空用 Host 默认。',
   mcpRowInvalid: '每条服务器需要名称，以及命令或 URL。',
   mcpToolsLabel: '个工具',
+  mcpStatusConnected: '已连接',
+  mcpStatusReconnecting: '重连中',
+  mcpStatusGaveUp: '已放弃',
 }

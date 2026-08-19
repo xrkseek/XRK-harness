@@ -45,6 +45,8 @@ export interface FaceProcessPlugin {
   readonly commands?: readonly FacePluginCommand[];
   /** `kind: tools` contributions — Face `viewFor` standing lookup. */
   readonly tools?: readonly ToolDefinition[];
+  /** MCP supervisor health (Host `mcp:*` plugins). */
+  readonly mcpHealth?: "connected" | "reconnecting" | "gave-up";
 }
 
 /**

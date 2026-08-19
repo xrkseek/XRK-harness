@@ -1,5 +1,19 @@
 import type { PolicyEngine } from "@xrkseek/policy";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import type { McpReconnectConfig } from "./reconnect.js";
+
+export type { McpReconnectConfig } from "./reconnect.js";
+
+/** Live generation health the Host overlay and register disposer observe. */
+export type McpConnectionStatus = "connected" | "reconnecting" | "gave-up";
+
+/** Snapshot of the stdio supervisor's current generation. */
+export interface McpConnectionState {
+  readonly status: McpConnectionStatus;
+  /** Consecutive failed attempts in the current outage (reconnect / gave-up). */
+  readonly attempt?: number;
+  readonly maxAttempts?: number;
+}
 
 export interface McpToolInfo {
   readonly name: string;
@@ -29,6 +43,10 @@ export interface McpClient {
   onToolsListChanged(
     handler: () => void | Promise<void>,
   ): () => void;
+  /** Supervisor health (stdio crash recovery). HTTP stays `connected` unless the Client closes. */
+  onConnectionState(
+    handler: (state: McpConnectionState) => void,
+  ): () => void;
   dispose(): Promise<void>;
 }
 
@@ -41,6 +59,13 @@ interface McpClientBase {
    * When set, stdio `command` / http `url` are ignored.
    */
   readonly createTransport?: () => Transport | Promise<Transport>;
+  /**
+   * Process supervisor (stdio). HTTP defaults to `{ enabled: false }` — SDK SSE
+   * resume is {@link McpHttpOptions.reconnectionOptions}, not this policy.
+   */
+  readonly reconnect?: McpReconnectConfig;
+  /** Optional supervisor diagnostics (tests / Host logs). */
+  readonly onLog?: (level: "info" | "warn" | "error", message: string) => void;
 }
 
 export interface McpStdioOptions extends McpClientBase {

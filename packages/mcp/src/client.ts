@@ -5,14 +5,35 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { assertPolicyAllow } from "@xrkseek/policy";
 import { assertServerName } from "./names.js";
+import { resolveReconnectPolicy } from "./reconnect.js";
 import type {
   McpCallResult,
   McpClient,
   McpClientOptions,
+  McpConnectionState,
   McpToolInfo,
 } from "./types.js";
 
 const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000;
+
+// SDK stdio transport owns two 2s termination windows; one extra second for
+// the process-close event. Timing out fails closed instead of overlapping children.
+const GENERATION_CLOSE_TIMEOUT_MS = 5_000;
+
+/** Local Promise.withResolvers (tsconfig lib is ES2022). */
+function withResolvers<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 function contentToText(content: unknown): string {
   if (!Array.isArray(content)) {
@@ -41,7 +62,7 @@ function toCallResult(result: unknown): McpCallResult {
     typeof result === "object" &&
     result !== null &&
     "content" in result
-      ? contentToText((result as { content: unknown }).content)
+      ? contentToText(result.content)
       : JSON.stringify(result);
   return {
     content,
@@ -99,9 +120,11 @@ async function openTransport(options: McpClientOptions): Promise<Transport> {
 /**
  * MCP client: stdio / streamable-http (or injected transport) → list/call tools.
  * `connect()` always runs `assertPolicyAllow({ kind: "mcp.connect" })` first.
- * Reconnect: HTTP transport forwards SDK `reconnectionOptions` (SSE resume).
- * `onToolsListChanged` forwards `notifications/tools/list_changed` (tool catalog
- * hot-sync). Process-level supervisor / Face MCP settings UI are not included.
+ *
+ * Stdio (and injected transports) run a process supervisor after the first
+ * successful `connect()`: `Client.onclose` respawns with bounded backoff
+ * (DSH `connection.ts`). HTTP process restart is off unless `reconnect.enabled`;
+ * SSE resume stays on SDK `reconnectionOptions`.
  */
 export function createMcpClient(options: McpClientOptions): McpClient {
   assertServerName(options.serverName);
@@ -113,20 +136,43 @@ export function createMcpClient(options: McpClientOptions): McpClient {
     throw new Error("createMcpClient: command, url (http), or createTransport required");
   }
 
+  const reconnect = resolveReconnectPolicy(
+    options.reconnect ??
+      (options.transport === "http" ? { enabled: false } : undefined),
+    "reconnect",
+  );
   const timeoutMs = options.toolCallTimeoutMs ?? DEFAULT_TOOL_CALL_TIMEOUT_MS;
+  const label = `mcp(${options.serverName})`;
   const listChangedHandlers = new Set<() => void | Promise<void>>();
+  const stateHandlers = new Set<(state: McpConnectionState) => void>();
+  /** Live generation (connected). */
   let client: Client | undefined;
+  /** In-flight or live generation for `isCurrent` / onclose fencing. */
+  let attempt: Client | undefined;
   let transport: Transport | undefined;
+  let clientClosed: Promise<void> | undefined;
   let connected = false;
-  let closed = false;
+  let disposed = false;
   let inflight: Promise<void> | undefined;
   let notifyChain = Promise.resolve();
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let failedAttempts = 0;
+  let connectedAt: number | undefined;
 
-  function requireLive(): Client {
-    if (!client || !connected) {
-      throw new Error("MCP client not connected");
+  const log = (level: "info" | "warn" | "error", message: string): void => {
+    options.onLog?.(level, `${label}: ${message}`);
+  };
+
+  const isCurrent = (generation: Client): boolean => !disposed && attempt === generation;
+
+  function emitState(state: McpConnectionState): void {
+    for (const handler of [...stateHandlers]) {
+      try {
+        handler(state);
+      } catch {
+        /* isolate subscribers */
+      }
     }
-    return client;
   }
 
   async function fanOutListChanged(): Promise<void> {
@@ -139,52 +185,193 @@ export function createMcpClient(options: McpClientOptions): McpClient {
     }
   }
 
-  async function openAndConnect(): Promise<void> {
-    if (closed) throw new Error("MCP client disposed");
+  function waitForClose(closed: Promise<void>): Promise<boolean> {
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        resolve(false);
+      }, GENERATION_CLOSE_TIMEOUT_MS);
+      timeout.unref?.();
+      void closed.then(() => {
+        clearTimeout(timeout);
+        resolve(true);
+      });
+    });
+  }
+
+  function scheduleReconnect(): void {
+    const lostEstablished = connectedAt !== undefined;
+    connected = false;
+    if (!reconnect.enabled) {
+      log(
+        "error",
+        lostEstablished
+          ? "connection lost and reconnect is disabled"
+          : "connection failed and reconnect is disabled",
+      );
+      return;
+    }
+    if (connectedAt !== undefined && Date.now() - connectedAt >= reconnect.maxDelayMs) {
+      failedAttempts = 0;
+    }
+    connectedAt = undefined;
+    failedAttempts += 1;
+    if (failedAttempts > reconnect.maxAttempts) {
+      log(
+        "error",
+        `giving up after ${reconnect.maxAttempts} consecutive failed reconnect attempts`,
+      );
+      emitState({
+        status: "gave-up",
+        attempt: reconnect.maxAttempts,
+        maxAttempts: reconnect.maxAttempts,
+      });
+      return;
+    }
+    const delayMs = Math.min(
+      reconnect.maxDelayMs,
+      reconnect.initialDelayMs * 2 ** (failedAttempts - 1),
+    );
+    const action = lostEstablished
+      ? "connection lost; reconnecting"
+      : "connection failed; retrying";
+    log("warn", `${action} in ${delayMs}ms (attempt ${failedAttempts}/${reconnect.maxAttempts})`);
+    emitState({
+      status: "reconnecting",
+      attempt: failedAttempts,
+      maxAttempts: reconnect.maxAttempts,
+    });
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = undefined;
+      void connectGeneration(false);
+    }, delayMs);
+    reconnectTimer.unref?.();
+  }
+
+  function generationDown(generation: Client): void {
+    if (!isCurrent(generation)) return;
+    attempt = undefined;
+    client = undefined;
+    transport = undefined;
+    clientClosed = undefined;
+    scheduleReconnect();
+  }
+
+  /**
+   * One generation: fresh Client + transport. First `connect()` throws on
+   * failure (Host spawn fail-closed). Later attempts never reject; they
+   * schedule backoff or give up.
+   */
+  async function connectGeneration(startup: boolean): Promise<void> {
+    if (disposed) {
+      if (startup) throw new Error("MCP client disposed");
+      return;
+    }
     assertPolicyAllow(options.policy, {
       kind: "mcp.connect",
       serverId: options.serverName,
     });
 
-    const next = await openTransport(options);
-    if (closed) {
-      await closeQuietly(next);
-      throw new Error("MCP client disposed");
-    }
-    const c = new Client({
+    const generation = new Client({
       name: "xrkseek-mcp",
       version: "0.0.0",
     });
-    // Register before connect so a list_changed during handshake is not dropped.
-    c.setNotificationHandler(ToolListChangedNotificationSchema, () => {
-      if (closed) return;
+    const closed = withResolvers<void>();
+    let attemptSettled = false;
+    let closeObserved = false;
+    attempt = generation;
+    clientClosed = closed.promise;
+    generation.onclose = () => {
+      closeObserved = true;
+      closed.resolve();
+      if (attemptSettled) generationDown(generation);
+    };
+    generation.setNotificationHandler(ToolListChangedNotificationSchema, () => {
+      if (!isCurrent(generation) || disposed) return;
       notifyChain = notifyChain.then(fanOutListChanged, fanOutListChanged);
     });
+
+    let next: Transport | undefined;
     try {
-      await c.connect(next);
+      next = await openTransport(options);
+      if (disposed) {
+        await closeQuietly(next);
+        await closeQuietly(generation);
+        attempt = undefined;
+        clientClosed = undefined;
+        throw new Error("MCP client disposed");
+      }
+      await generation.connect(next);
+      if (closeObserved) {
+        attemptSettled = true;
+        await closeQuietly(next);
+        generationDown(generation);
+        if (startup) throw new Error("MCP client closed during connect");
+        return;
+      }
     } catch (err) {
-      await closeQuietly(c);
+      await closeQuietly(generation);
       await closeQuietly(next);
-      throw err;
+      attemptSettled = true;
+      if (startup) {
+        attempt = undefined;
+        clientClosed = undefined;
+        throw err;
+      }
+      if (!isCurrent(generation)) return;
+      const quiesced = closeObserved || await waitForClose(closed.promise);
+      if (!quiesced) {
+        attempt = undefined;
+        clientClosed = undefined;
+        log(
+          "error",
+          `failed generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped`,
+        );
+        emitState({
+          status: "gave-up",
+          attempt: failedAttempts,
+          maxAttempts: reconnect.maxAttempts,
+        });
+        return;
+      }
+      generationDown(generation);
+      return;
     }
-    if (closed) {
-      await closeQuietly(c);
-      await closeQuietly(next);
-      throw new Error("MCP client disposed");
+
+    attemptSettled = true;
+    if (closeObserved) {
+      generationDown(generation);
+      if (startup) throw new Error("MCP client closed during connect");
+      return;
     }
-    client = c;
+    if (!isCurrent(generation)) return;
+
+    client = generation;
     transport = next;
     connected = true;
+    connectedAt = Date.now();
+    emitState({ status: "connected" });
+    if (!startup) {
+      log("info", `reconnected (attempt ${failedAttempts}/${reconnect.maxAttempts})`);
+      notifyChain = notifyChain.then(fanOutListChanged, fanOutListChanged);
+    }
+  }
+
+  function requireLive(): Client {
+    if (disposed) throw new Error("MCP client disposed");
+    if (!client || !connected) {
+      throw new Error("MCP client not connected");
+    }
+    return client;
   }
 
   return {
     serverName: options.serverName,
 
     async connect() {
-      if (closed) throw new Error("MCP client disposed");
+      if (disposed) throw new Error("MCP client disposed");
       if (connected) return;
       if (inflight) return inflight;
-      inflight = openAndConnect();
+      inflight = connectGeneration(true);
       try {
         await inflight;
       } finally {
@@ -225,21 +412,47 @@ export function createMcpClient(options: McpClientOptions): McpClient {
       };
     },
 
+    onConnectionState(handler) {
+      stateHandlers.add(handler);
+      return () => {
+        stateHandlers.delete(handler);
+      };
+    },
+
     async dispose() {
-      closed = true;
+      disposed = true;
       connected = false;
+      if (reconnectTimer !== undefined) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+      }
       listChangedHandlers.clear();
-      const c = client;
+      stateHandlers.clear();
+      // Abandon any in-flight attempt: connectGeneration checks `disposed`
+      // after openTransport and cleans up. Closing a never-connected Client
+      // here can hang the SDK close path.
+      const live = client;
+      const liveClosed = clientClosed;
+      const liveTransport = transport;
+      const established = connectedAt !== undefined;
+      attempt = undefined;
       client = undefined;
-      const t = transport;
       transport = undefined;
+      clientClosed = undefined;
+      connectedAt = undefined;
       try {
-        c?.removeNotificationHandler("notifications/tools/list_changed");
+        live?.removeNotificationHandler("notifications/tools/list_changed");
       } catch {
         /* ignore */
       }
-      await closeQuietly(c);
-      await closeQuietly(t);
+      await closeQuietly(live);
+      await closeQuietly(liveTransport);
+      if (established && liveClosed !== undefined && !await waitForClose(liveClosed)) {
+        log(
+          "error",
+          `generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms during disposal`,
+        );
+      }
     },
   };
 }

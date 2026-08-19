@@ -13,6 +13,8 @@ export interface McpConnectedEntry {
   readonly serverName: string
   readonly kind: string
   readonly toolCount: number
+  /** Stdio supervisor health; omitted on older Hosts. */
+  readonly status?: 'connected' | 'reconnecting' | 'gave-up'
 }
 
 /** Host-served MCP namespace value (desired + overlay). */
@@ -51,7 +53,7 @@ export interface McpCardState extends CardShell {
   readonly rows: readonly McpServerRow[]
   /** Live overlay from the running Host; read-only. */
   readonly connected: readonly McpConnectedEntry[]
-  /** Face note (restart / allow policy); read-only. */
+  /** Face note (live remount / restart / allow policy); read-only. */
   readonly note: string
   /** Whether any row fails client-side validation. */
   readonly rowInvalid: boolean

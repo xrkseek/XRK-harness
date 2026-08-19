@@ -7,6 +7,10 @@ export {
   createMcpClient,
 } from "./client.js";
 export {
+  RECONNECT_DEFAULTS,
+  resolveReconnectPolicy,
+} from "./reconnect.js";
+export {
   registerMcpTools,
   mcpToolDefinition,
   type AppliedMcpTool,
@@ -24,8 +28,11 @@ export type {
   McpCallResult,
   McpClient,
   McpClientOptions,
+  McpConnectionState,
+  McpConnectionStatus,
   McpHttpOptions,
   McpHttpReconnectionOptions,
+  McpReconnectConfig,
   McpStdioOptions,
   McpToolInfo,
 } from "./types.js";
