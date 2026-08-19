@@ -36,9 +36,13 @@ describe.skipIf(!HAS_SHELL)("product shell inventory", () => {
         const bootRow = dialog.locator(
           '[data-plugin-entry="@xrkseek/client-runtime"]',
         );
+        const exportRow = dialog.locator(
+          '[data-plugin-entry="@xrkseek/client-session-log-export"]',
+        );
         try {
           await processRow.waitFor({ timeout: 20_000 });
           await bootRow.waitFor({ timeout: 10_000 });
+          await exportRow.waitFor({ timeout: 10_000 });
         } catch (error) {
           throw new Error(
             `inventory rows missing; page errors: ${pageErrors.join(" | ") || "(none)"}`,

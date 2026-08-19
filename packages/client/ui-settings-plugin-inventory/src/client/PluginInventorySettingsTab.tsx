@@ -51,6 +51,8 @@ function moduleShortName(moduleName: string): string {
     .replace(/^cordis:/, '')
     .replace(/^cordis-plugin-/, '')
     .replace(/^dsh-(?:host-|client-)?/, '')
+    .replace(/^client-/, '')
+    .replace(/^xrk-/, '')
 }
 
 /** Whether an inventory row matches the local catalog query. */

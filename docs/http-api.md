@@ -8,7 +8,7 @@ Base URL: `http://127.0.0.1:8787` (override with `XRK_HOST` / `XRK_PORT`).
 
 - `/health` — **public**
 - REST `/api/sessions` · `/api/chat` — `Authorization: Bearer <XRK_API_KEY>` or `x-api-key` when `XRK_API_KEY` is set
-- Face `/api/<method>` · `/api/respond` · WS `/api/events.*` — 同上；本机回环且无头时放行（DSH Web 同源）
+- Face `/api/<method>` · `/api/respond` · WS `/api/events.*` — 同上；本机回环且无头时放行（产品壳同源）
 - Empty `XRK_API_KEY` disables auth (dev only)
 
 ## Endpoints
@@ -90,14 +90,14 @@ Same body as `/api/chat`. SSE events:
 
 SSE stream of session events (replays history, then live).
 
-## Host Face（DeepSeek 兼容 · U1）
+## Host Face（U1）
 
 并行协议面（与上表 REST 共存），挂在同一 `serve`：
 
 | Method | Path | 说明 |
 |--------|------|------|
 | `POST` | `/api/face/<method>` | 前缀路径 |
-| `POST` | `/api/<method>` | DeepSeek 原生：点号（`session.prompt`）或 Typert（`commands/execute`） |
+| `POST` | `/api/<method>` | 点号（`session.prompt`）或 Typert（`commands/execute`）；wire 形对齐上游 Session/RPC |
 | `GET` / `HEAD` | `/api/session.export` | 会话 ZIP（`sessionId` · `includeDescendants`）；壳先 HEAD |
 | WS | `/api/face/events.*` 或 `/api/events.*` | mux / host 只下行 |
 

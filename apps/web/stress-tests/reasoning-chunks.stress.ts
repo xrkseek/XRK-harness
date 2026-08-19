@@ -53,7 +53,7 @@ it('keeps the browser responsive while rendering 100,000 reasoning chunks', asyn
     page = await newEnglishPage(browser)
     const activePage = page
     await activePage.addInitScript(() => {
-      localStorage.setItem('dsh.sessions.current', JSON.stringify({ sessionId: 'fx-alpha' }))
+      localStorage.setItem('xrk.sessions.current', JSON.stringify({ sessionId: 'fx-alpha' }))
     })
     const tripwire = watchConsole(activePage)
     onTestFailed(() => saveFailureShot(activePage, 'web-stress-reasoning-chunks'))

@@ -10,15 +10,15 @@ import type { FaceRpcResult } from "./types.js";
 import { canOpenNativePath, openNativePath } from "./host-open-path.js";
 import { publishRemoteEvent } from "./remote-event.js";
 import {
-  DSH_EMPTY_OBJECT_SCHEMA,
-  DSH_LLM_SCHEMA,
-  DSH_LOCALE_SCHEMA,
-  DSH_MCP_SCHEMA,
-  DSH_ONBOARDING_SCHEMA,
-  DSH_PERMISSION_SCHEMA,
-  DSH_THEME_SCHEMA,
+  FACE_EMPTY_OBJECT_SCHEMA,
+  FACE_LLM_SCHEMA,
+  FACE_LOCALE_SCHEMA,
+  FACE_MCP_SCHEMA,
+  FACE_ONBOARDING_SCHEMA,
+  FACE_PERMISSION_SCHEMA,
+  FACE_THEME_SCHEMA,
   isFacePermissionPreset,
-} from "./dsh-schema.js";
+} from "./face-schema.js";
 
 export type UiTheme = "system" | "light" | "dark";
 
@@ -52,15 +52,15 @@ const MAX_LOCALE = 32;
 const MAX_SECRET = 8192;
 
 /** DSH locale plugin only ships `zh` | `en`. */
-function dshLocalePreference(locale: string): "zh" | "en" {
+function faceLocalePreference(locale: string): "zh" | "en" {
   const lower = locale.trim().toLowerCase();
   return lower.startsWith("zh") ? "zh" : "en";
 }
 
-const LOCALE_SCHEMA = DSH_LOCALE_SCHEMA;
-const THEME_SCHEMA = DSH_THEME_SCHEMA;
+const LOCALE_SCHEMA = FACE_LOCALE_SCHEMA;
+const THEME_SCHEMA = FACE_THEME_SCHEMA;
 
-function applyDshUiPref(
+function applyFaceUiPref(
   runtime: FaceRuntime,
   ns: string,
   value: Record<string, unknown>,
@@ -356,7 +356,7 @@ function emitCredentialRemote(runtime: FaceRuntime, slotId: string): void {
   }
 }
 
-/** DeepSeek `credentials.describe({ refs })` — never returns secret values. */
+/** Face `credentials.describe({ refs })` — never returns secret values. */
 export async function credentialsDescribe(
   runtime: FaceRuntime,
   payload: unknown,
@@ -398,7 +398,7 @@ export async function credentialsSet(
 ): Promise<FaceRpcResult<unknown>> {
   const p =
     payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
-  // DeepSeek: { ref, value } · XRK console: { slotId, value }
+  // Face/shell: { ref, value } · XRK console: { slotId, value }
   const rawRef =
     typeof p.ref === "string"
       ? p.ref.trim()
@@ -467,7 +467,7 @@ export async function credentialsSet(
   };
 }
 
-/** DeepSeek `credentials.unset({ ref })` → empty object. */
+/** Face `credentials.unset({ ref })` → empty object. */
 export async function credentialsUnset(
   runtime: FaceRuntime,
   payload: unknown,
@@ -497,8 +497,8 @@ export async function credentialsUnset(
   return { ok: true, value: {} };
 }
 
-/** DeepSeek SettingsNamespaceView (minimal fields the web client reads). */
-export interface DshSettingsNamespaceView {
+/** Face SettingsNamespaceView (minimal fields the product shell reads). */
+export interface FaceSettingsNamespaceView {
   readonly ns: string;
   readonly schema: unknown;
   readonly value: unknown;
@@ -509,7 +509,7 @@ export interface DshSettingsNamespaceView {
   readonly revision: number;
 }
 
-export type DshSettingsPathOp =
+export type FaceSettingsPathOp =
   | { readonly op: "set"; readonly path: string[]; readonly value: unknown }
   | { readonly op: "unset"; readonly path: string[] };
 
@@ -552,7 +552,7 @@ function unsetAtPath(root: Record<string, unknown>, path: readonly string[]): vo
 }
 
 /**
- * Process-memory settings namespaces for DeepSeek Web (welcome notice, etc.).
+ * Process-memory settings namespaces for Face (welcome notice, etc.).
  * Most ns stay in memory; `mcp.servers` also persist to host-settings.json.
  */
 export class FaceSettingsNamespaces {
@@ -580,7 +580,7 @@ export class FaceSettingsNamespaces {
         user: {},
         revision: 0,
         base: {},
-        schema: DSH_EMPTY_OBJECT_SCHEMA,
+        schema: FACE_EMPTY_OBJECT_SCHEMA,
         applies: "live",
       };
       this.map.set(ns, slot);
@@ -593,7 +593,7 @@ export class FaceSettingsNamespaces {
     base?: Record<string, unknown>,
     schema?: unknown,
     applies?: "live" | "restart",
-  ): DshSettingsNamespaceView {
+  ): FaceSettingsNamespaceView {
     const slot = this.ensure(ns);
     if (base !== undefined) slot.base = base;
     if (schema !== undefined) slot.schema = schema;
@@ -612,10 +612,10 @@ export class FaceSettingsNamespaces {
 
   mutate(
     ns: string,
-    ops: readonly DshSettingsPathOp[],
+    ops: readonly FaceSettingsPathOp[],
     expectedRevision?: number,
   ):
-    | { ok: true; view: DshSettingsNamespaceView }
+    | { ok: true; view: FaceSettingsNamespaceView }
     | { ok: false; code: string; message: string } {
     const slot = this.ensure(ns);
     if (expectedRevision !== undefined && expectedRevision !== slot.revision) {
@@ -754,7 +754,7 @@ function mcpDescribeBase(runtime: FaceRuntime): Record<string, unknown> {
   };
 }
 
-function mcpMutateRejected(ops: readonly DshSettingsPathOp[]): string | undefined {
+function mcpMutateRejected(ops: readonly FaceSettingsPathOp[]): string | undefined {
   for (const op of ops) {
     if (op.path.length === 0) continue;
     if (op.path[0] !== "servers") {
@@ -764,23 +764,23 @@ function mcpMutateRejected(ops: readonly DshSettingsPathOp[]): string | undefine
   return undefined;
 }
 
-/** DeepSeek `settings.describe` — namespaces[] for Web welcome / forms. */
-export async function settingsDescribeDsh(
+/** Face `settings.describe` — namespaces[] for welcome / forms. */
+export async function settingsDescribeFace(
   runtime: FaceRuntime,
 ): Promise<FaceRpcResult<unknown>> {
-  const namespaces: DshSettingsNamespaceView[] = [
-    runtime.settingsNamespaces.view("ui-onboarding", {}, DSH_ONBOARDING_SCHEMA),
+  const namespaces: FaceSettingsNamespaceView[] = [
+    runtime.settingsNamespaces.view("ui-onboarding", {}, FACE_ONBOARDING_SCHEMA),
     runtime.settingsNamespaces.view(
       "ui",
       {
         theme: runtime.uiSettings.theme,
         locale: runtime.uiSettings.locale,
       },
-      DSH_EMPTY_OBJECT_SCHEMA,
+      FACE_EMPTY_OBJECT_SCHEMA,
     ),
     runtime.settingsNamespaces.view(
       "locale",
-      { preference: dshLocalePreference(runtime.uiSettings.locale) },
+      { preference: faceLocalePreference(runtime.uiSettings.locale) },
       LOCALE_SCHEMA,
     ),
     runtime.settingsNamespaces.view(
@@ -791,13 +791,13 @@ export async function settingsDescribeDsh(
     runtime.settingsNamespaces.view(
       "permission",
       { defaultPreset: "workspace-write" },
-      DSH_PERMISSION_SCHEMA,
+      FACE_PERMISSION_SCHEMA,
     ),
-    runtime.settingsNamespaces.view("llm", { providers: {} }, DSH_LLM_SCHEMA),
+    runtime.settingsNamespaces.view("llm", { providers: {} }, FACE_LLM_SCHEMA),
     runtime.settingsNamespaces.view(
       "mcp",
       mcpDescribeBase(runtime),
-      DSH_MCP_SCHEMA,
+      FACE_MCP_SCHEMA,
       "restart",
     ),
   ];
@@ -806,7 +806,7 @@ export async function settingsDescribeDsh(
       runtime.settingsNamespaces.view(
         "host",
         { ...runtime.hostPublic },
-        DSH_EMPTY_OBJECT_SCHEMA,
+        FACE_EMPTY_OBJECT_SCHEMA,
       ),
     );
   }
@@ -820,8 +820,8 @@ export async function settingsDescribeDsh(
   };
 }
 
-/** DeepSeek `settings.mutate` — path ops (welcome notice ack). */
-export async function settingsMutateDsh(
+/** Face `settings.mutate` — path ops (welcome notice ack). */
+export async function settingsMutateFace(
   runtime: FaceRuntime,
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
@@ -838,7 +838,7 @@ export async function settingsMutateDsh(
       },
     };
   }
-  const ops: DshSettingsPathOp[] = [];
+  const ops: FaceSettingsPathOp[] = [];
   for (const raw of opsRaw) {
     if (!raw || typeof raw !== "object") continue;
     const o = raw as Record<string, unknown>;
@@ -866,7 +866,7 @@ export async function settingsMutateDsh(
       error: { code: result.code, message: result.message, details: { ns } },
     };
   }
-  applyDshUiPref(runtime, ns, result.view.value as Record<string, unknown>);
+  applyFaceUiPref(runtime, ns, result.view.value as Record<string, unknown>);
   publishRemoteEvent(runtime.bus, "settings/document-updated", [
     ns,
     result.view.revision,
@@ -884,7 +884,7 @@ export async function settingsMutateDsh(
       value: runtime.settingsNamespaces.view(
         "mcp",
         mcpDescribeBase(runtime),
-        DSH_MCP_SCHEMA,
+        FACE_MCP_SCHEMA,
         "restart",
       ),
     };
@@ -892,8 +892,8 @@ export async function settingsMutateDsh(
   return { ok: true, value: result.view };
 }
 
-/** DeepSeek `settings.update` — merge patch into namespace user layer. */
-export async function settingsUpdateDsh(
+/** Face `settings.update` — merge patch into namespace user layer. */
+export async function settingsUpdateFace(
   runtime: FaceRuntime,
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
@@ -913,12 +913,12 @@ export async function settingsUpdateDsh(
       },
     };
   }
-  const ops: DshSettingsPathOp[] = Object.entries(patch).map(([key, value]) => ({
+  const ops: FaceSettingsPathOp[] = Object.entries(patch).map(([key, value]) => ({
     op: "set" as const,
     path: [key],
     value,
   }));
-  return settingsMutateDsh(runtime, {
+  return settingsMutateFace(runtime, {
     ns,
     ops,
     ...(typeof p.expectedRevision === "number"
@@ -927,8 +927,8 @@ export async function settingsUpdateDsh(
   });
 }
 
-/** DeepSeek `settings.replace` — replace entire user section for ns. */
-export async function settingsReplaceDsh(
+/** Face `settings.replace` — replace entire user section for ns. */
+export async function settingsReplaceFace(
   runtime: FaceRuntime,
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
@@ -948,7 +948,7 @@ export async function settingsReplaceDsh(
       },
     };
   }
-  return settingsMutateDsh(runtime, {
+  return settingsMutateFace(runtime, {
     ns,
     ops: [{ op: "set", path: [], value: section }],
     ...(typeof p.expectedRevision === "number"
@@ -1037,7 +1037,7 @@ export async function prepareSettingsDocument(runtime: FaceRuntime): Promise<str
 }
 
 /**
- * DeepSeek pathless `settings.openDocument`.
+ * Face pathless `settings.openDocument`.
  * Wire value is only `{ opened: true }` (DSH schema); non-desktop → NI.
  */
 export async function settingsOpenDocument(

@@ -1,5 +1,5 @@
 /**
- * Face HTTP/WS 路径：与 DSH apiproxy 同形。
+ * Face HTTP/WS 路径：与产品壳 apiproxy 同形。
  *
  * Unary 两类：
  * - 点号方法：`/api/session.prompt`（须含 `.`，避免抢走 REST `/api/sessions`）
@@ -24,8 +24,8 @@ export const FACE_RESPOND_PATHS = [
 const REST_API_SEGMENTS = new Set(["sessions", "chat"]);
 
 /**
- * DSH Web `connection.rpc.call("/api", endpoint)` 会打的 Remote namespace。
- * 未实现的 endpoint 仍要认领，回合法 DSH 信封，禁止 HTTP 404。
+ * 产品壳 `connection.rpc.call("/api", endpoint)` 会打的 Remote namespace。
+ * 未实现的 endpoint 仍要认领，回合法 Face 信封，禁止 HTTP 404。
  */
 export const FACE_REMOTE_NAMESPACES = new Set([
   "commands",

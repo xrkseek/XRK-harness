@@ -1,6 +1,6 @@
 /**
- * In-memory DeepSeek workspace registry for Face (list/create/rename/archive).
- * Not durable across process restart — enough for DSH Web sidebar wiring.
+ * In-memory workspace registry for Face (list/create/rename/archive).
+ * Not durable across process restart — enough for product-shell sidebar wiring.
  */
 
 import path from "node:path";

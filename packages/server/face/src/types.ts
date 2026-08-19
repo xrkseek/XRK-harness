@@ -12,7 +12,7 @@ export type FaceRpcFail = {
   readonly details?: Record<string, unknown>;
 };
 
-/** DSH Web Zod 要求：线上错误必须有 `details`。 */
+/** 产品壳 Zod 要求：线上错误必须有 `details`。 */
 export type FaceRpcError = {
   readonly code: string;
   readonly message: string;
@@ -23,7 +23,7 @@ export type FaceRpcResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: FaceRpcFail };
 
-/** Unary response — DeepSeek `type: server-response`. */
+/** Unary response — Face `type: server-response`. */
 export interface FaceRpcResponse<T = unknown> {
   readonly type: "server-response";
   readonly rpcId: RpcId;
@@ -72,7 +72,7 @@ export type MuxFrame =
       readonly sessionId: string;
       readonly jobs: readonly unknown[];
     }
-  /** DSH Web 可应答审批（稳定 rpcId 在 server-request 信封上）。 */
+  /** 产品壳可应答审批（稳定 rpcId 在 server-request 信封上）。 */
   | {
       readonly type: "approval/requested";
       readonly sessionId: string;
@@ -87,7 +87,7 @@ export type MuxFrame =
       readonly approvalId: string;
       readonly outcome: "allowed-once" | "rejected" | "cancelled" | "unavailable";
     }
-  /** DSH `question/requested` — answerable server-request (rpcId on envelope). */
+  /** Face `question/requested` — answerable server-request (rpcId on envelope). */
   | {
       readonly type: "question/requested";
       readonly sessionId: string;
@@ -100,7 +100,7 @@ export type MuxFrame =
       readonly outcome: "answered" | "cancelled";
     };
 
-/** DSH `AskUserQuestionItem` (captured shell Zod). */
+/** Face `AskUserQuestionItem` (product-shell Zod). */
 export interface FaceQuestionItem {
   readonly id: string;
   readonly question: string;
@@ -114,7 +114,7 @@ export interface FaceQuestionItem {
   readonly intent?: { readonly kind: "plan-review"; readonly approve: string };
 }
 
-/** DSH `AskUserQuestionAnswer`. */
+/** Face `AskUserQuestionAnswer`. */
 export interface FaceQuestionAnswer {
   readonly answers: readonly FaceQuestionAnswerItem[];
 }

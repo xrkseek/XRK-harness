@@ -8,7 +8,8 @@
  * Copies client plugin bundles from packages/client/<name>/lib/client.js
  * and Face wire shims from packages/stubs (typert-registry, api-gateway,
  * api-remotes). Writes boot.json from each package.json xrk.client
- * metadata. If a UI client.js is missing, set XRK_UI_SRC to a DSH checkout.
+ * metadata. If a UI client.js is missing, set XRK_UI_SRC to a compare
+ * checkout that already has matching lib/client.js artifacts.
  *
  *   pnpm web:assemble
  */
@@ -33,6 +34,8 @@ const UI_SRC = process.env.XRK_UI_SRC?.trim()
   ? path.resolve(process.env.XRK_UI_SRC.trim())
   : "";
 
+// Historical Cordis UI / runner ids (no longer in-tree) plus HMR and the
+// native picker — still filtered so overlays cannot reintroduce them.
 const OMIT = new Set([
   "@xrkseek/client-ui-cordis",
   "@xrkseek/xrk-cordis-client-runner",
@@ -46,7 +49,7 @@ const WELCOME_VERSION_XRK = "2026-08-17.xrk1";
 const WELCOME_BODY_ZH_XRK =
   "XRK Harness Web UI 基于 DeepSeek Harness（MIT）二次修改。当前仍处在面向开发者测试的阶段，还有许多地方需要持续改进。后端契约走本仓 Face / serve；上游归因见 apps/web/NOTICE。\\n\\n欢迎反馈与共建。";
 const WELCOME_BODY_EN_XRK =
-  "XRK Harness Web UI is a secondary fork of DeepSeek Harness (MIT). It is still under developer testing. The host contract is this repo’s Face / serve; see apps/web/NOTICE for upstream attribution.\\n\\nFeedback welcome.";
+  "XRK Harness Web UI is a secondary adaptation of DeepSeek Harness (MIT). It is still under developer testing. The host contract is this repo’s Face / serve; see apps/web/NOTICE for upstream attribution.\\n\\nFeedback welcome.";
 const WELCOME_BODY_ZH_DSH =
   "DeepSeek Harness 目前的 0.1 版本仍处在面向 Harness 开发者进行测试的阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者的反馈建议。预计 DeepSeek Harness 的核心插件以及基础 API 都会在接下来的一段时间内快速迭代、持续演化。\\n\\n我们期待与全球开发者一起，在开源、开放、可复用、可组合的基础设施之上，共同探索智能上限。欢迎全球 Harness 开发者加入 DSH 插件生态。";
 const WELCOME_BODY_EN_DSH =

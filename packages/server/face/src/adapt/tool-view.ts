@@ -1,5 +1,5 @@
 /**
- * Face tool-view: DSH apiproxy `viewFor` — lookup only.
+ * Face tool-view: apiproxy `viewFor` — lookup only.
  * Cards come from each tool's `presentCall` / `presentResult`.
  */
 
@@ -78,7 +78,7 @@ export function faceToolLookup(
   };
 }
 
-/** DSH `viewFor` — missing lookup / pairing / presenter → no view. */
+/** Face `viewFor` — missing lookup / pairing / presenter → no view. */
 export function presentToolView(
   event: SessionEvent,
   lookup?: PresentToolLookup,

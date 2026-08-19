@@ -1,11 +1,11 @@
 /**
- * XRK Face 错误码 → DSH Web 闭集 RpcError（必含 details）。
+ * XRK Face 错误码 → 产品壳闭集 RpcError（必含 details）。
  */
 
 import type { FaceRpcError } from "../types.js";
 
-/** DSH 浏览器客户端接受的 code（RpcErrorDetailsMap 键）。 */
-export const DSH_RPC_ERROR_CODES = [
+/** 产品壳浏览器客户端接受的 code（RpcErrorDetailsMap 键）。 */
+export const FACE_RPC_ERROR_CODES = [
   "bad-request",
   "cancelled",
   "session-not-found",
@@ -47,9 +47,9 @@ export const DSH_RPC_ERROR_CODES = [
   "internal",
 ] as const;
 
-export type DshRpcErrorCode = (typeof DSH_RPC_ERROR_CODES)[number];
+export type FaceRpcErrorCode = (typeof FACE_RPC_ERROR_CODES)[number];
 
-const DSH_CODES = new Set<string>(DSH_RPC_ERROR_CODES);
+const FACE_RPC_CODES = new Set<string>(FACE_RPC_ERROR_CODES);
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -59,8 +59,8 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 /**
- * 把 handler 错误归一成 DSH 可解析的 RpcError。
- * 未知 / 仅 XRK 的 code 折到最近 DSH 码或 `internal`。
+ * 把 handler 错误归一成产品壳可解析的 RpcError。
+ * 未知 / 仅 XRK 的 code 折到最近壳侧码或 `internal`。
  */
 export function mapFaceRpcError(
   code: string,
@@ -283,7 +283,7 @@ export function mapFaceRpcError(
       };
 
     default:
-      if (DSH_CODES.has(code)) {
+      if (FACE_RPC_CODES.has(code)) {
         return {
           code,
           message,

@@ -1,5 +1,5 @@
 /**
- * 本机回环判定：产品壳（DSH Web）同源 fetch/WS 不带 Authorization。
+ * 本机回环判定：产品壳同源 fetch/WS 不带 Authorization。
  */
 
 export function isLoopbackAddress(address: string | undefined): boolean {

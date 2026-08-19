@@ -12,7 +12,7 @@ import {
   SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN,
 } from '@xrkseek/client-ui-layout/src/client/columns.ts'
 
-const PERSIST_KEY = 'dsh.layout.panels'
+const PERSIST_KEY = 'xrk.layout.panels'
 
 beforeEach(() => { localStorage.clear() })
 

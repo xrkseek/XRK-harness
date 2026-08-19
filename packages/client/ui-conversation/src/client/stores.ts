@@ -23,7 +23,7 @@ export function createChatStore(): EngineStoreHandle<ChatStoreState, ChatActions
     // PropsStore<ChatStore>'s SnapshotSelectorHook<ChatStoreState>, so init
     // and the contract cannot drift.
     init: (): ChatStoreState => ({ selection: null, draft: '', view: null, inspect: null }),
-    persist: 'dsh.conversation.chat',
+    persist: 'xrk.conversation.chat',
     actions: {
       select: (d, target: SelectionTarget | null) => { d.selection = target },
       setDraft: (d, text: string) => { d.draft = text },

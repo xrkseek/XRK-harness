@@ -166,7 +166,7 @@ export function producedFileMentions(
   label: (path: string) => string,
 ): MarkdownFileMentions {
   return {
-    resolve(value) {
+    resolve(value: string) {
       const path = paths.includes(value) ? value : onlyPathWithBasename(paths, value)
       if (path === undefined) return undefined
       return { open: () => { openFile(path) }, label: label(path), title: path }

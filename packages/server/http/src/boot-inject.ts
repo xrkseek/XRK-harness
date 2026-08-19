@@ -19,7 +19,7 @@ export interface WebBootManifest {
   readonly entries: readonly WebBootEntry[];
 }
 
-/** Fallback when no captured DSH boot.json — Face console roster. */
+/** Fallback when no product `boot.json` is on disk — Face console roster. */
 export const FACE_CONSOLE_BOOT: WebBootManifest = {
   rev: "xrk-face-console",
   entries: [
@@ -61,6 +61,7 @@ export function loadBootManifestFromWebDist(
  * Vite HMR client (it EventSources `/plugins/events`, which product serve
  * does not expose).
  */
+/** Historical Cordis UI / runner ids (no longer in-tree) plus HMR. */
 export const XRK_OMIT_CLIENT_PLUGIN_IDS = [
   "@xrkseek/client-ui-cordis",
   "@xrkseek/xrk-cordis-client-runner",
@@ -77,7 +78,7 @@ export function applyXrkProductBootPolicy(
   return { rev: manifest.rev, entries };
 }
 
-/** Prefer captured DSH `boot.json`; else legacy console fallback roster. */
+/** Prefer product `boot.json` under webDist; else Face console fallback roster. */
 export function resolveWebBootManifest(webDistRoot?: string): WebBootManifest {
   if (webDistRoot) {
     const captured = loadBootManifestFromWebDist(webDistRoot);

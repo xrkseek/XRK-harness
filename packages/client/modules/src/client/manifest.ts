@@ -167,7 +167,7 @@ export interface XrkWindow {
    * plugin can provide it as `ctx.modules`. Missing slot at wrapper apply
    * time = kernel sequencing bug, thrown loud.
    */
-  __DSH_MODULES__?: ClientModuleSystem
+  __XRK_MODULES__?: ClientModuleSystem
 }
 
 /** Per-module bookkeeping in {@link ClientModuleLoader.loadCache} (module-graph boundary, flat today). */

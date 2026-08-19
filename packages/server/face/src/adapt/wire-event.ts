@@ -1,7 +1,7 @@
 /**
  * XRK SessionEvent → Face mux/history wire row.
  *
- * DeepSeek Web expects `{ type, seq, time, data }` with seq inside the event.
+ * Face wire rows are `{ type, seq, time, data }` with seq inside the event.
  * turn/step use session-scoped monotonic maps when provided (preferred);
  * otherwise fall back to wireNumericId hash for isolated unit tests.
  */
@@ -10,7 +10,7 @@ import type { MessageContent, SessionEvent } from "@xrkseek/protocol";
 import { asContentBlocks } from "@xrkseek/protocol";
 import {
   type FaceInboxWireProjector,
-  type DshInboxSplice,
+  type FaceInboxSplice,
 } from "./inbox-wire.js";
 import { presentToolView, type PresentToolLookup, type ToolEventView } from "./tool-view.js";
 import type { FaceWireIdMaps } from "./wire-ids.js";
@@ -44,25 +44,25 @@ export const EVENT_ISOMORPHISM = {
   "feedback/record": "feedback/record",
 } as const satisfies Record<SessionEvent["type"], string>;
 
-/** DeepSeek SessionEvent envelope on the Face wire. */
-export interface DshWireSessionEvent {
+/** SessionEvent envelope on the Face wire. */
+export interface FaceWireSessionEvent {
   readonly type: string;
   readonly seq: number;
   readonly time: number;
   readonly data: unknown;
   /**
-   * DSH surface marker. Client conversation fold only updates
+   * Face surface marker. Client conversation fold only updates
    * `assistant/message` / `tool/result` / `user/message` when this is `append`
    * (see `isAppendSurfaceEvent`). XRK protocol events have no surfaceOp — Face
    * stamps append on the three model-visible types at the wire boundary.
    */
   readonly surfaceOp?: "append" | { readonly op: "replace"; readonly start: number; readonly end: number };
-  /** When true, DSH client fold may skip unknown / non-product events. */
+  /** When true, product-shell fold may skip unknown / non-product events. */
   readonly ignorable?: true;
 }
 
 export interface WireHistoryEntry {
-  readonly event: DshWireSessionEvent;
+  readonly event: FaceWireSessionEvent;
   readonly view?: ToolEventView;
 }
 
@@ -70,23 +70,23 @@ export interface WireAdaptContext {
   readonly sessionId: string;
   readonly ids?: FaceWireIdMaps;
   /**
-   * Ordered inbox projector. Required for prompt/* → `agent/inbox/spliced`.
+   * Ordered inbox projector. Required for prompt/* ? `agent/inbox/spliced`.
    * History builds a fresh projector; mux reuses the per-session instance.
    */
   readonly inbox?: FaceInboxWireProjector;
   /**
-   * Call-id → { name, args } pairing for result-time presenters (DSH `argsFor`).
+   * Call-id ? { name, args } pairing for result-time presenters (wire `argsFor`).
    * History precomputes from the log; mux uses FaceToolArgMaps.
    */
   readonly toolArgs?: ReadonlyMap<
     string,
     { readonly name: string; readonly args: unknown }
   >;
-  /** Tool presenter lookup (DSH `ctx.tools.get`). Omit → no view. */
+  /** Tool presenter lookup (standing tools get). Omit ? no view. */
   readonly getTool?: PresentToolLookup["getTool"];
 }
 
-/** DSH `tool/call` / assistant tool-call block `arguments` is a JSON string. */
+/** Face wire `tool/call` / assistant tool-call block `arguments` is a JSON string. */
 function wireToolArguments(value: unknown): string {
   if (typeof value === "string") return value;
   try {
@@ -169,12 +169,12 @@ function assistantMessageContent(
   return blocks;
 }
 
-/** Map XRK flat event → DSH `{ type, seq, time, data }`. */
-export function toDshWireSessionEvent(
+/** Map XRK flat event → Face `{ type, seq, time, data }`. */
+export function toFaceWireSessionEvent(
   event: SessionEvent,
   seq: number,
   ctx?: WireAdaptContext,
-): DshWireSessionEvent {
+): FaceWireSessionEvent {
   const time = event.ts;
   switch (event.type) {
     case "user/message":
@@ -336,7 +336,7 @@ export function toDshWireSessionEvent(
     case "prompt/admitted":
     case "prompt/promoted":
     case "prompt/withdrawn": {
-      const splice: DshInboxSplice | undefined = ctx?.inbox?.project(event);
+      const splice: FaceInboxSplice | undefined = ctx?.inbox?.project(event);
       if (splice) {
         return {
           type: "agent/inbox/spliced",
@@ -390,7 +390,7 @@ export function toWireHistoryEntry(
 ): WireHistoryEntry {
   const view = presentToolView(event, toolLookup(ctx));
   return {
-    event: toDshWireSessionEvent(event, seq, ctx),
+    event: toFaceWireSessionEvent(event, seq, ctx),
     ...(view ? { view } : {}),
   };
 }
@@ -403,7 +403,7 @@ export function toMuxSessionEvent(
 ): {
   readonly type: "session/event";
   readonly sessionId: string;
-  readonly event: DshWireSessionEvent;
+  readonly event: FaceWireSessionEvent;
   readonly seq: number;
   readonly view?: ToolEventView;
 } {
@@ -418,7 +418,7 @@ export function toMuxSessionEvent(
   return {
     type: "session/event",
     sessionId,
-    event: toDshWireSessionEvent(event, seq, wireCtx),
+    event: toFaceWireSessionEvent(event, seq, wireCtx),
     seq,
     ...(view ? { view } : {}),
   };

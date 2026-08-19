@@ -44,7 +44,7 @@ export interface FaceJobsSource {
   onJobsChanged(listener: () => void): () => void;
 }
 
-/** DSH tool-jobs `fitCompletionNotice` (optional UTF-8 cap). */
+/** Face tool-jobs `fitCompletionNotice` (optional UTF-8 cap). */
 export function formatJobCompletionNotice(
   job: JobView,
   maxBytes?: number,
@@ -110,6 +110,6 @@ export function isSettledJobStatus(status: JobViewStatus): boolean {
   return status !== "running" && status !== "stopping";
 }
 
-/** DSH `maxConsecutiveWakes` default. */
+/** Face `maxConsecutiveWakes` default. */
 export const JOB_COMPLETION_MAX_WAKES = 3;
 

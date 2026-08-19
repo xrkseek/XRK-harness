@@ -9,7 +9,7 @@ MCP **client**（stdio + streamable-http）。规格门禁：[policy.md](../poli
 | 连 MCP server · list/call tools | 不做 MCP server（本仓角色） |
 | 命名 `mcp__<server>__<raw>` | 不静默覆盖 ToolRegistry 同名 |
 | `connect` 前 `assertPolicyAllow(mcp.connect)` | 默认 deny；不假装已产品化 Host UI |
-| `transport: "http"` → SDK `StreamableHTTPClientTransport` | 进程级自动重连 · 浏览器 MCP 设置壳硬刷 |
+| `transport: "http"` → SDK `StreamableHTTPClientTransport` | 进程级自动重连 · 浏览器 MCP 设置壳（Plugins → MCP 卡；`product-shell-mcp.e2e.ts`） |
 | `onToolsListChanged` / `registerMcpTools` 默认 watch | `notifications/tools/list_changed` 热同步；拉表失败保留上一代 |
 
 `McpHttpOptions.reconnectionOptions` 原样传给 SDK（SSE 流恢复）。Host HTTP MCP 默认 `maxRetries: 2`。这不是进程 supervisor。Host `loadMcpToolPlugins` 在 list_changed 后就地更新 `plugin.tools` 并 `invalidateAll` agent 缓存。
@@ -68,4 +68,4 @@ Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目�
 
 ## 未做
 
-进程级 supervisor（HTTP 仅 SDK SSE 恢复；`tools/list_changed` 热同步已接）。浏览器 MCP 设置壳硬刷未勾。Face desired `servers` 落盘已接。
+进程级 supervisor（HTTP 仅 SDK SSE 恢复；`tools/list_changed` 热同步已接）。浏览器 **Plugins → MCP** 卡编辑 desired `servers`（`product-shell-mcp.e2e.ts`）；仍非 live connect / 非 supervisor。

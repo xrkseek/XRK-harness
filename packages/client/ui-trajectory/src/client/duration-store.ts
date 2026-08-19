@@ -8,6 +8,6 @@ import {
  */
 export function createTrajectoryDurationStore(): SnapshotStore<boolean> {
   return createSnapshotStore(false, {
-    persist: { name: 'dsh.trajectory.duration' },
+    persist: { name: 'xrk.trajectory.duration' },
   })
 }

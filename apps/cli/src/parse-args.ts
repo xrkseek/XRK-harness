@@ -229,7 +229,7 @@ Usage:
 
 Commands:
   run           One turn (default: minimal + replay; XRK_LLM_PRESET if set)
-  serve         HTTP host + product UI (captured DSH Web)
+  serve         HTTP host + product UI (apps/web/dist)
   web           Alias for serve
   doctor        Check node / workspace / product shell
   dump-config   Print layered config JSON

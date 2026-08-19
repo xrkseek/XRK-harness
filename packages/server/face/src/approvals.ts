@@ -23,7 +23,7 @@ export type ApprovalOutcomeWire =
   | "unavailable";
 
 export interface PendingApprovalItem {
-  /** Stable server-request rpcId for DSH Web `/api/respond`. */
+  /** Stable server-request rpcId for product-shell `/api/respond`. */
   readonly rpcId: string;
   readonly approvalId: string;
   readonly sessionId: string;

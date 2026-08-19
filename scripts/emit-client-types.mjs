@@ -15,6 +15,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CLIENT_SRC = path.join(ROOT, "packages", "client");
+// Historical Cordis UI / runner ids (no longer in-tree) plus HMR —
+// still filtered so overlays cannot reintroduce them.
 const OMIT = new Set([
   "@xrkseek/client-ui-cordis",
   "@xrkseek/xrk-cordis-client-runner",

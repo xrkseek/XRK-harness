@@ -1,11 +1,20 @@
 ﻿{
-    "version":  "0.0.0-stub",
-    "name":  "@xrkseek/xrk-user-questions",
-    "description":  "XRK stub — replace with real package or remap",
-    "exports":  {
-                    ".":  "./index.js",
-                    "./package.json":  "./package.json"
-                },
-    "type":  "module",
-    "private":  true
+  "version": "0.0.0-stub",
+  "name": "@xrkseek/xrk-user-questions",
+  "description": "XRK stub — wire-safe ask-user question types for Face/client chains",
+  "type": "module",
+  "private": true,
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./types": {
+      "types": "./types.d.ts",
+      "default": "./types.js"
+    },
+    "./package.json": "./package.json"
+  }
 }

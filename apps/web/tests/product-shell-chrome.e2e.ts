@@ -2,33 +2,23 @@
  * Host-serve chrome: welcome dialog / sidebar / wordmark over apps/web/dist.
  */
 import { describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import type { Browser } from "playwright";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import {
   HAS_SHELL,
   openEnglishPage,
-  spawnProductShell,
+  spawnRegisteredWorkspace,
 } from "./product-shell-host.ts";
 
 describe.skipIf(!HAS_SHELL)("product shell chrome", () => {
   it(
     "opens welcome dialog, New session, and wordmark",
     async () => {
-      const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "xrk-chrome-"));
-      const { manager, base } = await spawnProductShell({
-        workspaceRoot,
+      const shell = await spawnRegisteredWorkspace({
+        label: "xrk-chrome-",
         llm: createReplayAdapter([{ content: "pong-shell" }]),
       });
-
-      let browser: Browser | undefined;
+      const { browser, page, pageErrors } = await openEnglishPage(shell.base);
       try {
-        const opened = await openEnglishPage(base);
-        browser = opened.browser;
-        const { page, pageErrors } = opened;
-
         const dialog = page.getByRole("dialog", {
           name: /内测声明|Internal Testing Notice/,
         });
@@ -54,9 +44,8 @@ describe.skipIf(!HAS_SHELL)("product shell chrome", () => {
           await page.locator('svg[aria-hidden="true"]').count(),
         ).toBeGreaterThan(0);
       } finally {
-        await browser?.close();
-        await manager.stopAll();
-        await rm(workspaceRoot, { recursive: true, force: true });
+        await browser.close();
+        await shell.dispose();
       }
     },
     40_000,

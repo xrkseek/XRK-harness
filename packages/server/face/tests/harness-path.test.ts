@@ -1,5 +1,5 @@
 /**
- * Face harness path: prompt â†’ tool â†’ cancel â†’ policy ask.
+ * Face harness path: prompt â†?tool â†?cancel â†?policy ask.
  * Locks the main control-plane loop without browser E2E.
  */
 import { describe, expect, it } from "vitest";
@@ -20,7 +20,7 @@ import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import {
   FaceInboxWireProjector,
-  toDshWireSessionEvent,
+  toFaceWireSessionEvent,
 } from "../src/adapt/index.js";
 
 type Agent = Awaited<
@@ -121,7 +121,7 @@ async function buildFace(opts: {
 }
 
 describe("Face harness path polish", () => {
-  it("prompt â†’ tool/call+result â†’ final assistant (wire shapes)", async () => {
+  it("prompt â†?tool/call+result â†?final assistant (wire shapes)", async () => {
     const { runtime, store } = await buildFace({
       llm: createReplayAdapter([
         {
@@ -166,7 +166,7 @@ describe("Face harness path polish", () => {
     const wires = store
       .get(sessionId)
       .events.map((e, i) =>
-        toDshWireSessionEvent(e, i + 1, { sessionId, inbox }),
+        toFaceWireSessionEvent(e, i + 1, { sessionId, inbox }),
       );
     expect(wires.some((w) => w.type === "agent/inbox/spliced")).toBe(true);
     expect(wires.some((w) => w.type === "tool/call")).toBe(true);

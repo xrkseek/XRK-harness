@@ -270,9 +270,23 @@ describe("host/remote-event", () => {
     ]);
 
     host.length = 0;
-    const rejected = await dispatchFaceMethod(rt, "settings.mutate", "m3", {
+    const mcp = await dispatchFaceMethod(rt, "settings.mutate", "m3", {
       ns: "mcp",
       ops: [{ op: "set", path: ["servers"], value: [] }],
+    });
+    expect(mcp.result.ok).toBe(true);
+    expect(host).toEqual([
+      {
+        type: "host/remote-event",
+        event: "settings/document-updated",
+        args: ["mcp", 1],
+      },
+    ]);
+
+    host.length = 0;
+    const rejected = await dispatchFaceMethod(rt, "settings.mutate", "m4", {
+      ns: "mcp",
+      ops: [{ op: "set", path: ["connected"], value: [] }],
     });
     expect(rejected.result.ok).toBe(false);
     expect(host).toEqual([]);

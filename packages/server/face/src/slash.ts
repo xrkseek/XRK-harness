@@ -10,7 +10,7 @@ import {
   collectFacePluginCommands,
   type FacePluginCommand,
 } from "./plugin-inventory.js";
-import { FACE_PERMISSION_PRESETS } from "./dsh-schema.js";
+import { FACE_PERMISSION_PRESETS } from "./face-schema.js";
 import {
   applyPermissionPreset,
   permissionSelectFromEvents,

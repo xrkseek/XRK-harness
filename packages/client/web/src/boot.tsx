@@ -109,7 +109,7 @@ export class AppWebEntry {
     // trigger a real fetch), and put the instance on the kernel slot the
     // wrapper's apply reads to provide ctx.modules.
     this.modules.registerStatic(MODULES_ID, ModulesClient)
-    ;(globalThis as XrkWindow).__DSH_MODULES__ = this.modules
+    ;(globalThis as XrkWindow).__XRK_MODULES__ = this.modules
 
     this.root = createRoot(this.el)
     this.root.render(

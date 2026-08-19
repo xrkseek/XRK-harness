@@ -352,6 +352,39 @@ importers:
         specifier: workspace:^
         version: link:../../stubs/xrk-invariants
 
+  packages/client/session-log-export:
+    devDependencies:
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.31
+      '@xrkseek/client-locale':
+        specifier: workspace:^
+        version: link:../locale
+      '@xrkseek/client-runtime':
+        specifier: workspace:^
+        version: link:../runtime
+      '@xrkseek/client-ui-commands':
+        specifier: workspace:^
+        version: link:../ui-commands
+      '@xrkseek/client-ui-conversation':
+        specifier: workspace:^
+        version: link:../ui-conversation
+      '@xrkseek/client-ui-primitives':
+        specifier: workspace:^
+        version: link:../ui-primitives
+      '@xrkseek/client-ui-slots':
+        specifier: workspace:^
+        version: link:../ui-slots
+      '@xrkseek/cordis':
+        specifier: workspace:^
+        version: link:../../cordis
+      '@xrkseek/xrk-invariants':
+        specifier: workspace:^
+        version: link:../../stubs/xrk-invariants
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+
   packages/client/ui-agent-preset:
     devDependencies:
       '@types/react':
@@ -601,6 +634,9 @@ importers:
       '@xrkseek/client-ui-conversation':
         specifier: workspace:^
         version: link:../ui-conversation
+      '@xrkseek/client-ui-primitives':
+        specifier: workspace:^
+        version: link:../ui-primitives
       '@xrkseek/client-ui-slots':
         specifier: workspace:^
         version: link:../ui-slots
@@ -728,6 +764,12 @@ importers:
       '@xrkseek/xrk-invariants':
         specifier: workspace:^
         version: link:../../stubs/xrk-invariants
+      '@xrkseek/xrk-session':
+        specifier: workspace:^
+        version: link:../../stubs/xrk-session
+      '@xrkseek/xrk-typert-protocol':
+        specifier: workspace:^
+        version: link:../../stubs/xrk-typert-protocol
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -1015,6 +1057,9 @@ importers:
       '@xrkseek/xrk-api-remotes':
         specifier: workspace:^
         version: link:../../stubs/xrk-api-remotes
+      '@xrkseek/xrk-commands':
+        specifier: workspace:^
+        version: link:../../stubs/xrk-commands
       '@xrkseek/xrk-invariants':
         specifier: workspace:^
         version: link:../../stubs/xrk-invariants
@@ -2477,6 +2522,12 @@ importers:
       '@xrkseek/xrk-tools':
         specifier: workspace:^
         version: link:../xrk-tools
+      '@xrkseek/xrk-user-approval':
+        specifier: workspace:^
+        version: link:../xrk-user-approval
+      '@xrkseek/xrk-user-questions':
+        specifier: workspace:^
+        version: link:../xrk-user-questions
       fflate:
         specifier: ^0.8.2
         version: 0.8.3
@@ -2491,7 +2542,14 @@ importers:
         specifier: workspace:^
         version: link:../xrk-invariants
 
-  packages/stubs/xrk-host-webserver: {}
+  packages/stubs/xrk-host-webserver:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      '@xrkseek/cordis':
+        specifier: workspace:^
+        version: link:../../cordis
 
   packages/stubs/xrk-invariants:
     dependencies:
@@ -2750,7 +2808,11 @@ importers:
         specifier: workspace:^
         version: link:../xrk-invariants
 
-  packages/stubs/xrk-subagent: {}
+  packages/stubs/xrk-subagent:
+    devDependencies:
+      '@xrkseek/xrk-session-projection':
+        specifier: workspace:^
+        version: link:../xrk-session-projection
 
   packages/stubs/xrk-system-prompt: {}
 
@@ -2888,6 +2950,12 @@ importers:
       '@xrkseek/xrk-typert-protocol':
         specifier: workspace:^
         version: link:../xrk-typert-protocol
+
+  packages/stubs/xrk-user-approval:
+    devDependencies:
+      '@xrkseek/xrk-brand':
+        specifier: workspace:^
+        version: link:../xrk-brand
 
   packages/stubs/xrk-user-questions: {}
 
@@ -6498,7 +6566,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 24.13.3
+      '@types/node': 22.20.1
 
   '@typescript-eslint/eslint-plugin@8.67.0(@typescript-eslint/parser@8.67.0(eslint@10.8.1)(typescript@5.9.3))(eslint@10.8.1)(typescript@5.9.3)':
     dependencies:

@@ -1,5 +1,5 @@
 /**
- * Face-owned session projection registry (essence of DeepSeek session-projection).
+ * Face-owned session projection registry (session-projection fold).
  * No Cordis — Host computes; mux carries higher-seq-wins values.
  */
 

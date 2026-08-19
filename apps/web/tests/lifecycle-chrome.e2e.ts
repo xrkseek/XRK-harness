@@ -223,7 +223,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     await page.reload({ waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
-    // Selection persisted (dsh.sessions.current) and history replayed: the
+    // Selection persisted (xrk.sessions.current) and history replayed: the
     // recorded turn re-renders from session.history with zero model calls —
     // the replay cursor was fully consumed before the reload, so any stray
     // request would fail the scenario loudly at close().
