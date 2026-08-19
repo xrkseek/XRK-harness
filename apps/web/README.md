@@ -14,9 +14,9 @@ pnpm web:assemble
 
 - `web:build`：本仓 Vite SPA
 - `client:bundle`：本仓 tsdown 编出各插件 `lib/client.js`（省略 HMR / Cordis UI）
-- `web:assemble`：按各包 `xrk.client` 把 `packages/client/*/lib/client.js` 与 Face 立即层 `packages/stubs/xrk-{typert-registry,api-gateway,api-remotes}/lib/client.js` 装进 `dist/plugins/@xrkseek/...` 并写 `boot.json`（35 条；omit HMR / Cordis UI）
+- `web:assemble`：按各包 `xrk.client` 把 `packages/client/*/lib/client.js` 与 Face 立即层 `packages/stubs/xrk-{typert-registry,api-gateway,api-remotes}/lib/client.js` 装进 `dist/plugins/@xrkseek/...` 并写 `boot.json`（34 条；omit HMR / Cordis UI / native picker）
 
-Host 有完整 dist 时跑 `packages/server/host/tests/product-shell.test.ts`（GET `/` · boot · plugin 200 · 首屏 RPC）。欢迎窗 / 侧栏 / 流式：`pnpm test:web`（`tests/product-shell-chrome.e2e.ts` · `tests/product-shell-stream.e2e.ts`，不进 `pnpm check`）。Playwright 是本包 devDependency；浏览器不随 `pnpm install` 下来，要跑硬刷时：
+Host 有完整 dist 时跑 `packages/server/host/tests/product-shell.test.ts`（GET `/` · boot · plugin 200 · 首屏 RPC）。Host-serve 硬刷：`pnpm test:web`（`tests/product-shell-*.e2e.ts`，不进 `pnpm check`）。Playwright 是本包 devDependency；浏览器不随 `pnpm install` 下来，要跑硬刷时：
 
 ```bash
 pnpm --filter @xrkseek/web-frontend exec playwright install chromium

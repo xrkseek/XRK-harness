@@ -24,8 +24,8 @@
 
 | 域 | 说明 |
 | --- | --- |
-| Host Face ↔ 产品 Web | 首屏 RPC + 静态壳有测（`product-shell.test`：`__XRK_BOOT__` · `@xrkseek/client-*` + Face 立即层 plugin 200）；Playwright 硬刷欢迎窗 / 侧栏 / wordmark / 流式一轮（`pnpm test:web`，不进 `pnpm check`）；Face 冷 history 含 reasoning / standing 工具卡；浏览器硬刷 thinking / 工具卡 / 审批卡仍未勾 E2E |
-| 产品 Web | `pnpm web:build` + `client:bundle` + `web:assemble` → `apps/web/dist`（35 plugins）；欢迎窗 / 侧栏 / 流式 Playwright 已勾；工具卡 / 审批卡浏览器 E2E 未勾 |
+| Host Face ↔ 产品 Web | 首屏 RPC + 静态壳有测（`product-shell.test`）；Host-serve Playwright 硬刷欢迎窗 / 流式 / 工具卡 / 审批 / 提问 / inventory / Think / TodoDock / Access / Plan（`pnpm test:web`，10 绿，不进 `pnpm check`）；Face 冷 history 含 reasoning / standing 工具卡；DSH Cordis scaffold 金标 e2e 未搬 |
+| 产品 Web | `pnpm web:build` + `client:bundle` + `web:assemble` → `apps/web/dist`（34 plugins；omit HMR / Cordis UI / native picker）；Host-serve `product-shell-*.e2e.ts` 全勾 |
 | 保留插件 kind | `channel` / `policy` / `llm` 可发现、未自动接线；Cordis 宿主包只登记 stub |
 
 ## 未做
@@ -34,7 +34,7 @@
 | --- | --- |
 | Registry R1+ | 官方协议包（Anthropic / Gemini / Responses） |
 | MCP 产品面 | 进程级 supervisor · 浏览器 MCP 设置壳硬刷（Face `mcp.servers` 落盘 + 下次 spawn 已接） |
-| DSH 插件长尾 | MCP UI、壳硬刷 E2E、SQLite FTS、Cordis remote-event inspect/run、真 Win process-inspector 等 —— 对照笔记进 Canvas，不写成产品路线 |
+| DSH 插件长尾 | MCP UI、Cordis scaffold 金标 e2e、SQLite FTS、Cordis remote-event inspect/run、真 Win process-inspector 等 —— 对照笔记进 Canvas，不写成产品路线 |
 
 ## 依赖纪律
 
