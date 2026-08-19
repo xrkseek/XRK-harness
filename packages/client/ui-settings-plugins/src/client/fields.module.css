@@ -93,6 +93,10 @@
   cursor: default;
 }
 
+.select {
+  composes: input;
+}
+
 .inputInvalid {
   composes: input;
   border-color: var(--dsw-alias-label-error);

@@ -1,4 +1,5 @@
-/* MCP card: connected overlay + desired-server rows (matches PluginCard tokens). */
+/* MCP card list editor — layout mirrors DSH Models ModelListEditor
+   (XRKbar deepseek-harness), tokens match PluginCard / fields. */
 
 .block + .block {
   border-top: 1px solid var(--dsw-alias-border-l2);
@@ -8,6 +9,7 @@
 
 .heading {
   margin: 0;
+  padding: 12px 0 4px;
   font-size: 13px;
   font-weight: 600;
   line-height: 1.5;
@@ -21,8 +23,12 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.hint {
+.empty {
   margin: 8px 0 0;
+  padding: 12px;
+  border: 1px dashed var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
+  border-radius: 8px;
+  text-align: center;
   font-size: 12px;
   line-height: 1.5;
   color: var(--dsw-alias-label-tertiary);
@@ -49,10 +55,10 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 8px 10px;
+  padding: 6px 10px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 8px;
-  background: var(--dsw-alias-bg-layer-3);
+  background: var(--dsw-alias-bg-layer-1);
 }
 
 .connectedName {
@@ -80,33 +86,134 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.serversHead {
+.list {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.entry {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.primary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(96px, 0.9fr) auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 0 4px;
+  gap: 6px;
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 22px;
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-primary);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.input:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.inputInvalid {
+  composes: input;
+  border-color: var(--dsw-alias-label-error);
+}
+
+select.input {
+  max-width: none;
+  cursor: pointer;
+}
+
+.iconButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-module-platform));
+  color: var(--dsw-alias-label-primary);
+}
+
+.iconButton:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.iconButtonDanger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-danger, var(--dsw-alias-bg-module-platform));
+  color: var(--dsw-alias-state-error-primary, var(--dsw-alias-label-error));
+}
+
+.iconOpen {
+  transform: rotate(180deg);
+}
+
+.advanced {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  padding: 8px 4px 2px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fieldLabel {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .add {
-  appearance: none;
+  box-sizing: border-box;
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  height: 28px;
+  margin-top: 8px;
+  padding: 0 10px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  padding: 4px 10px;
-  background: none;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 12px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-secondary);
+  line-height: 18px;
   cursor: pointer;
 }
 
 .add:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
-  border-color: var(--dsw-alias-label-dimmed);
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-module-platform));
 }
 
 .add:disabled {
@@ -114,88 +221,13 @@
   cursor: default;
 }
 
-.row {
-  margin-top: 8px;
-  padding: 12px 0;
-  border-top: 1px solid var(--dsw-alias-border-l2);
-}
+@media (max-width: 720px) {
+  .primary {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
 
-.rowHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.rowTitle {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.remove {
-  appearance: none;
-  border: none;
-  background: none;
-  padding: 4px;
-  color: var(--dsw-alias-label-tertiary);
-  cursor: pointer;
-  border-radius: 6px;
-}
-
-.remove:hover:not(:disabled) {
-  color: var(--dsw-alias-label-error);
-  background: var(--dsw-alias-bg-module-platform);
-}
-
-.remove:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 0;
-}
-
-.head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.label {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-primary);
-}
-
-.select {
-  height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-layer-3);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-primary);
-}
-
-.select:focus-visible {
-  outline: none;
-  border-color: var(--dsw-alias-brand-primary);
-}
-
-.select:disabled {
-  color: var(--dsw-alias-label-tertiary);
-  cursor: default;
+  .primary .endpoint,
+  .primary .transport {
+    grid-column: 1 / -1;
+  }
 }

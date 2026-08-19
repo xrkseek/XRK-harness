@@ -24,7 +24,7 @@
 
 | 域 | 说明 |
 | --- | --- |
-| Host Face ↔ 产品 Web | 首屏 RPC + 静态壳有测（`product-shell.test`）；Host-serve Playwright 硬刷欢迎窗 / 流式 / 工具卡 / 审批 / 提问 / inventory / Think / TodoDock / Access / Plan / plan-review / Session log 导出（`pnpm test:web`，12 绿，不进 `pnpm check`）；Face 冷 history 含 reasoning / standing 工具卡；DSH Cordis scaffold 金标 e2e 未搬 |
+| Host Face ↔ 产品 Web | 首屏 RPC + 静态壳有测（`product-shell.test`）；Host-serve Playwright 硬刷欢迎窗 / 流式 / 工具卡 / 审批 / 提问 / inventory / Think / TodoDock / Access / Plan / plan-review / Session log 导出 / MCP 设置（`pnpm test:web`，13 绿，不进 `pnpm check`）；Face 冷 history 含 reasoning / standing 工具卡；DSH Cordis scaffold 金标 e2e 未搬 |
 | 产品 Web | `pnpm web:build` + `client:bundle` + `web:assemble` → `apps/web/dist`（35 plugins，含 `client-session-log-export`；omit HMR / Cordis UI / native picker）；Host-serve `product-shell-*.e2e.ts` 全勾 |
 | 保留插件 kind | `channel` / `policy` / `llm` 可发现、未自动接线；Cordis 宿主包只登记 stub |
 
@@ -33,8 +33,8 @@
 | 域 | 说明 |
 | --- | --- |
 | Registry R1+ | 官方协议包（Anthropic / Gemini / Responses） |
-| MCP 产品面 | 进程级 supervisor（Face `mcp.servers` 落盘 + 浏览器 Plugins 卡已接；下次 spawn 生效） |
-| DSH 插件长尾 | MCP UI、Cordis scaffold 金标 e2e、SQLite FTS、Cordis remote-event inspect/run、真 Win process-inspector 等 —— 对照笔记进 Canvas，不写成产品路线 |
+| MCP 产品面 | 进程级 supervisor（Face `mcp.servers` 落盘 + 浏览器 Plugins → MCP 卡已接；`product-shell-mcp.e2e.ts`；下次 spawn 生效） |
+| DSH 插件长尾 | Cordis scaffold 金标 e2e、SQLite FTS、Cordis remote-event inspect/run、真 Win process-inspector 等 —— 对照笔记进 Canvas，不写成产品路线 |
 
 ## 依赖纪律
 

@@ -37,7 +37,11 @@ describe.skipIf(!HAS_SHELL)("product shell mcp settings", () => {
         await dialog.getByRole("button", { name: /Add server|添加服务器/ }).click();
         await dialog.locator("#plugin-config-mcp-name-0").fill("fixture-fs");
         await dialog.locator("#plugin-config-mcp-command-0").fill("npx");
-        await dialog.locator("#plugin-config-mcp-args-0").fill("-y, @modelcontextprotocol/server-filesystem, /tmp");
+        const args = dialog.locator("#plugin-config-mcp-args-0");
+        if (!(await args.isVisible().catch(() => false))) {
+          await dialog.getByRole("button", { name: /Advanced 1|高级 1/ }).click();
+        }
+        await args.fill("-y, @modelcontextprotocol/server-filesystem, /tmp");
         await dialog.getByRole("button", { name: /^Save$|^保存$/ }).click();
 
         const settingsPath = path.join(shell.workspaceRoot, ".xrk", "host-settings.json");
@@ -55,8 +59,10 @@ describe.skipIf(!HAS_SHELL)("product shell mcp settings", () => {
         await again.getByRole("button", {
           name: /Show settings: MCP servers|展开设置：MCP 服务器/,
         }).click();
-        await expect(again.locator("#plugin-config-mcp-name-0")).toHaveValue("fixture-fs");
-        await expect(again.locator("#plugin-config-mcp-command-0")).toHaveValue("npx");
+        await expect.poll(async () => again.locator("#plugin-config-mcp-name-0").inputValue())
+          .toBe("fixture-fs");
+        await expect.poll(async () => again.locator("#plugin-config-mcp-command-0").inputValue())
+          .toBe("npx");
 
         expect(
           pageErrors,
