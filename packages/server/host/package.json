@@ -39,12 +39,10 @@
     "@xrkseek/preset-minimal": "workspace:*"
   },
   "license": "MIT",
-  "publishConfig": {
-    "access": "public"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xrkseek/XRK-harness.git",
     "directory": "packages/server/host"
-  }
+  },
+  "private": true
 }

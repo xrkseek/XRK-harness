@@ -1,6 +1,8 @@
 {
   "name": "@xrkseek/harness-cli",
   "version": "0.1.0",
+  "private": true,
+  "description": "XRK-Harness CLI (run / serve / web). Product shell ships in product-web/.",
   "type": "module",
   "exports": {
     ".": {
@@ -11,6 +13,7 @@
   },
   "files": [
     "dist",
+    "product-web",
     "README.md"
   ],
   "bin": {
@@ -24,13 +27,9 @@
     "@xrkseek/preset-minimal": "workspace:*",
     "@xrkseek/preset-server": "workspace:*",
     "@xrkseek/server-config": "workspace:*",
-    "@xrkseek/server-host": "workspace:*",
-    "@xrkseek/web-frontend": "workspace:*"
+    "@xrkseek/server-host": "workspace:*"
   },
   "license": "MIT",
-  "publishConfig": {
-    "access": "public"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xrkseek/XRK-harness.git",

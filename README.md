@@ -27,7 +27,7 @@ XRK-Harness（npm scope **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** �
 |------|------|
 | **Session 为真源** | 对话与工具调用以 append-only 事件日志重建；turn / loop 短寿 |
 | **可组装** | `minimal` / `harness` / `server` preset **只接线、不写业务** |
-| **Host + Face** | HTTP / Unary RPC / 双 WebSocket；产品壳 `@xrkseek/web-frontend` |
+| **Host + Face** | HTTP / Unary RPC / 双 WebSocket；产品壳随 CLI（`product-web/`） |
 | **MCP** | stdio 与 streamable-http；Settings 落盘后可热挂载 |
 
 两条用法：**CLI**（`run`）或 **Web**（`web` / `serve`）。没有第三套「说明书页」UI。
@@ -40,18 +40,16 @@ XRK-Harness（npm scope **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** �
 
 需要 **Node.js ≥26**。
 
-### 从 npm（推荐，对齐 DeepSeek Harness）
-
-发布到 registry 后：
+### 安装
 
 ```sh
 npx @xrkseek/harness-cli web
 # 或：npx @xrkseek/harness-cli run --preset minimal --prompt "ping"
 ```
 
-默认打开产品 Web（`@xrkseek/web-frontend` 自带 `dist`）。工作目录即 workspace。
+工作目录即 workspace。Packages / 发行版见 [docs/publishing.md](./docs/publishing.md)。
 
-### 从源码（维护者）
+### 从源码
 
 ```sh
 pnpm install
@@ -60,7 +58,7 @@ pnpm web:build && pnpm client:bundle && pnpm web:assemble
 node apps/cli/dist/bin.js web --workspace .
 ```
 
-`serve` / `web` 在 monorepo 里若缺 `apps/web/dist` 会代跑上面三步组装；npm 安装则直接用包内 `dist`。
+`serve` / `web` 缺 `apps/web/dist` 时代编三步；打发行版与包：`pnpm release:stage` / `pnpm release`。
 
 无密钥试跑：
 
@@ -111,9 +109,9 @@ npx @xrkseek/harness-cli serve --preset harness --workspace .
 ## 仓库布局
 
 ```text
-apps/cli · apps/web              CLI · 产品壳（发布为 @xrkseek/harness-cli · web-frontend）
-packages/client                  壳客户端（组装进 web dist；默认不单独发）
-packages/* · presets/*           运行时库与 preset
+apps/cli · apps/web              CLI（对外只发 harness-cli）· 壳源码（打进 CLI product-web）
+packages/client                  壳客户端（组装进 product-web；不单独发）
+packages/* · presets/*           运行时库与 preset（仓内 private）
 docs/                            规格 · ADR · 模块地图
 ```
 
@@ -126,20 +124,20 @@ docs/                            规格 · ADR · 模块地图
 | 可选 | 命令 |
 |------|------|
 | 产品壳硬刷 | `pnpm test:web` |
-| 发包烟测 | `pnpm pack:smoke` · `pnpm release:prep` |
+| 发行 | `pnpm release:stage` · `pnpm release`（Release + Packages） |
 
 ---
 
 ## 常见问题
 
 **Q: `serve` 没有 UI？**  
-A: npm 安装需带 `@xrkseek/web-frontend`；源码仓先 `web:build && client:bundle && web:assemble`。
+A: 发行包应自带 `product-web/`；源码仓先 `web:build && client:bundle && web:assemble`。
 
 **Q: MCP 连不上？**  
 A: 默认 deny → `XRK_MCP_ALLOW=1` 或 Settings → Plugins → MCP。
 
-**Q: 能 `npm install @xrkseek/harness` 了吗？**  
-A: 发包面已准备；是否已上 registry 以 npm 为准。见 [publishing](./docs/publishing.md)。
+**Q: 怎么发布？**  
+A: `pnpm release` → GitHub Release 附件 + Packages（`@xrkseek/harness-cli`）。见 [publishing](./docs/publishing.md)。
 
 更多：[troubleshooting](./docs/troubleshooting.md)。
 

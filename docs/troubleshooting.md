@@ -14,7 +14,7 @@
 
 | 症状 | 处理 |
 |------|------|
-| `serve` 打开后不像产品壳 / 静态 404 | 先 `pnpm web:build && pnpm client:bundle && pnpm web:assemble`。CLI `serve` 缺默认 dist 时会代跑这三步；`XRK_WEB_DIST` 指错路径则直接报错 |
+| `serve` 无产品壳 / `GET /` 404 | 发行包应有 `product-web/`。源码：`pnpm web:build && pnpm client:bundle && pnpm web:assemble`。`XRK_WEB_DIST` 指错则报错 |
 | 绑定失败 / 拒绝 `0.0.0.0` | CLI 故意拒绝全网卡；用 `127.0.0.1` 或本机局域网地址 |
 | `/api/*` 401 | 设置了 `XRK_API_KEY` 但请求未带 Bearer / `x-api-key` |
 | session busy `409` | 同 session 已有 turn 在飞；等结束或换 sessionId |
@@ -61,8 +61,8 @@
 
 | 症状 | 处理 |
 |------|------|
-| `npm install @xrkseek/harness` 不可用 | 预期：Phase 0 全仓 private（[publishing.md](./publishing.md)） |
-| `pnpm pack:smoke` 缺 dist | 脚本会先 `tsc -b`；仍失败则查包 `files`/`exports` |
+| `npx` / Packages 找不到包 | 配置 `@xrkseek` → `npm.pkg.github.com`；或下发行版 tarball。见 [publishing.md](./publishing.md) |
+| `pnpm release:stage` 失败 | 先 `pnpm build`；确认 `apps/web/dist/index.html`；deploy 需能解析 CLI workspace 依赖 |
 
 ## 仍需深入
 

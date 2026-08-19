@@ -20,3 +20,7 @@ packages/stubs/**/lib/
 .xrk/tool-outputs/
 .xrk/sessions/
 .xrk/host-settings.json
+
+# Release staging (fat CLI)
+.release/
+apps/cli/product-web/

@@ -19,12 +19,10 @@
     "@xrkseek/policy": "workspace:*"
   },
   "license": "MIT",
-  "publishConfig": {
-    "access": "public"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xrkseek/XRK-harness.git",
     "directory": "packages/mcp"
-  }
+  },
+  "private": true
 }

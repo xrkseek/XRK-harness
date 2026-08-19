@@ -18,23 +18,23 @@
 | MCP | `@xrkseek/mcp`（stdio/HTTP 有界进程重连 + SSE）；Host `XRK_MCP_*` 或 Face `mcp.servers` 落盘 + 文件真源热挂载（默认 deny） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) |
 | Attachment / 插件 | Face 附件；进程插件 `tools` · `prompt` · `commands` | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
 
-**对齐 DSH 的口径（诚实）**：内核主路径已可当日常 harness 用；**不是** DSH 二百插件全集。产品壳 = `apps/web` + `packages/client`；serve 用 `apps/web/dist`，内核不嵌 Cordis。
+产品壳 = `apps/web` + `packages/client`；serve 用组装后的 dist / CLI `product-web/`；内核不嵌 Cordis。
 
-## 正式使用（诚实分层）
+## 正式使用
 
 | 层级 | 能做什么 | 前置 |
 | --- | --- | --- |
-| **A — clone 即用** | `pnpm install` + `pnpm build` + `pnpm check`；`xrk-harness run --preset minimal`（replay）；编出 `apps/web/dist` 后 `serve`/`web` 托管产品壳；Host Face RPC、MCP 文件真源热挂载、Plugins 卡 | Node ≥26；LLM 真跑需 `XRK_LLM_*` 或 replay；产品 UI 须 `web:build` + `client:bundle` + `web:assemble` |
-| **B — 浏览器硬刷** | `pnpm test:web`（Host-serve e2e，不进 `pnpm check`） | Chromium（`playwright install chromium`）；缺完整 dist 则相关测 skip |
-| **C — 未发布** | `npm install @xrkseek/harness` 一类**尚不可用** | 全仓 `"private": true`；无 changesets / CI release；见 [publishing.md](./publishing.md) |
+| **A — 能用** | `npx @xrkseek/harness-cli` 或源码 `build` + 组装壳后 `web`/`run` | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
+| **B — 浏览器硬刷** | `pnpm test:web`（不进 `pnpm check`） | Chromium；完整 `apps/web/dist` |
+| **C — 上架** | GitHub Release + Packages（`@xrkseek/harness-cli`） | `pnpm release`；见 [publishing.md](./publishing.md) |
 
-本地 pack 烟测（不发布）：`pnpm pack:smoke`（`tsc -b` 后 `pnpm pack` 抽样，查 tarball 无 `.env`）。入门：[getting-started.md](./getting-started.md) · 配置：[configuration.md](./configuration.md) · 排障：[troubleshooting.md](./troubleshooting.md)。
+入门：[getting-started.md](./getting-started.md) · 配置：[configuration.md](./configuration.md) · 排障：[troubleshooting.md](./troubleshooting.md)。
 
 ## 未稳
 
 | 域 | 说明 |
 | --- | --- |
-| Host Face ↔ 产品 Web | 首屏 RPC + 静态壳有测（`product-shell.test`）；Host-serve Playwright 硬刷欢迎窗 / 流式 / 工具卡 / 审批 / 提问 / inventory / Think / TodoDock / Access / Plan / plan-review / Session log 导出 / MCP 设置（`pnpm test:web`，13 绿，不进 `pnpm check`）；Face 冷 history 含 reasoning / standing 工具卡；DSH Cordis scaffold 金标 e2e 未搬 |
+| Host Face ↔ 产品 Web | 首屏 RPC + 静态壳有测（`product-shell.test`）；Host-serve Playwright 硬刷欢迎窗 / 流式 / 工具卡 / 审批 / 提问 / inventory / Think / TodoDock / Access / Plan / plan-review / Session log 导出 / MCP 设置（`pnpm test:web`，13 绿，不进 `pnpm check`）；Face 冷 history 含 reasoning / standing 工具卡；Cordis scaffold 金标 e2e 未搬 |
 | 产品 Web | `pnpm web:build` + `client:bundle` + `web:assemble` → `apps/web/dist`（35 plugins，含 `client-session-log-export`；omit HMR / Cordis UI / native picker）；Host-serve `product-shell-*.e2e.ts` 全勾 |
 | 保留插件 kind | `channel` / `policy` / `llm` 可发现、未自动接线；Cordis 宿主包只登记 stub |
 

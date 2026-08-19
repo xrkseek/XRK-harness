@@ -2,9 +2,6 @@
   "name": "@xrkseek/client-ui-theme",
   "description": "Theme plugin: Host bootstrap for the pre-plugin palette; DOM-free ThemeRuntime for light/dark/system state; --dsw-* token styles and Appearance settings row",
   "version": "0.1.0-rc.7",
-  "publishConfig": {
-    "access": "public"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xrkseek/XRK-harness.git",
@@ -86,5 +83,6 @@
     "@xrkseek/xrk-settings": "workspace:^",
     "clsx": "^2.0.0",
     "@xrkseek/schemastery": "workspace:^"
-  }
+  },
+  "private": true
 }

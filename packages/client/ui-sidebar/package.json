@@ -2,9 +2,6 @@
   "name": "@xrkseek/client-ui-sidebar",
   "description": "Sidebar plugin: session multi-level tree, search, grouping, state dots",
   "version": "0.1.0-rc.7",
-  "publishConfig": {
-    "access": "public"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xrkseek/XRK-harness.git",
@@ -73,5 +70,6 @@
     "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
-  ]
+  ],
+  "private": true
 }

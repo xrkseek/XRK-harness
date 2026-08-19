@@ -42,9 +42,6 @@
     "url": "git+https://github.com/xrkseek/XRK-harness.git",
     "directory": "packages/client/ui-jobs"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "dependencies": {
     "react": "^18.2.0"
   },
@@ -73,5 +70,6 @@
     "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
-  ]
+  ],
+  "private": true
 }

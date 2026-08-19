@@ -58,7 +58,7 @@
 | [configuration.md](./configuration.md) | 环境变量 · 落盘路径 |
 | [troubleshooting.md](./troubleshooting.md) | 症状表 |
 | [status.md](./status.md) | 能力矩阵 · 正式使用分层 |
-| [publishing.md](./publishing.md) | npm Phase 0/1 |
+| [publishing.md](./publishing.md) | GitHub Release · Packages |
 
 ### Session / Host
 

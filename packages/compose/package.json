@@ -14,12 +14,10 @@
     "README.md"
   ],
   "license": "MIT",
-  "publishConfig": {
-    "access": "public"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xrkseek/XRK-harness.git",
     "directory": "packages/compose"
-  }
+  },
+  "private": true
 }
