@@ -15,7 +15,12 @@
   ],
   "dependencies": {
     "@xrkseek/llm": "workspace:*",
-    "@xrkseek/llm-openai-compatible": "workspace:*"
+    "@xrkseek/llm-anthropic": "workspace:*",
+    "@xrkseek/llm-deepseek": "workspace:*",
+    "@xrkseek/llm-gemini": "workspace:*",
+    "@xrkseek/llm-openai-compatible": "workspace:*",
+    "@xrkseek/llm-openai-responses": "workspace:*",
+    "@xrkseek/protocol": "workspace:*"
   },
   "license": "MIT",
   "repository": {

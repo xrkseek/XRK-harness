@@ -1,11 +1,17 @@
 import { discoverOpenAiChatModels } from "@xrkseek/llm-registry";
 import { FACE_AGENT_PRESETS, FACE_AGENT_PRESET_IDS } from "../presets-catalog.js";
+import { resolveDefaultAgentPreset } from "../settings-document.js";
+import { buildFaceModelCatalog, routeServed } from "../model-catalog.js";
+import {
+  readProviderApiKey,
+  readProviderRoute,
+} from "../llm-provider-context.js";
 import { readSessionAttachment } from "../session-attachment.js";
 import { asRecord, type FaceHandler } from "./types.js";
 import { publishRemoteEvent } from "../remote-event.js";
 
 export const agentPresetList: FaceHandler = async (runtime) => {
-  const defaultId = runtime.defaultAgentPreset ?? "minimal";
+  const defaultId = resolveDefaultAgentPreset(runtime);
   return {
     ok: true,
     value: {
@@ -118,39 +124,35 @@ export const agentPresetReadOnly: FaceHandler = async (_runtime, _rpcId, payload
 };
 
 export const llmProviders: FaceHandler = async (runtime) => {
-  const routable = new Map(
-    runtime.registry.listRoutable().map((r) => [r.id, r]),
-  );
-  const providers = runtime.registry.listBrands().map((b) => ({
-    provider: b.id,
-    displayName: b.displayName,
-    settingsNs: "llm",
-    settingsPath: ["providers", b.id],
-    active: routable.get(b.id)?.active ?? false,
-    declared: true,
-  }));
+  const providers = runtime.registry.listBrands().map((b) => {
+    if (b.id === "deepseek") {
+      return {
+        provider: "deepseek-official",
+        displayName: b.displayName,
+        settingsNs: "llm-deepseek",
+        settingsPath: [] as string[],
+        active: routeServed(runtime, b.id),
+        declared: false,
+      };
+    }
+    return {
+      provider: b.id,
+      displayName: b.displayName,
+      settingsNs: "llm-pi-ai",
+      settingsPath: ["providers", b.id],
+      active: routeServed(runtime, b.id),
+      declared: false,
+    };
+  });
   return { ok: true, value: { providers } };
 };
 
 export const llmModels: FaceHandler = async (runtime) => {
-  const groups = runtime.registry
-    .listBrands()
-    .filter((b) => b.baseUrl || b.id === "ollama")
-    .map((b) => ({
-      id: b.id,
-      name: b.displayName,
-      models: [
-        {
-          id: b.defaultModel ?? "default",
-          name: b.defaultModel ?? "default",
-        },
-      ],
-    }));
-  return { ok: true, value: { groups, failures: [] } };
+  return { ok: true, value: buildFaceModelCatalog(runtime) };
 };
 
 /** Namespaces this Host can interrogate (openai-chat GET /models). */
-const DISCOVERY_NS = new Set(["llm", "llm-pi-ai"]);
+const DISCOVERY_NS = new Set(["llm-deepseek", "llm-pi-ai"]);
 
 function resolveDiscoveryBaseUrl(
   runtime: Parameters<FaceHandler>[0],
@@ -158,16 +160,20 @@ function resolveDiscoveryBaseUrl(
   baseURL: string | undefined,
 ): { baseUrl?: string; authMode?: "bearer" | "api-key" } {
   if (provider) {
+    const route = readProviderRoute(runtime, provider);
     try {
-      const binding = runtime.registry.resolve({ provider });
+      const binding = runtime.registry.resolve({
+        provider,
+        ...(route.baseUrl ? { baseUrl: route.baseUrl } : {}),
+        ...(baseURL ? { baseUrl: baseURL } : {}),
+      });
       return {
-        ...(baseURL || binding.baseUrl
-          ? { baseUrl: baseURL ?? binding.baseUrl }
-          : {}),
+        ...(binding.baseUrl ? { baseUrl: binding.baseUrl } : {}),
         authMode: binding.authMode,
       };
     } catch {
-      return baseURL ? { baseUrl: baseURL } : {};
+      const baseUrl = baseURL ?? route.baseUrl;
+      return baseUrl ? { baseUrl } : {};
     }
   }
   return baseURL ? { baseUrl: baseURL } : {};
@@ -178,16 +184,15 @@ function resolveDiscoveryKey(
   provider: string | undefined,
   apiKey: string | undefined,
 ): string | undefined {
-  const typed = apiKey?.trim();
-  if (typed) return typed;
-  if (!provider) return undefined;
-  const vault = runtime.credentials.peek(`llm.${provider}`);
-  if (vault?.trim()) return vault.trim();
-  const brand = runtime.registry.listBrands().find((b) => b.id === provider);
-  const envName = brand?.apiKeyEnv;
-  if (!envName) return undefined;
-  const fromEnv = process.env[envName]?.trim();
-  return fromEnv || undefined;
+  if (!provider) {
+    const typed = apiKey?.trim();
+    return typed || undefined;
+  }
+  try {
+    return readProviderApiKey(runtime, provider, apiKey).apiKey;
+  } catch {
+    return undefined;
+  }
 }
 
 export const llmDiscoverModels: FaceHandler = async (runtime, _rpcId, payload) => {

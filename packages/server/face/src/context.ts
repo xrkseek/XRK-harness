@@ -75,7 +75,10 @@ export interface FaceRuntime {
   readonly admitRpcMap: Map<string, string>;
   /** Next user/message for session should carry this rpcId */
   readonly pendingUserRpc: Map<string, string>;
-  readonly sessionModels: Map<string, { provider: string; model: string }>;
+  readonly sessionModels: Map<
+    string,
+    { provider: string; model: string; reasoningEffort?: string }
+  >;
   /** sessionId → agentPreset id */
   readonly sessionAgentPresets: Map<string, string>;
   /** sessionId → project cwd (DSH session.list / blank reuse). */

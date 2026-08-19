@@ -66,8 +66,11 @@ describe("session.export", () => {
     expect(buf.subarray(0, 2).toString("utf8")).toBe("PK");
     const asText = buf.toString("latin1");
     expect(asText).toContain(`sessions/${parent.id}.jsonl`);
+    expect(asText).toContain(`sessions/${parent.id}.jsonl.zst`);
     expect(asText).toContain(`sessions/${child.id}.jsonl`);
+    expect(asText).toContain(`sessions/${child.id}.jsonl.zst`);
     expect(asText).toContain("export-root-token");
+    expect(asText).toContain("sessionCompressedSidecar");
     expect(asText).toContain("manifest.json");
 
     const missing = await fetch(

@@ -6,8 +6,13 @@ import {
   withdrawAdmit,
 } from "@xrkseek/core-session";
 import { assertPolicyAllow } from "@xrkseek/policy";
-import { U1_AGENT_PRESETS } from "../context.js";
+import { contentHasImage, type MessageContent } from "@xrkseek/protocol";
+import { U1_AGENT_PRESETS, type FaceRuntime } from "../context.js";
 import { toWireHistoryEntry, collectToolCallArgs } from "../adapt/index.js";
+import {
+  DEFAULT_HISTORY_MAX_MESSAGES,
+  paginateSessionHistory,
+} from "../adapt/history-paginate.js";
 import { tryFaceSlashCommand } from "../slash.js";
 import { SessionTitleInvalidError } from "../projections/index.js";
 import { parseSearchQuery, searchSessions } from "../session-search.js";
@@ -18,6 +23,28 @@ import {
   defaultPermissionPreset,
   pinInitialPermission,
 } from "../permissions.js";
+import { resolveDefaultAgentPreset } from "../settings-document.js";
+import {
+  buildFaceModelCatalog,
+  resolveSessionModelSelection,
+  routeServed,
+  saveAgentDefaultModel,
+  type FaceModelSelection,
+} from "../model-catalog.js";
+import {
+  FaceLlmResolveError,
+  resolveLlmForSelection,
+} from "../llm-resolve.js";
+import { publishRemoteEvent } from "../remote-event.js";
+
+function sessionHasImageContent(runtime: FaceRuntime, sessionId: string): boolean {
+  for (const ev of runtime.store.get(sessionId).events) {
+    if (ev.type !== "user/message" && ev.type !== "prompt/admitted") continue;
+    const content = (ev as { content?: MessageContent }).content;
+    if (content !== undefined && contentHasImage(content)) return true;
+  }
+  return false;
+}
 
 export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   const p = asRecord(payload);
@@ -75,8 +102,8 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   );
   if (agentPreset) {
     runtime.sessionAgentPresets.set(sessionId, agentPreset);
-  } else if (runtime.defaultAgentPreset) {
-    runtime.sessionAgentPresets.set(sessionId, runtime.defaultAgentPreset);
+  } else {
+    runtime.sessionAgentPresets.set(sessionId, resolveDefaultAgentPreset(runtime));
   }
 
   if (parentSessionId) {
@@ -173,8 +200,11 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
   const beforeSeq =
     typeof p.beforeSeq === "number" ? p.beforeSeq : undefined;
   const maxMessages =
-    typeof p.maxMessages === "number" ? p.maxMessages : 100;
+    typeof p.maxMessages === "number"
+      ? p.maxMessages
+      : DEFAULT_HISTORY_MAX_MESSAGES;
 
+  const page = paginateSessionHistory(events, beforeSeq, maxMessages);
   const inbox = runtime.inboxWire.fresh();
   const toolArgs = collectToolCallArgs(events);
   const wireCtx = {
@@ -186,16 +216,12 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       ? { getTool: (name: string) => runtime.getTool!(sessionId, name) }
       : {}),
   };
-  let indexed = events.map((event, i) =>
-    toWireHistoryEntry(event, i + 1, wireCtx),
-  );
-  if (beforeSeq !== undefined) {
-    indexed = indexed.filter((e) => e.event.seq < beforeSeq);
-  }
-  const hasMore = indexed.length > maxMessages;
-  if (hasMore) {
-    indexed = indexed.slice(-maxMessages);
-  }
+  const indexed = page.events.map((event, i) => {
+    const idx = events.indexOf(event);
+    const seq = idx >= 0 ? idx + 1 : i + 1;
+    return toWireHistoryEntry(event, seq, wireCtx);
+  });
+  const hasMore = page.hasMore;
   for (const row of indexed) {
     while (runtime.seq.last(sessionId) < row.event.seq) {
       runtime.seq.next(sessionId);
@@ -336,31 +362,7 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   });
   runtime.pendingUserRpc.set(sessionId, rpcId);
   runtime.publishQueue(sessionId);
-  runtime.bus.publishHost({
-    type: "host/session-status",
-    sessionId,
-    running: true,
-  });
   runtime.drain.wake(sessionId);
-  void Promise.resolve()
-    .then(async () => {
-      for (let i = 0; i < 50; i++) {
-        if (!runtime.drain.isActive(sessionId)) break;
-        await new Promise((r) => setTimeout(r, 20));
-      }
-      runtime.bus.publishHost({
-        type: "host/session-status",
-        sessionId,
-        running: runtime.drain.isActive(sessionId),
-      });
-    })
-    .catch((err: unknown) => {
-      runtime.bus.publishHost({
-        type: "host/agent-error",
-        sessionId,
-        message: err instanceof Error ? err.message : String(err),
-      });
-    });
 
   return { ok: true, value: { accepted: true } };
 };
@@ -390,41 +392,16 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
 
 export const sessionModels: FaceHandler = async (runtime, _rpcId, payload) => {
   const sessionId = String(asRecord(payload).sessionId ?? "");
-  const brands = runtime.registry.listBrands();
-  const routableRows = runtime.registry.listRoutable();
-  const current =
-    runtime.sessionModels.get(sessionId) ??
-    (() => {
-      const active = routableRows.find((r) => r.active);
-      if (!active) return { provider: "deepseek", model: "deepseek-chat" };
-      const brand = brands.find((b) => b.id === active.id);
-      return {
-        provider: active.id,
-        model: brand?.defaultModel ?? "gpt-4o-mini",
-      };
-    })();
-  const groups = brands
-    .filter((b) => b.baseUrl || b.id === "ollama")
-    .map((b) => ({
-      id: b.id,
-      name: b.displayName,
-      models: [
-        {
-          id: b.defaultModel ?? "default",
-          name: b.defaultModel ?? "default",
-        },
-      ],
-    }));
-  const routable = routableRows.some(
-    (r) => r.id === current.provider && r.active,
-  );
+  const current = resolveSessionModelSelection(runtime, sessionId);
+  const { groups, failures } = buildFaceModelCatalog(runtime);
+  const routable = routeServed(runtime, current.provider);
   return {
     ok: true,
     value: {
       current,
       routable,
       groups,
-      failures: [],
+      failures,
     },
   };
 };
@@ -443,15 +420,10 @@ export const sessionSelectModel: FaceHandler = async (runtime, _rpcId, payload) 
       },
     };
   }
-  try {
-    runtime.registry.resolve({ provider, model });
-  } catch {
+  if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: {
-        code: "provider-not-found",
-        message: `unknown provider: ${provider}`,
-      },
+      error: { code: "session-not-found", message: sessionId },
     };
   }
   if (runtime.policy) {
@@ -470,17 +442,63 @@ export const sessionSelectModel: FaceHandler = async (runtime, _rpcId, payload) 
       };
     }
   }
-  const selected = {
+  try {
+    runtime.registry.resolve({ provider, model });
+  } catch {
+    return {
+      ok: false,
+      error: {
+        code: "provider-not-found",
+        message: `unknown provider: ${provider}`,
+      },
+    };
+  }
+  const selected: FaceModelSelection = {
     provider,
     model,
     ...(typeof p.reasoningEffort === "string" && p.reasoningEffort.trim()
       ? { reasoningEffort: p.reasoningEffort.trim() }
       : {}),
   };
-  runtime.sessionModels.set(sessionId, {
-    provider: selected.provider,
-    model: selected.model,
-  });
+  let resolved;
+  try {
+    resolved = resolveLlmForSelection(runtime, selected);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const code =
+      err instanceof FaceLlmResolveError && err.code === "missing-credential"
+        ? "model-unavailable"
+        : "model-unavailable";
+    return {
+      ok: false,
+      error: {
+        code,
+        message,
+        details: { provider, model },
+      },
+    };
+  }
+  const modalities = resolved.adapter.inputModalities ?? ["text"];
+  if (sessionHasImageContent(runtime, sessionId) && !modalities.includes("image")) {
+    return {
+      ok: false,
+      error: {
+        code: "model-unavailable",
+        message: `Model "${model}" does not accept image input, but this session already contains images; select an image-capable model.`,
+        details: { provider, model },
+      },
+    };
+  }
+  runtime.sessionModels.set(sessionId, selected);
+  try {
+    await saveAgentDefaultModel(runtime, selected);
+    publishRemoteEvent(runtime.bus, "settings/document-updated", [
+      "agent-default-model",
+      runtime.settingsNamespaces.ensure("agent-default-model").revision,
+    ]);
+  } catch {
+    /* session selection still applies */
+  }
   return { ok: true, value: { selected } };
 };
 

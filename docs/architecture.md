@@ -78,7 +78,7 @@ XRK-harness/
 └── scripts/
 ```
 
-JSONL 会话目录（Host `XRK_SESSIONS_DIR`）：`{id}.jsonl` + 旁路 `subagents.json` · `goals.json`。hydrate 丢掉末行不完整 JSON 或末行 schema 失败并原子回写。
+会话持久化（Host `XRK_SESSIONS_DIR`）：`sessions.db`（WAL · schema v3 · 物理 `text-chunks` · FTS5 trigram）+ 旁路 `subagents.json` · `goals.json`。ZIP 导出 `toPackedJSONL` + `.jsonl.zst`。
 
 Host agent-cache：根会话 Scope `agent:{id}`；Face 已登记父会话的子会话走 `openSubagentRealm`（`subagent:{id}`）。
 

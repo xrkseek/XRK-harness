@@ -53,11 +53,11 @@ export class FakeApiClient implements IApiClient {
     () => Promise.resolve(ok({
       events: [],
       hasMore: false,
-      modelSelection: { provider: 'deepseek-official', model: 'deepseek-chat' },
+      modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     }))
 
   onModels: (payload: unknown) => Promise<RpcResponse<SessionModels>> = () => Promise.resolve(ok({
-    current: { provider: 'deepseek-official', model: 'deepseek-chat' },
+    current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     routable: true,
     groups: [],
     failures: [],

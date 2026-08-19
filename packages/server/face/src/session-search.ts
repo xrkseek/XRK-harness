@@ -1,6 +1,8 @@
 import type { SessionEvent } from "@xrkseek/protocol";
-import { flattenText } from "@xrkseek/protocol";
-import type { SessionStore } from "@xrkseek/core-session";
+import {
+  extractSessionSearchTexts,
+  type SessionStore,
+} from "@xrkseek/core-session";
 import type { FaceRpcResult } from "./types.js";
 
 /** Wire-compatible with deepseek-harness session.search. */
@@ -24,33 +26,16 @@ function truncateCodePoints(text: string, max: number): string {
   return chars.slice(0, max).join("");
 }
 
-function extractSearchableTexts(events: readonly SessionEvent[]): string[] {
-  const out: string[] = [];
-  for (const e of events) {
-    if (e.type === "user/message") {
-      const text = flattenText(e.content);
-      if (text) out.push(text);
-    } else if (e.type === "assistant/message" && typeof e.content === "string") {
-      out.push(e.content);
-    } else if (e.type === "prompt/admitted") {
-      const text = flattenText(e.content);
-      if (text) out.push(text);
-    } else if (e.type === "safety/notice" && typeof e.content === "string") {
-      out.push(e.content);
-    } else if (e.type === "command/run") {
-      out.push(e.name);
-      if (e.args) out.push(e.args);
-    } else if (e.type === "command/done" && typeof e.text === "string") {
-      out.push(e.text);
-    } else if (e.type === "todo/write") {
-      for (const item of e.todos) {
-        if (item.content) out.push(item.content);
-      }
-    } else if (e.type === "feedback/record") {
-      out.push(e.text);
-    }
-  }
-  return out;
+function hasFtsSearch(
+  store: SessionStore,
+): store is SessionStore & {
+  searchSessionIds(query: string): readonly string[];
+} {
+  return (
+    "searchSessionIds" in store &&
+    typeof (store as { searchSessionIds?: unknown }).searchSessionIds ===
+      "function"
+  );
 }
 
 function lastEventTs(events: readonly SessionEvent[]): number {
@@ -118,19 +103,23 @@ export function parseSearchQuery(payload: unknown): FaceRpcResult<string> {
 
 /**
  * Session search over user/assistant/admit/safety plus command text and
- * standing todos. One hit per session; newest activity first. JSONL Host
- * store is already eager-loaded, so persisted sessions are in the same scan.
- * Not SQLite FTS.
+ * standing todos. One hit per session; newest activity first.
+ * Persistent SQLite store uses FTS5 trigram for candidates; memory store
+ * scans in process. Snippets always come from loaded events.
  */
 export function searchSessions(
   store: SessionStore,
   query: string,
 ): SessionSearchValue {
   const hits: (SessionSearchItem & { readonly lastTs: number })[] = [];
+  const candidateIds = hasFtsSearch(store)
+    ? store.searchSessionIds(query)
+    : store.list();
 
-  for (const sessionId of store.list()) {
+  for (const sessionId of candidateIds) {
+    if (!store.has(sessionId)) continue;
     const events = store.get(sessionId).events;
-    const snippet = bestSnippet(extractSearchableTexts(events), query);
+    const snippet = bestSnippet(extractSessionSearchTexts(events), query);
     if (snippet === undefined) continue;
     hits.push({ sessionId, snippet, lastTs: lastEventTs(events) });
   }

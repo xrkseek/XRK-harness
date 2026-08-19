@@ -83,6 +83,14 @@ export {
   type SettleDanglingResult,
 } from "./dangling.js";
 
+export {
+  foldRequestHeader,
+  llmConfigEquals,
+  requestHeaderEquals,
+  canonicalRequestHeader,
+  type RequestHeaderSnapshot,
+} from "./request-header.js";
+
 export type { SessionRecord, SessionStore } from "./store.js";
 import type { SessionRecord, SessionStore } from "./store.js";
 import { deepFreeze, newSessionId } from "./freeze.js";
@@ -169,7 +177,32 @@ export function assertModelVisible(
 }
 
 export { fromJSONL, parseJSONL, toJSONL, type ParseJSONLResult } from "./jsonl.js";
-export { createJsonlSessionStore } from "./jsonl-store.js";
+export {
+  createPersistentSessionStore,
+  ftsMatchQuery,
+  SESSION_DB_FILENAME,
+  SESSION_SCHEMA_VERSION,
+  type PersistentSessionStore,
+} from "./sqlite-store.js";
+export {
+  expandPackedStorageRecords,
+  fromPackedJSONL,
+  fromPackedJSONLZstd,
+  isTextChunkRow,
+  packChunkRunsForExport,
+  parsePackedJSONL,
+  toPackedJSONL,
+  zstdCompressUtf8,
+  zstdDecompressUtf8,
+  type PackedStorageRecord,
+  type ParsePackedJSONLResult,
+  type TextChunkRow,
+} from "./chunk-pack.js";
+export { repairOpenTurnEvents } from "./repair-open-turn.js";
+export {
+  extractEventSearchText,
+  extractSessionSearchTexts,
+} from "./search-text.js";
 export { writeTextFileAtomicSync } from "./atomic-write.js";
 
 export function forkSession(

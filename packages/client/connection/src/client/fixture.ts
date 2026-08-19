@@ -309,13 +309,13 @@ function fixtureModelGroups(): ModelProviderGroup[] {
       models: [
         {
           id: 'deepseek-v4-flash',
-          name: 'DeepSeek-V4-Flash',
-          description: '快速响应',
+          name: 'DeepSeek V4 Flash',
+          description: '快速对话',
           reasoning: DEEPSEEK_REASONING,
         },
         {
           id: 'deepseek-v4-pro',
-          name: 'DeepSeek-V4-Pro',
+          name: 'DeepSeek V4 Pro',
           description: '复杂任务',
           reasoning: DEEPSEEK_REASONING,
         },
@@ -377,7 +377,7 @@ function buildAlphaLog(): SessionEvent[] {
   // route capacity that accompanied them just as the live prompt path does.
   push({
     type: 'request/context',
-    data: { provider: 'deepseek-official', model: 'deepseek-v4-flash', contextWindow: 128_000 },
+    data: { provider: 'deepseek-official', model: 'deepseek-v4-flash', contextWindow: 1_000_000 },
   })
   for (let turn = 0; turn < 60; turn++) {
     push({ type: 'turn/start', data: { turn } })
@@ -2452,7 +2452,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         if (lastRequestContext(logOf(id))?.model !== selection.model) {
           append(id, {
             type: 'request/context',
-            data: { provider: selection.provider, model: selection.model, contextWindow: 128_000 },
+            data: { provider: selection.provider, model: selection.model, contextWindow: 1_000_000 },
           })
         }
         startReply(

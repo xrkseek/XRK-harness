@@ -65,6 +65,9 @@ importers:
       '@xrkseek/server-config':
         specifier: workspace:*
         version: link:../../packages/server/config
+      '@xrkseek/server-face':
+        specifier: workspace:*
+        version: link:../../packages/server/face
       '@xrkseek/server-host':
         specifier: workspace:*
         version: link:../../packages/server/host
@@ -2050,6 +2053,18 @@ importers:
 
   packages/kernel: {}
 
+  packages/llm/anthropic:
+    dependencies:
+      '@xrkseek/attachment':
+        specifier: workspace:*
+        version: link:../../attachment
+      '@xrkseek/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../../protocol
+
   packages/llm/deepseek:
     dependencies:
       '@xrkseek/llm':
@@ -2059,6 +2074,18 @@ importers:
         specifier: workspace:*
         version: link:../openai-compatible
 
+  packages/llm/gemini:
+    dependencies:
+      '@xrkseek/attachment':
+        specifier: workspace:*
+        version: link:../../attachment
+      '@xrkseek/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../../protocol
+
   packages/llm/llm:
     dependencies:
       '@xrkseek/protocol':
@@ -2067,6 +2094,21 @@ importers:
 
   packages/llm/openai-compatible:
     dependencies:
+      '@xrkseek/attachment':
+        specifier: workspace:*
+        version: link:../../attachment
+      '@xrkseek/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../../protocol
+
+  packages/llm/openai-responses:
+    dependencies:
+      '@xrkseek/attachment':
+        specifier: workspace:*
+        version: link:../../attachment
       '@xrkseek/llm':
         specifier: workspace:*
         version: link:../llm
@@ -2079,9 +2121,24 @@ importers:
       '@xrkseek/llm':
         specifier: workspace:*
         version: link:../llm
+      '@xrkseek/llm-anthropic':
+        specifier: workspace:*
+        version: link:../anthropic
+      '@xrkseek/llm-deepseek':
+        specifier: workspace:*
+        version: link:../deepseek
+      '@xrkseek/llm-gemini':
+        specifier: workspace:*
+        version: link:../gemini
       '@xrkseek/llm-openai-compatible':
         specifier: workspace:*
         version: link:../openai-compatible
+      '@xrkseek/llm-openai-responses':
+        specifier: workspace:*
+        version: link:../openai-responses
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../../protocol
 
   packages/llm/replay:
     dependencies:
@@ -2153,12 +2210,21 @@ importers:
       '@xrkseek/llm':
         specifier: workspace:*
         version: link:../llm/llm
+      '@xrkseek/llm-anthropic':
+        specifier: workspace:*
+        version: link:../llm/anthropic
       '@xrkseek/llm-deepseek':
         specifier: workspace:*
         version: link:../llm/deepseek
+      '@xrkseek/llm-gemini':
+        specifier: workspace:*
+        version: link:../llm/gemini
       '@xrkseek/llm-openai-compatible':
         specifier: workspace:*
         version: link:../llm/openai-compatible
+      '@xrkseek/llm-openai-responses':
+        specifier: workspace:*
+        version: link:../llm/openai-responses
       '@xrkseek/llm-registry':
         specifier: workspace:*
         version: link:../llm/registry
@@ -2222,6 +2288,9 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+      '@xrkseek/llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
       '@xrkseek/llm-registry':
         specifier: workspace:*
         version: link:../../llm/registry
@@ -2231,13 +2300,22 @@ importers:
       '@xrkseek/protocol':
         specifier: workspace:*
         version: link:../../protocol
+      '@xrkseek/schemastery':
+        specifier: workspace:*
+        version: link:../../schemastery
       '@xrkseek/workspace':
         specifier: workspace:*
         version: link:../../workspace
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.3.1
       ws:
         specifier: ^8.18.0
         version: 8.21.3
     devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
       '@types/ws':
         specifier: ^8.5.13
         version: 8.18.1
@@ -2283,6 +2361,9 @@ importers:
       '@xrkseek/exec-web':
         specifier: workspace:*
         version: link:../../exec/web
+      '@xrkseek/llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
       '@xrkseek/llm-registry':
         specifier: workspace:*
         version: link:../../llm/registry
@@ -3943,6 +4024,9 @@ packages:
 
   '@types/hast@3.0.5':
     resolution: {integrity: sha512-rp/ezSWaD1m44dPKICGhiskI13nVr7qTloFwDa/IYkhhf5nzwP+zIQcIJh3WIFSBOy/H1PzB40jPjMDksN4F+g==}
+
+  '@types/js-yaml@4.0.9':
+    resolution: {integrity: sha512-k4MGaQl5TGo/iipqb2UDG2UwjXziSWkh0uysQelTlJpX1qGlpUZYm8PnO4DxG1qBomtJUdYJ6qR6xdIah10JLg==}
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
@@ -6531,6 +6615,8 @@ snapshots:
   '@types/hast@3.0.5':
     dependencies:
       '@types/unist': 3.0.3
+
+  '@types/js-yaml@4.0.9': {}
 
   '@types/json-schema@7.0.15': {}
 

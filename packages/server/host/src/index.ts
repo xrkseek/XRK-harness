@@ -1,8 +1,9 @@
 import type { AgentHandle, AgentRunResult } from "@xrkseek/core-agent";
+import type { LlmAdapter } from "@xrkseek/llm";
 import { createMemoryAttachmentStore } from "@xrkseek/attachment";
 import {
-  createJsonlSessionStore,
   createMemorySessionStore,
+  createPersistentSessionStore,
   createSessionDrainHub,
   newSession,
   type SessionDrainHub,
@@ -29,6 +30,8 @@ import {
   formatQuestionAnswer,
   isLoopbackAddress,
   publishRemoteEvent,
+  resolveLlmForSession,
+  createSessionRoutingLlm,
   tryHandleFaceHttp,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
@@ -42,6 +45,7 @@ import { access } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import path from "node:path";
 import { createHostAgentCache } from "./agent-cache.js";
+import { wireDrainStatus, publishDrainIdle, type SessionDrainControl } from "./drain-status.js";
 import {
   loadMcpToolPlugins,
   mcpDraftsToSpecs,
@@ -136,15 +140,14 @@ export type AgentFactory = (input: {
    * Host stop disposes. Survives agent invalidate like PTY.
    */
   shellJobs?: import("@xrkseek/exec-shell").ShellService;
+  /**
+   * Face-backed LLM when settings + credentials are configured.
+   * Host wires this after Face runtime starts; falls back to env/replay in presets.
+   */
+  resolveLlm?: (sessionId: string) => LlmAdapter | undefined;
 }) => Promise<AgentHandle>;
 
-/** Host-side drain control (admit wake / resume join). */
-export interface SessionDrainControl {
-  run(sessionId: string): Promise<AgentRunResult | undefined>;
-  wake(sessionId: string): void;
-  cancel(sessionId: string): Promise<void>;
-  isActive(sessionId: string): boolean;
-}
+export type { SessionDrainControl } from "./drain-status.js";
 
 export interface HostInstance {
   readonly id: string;
@@ -182,7 +185,7 @@ export function createHostManager(): HostManager {
       const id = `host_${++seq}`;
       const sessionsDir = config.runtime.sessionsDir?.trim();
       const store: SessionStore = sessionsDir
-        ? createJsonlSessionStore(sessionsDir)
+        ? createPersistentSessionStore(sessionsDir)
         : createMemorySessionStore();
       const loader = createPluginLoader();
 
@@ -251,6 +254,15 @@ export function createHostManager(): HostManager {
         approvals?: FaceApprovalBroker;
         questions?: FaceQuestionBroker;
       } = {};
+      const llmResolverBox: {
+        resolve?: (sessionId: string) => LlmAdapter | undefined;
+      } = {};
+      const sessionCwdBox: {
+        get?: (sessionId: string) => string | undefined;
+      } = {};
+      const hostStatusBox: {
+        publish?: (sessionId: string, running: boolean) => void;
+      } = {};
 
       const lineage: { parentOf: (sessionId: string) => string | undefined } = {
         parentOf: () => undefined,
@@ -259,13 +271,15 @@ export function createHostManager(): HostManager {
       const resolveAgent = async (sessionId: string) => {
         // Cache composition binding only — never treat AgentHandle as transcript source (ADR-0003).
         const parentSessionId = lineage.parentOf(sessionId);
+        const sessionRoot =
+          sessionCwdBox.get?.(sessionId) ?? config.runtime.workspaceRoot;
         return agentCache.resolve(
           sessionId,
           async () => {
             const agent = await factory({
               sessionId,
               store,
-              workspaceRoot: config.runtime.workspaceRoot,
+              workspaceRoot: sessionRoot,
               plugins: loader.list(),
               resolveImage: async (attachmentId) => {
                 const stored = await attachments.readImage(attachmentId);
@@ -276,6 +290,9 @@ export function createHostManager(): HostManager {
               },
               ...(sharedPty ? { ptyService: sharedPty.service } : {}),
               ...(sharedShell ? { shellJobs: sharedShell } : {}),
+              ...(llmResolverBox.resolve
+                ? { resolveLlm: llmResolverBox.resolve }
+                : {}),
             });
             if (faceBox.approvals) {
               agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
@@ -296,35 +313,40 @@ export function createHostManager(): HostManager {
 
       const hub: SessionDrainHub = createSessionDrainHub({
         createDrain: (sessionId) => async ({ signal }) => {
-          const agent = await resolveAgent(sessionId);
-          // Delivery queue rule (docs/session-delivery.md §3):
-          // one continueTurn ⇒ one promote; runTurn owns tool continuation
-          // without promoting further inbox items. Loop until inbox empty.
-          while (agent.pendingAdmits().length > 0) {
-            if (signal.aborted) {
-              throw new DOMException("aborted", "AbortError");
+          try {
+            const agent = await resolveAgent(sessionId);
+            // Delivery queue rule (docs/session-delivery.md §3):
+            // one continueTurn ⇒ one promote; runTurn owns tool continuation
+            // without promoting further inbox items. Loop until inbox empty.
+            while (agent.pendingAdmits().length > 0) {
+              if (signal.aborted) {
+                throw new DOMException("aborted", "AbortError");
+              }
+              const result = await agent.continueTurn({ signal });
+              lastDrainResult.set(sessionId, result);
             }
-            const result = await agent.continueTurn({ signal });
-            lastDrainResult.set(sessionId, result);
+          } finally {
+            publishDrainIdle(hub, sessionId, (sid, running) => {
+              if (
+                !running &&
+                "flush" in store &&
+                typeof (store as { flush?: () => void }).flush === "function"
+              ) {
+                (store as { flush: () => void }).flush();
+              }
+              hostStatusBox.publish?.(sid, running);
+            });
           }
         },
       });
 
-      const drain: SessionDrainControl = {
-        async run(sessionId) {
-          await hub.run(sessionId);
-          return lastDrainResult.get(sessionId);
+      const drain: SessionDrainControl = wireDrainStatus(
+        hub,
+        (sessionId, running) => {
+          hostStatusBox.publish?.(sessionId, running);
         },
-        wake(sessionId) {
-          hub.wake(sessionId);
-        },
-        cancel(sessionId) {
-          return hub.cancel(sessionId);
-        },
-        isActive(sessionId) {
-          return hub.isActive(sessionId);
-        },
-      };
+        lastDrainResult,
+      );
 
       const officeAgent = await resolveOfficeAgentSeedDir(
         config.runtime.workspaceRoot,
@@ -431,6 +453,38 @@ export function createHostManager(): HostManager {
       });
       faceBox.approvals = faceRuntime.approvals;
       faceBox.questions = faceRuntime.questions;
+      sessionCwdBox.get = (sessionId) =>
+        faceRuntime.sessionCwds.get(sessionId);
+      hostStatusBox.publish = (sessionId, running) => {
+        faceRuntime.bus.publishHost({
+          type: "host/session-status",
+          sessionId,
+          running,
+        });
+      };
+      llmResolverBox.resolve = (sessionId) =>
+        createSessionRoutingLlm(faceRuntime, sessionId);
+      faceRuntime.bus.subscribeHost((_rpcId, frame) => {
+        if (frame.type !== "host/remote-event") return;
+        const event = frame.event;
+        if (
+          event === "llm/adapters-updated" ||
+          event === "credentials/updated"
+        ) {
+          void invalidateAgents();
+          return;
+        }
+        if (event === "settings/document-updated") {
+          const ns = frame.args[0];
+          if (
+            ns === "agent-default-model" ||
+            ns === "llm-deepseek" ||
+            ns === "llm-pi-ai"
+          ) {
+            void invalidateAgents();
+          }
+        }
+      });
       lineage.parentOf = (sessionId) =>
         faceRuntime.subagents.getByChild(sessionId)?.parentSessionId;
       notifyMcpOverlay = () => {
@@ -533,6 +587,9 @@ export function createHostManager(): HostManager {
             } catch {
               // Host stop must continue even if PTY cleanup partially fails.
             }
+          }
+          if ("close" in store && typeof store.close === "function") {
+            store.close();
           }
           for (const p of loader.list()) {
             await loader.unregister(p.id);

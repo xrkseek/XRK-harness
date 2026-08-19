@@ -26,3 +26,8 @@ export {
 } from "./memory.js";
 export { sniffImageMediaType, readImageSize } from "./image-meta.js";
 export { attachmentIdForBytes } from "./digest.js";
+export {
+  DEFAULT_MAX_REQUEST_IMAGE_BYTES,
+  REQUEST_IMAGE_OFFLOAD_PLACEHOLDER,
+  offloadRequestImages,
+} from "./request-image-bound.js";

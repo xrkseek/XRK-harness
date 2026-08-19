@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   createMemorySessionStore,
   createSessionDrainHub,
@@ -12,6 +15,7 @@ import { dispatchFaceMethod } from "../src/dispatch.js";
 
 async function harness() {
   const store = createMemorySessionStore();
+  const root = await mkdtemp(path.join(tmpdir(), "xrk-face-dispatch-"));
   const agents = new Map<string, Awaited<ReturnType<ReturnType<typeof createMinimalComposition>["createAgent"]>>>();
   const hub = createSessionDrainHub({
     createDrain: (sessionId) => async ({ signal }) => {
@@ -26,7 +30,8 @@ async function harness() {
 
   const runtime = createFaceRuntime({
     store,
-    workspaceRoot: process.cwd(),
+    workspaceRoot: root,
+    productDir: root,
     version: "test",
     registry: createProviderRegistry(),
     drain: {
@@ -38,7 +43,7 @@ async function harness() {
       let a = agents.get(sessionId);
       if (!a) {
         const composition = createMinimalComposition({
-          workspaceRoot: process.cwd(),
+          workspaceRoot: root,
           sessionStore: store,
           sessionId,
           assemble: true,
@@ -179,6 +184,7 @@ describe("face dispatch", () => {
 
   it("prompt returns before slow turn finishes", async () => {
     const store = createMemorySessionStore();
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-slow-"));
     newSession(store);
     const sessionId = store.list()[0]!;
     let continueStarted = false;
@@ -197,7 +203,8 @@ describe("face dispatch", () => {
     });
     const runtime = createFaceRuntime({
       store,
-      workspaceRoot: process.cwd(),
+      workspaceRoot: root,
+      productDir: root,
       drain: {
         wake: (id) => hub.wake(id),
         cancel: (id) => hub.cancel(id),
@@ -207,7 +214,7 @@ describe("face dispatch", () => {
         let a = agents.get(sid);
         if (!a) {
           a = createMinimalComposition({
-            workspaceRoot: process.cwd(),
+            workspaceRoot: root,
             sessionStore: store,
             sessionId: sid,
             assemble: true,
@@ -240,19 +247,26 @@ describe("face dispatch", () => {
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
 
-    const sel = await dispatchFaceMethod(runtime, "session.selectModel", "s", {
-      sessionId,
-      provider: "deepseek",
-      model: "deepseek-chat",
-    });
-    expect(sel.result.ok).toBe(true);
+    const prevKey = process.env.DEEPSEEK_API_KEY;
+    process.env.DEEPSEEK_API_KEY = "sk-test-dispatch-select";
+    try {
+      const sel = await dispatchFaceMethod(runtime, "session.selectModel", "s", {
+        sessionId,
+        provider: "deepseek",
+        model: "deepseek-v4-flash",
+      });
+      expect(sel.result.ok).toBe(true);
 
-    const bad = await dispatchFaceMethod(runtime, "session.selectModel", "s2", {
-      sessionId,
-      provider: "nope",
-      model: "x",
-    });
-    expect(bad.result.ok).toBe(false);
+      const bad = await dispatchFaceMethod(runtime, "session.selectModel", "s2", {
+        sessionId,
+        provider: "nope",
+        model: "x",
+      });
+      expect(bad.result.ok).toBe(false);
+    } finally {
+      if (prevKey === undefined) delete process.env.DEEPSEEK_API_KEY;
+      else process.env.DEEPSEEK_API_KEY = prevKey;
+    }
 
     const providers = await dispatchFaceMethod(runtime, "llm.providers", "lp", {});
     expect(providers.result.ok).toBe(true);
@@ -334,7 +348,7 @@ describe("face dispatch", () => {
     );
     try {
       const err = await dispatchFaceMethod(runtime, "llm.discoverModels", "d3", {
-        settingsNs: "llm",
+        settingsNs: "llm-pi-ai",
         baseURL: "https://gateway.acme.example/v1",
         apiKey: "wrong",
       });
@@ -344,7 +358,7 @@ describe("face dispatch", () => {
       expect(err.result.error.message).toContain("401");
       expect(JSON.stringify(err.result.error)).not.toContain("wrong");
       expect(err.result.error.details).toEqual({
-        settingsNs: "llm",
+        settingsNs: "llm-pi-ai",
         baseURL: "https://gateway.acme.example/v1",
       });
     } finally {

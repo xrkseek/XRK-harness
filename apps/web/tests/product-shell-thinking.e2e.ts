@@ -3,13 +3,12 @@
  * Asserts `[data-variant="think"]` + JSONL reasoning chunks.
  */
 import { describe, expect, it } from "vitest";
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import {
   HAS_SHELL,
   openEnglishPage,
   prepareLiveComposer,
+  readFirstPersistedSessionLog,
   sendComposerPrompt,
   spawnRegisteredWorkspace,
 } from "./product-shell-host.ts";
@@ -50,14 +49,7 @@ describe.skipIf(!HAS_SHELL)("product shell thinking", () => {
           `page errors: ${pageErrors.join(" | ") || "(none)"}`,
         ).toEqual([]);
 
-        const files = (await readdir(shell.sessionsDir)).filter((f) =>
-          f.endsWith(".jsonl"),
-        );
-        expect(files.length).toBeGreaterThan(0);
-        const log = await readFile(
-          path.join(shell.sessionsDir, files[0]!),
-          "utf8",
-        );
+        const log = readFirstPersistedSessionLog(shell.sessionsDir);
         expect(log).toContain('"type":"assistant/chunk"');
         expect(log).toContain('"kind":"reasoning"');
         expect(log).toContain(THINK);

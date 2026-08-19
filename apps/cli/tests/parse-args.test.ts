@@ -82,7 +82,7 @@ describe("product paths", () => {
   it("resolves product shell dist when present", async () => {
     const dir = await resolveProductWebDist();
     if (!dir) return;
-    expect(dir.replaceAll("\\", "/")).toMatch(/\/web\/dist$/);
+    expect(dir.replaceAll("\\", "/")).toMatch(/\/(web\/dist|product-web)$/);
   });
 
   it("ensureProductWebDist rejects a missing configured path without building", async () => {

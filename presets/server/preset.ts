@@ -26,7 +26,7 @@ export interface ServerCompositionOptions {
 export function createServerAgentFactory(
   options: ServerCompositionOptions,
 ): AgentFactory {
-  const llm =
+  const fallbackLlm =
     options.llm ??
     resolveLlmFromEnv(options.env ?? process.env)?.adapter ??
     createReplayAdapter([
@@ -35,7 +35,22 @@ export function createServerAgentFactory(
       },
     ]);
 
-  return async ({ sessionId, store, workspaceRoot, plugins, resolveImage, ptyService, shellJobs }) => {
+  return async ({
+    sessionId,
+    store,
+    workspaceRoot,
+    plugins,
+    resolveImage,
+    ptyService,
+    shellJobs,
+    resolveLlm,
+  }) => {
+    const llm =
+      resolveLlm?.(sessionId) ??
+      options.llm ??
+      resolveLlmFromEnv(options.env ?? process.env)?.adapter ??
+      fallbackLlm;
+
     const composition = createHarnessComposition({
       workspaceRoot: workspaceRoot || options.workspaceRoot,
       sessionStore: store,

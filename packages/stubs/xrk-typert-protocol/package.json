@@ -1,7 +1,7 @@
 {
   "name": "@xrkseek/xrk-typert-protocol",
   "description": "Compiler-independent Remote metadata and Typert provider protocols",
-  "version": "0.1.0-rc.7",
+  "version": "0.1.0-rc.8",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xrkseek/XRK-harness.git",

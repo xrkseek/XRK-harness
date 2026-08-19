@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { chromium, type Browser, type Page } from "playwright";
+import { createPersistentSessionStore, toJSONL } from "@xrkseek/core-session";
 import { createStdTools } from "@xrkseek/core-tools";
 import type { LlmAdapter } from "@xrkseek/llm";
 import type { PolicyEngine } from "@xrkseek/policy";
@@ -45,6 +46,20 @@ export async function faceRpc(
 /** Hero or live composer — not the workspace-trigger placeholder. */
 export const LIVE_PLACEHOLDER =
   /Describe what you want to build|Message the agent|描述你想要构建的内容|给智能体发消息/;
+
+/** Read the first persisted session log as JSONL text (SQLite or legacy import). */
+export function readFirstPersistedSessionLog(sessionsDir: string): string {
+  const store = createPersistentSessionStore(sessionsDir);
+  try {
+    const ids = store.list();
+    if (ids.length === 0) {
+      throw new Error(`no persisted sessions under ${sessionsDir}`);
+    }
+    return toJSONL(store.get(ids[0]!).events);
+  } finally {
+    store.close();
+  }
+}
 
 export async function spawnProductShell(options: {
   workspaceRoot: string;

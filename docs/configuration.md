@@ -2,16 +2,33 @@
 
 本页汇总 **Host / CLI 常用环境变量与落盘路径**。实现真源在代码；契约细节仍以各专题文档为准。
 
-密钥与 `.env` **永不入库**。生产环境务必设置非空 `XRK_API_KEY` 并收紧 CORS（[security-checklist.md](./security-checklist.md)）。
+## 密钥与凭据
+
+**永不入库**：`.env`、`.xrk/.credentials.yaml`、`.xrk/settings.yaml`、`.xrk/workspaces.json` 均在 `.gitignore`。仓库只提供 `.env.example` 与 `.xrk/*.example` 模板。
+
+| 来源 | 用途 | 优先级（高 → 低） |
+|------|------|-------------------|
+| 进程 **env** | Host 鉴权 `XRK_API_KEY`；LLM `DEEPSEEK_API_KEY` 等 brand `apiKeyEnv` | 覆盖同名文件键 |
+| `{workspace}/.xrk/.credentials.yaml` | Face `credentials.set` 落盘；Settings → Credentials | 工作区持久 |
+| `{workspace}/.xrk/settings.yaml` | 模型选择、preset、MCP desired 等 | 与 credentials 分离 |
+| Settings UI | 同上，经 Face RPC 写文件 | 推荐终端用户路径 |
+
+**开发**：`XRK_API_KEY` 留空 → HTTP/Face **免鉴权**（仅本机调试）。  
+**生产**：必须非空 `XRK_API_KEY`，并收紧 `XRK_CORS_ORIGIN`（[security-checklist.md](./security-checklist.md)）。
+
+从零安装步骤：[getting-started.md](./getting-started.md)。
 
 ## 落盘路径（workspace 相对）
 
-| 路径 | 用途 |
-|------|------|
-| `{workspace}/.xrk/sessions/` | CLI `serve`/`web` 默认 JSONL 会话（`--no-persist` 关） |
-| `{workspace}/.xrk/host-settings.json` | Face settings 落盘；`mcp.servers` 文件真源时可热挂载 |
-| `{productDir}/host-settings.json` | `settings.openDocument` 红acted 打开目标（见 Face） |
-| `XRK_POLICY_FILE` | 显式 policy JSON；优先于默认路径 |
+| 路径 | 用途 | 入库 |
+|------|------|------|
+| `{workspace}/.xrk/sessions/` | CLI `serve`/`web` 默认 Session 仓（`sessions.db` · `--no-persist` 关） | 否 |
+| `{workspace}/.xrk/settings.yaml` | Face 设置真源（模型 / 预设 / 插件 / 权限等） | **否**（有 `.example`） |
+| `{workspace}/.xrk/.credentials.yaml` | API 密钥（write-only；`credentials.set` 落盘） | **否**（有 `.example`） |
+| `{workspace}/.xrk/workspaces.json` | 侧栏工作区列表 | 否 |
+| `{workspace}/.xrk/host-settings.json` | Face settings 落盘；`mcp.servers` 文件真源时可热挂载 | 否 |
+| `{productDir}/host-settings.json` | `settings.openDocument` 红acted 打开目标（见 Face） | 视产品目录 |
+| `XRK_POLICY_FILE` | 显式 policy JSON；优先于默认路径 | 否（勿提交含密钥的 policy） |
 
 旁路文件（与 sessions 同目录时常有）：`subagents.json` · `goals.json`。
 
@@ -32,7 +49,7 @@
 | `XRK_PRESET` | `minimal` \| `harness` \| `server` |
 | `XRK_WORKSPACE` | workspace 根 |
 | `XRK_WEB_DIST` | 产品壳静态根。默认：CLI 包内 `product-web/`，或 monorepo `apps/web/dist`。设了则必须已存在 |
-| `XRK_SESSIONS_DIR` | JSONL 目录；Host 省略 = 内存（CLI serve 另有默认） |
+| `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db` · WAL）；Host 省略 = 内存（CLI serve 另有默认） |
 | `XRK_PLUGINS_DIR` | 进程插件根；`web/` 子目录为客户端叠加 |
 | `XRK_DUMP_SESSION` | 非空时 CLI run 向 stderr dump session（示例见 hello-agent） |
 

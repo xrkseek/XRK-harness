@@ -18,7 +18,15 @@
 | 绑定失败 / 拒绝 `0.0.0.0` | CLI 故意拒绝全网卡；用 `127.0.0.1` 或本机局域网地址 |
 | `/api/*` 401 | 设置了 `XRK_API_KEY` 但请求未带 Bearer / `x-api-key` |
 | session busy `409` | 同 session 已有 turn 在飞；等结束或换 sessionId |
-| 无 LLM 回复 / 适配器错 | `minimal` 用 replay；真模型检查 `XRK_LLM_*`（[configuration.md](./configuration.md)） |
+| 无 LLM 回复 / 适配器错 | `minimal` 用 replay；真模型检查 Settings / `.xrk/.credentials.yaml` 或 brand `apiKeyEnv`（[configuration.md](./configuration.md)） |
+
+## 密钥 / 凭据
+
+| 症状 | 处理 |
+|------|------|
+| 误把 `.xrk/.credentials.yaml` 提交进 git | 立刻在 provider 控制台**轮换**已泄漏 key；`git rm --cached .xrk/.credentials.yaml`；确认 `.gitignore` 含该路径；未推送时用 `git reset --soft origin/main` 去掉含密钥的提交 |
+| 克隆仓后没有 `.xrk/` | 正常。首次 `web`/`serve` 自动创建；或 `cp .xrk/.credentials.yaml.example .xrk/.credentials.yaml` |
+| Settings 写了 key 仍无回复 | 看 `agent-default-model` 是否与凭据 brand 匹配；env 同名变量是否覆盖为空 |
 
 ## 产品壳 / 浏览器
 
@@ -53,7 +61,7 @@
 | 症状 | 处理 |
 |------|------|
 | 重启丢会话 | Host 未设 `XRK_SESSIONS_DIR` 且非 CLI serve 默认路径 → 内存仓 |
-| JSONL 损坏 | hydrate 丢弃末行坏 JSON 或 schema 失败并回写；中段损坏跳过该会话 |
+| 会话库损坏 / 打不开 | 看 `{workspace}/.xrk/sessions/sessions.db`；Host 须 `stop`/`close` 后再删文件（Windows） |
 
 见 [session.md](./session.md)。
 

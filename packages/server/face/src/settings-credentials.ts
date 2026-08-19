@@ -11,14 +11,24 @@ import { canOpenNativePath, openNativePath } from "./host-open-path.js";
 import { publishRemoteEvent } from "./remote-event.js";
 import {
   FACE_EMPTY_OBJECT_SCHEMA,
-  FACE_LLM_SCHEMA,
-  FACE_LOCALE_SCHEMA,
   FACE_MCP_SCHEMA,
   FACE_ONBOARDING_SCHEMA,
-  FACE_PERMISSION_SCHEMA,
+  FACE_LOCALE_SCHEMA,
   FACE_THEME_SCHEMA,
+  FACE_PERMISSION_SCHEMA,
   isFacePermissionPreset,
 } from "./face-schema.js";
+import {
+  ensureSettingsDocument,
+  mergeLayers,
+  persistCredentialsFile,
+  persistSettingsDocument,
+  validateSettingsNamespace,
+} from "./settings-document.js";
+import {
+  FACE_PRODUCT_SETTINGS_NAMESPACES,
+  schemaEnvelopeOf,
+} from "./settings-schemas.js";
 
 export type UiTheme = "system" | "light" | "dark";
 
@@ -44,7 +54,7 @@ export interface CredentialSlotView {
   readonly envVar?: string;
   /** True if env or in-memory vault has a non-empty value. Never returns the value. */
   readonly configured: boolean;
-  readonly source: "env" | "vault" | "none";
+  readonly source: "env" | "vault" | "file" | "none";
 }
 
 const UI_THEMES = new Set<UiTheme>(["system", "light", "dark"]);
@@ -82,7 +92,7 @@ function applyFaceUiPref(
   if (ns === "locale") {
     const pref = value.preference;
     if (typeof pref === "string" && pref.trim()) {
-      runtime.uiSettings.locale = pref.trim().slice(0, MAX_LOCALE);
+      runtime.uiSettings.locale = faceLocalePreference(pref);
     }
   }
 }
@@ -93,6 +103,8 @@ export function defaultUiSettings(): FaceUiSettings {
 
 export class FaceCredentialVault {
   private readonly overrides = new Map<string, string>();
+  /** Values loaded from `.credentials.yaml` (reported as `source: file`). */
+  private readonly fileBacked = new Set<string>();
 
   peek(slotId: string): string | undefined {
     const v = this.overrides.get(slotId);
@@ -103,12 +115,38 @@ export class FaceCredentialVault {
     return this.peek(slotId) !== undefined;
   }
 
+  isFileBacked(slotId: string): boolean {
+    return this.fileBacked.has(slotId);
+  }
+
+  setFromFile(slotId: string, value: string): void {
+    this.overrides.set(slotId, value);
+    this.fileBacked.add(slotId);
+  }
+
   set(slotId: string, value: string | null): void {
     if (value === null || value === "") {
       this.overrides.delete(slotId);
+      this.fileBacked.delete(slotId);
       return;
     }
     this.overrides.set(slotId, value);
+    this.fileBacked.delete(slotId);
+  }
+
+  listFileBackedSlots(): { slotId: string; value: string | null }[] {
+    return [...this.fileBacked].map((slotId) => ({
+      slotId,
+      value: this.overrides.get(slotId) ?? null,
+    }));
+  }
+
+  /** Every in-memory override eligible for `.credentials.yaml` persistence. */
+  listPersistedSlots(): { slotId: string; value: string | null }[] {
+    return [...this.overrides.entries()].map(([slotId, value]) => ({
+      slotId,
+      value,
+    }));
   }
 
   /** Test / diagnostics — never expose via Face RPC. */
@@ -133,13 +171,19 @@ export function listCredentialSlots(
   const hostEnv = "XRK_API_KEY";
   const hostVault = vault.peek("host.apiKey");
   const hostEnvOk = envHas(env, hostEnv) || Boolean(runtime.bootstrapApiKey?.trim());
-  slots.push({
-    id: "host.apiKey",
-    label: "Host API key",
-    envVar: hostEnv,
-    configured: Boolean(hostVault) || hostEnvOk,
-    source: hostVault ? "vault" : hostEnvOk ? "env" : "none",
-  });
+    slots.push({
+      id: "host.apiKey",
+      label: "Host API key",
+      envVar: hostEnv,
+      configured: Boolean(hostVault) || hostEnvOk,
+      source: vault.isFileBacked("host.apiKey")
+        ? "file"
+        : hostVault
+          ? "vault"
+          : hostEnvOk
+            ? "env"
+            : "none",
+    });
 
   for (const brand of runtime.registry.listBrands()) {
     if (!brand.apiKeyEnv) continue;
@@ -151,7 +195,13 @@ export function listCredentialSlots(
       label: `${brand.displayName} API key`,
       envVar: brand.apiKeyEnv,
       configured: Boolean(v) || e,
-      source: v ? "vault" : e ? "env" : "none",
+      source: vault.isFileBacked(id)
+        ? "file"
+        : v
+          ? "vault"
+          : e
+            ? "env"
+            : "none",
     });
   }
 
@@ -382,10 +432,10 @@ export async function credentialsDescribe(
       credentials[ref] = { configured: false, writable: true };
       continue;
     }
-    const slot = listCredentialSlots(runtime).find((s) => s.id === slotId)!;
+    const view = listCredentialSlots(runtime).find((s) => s.id === slotId)!;
     credentials[ref] = {
-      configured: slot.configured,
-      ...(slot.source !== "none" ? { source: slot.source } : {}),
+      configured: view.configured,
+      ...(view.source !== "none" ? { source: view.source } : {}),
       writable: true,
     };
   }
@@ -421,6 +471,7 @@ export async function credentialsSet(
   const clear = p.clear === true || p.value === null || p.value === "";
   if (clear) {
     runtime.credentials.set(slotId, null);
+    await persistCredentialsFile(runtime);
     emitCredentialRemote(runtime, slotId);
     return {
       ok: true,
@@ -454,6 +505,7 @@ export async function credentialsSet(
   }
 
   runtime.credentials.set(slotId, p.value);
+  await persistCredentialsFile(runtime);
   const slot = listCredentialSlots(runtime).find((s) => s.id === slotId)!;
   emitCredentialRemote(runtime, slotId);
   return {
@@ -602,7 +654,10 @@ export class FaceSettingsNamespaces {
     return {
       ns,
       schema: slot.schema,
-      value: { ...slot.base, ...slot.user },
+      value: mergeLayers(
+        slot.base as Record<string, unknown>,
+        slot.user as Record<string, unknown>,
+      ),
       base: { ...slot.base },
       user: { ...slot.user },
       applies: slot.applies,
@@ -631,7 +686,10 @@ export class FaceSettingsNamespaces {
       if (op.op === "set") setAtPath(nextUser, op.path, op.value);
       else unsetAtPath(nextUser, op.path);
     }
-    const merged = { ...slot.base, ...nextUser };
+    const merged = mergeLayers(
+      slot.base as Record<string, unknown>,
+      nextUser as Record<string, unknown>,
+    );
     const invalid = validateNamespaceValue(ns, merged);
     if (invalid) {
       return { ok: false, code: "settings-invalid", message: invalid };
@@ -646,6 +704,8 @@ function validateNamespaceValue(
   ns: string,
   value: Record<string, unknown>,
 ): string | undefined {
+  const fromDoc = validateSettingsNamespace(ns, value);
+  if (fromDoc) return fromDoc;
   if (ns === "permission") {
     const preset = value.defaultPreset;
     if (preset !== undefined && !isFacePermissionPreset(preset)) {
@@ -804,29 +864,48 @@ export async function settingsDescribeFace(
       },
       FACE_EMPTY_OBJECT_SCHEMA,
     ),
-    runtime.settingsNamespaces.view(
-      "locale",
-      { preference: faceLocalePreference(runtime.uiSettings.locale) },
-      LOCALE_SCHEMA,
-    ),
-    runtime.settingsNamespaces.view(
-      "ui-theme",
-      { preference: runtime.uiSettings.theme },
-      THEME_SCHEMA,
-    ),
-    runtime.settingsNamespaces.view(
-      "permission",
-      { defaultPreset: "workspace-write" },
-      FACE_PERMISSION_SCHEMA,
-    ),
-    runtime.settingsNamespaces.view("llm", { providers: {} }, FACE_LLM_SCHEMA),
-    runtime.settingsNamespaces.view(
-      "mcp",
-      mcpDescribeBase(runtime),
-      FACE_MCP_SCHEMA,
-      mcpApplies(runtime),
-    ),
   ];
+  for (const spec of FACE_PRODUCT_SETTINGS_NAMESPACES) {
+    if (spec.ns === "mcp") {
+      namespaces.push(
+        runtime.settingsNamespaces.view(
+          "mcp",
+          mcpDescribeBase(runtime),
+          FACE_MCP_SCHEMA,
+          mcpApplies(runtime),
+        ),
+      );
+      continue;
+    }
+    if (spec.ns === "locale") {
+      namespaces.push(
+        runtime.settingsNamespaces.view(
+          "locale",
+          { preference: faceLocalePreference(runtime.uiSettings.locale) },
+          LOCALE_SCHEMA,
+        ),
+      );
+      continue;
+    }
+    if (spec.ns === "ui-theme") {
+      namespaces.push(
+        runtime.settingsNamespaces.view(
+          "ui-theme",
+          { preference: runtime.uiSettings.theme },
+          THEME_SCHEMA,
+        ),
+      );
+      continue;
+    }
+    namespaces.push(
+      runtime.settingsNamespaces.view(
+        spec.ns,
+        spec.base,
+        schemaEnvelopeOf(spec),
+        spec.applies,
+      ),
+    );
+  }
   if (runtime.hostPublic) {
     namespaces.push(
       runtime.settingsNamespaces.view(
@@ -899,7 +978,7 @@ export async function settingsMutateFace(
       result.view.revision,
     ]);
   }
-  if (ns === "llm") {
+  if (ns === "llm-deepseek" || ns === "llm-pi-ai") {
     publishRemoteEvent(runtime.bus, "llm/adapters-updated", []);
   }
   if (ns === "mcp") {
@@ -930,6 +1009,7 @@ export async function settingsMutateFace(
       ),
     };
   }
+  await persistSettingsDocument(runtime, runtime.settingsNamespaces);
   return { ok: true, value: result.view };
 }
 
@@ -1073,8 +1153,7 @@ export async function prepareSettingsDocument(runtime: FaceRuntime): Promise<str
   if (pinned && path.isAbsolute(pinned) && (await fileExists(pinned))) {
     return pinned;
   }
-  await persistHostSettings(runtime);
-  return hostSettingsPath(runtime);
+  return ensureSettingsDocument(runtime);
 }
 
 /**

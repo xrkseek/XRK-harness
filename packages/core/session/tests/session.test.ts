@@ -24,7 +24,7 @@ function sampleTurn(): SessionEvent[] {
       content: "hello",
     },
     { type: "step/end", ts: 5, turnId: "t1", stepId: "s1" },
-    { type: "turn/end", ts: 6, turnId: "t1" },
+    { type: "turn/end", ts: 6, turnId: "t1", reason: { kind: "completed" } },
   ];
 }
 

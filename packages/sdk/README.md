@@ -29,7 +29,7 @@ HTTP：`createHostManager` + `loadHostConfig` + preset factory — 见 CLI `serv
 |----|------------|
 | Agent | `createAgent` · `AgentHandle` · `SessionBusyError` · `SessionSafetyLimitError` |
 | Loop | `runTurn` · `settleToolBatch` · `runCompaction` |
-| Session | `createMemorySessionStore` · `createJsonlSessionStore` · `has` · `newSession` · `admitPrompt` · `promoteAdmitsForTurn` · `deriveMessages` · latches · safety · dangling |
+| Session | `createMemorySessionStore` · `createPersistentSessionStore` · `has` · `newSession` · `admitPrompt` · `promoteAdmitsForTurn` · `deriveMessages` · latches · safety · dangling |
 | Protocol | `parseSessionEvent` · `sessionEventJsonSchema` · `parsePromptDelivery` |
 | Tools | `createToolRegistry` · `createToolPipeline` · `createStdTools` · `materializeTools` · `boundToolOutput` · `runTool` |
 | Web | `createWebTools` · `createDefaultWebAccess` · `createHttpFetchProvider` |

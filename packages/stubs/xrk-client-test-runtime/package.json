@@ -1,7 +1,7 @@
-ï»¿{
+{
     "version":  "0.0.0-stub",
     "name":  "@xrkseek/client-test-runtime",
-    "description":  "XRK stub â€” replace with real package or remap",
+    "description":  "XRK stub ¡ª replace with real package or remap",
     "exports":  {
                     ".":  "./index.js",
                     "./package.json":  "./package.json"

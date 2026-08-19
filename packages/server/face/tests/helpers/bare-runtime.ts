@@ -3,6 +3,9 @@ import {
   createMemorySessionStore,
   type SessionStore,
 } from "@xrkseek/core-session";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import type { AgentHandle } from "@xrkseek/core-agent";
 import {
   createFaceRuntime,
@@ -47,19 +50,24 @@ export function createBareFaceRuntime(
     Partial<
       Pick<
         CreateFaceRuntimeOptions,
-        "drain" | "workspaceRoot" | "version" | "resolveAgent"
+        "drain" | "workspaceRoot" | "version" | "resolveAgent" | "productDir"
       >
     > & {
       store?: SessionStore;
     } = {},
 ) {
   const store = options.store ?? createMemorySessionStore();
+  const isolated =
+    options.workspaceRoot ??
+    options.productDir ??
+    mkdtempSync(path.join(tmpdir(), "xrk-face-bare-"));
   return createFaceRuntime({
-    workspaceRoot: process.cwd(),
     version: "test",
     drain: idleFaceDrain,
     resolveAgent: unusedAgentResolve(),
     ...options,
     store,
+    workspaceRoot: options.workspaceRoot ?? isolated,
+    productDir: options.productDir ?? isolated,
   });
 }

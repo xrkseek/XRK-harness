@@ -1,8 +1,39 @@
-import { toJSONL } from "@xrkseek/core-session";
+import { toJSONL, createMemorySessionStore } from "@xrkseek/core-session";
 import { resolveLlmFromEnv } from "@xrkseek/llm-registry";
 import { createHarnessComposition } from "@xrkseek/preset-harness";
 import { createMinimalComposition } from "@xrkseek/preset-minimal";
+import {
+  createFaceRuntime,
+  resolveLlmForSession,
+} from "@xrkseek/server-face";
 import type { ParsedArgs } from "../parse-args.js";
+
+function noopDrain() {
+  return {
+    wake() {},
+    async cancel() {},
+    isActive() {
+      return false;
+    },
+  };
+}
+
+function resolveWorkspaceLlm(workspaceRoot: string) {
+  const store = createMemorySessionStore();
+  const sessionId = store.create().id;
+  const runtime = createFaceRuntime({
+    store,
+    workspaceRoot,
+    drain: noopDrain(),
+    resolveAgent: async () => {
+      throw new Error("run: resolveAgent unused");
+    },
+  });
+  return (
+    resolveLlmForSession(runtime, sessionId)?.adapter ??
+    resolveLlmFromEnv(process.env)?.adapter
+  );
+}
 
 async function resolvePrompt(args: ParsedArgs): Promise<string> {
   if (args.promptExplicit) return args.prompt;
@@ -19,18 +50,18 @@ async function resolvePrompt(args: ParsedArgs): Promise<string> {
 
 export async function runCommand(args: ParsedArgs): Promise<number> {
   const prompt = await resolvePrompt(args);
-  const fromEnv = resolveLlmFromEnv(process.env);
+  const llm = resolveWorkspaceLlm(args.workspace);
   const composition =
     args.preset === "harness" || args.preset === "server"
       ? createHarnessComposition({
           workspaceRoot: args.workspace,
           presentation: args.presentation,
-          ...(fromEnv ? { llm: fromEnv.adapter } : {}),
+          ...(llm ? { llm } : {}),
         })
       : args.preset === "minimal"
         ? createMinimalComposition({
             workspaceRoot: args.workspace,
-            ...(fromEnv ? { llm: fromEnv.adapter } : {}),
+            ...(llm ? { llm } : {}),
           })
         : null;
   if (!composition) {

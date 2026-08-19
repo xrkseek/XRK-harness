@@ -46,15 +46,23 @@ function factoryForPreset(
       ...(policy ? { policy } : {}),
     });
   }
-  return async ({ sessionId, store, workspaceRoot: root, plugins, resolveImage }) => {
-    const fromEnv = resolveLlmFromEnv(process.env);
+  return async ({
+    sessionId,
+    store,
+    workspaceRoot: root,
+    plugins,
+    resolveImage,
+    resolveLlm,
+  }) => {
+    const fromFace = resolveLlm?.(sessionId);
+    const fromEnv = fromFace ? undefined : resolveLlmFromEnv(process.env);
     const composition = createMinimalComposition({
       workspaceRoot: root || workspaceRoot,
       sessionStore: store,
       sessionId,
       assemble: true,
       plugins,
-      ...(fromEnv ? { llm: fromEnv.adapter } : {}),
+      ...(fromFace ? { llm: fromFace } : fromEnv ? { llm: fromEnv.adapter } : {}),
       ...(policy ? { policy } : {}),
       ...(resolveImage ? { resolveImage } : {}),
     });

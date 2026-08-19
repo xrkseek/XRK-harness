@@ -53,10 +53,18 @@ export const sessionEventJsonSchema = {
     },
     {
       type: "object",
-      required: ["type", "ts", "turnId"],
+      required: ["type", "ts", "turnId", "reason"],
       properties: baseProps({
         type: { const: "turn/end" },
         turnId: { type: "string" },
+        reason: {
+          type: "object",
+          required: ["kind"],
+          properties: {
+            kind: { type: "string" },
+          },
+          additionalProperties: true,
+        },
       }),
       additionalProperties: false,
     },

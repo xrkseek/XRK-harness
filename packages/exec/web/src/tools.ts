@@ -59,37 +59,65 @@ export function createWebTools(
       ("env" in options && options.env) || process.env,
     );
 
-  const searchTool: ToolDefinition<{ query: string }> = {
+  const searchTool: ToolDefinition<{ query?: string; queries?: string[] }> = {
     name: "web_search",
     description:
-      "Search the web for current information. Returns an optional summary answer and a list of source URLs.",
+      "Search the web for current information. Pass `query` or `queries` (searched concurrently). Returns summaries and source URLs.",
     parameters: {
       type: "object",
       properties: {
-        query: { type: "string", description: "The search query." },
+        query: { type: "string", description: "A single search query." },
+        queries: {
+          type: "array",
+          items: { type: "string" },
+          description: "Multiple queries searched in parallel.",
+        },
       },
-      required: ["query"],
     },
     async execute(args, signal) {
-      const query = String(args?.query ?? "").trim();
-      if (!query) {
-        return { content: "Error: query must be a non-empty string", isError: true };
+      const rawQueries = Array.isArray(args?.queries)
+        ? args.queries.map((q) => String(q).trim()).filter(Boolean)
+        : [];
+      const single = String(args?.query ?? "").trim();
+      const queries = rawQueries.length > 0 ? rawQueries : single ? [single] : [];
+      if (queries.length === 0) {
+        return {
+          content: "Error: provide `query` or non-empty `queries`",
+          isError: true,
+        };
       }
       if (!search) {
         return { content: missingSearch, isError: true };
       }
       try {
-        const result = await search.search(
-          { query, maxResults: searchMaxResults },
-          signal,
+        const results = await Promise.all(
+          queries.map((query) =>
+            search.search({ query, maxResults: searchMaxResults }, signal),
+          ),
         );
-        const projected = {
-          ...result,
-          sources: result.sources.map(projectSource),
+        const sections = results.map((result, i) => {
+          const projected = {
+            ...result,
+            sources: result.sources.map(projectSource),
+          };
+          const header = queries.length > 1 ? `## ${queries[i]}\n\n` : "";
+          return `${header}${formatSearchOutput(projected)}`;
+        });
+        const combined = {
+          sources: results.flatMap((r) => r.sources.map(projectSource)),
+          truncated: results.some((r) => r.truncated),
+          ...(results.some((r) => r.content?.trim())
+            ? {
+                content: results
+                  .map((r) => r.content)
+                  .filter((c): c is string => Boolean(c?.trim()))
+                  .join("\n\n"),
+              }
+            : {}),
         };
         return {
-          content: formatSearchOutput(projected),
-          meta: searchMetaFromValue(projected),
+          content: sections.join("\n\n---\n\n"),
+          meta: searchMetaFromValue(combined),
         };
       } catch (err) {
         return fail(err);

@@ -18,13 +18,17 @@
     "@xrkseek/core-agent": "workspace:*",
     "@xrkseek/core-session": "workspace:*",
     "@xrkseek/core-tools": "workspace:*",
+    "@xrkseek/llm": "workspace:*",
     "@xrkseek/llm-registry": "workspace:*",
     "@xrkseek/policy": "workspace:*",
     "@xrkseek/protocol": "workspace:*",
+    "@xrkseek/schemastery": "workspace:*",
     "@xrkseek/workspace": "workspace:*",
+    "js-yaml": "^4.1.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/ws": "^8.5.13",
     "@xrkseek/core-tools": "workspace:*",
     "@xrkseek/llm-replay": "workspace:*",

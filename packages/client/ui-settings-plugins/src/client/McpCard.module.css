@@ -91,11 +91,6 @@
   color: var(--dsw-alias-label-error);
 }
 
-.badgeError {
-  composes: badge;
-  color: var(--dsw-alias-label-error);
-}
-
 .list {
   display: flex;
   flex-direction: column;
@@ -117,9 +112,14 @@
   gap: 6px;
 }
 
+.primary > * {
+  min-width: 0;
+}
+
 .input {
   box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   height: 32px;
   padding: 0 10px;
   border: 1px solid var(--dsw-alias-border-l2);
@@ -127,8 +127,12 @@
   font: inherit;
   font-size: 13px;
   line-height: 22px;
-  background: var(--dsw-alias-bg-layer-3);
+  background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
+}
+
+.input::placeholder {
+  color: var(--dsw-alias-label-dimmed);
 }
 
 .input:focus-visible {

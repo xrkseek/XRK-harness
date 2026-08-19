@@ -3,13 +3,12 @@
  * + final assistant text + Trajectory tab.
  */
 import { describe, expect, it } from "vitest";
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import {
   HAS_SHELL,
   openEnglishPage,
   prepareLiveComposer,
+  readFirstPersistedSessionLog,
   sendComposerPrompt,
   spawnRegisteredWorkspace,
 } from "./product-shell-host.ts";
@@ -64,14 +63,7 @@ describe.skipIf(!HAS_SHELL)("product shell tool", () => {
           `page errors: ${pageErrors.join(" | ") || "(none)"}`,
         ).toEqual([]);
 
-        const files = (await readdir(shell.sessionsDir)).filter((f) =>
-          f.endsWith(".jsonl"),
-        );
-        expect(files.length).toBeGreaterThan(0);
-        const log = await readFile(
-          path.join(shell.sessionsDir, files[0]!),
-          "utf8",
-        );
+        const log = readFirstPersistedSessionLog(shell.sessionsDir);
         expect(log).toContain('"type":"tool/call"');
         expect(log).toContain('"type":"tool/result"');
         expect(log).toContain('"name":"todo_write"');

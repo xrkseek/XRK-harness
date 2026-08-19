@@ -41,11 +41,16 @@ import {
   pendingPlanTarget,
 } from "@xrkseek/protocol";
 import { resolveCompactionOptions, runCompaction } from "./compaction.js";
+import { maybeAppendRequestHeader } from "./request-header-log.js";
 import {
   MAX_STEPS_PROMPT,
   MAX_STEPS_TOOL_DISABLED,
 } from "./max-steps.js";
 import { settleToolBatch, type ToolSettleMode } from "./settle-batch.js";
+import {
+  finalizeCancelledTurn,
+  isAbortError,
+} from "./cancel-finalize.js";
 
 export interface AssembleOptions {
   readonly persona?: string;
@@ -181,6 +186,9 @@ async function invokeLlm(
   let reasoning = "";
   let toolCalls: LlmChatResponse["toolCalls"];
   for await (const ev of input.llm.stream(request)) {
+    if (input.signal?.aborted) {
+      throw new DOMException("aborted", "AbortError");
+    }
     if (ev.type === "reasoning-delta") {
       if (ev.text) {
         reasoning += ev.text;
@@ -366,6 +374,9 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     content: userContent,
   });
 
+  let activeStepId: string | undefined;
+
+  try {
   while (steps < maxSteps) {
     if (input.signal?.aborted) {
       throw new DOMException("aborted", "AbortError");
@@ -373,6 +384,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     steps += 1;
     commitPendingPlanMode(input.store, input.sessionId, now);
     const stepId = id("step");
+    activeStepId = stepId;
     append(input.store, input.sessionId, {
       type: "step/start",
       ts: now(),
@@ -436,6 +448,14 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     assertToolCallsSettled(snapEvents);
     assertModelVisible(snapEvents, deriveMessages(snapEvents));
 
+    maybeAppendRequestHeader({
+      store: input.store,
+      sessionId: input.sessionId,
+      turnId,
+      llm: input.llm,
+      now,
+    });
+
     let response;
     const onChunk = (chunk: {
       kind: "text" | "reasoning";
@@ -474,6 +494,14 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         if (!did.compacted) throw err;
         req = buildReq();
         assertToolCallsSettled(input.store.get(input.sessionId).events);
+        maybeAppendRequestHeader({
+          store: input.store,
+          sessionId: input.sessionId,
+          turnId,
+          llm: input.llm,
+          now,
+          reason: "change",
+        });
         response = await invokeLlm(input, req, onChunk);
       } else {
         throw err;
@@ -618,15 +646,29 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       turnId,
       stepId,
     });
+    activeStepId = undefined;
   }
 
   append(input.store, input.sessionId, {
     type: "turn/end",
     ts: now(),
     turnId,
+    reason: { kind: "completed" },
   });
 
   return { turnId, assistantText, steps, toolOk, toolFailed };
+  } catch (err) {
+    if (isAbortError(err, input.signal)) {
+      finalizeCancelledTurn({
+        store: input.store,
+        sessionId: input.sessionId,
+        turnId,
+        ...(activeStepId !== undefined ? { stepId: activeStepId } : {}),
+        now,
+      });
+    }
+    throw err;
+  }
 }
 
 export { buildVolatileUser };
@@ -643,3 +685,4 @@ export {
   type RunCompactionInput,
   type RunCompactionResult,
 } from "./compaction.js";
+export { maybeAppendRequestHeader, peekLlmRoute } from "./request-header-log.js";

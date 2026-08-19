@@ -103,6 +103,7 @@ describe("goals remotes", () => {
       type: "turn/end",
       ts: 11,
       turnId: "t-end",
+      reason: { kind: "completed" },
     });
     const goal = runtime.goals.get(session.id);
     expect(goal?.phase).toBe("blocked");

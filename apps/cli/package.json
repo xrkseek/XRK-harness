@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/harness-cli",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "private": true,
   "description": "XRK-Harness CLI (run / serve / web). Product shell ships in product-web/.",
   "type": "module",
@@ -27,6 +27,7 @@
     "@xrkseek/preset-minimal": "workspace:*",
     "@xrkseek/preset-server": "workspace:*",
     "@xrkseek/server-config": "workspace:*",
+    "@xrkseek/server-face": "workspace:*",
     "@xrkseek/server-host": "workspace:*"
   },
   "license": "MIT",

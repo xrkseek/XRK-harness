@@ -223,6 +223,29 @@ describe("Face DSH wire-event adapt", () => {
     });
   });
 
+  it("turn/end preserves stored reason on wire", () => {
+    const wire = toFaceWireSessionEvent(
+      {
+        type: "turn/end",
+        ts: 16,
+        turnId: "t1",
+        reason: {
+          kind: "error",
+          error: { code: "RATE_LIMIT", message: "slow down" },
+        },
+      },
+      9,
+      { sessionId: "sess", ids: new FaceWireIdMaps() },
+    );
+    expect(wire.data).toEqual({
+      turn: 1,
+      reason: {
+        kind: "error",
+        error: { code: "RATE_LIMIT", message: "slow down" },
+      },
+    });
+  });
+
   it("session/title data matches DSH title fold fields", () => {
     const wire = toFaceWireSessionEvent(
       {

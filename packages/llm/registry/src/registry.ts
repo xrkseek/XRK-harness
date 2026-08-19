@@ -1,17 +1,31 @@
 import type { LlmAdapter } from "@xrkseek/llm";
+import { createAnthropicAdapter } from "@xrkseek/llm-anthropic";
+import { isOfficialDeepSeekBaseUrl } from "@xrkseek/llm-deepseek";
+import { createGeminiAdapter } from "@xrkseek/llm-gemini";
 import { createOpenAiCompatibleAdapter } from "@xrkseek/llm-openai-compatible";
+import { createOpenAiResponsesAdapter } from "@xrkseek/llm-openai-responses";
 import { OPENAI_CHAT_BRANDS } from "./brands-openai-chat.js";
+import { R1_PROTOCOL_BRANDS } from "./brands-r1.js";
 import type {
   BrandEntry,
+  ProtocolId,
   ProviderBinding,
   ResolveInput,
   RoutableProvider,
+} from "./types.js";
+import {
+  defaultPathForProtocol,
+  factoryKindForProtocol,
+  normalizeProtocolId,
 } from "./types.js";
 
 /** When brand and input omit model. */
 export const REGISTRY_FALLBACK_MODEL = "gpt-4o-mini";
 
-const DEFAULT_PATH = "/chat/completions";
+export const DEFAULT_REGISTRY_BRANDS: readonly BrandEntry[] = [
+  ...OPENAI_CHAT_BRANDS,
+  ...R1_PROTOCOL_BRANDS,
+];
 
 export interface ProviderRegistry {
   registerBrand(entry: BrandEntry): void;
@@ -50,7 +64,7 @@ export function createProviderRegistry(
   options: CreateProviderRegistryOptions = {},
 ): ProviderRegistry {
   const brands = new Map<string, BrandEntry>();
-  for (const b of options.brands ?? OPENAI_CHAT_BRANDS) {
+  for (const b of options.brands ?? DEFAULT_REGISTRY_BRANDS) {
     brands.set(b.id.toLowerCase(), b);
   }
   const registryDefaultProvider = normalizeKey(options.defaultProvider);
@@ -97,6 +111,12 @@ export function createProviderRegistry(
       }
 
       const brand = brands.get(providerKey)!;
+      const protocol: ProtocolId =
+        normalizeProtocolId(input.protocol) ?? brand.protocol;
+      const protocolOverridden =
+        normalizeProtocolId(input.protocol) !== undefined &&
+        normalizeProtocolId(input.protocol) !== brand.protocol;
+
       const baseUrl = (input.baseUrl?.trim() || brand.baseUrl || "").replace(
         /\/+$/,
         "",
@@ -109,27 +129,25 @@ export function createProviderRegistry(
 
       const path =
         input.path?.trim() ||
-        brand.path ||
-        DEFAULT_PATH;
+        (protocolOverridden ? undefined : brand.path) ||
+        defaultPathForProtocol(protocol);
       const normalizedPath = path.startsWith("/") ? path : `/${path}`;
       const model =
         (typeof input.model === "string" && input.model.trim()) ||
         brand.defaultModel ||
         registryDefaultModel ||
         REGISTRY_FALLBACK_MODEL;
-      const authMode = brand.authMode ?? "bearer";
-
-      if (brand.protocol !== "openai-chat") {
-        throw new Error(
-          `llm-registry: unsupported protocol in R0: ${brand.protocol}`,
-        );
-      }
+      const authMode =
+        brand.authMode ??
+        (protocol === "anthropic-messages" || protocol === "gemini-generate"
+          ? "api-key"
+          : "bearer");
 
       const apiKeyEnv = brand.apiKeyEnv;
       return {
         provider: providerKey,
-        protocol: "openai-chat",
-        factoryKind: "compat",
+        protocol,
+        factoryKind: factoryKindForProtocol(protocol),
         model,
         baseUrl,
         path: normalizedPath,
@@ -140,24 +158,73 @@ export function createProviderRegistry(
     },
 
     createAdapter(binding, secrets, extras) {
-      if (binding.protocol !== "openai-chat") {
-        throw new Error(
-          `llm-registry: createAdapter unsupported protocol: ${binding.protocol}`,
-        );
+      const id = extras?.id ?? binding.provider;
+      const model = extras?.model ?? binding.model;
+      const fetchImpl = extras?.fetch;
+      const apiKey = secrets.apiKey;
+
+      if (
+        binding.protocol === "openai-chat" ||
+        binding.protocol === "openai-completions"
+      ) {
+        const vision =
+          extras?.inputModalities ??
+          (binding.provider === "deepseek" &&
+          isOfficialDeepSeekBaseUrl(binding.baseUrl)
+            ? ["text"]
+            : ["text", "image"]);
+        return createOpenAiCompatibleAdapter({
+          id,
+          baseUrl: binding.baseUrl,
+          path: binding.path,
+          authMode: binding.authMode,
+          model,
+          inputModalities: vision,
+          ...(apiKey !== undefined ? { apiKey } : {}),
+          ...(fetchImpl ? { fetch: fetchImpl } : {}),
+        });
       }
-      const vision =
-        extras?.inputModalities ??
-        (binding.provider === "deepseek" ? ["text"] : ["text", "image"]);
-      return createOpenAiCompatibleAdapter({
-        id: extras?.id ?? binding.provider,
-        baseUrl: binding.baseUrl,
-        path: binding.path,
-        authMode: binding.authMode,
-        model: extras?.model ?? binding.model,
-        inputModalities: vision,
-        ...(secrets.apiKey !== undefined ? { apiKey: secrets.apiKey } : {}),
-        ...(extras?.fetch ? { fetch: extras.fetch } : {}),
-      });
+
+      if (binding.protocol === "anthropic-messages") {
+        return createAnthropicAdapter({
+          id,
+          baseUrl: binding.baseUrl,
+          path: binding.path,
+          model,
+          inputModalities: extras?.inputModalities ?? ["text", "image"],
+          ...(apiKey !== undefined ? { apiKey } : {}),
+          ...(fetchImpl ? { fetch: fetchImpl } : {}),
+        });
+      }
+
+      if (binding.protocol === "openai-responses") {
+        return createOpenAiResponsesAdapter({
+          id,
+          baseUrl: binding.baseUrl,
+          path: binding.path,
+          model,
+          inputModalities: extras?.inputModalities ?? ["text", "image"],
+          ...(apiKey !== undefined ? { apiKey } : {}),
+          ...(fetchImpl ? { fetch: fetchImpl } : {}),
+        });
+      }
+
+      if (binding.protocol === "gemini-generate") {
+        return createGeminiAdapter({
+          id,
+          baseUrl: binding.baseUrl,
+          model,
+          inputModalities: extras?.inputModalities ?? ["text", "image"],
+          ...(apiKey !== undefined ? { apiKey } : {}),
+          ...(fetchImpl ? { fetch: fetchImpl } : {}),
+        });
+      }
+
+      throw new Error(
+        `llm-registry: createAdapter unsupported protocol: ${
+          (binding as ProviderBinding).protocol
+        }`,
+      );
     },
 
     listBrands() {
@@ -173,7 +240,6 @@ export function createProviderRegistry(
             secretsEnv[b.apiKeyEnv] &&
               String(secretsEnv[b.apiKeyEnv]).trim().length > 0,
           );
-        // active = has baseUrl (or ollama) AND (no apiKeyEnv OR env has key)
         const active =
           (Boolean(b.baseUrl) || b.id === "ollama") &&
           (!b.apiKeyEnv || keyOk);

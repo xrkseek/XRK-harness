@@ -155,11 +155,13 @@ describe("Face host stream (DSH host frames)", () => {
 });
 
 describe("host/remote-event", () => {
-  function runtime() {
+  async function runtime() {
     const store = createMemorySessionStore();
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-host-remote-"));
     return createFaceRuntime({
       store,
-      workspaceRoot: process.cwd(),
+      workspaceRoot: root,
+      productDir: root,
       drain: drain(),
       resolveAgent: async () => {
         throw new Error("unused");
@@ -168,7 +170,7 @@ describe("host/remote-event", () => {
   }
 
   it("forwards credentials/updated on set and unset; unknown slot stays quiet", async () => {
-    const rt = runtime();
+    const rt = await runtime();
     const host = collectHost(rt);
     const ok = await dispatchFaceMethod(rt, "credentials.set", "c1", {
       slotId: "host.apiKey",
@@ -206,7 +208,7 @@ describe("host/remote-event", () => {
   });
 
   it("forwards llm/adapters-updated when an llm credential changes", async () => {
-    const rt = runtime();
+    const rt = await runtime();
     const host = collectHost(rt);
     const set = await dispatchFaceMethod(rt, "credentials.set", "c1", {
       slotId: "llm.openai",
@@ -227,8 +229,8 @@ describe("host/remote-event", () => {
     ]);
   });
 
-  it("forwards settings/document-updated on mutate; llm ns also adapters-updated", async () => {
-    const rt = runtime();
+  it("forwards settings/document-updated on mutate; llm-pi-ai ns also adapters-updated", async () => {
+    const rt = await runtime();
     await dispatchFaceMethod(rt, "settings.describe", "d0", {});
     const host = collectHost(rt);
     const mut = await dispatchFaceMethod(rt, "settings.mutate", "m1", {
@@ -252,7 +254,7 @@ describe("host/remote-event", () => {
 
     host.length = 0;
     const llm = await dispatchFaceMethod(rt, "settings.mutate", "m2", {
-      ns: "llm",
+      ns: "llm-pi-ai",
       ops: [{ op: "set", path: ["providers"], value: {} }],
     });
     expect(llm.result.ok).toBe(true);
@@ -260,7 +262,7 @@ describe("host/remote-event", () => {
       {
         type: "host/remote-event",
         event: "settings/document-updated",
-        args: ["llm", 1],
+        args: ["llm-pi-ai", 1],
       },
       {
         type: "host/remote-event",
@@ -293,7 +295,7 @@ describe("host/remote-event", () => {
   });
 
   it("forwards agent-preset/selected on select", async () => {
-    const rt = runtime();
+    const rt = await runtime();
     const created = await dispatchFaceMethod(rt, "session.create", "s", {});
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;

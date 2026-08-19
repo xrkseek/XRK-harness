@@ -7,8 +7,19 @@ import {
 /** Official OpenAI-compatible Chat Completions host (docs: api-docs.deepseek.com). */
 export const DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com";
 
+/** True for the vendor-hosted API; custom gateways may expose vision. */
+export function isOfficialDeepSeekBaseUrl(baseUrl: string): boolean {
+  const trimmed = baseUrl.trim().replace(/\/+$/, "");
+  return (
+    trimmed === "https://api.deepseek.com" ||
+    trimmed === "https://api.deepseek.com/v1" ||
+    trimmed === "http://api.deepseek.com" ||
+    trimmed === "http://api.deepseek.com/v1"
+  );
+}
+
 /** Stable chat alias; override with platform model ids as needed. */
-export const DEEPSEEK_DEFAULT_MODEL = "deepseek-chat";
+export const DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-flash";
 
 export type DeepSeekAdapterOptions = Omit<
   OpenAiCompatibleOptions,
@@ -42,5 +53,8 @@ export function createDeepSeekAdapter(
     id,
     baseUrl,
     model,
+    inputModalities:
+      rest.inputModalities ??
+      (isOfficialDeepSeekBaseUrl(baseUrl) ? ["text"] : ["text", "image"]),
   });
 }

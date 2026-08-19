@@ -45,7 +45,7 @@ export interface HostRuntimeConfig {
   /** Env: `XRK_MCP_ALLOW=1` elevates mcp.connect default to allow for configured servers. */
   readonly mcpAllowConnect?: boolean;
   /**
-   * JSONL session directory. Env: `XRK_SESSIONS_DIR`.
+   * Session persistence directory (`sessions.db`). Env: `XRK_SESSIONS_DIR`.
    * Omit → in-memory store (process lifetime only).
    */
   readonly sessionsDir?: string;

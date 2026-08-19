@@ -3,9 +3,14 @@ import {
   DEEPSEEK_DEFAULT_BASE_URL,
   DEEPSEEK_DEFAULT_MODEL,
   createDeepSeekAdapter,
+  isOfficialDeepSeekBaseUrl,
 } from "../src/index.js";
 
 describe("deepseek adapter", () => {
+  it("detects official baseUrl", () => {
+    expect(isOfficialDeepSeekBaseUrl(DEEPSEEK_DEFAULT_BASE_URL)).toBe(true);
+    expect(isOfficialDeepSeekBaseUrl("https://gateway.example/v1")).toBe(false);
+  });
   it("defaults baseUrl and model; bearer auth", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       expect(url).toBe(`${DEEPSEEK_DEFAULT_BASE_URL}/chat/completions`);
@@ -57,6 +62,7 @@ describe("deepseek adapter", () => {
       fetch: fetchMock as unknown as typeof fetch,
     });
     expect(llm.id).toBe("ds-gw");
+    expect(llm.inputModalities).toEqual(["text", "image"]);
     const out = await llm.chat({
       messages: [{ role: "user", content: "x" }],
     });

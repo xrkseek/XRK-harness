@@ -94,7 +94,7 @@ compose        → 零或薄依赖（禁止 kernel → compose）
 | 无全局 Proxy | 组合用 `@xrkseek/compose`（[ADR-0005](./docs/adr/0005-compose-leaf.md)） |
 | 外壳 / 内核 | 壳可二次创作；内核不可让；不对 deepseek-ai 提 PR；无 vendor（[ADR-0002](./docs/adr/0002-no-embed-upstream.md)） |
 | presets | 无业务逻辑 |
-| 密钥 | 不入库；文档不写真值 |
+| 密钥 | 不入库；`.xrk/.credentials.yaml` · `.xrk/settings.yaml` · `.env` 已 gitignore；仓内仅 `*.example` 模板 |
 | 文档诚实 | 未实现 → `status`「未做」；勿写成假 API / 路线清单当规格 |
 | 本机泄漏 | 绝对路径、固定代理端口 → Canvas，不进 `docs/` / README |
 

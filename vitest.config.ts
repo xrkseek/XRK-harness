@@ -23,6 +23,9 @@ export default defineConfig({
       pkg("llm", "packages/llm/llm/src/index.ts"),
       pkg("llm-replay", "packages/llm/replay/src/index.ts"),
       pkg("llm-openai-compatible", "packages/llm/openai-compatible/src/index.ts"),
+      pkg("llm-openai-responses", "packages/llm/openai-responses/src/index.ts"),
+      pkg("llm-anthropic", "packages/llm/anthropic/src/index.ts"),
+      pkg("llm-gemini", "packages/llm/gemini/src/index.ts"),
       pkg("llm-deepseek", "packages/llm/deepseek/src/index.ts"),
       pkg("llm-registry", "packages/llm/registry/src/index.ts"),
       pkg("exec-fs", "packages/exec/fs/src/index.ts"),
@@ -57,5 +60,6 @@ export default defineConfig({
       "apps/**/tests/**/*.test.ts",
     ],
     globals: false,
+    pool: "forks",
   },
 });

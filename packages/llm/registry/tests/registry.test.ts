@@ -20,7 +20,7 @@ describe("createProviderRegistry", () => {
     const reg = createProviderRegistry({ defaultProvider: "deepseek" });
     const b = reg.resolve({});
     expect(b.provider).toBe("deepseek");
-    expect(b.model).toBe("deepseek-chat");
+    expect(b.model).toBe("deepseek-v4-flash");
   });
 
   it("throws on unknown provider", () => {
@@ -97,5 +97,60 @@ describe("createProviderRegistry", () => {
     expect(openai?.active).toBe(true);
     expect(groq?.active).toBe(false);
     expect(ollama?.active).toBe(true);
+  });
+
+  it("resolves R1 protocols: anthropic · gemini · responses", () => {
+    const reg = createProviderRegistry();
+    const anth = reg.resolve({ provider: "anthropic" });
+    expect(anth.protocol).toBe("anthropic-messages");
+    expect(anth.factoryKind).toBe("anthropic");
+    expect(anth.path).toBe("/v1/messages");
+
+    const gem = reg.resolve({ provider: "gemini" });
+    expect(gem.protocol).toBe("gemini-generate");
+    expect(gem.factoryKind).toBe("gemini");
+
+    const resp = reg.resolve({ provider: "openai-responses" });
+    expect(resp.protocol).toBe("openai-responses");
+    expect(resp.factoryKind).toBe("responses");
+  });
+
+  it("protocol override maps custom brand onto anthropic-messages", async () => {
+    const reg = createProviderRegistry();
+    const binding = reg.resolve({
+      provider: "custom",
+      baseUrl: "https://gw.example",
+      protocol: "anthropic-messages",
+      model: "claude-x",
+    });
+    expect(binding.protocol).toBe("anthropic-messages");
+    expect(binding.factoryKind).toBe("anthropic");
+
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ content: [{ type: "text", text: "via-override" }] }),
+        { status: 200 },
+      ),
+    );
+    const adapter = reg.createAdapter(
+      binding,
+      { apiKey: "k" },
+      { fetch: fetchMock as unknown as typeof fetch },
+    );
+    const out = await adapter.chat({
+      messages: [{ role: "user", content: "x" }],
+    });
+    expect(out.content).toBe("via-override");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/v1/messages");
+  });
+
+  it("openai-completions aliases chat completions factory", () => {
+    const reg = createProviderRegistry();
+    const b = reg.resolve({
+      provider: "openai",
+      protocol: "openai-completions",
+    });
+    expect(b.protocol).toBe("openai-completions");
+    expect(b.factoryKind).toBe("compat");
   });
 });

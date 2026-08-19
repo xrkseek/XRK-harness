@@ -115,7 +115,7 @@ describe("Face policy provider.use", () => {
     const denied = await dispatchFaceMethod(runtime, "session.selectModel", "m1", {
       sessionId,
       provider: "deepseek",
-      model: "deepseek-chat",
+      model: "deepseek-v4-flash",
     });
     expect(denied.result.ok).toBe(false);
     if (!denied.result.ok) {

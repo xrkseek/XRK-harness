@@ -50,6 +50,7 @@ import {
   type FaceMcpServerDraft,
   type FaceUiSettings,
 } from "./settings-credentials.js";
+import { hydrateFaceSettingsDocument } from "./settings-document.js";
 import { FaceApprovalBroker, approvalRequestedFrame, approvalResolvedFrame } from "./approvals.js";
 import {
   FaceQuestionBroker,
@@ -60,6 +61,7 @@ import {
   questionResolvedFrame,
 } from "./questions.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
+import { hydrateWorkspaceRegistry } from "./workspace-store.js";
 import { FaceSubagentRegistry } from "./subagent-registry.js";
 import { FaceMessageFeedbackStore } from "./message-feedback.js";
 import { FaceGoalStore } from "./goal-store.js";
@@ -126,9 +128,9 @@ export interface CreateFaceRuntimeOptions {
   readonly hasPtyActivity?: () => boolean;
   /** Host input modalities; default text-only. */
   readonly inputModalities?: readonly ("text" | "image")[];
-  /** Optional JSON sidecar for parent→child links (JSONL session dir). */
+  /** Optional JSON sidecar for parent→child links (sessions directory). */
   readonly subagentPersistPath?: string;
-  /** Optional JSON sidecar for Face goals (JSONL session dir). */
+  /** Optional JSON sidecar for Face goals (sessions directory). */
   readonly goalPersistPath?: string;
 }
 
@@ -159,7 +161,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const rpcAdmitMap = new Map<string, string>();
   const admitRpcMap = new Map<string, string>();
   const pendingUserRpc = new Map<string, string>();
-  const sessionModels = new Map<string, { provider: string; model: string }>();
+  const sessionModels = new Map<
+    string,
+    { provider: string; model: string; reasoningEffort?: string }
+  >();
   const sessionAgentPresets = new Map<string, string>();
   const sessionCwds = new Map<string, string>();
   const workspaces = new FaceWorkspaceRegistry(options.workspaceRoot);
@@ -534,6 +539,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   };
   runtimeBox.current = runtime;
   goals.bind(runtime);
+  hydrateFaceSettingsDocument(runtime);
   hydrateFaceHostSettings(runtime);
+  hydrateWorkspaceRegistry(runtime, workspaces);
   return runtime;
 }
