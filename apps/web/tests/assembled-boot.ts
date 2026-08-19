@@ -11,40 +11,40 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { act, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
-import type { WebBootEntry } from '@deepseek-ai/dsh-client-modules/client'
-import { AppWebEntry } from '@deepseek-ai/dsh-client-web'
+import type { WebBootEntry } from '@xrkseek/client-modules/client'
+import { AppWebEntry } from '@xrkseek/client-web'
 
 /** Boot entries for the minimal assembled graph, each carrying the workspace bundle it loads. */
 const PLUGINS: readonly (WebBootEntry & { bundlePath: string })[] = [
-  { id: '@deepseek-ai/dsh-typert-registry', bundlePath: 'packages/typert/registry/lib/client.js', url: '/plugins/typert-registry.js', rev: 'fx', inject: [], immediately: true },
-  { id: '@deepseek-ai/dsh-client-connection', bundlePath: 'packages/client/connection/lib/client.js', url: '/plugins/connection.js', rev: 'fx', inject: [], immediately: true },
-  { id: '@deepseek-ai/dsh-api-gateway', bundlePath: 'packages/api/gateway/lib/client.js', url: '/plugins/api-gateway.js', rev: 'fx', inject: ['@deepseek-ai/dsh-typert-registry', '@deepseek-ai/dsh-client-connection'], immediately: true },
-  { id: '@deepseek-ai/dsh-api-remotes', bundlePath: 'packages/api/remotes/lib/client.js', url: '/plugins/api-remotes.js', rev: 'fx', inject: ['@deepseek-ai/dsh-api-gateway'], immediately: true },
+  { id: '@xrkseek/xrk-typert-registry', bundlePath: 'packages/typert/registry/lib/client.js', url: '/plugins/typert-registry.js', rev: 'fx', inject: [], immediately: true },
+  { id: '@xrkseek/client-connection', bundlePath: 'packages/client/connection/lib/client.js', url: '/plugins/connection.js', rev: 'fx', inject: [], immediately: true },
+  { id: '@xrkseek/xrk-api-gateway', bundlePath: 'packages/api/gateway/lib/client.js', url: '/plugins/api-gateway.js', rev: 'fx', inject: ['@xrkseek/xrk-typert-registry', '@xrkseek/client-connection'], immediately: true },
+  { id: '@xrkseek/xrk-api-remotes', bundlePath: 'packages/api/remotes/lib/client.js', url: '/plugins/api-remotes.js', rev: 'fx', inject: ['@xrkseek/xrk-api-gateway'], immediately: true },
   // The settings domain base: the only provider of ctx.settingsScope, which the
   // locale and ui-theme rows below inject for their preference rows. Without it
   // both stay pending and ui-layout never activates, so nothing renders.
-  { id: '@deepseek-ai/dsh-client-ui-settings', bundlePath: 'packages/client/ui-settings/lib/client.js', url: '/plugins/ui-settings.js', rev: 'fx', inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-runtime', '@deepseek-ai/dsh-api-remotes'], immediately: true },
-  { id: '@deepseek-ai/dsh-client-runtime', bundlePath: 'packages/client/runtime/lib/client.js', url: '/plugins/runtime.js', rev: 'fx', inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-typert-registry', '@deepseek-ai/dsh-api-gateway'], immediately: true },
-  { id: '@deepseek-ai/dsh-client-ui-theme', bundlePath: 'packages/client/ui-theme/lib/client.js', url: '/plugins/ui-theme.js', rev: 'fx', inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-runtime', '@deepseek-ai/dsh-client-locale', '@deepseek-ai/dsh-client-ui-settings', '@deepseek-ai/dsh-api-remotes'], immediately: true },
-  { id: '@deepseek-ai/dsh-client-locale', bundlePath: 'packages/client/locale/lib/client.js', url: '/plugins/locale.js', rev: 'fx', inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-runtime', '@deepseek-ai/dsh-client-ui-settings', '@deepseek-ai/dsh-api-remotes'], immediately: true },
-  { id: '@deepseek-ai/dsh-client-ui-layout', bundlePath: 'packages/client/ui-layout/lib/client.js', url: '/plugins/ui-layout.js', rev: 'fx', inject: ['@deepseek-ai/dsh-client-runtime'] },
-  { id: '@deepseek-ai/dsh-client-ui-sidebar', bundlePath: 'packages/client/ui-sidebar/lib/client.js', url: '/plugins/ui-sidebar.js', rev: 'fx', inject: ['@deepseek-ai/dsh-client-ui-layout'] },
-  { id: '@deepseek-ai/dsh-client-ui-conversation', bundlePath: 'packages/client/ui-conversation/lib/client.js', url: '/plugins/ui-conversation.js', rev: 'fx', inject: ['@deepseek-ai/dsh-client-ui-layout'] },
-  { id: '@deepseek-ai/dsh-client-ui-tool', bundlePath: 'packages/client/ui-tool/lib/client.js', url: '/plugins/ui-tool.js', rev: 'fx', inject: ['@deepseek-ai/dsh-client-runtime', '@deepseek-ai/dsh-client-locale', '@deepseek-ai/dsh-client-ui-conversation'] },
-  { id: '@deepseek-ai/dsh-client-ui-workflow-run', bundlePath: 'packages/client/ui-workflow-run/lib/client.js', url: '/plugins/ui-workflow-run.js', rev: 'fx', inject: ['@deepseek-ai/dsh-client-locale', '@deepseek-ai/dsh-client-runtime', '@deepseek-ai/dsh-client-ui-conversation'] },
+  { id: '@xrkseek/client-ui-settings', bundlePath: 'packages/client/ui-settings/lib/client.js', url: '/plugins/ui-settings.js', rev: 'fx', inject: ['@xrkseek/client-connection', '@xrkseek/client-runtime', '@xrkseek/xrk-api-remotes'], immediately: true },
+  { id: '@xrkseek/client-runtime', bundlePath: 'packages/client/runtime/lib/client.js', url: '/plugins/runtime.js', rev: 'fx', inject: ['@xrkseek/client-connection', '@xrkseek/xrk-typert-registry', '@xrkseek/xrk-api-gateway'], immediately: true },
+  { id: '@xrkseek/client-ui-theme', bundlePath: 'packages/client/ui-theme/lib/client.js', url: '/plugins/ui-theme.js', rev: 'fx', inject: ['@xrkseek/client-connection', '@xrkseek/client-runtime', '@xrkseek/client-locale', '@xrkseek/client-ui-settings', '@xrkseek/xrk-api-remotes'], immediately: true },
+  { id: '@xrkseek/client-locale', bundlePath: 'packages/client/locale/lib/client.js', url: '/plugins/locale.js', rev: 'fx', inject: ['@xrkseek/client-connection', '@xrkseek/client-runtime', '@xrkseek/client-ui-settings', '@xrkseek/xrk-api-remotes'], immediately: true },
+  { id: '@xrkseek/client-ui-layout', bundlePath: 'packages/client/ui-layout/lib/client.js', url: '/plugins/ui-layout.js', rev: 'fx', inject: ['@xrkseek/client-runtime'] },
+  { id: '@xrkseek/client-ui-sidebar', bundlePath: 'packages/client/ui-sidebar/lib/client.js', url: '/plugins/ui-sidebar.js', rev: 'fx', inject: ['@xrkseek/client-ui-layout'] },
+  { id: '@xrkseek/client-ui-conversation', bundlePath: 'packages/client/ui-conversation/lib/client.js', url: '/plugins/ui-conversation.js', rev: 'fx', inject: ['@xrkseek/client-ui-layout'] },
+  { id: '@xrkseek/client-ui-tool', bundlePath: 'packages/client/ui-tool/lib/client.js', url: '/plugins/ui-tool.js', rev: 'fx', inject: ['@xrkseek/client-runtime', '@xrkseek/client-locale', '@xrkseek/client-ui-conversation'] },
+  { id: '@xrkseek/client-ui-workflow-run', bundlePath: 'packages/client/ui-workflow-run/lib/client.js', url: '/plugins/ui-workflow-run.js', rev: 'fx', inject: ['@xrkseek/client-locale', '@xrkseek/client-runtime', '@xrkseek/client-ui-conversation'] },
   {
-    id: '@deepseek-ai/dsh-client-ui-workspace',
+    id: '@xrkseek/client-ui-workspace',
     bundlePath: 'packages/client/ui-workspace/lib/client.js',
     url: '/plugins/ui-workspace.js',
     rev: 'fx',
     inject: [
-      '@deepseek-ai/dsh-client-runtime',
-      '@deepseek-ai/dsh-client-ui-conversation',
-      '@deepseek-ai/dsh-client-ui-sidebar',
+      '@xrkseek/client-runtime',
+      '@xrkseek/client-ui-conversation',
+      '@xrkseek/client-ui-sidebar',
     ],
   },
-  { id: '@deepseek-ai/dsh-session-log-export', bundlePath: 'packages/session-query/session-log-export/lib/client.js', url: '/plugins/session-log-download.js', rev: 'fx', inject: ['@deepseek-ai/dsh-client-ui-commands', '@deepseek-ai/dsh-client-ui-conversation'] },
-  { id: '@deepseek-ai/dsh-client-ui-trajectory', bundlePath: 'packages/client/ui-trajectory/lib/client.js', url: '/plugins/ui-trajectory.js', rev: 'fx', inject: ['@deepseek-ai/dsh-client-ui-conversation'] },
+  { id: '@xrkseek/xrk-session-log-export', bundlePath: 'packages/session-query/session-log-export/lib/client.js', url: '/plugins/session-log-download.js', rev: 'fx', inject: ['@xrkseek/client-ui-commands', '@xrkseek/client-ui-conversation'] },
+  { id: '@xrkseek/client-ui-trajectory', bundlePath: 'packages/client/ui-trajectory/lib/client.js', url: '/plugins/ui-trajectory.js', rev: 'fx', inject: ['@xrkseek/client-ui-conversation'] },
 ]
 
 const bundles = new Map(PLUGINS.map(plugin => [
@@ -53,7 +53,7 @@ const bundles = new Map(PLUGINS.map(plugin => [
 ]))
 
 interface FixtureWindow extends Window {
-  __DSH_BOOT__?: { rev: string; entries: WebBootEntry[] }
+  __XRK_BOOT__?: { rev: string; entries: WebBootEntry[] }
   __ModuleLoader__?: unknown
 }
 
@@ -93,7 +93,7 @@ export function installAssembledBootEnv(): void {
     act(() => { unmount?.() })
     unmount = undefined
     cleanup()
-    delete win.__DSH_BOOT__
+    delete win.__XRK_BOOT__
     delete win.__ModuleLoader__
     document.body.innerHTML = ''
     document.head.querySelectorAll('style[data-plugin]').forEach((style) => { style.remove() })
@@ -117,7 +117,7 @@ export function mountAssembledApp(): void {
   const root = document.createElement('div')
   root.id = 'root'
   document.body.appendChild(root)
-  win.__DSH_BOOT__ = { rev: 'fx', entries: PLUGINS.map(({ bundlePath: _bundlePath, ...plugin }) => plugin) }
+  win.__XRK_BOOT__ = { rev: 'fx', entries: PLUGINS.map(({ bundlePath: _bundlePath, ...plugin }) => plugin) }
   act(() => {
     const entry = new AppWebEntry(root, {
       loadBundle: async (url) => {

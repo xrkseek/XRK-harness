@@ -1,4 +1,4 @@
-import { Context } from '@deepseek-ai/cordis';
+import { Context } from '@xrkseek/cordis';
 function swap(target, source) {
     for (const key of Reflect.ownKeys(target)) {
         Reflect.deleteProperty(target, key);

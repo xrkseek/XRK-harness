@@ -1,4 +1,4 @@
-# @deepseek-ai/dsh-client-ui-directory-picker-native
+# @xrkseek/client-ui-directory-picker-native
 
 [English](README.md) | 中文
 
@@ -6,7 +6,7 @@
 
 两处注册通过嵌套的 `slots.inject()` 作为一个事务性 effect 安装，因为任一声明方条目都可能稍后激活或替换其声明。占位者在每个 `open` 上升沿只武装一次，所以重渲染（包括采纳期间 `busy` 而 `open` 仍为真）都不会再开第二个选择框；owner 撤回 `open` 会为下一次请求重新武装。结果经由 ref 回报，因此答案落到 owner 最新的处理器上，而不是打开选择框时捕获的那一套。卸载（HMR 替换占位者）会整体丢弃该结果：wire 上没有按请求的中止通道，所以 Host 侧的选择框会一直存在到被回答，它的答案无处可落，替换后的实例则在 owner 仍然打开的请求下重新武装。
 
-node 半边是一个空 `apply`：它的存在只为让插件出现在 host 的 cordis.yml 与 Loader 中，浏览器半边经 `exports["./client"]` 出货，并通过 `dsh.client` 清单声明被发现。
+node 半边是一个空 `apply`：它的存在只为让插件出现在 host 的 cordis.yml 与 Loader 中，浏览器半边经 `exports["./client"]` 出货，并通过 `xrk.client` 清单声明被发现。
 
 ## 模型体验
 

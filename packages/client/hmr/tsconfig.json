@@ -10,26 +10,10 @@
     ],
     "types": [
       "node"
-    ]
+    ],
+    "paths": {}
   },
   "include": [
     "src"
-  ],
-  "references": [
-    {
-      "path": "../../cordis"
-    },
-    {
-      "path": "../../cordis-loader"
-    },
-    {
-      "path": "../modules"
-    },
-    {
-      "path": "../../schemastery"
-    },
-    {
-      "path": "../../stubs/dsh-invariants"
-    }
   ]
 }

@@ -1,4 +1,4 @@
-# @deepseek-ai/dsh-client-web-react
+# @xrkseek/client-web-react
 
 English | [中文](README.zh.md)
 

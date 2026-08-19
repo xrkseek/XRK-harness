@@ -317,7 +317,7 @@ describe("manifest aliases + cordis stub", () => {
       path.join(dir, "package.json"),
       JSON.stringify({
         name: "community-cordis",
-        peerDependencies: { "@deepseek-ai/cordis": "*" },
+        peerDependencies: { "@xrkseek/cordis": "*" },
         main: "./boom.mjs",
       }),
       "utf8",

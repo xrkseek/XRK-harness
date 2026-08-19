@@ -1,4 +1,4 @@
-import { valueMap } from '@deepseek-ai/cosmokit';
+import { valueMap } from '@xrkseek/cosmokit';
 // eslint-disable-next-line no-new-func
 /** Evaluate a JavaScript expression against a loader context scope. */
 export const evaluate = new Function('ctx', 'expr', `

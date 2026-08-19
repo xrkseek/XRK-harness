@@ -1,5 +1,5 @@
 # NOTICE
 
-`apps/web` + `packages/client` 是 **DeepSeek Harness** Web 客户端源码的定点拷贝（MIT，Copyright DeepSeek），在本仓做二次创作。本仓根目录 [LICENSE](../../LICENSE) 覆盖 XRK-Harness；DeepSeek 原文许可条件：保留版权声明与许可全文（上游 MIT 与本仓相同条款）。
+`apps/web` + `packages/client` 是 **DeepSeek Harness** Web 客户端源码的定点拷贝（MIT，Copyright DeepSeek），在本仓二次创作并 **rescoped** 为 `@xrkseek/client-*` / `@xrkseek/web-frontend`（不再使用 `@deepseek-ai/dsh-*` 包名）。本仓根目录 [LICENSE](../../LICENSE) 覆盖 XRK-Harness；DeepSeek 原文许可条件：保留版权声明与许可全文（上游 MIT 与本仓相同条款）。
 
 不是 GitHub Fork：不跟踪 DSH 默认分支，不向 deepseek-ai 提 PR。定点见 [UPSTREAM](./UPSTREAM)。对照实现看本机 bar 仓，不设 vendor 联接。

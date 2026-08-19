@@ -119,7 +119,7 @@ export interface HttpServerOptions {
   attachExtras?: (server: Server) => { close(): void };
   /**
    * Optional SPA dist root. Public GET/HEAD (no API key).
-   * `transformIndex` typically injects `__DSH_BOOT__`.
+   * `transformIndex` typically injects `__XRK_BOOT__`.
    */
   readonly webStatic?: WebStaticOptions;
 }

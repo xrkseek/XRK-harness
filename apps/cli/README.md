@@ -8,7 +8,7 @@ CLI 入口：`xrk-harness`（`apps/cli`）。产品聊天 UI = `apps/web/dist`�
 |------|------|
 | `run` | 单 turn（默认 minimal + replay；设了 `XRK_LLM_PRESET` 则走 Registry） |
 | `serve` | HTTP host + 产品壳 |
-| `web` | `serve` 别名（对齐 `dsh web`） |
+| `web` | `serve` 的别名 |
 | `doctor` | Node ≥26 · workspace 目录 · 产品壳是否找得到 |
 | `dump-config` | 打印 preset 组合配置 |
 | `help` | 帮助 |
@@ -38,7 +38,7 @@ node apps/cli/dist/bin.js run --preset minimal "ping"
 node apps/cli/dist/bin.js doctor
 ```
 
-`serve` 按 **CLI 包位置** 找 `apps/web/dist`（无则 `apps/console`），不把用户 `--workspace` 当成壳目录。
+`serve` 按 **CLI 包位置** 找 `apps/web/dist`（无则 `apps/console`），不把用户 `--workspace` 当成壳目录。产品壳：`pnpm web:build` 后 `pnpm client:bundle` 再 `pnpm web:assemble`。
 
 ## 环境变量
 

@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
-import { Context, Inject, Service, composeError } from "@deepseek-ai/cordis";
-import { deepEqual, defineProperty, isNonNullable, isNullable, valueMap } from "@deepseek-ai/cosmokit";
+import { Context, Inject, Service, composeError } from "@xrkseek/cordis";
+import { deepEqual, defineProperty, isNonNullable, isNullable, valueMap } from "@xrkseek/cosmokit";
 //#region lib/types/internal.js
 /** Helpers for locating the current Node internal module loader. */
 var ModuleLoader;

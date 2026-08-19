@@ -64,19 +64,19 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
       const htmlRes = await fetch(`${base}/`);
       expect(htmlRes.status).toBe(200);
       const html = await htmlRes.text();
-      expect(html).toContain("__DSH_BOOT__");
-      expect(html).toContain("@deepseek-ai/dsh-client-runtime");
-      expect(html).toContain("@deepseek-ai/dsh-client-ui-conversation");
-      expect(html).not.toContain("dsh-client-ui-cordis");
-      expect(html).not.toContain("dsh-cordis-client-runner");
-      expect(html).not.toContain("dsh-client-hmr");
+      expect(html).toContain("__XRK_BOOT__");
+      expect(html).toContain("@xrkseek/client-runtime");
+      expect(html).toContain("@xrkseek/client-ui-conversation");
+      expect(html).not.toContain("client-ui-cordis");
+      expect(html).not.toContain("xrk-cordis-client-runner");
+      expect(html).not.toContain("client-hmr");
 
       const welcomeJs = await readFile(
         path.join(
           WEB_DIST,
           "plugins",
-          "@deepseek-ai",
-          "dsh-client-ui-settings-models",
+          "@xrkseek",
+          "client-ui-settings-models",
           "client.js",
         ),
         "utf8",
@@ -85,14 +85,32 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
       expect(welcomeJs).toContain("2026-08-17.xrk1");
 
       const plugin = await fetch(
-        `${base}/plugins/@deepseek-ai/dsh-client-runtime/client.js`,
+        `${base}/plugins/@xrkseek/client-runtime/client.js`,
         { method: "HEAD" },
       );
       expect(plugin.status).toBe(200);
       expect(plugin.headers.get("content-type") ?? "").toMatch(/javascript/);
 
+      const typert = await fetch(
+        `${base}/plugins/@xrkseek/xrk-typert-registry/client.js`,
+        { method: "HEAD" },
+      );
+      expect(typert.status).toBe(200);
+
+      const bootRes = await fetch(`${base}/boot.json`);
+      expect(bootRes.status).toBe(200);
+      const boot = (await bootRes.json()) as { entries: { id: string }[] };
+      const bootIds = boot.entries.map((e) => e.id);
+      expect(bootIds).toEqual(
+        expect.arrayContaining([
+          "@xrkseek/xrk-typert-registry",
+          "@xrkseek/xrk-api-gateway",
+          "@xrkseek/xrk-api-remotes",
+        ]),
+      );
+
       const missing = await fetch(
-        `${base}/plugins/@deepseek-ai/does-not-exist/client.js`,
+        `${base}/plugins/@xrkseek/does-not-exist/client.js`,
       );
       expect(missing.status).toBe(404);
       expect(await missing.text()).not.toContain("<!doctype html>");

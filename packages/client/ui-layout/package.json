@@ -1,5 +1,5 @@
 {
-  "name": "@deepseek-ai/dsh-client-ui-layout",
+  "name": "@xrkseek/client-ui-layout",
   "description": "Shell plugin: three-column AppFrame with drag handles, ctx.layout viewing-state service (navigation + panels)",
   "version": "0.1.0-rc.7",
   "publishConfig": {
@@ -7,7 +7,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
     "directory": "packages/client/ui-layout"
   },
   "type": "module",
@@ -29,11 +29,11 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
-  "dsh": {
+  "xrk": {
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-theme"
+        "@xrkseek/client-runtime",
+        "@xrkseek/client-ui-theme"
       ],
       "platform": "web"
     }
@@ -44,21 +44,21 @@
   },
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/dsh-client-runtime": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-theme": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^",
+    "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/client-ui-theme": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "@xrkseek/cordis": "workspace:^",
     "react": "^18.2.0"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-client-locale": "workspace:^",
-    "@deepseek-ai/dsh-client-runtime": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-theme": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@xrkseek/client-locale": "workspace:^",
+    "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/client-ui-theme": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
     "@types/react": "~18.3.1",
-    "@deepseek-ai/cordis": "workspace:^",
+    "@xrkseek/cordis": "workspace:^",
     "react": "^18.2.0"
   },
   "files": [

@@ -7,12 +7,12 @@
  * payload, the scoped consume-token dispatch, per-session popupFor
  * lifecycle, and the directory invalidation event subscriptions.
  */
-import { Context } from '@deepseek-ai/cordis'
+import { Context } from '@xrkseek/cordis'
 import { describe, expect, it, vi } from 'vitest'
-import type { CommandResult } from '@deepseek-ai/dsh-commands/types'
-import { createScope, scopeOf } from '@deepseek-ai/dsh-client-runtime/client'
-import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
-import type { ClientSessionContext, ConsumeTokenRequest, InputTriggerPick, InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
+import type { CommandResult } from '@xrkseek/xrk-commands/types'
+import { createScope, scopeOf } from '@xrkseek/client-runtime/client'
+import type { SessionId } from '@xrkseek/client-runtime/client'
+import type { ClientSessionContext, ConsumeTokenRequest, InputTriggerPick, InputTriggerSource } from '@xrkseek/client-ui-input-trigger/client'
 import type { CommandContribution, CommandDecoration, CommandUiSpec, SelectOption } from '../src/client/contract.ts'
 import type { CommandDescriptor } from '../src/client/directory.ts'
 import { CommandUiRuntime } from '../src/client/service.ts'

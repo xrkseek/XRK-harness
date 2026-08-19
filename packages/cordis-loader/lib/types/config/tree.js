@@ -6,8 +6,8 @@ var __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExte
     }
     return path;
 };
-import { composeError } from '@deepseek-ai/cordis';
-import { isNonNullable } from '@deepseek-ai/cosmokit';
+import { composeError } from '@xrkseek/cordis';
+import { isNonNullable } from '@xrkseek/cosmokit';
 import { EntryGroup } from "./group.js";
 /** Mutable tree of loader entries. Persistence is supplied by subclasses. */
 export class EntryTree {

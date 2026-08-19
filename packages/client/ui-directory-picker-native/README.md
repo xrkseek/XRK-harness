@@ -1,4 +1,4 @@
-# @deepseek-ai/dsh-client-ui-directory-picker-native
+# @xrkseek/client-ui-directory-picker-native
 
 English | [中文](README.zh.md)
 
@@ -6,7 +6,7 @@ Native directory-picker surface: the browser half of the native picking interact
 
 Both registrations install as one transactional effect through nested `slots.inject()` calls, because either declaring entry may activate later or replace its declaration. The occupant arms once per rising `open` edge, so re-renders — including an adoption that keeps `open` true while `busy` — never launch a second chooser, and the owner withdrawing `open` re-arms the next request. Settlements ride a ref so the answer reaches the owner's latest handlers rather than the ones captured when the chooser opened. An unmount (HMR replacing the occupant) discards the settlement wholesale: the wire carries no per-request abort, so the host-side chooser survives until answered, its answer lands nowhere, and the replacement instance re-arms under the owner's still-open request.
 
-The node half is an empty `apply`: it exists so the plugin appears in the host cordis.yml and Loader, while the browser half ships through `exports["./client"]` and is discovered through the `dsh.client` manifest declaration.
+The node half is an empty `apply`: it exists so the plugin appears in the host cordis.yml and Loader, while the browser half ships through `exports["./client"]` and is discovered through the `xrk.client` manifest declaration.
 
 ## Model Experience
 

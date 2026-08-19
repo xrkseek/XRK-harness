@@ -19,7 +19,7 @@
 | `commands` | `commands[]` | Face `commands/list` + `commands/execute`（插件名优先于 workspace recipe） |
 
 保留（可发现、尚未自动接线）：`channel` · `policy` · `llm`。  
-`cordis`：DSH Cordis 宿主包（peer/dep `@deepseek-ai/cordis`）只登记 stub，**不 `import()`、不调 `apply()`**。
+`cordis`：DSH Cordis 宿主包（peer/dep `@xrkseek/cordis`）只登记 stub，**不 `import()`、不调 `apply()`**。
 
 常量：`PLUGIN_KINDS` · `RESERVED_PLUGIN_KINDS`。
 
@@ -71,7 +71,7 @@ Host `stop` 会对已登记插件逐个 `unregister`（含 `dispose`）。
 
 或 `package.json` 同形字段：`xrkseek.plugin` · `dsh.plugin` · `deepseek.plugin`（嵌套 `dsh.plugin` / 顶层 `"dsh.plugin"` 均可）。
 
-无上述字段、但 `peerDependencies` / `dependencies` 含 `@deepseek-ai/cordis` → `kind: "cordis"` stub（`skipLoad`）。
+无上述字段、但 `peerDependencies` / `dependencies` 含 `@xrkseek/cordis` → `kind: "cordis"` stub（`skipLoad`）。
 
 `discover(dir)`：目录自身有 manifest → 单插件；否则扫描一级子目录（`@scope/pkg` 两级）。跳过 `node_modules` / `web` / `client`。
 

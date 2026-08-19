@@ -1,0 +1,35 @@
+{
+  "name": "@xrkseek/xrk-api-gateway",
+  "description": "XRK Face Client Remote gateway ($on / $dispatch / Face $bindFace). Not the DSH generated-codec gateway.",
+  "version": "0.1.0-rc.7",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./client": {
+      "types": "./src/client/index.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "xrk": {
+    "client": {
+      "inject": [
+        "@xrkseek/xrk-typert-registry",
+        "@xrkseek/client-connection"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@xrkseek/cordis": "workspace:^",
+    "@xrkseek/client-connection": "workspace:^",
+    "@xrkseek/xrk-typert-protocol": "workspace:^",
+    "@xrkseek/xrk-typert-registry": "workspace:^"
+  }
+}

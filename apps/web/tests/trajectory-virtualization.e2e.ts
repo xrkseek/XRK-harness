@@ -8,8 +8,8 @@ import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import type { ReplayEntry } from '@deepseek-ai/dsh-llm-replay'
+import type { StreamChunk } from '@xrkseek/xrk-llm'
+import type { ReplayEntry } from '@xrkseek/xrk-llm-replay'
 import { createChatScrollFixture } from './chat-scroll-fixture.ts'
 import {
   captureStableAria,

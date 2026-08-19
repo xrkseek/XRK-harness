@@ -29,4 +29,4 @@ DSH Web 是 MIT。定点拷源码做二次创作合法，但 **GitHub Fork / 跟
 - 规格以本仓 `docs/` + 代码为准
 - Face 说 DSH 形 wire，真源仍是 session 事件
 - 产品 boot 省略 Cordis 客户端面板与捕获壳 HMR
-- `apps/web` / `packages/client` 暂不进 pnpm workspace（自包含编出尚未齐）
+- `apps/web` + `packages/client` 已进 pnpm workspace；Vite SPA 本仓可编。插件 `client.js` 由本仓 `pnpm client:bundle`（tsdown）编出，`web:assemble` 装进 `apps/web/dist`

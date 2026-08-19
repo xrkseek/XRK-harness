@@ -2,11 +2,11 @@
  * Deliverables plugin, node half. Registers the response-format guidance that
  * lets the browser half recognize final-response file references. The browser
  * half ships via exports["./client"], discovered through the package.json
- * dsh.client declaration.
+ * xrk.client declaration.
  */
 
-import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-system-prompt'
+import type { Context } from '@xrkseek/cordis'
+import type {} from '@xrkseek/xrk-system-prompt'
 
 /** Services required for the model guidance paired with the browser renderer. */
 export const inject = ['systemPrompt']

@@ -1,13 +1,13 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-client-ui-goal`.
- * @module @deepseek-ai/dsh-client-ui-goal/invariant
+ * Package-owned invariant companion for `@xrkseek/client-ui-goal`.
+ * @module @xrkseek/client-ui-goal/invariant
  */
 
 /* jscpd:ignore-start */
-import type { Context } from '@deepseek-ai/cordis'
-import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
+import type { Context } from '@xrkseek/cordis'
+import type { InvariantInstaller } from '@xrkseek/xrk-invariants'
 
-const PACKAGE_NAME = '@deepseek-ai/dsh-client-ui-goal'
+const PACKAGE_NAME = '@xrkseek/client-ui-goal'
 
 /** Cordis companion plugin name. */
 export const name = 'client-ui-goal-invariant'

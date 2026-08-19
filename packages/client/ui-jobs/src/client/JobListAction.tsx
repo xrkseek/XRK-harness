@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import type { JobView } from '@deepseek-ai/dsh-client-runtime/client'
-import { IconChevronDownOutline14, StateDot, useDismissOnOutsidePointer, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { JobView } from '@xrkseek/client-runtime/client'
+import { IconChevronDownOutline14, StateDot, useDismissOnOutsidePointer, type StateDotState } from '@xrkseek/client-ui-primitives'
+import type { PropsLocale, PropsRuntime, TranslateNS } from '@xrkseek/client-ui-slots'
 import { NS } from './locales.ts'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@xrkseek/client-ui-conversation/client'
 import css from './JobListAction.module.css'
 
 /** Full props for the session-header background-job action. */

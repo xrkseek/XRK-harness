@@ -15,10 +15,10 @@
  * — a cold session's host Agent is already disposed while its client actx
  * stays alive for history viewing.
  */
-import { Context as CordisContext } from '@deepseek-ai/cordis'
-import type { Context, Fiber } from '@deepseek-ai/cordis'
-import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
-import type { TypertClientRemote, TypertRemoteScopeApi } from '@deepseek-ai/dsh-typert-protocol'
+import { Context as CordisContext } from '@xrkseek/cordis'
+import type { Context, Fiber } from '@xrkseek/cordis'
+import type { SessionId } from '@xrkseek/xrk-api-remotes/client'
+import type { TypertClientRemote, TypertRemoteScopeApi } from '@xrkseek/xrk-typert-protocol'
 
 /** Client Cordis Context carrying one Agent identity and its scoped Remote namespaces. */
 export type AgentContext = Omit<Context, 'remote'> & {
@@ -26,7 +26,7 @@ export type AgentContext = Omit<Context, 'remote'> & {
 }
 
 /** Context tag written by {@link createScope}. */
-const kScope = Symbol('dsh.client.scope')
+const kScope = Symbol('xrk.client.scope')
 
 /** A minted Agent scope and its disposal boundary. */
 export interface AgentScopeHandle {

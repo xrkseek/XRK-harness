@@ -20,7 +20,7 @@ export function mountFaceConsole(root: HTMLElement): void {
 
   const bootGate = new BootGate();
   bootGate.register("manifest", boot ? "active" : "failed");
-  if (!boot) bootGate.fail("missing __DSH_BOOT__ / __XRK_BOOT__");
+  if (!boot) bootGate.fail("missing __XRK_BOOT__ / __XRK_BOOT__");
 
   const view = new FaceSessionView();
   const slots = new SlotRegistry();

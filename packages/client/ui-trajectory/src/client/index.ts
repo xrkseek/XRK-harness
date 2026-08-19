@@ -2,13 +2,13 @@
  * Browser trajectory plugin contributing one entry to the conversation view
  * slot without defining a service.
  */
-import type { Context } from '@deepseek-ai/cordis'
-import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context } from '@xrkseek/cordis'
+import type { SessionId } from '@xrkseek/client-runtime/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
-import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@xrkseek/client-locale/client'
 // Type-only: the 'conversation.view' SlotMap row (declared by the slot's
 // owning package) must be in the program for the register calls to type.
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@xrkseek/client-ui-conversation/client'
 import { createTrajectoryDurationStore } from './duration-store.ts'
 import { en, NS, zh } from './locales.ts'
 import { registerTrajectoryAssistantDefinition } from './trajectory-assistant-definition.ts'

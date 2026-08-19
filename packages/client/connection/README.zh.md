@@ -1,4 +1,4 @@
-# @deepseek-ai/dsh-client-connection
+# @xrkseek/client-connection
 
 [English](README.md) | 中文
 

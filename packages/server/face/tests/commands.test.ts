@@ -575,7 +575,7 @@ describe("pluginInventory/list", () => {
         { id: "example-tools", kind: "tools" },
         { id: "community-cordis", kind: "cordis" },
       ],
-      webPlugins: [{ id: "@deepseek-ai/dsh-client-runtime" }],
+      webPlugins: [{ id: "@xrkseek/client-runtime" }],
     });
     const listed = await dispatchFaceMethod(
       runtime,
@@ -600,8 +600,8 @@ describe("pluginInventory/list", () => {
           fiberPhase: "failed",
         },
         {
-          entryId: "@deepseek-ai/dsh-client-runtime",
-          moduleName: "@deepseek-ai/dsh-client-runtime",
+          entryId: "@xrkseek/client-runtime",
+          moduleName: "@xrkseek/client-runtime",
           enabled: true,
           fiberPhase: "active",
         },

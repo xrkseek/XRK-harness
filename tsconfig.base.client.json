@@ -10,6 +10,8 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": true,
@@ -20,12 +22,12 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@deepseek-ai/cordis": ["./packages/cordis/src"],
-      "@deepseek-ai/cosmokit": ["./packages/cosmokit/src"],
-      "@deepseek-ai/schemastery": ["./packages/schemastery/src"],
-      "@deepseek-ai/cordis-plugin-loader": ["./packages/cordis-loader/src"],
-      "@deepseek-ai/cordis-plugin-include": ["./packages/cordis-include/src"],
-      "@deepseek-ai/cordis-plugin-group": ["./packages/cordis-group/src"]
+      "@xrkseek/cordis": ["./packages/cordis/src"],
+      "@xrkseek/cosmokit": ["./packages/cosmokit/src"],
+      "@xrkseek/schemastery": ["./packages/schemastery/src"],
+      "@xrkseek/cordis-plugin-loader": ["./packages/cordis-loader/src"],
+      "@xrkseek/cordis-plugin-include": ["./packages/cordis-include/src"],
+      "@xrkseek/cordis-plugin-group": ["./packages/cordis-group/src"]
     }
   }
 }

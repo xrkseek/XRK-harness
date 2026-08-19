@@ -1,4 +1,4 @@
-import { defineProperty, isNullable } from '@deepseek-ai/cosmokit';
+import { defineProperty, isNullable } from '@xrkseek/cosmokit';
 import { getTraceable, symbols, withProps } from "./utils.js";
 function enhanceError(error) {
     const lines = error.stack.split('\n');

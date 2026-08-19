@@ -39,6 +39,7 @@ describe("Face DSH wire-event adapt", () => {
       type: "user/message",
       seq: 3,
       time: 10,
+      surfaceOp: "append",
       data: {
         id: "t1",
         content: [{ type: "text", text: "hello" }],
@@ -46,6 +47,37 @@ describe("Face DSH wire-event adapt", () => {
         rpcId: "rpc-1",
       },
     });
+  });
+
+  it("assistant/message and tool/result stamp surfaceOp append for client fold", () => {
+    expect(
+      toDshWireSessionEvent(
+        {
+          type: "assistant/message",
+          ts: 11,
+          turnId: "t1",
+          stepId: "s1",
+          content: "hi",
+        },
+        4,
+      ).surfaceOp,
+    ).toBe("append");
+    expect(
+      toDshWireSessionEvent(
+        {
+          type: "tool/result",
+          ts: 12,
+          turnId: "t1",
+          stepId: "s1",
+          result: {
+            toolCallId: "c1",
+            name: "todo_write",
+            content: "ok",
+          },
+        },
+        5,
+      ).surfaceOp,
+    ).toBe("append");
   });
 
   it("assistant/chunk uses text-delta; maps turn/step when ctx.ids set", () => {
@@ -142,7 +174,7 @@ describe("Face DSH wire-event adapt", () => {
     expect(wire.data).toMatchObject({
       callId: "c9",
       name: "bash",
-      arguments: { cmd: "pwd" },
+      arguments: '{"cmd":"pwd"}',
     });
     expect(wire.data).not.toHaveProperty("call");
     expect(presentToolView(event)).toBeUndefined();

@@ -4,11 +4,11 @@
 
 | 本仓路径 | npm 名 |
 |----------|--------|
-| `packages/cordis` | `@deepseek-ai/cordis` |
-| `packages/cordis-loader` | `@deepseek-ai/cordis-plugin-loader` |
-| `packages/cordis-include` | `@deepseek-ai/cordis-plugin-include` |
-| `packages/cordis-group` | `@deepseek-ai/cordis-plugin-group` |
-| `packages/cosmokit` | `@deepseek-ai/cosmokit` |
-| `packages/schemastery` | `@deepseek-ai/schemastery` |
+| `packages/cordis` | `@xrkseek/cordis` |
+| `packages/cordis-loader` | `@xrkseek/cordis-plugin-loader` |
+| `packages/cordis-include` | `@xrkseek/cordis-plugin-include` |
+| `packages/cordis-group` | `@xrkseek/cordis-plugin-group` |
+| `packages/cosmokit` | `@xrkseek/cosmokit` |
+| `packages/schemastery` | `@xrkseek/schemastery` |
 
 不是 GitHub Fork，不是 live vendor 联接。壳归因见 [apps/web/NOTICE](../apps/web/NOTICE)；本仓根 [LICENSE](../../LICENSE)。

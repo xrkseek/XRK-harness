@@ -24,8 +24,8 @@
 
 | 域 | 说明 |
 | --- | --- |
-| Host Face ↔ 产品 Web | 首屏 RPC + 静态壳有测；Face 冷 history 含 reasoning / standing 工具卡；浏览器硬刷 thinking / 工具卡仍未勾 E2E |
-| 产品 Web | `apps/web` Vite SPA 已能本仓编出 `dist/`；`boot.json` + `/plugins` 组装未齐；浏览器硬刷未验收 |
+| Host Face ↔ 产品 Web | 首屏 RPC + 静态壳有测（`product-shell.test`：`__XRK_BOOT__` · `@xrkseek/client-*` + Face 立即层 plugin 200）；Playwright 硬刷欢迎窗 / 侧栏 / wordmark / 流式一轮（`pnpm test:web`，不进 `pnpm check`）；Face 冷 history 含 reasoning / standing 工具卡；浏览器硬刷 thinking / 工具卡 / 审批卡仍未勾 E2E |
+| 产品 Web | `pnpm web:build` + `client:bundle` + `web:assemble` → `apps/web/dist`（35 plugins）；欢迎窗 / 侧栏 / 流式 Playwright 已勾；工具卡 / 审批卡浏览器 E2E 未勾 |
 | 保留插件 kind | `channel` / `policy` / `llm` 可发现、未自动接线；Cordis 宿主包只登记 stub |
 
 ## 未做
@@ -44,6 +44,6 @@ presets / sdk / server → core* | llm | mcp | attachment | exec* | workspace | 
 core* / 能力叶 → kernel | protocol | compose
 ```
 
-外壳二次创作：`apps/web` + `packages/client`。品牌：`apps/web/public`。serve 用 `apps/web/dist`（gitignore；Vite SPA 已能本仓编出；boot/plugins 组装未齐）。不是 GitHub Fork；无 vendor 联接；Cordis 薄栈在 `packages/cordis*`。内核不嵌 Cordis Host。见 [AGENTS.md](../AGENTS.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)。
+外壳二次创作：`apps/web` + `packages/client`。品牌：`apps/web/public`。serve 用 `apps/web/dist`（`web:build` + `client:bundle` + `web:assemble`；gitignore）。不是 GitHub Fork；无 vendor 联接；Cordis 薄栈在 `packages/cordis*`。内核不嵌 Cordis Host。见 [AGENTS.md](../AGENTS.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)。
 
 [learn.md](./learn.md) · [modules/](./modules/README.md)

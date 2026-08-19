@@ -112,7 +112,7 @@ node apps/cli/dist/bin.js serve --preset server --workspace .
 # open http://127.0.0.1:8787/
 ```
 
-index.html 由 host 注入 `__DSH_BOOT__` / `__XRK_BOOT__`（`boot.json` merge `{XRK_PLUGINS_DIR}/web/boot.json` 后，再 `applyXrkProductBootPolicy` 去掉 Cordis 客户端 id 与捕获壳 HMR）。缺失的 `/plugins/…` 返回 404（不回退 SPA）。
+index.html 由 host 注入 `__XRK_BOOT__`（`boot.json` merge `{XRK_PLUGINS_DIR}/web/boot.json` 后，再 `applyXrkProductBootPolicy` 去掉 Cordis 客户端 id 与 HMR）。缺失的 `/plugins/…` 返回 404（不回退 SPA）。
 
 ## Env
 

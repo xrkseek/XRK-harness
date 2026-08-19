@@ -25,15 +25,15 @@
  * imports are a build error anyway.
  *
  * This file is the browser-safe contract face (zero node imports): the
- * `__DSH_BOOT__` wire types, the boot-manifest parser, and the boundaries around
+ * `__XRK_BOOT__` wire types, the boot-manifest parser, and the boundaries around
  * {@link ClientModuleSystem}. The package root is the host-side service that
  * composes the wire.
  */
 
-import type {} from '@deepseek-ai/cordis'
+import type {} from '@xrkseek/cordis'
 import type { ClientModuleSystem } from './system.ts'
 
-declare module '@deepseek-ai/cordis' {
+declare module '@xrkseek/cordis' {
   interface Context {
     /** The client module system the web shell builds at boot (provided by the `./client` wrapper plugin). */
     modules: ClientModuleLoader
@@ -44,7 +44,7 @@ declare module '@deepseek-ai/cordis' {
  * One composed client entry pushed by the host (a graph row). Wire
  * single source: the host node half (package root) produces this same shape.
  * `immediately` marks stage-one prefetch; `inject` is informational graph
- * metadata (the authoritative edges live in each package's `dsh.client`
+ * metadata (the authoritative edges live in each package's `xrk.client`
  * declaration and reach fibers through entry creation).
  */
 export interface WebBootEntry {
@@ -60,7 +60,7 @@ export interface WebBootEntry {
   immediately?: boolean
 }
 
-/** The composed client entry graph the host injects as `window.__DSH_BOOT__`. */
+/** The composed client entry graph the host injects as `window.__XRK_BOOT__`. */
 export interface WebBootGraph {
   /** Consistency anchor over the whole graph (content + bundle hashes). */
   rev: string
@@ -99,15 +99,15 @@ export interface BootManifest {
 }
 
 /**
- * Parse `window.__DSH_BOOT__` into the two consumer views. Wire boundary:
+ * Parse `window.__XRK_BOOT__` into the two consumer views. Wire boundary:
  * a missing or malformed graph throws (the shell shows the loud failure —
  * a page without a valid manifest cannot boot anything).
- * @param wire - the raw `window.__DSH_BOOT__` value.
+ * @param wire - the raw `window.__XRK_BOOT__` value.
  * @returns the manifest with optional plugin-view fields normalized.
  */
 export function parseBootManifest(wire: unknown): BootManifest {
   if (typeof wire !== 'object' || wire === null) {
-    throw new Error('client-modules: window.__DSH_BOOT__ is missing or not an object')
+    throw new Error('client-modules: window.__XRK_BOOT__ is missing or not an object')
   }
   const graph = wire as Record<string, unknown>
   if (typeof graph.rev !== 'string') {
@@ -156,9 +156,9 @@ export interface ClientPluginHandoff {
 }
 
 /** Window API of the web boot protocol: the host-injected graph, registration sink, and kernel handoff slot. */
-export interface DshWindow {
+export interface XrkWindow {
   /** Host-composed entry graph, injected before the shell bundle runs; wire-boundary raw until {@link parseBootManifest}. */
-  __DSH_BOOT__?: unknown
+  __XRK_BOOT__?: unknown
   /** Bundle registration sink; installed once per page by the {@link ClientModuleSystem} constructor. */
   __ModuleLoader__?: { load(handoff: ClientPluginHandoff): void }
   /**

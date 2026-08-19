@@ -1,4 +1,4 @@
-import type { Dict } from '@deepseek-ai/cosmokit';
+import type { Dict } from '@xrkseek/cosmokit';
 import { Context } from './context.ts';
 import { Fiber } from './fiber.ts';
 declare module './context.ts' {

@@ -2,35 +2,10 @@
   "extends": "../../../tsconfig.base.client.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "lib/types"
+    "outDir": "lib/types",
+    "paths": {}
   },
   "include": [
     "src"
-  ],
-  "references": [
-    {
-      "path": "../../cordis"
-    },
-    {
-      "path": "../locale"
-    },
-    {
-      "path": "../runtime"
-    },
-    {
-      "path": "../ui-tool"
-    },
-    {
-      "path": "../ui-primitives"
-    },
-    {
-      "path": "../ui-input-trigger"
-    },
-    {
-      "path": "../ui-slots"
-    },
-    {
-      "path": "../../stubs/dsh-invariants"
-    }
   ]
 }

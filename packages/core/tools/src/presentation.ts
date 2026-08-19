@@ -173,7 +173,7 @@ export type ParsedExitStatus =
 
 /**
  * Inverse of DSH shell render markers `[exit code: N]` / `[killed by signal: X]`.
- * Copied from `@deepseek-ai/dsh-shell` `parseExitStatus`.
+ * Copied from `@xrkseek/xrk-shell` `parseExitStatus`.
  */
 export function parseExitStatus(text: string): ParsedExitStatus {
   const signal = /\n\[killed by signal: ([^\]\n]+)\]$/.exec(text);

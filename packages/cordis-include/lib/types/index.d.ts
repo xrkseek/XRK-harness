@@ -1,5 +1,5 @@
-import { EntryGroup, EntryTree, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader';
-import { Context, Service } from '@deepseek-ai/cordis';
+import { EntryGroup, EntryTree, type EntryOptions } from '@xrkseek/cordis-plugin-loader';
+import { Context, Service } from '@xrkseek/cordis';
 import * as yaml from 'js-yaml';
 /**
  * The entry-list YAML dialect: `!!js` scalars round-trip as expression nodes

@@ -1,4 +1,4 @@
-import { defineProperty, hyphenate, isNullable } from "@deepseek-ai/cosmokit";
+import { defineProperty, hyphenate, isNullable } from "@xrkseek/cosmokit";
 //#region lib/types/utils.js
 /** Ordered collection of disposable values with O(1) deletion by value. */
 var DisposableList = class {

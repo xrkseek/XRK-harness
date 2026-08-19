@@ -1,4 +1,4 @@
-import { Context, Fiber, Inject } from '@deepseek-ai/cordis';
+import { Context, Fiber, Inject } from '@xrkseek/cordis';
 import { Loader } from '../index.ts';
 import { EntryGroup } from './group.ts';
 import { EntryTree } from './tree.ts';

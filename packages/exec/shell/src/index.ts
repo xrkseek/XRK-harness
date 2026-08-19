@@ -682,7 +682,7 @@ export function statusLine(opts: {
 }
 
 /**
- * Model-facing foreground text. Copied from `@deepseek-ai/dsh-tool-bash`
+ * Model-facing foreground text. Copied from `@xrkseek/xrk-tool-bash`
  * `renderResult`: stderr section, then `[exit code: N]` last so `parseExitStatus`
  * can split the pill. Non-zero exits are reported, not `isError`.
  */

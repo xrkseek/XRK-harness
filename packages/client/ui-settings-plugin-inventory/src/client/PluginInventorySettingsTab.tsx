@@ -1,10 +1,10 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
-import type { PluginInventorySnapshot } from '@deepseek-ai/dsh-api-remotes/client'
+import type { PluginInventorySnapshot } from '@xrkseek/xrk-api-remotes/client'
 import {
   IconChevronDownOutline14,
   IconSearchOutline16,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@xrkseek/client-ui-primitives'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type { PluginInventoryLocaleKey } from './locales.ts'
 import css from './PluginInventorySettingsTab.module.css'
 
