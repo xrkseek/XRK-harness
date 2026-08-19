@@ -8,7 +8,7 @@ import { asContentBlocks } from "@xrkseek/protocol";
 
 export type InboxTarget = "next-turn" | "next-step";
 
-export interface DshWireUserMessage {
+export interface FaceWireUserMessage {
   readonly id: string;
   readonly role: "user";
   readonly content: readonly (
@@ -31,11 +31,11 @@ export interface DshWireUserMessage {
   };
 }
 
-export interface DshInboxSplice {
+export interface FaceInboxSplice {
   readonly target: InboxTarget;
   readonly start: number;
   readonly removedCount?: number;
-  readonly inserted: readonly DshWireUserMessage[];
+  readonly inserted: readonly FaceWireUserMessage[];
   readonly outcome?: "canceled";
 }
 
@@ -43,7 +43,7 @@ function userMessage(
   id: string,
   content: MessageContent,
   rpcId?: string,
-): DshWireUserMessage {
+): FaceWireUserMessage {
   return {
     id,
     role: "user",
@@ -64,15 +64,15 @@ function userMessage(
  * Callers must feed events in session log order.
  */
 export class FaceInboxWireProjector {
-  private readonly nextTurn: DshWireUserMessage[] = [];
-  private readonly nextStep: DshWireUserMessage[] = [];
+  private readonly nextTurn: FaceWireUserMessage[] = [];
+  private readonly nextStep: FaceWireUserMessage[] = [];
 
   constructor(
     private readonly admitToRpc: ReadonlyMap<string, string> = new Map(),
   ) {}
 
-  /** Project one XRK prompt event into a DSH inbox splice, mutating pending lists. */
-  project(event: SessionEvent): DshInboxSplice | undefined {
+  /** Project one XRK prompt event into a Face inbox splice, mutating pending lists. */
+  project(event: SessionEvent): FaceInboxSplice | undefined {
     switch (event.type) {
       case "prompt/admitted": {
         const target: InboxTarget =
@@ -100,7 +100,7 @@ export class FaceInboxWireProjector {
         };
       }
       case "prompt/promoted": {
-        // Claim-style pure deletion (no outcome) — matches DSH claim splices.
+        // Claim-style pure deletion (no outcome) — matches Face claim splices.
         const hit = this.locate(event.admitId);
         if (!hit) return undefined;
         hit.list.splice(hit.index, 1);
@@ -119,7 +119,7 @@ export class FaceInboxWireProjector {
   private locate(
     admitId: string,
   ):
-    | { target: InboxTarget; list: DshWireUserMessage[]; index: number }
+    | { target: InboxTarget; list: FaceWireUserMessage[]; index: number }
     | undefined {
     const stepIdx = this.nextStep.findIndex((m) => m.id === admitId);
     if (stepIdx >= 0) {

@@ -28,6 +28,8 @@ export type {} from '@xrkseek/xrk-settings/types'
 
 import type { Branded } from '@xrkseek/xrk-brand'
 import type { RemoteResult, TypertClientRemote } from '@xrkseek/xrk-typert-protocol'
+import type { CommandDescriptor, CommandExecution } from '@xrkseek/xrk-commands/types'
+import type { SessionId } from '@xrkseek/xrk-session/types'
 
 /** Stable Loader-tree identity of one configured plugin entry. */
 export type PluginEntryId = Branded<'PluginEntryId'>
@@ -56,6 +58,15 @@ export interface PluginInventorySnapshot {
 
 declare module '@xrkseek/xrk-typert-protocol' {
   interface TypertRemoteNamespaceMap {
+    /** Face-bound slash-command Remote (see api-remotes `$bindFace`). */
+    commands: {
+      execute: (
+        agentId: SessionId,
+        line: string,
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<CommandExecution | undefined>>
+      list: (agentId: SessionId) => Promise<RemoteResult<readonly CommandDescriptor[]>>
+    }
     pluginInventory: {
       list: () => Promise<RemoteResult<PluginInventorySnapshot>>
     }

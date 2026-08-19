@@ -292,9 +292,9 @@ export async function workspaceSyncSeeds(
 }
 
 /**
- * DeepSeek `workspace.list` — registry of workspaces + archived sessions.
+ * Face `workspace.list` — registry of workspaces + archived sessions.
  */
-export async function workspaceListDsh(
+export async function workspaceListFace(
   runtime: FaceRuntime,
 ): Promise<FaceRpcResult<unknown>> {
   return {
@@ -303,7 +303,7 @@ export async function workspaceListDsh(
   };
 }
 
-export async function workspaceCreateDsh(
+export async function workspaceCreateFace(
   runtime: FaceRuntime,
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
@@ -326,7 +326,7 @@ export async function workspaceCreateDsh(
   return { ok: true, value: result };
 }
 
-export async function workspaceRenameDsh(
+export async function workspaceRenameFace(
   runtime: FaceRuntime,
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
@@ -363,7 +363,7 @@ export async function workspaceRenameDsh(
   return { ok: true, value: { workspace } };
 }
 
-export async function workspaceArchiveSessionDsh(
+export async function workspaceArchiveSessionFace(
   runtime: FaceRuntime,
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
@@ -387,7 +387,7 @@ export async function workspaceArchiveSessionDsh(
   return { ok: true, value: { archivedSessionIds } };
 }
 
-export async function workspaceDeleteDsh(
+export async function workspaceDeleteFace(
   runtime: FaceRuntime,
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
@@ -435,7 +435,7 @@ export async function workspaceDeleteDsh(
   };
 }
 
-export async function workspaceInsertBeforeDsh(
+export async function workspaceInsertBeforeFace(
   runtime: FaceRuntime,
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {
@@ -478,7 +478,7 @@ export async function workspaceInsertBeforeDsh(
   return { ok: true, value: listed };
 }
 
-export async function workspaceInsertSessionBeforeDsh(
+export async function workspaceInsertSessionBeforeFace(
   runtime: FaceRuntime,
   payload: unknown,
 ): Promise<FaceRpcResult<unknown>> {

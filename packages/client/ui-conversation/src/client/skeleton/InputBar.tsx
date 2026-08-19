@@ -19,9 +19,8 @@ import type { AttachmentRailItem } from '@xrkseek/client-ui-attachment'
 import type {} from '@xrkseek/xrk-plan-mode/client'
 // Type-only: the `goal` projection key merge (hint disambiguation).
 import type {} from '@xrkseek/xrk-goal/client'
-// The `imageLimits` projection key merge (intake pre-check) arrives with the
-// wire types: apiproxy's sessions contract declares it, and client-runtime's
-// api-remotes import already places it in every client program.
+// Type-only: Face `imageLimits` projection key (intake pre-check).
+import type {} from '../image-limits-projection.ts'
 import type { Translate } from '@xrkseek/client-ui-slots'
 import type { ComposerAttachment, ComposerBarProps } from '../contract/slots.ts'
 import { deriveDecorations } from '../input/decorations.ts'

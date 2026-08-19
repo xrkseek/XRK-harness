@@ -23,12 +23,12 @@ HTTP/WS (attach-http)
 
 ## 文件地图
 
-### 接线层（`wire/`）— 对 DSH Web 的协议面
+### 接线层（`wire/`）— 对产品壳的协议面
 
 | 文件                | 作用                                   | 关键契约                    |
 | ------------------- | -------------------------------------- | --------------------------- |
 | `wire/envelope.ts`  | unary 解析 · ok/err · `server-request` | 错误必含 `details`          |
-| `wire/rpc-error.ts` | XRK code → DSH 闭集                    | 未知码折 `internal`         |
+| `wire/rpc-error.ts` | XRK code → 产品壳闭集                    | 未知码折 `internal`         |
 | `wire/paths.ts`     | `/api/<method>` · WS · `/api/respond`  | 点号 unary；Typert `ns/method` 白名单 |
 | `wire/loopback.ts`  | 回环地址判定                           | 产品壳同源免 API key               |
 | `wire/respond.ts`   | 解析 `client-response` · 审批后提问    | 回执 `accepted` / `reason`；`cancelled` 走提问 |
@@ -78,7 +78,7 @@ HTTP/WS (attach-http)
 | `workspace-face.ts`       | workspace.* Face                        | 路径不得逃出 root        |
 | `workspace-registry.ts`   | DSH 形 workspace 注册表                 | `workspaceIdOf`；delete 发 removed；insertBefore 发 order |
 | `settings-credentials.ts` | settings.* · credentials.*              | 密钥不入库；openDocument 忽略客户端 path；`mcp.servers` 落盘（禁 env）；`connected` overlay |
-| `dsh-schema.ts`           | settings namespace schemastery 信封     | `{ uid, refs }`；JSON Schema 壳读不了 |
+| `face-schema.ts`          | settings namespace schemastery 信封     | `{ uid, refs }`；JSON Schema 壳读不了 |
 
 ### Wire 适配（`adapt/`）
 

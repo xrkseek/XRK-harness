@@ -1,11 +1,23 @@
 ﻿{
-    "version":  "0.0.0-stub",
-    "name":  "@xrkseek/xrk-host-webserver",
-    "description":  "XRK stub — replace with real package or remap",
-    "exports":  {
-                    ".":  "./index.js",
-                    "./package.json":  "./package.json"
-                },
-    "type":  "module",
-    "private":  true
+  "version": "0.0.0-stub",
+  "name": "@xrkseek/xrk-host-webserver",
+  "description": "XRK stub — browser HTTP carrier types (webServer route registry) for Face/client host emit",
+  "type": "module",
+  "private": true,
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@xrkseek/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@xrkseek/cordis": "workspace:^",
+    "@types/node": "^22.10.0"
+  }
 }

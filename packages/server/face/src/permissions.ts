@@ -15,7 +15,7 @@ import {
   FACE_PERMISSION_PRESETS,
   isFacePermissionPreset,
   type FacePermissionPreset,
-} from "./dsh-schema.js";
+} from "./face-schema.js";
 import type { FaceRuntime } from "./context.js";
 
 export const CUSTOM_PERMISSION_PRESET = "custom" as const;

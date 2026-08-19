@@ -11,6 +11,12 @@ export type PluginsSettingsLocaleKey =
   | 'webSearchTitle' | 'webSearchDescription'
   | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
   | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
+  | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading' | 'mcpConnectedEmpty'
+  | 'mcpServersHeading' | 'mcpServersEmpty' | 'mcpAddServer' | 'mcpRemoveServer'
+  | 'mcpServerRow' | 'mcpServerName' | 'mcpServerNameHint' | 'mcpTransport'
+  | 'mcpTransportStdio' | 'mcpTransportHttp' | 'mcpTransportHint'
+  | 'mcpCommand' | 'mcpCommandHint' | 'mcpUrl' | 'mcpUrlHint'
+  | 'mcpArgs' | 'mcpArgsHint' | 'mcpCwd' | 'mcpCwdHint' | 'mcpRowInvalid' | 'mcpToolsLabel'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -51,6 +57,31 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBaseUrlHint: 'Leave blank to use the provider default.',
   webSearchMaxUses: 'Max searches per request',
   webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
+  mcpTitle: 'MCP servers',
+  mcpDescription: 'Desired MCP servers for the next Host spawn (not live connect).',
+  mcpConnectedHeading: 'Connected now',
+  mcpConnectedEmpty: 'No MCP plugins are connected in this Host process.',
+  mcpServersHeading: 'Desired servers',
+  mcpServersEmpty: 'No desired servers yet. Add one to persist a draft for the next spawn.',
+  mcpAddServer: 'Add server',
+  mcpRemoveServer: 'Remove server',
+  mcpServerRow: 'Server {index}',
+  mcpServerName: 'Server name',
+  mcpServerNameHint: 'Stable id used in tool names (mcp__<name>__…).',
+  mcpTransport: 'Transport',
+  mcpTransportStdio: 'stdio (local process)',
+  mcpTransportHttp: 'HTTP (remote URL)',
+  mcpTransportHint: 'stdio runs a command; HTTP connects to a streamable MCP endpoint.',
+  mcpCommand: 'Command',
+  mcpCommandHint: 'Executable for stdio transport (for example npx).',
+  mcpUrl: 'URL',
+  mcpUrlHint: 'HTTPS endpoint for streamable HTTP MCP.',
+  mcpArgs: 'Arguments',
+  mcpArgsHint: 'Optional comma-separated args passed to the command.',
+  mcpCwd: 'Working directory',
+  mcpCwdHint: 'Optional cwd for stdio spawn; leave blank for Host default.',
+  mcpRowInvalid: 'Each server needs a name and either a command or URL.',
+  mcpToolsLabel: 'tools',
 }
 
 /** Simplified Chinese copy. */
@@ -92,4 +123,29 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBaseUrlHint: '留空则使用提供方默认地址。',
   webSearchMaxUses: '单次请求最多搜索次数',
   webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
+  mcpTitle: 'MCP 服务器',
+  mcpDescription: '下次 Host 启动时生效的期望 MCP 配置（不是即时连接）。',
+  mcpConnectedHeading: '当前已连接',
+  mcpConnectedEmpty: '本 Host 进程尚未连接任何 MCP 插件。',
+  mcpServersHeading: '期望服务器',
+  mcpServersEmpty: '还没有期望配置。添加一条以在下次 spawn 时落盘。',
+  mcpAddServer: '添加服务器',
+  mcpRemoveServer: '移除服务器',
+  mcpServerRow: '服务器 {index}',
+  mcpServerName: '服务器名称',
+  mcpServerNameHint: '工具名中的稳定 id（mcp__<name>__…）。',
+  mcpTransport: '传输方式',
+  mcpTransportStdio: 'stdio（本地进程）',
+  mcpTransportHttp: 'HTTP（远程 URL）',
+  mcpTransportHint: 'stdio 启动命令；HTTP 连接 streamable MCP 端点。',
+  mcpCommand: '命令',
+  mcpCommandHint: 'stdio 的可执行文件（例如 npx）。',
+  mcpUrl: 'URL',
+  mcpUrlHint: 'streamable HTTP MCP 的 HTTPS 地址。',
+  mcpArgs: '参数',
+  mcpArgsHint: '可选，逗号分隔，传给命令。',
+  mcpCwd: '工作目录',
+  mcpCwdHint: 'stdio 可选 cwd；留空用 Host 默认。',
+  mcpRowInvalid: '每条服务器需要名称，以及命令或 URL。',
+  mcpToolsLabel: '个工具',
 }

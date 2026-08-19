@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FaceWireIdMaps,
   presentToolView,
-  toDshWireSessionEvent,
+  toFaceWireSessionEvent,
   wireNumericId,
 } from "../src/adapt/index.js";
 
@@ -25,7 +25,7 @@ describe("Face DSH wire-event adapt", () => {
   });
 
   it("user/message carries content blocks + source.kind user", () => {
-    const wire = toDshWireSessionEvent(
+    const wire = toFaceWireSessionEvent(
       {
         type: "user/message",
         ts: 10,
@@ -51,7 +51,7 @@ describe("Face DSH wire-event adapt", () => {
 
   it("assistant/message and tool/result stamp surfaceOp append for client fold", () => {
     expect(
-      toDshWireSessionEvent(
+      toFaceWireSessionEvent(
         {
           type: "assistant/message",
           ts: 11,
@@ -63,7 +63,7 @@ describe("Face DSH wire-event adapt", () => {
       ).surfaceOp,
     ).toBe("append");
     expect(
-      toDshWireSessionEvent(
+      toFaceWireSessionEvent(
         {
           type: "tool/result",
           ts: 12,
@@ -82,7 +82,7 @@ describe("Face DSH wire-event adapt", () => {
 
   it("assistant/chunk uses text-delta; maps turn/step when ctx.ids set", () => {
     const ids = new FaceWireIdMaps();
-    const wire = toDshWireSessionEvent(
+    const wire = toFaceWireSessionEvent(
       {
         type: "assistant/chunk",
         ts: 11,
@@ -101,7 +101,7 @@ describe("Face DSH wire-event adapt", () => {
   });
 
   it("assistant/chunk kind=reasoning maps to reasoning-delta index 0", () => {
-    const wire = toDshWireSessionEvent(
+    const wire = toFaceWireSessionEvent(
       {
         type: "assistant/chunk",
         ts: 11,
@@ -121,7 +121,7 @@ describe("Face DSH wire-event adapt", () => {
   });
 
   it("assistant/message prepends reasoning block when present", () => {
-    const wire = toDshWireSessionEvent(
+    const wire = toFaceWireSessionEvent(
       {
         type: "assistant/message",
         ts: 12,
@@ -138,7 +138,7 @@ describe("Face DSH wire-event adapt", () => {
   });
 
   it("assistant/message content includes text + tool-call blocks", () => {
-    const wire = toDshWireSessionEvent(
+    const wire = toFaceWireSessionEvent(
       {
         type: "assistant/message",
         ts: 12,
@@ -170,7 +170,7 @@ describe("Face DSH wire-event adapt", () => {
       stepId: "s1",
       call: { id: "c9", name: "bash", arguments: { cmd: "pwd" } },
     };
-    const wire = toDshWireSessionEvent(event, 5);
+    const wire = toFaceWireSessionEvent(event, 5);
     expect(wire.data).toMatchObject({
       callId: "c9",
       name: "bash",
@@ -200,7 +200,7 @@ describe("Face DSH wire-event adapt", () => {
   });
 
   it("tool/result nests message.content + source.callId", () => {
-    const wire = toDshWireSessionEvent(
+    const wire = toFaceWireSessionEvent(
       {
         type: "tool/result",
         ts: 13,
@@ -224,7 +224,7 @@ describe("Face DSH wire-event adapt", () => {
   });
 
   it("session/title data matches DSH title fold fields", () => {
-    const wire = toDshWireSessionEvent(
+    const wire = toFaceWireSessionEvent(
       {
         type: "session/title",
         ts: 14,
@@ -242,7 +242,7 @@ describe("Face DSH wire-event adapt", () => {
   });
 
   it("prompt/* without projector are ignorable; with projector become spliced", () => {
-    const bare = toDshWireSessionEvent(
+    const bare = toFaceWireSessionEvent(
       {
         type: "prompt/admitted",
         ts: 20,
@@ -256,7 +256,7 @@ describe("Face DSH wire-event adapt", () => {
   });
 
   it("todo/write carries data.todos (DSH standing-plan event)", () => {
-    const wire = toDshWireSessionEvent(
+    const wire = toFaceWireSessionEvent(
       {
         type: "todo/write",
         ts: 30,
@@ -273,7 +273,7 @@ describe("Face DSH wire-event adapt", () => {
   });
 
   it("feedback/record is ignorable (shell has no dedicated card)", () => {
-    const wire = toDshWireSessionEvent(
+    const wire = toFaceWireSessionEvent(
       {
         type: "feedback/record",
         ts: 40,

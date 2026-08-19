@@ -55,6 +55,8 @@
     "@xrkseek/xrk-commands": "workspace:^",
     "@xrkseek/xrk-goal": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
+    "@xrkseek/xrk-session": "workspace:^",
+    "@xrkseek/xrk-typert-protocol": "workspace:^",
     "@xrkseek/cordis": "workspace:^",
     "react": "^18.2.0"
   },
@@ -69,6 +71,8 @@
     "@xrkseek/xrk-commands": "workspace:^",
     "@xrkseek/xrk-goal": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
+    "@xrkseek/xrk-session": "workspace:^",
+    "@xrkseek/xrk-typert-protocol": "workspace:^",
     "@testing-library/react": "^16.1.0",
     "@types/react": "~18.3.1",
     "@xrkseek/cordis": "workspace:^",

@@ -1,5 +1,5 @@
 /**
- * Session-scoped turn/step counters for DSH wire (numeric, order of first seen).
+ * Session-scoped turn/step counters for Face wire (numeric, order of first seen).
  * Prefer this over hashing string ids so trajectory location math stays monotonic.
  */
 

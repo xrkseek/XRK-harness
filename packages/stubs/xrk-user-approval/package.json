@@ -1,0 +1,26 @@
+{
+  "version": "0.0.0-stub",
+  "name": "@xrkseek/xrk-user-approval",
+  "description": "XRK stub — wire-safe approval identifiers and outcomes for Face/client chains",
+  "type": "module",
+  "private": true,
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./types": {
+      "types": "./types.d.ts",
+      "default": "./types.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@xrkseek/xrk-brand": "workspace:^"
+  },
+  "devDependencies": {
+    "@xrkseek/xrk-brand": "workspace:^"
+  }
+}

@@ -148,7 +148,10 @@ function attachPersistence<T>(api: StoreApi<T>, name: string): void {
 
 /** Deep-freeze wholesale-set state outside production: set() bypasses immer's freeze. */
 function devFreeze<T>(value: T): T {
-  if (process.env.NODE_ENV === 'production') return value
+  // Client tsc programs omit Node typings; bundlers still replace this shape.
+  const nodeEnv = (globalThis as { process?: { env?: { NODE_ENV?: string } } })
+    .process?.env?.NODE_ENV
+  if (nodeEnv === 'production') return value
   deepFreeze(value)
   return value
 }

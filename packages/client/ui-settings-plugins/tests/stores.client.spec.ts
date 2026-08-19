@@ -8,6 +8,7 @@ import { stubSettingsScope, type StubSettingsScope } from '@xrkseek/client-test-
 import { CardForm, numberField, textField } from '../src/client/card-form.ts'
 import { AgentLoopCardController, type AgentLoopSettings } from '../src/client/agent-loop-card-controller.ts'
 import { BashCardController, type BashSettings } from '../src/client/bash-card-controller.ts'
+import { McpCardController, type McpSettings } from '../src/client/mcp-card-controller.ts'
 import { ConfigurablePluginsTabController } from '../src/client/tab-store.ts'
 import { WebSearchCardController, type WebSearchSettings } from '../src/client/web-search-card-controller.ts'
 
@@ -665,5 +666,60 @@ describe('ConfigurablePluginsTabController', () => {
 
     expect(controller.inject().hooks.configurablePlugins.getSnapshot())
       .toEqual({ loaded: true, namespaces: [] })
+  })
+})
+
+describe('McpCardController', () => {
+  it('projects connected overlay read-only and saves servers in one mutate', async () => {
+    const host = stubSettingsScope<McpSettings>()
+    host.set.mockImplementation((_field, value) => {
+      host.publish({
+        value: {
+          servers: value as McpSettings['servers'],
+          connected: [{ id: 'mcp:demo', serverName: 'demo', kind: 'tools', toolCount: 2 }],
+          note: 'restart note',
+        },
+        user: { servers: value },
+      })
+      return Promise.resolve()
+    })
+    const controller = new McpCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { servers: [], connected: [], note: 'restart note' },
+      base: { servers: [] },
+      user: {},
+    })
+    const face = controller.inject()
+
+    face.addRow()
+    face.editRow(0, { serverName: 'fs', command: 'npx', args: '-y, mcp-server' })
+    expect(face.hooks.mcpCard.getSnapshot()).toMatchObject({
+      dirty: true,
+      rowInvalid: false,
+      connected: [],
+    })
+
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledOnce() })
+    expect(host.set).toHaveBeenCalledWith('servers', [{
+      serverName: 'fs',
+      command: 'npx',
+      args: ['-y', 'mcp-server'],
+    }])
+    expect(face.hooks.mcpCard.getSnapshot().dirty).toBe(false)
+  })
+
+  it('blocks save while a row is incomplete', async () => {
+    const host = stubSettingsScope<McpSettings>()
+    const controller = new McpCardController(host.scope)
+    host.publish({ status: 'ready', writable: true, value: { servers: [] }, base: {}, user: {} })
+    const face = controller.inject()
+    face.addRow()
+    face.editRow(0, { serverName: 'only-name' })
+    expect(face.hooks.mcpCard.getSnapshot().rowInvalid).toBe(true)
+    face.save()
+    expect(host.set).not.toHaveBeenCalled()
   })
 })

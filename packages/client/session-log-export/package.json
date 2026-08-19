@@ -1,0 +1,77 @@
+{
+  "name": "@xrkseek/client-session-log-export",
+  "description": "Web Session-log export header action and shared download dialog (ZIP via Face /api/session.export)",
+  "version": "0.1.0-rc.7",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/client/session-log-export"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "xrk": {
+    "client": {
+      "inject": [
+        "@xrkseek/client-locale",
+        "@xrkseek/client-runtime",
+        "@xrkseek/client-ui-commands",
+        "@xrkseek/client-ui-conversation"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "bundle": "tsdown",
+    "watch": "tsdown --watch"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@xrkseek/cordis": "workspace:^",
+    "@xrkseek/client-locale": "workspace:^",
+    "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-ui-commands": "workspace:^",
+    "@xrkseek/client-ui-conversation": "workspace:^",
+    "@xrkseek/client-ui-primitives": "workspace:^",
+    "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@xrkseek/cordis": "workspace:^",
+    "@xrkseek/client-locale": "workspace:^",
+    "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-ui-commands": "workspace:^",
+    "@xrkseek/client-ui-conversation": "workspace:^",
+    "@xrkseek/client-ui-primitives": "workspace:^",
+    "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts"
+  ]
+}

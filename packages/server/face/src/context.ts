@@ -79,7 +79,7 @@ export interface FaceRuntime {
   readonly sessionAgentPresets: Map<string, string>;
   /** sessionId → project cwd (DSH session.list / blank reuse). */
   readonly sessionCwds: Map<string, string>;
-  /** DeepSeek workspace registry (in-memory). */
+  /** In-memory workspace registry for the product shell. */
   readonly workspaces: FaceWorkspaceRegistry;
   /** Direct subagent children (fork / create-with-parent). */
   readonly subagents: FaceSubagentRegistry;
@@ -94,12 +94,12 @@ export interface FaceRuntime {
   readonly loadSlashRecipes?: SlashRecipesLoader;
   /** Process plugins (`XRK_PLUGINS_DIR` / MCP) for inventory + slash. */
   readonly plugins?: readonly FaceProcessPlugin[];
-  /** Standing / remembered tool presenters (DSH `ctx.tools.get`). */
+  /** Standing / remembered tool presenters (wire tools get). */
   getTool?(
     sessionId: string,
     name: string,
   ): Pick<ToolDefinition, "presentCall" | "presentResult"> | undefined;
-  /** Product-shell `boot.json` entries (captured DSH client plugins). */
+  /** Product-shell `boot.json` entries (assembled client plugins). */
   readonly webPlugins?: readonly FaceWebPlugin[];
   /** Mutable UI prefs (theme/locale) — not secrets. */
   readonly uiSettings: FaceUiSettings;
@@ -107,7 +107,7 @@ export interface FaceRuntime {
   readonly hostPublic?: FaceHostPublicSettings;
   /** In-memory credential overrides — never session-logged. */
   readonly credentials: FaceCredentialVault;
-  /** DeepSeek-compatible settings namespaces (welcome notice, etc.). */
+  /** Face settings namespaces (welcome notice, etc.). */
   readonly settingsNamespaces: FaceSettingsNamespaces;
   /** Bootstrap Host API key from env/config (before vault override). */
   readonly bootstrapApiKey?: string;

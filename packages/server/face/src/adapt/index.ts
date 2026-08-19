@@ -1,18 +1,18 @@
 export {
   EVENT_ISOMORPHISM,
-  toDshWireSessionEvent,
+  toFaceWireSessionEvent,
   toMuxSessionEvent,
   toWireHistoryEntry,
   wireNumericId,
-  type DshWireSessionEvent,
+  type FaceWireSessionEvent,
   type WireAdaptContext,
   type WireHistoryEntry,
 } from "./wire-event.js";
 export {
   FaceInboxWireMaps,
   FaceInboxWireProjector,
-  type DshInboxSplice,
-  type DshWireUserMessage,
+  type FaceInboxSplice,
+  type FaceWireUserMessage,
   type InboxTarget,
 } from "./inbox-wire.js";
 export { FaceWireIdMaps } from "./wire-ids.js";

@@ -1,9 +1,9 @@
 /**
  * Compact schemastery envelopes (`schema.toJSON()`) for Face `settings.describe`.
- * The captured DSH Web rehydrates these; JSON Schema will not parse.
+ * The product Web rehydrates these; JSON Schema will not parse.
  */
 
-export interface DshSchemaNode {
+export interface FaceSchemaNode {
   readonly type: string;
   readonly value?: unknown;
   readonly list?: readonly number[];
@@ -12,17 +12,17 @@ export interface DshSchemaNode {
   readonly meta?: { readonly description?: string };
 }
 
-export interface DshSchemaEnvelope {
+export interface FaceSchemaEnvelope {
   readonly uid: number;
-  readonly refs: Readonly<Record<number, DshSchemaNode>>;
+  readonly refs: Readonly<Record<number, FaceSchemaNode>>;
 }
 
-export const DSH_EMPTY_OBJECT_SCHEMA: DshSchemaEnvelope = {
+export const FACE_EMPTY_OBJECT_SCHEMA: FaceSchemaEnvelope = {
   uid: 1,
   refs: { 1: { type: "object" } },
 };
 
-export const DSH_ONBOARDING_SCHEMA: DshSchemaEnvelope = {
+export const FACE_ONBOARDING_SCHEMA: FaceSchemaEnvelope = {
   uid: 2,
   refs: {
     1: { type: "string" },
@@ -30,7 +30,7 @@ export const DSH_ONBOARDING_SCHEMA: DshSchemaEnvelope = {
   },
 };
 
-export const DSH_LOCALE_SCHEMA: DshSchemaEnvelope = {
+export const FACE_LOCALE_SCHEMA: FaceSchemaEnvelope = {
   uid: 4,
   refs: {
     1: { type: "const", value: "zh" },
@@ -40,7 +40,7 @@ export const DSH_LOCALE_SCHEMA: DshSchemaEnvelope = {
   },
 };
 
-export const DSH_THEME_SCHEMA: DshSchemaEnvelope = {
+export const FACE_THEME_SCHEMA: FaceSchemaEnvelope = {
   uid: 5,
   refs: {
     1: { type: "const", value: "system" },
@@ -51,7 +51,7 @@ export const DSH_THEME_SCHEMA: DshSchemaEnvelope = {
   },
 };
 
-/** Same preset ids as DSH permission-presets (settings row enum). */
+/** Same preset ids as the permission-presets settings row enum. */
 export const FACE_PERMISSION_PRESETS = [
   "read-only",
   "workspace-write",
@@ -60,7 +60,7 @@ export const FACE_PERMISSION_PRESETS = [
 
 export type FacePermissionPreset = (typeof FACE_PERMISSION_PRESETS)[number];
 
-export const DSH_PERMISSION_SCHEMA: DshSchemaEnvelope = {
+export const FACE_PERMISSION_SCHEMA: FaceSchemaEnvelope = {
   uid: 5,
   refs: {
     1: {
@@ -87,7 +87,7 @@ export const DSH_PERMISSION_SCHEMA: DshSchemaEnvelope = {
  * Face MCP desired servers. `connected` is overlay from live plugins.
  * Applies on next Host spawn (not a live supervisor).
  */
-export const DSH_MCP_SCHEMA: DshSchemaEnvelope = {
+export const FACE_MCP_SCHEMA: FaceSchemaEnvelope = {
   uid: 9,
   refs: {
     1: { type: "string" },
@@ -118,7 +118,7 @@ export const DSH_MCP_SCHEMA: DshSchemaEnvelope = {
 };
 
 /** `providers` is a dict so models page can probe `providers/<route>/api`. */
-export const DSH_LLM_SCHEMA: DshSchemaEnvelope = {
+export const FACE_LLM_SCHEMA: FaceSchemaEnvelope = {
   uid: 8,
   refs: {
     1: { type: "const", value: "openai-chat" },

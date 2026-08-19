@@ -46,6 +46,8 @@
     "@xrkseek/xrk-llm": "workspace:^",
     "@xrkseek/xrk-session": "workspace:^",
     "@xrkseek/xrk-tools": "workspace:^",
+    "@xrkseek/xrk-user-approval": "workspace:^",
+    "@xrkseek/xrk-user-questions": "workspace:^",
     "@xrkseek/schemastery": "workspace:^",
     "fflate": "^0.8.2",
     "zod": "^4.4.3"
@@ -56,7 +58,9 @@
   },
   "devDependencies": {
     "@xrkseek/cordis": "workspace:^",
-    "@xrkseek/xrk-invariants": "workspace:^"
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "@xrkseek/xrk-user-approval": "workspace:^",
+    "@xrkseek/xrk-user-questions": "workspace:^"
   },
   "private": true
 }

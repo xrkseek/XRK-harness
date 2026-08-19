@@ -1,5 +1,5 @@
 /**
- * Face ↔ DSH Web 接线层：信封、错误码、路径、/api/respond。
+ * Face ↔ product-shell 接线层：信封、错误码、路径、/api/respond。
  */
 
 export {
@@ -9,9 +9,9 @@ export {
   serverRequestFrame,
 } from "./envelope.js";
 export {
-  DSH_RPC_ERROR_CODES,
+  FACE_RPC_ERROR_CODES,
   mapFaceRpcError,
-  type DshRpcErrorCode,
+  type FaceRpcErrorCode,
 } from "./rpc-error.js";
 export {
   FACE_REMOTE_NAMESPACES,

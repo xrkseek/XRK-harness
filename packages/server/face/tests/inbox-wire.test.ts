@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   FaceInboxWireProjector,
-  toDshWireSessionEvent,
+  toFaceWireSessionEvent,
   toQueueItems,
 } from "../src/index.js";
 
@@ -57,7 +57,7 @@ describe("Face inbox wire + session/queue DSH shapes", () => {
       ]),
     );
 
-    const admitQ = toDshWireSessionEvent(
+    const admitQ = toFaceWireSessionEvent(
       {
         type: "prompt/admitted",
         ts: 1,
@@ -85,7 +85,7 @@ describe("Face inbox wire + session/queue DSH shapes", () => {
       },
     });
 
-    const admitS = toDshWireSessionEvent(
+    const admitS = toFaceWireSessionEvent(
       {
         type: "prompt/admitted",
         ts: 2,
@@ -101,7 +101,7 @@ describe("Face inbox wire + session/queue DSH shapes", () => {
       start: 0,
     });
 
-    const withdrawn = toDshWireSessionEvent(
+    const withdrawn = toFaceWireSessionEvent(
       { type: "prompt/withdrawn", ts: 3, admitId: "a1" },
       3,
       { sessionId: "s", inbox },
@@ -119,7 +119,7 @@ describe("Face inbox wire + session/queue DSH shapes", () => {
       },
     });
 
-    const promoted = toDshWireSessionEvent(
+    const promoted = toFaceWireSessionEvent(
       { type: "prompt/promoted", ts: 4, admitId: "a2" },
       4,
       { sessionId: "s", inbox },
@@ -134,7 +134,7 @@ describe("Face inbox wire + session/queue DSH shapes", () => {
   });
 
   it("prompt/* without projector stays ignorable (isolated calls)", () => {
-    const wire = toDshWireSessionEvent(
+    const wire = toFaceWireSessionEvent(
       {
         type: "prompt/admitted",
         ts: 20,

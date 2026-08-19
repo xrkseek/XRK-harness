@@ -4,7 +4,7 @@
 
 归因：[NOTICE](./NOTICE) · [UPSTREAM](./UPSTREAM)。本仓根 [LICENSE](../../LICENSE)。
 
-品牌在 `public/`。编出到 `dist/`（gitignore）：
+品牌在 `public/`：真源 **`logo-plate.png`**；`favicon.svg` / `logo-mark.svg` 由该 PNG 矢量化生成（勿手拼路径）；`logo.png` · `favicon.png` 与 plate 同源。编出到 `dist/`（gitignore）：
 
 ```bash
 pnpm web:build
@@ -14,7 +14,7 @@ pnpm web:assemble
 
 - `web:build`：本仓 Vite SPA
 - `client:bundle`：本仓 tsdown 编出各插件 `lib/client.js`（省略 HMR / Cordis UI）
-- `web:assemble`：按各包 `xrk.client` 把 `packages/client/*/lib/client.js` 与 Face 立即层 `packages/stubs/xrk-{typert-registry,api-gateway,api-remotes}/lib/client.js` 装进 `dist/plugins/@xrkseek/...` 并写 `boot.json`（34 条；omit HMR / Cordis UI / native picker）
+- `web:assemble`：按各包 `xrk.client` 把 `packages/client/*/lib/client.js` 与 Face 立即层 `packages/stubs/xrk-{typert-registry,api-gateway,api-remotes}/lib/client.js` 装进 `dist/plugins/@xrkseek/...` 并写 `boot.json`（35 条；omit HMR / Cordis UI / native picker）
 
 Host 有完整 dist 时跑 `packages/server/host/tests/product-shell.test.ts`（GET `/` · boot · plugin 200 · 首屏 RPC）。Host-serve 硬刷：`pnpm test:web`（`tests/product-shell-*.e2e.ts`，不进 `pnpm check`）。Playwright 是本包 devDependency；浏览器不随 `pnpm install` 下来，要跑硬刷时：
 

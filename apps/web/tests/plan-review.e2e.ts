@@ -1,13 +1,17 @@
-// Web e2e scenario: the plan-review takeover. The shipped composition mounts
-// plan mode and its client seat, so `/plan <task>` enters plan mode for real
-// and the recorded turn ends on exit_plan_mode blocking against the live
-// userInteraction seam. The composer is then occupied by the plan decision
-// card — not the generic question flow — and approving it through the card
-// completes the turn with the approval in the log.
-// Replay is deterministic: the plan content arrives from replayed chunks, the
-// review wait is real, and the approve click is the test's own gesture (the
-// turn cannot complete without it, in record and replay alike).
-import { readFile } from 'node:fs/promises'
+/**
+ * Cordis scaffold lane (launchWebScaffold) — not Host-serve.
+ * Host-serve equivalent: product-shell-plan-review.e2e.ts (`pnpm test:web`).
+ *
+ * Web e2e scenario: the plan-review takeover. The shipped composition mounts
+ * plan mode and its client seat, so `/plan <task>` enters plan mode for real
+ * and the recorded turn ends on exit_plan_mode blocking against the live
+ * userInteraction seam. The composer is then occupied by the plan decision
+ * card — not the generic question flow — and approving it through the card
+ * completes the turn with the approval in the log.
+ * Replay is deterministic: the plan content arrives from replayed chunks, the
+ * review wait is real, and the approve click is the test's own gesture (the
+ * turn cannot complete without it, in record and replay alike).
+ */import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'

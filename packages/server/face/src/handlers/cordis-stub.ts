@@ -1,5 +1,5 @@
 /**
- * DSH Web Cordis panel calls `dynamicCordisRunner/*`.
+ * Product-shell Cordis panel calls `dynamicCordisRunner/*`.
  * Host does not embed Cordis `apply(ctx)` — return schema-valid empty / no-op
  * so the shell stays up (inventory empty, stop = not-running).
  */
