@@ -14,7 +14,7 @@
 
 | 症状 | 处理 |
 |------|------|
-| `serve` 打开后是简陋验证台 | 未组装 `apps/web/dist` → 走 `apps/console`。需产品壳时：`pnpm web:build && pnpm client:bundle && pnpm web:assemble` |
+| `serve` 打开后不像产品壳 / 静态 404 | **先构建壳**：`pnpm web:build && pnpm client:bundle && pnpm web:assemble`，再 `serve`。产物在 `apps/web/dist` |
 | 绑定失败 / 拒绝 `0.0.0.0` | CLI 故意拒绝全网卡；用 `127.0.0.1` 或本机局域网地址 |
 | `/api/*` 401 | 设置了 `XRK_API_KEY` 但请求未带 Bearer / `x-api-key` |
 | session busy `409` | 同 session 已有 turn 在飞；等结束或换 sessionId |

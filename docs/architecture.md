@@ -58,7 +58,7 @@ XRK-harness/
 ├── apps/
 │   ├── cli/                 # @xrkseek/harness-cli
 │   ├── web/                 # 产品壳（二次创作源码；serve 用 dist/）
-│   └── console/             # Face 验证台（?console=1；无 web/dist 时回退）
+│   └── console/             # Face 验证台（?console=1；维护者工具，非产品入口）
 ├── packages/
 │   ├── client/              # 壳客户端包（与 apps/web 成对）
 │   ├── kernel/ · protocol/ · compose/
@@ -82,4 +82,4 @@ JSONL 会话目录（Host `XRK_SESSIONS_DIR`）：`{id}.jsonl` + 旁路 `subagen
 
 Host agent-cache：根会话 Scope `agent:{id}`；Face 已登记父会话的子会话走 `openSubagentRealm`（`subagent:{id}`）。
 
-Face 接线：`packages/server/face/src/wire/`。产品壳源码 `apps/web` + `packages/client`；serve 托管 `apps/web/dist`（无则 `apps/console`）。
+Face 接线：`packages/server/face/src/wire/`。产品壳源码 `apps/web` + `packages/client`；serve 托管 `apps/web/dist`（先 `web:build` + `client:bundle` + `web:assemble`）。`apps/console` 仅作 Face 验证台。

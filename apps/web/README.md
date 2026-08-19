@@ -24,4 +24,4 @@ pnpm --filter @xrkseek/web-frontend exec playwright install chromium
 
 裸 `vite` / `pnpm --filter @xrkseek/web-frontend dev` 在 config 钩子拒绝（`apps/web/tests/vite-entry.test.ts`）。缺本仓 `lib/client.js` 时，`web:assemble` 仍可设 `XRK_UI_SRC` 指向对照仓树作回退。
 
-Cordis 薄栈：`packages/cordis*` · `cosmokit` · `schemastery`。缺的主机面包暂用 `packages/stubs/*`。Face 验证台见 [`apps/console`](../console/)。
+Cordis 薄栈：`packages/cordis*` · `cosmokit` · `schemastery`。缺的主机面包暂用 `packages/stubs/*`。Face 接线验证见 [`apps/console`](../console/)（非产品入口）。

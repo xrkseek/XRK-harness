@@ -44,7 +44,7 @@
 | 试用 / 集成 | 根 [README](../README.md)「如果你是第一次接触」→ status → getting-started → configuration → http-api · host-face |
 | 能力叶 / 工具作者 | [AGENTS.md](../AGENTS.md) 角色表 → tool-pipeline · seams · policy · modules/ |
 | Host / Face | host-preset · profiles · plugin-loader · modules/server-host · host-face |
-| 产品壳 | host-face · `apps/web` · `packages/client` · status Tier B |
+| 产品壳 | host-face · `apps/web` · `packages/client` · getting-started（先编 dist 再 serve） |
 | 安全 | security-checklist · policy |
 | 维护者 / Agent | [AGENTS.md](../AGENTS.md) · architecture · learn · modules · adr · publishing |
 

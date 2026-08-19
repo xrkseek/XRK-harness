@@ -40,9 +40,9 @@ mode: queue | steer → admit（slash → recipe / skill 写入 user）→ wake 
 
 ## Boot
 
-- 静态资源：`XRK_WEB_DIST` 可覆盖；未设置时 `serve` 找 `apps/web/dist`，否则 `apps/console`
+- 静态资源：默认 `apps/web/dist`；可用 `XRK_WEB_DIST` 覆盖。缺产物时先 `pnpm web:build && pnpm client:bundle && pnpm web:assemble`
 - `apps/web`：产品壳源码 + `public/` 品牌；Host 省略 Cordis 客户端与 HMR boot
-- `apps/console`：验证台（`?console=1`；无 `web/dist` 时回退）
+- `apps/console`：Face 接线验证台（`?console=1`）；**不是**产品壳替代入口
 
 ## 相关
 
