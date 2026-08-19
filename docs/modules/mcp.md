@@ -9,11 +9,11 @@ MCP **client**（stdio + streamable-http）。规格门禁：[policy.md](../poli
 | 连 MCP server · list/call tools | 不做 MCP server（本仓角色） |
 | 命名 `mcp__<server>__<raw>` | 不静默覆盖 ToolRegistry 同名 |
 | `connect` 前 `assertPolicyAllow(mcp.connect)` | 默认 deny；UI 在 Face/Host，不在本包 |
-| `transport: "http"` → SDK `StreamableHTTPClientTransport` | HTTP 进程级 supervisor（默认关；SSE 走 SDK `reconnectionOptions`） |
+| `transport: "http"` → SDK `StreamableHTTPClientTransport` | SSE 走 SDK `reconnectionOptions`；进程级 supervisor 默认开（与 stdio 同策；可 `reconnect.enabled: false`） |
 | `onToolsListChanged` / `registerMcpTools` 默认 watch | 拉表失败保留上一代；gave-up 才卸工具 |
-| stdio `Client.onclose` 有界退避重连（DSH `connection.ts`） | 首次 `connect()` 失败 fail-closed；HTTP 进程 supervisor 默认关 |
+| stdio / HTTP `Client.onclose` 有界退避重连（DSH `connection.ts`） | 首次 `connect()` 失败 fail-closed；disabled / 帽满 → `gave-up` |
 
-`McpHttpOptions.reconnectionOptions` 原样传给 SDK（SSE 流恢复）。Host HTTP MCP 默认 `maxRetries: 2`。stdio 默认 `reconnect.enabled: true`（`initialDelayMs` 500 · `maxDelayMs` 30s · `maxAttempts` 10）；稳定窗口 = `maxDelayMs`。Host `loadMcpToolPlugins` 在 list_changed / gave-up 后就地更新 `plugin.tools` 并 `invalidateAll` agent 缓存；文件真源下 Face mutate → `reconcileMcpToolPlugins` 热挂载；overlay `connected[].status` 供 Plugins 卡徽标。
+`McpHttpOptions.reconnectionOptions` 原样传给 SDK（SSE 流恢复）。Host HTTP MCP 默认 `maxRetries: 2`。stdio/HTTP 默认 `reconnect.enabled: true`（`initialDelayMs` 500 · `maxDelayMs` 30s · `maxAttempts` 10）；稳定窗口 = `maxDelayMs`。Host `loadMcpToolPlugins` 在 list_changed / health 后就地更新 `plugin.tools` 并 `invalidateAll`；文件真源下 Face mutate → `reconcileMcpToolPlugins` 热挂载（`gave-up` 同 fingerprint 也会 replace）；health 变推 `settings/document-updated` 刷新 overlay 徽标。
 
 ## 文件地图
 
@@ -74,4 +74,4 @@ Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目�
 
 ## 未做
 
-HTTP 进程级 supervisor（stdio 已接；HTTP 仅 SDK SSE）。浏览器 **Plugins → MCP** 卡编辑 desired `servers` 已硬刷；文件真源下 mutate 后热挂载已接。
+（本切片内 HTTP/stdio 进程级 supervisor、文件真源 mutate 热挂载、Plugins MCP 卡均已接。）

@@ -28,6 +28,7 @@ import {
   effectiveHostApiKey,
   formatQuestionAnswer,
   isLoopbackAddress,
+  publishRemoteEvent,
   tryHandleFaceHttp,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
@@ -197,12 +198,26 @@ export function createHostManager(): HostManager {
       const mcpSpecs = resolveMcpSpecs(config);
       const mcpFileSourced = configuredMcpSpecs(config).length === 0;
       let invalidateAgents: () => Promise<void> = async () => {};
+      /** Mutable Face inventory — Host splices after MCP reconcile / health. */
+      const facePlugins: RegisteredPlugin[] = [];
+      const refreshFacePlugins = () => {
+        facePlugins.splice(0, facePlugins.length, ...loader.list());
+      };
+      let notifyMcpOverlay: () => void = () => {
+        refreshFacePlugins();
+      };
+      const mcpHooks = {
+        onToolsChanged: () => invalidateAgents(),
+        onHealthChanged: () => {
+          notifyMcpOverlay();
+        },
+      };
       if (mcpSpecs.length > 0) {
         const mcpPlugins = await loadMcpToolPlugins({
           specs: mcpSpecs,
           ...(policy ? { policy } : {}),
           allowConnect: Boolean(config.runtime.mcpAllowConnect),
-          onToolsChanged: () => invalidateAgents(),
+          ...mcpHooks,
         });
         for (const p of mcpPlugins) {
           if (loader.list().some((x) => x.id === p.id)) continue;
@@ -210,14 +225,11 @@ export function createHostManager(): HostManager {
           loadedPluginIds = [...loadedPluginIds, p.id];
         }
       }
+      refreshFacePlugins();
 
       const agentCache = createHostAgentCache(loader.list(), { hostId: id });
       invalidateAgents = () => agentCache.invalidateAll();
-      /** Mutable Face inventory — Host splices after MCP reconcile. */
-      const facePlugins: RegisteredPlugin[] = [...loader.list()];
-      const refreshFacePlugins = () => {
-        facePlugins.splice(0, facePlugins.length, ...loader.list());
-      };
+      let mcpSyncTail: Promise<unknown> = Promise.resolve();
       const lastDrainResult = new Map<string, AgentRunResult>();
       const attachments = createMemoryAttachmentStore();
 
@@ -351,27 +363,36 @@ export function createHostManager(): HostManager {
         ...(mcpFileSourced
           ? {
               syncMcpServers: async (servers: readonly McpServerDraft[]) => {
-                await reconcileMcpToolPlugins({
-                  desired: mcpDraftsToSpecs(servers),
-                  list: () => loader.list(),
-                  register: (plugin) => {
-                    loader.register(plugin);
-                    if (!loadedPluginIds.includes(plugin.id)) {
-                      loadedPluginIds = [...loadedPluginIds, plugin.id];
-                    }
-                  },
-                  unregister: async (pluginId) => {
-                    await loader.unregister(pluginId);
-                    loadedPluginIds = loadedPluginIds.filter(
-                      (x) => x !== pluginId,
-                    );
-                  },
-                  ...(policy ? { policy } : {}),
-                  allowConnect: Boolean(config.runtime.mcpAllowConnect),
-                  onToolsChanged: () => invalidateAgents(),
+                const run = mcpSyncTail.then(async () => {
+                  const result = await reconcileMcpToolPlugins({
+                    desired: mcpDraftsToSpecs(servers),
+                    list: () => loader.list(),
+                    register: (plugin) => {
+                      loader.register(plugin);
+                      if (!loadedPluginIds.includes(plugin.id)) {
+                        loadedPluginIds = [...loadedPluginIds, plugin.id];
+                      }
+                    },
+                    unregister: async (pluginId) => {
+                      await loader.unregister(pluginId);
+                      loadedPluginIds = loadedPluginIds.filter(
+                        (x) => x !== pluginId,
+                      );
+                    },
+                    ...(policy ? { policy } : {}),
+                    allowConnect: Boolean(config.runtime.mcpAllowConnect),
+                    ...mcpHooks,
+                  });
+                  refreshFacePlugins();
+                  await invalidateAgents();
+                  return { failures: result.failures };
                 });
-                refreshFacePlugins();
-                await invalidateAgents();
+                // Keep the chain alive even if one reconcile rejects.
+                mcpSyncTail = run.then(
+                  () => undefined,
+                  () => undefined,
+                );
+                return run;
               },
             }
           : {}),
@@ -412,6 +433,14 @@ export function createHostManager(): HostManager {
       faceBox.questions = faceRuntime.questions;
       lineage.parentOf = (sessionId) =>
         faceRuntime.subagents.getByChild(sessionId)?.parentSessionId;
+      notifyMcpOverlay = () => {
+        refreshFacePlugins();
+        const slot = faceRuntime.settingsNamespaces.ensure("mcp");
+        publishRemoteEvent(faceRuntime.bus, "settings/document-updated", [
+          "mcp",
+          slot.revision,
+        ]);
+      };
 
       const faceCheckAuth = (r: IncomingMessage) => {
         const expected = effectiveHostApiKey(faceRuntime);

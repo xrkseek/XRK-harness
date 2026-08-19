@@ -60,8 +60,9 @@ interface McpClientBase {
    */
   readonly createTransport?: () => Transport | Promise<Transport>;
   /**
-   * Process supervisor (stdio). HTTP defaults to `{ enabled: false }` — SDK SSE
-   * resume is {@link McpHttpOptions.reconnectionOptions}, not this policy.
+   * Process supervisor after a successful first connect (stdio and HTTP).
+   * Default enabled. HTTP also keeps SDK SSE resume via
+   * {@link McpHttpOptions.reconnectionOptions}.
    */
   readonly reconnect?: McpReconnectConfig;
   /** Optional supervisor diagnostics (tests / Host logs). */

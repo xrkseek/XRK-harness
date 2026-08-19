@@ -375,6 +375,7 @@ describe("Face settings U2", () => {
             mcpHealth: "connected",
           })),
         );
+        return { failures: [] };
       },
     });
     const desc = await dispatchFaceMethod(rt, "settings.describe", "md-live", {});
@@ -412,6 +413,36 @@ describe("Face settings U2", () => {
             status: "connected",
           },
         ],
+      },
+    });
+  });
+
+  it("mcp mutate surfaces connectFailures from Host sync", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-mcp-fail-"));
+    const rt = runtime({
+      productDir: dir,
+      plugins: [],
+      syncMcpServers: async () => ({
+        failures: [{ serverName: "gone", message: "policy deny" }],
+      }),
+    });
+    const mut = await dispatchFaceMethod(rt, "settings.mutate", "mm-fail", {
+      ns: "mcp",
+      ops: [
+        {
+          op: "set",
+          path: ["servers"],
+          value: [{ serverName: "gone", command: "npx" }],
+        },
+      ],
+    });
+    expect(mut.result.ok).toBe(true);
+    if (!mut.result.ok) return;
+    expect(mut.result.value).toMatchObject({
+      ns: "mcp",
+      applies: "live",
+      value: {
+        connectFailures: [{ serverName: "gone", message: "policy deny" }],
       },
     });
   });

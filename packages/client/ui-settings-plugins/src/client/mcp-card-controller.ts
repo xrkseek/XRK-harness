@@ -13,7 +13,7 @@ export interface McpConnectedEntry {
   readonly serverName: string
   readonly kind: string
   readonly toolCount: number
-  /** Stdio supervisor health; omitted on older Hosts. */
+  /** Supervisor health; omitted on older Hosts. */
   readonly status?: 'connected' | 'reconnecting' | 'gave-up'
 }
 
@@ -99,8 +99,9 @@ export class McpCardController {
       this.rows = serversOf(snapshot).map(rowToUi)
       this.seeded = true
       this.failed = false
-      this.publish()
     }
+    // Always republish: connected/note/status overlay can change while rows stay dirty.
+    this.publish()
   }
 
   private projection(): McpCardState {
@@ -240,16 +241,14 @@ function rowToUi(row: McpServerDraft): McpServerRow {
 
 function rowFromUi(row: McpServerRow): McpServerDraft {
   const serverName = row.serverName.trim()
-  const args = row.args.split(',').map(part => part.trim()).filter(part => part.length > 0)
-  const cwd = row.cwd.trim()
   if (row.transport === 'http') {
     return {
       serverName,
       url: row.url.trim(),
-      ...(args.length > 0 ? { args } : {}),
-      ...(cwd ? { cwd } : {}),
     }
   }
+  const args = row.args.split(',').map(part => part.trim()).filter(part => part.length > 0)
+  const cwd = row.cwd.trim()
   return {
     serverName,
     command: row.command.trim(),

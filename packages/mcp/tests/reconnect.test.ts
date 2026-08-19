@@ -177,8 +177,9 @@ describe("mcp reconnect supervisor", () => {
     await client.dispose();
   });
 
-  it("does not reconnect when disabled", async () => {
+  it("does not reconnect when disabled; emits gave-up and drops tools", async () => {
     const logs: string[] = [];
+    const states: string[] = [];
     const client = createMcpClient({
       serverName: "srv",
       command: "echo",
@@ -189,28 +190,72 @@ describe("mcp reconnect supervisor", () => {
         logs.push(message);
       },
     });
+    client.onConnectionState((state) => {
+      states.push(state.status);
+    });
     await client.connect();
+    const registry = createToolRegistry();
+    const wired = await registerMcpTools(registry, client);
+    expect(registry.get("mcp__srv__remote")).toBeDefined();
+
     instances[0]!.onclose?.();
     await sleep(20);
     expect(instances).toHaveLength(1);
     expect(logs.some((line) => line.includes("reconnect is disabled"))).toBe(true);
+    expect(states).toContain("gave-up");
+    expect(registry.get("mcp__srv__remote")).toBeUndefined();
     await expect(client.listTools()).rejects.toThrow(/not connected/);
+    wired.dispose();
     await client.dispose();
   });
 
-  it("does not process-supervise HTTP by default", async () => {
+  it("process-supervises HTTP by default (opt out with reconnect.enabled false)", async () => {
+    const states: string[] = [];
     const client = createMcpClient({
       transport: "http",
       serverName: "remote",
       url: "http://127.0.0.1:9/mcp",
       policy: allowPolicy(),
       createTransport: async () => ({ close: async () => {} }) as never,
+      reconnect: { initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 3 },
+    });
+    client.onConnectionState((state) => {
+      states.push(state.status);
     });
     await client.connect();
     instances[0]!.onclose?.();
-    await sleep(20);
-    expect(instances).toHaveLength(1);
+    await vi.waitFor(() => {
+      expect(instances.length).toBeGreaterThanOrEqual(2);
+    });
+    expect(states).toContain("reconnecting");
     await client.dispose();
+  });
+
+  it("dispose during in-flight reconnect does not reject", async () => {
+    let releaseTransport!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseTransport = resolve;
+    });
+    let transportCalls = 0;
+    const client = createMcpClient({
+      serverName: "srv",
+      command: "echo",
+      policy: allowPolicy(),
+      createTransport: async () => {
+        transportCalls += 1;
+        if (transportCalls > 1) await gate;
+        return { close: async () => {} } as never;
+      },
+      reconnect: { initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 5 },
+    });
+    await client.connect();
+    instances[0]!.onclose?.();
+    await vi.waitFor(() => {
+      expect(transportCalls).toBeGreaterThanOrEqual(2);
+    });
+    await expect(client.dispose()).resolves.toBeUndefined();
+    releaseTransport();
+    await sleep(20);
   });
 
   it("cancels a pending backoff on dispose", async () => {

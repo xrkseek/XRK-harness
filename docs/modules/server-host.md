@@ -11,7 +11,7 @@
 | `index.ts` | `createHostManager` · spawn/stop | AgentHandle 可缓存绑定，**不可**当 transcript |
 | `agent-cache.ts` | 按 session 缓存 agent · `host.plugins` Scope | 根会话 `agent:{id}`；子会话 `openSubagentRealm`（`subagent:{id}`）；invalidate 父卸嵌套子 |
 | `standing-tools.ts` | preset standing 工具表（Face `viewFor`） | 冷 history 不 resume agent；minimal = fs+std+skill，harness/server 加 bash + web + lsp + pty |
-| `mcp-wire.ts` | `XRK_MCP_SERVERS` 或 `{workspace}/.xrk/host-settings.json` → 合成 `kind: tools` 插件；文件真源时 Face mutate → `reconcileMcpToolPlugins` | 须 allow；id = `mcp:<serverName>`；stdio 有界重连；list_changed / gave-up 刷新 tools + invalidateAll；`mcpHealth` 供 Face overlay；env/config 非空赢过文件（无 live sync） |
+| `mcp-wire.ts` | `XRK_MCP_SERVERS` 或 `{workspace}/.xrk/host-settings.json` → 合成 `kind: tools` 插件；文件真源时 Face mutate → `reconcileMcpToolPlugins` | 须 allow；id = `mcp:<serverName>`；stdio/HTTP 有界重连；list_changed / health / gave-up 刷新 tools + invalidateAll；health 推 overlay；`gave-up` 同 fingerprint 也会 replace；env/config 非空赢过文件（无 live sync） |
 
 配置在 `@xrkseek/server-config`（`loadHostConfig`）。
 

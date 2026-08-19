@@ -87,7 +87,14 @@ export interface CreateFaceRuntimeOptions {
    * Host live-applies Face `mcp.servers` when MCP is sourced from
    * host-settings.json (env empty).
    */
-  readonly syncMcpServers?: (servers: readonly FaceMcpServerDraft[]) => Promise<void>;
+  readonly syncMcpServers?: (
+    servers: readonly FaceMcpServerDraft[],
+  ) => Promise<{
+    readonly failures: readonly {
+      readonly serverName: string;
+      readonly message: string;
+    }[];
+  }>;
   /** Product-shell boot entries listed in inventory. */
   readonly webPlugins?: readonly FaceWebPlugin[];
   readonly invalidateAgent?: (sessionId: string) => void | Promise<void>;
