@@ -1,8 +1,16 @@
-/** MCP desired-server card: edit draft servers; connected overlay stays read-only. */
+/** MCP desired-server card: edit draft servers; connected overlay stays read-only.
+ *
+ * Row chrome follows DSH Models `ModelListEditor` (XRKbar): compact bordered
+ * entries, primary grid + expandable secondary fields, pill add, glyph trash.
+ */
 
+import { useEffect, useRef, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { IconPlusOutline16, IconTrashOutline16 } from '@xrkseek/client-ui-primitives'
-import { ValueField } from './fields.tsx'
+import {
+  IconChevronDownOutline14,
+  IconPlusOutline16,
+  IconTrashOutline16,
+} from '@xrkseek/client-ui-primitives'
 import { PluginCard } from './PluginCard.tsx'
 import type { McpCardFace, McpServerRow, McpTransport } from './mcp-card-controller.ts'
 import type {} from './slot-contract.ts'
@@ -23,6 +31,22 @@ export function McpCard(props: McpCardProps) {
   const { t } = props
   const state = props.useMcpCard(snapshot => snapshot)
   const disabled = !state.writable
+  const [expanded, setExpanded] = useState<ReadonlySet<number>>(() => new Set())
+  const prevLen = useRef(state.rows.length)
+
+  // A newly appended row opens its advanced fields (args / cwd), matching DSH
+  // model-list posture where secondary capacity starts available after Add.
+  useEffect(() => {
+    if (state.rows.length > prevLen.current) {
+      setExpanded((current) => {
+        const next = new Set(current)
+        next.add(state.rows.length - 1)
+        return next
+      })
+    }
+    prevLen.current = state.rows.length
+  }, [state.rows.length])
+
   return (
     <PluginCard
       t={t}
@@ -40,7 +64,7 @@ export function McpCard(props: McpCardProps) {
       <section className={css.block} aria-label={t('mcpConnectedHeading')}>
         <h3 className={css.heading}>{t('mcpConnectedHeading')}</h3>
         {state.connected.length === 0
-          ? <p className={css.hint}>{t('mcpConnectedEmpty')}</p>
+          ? <p className={css.empty}>{t('mcpConnectedEmpty')}</p>
           : (
             <ul className={css.connectedList}>
               {state.connected.map(entry => (
@@ -58,87 +82,124 @@ export function McpCard(props: McpCardProps) {
           )}
       </section>
       <section className={css.block} aria-label={t('mcpServersHeading')}>
-        <div className={css.serversHead}>
-          <h3 className={css.heading}>{t('mcpServersHeading')}</h3>
-          <button
-            type="button"
-            className={css.add}
-            disabled={disabled}
-            onClick={() => { props.addRow() }}
-          >
-            <IconPlusOutline16 size={14} />
-            {t('mcpAddServer')}
-          </button>
-        </div>
+        <h3 className={css.heading}>{t('mcpServersHeading')}</h3>
         {state.rows.length === 0
-          ? <p className={css.hint}>{t('mcpServersEmpty')}</p>
-          : state.rows.map((row, index) => (
-            <ServerRow
-              key={`mcp-row-${String(index)}`}
-              t={t}
-              index={index}
-              row={row}
-              disabled={disabled}
-              onEdit={props.editRow}
-              onRemove={props.removeRow}
-            />
-          ))}
+          ? <p className={css.empty}>{t('mcpServersEmpty')}</p>
+          : (
+            <div className={css.list}>
+              {state.rows.map((row, index) => (
+                <ServerEntry
+                  key={`mcp-row-${String(index)}`}
+                  t={t}
+                  index={index}
+                  row={row}
+                  disabled={disabled}
+                  open={expanded.has(index)}
+                  onToggle={() => {
+                    setExpanded((current) => {
+                      const next = new Set(current)
+                      if (next.has(index)) next.delete(index)
+                      else next.add(index)
+                      return next
+                    })
+                  }}
+                  onEdit={props.editRow}
+                  onRemove={() => {
+                    props.removeRow(index)
+                    setExpanded((current) => {
+                      const next = new Set<number>()
+                      for (const at of current) {
+                        if (at < index) next.add(at)
+                        else if (at > index) next.add(at - 1)
+                      }
+                      return next
+                    })
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        <button
+          type="button"
+          className={css.add}
+          disabled={disabled}
+          onClick={() => { props.addRow() }}
+        >
+          <IconPlusOutline16 size={14} />
+          {t('mcpAddServer')}
+        </button>
         {state.rowInvalid ? <p className={css.invalid} role="status">{t('mcpRowInvalid')}</p> : null}
       </section>
     </PluginCard>
   )
 }
 
-interface ServerRowProps {
+interface ServerEntryProps {
   t: McpCardProps['t']
   index: number
   row: McpServerRow
   disabled: boolean
+  open: boolean
+  onToggle: () => void
   onEdit: McpCardFace['editRow']
-  onRemove: McpCardFace['removeRow']
+  onRemove: () => void
 }
 
-function ServerRow({ t, index, row, disabled, onEdit, onRemove }: ServerRowProps) {
-  const transport = row.transport
+function ServerEntry({
+  t, index, row, disabled, open, onToggle, onEdit, onRemove,
+}: ServerEntryProps) {
+  const n = String(index + 1)
+  const nameInvalid = row.serverName.trim() === ''
+  const endpointInvalid = row.transport === 'http'
+    ? row.url.trim() === ''
+    : row.command.trim() === ''
   return (
-    <div className={css.row}>
-      <div className={css.rowHead}>
-        <span className={css.rowTitle}>{t('mcpServerRow').replace('{index}', String(index + 1))}</span>
-        <button
-          type="button"
-          className={css.remove}
+    <div className={css.entry}>
+      <div className={css.primary}>
+        <input
+          id={`plugin-config-mcp-name-${String(index)}`}
+          className={nameInvalid ? css.inputInvalid : css.input}
+          type="text"
+          value={row.serverName}
+          placeholder={t('mcpServerName')}
+          aria-label={`${t('mcpServerName')} ${n}`}
+          aria-invalid={nameInvalid || undefined}
           disabled={disabled}
-          aria-label={t('mcpRemoveServer')}
-          onClick={() => { onRemove(index) }}
-        >
-          <IconTrashOutline16 size={14} />
-        </button>
-      </div>
-      <ValueField
-        id={`plugin-config-mcp-name-${String(index)}`}
-        label={t('mcpServerName')}
-        hint={t('mcpServerNameHint')}
-        overriddenLabel={t('overridden')}
-        resetLabel={t('reset')}
-        invalidLabel={t('mcpRowInvalid')}
-        disabled={disabled}
-        text={row.serverName}
-        overridden={false}
-        invalid={row.serverName.trim() === ''}
-        onEdit={(text) => { onEdit(index, { serverName: text }) }}
-        onReset={() => { onEdit(index, { serverName: '' }) }}
-      />
-      <div className={css.field}>
-        <div className={css.head}>
-          <label className={css.label} htmlFor={`plugin-config-mcp-transport-${String(index)}`}>
-            {t('mcpTransport')}
-          </label>
-        </div>
+          onChange={(event) => { onEdit(index, { serverName: event.target.value }) }}
+        />
+        {row.transport === 'http'
+          ? (
+            <input
+              id={`plugin-config-mcp-url-${String(index)}`}
+              className={`${endpointInvalid ? css.inputInvalid : css.input} ${css.endpoint}`}
+              type="text"
+              value={row.url}
+              placeholder={t('mcpUrl')}
+              aria-label={`${t('mcpUrl')} ${n}`}
+              aria-invalid={endpointInvalid || undefined}
+              disabled={disabled}
+              onChange={(event) => { onEdit(index, { url: event.target.value }) }}
+            />
+          )
+          : (
+            <input
+              id={`plugin-config-mcp-command-${String(index)}`}
+              className={`${endpointInvalid ? css.inputInvalid : css.input} ${css.endpoint}`}
+              type="text"
+              value={row.command}
+              placeholder={t('mcpCommand')}
+              aria-label={`${t('mcpCommand')} ${n}`}
+              aria-invalid={endpointInvalid || undefined}
+              disabled={disabled}
+              onChange={(event) => { onEdit(index, { command: event.target.value }) }}
+            />
+          )}
         <select
           id={`plugin-config-mcp-transport-${String(index)}`}
-          className={css.select}
+          className={`${css.input} ${css.transport}`}
           disabled={disabled}
-          value={transport}
+          value={row.transport}
+          aria-label={`${t('mcpTransport')} ${n}`}
           onChange={(event) => {
             onEdit(index, { transport: event.target.value as McpTransport })
           }}
@@ -146,69 +207,62 @@ function ServerRow({ t, index, row, disabled, onEdit, onRemove }: ServerRowProps
           <option value="stdio">{t('mcpTransportStdio')}</option>
           <option value="http">{t('mcpTransportHttp')}</option>
         </select>
-        <p className={css.hint}>{t('mcpTransportHint')}</p>
+        <button
+          type="button"
+          className={css.iconButton}
+          aria-label={`${t('mcpAdvanced')} ${n}`}
+          aria-expanded={open}
+          title={t('mcpAdvanced')}
+          onClick={onToggle}
+        >
+          <IconChevronDownOutline14
+            size={14}
+            className={open ? css.iconOpen : undefined}
+          />
+        </button>
+        <button
+          type="button"
+          className={`${css.iconButton} ${css.iconButtonDanger}`}
+          aria-label={`${t('mcpRemoveServer')} ${n}`}
+          title={t('mcpRemoveServer')}
+          disabled={disabled}
+          onClick={onRemove}
+        >
+          <IconTrashOutline16 size={14} />
+        </button>
       </div>
-      {transport === 'stdio'
+      {open
         ? (
-          <ValueField
-            id={`plugin-config-mcp-command-${String(index)}`}
-            label={t('mcpCommand')}
-            hint={t('mcpCommandHint')}
-            overriddenLabel={t('overridden')}
-            resetLabel={t('reset')}
-            invalidLabel={t('mcpRowInvalid')}
-            disabled={disabled}
-            text={row.command}
-            overridden={false}
-            invalid={row.command.trim() === ''}
-            onEdit={(text) => { onEdit(index, { command: text }) }}
-            onReset={() => { onEdit(index, { command: '' }) }}
-          />
+          <div className={css.advanced}>
+            <label className={css.field}>
+              <span className={css.fieldLabel}>{t('mcpArgs')}</span>
+              <input
+                id={`plugin-config-mcp-args-${String(index)}`}
+                className={css.input}
+                type="text"
+                value={row.args}
+                placeholder={t('mcpArgsHint')}
+                aria-label={`${t('mcpArgs')} ${n}`}
+                disabled={disabled}
+                onChange={(event) => { onEdit(index, { args: event.target.value }) }}
+              />
+            </label>
+            <label className={css.field}>
+              <span className={css.fieldLabel}>{t('mcpCwd')}</span>
+              <input
+                id={`plugin-config-mcp-cwd-${String(index)}`}
+                className={css.input}
+                type="text"
+                value={row.cwd}
+                placeholder={t('mcpCwdHint')}
+                aria-label={`${t('mcpCwd')} ${n}`}
+                disabled={disabled}
+                onChange={(event) => { onEdit(index, { cwd: event.target.value }) }}
+              />
+            </label>
+          </div>
         )
-        : (
-          <ValueField
-            id={`plugin-config-mcp-url-${String(index)}`}
-            label={t('mcpUrl')}
-            hint={t('mcpUrlHint')}
-            overriddenLabel={t('overridden')}
-            resetLabel={t('reset')}
-            invalidLabel={t('mcpRowInvalid')}
-            disabled={disabled}
-            text={row.url}
-            overridden={false}
-            invalid={row.url.trim() === ''}
-            onEdit={(text) => { onEdit(index, { url: text }) }}
-            onReset={() => { onEdit(index, { url: '' }) }}
-          />
-        )}
-      <ValueField
-        id={`plugin-config-mcp-args-${String(index)}`}
-        label={t('mcpArgs')}
-        hint={t('mcpArgsHint')}
-        overriddenLabel={t('overridden')}
-        resetLabel={t('reset')}
-        invalidLabel={t('mcpRowInvalid')}
-        disabled={disabled}
-        text={row.args}
-        overridden={false}
-        invalid={false}
-        onEdit={(text) => { onEdit(index, { args: text }) }}
-        onReset={() => { onEdit(index, { args: '' }) }}
-      />
-      <ValueField
-        id={`plugin-config-mcp-cwd-${String(index)}`}
-        label={t('mcpCwd')}
-        hint={t('mcpCwdHint')}
-        overriddenLabel={t('overridden')}
-        resetLabel={t('reset')}
-        invalidLabel={t('mcpRowInvalid')}
-        disabled={disabled}
-        text={row.cwd}
-        overridden={false}
-        invalid={false}
-        onEdit={(text) => { onEdit(index, { cwd: text }) }}
-        onReset={() => { onEdit(index, { cwd: '' }) }}
-      />
+        : null}
     </div>
   )
 }

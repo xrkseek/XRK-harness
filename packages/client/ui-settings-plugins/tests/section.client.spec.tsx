@@ -17,12 +17,13 @@ import { ConfigurablePluginsTab } from '../src/client/ConfigurablePluginsTab.tsx
 import type { ConfigurablePluginsTabProps } from '../src/client/ConfigurablePluginsTab.tsx'
 import { PluginsSettingsSection } from '../src/client/PluginsSettingsSection.tsx'
 import type { PluginsSettingsSectionProps, PluginsSettingsTabEntry } from '../src/client/PluginsSettingsSection.tsx'
-import { WebSearchCard } from '../src/client/WebSearchCard.tsx'
-import type { WebSearchCardProps } from '../src/client/WebSearchCard.tsx'
+import { McpCard } from '../src/client/McpCard.tsx'
+import type { McpCardProps } from '../src/client/McpCard.tsx'
 import type { AgentLoopCardState } from '../src/client/agent-loop-card-controller.ts'
 import type { BashCardState } from '../src/client/bash-card-controller.ts'
 import type { CardFieldState, CardShell } from '../src/client/card-form.ts'
 import type { ConfigurablePluginsTabState } from '../src/client/tab-store.ts'
+import type { McpCardState } from '../src/client/mcp-card-controller.ts'
 import type { WebSearchCardState } from '../src/client/web-search-card-controller.ts'
 import { en } from '../src/client/locales.ts'
 
@@ -346,6 +347,78 @@ describe('AgentLoopCard', () => {
     fireEvent.click(screen.getByRole('button', { name: en.reset }))
 
     expect(actions.resetField).toHaveBeenCalledWith('maxParallelToolCalls')
+  })
+})
+
+describe('McpCard', () => {
+  function mcpActions() {
+    return {
+      ...cardActions(),
+      editRow: vi.fn(),
+      addRow: vi.fn(),
+      removeRow: vi.fn(),
+    }
+  }
+
+  function renderMcp(state: Partial<McpCardState> = {}) {
+    const store = createSnapshotStore<McpCardState>({
+      ...settled,
+      rows: [],
+      connected: [],
+      note: '',
+      rowInvalid: false,
+      ...state,
+    })
+    const actions = mcpActions()
+    const props = {
+      ...actions,
+      t,
+      useMcpCard: bindSnapshotSelector(store),
+    } as unknown as McpCardProps
+    render(<McpCard {...props} />)
+    return actions
+  }
+
+  it('renders nothing while its namespace is unavailable', () => {
+    const { container } = render(<div />)
+    renderMcp({ available: false })
+
+    expect(container.textContent).toBe('')
+    expect(screen.queryByText(en.mcpTitle)).toBeNull()
+  })
+
+  it('shows connected overlay and server rows only once expanded', () => {
+    renderMcp({
+      connected: [{ id: 'mcp:demo', serverName: 'demo', kind: 'tools', toolCount: 3 }],
+      note: 'restart note',
+    })
+    expect(screen.getByText(en.mcpTitle)).toBeTruthy()
+    expect(screen.queryByText(en.mcpConnectedHeading)).toBeNull()
+
+    fireEvent.click(screen.getByText(en.mcpTitle))
+
+    expect(screen.getByText(en.mcpConnectedHeading)).toBeTruthy()
+    expect(screen.getByText('demo')).toBeTruthy()
+    expect(screen.getByText('restart note')).toBeTruthy()
+    expect(screen.getByRole('button', { name: en.mcpAddServer })).toBeTruthy()
+  })
+
+  it('stages row edits and blocks save while a row is invalid', () => {
+    const actions = renderMcp({ dirty: true, rowInvalid: true, rows: [{
+      serverName: 'fs',
+      transport: 'stdio',
+      command: '',
+      url: '',
+      args: '',
+      cwd: '',
+    }] })
+    fireEvent.click(screen.getByText(en.mcpTitle))
+
+    expect(screen.getByRole('button', { name: en.save })).toHaveProperty('disabled', true)
+    expect(screen.getByText(en.mcpRowInvalid)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: en.mcpAddServer }))
+    expect(actions.addRow).toHaveBeenCalledOnce()
   })
 })
 

@@ -13,7 +13,7 @@ export type PluginsSettingsLocaleKey =
   | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
   | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading' | 'mcpConnectedEmpty'
   | 'mcpServersHeading' | 'mcpServersEmpty' | 'mcpAddServer' | 'mcpRemoveServer'
-  | 'mcpServerRow' | 'mcpServerName' | 'mcpServerNameHint' | 'mcpTransport'
+  | 'mcpAdvanced' | 'mcpServerRow' | 'mcpServerName' | 'mcpServerNameHint' | 'mcpTransport'
   | 'mcpTransportStdio' | 'mcpTransportHttp' | 'mcpTransportHint'
   | 'mcpCommand' | 'mcpCommandHint' | 'mcpUrl' | 'mcpUrlHint'
   | 'mcpArgs' | 'mcpArgsHint' | 'mcpCwd' | 'mcpCwdHint' | 'mcpRowInvalid' | 'mcpToolsLabel'
@@ -65,6 +65,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   mcpServersEmpty: 'No desired servers yet. Add one to persist a draft for the next spawn.',
   mcpAddServer: 'Add server',
   mcpRemoveServer: 'Remove server',
+  mcpAdvanced: 'Advanced',
   mcpServerRow: 'Server {index}',
   mcpServerName: 'Server name',
   mcpServerNameHint: 'Stable id used in tool names (mcp__<name>__…).',
@@ -131,6 +132,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   mcpServersEmpty: '还没有期望配置。添加一条以在下次 spawn 时落盘。',
   mcpAddServer: '添加服务器',
   mcpRemoveServer: '移除服务器',
+  mcpAdvanced: '高级',
   mcpServerRow: '服务器 {index}',
   mcpServerName: '服务器名称',
   mcpServerNameHint: '工具名中的稳定 id（mcp__<name>__…）。',

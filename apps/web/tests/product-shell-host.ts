@@ -158,7 +158,12 @@ export async function dismissWelcome(page: Page): Promise<void> {
   const dialog = page.getByRole("dialog", {
     name: /内测声明|Internal Testing Notice/,
   });
-  await dialog.waitFor({ state: "visible", timeout: 20_000 });
+  try {
+    await dialog.waitFor({ state: "visible", timeout: 20_000 });
+  } catch {
+    // Onboarding may already be completed (reload / persisted workspace).
+    return;
+  }
   await page.getByRole("button", { name: /继续|Continue/ }).click();
   await dialog.waitFor({ state: "hidden", timeout: 10_000 });
 }
