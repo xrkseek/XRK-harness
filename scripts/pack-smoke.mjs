@@ -6,12 +6,16 @@
 import { spawnSync } from "node:child_process";
 import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** @type {{ name: string; dir: string; tarballPrefix: string }[]} */
 const PACKAGES = [
-  "@xrkseek/harness",
-  "@xrkseek/harness-cli",
-  "@xrkseek/mcp",
+  { name: "@xrkseek/harness", dir: "packages/sdk", tarballPrefix: "xrkseek-harness-" },
+  { name: "@xrkseek/harness-cli", dir: "apps/cli", tarballPrefix: "xrkseek-harness-cli-" },
+  { name: "@xrkseek/mcp", dir: "packages/mcp", tarballPrefix: "xrkseek-mcp-" },
 ];
 
 const FORBIDDEN = [
@@ -21,27 +25,34 @@ const FORBIDDEN = [
   /\.pem$/i,
 ];
 
-function run(cmd, args) {
-  const r = spawnSync(cmd, args, { stdio: "inherit", shell: true });
+function run(cmd, args, cwd = ROOT) {
+  // Windows: .cmd shims need shell; args here are fixed literals only.
+  const r = spawnSync(cmd, args, {
+    cwd,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+    env: process.env,
+  });
   if (r.status !== 0) {
     process.exit(r.status ?? 1);
   }
 }
 
 function listTarEntries(tgzPath) {
-  const r = spawnSync("tar", ["-tzf", tgzPath], { encoding: "utf8" });
+  const r = spawnSync("tar", ["-tzf", tgzPath], {
+    encoding: "utf8",
+    shell: process.platform === "win32",
+  });
   if (r.status !== 0) {
     throw new Error(`tar -tzf failed for ${tgzPath}: ${r.stderr ?? r.stdout}`);
   }
   return r.stdout.trim().split("\n").filter(Boolean);
 }
 
-async function newestTgz(dir, prefix) {
+async function newestMatchingTgz(dir, prefix) {
   const names = await readdir(dir);
   const matches = names.filter((n) => n.startsWith(prefix) && n.endsWith(".tgz"));
-  if (matches.length === 0) {
-    return null;
-  }
+  if (matches.length === 0) return null;
   let best = matches[0];
   let bestMtime = 0;
   for (const n of matches) {
@@ -61,37 +72,29 @@ async function main() {
   const outDir = await mkdtemp(join(tmpdir(), "xrk-pack-smoke-"));
 
   try {
-    for (const name of PACKAGES) {
-      console.log(`\npack-smoke: packing ${name}…`);
-      const r = spawnSync(
-        "pnpm",
-        ["--filter", name, "pack", "--pack-destination", outDir],
-        { encoding: "utf8", shell: true },
-      );
-      if (r.status !== 0) {
-        console.error(r.stderr ?? r.stdout);
-        process.exit(1);
-      }
+    for (const pkg of PACKAGES) {
+      console.log(`\npack-smoke: packing ${pkg.name}…`);
+      const pkgDir = join(ROOT, pkg.dir);
+      run("pnpm", ["pack", "--pack-destination", outDir], pkgDir);
 
-      const short = name.replace("@xrkseek/", "xrkseek-");
-      const tgz = await newestTgz(outDir, short);
+      const tgz = await newestMatchingTgz(outDir, pkg.tarballPrefix);
       if (!tgz) {
-        console.error(`pack-smoke: no .tgz found for ${name} in ${outDir}`);
+        console.error(`pack-smoke: no .tgz for ${pkg.name} in ${outDir}`);
         process.exit(1);
       }
 
       const entries = listTarEntries(tgz);
       const bad = entries.filter((e) => FORBIDDEN.some((re) => re.test(e)));
       if (bad.length > 0) {
-        console.error(`pack-smoke: ${name} tarball contains forbidden paths:\n  ${bad.join("\n  ")}`);
+        console.error(`pack-smoke: ${pkg.name} forbidden paths:\n  ${bad.join("\n  ")}`);
         process.exit(1);
       }
       const hasDist = entries.some((e) => e.includes("/dist/") || e.endsWith("/dist"));
       if (!hasDist) {
-        console.error(`pack-smoke: ${name} tarball missing dist/ — run build first`);
+        console.error(`pack-smoke: ${pkg.name} missing dist/`);
         process.exit(1);
       }
-      console.log(`pack-smoke: OK ${name} (${entries.length} entries)`);
+      console.log(`pack-smoke: OK ${pkg.name} (${entries.length} entries)`);
     }
 
     console.log("\npack-smoke: all sampled packages passed.");

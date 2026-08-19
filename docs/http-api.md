@@ -116,6 +116,8 @@ index.html 由 host 注入 `__XRK_BOOT__`（`boot.json` merge `{XRK_PLUGINS_DIR}
 
 ## Env
 
+运维全集见 [configuration.md](./configuration.md)。本表为 HTTP Host 常用项摘要：
+
 | Var | Meaning |
 |-----|---------|
 | `XRK_API_KEY` | API key for `/api/*` |
@@ -129,6 +131,7 @@ index.html 由 host 注入 `__XRK_BOOT__`（`boot.json` merge `{XRK_PLUGINS_DIR}
 | `XRK_LLM_PRESET` | Provider Registry brand id (`openrouter`, `deepseek`, …) — see [llm-provider-registry.md](./llm-provider-registry.md) |
 | `XRK_LLM_MODEL` | optional model override when preset set |
 | `XRK_LLM_BASE_URL` | optional baseUrl override (required for `custom` / `newapi` / …) |
+| brand `apiKeyEnv` | e.g. `OPENROUTER_API_KEY` · `DEEPSEEK_API_KEY`（见 [llm-provider-presets.md](./llm-provider-presets.md)） |
 | `XRK_WEB_DIST` | SPA dist root（CLI 默认 `apps/web/dist`，否则 `apps/console/dist`） |
 | `XRK_SESSIONS_DIR` | JSONL 会话目录；CLI `serve` 省略时用 `{workspace}/.xrk/sessions`（`--no-persist` = 内存）；旁路 `subagents.json` · `goals.json` |
 | `XRK_POLICY_FILE` | policy JSON |

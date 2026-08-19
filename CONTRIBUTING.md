@@ -67,6 +67,6 @@ sdk · server · presets → core* / llm / mcp / attachment / exec* / workspace 
 
 ## 文档入口
 
-分层见 [docs/README.md](./docs/README.md)。改契约必改对应规格 + [docs/status.md](./docs/status.md)。包落点见 [docs/modules/README.md](./docs/modules/README.md)。本机对照 / 体量板进 Cursor Canvas，不进 `docs/`。
+分层与属性见 [docs/README.md](./docs/README.md)。改契约必改对应规格 + [docs/status.md](./docs/status.md)。入门 / 配置 / 排障：[getting-started](./docs/getting-started.md) · [configuration](./docs/configuration.md) · [troubleshooting](./docs/troubleshooting.md)。包落点见 [docs/modules/README.md](./docs/modules/README.md)。本机对照进 Cursor Canvas，不进 `docs/`。
 
 [docs/README.md](./docs/README.md) · [docs/status.md](./docs/status.md) · [docs/architecture.md](./docs/architecture.md)
