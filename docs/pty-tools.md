@@ -22,7 +22,7 @@ Host（harness/server）共享一份 PTY registry：跨 agent invalidate 仍保�
 
 DSH 钉 `node-pty@1.2.0-beta.15`（带 `prebuilds/`）。本仓同样：`optionalDependencies` 用该 beta；`postinstall` 跑 `scripts/ensure-spawn-helper.mjs` 恢复 Linux/mac `spawn-helper` 可执行位。
 
-若安装要拉 GitHub / npm 国外源，用本机 HTTP 代理（不入库文档）。
+网络受限时在**本机**配置 npm/Git 代理；勿把固定端口或路径写进仓库文档或测试。
 
 ## Env scrub（CV DSH）
 

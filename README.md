@@ -6,67 +6,85 @@
 
 **TypeScript Agent Harness + Server Kit**
 
-纯 Node / TypeScript 宿主 · 可组装 · 可审计 · session 事件为对话真源
+可组装的 Node 宿主 · session 事件为对话真源 · Host Face 对接产品壳
 
-[文档](./docs/README.md) · [能力矩阵](./docs/status.md) · [贡献](./CONTRIBUTING.md) · [MIT](./LICENSE) · [xrkseek](https://github.com/xrkseek)
+[文档中心](./docs/README.md) · [能力矩阵](./docs/status.md) · [快速开始](./docs/getting-started.md) · [配置](./docs/configuration.md) · [贡献](./CONTRIBUTING.md) · [MIT](./LICENSE)
 
 </div>
 
 ---
 
-## 进度
+## 这是什么
 
-以 [docs/status.md](./docs/status.md) 为准。摘要：
+XRK-Harness（npm scope `@xrkseek/*`）是纯 **TypeScript / Node ≥26** 的 Agent 运行时与 Server Kit：
+
+- **Session 为真源**：对话与工具调用以 append-only 事件日志重建，turn / loop 短寿
+- **可组装**：`minimal` / `harness` / `server` preset 只接线，不写业务；能力经 compose 与工具瀑布组合
+- **Host + Face**：HTTP / RPC / 双 WebSocket；产品壳为 `apps/web` + `packages/client`（serve 托管 `apps/web/dist`）
+- **MCP**：stdio 与 streamable-http；文件真源下 Settings 落盘后可热挂载
+
+当前以 **clone 本仓** 使用为主。npm 公开发布尚未完成（全仓 `private: true`）。能正式用到哪一层，见 [docs/status.md](./docs/status.md)。
+
+## 状态摘要
 
 | 域 | 状态 |
 |----|------|
-| Kernel · Compose · Session · Agent · Exec · HTTP · Host Face 主路径 | 能跑 |
-| MCP（stdio · HTTP · list_changed）· Attachment（Face 可图） | 能跑 |
-| Host Face ↔ 产品 Web · 浏览器 E2E | 未稳 |
-| Registry R1 官方协议 · MCP 设置 UI | 未做 |
+| Kernel · Compose · Session · Agent · Exec · HTTP · Host Face | 能跑 |
+| MCP（stdio · HTTP · 热挂载 · Plugins 卡）· Attachment | 能跑 |
+| 产品 Web 全量组装 · 浏览器 E2E | 未稳（需 `web:build` + bundle + assemble） |
+| Registry 官方协议扩展 · npm 公开发布 | 未做 |
+
+完整矩阵与分层说明：[docs/status.md](./docs/status.md)。
 
 ## 快速开始
 
-需要 **Node ≥26**。
+需要 **Node.js ≥26** 与 **pnpm 9**（见根 `packageManager`）。
 
 ```bash
+git clone https://github.com/xrkseek/XRK-harness.git
+cd XRK-harness
 pnpm install
 pnpm build
 
+# 无 API key：replay LLM
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
-# 产品壳：编出 apps/web/dist 后 serve；否则回退 Face console
+
+# HTTP + Face（无产品壳 dist 时回退 apps/console）
 node apps/cli/dist/bin.js serve --preset server --workspace .
-# or: pnpm serve   /   xrk-harness web --open
 ```
 
-示例：[examples/hello-agent](./examples/hello-agent) · HTTP：[docs/http-api.md](./docs/http-api.md)
+接真模型时设置 `XRK_LLM_*`（见 [配置](./docs/configuration.md)）。一步步说明、产品壳组装与常见问题：[docs/getting-started.md](./docs/getting-started.md)。
 
-## 原则
+示例：[examples/hello-agent](./examples/hello-agent)。
 
-- 宿主仅 TypeScript（Node ≥26）
-- Session 长寿 · turn / loop 短寿
-- 模型可见输入必须可从 session 事件重建
-- 无全局 Proxy；组合用 `@xrkseek/compose`
-- presets 无业务逻辑；密钥不入库
-
-## 布局
-
-树与依赖：[docs/architecture.md](./docs/architecture.md)。包索引：[docs/modules/README.md](./docs/modules/README.md)。
+## 仓库布局
 
 ```text
-apps/cli · apps/web · apps/console   CLI · 壳底稿 · Face 验证台
-packages/client         壳客户端包底稿（与 apps/web 成对）
-packages/*              @xrkseek 库（kernel · compose · core* · llm · exec* · server · …）
-presets/                minimal | harness | server
-docs/                   规格 · ADR · modules 文件地图
+apps/cli · apps/web · apps/console     CLI · 产品壳 · Face 验证台
+packages/client                        壳客户端包（与 apps/web 成对）
+packages/*                             @xrkseek 库（kernel · compose · core* · llm · mcp · server · …）
+presets/                               minimal | harness | server
+docs/                                  规格 · ADR · 模块地图
+extensions/                            进程插件示例
 ```
 
-[AGENTS.md](./AGENTS.md)
+包平面与依赖边：[docs/architecture.md](./docs/architecture.md) · [docs/modules/](./docs/modules/README.md)。
 
----
+## 文档去哪读
 
-<div align="center">
+| 你想… | 打开 |
+|-------|------|
+| 先跑起来 | [getting-started.md](./docs/getting-started.md) |
+| 知道能正式用什么 | [status.md](./docs/status.md) |
+| 配环境变量 / MCP / LLM | [configuration.md](./docs/configuration.md) |
+| 懂架构 | [architecture.md](./docs/architecture.md) |
+| 接 HTTP / Face | [http-api.md](./docs/http-api.md) · [host-face.md](./docs/host-face.md) |
+| 排障 | [troubleshooting.md](./docs/troubleshooting.md) |
+| 贡献 / 门禁 | [CONTRIBUTING.md](./CONTRIBUTING.md) · [testing.md](./docs/testing.md) |
+| 全索引 | [docs/README.md](./docs/README.md) |
 
-MIT © [xrkseek](https://github.com/xrkseek)
+维护者与 Agent 约定留在 [AGENTS.md](./AGENTS.md)，不进产品说明。
 
-</div>
+## 许可
+
+[MIT](./LICENSE) © [xrkseek](https://github.com/xrkseek)

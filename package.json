@@ -24,7 +24,8 @@
     "stub:types": "node ./scripts/emit-stub-types.mjs",
     "client:bundle": "node ./scripts/bundle-client-js.mjs",
     "xrk": "node ./apps/cli/dist/bin.js",
-    "serve": "node ./apps/cli/dist/bin.js serve"
+    "serve": "node ./apps/cli/dist/bin.js serve",
+    "pack:smoke": "node ./scripts/pack-smoke.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

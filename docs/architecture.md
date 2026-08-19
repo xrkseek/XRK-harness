@@ -14,13 +14,17 @@
 
 ## 文档分层
 
+完整属性表见 [docs/README.md](./README.md)。摘要：
+
 | 层 | 写什么 | 不写什么 |
 |----|--------|----------|
-| [status.md](./status.md) | 能跑 / 未稳 / 未做 | 对照仓路径、本机笔记 |
-| `docs/*.md` | 已实现契约（HTTP · Face · session · 工具） | 未做路线清单当规格 |
-| [modules/](./modules/README.md) | 大包文件地图 | 教 Agent 怎么读文档 |
-| 包 README | 该包职责与导出 | 全仓战略 |
-| Canvas（本机） | 对照 · 体量 · 目录打磨 | 不入库 |
+| 根 README | 产品介绍 · 最短跑通 | Agent 红线、本机绝对路径 |
+| [status.md](./status.md) | 能跑 / 未稳 / 未做 · 正式使用分层 | 对照仓路径、未立项路线当规格 |
+| [getting-started](./getting-started.md) · [configuration](./configuration.md) · [troubleshooting](./troubleshooting.md) | 入门 · 环境变量 · 排障 | 密钥真值 |
+| `docs/*.md` 契约 | 已实现 HTTP · Face · session · 工具 | 「计划支持」清单当规格 |
+| [modules/](./modules/README.md) | 大包文件地图 | 教人怎么读文档的元规则 |
+| [AGENTS.md](../AGENTS.md) | 自动化 / 贡献红线 | 面向终端用户的产品文案 |
+| Canvas（本机） | 对照 · 体量 · 打磨 TODO | 不入库 |
 
 依赖边见 [AGENTS.md](../AGENTS.md)。能力矩阵：[status.md](./status.md)。
 
