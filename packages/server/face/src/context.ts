@@ -98,8 +98,16 @@ export interface FaceRuntime {
   /**
    * Host live-applies Face `mcp.servers` when MCP is sourced from
    * host-settings.json (env empty). Absent → mutate stays `applies: restart`.
+   * Returns per-server connect failures (other servers may still mount).
    */
-  readonly syncMcpServers?: (servers: readonly FaceMcpServerDraft[]) => Promise<void>;
+  readonly syncMcpServers?: (
+    servers: readonly FaceMcpServerDraft[],
+  ) => Promise<{
+    readonly failures: readonly {
+      readonly serverName: string;
+      readonly message: string;
+    }[];
+  }>;
   /** Standing / remembered tool presenters (wire tools get). */
   readonly getTool?: (
     sessionId: string,

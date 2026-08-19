@@ -4,9 +4,9 @@ MCP client：stdio 或 streamable-http（或测试注入 transport）→ `listTo
 
 ## Status
 
-**能跑**：stdio · streamable-http · 命名 `mcp__<server>__<tool>` · `registerMcpTools` · **默认 `mcp.connect` deny** · **stdio 有界重连**（`Client.onclose`）。  
+**能跑**：stdio · streamable-http · 命名 `mcp__<server>__<tool>` · `registerMcpTools` · **默认 `mcp.connect` deny** · **stdio/HTTP 有界进程重连**（`Client.onclose`；HTTP 另有 SDK SSE `reconnectionOptions`）。  
 Host 接线：`XRK_MCP_SERVERS`（`command` 或 `url`）+ `XRK_MCP_ALLOW=1`（见 [server-host 模块笔记](../../docs/modules/server-host.md)）。  
-HTTP 可传 SDK `reconnectionOptions`（SSE 恢复；进程 supervisor 默认关）。`registerMcpTools` 默认 watch `tools/list_changed`（拉表失败保留上一代；gave-up 卸工具）。Face `mcp.servers` 可落盘；空 `XRK_MCP_SERVERS` 时 Host 在 mutate 后热挂载。Plugins → MCP 卡硬刷见 `product-shell-mcp.e2e.ts`。未做：HTTP 进程 supervisor。
+`registerMcpTools` 默认 watch `tools/list_changed`（拉表失败保留上一代；gave-up 卸工具）。Face `mcp.servers` 可落盘；空 `XRK_MCP_SERVERS` 时 Host 在 mutate 后热挂载。Plugins → MCP 卡硬刷见 `product-shell-mcp.e2e.ts`。
 
 门禁见 [docs/policy.md](../../docs/policy.md)。状态：[docs/status.md](../../docs/status.md)。  
 **文件地图**：[docs/modules/mcp.md](../../docs/modules/mcp.md)。

@@ -168,16 +168,22 @@ export function mcpDraftsToSpecs(
   return out;
 }
 
-/** Stable id for reconcile keep/replace (env intentionally omitted from Face drafts). */
+/** Stable id for reconcile keep/replace. Includes env so env-only edits remount. */
 export function mcpFingerprint(spec: McpServerSpec): string {
   if ("url" in spec) {
     return JSON.stringify({ n: spec.serverName, u: spec.url });
   }
+  const env = spec.env
+    ? Object.keys(spec.env)
+        .sort()
+        .map((k) => [k, spec.env![k] ?? ""])
+    : [];
   return JSON.stringify({
     n: spec.serverName,
     c: spec.command,
     a: [...(spec.args ?? [])],
     d: spec.cwd ?? "",
+    e: env,
   });
 }
 
@@ -205,7 +211,13 @@ function isMcpPlugin(plugin: RegisteredPlugin): plugin is McpRegisteredPlugin {
 async function connectOneMcpPlugin(
   spec: McpServerSpec,
   policy: PolicyEngine,
-  onToolsChanged?: (serverName: string) => void | Promise<void>,
+  hooks?: {
+    readonly onToolsChanged?: (serverName: string) => void | Promise<void>;
+    readonly onHealthChanged?: (
+      serverName: string,
+      status: McpConnectionStatus,
+    ) => void | Promise<void>;
+  },
 ): Promise<McpRegisteredPlugin> {
   assertPolicyAllow(policy, {
     kind: "mcp.connect",
@@ -238,7 +250,7 @@ async function connectOneMcpPlugin(
         try {
           const next = await toolsFromClient(client);
           tools.splice(0, tools.length, ...next);
-          await onToolsChanged?.(spec.serverName);
+          await hooks?.onToolsChanged?.(spec.serverName);
         } catch {
           /* keep previous generation */
         }
@@ -259,9 +271,22 @@ async function connectOneMcpPlugin(
     };
     const unsubState = client.onConnectionState((state) => {
       plugin.mcpHealth = state.status;
-      if (state.status !== "gave-up") return;
-      tools.splice(0, tools.length);
-      void onToolsChanged?.(spec.serverName);
+      void hooks?.onHealthChanged?.(spec.serverName, state.status);
+      if (state.status === "gave-up") {
+        tools.splice(0, tools.length);
+        void hooks?.onToolsChanged?.(spec.serverName);
+      } else if (state.status === "connected") {
+        // Re-list after a successful reconnect generation.
+        refresh = refresh.then(async () => {
+          try {
+            const next = await toolsFromClient(client);
+            tools.splice(0, tools.length, ...next);
+            await hooks?.onToolsChanged?.(spec.serverName);
+          } catch {
+            /* keep previous generation */
+          }
+        });
+      }
     });
     return plugin;
   } catch (err) {
@@ -283,16 +308,25 @@ export async function loadMcpToolPlugins(options: {
   readonly allowConnect?: boolean;
   /** Fired after a successful list_changed re-list (not on fetch failure). */
   readonly onToolsChanged?: (serverName: string) => void | Promise<void>;
+  /** Fired on supervisor health transitions (connected / reconnecting / gave-up). */
+  readonly onHealthChanged?: (
+    serverName: string,
+    status: McpConnectionStatus,
+  ) => void | Promise<void>;
 }): Promise<readonly McpRegisteredPlugin[]> {
   if (options.specs.length === 0) return [];
   const policy = connectPolicy(options.policy, Boolean(options.allowConnect));
   const plugins: McpRegisteredPlugin[] = [];
+  const hooks = {
+    ...(options.onToolsChanged ? { onToolsChanged: options.onToolsChanged } : {}),
+    ...(options.onHealthChanged
+      ? { onHealthChanged: options.onHealthChanged }
+      : {}),
+  };
 
   try {
     for (const spec of options.specs) {
-      plugins.push(
-        await connectOneMcpPlugin(spec, policy, options.onToolsChanged),
-      );
+      plugins.push(await connectOneMcpPlugin(spec, policy, hooks));
     }
   } catch (err) {
     for (const plugin of plugins) {
@@ -317,8 +351,9 @@ export interface ReconcileMcpResult {
 
 /**
  * Diff desired MCP specs against live `mcp:*` plugins: unregister removed /
- * changed, connect additions. Per-server connect failures are collected (other
- * servers still apply).
+ * changed / gave-up, connect additions. Per-server connect failures are
+ * collected (other servers still apply). Duplicate `serverName` in desired:
+ * last entry wins.
  */
 export async function reconcileMcpToolPlugins(options: {
   readonly desired: readonly McpServerSpec[];
@@ -328,6 +363,10 @@ export async function reconcileMcpToolPlugins(options: {
   readonly policy?: PolicyEngine;
   readonly allowConnect?: boolean;
   readonly onToolsChanged?: (serverName: string) => void | Promise<void>;
+  readonly onHealthChanged?: (
+    serverName: string,
+    status: McpConnectionStatus,
+  ) => void | Promise<void>;
 }): Promise<ReconcileMcpResult> {
   const policy = connectPolicy(options.policy, Boolean(options.allowConnect));
   const desiredById = new Map<string, McpServerSpec>(
@@ -337,11 +376,18 @@ export async function reconcileMcpToolPlugins(options: {
   const removed: string[] = [];
   const kept: string[] = [];
   const toAdd: McpServerSpec[] = [];
+  const hooks = {
+    ...(options.onToolsChanged ? { onToolsChanged: options.onToolsChanged } : {}),
+    ...(options.onHealthChanged
+      ? { onHealthChanged: options.onHealthChanged }
+      : {}),
+  };
 
   for (const plugin of current) {
     const spec = desiredById.get(plugin.id);
     const fp = typeof plugin.mcpFingerprint === "string" ? plugin.mcpFingerprint : "";
-    if (!spec || fp !== mcpFingerprint(spec)) {
+    const dead = plugin.mcpHealth === "gave-up";
+    if (!spec || dead || fp !== mcpFingerprint(spec)) {
       await options.unregister(plugin.id);
       removed.push(plugin.id);
       if (spec) toAdd.push(spec);
@@ -360,11 +406,7 @@ export async function reconcileMcpToolPlugins(options: {
     const id = `mcp:${spec.serverName}`;
     if (options.list().some((p) => p.id === id)) continue;
     try {
-      const plugin = await connectOneMcpPlugin(
-        spec,
-        policy,
-        options.onToolsChanged,
-      );
+      const plugin = await connectOneMcpPlugin(spec, policy, hooks);
       options.register(plugin);
       added.push(plugin.id);
     } catch (err) {

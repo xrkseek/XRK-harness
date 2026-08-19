@@ -77,7 +77,7 @@ describe("host mcp-wire", () => {
       cwd: "/tmp",
     };
     expect(mcpFingerprint(stdio)).toBe(
-      JSON.stringify({ n: "fs", c: "npx", a: ["-y", "x"], d: "/tmp" }),
+      JSON.stringify({ n: "fs", c: "npx", a: ["-y", "x"], d: "/tmp", e: [] }),
     );
     expect(mcpFingerprint({ serverName: "r", url: "https://x" })).toBe(
       JSON.stringify({ n: "r", u: "https://x" }),
@@ -132,6 +132,41 @@ describe("host mcp-wire", () => {
     expect(result.added).toEqual([]);
     expect(result.failures).toEqual([]);
     expect(plugins.map((p) => p.id)).toEqual(["mcp:keep"]);
+  });
+
+  it("reconcile replaces gave-up plugins with the same fingerprint", async () => {
+    const spec: McpServerSpec = {
+      serverName: "dead",
+      command: "xrk-mcp-missing-binary-xyz",
+    };
+    const dead: McpRegisteredPlugin = {
+      id: "mcp:dead",
+      kind: "tools",
+      tools: [],
+      mcpHealth: "gave-up",
+      mcpFingerprint: mcpFingerprint(spec),
+      async dispose() {},
+    };
+    const plugins: RegisteredPlugin[] = [dead];
+    const result = await reconcileMcpToolPlugins({
+      desired: [spec],
+      list: () => plugins,
+      register: (plugin) => {
+        plugins.push(plugin);
+      },
+      unregister: async (id) => {
+        const i = plugins.findIndex((p) => p.id === id);
+        if (i < 0) return;
+        await plugins[i]?.dispose?.();
+        plugins.splice(i, 1);
+      },
+      allowConnect: true,
+    });
+    expect(result.kept).toEqual([]);
+    expect(result.removed).toEqual(["mcp:dead"]);
+    // Replace attempted; missing binary fails closed and is collected.
+    expect(result.failures[0]?.serverName).toBe("dead");
+    expect(plugins.map((p) => p.id)).not.toContain("mcp:dead");
   });
 
   it("reconcile collects connect failures without aborting the batch", async () => {

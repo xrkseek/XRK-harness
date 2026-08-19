@@ -15,7 +15,7 @@
 | HTTP + Host + Face 主路径 | `server-*`（产品 boot 省略 Cordis UI/HMR；工具卡 · `session/jobs` · standing 冷 history；`ask_user`；`/permission` · `/plan` · `/compact` · `/export` · `/feedback`） | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
 | CLI | `@xrkseek/harness-cli`（`serve`/`web` 产品壳） | [apps/cli/README.md](../apps/cli/README.md) |
 | LLM / Presets / SDK | `llm-*` · `presets/*` · `@xrkseek/harness` | [llm-provider-registry.md](./llm-provider-registry.md) · [profiles.md](./profiles.md) |
-| MCP | `@xrkseek/mcp`（stdio 有界重连）；Host `XRK_MCP_*` 或 Face `mcp.servers` 落盘 + 文件真源热挂载（默认 deny） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) |
+| MCP | `@xrkseek/mcp`（stdio/HTTP 有界进程重连 + SSE）；Host `XRK_MCP_*` 或 Face `mcp.servers` 落盘 + 文件真源热挂载（默认 deny） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) |
 | Attachment / 插件 | Face 附件；进程插件 `tools` · `prompt` · `commands` | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
 
 **对齐 DSH 的口径（诚实）**：内核主路径已可当日常 harness 用；**不是** DSH 二百插件全集。产品壳 = `apps/web` + `packages/client`；serve 用 `apps/web/dist`，内核不嵌 Cordis。
@@ -33,7 +33,6 @@
 | 域 | 说明 |
 | --- | --- |
 | Registry R1+ | 官方协议包（Anthropic / Gemini / Responses） |
-| MCP 产品面 | HTTP 进程级 supervisor（stdio 有界重连 + Face 落盘 + 文件真源 mutate 热挂载 + Plugins 卡已接） |
 | DSH 插件长尾 | Cordis scaffold 金标 e2e、SQLite FTS、Cordis remote-event inspect/run、真 Win process-inspector 等 —— 对照笔记进 Canvas，不写成产品路线 |
 
 ## 依赖纪律

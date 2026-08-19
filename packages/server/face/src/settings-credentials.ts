@@ -729,10 +729,10 @@ function validateMcpServersValue(raw: unknown): string | undefined {
 }
 
 const MCP_SETTINGS_NOTE_RESTART =
-  "Desired servers persist in .xrk/host-settings.json and apply on the next Host spawn. Live connect still needs XRK_MCP_ALLOW=1 (or policy allow). Stdio crashes reconnect with bounded backoff; HTTP uses SDK SSE resume.";
+  "Desired servers persist in .xrk/host-settings.json and apply on the next Host spawn. Live connect still needs XRK_MCP_ALLOW=1 (or policy allow). Stdio and HTTP both use bounded process reconnect after a successful connect; HTTP also keeps SDK SSE resume.";
 
 const MCP_SETTINGS_NOTE_LIVE =
-  "Desired servers persist in .xrk/host-settings.json; Host remounts MCP tools in this process. Connect still needs XRK_MCP_ALLOW=1 (or policy allow). Stdio crashes reconnect with bounded backoff; HTTP uses SDK SSE resume.";
+  "Desired servers persist in .xrk/host-settings.json; Host remounts MCP tools in this process. Connect still needs XRK_MCP_ALLOW=1 (or policy allow). Stdio and HTTP both use bounded process reconnect after a successful connect; HTTP also keeps SDK SSE resume.";
 
 function mcpApplies(runtime: FaceRuntime): "live" | "restart" {
   return typeof runtime.syncMcpServers === "function" ? "live" : "restart";
@@ -768,11 +768,15 @@ function mcpConnected(runtime: FaceRuntime): readonly {
     }));
 }
 
-function mcpDescribeBase(runtime: FaceRuntime): Record<string, unknown> {
+function mcpDescribeBase(
+  runtime: FaceRuntime,
+  connectFailures: readonly { readonly serverName: string; readonly message: string }[] = [],
+): Record<string, unknown> {
   return {
     servers: [],
     connected: mcpConnected(runtime),
     note: mcpSettingsNote(runtime),
+    ...(connectFailures.length > 0 ? { connectFailures } : {}),
   };
 }
 
@@ -904,8 +908,13 @@ export async function settingsMutateFace(
     slot.user = { servers: mcpServersFromRuntime(runtime) };
     slot.applies = applies;
     await persistHostSettings(runtime);
+    let connectFailures: readonly {
+      readonly serverName: string;
+      readonly message: string;
+    }[] = [];
     if (runtime.syncMcpServers) {
-      await runtime.syncMcpServers(mcpServersFromRuntime(runtime));
+      const synced = await runtime.syncMcpServers(mcpServersFromRuntime(runtime));
+      connectFailures = synced.failures;
     }
     publishRemoteEvent(runtime.bus, "settings/document-updated", [
       ns,
@@ -915,7 +924,7 @@ export async function settingsMutateFace(
       ok: true,
       value: runtime.settingsNamespaces.view(
         "mcp",
-        mcpDescribeBase(runtime),
+        mcpDescribeBase(runtime, connectFailures),
         FACE_MCP_SCHEMA,
         applies,
       ),

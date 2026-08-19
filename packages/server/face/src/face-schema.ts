@@ -85,7 +85,8 @@ export const FACE_PERMISSION_SCHEMA: FaceSchemaEnvelope = {
 
 /**
  * Face MCP desired servers. `connected` is overlay from live plugins
- * (`status` is the stdio supervisor health). Desired `servers` apply on next Host spawn.
+ * (`status` is supervisor health). File-sourced Host remounts on mutate
+ * (`applies: live`); env/config MCP stays `applies: restart`.
  */
 export const FACE_MCP_SCHEMA: FaceSchemaEnvelope = {
   uid: 9,
@@ -110,9 +111,14 @@ export const FACE_MCP_SCHEMA: FaceSchemaEnvelope = {
     },
     7: { type: "array", inner: 6 },
     8: { type: "string" },
+    10: {
+      type: "object",
+      dict: { serverName: 1, message: 1 },
+    },
+    11: { type: "array", inner: 10 },
     9: {
       type: "object",
-      dict: { servers: 4, connected: 7, note: 8 },
+      dict: { servers: 4, connected: 7, note: 8, connectFailures: 11 },
     },
   },
 };

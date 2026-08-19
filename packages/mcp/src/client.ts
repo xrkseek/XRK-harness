@@ -121,10 +121,11 @@ async function openTransport(options: McpClientOptions): Promise<Transport> {
  * MCP client: stdio / streamable-http (or injected transport) → list/call tools.
  * `connect()` always runs `assertPolicyAllow({ kind: "mcp.connect" })` first.
  *
- * Stdio (and injected transports) run a process supervisor after the first
- * successful `connect()`: `Client.onclose` respawns with bounded backoff
- * (DSH `connection.ts`). HTTP process restart is off unless `reconnect.enabled`;
- * SSE resume stays on SDK `reconnectionOptions`.
+ * After the first successful `connect()`, a generation supervisor owns
+ * `Client.onclose`: recreate Client+transport with bounded backoff
+ * (DSH `connection.ts`) for stdio **and** HTTP. HTTP also keeps SDK SSE
+ * resume via `reconnectionOptions`. Pass `reconnect: { enabled: false }` to
+ * opt out of process-level restart (lost connections emit `gave-up`).
  */
 export function createMcpClient(options: McpClientOptions): McpClient {
   assertServerName(options.serverName);
@@ -136,11 +137,7 @@ export function createMcpClient(options: McpClientOptions): McpClient {
     throw new Error("createMcpClient: command, url (http), or createTransport required");
   }
 
-  const reconnect = resolveReconnectPolicy(
-    options.reconnect ??
-      (options.transport === "http" ? { enabled: false } : undefined),
-    "reconnect",
-  );
+  const reconnect = resolveReconnectPolicy(options.reconnect, "reconnect");
   const timeoutMs = options.toolCallTimeoutMs ?? DEFAULT_TOOL_CALL_TIMEOUT_MS;
   const label = `mcp(${options.serverName})`;
   const listChangedHandlers = new Set<() => void | Promise<void>>();
@@ -202,12 +199,17 @@ export function createMcpClient(options: McpClientOptions): McpClient {
     const lostEstablished = connectedAt !== undefined;
     connected = false;
     if (!reconnect.enabled) {
+      connectedAt = undefined;
       log(
         "error",
         lostEstablished
           ? "connection lost and reconnect is disabled"
           : "connection failed and reconnect is disabled",
       );
+      // Terminal for Host overlay / tool unload — same as failure-cap give-up.
+      if (lostEstablished) {
+        emitState({ status: "gave-up" });
+      }
       return;
     }
     if (connectedAt !== undefined && Date.now() - connectedAt >= reconnect.maxDelayMs) {
@@ -242,6 +244,7 @@ export function createMcpClient(options: McpClientOptions): McpClient {
     });
     reconnectTimer = setTimeout(() => {
       reconnectTimer = undefined;
+      // Non-startup must never reject (dispose races return quietly).
       void connectGeneration(false);
     }, delayMs);
     reconnectTimer.unref?.();
@@ -296,9 +299,12 @@ export function createMcpClient(options: McpClientOptions): McpClient {
       if (disposed) {
         await closeQuietly(next);
         await closeQuietly(generation);
-        attempt = undefined;
-        clientClosed = undefined;
-        throw new Error("MCP client disposed");
+        if (attempt === generation) {
+          attempt = undefined;
+          clientClosed = undefined;
+        }
+        if (startup) throw new Error("MCP client disposed");
+        return;
       }
       await generation.connect(next);
       if (closeObserved) {
@@ -370,6 +376,11 @@ export function createMcpClient(options: McpClientOptions): McpClient {
     async connect() {
       if (disposed) throw new Error("MCP client disposed");
       if (connected) return;
+      // Cancel pending backoff so a manual connect does not race a timer generation.
+      if (reconnectTimer !== undefined) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+      }
       if (inflight) return inflight;
       inflight = connectGeneration(true);
       try {
