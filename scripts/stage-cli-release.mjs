@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Stage @xrkseek/harness-cli for GitHub Release + Packages.
- * Assembles product-web, deploy-closes runtime, writes .release/*.tgz
+ * Stage @xrkseek/harness-cli → .release/
+ * - harness-cli/     deploy 树（给 npm pack / Packages）
+ * - xrkseek-harness-cli-<ver>.tgz   发行版（给 GitHub Release）
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -46,7 +47,6 @@ function walkPkgJson(dir, acc = []) {
   return acc;
 }
 
-/** Keep workspace private so only the staged CLI is publishable. */
 function ensurePrivateSurface() {
   const files = [
     path.join(ROOT, "package.json"),
@@ -92,10 +92,26 @@ run("pnpm", ["--filter", "@xrkseek/harness-cli", "deploy", "--prod", STAGE]);
 const stagedPkgPath = path.join(STAGE, "package.json");
 const staged = JSON.parse(readFileSync(stagedPkgPath, "utf8").replace(/^\uFEFF/, ""));
 delete staged.private;
+delete staged.bundleDependencies;
 staged.publishConfig = {
   access: "public",
   registry: "https://npm.pkg.github.com",
 };
+
+for (const field of ["dependencies", "optionalDependencies"]) {
+  const deps = staged[field];
+  if (!deps || typeof deps !== "object") continue;
+  for (const [name, range] of Object.entries(deps)) {
+    if (typeof range !== "string" || !range.startsWith("workspace:")) continue;
+    const depPkg = path.join(STAGE, "node_modules", ...name.split("/"), "package.json");
+    if (!existsSync(depPkg)) {
+      console.error(`stage: missing ${depPkg} for ${name}`);
+      process.exit(1);
+    }
+    const v = JSON.parse(readFileSync(depPkg, "utf8").replace(/^\uFEFF/, "")).version;
+    deps[name] = typeof v === "string" ? v : "0.1.0";
+  }
+}
 staged.bundleDependencies = Object.keys(staged.dependencies ?? {});
 writeFileSync(stagedPkgPath, `${JSON.stringify(staged, null, 2)}\n`);
 
@@ -106,23 +122,7 @@ if (!existsSync(path.join(STAGE, "product-web", "index.html"))) {
 
 const ver = typeof staged.version === "string" ? staged.version : "0.0.0";
 const releaseTgz = path.join(ROOT, ".release", `xrkseek-harness-cli-${ver}.tgz`);
-rmSync(releaseTgz, { force: true });
 run("tar", ["-czf", releaseTgz, "-C", path.join(ROOT, ".release"), "harness-cli"]);
 
-const pack = spawnSync(
-  "npm",
-  ["pack", "--pack-destination", path.join(ROOT, ".release")],
-  {
-    cwd: STAGE,
-    encoding: "utf8",
-    shell: process.platform === "win32",
-    env: process.env,
-  },
-);
-if (pack.status !== 0) {
-  process.stderr.write(pack.stderr || pack.stdout || "");
-  process.exit(pack.status ?? 1);
-}
-
-console.log(`stage: ${releaseTgz}`);
-console.log(`stage: ${STAGE}`);
+console.log(`stage: release ${releaseTgz}`);
+console.log(`stage: npm     ${STAGE}`);

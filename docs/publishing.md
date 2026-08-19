@@ -1,29 +1,26 @@
 # Publishing
 
-对外只发 **`@xrkseek/harness-cli`**（壳在包内 `product-web/`）。其余 workspace 包保持 `private`。
+对外 **`@xrkseek/harness-cli`**（`product-web/`）。workspace 其余包 `private`。
 
-## 产物
-
-| 产物 | 路径 / 通道 |
-|------|-------------|
-| 发行版 | GitHub Release 附件 `.release/xrkseek-harness-cli-<ver>.tgz`（含运行时 + `product-web`） |
-| 包 | GitHub Packages：`@xrkseek/harness-cli` |
+| 产物 | 上传到哪里 |
+|------|------------|
+| `xrkseek-harness-cli-<ver>.tgz` | GitHub **Release**（解压即用） |
+| `npm pack` 产物 | GitHub **Packages** |
 
 ```bash
-pnpm release:stage          # 组装 · deploy · 打 tarball
-pnpm release                # stage 后：创建 Release + 发 Packages
+pnpm release:stage              # 只打 .release/
+pnpm release                    # stage + Release + Packages
+XRK_RELEASE_SKIP_PACKAGES=1 pnpm release   # 只更 Release
+XRK_RELEASE_SKIP_GH_RELEASE=1 pnpm release # 只更 Packages
 ```
 
-需要 `gh` 已登录、以及 `GITHUB_TOKEN`（`contents:write` · `packages:write`）。
-
 ```ini
-# 消费 Packages
 @xrkseek:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=YOUR_TOKEN
 ```
 
 ```sh
 npx @xrkseek/harness-cli web
-# 或解压发行版后：
-node dist/bin.js web
 ```
+
+Release：https://github.com/xrkseek/XRK-harness/releases
