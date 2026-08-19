@@ -37,6 +37,40 @@ export interface FieldProps {
 }
 
 /**
+ * Label + control + hint without override chrome (list editors, MCP rows).
+ */
+export function PlainField(props: {
+  id: string
+  label: string
+  hint: string
+  value: string
+  disabled: boolean
+  invalid?: boolean
+  placeholder?: string
+  onChange: (value: string) => void
+  onBlur?: () => void
+}) {
+  const invalid = props.invalid === true
+  return (
+    <div className={css.field}>
+      <label className={css.label} htmlFor={props.id}>{props.label}</label>
+      <input
+        id={props.id}
+        className={invalid ? css.inputInvalid : css.input}
+        type="text"
+        value={props.value}
+        placeholder={props.placeholder ?? ''}
+        disabled={props.disabled}
+        aria-invalid={invalid || undefined}
+        onChange={(event) => { props.onChange(event.target.value) }}
+        onBlur={props.onBlur}
+      />
+      <p className={css.hint}>{props.hint}</p>
+    </div>
+  )
+}
+
+/**
  * A staged value field. `numeric` only hints the keypad: which drafts a field
  * accepts is decided by its spec, so the control never silently rewrites what
  * the user typed.

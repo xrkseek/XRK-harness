@@ -721,5 +721,17 @@ describe('McpCardController', () => {
     expect(face.hooks.mcpCard.getSnapshot().rowInvalid).toBe(true)
     face.save()
     expect(host.set).not.toHaveBeenCalled()
+    expect(face.hooks.mcpCard.getSnapshot().showErrors).toBe(true)
+  })
+
+  it('suggests a name from the launch line when the name is blank', () => {
+    const host = stubSettingsScope<McpSettings>()
+    const controller = new McpCardController(host.scope)
+    host.publish({ status: 'ready', writable: true, value: { servers: [] }, base: {}, user: {} })
+    const face = controller.inject()
+    face.addRow()
+    face.editRow(0, { command: 'npx', args: '-y, @modelcontextprotocol/server-memory' })
+    face.suggestName(0)
+    expect(face.hooks.mcpCard.getSnapshot().rows[0]?.serverName).toBe('server-memory')
   })
 })

@@ -42,7 +42,7 @@ export interface McpServerRow {
   readonly transport: McpTransport
   readonly command: string
   readonly url: string
-  /** Comma-separated args shown in one control. */
+  /** Comma-separated args (UI edits them as one launch line). */
   readonly args: string
   readonly cwd: string
 }
@@ -57,6 +57,8 @@ export interface McpCardState extends CardShell {
   readonly note: string
   /** Whether any row fails client-side validation. */
   readonly rowInvalid: boolean
+  /** Show field errors only after a blocked save (so empty new rows stay calm). */
+  readonly showErrors: boolean
 }
 
 /** The registration-side face the MCP card's slot entry injects. */
@@ -67,6 +69,8 @@ export interface McpCardFace extends CardActions {
   }
   /** Stage one field on a row. */
   editRow: (index: number, patch: Partial<McpServerRow>) => void
+  /** Fill empty name from command / URL when the user leaves the field. */
+  suggestName: (index: number) => void
   /** Append an empty stdio row. */
   addRow: () => void
   /** Remove a staged row. */
@@ -80,6 +84,7 @@ export class McpCardController {
   private seeded = false
   private saving = false
   private failed = false
+  private showErrors = false
 
   /** @param scope - the bound settings scope for the `mcp` namespace. */
   constructor(private readonly scope: SettingsScope<McpSettings>) {
@@ -99,6 +104,7 @@ export class McpCardController {
       this.rows = serversOf(snapshot).map(rowToUi)
       this.seeded = true
       this.failed = false
+      this.showErrors = false
     }
     // Always republish: connected/note/status overlay can change while rows stay dirty.
     this.publish()
@@ -113,6 +119,7 @@ export class McpCardController {
       dirty: this.dirty(),
       invalid,
       rowInvalid: invalid,
+      showErrors: this.showErrors && invalid,
       saving: this.saving,
       failed: this.failed,
       rows: this.rows,
@@ -137,6 +144,7 @@ export class McpCardController {
     return {
       hooks: { mcpCard: this.store },
       editRow: (index, patch) => { this.editRow(index, patch) },
+      suggestName: (index) => { this.suggestName(index) },
       addRow: () => { this.addRow() },
       removeRow: (index) => { this.removeRow(index) },
       edit: () => { /* rows use editRow */ },
@@ -149,9 +157,24 @@ export class McpCardController {
   private editRow(index: number, patch: Partial<McpServerRow>): void {
     const row = this.rows[index]
     if (row === undefined) return
-    this.rows = this.rows.with(index, { ...row, ...patch })
+    let next: McpServerRow = { ...row, ...patch }
+    if (patch.transport !== undefined && patch.transport !== row.transport) {
+      next = patch.transport === 'http'
+        ? { ...next, command: '', args: '', cwd: '' }
+        : { ...next, url: '' }
+    }
+    this.rows = this.rows.with(index, next)
     this.failed = false
+    if (!this.rows.some(r => validateRow(r) !== undefined)) this.showErrors = false
     this.publish()
+  }
+
+  private suggestName(index: number): void {
+    const row = this.rows[index]
+    if (row === undefined || row.serverName.trim()) return
+    const suggested = suggestServerName(row)
+    if (!suggested) return
+    this.editRow(index, { serverName: suggested })
   }
 
   private addRow(): void {
@@ -164,6 +187,7 @@ export class McpCardController {
     if (index < 0 || index >= this.rows.length) return
     this.rows = this.rows.toSpliced(index, 1)
     this.failed = false
+    if (!this.rows.some(r => validateRow(r) !== undefined)) this.showErrors = false
     this.publish()
   }
 
@@ -172,16 +196,22 @@ export class McpCardController {
     if (snapshot.status !== 'ready') return
     this.rows = serversOf(snapshot).map(rowToUi)
     this.failed = false
+    this.showErrors = false
     this.publish()
   }
 
   private async save(): Promise<void> {
     const snapshot = this.scope.getSnapshot()
     if (snapshot.status !== 'ready' || !snapshot.writable || this.saving) return
-    if (this.rows.some(row => validateRow(row) !== undefined)) return
+    if (this.rows.some(row => validateRow(row) !== undefined)) {
+      this.showErrors = true
+      this.publish()
+      return
+    }
     if (!this.dirty()) return
     this.saving = true
     this.failed = false
+    this.showErrors = false
     this.publish()
     const payload = this.rows.map(rowFromUi)
     await this.scope.set('servers', payload)
@@ -247,12 +277,12 @@ function rowFromUi(row: McpServerRow): McpServerDraft {
       url: row.url.trim(),
     }
   }
-  const args = row.args.split(',').map(part => part.trim()).filter(part => part.length > 0)
+  const launch = splitLaunch(joinLaunch(row.command, row.args))
   const cwd = row.cwd.trim()
   return {
     serverName,
-    command: row.command.trim(),
-    ...(args.length > 0 ? { args } : {}),
+    command: launch.command,
+    ...(launch.args.length > 0 ? { args: launch.args } : {}),
     ...(cwd ? { cwd } : {}),
   }
 }
@@ -266,5 +296,81 @@ function validateRow(row: McpServerRow): string | undefined {
   if (row.transport === 'http') {
     return row.url.trim() ? undefined : 'url'
   }
-  return row.command.trim() ? undefined : 'command'
+  return joinLaunch(row.command, row.args).trim() ? undefined : 'command'
+}
+
+/** Join command + CSV args into one launch line for the editor. */
+export function joinLaunch(command: string, argsCsv: string): string {
+  const args = argsCsv.split(',').map(part => part.trim()).filter(part => part.length > 0)
+  return [command.trim(), ...args].filter(part => part.length > 0).join(' ')
+}
+
+/** Split a launch line into executable + args (quote-aware). */
+export function splitLaunch(line: string): { command: string; args: string[] } {
+  const tokens: string[] = []
+  let cur = ''
+  let quote: '"' | "'" | null = null
+  for (const c of line.trim()) {
+    if (quote) {
+      if (c === quote) quote = null
+      else cur += c
+      continue
+    }
+    if (c === '"' || c === "'") {
+      quote = c
+      continue
+    }
+    if (/\s/.test(c)) {
+      if (cur) {
+        tokens.push(cur)
+        cur = ''
+      }
+      continue
+    }
+    cur += c
+  }
+  if (cur) tokens.push(cur)
+  return { command: tokens[0] ?? '', args: tokens.slice(1) }
+}
+
+/** Apply a launch line edit onto command + args fields. */
+export function applyLaunch(line: string): Pick<McpServerRow, 'command' | 'args'> {
+  const { command, args } = splitLaunch(line)
+  return { command, args: args.join(', ') }
+}
+
+/** Suggest a stable id from URL host or command basename. */
+export function suggestServerName(row: McpServerRow): string {
+  if (row.transport === 'http') {
+    const raw = row.url.trim()
+    if (!raw) return ''
+    try {
+      const host = new URL(raw.includes('://') ? raw : `https://${raw}`).hostname
+      const base = host.replace(/^www\./, '').split('.')[0] ?? ''
+      return sanitizeName(base)
+    } catch {
+      return ''
+    }
+  }
+  const launch = splitLaunch(joinLaunch(row.command, row.args))
+  for (const token of [...launch.args].reverse()) {
+    if (token.startsWith('@') || token.includes('/')) {
+      const leaf = token.split('/').pop() ?? token
+      const cleaned = sanitizeName(leaf.replace(/^@/, ''))
+      if (cleaned && cleaned !== 'y') return cleaned
+    }
+  }
+  const cmd = launch.command
+  if (!cmd) return ''
+  if (/^(npx|pnpm|yarn|bun|node|deno)$/i.test(cmd)) return ''
+  const base = cmd.split(/[/\\]/).pop() ?? cmd
+  return sanitizeName(base.replace(/\.(exe|cmd|bat|js|mjs|cjs)$/i, ''))
+}
+
+function sanitizeName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48)
 }

@@ -72,15 +72,22 @@
 }
 
 .input {
-  height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  /* Match Models/General: soft hairline on layer-1 — not a bright frame on layer-3. */
+  border: 1px solid var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
   border-radius: 8px;
-  background: var(--dsw-alias-bg-layer-3);
+  background: var(--dsw-alias-bg-layer-1);
   font: inherit;
   font-size: 13px;
   line-height: 1.5;
   color: var(--dsw-alias-label-primary);
+}
+
+.input::placeholder {
+  color: var(--dsw-alias-label-dimmed);
 }
 
 .input:focus-visible {
@@ -93,8 +100,21 @@
   cursor: default;
 }
 
+/* Autofill paints a loud light field on dark themes — neutralize it. */
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--dsw-alias-label-primary);
+  caret-color: var(--dsw-alias-label-primary);
+  border: 1px solid var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
+  box-shadow: 0 0 0 1000px var(--dsw-alias-bg-layer-1) inset;
+  transition: background-color 99999s ease-out 0s;
+}
+
 .select {
   composes: input;
+  max-width: none;
+  cursor: pointer;
 }
 
 .inputInvalid {

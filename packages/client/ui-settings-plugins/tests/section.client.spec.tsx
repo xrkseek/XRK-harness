@@ -355,6 +355,7 @@ describe('McpCard', () => {
     return {
       ...cardActions(),
       editRow: vi.fn(),
+      suggestName: vi.fn(),
       addRow: vi.fn(),
       removeRow: vi.fn(),
     }
@@ -367,6 +368,7 @@ describe('McpCard', () => {
       connected: [],
       note: '',
       rowInvalid: false,
+      showErrors: false,
       ...state,
     })
     const actions = mcpActions()
@@ -411,7 +413,7 @@ describe('McpCard', () => {
   })
 
   it('stages row edits and blocks save while a row is invalid', () => {
-    const actions = renderMcp({ dirty: true, rowInvalid: true, rows: [{
+    const actions = renderMcp({ dirty: true, rowInvalid: true, showErrors: true, rows: [{
       serverName: 'fs',
       transport: 'stdio',
       command: '',
