@@ -109,7 +109,7 @@ export function createWorkerCodeRuntime(
           if (settled) return;
           settled = true;
           clearTimeout(timer);
-          reject(err);
+          reject(err instanceof Error ? err : new Error(String(err)));
         });
       });
     },

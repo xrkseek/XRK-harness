@@ -30,7 +30,6 @@ import {
   formatQuestionAnswer,
   isLoopbackAddress,
   publishRemoteEvent,
-  resolveLlmForSession,
   createSessionRoutingLlm,
   tryHandleFaceHttp,
   type FaceApprovalBroker,

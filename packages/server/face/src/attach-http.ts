@@ -277,7 +277,7 @@ export function attachFaceUpgrades(
           JSON.stringify(
             serverRequestFrame(
               rpcId,
-              frame as { type: string } & Record<string, unknown>,
+              frame,
             ),
           ),
         );
@@ -293,7 +293,7 @@ export function attachFaceUpgrades(
           JSON.stringify(
             serverRequestFrame(
               rpcId,
-              frame as { type: string } & Record<string, unknown>,
+              frame,
             ),
           ),
         );

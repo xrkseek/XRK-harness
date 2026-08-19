@@ -11,6 +11,7 @@ packages/stubs/**/lib/
 
 .turbo/
 *.log
+.eslintcache
 .env
 .env.*
 !.env.example

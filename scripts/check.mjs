@@ -16,7 +16,34 @@ function run(cmd, args) {
   }
 }
 
+/** Kernel + CLI paths mirrored by root tsconfig.json references (not product shell / DSH stubs). */
+const LINT_PATHS = [
+  "packages/kernel",
+  "packages/compose",
+  "packages/protocol",
+  "packages/core",
+  "packages/llm",
+  "packages/mcp",
+  "packages/attachment",
+  "packages/exec",
+  "packages/workspace",
+  "packages/policy",
+  "packages/code-runtime",
+  "packages/testkit",
+  "packages/server",
+  "packages/web-runtime",
+  "packages/sdk",
+  "presets",
+  "apps/cli/src",
+];
+
 run("npx", ["tsc", "-b", "--pretty", "false"]);
-run("npx", ["eslint", "."]);
+run("npx", [
+  "eslint",
+  ...LINT_PATHS,
+  "--cache",
+  "--cache-location",
+  ".eslintcache",
+]);
 run("npx", ["vitest", "run"]);
 run("npx", ["vitest", "run", "--config", "vitest.kernel.config.ts", "--coverage"]);

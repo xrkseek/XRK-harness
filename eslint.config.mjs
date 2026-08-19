@@ -4,7 +4,8 @@ import tseslint from "typescript-eslint";
 
 /**
  * M0 lint gate: type-aware recommended + no-explicit-any + no-floating-promises.
- * Ignores build output and non-TS tooling.
+ * Scope matches root tsconfig.json references (kernel / server / CLI).
+ * Product shell (packages/client) and DSH stubs are typed by their own builds — excluded here.
  */
 export default tseslint.config(
   {
@@ -13,13 +14,29 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/coverage/**",
       "**/tests/**",
+      "**/*.client.spec.ts",
+      "**/*.client.spec.tsx",
       "extensions/**",
       "scripts/**",
       "vitest.config.ts",
       "vitest.kernel.config.ts",
+      "vitest.web.config.ts",
       "**/vite.config.ts",
       "**/*.mjs",
       "**/*.cjs",
+      // Not in root tsc -b; huge fixture/stub trees make projectService hang on Windows.
+      "packages/client/**",
+      "packages/stubs/**",
+      "packages/cordis/**",
+      "packages/cordis-loader/**",
+      "packages/schemastery/**",
+      "apps/web/**",
+      "apps/console/**",
+      "apps/cli/product-web/**",
+      "apps/cli/dist/**",
+      "**/*.js",
+      "**/*.jsx",
+      ".eslintcache",
     ],
   },
   eslint.configs.recommended,

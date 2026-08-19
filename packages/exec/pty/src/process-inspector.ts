@@ -82,7 +82,7 @@ export function parseProcStat(text: string): ProcStat | undefined {
 function readLinuxStat(internals: ProcessInspectorInternals, pid: number): ProcStat | undefined {
   try {
     return parseProcStat(internals.readFile(`/proc/${pid}/stat`))
-  } catch (_unreadableProcEntry) {
+  } catch {
     return undefined
   }
 }
@@ -102,7 +102,7 @@ export function linuxProcessGroupHasLiveMembers(
   let entries: string[]
   try {
     entries = internals.readDir('/proc')
-  } catch (_unreadableProcDirectory) {
+  } catch {
     return undefined
   }
   let matched = false
@@ -119,7 +119,7 @@ export function linuxProcessGroupHasLiveMembers(
 function numericEntries(internals: ProcessInspectorInternals, path: string): number[] {
   try {
     return internals.readDir(path).filter(entry => /^\d+$/.test(entry)).map(Number)
-  } catch (_unreadableProcDirectory) {
+  } catch {
     return []
   }
 }
@@ -138,7 +138,7 @@ function readSyscall(internals: ProcessInspectorInternals, pid: number, tid: num
     const args = fields.slice(1, 7).map(field => Number.parseInt(field, 16))
     if (!Number.isSafeInteger(number) || args.some(value => !Number.isSafeInteger(value))) return undefined
     return { number, args }
-  } catch (_unreadableSyscall) {
+  } catch {
     return undefined
   }
 }
@@ -155,7 +155,7 @@ function readMemory(
     const buffer = Buffer.alloc(length)
     const count = internals.read(fd, buffer, length, address)
     return buffer.subarray(0, count)
-  } catch (_unreadableProcessMemory) {
+  } catch {
     return undefined
   } finally {
     if (fd !== undefined) internals.close(fd)
@@ -186,7 +186,7 @@ function epollHasStdin(internals: ProcessInspectorInternals, pid: number, epfd: 
     return internals.readFile(`/proc/${pid}/fdinfo/${epfd}`)
       .split('\n')
       .some(line => /^tfd:\s+0\b/.test(line.trim()))
-  } catch (_unreadableFdInfo) {
+  } catch {
     return false
   }
 }
@@ -318,7 +318,7 @@ class LinuxProcessInspector extends PosixProcessInspector {
 
 }
 
-interface PsEntry extends ProcessTreeEntry {}
+type PsEntry = ProcessTreeEntry;
 
 function macProcessTable(internals: ProcessInspectorInternals): PsEntry[] {
   return internals.exec('/bin/ps', ['-axo', 'pid=,ppid=,lstart=']).split('\n').flatMap((line) => {
@@ -333,7 +333,7 @@ class MacProcessInspector extends PosixProcessInspector {
     try {
       const value = Number(this.internals.exec('/bin/ps', ['-o', 'tpgid=', '-p', String(shellPid)]).trim())
       return Number.isSafeInteger(value) && value > 0 ? value : undefined
-    } catch (_missingProcess) {
+    } catch {
       return undefined
     }
   }

@@ -185,7 +185,7 @@ function parseResponse(json: unknown): LlmChatResponse {
           name: typeof block.name === "string" ? block.name : "unknown",
           arguments:
             block.input && typeof block.input === "object"
-              ? (block.input as Record<string, unknown>)
+              ? (block.input)
               : {},
         });
       }
@@ -284,7 +284,7 @@ async function* streamAnthropicSse(res: Response): AsyncGenerator<LlmStreamEvent
 
   const toolCalls: ToolCall[] = [];
   for (const [idx, acc] of [...toolAcc.entries()].sort((a, b) => a[0] - b[0])) {
-    let args: Record<string, unknown> = {};
+    let args: Record<string, unknown>;
     try {
       args = acc.json ? (JSON.parse(acc.json) as Record<string, unknown>) : {};
     } catch {

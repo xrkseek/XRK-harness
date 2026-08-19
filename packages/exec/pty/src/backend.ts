@@ -69,7 +69,12 @@ export function createBashTerminalBackend(
           const signal = spec.signal;
           let onAbort: (() => void) | undefined;
           const aborted = new Promise<never>((_, reject) => {
-            onAbort = () => reject(signal.reason);
+            onAbort = () =>
+              reject(
+                signal.reason instanceof Error
+                  ? signal.reason
+                  : new Error(String(signal.reason)),
+              );
             signal.addEventListener("abort", onAbort, { once: true });
           });
           try {

@@ -4,12 +4,20 @@
 
 根脚本 `pnpm check` → `scripts/check.mjs`：
 
-| 步  | 命令                                                     | 失败含义                                                  |
-| --- | -------------------------------------------------------- | --------------------------------------------------------- |
-| 1   | `tsc -b --pretty false`                                  | 类型 / 项目引用断裂                                       |
-| 2   | `eslint .`                                               | 风格与不安全模式（含 no-explicit-any、floating promises） |
-| 3   | `vitest run`                                             | 行为回归                                                  |
-| 4   | `vitest run --config vitest.kernel.config.ts --coverage` | `@xrkseek/kernel` 行/分支/函数/语句 **≥ 90%**             |
+| 步  | 命令                                                     | 耗时量级（本机参考） | 失败含义                                                  |
+| --- | -------------------------------------------------------- | -------------------- | --------------------------------------------------------- |
+| 1   | `tsc -b --pretty false`                                  | ~2s                  | 类型 / 项目引用断裂                                       |
+| 2   | `eslint <kernel paths>`                                  | ~30s 冷 / ~5s 缓存   | 风格与不安全模式（**不含** 产品壳 `packages/client`、DSH `packages/stubs`、打包 `product-web`） |
+| 3   | `vitest run`                                             | ~10s                 | 行为回归                                                  |
+| 4   | `vitest run --config vitest.kernel.config.ts --coverage` | ~15s                 | `@xrkseek/kernel` 行/分支/函数/语句 **≥ 90%**             |
+
+**勿**在本仓根目录跑 `eslint .`：会把 `apps/cli/product-web/` 里整包 Vite 产物（数 MB JS）和 `packages/client` 三千行 fixture 丢进 TypeScript project service，Windows 上 CPU 拉满、IDE 卡死。
+
+日常开发快环（不等 eslint）：
+
+```bash
+pnpm exec tsc -b && pnpm test
+```
 
 单独命令：
 

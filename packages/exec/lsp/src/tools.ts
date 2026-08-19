@@ -82,12 +82,7 @@ export function createLspTools(
         }
         let input;
         try {
-          input = parseLspArgs(args as {
-            operation: string;
-            file_path: string;
-            line: number;
-            character: number;
-          });
+          input = parseLspArgs(args);
         } catch (err) {
           return fail(err);
         }

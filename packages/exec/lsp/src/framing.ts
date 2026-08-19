@@ -56,6 +56,7 @@ export class MessageDecoder {
     } catch (error) {
       throw new Error(
         `LSP message body was not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
       );
     }
   }

@@ -17,7 +17,7 @@ import type { SessionRecord, SessionStore } from "./store.js";
 function openDatabase(dbPath: string): DatabaseSync {
   const { DatabaseSync: Db } = process.getBuiltinModule(
     "node:sqlite",
-  ) as typeof import("node:sqlite");
+  );
   return new Db(dbPath);
 }
 
@@ -275,7 +275,7 @@ export function createPersistentSessionStore(dir: string): PersistentSessionStor
     const cached = sessions.get(id);
     if (cached !== undefined) return cached;
 
-    let events = loadSessionEvents(db, id);
+    const events = loadSessionEvents(db, id);
     const repairs = repairOpenTurnEvents(events);
     if (repairs.length > 0) {
       for (const ev of repairs) {

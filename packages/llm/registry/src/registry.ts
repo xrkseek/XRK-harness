@@ -222,7 +222,7 @@ export function createProviderRegistry(
 
       throw new Error(
         `llm-registry: createAdapter unsupported protocol: ${
-          (binding as ProviderBinding).protocol
+          (binding).protocol
         }`,
       );
     },

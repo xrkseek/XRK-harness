@@ -15,7 +15,6 @@ import {
   FACE_ONBOARDING_SCHEMA,
   FACE_LOCALE_SCHEMA,
   FACE_THEME_SCHEMA,
-  FACE_PERMISSION_SCHEMA,
   isFacePermissionPreset,
 } from "./face-schema.js";
 import {
@@ -655,8 +654,8 @@ export class FaceSettingsNamespaces {
       ns,
       schema: slot.schema,
       value: mergeLayers(
-        slot.base as Record<string, unknown>,
-        slot.user as Record<string, unknown>,
+        slot.base,
+        slot.user,
       ),
       base: { ...slot.base },
       user: { ...slot.user },
@@ -687,8 +686,8 @@ export class FaceSettingsNamespaces {
       else unsetAtPath(nextUser, op.path);
     }
     const merged = mergeLayers(
-      slot.base as Record<string, unknown>,
-      nextUser as Record<string, unknown>,
+      slot.base,
+      nextUser,
     );
     const invalid = validateNamespaceValue(ns, merged);
     if (invalid) {
