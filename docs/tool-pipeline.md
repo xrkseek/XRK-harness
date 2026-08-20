@@ -1,5 +1,7 @@
 # Tool pipeline
 
+> **读者**：集成者 · 贡献者。
+
 ```text
 tool/call (session, by loop)
   → pre-execute

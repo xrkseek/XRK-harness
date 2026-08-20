@@ -1,5 +1,7 @@
 # `@xrkseek/compose`
 
+> **读者**：贡献者 · 维护者。
+
 时空可组合叶包：可逆 effect、依赖声明、卸序（Ordering）、isolate 域。无 Proxy、无第三方组合运行时依赖。
 
 ## 状态

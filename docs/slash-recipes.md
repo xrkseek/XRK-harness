@@ -1,5 +1,7 @@
 # Slash recipes and skills
 
+> **读者**：终端用户 · 集成者。
+
 Expand `/id ?` **before** `user/message` is logged. Recipe ids win when a skill has the same name.
 
 Hot path: `assemble.resolveSlash` inside `runTurn` (`@xrkseek/core-agent-loop`).  

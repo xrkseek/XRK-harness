@@ -1,12 +1,15 @@
 # 快速开始
 
-能力边界见 [status.md](./status.md)。环境变量与落盘路径见 [configuration.md](./configuration.md)。
+> **读者**：终端用户（路径 A）· 从本仓开发的贡献者（路径 B）。
+
+能力边界见 [status.md](./status.md)。环境变量与落盘路径见 [configuration.md](./configuration.md)。维护者发版见 [publishing.md](./publishing.md)，不在本页展开。
 
 ## 前置
 
 | 项 | 要求 |
 |----|------|
 | Node.js | **≥ 26** |
+| pnpm | 跟根 `package.json` → `packageManager`（当前 **11.22.0**） |
 | 用法 | **CLI**（`run`）或 **Web**（`web` / `serve`） |
 
 ```bash
@@ -32,7 +35,7 @@ npx @xrkseek/harness-cli web
 | 2 | **无 LLM 密钥**也可打开壳；发话需接模型或 `--preset minimal` + replay |
 | 3 | 接真模型：Settings → Models / Credentials，或见下文「接真模型」 |
 
-Registry 安装见 [publishing.md](./publishing.md)（GitHub Packages 须 token）。
+Registry / GitHub Packages 安装方式见 [publishing.md](./publishing.md)（维护者发版说明里含用户侧 `npx` 示例）。需要读 Packages 权限时再配 token。
 
 ---
 

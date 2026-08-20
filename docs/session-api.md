@@ -1,5 +1,7 @@
 # Session API（newSession · admit · continueTurn）
 
+> **读者**：集成者 · 贡献者。
+
 对齐 [ADR-0003](./adr/0003-session-long-loop-short.md)：admit ≠ execute。pending 用事件 `prompt/admitted` / `prompt/promoted`（无独立 inbox 表）。
 
 插话 vs 排队见 [session-delivery.md](./session-delivery.md)。默认 `admit` = **queue（FIFO）**；可带 `delivery: "steer"`。空 `continueTurn` 走 `promoteAdmitsForTurn`：**全部 pending steer 合并进一轮**，否则 promote 一条 queue。HTTP `POST .../admit` 透传 `delivery`。

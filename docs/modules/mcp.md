@@ -1,5 +1,7 @@
 # Module: `@xrkseek/mcp`
 
+> **读者**：贡献者 · 维护者（文件地图）；集成门禁见 [policy.md](../policy.md)。
+
 MCP **client**（stdio + streamable-http）。规格门禁：[policy.md](../policy.md)。包 README：[packages/mcp/README.md](../../packages/mcp/README.md)。
 
 ## 职责边界

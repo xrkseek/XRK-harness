@@ -1,5 +1,7 @@
 # Module: `@xrkseek/server-host`
 
+> **读者**：贡献者 · 维护者。
+
 进程内 Host：config · store · drain · HTTP · Face · 插件 / MCP 装载。
 
 规格：[host-preset.md](../host-preset.md) · [http-api.md](../http-api.md)。

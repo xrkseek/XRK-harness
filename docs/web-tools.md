@@ -1,5 +1,7 @@
 # Web tools
 
+> **读者**：集成者 · 贡献者。
+
 `@xrkseek/exec-web`：`web_search` / `web_fetch`。Harness / server preset 默认登记；minimal 不登记。
 
 ## 缝

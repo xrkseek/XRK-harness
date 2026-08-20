@@ -1,6 +1,8 @@
 # Session（索引）
 
-长寿 session + 短寿 turn（[ADR-0003](./adr/0003-session-long-loop-short.md)）。真源是事件日志；模型可见输入由 `deriveMessages` 重建。
+> **读者**：集成者 · 贡献者。
+
+长寿 session + 短寿 turn（[ADR-0003](./adr/0003-session-long-loop-short.md)）。真源是事件日志；模型可见输入由 `deriveMessages` 重建。身份与文档分层见 [audiences.md](./audiences.md)。
 
 | 文档 | 内容 |
 |------|------|

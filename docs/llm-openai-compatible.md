@@ -1,5 +1,7 @@
 # LLM OpenAI-compatible
 
+> **读者**：集成者 · 贡献者。
+
 `@xrkseek/llm-openai-compatible` — Chat Completions HTTP 适配（`LlmAdapter`）。
 
 ## 行为

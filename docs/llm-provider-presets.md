@@ -1,5 +1,7 @@
 # LLM Provider Brand Entries
 
+> **读者**：贡献者 · 维护者。
+
 从属 [llm-provider-registry.md](./llm-provider-registry.md)。条目数据，不是产品终点：对外走 **ProviderRegistry** `resolve` → `create`。
 
 ## BrandEntries（OpenAI Chat · R0）

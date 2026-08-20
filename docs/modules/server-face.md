@@ -1,5 +1,7 @@
 # Module: `@xrkseek/server-face`
 
+> **读者**：贡献者 · 维护者。产品契约见 [host-face.md](../host-face.md)。
+
 Host Face：Unary RPC + mux/host 双 WebSocket。规格：[host-face.md](../host-face.md)。
 
 ## 职责边界

@@ -1,10 +1,13 @@
 # AGENTS.md — XRK-Harness
 
-面向**克隆本仓、改代码 / 写测 / 同步教科书**的开发者与 Coding Agent。
+> **读者**：维护者 · Coding Agent（**笔记**，不是终端用户手册）。
+
+面向**克隆本仓、改代码 / 写测 / 同步教科书**的人。
 
 | 读什么 | 角色 |
 |--------|------|
 | 根 [README.md](./README.md) · [docs/](./docs/README.md) | **教科书**（产品与契约） |
+| [docs/audiences.md](./docs/audiences.md) · [docs/maintainer.md](./docs/maintainer.md) | 身份标准 · 交接 |
 | 本文件 · `.cursor/rules` · `.cursor/skills` | **笔记**（改码红线与流程） |
 | Cursor Canvas | **本机草稿**（不入库） |
 
@@ -30,7 +33,7 @@
 
 ## 栈与启动
 
-- **Node ≥ 26** · 包管理仅 **pnpm 9**（`packageManager`）
+- **Node ≥ 26** · 包管理 **pnpm**（`packageManager` 锁定精确版，当前 **11.22.0**；用 Corepack / `pnpm/action-setup` 对齐，勿随手升大版本）
 - 构建：`pnpm install` → `pnpm build`（或 `pnpm check`）
 - CLI：`node apps/cli/dist/bin.js run|serve|web|doctor|dump-config`
 - 首读（按任务）：
@@ -39,13 +42,15 @@
 |------|------|
 | 任意改动 | [docs/status.md](./docs/status.md) · 本文件角色表 |
 | Session / 事件 | 教科书 [session.md](./docs/session.md) · [protocol-events](./docs/protocol-events.md) · [session-compaction](./docs/session-compaction.md)；改 meter 开笔记 `.cursor/skills/xrk-meter-session` |
+| 写 / 改文档 | [docs/audiences.md](./docs/audiences.md) · 笔记 skill `xrk-docs-audience` |
 | 工具 | [docs/tool-pipeline.md](./docs/tool-pipeline.md) · [seams](./docs/seams.md) |
 | Host / Face | [docs/host-face.md](./docs/host-face.md) · [http-api](./docs/http-api.md) |
 | MCP | [docs/modules/mcp.md](./docs/modules/mcp.md) · [policy](./docs/policy.md) |
 | 壳 UI | [docs/host-face.md](./docs/host-face.md) · `apps/web` · `packages/client` |
 | 包落点 | [docs/modules/](./docs/modules/README.md) |
 | 门禁 | [docs/testing.md](./docs/testing.md) · [CONTRIBUTING.md](./CONTRIBUTING.md) |
-| 教科书 vs 笔记 | [docs/README.md](./docs/README.md)「教科书 · 笔记 · 草稿」· `.cursor/rules/xrk-product-identity.mdc` |
+| 教科书 vs 笔记 | [docs/audiences.md](./docs/audiences.md) · [docs/README.md](./docs/README.md) · `.cursor/rules/xrk-product-identity.mdc` |
+| 交接 / 发版 | [docs/maintainer.md](./docs/maintainer.md) · [docs/publishing.md](./docs/publishing.md) |
 
 全索引：[docs/README.md](./docs/README.md)。
 

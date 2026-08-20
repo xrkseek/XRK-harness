@@ -1,6 +1,10 @@
 # Learn
 
+> **读者**：集成者 · 贡献者 · 维护者（短章要义；非改码笔记）。
+
 本仓已落地能力的**要义摘录**（教科书短章；细节见各专题与 [modules/](./modules/README.md)）。不列未实现路线，不写改码红线。
+
+按身份读文档：[audiences.md](./audiences.md)。维护交接：[maintainer.md](./maintainer.md)。
 
 - **Session 事件为对话真源**：模型可见输入可从事件日志重建；turn / loop 短寿
 - **Session 仓**：`createPersistentSessionStore`（`node:sqlite` · `sessions.db` · WAL · **schema v3**：scalar + 物理 `text-chunks`（≥3 chunk 落库打包）+ FTS5 trigram · **lazy load** · **chunk 写批** · **`flush()`** · **open-turn 崩溃修复**）；Host 无 `XRK_SESSIONS_DIR` 时内存。CLI `serve`/`web` 默认 `~/.xrk/sessions`（`--no-persist` 关）。Host drain idle / `stop` 时 `flush`/`close`。ZIP 导出用 `toPackedJSONL`（`text-chunks`）+ **`.jsonl.zst` sidecar**（明文 `.jsonl` 仍保留）；`fromPackedJSONL` / `parsePackedJSONL` 可导入。CLI dump 仍 `toJSONL`

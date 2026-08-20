@@ -1,5 +1,7 @@
 # Workspace inject
 
+> **读者**：集成者 · 贡献者。
+
 Product context injection into the **three-layer** assemble path (`assemble.workspaceBlocks`).
 
 ## Product dir

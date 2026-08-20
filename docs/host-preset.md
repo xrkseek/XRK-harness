@@ -1,5 +1,7 @@
 # host-preset
 
+> **读者**：集成者 · 贡献者。
+
 ## Planes
 
 | Plane | Preset | Role |
