@@ -11,7 +11,7 @@
 | 贡献者（提 PR） | [CONTRIBUTING](../CONTRIBUTING.md) · [testing](./testing.md) |
 | 维护者（发版 / 交接） | [maintainer](./maintainer.md) · [publishing](./publishing.md) |
 
-Coding Agent / 改码红线不在本目录展开 → [AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/skills`。
+Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/skills`。
 
 ---
 

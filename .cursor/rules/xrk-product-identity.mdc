@@ -1,5 +1,5 @@
 ---
-description: 文档身份（用户/集成/贡献/维护）· 教科书 vs 笔记 · 交接入口
+description: 文档身份（用户/集成/贡献/维护）· 教科书 vs 笔记 · 写作禁旁白
 alwaysApply: true
 ---
 
@@ -10,7 +10,7 @@ alwaysApply: true
 ## 四种读者（教科书）
 
 | 身份 | 入口 |
-|------|------|
+|---|---|
 | 终端用户 | 根 README · `docs/getting-started` |
 | 集成者 | `docs/status` · `http-api` · `host-face` |
 | 贡献者 | `CONTRIBUTING` · `docs/testing` |
@@ -21,17 +21,20 @@ alwaysApply: true
 ## 载体
 
 | 载体 | 用途 |
-|------|------|
+|---|---|
 | `docs/` · 根/包 README · ADR | **教科书**（事实与契约） |
-| `AGENTS.md` · `.cursor/rules` · `.cursor/skills` | **笔记**（改码红线） |
+| `AGENTS.md` · `.cursor/rules` · `.cursor/skills` | **笔记**（改码红线；Agent 自用） |
 | Canvas | **本机草稿**（不入库） |
+
+分流靠**选对载体**，不要在教科书里解释「这篇不写发版因为…」。
 
 ## 硬规则
 
-- 新/大改文档文首：`> **读者**：…`
-- 根 README **不写**发版步骤、Agent 禁令
+- 新/大改文档文首：`> **读者**：…`（只标身份，不加「请去看 README」旁白）
+- 根 README：产品用法；开发入口仅链接表。**禁止**发版步骤、Agent 禁令、元叙事旁白
 - 禁止把笔记红线抄进用户说明书；禁止未做写成假 API
 - 冲突：代码 > status「能跑」> 教科书；笔记过期改笔记
 - Face / wire 用本仓术语；壳 = `apps/web` + `packages/client`；不嵌 Cordis Host；不对 deepseek-ai 提 PR
+- 工具链：Node ≥26；pnpm 钉 `packageManager`，本机 `npm install -g pnpm@…`（不用 Corepack）
 - Meter 笔记：`xrk-meter-compaction.mdc` · skill `xrk-meter-session`
-- 写文档笔记：skill `xrk-docs-audience`
+- 写文档：skill `xrk-docs-audience`（必读「语气 / 根 README」）

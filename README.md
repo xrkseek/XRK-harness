@@ -19,11 +19,6 @@
 
 ---
 
-面向**使用本产品**的人：安装、跑起来、接模型、查能力与契约。  
-不写「怎么发 GitHub Release」——那是维护者自己的流程，见文末。
-
----
-
 ## 这是什么
 
 XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agent 运行时与 Server Kit：
@@ -36,15 +31,13 @@ XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agen
 | **MCP** | stdio / streamable-http；可在设置里配置并热挂载 |
 | **压缩与用量** | 长会话可换窗压缩；壳上可看 token / 上下文压力 |
 
-用法只有两条：**命令行**（`run`）或 **网页**（`web` / `serve`）。
-
-哪些已经稳定、哪些还糙，以 [docs/status.md](./docs/status.md) 为准。
+用法：**命令行**（`run`）或 **网页**（`web` / `serve`）。能力边界见 [docs/status.md](./docs/status.md)。
 
 ---
 
 ## 怎么跑
 
-需要 **Node.js ≥26**，包管理用 **pnpm**（版本见根 `package.json` 的 `packageManager`，当前 **11.22.0**）。
+需要 **Node.js ≥26**。
 
 ### 直接用（推荐）
 
@@ -53,21 +46,18 @@ mkdir my-workspace && cd my-workspace
 npx @xrkseek/harness-cli web
 ```
 
-或无界面、打一句 prompt：
+无界面：
 
 ```sh
 npx @xrkseek/harness-cli run --preset minimal --prompt "ping"
 ```
 
-当前目录就是 workspace。首次运行会在 `{workspace}/.xrk/` 写下本地设置与会话（勿提交进 git）。
-
-更细的步骤：[docs/getting-started.md](./docs/getting-started.md)。
+当前目录即 workspace。首次运行会在 `{workspace}/.xrk/` 写下本地设置与会话（勿提交进 git）。细节：[docs/getting-started.md](./docs/getting-started.md)。
 
 ### 从本仓库源码跑
 
-适合想改壳或跟仓调试的人：
-
 ```sh
+npm install -g pnpm@11.22.0   # 与 package.json → packageManager 对齐
 pnpm install
 pnpm build
 pnpm web:build && pnpm client:bundle && pnpm web:assemble
@@ -84,8 +74,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 
 ### 接真模型
 
-在网页壳 **Settings → Credentials** 填写密钥（推荐）。  
-也可以复制 `.xrk/.credentials.yaml.example`，或设环境变量：
+网页壳 **Settings → Credentials**，或复制 `.xrk/.credentials.yaml.example` / 设环境变量：
 
 ```sh
 export DEEPSEEK_API_KEY=…
@@ -124,7 +113,7 @@ npx @xrkseek/harness-cli serve --preset harness --workspace .
 
 ---
 
-## 仓库里有什么（使用视角）
+## 仓库里有什么
 
 ```text
 apps/cli          命令行入口（对外包名 harness-cli）
@@ -139,15 +128,15 @@ docs/             使用与契约说明
 ## 常见问题
 
 **打开 `web` / `serve` 没有界面？**  
-发行版 CLI 应自带产品壳。若你在本仓库源码里跑，需要先完成 `web:build` · `client:bundle` · `web:assemble`（见上文「从本仓库源码跑」）。
+发行版 CLI 应自带产品壳。本仓库源码需先完成 `web:build` · `client:bundle` · `web:assemble`。
 
 **MCP 连不上？**  
-默认拒绝连接。在设置里配置 MCP 并放行，或设 `XRK_MCP_ALLOW=1`。见 [configuration](./docs/configuration.md) · [MCP](./docs/modules/mcp.md)。
+默认拒绝连接。在设置里配置并放行，或设 `XRK_MCP_ALLOW=1`。见 [configuration](./docs/configuration.md) · [MCP](./docs/modules/mcp.md)。
 
 **对话太长、上下文爆了？**  
 可用压缩（loop 配置或壳内 `/compact`）。见 [session-compaction](./docs/session-compaction.md)。
 
-更多症状表：[troubleshooting](./docs/troubleshooting.md)。
+更多：[troubleshooting](./docs/troubleshooting.md)。
 
 ---
 
@@ -157,14 +146,12 @@ docs/             使用与契约说明
 
 ---
 
-## 维护本仓（开发者）
-
-终端用户可忽略本节。若你在**改这个仓库、交接或发版**：
+## 开发与贡献
 
 | 文档 | 用途 |
 |------|------|
-| [docs/audiences.md](./docs/audiences.md) | 四种读者 · 文档写作标准 |
-| [docs/maintainer.md](./docs/maintainer.md) | **交接清单** · 日常命令 |
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | 贡献与 `pnpm check` |
-| [docs/publishing.md](./docs/publishing.md) | Release / Packages |
-| [AGENTS.md](./AGENTS.md) | 改码角色与红线（笔记，非用户手册） |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | 环境、`pnpm check`、契约同步 |
+| [docs/maintainer.md](./docs/maintainer.md) | 日常命令 · 交接 |
+| [docs/publishing.md](./docs/publishing.md) | 发版 |
+| [docs/audiences.md](./docs/audiences.md) | 文档读者分层 |
+| [AGENTS.md](./AGENTS.md) | 改码角色与红线 |

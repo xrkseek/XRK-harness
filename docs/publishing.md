@@ -1,6 +1,6 @@
 # Publishing
 
-> **读者**：维护者。终端用户只需 `npx @xrkseek/harness-cli …`（见根 [README](../README.md)）。交接总览见 [maintainer](./maintainer.md)。
+> **读者**：维护者。
 
 对外发布 **`@xrkseek/harness-cli`**（内含组装好的 `product-web/`）。workspace 内其余包保持 **`private`**，不随本次流程公开到 npm。
 
@@ -37,6 +37,7 @@ npx @xrkseek/harness-cli web
 
 ## 发版前核对
 
+- [ ] Node ≥26；本机 pnpm 与 `packageManager` 一致（`npm install -g pnpm@…`）  
 - [ ] `pnpm check` 绿  
 - [ ] 若有用户可见行为变化：已更新 [status](./status.md) 与相关契约  
 - [ ] [releases/](./releases/) 有对应说明（或明确本版只修包无文档章）  

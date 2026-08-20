@@ -1,6 +1,6 @@
 # Contributing
 
-> **读者**：贡献者 · 维护者。终端用户请看根 [README](./README.md)。
+> **读者**：贡献者 · 维护者。
 
 维护与提 PR 时遵循 [AGENTS.md](./AGENTS.md)。切片完成定义：**代码 + 测试 +（若改契约）教科书同步 + `pnpm check` 绿**。
 
@@ -9,13 +9,17 @@
 ## 环境
 
 - Node ≥ 26（`.nvmrc` / `engines`）
-- pnpm（版本以根 `package.json` 的 `packageManager` 为准；当前 **11.22.0**）
+- pnpm：与根 `package.json` 的 `packageManager` 同版（当前 **11.22.0**）。推荐：
 
 ```bash
-node -v   # 应 ≥ v26；若 shell 仍是旧版，改用系统 Node 或调整 PATH
+node -v                          # 应 ≥ v26；若仍是旧版，调整 PATH 指向系统 Node
+npm install -g pnpm@11.22.0      # 不要用 Corepack
+pnpm -v                          # 11.22.0
 pnpm install
 pnpm check
 ```
+
+CI 的 `pnpm/action-setup` 读同一 `packageManager` 字段。
 
 首次跑通见 [docs/getting-started.md](./docs/getting-started.md) 路径 B。
 
