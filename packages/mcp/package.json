@@ -18,7 +18,8 @@
     "@xrkseek/attachment": "workspace:*",
     "@xrkseek/core-tools": "workspace:*",
     "@xrkseek/policy": "workspace:*",
-    "@xrkseek/protocol": "workspace:*"
+    "@xrkseek/protocol": "workspace:*",
+    "zod": "^4.0.0"
   },
   "license": "MIT",
   "repository": {

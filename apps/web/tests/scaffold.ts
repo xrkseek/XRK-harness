@@ -236,17 +236,6 @@ export interface LaunchOptions {
   /** Leave the current welcome notice pending; ordinary scenarios pre-acknowledge it before browser boot. */
   welcomeNoticePending?: boolean
   /**
-   * Patch the shipped DeepSeek search row to a deterministic endpoint and
-   * credential reference. Browser search scenarios keep the real provider and
-   * credentials seam while avoiding external search traffic and ambient keys.
-   */
-  deepSeekSearch?: {
-    /** Anthropic-compatible base URL; the provider appends `/messages`. */
-    baseURL: string
-    /** Credential reference resolved by the shipped search provider. */
-    apiKeyEnv: string
-  }
-  /**
    * Replace the roster the scaffold mounts by default (the shipped directory
    * at `system` trust, default `standard`). Supply this only to change WHICH
    * presets a scenario sees — a writable user root, a different default —
@@ -476,15 +465,6 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         { id: 'tool-cordis', name: '@xrkseek/xrk-tool-cordis' },
       ] }]
       : [],
-    ...options.deepSeekSearch === undefined
-      ? []
-      : [{
-        id: 'web-search-deepseek',
-        config: {
-          apiKeyEnv: options.deepSeekSearch.apiKeyEnv,
-          baseURL: options.deepSeekSearch.baseURL,
-        },
-      }],
     ...mode === 'record' || options.deepSeekMissingCredential === true
       ? []
       : [{ id: 'llm-deepseek', disabled: true }],

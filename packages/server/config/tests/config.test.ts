@@ -48,13 +48,13 @@ describe("loadHostConfig", () => {
       env: {
         XRK_MCP_SERVERS: JSON.stringify({
           mcpServers: {
-            "12306-mcp": { command: "npx", args: ["-y", "12306-mcp"] },
+            demo: { command: "npx", args: ["-y", "demo-mcp"] },
           },
         }),
       },
     });
     expect(cfg.runtime.mcpServers).toEqual([
-      { serverName: "12306-mcp", command: "npx", args: ["-y", "12306-mcp"] },
+      { serverName: "demo", command: "npx", args: ["-y", "demo-mcp"] },
     ]);
   });
 });

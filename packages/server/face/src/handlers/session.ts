@@ -1,4 +1,3 @@
-import path from "node:path";
 import {
   AdmitNotPendingError,
   admitPrompt,
@@ -37,6 +36,8 @@ import {
   resolveLlmForSelection,
 } from "../llm-resolve.js";
 import { publishRemoteEvent } from "../remote-event.js";
+import { persistWorkspaceDoc } from "../workspace-store.js";
+import { resolveSessionCwd } from "../session-cwd.js";
 
 function sessionHasImageContent(runtime: FaceRuntime, sessionId: string): boolean {
   for (const ev of runtime.store.get(sessionId).events) {
@@ -141,6 +142,7 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       workspace,
     });
   }
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
   return {
     ok: true,
     value: {
@@ -151,7 +153,6 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
 };
 
 export const sessionList: FaceHandler = async (runtime) => {
-  const defaultCwd = path.resolve(runtime.workspaceRoot);
   const items = runtime.store.list().map((sessionId) => {
     const events = runtime.store.get(sessionId).events;
     const last = events[events.length - 1];
@@ -161,7 +162,7 @@ export const sessionList: FaceHandler = async (runtime) => {
       meta?.blank ?? !events.some((e) => e.type === "turn/start");
     const lastPromptAt = meta?.lastPromptAt ?? null;
     const updatedAt = Math.max(last?.ts ?? 0, lastPromptAt ?? 0);
-    const cwd = runtime.sessionCwds.get(sessionId) ?? defaultCwd;
+    const cwd = resolveSessionCwd(runtime, sessionId);
     const agentPreset = runtime.sessionAgentPresets.get(sessionId);
     const lineage = runtime.subagents.getByChild(sessionId);
     return {
@@ -600,6 +601,7 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
       workspace,
     });
   }
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
   return {
     ok: true,
     value: {

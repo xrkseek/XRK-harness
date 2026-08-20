@@ -36,7 +36,7 @@ npx @xrkseek/harness-cli web
 | 2 | **无 LLM 密钥**也可打开壳；发话需接模型或 `--preset minimal` + replay |
 | 3 | 接真模型：Settings → Models / Credentials，或见下文「接真模型」 |
 
-Registry / GitHub Packages 安装方式见 [publishing.md](./publishing.md)（维护者发版说明里含用户侧 `npx` 示例）。需要读 Packages 权限时再配 token。
+Registry / 安装见根 [README](../README.md)；维护者发版见 [publishing.md](./publishing.md)。
 
 ---
 
@@ -51,6 +51,15 @@ pnpm build
 pnpm web:build && pnpm client:bundle && pnpm web:assemble
 node apps/cli/dist/bin.js web --workspace .
 ```
+
+常用：
+
+| 命令 | 作用 |
+|------|------|
+| `web` / `serve` | 起 Host + 产品壳 |
+| `web --verbose` | 多打 `/api` 访问与 MCP 细节 |
+| `web --force` | 先杀掉占用端口的进程再监听（对标 OpenClaw `--force`） |
+| `restart` | 释放端口后重新 `serve`（同 flags） |
 
 `serve`/`web` 缺 `apps/web/dist` 时会自动跑上述三步组装；打发行版：`pnpm release:stage` / `pnpm release`。
 

@@ -10,7 +10,6 @@ import { AgentLoopCardController, type AgentLoopSettings } from '../src/client/a
 import { BashCardController, type BashSettings } from '../src/client/bash-card-controller.ts'
 import { McpCardController, type McpSettings } from '../src/client/mcp-card-controller.ts'
 import { ConfigurablePluginsTabController } from '../src/client/tab-store.ts'
-import { WebSearchCardController, type WebSearchSettings } from '../src/client/web-search-card-controller.ts'
 
 /** Make the stub behave like a Host that accepts every write. */
 function acceptWrites<T>(host: StubSettingsScope<T>): void {
@@ -24,15 +23,6 @@ function acceptWrites<T>(host: StubSettingsScope<T>): void {
     const base = host.scope.getSnapshot().base as Record<string, unknown> | undefined
     host.publish({ value: { ...section(), [field]: base?.[field] } as T, user })
   })
-}
-
-function credentialsApi(configured: boolean) {
-  const describe = vi.fn(() => Promise.resolve({
-    rpcId: 'c-1' as never,
-    result: { ok: true as const, value: { credentials: { DEEPSEEK_API_KEY: { configured, writable: true } } } },
-  }))
-  const set = vi.fn(() => Promise.resolve({ rpcId: 'c-2' as never, result: { ok: true as const, value: {} } }))
-  return { api: { credentials: { describe, set } } as never, describe, set }
 }
 
 describe('CardForm', () => {
@@ -381,166 +371,6 @@ describe('AgentLoopCardController', () => {
   })
 })
 
-describe('WebSearchCardController', () => {
-  it('reads the credential state for the reference the tab names', async () => {
-    const host = stubSettingsScope<WebSearchSettings>()
-    const credentials = credentialsApi(true)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
-    const state = () => controller.inject().hooks.webSearchCard.getSnapshot()
-    await vi.waitFor(() => { expect(credentials.describe).toHaveBeenCalled() })
-
-    host.publish({ status: 'ready', writable: true, value: { baseURL: 'https://search.test/v1' }, user: {} })
-    await vi.waitFor(() => { expect(state().apiKeyConfigured).toBe(true) })
-
-    expect(state()).toMatchObject({
-      baseURL: { text: 'https://search.test/v1', overridden: false },
-      apiKey: { text: '', overridden: false },
-    })
-  })
-
-  it('writes the staged key through the credentials domain, never the settings section', async () => {
-    const host = stubSettingsScope<WebSearchSettings>()
-    const credentials = credentialsApi(false)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
-    host.publish({ status: 'ready', writable: true, value: {}, user: {} })
-    const face = controller.inject()
-
-    face.edit('apiKey', ' ds-secret ')
-    expect(face.hooks.webSearchCard.getSnapshot().dirty).toBe(true)
-    expect(credentials.set).not.toHaveBeenCalled()
-
-    credentials.describe.mockImplementation(() => Promise.resolve({
-      rpcId: 'c-1' as never,
-      result: { ok: true as const, value: { credentials: { DEEPSEEK_API_KEY: { configured: true, writable: true } } } },
-    }))
-    face.save()
-    await vi.waitFor(() => { expect(credentials.set).toHaveBeenCalled() })
-
-    expect(credentials.set).toHaveBeenCalledWith({ ref: 'DEEPSEEK_API_KEY', value: 'ds-secret' })
-    expect(host.set).not.toHaveBeenCalled()
-    await vi.waitFor(() => {
-      expect(face.hooks.webSearchCard.getSnapshot()).toMatchObject({ dirty: false, apiKeyConfigured: true })
-    })
-  })
-
-  it('keeps the stored key when the draft is left blank', () => {
-    const host = stubSettingsScope<WebSearchSettings>()
-    const credentials = credentialsApi(true)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
-    host.publish({ status: 'ready', writable: true, value: {}, user: {} })
-    const face = controller.inject()
-
-    face.edit('apiKey', '   ')
-
-    expect(face.hooks.webSearchCard.getSnapshot().dirty).toBe(false)
-    face.save()
-
-    expect(credentials.set).not.toHaveBeenCalled()
-  })
-
-  it('re-reads when the Host reports the watched reference changed', async () => {
-    const host = stubSettingsScope<WebSearchSettings>()
-    const credentials = credentialsApi(false)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
-    host.publish({ status: 'ready', writable: true, value: {}, user: {} })
-    await vi.waitFor(() => { expect(credentials.describe).toHaveBeenCalled() })
-    credentials.describe.mockClear()
-
-    // Another reference is not this card's business.
-    controller.refreshCredential('OTHER_KEY')
-    expect(credentials.describe).not.toHaveBeenCalled()
-
-    // A key written on another surface reaches this card only through this signal.
-    credentials.describe.mockImplementation(() => Promise.resolve({
-      rpcId: 'c-1' as never,
-      result: { ok: true as const, value: { credentials: { DEEPSEEK_API_KEY: { configured: true, writable: true } } } },
-    }))
-    controller.refreshCredential('DEEPSEEK_API_KEY')
-
-    await vi.waitFor(() => {
-      expect(controller.inject().hooks.webSearchCard.getSnapshot().apiKeyConfigured).toBe(true)
-    })
-  })
-
-  it('addresses the reference the tab declares rather than the default', async () => {
-    const host = stubSettingsScope<WebSearchSettings>()
-    const credentials = credentialsApi(false)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
-    host.publish({ status: 'ready', writable: true, value: { apiKeyEnv: 'SEARCH_KEY' }, user: {} })
-    const face = controller.inject()
-
-    face.edit('apiKey', 'ds-secret')
-    face.save()
-    await vi.waitFor(() => { expect(credentials.set).toHaveBeenCalled() })
-
-    expect(credentials.set).toHaveBeenCalledWith({ ref: 'SEARCH_KEY', value: 'ds-secret' })
-  })
-
-  it('reports a key the Host did not store as a failed save', async () => {
-    const host = stubSettingsScope<WebSearchSettings>()
-    const credentials = credentialsApi(false)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
-    host.publish({ status: 'ready', writable: true, value: {}, user: {} })
-    const face = controller.inject()
-
-    face.edit('apiKey', 'ds-secret')
-    face.save()
-
-    await vi.waitFor(() => {
-      expect(face.hooks.webSearchCard.getSnapshot()).toMatchObject({ failed: true, dirty: true })
-    })
-  })
-
-  it('keeps the card usable when the credential read fails', async () => {
-    const host = stubSettingsScope<WebSearchSettings>()
-    const describe = vi.fn(() => Promise.reject(new Error('offline')))
-    const set = vi.fn(() => Promise.reject(new Error('offline')))
-    const controller = new WebSearchCardController(host.scope, { credentials: { describe, set } } as never)
-    const face = controller.inject()
-    await vi.waitFor(() => { expect(describe).toHaveBeenCalled() })
-
-    host.publish({ status: 'ready', writable: true, value: { baseURL: 'https://search.test/v1' }, user: {} })
-    face.edit('apiKey', 'ds-secret')
-    face.save()
-    await vi.waitFor(() => { expect(set).toHaveBeenCalled() })
-
-    expect(face.hooks.webSearchCard.getSnapshot()).toMatchObject({
-      available: true,
-      apiKeyConfigured: false,
-      baseURL: { text: 'https://search.test/v1' },
-    })
-  })
-
-  it('ignores a credential read the Host refused', async () => {
-    const host = stubSettingsScope<WebSearchSettings>()
-    const describe = vi.fn(() => Promise.resolve({
-      rpcId: 'c-1' as never,
-      result: { ok: false as const, error: { code: 'credentials-unavailable', message: 'no provider' } },
-    }))
-    const controller = new WebSearchCardController(host.scope, { credentials: { describe, set: vi.fn() } } as never)
-    await vi.waitFor(() => { expect(describe).toHaveBeenCalled() })
-
-    expect(controller.inject().hooks.webSearchCard.getSnapshot().apiKeyConfigured).toBe(false)
-  })
-
-  it('saves the endpoint and the search budget together', async () => {
-    const host = stubSettingsScope<WebSearchSettings>()
-    acceptWrites(host)
-    const credentials = credentialsApi(true)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
-    host.publish({ status: 'ready', writable: true, value: {}, base: {}, user: {} })
-    const face = controller.inject()
-
-    face.edit('baseURL', 'https://other.test')
-    face.edit('maxUses', '3')
-    face.save()
-    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledTimes(2) })
-
-    expect(host.set.mock.calls).toEqual([['baseURL', 'https://other.test'], ['maxUses', 3]])
-    expect(credentials.set).not.toHaveBeenCalled()
-  })
-})
-
 describe('ConfigurablePluginsTabController', () => {
   function settingsApi(namespaces: string[]) {
     const describe = vi.fn(() => Promise.resolve({
@@ -579,7 +409,7 @@ describe('ConfigurablePluginsTabController', () => {
 
   it('never dispatches a card whose namespace this deployment does not serve', async () => {
     const settings = settingsApi(['bash'])
-    const controller = new ConfigurablePluginsTabController(settings.api, () => ledger('bash', 'web-search-deepseek'))
+    const controller = new ConfigurablePluginsTabController(settings.api, () => ledger('bash', 'mcp'))
 
     await controller.load()
 
@@ -693,8 +523,13 @@ describe('McpCardController', () => {
     })
     const face = controller.inject()
 
-    face.addRow()
-    face.editRow(0, { serverName: 'fs', command: 'npx', args: '-y, mcp-server' })
+    expect(face.addRow()).toBe('empty')
+    expect(face.addRow('{ bad')).toBe('invalid')
+    expect(face.addRow(JSON.stringify({
+      mcpServers: {
+        fs: { command: 'npx', args: ['-y', 'mcp-server'] },
+      },
+    }))).toBe('ok')
     expect(face.hooks.mcpCard.getSnapshot()).toMatchObject({
       dirty: true,
       rowInvalid: false,
@@ -716,8 +551,12 @@ describe('McpCardController', () => {
     const controller = new McpCardController(host.scope)
     host.publish({ status: 'ready', writable: true, value: { servers: [] }, base: {}, user: {} })
     const face = controller.inject()
-    face.addRow()
-    face.editRow(0, { serverName: 'only-name' })
+    // Force an incomplete row via legacy edit after paste of a valid name-only edge is skipped;
+    // seed one incomplete draft through save path is not possible — inject via second paste then edit.
+    face.addRow(JSON.stringify({
+      mcpServers: { only: { command: 'npx' } },
+    }))
+    face.editRow(0, { command: '' })
     expect(face.hooks.mcpCard.getSnapshot().rowInvalid).toBe(true)
     face.save()
     expect(host.set).not.toHaveBeenCalled()
@@ -731,16 +570,31 @@ describe('McpCardController', () => {
     const face = controller.inject()
     face.addRow(JSON.stringify({
       mcpServers: {
-        '12306-mcp': { command: 'npx', args: ['-y', '12306-mcp'] },
+        demo: { command: 'npx', args: ['-y', 'demo-mcp'] },
       },
     }))
-    expect(face.hooks.mcpCard.getSnapshot().rows).toEqual([{
-      serverName: '12306-mcp',
-      transport: 'stdio',
-      command: 'npx',
-      url: '',
-      args: '-y, 12306-mcp',
-      cwd: '',
-    }])
+    face.addRow(JSON.stringify({
+      mcpServers: {
+        other: { command: 'npx', args: ['other-mcp'] },
+      },
+    }))
+    expect(face.hooks.mcpCard.getSnapshot().rows).toEqual([
+      {
+        serverName: 'demo',
+        transport: 'stdio',
+        command: 'npx',
+        url: '',
+        args: '-y, demo-mcp',
+        cwd: '',
+      },
+      {
+        serverName: 'other',
+        transport: 'stdio',
+        command: 'npx',
+        url: '',
+        args: 'other-mcp',
+        cwd: '',
+      },
+    ])
   })
 })

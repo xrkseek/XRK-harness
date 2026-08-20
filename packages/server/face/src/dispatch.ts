@@ -28,6 +28,7 @@ import {
   settingsUpdateFace,
 } from "./settings-credentials.js";
 import { skillList } from "./skill-list.js";
+import { resolveSessionCwd } from "./session-cwd.js";
 import {
   bindPayload,
   bindRuntime,
@@ -143,9 +144,9 @@ const HANDLERS: Record<string, FaceHandler> = {
     const sessionId = String(
       (payload as Record<string, unknown> | null)?.sessionId ?? "",
     ).trim();
-    const root =
-      (sessionId ? runtime.sessionCwds.get(sessionId) : undefined) ??
-      runtime.workspaceRoot;
+    const root = sessionId
+      ? resolveSessionCwd(runtime, sessionId)
+      : runtime.workspaceRoot;
     return skillList(root, payload);
   }),
   "subagent.list": subagentList,

@@ -6,7 +6,6 @@
 
 import type {
   ChatMessage,
-  CompactionReason,
   ContextCompactionEvent,
   SessionEvent,
 } from "@xrkseek/protocol";
@@ -24,8 +23,9 @@ export function estimateTokens(text: string): number {
 }
 
 function messagePlainText(m: ChatMessage): string {
-  if (m.role === "user") return flattenText(m.content);
-  return m.content ?? "";
+  if (m.role === "tool") return flattenText(m.content);
+  if (m.role === "assistant") return flattenText(m.content ?? "");
+  return flattenText(m.content);
 }
 
 export function estimateMessagesTokens(

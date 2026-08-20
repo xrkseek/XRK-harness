@@ -32,6 +32,7 @@ import {
   publishRemoteEvent,
   createSessionRoutingLlm,
   liveRouteAllowsImageInput,
+  resolveSessionCwd,
   tryHandleFaceHttp,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
@@ -48,7 +49,6 @@ import path from "node:path";
 import { createHostAgentCache } from "./agent-cache.js";
 import { wireDrainStatus, publishDrainIdle, type SessionDrainControl } from "./drain-status.js";
 import {
-  loadMcpToolPlugins,
   mcpDraftsToSpecs,
   parseMcpServersEnv,
   readMcpServersFromHostSettings,
@@ -60,10 +60,12 @@ import { createStandingToolRegistry } from "./standing-tools.js";
 import { createDefaultPtyAccess } from "@xrkseek/exec-pty";
 import { createLocalShell } from "@xrkseek/exec-shell";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
+import type { HostLogger, HostSpawnOptions } from "./log.js";
 
 export { createHostAgentCache, HOST_PLUGINS_KEY } from "./agent-cache.js";
 export { createStandingToolRegistry } from "./standing-tools.js";
 export type { AgentResolveOpts, HostAgentCache } from "./agent-cache.js";
+export type { HostLogger, HostSpawnOptions } from "./log.js";
 export {
   loadMcpToolPlugins,
   mcpDraftsToSpecs,
@@ -76,6 +78,27 @@ export {
   type McpServerSpec,
   type ReconcileMcpResult,
 } from "./mcp-wire.js";
+
+function logMcpReconcile(
+  log: HostLogger | undefined,
+  label: string,
+  result: {
+    readonly added: readonly string[];
+    readonly removed: readonly string[];
+    readonly kept: readonly string[];
+    readonly failures: readonly { serverName: string; message: string }[];
+  },
+): void {
+  if (!log) return;
+  log.info(
+    `mcp ${label}: +${result.added.length} -${result.removed.length} keep=${result.kept.length}`,
+  );
+  for (const id of result.added) log.info(`mcp connected ${id}`);
+  for (const id of result.removed) log.info(`mcp removed ${id}`);
+  for (const f of result.failures) {
+    log.warn(`mcp connect failed ${f.serverName}: ${f.message}`);
+  }
+}
 
 async function resolveOfficeAgentSeedDir(
   workspaceRoot: string,
@@ -146,6 +169,12 @@ export type AgentFactory = (input: {
    * Host wires this after Face runtime starts; falls back to env/replay in presets.
    */
   resolveLlm?: (sessionId: string) => LlmAdapter | undefined;
+  /** Face Plugins → agent-loop / bash (Host reads live Face namespaces). */
+  maxParallelToolCalls?: number;
+  bashLimits?: {
+    timeoutMs?: number;
+    maxOutputBytes?: number;
+  };
 }) => Promise<AgentHandle>;
 
 export type { SessionDrainControl } from "./drain-status.js";
@@ -170,7 +199,11 @@ export interface HostInstance {
 }
 
 export interface HostManager {
-  spawn(config: HostConfig, factory: AgentFactory): Promise<HostInstance>;
+  spawn(
+    config: HostConfig,
+    factory: AgentFactory,
+    options?: HostSpawnOptions,
+  ): Promise<HostInstance>;
   get(id: string): HostInstance | undefined;
   list(): readonly HostInstance[];
   stop(id: string): Promise<void>;
@@ -182,7 +215,8 @@ export function createHostManager(): HostManager {
   let seq = 0;
 
   return {
-    async spawn(config, factory) {
+    async spawn(config, factory, options) {
+      const log = options?.logger;
       const id = `host_${++seq}`;
       const sessionsDir = config.runtime.sessionsDir?.trim();
       const store: SessionStore = sessionsDir
@@ -201,6 +235,11 @@ export function createHostManager(): HostManager {
 
       const mcpSpecs = resolveMcpSpecs(config);
       const mcpFileSourced = configuredMcpSpecs(config).length === 0;
+      if (mcpSpecs.length > 0) {
+        log?.info(
+          `mcp desired ${mcpSpecs.length} (source=${mcpFileSourced ? "host-settings" : "env/config"}; allow=${config.runtime.mcpAllowConnect ? "on" : "off"})`,
+        );
+      }
       let invalidateAgents: () => Promise<void> = async () => {};
       /** Mutable Face inventory — Host splices after MCP reconcile / health. */
       const facePlugins: RegisteredPlugin[] = [];
@@ -212,12 +251,12 @@ export function createHostManager(): HostManager {
       };
       const attachments = createMemoryAttachmentStore();
       /** Filled after Face boot — MCP image gate reads live Registry modalities. */
-      let faceForModality: FaceRuntime | undefined;
+      const faceForModality: { current?: FaceRuntime } = {};
       const mcpImageAdmission = {
         attachments,
         allowsImageInput: () =>
-          faceForModality
-            ? liveRouteAllowsImageInput(faceForModality)
+          faceForModality.current
+            ? liveRouteAllowsImageInput(faceForModality.current)
             : false,
       };
       const mcpHooks = {
@@ -227,17 +266,33 @@ export function createHostManager(): HostManager {
         },
       };
       if (mcpSpecs.length > 0) {
-        const mcpPlugins = await loadMcpToolPlugins({
-          specs: mcpSpecs,
+        const boot = await reconcileMcpToolPlugins({
+          desired: mcpSpecs,
+          list: () => loader.list(),
+          register: (plugin) => {
+            loader.register(plugin);
+            if (!loadedPluginIds.includes(plugin.id)) {
+              loadedPluginIds = [...loadedPluginIds, plugin.id];
+            }
+          },
+          unregister: async (pluginId) => {
+            await loader.unregister(pluginId);
+            loadedPluginIds = loadedPluginIds.filter((x) => x !== pluginId);
+          },
           ...(policy ? { policy } : {}),
           allowConnect: Boolean(config.runtime.mcpAllowConnect),
           imageAdmission: mcpImageAdmission,
           ...mcpHooks,
         });
-        for (const p of mcpPlugins) {
-          if (loader.list().some((x) => x.id === p.id)) continue;
-          loader.register(p);
-          loadedPluginIds = [...loadedPluginIds, p.id];
+        logMcpReconcile(log, "boot", boot);
+        if (
+          boot.added.length === 0 &&
+          boot.failures.length > 0 &&
+          !config.runtime.mcpAllowConnect
+        ) {
+          log?.warn(
+            "mcp: set XRK_MCP_ALLOW=1 (or policy allow mcp.connect) to connect saved servers",
+          );
         }
       }
       refreshFacePlugins();
@@ -268,6 +323,12 @@ export function createHostManager(): HostManager {
       const llmResolverBox: {
         resolve?: (sessionId: string) => LlmAdapter | undefined;
       } = {};
+      const pluginSettingsBox: {
+        read?: () => {
+          maxParallelToolCalls?: number;
+          bashLimits?: { timeoutMs?: number; maxOutputBytes?: number };
+        };
+      } = {};
       const sessionCwdBox: {
         get?: (sessionId: string) => string | undefined;
       } = {};
@@ -287,6 +348,7 @@ export function createHostManager(): HostManager {
         return agentCache.resolve(
           sessionId,
           async () => {
+            const pluginSettings = pluginSettingsBox.read?.() ?? {};
             const agent = await factory({
               sessionId,
               store,
@@ -303,6 +365,12 @@ export function createHostManager(): HostManager {
               ...(sharedShell ? { shellJobs: sharedShell } : {}),
               ...(llmResolverBox.resolve
                 ? { resolveLlm: llmResolverBox.resolve }
+                : {}),
+              ...(pluginSettings.maxParallelToolCalls !== undefined
+                ? { maxParallelToolCalls: pluginSettings.maxParallelToolCalls }
+                : {}),
+              ...(pluginSettings.bashLimits
+                ? { bashLimits: pluginSettings.bashLimits }
                 : {}),
             });
             if (faceBox.approvals) {
@@ -419,6 +487,7 @@ export function createHostManager(): HostManager {
                     imageAdmission: mcpImageAdmission,
                     ...mcpHooks,
                   });
+                  logMcpReconcile(log, "reconcile", result);
                   refreshFacePlugins();
                   await invalidateAgents();
                   return { failures: result.failures };
@@ -465,11 +534,11 @@ export function createHostManager(): HostManager {
           isActive: (sessionId) => drain.isActive(sessionId),
         },
       });
-      faceForModality = faceRuntime;
+      faceForModality.current = faceRuntime;
       faceBox.approvals = faceRuntime.approvals;
       faceBox.questions = faceRuntime.questions;
       sessionCwdBox.get = (sessionId) =>
-        faceRuntime.sessionCwds.get(sessionId);
+        resolveSessionCwd(faceRuntime, sessionId);
       hostStatusBox.publish = (sessionId, running) => {
         faceRuntime.bus.publishHost({
           type: "host/session-status",
@@ -479,6 +548,45 @@ export function createHostManager(): HostManager {
       };
       llmResolverBox.resolve = (sessionId) =>
         createSessionRoutingLlm(faceRuntime, sessionId);
+      pluginSettingsBox.read = () => {
+        const loop = faceRuntime.settingsNamespaces.view("agent-loop").value as Record<
+          string,
+          unknown
+        >;
+        const bash = faceRuntime.settingsNamespaces.view("bash").value as Record<
+          string,
+          unknown
+        >;
+        const maxParallelToolCalls =
+          typeof loop.maxParallelToolCalls === "number" &&
+          Number.isFinite(loop.maxParallelToolCalls) &&
+          loop.maxParallelToolCalls > 0
+            ? Math.floor(loop.maxParallelToolCalls)
+            : undefined;
+        const timeoutMs =
+          typeof bash.timeoutMs === "number" &&
+          Number.isFinite(bash.timeoutMs) &&
+          bash.timeoutMs > 0
+            ? Math.floor(bash.timeoutMs)
+            : undefined;
+        const maxOutputBytes =
+          typeof bash.maxOutputBytes === "number" &&
+          Number.isFinite(bash.maxOutputBytes) &&
+          bash.maxOutputBytes > 0
+            ? Math.floor(bash.maxOutputBytes)
+            : undefined;
+        return {
+          ...(maxParallelToolCalls !== undefined ? { maxParallelToolCalls } : {}),
+          ...(timeoutMs !== undefined || maxOutputBytes !== undefined
+            ? {
+                bashLimits: {
+                  ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+                  ...(maxOutputBytes !== undefined ? { maxOutputBytes } : {}),
+                },
+              }
+            : {}),
+        };
+      };
       faceRuntime.bus.subscribeHost((_rpcId, frame) => {
         if (frame.type !== "host/remote-event") return;
         const event = frame.event;
@@ -494,7 +602,9 @@ export function createHostManager(): HostManager {
           if (
             ns === "agent-default-model" ||
             ns === "llm-deepseek" ||
-            ns === "llm-pi-ai"
+            ns === "llm-pi-ai" ||
+            ns === "agent-loop" ||
+            ns === "bash"
           ) {
             void invalidateAgents();
           }
@@ -537,6 +647,15 @@ export function createHostManager(): HostManager {
         ensureSession,
         resolveAgent,
         drain,
+        ...(log
+          ? {
+              onAccess: (info) => {
+                log.debug(
+                  `http ${info.method} ${info.path} → ${info.status}`,
+                );
+              },
+            }
+          : {}),
         ...(config.runtime.webDist
           ? {
               webStatic: {
@@ -560,6 +679,7 @@ export function createHostManager(): HostManager {
       });
 
       const addr = await http.listen();
+      log?.info(`listening ${config.runtime.host}:${addr.port}`);
       let status: HostInstance["status"] = "running";
 
       const instance: HostInstance = {

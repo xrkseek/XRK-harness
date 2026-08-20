@@ -212,6 +212,7 @@ export {
   type ProviderRouteContext,
 } from "./llm-provider-context.js";
 export { normalizeApiKey, type ApiKeyCheck } from "./llm-api-key.js";
+export { resolveSessionCwd } from "./session-cwd.js";
 export {
   FaceCredentialVault,
   FaceSettingsNamespaces,

@@ -12,7 +12,7 @@ import {
 import { createFsLocalProvider, createFsTools } from "@xrkseek/exec-fs";
 import { createBashTools, createLocalShell } from "@xrkseek/exec-shell";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
-import { createWebTools } from "@xrkseek/exec-web";
+import { createDefaultWebAccess, createWebTools } from "@xrkseek/exec-web";
 import { createLspTools } from "@xrkseek/exec-lsp";
 import { createPtyTools } from "@xrkseek/exec-pty";
 import { createSkillTools } from "@xrkseek/workspace";
@@ -36,7 +36,7 @@ export function createStandingToolRegistry(options: {
       subprocess: createLocalSubprocess(),
     });
     for (const tool of createBashTools(shell)) tools.register(tool);
-    for (const tool of createWebTools()) tools.register(tool);
+    for (const tool of createWebTools(createDefaultWebAccess())) tools.register(tool);
     for (const tool of createLspTools({
       workspaceRoot: options.workspaceRoot,
     })) {

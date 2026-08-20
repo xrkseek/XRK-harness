@@ -6,10 +6,19 @@ import type {
   WebSearchSource,
 } from "./types.js";
 import { WebError } from "./types.js";
+import { createDuckDuckGoSearch } from "./search-duckduckgo.js";
+import { createParallelFreeSearch } from "./search-parallel-free.js";
 
 export const SEARCH_TIMEOUT_MS = 30_000;
 
-export type SearchProviderId = "tavily" | "brave";
+/** AGT-aligned keyless cascade order. */
+export const KEYLESS_FALLBACKS = ["parallel-free", "duckduckgo"] as const;
+
+export type SearchProviderId =
+  | "tavily"
+  | "brave"
+  | "parallel-free"
+  | "duckduckgo";
 
 const TAVILY_URL = "https://api.tavily.com/search";
 const BRAVE_URL = "https://api.search.brave.com/res/v1/web/search";
@@ -200,8 +209,14 @@ export function createBraveSearch(options: {
 
 export function searchUnavailableMessage(env: NodeJS.ProcessEnv): string {
   const pin = env.XRK_WEB_SEARCH_PROVIDER?.trim().toLowerCase();
-  if (pin && pin !== "tavily" && pin !== "brave") {
-    return `Error: Unknown XRK_WEB_SEARCH_PROVIDER "${pin}". Use tavily or brave.`;
+  if (
+    pin &&
+    pin !== "tavily" &&
+    pin !== "brave" &&
+    pin !== "parallel-free" &&
+    pin !== "duckduckgo"
+  ) {
+    return `Error: Unknown XRK_WEB_SEARCH_PROVIDER "${pin}". Use tavily, brave, parallel-free, or duckduckgo.`;
   }
   if (pin === "tavily" && !env.XRK_TAVILY_API_KEY?.trim()) {
     return "Error: Web search is not configured. Set XRK_TAVILY_API_KEY.";
@@ -209,9 +224,13 @@ export function searchUnavailableMessage(env: NodeJS.ProcessEnv): string {
   if (pin === "brave" && !env.XRK_BRAVE_SEARCH_API_KEY?.trim()) {
     return "Error: Web search is not configured. Set XRK_BRAVE_SEARCH_API_KEY.";
   }
-  return "Error: Web search is not configured. Set XRK_TAVILY_API_KEY or XRK_BRAVE_SEARCH_API_KEY.";
+  return "Error: Web search is not configured.";
 }
 
+/**
+ * Prefer keyed providers when present; otherwise parallel-free (AGT).
+ * Unknown `XRK_WEB_SEARCH_PROVIDER` → `undefined` (caller shows unavailable).
+ */
 export function resolveSearchProviderId(
   env: NodeJS.ProcessEnv,
 ): SearchProviderId | undefined {
@@ -220,10 +239,83 @@ export function resolveSearchProviderId(
   const brave = Boolean(env.XRK_BRAVE_SEARCH_API_KEY?.trim());
   if (pin === "tavily") return tavily ? "tavily" : undefined;
   if (pin === "brave") return brave ? "brave" : undefined;
+  if (pin === "parallel-free") return "parallel-free";
+  if (pin === "duckduckgo") return "duckduckgo";
   if (pin) return undefined;
   if (tavily) return "tavily";
   if (brave) return "brave";
-  return undefined;
+  return "parallel-free";
+}
+
+function createProvider(
+  id: SearchProviderId,
+  env: NodeJS.ProcessEnv,
+  fetch?: FetchFn,
+): WebSearch | undefined {
+  if (id === "tavily") {
+    const key = env.XRK_TAVILY_API_KEY?.trim();
+    if (!key) return undefined;
+    return createTavilySearch({
+      apiKey: key,
+      ...(fetch ? { fetch } : {}),
+    });
+  }
+  if (id === "brave") {
+    const key = env.XRK_BRAVE_SEARCH_API_KEY?.trim();
+    if (!key) return undefined;
+    return createBraveSearch({
+      apiKey: key,
+      ...(fetch ? { fetch } : {}),
+    });
+  }
+  if (id === "parallel-free") {
+    return createParallelFreeSearch({
+      ...(fetch ? { fetch } : {}),
+      ...(env.XRK_PARALLEL_FREE_MCP_URL?.trim()
+        ? { mcpUrl: env.XRK_PARALLEL_FREE_MCP_URL.trim() }
+        : {}),
+    });
+  }
+  return createDuckDuckGoSearch({
+    ...(fetch ? { fetch } : {}),
+    ...(env.XRK_WEB_SEARCH_REGION?.trim()
+      ? { region: env.XRK_WEB_SEARCH_REGION.trim() }
+      : {}),
+  });
+}
+
+/** Try primary; on throw or empty sources, walk remaining keyless providers (AGT). */
+export function createCascadingSearch(
+  primary: WebSearch,
+  fallbacks: readonly WebSearch[],
+): WebSearch {
+  return {
+    async search(request, signal) {
+      try {
+        const result = await primary.search(request, signal);
+        if (result.sources.length > 0) return result;
+      } catch {
+        /* fall through */
+      }
+      let lastError: unknown;
+      for (const fb of fallbacks) {
+        try {
+          const result = await fb.search(request, signal);
+          if (result.sources.length > 0) return result;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      if (lastError !== undefined) {
+        if (lastError instanceof WebError) throw lastError;
+        throw new WebError(
+          lastError instanceof Error ? lastError.message : String(lastError),
+          "WEB_PROVIDER_ERROR",
+        );
+      }
+      return { sources: [], truncated: false };
+    },
+  };
 }
 
 export function createSearchFromEnv(options: {
@@ -232,17 +324,19 @@ export function createSearchFromEnv(options: {
 }): WebSearch | undefined {
   const env = options.env ?? process.env;
   const id = resolveSearchProviderId(env);
-  if (id === "tavily") {
-    return createTavilySearch({
-      apiKey: env.XRK_TAVILY_API_KEY!.trim(),
-      ...(options.fetch ? { fetch: options.fetch } : {}),
-    });
+  if (!id) return undefined;
+  const primary = createProvider(id, env, options.fetch);
+  if (!primary) return undefined;
+
+  const pin = env.XRK_WEB_SEARCH_PROVIDER?.trim();
+  if (pin) return primary;
+
+  const fallbacks: WebSearch[] = [];
+  for (const fbId of KEYLESS_FALLBACKS) {
+    if (fbId === id) continue;
+    const fb = createProvider(fbId, env, options.fetch);
+    if (fb) fallbacks.push(fb);
   }
-  if (id === "brave") {
-    return createBraveSearch({
-      apiKey: env.XRK_BRAVE_SEARCH_API_KEY!.trim(),
-      ...(options.fetch ? { fetch: options.fetch } : {}),
-    });
-  }
-  return undefined;
+  if (fallbacks.length === 0) return primary;
+  return createCascadingSearch(primary, fallbacks);
 }

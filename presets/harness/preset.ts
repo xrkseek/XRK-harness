@@ -159,6 +159,13 @@ export interface HarnessCompositionOptions {
    * `false` skips overflow retry; manual compact still works.
    */
   readonly compaction?: false | CompactionOptions;
+  /** Face `agent-loop.maxParallelToolCalls` — bounds parallel tool settles. */
+  readonly maxParallelToolCalls?: number;
+  /** Face `bash.timeoutMs` / `maxOutputBytes` — applied to the bash tool. */
+  readonly bashLimits?: {
+    readonly timeoutMs?: number;
+    readonly maxOutputBytes?: number;
+  };
 }
 
 export interface HarnessComposition {
@@ -226,7 +233,14 @@ export function createHarnessComposition(
 
   const tools = createToolRegistry();
   for (const tool of createFsTools(fs)) tools.register(tool);
-  for (const tool of createBashTools(shell)) tools.register(tool);
+  for (const tool of createBashTools(shell, {
+    ...(options.bashLimits?.timeoutMs !== undefined
+      ? { timeoutMs: options.bashLimits.timeoutMs }
+      : {}),
+    ...(options.bashLimits?.maxOutputBytes !== undefined
+      ? { maxOutputBytes: options.bashLimits.maxOutputBytes }
+      : {}),
+  })) tools.register(tool);
   for (const tool of createStdTools()) tools.register(tool);
   for (const tool of createSkillTools({
     workspaceRoot: injectOpts.root,
@@ -454,6 +468,9 @@ export function createHarnessComposition(
           : {}),
         compaction:
           options.compaction === false ? false : (options.compaction ?? {}),
+        ...(options.maxParallelToolCalls !== undefined
+          ? { maxParallelToolCalls: options.maxParallelToolCalls }
+          : {}),
       });
     },
     dumpConfig(patch = {}) {

@@ -731,7 +731,25 @@ function formatJobOutput(
   return fitWithSuffix(content, trailer, limit);
 }
 
-export function createBashTools(shell: ShellService): ToolDefinition[] {
+export function createBashTools(
+  shell: ShellService,
+  options: {
+    readonly timeoutMs?: number;
+    readonly maxOutputBytes?: number;
+  } = {},
+): ToolDefinition[] {
+  const timeoutMs =
+    typeof options.timeoutMs === "number" &&
+    Number.isFinite(options.timeoutMs) &&
+    options.timeoutMs > 0
+      ? Math.floor(options.timeoutMs)
+      : undefined;
+  const maxOutputBytes =
+    typeof options.maxOutputBytes === "number" &&
+    Number.isFinite(options.maxOutputBytes) &&
+    options.maxOutputBytes > 0
+      ? Math.floor(options.maxOutputBytes)
+      : undefined;
   return [
     {
       name: "bash",
@@ -752,6 +770,7 @@ export function createBashTools(shell: ShellService): ToolDefinition[] {
           if (a.background) {
             const started = await shell.startJob(command, undefined, {
               ...(signal ? { signal } : {}),
+              ...(timeoutMs !== undefined ? { timeoutMs } : {}),
             });
             return {
               content: `started ${started.id}${
@@ -761,8 +780,13 @@ export function createBashTools(shell: ShellService): ToolDefinition[] {
           }
           const out = await shell.run(command, undefined, {
             ...(signal ? { signal } : {}),
+            ...(timeoutMs !== undefined ? { timeoutMs } : {}),
           });
-          return { content: formatRun(out) };
+          let content = formatRun(out);
+          if (maxOutputBytes !== undefined) {
+            content = fitWithSuffix(content, "\n[truncated]", maxOutputBytes);
+          }
+          return { content };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return { content: message, isError: true };

@@ -1,0 +1,28 @@
+{
+  "order": [
+    "ws_default"
+  ],
+  "entries": {
+    "ws_default": {
+      "path": "C:\\Users\\sunflowerss\\Desktop\\XRKgrocery\\XRK-harness",
+      "title": "XRK-harness",
+      "createdAt": "2026-08-20T08:55:23.981Z",
+      "updatedAt": "2026-08-20T08:55:23.981Z"
+    }
+  },
+  "seq": 0,
+  "membership": {
+    "sess_mt1a5xx6_ahbq8m": "ws_default",
+    "sess_mt1a5xyc_dah1hy": "ws_default",
+    "sess_mt1ac2zm_6ml5p8": "ws_default",
+    "sess_mt1ac30t_nyio94": "ws_default"
+  },
+  "sessionOrder": {
+    "ws_default": [
+      "sess_mt1a5xx6_ahbq8m",
+      "sess_mt1a5xyc_dah1hy",
+      "sess_mt1ac2zm_6ml5p8",
+      "sess_mt1ac30t_nyio94"
+    ]
+  }
+}

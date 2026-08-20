@@ -74,6 +74,7 @@ describe("Face host stream (DSH host frames)", () => {
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
       drain: drain(),
       resolveAgent: async () => {
         throw new Error("unused");

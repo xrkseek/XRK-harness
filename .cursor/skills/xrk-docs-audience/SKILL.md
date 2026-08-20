@@ -24,6 +24,7 @@ description: >-
 |------|------|
 | 产品用法、契约、能力边界 | `docs/` · 根 README |
 | 发版、交接清单 | `docs/maintainer.md` · `docs/publishing.md` |
+| 发行说明（`docs/releases/v*`） | rule + skill `xrk-release-notes`（DSH 风：新增/完善/删除/修复） |
 | 改码红线、测哪些、Agent 禁令 | `AGENTS.md` · `.cursor/rules` · `.cursor/skills` |
 | 本机路径、对照仓 | Canvas（不入库） |
 

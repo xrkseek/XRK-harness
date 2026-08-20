@@ -19,24 +19,30 @@ export type PackedStorageRecord = SessionEvent | TextChunkRow;
 const MIN_RUN = 3;
 
 type DeltaChunk = Extract<SessionEvent, { type: "assistant/chunk" }>;
+type TextDeltaChunk = DeltaChunk & { readonly kind?: "text" | "reasoning" };
 
-function chunkKey(ev: DeltaChunk): string {
+function isTextDelta(ev: DeltaChunk): ev is TextDeltaChunk {
+  return ev.kind !== "usage";
+}
+
+function chunkKey(ev: TextDeltaChunk): string {
   const kind = ev.kind ?? "text";
   const index = ev.index ?? 0;
   return `${ev.turnId}\0${ev.stepId}\0${kind}\0${index}`;
 }
 
-function continues(prev: DeltaChunk, next: DeltaChunk): boolean {
+function continues(prev: TextDeltaChunk, next: TextDeltaChunk): boolean {
   return chunkKey(prev) === chunkKey(next);
 }
 
-function buildRow(run: readonly DeltaChunk[]): TextChunkRow {
+function buildRow(run: readonly TextDeltaChunk[]): TextChunkRow {
   const first = run[0]!;
+  const kind = first.kind ?? "text";
   return {
     type: "text-chunks",
     turnId: first.turnId,
     stepId: first.stepId,
-    kind: first.kind ?? "text",
+    kind,
     index: first.index ?? 0,
     ts0: first.ts,
     dts: run.slice(1).map((ev, i) => ev.ts - run[i]!.ts),
@@ -52,7 +58,7 @@ export function packChunkRunsForExport(
   events: readonly SessionEvent[],
 ): readonly PackedStorageRecord[] {
   const out: PackedStorageRecord[] = [];
-  let run: DeltaChunk[] = [];
+  let run: TextDeltaChunk[] = [];
 
   const flush = (): void => {
     if (run.length >= MIN_RUN) {
@@ -65,6 +71,11 @@ export function packChunkRunsForExport(
 
   for (const event of events) {
     if (event.type !== "assistant/chunk") {
+      flush();
+      out.push(event);
+      continue;
+    }
+    if (!isTextDelta(event)) {
       flush();
       out.push(event);
       continue;

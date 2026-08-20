@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createBraveSearch,
+  createCascadingSearch,
   createSearchFromEnv,
   createTavilySearch,
   resolveSearchProviderId,
@@ -8,7 +9,7 @@ import {
 } from "../src/search-providers.js";
 
 describe("search provider selection", () => {
-  it("prefers Tavily when both keys exist unless pinned", () => {
+  it("prefers Tavily when both keys exist unless pinned; else parallel-free", () => {
     expect(
       resolveSearchProviderId({
         XRK_TAVILY_API_KEY: "t",
@@ -22,7 +23,13 @@ describe("search provider selection", () => {
         XRK_WEB_SEARCH_PROVIDER: "brave",
       }),
     ).toBe("brave");
-    expect(resolveSearchProviderId({})).toBeUndefined();
+    expect(resolveSearchProviderId({})).toBe("parallel-free");
+    expect(
+      resolveSearchProviderId({ XRK_WEB_SEARCH_PROVIDER: "duckduckgo" }),
+    ).toBe("duckduckgo");
+    expect(
+      resolveSearchProviderId({ XRK_WEB_SEARCH_PROVIDER: "parallel-free" }),
+    ).toBe("parallel-free");
     expect(
       searchUnavailableMessage({ XRK_WEB_SEARCH_PROVIDER: "exa" }),
     ).toMatch(/Unknown XRK_WEB_SEARCH_PROVIDER/);
@@ -86,14 +93,50 @@ describe("Tavily / Brave HTTP", () => {
     expect(out.sources).toHaveLength(2);
   });
 
-  it("createSearchFromEnv is undefined without a key", () => {
-    expect(createSearchFromEnv({ env: {} })).toBeUndefined();
-    expect(
-      createSearchFromEnv({
-        env: { XRK_BRAVE_SEARCH_API_KEY: "b" },
-        fetch: async () => Response.json({ web: { results: [] } }),
-      }),
-    ).toBeDefined();
+  it("createSearchFromEnv defaults to cascading parallel-free → duckduckgo", async () => {
+    const calls: string[] = [];
+    const search = createSearchFromEnv({
+      env: {},
+      fetch: async (input) => {
+        const url = String(input);
+        calls.push(url);
+        if (url.includes("parallel.ai")) {
+          throw new Error("parallel down");
+        }
+        return new Response(
+          `<a class="result__a" href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2F">Example</a>`,
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
+      },
+    });
+    expect(search).toBeDefined();
+    const out = await search!.search({ query: "q", maxResults: 8 });
+    expect(out.sources[0]?.url).toBe("https://example.com/");
+    expect(calls.some((u) => u.includes("parallel.ai") || u.includes("duckduckgo"))).toBe(
+      true,
+    );
+  });
+
+  it("createCascadingSearch falls through empty primary", async () => {
+    const search = createCascadingSearch(
+      {
+        async search() {
+          return { sources: [], truncated: false };
+        },
+      },
+      [
+        {
+          async search() {
+            return {
+              sources: [{ url: "https://fb.example/", title: "FB" }],
+              truncated: false,
+            };
+          },
+        },
+      ],
+    );
+    const out = await search.search({ query: "q", maxResults: 3 });
+    expect(out.sources[0]?.url).toBe("https://fb.example/");
   });
 
   it("times out via the provider budget, not a second timer", async () => {

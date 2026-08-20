@@ -14,8 +14,10 @@ import {
   ensureProductWebDist,
   repoRoot,
 } from "../product-paths.js";
+import { createCliLogger, resolveLogLevel, type CliLogger } from "../log.js";
+import { forceFreePort } from "../port.js";
 
-function openProductUrl(url: string): void {
+function openProductUrl(url: string, log: CliLogger): void {
   const platform = process.platform;
   const child =
     platform === "win32"
@@ -29,7 +31,7 @@ function openProductUrl(url: string): void {
           stdio: "ignore",
         });
   child.once("error", (err) => {
-    process.stderr.write(`warn: could not open browser: ${err.message}\n`);
+    log.warn(`could not open browser: ${err.message}`);
   });
   child.unref();
 }
@@ -70,6 +72,10 @@ function factoryForPreset(
 }
 
 export async function runServe(args: ParsedArgs): Promise<number> {
+  const log = createCliLogger(
+    resolveLogLevel({ verbose: args.verbose, quiet: args.quiet }),
+  );
+
   const patch: Record<string, unknown> = {
     ...args.patch,
     workspaceRoot: args.workspace,
@@ -80,6 +86,10 @@ export async function runServe(args: ParsedArgs): Promise<number> {
 
   const config = loadHostConfig({ patch });
   assertSafeHost(config.runtime.host);
+
+  if (args.force && config.runtime.port > 0) {
+    await forceFreePort(config.runtime.port, log);
+  }
 
   const preset =
     args.preset === "minimal" ||
@@ -97,7 +107,7 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     webDist = await ensureProductWebDist(config.runtime.webDist);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`error: ${message}\n`);
+    log.error(message);
     return 1;
   }
   const sessionsDir = args.persist
@@ -124,30 +134,33 @@ export async function runServe(args: ParsedArgs): Promise<number> {
       runtime,
     },
     factory,
+    { logger: log },
   );
 
   const health = instance.health();
   const port = health.port ?? config.runtime.port;
   const origin = `http://${config.runtime.host}:${port}`;
-  process.stdout.write(`xrk-harness serve  ${origin}/\n`);
+  log.info(`xrk-harness serve  ${origin}/`);
   const uiRel = path.relative(repoRoot(), webDist) || webDist;
-  process.stdout.write(
-    `  workspace=${config.runtime.workspaceRoot}\n`,
+  log.info(`  workspace=${config.runtime.workspaceRoot}`);
+  log.info(
+    `  preset=${preset}  ui=${uiRel}  sessions=${sessionsDir ?? "memory"}`,
   );
-  process.stdout.write(
-    `  preset=${preset}  ui=${uiRel}  sessions=${sessionsDir ?? "memory"}\n`,
+  log.info(
+    `  mcpAllow=${config.runtime.mcpAllowConnect ? "on" : "off"}  log=${log.level}`,
   );
   if (config.credentials.apiKey) {
-    process.stdout.write("  apiKey=set\n");
+    log.info("  apiKey=set");
   }
-  if (policy) process.stdout.write("  policy=on\n");
+  if (policy) log.info("  policy=on");
+  log.info("  tip: Ctrl+C stop · `xrk-harness restart` / `web --force` free port");
 
   if (args.open) {
-    openProductUrl(`${origin}/`);
+    openProductUrl(`${origin}/`, log);
   }
 
   const shutdown = async () => {
-    process.stdout.write("shutting down...\n");
+    log.info("shutting down...");
     await manager.stopAll();
     process.exit(0);
   };

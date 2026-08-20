@@ -8,12 +8,9 @@ export type PluginsSettingsLocaleKey =
   | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
   | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
-  | 'webSearchTitle' | 'webSearchDescription'
-  | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
-  | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
   | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading'
   | 'mcpServersHeading' | 'mcpServersEmpty' | 'mcpAddServer' | 'mcpRemoveServer'
-  | 'mcpPaste' | 'mcpPasteHint'
+  | 'mcpPaste' | 'mcpPasteHint' | 'mcpPasteEmpty' | 'mcpPasteInvalid'
   | 'mcpServerRow' | 'mcpServerName' | 'mcpServerNameHint' | 'mcpTransport'
   | 'mcpTransportStdio' | 'mcpTransportHttp' | 'mcpTransportHint'
   | 'mcpCommand' | 'mcpCommandHint' | 'mcpUrl' | 'mcpUrlHint'
@@ -49,25 +46,17 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopDescription: 'How the agent dispatches tool calls.',
   agentLoopMaxParallel: 'Parallel tool calls',
   agentLoopMaxParallelHint: 'Upper bound on parallel-safe calls running at once within one step.',
-  webSearchTitle: 'Web search',
-  webSearchDescription: 'The DeepSeek search provider.',
-  webSearchApiKey: 'API key',
-  webSearchApiKeyHint: 'Stored outside the settings file. Leave blank to keep the current key.',
-  webSearchApiKeySet: 'A key is configured.',
-  webSearchApiKeyUnset: 'No key is configured; search is unavailable until one is.',
-  webSearchBaseUrl: 'Endpoint',
-  webSearchBaseUrlHint: 'Leave blank to use the provider default.',
-  webSearchMaxUses: 'Max searches per request',
-  webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
   mcpTitle: 'MCP servers',
-  mcpDescription: 'Add local commands or remote URLs. Saved list remounts live when Host uses the settings file (empty XRK_MCP_SERVERS). Allow policy still required to connect.',
+  mcpDescription: 'Paste Cursor / Trae style JSON blocks one at a time. Each paste merges servers by name; save remounts when Host uses the settings file.',
   mcpConnectedHeading: 'Connected now',
   mcpServersHeading: 'Servers',
-  mcpServersEmpty: 'No servers yet. Add one, save, and Host remounts.',
-  mcpAddServer: 'Add server',
+  mcpServersEmpty: 'No servers yet. Paste a JSON block below and add.',
+  mcpAddServer: 'Add from JSON',
   mcpRemoveServer: 'Remove',
-  mcpPaste: 'Paste JSON',
-  mcpPasteHint: '{ "mcpServers": { "12306-mcp": { "command": "npx", "args": ["-y", "12306-mcp"] } } }',
+  mcpPaste: 'Paste JSON block',
+  mcpPasteHint: '{ "mcpServers": { "demo": { "command": "npx", "args": ["-y", "demo-mcp"] } } }',
+  mcpPasteEmpty: 'Paste a JSON block first.',
+  mcpPasteInvalid: 'Could not find mcpServers entries in that JSON.',
   mcpServerRow: 'Server {index}',
   mcpServerName: 'Name',
   mcpServerNameHint: 'Short id in tool names (mcp__name__…).',
@@ -119,25 +108,17 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopDescription: 'Agent 如何派发工具调用。',
   agentLoopMaxParallel: '并行工具调用数',
   agentLoopMaxParallelHint: '同一步内最多同时运行多少个可并行的调用。',
-  webSearchTitle: '网页搜索',
-  webSearchDescription: 'DeepSeek 搜索提供方。',
-  webSearchApiKey: 'API Key',
-  webSearchApiKeyHint: '不写入设置文件。留空表示保持当前密钥。',
-  webSearchApiKeySet: '已配置密钥。',
-  webSearchApiKeyUnset: '未配置密钥；配置之前搜索不可用。',
-  webSearchBaseUrl: '接口地址',
-  webSearchBaseUrlHint: '留空则使用提供方默认地址。',
-  webSearchMaxUses: '单次请求最多搜索次数',
-  webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
   mcpTitle: 'MCP 服务器',
-  mcpDescription: '添加本地命令或远程 URL。设置文件为真源（空 XRK_MCP_SERVERS）时保存后热挂载；连接仍需 allow 策略。',
+  mcpDescription: '像 Trae / Cursor 一样每次粘贴一段 mcpServers JSON；按名称合并进列表，保存后热挂载。',
   mcpConnectedHeading: '当前已连接',
   mcpServersHeading: '服务器',
-  mcpServersEmpty: '还没有服务器。添加一条并保存即可热挂载。',
-  mcpAddServer: '添加服务器',
+  mcpServersEmpty: '还没有服务器。在下方粘贴 JSON 块后点添加。',
+  mcpAddServer: '从 JSON 添加',
   mcpRemoveServer: '移除',
-  mcpPaste: '粘贴 JSON',
-  mcpPasteHint: '{ "mcpServers": { "12306-mcp": { "command": "npx", "args": ["-y", "12306-mcp"] } } }',
+  mcpPaste: '粘贴 JSON 块',
+  mcpPasteHint: '{ "mcpServers": { "demo": { "command": "npx", "args": ["-y", "demo-mcp"] } } }',
+  mcpPasteEmpty: '请先粘贴一段 JSON。',
+  mcpPasteInvalid: '这段 JSON 里没有可用的 mcpServers 条目。',
   mcpServerRow: '服务器 {index}',
   mcpServerName: '名称',
   mcpServerNameHint: '工具名里的短 id（mcp__name__…）。',

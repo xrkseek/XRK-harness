@@ -118,10 +118,6 @@ const UiConversationConfig = Schema.object({
   busyEnter: Schema.union(["queue", "steer"]),
 });
 
-const WebSearchConfig = Schema.object({
-  provider: Schema.union(["tavily", "brave", "deepseek"]),
-});
-
 /** Shipped openai-chat + R1 protocol catalog (excludes DeepSeek → `llm-deepseek`). */
 function buildPiAiCatalogBase(): Record<string, unknown> {
   const providers: Record<string, Record<string, unknown>> = {};
@@ -223,12 +219,6 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       ns: "ui-conversation",
       schema: schemasteryJson(UiConversationConfig) as FaceSchemaEnvelope,
       base: { busyEnter: "queue" },
-      applies: "live",
-    },
-    {
-      ns: "web-search-deepseek",
-      schema: schemasteryJson(WebSearchConfig) as FaceSchemaEnvelope,
-      base: {},
       applies: "live",
     },
     {

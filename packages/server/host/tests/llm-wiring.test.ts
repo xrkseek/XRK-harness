@@ -75,47 +75,58 @@ describe("host llm wiring", () => {
       "utf8",
     );
 
-    const manager = createHostManager();
-    const config = loadHostConfig({
-      env: { XRK_HOST: "127.0.0.1", XRK_PORT: "0" },
-      patch: { workspaceRoot: dir, preset: "minimal" },
-    });
-
-    let capturedAdapterId: string | undefined;
-    const instance = await manager.spawn(config, async (input) => {
-      const llm =
-        input.resolveLlm?.(input.sessionId) ??
-        createReplayAdapter([{ content: "replay-fallback" }]);
-      capturedAdapterId = llm.id;
-      const composition = createMinimalComposition({
-        workspaceRoot: input.workspaceRoot,
-        sessionStore: input.store,
-        sessionId: input.sessionId,
-        plugins: input.plugins,
-        llm,
-        assemble: true,
-      });
-      return composition.createAgent();
-    });
-
-    const store = instance.store;
-    const sessionId = store.create().id;
-    const port = instance.health().port!;
-    const promptRes = await fetch(`http://127.0.0.1:${port}/api/session.prompt`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        rpcId: "p1",
-        payload: {
-          sessionId,
-          mode: "queue",
-          content: [{ type: "text", text: "ping" }],
+    const prevHome = process.env.XRK_HOME;
+    process.env.XRK_HOME = xrkDir;
+    try {
+      const manager = createHostManager();
+      const config = loadHostConfig({
+        env: {
+          XRK_HOST: "127.0.0.1",
+          XRK_PORT: "0",
+          XRK_HOME: xrkDir,
         },
-      }),
-    });
-    expect(promptRes.status).toBe(200);
+        patch: { workspaceRoot: dir, preset: "minimal" },
+      });
 
-    expect(capturedAdapterId).toMatch(/^session:/);
-    await manager.stopAll();
+      let capturedAdapterId: string | undefined;
+      const instance = await manager.spawn(config, async (input) => {
+        const llm =
+          input.resolveLlm?.(input.sessionId) ??
+          createReplayAdapter([{ content: "replay-fallback" }]);
+        capturedAdapterId = llm.id;
+        const composition = createMinimalComposition({
+          workspaceRoot: input.workspaceRoot,
+          sessionStore: input.store,
+          sessionId: input.sessionId,
+          plugins: input.plugins,
+          llm,
+          assemble: true,
+        });
+        return composition.createAgent();
+      });
+
+      const store = instance.store;
+      const sessionId = store.create().id;
+      const port = instance.health().port!;
+      const promptRes = await fetch(`http://127.0.0.1:${port}/api/session.prompt`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          rpcId: "p1",
+          payload: {
+            sessionId,
+            mode: "queue",
+            content: [{ type: "text", text: "ping" }],
+          },
+        }),
+      });
+      expect(promptRes.status).toBe(200);
+
+      expect(capturedAdapterId).toMatch(/^session:/);
+      await manager.stopAll();
+    } finally {
+      if (prevHome === undefined) delete process.env.XRK_HOME;
+      else process.env.XRK_HOME = prevHome;
+    }
   });
 });

@@ -77,7 +77,7 @@ export class ChunkFold {
           kind: "assistant",
           turnId: event.turnId,
           stepId: event.stepId,
-          content: event.content,
+          content: flattenText(event.content),
         });
         break;
       case "tool/call":
@@ -97,7 +97,7 @@ export class ChunkFold {
           callId: event.result.toolCallId,
           name: event.result.name,
           phase: "result",
-          detail: event.result.content,
+          detail: flattenText(event.result.content),
         });
         break;
       case "safety/notice":

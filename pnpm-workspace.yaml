@@ -10,7 +10,9 @@ packages:
   - "presets/*"
   - "examples/*"
   - "extensions/*"
-# pnpm ≥10：仅允许下列包跑 lifecycle（esbuild / node-pty）
+# pnpm ≥10：仅允许下列包跑 lifecycle
 allowBuilds:
+  "@xrkseek/exec-pty": true
+  "@xrkseek/exec-pty@file:packages/exec/pty": true
   esbuild: true
   node-pty: true

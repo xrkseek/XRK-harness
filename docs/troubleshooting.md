@@ -40,6 +40,8 @@
 | `test:web` 失败且提到 Chromium | `pnpm --filter @xrkseek/web-frontend exec playwright install chromium` |
 | 浏览器打不开本机 Host / 请求走代理 | 清掉 `HTTP_PROXY` · `HTTPS_PROXY` · `ALL_PROXY`（或设 `NO_PROXY=localhost,127.0.0.1`）后再测 |
 | Vite 直接 `serve`/`dev` 被拒 | 产品入口是 `xrk-harness web` / Host serve，不是裸 Vite |
+| `EADDRINUSE` / 端口占用 | `xrk-harness web --force` 或 `xrk-harness restart`（会停掉占用该端口的进程） |
+| serve 终端几乎没输出 | 默认只打启动横幅；加 `--verbose` 或 `XRK_LOG=debug` 看 `/api` 与 MCP 挂载 |
 
 ## MCP
 
@@ -56,10 +58,10 @@
 
 下列在**未配置**时仍可能出现在工具表，execute 回明文错误：
 
-- `web_search` — 无 Tavily/Brave 密钥
+- `web_search` — 钉了无效 `XRK_WEB_SEARCH_PROVIDER`，或钉了 Tavily/Brave 却无密钥；默认无 key 走 parallel-free，失败回退 DuckDuckGo
 - `lsp` — 无 `XRK_LSP_COMMAND`
 - `terminal_open` — 无可用 `node-pty` native
-
+- 交互式浏览器（AGT `browser_*`）— 本仓未做；用 `web_fetch` 读静态页
 ## Session / 仓
 
 | 症状 | 处理 |
@@ -73,7 +75,7 @@
 
 | 症状 | 处理 |
 |------|------|
-| `npx` / Packages 找不到包 | 配置 `@xrkseek` → `npm.pkg.github.com`；或下发行版 tarball。见 [publishing.md](./publishing.md) |
+| `npx` 找不到包 | 确认 npmjs 上已发 `@xrkseek/harness-cli`；或下 GitHub Release tarball。见 [publishing.md](./publishing.md) |
 | `pnpm release:stage` 失败 | 先 `pnpm build`；确认 `apps/web/dist/index.html`；deploy 需能解析 CLI workspace 依赖 |
 
 ## 仍需深入

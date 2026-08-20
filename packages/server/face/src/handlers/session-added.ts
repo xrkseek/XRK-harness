@@ -1,5 +1,6 @@
 import type { FaceRuntime } from "../context.js";
 import type { HostFrame } from "../types.js";
+import { resolveSessionCwd } from "../session-cwd.js";
 
 /**
  * DSH `sessionListFields` + `sessionBlank` for `host/session-added`.
@@ -11,14 +12,14 @@ export function sessionAddedFrame(
 ): Extract<HostFrame, { type: "host/session-added" }> {
   const events = runtime.store.get(sessionId).events;
   const blank = !events.some((e) => e.type === "turn/start");
-  const cwd = runtime.sessionCwds.get(sessionId);
+  const cwd = resolveSessionCwd(runtime, sessionId);
   const agentPreset = runtime.sessionAgentPresets.get(sessionId);
   const lineage = runtime.subagents.getByChild(sessionId);
   return {
     type: "host/session-added",
     sessionId,
     blank,
-    ...(cwd ? { cwd } : {}),
+    cwd,
     ...(agentPreset ? { agentPreset } : {}),
     ...(lineage
       ? {

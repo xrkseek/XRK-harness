@@ -50,7 +50,7 @@
 | 包落点 | [docs/modules/](./docs/modules/README.md) |
 | 门禁 | [docs/testing.md](./docs/testing.md) · [CONTRIBUTING.md](./CONTRIBUTING.md) |
 | 教科书 vs 笔记 | [docs/audiences.md](./docs/audiences.md) · [docs/README.md](./docs/README.md) · `.cursor/rules/xrk-product-identity.mdc` |
-| 交接 / 发版 | [docs/maintainer.md](./docs/maintainer.md) · [docs/publishing.md](./docs/publishing.md) |
+| 交接 / 发版 | [docs/maintainer.md](./docs/maintainer.md) · [docs/publishing.md](./docs/publishing.md) · 发行说明 skill `xrk-release-notes` |
 
 全索引：[docs/README.md](./docs/README.md)。
 

@@ -408,13 +408,33 @@ export async function workspaceDeleteFace(
   }
   const result = runtime.workspaces.delete(workspaceId);
   if (!result.ok) {
-    const code =
-      result.reason.startsWith("unknown")
-        ? "workspace-not-found"
-        : "workspace-move-invalid";
-    return { ok: false, error: { code, message: result.reason } };
+    if (result.reason.startsWith("unknown")) {
+      return {
+        ok: false,
+        error: {
+          code: "workspace-not-found",
+          message: result.reason,
+          details: { workspaceId },
+        },
+      };
+    }
+    // e.g. cannot delete default workspace
+    return {
+      ok: false,
+      error: {
+        code: "internal",
+        message: result.reason,
+        details: {},
+      },
+    };
   }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
+  const defPath = runtime.workspaces.get(runtime.workspaces.defaultId())?.path;
+  if (defPath) {
+    for (const sid of result.movedSessionIds) {
+      runtime.sessionCwds.set(sid, defPath);
+    }
+  }
   runtime.bus.publishHost({
     type: "host/workspace-removed",
     workspaceId,
@@ -431,11 +451,7 @@ export async function workspaceDeleteFace(
   }
   return {
     ok: true,
-    value: {
-      workspaceId,
-      movedSessionIds: result.movedSessionIds,
-      ...listed,
-    },
+    value: { deleted: true as const },
   };
 }
 

@@ -1,5 +1,5 @@
 /**
- * Host-serve Settings → Plugins → MCP card: persist desired servers and survive reload.
+ * Host-serve Settings → Plugins → MCP card: paste JSON blocks, persist, survive reload.
  */
 import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
@@ -34,14 +34,18 @@ describe.skipIf(!HAS_SHELL)("product shell mcp settings", () => {
         });
         await expand.waitFor({ timeout: 20_000 });
         await expand.click();
-        await dialog.getByRole("button", { name: /Add server|添加服务器/ }).click();
-        await dialog.locator("#plugin-config-mcp-name-0").fill("fixture-fs");
-        await dialog.locator("#plugin-config-mcp-command-0").fill("npx");
-        const args = dialog.locator("#plugin-config-mcp-args-0");
-        if (!(await args.isVisible().catch(() => false))) {
-          await dialog.getByRole("button", { name: /Advanced 1|高级 1/ }).click();
-        }
-        await args.fill("-y, @modelcontextprotocol/server-filesystem, /tmp");
+
+        const paste = dialog.locator("#plugin-config-mcp-paste");
+        await paste.fill(JSON.stringify({
+          mcpServers: {
+            "fixture-fs": {
+              command: "npx",
+              args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+            },
+          },
+        }));
+        await dialog.getByRole("button", { name: /Add from JSON|从 JSON 添加/ }).click();
+        await expect(dialog.getByText("fixture-fs")).toBeVisible({ timeout: 5_000 });
         await dialog.getByRole("button", { name: /^Save$|^保存$/ }).click();
 
         const settingsPath = path.join(shell.xrkHome, "host-settings.json");
@@ -59,10 +63,8 @@ describe.skipIf(!HAS_SHELL)("product shell mcp settings", () => {
         await again.getByRole("button", {
           name: /Show settings: MCP servers|展开设置：MCP 服务器/,
         }).click();
-        await expect.poll(async () => again.locator("#plugin-config-mcp-name-0").inputValue())
-          .toBe("fixture-fs");
-        await expect.poll(async () => again.locator("#plugin-config-mcp-command-0").inputValue())
-          .toBe("npx");
+        await expect(again.getByText("fixture-fs")).toBeVisible({ timeout: 10_000 });
+        await expect(again.getByText(/npx/)).toBeVisible();
 
         expect(
           pageErrors,

@@ -33,12 +33,28 @@ export {
 export {
   capSearchResult,
   createBraveSearch,
+  createCascadingSearch,
   createSearchFromEnv,
   createTavilySearch,
+  KEYLESS_FALLBACKS,
   resolveSearchProviderId,
   searchUnavailableMessage,
   type SearchProviderId,
 } from "./search-providers.js";
+export {
+  createDuckDuckGoSearch,
+  parseDuckDuckGoHtml,
+} from "./search-duckduckgo.js";
+export {
+  createParallelFreeSearch,
+  PARALLEL_MCP_SEARCH_URL,
+} from "./search-parallel-free.js";
+export {
+  callMcpTool,
+  extractMcpToolPayload,
+  iterMcpMessages,
+  selectMcpEnvelope,
+} from "./search-mcp-client.js";
 export {
   DEFAULT_FETCH_MAX_OUTPUT_CHARS,
   DEFAULT_WEB_TOOL_TIMEOUT_MS,
@@ -73,7 +89,7 @@ export interface DefaultWebAccess extends WebAccess {
   readonly searchUnavailableMessage: string;
 }
 
-/** Fetch is always HTTP. Search is present only when a Tavily or Brave key is set. */
+/** Fetch is always HTTP. Search: keyed Tavily/Brave, else parallel-free → duckduckgo. */
 export function createDefaultWebAccess(
   options: DefaultWebAccessOptions = {},
 ): DefaultWebAccess {

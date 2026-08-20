@@ -308,8 +308,14 @@ describe("Face workspace U2", () => {
     });
     expect(deleted.result.ok).toBe(true);
     if (deleted.result.ok) {
+      expect(deleted.result.value).toEqual({ deleted: true });
+    }
+
+    const listed = await dispatchFaceMethod(runtime, "workspace.list", "l", {});
+    expect(listed.result.ok).toBe(true);
+    if (listed.result.ok) {
       const items = (
-        deleted.result.value as { items: { workspaceId: string }[] }
+        listed.result.value as { items: { workspaceId: string }[] }
       ).items;
       expect(items.map((w) => w.workspaceId)).toEqual(["ws_default"]);
     }
@@ -373,5 +379,57 @@ describe("Face workspace U2", () => {
     expect(items.some((w) => w.title === "Kept Workspace")).toBe(true);
     expect(items.some((w) => w.path === path.resolve(other))).toBe(true);
     expect(title).toBe(path.basename(other));
+  });
+
+  it("persists session↔workspace membership so cwd survives Face rebuild (DSH header.cwd analogue)", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-cwd-"));
+    const other = path.join(root, "agt-project");
+    await mkdir(other, { recursive: true });
+    const productDir = path.join(root, ".xrk");
+
+    const store = createMemorySessionStore();
+    const first = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(first, "workspace.create", "c1", {
+      path: other,
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const workspaceId = (
+      created.result.value as { workspace: { workspaceId: string } }
+    ).workspace.workspaceId;
+    const sess = await dispatchFaceMethod(first, "session.create", "c2", {
+      workspaceId,
+    });
+    expect(sess.result.ok).toBe(true);
+    if (!sess.result.ok) return;
+    const sessionId = (sess.result.value as { sessionId: string }).sessionId;
+
+    // Simulate Host restart: new FaceRuntime, same store + productDir.
+    first.sessionCwds.clear();
+    const second = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    expect(second.sessionCwds.get(sessionId)).toBe(path.resolve(other));
+    const listed = await dispatchFaceMethod(second, "session.list", "c3", {});
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) return;
+    const item = (
+      listed.result.value as { items: { sessionId: string; cwd: string }[] }
+    ).items.find((i) => i.sessionId === sessionId);
+    expect(item?.cwd).toBe(path.resolve(other));
   });
 });

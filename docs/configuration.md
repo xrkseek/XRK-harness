@@ -49,6 +49,7 @@
 | `XRK_API_KEY` | Face/HTTP 鉴权 | 空 = **开发免鉴权**；产品壳同源回环可无头 |
 | `XRK_CORS_ORIGIN` | CORS | 默认 `*` |
 | `XRK_RATE_LIMIT` | 每 IP 每分钟请求上限 | 见 http 实现 |
+| `XRK_LOG` / `XRK_LOG_LEVEL` | CLI Host 日志级别：`silent` \| `error` \| `warn` \| `info` \| `debug` | 默认 `info`；CLI `--verbose` = debug，`--quiet` = warn |
 
 ## Preset · Workspace · 静态壳
 
@@ -96,11 +97,25 @@ Preset 选型：[profiles.md](./profiles.md)。
 |------|------|
 | `XRK_TAVILY_API_KEY` | Tavily `web_search` |
 | `XRK_BRAVE_SEARCH_API_KEY` | Brave Search |
-| `XRK_WEB_SEARCH_PROVIDER` | 可选 `tavily` \| `brave` |
+| `XRK_PARALLEL_FREE_MCP_URL` | 可选 Parallel 免费 MCP URL（默认 `https://search.parallel.ai/mcp`） |
+| `XRK_WEB_SEARCH_PROVIDER` | 可选 `tavily` \| `brave` \| `parallel-free` \| `duckduckgo`（默认：有 key 用 key，否则 parallel-free → 失败回退 duckduckgo） |
+| `XRK_WEB_SEARCH_REGION` | 可选 DuckDuckGo 区域 `kl` |
 | `XRK_LSP_COMMAND` / `XRK_LSP_ARGS` | `lsp` stdio 语言服务器 |
 | `XRK_SHELL` 等 | PTY/shell 显式覆盖（见 [pty-tools.md](./pty-tools.md)；子进程会 scrub 凭据形环境变量） |
 
-无搜索密钥 / 无 LSP 命令时：工具仍可能登记，**execute 诚实失败**。
+无 Tavily/Brave 密钥时：`web_search` 默认 **parallel-free**，失败回退 DuckDuckGo。无 LSP 命令时：`lsp` 仍可能登记，**execute 诚实失败**。
+
+## Plugins 设置（端到端）
+
+Settings → Plugins 里会动到运行时的命名空间：
+
+| Face ns | 字段 | 生效 |
+|---------|------|------|
+| `mcp` | `servers` | 热挂载（文件源） |
+| `bash` | `timeoutMs` · `maxOutputBytes` | 下次 agent 重建后作用于 `bash` 工具 |
+| `agent-loop` | `maxParallelToolCalls` | 下次 agent 重建后限制同一步并行 settle |
+
+网页搜索**不是** Plugins 卡；见 [web-tools.md](./web-tools.md)。
 
 ## CLI 常用标志
 
