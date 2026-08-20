@@ -27,9 +27,42 @@ listForUi() / catalog() → Face `llm.providers` · `session.models`
 | `openai-responses` | `@xrkseek/llm-openai-responses` | `openai-responses` |
 | `gemini-generate` | `@xrkseek/llm-gemini` | `gemini` |
 
-Face `llm-pi-ai.providers.*.api` 写入后经 `readProviderRoute` → `resolve({ protocol })` 选工厂；覆盖协议时用目标协议默认 path。
+Face `llm-pi-ai.providers.*.api` 写入后经 `readProviderRoute` → `resolveProviderBinding` 选工厂；覆盖协议时用目标协议默认 path。
 
-见 [status.md](./status.md) · [llm-provider-presets.md](./llm-provider-presets.md)。
+### 协议 / 字段别名（保留）
+
+协议栈上的别名是契约的一部分，**不要**为「去冗余」删掉读侧兼容：
+
+| 别名 | 含义 |
+|------|------|
+| `openai-completions` | 与 `openai-chat` 同工厂 |
+| settings `baseURL` / `baseUrl` | 同一 endpoint；schema 写 `baseURL`，读侧两者都认 |
+| Registry brand `custom` | 预设占位（须自带 baseUrl）；**不等于** Settings 手写路由 id |
+
+## Settings 手写路由（Custom provider）
+
+产品 Settings → Models → Custom provider 写入 `llm-pi-ai.providers.<id>`（如 `xyt`）。该 id **不是** Registry brand。
+
+| 面 | 行为 |
+|----|------|
+| `llm.providers` / `llm.models` / `session.models` | 列出声明路由（`declared: true`） |
+| `session.selectModel` · agent LLM | `resolveProviderBinding`：有 brand 走 Registry；否则从 profile **合成** `ProviderBinding` |
+| 凭据 | `apiKeyEnv` → `credentials` 槽 `llm.<id>` |
+| 禁止 | 产品选择路径直接 `registry.resolve(provider)`（会 `unknown provider`） |
+
+实现落点：`packages/server/face/src/llm-provider-context.ts` · `llm-resolve.ts` · `model-catalog.ts`。
+
+### 改这条链路时的完成清单
+
+缺一项 = 半截改动（列表能亮、点选报错）：
+
+1. **列出**：`listDeclaredPiAiProviders` → catalog / `llm.providers`
+2. **解析**：`resolveProviderBinding`（含合成）→ `resolveLlmForSelection` / `session.selectModel` / discovery
+3. **凭据**：`listSettingsProviderCredentialRefs` + vault `llm.<id>`
+4. **测**：至少一条 Face 测「mutate 声明路由 → selectModel 成功」
+5. **构建**：`tsc -b packages/server/face`（及依赖它的 host/cli）后重启本机 `web`/`serve`
+
+见 [status.md](./status.md) · [llm-provider-presets.md](./llm-provider-presets.md) · [modules/server-face.md](./modules/server-face.md)。
 
 ## 相关
 

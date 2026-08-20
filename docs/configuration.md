@@ -40,6 +40,16 @@
 
 旁路文件（与 sessions 同目录时常有）：`subagents.json` · `goals.json`。
 
+### Agent 写哪里
+
+| 目标 | 行为 |
+|------|------|
+| 当前会话 **workspace 根内** | fs / bash / PTY / LSP 可读写（受权限预设与 path jail） |
+| **`~/.xrk`**（设置、凭据、会话库、工作区列表） | Face / Host 进程写；**模型工具默认碰不到**（除非 workspace 就是该目录） |
+| 产品仓 `packages/*` · `extensions/*` | 仅当 `--workspace` / 侧栏工作区指向该树时，与改普通项目一样 |
+
+Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-checklist.md)）。
+
 ## 监听与鉴权
 
 | 变量 | 含义 | 默认 / 备注 |
@@ -55,7 +65,7 @@
 
 | 变量 | 含义 |
 |------|------|
-| `XRK_PRESET` | `minimal` \| `harness` \| `server` |
+| `XRK_PRESET` | Host 入口：`minimal` \| `harness` \| `server`（`server` = harness 工具 + Host factory；会话徽章见 [profiles.md](./profiles.md)） |
 | `XRK_WORKSPACE` | workspace 根 |
 | `XRK_WEB_DIST` | 产品壳静态根。默认：CLI 包内 `product-web/`，或 monorepo `apps/web/dist`。设了则必须已存在 |
 | `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db` · WAL）；Host 省略 = 内存（CLI serve 另有默认） |
@@ -80,14 +90,13 @@ Preset 选型：[profiles.md](./profiles.md)。
 | 变量 | 含义 |
 |------|------|
 | `XRK_POLICY_FILE` | policy JSON（tool / provider / mcp） |
-| `XRK_MCP_SERVERS` | JSON 数组 `[{serverName,command|url,...}]` 或 Cursor/Claude `{ "mcpServers": { "name": { "command", "args" } } }` |
-| `XRK_MCP_ALLOW` | `1`/`true` → 本进程 `mcp.connect` 默认 allow |
+| `XRK_MCP_SERVERS` | 可选；非空则赢过文件（CI）。产品路径用 Settings → Plugins → MCP |
+| `XRK_MCP_ALLOW` | 可选；强制 allow（CI/无头）。产品路径用 MCP「允许连接」 |
 
 行为要点：
 
-- `mcp.connect` **默认 deny**
-- `XRK_MCP_SERVERS` / config **非空**时赢过文件，mutate 为 `applies: restart`
-- env/config **空**时读 `~/.xrk/host-settings.json` 的 `mcp.servers`（也接受根级 `mcpServers` 对象），Face mutate 后 **热挂载**（`applies: live`）
+- `mcp.connect` 默认 deny；Web「允许连接」或 `XRK_MCP_ALLOW` 才挂载
+- env/config **空**时读 `~/.xrk/host-settings.json`（`servers` + `allowConnect`），Face mutate 后 **热挂载**
 
 [policy.md](./policy.md) · [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md)。
 
@@ -95,11 +104,10 @@ Preset 选型：[profiles.md](./profiles.md)。
 
 | 变量 | 含义 |
 |------|------|
-| `XRK_TAVILY_API_KEY` | Tavily `web_search` |
-| `XRK_BRAVE_SEARCH_API_KEY` | Brave Search |
+| `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY` | 可选 env；产品路径用 Credentials |
 | `XRK_PARALLEL_FREE_MCP_URL` | 可选 Parallel 免费 MCP URL（默认 `https://search.parallel.ai/mcp`） |
-| `XRK_WEB_SEARCH_PROVIDER` | 可选 `tavily` \| `brave` \| `parallel-free` \| `duckduckgo`（默认：有 key 用 key，否则 parallel-free → 失败回退 duckduckgo） |
-| `XRK_WEB_SEARCH_REGION` | 可选 DuckDuckGo 区域 `kl` |
+| `XRK_WEB_SEARCH_PROVIDER` | 可选钉死提供方；产品路径用 Settings → Plugins → Web search |
+| `XRK_WEB_SEARCH_REGION` | 可选 DuckDuckGo `kl`；产品路径用 Web search → region |
 | `XRK_LSP_COMMAND` / `XRK_LSP_ARGS` | `lsp` stdio 语言服务器 |
 | `XRK_SHELL` 等 | PTY/shell 显式覆盖（见 [pty-tools.md](./pty-tools.md)；子进程会 scrub 凭据形环境变量） |
 
@@ -111,11 +119,12 @@ Settings → Plugins 里会动到运行时的命名空间：
 
 | Face ns | 字段 | 生效 |
 |---------|------|------|
-| `mcp` | `servers` | 热挂载（文件源） |
+| `mcp` | `servers` · `allowConnect` | 热挂载（文件源）；关 allow 则 park |
+| `web-search` | `provider` · `region`（密钥走 Credentials） | 下次 agent 重建后作用于 `web_search` |
 | `bash` | `timeoutMs` · `maxOutputBytes` | 下次 agent 重建后作用于 `bash` 工具 |
 | `agent-loop` | `maxParallelToolCalls` | 下次 agent 重建后限制同一步并行 settle |
 
-网页搜索**不是** Plugins 卡；见 [web-tools.md](./web-tools.md)。
+Tavily / Brave 密钥：Plugins → Web search 卡或 Settings → Credentials（同一槽 `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY`）。
 
 ## CLI 常用标志
 

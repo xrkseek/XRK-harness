@@ -46,6 +46,8 @@ mkdir my-workspace && cd my-workspace
 npx @xrkseek/harness-cli web
 ```
 
+默认 **harness** preset（含 `web_search` / `web_fetch`）。仅要 fs 烟测时加 `--preset minimal`。
+
 无界面：
 
 ```sh

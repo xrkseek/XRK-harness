@@ -2,17 +2,43 @@
 
 > **读者**：终端用户 · 集成者 · 贡献者。
 
-本仓用 **preset** 表达可切换组合，不使用独立 “profile” 运行时。CLI / env：`minimal` | `harness` | `server`。
+本仓用 **preset** 表达可切换组合。有两套名字，不要混成「三种工具面」：
 
-## 选型
+| 名字 | 落在哪 | 决定什么 |
+|------|--------|----------|
+| **Host CLI** `--preset` / `XRK_PRESET` | 进程启动 | 默认会话徽章种子；`server` = Host 平面入口名 |
+| **Session `agentPreset`** | 会话徽章（UI / Face） | **实际工具组合**：只认 `minimal` \| `harness` |
 
-| Preset | 平面 | 包含 | 适用 |
-|--------|------|------|------|
-| **minimal** | Session | fs 工具（read/write/edit/glob/grep）· **skill** · write-intent · workspace inject · replay 默认 LLM | 本地烟测、示例、无 shell |
-| **harness** | Session | minimal 工具面 + bash + std（todo_write/ask_user/exit_plan_mode）· **web_search / web_fetch** · **lsp** · **terminal_*** · **skill** · sandbox 栈 · 可选 `run_code` | 完整编码 Agent |
-| **server** | Host | HTTP host + agent factory → 通常挂 harness 组合 | `serve` |
+## 工具面（Session）
+
+| `agentPreset` | 工具 | 适用 |
+|---------------|------|------|
+| **minimal** | fs（read/write/edit/glob/grep）· skill · std（todo / ask_user / exit_plan_mode） | 烟测、无 shell / 无联网 |
+| **harness** | minimal + bash · **web_search / web_fetch** · lsp · terminal_* · sandbox | 完整编码 Agent（**`web` / `serve` 默认**） |
+
+Wire 仍接受遗留值 **`server`**，入库与徽章一律归一成 **`harness`**（工具面相同）。产品 UI **不再**单独展示 Server。
+
+## Host 入口名
+
+| Host `--preset` | 含义 |
+|-----------------|------|
+| `minimal` | 新会话默认徽章 = minimal |
+| `harness` | 新会话默认徽章 = harness（`web` / `serve` / `restart` 默认） |
+| `server` | 与 harness **同一套工具**；`@xrkseek/preset-server` 的 Host factory 接线名 |
+
+`run` / `dump-config` 默认 **minimal**。Host `--preset` **不会**覆盖已有会话徽章；换工具面请改徽章或新建会话。
 
 Host vs Session 平面：[host-preset.md](./host-preset.md)。
+
+## Agent 可写范围
+
+| 根 | Agent 能否用 fs/bash 改 |
+|----|------------------------|
+| **会话 workspace**（侧栏工作区 / `session` cwd） | 能（`resolveWithinRoot`；权限预设 `read-only` 除外） |
+| **`~/.xrk`**（`XRK_HOME`：settings / credentials / sessions / workspaces） | **不能**（除非把该目录本身选成 workspace） |
+| **产品插件 / 仓内 `packages/*`** | 仅当 workspace 根就是那个树时能改 |
+
+`{workspace}/.xrk` 是项目 inject（assistant / skills / recipes），在 workspace 内；与 harness home 不是同一棵树。详见 [configuration.md](./configuration.md) · [security-checklist.md](./security-checklist.md)。
 
 ## 共同选项（session preset）
 
@@ -35,6 +61,7 @@ Harness 另有：`presentation: "tools" | "code"`（`code` 注册实验性 `run_
 ## CLI
 
 ```bash
+node apps/cli/dist/bin.js web --workspace .
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 node apps/cli/dist/bin.js run --preset harness --presentation code --prompt "ping"
 node apps/cli/dist/bin.js serve --preset server --workspace .

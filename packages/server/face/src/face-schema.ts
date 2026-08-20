@@ -84,8 +84,9 @@ export const FACE_PERMISSION_SCHEMA: FaceSchemaEnvelope = {
 };
 
 /**
- * Face MCP desired servers. `connected` is overlay from live plugins
- * (`status` is supervisor health). File-sourced Host remounts on mutate
+ * Face MCP desired servers. `connected` / `parked` are live overlays.
+ * `allowConnect` is user-writable (Web Settings); env `XRK_MCP_ALLOW` still
+ * forces allow for headless/CI. File-sourced Host remounts on mutate
  * (`applies: live`); env/config MCP stays `applies: restart`.
  */
 export const FACE_MCP_SCHEMA: FaceSchemaEnvelope = {
@@ -104,7 +105,8 @@ export const FACE_MCP_SCHEMA: FaceSchemaEnvelope = {
       },
     },
     4: { type: "array", inner: 3 },
-    5: { type: "string" },
+    /** Live overlay: Host sends a numeric tool count. */
+    5: { type: "number" },
     6: {
       type: "object",
       dict: { id: 1, serverName: 1, kind: 1, toolCount: 5, status: 1 },
@@ -116,9 +118,19 @@ export const FACE_MCP_SCHEMA: FaceSchemaEnvelope = {
       dict: { serverName: 1, message: 1 },
     },
     11: { type: "array", inner: 10 },
+    12: { type: "const", value: true },
+    13: { type: "const", value: false },
+    14: { type: "union", list: [12, 13] },
     9: {
       type: "object",
-      dict: { servers: 4, connected: 7, note: 8, connectFailures: 11 },
+      dict: {
+        servers: 4,
+        allowConnect: 14,
+        connected: 7,
+        parked: 2,
+        note: 8,
+        connectFailures: 11,
+      },
     },
   },
 };

@@ -114,6 +114,17 @@ const AgentLoopConfig = Schema.object({
   maxParallelToolCalls: Schema.number().step(1).min(1),
 });
 
+const WebSearchConfig = Schema.object({
+  provider: Schema.union([
+    "auto",
+    "tavily",
+    "brave",
+    "parallel-free",
+    "duckduckgo",
+  ]),
+  region: Schema.string(),
+});
+
 const UiConversationConfig = Schema.object({
   busyEnter: Schema.union(["queue", "steer"]),
 });
@@ -182,7 +193,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "agent-presets",
       schema: schemasteryJson(AgentPresetsConfig) as FaceSchemaEnvelope,
-      base: { default: "minimal" },
+      base: { default: "harness" },
       applies: "live",
     },
     {
@@ -216,6 +227,12 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       applies: "live",
     },
     {
+      ns: "web-search",
+      schema: schemasteryJson(WebSearchConfig) as FaceSchemaEnvelope,
+      base: { provider: "auto" },
+      applies: "live",
+    },
+    {
       ns: "ui-conversation",
       schema: schemasteryJson(UiConversationConfig) as FaceSchemaEnvelope,
       base: { busyEnter: "queue" },
@@ -224,7 +241,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "mcp",
       schema: FACE_MCP_SCHEMA,
-      base: { servers: [] },
+      base: { servers: [], allowConnect: false },
       applies: "live",
     },
   ];

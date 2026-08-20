@@ -209,6 +209,15 @@ describe("Face adapt / slash / queue / presets", () => {
       ok: true,
       value: { sessionId, agentPreset: "harness" },
     });
+
+    const legacy = await dispatchFaceMethod(runtime, "agentPreset.select", "s2", {
+      sessionId,
+      agentPreset: "server",
+    });
+    expect(legacy.result).toEqual({
+      ok: true,
+      value: { sessionId, agentPreset: "harness" },
+    });
     expect(runtime.sessionAgentPresets.get(sessionId)).toBe("harness");
 
     const copy = await dispatchFaceMethod(runtime, "agentPreset.copy", "cp", {

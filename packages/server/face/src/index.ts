@@ -35,7 +35,6 @@ export {
 export { createFaceBus, type FaceBus } from "./bus.js";
 export { createFaceSeqClock, type FaceSeqClock } from "./seq.js";
 export {
-  U1_AGENT_PRESETS,
   type FaceDrain,
   type FaceRuntime,
 } from "./context.js";
@@ -146,6 +145,8 @@ export {
 export {
   FACE_AGENT_PRESETS,
   FACE_AGENT_PRESET_IDS,
+  canonicalAgentPresetId,
+  resolveToolPreset,
   type AgentPresetInfo,
 } from "./presets-catalog.js";
 export {
@@ -209,7 +210,14 @@ export {
   readProviderApiKey,
   readProviderRoute,
   providerHasUsableCredential,
+  providerApiKeyEnv,
+  listSettingsProviderCredentialRefs,
+  listDeclaredPiAiProviders,
+  resolveProviderBinding,
+  providerRouteServed,
+  piAiProviderProfile,
   type ProviderRouteContext,
+  type DeclaredPiAiProvider,
 } from "./llm-provider-context.js";
 export { normalizeApiKey, type ApiKeyCheck } from "./llm-api-key.js";
 export { resolveSessionCwd } from "./session-cwd.js";

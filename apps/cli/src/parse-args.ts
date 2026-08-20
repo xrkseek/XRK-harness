@@ -104,7 +104,9 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     throw new Error(`unknown command: ${first}`);
   }
 
-  let preset = "minimal";
+  /** Product Host (`web`/`serve`) defaults to harness tools; `run` stays minimal for smoke. */
+  let preset =
+    command === "serve" || command === "restart" ? "harness" : "minimal";
   let promptFromFlag: string | undefined;
   const promptParts: string[] = [];
   let workspace = process.cwd();
@@ -269,7 +271,7 @@ Commands:
   help          Show this help
 
 Options:
-  --preset <id>       Preset id (minimal|harness|server, default: minimal)
+  --preset <id>       Preset id (minimal|harness|server; web/serve default: harness; run default: minimal)
   --prompt <text>     User prompt for run (or positional tokens)
   --workspace <path>  User workspace (default: cwd)
   --host <addr>       Bind host (default: 127.0.0.1; not 0.0.0.0)
@@ -289,7 +291,7 @@ Env:
   XRK_MCP_ALLOW=1           Allow mcp.connect for configured / saved servers
 
 Examples:
-  xrk-harness serve --preset server
+  xrk-harness serve --preset harness
   xrk-harness web --port 8080 --open --verbose
   xrk-harness web --force
   xrk-harness restart --workspace .

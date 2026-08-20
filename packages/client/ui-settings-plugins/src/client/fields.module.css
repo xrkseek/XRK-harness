@@ -111,14 +111,24 @@
   transition: background-color 99999s ease-out 0s;
 }
 
+/*
+ * Select modifier — apply with `.input` in JSX.
+ * Do not use CSS Modules `composes`: tsdown drops it, leaving a naked OS select.
+ */
 .select {
-  composes: input;
+  appearance: none;
   max-width: none;
   cursor: pointer;
+  padding-right: 32px;
+  /* Data-URI cannot resolve CSS vars; #81858C matches Models select chevron. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2381858C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 12px;
 }
 
+/* Apply with `.input` in JSX (same reason as `.select`). */
 .inputInvalid {
-  composes: input;
   border-color: var(--dsw-alias-label-error);
 }
 

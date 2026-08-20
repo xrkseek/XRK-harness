@@ -1,3 +1,4 @@
+import { resolveToolPreset } from "@xrkseek/server-face";
 import { loadHostConfig, defaultSessionsDir } from "@xrkseek/server-config";
 import { createHostManager, type AgentFactory } from "@xrkseek/server-host";
 import {
@@ -8,6 +9,7 @@ import { createMinimalComposition } from "@xrkseek/preset-minimal";
 import { resolveLlmFromEnv } from "@xrkseek/llm-registry";
 import { createPolicyEngineFromFile, type PolicyEngine } from "@xrkseek/policy";
 import { spawn } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import { assertSafeHost, type ParsedArgs } from "../parse-args.js";
 import {
@@ -37,17 +39,11 @@ function openProductUrl(url: string, log: CliLogger): void {
 }
 
 function factoryForPreset(
-  preset: string,
+  hostPreset: string,
   workspaceRoot: string,
   policy?: PolicyEngine,
 ): AgentFactory {
-  if (preset === "server" || preset === "harness") {
-    return createServerAgentFactory({
-      workspaceRoot,
-      ...(policy ? { policy } : {}),
-    });
-  }
-  return async ({
+  const minimalFactory: AgentFactory = async ({
     sessionId,
     store,
     workspaceRoot: root,
@@ -68,6 +64,17 @@ function factoryForPreset(
       ...(resolveImage ? { resolveImage } : {}),
     });
     return composition.createAgent();
+  };
+
+  const harnessFactory = createServerAgentFactory({
+    workspaceRoot,
+    ...(policy ? { policy } : {}),
+  });
+
+  return async (input) => {
+    const preset = resolveToolPreset(input.agentPreset, hostPreset);
+    if (preset === "minimal") return minimalFactory(input);
+    return harnessFactory(input);
   };
 }
 
@@ -147,12 +154,19 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     `  preset=${preset}  ui=${uiRel}  sessions=${sessionsDir ?? "memory"}`,
   );
   log.info(
-    `  mcpAllow=${config.runtime.mcpAllowConnect ? "on" : "off"}  log=${log.level}`,
+    `  mcpAllow=${health.mcpAllowConnect ? "on" : "off"}  log=${log.level}`,
   );
   if (config.credentials.apiKey) {
     log.info("  apiKey=set");
   }
   if (policy) log.info("  policy=on");
+  const home = path.resolve(os.homedir());
+  const ws = path.resolve(config.runtime.workspaceRoot);
+  if (ws === home || ws.startsWith(home + path.sep + ".xrk")) {
+    log.info(
+      "  tip: workspace is your user home (or ~/.xrk) — prefer `cd <project> && xrk-harness web`",
+    );
+  }
   log.info("  tip: Ctrl+C stop · `xrk-harness restart` / `web --force` free port");
 
   if (args.open) {

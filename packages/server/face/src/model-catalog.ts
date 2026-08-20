@@ -5,7 +5,13 @@ import type { BrandEntry } from "@xrkseek/llm-registry";
 import type { FaceRuntime } from "./context.js";
 import { DEFAULT_DEEPSEEK_MODELS } from "./settings-schemas.js";
 import { mergeLayers, persistSettingsDocument } from "./settings-document.js";
-import { providerHasUsableCredential } from "./llm-provider-context.js";
+import {
+  listDeclaredPiAiProviders,
+  piAiProviderProfile,
+  providerHasUsableCredential,
+  providerRouteServed,
+  resolveProviderBinding,
+} from "./llm-provider-context.js";
 
 export interface FaceModelEntry {
   readonly id: string;
@@ -81,16 +87,9 @@ function piAiProviderModels(
   runtime: FaceRuntime,
   brandId: string,
 ): FaceModelEntry[] {
-  const merged = mergedNamespace(runtime, "llm-pi-ai");
-  const providers = merged.providers;
-  if (!providers || typeof providers !== "object" || Array.isArray(providers)) {
-    return [];
-  }
-  const profile = (providers as Record<string, unknown>)[brandId];
-  if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
-    return [];
-  }
-  return asModelRows((profile as { models?: unknown }).models);
+  const profile = piAiProviderProfile(runtime, brandId);
+  if (!profile) return [];
+  return asModelRows(profile.models);
 }
 
 function modelsForBrand(
@@ -106,23 +105,9 @@ function modelsForBrand(
   return [];
 }
 
-/** DSH `routeServed`: whether this deployment exposes a route for the provider (not API-key gating). */
+/** Alias of {@link providerRouteServed} (DSH name kept for handlers). */
 export function routeServed(runtime: FaceRuntime, provider: string): boolean {
-  const id = provider.trim();
-  if (!id) return false;
-  try {
-    runtime.registry.resolve({ provider: id });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function providerHasCredentials(
-  runtime: FaceRuntime,
-  brandId: string,
-): boolean {
-  return providerHasUsableCredential(runtime, brandId);
+  return providerRouteServed(runtime, provider);
 }
 
 /** Provider-grouped catalog for composer + `llm.models` (no `"default"` placeholders). */
@@ -138,6 +123,17 @@ export function buildFaceModelCatalog(
       id: brand.id,
       name: brand.displayName,
       models,
+    });
+  }
+  for (const declared of listDeclaredPiAiProviders(runtime)) {
+    if (!declared.baseUrl || declared.models.length === 0) continue;
+    groups.push({
+      id: declared.id,
+      name: declared.displayName,
+      models: declared.models.map((m) => ({
+        id: m.id,
+        name: m.name ?? m.id,
+      })),
     });
   }
   return { groups, failures: [] };
@@ -156,7 +152,9 @@ export function lookupModelContextWindow(
       return deepseekModels(runtime).find((m) => m.id === selection.model)
         ?.contextWindow;
     }
-    return undefined;
+    return piAiProviderModels(runtime, selection.provider).find(
+      (m) => m.id === selection.model,
+    )?.contextWindow;
   }
   return modelsForBrand(runtime, brand).find((m) => m.id === selection.model)
     ?.contextWindow;
@@ -191,7 +189,10 @@ export function resolveSessionModelSelection(
   const saved = resolveAgentDefaultModel(runtime);
   if (saved) {
     try {
-      runtime.registry.resolve(saved);
+      resolveProviderBinding(runtime, {
+        provider: saved.provider,
+        model: saved.model,
+      });
       return saved;
     } catch {
       /* fall through */
@@ -203,7 +204,7 @@ export function resolveSessionModelSelection(
     .filter(
       (b) =>
         (b.baseUrl || b.id === "ollama") &&
-        providerHasCredentials(runtime, b.id) &&
+        providerHasUsableCredential(runtime, b.id) &&
         routeServed(runtime, b.id),
     );
   for (const brand of credentialed) {

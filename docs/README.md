@@ -131,4 +131,4 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [learn.md](./learn.md) | 要义摘录（短） |
 | [modules/](./modules/README.md) | 包文件地图 |
 | [adr/](./adr/README.md) | 架构决策 |
-| [releases/](./releases/) | 发行说明（当前 [v0.0.2](./releases/v0.0.2.md)） |
+| [releases/](./releases/) | 发行说明（当前 [v0.0.4](./releases/v0.0.4.md)） |

@@ -87,7 +87,7 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
     host: "127.0.0.1",
     port: 8787,
     workspaceRoot: process.cwd(),
-    preset: "minimal",
+    preset: "harness",
     corsOrigin: "*",
     rateLimitPerMinute: 120,
     ...input.defaults,

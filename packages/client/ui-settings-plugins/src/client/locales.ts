@@ -15,7 +15,16 @@ export type PluginsSettingsLocaleKey =
   | 'mcpTransportStdio' | 'mcpTransportHttp' | 'mcpTransportHint'
   | 'mcpCommand' | 'mcpCommandHint' | 'mcpUrl' | 'mcpUrlHint'
   | 'mcpArgs' | 'mcpArgsHint' | 'mcpCwd' | 'mcpCwdHint' | 'mcpRowInvalid' | 'mcpToolsLabel'
+  | 'mcpAllowConnect' | 'mcpAllowConnectHint'
   | 'mcpStatusConnected' | 'mcpStatusReconnecting' | 'mcpStatusGaveUp'
+  | 'mcpStatusParked' | 'mcpStatusFailed' | 'mcpStatusIdle'
+  | 'webSearchTitle' | 'webSearchDescription' | 'webSearchProvider' | 'webSearchProviderHint'
+  | 'webSearchProviderAuto' | 'webSearchProviderTavily' | 'webSearchProviderBrave'
+  | 'webSearchProviderParallel' | 'webSearchProviderDuckduckgo'
+  | 'webSearchRegion' | 'webSearchRegionHint'
+  | 'webSearchTavilyKey' | 'webSearchTavilyKeyHint'
+  | 'webSearchBraveKey' | 'webSearchBraveKeyHint'
+  | 'webSearchKeySet' | 'webSearchKeyUnset'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -47,7 +56,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxParallel: 'Parallel tool calls',
   agentLoopMaxParallelHint: 'Upper bound on parallel-safe calls running at once within one step.',
   mcpTitle: 'MCP servers',
-  mcpDescription: 'Paste Cursor / Trae style JSON blocks one at a time. Each paste merges servers by name; save remounts when Host uses the settings file.',
+  mcpDescription: 'Paste Cursor / Trae style JSON, then save — servers mount on save (no separate env step).',
   mcpConnectedHeading: 'Connected now',
   mcpServersHeading: 'Servers',
   mcpServersEmpty: 'No servers yet. Paste a JSON block below and add.',
@@ -74,9 +83,31 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   mcpCwdHint: 'Optional. Leave blank to use the Host default.',
   mcpRowInvalid: 'Each server needs a name and a command or URL.',
   mcpToolsLabel: 'tools',
+  mcpAllowConnect: 'Allow connect',
+  mcpAllowConnectHint: 'Saving a non-empty list connects automatically. Turn off and save to keep the list without mounting tools.',
   mcpStatusConnected: 'Connected',
   mcpStatusReconnecting: 'Reconnecting',
   mcpStatusGaveUp: 'Gave up',
+  mcpStatusParked: 'Parked',
+  mcpStatusFailed: 'Failed',
+  mcpStatusIdle: 'Not connected',
+  webSearchTitle: 'Web search',
+  webSearchDescription: 'Provider and keys for the web_search tool. Keys save through Credentials, not settings.yaml.',
+  webSearchProvider: 'Provider',
+  webSearchProviderHint: 'Auto picks Tavily or Brave when a key is set, otherwise parallel-free → DuckDuckGo.',
+  webSearchProviderAuto: 'Auto',
+  webSearchProviderTavily: 'Tavily',
+  webSearchProviderBrave: 'Brave',
+  webSearchProviderParallel: 'Parallel free',
+  webSearchProviderDuckduckgo: 'DuckDuckGo',
+  webSearchRegion: 'DuckDuckGo region',
+  webSearchRegionHint: 'Optional kl region (for example us-en). Used when DuckDuckGo runs.',
+  webSearchTavilyKey: 'Tavily API key',
+  webSearchTavilyKeyHint: 'Required when provider is Tavily (or Auto with this key set). Leave blank to keep the stored key.',
+  webSearchBraveKey: 'Brave Search API key',
+  webSearchBraveKeyHint: 'Required when provider is Brave (or Auto with this key set). Leave blank to keep the stored key.',
+  webSearchKeySet: 'Configured',
+  webSearchKeyUnset: 'Not set',
 }
 
 /** Simplified Chinese copy. */
@@ -109,7 +140,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxParallel: '并行工具调用数',
   agentLoopMaxParallelHint: '同一步内最多同时运行多少个可并行的调用。',
   mcpTitle: 'MCP 服务器',
-  mcpDescription: '像 Trae / Cursor 一样每次粘贴一段 mcpServers JSON；按名称合并进列表，保存后热挂载。',
+  mcpDescription: '粘贴 Trae / Cursor 风格 mcpServers JSON，保存后会挂载（不必再先开环境变量）。',
   mcpConnectedHeading: '当前已连接',
   mcpServersHeading: '服务器',
   mcpServersEmpty: '还没有服务器。在下方粘贴 JSON 块后点添加。',
@@ -136,7 +167,29 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   mcpCwdHint: '可选。留空使用 Host 默认。',
   mcpRowInvalid: '每条服务器需要名称，以及命令或 URL。',
   mcpToolsLabel: '个工具',
+  mcpAllowConnect: '允许连接',
+  mcpAllowConnectHint: '列表非空时保存会自动连接。关掉此项再保存可只保留列表、不挂载工具。',
   mcpStatusConnected: '已连接',
   mcpStatusReconnecting: '重连中',
   mcpStatusGaveUp: '已放弃',
+  mcpStatusParked: '已停放',
+  mcpStatusFailed: '失败',
+  mcpStatusIdle: '未连接',
+  webSearchTitle: '网页搜索',
+  webSearchDescription: 'web_search 工具的提供方与密钥。密钥经「凭据」落盘，不写入 settings.yaml。',
+  webSearchProvider: '提供方',
+  webSearchProviderHint: '自动：有密钥用 Tavily/Brave，否则 parallel-free → DuckDuckGo。',
+  webSearchProviderAuto: '自动',
+  webSearchProviderTavily: 'Tavily',
+  webSearchProviderBrave: 'Brave',
+  webSearchProviderParallel: 'Parallel 免费',
+  webSearchProviderDuckduckgo: 'DuckDuckGo',
+  webSearchRegion: 'DuckDuckGo 区域',
+  webSearchRegionHint: '可选 kl 区域（如 us-en），仅 DuckDuckGo 时生效。',
+  webSearchTavilyKey: 'Tavily API 密钥',
+  webSearchTavilyKeyHint: '提供方为 Tavily（或自动且已配置此密钥）时需要。留空表示保留已存密钥。',
+  webSearchBraveKey: 'Brave Search API 密钥',
+  webSearchBraveKeyHint: '提供方为 Brave（或自动且已配置此密钥）时需要。留空表示保留已存密钥。',
+  webSearchKeySet: '已配置',
+  webSearchKeyUnset: '未设置',
 }

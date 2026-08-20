@@ -1,8 +1,9 @@
 /**
- * Host MCP wiring: env `XRK_MCP_SERVERS` (+ optional `XRK_MCP_ALLOW=1`).
- * Registers each connected server as a synthetic `kind: tools` plugin.
- * Face `mcp.servers` in `~/.xrk/host-settings.json` apply when env/config
- * are empty — including live reconcile after `settings.mutate` (no spawn restart).
+ * Host MCP wiring: Face `mcp.servers` + `mcp.allowConnect` in
+ * `~/.xrk/host-settings.json` (Web Settings). Optional env
+ * `XRK_MCP_SERVERS` / `XRK_MCP_ALLOW` override for headless/CI.
+ * Registers each connected server as a synthetic `kind: tools` plugin;
+ * live reconcile after `settings.mutate` (no spawn restart) when file-sourced.
  */
 
 import { readFileSync } from "node:fs";
@@ -102,9 +103,8 @@ export function readMcpServersFromHostSettings(
   }
   const root = parsed as {
     mcp?: { servers?: unknown };
-    mcpServers?: unknown;
   };
-  const servers = root.mcp?.servers ?? root.mcpServers;
+  const servers = root.mcp?.servers;
   if (servers === undefined) return [];
   return mcpDraftsToSpecs(
     parseMcpServersValue(servers).map((row) => ({
@@ -115,6 +115,18 @@ export function readMcpServersFromHostSettings(
       ...(row.cwd ? { cwd: row.cwd } : {}),
     })),
   );
+}
+
+/** Face dump `mcp.allowConnect` (Web Settings). Missing / false → false. */
+export function readMcpAllowFromHostSettings(file: string): boolean {
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as {
+      mcp?: { allowConnect?: unknown };
+    };
+    return parsed.mcp?.allowConnect === true;
+  } catch {
+    return false;
+  }
 }
 
 /** Convert Face desired drafts into Host connect specs (skips incomplete rows). */
@@ -317,6 +329,8 @@ export async function loadMcpToolPlugins(options: {
 
 export interface ReconcileMcpResult {
   readonly failures: readonly { readonly serverName: string; readonly message: string }[];
+  /** Desired servers not connected because policy denied (expected when allow=off). */
+  readonly parked: readonly string[];
   readonly added: readonly string[];
   readonly removed: readonly string[];
   readonly kept: readonly string[];
@@ -342,7 +356,8 @@ export async function reconcileMcpToolPlugins(options: {
   ) => void | Promise<void>;
   readonly imageAdmission?: import("@xrkseek/mcp").McpImageAdmission;
 }): Promise<ReconcileMcpResult> {
-  const policy = connectPolicy(options.policy, Boolean(options.allowConnect));
+  const allow = Boolean(options.allowConnect);
+  const policy = connectPolicy(options.policy, allow);
   const desiredById = new Map<string, McpServerSpec>(
     options.desired.map((spec) => [`mcp:${spec.serverName}`, spec]),
   );
@@ -356,6 +371,21 @@ export async function reconcileMcpToolPlugins(options: {
       ? { onHealthChanged: options.onHealthChanged }
       : {}),
   };
+
+  // Allow off: disconnect everything and park desired (Web Settings toggle).
+  if (!allow) {
+    for (const plugin of current) {
+      await options.unregister(plugin.id);
+      removed.push(plugin.id);
+    }
+    return {
+      failures: [],
+      parked: options.desired.map((s) => s.serverName),
+      added: [],
+      removed,
+      kept: [],
+    };
+  }
 
   for (const plugin of current) {
     const spec = desiredById.get(plugin.id);
@@ -375,10 +405,19 @@ export async function reconcileMcpToolPlugins(options: {
   }
 
   const added: string[] = [];
+  const parked: string[] = [];
   const failures: { serverName: string; message: string }[] = [];
   for (const spec of toAdd) {
     const id = `mcp:${spec.serverName}`;
     if (options.list().some((p) => p.id === id)) continue;
+    const decision = policy.evaluate({
+      kind: "mcp.connect",
+      serverId: spec.serverName,
+    });
+    if (decision.verdict !== "allow") {
+      parked.push(spec.serverName);
+      continue;
+    }
     try {
       const plugin = await connectOneMcpPlugin(
         spec,
@@ -396,5 +435,5 @@ export async function reconcileMcpToolPlugins(options: {
     }
   }
 
-  return { failures, added, removed, kept };
+  return { failures, parked, added, removed, kept };
 }

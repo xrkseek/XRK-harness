@@ -24,7 +24,7 @@ export const DEFAULT_HTTP_FETCH_LIMITS: HttpFetchLimits = {
   maxBodyChars: 100_000,
   timeoutMs: 30_000,
   maxRedirects: 5,
-  userAgent: "xrk-harness/0.0.0 (+https://github.com/xrkseek)",
+  userAgent: "xrk-harness/0.0.4 (+https://github.com/xrkseek)",
 };
 
 export const LOCAL_FETCH_PROVIDER_ID = "http";

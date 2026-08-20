@@ -207,41 +207,94 @@ export function createBraveSearch(options: {
   };
 }
 
-export function searchUnavailableMessage(env: NodeJS.ProcessEnv): string {
-  const pin = env.XRK_WEB_SEARCH_PROVIDER?.trim().toLowerCase();
+/** Structured search preference (Face Settings / Host), not an env bag. */
+export type SearchAccessConfig = {
+  /** `auto` / omit → keyed cascade; else pin one provider id. */
+  readonly provider?: string;
+  readonly region?: string;
+  readonly tavilyApiKey?: string;
+  readonly braveApiKey?: string;
+  readonly parallelFreeMcpUrl?: string;
+};
+
+/** Map process/CI env into {@link SearchAccessConfig}. */
+export function searchConfigFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): SearchAccessConfig {
+  return {
+    ...(env.XRK_WEB_SEARCH_PROVIDER?.trim()
+      ? { provider: env.XRK_WEB_SEARCH_PROVIDER.trim() }
+      : {}),
+    ...(env.XRK_WEB_SEARCH_REGION?.trim()
+      ? { region: env.XRK_WEB_SEARCH_REGION.trim() }
+      : {}),
+    ...(env.XRK_TAVILY_API_KEY?.trim()
+      ? { tavilyApiKey: env.XRK_TAVILY_API_KEY.trim() }
+      : {}),
+    ...(env.XRK_BRAVE_SEARCH_API_KEY?.trim()
+      ? { braveApiKey: env.XRK_BRAVE_SEARCH_API_KEY.trim() }
+      : {}),
+    ...(env.XRK_PARALLEL_FREE_MCP_URL?.trim()
+      ? { parallelFreeMcpUrl: env.XRK_PARALLEL_FREE_MCP_URL.trim() }
+      : {}),
+  };
+}
+
+export function searchUnavailableMessage(
+  config: SearchAccessConfig | NodeJS.ProcessEnv,
+): string {
+  const cfg = normalizeSearchConfig(config);
+  const pin = cfg.provider?.trim().toLowerCase();
   if (
     pin &&
+    pin !== "auto" &&
     pin !== "tavily" &&
     pin !== "brave" &&
     pin !== "parallel-free" &&
     pin !== "duckduckgo"
   ) {
-    return `Error: Unknown XRK_WEB_SEARCH_PROVIDER "${pin}". Use tavily, brave, parallel-free, or duckduckgo.`;
+    return `Error: Unknown web search provider "${pin}". Use tavily, brave, parallel-free, or duckduckgo.`;
   }
-  if (pin === "tavily" && !env.XRK_TAVILY_API_KEY?.trim()) {
-    return "Error: Web search is not configured. Set XRK_TAVILY_API_KEY.";
+  if (pin === "tavily" && !cfg.tavilyApiKey?.trim()) {
+    return "Error: Web search is not configured. Add a Tavily key under Credentials.";
   }
-  if (pin === "brave" && !env.XRK_BRAVE_SEARCH_API_KEY?.trim()) {
-    return "Error: Web search is not configured. Set XRK_BRAVE_SEARCH_API_KEY.";
+  if (pin === "brave" && !cfg.braveApiKey?.trim()) {
+    return "Error: Web search is not configured. Add a Brave Search key under Credentials.";
   }
   return "Error: Web search is not configured.";
 }
 
+function normalizeSearchConfig(
+  value: SearchAccessConfig | NodeJS.ProcessEnv,
+): SearchAccessConfig {
+  if (
+    "XRK_WEB_SEARCH_PROVIDER" in value ||
+    "XRK_TAVILY_API_KEY" in value ||
+    "XRK_BRAVE_SEARCH_API_KEY" in value ||
+    "XRK_WEB_SEARCH_REGION" in value ||
+    "XRK_PARALLEL_FREE_MCP_URL" in value
+  ) {
+    return searchConfigFromEnv(value as NodeJS.ProcessEnv);
+  }
+  return value as SearchAccessConfig;
+}
+
 /**
  * Prefer keyed providers when present; otherwise parallel-free (AGT).
- * Unknown `XRK_WEB_SEARCH_PROVIDER` → `undefined` (caller shows unavailable).
+ * Unknown pinned provider → `undefined` (caller shows unavailable).
  */
 export function resolveSearchProviderId(
-  env: NodeJS.ProcessEnv,
+  config: SearchAccessConfig | NodeJS.ProcessEnv,
 ): SearchProviderId | undefined {
-  const pin = env.XRK_WEB_SEARCH_PROVIDER?.trim().toLowerCase();
-  const tavily = Boolean(env.XRK_TAVILY_API_KEY?.trim());
-  const brave = Boolean(env.XRK_BRAVE_SEARCH_API_KEY?.trim());
+  const cfg = normalizeSearchConfig(config);
+  const pin = cfg.provider?.trim().toLowerCase();
+  const tavily = Boolean(cfg.tavilyApiKey?.trim());
+  const brave = Boolean(cfg.braveApiKey?.trim());
   if (pin === "tavily") return tavily ? "tavily" : undefined;
   if (pin === "brave") return brave ? "brave" : undefined;
   if (pin === "parallel-free") return "parallel-free";
   if (pin === "duckduckgo") return "duckduckgo";
-  if (pin) return undefined;
+  if (pin && pin !== "auto") return undefined;
   if (tavily) return "tavily";
   if (brave) return "brave";
   return "parallel-free";
@@ -249,11 +302,11 @@ export function resolveSearchProviderId(
 
 function createProvider(
   id: SearchProviderId,
-  env: NodeJS.ProcessEnv,
+  config: SearchAccessConfig,
   fetch?: FetchFn,
 ): WebSearch | undefined {
   if (id === "tavily") {
-    const key = env.XRK_TAVILY_API_KEY?.trim();
+    const key = config.tavilyApiKey?.trim();
     if (!key) return undefined;
     return createTavilySearch({
       apiKey: key,
@@ -261,7 +314,7 @@ function createProvider(
     });
   }
   if (id === "brave") {
-    const key = env.XRK_BRAVE_SEARCH_API_KEY?.trim();
+    const key = config.braveApiKey?.trim();
     if (!key) return undefined;
     return createBraveSearch({
       apiKey: key,
@@ -271,16 +324,14 @@ function createProvider(
   if (id === "parallel-free") {
     return createParallelFreeSearch({
       ...(fetch ? { fetch } : {}),
-      ...(env.XRK_PARALLEL_FREE_MCP_URL?.trim()
-        ? { mcpUrl: env.XRK_PARALLEL_FREE_MCP_URL.trim() }
+      ...(config.parallelFreeMcpUrl?.trim()
+        ? { mcpUrl: config.parallelFreeMcpUrl.trim() }
         : {}),
     });
   }
   return createDuckDuckGoSearch({
     ...(fetch ? { fetch } : {}),
-    ...(env.XRK_WEB_SEARCH_REGION?.trim()
-      ? { region: env.XRK_WEB_SEARCH_REGION.trim() }
-      : {}),
+    ...(config.region?.trim() ? { region: config.region.trim() } : {}),
   });
 }
 
@@ -318,25 +369,37 @@ export function createCascadingSearch(
   };
 }
 
-export function createSearchFromEnv(options: {
-  readonly env?: NodeJS.ProcessEnv;
+/** Build search from structured Face/Host config (preferred product path). */
+export function createSearchFromConfig(options: {
+  readonly config?: SearchAccessConfig;
   readonly fetch?: FetchFn;
 }): WebSearch | undefined {
-  const env = options.env ?? process.env;
-  const id = resolveSearchProviderId(env);
+  const config = options.config ?? {};
+  const id = resolveSearchProviderId(config);
   if (!id) return undefined;
-  const primary = createProvider(id, env, options.fetch);
+  const primary = createProvider(id, config, options.fetch);
   if (!primary) return undefined;
 
-  const pin = env.XRK_WEB_SEARCH_PROVIDER?.trim();
-  if (pin) return primary;
+  const pin = config.provider?.trim().toLowerCase();
+  if (pin && pin !== "auto") return primary;
 
   const fallbacks: WebSearch[] = [];
   for (const fbId of KEYLESS_FALLBACKS) {
     if (fbId === id) continue;
-    const fb = createProvider(fbId, env, options.fetch);
+    const fb = createProvider(fbId, config, options.fetch);
     if (fb) fallbacks.push(fb);
   }
   if (fallbacks.length === 0) return primary;
   return createCascadingSearch(primary, fallbacks);
+}
+
+/** Headless/CI: map env → {@link createSearchFromConfig}. */
+export function createSearchFromEnv(options: {
+  readonly env?: NodeJS.ProcessEnv;
+  readonly fetch?: FetchFn;
+}): WebSearch | undefined {
+  return createSearchFromConfig({
+    config: searchConfigFromEnv(options.env ?? process.env),
+    ...(options.fetch ? { fetch: options.fetch } : {}),
+  });
 }

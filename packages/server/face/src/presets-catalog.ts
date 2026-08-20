@@ -1,4 +1,4 @@
-/** Catalog of Face-exposed agent presets (product identity, not business logic). */
+/** Catalog of Face-exposed session agent presets (tool composition badges). */
 
 export interface AgentPresetInfo {
   readonly id: string;
@@ -6,24 +6,43 @@ export interface AgentPresetInfo {
   readonly description: string;
 }
 
+/**
+ * Session badges offered in the product UI.
+ * Host CLI also accepts `server` (same tools as harness) — see {@link resolveToolPreset}.
+ */
 export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
   {
     id: "minimal",
     displayName: "Minimal",
-    description: "Lean agent composition for tests and embedded hosts",
+    description: "Filesystem tools only (no shell / web / lsp / PTY)",
   },
   {
     id: "harness",
     displayName: "Harness",
-    description: "Full local harness with workspace inject and slash recipes",
-  },
-  {
-    id: "server",
-    displayName: "Server",
-    description: "HTTP/host-oriented server preset",
+    description:
+      "Full coding agent: fs + bash + web_search/web_fetch + lsp + terminal",
   },
 ];
 
-export const FACE_AGENT_PRESET_IDS = new Set(
-  FACE_AGENT_PRESETS.map((p) => p.id),
-);
+/** Ids accepted on the wire (includes legacy `server` → harness tools). */
+export const FACE_AGENT_PRESET_IDS = new Set<string>([
+  ...FACE_AGENT_PRESETS.map((p) => p.id),
+  "server",
+]);
+
+/**
+ * Map session badge / Host `--preset` to the two tool compositions.
+ * `server` is the Host-plane CLI name; tools match harness.
+ */
+export function resolveToolPreset(
+  agentPreset: string | undefined,
+  hostFallback = "harness",
+): "minimal" | "harness" {
+  const raw = (agentPreset?.trim() || hostFallback).trim();
+  return raw === "minimal" ? "minimal" : "harness";
+}
+
+/** Persist only catalog ids (legacy `server` → `harness`). */
+export function canonicalAgentPresetId(id: string): "minimal" | "harness" {
+  return resolveToolPreset(id, "harness");
+}

@@ -16,8 +16,8 @@ import {
 } from "./model-catalog.js";
 import {
   providerHasUsableCredential,
+  providerApiKeyEnv,
   readProviderApiKey,
-  readProviderRoute,
   resolveProviderBinding,
 } from "./llm-provider-context.js";
 
@@ -46,19 +46,17 @@ export function resolveLlmForSelection(
     const brand = runtime.registry.listBrands().find(
       (b) => b.id === selection.provider,
     );
-    const ref = brand?.apiKeyEnv ?? `llm.${selection.provider}`;
+    const ref = brand?.apiKeyEnv ?? providerApiKeyEnv(runtime, selection.provider) ?? `llm.${selection.provider}`;
     throw new FaceLlmResolveError(
       "missing-credential",
       `no API key configured for provider "${selection.provider}" (${ref})`,
     );
   }
 
-  const route = readProviderRoute(runtime, selection.provider);
   const { apiKey } = readProviderApiKey(runtime, selection.provider);
-  const binding = resolveProviderBinding(runtime.registry, {
+  const binding = resolveProviderBinding(runtime, {
     provider: selection.provider,
     model: selection.model,
-    route,
   });
   const adapter = runtime.registry.createAdapter(
     binding,
@@ -137,10 +135,9 @@ export function resolveLlmForSession(
   const selection = resolveSessionModelSelection(runtime, sessionId);
   const config = routing.ensureRoute();
   return {
-    binding: resolveProviderBinding(runtime.registry, {
+    binding: resolveProviderBinding(runtime, {
       provider: config.provider,
       model: config.model,
-      route: readProviderRoute(runtime, config.provider),
     }),
     adapter: routing,
     selection,

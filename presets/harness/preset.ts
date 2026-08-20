@@ -166,6 +166,10 @@ export interface HarnessCompositionOptions {
     readonly timeoutMs?: number;
     readonly maxOutputBytes?: number;
   };
+  /**
+   * Face `web-search` + Credentials vault (structured; preferred over env).
+   */
+  readonly webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
 }
 
 export interface HarnessComposition {
@@ -252,7 +256,9 @@ export function createHarnessComposition(
     const access =
       typeof options.webTools === "object"
         ? options.webTools
-        : createDefaultWebAccess();
+        : createDefaultWebAccess(
+            options.webSearch ? { search: options.webSearch } : {},
+          );
     for (const tool of createWebTools(access)) tools.register(tool);
   }
   if (options.lspTools !== false) {

@@ -10,7 +10,7 @@ MCP **client**（stdio + streamable-http）。规格门禁：[policy.md](../poli
 |----|------|
 | 连 MCP server · list/call tools | 不做 MCP server（本仓角色） |
 | 命名 `mcp__<server>__<raw>` | 不静默覆盖 ToolRegistry 同名 |
-| `connect` 前 `assertPolicyAllow(mcp.connect)` | 默认 deny；UI 在 Face/Host，不在本包 |
+| `connect` 前 `assertPolicyAllow(mcp.connect)` | 默认 deny；UI 在 Face/Host，不在本包。Host reconcile：**deny 时 park**（保留 desired、不 spawn、不记 warn failure） |
 | `transport: "http"` → SDK `StreamableHTTPClientTransport` | SSE 走 SDK `reconnectionOptions`；进程级 supervisor 默认开（与 stdio 同策；可 `reconnect.enabled: false`） |
 | `onToolsListChanged` / `registerMcpTools` 默认 watch | 拉表失败保留上一代；gave-up 才卸工具 |
 | stdio / HTTP `Client.onclose` 有界退避重连（DSH `connection.ts`） | 首次 `connect()` 失败 fail-closed；disabled / 帽满 → `gave-up` |

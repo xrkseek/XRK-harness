@@ -17,9 +17,16 @@ import {
   FACE_PRODUCT_SETTINGS_NAMESPACES,
   schemaEnvelopeOf,
 } from "./settings-schemas.js";
-import { FACE_AGENT_PRESET_IDS } from "./presets-catalog.js";
+import { FACE_AGENT_PRESET_IDS, canonicalAgentPresetId } from "./presets-catalog.js";
+import {
+  listSettingsProviderCredentialRefs,
+  providerApiKeyEnv,
+} from "./llm-provider-context.js";
+import { mergeLayers } from "./settings-layers.js";
 import type { FaceSettingsNamespaces } from "./settings-credentials.js";
 import { isFacePermissionPreset } from "./face-schema.js";
+
+export { mergeLayers } from "./settings-layers.js";
 
 /** Harness home: explicit `productDir` (tests isolate settings/workspaces), else `XRK_HOME` / `~/.xrk`.
  * Not the workspace product tree — that is always `{workspaceRoot}/.xrk` via `resolveProductDir`.
@@ -35,31 +42,6 @@ export function settingsYamlPath(runtime: FaceRuntime): string {
 
 export function credentialsYamlPath(runtime: FaceRuntime): string {
   return path.join(resolveHarnessHome(runtime), ".credentials.yaml");
-}
-
-export function mergeLayers(
-  base: Record<string, unknown>,
-  user: Record<string, unknown>,
-): Record<string, unknown> {
-  const out = { ...base };
-  for (const [key, value] of Object.entries(user)) {
-    if (
-      value !== null &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      typeof out[key] === "object" &&
-      out[key] !== null &&
-      !Array.isArray(out[key])
-    ) {
-      out[key] = mergeLayers(
-        out[key] as Record<string, unknown>,
-        value as Record<string, unknown>,
-      );
-    } else {
-      out[key] = value;
-    }
-  }
-  return out;
 }
 
 function loadYamlFile(file: string): Record<string, unknown> {
@@ -92,8 +74,10 @@ export function resolveDefaultAgentPreset(runtime: FaceRuntime): string {
     slot.user,
   );
   const id = merged.default;
-  if (typeof id === "string" && FACE_AGENT_PRESET_IDS.has(id)) return id;
-  return runtime.defaultAgentPreset ?? "minimal";
+  if (typeof id === "string" && FACE_AGENT_PRESET_IDS.has(id)) {
+    return canonicalAgentPresetId(id);
+  }
+  return canonicalAgentPresetId(runtime.defaultAgentPreset ?? "minimal");
 }
 
 export function hydrateFaceSettingsDocument(runtime: FaceRuntime): void {
@@ -143,17 +127,31 @@ function resolveCredentialSlotForRef(
   ref: string,
 ): string | undefined {
   if (ref === "XRK_API_KEY") return "host.apiKey";
+  if (ref === "XRK_TAVILY_API_KEY") return "web.tavily";
+  if (ref === "XRK_BRAVE_SEARCH_API_KEY") return "web.brave";
   for (const brand of runtime.registry.listBrands()) {
     if (brand.apiKeyEnv === ref) return `llm.${brand.id}`;
+  }
+  for (const { providerId, apiKeyEnv } of listSettingsProviderCredentialRefs(
+    runtime,
+  )) {
+    if (apiKeyEnv === ref) return `llm.${providerId}`;
   }
   return undefined;
 }
 
-function credentialRefForSlot(runtime: FaceRuntime, slotId: string): string | undefined {
+function credentialRefForSlot(
+  runtime: FaceRuntime,
+  slotId: string,
+): string | undefined {
   if (slotId === "host.apiKey") return "XRK_API_KEY";
+  if (slotId === "web.tavily") return "XRK_TAVILY_API_KEY";
+  if (slotId === "web.brave") return "XRK_BRAVE_SEARCH_API_KEY";
   const brandId = slotId.startsWith("llm.") ? slotId.slice("llm.".length) : "";
+  if (!brandId) return undefined;
   const brand = runtime.registry.listBrands().find((b) => b.id === brandId);
-  return brand?.apiKeyEnv;
+  if (brand?.apiKeyEnv) return brand.apiKeyEnv;
+  return providerApiKeyEnv(runtime, brandId);
 }
 
 export async function persistCredentialsFile(runtime: FaceRuntime): Promise<void> {

@@ -124,6 +124,8 @@ compose        → 零或薄依赖（禁止 kernel → compose）
 | Preset 选项 | `docs/profiles.md` · preset README |
 | 新能力是否可依赖 | `docs/status.md` |
 | Face / MCP 产品面 | `host-face.md` · `modules/mcp.md` · status |
+| Face LLM 提供方（含 Custom） | `docs/llm-provider-registry.md` 完成清单（列 · 解析 · 凭据 · 测 · 构建） |
+| Face LLM 手写路由 | [llm-provider-registry.md](./docs/llm-provider-registry.md)「Settings 手写路由」完成清单 |
 
 空壳能力：实现前 **只** 更新 status「未做」。
 

@@ -77,14 +77,64 @@
 }
 
 .badgeMuted {
-  composes: badge;
   font-weight: 400;
   color: var(--dsw-alias-label-tertiary);
 }
 
 .badgeError {
-  composes: badge;
   color: var(--dsw-alias-label-error);
+}
+
+.badgeOk {
+  color: var(--dsw-alias-state-success-primary, var(--dsw-alias-label-secondary));
+}
+
+.badgeWarn {
+  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-tertiary));
+}
+
+.allowRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.allowRow input {
+  margin-top: 3px;
+}
+
+.allowTitle {
+  display: block;
+  font-weight: 600;
+}
+
+.allowHint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.entryTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  padding: 0;
+  background: currentColor;
 }
 
 .list {
