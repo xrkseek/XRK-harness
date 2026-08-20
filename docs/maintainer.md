@@ -1,6 +1,6 @@
 # 维护者交接
 
-> **读者**：维护者（仓库所有者 / 即将接手的人）。终端用户请看根 [README](../README.md)。
+> **读者**：维护者（仓库所有者 / 即将接手的人）。
 
 把「能跑的产品」交给下一个人时，按本页核对。细节契约仍在各教科书专题；改码红线在 [AGENTS.md](../AGENTS.md)。
 
@@ -28,6 +28,7 @@
 ## 日常命令
 
 ```bash
+npm install -g pnpm@11.22.0   # 与 package.json → packageManager 对齐
 pnpm install
 pnpm check                 # tsc · eslint · vitest · kernel coverage
 pnpm build
@@ -82,7 +83,8 @@ pnpm test:web              # 产品壳硬刷；不进 check
 
 ## 交接检查清单
 
-- [ ] 继任者本机 Node ≥26，且 pnpm 与根 `packageManager` 一致（Corepack）  
+- [ ] 继任者本机 Node ≥26；`npm install -g pnpm@…` 与根 `packageManager` 一致  
+
 - [ ] 读过 status「能跑 / 未稳 / 未做」，不对外承诺未做项  
 - [ ] `pnpm check` 绿；知道 `test:web` 单独跑  
 - [ ] 会按 publishing 打 Release / Packages（或明确谁有 token）  

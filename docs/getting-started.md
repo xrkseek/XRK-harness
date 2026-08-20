@@ -2,14 +2,15 @@
 
 > **读者**：终端用户（路径 A）· 从本仓开发的贡献者（路径 B）。
 
-能力边界见 [status.md](./status.md)。环境变量与落盘路径见 [configuration.md](./configuration.md)。维护者发版见 [publishing.md](./publishing.md)，不在本页展开。
+能力边界见 [status.md](./status.md)。环境变量与落盘路径见 [configuration.md](./configuration.md)。
 
 ## 前置
 
 | 项 | 要求 |
 |----|------|
-| Node.js | **≥ 26** |
-| pnpm | 跟根 `package.json` → `packageManager`（当前 **11.22.0**） |
+| Node.js | **≥ 26**（`node -v`；勿被 IDE 自带 Node 抢 PATH） |
+| pnpm | **仅路径 B**：`npm install -g pnpm@11.22.0`（与根 `packageManager` 同版） |
+
 | 用法 | **CLI**（`run`）或 **Web**（`web` / `serve`） |
 
 ```bash
@@ -44,6 +45,7 @@ Registry / GitHub Packages 安装方式见 [publishing.md](./publishing.md)（�
 ```bash
 git clone https://github.com/xrkseek/XRK-harness.git
 cd XRK-harness
+npm install -g pnpm@11.22.0   # 与 packageManager 对齐
 pnpm install
 pnpm build
 pnpm web:build && pnpm client:bundle && pnpm web:assemble
