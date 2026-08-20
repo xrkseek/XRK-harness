@@ -240,11 +240,13 @@ function buildModelRequest(input: {
   const derived = deriveMessages(input.events);
   assertModelVisible(input.events, derived);
 
-  const toolDefs = input.tools.list().map((t) => ({
-    name: t.name,
-    description: t.description,
-    parameters: t.parameters,
-  }));
+  const toolDefs = [...input.tools.list()]
+    .map((t) => ({
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    }))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
   const useAssemble = input.assemble && input.assemble.enabled !== false;
   if (!useAssemble) {
@@ -299,6 +301,10 @@ function buildModelRequest(input: {
       sessionId: input.sessionId,
       ...(input.assemble?.owner ? { owner: input.assemble.owner } : {}),
     },
+    // Follow-ups: keep conversation prefix byte-stable for provider cache
+    // (DSH append-only). Marker + changing clock only on the opening step.
+    includeCurrentMarker: input.firstStep === true,
+    includeVolatileTime: input.firstStep === true,
     tools: toolDefs,
     ...(input.assemble?.workspaceBlocks ||
     input.slashSystemExtra ||

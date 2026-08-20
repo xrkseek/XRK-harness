@@ -34,6 +34,17 @@ export interface ThreeLayerInput {
   readonly volatile: VolatileUserInput;
   readonly tools?: AssembledRequest["tools"];
   readonly workspaceBlocks?: readonly string[];
+  /**
+   * When false, omit the `[current message]` marker (follow-up steps).
+   * Leaving the marker after growing history moves it each step and busts
+   * DeepSeek-style prompt-prefix cache for the conversation body.
+   */
+  readonly includeCurrentMarker?: boolean;
+  /**
+   * When false, omit `time:` from volatile (follow-up steps). Session id stays
+   * so the volatile suffix can stay byte-stable across a turn's tool loop.
+   */
+  readonly includeVolatileTime?: boolean;
 }
 
 export function buildSkeletonSystem(input: SkeletonSystemInput): string {
@@ -55,9 +66,13 @@ export function buildSkeletonUser(input: SkeletonUserInput): ChatMessage {
   };
 }
 
-export function buildVolatileUser(input: VolatileUserInput): ChatMessage {
+export function buildVolatileUser(
+  input: VolatileUserInput,
+  options: { readonly includeTime?: boolean } = {},
+): ChatMessage {
+  const includeTime = options.includeTime !== false;
   const lines = [
-    `time: ${input.nowIso}`,
+    ...(includeTime ? [`time: ${input.nowIso}`] : []),
     `session: ${input.sessionId}`,
   ];
   if (input.owner) lines.push(`owner: ${input.owner}`);
@@ -67,11 +82,14 @@ export function buildVolatileUser(input: VolatileUserInput): ChatMessage {
   };
 }
 
-/** History transcript + current-message marker before the live user turn. */
+/** History transcript; optional current-message marker before the live user turn. */
 export function mergeHistory(
   history: readonly ChatMessage[],
+  options: { readonly includeCurrentMarker?: boolean } = {},
 ): ChatMessage[] {
   if (history.length === 0) return [];
+  const includeMarker = options.includeCurrentMarker !== false;
+  if (!includeMarker) return [...history];
   return [
     ...history,
     {
@@ -81,11 +99,21 @@ export function mergeHistory(
   ];
 }
 
+/** Lexicographic tool order — registration order must not leak to the wire. */
+export function orderToolsForWire(
+  tools: AssembledRequest["tools"],
+): AssembledRequest["tools"] {
+  return [...tools].sort((a, b) =>
+    a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+  );
+}
+
 /**
  * Fixed order:
  * 1. system = skeleton system (+ optional workspace blocks appended)
- * 2. messages = history(+marker) + skeleton user + volatile user
+ * 2. messages = history(+optional marker) + skeleton user + volatile user
  * Volatile content must never appear in `system`.
+ * Tools are sorted by name for prompt-cache stability (DSH parity).
  */
 export function assembleThreeLayers(
   input: ThreeLayerInput,
@@ -96,13 +124,23 @@ export function assembleThreeLayers(
   }
   const system = systemParts.filter((s) => s.trim()).join("\n\n");
   const messages: ChatMessage[] = [
-    ...mergeHistory(input.history),
+    ...mergeHistory(
+      input.history,
+      input.includeCurrentMarker === undefined
+        ? {}
+        : { includeCurrentMarker: input.includeCurrentMarker },
+    ),
     buildSkeletonUser(input.skeletonUser),
-    buildVolatileUser(input.volatile),
+    buildVolatileUser(
+      input.volatile,
+      input.includeVolatileTime === undefined
+        ? {}
+        : { includeTime: input.includeVolatileTime },
+    ),
   ];
   return {
     system,
     messages,
-    tools: input.tools ?? [],
+    tools: orderToolsForWire(input.tools ?? []),
   };
 }

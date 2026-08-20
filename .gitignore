@@ -30,3 +30,8 @@ packages/stubs/**/lib/
 # Release staging (fat CLI)
 .release/
 apps/cli/product-web/
+
+# Local probes / Playwright MCP dumps (never commit)
+.playwright-mcp/
+.tmp-*.mjs
+.tmp-*/
