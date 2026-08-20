@@ -1,0 +1,60 @@
+- button "New session"
+- button "Collapse sidebar":
+  - img
+- button "New session":
+  - img
+  - text: New Session
+- text: Workspaces
+- button "Search sessions":
+  - img
+- textbox "Search sessions..."
+- button "View options":
+  - img
+- button "Add workspace":
+  - img
+- tree "Sessions":
+  - treeitem "{{workspace}}":
+    - img
+    - text: {{workspace}}
+  - treeitem "workspace" [expanded]:
+    - img
+    - text: workspace
+  - treeitem "say the marker now" [selected]
+- button "Settings":
+  - img
+  - text: Settings
+- banner:
+  - navigation "Session hierarchy":
+    - button "say the marker" [disabled]
+  - img
+  - text: Minimal mode
+  - button "Session log":
+    - text: Session log
+    - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+- text: say the marker {{clock}}
+- button "Copy":
+  - img
+- paragraph: aria-stream-marker
+- button "Copy":
+  - img
+- button "Good response":
+  - img
+- button "Bad response":
+  - img
+- button "Branch into a new conversation":
+  - img
+- text: {{clock}} Ran for {{duration}} TTFT {{duration}} {{throughput}} tok/s
+- textbox "Message the agent"
+- button "Commands":
+  - img
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current DeepSeek V4 Flash":
+  - text: DeepSeek V4 Flash
+  - img
+- button "Send message" [disabled]
+- text: 1 turns · 1 steps LLM {{duration}} TTFT avg {{duration}} · {{throughput}} tok/s Cache hit 0% Input 3 tok · Output 2 tok Details
+- button "Close details"
+- text: Click a tool row in the message flow to view its details

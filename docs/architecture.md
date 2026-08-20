@@ -14,17 +14,13 @@
 
 ## 文档分层
 
-完整属性表见 [docs/README.md](./README.md)。摘要：
+完整表见 [docs/README.md](./README.md)「教科书 · 笔记 · 草稿」。摘要：
 
-| 层 | 写什么 | 不写什么 |
-|----|--------|----------|
-| 根 README | 产品介绍 · 最短跑通 | Agent 红线、本机绝对路径 |
-| [status.md](./status.md) | 能跑 / 未稳 / 未做 · 正式使用分层 | 对照仓路径、未立项路线当规格 |
-| [getting-started](./getting-started.md) · [configuration](./configuration.md) · [troubleshooting](./troubleshooting.md) | 入门 · 环境变量 · 排障 | 密钥真值 |
-| `docs/*.md` 契约 | 已实现 HTTP · Face · session · 工具 | 「计划支持」清单当规格 |
-| [modules/](./modules/README.md) | 大包文件地图 | 教人怎么读文档的元规则 |
-| [AGENTS.md](../AGENTS.md) | 自动化 / 贡献红线 | 面向终端用户的产品文案 |
-| Canvas（本机） | 对照 · 体量 · 打磨 TODO | 不入库 |
+| 层 | 形态 | 写什么 | 不写什么 |
+|----|------|--------|----------|
+| 根 README · `docs/*` · 包 README · ADR | **教科书** | 产品、契约、用法、能力边界 | 改码红线、「本刀」、本机路径 |
+| [AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/skills` | **笔记** | 角色、红线、改哪测哪 | 当规格的假 API |
+| Canvas（本机） | **草稿** | 对照 · 临时 TODO | 入库 |
 
 依赖边见 [AGENTS.md](../AGENTS.md)。能力矩阵：[status.md](./status.md)。
 

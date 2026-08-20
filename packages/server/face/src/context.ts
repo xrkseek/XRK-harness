@@ -56,7 +56,7 @@ export interface FaceRuntime {
   readonly drain: FaceDrain;
   readonly registry: ProviderRegistry;
   readonly workspaceRoot: string;
-  /** Product inject dir; default `{workspaceRoot}/.xrk`. */
+  /** Product inject dir override for tests; Host leaves unset → `{workspace}/.xrk`. Settings/creds use `resolveHarnessHome` (`~/.xrk`). */
   readonly productDir?: string;
   /**
    * Named seed templates for `workspace.syncSeeds({ template })`.

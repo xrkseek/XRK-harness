@@ -242,7 +242,7 @@ Options:
   --host <addr>       Bind host (default: 127.0.0.1; not 0.0.0.0)
   --port <n>          Bind port (default: 8787; 0 = OS pick)
   --open              Open the product UI in the system browser
-  --no-persist        In-memory sessions (default: {workspace}/.xrk/sessions)
+  --no-persist        In-memory sessions (default: ~/.xrk/sessions)
   --patch <json>      Shallow JSON patch merged into dump-config / serve
   --presentation <m>  tools (default) | code (experimental run_code)
   -V, --version       Print CLI version

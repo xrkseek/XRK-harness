@@ -201,6 +201,7 @@ export {
   resolveLlmForSession,
   resolveLlmForSelection,
   createSessionRoutingLlm,
+  liveRouteAllowsImageInput,
   FaceLlmResolveError,
   type ResolvedFaceLlm,
 } from "./llm-resolve.js";

@@ -63,7 +63,7 @@ whenToUse: when testing skill.list
       "utf8",
     );
 
-    const listed = await listSkillsFromWorkspace(ws);
+    const listed = await listSkillsFromWorkspace(ws, { includeUserHome: false });
     expect(listed).toMatchObject([
       {
         name: "office-ping",
@@ -84,7 +84,27 @@ whenToUse: when testing skill.list
     });
     expect(res.result.ok).toBe(true);
     if (res.result.ok) {
-      expect((res.result.value as { skills: unknown[] }).skills).toHaveLength(1);
+      const skills = (res.result.value as { skills: { name: string }[] }).skills;
+      expect(skills.some((s) => s.name === "office-ping")).toBe(true);
     }
+  });
+
+  it("lists skills from .claude/skills without requiring .xrk", async () => {
+    const ws = path.join(os.tmpdir(), `xrk-ws-claude-${Date.now()}`);
+    const skillDir = path.join(ws, ".claude", "skills", "claude-only");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(
+      path.join(skillDir, "SKILL.md"),
+      `---
+name: claude-only
+description: From Claude tree
+---
+# Claude only
+`,
+      "utf8",
+    );
+
+    const listed = await listSkillsFromWorkspace(ws, { includeUserHome: false });
+    expect(listed.some((s) => s.name === "claude-only")).toBe(true);
   });
 });

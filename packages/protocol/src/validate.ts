@@ -9,6 +9,7 @@ import {
   isContentBlock,
   type MessageContent,
 } from "./content.js";
+import { parseTokenUsage } from "./token-usage.js";
 
 const SAFETY_KINDS = new Set([
   "loop_soft",
@@ -97,7 +98,7 @@ function parseToolResult(value: unknown, path: string): ToolResult {
   return {
     toolCallId: reqString(value, "toolCallId", path),
     name: reqString(value, "name", path),
-    content: reqString(value, "content", path),
+    content: parseMessageContent(value.content, `${path}.content`),
     ...(isError === true ? { isError: true as const } : {}),
     ...(meta !== undefined
       ? { meta: meta as Readonly<Record<string, unknown>> }
@@ -190,19 +191,49 @@ export function parseSessionEvent(value: unknown): SessionEvent {
     case "assistant/chunk": {
       const kindRaw = value.kind;
       const kind =
-        kindRaw === "reasoning" || kindRaw === "text" ? kindRaw : undefined;
+        kindRaw === "reasoning" ||
+        kindRaw === "text" ||
+        kindRaw === "usage"
+          ? kindRaw
+          : undefined;
       const index =
         typeof value.index === "number" && Number.isFinite(value.index)
           ? Math.floor(value.index)
           : undefined;
+      const usage =
+        value.usage === undefined
+          ? undefined
+          : (() => {
+              try {
+                return parseTokenUsage(value.usage);
+              } catch (err) {
+                throw new SessionEventParseError(
+                  err instanceof Error ? err.message : "invalid usage",
+                  `${type}.usage`,
+                );
+              }
+            })();
+      if (kind === "usage" && usage === undefined) {
+        throw new SessionEventParseError(
+          'kind "usage" requires usage object',
+          type,
+        );
+      }
+      const text =
+        kind === "usage"
+          ? typeof value.text === "string"
+            ? value.text
+            : ""
+          : reqString(value, "text", type);
       return {
         type,
         ts,
         turnId: reqString(value, "turnId", type),
         stepId: reqString(value, "stepId", type),
-        text: reqString(value, "text", type),
+        text,
         ...(kind ? { kind } : {}),
         ...(index !== undefined ? { index } : {}),
+        ...(usage !== undefined ? { usage } : {}),
       };
     }
     case "assistant/message": {
@@ -219,6 +250,19 @@ export function parseSessionEvent(value: unknown): SessionEvent {
                   type,
                 );
               })();
+      const usage =
+        value.usage === undefined
+          ? undefined
+          : (() => {
+              try {
+                return parseTokenUsage(value.usage);
+              } catch (err) {
+                throw new SessionEventParseError(
+                  err instanceof Error ? err.message : "invalid usage",
+                  `${type}.usage`,
+                );
+              }
+            })();
       return {
         type,
         ts,
@@ -228,6 +272,7 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         ...(toolCalls ? { toolCalls } : {}),
         ...(reasoning !== undefined ? { reasoning } : {}),
         ...(interrupted !== undefined ? { interrupted } : {}),
+        ...(usage !== undefined ? { usage } : {}),
       };
     }
     case "tool/call":
@@ -302,6 +347,21 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         );
       }
       const turnId = optString(value, "turnId");
+      const shadowedRaw = value.shadowedTokenCount;
+      let shadowedTokenCount: number | undefined;
+      if (shadowedRaw !== undefined) {
+        if (
+          typeof shadowedRaw !== "number" ||
+          !Number.isInteger(shadowedRaw) ||
+          shadowedRaw < 0
+        ) {
+          throw new SessionEventParseError(
+            "shadowedTokenCount must be a non-negative integer",
+            `${type}.shadowedTokenCount`,
+          );
+        }
+        shadowedTokenCount = shadowedRaw;
+      }
       return {
         type,
         ts,
@@ -309,6 +369,7 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         summary: reqString(value, "summary", type),
         recent: reqString(value, "recent", type),
         ...(turnId !== undefined ? { turnId } : {}),
+        ...(shadowedTokenCount !== undefined ? { shadowedTokenCount } : {}),
       };
     }
     case "session/title": {
@@ -534,6 +595,45 @@ export function parseSessionEvent(value: unknown): SessionEvent {
       const provider = reqString(configRecord, "provider", `${type}.config`);
       const model = reqString(configRecord, "model", `${type}.config`);
       const reasoningEffort = optString(configRecord, "reasoningEffort");
+      const contextWindowRaw = configRecord.contextWindow;
+      const contextWindow =
+        typeof contextWindowRaw === "number" &&
+        Number.isInteger(contextWindowRaw) &&
+        contextWindowRaw > 0
+          ? contextWindowRaw
+          : undefined;
+      const systemRaw = (headerRaw as { system?: unknown }).system;
+      const system =
+        typeof systemRaw === "string" && systemRaw.length > 0
+          ? systemRaw
+          : undefined;
+      const toolsRaw = (headerRaw as { tools?: unknown }).tools;
+      let tools:
+        | {
+            name: string;
+            description: string;
+            parameters: Record<string, unknown>;
+          }[]
+        | undefined;
+      if (Array.isArray(toolsRaw)) {
+        tools = [];
+        for (const row of toolsRaw) {
+          if (!row || typeof row !== "object") continue;
+          const r = row as Record<string, unknown>;
+          const name = typeof r.name === "string" ? r.name.trim() : "";
+          if (!name) continue;
+          const description =
+            typeof r.description === "string" ? r.description : "";
+          const parameters =
+            r.parameters &&
+            typeof r.parameters === "object" &&
+            !Array.isArray(r.parameters)
+              ? (r.parameters as Record<string, unknown>)
+              : {};
+          tools.push({ name, description, parameters });
+        }
+        if (tools.length === 0) tools = undefined;
+      }
       const adapterDefaultsRaw = (headerRaw as { adapterDefaults?: unknown })
         .adapterDefaults;
       let adapterDefaults:
@@ -562,7 +662,10 @@ export function parseSessionEvent(value: unknown): SessionEvent {
             provider,
             model,
             ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+            ...(contextWindow !== undefined ? { contextWindow } : {}),
           },
+          ...(system !== undefined ? { system } : {}),
+          ...(tools !== undefined ? { tools } : {}),
           ...(adapterDefaults ? { adapterDefaults } : {}),
         },
       };

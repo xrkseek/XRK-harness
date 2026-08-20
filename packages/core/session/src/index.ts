@@ -73,6 +73,18 @@ import {
 } from "./compaction.js";
 
 export {
+  estimateAssistantSurface,
+  estimateMessageContent,
+  estimateSystemTokens,
+  estimateToolsTokens,
+} from "./surface-estimate.js";
+
+export {
+  foldSurfaceTokens,
+  priceCurrentSurfaceWindow,
+} from "./surface-fold.js";
+
+export {
   TOOL_INTERRUPTED_MESSAGE,
   ToolSettlementError,
   assertToolCallsSettled,

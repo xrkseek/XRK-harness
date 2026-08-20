@@ -13,6 +13,17 @@ Append-only session log, `deriveMessages()`, model-visible invariant, and execut
 
 See [docs/session-latch.md](../../../docs/session-latch.md), [docs/session-api.md](../../../docs/session-api.md), [docs/session-delivery.md](../../../docs/session-delivery.md), [docs/session-safety.md](../../../docs/session-safety.md), [docs/session-compaction.md](../../../docs/session-compaction.md), [docs/protocol-events.md](../../../docs/protocol-events.md), and [docs/tool-settlement.md](../../../docs/tool-settlement.md).
 
+## Compaction / meter
+
+| File | Role |
+|------|------|
+| `compaction.ts` | Window helpers · budget `estimateTokens` / `estimateMessagesTokens` |
+| `surface-estimate.ts` | Heuristic pricing for text, blocks, toolCalls, system, tools |
+| `surface-fold.ts` | `foldSurfaceTokens` · `priceCurrentSurfaceWindow` |
+| `request-header.ts` | `foldRequestHeader` · reconstructable LLM envelope |
+
+See [docs/session-compaction.md](../../../docs/session-compaction.md).
+
 ## Store
 
 `createMemorySessionStore` — `append` runs `assertSessionEvent` then deep-freeze. `has(id)` 不抛。  

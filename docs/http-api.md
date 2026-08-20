@@ -133,9 +133,9 @@ index.html 由 host 注入 `__XRK_BOOT__`（`boot.json` merge `{XRK_PLUGINS_DIR}
 | `XRK_LLM_BASE_URL` | optional baseUrl override (required for `custom` / `newapi` / …) |
 | brand `apiKeyEnv` | e.g. `OPENROUTER_API_KEY` · `DEEPSEEK_API_KEY`（见 [llm-provider-presets.md](./llm-provider-presets.md)） |
 | `XRK_WEB_DIST` | SPA dist（可选覆盖；缺省见上） |
-| `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db`）；CLI `serve` 省略时用 `{workspace}/.xrk/sessions`（`--no-persist` = 内存）；旁路 `subagents.json` · `goals.json` |
+| `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db`）；CLI `serve` 省略时用 `~/.xrk/sessions`（`--no-persist` = 内存）；旁路 `subagents.json` · `goals.json` |
 | `XRK_POLICY_FILE` | policy JSON |
-| `XRK_MCP_SERVERS` | MCP 服务器 JSON（`command` 或 `url`）；空则回退 `.xrk/host-settings.json` |
+| `XRK_MCP_SERVERS` | MCP 服务器 JSON（`command` 或 `url`）；空则回退 `~/.xrk/host-settings.json` |
 | `XRK_MCP_ALLOW` | `1`/`true` → 本进程 `mcp.connect` allow |
 | `XRK_TAVILY_API_KEY` | Tavily 搜索；缺省时 `web_search` 仍登记、execute 失败 |
 | `XRK_BRAVE_SEARCH_API_KEY` | Brave Search；与 Tavily 都有且未钉 provider 时用 Tavily |

@@ -185,6 +185,62 @@ describe("openai-compatible adapter", () => {
     expect(out.reasoning).toBe("step by step");
   });
 
+  it("parses chat completion usage", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "ok" } }],
+            usage: { prompt_tokens: 11, completion_tokens: 3 },
+          }),
+          { status: 200 },
+        )) as unknown as typeof fetch,
+    });
+    const out = await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(out.usage).toEqual({ inputTokens: 11, outputTokens: 3 });
+  });
+
+  it("streams usage on done and requests stream_options.include_usage", async () => {
+    let body: Record<string, unknown> | undefined;
+    const payload = [
+      JSON.stringify({ choices: [{ delta: { content: "a" } }] }),
+      JSON.stringify({
+        choices: [],
+        usage: { prompt_tokens: 4, completion_tokens: 2 },
+      }),
+    ]
+      .map((row) => `data: ${row}\n\n`)
+      .join("");
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async (_u, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(`${payload}data: [DONE]\n\n`, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        });
+      }) as unknown as typeof fetch,
+    });
+    const events = [];
+    for await (const ev of llm.stream!({
+      messages: [{ role: "user", content: "hi" }],
+    })) {
+      events.push(ev);
+    }
+    expect(body?.stream_options).toEqual({ include_usage: true });
+    expect(events.some((e) => e.type === "usage")).toBe(true);
+    const done = events.find((e) => e.type === "done");
+    expect(done).toMatchObject({
+      type: "done",
+      usage: { inputTokens: 4, outputTokens: 2 },
+    });
+  });
+
   it("streams reasoning-delta then text-delta then done", async () => {
     const payload = [
       JSON.stringify({

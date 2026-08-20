@@ -7,6 +7,7 @@ import {
   formatSkillCatalog,
   isSkillName,
   listSkills,
+  listSkillsFromWorkspace,
   loadSkill,
   parseSkillMarkdown,
 } from "../src/index.js";
@@ -56,6 +57,55 @@ Do the ping.
     expect(parseSkillMarkdown("---\nname: x\n---\n# Hi", "x").content).toBe(
       "# Hi",
     );
+  });
+
+  it("imports .claude and .xrk when present; skips missing roots", async () => {
+    const ws = await mkdtemp(path.join(tmpdir(), "xrk-skill-multi-"));
+    const claudeDir = path.join(ws, ".claude", "skills", "from-claude");
+    const xrkDir = path.join(ws, ".xrk", "skills", "from-xrk");
+    await mkdir(claudeDir, { recursive: true });
+    await mkdir(xrkDir, { recursive: true });
+    await writeFile(
+      path.join(claudeDir, "SKILL.md"),
+      "---\nname: from-claude\ndescription: Claude skill\n---\n# C\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(xrkDir, "SKILL.md"),
+      "---\nname: from-xrk\ndescription: XRK skill\n---\n# X\n",
+      "utf8",
+    );
+    const listed = await listSkillsFromWorkspace(ws, { includeUserHome: false });
+    expect(listed.map((s) => s.name).sort()).toEqual(["from-claude", "from-xrk"]);
+    expect(
+      await loadSkill({
+        workspaceRoot: ws,
+        includeUserHome: false,
+        name: "from-claude",
+      }),
+    ).toMatchObject({ name: "from-claude" });
+  });
+
+  it(".xrk wins over .claude on the same skill name", async () => {
+    const ws = await mkdtemp(path.join(tmpdir(), "xrk-skill-overlay-"));
+    const claudeDir = path.join(ws, ".claude", "skills", "shared");
+    const xrkDir = path.join(ws, ".xrk", "skills", "shared");
+    await mkdir(claudeDir, { recursive: true });
+    await mkdir(xrkDir, { recursive: true });
+    await writeFile(
+      path.join(claudeDir, "SKILL.md"),
+      "---\nname: shared\ndescription: from claude\n---\n# Claude\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(xrkDir, "SKILL.md"),
+      "---\nname: shared\ndescription: from xrk\n---\n# Xrk\n",
+      "utf8",
+    );
+    const listed = await listSkillsFromWorkspace(ws, { includeUserHome: false });
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.description).toBe("from xrk");
+    expect(listed[0]?.directory).toBe(xrkDir);
   });
 
   it("skill tool loads body and rejects unknown names", async () => {

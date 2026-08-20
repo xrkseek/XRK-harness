@@ -42,7 +42,7 @@ export interface McpServerRow {
   readonly transport: McpTransport
   readonly command: string
   readonly url: string
-  /** Comma-separated args (UI edits them as one launch line). */
+  /** Comma-separated args in the editor. */
   readonly args: string
   readonly cwd: string
 }
@@ -57,7 +57,7 @@ export interface McpCardState extends CardShell {
   readonly note: string
   /** Whether any row fails client-side validation. */
   readonly rowInvalid: boolean
-  /** Show field errors only after a blocked save (so empty new rows stay calm). */
+  /** Show field errors only after a blocked save. */
   readonly showErrors: boolean
 }
 
@@ -69,10 +69,8 @@ export interface McpCardFace extends CardActions {
   }
   /** Stage one field on a row. */
   editRow: (index: number, patch: Partial<McpServerRow>) => void
-  /** Fill empty name from command / URL when the user leaves the field. */
-  suggestName: (index: number) => void
-  /** Append an empty stdio row. */
-  addRow: () => void
+  /** Append an empty stdio row, or expand a Cursor/Claude `{ mcpServers }` paste. */
+  addRow: (paste?: string) => void
   /** Remove a staged row. */
   removeRow: (index: number) => void
 }
@@ -144,8 +142,7 @@ export class McpCardController {
     return {
       hooks: { mcpCard: this.store },
       editRow: (index, patch) => { this.editRow(index, patch) },
-      suggestName: (index) => { this.suggestName(index) },
-      addRow: () => { this.addRow() },
+      addRow: (paste) => { this.addRow(paste) },
       removeRow: (index) => { this.removeRow(index) },
       edit: () => { /* rows use editRow */ },
       resetField: () => { /* n/a for MCP list */ },
@@ -169,16 +166,11 @@ export class McpCardController {
     this.publish()
   }
 
-  private suggestName(index: number): void {
-    const row = this.rows[index]
-    if (row === undefined || row.serverName.trim()) return
-    const suggested = suggestServerName(row)
-    if (!suggested) return
-    this.editRow(index, { serverName: suggested })
-  }
-
-  private addRow(): void {
-    this.rows = [...this.rows, emptyRow()]
+  private addRow(paste?: string): void {
+    const imported = paste ? rowsFromMcpPaste(paste) : []
+    this.rows = imported.length > 0
+      ? [...this.rows, ...imported]
+      : [...this.rows, emptyRow()]
     this.failed = false
     this.publish()
   }
@@ -277,12 +269,12 @@ function rowFromUi(row: McpServerRow): McpServerDraft {
       url: row.url.trim(),
     }
   }
-  const launch = splitLaunch(joinLaunch(row.command, row.args))
+  const args = row.args.split(',').map(part => part.trim()).filter(part => part.length > 0)
   const cwd = row.cwd.trim()
   return {
     serverName,
-    command: launch.command,
-    ...(launch.args.length > 0 ? { args: launch.args } : {}),
+    command: row.command.trim(),
+    ...(args.length > 0 ? { args } : {}),
     ...(cwd ? { cwd } : {}),
   }
 }
@@ -291,86 +283,63 @@ function emptyRow(): McpServerRow {
   return { serverName: '', transport: 'stdio', command: '', url: '', args: '', cwd: '' }
 }
 
+function namedRowToUi(name: string, row: Record<string, unknown>): McpServerRow | undefined {
+  const serverName = name.trim()
+  if (!serverName) return undefined
+  const url = typeof row.url === 'string' ? row.url.trim() : ''
+  const command = typeof row.command === 'string' ? row.command.trim() : ''
+  if (!url && !command) return undefined
+  return {
+    serverName,
+    transport: url ? 'http' : 'stdio',
+    command,
+    url,
+    args: Array.isArray(row.args) ? row.args.map(String).join(', ') : '',
+    cwd: typeof row.cwd === 'string' ? row.cwd : '',
+  }
+}
+
+/**
+ * Cursor / Claude Desktop paste: `{ "mcpServers": { "12306-mcp": { "command": "npx", "args": ["-y", "12306-mcp"] } } }`.
+ * Also accepts a bare name map or a Face array of `{ serverName, command }`.
+ */
+export function rowsFromMcpPaste(raw: string): McpServerRow[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return []
+  }
+  if (Array.isArray(parsed)) {
+    const out: McpServerRow[] = []
+    for (const row of parsed) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) continue
+      const o = row as Record<string, unknown>
+      const mapped = namedRowToUi(String(o.serverName ?? ''), o)
+      if (mapped) out.push(mapped)
+    }
+    return out
+  }
+  if (!parsed || typeof parsed !== 'object') return []
+  const root = parsed as Record<string, unknown>
+  const map = (
+    root.mcpServers && typeof root.mcpServers === 'object' && !Array.isArray(root.mcpServers)
+      ? root.mcpServers
+      : root
+  ) as Record<string, unknown>
+  const out: McpServerRow[] = []
+  for (const [name, row] of Object.entries(map)) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue
+    const mapped = namedRowToUi(name, row as Record<string, unknown>)
+    if (mapped) out.push(mapped)
+  }
+  return out
+}
+
 function validateRow(row: McpServerRow): string | undefined {
   if (!row.serverName.trim()) return 'serverName'
   if (row.transport === 'http') {
     return row.url.trim() ? undefined : 'url'
   }
-  return joinLaunch(row.command, row.args).trim() ? undefined : 'command'
-}
-
-/** Join command + CSV args into one launch line for the editor. */
-export function joinLaunch(command: string, argsCsv: string): string {
-  const args = argsCsv.split(',').map(part => part.trim()).filter(part => part.length > 0)
-  return [command.trim(), ...args].filter(part => part.length > 0).join(' ')
-}
-
-/** Split a launch line into executable + args (quote-aware). */
-export function splitLaunch(line: string): { command: string; args: string[] } {
-  const tokens: string[] = []
-  let cur = ''
-  let quote: '"' | "'" | null = null
-  for (const c of line.trim()) {
-    if (quote) {
-      if (c === quote) quote = null
-      else cur += c
-      continue
-    }
-    if (c === '"' || c === "'") {
-      quote = c
-      continue
-    }
-    if (/\s/.test(c)) {
-      if (cur) {
-        tokens.push(cur)
-        cur = ''
-      }
-      continue
-    }
-    cur += c
-  }
-  if (cur) tokens.push(cur)
-  return { command: tokens[0] ?? '', args: tokens.slice(1) }
-}
-
-/** Apply a launch line edit onto command + args fields. */
-export function applyLaunch(line: string): Pick<McpServerRow, 'command' | 'args'> {
-  const { command, args } = splitLaunch(line)
-  return { command, args: args.join(', ') }
-}
-
-/** Suggest a stable id from URL host or command basename. */
-export function suggestServerName(row: McpServerRow): string {
-  if (row.transport === 'http') {
-    const raw = row.url.trim()
-    if (!raw) return ''
-    try {
-      const host = new URL(raw.includes('://') ? raw : `https://${raw}`).hostname
-      const base = host.replace(/^www\./, '').split('.')[0] ?? ''
-      return sanitizeName(base)
-    } catch {
-      return ''
-    }
-  }
-  const launch = splitLaunch(joinLaunch(row.command, row.args))
-  for (const token of [...launch.args].reverse()) {
-    if (token.startsWith('@') || token.includes('/')) {
-      const leaf = token.split('/').pop() ?? token
-      const cleaned = sanitizeName(leaf.replace(/^@/, ''))
-      if (cleaned && cleaned !== 'y') return cleaned
-    }
-  }
-  const cmd = launch.command
-  if (!cmd) return ''
-  if (/^(npx|pnpm|yarn|bun|node|deno)$/i.test(cmd)) return ''
-  const base = cmd.split(/[/\\]/).pop() ?? cmd
-  return sanitizeName(base.replace(/\.(exe|cmd|bat|js|mjs|cjs)$/i, ''))
-}
-
-function sanitizeName(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48)
+  return row.command.trim() ? undefined : 'command'
 }

@@ -33,6 +33,7 @@ import {
 } from "../model-catalog.js";
 import {
   FaceLlmResolveError,
+  liveRouteAllowsImageInput,
   resolveLlmForSelection,
 } from "../llm-resolve.js";
 import { publishRemoteEvent } from "../remote-event.js";
@@ -310,8 +311,18 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
         },
       };
     }
-    const modalities = runtime.inputModalities ?? ["text"];
-    if (!modalities.includes("image")) {
+    // Face intake max (Host may allow paste) AND live adapter route (Registry).
+    const faceIntake = runtime.inputModalities ?? ["text"];
+    if (!faceIntake.includes("image")) {
+      return {
+        ok: false,
+        error: {
+          code: "unsupported-modality",
+          message: "active route does not accept image input",
+        },
+      };
+    }
+    if (!liveRouteAllowsImageInput(runtime, sessionId)) {
       return {
         ok: false,
         error: {

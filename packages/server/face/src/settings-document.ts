@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import yaml from "js-yaml";
+import { resolveXrkHome } from "@xrkseek/server-config";
 import type { FaceRuntime } from "./context.js";
 import {
   FACE_PRODUCT_SETTINGS_NAMESPACES,
@@ -20,12 +21,12 @@ import { FACE_AGENT_PRESET_IDS } from "./presets-catalog.js";
 import type { FaceSettingsNamespaces } from "./settings-credentials.js";
 import { isFacePermissionPreset } from "./face-schema.js";
 
-/** Harness home: env override, else `{workspace}/.xrk`. */
+/** Harness home: explicit `productDir` (tests isolate settings/workspaces), else `XRK_HOME` / `~/.xrk`.
+ * Not the workspace product tree — that is always `{workspaceRoot}/.xrk` via `resolveProductDir`.
+ */
 export function resolveHarnessHome(runtime: FaceRuntime): string {
-  const env =
-    process.env.XRK_DSH_HOME?.trim() || process.env.DSH_HOME?.trim() || "";
-  if (env) return path.resolve(env);
-  return runtime.productDir ?? path.join(runtime.workspaceRoot, ".xrk");
+  if (runtime.productDir?.trim()) return path.resolve(runtime.productDir);
+  return resolveXrkHome();
 }
 
 export function settingsYamlPath(runtime: FaceRuntime): string {

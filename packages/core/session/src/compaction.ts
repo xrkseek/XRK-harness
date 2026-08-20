@@ -11,16 +11,16 @@ import type {
   SessionEvent,
 } from "@xrkseek/protocol";
 import { flattenText } from "@xrkseek/protocol";
-
-export type { CompactionReason };
+import { estimateText } from "./surface-estimate.js";
 
 export const DEFAULT_COMPACTION_KEEP_TOKENS = 8_000;
 export const DEFAULT_COMPACTION_BUFFER_TOKENS = 2_000;
 
-/** Rough token estimate (chars/4) — good enough for M1 budgets. */
+/**
+ * Budget estimator for `selectHeadRecent` / overflow (`chars/4` via {@link estimateText}).
+ */
 export function estimateTokens(text: string): number {
-  if (!text) return 0;
-  return Math.ceil(text.length / 4);
+  return estimateText(text);
 }
 
 function messagePlainText(m: ChatMessage): string {
@@ -80,10 +80,9 @@ function serializeMessage(m: ChatMessage): string {
     return parts.join("\n");
   }
   if (m.role === "tool") {
+    const text = flattenText(m.content);
     const body =
-      m.content.length > 2_000
-        ? `${m.content.slice(0, 2_000)}\n[truncated]`
-        : m.content;
+      text.length > 2_000 ? `${text.slice(0, 2_000)}\n[truncated]` : text;
     return `[Tool result ${m.name}]: ${body}`;
   }
   if (m.role === "system") return `[System]: ${m.content}`;

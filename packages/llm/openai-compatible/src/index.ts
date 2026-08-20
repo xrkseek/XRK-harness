@@ -22,6 +22,7 @@ import {
   asContentBlocks,
   contentHasImage,
   flattenText,
+  tryParseOpenAiUsage,
 } from "@xrkseek/protocol";
 
 export type OpenAiAuthMode = "bearer" | "api-key" | "header";
@@ -73,7 +74,7 @@ type WireMessage =
     }
   | {
       role: "tool";
-      content: string;
+      content: string | WireContentPart[];
       tool_call_id: string;
       name?: string;
     };
@@ -159,7 +160,7 @@ async function toWireMessages(
     }
     out.push({
       role: "tool",
-      content: m.content,
+      content: await userContentToWire(m.content, resolveImage),
       tool_call_id: m.toolCallId,
       ...(m.name ? { name: m.name } : {}),
     });
@@ -303,7 +304,10 @@ async function buildBody(
 ): Promise<Record<string, unknown>> {
   const modalities = options.inputModalities ?? ["text"];
   for (const m of request.messages) {
-    if (m.role === "user" && contentHasImage(m.content)) {
+    if (
+      (m.role === "user" || m.role === "tool") &&
+      contentHasImage(m.content)
+    ) {
       if (!modalities.includes("image")) {
         throw new UnsupportedContentError(
           "image content is not supported on text-only LLM routes",
@@ -323,6 +327,7 @@ async function buildBody(
   if (tools) body.tools = tools;
   if (options.temperature !== undefined) body.temperature = options.temperature;
   if (options.maxTokens !== undefined) body.max_tokens = options.maxTokens;
+  if (stream) body.stream_options = { include_usage: true };
   return body;
 }
 
@@ -336,7 +341,8 @@ function parseChatJson(text: string): LlmChatResponse {
       { cause: err },
     );
   }
-  const choice = (json as { choices?: unknown[] })?.choices?.[0] as
+  const root = json as { choices?: unknown[]; usage?: unknown };
+  const choice = root?.choices?.[0] as
     | {
         message?: {
           content?: unknown;
@@ -358,10 +364,12 @@ function parseChatJson(text: string): LlmChatResponse {
         : undefined;
   const reasoning =
     reasoningRaw && reasoningRaw.trim() ? reasoningRaw : undefined;
+  const usage = tryParseOpenAiUsage(root.usage);
   return {
     content,
     ...(toolCalls ? { toolCalls } : {}),
     ...(reasoning ? { reasoning } : {}),
+    ...(usage ? { usage } : {}),
   };
 }
 
@@ -382,6 +390,7 @@ async function* streamSse(
   let buf = "";
   let content = "";
   let reasoning = "";
+  let usage: LlmChatResponse["usage"];
   const toolAcc = new Map<number, ToolCallAcc>();
 
   const flushLine = function* (line: string): Generator<LlmStreamEvent> {
@@ -396,7 +405,13 @@ async function* streamSse(
     } catch {
       return;
     }
-    const choice = (json as { choices?: unknown[] })?.choices?.[0] as
+    const root = json as { choices?: unknown[]; usage?: unknown };
+    const parsedUsage = tryParseOpenAiUsage(root.usage);
+    if (parsedUsage) {
+      usage = parsedUsage;
+      yield { type: "usage", usage: parsedUsage };
+    }
+    const choice = root?.choices?.[0] as
       | {
           delta?: {
             content?: unknown;
@@ -477,6 +492,7 @@ async function* streamSse(
     content,
     ...(reasoning.trim() ? { reasoning } : {}),
     ...(toolCalls.length ? { toolCalls } : {}),
+    ...(usage ? { usage } : {}),
   };
 }
 

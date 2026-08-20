@@ -67,6 +67,21 @@ describe("parseSessionEvent", () => {
     });
   });
 
+  it("parses assistant/message.usage", () => {
+    const msg = parseSessionEvent({
+      type: "assistant/message",
+      ts: 2,
+      turnId: "t",
+      stepId: "s",
+      content: "ans",
+      usage: { inputTokens: 10, outputTokens: 4, reasoningTokens: 1 },
+    });
+    expect(msg).toMatchObject({
+      type: "assistant/message",
+      usage: { inputTokens: 10, outputTokens: 4, reasoningTokens: 1 },
+    });
+  });
+
   it("parses tool/call and tool/result", () => {
     const call = parseSessionEvent({
       type: "tool/call",
@@ -178,6 +193,21 @@ describe("parseSessionEvent", () => {
       recent: "tail",
     });
     expect(ev.type).toBe("context/compaction");
+  });
+
+  it("parses context/compaction.shadowedTokenCount", () => {
+    const ev = parseSessionEvent({
+      type: "context/compaction",
+      ts: 1,
+      reason: "manual",
+      summary: "sum",
+      recent: "",
+      shadowedTokenCount: 42,
+    });
+    expect(ev).toMatchObject({
+      type: "context/compaction",
+      shadowedTokenCount: 42,
+    });
   });
 
   it("parses session/title (log-only)", () => {

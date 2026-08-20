@@ -62,6 +62,11 @@ describe("createAgent compactNow", () => {
       reason: "manual",
       summary: "## Objective\n- compact-test",
     });
+    if (last?.type === "context/compaction") {
+      expect(last.shadowedTokenCount).toBeTypeOf("number");
+      expect(last.shadowedTokenCount).toBeGreaterThan(0);
+      expect(out.shadowedTokens).toBe(last.shadowedTokenCount);
+    }
     expect(out.summarySeq).toBe(events.length);
   });
 

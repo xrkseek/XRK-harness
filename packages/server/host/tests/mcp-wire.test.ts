@@ -16,14 +16,16 @@ import {
 import type { RegisteredPlugin } from "@xrkseek/server-loader";
 
 describe("host mcp-wire", () => {
-  it("parses XRK_MCP_SERVERS JSON", () => {
+  it("parses Cursor mcpServers object JSON", () => {
     const specs = parseMcpServersEnv(
-      JSON.stringify([
-        { serverName: "demo", command: "npx", args: ["-y", "x"] },
-      ]),
+      JSON.stringify({
+        mcpServers: {
+          "12306-mcp": { command: "npx", args: ["-y", "12306-mcp"] },
+        },
+      }),
     );
     expect(specs).toEqual([
-      { serverName: "demo", command: "npx", args: ["-y", "x"] },
+      { serverName: "12306-mcp", command: "npx", args: ["-y", "12306-mcp"] },
     ]);
   });
 

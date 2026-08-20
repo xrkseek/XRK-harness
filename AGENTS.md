@@ -1,9 +1,14 @@
 # AGENTS.md — XRK-Harness
 
-面向**克隆本仓、改代码 / 写测 / 同步规格**的开发者与 Coding Agent。  
-产品介绍与安装路径见根 [README.md](./README.md)；契约真源见 [docs/](./docs/README.md)。
+面向**克隆本仓、改代码 / 写测 / 同步教科书**的开发者与 Coding Agent。
 
-文档 / skill 与实现冲突时以**代码**为准；能力是否可依赖以 [docs/status.md](./docs/status.md) 为准。
+| 读什么 | 角色 |
+|--------|------|
+| 根 [README.md](./README.md) · [docs/](./docs/README.md) | **教科书**（产品与契约） |
+| 本文件 · `.cursor/rules` · `.cursor/skills` | **笔记**（改码红线与流程） |
+| Cursor Canvas | **本机草稿**（不入库） |
+
+冲突时以**代码**为准；能力是否可依赖以 [docs/status.md](./docs/status.md) 为准。**不要**把笔记里的禁令抄进教科书。
 
 ---
 
@@ -18,7 +23,7 @@
 | **产品壳** | `apps/web` · `packages/client/*` · 品牌 `apps/web/public` | 当 GitHub Fork 向上游 deepseek-ai 提 PR；vendor / 捕获目录；用裸 Vite 当产品入口 |
 | **Preset** | `presets/minimal\|harness\|server` | 业务逻辑、密钥、绕过 policy 的默认放行 |
 | **进程插件** | `extensions/*`（`kind: tools\|prompt\|commands`） | 依赖 `apps` 内部私有路径 |
-| **文档 / 发布** | `docs/*` · `CONTRIBUTING` · `publishing` | 把未实现写成规格；本机绝对路径 / 代理端口进仓库文档 |
+| **文档 / 发布** | `docs/*`（教科书）· `CONTRIBUTING` · `publishing` | 把未实现写成规格；本机路径进教科书；把笔记红线写进 `docs/` |
 | **Coding Agent** | 用户指定切片 | 擅自 commit / push；带 Cursor co-author trailer；跳过 `pnpm check` |
 
 ---
@@ -33,13 +38,14 @@
 | 任务 | 先读 |
 |------|------|
 | 任意改动 | [docs/status.md](./docs/status.md) · 本文件角色表 |
-| Session / 事件 | [docs/session.md](./docs/session.md) · [protocol-events](./docs/protocol-events.md) |
+| Session / 事件 | 教科书 [session.md](./docs/session.md) · [protocol-events](./docs/protocol-events.md) · [session-compaction](./docs/session-compaction.md)；改 meter 开笔记 `.cursor/skills/xrk-meter-session` |
 | 工具 | [docs/tool-pipeline.md](./docs/tool-pipeline.md) · [seams](./docs/seams.md) |
 | Host / Face | [docs/host-face.md](./docs/host-face.md) · [http-api](./docs/http-api.md) |
 | MCP | [docs/modules/mcp.md](./docs/modules/mcp.md) · [policy](./docs/policy.md) |
 | 壳 UI | [docs/host-face.md](./docs/host-face.md) · `apps/web` · `packages/client` |
 | 包落点 | [docs/modules/](./docs/modules/README.md) |
 | 门禁 | [docs/testing.md](./docs/testing.md) · [CONTRIBUTING.md](./CONTRIBUTING.md) |
+| 教科书 vs 笔记 | [docs/README.md](./docs/README.md)「教科书 · 笔记 · 草稿」· `.cursor/rules/xrk-product-identity.mdc` |
 
 全索引：[docs/README.md](./docs/README.md)。
 

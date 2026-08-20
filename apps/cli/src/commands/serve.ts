@@ -1,4 +1,4 @@
-import { loadHostConfig } from "@xrkseek/server-config";
+import { loadHostConfig, defaultSessionsDir } from "@xrkseek/server-config";
 import { createHostManager, type AgentFactory } from "@xrkseek/server-host";
 import {
   createServerAgentFactory,
@@ -11,7 +11,6 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { assertSafeHost, type ParsedArgs } from "../parse-args.js";
 import {
-  defaultSessionsDir,
   ensureProductWebDist,
   repoRoot,
 } from "../product-paths.js";
@@ -102,7 +101,7 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     return 1;
   }
   const sessionsDir = args.persist
-    ? (config.runtime.sessionsDir?.trim() || defaultSessionsDir(config.runtime.workspaceRoot))
+    ? (config.runtime.sessionsDir?.trim() || defaultSessionsDir())
     : undefined;
 
   const manager = createHostManager();
@@ -132,6 +131,9 @@ export async function runServe(args: ParsedArgs): Promise<number> {
   const origin = `http://${config.runtime.host}:${port}`;
   process.stdout.write(`xrk-harness serve  ${origin}/\n`);
   const uiRel = path.relative(repoRoot(), webDist) || webDist;
+  process.stdout.write(
+    `  workspace=${config.runtime.workspaceRoot}\n`,
+  );
   process.stdout.write(
     `  preset=${preset}  ui=${uiRel}  sessions=${sessionsDir ?? "memory"}\n`,
   );

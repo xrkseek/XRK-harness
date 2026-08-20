@@ -14,6 +14,7 @@ export interface LlmRouteSelection {
   readonly provider: string;
   readonly model: string;
   readonly reasoningEffort?: string;
+  readonly contextWindow?: number;
 }
 
 export interface RoutingLlmAdapter extends LlmAdapter {
@@ -27,6 +28,11 @@ export interface CreateRoutingLlmAdapterOptions {
   readonly id: string;
   readonly getSelection: () => LlmRouteSelection | undefined;
   readonly resolveAdapter: (selection: LlmRouteSelection) => LlmAdapter;
+  /**
+   * Optional static override. When omitted, `inputModalities` is read from the
+   * current inner adapter (live route) so Host Face intake settings cannot
+   * mask Registry text-only brands.
+   */
   readonly inputModalities?: readonly ("text" | "image")[];
 }
 
@@ -52,15 +58,15 @@ export function createRoutingLlmAdapter(
       ...(selection.reasoningEffort !== undefined
         ? { reasoningEffort: selection.reasoningEffort }
         : {}),
+      ...(selection.contextWindow !== undefined
+        ? { contextWindow: selection.contextWindow }
+        : {}),
     };
     return options.resolveAdapter(selection);
   };
 
   const adapter: RoutingLlmAdapter = {
     id: options.id,
-    ...(options.inputModalities !== undefined
-      ? { inputModalities: options.inputModalities }
-      : {}),
     peekRoute() {
       return lastRoute;
     },
@@ -85,9 +91,23 @@ export function createRoutingLlmAdapter(
         content: response.content,
         ...(response.reasoning?.trim() ? { reasoning: response.reasoning } : {}),
         ...(response.toolCalls ? { toolCalls: response.toolCalls } : {}),
+        ...(response.usage ? { usage: response.usage } : {}),
       };
     },
   };
+
+  Object.defineProperty(adapter, "inputModalities", {
+    enumerable: true,
+    configurable: true,
+    get(): readonly ("text" | "image")[] | undefined {
+      if (options.inputModalities !== undefined) return options.inputModalities;
+      try {
+        return resolveInner().inputModalities;
+      } catch {
+        return undefined;
+      }
+    },
+  });
 
   return adapter;
 }

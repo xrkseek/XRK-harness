@@ -18,7 +18,7 @@ function collectImageOccurrences(
   const out: { msgIndex: number; blockIndex: number; bytes: number }[] = [];
   for (let msgIndex = 0; msgIndex < messages.length; msgIndex++) {
     const msg = messages[msgIndex]!;
-    if (msg.role !== "user") continue;
+    if (msg.role !== "user" && msg.role !== "tool") continue;
     const content = msg.content;
     if (typeof content === "string") continue;
     const blocks = asContentBlocks(content);
@@ -68,7 +68,12 @@ export function offloadRequestImages(
     const key = `${occ.msgIndex}:${occ.blockIndex}`;
     if (offloaded.has(key)) continue;
     const msg = cloned[occ.msgIndex]!;
-    if (msg.role !== "user" || typeof msg.content === "string") continue;
+    if (
+      (msg.role !== "user" && msg.role !== "tool") ||
+      typeof msg.content === "string"
+    ) {
+      continue;
+    }
     cloned[occ.msgIndex] = {
       ...msg,
       content: replaceImageBlock(msg.content, occ.blockIndex),

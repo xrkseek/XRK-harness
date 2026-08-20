@@ -1,7 +1,23 @@
 import type { SessionStore } from "@xrkseek/core-session";
 import type { SessionEvent } from "@xrkseek/protocol";
+import { parseMcpServersJson, type McpServerRow } from "./mcp-servers.js";
 
 export type { SessionStore, SessionEvent };
+export type { McpServerRow };
+export {
+  XRK_HOME_DIR_NAME,
+  XRK_HOME_ENVS,
+  defaultSessionsDir,
+  defaultXrkHome,
+  hostSettingsPath,
+  resolveXrkHome,
+} from "./home.js";
+export {
+  mcpServersContainEnv,
+  mcpServersObjectMap,
+  parseMcpServersJson,
+  parseMcpServersValue,
+} from "./mcp-servers.js";
 
 export interface HostCredentials {
   /** API key for /api/* ; empty disables auth (dev only). */
@@ -31,17 +47,12 @@ export interface HostRuntimeConfig {
    */
   readonly policyFile?: string;
   /**
-   * MCP stdio servers JSON (Host registers as `kind: tools` plugins).
-   * Env: `XRK_MCP_SERVERS` — `[{serverName,command,args?,env?,cwd?}]`.
+   * MCP stdio/http servers JSON (Host registers as `kind: tools` plugins).
+   * Env: `XRK_MCP_SERVERS` — array `[{serverName,command|url,...}]` or Cursor/Claude
+   * object `{ "mcpServers": { "name": { "command": "npx", "args": [...] } } }`.
    * Connect still needs allow (`XRK_MCP_ALLOW=1` or policy allow for mcp.connect).
    */
-  readonly mcpServers?: readonly {
-    readonly serverName: string;
-    readonly command: string;
-    readonly args?: readonly string[];
-    readonly env?: Readonly<Record<string, string>>;
-    readonly cwd?: string;
-  }[];
+  readonly mcpServers?: readonly McpServerRow[];
   /** Env: `XRK_MCP_ALLOW=1` elevates mcp.connect default to allow for configured servers. */
   readonly mcpAllowConnect?: boolean;
   /**
@@ -67,54 +78,6 @@ function num(v: string | undefined, fallback: number): number {
   if (v === undefined || v === "") return fallback;
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
-}
-
-function parseMcpServersJson(raw: string): HostRuntimeConfig["mcpServers"] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error("XRK_MCP_SERVERS must be valid JSON");
-  }
-  if (!Array.isArray(parsed)) {
-    throw new Error("XRK_MCP_SERVERS must be a JSON array");
-  }
-  type McpServerSpec = {
-    serverName: string;
-    command: string;
-    args?: string[];
-    env?: Record<string, string>;
-    cwd?: string;
-  };
-  const out: McpServerSpec[] = [];
-  for (const row of parsed) {
-    if (!row || typeof row !== "object") continue;
-    const o = row as Record<string, unknown>;
-    const serverName = String(o.serverName ?? "").trim();
-    const command = String(o.command ?? "").trim();
-    if (!serverName || !command) {
-      throw new Error("XRK_MCP_SERVERS entry requires serverName and command");
-    }
-    out.push({
-      serverName,
-      command,
-      ...(Array.isArray(o.args) ? { args: o.args.map((a) => String(a)) } : {}),
-      ...(o.env && typeof o.env === "object" && !Array.isArray(o.env)
-        ? {
-            env: Object.fromEntries(
-              Object.entries(o.env as Record<string, unknown>).map(([k, v]) => [
-                k,
-                String(v),
-              ]),
-            ),
-          }
-        : {}),
-      ...(typeof o.cwd === "string" && o.cwd.trim()
-        ? { cwd: o.cwd.trim() }
-        : {}),
-    });
-  }
-  return out;
 }
 
 /** Layered config: defaults < env < patch. Secrets only from env. */

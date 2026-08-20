@@ -22,7 +22,8 @@ export interface AssistantMessage {
 
 export interface ToolMessage {
   readonly role: "tool";
-  readonly content: string;
+  /** Plain string or ContentBlock[] (text + admitted image refs). */
+  readonly content: MessageContent;
   readonly toolCallId: string;
   readonly name?: string;
   readonly isError?: boolean;

@@ -62,6 +62,50 @@ describe("resolveLlmForSession", () => {
     expect(resolved!.adapter.id).toMatch(/^session:/);
     expect(resolved!.binding.baseUrl).toBe("https://api.deepseek.com");
     expect(resolved!.binding.model).toBe("deepseek-v4-flash");
+    // Face intake may be text+image; official DeepSeek adapter stays text-only.
+    expect(resolved!.adapter.inputModalities).toEqual(["text"]);
+  });
+
+  it("keeps official DeepSeek text-only even when Face intake allows images", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-llm-modality-"));
+    await writeFile(
+      path.join(dir, "settings.yaml"),
+      [
+        "llm-deepseek:",
+        "  baseURL: https://api.deepseek.com",
+        "  models:",
+        "    - id: deepseek-v4-flash",
+        "agent-default-model:",
+        "  provider: deepseek",
+        "  model: deepseek-v4-flash",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(dir, ".credentials.yaml"),
+      "DEEPSEEK_API_KEY: sk-test-key\n",
+      "utf8",
+    );
+
+    const store = createMemorySessionStore();
+    const sessionId = store.create().id;
+    const rt = createFaceRuntime({
+      store,
+      workspaceRoot: dir,
+      productDir: dir,
+      inputModalities: ["text", "image"],
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+
+    const { liveRouteAllowsImageInput } = await import("../src/llm-resolve.js");
+    expect(liveRouteAllowsImageInput(rt, sessionId)).toBe(false);
+    expect(resolveLlmForSession(rt, sessionId)!.adapter.inputModalities).toEqual(
+      ["text"],
+    );
   });
 
   it("returns undefined when provider requires a key but none is configured", async () => {

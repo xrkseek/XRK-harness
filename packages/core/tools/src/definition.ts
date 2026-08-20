@@ -1,4 +1,5 @@
 import type { ToolResult } from "@xrkseek/protocol";
+import type { MessageContent } from "@xrkseek/protocol";
 import type {
   PresentableToolResult,
   ToolCallView,
@@ -31,7 +32,7 @@ export interface ToolDefinition<TArgs = unknown> {
 }
 
 export interface ToolResultContent {
-  readonly content: string;
+  readonly content: MessageContent;
   readonly isError?: boolean;
   /** Face presentation replay; copied onto session `tool/result`. */
   readonly meta?: Readonly<Record<string, unknown>>;

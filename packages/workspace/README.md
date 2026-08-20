@@ -8,7 +8,8 @@ Product workspace inject, seed sync, recipes, skill load, and tool-output persis
 
 Order: assistant → context → rules → skills cards (`SKILL.md` name+description) → subagents.  
 Full skill bodies are loaded by the `skill` tool (`createSkillTools`), not injected.
-Default product dir: `{root}/.xrk` (never repo-root `AGENTS.md`).
+Skills auto-import from existing `.claude|.cursor|.agents|.codex|.xrk/skills` (and user-home twins); missing roots are skipped.
+Default product dir for assistant/rules/recipes: `{root}/.xrk` (never repo-root `AGENTS.md`; not required for skills).
 
 Presets (`minimal` / `harness`) wire inject into three-layer `workspaceBlocks` by default.
 

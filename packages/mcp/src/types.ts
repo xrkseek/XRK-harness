@@ -1,6 +1,8 @@
 import type { PolicyEngine } from "@xrkseek/policy";
+import type { MessageContent } from "@xrkseek/protocol";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { McpReconnectConfig } from "./reconnect.js";
+import type { McpImageAdmission } from "./project-content.js";
 
 export type { McpReconnectConfig } from "./reconnect.js";
 
@@ -22,7 +24,8 @@ export interface McpToolInfo {
 }
 
 export interface McpCallResult {
-  readonly content: string;
+  /** Model-visible projection (string or admitted ContentBlock[]). */
+  readonly content: MessageContent;
   readonly isError?: boolean;
 }
 
@@ -67,6 +70,11 @@ interface McpClientBase {
   readonly reconnect?: McpReconnectConfig;
   /** Optional supervisor diagnostics (tests / Host logs). */
   readonly onLog?: (level: "info" | "warn" | "error", message: string) => void;
+  /**
+   * When set, image blocks in tool results may be saved to the AttachmentStore
+   * and returned as ContentBlock[] (DSH mcp-client image admission).
+   */
+  readonly imageAdmission?: McpImageAdmission;
 }
 
 export interface McpStdioOptions extends McpClientBase {

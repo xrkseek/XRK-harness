@@ -1,4 +1,4 @@
-/* MCP card — flat rows (no nested bright frames), soft fields via fields.css. */
+/* MCP card — flat rows; soft inputs live in fields.module.css. */
 
 .block + .block {
   border-top: 1px solid var(--dsw-alias-border-l2);
@@ -158,91 +158,40 @@
   padding: 0;
 }
 
-.transport {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 0;
-  border-top: 1px solid var(--dsw-alias-border-l2);
-}
-
-.transportLabel {
+.pasteLabel {
+  margin: 12px 0 6px;
   font-size: 13px;
   font-weight: 500;
   line-height: 1.5;
   color: var(--dsw-alias-label-primary);
 }
 
-.segment {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
-  padding: 2px;
+.paste {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 96px;
+  padding: 8px 10px;
   border: 1px solid var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
   border-radius: 8px;
-  background: var(--dsw-alias-bg-module-platform);
-}
-
-.segmentBtn,
-.segmentActive {
-  height: 28px;
-  border: none;
-  border-radius: 6px;
-  font: inherit;
-  font-size: 12px;
-  line-height: 18px;
-  cursor: pointer;
-}
-
-.segmentBtn {
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.segmentActive {
   background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-primary);
-  font-weight: 500;
-}
-
-.segmentBtn:hover:not(:disabled),
-.segmentActive:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
-}
-
-.segmentBtn:disabled,
-.segmentActive:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.transportHint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.more {
-  display: inline-flex;
-  align-self: flex-start;
-  margin: 4px 0 8px;
-  border: none;
-  padding: 0;
-  background: none;
   font: inherit;
   font-size: 12px;
   line-height: 1.5;
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
-}
-
-.more:hover:not(:disabled) {
   color: var(--dsw-alias-label-primary);
+  resize: vertical;
 }
 
-.more:disabled {
-  opacity: 0.4;
+.paste::placeholder {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+.paste:focus-visible {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.paste:disabled {
+  color: var(--dsw-alias-label-tertiary);
   cursor: default;
 }
 

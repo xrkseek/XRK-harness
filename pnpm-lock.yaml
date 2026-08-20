@@ -2151,12 +2151,18 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(zod@4.4.3)
+      '@xrkseek/attachment':
+        specifier: workspace:*
+        version: link:../attachment
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../core/tools
       '@xrkseek/policy':
         specifier: workspace:*
         version: link:../policy
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/policy:
     dependencies:
@@ -2303,6 +2309,9 @@ importers:
       '@xrkseek/schemastery':
         specifier: workspace:*
         version: link:../../schemastery
+      '@xrkseek/server-config':
+        specifier: workspace:*
+        version: link:../config
       '@xrkseek/workspace':
         specifier: workspace:*
         version: link:../../workspace

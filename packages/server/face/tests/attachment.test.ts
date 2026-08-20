@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createMemoryAttachmentStore } from "@xrkseek/attachment";
 import {
@@ -34,14 +37,44 @@ function stubAgent(store: SessionStore, sessionId: string) {
   };
 }
 
-function face(opts?: {
+async function face(opts?: {
   readonly modalities?: readonly ("text" | "image")[];
+  /** When true, seed an openai vision route so live-route gate allows images. */
+  readonly visionRoute?: boolean;
 }) {
   const store = createMemorySessionStore();
   const attachments = createMemoryAttachmentStore();
+  let productDir = process.cwd();
+  if (opts?.visionRoute) {
+    productDir = await mkdtemp(path.join(tmpdir(), "xrk-face-vision-"));
+    await writeFile(
+      path.join(productDir, "settings.yaml"),
+      [
+        "llm-pi-ai:",
+        "  providers:",
+        "    openai:",
+        "      baseURL: https://api.openai.com/v1",
+        "      api: openai-completions",
+        "      models:",
+        "        - id: gpt-4.1",
+        "          name: GPT",
+        "agent-default-model:",
+        "  provider: openai",
+        "  model: gpt-4.1",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(productDir, ".credentials.yaml"),
+      "OPENAI_API_KEY: sk-test-key\n",
+      "utf8",
+    );
+  }
   const runtime = createFaceRuntime({
     store,
-    workspaceRoot: process.cwd(),
+    workspaceRoot: productDir,
+    productDir,
     version: "test",
     registry: createProviderRegistry(),
     attachments,
@@ -57,8 +90,8 @@ function face(opts?: {
 }
 
 describe("Face session.attachment / image prompt", () => {
-  it("rejects image when route is text-only (default)", async () => {
-    const { runtime } = face({ modalities: ["text"] });
+  it("rejects image when Face intake is text-only", async () => {
+    const { runtime } = await face({ modalities: ["text"] });
     const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});
     expect(created.result.ok).toBe(true);
     if (!created.result.ok) throw new Error("create failed");
@@ -73,12 +106,67 @@ describe("Face session.attachment / image prompt", () => {
       ],
     });
     expect(res.result.ok).toBe(false);
+    // Face maps unsupported-modality → wire attachment-error (rpc-error.ts).
+    if (!res.result.ok) expect(res.result.error.code).toBe("attachment-error");
+  });
+
+  it("rejects image when Face intake allows but live route is text-only", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-face-text-route-"));
+    await writeFile(
+      path.join(dir, "settings.yaml"),
+      [
+        "llm-deepseek:",
+        "  baseURL: https://api.deepseek.com",
+        "  models:",
+        "    - id: deepseek-v4-flash",
+        "agent-default-model:",
+        "  provider: deepseek",
+        "  model: deepseek-v4-flash",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(dir, ".credentials.yaml"),
+      "DEEPSEEK_API_KEY: sk-test-key\n",
+      "utf8",
+    );
+    const store = createMemorySessionStore();
+    const attachments = createMemoryAttachmentStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: dir,
+      productDir: dir,
+      version: "test",
+      registry: createProviderRegistry(),
+      attachments,
+      inputModalities: ["text", "image"],
+      drain: {
+        wake: () => undefined,
+        cancel: async () => undefined,
+        isActive: () => false,
+      },
+      resolveAgent: async (sessionId) => stubAgent(store, sessionId),
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});
+    if (!created.result.ok) throw new Error("create failed");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const res = await dispatchFaceMethod(runtime, "session.prompt", "r1", {
+      sessionId,
+      mode: "queue",
+      content: [
+        { type: "text", text: "see" },
+        { type: "image", mediaType: "image/png", data: PNG_B64 },
+      ],
+    });
+    expect(res.result.ok).toBe(false);
     if (!res.result.ok) expect(res.result.error.code).toBe("attachment-error");
   });
 
   it("persists image refs then session.attachment returns base64", async () => {
-    const { runtime, store } = face({
+    const { runtime, store } = await face({
       modalities: ["text", "image"],
+      visionRoute: true,
     });
     const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});
     if (!created.result.ok) throw new Error("create failed");
@@ -123,7 +211,7 @@ describe("Face session.attachment / image prompt", () => {
   });
 
   it("denies attachment id not referenced by session", async () => {
-    const { runtime } = face({ modalities: ["text", "image"] });
+    const { runtime } = await face({ modalities: ["text", "image"] });
     const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});
     if (!created.result.ok) throw new Error("create failed");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;

@@ -132,6 +132,19 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
       const listed = await faceRpc(base, "session.list");
       expect(listed.ok).toBe(true);
 
+      const workspaces = await faceRpc(base, "workspace.list");
+      expect(workspaces.ok).toBe(true);
+
+      // Immediately-tier locale/theme + welcome/agent-preset fire this on connect.
+      const settings = await faceRpc(base, "settings.describe");
+      expect(settings.ok).toBe(true);
+      expect(settings.value).toMatchObject({
+        namespaces: expect.any(Array),
+      });
+      expect(
+        (settings.value as { namespaces: unknown[] }).namespaces.length,
+      ).toBeGreaterThan(0);
+
       const presets = await faceRpc(base, "agentPreset.list");
       expect(presets.ok).toBe(true);
       expect(presets.value).toMatchObject({ authorable: false });
@@ -145,9 +158,6 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
         args: {},
       });
       expect(cordis).toEqual({ ok: true, value: [] });
-
-      const workspaces = await faceRpc(base, "workspace.list");
-      expect(workspaces.ok).toBe(true);
     } finally {
       await manager.stopAll();
     }

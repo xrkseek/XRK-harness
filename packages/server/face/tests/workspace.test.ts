@@ -31,6 +31,7 @@ describe("Face workspace U2", () => {
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
       seedTemplateDirs: { "office-agent": seed },
       drain: drain(),
       resolveAgent: async (sessionId) =>
@@ -153,6 +154,7 @@ describe("Face workspace U2", () => {
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
       drain: drain(),
       resolveAgent: async () => {
         throw new Error("unused");
@@ -188,6 +190,7 @@ describe("Face workspace U2", () => {
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
       drain: drain(),
       resolveAgent: async () => {
         throw new Error("unused");
@@ -253,6 +256,7 @@ describe("Face workspace U2", () => {
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
       drain: drain(),
       resolveAgent: async () => {
         throw new Error("unused");
@@ -326,6 +330,7 @@ describe("Face workspace U2", () => {
     const first = createFaceRuntime({
       store,
       workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
       drain: drain(),
       resolveAgent: async () => {
         throw new Error("unused");
@@ -353,6 +358,7 @@ describe("Face workspace U2", () => {
     const second = createFaceRuntime({
       store: createMemorySessionStore(),
       workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
       drain: drain(),
       resolveAgent: async () => {
         throw new Error("unused");

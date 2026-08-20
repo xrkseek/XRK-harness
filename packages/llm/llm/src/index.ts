@@ -1,4 +1,9 @@
-import type { ChatMessage, ToolCall } from "@xrkseek/protocol";
+import type {
+  ChatMessage,
+  LlmRequestConfig,
+  ToolCall,
+  TokenUsage,
+} from "@xrkseek/protocol";
 
 export interface LlmChatRequest {
   readonly messages: readonly ChatMessage[];
@@ -22,6 +27,8 @@ export interface LlmChatResponse {
   readonly toolCalls?: readonly ToolCall[];
   /** Optional model reasoning / thinking text when the vendor exposes it. */
   readonly reasoning?: string;
+  /** Optional provider token sample when the vendor reports usage. */
+  readonly usage?: TokenUsage;
 }
 
 /** Streaming events from OpenAI-compatible SSE (text + reasoning). */
@@ -37,10 +44,16 @@ export type LlmStreamEvent =
       readonly text: string;
     }
   | {
+      /** Mid-stream provider usage sample (DSH StreamChunk usage). */
+      readonly type: "usage";
+      readonly usage: TokenUsage;
+    }
+  | {
       readonly type: "done";
       readonly content: string;
       readonly reasoning?: string;
       readonly toolCalls?: readonly ToolCall[];
+      readonly usage?: TokenUsage;
     };
 
 export interface LlmAdapter {
@@ -53,6 +66,13 @@ export interface LlmAdapter {
    * and appends `assistant/chunk` events before `assistant/message`.
    */
   stream?(request: LlmChatRequest): AsyncIterable<LlmStreamEvent>;
+  /**
+   * Optional on routing adapters (`@xrkseek/llm-registry`): live route for
+   * `request/header` logging without provider I/O.
+   */
+  peekRoute?(): LlmRequestConfig | undefined;
+  /** Prefer over {@link peekRoute} when present — resolves selection now. */
+  ensureRoute?(): LlmRequestConfig;
 }
 
 /** Provider reported context window / token limit exceeded. */
@@ -113,18 +133,22 @@ export async function collectLlmStream(
   let content = "";
   let reasoning = "";
   let toolCalls: readonly ToolCall[] | undefined;
+  let usage: LlmChatResponse["usage"];
   for await (const ev of stream) {
     if (ev.type === "text-delta") content += ev.text;
     else if (ev.type === "reasoning-delta") reasoning += ev.text;
+    else if (ev.type === "usage") usage = ev.usage;
     else if (ev.type === "done") {
       content = ev.content || content;
       if (ev.reasoning) reasoning = ev.reasoning;
       if (ev.toolCalls) toolCalls = ev.toolCalls;
+      if (ev.usage) usage = ev.usage;
     }
   }
   return {
     content,
     ...(reasoning.trim() ? { reasoning } : {}),
     ...(toolCalls ? { toolCalls } : {}),
+    ...(usage ? { usage } : {}),
   };
 }

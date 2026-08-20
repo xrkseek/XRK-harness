@@ -24,6 +24,18 @@ export {
   type SessionStatsProjection,
 } from "./units/session-stats.js";
 export {
+  createTokenUsageProjectionUnit,
+  type TokenUsageProjection,
+} from "./units/token-usage.js";
+export {
+  createContextPressureProjectionUnit,
+  type ContextPressureProjection,
+} from "./units/context-pressure.js";
+export {
+  createContextBreakdownProjectionUnit,
+  type ContextBreakdownProjection,
+} from "./units/context-breakdown.js";
+export {
   DEFAULT_FALLBACK_MAX_WORDS,
   DEFAULT_TITLE_MAX_BYTES,
   fallbackSessionTitle,

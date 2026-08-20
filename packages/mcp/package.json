@@ -15,8 +15,10 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@xrkseek/attachment": "workspace:*",
     "@xrkseek/core-tools": "workspace:*",
-    "@xrkseek/policy": "workspace:*"
+    "@xrkseek/policy": "workspace:*",
+    "@xrkseek/protocol": "workspace:*"
   },
   "license": "MIT",
   "repository": {

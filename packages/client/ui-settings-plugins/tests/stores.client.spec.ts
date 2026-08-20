@@ -724,14 +724,23 @@ describe('McpCardController', () => {
     expect(face.hooks.mcpCard.getSnapshot().showErrors).toBe(true)
   })
 
-  it('suggests a name from the launch line when the name is blank', () => {
+  it('expands a Cursor mcpServers object on add', () => {
     const host = stubSettingsScope<McpSettings>()
     const controller = new McpCardController(host.scope)
     host.publish({ status: 'ready', writable: true, value: { servers: [] }, base: {}, user: {} })
     const face = controller.inject()
-    face.addRow()
-    face.editRow(0, { command: 'npx', args: '-y, @modelcontextprotocol/server-memory' })
-    face.suggestName(0)
-    expect(face.hooks.mcpCard.getSnapshot().rows[0]?.serverName).toBe('server-memory')
+    face.addRow(JSON.stringify({
+      mcpServers: {
+        '12306-mcp': { command: 'npx', args: ['-y', '12306-mcp'] },
+      },
+    }))
+    expect(face.hooks.mcpCard.getSnapshot().rows).toEqual([{
+      serverName: '12306-mcp',
+      transport: 'stdio',
+      command: 'npx',
+      url: '',
+      args: '-y, 12306-mcp',
+      cwd: '',
+    }])
   })
 })

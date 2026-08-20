@@ -1,10 +1,12 @@
 /**
  * Run LLM summarizer and append `context/compaction` (window swap).
+ * Logs `shadowedTokenCount` from the same surface estimator Face meter uses.
  */
 
 import {
   DEFAULT_COMPACTION_KEEP_TOKENS,
   prepareCompactionPayload,
+  priceCurrentSurfaceWindow,
   type CompactionOptions,
 } from "@xrkseek/core-session";
 import type { SessionStore } from "@xrkseek/core-session";
@@ -38,6 +40,8 @@ export async function runCompaction(
   const payload = prepareCompactionPayload(events, keep);
   if (!payload) return { compacted: false };
 
+  const shadowedTokenCount = priceCurrentSurfaceWindow(events);
+
   const response = await input.llm.chat({
     messages: [{ role: "user", content: payload.prompt }],
     ...(input.signal ? { signal: input.signal } : {}),
@@ -51,6 +55,7 @@ export async function runCompaction(
     reason: input.reason,
     summary,
     recent: payload.recent,
+    shadowedTokenCount,
     ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
   };
   input.store.append(input.sessionId, event);

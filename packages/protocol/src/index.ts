@@ -64,6 +64,7 @@ export {
   type LlmRequestConfig,
   type RequestHeaderEvent,
   type RequestHeaderReason,
+  type RequestHeaderToolSchema,
   type SandboxMode,
   type ApprovalPolicy,
   type ToolCallEvent,
@@ -94,6 +95,14 @@ export {
   type PlanUnitState,
 } from "./plan-mode.js";
 export type { ToolCall, ToolResult } from "./tools.js";
+export {
+  inputPressureTokens,
+  parseTokenUsage,
+  providerUsageSample,
+  tryParseOpenAiUsage,
+  usageFromSessionEvent,
+  type TokenUsage,
+} from "./token-usage.js";
 export {
   sessionEventJsonSchema,
   sessionEventJsonSchemaStub,

@@ -160,7 +160,7 @@ export type ToolEventView =
   | { readonly for: "call"; readonly view: ToolCallView }
   | { readonly for: "result"; readonly view: ToolResultView };
 
-/** Shape presenters receive (XRK result content is a string, not ContentBlock[]). */
+/** Shape presenters receive (flattened text; image refs stay on the session log). */
 export interface PresentableToolResult {
   readonly content: string;
   readonly isError?: boolean;

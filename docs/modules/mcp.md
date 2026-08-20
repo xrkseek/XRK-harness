@@ -23,7 +23,8 @@ MCP **client**（stdio + streamable-http）。规格门禁：[policy.md](../poli
 | `types.ts` | `McpClient` · `McpStdioOptions` · `McpHttpOptions` · `McpConnectionState` · 结果形 | |
 | `names.ts` | `publicToolName` · `parsePublicToolName` · `assertServerName` | serverName ∈ `[A-Za-z0-9_-]{1,32}`；raw 禁 `__` |
 | `reconnect.ts` | `resolveReconnectPolicy` · `RECONNECT_DEFAULTS` | 有界退避；错配构造失败 |
-| `client.ts` | `createMcpClient` | 先 policy；stdio 代际 supervisor；`onToolsListChanged` / `onConnectionState` |
+| `client.ts` | `createMcpClient` | 先 policy；stdio 代际 supervisor；`onToolsListChanged` / `onConnectionState`；可选 `imageAdmission` |
+| `project-content.ts` | 有序块投影；公开 barrel：`mapMcpCallContent` · `McpImageAdmission`；`projectMcpContent` 等为模块内实现 | image → AttachmentStore 或 diagnostic text；禁 JSON dump base64 |
 | `register.ts` | `registerMcpTools` · `mcpToolDefinition` | 显式同名 → skip；默认 watch；gave-up 卸工具 |
 
 ## 标准用法
@@ -53,7 +54,7 @@ createMcpClient({
 });
 ```
 
-Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目可 `command` 或 `url`；空 env 时读 `{workspace}/.xrk/host-settings.json` 的 `mcp.servers`）。Face `settings.mutate` 写 desired `servers`（禁 `env`）；文件真源时 Host `reconcileMcpToolPlugins` 热挂载（`applies: live`）；`XRK_MCP_SERVERS` / config 非空则仍赢过文件且 mutate 为 `applies: restart`。
+Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目可 `command` 或 `url`；空 env 时读 `~/.xrk/host-settings.json` 的 `mcp.servers`）。Face `settings.mutate` 写 desired `servers`（禁 `env`）；文件真源时 Host `reconcileMcpToolPlugins` 热挂载（`applies: live`）；`XRK_MCP_SERVERS` / config 非空则仍赢过文件且 mutate 为 `applies: restart`。
 
 ## 不变量（防 bug）
 
@@ -61,13 +62,15 @@ Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目�
 2. **工具名稳定**：模型可见名只来自 `publicToolName`；改命名规则 = 破坏会话可重放。  
 3. **dispose 成对**：Host `loader.unregister` / plugin `dispose` 必须关子进程 / HTTP session。  
 4. **显式优先**：registry 已有同名 → skip（与 loader tools 纪律一致）。  
-5. **代际不交错**：每次重连新 `Client`；`isCurrent` 让旧代 `onclose`  inert。失败帽耗尽才卸工具。
+5. **代际不交错**：每次重连新 `Client`；`isCurrent` 让旧代 `onclose`  inert。失败帽耗尽才卸工具。  
+6. **富结果**：非 text 块不 `JSON.stringify`；image 须 `imageAdmission` 才进模型可见 ContentBlock；否则固定 diagnostic 文案（raw bytes 不进 session log）。
 
 ## 测试
 
 | 测 | 覆盖 |
 |----|------|
 | `packages/mcp/tests/mcp.test.ts` | 命名 · 默认 deny · InMemory ping · http 选项形 · register/dispose · list_changed 热同步 |
+| `packages/mcp/tests/project-content.test.ts` | 有序投影 · image 准入 / 拒绝 · 禁 dump base64 |
 | `packages/mcp/tests/reconnect.test.ts` | 代际重连 · 失败帽 · disabled→gave-up · HTTP 默认督 · dispose 竞态 · 稳定窗口 |
 | `packages/server/host/tests/mcp-wire.test.ts` | env / host-settings · fingerprint · reconcile keep/remove/gave-up replace/fail |
 | Face `settings-credentials` | mutate 落盘 · `applies: live` · `connectFailures` |

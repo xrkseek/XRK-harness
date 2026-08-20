@@ -11,6 +11,7 @@ export interface FaceModelEntry {
   readonly id: string;
   readonly name: string;
   readonly description?: string;
+  readonly contextWindow?: number;
 }
 
 export interface FaceModelProviderGroup {
@@ -47,11 +48,17 @@ function asModelRows(raw: unknown): FaceModelEntry[] {
     const name =
       typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : id;
     const descRaw = (row as { description?: unknown }).description;
+    const cwRaw = (row as { contextWindow?: unknown }).contextWindow;
     out.push({
       id,
       name,
       ...(typeof descRaw === "string" && descRaw.trim()
         ? { description: descRaw.trim() }
+        : {}),
+      ...(typeof cwRaw === "number" &&
+      Number.isInteger(cwRaw) &&
+      cwRaw > 0
+        ? { contextWindow: cwRaw }
         : {}),
     });
   }
@@ -66,6 +73,7 @@ function deepseekModels(runtime: FaceRuntime): FaceModelEntry[] {
     id: m.id,
     name: m.name,
     ...(m.description ? { description: m.description } : {}),
+    ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
   }));
 }
 
@@ -133,6 +141,25 @@ export function buildFaceModelCatalog(
     });
   }
   return { groups, failures: [] };
+}
+
+/** Look up catalog contextWindow for a selection (Face contextPressure denominator). */
+export function lookupModelContextWindow(
+  runtime: FaceRuntime,
+  selection: FaceModelSelection,
+): number | undefined {
+  const brand = runtime.registry
+    .listBrands()
+    .find((b) => b.id === selection.provider);
+  if (!brand) {
+    if (selection.provider === "deepseek") {
+      return deepseekModels(runtime).find((m) => m.id === selection.model)
+        ?.contextWindow;
+    }
+    return undefined;
+  }
+  return modelsForBrand(runtime, brand).find((m) => m.id === selection.model)
+    ?.contextWindow;
 }
 
 /** Shared default from `agent-default-model` settings namespace. */

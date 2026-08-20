@@ -9,6 +9,8 @@ import {
 import type { ProviderBinding } from "@xrkseek/llm-registry";
 import type { FaceRuntime } from "./context.js";
 import {
+  lookupModelContextWindow,
+  resolveAgentDefaultModel,
   resolveSessionModelSelection,
   type FaceModelSelection,
 } from "./model-catalog.js";
@@ -64,9 +66,9 @@ export function resolveLlmForSelection(
     {
       id: `${binding.provider}:${binding.model}`,
       model: selection.model,
-      ...(runtime.inputModalities !== undefined
-        ? { inputModalities: runtime.inputModalities }
-        : {}),
+      // Do NOT pass runtime.inputModalities here — that is Face intake
+      // capability. Adapter modalities come from Registry / brand defaults
+      // (official DeepSeek stays text-only).
     },
   );
   return { binding, adapter, selection };
@@ -87,13 +89,42 @@ export function createSessionRoutingLlm(
   }
   return createRoutingLlmAdapter({
     id: `session:${sessionId}`,
-    getSelection: pickSelection,
+    getSelection: () => {
+      const selection = pickSelection();
+      const contextWindow = lookupModelContextWindow(runtime, selection);
+      return {
+        provider: selection.provider,
+        model: selection.model,
+        ...(selection.reasoningEffort !== undefined
+          ? { reasoningEffort: selection.reasoningEffort }
+          : {}),
+        ...(contextWindow !== undefined ? { contextWindow } : {}),
+      };
+    },
     resolveAdapter: (selection) =>
       resolveLlmForSelection(runtime, selection).adapter,
-    ...(runtime.inputModalities !== undefined
-      ? { inputModalities: runtime.inputModalities }
-      : {}),
   });
+}
+
+/**
+ * Whether the live model route declares image input (DSH resolveModelInfo gate).
+ * Face `inputModalities` is intake-only and must not override this.
+ */
+export function liveRouteAllowsImageInput(
+  runtime: FaceRuntime,
+  sessionId?: string,
+): boolean {
+  try {
+    const selection =
+      sessionId !== undefined
+        ? resolveSessionModelSelection(runtime, sessionId)
+        : resolveAgentDefaultModel(runtime) ??
+          resolveSessionModelSelection(runtime, "");
+    const { adapter } = resolveLlmForSelection(runtime, selection);
+    return (adapter.inputModalities ?? ["text"]).includes("image");
+  } catch {
+    return false;
+  }
 }
 
 /** Build adapter for the session's selected provider/model when credentials exist. */

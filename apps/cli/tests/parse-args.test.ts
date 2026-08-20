@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { helpText, parseArgs } from "../src/parse-args.js";
-import { defaultSessionsDir, ensureProductWebDist, harnessAppsRoot, resolveProductWebDist } from "../src/product-paths.js";
+import { ensureProductWebDist, harnessAppsRoot, resolveProductWebDist } from "../src/product-paths.js";
 import os from "node:os";
 import path from "node:path";
 
@@ -58,6 +58,7 @@ describe("cli parseArgs", () => {
     expect(helpText()).toContain("doctor");
     expect(helpText()).toContain("web");
     expect(helpText()).toContain("--no-persist");
+    expect(helpText()).toContain("~/.xrk/sessions");
     expect(helpText()).toContain("127.0.0.1");
   });
 
@@ -68,11 +69,9 @@ describe("cli parseArgs", () => {
 });
 
 describe("product paths", () => {
-  it("sessions default under workspace .xrk", () => {
-    const root = path.join(os.tmpdir(), "xrk-ws");
-    expect(defaultSessionsDir(root)).toBe(
-      path.join(path.resolve(root), ".xrk", "sessions"),
-    );
+  it("sessions default under ~/.xrk", async () => {
+    const { defaultSessionsDir, resolveXrkHome } = await import("@xrkseek/server-config");
+    expect(defaultSessionsDir()).toBe(path.join(resolveXrkHome(), "sessions"));
   });
 
   it("apps root sits next to cli package", () => {

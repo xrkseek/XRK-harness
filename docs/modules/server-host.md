@@ -11,7 +11,7 @@
 | `index.ts` | `createHostManager` · spawn/stop | AgentHandle 可缓存绑定，**不可**当 transcript |
 | `agent-cache.ts` | 按 session 缓存 agent · `host.plugins` Scope | 根会话 `agent:{id}`；子会话 `openSubagentRealm`（`subagent:{id}`）；invalidate 父卸嵌套子 |
 | `standing-tools.ts` | preset standing 工具表（Face `viewFor`） | 冷 history 不 resume agent；minimal = fs+std+skill，harness/server 加 bash + web + lsp + pty |
-| `mcp-wire.ts` | `XRK_MCP_SERVERS` 或 `{workspace}/.xrk/host-settings.json` → 合成 `kind: tools` 插件；文件真源时 Face mutate → `reconcileMcpToolPlugins` | 须 allow；id = `mcp:<serverName>`；stdio/HTTP 有界重连；list_changed / health / gave-up 刷新 tools + invalidateAll；health 推 overlay；`gave-up` 同 fingerprint 也会 replace；env/config 非空赢过文件（无 live sync） |
+| `mcp-wire.ts` | `XRK_MCP_SERVERS` 或 `~/.xrk/host-settings.json` → 合成 `kind: tools` 插件；文件真源时 Face mutate → `reconcileMcpToolPlugins` | 须 allow；id = `mcp:<serverName>`；stdio/HTTP 有界重连；list_changed / health / gave-up 刷新 tools + invalidateAll；health 推 overlay；`gave-up` 同 fingerprint 也会 replace；env/config 非空赢过文件（无 live sync） |
 
 配置在 `@xrkseek/server-config`（`loadHostConfig`）。
 
@@ -36,11 +36,11 @@
 | `XRK_WORKSPACE` | workspaceRoot |
 | `XRK_PRESET` | minimal \| harness \| server |
 | `XRK_API_KEY` | Face/HTTP 鉴权（空=开发免鉴权） |
-| `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db`）；省略 = 内存 store（CLI `serve` 另有默认 `{workspace}/.xrk/sessions`） |
+| `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db`）；省略 = 内存 store（CLI `serve` 另有默认 `~/.xrk/sessions`） |
 | `XRK_PLUGINS_DIR` | 进程插件根；`web/` 子目录为客户端叠加（boot + `/plugins/…`） |
 | `XRK_WEB_DIST` | 静态壳覆盖；缺省见 CLI（`product-web/` 或 apps/web/dist） |
 | `XRK_POLICY_FILE` | policy JSON |
-| `XRK_MCP_SERVERS` | JSON 数组：`[{serverName,command,args?,env?,cwd?}]` 或 `[{serverName,url}]`；空则回退 `.xrk/host-settings.json` |
+| `XRK_MCP_SERVERS` | JSON 数组：`[{serverName,command,args?,env?,cwd?}]` 或 `[{serverName,url}]`；空则回退 `~/.xrk/host-settings.json` |
 | `XRK_MCP_ALLOW` | `1`/`true` → 本进程 mcp.connect 默认 allow |
 | `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY` | web_search；见 [web-tools.md](../web-tools.md) |
 | `XRK_LSP_COMMAND` / `XRK_LSP_ARGS` | `lsp` stdio 语言服务器；见 [lsp-tools.md](../lsp-tools.md) |

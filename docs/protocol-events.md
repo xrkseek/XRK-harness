@@ -1,6 +1,8 @@
 # Protocol events
 
-Append-only session facts (`@xrkseek/protocol`). Model-visible history is reconstructed by `deriveMessages` — never a parallel mutable messages array.
+Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deriveMessages` 从事件重建，没有并行的可变 messages 数组。
+
+压缩换窗见 [session-compaction.md](./session-compaction.md)。
 
 ## Event set
 
@@ -9,15 +11,16 @@ Append-only session facts (`@xrkseek/protocol`). Model-visible history is recons
 | `turn/start` · `turn/end` | `turnId` | Turn bracket |
 | `step/start` · `step/end` | `turnId`, `stepId` | Provider step |
 | `user/message` | `turnId`, `content` | `content`: `string` **或** `ContentBlock[]`（text / image+`ImageAttachmentRef`）；可选 `rpcId` |
-| `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta；可选 `kind`：`text`\|`reasoning`；可选 `index`（reasoning=0、text=1 当两者都出现） |
-| `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls`；可选 `reasoning`（非 deriveMessages 可见） |
+| `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta；可选 `kind`：`text`\|`reasoning`\|`usage`；`usage` 时带 `usage`（TokenUsage；可空 text）；可选 `index`（reasoning=0、text=1） |
+| `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls`；可选 `reasoning`（非 deriveMessages 可见）；可选 `interrupted`；可选 `usage`（`TokenUsage`；Face `sessionStats.decodeTokens` + `tokenUsage`） |
+| `request/header` | `turnId`, `reason`, `header.config` | 非模型可见；`provider`/`model`；可选 `reasoningEffort` · `contextWindow`；可选 `system` · `tools[]`（Face `contextBreakdown` / envelope 重价） |
 | `tool/call` | `turnId`, `stepId`, `call` | Before pipeline body |
-| `tool/result` | `turnId`, `stepId`, `result` | Settled result；`result.meta` 可选（壳卡回放，不进 `deriveMessages`） |
+| `tool/result` | `turnId`, `stepId`, `result` | Settled result；`result.content` = MessageContent（string \| ContentBlock[]，MCP 可准入 image ref）；`result.meta` 可选（壳卡回放，不进 `deriveMessages`） |
 | `prompt/admitted` | `admitId`, `content` | MessageContent（string \| blocks）；可选 `delivery`: steer\|queue |
 | `prompt/promoted` | `admitId` | Consumed into a turn (not yet chat) |
 | `prompt/withdrawn` | `admitId` | Inbox withdraw (edit/remove/steer rewrite) |
 | `safety/notice` | `turnId`, `kind`, `content` | loop_soft/hard · mistake_limit · api_error |
-| `context/compaction` | `reason`, `summary`, `recent` | Optional `turnId` |
+| `context/compaction` | `reason`, `summary`, `recent` | Optional `turnId` · `shadowedTokenCount`（Face meter 有符号缩小；缺省 delta 0） |
 | `session/title` | `title`, `source` (`fallback`\|`user`) | **Log-only** — not in `deriveMessages`; Face projections |
 | `approval/asked` | `approvalId`, `toolCallId`, `toolName`, `reason` | **Log-only** — tool policy `ask`；可选 `argsSummary` |
 | `approval/decided` | `approvalId`, `decision` (`allow`\|`deny`), `source` | `user` · `cancel` · `timeout` |
@@ -40,6 +43,17 @@ Append-only session facts (`@xrkseek/protocol`). Model-visible history is recons
 | `isSessionEvent` | **Loose** gate (known `type` + numeric `ts` only) |
 
 `createMemorySessionStore().append` runs `assertSessionEvent` before freeze — bad shapes fail at the write boundary.
+
+## TokenUsage
+
+| Export | Behavior |
+|--------|----------|
+| `parseTokenUsage` · `tryParseOpenAiUsage` | Strict / soft provider sample decode |
+| `providerUsageSample(event)` | From mid-stream `assistant/chunk` kind=`usage` or final `assistant/message.usage` → `{ usage, turnId, stepId }` |
+| `usageFromSessionEvent(event)` | Same sample, usage only |
+| `inputPressureTokens(usage)` | `input + cacheRead + cacheWrite`（for context pressure） |
+
+Surface / compaction window pricing lives in `@xrkseek/core-session` — see [session-compaction.md](./session-compaction.md).
 
 ## JSON Schema
 
