@@ -1,5 +1,7 @@
 # HTTP API
 
+> **读者**：集成者。
+
 Base URL: `http://127.0.0.1:8787` (override with `XRK_HOST` / `XRK_PORT`).
 
 语义总览：[session-api.md](./session-api.md)、[session-latch.md](./session-latch.md)、[session-delivery.md](./session-delivery.md)。

@@ -1,5 +1,7 @@
 # LSP tools
 
+> **读者**：集成者 · 贡献者。
+
 `@xrkseek/exec-lsp`：单一模型工具 `lsp`。Harness / server preset 默认登记；minimal 不登记。
 
 ## 缝

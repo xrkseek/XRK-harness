@@ -1,5 +1,7 @@
 # Tool output bound
 
+> **读者**：贡献者。
+
 通用「给模型看的」输出封顶。  
 **叶工具可返回完整域输出**；pipeline 在 `finalize` 之后统一 bound，再 freeze `tool/result`。
 

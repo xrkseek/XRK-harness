@@ -1,5 +1,7 @@
 # Protocol events
 
+> **读者**：集成者 · 贡献者。
+
 Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deriveMessages` 从事件重建，没有并行的可变 messages 数组。
 
 压缩换窗见 [session-compaction.md](./session-compaction.md)。

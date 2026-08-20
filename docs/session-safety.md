@@ -1,5 +1,7 @@
 # Session safety（mistake · loop）
 
+> **读者**：集成者 · 贡献者。
+
 Session 旁路，**不**写进 `runTurn` 内核。见 [ADR-0003](./adr/0003-session-long-loop-short.md)。
 
 ## 组件

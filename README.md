@@ -10,7 +10,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D26-brightgreen.svg)](https://nodejs.org/)
-[![pnpm](https://img.shields.io/badge/pnpm-9-blue.svg)](https://pnpm.io/)
+[![pnpm](https://img.shields.io/badge/pnpm-11-blue.svg)](https://pnpm.io/)
 [![GitHub](https://img.shields.io/badge/github-xrkseek%2FXRK--harness-black.svg)](https://github.com/xrkseek/XRK-harness)
 
 [入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md)
@@ -44,7 +44,7 @@ XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agen
 
 ## 怎么跑
 
-需要 **Node.js ≥26**。
+需要 **Node.js ≥26**，包管理用 **pnpm**（版本见根 `package.json` 的 `packageManager`，当前 **11.22.0**）。
 
 ### 直接用（推荐）
 
@@ -159,8 +159,12 @@ docs/             使用与契约说明
 
 ## 维护本仓（开发者）
 
-若你在改这个仓库、跑门禁或发版，请看：
+终端用户可忽略本节。若你在**改这个仓库、交接或发版**：
 
-- [CONTRIBUTING.md](./CONTRIBUTING.md) — 贡献与 `pnpm check`
-- [docs/publishing.md](./docs/publishing.md) — Release / Packages
-- [AGENTS.md](./AGENTS.md) — 改码角色与红线（给维护者 / Coding Agent，不是终端用户手册）
+| 文档 | 用途 |
+|------|------|
+| [docs/audiences.md](./docs/audiences.md) | 四种读者 · 文档写作标准 |
+| [docs/maintainer.md](./docs/maintainer.md) | **交接清单** · 日常命令 |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | 贡献与 `pnpm check` |
+| [docs/publishing.md](./docs/publishing.md) | Release / Packages |
+| [AGENTS.md](./AGENTS.md) | 改码角色与红线（笔记，非用户手册） |

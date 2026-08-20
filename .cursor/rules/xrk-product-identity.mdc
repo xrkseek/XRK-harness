@@ -1,22 +1,37 @@
 ---
-description: 教科书 vs 笔记；产品文档只写已有行为；本机草稿进 Canvas
+description: 文档身份（用户/集成/贡献/维护）· 教科书 vs 笔记 · 交接入口
 alwaysApply: true
 ---
 
-# 教科书 · 笔记 · 本机草稿
+# 文档身份与载体
 
-| 形态 | 位置 | 读者 | 写什么 |
-|------|------|------|--------|
-| **教科书** | `docs/` · 根 README · 包 README · ADR | 用户 / 集成者 / 要学本仓的人 | 概念、契约、怎么用、能跑到哪（status） |
-| **笔记** | `.cursor/rules/*.mdc` · `.cursor/skills/*/SKILL.md` · `AGENTS.md` | Coding Agent / 改码维护者 | 红线、分层、改哪测哪、勿做清单 |
-| **本机草稿** | Cursor Canvas | 本人 | 对照路径、临时 TODO；**不入库** |
+产品名：**XRK-Harness**（`@xrkseek/*`）。
+
+## 四种读者（教科书）
+
+| 身份 | 入口 |
+|------|------|
+| 终端用户 | 根 README · `docs/getting-started` |
+| 集成者 | `docs/status` · `http-api` · `host-face` |
+| 贡献者 | `CONTRIBUTING` · `docs/testing` |
+| 维护者 | `docs/maintainer` · `docs/publishing` |
+
+标准全文：[docs/audiences.md](docs/audiences.md)。交接：[docs/maintainer.md](docs/maintainer.md)。
+
+## 载体
+
+| 载体 | 用途 |
+|------|------|
+| `docs/` · 根/包 README · ADR | **教科书**（事实与契约） |
+| `AGENTS.md` · `.cursor/rules` · `.cursor/skills` | **笔记**（改码红线） |
+| Canvas | **本机草稿**（不入库） |
 
 ## 硬规则
 
-- 教科书 **不写**：改码红线、「不要合并」「本刀」「shim」「duck cast」、教 Agent 怎么读文档。
-- 笔记 **不写**：当作产品规格的假 API；把未实现写成已支持。
-- 冲突：**代码** > status「能跑」> 教科书；笔记过期则改笔记，勿为省事改教科书去迁就 Agent。
-- 产品名：**XRK-Harness**（`@xrkseek/*`）。术语：Face wire、session 事件。
-- **外壳 / 内核**：壳 = `apps/web` + `packages/client`；serve 用 `apps/web/dist`；无 vendor；内核不嵌 Cordis Host。
-- 短要点目录：[docs/learn.md](docs/learn.md)；包地图：[docs/modules/](docs/modules/README.md)。
-- Meter 域笔记：`xrk-meter-compaction.mdc` · skill `xrk-meter-session`。
+- 新/大改文档文首：`> **读者**：…`
+- 根 README **不写**发版步骤、Agent 禁令
+- 禁止把笔记红线抄进用户说明书；禁止未做写成假 API
+- 冲突：代码 > status「能跑」> 教科书；笔记过期改笔记
+- Face / wire 用本仓术语；壳 = `apps/web` + `packages/client`；不嵌 Cordis Host；不对 deepseek-ai 提 PR
+- Meter 笔记：`xrk-meter-compaction.mdc` · skill `xrk-meter-session`
+- 写文档笔记：skill `xrk-docs-audience`

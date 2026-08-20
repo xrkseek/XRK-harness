@@ -1,5 +1,7 @@
 # Session Delivery（steer · queue）
 
+> **读者**：集成者 · 贡献者。
+
 产品规格：用户输入如何进入 inbox，以及何时被 promote 进 turn。  
 真源仍为 `prompt/admitted` / `prompt/promoted` 事件（无独立 inbox 表）。
 

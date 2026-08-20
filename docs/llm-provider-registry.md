@@ -1,5 +1,7 @@
 # LLM Provider Registry
 
+> **读者**：集成者 · 贡献者。
+
 产品规格。`@xrkseek/llm-registry`：单路径解析与创建适配器。BrandEntries：[llm-provider-presets.md](./llm-provider-presets.md)。
 
 ## 目标

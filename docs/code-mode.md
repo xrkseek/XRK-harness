@@ -1,5 +1,7 @@
 # Code Mode
 
+> **读者**：贡献者（实验面）。
+
 Use **Code Mode** when the model should run short JS snippets (`run_code`) instead of (or in addition to) emitting many atomic tool calls.
 
 | Mode | When |

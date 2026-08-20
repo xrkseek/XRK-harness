@@ -2,7 +2,7 @@
   "name": "xrk-harness",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@11.22.0",
   "engines": {
     "node": ">=26"
   },

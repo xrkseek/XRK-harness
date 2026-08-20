@@ -1,6 +1,8 @@
 # Plugin loader
 
-进程内插件登记与目录发现（`@xrkseek/server-loader`）。**能力优先做成插件贡献**，再由 preset / Host 接线——不要为每个新能力单独开 Host 特例。
+> **读者**：贡献者 · 维护者。
+
+进程内插件登记与目录发现（`@xrkseek/server-loader`）。新 Host 能力优先做成插件贡献，再由 preset / Host 接线。
 
 ## 两层插件
 

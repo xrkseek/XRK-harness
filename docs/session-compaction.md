@@ -1,5 +1,7 @@
 # Session compaction
 
+> **读者**：集成者 · 贡献者（配置压缩 / 理解 meter）。终端用户可在壳内使用 `/compact`，细节见下文「Face `/compact`」。
+
 长会话里，模型可见上下文需要**换窗**，而不是改写或删除历史日志。
 
 本仓做法：在 append-only 事件流上追加一条 `context/compaction`，之后 `deriveMessages` 只从**最新**压缩点往后重建；旧事件仍留在 store，可供审计与摘要器全量读取。

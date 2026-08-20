@@ -1,5 +1,7 @@
 # Testing
 
+> **读者**：贡献者 · 维护者。
+
 ## 门禁
 
 根脚本 `pnpm check` → `scripts/check.mjs`：

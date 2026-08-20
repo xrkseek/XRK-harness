@@ -1,5 +1,7 @@
 # Session latch
 
+> **读者**：贡献者 · 维护者。
+
 Promise 门闩（无代数效应运行时）。决策见 [ADR-0003](./adr/0003-session-long-loop-short.md)、[ADR-0004](./adr/0004-no-effect-runtime.md)。
 
 ## `createTurnLatch`（已接 `createAgent`）

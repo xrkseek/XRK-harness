@@ -1,5 +1,7 @@
 # Profiles（Presets）
 
+> **读者**：终端用户 · 集成者 · 贡献者。
+
 本仓用 **preset** 表达可切换组合，不使用独立 “profile” 运行时。CLI / env：`minimal` | `harness` | `server`。
 
 ## 选型

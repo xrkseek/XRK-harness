@@ -1,5 +1,7 @@
 # `@xrkseek/attachment`（文件地图）
 
+> **读者**：贡献者 · 维护者。
+
 | 文件 | 职责 |
 |------|------|
 | `types.ts` | limits · SaveImage · StoredImage；`ImageAttachmentRef` 复用 protocol |

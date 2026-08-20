@@ -1,5 +1,7 @@
 # Host Face
 
+> **读者**：集成者 · 贡献者。
+
 `@xrkseek/server-face`：Unary RPC + 双 WebSocket，与 REST `/api/sessions` 并行，共用 session 真源。
 
 ## 目标

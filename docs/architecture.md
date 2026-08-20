@@ -1,5 +1,7 @@
 # Architecture
 
+> **读者**：集成者 · 贡献者 · 维护者。
+
 宿主 **仅 TypeScript（Node ≥26）**。会话真源为 append-only **session 事件**；agent loop / turn 状态短寿。
 
 ## 决策（ADR）
@@ -14,15 +16,16 @@
 
 ## 文档分层
 
-完整表见 [docs/README.md](./README.md)「教科书 · 笔记 · 草稿」。摘要：
+完整身份与写作标准见 [audiences.md](./audiences.md)。摘要：
 
 | 层 | 形态 | 写什么 | 不写什么 |
 |----|------|--------|----------|
-| 根 README · `docs/*` · 包 README · ADR | **教科书** | 产品、契约、用法、能力边界 | 改码红线、「本刀」、本机路径 |
-| [AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/skills` | **笔记** | 角色、红线、改哪测哪 | 当规格的假 API |
+| 根 README · `docs/*` · 包 README · ADR | **教科书** | 产品、契约、用法、能力边界 | 发版口令当用户 FAQ、Agent 红线 |
+| [maintainer](./maintainer.md) · [publishing](./publishing.md) | 教科书（**维护者专章**） | 交接、发版 | 塞进根 README 正文 |
+| [AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/skills` | **笔记** | 角色、红线、改哪测哪 | 假 API 当规格 |
 | Canvas（本机） | **草稿** | 对照 · 临时 TODO | 入库 |
 
-依赖边见 [AGENTS.md](../AGENTS.md)。能力矩阵：[status.md](./status.md)。
+依赖边见 [AGENTS.md](../AGENTS.md)。能力矩阵：[status.md](./status.md)。交接：[maintainer.md](./maintainer.md)。
 
 ## 包平面
 

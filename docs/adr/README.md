@@ -1,5 +1,7 @@
 # ADR
 
+> **读者**：维护者 · 贡献者（重大决策）。
+
 Architecture Decision Records.
 
 | ID | Title | Status |

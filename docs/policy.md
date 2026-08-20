@@ -1,5 +1,7 @@
 # Policy
 
+> **读者**：集成者 · 贡献者。
+
 Ordered rule engine for `tool.call` · `provider.use` · `mcp.connect`.
 
 ## Verdicts

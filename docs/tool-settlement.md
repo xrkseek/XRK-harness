@@ -1,5 +1,7 @@
 # Tool settlement
 
+> **读者**：贡献者。
+
 ## 悬挂 call（fail-before-retry）
 
 底层不变量：**每个 `tool/call`（及未落 call 的 `assistant.toolCalls`）必须有配对 `tool/result`，才可进入下一轮模型请求。**

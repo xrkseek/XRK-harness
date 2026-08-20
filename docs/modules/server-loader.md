@@ -1,5 +1,7 @@
 # Module: `@xrkseek/server-loader`
 
+> **读者**：贡献者 · 维护者。
+
 进程插件登记 / 发现 / kind 接线。规格：[plugin-loader.md](../plugin-loader.md)。
 
 ## 文件地图

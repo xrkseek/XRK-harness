@@ -1,5 +1,7 @@
 # Exec seams
 
+> **读者**：贡献者 · 能力叶作者。
+
 ### Triad: Definition / Provider / Consumer
 
 | Layer | Role | Example (fs) |

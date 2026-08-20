@@ -1,5 +1,7 @@
 # PTY tools
 
+> **读者**：集成者 · 贡献者。
+
 `@xrkseek/exec-pty`：六件套 `terminal_open` / `terminal_send` / `terminal_read` / `terminal_signal` / `terminal_close` / `terminal_list`。Harness / server preset 默认登记；minimal 不登记。
 
 对照源码：本机 `deepseek-harness` @ `dsh-v0.1.0-rc.8`（`origin/master`）。

@@ -1,11 +1,15 @@
 # Contributing
 
-维护 XRK-Harness 时遵循 [AGENTS.md](./AGENTS.md)。切片完成定义：**代码 + 测试 +（若改契约）docs 同步 + `pnpm check` 绿**。
+> **读者**：贡献者 · 维护者。终端用户请看根 [README](./README.md)。
+
+维护与提 PR 时遵循 [AGENTS.md](./AGENTS.md)。切片完成定义：**代码 + 测试 +（若改契约）教科书同步 + `pnpm check` 绿**。
+
+身份与文档分层：[docs/audiences.md](./docs/audiences.md)。整仓交接：[docs/maintainer.md](./docs/maintainer.md)。
 
 ## 环境
 
 - Node ≥ 26（`.nvmrc` / `engines`）
-- pnpm 9（`packageManager` 字段锁定）
+- pnpm（版本以根 `package.json` 的 `packageManager` 为准；当前 **11.22.0**）
 
 ```bash
 node -v   # 应 ≥ v26；若 shell 仍是旧版，改用系统 Node 或调整 PATH
@@ -13,7 +17,7 @@ pnpm install
 pnpm check
 ```
 
-首次跑通见 [docs/getting-started.md](./docs/getting-started.md)。
+首次跑通见 [docs/getting-started.md](./docs/getting-started.md) 路径 B。
 
 **勿提交密钥**：`.xrk/.credentials.yaml`、`.xrk/settings.yaml`、`.env` 已在 `.gitignore`；仓内只保留 `.xrk/*.example` 与 `.env.example`。若误提交，轮换 key 并重写未推送历史。
 
@@ -46,8 +50,11 @@ sdk · server · presets → core* / llm / mcp / attachment / exec* / workspace 
 | Tool 管道阶段 / settle | `docs/tool-*.md` |
 | Preset 选项 | `docs/profiles.md` · `docs/workspace-inject.md` · preset README |
 | 新能力是否可依赖 | `docs/status.md` |
+| Meter / compaction | `docs/session-compaction.md` · `docs/protocol-events.md` |
 
 空壳 / 未接线能力在实现前 **只** 更新 `docs/status.md`「未做」，勿写假 API。`@xrkseek/mcp` 已能跑（stdio · HTTP · `tools/list_changed` · 默认 deny）；勿再当空壳。
+
+新文档文首加 `> **读者**：…`（见 [audiences](./docs/audiences.md)）。**不要**把 Agent 红线写进用户说明书。
 
 ## 扩展常见路径
 
@@ -63,12 +70,18 @@ sdk · server · presets → core* / llm / mcp / attachment / exec* / workspace 
 
 - 默认分支 `main`  
 - **不要**代提交，除非维护者明确要求  
-- Commit 勿带 Cursor co-author trailer（见用户/仓库规则）  
-- 密钥（`.env`、真实 API key）永不入库  
+- Commit 勿带 Cursor co-author trailer  
+- 密钥永不入库  
 - 外壳是 MIT 二次创作，**不要**向 deepseek-ai / DSH 仓库提 PR（见 [ADR-0002](./docs/adr/0002-no-embed-upstream.md)）  
 
 ## 文档入口
 
-分层与属性见 [docs/README.md](./docs/README.md)。改契约必改对应规格 + [docs/status.md](./docs/status.md)。入门 / 配置 / 排障：[getting-started](./docs/getting-started.md) · [configuration](./docs/configuration.md) · [troubleshooting](./docs/troubleshooting.md)。包落点见 [docs/modules/README.md](./docs/modules/README.md)。本机对照进 Cursor Canvas，不进 `docs/`。
+| 目的 | 打开 |
+|------|------|
+| 身份与分层 | [docs/audiences.md](./docs/audiences.md) |
+| 教科书索引 | [docs/README.md](./docs/README.md) |
+| 能力诚实 | [docs/status.md](./docs/status.md) |
+| 交接 / 发版 | [docs/maintainer.md](./docs/maintainer.md) · [docs/publishing.md](./docs/publishing.md) |
+| 改码笔记 | [AGENTS.md](./AGENTS.md) |
 
-[docs/README.md](./docs/README.md) · [docs/status.md](./docs/status.md) · [docs/architecture.md](./docs/architecture.md)
+本机对照进 Cursor Canvas，不进 `docs/`。
