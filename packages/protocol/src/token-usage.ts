@@ -40,7 +40,13 @@ export function parseTokenUsage(value: unknown): TokenUsage {
   };
 }
 
-/** Soft-parse OpenAI-style usage blobs; returns undefined when unusable. */
+/** Soft-parse OpenAI-style usage blobs; returns undefined when unusable.
+ *
+ * Wire `prompt_tokens` often **includes** cache hits (DeepSeek:
+ * `prompt_tokens = prompt_cache_hit_tokens + prompt_cache_miss_tokens`).
+ * Harness {@link TokenUsage} keeps **disjoint** buckets, so cache reads are
+ * subtracted from `inputTokens` (DSH `mapUsage`).
+ */
 export function tryParseOpenAiUsage(value: unknown): TokenUsage | undefined {
   if (!value || typeof value !== "object") return undefined;
   const o = value as Record<string, unknown>;
@@ -56,30 +62,63 @@ export function tryParseOpenAiUsage(value: unknown): TokenUsage | undefined {
   ) {
     return undefined;
   }
-  const usage: TokenUsage = {
-    inputTokens: Math.trunc(input),
-    outputTokens: Math.trunc(output),
-  };
-  const cacheRead = o.cache_read_input_tokens ?? o.cacheReadTokens;
-  const cacheWrite = o.cache_creation_input_tokens ?? o.cacheWriteTokens;
-  const reasoning = o.reasoning_tokens ?? o.reasoningTokens;
+
+  const details =
+    o.prompt_tokens_details &&
+    typeof o.prompt_tokens_details === "object" &&
+    !Array.isArray(o.prompt_tokens_details)
+      ? (o.prompt_tokens_details as Record<string, unknown>)
+      : undefined;
+  const completionDetails =
+    o.completion_tokens_details &&
+    typeof o.completion_tokens_details === "object" &&
+    !Array.isArray(o.completion_tokens_details)
+      ? (o.completion_tokens_details as Record<string, unknown>)
+      : undefined;
+
+  const cacheReadRaw =
+    details?.cached_tokens ??
+    o.prompt_cache_hit_tokens ??
+    o.cache_read_input_tokens ??
+    o.cacheReadTokens;
+  const cacheWriteRaw =
+    o.cache_creation_input_tokens ??
+    o.cacheWriteTokens ??
+    details?.cache_write_tokens;
+  const reasoningRaw =
+    completionDetails?.reasoning_tokens ??
+    o.reasoning_tokens ??
+    o.reasoningTokens;
+
+  const cacheRead =
+    typeof cacheReadRaw === "number" &&
+    Number.isFinite(cacheReadRaw) &&
+    cacheReadRaw >= 0
+      ? Math.trunc(cacheReadRaw)
+      : undefined;
+  const cacheWrite =
+    typeof cacheWriteRaw === "number" &&
+    Number.isFinite(cacheWriteRaw) &&
+    cacheWriteRaw >= 0
+      ? Math.trunc(cacheWriteRaw)
+      : undefined;
+  const reasoning =
+    typeof reasoningRaw === "number" &&
+    Number.isFinite(reasoningRaw) &&
+    reasoningRaw >= 0
+      ? Math.trunc(reasoningRaw)
+      : undefined;
+
+  const promptTotal = Math.trunc(input);
+  const uncached =
+    cacheRead !== undefined ? Math.max(0, promptTotal - cacheRead) : promptTotal;
+
   return {
-    ...usage,
-    ...(typeof cacheRead === "number" &&
-    Number.isFinite(cacheRead) &&
-    cacheRead >= 0
-      ? { cacheReadTokens: Math.trunc(cacheRead) }
-      : {}),
-    ...(typeof cacheWrite === "number" &&
-    Number.isFinite(cacheWrite) &&
-    cacheWrite >= 0
-      ? { cacheWriteTokens: Math.trunc(cacheWrite) }
-      : {}),
-    ...(typeof reasoning === "number" &&
-    Number.isFinite(reasoning) &&
-    reasoning >= 0
-      ? { reasoningTokens: Math.trunc(reasoning) }
-      : {}),
+    inputTokens: uncached,
+    outputTokens: Math.trunc(output),
+    ...(cacheRead !== undefined ? { cacheReadTokens: cacheRead } : {}),
+    ...(cacheWrite !== undefined ? { cacheWriteTokens: cacheWrite } : {}),
+    ...(reasoning !== undefined ? { reasoningTokens: reasoning } : {}),
   };
 }
 

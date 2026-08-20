@@ -33,6 +33,7 @@ import {
   createSessionRoutingLlm,
   liveRouteAllowsImageInput,
   resolveSessionCwd,
+  canonicalAgentPresetId,
   tryHandleFaceHttp,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
@@ -51,6 +52,7 @@ import { wireDrainStatus, publishDrainIdle, type SessionDrainControl } from "./d
 import {
   mcpDraftsToSpecs,
   parseMcpServersEnv,
+  readMcpAllowFromHostSettings,
   readMcpServersFromHostSettings,
   reconcileMcpToolPlugins,
   type McpServerDraft,
@@ -71,6 +73,7 @@ export {
   mcpDraftsToSpecs,
   mcpFingerprint,
   parseMcpServersEnv,
+  readMcpAllowFromHostSettings,
   readMcpServersFromHostSettings,
   reconcileMcpToolPlugins,
   type McpRegisteredPlugin,
@@ -86,15 +89,23 @@ function logMcpReconcile(
     readonly added: readonly string[];
     readonly removed: readonly string[];
     readonly kept: readonly string[];
+    readonly parked: readonly string[];
     readonly failures: readonly { serverName: string; message: string }[];
   },
 ): void {
   if (!log) return;
+  const parkBit =
+    result.parked.length > 0 ? ` park=${result.parked.length}` : "";
   log.info(
-    `mcp ${label}: +${result.added.length} -${result.removed.length} keep=${result.kept.length}`,
+    `mcp ${label}: +${result.added.length} -${result.removed.length} keep=${result.kept.length}${parkBit}`,
   );
   for (const id of result.added) log.info(`mcp connected ${id}`);
   for (const id of result.removed) log.info(`mcp removed ${id}`);
+  if (result.parked.length > 0) {
+    log.info(
+      `mcp parked ${result.parked.join(", ")} (enable Allow connect in Settings > Plugins > MCP)`,
+    );
+  }
   for (const f of result.failures) {
     log.warn(`mcp connect failed ${f.serverName}: ${f.message}`);
   }
@@ -142,6 +153,20 @@ function resolveMcpSpecs(config: HostConfig) {
   return readMcpServersFromHostSettings(hostSettingsPath());
 }
 
+/**
+ * Connect allow: env `XRK_MCP_ALLOW` (CI/headless) wins, else Face
+ * `mcp.allowConnect` in host-settings.json (Web Settings).
+ */
+function resolveMcpAllowConnect(
+  config: HostConfig,
+  faceAllow?: boolean,
+): boolean {
+  if (config.runtime.mcpAllowConnect) return true;
+  if (faceAllow === true) return true;
+  if (faceAllow === false) return false;
+  return readMcpAllowFromHostSettings(hostSettingsPath());
+}
+
 export type AgentImageResolver = (
   attachmentId: string,
 ) => Promise<{ readonly mediaType: string; readonly data: Uint8Array }>;
@@ -150,6 +175,11 @@ export type AgentFactory = (input: {
   sessionId: string;
   store: SessionStore;
   workspaceRoot: string;
+  /**
+   * Session Face `agentPreset` (header badge). Host factory must honor this for
+   * tool composition — it is not cosmetic. Falls back to Host `--preset`.
+   */
+  agentPreset?: string;
   /** Plugins loaded by host (`XRK_PLUGINS_DIR` / register). Wire via `wireCompositionTools`. */
   plugins: readonly RegisteredPlugin[];
   /** Attachment bytes for vision user content (Host memory store). */
@@ -169,12 +199,14 @@ export type AgentFactory = (input: {
    * Host wires this after Face runtime starts; falls back to env/replay in presets.
    */
   resolveLlm?: (sessionId: string) => LlmAdapter | undefined;
-  /** Face Plugins → agent-loop / bash (Host reads live Face namespaces). */
+  /** Face Plugins → agent-loop / bash / web-search (Host reads live Face namespaces). */
   maxParallelToolCalls?: number;
   bashLimits?: {
     timeoutMs?: number;
     maxOutputBytes?: number;
   };
+  /** Merged Face web-search + vault keys for `createDefaultWebAccess({ search })`. */
+  webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
 }) => Promise<AgentHandle>;
 
 export type { SessionDrainControl } from "./drain-status.js";
@@ -194,6 +226,8 @@ export interface HostInstance {
     status: string;
     port?: number;
     plugins?: readonly string[];
+    /** Resolved MCP connect allow (Face Settings and/or env override). */
+    mcpAllowConnect?: boolean;
   };
   stop(): Promise<void>;
 }
@@ -235,9 +269,10 @@ export function createHostManager(): HostManager {
 
       const mcpSpecs = resolveMcpSpecs(config);
       const mcpFileSourced = configuredMcpSpecs(config).length === 0;
+      let mcpAllowConnect = resolveMcpAllowConnect(config);
       if (mcpSpecs.length > 0) {
         log?.info(
-          `mcp desired ${mcpSpecs.length} (source=${mcpFileSourced ? "host-settings" : "env/config"}; allow=${config.runtime.mcpAllowConnect ? "on" : "off"})`,
+          `mcp desired ${mcpSpecs.length} (source=${mcpFileSourced ? "host-settings" : "env/config"}; allow=${mcpAllowConnect ? "on" : "off"})`,
         );
       }
       let invalidateAgents: () => Promise<void> = async () => {};
@@ -280,20 +315,11 @@ export function createHostManager(): HostManager {
             loadedPluginIds = loadedPluginIds.filter((x) => x !== pluginId);
           },
           ...(policy ? { policy } : {}),
-          allowConnect: Boolean(config.runtime.mcpAllowConnect),
+          allowConnect: mcpAllowConnect,
           imageAdmission: mcpImageAdmission,
           ...mcpHooks,
         });
         logMcpReconcile(log, "boot", boot);
-        if (
-          boot.added.length === 0 &&
-          boot.failures.length > 0 &&
-          !config.runtime.mcpAllowConnect
-        ) {
-          log?.warn(
-            "mcp: set XRK_MCP_ALLOW=1 (or policy allow mcp.connect) to connect saved servers",
-          );
-        }
       }
       refreshFacePlugins();
 
@@ -327,9 +353,13 @@ export function createHostManager(): HostManager {
         read?: () => {
           maxParallelToolCalls?: number;
           bashLimits?: { timeoutMs?: number; maxOutputBytes?: number };
+          webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
         };
       } = {};
       const sessionCwdBox: {
+        get?: (sessionId: string) => string | undefined;
+      } = {};
+      const sessionPresetBox: {
         get?: (sessionId: string) => string | undefined;
       } = {};
       const hostStatusBox: {
@@ -345,6 +375,7 @@ export function createHostManager(): HostManager {
         const parentSessionId = lineage.parentOf(sessionId);
         const sessionRoot =
           sessionCwdBox.get?.(sessionId) ?? config.runtime.workspaceRoot;
+        const agentPreset = sessionPresetBox.get?.(sessionId);
         return agentCache.resolve(
           sessionId,
           async () => {
@@ -354,6 +385,7 @@ export function createHostManager(): HostManager {
               store,
               workspaceRoot: sessionRoot,
               plugins: loader.list(),
+              ...(agentPreset ? { agentPreset } : {}),
               resolveImage: async (attachmentId) => {
                 const stored = await attachments.readImage(attachmentId);
                 return {
@@ -371,6 +403,9 @@ export function createHostManager(): HostManager {
                 : {}),
               ...(pluginSettings.bashLimits
                 ? { bashLimits: pluginSettings.bashLimits }
+                : {}),
+              ...(pluginSettings.webSearch
+                ? { webSearch: pluginSettings.webSearch }
                 : {}),
             });
             if (faceBox.approvals) {
@@ -450,7 +485,7 @@ export function createHostManager(): HostManager {
           preset: config.runtime.preset,
         }),
         version: "0.0.0",
-        defaultAgentPreset: config.runtime.preset,
+        defaultAgentPreset: canonicalAgentPresetId(config.runtime.preset),
         registry: createProviderRegistry(),
         attachments,
         // Face intake only (InputBar paste). Live adapter modalities come from
@@ -465,8 +500,15 @@ export function createHostManager(): HostManager {
         plugins: facePlugins,
         ...(mcpFileSourced
           ? {
-              syncMcpServers: async (servers: readonly McpServerDraft[]) => {
+              syncMcpServers: async (
+                servers: readonly McpServerDraft[],
+                options?: { readonly allowConnect?: boolean },
+              ) => {
                 const run = mcpSyncTail.then(async () => {
+                  mcpAllowConnect = resolveMcpAllowConnect(
+                    config,
+                    options?.allowConnect,
+                  );
                   const result = await reconcileMcpToolPlugins({
                     desired: mcpDraftsToSpecs(servers),
                     list: () => loader.list(),
@@ -483,14 +525,17 @@ export function createHostManager(): HostManager {
                       );
                     },
                     ...(policy ? { policy } : {}),
-                    allowConnect: Boolean(config.runtime.mcpAllowConnect),
+                    allowConnect: mcpAllowConnect,
                     imageAdmission: mcpImageAdmission,
                     ...mcpHooks,
                   });
                   logMcpReconcile(log, "reconcile", result);
                   refreshFacePlugins();
                   await invalidateAgents();
-                  return { failures: result.failures };
+                  return {
+                    failures: result.failures,
+                    parked: result.parked,
+                  };
                 });
                 // Keep the chain alive even if one reconcile rejects.
                 mcpSyncTail = run.then(
@@ -539,6 +584,8 @@ export function createHostManager(): HostManager {
       faceBox.questions = faceRuntime.questions;
       sessionCwdBox.get = (sessionId) =>
         resolveSessionCwd(faceRuntime, sessionId);
+      sessionPresetBox.get = (sessionId) =>
+        faceRuntime.sessionAgentPresets.get(sessionId);
       hostStatusBox.publish = (sessionId, running) => {
         faceRuntime.bus.publishHost({
           type: "host/session-status",
@@ -557,6 +604,8 @@ export function createHostManager(): HostManager {
           string,
           unknown
         >;
+        const webSearchNs = faceRuntime.settingsNamespaces.view("web-search")
+          .value as Record<string, unknown>;
         const maxParallelToolCalls =
           typeof loop.maxParallelToolCalls === "number" &&
           Number.isFinite(loop.maxParallelToolCalls) &&
@@ -575,6 +624,32 @@ export function createHostManager(): HostManager {
           bash.maxOutputBytes > 0
             ? Math.floor(bash.maxOutputBytes)
             : undefined;
+        const provider =
+          typeof webSearchNs.provider === "string"
+            ? webSearchNs.provider.trim()
+            : "";
+        const region =
+          typeof webSearchNs.region === "string"
+            ? webSearchNs.region.trim()
+            : "";
+        const tavily = faceRuntime.credentials.peek("web.tavily");
+        const brave = faceRuntime.credentials.peek("web.brave");
+        const webSearch: import("@xrkseek/exec-web").SearchAccessConfig = {
+          ...(provider && provider !== "auto" ? { provider } : {}),
+          ...(region ? { region } : {}),
+          ...(tavily || process.env.XRK_TAVILY_API_KEY?.trim()
+            ? {
+                tavilyApiKey:
+                  tavily ?? process.env.XRK_TAVILY_API_KEY?.trim() ?? "",
+              }
+            : {}),
+          ...(brave || process.env.XRK_BRAVE_SEARCH_API_KEY?.trim()
+            ? {
+                braveApiKey:
+                  brave ?? process.env.XRK_BRAVE_SEARCH_API_KEY?.trim() ?? "",
+              }
+            : {}),
+        };
         return {
           ...(maxParallelToolCalls !== undefined ? { maxParallelToolCalls } : {}),
           ...(timeoutMs !== undefined || maxOutputBytes !== undefined
@@ -585,6 +660,7 @@ export function createHostManager(): HostManager {
                 },
               }
             : {}),
+          webSearch,
         };
       };
       faceRuntime.bus.subscribeHost((_rpcId, frame) => {
@@ -604,7 +680,8 @@ export function createHostManager(): HostManager {
             ns === "llm-deepseek" ||
             ns === "llm-pi-ai" ||
             ns === "agent-loop" ||
-            ns === "bash"
+            ns === "bash" ||
+            ns === "web-search"
           ) {
             void invalidateAgents();
           }
@@ -700,6 +777,7 @@ export function createHostManager(): HostManager {
             ok: status === "running",
             status,
             port: addr.port,
+            mcpAllowConnect,
             ...(loadedPluginIds.length
               ? { plugins: loadedPluginIds }
               : {}),

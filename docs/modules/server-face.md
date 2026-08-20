@@ -81,6 +81,10 @@ HTTP/WS (attach-http)
 | `workspace-registry.ts`   | DSH 形 workspace 注册表                 | `workspaceIdOf`；delete 发 removed；insertBefore 发 order |
 | `settings-credentials.ts` | settings.* · credentials.*              | 密钥不入库；openDocument 忽略客户端 path；`mcp.servers` 落盘（禁 env）；`connected` overlay |
 | `face-schema.ts`          | settings namespace schemastery 信封     | `{ uid, refs }`；JSON Schema 壳读不了 |
+| `settings-schemas.ts`     | Face 产品 namespace base / schema          | `llm-pi-ai` · `llm-deepseek` · mcp … |
+| `llm-provider-context.ts` | 路由 · 凭据 · **声明路由合成 binding**  | 产品面禁止裸 `registry.resolve`；保留 `baseURL`/`baseUrl` |
+| `llm-resolve.ts`          | selection → adapter                     | `resolveLlmForSelection` / session routing |
+| `model-catalog.ts`        | `session.models` 目录 · 默认 selection  | brand + 声明路由；`routeServed` |
 
 ### Wire 适配（`adapt/`）
 
@@ -142,7 +146,8 @@ HTTP/WS (attach-http)
 | `tests/session-stats.test.ts`    | sessionStats：step/end 计数 · llm/ttft/tool 墙钟 · usage→decode · 取消不计入 llmMs |
 | `tests/token-usage.test.ts`      | tokenUsage 同 step 替换；contextPressure surface projected；contextBreakdown；toolCalls；shadowedTokenCount 缩小 |
 | `tests/permissions.test.ts`      | pin · `/permission` · never 自动放行 · read-only deny |
-| `tests/plan-mode.test.ts`        | `/plan` 提交 · suffix steer · exit_plan_mode plan-review |
+| `tests/settings-credentials.test.ts` | settings mutate · MCP · **自定义 provider → selectModel** |
+| `tests/llm-resolve.test.ts`          | settings + vault → live adapter |
 
 ## 已知诚实拒绝 / 空面
 

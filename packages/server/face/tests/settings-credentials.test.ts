@@ -421,6 +421,7 @@ describe("Face settings U2", () => {
     ).namespaces.find((n) => n.ns === "mcp");
     expect(mcp?.applies).toBe("live");
     expect(mcp?.value.note).toContain("remounts");
+    expect(mcp?.value).toMatchObject({ allowConnect: false });
 
     const draft = [
       { serverName: "fs", command: "npx", args: ["-y", "mcp-server"] },
@@ -719,5 +720,125 @@ describe("Face credentials U2", () => {
     expect(
       (modelsAfter.result.value as { routable: boolean }).routable,
     ).toBe(true);
+  });
+
+  it("settings-declared pi-ai apiKeyEnv becomes a credential slot", async () => {
+    const rt = runtime({ bootstrapApiKey: "" });
+    const mutate = await dispatchFaceMethod(rt, "settings.mutate", "p0", {
+      ns: "llm-pi-ai",
+      ops: [
+        {
+          op: "set",
+          path: ["providers", "acme"],
+          value: {
+            apiKeyEnv: "ACME_API_KEY",
+            api: "openai-completions",
+            baseURL: "https://example.test/v1",
+            models: [{ id: "m1" }],
+          },
+        },
+      ],
+    });
+    expect(mutate.result.ok).toBe(true);
+    const set = await dispatchFaceMethod(rt, "credentials.set", "p1", {
+      ref: "ACME_API_KEY",
+      value: "sk-test",
+    });
+    expect(set.result.ok).toBe(true);
+    expect(rt.credentials.peek("llm.acme")).toBe("sk-test");
+  });
+
+  it("llm.providers lists settings-declared custom routes", async () => {
+    const rt = runtime({ bootstrapApiKey: "" });
+    const mutate = await dispatchFaceMethod(rt, "settings.mutate", "c0", {
+      ns: "llm-pi-ai",
+      ops: [
+        {
+          op: "set",
+          path: ["providers", "my-gateway"],
+          value: {
+            apiKeyEnv: "MY_GATEWAY_API_KEY",
+            api: "openai-chat",
+            baseURL: "https://gateway.example/v1",
+            displayName: "My Gateway",
+            models: [{ id: "g1", name: "G1" }],
+          },
+        },
+      ],
+    });
+    expect(mutate.result.ok).toBe(true);
+    if (!mutate.result.ok) {
+      expect.fail(mutate.result.error.message);
+    }
+    const listed = await dispatchFaceMethod(rt, "llm.providers", "c1", {});
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) return;
+    const row = (
+      listed.result.value as {
+        providers: {
+          provider: string;
+          declared: boolean;
+          settingsPath: string[];
+          active: boolean;
+          displayName: string;
+        }[];
+      }
+    ).providers.find((p) => p.provider === "my-gateway");
+    expect(row).toMatchObject({
+      provider: "my-gateway",
+      declared: true,
+      settingsNs: "llm-pi-ai",
+      settingsPath: ["providers", "my-gateway"],
+      active: true,
+      displayName: "My Gateway",
+    });
+  });
+
+  it("session.selectModel accepts settings-declared custom routes", async () => {
+    const rt = runtime({ bootstrapApiKey: "" });
+    const created = await dispatchFaceMethod(rt, "session.create", "cx0", {});
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const mutate = await dispatchFaceMethod(rt, "settings.mutate", "cx1", {
+      ns: "llm-pi-ai",
+      ops: [
+        {
+          op: "set",
+          path: ["providers", "xyt"],
+          value: {
+            apiKeyEnv: "XYT_API_KEY",
+            api: "openai-chat",
+            baseURL: "https://xyt.example/v1",
+            displayName: "小鱼源",
+            models: [{ id: "gemini-3.5-flash", name: "gemini-3.5-flash" }],
+          },
+        },
+      ],
+    });
+    expect(mutate.result.ok).toBe(true);
+    if (!mutate.result.ok) {
+      expect.fail(mutate.result.error.message);
+    }
+
+    const set = await dispatchFaceMethod(rt, "credentials.set", "cx2", {
+      ref: "XYT_API_KEY",
+      value: "sk-xyt-test",
+    });
+    expect(set.result.ok).toBe(true);
+
+    const sel = await dispatchFaceMethod(rt, "session.selectModel", "cx3", {
+      sessionId,
+      provider: "xyt",
+      model: "gemini-3.5-flash",
+    });
+    expect(sel.result.ok).toBe(true);
+    if (!sel.result.ok) {
+      expect.fail(sel.result.error.message);
+    }
+    expect(sel.result.value).toMatchObject({
+      selected: { provider: "xyt", model: "gemini-3.5-flash" },
+    });
   });
 });

@@ -46,6 +46,7 @@ export function createServerAgentFactory(
     resolveLlm,
     maxParallelToolCalls,
     bashLimits,
+    webSearch,
   }) => {
     const llm =
       resolveLlm?.(sessionId) ??
@@ -66,6 +67,7 @@ export function createServerAgentFactory(
       ...(shellJobs ? { shell: shellJobs } : {}),
       ...(maxParallelToolCalls !== undefined ? { maxParallelToolCalls } : {}),
       ...(bashLimits ? { bashLimits } : {}),
+      ...(webSearch ? { webSearch } : {}),
     });
     return composition.createAgent();
   };

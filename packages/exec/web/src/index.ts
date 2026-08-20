@@ -1,5 +1,10 @@
 import { createHttpFetchProvider } from "./fetch-http.js";
-import { createSearchFromEnv, searchUnavailableMessage } from "./search-providers.js";
+import {
+  createSearchFromConfig,
+  searchConfigFromEnv,
+  searchUnavailableMessage,
+  type SearchAccessConfig,
+} from "./search-providers.js";
 import type { FetchFn, WebAccess } from "./types.js";
 
 export {
@@ -34,11 +39,14 @@ export {
   capSearchResult,
   createBraveSearch,
   createCascadingSearch,
+  createSearchFromConfig,
   createSearchFromEnv,
   createTavilySearch,
   KEYLESS_FALLBACKS,
   resolveSearchProviderId,
+  searchConfigFromEnv,
   searchUnavailableMessage,
+  type SearchAccessConfig,
   type SearchProviderId,
 } from "./search-providers.js";
 export {
@@ -81,6 +89,9 @@ export {
 } from "./tools.js";
 
 export interface DefaultWebAccessOptions {
+  /** Face/Host structured search (preferred). */
+  readonly search?: SearchAccessConfig;
+  /** Headless/CI overlay; ignored when `search` is set. */
   readonly env?: NodeJS.ProcessEnv;
   readonly fetch?: FetchFn;
 }
@@ -93,17 +104,18 @@ export interface DefaultWebAccess extends WebAccess {
 export function createDefaultWebAccess(
   options: DefaultWebAccessOptions = {},
 ): DefaultWebAccess {
-  const env = options.env ?? process.env;
+  const searchConfig =
+    options.search ?? searchConfigFromEnv(options.env ?? process.env);
   const fetchImpl = createHttpFetchProvider(
     options.fetch ? { fetch: options.fetch } : {},
   );
-  const search = createSearchFromEnv({
-    env,
+  const search = createSearchFromConfig({
+    config: searchConfig,
     ...(options.fetch ? { fetch: options.fetch } : {}),
   });
   return {
     fetch: fetchImpl,
     ...(search ? { search } : {}),
-    searchUnavailableMessage: searchUnavailableMessage(env),
+    searchUnavailableMessage: searchUnavailableMessage(searchConfig),
   };
 }

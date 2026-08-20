@@ -6,7 +6,11 @@ import {
 } from "@xrkseek/core-session";
 import { assertPolicyAllow } from "@xrkseek/policy";
 import { contentHasImage, type MessageContent } from "@xrkseek/protocol";
-import { U1_AGENT_PRESETS, type FaceRuntime } from "../context.js";
+import { type FaceRuntime } from "../context.js";
+import {
+  FACE_AGENT_PRESET_IDS,
+  canonicalAgentPresetId,
+} from "../presets-catalog.js";
 import { toWireHistoryEntry, collectToolCallArgs } from "../adapt/index.js";
 import {
   DEFAULT_HISTORY_MAX_MESSAGES,
@@ -52,7 +56,7 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   const p = asRecord(payload);
   const agentPreset =
     typeof p.agentPreset === "string" ? p.agentPreset : undefined;
-  if (agentPreset && !U1_AGENT_PRESETS.has(agentPreset)) {
+  if (agentPreset && !FACE_AGENT_PRESET_IDS.has(agentPreset)) {
     return {
       ok: false,
       error: {
@@ -103,16 +107,22 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     attach.workspaceId,
   );
   if (agentPreset) {
-    runtime.sessionAgentPresets.set(sessionId, agentPreset);
+    runtime.sessionAgentPresets.set(
+      sessionId,
+      canonicalAgentPresetId(agentPreset),
+    );
   } else {
-    runtime.sessionAgentPresets.set(sessionId, resolveDefaultAgentPreset(runtime));
+    const parentPreset = parentSessionId
+      ? runtime.sessionAgentPresets.get(parentSessionId)
+      : undefined;
+    runtime.sessionAgentPresets.set(
+      sessionId,
+      parentPreset ??
+        canonicalAgentPresetId(resolveDefaultAgentPreset(runtime)),
+    );
   }
 
   if (parentSessionId) {
-    const parentPreset = runtime.sessionAgentPresets.get(parentSessionId);
-    if (parentPreset && !runtime.sessionAgentPresets.get(sessionId)) {
-      runtime.sessionAgentPresets.set(sessionId, parentPreset);
-    }
     const parentModel = runtime.sessionModels.get(parentSessionId);
     if (parentModel) {
       runtime.sessionModels.set(sessionId, { ...parentModel });
@@ -454,17 +464,6 @@ export const sessionSelectModel: FaceHandler = async (runtime, _rpcId, payload) 
       };
     }
   }
-  try {
-    runtime.registry.resolve({ provider, model });
-  } catch {
-    return {
-      ok: false,
-      error: {
-        code: "provider-not-found",
-        message: `unknown provider: ${provider}`,
-      },
-    };
-  }
   const selected: FaceModelSelection = {
     provider,
     model,
@@ -477,14 +476,19 @@ export const sessionSelectModel: FaceHandler = async (runtime, _rpcId, payload) 
     resolved = resolveLlmForSelection(runtime, selected);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const code =
-      err instanceof FaceLlmResolveError && err.code === "missing-credential"
-        ? "model-unavailable"
-        : "model-unavailable";
+    if (/unknown provider/i.test(message)) {
+      return {
+        ok: false,
+        error: {
+          code: "provider-not-found",
+          message: `unknown provider: ${provider}`,
+        },
+      };
+    }
     return {
       ok: false,
       error: {
-        code,
+        code: "model-unavailable",
         message,
         details: { provider, model },
       },

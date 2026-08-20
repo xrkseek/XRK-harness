@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   inputPressureTokens,
   providerUsageSample,
+  tryParseOpenAiUsage,
   usageFromSessionEvent,
   type SessionEvent,
 } from "../src/index.js";
@@ -53,5 +54,33 @@ describe("token-usage event helpers", () => {
         content: "hi",
       }),
     ).toBeUndefined();
+  });
+
+  it("tryParseOpenAiUsage maps DeepSeek cache hits to disjoint buckets", () => {
+    expect(
+      tryParseOpenAiUsage({
+        prompt_tokens: 283,
+        completion_tokens: 69,
+        prompt_cache_hit_tokens: 256,
+        prompt_cache_miss_tokens: 27,
+        prompt_tokens_details: { cached_tokens: 256 },
+        completion_tokens_details: { reasoning_tokens: 24 },
+      }),
+    ).toEqual({
+      inputTokens: 27,
+      outputTokens: 69,
+      cacheReadTokens: 256,
+      reasoningTokens: 24,
+    });
+    expect(
+      tryParseOpenAiUsage({
+        prompt_tokens: 10,
+        completion_tokens: 2,
+        prompt_cache_hit_tokens: 8,
+      }),
+    ).toEqual({ inputTokens: 2, outputTokens: 2, cacheReadTokens: 8 });
+    expect(
+      tryParseOpenAiUsage({ prompt_tokens: 10, completion_tokens: 2 }),
+    ).toEqual({ inputTokens: 10, outputTokens: 2 });
   });
 });

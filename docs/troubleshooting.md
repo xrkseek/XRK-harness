@@ -28,6 +28,7 @@
 
 | 症状 | 处理 |
 |------|------|
+| `unknown credential ref: <ROUTE>_API_KEY` | 自定义提供方写入密钥时，Face 须先有该路由的 `apiKeyEnv`（创建提供方会写进 `llm-pi-ai`）。升级到含此修复的版本后，对已存在的提供方再点一次保存密钥即可 |
 | 误把 `.xrk/.credentials.yaml` 提交进 git | 立刻在 provider 控制台**轮换**已泄漏 key；`git rm --cached .xrk/.credentials.yaml`；确认 `.gitignore` 含该路径；未推送时用 `git reset --soft origin/main` 去掉含密钥的提交 |
 | 克隆仓后没有 `.xrk/` | 正常。首次 `web`/`serve` 自动创建；或 `cp .xrk/.credentials.yaml.example .xrk/.credentials.yaml` |
 | Settings 写了 key 仍无回复 | 看 `agent-default-model` 是否与凭据 brand 匹配；env 同名变量是否覆盖为空 |
@@ -47,7 +48,8 @@
 
 | 症状 | 处理 |
 |------|------|
-| connect 被拒 | 默认 deny → `XRK_MCP_ALLOW=1` 或 policy allow |
+| 启动打 `mcp parked …`（info） | 正常：未开「允许连接」。Settings → Plugins → MCP 打开 Allow connect 并保存 |
+| connect 被拒 / `connectFailures` | 已 allow 仍失败 → 查 command/PATH |
 | mutate 后不热挂载 | 若设了 `XRK_MCP_SERVERS`，env 赢过文件 → `applies: restart`，需重启 Host |
 | 工具消失 / gave-up | 进程重连帽满或 `reconnect.enabled: false`；看 Face `connectFailures` / `connected[].status` |
 | stdio 命令找不到 | 检查 PATH 与 `command`/`args`/`cwd` |
@@ -56,12 +58,16 @@
 
 ## 工具诚实失败（不是 bug）
 
-下列在**未配置**时仍可能出现在工具表，execute 回明文错误：
+| 症状 | 处理 |
+|------|------|
+| 工具表只有 fs、没有 `web_search` | 会话徽章是 **Minimal** 时工具面就是 fs。改选 **Harness**（或新建 Harness 会话）。Host `--preset server` 与 harness 工具相同，不会单独出「Server」工具面。见 [profiles.md](./profiles.md) |
+| Agent 改不了 `~/.xrk` / Settings | 正常：harness home 不在会话 workspace 内。改设置用产品 Settings；要让 Agent 改某目录，把该目录加成工作区 |
+| `web_search` 执行失败 | 钉了无效 `XRK_WEB_SEARCH_PROVIDER`，或钉了 Tavily/Brave 却无密钥；默认无 key 走 parallel-free，失败回退 DuckDuckGo |
+| `lsp` 失败 | 无 `XRK_LSP_COMMAND` |
+| `terminal_open` 失败 | 无可用 `node-pty` native |
+| 要交互式浏览器（AGT `browser_*`） | 本仓未做；用 `web_fetch` 读静态页 |
 
-- `web_search` — 钉了无效 `XRK_WEB_SEARCH_PROVIDER`，或钉了 Tavily/Brave 却无密钥；默认无 key 走 parallel-free，失败回退 DuckDuckGo
-- `lsp` — 无 `XRK_LSP_COMMAND`
-- `terminal_open` — 无可用 `node-pty` native
-- 交互式浏览器（AGT `browser_*`）— 本仓未做；用 `web_fetch` 读静态页
+下列在**未配置**时仍可能出现在工具表，execute 回明文错误（见上表）。
 ## Session / 仓
 
 | 症状 | 处理 |

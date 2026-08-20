@@ -16,7 +16,6 @@ import type {
   FaceWebPlugin,
 } from "./plugin-inventory.js";
 import type { SlashRecipesLoader } from "./slash.js";
-import { FACE_AGENT_PRESET_IDS } from "./presets-catalog.js";
 import type {
   FaceCredentialVault,
   FaceHostPublicSettings,
@@ -32,9 +31,6 @@ import type { FaceMessageFeedbackStore } from "./message-feedback.js";
 import type { FaceGoalStore } from "./goal-store.js";
 import type { FaceWireIdMaps } from "./adapt/wire-ids.js";
 import type { FaceInboxWireMaps } from "./adapt/inbox-wire.js";
-
-/** @deprecated use FACE_AGENT_PRESET_IDS */
-export const U1_AGENT_PRESETS = FACE_AGENT_PRESET_IDS;
 
 export interface FaceDrain {
   wake(sessionId: string): void;
@@ -99,17 +95,19 @@ export interface FaceRuntime {
   /** Process plugins (`XRK_PLUGINS_DIR` / MCP) for inventory + slash. */
   readonly plugins?: readonly FaceProcessPlugin[];
   /**
-   * Host live-applies Face `mcp.servers` when MCP is sourced from
+   * Host live-applies Face MCP desired servers when sourced from
    * host-settings.json (env empty). Absent → mutate stays `applies: restart`.
-   * Returns per-server connect failures (other servers may still mount).
+   * Returns per-server connect failures and parked names.
    */
   readonly syncMcpServers?: (
     servers: readonly FaceMcpServerDraft[],
+    options?: { readonly allowConnect?: boolean },
   ) => Promise<{
     readonly failures: readonly {
       readonly serverName: string;
       readonly message: string;
     }[];
+    readonly parked?: readonly string[];
   }>;
   /** Standing / remembered tool presenters (wire tools get). */
   readonly getTool?: (

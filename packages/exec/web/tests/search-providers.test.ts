@@ -32,7 +32,7 @@ describe("search provider selection", () => {
     ).toBe("parallel-free");
     expect(
       searchUnavailableMessage({ XRK_WEB_SEARCH_PROVIDER: "exa" }),
-    ).toMatch(/Unknown XRK_WEB_SEARCH_PROVIDER/);
+    ).toMatch(/Unknown web search provider/);
   });
 });
 

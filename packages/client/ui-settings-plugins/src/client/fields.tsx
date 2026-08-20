@@ -55,7 +55,7 @@ export function PlainField(props: {
       <label className={css.label} htmlFor={props.id}>{props.label}</label>
       <input
         id={props.id}
-        className={invalid ? css.inputInvalid : css.input}
+        className={invalid ? `${css.input} ${css.inputInvalid}` : css.input}
         type="text"
         value={props.value}
         placeholder={props.placeholder ?? ''}
@@ -83,7 +83,7 @@ export function SelectField(props: {
       <label className={css.label} htmlFor={props.id}>{props.label}</label>
       <select
         id={props.id}
-        className={css.select}
+        className={`${css.input} ${css.select}`}
         value={props.value}
         disabled={props.disabled}
         onChange={(event) => { props.onChange(event.target.value) }}
@@ -132,7 +132,7 @@ export function ValueField(props: FieldProps & {
       </div>
       <input
         id={props.id}
-        className={props.invalid ? css.inputInvalid : css.input}
+        className={props.invalid ? `${css.input} ${css.inputInvalid}` : css.input}
         type="text"
         {...props.numeric === true ? { inputMode: 'numeric' as const } : {}}
         {...props.invalid ? { 'aria-invalid': true } : {}}

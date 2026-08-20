@@ -9,6 +9,7 @@ import {
   mcpServersContainEnv,
   parseMcpServersValue,
 } from "@xrkseek/server-config";
+import Schema from "@xrkseek/schemastery";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import { canOpenNativePath, openNativePath } from "./host-open-path.js";
@@ -33,6 +34,7 @@ import {
   FACE_PRODUCT_SETTINGS_NAMESPACES,
   schemaEnvelopeOf,
 } from "./settings-schemas.js";
+import { listSettingsProviderCredentialRefs } from "./llm-provider-context.js";
 
 export type UiTheme = "system" | "light" | "dark";
 
@@ -198,6 +200,64 @@ export function listCredentialSlots(
       id,
       label: `${brand.displayName} API key`,
       envVar: brand.apiKeyEnv,
+      configured: Boolean(v) || e,
+      source: vault.isFileBacked(id)
+        ? "file"
+        : v
+          ? "vault"
+          : e
+            ? "env"
+            : "none",
+    });
+  }
+
+  for (const web of [
+    {
+      id: "web.tavily",
+      label: "Tavily API key",
+      envVar: "XRK_TAVILY_API_KEY",
+    },
+    {
+      id: "web.brave",
+      label: "Brave Search API key",
+      envVar: "XRK_BRAVE_SEARCH_API_KEY",
+    },
+  ] as const) {
+    const v = vault.peek(web.id);
+    const e = envHas(env, web.envVar);
+    slots.push({
+      id: web.id,
+      label: web.label,
+      envVar: web.envVar,
+      configured: Boolean(v) || e,
+      source: vault.isFileBacked(web.id)
+        ? "file"
+        : v
+          ? "vault"
+          : e
+            ? "env"
+            : "none",
+    });
+  }
+
+  // Custom / settings-declared providers (e.g. llm-pi-ai route `xyt` → XYT_API_KEY).
+  const brandIds = new Set(runtime.registry.listBrands().map((b) => b.id));
+  const seenEnv = new Set(
+    slots.map((s) => s.envVar).filter((x): x is string => Boolean(x)),
+  );
+  for (const { providerId, apiKeyEnv } of listSettingsProviderCredentialRefs(
+    runtime,
+  )) {
+    if (brandIds.has(providerId)) continue;
+    const id = `llm.${providerId}`;
+    if (slots.some((s) => s.id === id) || seenEnv.has(apiKeyEnv)) continue;
+    seenEnv.add(apiKeyEnv);
+    const v = vault.peek(id);
+    const e = envHas(env, apiKeyEnv);
+    slots.push({
+      id,
+      label: `${providerId} API key`,
+      envVar: apiKeyEnv,
       configured: Boolean(v) || e,
       source: vault.isFileBacked(id)
         ? "file"
@@ -727,9 +787,26 @@ function validateNamespaceValue(
     }
   }
   if (ns === "mcp") {
-    return validateMcpServersValue(value.servers);
+    const mcpErr = validateMcpServersValue(value.servers);
+    if (mcpErr) return mcpErr;
   }
-  return undefined;
+  return validateWithProductSchema(ns, value);
+}
+
+/** Schemastery check for Face product namespaces (catches type mismatches like MCP toolCount). */
+function validateWithProductSchema(
+  ns: string,
+  value: Record<string, unknown>,
+): string | undefined {
+  const spec = FACE_PRODUCT_SETTINGS_NAMESPACES.find((s) => s.ns === ns);
+  if (!spec) return undefined;
+  try {
+    const schema = new Schema(schemaEnvelopeOf(spec) as Schema);
+    schema(value);
+    return undefined;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
 }
 
 export interface FaceMcpServerDraft {
@@ -764,10 +841,10 @@ function validateMcpServersValue(raw: unknown): string | undefined {
 }
 
 const MCP_SETTINGS_NOTE_RESTART =
-  "Desired servers persist in ~/.xrk/host-settings.json and apply on the next Host spawn. Live connect still needs XRK_MCP_ALLOW=1 (or policy allow). Stdio and HTTP both use bounded process reconnect after a successful connect; HTTP also keeps SDK SSE resume.";
+  "Servers and Allow connect save to ~/.xrk/host-settings.json and apply on the next Host spawn.";
 
 const MCP_SETTINGS_NOTE_LIVE =
-  "Desired servers persist in ~/.xrk/host-settings.json; Host remounts MCP tools in this process. Connect still needs XRK_MCP_ALLOW=1 (or policy allow). Stdio and HTTP both use bounded process reconnect after a successful connect; HTTP also keeps SDK SSE resume.";
+  "Save remounts MCP in this process. Turn on Allow connect to mount tools; each server row shows status.";
 
 function mcpApplies(runtime: FaceRuntime): "live" | "restart" {
   return typeof runtime.syncMcpServers === "function" ? "live" : "restart";
@@ -803,13 +880,29 @@ function mcpConnected(runtime: FaceRuntime): readonly {
     }));
 }
 
+function mcpAllowFromRuntime(runtime: FaceRuntime): boolean {
+  const raw = runtime.settingsNamespaces.ensure("mcp").user.allowConnect;
+  return raw === true;
+}
+
 function mcpDescribeBase(
   runtime: FaceRuntime,
   connectFailures: readonly { readonly serverName: string; readonly message: string }[] = [],
+  parkedExplicit?: readonly string[],
 ): Record<string, unknown> {
+  const connected = mcpConnected(runtime);
+  const connectedNames = new Set(connected.map((c) => c.serverName));
+  const failedNames = new Set(connectFailures.map((f) => f.serverName));
+  const parked =
+    parkedExplicit ??
+    mcpServersFromRuntime(runtime)
+      .map((s) => s.serverName)
+      .filter((n) => !connectedNames.has(n) && !failedNames.has(n));
   return {
     servers: [],
-    connected: mcpConnected(runtime),
+    allowConnect: mcpAllowFromRuntime(runtime),
+    connected,
+    parked: [...parked],
     note: mcpSettingsNote(runtime),
     ...(connectFailures.length > 0 ? { connectFailures } : {}),
   };
@@ -818,8 +911,9 @@ function mcpDescribeBase(
 function mcpMutateRejected(ops: readonly FaceSettingsPathOp[]): string | undefined {
   for (const op of ops) {
     if (op.path.length === 0) continue;
-    if (op.path[0] !== "servers") {
-      return "mcp only accepts servers (connected is live overlay)";
+    const head = op.path[0];
+    if (head !== "servers" && head !== "allowConnect") {
+      return "mcp only accepts servers and allowConnect (connected/parked are live overlays)";
     }
   }
   return undefined;
@@ -933,6 +1027,7 @@ export async function settingsMutateFace(
   if (ns === "mcp") {
     const mcpReject = mcpMutateRejected(ops);
     if (mcpReject) {
+      console.warn(`[face] settings.mutate rejected ns=mcp: ${mcpReject}`);
       return {
         ok: false,
         error: { code: "settings-invalid", message: mcpReject, details: { ns } },
@@ -941,6 +1036,9 @@ export async function settingsMutateFace(
   }
   const result = runtime.settingsNamespaces.mutate(ns, ops, expected);
   if (!result.ok) {
+    console.warn(
+      `[face] settings.mutate rejected ns=${ns} code=${result.code}: ${result.message}`,
+    );
     return {
       ok: false,
       error: { code: result.code, message: result.message, details: { ns } },
@@ -959,16 +1057,24 @@ export async function settingsMutateFace(
   if (ns === "mcp") {
     const applies = mcpApplies(runtime);
     const slot = runtime.settingsNamespaces.ensure("mcp");
-    slot.user = { servers: mcpServersFromRuntime(runtime) };
+    const allowConnect = mcpAllowFromRuntime(runtime);
+    slot.user = {
+      servers: mcpServersFromRuntime(runtime),
+      allowConnect,
+    };
     slot.applies = applies;
     await persistHostSettings(runtime);
     let connectFailures: readonly {
       readonly serverName: string;
       readonly message: string;
     }[] = [];
+    let parked: readonly string[] = [];
     if (runtime.syncMcpServers) {
-      const synced = await runtime.syncMcpServers(mcpServersFromRuntime(runtime));
+      const synced = await runtime.syncMcpServers(mcpServersFromRuntime(runtime), {
+        allowConnect,
+      });
       connectFailures = synced.failures;
+      parked = synced.parked ?? [];
     }
     publishRemoteEvent(runtime.bus, "settings/document-updated", [
       ns,
@@ -978,7 +1084,7 @@ export async function settingsMutateFace(
       ok: true,
       value: runtime.settingsNamespaces.view(
         "mcp",
-        mcpDescribeBase(runtime, connectFailures),
+        mcpDescribeBase(runtime, connectFailures, parked),
         FACE_MCP_SCHEMA,
         applies,
       ),
@@ -1074,16 +1180,19 @@ function mcpServersFromRuntime(runtime: FaceRuntime): FaceMcpServerDraft[] {
   }
 }
 
-  /** Load `~/.xrk/host-settings.json` mcp.servers into the namespace user layer. */
+  /** Load `~/.xrk/host-settings.json` mcp.servers (+ allowConnect) into the namespace user layer. */
 export function hydrateFaceHostSettings(runtime: FaceRuntime): void {
   const file = hostSettingsPath(runtime);
   try {
     const parsed = JSON.parse(readFileSync(file, "utf8")) as {
-      mcp?: { servers?: unknown };
+      mcp?: { servers?: unknown; allowConnect?: unknown };
     };
     const servers = parseFaceMcpServers(parsed.mcp?.servers);
     const slot = runtime.settingsNamespaces.ensure("mcp");
-    slot.user = { servers };
+    slot.user = {
+      servers,
+      ...(parsed.mcp?.allowConnect === true ? { allowConnect: true } : { allowConnect: false }),
+    };
     slot.applies = mcpApplies(runtime);
   } catch {
     /* missing or malformed dump — next mutate rewrites */
@@ -1113,7 +1222,10 @@ async function persistHostSettings(runtime: FaceRuntime): Promise<void> {
       runtime.settingsDocumentPath && path.isAbsolute(runtime.settingsDocumentPath)
         ? runtime.settingsDocumentPath
         : (previous.policyFile ?? null),
-    mcp: { servers: mcpServersFromRuntime(runtime) },
+    mcp: {
+      servers: mcpServersFromRuntime(runtime),
+      allowConnect: mcpAllowFromRuntime(runtime),
+    },
   };
   await writeFile(dump, `${JSON.stringify(body, null, 2)}\n`, "utf8");
 }

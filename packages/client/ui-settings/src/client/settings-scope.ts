@@ -188,7 +188,17 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
       draft.base = view.base
       draft.user = view.user
       if (writable !== undefined) draft.writable = writable
-      if (decoded === undefined) return
+      if (!publish) return
+      if (decoded === undefined) {
+        // Schema mismatch must not leave the scope stuck on `loading` forever
+        // (PluginCard treats non-ready as invisible — e.g. MCP toolCount type).
+        console.warn(
+          `[settings] namespace "${this.spec.namespace}" failed schema decode; card hidden until Host value matches schema`,
+        )
+        draft.status = 'unavailable'
+        draft.value = undefined
+        return
+      }
       draft.status = 'ready'
       draft.value = decoded
     })

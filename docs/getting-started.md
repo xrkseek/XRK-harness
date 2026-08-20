@@ -28,6 +28,7 @@ mkdir my-agent && cd my-agent
 npx @xrkseek/harness-cli web
 ```
 
+不要在用户主目录直接跑 `web`（cwd 会变成 workspace，Agent 可写范围过大）。`~/.xrk` 是设置/会话仓，不是项目根。
 浏览器打开提示地址（默认 `http://127.0.0.1:8787`）。
 
 | 步骤 | 说明 |
@@ -115,7 +116,8 @@ export XRK_LLM_PRESET=deepseek   # CLI run 快捷路径；serve/web 仍读 setti
 npx @xrkseek/harness-cli serve --preset harness --workspace .
 ```
 
-Brand 与 `apiKeyEnv` 对照：[llm-provider-presets.md](./llm-provider-presets.md)。
+Brand 与 `apiKeyEnv` 对照：[llm-provider-presets.md](./llm-provider-presets.md)。  
+Preset 选型（minimal / harness / server）：[profiles.md](./profiles.md)。
 
 ---
 

@@ -125,7 +125,7 @@ describe('ui-settings-plugins apply', () => {
     await ctx.plugin({ inject: [...inject], apply }).await()
 
     expect(slots.entries('settings.plugin.item').map(entry => entry.options.key))
-      .toEqual(['mcp', 'bash', 'agent-loop'])
+      .toEqual(['mcp', 'web-search', 'bash', 'agent-loop'])
   })
 
   it('dispatches the served namespaces its cards claim, and no others', async () => {
@@ -179,7 +179,7 @@ describe('ui-settings-plugins apply', () => {
 
     // A key written on another surface changes no settings section, so this
     // event is the only thing that reaches the card.
-    ctx.remote.$dispatch('credentials/updated', ['DEEPSEEK_API_KEY'])
+    ctx.remote.$dispatch('credentials/updated', ['XRK_TAVILY_API_KEY'])
 
     await vi.waitFor(() => { expect(describeCredentials).toHaveBeenCalledTimes(1) })
   })

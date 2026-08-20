@@ -1,17 +1,19 @@
 import { discoverOpenAiChatModels } from "@xrkseek/llm-registry";
-import { FACE_AGENT_PRESETS, FACE_AGENT_PRESET_IDS } from "../presets-catalog.js";
+import { FACE_AGENT_PRESETS, FACE_AGENT_PRESET_IDS, canonicalAgentPresetId } from "../presets-catalog.js";
 import { resolveDefaultAgentPreset } from "../settings-document.js";
 import { buildFaceModelCatalog, routeServed } from "../model-catalog.js";
 import {
+  listDeclaredPiAiProviders,
   readProviderApiKey,
   readProviderRoute,
+  resolveProviderBinding,
 } from "../llm-provider-context.js";
 import { readSessionAttachment } from "../session-attachment.js";
 import { asRecord, type FaceHandler } from "./types.js";
 import { publishRemoteEvent } from "../remote-event.js";
 
 export const agentPresetList: FaceHandler = async (runtime) => {
-  const defaultId = resolveDefaultAgentPreset(runtime);
+  const defaultId = canonicalAgentPresetId(resolveDefaultAgentPreset(runtime));
   return {
     ok: true,
     value: {
@@ -37,8 +39,7 @@ export const agentPresetRead: FaceHandler = async (_runtime, _rpcId, payload) =>
       error: { code: "invalid-payload", message: "agentPreset required" },
     };
   }
-  const info = FACE_AGENT_PRESETS.find((x) => x.id === agentPreset);
-  if (!info) {
+  if (!FACE_AGENT_PRESET_IDS.has(agentPreset)) {
     return {
       ok: false,
       error: {
@@ -51,6 +52,8 @@ export const agentPresetRead: FaceHandler = async (_runtime, _rpcId, payload) =>
       },
     };
   }
+  const id = canonicalAgentPresetId(agentPreset);
+  const info = FACE_AGENT_PRESETS.find((x) => x.id === id)!;
   const content = [
     `# ${info.displayName}`,
     "",
@@ -100,13 +103,16 @@ export const agentPresetSelect: FaceHandler = async (runtime, _rpcId, payload) =
       error: { code: "session-not-found", message: sessionId },
     };
   }
-  runtime.sessionAgentPresets.set(sessionId, agentPreset);
+  runtime.sessionAgentPresets.set(sessionId, canonicalAgentPresetId(agentPreset));
   await runtime.invalidateAgent?.(sessionId);
   publishRemoteEvent(runtime.bus, "agent-preset/selected", [
     sessionId,
-    agentPreset,
+    canonicalAgentPresetId(agentPreset),
   ]);
-  return { ok: true, value: { sessionId, agentPreset } };
+  return {
+    ok: true,
+    value: { sessionId, agentPreset: canonicalAgentPresetId(agentPreset) },
+  };
 };
 
 /** DSH UI disables copy when `authorable: false`; if still called, use the closed error. */
@@ -144,6 +150,16 @@ export const llmProviders: FaceHandler = async (runtime) => {
       declared: false,
     };
   });
+  for (const declared of listDeclaredPiAiProviders(runtime)) {
+    providers.push({
+      provider: declared.id,
+      displayName: declared.displayName,
+      settingsNs: "llm-pi-ai",
+      settingsPath: ["providers", declared.id],
+      active: routeServed(runtime, declared.id),
+      declared: true,
+    });
+  }
   return { ok: true, value: { providers } };
 };
 
@@ -160,18 +176,18 @@ function resolveDiscoveryBaseUrl(
   baseURL: string | undefined,
 ): { baseUrl?: string; authMode?: "bearer" | "api-key" } {
   if (provider) {
-    const route = readProviderRoute(runtime, provider);
     try {
-      const binding = runtime.registry.resolve({
+      const binding = resolveProviderBinding(runtime, {
         provider,
-        ...(route.baseUrl ? { baseUrl: route.baseUrl } : {}),
-        ...(baseURL ? { baseUrl: baseURL } : {}),
+        model: "_",
+        ...(baseURL ? { route: { baseUrl: baseURL } } : {}),
       });
       return {
         ...(binding.baseUrl ? { baseUrl: binding.baseUrl } : {}),
         authMode: binding.authMode,
       };
     } catch {
+      const route = readProviderRoute(runtime, provider);
       const baseUrl = baseURL ?? route.baseUrl;
       return baseUrl ? { baseUrl } : {};
     }

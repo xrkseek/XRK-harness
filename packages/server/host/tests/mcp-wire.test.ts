@@ -133,6 +133,7 @@ describe("host mcp-wire", () => {
     expect(result.removed).toEqual(["mcp:stale"]);
     expect(result.added).toEqual([]);
     expect(result.failures).toEqual([]);
+    expect(result.parked).toEqual([]);
     expect(plugins.map((p) => p.id)).toEqual(["mcp:keep"]);
   });
 
@@ -183,8 +184,26 @@ describe("host mcp-wire", () => {
       allowConnect: true,
     });
     expect(result.added).toEqual([]);
+    expect(result.parked).toEqual([]);
     expect(result.failures).toHaveLength(1);
     expect(result.failures[0]?.serverName).toBe("nope");
+    expect(plugins).toEqual([]);
+  });
+
+  it("reconcile parks desired servers when mcp.connect is denied", async () => {
+    const plugins: RegisteredPlugin[] = [];
+    const result = await reconcileMcpToolPlugins({
+      desired: [{ serverName: "playwright", command: "npx" }],
+      list: () => plugins,
+      register: (plugin) => {
+        plugins.push(plugin);
+      },
+      unregister: async () => {},
+      // Default policy denies mcp.connect; no allowConnect.
+    });
+    expect(result.added).toEqual([]);
+    expect(result.failures).toEqual([]);
+    expect(result.parked).toEqual(["playwright"]);
     expect(plugins).toEqual([]);
   });
 });

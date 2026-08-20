@@ -36,6 +36,14 @@ describe("cli parseArgs", () => {
     expect(a.command).toBe("serve");
     expect(a.port).toBe(8080);
     expect(a.open).toBe(true);
+    expect(a.preset).toBe("harness");
+  });
+
+  it("defaults run to minimal and serve/restart to harness", () => {
+    expect(parseArgs(["run", "hi"]).preset).toBe("minimal");
+    expect(parseArgs(["serve"]).preset).toBe("harness");
+    expect(parseArgs(["restart"]).preset).toBe("harness");
+    expect(parseArgs(["web", "--preset", "minimal"]).preset).toBe("minimal");
   });
 
   it("takes positional prompt", () => {
