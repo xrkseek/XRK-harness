@@ -25,6 +25,7 @@ export {
   buildSkeletonUser,
   buildVolatileUser,
   mergeHistory,
+  orderToolsForWire,
   type AssembledRequest,
   type SkeletonSystemInput,
   type SkeletonUserInput,

@@ -45,7 +45,10 @@ describe("three-layer assemble", () => {
         nowIso: "2026-01-01T00:00:00.000Z",
         sessionId: "sess_fixed",
       },
-      tools: [{ name: "read_file", description: "r", parameters: {} }],
+      tools: [
+        { name: "write_file", description: "w", parameters: {} },
+        { name: "read_file", description: "r", parameters: {} },
+      ],
     });
     expect({
       system: req.system,
@@ -62,8 +65,32 @@ describe("three-layer assemble", () => {
         "now",
         "[volatile]\ntime: 2026-01-01T00:00:00.000Z\nsession: sess_fixed",
       ],
-      tools: ["read_file"],
+      tools: ["read_file", "write_file"],
     });
+  });
+
+  it("follow-up steps omit current-marker and volatile clock for cache prefix", () => {
+    const req = assembleThreeLayers({
+      skeletonSystem: { persona: "P" },
+      history: [
+        { role: "user", content: "a" },
+        { role: "assistant", content: "b" },
+      ],
+      skeletonUser: { text: "\u200b" },
+      volatile: {
+        nowIso: "2026-01-01T00:00:00.000Z",
+        sessionId: "sess_fixed",
+      },
+      includeCurrentMarker: false,
+      includeVolatileTime: false,
+      tools: [{ name: "echo", description: "e", parameters: {} }],
+    });
+    expect(req.messages.map((m) => m.content)).toEqual([
+      "a",
+      "b",
+      "\u200b",
+      "[volatile]\nsession: sess_fixed",
+    ]);
   });
 });
 
