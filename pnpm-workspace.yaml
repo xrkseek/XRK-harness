@@ -10,3 +10,7 @@ packages:
   - "presets/*"
   - "examples/*"
   - "extensions/*"
+# pnpm 11：依赖 lifecycle 默认拒绝；仅放行本仓需要的原生/打包工具
+allowBuilds:
+  esbuild: true
+  node-pty: true

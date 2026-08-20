@@ -11,6 +11,7 @@
 | `engines` / `Unsupported environment`，Node 过旧 | 换系统 Node **≥26**；勿让 IDE 自带 Node 抢 PATH |
 | `This project is configured to use pnpm@…` / Corepack 提示 | 按根 `package.json` 的 `packageManager` 启用：`corepack enable` 后重开终端，或让 CI 的 `pnpm/action-setup` 读该字段 |
 | 本机 pnpm 大版本与 `packageManager` 不一致 | **以仓库锁定为准**升级/降级；勿混用 npm/yarn 装依赖 |
+| `ERR_PNPM_IGNORED_BUILDS`（esbuild / node-pty 等） | pnpm 11 默认拦依赖 build；在根 `pnpm-workspace.yaml` → `allowBuilds` 放行后重装（勿关 `strictDepBuilds` 偷懒） |
 | `pnpm check` 第一步 `tsc` 失败 | 先 `pnpm install`；看项目引用断裂包 |
 | Windows 上 `node` 版本对但脚本仍报旧引擎 | 同一终端确认 `where node` / `Get-Command node` 指向 ≥26 |
 
