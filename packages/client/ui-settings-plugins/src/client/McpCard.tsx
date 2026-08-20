@@ -1,19 +1,13 @@
-/** MCP desired-server card: edit draft servers; connected overlay stays read-only.
- *
- * Same vertical field stack as Agent / Bash (label + control + hint). All of
- * name / transport / command / args / cwd stay visible so they read alike —
- * no launch-line merge, no buried “advanced” cwd.
- */
+/** MCP desired-server card: JSON-block paste only (Cursor / Trae style). */
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import {
   IconPlusOutline16,
   IconTrashOutline16,
 } from '@xrkseek/client-ui-primitives'
-import { PlainField, SelectField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
-import type { McpCardFace, McpServerRow, McpTransport } from './mcp-card-controller.ts'
+import type { McpCardFace, McpServerRow } from './mcp-card-controller.ts'
 import type {} from './slot-contract.ts'
 import css from './McpCard.module.css'
 
@@ -33,11 +27,17 @@ export function McpCard(props: McpCardProps) {
   const state = props.useMcpCard(snapshot => snapshot)
   const disabled = !state.writable
   const pasteRef = useRef<HTMLTextAreaElement>(null)
+  const [pasteHint, setPasteHint] = useState<string | undefined>()
 
-  const addFromPasteOrBlank = () => {
+  const addFromPaste = () => {
     const pasted = pasteRef.current?.value ?? ''
-    props.addRow(pasted)
-    if (pasteRef.current) pasteRef.current.value = ''
+    const result = props.addRow(pasted)
+    if (result === 'ok') {
+      if (pasteRef.current) pasteRef.current.value = ''
+      setPasteHint(undefined)
+      return
+    }
+    setPasteHint(result === 'empty' ? t('mcpPasteEmpty') : t('mcpPasteInvalid'))
   }
 
   return (
@@ -96,20 +96,17 @@ export function McpCard(props: McpCardProps) {
         {state.rows.length === 0
           ? <p className={css.empty}>{t('mcpServersEmpty')}</p>
           : (
-            <div className={css.list}>
+            <ul className={css.list}>
               {state.rows.map((row, index) => (
-                <ServerEntry
-                  key={`mcp-row-${String(index)}`}
+                <ServerSummary
+                  key={`mcp-row-${row.serverName}-${String(index)}`}
                   t={t}
-                  index={index}
                   row={row}
                   disabled={disabled}
-                  showErrors={state.showErrors}
-                  onEdit={props.editRow}
                   onRemove={() => { props.removeRow(index) }}
                 />
               ))}
-            </div>
+            </ul>
           )}
         <label className={css.pasteLabel} htmlFor="plugin-config-mcp-paste">
           {t('mcpPaste')}
@@ -120,54 +117,47 @@ export function McpCard(props: McpCardProps) {
           className={css.paste}
           disabled={disabled}
           placeholder={t('mcpPasteHint')}
-          rows={5}
+          rows={8}
           spellCheck={false}
+          onChange={() => { if (pasteHint) setPasteHint(undefined) }}
         />
         <button
           type="button"
           className={css.add}
           disabled={disabled}
-          onClick={addFromPasteOrBlank}
+          onClick={addFromPaste}
         >
           <IconPlusOutline16 size={14} />
           {t('mcpAddServer')}
         </button>
-        {state.showErrors ? <p className={css.invalid} role="status">{t('mcpRowInvalid')}</p> : null}
+        {pasteHint ? <p className={css.invalid} role="status">{pasteHint}</p> : null}
       </section>
     </PluginCard>
   )
 }
 
-interface ServerEntryProps {
+interface ServerSummaryProps {
   t: McpCardProps['t']
-  index: number
   row: McpServerRow
   disabled: boolean
-  showErrors: boolean
-  onEdit: McpCardFace['editRow']
   onRemove: () => void
 }
 
-function ServerEntry({
-  t, index, row, disabled, showErrors, onEdit, onRemove,
-}: ServerEntryProps) {
-  const n = String(index + 1)
-  const title = row.serverName.trim() || t('mcpServerRow').replace('{index}', n)
-  const nameInvalid = showErrors && row.serverName.trim() === ''
-  const endpointInvalid = showErrors && (
-    row.transport === 'http'
-      ? row.url.trim() === ''
-      : row.command.trim() === ''
-  )
-
+function ServerSummary({ t, row, disabled, onRemove }: ServerSummaryProps) {
+  const summary = row.transport === 'http'
+    ? row.url
+    : [row.command, row.args].filter(part => part.trim()).join(' ')
   return (
-    <article className={css.entry} aria-label={title}>
+    <li className={css.entry} aria-label={row.serverName}>
       <div className={css.entryHead}>
-        <h4 className={css.entryTitle}>{title}</h4>
+        <div>
+          <h4 className={css.entryTitle}>{row.serverName}</h4>
+          <p className={css.empty}>{summary || t('mcpServerRow').replace('{index}', '')}</p>
+        </div>
         <button
           type="button"
           className={css.remove}
-          aria-label={`${t('mcpRemoveServer')} ${n}`}
+          aria-label={`${t('mcpRemoveServer')} ${row.serverName}`}
           title={t('mcpRemoveServer')}
           disabled={disabled}
           onClick={onRemove}
@@ -175,70 +165,6 @@ function ServerEntry({
           <IconTrashOutline16 size={14} />
         </button>
       </div>
-      <div className={css.entryBody}>
-        <PlainField
-          id={`plugin-config-mcp-name-${String(index)}`}
-          label={t('mcpServerName')}
-          hint={t('mcpServerNameHint')}
-          value={row.serverName}
-          invalid={nameInvalid}
-          disabled={disabled}
-          onChange={(value) => { onEdit(index, { serverName: value }) }}
-        />
-        <SelectField
-          id={`plugin-config-mcp-transport-${String(index)}`}
-          label={t('mcpTransport')}
-          hint={t('mcpTransportHint')}
-          value={row.transport}
-          disabled={disabled}
-          options={[
-            { value: 'stdio', label: t('mcpTransportStdio') },
-            { value: 'http', label: t('mcpTransportHttp') },
-          ]}
-          onChange={(value) => { onEdit(index, { transport: value as McpTransport }) }}
-        />
-        {row.transport === 'http'
-          ? (
-            <PlainField
-              id={`plugin-config-mcp-url-${String(index)}`}
-              label={t('mcpUrl')}
-              hint={t('mcpUrlHint')}
-              value={row.url}
-              invalid={endpointInvalid}
-              disabled={disabled}
-              onChange={(value) => { onEdit(index, { url: value }) }}
-            />
-          )
-          : (
-            <>
-              <PlainField
-                id={`plugin-config-mcp-command-${String(index)}`}
-                label={t('mcpCommand')}
-                hint={t('mcpCommandHint')}
-                value={row.command}
-                invalid={endpointInvalid}
-                disabled={disabled}
-                onChange={(value) => { onEdit(index, { command: value }) }}
-              />
-              <PlainField
-                id={`plugin-config-mcp-args-${String(index)}`}
-                label={t('mcpArgs')}
-                hint={t('mcpArgsHint')}
-                value={row.args}
-                disabled={disabled}
-                onChange={(value) => { onEdit(index, { args: value }) }}
-              />
-              <PlainField
-                id={`plugin-config-mcp-cwd-${String(index)}`}
-                label={t('mcpCwd')}
-                hint={t('mcpCwdHint')}
-                value={row.cwd}
-                disabled={disabled}
-                onChange={(value) => { onEdit(index, { cwd: value }) }}
-              />
-            </>
-          )}
-      </div>
-    </article>
+    </li>
   )
 }

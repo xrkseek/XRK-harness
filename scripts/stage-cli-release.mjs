@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Stage @xrkseek/harness-cli → .release/
- * - harness-cli/     deploy 树（给 npm pack / Packages）
+ * - harness-cli/     deploy 树（给 npm pack / npmjs）
  * - xrkseek-harness-cli-<ver>.tgz   发行版（给 GitHub Release）
  */
 import { spawnSync } from "node:child_process";
@@ -129,7 +129,7 @@ cpSync(WEB_DIST, PRODUCT_WEB, { recursive: true });
 rmSync(path.join(ROOT, ".release"), { recursive: true, force: true });
 mkdirSync(path.join(ROOT, ".release"), { recursive: true });
 
-run("pnpm", ["--filter", "@xrkseek/harness-cli", "deploy", "--prod", STAGE]);
+run("pnpm", ["--filter", "@xrkseek/harness-cli", "deploy", "--prod", "--legacy", STAGE]);
 
 if (!existsSync(path.join(STAGE, "product-web", "index.html"))) {
   console.error("stage: deploy missed product-web/");
@@ -158,9 +158,17 @@ staged.bundleDependencies = names;
 staged.files = ["dist", "product-web", "README.md"];
 staged.publishConfig = {
   access: "public",
-  registry: "https://npm.pkg.github.com",
+  registry: "https://registry.npmjs.org",
 };
 writeFileSync(stagedPkgPath, `${JSON.stringify(staged, null, 2)}\n`);
+
+// MCP SDK peers must resolve after .pnpm is stripped (npm global / npx).
+for (const must of ["zod"]) {
+  if (!existsSync(path.join(STAGE, "node_modules", must))) {
+    console.error(`stage: missing bundled dependency ${must} after hoist`);
+    process.exit(1);
+  }
+}
 
 const ver = typeof staged.version === "string" ? staged.version : "0.0.0";
 const releaseTgz = path.join(ROOT, ".release", `xrkseek-harness-cli-${ver}.tgz`);

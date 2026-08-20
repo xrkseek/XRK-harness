@@ -4,11 +4,11 @@ import type { SettingsScope, SnapshotStore } from '@xrkseek/client-runtime/clien
 import { CardForm, numberField, type CardActions, type CardFieldState, type CardShell } from './card-form.ts'
 
 /**
- * Namespace of the shell capability. Spelled here rather than imported: a
- * client package must not depend on a Host package, and the executor families
- * that own it spell the same value.
+ * Namespace of the bash/terminal capability. Must match Face
+ * `FACE_PRODUCT_SETTINGS_NAMESPACES` (`bash`) or the Plugins tab never
+ * dispatches this card (Host serves `bash`, not `shell`).
  */
-export const SHELL_NS = 'shell'
+export const SHELL_NS = 'bash'
 
 /** The shell fields this card edits — a subset of the served schema by design. */
 export interface BashSettings {

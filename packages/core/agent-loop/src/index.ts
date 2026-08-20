@@ -112,6 +112,11 @@ export interface RunTurnInput {
    */
   readonly toolSettle?: ToolSettleMode;
   /**
+   * Cap concurrent tool settles when `toolSettle` is `parallel`.
+   * Face Plugins → Agent loop → `maxParallelToolCalls`.
+   */
+  readonly maxParallelToolCalls?: number;
+  /**
    * Context compaction / overflow recovery (opt-in).
    * Pass `false` or omit to disable. Object enables auto + one overflow retry.
    */
@@ -611,6 +616,9 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       mode: input.toolSettle ?? "parallel",
       ...(input.signal ? { signal: input.signal } : {}),
       ...(input.pipeline ? { pipeline: input.pipeline } : {}),
+      ...(input.maxParallelToolCalls !== undefined
+        ? { maxParallel: input.maxParallelToolCalls }
+        : {}),
     });
 
     // Barrier 2: tool side-events then tool/result in call order.

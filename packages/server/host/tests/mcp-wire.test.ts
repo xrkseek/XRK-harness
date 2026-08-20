@@ -20,12 +20,12 @@ describe("host mcp-wire", () => {
     const specs = parseMcpServersEnv(
       JSON.stringify({
         mcpServers: {
-          "12306-mcp": { command: "npx", args: ["-y", "12306-mcp"] },
+          demo: { command: "npx", args: ["-y", "demo-mcp"] },
         },
       }),
     );
     expect(specs).toEqual([
-      { serverName: "12306-mcp", command: "npx", args: ["-y", "12306-mcp"] },
+      { serverName: "demo", command: "npx", args: ["-y", "demo-mcp"] },
     ]);
   });
 

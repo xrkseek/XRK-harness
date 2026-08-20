@@ -93,6 +93,15 @@ export interface HttpServerOptions {
    * `transformIndex` typically injects `__XRK_BOOT__`.
    */
   readonly webStatic?: WebStaticOptions;
+  /**
+   * Optional access log for `/api/*` (and Face extras under `/api`).
+   * Static UI assets are not reported (DSH: shell owns chatter; keep noise low).
+   */
+  readonly onAccess?: (info: {
+    readonly method: string;
+    readonly path: string;
+    readonly status: number;
+  }) => void;
 }
 
 export interface HarnessHttpServer {
@@ -184,6 +193,15 @@ export function createHttpServer(
     }
 
     const url = new URL(req.url ?? "/", `http://${options.host}`);
+    if (options.onAccess && url.pathname.startsWith("/api")) {
+      res.on("finish", () => {
+        options.onAccess!({
+          method: req.method ?? "GET",
+          path: url.pathname,
+          status: res.statusCode,
+        });
+      });
+    }
     const path = url.pathname;
 
     // Public health

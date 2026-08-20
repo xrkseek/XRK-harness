@@ -280,6 +280,8 @@ export class FaceWorkspaceRegistry {
       { path: string; title: string; createdAt: string; updatedAt: string }
     >;
     seq: number;
+    membership: Record<string, string>;
+    sessionOrder: Record<string, string[]>;
   } {
     const entries: Record<
       string,
@@ -293,7 +295,26 @@ export class FaceWorkspaceRegistry {
         updatedAt: row.updatedAt,
       };
     }
-    return { order: [...this.order], entries, seq: this.seq };
+    const membership: Record<string, string> = {};
+    for (const [sid, wsId] of this.membership) {
+      membership[sid] = wsId;
+    }
+    const sessionOrder: Record<string, string[]> = {};
+    for (const [wsId, ids] of this.sessionOrder) {
+      sessionOrder[wsId] = [...ids];
+    }
+    return {
+      order: [...this.order],
+      entries,
+      seq: this.seq,
+      membership,
+      sessionOrder,
+    };
+  }
+
+  /** All live session → workspace bindings. */
+  listMembership(): readonly (readonly [string, string])[] {
+    return [...this.membership.entries()];
   }
 
   importState(
@@ -306,6 +327,8 @@ export class FaceWorkspaceRegistry {
         >
       >;
       seq: number;
+      membership?: Readonly<Record<string, string>>;
+      sessionOrder?: Readonly<Record<string, readonly string[]>>;
     },
     fallbackRoot: string,
   ): void {
@@ -355,6 +378,25 @@ export class FaceWorkspaceRegistry {
       });
       if (!this.order.includes(id)) this.order.push(id);
       this.sessionOrder.set(id, []);
+    }
+
+    if (doc.sessionOrder) {
+      for (const [wsId, ids] of Object.entries(doc.sessionOrder)) {
+        if (!this.workspaces.has(wsId)) continue;
+        const live = ids.filter((sid) => typeof sid === "string" && sid.length > 0);
+        this.sessionOrder.set(wsId, [...live]);
+      }
+    }
+    if (doc.membership) {
+      for (const [sid, wsId] of Object.entries(doc.membership)) {
+        if (!this.workspaces.has(wsId)) continue;
+        this.membership.set(sid, wsId);
+        const bucket = this.sessionOrder.get(wsId) ?? [];
+        if (!bucket.includes(sid)) {
+          bucket.push(sid);
+          this.sessionOrder.set(wsId, bucket);
+        }
+      }
     }
   }
 }

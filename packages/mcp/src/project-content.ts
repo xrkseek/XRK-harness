@@ -185,7 +185,7 @@ export async function prepareMcpImageProjection(
     }));
   }
 
-  let allows = false;
+  let allows: boolean;
   try {
     allows = await admission.allowsImageInput();
   } catch (error: unknown) {
@@ -249,7 +249,7 @@ export async function mapMcpCallContent(
 
   const payload =
     typeof raw === "object" && raw !== null && "content" in raw
-      ? (raw as { content: unknown }).content
+      ? raw.content
       : raw;
 
   if (!Array.isArray(payload)) {

@@ -1,6 +1,7 @@
 import { runDoctor } from "./commands/doctor.js";
 import { runDumpConfig } from "./commands/dump-config.js";
 import { runCommand } from "./commands/run.js";
+import { runRestart } from "./commands/restart.js";
 import { runServe } from "./commands/serve.js";
 import { helpText, parseArgs } from "./parse-args.js";
 import { readCliVersion } from "./product-paths.js";
@@ -46,6 +47,8 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
         return 0;
       case "serve":
         return await runServe(args);
+      case "restart":
+        return await runRestart(args);
       default:
         process.stdout.write(helpText());
         return 0;

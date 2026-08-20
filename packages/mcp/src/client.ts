@@ -8,7 +8,6 @@ import { assertServerName } from "./names.js";
 import { mapMcpCallContent } from "./project-content.js";
 import { resolveReconnectPolicy } from "./reconnect.js";
 import type {
-  McpCallResult,
   McpClient,
   McpClientOptions,
   McpConnectionState,

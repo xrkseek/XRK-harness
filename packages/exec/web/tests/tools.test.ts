@@ -10,13 +10,34 @@ import {
 } from "../src/index.js";
 
 describe("createWebTools", () => {
-  it("always registers both tools; search without a key is an honest error", async () => {
-    const tools = createWebTools({ env: {} });
+  it("registers both tools; empty env cascades to DuckDuckGo when parallel-free fails", async () => {
+    const access = createDefaultWebAccess({
+      env: {},
+      fetch: async (input) => {
+        if (String(input).includes("parallel.ai")) {
+          throw new Error("parallel unavailable");
+        }
+        return new Response(
+          `<a class="result__a" href="https://example.com/">News</a>`,
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
+      },
+    });
+    const tools = createWebTools(access);
     expect(tools.map((t) => t.name)).toEqual(["web_search", "web_fetch"]);
-    const search = tools[0]!;
-    const out = await search.execute({ query: "news" });
+    const out = await tools[0]!.execute({ query: "news" });
+    expect(out.isError).toBeUndefined();
+    expect(out.content).toContain("https://example.com/");
+  });
+
+  it("honest error when a keyed provider is pinned without a key", async () => {
+    const access = createDefaultWebAccess({
+      env: { XRK_WEB_SEARCH_PROVIDER: "tavily" },
+    });
+    const tools = createWebTools(access);
+    const out = await tools[0]!.execute({ query: "news" });
     expect(out.isError).toBe(true);
-    expect(out.content).toMatch(/XRK_TAVILY_API_KEY or XRK_BRAVE_SEARCH_API_KEY/);
+    expect(out.content).toMatch(/XRK_TAVILY_API_KEY/);
   });
 
   it("search execute writes format text + replay meta", async () => {

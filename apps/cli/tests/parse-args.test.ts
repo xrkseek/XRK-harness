@@ -54,9 +54,20 @@ describe("cli parseArgs", () => {
     expect(a.host).toBe("127.0.0.1");
   });
 
+  it("parses --force --verbose and restart", () => {
+    const a = parseArgs(["restart", "--force", "--verbose", "--port", "8799"]);
+    expect(a.command).toBe("restart");
+    expect(a.force).toBe(true);
+    expect(a.verbose).toBe(true);
+    expect(a.port).toBe(8799);
+  });
+
   it("help text mentions web and persist", () => {
     expect(helpText()).toContain("doctor");
     expect(helpText()).toContain("web");
+    expect(helpText()).toContain("restart");
+    expect(helpText()).toContain("--force");
+    expect(helpText()).toContain("--verbose");
     expect(helpText()).toContain("--no-persist");
     expect(helpText()).toContain("~/.xrk/sessions");
     expect(helpText()).toContain("127.0.0.1");

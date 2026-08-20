@@ -2,45 +2,52 @@
 
 > **读者**：维护者。
 
-对外发布 **`@xrkseek/harness-cli`**（内含组装好的 `product-web/`）。workspace 内其余包保持 **`private`**，不随本次流程公开到 npm。
+对外只发 **`@xrkseek/harness-cli`**（含组装好的 `product-web/`）。workspace 内其余包保持 **`private`**，随 CLI deploy 捆绑，不上架。
 
-## 产物
+版本真源：`apps/cli/package.json` → `version`（当前 **0.0.3**）。发行说明：`docs/releases/vX.Y.Z.md`（结构见 rule `xrk-release-notes`）。
 
-| 产物 | 上传到哪里 | 用户怎么用 |
-|------|------------|------------|
-| `xrkseek-harness-cli-<ver>.tgz` | GitHub **Release** | 下载解压或按 Release 说明安装 |
-| `npm pack` 产物 | GitHub **Packages** | `npx @xrkseek/harness-cli`（需配置 registry + token） |
+## 双通道
 
-Release 列表：https://github.com/xrkseek/XRK-harness/releases
+| # | 产物 | 去向 | 用户怎么用 |
+|---|------|------|------------|
+| 1 | npm pack | **npmjs.org** | `npx @xrkseek/harness-cli web` / `npm i -g @xrkseek/harness-cli` |
+| 2 | `xrkseek-harness-cli-<ver>.tgz` | GitHub **Release** | 下载离线包 |
+
+不发 GitHub Packages。Release 列表：https://github.com/xrkseek/XRK-harness/releases
+
+## 本机认证
+
+```bash
+# npmjs — 用 User 环境变量 NPM_TOKEN（见本机 Cursor 全局规则），或：
+npm login --registry=https://registry.npmjs.org
+npm whoami
+
+# GitHub Release
+gh auth status
+```
 
 ## 命令
 
 ```bash
 pnpm release:stage              # 只打到 .release/
-pnpm release                    # stage + GitHub Release + Packages
-XRK_RELEASE_SKIP_PACKAGES=1 pnpm release   # 只更 Release
-XRK_RELEASE_SKIP_GH_RELEASE=1 pnpm release # 只更 Packages
+pnpm release                    # GitHub Release + npmjs
+XRK_RELEASE_SKIP_NPM=1 pnpm release          # 只更 Release
+XRK_RELEASE_SKIP_GH_RELEASE=1 pnpm release   # 只发 npmjs
+XRK_RELEASE_SKIP_UPLOAD=1 pnpm release       # 只 stage
 ```
 
-## GitHub Packages 认证（维护者本机 / CI）
-
-```ini
-@xrkseek:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=YOUR_TOKEN
-```
-
-用户侧安装示例（需已有读 Packages 权限）：
-
-```sh
-npx @xrkseek/harness-cli web
-```
+`XRK_RELEASE_SKIP_PACKAGES=1` 仍可用，等同 `SKIP_NPM`。
 
 ## 发版前核对
 
-- [ ] Node ≥26；本机 pnpm 与 `packageManager` 一致（`npm install -g pnpm@…`）  
+- [ ] `apps/cli` 版本已 bump；`docs/releases/v…md` 已写（新增/完善/删除/修复）  
+- [ ] `NPM_TOKEN` / `npm whoami` 可用；`gh auth status` 正常  
 - [ ] `pnpm check` 绿  
-- [ ] 若有用户可见行为变化：已更新 [status](./status.md) 与相关契约  
-- [ ] [releases/](./releases/) 有对应说明（或明确本版只修包无文档章）  
+- [ ] status / 契约已随用户可见变化更新  
 - [ ] 密钥未进产物 / 未进 git  
 
-完整交接清单：[maintainer](./maintainer.md)。
+## 版本线
+
+- **0.0.1** 起为公开线。升版：改 `apps/cli/package.json` → 写发行说明 → `pnpm release`。
+
+完整交接：[maintainer](./maintainer.md)。

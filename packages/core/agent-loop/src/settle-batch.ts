@@ -27,6 +27,11 @@ export interface SettleToolBatchInput {
   readonly signal?: AbortSignal;
   /** Default `parallel`. */
   readonly mode?: ToolSettleMode;
+  /**
+   * Cap concurrent settles when `mode` is `parallel`.
+   * Omit / ≤0 → unbounded (Promise.all). Face `agent-loop.maxParallelToolCalls`.
+   */
+  readonly maxParallel?: number;
 }
 
 export interface SettleToolBatchResult {
@@ -70,9 +75,31 @@ export async function settleToolBatch(
     return { outcomes, mode };
   }
 
-  // Parallel: start all, preserve call-order in the returned array.
-  const outcomes = await Promise.all(
-    input.calls.map((call) => settleOne(input, call)),
-  );
+  const cap =
+    typeof input.maxParallel === "number" &&
+    Number.isFinite(input.maxParallel) &&
+    input.maxParallel > 0
+      ? Math.floor(input.maxParallel)
+      : undefined;
+
+  if (cap === undefined || cap >= input.calls.length) {
+    const outcomes = await Promise.all(
+      input.calls.map((call) => settleOne(input, call)),
+    );
+    return { outcomes, mode };
+  }
+
+  // Bounded parallel: worker pool; results kept in call order.
+  const outcomes: RunToolOutcome[] = new Array(input.calls.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    for (;;) {
+      const i = next++;
+      if (i >= input.calls.length) return;
+      outcomes[i] = await settleOne(input, input.calls[i]!);
+    }
+  }
+  const workers = Array.from({ length: cap }, () => worker());
+  await Promise.all(workers);
   return { outcomes, mode };
 }

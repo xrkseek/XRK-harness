@@ -38,3 +38,4 @@ alwaysApply: true
 - 工具链：Node ≥26；pnpm 钉 `packageManager`，本机 `npm install -g pnpm@…`（不用 Corepack）
 - Meter 笔记：`xrk-meter-compaction.mdc` · skill `xrk-meter-session`
 - 写文档：skill `xrk-docs-audience`（必读「语气 / 根 README」）
+- 发行说明：`docs/releases/**` → rule `xrk-release-notes` · skill `xrk-release-notes`（新增/完善/删除/修复；禁日记腔）

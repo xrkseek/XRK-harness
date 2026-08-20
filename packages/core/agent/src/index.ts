@@ -142,6 +142,8 @@ export interface CreateAgentOptions {
   readonly safety?: false | SessionSafetyOptions;
   /** Default `parallel` — see runTurn `toolSettle`. */
   readonly toolSettle?: "serial" | "parallel";
+  /** Cap concurrent settles; Face `agent-loop.maxParallelToolCalls`. */
+  readonly maxParallelToolCalls?: number;
   /** Opt-in context compaction / one overflow retry. */
   readonly compaction?: false | CompactionOptions;
   /** Forwarded to runTurn for vision adapters. */
@@ -290,6 +292,9 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
               : {}),
             ...(options.toolSettle !== undefined
               ? { toolSettle: options.toolSettle }
+              : {}),
+            ...(options.maxParallelToolCalls !== undefined
+              ? { maxParallelToolCalls: options.maxParallelToolCalls }
               : {}),
             ...(options.compaction !== undefined
               ? { compaction: options.compaction }

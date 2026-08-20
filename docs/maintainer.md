@@ -19,7 +19,7 @@
 
 | 项 | 事实 |
 |----|------|
-| 对外发包 | 主要是 **`@xrkseek/harness-cli`**（含 `product-web/`） |
+| 对外发包 | 主要是 **`@xrkseek/harness-cli`**（npmjs + GitHub Release；含 `product-web/`） |
 | 其余 `@xrkseek/*` | 多数 **private**（workspace）；勿当已 npm 公开 SDK 对外承诺 |
 | 产品壳 | `apps/web` + `packages/client` → 组装进 CLI；**不是** deepseek-ai Fork，勿向上游提 PR |
 | 会话 / 设置 | 用户机 `~/.xrk/` 或 workspace `.xrk/`（gitignore）；仓内只有 `*.example` |
@@ -87,10 +87,10 @@ pnpm test:web              # 产品壳硬刷；不进 check
 
 - [ ] 读过 status「能跑 / 未稳 / 未做」，不对外承诺未做项  
 - [ ] `pnpm check` 绿；知道 `test:web` 单独跑  
-- [ ] 会按 publishing 打 Release / Packages（或明确谁有 token）  
+- [ ] 会按 publishing 打 Release / npmjs（或明确谁有 NPM_TOKEN）  
 - [ ] 知道密钥只在本机、example 在仓内  
 - [ ] 知道 Cordis / DSH 对照只在 Canvas，不进 docs 当路线图  
-- [ ] 重大决策有 ADR；发行说明在 `docs/releases/`  
+- [ ] 重大决策有 ADR；发行说明在 `docs/releases/`（新增/完善/删除/修复，非日记）  
 
 ## 相关
 

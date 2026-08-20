@@ -152,6 +152,6 @@ docs/             使用与契约说明
 |------|------|
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 环境、`pnpm check`、契约同步 |
 | [docs/maintainer.md](./docs/maintainer.md) | 日常命令 · 交接 |
-| [docs/publishing.md](./docs/publishing.md) | 发版 |
+| [docs/publishing.md](./docs/publishing.md) | npmjs + GitHub Release |
 | [docs/audiences.md](./docs/audiences.md) | 文档读者分层 |
 | [AGENTS.md](./AGENTS.md) | 改码角色与红线 |

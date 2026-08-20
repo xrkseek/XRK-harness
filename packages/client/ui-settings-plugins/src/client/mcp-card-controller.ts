@@ -61,16 +61,22 @@ export interface McpCardState extends CardShell {
   readonly showErrors: boolean
 }
 
+/** Result of merging a paste into the staged list. */
+export type McpPasteResult = 'ok' | 'empty' | 'invalid'
+
 /** The registration-side face the MCP card's slot entry injects. */
 export interface McpCardFace extends CardActions {
   hooks: {
     /** Card snapshot bound by the renderer as useMcpCard. */
     mcpCard: SnapshotStore<McpCardState>
   }
-  /** Stage one field on a row. */
+  /** @deprecated Form editing removed; JSON paste only. */
   editRow: (index: number, patch: Partial<McpServerRow>) => void
-  /** Append an empty stdio row, or expand a Cursor/Claude `{ mcpServers }` paste. */
-  addRow: (paste?: string) => void
+  /**
+   * Merge a Cursor/Trae `{ mcpServers }` JSON block into the staged list
+   * (upsert by server name). Empty / invalid paste does not add a blank row.
+   */
+  addRow: (paste?: string) => McpPasteResult
   /** Remove a staged row. */
   removeRow: (index: number) => void
 }
@@ -142,9 +148,9 @@ export class McpCardController {
     return {
       hooks: { mcpCard: this.store },
       editRow: (index, patch) => { this.editRow(index, patch) },
-      addRow: (paste) => { this.addRow(paste) },
+      addRow: (paste) => this.addRow(paste),
       removeRow: (index) => { this.removeRow(index) },
-      edit: () => { /* rows use editRow */ },
+      edit: () => { /* rows use paste merge */ },
       resetField: () => { /* n/a for MCP list */ },
       save: () => { void this.save() },
       discard: () => { this.discard() },
@@ -166,13 +172,15 @@ export class McpCardController {
     this.publish()
   }
 
-  private addRow(paste?: string): void {
-    const imported = paste ? rowsFromMcpPaste(paste) : []
-    this.rows = imported.length > 0
-      ? [...this.rows, ...imported]
-      : [...this.rows, emptyRow()]
+  private addRow(paste?: string): McpPasteResult {
+    const raw = typeof paste === 'string' ? paste.trim() : ''
+    if (!raw) return 'empty'
+    const imported = rowsFromMcpPaste(raw)
+    if (imported.length === 0) return 'invalid'
+    this.rows = mergeRowsByName(this.rows, imported)
     this.failed = false
     this.publish()
+    return 'ok'
   }
 
   private removeRow(index: number): void {
@@ -279,8 +287,23 @@ function rowFromUi(row: McpServerRow): McpServerDraft {
   }
 }
 
-function emptyRow(): McpServerRow {
-  return { serverName: '', transport: 'stdio', command: '', url: '', args: '', cwd: '' }
+/** Upsert imported rows by `serverName` (later paste wins). */
+function mergeRowsByName(
+  existing: readonly McpServerRow[],
+  imported: readonly McpServerRow[],
+): McpServerRow[] {
+  const byName = new Map(existing.map(row => [row.serverName, row] as const))
+  for (const row of imported) {
+    byName.set(row.serverName, row)
+  }
+  const order: string[] = []
+  for (const row of existing) {
+    if (!order.includes(row.serverName)) order.push(row.serverName)
+  }
+  for (const row of imported) {
+    if (!order.includes(row.serverName)) order.push(row.serverName)
+  }
+  return order.map(name => byName.get(name)!).filter(Boolean)
 }
 
 function namedRowToUi(name: string, row: Record<string, unknown>): McpServerRow | undefined {
@@ -300,7 +323,7 @@ function namedRowToUi(name: string, row: Record<string, unknown>): McpServerRow 
 }
 
 /**
- * Cursor / Claude Desktop paste: `{ "mcpServers": { "12306-mcp": { "command": "npx", "args": ["-y", "12306-mcp"] } } }`.
+ * Cursor / Trae / Claude Desktop paste: `{ "mcpServers": { "name": { "command", "args" } } }`.
  * Also accepts a bare name map or a Face array of `{ serverName, command }`.
  */
 export function rowsFromMcpPaste(raw: string): McpServerRow[] {

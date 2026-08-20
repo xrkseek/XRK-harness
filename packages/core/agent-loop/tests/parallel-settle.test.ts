@@ -101,6 +101,37 @@ describe("settleToolBatch", () => {
     });
     expect(order).toEqual(["a-start", "a-end", "b-start", "b-end"]);
   });
+
+  it("maxParallel caps concurrent settles", async () => {
+    const tools = createToolRegistry();
+    let live = 0;
+    let peak = 0;
+    tools.register({
+      name: "work",
+      description: "work",
+      parameters: {},
+      async execute() {
+        live += 1;
+        peak = Math.max(peak, live);
+        await delay(25);
+        live -= 1;
+        return { content: "ok" };
+      },
+    });
+    const materialization = materializeTools(tools);
+    await settleToolBatch({
+      calls: [
+        { id: "1", name: "work", arguments: {} },
+        { id: "2", name: "work", arguments: {} },
+        { id: "3", name: "work", arguments: {} },
+      ],
+      registry: tools,
+      materialization,
+      mode: "parallel",
+      maxParallel: 2,
+    });
+    expect(peak).toBeLessThanOrEqual(2);
+  });
 });
 
 describe("runTurn parallel settle", () => {

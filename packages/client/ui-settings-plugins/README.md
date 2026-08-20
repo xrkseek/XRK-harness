@@ -8,7 +8,7 @@ The **Plugins** settings section and its **Plugin configuration** tab. The secti
 
 The configurable tab reads which settings namespaces the Host serves and dispatches one slot key per namespace, so what renders is the intersection of two ledgers: the namespaces a live Host plugin registered, and the cards registered under those keys. A served namespace no card claims renders nothing — another surface owns it, or this deployment ships no browser half for it — and a card whose namespace this deployment does not serve is never dispatched, so an uncomposed plugin leaves no trace and does not hold the tab back from its empty line. The empty line waits for the Host's first answer, so an unanswered read never reads as "this deployment configures no plugin". Cards appear in the order they registered, which is stable for the cards one package installs together and not stable across plugins: apply order between packages is unconstrained.
 
-The cards this package ships cover the shell executor (`bash`), the agent loop's tool-call parallelism (`agent-loop`), and the DeepSeek search provider (`web-search-deepseek`).
+The cards this package ships cover MCP servers (`mcp`), the shell executor (`bash`), and the agent loop's tool-call parallelism (`agent-loop`). Web search is env-driven (`docs/web-tools.md`), not a Plugins settings card.
 
 ## Extension point
 

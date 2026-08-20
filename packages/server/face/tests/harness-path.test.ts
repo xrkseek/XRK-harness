@@ -1,5 +1,5 @@
 /**
- * Face harness path: prompt â†?tool â†?cancel â†?policy ask.
+ * Face harness path: prompt ï¿½?tool ï¿½?cancel ï¿½?policy ask.
  * Locks the main control-plane loop without browser E2E.
  */
 import { describe, expect, it } from "vitest";
@@ -89,6 +89,7 @@ async function buildFace(opts: {
   const runtime = createFaceRuntime({
     store,
     workspaceRoot,
+    productDir: path.join(workspaceRoot, ".xrk"),
     version: "test",
     drain: {
       wake: (id) => hub.wake(id),
@@ -121,7 +122,7 @@ async function buildFace(opts: {
 }
 
 describe("Face harness path polish", () => {
-  it("prompt â†?tool/call+result â†?final assistant (wire shapes)", async () => {
+  it("prompt ï¿½?tool/call+result ï¿½?final assistant (wire shapes)", async () => {
     const { runtime, store } = await buildFace({
       llm: createReplayAdapter([
         {

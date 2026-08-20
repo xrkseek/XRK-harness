@@ -1,4 +1,10 @@
-export type CliCommand = "run" | "doctor" | "dump-config" | "serve" | "help";
+export type CliCommand =
+  | "run"
+  | "doctor"
+  | "dump-config"
+  | "serve"
+  | "restart"
+  | "help";
 
 export interface ParsedArgs {
   readonly command: CliCommand;
@@ -12,6 +18,10 @@ export interface ParsedArgs {
   readonly version: boolean;
   readonly open: boolean;
   readonly persist: boolean;
+  /** OpenClaw-style: free the listen port before bind. */
+  readonly force: boolean;
+  readonly verbose: boolean;
+  readonly quiet: boolean;
   readonly host?: string;
   readonly port?: number;
 }
@@ -60,6 +70,9 @@ function emptyArgs(partial: Partial<ParsedArgs> & { command: CliCommand }): Pars
     version: false,
     open: false,
     persist: true,
+    force: false,
+    verbose: false,
+    quiet: false,
     ...partial,
   };
 }
@@ -81,6 +94,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     first === "doctor" ||
     first === "dump-config" ||
     first === "serve" ||
+    first === "restart" ||
     first === "help"
   ) {
     command = first;
@@ -100,6 +114,9 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   let version = false;
   let open = false;
   let persist = true;
+  let force = false;
+  let verbose = false;
+  let quiet = false;
   let host: string | undefined;
   let port: number | undefined;
 
@@ -119,6 +136,18 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     }
     if (a === "--no-persist") {
       persist = false;
+      continue;
+    }
+    if (a === "--force") {
+      force = true;
+      continue;
+    }
+    if (a === "--verbose" || a === "-v") {
+      verbose = true;
+      continue;
+    }
+    if (a === "--quiet" || a === "-q") {
+      quiet = true;
       continue;
     }
     if (a === "--preset") {
@@ -216,6 +245,9 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     version,
     open,
     persist,
+    force,
+    verbose,
+    quiet,
     ...(host ? { host } : {}),
     ...(port !== undefined ? { port } : {}),
   };
@@ -231,6 +263,7 @@ Commands:
   run           One turn (default: minimal + replay; XRK_LLM_PRESET if set)
   serve         HTTP host + product UI (apps/web/dist)
   web           Alias for serve
+  restart       Free the listen port, then serve (same flags as web)
   doctor        Check node / workspace / product shell
   dump-config   Print layered config JSON
   help          Show this help
@@ -242,15 +275,24 @@ Options:
   --host <addr>       Bind host (default: 127.0.0.1; not 0.0.0.0)
   --port <n>          Bind port (default: 8787; 0 = OS pick)
   --open              Open the product UI in the system browser
+  --force             Kill whatever is already listening on --port (OpenClaw-style)
+  --verbose, -v       Debug logs (HTTP /api access + MCP detail)
+  --quiet, -q         Warn/error only
   --no-persist        In-memory sessions (default: ~/.xrk/sessions)
   --patch <json>      Shallow JSON patch merged into dump-config / serve
   --presentation <m>  tools (default) | code (experimental run_code)
   -V, --version       Print CLI version
   -h, --help          Show help
 
+Env:
+  XRK_LOG / XRK_LOG_LEVEL   silent|error|warn|info|debug (default info)
+  XRK_MCP_ALLOW=1           Allow mcp.connect for configured / saved servers
+
 Examples:
   xrk-harness serve --preset server
-  xrk-harness web --port 8080 --open
+  xrk-harness web --port 8080 --open --verbose
+  xrk-harness web --force
+  xrk-harness restart --workspace .
   xrk-harness run --preset minimal "ping"
 `;
 }
