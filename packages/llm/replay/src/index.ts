@@ -108,11 +108,15 @@ export function createReplayAdapter(
       if (hangBeforeDone) {
         await waitForAbort(request.signal);
       }
+      if (next.usage) {
+        yield { type: "usage", usage: next.usage };
+      }
       yield {
         type: "done",
         content: next.content,
         ...(reasoning.trim() ? { reasoning } : {}),
         ...(next.toolCalls ? { toolCalls: next.toolCalls } : {}),
+        ...(next.usage ? { usage: next.usage } : {}),
       };
     };
   }

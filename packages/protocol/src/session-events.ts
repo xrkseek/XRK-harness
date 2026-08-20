@@ -1,5 +1,6 @@
 import type { ToolCall, ToolResult } from "./tools.js";
 import type { MessageContent } from "./content.js";
+import type { TokenUsage } from "./token-usage.js";
 
 /** Append-only session facts (M0 minimal set). */
 
@@ -56,11 +57,17 @@ export interface AssistantChunkEvent extends SessionEventBase {
   readonly type: "assistant/chunk";
   readonly turnId: string;
   readonly stepId: string;
+  /** Empty when `kind` is `"usage"`. */
   readonly text: string;
-  /** Default `"text"`. Reasoning uses a separate Face mux chunk type. */
-  readonly kind?: "text" | "reasoning";
+  /**
+   * Default `"text"`. Reasoning uses a separate Face mux chunk type.
+   * `"usage"` carries provider token sample mid-stream (DSH StreamChunk usage).
+   */
+  readonly kind?: "text" | "reasoning" | "usage";
   /** DSH StreamChunk index; reasoning=0 text=1 recommended when both appear. */
   readonly index?: number;
+  /** Present when `kind` is `"usage"` (also allowed on text chunks for soft forward-compat). */
+  readonly usage?: TokenUsage;
 }
 
 export interface AssistantMessageEvent extends SessionEventBase {
@@ -73,6 +80,8 @@ export interface AssistantMessageEvent extends SessionEventBase {
   readonly reasoning?: string;
   /** User cancelled mid-stream; prefix was finalized from logged chunks (DSH rc.8). */
   readonly interrupted?: boolean;
+  /** Provider token sample when the adapter reported usage (Face sessionStats). */
+  readonly usage?: TokenUsage;
 }
 
 export interface ToolCallEvent extends SessionEventBase {
@@ -180,6 +189,11 @@ export interface ContextCompactionEvent extends SessionEventBase {
   readonly summary: string;
   /** Verbatim recent tail kept outside the summarized head. */
   readonly recent: string;
+  /**
+   * Heuristic tokens of the surface window this compaction replaces
+   * (DSH shadowedTokenCount). When omitted, Face meter folds at delta 0.
+   */
+  readonly shadowedTokenCount?: number;
 }
 
 /**
@@ -300,9 +314,18 @@ export interface LlmRequestConfig {
   readonly provider: string;
   readonly model: string;
   readonly reasoningEffort?: string;
+  /** Provider-advertised context capacity when known (Face contextPressure). */
+  readonly contextWindow?: number;
 }
 
 export type RequestHeaderReason = "initial" | "resume" | "change";
+
+/** Tool schema row logged on `request/header` for Face contextBreakdown. */
+export interface RequestHeaderToolSchema {
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: Record<string, unknown>;
+}
 
 /** Non-history request envelope snapshot (DSH `request/header`). Not model-visible. */
 export interface RequestHeaderEvent extends SessionEventBase {
@@ -311,6 +334,10 @@ export interface RequestHeaderEvent extends SessionEventBase {
   readonly reason: RequestHeaderReason;
   readonly header: {
     readonly config: LlmRequestConfig;
+    /** Assembled system prompt for this request (optional; Face estimate). */
+    readonly system?: string;
+    /** Standing tool schemas for this request (optional; Face estimate). */
+    readonly tools?: readonly RequestHeaderToolSchema[];
     readonly adapterDefaults?: {
       readonly reasoningEffort?: boolean;
       readonly maxTokens?: boolean;

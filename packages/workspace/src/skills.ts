@@ -1,4 +1,5 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { access, readdir, readFile, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 
 export interface SkillSummary {
@@ -6,7 +7,7 @@ export interface SkillSummary {
   readonly description: string;
   readonly whenToUse?: string;
   readonly modelInvocable: boolean;
-  /** Directory under `{productDir}/skills`. */
+  /** Directory name that contains `SKILL.md`. */
   readonly dirName: string;
   readonly directory: string;
 }
@@ -16,7 +17,49 @@ export interface SkillDefinition extends SkillSummary {
   readonly content: string;
 }
 
+/** Options shared by list / load / tools / slash. */
+export interface SkillSourceOptions {
+  /**
+   * Project root: auto-import existing skill dirs under
+   * `.codex` / `.claude` / `.agents` / `.cursor` / `.xrk` (never mkdir).
+   */
+  readonly workspaceRoot?: string;
+  /**
+   * Legacy single product root → `{productDir}/skills` only.
+   * Prefer `workspaceRoot` for multi-vendor import.
+   */
+  readonly productDir?: string;
+  /** Explicit skill roots (each is a skills directory). */
+  readonly skillDirs?: readonly string[];
+  /**
+   * Also scan `~/.codex|claude|agents|cursor|xrk/skills` when using workspaceRoot.
+   * Default true. Tests that assert exact lists should pass false.
+   */
+  readonly includeUserHome?: boolean;
+}
+
 const MAX_NAME = 128;
+
+/**
+ * Relative project skill roots, low → high priority (later wins on name clash).
+ * Matches Cursor/Claude/Codex layouts; `.xrk/skills` is the XRK-native overlay.
+ */
+export const PROJECT_SKILL_REL_DIRS = [
+  ".codex/skills",
+  ".claude/skills",
+  ".agents/skills",
+  ".cursor/skills",
+  ".xrk/skills",
+] as const;
+
+/** User-home skill roots (same order; lower than any project root). */
+export const USER_SKILL_REL_DIRS = [
+  ".codex/skills",
+  ".claude/skills",
+  ".agents/skills",
+  ".cursor/skills",
+  ".xrk/skills",
+] as const;
 
 export function isSkillName(name: string): boolean {
   const trimmed = name.trim();
@@ -31,7 +74,12 @@ export function isSkillName(name: string): boolean {
 export function parseSkillMarkdown(
   raw: string,
   fallbackName: string,
-): { readonly name: string; readonly description: string; readonly whenToUse?: string; readonly content: string } {
+): {
+  readonly name: string;
+  readonly description: string;
+  readonly whenToUse?: string;
+  readonly content: string;
+} {
   let body = raw.replace(/^\uFEFF/, "");
   let name = fallbackName;
   let description = "";
@@ -73,10 +121,68 @@ export function parseSkillMarkdown(
   };
 }
 
-export async function listSkills(options: {
-  readonly productDir: string;
-}): Promise<readonly SkillSummary[]> {
-  const root = path.resolve(options.productDir, "skills");
+async function dirExists(p: string): Promise<boolean> {
+  try {
+    await access(p);
+    const st = await stat(p);
+    return st.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Existing skill directories only — never creates paths.
+ * Order: user homes (if enabled) → project vendors → optional productDir/skills.
+ */
+export async function resolveSkillDirs(
+  options: SkillSourceOptions,
+): Promise<readonly string[]> {
+  if (options.skillDirs && options.skillDirs.length > 0) {
+    const out: string[] = [];
+    for (const dir of options.skillDirs) {
+      const abs = path.resolve(dir);
+      if (await dirExists(abs)) out.push(abs);
+    }
+    return out;
+  }
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = async (abs: string) => {
+    const key = path.resolve(abs);
+    if (seen.has(key)) return;
+    if (!(await dirExists(key))) return;
+    seen.add(key);
+    out.push(key);
+  };
+
+  if (options.workspaceRoot) {
+    const root = path.resolve(options.workspaceRoot);
+    const includeUser = options.includeUserHome !== false;
+    if (includeUser) {
+      const home = homedir();
+      for (const rel of USER_SKILL_REL_DIRS) {
+        await push(path.join(home, rel));
+      }
+    }
+    for (const rel of PROJECT_SKILL_REL_DIRS) {
+      await push(path.join(root, rel));
+    }
+  }
+
+  if (options.productDir) {
+    await push(path.join(path.resolve(options.productDir), "skills"));
+  }
+
+  return out;
+}
+
+/** Scan one skills directory for child SKILL.md folders (missing root → []). */
+export async function listSkillsInDir(
+  skillsRoot: string,
+): Promise<readonly SkillSummary[]> {
+  const root = path.resolve(skillsRoot);
   let names: string[];
   try {
     names = await readdir(root);
@@ -120,21 +226,43 @@ export async function listSkills(options: {
   return out;
 }
 
+/**
+ * Merge skill roots; later roots win on name / dirName clash.
+ * Missing dirs are skipped (no mkdir).
+ */
+export async function listSkills(
+  options: SkillSourceOptions & { readonly productDir?: string },
+): Promise<readonly SkillSummary[]> {
+  const dirs = await resolveSkillDirs(options);
+  if (dirs.length === 0) return [];
+
+  const byName = new Map<string, SkillSummary>();
+  for (const dir of dirs) {
+    for (const skill of await listSkillsInDir(dir)) {
+      byName.set(skill.name, skill);
+    }
+  }
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function listSkillsFromWorkspace(
   workspaceRoot: string,
+  options?: { readonly includeUserHome?: boolean },
 ): Promise<readonly SkillSummary[]> {
   return listSkills({
-    productDir: path.resolve(workspaceRoot, ".xrk"),
+    workspaceRoot,
+    ...(options?.includeUserHome !== undefined
+      ? { includeUserHome: options.includeUserHome }
+      : {}),
   });
 }
 
-export async function loadSkill(options: {
-  readonly productDir: string;
-  readonly name: string;
-}): Promise<SkillDefinition | undefined> {
+export async function loadSkill(
+  options: SkillSourceOptions & { readonly name: string },
+): Promise<SkillDefinition | undefined> {
   const wanted = options.name.trim();
   if (!isSkillName(wanted)) return undefined;
-  const listed = await listSkills({ productDir: options.productDir });
+  const listed = await listSkills(options);
   const summary = listed.find(
     (s) => s.name === wanted || s.dirName === wanted,
   );
@@ -170,7 +298,7 @@ export function formatSkillCatalog(
   return [
     "## Skills",
     ...lines,
-    "Use the skill tool with the exact name to load full instructions before acting on a matching task.",
+    "Use the skill tool with the exact skill name to load full instructions before acting on a matching task.",
   ].join("\n");
 }
 

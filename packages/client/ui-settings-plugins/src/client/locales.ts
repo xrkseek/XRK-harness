@@ -11,12 +11,13 @@ export type PluginsSettingsLocaleKey =
   | 'webSearchTitle' | 'webSearchDescription'
   | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
   | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
-  | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading' | 'mcpConnectedEmpty'
+  | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading'
   | 'mcpServersHeading' | 'mcpServersEmpty' | 'mcpAddServer' | 'mcpRemoveServer'
-  | 'mcpMore' | 'mcpServerRow' | 'mcpServerName' | 'mcpServerNameHint' | 'mcpTransport'
+  | 'mcpPaste' | 'mcpPasteHint'
+  | 'mcpServerRow' | 'mcpServerName' | 'mcpServerNameHint' | 'mcpTransport'
   | 'mcpTransportStdio' | 'mcpTransportHttp' | 'mcpTransportHint'
   | 'mcpCommand' | 'mcpCommandHint' | 'mcpUrl' | 'mcpUrlHint'
-  | 'mcpCwd' | 'mcpCwdHint' | 'mcpRowInvalid' | 'mcpToolsLabel'
+  | 'mcpArgs' | 'mcpArgsHint' | 'mcpCwd' | 'mcpCwdHint' | 'mcpRowInvalid' | 'mcpToolsLabel'
   | 'mcpStatusConnected' | 'mcpStatusReconnecting' | 'mcpStatusGaveUp'
 
 /** English copy. */
@@ -61,23 +62,25 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   mcpTitle: 'MCP servers',
   mcpDescription: 'Add local commands or remote URLs. Saved list remounts live when Host uses the settings file (empty XRK_MCP_SERVERS). Allow policy still required to connect.',
   mcpConnectedHeading: 'Connected now',
-  mcpConnectedEmpty: 'No MCP plugins are connected in this Host process.',
   mcpServersHeading: 'Servers',
   mcpServersEmpty: 'No servers yet. Add one, save, and Host remounts.',
   mcpAddServer: 'Add server',
   mcpRemoveServer: 'Remove',
-  mcpMore: 'Working directory…',
+  mcpPaste: 'Paste JSON',
+  mcpPasteHint: '{ "mcpServers": { "12306-mcp": { "command": "npx", "args": ["-y", "12306-mcp"] } } }',
   mcpServerRow: 'Server {index}',
   mcpServerName: 'Name',
-  mcpServerNameHint: 'Short id in tool names (mcp__name__…). Leave blank then leave the field to auto-fill.',
-  mcpTransport: 'Type',
-  mcpTransportStdio: 'Local',
-  mcpTransportHttp: 'Remote',
-  mcpTransportHint: 'Local runs a process; Remote uses a streamable HTTP URL.',
+  mcpServerNameHint: 'Short id in tool names (mcp__name__…).',
+  mcpTransport: 'Transport',
+  mcpTransportStdio: 'Local process',
+  mcpTransportHttp: 'Remote URL',
+  mcpTransportHint: 'Local runs a command; remote connects to a streamable HTTP endpoint.',
   mcpCommand: 'Command',
-  mcpCommandHint: 'Full launch line — executable and args, space-separated (quotes ok).',
+  mcpCommandHint: 'Executable for local transport (for example npx).',
   mcpUrl: 'URL',
   mcpUrlHint: 'Streamable HTTP MCP endpoint.',
+  mcpArgs: 'Arguments',
+  mcpArgsHint: 'Optional, comma-separated args passed to the command.',
   mcpCwd: 'Working directory',
   mcpCwdHint: 'Optional. Leave blank to use the Host default.',
   mcpRowInvalid: 'Each server needs a name and a command or URL.',
@@ -129,23 +132,25 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   mcpTitle: 'MCP 服务器',
   mcpDescription: '添加本地命令或远程 URL。设置文件为真源（空 XRK_MCP_SERVERS）时保存后热挂载；连接仍需 allow 策略。',
   mcpConnectedHeading: '当前已连接',
-  mcpConnectedEmpty: '本 Host 进程尚未连接任何 MCP 插件。',
   mcpServersHeading: '服务器',
   mcpServersEmpty: '还没有服务器。添加一条并保存即可热挂载。',
   mcpAddServer: '添加服务器',
   mcpRemoveServer: '移除',
-  mcpMore: '工作目录…',
+  mcpPaste: '粘贴 JSON',
+  mcpPasteHint: '{ "mcpServers": { "12306-mcp": { "command": "npx", "args": ["-y", "12306-mcp"] } } }',
   mcpServerRow: '服务器 {index}',
   mcpServerName: '名称',
-  mcpServerNameHint: '工具名里的短 id（mcp__name__…）。留空后失焦可自动填。',
-  mcpTransport: '类型',
-  mcpTransportStdio: '本地',
-  mcpTransportHttp: '远程',
-  mcpTransportHint: '本地跑进程；远程连 streamable HTTP。',
+  mcpServerNameHint: '工具名里的短 id（mcp__name__…）。',
+  mcpTransport: '传输方式',
+  mcpTransportStdio: '本地进程',
+  mcpTransportHttp: '远程 URL',
+  mcpTransportHint: '本地启动命令；远程连接 streamable HTTP 端点。',
   mcpCommand: '命令',
-  mcpCommandHint: '整行启动命令——可执行文件与参数，空格分隔（可用引号）。',
+  mcpCommandHint: '本地传输的可执行文件（例如 npx）。',
   mcpUrl: 'URL',
   mcpUrlHint: 'streamable HTTP MCP 端点。',
+  mcpArgs: '参数',
+  mcpArgsHint: '可选，逗号分隔，传给命令。',
   mcpCwd: '工作目录',
   mcpCwdHint: '可选。留空使用 Host 默认。',
   mcpRowInvalid: '每条服务器需要名称，以及命令或 URL。',

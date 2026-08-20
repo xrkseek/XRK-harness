@@ -228,7 +228,12 @@ export function createHarnessComposition(
   for (const tool of createFsTools(fs)) tools.register(tool);
   for (const tool of createBashTools(shell)) tools.register(tool);
   for (const tool of createStdTools()) tools.register(tool);
-  for (const tool of createSkillTools({ productDir })) tools.register(tool);
+  for (const tool of createSkillTools({
+    workspaceRoot: injectOpts.root,
+    productDir,
+  })) {
+    tools.register(tool);
+  }
   if (options.webTools !== false) {
     const access =
       typeof options.webTools === "object"
@@ -436,7 +441,11 @@ export function createHarnessComposition(
               assemble: {
                 persona: system,
                 ...(workspaceBlocks?.length ? { workspaceBlocks } : {}),
-                resolveSlash: createSlashResolver({ productDir, recipes }),
+                resolveSlash: createSlashResolver({
+                  workspaceRoot: injectOpts.root,
+                  productDir,
+                  recipes,
+                }),
               },
             }
           : {}),

@@ -151,7 +151,10 @@ export function createMinimalComposition(
   for (const tool of createFsTools(fs)) {
     tools.register(tool);
   }
-  for (const tool of createSkillTools({ productDir })) {
+  for (const tool of createSkillTools({
+    workspaceRoot: injectOpts.root,
+    productDir,
+  })) {
     tools.register(tool);
   }
   wireCompositionTools(tools, {
@@ -276,7 +279,11 @@ export function createMinimalComposition(
               assemble: {
                 persona: system,
                 ...(workspaceBlocks?.length ? { workspaceBlocks } : {}),
-                resolveSlash: createSlashResolver({ productDir, recipes }),
+                resolveSlash: createSlashResolver({
+                  workspaceRoot: injectOpts.root,
+                  productDir,
+                  recipes,
+                }),
               },
             }
           : {}),

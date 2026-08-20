@@ -15,7 +15,7 @@
 | HTTP + Host + Face 主路径 | `server-*`（产品 boot 省略 Cordis UI/HMR；工具卡 · `session/jobs` · standing 冷 history；`ask_user`；`/permission` · `/plan` · `/compact` · `/export` · `/feedback`） | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
 | CLI | `@xrkseek/harness-cli`（`serve`/`web` 产品壳） | [apps/cli/README.md](../apps/cli/README.md) |
 | LLM / Presets / SDK | `llm-*` · Registry R0+R1（openai-chat / completions 别名 · anthropic-messages · openai-responses · gemini-generate）· `presets/*` · `@xrkseek/harness` | [llm-provider-registry.md](./llm-provider-registry.md) · [profiles.md](./profiles.md) |
-| MCP | `@xrkseek/mcp`（stdio/HTTP 有界进程重连 + SSE）；Host `XRK_MCP_*` 或 Face `mcp.servers` 落盘 + 文件真源热挂载（默认 deny） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) |
+| MCP | `@xrkseek/mcp`（stdio/HTTP 有界进程重连 + SSE；有序 content 投影；可选 image → AttachmentStore）；Host `XRK_MCP_*` 或 Face `mcp.servers` 落盘 + 文件真源热挂载（默认 deny） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) |
 | Attachment / 插件 | Face 附件；进程插件 `tools` · `prompt` · `commands` | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
 
 产品壳 = `apps/web` + `packages/client`；serve 用组装后的 dist / CLI `product-web/`；内核不嵌 Cordis。
@@ -34,7 +34,7 @@
 
 | 域 | 说明 |
 | --- | --- |
-| Host Face ↔ 产品 Web | 首屏 RPC + 静态壳有测（`product-shell.test`）；Host-serve Playwright 硬刷欢迎窗 / 流式 / 取消 / 工具卡 / 审批 / 提问 / inventory / Think / TodoDock / Access / Plan / plan-review / Session log 导出 / MCP 设置（`pnpm test:web`，含 `product-shell-cancel.e2e.ts`，不进 `pnpm check`）；Face 冷 history 含 reasoning / standing 工具卡；Cordis scaffold 金标 e2e 未搬 |
+| Host Face ↔ 产品 Web | 首屏 RPC（含 `settings.describe`）+ Context meter（`tokenUsage` / `contextPressure` / `contextBreakdown`；compaction 可带 `shadowedTokenCount`）+ 静态壳有测（`product-shell.test`）；Host-serve Playwright 硬刷欢迎窗 / 流式 / **stream aria golden** / 取消 / 工具卡 / 审批 / 提问 / inventory / Think / TodoDock / Access / Plan / plan-review / Session log 导出 / MCP 设置（`pnpm test:web`，不进 `pnpm check`）；Face 冷 history 含 reasoning / standing 工具卡；Cordis scaffold 全家桶未搬 |
 | 产品 Web | `pnpm web:build` + `client:bundle` + `web:assemble` → `apps/web/dist`（35 plugins，含 `client-session-log-export`；omit HMR / Cordis UI / native picker）；Host-serve `product-shell-*.e2e.ts` 全勾 |
 | 保留插件 kind | `channel` / `policy` / `llm` 可发现、未自动接线；Cordis 宿主包只登记 stub |
 
@@ -42,7 +42,7 @@
 
 | 域 | 说明 |
 | --- | --- |
-| DSH 插件长尾 | Cordis scaffold 金标 e2e、Cordis remote-event inspect/run、真 Win process-inspector、client 整包 resync、Azure deployment 深路径 / Ollama 原生协议等 —— 对照笔记进 Canvas，不写成产品路线 |
+| DSH 插件长尾 | Cordis scaffold 全家桶、Cordis remote-event inspect/run、真 Win process-inspector、client 整包 resync、Azure deployment / Ollama 原生协议等 —— 对照笔记进 Canvas，不写成产品路线 |
 
 ## 依赖纪律
 

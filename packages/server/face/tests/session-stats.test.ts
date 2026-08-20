@@ -114,6 +114,57 @@ describe("Face sessionStats projection", () => {
     });
   });
 
+  it("folds decodeMs/decodeTokens from assistant/message.usage after TTFT", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    registry.register(createSessionStatsProjectionUnit());
+
+    store.append(session.id, { type: "turn/start", ts: 100, turnId: "t1" });
+    store.append(session.id, {
+      type: "step/start",
+      ts: 110,
+      turnId: "t1",
+      stepId: "s1",
+    });
+    store.append(session.id, {
+      type: "assistant/chunk",
+      ts: 140,
+      turnId: "t1",
+      stepId: "s1",
+      text: "hi",
+      kind: "text",
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 200,
+      turnId: "t1",
+      stepId: "s1",
+      content: "hi",
+      usage: { inputTokens: 12, outputTokens: 5 },
+    });
+    store.append(session.id, {
+      type: "step/end",
+      ts: 210,
+      turnId: "t1",
+      stepId: "s1",
+    });
+    driveAll(registry, session.id, store);
+
+    expect(registry.snapshot(session.id).values.sessionStats).toEqual({
+      turns: 1,
+      steps: 1,
+      llmMs: 90,
+      toolMs: 0,
+      ttftMs: 30,
+      ttftSteps: 1,
+      decodeMs: 60,
+      decodeTokens: 5,
+    });
+  });
+
   it("does not count cancelled stream time without assistant/message", () => {
     const store = createMemorySessionStore();
     const session = newSession(store);

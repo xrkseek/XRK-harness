@@ -39,6 +39,25 @@ export interface FaceProjectionMap {
     readonly decodeMs: number;
     readonly decodeTokens: number;
   };
+  /** Cumulative provider token buckets (DSH tokenUsage; StatsLine). */
+  readonly tokenUsage: {
+    readonly uncachedInputTokens: number;
+    readonly outputTokens: number;
+    readonly cacheReadTokens: number;
+    readonly cacheWriteTokens: number;
+  };
+  /** Newest prompt pressure + route capacity (DSH contextPressure; ContextMeter). */
+  readonly contextPressure: {
+    readonly pressureTokens?: number;
+    readonly projectedTokens?: number;
+    readonly contextWindow?: number;
+  };
+  /** Heuristic system/tools/message composition (DSH contextBreakdown). */
+  readonly contextBreakdown: {
+    readonly systemTokens: number;
+    readonly toolsTokens: number;
+    readonly messageTokens: number;
+  };
 }
 
 export interface SessionListMetadata {

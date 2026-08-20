@@ -1,0 +1,31 @@
+---
+description: Meter/compaction 改码笔记（非教科书）
+globs: packages/protocol/src/token-usage.ts,packages/core/session/src/{compaction,surface-*,request-header}.ts,packages/core/agent-loop/src/{compaction,request-header-log}.ts,packages/server/face/src/projections/**/*
+alwaysApply: false
+---
+
+# 笔记 · meter / compaction
+
+教科书：`docs/session-compaction.md` · `docs/protocol-events.md`（TokenUsage）。改完契约再改教科书，**别把本页红线抄进 docs**。
+
+## 分层
+
+| 层 | 包 | 符号 |
+|----|-----|------|
+| 样本 | protocol | `providerUsageSample` → `usageFromSessionEvent` · `inputPressureTokens` |
+| 计价 | core-session | 预算 `estimateTokens` ≠ meter `foldSurfaceTokens` / `priceCurrentSurfaceWindow` |
+| 投影 | server-face | `tokenUsage` · `contextPressure` · `contextBreakdown` · `sessionStats` · `parse-int.ts` |
+
+## 红线（短）
+
+- 勿合并预算与 surface 计价（密度可共用 `estimateText`）。
+- 勿在 Face 做 estimate/fold re-export；直 import protocol / core-session。
+- 勿合并 pressure + breakdown 成 mega-unit。
+- 勿把 `stubs/xrk-token-meter` 嵌进内核。
+- `usageFromSessionEvent` 只做 `providerUsageSample` 的薄封装。
+- `request-header-log` 用 `LlmAdapter.peekRoute?` / `ensureRoute?`，禁止 duck cast。
+- 缺 `shadowedTokenCount` → fold delta **0**。
+
+## 同步教科书
+
+`session-compaction` · `protocol-events` · `learn`（短）· `status` · 需要时 `modules/`。

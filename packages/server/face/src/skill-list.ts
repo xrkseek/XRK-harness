@@ -1,5 +1,7 @@
 /**
- * skill.list — Face RPC over workspace `.xrk/skills/<id>/SKILL.md`.
+ * skill.list — Face RPC over workspace skill roots
+ * (`.xrk` / `.claude` / `.cursor` / `.agents` / `.codex` `/skills`, plus user home).
+ * Missing roots are skipped; nothing is created.
  */
 
 import type { FaceRpcResult } from "./types.js";

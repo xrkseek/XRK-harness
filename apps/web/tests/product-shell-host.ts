@@ -1,10 +1,11 @@
 /** Shared Host-serve spawn for apps/web product-shell e2e (not DSH Cordis scaffold). */
 
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { chromium, type Browser, type Page } from "playwright";
+import { expect } from "vitest";
 import { createPersistentSessionStore, toJSONL } from "@xrkseek/core-session";
 import { createStdTools } from "@xrkseek/core-tools";
 import type { LlmAdapter } from "@xrkseek/llm";
@@ -65,6 +66,8 @@ export async function spawnProductShell(options: {
   workspaceRoot: string;
   llm: LlmAdapter;
   sessionsDir?: string;
+  /** Isolate Face/settings home (default: leave process `XRK_HOME`). */
+  xrkHome?: string;
   /** Live-agent tool policy (Host still binds Face `setApprovalHandler`). */
   policy?: PolicyEngine;
   /** Process plugins root (`XRK_PLUGINS_DIR`). */
@@ -73,43 +76,57 @@ export async function spawnProductShell(options: {
   manager: ReturnType<typeof createHostManager>;
   base: string;
 }> {
-  const manager = createHostManager();
-  const config = loadHostConfig({
-    env: {
-      XRK_API_KEY: "",
-      XRK_HOST: "127.0.0.1",
-      XRK_PORT: "0",
-    },
-    patch: {
-      workspaceRoot: options.workspaceRoot,
-      webDist: WEB_DIST,
-      ...(options.sessionsDir ? { sessionsDir: options.sessionsDir } : {}),
-      ...(options.pluginsDir ? { pluginsDir: options.pluginsDir } : {}),
-    },
-  });
+  const prevHome = process.env.XRK_HOME;
+  if (options.xrkHome) {
+    process.env.XRK_HOME = options.xrkHome;
+  }
+  try {
+    const manager = createHostManager();
+    const config = loadHostConfig({
+      env: {
+        ...process.env,
+        XRK_API_KEY: "",
+        XRK_HOST: "127.0.0.1",
+        XRK_PORT: "0",
+        ...(options.xrkHome ? { XRK_HOME: options.xrkHome } : {}),
+      },
+      patch: {
+        workspaceRoot: options.workspaceRoot,
+        webDist: WEB_DIST,
+        ...(options.sessionsDir ? { sessionsDir: options.sessionsDir } : {}),
+        ...(options.pluginsDir ? { pluginsDir: options.pluginsDir } : {}),
+      },
+    });
 
-  // Align live agent tools with Host standing registry (todo_write / ask_user).
-  // Minimal preset is fs+skill only; product-shell hard刷 needs std tools.
-  const instance = await manager.spawn(
-    config,
-    async ({ sessionId, store, workspaceRoot: root, plugins }) =>
-      createMinimalComposition({
-        workspaceRoot: root,
-        sessionStore: store,
-        sessionId,
-        plugins,
-        llm: options.llm,
-        assemble: true,
-        extraTools: createStdTools(),
-        ...(options.policy ? { policy: options.policy } : {}),
-      }).createAgent(),
-  );
+    // Align live agent tools with Host standing registry (todo_write / ask_user).
+    // Minimal preset is fs+skill only; product-shell hard刷 needs std tools.
+    const instance = await manager.spawn(
+      config,
+      async ({ sessionId, store, workspaceRoot: root, plugins }) =>
+        createMinimalComposition({
+          workspaceRoot: root,
+          sessionStore: store,
+          sessionId,
+          plugins,
+          llm: options.llm,
+          assemble: true,
+          extraTools: createStdTools(),
+          ...(options.policy ? { policy: options.policy } : {}),
+        }).createAgent(),
+    );
 
-  const port = instance.health().port!;
-  return { manager, base: `http://127.0.0.1:${port}` };
+    const port = instance.health().port!;
+    return { manager, base: `http://127.0.0.1:${port}` };
+  } catch (err) {
+    if (options.xrkHome) {
+      if (prevHome === undefined) delete process.env.XRK_HOME;
+      else process.env.XRK_HOME = prevHome;
+    }
+    throw err;
+  }
 }
 
-/** Temp workspace + Face `workspace.create`, ready for a live composer. */
+/** Temp workspace + isolated `XRK_HOME` + Face `workspace.create`, ready for a live composer. */
 export async function spawnRegisteredWorkspace(options: {
   llm: LlmAdapter;
   label?: string;
@@ -119,19 +136,23 @@ export async function spawnRegisteredWorkspace(options: {
   manager: ReturnType<typeof createHostManager>;
   base: string;
   workspaceRoot: string;
+  xrkHome: string;
   sessionsDir: string;
   dispose: () => Promise<void>;
 }> {
   const workspaceRoot = await mkdtemp(
     path.join(os.tmpdir(), options.label ?? "xrk-shell-"),
   );
-  const sessionsDir = path.join(workspaceRoot, ".xrk", "sessions");
+  const xrkHome = path.join(workspaceRoot, "xrk-home");
+  const sessionsDir = path.join(xrkHome, "sessions");
   const workspaceDir = path.join(workspaceRoot, "workspace");
+  const prevHome = process.env.XRK_HOME;
   await mkdir(sessionsDir, { recursive: true });
   await mkdir(workspaceDir, { recursive: true });
   const { manager, base } = await spawnProductShell({
     workspaceRoot,
     sessionsDir,
+    xrkHome,
     llm: options.llm,
     ...(options.policy ? { policy: options.policy } : {}),
     ...(options.pluginsDir ? { pluginsDir: options.pluginsDir } : {}),
@@ -139,6 +160,8 @@ export async function spawnRegisteredWorkspace(options: {
   const created = await faceRpc(base, "workspace.create", { path: workspaceDir });
   if (!created.ok) {
     await manager.stopAll();
+    if (prevHome === undefined) delete process.env.XRK_HOME;
+    else process.env.XRK_HOME = prevHome;
     await rm(workspaceRoot, { recursive: true, force: true });
     throw new Error(`workspace.create failed: ${JSON.stringify(created.error)}`);
   }
@@ -146,9 +169,12 @@ export async function spawnRegisteredWorkspace(options: {
     manager,
     base,
     workspaceRoot,
+    xrkHome,
     sessionsDir,
     async dispose() {
       await manager.stopAll();
+      if (prevHome === undefined) delete process.env.XRK_HOME;
+      else process.env.XRK_HOME = prevHome;
       await rm(workspaceRoot, { recursive: true, force: true });
     },
   };
@@ -245,4 +271,93 @@ export async function sendComposerPrompt(
 ): Promise<void> {
   await page.getByPlaceholder(LIVE_PLACEHOLDER).fill(text);
   await page.getByRole("button", { name: /发送消息|Send message/ }).click();
+}
+
+/** Snapshot mode for Host-serve aria goldens (DSH scaffold pattern, no Cordis). */
+export type WebSnapshotMode = "replay" | "refresh";
+
+export function webSnapshotMode(
+  env: NodeJS.ProcessEnv = process.env,
+): WebSnapshotMode {
+  return env.XRK_SNAPSHOT === "refresh" ? "refresh" : "replay";
+}
+
+/** Collapse clocks / durations / cwd so goldens stay machine-stable. */
+export function normalizeAria(snapshot: string, workspaceCwd: string): string {
+  const normalizedCwd = workspaceCwd.replace(/\\/g, "/");
+  const base =
+    normalizedCwd.split("/").filter(Boolean).pop() ?? normalizedCwd;
+  return snapshot
+    .split(workspaceCwd)
+    .join("{{cwd}}")
+    .split(normalizedCwd)
+    .join("{{cwd}}")
+    .split(base)
+    .join("{{workspace}}")
+    .replace(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+      "{{uuid}}",
+    )
+    .replace(
+      /~\d+(?:y(?: \d+mo)?|mo(?: \d+d)?)|\b(?:\d+d(?: \d+h(?: \d+m \d+s)?)?|\d+h \d+m \d+s|\d+m ?\d+s|\d+(?:\.\d+)?s|\d+(?:\.\d+)?ms)\b/g,
+      (duration) => (duration.startsWith("~") ? duration : "{{duration}}"),
+    )
+    .replace(
+      /约\d+(?:年(?:\d+个月)?|个月(?:\d+天)?)|\d+(?:天(?:\d+小时(?:\d+分\d+秒)?)?|小时\d+分\d+秒|分\d+秒|(?:\.\d+)?秒)/g,
+      (duration) => (duration.startsWith("约") ? duration : "{{duration}}"),
+    )
+    .replace(/\d+(?:\.\d+)?(?= tok\/s(?!\w))/g, "{{throughput}}")
+    .replace(/(Compacted \d+ history items \(~)\d+( tokens\))/g, "$1{{tokens}}$2")
+    .replace(/\d{4}年\d{1,2}月\d{1,2}日 \d{2}:\d{2}/g, "{{clock}}")
+    .replace(/\d{1,2}月\d{1,2}日 \d{2}:\d{2}/g, "{{clock}}")
+    .replace(
+      /(?<!\d)\d{1,2}:\d{2}:\d{2}(?:\.\d+)?(?:\s*[AP]M)?(?!\d)/gi,
+      "{{clock}}",
+    )
+    .replace(/(?<!\d)\d{2}:\d{2}(?!\d)/g, "{{clock}}");
+}
+
+/** Poll until two consecutive normalized aria snapshots match (DSH 金标 barrier). */
+export async function captureStableAria(
+  page: Page,
+  selector: string,
+  workspaceCwd: string,
+): Promise<string> {
+  const region = page.locator(selector).first();
+  let previous = normalizeAria(await region.ariaSnapshot(), workspaceCwd);
+  await expect
+    .poll(
+      async () => {
+        const current = normalizeAria(
+          await region.ariaSnapshot(),
+          workspaceCwd,
+        );
+        const stable = current === previous;
+        previous = current;
+        return stable;
+      },
+      { timeout: 5_000, message: "aria snapshot did not stabilize" },
+    )
+    .toBe(true);
+  return previous;
+}
+
+/** Compare golden or rewrite under `XRK_SNAPSHOT=refresh`. */
+export async function compareOrRefreshGolden(
+  goldenPath: string,
+  actual: string,
+  mode: WebSnapshotMode = webSnapshotMode(),
+): Promise<void> {
+  const payload = `${actual}\n`;
+  if (mode === "refresh") {
+    await mkdir(path.dirname(goldenPath), { recursive: true });
+    await writeFile(goldenPath, payload);
+    return;
+  }
+  if (!existsSync(goldenPath)) {
+    throw new Error(
+      `missing golden ${goldenPath} — run XRK_SNAPSHOT=refresh pnpm test:web to generate it`,
+    );
+  }
+  expect(payload).toBe(await readFile(goldenPath, "utf8"));
 }

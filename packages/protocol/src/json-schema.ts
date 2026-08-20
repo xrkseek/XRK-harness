@@ -15,13 +15,82 @@ const toolCallSchema = {
   additionalProperties: false,
 } as const;
 
+const tokenUsageSchema = {
+  type: "object",
+  required: ["inputTokens", "outputTokens"],
+  properties: {
+    inputTokens: { type: "integer", minimum: 0 },
+    outputTokens: { type: "integer", minimum: 0 },
+    cacheReadTokens: { type: "integer", minimum: 0 },
+    cacheWriteTokens: { type: "integer", minimum: 0 },
+    reasoningTokens: { type: "integer", minimum: 0 },
+  },
+  additionalProperties: false,
+} as const;
+
+const messageContentSchema = {
+  oneOf: [
+    { type: "string" },
+    {
+      type: "array",
+      items: {
+        oneOf: [
+          {
+            type: "object",
+            required: ["type", "text"],
+            properties: {
+              type: { const: "text" },
+              text: { type: "string" },
+            },
+            additionalProperties: false,
+          },
+          {
+            type: "object",
+            required: ["type", "attachment"],
+            properties: {
+              type: { const: "image" },
+              attachment: {
+                type: "object",
+                required: [
+                  "attachmentId",
+                  "mediaType",
+                  "bytes",
+                  "width",
+                  "height",
+                ],
+                properties: {
+                  attachmentId: { type: "string" },
+                  mediaType: {
+                    enum: [
+                      "image/png",
+                      "image/jpeg",
+                      "image/webp",
+                      "image/gif",
+                    ],
+                  },
+                  bytes: { type: "number" },
+                  width: { type: "number" },
+                  height: { type: "number" },
+                  name: { type: "string" },
+                },
+                additionalProperties: false,
+              },
+            },
+            additionalProperties: false,
+          },
+        ],
+      },
+    },
+  ],
+} as const;
+
 const toolResultSchema = {
   type: "object",
   required: ["toolCallId", "name", "content"],
   properties: {
     toolCallId: { type: "string" },
     name: { type: "string" },
-    content: { type: "string" },
+    content: messageContentSchema,
     isError: { type: "boolean" },
     meta: { type: "object" },
   },
@@ -94,61 +163,7 @@ export const sessionEventJsonSchema = {
       properties: baseProps({
         type: { const: "user/message" },
         turnId: { type: "string" },
-        content: {
-          oneOf: [
-            { type: "string" },
-            {
-              type: "array",
-              items: {
-                oneOf: [
-                  {
-                    type: "object",
-                    required: ["type", "text"],
-                    properties: {
-                      type: { const: "text" },
-                      text: { type: "string" },
-                    },
-                    additionalProperties: false,
-                  },
-                  {
-                    type: "object",
-                    required: ["type", "attachment"],
-                    properties: {
-                      type: { const: "image" },
-                      attachment: {
-                        type: "object",
-                        required: [
-                          "attachmentId",
-                          "mediaType",
-                          "bytes",
-                          "width",
-                          "height",
-                        ],
-                        properties: {
-                          attachmentId: { type: "string" },
-                          mediaType: {
-                            enum: [
-                              "image/png",
-                              "image/jpeg",
-                              "image/webp",
-                              "image/gif",
-                            ],
-                          },
-                          bytes: { type: "number" },
-                          width: { type: "number" },
-                          height: { type: "number" },
-                          name: { type: "string" },
-                        },
-                        additionalProperties: false,
-                      },
-                    },
-                    additionalProperties: false,
-                  },
-                ],
-              },
-            },
-          ],
-        },
+        content: messageContentSchema,
         rpcId: { type: "string" },
       }),
       additionalProperties: false,
@@ -161,8 +176,9 @@ export const sessionEventJsonSchema = {
         turnId: { type: "string" },
         stepId: { type: "string" },
         text: { type: "string" },
-        kind: { type: "string", enum: ["text", "reasoning"] },
+        kind: { type: "string", enum: ["text", "reasoning", "usage"] },
         index: { type: "integer" },
+        usage: tokenUsageSchema,
       }),
       additionalProperties: false,
     },
@@ -175,7 +191,9 @@ export const sessionEventJsonSchema = {
         stepId: { type: "string" },
         content: { type: "string" },
         reasoning: { type: "string" },
+        interrupted: { type: "boolean" },
         toolCalls: { type: "array", items: toolCallSchema },
+        usage: tokenUsageSchema,
       }),
       additionalProperties: false,
     },
@@ -308,6 +326,7 @@ export const sessionEventJsonSchema = {
         reason: { enum: ["auto", "overflow", "manual"] },
         summary: { type: "string" },
         recent: { type: "string" },
+        shadowedTokenCount: { type: "integer", minimum: 0 },
       }),
       additionalProperties: false,
     },

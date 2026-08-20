@@ -28,7 +28,7 @@
 | `kernel/` | `@xrkseek/kernel` | [architecture.md](../architecture.md) |
 | `protocol/` | `@xrkseek/protocol` | [protocol-events.md](../protocol-events.md) |
 | `compose/` | `@xrkseek/compose` | [compose.md](../compose.md) |
-| `core/session/` | `@xrkseek/core-session` | [session.md](../session.md) |
+| `core/session/` | `@xrkseek/core-session` | [session.md](../session.md) · [session-compaction.md](../session-compaction.md) |
 | `core/agent/` | `@xrkseek/core-agent` | [session-api.md](../session-api.md) |
 | `core/agent-loop/` | `@xrkseek/core-agent-loop` | [tool-pipeline.md](../tool-pipeline.md) |
 | `core/tools/` | `@xrkseek/core-tools` | [tool-pipeline.md](../tool-pipeline.md) · [tool-settlement.md](../tool-settlement.md) |

@@ -1,5 +1,12 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadHostConfig } from "../src/index.js";
+import {
+  defaultSessionsDir,
+  loadHostConfig,
+  parseMcpServersJson,
+  parseMcpServersValue,
+  resolveXrkHome,
+} from "../src/index.js";
 
 describe("loadHostConfig", () => {
   it("reads XRK_PLUGINS_DIR", () => {
@@ -34,5 +41,49 @@ describe("loadHostConfig", () => {
       env: { XRK_SESSIONS_DIR: "  ./.xrk/sessions  " },
     });
     expect(cfg.runtime.sessionsDir).toBe("./.xrk/sessions");
+  });
+
+  it("parses Cursor mcpServers object JSON", () => {
+    const cfg = loadHostConfig({
+      env: {
+        XRK_MCP_SERVERS: JSON.stringify({
+          mcpServers: {
+            "12306-mcp": { command: "npx", args: ["-y", "12306-mcp"] },
+          },
+        }),
+      },
+    });
+    expect(cfg.runtime.mcpServers).toEqual([
+      { serverName: "12306-mcp", command: "npx", args: ["-y", "12306-mcp"] },
+    ]);
+  });
+});
+
+describe("resolveXrkHome", () => {
+  it("honors XRK_HOME over default", () => {
+    const home = resolveXrkHome({ XRK_HOME: "C:/tmp/xrk-home-test" });
+    expect(home.replace(/\\/g, "/")).toMatch(/tmp\/xrk-home-test$/);
+  });
+
+  it("sessions dir sits under harness home", () => {
+    const env = { XRK_HOME: path.join("C:", "tmp", "xrk-sess") };
+    expect(defaultSessionsDir(env)).toBe(path.join(resolveXrkHome(env), "sessions"));
+  });
+});
+
+describe("parseMcpServersValue", () => {
+  it("accepts Face array and Cursor object", () => {
+    expect(
+      parseMcpServersValue([
+        { serverName: "a", command: "npx", args: ["-y", "x"] },
+      ]),
+    ).toEqual([{ serverName: "a", command: "npx", args: ["-y", "x"] }]);
+    expect(
+      parseMcpServersJson(
+        JSON.stringify({
+          mcpServers: { demo: { command: "node", args: ["s.js"] } },
+        }),
+      ),
+    ).toEqual([{ serverName: "demo", command: "node", args: ["s.js"] }]);
   });
 });

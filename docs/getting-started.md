@@ -28,7 +28,7 @@ npx @xrkseek/harness-cli web
 
 | 步骤 | 说明 |
 |------|------|
-| 1 | 首次启动会在 `{workspace}/.xrk/` 下创建 **本地** `settings.yaml`、会话库等 |
+| 1 | 首次启动会在 **`~/.xrk/`**（可用 `XRK_HOME` 改）创建 `settings.yaml`、会话库等；`--workspace` 只钉项目根 |
 | 2 | **无 LLM 密钥**也可打开壳；发话需接模型或 `--preset minimal` + replay |
 | 3 | 接真模型：Settings → Models / Credentials，或见下文「接真模型」 |
 
@@ -69,7 +69,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | CORS | 默认 `*` 可接受 | 设 `XRK_CORS_ORIGIN` 为实际前端源 |
 | 绑定 | `127.0.0.1:8787` | 反向代理 + TLS；CLI 拒绝 `0.0.0.0` |
 | LLM 密钥 | Settings / `.xrk/.credentials.yaml` / env | 同上，密钥**仅运行时**；不入库 |
-| Session | `{workspace}/.xrk/sessions/sessions.db` | 备份 / 权限隔离 workspace 目录 |
+| Session | `~/.xrk/sessions/sessions.db` | 备份用户主目录；`XRK_HOME` 可改 |
 | 源码仓 | `.xrk/` gitignored | 部署机单独 workspace，不带开发机 `.xrk` |
 
 密钥落盘与 env 优先级：[configuration.md](./configuration.md#密钥与凭据)。
@@ -82,7 +82,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 
 **1 — 产品壳（推荐）**
 
-启动 `web` 后：Settings → Models 选 provider/model → Credentials 填入 API key（写入 `{workspace}/.xrk/.credentials.yaml`）。
+启动 `web` 后：Settings → Models 选 provider/model → Credentials 填入 API key（写入 `~/.xrk/.credentials.yaml`）。
 
 **2 — 工作区文件**
 

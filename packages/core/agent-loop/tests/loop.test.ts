@@ -216,6 +216,46 @@ describe("runTurn", () => {
     expect(firstReasoning).toBeLessThan(messageIdx);
   });
 
+  it("persists assistant/message.usage from replay stream", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const llm = createReplayAdapter(
+      [
+        {
+          content: "pong",
+          usage: { inputTokens: 9, outputTokens: 2 },
+        },
+      ],
+      { enableStream: true },
+    );
+
+    await runTurn({
+      sessionId: session.id,
+      userText: "ping",
+      store,
+      llm,
+      tools: createToolRegistry(),
+    });
+
+    const message = store
+      .get(session.id)
+      .events.find((e) => e.type === "assistant/message");
+    expect(message).toMatchObject({
+      type: "assistant/message",
+      usage: { inputTokens: 9, outputTokens: 2 },
+    });
+    const usageChunk = store
+      .get(session.id)
+      .events.find(
+        (e) => e.type === "assistant/chunk" && e.kind === "usage",
+      );
+    expect(usageChunk).toMatchObject({
+      type: "assistant/chunk",
+      kind: "usage",
+      usage: { inputTokens: 9, outputTokens: 2 },
+    });
+  });
+
   it("passes image blocks when adapter declares image modality", async () => {
     const store = createMemorySessionStore();
     const session = store.create();

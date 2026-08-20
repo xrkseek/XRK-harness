@@ -4,6 +4,7 @@ import {
   loadSkill,
   renderSkillContent,
   type SkillDefinition,
+  type SkillSourceOptions,
 } from "./skills.js";
 
 export function presentSkillCall(args: { name: string }): {
@@ -20,10 +21,9 @@ export function presentSkillCall(args: { name: string }): {
   };
 }
 
-export function createSkillTools(options: {
-  readonly productDir: string;
-}): ToolDefinition[] {
-  const productDir = options.productDir;
+export function createSkillTools(
+  options: SkillSourceOptions,
+): ToolDefinition[] {
   return [
     {
       name: "skill",
@@ -48,7 +48,7 @@ export function createSkillTools(options: {
           };
         }
         const skill: SkillDefinition | undefined = await loadSkill({
-          productDir,
+          ...options,
           name,
         });
         if (!skill) {

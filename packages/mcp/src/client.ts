@@ -5,6 +5,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { assertPolicyAllow } from "@xrkseek/policy";
 import { assertServerName } from "./names.js";
+import { mapMcpCallContent } from "./project-content.js";
 import { resolveReconnectPolicy } from "./reconnect.js";
 import type {
   McpCallResult,
@@ -33,41 +34,6 @@ function withResolvers<T>(): {
     reject = rej;
   });
   return { promise, resolve, reject };
-}
-
-function contentToText(content: unknown): string {
-  if (!Array.isArray(content)) {
-    return typeof content === "string" ? content : JSON.stringify(content ?? "");
-  }
-  const parts: string[] = [];
-  for (const block of content) {
-    if (!block || typeof block !== "object") continue;
-    const b = block as Record<string, unknown>;
-    if (b.type === "text" && typeof b.text === "string") {
-      parts.push(b.text);
-    } else {
-      parts.push(JSON.stringify(b));
-    }
-  }
-  return parts.join("\n");
-}
-
-function toCallResult(result: unknown): McpCallResult {
-  const isError =
-    typeof result === "object" &&
-    result !== null &&
-    "isError" in result &&
-    Boolean((result as { isError?: boolean }).isError);
-  const content =
-    typeof result === "object" &&
-    result !== null &&
-    "content" in result
-      ? contentToText(result.content)
-      : JSON.stringify(result);
-  return {
-    content,
-    ...(isError ? { isError: true } : {}),
-  };
 }
 
 async function closeQuietly(
@@ -413,7 +379,7 @@ export function createMcpClient(options: McpClientOptions): McpClient {
           ...(signal ? { signal } : {}),
         },
       );
-      return toCallResult(result);
+      return mapMcpCallContent(result, rawName, options.imageAdmission);
     },
 
     onToolsListChanged(handler) {

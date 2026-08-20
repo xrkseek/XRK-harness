@@ -119,9 +119,14 @@ export function createWorkspaceInjector(
         if (t) blocks.push(`## Rules\n${t}`);
       }
 
-      // 4. skills directory cards (name + description; full body via `skill` tool)
+      // 4. skills cards — project vendors only in the inject budget; user-home
+      //    skills stay available via the skill tool / skill.list.
       const skillCards = formatSkillCatalog(
-        await listSkills({ productDir }),
+        await listSkills({
+          workspaceRoot: root,
+          productDir,
+          includeUserHome: false,
+        }),
       );
       if (skillCards) {
         const t = clip("skills", skillCards, budget);
@@ -146,7 +151,11 @@ export function createWorkspaceInjector(
     },
 
     async syncSeeds(seedDir) {
+      // Explicit seed only — inject / skill import never mkdir `.xrk`.
       const created: string[] = [];
+      if (!(await exists(seedDir))) {
+        return { created };
+      }
       await mkdir(productDir, { recursive: true });
 
       async function walk(rel: string): Promise<void> {
@@ -207,14 +216,19 @@ export {
 
 export {
   SKILL_TOOL_GUIDANCE,
+  PROJECT_SKILL_REL_DIRS,
+  USER_SKILL_REL_DIRS,
   formatSkillCatalog,
   isSkillName,
   listSkills,
   listSkillsFromWorkspace,
+  listSkillsInDir,
   loadSkill,
   parseSkillMarkdown,
   renderSkillContent,
+  resolveSkillDirs,
   type SkillDefinition,
+  type SkillSourceOptions,
   type SkillSummary,
 } from "./skills.js";
 

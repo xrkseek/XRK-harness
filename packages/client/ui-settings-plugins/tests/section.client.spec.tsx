@@ -355,7 +355,6 @@ describe('McpCard', () => {
     return {
       ...cardActions(),
       editRow: vi.fn(),
-      suggestName: vi.fn(),
       addRow: vi.fn(),
       removeRow: vi.fn(),
     }

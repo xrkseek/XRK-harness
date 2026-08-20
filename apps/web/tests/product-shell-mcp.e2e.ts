@@ -44,7 +44,7 @@ describe.skipIf(!HAS_SHELL)("product shell mcp settings", () => {
         await args.fill("-y, @modelcontextprotocol/server-filesystem, /tmp");
         await dialog.getByRole("button", { name: /^Save$|^保存$/ }).click();
 
-        const settingsPath = path.join(shell.workspaceRoot, ".xrk", "host-settings.json");
+        const settingsPath = path.join(shell.xrkHome, "host-settings.json");
         await expect.poll(async () => {
           const raw = await readFile(settingsPath, "utf8");
           return raw.includes("fixture-fs") && raw.includes("npx");

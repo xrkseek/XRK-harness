@@ -7,7 +7,7 @@
  */
 
 import type { MessageContent, SessionEvent } from "@xrkseek/protocol";
-import { asContentBlocks } from "@xrkseek/protocol";
+import { asContentBlocks, flattenText } from "@xrkseek/protocol";
 import {
   type FaceInboxWireProjector,
   type FaceInboxSplice,
@@ -199,12 +199,17 @@ export function toFaceWireSessionEvent(
         data: {
           turn: turnNum(ctx, event.turnId),
           step: stepNum(ctx, event.turnId, event.stepId),
-          chunk: {
-            type:
-              event.kind === "reasoning" ? "reasoning-delta" : "text-delta",
-            index: event.index ?? 0,
-            text: event.text,
-          },
+          chunk:
+            event.kind === "usage" && event.usage
+              ? { type: "usage", usage: event.usage }
+              : {
+                  type:
+                    event.kind === "reasoning"
+                      ? "reasoning-delta"
+                      : "text-delta",
+                  index: event.index ?? 0,
+                  text: event.text,
+                },
         },
       };
     case "assistant/message":
@@ -222,6 +227,7 @@ export function toFaceWireSessionEvent(
             source: { provider: "xrk", model: "unknown" },
           },
           ...(event.interrupted === true ? { interrupted: true } : {}),
+          ...(event.usage ? { usage: event.usage } : {}),
         },
       };
     case "turn/start":
@@ -284,7 +290,14 @@ export function toFaceWireSessionEvent(
             source: { callId: event.result.toolCallId },
           },
           ...(event.result.isError
-            ? { error: { message: event.result.content } }
+            ? {
+                error: {
+                  message:
+                    typeof event.result.content === "string"
+                      ? event.result.content
+                      : flattenText(event.result.content),
+                },
+              }
             : {}),
         },
       };

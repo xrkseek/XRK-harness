@@ -28,7 +28,7 @@ async function exists(p: string): Promise<boolean> {
 }
 
 export function resolveProductDir(runtime: FaceRuntime): string {
-  if (runtime.productDir) return path.resolve(runtime.productDir);
+  // Workspace inject / skills stay under the project; user settings use resolveHarnessHome.
   return path.resolve(runtime.workspaceRoot, ".xrk");
 }
 

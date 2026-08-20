@@ -1,4 +1,5 @@
 import type { SessionEvent } from "@xrkseek/protocol";
+import { flattenText } from "@xrkseek/protocol";
 import type { ToolDefinition } from "./definition.js";
 import type { ToolEventView } from "./presentation.js";
 
@@ -36,7 +37,10 @@ export function presentToolEventView(
       const call = lookup.argsFor?.(event.result.toolCallId);
       if (call === undefined) return undefined;
       const view = lookup.getTool(call.name)?.presentResult?.(call.args, {
-        content: event.result.content,
+        content:
+          typeof event.result.content === "string"
+            ? event.result.content
+            : flattenText(event.result.content),
         ...(event.result.isError ? { isError: true } : {}),
         ...(event.result.meta !== undefined ? { meta: event.result.meta } : {}),
       });

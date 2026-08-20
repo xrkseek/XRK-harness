@@ -14,6 +14,7 @@ export default defineConfig({
     include: [
       "apps/web/tests/product-shell-chrome.e2e.ts",
       "apps/web/tests/product-shell-stream.e2e.ts",
+      "apps/web/tests/product-shell-stream-aria.e2e.ts",
       "apps/web/tests/product-shell-cancel.e2e.ts",
       "apps/web/tests/product-shell-tool.e2e.ts",
       "apps/web/tests/product-shell-approval.e2e.ts",

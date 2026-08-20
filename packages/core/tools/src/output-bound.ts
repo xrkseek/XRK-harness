@@ -3,6 +3,9 @@
  * Domain tools may return full text; this layer truncates what the model / session log sees.
  */
 
+import type { MessageContent } from "@xrkseek/protocol";
+import { contentHasImage, flattenText } from "@xrkseek/protocol";
+
 export const DEFAULT_TOOL_OUTPUT_MAX_LINES = 2_000;
 export const DEFAULT_TOOL_OUTPUT_MAX_BYTES = 50 * 1024;
 
@@ -12,7 +15,7 @@ export interface ToolOutputBoundLimits {
 }
 
 export interface BoundToolOutputResult {
-  readonly content: string;
+  readonly content: MessageContent;
   readonly truncated: boolean;
   readonly outputPaths: readonly string[];
   readonly originalBytes: number;
@@ -118,11 +121,25 @@ function boundedPreview(
 
 /**
  * Bound model-visible tool text. Pure aside from optional `persist`.
+ * Image-bearing ContentBlock[] results are left intact (DSH: don't truncate vision).
  */
 export async function boundToolOutput(
-  text: string,
+  content: MessageContent,
   options: BoundToolOutputOptions = {},
 ): Promise<BoundToolOutputResult> {
+  if (typeof content !== "string") {
+    if (contentHasImage(content)) {
+      return {
+        content,
+        truncated: false,
+        outputPaths: [],
+        originalBytes: 0,
+        originalLines: 0,
+      };
+    }
+    content = flattenText(content);
+  }
+  const text = content;
   const maxLines = options.maxLines ?? DEFAULT_TOOL_OUTPUT_MAX_LINES;
   const maxBytes = options.maxBytes ?? DEFAULT_TOOL_OUTPUT_MAX_BYTES;
   const originalBytes = Buffer.byteLength(text, "utf8");

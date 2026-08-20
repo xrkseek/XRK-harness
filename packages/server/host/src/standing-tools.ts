@@ -16,7 +16,6 @@ import { createWebTools } from "@xrkseek/exec-web";
 import { createLspTools } from "@xrkseek/exec-lsp";
 import { createPtyTools } from "@xrkseek/exec-pty";
 import { createSkillTools } from "@xrkseek/workspace";
-import path from "node:path";
 
 export function createStandingToolRegistry(options: {
   readonly workspaceRoot: string;
@@ -24,10 +23,13 @@ export function createStandingToolRegistry(options: {
 }): ToolRegistry {
   const tools = createToolRegistry();
   const fs = createFsLocalProvider({ root: options.workspaceRoot });
-  const productDir = path.join(options.workspaceRoot, ".xrk");
   for (const tool of createFsTools(fs)) tools.register(tool);
   for (const tool of createStdTools()) tools.register(tool);
-  for (const tool of createSkillTools({ productDir })) tools.register(tool);
+  for (const tool of createSkillTools({
+    workspaceRoot: options.workspaceRoot,
+  })) {
+    tools.register(tool);
+  }
   const preset = options.preset ?? "minimal";
   if (preset === "harness" || preset === "server") {
     const shell = createLocalShell({

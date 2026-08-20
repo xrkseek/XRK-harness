@@ -49,9 +49,7 @@ export function readCliVersion(): string {
   }
 }
 
-export function defaultSessionsDir(workspaceRoot: string): string {
-  return path.join(path.resolve(workspaceRoot), ".xrk", "sessions");
-}
+export { defaultSessionsDir } from "@xrkseek/server-config";
 
 async function distIfReady(dir: string): Promise<string | undefined> {
   try {

@@ -12,7 +12,6 @@ import {
   SessionSafetyLimitError,
   DEFAULT_COMPACTION_KEEP_TOKENS,
   deriveMessagesUnwindowed,
-  estimateTokens,
   selectHeadRecent,
   type AdmitReceipt,
   type SessionSafety,
@@ -459,7 +458,7 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
           return {
             compacted: true as const,
             shadowedMessages: selected.headMessageCount,
-            shadowedTokens: estimateTokens(selected.head),
+            shadowedTokens: result.event!.shadowedTokenCount!,
             summarySeq: options.store.get(options.sessionId).events.length,
           };
         });

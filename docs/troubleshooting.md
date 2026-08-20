@@ -61,7 +61,7 @@
 | 症状 | 处理 |
 |------|------|
 | 重启丢会话 | Host 未设 `XRK_SESSIONS_DIR` 且非 CLI serve 默认路径 → 内存仓 |
-| 会话库损坏 / 打不开 | 看 `{workspace}/.xrk/sessions/sessions.db`；Host 须 `stop`/`close` 后再删文件（Windows） |
+| 会话库损坏 / 打不开 | 看 `~/.xrk/sessions/sessions.db`（或 `XRK_SESSIONS_DIR`）；Host 须 `stop`/`close` 后再删文件（Windows） |
 
 见 [session.md](./session.md)。
 

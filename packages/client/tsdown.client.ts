@@ -98,9 +98,8 @@ export function clientBundle(
   const lib = clientLibraryConfig(id, libEntry, options.lib)
   return ({ env }) => {
     const face = buildFace(env?.XRK_BUILD_FACE)
-    const client = clientConfig(id, face === undefined
-      ? 'src/client/index.ts'
-      : 'lib/types/client/index.js')
+    // Always bundle from src. Packing stale lib/types shipped the old MCP card.
+    const client = clientConfig(id, 'src/client/index.ts')
     const node = [lib, ...(options.companions ?? [])]
     if (face === 'host') return options.hostPhase === true ? node : [SKIP_WORKSPACE_BUILD]
     // XRK: client.js can be produced without a Node-half lib/types graph

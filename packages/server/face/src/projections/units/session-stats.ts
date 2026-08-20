@@ -1,5 +1,7 @@
 import type { SessionEvent } from "@xrkseek/protocol";
+import { usageFromSessionEvent } from "@xrkseek/protocol";
 import type { ProjectionDefinition } from "../registry.js";
+import { asNonNegInt, asNonNegNumber } from "../parse-int.js";
 
 /** Whole-log conversation figures (DSH `sessionStats`; client StatsLine). */
 export interface SessionStatsProjection {
@@ -39,29 +41,17 @@ function isNonEmptyTextChunk(event: SessionEvent): boolean {
   return (
     event.type === "assistant/chunk" &&
     event.kind !== "reasoning" &&
+    event.kind !== "usage" &&
     event.text.trim().length > 0
   );
-}
-
-function asNonNegInt(value: unknown, label: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
-    throw new Error(`sessionStats.${label} must be a non-negative integer`);
-  }
-  return value;
-}
-
-function asNonNeg(value: unknown, label: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    throw new Error(`sessionStats.${label} must be a non-negative number`);
-  }
-  return value;
 }
 
 /**
  * DSH sessionStats fold over XRK events:
  * `step/end` counts steps; `step/start` → `assistant/message` is llmMs;
  * first non-empty text chunk is TTFT; `tool/call` → `tool/result` by call id.
- * Decode tokens stay 0 until `assistant/message` carries usage (not in protocol yet).
+ * When `assistant/message.usage.outputTokens` is present after TTFT,
+ * accumulate decodeMs (first token → message) and decodeTokens.
  */
 export function createSessionStatsProjectionUnit(): ProjectionDefinition<
   "sessionStats",
@@ -115,18 +105,32 @@ export function createSessionStatsProjectionUnit(): ProjectionDefinition<
           ) {
             return state;
           }
-          const next: SessionStatsState = {
+          let next: SessionStatsState = {
             ...state,
             llmMs: state.llmMs + Math.max(0, event.ts - open.startTime),
             openStep: null,
           };
           if (open.firstTokenTime !== null) {
-            return {
+            next = {
               ...next,
               ttftMs:
                 next.ttftMs + Math.max(0, open.firstTokenTime - open.startTime),
               ttftSteps: next.ttftSteps + 1,
             };
+            const outputTokens = usageFromSessionEvent(event)?.outputTokens;
+            if (
+              typeof outputTokens === "number" &&
+              Number.isFinite(outputTokens) &&
+              outputTokens >= 0
+            ) {
+              next = {
+                ...next,
+                decodeMs:
+                  next.decodeMs +
+                  Math.max(0, event.ts - open.firstTokenTime),
+                decodeTokens: next.decodeTokens + outputTokens,
+              };
+            }
           }
           return next;
         }
@@ -185,14 +189,18 @@ export function createSessionStatsProjectionUnit(): ProjectionDefinition<
       }
       const v = value as Record<string, unknown>;
       return {
-        turns: asNonNegInt(v.turns, "turns"),
-        steps: asNonNegInt(v.steps, "steps"),
-        llmMs: asNonNeg(v.llmMs, "llmMs"),
-        toolMs: asNonNeg(v.toolMs, "toolMs"),
-        ttftMs: asNonNeg(v.ttftMs, "ttftMs"),
-        ttftSteps: asNonNegInt(v.ttftSteps, "ttftSteps"),
-        decodeMs: asNonNeg(v.decodeMs, "decodeMs"),
-        decodeTokens: asNonNeg(v.decodeTokens, "decodeTokens"),
+        turns: asNonNegInt(v.turns, "sessionStats", "turns"),
+        steps: asNonNegInt(v.steps, "sessionStats", "steps"),
+        llmMs: asNonNegNumber(v.llmMs, "sessionStats", "llmMs"),
+        toolMs: asNonNegNumber(v.toolMs, "sessionStats", "toolMs"),
+        ttftMs: asNonNegNumber(v.ttftMs, "sessionStats", "ttftMs"),
+        ttftSteps: asNonNegInt(v.ttftSteps, "sessionStats", "ttftSteps"),
+        decodeMs: asNonNegNumber(v.decodeMs, "sessionStats", "decodeMs"),
+        decodeTokens: asNonNegNumber(
+          v.decodeTokens,
+          "sessionStats",
+          "decodeTokens",
+        ),
       };
     },
   };

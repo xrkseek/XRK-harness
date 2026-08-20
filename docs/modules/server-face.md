@@ -59,7 +59,7 @@ HTTP/WS (attach-http)
 | `slash.ts`           | recipe catalog · `commands/execute`            | 插件 command 优先；内建 `/compact` · `/export` · `/feedback` · `/goal` · `/permission` · `/plan`；miss → `undefined`（当普通 prompt；skill 斜杠在 loop `resolveSlash`） |
 | `plugin-inventory.ts` | `pluginInventory/list` 投影                    | 进程插件 + boot；cordis = failed |
 | `session-search.ts`  | `session.search`                               | query 1..500 · 禁 NUL · 最多 20 · 最近活动优先 · 含 admit/safety/command/todo/feedback |
-| `skill-list.ts`      | `skill.list`                                   | 扫 `.xrk/skills/<id>/SKILL.md`（`@xrkseek/workspace`）；要 `sessionId`；模型加载走 `skill` 工具 |
+| `skill-list.ts`      | `skill.list`                                   | 扫已存在的 `.xrk|.claude|.cursor|.agents|.codex/skills`（及用户主目录同名）；不强制建目录；模型加载走 `skill` 工具 |
 | `presets-catalog.ts` | agentPreset 列表常量                           | `read` 只读；创作面仍 NI                             |
 | `message-feedback.ts` | `messageFeedback/list/put/delete`             | 进程内 CAS；Typert 嵌套 ok；非 transcript |
 | `goal-store.ts`       | `goals/*` + `/goal`                            | 投影 sidecar；turn/end 续轮；`goals.json` |
@@ -97,7 +97,8 @@ HTTP/WS (attach-http)
 | --------------------------------------------------- | --------------------- |
 | `registry.ts`                                       | 投影注册表 · snapshot |
 | `title-controller.ts` / `title-normalize.ts`        | 标题                  |
-| `units/title.ts` · `units/session-list-metadata.ts` · `units/todos.ts` · `units/permissions.ts` · `units/plan.ts` · `units/image-limits.ts` · `units/session-stats.ts` | 单元（todos = 站立计划；permissions = Access 芯片；plan = plan-mode 芯片；imageLimits = 附件摄入上限，有 AttachmentStore 才登记，boot 常量不推变更帧；sessionStats = 全日志计数/墙钟） |
+| `units/title.ts` · `units/session-list-metadata.ts` · `units/todos.ts` · `units/permissions.ts` · `units/plan.ts` · `units/image-limits.ts` · `units/session-stats.ts` · `units/token-usage.ts` · `units/context-pressure.ts` · `units/context-breakdown.ts` · `parse-int.ts` | StatsLine / ContextMeter 投影单元；整数 parse 共用 |
+
 | `install-defaults.ts`                               | 默认安装              |
 | `../permissions.ts`                                 | 预设表 · pin · `/permission` 写 knobs |
 | `../plan-mode.ts`                                   | `/plan` 选择预览 · idle 提交 `plan/mode` |
@@ -136,7 +137,8 @@ HTTP/WS (attach-http)
 | `tests/workspace.test.ts`        | list/create/rename/archive · delete/insert* |
 | `tests/host-frames.test.ts`      | session-added 子会话字段 · workspace-removed / order-changed · fork · `host/remote-event` |
 | `tests/projections.test.ts`      | title · list metadata · todos 站立计划（write 后 turn/start 清 null） |
-| `tests/session-stats.test.ts`    | sessionStats：step/end 计数 · llm/ttft/tool 墙钟 · 取消不计入 llmMs |
+| `tests/session-stats.test.ts`    | sessionStats：step/end 计数 · llm/ttft/tool 墙钟 · usage→decode · 取消不计入 llmMs |
+| `tests/token-usage.test.ts`      | tokenUsage 同 step 替换；contextPressure surface projected；contextBreakdown；toolCalls；shadowedTokenCount 缩小 |
 | `tests/permissions.test.ts`      | pin · `/permission` · never 自动放行 · read-only deny |
 | `tests/plan-mode.test.ts`        | `/plan` 提交 · suffix steer · exit_plan_mode plan-review |
 

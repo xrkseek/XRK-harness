@@ -11,7 +11,7 @@ import {
 } from "@xrkseek/core-session";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { createPolicyEngineFromFile } from "@xrkseek/policy";
-import type { HostConfig } from "@xrkseek/server-config";
+import { hostSettingsPath, resolveXrkHome, type HostConfig } from "@xrkseek/server-config";
 import {
   applyXrkProductBootPolicy,
   createHttpServer,
@@ -31,9 +31,11 @@ import {
   isLoopbackAddress,
   publishRemoteEvent,
   createSessionRoutingLlm,
+  liveRouteAllowsImageInput,
   tryHandleFaceHttp,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
+  type FaceRuntime,
 } from "@xrkseek/server-face";
 import {
   createPluginLoader,
@@ -52,6 +54,7 @@ import {
   readMcpServersFromHostSettings,
   reconcileMcpToolPlugins,
   type McpServerDraft,
+  type McpServerSpec,
 } from "./mcp-wire.js";
 import { createStandingToolRegistry } from "./standing-tools.js";
 import { createDefaultPtyAccess } from "@xrkseek/exec-pty";
@@ -101,20 +104,19 @@ async function resolveWebPluginOverlay(
 }
 
 /** Env/config MCP list (empty → Face host-settings.json is the source). */
-function configuredMcpSpecs(config: HostConfig) {
-  return (
-    config.runtime.mcpServers ??
-    parseMcpServersEnv(process.env.XRK_MCP_SERVERS)
-  );
+function configuredMcpSpecs(config: HostConfig): readonly McpServerSpec[] {
+  const fromConfig = config.runtime.mcpServers;
+  if (fromConfig && fromConfig.length > 0) {
+    return mcpDraftsToSpecs(fromConfig);
+  }
+  return parseMcpServersEnv(process.env.XRK_MCP_SERVERS);
 }
 
-/** Env/config win; empty → Face dump `{workspace}/.xrk/host-settings.json`. */
+/** Env/config win; empty → Face dump `~/.xrk/host-settings.json`. */
 function resolveMcpSpecs(config: HostConfig) {
   const configured = configuredMcpSpecs(config);
   if (configured.length > 0) return configured;
-  return readMcpServersFromHostSettings(
-    path.join(config.runtime.workspaceRoot, ".xrk", "host-settings.json"),
-  );
+  return readMcpServersFromHostSettings(hostSettingsPath());
 }
 
 export type AgentImageResolver = (
@@ -208,6 +210,16 @@ export function createHostManager(): HostManager {
       let notifyMcpOverlay: () => void = () => {
         refreshFacePlugins();
       };
+      const attachments = createMemoryAttachmentStore();
+      /** Filled after Face boot — MCP image gate reads live Registry modalities. */
+      let faceForModality: FaceRuntime | undefined;
+      const mcpImageAdmission = {
+        attachments,
+        allowsImageInput: () =>
+          faceForModality
+            ? liveRouteAllowsImageInput(faceForModality)
+            : false,
+      };
       const mcpHooks = {
         onToolsChanged: () => invalidateAgents(),
         onHealthChanged: () => {
@@ -219,6 +231,7 @@ export function createHostManager(): HostManager {
           specs: mcpSpecs,
           ...(policy ? { policy } : {}),
           allowConnect: Boolean(config.runtime.mcpAllowConnect),
+          imageAdmission: mcpImageAdmission,
           ...mcpHooks,
         });
         for (const p of mcpPlugins) {
@@ -233,7 +246,6 @@ export function createHostManager(): HostManager {
       invalidateAgents = () => agentCache.invalidateAll();
       let mcpSyncTail: Promise<unknown> = Promise.resolve();
       const lastDrainResult = new Map<string, AgentRunResult>();
-      const attachments = createMemoryAttachmentStore();
 
       const sharedPty =
         config.runtime.preset === "harness" || config.runtime.preset === "server"
@@ -363,6 +375,8 @@ export function createHostManager(): HostManager {
         store,
         resolveAgent,
         workspaceRoot: config.runtime.workspaceRoot,
+        // Face settings / credentials / workspaces.json / host-settings → harness home.
+        productDir: resolveXrkHome(),
         tools: createStandingToolRegistry({
           workspaceRoot: config.runtime.workspaceRoot,
           preset: config.runtime.preset,
@@ -371,8 +385,8 @@ export function createHostManager(): HostManager {
         defaultAgentPreset: config.runtime.preset,
         registry: createProviderRegistry(),
         attachments,
-        // Face admits images; adapter `inputModalities` still gates the LLM call.
-        // Official DeepSeek brand stays text-only at the adapter.
+        // Face intake only (InputBar paste). Live adapter modalities come from
+        // Registry — official DeepSeek stays text-only; MCP/prompt gate on that.
         inputModalities: ["text", "image"],
         ...(sessionsDir
           ? {
@@ -402,6 +416,7 @@ export function createHostManager(): HostManager {
                     },
                     ...(policy ? { policy } : {}),
                     allowConnect: Boolean(config.runtime.mcpAllowConnect),
+                    imageAdmission: mcpImageAdmission,
                     ...mcpHooks,
                   });
                   refreshFacePlugins();
@@ -450,6 +465,7 @@ export function createHostManager(): HostManager {
           isActive: (sessionId) => drain.isActive(sessionId),
         },
       });
+      faceForModality = faceRuntime;
       faceBox.approvals = faceRuntime.approvals;
       faceBox.questions = faceRuntime.questions;
       sessionCwdBox.get = (sessionId) =>

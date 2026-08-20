@@ -5,6 +5,10 @@
 import { readFileSync } from "node:fs";
 import { access, constants, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  mcpServersContainEnv,
+  parseMcpServersValue,
+} from "@xrkseek/server-config";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import { canOpenNativePath, openNativePath } from "./host-open-path.js";
@@ -22,6 +26,7 @@ import {
   mergeLayers,
   persistCredentialsFile,
   persistSettingsDocument,
+  resolveHarnessHome,
   validateSettingsNamespace,
 } from "./settings-document.js";
 import {
@@ -735,44 +740,15 @@ export interface FaceMcpServerDraft {
   readonly cwd?: string;
 }
 
-/** Parse Face/host-settings MCP drafts. `env` is dropped (never copied). Mutate rejects env. */
+/** Parse Face/host-settings MCP drafts. Accepts array or `{ mcpServers: { name: { command } } }`. `env` is dropped. */
 export function parseFaceMcpServers(raw: unknown): FaceMcpServerDraft[] {
-  if (raw === undefined) return [];
-  if (!Array.isArray(raw)) {
-    throw new Error("mcp.servers must be an array");
-  }
-  const out: FaceMcpServerDraft[] = [];
-  for (const row of raw) {
-    if (!row || typeof row !== "object" || Array.isArray(row)) {
-      throw new Error("mcp.servers entries must be objects");
-    }
-    const o = row as Record<string, unknown>;
-    const serverName = String(o.serverName ?? "").trim();
-    if (!serverName) throw new Error("mcp.servers entry needs serverName");
-    const url = typeof o.url === "string" ? o.url.trim() : "";
-    const command = typeof o.command === "string" ? o.command.trim() : "";
-    if (!url && !command) {
-      throw new Error("mcp.servers entry needs command or url");
-    }
-    out.push({
-      serverName,
-      ...(url ? { url } : { command }),
-      ...(Array.isArray(o.args) ? { args: o.args.map((a) => String(a)) } : {}),
-      ...(typeof o.cwd === "string" && o.cwd.trim() ? { cwd: o.cwd.trim() } : {}),
-    });
-  }
-  return out;
-}
-
-function mcpServersContainEnv(raw: unknown): boolean {
-  if (!Array.isArray(raw)) return false;
-  return raw.some(
-    (row) =>
-      row !== null &&
-      typeof row === "object" &&
-      !Array.isArray(row) &&
-      (row as { env?: unknown }).env !== undefined,
-  );
+  return parseMcpServersValue(raw, { throwOnInvalid: true }).map((row) => ({
+    serverName: row.serverName,
+    ...(row.url ? { url: row.url } : {}),
+    ...(row.command ? { command: row.command } : {}),
+    ...(row.args && row.args.length > 0 ? { args: [...row.args] } : {}),
+    ...(row.cwd ? { cwd: row.cwd } : {}),
+  }));
 }
 
 function validateMcpServersValue(raw: unknown): string | undefined {
@@ -788,10 +764,10 @@ function validateMcpServersValue(raw: unknown): string | undefined {
 }
 
 const MCP_SETTINGS_NOTE_RESTART =
-  "Desired servers persist in .xrk/host-settings.json and apply on the next Host spawn. Live connect still needs XRK_MCP_ALLOW=1 (or policy allow). Stdio and HTTP both use bounded process reconnect after a successful connect; HTTP also keeps SDK SSE resume.";
+  "Desired servers persist in ~/.xrk/host-settings.json and apply on the next Host spawn. Live connect still needs XRK_MCP_ALLOW=1 (or policy allow). Stdio and HTTP both use bounded process reconnect after a successful connect; HTTP also keeps SDK SSE resume.";
 
 const MCP_SETTINGS_NOTE_LIVE =
-  "Desired servers persist in .xrk/host-settings.json; Host remounts MCP tools in this process. Connect still needs XRK_MCP_ALLOW=1 (or policy allow). Stdio and HTTP both use bounded process reconnect after a successful connect; HTTP also keeps SDK SSE resume.";
+  "Desired servers persist in ~/.xrk/host-settings.json; Host remounts MCP tools in this process. Connect still needs XRK_MCP_ALLOW=1 (or policy allow). Stdio and HTTP both use bounded process reconnect after a successful connect; HTTP also keeps SDK SSE resume.";
 
 function mcpApplies(runtime: FaceRuntime): "live" | "restart" {
   return typeof runtime.syncMcpServers === "function" ? "live" : "restart";
@@ -1087,8 +1063,7 @@ async function fileExists(target: string): Promise<boolean> {
 }
 
 function hostSettingsPath(runtime: FaceRuntime): string {
-  const dir = runtime.productDir ?? path.join(runtime.workspaceRoot, ".xrk");
-  return path.join(dir, "host-settings.json");
+  return path.join(resolveHarnessHome(runtime), "host-settings.json");
 }
 
 function mcpServersFromRuntime(runtime: FaceRuntime): FaceMcpServerDraft[] {
@@ -1099,7 +1074,7 @@ function mcpServersFromRuntime(runtime: FaceRuntime): FaceMcpServerDraft[] {
   }
 }
 
-/** Load `{productDir}/host-settings.json` mcp.servers into the namespace user layer. */
+  /** Load `~/.xrk/host-settings.json` mcp.servers into the namespace user layer. */
 export function hydrateFaceHostSettings(runtime: FaceRuntime): void {
   const file = hostSettingsPath(runtime);
   try {

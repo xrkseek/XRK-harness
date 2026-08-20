@@ -11,7 +11,6 @@ import {
 } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
-  buildVolatileUser,
   type AssembledRequest,
 } from "@xrkseek/core-system-prompt";
 import {
@@ -31,6 +30,7 @@ import type {
   MessageContent,
   SafetyNoticePayload,
   SessionEvent,
+  TokenUsage,
 } from "@xrkseek/protocol";
 import {
   contentHasImage,
@@ -173,9 +173,10 @@ async function invokeLlm(
   input: RunTurnInput,
   req: { messages: ChatMessage[]; tools: AssembledRequest["tools"] },
   onChunk: (chunk: {
-    kind: "text" | "reasoning";
+    kind: "text" | "reasoning" | "usage";
     index: number;
     text: string;
+    usage?: TokenUsage;
   }) => void,
 ): Promise<LlmChatResponse> {
   const request = toLlmRequest(input, req);
@@ -185,6 +186,7 @@ async function invokeLlm(
   let content = "";
   let reasoning = "";
   let toolCalls: LlmChatResponse["toolCalls"];
+  let usage: TokenUsage | undefined;
   for await (const ev of input.llm.stream(request)) {
     if (input.signal?.aborted) {
       throw new DOMException("aborted", "AbortError");
@@ -199,16 +201,21 @@ async function invokeLlm(
         content += ev.text;
         onChunk({ kind: "text", index: ev.index, text: ev.text });
       }
+    } else if (ev.type === "usage") {
+      usage = ev.usage;
+      onChunk({ kind: "usage", index: 0, text: "", usage: ev.usage });
     } else if (ev.type === "done") {
       content = ev.content || content;
       if (ev.reasoning) reasoning = ev.reasoning;
       if (ev.toolCalls) toolCalls = ev.toolCalls;
+      if (ev.usage) usage = ev.usage;
     }
   }
   return {
     content,
     ...(reasoning.trim() ? { reasoning } : {}),
     ...(toolCalls ? { toolCalls } : {}),
+    ...(usage ? { usage } : {}),
   };
 }
 
@@ -454,21 +461,36 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       turnId,
       llm: input.llm,
       now,
+      ...(req.system?.trim() ? { system: req.system } : {}),
+      ...(req.tools.length ? { tools: req.tools } : {}),
     });
 
     let response;
     const onChunk = (chunk: {
-      kind: "text" | "reasoning";
+      kind: "text" | "reasoning" | "usage";
       index: number;
       text: string;
+      usage?: TokenUsage;
     }) => {
+      if (chunk.kind === "usage" && chunk.usage) {
+        append(input.store, input.sessionId, {
+          type: "assistant/chunk",
+          ts: now(),
+          turnId,
+          stepId,
+          text: "",
+          kind: "usage",
+          usage: chunk.usage,
+        });
+        return;
+      }
       append(input.store, input.sessionId, {
         type: "assistant/chunk",
         ts: now(),
         turnId,
         stepId,
         text: chunk.text,
-        kind: chunk.kind,
+        kind: chunk.kind === "reasoning" ? "reasoning" : "text",
         index: chunk.index,
       });
     };
@@ -501,6 +523,8 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
           llm: input.llm,
           now,
           reason: "change",
+          ...(req.system?.trim() ? { system: req.system } : {}),
+          ...(req.tools.length ? { tools: req.tools } : {}),
         });
         response = await invokeLlm(input, req, onChunk);
       } else {
@@ -517,6 +541,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       content: response.content,
       ...(response.toolCalls ? { toolCalls: response.toolCalls } : {}),
       ...(response.reasoning ? { reasoning: response.reasoning } : {}),
+      ...(response.usage ? { usage: response.usage } : {}),
     });
 
     const calls = response.toolCalls ?? [];
@@ -671,7 +696,6 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   }
 }
 
-export { buildVolatileUser };
 export { MAX_STEPS_PROMPT, MAX_STEPS_TOOL_DISABLED } from "./max-steps.js";
 export {
   settleToolBatch,
@@ -681,8 +705,7 @@ export {
 } from "./settle-batch.js";
 export {
   runCompaction,
-  resolveCompactionOptions,
   type RunCompactionInput,
   type RunCompactionResult,
 } from "./compaction.js";
-export { maybeAppendRequestHeader, peekLlmRoute } from "./request-header-log.js";
+export { maybeAppendRequestHeader } from "./request-header-log.js";

@@ -1,13 +1,22 @@
 ---
-description: XRK 文档只写本仓已有行为；学习见 learn.md；本机笔记进 Canvas
+description: 教科书 vs 笔记；产品文档只写已有行为；本机草稿进 Canvas
 alwaysApply: true
 ---
 
-# 文档与学习
+# 教科书 · 笔记 · 本机草稿
 
-- 产品名：**XRK-Harness**（`@xrkseek/*`）。
-- **只写已有**：`docs/` / README / AGENTS 描述本仓已实现行为与真实 NI；禁止把未做能力、对照仓路线、教 Agent 怎么读文档的元规则写成产品规格。
-- **学习**：已落地要点写 [docs/learn.md](docs/learn.md)，保持短；细节实现地图在 [docs/modules/](docs/modules/README.md)。
-- **本机**：路径、gitignore 产物、对照清单 → Cursor Canvas，不进仓库文档。
-- Face / wire：用本仓术语（Face wire、session 事件）。
-- **外壳 / 内核**：产品壳 = `apps/web` + `packages/client`（不是 GitHub Fork，不对 deepseek-ai 提 PR）；serve 用 `apps/web/dist`；无 vendor。内核不让渡、不嵌 Cordis Host。
+| 形态 | 位置 | 读者 | 写什么 |
+|------|------|------|--------|
+| **教科书** | `docs/` · 根 README · 包 README · ADR | 用户 / 集成者 / 要学本仓的人 | 概念、契约、怎么用、能跑到哪（status） |
+| **笔记** | `.cursor/rules/*.mdc` · `.cursor/skills/*/SKILL.md` · `AGENTS.md` | Coding Agent / 改码维护者 | 红线、分层、改哪测哪、勿做清单 |
+| **本机草稿** | Cursor Canvas | 本人 | 对照路径、临时 TODO；**不入库** |
+
+## 硬规则
+
+- 教科书 **不写**：改码红线、「不要合并」「本刀」「shim」「duck cast」、教 Agent 怎么读文档。
+- 笔记 **不写**：当作产品规格的假 API；把未实现写成已支持。
+- 冲突：**代码** > status「能跑」> 教科书；笔记过期则改笔记，勿为省事改教科书去迁就 Agent。
+- 产品名：**XRK-Harness**（`@xrkseek/*`）。术语：Face wire、session 事件。
+- **外壳 / 内核**：壳 = `apps/web` + `packages/client`；serve 用 `apps/web/dist`；无 vendor；内核不嵌 Cordis Host。
+- 短要点目录：[docs/learn.md](docs/learn.md)；包地图：[docs/modules/](docs/modules/README.md)。
+- Meter 域笔记：`xrk-meter-compaction.mdc` · skill `xrk-meter-session`。

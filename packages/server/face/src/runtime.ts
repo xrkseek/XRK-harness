@@ -71,7 +71,7 @@ export interface CreateFaceRuntimeOptions {
   readonly resolveAgent: (sessionId: string) => Promise<AgentHandle>;
   readonly drain: FaceDrain;
   readonly workspaceRoot: string;
-  /** Override product inject dir (default `{workspaceRoot}/.xrk`). */
+  /** Override harness home for settings/creds (default `~/.xrk`). Workspace inject stays `{workspaceRoot}/.xrk`. */
   readonly productDir?: string;
   /** Named templates for Face `workspace.syncSeeds({ template })`. */
   readonly seedTemplateDirs?: Readonly<Record<string, string>>;

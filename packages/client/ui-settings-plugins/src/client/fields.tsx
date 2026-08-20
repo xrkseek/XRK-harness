@@ -48,7 +48,6 @@ export function PlainField(props: {
   invalid?: boolean
   placeholder?: string
   onChange: (value: string) => void
-  onBlur?: () => void
 }) {
   const invalid = props.invalid === true
   return (
@@ -63,8 +62,36 @@ export function PlainField(props: {
         disabled={props.disabled}
         aria-invalid={invalid || undefined}
         onChange={(event) => { props.onChange(event.target.value) }}
-        onBlur={props.onBlur}
       />
+      <p className={css.hint}>{props.hint}</p>
+    </div>
+  )
+}
+
+/** Same chrome as PlainField, for a short option list (MCP transport). */
+export function SelectField(props: {
+  id: string
+  label: string
+  hint: string
+  value: string
+  disabled: boolean
+  options: readonly { readonly value: string; readonly label: string }[]
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className={css.field}>
+      <label className={css.label} htmlFor={props.id}>{props.label}</label>
+      <select
+        id={props.id}
+        className={css.select}
+        value={props.value}
+        disabled={props.disabled}
+        onChange={(event) => { props.onChange(event.target.value) }}
+      >
+        {props.options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
       <p className={css.hint}>{props.hint}</p>
     </div>
   )

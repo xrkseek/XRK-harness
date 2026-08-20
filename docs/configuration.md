@@ -9,8 +9,8 @@
 | 来源 | 用途 | 优先级（高 → 低） |
 |------|------|-------------------|
 | 进程 **env** | Host 鉴权 `XRK_API_KEY`；LLM `DEEPSEEK_API_KEY` 等 brand `apiKeyEnv` | 覆盖同名文件键 |
-| `{workspace}/.xrk/.credentials.yaml` | Face `credentials.set` 落盘；Settings → Credentials | 工作区持久 |
-| `{workspace}/.xrk/settings.yaml` | 模型选择、preset、MCP desired 等 | 与 credentials 分离 |
+| `~/.xrk/.credentials.yaml` | Face `credentials.set` 落盘；Settings → Credentials | 用户主目录（`XRK_HOME` 可改） |
+| `~/.xrk/settings.yaml` | 模型选择、preset、MCP desired 等 | 与 credentials 分离 |
 | Settings UI | 同上，经 Face RPC 写文件 | 推荐终端用户路径 |
 
 **开发**：`XRK_API_KEY` 留空 → HTTP/Face **免鉴权**（仅本机调试）。  
@@ -18,16 +18,22 @@
 
 从零安装步骤：[getting-started.md](./getting-started.md)。
 
-## 落盘路径（workspace 相对）
+## 落盘路径（两套根）
+
+| 根 | 用途 |
+|----|------|
+| **`~/.xrk`**（`XRK_HOME` / `XRK_DSH_HOME` / `DSH_HOME`） | 用户设置、凭据、会话、工作区列表、MCP desired — 对齐 DSH `~/.dsh` |
+| **`{workspace}/.xrk`** | 可选：项目 assistant / context / rules / recipes；**不强制创建** |
+| **Skills** | 自动导入已存在的 `.claude/skills` · `.cursor/skills` · `.agents/skills` · `.codex/skills` · `.xrk/skills`（及 `~/` 同名路径）；缺则跳过 |
 
 | 路径 | 用途 | 入库 |
 |------|------|------|
-| `{workspace}/.xrk/sessions/` | CLI `serve`/`web` 默认 Session 仓（`sessions.db` · `--no-persist` 关） | 否 |
-| `{workspace}/.xrk/settings.yaml` | Face 设置真源（模型 / 预设 / 插件 / 权限等） | **否**（有 `.example`） |
-| `{workspace}/.xrk/.credentials.yaml` | API 密钥（write-only；`credentials.set` 落盘） | **否**（有 `.example`） |
-| `{workspace}/.xrk/workspaces.json` | 侧栏工作区列表 | 否 |
-| `{workspace}/.xrk/host-settings.json` | Face settings 落盘；`mcp.servers` 文件真源时可热挂载 | 否 |
-| `{productDir}/host-settings.json` | `settings.openDocument` 红acted 打开目标（见 Face） | 视产品目录 |
+| `~/.xrk/sessions/` | CLI `serve`/`web` 默认 Session 仓（`sessions.db` · `--no-persist` 关） | 否 |
+| `~/.xrk/settings.yaml` | Face 设置真源（模型 / 预设 / 插件 / 权限等） | **否**（仓内有 `.example`） |
+| `~/.xrk/.credentials.yaml` | API 密钥（write-only；`credentials.set` 落盘） | **否** |
+| `~/.xrk/workspaces.json` | 侧栏工作区列表 | 否 |
+| `~/.xrk/host-settings.json` | Face MCP desired；文件真源时可热挂载 | 否 |
+| `{workspace}/.xrk/skills/` · `recipes/` | 可选项目 inject；skills 也从 `.claude` / `.cursor` 等导入 | 否 |
 | `XRK_POLICY_FILE` | 显式 policy JSON；优先于默认路径 | 否（勿提交含密钥的 policy） |
 
 旁路文件（与 sessions 同目录时常有）：`subagents.json` · `goals.json`。
@@ -71,14 +77,14 @@ Preset 选型：[profiles.md](./profiles.md)。
 | 变量 | 含义 |
 |------|------|
 | `XRK_POLICY_FILE` | policy JSON（tool / provider / mcp） |
-| `XRK_MCP_SERVERS` | JSON 数组：`[{serverName,command,args?,env?,cwd?}]` 或 `[{serverName,url}]` |
+| `XRK_MCP_SERVERS` | JSON 数组 `[{serverName,command|url,...}]` 或 Cursor/Claude `{ "mcpServers": { "name": { "command", "args" } } }` |
 | `XRK_MCP_ALLOW` | `1`/`true` → 本进程 `mcp.connect` 默认 allow |
 
 行为要点：
 
 - `mcp.connect` **默认 deny**
 - `XRK_MCP_SERVERS` / config **非空**时赢过文件，mutate 为 `applies: restart`
-- env/config **空**时读 `.xrk/host-settings.json` 的 `mcp.servers`，Face mutate 后 **热挂载**（`applies: live`）
+- env/config **空**时读 `~/.xrk/host-settings.json` 的 `mcp.servers`（也接受根级 `mcpServers` 对象），Face mutate 后 **热挂载**（`applies: live`）
 
 [policy.md](./policy.md) · [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md)。
 

@@ -29,7 +29,7 @@ export type PostOutcome =
   | { readonly action: "block"; readonly reason: string }
   | {
       readonly action: "replace";
-      readonly content: string;
+      readonly content: import("@xrkseek/protocol").MessageContent;
       readonly isError?: boolean;
     };
 
@@ -74,7 +74,11 @@ export interface PostHandler {
 }
 
 export interface FinalizeHandler {
-  (ctx: ToolPipelineContext): string | Promise<string>;
+  (
+    ctx: ToolPipelineContext,
+  ):
+    | import("@xrkseek/protocol").MessageContent
+    | Promise<import("@xrkseek/protocol").MessageContent>;
 }
 
 export interface ApprovalHandler {
