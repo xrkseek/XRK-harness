@@ -26,6 +26,7 @@ describe("finalizeCancelledTurn (DSH abort settle)", () => {
       turnId: "t1",
       stepId: "s1",
       now: () => 10,
+      cancelCause: { kind: "user" },
     });
 
     expect(listDanglingToolCalls(store.get(session.id).events)).toHaveLength(0);
@@ -42,6 +43,7 @@ describe("finalizeCancelledTurn (DSH abort settle)", () => {
       .events.find((e) => e.type === "turn/end");
     expect(turnEnd?.type === "turn/end" && turnEnd.reason).toEqual({
       kind: "aborted",
+      reason: { kind: "user" },
     });
   });
 });

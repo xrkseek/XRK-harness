@@ -132,6 +132,12 @@ async function executeBody(
     ctx.metrics.calls += 1;
     const out = await tool.execute(ctx.args, signal, {
       emitToolEvent: (type, payload) => emitToolEvent(ctx, type, payload),
+      concludeTurn: () => {
+        ctx.concludeRequested = true;
+      },
+      deferContext: (text) => {
+        addAdditionalContext(ctx, text);
+      },
     });
     // DSH: cancel after body invocation supersedes a late success.
     if ((signal ?? ctx.signal)?.aborted) {
@@ -307,7 +313,8 @@ export function createToolPipeline(
       );
       // Failures never conclude (DSH ToolExecutionFailure.concludesTurn: never).
       const concludesTurn =
-        raw.concludesTurn === true && raw.isError !== true
+        raw.isError !== true &&
+        (raw.concludesTurn === true || ctx.concludeRequested === true)
           ? (true as const)
           : undefined;
 

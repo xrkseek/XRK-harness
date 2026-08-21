@@ -108,6 +108,48 @@ describe("resolveLlmForSession", () => {
     );
   });
 
+  it("allows image on official host when model is vision-exp", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-llm-vision-exp-"));
+    await writeFile(
+      path.join(dir, "settings.yaml"),
+      [
+        "llm-deepseek:",
+        "  baseURL: https://api.deepseek.com",
+        "  models:",
+        "    - id: deepseek-v4-flash-vision-exp",
+        "agent-default-model:",
+        "  provider: deepseek",
+        "  model: deepseek-v4-flash-vision-exp",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(dir, ".credentials.yaml"),
+      "DEEPSEEK_API_KEY: sk-test-key\n",
+      "utf8",
+    );
+
+    const store = createMemorySessionStore();
+    const sessionId = store.create().id;
+    const rt = createFaceRuntime({
+      store,
+      workspaceRoot: dir,
+      productDir: dir,
+      inputModalities: ["text", "image"],
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+
+    const { liveRouteAllowsImageInput } = await import("../src/llm-resolve.js");
+    expect(liveRouteAllowsImageInput(rt, sessionId)).toBe(true);
+    expect(resolveLlmForSession(rt, sessionId)!.adapter.inputModalities).toEqual(
+      ["text", "image"],
+    );
+  });
+
   it("returns undefined when provider requires a key but none is configured", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-llm-resolve-empty-"));
     await writeFile(

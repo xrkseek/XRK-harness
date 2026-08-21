@@ -1,4 +1,4 @@
-import type { SessionEvent, ToolCall } from "@xrkseek/protocol";
+import type { SessionEvent, ToolCall, TurnEndCancelCause } from "@xrkseek/protocol";
 import {
   settleDanglingTools,
   type SessionStore,
@@ -108,6 +108,8 @@ export function finalizeCancelledTurn(input: {
   readonly turnId: string;
   readonly stepId?: string;
   readonly now: () => number;
+  /** Durable cancel cause (DSH). Default `{ kind: "legacy" }`. */
+  readonly cancelCause?: TurnEndCancelCause;
 }): void {
   const events = () => input.store.get(input.sessionId).events;
 
@@ -158,7 +160,10 @@ export function finalizeCancelledTurn(input: {
       type: "turn/end",
       ts: input.now(),
       turnId: input.turnId,
-      reason: { kind: "aborted" },
+      reason: {
+        kind: "aborted",
+        reason: input.cancelCause ?? { kind: "legacy" },
+      },
     });
   }
 }

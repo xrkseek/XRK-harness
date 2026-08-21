@@ -350,4 +350,44 @@ describe("tool pipeline", () => {
     expect(bad.concludesTurn).toBeUndefined();
     expect(bad.result.isError).toBe(true);
   });
+
+  it("honors extras.concludeTurn and deferContext (DSH ToolRunContext)", async () => {
+    const reg = createToolRegistry();
+    reg.register({
+      name: "via-extras",
+      description: "via-extras",
+      parameters: { type: "object" },
+      async execute(_args, _signal, extras) {
+        extras?.deferContext("after-result context");
+        extras?.concludeTurn();
+        return { content: "ok" };
+      },
+    });
+    const out = await runToolDetailed({
+      registry: reg,
+      call: { id: "1", name: "via-extras", arguments: {} },
+    });
+    expect(out.concludesTurn).toBe(true);
+    expect(out.additionalContexts).toEqual(["after-result context"]);
+    expect(out.result.content).toBe("ok");
+  });
+
+  it("drops extras.concludeTurn when the body result is an error", async () => {
+    const reg = createToolRegistry();
+    reg.register({
+      name: "fail-conclude",
+      description: "fail-conclude",
+      parameters: { type: "object" },
+      async execute(_args, _signal, extras) {
+        extras?.concludeTurn();
+        return { content: "boom", isError: true };
+      },
+    });
+    const out = await runToolDetailed({
+      registry: reg,
+      call: { id: "1", name: "fail-conclude", arguments: {} },
+    });
+    expect(out.concludesTurn).toBeUndefined();
+    expect(out.result.isError).toBe(true);
+  });
 });

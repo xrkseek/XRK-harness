@@ -513,7 +513,8 @@ export function createHostManager(): HostManager {
         registry: createProviderRegistry(),
         attachments,
         // Face intake only (InputBar paste). Live adapter modalities come from
-        // Registry — official DeepSeek stays text-only; MCP/prompt gate on that.
+        // Registry — official DeepSeek text models stay text-only; vision-exp
+        // declares image; MCP/prompt gate on that.
         inputModalities: ["text", "image"],
         ...(sessionsDir
           ? {

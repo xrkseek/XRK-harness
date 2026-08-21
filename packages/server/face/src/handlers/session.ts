@@ -400,7 +400,7 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
   await runtime.drain.cancel(sessionId);
   try {
     const agent = await runtime.resolveAgent(sessionId);
-    agent.abort();
+    agent.abort({ kind: "user" });
   } catch {
     /* ignore */
   }

@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   DEEPSEEK_DEFAULT_BASE_URL,
+  DEEPSEEK_DEFAULT_CATALOG,
   DEEPSEEK_DEFAULT_MODEL,
+  DEEPSEEK_VISION_EXP_MODEL,
   createDeepSeekAdapter,
+  isDeepSeekVisionModel,
   isOfficialDeepSeekBaseUrl,
+  resolveDeepSeekInputModalities,
 } from "../src/index.js";
 
 describe("deepseek adapter", () => {
@@ -11,6 +15,7 @@ describe("deepseek adapter", () => {
     expect(isOfficialDeepSeekBaseUrl(DEEPSEEK_DEFAULT_BASE_URL)).toBe(true);
     expect(isOfficialDeepSeekBaseUrl("https://gateway.example/v1")).toBe(false);
   });
+
   it("defaults baseUrl and model; bearer auth", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       expect(url).toBe(`${DEEPSEEK_DEFAULT_BASE_URL}/chat/completions`);
@@ -67,6 +72,24 @@ describe("deepseek adapter", () => {
       messages: [{ role: "user", content: "x" }],
     });
     expect(out.content).toBe("gw");
+  });
+
+  it("declares image on official host for vision-exp catalog model", () => {
+    expect(isDeepSeekVisionModel(DEEPSEEK_VISION_EXP_MODEL)).toBe(true);
+    expect(
+      resolveDeepSeekInputModalities({
+        baseUrl: DEEPSEEK_DEFAULT_BASE_URL,
+        model: DEEPSEEK_VISION_EXP_MODEL,
+      }),
+    ).toEqual(["text", "image"]);
+    const llm = createDeepSeekAdapter({
+      apiKey: "sk",
+      model: DEEPSEEK_VISION_EXP_MODEL,
+    });
+    expect(llm.inputModalities).toEqual(["text", "image"]);
+    expect(DEEPSEEK_DEFAULT_CATALOG.map((m) => m.id)).toContain(
+      DEEPSEEK_VISION_EXP_MODEL,
+    );
   });
 
   it("emits thinking wire when reasoningEffort is set", async () => {

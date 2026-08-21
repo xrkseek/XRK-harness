@@ -73,9 +73,12 @@ export {
   type ToolResultEvent,
   type TurnEndEvent,
   type TurnEndReason,
+  type TurnEndCancelCause,
+  type AgentCancelCause,
   type TurnStartEvent,
   type UserMessageEvent,
 } from "./session-events.js";
+export { parseTurnEndCancelCause } from "./session-events.js";
 export {
   EMPTY_PERMISSION_KNOBS,
   applyPermissionKnobEvent,

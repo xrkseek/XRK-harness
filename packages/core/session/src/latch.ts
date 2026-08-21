@@ -25,7 +25,7 @@ export interface TurnLatch {
    */
   run<T>(work: (signal: AbortSignal) => Promise<T>): Promise<T>;
   /** Abort the in-flight work (if any). Idle cancel is a no-op. */
-  cancel(): void;
+  cancel(reason?: unknown): void;
 }
 
 export function createTurnLatch(options?: {
@@ -57,8 +57,8 @@ export function createTurnLatch(options?: {
       }
     },
 
-    cancel() {
-      controller?.abort();
+    cancel(reason?: unknown) {
+      controller?.abort(reason);
     },
   };
 }

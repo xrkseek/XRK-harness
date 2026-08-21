@@ -26,7 +26,7 @@
 | 取消路径：body 已调用（抛 Abort / 晚成功被覆盖） | `ABORTED` | 取消发生在开跑之后；勿当未执行 |
 | 取消路径：`settleDanglingTools(…, { kind: "aborted-before-dispatch" })` 或 settle 未开跑槽位 | `ABORTED_BEFORE_DISPATCH` | 取消阻止了 body；可按需重试 |
 
-`runTurn` **入口**先 `settleDanglingTools`（崩溃码）；取消 finalize 用 `aborted-before-dispatch`。每步 LLM 前再 `assertToolCallsSettled`。
+`runTurn` **入口**先 `settleDanglingTools`（崩溃码）；取消 finalize 用 `aborted-before-dispatch`，并把 `AgentCancelCause` 写入 `turn/end.reason`（`user` / `parent` / `hook` / `disposed` / `legacy`）。每步 LLM 前再 `assertToolCallsSettled`。
 
 ---
 
@@ -71,10 +71,12 @@ createAgent({ …, toolSettle: "serial" });
 
 ## `concludesTurn`（DSH 步末结轮）
 
-工具 `execute` 成功返回 `{ concludesTurn: true }` 时，`runTurn` 在本步 settle 完（call/result · contexts · `step/end`）后**结束本轮**，不再开下一步 LLM。失败 / `isError` / abort 合成结果**不会**结轮。
+工具成功结轮有两种等价写法：返回 `{ concludesTurn: true }`，或在 body 内调用 `extras.concludeTurn()`（可再 `extras.deferContext(text)` 排队结果后上下文）。`runTurn` 在本步 settle 完（call/result · contexts · `step/end`）后**结束本轮**，不再开下一步 LLM。失败 / `isError` / abort 合成结果**不会**结轮。
 
 ```ts
-async execute() {
-  return { content: "submitted", concludesTurn: true };
+async execute(_args, _signal, extras) {
+  extras?.concludeTurn();
+  return { content: "submitted" };
+  // 或: return { content: "submitted", concludesTurn: true };
 }
 ```

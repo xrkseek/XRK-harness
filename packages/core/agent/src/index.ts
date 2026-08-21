@@ -1,5 +1,6 @@
 import type { CompactionOptions } from "@xrkseek/core-session";
 import type { LlmAdapter, LlmChatRequest, ResolvedRetryPolicy } from "@xrkseek/llm";
+import type { AgentCancelCause } from "@xrkseek/protocol";
 import {
   admitPrompt,
   createSessionSafety,
@@ -76,7 +77,8 @@ export interface AgentHandle {
   ): AdmitReceipt;
   /** Pending admits not yet promoted. */
   pendingAdmits(): readonly AdmitReceipt[];
-  abort(): void;
+  /** Cancel the in-flight turn (DSH). Default cause `{ kind: "user" }`. */
+  abort(cause?: AgentCancelCause): void;
   isBusy(): boolean;
   /**
    * Wire human approval for pipeline `ask` (policy / pre).
@@ -433,8 +435,8 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
     isBusy() {
       return latch.isActive();
     },
-    abort() {
-      latch.cancel();
+    abort(cause) {
+      latch.cancel(cause ?? { kind: "user" });
     },
     setApprovalHandler(handler) {
       pipeline.setApprovalHandler(handler);

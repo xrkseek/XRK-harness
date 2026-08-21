@@ -14,14 +14,51 @@ export interface TurnStartEvent extends SessionEventBase {
   readonly turnId: string;
 }
 
+/** Live cancel source (DSH `AgentCancelCause`). */
+export type AgentCancelCause =
+  | { readonly kind: "user" }
+  | { readonly kind: "parent" }
+  | { readonly kind: "hook"; readonly reason: string }
+  | { readonly kind: "disposed" };
+
+/**
+ * Durable cancel cause on `turn/end` (DSH `TurnEndCancelCause`).
+ * `legacy` covers bare `AbortSignal` aborts without a typed reason.
+ */
+export type TurnEndCancelCause =
+  | AgentCancelCause
+  | { readonly kind: "legacy" };
+
 /** Why a turn ended (DSH wire subset; merge-extensible at Face boundary). */
 export type TurnEndReason =
   | { readonly kind: "completed" }
-  | { readonly kind: "aborted"; readonly reason?: unknown }
+  | { readonly kind: "aborted"; readonly reason: TurnEndCancelCause }
   | { readonly kind: "error"; readonly error: unknown }
   | { readonly kind: "max-tokens" }
   | { readonly kind: "interrupted" }
   | { readonly kind: "blocked" };
+
+/** Coerce `AbortSignal.reason` / unknown into a durable cancel cause. */
+export function parseTurnEndCancelCause(raw: unknown): TurnEndCancelCause {
+  if (raw !== null && typeof raw === "object" && "kind" in raw) {
+    const kind = (raw as { kind: unknown }).kind;
+    if (
+      kind === "user" ||
+      kind === "parent" ||
+      kind === "disposed" ||
+      kind === "legacy"
+    ) {
+      return { kind };
+    }
+    if (
+      kind === "hook" &&
+      typeof (raw as { reason?: unknown }).reason === "string"
+    ) {
+      return { kind: "hook", reason: (raw as { reason: string }).reason };
+    }
+  }
+  return { kind: "legacy" };
+}
 
 export interface TurnEndEvent extends SessionEventBase {
   readonly type: "turn/end";

@@ -1,6 +1,6 @@
 import type { LlmAdapter } from "@xrkseek/llm";
 import { createAnthropicAdapter } from "@xrkseek/llm-anthropic";
-import { isOfficialDeepSeekBaseUrl } from "@xrkseek/llm-deepseek";
+import { resolveDeepSeekInputModalities } from "@xrkseek/llm-deepseek";
 import { createGeminiAdapter } from "@xrkseek/llm-gemini";
 import { createOpenAiCompatibleAdapter } from "@xrkseek/llm-openai-compatible";
 import { createOpenAiResponsesAdapter } from "@xrkseek/llm-openai-responses";
@@ -169,9 +169,11 @@ export function createProviderRegistry(
       ) {
         const vision =
           extras?.inputModalities ??
-          (binding.provider === "deepseek" &&
-          isOfficialDeepSeekBaseUrl(binding.baseUrl)
-            ? ["text"]
+          (binding.provider === "deepseek"
+            ? resolveDeepSeekInputModalities({
+                baseUrl: binding.baseUrl,
+                model,
+              })
             : ["text", "image"]);
         return createOpenAiCompatibleAdapter({
           id,

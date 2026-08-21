@@ -71,7 +71,7 @@ describe("createProviderRegistry", () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 
-  it("openai adapter declares image; deepseek stays text-only", () => {
+  it("openai adapter declares image; deepseek stays text-only; vision-exp declares image", () => {
     const reg = createProviderRegistry();
     const openai = reg.createAdapter(
       reg.resolve({ provider: "openai", model: "m" }),
@@ -81,8 +81,16 @@ describe("createProviderRegistry", () => {
       reg.resolve({ provider: "deepseek" }),
       {},
     );
+    const vision = reg.createAdapter(
+      reg.resolve({
+        provider: "deepseek",
+        model: "deepseek-v4-flash-vision-exp",
+      }),
+      {},
+    );
     expect(openai.inputModalities).toEqual(["text", "image"]);
     expect(deepseek.inputModalities).toEqual(["text"]);
+    expect(vision.inputModalities).toEqual(["text", "image"]);
   });
 
   it("listRoutable marks active when key present", () => {
