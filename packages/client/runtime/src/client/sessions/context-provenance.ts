@@ -81,6 +81,10 @@ export function contextProvenance(source: unknown): ContextProvenanceView {
     // identifies the producer far better than the plugin id would.
     case 'agent-instructions':
       return { role: 'inject', label: joined(collect(record, 'changes', 'path')) ?? kind }
+    // Durable skill catalog: prefer entry names so the collapsed row reads like
+    // a tool summary ("foo, bar") rather than the bare source kind.
+    case 'skill-catalog':
+      return { role: 'inject', label: joined(collect(record, 'entries', 'name')) ?? kind }
     case 'plugin':
       return { role: 'inject', label: readString(record, 'plugin') ?? kind }
     // A user-explicit skill invocation names the skill it injected.

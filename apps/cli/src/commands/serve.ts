@@ -17,7 +17,8 @@ import {
   repoRoot,
 } from "../product-paths.js";
 import { createCliLogger, resolveLogLevel, type CliLogger } from "../log.js";
-import { forceFreePort } from "../port.js";
+import { clearHostLock, writeHostLock } from "../host-lock.js";
+import { forceFreeXrkPort } from "../port.js";
 
 function openProductUrl(url: string, log: CliLogger): void {
   const platform = process.platform;
@@ -95,7 +96,13 @@ export async function runServe(args: ParsedArgs): Promise<number> {
   assertSafeHost(config.runtime.host);
 
   if (args.force && config.runtime.port > 0) {
-    await forceFreePort(config.runtime.port, log);
+    try {
+      await forceFreeXrkPort(config.runtime.port, log);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.error(message);
+      return 1;
+    }
   }
 
   const preset =
@@ -147,6 +154,7 @@ export async function runServe(args: ParsedArgs): Promise<number> {
   const health = instance.health();
   const port = health.port ?? config.runtime.port;
   const origin = `http://${config.runtime.host}:${port}`;
+  if (port > 0) writeHostLock(port);
   log.info(`xrk-harness serve  ${origin}/`);
   const uiRel = path.relative(repoRoot(), webDist) || webDist;
   log.info(`  workspace=${config.runtime.workspaceRoot}`);
@@ -167,7 +175,9 @@ export async function runServe(args: ParsedArgs): Promise<number> {
       "  tip: workspace is your user home (or ~/.xrk) — prefer `cd <project> && xrk-harness web`",
     );
   }
-  log.info("  tip: Ctrl+C stop · `xrk-harness restart` / `web --force` free port");
+  log.info(
+    "  tip: Ctrl+C stop · `xrk-harness restart` stops this Host · `web --force` only kills verified XRK listeners",
+  );
 
   if (args.open) {
     openProductUrl(`${origin}/`, log);
@@ -187,6 +197,7 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     }
     stopState = "stopping";
     log.info("shutting down...");
+    if (port > 0) clearHostLock(port);
     void manager
       .stopAll()
       .then(() => {

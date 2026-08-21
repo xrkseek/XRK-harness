@@ -34,7 +34,8 @@ Root:
   default  ~/.xrk/plugins  (XRK_HOME / XRK_DSH_HOME / DSH_HOME)
   override XRK_PLUGINS_DIR
 
-After add/remove, restart \`xrk-harness web\` / \`serve\` to load changes.
+After add/remove, run \`xrk-harness restart\` so Host reloads plugins
+(stops the previous XRK Host via pid lock; will not kill foreign listeners).
 
 Examples:
   xrk-harness plugin add @huanlin/dsh-plugin-spur
@@ -67,7 +68,7 @@ export async function runPlugin(argv: readonly string[]): Promise<number> {
           addPlugin(spec);
         }
         process.stdout.write(
-          "xrk-harness: restart `web` / `serve` to load new plugins\n",
+          "xrk-harness: run `restart` to load new plugins (stops the previous XRK Host only)\n",
         );
         return 0;
       }
@@ -80,7 +81,7 @@ export async function runPlugin(argv: readonly string[]): Promise<number> {
           removePlugin(name);
         }
         process.stdout.write(
-          "xrk-harness: restart `web` / `serve` to drop removed plugins\n",
+          "xrk-harness: run `restart` to drop removed plugins (stops the previous XRK Host only)\n",
         );
         return 0;
       }

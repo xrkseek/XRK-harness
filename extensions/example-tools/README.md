@@ -13,4 +13,4 @@ src/index.ts      # typed mirror (optional)
 Contributes `example_ping` → returns `pong`. Host spawn with `XRK_PLUGINS_DIR`
 passes plugins into the agent factory; presets call `wireCompositionTools`.
 
-See [docs/plugin-loader.md](../../docs/plugin-loader.md).
+See [docs/plugin-development.md](../../docs/plugin-development.md) · [docs/plugin-loader.md](../../docs/plugin-loader.md).

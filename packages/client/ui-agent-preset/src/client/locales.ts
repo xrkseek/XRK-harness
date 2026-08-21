@@ -7,6 +7,7 @@ export type AgentPresetSettingsKey =
   | 'presetStandardName' | 'presetStandardDescription'
   | 'presetCodeName' | 'presetCodeDescription'
   | 'presetMinimalName' | 'presetMinimalDescription'
+  | 'presetHarnessName' | 'presetHarnessDescription'
   | 'presetCordisName' | 'presetCordisDescription'
   | 'duplicate' | 'duplicateUnavailable' | 'delete' | 'presetId' | 'presetIdPlaceholder' | 'copyOf'
   | 'displayName' | 'displayNamePlaceholder'
@@ -42,7 +43,10 @@ export const en: Record<AgentPresetSettingsKey, string> = {
     'All Standard mode capabilities, with tools exposed through the Code Mode SDK so the model can combine multi-step operations in one TypeScript program.',
   presetMinimalName: 'Minimal mode',
   presetMinimalDescription:
-    'Two-tool coding agent with persistent bash and str_replace_editor.',
+    'Filesystem, skill, and std tools only — no bash, web, lsp, or PTY.',
+  presetHarnessName: 'XRK Harness',
+  presetHarnessDescription:
+    'Full coding agent: filesystem, bash, web search/fetch, lsp, and terminal tools.',
   presetCordisName: 'Creator mode',
   presetCordisDescription:
     'Built for creating custom agent presets, with all Standard mode capabilities plus runtime inspection, plugin experiments, and preset-authoring guidance.',
@@ -103,7 +107,10 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
   presetCodeName: 'PTC 模式',
   presetCodeDescription: '具备标准模式的全部能力，并通过 Code Mode SDK 呈现工具，让模型用一个 TypeScript 程序组合多步操作。',
   presetMinimalName: '极简模式',
-  presetMinimalDescription: '仅提供持久 bash 与 str_replace_editor 的双工具编码 Agent。',
+  presetMinimalDescription: '仅文件系统、skill 与 std 工具；无 bash / 联网 / lsp / PTY。',
+  presetHarnessName: 'XRK Harness',
+  presetHarnessDescription:
+    '完整编码 Agent：文件系统、bash、网页检索/抓取、lsp 与终端工具。',
   presetCordisName: '创造模式',
   presetCordisDescription: '用于创建自定义 Agent preset：具备标准模式的全部能力，并提供运行时检查、插件实验和 preset 创作指导。',
   duplicate: '复制',
@@ -167,9 +174,12 @@ interface PresetLocaleKeys {
 }
 
 const BUILT_IN_PRESET_KEYS: Readonly<Partial<Record<string, PresetLocaleKeys>>> = {
-  standard: { name: 'presetStandardName', description: 'presetStandardDescription' },
-  code: { name: 'presetCodeName', description: 'presetCodeDescription' },
+  // XRK session badges (Face catalog ids).
+  harness: { name: 'presetHarnessName', description: 'presetHarnessDescription' },
   minimal: { name: 'presetMinimalName', description: 'presetMinimalDescription' },
+  // Legacy DSH ids kept for foreign/resumed logs; map to nearest XRK copy.
+  standard: { name: 'presetHarnessName', description: 'presetHarnessDescription' },
+  code: { name: 'presetCodeName', description: 'presetCodeDescription' },
   cordis: { name: 'presetCordisName', description: 'presetCordisDescription' },
 }
 

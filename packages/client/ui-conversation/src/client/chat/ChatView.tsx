@@ -104,10 +104,12 @@ function runningTurnStartTime(timeline: ConversationTimelineSnapshot): number | 
 }
 
 /** Turn-level model activity label retained across first-token, tool, and streaming phases. */
-function TurnStatus({ startTime, t }: {
+function TurnStatus({ startTime, pendingSteer, t }: {
   /** The running turn's logged `turn/start` time; null falls back to mount
    *  time when that boundary is outside the window. */
   startTime: number | null
+  /** Pending steering bubbles waiting to be claimed into the open turn. */
+  pendingSteer: number
   /** The owning view's locale seat. */
   t: ChatViewSlotProps['t']
 }) {
@@ -129,7 +131,12 @@ function TurnStatus({ startTime, t }: {
   const showClock = elapsedMs >= 15_000
   return (
     <div className={css.turnStatus} role="status" aria-live="polite">
-      Deep diving...
+      {t('chat.deepDiving')}
+      {pendingSteer > 0 && (
+        <span className={css.turnStatusClock}>
+          {t('chat.deepDiving.steered', { count: pendingSteer })}
+        </span>
+      )}
       {showClock && (
         <span className={css.turnStatusClock} aria-hidden>
           {formatRunDuration(elapsedMs, t)}
@@ -400,7 +407,13 @@ export function ChatView({
               double-render the same wait. */}
           {/* Turn-level loading signal: rides the whole running turn (first-token
               wait, tool execution, streaming) so it never flickers per step. */}
-          {running && <TurnStatus startTime={runningTurnStart} t={t} />}
+          {running && (
+            <TurnStatus
+              startTime={runningTurnStart}
+              pendingSteer={pendingSteering.length}
+              t={t}
+            />
+          )}
           {pendingSteering.map(item => (
             <PendingSteeringBubble key={item.id} content={item.content} loadImage={loadImage} t={t} />
           ))}

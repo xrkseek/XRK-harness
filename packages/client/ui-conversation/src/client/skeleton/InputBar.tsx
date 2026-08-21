@@ -147,7 +147,7 @@ export function InputBar({
   const workspaceTrigger = inert && !removed && onRequestWorkspace !== undefined
   const textareaDisabled = removed || (locked && !workspaceTrigger)
   const canSteerQueue = !locked && !machineBusy && !commandMenuOpen && empty && running && subagent === null
-    && input.queue.some(row => row.placement === 'queued')
+    && (input?.queue.some(row => row.placement === 'queued') ?? false)
 
   useEffect(() => {
     if (input === undefined || inputActions === undefined) return
@@ -337,12 +337,10 @@ export function InputBar({
     if (e.repeat) return // held-down Enter must not machine-gun sends
     if (locked || machineBusy) return
     const accelerated = e.ctrlKey || e.metaKey
-    // Empty-draft accelerated Enter acts on the queue instead of the (empty)
-    // draft: the machine rejects empty drafts, so the gesture steers every
-    // still-pending queued message into the running turn (the dock's per-row
-    // steer button applied to the whole queue). Steering needs the same
-    // window as the per-row button: a running ordinary session.
-    if (accelerated && canSteerQueue) {
+    // Empty draft while busy: flush the queue into the running turn (same as
+    // the dock's 插话按钮 / Cmd+Enter). Plain Enter used to be a silent no-op
+    // here, which felt like "stuck in Deep diving" when messages were queued.
+    if (canSteerQueue) {
       keyboard.steerQueue()
       return
     }

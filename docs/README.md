@@ -47,6 +47,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 懂架构 | [architecture](./architecture.md) → [compose](./compose.md) → [adr/](./adr/README.md) |
 | 接 HTTP / Face | [http-api](./http-api.md) · [host-face](./host-face.md) |
 | 选 preset | [profiles](./profiles.md) · [host-preset](./host-preset.md) |
+| 写进程插件 | [plugin-development](./plugin-development.md) · [plugin-loader](./plugin-loader.md) |
 | 写工具 / 守卫 | [tool-pipeline](./tool-pipeline.md) · [seams](./seams.md) · [policy](./policy.md) |
 | Session / 压缩 / meter | [session](./session.md) · [session-compaction](./session-compaction.md) · [modules/session-projection](./modules/session-projection.md) · [protocol-events](./protocol-events.md) |
 | 看包落点 | [modules/](./modules/README.md) |
@@ -92,7 +93,8 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [http-api.md](./http-api.md) | HTTP / SSE |
 | [host-face.md](./host-face.md) | Host Face（RPC + 双 WS） |
 | [host-preset.md](./host-preset.md) | Host vs preset |
-| [profiles.md](./profiles.md) | Preset 选型 |
+| [profiles.md](./profiles.md) | Preset 选型（Session / Host / 工作区种子） |
+| [plugin-development.md](./plugin-development.md) | 进程插件怎么写 / 怎么装 |
 | [plugin-loader.md](./plugin-loader.md) | 插件 discover / load |
 
 ### LLM

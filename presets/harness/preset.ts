@@ -428,7 +428,7 @@ export function createHarnessComposition(
 
   return {
     id: presetId,
-    description: "Harness: fs + shell + sandbox + web + lsp + pty + workspace inject",
+    description: "XRK Harness: fs + shell + sandbox + web + lsp + pty + workspace inject",
     workspaceRoot: options.workspaceRoot,
     fs,
     workspace,
@@ -545,6 +545,6 @@ export function createHarnessComposition(
 
 export const preset = {
   id: presetId,
-  description: "Full harness composition: fs + shell + sandbox",
+  description: "XRK Harness composition: fs + shell + sandbox + web + lsp + pty",
   create: createHarnessComposition,
 };

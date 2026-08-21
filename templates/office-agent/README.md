@@ -2,6 +2,8 @@
 
 产品种子模板：注入到 workspace 的 `.xrk` / 人格与 recipes。
 
+**办公办事**用本模板；**写 XRK 进程插件**用 [templates/xrk-harness](../xrk-harness/)。
+
 ## Files
 
 | File | Role |
@@ -27,4 +29,4 @@ const inj = createWorkspaceInjector({
 await inj.syncSeeds(path.join("templates", "office-agent"));
 ```
 
-见 [docs/workspace-inject.md](../../docs/workspace-inject.md)。
+见 [docs/workspace-inject.md](../../docs/workspace-inject.md) · [docs/profiles.md](../../docs/profiles.md)。

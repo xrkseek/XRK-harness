@@ -262,7 +262,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    const disclosure = ctxView.getByRole('button', { name: /^上下文注入\s*fixture$/ })
+    const disclosure = ctxView.getByRole('button', { name: /^上下文注入\s*fixture/ })
     expect(disclosure.getAttribute('aria-expanded')).toBe('false')
     expect(ctxView.container.querySelector('[data-context-injection-body]')).toBeNull()
     expect(ctxView.container.querySelector('svg')).not.toBeNull()
@@ -373,7 +373,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
     const entries = [...view.container.querySelectorAll('[data-context-entries] li')].map(node => node.textContent)
     expect(entries).toEqual(['a-skillDoes A', 'b-skillDoes B'])
     expect(view.container.querySelector('[data-context-text]')).toBeNull()
@@ -397,7 +397,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
     expect(view.container.querySelector('[data-context-catalog-update]')?.textContent).toBe('替换目录')
   })
 
@@ -419,7 +419,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
     expect(view.container.querySelector('[data-context-entries]')).toBeNull()
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('catalog prose')
     // The marker reports what rendered, not what was declared.
@@ -439,7 +439,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*agent-instructions$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*agent-instructions/ }))
     expect(view.container.querySelector('[data-context-files]')).toBeNull()
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('instruction prose')
     expect(view.container.querySelector('[data-context-fields]')).not.toBeNull()
@@ -475,7 +475,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*plugin$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*plugin/ }))
     expect(view.container.querySelector('[data-context-fields] dd')?.textContent)
       .toMatch(/… 已截断，共 \d+ 字符$/)
   })
@@ -494,7 +494,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
     expect(view.container.querySelector('[data-context-catalog-update]')?.textContent).toBe('替换目录')
     expect(view.container.querySelectorAll('[data-context-entries] li')).toHaveLength(0)
     expect(view.container.querySelector('[data-context-injection-body]')?.getAttribute('data-context-form'))
@@ -513,7 +513,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
     expect(view.container.querySelector('[data-context-entries]')).toBeNull()
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('catalog prose')
   })
@@ -529,7 +529,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
     expect(view.container.querySelectorAll('[data-context-entries] li')).toHaveLength(200)
     expect(view.container.querySelector('[data-context-entries-truncated]')?.textContent).toBe('…还有 5 条')
   })
@@ -546,7 +546,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
     expect(view.getByText(/未知内容块/)).toBeTruthy()
   })
 
@@ -564,7 +564,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*agent-instructions$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*agent-instructions/ }))
     expect(view.container.querySelector('[data-context-files]')).toBeNull()
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('instruction prose')
   })
@@ -580,7 +580,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*later$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*later/ }))
     const fields = [...view.container.querySelectorAll('[data-context-fields] dt')].map(node => node.textContent)
     expect(fields).toEqual(['plugin', 'form'])
   })
@@ -636,7 +636,7 @@ describe('MessageItem arms', () => {
       />,
     )
     expect(view.container.querySelector('[data-context-summary]')).toBeNull()
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*tool-jobs$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*tool-jobs/ }))
     expect(view.container.querySelector('[data-context-fields]')).not.toBeNull()
   })
 
@@ -657,7 +657,7 @@ describe('MessageItem arms', () => {
         } as never}
         />,
       )
-      fireEvent.click(view.getByRole('button', { name: new RegExp(`^上下文注入\\s*${label}$`) }))
+      fireEvent.click(view.getByRole('button', { name: new RegExp(`^上下文注入\\s*${label}`) }))
       expect(view.container.querySelector('[data-context-text]')?.textContent).toBe(`${form} prose`)
       expect(view.container.querySelector('[data-context-injection-body]')?.getAttribute('data-context-form'))
         .toBeNull()
@@ -674,7 +674,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*plugin$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*plugin/ }))
     expect(view.container.querySelector('[data-context-snapshot-supersedes]')?.textContent)
       .toBe('取代先前的快照')
   })
@@ -691,7 +691,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*subagent-report$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*subagent-report/ }))
     expect(view.container.querySelector('[data-context-relay-sender]')?.textContent).toBe('来自会话 child-7')
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('child report body')
   })

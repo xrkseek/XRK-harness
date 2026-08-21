@@ -41,7 +41,7 @@
 | `test:web` 失败且提到 Chromium | `pnpm --filter @xrkseek/web-frontend exec playwright install chromium` |
 | 浏览器打不开本机 Host / 请求走代理 | 清掉 `HTTP_PROXY` · `HTTPS_PROXY` · `ALL_PROXY`（或设 `NO_PROXY=localhost,127.0.0.1`）后再测 |
 | Vite 直接 `serve`/`dev` 被拒 | 产品入口是 `xrk-harness web` / Host serve，不是裸 Vite |
-| `EADDRINUSE` / 端口占用 | `xrk-harness web --force` 或 `xrk-harness restart`（会停掉占用该端口的进程） |
+| `EADDRINUSE` / 端口占用 | 先 `xrk-harness restart`（只停本机 XRK Host）。若是其它程序占端口：自行结束该进程，或换 `--port`。`--force` 同样**拒绝**杀掉非 XRK 进程 |
 | serve 终端几乎没输出 | 默认只打启动横幅；加 `--verbose` 或 `XRK_LOG=debug` 看 `/api` 与 MCP 挂载 |
 
 ## MCP
