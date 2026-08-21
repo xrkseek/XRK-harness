@@ -14,13 +14,14 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
   {
     id: "minimal",
     displayName: "Minimal",
-    description: "Filesystem tools only (no shell / web / lsp / PTY)",
+    description:
+      "Filesystem + skill + std tools only (no bash / web / lsp / PTY)",
   },
   {
     id: "harness",
-    displayName: "Harness",
+    displayName: "XRK Harness",
     description:
-      "Full coding agent: fs + bash + web_search/web_fetch + lsp + terminal",
+      "Full coding agent: fs + bash + web_search/web_fetch + lsp + terminal_*",
   },
 ];
 

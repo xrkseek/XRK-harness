@@ -1,4 +1,4 @@
-/** Web-localized copy for the four shipped presets and file copy for every other row. */
+/** Web-localized copy for shipped presets and file copy for every other row. */
 
 import { describe, expect, it } from 'vitest'
 import { en, presetDisplayText, zh } from '../src/client/locales.ts'
@@ -7,9 +7,11 @@ const translate = (bundle: typeof en) => (key: keyof typeof en): string => bundl
 
 describe('preset display copy', () => {
   it.each([
-    ['standard', 'presetStandardName', 'presetStandardDescription'],
-    ['code', 'presetCodeName', 'presetCodeDescription'],
+    ['harness', 'presetHarnessName', 'presetHarnessDescription'],
     ['minimal', 'presetMinimalName', 'presetMinimalDescription'],
+    // Legacy DSH id → XRK Harness copy
+    ['standard', 'presetHarnessName', 'presetHarnessDescription'],
+    ['code', 'presetCodeName', 'presetCodeDescription'],
     ['cordis', 'presetCordisName', 'presetCordisDescription'],
   ] as const)('localizes the shipped %s preset in English and Chinese', (id, nameKey, descriptionKey) => {
     const preset = { id, trust: 'system' as const, name: 'file name', description: 'file description' }

@@ -533,10 +533,11 @@ describe('Enter semantics', () => {
     expect(idle.steerQueue).not.toHaveBeenCalled()
     expect(idle.sink).not.toHaveBeenCalled()
 
-    // Plain Enter never steers the queue, even under the busy Steer preference.
+    // Plain Enter with an empty draft also steers the whole queue while busy
+    // (same as Cmd/Ctrl+Enter); previously it was a silent no-op.
     const plain = bench({ running: true, busyEnter: 'steer', queue: [row('q-1')], steerQueue: vi.fn() })
     fireEvent.keyDown(plain.textarea, { key: 'Enter' })
-    expect(plain.steerQueue).not.toHaveBeenCalled()
+    expect(plain.steerQueue).toHaveBeenCalledTimes(1)
     expect(plain.sink).not.toHaveBeenCalled()
 
     // Subagent sessions keep the queue transport (no steering face).

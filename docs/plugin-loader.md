@@ -2,7 +2,9 @@
 
 > **读者**：贡献者 · 维护者。
 
-进程内插件登记与目录发现（`@xrkseek/server-loader`）。新 Host 能力优先做成插件贡献，再由 preset / Host 接线。
+在 XRK-Harness 上扩展能力，优先做成插件贡献，再由 preset / Host 接线。
+
+**怎么写、怎么试跑**（最小目录 · CLI · 工作区种子）：[plugin-development.md](./plugin-development.md)。
 
 ## 两层插件
 

@@ -109,12 +109,12 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     throw new Error(`unknown command: ${first}`);
   }
 
-  // `plugin` owns the rest of argv (add/remove/list/path + specs).
+  // `plugin` owns the rest of argv (subcommand + specs).
   if (command === "plugin") {
     return emptyArgs({ command: "plugin", pluginArgv: args });
   }
 
-  /** Product Host (`web`/`serve`) defaults to harness tools; `run` stays minimal for smoke. */
+  /** Product Host (`web`/`serve`/`restart`) defaults to harness tools; `run` stays minimal for smoke. */
   let preset =
     command === "serve" || command === "restart" ? "harness" : "minimal";
   let promptFromFlag: string | undefined;
@@ -276,20 +276,24 @@ Commands:
   run           One turn (default: minimal + replay; XRK_LLM_PRESET if set)
   serve         HTTP host + product UI (apps/web/dist)
   web           Alias for serve
-  restart       Free the listen port, then serve (same flags as web)
+  restart       Stop the previous XRK Host on this port (pid lock), then serve
   plugin        Install / remove / list user plugins (~/.xrk/plugins)
   doctor        Check node / workspace / product shell
   dump-config   Print layered config JSON
   help          Show this help
 
 Options:
-  --preset <id>       Preset id (minimal|harness|server; web/serve default: harness; run default: minimal)
+  --preset <id>       Preset id (minimal|harness|server)
+                        · web/serve/restart default: harness (XRK Harness tools)
+                        · run default: minimal
+                        · server = Host factory name; tools same as harness
   --prompt <text>     User prompt for run (or positional tokens)
   --workspace <path>  User workspace (default: cwd)
   --host <addr>       Bind host (default: 127.0.0.1; not 0.0.0.0)
   --port <n>          Bind port (default: 8787; 0 = OS pick)
   --open              Open the product UI in the system browser
-  --force             Kill whatever is already listening on --port (OpenClaw-style)
+  --force             Stop a verified XRK Host on --port before bind
+                        (refuses to kill non-XRK listeners)
   --verbose, -v       Debug logs (HTTP /api access + MCP detail)
   --quiet, -q         Warn/error only
   --no-persist        In-memory sessions (default: ~/.xrk/sessions)
@@ -304,11 +308,10 @@ Env:
   XRK_PLUGINS_DIR           Plugin root (default: ~/.xrk/plugins when present)
 
 Examples:
-  xrk-harness serve --preset harness
-  xrk-harness web --port 8080 --open --verbose
-  xrk-harness web --force
-  xrk-harness restart --workspace .
-  xrk-harness plugin add @huanlin/dsh-plugin-spur
+  xrk-harness web --workspace .
+  xrk-harness restart --port 8787
+  xrk-harness web --force --verbose
+  xrk-harness plugin add ./extensions/example-tools
   xrk-harness plugin list
   xrk-harness run --preset minimal "ping"
 `;

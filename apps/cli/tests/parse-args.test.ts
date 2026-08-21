@@ -43,6 +43,8 @@ describe("cli parseArgs", () => {
     expect(parseArgs(["run", "hi"]).preset).toBe("minimal");
     expect(parseArgs(["serve"]).preset).toBe("harness");
     expect(parseArgs(["restart"]).preset).toBe("harness");
+    expect(parseArgs(["restart"]).command).toBe("restart");
+    expect(parseArgs(["restart"]).force).toBe(false);
     expect(parseArgs(["web", "--preset", "minimal"]).preset).toBe("minimal");
   });
 
@@ -62,12 +64,16 @@ describe("cli parseArgs", () => {
     expect(a.host).toBe("127.0.0.1");
   });
 
-  it("parses --force --verbose and restart", () => {
-    const a = parseArgs(["restart", "--force", "--verbose", "--port", "8799"]);
-    expect(a.command).toBe("restart");
-    expect(a.force).toBe(true);
-    expect(a.verbose).toBe(true);
-    expect(a.port).toBe(8799);
+  it("parses restart as its own command; --force stays optional", () => {
+    const soft = parseArgs(["restart", "--verbose", "--port", "8799"]);
+    expect(soft.command).toBe("restart");
+    expect(soft.force).toBe(false);
+    expect(soft.verbose).toBe(true);
+    expect(soft.port).toBe(8799);
+
+    const hard = parseArgs(["web", "--force", "--port", "8799"]);
+    expect(hard.command).toBe("serve");
+    expect(hard.force).toBe(true);
   });
 
   it("parses plugin and keeps remaining argv", () => {

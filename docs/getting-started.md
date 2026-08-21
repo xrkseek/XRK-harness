@@ -58,10 +58,9 @@ node apps/cli/dist/bin.js web --workspace .
 
 | 命令 | 作用 |
 |------|------|
-| `web` / `serve` | 起 Host + 产品壳 |
-| `web --verbose` | 多打 `/api` 访问与 MCP 细节 |
-| `web --force` | 先杀掉占用端口的进程再监听（对标 OpenClaw `--force`） |
-| `restart` | 释放端口后重新 `serve`（同 flags） |
+| `web` / `serve` | 起 Host + 产品壳（默认徽章 **XRK Harness**） |
+| `restart` | 停先前的 XRK Host（pid 锁）再起；不杀陌生进程 |
+| `web --force` | 只停已识别为 XRK Host 的监听；非 XRK 占用则报错 |
 
 `serve`/`web` 缺 `apps/web/dist` 时会自动跑上述三步组装；打发行版：`pnpm release:stage` / `pnpm release`。
 
