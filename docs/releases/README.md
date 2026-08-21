@@ -6,6 +6,7 @@
 
 | 版本 | 摘要 |
 |------|------|
+| [v0.0.11](./v0.0.11.md) | 成熟 restart · xrk-harness 种子 · 双工具面文案 |
 | [v0.0.10](./v0.0.10.md) | 修复 web/serve 关停刷屏与 close 监听器泄漏 |
 | [v0.0.9](./v0.0.9.md) | 修复同 turn inject 挤掉对话（messageId） |
 | [v0.0.8](./v0.0.8.md) | 持久工作区注入 · skills/笔记分层 · PTY sess_ 提示 |
