@@ -22,7 +22,7 @@
 | `@xrkseek/mcp` | [mcp.md](./mcp.md) | [policy.md](../policy.md) |
 | `@xrkseek/attachment` | [attachment.md](./attachment.md) | [protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) |
 
-## 全包索引（33）
+## 全包索引（37）
 
 路径相对 `packages/`。未单列笔记的包以 README + `src/index.ts` 为准。
 

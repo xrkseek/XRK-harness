@@ -36,7 +36,7 @@ Face 默认单元（`packages/server/face/src/projections/units`）一律带 `wi
 | `snapshot` | 一致切面：wired + sidecar；`asOfSeq` = 日志长度（空为 `-1`） |
 | `stateOf` | 借读 host 态；未注册 → `undefined` |
 | `checkpoint` | 全部单元状态（含 host-only），供缓存写侧 |
-| `restoreFloor` · `viewCheckpoint` · `restore` | DSH 冷读阶梯（无 cache 包时仍可单测 / 将来接线） |
+| `restoreFloor` · `viewCheckpoint` · `restore` | DSH 冷读阶梯（缝上可用；本仓无持久 cache 包） |
 | `setSidecar` | Host 叠加（如 `goal`） |
 
 Face 封装：`createFaceProjectionRegistry` ≡ `createSessionProjectionRegistry`。

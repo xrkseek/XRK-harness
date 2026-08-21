@@ -24,14 +24,21 @@ const PI_AI_PROTOCOLS = [
   "gemini-generate",
 ] as const;
 
-export const DEFAULT_DEEPSEEK_MODELS = [
+export const DEFAULT_DEEPSEEK_MODELS: ReadonlyArray<{
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly contextWindow: number;
+  readonly maxTokens: number;
+  readonly inputModalities: Array<"text" | "image">;
+}> = [
   {
     id: "deepseek-v4-flash",
     name: "DeepSeek V4 Flash",
     description: "",
     contextWindow: 1_000_000,
     maxTokens: 384_000,
-    inputModalities: ["text"] as const,
+    inputModalities: ["text"],
   },
   {
     id: "deepseek-v4-pro",
@@ -39,7 +46,7 @@ export const DEFAULT_DEEPSEEK_MODELS = [
     description: "",
     contextWindow: 1_000_000,
     maxTokens: 384_000,
-    inputModalities: ["text"] as const,
+    inputModalities: ["text"],
   },
   {
     id: "deepseek-v4-flash-vision-exp",
@@ -47,9 +54,9 @@ export const DEFAULT_DEEPSEEK_MODELS = [
     description: "",
     contextWindow: 1_000_000,
     maxTokens: 384_000,
-    inputModalities: ["text", "image"] as const,
+    inputModalities: ["text", "image"],
   },
-] as const;
+];
 
 const DeepSeekConfig = Schema.object({
   apiKeyEnv: Schema.string().role("credential-ref"),

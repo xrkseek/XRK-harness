@@ -61,6 +61,7 @@ XRK-harness/
 ├── packages/
 │   ├── client/              # 壳客户端包（与 apps/web 成对）
 │   ├── kernel/ · protocol/ · compose/
+│   ├── session/session-projection/  # 投影状态/视图缝
 │   ├── core/{agent,agent-loop,tools,session,system-prompt}/
 │   ├── llm/{llm,openai-compatible,deepseek,replay,registry}/
 │   ├── mcp/ · attachment/
@@ -81,4 +82,4 @@ XRK-harness/
 
 Host agent-cache：根会话 Scope `agent:{id}`；Face 已登记父会话的子会话走 `openSubagentRealm`（`subagent:{id}`）。
 
-Face 接线：`packages/server/face/src/wire/`。产品壳源码 `apps/web` + `packages/client`；serve 托管 `apps/web/dist`（先 `web:build` + `client:bundle` + `web:assemble`）。`apps/console` 仅作 Face 验证台。
+Face 接线：`packages/server/face/src/wire/`。投影驱动：`@xrkseek/session-projection`（Face `projections/` 载体）。产品壳源码 `apps/web` + `packages/client`；serve 托管 `apps/web/dist`（先 `web:build` + `client:bundle` + `web:assemble`）。`apps/console` 仅作 Face 验证台。

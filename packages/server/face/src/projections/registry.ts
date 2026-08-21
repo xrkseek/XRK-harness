@@ -7,12 +7,6 @@ import type { ImageAttachmentLimits } from "@xrkseek/attachment";
 import type { PlanProjection, TodoItem } from "@xrkseek/protocol";
 import {
   createSessionProjectionRegistry,
-  type ProjectionChangeListener,
-  type ProjectionCheckpoint,
-  type ProjectionCheckpointRow,
-  type ProjectionDefinition,
-  type ProjectionSnapshot,
-  type ProjectionWire,
   type SessionProjectionRegistry,
   type SessionProjectionRegistryOptions,
 } from "@xrkseek/session-projection";
@@ -85,6 +79,8 @@ export interface SessionListMetadata {
 }
 
 declare module "@xrkseek/session-projection" {
+  // Face default unit keys (empty body is intentional merge).
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- declaration merge
   interface SessionProjectionMap extends FaceProjectionMap {}
 }
 

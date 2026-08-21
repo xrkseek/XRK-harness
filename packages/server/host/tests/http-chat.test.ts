@@ -4,16 +4,14 @@ import { createMinimalComposition } from "@xrkseek/preset-minimal";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { loadHostConfig } from "@xrkseek/server-config";
 import { createHostManager } from "../src/index.js";
+import { isolatedHostEnv, withIsolatedXrkHome } from "./helpers/isolated-xrk-home.js";
 
 describe("host http chat", () => {
   it("serves health + authenticated chat with replay", async () => {
+    await withIsolatedXrkHome(async (xrkHome) => {
     const manager = createHostManager();
     const config = loadHostConfig({
-      env: {
-        XRK_API_KEY: "test-key",
-        XRK_HOST: "127.0.0.1",
-        XRK_PORT: "0",
-      },
+      env: isolatedHostEnv(xrkHome, { XRK_API_KEY: "test-key" }),
       patch: { workspaceRoot: process.cwd() },
     });
 
@@ -56,16 +54,14 @@ describe("host http chat", () => {
     expect(body.sessionId).toBeTruthy();
 
     await manager.stopAll();
+    });
   });
 
   it("newSession + admit-only + turn resume", async () => {
+    await withIsolatedXrkHome(async (xrkHome) => {
     const manager = createHostManager();
     const config = loadHostConfig({
-      env: {
-        XRK_API_KEY: "test-key",
-        XRK_HOST: "127.0.0.1",
-        XRK_PORT: "0",
-      },
+      env: isolatedHostEnv(xrkHome, { XRK_API_KEY: "test-key" }),
       patch: { workspaceRoot: process.cwd() },
     });
 
@@ -117,16 +113,14 @@ describe("host http chat", () => {
     expect(turnBody.admitId).toBe(admitBody.admitId);
 
     await manager.stopAll();
+    });
   });
 
   it("admit wake schedules drain without blocking", async () => {
+    await withIsolatedXrkHome(async (xrkHome) => {
     const manager = createHostManager();
     const config = loadHostConfig({
-      env: {
-        XRK_API_KEY: "test-key",
-        XRK_HOST: "127.0.0.1",
-        XRK_PORT: "0",
-      },
+      env: isolatedHostEnv(xrkHome, { XRK_API_KEY: "test-key" }),
       patch: { workspaceRoot: process.cwd() },
     });
 
@@ -178,16 +172,14 @@ describe("host http chat", () => {
     ).toBe(true);
 
     await manager.stopAll();
+    });
   });
 
   it("admit delivery=steer promotes ahead of older queue", async () => {
+    await withIsolatedXrkHome(async (xrkHome) => {
     const manager = createHostManager();
     const config = loadHostConfig({
-      env: {
-        XRK_API_KEY: "test-key",
-        XRK_HOST: "127.0.0.1",
-        XRK_PORT: "0",
-      },
+      env: isolatedHostEnv(xrkHome, { XRK_API_KEY: "test-key" }),
       patch: { workspaceRoot: process.cwd() },
     });
 
@@ -258,21 +250,21 @@ describe("host http chat", () => {
     ).toBe(true);
 
     await manager.stopAll();
+    });
   });
 
   it("loads pluginsDir and wires tools into agent registry", async () => {
+    await withIsolatedXrkHome(async (xrkHome) => {
     const extRoot = path.resolve(
       import.meta.dirname,
       "../../../../extensions",
     );
     const manager = createHostManager();
     const config = loadHostConfig({
-      env: {
+      env: isolatedHostEnv(xrkHome, {
         XRK_API_KEY: "",
-        XRK_HOST: "127.0.0.1",
-        XRK_PORT: "0",
         XRK_PLUGINS_DIR: extRoot,
-      },
+      }),
       patch: { workspaceRoot: process.cwd() },
     });
 
@@ -313,5 +305,6 @@ describe("host http chat", () => {
 
     await manager.stopAll();
     expect(instance.loader.list()).toEqual([]);
+    });
   });
 });

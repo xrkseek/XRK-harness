@@ -35,7 +35,6 @@ import {
   type FaceModelSelection,
 } from "../model-catalog.js";
 import {
-  FaceLlmResolveError,
   liveRouteAllowsImageInput,
   resolveLlmForSelection,
 } from "../llm-resolve.js";

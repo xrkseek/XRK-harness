@@ -6,16 +6,18 @@ import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { createServerAgentFactory } from "@xrkseek/preset-server";
 import { loadHostConfig } from "@xrkseek/server-config";
 import { createHostManager } from "../src/index.js";
+import { isolatedHostEnv, withIsolatedXrkHome } from "./helpers/isolated-xrk-home.js";
 
 describe("host session cwd wiring", () => {
   it("host spawn passes per-session cwd into agent factory", async () => {
+    await withIsolatedXrkHome(async (xrkHome) => {
     const hostRoot = await mkdtemp(path.join(tmpdir(), "xrk-host-root-"));
     const projectRoot = await mkdtemp(path.join(tmpdir(), "xrk-project-"));
     await mkdir(path.join(projectRoot, ".xrk"), { recursive: true });
 
     const manager = createHostManager();
     const config = loadHostConfig({
-      env: { XRK_HOST: "127.0.0.1", XRK_PORT: "0" },
+      env: isolatedHostEnv(xrkHome),
       patch: { workspaceRoot: hostRoot, preset: "minimal" },
     });
     const roots: string[] = [];
@@ -74,5 +76,6 @@ describe("host session cwd wiring", () => {
     expect(roots).toContain(path.resolve(projectRoot));
 
     await instance.stop();
+    });
   });
 });

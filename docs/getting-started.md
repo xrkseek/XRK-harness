@@ -38,7 +38,7 @@ npx @xrkseek/harness-cli web
 | 3 | 接真模型：Settings → Models / Credentials，或见下文「接真模型」 |
 | 4 | 可选装用户插件：`xrk-harness plugin add <包名>`（落到 `~/.xrk/plugins`；装完重启 `web`） |
 
-Registry / 安装见根 [README](../README.md)；维护者发版见 [publishing.md](./publishing.md)。
+Registry / 安装见根 [README](../README.md)。版本说明：[releases/](./releases/)。
 
 ---
 

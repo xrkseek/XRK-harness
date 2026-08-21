@@ -90,7 +90,7 @@ function resolveClientJs(
     (typeof clientExport?.default === "string" && clientExport.default) ||
     (typeof clientExport?.import === "string" && clientExport.import) ||
     (typeof exportsField?.["./client"] === "string"
-      ? (exportsField["./client"] as string)
+      ? (exportsField["./client"])
       : undefined);
   if (def) {
     const abs = path.resolve(root, def);

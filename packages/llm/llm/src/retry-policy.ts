@@ -43,7 +43,7 @@ function errorCode(err: unknown): string | undefined {
     err &&
     typeof err === "object" &&
     "code" in err &&
-    typeof (err as { code: unknown }).code === "string"
+    typeof (err).code === "string"
   ) {
     return (err as { code: string }).code;
   }

@@ -274,9 +274,9 @@ function normalizeSearchConfig(
     "XRK_WEB_SEARCH_REGION" in value ||
     "XRK_PARALLEL_FREE_MCP_URL" in value
   ) {
-    return searchConfigFromEnv(value as NodeJS.ProcessEnv);
+    return searchConfigFromEnv(value);
   }
-  return value as SearchAccessConfig;
+  return value;
 }
 
 /**

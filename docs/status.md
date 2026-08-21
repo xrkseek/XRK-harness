@@ -11,7 +11,8 @@
 | 域 | 包 / 入口 | 规格 |
 | --- | --- | --- |
 | Kernel / Compose C0·C1·C2 | `@xrkseek/kernel` · `@xrkseek/compose`；Host 子会话 `openSubagentRealm` | [architecture](./architecture.md) · [compose](./compose.md) · [ADR-0005](./adr/0005-compose-leaf.md) |
-| Session / Agent / Loop / Tools | `core-*`（`createPersistentSessionStore` SQLite + `XRK_SESSIONS_DIR`） | [session.md](./session.md) · [tool-pipeline.md](./tool-pipeline.md) |
+| Session / Agent / Loop / Tools | `core-*`（`createPersistentSessionStore` SQLite + `XRK_SESSIONS_DIR`） | [session.md](./session.md) · [tool-pipeline.md](./tool-pipeline.md) · [tool-settlement.md](./tool-settlement.md) |
+| Session 投影（状态/视图） | `@xrkseek/session-projection`；Face 默认单元 + mux / history | [modules/session-projection.md](./modules/session-projection.md) · [host-face.md](./host-face.md) |
 | Exec / Workspace / Policy | `exec-*`（`web_*` · `lsp` · **`terminal_*`**）· `workspace`（inject · recipes · skill）· `policy` | [seams.md](./seams.md) · [web-tools.md](./web-tools.md) · [lsp-tools.md](./lsp-tools.md) · [pty-tools.md](./pty-tools.md) · [workspace-inject.md](./workspace-inject.md) · [slash-recipes.md](./slash-recipes.md) · [policy.md](./policy.md) |
 | Jobs | `job_list` / `job_output` / `job_kill` · `pty-send` · Face settle 通知 · Host 共享 + session 隔离 | [shell-jobs.md](./shell-jobs.md) |
 | HTTP + Host + Face 主路径 | `server-*`（产品 boot 省略 Cordis UI/HMR；工具卡 · `session/jobs` · standing 冷 history；`ask_user`；`/permission` · `/plan` · `/compact` · `/export` · `/feedback`） | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
@@ -28,7 +29,7 @@
 | --- | --- | --- |
 | **A — 能用** | `npx @xrkseek/harness-cli` 或源码 `build` + 组装壳后 `web`/`run` | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
 | **B — 浏览器硬刷** | `pnpm test:web`（不进 `pnpm check`） | Chromium；完整 `apps/web/dist` |
-| **C — 上架** | GitHub Release + Packages（`@xrkseek/harness-cli`） | `pnpm release`；见 [publishing.md](./publishing.md) |
+| **C — 上架** | npmjs + GitHub Release（`@xrkseek/harness-cli`） | `pnpm release`；见 [publishing.md](./publishing.md) |
 
 入门：[getting-started.md](./getting-started.md) · 配置：[configuration.md](./configuration.md) · 排障：[troubleshooting.md](./troubleshooting.md)。
 

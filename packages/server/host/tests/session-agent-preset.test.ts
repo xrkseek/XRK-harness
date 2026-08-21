@@ -8,13 +8,15 @@ import { createServerAgentFactory } from "@xrkseek/preset-server";
 import { resolveToolPreset } from "@xrkseek/server-face";
 import { loadHostConfig } from "@xrkseek/server-config";
 import { createHostManager, type AgentFactory } from "../src/index.js";
+import { isolatedHostEnv, withIsolatedXrkHome } from "./helpers/isolated-xrk-home.js";
 
 describe("host session agentPreset → tool composition", () => {
   it("session agentPreset harness gets web_search even when Host --preset is minimal", async () => {
+    await withIsolatedXrkHome(async (xrkHome) => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-host-preset-"));
     const manager = createHostManager();
     const config = loadHostConfig({
-      env: { XRK_HOST: "127.0.0.1", XRK_PORT: "0" },
+      env: isolatedHostEnv(xrkHome),
       patch: { workspaceRoot: dir, preset: "minimal" },
     });
 
@@ -83,6 +85,7 @@ describe("host session agentPreset → tool composition", () => {
     expect(seen[0]?.tools).toContain("bash");
 
     await manager.stopAll();
+    });
   });
 });
 

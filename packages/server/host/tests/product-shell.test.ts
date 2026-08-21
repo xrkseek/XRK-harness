@@ -6,6 +6,7 @@ import { createMinimalComposition } from "@xrkseek/preset-minimal";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { loadHostConfig } from "@xrkseek/server-config";
 import { createHostManager } from "../src/index.js";
+import { isolatedHostEnv, withIsolatedXrkHome } from "./helpers/isolated-xrk-home.js";
 
 const WEB_DIST = path.resolve(process.cwd(), "apps", "web", "dist");
 const HAS_SHELL = existsSync(path.join(WEB_DIST, "index.html"));
@@ -31,13 +32,10 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
   it(
     "serves apps/web/dist + boot inject + first-paint RPCs",
     async () => {
+    await withIsolatedXrkHome(async (xrkHome) => {
     const manager = createHostManager();
     const config = loadHostConfig({
-      env: {
-        XRK_API_KEY: "",
-        XRK_HOST: "127.0.0.1",
-        XRK_PORT: "0",
-      },
+      env: isolatedHostEnv(xrkHome, { XRK_API_KEY: "" }),
       patch: {
         workspaceRoot: process.cwd(),
         webDist: WEB_DIST,
@@ -161,6 +159,7 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
     } finally {
       await manager.stopAll();
     }
+    });
   },
   20_000,
 );

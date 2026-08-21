@@ -41,7 +41,8 @@ export type TurnEndReason =
 /** Coerce `AbortSignal.reason` / unknown into a durable cancel cause. */
 export function parseTurnEndCancelCause(raw: unknown): TurnEndCancelCause {
   if (raw !== null && typeof raw === "object" && "kind" in raw) {
-    const kind = (raw as { kind: unknown }).kind;
+    const rec = raw as { kind?: unknown; reason?: unknown };
+    const kind = rec.kind;
     if (
       kind === "user" ||
       kind === "parent" ||
@@ -50,11 +51,8 @@ export function parseTurnEndCancelCause(raw: unknown): TurnEndCancelCause {
     ) {
       return { kind };
     }
-    if (
-      kind === "hook" &&
-      typeof (raw as { reason?: unknown }).reason === "string"
-    ) {
-      return { kind: "hook", reason: (raw as { reason: string }).reason };
+    if (kind === "hook" && typeof rec.reason === "string") {
+      return { kind: "hook", reason: rec.reason };
     }
   }
   return { kind: "legacy" };
