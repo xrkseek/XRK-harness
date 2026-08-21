@@ -44,6 +44,7 @@
 
 | 域 | 说明 |
 | --- | --- |
+| DSH 工具 API 薄缺口 | `ToolExecuteExtras.concludeTurn()` 回调（成功路径已支持返回 `concludesTurn`）；标准工具默认结轮策略未铺开 |
 | DSH 插件长尾 | Cordis scaffold 全家桶、Cordis remote-event inspect/run、真 Win process-inspector、client 整包 resync、Azure deployment / Ollama 原生协议等 —— 对照笔记进 Canvas，不写成产品路线 |
 
 ## 依赖纪律
