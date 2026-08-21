@@ -242,4 +242,32 @@ describe("http without webStatic", () => {
     expect(res.status).toBe(404);
     await http.close();
   });
+
+  it("close is idempotent (no stacked Server close listeners)", async () => {
+    const store = createMemorySessionStore();
+    newSession(store);
+    const http = createHttpServer({
+      host: "127.0.0.1",
+      port: 0,
+      apiKey: "",
+      corsOrigin: "*",
+      rateLimitPerMinute: 1000,
+      store,
+      ensureSession: (id) => id ?? store.list()[0]!,
+      resolveAgent: async (sessionId) =>
+        createMinimalComposition({
+          workspaceRoot: process.cwd(),
+          sessionStore: store,
+          sessionId,
+          assemble: true,
+          llm: createReplayAdapter([{ content: "x" }]),
+        }).createAgent(),
+    });
+    await http.listen();
+    const first = http.close();
+    const second = http.close();
+    expect(second).toBe(first);
+    await first;
+    await second;
+  });
 });

@@ -535,6 +535,7 @@ export function createHttpServer(
   });
 
   const extrasCloser = options.attachExtras?.(server);
+  let closing: Promise<void> | undefined;
 
   return {
     server,
@@ -552,14 +553,20 @@ export function createHttpServer(
       });
     },
     close() {
-      return new Promise((resolve, reject) => {
+      if (closing) return closing;
+      closing = new Promise((resolve, reject) => {
         for (const set of eventSubs.values()) {
           for (const res of set) res.end();
         }
         eventSubs.clear();
         extrasCloser?.close();
+        // Open SSE / keep-alive / WS upgrades otherwise block server.close.
+        if (typeof server.closeAllConnections === "function") {
+          server.closeAllConnections();
+        }
         server.close((err) => (err ? reject(err) : resolve()));
       });
+      return closing;
     },
   };
 }
