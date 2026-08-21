@@ -132,7 +132,7 @@ export function renderList(
 }
 
 export const PTY_PROMPT_TEXT =
-  "Use a terminal session only when work needs persistent terminal state or interactive stdin; prefer shell/read/write/edit for bounded one-shot operations. Track every terminal session id and close sessions that no longer matter. An inferred_idle or timeout result does not prove the foreground command exited. Use run_in_background on terminal_send for fire-and-forget; collect with job_output or stop with job_kill.";
+  "Use a terminal session only when work needs persistent terminal state or interactive stdin; prefer shell/read/write/edit for bounded one-shot operations. Terminal ids look like `pty-1` from terminal_open / terminal_list — never reuse the chat session id (`sess_…`) from the volatile block. Track every terminal session id and close sessions that no longer matter. An inferred_idle or timeout result does not prove the foreground command exited. Use run_in_background on terminal_send for fire-and-forget; collect with job_output or stop with job_kill.";
 
 export function presentOpenCall(args: {
   type?: string;

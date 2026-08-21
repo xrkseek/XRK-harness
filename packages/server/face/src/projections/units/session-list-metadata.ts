@@ -1,4 +1,5 @@
 import type { SessionEvent } from "@xrkseek/protocol";
+import { isHumanUserMessageSource } from "@xrkseek/protocol";
 import type {
   ProjectionDefinition,
   SessionListMetadata,
@@ -16,7 +17,10 @@ export function createSessionListMetadataUnit(): ProjectionDefinition<
     apply(state, event: SessionEvent): SessionListMetadata {
       const blank = state.blank && event.type !== "turn/start";
       const lastPromptAt =
-        event.type === "user/message" ? event.ts : state.lastPromptAt;
+        event.type === "user/message" &&
+        isHumanUserMessageSource(event.source)
+          ? event.ts
+          : state.lastPromptAt;
       if (blank === state.blank && lastPromptAt === state.lastPromptAt) {
         return state;
       }

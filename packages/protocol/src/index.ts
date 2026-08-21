@@ -30,6 +30,7 @@ export {
   isSessionEvent,
   isPromptDelivery,
   parsePromptDelivery,
+  isHumanUserMessageSource,
   type ApprovalAskedEvent,
   type ApprovalDecidedEvent,
   type ApprovalDecisionSource,
@@ -77,6 +78,8 @@ export {
   type AgentCancelCause,
   type TurnStartEvent,
   type UserMessageEvent,
+  type UserMessageSource,
+  type WorkspaceBudgetTruncation,
 } from "./session-events.js";
 export { parseTurnEndCancelCause } from "./session-events.js";
 export {

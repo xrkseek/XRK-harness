@@ -47,7 +47,7 @@ Host vs Session 平面：[host-preset.md](./host-preset.md)。
 | `workspaceRoot` | 必填 | 工作区根 |
 | `llm` | replay 固定文案 | 实现 `LlmAdapter`；生产可用 openai-compatible / `createDeepSeekAdapter` |
 | `assemble` | `true` | 三层消息；`false` 则仅扁平 system |
-| `workspaceInject` | 随 assemble 开启 | `.xrk` → `workspaceBlocks`；`false` 关闭 |
+| `workspaceInject` | 随 assemble 开启 | `.xrk` → 持久 `user/message`（skill-catalog · agent-instructions）；`false` 关闭 |
 | `slashRecipes` | 随 assemble 开启 | `.xrk/recipes` → `/id` expand；`false` 只关 recipe，`/skill-name` 仍展开 |
 | `plugins` | 无 | host `loader.list()` / 显式 `RegisteredPlugin[]` → tools 接线 |
 | `extraTools` | 无 | 显式 ToolDefinition（同名冲突抛错） |

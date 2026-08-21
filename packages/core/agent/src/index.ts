@@ -157,6 +157,13 @@ export interface CreateAgentOptions {
   readonly resolveImage?: LlmChatRequest["resolveImage"];
   /** Optional Face `session/jobs` source (bash background jobs). */
   readonly jobs?: AgentHandle["jobs"];
+  /**
+   * Durable workspace / skill-catalog injects before the human user message.
+   * Forwarded to `runTurn.beforeUserMessage`.
+   */
+  readonly beforeUserMessage?: Parameters<
+    typeof runTurn
+  >[0]["beforeUserMessage"];
 }
 
 function mergeSignals(
@@ -311,6 +318,9 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
               : {}),
             ...(options.resolveImage
               ? { resolveImage: options.resolveImage }
+              : {}),
+            ...(options.beforeUserMessage
+              ? { beforeUserMessage: options.beforeUserMessage }
               : {}),
           });
         } catch (err) {

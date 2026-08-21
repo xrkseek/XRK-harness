@@ -147,6 +147,7 @@ export {
 export {
   createWorkspaceInjector,
   resolveWorkspaceInject,
+  appendWorkspaceInjectsIfChanged,
   createWorkspaceToolOutputPersist,
   applyRecipe,
   parseRecipeYaml,

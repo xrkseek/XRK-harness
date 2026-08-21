@@ -37,7 +37,7 @@ describe("makeHarness", () => {
     expect(h.composition.tools.list().map((t) => t.name)).toContain("run_code");
   });
 
-  it("minimal injects .xrk into assemble system", async () => {
+  it("minimal injects .xrk as durable user messages (not system)", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-inj-"));
     await mkdir(path.join(root, ".xrk"), { recursive: true });
     await writeFile(
@@ -47,11 +47,15 @@ describe("makeHarness", () => {
     );
 
     let systemText = "";
+    let userTexts: string[] = [];
     const llm = {
       id: "cap",
       async chat(req: { messages: readonly { role: string; content: string }[] }) {
         const sys = req.messages.find((m) => m.role === "system");
         systemText = sys?.content ?? "";
+        userTexts = req.messages
+          .filter((m) => m.role === "user")
+          .map((m) => String(m.content));
         return { content: "ok" };
       },
     };
@@ -64,8 +68,18 @@ describe("makeHarness", () => {
     expect(composition.workspace).toBeTruthy();
     const agent = await composition.createAgent();
     await agent.continueTurn({ text: "hi" });
-    expect(systemText).toContain("## Assistant");
-    expect(systemText).toContain("INJECT-MARKER");
+    expect(systemText).not.toContain("INJECT-MARKER");
+    expect(userTexts.some((t) => t.includes("## Assistant"))).toBe(true);
+    expect(userTexts.some((t) => t.includes("INJECT-MARKER"))).toBe(true);
+
+    const events = composition.store.get(composition.sessionId).events;
+    expect(
+      events.some(
+        (e) =>
+          e.type === "user/message" &&
+          e.source?.kind === "agent-instructions",
+      ),
+    ).toBe(true);
   });
 
   it("workspaceInject false skips blocks", async () => {

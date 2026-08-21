@@ -192,7 +192,8 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
         properties: {
           sessionId: {
             type: "string",
-            description: "Terminal session id returned by terminal_open or terminal_list.",
+            description:
+              "PTY id like `pty-1` from terminal_open or terminal_list — not the chat `sess_…` id.",
           },
           text: {
             type: "string",
@@ -308,7 +309,11 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
       parameters: {
         type: "object",
         properties: {
-          sessionId: { type: "string", description: "Terminal session id." },
+          sessionId: {
+            type: "string",
+            description:
+              "PTY id like `pty-1` from terminal_open or terminal_list — not the chat `sess_…` id.",
+          },
           offset: {
             type: "number",
             description: "Newest-relative line offset (default 0).",
@@ -358,7 +363,11 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
       parameters: {
         type: "object",
         properties: {
-          sessionId: { type: "string", description: "Terminal session id." },
+          sessionId: {
+            type: "string",
+            description:
+              "PTY id like `pty-1` from terminal_open or terminal_list — not the chat `sess_…` id.",
+          },
           signal: {
             type: "string",
             enum: [...TERMINAL_SIGNALS],
@@ -399,7 +408,11 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
       parameters: {
         type: "object",
         properties: {
-          sessionId: { type: "string", description: "Terminal session id." },
+          sessionId: {
+            type: "string",
+            description:
+              "PTY id like `pty-1` from terminal_open or terminal_list — not the chat `sess_…` id.",
+          },
         },
         required: ["sessionId"],
       },

@@ -3110,6 +3110,9 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../core/tools
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   presets/harness:
     dependencies:

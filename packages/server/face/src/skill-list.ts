@@ -9,7 +9,7 @@ import { listSkillsFromWorkspace, type SkillSummary } from "@xrkseek/workspace";
 
 export type SkillEntry = Pick<
   SkillSummary,
-  "name" | "description" | "whenToUse" | "modelInvocable"
+  "name" | "description" | "whenToUse" | "modelInvocable" | "userInvocable"
 >;
 
 export { listSkillsFromWorkspace };
@@ -20,6 +20,7 @@ function toEntry(skill: SkillSummary): SkillEntry {
     description: skill.description,
     ...(skill.whenToUse ? { whenToUse: skill.whenToUse } : {}),
     modelInvocable: skill.modelInvocable,
+    userInvocable: skill.userInvocable,
   };
 }
 

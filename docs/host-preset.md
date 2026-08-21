@@ -15,8 +15,9 @@ Presets must not publish conflicting services to a root realm — composition on
 
 ## Workspace inject
 
-By default (when three-layer assemble is on), presets load `{workspace}/.xrk` into
-`assemble.workspaceBlocks`. Opt out with `workspaceInject: false`.
+By default (when three-layer assemble is on), presets append durable workspace
+injects (`skill-catalog` / `agent-instructions` `user/message` rows) at turn
+start. Opt out with `workspaceInject: false`.
 
 Details: [workspace-inject.md](./workspace-inject.md).
 

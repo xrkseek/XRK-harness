@@ -76,16 +76,73 @@ export interface StepEndEvent extends SessionEventBase {
   readonly stepId: string;
 }
 
+/**
+ * Durable producer of a `user/message` (DSH MessageSource subset).
+ * `kind: "user"` (or omit) = human / promoted admit. Other kinds render as
+ * Face「上下文注入」and stay model-visible via `deriveMessages`.
+ */
+export type UserMessageSource =
+  | { readonly kind: "user" }
+  | {
+      readonly kind: "skill-catalog";
+      readonly form: "catalog";
+      readonly entries: readonly {
+        readonly name: string;
+        readonly description: string;
+      }[];
+      /** True when this row replaces a prior catalog (digest change). */
+      readonly update?: boolean;
+      /** Stable digest of the model-facing catalog body (Host change detection). */
+      readonly digest?: string;
+      readonly budgetTruncations?: readonly WorkspaceBudgetTruncation[];
+    }
+  | {
+      readonly kind: "agent-instructions";
+      readonly form: "instructions";
+      readonly changes: readonly {
+        readonly action: "set" | "merge" | "clear";
+        readonly path?: string;
+      }[];
+      readonly digest?: string;
+      readonly budgetTruncations?: readonly WorkspaceBudgetTruncation[];
+    }
+  | {
+      readonly kind: "plugin";
+      readonly plugin?: string;
+      readonly form?: string;
+      readonly [key: string]: unknown;
+    };
+
+/** Budget clip recorded on durable workspace injects (was inject-result-only). */
+export interface WorkspaceBudgetTruncation {
+  readonly section: string;
+  readonly originalChars: number;
+  readonly keptChars: number;
+}
+
 export interface UserMessageEvent extends SessionEventBase {
   readonly type: "user/message";
   readonly turnId: string;
   /** Plain string (legacy) or ContentBlock[] (text + image refs). */
   readonly content: MessageContent;
   /**
+   * Producer of this message. Omit or `{ kind: "user" }` for human prompts.
+   * Non-user kinds are durable context injects (skill catalog, workspace
+   * instructions, plugins) — still model-visible.
+   */
+  readonly source?: UserMessageSource;
+  /**
    * Face / client optimism id (echo of unary `rpcId` from `session.prompt`).
    * Ignored by `deriveMessages` — not model-visible.
    */
   readonly rpcId?: string;
+}
+
+/** True when the message is a human / promoted admit (not durable context inject). */
+export function isHumanUserMessageSource(
+  source: UserMessageSource | undefined,
+): boolean {
+  return source === undefined || source.kind === "user";
 }
 
 export interface AssistantChunkEvent extends SessionEventBase {

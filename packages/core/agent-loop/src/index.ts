@@ -146,6 +146,17 @@ export interface RunTurnInput {
    * SERVER / TIMEOUT / TRANSPORT. Pass `false` to disable.
    */
   readonly llmRetry?: false | Partial<ResolvedRetryPolicy>;
+  /**
+   * After `turn/start`, before the human `user/message`, append durable
+   * context injects (skill catalog / agent-instructions). Presets wire
+   * workspace digest checks here — must not put those into system.
+   */
+  readonly beforeUserMessage?: (ctx: {
+    readonly store: SessionStore;
+    readonly sessionId: string;
+    readonly turnId: string;
+    readonly now: () => number;
+  }) => void | Promise<void>;
 }
 
 export interface RunTurnResult {
@@ -438,6 +449,14 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     ts: now(),
     turnId,
   });
+  if (input.beforeUserMessage) {
+    await input.beforeUserMessage({
+      store: input.store,
+      sessionId: input.sessionId,
+      turnId,
+      now,
+    });
+  }
   append(input.store, input.sessionId, {
     type: "user/message",
     ts: now(),

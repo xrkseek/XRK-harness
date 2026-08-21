@@ -5,6 +5,8 @@ description: >-
   GitHub Release bodies. Use when shipping a version, drafting v*.md, or editing
   publishing release checklist. Enforces DSH-style Added/Improved/Removed/Fixed
   sections; forbids diary voice.
+disable-model-invocation: true
+user-invocable: false
 ---
 
 # 笔记 · 写发行说明

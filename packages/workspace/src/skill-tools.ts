@@ -57,6 +57,12 @@ export function createSkillTools(
             isError: true,
           };
         }
+        if (!skill.modelInvocable) {
+          return {
+            content: `Error: skill "${name}" is not model-invocable (notes / disable-model-invocation)`,
+            isError: true,
+          };
+        }
         return { content: renderSkillContent(skill) };
       },
       presentCall: presentSkillCall,

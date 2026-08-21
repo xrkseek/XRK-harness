@@ -26,7 +26,7 @@
 |----|------|
 | **`~/.xrk`**（`XRK_HOME` / `XRK_DSH_HOME` / `DSH_HOME`） | 用户设置、凭据、会话、工作区列表、MCP desired — 对齐 DSH `~/.dsh` |
 | **`{workspace}/.xrk`** | 可选：项目 assistant / context / rules / recipes；**不强制创建** |
-| **Skills** | 自动导入已存在的 `.claude/skills` · `.cursor/skills` · `.agents/skills` · `.codex/skills` · `.xrk/skills`（及 `~/` 同名路径）；缺则跳过 |
+| **Skills** | 产品 skills：已存在的 `.claude/skills` 等（见 [skills-layers.md](./skills-layers.md)）；笔记 `.cursor/skills` 若标 `disable-model-invocation` 则不进产品 Agent |
 
 | 路径 | 用途 | 入库 |
 |------|------|------|

@@ -38,7 +38,7 @@ HTTP：`createHostManager` + `loadHostConfig` + preset factory — 见 CLI `serv
 | Prompt | `assembleThreeLayers` · `createSystemPromptAssembler` · `createOutboundPipeline` |
 | LLM | `LlmAdapter` · `stream()` · `createReplayAdapter` · `createOpenAiCompatibleAdapter` · `createDeepSeekAdapter` · `collectLlmStream` |
 | Plugins | `createPluginLoader` · `wireCompositionTools` / `Prompts` · `collectPluginCommands` · `PLUGIN_KINDS` |
-| Workspace | `createWorkspaceInjector` · `resolveWorkspaceInject` · `createWorkspaceToolOutputPersist` · recipes · `createSlashResolver` · `createSkillTools` · `listSkillsFromWorkspace` |
+| Workspace | `createWorkspaceInjector` · `resolveWorkspaceInject` · `appendWorkspaceInjectsIfChanged` · `createWorkspaceToolOutputPersist` · recipes · `createSlashResolver` · `createSkillTools` · `listSkillsFromWorkspace` |
 | Policy | `createPolicyEngine` · ruleset file load · `createPolicyToolPre` / `Guard` · `denyToolNames` |
 | MCP | `createMcpClient` · `registerMcpTools` · `publicToolName`（默认 deny；可 watch list_changed） |
 | Presets | `createMinimalComposition` · `createHarnessComposition` · `createServerComposition` / `createServerAgentFactory` |
