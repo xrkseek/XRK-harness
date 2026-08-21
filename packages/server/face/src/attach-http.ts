@@ -181,7 +181,7 @@ export function attachFaceUpgrades(
 ): { close(): void } {
   const muxWss = new WebSocketServer({ noServer: true });
   const hostWss = new WebSocketServer({ noServer: true });
-
+  let closed = false;
   const onUpgrade = (
     req: IncomingMessage,
     socket: import("node:stream").Duplex,
@@ -304,7 +304,23 @@ export function attachFaceUpgrades(
 
   return {
     close() {
+      if (closed) return;
+      closed = true;
       server.off("upgrade", onUpgrade);
+      for (const client of muxWss.clients) {
+        try {
+          client.terminate();
+        } catch {
+          // ignore
+        }
+      }
+      for (const client of hostWss.clients) {
+        try {
+          client.terminate();
+        } catch {
+          // ignore
+        }
+      }
       muxWss.close();
       hostWss.close();
     },
@@ -329,6 +345,7 @@ export function createFaceOnlyServer(
     sendJson(res, 404, { error: "not found" });
   });
   const upgrades = attachFaceUpgrades(server, runtime, options);
+  let closing: Promise<void> | undefined;
   return {
     server,
     async listen() {
@@ -344,10 +361,17 @@ export function createFaceOnlyServer(
       return { host, port: addr.port };
     },
     async close() {
-      upgrades.close();
-      await new Promise<void>((resolve, reject) => {
-        server.close((err) => (err ? reject(err) : resolve()));
-      });
+      if (closing) return closing;
+      closing = (async () => {
+        upgrades.close();
+        if (typeof server.closeAllConnections === "function") {
+          server.closeAllConnections();
+        }
+        await new Promise<void>((resolve, reject) => {
+          server.close((err) => (err ? reject(err) : resolve()));
+        });
+      })();
+      return closing;
     },
   };
 }

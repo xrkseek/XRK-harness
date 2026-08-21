@@ -173,16 +173,36 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     openProductUrl(`${origin}/`, log);
   }
 
-  const shutdown = async () => {
+  /**
+   * Idempotent stop. First Ctrl+C starts teardown; further signals force-exit
+   * so a hung `http.close` (open SSE / WS) cannot spam "shutting down..." or
+   * stack Server `close` listeners (MaxListenersExceededWarning).
+   */
+  let stopState: "running" | "stopping" = "running";
+  const onSignal = (signal: NodeJS.Signals) => {
+    if (stopState === "stopping") {
+      log.warn(`${signal} again — force exit`);
+      process.exit(1);
+      return;
+    }
+    stopState = "stopping";
     log.info("shutting down...");
-    await manager.stopAll();
-    process.exit(0);
+    void manager
+      .stopAll()
+      .then(() => {
+        process.exit(0);
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`shutdown failed: ${message}`);
+        process.exit(1);
+      });
   };
   process.on("SIGINT", () => {
-    void shutdown();
+    onSignal("SIGINT");
   });
   process.on("SIGTERM", () => {
-    void shutdown();
+    onSignal("SIGTERM");
   });
 
   await new Promise(() => {});

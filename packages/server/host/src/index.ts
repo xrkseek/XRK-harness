@@ -812,6 +812,7 @@ export function createHostManager(): HostManager {
       const addr = await http.listen();
       log?.info(`listening ${config.runtime.host}:${addr.port}`);
       let status: HostInstance["status"] = "running";
+      let stopPromise: Promise<void> | undefined;
 
       const instance: HostInstance = {
         id,
@@ -838,30 +839,34 @@ export function createHostManager(): HostManager {
           };
         },
         async stop() {
+          if (stopPromise) return stopPromise;
           status = "stopped";
-          await http.close();
-          await agentCache.dispose();
-          if (sharedShell) {
-            try {
-              await sharedShell.dispose();
-            } catch {
-              // Host stop must continue even if jobs teardown partially fails.
+          stopPromise = (async () => {
+            await http.close();
+            await agentCache.dispose();
+            if (sharedShell) {
+              try {
+                await sharedShell.dispose();
+              } catch {
+                // Host stop must continue even if jobs teardown partially fails.
+              }
             }
-          }
-          if (sharedPty) {
-            try {
-              await sharedPty.service.dispose();
-            } catch {
-              // Host stop must continue even if PTY cleanup partially fails.
+            if (sharedPty) {
+              try {
+                await sharedPty.service.dispose();
+              } catch {
+                // Host stop must continue even if PTY cleanup partially fails.
+              }
             }
-          }
-          if ("close" in store && typeof store.close === "function") {
-            store.close();
-          }
-          for (const p of loader.list()) {
-            await loader.unregister(p.id);
-          }
-          instances.delete(id);
+            if ("close" in store && typeof store.close === "function") {
+              store.close();
+            }
+            for (const p of loader.list()) {
+              await loader.unregister(p.id);
+            }
+            instances.delete(id);
+          })();
+          return stopPromise;
         },
       };
 

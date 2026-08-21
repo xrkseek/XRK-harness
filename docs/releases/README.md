@@ -6,6 +6,7 @@
 
 | 版本 | 摘要 |
 |------|------|
+| [v0.0.10](./v0.0.10.md) | 修复 web/serve 关停刷屏与 close 监听器泄漏 |
 | [v0.0.9](./v0.0.9.md) | 修复同 turn inject 挤掉对话（messageId） |
 | [v0.0.8](./v0.0.8.md) | 持久工作区注入 · skills/笔记分层 · PTY sess_ 提示 |
 | [v0.0.7](./v0.0.7.md) | Agent 结算/重试/取消 · DeepSeek vision-exp · 投影状态/视图分离 |
