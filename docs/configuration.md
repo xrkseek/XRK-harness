@@ -69,8 +69,10 @@ Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-c
 | `XRK_WORKSPACE` | workspace 根 |
 | `XRK_WEB_DIST` | 产品壳静态根。默认：CLI 包内 `product-web/`，或 monorepo `apps/web/dist`。设了则必须已存在 |
 | `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db` · WAL）；Host 省略 = 内存（CLI serve 另有默认） |
-| `XRK_PLUGINS_DIR` | 进程插件根；`web/` 子目录为客户端叠加 |
+| `XRK_PLUGINS_DIR` | 进程插件根；`web/` 子目录为客户端叠加。未设时：若 `{XRK_HOME}/plugins` 已存在（`xrk-harness plugin add` 会创建）则用该目录 |
 | `XRK_DUMP_SESSION` | 非空时 CLI run 向 stderr dump session（示例见 hello-agent） |
+
+用户插件 CLI：`xrk-harness plugin add|remove|list|path`（见 [plugin-loader.md](./plugin-loader.md)）。
 
 Preset 选型：[profiles.md](./profiles.md)。
 
