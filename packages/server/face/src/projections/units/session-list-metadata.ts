@@ -22,21 +22,23 @@ export function createSessionListMetadataUnit(): ProjectionDefinition<
       }
       return { blank, lastPromptAt };
     },
-    view: (state) => state,
-    parse(value: unknown): SessionListMetadata {
-      if (value === null || typeof value !== "object") {
-        throw new Error("sessionListMetadata must be an object");
-      }
-      const v = value as { blank?: unknown; lastPromptAt?: unknown };
-      if (typeof v.blank !== "boolean") {
-        throw new Error("sessionListMetadata.blank must be boolean");
-      }
-      if (
-        !(v.lastPromptAt === null || typeof v.lastPromptAt === "number")
-      ) {
-        throw new Error("sessionListMetadata.lastPromptAt must be number|null");
-      }
-      return { blank: v.blank, lastPromptAt: v.lastPromptAt };
+    wire: {
+      view: (state) => state,
+      parse(value: unknown): SessionListMetadata {
+        if (value === null || typeof value !== "object") {
+          throw new Error("sessionListMetadata must be an object");
+        }
+        const v = value as { blank?: unknown; lastPromptAt?: unknown };
+        if (typeof v.blank !== "boolean") {
+          throw new Error("sessionListMetadata.blank must be boolean");
+        }
+        if (
+          !(v.lastPromptAt === null || typeof v.lastPromptAt === "number")
+        ) {
+          throw new Error("sessionListMetadata.lastPromptAt must be number|null");
+        }
+        return { blank: v.blank, lastPromptAt: v.lastPromptAt };
+      },
     },
   };
 }

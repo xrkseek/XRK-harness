@@ -14,6 +14,7 @@
     { "path": "../../llm/registry" },
     { "path": "../../policy" },
     { "path": "../../protocol" },
+    { "path": "../../session/session-projection" },
     { "path": "../../workspace" }
   ]
 }

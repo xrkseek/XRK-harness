@@ -27,9 +27,9 @@ declare module '@xrkseek/cordis' {
   }
 }
 
-import type { SessionProjectionMap } from './types.ts'
+import type { SessionProjectionMap, SessionProjectionStateMap } from './types.ts'
 
-export type { SessionProjectionMap } from './types.ts'
+export type { SessionProjectionMap, SessionProjectionStateMap } from './types.ts'
 
 /**
  * One domain's state-driven computation unit: three pure synchronous

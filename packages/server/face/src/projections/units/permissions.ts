@@ -26,36 +26,38 @@ export function createPermissionsProjectionUnit(): ProjectionDefinition<
     apply(state, event: SessionEvent): PermissionKnobState {
       return applyPermissionKnobEvent(state, event);
     },
-    view: (state) => derivePermissionSelect(state),
-    parse(value: unknown): PermissionSelect {
-      if (!value || typeof value !== "object") {
-        throw new Error("permissions projection must be PermissionSelect");
-      }
-      const v = value as {
-        options?: unknown;
-        currentValue?: unknown;
-      };
-      if (typeof v.currentValue !== "string" || !Array.isArray(v.options)) {
-        throw new Error("permissions projection shape invalid");
-      }
-      const options: PermissionSelectOption[] = [];
-      for (const row of v.options) {
-        if (!row || typeof row !== "object") {
-          throw new Error("permissions option invalid");
+    wire: {
+      view: (state) => derivePermissionSelect(state),
+      parse(value: unknown): PermissionSelect {
+        if (!value || typeof value !== "object") {
+          throw new Error("permissions projection must be PermissionSelect");
         }
-        const o = row as Record<string, unknown>;
-        if (typeof o.value !== "string" || typeof o.name !== "string") {
-          throw new Error("permissions option invalid");
+        const v = value as {
+          options?: unknown;
+          currentValue?: unknown;
+        };
+        if (typeof v.currentValue !== "string" || !Array.isArray(v.options)) {
+          throw new Error("permissions projection shape invalid");
         }
-        options.push({
-          value: o.value,
-          name: o.name,
-          ...(typeof o.description === "string"
-            ? { description: o.description }
-            : {}),
-        });
-      }
-      return { options, currentValue: v.currentValue };
+        const options: PermissionSelectOption[] = [];
+        for (const row of v.options) {
+          if (!row || typeof row !== "object") {
+            throw new Error("permissions option invalid");
+          }
+          const o = row as Record<string, unknown>;
+          if (typeof o.value !== "string" || typeof o.name !== "string") {
+            throw new Error("permissions option invalid");
+          }
+          options.push({
+            value: o.value,
+            name: o.name,
+            ...(typeof o.description === "string"
+              ? { description: o.description }
+              : {}),
+          });
+        }
+        return { options, currentValue: v.currentValue };
+      },
     },
   };
 }

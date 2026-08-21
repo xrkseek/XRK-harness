@@ -56,29 +56,31 @@ export function createContextBreakdownProjectionUnit(): ProjectionDefinition<
       }
       return { systemTokens, toolsTokens, messageTokens };
     },
-    view: (state) => state,
-    parse(value: unknown): ContextBreakdownProjection {
-      if (!value || typeof value !== "object") {
-        throw new Error("contextBreakdown projection must be an object");
-      }
-      const v = value as Record<string, unknown>;
-      return {
-        systemTokens: asNonNegInt(
-          v.systemTokens,
-          "contextBreakdown",
-          "systemTokens",
-        ),
-        toolsTokens: asNonNegInt(
-          v.toolsTokens,
-          "contextBreakdown",
-          "toolsTokens",
-        ),
-        messageTokens: asNonNegInt(
-          v.messageTokens,
-          "contextBreakdown",
-          "messageTokens",
-        ),
-      };
+    wire: {
+      view: (state) => state,
+      parse(value: unknown): ContextBreakdownProjection {
+        if (!value || typeof value !== "object") {
+          throw new Error("contextBreakdown projection must be an object");
+        }
+        const v = value as Record<string, unknown>;
+        return {
+          systemTokens: asNonNegInt(
+            v.systemTokens,
+            "contextBreakdown",
+            "systemTokens",
+          ),
+          toolsTokens: asNonNegInt(
+            v.toolsTokens,
+            "contextBreakdown",
+            "toolsTokens",
+          ),
+          messageTokens: asNonNegInt(
+            v.messageTokens,
+            "contextBreakdown",
+            "messageTokens",
+          ),
+        };
+      },
     },
   };
 }

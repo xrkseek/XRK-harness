@@ -8,6 +8,7 @@ export {
   type ProjectionCheckpointRow,
   type ProjectionDefinition,
   type ProjectionSnapshot,
+  type ProjectionWire,
   type SessionListMetadata,
 } from "./registry.js";
 export {

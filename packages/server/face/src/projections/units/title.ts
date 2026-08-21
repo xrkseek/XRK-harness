@@ -25,11 +25,13 @@ export function createTitleProjectionUnit(): ProjectionDefinition<
       if (state.title === event.title) return state;
       return { title: event.title, pinned: false };
     },
-    view: (state) => state.title,
-    parse(value: unknown): string | null {
-      if (value === null) return null;
-      if (typeof value === "string") return value;
-      throw new Error("title projection must be string | null");
+    wire: {
+      view: (state) => state.title,
+      parse(value: unknown): string | null {
+        if (value === null) return null;
+        if (typeof value === "string") return value;
+        throw new Error("title projection must be string | null");
+      },
     },
   };
 }

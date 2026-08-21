@@ -24,16 +24,18 @@ export function createPlanProjectionUnit(): ProjectionDefinition<
     apply(state, event: SessionEvent): PlanUnitState {
       return applyPlanUnitEvent(state, event);
     },
-    view: (state) => viewPlanProjection(state),
-    parse(value: unknown): PlanProjection {
-      if (!value || typeof value !== "object") {
-        throw new Error("plan projection must be PlanProjection");
-      }
-      const v = value as { active?: unknown; pending?: unknown };
-      if (typeof v.active !== "boolean" || typeof v.pending !== "boolean") {
-        throw new Error("plan projection shape invalid");
-      }
-      return { active: v.active, pending: v.pending };
+    wire: {
+      view: (state) => viewPlanProjection(state),
+      parse(value: unknown): PlanProjection {
+        if (!value || typeof value !== "object") {
+          throw new Error("plan projection must be PlanProjection");
+        }
+        const v = value as { active?: unknown; pending?: unknown };
+        if (typeof v.active !== "boolean" || typeof v.pending !== "boolean") {
+          throw new Error("plan projection shape invalid");
+        }
+        return { active: v.active, pending: v.pending };
+      },
     },
   };
 }

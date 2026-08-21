@@ -24,6 +24,7 @@
     "@xrkseek/protocol": "workspace:*",
     "@xrkseek/schemastery": "workspace:*",
     "@xrkseek/server-config": "workspace:*",
+    "@xrkseek/session-projection": "workspace:*",
     "@xrkseek/workspace": "workspace:*",
     "js-yaml": "^4.1.0",
     "ws": "^8.18.0"

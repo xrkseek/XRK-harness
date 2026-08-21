@@ -73,6 +73,10 @@ describe("FaceProjectionRegistry", () => {
     });
     registry.drive(session.id, fallback, 2);
     expect(registry.snapshot(session.id).values.title).toBe("Pinned");
+    expect(registry.stateOf(session.id, "title")).toEqual({
+      title: "Pinned",
+      pinned: true,
+    });
   });
 
   it("sessionListMetadata flips blank on turn/start", () => {

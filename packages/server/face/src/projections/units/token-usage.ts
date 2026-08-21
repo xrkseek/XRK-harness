@@ -109,30 +109,32 @@ export function createTokenUsageProjectionUnit(): ProjectionDefinition<
         last: { turnId, stepId, buckets },
       };
     },
-    view: (state) => state.totals,
-    parse(value: unknown): TokenUsageProjection {
-      if (!value || typeof value !== "object") {
-        throw new Error("tokenUsage projection must be an object");
-      }
-      const v = value as Record<string, unknown>;
-      return {
-        uncachedInputTokens: asNonNegInt(
-          v.uncachedInputTokens,
-          "tokenUsage",
-          "uncachedInputTokens",
-        ),
-        outputTokens: asNonNegInt(v.outputTokens, "tokenUsage", "outputTokens"),
-        cacheReadTokens: asNonNegInt(
-          v.cacheReadTokens,
-          "tokenUsage",
-          "cacheReadTokens",
-        ),
-        cacheWriteTokens: asNonNegInt(
-          v.cacheWriteTokens,
-          "tokenUsage",
-          "cacheWriteTokens",
-        ),
-      };
+    wire: {
+      view: (state) => state.totals,
+      parse(value: unknown): TokenUsageProjection {
+        if (!value || typeof value !== "object") {
+          throw new Error("tokenUsage projection must be an object");
+        }
+        const v = value as Record<string, unknown>;
+        return {
+          uncachedInputTokens: asNonNegInt(
+            v.uncachedInputTokens,
+            "tokenUsage",
+            "uncachedInputTokens",
+          ),
+          outputTokens: asNonNegInt(v.outputTokens, "tokenUsage", "outputTokens"),
+          cacheReadTokens: asNonNegInt(
+            v.cacheReadTokens,
+            "tokenUsage",
+            "cacheReadTokens",
+          ),
+          cacheWriteTokens: asNonNegInt(
+            v.cacheWriteTokens,
+            "tokenUsage",
+            "cacheWriteTokens",
+          ),
+        };
+      },
     },
   };
 }

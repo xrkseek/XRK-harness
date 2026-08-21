@@ -84,6 +84,7 @@ export {
   type FaceProjectionMap,
   type FaceProjectionRegistry,
   type ProjectionSnapshot,
+  type ProjectionWire,
   type SessionListMetadata,
 } from "./projections/index.js";
 export {
