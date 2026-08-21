@@ -6,6 +6,7 @@
 
 | 版本 | 摘要 |
 |------|------|
+| [v0.0.6](./v0.0.6.md) | CLI `plugin add/remove/list`：用户插件装到 `~/.xrk/plugins` |
 | [v0.0.5](./v0.0.5.md) | Prompt cache：tools 字典序；同 turn 后续 step 稳定前缀（对齐 DSH） |
 | [v0.0.4](./v0.0.4.md) | Settings 主路径：自定义提供方 · Web search 卡 · MCP Allow/park；`web`/`serve` 默认 harness |
 | [v0.0.3](./v0.0.3.md) | 默认联网搜索级联；bash / agent-loop 进 Agent；工作区绑定持久化 |
