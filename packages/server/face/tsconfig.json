@@ -11,9 +11,11 @@
     { "path": "../../core/agent" },
     { "path": "../../core/session" },
     { "path": "../../core/tools" },
+    { "path": "../../llm/llm" },
     { "path": "../../llm/registry" },
     { "path": "../../policy" },
     { "path": "../../protocol" },
+    { "path": "../config" },
     { "path": "../../session/session-projection" },
     { "path": "../../workspace" }
   ]

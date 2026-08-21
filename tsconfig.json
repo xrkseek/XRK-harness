@@ -27,6 +27,7 @@
     { "path": "packages/policy" },
     { "path": "packages/code-runtime" },
     { "path": "packages/testkit" },
+    { "path": "packages/session/session-projection" },
     { "path": "packages/server/http" },
     { "path": "packages/server/face" },
     { "path": "packages/server/loader" },

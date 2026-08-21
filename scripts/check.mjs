@@ -30,6 +30,7 @@ const LINT_PATHS = [
   "packages/policy",
   "packages/code-runtime",
   "packages/testkit",
+  "packages/session",
   "packages/server",
   "packages/web-runtime",
   "packages/sdk",
@@ -37,13 +38,22 @@ const LINT_PATHS = [
   "apps/cli/src",
 ];
 
-run("npx", ["tsc", "-b", "--pretty", "false"]);
-run("npx", [
+// `pnpm exec` (not `npx tsc`) — npm has an unrelated package named `tsc`.
+run("pnpm", ["exec", "tsc", "-b", "--pretty", "false"]);
+run("pnpm", [
+  "exec",
   "eslint",
   ...LINT_PATHS,
   "--cache",
   "--cache-location",
   ".eslintcache",
 ]);
-run("npx", ["vitest", "run"]);
-run("npx", ["vitest", "run", "--config", "vitest.kernel.config.ts", "--coverage"]);
+run("pnpm", ["exec", "vitest", "run"]);
+run("pnpm", [
+  "exec",
+  "vitest",
+  "run",
+  "--config",
+  "vitest.kernel.config.ts",
+  "--coverage",
+]);
