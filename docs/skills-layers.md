@@ -34,7 +34,7 @@ Cursor 仍可按自己的机制读这些文件；**XRK 运行时**尊重上述 f
 | `subagents.md` | 子代理说明 |
 | `recipes/*.yaml` | `/id` 斜杠配方 |
 
-进 session 的是 **agent-instructions** 注入行，不是 system 大段（保 prompt cache）。详见 [workspace-inject.md](./workspace-inject.md)。
+进 session 的是 **agent-instructions** 注入行，不是 system 大段（保 prompt cache）。每条 inject 与人类 prompt 都有独立 `messageId`（Face `data.id`），同 turn 不会挤掉对话行。详见 [workspace-inject.md](./workspace-inject.md)。
 
 ## 产品 skills（运行时）
 

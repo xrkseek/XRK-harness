@@ -13,7 +13,11 @@ import {
 } from "@xrkseek/llm-registry";
 import type { PolicyEngine } from "@xrkseek/policy";
 import type { SessionEvent } from "@xrkseek/protocol";
-import { flattenText, isHumanUserMessageSource } from "@xrkseek/protocol";
+import {
+  flattenText,
+  isHumanUserMessageSource,
+  newUserMessageId,
+} from "@xrkseek/protocol";
 import { createFaceBus, type FaceBus } from "./bus.js";
 import type { FaceDrain, FaceRuntime } from "./context.js";
 import { createFaceSeqClock, type FaceSeqClock } from "./seq.js";
@@ -353,6 +357,17 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         next = { ...next, rpcId: rpc };
         pendingUserRpc.delete(id);
       }
+    }
+
+    // DSH: every UserMessage has a stable MessageId. Face conversation keys
+    // rows by wire data.id (= messageId); bare turnId collides when durable
+    // injects share a turn with the human prompt.
+    if (
+      next.type === "user/message" &&
+      !replayingLog &&
+      next.messageId === undefined
+    ) {
+      next = { ...next, messageId: newUserMessageId() };
     }
 
     const frozen = originalAppend(id, next);

@@ -14,12 +14,16 @@ function stabilize(events: readonly SessionEvent[]): SessionEvent[] {
     const copy = { ...e } as SessionEvent & {
       turnId?: string;
       stepId?: string;
+      messageId?: string;
     };
     if ("turnId" in copy && typeof copy.turnId === "string") {
       (copy as { turnId: string }).turnId = "turn_fixed";
     }
     if ("stepId" in copy && typeof copy.stepId === "string") {
       (copy as { stepId: string }).stepId = "step_fixed";
+    }
+    if ("messageId" in copy && typeof copy.messageId === "string") {
+      (copy as { messageId: string }).messageId = "umsg_fixed";
     }
     return copy;
   });
@@ -45,7 +49,7 @@ describe("session jsonl snapshot", () => {
     expect(jsonl).toBe(
       [
         '{"type":"turn/start","ts":1,"turnId":"turn_fixed"}',
-        '{"type":"user/message","ts":2,"turnId":"turn_fixed","content":"ping"}',
+        '{"type":"user/message","ts":2,"turnId":"turn_fixed","content":"ping","messageId":"umsg_fixed","source":{"kind":"user"}}',
         '{"type":"step/start","ts":3,"turnId":"turn_fixed","stepId":"step_fixed"}',
         '{"type":"assistant/message","ts":5,"turnId":"turn_fixed","stepId":"step_fixed","content":"pong"}',
         '{"type":"step/end","ts":6,"turnId":"turn_fixed","stepId":"step_fixed"}',

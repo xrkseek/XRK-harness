@@ -15,7 +15,7 @@
 | [modules/session-projection.md](./modules/session-projection.md) | 投影状态/视图缝 · Face mux / history |
 | [tool-settlement.md](./tool-settlement.md) | dangling · 取消码 · 并行 settle · concludesTurn |
 | [http-api.md](./http-api.md) | HTTP 形状 |
-| [workspace-inject.md](./workspace-inject.md) | `.xrk` → durable `user/message` injects（skill-catalog · agent-instructions） |
+| [workspace-inject.md](./workspace-inject.md) | `.xrk` → durable `user/message` injects（`messageId` 唯一；skill-catalog · agent-instructions） |
 | [slash-recipes.md](./slash-recipes.md) | `/recipe-id` · `/skill-name` 展开 |
 | [policy.md](./policy.md) | tool/provider/mcp 门禁 |
 

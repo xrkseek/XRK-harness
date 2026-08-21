@@ -354,12 +354,14 @@ export function parseSessionEvent(value: unknown): SessionEvent {
       };
     case "user/message": {
       const rpcId = optString(value, "rpcId");
+      const messageId = optString(value, "messageId");
       const source = parseUserMessageSource(value.source, `${type}.source`);
       return {
         type,
         ts,
         turnId: reqString(value, "turnId", type),
         content: parseMessageContent(value.content, `${type}.content`),
+        ...(messageId !== undefined ? { messageId } : {}),
         ...(source !== undefined ? { source } : {}),
         ...(rpcId !== undefined ? { rpcId } : {}),
       };

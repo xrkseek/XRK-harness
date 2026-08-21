@@ -44,6 +44,7 @@ import type {
 import {
   contentHasImage,
   flattenText,
+  newUserMessageId,
   parseSessionEvent,
   parseTurnEndCancelCause,
   DEFAULT_PLAN_POLICY_SECTION,
@@ -461,7 +462,9 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     type: "user/message",
     ts: now(),
     turnId,
+    messageId: newUserMessageId(),
     content: userContent,
+    source: { kind: "user" },
   });
 
   let activeStepId: string | undefined;
@@ -490,7 +493,9 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         type: "user/message",
         ts: now(),
         turnId,
+        messageId: newUserMessageId(),
         content: MAX_STEPS_PROMPT,
+        source: { kind: "user" },
       });
     }
     const table = isLastStep ? undefined : materializeTools(input.tools);
@@ -853,6 +858,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         type: "user/message",
         ts: now(),
         turnId,
+        messageId: newUserMessageId(),
         content,
       });
     }

@@ -35,6 +35,8 @@ On each turn start (after `turn/start`, before the human `user/message`), preset
 | Skill catalog (name + description) | `skill-catalog` · `form: catalog` | `<available_skills>` … |
 | assistant / context / rules / subagents | `agent-instructions` · `form: instructions` + `changes[]` | Markdown sections |
 
+Each inject (and the human prompt) gets a unique `messageId`. Face wire `data.id` uses that id — **not** bare `turnId` — so the shell can show inject rows and the human row in the same turn without collapsing the conversation.
+
 Digest last-wins: unchanged → no new row; changed → full replacement (`update: true` on catalog). Skill **bodies** still load via the `skill` tool or `/skill-name` (see [slash-recipes.md](./slash-recipes.md)).
 
 Face chat renders non-`user` sources as collapsed **上下文注入** rows; Trajectory lists them by producer.
