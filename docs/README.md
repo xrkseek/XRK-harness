@@ -58,6 +58,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 跑测 / 提 PR | [testing](./testing.md) · [CONTRIBUTING](../CONTRIBUTING.md) |
 | 交接本仓 | [maintainer](./maintainer.md) · [audiences](./audiences.md) |
 | 发版 | [publishing](./publishing.md)（**维护者**） |
+| 版本说明 | [releases/](./releases/)（当前 [v0.0.7](./releases/v0.0.7.md)） |
 | 改码笔记 | [AGENTS](../AGENTS.md) · `.cursor/skills` |
 
 ---
@@ -132,4 +133,4 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [learn.md](./learn.md) | 要义摘录（短） |
 | [modules/](./modules/README.md) | 包文件地图 |
 | [adr/](./adr/README.md) | 架构决策 |
-| [releases/](./releases/) | 发行说明（当前 [v0.0.4](./releases/v0.0.4.md)） |
+| [releases/](./releases/) | 发行说明（当前 [v0.0.7](./releases/v0.0.7.md)） |

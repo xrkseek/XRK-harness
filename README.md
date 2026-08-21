@@ -107,10 +107,11 @@ npx @xrkseek/harness-cli serve --preset harness --workspace .
 | 从零安装 / 开发与生产怎么分 | [getting-started](./docs/getting-started.md) |
 | 环境变量、落盘路径 | [configuration](./docs/configuration.md) |
 | 接 HTTP / Face | [http-api](./docs/http-api.md) · [host-face](./docs/host-face.md) |
-| Session、压缩、事件契约 | [session](./docs/session.md) · [session-compaction](./docs/session-compaction.md) · [protocol-events](./docs/protocol-events.md) |
+| Session、压缩、投影、事件契约 | [session](./docs/session.md) · [session-compaction](./docs/session-compaction.md) · [session-projection](./docs/modules/session-projection.md) · [protocol-events](./docs/protocol-events.md) |
 | 自己写工具 | [tool-pipeline](./docs/tool-pipeline.md) · [seams](./docs/seams.md) |
 | 排障 | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 | [learn](./docs/learn.md) |
+| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.0.7](./docs/releases/v0.0.7.md)） |
 | 全部专题索引 | [docs/README.md](./docs/README.md) |
 
 ---

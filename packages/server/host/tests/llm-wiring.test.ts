@@ -8,12 +8,14 @@ import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { createMinimalComposition } from "@xrkseek/preset-minimal";
 import { loadHostConfig } from "@xrkseek/server-config";
 import { createHostManager } from "../src/index.js";
+import { isolatedHostEnv, withIsolatedXrkHome } from "./helpers/isolated-xrk-home.js";
 
 describe("host llm wiring", () => {
   it("passes resolveLlm into the agent factory after Face starts", async () => {
+    await withIsolatedXrkHome(async (xrkHome) => {
     const manager = createHostManager();
     const config = loadHostConfig({
-      env: { XRK_HOST: "127.0.0.1", XRK_PORT: "0" },
+      env: isolatedHostEnv(xrkHome),
       patch: { workspaceRoot: process.cwd(), preset: "minimal" },
     });
     let sawResolveLlm = false;
@@ -51,6 +53,7 @@ describe("host llm wiring", () => {
     expect(sawResolveLlm).toBe(true);
     await manager.stopAll();
     void instance;
+    });
   });
 
   it("resolveLlm yields deepseek adapter when workspace settings + credentials exist", async () => {
@@ -76,7 +79,11 @@ describe("host llm wiring", () => {
     );
 
     const prevHome = process.env.XRK_HOME;
+    const prevMcp = process.env.XRK_MCP_SERVERS;
+    const prevAllow = process.env.XRK_MCP_ALLOW;
     process.env.XRK_HOME = xrkDir;
+    delete process.env.XRK_MCP_SERVERS;
+    delete process.env.XRK_MCP_ALLOW;
     try {
       const manager = createHostManager();
       const config = loadHostConfig({
@@ -127,6 +134,10 @@ describe("host llm wiring", () => {
     } finally {
       if (prevHome === undefined) delete process.env.XRK_HOME;
       else process.env.XRK_HOME = prevHome;
+      if (prevMcp === undefined) delete process.env.XRK_MCP_SERVERS;
+      else process.env.XRK_MCP_SERVERS = prevMcp;
+      if (prevAllow === undefined) delete process.env.XRK_MCP_ALLOW;
+      else process.env.XRK_MCP_ALLOW = prevAllow;
     }
   });
 });

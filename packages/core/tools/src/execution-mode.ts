@@ -21,7 +21,7 @@ export function classifyToolExecutionMode(
   const tool = registry.get(call.name);
   if (!tool?.isConcurrencySafe) return { kind: "exclusive" };
   try {
-    const safe: unknown = tool.isConcurrencySafe(call.arguments as never);
+    const safe: unknown = tool.isConcurrencySafe(call.arguments);
     return safe === true ? { kind: "parallel" } : { kind: "exclusive" };
   } catch {
     return { kind: "exclusive" };

@@ -20,4 +20,6 @@ sources as the Host API.
 
 ## Related
 
-[docs/modules/server-face.md](../../../docs/modules/server-face.md) · `@xrkseek/session-projection`
+[docs/modules/session-projection.md](../../../docs/modules/session-projection.md) ·
+[docs/modules/server-face.md](../../../docs/modules/server-face.md) ·
+`@xrkseek/session-projection`

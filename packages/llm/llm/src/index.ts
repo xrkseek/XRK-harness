@@ -173,7 +173,7 @@ export function toolCallArgsIncomplete(args: unknown): boolean {
     !!args &&
     typeof args === "object" &&
     !Array.isArray(args) &&
-    Object.keys(args as object).length === 1 &&
+    Object.keys(args).length === 1 &&
     typeof (args as { _raw?: unknown })._raw === "string"
   );
 }

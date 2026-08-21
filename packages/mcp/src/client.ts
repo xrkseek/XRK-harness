@@ -392,7 +392,7 @@ export function createMcpClient(options: McpClientOptions): McpClient {
           description: t.description ?? "",
           inputSchema:
             t.inputSchema && typeof t.inputSchema === "object"
-              ? (t.inputSchema as Record<string, unknown>)
+              ? (t.inputSchema)
               : { type: "object", properties: {} },
           ...(annotations ? { annotations } : {}),
         };

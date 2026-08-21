@@ -12,6 +12,8 @@
 | [session-latch.md](./session-latch.md) | TurnLatch · DrainLatch · wake/resume |
 | [session-safety.md](./session-safety.md) | mistake · loop tracker |
 | [session-compaction.md](./session-compaction.md) | 换窗压缩 · overflow · Token 估算 · Context meter |
+| [modules/session-projection.md](./modules/session-projection.md) | 投影状态/视图缝 · Face mux / history |
+| [tool-settlement.md](./tool-settlement.md) | dangling · 取消码 · 并行 settle · concludesTurn |
 | [http-api.md](./http-api.md) | HTTP 形状 |
 | [workspace-inject.md](./workspace-inject.md) | `.xrk` → assemble.workspaceBlocks |
 | [slash-recipes.md](./slash-recipes.md) | `/recipe-id` · `/skill-name` 展开 |

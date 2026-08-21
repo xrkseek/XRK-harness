@@ -648,7 +648,7 @@ export function createHostManager(): HostManager {
           Array.isArray(toolOrderRaw) &&
           toolOrderRaw.length > 0 &&
           toolOrderRaw.every((x) => typeof x === "string")
-            ? (toolOrderRaw as string[])
+            ? (toolOrderRaw)
             : undefined;
         const toolSettleRaw = loop.toolSettle;
         const toolSettle =

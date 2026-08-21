@@ -41,7 +41,7 @@ function foldStepStreamChunks(
   const toolCalls = [...byIndex.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([, acc]) => {
-      let argumentsValue: unknown = {};
+      let argumentsValue: unknown;
       try {
         argumentsValue = acc.arguments ? JSON.parse(acc.arguments) : {};
       } catch {

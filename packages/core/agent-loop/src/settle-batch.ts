@@ -200,7 +200,7 @@ async function settleParallelGroup(
     inFlight.delete(settledIndex);
     if (failure !== undefined) {
       await Promise.allSettled([...inFlight.values()]);
-      throw failure;
+      throw failure instanceof Error ? failure : new Error(String(failure));
     }
     if (input.signal?.aborted) {
       aborted = true;
