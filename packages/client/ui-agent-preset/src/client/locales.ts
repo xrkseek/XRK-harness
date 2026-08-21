@@ -4,11 +4,8 @@
 export type AgentPresetSettingsKey =
   | 'title' | 'description' | 'loading' | 'error' | 'userTrust' | 'seatHint' | 'headerHint'
   | 'nav' | 'sectionIntro' | 'builtIn' | 'setDefault' | 'view'
-  | 'presetStandardName' | 'presetStandardDescription'
-  | 'presetCodeName' | 'presetCodeDescription'
   | 'presetMinimalName' | 'presetMinimalDescription'
   | 'presetHarnessName' | 'presetHarnessDescription'
-  | 'presetCordisName' | 'presetCordisDescription'
   | 'duplicate' | 'duplicateUnavailable' | 'delete' | 'presetId' | 'presetIdPlaceholder' | 'copyOf'
   | 'displayName' | 'displayNamePlaceholder'
   | 'inUse' | 'noDescription' | 'builtInGroup' | 'customGroup'
@@ -26,30 +23,21 @@ export const en: Record<AgentPresetSettingsKey, string> = {
   loading: 'Loading presets…',
   error: 'Could not load agent presets.',
   userTrust: 'Custom',
-  seatHint: 'Agent preset for the session you are about to start',
-  headerHint: 'The agent preset this session runs, fixed when it started',
+  seatHint: 'Tool surface for the session you are about to start',
+  headerHint: 'Tool surface this session runs, fixed when it started',
   nav: 'Agent presets',
   sectionIntro:
-    'A preset is the plugin composition one session\'s agent runs — its tools, prompt, and capabilities. '
-    + 'Duplicate an existing one and make it yours, or let the agent draft one for you in Creator mode.',
+    'XRK ships two built-in tool surfaces: Minimal and XRK Harness. '
+    + 'A session badge picks which tools the agent may call; workspace seeds under .xrk feed personality and rules separately.',
   builtIn: 'Built-in',
   setDefault: 'Set as default',
   view: 'View',
-  presetStandardName: 'Standard mode',
-  presetStandardDescription:
-    'Full coding agent with file editing, shell, file and web search, skills, planning, goals, subagents, and workflows.',
-  presetCodeName: 'PTC mode',
-  presetCodeDescription:
-    'All Standard mode capabilities, with tools exposed through the Code Mode SDK so the model can combine multi-step operations in one TypeScript program.',
-  presetMinimalName: 'Minimal mode',
+  presetMinimalName: 'Minimal',
   presetMinimalDescription:
     'Filesystem, skill, and std tools only — no bash, web, lsp, or PTY.',
   presetHarnessName: 'XRK Harness',
   presetHarnessDescription:
     'Full coding agent: filesystem, bash, web search/fetch, lsp, and terminal tools.',
-  presetCordisName: 'Creator mode',
-  presetCordisDescription:
-    'Built for creating custom agent presets, with all Standard mode capabilities plus runtime inspection, plugin experiments, and preset-authoring guidance.',
   duplicate: 'Duplicate',
   duplicateUnavailable: 'This deployment has no writable preset directory',
   delete: 'Delete',
@@ -64,7 +52,7 @@ export const en: Record<AgentPresetSettingsKey, string> = {
   brokenBadge: 'Failed to load',
   brokenNoCopy: 'A preset that failed to load cannot be duplicated',
   copyOf: 'Copied from',
-  composition: 'Composition (agent.cordis.yml)',
+  composition: 'Composition',
   cancel: 'Cancel',
   close: 'Close',
   retry: 'Retry',
@@ -74,7 +62,7 @@ export const en: Record<AgentPresetSettingsKey, string> = {
     + 'be changed later; everything else is edited in the preset\'s own files.',
   create: 'Create',
   creating: 'Creating…',
-  creatorDraft: 'Draft a custom preset with Creator mode',
+  creatorDraft: 'Draft a custom preset',
   openLocation: 'Open folder',
   showLocation: 'Show location',
   revealedPathLabel: 'Preset files:',
@@ -95,24 +83,20 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
   loading: '正在加载预设…',
   error: '无法加载 Agent 预设。',
   userTrust: '自定义',
-  seatHint: '即将开始的这个会话所用的 Agent 预设',
-  headerHint: '本会话运行的 Agent 预设，开始时即固定',
+  seatHint: '即将开始的这个会话所用的工具面',
+  headerHint: '本会话的工具面，开始时即固定',
   nav: 'Agent 预设',
-  sectionIntro: '预设即一个会话的 Agent 所运行的插件组装 —— 它的工具、提示词与能力。复制一份既有预设改成自己的，或用「创造模式」让 Agent 帮你创建。',
+  sectionIntro:
+    'XRK 内置两种工具面：Minimal 与 XRK Harness。'
+    + '会话徽章决定 Agent 能调哪些工具；工作区 .xrk 种子则另路喂人格与规则。',
   builtIn: '内置',
   setDefault: '设为默认',
   view: '查看',
-  presetStandardName: '标准模式',
-  presetStandardDescription: '功能完整的编码 Agent，支持文件编辑、Shell、文件与网页检索、Skills、计划、目标、子代理和工作流。',
-  presetCodeName: 'PTC 模式',
-  presetCodeDescription: '具备标准模式的全部能力，并通过 Code Mode SDK 呈现工具，让模型用一个 TypeScript 程序组合多步操作。',
-  presetMinimalName: '极简模式',
+  presetMinimalName: 'Minimal',
   presetMinimalDescription: '仅文件系统、skill 与 std 工具；无 bash / 联网 / lsp / PTY。',
   presetHarnessName: 'XRK Harness',
   presetHarnessDescription:
     '完整编码 Agent：文件系统、bash、网页检索/抓取、lsp 与终端工具。',
-  presetCordisName: '创造模式',
-  presetCordisDescription: '用于创建自定义 Agent preset：具备标准模式的全部能力，并提供运行时检查、插件实验和 preset 创作指导。',
   duplicate: '复制',
   duplicateUnavailable: '此部署未配置可写的预设目录',
   delete: '删除',
@@ -127,7 +111,7 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
   brokenBadge: '加载失败',
   brokenNoCopy: '预设加载失败，不能复制',
   copyOf: '复制自',
-  composition: '组装（agent.cordis.yml）',
+  composition: '组装',
   cancel: '取消',
   close: '关闭',
   retry: '重试',
@@ -135,7 +119,7 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
   copyIntro: '整个预设会在本机复制一份。标识符将成为目录名，事后无法更改；其余内容之后直接在预设自己的文件里编辑。',
   create: '创建',
   creating: '正在创建…',
-  creatorDraft: '用「创造模式」创作自定义预设',
+  creatorDraft: '创作自定义预设',
   openLocation: '打开目录',
   showLocation: '查看路径',
   revealedPathLabel: '预设文件：',
@@ -173,21 +157,15 @@ interface PresetLocaleKeys {
   readonly description: AgentPresetSettingsKey
 }
 
+/** Only the two Face catalog ids XRK actually ships. */
 const BUILT_IN_PRESET_KEYS: Readonly<Partial<Record<string, PresetLocaleKeys>>> = {
-  // XRK session badges (Face catalog ids).
   harness: { name: 'presetHarnessName', description: 'presetHarnessDescription' },
   minimal: { name: 'presetMinimalName', description: 'presetMinimalDescription' },
-  // Legacy DSH ids kept for foreign/resumed logs; map to nearest XRK copy.
-  standard: { name: 'presetHarnessName', description: 'presetHarnessDescription' },
-  code: { name: 'presetCodeName', description: 'presetCodeDescription' },
-  cordis: { name: 'presetCordisName', description: 'presetCordisDescription' },
 }
 
 /**
  * Resolve preset display copy without making user-authored metadata translatable.
- * @param preset - roster row whose copy is being rendered.
- * @param t - active Web locale lookup.
- * @returns localized copy for a known shipped preset, otherwise file metadata.
+ * Unknown system ids fall through to Face-published name/description.
  */
 export function presetDisplayText(
   preset: PresetDisplaySource,

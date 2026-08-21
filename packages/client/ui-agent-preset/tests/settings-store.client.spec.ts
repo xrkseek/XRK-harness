@@ -61,7 +61,7 @@ function fakeApi(
 describe('the agent-preset settings controller', () => {
   it('disables the control when this browser may not write settings', async () => {
     const controller = new AgentPresetSettingsController(fakeApi([
-      { id: 'standard', trust: 'system', isDefault: true },
+      { id: 'harness', trust: 'system', isDefault: true },
     ], { readOnly: true }))
 
     await controller.load()
@@ -70,12 +70,12 @@ describe('the agent-preset settings controller', () => {
     // offering a control whose write answers `settings-rejected` would promise
     // a switch the host refuses.
     expect(controller.store.getSnapshot().writable).toBe(false)
-    expect(controller.store.getSnapshot().currentValue).toBe('standard')
+    expect(controller.store.getSnapshot().currentValue).toBe('harness')
   })
 
   it('derives options and the current default from one roster call', async () => {
     const controller = new AgentPresetSettingsController(fakeApi([
-      { id: 'standard', trust: 'system', isDefault: true },
+      { id: 'harness', trust: 'system', isDefault: true },
       { id: 'mine', trust: 'user', isDefault: false },
     ]))
 
@@ -83,16 +83,16 @@ describe('the agent-preset settings controller', () => {
 
     const state = controller.store.getSnapshot()
     expect(state.status).toBe('ready')
-    expect(state.currentValue).toBe('standard')
+    expect(state.currentValue).toBe('harness')
     expect(state.options).toEqual([
-      { id: 'standard', trust: 'system' },
+      { id: 'harness', trust: 'system' },
       { id: 'mine', trust: 'user' },
     ])
   })
 
   it('offers no broken preset: the pickers choose the NEXT session\'s composition', async () => {
     const controller = new AgentPresetSettingsController(fakeApi([
-      { id: 'standard', trust: 'system', isDefault: true },
+      { id: 'harness', trust: 'system', isDefault: true },
       { id: 'damaged', trust: 'user', isDefault: false, broken: 'the composition is not valid YAML' },
     ] as never))
 
@@ -101,12 +101,12 @@ describe('the agent-preset settings controller', () => {
     // A broken preset cannot compose a session; listing it here would defer
     // that discovery to a failed session start. The management section shows
     // (and deletes) it from its own store instead.
-    expect(controller.store.getSnapshot().options.map(option => option.id)).toEqual(['standard'])
+    expect(controller.store.getSnapshot().options.map(option => option.id)).toEqual(['harness'])
   })
 
   it('carries the display metadata a preset published', async () => {
     const controller = new AgentPresetSettingsController(fakeApi([
-      { id: 'standard', trust: 'system', isDefault: true, name: '标准模式', description: '完整的编码 agent。' },
+      { id: 'harness', trust: 'system', isDefault: true, name: 'XRK Harness', description: '完整编码 Agent。' },
     ] as never))
 
     await controller.load()
@@ -114,7 +114,7 @@ describe('the agent-preset settings controller', () => {
     // Surfaces beyond this row read the same options; the id alone never said
     // what a preset does.
     expect(controller.store.getSnapshot().options).toEqual([
-      { id: 'standard', trust: 'system', name: '标准模式', description: '完整的编码 agent。' },
+      { id: 'harness', trust: 'system', name: 'XRK Harness', description: '完整编码 Agent。' },
     ])
   })
 
@@ -132,7 +132,7 @@ describe('the agent-preset settings controller', () => {
   it('writes only the default field, into the agent-presets namespace', async () => {
     const writes: Recorded[] = []
     const controller = new AgentPresetSettingsController(fakeApi([
-      { id: 'standard', trust: 'system', isDefault: true },
+      { id: 'harness', trust: 'system', isDefault: true },
       { id: 'minimal', trust: 'system', isDefault: false },
     ], { writes }))
     await controller.load()
@@ -145,7 +145,7 @@ describe('the agent-preset settings controller', () => {
 
   it('restores the previous value and surfaces the message when the write fails', async () => {
     const controller = new AgentPresetSettingsController(fakeApi([
-      { id: 'standard', trust: 'system', isDefault: true },
+      { id: 'harness', trust: 'system', isDefault: true },
       { id: 'minimal', trust: 'system', isDefault: false },
     ], { failWrite: 'read-only settings' }))
     await controller.load()
@@ -153,7 +153,7 @@ describe('the agent-preset settings controller', () => {
     await controller.select('minimal')
 
     const state = controller.store.getSnapshot()
-    expect(state.currentValue).toBe('standard')
+    expect(state.currentValue).toBe('harness')
     expect(state.error).toBe('read-only settings')
     expect(state.status).toBe('ready')
   })
@@ -161,11 +161,11 @@ describe('the agent-preset settings controller', () => {
   it('ignores a pick that is already the default', async () => {
     const writes: Recorded[] = []
     const controller = new AgentPresetSettingsController(fakeApi([
-      { id: 'standard', trust: 'system', isDefault: true },
+      { id: 'harness', trust: 'system', isDefault: true },
     ], { writes }))
     await controller.load()
 
-    await controller.select('standard')
+    await controller.select('harness')
 
     expect(writes).toEqual([])
   })
@@ -184,19 +184,19 @@ describe('the agent-preset settings controller', () => {
     // Settings can name a preset that was since deleted; the picker still has
     // to show something rather than an empty control.
     const controller = new AgentPresetSettingsController(fakeApi([
-      { id: 'standard', trust: 'system', isDefault: false },
+      { id: 'harness', trust: 'system', isDefault: false },
       { id: 'mine', trust: 'user', isDefault: false },
     ]))
 
     await controller.load()
 
-    expect(controller.store.getSnapshot().currentValue).toBe('standard')
+    expect(controller.store.getSnapshot().currentValue).toBe('harness')
   })
 
   it('ignores a load while one is already in flight', async () => {
     const writes: Recorded[] = []
     const controller = new AgentPresetSettingsController(fakeApi(
-      [{ id: 'standard', trust: 'system', isDefault: true }], { writes }))
+      [{ id: 'harness', trust: 'system', isDefault: true }], { writes }))
 
     await Promise.all([controller.load(), controller.load()])
 
@@ -222,7 +222,7 @@ describe('the agent-preset settings controller', () => {
 
   it('reports a transport that rejects mid-write and keeps the old default showing', async () => {
     const controller = new AgentPresetSettingsController(fakeApi([
-      { id: 'standard', trust: 'system', isDefault: true },
+      { id: 'harness', trust: 'system', isDefault: true },
       { id: 'mine', trust: 'user', isDefault: false },
     ], { failWriteWith: new Error('socket closed') }))
     await controller.load()
@@ -231,7 +231,7 @@ describe('the agent-preset settings controller', () => {
 
     // The value snaps back because the host never took it; a picker still
     // showing "mine" would be claiming a default that does not exist.
-    expect(controller.store.getSnapshot()).toMatchObject({ currentValue: 'standard', error: 'socket closed' })
+    expect(controller.store.getSnapshot()).toMatchObject({ currentValue: 'harness', error: 'socket closed' })
   })
 })
 
@@ -263,7 +263,7 @@ describe('the new-session chip controller', () => {
   }
 
   const ROSTER: { id: string; trust: 'system' | 'user'; isDefault: boolean }[] = [
-    { id: 'standard', trust: 'system', isDefault: true },
+    { id: 'harness', trust: 'system', isDefault: true },
     { id: 'minimal', trust: 'system', isDefault: false },
   ]
 
@@ -274,9 +274,9 @@ describe('the new-session chip controller', () => {
 
     // The chip names the session about to start, and nothing about it is
     // decided yet — the default is the honest opening value.
-    expect(controller.store.getSnapshot().current).toBe('standard')
+    expect(controller.store.getSnapshot().current).toBe('harness')
     expect(controller.store.getSnapshot().options).toEqual([
-      { id: 'standard', trust: 'system' },
+      { id: 'harness', trust: 'system' },
       { id: 'minimal', trust: 'system' },
     ])
   })
@@ -293,13 +293,13 @@ describe('the new-session chip controller', () => {
 
   it('carries the display metadata into the menu rows', async () => {
     const controller = chip([
-      { id: 'standard', trust: 'system', isDefault: true, name: '标准模式', description: '完整的编码 agent。' },
+      { id: 'harness', trust: 'system', isDefault: true, name: 'XRK Harness', description: '完整编码 Agent。' },
     ] as never, undefined)
 
     await controller.load()
 
     expect(controller.store.getSnapshot().options).toEqual([
-      { id: 'standard', trust: 'system', name: '标准模式', description: '完整的编码 agent。' },
+      { id: 'harness', trust: 'system', name: 'XRK Harness', description: '完整编码 Agent。' },
     ])
   })
 
@@ -327,7 +327,7 @@ describe('the new-session chip controller', () => {
 
   it('applies the stage to the blank session the flow lands on', async () => {
     const writes: Recorded[] = []
-    const current = { id: 's1', blank: true, agentPreset: 'standard' }
+    const current = { id: 's1', blank: true, agentPreset: 'harness' }
     const controller = chip(ROSTER, current, { writes })
     await controller.load()
     await controller.select('minimal')
@@ -338,7 +338,7 @@ describe('the new-session chip controller', () => {
 
   it('spends the stage exactly once', async () => {
     const writes: Recorded[] = []
-    const controller = chip(ROSTER, { id: 's1', blank: true, agentPreset: 'standard' }, { writes })
+    const controller = chip(ROSTER, { id: 's1', blank: true, agentPreset: 'harness' }, { writes })
     await controller.load()
     await controller.select('minimal')
 
@@ -352,7 +352,7 @@ describe('the new-session chip controller', () => {
 
   it('drops the stage against a session that already started', async () => {
     const writes: Recorded[] = []
-    const controller = chip(ROSTER, { id: 's1', blank: false, agentPreset: 'standard' }, { writes })
+    const controller = chip(ROSTER, { id: 's1', blank: false, agentPreset: 'harness' }, { writes })
     await controller.load()
 
     await controller.select('minimal')
@@ -373,34 +373,34 @@ describe('the new-session chip controller', () => {
 
   it('falls back to the default when the host refuses the switch', async () => {
     const controller = chip(
-      ROSTER, { id: 's1', blank: true, agentPreset: 'standard' }, { failSelect: 'already started' })
+      ROSTER, { id: 's1', blank: true, agentPreset: 'harness' }, { failSelect: 'already started' })
     await controller.load()
 
     await controller.select('minimal')
 
     // Showing `minimal` after a refusal would claim a composition the session
     // never got.
-    expect(controller.store.getSnapshot()).toMatchObject({ current: 'standard', error: 'already started' })
+    expect(controller.store.getSnapshot()).toMatchObject({ current: 'harness', error: 'already started' })
   })
 
   it('falls back to the default when the switch never reaches the host', async () => {
     const controller = chip(
-      ROSTER, { id: 's1', blank: true, agentPreset: 'standard' }, { throwOn: 'select' })
+      ROSTER, { id: 's1', blank: true, agentPreset: 'harness' }, { throwOn: 'select' })
     await controller.load()
 
     await controller.select('minimal')
 
     expect(controller.store.getSnapshot())
-      .toMatchObject({ current: 'standard', busy: false, error: 'socket closed' })
+      .toMatchObject({ current: 'harness', busy: false, error: 'socket closed' })
   })
 
   it('ignores a pick while a switch is in flight', async () => {
     const writes: Recorded[] = []
-    const controller = chip(ROSTER, { id: 's1', blank: true, agentPreset: 'standard' }, { writes })
+    const controller = chip(ROSTER, { id: 's1', blank: true, agentPreset: 'harness' }, { writes })
     await controller.load()
 
     const first = controller.select('minimal')
-    await controller.select('standard')
+    await controller.select('harness')
     await first
 
     expect(writes).toEqual([{ ns: 'select', patch: 'minimal' }])
@@ -439,7 +439,7 @@ describe('the new-session chip controller', () => {
       agentPresets: {
         list: () => Promise.resolve({
           rpcId: 'r',
-          result: { ok: true as const, value: { presets: [{ id: 'standard', trust: 'system', isDefault: true }], authorable: true } },
+          result: { ok: true as const, value: { presets: [{ id: 'harness', trust: 'system', isDefault: true }], authorable: true } },
         }),
       },
       // The roster answered; `settings.describe` is what rejected, and the row

@@ -30,7 +30,7 @@ const ROSTER_ONE = {
   result: {
     ok: true as const,
     value: {
-      presets: [{ id: 'standard', trust: 'system', isDefault: true }],
+      presets: [{ id: 'harness', trust: 'system', isDefault: true }],
       authorable: true,
       hasDocument: true,
     },
@@ -44,7 +44,7 @@ const ROSTER_AUTHORED = {
     ok: true as const,
     value: {
       presets: [
-        { id: 'standard', trust: 'system', isDefault: true },
+        { id: 'harness', trust: 'system', isDefault: true },
         { id: 'mine', trust: 'user', isDefault: false },
       ],
       authorable: true,
@@ -60,7 +60,7 @@ const ROSTER_MOVED = {
     ok: true as const,
     value: {
       presets: [
-        { id: 'standard', trust: 'system', isDefault: false },
+        { id: 'harness', trust: 'system', isDefault: false },
         { id: 'minimal', trust: 'system', isDefault: true },
       ],
       authorable: true,
@@ -88,7 +88,7 @@ async function bench() {
         list: () => { calls.push('list'); return Promise.resolve(ROSTER) },
         read: () => Promise.resolve({
           rpcId: 'r',
-          result: { ok: true as const, value: { agentPreset: 'standard', trust: 'system', content: '' } },
+          result: { ok: true as const, value: { agentPreset: 'harness', trust: 'system', content: '' } },
         }),
         copy: (payload: { from: string; agentPreset: string }) => {
           calls.push(`copy:${payload.agentPreset}`)
@@ -218,11 +218,11 @@ describe('ui-agent-preset apply', () => {
     // Each thunk reaches its own controller: the row's load fills the row's
     // store, and the section's default write does not go through the row.
     await row.load()
-    await row.select('standard')
-    await section.makeDefault('standard')
-    expect(row.hooks.agentPreset.getSnapshot().options).toEqual([{ id: 'standard', trust: 'system' }])
+    await row.select('harness')
+    await section.makeDefault('harness')
+    expect(row.hooks.agentPreset.getSnapshot().options).toEqual([{ id: 'harness', trust: 'system' }])
     expect(section.hooks.agentPresetSection.getSnapshot().rows)
-      .toEqual([{ id: 'standard', trust: 'system', isDefault: true }])
+      .toEqual([{ id: 'harness', trust: 'system', isDefault: true }])
   })
 
   it('routes the section actions to one controller', async () => {
@@ -232,13 +232,13 @@ describe('ui-agent-preset apply', () => {
     const section = (slots.entries('settings.section')[0]!.inject as unknown as () => AgentPresetSectionInjected)()
 
     await section.load()
-    section.beginCopy('standard')
+    section.beginCopy('harness')
     section.cancelCopy()
-    section.beginCopy('standard')
+    section.beginCopy('harness')
     section.setCopyId('mine')
     section.setCopyName('我的模式')
     await section.confirmCopy()
-    await section.view('standard')
+    await section.view('harness')
     section.closeView()
     section.confirmDelete('mine')
     await Promise.all([section.openLocation('mine'), section.remove()])
@@ -333,7 +333,7 @@ describe('ui-agent-preset apply', () => {
     const chip = slots.entries('conversation.hero.agentPreset')[0]!
     const seat = (chip.inject as unknown as () => AgentPresetSeatInjected)()
     await seat.load()
-    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('standard')
+    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('harness')
 
     // The chip opens on the deployment default, and the setting it comes from
     // lives on another screen: without this the next session — the very one
@@ -344,7 +344,7 @@ describe('ui-agent-preset apply', () => {
     moveDefault()
     ctx.remote.$dispatch('settings/document-updated', ['llm-deepseek', 1])
     await Promise.resolve()
-    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('standard')
+    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('harness')
 
     ctx.remote.$dispatch('settings/document-updated', ['agent-presets', 1])
     await vi.waitFor(() => {
@@ -360,7 +360,7 @@ describe('ui-agent-preset apply', () => {
     ctx.provide('conversation', {} as never)
     const state = {
       current: 's1',
-      byId: { s1: { id: 's1', blank: true, agentPreset: 'standard' } },
+      byId: { s1: { id: 's1', blank: true, agentPreset: 'harness' } },
     }
     ctx.provide('sessions', sessionsDouble(state) as never)
     ctx.provide('workspaces', workspacesDouble() as never)
@@ -383,11 +383,11 @@ describe('ui-agent-preset apply', () => {
     const chip = slots.entries('conversation.hero.agentPreset')[0]!
     const seat = (chip.inject as unknown as () => AgentPresetSeatInjected)()
     await seat.load()
-    expect(seat.hooks.agentPresetSeat.getSnapshot().options.map(option => option.id)).toEqual(['standard'])
+    expect(seat.hooks.agentPresetSeat.getSnapshot().options.map(option => option.id)).toEqual(['harness'])
 
     const section = (slots.entries('settings.section')[0]!.inject as unknown as () => AgentPresetSectionInjected)()
     await section.load()
-    section.beginCopy('standard')
+    section.beginCopy('harness')
     section.setCopyId('mine')
     section.setCopyName('我的模式')
     await section.confirmCopy()
@@ -396,7 +396,7 @@ describe('ui-agent-preset apply', () => {
     // on the wire announces it: a preset created to be used must appear on
     // the one screen that starts sessions, without a reload.
     await vi.waitFor(() => {
-      expect(seat.hooks.agentPresetSeat.getSnapshot().options.map(option => option.id)).toEqual(['standard', 'mine'])
+      expect(seat.hooks.agentPresetSeat.getSnapshot().options.map(option => option.id)).toEqual(['harness', 'mine'])
     })
     conversation()
   })
@@ -423,7 +423,7 @@ describe('ui-agent-preset apply', () => {
     expect(calls).not.toContain('select:minimal')
 
     state.current = 's1'
-    state.byId['s1'] = { id: 's1', blank: true, agentPreset: 'standard' }
+    state.byId['s1'] = { id: 's1', blank: true, agentPreset: 'harness' }
     sessions.notify()
 
     // Connecting a workspace produced the session; the stage reaches it there.
@@ -460,7 +460,7 @@ describe('ui-agent-preset apply', () => {
     ctx.provide('conversation', {} as never)
     const state = {
       current: 's1',
-      byId: { s1: { id: 's1', blank: true, agentPreset: 'standard' } },
+      byId: { s1: { id: 's1', blank: true, agentPreset: 'harness' } },
     }
     const sessions = sessionsDouble(state)
     ctx.provide('sessions', sessions as never)
@@ -499,7 +499,7 @@ describe('ui-agent-preset apply', () => {
     // One roster behind both: the label resolves a name the settings row's own
     // load already fetched, rather than issuing a second read per session.
     expect(label.hooks.agentPresets).toBe(row.hooks.agentPreset)
-    expect(label.hooks.agentPresets.getSnapshot().options).toEqual([{ id: 'standard', trust: 'system' }])
+    expect(label.hooks.agentPresets.getSnapshot().options).toEqual([{ id: 'harness', trust: 'system' }])
   })
 
   it('stages the creator preset and starts a session from the section', async () => {
