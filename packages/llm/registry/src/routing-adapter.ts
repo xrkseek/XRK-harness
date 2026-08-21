@@ -65,6 +65,17 @@ export function createRoutingLlmAdapter(
     return options.resolveAdapter(selection);
   };
 
+  const withRouteEffort = (request: LlmChatRequest): LlmChatRequest => {
+    const selection = options.getSelection();
+    if (
+      !selection?.reasoningEffort ||
+      request.reasoningEffort !== undefined
+    ) {
+      return request;
+    }
+    return { ...request, reasoningEffort: selection.reasoningEffort };
+  };
+
   const adapter: RoutingLlmAdapter = {
     id: options.id,
     peekRoute() {
@@ -75,23 +86,27 @@ export function createRoutingLlmAdapter(
       return lastRoute!;
     },
     async chat(request: LlmChatRequest): Promise<LlmChatResponse> {
-      return resolveInner().chat(request);
+      return resolveInner().chat(withRouteEffort(request));
     },
     stream: async function* (
       request: LlmChatRequest,
     ): AsyncIterable<LlmStreamEvent> {
       const inner = resolveInner();
+      const merged = withRouteEffort(request);
       if (inner.stream) {
-        yield* inner.stream(request);
+        yield* inner.stream(merged);
         return;
       }
-      const response = await inner.chat(request);
+      const response = await inner.chat(merged);
       yield {
         type: "done",
         content: response.content,
         ...(response.reasoning?.trim() ? { reasoning: response.reasoning } : {}),
         ...(response.toolCalls ? { toolCalls: response.toolCalls } : {}),
         ...(response.usage ? { usage: response.usage } : {}),
+        ...(response.finishReason
+          ? { finishReason: response.finishReason }
+          : {}),
       };
     },
   };

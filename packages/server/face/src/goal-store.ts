@@ -9,7 +9,7 @@ import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import { tryWriteJsonSidecar } from "./json-sidecar.js";
 
-export const DEFAULT_MAX_GOAL_ROUNDS = 8;
+export const DEFAULT_MAX_GOAL_ROUNDS = 16;
 export const GOAL_OBJECTIVE_MAX_CHARS = 4000;
 
 export type GoalPhase = "active" | "paused" | "blocked" | "complete";

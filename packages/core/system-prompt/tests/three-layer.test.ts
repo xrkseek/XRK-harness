@@ -144,4 +144,60 @@ describe("outbound pipeline", () => {
       }),
     ).rejects.toThrow(/toolPair/);
   });
+
+  it("sorts tools lexicographically by default", () => {
+    const req = assembleThreeLayers({
+      skeletonSystem: { persona: "P" },
+      history: [],
+      skeletonUser: { text: "x" },
+      volatile: { nowIso: "t", sessionId: "s" },
+      tools: [
+        { name: "zeta", description: "z", parameters: {} },
+        { name: "alpha", description: "a", parameters: {} },
+      ],
+    });
+    expect(req.tools.map((t) => t.name)).toEqual(["alpha", "zeta"]);
+  });
+
+  it("honors toolOrder with a single rest marker", () => {
+    const tools = [
+      { name: "a", description: "", parameters: {} },
+      { name: "b", description: "", parameters: {} },
+      { name: "c", description: "", parameters: {} },
+      { name: "z", description: "", parameters: {} },
+    ];
+    const req = assembleThreeLayers({
+      skeletonSystem: { persona: "P" },
+      history: [],
+      skeletonUser: { text: "x" },
+      volatile: { nowIso: "t", sessionId: "s" },
+      tools,
+      toolOrder: ["z", " ", "a"],
+    });
+    expect(req.tools.map((t) => t.name)).toEqual(["z", "b", "c", "a"]);
+  });
+
+  it("fails loud on bad toolOrder", () => {
+    const tools = [{ name: "a", description: "", parameters: {} }];
+    expect(() =>
+      assembleThreeLayers({
+        skeletonSystem: { persona: "P" },
+        history: [],
+        skeletonUser: { text: "x" },
+        volatile: { nowIso: "t", sessionId: "s" },
+        tools,
+        toolOrder: ["a"],
+      }),
+    ).toThrow(/exactly one/);
+    expect(() =>
+      assembleThreeLayers({
+        skeletonSystem: { persona: "P" },
+        history: [],
+        skeletonUser: { text: "x" },
+        volatile: { nowIso: "t", sessionId: "s" },
+        tools,
+        toolOrder: ["missing", " "],
+      }),
+    ).toThrow(/unknown tool/);
+  });
 });

@@ -43,6 +43,30 @@ describe("chunk-pack export", () => {
     expect(expandPackedStorageRecords(packed)).toEqual(events);
   });
 
+  it("packs tool-call argument deltas into tool-call-chunks", () => {
+    const events: SessionEvent[] = [1, 2, 3].map((n) => ({
+      type: "assistant/chunk" as const,
+      ts: n,
+      turnId: "t1",
+      stepId: "s1",
+      text: `{"a":${n}`,
+      kind: "tool-call" as const,
+      index: 0,
+      toolCallId: "c1",
+      toolName: "echo",
+      argumentsDelta: `{"a":${n}`,
+    }));
+    const packed = packChunkRunsForExport(events);
+    expect(packed).toHaveLength(1);
+    expect(packed[0]).toMatchObject({
+      type: "tool-call-chunks",
+      toolCallId: "c1",
+      toolName: "echo",
+      args: ['{"a":1', '{"a":2', '{"a":3'],
+    });
+    expect(expandPackedStorageRecords(packed)).toEqual(events);
+  });
+
   it("keeps short runs verbatim", () => {
     const events = [chunk(1, "a"), chunk(2, "b")];
     expect(packChunkRunsForExport(events)).toEqual(events);

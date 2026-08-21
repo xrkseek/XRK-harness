@@ -317,4 +317,37 @@ describe("tool pipeline", () => {
       meta: { kind: "search", truncated: false },
     });
   });
+
+  it("propagates concludesTurn on success and drops it on isError", async () => {
+    const reg = createToolRegistry();
+    reg.register({
+      name: "done",
+      description: "done",
+      parameters: { type: "object" },
+      async execute() {
+        return { content: "ok", concludesTurn: true };
+      },
+    });
+    reg.register({
+      name: "fail",
+      description: "fail",
+      parameters: { type: "object" },
+      async execute() {
+        return { content: "nope", isError: true, concludesTurn: true };
+      },
+    });
+    const ok = await runToolDetailed({
+      registry: reg,
+      call: { id: "1", name: "done", arguments: {} },
+    });
+    expect(ok.concludesTurn).toBe(true);
+    expect(ok.result.isError).toBeUndefined();
+
+    const bad = await runToolDetailed({
+      registry: reg,
+      call: { id: "2", name: "fail", arguments: {} },
+    });
+    expect(bad.concludesTurn).toBeUndefined();
+    expect(bad.result.isError).toBe(true);
+  });
 });

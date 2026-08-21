@@ -323,6 +323,37 @@ describe("parseSessionEvent", () => {
     expect(() =>
       parseSessionEvent({ type: "feedback/record", ts: 6, text: "  " }),
     ).toThrow(/non-empty/);
+
+    expect(
+      parseSessionEvent({
+        type: "llm/retry",
+        ts: 7,
+        turnId: "t1",
+        stepId: "s1",
+        retryId: "r1",
+        retry: 1,
+        maxRetries: 5,
+        delayMs: 1000,
+        mode: "normal",
+        failure: { message: "rate", code: "RATE_LIMIT", status: 429 },
+        provider: "openai-compatible",
+      }),
+    ).toMatchObject({
+      type: "llm/retry",
+      retry: 1,
+      failure: { code: "RATE_LIMIT" },
+    });
+
+    expect(
+      parseSessionEvent({
+        type: "llm/retry-started",
+        ts: 8,
+        turnId: "t1",
+        stepId: "s1",
+        retryId: "r1",
+        retry: 1,
+      }),
+    ).toMatchObject({ type: "llm/retry-started", retry: 1 });
   });
 });
 
@@ -357,6 +388,9 @@ describe("sessionEventJsonSchema", () => {
       "approval/policy",
       "plan/mode",
       "feedback/record",
+      "request/header",
+      "llm/retry",
+      "llm/retry-started",
     ];
     expect(types.sort()).toEqual([...expected].sort());
     expect(sessionEventJsonSchema.$id).toContain("session-event");

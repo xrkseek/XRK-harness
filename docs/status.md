@@ -2,7 +2,7 @@
 
 > **读者**：全员（对外说话以本页为准）。
 
-三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 2026-08-21（v0.0.6）。
+三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 2026-08-21（v0.0.7）；**AI 调用链路**（maxSteps · prune/soft-compact · reasoning passback · max-tokens keep/drop · EMPTY/未知 finish/残缺 tool · derive 跳过空 assistant · **reasoningEffort→DeepSeek thinking wire** · toolOrder · Anthropic cache · **LlmError HTTP 分类（含 gemini / openai-responses）· 步内 llm/retry（Face 可调）· TOOL_NOT_STARTED/OUTCOME_UNKNOWN/ABORTED_BEFORE_DISPATCH/`ABORTED` · isConcurrencySafe settle（只读工具已标）· tool-call stream + tool-call-chunks · concludesTurn 结轮**）已跟至同基线（对照 DSH `dsh-v0.1.0-rc.8`）。
 
 ## 能跑（本地 / Host 主路径）
 

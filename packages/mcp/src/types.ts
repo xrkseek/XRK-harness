@@ -17,10 +17,21 @@ export interface McpConnectionState {
   readonly maxAttempts?: number;
 }
 
+export interface McpToolAnnotations {
+  readonly title?: string;
+  /** MCP hint — exact `true` may opt the tool into parallel settle. */
+  readonly readOnlyHint?: boolean;
+  readonly destructiveHint?: boolean;
+  readonly idempotentHint?: boolean;
+  readonly openWorldHint?: boolean;
+}
+
 export interface McpToolInfo {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: Record<string, unknown>;
+  /** Optional MCP tool annotations (spec tool.annotations). */
+  readonly annotations?: McpToolAnnotations;
 }
 
 export interface McpCallResult {

@@ -816,6 +816,7 @@ export function createBashTools(
             .join("\n"),
         };
       },
+      isConcurrencySafe: () => true,
     },
     {
       name: "job_list",
@@ -839,6 +840,7 @@ export function createBashTools(
         title: "List background jobs",
         kind: "read",
       }),
+      isConcurrencySafe: () => true,
     },
     {
       name: "job_output",
@@ -897,6 +899,9 @@ export function createBashTools(
         title: `Read output from background job ${requireJobIdSafe(args)}`,
         kind: "read",
       }),
+      // Non-blocking reads may overlap; wait:true is exclusive.
+      isConcurrencySafe: (args) =>
+        (args as { wait?: boolean }).wait !== true,
     },
     {
       name: "bash_kill",

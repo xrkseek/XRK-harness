@@ -345,8 +345,8 @@ describe('AgentLoopCardController', () => {
     host.publish({
       status: 'ready',
       writable: true,
-      value: { maxParallelToolCalls: 10 },
-      base: { maxParallelToolCalls: 10 },
+      value: { maxParallelToolCalls: 10, maxSteps: 32 },
+      base: { maxParallelToolCalls: 10, maxSteps: 32 },
       user: {},
     })
     const face = controller.inject()
@@ -361,11 +361,34 @@ describe('AgentLoopCardController', () => {
     })
   })
 
+  it('saves maxSteps when edited', async () => {
+    const host = stubSettingsScope<AgentLoopSettings>()
+    acceptWrites(host)
+    const controller = new AgentLoopCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { maxSteps: 32 },
+      base: { maxSteps: 32 },
+      user: {},
+    })
+    const face = controller.inject()
+
+    face.edit('maxSteps', '48')
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('maxSteps', 48) })
+
+    expect(face.hooks.agentLoopCard.getSnapshot()).toMatchObject({
+      dirty: false,
+      maxSteps: { text: '48', overridden: true },
+    })
+  })
+
   it('reports a read-only document so the card can disable its controls', () => {
     const host = stubSettingsScope<AgentLoopSettings>()
     const controller = new AgentLoopCardController(host.scope)
 
-    host.publish({ status: 'ready', writable: false, value: { maxParallelToolCalls: 10 } })
+    host.publish({ status: 'ready', writable: false, value: { maxParallelToolCalls: 10, maxSteps: 32 } })
 
     expect(controller.inject().hooks.agentLoopCard.getSnapshot().writable).toBe(false)
   })

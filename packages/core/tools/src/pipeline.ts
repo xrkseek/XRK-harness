@@ -5,6 +5,7 @@ import {
   normalizeToolResult,
   type ToolDefinition,
 } from "./definition.js";
+import { abortedToolContent, isAbortError } from "./abort.js";
 import { runGuards } from "./guards.js";
 import {
   boundToolOutput,
@@ -85,8 +86,24 @@ async function runPost(
     ctx.result = {
       content: outcome.content,
       ...(outcome.isError ? { isError: true as const } : {}),
+      // Replace drops prior concludesTurn (new content owns the flag).
     };
   }
+}
+
+function copyResultFields(
+  content: import("@xrkseek/protocol").MessageContent,
+  prev: NonNullable<ToolPipelineContext["result"]>,
+): NonNullable<ToolPipelineContext["result"]> {
+  return {
+    content,
+    ...(prev.isError ? { isError: true as const } : {}),
+    ...(prev.meta !== undefined ? { meta: prev.meta } : {}),
+    ...(prev.concludesTurn === true && !prev.isError
+      ? { concludesTurn: true as const }
+      : {}),
+    ...(prev.error !== undefined ? { error: prev.error } : {}),
+  };
 }
 
 async function runFinalize(
@@ -98,11 +115,7 @@ async function runFinalize(
   for (const handler of handlers) {
     content = await handler(ctx);
   }
-  ctx.result = {
-    content,
-    ...(ctx.result.isError ? { isError: true as const } : {}),
-    ...(ctx.result.meta !== undefined ? { meta: ctx.result.meta } : {}),
-  };
+  ctx.result = copyResultFields(content, ctx.result);
 }
 
 async function executeBody(
@@ -120,6 +133,11 @@ async function executeBody(
     const out = await tool.execute(ctx.args, signal, {
       emitToolEvent: (type, payload) => emitToolEvent(ctx, type, payload),
     });
+    // DSH: cancel after body invocation supersedes a late success.
+    if ((signal ?? ctx.signal)?.aborted) {
+      ctx.result = abortedToolContent();
+      return;
+    }
     ctx.result = out;
   };
 
@@ -142,6 +160,10 @@ async function executeBody(
       await withAround();
       return;
     } catch (err) {
+      if (isAbortError(err)) {
+        ctx.result = abortedToolContent();
+        return;
+      }
       if (isTransientError(err) && attempt < maxRetries) {
         attempt += 1;
         ctx.metrics.retries += 1;
@@ -269,11 +291,7 @@ export function createToolPipeline(
         stages.push("bound");
         ctx.stage = "bound";
         const bounded = await boundToolOutput(ctx.result.content, outputBound);
-        ctx.result = {
-          content: bounded.content,
-          ...(ctx.result.isError ? { isError: true as const } : {}),
-          ...(ctx.result.meta !== undefined ? { meta: ctx.result.meta } : {}),
-        };
+        ctx.result = copyResultFields(bounded.content, ctx.result);
         truncated = bounded.truncated;
         outputPaths = bounded.outputPaths;
       }
@@ -287,6 +305,11 @@ export function createToolPipeline(
       const result = freezeToolResult(
         normalizeToolResult(call.id, call.name, raw),
       );
+      // Failures never conclude (DSH ToolExecutionFailure.concludesTurn: never).
+      const concludesTurn =
+        raw.concludesTurn === true && raw.isError !== true
+          ? (true as const)
+          : undefined;
 
       return {
         result,
@@ -297,6 +320,7 @@ export function createToolPipeline(
         skippedBody: ctx.skippedBody,
         ...(truncated ? { truncated: true } : {}),
         ...(outputPaths.length ? { outputPaths } : {}),
+        ...(concludesTurn ? { concludesTurn } : {}),
       };
     },
   };

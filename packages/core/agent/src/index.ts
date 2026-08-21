@@ -1,5 +1,5 @@
 import type { CompactionOptions } from "@xrkseek/core-session";
-import type { LlmAdapter, LlmChatRequest } from "@xrkseek/llm";
+import type { LlmAdapter, LlmChatRequest, ResolvedRetryPolicy } from "@xrkseek/llm";
 import {
   admitPrompt,
   createSessionSafety,
@@ -144,6 +144,11 @@ export interface CreateAgentOptions {
   readonly toolSettle?: "serial" | "parallel";
   /** Cap concurrent settles; Face `agent-loop.maxParallelToolCalls`. */
   readonly maxParallelToolCalls?: number;
+  /**
+   * Provider request retries within a step (DSH llm-retry).
+   * Face `agent-loop.llmRetryMaxRetries`: `0` → `false`; `n>0` → `{ maxRetries: n }`.
+   */
+  readonly llmRetry?: false | Partial<ResolvedRetryPolicy>;
   /** Opt-in context compaction / one overflow retry. */
   readonly compaction?: false | CompactionOptions;
   /** Forwarded to runTurn for vision adapters. */
@@ -295,6 +300,9 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
               : {}),
             ...(options.maxParallelToolCalls !== undefined
               ? { maxParallelToolCalls: options.maxParallelToolCalls }
+              : {}),
+            ...(options.llmRetry !== undefined
+              ? { llmRetry: options.llmRetry }
               : {}),
             ...(options.compaction !== undefined
               ? { compaction: options.compaction }

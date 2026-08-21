@@ -185,6 +185,180 @@ describe("openai-compatible adapter", () => {
     expect(out.reasoning).toBe("step by step");
   });
 
+  it("emits reasoning_content on every prior reasoned assistant turn (rc.8)", async () => {
+    let body: { messages: Record<string, unknown>[] } | undefined;
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async (_u, init) => {
+        body = JSON.parse(String(init?.body)) as typeof body;
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "ok" }, finish_reason: "stop" }],
+          }),
+          { status: 200 },
+        );
+      }) as unknown as typeof fetch,
+    });
+    await llm.chat({
+      messages: [
+        { role: "user", content: "go" },
+        {
+          role: "assistant",
+          content: "",
+          reasoning: "plan",
+          toolCalls: [{ id: "c1", name: "echo", arguments: { text: "x" } }],
+        },
+        {
+          role: "tool",
+          content: "x",
+          toolCallId: "c1",
+          name: "echo",
+        },
+        {
+          role: "assistant",
+          content: "done",
+          reasoning: "plain thinking",
+        },
+      ],
+    });
+    expect(body?.messages).toEqual([
+      { role: "user", content: "go" },
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [
+          {
+            id: "c1",
+            type: "function",
+            function: { name: "echo", arguments: '{"text":"x"}' },
+          },
+        ],
+        reasoning_content: "plan",
+      },
+      { role: "tool", content: "x", tool_call_id: "c1", name: "echo" },
+      {
+        role: "assistant",
+        content: "done",
+        reasoning_content: "plain thinking",
+      },
+    ]);
+  });
+
+  it("maps finish_reason length to max-tokens and drops truncated tool calls", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      enableStream: false,
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: "cut",
+                  tool_calls: [
+                    {
+                      id: "c1",
+                      type: "function",
+                      function: { name: "echo", arguments: "{}" },
+                    },
+                  ],
+                },
+                finish_reason: "length",
+              },
+            ],
+          }),
+          { status: 200 },
+        )) as unknown as typeof fetch,
+    });
+    const out = await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(out.finishReason).toBe("max-tokens");
+    expect(out.toolCalls).toBeUndefined();
+    expect(out.content).toBe("cut");
+  });
+
+  it("rejects empty stop as EMPTY_RESPONSE", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      enableStream: false,
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "" }, finish_reason: "stop" }],
+          }),
+          { status: 200 },
+        )) as unknown as typeof fetch,
+    });
+    await expect(
+      llm.chat({ messages: [{ role: "user", content: "hi" }] }),
+    ).rejects.toMatchObject({ name: "EmptyResponseError", code: "EMPTY_RESPONSE" });
+  });
+
+  it("rejects content_filter finish as ProviderFinishError", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      enableStream: false,
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: { content: "x" },
+                finish_reason: "content_filter",
+              },
+            ],
+          }),
+          { status: 200 },
+        )) as unknown as typeof fetch,
+    });
+    await expect(
+      llm.chat({ messages: [{ role: "user", content: "hi" }] }),
+    ).rejects.toMatchObject({
+      name: "ProviderFinishError",
+      code: "CONTENT_FILTER",
+    });
+  });
+
+  it("rejects truncated tool JSON when finish is not max-tokens", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      enableStream: false,
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: "",
+                  tool_calls: [
+                    {
+                      id: "c1",
+                      type: "function",
+                      function: { name: "echo", arguments: '{"text":' },
+                    },
+                  ],
+                },
+                finish_reason: "stop",
+              },
+            ],
+          }),
+          { status: 200 },
+        )) as unknown as typeof fetch,
+    });
+    await expect(
+      llm.chat({ messages: [{ role: "user", content: "hi" }] }),
+    ).rejects.toMatchObject({
+      name: "IncompleteToolCallError",
+      code: "INCOMPLETE_TOOL_CALL",
+    });
+  });
+
   it("parses chat completion usage", async () => {
     const llm = createOpenAiCompatibleAdapter({
       baseUrl: "https://api.example.com/v1",
@@ -345,5 +519,101 @@ describe("openai-compatible adapter", () => {
         },
       ]),
     );
+  });
+});
+
+describe("deepseek thinking wire", () => {
+  it("emits thinking + reasoning_effort from request effort", async () => {
+    let body: Record<string, unknown> | undefined;
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.deepseek.com",
+      model: "deepseek-v4-flash",
+      deepseekThinking: true,
+      enableStream: false,
+      fetch: (async (_u, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "ok" }, finish_reason: "stop" }],
+          }),
+          { status: 200 },
+        );
+      }) as unknown as typeof fetch,
+    });
+    await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+      reasoningEffort: "high",
+    });
+    expect(body?.thinking).toEqual({ type: "enabled" });
+    expect(body?.reasoning_effort).toBe("high");
+  });
+
+  it("maps off to thinking disabled without reasoning_effort", async () => {
+    let body: Record<string, unknown> | undefined;
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.deepseek.com",
+      model: "m",
+      deepseekThinking: true,
+      enableStream: false,
+      fetch: (async (_u, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "ok" }, finish_reason: "stop" }],
+          }),
+          { status: 200 },
+        );
+      }) as unknown as typeof fetch,
+    });
+    await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+      reasoningEffort: "off",
+    });
+    expect(body?.thinking).toEqual({ type: "disabled" });
+    expect(body?.reasoning_effort).toBeUndefined();
+  });
+
+  it("omits thinking fields when deepseekThinking unset", async () => {
+    let body: Record<string, unknown> | undefined;
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      enableStream: false,
+      fetch: (async (_u, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "ok" }, finish_reason: "stop" }],
+          }),
+          { status: 200 },
+        );
+      }) as unknown as typeof fetch,
+    });
+    await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+      reasoningEffort: "high",
+    });
+    expect(body?.thinking).toBeUndefined();
+    expect(body?.reasoning_effort).toBeUndefined();
+  });
+
+  it("rejects unknown effort", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.deepseek.com",
+      model: "m",
+      deepseekThinking: true,
+      enableStream: false,
+      fetch: (async () =>
+        new Response("{}", { status: 200 })) as unknown as typeof fetch,
+    });
+    await expect(
+      llm.chat({
+        messages: [{ role: "user", content: "hi" }],
+        reasoningEffort: "medium",
+      }),
+    ).rejects.toMatchObject({
+      name: "UnsupportedReasoningEffortError",
+      code: "UNSUPPORTED_REASONING_EFFORT",
+    });
   });
 });

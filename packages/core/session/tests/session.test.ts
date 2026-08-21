@@ -105,6 +105,82 @@ describe("deriveMessages + invariant", () => {
     expect(msgs.map((m) => m.role)).toEqual(["user", "assistant", "tool"]);
   });
 
+  it("skips usage-only empty assistant messages in derive", () => {
+    const events: SessionEvent[] = [
+      { type: "user/message", ts: 1, turnId: "t", content: "hi" },
+      {
+        type: "assistant/message",
+        ts: 2,
+        turnId: "t",
+        stepId: "s",
+        content: "",
+        usage: { inputTokens: 1, outputTokens: 0 },
+      },
+      {
+        type: "assistant/message",
+        ts: 3,
+        turnId: "t",
+        stepId: "s2",
+        content: "ok",
+      },
+    ];
+    expect(deriveMessages(events)).toEqual([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "ok" },
+    ]);
+  });
+
+  it("passbacks reasoning on every reasoned assistant turn (rc.8)", () => {
+    const withTools: SessionEvent[] = [
+      { type: "user/message", ts: 1, turnId: "t", content: "go" },
+      {
+        type: "assistant/message",
+        ts: 2,
+        turnId: "t",
+        stepId: "s1",
+        content: "",
+        reasoning: "need the file",
+        toolCalls: [{ id: "c1", name: "read", arguments: { path: "a" } }],
+      },
+      {
+        type: "tool/result",
+        ts: 3,
+        turnId: "t",
+        stepId: "s1",
+        result: { toolCallId: "c1", name: "read", content: "ok" },
+      },
+      {
+        type: "assistant/message",
+        ts: 4,
+        turnId: "t",
+        stepId: "s2",
+        content: "done",
+        reasoning: "final answer thinking",
+      },
+    ];
+    const msgs = deriveMessages(withTools);
+    expect(msgs).toEqual([
+      { role: "user", content: "go" },
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [{ id: "c1", name: "read", arguments: { path: "a" } }],
+        reasoning: "need the file",
+      },
+      {
+        role: "tool",
+        content: "ok",
+        toolCallId: "c1",
+        name: "read",
+      },
+      {
+        role: "assistant",
+        content: "done",
+        reasoning: "final answer thinking",
+      },
+    ]);
+  });
+
   it("projects safety/notice as user (typed in log)", () => {
     const events: SessionEvent[] = [
       { type: "user/message", ts: 1, turnId: "t", content: "hi" },

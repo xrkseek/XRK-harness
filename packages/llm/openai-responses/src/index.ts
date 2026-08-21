@@ -10,6 +10,9 @@ import type {
 } from "@xrkseek/llm";
 import {
   ContextOverflowError,
+  classifyCaughtLlmError,
+  isLlmError,
+  throwHttpLlmError,
   UnsupportedContentError,
 } from "@xrkseek/llm";
 import type { ChatMessage, MessageContent, ToolCall } from "@xrkseek/protocol";
@@ -361,12 +364,19 @@ export function createOpenAiResponsesAdapter(
         ? AbortSignal.any([request.signal, timeoutSignal])
         : (request.signal ?? timeoutSignal);
 
-    const res = await doFetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      ...(signal ? { signal } : {}),
-    });
+    let res: Response;
+    try {
+      res = await doFetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        ...(signal ? { signal } : {}),
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") throw err;
+      if (isLlmError(err)) throw err;
+      classifyCaughtLlmError(err, "openai-responses");
+    }
     if (!res.ok) {
       const text = await res.text();
       if (looksLikeOverflow(res.status, text)) {
@@ -374,9 +384,7 @@ export function createOpenAiResponsesAdapter(
           `openai-responses overflow (${res.status}): ${text.slice(0, 400)}`,
         );
       }
-      throw new Error(
-        `openai-responses HTTP ${res.status}: ${text.slice(0, 800)}`,
-      );
+      throwHttpLlmError("openai-responses", res.status, text, res.headers);
     }
     return res;
   }

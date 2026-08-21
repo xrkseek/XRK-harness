@@ -4,6 +4,7 @@ import type {
   LlmChatResponse,
   LlmStreamEvent,
 } from "@xrkseek/llm";
+import { finalizeLlmChatResponse } from "@xrkseek/llm";
 
 export interface ReplayAdapterOptions {
   readonly id?: string;
@@ -74,7 +75,7 @@ export function createReplayAdapter(
       throw new Error("replay adapter exhausted fixtures");
     }
     i += 1;
-    return next;
+    return finalizeLlmChatResponse(next);
   };
 
   const adapter: LlmAdapter = {
@@ -111,12 +112,14 @@ export function createReplayAdapter(
       if (next.usage) {
         yield { type: "usage", usage: next.usage };
       }
+      // Fixture may still list truncated tools; keep/drop already applied in take().
       yield {
         type: "done",
         content: next.content,
         ...(reasoning.trim() ? { reasoning } : {}),
         ...(next.toolCalls ? { toolCalls: next.toolCalls } : {}),
         ...(next.usage ? { usage: next.usage } : {}),
+        ...(next.finishReason ? { finishReason: next.finishReason } : {}),
       };
     };
   }

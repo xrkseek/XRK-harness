@@ -43,6 +43,8 @@ export const EVENT_ISOMORPHISM = {
   "plan/mode": "plan/mode",
   "feedback/record": "feedback/record",
   "request/header": "request.header",
+  "llm/retry": "llm.retry",
+  "llm/retry-started": "llm.retry-started",
 } as const satisfies Record<SessionEvent["type"], string>;
 
 /** SessionEvent envelope on the Face wire. */
@@ -202,14 +204,22 @@ export function toFaceWireSessionEvent(
           chunk:
             event.kind === "usage" && event.usage
               ? { type: "usage", usage: event.usage }
-              : {
-                  type:
-                    event.kind === "reasoning"
-                      ? "reasoning-delta"
-                      : "text-delta",
-                  index: event.index ?? 0,
-                  text: event.text,
-                },
+              : event.kind === "tool-call"
+                ? {
+                    type: "tool-call-delta",
+                    index: event.index ?? 0,
+                    id: event.toolCallId ?? "",
+                    ...(event.toolName ? { name: event.toolName } : {}),
+                    argumentsDelta: event.argumentsDelta ?? event.text,
+                  }
+                : {
+                    type:
+                      event.kind === "reasoning"
+                        ? "reasoning-delta"
+                        : "text-delta",
+                    index: event.index ?? 0,
+                    text: event.text,
+                  },
         },
       };
     case "assistant/message":
@@ -296,6 +306,12 @@ export function toFaceWireSessionEvent(
                     typeof event.result.content === "string"
                       ? event.result.content
                       : flattenText(event.result.content),
+                  ...(event.result.error
+                    ? {
+                        name: event.result.error.name,
+                        code: event.result.error.code,
+                      }
+                    : {}),
                 },
               }
             : {}),
@@ -351,6 +367,8 @@ export function toFaceWireSessionEvent(
     case "plan/mode":
     case "feedback/record":
     case "request/header":
+    case "llm/retry":
+    case "llm/retry-started":
       return {
         type: event.type,
         seq,

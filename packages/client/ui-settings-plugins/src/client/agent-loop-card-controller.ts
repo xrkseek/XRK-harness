@@ -1,7 +1,7 @@
 /** The agent-loop card's staged form over the `agent-loop` settings namespace. */
 
 import type { SettingsScope, SnapshotStore } from '@xrkseek/client-runtime/client'
-import { CardForm, numberField, type CardActions, type CardFieldState, type CardShell } from './card-form.ts'
+import { CardForm, numberField, textField, type CardActions, type CardFieldState, type CardShell } from './card-form.ts'
 
 /**
  * Namespace of the agent loop's user-owned settings. Spelled here rather than
@@ -9,19 +9,30 @@ import { CardForm, numberField, type CardActions, type CardFieldState, type Card
  */
 export const AGENT_LOOP_NS = 'agent-loop'
 
-/**
- * The agent-loop fields this card edits. The Host section carries only this
+/** The agent-loop fields this card edits. The Host section carries only this
  * field — the composed `agents` array is deliberately not part of it.
  */
 export interface AgentLoopSettings {
   /** Upper bound on parallel-safe tool calls in flight per step. */
   maxParallelToolCalls?: number
+  /** Max LLM steps (tool rounds) per user turn. */
+  maxSteps?: number
+  /** `parallel` (default) or force `serial`. */
+  toolSettle?: 'parallel' | 'serial'
+  /** Max provider retries per step; `0` disables. */
+  llmRetryMaxRetries?: number
 }
 
 /** What the agent-loop card renders. */
 export interface AgentLoopCardState extends CardShell {
   /** Parallel tool-call cap. */
   maxParallelToolCalls: CardFieldState
+  /** Steps-per-turn cap. */
+  maxSteps: CardFieldState
+  /** Settle mode. */
+  toolSettle: CardFieldState
+  /** Provider retry cap. */
+  llmRetryMaxRetries: CardFieldState
 }
 
 /** The registration-side face the agent-loop card's slot entry injects. */
@@ -39,12 +50,23 @@ export class AgentLoopCardController {
 
   /** @param scope - the bound settings scope for the `agent-loop` namespace. */
   constructor(scope: SettingsScope<AgentLoopSettings>) {
-    this.form = new CardForm(scope, [numberField('maxParallelToolCalls')])
+    this.form = new CardForm(scope, [
+      numberField('maxParallelToolCalls'),
+      numberField('maxSteps'),
+      textField('toolSettle'),
+      numberField('llmRetryMaxRetries'),
+    ])
     this.store = this.form.bind(() => this.projection())
   }
 
   private projection(): AgentLoopCardState {
-    return { ...this.form.shell(), maxParallelToolCalls: this.form.field('maxParallelToolCalls') }
+    return {
+      ...this.form.shell(),
+      maxParallelToolCalls: this.form.field('maxParallelToolCalls'),
+      maxSteps: this.form.field('maxSteps'),
+      toolSettle: this.form.field('toolSettle'),
+      llmRetryMaxRetries: this.form.field('llmRetryMaxRetries'),
+    }
   }
 
   /**

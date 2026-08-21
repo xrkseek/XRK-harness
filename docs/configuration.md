@@ -124,7 +124,11 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `mcp` | `servers` · `allowConnect` | 热挂载（文件源）；关 allow 则 park |
 | `web-search` | `provider` · `region`（密钥走 Credentials） | 下次 agent 重建后作用于 `web_search` |
 | `bash` | `timeoutMs` · `maxOutputBytes` | 下次 agent 重建后作用于 `bash` 工具 |
-| `agent-loop` | `maxParallelToolCalls` | 下次 agent 重建后限制同一步并行 settle |
+| `agent-loop` | `maxParallelToolCalls` | 下次 agent 重建后限制同一步并行 settle 池上限 |
+| `agent-loop` | `maxSteps` | 单次用户 turn 的 LLM 步数上限（默认 32） |
+| `agent-loop` | `toolSettle` | `parallel`（默认，按 `isConcurrencySafe`）或 `serial` |
+| `agent-loop` | `llmRetryMaxRetries` | 步内 provider 重试上限（默认 5；`0` 关闭） |
+| `agent-loop` | `toolOrder` | DSH 风格工具线序（settings.yaml；恰好一个 `' '` rest） |
 
 Tavily / Brave 密钥：Plugins → Web search 卡或 Settings → Credentials（同一槽 `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY`）。
 

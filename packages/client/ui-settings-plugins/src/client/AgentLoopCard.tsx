@@ -42,6 +42,43 @@ export function AgentLoopCard(props: AgentLoopCardProps) {
         onEdit={(text) => { props.edit('maxParallelToolCalls', text) }}
         onReset={() => { props.resetField('maxParallelToolCalls') }}
       />
+      <ValueField
+        id="plugin-config-agent-loop-max-steps"
+        label={t('agentLoopMaxSteps')}
+        hint={t('agentLoopMaxStepsHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        disabled={!state.writable}
+        {...state.maxSteps}
+        onEdit={(text) => { props.edit('maxSteps', text) }}
+        onReset={() => { props.resetField('maxSteps') }}
+      />
+      <ValueField
+        id="plugin-config-agent-loop-tool-settle"
+        label={t('agentLoopToolSettle')}
+        hint={t('agentLoopToolSettleHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        disabled={!state.writable}
+        {...state.toolSettle}
+        onEdit={(text) => { props.edit('toolSettle', text) }}
+        onReset={() => { props.resetField('toolSettle') }}
+      />
+      <ValueField
+        id="plugin-config-agent-loop-llm-retry"
+        label={t('agentLoopLlmRetry')}
+        hint={t('agentLoopLlmRetryHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        disabled={!state.writable}
+        {...state.llmRetryMaxRetries}
+        onEdit={(text) => { props.edit('llmRetryMaxRetries', text) }}
+        onReset={() => { props.resetField('llmRetryMaxRetries') }}
+      />
     </PluginCard>
   )
 }

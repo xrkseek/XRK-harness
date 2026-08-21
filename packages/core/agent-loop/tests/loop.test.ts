@@ -35,6 +35,118 @@ describe("runTurn", () => {
     ]);
   });
 
+  it("ends turn error on EMPTY_RESPONSE", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    const llm = createReplayAdapter([{ content: "" }]);
+
+    await expect(
+      runTurn({
+        sessionId: session.id,
+        userText: "hi",
+        store,
+        llm,
+        tools,
+        llmRetry: false,
+      }),
+    ).rejects.toMatchObject({ name: "EmptyResponseError" });
+
+    const end = store.get(session.id).events.find((e) => e.type === "turn/end");
+    expect(end).toMatchObject({
+      type: "turn/end",
+      reason: {
+        kind: "error",
+        error: { code: "EMPTY_RESPONSE" },
+      },
+    });
+  });
+
+  it("ends turn max-tokens and drops truncated tool calls", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    let executed = 0;
+    tools.register({
+      name: "echo",
+      description: "e",
+      parameters: { type: "object" },
+      async execute() {
+        executed += 1;
+        return { content: "should-not-run" };
+      },
+    });
+    const llm = createReplayAdapter([
+      {
+        content: "partial",
+        finishReason: "max-tokens",
+        toolCalls: [{ id: "c1", name: "echo", arguments: {} }],
+      },
+    ]);
+
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "hi",
+      store,
+      llm,
+      tools,
+    });
+
+    expect(result.assistantText).toBe("partial");
+    expect(executed).toBe(0);
+    const events = store.get(session.id).events;
+    expect(events.some((e) => e.type === "tool/call")).toBe(false);
+    const end = events.find((e) => e.type === "turn/end");
+    expect(end).toMatchObject({ type: "turn/end", reason: { kind: "max-tokens" } });
+    expect(deriveMessages(events)).toEqual([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "partial" },
+    ]);
+  });
+
+  it("forwards assemble.toolOrder onto the LLM tools list", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    tools.register({
+      name: "zeta",
+      description: "z",
+      parameters: { type: "object" },
+      async execute() {
+        return { content: "z" };
+      },
+    });
+    tools.register({
+      name: "alpha",
+      description: "a",
+      parameters: { type: "object" },
+      async execute() {
+        return { content: "a" };
+      },
+    });
+    const llm = createReplayAdapter([{ content: "ok" }]);
+    const seen: string[][] = [];
+    const orig = llm.chat.bind(llm);
+    llm.chat = async (req) => {
+      seen.push((req.tools ?? []).map((t) => t.name));
+      return orig(req);
+    };
+
+    await runTurn({
+      sessionId: session.id,
+      userText: "hi",
+      store,
+      llm,
+      tools,
+      assemble: {
+        persona: "P",
+        toolOrder: ["zeta", " "],
+      },
+    });
+
+    expect(seen[0]).toEqual(["zeta", "alpha"]);
+  });
+
   it("runs one tool then final answer", async () => {
     const store = createMemorySessionStore();
     const session = store.create();
@@ -69,6 +181,69 @@ describe("runTurn", () => {
     expect(result.steps).toBe(2);
     const roles = deriveMessages(store.get(session.id).events).map((m) => m.role);
     expect(roles).toEqual(["user", "assistant", "tool", "assistant"]);
+  });
+
+  it("passbacks reasoning on every reasoned assistant when calling LLM again (rc.8)", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    tools.register({
+      name: "echo",
+      description: "echo",
+      parameters: { type: "object" },
+      async execute(args) {
+        return { content: String((args as { text?: string }).text ?? "") };
+      },
+    });
+    const llm = createReplayAdapter([
+      {
+        content: "",
+        reasoning: "need echo",
+        toolCalls: [
+          { id: "c1", name: "echo", arguments: { text: "hi" } },
+        ],
+      },
+      { content: "done", reasoning: "plain CoT" },
+      { content: "follow" },
+    ]);
+    const seen: unknown[] = [];
+    const orig = llm.chat.bind(llm);
+    llm.chat = async (req) => {
+      seen.push(req.messages);
+      return orig(req);
+    };
+
+    await runTurn({
+      sessionId: session.id,
+      userText: "go",
+      store,
+      llm,
+      tools,
+    });
+    // Second turn to force another LLM call that replays the plain CoT turn.
+    await runTurn({
+      sessionId: session.id,
+      userText: "again",
+      store,
+      llm,
+      tools,
+    });
+
+    expect(seen.length).toBeGreaterThanOrEqual(3);
+    const second = seen[1] as Array<{
+      role: string;
+      reasoning?: string;
+      toolCalls?: unknown;
+    }>;
+    const assistantWithTools = second.find(
+      (m) => m.role === "assistant" && m.toolCalls,
+    );
+    expect(assistantWithTools?.reasoning).toBe("need echo");
+    const third = seen[2] as Array<{ role: string; reasoning?: string }>;
+    const plain = third.find(
+      (m) => m.role === "assistant" && m.reasoning === "plain CoT",
+    );
+    expect(plain?.reasoning).toBe("plain CoT");
   });
 
   it("appends todo/write before tool/result; deriveMessages skips it", async () => {
@@ -300,5 +475,44 @@ describe("runTurn", () => {
     });
     expect(result.assistantText).toBe("saw");
     expect(sawImage).toBe(true);
+  });
+
+  it("ends the turn when a tool returns concludesTurn (DSH)", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    tools.register({
+      name: "finish",
+      description: "finish",
+      parameters: { type: "object" },
+      async execute() {
+        return { content: "done", concludesTurn: true };
+      },
+    });
+    const llm = createReplayAdapter([
+      {
+        content: "",
+        toolCalls: [{ id: "c1", name: "finish", arguments: {} }],
+      },
+      { content: "should-not-run" },
+    ]);
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "go",
+      store,
+      llm,
+      tools,
+    });
+    expect(result.assistantText).toBe("");
+    expect(result.steps).toBe(1);
+    expect(result.toolOk).toBe(1);
+    const end = store.get(session.id).events.find((e) => e.type === "turn/end");
+    expect(end).toMatchObject({
+      type: "turn/end",
+      reason: { kind: "completed" },
+    });
+    const msgs = deriveMessages(store.get(session.id).events);
+    expect(msgs.some((m) => m.role === "assistant" && m.content === "should-not-run")).toBe(false);
+    expect(msgs.some((m) => m.role === "tool" && m.content === "done")).toBe(true);
   });
 });

@@ -95,11 +95,23 @@ function parseToolResult(value: unknown, path: string): ToolResult {
       throw new SessionEventParseError("meta must be a JSON object", path);
     }
   }
+  let error: ToolResult["error"];
+  const errorRaw = value.error;
+  if (errorRaw !== undefined) {
+    if (!isObject(errorRaw)) {
+      throw new SessionEventParseError("error must be an object", path);
+    }
+    error = {
+      name: reqString(errorRaw, "name", `${path}.error`),
+      code: reqString(errorRaw, "code", `${path}.error`),
+    };
+  }
   return {
     toolCallId: reqString(value, "toolCallId", path),
     name: reqString(value, "name", path),
     content: parseMessageContent(value.content, `${path}.content`),
     ...(isError === true ? { isError: true as const } : {}),
+    ...(error !== undefined ? { error } : {}),
     ...(meta !== undefined
       ? { meta: meta as Readonly<Record<string, unknown>> }
       : {}),
@@ -193,7 +205,8 @@ export function parseSessionEvent(value: unknown): SessionEvent {
       const kind =
         kindRaw === "reasoning" ||
         kindRaw === "text" ||
-        kindRaw === "usage"
+        kindRaw === "usage" ||
+        kindRaw === "tool-call"
           ? kindRaw
           : undefined;
       const index =
@@ -218,6 +231,32 @@ export function parseSessionEvent(value: unknown): SessionEvent {
           'kind "usage" requires usage object',
           type,
         );
+      }
+      const toolCallId = optString(value, "toolCallId");
+      const toolName = optString(value, "toolName");
+      const argumentsDelta = optString(value, "argumentsDelta");
+      if (kind === "tool-call") {
+        if (!toolCallId) {
+          throw new SessionEventParseError(
+            'kind "tool-call" requires toolCallId',
+            type,
+          );
+        }
+        const delta =
+          argumentsDelta ??
+          (typeof value.text === "string" ? value.text : "");
+        return {
+          type,
+          ts,
+          turnId: reqString(value, "turnId", type),
+          stepId: reqString(value, "stepId", type),
+          text: delta,
+          kind: "tool-call" as const,
+          ...(index !== undefined ? { index } : {}),
+          toolCallId,
+          ...(toolName !== undefined ? { toolName } : {}),
+          argumentsDelta: delta,
+        };
       }
       const text =
         kind === "usage"
@@ -668,6 +707,83 @@ export function parseSessionEvent(value: unknown): SessionEvent {
           ...(tools !== undefined ? { tools } : {}),
           ...(adapterDefaults ? { adapterDefaults } : {}),
         },
+      };
+    }
+    case "llm/retry": {
+      const modeRaw = value.mode;
+      const mode =
+        modeRaw === "normal" || modeRaw === "always" ? modeRaw : undefined;
+      if (!mode) {
+        throw new SessionEventParseError("invalid llm/retry mode", type);
+      }
+      const failureRaw = value.failure;
+      if (
+        !failureRaw ||
+        typeof failureRaw !== "object" ||
+        Array.isArray(failureRaw)
+      ) {
+        throw new SessionEventParseError("failure required", type);
+      }
+      const f = failureRaw as Record<string, unknown>;
+      const delayMs = value.delayMs;
+      if (typeof delayMs !== "number" || !Number.isFinite(delayMs) || delayMs < 0) {
+        throw new SessionEventParseError("delayMs must be a non-negative number", type);
+      }
+      const retry = value.retry;
+      if (typeof retry !== "number" || !Number.isInteger(retry) || retry < 1) {
+        throw new SessionEventParseError("retry must be a positive integer", type);
+      }
+      const maxRetriesRaw = value.maxRetries;
+      const maxRetries =
+        typeof maxRetriesRaw === "number" &&
+        Number.isInteger(maxRetriesRaw) &&
+        maxRetriesRaw >= 0
+          ? maxRetriesRaw
+          : undefined;
+      const statusRaw = f.status;
+      const status =
+        typeof statusRaw === "number" && Number.isInteger(statusRaw)
+          ? statusRaw
+          : undefined;
+      const pra = f.providerRetryAfterMs;
+      const providerRetryAfterMs =
+        typeof pra === "number" && Number.isFinite(pra) && pra >= 0
+          ? pra
+          : undefined;
+      const provider = optString(value, "provider");
+      return {
+        type,
+        ts,
+        turnId: reqString(value, "turnId", type),
+        stepId: reqString(value, "stepId", type),
+        retryId: reqString(value, "retryId", type),
+        retry,
+        ...(maxRetries !== undefined ? { maxRetries } : {}),
+        delayMs,
+        mode,
+        failure: {
+          message: reqString(f, "message", `${type}.failure`),
+          code: reqString(f, "code", `${type}.failure`),
+          ...(status !== undefined ? { status } : {}),
+          ...(providerRetryAfterMs !== undefined
+            ? { providerRetryAfterMs }
+            : {}),
+        },
+        ...(provider !== undefined ? { provider } : {}),
+      };
+    }
+    case "llm/retry-started": {
+      const retry = value.retry;
+      if (typeof retry !== "number" || !Number.isInteger(retry) || retry < 1) {
+        throw new SessionEventParseError("retry must be a positive integer", type);
+      }
+      return {
+        type,
+        ts,
+        turnId: reqString(value, "turnId", type),
+        stepId: reqString(value, "stepId", type),
+        retryId: reqString(value, "retryId", type),
+        retry,
       };
     }
     default:

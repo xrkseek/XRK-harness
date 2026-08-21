@@ -68,4 +68,28 @@ describe("deepseek adapter", () => {
     });
     expect(out.content).toBe("gw");
   });
+
+  it("emits thinking wire when reasoningEffort is set", async () => {
+    let body: Record<string, unknown> | undefined;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "ok" }, finish_reason: "stop" }],
+        }),
+        { status: 200 },
+      );
+    });
+    const llm = createDeepSeekAdapter({
+      apiKey: "sk",
+      fetch: fetchMock as unknown as typeof fetch,
+      enableStream: false,
+    });
+    await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+      reasoningEffort: "max",
+    });
+    expect(body?.thinking).toEqual({ type: "enabled" });
+    expect(body?.reasoning_effort).toBe("max");
+  });
 });

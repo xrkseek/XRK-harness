@@ -201,6 +201,14 @@ export type AgentFactory = (input: {
   resolveLlm?: (sessionId: string) => LlmAdapter | undefined;
   /** Face Plugins → agent-loop / bash / web-search (Host reads live Face namespaces). */
   maxParallelToolCalls?: number;
+  /** Face `agent-loop.maxSteps` — LLM steps per user turn. */
+  maxSteps?: number;
+  /** Face `agent-loop.toolOrder` — DSH-style tool wire order. */
+  toolOrder?: readonly string[];
+  /** Face `agent-loop.toolSettle`. */
+  toolSettle?: "serial" | "parallel";
+  /** Face `agent-loop.llmRetryMaxRetries` (`0` disables). */
+  llmRetryMaxRetries?: number;
   bashLimits?: {
     timeoutMs?: number;
     maxOutputBytes?: number;
@@ -352,6 +360,10 @@ export function createHostManager(): HostManager {
       const pluginSettingsBox: {
         read?: () => {
           maxParallelToolCalls?: number;
+          maxSteps?: number;
+          toolOrder?: readonly string[];
+          toolSettle?: "serial" | "parallel";
+          llmRetryMaxRetries?: number;
           bashLimits?: { timeoutMs?: number; maxOutputBytes?: number };
           webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
         };
@@ -400,6 +412,18 @@ export function createHostManager(): HostManager {
                 : {}),
               ...(pluginSettings.maxParallelToolCalls !== undefined
                 ? { maxParallelToolCalls: pluginSettings.maxParallelToolCalls }
+                : {}),
+              ...(pluginSettings.maxSteps !== undefined
+                ? { maxSteps: pluginSettings.maxSteps }
+                : {}),
+              ...(pluginSettings.toolOrder !== undefined
+                ? { toolOrder: pluginSettings.toolOrder }
+                : {}),
+              ...(pluginSettings.toolSettle !== undefined
+                ? { toolSettle: pluginSettings.toolSettle }
+                : {}),
+              ...(pluginSettings.llmRetryMaxRetries !== undefined
+                ? { llmRetryMaxRetries: pluginSettings.llmRetryMaxRetries }
                 : {}),
               ...(pluginSettings.bashLimits
                 ? { bashLimits: pluginSettings.bashLimits }
@@ -612,6 +636,31 @@ export function createHostManager(): HostManager {
           loop.maxParallelToolCalls > 0
             ? Math.floor(loop.maxParallelToolCalls)
             : undefined;
+        const maxSteps =
+          typeof loop.maxSteps === "number" &&
+          Number.isFinite(loop.maxSteps) &&
+          loop.maxSteps > 0
+            ? Math.floor(loop.maxSteps)
+            : undefined;
+        const toolOrderRaw = loop.toolOrder;
+        const toolOrder =
+          Array.isArray(toolOrderRaw) &&
+          toolOrderRaw.length > 0 &&
+          toolOrderRaw.every((x) => typeof x === "string")
+            ? (toolOrderRaw as string[])
+            : undefined;
+        const toolSettleRaw = loop.toolSettle;
+        const toolSettle =
+          toolSettleRaw === "serial" || toolSettleRaw === "parallel"
+            ? toolSettleRaw
+            : undefined;
+        const llmRetryMaxRetriesRaw = loop.llmRetryMaxRetries;
+        const llmRetryMaxRetries =
+          typeof llmRetryMaxRetriesRaw === "number" &&
+          Number.isFinite(llmRetryMaxRetriesRaw) &&
+          llmRetryMaxRetriesRaw >= 0
+            ? Math.floor(llmRetryMaxRetriesRaw)
+            : undefined;
         const timeoutMs =
           typeof bash.timeoutMs === "number" &&
           Number.isFinite(bash.timeoutMs) &&
@@ -652,6 +701,10 @@ export function createHostManager(): HostManager {
         };
         return {
           ...(maxParallelToolCalls !== undefined ? { maxParallelToolCalls } : {}),
+          ...(maxSteps !== undefined ? { maxSteps } : {}),
+          ...(toolOrder !== undefined ? { toolOrder } : {}),
+          ...(toolSettle !== undefined ? { toolSettle } : {}),
+          ...(llmRetryMaxRetries !== undefined ? { llmRetryMaxRetries } : {}),
           ...(timeoutMs !== undefined || maxOutputBytes !== undefined
             ? {
                 bashLimits: {

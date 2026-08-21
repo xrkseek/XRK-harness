@@ -1,8 +1,30 @@
 import type { SessionEvent, ToolCall } from "@xrkseek/protocol";
+import {
+  TOOL_ABORTED_BEFORE_DISPATCH,
+  TOOL_ABORTED_BEFORE_DISPATCH_MESSAGE,
+} from "@xrkseek/protocol";
+export {
+  TOOL_ABORTED,
+  TOOL_ABORTED_BEFORE_DISPATCH,
+  TOOL_ABORTED_MESSAGE,
+  TOOL_ABORTED_BEFORE_DISPATCH_MESSAGE,
+} from "@xrkseek/protocol";
 import type { SessionStore } from "./index.js";
 
-/** OpenCode-aligned settlement text for abandoned local tool calls. */
+/** @deprecated Prefer source-specific messages below. */
 export const TOOL_INTERRUPTED_MESSAGE = "Tool execution interrupted";
+
+/** Recovery code: assistant named the call but no `tool/call` was recorded. */
+export const TOOL_NOT_STARTED = "TOOL_NOT_STARTED";
+
+/** Recovery code: `tool/call` recorded but no durable `tool/result`. */
+export const TOOL_OUTCOME_UNKNOWN = "TOOL_OUTCOME_UNKNOWN";
+
+export const TOOL_NOT_STARTED_MESSAGE =
+  "The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.";
+
+export const TOOL_OUTCOME_UNKNOWN_MESSAGE =
+  "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.";
 
 export interface DanglingToolCall {
   readonly call: ToolCall;
@@ -53,8 +75,6 @@ export function listDanglingToolCalls(
     if (ev.type === "assistant/message" && ev.toolCalls?.length) {
       for (const call of ev.toolCalls) {
         if (open.has(call.id)) continue;
-        // Only open if no result exists later — we don't know yet; add tentatively.
-        // Results after this assistant will clear. Prior results already deleted from open.
         open.set(call.id, {
           call,
           turnId: ev.turnId,
@@ -77,9 +97,44 @@ export function assertToolCallsSettled(events: readonly SessionEvent[]): void {
   }
 }
 
+export function danglingSettlement(d: DanglingToolCall): {
+  readonly content: string;
+  readonly error: { readonly name: string; readonly code: string };
+} {
+  if (d.source === "tool/call") {
+    return {
+      content: TOOL_OUTCOME_UNKNOWN_MESSAGE,
+      error: { name: "ToolOutcomeUnknownError", code: TOOL_OUTCOME_UNKNOWN },
+    };
+  }
+  return {
+    content: TOOL_NOT_STARTED_MESSAGE,
+    error: { name: "ToolNotStartedError", code: TOOL_NOT_STARTED },
+  };
+}
+
+export function abortedBeforeDispatchSettlement(): {
+  readonly content: string;
+  readonly error: { readonly name: string; readonly code: string };
+} {
+  return {
+    content: TOOL_ABORTED_BEFORE_DISPATCH_MESSAGE,
+    error: {
+      name: "AbortError",
+      code: TOOL_ABORTED_BEFORE_DISPATCH,
+    },
+  };
+}
+
 export interface SettleDanglingOptions {
   readonly now?: () => number;
+  /** @deprecated Ignored; settlement text is source-specific (DSH repair). */
   readonly message?: string;
+  /**
+   * `aborted-before-dispatch` — cancel path (known: body never ran).
+   * Default `crash` — source-specific unknown / not-started codes.
+   */
+  readonly kind?: "crash" | "aborted-before-dispatch";
 }
 
 export interface SettleDanglingResult {
@@ -97,9 +152,12 @@ export function settleDanglingTools(
   options: SettleDanglingOptions = {},
 ): SettleDanglingResult {
   const now = options.now ?? Date.now;
-  const message = options.message ?? TOOL_INTERRUPTED_MESSAGE;
   const dangling = listDanglingToolCalls(store.get(sessionId).events);
   for (const d of dangling) {
+    const settled =
+      options.kind === "aborted-before-dispatch"
+        ? abortedBeforeDispatchSettlement()
+        : danglingSettlement(d);
     store.append(sessionId, {
       type: "tool/result",
       ts: now(),
@@ -108,8 +166,9 @@ export function settleDanglingTools(
       result: {
         toolCallId: d.call.id,
         name: d.call.name,
-        content: message,
+        content: settled.content,
         isError: true,
+        error: settled.error,
       },
     });
   }

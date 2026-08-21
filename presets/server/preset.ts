@@ -45,6 +45,10 @@ export function createServerAgentFactory(
     shellJobs,
     resolveLlm,
     maxParallelToolCalls,
+    maxSteps,
+    toolOrder,
+    toolSettle,
+    llmRetryMaxRetries,
     bashLimits,
     webSearch,
   }) => {
@@ -66,6 +70,10 @@ export function createServerAgentFactory(
       ...(ptyService ? { ptyTools: ptyService } : {}),
       ...(shellJobs ? { shell: shellJobs } : {}),
       ...(maxParallelToolCalls !== undefined ? { maxParallelToolCalls } : {}),
+      ...(maxSteps !== undefined ? { maxSteps } : {}),
+      ...(toolOrder !== undefined ? { toolOrder } : {}),
+      ...(toolSettle !== undefined ? { toolSettle } : {}),
+      ...(llmRetryMaxRetries !== undefined ? { llmRetryMaxRetries } : {}),
       ...(bashLimits ? { bashLimits } : {}),
       ...(webSearch ? { webSearch } : {}),
     });

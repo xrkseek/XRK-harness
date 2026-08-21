@@ -10,12 +10,13 @@ Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deri
 
 | `type` | Required fields (beyond `ts`) | Notes |
 |--------|-------------------------------|--------|
-| `turn/start` · `turn/end` | `turnId` | Turn bracket |
+| `turn/start` · `turn/end` | `turnId` | Turn bracket；`turn/end.reason` 含 `completed` · `aborted` · `error` · `max-tokens` · `interrupted` · `blocked`。OpenAI `finish_reason: length` / Anthropic `stop_reason: max_tokens` → keep/drop 去截断 toolCalls → `{ kind: "max-tokens" }`（sticky）。`stop` 且无内容/推理/工具 → `EMPTY_RESPONSE`；未知 finish（如 `content_filter`）→ `ProviderFinishError`；非 max-tokens 的残缺 tool JSON → `IncompleteToolCallError`；三者均写 `turn/end` `{ kind: "error" }` 后抛出 |
 | `step/start` · `step/end` | `turnId`, `stepId` | Provider step |
 | `user/message` | `turnId`, `content` | `content`: `string` **或** `ContentBlock[]`（text / image+`ImageAttachmentRef`）；可选 `rpcId` |
-| `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta；可选 `kind`：`text`\|`reasoning`\|`usage`；`usage` 时带 `usage`（TokenUsage；可空 text）；可选 `index`（reasoning=0、text=1） |
-| `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls`；可选 `reasoning`（非 deriveMessages 可见）；可选 `interrupted`；可选 `usage`（`TokenUsage`；Face `sessionStats.decodeTokens` + `tokenUsage`） |
+| `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta；可选 `kind`：`text`\|`reasoning`\|`usage`\|`tool-call`；`usage` 时带 `usage`；`tool-call` 时带 `toolCallId` · 可选 `toolName` · `argumentsDelta`；可选 `index` |
+| `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls`；可选 `reasoning`（`deriveMessages` 在有文本时回传，DSH rc.8 每轮 CoT）；可选 `interrupted`；可选 `usage`（`TokenUsage`；Face `sessionStats.decodeTokens` + `tokenUsage`） |
 | `request/header` | `turnId`, `reason`, `header.config` | 非模型可见；`provider`/`model`；可选 `reasoningEffort` · `contextWindow`；可选 `system` · `tools[]`（Face `contextBreakdown` / envelope 重价） |
+| `llm/retry` · `llm/retry-started` | `turnId`, `stepId`, `retryId`, `retry`, … | 非模型可见；步内可重试失败后写 `llm/retry`（delay / failure.code），backoff 结束写 `llm/retry-started`；失败尝试的 stream chunk **不**落库 |
 | `tool/call` | `turnId`, `stepId`, `call` | Before pipeline body |
 | `tool/result` | `turnId`, `stepId`, `result` | Settled result；`result.content` = MessageContent（string \| ContentBlock[]，MCP 可准入 image ref）；`result.meta` 可选（壳卡回放，不进 `deriveMessages`） |
 | `prompt/admitted` | `admitId`, `content` | MessageContent（string \| blocks）；可选 `delivery`: steer\|queue |

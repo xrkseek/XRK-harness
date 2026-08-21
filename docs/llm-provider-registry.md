@@ -29,15 +29,17 @@ listForUi() / catalog() → Face `llm.providers` · `session.models`
 
 Face `llm-pi-ai.providers.*.api` 写入后经 `readProviderRoute` → `resolveProviderBinding` 选工厂；覆盖协议时用目标协议默认 path。
 
-### Prompt cache（DeepSeek 等前缀缓存）
+### Prompt cache（DeepSeek / Anthropic 等前缀缓存）
 
 对齐 DSH：模型可见前缀尽量 **append-only**。
 
 | 做法 | 作用 |
 |------|------|
 | tools **按 name 字典序** | 注册 / MCP 热挂顺序不进入 wire |
+| 可选 `toolOrder: string[]`（恰好一个 `' '` rest） | 固定常用工具位置；错配 fail-loud；缺省 = 纯字典序。Face `agent-loop.toolOrder` → Host → `assemble.toolOrder`（settings.yaml）；`@xrkseek/core-system-prompt` |
 | volatile **不进 system** | 时钟与 session id 只在 user 尾缀 |
 | 同 turn 后续 step：关 `[current message]` 与 volatile `time:` | 工具循环不每步挪动对话中段 |
+| Anthropic `cache_control: { type: "ephemeral" }` | system 文本块 + 最后一个 tool 定义打 breakpoint；`chat`/`stream` usage 映射 `cache_read_input_tokens` / `cache_creation_input_tokens` → `cacheReadTokens` / `cacheWriteTokens` |
 
 StatsLine「缓存命中」= `cacheReadTokens / (uncached + cacheRead + cacheWrite)`（`tokenUsage` 投影）。换模型 / 改 system（plan · recipe）仍会整段 miss。
 

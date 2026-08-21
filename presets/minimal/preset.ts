@@ -292,6 +292,7 @@ export function createMinimalComposition(
           : {}),
         compaction:
           options.compaction === false ? false : (options.compaction ?? {}),
+        maxSteps: 8,
       });
     },
     dumpConfig(patch = {}) {

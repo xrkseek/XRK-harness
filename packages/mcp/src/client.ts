@@ -11,10 +11,36 @@ import type {
   McpClient,
   McpClientOptions,
   McpConnectionState,
+  McpToolAnnotations,
   McpToolInfo,
 } from "./types.js";
 
 const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000;
+
+/** Parse MCP tool.annotations; only known boolean hints are kept. */
+export function parseMcpToolAnnotations(
+  raw: unknown,
+): McpToolAnnotations | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const out: {
+    title?: string;
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+  } = {};
+  if (typeof o.title === "string" && o.title.trim()) out.title = o.title.trim();
+  if (typeof o.readOnlyHint === "boolean") out.readOnlyHint = o.readOnlyHint;
+  if (typeof o.destructiveHint === "boolean") {
+    out.destructiveHint = o.destructiveHint;
+  }
+  if (typeof o.idempotentHint === "boolean") {
+    out.idempotentHint = o.idempotentHint;
+  }
+  if (typeof o.openWorldHint === "boolean") out.openWorldHint = o.openWorldHint;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 
 // SDK stdio transport owns two 2s termination windows; one extra second for
 // the process-close event. Timing out fails closed instead of overlapping children.
@@ -357,16 +383,20 @@ export function createMcpClient(options: McpClientOptions): McpClient {
 
     async listTools() {
       const result = await requireLive().listTools();
-      return result.tools.map(
-        (t): McpToolInfo => ({
+      return result.tools.map((t): McpToolInfo => {
+        const annotations = parseMcpToolAnnotations(
+          (t as { annotations?: unknown }).annotations,
+        );
+        return {
           name: t.name,
           description: t.description ?? "",
           inputSchema:
             t.inputSchema && typeof t.inputSchema === "object"
               ? (t.inputSchema as Record<string, unknown>)
               : { type: "object", properties: {} },
-        }),
-      );
+          ...(annotations ? { annotations } : {}),
+        };
+      });
     },
 
     async callTool(rawName, args, signal) {
