@@ -26,6 +26,8 @@ packages/stubs/**/lib/
 .xrk/sessions/
 .xrk/host-settings.json
 .xrk-harness/
+# Accidental cwd dump when harness home resolves to repo root
+/workspaces.json
 
 # Release staging (fat CLI)
 .release/
