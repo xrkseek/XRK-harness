@@ -95,6 +95,7 @@ export async function tryApplySlashSkill(
     typeof source === "string" ? { productDir: source } : source;
   const skill = await loadSkill({ ...opts, name: parsed.id });
   if (!skill) return undefined;
+  if (!skill.userInvocable) return undefined;
   const body = renderSkillContent(skill);
   const userPrompt = parsed.rest ? `${body}\n\n${parsed.rest}` : body;
   return {

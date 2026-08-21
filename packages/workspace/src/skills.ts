@@ -6,7 +6,10 @@ export interface SkillSummary {
   readonly name: string;
   readonly description: string;
   readonly whenToUse?: string;
+  /** False → omit from catalog / `skill` tool (DSH `disable-model-invocation`). */
   readonly modelInvocable: boolean;
+  /** False → omit from `/skill-name` slash expand (DSH `user-invocable: false`). */
+  readonly userInvocable: boolean;
   /** Directory name that contains `SKILL.md`. */
   readonly dirName: string;
   readonly directory: string;
@@ -71,19 +74,40 @@ export function isSkillName(name: string): boolean {
   return true;
 }
 
-export function parseSkillMarkdown(
-  raw: string,
-  fallbackName: string,
-): {
+export type ParsedSkillFrontmatter = {
   readonly name: string;
   readonly description: string;
   readonly whenToUse?: string;
   readonly content: string;
-} {
+  readonly modelInvocable: boolean;
+  readonly userInvocable: boolean;
+  /**
+   * True when disable-model-invocation / user-invocable frontmatter is present
+   * but not a boolean — skill is dropped (fail-closed, DSH).
+   */
+  readonly invalid: boolean;
+};
+
+function parseFrontmatterBool(
+  raw: string,
+): boolean | "invalid" {
+  const v = raw.trim().toLowerCase();
+  if (v === "true" || v === "yes" || v === "1") return true;
+  if (v === "false" || v === "no" || v === "0") return false;
+  return "invalid";
+}
+
+export function parseSkillMarkdown(
+  raw: string,
+  fallbackName: string,
+): ParsedSkillFrontmatter {
   let body = raw.replace(/^\uFEFF/, "");
   let name = fallbackName;
   let description = "";
   let whenToUse: string | undefined;
+  let modelInvocable = true;
+  let userInvocable = true;
+  let invalid = false;
 
   if (body.startsWith("---")) {
     const end = body.indexOf("\n---", 3);
@@ -91,7 +115,7 @@ export function parseSkillMarkdown(
       const fm = body.slice(3, end).trim();
       body = body.slice(end + 4).replace(/^\r?\n/, "");
       for (const line of fm.split(/\r?\n/)) {
-        const m = /^(\w+)\s*:\s*(.*)$/.exec(line.trim());
+        const m = /^([\w-]+)\s*:\s*(.*)$/.exec(line.trim());
         if (!m) continue;
         const key = m[1]!;
         const val = m[2]!.replace(/^["']|["']$/g, "").trim();
@@ -99,6 +123,19 @@ export function parseSkillMarkdown(
         if (key === "description" && val) description = val;
         if ((key === "whenToUse" || key === "when_to_use") && val) {
           whenToUse = val;
+        }
+        if (
+          key === "disable-model-invocation" ||
+          key === "disable_model_invocation"
+        ) {
+          const b = parseFrontmatterBool(val);
+          if (b === "invalid") invalid = true;
+          else modelInvocable = !b;
+        }
+        if (key === "user-invocable" || key === "user_invocable") {
+          const b = parseFrontmatterBool(val);
+          if (b === "invalid") invalid = true;
+          else userInvocable = b;
         }
       }
     }
@@ -118,6 +155,9 @@ export function parseSkillMarkdown(
     description,
     ...(whenToUse ? { whenToUse } : {}),
     content,
+    modelInvocable,
+    userInvocable,
+    invalid,
   };
 }
 
@@ -201,7 +241,7 @@ export async function listSkillsInDir(
       continue;
     }
     const skillFile = path.join(directory, "SKILL.md");
-    let parsed: ReturnType<typeof parseSkillMarkdown>;
+    let parsed: ParsedSkillFrontmatter;
     try {
       const raw = await readFile(skillFile, "utf8");
       parsed = parseSkillMarkdown(raw, dirName);
@@ -210,14 +250,19 @@ export async function listSkillsInDir(
         name: dirName,
         description: dirName,
         content: "",
+        modelInvocable: true,
+        userInvocable: true,
+        invalid: false,
       };
     }
+    if (parsed.invalid) continue;
     if (!isSkillName(parsed.name)) continue;
     out.push({
       name: parsed.name,
       description: parsed.description,
       ...(parsed.whenToUse ? { whenToUse: parsed.whenToUse } : {}),
-      modelInvocable: true,
+      modelInvocable: parsed.modelInvocable,
+      userInvocable: parsed.userInvocable,
       dirName,
       directory,
     });
@@ -283,6 +328,8 @@ export async function loadSkill(
     name: parsed.name,
     description: parsed.description,
     ...(parsed.whenToUse ? { whenToUse: parsed.whenToUse } : {}),
+    modelInvocable: summary.modelInvocable,
+    userInvocable: summary.userInvocable,
     content: parsed.content,
   };
 }
@@ -290,8 +337,9 @@ export async function loadSkill(
 export function formatSkillCatalog(
   skills: readonly SkillSummary[],
 ): string | undefined {
-  if (skills.length === 0) return undefined;
-  const lines = skills.map((s) => {
+  const listed = skills.filter((s) => s.modelInvocable);
+  if (listed.length === 0) return undefined;
+  const lines = listed.map((s) => {
     const extra = s.whenToUse ? ` When to use: ${s.whenToUse}` : "";
     return `- **${s.name}**: ${s.description}.${extra}`;
   });

@@ -165,6 +165,55 @@ export const sessionEventJsonSchema = {
         turnId: { type: "string" },
         content: messageContentSchema,
         rpcId: { type: "string" },
+        source: {
+          type: "object",
+          required: ["kind"],
+          properties: {
+            kind: { type: "string" },
+            form: { type: "string" },
+            digest: { type: "string" },
+            update: { type: "boolean" },
+            entries: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["name", "description"],
+                properties: {
+                  name: { type: "string" },
+                  description: { type: "string" },
+                },
+                additionalProperties: true,
+              },
+            },
+            changes: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["action"],
+                properties: {
+                  action: { type: "string", enum: ["set", "merge", "clear"] },
+                  path: { type: "string" },
+                },
+                additionalProperties: true,
+              },
+            },
+            plugin: { type: "string" },
+            budgetTruncations: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["section", "originalChars", "keptChars"],
+                properties: {
+                  section: { type: "string" },
+                  originalChars: { type: "number" },
+                  keptChars: { type: "number" },
+                },
+                additionalProperties: false,
+              },
+            },
+          },
+          additionalProperties: true,
+        },
       }),
       additionalProperties: false,
     },

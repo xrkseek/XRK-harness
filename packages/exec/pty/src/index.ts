@@ -66,7 +66,7 @@ export {
   type SpawnTerminalFn,
   type SpawnTerminalSpec,
 } from "./handle.js";
-export { createTerminalSessionService } from "./registry.js";
+export { createTerminalSessionService, unknownSessionHint } from "./registry.js";
 export {
   createBashTerminalBackend,
   type BashTerminalBackendOptions,

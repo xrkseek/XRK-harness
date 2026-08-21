@@ -25,6 +25,59 @@ describe("parseSessionEvent", () => {
     });
   });
 
+  it("parses user/message skill-catalog source", () => {
+    const ev = parseSessionEvent({
+      type: "user/message",
+      ts: 1,
+      turnId: "t1",
+      content: "<available_skills>",
+      source: {
+        kind: "skill-catalog",
+        form: "catalog",
+        entries: [{ name: "ping", description: "Ping" }],
+        digest: "abc",
+        update: true,
+      },
+    });
+    expect(ev).toMatchObject({
+      type: "user/message",
+      source: {
+        kind: "skill-catalog",
+        form: "catalog",
+        entries: [{ name: "ping", description: "Ping" }],
+        digest: "abc",
+        update: true,
+      },
+    });
+  });
+
+  it("parses user/message agent-instructions source", () => {
+    const ev = parseSessionEvent({
+      type: "user/message",
+      ts: 2,
+      turnId: "t1",
+      content: "## Assistant\nhello",
+      source: {
+        kind: "agent-instructions",
+        form: "instructions",
+        changes: [{ action: "set", path: "assistant.md" }],
+        budgetTruncations: [
+          { section: "rules", originalChars: 100, keptChars: 40 },
+        ],
+      },
+    });
+    expect(ev).toMatchObject({
+      source: {
+        kind: "agent-instructions",
+        form: "instructions",
+        changes: [{ action: "set", path: "assistant.md" }],
+        budgetTruncations: [
+          { section: "rules", originalChars: 100, keptChars: 40 },
+        ],
+      },
+    });
+  });
+
   it("rejects user/message missing content", () => {
     expect(() =>
       parseSessionEvent({ type: "user/message", ts: 1, turnId: "t" }),

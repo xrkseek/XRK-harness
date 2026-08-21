@@ -15,7 +15,7 @@ Parse/apply: `@xrkseek/workspace` (`createSlashResolver`, `tryApplySlashRecipe`,
 4. Unknown `/id` ? leave raw text (no expand).
 5. Logged user content is the **expanded** prompt (model-visible ? session).
 
-Recipe instructions land as a `## Recipe` workspace block on the three-layer system string. Skill bodies do **not** ? they are in the user event.
+Recipe instructions land as a `## Recipe` workspace block on the three-layer system string (`systemExtra`). Standing workspace assistant/rules and the skill catalog are durable `user/message` injects — see [workspace-inject.md](./workspace-inject.md). Skill slash bodies stay in the user event.
 
 Skill slash is **not** a Face command: unknown `/name` on `session.prompt` is admitted as text, then expanded here. `commands/list` / `commands/execute` still only cover builtins, process plugins, and recipes.
 

@@ -16,7 +16,7 @@
 
 一 composition 一 registry（没有 Cordis Agent owner；`hasActivity` = 已发布会话 ∪ 未发布 spawn）。Enablement ≠ provider：工具始终可见。无 `node-pty` 时 `terminal_open` 回 `isError` 明文。
 
-Host（harness/server）共享一份 PTY registry：跨 agent invalidate 仍保留会话，供 `/permission` 沙箱 fence 使用。
+Host（harness/server）共享一份 PTY registry：跨 agent invalidate 仍保留会话，供 `/permission` 沙箱 fence 使用。PTY id 形如 `pty-1`；勿把 volatile 里的聊天 `sess_…` 当成 terminal sessionId（会 `NO_SESSION` 并提示）。
 
 `bash` 仍是一次性管道 job（[shell-jobs.md](./shell-jobs.md)）。持久会话走本包。`terminal_send.run_in_background` 经 composition `ShellService.startManagedJob` 登记 `pty-send`，用 `job_output` / `job_kill` 收集或取消。
 

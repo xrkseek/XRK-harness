@@ -46,7 +46,7 @@ import {
   createSkillTools,
   createSlashResolver,
   loadOfficeRecipes,
-  resolveWorkspaceInject,
+  appendWorkspaceInjectsIfChanged,
   SKILL_TOOL_GUIDANCE,
   type ResolveWorkspaceInjectOptions,
   type WorkspaceInjector,
@@ -76,8 +76,9 @@ export interface MinimalCompositionOptions {
   readonly fs?: FsService;
   readonly assemble?: boolean;
   /**
-   * Wire product workspace into three-layer `workspaceBlocks`.
-   * Default: on when assemble is enabled. See docs/workspace-inject.md.
+   * Wire product workspace as durable `user/message` injects (skill catalog +
+   * agent-instructions) at turn start. Default: on when assemble is enabled.
+   * See docs/workspace-inject.md.
    */
   readonly workspaceInject?: WorkspaceInjectOption;
   /**
@@ -252,11 +253,8 @@ export function createMinimalComposition(
     async createAgent() {
       const system = await prompts.assemble();
       const useAssemble = options.assemble !== false;
-      let workspaceBlocks: readonly string[] | undefined;
-      if (shouldInject(options.assemble, options.workspaceInject)) {
-        const resolved = await resolveWorkspaceInject(injectOpts);
-        workspaceBlocks = resolved.blocks;
-      }
+      const injectOn =
+        shouldInject(options.assemble, options.workspaceInject);
       const productDir =
         injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
       let recipes: Awaited<ReturnType<typeof loadOfficeRecipes>> = [];
@@ -278,12 +276,21 @@ export function createMinimalComposition(
           ? {
               assemble: {
                 persona: system,
-                ...(workspaceBlocks?.length ? { workspaceBlocks } : {}),
                 resolveSlash: createSlashResolver({
                   workspaceRoot: injectOpts.root,
                   productDir,
                   recipes,
                 }),
+              },
+            }
+          : {}),
+        ...(injectOn
+          ? {
+              beforeUserMessage: async (ctx) => {
+                await appendWorkspaceInjectsIfChanged({
+                  ...ctx,
+                  injectOptions: injectOpts,
+                });
               },
             }
           : {}),

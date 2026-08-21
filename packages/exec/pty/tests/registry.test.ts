@@ -132,5 +132,8 @@ describe("createTerminalSessionService", () => {
       code: "DUPLICATE_NAME",
     });
     expect(() => service.read("pty-999")).toThrow(TerminalError);
+    expect(() => service.read("sess_mt2sdlby_v29jih")).toThrow(
+      /chat\/agent session id|pty-N/,
+    );
   });
 });

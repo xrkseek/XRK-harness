@@ -1,18 +1,20 @@
 import { mkdir, readFile, readdir, writeFile, access, stat } from "node:fs/promises";
 import path from "node:path";
 import { formatSkillCatalog, listSkills } from "./skills.js";
+import {
+  buildInstructionsPayload,
+  buildSkillCatalogPayload,
+  foldLatestWorkspaceInjectDigests,
+  planWorkspaceInjectAppends,
+  type InstructionChange,
+  type WorkspaceBudgetEvent,
+  type WorkspaceDurableInject,
+  type WorkspaceInjectAppend,
+} from "./durable-inject.js";
 
-export interface WorkspaceBudgetEvent {
-  readonly type: "workspace/budget-truncation";
-  readonly section: string;
-  readonly originalChars: number;
-  readonly keptChars: number;
-}
+export type { WorkspaceBudgetEvent } from "./durable-inject.js";
 
-export interface WorkspaceInjectResult {
-  readonly blocks: string[];
-  readonly events: WorkspaceBudgetEvent[];
-}
+export type WorkspaceInjectResult = WorkspaceDurableInject;
 
 export interface WorkspaceInjector {
   inject(options?: { maxChars?: number }): Promise<WorkspaceInjectResult>;
@@ -75,6 +77,9 @@ function clip(
  * Injection order:
  * 1 assistant md · 2 contextFiles · 3 rules · 4 skills cards · 5 subagents list
  * Root AGENTS.md of the host repo is never injected (productDir isolation).
+ *
+ * Durable path: instructions (1–3, 5) + skill catalog (4) as separate
+ * `user/message` payloads; `blocks` kept for previewInject only.
  */
 export function createWorkspaceInjector(
   options: WorkspaceInjectorOptions,
@@ -87,7 +92,8 @@ export function createWorkspaceInjector(
   return {
     async inject({ maxChars = 32_000 } = {}) {
       const budget = { left: maxChars, events: [] as WorkspaceBudgetEvent[] };
-      const blocks: string[] = [];
+      const instructionBlocks: string[] = [];
+      const changes: InstructionChange[] = [];
 
       // 1. assistant md
       const assistant =
@@ -95,7 +101,15 @@ export function createWorkspaceInjector(
         (await readIfExists(path.join(productDir, "ASSISTANT.md")));
       if (assistant) {
         const t = clip("assistant", assistant, budget);
-        if (t) blocks.push(`## Assistant\n${t}`);
+        if (t) {
+          instructionBlocks.push(`## Assistant\n${t}`);
+          changes.push({
+            action: "set",
+            path: (await exists(path.join(productDir, "assistant.md")))
+              ? "assistant.md"
+              : "ASSISTANT.md",
+          });
+        }
       }
 
       // 2. contextFiles
@@ -106,7 +120,10 @@ export function createWorkspaceInjector(
           const text = await readIfExists(path.join(ctxDir, f));
           if (!text) continue;
           const t = clip(`context:${f}`, text, budget);
-          if (t) blocks.push(`## Context: ${f}\n${t}`);
+          if (t) {
+            instructionBlocks.push(`## Context: ${f}\n${t}`);
+            changes.push({ action: "merge", path: `context/${f}` });
+          }
         }
       }
 
@@ -116,21 +133,28 @@ export function createWorkspaceInjector(
         (await readIfExists(path.join(productDir, "RULES.md")));
       if (rules) {
         const t = clip("rules", rules, budget);
-        if (t) blocks.push(`## Rules\n${t}`);
+        if (t) {
+          instructionBlocks.push(`## Rules\n${t}`);
+          changes.push({
+            action: "merge",
+            path: (await exists(path.join(productDir, "rules.md")))
+              ? "rules.md"
+              : "RULES.md",
+          });
+        }
       }
 
-      // 4. skills cards — project vendors only in the inject budget; user-home
-      //    skills stay available via the skill tool / skill.list.
-      const skillCards = formatSkillCatalog(
-        await listSkills({
-          workspaceRoot: root,
-          productDir,
-          includeUserHome: false,
-        }),
-      );
+      // 4. skills — durable catalog; preview `blocks` still include markdown cards
+      const skills = await listSkills({
+        workspaceRoot: root,
+        productDir,
+        includeUserHome: false,
+      });
+      const skillCards = formatSkillCatalog(skills);
+      let skillBlock: string | undefined;
       if (skillCards) {
         const t = clip("skills", skillCards, budget);
-        if (t) blocks.push(t);
+        if (t) skillBlock = t;
       }
 
       // 5. subagents list
@@ -138,7 +162,10 @@ export function createWorkspaceInjector(
         (await readIfExists(path.join(productDir, "subagents.md"))) ?? "";
       if (subagents.trim()) {
         const t = clip("subagents", subagents, budget);
-        if (t) blocks.push(`## Subagents\n${t}`);
+        if (t) {
+          instructionBlocks.push(`## Subagents\n${t}`);
+          changes.push({ action: "merge", path: "subagents.md" });
+        }
       }
 
       // Isolation: never read root AGENTS.md as product inject
@@ -147,7 +174,27 @@ export function createWorkspaceInjector(
         // explicit no-op — documented for tests
       }
 
-      return { blocks, events: budget.events };
+      // Preview order: assistant · context · rules · skills · subagents
+      const previewBlocks = [
+        ...instructionBlocks.filter((b) => !b.startsWith("## Subagents")),
+        ...(skillBlock ? [skillBlock] : []),
+        ...instructionBlocks.filter((b) => b.startsWith("## Subagents")),
+      ];
+
+      const skillCatalog = buildSkillCatalogPayload(skills, budget.events);
+      const instructions = buildInstructionsPayload(
+        instructionBlocks,
+        changes,
+        budget.events,
+      );
+
+      return {
+        instructionBlocks,
+        blocks: previewBlocks,
+        events: budget.events,
+        ...(skillCatalog ? { skillCatalog } : {}),
+        ...(instructions ? { instructions } : {}),
+      };
     },
 
     async syncSeeds(seedDir) {
@@ -240,8 +287,24 @@ export {
   type WorkspaceToolOutputPersistOptions,
 } from "./tool-output-persist.js";
 
+export {
+  buildInstructionsPayload,
+  buildSkillCatalogPayload,
+  budgetEventsToTruncations,
+  digestWorkspaceText,
+  foldLatestWorkspaceInjectDigests,
+  formatAvailableSkillsXml,
+  planWorkspaceInjectAppends,
+  type DurableInstructionsPayload,
+  type DurableSkillCatalogPayload,
+  type InstructionChange,
+  type LatestWorkspaceInjectDigests,
+  type WorkspaceDurableInject,
+  type WorkspaceInjectAppend,
+} from "./durable-inject.js";
+
 /**
- * Options for resolving product-workspace blocks into three-layer assemble.
+ * Options for resolving product-workspace injects.
  * Default product dir: `{root}/.xrk` (never repo-root AGENTS.md).
  */
 export interface ResolveWorkspaceInjectOptions {
@@ -258,14 +321,16 @@ export interface ResolveWorkspaceInjectOptions {
 export interface ResolvedWorkspaceInject {
   readonly injector: WorkspaceInjector;
   readonly blocks: readonly string[];
+  readonly instructionBlocks: readonly string[];
   readonly events: readonly WorkspaceBudgetEvent[];
+  readonly durable: WorkspaceDurableInject;
   /** Files created by optional syncSeeds (empty if not synced). */
   readonly seeded: readonly string[];
 }
 
 /**
- * Create injector, optional seed sync, then inject for assemble.workspaceBlocks.
- * Presets call this once per createAgent() (fresh inject each agent bind).
+ * Create injector, optional seed sync, then resolve durable + preview blocks.
+ * Presets call this once per createAgent(); durable injects append at turn start.
  */
 export async function resolveWorkspaceInject(
   options: ResolveWorkspaceInjectOptions,
@@ -290,7 +355,45 @@ export async function resolveWorkspaceInject(
   return {
     injector,
     blocks: out.blocks,
+    instructionBlocks: out.instructionBlocks,
     events: out.events,
+    durable: out,
     seeded,
   };
+}
+
+/** Append durable workspace injects when digests changed (turn boundary). */
+export async function appendWorkspaceInjectsIfChanged(input: {
+  readonly store: {
+    get(sessionId: string): {
+      readonly events: readonly import("@xrkseek/protocol").SessionEvent[];
+    };
+    append(
+      sessionId: string,
+      event: import("@xrkseek/protocol").SessionEvent,
+    ): unknown;
+  };
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly now: () => number;
+  readonly injectOptions: ResolveWorkspaceInjectOptions;
+}): Promise<readonly WorkspaceInjectAppend[]> {
+  const resolved = await resolveWorkspaceInject(input.injectOptions);
+  const previous = foldLatestWorkspaceInjectDigests(
+    input.store.get(input.sessionId).events,
+  );
+  const appends = planWorkspaceInjectAppends({
+    durable: resolved.durable,
+    previous,
+  });
+  for (const row of appends) {
+    input.store.append(input.sessionId, {
+      type: "user/message",
+      ts: input.now(),
+      turnId: input.turnId,
+      content: row.content,
+      source: row.source,
+    });
+  }
+  return appends;
 }

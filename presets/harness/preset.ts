@@ -77,7 +77,7 @@ import {
   createSkillTools,
   createSlashResolver,
   loadOfficeRecipes,
-  resolveWorkspaceInject,
+  appendWorkspaceInjectsIfChanged,
   SKILL_TOOL_GUIDANCE,
   type ResolveWorkspaceInjectOptions,
   type WorkspaceInjector,
@@ -111,8 +111,9 @@ export interface HarnessCompositionOptions {
   /** Default `tools`. `code` adds experimental `run_code` (still keeps fs/shell). */
   readonly presentation?: PresentationMode;
   /**
-   * Wire product workspace into three-layer `workspaceBlocks`.
-   * Default: on when assemble is enabled. See docs/workspace-inject.md.
+   * Wire product workspace as durable `user/message` injects (skill catalog +
+   * agent-instructions) at turn start. Default: on when assemble is enabled.
+   * See docs/workspace-inject.md.
    */
   readonly workspaceInject?: WorkspaceInjectOption;
   /**
@@ -440,11 +441,8 @@ export function createHarnessComposition(
     async createAgent() {
       const system = await prompts.assemble();
       const useAssemble = options.assemble !== false;
-      let workspaceBlocks: readonly string[] | undefined;
-      if (shouldInject(options.assemble, options.workspaceInject)) {
-        const resolved = await resolveWorkspaceInject(injectOpts);
-        workspaceBlocks = resolved.blocks;
-      }
+      const injectOn =
+        shouldInject(options.assemble, options.workspaceInject);
       const productDir =
         injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
       let recipes: Awaited<ReturnType<typeof loadOfficeRecipes>> = [];
@@ -477,13 +475,22 @@ export function createHarnessComposition(
           ? {
               assemble: {
                 persona: system,
-                ...(workspaceBlocks?.length ? { workspaceBlocks } : {}),
                 ...(options.toolOrder ? { toolOrder: options.toolOrder } : {}),
                 resolveSlash: createSlashResolver({
                   workspaceRoot: injectOpts.root,
                   productDir,
                   recipes,
                 }),
+              },
+            }
+          : {}),
+        ...(injectOn
+          ? {
+              beforeUserMessage: async (ctx) => {
+                await appendWorkspaceInjectsIfChanged({
+                  ...ctx,
+                  injectOptions: injectOpts,
+                });
               },
             }
           : {}),

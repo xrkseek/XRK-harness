@@ -4,6 +4,8 @@ description: >-
   Working notes for XRK session meter, compaction shadow-price, TokenUsage, and
   Face context projections. Use when editing those packages or syncing related
   textbook docs (session-compaction, protocol-events).
+disable-model-invocation: true
+user-invocable: false
 ---
 
 # 笔记 · meter / session compaction

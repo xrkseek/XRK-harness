@@ -117,7 +117,8 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [pty-tools.md](./pty-tools.md) | `terminal_*` |
 | [shell-jobs.md](./shell-jobs.md) | shell 后台 job |
 | [code-mode.md](./code-mode.md) | `run_code` 实验面 |
-| [workspace-inject.md](./workspace-inject.md) | `.xrk` 注入 |
+| [workspace-inject.md](./workspace-inject.md) | `.xrk` 持久注入（agent-instructions） |
+| [skills-layers.md](./skills-layers.md) | 笔记 / 产品 rules / 产品 skills 分层 |
 | [slash-recipes.md](./slash-recipes.md) | `/recipe-id` · `/skill-name` |
 | [policy.md](./policy.md) | tool / provider / mcp 门禁 |
 | [modules/mcp.md](./modules/mcp.md) | MCP client 地图 |

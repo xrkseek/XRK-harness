@@ -8,7 +8,7 @@
 |--------|------|
 | 根 [README.md](./README.md) · [docs/](./docs/README.md) | **教科书**（产品与契约） |
 | [docs/audiences.md](./docs/audiences.md) · [docs/maintainer.md](./docs/maintainer.md) | 身份标准 · 交接 |
-| 本文件 · `.cursor/rules` · `.cursor/skills` | **笔记**（改码红线与流程） |
+| 本文件 · `.cursor/rules` · `.cursor/skills` | **笔记**（改码红线与流程；勿与产品 skills 混用 — [skills-layers](./docs/skills-layers.md)） |
 | Cursor Canvas | **本机草稿**（不入库） |
 
 冲突时以**代码**为准；能力是否可依赖以 [docs/status.md](./docs/status.md) 为准。**不要**把笔记里的禁令抄进教科书。

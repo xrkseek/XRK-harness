@@ -189,7 +189,7 @@ export function toFaceWireSessionEvent(
         data: {
           id: event.turnId,
           content: wireContentBlocks(event.content),
-          source: { kind: "user" },
+          source: event.source ?? { kind: "user" },
           ...(event.rpcId ? { rpcId: event.rpcId } : {}),
         },
       };

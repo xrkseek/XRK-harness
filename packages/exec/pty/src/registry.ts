@@ -21,6 +21,27 @@ interface SessionRecord {
   closing: Promise<void> | undefined;
 }
 
+/**
+ * Clarify common model mistakes: chat `sess_*` ids from the volatile block are
+ * not PTY ids (`pty-N` from terminal_open / terminal_list).
+ */
+export function unknownSessionHint(
+  sessionId: string,
+  liveCount: number,
+): string {
+  if (/^sess[_-]/i.test(sessionId)) {
+    return (
+      " — that looks like a chat/agent session id from the volatile prompt, " +
+      "not a terminal id. Call terminal_open (or terminal_list) and use a " +
+      "`pty-N` id."
+    );
+  }
+  if (liveCount === 0) {
+    return " — no live terminals; call terminal_open first.";
+  }
+  return " — use an id from terminal_list / terminal_open (form `pty-N`).";
+}
+
 interface PendingSpawn {
   readonly controller: AbortController;
   readonly settled: Promise<void>;
@@ -65,7 +86,11 @@ export function createTerminalSessionService(): DisposableTerminalSessionService
   function expectSession(sessionId: string): SessionRecord {
     const record = sessions.get(sessionId);
     if (record === undefined) {
-      throw new TerminalError(`unknown PTY session ${sessionId}`, "NO_SESSION");
+      const hint = unknownSessionHint(sessionId, sessions.size);
+      throw new TerminalError(
+        `unknown PTY session ${sessionId}${hint}`,
+        "NO_SESSION",
+      );
     }
     return record;
   }

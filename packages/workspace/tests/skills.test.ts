@@ -47,6 +47,7 @@ Do the ping.
         description: "Ping skill for tests",
         whenToUse: "when testing skill.list",
         modelInvocable: true,
+        userInvocable: true,
         dirName: "office-ping",
         directory: dir,
       },
@@ -130,5 +131,49 @@ Do the ping.
       kind: "read",
       rawInput: "notes",
     });
+  });
+
+  it("honors disable-model-invocation and drops invalid flags", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-skill-flags-"));
+    const product = path.join(root, ".xrk");
+    const notes = path.join(product, "skills", "repo-notes");
+    const bad = path.join(product, "skills", "bad-flag");
+    await mkdir(notes, { recursive: true });
+    await mkdir(bad, { recursive: true });
+    await writeFile(
+      path.join(notes, "SKILL.md"),
+      `---
+name: repo-notes
+description: Coding-agent notes
+disable-model-invocation: true
+user-invocable: false
+---
+# Notes only
+`,
+      "utf8",
+    );
+    await writeFile(
+      path.join(bad, "SKILL.md"),
+      `---
+name: bad-flag
+description: Bad
+disable-model-invocation: maybe
+---
+# Dropped
+`,
+      "utf8",
+    );
+    const listed = await listSkills({ productDir: product });
+    expect(listed.map((s) => s.name)).toEqual(["repo-notes"]);
+    expect(listed[0]?.modelInvocable).toBe(false);
+    expect(listed[0]?.userInvocable).toBe(false);
+    expect(formatSkillCatalog(listed)).toBeUndefined();
+
+    const tool = createSkillTools({ productDir: product }).find(
+      (t) => t.name === "skill",
+    )!;
+    const denied = await tool.execute({ name: "repo-notes" });
+    expect(denied.isError).toBe(true);
+    expect(String(denied.content)).toMatch(/not model-invocable/);
   });
 });

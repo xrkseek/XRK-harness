@@ -11,7 +11,7 @@
 | **贡献者** | 提 PR、改一包、补测 | [CONTRIBUTING](../CONTRIBUTING.md) → [testing](./testing.md) · [modules](./modules/README.md) | 把未做写成规格；密钥 |
 | **维护者** | 发版、定架构、交接、管 Agent | [maintainer](./maintainer.md) · [publishing](./publishing.md) · [AGENTS](../AGENTS.md) | 写进根 README 当用户 FAQ |
 
-Coding Agent **不是**第五种产品读者：它读 [AGENTS.md](../AGENTS.md) 与 `.cursor/rules` · `.cursor/skills`（**笔记**）。产品说明书在 `docs/`（**教科书**）。
+Coding Agent **不是**第五种产品读者：它读 [AGENTS.md](../AGENTS.md) 与 `.cursor/rules` · `.cursor/skills`（**笔记**）。产品说明书在 `docs/`（**教科书**）。运行时产品 Agent 的 skills / rules 分层见 [skills-layers.md](./skills-layers.md)。
 
 ## 载体分层
 

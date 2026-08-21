@@ -49,6 +49,48 @@ describe("Face DSH wire-event adapt", () => {
     });
   });
 
+  it("user/message passes through skill-catalog source", () => {
+    const source = {
+      kind: "skill-catalog" as const,
+      form: "catalog" as const,
+      entries: [{ name: "ping", description: "Ping" }],
+      digest: "d1",
+    };
+    const wire = toFaceWireSessionEvent(
+      {
+        type: "user/message",
+        ts: 11,
+        turnId: "t2",
+        content: "<available_skills>",
+        source,
+      },
+      4,
+    );
+    expect(wire.data).toMatchObject({
+      source,
+      content: [{ type: "text", text: "<available_skills>" }],
+    });
+  });
+
+  it("user/message passes through agent-instructions source", () => {
+    const source = {
+      kind: "agent-instructions" as const,
+      form: "instructions" as const,
+      changes: [{ action: "set" as const, path: "assistant.md" }],
+    };
+    const wire = toFaceWireSessionEvent(
+      {
+        type: "user/message",
+        ts: 12,
+        turnId: "t3",
+        content: "## Assistant\nHi",
+        source,
+      },
+      5,
+    );
+    expect(wire.data).toMatchObject({ source });
+  });
+
   it("assistant/message and tool/result stamp surfaceOp append for client fold", () => {
     expect(
       toFaceWireSessionEvent(

@@ -2,6 +2,8 @@ import type {
   CompactionReason,
   SafetyNoticeKind,
   SessionEvent,
+  UserMessageSource,
+  WorkspaceBudgetTruncation,
 } from "./session-events.js";
 import { isPromptDelivery } from "./session-events.js";
 import type { ToolCall, ToolResult } from "./tools.js";
@@ -32,6 +34,166 @@ export class SessionEventParseError extends Error {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseBudgetTruncations(
+  raw: unknown,
+  path: string,
+): readonly WorkspaceBudgetTruncation[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new SessionEventParseError("budgetTruncations must be array", path);
+  }
+  const out: WorkspaceBudgetTruncation[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const row = raw[i];
+    if (!isObject(row)) {
+      throw new SessionEventParseError("invalid truncation row", `${path}[${i}]`);
+    }
+    const originalChars = row.originalChars;
+    const keptChars = row.keptChars;
+    if (typeof originalChars !== "number" || !Number.isFinite(originalChars)) {
+      throw new SessionEventParseError(
+        "originalChars must be number",
+        `${path}[${i}]`,
+      );
+    }
+    if (typeof keptChars !== "number" || !Number.isFinite(keptChars)) {
+      throw new SessionEventParseError(
+        "keptChars must be number",
+        `${path}[${i}]`,
+      );
+    }
+    out.push({
+      section: reqString(row, "section", `${path}[${i}]`),
+      originalChars,
+      keptChars,
+    });
+  }
+  return out;
+}
+
+/**
+ * Parse optional durable `user/message.source` (DSH MessageSource subset).
+ * Unknown plugin-shaped kinds are kept as `{ kind: "plugin", ... }` bags.
+ */
+function parseUserMessageSource(
+  raw: unknown,
+  path: string,
+): UserMessageSource | undefined {
+  if (raw === undefined) return undefined;
+  if (!isObject(raw) || typeof raw.kind !== "string" || !raw.kind) {
+    throw new SessionEventParseError("source.kind required", path);
+  }
+  const kind = raw.kind;
+  const budgetTruncations = parseBudgetTruncations(
+    raw.budgetTruncations,
+    `${path}.budgetTruncations`,
+  );
+  const digest =
+    typeof raw.digest === "string" ? raw.digest : undefined;
+
+  if (kind === "user") {
+    return { kind: "user" };
+  }
+
+  if (kind === "skill-catalog") {
+    if (raw.form !== undefined && raw.form !== "catalog") {
+      throw new SessionEventParseError(
+        'skill-catalog form must be "catalog"',
+        path,
+      );
+    }
+    const entriesRaw = raw.entries;
+    if (!Array.isArray(entriesRaw)) {
+      throw new SessionEventParseError("entries must be array", path);
+    }
+    const entries: { name: string; description: string }[] = [];
+    for (let i = 0; i < entriesRaw.length; i++) {
+      const row = entriesRaw[i];
+      if (!isObject(row)) {
+        throw new SessionEventParseError("invalid catalog entry", `${path}.entries[${i}]`);
+      }
+      entries.push({
+        name: reqString(row, "name", `${path}.entries[${i}]`),
+        description: reqString(row, "description", `${path}.entries[${i}]`),
+      });
+    }
+    return {
+      kind: "skill-catalog",
+      form: "catalog",
+      entries,
+      ...(raw.update === true ? { update: true } : {}),
+      ...(digest !== undefined ? { digest } : {}),
+      ...(budgetTruncations !== undefined ? { budgetTruncations } : {}),
+    };
+  }
+
+  if (kind === "agent-instructions") {
+    if (raw.form !== undefined && raw.form !== "instructions") {
+      throw new SessionEventParseError(
+        'agent-instructions form must be "instructions"',
+        path,
+      );
+    }
+    const changesRaw = raw.changes;
+    if (!Array.isArray(changesRaw)) {
+      throw new SessionEventParseError("changes must be array", path);
+    }
+    const changes: {
+      action: "set" | "merge" | "clear";
+      path?: string;
+    }[] = [];
+    for (let i = 0; i < changesRaw.length; i++) {
+      const row = changesRaw[i];
+      if (!isObject(row)) {
+        throw new SessionEventParseError("invalid change", `${path}.changes[${i}]`);
+      }
+      const action = row.action;
+      if (action !== "set" && action !== "merge" && action !== "clear") {
+        throw new SessionEventParseError(
+          'change.action must be "set" | "merge" | "clear"',
+          `${path}.changes[${i}]`,
+        );
+      }
+      const filePath =
+        typeof row.path === "string" ? row.path : undefined;
+      changes.push({
+        action,
+        ...(filePath !== undefined ? { path: filePath } : {}),
+      });
+    }
+    return {
+      kind: "agent-instructions",
+      form: "instructions",
+      changes,
+      ...(digest !== undefined ? { digest } : {}),
+      ...(budgetTruncations !== undefined ? { budgetTruncations } : {}),
+    };
+  }
+
+  // plugin + forward-compat opaque kinds: keep as plugin bag when kind is plugin,
+  // otherwise wrap unknown kinds as plugin with the durable kind string preserved
+  // via a `plugin` label when absent.
+  if (kind === "plugin") {
+    const out: { kind: "plugin"; plugin?: string; form?: string; [key: string]: unknown } = {
+      kind: "plugin",
+    };
+    for (const [k, v] of Object.entries(raw)) {
+      if (k === "kind") continue;
+      out[k] = v;
+    }
+    return out;
+  }
+
+  // Unknown producer kinds: preserve for Face opaque rendering (merge-extensible).
+  return {
+    kind: "plugin",
+    plugin: kind,
+    ...Object.fromEntries(
+      Object.entries(raw).filter(([k]) => k !== "kind"),
+    ),
+  };
 }
 
 function reqString(
@@ -192,11 +354,13 @@ export function parseSessionEvent(value: unknown): SessionEvent {
       };
     case "user/message": {
       const rpcId = optString(value, "rpcId");
+      const source = parseUserMessageSource(value.source, `${type}.source`);
       return {
         type,
         ts,
         turnId: reqString(value, "turnId", type),
         content: parseMessageContent(value.content, `${type}.content`),
+        ...(source !== undefined ? { source } : {}),
         ...(rpcId !== undefined ? { rpcId } : {}),
       };
     }

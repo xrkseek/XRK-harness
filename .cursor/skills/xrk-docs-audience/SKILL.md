@@ -4,6 +4,8 @@ description: >-
   Write or revise XRK-Harness documentation with correct audience identity.
   Use when editing README, docs/*, CONTRIBUTING, AGENTS, or adding new markdown
   specs. Enforces textbook vs notes; forbids meta disclaimers in user docs.
+disable-model-invocation: true
+user-invocable: false
 ---
 
 # 笔记 · 写文档按身份
