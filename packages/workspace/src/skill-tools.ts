@@ -60,6 +60,7 @@ export function createSkillTools(
         return { content: renderSkillContent(skill) };
       },
       presentCall: presentSkillCall,
+      isConcurrencySafe: () => true,
     } satisfies ToolDefinition<{ name: string }>,
   ];
 }

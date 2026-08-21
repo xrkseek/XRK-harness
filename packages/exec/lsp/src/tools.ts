@@ -120,6 +120,7 @@ export function createLspTools(
       },
       presentCall: presentLspCall,
       presentResult: presentLspResult,
+      isConcurrencySafe: () => true,
     } satisfies ToolDefinition<{
       operation: string;
       file_path: string;

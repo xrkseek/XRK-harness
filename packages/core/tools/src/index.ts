@@ -1,4 +1,8 @@
 export {
+  abortedToolContent,
+  isAbortError,
+} from "./abort.js";
+export {
   createToolRegistry,
   errorToolResult,
   freezeToolResult,
@@ -8,6 +12,11 @@ export {
   type ToolRegistry,
   type ToolResultContent,
 } from "./definition.js";
+export {
+  classifyToolExecutionMode,
+  type ToolExecutionMode,
+  type ToolExecutionModeKind,
+} from "./execution-mode.js";
 export {
   parseExitStatus,
   type DiffCallView,

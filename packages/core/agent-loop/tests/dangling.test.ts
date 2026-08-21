@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  TOOL_INTERRUPTED_MESSAGE,
+  TOOL_OUTCOME_UNKNOWN_MESSAGE,
   createMemorySessionStore,
   deriveMessages,
   listDanglingToolCalls,
@@ -54,7 +54,7 @@ describe("runTurn fail-before-retry", () => {
       (m) => m.role === "tool" && m.toolCallId === "orphan",
     );
     expect(interrupted).toMatchObject({
-      content: TOOL_INTERRUPTED_MESSAGE,
+      content: TOOL_OUTCOME_UNKNOWN_MESSAGE,
       isError: true,
     });
     // New user turn still reconstructible after settlement prefix.

@@ -1,23 +1,59 @@
 import type { SessionEvent } from "@xrkseek/protocol";
 import {
+  danglingSettlement,
   listDanglingToolCalls,
-  TOOL_INTERRUPTED_MESSAGE,
 } from "./dangling.js";
 
 function foldStepStreamChunks(
   events: readonly SessionEvent[],
   turnId: string,
   stepId: string,
-): { readonly content: string; readonly reasoning: string } {
+): {
+  readonly content: string;
+  readonly reasoning: string;
+  readonly toolCalls: import("@xrkseek/protocol").ToolCall[];
+} {
   let content = "";
   let reasoning = "";
+  const byIndex = new Map<
+    number,
+    { id: string; name?: string; arguments: string }
+  >();
   for (const ev of events) {
     if (ev.type !== "assistant/chunk") continue;
     if (ev.turnId !== turnId || ev.stepId !== stepId) continue;
+    if (ev.kind === "usage") continue;
+    if (ev.kind === "tool-call") {
+      const idx = ev.index ?? 0;
+      const cur = byIndex.get(idx) ?? {
+        id: ev.toolCallId ?? `call_${idx}`,
+        arguments: "",
+      };
+      if (ev.toolCallId) cur.id = ev.toolCallId;
+      if (ev.toolName) cur.name = ev.toolName;
+      cur.arguments += ev.argumentsDelta ?? ev.text;
+      byIndex.set(idx, cur);
+      continue;
+    }
     if (ev.kind === "reasoning") reasoning += ev.text;
     else content += ev.text;
   }
-  return { content, reasoning };
+  const toolCalls = [...byIndex.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, acc]) => {
+      let argumentsValue: unknown = {};
+      try {
+        argumentsValue = acc.arguments ? JSON.parse(acc.arguments) : {};
+      } catch {
+        argumentsValue = acc.arguments;
+      }
+      return {
+        id: acc.id,
+        name: acc.name ?? "unknown",
+        arguments: argumentsValue,
+      };
+    });
+  return { content, reasoning, toolCalls };
 }
 
 function findOpenTurnId(events: readonly SessionEvent[]): string | undefined {
@@ -81,6 +117,7 @@ export function repairOpenTurnEvents(
   const ts = () => now();
 
   for (const d of listDanglingToolCalls(events)) {
+    const settled = danglingSettlement(d);
     out.push({
       type: "tool/result",
       ts: ts(),
@@ -89,8 +126,9 @@ export function repairOpenTurnEvents(
       result: {
         toolCallId: d.call.id,
         name: d.call.name,
-        content: TOOL_INTERRUPTED_MESSAGE,
+        content: settled.content,
         isError: true,
+        error: settled.error,
       },
     });
   }
@@ -99,7 +137,11 @@ export function repairOpenTurnEvents(
   if (stepId !== undefined) {
     if (!stepHasAssistantMessage(events, turnId, stepId)) {
       const folded = foldStepStreamChunks(events, turnId, stepId);
-      if (folded.content.trim() || folded.reasoning.trim()) {
+      if (
+        folded.content.trim() ||
+        folded.reasoning.trim() ||
+        folded.toolCalls.length > 0
+      ) {
         out.push({
           type: "assistant/message",
           ts: ts(),
@@ -108,6 +150,9 @@ export function repairOpenTurnEvents(
           content: folded.content,
           ...(folded.reasoning.trim()
             ? { reasoning: folded.reasoning }
+            : {}),
+          ...(folded.toolCalls.length
+            ? { toolCalls: folded.toolCalls }
             : {}),
           interrupted: true,
         });

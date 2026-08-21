@@ -5,7 +5,9 @@ import type { SessionEvent } from "@xrkseek/protocol";
 import { assertSessionEvent } from "@xrkseek/protocol";
 import {
   expandPackedStorageRecords,
+  isPackedChunkRow,
   isTextChunkRow,
+  isToolCallChunkRow,
   packChunkRunsForExport,
   type PackedStorageRecord,
 } from "./chunk-pack.js";
@@ -34,7 +36,7 @@ export interface PersistentSessionStore extends SessionStore {
 }
 
 const ID_RE = /^[A-Za-z0-9._-]+$/;
-/** v3: durable rows may be `text-chunks` packed storage (expanded on load). */
+/** v3: durable rows may be packed `text-chunks` / `tool-call-chunks` (expanded on load). */
 const SCHEMA_VERSION = 3;
 const DB_NAME = "sessions.db";
 
@@ -62,11 +64,15 @@ function extractStorageSearchText(record: PackedStorageRecord): string | null {
     const text = record.texts.join("");
     return text || null;
   }
+  if (isToolCallChunkRow(record)) {
+    // Argument fragments are not model-visible search text.
+    return null;
+  }
   return extractEventSearchText(record) || null;
 }
 
 function storageTs(record: PackedStorageRecord): number {
-  return isTextChunkRow(record) ? record.ts0 : record.ts;
+  return isPackedChunkRow(record) ? record.ts0 : record.ts;
 }
 
 function ensureFts(db: DatabaseSync): void {
@@ -104,7 +110,7 @@ function rebuildFts(db: DatabaseSync): void {
   for (const row of rows) {
     try {
       const raw: unknown = JSON.parse(row.payload);
-      if (isTextChunkRow(raw)) {
+      if (isPackedChunkRow(raw)) {
         const text = extractStorageSearchText(raw);
         if (text) insert.run(row.session_id, row.seq, text);
         continue;
@@ -153,7 +159,7 @@ function initSchema(db: DatabaseSync): void {
 
 function parseStoragePayload(payload: string): SessionEvent[] {
   const raw: unknown = JSON.parse(payload);
-  if (isTextChunkRow(raw)) {
+  if (isPackedChunkRow(raw)) {
     return expandPackedStorageRecords([raw]);
   }
   return [assertSessionEvent(raw)];
@@ -193,6 +199,7 @@ function loadSessionIds(db: DatabaseSync): Set<string> {
 /**
  * Durable SessionStore: one workspace SQLite file (`sessions.db`) with WAL.
  * Lazy session load; batched chunk writes packed as `text-chunks` (≥3);
+ * tool-call argument deltas pack as `tool-call-chunks` (≥3);
  * FTS5 trigram search. In-memory API stays flat SessionEvent[].
  */
 export function createPersistentSessionStore(dir: string): PersistentSessionStore {

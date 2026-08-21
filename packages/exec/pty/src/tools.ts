@@ -349,6 +349,7 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
         kind: "read",
         rawInput: args,
       }),
+      isConcurrencySafe: () => true,
     },
     {
       name: "terminal_signal",
@@ -451,6 +452,7 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
         title: "List terminal sessions",
         kind: "read",
       }),
+      isConcurrencySafe: () => true,
     },
   ];
 }

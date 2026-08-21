@@ -9,20 +9,86 @@ import type {
   LlmStreamEvent,
 } from "@xrkseek/llm";
 import {
+  finalizeLlmChatResponse,
   collectLlmStream,
+  classifyCaughtLlmError,
   ContextOverflowError,
+  isLlmError,
+  throwHttpLlmError,
   UnsupportedContentError,
+  withAnthropicStopReason,
 } from "@xrkseek/llm";
-import type { ChatMessage, MessageContent, ToolCall } from "@xrkseek/protocol";
+import type { ChatMessage, MessageContent, ToolCall, TokenUsage } from "@xrkseek/protocol";
 import {
   asContentBlocks,
   contentHasImage,
   flattenText,
+  tryParseOpenAiUsage,
 } from "@xrkseek/protocol";
 
 export const ANTHROPIC_DEFAULT_BASE_URL = "https://api.anthropic.com";
 export const ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-4-20250514";
 export const ANTHROPIC_API_VERSION = "2023-06-01";
+
+const EPHEMERAL_CACHE = { type: "ephemeral" as const };
+
+/** Soft-merge Anthropic stream usage fragments (input on start, output on delta). */
+function mergeAnthropicUsagePartial(
+  prev: TokenUsage | undefined,
+  raw: unknown,
+): TokenUsage | undefined {
+  if (!raw || typeof raw !== "object") return prev;
+  const o = raw as Record<string, unknown>;
+  const inputRaw = o.input_tokens ?? o.inputTokens;
+  const outputRaw = o.output_tokens ?? o.outputTokens;
+  const cacheReadRaw = o.cache_read_input_tokens ?? o.cacheReadTokens;
+  const cacheWriteRaw = o.cache_creation_input_tokens ?? o.cacheWriteTokens;
+
+  const asNonNeg = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0
+      ? Math.trunc(v)
+      : undefined;
+
+  const input = asNonNeg(inputRaw);
+  const output = asNonNeg(outputRaw);
+  const cacheRead = asNonNeg(cacheReadRaw);
+  const cacheWrite = asNonNeg(cacheWriteRaw);
+  if (
+    input === undefined &&
+    output === undefined &&
+    cacheRead === undefined &&
+    cacheWrite === undefined
+  ) {
+    return prev;
+  }
+
+  // Disjoint buckets: subtract cache reads from input when both present (DSH mapUsage).
+  let inputTokens = input ?? prev?.inputTokens ?? 0;
+  if (input !== undefined && cacheRead !== undefined) {
+    inputTokens = Math.max(0, input - cacheRead);
+  } else if (input === undefined && cacheRead !== undefined && prev?.inputTokens !== undefined) {
+    // keep prior uncached input
+    inputTokens = prev.inputTokens;
+  }
+
+  return {
+    inputTokens,
+    outputTokens: output ?? prev?.outputTokens ?? 0,
+    ...(cacheRead !== undefined
+      ? { cacheReadTokens: cacheRead }
+      : prev?.cacheReadTokens !== undefined
+        ? { cacheReadTokens: prev.cacheReadTokens }
+        : {}),
+    ...(cacheWrite !== undefined
+      ? { cacheWriteTokens: cacheWrite }
+      : prev?.cacheWriteTokens !== undefined
+        ? { cacheWriteTokens: prev.cacheWriteTokens }
+        : {}),
+    ...(prev?.reasoningTokens !== undefined
+      ? { reasoningTokens: prev.reasoningTokens }
+      : {}),
+  };
+}
 
 export interface AnthropicAdapterOptions {
   readonly id?: string;
@@ -191,11 +257,18 @@ function parseResponse(json: unknown): LlmChatResponse {
       }
     }
   }
-  return {
-    content,
-    ...(reasoning.trim() ? { reasoning } : {}),
-    ...(toolCalls.length ? { toolCalls } : {}),
-  };
+  const usage = tryParseOpenAiUsage((json as { usage?: unknown })?.usage);
+  return finalizeLlmChatResponse(
+    withAnthropicStopReason(
+      {
+        content,
+        ...(reasoning.trim() ? { reasoning } : {}),
+        ...(toolCalls.length ? { toolCalls } : {}),
+        ...(usage ? { usage } : {}),
+      },
+      (json as { stop_reason?: unknown })?.stop_reason,
+    ),
+  );
 }
 
 async function* streamAnthropicSse(res: Response): AsyncGenerator<LlmStreamEvent> {
@@ -208,6 +281,8 @@ async function* streamAnthropicSse(res: Response): AsyncGenerator<LlmStreamEvent
   const toolAcc = new Map<number, { id?: string; name?: string; json: string }>();
   let blockIndex = -1;
   let blockType = "";
+  let usage: TokenUsage | undefined;
+  let stopRaw: unknown;
 
   const flushEvent = function* (payload: string): Generator<LlmStreamEvent> {
     let json: unknown;
@@ -219,14 +294,36 @@ async function* streamAnthropicSse(res: Response): AsyncGenerator<LlmStreamEvent
     const ev = json as {
       type?: string;
       index?: number;
+      message?: { usage?: unknown };
+      usage?: unknown;
       content_block?: { type?: string; id?: string; name?: string };
       delta?: {
         type?: string;
         text?: string;
         thinking?: string;
         partial_json?: string;
+        stop_reason?: unknown;
       };
     };
+    if (ev.type === "message_start") {
+      const next = mergeAnthropicUsagePartial(usage, ev.message?.usage);
+      if (next) {
+        usage = next;
+        yield { type: "usage", usage: next };
+      }
+      return;
+    }
+    if (ev.type === "message_delta") {
+      if (ev.delta?.stop_reason !== undefined) {
+        stopRaw = ev.delta.stop_reason;
+      }
+      const next = mergeAnthropicUsagePartial(usage, ev.usage);
+      if (next) {
+        usage = next;
+        yield { type: "usage", usage: next };
+      }
+      return;
+    }
     if (ev.type === "content_block_start") {
       blockIndex = typeof ev.index === "number" ? ev.index : blockIndex + 1;
       blockType = ev.content_block?.type ?? "";
@@ -238,6 +335,15 @@ async function* streamAnthropicSse(res: Response): AsyncGenerator<LlmStreamEvent
           ...(name !== undefined ? { name } : {}),
           json: "",
         });
+        if (typeof id === "string") {
+          yield {
+            type: "tool-call-delta" as const,
+            index: blockIndex,
+            id,
+            ...(typeof name === "string" ? { name } : {}),
+            argumentsDelta: "",
+          };
+        }
       }
       return;
     }
@@ -257,11 +363,19 @@ async function* streamAnthropicSse(res: Response): AsyncGenerator<LlmStreamEvent
         delta.type === "input_json_delta" &&
         typeof delta.partial_json === "string"
       ) {
-        const cur = toolAcc.get(
-          typeof ev.index === "number" ? ev.index : blockIndex,
-        ) ?? { json: "" };
+        const idx = typeof ev.index === "number" ? ev.index : blockIndex;
+        const cur = toolAcc.get(idx) ?? { json: "" };
         cur.json += delta.partial_json;
-        toolAcc.set(typeof ev.index === "number" ? ev.index : blockIndex, cur);
+        toolAcc.set(idx, cur);
+        const id =
+          cur.id ?? `call_${idx}_${(cur.name ?? "unknown").replace(/\W/g, "_")}`;
+        yield {
+          type: "tool-call-delta" as const,
+          index: idx,
+          id,
+          ...(cur.name ? { name: cur.name } : {}),
+          argumentsDelta: delta.partial_json,
+        };
       }
     }
   };
@@ -296,11 +410,29 @@ async function* streamAnthropicSse(res: Response): AsyncGenerator<LlmStreamEvent
       arguments: args,
     });
   }
+  const finalized = finalizeLlmChatResponse(
+    withAnthropicStopReason(
+      {
+        content,
+        ...(reasoning.trim() ? { reasoning } : {}),
+        ...(toolCalls.length ? { toolCalls } : {}),
+        ...(usage ? { usage } : {}),
+      },
+      stopRaw,
+    ),
+  );
   yield {
     type: "done",
-    content,
-    ...(reasoning.trim() ? { reasoning } : {}),
-    ...(toolCalls.length ? { toolCalls } : {}),
+    content: finalized.content,
+    ...(finalized.reasoning ? { reasoning: finalized.reasoning } : {}),
+    ...(finalized.toolCalls ? { toolCalls: finalized.toolCalls } : {}),
+    ...(finalized.usage ? { usage: finalized.usage } : {}),
+    ...(finalized.finishReason
+      ? { finishReason: finalized.finishReason }
+      : {}),
+    ...(finalized.finishError
+      ? { finishError: finalized.finishError }
+      : {}),
   };
 }
 
@@ -344,14 +476,31 @@ export function createAnthropicAdapter(
       messages,
       stream,
     };
-    if (system) body.system = system;
+    if (system) {
+      // Prompt-cache breakpoint on the stable system prefix (DSH gold).
+      body.system = [
+        {
+          type: "text",
+          text: system,
+          cache_control: EPHEMERAL_CACHE,
+        },
+      ];
+    }
     if (options.temperature !== undefined) body.temperature = options.temperature;
     if (request.tools?.length) {
-      body.tools = request.tools.map((t) => ({
-        name: t.name,
-        description: t.description,
-        input_schema: t.parameters,
-      }));
+      const tools = request.tools.map((t, i) => {
+        const def: Record<string, unknown> = {
+          name: t.name,
+          description: t.description,
+          input_schema: t.parameters,
+        };
+        // Cache breakpoint on the last tool — tools block is sorted/stable.
+        if (i === request.tools!.length - 1) {
+          def.cache_control = EPHEMERAL_CACHE;
+        }
+        return def;
+      });
+      body.tools = tools;
     }
     const headers: Record<string, string> = {
       "content-type": "application/json",
@@ -370,12 +519,19 @@ export function createAnthropicAdapter(
         ? AbortSignal.any([request.signal, timeoutSignal])
         : (request.signal ?? timeoutSignal);
 
-    const res = await doFetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      ...(signal ? { signal } : {}),
-    });
+    let res: Response;
+    try {
+      res = await doFetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        ...(signal ? { signal } : {}),
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") throw err;
+      if (isLlmError(err)) throw err;
+      classifyCaughtLlmError(err, "anthropic");
+    }
     if (!res.ok) {
       const text = await res.text();
       if (looksLikeOverflow(res.status, text)) {
@@ -383,7 +539,7 @@ export function createAnthropicAdapter(
           `anthropic overflow (${res.status}): ${text.slice(0, 400)}`,
         );
       }
-      throw new Error(`anthropic HTTP ${res.status}: ${text.slice(0, 800)}`);
+      throwHttpLlmError("anthropic", res.status, text, res.headers);
     }
     return res;
   }

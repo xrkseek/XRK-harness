@@ -57,17 +57,27 @@ export interface AssistantChunkEvent extends SessionEventBase {
   readonly type: "assistant/chunk";
   readonly turnId: string;
   readonly stepId: string;
-  /** Empty when `kind` is `"usage"`. */
+  /**
+   * Text / reasoning payload. Empty when `kind` is `"usage"`.
+   * For `kind: "tool-call"`, mirrors {@link argumentsDelta} (pack/search convenience).
+   */
   readonly text: string;
   /**
    * Default `"text"`. Reasoning uses a separate Face mux chunk type.
-   * `"usage"` carries provider token sample mid-stream (DSH StreamChunk usage).
+   * `"usage"` — provider token sample mid-stream.
+   * `"tool-call"` — streamed tool-call argument fragment (DSH tool-call-delta).
    */
-  readonly kind?: "text" | "reasoning" | "usage";
-  /** DSH StreamChunk index; reasoning=0 text=1 recommended when both appear. */
+  readonly kind?: "text" | "reasoning" | "usage" | "tool-call";
+  /** DSH StreamChunk index; reasoning=0 text=1; tool-call uses vendor tool index. */
   readonly index?: number;
   /** Present when `kind` is `"usage"` (also allowed on text chunks for soft forward-compat). */
   readonly usage?: TokenUsage;
+  /** Required when `kind` is `"tool-call"`. */
+  readonly toolCallId?: string;
+  /** Optional tool name when first seen on the stream. */
+  readonly toolName?: string;
+  /** JSON arguments fragment when `kind` is `"tool-call"`. */
+  readonly argumentsDelta?: string;
 }
 
 export interface AssistantMessageEvent extends SessionEventBase {
@@ -345,6 +355,34 @@ export interface RequestHeaderEvent extends SessionEventBase {
   };
 }
 
+/** Durable record that a provider retry wait was scheduled (DSH llm/retry). */
+export interface LlmRetryEvent extends SessionEventBase {
+  readonly type: "llm/retry";
+  readonly turnId: string;
+  readonly stepId: string;
+  readonly retryId: string;
+  readonly retry: number;
+  readonly maxRetries?: number;
+  readonly delayMs: number;
+  readonly mode: "normal" | "always";
+  readonly failure: {
+    readonly message: string;
+    readonly code: string;
+    readonly status?: number;
+    readonly providerRetryAfterMs?: number;
+  };
+  readonly provider?: string;
+}
+
+/** Durable transition after a retry wait completed (DSH llm/retry-started). */
+export interface LlmRetryStartedEvent extends SessionEventBase {
+  readonly type: "llm/retry-started";
+  readonly turnId: string;
+  readonly stepId: string;
+  readonly retryId: string;
+  readonly retry: number;
+}
+
 export type SessionEvent =
   | TurnStartEvent
   | TurnEndEvent
@@ -371,7 +409,9 @@ export type SessionEvent =
   | ApprovalPolicyEvent
   | PlanModeEvent
   | FeedbackRecordEvent
-  | RequestHeaderEvent;
+  | RequestHeaderEvent
+  | LlmRetryEvent
+  | LlmRetryStartedEvent;
 
 const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "turn/start",
@@ -400,6 +440,8 @@ const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "plan/mode",
   "feedback/record",
   "request/header",
+  "llm/retry",
+  "llm/retry-started",
 ]);
 
 /**

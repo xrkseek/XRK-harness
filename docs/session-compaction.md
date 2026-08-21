@@ -58,6 +58,20 @@ createAgent({ compaction: {} }).compactNow() // Face `/compact`：idle · reason
 
 未传 `compaction`（或 `false`）时，loop **不做** overflow 恢复。preset `{}`：开一次 overflow 重试；无 `maxRequestTokens` 则不主动按预算 compact。`/compact` 走 `compactNow`，不依赖 overflow 开关。
 
+### Harness 默认软压缩与 tool-result prune
+
+`presets/harness`（及 server）默认：
+
+```ts
+compaction: {
+  maxRequestTokens: 100_000,
+  keepTokens: 24_000,
+  bufferTokens: 4_000,
+}
+```
+
+`minimal` 仍 `{}`（仅 overflow，无主动软压）。软压触发时：先 **model-free prune**（DSH：低压不剪），重测后仍超预算才摘要。Provider overflow：先 prune 再重试一次，仍溢出才 `runCompaction`。阈值用 Unicode **码点**（`thresholdChars=8192` · `head=4096` · `tail=1024`）；日志保留原文，`deriveMessages` 按 callId 取最新表面。不引入多事件 `compaction/summary|prune` 协议。
+
 ### Face `/compact`
 
 无参数。busy / 摘要失败 → error；无可压缩历史 → success「No compactable history yet.」。成功文案含 shadowed 条数与估算 token；`command/done.sourceEventSeq` 指向写入的 `context/compaction`。

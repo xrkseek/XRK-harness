@@ -5,6 +5,7 @@ import { createToolRegistry } from "@xrkseek/core-tools";
 import { createPolicyEngine } from "@xrkseek/policy";
 import {
   createMcpClient,
+  mcpToolDefinition,
   parsePublicToolName,
   publicToolName,
   registerMcpTools,
@@ -303,5 +304,40 @@ describe("mcp client M0", () => {
     expect(client.failNextList).toBe(false);
 
     wired.dispose();
+  });
+
+
+  it("readOnlyHint maps to isConcurrencySafe; otherwise exclusive", () => {
+    const client = {
+      serverName: "demo",
+      async connect() {},
+      async listTools() { return []; },
+      async callTool() { return { content: "" }; },
+      onToolsListChanged() { return () => {}; },
+      onConnectionState() { return () => {}; },
+      async dispose() {},
+    } as any;
+    const safe = mcpToolDefinition(client, {
+      name: "peek",
+      description: "ro",
+      inputSchema: { type: "object", properties: {} },
+      annotations: { readOnlyHint: true },
+    });
+    expect(safe.isConcurrencySafe?.({})).toBe(true);
+
+    const unsafe = mcpToolDefinition(client, {
+      name: "write",
+      description: "rw",
+      inputSchema: { type: "object", properties: {} },
+      annotations: { readOnlyHint: false },
+    });
+    expect(unsafe.isConcurrencySafe).toBeUndefined();
+
+    const plain = mcpToolDefinition(client, {
+      name: "plain",
+      description: "no ann",
+      inputSchema: { type: "object", properties: {} },
+    });
+    expect(plain.isConcurrencySafe).toBeUndefined();
   });
 });

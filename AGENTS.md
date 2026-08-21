@@ -34,6 +34,7 @@
 ## 栈与启动
 
 - **Node ≥ 26** · **pnpm** 精确版钉在根 `packageManager`（当前 **11.22.0**）：本机 `npm install -g pnpm@…`；CI `pnpm/action-setup`；勿随手升大版本
+- **禁止**用 Cursor 自带 `helpers/node.exe`（常为 Node 22）跑门禁 / 发版；Windows 先把 `C:\Program Files\nodejs` 插到 `PATH` 最前（笔记 rule `xrk-node26`）
 - 构建：`pnpm install` → `pnpm build`（或 `pnpm check`）
 - CLI：`node apps/cli/dist/bin.js run|serve|web|doctor|dump-config`
 - 首读（按任务）：

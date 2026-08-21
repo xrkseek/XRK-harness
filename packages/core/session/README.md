@@ -27,4 +27,4 @@ See [docs/session-compaction.md](../../../docs/session-compaction.md).
 ## Store
 
 `createMemorySessionStore` — `append` runs `assertSessionEvent` then deep-freeze. `has(id)` 不抛。  
-`createPersistentSessionStore(dir)` — 工作区 `{dir}/sessions.db`（WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · chunk 写批并物理 `text-chunks` · `flush()` · open-turn 崩溃修复）；Host 经 `XRK_SESSIONS_DIR` 默认选用；drain idle / `stop` 时 flush/close。ZIP 导出 `toPackedJSONL` + `.jsonl.zst` sidecar；`fromPackedJSONL` 可导入；`searchSessionIds` 供 Face `session.search`。
+`createPersistentSessionStore(dir)` — 工作区 `{dir}/sessions.db`（WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · chunk 写批并物理 `text-chunks` / `tool-call-chunks` · `flush()` · open-turn 崩溃修复）；Host 经 `XRK_SESSIONS_DIR` 默认选用；drain idle / `stop` 时 flush/close。ZIP 导出 `toPackedJSONL` + `.jsonl.zst` sidecar；`fromPackedJSONL` 可导入；`searchSessionIds` 供 Face `session.search`。

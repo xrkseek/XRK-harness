@@ -26,6 +26,7 @@ export {
   buildVolatileUser,
   mergeHistory,
   orderToolsForWire,
+  TOOL_ORDER_REST,
   type AssembledRequest,
   type SkeletonSystemInput,
   type SkeletonUserInput,

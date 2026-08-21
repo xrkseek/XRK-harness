@@ -45,6 +45,13 @@ export interface ThreeLayerInput {
    * so the volatile suffix can stay byte-stable across a turn's tool loop.
    */
   readonly includeVolatileTime?: boolean;
+  /**
+   * Optional tool wire order (DSH `toolOrder`). Exactly one `' '` rest marker;
+   * named tools before/after the rest appear in that order, remaining tools
+   * fill the rest slot in lexicographic order. Omit / empty → pure lex sort.
+   * Unknown names, duplicates, or wrong rest count throw.
+   */
+  readonly toolOrder?: readonly string[];
 }
 
 export function buildSkeletonSystem(input: SkeletonSystemInput): string {
@@ -100,12 +107,50 @@ export function mergeHistory(
 }
 
 /** Lexicographic tool order — registration order must not leak to the wire. */
+export const TOOL_ORDER_REST = " " as const;
+
+/**
+ * Order tools for the wire.
+ * @param tools - tool definitions for this request
+ * @param toolOrder - optional DSH-style order with exactly one `' '` rest
+ */
 export function orderToolsForWire(
   tools: AssembledRequest["tools"],
+  toolOrder?: readonly string[],
 ): AssembledRequest["tools"] {
-  return [...tools].sort((a, b) =>
+  const lex = [...tools].sort((a, b) =>
     a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
   );
+  if (!toolOrder || toolOrder.length === 0) return lex;
+
+  const restMarks = toolOrder.filter((x) => x === TOOL_ORDER_REST);
+  if (restMarks.length !== 1) {
+    throw new Error(
+      `toolOrder must contain exactly one ' ' rest marker (got ${restMarks.length})`,
+    );
+  }
+  const named = toolOrder.filter((x) => x !== TOOL_ORDER_REST);
+  if (new Set(named).size !== named.length) {
+    throw new Error("toolOrder must not list the same tool name twice");
+  }
+  const byName = new Map(tools.map((t) => [t.name, t] as const));
+  for (const name of named) {
+    if (!byName.has(name)) {
+      throw new Error(`toolOrder references unknown tool: ${name}`);
+    }
+  }
+  const restIdx = toolOrder.indexOf(TOOL_ORDER_REST);
+  const before = toolOrder.slice(0, restIdx).filter((x) => x !== TOOL_ORDER_REST);
+  const after = toolOrder.slice(restIdx + 1).filter((x) => x !== TOOL_ORDER_REST);
+  const pinned = new Set([...before, ...after]);
+  const middle = lex.filter((t) => !pinned.has(t.name));
+  const pick = (names: readonly string[]) =>
+    names.map((n) => {
+      const t = byName.get(n);
+      if (!t) throw new Error(`toolOrder references unknown tool: ${n}`);
+      return t;
+    });
+  return [...pick(before), ...middle, ...pick(after)];
 }
 
 /**
@@ -113,7 +158,7 @@ export function orderToolsForWire(
  * 1. system = skeleton system (+ optional workspace blocks appended)
  * 2. messages = history(+optional marker) + skeleton user + volatile user
  * Volatile content must never appear in `system`.
- * Tools are sorted by name for prompt-cache stability (DSH parity).
+ * Tools are sorted by name (or `toolOrder`) for prompt-cache stability (DSH parity).
  */
 export function assembleThreeLayers(
   input: ThreeLayerInput,
@@ -141,6 +186,6 @@ export function assembleThreeLayers(
   return {
     system,
     messages,
-    tools: orderToolsForWire(input.tools ?? []),
+    tools: orderToolsForWire(input.tools ?? [], input.toolOrder),
   };
 }

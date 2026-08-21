@@ -176,22 +176,42 @@ function foldChat(events: readonly SessionEvent[]): ChatMessage[] {
       case "safety/notice":
         messages.push({ role: "user", content: ev.content });
         break;
-      case "assistant/message":
+      case "assistant/message": {
+        // DSH deriveEventMessage: skip usage-only / content-less assistants
+        // (e.g. max-tokens after keep/drop with no text left).
+        const hasTools = Boolean(ev.toolCalls?.length);
+        const hasReasoning = Boolean(ev.reasoning?.trim());
+        const hasText = Boolean(ev.content.trim());
+        if (!hasTools && !hasReasoning && !hasText) break;
         messages.push({
           role: "assistant",
           content: ev.content,
           ...(ev.toolCalls ? { toolCalls: ev.toolCalls } : {}),
+          // DSH serializeAssistant (dsh-v0.1.0-rc.8): every reasoning-carrying
+          // turn keeps CoT for gateway re-encode; omit only when empty.
+          ...(ev.reasoning?.trim() ? { reasoning: ev.reasoning } : {}),
         });
         break;
-      case "tool/result":
-        messages.push({
-          role: "tool",
+      }
+      case "tool/result": {
+        const msg = {
+          role: "tool" as const,
           content: ev.result.content,
           toolCallId: ev.result.toolCallId,
           name: ev.result.name,
-          ...(ev.result.isError ? { isError: true } : {}),
-        });
+          ...(ev.result.isError ? { isError: true as const } : {}),
+        };
+        // Latest surface wins (prune appends a replacement with the same callId).
+        const existing = messages.findIndex(
+          (m) => m.role === "tool" && m.toolCallId === ev.result.toolCallId,
+        );
+        if (existing >= 0) {
+          messages[existing] = msg;
+        } else {
+          messages.push(msg);
+        }
         break;
+      }
       default:
         break;
     }

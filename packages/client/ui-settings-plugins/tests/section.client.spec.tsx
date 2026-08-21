@@ -312,6 +312,9 @@ describe('AgentLoopCard', () => {
       ...settled,
       dirty: true,
       maxParallelToolCalls: field('10'),
+      maxSteps: field('32'),
+      toolSettle: field('parallel'),
+      llmRetryMaxRetries: field('5'),
     })
     const actions = cardActions()
     const props = {
@@ -333,6 +336,9 @@ describe('AgentLoopCard', () => {
     const store = createSnapshotStore<AgentLoopCardState>({
       ...settled,
       maxParallelToolCalls: field('2', { overridden: true }),
+      maxSteps: field('32'),
+      toolSettle: field('parallel'),
+      llmRetryMaxRetries: field('5'),
     })
     const actions = cardActions()
     const props = {

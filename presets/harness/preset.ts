@@ -155,12 +155,29 @@ export interface HarnessCompositionOptions {
   /** Host vision: resolve attachment bytes for image user content. */
   readonly resolveImage?: Parameters<typeof createAgent>[0]["resolveImage"];
   /**
-   * Context compaction. Default `{}` enables overflow retry + `/compact`.
+   * Context compaction. Default soft budgets + overflow retry + `/compact`.
    * `false` skips overflow retry; manual compact still works.
    */
   readonly compaction?: false | CompactionOptions;
   /** Face `agent-loop.maxParallelToolCalls` — bounds parallel tool settles. */
   readonly maxParallelToolCalls?: number;
+  /** Face `agent-loop.toolSettle` — `parallel` (default) or force `serial`. */
+  readonly toolSettle?: "serial" | "parallel";
+  /**
+   * Face `agent-loop.llmRetryMaxRetries`.
+   * `0` disables step retries; omit uses kernel default (5).
+   */
+  readonly llmRetryMaxRetries?: number;
+  /**
+   * Max LLM steps per user turn. Default **32** (harness/server).
+   * Face `agent-loop.maxSteps` overrides when Host injects it.
+   */
+  readonly maxSteps?: number;
+  /**
+   * Face `agent-loop.toolOrder` — DSH-style wire order with one `' '` rest.
+   * Forwarded into `assemble.toolOrder`.
+   */
+  readonly toolOrder?: readonly string[];
   /** Face `bash.timeoutMs` / `maxOutputBytes` — applied to the bash tool. */
   readonly bashLimits?: {
     readonly timeoutMs?: number;
@@ -461,6 +478,7 @@ export function createHarnessComposition(
               assemble: {
                 persona: system,
                 ...(workspaceBlocks?.length ? { workspaceBlocks } : {}),
+                ...(options.toolOrder ? { toolOrder: options.toolOrder } : {}),
                 resolveSlash: createSlashResolver({
                   workspaceRoot: injectOpts.root,
                   productDir,
@@ -473,10 +491,28 @@ export function createHarnessComposition(
           ? { resolveImage: options.resolveImage }
           : {}),
         compaction:
-          options.compaction === false ? false : (options.compaction ?? {}),
+          options.compaction === false
+            ? false
+            : (options.compaction ?? {
+                maxRequestTokens: 100_000,
+                keepTokens: 24_000,
+                bufferTokens: 4_000,
+              }),
         ...(options.maxParallelToolCalls !== undefined
           ? { maxParallelToolCalls: options.maxParallelToolCalls }
           : {}),
+        ...(options.toolSettle !== undefined
+          ? { toolSettle: options.toolSettle }
+          : {}),
+        ...(options.llmRetryMaxRetries !== undefined
+          ? {
+              llmRetry:
+                options.llmRetryMaxRetries <= 0
+                  ? false
+                  : { maxRetries: Math.floor(options.llmRetryMaxRetries) },
+            }
+          : {}),
+        maxSteps: options.maxSteps ?? 32,
       });
     },
     dumpConfig(patch = {}) {

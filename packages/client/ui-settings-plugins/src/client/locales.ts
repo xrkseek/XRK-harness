@@ -8,6 +8,9 @@ export type PluginsSettingsLocaleKey =
   | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
   | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
+  | 'agentLoopMaxSteps' | 'agentLoopMaxStepsHint'
+  | 'agentLoopToolSettle' | 'agentLoopToolSettleHint'
+  | 'agentLoopLlmRetry' | 'agentLoopLlmRetryHint'
   | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading'
   | 'mcpServersHeading' | 'mcpServersEmpty' | 'mcpAddServer' | 'mcpRemoveServer'
   | 'mcpPaste' | 'mcpPasteHint' | 'mcpPasteEmpty' | 'mcpPasteInvalid'
@@ -55,6 +58,12 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopDescription: 'How the agent dispatches tool calls.',
   agentLoopMaxParallel: 'Parallel tool calls',
   agentLoopMaxParallelHint: 'Upper bound on parallel-safe calls running at once within one step.',
+  agentLoopMaxSteps: 'Max steps per turn',
+  agentLoopMaxStepsHint: 'Upper bound on LLM steps (including tool rounds) within one user turn. Default 32.',
+  agentLoopToolSettle: 'Tool settle mode',
+  agentLoopToolSettleHint: 'parallel (default): overlap only isConcurrencySafe tools. serial: one call at a time.',
+  agentLoopLlmRetry: 'LLM retries per step',
+  agentLoopLlmRetryHint: 'Retry empty / rate-limit / server / timeout failures within one step. 0 disables. Default 5.',
   mcpTitle: 'MCP servers',
   mcpDescription: 'Paste Cursor / Trae style JSON, then save — servers mount on save (no separate env step).',
   mcpConnectedHeading: 'Connected now',
@@ -139,6 +148,12 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopDescription: 'Agent 如何派发工具调用。',
   agentLoopMaxParallel: '并行工具调用数',
   agentLoopMaxParallelHint: '同一步内最多同时运行多少个可并行的调用。',
+  agentLoopMaxSteps: '每轮最大步数',
+  agentLoopMaxStepsHint: '单次用户 turn 内 LLM 步数上限（含工具回合）。默认 32。',
+  agentLoopToolSettle: '工具结算模式',
+  agentLoopToolSettleHint: 'parallel（默认）：仅 isConcurrencySafe 的工具可重叠。serial：逐步独占。',
+  agentLoopLlmRetry: '步内 LLM 重试次数',
+  agentLoopLlmRetryHint: '对空响应 / 限流 / 服务端 / 超时在同一步内重试。0 关闭。默认 5。',
   mcpTitle: 'MCP 服务器',
   mcpDescription: '粘贴 Trae / Cursor 风格 mcpServers JSON，保存后会挂载（不必再先开环境变量）。',
   mcpConnectedHeading: '当前已连接',

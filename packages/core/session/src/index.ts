@@ -86,14 +86,35 @@ export {
 
 export {
   TOOL_INTERRUPTED_MESSAGE,
+  TOOL_NOT_STARTED,
+  TOOL_NOT_STARTED_MESSAGE,
+  TOOL_OUTCOME_UNKNOWN,
+  TOOL_OUTCOME_UNKNOWN_MESSAGE,
+  TOOL_ABORTED_BEFORE_DISPATCH,
+  TOOL_ABORTED_BEFORE_DISPATCH_MESSAGE,
+  TOOL_ABORTED,
+  TOOL_ABORTED_MESSAGE,
   ToolSettlementError,
   assertToolCallsSettled,
+  abortedBeforeDispatchSettlement,
+  danglingSettlement,
   listDanglingToolCalls,
   settleDanglingTools,
   type DanglingToolCall,
   type SettleDanglingOptions,
   type SettleDanglingResult,
 } from "./dangling.js";
+
+export {
+  TOOL_RESULT_PRUNE_HEAD_CHARS,
+  TOOL_RESULT_PRUNE_META_PREV_TOKENS,
+  TOOL_RESULT_PRUNE_TAIL_CHARS,
+  TOOL_RESULT_PRUNE_THRESHOLD_CHARS,
+  pruneOversizedToolResults,
+  pruneToolResultText,
+  type ToolResultPruneOptions,
+  type ToolResultPruneResult,
+} from "./tool-result-prune.js";
 
 export {
   foldRequestHeader,
@@ -200,7 +221,9 @@ export {
   expandPackedStorageRecords,
   fromPackedJSONL,
   fromPackedJSONLZstd,
+  isPackedChunkRow,
   isTextChunkRow,
+  isToolCallChunkRow,
   packChunkRunsForExport,
   parsePackedJSONL,
   toPackedJSONL,
@@ -209,6 +232,7 @@ export {
   type PackedStorageRecord,
   type ParsePackedJSONLResult,
   type TextChunkRow,
+  type ToolCallChunkRow,
 } from "./chunk-pack.js";
 export { repairOpenTurnEvents } from "./repair-open-turn.js";
 export {

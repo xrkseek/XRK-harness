@@ -3,6 +3,7 @@ import {
   assertToolCallsSettled,
   deriveMessages,
   estimateMessagesTokens,
+  pruneOversizedToolResults,
   settleDanglingTools,
   DEFAULT_COMPACTION_BUFFER_TOKENS,
   DEFAULT_COMPACTION_KEEP_TOKENS,
@@ -19,11 +20,18 @@ import {
   type ToolRegistry,
 } from "@xrkseek/core-tools";
 import {
+  finalizeLlmChatResponse,
   isContextOverflowError,
+  isEmptyResponseError,
+  isIncompleteToolCallError,
+  isLlmError,
+  isProviderFinishError,
+  isUnsupportedReasoningEffortError,
   UnsupportedContentError,
   type LlmAdapter,
   type LlmChatRequest,
   type LlmChatResponse,
+  type ResolvedRetryPolicy,
 } from "@xrkseek/llm";
 import type {
   ChatMessage,
@@ -31,6 +39,7 @@ import type {
   SafetyNoticePayload,
   SessionEvent,
   TokenUsage,
+  TurnEndReason,
 } from "@xrkseek/protocol";
 import {
   contentHasImage,
@@ -51,12 +60,21 @@ import {
   finalizeCancelledTurn,
   isAbortError,
 } from "./cancel-finalize.js";
+import {
+  invokeLlmWithRetry,
+  resolveRetryPolicy,
+} from "./llm-retry.js";
 
 export interface AssembleOptions {
   readonly persona?: string;
   readonly mcpProtocol?: string;
   readonly owner?: string;
   readonly workspaceBlocks?: readonly string[];
+  /**
+   * Optional DSH `toolOrder` (exactly one `' '` rest). Forwarded to
+   * `assembleThreeLayers`; omit → lexicographic tool wire order.
+   */
+  readonly toolOrder?: readonly string[];
   /** When false, skip three-layer and use legacy system+history. Default true if assemble set. */
   readonly enabled?: boolean;
   /**
@@ -121,6 +139,12 @@ export interface RunTurnInput {
    * Pass `false` or omit to disable. Object enables auto + one overflow retry.
    */
   readonly compaction?: false | CompactionOptions;
+  /**
+   * Provider request retries within a step (DSH llm-retry).
+   * Default: normal mode, max 5, retryable EMPTY_RESPONSE / RATE_LIMIT /
+   * SERVER / TIMEOUT / TRANSPORT. Pass `false` to disable.
+   */
+  readonly llmRetry?: false | Partial<ResolvedRetryPolicy>;
 }
 
 export interface RunTurnResult {
@@ -166,11 +190,20 @@ function toLlmRequest(
   input: RunTurnInput,
   req: { messages: ChatMessage[]; tools: AssembledRequest["tools"] },
 ): LlmChatRequest {
+  let reasoningEffort: string | undefined;
+  try {
+    reasoningEffort =
+      input.llm.ensureRoute?.()?.reasoningEffort ??
+      input.llm.peekRoute?.()?.reasoningEffort;
+  } catch {
+    reasoningEffort = input.llm.peekRoute?.()?.reasoningEffort;
+  }
   return {
     messages: req.messages,
     ...(req.tools.length ? { tools: req.tools } : {}),
     ...(input.signal ? { signal: input.signal } : {}),
     ...(input.resolveImage ? { resolveImage: input.resolveImage } : {}),
+    ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
   };
 }
 
@@ -178,20 +211,25 @@ async function invokeLlm(
   input: RunTurnInput,
   req: { messages: ChatMessage[]; tools: AssembledRequest["tools"] },
   onChunk: (chunk: {
-    kind: "text" | "reasoning" | "usage";
+    kind: "text" | "reasoning" | "usage" | "tool-call";
     index: number;
     text: string;
     usage?: TokenUsage;
+    toolCallId?: string;
+    toolName?: string;
+    argumentsDelta?: string;
   }) => void,
 ): Promise<LlmChatResponse> {
   const request = toLlmRequest(input, req);
   if (!input.llm.stream) {
-    return input.llm.chat(request);
+    return finalizeLlmChatResponse(await input.llm.chat(request));
   }
   let content = "";
   let reasoning = "";
   let toolCalls: LlmChatResponse["toolCalls"];
   let usage: TokenUsage | undefined;
+  let finishReason: LlmChatResponse["finishReason"];
+  let finishError: LlmChatResponse["finishError"];
   for await (const ev of input.llm.stream(request)) {
     if (input.signal?.aborted) {
       throw new DOMException("aborted", "AbortError");
@@ -206,6 +244,15 @@ async function invokeLlm(
         content += ev.text;
         onChunk({ kind: "text", index: ev.index, text: ev.text });
       }
+    } else if (ev.type === "tool-call-delta") {
+      onChunk({
+        kind: "tool-call",
+        index: ev.index,
+        text: ev.argumentsDelta,
+        toolCallId: ev.id,
+        ...(ev.name ? { toolName: ev.name } : {}),
+        argumentsDelta: ev.argumentsDelta,
+      });
     } else if (ev.type === "usage") {
       usage = ev.usage;
       onChunk({ kind: "usage", index: 0, text: "", usage: ev.usage });
@@ -214,14 +261,18 @@ async function invokeLlm(
       if (ev.reasoning) reasoning = ev.reasoning;
       if (ev.toolCalls) toolCalls = ev.toolCalls;
       if (ev.usage) usage = ev.usage;
+      if (ev.finishReason) finishReason = ev.finishReason;
+      if (ev.finishError) finishError = ev.finishError;
     }
   }
-  return {
+  return finalizeLlmChatResponse({
     content,
     ...(reasoning.trim() ? { reasoning } : {}),
     ...(toolCalls ? { toolCalls } : {}),
     ...(usage ? { usage } : {}),
-  };
+    ...(finishReason ? { finishReason } : {}),
+    ...(finishError ? { finishError } : {}),
+  });
 }
 
 function buildModelRequest(input: {
@@ -306,6 +357,7 @@ function buildModelRequest(input: {
     includeCurrentMarker: input.firstStep === true,
     includeVolatileTime: input.firstStep === true,
     tools: toolDefs,
+    ...(input.assemble?.toolOrder ? { toolOrder: input.assemble.toolOrder } : {}),
     ...(input.assemble?.workspaceBlocks ||
     input.slashSystemExtra ||
     foldPlanMode(input.events)
@@ -393,6 +445,8 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   });
 
   let activeStepId: string | undefined;
+  /** Sticky: once any step hits max-tokens, the turn ends that way (DSH). */
+  let turnEndReason: TurnEndReason = { kind: "completed" };
 
   try {
   while (steps < maxSteps) {
@@ -438,26 +492,39 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
 
     let req = buildReq();
 
-    // Proactive compact when soft budget exceeded.
+    // Soft budget: prune only under pressure (DSH: below-pressure never prune),
+    // remeasure, then summarize only if still over.
     if (
       compaction?.auto !== false &&
       compaction?.maxRequestTokens !== undefined
     ) {
       const buffer =
         compaction.bufferTokens ?? DEFAULT_COMPACTION_BUFFER_TOKENS;
-      const used = estimateMessagesTokens(req.messages);
-      if (used > compaction.maxRequestTokens - buffer) {
-        const did = await runCompaction({
-          store: input.store,
-          sessionId: input.sessionId,
-          llm: input.llm,
-          reason: "auto",
-          keepTokens: compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
-          turnId,
-          ...(input.signal ? { signal: input.signal } : {}),
+      const softCeiling = compaction.maxRequestTokens - buffer;
+      let used = estimateMessagesTokens(req.messages);
+      if (used > softCeiling) {
+        const pruned = pruneOversizedToolResults(input.store, input.sessionId, {
           now,
+          turnId,
+          stepId,
         });
-        if (did.compacted) req = buildReq();
+        if (pruned.pruned > 0) {
+          req = buildReq();
+          used = estimateMessagesTokens(req.messages);
+        }
+        if (used > softCeiling) {
+          const did = await runCompaction({
+            store: input.store,
+            sessionId: input.sessionId,
+            llm: input.llm,
+            reason: "auto",
+            keepTokens: compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
+            turnId,
+            ...(input.signal ? { signal: input.signal } : {}),
+            now,
+          });
+          if (did.compacted) req = buildReq();
+        }
       }
     }
 
@@ -478,10 +545,13 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
 
     let response;
     const onChunk = (chunk: {
-      kind: "text" | "reasoning" | "usage";
+      kind: "text" | "reasoning" | "usage" | "tool-call";
       index: number;
       text: string;
       usage?: TokenUsage;
+      toolCallId?: string;
+      toolName?: string;
+      argumentsDelta?: string;
     }) => {
       if (chunk.kind === "usage" && chunk.usage) {
         append(input.store, input.sessionId, {
@@ -492,6 +562,22 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
           text: "",
           kind: "usage",
           usage: chunk.usage,
+        });
+        return;
+      }
+      if (chunk.kind === "tool-call" && chunk.toolCallId) {
+        const delta = chunk.argumentsDelta ?? chunk.text;
+        append(input.store, input.sessionId, {
+          type: "assistant/chunk",
+          ts: now(),
+          turnId,
+          stepId,
+          text: delta,
+          kind: "tool-call",
+          index: chunk.index,
+          toolCallId: chunk.toolCallId,
+          ...(chunk.toolName ? { toolName: chunk.toolName } : {}),
+          argumentsDelta: delta,
         });
         return;
       }
@@ -506,7 +592,18 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       });
     };
     try {
-      response = await invokeLlm(input, req, onChunk);
+      response = await invokeLlmWithRetry({
+        invoke: (onBuffered) => invokeLlm(input, req, onBuffered),
+        flushChunk: onChunk,
+        store: input.store,
+        sessionId: input.sessionId,
+        turnId,
+        stepId,
+        now,
+        ...(input.signal ? { signal: input.signal } : {}),
+        policy: resolveRetryPolicy(input.llmRetry),
+        provider: input.llm.id,
+      });
     } catch (err) {
       if (
         compaction &&
@@ -514,36 +611,93 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         !overflowRecovered
       ) {
         overflowRecovered = true;
-        const did = await runCompaction({
-          store: input.store,
-          sessionId: input.sessionId,
-          llm: input.llm,
-          reason: "overflow",
-          keepTokens: compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
-          turnId,
-          ...(input.signal ? { signal: input.signal } : {}),
+        // Overflow: prune first, retry once; only summarize if still overflowing
+        // (DSH compaction-basic: model-free prune before head reduction).
+        const pruned = pruneOversizedToolResults(input.store, input.sessionId, {
           now,
-        });
-        if (!did.compacted) throw err;
-        req = buildReq();
-        assertToolCallsSettled(input.store.get(input.sessionId).events);
-        maybeAppendRequestHeader({
-          store: input.store,
-          sessionId: input.sessionId,
           turnId,
-          llm: input.llm,
-          now,
-          reason: "change",
-          ...(req.system?.trim() ? { system: req.system } : {}),
-          ...(req.tools.length ? { tools: req.tools } : {}),
+          stepId,
         });
-        response = await invokeLlm(input, req, onChunk);
+        if (pruned.pruned > 0) {
+          req = buildReq();
+          assertToolCallsSettled(input.store.get(input.sessionId).events);
+          maybeAppendRequestHeader({
+            store: input.store,
+            sessionId: input.sessionId,
+            turnId,
+            llm: input.llm,
+            now,
+            reason: "change",
+            ...(req.system?.trim() ? { system: req.system } : {}),
+            ...(req.tools.length ? { tools: req.tools } : {}),
+          });
+          try {
+            response = await invokeLlm(input, req, onChunk);
+          } catch (retryErr) {
+            if (!isContextOverflowError(retryErr)) throw retryErr;
+            const did = await runCompaction({
+              store: input.store,
+              sessionId: input.sessionId,
+              llm: input.llm,
+              reason: "overflow",
+              keepTokens:
+                compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
+              turnId,
+              ...(input.signal ? { signal: input.signal } : {}),
+              now,
+            });
+            if (!did.compacted) throw retryErr;
+            req = buildReq();
+            assertToolCallsSettled(input.store.get(input.sessionId).events);
+            maybeAppendRequestHeader({
+              store: input.store,
+              sessionId: input.sessionId,
+              turnId,
+              llm: input.llm,
+              now,
+              reason: "change",
+              ...(req.system?.trim() ? { system: req.system } : {}),
+              ...(req.tools.length ? { tools: req.tools } : {}),
+            });
+            response = await invokeLlm(input, req, onChunk);
+          }
+        } else {
+          const did = await runCompaction({
+            store: input.store,
+            sessionId: input.sessionId,
+            llm: input.llm,
+            reason: "overflow",
+            keepTokens:
+              compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
+            turnId,
+            ...(input.signal ? { signal: input.signal } : {}),
+            now,
+          });
+          if (!did.compacted) throw err;
+          req = buildReq();
+          assertToolCallsSettled(input.store.get(input.sessionId).events);
+          maybeAppendRequestHeader({
+            store: input.store,
+            sessionId: input.sessionId,
+            turnId,
+            llm: input.llm,
+            now,
+            reason: "change",
+            ...(req.system?.trim() ? { system: req.system } : {}),
+            ...(req.tools.length ? { tools: req.tools } : {}),
+          });
+          response = await invokeLlm(input, req, onChunk);
+        }
       } else {
         throw err;
       }
     }
 
     assistantText = response.content;
+    // DSH: max-tokens is sticky for the turn; keep/drop already stripped tools.
+    if (response.finishReason === "max-tokens") {
+      turnEndReason = { kind: "max-tokens" };
+    }
     append(input.store, input.sessionId, {
       type: "assistant/message",
       ts: now(),
@@ -615,7 +769,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       });
     }
 
-    const { outcomes } = await settleToolBatch({
+    const { outcomes, aborted: settleAborted } = await settleToolBatch({
       calls,
       registry: input.tools,
       materialization: table!,
@@ -658,6 +812,10 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       batchSafety.push(...outcome.safetyNotices);
     }
 
+    if (settleAborted || input.signal?.aborted) {
+      throw new DOMException("aborted", "AbortError");
+    }
+
     for (const notice of batchSafety) {
       append(input.store, input.sessionId, {
         type: "safety/notice",
@@ -686,13 +844,18 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       stepId,
     });
     activeStepId = undefined;
+
+    // DSH: any successful tool with concludesTurn ends the turn at this step.
+    if (outcomes.some((o) => o.concludesTurn === true)) {
+      break;
+    }
   }
 
   append(input.store, input.sessionId, {
     type: "turn/end",
     ts: now(),
     turnId,
-    reason: { kind: "completed" },
+    reason: turnEndReason,
   });
 
   return { turnId, assistantText, steps, toolOk, toolFailed };
@@ -704,6 +867,41 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         turnId,
         ...(activeStepId !== undefined ? { stepId: activeStepId } : {}),
         now,
+      });
+    } else if (
+      isEmptyResponseError(err) ||
+      isProviderFinishError(err) ||
+      isIncompleteToolCallError(err) ||
+      isUnsupportedReasoningEffortError(err) ||
+      isLlmError(err)
+    ) {
+      if (activeStepId !== undefined) {
+        append(input.store, input.sessionId, {
+          type: "step/end",
+          ts: now(),
+          turnId,
+          stepId: activeStepId,
+        });
+      }
+      const code =
+        isProviderFinishError(err) ||
+        isEmptyResponseError(err) ||
+        isIncompleteToolCallError(err) ||
+        isUnsupportedReasoningEffortError(err) ||
+        isLlmError(err)
+          ? (err as { code: string }).code
+          : "ERROR";
+      append(input.store, input.sessionId, {
+        type: "turn/end",
+        ts: now(),
+        turnId,
+        reason: {
+          kind: "error",
+          error: {
+            message: err instanceof Error ? err.message : String(err),
+            code,
+          },
+        },
       });
     }
     throw err;

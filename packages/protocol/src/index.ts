@@ -62,6 +62,8 @@ export {
   type PlanModeEvent,
   type FeedbackRecordEvent,
   type LlmRequestConfig,
+  type LlmRetryEvent,
+  type LlmRetryStartedEvent,
   type RequestHeaderEvent,
   type RequestHeaderReason,
   type RequestHeaderToolSchema,
@@ -70,6 +72,7 @@ export {
   type ToolCallEvent,
   type ToolResultEvent,
   type TurnEndEvent,
+  type TurnEndReason,
   type TurnStartEvent,
   type UserMessageEvent,
 } from "./session-events.js";
@@ -95,6 +98,12 @@ export {
   type PlanUnitState,
 } from "./plan-mode.js";
 export type { ToolCall, ToolResult } from "./tools.js";
+export {
+  TOOL_ABORTED,
+  TOOL_ABORTED_BEFORE_DISPATCH,
+  TOOL_ABORTED_MESSAGE,
+  TOOL_ABORTED_BEFORE_DISPATCH_MESSAGE,
+} from "./tools.js";
 export {
   inputPressureTokens,
   parseTokenUsage,

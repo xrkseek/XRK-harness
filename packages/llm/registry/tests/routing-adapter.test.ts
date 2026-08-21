@@ -26,4 +26,47 @@ describe("createRoutingLlmAdapter", () => {
       model: "m2",
     });
   });
+
+  it("injects selection.reasoningEffort into the inner request", async () => {
+    let seenEffort: string | undefined;
+    const routing = createRoutingLlmAdapter({
+      id: "route-effort",
+      getSelection: () => ({
+        provider: "deepseek",
+        model: "deepseek-v4-flash",
+        reasoningEffort: "low",
+      }),
+      resolveAdapter: () => {
+        const inner = createReplayAdapter([{ content: "ok" }]);
+        const orig = inner.chat.bind(inner);
+        inner.chat = async (req) => {
+          seenEffort = req.reasoningEffort;
+          return orig(req);
+        };
+        return inner;
+      },
+    });
+    await routing.chat({ messages: [{ role: "user", content: "hi" }] });
+    expect(seenEffort).toBe("low");
+    expect(routing.peekRoute()?.reasoningEffort).toBe("low");
+  });
+
+  it("puts selection.contextWindow on ensureRoute / peekRoute (request/header)", async () => {
+    const routing = createRoutingLlmAdapter({
+      id: "route-window",
+      getSelection: () => ({
+        provider: "deepseek",
+        model: "deepseek-v4-flash",
+        contextWindow: 128_000,
+      }),
+      resolveAdapter: () => createReplayAdapter([{ content: "ok" }]),
+    });
+    expect(routing.ensureRoute()).toEqual({
+      provider: "deepseek",
+      model: "deepseek-v4-flash",
+      contextWindow: 128_000,
+    });
+    await routing.chat({ messages: [{ role: "user", content: "hi" }] });
+    expect(routing.peekRoute()?.contextWindow).toBe(128_000);
+  });
 });

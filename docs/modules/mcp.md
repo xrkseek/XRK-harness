@@ -22,12 +22,10 @@ MCP **client**（stdio + streamable-http）。规格门禁：[policy.md](../poli
 | 文件 | 作用 | 关键契约 |
 |------|------|----------|
 | `index.ts` | 导出面 | |
-| `types.ts` | `McpClient` · `McpStdioOptions` · `McpHttpOptions` · `McpConnectionState` · 结果形 | |
-| `names.ts` | `publicToolName` · `parsePublicToolName` · `assertServerName` | serverName ∈ `[A-Za-z0-9_-]{1,32}`；raw 禁 `__` |
-| `reconnect.ts` | `resolveReconnectPolicy` · `RECONNECT_DEFAULTS` | 有界退避；错配构造失败 |
-| `client.ts` | `createMcpClient` | 先 policy；stdio 代际 supervisor；`onToolsListChanged` / `onConnectionState`；可选 `imageAdmission` |
+| `client.ts` | `createMcpClient` · `parseMcpToolAnnotations` | 先 policy；stdio 代际 supervisor；`onToolsListChanged` / `onConnectionState`；可选 `imageAdmission`；listTools 透传 annotations |
+| `types.ts` | `McpClient` · `McpToolInfo` · `McpToolAnnotations` · `McpStdioOptions` · `McpHttpOptions` · `McpConnectionState` · 结果形 | |
 | `project-content.ts` | 有序块投影；公开 barrel：`mapMcpCallContent` · `McpImageAdmission`；`projectMcpContent` 等为模块内实现 | image → AttachmentStore 或 diagnostic text；禁 JSON dump base64 |
-| `register.ts` | `registerMcpTools` · `mcpToolDefinition` | 显式同名 → skip；默认 watch；gave-up 卸工具 |
+| `register.ts` | `registerMcpTools` · `mcpToolDefinition` | 显式同名 → skip；默认 watch；gave-up 卸工具；`annotations.readOnlyHint === true` → `isConcurrencySafe` |
 
 ## 标准用法
 

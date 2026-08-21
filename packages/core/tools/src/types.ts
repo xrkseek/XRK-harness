@@ -124,6 +124,11 @@ export interface RunToolOutcome {
   readonly truncated?: boolean;
   /** Managed full-output paths when persist was used. */
   readonly outputPaths?: readonly string[];
+  /**
+   * DSH: successful tool asked to end the turn after this step.
+   * Failures / abort synthetics never set this.
+   */
+  readonly concludesTurn?: true;
 }
 
 export interface ToolPipeline {

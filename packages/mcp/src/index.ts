@@ -1,5 +1,6 @@
 export {
   createMcpClient,
+  parseMcpToolAnnotations,
 } from "./client.js";
 export {
   RECONNECT_DEFAULTS,
@@ -34,5 +35,6 @@ export type {
   McpHttpReconnectionOptions,
   McpReconnectConfig,
   McpStdioOptions,
+  McpToolAnnotations,
   McpToolInfo,
 } from "./types.js";

@@ -2,16 +2,22 @@ import {
   offloadRequestImages,
   DEFAULT_MAX_REQUEST_IMAGE_BYTES,
 } from "@xrkseek/attachment";
+import {
+  finalizeLlmChatResponse,
+  collectLlmStream,
+  classifyCaughtLlmError,
+  ContextOverflowError,
+  isLlmError,
+  throwHttpLlmError,
+  withOpenAiFinishReason,
+  UnsupportedContentError,
+  UnsupportedReasoningEffortError,
+} from "@xrkseek/llm";
 import type {
   LlmAdapter,
   LlmChatRequest,
   LlmChatResponse,
   LlmStreamEvent,
-} from "@xrkseek/llm";
-import {
-  collectLlmStream,
-  ContextOverflowError,
-  UnsupportedContentError,
 } from "@xrkseek/llm";
 import type {
   ChatMessage,
@@ -24,6 +30,16 @@ import {
   flattenText,
   tryParseOpenAiUsage,
 } from "@xrkseek/protocol";
+import {
+  resolveDeepSeekThinkingWire,
+  type DeepSeekThinkingDefaults,
+} from "./deepseek-thinking.js";
+
+export {
+  resolveDeepSeekThinkingWire,
+  type DeepSeekThinkingDefaults,
+  type DeepSeekThinkingWire,
+} from "./deepseek-thinking.js";
 
 export type OpenAiAuthMode = "bearer" | "api-key" | "header";
 
@@ -54,6 +70,12 @@ export interface OpenAiCompatibleOptions {
   readonly inputModalities?: readonly ("text" | "image")[];
   /** Max inlined base64 image bytes per request (DSH rc.8 default 20MiB). */
   readonly maxRequestImageBytes?: number;
+  /**
+   * When set, emit DeepSeek `thinking` / `reasoning_effort` from
+   * {@link LlmChatRequest.reasoningEffort} + these defaults (DSH serialize).
+   * Plain OpenAI gateways should leave this unset.
+   */
+  readonly deepseekThinking?: true | DeepSeekThinkingDefaults;
 }
 
 type WireContentPart =
@@ -71,6 +93,8 @@ type WireMessage =
         type: "function";
         function: { name: string; arguments: string };
       }[];
+      /** DeepSeek / thinking models — required on prior tool turns. */
+      reasoning_content?: string;
     }
   | {
       role: "tool";
@@ -151,10 +175,15 @@ async function toWireMessages(
               : JSON.stringify(c.arguments ?? {}),
         },
       }));
+      const reasoning =
+        typeof m.reasoning === "string" && m.reasoning.trim()
+          ? m.reasoning
+          : undefined;
       out.push({
         role: "assistant",
         content: m.content,
         ...(tool_calls?.length ? { tool_calls } : {}),
+        ...(reasoning ? { reasoning_content: reasoning } : {}),
       });
       continue;
     }
@@ -328,6 +357,18 @@ async function buildBody(
   if (options.temperature !== undefined) body.temperature = options.temperature;
   if (options.maxTokens !== undefined) body.max_tokens = options.maxTokens;
   if (stream) body.stream_options = { include_usage: true };
+  if (options.deepseekThinking) {
+    const defaults: DeepSeekThinkingDefaults =
+      options.deepseekThinking === true ? {} : options.deepseekThinking;
+    const thinking = resolveDeepSeekThinkingWire(
+      request.reasoningEffort,
+      defaults,
+    );
+    if (thinking.thinking) body.thinking = thinking.thinking;
+    if (thinking.reasoning_effort !== undefined) {
+      body.reasoning_effort = thinking.reasoning_effort;
+    }
+  }
   return body;
 }
 
@@ -344,6 +385,7 @@ function parseChatJson(text: string): LlmChatResponse {
   const root = json as { choices?: unknown[]; usage?: unknown };
   const choice = root?.choices?.[0] as
     | {
+        finish_reason?: unknown;
         message?: {
           content?: unknown;
           tool_calls?: unknown;
@@ -365,12 +407,17 @@ function parseChatJson(text: string): LlmChatResponse {
   const reasoning =
     reasoningRaw && reasoningRaw.trim() ? reasoningRaw : undefined;
   const usage = tryParseOpenAiUsage(root.usage);
-  return {
-    content,
-    ...(toolCalls ? { toolCalls } : {}),
-    ...(reasoning ? { reasoning } : {}),
-    ...(usage ? { usage } : {}),
-  };
+  return finalizeLlmChatResponse(
+    withOpenAiFinishReason(
+      {
+        content,
+        ...(toolCalls ? { toolCalls } : {}),
+        ...(reasoning ? { reasoning } : {}),
+        ...(usage ? { usage } : {}),
+      },
+      choice?.finish_reason,
+    ),
+  );
 }
 
 type ToolCallAcc = {
@@ -391,6 +438,7 @@ async function* streamSse(
   let content = "";
   let reasoning = "";
   let usage: LlmChatResponse["usage"];
+  let finishRaw: unknown;
   const toolAcc = new Map<number, ToolCallAcc>();
 
   const flushLine = function* (line: string): Generator<LlmStreamEvent> {
@@ -413,6 +461,7 @@ async function* streamSse(
     }
     const choice = root?.choices?.[0] as
       | {
+          finish_reason?: unknown;
           delta?: {
             content?: unknown;
             reasoning_content?: unknown;
@@ -421,6 +470,9 @@ async function* streamSse(
           };
         }
       | undefined;
+    if (choice?.finish_reason !== undefined && choice.finish_reason !== null) {
+      finishRaw = choice.finish_reason;
+    }
     const delta = choice?.delta;
     if (!delta) return;
 
@@ -460,6 +512,21 @@ async function* streamSse(
           cur.arguments += tc.function.arguments;
         }
         toolAcc.set(idx, cur);
+        const id = cur.id ?? `call_${idx}_${(cur.name ?? "unknown").replace(/\W/g, "_")}`;
+        const argsPiece =
+          typeof tc.function?.arguments === "string"
+            ? tc.function.arguments
+            : "";
+        // Emit when we learn identity or receive an arguments fragment.
+        if (typeof tc.id === "string" || typeof tc.function?.name === "string" || argsPiece) {
+          yield {
+            type: "tool-call-delta" as const,
+            index: idx,
+            id,
+            ...(cur.name ? { name: cur.name } : {}),
+            argumentsDelta: argsPiece,
+          };
+        }
       }
     }
   };
@@ -487,12 +554,29 @@ async function* streamSse(
     });
   }
 
+  const finalized = finalizeLlmChatResponse(
+    withOpenAiFinishReason(
+      {
+        content,
+        ...(reasoning.trim() ? { reasoning } : {}),
+        ...(toolCalls.length ? { toolCalls } : {}),
+        ...(usage ? { usage } : {}),
+      },
+      finishRaw,
+    ),
+  );
   yield {
     type: "done",
-    content,
-    ...(reasoning.trim() ? { reasoning } : {}),
-    ...(toolCalls.length ? { toolCalls } : {}),
-    ...(usage ? { usage } : {}),
+    content: finalized.content,
+    ...(finalized.reasoning ? { reasoning: finalized.reasoning } : {}),
+    ...(finalized.toolCalls ? { toolCalls: finalized.toolCalls } : {}),
+    ...(finalized.usage ? { usage: finalized.usage } : {}),
+    ...(finalized.finishReason
+      ? { finishReason: finalized.finishReason }
+      : {}),
+    ...(finalized.finishError
+      ? { finishError: finalized.finishError }
+      : {}),
   };
 }
 
@@ -518,31 +602,42 @@ export function createOpenAiCompatibleAdapter(
     if (request.signal?.aborted) {
       throw new DOMException("aborted", "AbortError");
     }
-    const body = await buildBody(options, request, stream);
-    const signal = requestSignal(options, request);
-    const res = await doFetch(endpoint, {
-      method: "POST",
-      headers: buildAuthHeaders(options),
-      body: JSON.stringify(body),
-      ...(signal ? { signal } : {}),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      if (looksLikeOverflow(res.status, text)) {
-        throw new ContextOverflowError(
-          `openai-compatible overflow (${res.status}): ${text.slice(0, 400)}`,
-        );
+    try {
+      const body = await buildBody(options, request, stream);
+      const signal = requestSignal(options, request);
+      const res = await doFetch(endpoint, {
+        method: "POST",
+        headers: buildAuthHeaders(options),
+        body: JSON.stringify(body),
+        ...(signal ? { signal } : {}),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        if (looksLikeOverflow(res.status, text)) {
+          throw new ContextOverflowError(
+            `openai-compatible overflow (${res.status}): ${text.slice(0, 400)}`,
+          );
+        }
+        if (looksLikeRequestBodyLimit(res.status, text)) {
+          throw new UnsupportedContentError(
+            `openai-compatible request body too large (${res.status}): ${text.slice(0, 400)}`,
+          );
+        }
+        throwHttpLlmError("openai-compatible", res.status, text, res.headers);
       }
-      if (looksLikeRequestBodyLimit(res.status, text)) {
-        throw new UnsupportedContentError(
-          `openai-compatible request body too large (${res.status}): ${text.slice(0, 400)}`,
-        );
+      return res;
+    } catch (err) {
+      if (
+        err instanceof ContextOverflowError ||
+        err instanceof UnsupportedContentError ||
+        err instanceof UnsupportedReasoningEffortError ||
+        isLlmError(err) ||
+        (err instanceof DOMException && err.name === "AbortError")
+      ) {
+        throw err;
       }
-      throw new Error(
-        `openai-compatible HTTP ${res.status}: ${text.slice(0, 800)}`,
-      );
+      classifyCaughtLlmError(err, "openai-compatible");
     }
-    return res;
   }
 
   const adapter: LlmAdapter = {

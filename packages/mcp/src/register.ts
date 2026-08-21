@@ -29,6 +29,7 @@ export function mcpToolDefinition(
   client: McpClient,
   info: McpToolInfo,
 ): ToolDefinition {
+  const readOnly = info.annotations?.readOnlyHint === true;
   return {
     name: publicToolName(client.serverName, info.name),
     description: info.description || `MCP tool ${info.name}`,
@@ -44,6 +45,8 @@ export function mcpToolDefinition(
         ...(result.isError ? { isError: true } : {}),
       };
     },
+    // Fail-closed: only exact MCP readOnlyHint permits parallel settle.
+    ...(readOnly ? { isConcurrencySafe: () => true } : {}),
   };
 }
 

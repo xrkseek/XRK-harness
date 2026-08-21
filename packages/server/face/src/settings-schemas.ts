@@ -112,6 +112,23 @@ const BashConfig = Schema.object({
 
 const AgentLoopConfig = Schema.object({
   maxParallelToolCalls: Schema.number().step(1).min(1),
+  /** Max LLM steps per user turn (tool rounds). Harness/server default 32. */
+  maxSteps: Schema.number().step(1).min(1).default(32),
+  /**
+   * DSH toolOrder: tool name list with exactly one `' '` rest marker.
+   * Empty / omit → lexicographic wire order. Edited via settings.yaml for now.
+   */
+  toolOrder: Schema.array(Schema.string()),
+  /**
+   * Tool settle mode. `parallel` (default) uses `isConcurrencySafe` barriers;
+   * `serial` forces exclusive execution for every call.
+   */
+  toolSettle: Schema.union(["parallel", "serial"]).default("parallel"),
+  /**
+   * Max provider retries within one LLM step (`0` disables).
+   * Omit → kernel default (5).
+   */
+  llmRetryMaxRetries: Schema.number().step(1).min(0).default(5),
 });
 
 const WebSearchConfig = Schema.object({
@@ -223,7 +240,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "agent-loop",
       schema: schemasteryJson(AgentLoopConfig) as FaceSchemaEnvelope,
-      base: {},
+      base: { maxSteps: 32, toolSettle: "parallel", llmRetryMaxRetries: 5 },
       applies: "live",
     },
     {

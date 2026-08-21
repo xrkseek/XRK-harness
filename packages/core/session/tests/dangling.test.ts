@@ -1,17 +1,21 @@
-import { describe, expect, it } from "vitest";
-import type { SessionEvent } from "@xrkseek/protocol";
 import {
-  TOOL_INTERRUPTED_MESSAGE,
-  ToolSettlementError,
+  TOOL_ABORTED_BEFORE_DISPATCH,
+  TOOL_ABORTED_BEFORE_DISPATCH_MESSAGE,
+  TOOL_OUTCOME_UNKNOWN,
+  TOOL_OUTCOME_UNKNOWN_MESSAGE,
+  TOOL_NOT_STARTED,
+  TOOL_NOT_STARTED_MESSAGE,
   assertToolCallsSettled,
   createMemorySessionStore,
   deriveMessages,
   listDanglingToolCalls,
   settleDanglingTools,
 } from "../src/index.js";
+import type { SessionEvent } from "@xrkseek/protocol";
+import { describe, expect, it } from "vitest";
 
 describe("listDanglingToolCalls", () => {
-  it("detects tool/call without result", () => {
+  it("finds tool/call without result", () => {
     const events: SessionEvent[] = [
       {
         type: "tool/call",
@@ -21,11 +25,18 @@ describe("listDanglingToolCalls", () => {
         call: { id: "c1", name: "echo", arguments: {} },
       },
     ];
-    expect(listDanglingToolCalls(events)).toHaveLength(1);
-    expect(listDanglingToolCalls(events)[0]?.call.id).toBe("c1");
+    expect(listDanglingToolCalls(events)).toEqual([
+      {
+        call: { id: "c1", name: "echo", arguments: {} },
+        turnId: "t",
+        stepId: "s",
+        openedAt: 0,
+        source: "tool/call",
+      },
+    ]);
   });
 
-  it("clears when result arrives", () => {
+  it("clears after tool/result", () => {
     const events: SessionEvent[] = [
       {
         type: "tool/call",
@@ -46,40 +57,10 @@ describe("listDanglingToolCalls", () => {
         },
       },
     ];
-    expect(listDanglingToolCalls(events)).toHaveLength(0);
+    expect(listDanglingToolCalls(events)).toEqual([]);
   });
 
-  it("reopens same call id across turns", () => {
-    const events: SessionEvent[] = [
-      {
-        type: "tool/call",
-        ts: 1,
-        turnId: "t1",
-        stepId: "s1",
-        call: { id: "c1", name: "echo", arguments: { n: 1 } },
-      },
-      {
-        type: "tool/result",
-        ts: 2,
-        turnId: "t1",
-        stepId: "s1",
-        result: { toolCallId: "c1", name: "echo", content: "1" },
-      },
-      {
-        type: "tool/call",
-        ts: 3,
-        turnId: "t2",
-        stepId: "s2",
-        call: { id: "c1", name: "echo", arguments: { n: 2 } },
-      },
-    ];
-    const d = listDanglingToolCalls(events);
-    expect(d).toHaveLength(1);
-    expect(d[0]?.turnId).toBe("t2");
-    expect(d[0]?.call.arguments).toEqual({ n: 2 });
-  });
-
-  it("opens from assistant.toolCalls when tool/call missing", () => {
+  it("treats assistant toolCalls without tool/call as dangling", () => {
     const events: SessionEvent[] = [
       {
         type: "assistant/message",
@@ -95,7 +76,7 @@ describe("listDanglingToolCalls", () => {
 });
 
 describe("settleDanglingTools", () => {
-  it("appends interrupted results and is idempotent", () => {
+  it("appends outcome-unknown for recorded tool/call and is idempotent", () => {
     const store = createMemorySessionStore();
     const s = store.create("dangle");
     store.append(s.id, {
@@ -115,16 +96,64 @@ describe("settleDanglingTools", () => {
     const second = settleDanglingTools(store, s.id);
     expect(second.settled).toHaveLength(0);
 
+    const resultEv = store.get(s.id).events.find((e) => e.type === "tool/result");
+    expect(resultEv?.type === "tool/result" && resultEv.result.error).toEqual({
+      name: "ToolOutcomeUnknownError",
+      code: TOOL_OUTCOME_UNKNOWN,
+    });
+
     const msgs = deriveMessages(store.get(s.id).events);
     expect(msgs).toEqual([
       {
         role: "tool",
-        content: TOOL_INTERRUPTED_MESSAGE,
+        content: TOOL_OUTCOME_UNKNOWN_MESSAGE,
         toolCallId: "c1",
         name: "boom",
         isError: true,
       },
     ]);
+  });
+
+  it("uses TOOL_NOT_STARTED when only assistant named the call", () => {
+    const store = createMemorySessionStore();
+    const s = store.create("not-started");
+    store.append(s.id, {
+      type: "assistant/message",
+      ts: 1,
+      turnId: "t",
+      stepId: "s",
+      content: "",
+      toolCalls: [{ id: "c2", name: "x", arguments: {} }],
+    });
+    settleDanglingTools(store, s.id, { now: () => 2 });
+    const resultEv = store.get(s.id).events.find((e) => e.type === "tool/result");
+    expect(resultEv?.type === "tool/result" && resultEv.result).toMatchObject({
+      content: TOOL_NOT_STARTED_MESSAGE,
+      isError: true,
+      error: { code: TOOL_NOT_STARTED },
+    });
+  });
+
+  it("uses ABORTED_BEFORE_DISPATCH when kind is aborted-before-dispatch", () => {
+    const store = createMemorySessionStore();
+    const s = store.create("abort");
+    store.append(s.id, {
+      type: "tool/call",
+      ts: 1,
+      turnId: "t",
+      stepId: "s",
+      call: { id: "c3", name: "x", arguments: {} },
+    });
+    settleDanglingTools(store, s.id, {
+      now: () => 3,
+      kind: "aborted-before-dispatch",
+    });
+    const resultEv = store.get(s.id).events.find((e) => e.type === "tool/result");
+    expect(resultEv?.type === "tool/result" && resultEv.result).toMatchObject({
+      content: TOOL_ABORTED_BEFORE_DISPATCH_MESSAGE,
+      isError: true,
+      error: { name: "AbortError", code: TOOL_ABORTED_BEFORE_DISPATCH },
+    });
   });
 
   it("assertToolCallsSettled throws when open", () => {
@@ -137,6 +166,6 @@ describe("settleDanglingTools", () => {
         call: { id: "c1", name: "echo", arguments: {} },
       },
     ];
-    expect(() => assertToolCallsSettled(events)).toThrow(ToolSettlementError);
+    expect(() => assertToolCallsSettled(events)).toThrow(/unsettled/);
   });
 });

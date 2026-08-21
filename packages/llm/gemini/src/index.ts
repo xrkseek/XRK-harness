@@ -10,6 +10,9 @@ import type {
 } from "@xrkseek/llm";
 import {
   ContextOverflowError,
+  classifyCaughtLlmError,
+  isLlmError,
+  throwHttpLlmError,
   UnsupportedContentError,
 } from "@xrkseek/llm";
 import type { ChatMessage, MessageContent, ToolCall } from "@xrkseek/protocol";
@@ -344,12 +347,19 @@ export function createGeminiAdapter(
       url += `${url.includes("?") ? "&" : "?"}alt=sse`;
     }
 
-    const res = await doFetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      ...(signal ? { signal } : {}),
-    });
+    let res: Response;
+    try {
+      res = await doFetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        ...(signal ? { signal } : {}),
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") throw err;
+      if (isLlmError(err)) throw err;
+      classifyCaughtLlmError(err, "gemini");
+    }
     if (!res.ok) {
       const text = await res.text();
       if (looksLikeOverflow(res.status, text)) {
@@ -357,7 +367,7 @@ export function createGeminiAdapter(
           `gemini overflow (${res.status}): ${text.slice(0, 400)}`,
         );
       }
-      throw new Error(`gemini HTTP ${res.status}: ${text.slice(0, 800)}`);
+      throwHttpLlmError("gemini", res.status, text, res.headers);
     }
     return res;
   }

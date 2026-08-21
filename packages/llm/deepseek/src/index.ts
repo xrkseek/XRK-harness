@@ -36,7 +36,8 @@ export type DeepSeekAdapterOptions = Omit<
  * Thin DeepSeek adapter: defaults + openai-compatible wire.
  * Optional `reasoning` on chat responses when the vendor returns
  * `reasoning_content`. Default `stream()` emits reasoning-delta.
- * Does not declare image modality.
+ * Emits `thinking` / `reasoning_effort` from request + optional defaults
+ * (DSH `serializeRequest`). Does not declare image modality on the official host.
  */
 export function createDeepSeekAdapter(
   options: DeepSeekAdapterOptions,
@@ -45,6 +46,7 @@ export function createDeepSeekAdapter(
     baseUrl = DEEPSEEK_DEFAULT_BASE_URL,
     model = DEEPSEEK_DEFAULT_MODEL,
     id = "deepseek",
+    deepseekThinking = true,
     ...rest
   } = options;
 
@@ -53,6 +55,7 @@ export function createDeepSeekAdapter(
     id,
     baseUrl,
     model,
+    deepseekThinking,
     inputModalities:
       rest.inputModalities ??
       (isOfficialDeepSeekBaseUrl(baseUrl) ? ["text"] : ["text", "image"]),

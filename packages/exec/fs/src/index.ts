@@ -210,6 +210,7 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       },
       presentCall: presentReadCall,
       presentResult: presentReadResult,
+      isConcurrencySafe: () => true,
     },
     {
       name: "write_file",
@@ -300,6 +301,7 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       },
       presentCall: presentGlobCall,
       presentResult: presentGlobResult,
+      isConcurrencySafe: () => true,
     },
     {
       name: "grep",
@@ -346,6 +348,7 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       },
       presentCall: presentGrepCall,
       presentResult: presentGrepResult,
+      isConcurrencySafe: () => true,
     },
   ];
 }

@@ -125,6 +125,7 @@ export function createWebTools(
     },
     presentCall: presentSearchCall,
     presentResult: presentSearchResult,
+    isConcurrencySafe: () => true,
   };
 
   const fetchTool: ToolDefinition<{ url: string }> = {
@@ -161,6 +162,7 @@ export function createWebTools(
     },
     presentCall: presentFetchCall,
     presentResult: presentFetchResult,
+    isConcurrencySafe: () => true,
   };
 
   return [searchTool, fetchTool];

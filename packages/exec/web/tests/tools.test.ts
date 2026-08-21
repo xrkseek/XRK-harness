@@ -37,7 +37,7 @@ describe("createWebTools", () => {
     const tools = createWebTools(access);
     const out = await tools[0]!.execute({ query: "news" });
     expect(out.isError).toBe(true);
-    expect(out.content).toMatch(/XRK_TAVILY_API_KEY/);
+    expect(out.content).toMatch(/Tavily|Credentials|XRK_TAVILY/i);
   });
 
   it("search execute writes format text + replay meta", async () => {

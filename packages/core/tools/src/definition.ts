@@ -21,6 +21,12 @@ export interface ToolDefinition<TArgs = unknown> {
     extras?: ToolExecuteExtras,
   ): Promise<ToolResultContent>;
   /**
+   * Per-call concurrency classifier (DSH `isConcurrencySafe`).
+   * Exact `true` may run overlapping with other safe calls; undeclared,
+   * throwing, or any other return → exclusive barrier.
+   */
+  isConcurrencySafe?(args: TArgs): boolean;
+  /**
    * Pure UI render intent. Soft-fail (return undefined / never throw) — Face
    * `viewFor` catches throws the same way DSH apiproxy does.
    */
@@ -36,6 +42,20 @@ export interface ToolResultContent {
   readonly isError?: boolean;
   /** Face presentation replay; copied onto session `tool/result`. */
   readonly meta?: Readonly<Record<string, unknown>>;
+  /**
+   * DSH `ToolExecutionSuccess.concludesTurn`: successful body may end the
+   * current agent turn after this step settles (no further LLM step).
+   * Ignored when `isError` is set.
+   */
+  readonly concludesTurn?: true;
+  /**
+   * Structured failure class (e.g. abort codes). Copied onto session
+   * `tool/result.error` by {@link normalizeToolResult}.
+   */
+  readonly error?: {
+    readonly name: string;
+    readonly code: string;
+  };
 }
 
 export interface ToolRegistry {
@@ -86,6 +106,7 @@ export function normalizeToolResult(
     content: out.content,
     ...(out.isError ? { isError: true as const } : {}),
     ...(out.meta !== undefined ? { meta: out.meta } : {}),
+    ...(out.error !== undefined ? { error: out.error } : {}),
   };
 }
 

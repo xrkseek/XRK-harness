@@ -19,6 +19,7 @@ describe("settleToolBatch", () => {
       name: "slow",
       description: "slow",
       parameters: {},
+      isConcurrencySafe: () => true,
       async execute() {
         started.push("slow");
         await delay(40);
@@ -30,6 +31,7 @@ describe("settleToolBatch", () => {
       name: "fast",
       description: "fast",
       parameters: {},
+      isConcurrencySafe: () => true,
       async execute() {
         started.push("fast");
         await delay(5);
@@ -110,6 +112,7 @@ describe("settleToolBatch", () => {
       name: "work",
       description: "work",
       parameters: {},
+      isConcurrencySafe: () => true,
       async execute() {
         live += 1;
         peak = Math.max(peak, live);
@@ -132,6 +135,57 @@ describe("settleToolBatch", () => {
     });
     expect(peak).toBeLessThanOrEqual(2);
   });
+
+  it("exclusive tools barrier between parallel groups", async () => {
+    const tools = createToolRegistry();
+    const order: string[] = [];
+    tools.register({
+      name: "read",
+      description: "read",
+      parameters: {},
+      isConcurrencySafe: () => true,
+      async execute(args) {
+        const id = String((args as { id?: string }).id ?? "");
+        order.push(`read-${id}-start`);
+        await delay(20);
+        order.push(`read-${id}-end`);
+        return { content: id };
+      },
+    });
+    tools.register({
+      name: "write",
+      description: "write",
+      parameters: {},
+      async execute() {
+        order.push("write-start");
+        await delay(5);
+        order.push("write-end");
+        return { content: "w" };
+      },
+    });
+    const materialization = materializeTools(tools);
+    await settleToolBatch({
+      calls: [
+        { id: "1", name: "read", arguments: { id: "a" } },
+        { id: "2", name: "read", arguments: { id: "b" } },
+        { id: "3", name: "write", arguments: {} },
+        { id: "4", name: "read", arguments: { id: "c" } },
+      ],
+      registry: tools,
+      materialization,
+      mode: "parallel",
+    });
+    // Two reads overlap before write; write is exclusive; third read after.
+    expect(order.indexOf("write-start")).toBeGreaterThan(
+      order.indexOf("read-a-end"),
+    );
+    expect(order.indexOf("write-start")).toBeGreaterThan(
+      order.indexOf("read-b-end"),
+    );
+    expect(order.indexOf("read-c-start")).toBeGreaterThan(
+      order.indexOf("write-end"),
+    );
+  });
 });
 
 describe("runTurn parallel settle", () => {
@@ -143,6 +197,7 @@ describe("runTurn parallel settle", () => {
       name: "slow",
       description: "slow",
       parameters: {},
+      isConcurrencySafe: () => true,
       async execute() {
         await delay(30);
         return { content: "S" };
@@ -152,6 +207,7 @@ describe("runTurn parallel settle", () => {
       name: "fast",
       description: "fast",
       parameters: {},
+      isConcurrencySafe: () => true,
       async execute() {
         await delay(5);
         return { content: "F" };
@@ -192,5 +248,96 @@ describe("runTurn parallel settle", () => {
     const msgs = deriveMessages(store.get(session.id).events);
     const toolMsgs = msgs.filter((m) => m.role === "tool");
     expect(toolMsgs.map((m) => m.content)).toEqual(["S", "F"]);
+  });
+});
+
+describe("settleToolBatch abort (DSH ABORTED / ABORTED_BEFORE_DISPATCH)", () => {
+  it("marks mid-body cancel as ABORTED and never-started as ABORTED_BEFORE_DISPATCH", async () => {
+    const tools = createToolRegistry();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    tools.register({
+      name: "slow",
+      description: "slow",
+      parameters: {},
+      isConcurrencySafe: () => true,
+      async execute(_args, signal) {
+        await gate;
+        if (signal?.aborted) throw new DOMException("aborted", "AbortError");
+        return { content: "slow-ok" };
+      },
+    });
+    tools.register({
+      name: "later",
+      description: "later",
+      parameters: {},
+      isConcurrencySafe: () => true,
+      async execute() {
+        return { content: "should-not-run" };
+      },
+    });
+    const materialization = materializeTools(tools);
+    const ac = new AbortController();
+    const pending = settleToolBatch({
+      calls: [
+        { id: "1", name: "slow", arguments: {} },
+        { id: "2", name: "later", arguments: {} },
+      ],
+      registry: tools,
+      materialization,
+      mode: "parallel",
+      maxParallel: 1,
+      signal: ac.signal,
+    });
+    await delay(10);
+    ac.abort();
+    release();
+    const { outcomes, aborted } = await pending;
+    expect(aborted).toBe(true);
+    expect(outcomes).toHaveLength(2);
+    expect(outcomes[0]?.result.error?.code).toBe("ABORTED");
+    expect(String(outcomes[0]?.result.content)).toMatch(/^Error: tool call aborted$/);
+    expect(outcomes[0]?.skippedBody).toBeFalsy();
+    expect(outcomes[1]?.result.isError).toBe(true);
+    expect(outcomes[1]?.result.error?.code).toBe("ABORTED_BEFORE_DISPATCH");
+    expect(String(outcomes[1]?.result.content)).toMatch(/aborted before dispatch/i);
+    expect(outcomes[1]?.skippedBody).toBe(true);
+  });
+
+  it("supersedes late success with ABORTED when cancel wins after body returns", async () => {
+    const tools = createToolRegistry();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    tools.register({
+      name: "late",
+      description: "late",
+      parameters: {},
+      async execute(_args, signal) {
+        await gate;
+        // Body ignores abort and returns success; pipeline must still ABORT.
+        void signal;
+        return { content: "should-be-superseded" };
+      },
+    });
+    const materialization = materializeTools(tools);
+    const ac = new AbortController();
+    const pending = settleToolBatch({
+      calls: [{ id: "1", name: "late", arguments: {} }],
+      registry: tools,
+      materialization,
+      mode: "serial",
+      signal: ac.signal,
+    });
+    await delay(10);
+    ac.abort();
+    release();
+    const { outcomes, aborted } = await pending;
+    expect(aborted).toBe(true);
+    expect(outcomes[0]?.result.error?.code).toBe("ABORTED");
+    expect(outcomes[0]?.result.content).toBe("Error: tool call aborted");
   });
 });

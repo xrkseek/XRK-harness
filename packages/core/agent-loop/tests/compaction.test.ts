@@ -115,4 +115,72 @@ describe("runTurn compaction / overflow", () => {
       }),
     ).rejects.toBeInstanceOf(ContextOverflowError);
   });
+
+  it("prunes oversized tool results before overflow compact", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const big = "Z".repeat(9000);
+    store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "old",
+      content: "seed",
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 2,
+      turnId: "old",
+      stepId: "s0",
+      content: "",
+      toolCalls: [{ id: "c1", name: "read", arguments: {} }],
+    });
+    store.append(session.id, {
+      type: "tool/result",
+      ts: 3,
+      turnId: "old",
+      stepId: "s0",
+      result: { toolCallId: "c1", name: "read", content: big },
+    });
+
+    let sawOverflow = false;
+    let chatsAfterOverflow = 0;
+    const llm: LlmAdapter = {
+      id: "overflow-prune",
+      async chat(req: LlmChatRequest): Promise<LlmChatResponse> {
+        const text = req.messages.map((m) => m.content).join("\n");
+        const isSummarizer =
+          req.messages.length === 1 &&
+          req.messages[0]?.role === "user" &&
+          text.includes("Create a new anchored summary");
+        if (isSummarizer) {
+          return { content: "## Objective\n- pruned\n## Next\n1. continue" };
+        }
+        if (!sawOverflow) {
+          sawOverflow = true;
+          throw new ContextOverflowError("too long");
+        }
+        chatsAfterOverflow += 1;
+        return { content: "ok" };
+      },
+    };
+
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "continue",
+      store,
+      llm,
+      tools: createToolRegistry(),
+      compaction: { keepTokens: 40 },
+    });
+    expect(result.assistantText).toBe("ok");
+    // Prune alone can clear overflow — summarizer may be skipped.
+    expect(chatsAfterOverflow).toBeGreaterThanOrEqual(1);
+    const toolResults = store
+      .get(session.id)
+      .events.filter((e) => e.type === "tool/result");
+    expect(toolResults.length).toBeGreaterThanOrEqual(2);
+    const latest = toolResults[toolResults.length - 1]!;
+    expect(String(latest.result.content).length).toBeLessThan(big.length);
+    expect(String(latest.result.content)).toContain("chars omitted");
+  });
 });
