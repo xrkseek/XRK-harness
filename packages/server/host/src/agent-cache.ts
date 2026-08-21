@@ -101,7 +101,7 @@ export function createHostAgentCache(
         const agent = await create();
         child.effect(
           () => () => {
-            agent.abort();
+            agent.abort({ kind: "disposed" });
           },
           { label: `agent.abort(${sessionId})` },
         );

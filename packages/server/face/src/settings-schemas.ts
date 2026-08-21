@@ -31,6 +31,7 @@ export const DEFAULT_DEEPSEEK_MODELS = [
     description: "",
     contextWindow: 1_000_000,
     maxTokens: 384_000,
+    inputModalities: ["text"] as const,
   },
   {
     id: "deepseek-v4-pro",
@@ -38,6 +39,15 @@ export const DEFAULT_DEEPSEEK_MODELS = [
     description: "",
     contextWindow: 1_000_000,
     maxTokens: 384_000,
+    inputModalities: ["text"] as const,
+  },
+  {
+    id: "deepseek-v4-flash-vision-exp",
+    name: "DeepSeek V4 Flash Vision Exp",
+    description: "",
+    contextWindow: 1_000_000,
+    maxTokens: 384_000,
+    inputModalities: ["text", "image"] as const,
   },
 ] as const;
 
@@ -54,6 +64,7 @@ const DeepSeekConfig = Schema.object({
       description: Schema.string(),
       contextWindow: Schema.number().step(1).min(1),
       maxTokens: Schema.number().step(1).min(1),
+      inputModalities: Schema.array(Schema.union(["text", "image"])).min(1),
     }),
   ).default([...DEFAULT_DEEPSEEK_MODELS]),
 });

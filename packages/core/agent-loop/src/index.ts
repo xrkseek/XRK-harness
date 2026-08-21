@@ -45,6 +45,7 @@ import {
   contentHasImage,
   flattenText,
   parseSessionEvent,
+  parseTurnEndCancelCause,
   DEFAULT_PLAN_POLICY_SECTION,
   foldPlanMode,
   pendingPlanTarget,
@@ -867,6 +868,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         turnId,
         ...(activeStepId !== undefined ? { stepId: activeStepId } : {}),
         now,
+        cancelCause: parseTurnEndCancelCause(input.signal?.reason),
       });
     } else if (
       isEmptyResponseError(err) ||

@@ -197,8 +197,12 @@ export {
   flattenText,
   contentHasImage,
   asContentBlocks,
+  parseTurnEndCancelCause,
   type SessionEvent,
   type MessageContent,
   type ContentBlock,
   type ImageAttachmentRef,
+  type TurnEndReason,
+  type TurnEndCancelCause,
+  type AgentCancelCause,
 } from "@xrkseek/protocol";

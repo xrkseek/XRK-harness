@@ -6,9 +6,20 @@ import type {
   ToolResultView,
 } from "./presentation.js";
 
-/** Optional execute extras — pipeline wires `emitToolEvent` → session side events. */
+/** Optional execute extras — pipeline wires session side-effects. */
 export interface ToolExecuteExtras {
   emitToolEvent(type: string, payload: unknown): void;
+  /**
+   * Mark a successful final result as terminal for the current agent turn
+   * (DSH `ToolRunContext.concludeTurn`). Equivalent to returning
+   * `{ concludesTurn: true }`; ignored when the result is an error.
+   */
+  concludeTurn(): void;
+  /**
+   * Defer a user-visible context string until after this tool's `tool/result`
+   * (DSH `deferContext`, string form — XRK appends `user/message`).
+   */
+  deferContext(text: string): void;
 }
 
 export interface ToolDefinition<TArgs = unknown> {

@@ -515,4 +515,42 @@ describe("runTurn", () => {
     expect(msgs.some((m) => m.role === "assistant" && m.content === "should-not-run")).toBe(false);
     expect(msgs.some((m) => m.role === "tool" && m.content === "done")).toBe(true);
   });
+
+  it("ends the turn when extras.concludeTurn is called (DSH)", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    tools.register({
+      name: "finish",
+      description: "finish",
+      parameters: { type: "object" },
+      async execute(_args, _signal, extras) {
+        extras?.concludeTurn();
+        return { content: "done-via-extras" };
+      },
+    });
+    const llm = createReplayAdapter([
+      {
+        content: "",
+        toolCalls: [{ id: "c1", name: "finish", arguments: {} }],
+      },
+      { content: "should-not-run" },
+    ]);
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "go",
+      store,
+      llm,
+      tools,
+    });
+    expect(result.steps).toBe(1);
+    expect(result.toolOk).toBe(1);
+    const msgs = deriveMessages(store.get(session.id).events);
+    expect(msgs.some((m) => m.role === "tool" && m.content === "done-via-extras")).toBe(
+      true,
+    );
+    expect(
+      msgs.some((m) => m.role === "assistant" && m.content === "should-not-run"),
+    ).toBe(false);
+  });
 });

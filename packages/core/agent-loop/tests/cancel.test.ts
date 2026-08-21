@@ -66,6 +66,7 @@ describe("cancel mid-stream prefix finalize (DSH rc.8)", () => {
     const turnEnd = events.find((e) => e.type === "turn/end");
     expect(turnEnd?.type === "turn/end" && turnEnd.reason).toEqual({
       kind: "aborted",
+      reason: { kind: "legacy" },
     });
 
     const assistantMsgs = deriveMessages(events).filter(

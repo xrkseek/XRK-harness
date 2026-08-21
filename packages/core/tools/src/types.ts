@@ -52,6 +52,8 @@ export interface ToolPipelineContext {
   /** Tool-owned side events (todo/write etc.) — reserved. */
   readonly toolEvents: { type: string; payload: unknown }[];
   result?: ToolResultContent;
+  /** Set by {@link ToolExecuteExtras.concludeTurn} during body. */
+  concludeRequested?: boolean;
 }
 
 export interface PreHandler {

@@ -13,7 +13,7 @@
 - 默认 `stream()`：SSE `delta.reasoning_content` → `reasoning-delta`（index 0），`delta.content` → `text-delta`（index 1）；`chat()` 仍非流 JSON
 - `inputModalities` 含 `"image"` 时 user 块走 `image_url` data URL（须 `resolveImage`）。默认 text-only
 
-厂商专用 body 分叉见 [llm-deepseek.md](./llm-deepseek.md)（官方 DeepSeek **不**标视觉）。
+厂商专用 body 分叉见 [llm-deepseek.md](./llm-deepseek.md)（官方 DeepSeek 默认 text-only；`deepseek-v4-flash-vision-exp` 标视觉）。
 
 ```ts
 import { createOpenAiCompatibleAdapter } from "@xrkseek/llm-openai-compatible";

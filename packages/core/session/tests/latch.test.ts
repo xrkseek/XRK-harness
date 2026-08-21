@@ -51,9 +51,29 @@ describe("createTurnLatch", () => {
         );
       });
     });
-    latch.cancel();
+    latch.cancel({ kind: "user" });
     await expect(sawAbort).rejects.toMatchObject({ name: "AbortError" });
     expect(latch.isActive()).toBe(false);
+  });
+
+  it("cancel forwards AbortSignal.reason", async () => {
+    const latch = createTurnLatch();
+    let reason: unknown;
+    const sawAbort = latch.run(async (signal) => {
+      await new Promise<void>((resolve, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => {
+            reason = signal.reason;
+            reject(new DOMException("Aborted", "AbortError"));
+          },
+          { once: true },
+        );
+      });
+    });
+    latch.cancel({ kind: "disposed" });
+    await expect(sawAbort).rejects.toMatchObject({ name: "AbortError" });
+    expect(reason).toEqual({ kind: "disposed" });
   });
 
   it("allows run after previous finishes", async () => {
