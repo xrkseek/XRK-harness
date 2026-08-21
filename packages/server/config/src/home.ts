@@ -50,3 +50,13 @@ export function hostSettingsPath(
 ): string {
   return path.join(resolveXrkHome(env), "host-settings.json");
 }
+
+/**
+ * `{home}/plugins` — CLI `plugin add` root + optional Host `pluginsDir`.
+ * Process discover + `{plugins}/web/` client overlay live here.
+ */
+export function defaultPluginsDir(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return path.join(resolveXrkHome(env), "plugins");
+}

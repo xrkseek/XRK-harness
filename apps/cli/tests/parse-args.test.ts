@@ -70,10 +70,26 @@ describe("cli parseArgs", () => {
     expect(a.port).toBe(8799);
   });
 
+  it("parses plugin and keeps remaining argv", () => {
+    const a = parseArgs([
+      "plugin",
+      "add",
+      "@huanlin/dsh-plugin-spur",
+      "./local",
+    ]);
+    expect(a.command).toBe("plugin");
+    expect(a.pluginArgv).toEqual([
+      "add",
+      "@huanlin/dsh-plugin-spur",
+      "./local",
+    ]);
+  });
+
   it("help text mentions web and persist", () => {
     expect(helpText()).toContain("doctor");
     expect(helpText()).toContain("web");
     expect(helpText()).toContain("restart");
+    expect(helpText()).toContain("plugin");
     expect(helpText()).toContain("--force");
     expect(helpText()).toContain("--verbose");
     expect(helpText()).toContain("--no-persist");

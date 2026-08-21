@@ -4,10 +4,13 @@ export type CliCommand =
   | "dump-config"
   | "serve"
   | "restart"
+  | "plugin"
   | "help";
 
 export interface ParsedArgs {
   readonly command: CliCommand;
+  /** Remaining argv after `plugin` (subcommand + specs). */
+  readonly pluginArgv: readonly string[];
   readonly preset: string;
   readonly prompt: string;
   readonly promptExplicit: boolean;
@@ -60,6 +63,7 @@ function parsePort(raw: string | undefined): number {
 
 function emptyArgs(partial: Partial<ParsedArgs> & { command: CliCommand }): ParsedArgs {
   return {
+    pluginArgv: [],
     preset: "minimal",
     prompt: "ping",
     promptExplicit: false,
@@ -95,6 +99,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     first === "dump-config" ||
     first === "serve" ||
     first === "restart" ||
+    first === "plugin" ||
     first === "help"
   ) {
     command = first;
@@ -102,6 +107,11 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     command = "serve";
   } else {
     throw new Error(`unknown command: ${first}`);
+  }
+
+  // `plugin` owns the rest of argv (add/remove/list/path + specs).
+  if (command === "plugin") {
+    return emptyArgs({ command: "plugin", pluginArgv: args });
   }
 
   /** Product Host (`web`/`serve`) defaults to harness tools; `run` stays minimal for smoke. */
@@ -237,6 +247,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 
   return {
     command: help && command !== "help" ? command : help ? "help" : command,
+    pluginArgv: [],
     preset,
     prompt,
     promptExplicit,
@@ -266,6 +277,7 @@ Commands:
   serve         HTTP host + product UI (apps/web/dist)
   web           Alias for serve
   restart       Free the listen port, then serve (same flags as web)
+  plugin        Install / remove / list user plugins (~/.xrk/plugins)
   doctor        Check node / workspace / product shell
   dump-config   Print layered config JSON
   help          Show this help
@@ -289,12 +301,15 @@ Options:
 Env:
   XRK_LOG / XRK_LOG_LEVEL   silent|error|warn|info|debug (default info)
   XRK_MCP_ALLOW=1           Allow mcp.connect for configured / saved servers
+  XRK_PLUGINS_DIR           Plugin root (default: ~/.xrk/plugins when present)
 
 Examples:
   xrk-harness serve --preset harness
   xrk-harness web --port 8080 --open --verbose
   xrk-harness web --force
   xrk-harness restart --workspace .
+  xrk-harness plugin add @huanlin/dsh-plugin-spur
+  xrk-harness plugin list
   xrk-harness run --preset minimal "ping"
 `;
 }

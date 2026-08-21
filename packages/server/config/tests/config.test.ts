@@ -24,11 +24,6 @@ describe("loadHostConfig", () => {
     expect(cfg.runtime.pluginsDir).toBe("./b");
   });
 
-  it("omits pluginsDir when unset", () => {
-    const cfg = loadHostConfig({ env: {} });
-    expect(cfg.runtime.pluginsDir).toBeUndefined();
-  });
-
   it("reads XRK_WEB_DIST", () => {
     const cfg = loadHostConfig({
       env: { XRK_WEB_DIST: "  apps/web/dist  " },

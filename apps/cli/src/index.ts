@@ -1,5 +1,6 @@
 import { runDoctor } from "./commands/doctor.js";
 import { runDumpConfig } from "./commands/dump-config.js";
+import { runPlugin } from "./commands/plugin.js";
 import { runCommand } from "./commands/run.js";
 import { runRestart } from "./commands/restart.js";
 import { runServe } from "./commands/serve.js";
@@ -49,6 +50,8 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
         return await runServe(args);
       case "restart":
         return await runRestart(args);
+      case "plugin":
+        return await runPlugin(args.pluginArgv);
       default:
         process.stdout.write(helpText());
         return 0;

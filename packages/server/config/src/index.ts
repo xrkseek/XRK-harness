@@ -1,5 +1,7 @@
+import { existsSync } from "node:fs";
 import type { SessionStore } from "@xrkseek/core-session";
 import type { SessionEvent } from "@xrkseek/protocol";
+import { defaultPluginsDir } from "./home.js";
 import { parseMcpServersJson, type McpServerRow } from "./mcp-servers.js";
 
 export type { SessionStore, SessionEvent };
@@ -7,6 +9,7 @@ export type { McpServerRow };
 export {
   XRK_HOME_DIR_NAME,
   XRK_HOME_ENVS,
+  defaultPluginsDir,
   defaultSessionsDir,
   defaultXrkHome,
   hostSettingsPath,
@@ -33,7 +36,9 @@ export interface HostRuntimeConfig {
   readonly rateLimitPerMinute: number;
   /**
    * Optional plugin root for `loader.loadAll` on host spawn.
-   * Env: `XRK_PLUGINS_DIR`. Empty / omit = skip discover.
+   * Env: `XRK_PLUGINS_DIR`. When unset, `{XRK_HOME}/plugins` if that
+   * directory already exists (created by `xrk-harness plugin add`).
+   * Empty / omit = skip discover.
    */
   readonly pluginsDir?: string;
   /**
@@ -107,6 +112,13 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
     ),
     ...(defaults.pluginsDir
       ? { pluginsDir: defaults.pluginsDir }
+      : {}),
+    ...(!defaults.pluginsDir &&
+    !(env.XRK_PLUGINS_DIR && String(env.XRK_PLUGINS_DIR).trim())
+      ? (() => {
+          const homePlugins = defaultPluginsDir(env);
+          return existsSync(homePlugins) ? { pluginsDir: homePlugins } : {};
+        })()
       : {}),
     ...(env.XRK_PLUGINS_DIR && String(env.XRK_PLUGINS_DIR).trim()
       ? { pluginsDir: String(env.XRK_PLUGINS_DIR).trim() }
