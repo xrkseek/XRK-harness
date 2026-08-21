@@ -1,6 +1,7 @@
 import type { ToolCall, ToolResult } from "./tools.js";
 import type { MessageContent } from "./content.js";
 import type { TokenUsage } from "./token-usage.js";
+import { randomUUID } from "node:crypto";
 
 /** Append-only session facts (M0 minimal set). */
 
@@ -123,6 +124,12 @@ export interface WorkspaceBudgetTruncation {
 export interface UserMessageEvent extends SessionEventBase {
   readonly type: "user/message";
   readonly turnId: string;
+  /**
+   * Stable Face / client row id. Required for multiple `user/message` rows in
+   * one turn (durable injects + human). Face wire uses this as `data.id`; when
+   * absent (old logs), wire falls back to `` `${turnId}:${seq}` ``.
+   */
+  readonly messageId?: string;
   /** Plain string (legacy) or ContentBlock[] (text + image refs). */
   readonly content: MessageContent;
   /**
@@ -136,6 +143,11 @@ export interface UserMessageEvent extends SessionEventBase {
    * Ignored by `deriveMessages` — not model-visible.
    */
   readonly rpcId?: string;
+}
+
+/** Mint a unique `user/message.messageId` (Face conversation node identity). */
+export function newUserMessageId(): string {
+  return `umsg_${randomUUID()}`;
 }
 
 /** True when the message is a human / promoted admit (not durable context inject). */

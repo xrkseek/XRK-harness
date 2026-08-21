@@ -41,12 +41,71 @@ describe("Face DSH wire-event adapt", () => {
       time: 10,
       surfaceOp: "append",
       data: {
-        id: "t1",
+        id: "t1:3",
         content: [{ type: "text", text: "hello" }],
         source: { kind: "user" },
         rpcId: "rpc-1",
       },
     });
+  });
+
+  it("same-turn inject + human without messageId still get distinct wire ids", () => {
+    const inject = toFaceWireSessionEvent(
+      {
+        type: "user/message",
+        ts: 10,
+        turnId: "t-shared",
+        content: "catalog",
+        source: {
+          kind: "skill-catalog",
+          form: "catalog",
+          entries: [],
+        },
+      },
+      7,
+    );
+    const human = toFaceWireSessionEvent(
+      {
+        type: "user/message",
+        ts: 11,
+        turnId: "t-shared",
+        content: "hi",
+      },
+      8,
+    );
+    expect((inject.data as { id: string }).id).toBe("t-shared:7");
+    expect((human.data as { id: string }).id).toBe("t-shared:8");
+  });
+
+  it("same-turn inject + human with messageId prefer durable ids on wire", () => {
+    const inject = toFaceWireSessionEvent(
+      {
+        type: "user/message",
+        ts: 10,
+        turnId: "t-shared",
+        messageId: "umsg_inject",
+        content: "catalog",
+        source: {
+          kind: "skill-catalog",
+          form: "catalog",
+          entries: [],
+        },
+      },
+      1,
+    );
+    const human = toFaceWireSessionEvent(
+      {
+        type: "user/message",
+        ts: 11,
+        turnId: "t-shared",
+        messageId: "umsg_human",
+        content: "hi",
+        source: { kind: "user" },
+      },
+      2,
+    );
+    expect((inject.data as { id: string }).id).toBe("umsg_inject");
+    expect((human.data as { id: string }).id).toBe("umsg_human");
   });
 
   it("user/message passes through skill-catalog source", () => {

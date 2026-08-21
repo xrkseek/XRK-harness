@@ -31,6 +31,7 @@ export {
   isPromptDelivery,
   parsePromptDelivery,
   isHumanUserMessageSource,
+  newUserMessageId,
   type ApprovalAskedEvent,
   type ApprovalDecidedEvent,
   type ApprovalDecisionSource,

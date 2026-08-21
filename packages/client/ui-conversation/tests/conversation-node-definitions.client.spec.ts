@@ -514,6 +514,42 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 
+  it('keeps same-turn skill-catalog inject and human prompt as distinct chat rows', () => {
+    // Face must wire unique data.id per user/message (messageId, not bare turnId);
+    // duplicate start Match ids wipe the conversation assembler.
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'user/message', {
+        ...textMessage('umsg_catalog', '<available_skills>'),
+        source: {
+          kind: 'skill-catalog',
+          form: 'catalog',
+          entries: [{ name: 'ping', description: 'Ping' }],
+        },
+      }, { surfaceOp: 'append' }),
+      at(3, 'user/message', {
+        ...textMessage('umsg_instr', '## Assistant'),
+        source: {
+          kind: 'agent-instructions',
+          form: 'instructions',
+          changes: [{ action: 'set', path: 'assistant.md' }],
+        },
+      }, { surfaceOp: 'append' }),
+      at(4, 'user/message', textMessage('umsg_human', 'hello'), { surfaceOp: 'append' }),
+    ])
+
+    const snap = snapshot(value)
+    const kinds = snap.order.map(key => snap.nodes.get(key)?.kind)
+    expect(kinds).toEqual(['context', 'context', 'user'])
+    expect(() => assembler([
+      at(1, 'user/message', textMessage('same-id', 'inject'), { surfaceOp: 'append' }),
+      at(2, 'user/message', {
+        ...textMessage('same-id', 'human'),
+        source: { kind: 'user' },
+      }, { surfaceOp: 'append' }),
+    ])).toThrow(/more than one start Match/)
+  })
+
   it('keeps replacement copies out of Chat business nodes', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),

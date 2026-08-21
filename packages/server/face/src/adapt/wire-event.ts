@@ -187,7 +187,10 @@ export function toFaceWireSessionEvent(
         time,
         surfaceOp: "append",
         data: {
-          id: event.turnId,
+          // Face conversation assembler keys rows by data.id; multiple
+          // user/message events share turnId (injects + human) so id must be
+          // unique per row — never bare turnId alone.
+          id: event.messageId ?? `${event.turnId}:${seq}`,
           content: wireContentBlocks(event.content),
           source: event.source ?? { kind: "user" },
           ...(event.rpcId ? { rpcId: event.rpcId } : {}),

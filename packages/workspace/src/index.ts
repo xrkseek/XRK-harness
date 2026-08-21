@@ -1,5 +1,6 @@
 import { mkdir, readFile, readdir, writeFile, access, stat } from "node:fs/promises";
 import path from "node:path";
+import { newUserMessageId } from "@xrkseek/protocol";
 import { formatSkillCatalog, listSkills } from "./skills.js";
 import {
   buildInstructionsPayload,
@@ -391,6 +392,7 @@ export async function appendWorkspaceInjectsIfChanged(input: {
       type: "user/message",
       ts: input.now(),
       turnId: input.turnId,
+      messageId: newUserMessageId(),
       content: row.content,
       source: row.source,
     });

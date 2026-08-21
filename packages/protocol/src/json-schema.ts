@@ -163,6 +163,7 @@ export const sessionEventJsonSchema = {
       properties: baseProps({
         type: { const: "user/message" },
         turnId: { type: "string" },
+        messageId: { type: "string" },
         content: messageContentSchema,
         rpcId: { type: "string" },
         source: {
