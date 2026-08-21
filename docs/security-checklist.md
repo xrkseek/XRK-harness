@@ -23,7 +23,7 @@
 | Tool output bound | pipeline `bound` + persist | 大结果外溢到 `.xrk/tool-outputs/` |
 | Code worker | `code-runtime` | `run_code` 进 worker（实验） |
 | Safety loop/mistake | `core-session` safety | soft/hard notice；可 abort turn |
-| 密钥不入库 | `.gitignore` + 示例模板 | `.env*` · `.xrk/.credentials.yaml` · `.xrk/settings.yaml` · `.xrk/workspaces.json` 忽略；仓内仅 `.env.example` · `.xrk/*.example` |
+| 密钥不入库 | `.gitignore` + 示例模板 | `.env*` · `.xrk/.credentials.yaml` · `.xrk/settings.yaml` · `.xrk/workspaces.json` · 根 `/workspaces.json` 忽略；仓内仅 `.env.example` · `.xrk/*.example` |
 
 ## 明确未做（勿宣传）
 
