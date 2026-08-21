@@ -2315,6 +2315,9 @@ importers:
       '@xrkseek/server-config':
         specifier: workspace:*
         version: link:../config
+      '@xrkseek/session-projection':
+        specifier: workspace:*
+        version: link:../../session/session-projection
       '@xrkseek/workspace':
         specifier: workspace:*
         version: link:../../workspace
@@ -2428,6 +2431,12 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+
+  packages/session/session-projection:
+    dependencies:
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../../protocol
 
   packages/stubs/xrk-agent:
     devDependencies:

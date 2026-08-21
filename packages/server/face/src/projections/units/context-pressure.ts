@@ -73,48 +73,50 @@ export function createContextPressureProjectionUnit(): ProjectionDefinition<
 
       return next;
     },
-    view: (state) => {
-      const out: {
-        -readonly [K in keyof ContextPressureProjection]?: ContextPressureProjection[K];
-      } = {};
-      if (state.contextWindow !== undefined) {
-        out.contextWindow = state.contextWindow;
-      }
-      if (state.pressureTokens !== undefined) {
-        out.pressureTokens = state.pressureTokens;
-        const sampled = state.sampledSurfaceTokens ?? state.surfaceTokens;
-        out.projectedTokens = Math.max(
-          0,
-          state.pressureTokens + state.surfaceTokens - sampled,
+    wire: {
+      view: (state) => {
+        const out: {
+          -readonly [K in keyof ContextPressureProjection]?: ContextPressureProjection[K];
+        } = {};
+        if (state.contextWindow !== undefined) {
+          out.contextWindow = state.contextWindow;
+        }
+        if (state.pressureTokens !== undefined) {
+          out.pressureTokens = state.pressureTokens;
+          const sampled = state.sampledSurfaceTokens ?? state.surfaceTokens;
+          out.projectedTokens = Math.max(
+            0,
+            state.pressureTokens + state.surfaceTokens - sampled,
+          );
+        }
+        return out;
+      },
+      parse(value: unknown): ContextPressureProjection {
+        if (!value || typeof value !== "object") {
+          throw new Error("contextPressure projection must be an object");
+        }
+        const v = value as Record<string, unknown>;
+        const pressureTokens = asOptNonNegInt(
+          v.pressureTokens,
+          "contextPressure",
+          "pressureTokens",
         );
-      }
-      return out;
-    },
-    parse(value: unknown): ContextPressureProjection {
-      if (!value || typeof value !== "object") {
-        throw new Error("contextPressure projection must be an object");
-      }
-      const v = value as Record<string, unknown>;
-      const pressureTokens = asOptNonNegInt(
-        v.pressureTokens,
-        "contextPressure",
-        "pressureTokens",
-      );
-      const projectedTokens = asOptNonNegInt(
-        v.projectedTokens,
-        "contextPressure",
-        "projectedTokens",
-      );
-      const contextWindow = asOptPositiveInt(
-        v.contextWindow,
-        "contextPressure",
-        "contextWindow",
-      );
-      return {
-        ...(pressureTokens !== undefined ? { pressureTokens } : {}),
-        ...(projectedTokens !== undefined ? { projectedTokens } : {}),
-        ...(contextWindow !== undefined ? { contextWindow } : {}),
-      };
+        const projectedTokens = asOptNonNegInt(
+          v.projectedTokens,
+          "contextPressure",
+          "projectedTokens",
+        );
+        const contextWindow = asOptPositiveInt(
+          v.contextWindow,
+          "contextPressure",
+          "contextWindow",
+        );
+        return {
+          ...(pressureTokens !== undefined ? { pressureTokens } : {}),
+          ...(projectedTokens !== undefined ? { projectedTokens } : {}),
+          ...(contextWindow !== undefined ? { contextWindow } : {}),
+        };
+      },
     },
   };
 }

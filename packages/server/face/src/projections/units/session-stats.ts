@@ -173,35 +173,37 @@ export function createSessionStatsProjectionUnit(): ProjectionDefinition<
           return state;
       }
     },
-    view: (state) => ({
-      turns: state.turns,
-      steps: state.steps,
-      llmMs: state.llmMs,
-      toolMs: state.toolMs,
-      ttftMs: state.ttftMs,
-      ttftSteps: state.ttftSteps,
-      decodeMs: state.decodeMs,
-      decodeTokens: state.decodeTokens,
-    }),
-    parse(value: unknown): SessionStatsProjection {
-      if (!value || typeof value !== "object") {
-        throw new Error("sessionStats projection must be an object");
-      }
-      const v = value as Record<string, unknown>;
-      return {
-        turns: asNonNegInt(v.turns, "sessionStats", "turns"),
-        steps: asNonNegInt(v.steps, "sessionStats", "steps"),
-        llmMs: asNonNegNumber(v.llmMs, "sessionStats", "llmMs"),
-        toolMs: asNonNegNumber(v.toolMs, "sessionStats", "toolMs"),
-        ttftMs: asNonNegNumber(v.ttftMs, "sessionStats", "ttftMs"),
-        ttftSteps: asNonNegInt(v.ttftSteps, "sessionStats", "ttftSteps"),
-        decodeMs: asNonNegNumber(v.decodeMs, "sessionStats", "decodeMs"),
-        decodeTokens: asNonNegNumber(
-          v.decodeTokens,
-          "sessionStats",
-          "decodeTokens",
-        ),
-      };
+    wire: {
+      view: (state) => ({
+        turns: state.turns,
+        steps: state.steps,
+        llmMs: state.llmMs,
+        toolMs: state.toolMs,
+        ttftMs: state.ttftMs,
+        ttftSteps: state.ttftSteps,
+        decodeMs: state.decodeMs,
+        decodeTokens: state.decodeTokens,
+      }),
+      parse(value: unknown): SessionStatsProjection {
+        if (!value || typeof value !== "object") {
+          throw new Error("sessionStats projection must be an object");
+        }
+        const v = value as Record<string, unknown>;
+        return {
+          turns: asNonNegInt(v.turns, "sessionStats", "turns"),
+          steps: asNonNegInt(v.steps, "sessionStats", "steps"),
+          llmMs: asNonNegNumber(v.llmMs, "sessionStats", "llmMs"),
+          toolMs: asNonNegNumber(v.toolMs, "sessionStats", "toolMs"),
+          ttftMs: asNonNegNumber(v.ttftMs, "sessionStats", "ttftMs"),
+          ttftSteps: asNonNegInt(v.ttftSteps, "sessionStats", "ttftSteps"),
+          decodeMs: asNonNegNumber(v.decodeMs, "sessionStats", "decodeMs"),
+          decodeTokens: asNonNegNumber(
+            v.decodeTokens,
+            "sessionStats",
+            "decodeTokens",
+          ),
+        };
+      },
     },
   };
 }

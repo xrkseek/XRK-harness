@@ -48,7 +48,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 接 HTTP / Face | [http-api](./http-api.md) · [host-face](./host-face.md) |
 | 选 preset | [profiles](./profiles.md) · [host-preset](./host-preset.md) |
 | 写工具 / 守卫 | [tool-pipeline](./tool-pipeline.md) · [seams](./seams.md) · [policy](./policy.md) |
-| Session / 压缩 / meter | [session](./session.md) · [session-compaction](./session-compaction.md) · [protocol-events](./protocol-events.md) |
+| Session / 压缩 / meter | [session](./session.md) · [session-compaction](./session-compaction.md) · [modules/session-projection](./modules/session-projection.md) · [protocol-events](./protocol-events.md) |
 | 看包落点 | [modules/](./modules/README.md) |
 
 ### 贡献 / 维护
@@ -87,6 +87,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [session-latch.md](./session-latch.md) | TurnLatch · DrainLatch |
 | [session-safety.md](./session-safety.md) | mistake · loop |
 | [session-compaction.md](./session-compaction.md) | 换窗压缩 · overflow · meter |
+| [modules/session-projection.md](./modules/session-projection.md) | 投影缝：状态/视图 · wire-only snapshot |
 | [http-api.md](./http-api.md) | HTTP / SSE |
 | [host-face.md](./host-face.md) | Host Face（RPC + 双 WS） |
 | [host-preset.md](./host-preset.md) | Host vs preset |

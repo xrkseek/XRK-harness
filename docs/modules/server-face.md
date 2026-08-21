@@ -99,9 +99,11 @@ HTTP/WS (attach-http)
 
 ### 投影（`projections/`）
 
+驱动注册表在 `@xrkseek/session-projection`（规格：[session-projection.md](./session-projection.md)）（双表 `SessionProjectionStateMap` / `SessionProjectionMap`；单元可选 `wire`；`snapshot` 只出视图；`stateOf` / `checkpoint` 可读 host 折叠态）。Face `projections/` 贡献默认单元并作为 mux / history 载体。
+
 | 文件                                                | 作用                  |
 | --------------------------------------------------- | --------------------- |
-| `registry.ts`                                       | 投影注册表 · snapshot |
+| `registry.ts`                                       | Face 薄封装 → `@xrkseek/session-projection`（`stateOf` · wire-only snapshot） |
 | `title-controller.ts` / `title-normalize.ts`        | 标题                  |
 | `units/title.ts` · `units/session-list-metadata.ts` · `units/todos.ts` · `units/permissions.ts` · `units/plan.ts` · `units/image-limits.ts` · `units/session-stats.ts` · `units/token-usage.ts` · `units/context-pressure.ts` · `units/context-breakdown.ts` · `parse-int.ts` | StatsLine / ContextMeter 投影单元；整数 parse 共用 |
 

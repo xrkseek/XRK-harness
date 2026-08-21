@@ -4,6 +4,7 @@ packages:
   - "packages/client/*"
   - "packages/stubs/*"
   - "packages/core/*"
+  - "packages/session/*"
   - "packages/llm/*"
   - "packages/exec/*"
   - "packages/server/*"

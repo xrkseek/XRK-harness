@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/xrk-session-projection",
-  "description": "Session-projection seam: the merge-extensible projection type table, the provider contract, and the ctx.sessionProjections registry serving whole current values of log-derived per-session state",
+  "description": "Client type outlet for SessionProjectionMap / SessionProjectionStateMap (Host drive lives in @xrkseek/session-projection + Face)",
   "version": "0.1.0-rc.8",
   "repository": {
     "type": "git",

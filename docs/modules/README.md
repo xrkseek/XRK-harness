@@ -14,6 +14,7 @@
 
 | 包 | 笔记 | 规格 |
 | --- | --- | --- |
+| `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) | 投影驱动缝（状态/视图） |
 | `@xrkseek/server-face` | [server-face.md](./server-face.md) | [host-face.md](../host-face.md) |
 | `@xrkseek/server-host` | [server-host.md](./server-host.md) | [host-preset.md](../host-preset.md) · [http-api.md](../http-api.md) |
 | `@xrkseek/server-loader` | [server-loader.md](./server-loader.md) | [plugin-loader.md](../plugin-loader.md) |
@@ -30,6 +31,7 @@
 | `kernel/` | `@xrkseek/kernel` | [architecture.md](../architecture.md) |
 | `protocol/` | `@xrkseek/protocol` | [protocol-events.md](../protocol-events.md) |
 | `compose/` | `@xrkseek/compose` | [compose.md](../compose.md) |
+| `session/session-projection/` | `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) |
 | `core/session/` | `@xrkseek/core-session` | [session.md](../session.md) · [session-compaction.md](../session-compaction.md) |
 | `core/agent/` | `@xrkseek/core-agent` | [session-api.md](../session-api.md) |
 | `core/agent-loop/` | `@xrkseek/core-agent-loop` | [tool-pipeline.md](../tool-pipeline.md) |
