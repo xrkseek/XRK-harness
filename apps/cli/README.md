@@ -1,6 +1,6 @@
 # @xrkseek/harness-cli
 
-bin：`xrk-harness`。产品 UI：包内 `product-web/`（源码仓用 `apps/web/dist`）。
+bin：`xrk-harness`（简写 `xrkh`）。产品 UI：包内 `product-web/`（源码仓用 `apps/web/dist`）。
 
 ## 命令
 

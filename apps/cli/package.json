@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/harness-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "XRK-Harness CLI (run / serve / web / plugin). Product shell ships in product-web/.",
   "type": "module",
@@ -17,7 +17,8 @@
     "README.md"
   ],
   "bin": {
-    "xrk-harness": "./dist/bin.js"
+    "xrk-harness": "./dist/bin.js",
+    "xrkh": "./dist/bin.js"
   },
   "dependencies": {
     "@xrkseek/core-session": "workspace:*",

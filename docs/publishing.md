@@ -4,7 +4,7 @@
 
 对外只发 **`@xrkseek/harness-cli`**（含组装好的 `product-web/`）。workspace 内其余包保持 **`private`**，随 CLI deploy 捆绑，不上架。
 
-版本真源：`apps/cli/package.json` → `version`（当前 **0.1.1**）。发行说明：`docs/releases/vX.Y.Z.md`（结构见 rule `xrk-release-notes`）。
+版本真源：`apps/cli/package.json` → `version`（当前 **0.1.2**）。发行说明：`docs/releases/vX.Y.Z.md`（结构见 rule `xrk-release-notes`）。
 
 ## 双通道
 

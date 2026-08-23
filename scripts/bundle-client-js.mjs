@@ -32,6 +32,19 @@ function readPkg(dir) {
   return JSON.parse(readFileSync(pj, "utf8").replace(/^\uFEFF/, ""));
 }
 
+/** Inline-safe stub imports must bundle, not become runtime require() leaks. */
+const INLINE_SAFE_EXTERNAL = /require\(["']@xrkseek\/xrk-(?:host-apiproxy|session|llm|tools|brand)/;
+
+function assertClientBundleInlined(pkgName, outPath) {
+  const text = readFileSync(outPath, "utf8");
+  const leak = INLINE_SAFE_EXTERNAL.exec(text);
+  if (leak) {
+    throw new Error(
+      `${pkgName}: client.js externalized ${leak[0]} — rebuild after stub src resolve or run stub:types`,
+    );
+  }
+}
+
 function tsdownCli() {
   const candidates = [
     path.join(ROOT, "node_modules", "tsdown", "dist", "run.mjs"),
@@ -113,6 +126,7 @@ function main() {
     if (!existsSync(out)) {
       throw new Error(`tsdown did not emit ${path.relative(ROOT, out)}`);
     }
+    assertClientBundleInlined(pkg.name, out);
     const srcStyles = path.join(dir, "src", "styles");
     const libStyles = path.join(dir, "lib", "styles");
     if (existsSync(srcStyles)) {

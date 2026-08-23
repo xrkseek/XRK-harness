@@ -83,6 +83,35 @@ function contextSourcePath(source: string): string | null {
   }
 }
 
+/**
+ * Resolve inline-safe stub subpaths to packages/stubs source trees so client
+ * bundles inline wire layers even when lib/types was not tsc-emitted yet
+ * (release client:bundle must not externalize @xrkseek/xrk-llm/message).
+ */
+function inlineSafeStubSourcePath(source: string): string | null {
+  if (!INLINE_SAFE.test(source)) return null
+  const match = /^@xrkseek\/(xrk-[^/]+)(?:\/(.*))?$/.exec(source)
+  if (!match) return null
+  const [, stubName, subpath = ''] = match
+  const srcRoot = resolvePath(REPOSITORY_ROOT, 'packages/stubs', stubName, 'src')
+  if (subpath.length === 0) {
+    const index = resolvePath(srcRoot, 'index.ts')
+    return existsSync(index) ? index : null
+  }
+  const segments = subpath.split('/')
+  const asFile = resolvePath(srcRoot, ...segments)
+  const fileTs = `${asFile}.ts`
+  if (existsSync(fileTs)) return fileTs
+  const indexTs = resolvePath(asFile, 'index.ts')
+  if (existsSync(indexTs)) return indexTs
+  return null
+}
+
+/** Workspace sources for client bundles (context contracts + inline-safe stubs). */
+function workspaceClientSourcePath(source: string): string | null {
+  return contextSourcePath(source) ?? inlineSafeStubSourcePath(source)
+}
+
 /** Rebase a physical lib-relative source onto a browser URL that mirrors the repository directories. */
 function browserSourcePath(source: string, sourcemapPath: string): string {
   if (!source.startsWith('.')) return source
@@ -235,9 +264,9 @@ function clientConfig(id: string, entry: string): UserConfig {
     // opinion for table entries (external above wins), bundle everything else.
     noExternal: (id: string) => (CLIENT_EXTERNALS.includes(id) ? undefined : true),
     plugins: [{
-      name: 'xrk-context-resolve',
+      name: 'xrk-workspace-resolve',
       resolveId(source: string) {
-        return contextSourcePath(source)
+        return workspaceClientSourcePath(source)
       },
     }, {
       name: 'xrk-client-bundle-purity',
@@ -246,7 +275,6 @@ function clientConfig(id: string, entry: string): UserConfig {
       // cross-plugin value import either inlines a duplicate runtime instance
       // or requires a specifier the frozen module table cannot answer.
       // Cross-plugin collaboration goes through cordis services instead.
-      name: 'xrk-client-bundle-purity',
       resolveId(source: string) {
         if (!source.startsWith('@xrkseek/')) return null
         if (CLIENT_EXTERNALS.includes(source)) return null // platform module: external wins

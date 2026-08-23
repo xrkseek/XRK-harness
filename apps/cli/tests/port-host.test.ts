@@ -14,6 +14,7 @@ describe("looksLikeXrkHostCommand", () => {
   it("accepts known Host fingerprints", () => {
     expect(looksLikeXrkHostCommand("node apps/cli/dist/bin.js web")).toBe(true);
     expect(looksLikeXrkHostCommand("C:\\npm\\xrk-harness.cmd web")).toBe(true);
+    expect(looksLikeXrkHostCommand("C:\\npm\\xrkh.cmd web")).toBe(true);
     expect(
       looksLikeXrkHostCommand("node .../@xrkseek/harness-cli/dist/bin.js serve"),
     ).toBe(true);

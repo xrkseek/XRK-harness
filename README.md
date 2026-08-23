@@ -14,7 +14,7 @@
 [![GitHub](https://img.shields.io/badge/github-xrkseek%2FXRK--harness-black.svg)](https://github.com/xrkseek/XRK-harness)
 [![npm](https://img.shields.io/npm/v/@xrkseek/harness-cli?label=npm)](https://www.npmjs.com/package/@xrkseek/harness-cli)
 
-[入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md) · [v0.1.0 发行说明](./docs/releases/v0.1.0.md)
+[入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md) · [v0.1.2 发行说明](./docs/releases/v0.1.2.md)
 
 </div>
 
@@ -47,7 +47,7 @@ XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agen
 
 ```sh
 mkdir my-workspace && cd my-workspace
-npx @xrkseek/harness-cli@0.1.1 web
+npx @xrkseek/harness-cli@0.1.2 web
 ```
 
 默认 **harness** preset（含 `web_search` / `web_fetch`）。仅要 fs 烟测时加 `--preset minimal`。
@@ -99,7 +99,7 @@ npx @xrkseek/harness-cli serve --preset harness --workspace .
 | 多厂商 LLM Registry | **能跑** |
 | DSH 社区 client（`dsh-compat` bridge） | **能跑**（vendor 消息/TongFlow 节点引擎等见 status「未做」） |
 | 产品网页与浏览器 E2E | **未稳**（有测，但不挡日常 `pnpm check`） |
-| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（**v0.1.0** 公开发版路径） |
+| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（**v0.1.2** 公开发版路径） |
 
 完整说明：[docs/status.md](./docs/status.md)。
 
@@ -117,7 +117,7 @@ npx @xrkseek/harness-cli serve --preset harness --workspace .
 | 自己写工具 / 进程插件 | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | 排障 | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 | [learn](./docs/learn.md) |
-| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.1.0](./docs/releases/v0.1.0.md)） |
+| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.1.2](./docs/releases/v0.1.2.md)） |
 | 全部专题索引 | [docs/README.md](./docs/README.md) |
 
 ---

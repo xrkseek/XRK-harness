@@ -21,6 +21,7 @@ const execFileAsync = promisify(execFile);
 /** Command-line fingerprints that identify an XRK product Host. */
 const XRK_HOST_FINGERPRINTS: readonly RegExp[] = [
   /xrk-harness/i,
+  /\bxrkh\b/i,
   /@xrkseek[/\\]harness-cli/i,
   /harness-cli[/\\](?:dist[/\\])?bin/i,
   /apps[/\\]cli[/\\](?:dist[/\\])?bin/i,
