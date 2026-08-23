@@ -5,6 +5,9 @@
  * platform constant module ({@link ./platform.ts}, the single source
  * of truth with the tsdown client externals); values stay shell-static
  * imports so every bundle sees the same instance.
+ *
+ * `@xrkseek/client-ui-attachment` is a client plugin (slot filler), not a
+ * platform seed — it loads via boot.json like other UI plugins (rc.2).
  */
 import * as React from 'react'
 import * as ReactJsxRuntime from 'react/jsx-runtime'
@@ -14,7 +17,6 @@ import * as Cordis from '@xrkseek/cordis'
 import * as UiSlots from '@xrkseek/client-ui-slots'
 import * as WebReact from '@xrkseek/client-web-react'
 import * as UiPrimitives from '@xrkseek/client-ui-primitives'
-import * as UiAttachment from '@xrkseek/client-ui-attachment'
 import * as SchemaForm from '@xrkseek/client-schema-form'
 import type { PlatformModule } from './platform.ts'
 
@@ -35,7 +37,6 @@ export function getStaticModules(): Record<string, unknown> {
     '@xrkseek/client-ui-slots': UiSlots,
     '@xrkseek/client-web-react': WebReact,
     '@xrkseek/client-ui-primitives': UiPrimitives,
-    '@xrkseek/client-ui-attachment': UiAttachment,
     '@xrkseek/client-schema-form': SchemaForm,
   } satisfies Record<PlatformModule, unknown>
 }

@@ -2,7 +2,7 @@
 
 > **读者**：全员（对外说话以本页为准）。
 
-三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 2026-08-21（v0.0.8+；**`user/message.messageId`** Face 行 id，同 turn durable inject 不挤掉对话）。**AI 调用链路**（maxSteps · prune/soft-compact · reasoning passback · max-tokens keep/drop · EMPTY/未知 finish/残缺 tool · derive 跳过空 assistant · **reasoningEffort→DeepSeek thinking wire** · toolOrder · Anthropic cache · **LlmError HTTP 分类（含 gemini / openai-responses）· 步内 llm/retry（Face 可调）· TOOL_NOT_STARTED/OUTCOME_UNKNOWN/ABORTED_BEFORE_DISPATCH/`ABORTED` · isConcurrencySafe settle（只读工具已标）· tool-call stream + tool-call-chunks · concludesTurn / `extras.concludeTurn` · 取消 `AgentCancelCause` · 同轮 retry 耗尽后仍显示 turn-error · **DeepSeek vision-exp catalog** · **session-projection 状态/视图分离** · **durable workspace inject**）已跟至同基线（对照 DSH `dsh-v0.1.1-rc.1`）。
+三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.1.0**（2026-08-23；**`user/message.messageId`** Face 行 id，同 turn durable inject 不挤掉对话）。**AI 调用链路**（maxSteps · prune/soft-compact · reasoning passback · max-tokens keep/drop · EMPTY/未知 finish/残缺 tool · derive 跳过空 assistant · **reasoningEffort→DeepSeek thinking wire** · toolOrder · Anthropic cache · **LlmError HTTP 分类（含 gemini / openai-responses）· 步内 llm/retry（Face 可调）· TOOL_NOT_STARTED/OUTCOME_UNKNOWN/ABORTED_BEFORE_DISPATCH/`ABORTED` · isConcurrencySafe settle（只读工具已标）· tool-call stream + tool-call-chunks · concludesTurn / `extras.concludeTurn` · 取消 `AgentCancelCause` · 同轮 retry 耗尽后仍显示 turn-error · **DeepSeek vision-exp catalog** · **session-projection 状态/视图分离** · **durable workspace inject**）已跟至同基线。
 
 ## 能跑（本地 / Host 主路径）
 
@@ -19,15 +19,16 @@
 | CLI | `@xrkseek/harness-cli`（`web`/`serve`；`restart`=停本机 XRK Host；`--force` 仅杀已识别 Host） | [apps/cli/README.md](../apps/cli/README.md) · [plugin-development](./plugin-development.md) |
 | LLM / Presets / SDK | `llm-*` · Registry R0+R1（openai-chat / completions 别名 · anthropic-messages · openai-responses · gemini-generate）· Face 手写 `llm-pi-ai` 路由（Custom provider）· `presets/*` · `@xrkseek/harness` | [llm-provider-registry.md](./llm-provider-registry.md) · [profiles.md](./profiles.md) |
 | MCP | `@xrkseek/mcp`（stdio/HTTP 有界进程重连 + SSE；有序 content 投影；可选 image → AttachmentStore）；Host `XRK_MCP_*` 或 Face `mcp.servers` + `allowConnect` 落盘热挂载（policy deny → **park**） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) |
-| Attachment / 插件 | Face 附件；进程插件 `tools` · `prompt` · `commands`；CLI 用户插件目录 + 客户端 `web/` 叠加 | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
+| Attachment / 插件 | Face 附件；进程插件 `tools` · `prompt` · `commands` · **`host`**；CLI 用户插件目录 + 客户端 `web/` 叠加；**DSH 社区 client** 免补 `xrk.host.json`（路径能力表 + `client.js` 扫描 + 约定 infer，见 [plugin-loader](./plugin-loader.md)） | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
+| DSH 社区 Host（通用） | `extensions/dsh-compat` + 全套 bridge（Cordis fiber · IM 消息/webhook · TongFlow 节点运行时 · GenUI React tree · vision OCR）；27 包 fixture 见 [community-plugins](./community-plugins.md) | [community-plugins.md](./community-plugins.md) · [ADR-0002](./adr/0002-no-embed-upstream.md) |
 
-产品壳 = `apps/web` + `packages/client`；serve 用组装后的 dist / CLI `product-web/`；内核不嵌 Cordis。
+产品壳 = `apps/web` + `packages/client`；serve 用组装后的 dist / CLI `product-web/`。欢迎词与 hero 文案为 XRK 自有（非上游营销体）。
 
 ## 正式使用
 
 | 层级 | 能做什么 | 前置 |
 | --- | --- | --- |
-| **A — 能用** | `npx @xrkseek/harness-cli` 或源码 `build` + 组装壳后 `web`/`run` | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
+| **A — 能用** | `npx @xrkseek/harness-cli` 或源码 `build` + 组装壳后 `web`/`run`；**v0.1.0** 首个公开发版 | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
 | **B — 浏览器硬刷** | `pnpm test:web`（不进 `pnpm check`） | Chromium；完整 `apps/web/dist` |
 | **C — 上架** | npmjs + GitHub Release（`@xrkseek/harness-cli`） | `pnpm release`；见 [publishing.md](./publishing.md) |
 
@@ -38,14 +39,14 @@
 | 域 | 说明 |
 | --- | --- |
 | Host Face ↔ 产品 Web | 首屏 RPC（含 `settings.describe`）+ Context meter（`tokenUsage` / `contextPressure` / `contextBreakdown`；compaction 可带 `shadowedTokenCount`）+ 静态壳有测（`product-shell.test`）；Host-serve Playwright 硬刷欢迎窗 / 流式 / **stream aria golden** / 取消 / 工具卡 / 审批 / 提问 / inventory / Think / TodoDock / Access / Plan / plan-review / Session log 导出 / MCP 设置（`pnpm test:web`，不进 `pnpm check`）；Face 冷 history 含 reasoning / standing 工具卡；Cordis scaffold 全家桶未搬 |
-| 产品 Web | `pnpm web:build` + `client:bundle` + `web:assemble` → `apps/web/dist`（35 plugins，含 `client-session-log-export`；omit HMR / Cordis UI / native picker）；Host-serve `product-shell-*.e2e.ts` 全勾 |
+| 产品 Web | `pnpm web:build` + `client:bundle` + `web:assemble` → `apps/web/dist`（37 plugins，含 `client-ui-reference` · `client-session-log-export`；omit HMR / Cordis UI / native picker）；Face `@file` / `@session` 发现 remotes 已接；跨会话 prepare 未接 Face 主路径；Host-serve `product-shell-*.e2e.ts` 全勾 |
 | 保留插件 kind | `channel` / `policy` / `llm` 可发现、未自动接线；Cordis 宿主包只登记 stub |
 
 ## 未做
 
 | 域 | 说明 |
 | --- | --- |
-| DSH 插件长尾 | Cordis scaffold 全家桶、Cordis remote-event inspect/run、真 Win process-inspector、client 整包 resync、Azure deployment / Ollama 原生协议等 —— 对照笔记进 Canvas，不写成产品路线 |
+| DSH 社区 vendor 生产规模 | 0.1.0 **bridge 已补齐**四类 vendor 缺口（见 [community-plugins](./community-plugins.md)）；大规模官方 IM 长连接、厂商 TongFlow Python 发行版、Cordis npm fiber 全量 DI、云端 vision LLM 仍依赖外部部署 |
 
 ## 依赖纪律
 
@@ -55,6 +56,6 @@ presets / sdk / server → core* | llm | mcp | attachment | exec* | workspace | 
 core* / 能力叶 → kernel | protocol | compose
 ```
 
-外壳二次创作：`apps/web` + `packages/client`。品牌：`apps/web/public`。serve 用 `apps/web/dist`（`web:build` + `client:bundle` + `web:assemble`；gitignore）。不是 GitHub Fork；无 vendor 联接；Cordis 薄栈在 `packages/cordis*`。内核不嵌 Cordis Host。见 [AGENTS.md](../AGENTS.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)。
+外壳二次创作：`apps/web` + `packages/client`。品牌：`apps/web/public`。serve 用 `apps/web/dist`（`web:build` + `client:bundle` + `web:assemble`；gitignore）。不是 GitHub Fork；无 vendor 联接。DSH 兼容经 `extensions/dsh-compat` + `@xrkseek/server-http/dsh-compat`（见 [ADR-0002](./adr/0002-no-embed-upstream.md)）。
 
 [learn.md](./learn.md) · [modules/](./modules/README.md)

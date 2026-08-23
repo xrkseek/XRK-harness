@@ -127,7 +127,7 @@ describe('lifecycle cascade (one axis)', () => {
 })
 
 describe('kind semantics', () => {
-  it('keyed: duplicate key throws, missing key throws', () => {
+  it('keyed: duplicate key throws, missing key throws, id promotes to key', () => {
     const core = new SlotCore()
     mountFrame(core)
     core.register({ name: 'test.keyed', key: 'a' }, Comp)
@@ -136,6 +136,10 @@ describe('kind semantics', () => {
     // @ts-expect-error keyed registration requires options.key
     expect(() => core.register({ name: 'test.keyed' }, Comp)).toThrow('requires options.key')
     expect(() => core.register({ name: 'test.keyed', key: 'b' }, Comp)).not.toThrow()
+    // Community DSH habit: list-style `id` on a keyed slot (genui settings card).
+    // @ts-expect-error keyed registration requires options.key (id is the compat fallback)
+    expect(() => core.register({ name: 'test.keyed', id: 'from-id' }, Comp)).not.toThrow()
+    expect(core.entries('test.keyed').map(e => e.options.key)).toContain('from-id')
   })
 
   it('list: duplicate id throws, missing id throws, entries sort by order stably', () => {

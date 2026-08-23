@@ -163,7 +163,7 @@ function finalNode(
         firstTokenTime: state.firstTokenTime ?? null,
         completedTime: event.time,
       },
-      ...(event.data.interrupted === true ? { interrupted: true } : {}),
+      ...event.data.interrupted === true ? { interrupted: true } : {},
     }
   }
   const location = context.start?.location ?? context.matches.at(-1)?.location

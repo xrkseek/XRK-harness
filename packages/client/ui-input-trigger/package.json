@@ -46,11 +46,9 @@
   "peerDependencies": {
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
-    "@xrkseek/client-ui-primitives": "workspace:^",
-    "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/cordis": "workspace:^",
-    "react": "^18.2.0"
+    "@xrkseek/xrk-file-reference": "workspace:^"
   },
   "devDependencies": {
     "@xrkseek/client-locale": "workspace:^",
@@ -61,7 +59,8 @@
     "@xrkseek/xrk-invariants": "workspace:^",
     "@types/react": "~18.3.1",
     "@xrkseek/cordis": "workspace:^",
-    "react": "^18.2.0"
+    "react": "^18.2.0",
+    "@xrkseek/xrk-file-reference": "workspace:^"
   },
   "files": [
     "lib/index.js",

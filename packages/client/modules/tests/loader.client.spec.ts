@@ -158,6 +158,42 @@ describe('require resolution', () => {
     await expect(b.loader.import('a', '', {})).rejects.toThrow('require("ghost") missed the module table')
   })
 
+  it('remaps require("@deepseek-ai/dsh-client-*") onto @xrkseek seed ids', async () => {
+    const prim = { marker: 'primitives' }
+    const slots = { marker: 'slots' }
+    const b = bench([row('community')], {
+      community: req => ({
+        prim: req('@deepseek-ai/dsh-client-ui-primitives'),
+        slots: req('@deepseek-ai/dsh-client-ui-slots'),
+        runtimeClient: req('@deepseek-ai/dsh-client-runtime/client'),
+      }),
+    }, {
+      seed: {
+        '@xrkseek/client-ui-primitives': prim,
+        '@xrkseek/client-ui-slots': slots,
+        '@xrkseek/client-runtime': { marker: 'runtime' },
+      },
+    })
+    const exports = await b.loader.import('community', '', {}) as {
+      prim: { marker: string }
+      slots: { marker: string }
+      runtimeClient: { marker: string }
+    }
+    expect(exports.prim).toBe(prim)
+    expect(exports.slots).toBe(slots)
+    expect(exports.runtimeClient.marker).toBe('runtime')
+  })
+
+  it('remaps import("@deepseek-ai/dsh-client-runtime/client") onto graph rows', async () => {
+    const b = bench([row('@xrkseek/client-runtime')], {
+      '@xrkseek/client-runtime': req => ({ marker: 'runtime' }),
+    })
+    const exports = await b.loader.import('@deepseek-ai/dsh-client-runtime/client', '', {}) as {
+      marker: string
+    }
+    expect(exports.marker).toBe('runtime')
+  })
+
   it('a require cycle is fatal', async () => {
     const b = bench([row('a'), row('b')], {
       a: req => ({ dep: req('b') }),

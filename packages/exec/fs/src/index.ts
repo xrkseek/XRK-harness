@@ -29,6 +29,14 @@ import {
 
 export { PathEscapeError, resolveWithinRoot } from "./paths.js";
 export {
+  createReadImageTool,
+  formatImageReadOutput,
+  imageMediaTypeForPath,
+  type CreateReadImageToolOptions,
+  type ImageReadValue,
+  type ReadImageFs,
+} from "./read-image.js";
+export {
   globToRegExp,
   matchGlob,
   type FsGlobOptions,
@@ -84,6 +92,8 @@ export interface FsService {
   readonly root: string;
   resolvePath(userPath: string): string;
   read(userPath: string, maxBytes?: number): Promise<FsReadResult>;
+  /** Read raw bytes (binary files, images). */
+  readBytes(userPath: string, maxBytes?: number): Promise<Uint8Array>;
   write(userPath: string, content: string): Promise<void>;
   /** Replace only when on-disk content matches `oldContent`. */
   edit(
@@ -137,6 +147,17 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
         };
       }
       return { content: buf.toString("utf8") };
+    },
+    async readBytes(userPath, maxBytes = defaultMaxBytes) {
+      emit("fs/read-intent", userPath);
+      const abs = resolveWithinRoot(root, userPath);
+      const buf = await fsReadFile(abs);
+      if (buf.byteLength > maxBytes) {
+        throw new Error(
+          `file exceeds read byte limit (${buf.byteLength} > ${maxBytes})`,
+        );
+      }
+      return new Uint8Array(buf);
     },
     async write(userPath, content) {
       emit("fs/write-intent", userPath);

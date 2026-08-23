@@ -1,0 +1,79 @@
+{
+  "name": "@xrkseek/xrk-session-reference",
+  "description": "Cross-session snapshot references and durable untrusted model context (ctx.sessionReferenceResolver)",
+  "version": "0.1.1-rc.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/context/session-reference"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    },
+    "./config": {
+      "types": "./src/config.ts",
+      "default": "./src/config.ts"
+    },
+    "./uri": {
+      "types": "./src/uri.ts",
+      "default": "./src/uri.ts"
+    },
+    "./typert": {
+      "types": "./lib/typert.host.d.ts",
+      "default": "./lib/typert.host.js"
+    },
+    "./remote": {
+      "types": "./lib/typert.remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts",
+    "lib/typert.host.js",
+    "lib/typert.host.d.ts",
+    "lib/typert.remote-client.js",
+    "lib/typert.remote-client.d.ts"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@xrkseek/schemastery": "workspace:^",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@xrkseek/xrk-agent": "workspace:^",
+    "@xrkseek/xrk-compaction": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "@xrkseek/xrk-llm": "workspace:^",
+    "@xrkseek/xrk-session": "workspace:^",
+    "@xrkseek/xrk-typert-protocol": "workspace:^",
+    "@xrkseek/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@xrkseek/xrk-agent": "workspace:^",
+    "@xrkseek/xrk-compaction": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "@xrkseek/xrk-llm": "workspace:^",
+    "@xrkseek/xrk-session": "workspace:^",
+    "@xrkseek/xrk-typert-protocol": "workspace:^",
+    "@xrkseek/cordis": "workspace:^"
+  },
+  "private": true
+}

@@ -28,6 +28,7 @@ XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agen
 | **Session 为真源** | 对话与工具写在 append-only 事件日志里，可重建；turn / loop 短寿 |
 | **可组装** | preset `minimal` / `harness` / `server` 只接线、不写业务逻辑 |
 | **Host + Face** | HTTP、Unary RPC、双 WebSocket；浏览器产品壳随 CLI 提供 |
+| **DSH 社区 client** | `plugin add` 装 npm 社区包；`dsh-compat` bridge（见 [community-plugins](./docs/community-plugins.md)） |
 | **MCP** | stdio / streamable-http；可在设置里配置并热挂载 |
 | **压缩与用量** | 长会话可换窗压缩；壳上可看 token / 上下文压力 |
 
@@ -93,8 +94,9 @@ npx @xrkseek/harness-cli serve --preset harness --workspace .
 |----|------|
 | 内核 · Session · Agent · 工具 · HTTP · Host Face · MCP | **能跑** |
 | 多厂商 LLM Registry | **能跑** |
+| DSH 社区 client（`dsh-compat` bridge） | **能跑**（vendor 消息/TongFlow 节点引擎等见 status「未做」） |
 | 产品网页与浏览器 E2E | **未稳**（有测，但不挡日常 `pnpm check`） |
-| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑** |
+| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（**v0.1.0** 公开发版路径） |
 
 完整说明：[docs/status.md](./docs/status.md)。
 
@@ -107,8 +109,9 @@ npx @xrkseek/harness-cli serve --preset harness --workspace .
 | 从零安装 / 开发与生产怎么分 | [getting-started](./docs/getting-started.md) |
 | 环境变量、落盘路径 | [configuration](./docs/configuration.md) |
 | 接 HTTP / Face | [http-api](./docs/http-api.md) · [host-face](./docs/host-face.md) |
+| 装 DSH 社区 client 包 | [community-plugins](./docs/community-plugins.md) · [plugin-loader](./docs/plugin-loader.md) |
 | Session、压缩、投影、事件契约 | [session](./docs/session.md) · [session-compaction](./docs/session-compaction.md) · [session-projection](./docs/modules/session-projection.md) · [protocol-events](./docs/protocol-events.md) |
-| 自己写工具 | [tool-pipeline](./docs/tool-pipeline.md) · [seams](./docs/seams.md) |
+| 自己写工具 / 进程插件 | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | 排障 | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 | [learn](./docs/learn.md) |
 | 版本发行说明 | [releases](./docs/releases/)（当前 [v0.0.7](./docs/releases/v0.0.7.md)） |
@@ -138,6 +141,9 @@ docs/             使用与契约说明
 
 **对话太长、上下文爆了？**  
 可用压缩（loop 配置或壳内 `/compact`）。见 [session-compaction](./docs/session-compaction.md)。
+
+**装了 DSH 社区插件但面板报 incomplete？**  
+多数路径已有 bridge；官方 IM 长连接、TongFlow 节点引擎等 vendor 能力见 [community-plugins](./docs/community-plugins.md) 与 [status](./docs/status.md)。
 
 更多：[troubleshooting](./docs/troubleshooting.md)。
 

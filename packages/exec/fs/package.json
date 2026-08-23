@@ -14,7 +14,9 @@
     "README.md"
   ],
   "dependencies": {
-    "@xrkseek/core-tools": "workspace:*"
+    "@xrkseek/attachment": "workspace:*",
+    "@xrkseek/core-tools": "workspace:*",
+    "@xrkseek/protocol": "workspace:*"
   },
   "license": "MIT",
   "repository": {

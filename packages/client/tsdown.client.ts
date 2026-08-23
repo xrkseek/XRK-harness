@@ -40,6 +40,9 @@ export const INLINE_SAFE = /^@xrkseek\/xrk-(host-apiproxy|session|llm|tools|bran
  */
 const VENDORED_LIBRARY = /^@xrkseek\/(cosmokit|schemastery)(\/|$)/
 
+/** Browser-safe context contracts inlined into client bundles (grammar/types only). */
+const CONTEXT_INLINE = /^@xrkseek\/xrk-(file-reference|session-reference)(\/|$)/
+
 /** Generated descriptor/codec contribution with no shared runtime identity. */
 const GENERATED_REMOTE = /^@xrkseek\/xrk-[a-z0-9]+(?:-[a-z0-9]+)*\/remote$/
 
@@ -65,6 +68,20 @@ const RUNTIME_STORE_EXEMPTION = '@xrkseek/client-runtime/client'
 export const CLIENT_EXTERNALS: readonly string[] = [...PLATFORM_MODULES, RUNTIME_STORE_EXEMPTION]
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('../..', import.meta.url))
+
+/** Resolve browser-safe context subpaths to workspace sources for client bundles. */
+function contextSourcePath(source: string): string | null {
+  switch (source) {
+    case '@xrkseek/xrk-file-reference/grammar':
+      return resolvePath(REPOSITORY_ROOT, 'packages/context/file-reference/src/grammar.ts')
+    case '@xrkseek/xrk-file-reference/types':
+      return resolvePath(REPOSITORY_ROOT, 'packages/context/file-reference/src/types.ts')
+    case '@xrkseek/xrk-session-reference/types':
+      return resolvePath(REPOSITORY_ROOT, 'packages/context/session-reference/src/types.ts')
+    default:
+      return null
+  }
+}
 
 /** Rebase a physical lib-relative source onto a browser URL that mirrors the repository directories. */
 function browserSourcePath(source: string, sourcemapPath: string): string {
@@ -218,7 +235,12 @@ function clientConfig(id: string, entry: string): UserConfig {
     // opinion for table entries (external above wins), bundle everything else.
     noExternal: (id: string) => (CLIENT_EXTERNALS.includes(id) ? undefined : true),
     plugins: [{
-      // Bundle purity gate (build-time mirror of the module-edge rules):
+      name: 'xrk-context-resolve',
+      resolveId(source: string) {
+        return contextSourcePath(source)
+      },
+    }, {
+      name: 'xrk-client-bundle-purity',
       // platform seed entries stay external, inline-safe wire layers inline,
       // and every other @xrkseek value import is a build error — a
       // cross-plugin value import either inlines a duplicate runtime instance
@@ -229,7 +251,7 @@ function clientConfig(id: string, entry: string): UserConfig {
         if (!source.startsWith('@xrkseek/')) return null
         if (CLIENT_EXTERNALS.includes(source)) return null // platform module: external wins
         if (VENDORED_LIBRARY.test(source)) return null // vendored library: inline, no shared identity
-        if (INLINE_SAFE.test(source) || GENERATED_REMOTE.test(source)) return null // wire contribution: inline is the point
+        if (INLINE_SAFE.test(source) || GENERATED_REMOTE.test(source) || CONTEXT_INLINE.test(source)) return null // wire / context contract: inline is the point
         throw new Error(
           `client bundle purity: "${source}" is not a platform module (CLIENT_EXTERNALS), an inline-safe wire layer, or a generated /remote contribution — `
           + 'cross-plugin value imports are forbidden; collaborate through cordis services (type-only imports are erased and never reach this gate)',

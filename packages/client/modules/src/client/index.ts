@@ -14,6 +14,7 @@ import type { XrkWindow } from './manifest.ts'
 
 export { ClientModuleSystem } from './system.ts'
 export { parseBootManifest } from './manifest.ts'
+export { remapDshClientRequire } from './dsh-require-remap.ts'
 export type {
   BootManifest, BootModuleRow, BootPluginRow, ClientModuleLoader, ClientModuleRecord,
   ClientModuleSystemOptions, ClientPluginHandoff, XrkWindow, WebBootEntry, WebBootGraph,

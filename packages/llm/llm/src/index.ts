@@ -19,7 +19,11 @@ export interface LlmChatRequest {
    */
   readonly resolveImage?: (
     attachmentId: string,
-  ) => Promise<{ readonly mediaType: string; readonly data: Uint8Array }>;
+  ) => Promise<{
+    readonly mediaType: string;
+    readonly data: Uint8Array;
+    readonly ref?: import("@xrkseek/protocol").ImageAttachmentRef;
+  }>;
   /**
    * DeepSeek-style reasoning effort (`off` | `low` | `high` | `max`).
    * Adapters that understand thinking mode map this to wire fields; others ignore.

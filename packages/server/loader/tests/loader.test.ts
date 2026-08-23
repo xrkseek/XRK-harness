@@ -416,3 +416,49 @@ describe("commands plugins + inventory", () => {
   });
 });
 
+describe("host plugins", () => {
+  it("loads kind:host with createPublicHandler", async () => {
+    const { listHostPlugins, PLUGIN_KINDS } = await import("../src/index.js");
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-host-"));
+    await writePlugin(root, "http-plug", {
+      id: "http-plug",
+      kind: PLUGIN_KINDS.host,
+      body: `export function createPlugin() {
+  return {
+    id: "http-plug",
+    kind: "host",
+    createPublicHandler() {
+      return async (req, res) => {
+        if (req.url === "/host-plug/ping") {
+          res.statusCode = 200;
+          res.end("pong");
+          return true;
+        }
+        return false;
+      };
+    },
+  };
+}
+`,
+    });
+    const loader = createPluginLoader();
+    await loader.loadAll(root);
+    const hostPlugins = listHostPlugins(loader.list());
+    expect(hostPlugins.map((p) => p.id)).toEqual(["http-plug"]);
+    const handler = hostPlugins[0]!.createPublicHandler!({});
+    const chunks: Buffer[] = [];
+    const res = {
+      statusCode: 0,
+      end(body: string) {
+        chunks.push(Buffer.from(body));
+      },
+    };
+    await handler(
+      { url: "/host-plug/ping" } as import("node:http").IncomingMessage,
+      res as import("node:http").ServerResponse,
+    );
+    expect(res.statusCode).toBe(200);
+    expect(Buffer.concat(chunks).toString("utf8")).toBe("pong");
+  });
+});
+

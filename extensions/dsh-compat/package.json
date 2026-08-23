@@ -1,0 +1,18 @@
+{
+  "name": "@xrkseek/dsh-compat",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Built-in DSH community adapter (kind: host). Committed in-repo; not published to npm.",
+  "dependencies": {
+    "@xrkseek/server-http": "workspace:*"
+  },
+  "xrk": {
+    "compat": true,
+    "role": "dsh-community-adapter",
+    "client": {
+      "inject": [],
+      "immediately": false
+    }
+  }
+}

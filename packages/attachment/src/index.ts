@@ -7,6 +7,8 @@ export type {
   ImageAttachmentLimits,
   ImageAttachmentRef,
   ImageMediaType,
+  ImageRequestPolicy,
+  RequestImageAttachment,
   SaveImageAttachment,
   StoredImageAttachment,
 } from "./types.js";
@@ -17,6 +19,7 @@ export {
 export {
   AttachmentError,
   isAttachmentError,
+  isImageAdmissionError,
   type AttachmentErrorCode,
 } from "./error.js";
 export type { AttachmentStore } from "./store.js";

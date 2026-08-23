@@ -7,7 +7,9 @@
   },
   "include": ["src/**/*.ts"],
   "references": [
+    { "path": "../../attachment" },
     { "path": "../llm" },
-    { "path": "../openai-compatible" }
+    { "path": "../openai-compatible" },
+    { "path": "../../protocol" }
   ]
 }

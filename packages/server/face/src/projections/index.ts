@@ -37,6 +37,14 @@ export {
   type ContextBreakdownProjection,
 } from "./units/context-breakdown.js";
 export {
+  createContextTimelineProjectionUnit,
+  type ContextTimelineProjection,
+} from "./units/context-timeline.js";
+export {
+  createContextHeadersProjectionUnit,
+  type ContextHeadersProjection,
+} from "./units/context-headers.js";
+export {
   DEFAULT_FALLBACK_MAX_WORDS,
   DEFAULT_TITLE_MAX_BYTES,
   fallbackSessionTitle,

@@ -76,11 +76,30 @@ export interface OpenAiCompatibleOptions {
    * Plain OpenAI gateways should leave this unset.
    */
   readonly deepseekThinking?: true | DeepSeekThinkingDefaults;
+  /**
+   * When set, replaces default `image_url` data-URL wire for vision requests.
+   * Used by `@xrkseek/llm-deepseek` for official Files API (`dsh-v0.1.1-rc.2`).
+   */
+  readonly wireImagePart?: (
+    stored: {
+      readonly attachmentId: string;
+      readonly mediaType: string;
+      readonly data: Uint8Array;
+      readonly ref?: import("@xrkseek/protocol").ImageAttachmentRef;
+    },
+    ctx: {
+      readonly baseUrl: string;
+      readonly apiKey: string;
+      readonly fetch?: typeof fetch;
+      readonly signal?: AbortSignal;
+    },
+  ) => Promise<WireContentPart>;
 }
 
 type WireContentPart =
   | { type: "text"; text: string }
-  | { type: "image_url"; image_url: { url: string } };
+  | { type: "image_url"; image_url: { url: string } }
+  | { type: "file"; file_id: string };
 
 type WireMessage =
   | { role: "system"; content: string }
@@ -120,6 +139,13 @@ function bytesToBase64(data: Uint8Array): string {
 async function userContentToWire(
   content: MessageContent,
   resolveImage: LlmChatRequest["resolveImage"],
+  wireImagePart: OpenAiCompatibleOptions["wireImagePart"],
+  wireCtx: {
+    readonly baseUrl: string;
+    readonly apiKey: string;
+    readonly fetch?: typeof fetch;
+    readonly signal?: AbortSignal;
+  },
 ): Promise<string | WireContentPart[]> {
   if (typeof content === "string") return content;
   if (!contentHasImage(content)) return flattenText(content);
@@ -135,6 +161,20 @@ async function userContentToWire(
       continue;
     }
     const stored = await resolveImage(block.attachment.attachmentId);
+    if (wireImagePart && wireCtx.apiKey.trim()) {
+      parts.push(
+        await wireImagePart(
+          {
+            attachmentId: block.attachment.attachmentId,
+            mediaType: stored.mediaType,
+            data: stored.data,
+            ref: block.attachment,
+          },
+          wireCtx,
+        ),
+      );
+      continue;
+    }
     const b64 = bytesToBase64(stored.data);
     parts.push({
       type: "image_url",
@@ -149,6 +189,13 @@ async function userContentToWire(
 async function toWireMessages(
   messages: readonly ChatMessage[],
   resolveImage: LlmChatRequest["resolveImage"],
+  wireImagePart: OpenAiCompatibleOptions["wireImagePart"],
+  wireCtx: {
+    readonly baseUrl: string;
+    readonly apiKey: string;
+    readonly fetch?: typeof fetch;
+    readonly signal?: AbortSignal;
+  },
 ): Promise<WireMessage[]> {
   const out: WireMessage[] = [];
   for (const m of messages) {
@@ -159,7 +206,12 @@ async function toWireMessages(
     if (m.role === "user") {
       out.push({
         role: "user",
-        content: await userContentToWire(m.content, resolveImage),
+        content: await userContentToWire(
+          m.content,
+          resolveImage,
+          wireImagePart,
+          wireCtx,
+        ),
       });
       continue;
     }
@@ -189,7 +241,12 @@ async function toWireMessages(
     }
     out.push({
       role: "tool",
-      content: await userContentToWire(m.content, resolveImage),
+      content: await userContentToWire(
+        m.content,
+        resolveImage,
+        wireImagePart,
+        wireCtx,
+      ),
       tool_call_id: m.toolCallId,
       ...(m.name ? { name: m.name } : {}),
     });
@@ -347,9 +404,20 @@ async function buildBody(
   const maxImageBytes =
     options.maxRequestImageBytes ?? DEFAULT_MAX_REQUEST_IMAGE_BYTES;
   const bounded = offloadRequestImages(request.messages, maxImageBytes);
+  const wireCtx = {
+    baseUrl: options.baseUrl,
+    apiKey: options.apiKey ?? "",
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    ...(request.signal === undefined ? {} : { signal: request.signal }),
+  };
   const body: Record<string, unknown> = {
     model: options.model,
-    messages: await toWireMessages(bounded, request.resolveImage),
+    messages: await toWireMessages(
+      bounded,
+      request.resolveImage,
+      options.wireImagePart,
+      wireCtx,
+    ),
     stream,
   };
   const tools = toWireTools(request.tools);

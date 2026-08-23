@@ -1,5 +1,21 @@
-tag: dsh-v0.1.0-rc.8
-commit: 141eb6fef83422698aef7a981029e843e8161534
-copied: 2026-08-20
-layout: apps/web · packages/client/* (source only)
-notes: kernel rc.8 ported (server/core); client targeted resync (interrupted UI, V4 models, e2e host); export text-chunks pack; full tree copy still manual
+tag: dsh-v0.1.1-rc.2
+commit: b150a55 (release tag; bar 仓 pull 后对齐)
+bar: ~/Desktop/XRKbar/deepseek-harness
+copied: 2026-08-23 (client shell resync + ui-reference / context)
+layout: apps/web · packages/client/* · packages/context/* (source only)
+notes: |
+  对照真源：本机 XRKbar/deepseek-harness（非整仓 vendor 联接）。
+  rc.2 要点：DeepSeek Files API 视觉上传复用 · 统一 request-image 管线 · read_image 坐标缩放。
+  内核已跟：Files API（@xrkseek/llm-deepseek）· attachment-local 规范化 + readImageRequest · exec-fs read_image。
+  产品壳 client 已跟（定点）：
+    · ui-attachment → slot 插件（conversation.input.attachments / message.images）；不再进 platform seed
+    · ui-conversation → InputBar 走 attachment slots；保留 image-limits-projection
+    · ui-subagent → header.lineage + read-only composer（@ 源已迁至 ui-reference）
+    · ui-reference → 统一 @file / @session；已进 boot（37 plugins）
+  context 已搬：file-reference · file-reference-local · session-reference
+  ui-input-trigger：rc.2 @ 语法（quoted token · section 分组）已 resync
+  Face remotes：fileReferences/list · sessionReferenceResolver/candidates（发现；prepare 未接）
+  教科书：[modules/references.md](../docs/modules/references.md)
+  工具：scripts/resync-client-from-bar.mjs · scripts/resync-context-from-bar.mjs
+  未整包搬：ui-renderer / ui-brand-official（XRK 有 web-react · 自有品牌）。
+  Cordis 缺口（全量 session-reference）：xrk-session-query · xrk-output-retention

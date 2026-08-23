@@ -21,6 +21,11 @@ export interface ImageAttachmentRef {
   readonly width: number;
   readonly height: number;
   readonly name?: string;
+  /** Orientation-applied dimensions before normalization scaling. */
+  readonly originalDimensions?: {
+    readonly width: number;
+    readonly height: number;
+  };
 }
 
 export interface TextBlock {
@@ -81,7 +86,14 @@ export function isImageAttachmentRef(
     typeof o.height === "number" &&
     Number.isFinite(o.height) &&
     o.height >= 0 &&
-    (o.name === undefined || typeof o.name === "string")
+    (o.name === undefined || typeof o.name === "string") &&
+    (o.originalDimensions === undefined ||
+      (typeof o.originalDimensions === "object" &&
+        o.originalDimensions !== null &&
+        typeof (o.originalDimensions as { width?: unknown }).width ===
+          "number" &&
+        typeof (o.originalDimensions as { height?: unknown }).height ===
+          "number"))
   );
 }
 

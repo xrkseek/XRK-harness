@@ -1,0 +1,25 @@
+{
+  "name": "@xrkseek/attachment-local",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "dependencies": {
+    "@xrkseek/attachment": "workspace:*",
+    "@xrkseek/protocol": "workspace:*",
+    "sharp": "^0.35.3"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/attachment-local"
+  },
+  "private": true
+}

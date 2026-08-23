@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
   - "packages/client/*"
+  - "packages/context/*"
   - "packages/stubs/*"
   - "packages/core/*"
   - "packages/session/*"
@@ -17,3 +18,4 @@ allowBuilds:
   "@xrkseek/exec-pty@file:packages/exec/pty": true
   esbuild: true
   node-pty: true
+  sharp: true

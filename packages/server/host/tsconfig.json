@@ -8,6 +8,7 @@
   "include": ["src/**/*.ts"],
   "references": [
     { "path": "../../attachment" },
+    { "path": "../../attachment-local" },
     { "path": "../../compose" },
     { "path": "../../core/agent" },
     { "path": "../../core/session" },
@@ -21,6 +22,7 @@
     { "path": "../../llm/registry" },
     { "path": "../../mcp" },
     { "path": "../../policy" },
+    { "path": "../../protocol" },
     { "path": "../config" },
     { "path": "../face" },
     { "path": "../http" },

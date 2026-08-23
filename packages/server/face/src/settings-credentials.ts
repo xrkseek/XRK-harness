@@ -52,6 +52,25 @@ export interface FaceHostPublicSettings {
   readonly rateLimitPerMinute: number;
   readonly pluginsDir?: string;
   readonly webDistConfigured: boolean;
+  /** Community packages whose `host.mjs` apply succeeded via dsh-compat. */
+  readonly cordisHostApplied?: readonly string[];
+  /** Per-package RPC channels from successful host.mjs apply. */
+  readonly cordisHostPackages?: readonly {
+    readonly packageName: string;
+    readonly rpcChannels: readonly string[];
+  }[];
+}
+
+export interface FaceCordisHostBridge {
+  readonly applyHostHalf?: (
+    packageName: string,
+  ) => Promise<{ readonly ok: boolean; readonly message?: string }>;
+  readonly invokeRpc?: (
+    channel: string,
+    endpoint: string,
+    payload: Record<string, unknown>,
+  ) => Promise<unknown>;
+  readonly stopHostHalf?: (packageName: string) => Promise<void>;
 }
 
 export interface CredentialSlotView {

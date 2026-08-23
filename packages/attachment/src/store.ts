@@ -1,6 +1,8 @@
 import type {
   ImageAttachmentLimits,
   ImageAttachmentRef,
+  ImageRequestPolicy,
+  RequestImageAttachment,
   SaveImageAttachment,
   StoredImageAttachment,
 } from "./types.js";
@@ -19,4 +21,13 @@ export interface AttachmentStore {
   ): Promise<readonly ImageAttachmentRef[]>;
   saveImage(input: SaveImageAttachment): Promise<ImageAttachmentRef>;
   readImage(attachmentId: string): Promise<StoredImageAttachment>;
+  /**
+   * Derive or read a cached model-request version. Local store implements;
+   * memory store rejects.
+   */
+  readImageRequest?(
+    ref: ImageAttachmentRef,
+    policy: ImageRequestPolicy,
+    signal?: AbortSignal,
+  ): Promise<RequestImageAttachment>;
 }

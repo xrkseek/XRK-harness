@@ -36,7 +36,9 @@ npx @xrkseek/harness-cli web
 | 1 | 首次启动会在 **`~/.xrk/`**（可用 `XRK_HOME` 改）创建 `settings.yaml`、会话库等；`--workspace` 只钉项目根 |
 | 2 | **无 LLM 密钥**也可打开壳；发话需接模型或 `--preset minimal` + replay |
 | 3 | 接真模型：Settings → Models / Credentials，或见下文「接真模型」 |
-| 4 | 可选装用户插件：`xrk-harness plugin add <包名>`（落到 `~/.xrk/plugins`；装完重启 `web`） |
+| 4 | 可选装用户插件：`xrk-harness plugin add <包名>`（落到 `~/.xrk/plugins`；装完 **`restart`** 重载 Host） |
+
+**DSH 社区 client 包**（如 `dsh-wallet` · `@liustack/modsearch`）同样用 `plugin add` 安装；不嵌 Cordis Host，经内置 `dsh-compat` 兼容器接入。能用什么、缺口在哪见 [community-plugins.md](./community-plugins.md)；安装与 discover 见 [plugin-loader.md](./plugin-loader.md)。
 
 Registry / 安装见根 [README](../README.md)。版本说明：[releases/](./releases/)。
 
@@ -127,11 +129,39 @@ Preset 选型（minimal / harness / server）：[profiles.md](./profiles.md)。
 
 ---
 
+## DSH 社区 client 插件（可选）
+
+npm 上的 DSH 生态 **client 包**（带 `dsh.client` / `xrk.client` 或 `client.js`）可装到本机插件目录，与进程 `tools` 插件共用 CLI：
+
+```bash
+xrk-harness plugin add dsh-wallet
+xrk-harness plugin add @liustack/modsearch
+xrk-harness restart
+```
+
+| 项 | 说明 |
+|----|------|
+| 落盘 | `~/.xrk/plugins`（`XRK_HOME` · `XRK_PLUGINS_DIR`） |
+| Host | `serve` / `web` 自动加载内置 `extensions/dsh-compat`（`kind: host`） |
+| 边界 | **不嵌入** Cordis Host 主进程；HTTP/RPC 走能力表 + bridge（OAuth 存本地、GenUI HTML 预览等） |
+| 诚实缺口 | 官方 IM 消息隧道、TongFlow 节点引擎、Cordis React GenUI、vision LLM 等见下表文档 |
+
+| 文档 | 内容 |
+|------|------|
+| [community-plugins.md](./community-plugins.md) | 适配层级 A–J · 0.1.0 bridge 模块 · 27 包 fixture · vendor 缺口 |
+| [plugin-loader.md](./plugin-loader.md) | `plugin add` · discover · `host.mjs` apply |
+| [plugin-development.md](./plugin-development.md) | 自写 `tools` / client 叠加 |
+
+本机已装包可审计：`node scripts/dsh-community-audit.mjs`（需 Node ≥26）。
+
+---
+
 ## 下一步
 
 | 目标 | 文档 |
 |------|------|
 | 能力边界 | [status.md](./status.md) |
+| DSH 社区 client | [community-plugins.md](./community-plugins.md) |
 | 配置全集 | [configuration.md](./configuration.md) |
 | HTTP / Face | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
 | 发布 | [publishing.md](./publishing.md) |

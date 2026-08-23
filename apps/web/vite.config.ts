@@ -143,7 +143,6 @@ export default defineConfig({
       { find: /^@xrkseek\/client-web-react$/, replacement: src('../../packages/client/web-react/src/index.ts') },
       { find: /^@xrkseek\/client-ui-slots$/, replacement: src('../../packages/client/ui-slots/src/index.ts') },
       { find: /^@xrkseek\/client-ui-primitives$/, replacement: src('../../packages/client/ui-primitives/src/index.ts') },
-      { find: /^@xrkseek\/client-ui-attachment$/, replacement: src('../../packages/client/ui-attachment/src/index.ts') },
       { find: /^@xrkseek\/client-schema-form$/, replacement: src('../../packages/client/schema-form/src/index.ts') },
       { find: /^@xrkseek\/client-modules\/client$/, replacement: src('../../packages/client/modules/src/client/index.ts') },
       { find: /^@xrkseek\/client-ui-theme\/styles\/(.+)$/, replacement: src('../../packages/client/ui-theme/src/styles/$1') },

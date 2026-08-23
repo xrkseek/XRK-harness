@@ -64,9 +64,15 @@ export function resolveLlmForSelection(
     {
       id: `${binding.provider}:${binding.model}`,
       model: selection.model,
-      // Do NOT pass runtime.inputModalities here — that is Face intake
-      // capability. Adapter modalities come from Registry / brand defaults
-      // (official DeepSeek text models stay text-only; vision-exp declares image).
+      ...(runtime.attachments?.readImageRequest
+        ? {
+            readImageRequest: (
+              ref,
+              policy,
+              signal,
+            ) => runtime.attachments!.readImageRequest!(ref, policy, signal),
+          }
+        : {}),
     },
   );
   return { binding, adapter, selection };

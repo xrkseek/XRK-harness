@@ -51,6 +51,7 @@ import {
   defaultUiSettings,
   hydrateFaceHostSettings,
   type FaceHostPublicSettings,
+  type FaceCordisHostBridge,
   type FaceMcpServerDraft,
   type FaceUiSettings,
 } from "./settings-credentials.js";
@@ -70,6 +71,11 @@ import { FaceSubagentRegistry } from "./subagent-registry.js";
 import { FaceMessageFeedbackStore } from "./message-feedback.js";
 import { FaceGoalStore } from "./goal-store.js";
 import { FaceWireIdMaps } from "./adapt/wire-ids.js";
+import { configureCostMeterHome } from "./cost-meter-store.js";
+import {
+  applyCostMeterUsageSample,
+  usageSampleFromMessage,
+} from "./cost-meter-record.js";
 export interface CreateFaceRuntimeOptions {
   readonly store: SessionStore;
   readonly resolveAgent: (sessionId: string) => Promise<AgentHandle>;
@@ -106,6 +112,8 @@ export interface CreateFaceRuntimeOptions {
   readonly invalidateAgent?: (sessionId: string) => void | Promise<void>;
   /** Public host runtime snapshot for settings.get (no secrets). */
   readonly hostPublic?: FaceHostPublicSettings;
+  /** Cordis panel `runHostHalf` → dsh-compat `host.mjs` apply. */
+  readonly cordisHostBridge?: FaceCordisHostBridge;
   /** Initial Host API key from env (vault may override). */
   readonly bootstrapApiKey?: string;
   readonly uiSettings?: FaceUiSettings;
@@ -132,6 +140,8 @@ export interface CreateFaceRuntimeOptions {
   readonly hasPtyActivity?: () => boolean;
   /** Host input modalities; default text-only. */
   readonly inputModalities?: readonly ("text" | "image")[];
+  /** Host persists `/auto-review` slash to dsh-compat store (DSH panel HTTP). */
+  readonly autoReviewSlashPersist?: (args: string) => void;
   /** Optional JSON sidecar for parent→child links (sessions directory). */
   readonly subagentPersistPath?: string;
   /** Optional JSON sidecar for Face goals (sessions directory). */
@@ -169,6 +179,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     string,
     { provider: string; model: string; reasoningEffort?: string }
   >();
+  const costMeterRoutes = new Map<string, { provider: string; model: string }>();
   const sessionAgentPresets = new Map<string, string>();
   const sessionCwds = new Map<string, string>();
   const workspaces = new FaceWorkspaceRegistry(options.workspaceRoot);
@@ -340,6 +351,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   /** While true, skip title fallback (event replay / fork must not invent log rows). */
   let replayingLog = false;
 
+  configureCostMeterHome(options.productDir);
+
   const appendPatched = (
     id: string,
     event: Parameters<typeof originalAppend>[1],
@@ -383,6 +396,26 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       }),
     );
     projections.drive(id, frozen, eventSeq);
+    if (!replayingLog) {
+      if (frozen.type === "request/header") {
+        costMeterRoutes.set(id, {
+          provider: frozen.header.config.provider,
+          model: frozen.header.config.model,
+        });
+      }
+      if (frozen.type === "assistant/message" && frozen.usage) {
+        const route =
+          costMeterRoutes.get(id) ??
+          sessionModels.get(id) ?? { provider: "deepseek", model: "unknown" };
+        const sample = usageSampleFromMessage(
+          id,
+          frozen,
+          route.provider,
+          route.model,
+        );
+        if (sample) applyCostMeterUsageSample(sample);
+      }
+    }
     if (
       frozen.type === "user/message" &&
       !replayingLog &&
@@ -479,6 +512,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     ...(options.hostPublic !== undefined
       ? { hostPublic: options.hostPublic }
       : {}),
+    ...(options.cordisHostBridge !== undefined
+      ? { cordisHostBridge: options.cordisHostBridge }
+      : {}),
     ...(options.bootstrapApiKey !== undefined
       ? { bootstrapApiKey: options.bootstrapApiKey }
       : {}),
@@ -514,6 +550,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
     ...(options.syncMcpServers !== undefined
       ? { syncMcpServers: options.syncMcpServers }
+      : {}),
+    ...(options.autoReviewSlashPersist !== undefined
+      ? { autoReviewSlashPersist: options.autoReviewSlashPersist }
       : {}),
     getTool,
     ...(options.webPlugins !== undefined

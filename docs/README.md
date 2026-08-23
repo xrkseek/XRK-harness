@@ -7,7 +7,7 @@
 | 你是谁 | 从这里开始 |
 |--------|------------|
 | 终端用户（装、跑、用壳） | 根 [README](../README.md) · [getting-started](./getting-started.md) |
-| 集成者（HTTP / Face / 工具） | [status](./status.md) · [http-api](./http-api.md) · [host-face](./host-face.md) |
+| 集成者（HTTP / Face / 工具 / DSH 社区包） | [status](./status.md) · [community-plugins](./community-plugins.md) · [http-api](./http-api.md) · [host-face](./host-face.md) |
 | 贡献者（提 PR） | [CONTRIBUTING](../CONTRIBUTING.md) · [testing](./testing.md) |
 | 维护者（发版 / 交接） | [maintainer](./maintainer.md) · [publishing](./publishing.md) |
 
@@ -36,6 +36,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 |--------|------|
 | 先跑起来 | [getting-started](./getting-started.md) · 根 [README](../README.md) |
 | 能正式用多少 | [status](./status.md) |
+| 装 DSH 社区 client 包 | [getting-started](./getting-started.md#dsh-社区-client-插件可选) · [community-plugins](./community-plugins.md) |
 | 配 LLM / MCP / 端口 | [configuration](./configuration.md) |
 | 排障 | [troubleshooting](./troubleshooting.md) |
 | 短要点 | [learn](./learn.md) |
@@ -47,7 +48,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 懂架构 | [architecture](./architecture.md) → [compose](./compose.md) → [adr/](./adr/README.md) |
 | 接 HTTP / Face | [http-api](./http-api.md) · [host-face](./host-face.md) |
 | 选 preset | [profiles](./profiles.md) · [host-preset](./host-preset.md) |
-| 写进程插件 | [plugin-development](./plugin-development.md) · [plugin-loader](./plugin-loader.md) |
+| 写进程插件 | [plugin-development](./plugin-development.md) · [plugin-loader](./plugin-loader.md) · [community-plugins](./community-plugins.md) |
 | 写工具 / 守卫 | [tool-pipeline](./tool-pipeline.md) · [seams](./seams.md) · [policy](./policy.md) |
 | Session / 压缩 / meter | [session](./session.md) · [session-compaction](./session-compaction.md) · [modules/session-projection](./modules/session-projection.md) · [protocol-events](./protocol-events.md) |
 | 看包落点 | [modules/](./modules/README.md) |
@@ -59,7 +60,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 跑测 / 提 PR | [testing](./testing.md) · [CONTRIBUTING](../CONTRIBUTING.md) |
 | 交接本仓 | [maintainer](./maintainer.md) · [audiences](./audiences.md) |
 | 发版 | [publishing](./publishing.md)（**维护者**） |
-| 版本说明 | [releases/](./releases/)（当前 [v0.0.7](./releases/v0.0.7.md)） |
+| 版本说明 | [releases/](./releases/)（当前 [v0.1.0](./releases/v0.1.0.md)） |
 | 改码笔记 | [AGENTS](../AGENTS.md) · `.cursor/skills` |
 
 ---
@@ -96,6 +97,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [profiles.md](./profiles.md) | Preset 选型（Session / Host / 工作区种子） |
 | [plugin-development.md](./plugin-development.md) | 进程插件怎么写 / 怎么装 |
 | [plugin-loader.md](./plugin-loader.md) | 插件 discover / load |
+| [community-plugins.md](./community-plugins.md) | DSH 社区兼容：A–J 层级 · 0.1.0 bridge 模块 · 27 包 fixture · vendor 缺口 |
 
 ### LLM
 
@@ -136,4 +138,4 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [learn.md](./learn.md) | 要义摘录（短） |
 | [modules/](./modules/README.md) | 包文件地图 |
 | [adr/](./adr/README.md) | 架构决策 |
-| [releases/](./releases/) | 发行说明（当前 [v0.0.7](./releases/v0.0.7.md)） |
+| [releases/](./releases/) | 发行说明（当前 [v0.1.0](./releases/v0.1.0.md)） |

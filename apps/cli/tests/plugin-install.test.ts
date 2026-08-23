@@ -168,6 +168,53 @@ describe("plugin add/remove/list", () => {
     expect(existsSync(path.join(pluginsDir, "example-tools"))).toBe(false);
   });
 
+  it("stages xrk.host.json for client packages", () => {
+    const home = tempDir("xrk-plug-host-");
+    const env = { XRK_HOME: home };
+    const pluginsDir = resolvePluginsDir(env);
+    const dir = path.join(home, "host-fixture");
+    mkdirSync(path.join(dir, "lib"), { recursive: true });
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify(
+        {
+          name: "@acme/hosted",
+          version: "2.0.0",
+          dsh: { client: { inject: [] } },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(path.join(dir, "lib", "client.js"), "export {};\n");
+    writeFileSync(
+      path.join(dir, "xrk.host.json"),
+      JSON.stringify({
+        http: [{ prefix: "/sidebar/", provider: "xrk-sidebar" }],
+      }),
+    );
+
+    addPlugin(dir, {
+      env,
+      pluginsDir,
+      io: { log: () => {}, warn: () => {} },
+    });
+
+    const staged = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "@acme",
+      "hosted",
+      "xrk.host.json",
+    );
+    expect(existsSync(staged)).toBe(true);
+    const body = JSON.parse(readFileSync(staged, "utf8")) as {
+      http: { prefix: string }[];
+    };
+    expect(body.http[0]!.prefix).toBe("/sidebar/");
+  });
+
   it("resolvePluginsDir honors XRK_PLUGINS_DIR", () => {
     const dir = tempDir("xrk-plug-ov-");
     expect(resolvePluginsDir({ XRK_PLUGINS_DIR: dir })).toBe(

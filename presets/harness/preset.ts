@@ -22,8 +22,10 @@ import {
 import {
   createFsLocalProvider,
   createFsTools,
+  createReadImageTool,
   type FsService,
 } from "@xrkseek/exec-fs";
+import type { AttachmentStore } from "@xrkseek/attachment";
 import {
   WEB_FETCH_GUIDANCE,
   WEB_SEARCH_GUIDANCE,
@@ -155,6 +157,10 @@ export interface HarnessCompositionOptions {
   readonly policy?: PolicyEngine;
   /** Host vision: resolve attachment bytes for image user content. */
   readonly resolveImage?: Parameters<typeof createAgent>[0]["resolveImage"];
+  /** Durable image store — enables `read_image` when set. */
+  readonly attachments?: AttachmentStore;
+  /** Gate `read_image` on live route image modality (Host). */
+  readonly routeAllowsImage?: () => boolean;
   /**
    * Context compaction. Default soft budgets + overflow retry + `/compact`.
    * `false` skips overflow retry; manual compact still works.
@@ -255,6 +261,17 @@ export function createHarnessComposition(
 
   const tools = createToolRegistry();
   for (const tool of createFsTools(fs)) tools.register(tool);
+  if (options.attachments) {
+    tools.register(
+      createReadImageTool({
+        fs,
+        attachments: options.attachments,
+        ...(options.routeAllowsImage
+          ? { routeAllowsImage: options.routeAllowsImage }
+          : {}),
+      }),
+    );
+  }
   for (const tool of createBashTools(shell, {
     ...(options.bashLimits?.timeoutMs !== undefined
       ? { timeoutMs: options.bashLimits.timeoutMs }

@@ -1,0 +1,31 @@
+{
+  "packages": {
+    "dshmarket": { "version": "1.0.0", "kind": "client" },
+    "dsh-better-sidebar": { "version": "1.0.0", "kind": "client" },
+    "dsh-mnemon": { "version": "1.0.0", "kind": "client" },
+    "vision-router": { "version": "1.0.0", "kind": "client" },
+    "vision-toolkit": { "version": "1.0.0", "kind": "client" },
+    "dsh-wallet": { "version": "1.0.0", "kind": "client" },
+    "dsh-memento": { "version": "1.0.0", "kind": "client" },
+    "dsh-modlens": { "version": "1.0.0", "kind": "client" },
+    "dsh-chat-import": { "version": "1.0.0", "kind": "client" },
+    "dsh-pocket": { "version": "1.0.0", "kind": "client" },
+    "dsh-genui": { "version": "1.0.0", "kind": "client" },
+    "dsh-noema": { "version": "1.0.0", "kind": "client" },
+    "dsh-im-weixin": { "version": "1.0.0", "kind": "client" },
+    "dsh-dream-skin": { "version": "1.0.0", "kind": "client" },
+    "dsh-undo-savepoint": { "version": "1.0.0", "kind": "client" },
+    "dsh-plugin-wallpaper-engine": { "version": "1.0.0", "kind": "client" },
+    "dsh-skin-market": { "version": "1.0.0", "kind": "client" },
+    "dsh-tokenledger": { "version": "1.0.0", "kind": "client" },
+    "dsh-mobile": { "version": "1.0.0", "kind": "client" },
+    "dsh-tongflow": { "version": "1.0.0", "kind": "client" },
+    "dsh-cost-meter": { "version": "1.5.0", "kind": "client" },
+    "dsh-context": { "version": "0.25.0", "kind": "client" },
+    "@liustack/modsearch": { "version": "1.0.0", "kind": "client" },
+    "@ychris12138/dsh-usage-stats": { "version": "1.0.0", "kind": "client" },
+    "@anionex/dsh-turn-rewind": { "version": "1.0.0", "kind": "client" },
+    "@xmanrui/dsh-im": { "version": "1.0.0", "kind": "client" },
+    "@xrkseek/dsh-compat": { "version": "0.0.0", "kind": "client" }
+  }
+}

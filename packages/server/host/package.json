@@ -15,6 +15,7 @@
   ],
   "dependencies": {
     "@xrkseek/attachment": "workspace:*",
+    "@xrkseek/attachment-local": "workspace:*",
     "@xrkseek/compose": "workspace:*",
     "@xrkseek/core-agent": "workspace:*",
     "@xrkseek/core-session": "workspace:*",
@@ -29,13 +30,19 @@
     "@xrkseek/llm-registry": "workspace:*",
     "@xrkseek/mcp": "workspace:*",
     "@xrkseek/policy": "workspace:*",
+    "@xrkseek/protocol": "workspace:*",
     "@xrkseek/server-config": "workspace:*",
     "@xrkseek/server-face": "workspace:*",
     "@xrkseek/server-http": "workspace:*",
     "@xrkseek/server-loader": "workspace:*",
-    "@xrkseek/workspace": "workspace:*"
+    "@xrkseek/workspace": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "optionalDependencies": {
+    "node-pty": "1.2.0-beta.15"
   },
   "devDependencies": {
+    "@types/ws": "^8.5.13",
     "@xrkseek/llm-replay": "workspace:*",
     "@xrkseek/preset-minimal": "workspace:*"
   },

@@ -62,7 +62,7 @@
 }
 
 /* Keep hover detection on a stationary box while the mark moves within it. */
-.markHitbox {
+.fishHitbox {
   grid-row: 1;
   grid-column: 1;
   display: inline-flex;
@@ -71,12 +71,12 @@
 }
 
 /* Keep the hero mark in the same primary ink as its headline. */
-.mark {
+.fish {
   color: var(--dsw-alias-label-primary);
   transform-origin: 50% 60%;
 }
 
-@keyframes hero-mark-nudge {
+@keyframes hero-fish-swim {
   0%, 100% {
     transform: translate(0, 0) rotate(0deg);
   }
@@ -91,8 +91,8 @@
 }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .markHitbox:hover .mark {
-    animation: hero-mark-nudge var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+  .fishHitbox:hover .fish {
+    animation: hero-fish-swim var(--ds-transition-duration-slow) var(--ds-ease-in-out);
   }
 }
 

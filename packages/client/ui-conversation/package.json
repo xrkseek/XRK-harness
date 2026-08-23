@@ -45,7 +45,6 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@xrkseek/xrk-settings": "workspace:^",
     "clsx": "^2.0.0",
     "@xrkseek/schemastery": "workspace:^"
   },
@@ -58,11 +57,8 @@
     "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
-    "@xrkseek/client-ui-attachment": "workspace:^",
-    "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-settings": "workspace:^",
     "@xrkseek/client-ui-input-trigger": "workspace:^",
-    "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/xrk-commands": "workspace:^",
     "@xrkseek/xrk-compaction": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
@@ -70,7 +66,12 @@
     "@xrkseek/xrk-session-stats": "workspace:^",
     "@xrkseek/xrk-token-meter": "workspace:^",
     "@xrkseek/xrk-tools": "workspace:^",
-    "react": "^18.2.0"
+    "@xrkseek/xrk-settings": "workspace:^",
+    "@xrkseek/client-ui-layout": "workspace:^",
+    "@xrkseek/xrk-goal": "workspace:^",
+    "@xrkseek/xrk-permission-presets": "workspace:^",
+    "@xrkseek/xrk-plan-mode": "workspace:^",
+    "@xrkseek/xrk-tool-todo": "workspace:^"
   },
   "devDependencies": {
     "@xrkseek/cordis": "workspace:^",
@@ -83,7 +84,6 @@
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-test-runtime": "workspace:^",
     "@xrkseek/client-ui-layout": "workspace:^",
-    "@xrkseek/client-ui-attachment": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-settings": "workspace:^",
     "@xrkseek/client-ui-input-trigger": "workspace:^",
@@ -101,7 +101,8 @@
     "@xrkseek/xrk-tool-todo": "workspace:^",
     "@xrkseek/xrk-tools": "workspace:^",
     "@types/react": "~18.3.1",
-    "react": "^18.2.0"
+    "react": "^18.2.0",
+    "@xrkseek/xrk-settings": "workspace:^"
   },
   "files": [
     "lib/index.js",

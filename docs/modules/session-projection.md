@@ -4,7 +4,7 @@
 
 `@xrkseek/session-projection` 是投影**驱动缝**：领域注册纯折叠单元，Face（或其它载体）负责 mux / history。客户端**从不**自己 fold 事件——只收 wire 全量值。
 
-对照 DSH `dsh-session-projection`（`dsh-v0.1.1-rc.1` 状态/视图分离）。本仓**无** Cordis `ctx.sessionProjections`；**无**持久 `session-projection-cache` 包（冷读 API 已在缝上预留）。
+对照 DSH `dsh-session-projection`（`dsh-v0.1.1-rc.2` 状态/视图分离）。本仓**无** Cordis `ctx.sessionProjections`；**无**持久 `session-projection-cache` 包（冷读 API 已在缝上预留）。
 
 ## 双表
 

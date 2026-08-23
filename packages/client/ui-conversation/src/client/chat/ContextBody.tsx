@@ -553,24 +553,14 @@ export function contextBody(
 ): { rendered: KnownContextForm | null; summary: string | null; body: ReactNode } {
   const opaque = { rendered: null, summary: null, body: <OpaqueBody {...props} /> }
   switch (form) {
-    case 'instructions': {
-      const changes = instructionChanges(props.source)
-      if (changes === null) return opaque
-      return {
-        rendered: 'instructions',
-        summary: props.t('message.context.instructions.summary', { count: changes.length }),
-        body: <InstructionsBody {...props} />,
-      }
-    }
-    case 'catalog': {
-      const entries = catalogEntries(props.source)
-      if (entries === null) return opaque
-      return {
-        rendered: 'catalog',
-        summary: props.t('message.context.catalog.summary', { count: entries.length }),
-        body: <CatalogBody {...props} />,
-      }
-    }
+    case 'instructions':
+      return instructionChanges(props.source) === null
+        ? opaque
+        : { rendered: 'instructions', summary: null, body: <InstructionsBody {...props} /> }
+    case 'catalog':
+      return catalogEntries(props.source) === null
+        ? opaque
+        : { rendered: 'catalog', summary: null, body: <CatalogBody {...props} /> }
     case 'snapshot':
       return snapshotSections(props.source) === null
         ? opaque

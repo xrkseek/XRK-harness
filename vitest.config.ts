@@ -52,6 +52,13 @@ export default defineConfig({
       pkg("preset-minimal", "presets/minimal/preset.ts"),
       pkg("preset-harness", "presets/harness/preset.ts"),
       pkg("preset-server", "presets/server/preset.ts"),
+      ["@xrkseek/xrk-file-reference/types", path.join(root, "packages/context/file-reference/src/types.ts")],
+      ["@xrkseek/xrk-file-reference/grammar", path.join(root, "packages/context/file-reference/src/grammar.ts")],
+      ["@xrkseek/xrk-file-reference-local/search", path.join(root, "packages/context/file-reference-local/src/search.ts")],
+      ["@xrkseek/xrk-session-reference/config", path.join(root, "packages/context/session-reference/src/config.ts")],
+      ["@xrkseek/xrk-session-reference/uri", path.join(root, "packages/context/session-reference/src/uri.ts")],
+      ["@xrkseek/xrk-session-reference/types", path.join(root, "packages/context/session-reference/src/types.ts")],
+      ["@xrkseek/xrk-session/types", path.join(root, "packages/stubs/xrk-session/src/types.ts")],
     ]),
   },
   test: {

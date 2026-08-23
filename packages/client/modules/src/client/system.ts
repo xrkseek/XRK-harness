@@ -8,6 +8,7 @@ import type {
   BootModuleRow, ClientModuleLoader, ClientModuleRecord,
   ClientModuleSystemOptions, ClientPluginHandoff, XrkWindow,
 } from './manifest.ts'
+import { remapDshClientRequire } from './dsh-require-remap.ts'
 
 /** Default bundle-load hook: same-origin external classic script. */
 const defaultLoadBundle = (url: string): Promise<void> => new Promise((resolve, reject) => {
@@ -133,21 +134,42 @@ export class ClientModuleSystem implements ClientModuleLoader {
   }
 
   /**
+   * Resolve one require specifier against seed → static → cache → factory.
+   * @returns exports, or `undefined` when nothing matches.
+   */
+  private lookupRequire(spec: string): unknown | undefined {
+    if (this.seed.has(spec)) return this.seed.get(spec)
+    if (this.statics.has(spec)) return this.statics.get(spec)
+    const id = stripClientSuffix(spec)
+    if (id !== spec) {
+      if (this.seed.has(id)) return this.seed.get(id)
+      if (this.statics.has(id)) return this.statics.get(id)
+    }
+    const record = this.loadCache.get(id)
+    if (record !== undefined) return record.exports
+    if (this.factories.has(id)) return this.materialize(id).exports
+    return undefined
+  }
+
+  /**
    * The synchronous require answered to factories: seed → static → memoized
    * record → registered factory (recursive materialization — this is what
-   * makes load order self-resolving). Fetching is async and therefore
-   * unreachable from here; an unregistered plugin specifier is loud (and a
-   * cross-plugin value import is already a build error upstream).
+   * makes load order self-resolving). Community DSH bundles that still
+   * `require("@deepseek-ai/dsh-client-*")` are remapped onto `@xrkseek/client-*`
+   * (same seed / graph rows). Fetching is async and therefore unreachable
+   * from here; an unregistered plugin specifier is loud.
    */
   private makeRequire(edges: Set<string>): (spec: string) => unknown {
     return (spec: string): unknown => {
       edges.add(spec)
-      if (this.seed.has(spec)) return this.seed.get(spec)
-      if (this.statics.has(spec)) return this.statics.get(spec)
-      const id = stripClientSuffix(spec)
-      const record = this.loadCache.get(id)
-      if (record !== undefined) return record.exports
-      if (this.factories.has(id)) return this.materialize(id).exports
+      const direct = this.lookupRequire(spec)
+      if (direct !== undefined) return direct
+      const mapped = remapDshClientRequire(spec)
+      if (mapped !== undefined && mapped !== spec) {
+        edges.add(mapped)
+        const viaAlias = this.lookupRequire(mapped)
+        if (viaAlias !== undefined) return viaAlias
+      }
       throw new Error(
         `client-modules: require("${spec}") missed the module table — not a platform seed word, not a shell-own module, `
         + 'and no registered factory (a build-time externals drift, or a forbidden cross-plugin value import)',
@@ -155,8 +177,22 @@ export class ClientModuleSystem implements ClientModuleLoader {
     }
   }
 
+  /**
+   * Graph row id for a require/import specifier (DSH remap + `/client` suffix).
+   */
+  private graphIdFor(spec: string): string {
+    const mapped = remapDshClientRequire(spec)
+    return stripClientSuffix(mapped ?? spec)
+  }
+
   async import(specifier: string): Promise<unknown> {
     if (this.seed.has(specifier)) return this.seed.get(specifier)
+    const bare = stripClientSuffix(specifier)
+    if (bare !== specifier) {
+      if (this.seed.has(bare)) return this.seed.get(bare)
+      const cachedBare = this.loadCache.get(bare)
+      if (cachedBare !== undefined) return cachedBare.exports
+    }
     const existing = this.loadCache.get(specifier)
     if (existing !== undefined) return existing.exports
     if (this.statics.has(specifier)) {
@@ -164,8 +200,9 @@ export class ClientModuleSystem implements ClientModuleLoader {
       this.loadCache.set(specifier, { id: specifier, exports, styles: [], edges: new Set() })
       return exports
     }
-    if (!this.factories.has(specifier)) {
-      const row = this.graphRows.get(specifier)
+    const id = this.graphIdFor(specifier)
+    if (!this.factories.has(id)) {
+      const row = this.graphRows.get(id)
       if (row === undefined) {
         throw new Error(
           `client-modules: cannot resolve "${specifier}" — not a seed word, not a shell-own module, `
@@ -174,7 +211,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
       }
       await this.arrive(row)
     }
-    return this.materialize(specifier).exports
+    return this.materialize(id).exports
   }
 
   registerStatic(id: string, module: unknown): void {

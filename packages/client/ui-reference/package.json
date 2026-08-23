@@ -1,0 +1,75 @@
+{
+  "name": "@xrkseek/client-ui-reference",
+  "description": "Unified Web @file and @session reference source",
+  "version": "0.1.1-rc.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/client/ui-reference"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "xrk": {
+    "client": {
+      "inject": [
+        "@xrkseek/client-runtime",
+        "@xrkseek/xrk-api-remotes",
+        "@xrkseek/client-locale",
+        "@xrkseek/client-ui-input-trigger"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "bundle": "tsdown",
+    "watch": "tsdown --watch"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@xrkseek/xrk-api-remotes": "workspace:^",
+    "@xrkseek/client-locale": "workspace:^",
+    "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-ui-input-trigger": "workspace:^",
+    "@xrkseek/xrk-file-reference": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "@xrkseek/xrk-session-reference": "workspace:^",
+    "@xrkseek/xrk-typert-protocol": "workspace:^",
+    "@xrkseek/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@xrkseek/xrk-api-remotes": "workspace:^",
+    "@xrkseek/client-locale": "workspace:^",
+    "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-ui-input-trigger": "workspace:^",
+    "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/xrk-file-reference": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "@xrkseek/xrk-session-reference": "workspace:^",
+    "@xrkseek/xrk-typert-protocol": "workspace:^",
+    "@xrkseek/cordis": "workspace:^"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "private": true
+}

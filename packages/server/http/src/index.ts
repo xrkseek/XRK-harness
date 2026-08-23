@@ -14,6 +14,52 @@ import {
   type SessionStore,
 } from "@xrkseek/core-session";
 import { tryServeWebStatic, type WebStaticOptions } from "./static.js";
+export {
+  createDshCompatPublicHandler,
+  createTokenLedgerBridgeFromFace,
+  createDshCompatHostPlugin,
+  ensureDshCompatHostPlugin,
+  DSH_COMPAT_HOST_PLUGIN_ID,
+  type DshCompatOptions,
+  type DshCompatHostPluginOptions,
+  type UsageStatsProviderRow,
+  prewarmDshCompatAdapters,
+  applyHostPackageByName,
+  stopHostPackageFiber,
+  listHostAppliedPackages,
+  isHostApplied,
+  getHostApplyRecord,
+  invokeDshCompatRpc,
+  attachDshCompatUpgrades,
+  syncAutoReviewSlashCommand,
+  createXrkWalletPort,
+  mapSessionCostToDsh,
+  type WalletFaceBridge,
+  type XrkWalletPort,
+} from "./dsh-compat/index.js";
+export {
+  createHostPluginsPublicHandler,
+  type HostWireContext,
+} from "./host-wire.js";
+export {
+  createPublicRouteHandler,
+  chainPublicHandlers,
+  type PublicRoute,
+  type PublicRouteHandlerFn,
+} from "./public-routes.js";
+export {
+  createXrkPluginPublicHandler,
+  createXrkPluginRoutes,
+} from "./xrk/plugin-routes.js";
+export {
+  readXrkPluginInventory,
+  fetchXrkPluginCatalog,
+  resolvePluginsDir,
+  DSH_SETTINGS_NAMESPACES,
+  DSH_SETTINGS_DEFAULTS,
+  type XrkPluginServicesOptions,
+  type XrkPluginInventory,
+} from "./xrk/plugin-services.js";
 
 export interface HttpChatRequest {
   readonly sessionId?: string;
@@ -86,6 +132,15 @@ export interface HttpServerOptions {
     req: IncomingMessage,
     res: ServerResponse,
   ) => boolean;
+  /**
+   * Optional public hook claimed **before** SPA static (DSH community Host
+   * shims: `/dsh-market/*`, `/dsh-mnemon-*`, `/_dsh/...`). Return true when
+   * the response was claimed.
+   */
+  tryHandlePublic?: (
+    req: IncomingMessage,
+    res: ServerResponse,
+  ) => boolean | Promise<boolean>;
   /** Optional upgrade attach (e.g. Face WS). Called once after server create. */
   attachExtras?: (server: Server) => { close(): void };
   /**
@@ -208,6 +263,12 @@ export function createHttpServer(
     if (req.method === "GET" && path === "/health") {
       sendJson(res, 200, { ok: true }, cors);
       return;
+    }
+
+    // DSH community Host shims before SPA fallback (otherwise index.html).
+    if (options.tryHandlePublic) {
+      const claimed = await options.tryHandlePublic(req, res);
+      if (claimed) return;
     }
 
     // Public SPA (before /api auth). No HTML fallback.
@@ -573,10 +634,12 @@ export function createHttpServer(
 
 export {
   XRK_OMIT_CLIENT_PLUGIN_IDS,
+  XRK_PLATFORM_CLIENT_BOOT_IDS,
   applyXrkProductBootPolicy,
   loadBootManifestFromWebDist,
   resolveWebBootManifest,
   mergeWebBootManifests,
+  ensureXrkPlatformClientBootEntries,
   bootInjectScript,
   injectBootIntoHtml,
   type WebBootEntry,

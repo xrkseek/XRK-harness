@@ -36,6 +36,19 @@ const FACE_REMOTES: FaceRemoteSpec = {
     put: 'args',
     delete: 'args',
   },
+  costMeter: {
+    getState: [],
+    updateConfig: ["patch"],
+    fetchPrices: [],
+    refreshBalance: [],
+    refreshGoQuota: [],
+    refreshCustomBalance: [],
+    refreshCodingPlan: ["provider"],
+    resetHistory: [],
+    importLegacyHistory: [],
+    getDaySessions: ["date"],
+    getTopSessions: ["limit", "sort", "dir"],
+  },
   dynamicCordisRunner: {
     inventory: [],
     syncInspectManifest: 'args',
@@ -49,6 +62,12 @@ const FACE_REMOTES: FaceRemoteSpec = {
     getClientCode: 'args',
     runHostHalf: 'args',
     settleUserRun: 'args',
+  },
+  fileReferences: {
+    list: ['agentId', 'query'],
+  },
+  sessionReferenceResolver: {
+    candidates: ['agentId', 'query'],
   },
 }
 

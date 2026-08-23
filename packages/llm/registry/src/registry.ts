@@ -1,6 +1,10 @@
 import type { LlmAdapter } from "@xrkseek/llm";
 import { createAnthropicAdapter } from "@xrkseek/llm-anthropic";
-import { resolveDeepSeekInputModalities } from "@xrkseek/llm-deepseek";
+import {
+  createDeepSeekAdapter,
+  isOfficialDeepSeekBaseUrl,
+  resolveDeepSeekInputModalities,
+} from "@xrkseek/llm-deepseek";
 import { createGeminiAdapter } from "@xrkseek/llm-gemini";
 import { createOpenAiCompatibleAdapter } from "@xrkseek/llm-openai-compatible";
 import { createOpenAiResponsesAdapter } from "@xrkseek/llm-openai-responses";
@@ -38,6 +42,7 @@ export interface ProviderRegistry {
       fetch?: typeof fetch;
       model?: string;
       inputModalities?: readonly ("text" | "image")[];
+      readImageRequest?: import("@xrkseek/llm-deepseek").DeepSeekReadImageRequest;
     },
   ): LlmAdapter;
   listBrands(): readonly BrandEntry[];
@@ -175,6 +180,22 @@ export function createProviderRegistry(
                 model,
               })
             : ["text", "image"]);
+        if (
+          binding.provider === "deepseek" &&
+          isOfficialDeepSeekBaseUrl(binding.baseUrl)
+        ) {
+          return createDeepSeekAdapter({
+            id,
+            baseUrl: binding.baseUrl,
+            model,
+            inputModalities: vision,
+            ...(apiKey !== undefined ? { apiKey } : {}),
+            ...(fetchImpl ? { fetch: fetchImpl } : {}),
+            ...(extras?.readImageRequest
+              ? { readImageRequest: extras.readImageRequest }
+              : {}),
+          });
+        }
         return createOpenAiCompatibleAdapter({
           id,
           baseUrl: binding.baseUrl,

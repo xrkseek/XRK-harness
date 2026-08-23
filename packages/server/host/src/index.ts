@@ -1,6 +1,6 @@
 import type { AgentHandle, AgentRunResult } from "@xrkseek/core-agent";
 import type { LlmAdapter } from "@xrkseek/llm";
-import { createMemoryAttachmentStore } from "@xrkseek/attachment";
+import { createLocalAttachmentStore } from "@xrkseek/attachment-local";
 import {
   createMemorySessionStore,
   createPersistentSessionStore,
@@ -14,8 +14,22 @@ import { createPolicyEngineFromFile } from "@xrkseek/policy";
 import { hostSettingsPath, resolveXrkHome, type HostConfig } from "@xrkseek/server-config";
 import {
   applyXrkProductBootPolicy,
+  chainPublicHandlers,
+  ensureDshCompatHostPlugin,
+  createHostPluginsPublicHandler,
   createHttpServer,
+  createXrkPluginPublicHandler,
+  prewarmDshCompatAdapters,
+  applyHostPackageByName,
+  stopHostPackageFiber,
+  listHostAppliedPackages,
+  invokeDshCompatRpc,
+  attachDshCompatUpgrades,
+  DSH_SETTINGS_NAMESPACES,
+  DSH_SETTINGS_DEFAULTS,
   type HarnessHttpServer,
+  type DshCompatOptions,
+  ensureXrkPlatformClientBootEntries,
   injectBootIntoHtml,
   loadBootManifestFromWebDist,
   mergeWebBootManifests,
@@ -49,6 +63,15 @@ import type { IncomingMessage } from "node:http";
 import path from "node:path";
 import { createHostAgentCache } from "./agent-cache.js";
 import { wireDrainStatus, publishDrainIdle, type SessionDrainControl } from "./drain-status.js";
+import { attachSidebarPtyUpgrades } from "./sidebar-pty.js";
+import { createUsageStatsBridgeFromFace } from "./usage-stats-bridge.js";
+import { createCostMeterUsageBridge } from "./cost-meter-bridge.js";
+import { createHarnessConnectorBridgeFromFace } from "./harness-connector-bridge.js";
+import { createAutoReviewBridgeFromHost } from "./auto-review-bridge.js";
+import {
+  createXrkWalletPort,
+} from "@xrkseek/server-http";
+import { createWalletFaceBridgeFromFace } from "./wallet-bridge.js";
 import {
   mcpDraftsToSpecs,
   parseMcpServersEnv,
@@ -169,7 +192,11 @@ function resolveMcpAllowConnect(
 
 export type AgentImageResolver = (
   attachmentId: string,
-) => Promise<{ readonly mediaType: string; readonly data: Uint8Array }>;
+) => Promise<{
+  readonly mediaType: string;
+  readonly data: Uint8Array;
+  readonly ref?: import("@xrkseek/protocol").ImageAttachmentRef;
+}>;
 
 export type AgentFactory = (input: {
   sessionId: string;
@@ -182,8 +209,12 @@ export type AgentFactory = (input: {
   agentPreset?: string;
   /** Plugins loaded by host (`XRK_PLUGINS_DIR` / register). Wire via `wireCompositionTools`. */
   plugins: readonly RegisteredPlugin[];
-  /** Attachment bytes for vision user content (Host memory store). */
+  /** Attachment bytes for vision user content (Host local store). */
   resolveImage?: AgentImageResolver;
+  /** Shared attachment store for tools + vision. */
+  attachments?: import("@xrkseek/attachment").AttachmentStore;
+  /** Live route image gate for `read_image`. */
+  routeAllowsImage?: () => boolean;
   /**
    * Host-shared PTY registry (harness/server). Survives agent invalidate so
    * sandbox-mode fence and open sessions stay composition-true.
@@ -292,7 +323,9 @@ export function createHostManager(): HostManager {
       let notifyMcpOverlay: () => void = () => {
         refreshFacePlugins();
       };
-      const attachments = createMemoryAttachmentStore();
+      const attachments = createLocalAttachmentStore({
+        xrkHome: resolveXrkHome(),
+      });
       /** Filled after Face boot — MCP image gate reads live Registry modalities. */
       const faceForModality: { current?: FaceRuntime } = {};
       const mcpImageAdmission = {
@@ -397,12 +430,18 @@ export function createHostManager(): HostManager {
               store,
               workspaceRoot: sessionRoot,
               plugins: loader.list(),
+              attachments,
+              routeAllowsImage: () =>
+                faceForModality.current
+                  ? liveRouteAllowsImageInput(faceForModality.current, sessionId)
+                  : false,
               ...(agentPreset ? { agentPreset } : {}),
               resolveImage: async (attachmentId) => {
                 const stored = await attachments.readImage(attachmentId);
                 return {
                   mediaType: stored.ref.mediaType,
                   data: stored.data,
+                  ref: stored.ref,
                 };
               },
               ...(sharedPty ? { ptyService: sharedPty.service } : {}),
@@ -493,11 +532,41 @@ export function createHostManager(): HostManager {
         config.runtime.pluginsDir,
       );
       const boot = applyXrkProductBootPolicy(
-        mergeWebBootManifests(
-          resolveWebBootManifest(config.runtime.webDist),
-          webOverlay ? loadBootManifestFromWebDist(webOverlay) : undefined,
+        ensureXrkPlatformClientBootEntries(
+          mergeWebBootManifests(
+            resolveWebBootManifest(config.runtime.webDist),
+            webOverlay ? loadBootManifestFromWebDist(webOverlay) : undefined,
+          ),
+          config.runtime.webDist,
         ),
       );
+      const hostPublic = {
+        host: config.runtime.host,
+        port: config.runtime.port,
+        workspaceRoot: config.runtime.workspaceRoot,
+        preset: config.runtime.preset,
+        corsOrigin: String(config.runtime.corsOrigin),
+        rateLimitPerMinute: config.runtime.rateLimitPerMinute,
+        ...(config.runtime.pluginsDir
+          ? { pluginsDir: config.runtime.pluginsDir }
+          : {}),
+        webDistConfigured: Boolean(config.runtime.webDist),
+        cordisHostApplied: [] as string[],
+        cordisHostPackages: [] as Array<{
+          packageName: string;
+          rpcChannels: string[];
+        }>,
+      };
+      const hostWireRef: { ctx?: DshCompatOptions } = {};
+      const syncCordisHostApplied = () => {
+        hostPublic.cordisHostApplied = listHostAppliedPackages().map(
+          (row) => row.packageName,
+        );
+        hostPublic.cordisHostPackages = listHostAppliedPackages().map((row) => ({
+          packageName: row.packageName,
+          rpcChannels: [...row.rpcChannels],
+        }));
+      };
       const faceRuntime = createFaceRuntime({
         store,
         resolveAgent,
@@ -574,17 +643,32 @@ export function createHostManager(): HostManager {
         ...(config.runtime.webDist
           ? { webPlugins: boot.entries.map((e) => ({ id: e.id })) }
           : {}),
-        hostPublic: {
-          host: config.runtime.host,
-          port: config.runtime.port,
-          workspaceRoot: config.runtime.workspaceRoot,
-          preset: config.runtime.preset,
-          corsOrigin: String(config.runtime.corsOrigin),
-          rateLimitPerMinute: config.runtime.rateLimitPerMinute,
-          ...(config.runtime.pluginsDir
-            ? { pluginsDir: config.runtime.pluginsDir }
-            : {}),
-          webDistConfigured: Boolean(config.runtime.webDist),
+        hostPublic,
+        cordisHostBridge: {
+          applyHostHalf: async (packageName: string) => {
+            const ctx = hostWireRef.ctx;
+            if (!ctx) {
+              return { ok: false, message: "Host wire not initialized" };
+            }
+            const ok = await applyHostPackageByName(ctx, packageName);
+            if (ok) syncCordisHostApplied();
+            return ok
+              ? { ok: true }
+              : {
+                  ok: false,
+                  message: "host.mjs apply failed or package missing",
+                };
+          },
+          invokeRpc: async (channel, endpoint, rpcPayload) => {
+            const ctx = hostWireRef.ctx;
+            if (!ctx) {
+              throw new Error("Host wire not initialized");
+            }
+            return invokeDshCompatRpc(ctx, channel, endpoint, rpcPayload);
+          },
+          stopHostHalf: async (packageName: string) => {
+            await stopHostPackageFiber(packageName);
+          },
         },
         bootstrapApiKey: config.credentials.apiKey,
         ...(officeAgent
@@ -595,6 +679,7 @@ export function createHostManager(): HostManager {
           ? { settingsDocumentPath: path.resolve(config.runtime.policyFile) }
           : {}),
         invalidateAgent: (sessionId) => agentCache.invalidate(sessionId),
+        ...createAutoReviewBridgeFromHost(resolveXrkHome()),
         ...(sharedPty
           ? { hasPtyActivity: () => sharedPty.service.hasActivity() }
           : {}),
@@ -604,6 +689,15 @@ export function createHostManager(): HostManager {
           isActive: (sessionId) => drain.isActive(sessionId),
         },
       });
+      // Authorize DSH client settings namespaces so panels do not fail
+      // "Host 未授权设置 RPC" when Cordis Host is absent (empty docs).
+      for (const ns of DSH_SETTINGS_NAMESPACES) {
+        const slot = faceRuntime.settingsNamespaces.ensure(ns);
+        const seed = DSH_SETTINGS_DEFAULTS[ns];
+        if (seed && Object.keys(slot.base).length === 0) {
+          slot.base = { ...seed };
+        }
+      }
       faceForModality.current = faceRuntime;
       faceBox.approvals = faceRuntime.approvals;
       faceBox.questions = faceRuntime.questions;
@@ -768,6 +862,33 @@ export function createHostManager(): HostManager {
         return !key && isLoopbackAddress(r.socket.remoteAddress);
       };
 
+      await ensureDshCompatHostPlugin(loader);
+      refreshFacePlugins();
+
+      const hostWireCtx = {
+        ...(config.runtime.pluginsDir
+          ? { pluginsDir: config.runtime.pluginsDir }
+          : {}),
+        xrkHome: resolveXrkHome(),
+        workspaceRoot: faceRuntime.workspaceRoot,
+        defaultCwd: faceRuntime.workspaceRoot,
+        resolveSessionCwd: (sessionId: string) =>
+          resolveSessionCwd(faceRuntime, sessionId),
+        tokenLedger: {
+          ...createCostMeterUsageBridge(faceRuntime),
+          ...createUsageStatsBridgeFromFace(faceRuntime),
+        },
+        walletPort: createXrkWalletPort({
+          xrkHome: resolveXrkHome(),
+          face: createWalletFaceBridgeFromFace(faceRuntime),
+        }),
+        harnessConnector: createHarnessConnectorBridgeFromFace(faceRuntime),
+      };
+      hostWireRef.ctx = hostWireCtx;
+
+      await prewarmDshCompatAdapters(hostWireCtx);
+      syncCordisHostApplied();
+
       const http = createHttpServer({
         host: config.runtime.host,
         port: config.runtime.port,
@@ -778,6 +899,15 @@ export function createHostManager(): HostManager {
         ensureSession,
         resolveAgent,
         drain,
+        tryHandlePublic: chainPublicHandlers(
+          createXrkPluginPublicHandler({
+            ...(config.runtime.pluginsDir
+              ? { pluginsDir: config.runtime.pluginsDir }
+              : {}),
+            xrkHome: resolveXrkHome(),
+          }),
+          createHostPluginsPublicHandler(loader.list(), hostWireCtx),
+        ),
         ...(log
           ? {
               onAccess: (info) => {
@@ -802,11 +932,26 @@ export function createHostManager(): HostManager {
             apiKey: effectiveHostApiKey(faceRuntime),
             checkAuth: faceCheckAuth,
           }),
-        attachExtras: (server) =>
-          attachFaceUpgrades(server, faceRuntime, {
+        attachExtras: (server) => {
+          const face = attachFaceUpgrades(server, faceRuntime, {
             apiKey: effectiveHostApiKey(faceRuntime),
             checkAuth: faceCheckAuth,
-          }),
+          });
+          const dshUpgrades = attachDshCompatUpgrades(server, {
+            checkAuth: faceCheckAuth,
+          });
+          const sidebarPty = attachSidebarPtyUpgrades(server, {
+            defaultCwd: faceRuntime.workspaceRoot,
+            checkAuth: faceCheckAuth,
+          });
+          return {
+            close() {
+              sidebarPty.close();
+              dshUpgrades.close();
+              face.close();
+            },
+          };
+        },
       });
 
       const addr = await http.listen();

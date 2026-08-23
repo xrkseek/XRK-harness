@@ -13,6 +13,11 @@ export const PLUGIN_KINDS = {
   prompt: "prompt",
   /** Slash command contributions → Face `commands/list` + `commands/execute` */
   commands: "commands",
+  /**
+   * Same-origin public HTTP routes before SPA fallback (DSH `ctx.webServer.register`
+   * analogue — no Cordis `apply()`).
+   */
+  host: "host",
 } as const;
 
 export type KnownPluginKind =

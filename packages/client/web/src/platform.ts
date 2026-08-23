@@ -10,7 +10,6 @@ export const PLATFORM_MODULES = [
   '@xrkseek/client-ui-slots',
   '@xrkseek/client-web-react',
   '@xrkseek/client-ui-primitives',
-  '@xrkseek/client-ui-attachment',
   '@xrkseek/client-schema-form',
 ] as const
 

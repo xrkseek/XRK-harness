@@ -21,6 +21,7 @@
 | `@xrkseek/server-config` | env 见 host 笔记 | [http-api.md](../http-api.md) |
 | `@xrkseek/mcp` | [mcp.md](./mcp.md) | [policy.md](../policy.md) |
 | `@xrkseek/attachment` | [attachment.md](./attachment.md) | [protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) |
+| `@xrkseek/xrk-file-reference` 等 | [references.md](./references.md) | [host-face.md](../host-face.md) · `packages/context/*` |
 
 ## 全包索引（37）
 

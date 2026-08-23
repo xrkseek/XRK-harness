@@ -7,7 +7,7 @@
 | 身份 | 要做什么 | 从哪进 | 不该塞给他 |
 |------|----------|--------|------------|
 | **终端用户** | 装 CLI / 开网页、接模型、日常用壳 | 根 [README](../README.md) → [getting-started](./getting-started.md) | 发版命令、包依赖图、Agent 红线 |
-| **集成者** | 接 HTTP / Face / SDK、写工具、配 MCP / policy | [status](./status.md) → [http-api](./http-api.md) · [host-face](./host-face.md) · 契约专题 | 本机 Canvas、`.cursor` 笔记 |
+| **集成者** | 接 HTTP / Face / SDK、写工具、配 MCP / policy、装 DSH 社区包 | [status](./status.md) → [community-plugins](./community-plugins.md) · [http-api](./http-api.md) · [host-face](./host-face.md) · 契约专题 | 本机 Canvas、`.cursor` 笔记 |
 | **贡献者** | 提 PR、改一包、补测 | [CONTRIBUTING](../CONTRIBUTING.md) → [testing](./testing.md) · [modules](./modules/README.md) | 把未做写成规格；密钥 |
 | **维护者** | 发版、定架构、交接、管 Agent | [maintainer](./maintainer.md) · [publishing](./publishing.md) · [AGENTS](../AGENTS.md) | 写进根 README 当用户 FAQ |
 
@@ -48,7 +48,8 @@ Coding Agent **不是**第五种产品读者：它读 [AGENTS.md](../AGENTS.md) 
 2. [http-api](./http-api.md) · [host-face](./host-face.md)  
 3. Session：[session](./session.md) · [protocol-events](./protocol-events.md) · [session-compaction](./session-compaction.md)  
 4. 工具：[tool-pipeline](./tool-pipeline.md) · [seams](./seams.md) · [policy](./policy.md)  
-5. 要义：[learn](./learn.md)
+5. DSH 社区 client：[community-plugins](./community-plugins.md) · [plugin-loader](./plugin-loader.md)  
+6. 要义：[learn](./learn.md)
 
 ### 贡献者
 

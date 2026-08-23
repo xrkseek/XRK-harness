@@ -5,6 +5,8 @@ import type {
   RegisteredPlugin,
   PluginPromptSection,
   PluginCommand,
+  HostPublicHandlerFn,
+  HostWireContext,
 } from "./types.js";
 import type { DiscoveryHit, PluginManifest } from "./manifest.js";
 
@@ -136,12 +138,22 @@ function asPlugin(value: unknown, label: string): RegisteredPlugin {
     commands = o.commands.map((c, i) => asCommand(c, `${label}: commands[${i}]`));
   }
 
+  let createPublicHandler:
+    | ((ctx: HostWireContext) => HostPublicHandlerFn)
+    | undefined;
+  if (typeof o.createPublicHandler === "function") {
+    createPublicHandler = o.createPublicHandler as (
+      ctx: HostWireContext,
+    ) => HostPublicHandlerFn;
+  }
+
   const base: RegisteredPlugin = {
     id: o.id,
     kind: o.kind,
     ...(tools ? { tools } : {}),
     ...(promptSections ? { promptSections } : {}),
     ...(commands ? { commands } : {}),
+    ...(createPublicHandler ? { createPublicHandler } : {}),
   };
   if (typeof dispose === "function") {
     return {

@@ -7,7 +7,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { bindSnapshotSelector } from '@xrkseek/client-web-react'
+import { bindSnapshotSelector } from '@xrkseek/client-test-runtime'
 import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import type {
@@ -21,7 +21,7 @@ import {
   CompactionNodeView, ContextMessageNodeView, RetryNodeView, UnknownNodeView,
   UserMessageNodeView,
 } from '../src/client/chat/MessageItem.tsx'
-import { AssistantMarkdown } from '../src/client/chat/AssistantMarkdown.tsx'
+import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { StatsLine, type StatsLineProps } from '../src/client/chat/StatsLine.tsx'
 import { zh } from '../src/client/locales.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
@@ -42,15 +42,17 @@ afterEach(() => {
 
 // Mirrors the real lookup chain (conversation namespace, then common).
 const t: ChatNodeViewProps['t'] = makeTranslate(zh, commonZh)
+const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
 const RETRY_ID = 'retry-fixture' as Extract<ConversationNode, { kind: 'model-retry' }>['retryId']
 
 interface MessageItemProps {
   readonly node: ConversationNode
   readonly t: ChatNodeViewProps['t']
+  readonly referenceLabels?: readonly string[]
 }
 
 /** Legacy-node fixture adapter for the independently registered renderers. */
-function MessageItem({ node, t: translate }: MessageItemProps) {
+function MessageItem({ node, t: translate, referenceLabels }: MessageItemProps) {
   const kind = node.kind === 'assistant' ? 'assistant-step' : node.kind
   const viewNode: ChatConversationViewNode = {
     key: `fixture:${node.kind}:${node.seq}`,
@@ -60,9 +62,13 @@ function MessageItem({ node, t: translate }: MessageItemProps) {
     anchorSeq: node.seq,
     location: { kind: 'session' },
     visibility: 'visible',
-    data: node.kind === 'model-retry' ? { attempts: [node], current: node } : node,
+    data: node.kind === 'model-retry'
+      ? { attempts: [node], current: node }
+      : (node.kind === 'user' || node.kind === 'steering') && referenceLabels !== undefined
+        ? { ...node, referenceLabels }
+        : node,
   }
-  const props = { node: viewNode, t: translate } as ChatNodeViewProps
+  const props = { node: viewNode, t: translate, renderMessageImages } as ChatNodeViewProps
   switch (node.kind) {
     case 'user':
     case 'steering':
@@ -81,6 +87,61 @@ function MessageItem({ node, t: translate }: MessageItemProps) {
 }
 
 describe('MessageItem arms', () => {
+  it('renders an adjacent session mention as a chip even without trailing whitespace', () => {
+    const view = render(
+      <MessageItem
+        t={t}
+        referenceLabels={['你好']}
+        node={{
+          kind: 'user',
+          seq: 1,
+          time: 1_000,
+          content: [{ type: 'text', text: '@你好这个在讲啥' }] as never,
+          source: null,
+        }}
+      />,
+    )
+    expect(view.container.querySelector('[data-ref-chip="session"]')?.textContent).toBe('你好')
+    expect(view.container.querySelector('[data-ref-chip="session"] svg')).not.toBeNull()
+    expect(view.getByText('这个在讲啥')).toBeTruthy()
+    expect(view.getByText('引用会话 · 你好')).toBeTruthy()
+  })
+
+  it('renders the complete metadata-confirmed multi-word session label', () => {
+    const view = render(
+      <MessageItem
+        t={t}
+        referenceLabels={['Research notes']}
+        node={{
+          kind: 'user',
+          seq: 1,
+          time: 1_000,
+          content: [{ type: 'text', text: '@Research notes what changed?' }] as never,
+          source: null,
+        }}
+      />,
+    )
+    expect(view.container.querySelector('[data-ref-chip="session"]')?.textContent).toBe('Research notes')
+    expect(view.getByText('what changed?')).toBeTruthy()
+    expect(view.getByText('引用会话 · Research notes')).toBeTruthy()
+  })
+
+  it('renders no-extension paths as files and leaves sentence punctuation outside the reference', () => {
+    const view = render(
+      <MessageItem t={t} node={{
+        kind: 'user',
+        seq: 1,
+        time: 1_000,
+        content: [{ type: 'text', text: 'Read @Dockerfile and @src/README.md, please.' }] as never,
+        source: null,
+      }} />,
+    )
+    const files = [...view.container.querySelectorAll('[data-ref-chip="file"]')]
+    expect(files.map(file => file.textContent)).toEqual(['Dockerfile', 'README.md'])
+    expect(files.every(file => file.querySelector('svg') !== null)).toBe(true)
+    expect(view.container.textContent).toContain('README.md, please.')
+  })
+
   it('user bubbles expose clock / copy and neither branch nor edit; copy writes the text', () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', {
@@ -262,10 +323,11 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    const disclosure = ctxView.getByRole('button', { name: /^上下文注入\s*fixture/ })
+    const disclosure = ctxView.getByRole('button', { name: /^上下文注入\s*fixture$/ })
     expect(disclosure.getAttribute('aria-expanded')).toBe('false')
     expect(ctxView.container.querySelector('[data-context-injection-body]')).toBeNull()
     expect(ctxView.container.querySelector('svg')).not.toBeNull()
+    expect(ctxView.container.querySelector('[data-context-recall-icon]')).toBeNull()
 
     fireEvent.click(disclosure)
     expect(disclosure.getAttribute('aria-expanded')).toBe('true')
@@ -373,7 +435,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
     const entries = [...view.container.querySelectorAll('[data-context-entries] li')].map(node => node.textContent)
     expect(entries).toEqual(['a-skillDoes A', 'b-skillDoes B'])
     expect(view.container.querySelector('[data-context-text]')).toBeNull()
@@ -397,7 +459,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
     expect(view.container.querySelector('[data-context-catalog-update]')?.textContent).toBe('替换目录')
   })
 
@@ -419,7 +481,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
     expect(view.container.querySelector('[data-context-entries]')).toBeNull()
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('catalog prose')
     // The marker reports what rendered, not what was declared.
@@ -439,7 +501,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*agent-instructions/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*agent-instructions$/ }))
     expect(view.container.querySelector('[data-context-files]')).toBeNull()
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('instruction prose')
     expect(view.container.querySelector('[data-context-fields]')).not.toBeNull()
@@ -475,7 +537,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*plugin/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*plugin$/ }))
     expect(view.container.querySelector('[data-context-fields] dd')?.textContent)
       .toMatch(/… 已截断，共 \d+ 字符$/)
   })
@@ -494,7 +556,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
     expect(view.container.querySelector('[data-context-catalog-update]')?.textContent).toBe('替换目录')
     expect(view.container.querySelectorAll('[data-context-entries] li')).toHaveLength(0)
     expect(view.container.querySelector('[data-context-injection-body]')?.getAttribute('data-context-form'))
@@ -513,7 +575,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
     expect(view.container.querySelector('[data-context-entries]')).toBeNull()
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('catalog prose')
   })
@@ -529,7 +591,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
     expect(view.container.querySelectorAll('[data-context-entries] li')).toHaveLength(200)
     expect(view.container.querySelector('[data-context-entries-truncated]')?.textContent).toBe('…还有 5 条')
   })
@@ -546,7 +608,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
     expect(view.getByText(/未知内容块/)).toBeTruthy()
   })
 
@@ -564,7 +626,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*agent-instructions/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*agent-instructions$/ }))
     expect(view.container.querySelector('[data-context-files]')).toBeNull()
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('instruction prose')
   })
@@ -580,7 +642,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*later/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*later$/ }))
     const fields = [...view.container.querySelectorAll('[data-context-fields] dt')].map(node => node.textContent)
     expect(fields).toEqual(['plugin', 'form'])
   })
@@ -636,7 +698,7 @@ describe('MessageItem arms', () => {
       />,
     )
     expect(view.container.querySelector('[data-context-summary]')).toBeNull()
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*tool-jobs/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*tool-jobs$/ }))
     expect(view.container.querySelector('[data-context-fields]')).not.toBeNull()
   })
 
@@ -657,7 +719,7 @@ describe('MessageItem arms', () => {
         } as never}
         />,
       )
-      fireEvent.click(view.getByRole('button', { name: new RegExp(`^上下文注入\\s*${label}`) }))
+      fireEvent.click(view.getByRole('button', { name: new RegExp(`^上下文注入\\s*${label}$`) }))
       expect(view.container.querySelector('[data-context-text]')?.textContent).toBe(`${form} prose`)
       expect(view.container.querySelector('[data-context-injection-body]')?.getAttribute('data-context-form'))
         .toBeNull()
@@ -674,7 +736,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*plugin/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*plugin$/ }))
     expect(view.container.querySelector('[data-context-snapshot-supersedes]')?.textContent)
       .toBe('取代先前的快照')
   })
@@ -691,7 +753,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*subagent-report/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*subagent-report$/ }))
     expect(view.container.querySelector('[data-context-relay-sender]')?.textContent).toBe('来自会话 child-7')
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('child report body')
   })
@@ -718,6 +780,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
+    expect(view.container.querySelector('[data-context-recall-icon]')).not.toBeNull()
     fireEvent.click(view.getByRole('button', { name: /^跨会话召回\s*重构 loader, 修 CI$/ }))
     const rows = [...view.container.querySelectorAll('[data-context-recalls] li')].map(node => node.textContent)
     expect(rows).toEqual(['重构 loader保留 18 条 · 省略 42 条已截断', '修 CI保留 3 条 · 省略 0 条'])
@@ -949,7 +1012,12 @@ describe('useCalendarDay boundary refresh', () => {
 describe('small branch tails', () => {
   it('AssistantMarkdown single-line reasoning summary skips the newline cut', () => {
     const view = render(
-      <AssistantMarkdown t={t} blocks={[{ kind: 'reasoning', text: 'one-liner' }]} streaming={false} />,
+      <AssistantMarkdown
+        t={t}
+        blocks={[{ kind: 'reasoning', text: 'one-liner' }]}
+        streaming={false}
+        renderMessageImages={renderMessageImages}
+      />,
     )
     expect(view.getByText('one-liner')).toBeTruthy()
   })

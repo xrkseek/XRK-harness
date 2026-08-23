@@ -6,6 +6,7 @@
 
 | 版本 | 摘要 |
 |------|------|
+| [v0.1.0](./v0.1.0.md) | 首个 0.1 公开发版：rc.2 引用/附件栈 · Face @ 发现 · DSH bridge |
 | [v0.0.11](./v0.0.11.md) | 成熟 restart · xrk-harness 种子 · 双工具面文案 |
 | [v0.0.10](./v0.0.10.md) | 修复 web/serve 关停刷屏与 close 监听器泄漏 |
 | [v0.0.9](./v0.0.9.md) | 修复同 turn inject 挤掉对话（messageId） |

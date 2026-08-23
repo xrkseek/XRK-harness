@@ -21,9 +21,10 @@
 | `tools` | `tools[]` | `wireCompositionTools` → ToolRegistry（显式同名优先） |
 | `prompt` | `promptSections[]` | `wireCompositionPrompts` → SystemPromptAssembler（`base` 等保留 id 优先） |
 | `commands` | `commands[]` | Face `commands/list` + `commands/execute`（插件名优先于 workspace recipe） |
+| `host` | `createPublicHandler(ctx)` | HTTP `tryHandlePublic` 链（SPA 前同源路由；DSH `ctx.webServer.register` 类比，无 Cordis `apply()`） |
 
 保留（可发现、尚未自动接线）：`channel` · `policy` · `llm`。  
-`cordis`：DSH Cordis 宿主包（peer/dep `@xrkseek/cordis`）只登记 stub，**不 `import()`、不调 `apply()`**。
+`cordis`：DSH Cordis 宿主包；经 dsh-compat `host.mjs` + 可选 **`cordis-fiber-runner` 子进程**，Face `dynamicCordisRunner/*` 由 `cordis-stub` 转发（见 [community-plugins.md](./community-plugins.md)）。
 
 常量：`PLUGIN_KINDS` · `RESERVED_PLUGIN_KINDS`。
 
@@ -109,6 +110,22 @@ export interface RegisteredPlugin {
       commandId: string;
     }): { kind: "success" | "error"; text?: string } | Promise<{ kind: "success" | "error"; text?: string }>;
   }[];
+  /** `kind: host` — public HTTP before SPA fallback */
+  createPublicHandler?: (ctx: {
+    pluginsDir?: string;
+    xrkHome?: string;
+    workspaceRoot?: string;
+    defaultCwd?: string;
+    resolveSessionCwd?: (sessionId: string) => string | undefined;
+    tokenLedger?: {
+      aggregateUsage?: (
+        query: { days?: number; site?: string },
+      ) => Promise<Record<string, unknown> | undefined>;
+      fetchBalance?: (
+        account?: string,
+      ) => Promise<Record<string, unknown> | undefined>;
+    };
+  }) => (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => Promise<boolean>;
   dispose?: () => void | Promise<void>;
 }
 ```
@@ -116,6 +133,27 @@ export interface RegisteredPlugin {
 ## 示例
 
 `extensions/example-tools` — `kind: tools` → `example_ping`。
+
+`extensions/dsh-compat` — **内置 DSH 兼容器**（`kind: host`，`private` 不入 npm）；`serve` 经 `ensureDshCompatHostPlugin()` 加载本目录，HTTP 实现在 `@xrkseek/server-http/dsh-compat`。
+
+社区 client 包 Host 路由解析顺序（`packages/server/http/src/dsh-compat`）：
+
+1. **全局路径能力表**（`dsh-path-capabilities`）：wallet、sidebar、`/_dsh/`… — **一次挂载，不按包名**
+2. 包内 **`xrk.host.json`**（仅 **XRK 自研**扩展需要额外 provider）
+3. 无声明时：**`client.js` 扫描** + Cordis `*-settings` 命名约定 → **RPC infer**
+4. **`host.mjs` apply bridge**（`webServer.register` · `rpc.register` · `registerUpgrade`）
+5. **`cordis-fiber-runner`**（进程内 apply 失败时 fork 子进程 RPC）
+6. **honest GET catch-all** — 未入表 GET 仍 JSON
+7. `cordis-registry` RPC + POST catch-all（settings fallback）
+8. Host `attachExtras` — `attachDshCompatUpgrades`（`prewarmDshCompatAdapters`）
+
+**不是 Cordis Host 主进程**：vendor 消息隧道、TongFlow 节点引擎、Cordis React GenUI、vision LLM 等见 [community-plugins.md](./community-plugins.md)「Vendor 缺口」；纯 UI client 通常可加载。
+
+社区包兼容层级、fixture 与 bridge 模块：[community-plugins.md](./community-plugins.md)。
+
+社区 `client.js` 契约摘要见 [`packages/server/http/src/dsh-compat/README.md`](../packages/server/http/src/dsh-compat/README.md)「学习 DSH」。
+
+`plugin add` 会复制 `client.js`、可选 **`host.mjs`**、可选 `xrk.host.json` / `package.json`（供 host 字段读取）。
 
 ## CLI 安装（`xrk-harness plugin`）
 
@@ -130,7 +168,7 @@ xrk-harness plugin path
 
 | 子命令 | 作用 |
 |--------|------|
-| `add <spec…>` | `npm pack` 拉包；识别 `xrk.client`/`dsh.client`（写 `web/` 叠加，inject 里 `@deepseek-ai/dsh-client-*` → `@xrkseek/client-*`）与进程 manifest（落到可 discover 路径） |
+| `add <spec…>` | `npm pack` 拉包；识别 `xrk.client`/`dsh.client`（写 `web/` 叠加，inject 里 `@deepseek-ai/dsh-client-*` → `@xrkseek/client-*`）与进程 manifest；client 半部同时复制 **`xrk.host.json`**（或 `package.json` → `xrkseek.host` / `dsh.host`） |
 | `remove <name…>` | 按 `.xrk-plugins.json` 删文件并重写 `web/boot.json` |
 | `list` / `path` | 清单与根路径 |
 
@@ -141,6 +179,7 @@ xrk-harness plugin path
   .xrk-plugins.json
   web/boot.json
   web/plugins/<id>/client.js
+  web/plugins/<id>/xrk.host.json   # 可选；Host provider 装配
   <id>/   # 进程插件（discover 跳过 web/）
 ```
 

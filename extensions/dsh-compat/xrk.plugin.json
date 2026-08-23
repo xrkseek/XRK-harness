@@ -1,0 +1,5 @@
+{
+  "id": "dsh-compat-host",
+  "kind": "host",
+  "entry": "./host.mjs"
+}

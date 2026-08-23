@@ -14,8 +14,10 @@
     "README.md"
   ],
   "dependencies": {
+    "@xrkseek/attachment": "workspace:*",
     "@xrkseek/llm": "workspace:*",
-    "@xrkseek/llm-openai-compatible": "workspace:*"
+    "@xrkseek/llm-openai-compatible": "workspace:*",
+    "@xrkseek/protocol": "workspace:*"
   },
   "license": "MIT",
   "repository": {

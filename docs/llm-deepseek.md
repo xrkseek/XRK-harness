@@ -19,7 +19,7 @@ SSE thinking 流走 openai-compatible 适配器（`reasoning_content` → `reaso
 | 路由 | `inputModalities` |
 | --- | --- |
 | 官方 host + Flash / Pro | `["text"]`（serialize 拒图） |
-| 官方 host + **`deepseek-v4-flash-vision-exp`** | `["text", "image"]`（对照 DSH `dsh-v0.1.1-rc.1` catalog） |
+| 官方 host + **`deepseek-v4-flash-vision-exp`** | `["text", "image"]`（对照 DSH `dsh-v0.1.1-rc.2` catalog）；官方 host 优先 **Files API** 上传并复用 `file_id` |
 | 自定义 gateway（非官方 baseUrl） | 默认 `["text", "image"]` |
 
 Face / Registry 创建 adapter 时按上表解析；Face intake（粘贴图片）不能盖过官方 text-only 模型。

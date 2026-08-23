@@ -1,4 +1,5 @@
 import type { ToolDefinition } from "@xrkseek/core-tools";
+import { resolveCordisFiberState } from "./cordis-bridge.js";
 import type { FaceRuntime } from "./context.js";
 
 /** DSH `pluginInventory/list` fiber phase. */
@@ -51,10 +52,10 @@ export interface FaceProcessPlugin {
 
 /**
  * Host process plugins first, then product-shell boot entries.
- * Cordis stubs stay disabled / failed.
+ * Cordis uses dsh-compat host.mjs apply or staged `client.js` when available.
  */
 export function listFacePluginInventory(
-  runtime: Pick<FaceRuntime, "plugins" | "webPlugins">,
+  runtime: Pick<FaceRuntime, "plugins" | "webPlugins" | "hostPublic">,
 ): FacePluginInventoryEntry[] {
   const seen = new Set<string>();
   const entries: FacePluginInventoryEntry[] = [];
@@ -66,11 +67,14 @@ export function listFacePluginInventory(
 
   for (const plugin of runtime.plugins ?? []) {
     const cordis = plugin.kind === "cordis";
+    const fiber = cordis
+      ? resolveCordisFiberState(runtime, plugin.id)
+      : { enabled: true, fiberPhase: "active" as const };
     push({
       entryId: plugin.id,
       moduleName: plugin.id,
-      enabled: !cordis,
-      fiberPhase: cordis ? "failed" : "active",
+      enabled: fiber.enabled,
+      fiberPhase: fiber.fiberPhase,
     });
   }
   for (const web of runtime.webPlugins ?? []) {

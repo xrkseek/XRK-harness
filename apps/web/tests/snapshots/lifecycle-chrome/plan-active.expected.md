@@ -20,7 +20,7 @@
 - button "Settings":
   - img
   - text: Settings
-- text: Into the Unknown Preview
+- text: Local agents, your harness
 - button "Choose workspace":
   - img
   - text: workspace

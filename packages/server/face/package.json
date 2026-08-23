@@ -26,6 +26,9 @@
     "@xrkseek/server-config": "workspace:*",
     "@xrkseek/session-projection": "workspace:*",
     "@xrkseek/workspace": "workspace:*",
+    "@xrkseek/xrk-file-reference": "workspace:*",
+    "@xrkseek/xrk-file-reference-local": "workspace:*",
+    "@xrkseek/xrk-session-reference": "workspace:*",
     "js-yaml": "^4.1.0",
     "ws": "^8.18.0"
   },

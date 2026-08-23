@@ -10,6 +10,7 @@
     }
   },
   "dependencies": {
+    "@xrkseek/attachment": "workspace:*",
     "@xrkseek/code-runtime": "workspace:*",
     "@xrkseek/core-agent": "workspace:*",
     "@xrkseek/core-session": "workspace:*",

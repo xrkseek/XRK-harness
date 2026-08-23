@@ -18,6 +18,7 @@ import type {
 import type { SlashRecipesLoader } from "./slash.js";
 import type {
   FaceCredentialVault,
+  FaceCordisHostBridge,
   FaceHostPublicSettings,
   FaceMcpServerDraft,
   FaceSettingsNamespaces,
@@ -120,6 +121,8 @@ export interface FaceRuntime {
   readonly uiSettings: FaceUiSettings;
   /** Read-only host public snapshot (from host spawn). */
   readonly hostPublic?: FaceHostPublicSettings;
+  /** On-demand Cordis `host.mjs` apply (Host wires after dsh-compat prewarm). */
+  readonly cordisHostBridge?: FaceCordisHostBridge;
   /** In-memory credential overrides — never session-logged. */
   readonly credentials: FaceCredentialVault;
   /** Face settings namespaces (welcome notice, etc.). */
@@ -143,11 +146,12 @@ export interface FaceRuntime {
   readonly questions: FaceQuestionBroker;
   /** Drop cached agent when preset changes (host wires). May be async (compose dispose). */
   invalidateAgent?(sessionId: string): void | Promise<void>;
-  /**
-   * When true, `/permission` refuses sandbox mode changes while PTY sessions
+  /** When true, `/permission` refuses sandbox mode changes while PTY sessions
    * are open or spawning (CV DSH terminal-bash sandbox fence).
    */
   hasPtyActivity?(): boolean;
+  /** Host persists `/auto-review` slash to dsh-compat HTTP store (~/.xrk). */
+  autoReviewSlashPersist?(args: string): void;
   /** Publish store appends as mux session/event. */
   watchSession(sessionId: string): void;
   publishQueue(sessionId: string): void;

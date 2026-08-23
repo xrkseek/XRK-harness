@@ -8,6 +8,8 @@ export type {
   PluginCommand,
   PluginCommandContext,
   PluginCommandResult,
+  HostWireContext,
+  HostPublicHandlerFn,
 } from "./types.js";
 export type { DiscoveryHit, PluginManifest } from "./manifest.js";
 export { scanPluginDir } from "./manifest.js";
@@ -43,6 +45,7 @@ export {
   type PluginFiberPhase,
   type PluginInventoryEntry,
 } from "./inventory.js";
+export { isHostPlugin, listHostPlugins } from "./host.js";
 
 export interface PluginLoader {
   register(plugin: RegisteredPlugin): void;

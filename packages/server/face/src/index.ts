@@ -269,3 +269,10 @@ export {
   type FaceQuestionHooks,
   type PendingQuestionItem,
 } from "./questions.js";
+export {
+  costMeterAggregateUsage,
+  costMeterDisplayExchangeRate,
+  costMeterSessionTotals,
+  costMeterWalletUsage,
+  configureCostMeterHome,
+} from "./cost-meter-store.js";

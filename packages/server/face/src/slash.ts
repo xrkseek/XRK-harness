@@ -22,6 +22,7 @@ import {
   previewPlanSet,
   steerPlanMessage,
 } from "./plan-mode.js";
+import { narrateAutoReviewCommand } from "./projections/units/auto-review.js";
 
 export type SlashRecipesLoader = () => Promise<readonly Recipe[]> | readonly Recipe[];
 
@@ -128,10 +129,20 @@ export async function listFaceCommandDescriptors(
             input: { hint: "[off|message]" },
           },
         ]),
+    ...(used.has("auto-review")
+      ? []
+      : [
+          {
+            name: "auto-review",
+            description: "Toggle AI auto-review or approve a denied retry",
+            input: { hint: "on|off|approve <n>" },
+          },
+        ]),
   ];
   used.add("goal");
   used.add("permission");
   used.add("plan");
+  used.add("auto-review");
   used.add("compact");
   used.add("export");
   used.add("feedback");
@@ -214,6 +225,24 @@ export async function executeFaceCommand(
       kind: "success",
       text: `preset ${name}`,
     });
+  }
+
+  if (parsed.name === "auto-review") {
+    const snap = runtime.projections.snapshot(sessionId) as {
+      autoReview?: { enabled?: boolean };
+    };
+    const current = snap.autoReview;
+    const enabledBefore = current?.enabled ?? false;
+    const text = narrateAutoReviewCommand(parsed.rawInput, enabledBefore);
+    runtime.autoReviewSlashPersist?.(parsed.rawInput);
+    return appendCommandPair(
+      runtime,
+      sessionId,
+      parsed,
+      { kind: "success", text },
+      undefined,
+      parsed.rawInput,
+    );
   }
 
   if (parsed.name === "plan") {

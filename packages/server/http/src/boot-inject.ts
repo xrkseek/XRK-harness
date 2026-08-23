@@ -67,6 +67,70 @@ export function resolveWebBootManifest(webDistRoot?: string): WebBootManifest {
 }
 
 /**
+ * Shell client halves that community `require("@deepseek-ai/dsh-client-*")`
+ * remap onto. Overlay `boot.json` lists only npm plugins — these rows must
+ * still be present so the module table can prefetch their factories.
+ */
+export const XRK_PLATFORM_CLIENT_BOOT_IDS = [
+  "@xrkseek/client-connection",
+  "@xrkseek/client-runtime",
+  "@xrkseek/client-locale",
+  "@xrkseek/xrk-typert-registry",
+  "@xrkseek/xrk-api-remotes",
+] as const;
+
+const PLATFORM_IMMEDIATELY = new Set<string>([
+  "@xrkseek/client-runtime",
+  "@xrkseek/client-locale",
+  "@xrkseek/xrk-typert-registry",
+  "@xrkseek/xrk-api-remotes",
+]);
+
+function pluginClientJsRel(id: string): string {
+  return path.posix.join("plugins", ...id.split("/"), "client.js");
+}
+
+/**
+ * Ensure platform client bundles from `webDist/plugins` are boot graph rows
+ * when overlay-only manifests omit them (DSH community plugins still require
+ * `@deepseek-ai/dsh-client-runtime/client` → `@xrkseek/client-runtime`).
+ */
+export function ensureXrkPlatformClientBootEntries(
+  manifest: WebBootManifest,
+  webDistRoot?: string,
+): WebBootManifest {
+  if (!webDistRoot) return manifest;
+  const root = path.resolve(webDistRoot);
+  const captured = loadBootManifestFromWebDist(root);
+  const capturedById = new Map(
+    (captured?.entries ?? []).map((e) => [e.id, e]),
+  );
+  const byId = new Map(manifest.entries.map((e) => [e.id, e]));
+  let changed = false;
+
+  for (const id of XRK_PLATFORM_CLIENT_BOOT_IDS) {
+    if (byId.has(id)) continue;
+    const rel = pluginClientJsRel(id);
+    if (!existsSync(path.join(root, rel))) continue;
+    const fromCaptured = capturedById.get(id);
+    byId.set(
+      id,
+      fromCaptured ?? {
+        id,
+        url: `/${rel}`,
+        rev: "platform",
+        inject: [],
+        ...(PLATFORM_IMMEDIATELY.has(id) ? { immediately: true } : {}),
+      },
+    );
+    changed = true;
+  }
+
+  if (!changed) return manifest;
+  return { rev: manifest.rev, entries: [...byId.values()] };
+}
+
+/**
  * Merge extra boot entries onto a base graph. Extra `id` replaces base.
  * Used for `{pluginsDir}/web/boot.json` overlay.
  */

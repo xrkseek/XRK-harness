@@ -50,6 +50,7 @@ describe("FsService", () => {
       root: "/virtual",
       resolvePath: (p: string) => p,
       read: vi.fn(async () => ({ content: "stub" })),
+      readBytes: vi.fn(async () => new Uint8Array()),
       write: vi.fn(async () => {}),
       edit: vi.fn(async () => {}),
       stat: vi.fn(async () => ({

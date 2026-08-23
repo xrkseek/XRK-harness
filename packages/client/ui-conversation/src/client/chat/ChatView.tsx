@@ -1,7 +1,8 @@
 // ChatView: the default conversation view — one stable keyed parent list over
 // final business Nodes, plus paging, pending steering and bottom-follow.
 // Each row dispatches through 'conversation.chat.node'; ui-tool owns the
-// tool-call renderer and its recursive root/subcall composition.
+// tool-call renderer and its recursive root/subcall composition. A Host
+// open-path refusal from the injected opener is an in-page dialog here.
 //
 // Scroll: when nested under `[data-conversation-scroll]` (active conversation
 // column), that host is the scrollport and this view is flow content; when
@@ -12,10 +13,10 @@
 // ChatNodeSeat subscribes to one Node key, so Assistant deltas and Tool
 // lifecycle updates replace only their own row without remounting it.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ConversationTimelineSnapshot } from '@xrkseek/client-runtime/client'
-import { IconChevronDownOutline14 } from '@xrkseek/client-ui-primitives'
-import type { ChatViewSlotProps } from '../contract/slots.ts'
+import { Button, IconChevronDownOutline14, Modal } from '@xrkseek/client-ui-primitives'
+import type { ChatViewSlotProps, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble } from './MessageItem.tsx'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
 import { formatRunDuration } from './message-chrome.ts'
@@ -95,6 +96,17 @@ function scrollPosition(list: HTMLElement, scrollport: HTMLElement): ChatScrollP
   }
 }
 
+/** Host/OS refusal text for the file-open dialog; empty throws keep a locale fallback. */
+function openFailureMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return message === '' ? fallback : message
+}
+
+/** ProducedFiles opens the session workspace as `.`. */
+function isFolderOpenPath(path: string): boolean {
+  return path === '.'
+}
+
 function runningTurnStartTime(timeline: ConversationTimelineSnapshot): number | null {
   let latest: number | null = null
   for (const turn of timeline.turns.values()) {
@@ -104,12 +116,10 @@ function runningTurnStartTime(timeline: ConversationTimelineSnapshot): number | 
 }
 
 /** Turn-level model activity label retained across first-token, tool, and streaming phases. */
-function TurnStatus({ startTime, pendingSteer, t }: {
+function TurnStatus({ startTime, t }: {
   /** The running turn's logged `turn/start` time; null falls back to mount
    *  time when that boundary is outside the window. */
   startTime: number | null
-  /** Pending steering bubbles waiting to be claimed into the open turn. */
-  pendingSteer: number
   /** The owning view's locale seat. */
   t: ChatViewSlotProps['t']
 }) {
@@ -131,12 +141,7 @@ function TurnStatus({ startTime, pendingSteer, t }: {
   const showClock = elapsedMs >= 15_000
   return (
     <div className={css.turnStatus} role="status" aria-live="polite">
-      {t('chat.deepDiving')}
-      {pendingSteer > 0 && (
-        <span className={css.turnStatusClock}>
-          {t('chat.deepDiving.steered', { count: pendingSteer })}
-        </span>
-      )}
+      Deep diving...
       {showClock && (
         <span className={css.turnStatusClock} aria-hidden>
           {formatRunDuration(elapsedMs, t)}
@@ -166,10 +171,48 @@ export function ChatView({
   const hasMore = useSession(s => s.hasMore)
   const loadingOlder = useSession(s => s.loadingOlder)
   const selectedCallId = useStore(s => s.selection?.callId)
+  const [fileOpenError, setFileOpenError] = useState<{ path: string; message: string } | null>(null)
+  const [fileOpenBusy, setFileOpenBusy] = useState(false)
+  // Close/retry must ignore a settlement that started before the latest
+  // gesture; otherwise a cancelled in-flight refusal reopens the dialog.
+  const fileOpenRequest = useRef(0)
+
+  const requestOpenFile = useCallback((path: string) => {
+    const id = ++fileOpenRequest.current
+    setFileOpenBusy(true)
+    void openFile(path).then(
+      () => {
+        if (id !== fileOpenRequest.current) return
+        setFileOpenError(null)
+        setFileOpenBusy(false)
+      },
+      (error: unknown) => {
+        if (id !== fileOpenRequest.current) return
+        setFileOpenError({
+          path,
+          message: openFailureMessage(
+            error,
+            t(isFolderOpenPath(path) ? 'fileOpen.folderUnknown' : 'fileOpen.unknown'),
+          ),
+        })
+        setFileOpenBusy(false)
+      },
+    )
+  }, [openFile, t])
+
+  const closeFileOpenError = useCallback(() => {
+    fileOpenRequest.current += 1
+    setFileOpenError(null)
+    setFileOpenBusy(false)
+  }, [])
 
   const pendingSteering = useMemo(
     () => inbox.filter(item => item.placement === 'steering'),
     [inbox],
+  )
+  const renderMessageImages = useCallback<RenderMessageImages>(
+    owner => renderSlot('conversation.message.images', { ...owner, loadImage }),
+    [loadImage, renderSlot],
   )
   const runningTurnStart = useMemo(() => runningTurnStartTime(timeline), [timeline])
 
@@ -393,10 +436,10 @@ export function ChatView({
               useSession={useSession}
               selectedCallId={selectedCallId}
               cwd={cwd}
-              openFile={openFile}
+              openFile={requestOpenFile}
               inspectCall={inspectCall}
               forkAt={forkAt}
-              loadImage={loadImage}
+              renderMessageImages={renderMessageImages}
               fileMentions={fileMentions}
               renderSlot={renderSlot}
               t={t}
@@ -407,15 +450,14 @@ export function ChatView({
               double-render the same wait. */}
           {/* Turn-level loading signal: rides the whole running turn (first-token
               wait, tool execution, streaming) so it never flickers per step. */}
-          {running && (
-            <TurnStatus
-              startTime={runningTurnStart}
-              pendingSteer={pendingSteering.length}
+          {running && <TurnStatus startTime={runningTurnStart} t={t} />}
+          {pendingSteering.map(item => (
+            <PendingSteeringBubble
+              key={item.id}
+              content={item.content}
+              renderMessageImages={renderMessageImages}
               t={t}
             />
-          )}
-          {pendingSteering.map(item => (
-            <PendingSteeringBubble key={item.id} content={item.content} loadImage={loadImage} t={t} />
           ))}
         </div>
         {!atBottom && (
@@ -435,6 +477,44 @@ export function ChatView({
           </div>
         )}
       </div>
+      {fileOpenError !== null && (
+        <FileOpenErrorDialog
+          path={fileOpenError.path}
+          message={fileOpenError.message}
+          busy={fileOpenBusy}
+          onClose={closeFileOpenError}
+          onRetry={() => { requestOpenFile(fileOpenError.path) }}
+          t={t}
+        />
+      )}
     </div>
+  )
+}
+
+/** In-page Host open-path refusal: the wire reason plus a retry of the same path. */
+function FileOpenErrorDialog({
+  path, message, busy, onClose, onRetry, t,
+}: {
+  path: string
+  message: string
+  busy: boolean
+  onClose: () => void
+  onRetry: () => void
+  t: ChatViewSlotProps['t']
+}) {
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      closeLabel={t('close')}
+      title={t(isFolderOpenPath(path) ? 'fileOpen.folderTitle' : 'fileOpen.title')}
+      description={message}
+      footer={(
+        <>
+          <Button variant="outline" className={css.modalAction} onClick={onClose}>{t('cancel')}</Button>
+          <Button variant="primary" className={css.modalAction} disabled={busy} onClick={onRetry}>{t('retry')}</Button>
+        </>
+      )}
+    />
   )
 }

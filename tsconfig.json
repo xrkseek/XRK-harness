@@ -16,6 +16,7 @@
     { "path": "packages/llm/replay" },
     { "path": "packages/mcp" },
     { "path": "packages/attachment" },
+    { "path": "packages/attachment-local" },
     { "path": "packages/exec/fs" },
     { "path": "packages/exec/web" },
     { "path": "packages/exec/lsp" },

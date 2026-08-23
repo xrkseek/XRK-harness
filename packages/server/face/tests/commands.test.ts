@@ -7,6 +7,7 @@ import { faceMethodFromPath } from "../src/wire/index.js";
 import {
   admittingAgentResolve,
   createBareFaceRuntime,
+  unusedAgentResolve,
 } from "./helpers/bare-runtime.js";
 
 function bareRuntime(store = createMemorySessionStore()) {
@@ -50,6 +51,11 @@ describe("commands/execute + list", () => {
     expect(listed.result.ok).toBe(true);
     if (listed.result.ok) {
       expect(listed.result.value).toEqual([
+        {
+          name: "auto-review",
+          description: "Toggle AI auto-review or approve a denied retry",
+          input: { hint: "on|off|approve <n>" },
+        },
         {
           name: "compact",
           description: "Compact older conversation history",
@@ -194,6 +200,11 @@ describe("commands/execute + list", () => {
     expect(listed.result.ok).toBe(true);
     if (listed.result.ok) {
       expect(listed.result.value).toEqual([
+        {
+          name: "auto-review",
+          description: "Toggle AI auto-review or approve a denied retry",
+          input: { hint: "on|off|approve <n>" },
+        },
         {
           name: "compact",
           description: "Compact older conversation history",
@@ -568,7 +579,7 @@ describe("/export", () => {
 });
 
 describe("pluginInventory/list", () => {
-  it("lists process plugins and boot entries; cordis stays failed", async () => {
+  it("lists process plugins and boot entries; cordis stays failed without bridge", async () => {
     const runtime = createBareFaceRuntime({
       store: createMemorySessionStore(),
       plugins: [
@@ -608,9 +619,63 @@ describe("pluginInventory/list", () => {
       ],
     });
   });
+
+  it("lists cordis active when host.mjs apply registered", async () => {
+    const runtime = createBareFaceRuntime({
+      store: createMemorySessionStore(),
+      plugins: [{ id: "community-cordis", kind: "cordis" }],
+      hostPublic: {
+        host: "127.0.0.1",
+        port: 8787,
+        workspaceRoot: "/tmp",
+        preset: "harness",
+        corsOrigin: "*",
+        rateLimitPerMinute: 60,
+        webDistConfigured: true,
+        cordisHostApplied: ["community-cordis"],
+      },
+    });
+    const listed = await dispatchFaceMethod(
+      runtime,
+      "pluginInventory/list",
+      "p2",
+      {},
+    );
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) throw new Error("list");
+    expect(listed.result.value).toEqual({
+      entries: [
+        {
+          entryId: "community-cordis",
+          moduleName: "community-cordis",
+          enabled: true,
+          fiberPhase: "active",
+        },
+      ],
+    });
+  });
 });
 
 describe("DSH shell remotes that must not 404 / NI", () => {
+  it("costMeter/getState returns Typert envelope with config", async () => {
+    const runtime = bareRuntime();
+    expect(faceMethodFromPath("/api/costMeter/getState")).toBe(
+      "costMeter/getState",
+    );
+    const res = await dispatchFaceMethod(runtime, "costMeter/getState", "cm0", {
+      args: {},
+    });
+    expect(res.result.ok).toBe(true);
+    if (!res.result.ok) throw new Error("getState");
+    const nested = res.result.value as {
+      ok: boolean;
+      value: { config: { locale: string }; today: { calls: number } };
+    };
+    expect(nested.ok).toBe(true);
+    expect(nested.value.config.locale).toBe("auto");
+    expect(nested.value.today.calls).toBe(0);
+  });
+
   it("dynamicCordisRunner/inventory is an empty list (no Cordis apply)", async () => {
     const runtime = bareRuntime();
     expect(faceMethodFromPath("/api/dynamicCordisRunner/inventory")).toBe(
@@ -637,5 +702,35 @@ describe("DSH shell remotes that must not 404 / NI", () => {
         reason: "not-running",
       });
     }
+  });
+
+  it("dynamicCordisRunner/inventory aligns with pluginInventory for web + cordis", async () => {
+    const runtime = createBareFaceRuntime({
+      plugins: [{ id: "@cordis/foo", kind: "cordis" }],
+      webPlugins: [{ id: "dsh/demo", moduleName: "dsh/demo" }],
+      resolveAgent: unusedAgentResolve(),
+    });
+    const listed = await dispatchFaceMethod(
+      runtime,
+      "dynamicCordisRunner/inventory",
+      "c2",
+      { args: {} },
+    );
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) throw new Error("inventory");
+    const rows = listed.result.value as Array<{
+      pluginId: string;
+      fiberPhase: string;
+      hostBridge?: string;
+    }>;
+    expect(rows.some((r) => r.pluginId === "dsh/demo" && r.fiberPhase === "active")).toBe(
+      true,
+    );
+    expect(
+      rows.some((r) => r.pluginId === "@cordis/foo" && r.fiberPhase === "failed"),
+    ).toBe(true);
+    expect(rows.find((r) => r.pluginId === "dsh/demo")?.hostBridge).toBe(
+      "xrk-dsh-compat",
+    );
   });
 });

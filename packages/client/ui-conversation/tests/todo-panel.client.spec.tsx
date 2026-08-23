@@ -6,7 +6,7 @@
  */
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bindSnapshotSelector } from '@xrkseek/client-web-react'
+import { bindSnapshotSelector } from '@xrkseek/client-test-runtime'
 import { createSnapshotStore } from '@xrkseek/client-runtime/client'
 import type { TodoItem } from '@xrkseek/client-runtime/client'
 import { makeTranslate } from '@xrkseek/client-test-runtime'

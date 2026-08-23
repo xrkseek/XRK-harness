@@ -197,7 +197,7 @@ export async function openEnglishPage(base: string): Promise<{
 
 export async function dismissWelcome(page: Page): Promise<void> {
   const dialog = page.getByRole("dialog", {
-    name: /内测声明|Internal Testing Notice/,
+    name: /欢迎使用 XRK-Harness|Welcome to XRK-Harness/,
   });
   try {
     await dialog.waitFor({ state: "visible", timeout: 20_000 });

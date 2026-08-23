@@ -81,6 +81,19 @@ import {
   pluginInventoryList,
 } from "./handlers/remotes.js";
 import {
+  costMeterFetchPricesRemote,
+  costMeterGetDaySessionsRemote,
+  costMeterGetStateRemote,
+  costMeterGetTopSessionsRemote,
+  costMeterImportLegacyHistoryRemote,
+  costMeterRefreshBalanceRemote,
+  costMeterRefreshCodingPlanRemote,
+  costMeterRefreshCustomBalanceRemote,
+  costMeterRefreshGoQuotaRemote,
+  costMeterResetHistoryRemote,
+  costMeterUpdateConfigRemote,
+} from "./handlers/cost-meter.js";
+import {
   goalsClear,
   goalsComplete,
   goalsCreate,
@@ -89,6 +102,10 @@ import {
   goalsResume,
 } from "./handlers/goals.js";
 import { cordisRunnerHandler } from "./handlers/cordis-stub.js";
+import {
+  fileReferencesList,
+  sessionReferenceResolverCandidates,
+} from "./handlers/references.js";
 
 const HANDLERS: Record<string, FaceHandler> = {
   "host.describe": hostDescribe,
@@ -159,6 +176,25 @@ const HANDLERS: Record<string, FaceHandler> = {
   "messageFeedback/list": messageFeedbackList,
   "messageFeedback/put": messageFeedbackPut,
   "messageFeedback/delete": messageFeedbackDelete,
+  "costMeter/getState": bindRuntime(() => costMeterGetStateRemote()),
+  "costMeter/updateConfig": bindPayload(costMeterUpdateConfigRemote),
+  "costMeter/fetchPrices": bindRuntime(() => costMeterFetchPricesRemote()),
+  "costMeter/resetHistory": bindRuntime(() => costMeterResetHistoryRemote()),
+  "costMeter/importLegacyHistory": bindRuntime((runtime) =>
+    costMeterImportLegacyHistoryRemote(runtime),
+  ),
+  "costMeter/refreshBalance": bindRuntime(() =>
+    costMeterRefreshBalanceRemote(),
+  ),
+  "costMeter/refreshGoQuota": bindRuntime(() =>
+    costMeterRefreshGoQuotaRemote(),
+  ),
+  "costMeter/refreshCustomBalance": bindRuntime(() =>
+    costMeterRefreshCustomBalanceRemote(),
+  ),
+  "costMeter/refreshCodingPlan": bindPayload(costMeterRefreshCodingPlanRemote),
+  "costMeter/getDaySessions": bindPayload(costMeterGetDaySessionsRemote),
+  "costMeter/getTopSessions": bindPayload(costMeterGetTopSessionsRemote),
   "goals/create": goalsCreate,
   "goals/edit": goalsEdit,
   "goals/pause": goalsPause,
@@ -172,6 +208,8 @@ const HANDLERS: Record<string, FaceHandler> = {
   "goal.resume": goalsResume,
   "goal.complete": goalsComplete,
   "goal.clear": goalsClear,
+  "fileReferences/list": fileReferencesList,
+  "sessionReferenceResolver/candidates": sessionReferenceResolverCandidates,
 };
 
 export function getHandler(method: string): FaceHandler | undefined {

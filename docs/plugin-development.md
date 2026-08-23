@@ -15,7 +15,7 @@
 | 斜杠 / 命令面 | `commands` | Face `commands/list` + `commands/execute` |
 | 改产品壳 UI | `xrk.client`（client 包） | `~/.xrk/plugins/web/` 叠加，**不是**进程 kind |
 
-不要写 Cordis `apply(ctx)` 社区 Host 插件：本仓 **不执行** `kind: cordis`（只登记 stub）。
+不要在本仓写 **`kind: cordis` 进程包**（只 discover、不自动 `apply`）。装 **DSH 社区 client / `host.mjs` 包**见 [community-plugins.md](./community-plugins.md) · [plugin-loader.md](./plugin-loader.md)。
 
 ## 最小进程插件（推荐路径）
 
@@ -90,7 +90,7 @@ xrk-harness restart
 
 ## 工作区喂法（让 Agent 会写插件）
 
-把 [templates/xrk-harness](../templates/xrk-harness/) 同步进 `{workspace}/.xrk`（`assistant.md` / `AGENTS.md`），会话徽章用 **XRK Harness**（`harness`）。之后模型在对话里能读到「怎么写 `xrk.plugin.json`、怎么 `plugin add`、不要碰 Cordis apply」。
+把 [templates/xrk-harness](../templates/xrk-harness/) 同步进 `{workspace}/.xrk`（`assistant.md` / `AGENTS.md`），会话徽章用 **XRK Harness**（`harness`）。之后模型在对话里能读到「怎么写 `xrk.plugin.json`、怎么 `plugin add`、DSH 社区包见 community-plugins」。
 
 ```ts
 import { createWorkspaceInjector } from "@xrkseek/workspace";
@@ -109,11 +109,28 @@ await inj.syncSeeds(path.join("templates", "xrk-harness"));
 
 带 `xrk.client` / `dsh.client` 的包经 `xrk-harness plugin add` 写入 `plugins/web/`，Host merge 进产品壳 boot。改完同样 `restart`。不参与进程 discover（`web/` 被跳过）。
 
+## DSH 社区 client / Host 包
+
+与上文「最小进程插件」不同：npm 上的 DSH 生态包通常带 **`client.js`**（壳 UI）和可选 **`host.mjs`**（同源 HTTP/RPC）。
+
+```bash
+xrk-harness plugin add dsh-wallet
+xrk-harness plugin add @xmanrui/dsh-im
+xrk-harness restart
+```
+
+| 文档 | 内容 |
+|------|------|
+| [community-plugins.md](./community-plugins.md) | 能跑什么、vendor 缺口、27 包 fixture |
+| [plugin-loader.md](./plugin-loader.md) | discover · `host.mjs` apply · fiber 子进程 |
+
+实现笔记（维护者）：[`packages/server/http/src/dsh-compat/README.md`](../packages/server/http/src/dsh-compat/README.md)。
+
 ## 明确不做
 
 - 热重载 / watch  
 - 未声明入口的任意执行  
 - 插件覆盖同名 builtin  
-- Cordis `apply(ctx)` Host 插件  
+- 在本仓实现 **vendor 满血**（官方 IM 消息隧道、TongFlow Python 节点引擎等 — 见 community-plugins「Vendor 缺口」）
 
-相关：[plugin-loader.md](./plugin-loader.md) · [host-preset.md](./host-preset.md) · [modules/server-loader.md](./modules/server-loader.md)
+相关：[plugin-loader.md](./plugin-loader.md) · [community-plugins.md](./community-plugins.md) · [host-preset.md](./host-preset.md) · [modules/server-loader.md](./modules/server-loader.md)

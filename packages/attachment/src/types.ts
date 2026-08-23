@@ -17,6 +17,7 @@ export interface ImageAttachmentLimits {
   readonly maxImagesPerMessage: number;
   readonly maxMessageImageBytes: number;
   readonly maxImagePixels: number;
+  readonly maxImageDimension?: number;
   readonly mediaTypes: readonly ImageMediaType[];
 }
 
@@ -38,4 +39,24 @@ export interface SaveImageAttachment {
 export interface StoredImageAttachment {
   readonly ref: ImageAttachmentRef;
   readonly data: Uint8Array;
+}
+
+/** Route-owned request-image budget (DSH rc.2). */
+export interface ImageRequestPolicy {
+  readonly maxPixels: number;
+  readonly maxBytes: number;
+}
+
+/** Cached deterministic request version for one attachment + policy. */
+export interface RequestImageAttachment {
+  readonly variantId: string;
+  readonly attachment: ImageAttachmentRef;
+  readonly data: Uint8Array;
+  readonly mediaType: ImageMediaType;
+  readonly bytes: number;
+  readonly width: number;
+  readonly height: number;
+  readonly depth: "uchar";
+  readonly space: "srgb";
+  readonly hasAlpha: boolean;
 }

@@ -1,4 +1,3 @@
-import type { ImageAttachmentRef } from "@xrkseek/protocol";
 import { attachmentIdForBytes } from "./digest.js";
 import { AttachmentError } from "./error.js";
 import { readImageSize, sniffImageMediaType } from "./image-meta.js";
@@ -6,6 +5,9 @@ import type { AttachmentStore } from "./store.js";
 import {
   DEFAULT_IMAGE_LIMITS,
   type ImageAttachmentLimits,
+  type ImageAttachmentRef,
+  type ImageRequestPolicy,
+  type RequestImageAttachment,
   type SaveImageAttachment,
   type StoredImageAttachment,
 } from "./types.js";
@@ -125,11 +127,25 @@ export function createMemoryAttachmentStore(
     return hit;
   }
 
+  async function readImageRequest(
+    ref: ImageAttachmentRef,
+    _policy: ImageRequestPolicy,
+    _signal?: AbortSignal,
+  ): Promise<RequestImageAttachment> {
+    void ref;
+    void _policy;
+    throw new AttachmentError(
+      "The mounted attachment provider cannot derive model-request images.",
+      "ATTACHMENT_PROJECTION_UNSUPPORTED",
+    );
+  }
+
   return {
     imageLimits,
     validateImage,
     saveImages,
     saveImage,
     readImage,
+    readImageRequest,
   };
 }

@@ -16,7 +16,8 @@
   "dependencies": {
     "@xrkseek/core-agent": "workspace:*",
     "@xrkseek/core-session": "workspace:*",
-    "@xrkseek/protocol": "workspace:*"
+    "@xrkseek/protocol": "workspace:*",
+    "@xrkseek/server-loader": "workspace:*"
   },
   "license": "MIT",
   "repository": {

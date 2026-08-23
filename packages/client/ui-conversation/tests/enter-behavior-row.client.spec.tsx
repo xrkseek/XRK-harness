@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { bindSnapshotSelector } from '@xrkseek/client-web-react'
+import { bindSnapshotSelector } from '@xrkseek/client-test-runtime'
 import { createSnapshotStore, type SessionListState, type WorkspaceListState } from '@xrkseek/client-runtime/client'
 import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { EnterBehaviorRow } from '../src/client/settings/EnterBehaviorRow.tsx'

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyXrkProductBootPolicy,
   createHttpServer,
+  ensureXrkPlatformClientBootEntries,
   injectBootIntoHtml,
   mergeWebBootManifests,
   resolveStaticPath,
@@ -56,6 +57,58 @@ describe("boot inject", () => {
     expect(merged.rev).toBe("base+extra");
     expect(merged.entries.map((e) => e.id)).toEqual(["keep", "swap", "added"]);
     expect(merged.entries.find((e) => e.id === "swap")?.url).toBe("/new.js");
+  });
+
+  it("ensureXrkPlatformClientBootEntries adds shell rows from web dist", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-boot-"));
+    const overlayOnly: WebBootManifest = {
+      rev: "overlay",
+      entries: [
+        {
+          id: "dsh-dream-skin",
+          url: "/plugins/dsh-dream-skin/client.js",
+          rev: "1",
+          inject: [],
+          immediately: true,
+        },
+      ],
+    };
+    const runtimeDir = path.join(
+      dir,
+      "plugins",
+      "@xrkseek",
+      "client-runtime",
+    );
+    await mkdir(runtimeDir, { recursive: true });
+    await writeFile(path.join(runtimeDir, "client.js"), "export {}", "utf8");
+    await writeFile(
+      path.join(dir, "boot.json"),
+      JSON.stringify({
+        rev: "base",
+        entries: [
+          {
+            id: "@xrkseek/client-runtime",
+            url: "/plugins/@xrkseek/client-runtime/client.js",
+            rev: "0.1.0",
+            inject: [],
+            immediately: true,
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const ensured = ensureXrkPlatformClientBootEntries(overlayOnly, dir);
+    expect(
+      ensured.entries.some((e) => e.id === "@xrkseek/client-runtime"),
+    ).toBe(true);
+    expect(
+      ensured.entries.some((e) => e.id === "dsh-dream-skin"),
+    ).toBe(true);
+    const runtime = ensured.entries.find(
+      (e) => e.id === "@xrkseek/client-runtime",
+    );
+    expect(runtime?.immediately).toBe(true);
   });
 
   it("product boot policy drops Cordis chrome and HMR ids", () => {

@@ -10,6 +10,10 @@ import { createSessionStatsProjectionUnit } from "./units/session-stats.js";
 import { createTokenUsageProjectionUnit } from "./units/token-usage.js";
 import { createContextPressureProjectionUnit } from "./units/context-pressure.js";
 import { createContextBreakdownProjectionUnit } from "./units/context-breakdown.js";
+import { createContextTimelineProjectionUnit } from "./units/context-timeline.js";
+import { createContextHeadersProjectionUnit } from "./units/context-headers.js";
+import { createAutoReviewProjectionUnit } from "./units/auto-review.js";
+import { createCostUsageProjectionUnit } from "./units/cost-usage.js";
 
 export interface InstallDefaultFaceProjectionsOptions {
   /**
@@ -33,6 +37,10 @@ export function installDefaultFaceProjections(
   const offTokenUsage = registry.register(createTokenUsageProjectionUnit());
   const offPressure = registry.register(createContextPressureProjectionUnit());
   const offBreakdown = registry.register(createContextBreakdownProjectionUnit());
+  const offTimeline = registry.register(createContextTimelineProjectionUnit());
+  const offHeaders = registry.register(createContextHeadersProjectionUnit());
+  const offAutoReview = registry.register(createAutoReviewProjectionUnit());
+  const offCostUsage = registry.register(createCostUsageProjectionUnit());
   const offLimits =
     options.imageLimits !== undefined
       ? registry.register(createImageLimitsProjectionUnit(options.imageLimits))
@@ -48,6 +56,10 @@ export function installDefaultFaceProjections(
       offTokenUsage();
       offPressure();
       offBreakdown();
+      offTimeline();
+      offHeaders();
+      offAutoReview();
+      offCostUsage();
       offLimits?.();
     },
   };

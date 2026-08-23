@@ -33,6 +33,9 @@ export const FACE_REMOTE_NAMESPACES = new Set([
   "pluginInventory",
   "messageFeedback",
   "dynamicCordisRunner",
+  "costMeter",
+  "fileReferences",
+  "sessionReferenceResolver",
 ]);
 
 const REMOTE_NS = /^[A-Za-z][A-Za-z0-9_-]*$/;

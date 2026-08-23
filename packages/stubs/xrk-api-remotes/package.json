@@ -35,10 +35,12 @@
     "@xrkseek/xrk-brand": "workspace:^",
     "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/xrk-commands": "workspace:^",
+    "@xrkseek/xrk-file-reference": "workspace:^",
     "@xrkseek/xrk-goal": "workspace:^",
     "@xrkseek/xrk-llm": "workspace:^",
     "@xrkseek/xrk-message-feedback": "workspace:^",
     "@xrkseek/xrk-session": "workspace:^",
+    "@xrkseek/xrk-session-reference": "workspace:^",
     "@xrkseek/xrk-settings": "workspace:^",
     "@xrkseek/xrk-typert-protocol": "workspace:^"
   }

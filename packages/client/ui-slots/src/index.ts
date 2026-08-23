@@ -793,6 +793,18 @@ export class SlotCore {
     // Kind constraints stay runtime checks for dynamically-composed callers;
     // typed callers already satisfied KindOptions statically. Cell occupancy
     // clashes only at the exact priority: a different priority shadows.
+    //
+    // DSH community plugins often register keyed slots with list-style `id`
+    // only (e.g. dsh-plugin-genui → settings.plugin.item). Promote id → key so
+    // the ModuleLoader apply() does not abort the whole plugin.
+    if (
+      spec.kind === "keyed" &&
+      options.key === undefined &&
+      typeof options.id === "string" &&
+      options.id.length > 0
+    ) {
+      options = { ...options, key: options.id }
+    }
     const priority = options.priority ?? 0
     const occupantHint = (occupant: StoredEntry) =>
       `at priority ${priority}${occupant.registrant !== undefined ? ` (registered by ${occupant.registrant})` : ''} — register at a different priority to shadow it (lowest renders)`

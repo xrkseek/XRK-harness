@@ -1,5 +1,5 @@
-- dialog "内测声明":
-  - heading "内测声明" [level=2]
-  - paragraph: DeepSeek Harness 目前的 0.1 版本仍处在面向 Harness 开发者进行测试的阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者的反馈建议。预计 DeepSeek Harness 的核心插件以及基础 API 都会在接下来的一段时间内快速迭代、持续演化。
-  - paragraph: 我们期待与全球开发者一起，在开源、开放、可复用、可组合的基础设施之上，共同探索智能上限。欢迎全球 Harness 开发者加入 DSH 插件生态。
+- dialog "欢迎使用 XRK-Harness":
+  - heading "欢迎使用 XRK-Harness" [level=2]
+  - paragraph: XRK-Harness 是本仓库的 Agent 宿主与产品壳：Session 可重建、工具可走策略，社区 DSH 插件经 dsh-compat 兼容器接入（不嵌入 Cordis Host）。
+  - paragraph: 0.1.0 是首个公开发版，CLI 与 serve 主路径可用；真 IM 隧道、Cordis fiber 子进程等缺口见 docs/status。欢迎通过 GitHub 反馈与共建。
   - button "继续"

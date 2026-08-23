@@ -11,6 +11,7 @@ import {
   type SessionProjectionRegistryOptions,
 } from "@xrkseek/session-projection";
 import type { PermissionSelect } from "../permissions.js";
+import type { AutoReviewProjection } from "./units/auto-review.js";
 
 export type {
   ProjectionChangeListener,
@@ -33,6 +34,8 @@ export interface FaceProjectionMap {
   readonly permissions: PermissionSelect;
   /** Plan-mode chip: logged active + pending `/plan` selection. */
   readonly plan: PlanProjection;
+  /** dsh-auto-review session header panel. */
+  readonly autoReview: AutoReviewProjection;
   /**
    * Attachment intake limits (DSH InputBar pre-check). Present only while
    * Face has an AttachmentStore; constant per boot — no change frames.
@@ -59,6 +62,17 @@ export interface FaceProjectionMap {
     readonly cacheReadTokens: number;
     readonly cacheWriteTokens: number;
   };
+  /** Per-session token buckets for dsh-cost-meter (`useProjection('costUsage')`). */
+  readonly costUsage: {
+    readonly input: number;
+    readonly output: number;
+    readonly cacheRead: number;
+    readonly cacheWrite: number;
+    readonly reasoning: number;
+    readonly cost: number;
+    readonly byModel: Record<string, unknown>;
+    readonly byProviderModel: Record<string, unknown>;
+  };
   /** Newest prompt pressure + route capacity (DSH contextPressure; ContextMeter). */
   readonly contextPressure: {
     readonly pressureTokens?: number;
@@ -70,6 +84,37 @@ export interface FaceProjectionMap {
     readonly systemTokens: number;
     readonly toolsTokens: number;
     readonly messageTokens: number;
+  };
+  /**
+   * Minimal timeline for community `dsh-context` (DSH contextTimeline).
+   * Always present so the Context tab does not hang on null.
+   */
+  readonly contextTimeline: {
+    readonly current: {
+      readonly system: number;
+      readonly tools: number;
+      readonly user: number;
+      readonly inject: number;
+      readonly assistant: number;
+      readonly tool: number;
+      readonly total: number;
+    };
+    readonly toolList: readonly unknown[];
+    readonly requests: readonly unknown[];
+    readonly events: readonly unknown[];
+    readonly nodes: readonly unknown[];
+    readonly archive: readonly unknown[];
+    readonly droppedNodes: number;
+    readonly model?: string;
+    readonly provider?: string;
+    readonly contextWindow?: number;
+  };
+  /** Header snapshots for dsh-context browser (may be empty). */
+  readonly contextHeaders: {
+    readonly headers: readonly {
+      readonly system?: string;
+      readonly tools: readonly unknown[];
+    }[];
   };
 }
 

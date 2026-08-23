@@ -33,12 +33,7 @@ interface ProjectedBlockCache {
 const projectedBlocks = new WeakMap<ToolCallBlock, ProjectedBlockCache>()
 
 function jsonArguments(value: unknown): string {
-  if (typeof value === 'string') return value
-  try {
-    return JSON.stringify(value ?? {})
-  } catch {
-    return '{}'
-  }
+  return JSON.stringify(value)
 }
 
 function rootCall(match: ConversationMatch): RunningToolCall {
@@ -46,7 +41,7 @@ function rootCall(match: ConversationMatch): RunningToolCall {
   return {
     callId: String(match.event.data.callId),
     name: match.event.data.name,
-    argsRaw: jsonArguments(match.event.data.arguments),
+    argsRaw: match.event.data.arguments,
     turn: match.event.data.turn,
     step: match.event.data.step,
     time: match.event.time,

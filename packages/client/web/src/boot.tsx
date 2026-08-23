@@ -38,7 +38,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import * as ModulesClient from '@xrkseek/client-modules/client'
 import {
   ClientModuleSystem, parseBootManifest,
-  type BootManifest, type ClientModuleSystemOptions, type XrkWindow,
+  type BootManifest, type BootPluginRow, type ClientModuleSystemOptions, type XrkWindow,
 } from '@xrkseek/client-modules/client'
 import * as AppShell from './app-shell.ts'
 import { APP_SHELL_ID } from './app-shell.ts'
@@ -149,12 +149,17 @@ export class AppWebEntry {
 
   /** Prefetch the immediately tier (factory registration only; failures defer to the import path). */
   private async prefetchImmediateTier(): Promise<void> {
-    await Promise.all(this.manifest.plugins
-      .filter(row => row.immediately)
-      .map(row => this.modules.prefetch(row.id).catch(() => {
+    const immediate = this.manifest.plugins.filter((row) => row.immediately)
+  /** @xrkseek/* platform rows first — community DSH bundles remap onto these ids. */
+    const platform = immediate.filter((row) => row.id.startsWith('@xrkseek/'))
+    const community = immediate.filter((row) => !row.id.startsWith('@xrkseek/'))
+    const prefetch = (row: BootPluginRow) =>
+      this.modules.prefetch(row.id).catch(() => {
         // Import reloads and reports this loudly per entry; swallowing
         // here keeps one failing prefetch from masking the others.
-      })))
+      })
+    await Promise.all(platform.map(prefetch))
+    await Promise.all(community.map(prefetch))
   }
 
   /** Plugin face: mount the Loader, inject the `internal` contract, adopt modules, create the graph entries, settle, sweep. */

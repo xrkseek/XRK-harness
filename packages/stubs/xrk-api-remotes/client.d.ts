@@ -25,10 +25,14 @@ export type {} from '@xrkseek/xrk-message-feedback/remote'
 export type {} from '@xrkseek/xrk-commands/types'
 export type {} from '@xrkseek/xrk-llm/types'
 export type {} from '@xrkseek/xrk-settings/types'
+export type { FileReferenceCandidate } from '@xrkseek/xrk-file-reference/types'
+export type { SessionReferenceMentionCandidate } from '@xrkseek/xrk-session-reference/types'
 
 import type { Branded } from '@xrkseek/xrk-brand'
 import type { RemoteResult, TypertClientRemote } from '@xrkseek/xrk-typert-protocol'
 import type { CommandDescriptor, CommandExecution } from '@xrkseek/xrk-commands/types'
+import type { FileReferenceCandidate } from '@xrkseek/xrk-file-reference/types'
+import type { SessionReferenceMentionCandidate } from '@xrkseek/xrk-session-reference/types'
 import type { SessionId } from '@xrkseek/xrk-session/types'
 
 /** Stable Loader-tree identity of one configured plugin entry. */
@@ -69,6 +73,20 @@ declare module '@xrkseek/xrk-typert-protocol' {
     }
     pluginInventory: {
       list: () => Promise<RemoteResult<PluginInventorySnapshot>>
+    }
+    fileReferences: {
+      list: (
+        agentId: SessionId,
+        query: string,
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<readonly FileReferenceCandidate[]>>
+    }
+    sessionReferenceResolver: {
+      candidates: (
+        agentId: SessionId,
+        query: string,
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<readonly SessionReferenceMentionCandidate[]>>
     }
   }
 }

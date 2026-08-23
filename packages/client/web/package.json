@@ -26,7 +26,6 @@
   "dependencies": {
     "@xrkseek/client-modules": "workspace:^",
     "@xrkseek/client-schema-form": "workspace:^",
-    "@xrkseek/client-ui-attachment": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/client-ui-theme": "workspace:^",

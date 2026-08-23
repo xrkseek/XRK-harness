@@ -1,4 +1,45 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ToolDefinition } from "@xrkseek/core-tools";
+
+/** Runtime context passed when a `kind: host` plugin builds its public handler. */
+export interface HostWireContext {
+  readonly pluginsDir?: string;
+  readonly xrkHome?: string;
+  readonly workspaceRoot?: string;
+  readonly defaultCwd?: string;
+  readonly resolveSessionCwd?: (sessionId: string) => string | undefined;
+  /** Face bridges injected by Host when wiring public handlers. */
+  readonly tokenLedger?: {
+    readonly aggregateUsage?: (
+      query: { readonly days?: number; readonly site?: string },
+    ) => Promise<Record<string, unknown> | undefined>;
+    readonly fetchBalance?: (
+      account?: string,
+    ) => Promise<Record<string, unknown> | undefined>;
+    readonly listUsageProviders?: () => Promise<
+      readonly {
+        readonly id: string;
+        readonly displayName?: string;
+        readonly configured?: boolean;
+        readonly accountMode?: string;
+      }[]
+    >;
+  };
+  readonly harnessConnector?: {
+    readonly onJobAccepted?: (job: {
+      readonly id: string;
+      readonly workspace?: string;
+      readonly instruction?: string;
+    }) => Promise<{ readonly sessionId?: string } | void>;
+  };
+  /** {@link XrkWalletPort} from `@xrkseek/server-http` — typed at Host wire site. */
+  readonly walletPort?: unknown;
+}
+
+export type HostPublicHandlerFn = (
+  req: IncomingMessage,
+  res: ServerResponse,
+) => boolean | Promise<boolean>;
 
 /** Prompt section contribution (`kind: "prompt"`). */
 export interface PluginPromptSection {
@@ -50,5 +91,12 @@ export interface RegisteredPlugin {
    * Collected via `collectPluginCommands` — first name wins.
    */
   readonly commands?: readonly PluginCommand[];
+  /**
+   * When `kind === "host"`: claims paths before SPA static (community client
+   * plugins expect Cordis Host routes on the product origin).
+   */
+  readonly createPublicHandler?: (
+    ctx: HostWireContext,
+  ) => HostPublicHandlerFn;
   dispose?: () => void | Promise<void>;
 }

@@ -79,8 +79,8 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
         ),
         "utf8",
       );
-      expect(welcomeJs).toContain("XRK Harness Web UI");
-      expect(welcomeJs).toContain("2026-08-17.xrk1");
+      expect(welcomeJs).toContain("Welcome to XRK-Harness");
+      expect(welcomeJs).toContain("2026-08-23.1");
 
       const plugin = await fetch(
         `${base}/plugins/@xrkseek/client-runtime/client.js`,
@@ -104,6 +104,7 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
           "@xrkseek/xrk-typert-registry",
           "@xrkseek/xrk-api-gateway",
           "@xrkseek/xrk-api-remotes",
+          "@xrkseek/client-ui-reference",
         ]),
       );
 
@@ -155,7 +156,21 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
       const cordis = await faceRpc(base, "dynamicCordisRunner/inventory", {
         args: {},
       });
-      expect(cordis).toEqual({ ok: true, value: [] });
+      expect(cordis.ok).toBe(true);
+      const cordisRows = (cordis.value ?? []) as Array<{
+        pluginId: string;
+        hostBridge?: string;
+        fiberPhase?: string;
+      }>;
+      expect(cordisRows.length).toBeGreaterThan(0);
+      expect(
+        cordisRows.some(
+          (row) =>
+            row.pluginId === "@xrkseek/client-runtime" &&
+            row.fiberPhase === "active" &&
+            row.hostBridge === "xrk-dsh-compat",
+        ),
+      ).toBe(true);
     } finally {
       await manager.stopAll();
     }

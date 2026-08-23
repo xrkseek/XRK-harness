@@ -4,7 +4,7 @@
 
 `@xrkseek/exec-pty`：六件套 `terminal_open` / `terminal_send` / `terminal_read` / `terminal_signal` / `terminal_close` / `terminal_list`。Harness / server preset 默认登记；minimal 不登记。
 
-对照源码：本机 `deepseek-harness` @ `dsh-v0.1.0-rc.8`（`origin/master`）。
+对照源码：本机 `XRKbar/deepseek-harness` @ `dsh-v0.1.1-rc.2`（pull 后 tag 对齐）。
 
 ## 缝
 

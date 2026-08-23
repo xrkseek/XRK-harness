@@ -68,6 +68,19 @@
 | 要交互式浏览器（AGT `browser_*`） | 本仓未做；用 `web_fetch` 读静态页 |
 
 下列在**未配置**时仍可能出现在工具表，execute 回明文错误（见上表）。
+
+## DSH 社区 client 插件
+
+| 症状 | 处理 |
+|------|------|
+| `plugin add` 后壳无变化 | 须 **`xrk-harness restart`**（或停再起 `web`）；`plugin list` 确认包在 `~/.xrk/plugins` |
+| 面板 `incomplete` / `*-host` | 对照 [community-plugins.md](./community-plugins.md)；多数 wire 已 bridge，少数为生产规模 vendor |
+| IM OAuth 后仍无厂商推送 | 本地 `message.send` / webhook 已可用；厂商云端长连接见 status「未做」 |
+| TongFlow 任务立刻完成 | 内置节点已执行；复杂 Python 独占节点见 status「未做」 |
+| Cordis 面板 `fiber-unavailable` | 包需 `host.mjs` 或 staged `client.js`；见 `dynamicCordisRunner/runHostHalf` 与 [community-plugins.md](./community-plugins.md) |
+
+本机审计：`node scripts/dsh-community-audit.mjs`。安装步骤：[getting-started.md](./getting-started.md#dsh-社区-client-插件可选)。
+
 ## Session / 仓
 
 | 症状 | 处理 |
@@ -88,5 +101,6 @@
 
 - 架构与依赖边：[architecture.md](./architecture.md)
 - Face 能力面：[host-face.md](./host-face.md)
+- DSH 社区 client：[community-plugins.md](./community-plugins.md)
 - 安全清单：[security-checklist.md](./security-checklist.md)
 - 包内文件地图：[modules/](./modules/README.md)

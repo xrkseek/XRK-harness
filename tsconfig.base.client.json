@@ -27,7 +27,11 @@
       "@xrkseek/schemastery": ["./packages/schemastery/src"],
       "@xrkseek/cordis-plugin-loader": ["./packages/cordis-loader/src"],
       "@xrkseek/cordis-plugin-include": ["./packages/cordis-include/src"],
-      "@xrkseek/cordis-plugin-group": ["./packages/cordis-group/src"]
+      "@xrkseek/cordis-plugin-group": ["./packages/cordis-group/src"],
+      "@xrkseek/xrk-file-reference": ["./packages/context/file-reference/src/index.ts"],
+      "@xrkseek/xrk-file-reference/grammar": ["./packages/context/file-reference/src/grammar.ts"],
+      "@xrkseek/xrk-file-reference/types": ["./packages/context/file-reference/src/types.ts"],
+      "@xrkseek/xrk-session-reference/types": ["./packages/context/session-reference/src/types.ts"]
     }
   }
 }
