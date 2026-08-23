@@ -8,49 +8,22 @@
     "directory": "packages/context/file-reference-local"
   },
   "type": "module",
-  "main": "lib/index.js",
-  "types": "lib/types/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
-    },
     "./search": {
-      "types": "./src/search.ts",
-      "default": "./src/search.ts"
+      "types": "./dist/search.d.ts",
+      "import": "./dist/search.js",
+      "default": "./dist/search.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
-    "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
-    "lib/types/**/*.js",
-    "lib/types/**/*.d.ts"
+    "dist",
+    "README.md",
+    "README.zh.md"
   ],
   "license": "MIT",
   "dependencies": {
-    "@xrkseek/schemastery": "workspace:^"
-  },
-  "peerDependencies": {
-    "@xrkseek/xrk-agent": "workspace:^",
-    "@xrkseek/xrk-file-reference": "workspace:^",
-    "@xrkseek/xrk-invariants": "workspace:^",
-    "@xrkseek/xrk-system-prompt": "workspace:^",
-    "@xrkseek/xrk-tools": "workspace:^",
-    "@xrkseek/cordis": "workspace:^"
-  },
-  "devDependencies": {
-    "@xrkseek/xrk-agent": "workspace:^",
-    "@xrkseek/xrk-file-reference": "workspace:^",
-    "@xrkseek/xrk-invariants": "workspace:^",
-    "@xrkseek/xrk-system-prompt": "workspace:^",
-    "@xrkseek/xrk-tools": "workspace:^",
-    "@xrkseek/cordis": "workspace:^"
+    "@xrkseek/xrk-file-reference": "workspace:*"
   },
   "private": true
 }

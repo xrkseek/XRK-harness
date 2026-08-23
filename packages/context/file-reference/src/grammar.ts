@@ -4,7 +4,7 @@
  * @module @xrkseek/xrk-file-reference/grammar
  */
 
-import type { FileReferenceCandidate } from './types.ts'
+import type { FileReferenceCandidate } from './types.js'
 
 /** Active `@` token ending at the editor cursor. */
 export interface ActiveAtToken {

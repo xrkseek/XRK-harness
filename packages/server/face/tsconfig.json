@@ -17,6 +17,9 @@
     { "path": "../../protocol" },
     { "path": "../config" },
     { "path": "../../session/session-projection" },
-    { "path": "../../workspace" }
+    { "path": "../../workspace" },
+    { "path": "../../context/file-reference" },
+    { "path": "../../context/file-reference-local" },
+    { "path": "../../context/session-reference" }
   ]
 }

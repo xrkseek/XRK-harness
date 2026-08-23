@@ -1,6 +1,6 @@
 /** Canonical session URI and inline mention encoding. */
 
-import { SessionId, type SessionId as SessionIdType } from '@xrkseek/xrk-session/types'
+import { SessionId, type SessionId as SessionIdType } from './types.js'
 import { SessionReferenceError } from './config.js'
 import type { SessionReferenceInput } from './types.js'
 

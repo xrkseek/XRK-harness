@@ -114,6 +114,19 @@ function ensurePrivateSurface() {
 
 ensurePrivateSurface();
 run("pnpm", ["exec", "tsc", "-b", "apps/cli", "--pretty", "false"]);
+
+const CONTEXT_RUNTIME = [
+  "packages/context/file-reference/dist/grammar.js",
+  "packages/context/file-reference-local/dist/search.js",
+  "packages/context/session-reference/dist/uri.js",
+];
+for (const rel of CONTEXT_RUNTIME) {
+  if (!existsSync(path.join(ROOT, rel))) {
+    console.error(`stage: missing context runtime ${rel} (tsc -b apps/cli)`);
+    process.exit(1);
+  }
+}
+
 run("pnpm", ["web:build"]);
 run("pnpm", ["client:bundle"]);
 run("pnpm", ["web:assemble"]);
@@ -134,6 +147,17 @@ run("pnpm", ["--filter", "@xrkseek/harness-cli", "deploy", "--prod", "--legacy",
 if (!existsSync(path.join(STAGE, "product-web", "index.html"))) {
   console.error("stage: deploy missed product-web/");
   process.exit(1);
+}
+
+for (const rel of [
+  "node_modules/@xrkseek/xrk-file-reference/dist/grammar.js",
+  "node_modules/@xrkseek/xrk-file-reference-local/dist/search.js",
+  "node_modules/@xrkseek/xrk-session-reference/dist/uri.js",
+]) {
+  if (!existsSync(path.join(STAGE, rel))) {
+    console.error(`stage: bundled context runtime missing ${rel}`);
+    process.exit(1);
+  }
 }
 
 const stagedPkgPath = path.join(STAGE, "package.json");

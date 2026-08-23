@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/harness-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "XRK-Harness CLI (run / serve / web / plugin). Product shell ships in product-web/.",
   "type": "module",

@@ -8,61 +8,24 @@
     "directory": "packages/context/file-reference"
   },
   "type": "module",
-  "main": "lib/index.js",
-  "types": "lib/types/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
-    },
     "./grammar": {
-      "types": "./src/grammar.ts",
-      "default": "./src/grammar.ts"
-    },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
+      "types": "./dist/grammar.d.ts",
+      "import": "./dist/grammar.js",
+      "default": "./dist/grammar.js"
     },
     "./types": {
-      "types": "./src/types.ts",
-      "default": "./src/types.ts"
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js",
+      "default": "./dist/types.js"
     },
-    "./typert": {
-      "types": "./lib/typert.host.d.ts",
-      "default": "./lib/typert.host.js"
-    },
-    "./remote": {
-      "types": "./lib/typert.remote-client.d.ts",
-      "default": "./lib/typert.remote-client.js"
-    },
-    "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
-    "lib/types/**/*.js",
-    "lib/types/**/*.d.ts",
-    "lib/typert.host.js",
-    "lib/typert.host.d.ts",
-    "lib/typert.remote-client.js",
-    "lib/typert.remote-client.d.ts"
+    "dist",
+    "README.md",
+    "README.zh.md"
   ],
   "license": "MIT",
-  "peerDependencies": {
-    "@xrkseek/xrk-agent": "workspace:^",
-    "@xrkseek/xrk-invariants": "workspace:^",
-    "@xrkseek/xrk-typert-protocol": "workspace:^",
-    "@xrkseek/cordis": "workspace:^"
-  },
-  "devDependencies": {
-    "@xrkseek/xrk-agent": "workspace:^",
-    "@xrkseek/xrk-invariants": "workspace:^",
-    "@xrkseek/xrk-typert-protocol": "workspace:^",
-    "@xrkseek/cordis": "workspace:^"
-  },
-  "dependencies": {
-    "zod": "^4.4.3"
-  },
   "private": true
 }

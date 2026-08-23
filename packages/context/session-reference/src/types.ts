@@ -1,13 +1,19 @@
 /**
  * Public session-reference request, candidate, and preparation records.
- * Imports stay on type-only subpaths so generated Remote clients can consume
- * this module without Host runtime code.
+ * Face discovery imports stay on type-only subpaths; Cordis prepare lives in
+ * `index.ts` (not wired on XRK Host main path).
  * @module @xrkseek/xrk-session-reference/types
  */
 
-import type { UserMessage } from '@xrkseek/xrk-llm/message'
-import type { ContentBlock } from '@xrkseek/xrk-llm/types'
-import type { SessionId } from '@xrkseek/xrk-session/types'
+import type { ContentBlock, UserMessage } from '@xrkseek/protocol'
+
+/** Opaque session id (Face path; Cordis prepare uses branded ids when wired). */
+export type SessionId = string & { readonly __xrkSessionId?: unique symbol }
+
+/** Brand a raw session id string for URI codec helpers. */
+export function SessionId(id: string): SessionId {
+  return id as SessionId
+}
 
 /** Durable source session, cited event seqs, and snapshot facts for prepared cross-session context. */
 export interface SessionReferenceSource {
@@ -27,12 +33,6 @@ export interface SessionReferenceSource {
     truncated: boolean
     inputIndex: number
   }[]
-}
-
-declare module '@xrkseek/xrk-llm' {
-  interface MessageSourceMap {
-    'session-reference': SessionReferenceSource
-  }
 }
 
 /** One source session selected by a host. */

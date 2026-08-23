@@ -1954,80 +1954,19 @@ importers:
 
   packages/compose: {}
 
-  packages/context/file-reference:
-    dependencies:
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@xrkseek/cordis':
-        specifier: workspace:^
-        version: link:../../cordis
-      '@xrkseek/xrk-agent':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-agent
-      '@xrkseek/xrk-invariants':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-invariants
-      '@xrkseek/xrk-typert-protocol':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-typert-protocol
+  packages/context/file-reference: {}
 
   packages/context/file-reference-local:
     dependencies:
-      '@xrkseek/schemastery':
-        specifier: workspace:^
-        version: link:../../schemastery
-    devDependencies:
-      '@xrkseek/cordis':
-        specifier: workspace:^
-        version: link:../../cordis
-      '@xrkseek/xrk-agent':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-agent
       '@xrkseek/xrk-file-reference':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../file-reference
-      '@xrkseek/xrk-invariants':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-invariants
-      '@xrkseek/xrk-system-prompt':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-system-prompt
-      '@xrkseek/xrk-tools':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-tools
 
   packages/context/session-reference:
     dependencies:
-      '@xrkseek/schemastery':
-        specifier: workspace:^
-        version: link:../../schemastery
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@xrkseek/cordis':
-        specifier: workspace:^
-        version: link:../../cordis
-      '@xrkseek/xrk-agent':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-agent
-      '@xrkseek/xrk-compaction':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-compaction
-      '@xrkseek/xrk-invariants':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-invariants
-      '@xrkseek/xrk-llm':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-llm
-      '@xrkseek/xrk-session':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-session
-      '@xrkseek/xrk-typert-protocol':
-        specifier: workspace:^
-        version: link:../../stubs/xrk-typert-protocol
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../../protocol
 
   packages/cordis:
     dependencies:

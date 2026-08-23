@@ -12,8 +12,9 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D26-brightgreen.svg)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-11-blue.svg)](https://pnpm.io/)
 [![GitHub](https://img.shields.io/badge/github-xrkseek%2FXRK--harness-black.svg)](https://github.com/xrkseek/XRK-harness)
+[![npm](https://img.shields.io/npm/v/@xrkseek/harness-cli?label=npm)](https://www.npmjs.com/package/@xrkseek/harness-cli)
 
-[入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md)
+[入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md) · [v0.1.0 发行说明](./docs/releases/v0.1.0.md)
 
 </div>
 
@@ -27,7 +28,9 @@ XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agen
 |------|------|
 | **Session 为真源** | 对话与工具写在 append-only 事件日志里，可重建；turn / loop 短寿 |
 | **可组装** | preset `minimal` / `harness` / `server` 只接线、不写业务逻辑 |
-| **Host + Face** | HTTP、Unary RPC、双 WebSocket；浏览器产品壳随 CLI 提供 |
+| **Host + Face** | HTTP、Unary RPC、双 WebSocket；浏览器产品壳随 CLI 提供（**37** boot 插件） |
+| **@ 引用** | 输入框 `@file` / `@session` 补全（Face 发现 remotes；跨会话 prepare 见 status） |
+| **附件** | composer 附件栏与消息图片；本地规范化与视觉上传管线 |
 | **DSH 社区 client** | `plugin add` 装 npm 社区包；`dsh-compat` bridge（见 [community-plugins](./docs/community-plugins.md)） |
 | **MCP** | stdio / streamable-http；可在设置里配置并热挂载 |
 | **压缩与用量** | 长会话可换窗压缩；壳上可看 token / 上下文压力 |
@@ -44,7 +47,7 @@ XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agen
 
 ```sh
 mkdir my-workspace && cd my-workspace
-npx @xrkseek/harness-cli web
+npx @xrkseek/harness-cli@0.1.1 web
 ```
 
 默认 **harness** preset（含 `web_search` / `web_fetch`）。仅要 fs 烟测时加 `--preset minimal`。
@@ -108,13 +111,13 @@ npx @xrkseek/harness-cli serve --preset harness --workspace .
 |------|------|
 | 从零安装 / 开发与生产怎么分 | [getting-started](./docs/getting-started.md) |
 | 环境变量、落盘路径 | [configuration](./docs/configuration.md) |
-| 接 HTTP / Face | [http-api](./docs/http-api.md) · [host-face](./docs/host-face.md) |
+| 接 HTTP / Face · `@` 引用 | [http-api](./docs/http-api.md) · [host-face](./docs/host-face.md) · [references](./docs/modules/references.md) |
 | 装 DSH 社区 client 包 | [community-plugins](./docs/community-plugins.md) · [plugin-loader](./docs/plugin-loader.md) |
 | Session、压缩、投影、事件契约 | [session](./docs/session.md) · [session-compaction](./docs/session-compaction.md) · [session-projection](./docs/modules/session-projection.md) · [protocol-events](./docs/protocol-events.md) |
 | 自己写工具 / 进程插件 | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | 排障 | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 | [learn](./docs/learn.md) |
-| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.0.7](./docs/releases/v0.0.7.md)） |
+| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.1.0](./docs/releases/v0.1.0.md)） |
 | 全部专题索引 | [docs/README.md](./docs/README.md) |
 
 ---
@@ -122,8 +125,10 @@ npx @xrkseek/harness-cli serve --preset harness --workspace .
 ## 仓库里有什么
 
 ```text
-apps/cli          命令行入口（对外包名 harness-cli）
+apps/cli          命令行入口（对外 @xrkseek/harness-cli）
 apps/web          产品壳源码（组装进 CLI 的 product-web）
+packages/client   浏览器插件（ui-conversation · ui-reference · …）
+packages/context  @file / @session 引用契约（Face 发现主路径）
 packages/*        运行时库（多数仓内 private）
 presets/*         接线组合
 docs/             使用与契约说明
