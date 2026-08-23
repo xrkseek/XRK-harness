@@ -24,12 +24,12 @@ const WEB_DIST = path.join(ROOT, "apps", "web", "dist");
 const PRODUCT_WEB = path.join(CLI, "product-web");
 const STAGE = path.join(ROOT, ".release", "harness-cli");
 
-function run(cmd, args, cwd = ROOT) {
+function run(cmd, args, cwd = ROOT, extraEnv = {}) {
   const r = spawnSync(cmd, args, {
     cwd,
     stdio: "inherit",
     shell: process.platform === "win32",
-    env: process.env,
+    env: { ...process.env, CI: "true", ...extraEnv },
   });
   if (r.status !== 0) process.exit(r.status ?? 1);
 }
@@ -76,6 +76,29 @@ function bundledNames(nm) {
   return names;
 }
 
+/** pnpm deploy omits gitignored dist/; copy compiled context runtime into the bundle. */
+function syncContextDistIntoStage(stageDir) {
+  const pairs = [
+    ["packages/context/file-reference/dist", "node_modules/@xrkseek/xrk-file-reference/dist"],
+    [
+      "packages/context/file-reference-local/dist",
+      "node_modules/@xrkseek/xrk-file-reference-local/dist",
+    ],
+    ["packages/context/session-reference/dist", "node_modules/@xrkseek/xrk-session-reference/dist"],
+  ];
+  for (const [srcRel, destRel] of pairs) {
+    const src = path.join(ROOT, srcRel);
+    const dest = path.join(stageDir, destRel);
+    if (!existsSync(src)) {
+      console.error(`stage: missing workspace context build ${srcRel}`);
+      process.exit(1);
+    }
+    rmSync(dest, { recursive: true, force: true });
+    mkdirSync(path.dirname(dest), { recursive: true });
+    cpSync(src, dest, { recursive: true });
+  }
+}
+
 function walkPkgJson(dir, acc = []) {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules" || name === "dist" || name === "lib" || name.startsWith(".")) {
@@ -113,7 +136,13 @@ function ensurePrivateSurface() {
 }
 
 ensurePrivateSurface();
-run("pnpm", ["exec", "tsc", "-b", "apps/cli", "--pretty", "false"]);
+run("node", [
+  path.join(ROOT, "node_modules", "typescript", "bin", "tsc"),
+  "-b",
+  "apps/cli",
+  "--pretty",
+  "false",
+]);
 
 const CONTEXT_RUNTIME = [
   "packages/context/file-reference/dist/grammar.js",
@@ -149,6 +178,13 @@ if (!existsSync(path.join(STAGE, "product-web", "index.html"))) {
   process.exit(1);
 }
 
+const stagedPkgPath = path.join(STAGE, "package.json");
+const staged = JSON.parse(readFileSync(stagedPkgPath, "utf8").replace(/^\uFEFF/, ""));
+delete staged.private;
+hoistPnpmStore(path.join(STAGE, "node_modules"));
+rmSync(path.join(STAGE, "node_modules", ".pnpm"), { recursive: true, force: true });
+syncContextDistIntoStage(STAGE);
+
 for (const rel of [
   "node_modules/@xrkseek/xrk-file-reference/dist/grammar.js",
   "node_modules/@xrkseek/xrk-file-reference-local/dist/search.js",
@@ -159,12 +195,6 @@ for (const rel of [
     process.exit(1);
   }
 }
-
-const stagedPkgPath = path.join(STAGE, "package.json");
-const staged = JSON.parse(readFileSync(stagedPkgPath, "utf8").replace(/^\uFEFF/, ""));
-delete staged.private;
-hoistPnpmStore(path.join(STAGE, "node_modules"));
-rmSync(path.join(STAGE, "node_modules", ".pnpm"), { recursive: true, force: true });
 
 const names = bundledNames(path.join(STAGE, "node_modules"));
 const dependencies = {};
