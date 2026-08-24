@@ -172,6 +172,41 @@ describe('resident composer', () => {
     expect(view.container.querySelector('textarea')).toBe(hero)
     await runtime.dispose()
   })
+
+  it('shows hero chrome while openState is cold (pre-history pull)', async () => {
+    const runtime = await bench({ blank: true })
+    await runtime.workspaces.update((draft) => {
+      draft.items = [{ workspaceId: 'w1', title: 'Proj', path: '/proj', sessionIds: [SID] }] as never
+    })
+    await runtime.sessions.updateSnapshot(SID, (draft) => {
+      draft.openState = 'cold'
+      draft.composerPhase = 'blank'
+      draft.blank = true
+    })
+    const view = runtime.renderRoot()
+    expect(view.container.querySelector('[data-phase="hero"]')).not.toBeNull()
+    expect(view.getByText('探索未至之境')).toBeTruthy()
+    await runtime.dispose()
+  })
+
+  it('settling keeps hero chrome while the composer seat stays hidden', async () => {
+    const runtime = await bench()
+    await runtime.workspaces.update((draft) => {
+      draft.items = [{ workspaceId: 'w1', title: 'Proj', path: '/proj', sessionIds: [SID] }] as never
+    })
+    await runtime.sessions.updateSnapshot(SID, (draft) => {
+      draft.openState = 'loading'
+      draft.composerPhase = 'blank'
+      draft.blank = false
+    })
+    const view = runtime.renderRoot()
+    expect(view.container.querySelector('[data-phase="settling"]')).not.toBeNull()
+    expect(view.getByText('探索未至之境')).toBeTruthy()
+    const seat = view.container.querySelector('[data-composer-seat]') as HTMLElement
+    expect(seat).not.toBeNull()
+    expect(getComputedStyle(seat).visibility).toBe('hidden')
+    await runtime.dispose()
+  })
 })
 
 describe('prompt rejection through the assembled composer', () => {

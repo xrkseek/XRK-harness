@@ -1,8 +1,7 @@
 /**
  * Host-serve plan-review (pnpm test:web). Cordis scaffold twin: plan-review.e2e.ts.
  *
- * `/plan` then `exit_plan_mode` → `[data-plan-review-key]` Approve →
- * leave plan mode + final text.
+ * `/plan` then `exit_plan_mode` �?`[data-plan-review-key]` Approve �? * leave plan mode + final text.
  */
 import { describe, expect, it } from "vitest";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
@@ -41,7 +40,7 @@ describe.skipIf(!HAS_SHELL)("product shell plan review", () => {
       });
       const { browser, page, pageErrors } = await openEnglishPage(shell.base);
       try {
-        await prepareLiveComposer(page, shell.base, pageErrors);
+        await prepareLiveComposer(page, shell, pageErrors);
         await sendComposerPrompt(page, "/plan");
         await page
           .getByRole("button", { name: /Plan mode on|计划模式/ })

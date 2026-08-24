@@ -191,6 +191,11 @@ export async function openEnglishPage(base: string): Promise<{
   page.on("pageerror", (err) => {
     pageErrors.push(String(err));
   });
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
+      pageErrors.push(msg.text());
+    }
+  });
   await page.goto(base, { waitUntil: "domcontentloaded" });
   return { browser, page, pageErrors };
 }
@@ -209,60 +214,31 @@ export async function dismissWelcome(page: Page): Promise<void> {
   await dialog.waitFor({ state: "hidden", timeout: 10_000 });
 }
 
-export async function waitForFaceSessions(
-  base: string,
-  timeoutMs = 15_000,
-): Promise<unknown[]> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const listed = await faceRpc(base, "session.list");
-    const items = (listed.value as { items?: unknown[] } | undefined)?.items;
-    if (Array.isArray(items) && items.length > 0) return items;
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-  return [];
-}
-
-export async function waitForLiveComposer(
-  page: Page,
-  timeoutMs = 20_000,
-): Promise<void> {
-  const live = page.getByPlaceholder(LIVE_PLACEHOLDER);
-  try {
-    await live.waitFor({ state: "visible", timeout: timeoutMs });
-  } catch (error) {
-    const input = page.locator("textarea").first();
-    const placeholder = await input
-      .getAttribute("placeholder")
-      .catch(() => null);
-    const aria = await input.getAttribute("aria-label").catch(() => null);
-    throw new Error(
-      `live composer missing; placeholder=${JSON.stringify(placeholder)} aria=${JSON.stringify(aria)}`,
-      { cause: error },
-    );
-  }
-}
-
+/** DSH lane: welcome → connect workspace → enabled hero composer. */
 export async function prepareLiveComposer(
   page: Page,
-  base: string,
+  shell: { readonly workspaceRoot: string },
   pageErrors: readonly string[] = [],
 ): Promise<void> {
   await dismissWelcome(page);
-  let sessions = await waitForFaceSessions(base, 12_000);
-  if (sessions.length === 0) {
-    await page
-      .getByRole("button", { name: /新建会话|New session/ })
+  const live = page.locator(
+    'textarea:enabled[placeholder="Describe what you want to build"]',
+  );
+  if (await live.isVisible().catch(() => false)) return;
+  try {
+    const { connectFreshWorkspace } = await import('./support.ts');
+    await connectFreshWorkspace(page, shell.workspaceRoot);
+  } catch (error) {
+    const phase = await page
+      .locator('div[data-phase]')
       .first()
-      .click();
-    sessions = await waitForFaceSessions(base, 12_000);
-  }
-  if (sessions.length === 0) {
+      .getAttribute('data-phase')
+      .catch(() => null);
     throw new Error(
-      `no Face session after welcome; page errors: ${pageErrors.join(" | ") || "(none)"}`,
+      `live composer not ready; phase=${JSON.stringify(phase)}; page errors: ${pageErrors.join(' | ') || '(none)'}`,
+      { cause: error },
     );
   }
-  await waitForLiveComposer(page);
 }
 
 export async function sendComposerPrompt(

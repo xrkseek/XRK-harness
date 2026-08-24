@@ -100,7 +100,7 @@ export function apply(ctx: ClientContext): void {
           if (version !== rowsVersion || revision !== rowsRevision) {
             rowsVersion = version
             rowsRevision = revision
-            rows = ctx.slots.entries('settings.section')
+            rows = ctx.slots.entriesOfSlot('settings.section')
               .map(e => ({
                 /* v8 ignore next -- list-slot registration requires id (SlotCore rejects an entry without one) */
                 id: e.options.id ?? '',

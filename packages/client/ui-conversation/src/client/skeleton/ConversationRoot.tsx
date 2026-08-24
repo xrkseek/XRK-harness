@@ -23,6 +23,8 @@ export function ConversationRoot({
   const inputState = useInput(s => s)
   const cwd = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.cwd)
   const summaryBlank = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.blank)
+  const liveBlank = useSession(s => s.blank)
+  const provenBlank = summaryBlank === true || liveBlank === true
   const workspaces = useWorkspaces(s => s)
   // A plugin this package cannot import (ui-model-selection) says this session cannot
   // send; its reason is already localized by whoever raised it.
@@ -75,9 +77,19 @@ export function ConversationRoot({
   // summary-blank session is the hero before its open starts (`cold`) and
   // after one fails (`error`) for the same reason — there is no history.
   const settling = sessionId !== undefined && composerPhase === 'blank' && openState === 'loading'
-    && summaryBlank !== true
+    && !provenBlank
+  // Align with the comment above: summary-blank sessions are hero before open
+  // (`cold`), after a failed open (`error`), and once history proves empty
+  // (`open`). `settling` only hides the composer — hero chrome must still paint
+  // or the column goes fully blank while history replays.
   const hero = sessionId === undefined
-    || (composerPhase === 'blank' && (openState === 'open' || summaryBlank === true))
+    || (composerPhase === 'blank' && (
+      openState === 'open'
+      || openState === 'cold'
+      || openState === 'error'
+      || provenBlank
+    ))
+  const heroChrome = hero || settling
   const zone: InputZone | undefined =
     session === undefined || inputState === undefined ? undefined : { session, input: inputState }
 
@@ -128,13 +140,13 @@ export function ConversationRoot({
   // blank session whose workspace vanished (deleted from the sidebar). The
   // bar is ONE session-maybe slot rendered unconditionally — inert is a prop,
   // not a different tree, so the textarea DOM survives the transition.
-  const inert = sessionId === undefined || (hero && chipTitle === undefined)
+  const inert = sessionId === undefined || (heroChrome && chipTitle === undefined)
   // A raised block is the same inert posture with the blocker's own reason:
   // one disabled textarea, never a second tree. The no-workspace state wins
   // when both hold — picking a workspace is the earlier prerequisite.
   const blocked = !inert && composerBlock !== undefined
   const inputBar = renderSlot('conversation.composer.bar', {
-    variant: hero ? 'hero' : 'composer',
+    variant: heroChrome ? 'hero' : 'composer',
     ...(inert
       ? {
         disabled: true,
@@ -147,20 +159,20 @@ export function ConversationRoot({
         // block keeps the model seat live because choosing a model is how the
         // user clears it.
         ? { blocked: composerBlock, placeholder: composerBlock.reason }
-        : hero ? { placeholder: t('placeholder.hero') } : {}),
+        : heroChrome ? { placeholder: t('placeholder.hero') } : {}),
     overlay: renderSlot('conversation.input.overlay', {}),
     leftItems: zone === undefined ? null : renderSlot('conversation.input.left', zone),
     rightItems: zone === undefined ? null : renderSlot('conversation.input.right', zone),
     // Stats band under the card, inside the bar's width column so both
     // share one constraint (composer.dock = stats-line family).
-    footer: !hero && zone !== undefined ? renderSlot('conversation.composer.dock', zone) : null,
+    footer: !heroChrome && zone !== undefined ? renderSlot('conversation.composer.dock', zone) : null,
   })
 
   const composerBar = (
-    <div className={clsx(css.composerStack, hero && css.composerHero)}>
-      {hero && <HeroGlow className={css.heroGlow} />}
-      {hero && <HeroShell t={t} renderSlot={renderSlot} />}
-      {hero && heroWorkspaceRow}
+    <div className={clsx(css.composerStack, heroChrome && css.composerHero)}>
+      {heroChrome && <HeroGlow className={css.heroGlow} />}
+      {heroChrome && <HeroShell t={t} renderSlot={renderSlot} />}
+      {heroChrome && heroWorkspaceRow}
       {zone !== undefined && renderSlot('conversation.input.dock', zone)}
       {inputBar}
     </div>

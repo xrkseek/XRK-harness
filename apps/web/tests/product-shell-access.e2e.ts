@@ -1,5 +1,5 @@
 /**
- * Host-serve Access chip: Permissions projection → switch Read Only
+ * Host-serve Access chip: Permissions projection �?switch Read Only
  * via the composer Access mode control (runs `/permission`).
  */
 import { describe, expect, it } from "vitest";
@@ -22,7 +22,7 @@ describe.skipIf(!HAS_SHELL)("product shell access", () => {
       });
       const { browser, page, pageErrors } = await openEnglishPage(shell.base);
       try {
-        await prepareLiveComposer(page, shell.base, pageErrors);
+        await prepareLiveComposer(page, shell, pageErrors);
 
         const access = page.getByRole("button", {
           name: /Access mode|访问模式/,

@@ -29,7 +29,7 @@ describe.skipIf(!HAS_SHELL)("product shell thinking", () => {
       });
       const { browser, page, pageErrors } = await openEnglishPage(shell.base);
       try {
-        await prepareLiveComposer(page, shell.base, pageErrors);
+        await prepareLiveComposer(page, shell, pageErrors);
         await sendComposerPrompt(page, "think then answer");
 
         const think = page.locator('[data-variant="think"]');

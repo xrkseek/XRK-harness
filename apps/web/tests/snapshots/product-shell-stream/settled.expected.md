@@ -27,7 +27,7 @@
   - navigation "Session hierarchy":
     - button "say the marker" [disabled]
   - img
-  - text: Minimal mode
+  - text: XRK Harness
   - button "Session log":
     - text: Session log
     - img
@@ -46,7 +46,7 @@
   - img
 - button "Branch into a new conversation":
   - img
-- text: {{clock}} Ran for {{duration}} TTFT {{duration}} {{throughput}} tok/s
+- text: {{clock}} Ran for {{duration}} TTFT {{duration}}
 - textbox "Message the agent"
 - button "Commands":
   - img
@@ -55,6 +55,6 @@
   - text: DeepSeek V4 Flash
   - img
 - button "Send message" [disabled]
-- text: 1 turns · 1 steps LLM {{duration}} TTFT avg {{duration}} · {{throughput}} tok/s Cache hit 0% Input 3 tok · Output 2 tok Details
+- text: 1 turns · 1 steps LLM {{duration}} TTFT avg {{duration}} Cache hit 0% Input 3 tok · Output 2 tok Details
 - button "Close details"
 - text: Click a tool row in the message flow to view its details

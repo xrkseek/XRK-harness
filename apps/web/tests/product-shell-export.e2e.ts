@@ -1,6 +1,6 @@
 /**
- * Host-serve Session log export: header button → HEAD /api/session.export
- * → browser download (`xrk-session-*.zip`) + success dialog.
+ * Host-serve Session log export: header button -> HEAD /api/session.export
+ * -> browser download (`xrk-session-*.zip`) + success dialog.
  */
 import { describe, expect, it } from "vitest";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
@@ -24,7 +24,7 @@ describe.skipIf(!HAS_SHELL)("product shell session export", () => {
       });
       const { browser, page, pageErrors } = await openEnglishPage(shell.base);
       try {
-        await prepareLiveComposer(page, shell.base, pageErrors);
+        await prepareLiveComposer(page, shell, pageErrors);
         await sendComposerPrompt(page, "say export-shell-ok then stop");
         await page.getByText(MARKER, { exact: true }).waitFor({ timeout: 20_000 });
 
@@ -55,10 +55,10 @@ describe.skipIf(!HAS_SHELL)("product shell session export", () => {
         expect(download.suggestedFilename()).toMatch(/^xrk-session-.+\.zip$/);
 
         const dialog = page.getByRole("dialog", {
-          name: /Session download started|Session 导出已开始下载/,
+          name: "Session download started",
         });
         await dialog.waitFor({ timeout: 20_000 });
-        await dialog.getByText(/Close|关闭/, { exact: true }).click();
+        await dialog.getByText("Close", { exact: true }).click();
 
         expect(
           pageErrors,

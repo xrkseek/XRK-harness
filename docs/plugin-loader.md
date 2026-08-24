@@ -169,7 +169,8 @@ xrk-harness plugin path
 | 子命令 | 作用 |
 |--------|------|
 | `add <spec…>` | `npm pack` 拉包；识别 `xrk.client`/`dsh.client`（写 `web/` 叠加，inject 里 `@deepseek-ai/dsh-client-*` → `@xrkseek/client-*`）与进程 manifest；client 半部同时复制 **`xrk.host.json`**（或 `package.json` → `xrkseek.host` / `dsh.host`） |
-| `remove <name…>` | 按 `.xrk-plugins.json` 删文件并重写 `web/boot.json` |
+| `remove <name…>` | 按 `.xrk-plugins.json` 删文件并重写 `web/boot.json`；空 `@scope` 父目录会一并 prune |
+| `reconcile` | 以 inventory 为真源：删 `web/plugins` 孤儿目录、重写 `web/boot.json`（inventory 空则删 boot） |
 | `list` / `path` | 清单与根路径 |
 
 布局：
@@ -183,7 +184,11 @@ xrk-harness plugin path
   <id>/   # 进程插件（discover 跳过 web/）
 ```
 
-装完须重启 `web` / `serve`。Host 在 `XRK_PLUGINS_DIR` 未设且该目录已存在时自动用作 `pluginsDir`。
+装完须重启 `web` / `serve`。`add` / `remove` 会自动 reconcile；手删目录或 inventory 不同步时跑 `plugin reconcile`。
+
+**Inventory 与磁盘**：`.xrk-plugins.json` 是 client 半部真源。`web/plugins/<id>/` 仅应存在 inventory 里 `kind: client|both` 的包；孤儿目录会导致 overlay `boot.json` 引用已删 `client.js`，浏览器 boot 失败或 slot 崩溃。`reconcile` 按 inventory 清理 staging 并重写 boot。
+
+Host 在 `XRK_PLUGINS_DIR` 未设且该目录已存在时自动用作 `pluginsDir`。
 
 ## Host / preset
 

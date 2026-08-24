@@ -1,6 +1,6 @@
 /**
- * Host-serve ask_user: replay questions[] â†’ `[data-question-key]`
- * â†’ pick an option â†’ Submit â†’ `/api/respond` â†’ final assistant text.
+ * Host-serve ask_user: replay questions[] â†?`[data-question-key]`
+ * â†?pick an option â†?Submit â†?`/api/respond` â†?final assistant text.
  */
 import { describe, expect, it } from "vitest";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
@@ -46,7 +46,7 @@ describe.skipIf(!HAS_SHELL)("product shell question", () => {
       });
       const { browser, page, pageErrors } = await openEnglishPage(shell.base);
       try {
-        await prepareLiveComposer(page, shell.base, pageErrors);
+        await prepareLiveComposer(page, shell, pageErrors);
         await sendComposerPrompt(page, "ask me a color then stop");
 
         const card = page.locator("[data-question-key]");

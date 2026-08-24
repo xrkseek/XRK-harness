@@ -23,6 +23,7 @@ import {
   type InventoryEntry,
 } from "./inventory.js";
 import { remapInjectList } from "./remap-inject.js";
+import { reconcileClientStaging } from "./staging-reconcile.js";
 
 export { anchorPathSpec, fetchPackage } from "./fetch-pack.js";
 export { classifyPackage } from "./classify.js";
@@ -33,6 +34,7 @@ export {
   type InventoryEntry,
   type PluginInventory,
 } from "./inventory.js";
+export { listStagedClientPluginIds, reconcileClientStaging } from "./staging-reconcile.js";
 
 export interface PluginIo {
   readonly log: (line: string) => void;
@@ -113,7 +115,7 @@ export function addPlugin(
         : {}),
     };
     upsertInventoryEntry(pluginsDir, entry);
-    reconcileBoot(pluginsDir);
+    reconcilePluginsDir(pluginsDir, io);
     io.log(
       `xrk-harness: installed ${entry.name}@${entry.version} (${entry.kind}) → ${pluginsDir}`,
     );
@@ -146,8 +148,20 @@ export function removePlugin(
     removeProcessPlugin(pluginsDir, name);
   }
   removeInventoryEntry(pluginsDir, name);
-  reconcileBoot(pluginsDir);
+  reconcilePluginsDir(pluginsDir, io);
   io.log(`xrk-harness: removed ${name}`);
+}
+
+/** Sync client staging + `web/boot.json` with inventory (orphan-safe). */
+export function reconcilePluginsDir(
+  pluginsDir: string,
+  io: PluginIo = defaultIo,
+): void {
+  const removed = reconcileClientStaging(pluginsDir);
+  for (const id of removed) {
+    io.log(`xrk-harness: pruned orphan client staging ${id}`);
+  }
+  reconcileBoot(pluginsDir);
 }
 
 export function listPlugins(

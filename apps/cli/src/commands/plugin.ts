@@ -5,6 +5,7 @@
 import {
   addPlugin,
   listPlugins,
+  reconcilePluginsDir,
   removePlugin,
   resolvePluginsDir,
 } from "../plugin/index.js";
@@ -17,6 +18,7 @@ Usage:
   xrk-harness plugin remove <name…>
   xrk-harness plugin list
   xrk-harness plugin path
+  xrk-harness plugin reconcile
   xrk-harness plugin help
 
 Specs (npm pack):
@@ -105,9 +107,17 @@ export async function runPlugin(argv: readonly string[]): Promise<number> {
         process.stdout.write(`${resolvePluginsDir()}\n`);
         return 0;
       }
+      case "reconcile": {
+        const pluginsDir = resolvePluginsDir();
+        reconcilePluginsDir(pluginsDir);
+        process.stdout.write(
+          "xrk-harness: reconciled client staging and web/boot.json with inventory\n",
+        );
+        return 0;
+      }
       default:
         throw new Error(
-          `unknown plugin subcommand: ${sub} (try: add | remove | list | path | help)`,
+          `unknown plugin subcommand: ${sub} (try: add | remove | list | path | reconcile | help)`,
         );
     }
   } catch (err) {

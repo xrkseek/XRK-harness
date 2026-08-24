@@ -13,6 +13,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  rmdirSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -111,16 +112,29 @@ export function installClientBundle(
   stageHostManifest(classified.root, destDir);
 }
 
-export function removeClientBundle(pluginsDir: string, name: string): void {
-  const destDir = clientInstallDir(pluginsDir, name);
-  rmSync(destDir, { recursive: true, force: true });
-  // Prune empty @scope parent
-  if (name.startsWith("@")) {
-    const scopeDir = path.dirname(destDir);
+/** Walk upward and remove empty directories until `stopAt` (non-inclusive). */
+export function pruneEmptyParents(dir: string, stopAt: string): void {
+  const stop = path.resolve(stopAt);
+  let current = path.resolve(dir);
+  while (current !== stop) {
+    const rel = path.relative(stop, current);
+    if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) break;
     try {
-      rmSync(scopeDir, { recursive: false });
+      if (!existsSync(current)) break;
+      if (readdirSync(current).length > 0) break;
+      rmdirSync(current);
+      current = path.dirname(current);
     } catch {
-      /* not empty */
+      break;
     }
   }
+}
+
+export function removeClientBundle(pluginsDir: string, name: string): void {
+  const destDir = clientInstallDir(pluginsDir, name);
+  const pluginsRoot = path.join(pluginsDir, "web", "plugins");
+  if (existsSync(destDir)) {
+    rmSync(destDir, { recursive: true, force: true });
+  }
+  pruneEmptyParents(path.dirname(destDir), pluginsRoot);
 }

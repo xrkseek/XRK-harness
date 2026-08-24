@@ -1,6 +1,6 @@
 /**
- * Host-serve policy ask: replay todo_write → composer takeover
- * `[data-approval-key]` → Allow once → `/api/respond` → tool + final text.
+ * Host-serve policy ask: replay todo_write -> composer takeover
+ * `[data-approval-key]` -> Allow once -> `/api/respond` -> tool + final text.
  */
 import { describe, expect, it } from "vitest";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
@@ -49,7 +49,7 @@ describe.skipIf(!HAS_SHELL)("product shell approval", () => {
       });
       const { browser, page, pageErrors } = await openEnglishPage(shell.base);
       try {
-        await prepareLiveComposer(page, shell.base, pageErrors);
+        await prepareLiveComposer(page, shell, pageErrors);
         await sendComposerPrompt(page, "update the todo then stop");
 
         const panel = page.locator("[data-approval-key]");
@@ -62,7 +62,7 @@ describe.skipIf(!HAS_SHELL)("product shell approval", () => {
           );
         }
 
-        await page.getByRole("button", { name: /Allow once|允许一次/ }).click();
+        await page.getByRole("button", { name: "Allow once" }).click();
         await panel.waitFor({ state: "hidden", timeout: 20_000 });
         await page.getByText(MARKER).waitFor({ timeout: 20_000 });
 

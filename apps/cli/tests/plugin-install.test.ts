@@ -3,15 +3,18 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { pruneEmptyParents } from "../src/plugin/install-client.js";
 import {
   addPlugin,
   listPlugins,
+  reconcilePluginsDir,
   readInventory,
   removePlugin,
   resolvePluginsDir,
@@ -215,10 +218,79 @@ describe("plugin add/remove/list", () => {
     expect(body.http[0]!.prefix).toBe("/sidebar/");
   });
 
+  it("pruneEmptyParents removes an empty scoped parent", () => {
+    const root = tempDir("xrk-prune-");
+    const pluginsRoot = path.join(root, "web", "plugins");
+    const scope = path.join(pluginsRoot, "@acme");
+    mkdirSync(path.join(scope, "whip"), { recursive: true });
+    rmSync(path.join(scope, "whip"), { recursive: true, force: true });
+    expect(readdirSync(scope)).toEqual([]);
+    pruneEmptyParents(scope, pluginsRoot);
+    expect(existsSync(scope)).toBe(false);
+  });
+
   it("resolvePluginsDir honors XRK_PLUGINS_DIR", () => {
     const dir = tempDir("xrk-plug-ov-");
     expect(resolvePluginsDir({ XRK_PLUGINS_DIR: dir })).toBe(
       path.resolve(dir),
     );
+  });
+
+  it("reconcile prunes orphan client staging not in inventory", () => {
+    const home = tempDir("xrk-plug-orphan-");
+    const env = { XRK_HOME: home };
+    const pluginsDir = resolvePluginsDir(env);
+    const orphanDir = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "@ghost",
+      "leftover",
+    );
+    mkdirSync(orphanDir, { recursive: true });
+    writeFileSync(path.join(orphanDir, "client.js"), "export {};\n");
+    writeFileSync(
+      path.join(pluginsDir, "web", "boot.json"),
+      JSON.stringify({
+        rev: "stale",
+        entries: [
+          {
+            id: "@ghost/leftover",
+            url: "/plugins/@ghost/leftover/client.js",
+            rev: "0",
+            inject: [],
+          },
+        ],
+      }),
+    );
+
+    reconcilePluginsDir(pluginsDir, { log: () => {}, warn: () => {} });
+
+    expect(existsSync(orphanDir)).toBe(false);
+    expect(existsSync(path.join(pluginsDir, "web", "plugins", "@ghost"))).toBe(
+      false,
+    );
+    expect(existsSync(path.join(pluginsDir, "web", "boot.json"))).toBe(false);
+  });
+
+  it("remove scoped client prunes empty @scope directory", () => {
+    const home = tempDir("xrk-plug-scope-");
+    const env = { XRK_HOME: home };
+    const pluginsDir = resolvePluginsDir(env);
+    const fixture = writeClientFixture(home, "@acme/whip");
+
+    addPlugin(fixture, {
+      env,
+      pluginsDir,
+      io: { log: () => {}, warn: () => {} },
+    });
+    const scopeDir = path.join(pluginsDir, "web", "plugins", "@acme");
+    expect(existsSync(scopeDir)).toBe(true);
+
+    removePlugin("@acme/whip", {
+      pluginsDir,
+      io: { log: () => {}, warn: () => {} },
+    });
+    expect(existsSync(scopeDir)).toBe(false);
   });
 });

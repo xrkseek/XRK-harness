@@ -25,7 +25,7 @@ describe.skipIf(!HAS_SHELL)("product shell stream", () => {
       });
       const { browser, page, pageErrors } = await openEnglishPage(shell.base);
       try {
-        await prepareLiveComposer(page, shell.base, pageErrors);
+        await prepareLiveComposer(page, shell, pageErrors);
         await sendComposerPrompt(page, "say the marker");
         try {
           await page.getByText(MARKER).waitFor({ timeout: 20_000 });

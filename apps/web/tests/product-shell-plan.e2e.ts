@@ -1,5 +1,5 @@
 /**
- * Host-serve Plan chip: `/plan` â†’ plan projection â†’ Plan mode chip.
+ * Host-serve Plan chip: `/plan` â†?plan projection â†?Plan mode chip.
  */
 import { describe, expect, it } from "vitest";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
@@ -22,7 +22,7 @@ describe.skipIf(!HAS_SHELL)("product shell plan", () => {
       });
       const { browser, page, pageErrors } = await openEnglishPage(shell.base);
       try {
-        await prepareLiveComposer(page, shell.base, pageErrors);
+        await prepareLiveComposer(page, shell, pageErrors);
         await sendComposerPrompt(page, "/plan");
 
         const chip = page.getByRole("button", {

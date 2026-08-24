@@ -1,6 +1,6 @@
 /**
- * Host-serve TodoDock: replay todo_write â†’ Face todos projection
- * â†’ `[data-testid="todo-panel"]` above the composer.
+ * Host-serve TodoDock: replay todo_write â†?Face todos projection
+ * â†?`[data-testid="todo-panel"]` above the composer.
  */
 import { describe, expect, it } from "vitest";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
@@ -43,7 +43,7 @@ describe.skipIf(!HAS_SHELL)("product shell todo dock", () => {
       });
       const { browser, page, pageErrors } = await openEnglishPage(shell.base);
       try {
-        await prepareLiveComposer(page, shell.base, pageErrors);
+        await prepareLiveComposer(page, shell, pageErrors);
         await sendComposerPrompt(page, "write todos then stop");
 
         const panel = page.locator('[data-testid="todo-panel"]');

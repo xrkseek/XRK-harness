@@ -16,7 +16,7 @@ const EXTENSIONS = path.resolve(process.cwd(), "extensions");
 
 describe.skipIf(!HAS_SHELL)("product shell inventory", () => {
   it(
-    "lists process plugins and boot entries in Settings → Plugins",
+    "lists process plugins and boot entries in Settings �?Plugins",
     async () => {
       const shell = await spawnRegisteredWorkspace({
         label: "xrk-inv-",
@@ -25,7 +25,7 @@ describe.skipIf(!HAS_SHELL)("product shell inventory", () => {
       });
       const { browser, page, pageErrors } = await openEnglishPage(shell.base);
       try {
-        await prepareLiveComposer(page, shell.base, pageErrors);
+        await prepareLiveComposer(page, shell, pageErrors);
         await page.getByRole("button", { name: /Settings|设置/ }).click();
         const dialog = page.getByRole("dialog", { name: /Settings|设置/ });
         await dialog.waitFor({ timeout: 10_000 });

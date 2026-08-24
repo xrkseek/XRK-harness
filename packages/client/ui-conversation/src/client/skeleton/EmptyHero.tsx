@@ -7,7 +7,7 @@
 import { useId } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import {
-  FishLogo, IconChevronDownOutline14, IconFolderClose16, IconFolderOpen16,
+  BrandMark, IconChevronDownOutline14, IconFolderClose16, IconFolderOpen16,
 } from '@xrkseek/client-ui-primitives'
 import { workspaceTitleOf } from '@xrkseek/client-runtime/client'
 import type { ConversationSlotProps } from '../contract/slots.ts'
@@ -122,7 +122,7 @@ export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
           {/* figma 34:10412: fish 34×25 leading the headline, gap 10. */}
           <span className={css.fishHitbox}>
             {renderSlot('conversation.hero.brand.mark', { size: 34, className: css.fish }, {
-              fallback: <FishLogo size={34} className={css.fish} />,
+              fallback: <BrandMark size={34} className={css.fish} />,
             })}
           </span>
           <span className={css.headlineText}>{t('hero.headline')}</span>

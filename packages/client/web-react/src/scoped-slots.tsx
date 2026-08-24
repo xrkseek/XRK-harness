@@ -304,6 +304,24 @@ function entryKeyOf(entry: StoredEntry): number {
   return key
 }
 
+/** Fail-loud face when a slot cell is dry or an entry boundary caught a crash. */
+function SlotFailureFace({ slotKey }: { slotKey: string }) {
+  return (
+    <div
+      data-slot-error={slotKey}
+      role="alert"
+      style={{
+        padding: '16px 20px',
+        color: 'var(--dsw-alias-text-secondary, #9aa0a6)',
+        fontSize: '13px',
+        lineHeight: '1.4',
+      }}
+    >
+      Slot <code>{slotKey}</code> failed to render. Check the browser console for the error.
+    </div>
+  )
+}
+
 /**
  * Per-entry isolation: one registrant crashing (component render or inject
  * factory) must not take down siblings. Assembly errors (missing providers)
@@ -327,7 +345,7 @@ class SlotErrorBoundary extends Component<
     this.props.onEntryError(error)
   }
   override render(): ReactNode {
-    if (this.state.failed) return <div data-slot-error={this.props.slotKey} />
+    if (this.state.failed) return <SlotFailureFace slotKey={this.props.slotKey} />
     return this.props.children
   }
 }
@@ -756,7 +774,7 @@ function renderOutletContent(
   // A cell whose every registration abdicated keeps the crash face: the
   // shadowing collapse ran out of survivors, which is a failure state, not
   // the owner's natural-empty fallback.
-  const deadCell = () => <div data-slot-error={slotKey} />
+  const deadCell = () => <SlotFailureFace slotKey={slotKey} />
 
   if (spec.kind === 'single') {
     const entry = host.entriesOfSlot(slotKey)[0]
@@ -845,7 +863,7 @@ function renderOutletContent(
     <>
       {list.map((item, i) => item.entry !== undefined
         ? guarded(item.entry, `e${entryKeyOf(item.entry)}`)
-        : <div data-slot-error={slotKey} key={`x${item.id ?? i}`} />)}
+        : <SlotFailureFace slotKey={slotKey} key={`x${item.id ?? i}`} />)}
     </>
   )
 }
@@ -863,7 +881,7 @@ function RootOutlet({ ownerProps }: { ownerProps: object }) {
     // Registrations exist but every one abdicated: the shadowing collapse ran
     // dry, so the crash face replaces the tree (registered-but-broken is a
     // crash, not the boot-order assembly failure below).
-    if (host.entriesOf('root').length > 0) return <div data-slot-error="root" />
+    if (host.entriesOf('root').length > 0) return <SlotFailureFace slotKey="root" />
     throw new SlotAssemblyError("renderSlot('root') before any 'root' registration (boot order)")
   }
   // Same anchor contract as SlotOutlet: 'root' is a slot like any other, and

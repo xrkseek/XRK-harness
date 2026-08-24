@@ -429,11 +429,13 @@ describe('ConversationRoot resident composer', () => {
     expect(b.view.getByText('Selected Folder')).toBeTruthy()
   })
 
-  it('settling phase: a summary that does not prove the session blank hides the composer while it opens', () => {
-    const b = mount(conversationSnapshot({ composerPhase: 'blank', blank: true, openState: 'loading' }))
+  it('settling phase: history replay hides the composer but keeps hero chrome', () => {
+    const b = mount(conversationSnapshot({ composerPhase: 'blank', blank: false, openState: 'loading' }))
     const root = b.view.container.querySelector('[data-phase]')
     expect(root?.getAttribute('data-phase')).toBe('settling')
-    expect(b.view.queryByText('探索未至之境')).toBeNull()
+    expect(b.view.getByText('探索未至之境')).toBeTruthy()
+    const seat = b.view.container.querySelector('[data-composer-seat]') as HTMLElement
+    expect(getComputedStyle(seat).visibility).toBe('hidden')
   })
 
   it('settling phase: a session the list has no row for settles conservatively', () => {

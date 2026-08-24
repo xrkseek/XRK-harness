@@ -67,6 +67,13 @@ export async function resolveProductWebDist(
   if (configured?.trim()) {
     return distIfReady(path.resolve(configured.trim()));
   }
+  // Monorepo checkout: prefer freshly assembled `apps/web/dist` over the
+  // packaged `product-web/` copy shipped next to the CLI (stale after
+  // `client:bundle` + `web:assemble` unless re-staged for release).
+  if (isMonorepoCheckout()) {
+    const assembled = await distIfReady(defaultProductWebDist());
+    if (assembled) return assembled;
+  }
   const bundled = await distIfReady(bundledProductWebDist());
   if (bundled) return bundled;
   return distIfReady(defaultProductWebDist());
