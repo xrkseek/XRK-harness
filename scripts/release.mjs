@@ -58,6 +58,27 @@ function npmPack() {
   return path.join(STAGE, npmTgz);
 }
 
+function npmOtpArgs() {
+  const otp = (process.env.NPM_CONFIG_OTP ?? process.env.NPM_OTP ?? "").trim();
+  if (!otp) return [];
+  return ["--otp", otp];
+}
+
+function npmPublishArgs(packed) {
+  const args = [
+    "--yes",
+    "npm@10.9.2",
+    "publish",
+    packed,
+    "--access",
+    "public",
+    "--registry",
+    NPMJS,
+    ...npmOtpArgs(),
+  ];
+  return args;
+}
+
 run("node", [path.join(ROOT, "scripts", "stage-cli-release.mjs")]);
 
 const pkg = JSON.parse(
@@ -122,20 +143,22 @@ if (!skipNpmjs) {
     writeFileSync(path.join(STAGE, ".npmrc"), `registry=${NPMJS}\n`);
   }
   console.log("release: publishing npmjs…");
-  run(
+  if (!npmOtpArgs().length) {
+    console.warn(
+      "release: no NPM_CONFIG_OTP / NPM_OTP — publish may fail if account requires 2FA for write actions",
+    );
+  }
+  const pub = spawnSync(
     "npx",
-    [
-      "--yes",
-      "npm@10.9.2",
-      "publish",
-      packed,
-      "--access",
-      "public",
-      "--registry",
-      NPMJS,
-    ],
-    { cwd: STAGE, env: process.env },
+    npmPublishArgs(packed),
+    { cwd: STAGE, stdio: "inherit", shell: process.platform === "win32", env: process.env },
   );
+  if (pub.status !== 0) {
+    console.error(
+      "release: npm publish failed — if EOTP, set NPM_CONFIG_OTP to a 6-digit authenticator code or a single 64-char recovery code",
+    );
+    process.exit(pub.status ?? 1);
+  }
   console.log("release: npmjs ok");
 }
 

@@ -68,7 +68,7 @@ New documents start with a bilingual audience line. Body text uses formal **Chin
 | 跑测 / 提 PR / Test / PR | [testing](./testing.md) · [CONTRIBUTING](../CONTRIBUTING.md) |
 | 交接本仓 / Handoff | [maintainer](./maintainer.md) · [audiences](./audiences.md) |
 | 发版 / Release | [publishing](./publishing.md)（**维护者 / Maintainers**） |
-| 版本说明 / Release notes | [releases/](./releases/)（正式 / formal [v0.1.0](./releases/v0.1.0.md) · 预览 / preview [v0.0.11](./releases/v0.0.11.md)） |
+| 版本说明 / Release notes | [releases/](./releases/)（正式 / formal [v0.1.4](./releases/v0.1.4.md) · 预览 / preview [v0.0.11](./releases/v0.0.11.md)） |
 | 改码笔记 / Coding notes | [AGENTS](../AGENTS.md) · `.cursor/skills` |
 
 ---
@@ -146,4 +146,4 @@ New documents start with a bilingual audience line. Body text uses formal **Chin
 | [learn.md](./learn.md) | 要义摘录 / Short digest |
 | [modules/](./modules/README.md) | 包文件地图 / Package file map |
 | [adr/](./adr/README.md) | 架构决策 / Architecture decisions |
-| [releases/](./releases/) | 发行说明 / Release notes（正式 [v0.1.0](./releases/v0.1.0.md) · 预览 [v0.0.11](./releases/v0.0.11.md)） |
+| [releases/](./releases/) | 发行说明 / Release notes（正式 [v0.1.4](./releases/v0.1.4.md) · 预览 [v0.0.11](./releases/v0.0.11.md)） |

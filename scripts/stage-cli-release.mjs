@@ -29,7 +29,7 @@ function run(cmd, args, cwd = ROOT, extraEnv = {}) {
     cwd,
     stdio: "inherit",
     shell: process.platform === "win32",
-    env: { ...process.env, CI: "true", ...extraEnv },
+    env: { ...process.env, ...extraEnv },
   });
   if (r.status !== 0) process.exit(r.status ?? 1);
 }
@@ -99,50 +99,7 @@ function syncContextDistIntoStage(stageDir) {
   }
 }
 
-function walkPkgJson(dir, acc = []) {
-  for (const name of readdirSync(dir)) {
-    if (name === "node_modules" || name === "dist" || name === "lib" || name.startsWith(".")) {
-      continue;
-    }
-    const full = path.join(dir, name);
-    const st = statSync(full);
-    if (st.isDirectory()) walkPkgJson(full, acc);
-    else if (name === "package.json") acc.push(full);
-  }
-  return acc;
-}
-
-function ensurePrivateSurface() {
-  const files = [
-    path.join(ROOT, "package.json"),
-    ...walkPkgJson(path.join(ROOT, "packages")),
-    ...walkPkgJson(path.join(ROOT, "presets")),
-    ...walkPkgJson(path.join(ROOT, "apps")),
-  ];
-  for (const file of files) {
-    const pkg = JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
-    if (!pkg.name) continue;
-    let dirty = false;
-    if (pkg.private !== true) {
-      pkg.private = true;
-      dirty = true;
-    }
-    if (pkg.publishConfig) {
-      delete pkg.publishConfig;
-      dirty = true;
-    }
-    if (dirty) writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
-  }
-}
-
-ensurePrivateSurface();
-run("node", [
-  path.join(ROOT, "node_modules", "typescript", "bin", "tsc"),
-  "-b",
-  "apps/cli",
-  "--pretty",
-  "false",
-]);
+run("pnpm", ["exec", "tsc", "-b", "apps/cli", "--pretty", "false"]);
 
 const CONTEXT_RUNTIME = [
   "packages/context/file-reference/dist/grammar.js",
@@ -171,7 +128,9 @@ cpSync(WEB_DIST, PRODUCT_WEB, { recursive: true });
 rmSync(path.join(ROOT, ".release"), { recursive: true, force: true });
 mkdirSync(path.join(ROOT, ".release"), { recursive: true });
 
-run("pnpm", ["--filter", "@xrkseek/harness-cli", "deploy", "--prod", "--legacy", STAGE]);
+run("pnpm", ["--filter", "@xrkseek/harness-cli", "deploy", "--prod", "--legacy", STAGE], ROOT, {
+  CI: "true",
+});
 
 if (!existsSync(path.join(STAGE, "product-web", "index.html"))) {
   console.error("stage: deploy missed product-web/");

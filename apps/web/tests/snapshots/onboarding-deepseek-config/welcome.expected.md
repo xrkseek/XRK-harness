@@ -1,5 +1,5 @@
 - dialog "欢迎使用 XRK-Harness":
   - heading "欢迎使用 XRK-Harness" [level=2]
   - paragraph: XRK-Harness 是本仓库的 Agent 宿主与产品壳：Session 可重建、工具可走策略，社区 DSH 插件经 dsh-compat 兼容器接入（不嵌入 Cordis Host）。
-  - paragraph: 0.1.0 是首个公开发版，CLI 与 serve 主路径可用；真 IM 隧道、Cordis fiber 子进程等缺口见 docs/status。欢迎通过 GitHub 反馈与共建。
+  - paragraph: 0.1.4 是当前正式公开发版，CLI 与 serve 主路径可用；真 IM 隧道、Cordis fiber 子进程等缺口见 docs/status。欢迎通过 GitHub 反馈与共建。
   - button "继续"
