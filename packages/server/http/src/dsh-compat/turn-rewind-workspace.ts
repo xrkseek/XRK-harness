@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Turn-rewind workspace capture via git status + file backup.
  */
 import {
@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { dataPath } from "./json-store.js";
+import { dataPath } from "./underlying/json-store.js";
 import { gitStatus } from "./sidebar-git.js";
 import {
   type RewindChange,

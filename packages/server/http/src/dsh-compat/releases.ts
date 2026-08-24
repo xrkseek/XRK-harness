@@ -1,8 +1,8 @@
-/**
+﻿/**
  * GitHub-style `/releases/latest` for community plugins that self-update.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson } from "../http-json.js";
+import { sendJson } from "./underlying/http-json.js";
 import { readXrkPluginInventory } from "../xrk/plugin-services.js";
 import type { XrkPluginServicesOptions } from "../xrk/plugin-services.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";

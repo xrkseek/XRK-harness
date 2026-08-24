@@ -267,10 +267,10 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 }
 
 export function helpText(): string {
-  return `xrk-harness — XRK Agent Harness CLI
+  return `xrkh — XRK Harness CLI (bin also: xrk-harness)
 
 Usage:
-  xrk-harness <command> [options] [prompt]
+  xrkh <command> [options] [prompt]
 
 Commands:
   run           One turn (default: minimal + replay; XRK_LLM_PRESET if set)
@@ -308,11 +308,11 @@ Env:
   XRK_PLUGINS_DIR           Plugin root (default: ~/.xrk/plugins when present)
 
 Examples:
-  xrk-harness web --workspace .
-  xrk-harness restart --port 8787
-  xrk-harness web --force --verbose
-  xrk-harness plugin add ./extensions/example-tools
-  xrk-harness plugin list
-  xrk-harness run --preset minimal "ping"
+  xrkh web --workspace .
+  xrkh restart --port 8787
+  xrkh web --force --verbose
+  xrkh plugin add ./extensions/example-tools
+  xrkh plugin list
+  xrkh run --preset minimal "ping"
 `;
 }

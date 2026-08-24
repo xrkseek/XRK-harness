@@ -1,6 +1,6 @@
 # LLM DeepSeek
 
-> **读者**：集成者 · 终端用户。
+> **读者 / Audience**：集成者 · 终端用户 / Integrators · End users
 
 `@xrkseek/llm-deepseek` — DeepSeek Chat Completions 预设（基于 `@xrkseek/llm-openai-compatible`）。
 

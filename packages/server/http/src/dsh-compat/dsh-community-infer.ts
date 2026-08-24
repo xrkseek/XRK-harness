@@ -26,7 +26,7 @@ export function inferDshCommunityHostManifest(
     resolveRpcRoute(channel, packageName),
   );
 
-  // HTTP: 全局能力表 + honest GET catch-all；不按包注册 xrk-stub 前缀。
+  // HTTP: global capability table + honest GET catch-all; do not register per-package xrk-stub prefixes.
 
   return {
     id,

@@ -1,6 +1,6 @@
 # `@xrkseek/attachment`（文件地图）
 
-> **读者**：贡献者 · 维护者。
+> **读者 / Audience**：贡献者 · 维护者 / Contributors · Maintainers
 
 | 文件 | 职责 |
 |------|------|

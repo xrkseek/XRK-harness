@@ -6,6 +6,7 @@ import type {
   CordisRpcHandler,
 } from "./cordis-registry.js";
 import type { SidebarCompatOptions } from "./sidebar-adapter.js";
+import type { SidebarFaceBridge } from "./sidebar-face-bridge.js";
 import type { TokenLedgerOptions } from "./tokenledger.js";
 import type { HarnessConnectorOptions } from "./harness-connector.js";
 import type { WalletOptions } from "./wallet.js";
@@ -60,7 +61,9 @@ export interface PluginHostManifest {
 }
 
 export type DshCompatWireOptions = XrkPluginServicesOptions &
-  SidebarCompatOptions &
+  SidebarCompatOptions & {
+    readonly sidebarFace?: SidebarFaceBridge;
+  } &
   TokenLedgerOptions &
   HarnessConnectorOptions &
   Pick<WalletOptions, "walletPort" | "face" | "xrkHome"> & {

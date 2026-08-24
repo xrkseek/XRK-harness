@@ -1,8 +1,8 @@
 /**
- * 底层标准：HTTP 入参解析（只读一次 body，避免挂起）。
+ * HTTP body helpers — read the request body at most once.
  */
 import type { IncomingMessage } from "node:http";
-import { readBody } from "../../http-json.js";
+import { readBody } from "./http-json.js";
 
 export function httpMethod(req: IncomingMessage): string {
   return (req.method ?? "GET").toUpperCase();

@@ -1,12 +1,12 @@
-/**
+﻿/**
  * dsh-plugin-wallpaper-engine file-backed settings + inventory.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { readBody, sendJson } from "../http-json.js";
-import { dataPath } from "./json-store.js";
+import { readBody, sendJson } from "./underlying/http-json.js";
+import { dataPath } from "./underlying/json-store.js";
 import { tag } from "./meta.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { parseJsonBody } from "./underlying/http-kit.js";

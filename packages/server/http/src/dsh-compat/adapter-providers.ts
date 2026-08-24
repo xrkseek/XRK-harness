@@ -299,6 +299,7 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
             ...(ctx.resolveSessionCwd
               ? { resolveSessionCwd: ctx.resolveSessionCwd }
               : {}),
+            ...(ctx.sidebarFace ? { sidebarFace: ctx.sidebarFace } : {}),
           }),
       },
     ],
@@ -472,11 +473,12 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
     const r = route as PluginHostRpcRoute;
     const pocketOpts = {
       ...(ctx.xrkHome ? { xrkHome: ctx.xrkHome } : {}),
+      ...(ctx.pluginsDir ? { pluginsDir: ctx.pluginsDir } : {}),
     };
     return {
       rpc: {
-        [r.channel]: (endpoint, payload) =>
-          handlePocketRpc(endpoint, payload, undefined, pocketOpts),
+        [r.channel]: (endpoint, payload, req) =>
+          handlePocketRpc(endpoint, payload, req, pocketOpts),
       },
     };
   },

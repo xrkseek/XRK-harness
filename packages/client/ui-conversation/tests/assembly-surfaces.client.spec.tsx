@@ -185,7 +185,7 @@ describe('resident composer', () => {
     })
     const view = runtime.renderRoot()
     expect(view.container.querySelector('[data-phase="hero"]')).not.toBeNull()
-    expect(view.getByText('探索未至之境')).toBeTruthy()
+    expect(view.getByText('向阳而生，驭光而行')).toBeTruthy()
     await runtime.dispose()
   })
 
@@ -201,7 +201,7 @@ describe('resident composer', () => {
     })
     const view = runtime.renderRoot()
     expect(view.container.querySelector('[data-phase="settling"]')).not.toBeNull()
-    expect(view.getByText('探索未至之境')).toBeTruthy()
+    expect(view.getByText('向阳而生，驭光而行')).toBeTruthy()
     const seat = view.container.querySelector('[data-composer-seat]') as HTMLElement
     expect(seat).not.toBeNull()
     expect(getComputedStyle(seat).visibility).toBe('hidden')

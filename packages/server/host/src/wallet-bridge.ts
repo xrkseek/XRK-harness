@@ -3,6 +3,8 @@
  */
 import {
   costMeterDisplayExchangeRate,
+  costMeterGetState,
+  costMeterRefreshBalance,
   costMeterSessionTotals,
   costMeterWalletUsage,
   type FaceRuntime,
@@ -11,6 +13,44 @@ import {
   mapSessionCostToDsh,
   type WalletFaceBridge,
 } from "@xrkseek/server-http";
+
+function balanceFromCostMeterState(): {
+  readonly status: "ok" | "err" | "off";
+  readonly currency: string;
+  readonly totalBalance: number;
+  readonly fetchedAt: number;
+  readonly message?: string;
+} {
+  const bal = costMeterGetState().balance as {
+    status?: string;
+    currency?: string;
+    totalBalance?: number;
+    fetchedAt?: number;
+    message?: string;
+  };
+  const status =
+    bal.status === "ok" || bal.status === "err" || bal.status === "off"
+      ? bal.status
+      : "off";
+  return {
+    status,
+    currency:
+      typeof bal.currency === "string" && bal.currency.trim()
+        ? bal.currency
+        : "CNY",
+    totalBalance:
+      typeof bal.totalBalance === "number" && Number.isFinite(bal.totalBalance)
+        ? bal.totalBalance
+        : 0,
+    fetchedAt:
+      typeof bal.fetchedAt === "number" && Number.isFinite(bal.fetchedAt)
+        ? bal.fetchedAt
+        : 0,
+    ...(typeof bal.message === "string" && bal.message
+      ? { message: bal.message }
+      : {}),
+  };
+}
 
 export function createWalletFaceBridgeFromFace(
   face: FaceRuntime,
@@ -48,6 +88,13 @@ export function createWalletFaceBridgeFromFace(
     },
     async getUsageTimeline() {
       return costMeterWalletUsage(7);
+    },
+    async getOfficialBalance() {
+      return balanceFromCostMeterState();
+    },
+    async refreshOfficialBalance() {
+      await costMeterRefreshBalance();
+      return balanceFromCostMeterState();
     },
   };
 }

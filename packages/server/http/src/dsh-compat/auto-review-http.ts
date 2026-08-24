@@ -1,10 +1,10 @@
-/**
+﻿/**
  * dsh-auto-review — settings + stats persist under ~/.xrk; classifier stays honest.
  * Face `autoReview` projection handles session slash; HTTP serves DSH client panel polls.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
-import { sendJson } from "../http-json.js";
+import { sendJson } from "./underlying/http-json.js";
 import {
   autoReviewClassifierUnavailable,
   honestReady,

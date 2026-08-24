@@ -1,8 +1,8 @@
 /**
- * XRK dsh-compat 底层：带 revision 的 JSON 文档读写（~/.xrk/…）。
- * Adapter 只装配路径；业务模块用此 primitive 持久化。
+ * Revisioned JSON documents under ~/.xrk/….
+ * Adapters wire paths; feature modules persist via this primitive.
  */
-import { dataPath, readJsonFile, writeJsonFile } from "./json-store.js";
+import { dataPath, readJsonFile, writeJsonFile } from "./underlying/json-store.js";
 
 export interface XrkRevisionedDoc<T> {
   readonly revision: number;

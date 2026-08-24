@@ -1,4 +1,4 @@
-/**
+﻿/**
  * dsh-undo-savepoint — file-backed settings rollback via host-settings.json snapshots.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -11,8 +11,8 @@ import {
   unlinkSync,
 } from "node:fs";
 import path from "node:path";
-import { sendJson } from "../http-json.js";
-import { dataPath, writeJsonFile } from "./json-store.js";
+import { sendJson } from "./underlying/http-json.js";
+import { dataPath, writeJsonFile } from "./underlying/json-store.js";
 import { recordRewindFromGit } from "./turn-rewind-workspace.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { parseJsonBody } from "./underlying/http-kit.js";

@@ -200,6 +200,11 @@ export {
   type NativeDirectoryPicker,
 } from "./host-pick-directory.js";
 export {
+  canOpenNativePath,
+  hostOpenPath,
+  openNativePath,
+} from "./host-open-path.js";
+export {
   resolveLlmForSession,
   resolveLlmForSelection,
   createSessionRoutingLlm,
@@ -272,6 +277,8 @@ export {
 export {
   costMeterAggregateUsage,
   costMeterDisplayExchangeRate,
+  costMeterGetState,
+  costMeterRefreshBalance,
   costMeterSessionTotals,
   costMeterWalletUsage,
   configureCostMeterHome,

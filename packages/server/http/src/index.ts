@@ -33,9 +33,13 @@ export {
   attachDshCompatUpgrades,
   syncAutoReviewSlashCommand,
   createXrkWalletPort,
+  createMobileAccessGateChecker,
+  createMobileAccessGateHandler,
+  injectMobileAccessShellIntoHtml,
   mapSessionCostToDsh,
   type WalletFaceBridge,
   type XrkWalletPort,
+  type SidebarFaceBridge,
 } from "./dsh-compat/index.js";
 export {
   createHostPluginsPublicHandler,

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Built-in DSH community adapter (kind: host). Committed in-repo; not published to npm.",
+  "description": "Built-in DSH community adapter (kind: host). Entry only; implementation at @xrkseek/server-http/dsh-compat (extractable).",
   "dependencies": {
     "@xrkseek/server-http": "workspace:*"
   },

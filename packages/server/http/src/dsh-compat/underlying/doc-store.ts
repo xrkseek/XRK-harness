@@ -1,6 +1,6 @@
 /**
- * 底层标准：具名 JSON 文档 store（`~/.xrk/<parts>` + revision 信封）。
- * 业务模块只声明 `parts` + 默认 data + RPC/HTTP 逻辑；adapter 只装配。
+ * Named revisioned JSON doc store (`~/.xrk/<parts>` + revision envelope).
+ * Feature modules declare `parts` + defaults; adapters only wire routes.
  */
 import {
   patchRevisionedDoc,

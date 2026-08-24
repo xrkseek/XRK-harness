@@ -1,5 +1,5 @@
 /**
- * 底层：Cordis `*-settings` RPC → 持久化 settings 文档。
+ * Cordis-style `*-settings` RPC → persisted settings documents.
  */
 import type {
   HostProviderPartial,

@@ -1,0 +1,11 @@
+{
+  "rev": "xrk-crash-settings-fixture",
+  "entries": [
+    {
+      "id": "xrk-crash-settings",
+      "url": "/plugins/xrk-crash-settings/client.js",
+      "rev": "0.0.0",
+      "inject": ["@xrkseek/client-runtime"]
+    }
+  ]
+}

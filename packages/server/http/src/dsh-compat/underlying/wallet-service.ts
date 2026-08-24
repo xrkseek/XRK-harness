@@ -1,5 +1,5 @@
 /**
- * XRK 钱包底层：持久化 + 可选 Face bridge → DSH 契约外形。
+ * XRK wallet service: persistence + optional Face bridge → community HTTP shapes.
  */
 import { randomUUID } from "node:crypto";
 import { honestReady } from "../honest-envelope.js";
@@ -66,6 +66,34 @@ export function createXrkWalletPort(
 ): XrkWalletPort {
   const { xrkHome, face } = options;
 
+  async function balanceFromFace(
+    refresh: boolean,
+  ): Promise<DshWalletBalanceView | null> {
+    if (!face?.getOfficialBalance) return null;
+    let snap = await face.getOfficialBalance();
+    // First paint: cost-meter never queried → refresh once (not on every poll after err).
+    if (
+      !refresh &&
+      snap &&
+      (snap.status === "off" || !snap.fetchedAt)
+    ) {
+      snap = (await face.refreshOfficialBalance?.()) ?? snap;
+    } else if (refresh) {
+      snap = (await face.refreshOfficialBalance?.()) ?? snap;
+    }
+    if (!snap || snap.status !== "ok") return null;
+    const currency = snap.currency || "CNY";
+    const total = snap.totalBalance;
+    return {
+      available: true,
+      currency,
+      total,
+      balances: [{ currency, total }],
+      low: total < 10 ? [{ currency, total }] : [],
+      ...honestReady(),
+    };
+  }
+
   return {
     async getBalanceView(): Promise<DshWalletBalanceView> {
       const state = loadState(xrkHome);
@@ -85,13 +113,50 @@ export function createXrkWalletPort(
           ...honestReady(),
         };
       }
+      const fromMeter = await balanceFromFace(false);
+      if (fromMeter) return fromMeter;
       return tag(
         {
-          available: false,
-          error:
-            "DeepSeek platform balance is not embedded on XRK; add manual accounts or configure cost-meter.",
-          balances: [],
+          available: true,
+          currency: "CNY",
+          total: 0,
+          balances: [{ currency: "CNY", total: 0 }],
           low: [],
+          note: "DeepSeek balance not cached yet — open cost-meter or hit wallet refresh; session cost still comes from cost-meter.",
+          ...honestReady(),
+        },
+        ["wallet-host"],
+      );
+    },
+
+    async refreshBalanceView(): Promise<DshWalletBalanceView> {
+      const state = loadState(xrkHome);
+      const manual = state.accounts.filter((a) => typeof a.balance === "number");
+      if (manual.length > 0) {
+        const currency = manual[0]?.currency ?? "CNY";
+        const total = manual.reduce((sum, row) => sum + (row.balance ?? 0), 0);
+        return {
+          available: true,
+          currency,
+          total,
+          balances: manual.map((row) => ({
+            currency: row.currency,
+            total: row.balance ?? 0,
+          })),
+          low: total < 10 ? [{ currency, total }] : [],
+          ...honestReady(),
+        };
+      }
+      const fromMeter = await balanceFromFace(true);
+      if (fromMeter) return fromMeter;
+      return tag(
+        {
+          available: true,
+          currency: "CNY",
+          total: 0,
+          balances: [{ currency: "CNY", total: 0 }],
+          low: [],
+          note: "DeepSeek balance not cached yet — open cost-meter or hit wallet refresh; session cost still comes from cost-meter.",
           ...honestReady(),
         },
         ["wallet-host"],

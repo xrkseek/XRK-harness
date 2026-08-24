@@ -3,7 +3,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFileSync } from "node:child_process";
-import { readBody, rpcOk, sendJson } from "../http-json.js";
+import { readBody, rpcOk, sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import {
   honestReady,
@@ -34,6 +34,8 @@ interface EngineRow {
   model?: string;
   enabled?: boolean;
   apiKey?: string;
+  hasKey?: boolean;
+  keySource?: string;
 }
 
 interface ModsearchStore {
@@ -93,10 +95,13 @@ function summaryFromStore(
   const engines: Record<string, EngineRow> = {};
   for (const name of ENGINES) {
     const row = store.engines[name] ?? {};
+    const apiKey = typeof row.apiKey === "string" ? row.apiKey.trim() : "";
     engines[name] = {
       baseURL: row.baseURL ?? "",
       model: row.model ?? "",
       enabled: row.enabled !== false,
+      hasKey: apiKey.length > 0,
+      keySource: apiKey.length > 0 ? "store" : "none",
     };
   }
   return {

@@ -13,6 +13,7 @@ import {
   HostContext, SessionMaybeProvider, SessionProvider, SlotAssemblyError, maybeObservableHook,
   observableHook, projectionHook, useHost, useSessionMaybeProvideInfo,
 } from './session-provider.tsx'
+import { shortError, slotDiag } from './diag.ts'
 
 type InjectedProps = Record<string, unknown>
 
@@ -305,19 +306,44 @@ function entryKeyOf(entry: StoredEntry): number {
 }
 
 /** Fail-loud face when a slot cell is dry or an entry boundary caught a crash. */
-function SlotFailureFace({ slotKey }: { slotKey: string }) {
+function SlotFailureFace({
+  slotKey,
+  entryId,
+  registrant,
+  summary,
+}: {
+  slotKey: string
+  entryId?: string | undefined
+  registrant?: string | undefined
+  summary?: string | undefined
+}) {
+  const who = [registrant, entryId].filter(Boolean).join(' · ')
   return (
     <div
       data-slot-error={slotKey}
+      {...(entryId !== undefined ? { 'data-slot-entry': entryId } : {})}
+      {...(registrant !== undefined ? { 'data-slot-registrant': registrant } : {})}
       role="alert"
       style={{
         padding: '16px 20px',
         color: 'var(--dsw-alias-text-secondary, #9aa0a6)',
         fontSize: '13px',
-        lineHeight: '1.4',
+        lineHeight: '1.45',
       }}
     >
-      Slot <code>{slotKey}</code> failed to render. Check the browser console for the error.
+      <div>
+        Slot <code>{slotKey}</code> failed to render
+        {who ? <> ({who})</> : null}. Panel stays open.
+      </div>
+      {summary ? (
+        <div style={{ marginTop: 6, color: 'var(--dsw-alias-text-tertiary, #7a8088)' }}>
+          {summary}
+        </div>
+      ) : null}
+      <div style={{ marginTop: 6, fontSize: 12 }}>
+        Console / <code>window.__XRK_DIAG__.recent</code>
+        {' '}(set <code>?xrkLog=debug</code> for stacks).
+      </div>
     </div>
   )
 }
@@ -333,19 +359,41 @@ function SlotFailureFace({ slotKey }: { slotKey: string }) {
  * the outlet then owns the crash face).
  */
 class SlotErrorBoundary extends Component<
-  { slotKey: string; onEntryError: (error: unknown) => void; children: ReactNode }, { failed: boolean }
+  {
+    slotKey: string
+    entryId?: string | undefined
+    registrant?: string | undefined
+    onEntryError: (error: unknown) => void
+    children: ReactNode
+  },
+  { failed: boolean; summary: string }
 > {
-  override state = { failed: false }
-  static getDerivedStateFromError(error: unknown): { failed: boolean } {
+  override state = { failed: false, summary: '' }
+  static getDerivedStateFromError(error: unknown): { failed: boolean; summary: string } {
     if (error instanceof SlotAssemblyError) throw error
-    return { failed: true }
+    return { failed: true, summary: shortError(error) }
   }
   override componentDidCatch(error: unknown): void {
-    console.error(`slot entry crashed in '${this.props.slotKey}':`, error)
+    const { slotKey, entryId, registrant } = this.props
+    slotDiag.error('entry crashed', {
+      slotKey,
+      ...(entryId !== undefined ? { entryId } : {}),
+      ...(registrant !== undefined ? { registrant } : {}),
+      error,
+    })
     this.props.onEntryError(error)
   }
   override render(): ReactNode {
-    if (this.state.failed) return <SlotFailureFace slotKey={this.props.slotKey} />
+    if (this.state.failed) {
+      return (
+        <SlotFailureFace
+          slotKey={this.props.slotKey}
+          entryId={this.props.entryId}
+          registrant={this.props.registrant}
+          summary={this.state.summary}
+        />
+      )
+    }
     return this.props.children
   }
 }
@@ -633,6 +681,16 @@ function RootEntry({ entry, ownerProps, slotKey, slotInjected, hookContext, hasH
   return renderEntry(slotKey, Comp, kit, standard, injected, slotInjected, ownerProps, hookContext, hasHookContext)
 }
 
+function entryDiagAttrs(entry: StoredEntry): {
+  entryId?: string | undefined
+  registrant?: string | undefined
+} {
+  return {
+    ...(entry.options.id !== undefined ? { entryId: entry.options.id } : {}),
+    ...(entry.registrant !== undefined ? { registrant: entry.registrant } : {}),
+  }
+}
+
 function StrictSessionEntry({ slotKey, entry, ownerProps, slotInjected, hookContext, hasHookContext, onEntryError }: {
   slotKey: string
   entry: StoredEntry
@@ -647,7 +705,12 @@ function StrictSessionEntry({ slotKey, entry, ownerProps, slotInjected, hookCont
   // Per-session remount rides this key; per-entry remount rides the outer
   // element's entry-identity key (the outlet's guarded() call).
   return (
-    <SlotErrorBoundary slotKey={slotKey} key={info.sessionId} onEntryError={onEntryError}>
+    <SlotErrorBoundary
+      slotKey={slotKey}
+      key={info.sessionId}
+      onEntryError={onEntryError}
+      {...entryDiagAttrs(entry)}
+    >
       <SessionEntry
         entry={entry}
         ownerProps={ownerProps}
@@ -746,7 +809,12 @@ function renderOutletContent(
         />
       )
       : (
-        <SlotErrorBoundary slotKey={slotKey} key={key} onEntryError={onEntryError}>
+        <SlotErrorBoundary
+          slotKey={slotKey}
+          key={key}
+          onEntryError={onEntryError}
+          {...entryDiagAttrs(entry)}
+        >
           {spec.scope === 'session-maybe'
             ? (
               <SessionMaybeEntry
@@ -807,9 +875,11 @@ function renderOutletContent(
         // exists — uncontained it would black out the whole owner region. So
         // it degrades to a decline: the chain and the fallback stay intact,
         // and the breach is reported like a crashed entry.
-        console.error(
-          `chain selector crashed in '${slotKey}' (${entry.registrant ?? 'unknown registrant'}), treating as declined:`,
-          error)
+        slotDiag.error('chain selector crashed (treating as declined)', {
+          slotKey,
+          ...entryDiagAttrs(entry),
+          error,
+        })
         continue
       }
       if (matched !== null) {
@@ -892,6 +962,7 @@ function RootOutlet({ ownerProps }: { ownerProps: object }) {
         slotKey="root"
         key={entryKeyOf(entry)}
         onEntryError={(error) => { host.reportEntryError('root', entry, error, { abdicate: true }) }}
+        {...entryDiagAttrs(entry)}
       >
         <RootEntry
           entry={entry}

@@ -1,3 +1,6 @@
+/**
+ * Path + JSON file primitives (`XRK_HOME` / `~/.xrk`).
+ */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";

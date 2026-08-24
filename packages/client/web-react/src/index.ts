@@ -17,6 +17,7 @@ export type {
 } from '@xrkseek/client-ui-slots'
 export { SlotOwnershipError, StaleAuthorizationError } from '@xrkseek/client-ui-slots'
 export { createSlotRenderer } from './scoped-slots.tsx'
+export { makeDiag, shortError, slotDiag, type Diag, type DiagLevel, type DiagRecord } from './diag.ts'
 
 export { SessionProvider, SlotAssemblyError, type SessionProviderProps } from './session-provider.tsx'
 

@@ -1,8 +1,8 @@
 /**
- * dsh-wallet HTTP adapter — 只解析路径/方法，业务走 {@link XrkWalletPort}。
+ * Community wallet HTTP adapter — parse path/method only; business logic via {@link XrkWalletPort}.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson } from "../http-json.js";
+import { sendJson } from "./underlying/http-json.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
 import {
   createXrkWalletPort,
@@ -11,7 +11,7 @@ import {
 import type { XrkWalletPort } from "./underlying/contracts/wallet-port.js";
 
 export interface WalletOptions extends XrkWalletServiceOptions {
-  /** Host 注入的底层端口；缺省时用 xrkHome + face 现场组装 */
+  /** Host-injected port; otherwise assembled from xrkHome + Face. */
   readonly walletPort?: XrkWalletPort;
 }
 
@@ -44,7 +44,7 @@ export async function handleWalletHttp(
   }
 
   if (normalized === "/api/wallet/refresh" && method === "GET") {
-    sendJson(res, 200, await port.getBalanceView());
+    sendJson(res, 200, await port.refreshBalanceView());
     return true;
   }
 

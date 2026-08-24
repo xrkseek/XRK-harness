@@ -2,7 +2,7 @@
  * dsh-tokenledger — aggregate Face tokenUsage into DSH-shaped usage API.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson } from "../http-json.js";
+import { sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 
@@ -96,13 +96,22 @@ export function createTokenLedgerBridgeFromFace(face: {
       const tokens = input + output + cacheRead + cacheWrite;
       const day = new Date().toISOString().slice(0, 10);
       const bucket = { tokens, inputTokens: input, outputTokens: output };
+      const requests = face.store.list().length;
       return {
         ok: true,
+        totals: {
+          tokens,
+          requests,
+          cacheHitRate: cacheRead + cacheWrite > 0 ? cacheRead / tokens : 0,
+          inputTokens: input,
+          outputTokens: output,
+        },
         windows: { today: bucket, week: bucket, month: bucket },
         activity: [{ day, tokens }],
         activityModels: [],
         sites: [],
         models: [],
+        priced: { totals: {} },
         adapter: DSH_COMPAT_ADAPTER,
       };
     },
@@ -114,17 +123,26 @@ export function createTokenLedgerBridgeFromFace(face: {
 }
 
 function emptyUsage(): Record<string, unknown> {
+  const bucket = { tokens: 0, inputTokens: 0, outputTokens: 0 };
   return {
     ok: true,
+    totals: {
+      tokens: 0,
+      requests: 0,
+      cacheHitRate: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+    },
     windows: {
-      today: { tokens: 0, inputTokens: 0, outputTokens: 0 },
-      week: { tokens: 0, inputTokens: 0, outputTokens: 0 },
-      month: { tokens: 0, inputTokens: 0, outputTokens: 0 },
+      today: bucket,
+      week: bucket,
+      month: bucket,
     },
     activity: [],
     activityModels: [],
     sites: [],
     models: [],
+    priced: { totals: {} },
   };
 }
 

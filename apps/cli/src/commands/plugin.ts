@@ -1,6 +1,6 @@
 /**
- * `xrk-harness plugin` — install / remove / list user plugins under
- * `{XRK_HOME}/plugins` (or `XRK_PLUGINS_DIR`).
+ * `xrkh plugin` — install / remove / list user plugins under
+ * `{XRK_HOME}/plugins` (or `XRK_PLUGINS_DIR`). Bin also: xrk-harness.
  */
 import {
   addPlugin,
@@ -11,15 +11,15 @@ import {
 } from "../plugin/index.js";
 
 export function pluginHelpText(): string {
-  return `xrk-harness plugin — manage user plugins
+  return `xrkh plugin — manage user plugins (bin also: xrk-harness)
 
 Usage:
-  xrk-harness plugin add <spec…>
-  xrk-harness plugin remove <name…>
-  xrk-harness plugin list
-  xrk-harness plugin path
-  xrk-harness plugin reconcile
-  xrk-harness plugin help
+  xrkh plugin add <spec…>
+  xrkh plugin remove <name…>
+  xrkh plugin list
+  xrkh plugin path
+  xrkh plugin reconcile
+  xrkh plugin help
 
 Specs (npm pack):
   @scope/name                 registry package
@@ -36,13 +36,13 @@ Root:
   default  ~/.xrk/plugins  (XRK_HOME / XRK_DSH_HOME / DSH_HOME)
   override XRK_PLUGINS_DIR
 
-After add/remove, run \`xrk-harness restart\` so Host reloads plugins
+After add/remove, run \`xrkh restart\` so Host reloads plugins
 (stops the previous XRK Host via pid lock; will not kill foreign listeners).
 
 Examples:
-  xrk-harness plugin add @huanlin/dsh-plugin-spur
-  xrk-harness plugin list
-  xrk-harness plugin remove @huanlin/dsh-plugin-spur
+  xrkh plugin add @huanlin/dsh-plugin-spur
+  xrkh plugin list
+  xrkh plugin remove @huanlin/dsh-plugin-spur
 `;
 }
 
@@ -70,7 +70,7 @@ export async function runPlugin(argv: readonly string[]): Promise<number> {
           addPlugin(spec);
         }
         process.stdout.write(
-          "xrk-harness: run `restart` to load new plugins (stops the previous XRK Host only)\n",
+          "xrkh: run `restart` to load new plugins (stops the previous XRK Host only)\n",
         );
         return 0;
       }
@@ -83,7 +83,7 @@ export async function runPlugin(argv: readonly string[]): Promise<number> {
           removePlugin(name);
         }
         process.stdout.write(
-          "xrk-harness: run `restart` to drop removed plugins (stops the previous XRK Host only)\n",
+          "xrkh: run `restart` to drop removed plugins (stops the previous XRK Host only)\n",
         );
         return 0;
       }
@@ -111,7 +111,7 @@ export async function runPlugin(argv: readonly string[]): Promise<number> {
         const pluginsDir = resolvePluginsDir();
         reconcilePluginsDir(pluginsDir);
         process.stdout.write(
-          "xrk-harness: reconciled client staging and web/boot.json with inventory\n",
+          "xrkh: reconciled client staging and web/boot.json with inventory\n",
         );
         return 0;
       }

@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Vision toolkit + vision-router same-origin routes.
  * Settings persist under ~/.xrk/vision/; analysis hosts stay honest incomplete.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readBody, sendJson } from "../http-json.js";
+import { readBody, sendJson } from "./underlying/http-json.js";
 import { sendDshErr, sendDshOk } from "./dsh-envelope.js";
 import { analyzePastePayload } from "./host-feature-bridge.js";
 import {

@@ -1,9 +1,9 @@
-/**
+﻿/**
  * dsh-noema — file-backed status, memory index, runner config.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
-import { rpcOk, sendJson } from "../http-json.js";
+import { rpcOk, sendJson } from "./underlying/http-json.js";
 import { searchNoemaMemories } from "./host-feature-bridge.js";
 import { honestReady } from "./honest-envelope.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";

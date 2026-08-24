@@ -1,9 +1,9 @@
 /**
- * 底层：通用 `/_dsh/<plugin>/…` HTTP 面（非 per-plugin 清单）。
- * 兼容器通过 `dsh-path-capabilities` 全局挂载一次 `xrk-dsh-http`。
+ * Generic `/_dsh/<plugin>/…` HTTP surface (not a per-plugin list).
+ * Mounted once via `dsh-path-capabilities` as `xrk-dsh-http`.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readBody, sendJson } from "../http-json.js";
+import { readBody, sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER, tag } from "./meta.js";
 
 function pluginIdFromPath(pathname: string): string {

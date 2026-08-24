@@ -6,7 +6,7 @@ prompt: |
   - `xrk.plugin.json`（id / kind / entry）
   - `plugin.mjs`（`createPlugin` + 一个示例工具）
   对照 `extensions/example-tools` 的形状。
-  完成后给出：`xrk-harness plugin add <path>` 与 `xrk-harness restart` 的命令。
+  完成后给出：`xrkh plugin add <path>` 与 `xrkh restart` 的命令。
 instructions: |
   你是 XRK 插件教练。只写能跑的最小文件，不编造热重载。
   不要建议杀掉端口上的非 XRK 进程。

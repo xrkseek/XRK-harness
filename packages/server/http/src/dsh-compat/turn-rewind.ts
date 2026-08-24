@@ -2,9 +2,10 @@
  * @anionex/dsh-turn-rewind — checkpoint preview/restore (file-backed index).
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson } from "../http-json.js";
+import { sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
+import type { SidebarFaceBridge } from "./sidebar-face-bridge.js";
 import {
   findRewindMarker,
   type RewindMarker,
@@ -16,6 +17,7 @@ export interface TurnRewindOptions {
   readonly workspaceRoot?: string;
   readonly defaultCwd?: string;
   readonly resolveSessionCwd?: (sessionId: string) => string | undefined;
+  readonly sidebarFace?: SidebarFaceBridge;
 }
 
 export type { RewindMarker } from "./turn-rewind-store.js";
@@ -102,6 +104,21 @@ export async function handleTurnRewindHttp(
       return true;
     }
     const mode = typeof body.mode === "string" ? body.mode : "code";
+    const bodyPlanId =
+      typeof body.planId === "string" ? body.planId : undefined;
+    const bodyConfirmation =
+      typeof body.confirmation === "string" ? body.confirmation : undefined;
+    if (
+      (marker.planId && bodyPlanId !== marker.planId) ||
+      (marker.confirmation && bodyConfirmation !== marker.confirmation)
+    ) {
+      sendJson(res, 409, {
+        code: "PLAN_STALE",
+        error: "checkpoint plan is stale; refresh preview",
+        adapter: DSH_COMPAT_ADAPTER,
+      });
+      return true;
+    }
     const cwd =
       (typeof body.cwd === "string" && body.cwd.trim()
         ? body.cwd.trim()
@@ -109,11 +126,39 @@ export async function handleTurnRewindHttp(
       options.workspaceRoot ??
       options.defaultCwd ??
       process.cwd();
-    const restored = restoreRewindWorkspace(marker, cwd, options.xrkHome);
+    const shouldRestore = mode === "code" || mode === "both";
+    const shouldFork = mode === "chat" || mode === "both";
+    const restored = shouldRestore
+      ? restoreRewindWorkspace(marker, cwd, options.xrkHome)
+      : false;
+    let resultSessionId = sid;
+    if (shouldFork) {
+      const bridge = options.sidebarFace;
+      if (!bridge?.forkSessionAt) {
+        sendJson(res, 503, {
+          code: "FORK_UNAVAILABLE",
+          error: "session fork requires XRK Host Face bridge",
+          adapter: DSH_COMPAT_ADAPTER,
+        });
+        return true;
+      }
+      try {
+        const forked = await bridge.forkSessionAt(sid, marker.messageSeq);
+        resultSessionId = forked.sessionId;
+      } catch (error) {
+        sendJson(res, 409, {
+          code: "FORK_FAILED",
+          error:
+            error instanceof Error ? error.message : "session.fork failed",
+          adapter: DSH_COMPAT_ADAPTER,
+        });
+        return true;
+      }
+    }
     sendJson(res, 200, {
       mode,
       rescuePointId: marker.checkpointId,
-      sessionId: sid,
+      sessionId: resultSessionId,
       restored,
       adapter: DSH_COMPAT_ADAPTER,
     });

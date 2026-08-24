@@ -336,8 +336,11 @@ describe('child outlets and the renderSlot binding', () => {
     const { view } = mountRoot(h, { 'k.list': { kind: 'list', scope: 'root' } },
       renderSlot => renderSlot('k.list', {}))
     spy.mockRestore()
-    expect(view.container.textContent).toBe('alive')
-    expect(view.container.querySelector('[data-slot-error]')).not.toBeNull()
+    expect(view.container.textContent).toContain('alive')
+    const face = view.container.querySelector('[data-slot-error]')
+    expect(face).not.toBeNull()
+    expect(face?.getAttribute('data-slot-entry')).toBe('bad')
+    expect(face?.textContent).toContain('entry boom')
   })
 })
 

@@ -297,16 +297,46 @@ describe("dsh-compat adapters", () => {
       });
       const body = (await res.json()) as {
         ok: boolean;
-        value: { matches: Array<{ name: string }> };
+        value: { matches: string[] };
       };
       expect(body.ok).toBe(true);
-      expect(body.value.matches.some((m) => m.name === "needle.txt")).toBe(
+      expect(body.value.matches.some((m) => m.endsWith("needle.txt"))).toBe(
         true,
       );
     });
   });
 
-  it("uploads via /sidebar/upload JSON body", async () => {
+  it("uploads via /sidebar/upload octet-stream query body", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-sidebar-upload-"));
+    temps.push(root);
+    const handler = compatHandler({
+      defaultCwd: root,
+      resolveSessionCwd: () => root,
+    });
+    await withPublicHandler(handler, async (base) => {
+      const params = new URLSearchParams({
+        sessionId: "s1",
+        dir: ".",
+        relativePath: "stream-upload.bin",
+      });
+      const res = await fetch(`${base}/sidebar/upload?${params}`, {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream" },
+        body: new Uint8Array([1, 2, 3, 4]),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        value: { uploaded: boolean; path: string };
+      };
+      expect(body.ok).toBe(true);
+      expect(body.value.uploaded).toBe(true);
+      expect(readFileSync(path.join(root, "stream-upload.bin")).byteLength).toBe(
+        4,
+      );
+    });
+  });
+
+  it("uploads via /sidebar/upload JSON body (compat)", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-sidebar-upload-"));
     temps.push(root);
     const handler = compatHandler({
@@ -392,6 +422,76 @@ describe("dsh-compat adapters", () => {
       expect(listBody.result.ok).toBe(true);
       expect(Array.isArray(listBody.result.value)).toBe(true);
       expect(listBody.result.value[0]?.title).toBe("note");
+    });
+  });
+
+  it("mnemon write provider-services returns catalog with providers[]", async () => {
+    const pluginsDir = compatPlugins(["dsh-mnemon"]);
+    const handler = createDshCompatPublicHandler({ pluginsDir });
+    await withPublicHandler(handler, async (base) => {
+      const res = await fetch(`${base}/dsh-mnemon-write/provider-services`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "client-request",
+          rpcId: "ps1",
+          method: "provider-services",
+          payload: {},
+        }),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        result: {
+          ok: boolean;
+          value: {
+            providers: Array<{ id: string }>;
+            items: Array<{ providerId: string }>;
+            generatedAt: string;
+          };
+        };
+      };
+      expect(body.result.ok).toBe(true);
+      expect(Array.isArray(body.result.value.providers)).toBe(true);
+      expect(body.result.value.providers[0]?.id).toBe("mnemon-native");
+      expect(Array.isArray(body.result.value.items)).toBe(true);
+      expect(body.result.value.generatedAt.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("mnemon task-agent-models always includes groups[]", async () => {
+    const pluginsDir = compatPlugins(["dsh-mnemon"]);
+    const handler = createDshCompatPublicHandler({ pluginsDir });
+    await withPublicHandler(handler, async (base) => {
+      const res = await fetch(`${base}/dsh-mnemon-read/task-agent-models`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "client-request",
+          rpcId: "tam1",
+          method: "task-agent-models",
+          payload: {},
+        }),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        result: {
+          ok: boolean;
+          value: { groups: unknown[]; models: unknown[] };
+        };
+      };
+      expect(body.result.ok).toBe(true);
+      expect(Array.isArray(body.result.value.groups)).toBe(true);
+      expect(Array.isArray(body.result.value.models)).toBe(true);
+      // JSON null breaks dsh-mnemon TaskAgentModelSection (`effective === void 0` only).
+      expect(
+        Object.prototype.hasOwnProperty.call(body.result.value, "effective"),
+      ).toBe(false);
+      expect(
+        Object.prototype.hasOwnProperty.call(
+          body.result.value,
+          "defaultSelection",
+        ),
+      ).toBe(false);
     });
   });
 
@@ -559,6 +659,8 @@ describe("dsh-compat adapters", () => {
       ).json();
       expect(Array.isArray(mem.entries)).toBe(true);
       expect(mem.entries.length).toBe(1);
+      expect(mem.entries[0].text).toBe("hello");
+      expect(Array.isArray(mem.budgets)).toBe(true);
 
       const mod = await (
         await fetch(`${base}/modlens/config?discover=1`)
@@ -568,6 +670,8 @@ describe("dsh-compat adapters", () => {
 
       const sync = await (await fetch(`${base}/api-import/sync`)).json();
       expect(sync.ok).toBe(true);
+      expect(sync.config.inbound).toBeTypeOf("object");
+      expect(sync.config.outbound).toBeTypeOf("object");
 
       const pocket = await fetch(`${base}/dsh-pocket/pocket.status`, {
         method: "POST",
@@ -582,12 +686,35 @@ describe("dsh-compat adapters", () => {
       const pBody = (await pocket.json()) as {
         result: {
           ok: boolean;
-          value: { state?: string; incomplete?: string[] };
+          value: {
+            state?: string;
+            proxyRunning?: boolean;
+            lanUrl?: string | null;
+            current?: string;
+          };
         };
       };
       expect(pBody.result.ok).toBe(true);
-      expect(pBody.result.value.state).toBe("offline");
-      expect(pBody.result.value.incomplete).toContain("pocket-host");
+      expect(pBody.result.value.state).toBe("connected");
+      expect(pBody.result.value.proxyRunning).toBe(true);
+      expect(pBody.result.value.lanUrl).toBeTypeOf("string");
+
+      const pVer = await fetch(`${base}/dsh-pocket/pocket.version`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "client-request",
+          rpcId: "pv1",
+          method: "pocket.version",
+          payload: {},
+        }),
+      });
+      const vBody = (await pVer.json()) as {
+        result: { ok: boolean; value: { current?: string; loaded?: string } };
+      };
+      expect(vBody.result.ok).toBe(true);
+      expect(vBody.result.value.current).toBe("1.0.0");
+      expect(vBody.result.value.loaded).toBe("1.0.0");
 
       const genui = await (
         await fetch(`${base}/.well-known/dsh-genui`)
@@ -736,7 +863,20 @@ describe("dsh-compat adapters", () => {
       });
       const onBody = (await on.json()) as { running: boolean; origin?: string };
       expect(onBody.running).toBe(true);
-      expect(onBody.origin).toContain("127.0.0.1");
+      expect(onBody.origin).toMatch(/^http:\/\//);
+
+      const lanPair = await fetch(`${base}/api/mobile-access/lan/pairing/open`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      expect(lanPair.status).toBe(200);
+      const lanPairBody = (await lanPair.json()) as {
+        appKey?: string;
+        pairUrl?: string;
+      };
+      expect(lanPairBody.appKey).toBeTruthy();
+      expect(lanPairBody.pairUrl).toContain("/mobile-access/pair");
 
       const pair = await fetch(`${base}/api/mobile-access/pairing/open`, {
         method: "POST",
@@ -746,6 +886,26 @@ describe("dsh-compat adapters", () => {
       const pairBody = (await pair.json()) as { ok: boolean; appKey?: string };
       expect(pairBody.ok).toBe(true);
       expect(pairBody.appKey).toBeTruthy();
+
+      const gated = await fetch(`${base}/`, {
+        headers: {
+          "x-forwarded-host": "demo.r6.cpolar.cn",
+          Accept: "application/json",
+        },
+        redirect: "manual",
+      });
+      expect(gated.status).toBe(401);
+      const gatedBody = (await gated.json()) as {
+        error: string;
+        mode: string;
+      };
+      expect(gatedBody.error).toBe("mobile_access_authentication_required");
+      expect(gatedBody.mode).toBe("wan");
+
+      const pinPage = await fetch(`${base}/mobile-access/wan-pin`, {
+        headers: { "x-forwarded-host": "demo.r6.cpolar.cn" },
+      });
+      expect(pinPage.status).toBe(200);
 
       const registry = await (
         await fetch(`${base}/api/plugins/registry`)
@@ -840,19 +1000,28 @@ describe("dsh-compat adapters", () => {
     });
   });
 
-  it("reports git status in sidebar when workspace is a repo", async () => {
+  it("reports git status/branch/log shapes expected by better-sidebar", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-sidebar-git-"));
     temps.push(root);
     writeFileSync(path.join(root, "tracked.txt"), "hello");
     const { execFileSync } = await import("node:child_process");
     try {
       execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+      execFileSync("git", ["config", "user.email", "t@xrk"], {
+        cwd: root,
+        stdio: "ignore",
+      });
+      execFileSync("git", ["config", "user.name", "xrk"], {
+        cwd: root,
+        stdio: "ignore",
+      });
       execFileSync("git", ["add", "tracked.txt"], { cwd: root, stdio: "ignore" });
-      execFileSync(
-        "git",
-        ["-c", "user.email=t@xrk", "-c", "user.name=xrk", "commit", "-m", "init"],
-        { cwd: root, stdio: "ignore" },
-      );
+      execFileSync("git", ["commit", "-m", "init"], {
+        cwd: root,
+        stdio: "ignore",
+      });
+      writeFileSync(path.join(root, "tracked.txt"), "hello\nchanged");
+      writeFileSync(path.join(root, "untracked.txt"), "u");
     } catch {
       return;
     }
@@ -861,18 +1030,104 @@ describe("dsh-compat adapters", () => {
       resolveSessionCwd: () => root,
     });
     await withPublicHandler(handler, async (base) => {
-      const res = await fetch(`${base}/sidebar/api/git.status`, {
+      const statusRes = await fetch(`${base}/sidebar/api/git.status`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: "s1" }),
       });
-      const body = (await res.json()) as {
+      const status = (await statusRes.json()) as {
         ok: boolean;
-        value: { available: boolean; branch: string | null };
+        value: {
+          available: boolean;
+          branch: string | null;
+          entries: Array<{ xy: string; path: string }>;
+        };
       };
-      expect(body.ok).toBe(true);
-      expect(body.value.available).toBe(true);
-      expect(body.value.branch).toBeTruthy();
+      expect(status.ok).toBe(true);
+      expect(status.value.available).toBe(true);
+      expect(status.value.branch).toBeTruthy();
+      expect(status.value.entries.length).toBeGreaterThan(0);
+      for (const entry of status.value.entries) {
+        expect(entry.xy).toMatch(/^[\sMADRCU?!]{2}$/);
+        expect(entry.path).toBeTruthy();
+      }
+
+      const branchRes = await fetch(`${base}/sidebar/api/git.branch`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: "s1" }),
+      });
+      const branch = (await branchRes.json()) as {
+        ok: boolean;
+        value: { available: boolean; current: string; names: string[] };
+      };
+      expect(branch.ok).toBe(true);
+      expect(branch.value.available).toBe(true);
+      expect(branch.value.current).toBeTruthy();
+      expect(Array.isArray(branch.value.names)).toBe(true);
+      expect(branch.value.names.length).toBeGreaterThan(0);
+      expect(branch.value).not.toHaveProperty("branches");
+
+      const logRes = await fetch(`${base}/sidebar/api/git.log`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: "s1", limit: 5 }),
+      });
+      const logBody = (await logRes.json()) as {
+        ok: boolean;
+        value: Array<{
+          hash: string;
+          hashFull: string;
+          subject: string;
+          author: string;
+          date: string;
+          refs: string;
+        }>;
+      };
+      expect(logBody.ok).toBe(true);
+      expect(Array.isArray(logBody.value)).toBe(true);
+      expect(logBody.value.length).toBeGreaterThan(0);
+      expect(logBody.value[0]!.hash).toBeTruthy();
+      expect(logBody.value[0]!.hashFull).toHaveLength(40);
+      expect(logBody.value[0]!.subject).toBe("init");
+
+      const depsRes = await fetch(`${base}/sidebar/api/terminal.deps`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: "s1" }),
+      });
+      const deps = (await depsRes.json()) as {
+        ok: boolean;
+        value: { ready: boolean; command: string; note: string };
+      };
+      expect(deps.ok).toBe(true);
+      expect(deps.value.ready).toBe(true);
+      expect(deps.value.command).toContain("node-pty");
+      expect(deps.value.note).toBeTruthy();
+
+      const stageRes = await fetch(`${base}/sidebar/api/git.stage`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: "s1", path: "tracked.txt" }),
+      });
+      const stage = (await stageRes.json()) as { ok: boolean };
+      expect(stage.ok).toBe(true);
+
+      const diffRes = await fetch(`${base}/sidebar/api/git.diff`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "s1",
+          path: "tracked.txt",
+          staged: true,
+        }),
+      });
+      const diff = (await diffRes.json()) as {
+        ok: boolean;
+        value: { diff: string };
+      };
+      expect(diff.ok).toBe(true);
+      expect(diff.value.diff).toContain("changed");
     });
   });
 
@@ -1234,6 +1489,8 @@ describe("dsh-compat adapters", () => {
       const previewBody = (await preview.json()) as {
         status: string;
         totalChanges: number;
+        planId?: string;
+        confirmation?: string;
       };
       expect(previewBody.status).toBe("ready");
       expect(previewBody.totalChanges).toBeGreaterThan(0);
@@ -1247,6 +1504,10 @@ describe("dsh-compat adapters", () => {
           sessionId: "sess-rw",
           messageSeq: 4,
           cwd: root,
+          ...(previewBody.planId ? { planId: previewBody.planId } : {}),
+          ...(previewBody.confirmation
+            ? { confirmation: previewBody.confirmation }
+            : {}),
         }),
       });
       const restoreBody = (await restore.json()) as { restored: boolean };

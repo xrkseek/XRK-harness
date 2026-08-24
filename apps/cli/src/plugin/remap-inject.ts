@@ -17,6 +17,7 @@ const EXACT: Readonly<Record<string, string>> = {
   "@deepseek-ai/dsh-client-ui-attachment": "@xrkseek/client-ui-attachment",
   "@deepseek-ai/dsh-client-web-react": "@xrkseek/client-web-react",
   "@deepseek-ai/dsh-client-schema-form": "@xrkseek/client-schema-form",
+  "@deepseek-ai/dsh-client-modules": "@xrkseek/client-modules",
 };
 
 /**

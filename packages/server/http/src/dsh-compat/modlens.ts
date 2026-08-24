@@ -1,10 +1,10 @@
-/**
+﻿/**
  * dsh-modlens — persisted engine config + CLI discovery.
  */
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { rpcOk, sendJson } from "../http-json.js";
+import { rpcOk, sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER, tag } from "./meta.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { parseJsonBody } from "./underlying/http-kit.js";

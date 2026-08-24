@@ -1,8 +1,8 @@
-/**
+﻿/**
  * @ychris12138/dsh-usage-stats — usage panel backed by tokenledger aggregate when wired.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson } from "../http-json.js";
+import { sendJson } from "./underlying/http-json.js";
 import type { TokenLedgerOptions } from "./tokenledger.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 

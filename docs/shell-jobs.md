@@ -1,8 +1,10 @@
-# Shell background jobs
+# Shell 后台任务 / Shell Background Jobs
 
-> **读者**：集成者 · 贡献者。
+> **读者 / Audience**：集成者 · 贡献者 / Integrators · Contributors
 
-In-process job registry on `@xrkseek/exec-shell` over `SubprocessService.start`，并支持托管 producer（CV DSH `jobs.start` / `jobs-local`）。
+进程内 job registry，基于 `@xrkseek/exec-shell` 与 `SubprocessService.start`，并支持托管 producer。
+
+In-process job registry on `@xrkseek/exec-shell` over `SubprocessService.start`, with managed producers.
 
 ## API
 

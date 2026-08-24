@@ -1,26 +1,30 @@
-# Policy
+# 策略门禁 / Policy
 
-> **读者**：集成者 · 贡献者。
+> **读者 / Audience**：集成者 · 贡献者 / Integrators · Contributors
+
+有序规则引擎，覆盖 `tool.call` · `provider.use` · `mcp.connect`。
 
 Ordered rule engine for `tool.call` · `provider.use` · `mcp.connect`.
 
-## Verdicts
+## 裁决 / Verdicts
 
-| Verdict | Meaning |
+| 裁决 / Verdict | 含义 / Meaning |
 |---------|---------|
-| `allow` | proceed |
-| `deny` | hard reject |
-| `ask` | needs approval (tool path: pre-execute → pipeline `onApproval`) |
+| `allow` | 放行 / proceed |
+| `deny` | 硬拒绝 / hard reject |
+| `ask` | 需审批（工具路径：pre-execute → pipeline `onApproval`） / needs approval |
 
-First matching rule wins; else per-kind defaults:
+首条匹配规则生效；否则按 kind 默认：
 
-| Kind | Default |
+The first matching rule wins; otherwise per-kind defaults apply:
+
+| Kind | 默认 / Default |
 |------|---------|
 | `tool.call` | allow |
 | `provider.use` | allow |
-| `mcp.connect` | **deny**（M0 client 已存在；须显式 allow） |
+| `mcp.connect` | **deny**（M0 client 已存在；须显式 allow / M0 client exists; explicit allow required） |
 
-## Programmatic API
+## 编程 API / Programmatic API
 
 ```ts
 import {
@@ -50,7 +54,7 @@ pipeline.onGuard(createPolicyToolGuard(engine));
 assertPolicyAllow(engine, { kind: "provider.use", providerId: llm.id });
 ```
 
-## Ruleset files (JSON)
+## 规则集文件（JSON） / Ruleset files (JSON)
 
 ```json
 {
@@ -76,19 +80,22 @@ assertPolicyAllow(engine, { kind: "provider.use", providerId: llm.id });
 }
 ```
 
-| API | Role |
+| API | 职责 / Role |
 |-----|------|
-| `parsePolicyRuleset` | validate + → engine options |
+| `parsePolicyRuleset` | 校验并转为 engine options / validate + → engine options |
 | `createPolicyEngineFromRuleset` | JSON → engine |
 | `loadPolicyRulesetFile` / `createPolicyEngineFromFile` | path → options / engine |
-| `policyRulesetJsonSchema` | export schema (`$id` …/policy-ruleset.json) |
+| `policyRulesetJsonSchema` | 导出 schema（`$id` …/policy-ruleset.json） / export schema |
 
-`action`: `deny` · `ask` · `allow-only`（名单外 deny）。  
+`action`：`deny` · `ask` · `allow-only`（名单外 deny）。  
 `mcp.connect` 仅支持 `deny`。无热重载——改文件后重新 `load`。
 
-## Host / Face wiring
+`action`: `deny` · `ask` · `allow-only` (deny outside the allow list).  
+`mcp.connect` supports `deny` only. No hot reload — re-`load` after editing the file.
 
-| 路径 | 行为 |
+## Host / Face 接线 / Host / Face wiring
+
+| 路径 / Path | 行为 / Behavior |
 |------|------|
 | Env `XRK_POLICY_FILE` | `loadHostConfig` → `runtime.policyFile` |
 | Host spawn | `createPolicyEngineFromFile` → Face `policy` + serve 注入 preset `onPre` |
@@ -97,10 +104,13 @@ assertPolicyAllow(engine, { kind: "provider.use", providerId: llm.id });
 | Preset `policy?` | tool `onPre(createPolicyToolPre)` |
 
 MCP connect 默认 deny；Client **stdio + streamable-http 能跑**；Host 可用 `XRK_MCP_SERVERS`（`command` 或 `url`）+ `XRK_MCP_ALLOW=1` 拉起。
-## Not shipped
+
+MCP connect defaults to deny. The client **supports stdio + streamable-http**. Host may start servers via `XRK_MCP_SERVERS` (`command` or `url`) with `XRK_MCP_ALLOW=1`.
+
+## 未交付 / Not shipped
 
 - YAML / TOML rulesets  
-- Policy 热重载  
-- 审批超时自动 decide（仅 abort→cancel）
+- Policy 热重载 / Policy hot reload  
+- 审批超时自动 decide（仅 abort→cancel） / Auto-decide on approval timeout (abort→cancel only)
 
-See [tool-pipeline.md](./tool-pipeline.md) · [security-checklist.md](./security-checklist.md) · [plugin-loader.md](./plugin-loader.md).
+参见 / See：[tool-pipeline.md](./tool-pipeline.md) · [security-checklist.md](./security-checklist.md) · [plugin-loader.md](./plugin-loader.md)。

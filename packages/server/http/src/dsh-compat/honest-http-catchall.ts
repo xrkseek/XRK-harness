@@ -1,10 +1,10 @@
 /**
- * 通用 GET 兜底 — 能力表未覆盖的社区 HTTP 仍返回 JSON，不落 SPA 空白。
- * 注册在 registry 最末；POST 返回 false 交给 RPC / settings 兜底。
+ * Generic GET catch-all — unlisted community HTTP still returns JSON (no blank SPA).
+ * Registered last; POST returns false for RPC / settings fallback.
  */
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson } from "../http-json.js";
+import { sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER, tag } from "./meta.js";
 
 const SKIP_PREFIXES = [

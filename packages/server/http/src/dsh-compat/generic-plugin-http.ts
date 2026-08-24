@@ -1,11 +1,11 @@
 /**
- * 底层：社区插件 `/plugins/<id>/…` 静态资产（chunks · css · json）。
- * API 形路径仍返回诚实 JSON。平台内置 bundle 未命中时 fall through 给 webDist。
+ * Community plugin static assets under `/plugins/<id>/…` (chunks · css · json).
+ * API-shaped paths return honest JSON. Unmatched platform bundles fall through to webDist.
  */
 import { createReadStream, statSync } from "node:fs";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readBody, sendJson } from "../http-json.js";
+import { readBody, sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER, tag } from "./meta.js";
 
 export interface PluginAssetOptions {

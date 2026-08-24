@@ -1,30 +1,48 @@
 /**
- * dsh-compat 底层标准入口 — 业务模块应优先组合这些 primitive。
- *
- * | Primitive | 用途 |
- * |-----------|------|
- * | `createXrkDocStore` | 具名 revision 文档（wallet、memento、IM…） |
- * | `parseJsonBody` / `httpMethod` | HTTP 路由只读一次 body |
- * | `honest-envelope` | 诚实 `*-host` / ready JSON |
- * | `persisted-settings-store` | Cordis `*-settings` RPC |
+ * Underlying primitives for the community Host adapter.
+ * Self-contained: extract this folder with zero imports from server-http root.
  */
+export {
+  dataPath,
+  ensureDir,
+  readJsonFile,
+  writeJsonFile,
+} from "./json-store.js";
 export {
   createXrkDocStore,
   type XrkDocStore,
 } from "./doc-store.js";
+export {
+  readBody,
+  rpcErr,
+  rpcOk,
+  sendJson,
+  type Json,
+} from "./http-json.js";
 export {
   drainMutatingBody,
   httpMethod,
   isMutatingMethod,
   parseJsonBody,
 } from "./http-kit.js";
+export {
+  applyMobileGateDecision,
+  classifyRequestHost,
+  effectiveRequestHost,
+  evaluateMobileGate,
+  hostOnly,
+  isMobileGateExemptPath,
+  type MobileGateCredentials,
+  type MobileGateDecision,
+  type MobileGateMode,
+  type MobileGateSnapshot,
+  type RequestHostClass,
+} from "./mobile-gate-kit.js";
+export type { PublicRouteHandlerFn } from "./public-handler.js";
 
-/** 底层模块契约（文档用；运行时无强制）。 */
+/** Module contract for docs (not enforced at runtime). */
 export interface DshUnderlyingModule {
-  /** 稳定 id，对齐 `dsh-compat-matrix` genericModule */
   readonly id: string;
-  /** `~/.xrk` 下相对路径段（可多个 doc） */
   readonly storageParts: readonly (readonly string[])[];
-  /** HTTP 能力表前缀或 RPC channel（由 adapter-providers 挂载） */
   readonly surfaces: readonly string[];
 }

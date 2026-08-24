@@ -1,6 +1,6 @@
 # Reference discovery（`@file` / `@session`）
 
-> **读者**：贡献者 · 维护者。
+> **读者 / Audience**：贡献者 · 维护者 / Contributors · Maintainers
 
 产品壳 `@` 引用栈：`ui-reference` 插件 + `packages/context/*` 契约 + Face 发现 remotes。跨会话 **prepare**（prompt 注入快照）仍走 Cordis `sessionQuery`，Face 主路径未接。
 

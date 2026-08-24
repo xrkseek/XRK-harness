@@ -100,14 +100,25 @@ export function apply(ctx: ClientContext): void {
           if (version !== rowsVersion || revision !== rowsRevision) {
             rowsVersion = version
             rowsRevision = revision
-            rows = ctx.slots.entriesOfSlot('settings.section')
-              .map(e => ({
-                /* v8 ignore next -- list-slot registration requires id (SlotCore rejects an entry without one) */
-                id: e.options.id ?? '',
+            // First-per-id over the raw ledger (not entriesOfSlot): a crashed
+            // section abdicates its cell, and entriesOfSlot would drop the nav
+            // row so the panel snaps back to General — looks like "click and
+            // vanish". Keeping the id in the nav leaves the crash face in the
+            // content column (list dry-cell) while the dialog stays open.
+            const seen = new Set<string>()
+            const projected: SettingsSectionRow[] = []
+            for (const e of ctx.slots.entries('settings.section')) {
+              /* v8 ignore next -- list-slot registration requires id */
+              const id = e.options.id ?? ''
+              if (seen.has(id)) continue
+              seen.add(id)
+              projected.push({
+                id,
                 order: e.options.order ?? 0,
                 label: resolveSlotLabel(e.options.label) ?? '',
-              }))
-              .sort((a, b) => a.order - b.order)
+              })
+            }
+            rows = projected.sort((a, b) => a.order - b.order)
           }
           return rows
         },

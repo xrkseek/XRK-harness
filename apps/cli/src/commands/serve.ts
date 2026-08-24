@@ -9,6 +9,7 @@ import { createMinimalComposition } from "@xrkseek/preset-minimal";
 import { resolveLlmFromEnv } from "@xrkseek/llm-registry";
 import { createPolicyEngineFromFile, type PolicyEngine } from "@xrkseek/policy";
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { assertSafeHost, type ParsedArgs } from "../parse-args.js";
@@ -19,6 +20,7 @@ import {
 import { createCliLogger, resolveLogLevel, type CliLogger } from "../log.js";
 import { clearHostLock, writeHostLock } from "../host-lock.js";
 import { forceFreeXrkPort } from "../port.js";
+import { listPlugins, resolvePluginsDir } from "../plugin/index.js";
 
 function openProductUrl(url: string, log: CliLogger): void {
   const platform = process.platform;
@@ -155,7 +157,7 @@ export async function runServe(args: ParsedArgs): Promise<number> {
   const port = health.port ?? config.runtime.port;
   const origin = `http://${config.runtime.host}:${port}`;
   if (port > 0) writeHostLock(port);
-  log.info(`xrk-harness serve  ${origin}/`);
+  log.info(`xrkh serve  ${origin}/`);
   const uiRel = path.relative(repoRoot(), webDist) || webDist;
   log.info(`  workspace=${config.runtime.workspaceRoot}`);
   log.info(
@@ -164,6 +166,42 @@ export async function runServe(args: ParsedArgs): Promise<number> {
   log.info(
     `  mcpAllow=${health.mcpAllowConnect ? "on" : "off"}  log=${log.level}`,
   );
+  const pluginsDir =
+    config.runtime.pluginsDir?.trim() ||
+    (existsSync(resolvePluginsDir()) ? resolvePluginsDir() : undefined);
+  if (pluginsDir) {
+    const inventory = listPlugins({ pluginsDir });
+    const processIds = health.plugins ?? [];
+    log.info(
+      `  pluginsDir=${pluginsDir}  inventory=${inventory.length}  process=${processIds.length}`,
+    );
+    if (log.level === "debug") {
+      const pluginLog = log.child("plugin");
+      for (const e of inventory) {
+        pluginLog.debug(`${e.name}@${e.version} (${e.kind})`);
+      }
+      for (const id of processIds) {
+        pluginLog.debug(`process ${id}`);
+      }
+      const bootPath = path.join(pluginsDir, "web", "boot.json");
+      if (existsSync(bootPath)) {
+        try {
+          const boot = JSON.parse(readFileSync(bootPath, "utf8")) as {
+            entries?: readonly { id?: string }[];
+          };
+          pluginLog.debug(
+            `web overlay boot entries=${boot.entries?.length ?? 0}`,
+          );
+        } catch (err) {
+          pluginLog.warn(
+            `web/boot.json unreadable: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+    }
+  } else {
+    log.info("  pluginsDir=(none)");
+  }
   if (config.credentials.apiKey) {
     log.info("  apiKey=set");
   }
@@ -172,11 +210,11 @@ export async function runServe(args: ParsedArgs): Promise<number> {
   const ws = path.resolve(config.runtime.workspaceRoot);
   if (ws === home || ws.startsWith(home + path.sep + ".xrk")) {
     log.info(
-      "  tip: workspace is your user home (or ~/.xrk) — prefer `cd <project> && xrk-harness web`",
+      "  tip: workspace is your user home (or ~/.xrk) — prefer `cd <project> && xrkh web`",
     );
   }
   log.info(
-    "  tip: Ctrl+C stop · `xrk-harness restart` stops this Host · `web --force` only kills verified XRK listeners",
+    "  tip: Ctrl+C stop · `xrkh restart` stops this Host · `web --force` only kills verified XRK listeners",
   );
 
   if (args.open) {

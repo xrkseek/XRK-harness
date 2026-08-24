@@ -1,14 +1,14 @@
-# PTY tools
+# PTY 工具 / PTY Tools
 
-> **读者**：集成者 · 贡献者。
+> **读者 / Audience**：集成者 · 贡献者 / Integrators · Contributors
 
 `@xrkseek/exec-pty`：六件套 `terminal_open` / `terminal_send` / `terminal_read` / `terminal_signal` / `terminal_close` / `terminal_list`。Harness / server preset 默认登记；minimal 不登记。
 
-对照源码：本机 `XRKbar/deepseek-harness` @ `dsh-v0.1.1-rc.2`（pull 后 tag 对齐）。
+`@xrkseek/exec-pty` provides six tools: `terminal_open` / `terminal_send` / `terminal_read` / `terminal_signal` / `terminal_close` / `terminal_list`. Harness and server presets register them by default; minimal does not.
 
-## 缝
+## 缝 / Seams
 
-| 层 | 内容 |
+| 层 / Layer | 内容 / Content |
 |----|------|
 | Definition | `TerminalSessionService` — spawn · startSend · read · signal · kill · list · `hasActivity` |
 | Provider | `node-pty@1.2.0-beta.15`（optional；**NAPI prebuild**）+ bash backend：`TERM=dumb`、`name: "dumb"`、OSC `133;D;`、受控 prompt `xrk> `；spawn 前 `scrubbedParentEnv` + 显式 `XRK_*` |

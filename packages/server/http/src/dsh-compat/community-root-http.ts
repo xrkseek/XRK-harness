@@ -1,8 +1,8 @@
 /**
- * 社区插件根路径 `/whale-girl` 等（非 `/api` · 非能力表前缀）。
+ * Community root paths such as `/whale-girl` (not `/api`, not capability-table prefixes).
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readBody, sendJson } from "../http-json.js";
+import { readBody, sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER, tag } from "./meta.js";
 
 const RESERVED_ROOT = new Set([

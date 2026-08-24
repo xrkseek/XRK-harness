@@ -1,8 +1,8 @@
-/**
+﻿/**
  * dsh-skin-market catalog + runtime state.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson } from "../http-json.js";
+import { sendJson } from "./underlying/http-json.js";
 import {
   readXrkPluginInventory,
   type XrkPluginServicesOptions,

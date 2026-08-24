@@ -1,9 +1,9 @@
-/**
+﻿/**
  * dsh-genui — file-backed design library under ~/.xrk/genui.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
-import { sendJson } from "../http-json.js";
+import { sendJson } from "./underlying/http-json.js";
 import { renderGenuiFromSchema } from "./host-feature-bridge.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { parseJsonBody } from "./underlying/http-kit.js";

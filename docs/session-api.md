@@ -1,34 +1,38 @@
-# Session API（newSession · admit · continueTurn）
+# Session API（newSession · admit · continueTurn） / Session API
 
-> **读者**：集成者 · 贡献者。
+> **读者 / Audience**：集成者 · 贡献者 / Integrators · Contributors
 
 对齐 [ADR-0003](./adr/0003-session-long-loop-short.md)：admit ≠ execute。pending 用事件 `prompt/admitted` / `prompt/promoted`（无独立 inbox 表）。
 
+Aligned with [ADR-0003](./adr/0003-session-long-loop-short.md): admit ≠ execute. Pending work uses events `prompt/admitted` / `prompt/promoted` (no separate inbox table).
+
 插话 vs 排队见 [session-delivery.md](./session-delivery.md)。默认 `admit` = **queue（FIFO）**；可带 `delivery: "steer"`。空 `continueTurn` 走 `promoteAdmitsForTurn`：**全部 pending steer 合并进一轮**，否则 promote 一条 queue。HTTP `POST .../admit` 透传 `delivery`。
 
-## 产品语义
+Steer vs queue: [session-delivery.md](./session-delivery.md). Default `admit` is **queue (FIFO)**; optional `delivery: "steer"`. Empty `continueTurn` uses `promoteAdmitsForTurn`: **all pending steers merge into one turn**, otherwise one queue item is promoted. HTTP `POST .../admit` passes through `delivery`.
 
-| API | 含义 |
+## 产品语义 / Product semantics
+
+| API | 含义 / Meaning |
 |-----|------|
-| **newSession** | 新日志（或复用已有 id） |
-| **admit** | 只记账；**不**进 `deriveMessages`（现行 = queue） |
-| **continueTurn(text)** | 同 session 跑一轮（`runTurn` 写 `user/message`） |
+| **newSession** | 新日志（或复用已有 id） / New log (or reuse an existing id) |
+| **admit** | 只记账；**不**进 `deriveMessages`（现行 = queue） / Bookkeeping only; **not** in `deriveMessages` |
+| **continueTurn(text)** | 同 session 跑一轮（`runTurn` 写 `user/message`） / Run one turn on the session |
 | **continueTurn()** | `promoteAdmitsForTurn`（steer 批合并或一条 queue）→ 再跑 |
-| **run(text)** | 兼容别名；必须带 text |
+| **run(text)** | 兼容别名；必须带 text / Compatibility alias; text required |
 
 `createAgent` 已暴露 `continueTurn` / `admit` / `pendingAdmits`。
 
-## 事件
+## 事件 / Events
 
 ```text
-prompt/admitted  →  pending（模型不可见）
+prompt/admitted  →  pending（模型不可见 / not model-visible）
 prompt/promoted  →  已消费 admit（仍不是 chat message）
 user/message     →  由 runTurn 写入（模型可见）
 ```
 
 ## HTTP
 
-| Method | Path | 行为 |
+| Method | Path | 行为 / Behavior |
 |--------|------|------|
 | `POST` | `/api/sessions` | newSession → `201 { sessionId }` |
 | `POST` | `/api/sessions/:id/admit` | body `{ message, resume?, wake? }` — 默认 **202** admit-only；`wake` → 202+scheduled；`resume` → drain join **200** |
@@ -37,8 +41,10 @@ user/message     →  由 runTurn 写入（模型可见）
 
 忙（TurnLatch 直调）→ `409`；drain `resume` 则 **join** 等待。无 pending 却空 turn → `400 no pending admit`。
 
-## 包
+Busy (direct TurnLatch) → `409`; drain `resume` **joins** and waits. Empty turn with no pending → `400 no pending admit`.
+
+## 包 / Packages
 
 - `@xrkseek/core-session`：`newSession` / `admitPrompt` / `promoteNextAdmit` / …
 - `@xrkseek/core-agent`：`AgentHandle.continueTurn`
-- `@xrkseek/harness` 再导出
+- `@xrkseek/harness` 再导出 / re-exports

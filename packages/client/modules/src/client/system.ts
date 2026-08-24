@@ -186,12 +186,12 @@ export class ClientModuleSystem implements ClientModuleLoader {
   }
 
   async import(specifier: string): Promise<unknown> {
-    if (this.seed.has(specifier)) return this.seed.get(specifier)
-    const bare = stripClientSuffix(specifier)
-    if (bare !== specifier) {
-      if (this.seed.has(bare)) return this.seed.get(bare)
-      const cachedBare = this.loadCache.get(bare)
-      if (cachedBare !== undefined) return cachedBare.exports
+    const direct = this.lookupRequire(specifier)
+    if (direct !== undefined) return direct
+    const mapped = remapDshClientRequire(specifier)
+    if (mapped !== undefined && mapped !== specifier) {
+      const viaAlias = this.lookupRequire(mapped)
+      if (viaAlias !== undefined) return viaAlias
     }
     const existing = this.loadCache.get(specifier)
     if (existing !== undefined) return existing.exports

@@ -92,6 +92,7 @@ describe("cli parseArgs", () => {
   });
 
   it("help text mentions web and persist", () => {
+    expect(helpText()).toContain("xrkh —");
     expect(helpText()).toContain("doctor");
     expect(helpText()).toContain("web");
     expect(helpText()).toContain("restart");

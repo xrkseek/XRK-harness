@@ -3,7 +3,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson } from "../http-json.js";
+import { sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
@@ -159,6 +159,20 @@ export function handleImMessagingRpc(
   ) {
     return listImMessages(xrkHome, channel, payload);
   }
+  if (
+    endpoint === "connection.keepalive" ||
+    endpoint === "connection.ping" ||
+    endpoint === "connection.stream"
+  ) {
+    return {
+      ok: true,
+      channel,
+      mode: "xrk-bridge",
+      transport: "http-poll",
+      streamPath: `/api/im/${channel}/stream`,
+      adapter: DSH_COMPAT_ADAPTER,
+    };
+  }
   if (endpoint === "webhook.status" || endpoint === "webhook.health") {
     const inbound = readMessages(xrkHome).filter(
       (m) => m.channel === channel && m.direction === "inbound",
@@ -180,6 +194,9 @@ export async function handleImMessagingHttp(
   pathname: string,
   xrkHome: string | undefined,
 ): Promise<boolean> {
+  if (await handleImMessagingStream(req, res, pathname, xrkHome)) {
+    return true;
+  }
   const method = (req.method ?? "GET").toUpperCase();
   const webhookMatch = /^\/api\/im\/([^/]+)\/webhook$/.exec(pathname);
   if (webhookMatch && method === "POST") {
@@ -219,4 +236,50 @@ export async function handleImMessagingHttp(
     return true;
   }
   return false;
+}
+
+/** Long-poll / SSE message stream for IM bridge clients (no Cordis socket). */
+export async function handleImMessagingStream(
+  req: IncomingMessage,
+  res: ServerResponse,
+  pathname: string,
+  xrkHome: string | undefined,
+): Promise<boolean> {
+  const streamMatch = /^\/api\/im\/([^/]+)\/stream$/.exec(pathname);
+  if (!streamMatch) return false;
+  const method = (req.method ?? "GET").toUpperCase();
+  if (method !== "GET") {
+    sendJson(res, 405, { error: "method not allowed" });
+    return true;
+  }
+  const channel = decodeURIComponent(streamMatch[1]!);
+  const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  const since = url.searchParams.get("since") ?? "";
+  const accept = String(req.headers.accept ?? "");
+  const useSse = accept.includes("text/event-stream");
+  const initial = listImMessages(xrkHome, channel, { limit: 32 });
+  const messages = (initial.messages as ImMessageRow[]).filter(
+    (m) => !since || m.createdAt > since,
+  );
+  if (useSse) {
+    res.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache",
+      connection: "keep-alive",
+    });
+    res.write(
+      `event: snapshot\ndata: ${JSON.stringify({ ok: true, channel, messages })}\n\n`,
+    );
+    res.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+    res.end();
+    return true;
+  }
+  sendJson(res, 200, {
+    ok: true,
+    channel,
+    messages,
+    mode: "xrk-bridge-poll",
+    adapter: DSH_COMPAT_ADAPTER,
+  });
+  return true;
 }

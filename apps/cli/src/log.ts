@@ -1,5 +1,8 @@
 /**
- * CLI / Host console log (DSH: URL + lifecycle belong to the shell; OpenClaw: --verbose).
+ * CLI / Host console log.
+ *
+ * Levels: flag (--verbose / --quiet) > XRK_LOG / XRK_LOG_LEVEL > default info.
+ * Lines are `HH:mm:ss.sss <level> <message>` on stdout (info) or stderr (rest).
  */
 
 export type LogLevel = "silent" | "error" | "warn" | "info" | "debug";
@@ -12,12 +15,21 @@ const RANK: Record<LogLevel, number> = {
   debug: 10,
 };
 
+const LEVEL_TAG: Record<Exclude<LogLevel, "silent">, string> = {
+  error: "error",
+  warn: "warn ",
+  info: "info ",
+  debug: "debug",
+};
+
 export interface CliLogger {
   readonly level: LogLevel;
   error(msg: string): void;
   warn(msg: string): void;
   info(msg: string): void;
   debug(msg: string): void;
+  /** Nested scope: `plugin add foo` → `info  plugin  add foo`. */
+  child(scope: string): CliLogger;
 }
 
 function parseLevel(raw: string | undefined): LogLevel | undefined {
@@ -55,16 +67,27 @@ function stamp(): string {
   return new Date().toISOString().slice(11, 23); // HH:mm:ss.sss
 }
 
-export function createCliLogger(level: LogLevel): CliLogger {
-  const write = (min: LogLevel, stream: NodeJS.WriteStream, msg: string) => {
+function createScopedLogger(level: LogLevel, scope: string): CliLogger {
+  const prefix = scope ? `${scope}  ` : "";
+  const write = (
+    min: Exclude<LogLevel, "silent">,
+    stream: NodeJS.WriteStream,
+    msg: string,
+  ) => {
     if (RANK[level] > RANK[min]) return;
-    stream.write(`${stamp()} ${msg}\n`);
+    stream.write(`${stamp()} ${LEVEL_TAG[min]}  ${prefix}${msg}\n`);
   };
   return {
     level,
-    error: (msg) => write("error", process.stderr, `error  ${msg}`),
-    warn: (msg) => write("warn", process.stderr, `warn   ${msg}`),
+    error: (msg) => write("error", process.stderr, msg),
+    warn: (msg) => write("warn", process.stderr, msg),
     info: (msg) => write("info", process.stdout, msg),
-    debug: (msg) => write("debug", process.stderr, `debug  ${msg}`),
+    debug: (msg) => write("debug", process.stderr, msg),
+    child: (next) =>
+      createScopedLogger(level, scope ? `${scope}.${next}` : next),
   };
+}
+
+export function createCliLogger(level: LogLevel): CliLogger {
+  return createScopedLogger(level, "");
 }

@@ -13,12 +13,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { readBody, sendJson } from "../http-json.js";
+import { readBody, sendJson } from "./underlying/http-json.js";
 import {
   readXrkPluginInventory,
   type XrkPluginServicesOptions,
 } from "../xrk/plugin-services.js";
-import { dataPath } from "./json-store.js";
+import { dataPath } from "./underlying/json-store.js";
 import { honestReady } from "./honest-envelope.js";
 import {
   scanTongflowRegistryFromInventory,
@@ -388,8 +388,28 @@ export async function handleTongflowStudioHttp(
       ok: true,
       python: false,
       scanner: false,
+      connection: {
+        mode: "http-bridge",
+        stream: false,
+        note: "XRK TypeScript node runtime; no Python TongFlow socket",
+      },
       adapter: DSH_COMPAT_ADAPTER,
       note: "TongFlow studio engine not embedded; canvas-compat /api/* is file-backed.",
+    });
+    return true;
+  }
+
+  if (pathname === "/tongflow/connection" || pathname === "/tongflow/events") {
+    sendJson(res, 200, {
+      ok: true,
+      connected: true,
+      transport: "http-poll",
+      endpoints: {
+        health: "/tongflow/health",
+        scan: "/tongflow/scan",
+        tasks: "/api/task/create",
+      },
+      adapter: DSH_COMPAT_ADAPTER,
     });
     return true;
   }

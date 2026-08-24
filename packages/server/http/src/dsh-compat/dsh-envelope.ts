@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Same-origin DSH plugin JSON envelope: `{ ok: true, value }` / `{ ok: false, error }`.
  * Most community clients do `if (!response.ok || !body.ok) throw`.
  */
 import type { ServerResponse } from "node:http";
-import { sendJson } from "../http-json.js";
+import { sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 
 export function sendDshOk(

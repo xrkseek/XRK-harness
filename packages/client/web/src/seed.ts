@@ -28,7 +28,7 @@ export function getStaticModules(): Record<string, unknown> {
   // The satisfies pin is the projection contract: a word added to
   // PLATFORM_MODULES without a static import here (or vice versa) fails to
   // compile instead of drifting into a runtime require miss.
-  return {
+  const core = {
     'react': React,
     'react/jsx-runtime': ReactJsxRuntime,
     'react-dom': ReactDom,
@@ -39,4 +39,15 @@ export function getStaticModules(): Record<string, unknown> {
     '@xrkseek/client-ui-primitives': UiPrimitives,
     '@xrkseek/client-schema-form': SchemaForm,
   } satisfies Record<PlatformModule, unknown>
+  // Community DSH chunks `import("@deepseek-ai/dsh-client-*")` / bare `cordis`.
+  // ModuleLoader remaps too; dual seed keeps MD preview alive even if remap
+  // lags a stale Vite shell bundle.
+  return {
+    ...core,
+    cordis: Cordis,
+    '@deepseek-ai/dsh-client-ui-slots': UiSlots,
+    '@deepseek-ai/dsh-client-web-react': WebReact,
+    '@deepseek-ai/dsh-client-ui-primitives': UiPrimitives,
+    '@deepseek-ai/dsh-client-schema-form': SchemaForm,
+  }
 }

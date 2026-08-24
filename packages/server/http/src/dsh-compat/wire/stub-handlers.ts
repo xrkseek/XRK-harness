@@ -1,8 +1,8 @@
 /**
- * 兼容器：诚实 stub RPC/HTTP（未匹配到具名底层能力时）。
+ * Honest stub RPC/HTTP when no named underlying capability matches.
  */
 import type { IncomingMessage } from "node:http";
-import { readBody, sendJson } from "../../http-json.js";
+import { readBody, sendJson } from "../underlying/http-json.js";
 import type {
   DshHttpRoute,
   HostProviderPartial,

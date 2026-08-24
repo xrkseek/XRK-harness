@@ -3,13 +3,14 @@
  * Plugins register handlers by channel prefix; Host mounts one public entry.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readBody, rpcErr, rpcOk, sendJson } from "../http-json.js";
+import { readBody, rpcErr, rpcOk, sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { trySettingsFallbackRpc } from "./cordis-settings-fallback.js";
 
 export type CordisRpcHandler = (
   endpoint: string,
   payload: Record<string, unknown>,
+  req?: IncomingMessage,
 ) => unknown | Promise<unknown>;
 
 export type CordisHttpHandler = (
@@ -104,7 +105,7 @@ export function createCordisCompatRegistry(): CordisCompatRegistry {
           return true;
         }
         try {
-          const value = await handler(method || endpoint, payload);
+          const value = await handler(method || endpoint, payload, req);
           sendJson(res, 200, rpcOk(rpcId, value));
         } catch (err) {
           sendJson(

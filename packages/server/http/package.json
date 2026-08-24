@@ -7,6 +7,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./dsh-compat": {
+      "types": "./dist/dsh-compat/index.d.ts",
+      "import": "./dist/dsh-compat/index.js",
+      "default": "./dist/dsh-compat/index.js"
     }
   },
   "files": [
@@ -17,7 +22,8 @@
     "@xrkseek/core-agent": "workspace:*",
     "@xrkseek/core-session": "workspace:*",
     "@xrkseek/protocol": "workspace:*",
-    "@xrkseek/server-loader": "workspace:*"
+    "@xrkseek/server-loader": "workspace:*",
+    "qrcode-generator": "1.4.4"
   },
   "license": "MIT",
   "repository": {

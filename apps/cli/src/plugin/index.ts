@@ -1,5 +1,5 @@
 /**
- * High-level plugin install / remove / list for `xrk-harness plugin`.
+ * High-level plugin install / remove / list for `xrkh plugin`.
  */
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
@@ -88,7 +88,7 @@ export function addPlugin(
     const { inject, dropped } = remapInjectList(classified.clientInject);
     for (const d of dropped) {
       io.warn(
-        `xrk-harness: warning: dropped unknown inject ${JSON.stringify(d)}`,
+        `xrkh: warning: dropped unknown inject ${JSON.stringify(d)}`,
       );
     }
 
@@ -117,7 +117,7 @@ export function addPlugin(
     upsertInventoryEntry(pluginsDir, entry);
     reconcilePluginsDir(pluginsDir, io);
     io.log(
-      `xrk-harness: installed ${entry.name}@${entry.version} (${entry.kind}) → ${pluginsDir}`,
+      `xrkh: installed ${entry.name}@${entry.version} (${entry.kind}) → ${pluginsDir}`,
     );
     return entry;
   } finally {
@@ -149,7 +149,7 @@ export function removePlugin(
   }
   removeInventoryEntry(pluginsDir, name);
   reconcilePluginsDir(pluginsDir, io);
-  io.log(`xrk-harness: removed ${name}`);
+  io.log(`xrkh: removed ${name}`);
 }
 
 /** Sync client staging + `web/boot.json` with inventory (orphan-safe). */
@@ -159,7 +159,7 @@ export function reconcilePluginsDir(
 ): void {
   const removed = reconcileClientStaging(pluginsDir);
   for (const id of removed) {
-    io.log(`xrk-harness: pruned orphan client staging ${id}`);
+    io.log(`xrkh: pruned orphan client staging ${id}`);
   }
   reconcileBoot(pluginsDir);
 }

@@ -1,4 +1,4 @@
-// Hero chrome for the blank-draft phase of ConversationRoot: fish headline,
+// Hero chrome for the blank-draft phase of ConversationRoot: brand headline,
 // glow backdrop, and the workspace row. Pure presentation — the resident
 // composer is NOT rendered here (it keeps its own stable tree position in
 // ConversationRoot so the textarea survives the hero → composer flip); CSS
@@ -126,7 +126,6 @@ export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
             })}
           </span>
           <span className={css.headlineText}>{t('hero.headline')}</span>
-          <span className={css.previewBadge}>{t('hero.preview')}</span>
         </div>
         <div className={css.body}>
           {/* The resident composer (ConversationRoot's root-owned scrollport;

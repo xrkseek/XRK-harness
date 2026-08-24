@@ -1,35 +1,54 @@
+> **读者**：集成者 · 终端用户（CLI 安装与日常命令）。
+
 # @xrkseek/harness-cli
 
-bin：`xrk-harness`（简写 `xrkh`）。产品 UI：包内 `product-web/`（源码仓用 `apps/web/dist`）。
+XRK Harness 命令行入口。日常以缩写 **`xrkh`** 为主；完整 bin 名 **`xrk-harness`** 等价可用。
+
+## 安装
+
+```bash
+npm install -g @xrkseek/harness-cli
+# 或一次性
+npx @xrkseek/harness-cli@latest web
+```
+
+安装后 PATH 上会有 `xrkh` 与 `xrk-harness` 两个入口，指向同一程序。
 
 ## 命令
 
 | 命令 | 作用 |
 |------|------|
-| `run` | 单 turn（默认 minimal + replay） |
-| `serve` / `web` | HTTP host + 产品壳（默认 **XRK Harness** 工具面） |
-| `restart` | 停**本机先前的 XRK Host**（`~/.xrk/run/host-<port>.pid.json`）再起；不杀陌生进程 |
-| `plugin` | 安装 / 卸载 / 列出用户插件（`~/.xrk/plugins`） |
-| `doctor` | Node · workspace · 产品壳 |
-| `dump-config` | 打印 preset 配置 |
-
-| Flag | 作用 |
-|------|------|
-| `--force` | 只停**已识别为 XRK Host** 的监听进程；端口被其它程序占用则报错退出 |
-| `--verbose` | `/api` + MCP 细节 |
-| `--quiet` | 仅 warn/error |
-
-OpenClaw/DSH 的 `gateway --force` 仍是按端口杀监听；其更成熟路径是服务管理器 + `--safe` drain。本 CLI 是前台进程，用 **pid 锁 + 指纹校验** 代替「杀端口上任意进程」。
-
-Preset 分层：[docs/profiles.md](../../docs/profiles.md)。写插件：[docs/plugin-development.md](../../docs/plugin-development.md)。
+| `xrkh run` | 单次 agent 回合（参数或 stdin） |
+| `xrkh serve` | 启动 HTTP Host + Face API |
+| `xrkh web` | 产品壳（静态 UI + API 代理） |
+| `xrkh plugin` | 工作区插件 install / list / remove / reconcile |
+| `xrkh doctor` | 环境与产品目录检查 |
+| `xrkh dump-config` | 输出解析后的 Host 配置（JSON） |
 
 ```bash
-npx @xrkseek/harness-cli web
-npx @xrkseek/harness-cli restart
-npx @xrkseek/harness-cli plugin add ./extensions/example-tools
-# 源码：
-pnpm build && pnpm web:build && pnpm client:bundle && pnpm web:assemble
-node apps/cli/dist/bin.js web --workspace .
+xrkh --help
+xrkh plugin --help
 ```
 
-静态根：`XRK_WEB_DIST` → `product-web/` → `apps/web/dist`。配置见 [docs/configuration.md](../../docs/configuration.md)。
+## 示例
+
+```bash
+xrkh run "hello"
+xrkh serve --port 8787
+xrkh web
+xrkh plugin add ./extensions/example-tools
+xrkh doctor
+```
+
+## 产品壳路径
+
+`xrkh web` / `xrkh serve` 会按顺序解析产品静态资源：
+
+1.  monorepo 开发：`apps/web/dist`（需先 `pnpm web:assemble`）
+2.  全局安装：`product-web/`（随 npm 包发布）
+
+## 相关文档
+
+- [Getting started](../../docs/getting-started.md)
+- [Plugin loader](../../docs/plugin-loader.md)
+- [Host / Face](../../docs/host-face.md)

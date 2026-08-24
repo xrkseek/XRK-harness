@@ -1,10 +1,12 @@
-# LLM Provider Registry
+# LLM Provider Registry / LLM Provider Registry
 
-> **读者**：集成者 · 贡献者。
+> **读者 / Audience**：集成者 · 贡献者 / Integrators · Contributors
 
 产品规格。`@xrkseek/llm-registry`：单路径解析与创建适配器。BrandEntries：[llm-provider-presets.md](./llm-provider-presets.md)。
 
-## 目标
+Product spec. `@xrkseek/llm-registry` is the single path to resolve and create adapters. BrandEntries: [llm-provider-presets.md](./llm-provider-presets.md).
+
+## 目标 / Goals
 
 ```text
 resolve(input) → ProviderBinding → createAdapter(binding, secrets) → LlmAdapter
@@ -15,7 +17,7 @@ listForUi() / catalog() → Face `llm.providers` · `session.models`
 - 协议包 ≠ compat 工厂 ≠ 品牌条目  
 - 密钥仅运行时注入；不入库  
 
-## 状态
+## 状态 / Status
 
 **R0**：openai-chat brands + env + Face 投影 + `discoverModels` GET `/models`。  
 **R1 已交付**：官方协议包 + Registry 分发：

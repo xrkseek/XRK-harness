@@ -325,6 +325,19 @@ export class SlotRegistry extends Service {
   }
 
   /**
+   * Report an entry boundary crash (same channel the React slot renderer uses).
+   * Tests and host supervision may call this directly.
+   */
+  reportEntryError(
+    key: string,
+    entry: StoredEntry,
+    error: unknown,
+    info: { abdicate: boolean },
+  ): void {
+    this._core.reportEntryError(key, entry, error, info)
+  }
+
+  /**
    * Look up a declared spec (register-declared or the built-in 'root').
    * @param key - SlotMap key.
    * @returns spec or undefined.

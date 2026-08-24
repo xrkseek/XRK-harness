@@ -1,14 +1,16 @@
-# Protocol events
+# 协议事件 / Protocol Events
 
-> **读者**：集成者 · 贡献者。
+> **读者 / Audience**：集成者 · 贡献者 / Integrators · Contributors
 
 Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deriveMessages` 从事件重建，没有并行的可变 messages 数组。
 
-压缩换窗见 [session-compaction.md](./session-compaction.md)。
+Append-only session facts (`@xrkseek/protocol`). Model-visible history is rebuilt by `deriveMessages` from events; there is no parallel mutable messages array.
 
-## Event set
+压缩换窗见 [session-compaction.md](./session-compaction.md)。 / Window compaction: [session-compaction.md](./session-compaction.md).
 
-| `type` | Required fields (beyond `ts`) | Notes |
+## 事件集合 / Event set
+
+| `type` | 必填字段（除 `ts`） / Required fields (beyond `ts`) | 说明 / Notes |
 |--------|-------------------------------|--------|
 | `turn/start` · `turn/end` | `turnId` | Turn bracket；`turn/end.reason` 含 `completed` · `aborted` · `error` · `max-tokens` · `interrupted` · `blocked`。OpenAI `finish_reason: length` / Anthropic `stop_reason: max_tokens` → keep/drop 去截断 toolCalls → `{ kind: "max-tokens" }`（sticky）。`stop` 且无内容/推理/工具 → `EMPTY_RESPONSE`；未知 finish（如 `content_filter`）→ `ProviderFinishError`；非 max-tokens 的残缺 tool JSON → `IncompleteToolCallError`；三者均写 `turn/end` `{ kind: "error" }` 后抛出 |
 | `step/start` · `step/end` | `turnId`, `stepId` | Provider step |

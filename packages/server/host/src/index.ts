@@ -31,9 +31,13 @@ import {
   type DshCompatOptions,
   ensureXrkPlatformClientBootEntries,
   injectBootIntoHtml,
+  injectMobileAccessShellIntoHtml,
   loadBootManifestFromWebDist,
   mergeWebBootManifests,
   resolveWebBootManifest,
+  createXrkWalletPort,
+  createMobileAccessGateChecker,
+  createMobileAccessGateHandler,
 } from "@xrkseek/server-http";
 import {
   attachFaceUpgrades,
@@ -68,10 +72,8 @@ import { createUsageStatsBridgeFromFace } from "./usage-stats-bridge.js";
 import { createCostMeterUsageBridge } from "./cost-meter-bridge.js";
 import { createHarnessConnectorBridgeFromFace } from "./harness-connector-bridge.js";
 import { createAutoReviewBridgeFromHost } from "./auto-review-bridge.js";
-import {
-  createXrkWalletPort,
-} from "@xrkseek/server-http";
 import { createWalletFaceBridgeFromFace } from "./wallet-bridge.js";
+import { createSidebarFaceBridgeFromFace } from "./sidebar-face-bridge.js";
 import {
   mcpDraftsToSpecs,
   parseMcpServersEnv,
@@ -846,7 +848,12 @@ export function createHostManager(): HostManager {
         ]);
       };
 
+      const mobileAccessGate = createMobileAccessGateChecker({
+        xrkHome: resolveXrkHome(),
+      });
+
       const faceCheckAuth = (r: IncomingMessage) => {
+        if (!mobileAccessGate(r)) return false;
         const expected = effectiveHostApiKey(faceRuntime);
         if (!expected) return true;
         const auth = r.headers.authorization;
@@ -882,6 +889,9 @@ export function createHostManager(): HostManager {
           xrkHome: resolveXrkHome(),
           face: createWalletFaceBridgeFromFace(faceRuntime),
         }),
+        sidebarFace: createSidebarFaceBridgeFromFace(faceRuntime, {
+          ...(sharedShell ? { shell: sharedShell } : {}),
+        }),
         harnessConnector: createHarnessConnectorBridgeFromFace(faceRuntime),
       };
       hostWireRef.ctx = hostWireCtx;
@@ -900,6 +910,7 @@ export function createHostManager(): HostManager {
         resolveAgent,
         drain,
         tryHandlePublic: chainPublicHandlers(
+          createMobileAccessGateHandler({ xrkHome: resolveXrkHome() }),
           createXrkPluginPublicHandler({
             ...(config.runtime.pluginsDir
               ? { pluginsDir: config.runtime.pluginsDir }
@@ -923,7 +934,9 @@ export function createHostManager(): HostManager {
                 root: config.runtime.webDist,
                 ...(webOverlay ? { extraRoots: [webOverlay] } : {}),
                 transformIndex: (html: string) =>
-                  injectBootIntoHtml(html, boot),
+                  injectMobileAccessShellIntoHtml(
+                    injectBootIntoHtml(html, boot),
+                  ),
               },
             }
           : {}),

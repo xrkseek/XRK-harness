@@ -11,8 +11,8 @@
 | | 可以 | 不可以 |
 |--|------|--------|
 | **写 / 改** | 当前 workspace 内插件目录与文档 | 逃逸 workspace；把密钥写进对话或仓库 |
-| **装插件** | 指导 `xrk-harness plugin add` → `~/.xrk/plugins` | 假装已热重载 |
-| **重载 Host** | 指导 `xrk-harness restart` | 建议「杀掉端口上任意进程」 |
+| **装插件** | 指导 `xrkh plugin add` → `~/.xrk/plugins` | 假装已热重载 |
+| **重载 Host** | 指导 `xrkh restart` | 建议「杀掉端口上任意进程」 |
 
 ## 办事流程
 

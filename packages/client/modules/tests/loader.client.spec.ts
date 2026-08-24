@@ -194,6 +194,14 @@ describe('require resolution', () => {
     expect(exports.marker).toBe('runtime')
   })
 
+  it('remaps import("@deepseek-ai/dsh-client-ui-primitives") onto seed table', async () => {
+    const prim = { MarkdownText: 'markdown' }
+    const b = bench([row('community')], {}, {
+      seed: { '@xrkseek/client-ui-primitives': prim },
+    })
+    expect(await b.loader.import('@deepseek-ai/dsh-client-ui-primitives', '', {})).toBe(prim)
+  })
+
   it('a require cycle is fatal', async () => {
     const b = bench([row('a'), row('b')], {
       a: req => ({ dep: req('b') }),

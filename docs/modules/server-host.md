@@ -1,6 +1,6 @@
 # Module: `@xrkseek/server-host`
 
-> **读者**：贡献者 · 维护者。
+> **读者 / Audience**：贡献者 · 维护者 / Contributors · Maintainers
 
 进程内 Host：config · store · drain · HTTP · Face · 插件 / MCP 装载。
 

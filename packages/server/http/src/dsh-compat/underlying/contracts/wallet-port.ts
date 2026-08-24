@@ -1,9 +1,9 @@
 /**
- * XRK 底层契约 ↔ DSH `dsh-wallet` client HTTP 外形。
- * Adapter 只转发；Bridge 做类型/字段映射；Service 持久化 + 组合 Face 数据。
+ * XRK wallet port ↔ community wallet client HTTP shapes.
+ * Adapter forwards; bridge maps fields; service persists + Face data.
  */
 
-/** npm `dsh-wallet` client `GET /wallet/api/balance` */
+/** Community wallet client `GET /wallet/api/balance`. */
 export interface DshWalletBalanceView {
   readonly available?: boolean;
   readonly error?: string;
@@ -13,7 +13,7 @@ export interface DshWalletBalanceView {
   readonly low?: ReadonlyArray<{ currency: string; total: number }>;
 }
 
-/** npm `dsh-wallet` client `GET /wallet/api/cost` */
+/** Community wallet client `GET /wallet/api/cost`. */
 export interface DshWalletCostView {
   readonly ok: boolean;
   readonly cost?: number;
@@ -30,7 +30,7 @@ export interface DshWalletCostView {
   readonly sessionId?: string;
 }
 
-/** npm `dsh-wallet` client `GET /wallet/api/usage` */
+/** Community wallet client `GET /wallet/api/usage`. */
 export interface DshWalletUsageView {
   readonly ok: boolean;
   readonly ready?: boolean;
@@ -39,7 +39,7 @@ export interface DshWalletUsageView {
   readonly days?: ReadonlyArray<{ readonly date: string; readonly cost: number }>;
 }
 
-/** Face / cost-meter 注入：XRK 真源，与 DSH 外形无关 */
+/** Face / cost-meter injection — XRK source of truth (shape-agnostic). */
 export interface WalletFaceBridge {
   getSessionCost(
     sessionId?: string,
@@ -60,11 +60,29 @@ export interface WalletFaceBridge {
     readonly ready: boolean;
     readonly degraded: boolean;
   }>;
+  /** Official balance cache from cost-meter (e.g. DeepSeek `/user/balance`). */
+  getOfficialBalance(): Promise<{
+    readonly status: "ok" | "err" | "off";
+    readonly currency: string;
+    readonly totalBalance: number;
+    readonly fetchedAt?: number;
+    readonly message?: string;
+  } | null>;
+  /** Refresh official balance and return the latest cache. */
+  refreshOfficialBalance(): Promise<{
+    readonly status: "ok" | "err" | "off";
+    readonly currency: string;
+    readonly totalBalance: number;
+    readonly fetchedAt?: number;
+    readonly message?: string;
+  } | null>;
 }
 
-/** XRK 钱包底层端口 — HTTP adapter 只调这个接口 */
+/** XRK wallet port — HTTP adapter calls only this interface. */
 export interface XrkWalletPort {
   getBalanceView(): Promise<DshWalletBalanceView>;
+  /** Refresh official balance cache, then read (wallet refresh button). */
+  refreshBalanceView(): Promise<DshWalletBalanceView>;
   getCostView(sessionId?: string): Promise<DshWalletCostView>;
   getUsageView(): Promise<DshWalletUsageView>;
   setCostThreshold(threshold: number): Promise<number>;

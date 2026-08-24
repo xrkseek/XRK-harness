@@ -1,31 +1,33 @@
-# 维护者交接
+# 维护者交接 / Maintainer Handoff
 
-> **读者**：维护者（仓库所有者 / 即将接手的人）。
+> **读者 / Audience**：维护者（仓库所有者 / 即将接手的人） / Maintainers (owners / incoming handoff)
 
 把「能跑的产品」交给下一个人时，按本页核对。细节契约仍在各教科书专题；改码红线在 [AGENTS.md](../AGENTS.md)。
 
-## 30 分钟上手
+When handing a working product to the next owner, use this checklist. Detailed contracts stay in textbook topics; coding red lines live in [AGENTS.md](../AGENTS.md).
 
-| 步 | 做什么 | 文档 |
+## 30 分钟上手 / 30-minute onboarding
+
+| 步 / Step | 做什么 / Action | 文档 / Doc |
 |----|--------|------|
-| 1 | 认身份与文档分层 | [audiences](./audiences.md) · [docs/README](./README.md) |
-| 2 | 看什么能正式依赖 | [status](./status.md) |
-| 3 | 本机跑通源码 + 壳 | [getting-started](./getting-started.md) 路径 B |
-| 4 | 门禁绿 | [testing](./testing.md) · `pnpm check` |
-| 5 | 发版怎么打 | [publishing](./publishing.md) |
-| 6 | 包边界与依赖忌口 | [architecture](./architecture.md) · [AGENTS](../AGENTS.md) |
+| 1 | 认身份与文档分层 / Audiences & carriers | [audiences](./audiences.md) · [docs/README](./README.md) |
+| 2 | 看什么能正式依赖 / What is dependable | [status](./status.md) |
+| 3 | 本机跑通源码 + 壳 / Run source + shell | [getting-started](./getting-started.md) 路径 B |
+| 4 | 门禁绿 / Green gate | [testing](./testing.md) · `pnpm check` |
+| 5 | 发版怎么打 / How to release | [publishing](./publishing.md) |
+| 6 | 包边界与依赖忌口 / Package boundaries | [architecture](./architecture.md) · [AGENTS](../AGENTS.md) |
 
-## 仓库真相
+## 仓库真相 / Repository facts
 
-| 项 | 事实 |
+| 项 / Item | 事实 / Fact |
 |----|------|
-| 对外发包 | 主要是 **`@xrkseek/harness-cli`**（npmjs + GitHub Release；含 `product-web/`） |
+| 对外发包 / Public package | 主要是 **`@xrkseek/harness-cli`**（npmjs + GitHub Release；含 `product-web/`） |
 | 其余 `@xrkseek/*` | 多数 **private**（workspace）；勿当已 npm 公开 SDK 对外承诺 |
-| 产品壳 | `apps/web` + `packages/client` → 组装进 CLI；**不是** deepseek-ai Fork，勿向上游提 PR |
-| 会话 / 设置 | 用户机 `~/.xrk/` 或 workspace `.xrk/`（gitignore）；仓内只有 `*.example` |
-| 能力三态 | **能跑 / 未稳 / 未做** — 只以 [status](./status.md) 对外说话 |
+| 产品壳 / Product shell | `apps/web` + `packages/client` → 组装进 CLI；**不是** deepseek-ai Fork，勿向上游提 PR |
+| 会话 / 设置 / Sessions · settings | 用户机 `~/.xrk/` 或 workspace `.xrk/`（gitignore）；仓内只有 `*.example` |
+| 能力三态 / Capability states | **能跑 / 未稳 / 未做** — 只以 [status](./status.md) 对外说话 |
 
-## 日常命令
+## 日常命令 / Day-to-day commands
 
 ```bash
 npm install -g pnpm@11.22.0   # 与 package.json → packageManager 对齐

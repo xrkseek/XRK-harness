@@ -1,10 +1,12 @@
-# Session（索引）
+# Session（索引） / Session (Index)
 
-> **读者**：集成者 · 贡献者。
+> **读者 / Audience**：集成者 · 贡献者 / Integrators · Contributors
 
 长寿 session + 短寿 turn（[ADR-0003](./adr/0003-session-long-loop-short.md)）。真源是事件日志；模型可见输入由 `deriveMessages` 重建。身份与文档分层见 [audiences.md](./audiences.md)。
 
-| 文档 | 内容 |
+A long-lived session plus short-lived turns ([ADR-0003](./adr/0003-session-long-loop-short.md)). The source of truth is the event log; model-visible input is rebuilt by `deriveMessages`. Audience layering: [audiences.md](./audiences.md).
+
+| 文档 / Doc | 内容 / Content |
 |------|------|
 | [protocol-events.md](./protocol-events.md) | 事件集合 · TokenUsage helpers · `parseSessionEvent` · JSON Schema |
 | [session-api.md](./session-api.md) | `newSession` · `admit` · `continueTurn` |
@@ -14,11 +16,17 @@
 | [session-compaction.md](./session-compaction.md) | 换窗压缩 · overflow · Token 估算 · Context meter |
 | [modules/session-projection.md](./modules/session-projection.md) | 投影状态/视图缝 · Face mux / history |
 | [tool-settlement.md](./tool-settlement.md) | dangling · 取消码 · 并行 settle · concludesTurn |
-| [http-api.md](./http-api.md) | HTTP 形状 |
+| [http-api.md](./http-api.md) | HTTP 形状 / HTTP shapes |
 | [workspace-inject.md](./workspace-inject.md) | `.xrk` → durable `user/message` injects（`messageId` 唯一；skill-catalog · agent-instructions） |
-| [slash-recipes.md](./slash-recipes.md) | `/recipe-id` · `/skill-name` 展开 |
-| [policy.md](./policy.md) | tool/provider/mcp 门禁 |
+| [slash-recipes.md](./slash-recipes.md) | `/recipe-id` · `/skill-name` 展开 / expansion |
+| [policy.md](./policy.md) | tool/provider/mcp 门禁 / gates |
 
-包：`@xrkseek/protocol` · `@xrkseek/core-session` · `@xrkseek/core-agent`。
+包 / Packages：`@xrkseek/protocol` · `@xrkseek/core-session` · `@xrkseek/core-agent`。
 
-JSONL 导出：`toJSONL` / `fromJSONL` / `parseJSONL`；ZIP 导出用 `toPackedJSONL`（`text-chunks` / `tool-call-chunks` 行压缩连续 `assistant/chunk`，≥3）+ 可选 `.jsonl.zst` sidecar；`fromPackedJSONL` / `parsePackedJSONL` / `fromPackedJSONLZstd` 可导入。**默认持久化** `createPersistentSessionStore` → `{XRK_SESSIONS_DIR}/sessions.db`（WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · chunk 写批并物理打包 `text-chunks` / `tool-call-chunks` · `flush()` · open-turn 崩溃修复）。内存 API 仍为扁平 `SessionEvent[]`。`SessionStore.has` 不抛。`session.search` 持久化走 FTS 候选。
+JSONL 导出：`toJSONL` / `fromJSONL` / `parseJSONL`；ZIP 导出用 `toPackedJSONL`（`text-chunks` / `tool-call-chunks` 行压缩连续 `assistant/chunk`，≥3）+ 可选 `.jsonl.zst` sidecar；`fromPackedJSONL` / `parsePackedJSONL` / `fromPackedJSONLZstd` 可导入。
+
+JSONL export uses `toJSONL` / `fromJSONL` / `parseJSONL`. ZIP export uses `toPackedJSONL` (packs consecutive `assistant/chunk` rows of kind `text-chunks` / `tool-call-chunks`, length ≥ 3) plus an optional `.jsonl.zst` sidecar; import via `fromPackedJSONL` / `parsePackedJSONL` / `fromPackedJSONLZstd`.
+
+**默认持久化 / Default persistence**：`createPersistentSessionStore` → `{XRK_SESSIONS_DIR}/sessions.db`（WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · chunk 写批并物理打包 `text-chunks` / `tool-call-chunks` · `flush()` · open-turn 崩溃修复）。内存 API 仍为扁平 `SessionEvent[]`。`SessionStore.has` 不抛。`session.search` 持久化走 FTS 候选。
+
+Default persistence is `createPersistentSessionStore` → `{XRK_SESSIONS_DIR}/sessions.db` (WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · batched chunk writes with physical packing · `flush()` · open-turn crash repair). The in-memory API remains a flat `SessionEvent[]`. `SessionStore.has` does not throw. Persistent `session.search` uses FTS candidates.

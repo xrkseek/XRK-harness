@@ -27,6 +27,7 @@ export default defineConfig({
       "apps/web/tests/product-shell-plan-review.e2e.ts",
       "apps/web/tests/product-shell-export.e2e.ts",
       "apps/web/tests/product-shell-mcp.e2e.ts",
+      "apps/web/tests/product-shell-settings-plugin.e2e.ts",
     ],
     globals: false,
     testTimeout: 60_000,

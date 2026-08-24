@@ -1,8 +1,10 @@
-# Session latch
+# Session 门闩 / Session Latch
 
-> **读者**：贡献者 · 维护者。
+> **读者 / Audience**：贡献者 · 维护者 / Contributors · Maintainers
 
 Promise 门闩（无代数效应运行时）。决策见 [ADR-0003](./adr/0003-session-long-loop-short.md)、[ADR-0004](./adr/0004-no-effect-runtime.md)。
+
+Promise latches (no algebraic-effect runtime). Decisions: [ADR-0003](./adr/0003-session-long-loop-short.md), [ADR-0004](./adr/0004-no-effect-runtime.md).
 
 ## `createTurnLatch`（已接 `createAgent`）
 
@@ -12,9 +14,11 @@ Promise 门闩（无代数效应运行时）。决策见 [ADR-0003](./adr/0003-s
 - `abort()` → 中止 in-flight `AbortSignal`
 - HTTP 直调 turn/chat：`409` + `{ error: "session busy" }`
 
+One `AgentHandle` allows **at most one** concurrent `continueTurn`.
+
 ## `createSessionDrainLatch` + `createSessionDrainHub`
 
-| API | 行为 |
+| API | 行为 / Behavior |
 |-----|------|
 | `run(sessionId)` | idle → `drain(force=true)`；busy → **join** |
 | `wake(sessionId)` | idle → `drain(force=false)`；busy → **至多一个** follow-up |
@@ -22,9 +26,9 @@ Promise 门闩（无代数效应运行时）。决策见 [ADR-0003](./adr/0003-s
 
 **Host**（`createHostManager`）持有 hub；drain body = 循环 `continueTurn()` 直到无 pending admit。实现为纯 Promise Map。
 
-## HTTP 产品切分
+## HTTP 产品切分 / HTTP product split
 
-| admit 字段 | 行为 |
+| admit 字段 / Field | 行为 / Behavior |
 |------------|------|
 | （默认） | 只记账 → **202** |
 | `wake: true` | 记账 + `hub.wake` → **202** `{ scheduled: true }`（不阻塞） |
@@ -32,7 +36,7 @@ Promise 门闩（无代数效应运行时）。决策见 [ADR-0003](./adr/0003-s
 
 `POST /turn` / `/chat` 仍可直调 agent（忙则 409）；inbox 路径优先走 drain。
 
-## 包
+## 包 / Packages
 
 `@xrkseek/core-session`：`createTurnLatch` · `createSessionDrainLatch` · `createSessionDrainHub`  
 `@xrkseek/server-host`：接线 + `HostInstance.drain`

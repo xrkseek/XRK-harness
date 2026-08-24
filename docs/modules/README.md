@@ -1,18 +1,20 @@
-# Module maps
+# 模块地图 / Module Maps
 
-> **读者**：贡献者 · 维护者。
+> **读者 / Audience**：贡献者 · 维护者 / Contributors · Maintainers
 
 包文件地图。规格在上一级 `docs/`；此处只标实现落点。身份标准见 [audiences.md](../audiences.md)。
 
-## 怎么用
+Package file maps. Contracts live in parent `docs/`; this page only points to implementation. Audience standard: [audiences.md](../audiences.md).
 
-1. 先看 [status.md](../status.md) 该域是否「能跑」。  
-2. 契约看规格列。  
+## 怎么用 / How to use
+
+1. 先看 [status.md](../status.md) 该域是否「能跑 / Working」。  
+2. 契约看规格列。 / Read the contract column.  
 3. 排障打开对应笔记（有则读文件表，无则读包 README + `src/index.ts`）。
 
-## 有独立文件地图的包
+## 有独立文件地图的包 / Packages with dedicated maps
 
-| 包 | 笔记 | 规格 |
+| 包 / Package | 笔记 / Note | 规格 / Spec |
 | --- | --- | --- |
 | `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) | 投影驱动缝（状态/视图） |
 | `@xrkseek/server-face` | [server-face.md](./server-face.md) | [host-face.md](../host-face.md) |
@@ -23,11 +25,13 @@
 | `@xrkseek/attachment` | [attachment.md](./attachment.md) | [protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) |
 | `@xrkseek/xrk-file-reference` 等 | [references.md](./references.md) | [host-face.md](../host-face.md) · `packages/context/*` |
 
-## 全包索引（37）
+## 全包索引（37） / Full package index (37)
 
 路径相对 `packages/`。未单列笔记的包以 README + `src/index.ts` 为准。
 
-| 路径 | npm | 规格 / 入口 |
+Paths are relative to `packages/`. Packages without a dedicated note use README + `src/index.ts`.
+
+| 路径 / Path | npm | 规格 / 入口 / Spec · entry |
 | --- | --- | --- |
 | `kernel/` | `@xrkseek/kernel` | [architecture.md](../architecture.md) |
 | `protocol/` | `@xrkseek/protocol` | [protocol-events.md](../protocol-events.md) |
@@ -69,9 +73,9 @@
 
 apps：`cli` · `web`（产品壳）· `console`（Face 验证台）。`packages/client` 与 `apps/web` 成对。presets：`minimal` · `harness` · `server`。
 
-## 术语
+## 术语 / Terms
 
-| 术语 | 含义（本仓） |
+| 术语 / Term | 含义（本仓） / Meaning |
 | --- | --- |
 | Session 真源 | `SessionStore` 事件日志 |
 | Face | Unary RPC + mux/host WS |

@@ -25,10 +25,10 @@ my-plugin/
 ## 试跑与重载
 
 ```bash
-XRK_PLUGINS_DIR=./extensions xrk-harness web
+XRK_PLUGINS_DIR=./extensions xrkh web
 # 或
-xrk-harness plugin add ./path/to/my-plugin
-xrk-harness restart
+xrkh plugin add ./path/to/my-plugin
+xrkh restart
 ```
 
 - **`restart`**：停掉本机先前记下的 XRK Host（`~/.xrk/run/host-<port>.pid.json`），再起新进程；**不会**杀掉占用端口的陌生进程。

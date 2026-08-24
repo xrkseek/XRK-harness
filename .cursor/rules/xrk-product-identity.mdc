@@ -30,12 +30,15 @@ alwaysApply: true
 
 ## 硬规则
 
-- 新/大改文档文首：`> **读者**：…`（只标身份，不加「请去看 README」旁白）
+- 新/大改文档文首：`> **读者 / Audience**：… / …`（中英身份；不加「请去看 README」旁白）
+- 教科书正文：**正式中英双语**（标题 `中文 / English`；段落先中后英；标准见 `docs/audiences.md`）
+- 代码注释：纯英文，或「中文。 / English.»；禁止仅中文注释
 - 根 README：产品用法；开发入口仅链接表。**禁止**发版步骤、Agent 禁令、元叙事旁白
 - 禁止把笔记红线抄进用户说明书；禁止未做写成假 API
+- Host / 社区插件：写 XRK 自研能力与待补，勿「未抄上游清单」
 - 冲突：代码 > status「能跑」> 教科书；笔记过期改笔记
 - Face / wire 用本仓术语；壳 = `apps/web` + `packages/client`；不嵌 Cordis Host；不对 deepseek-ai 提 PR
 - 工具链：Node ≥26（笔记 rule `xrk-node26`：禁用 Cursor helper Node 22）；pnpm 钉 `packageManager`，本机 `npm install -g pnpm@…`（不用 Corepack）
 - Meter 笔记：`xrk-meter-compaction.mdc` · skill `xrk-meter-session`
-- 写文档：skill `xrk-docs-audience`（必读「语气 / 根 README」）
-- 发行说明：`docs/releases/**` → rule `xrk-release-notes` · skill `xrk-release-notes`（新增/完善/删除/修复；禁日记腔）
+- 写文档：skill `xrk-docs-audience`（必读「语气 / 根 README / 双语」）
+- 发行说明：`docs/releases/**` → rule `xrk-release-notes` · skill `xrk-release-notes`（新增/完善/删除/修复；禁日记腔；新版优先中英对照节标题）

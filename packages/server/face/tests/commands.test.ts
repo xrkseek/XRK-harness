@@ -657,7 +657,7 @@ describe("pluginInventory/list", () => {
 });
 
 describe("DSH shell remotes that must not 404 / NI", () => {
-  it("costMeter/getState returns Typert envelope with config", async () => {
+  it("costMeter/getState returns flat CostMeterState (DSH client unwrap once)", async () => {
     const runtime = bareRuntime();
     expect(faceMethodFromPath("/api/costMeter/getState")).toBe(
       "costMeter/getState",
@@ -667,13 +667,13 @@ describe("DSH shell remotes that must not 404 / NI", () => {
     });
     expect(res.result.ok).toBe(true);
     if (!res.result.ok) throw new Error("getState");
-    const nested = res.result.value as {
-      ok: boolean;
-      value: { config: { locale: string }; today: { calls: number } };
+    const state = res.result.value as {
+      config: { locale: string; hideTodayCost: boolean };
+      today: { calls: number };
     };
-    expect(nested.ok).toBe(true);
-    expect(nested.value.config.locale).toBe("auto");
-    expect(nested.value.today.calls).toBe(0);
+    expect(state.config.locale).toBe("auto");
+    expect(state.config.hideTodayCost).toBe(false);
+    expect(state.today.calls).toBe(0);
   });
 
   it("dynamicCordisRunner/inventory is an empty list (no Cordis apply)", async () => {

@@ -180,6 +180,49 @@ const MNEMON_LIST_ENDPOINTS = new Set([
   "body-directory",
 ]);
 
+/** Provider catalog shape expected by dsh-mnemon settings (`catalog.providers.map`). */
+export function buildMnemonProviderCatalog(): {
+  readonly providers: ReadonlyArray<{ readonly id: string; readonly label: string }>;
+  readonly items: ReadonlyArray<{
+    readonly providerId: string;
+    readonly enabled: boolean;
+    readonly configured: boolean;
+    readonly settings: Record<string, unknown>;
+    readonly configuredSecrets: readonly string[];
+  }>;
+  readonly generatedAt: string;
+} {
+  return {
+    providers: [{ id: "mnemon-native", label: "mnemon" }],
+    items: [
+      {
+        providerId: "mnemon-native",
+        enabled: true,
+        configured: true,
+        settings: {},
+        configuredSecrets: [],
+      },
+    ],
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+/** Task-agent model catalog: always include `groups` so UI `.find` / `[0]` never NPE.
+ * Do NOT send `defaultSelection`/`effective` as JSON `null` — dsh-mnemon treats only
+ * `undefined` as missing (`effective === void 0`); `null.provider` crashes the section.
+ */
+export function buildMnemonTaskAgentModels(): {
+  readonly groups: readonly unknown[];
+  readonly models: readonly unknown[];
+  readonly failures: readonly unknown[];
+} {
+  return {
+    groups: [],
+    models: [],
+    failures: [],
+  };
+}
+
 export function handleMnemonRead(
   endpoint: string,
   options: MnemonStatusOptions,
@@ -190,17 +233,15 @@ export function handleMnemonRead(
     return buildMnemonStatus(options);
   }
   if (endpoint === "versions") return buildMnemonVersions();
-  if (endpoint === "turn-activities") return [];
+  if (endpoint === "turn-activities") {
+    return { cursor: -1, activities: [] };
+  }
   if (endpoint === "documents" || endpoint === "list") {
     return listMnemonDocuments(home);
   }
   if (MNEMON_LIST_ENDPOINTS.has(endpoint)) return [];
   if (endpoint === "provider-services") {
-    return {
-      items: [],
-      providers: [{ id: "mnemon-native", label: "mnemon" }],
-      generatedAt: new Date().toISOString(),
-    };
+    return buildMnemonProviderCatalog();
   }
   if (endpoint === "document") {
     const id = typeof payload.id === "string" ? payload.id : "";
@@ -208,7 +249,7 @@ export function handleMnemonRead(
   }
   if (endpoint === "runtime-memory") return null;
   if (endpoint === "task-agent-models") {
-    return { models: [] };
+    return buildMnemonTaskAgentModels();
   }
   return { ok: true, endpoint, items: [] };
 }
@@ -219,20 +260,23 @@ export function handleMnemonWrite(
   options: MnemonStatusOptions = {},
 ): unknown {
   const home = options.xrkHome?.trim();
-  if (
-    endpoint === "provider-services" ||
-    endpoint === "provider-service-update"
-  ) {
+  // Client prefers write channel for list; must return catalog, not a single row.
+  if (endpoint === "provider-services") {
+    return buildMnemonProviderCatalog();
+  }
+  if (endpoint === "provider-service-update") {
     return {
       providerId:
         typeof payload.providerId === "string"
           ? payload.providerId
           : "mnemon-native",
       enabled: payload.enabled !== false,
+      configured: true,
       settings:
         payload.settings && typeof payload.settings === "object"
           ? payload.settings
           : {},
+      configuredSecrets: [],
       status: "idle",
       activeMemoryBodyCount: 0,
       memoryBodyCount: 0,

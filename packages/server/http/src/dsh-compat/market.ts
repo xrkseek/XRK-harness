@@ -1,9 +1,9 @@
-/**
+﻿/**
  * DSH `/dsh-market/*` and `/api/dsh-market` → XRK plugin inventory + catalog.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import { sendJson } from "../http-json.js";
+import { sendJson } from "./underlying/http-json.js";
 import {
   fetchXrkPluginCatalog,
   readXrkPluginInventory,

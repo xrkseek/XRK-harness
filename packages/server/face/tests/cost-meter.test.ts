@@ -100,7 +100,7 @@ describe("cost-meter ledger", () => {
     expect(second.state.today.calls).toBe(1);
   });
 
-  it("costMeter/importLegacyHistory Face remote returns Typert envelope", async () => {
+  it("costMeter/importLegacyHistory Face remote returns flat import result", async () => {
     const home = mkdtempSync(path.join(tmpdir(), "xrk-cost-remote-"));
     configureCostMeterHome(home);
     costMeterResetHistory();
@@ -135,11 +135,7 @@ describe("cost-meter ledger", () => {
     );
     expect(res.result.ok).toBe(true);
     if (!res.result.ok) throw new Error("import");
-    const nested = res.result.value as {
-      ok: boolean;
-      value: { imported: number };
-    };
-    expect(nested.ok).toBe(true);
-    expect(nested.value.imported).toBe(1);
+    const body = res.result.value as { imported: number };
+    expect(body.imported).toBe(1);
   });
 });

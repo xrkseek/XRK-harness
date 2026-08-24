@@ -6,12 +6,28 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { mkdir, opendir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readBody, sendJson } from "../http-json.js";
-import { gitBranches, gitLog, gitStatus } from "./sidebar-git.js";
+import { readBody, sendJson } from "./underlying/http-json.js";
+import {
+  gitBranches,
+  gitCherryPick,
+  gitCheckout,
+  gitCommit,
+  gitCommitDiff,
+  gitDiff,
+  gitDiscard,
+  gitLog,
+  gitRevert,
+  gitStage,
+  gitStatus,
+  gitUnstage,
+} from "./sidebar-git.js";
 import {
   loadSidebarPrefs,
   saveSidebarPrefs,
 } from "./sidebar-prefs-store.js";
+import { probeBrowserUrl } from "./sidebar-browser.js";
+
+import type { SidebarFaceBridge } from "./sidebar-face-bridge.js";
 
 export interface SidebarCompatOptions {
   /** Resolve session workspace cwd (Face). */
@@ -19,6 +35,8 @@ export interface SidebarCompatOptions {
   /** Fallback when session unknown. */
   readonly defaultCwd?: string;
   readonly xrkHome?: string;
+  /** Side Chat + open.external (Host injects from Face). */
+  readonly sidebarFace?: SidebarFaceBridge;
 }
 
 /** NUL / high ratio of non-text bytes → treat as binary for editor routing. */
@@ -107,13 +125,14 @@ async function searchFiles(
   root: string,
   query: string,
   limit = 200,
-): Promise<{ matches: Array<{ path: string; name: string }>; truncated: boolean }> {
+): Promise<{ matches: string[]; truncated: boolean }> {
   const needle = query.trim().toLowerCase();
   if (!needle || !existsSync(root)) {
     return { matches: [], truncated: false };
   }
-  const matches: Array<{ path: string; name: string }> = [];
-  const queue = [root];
+  const rootResolved = path.resolve(root);
+  const matches: string[] = [];
+  const queue = [rootResolved];
   let truncated = false;
   while (queue.length > 0 && matches.length < limit) {
     const dir = queue.shift()!;
@@ -130,7 +149,8 @@ async function searchFiles(
       }
       const full = path.join(dir, dent.name);
       if (dent.name.toLowerCase().includes(needle)) {
-        matches.push({ path: full, name: dent.name });
+        const rel = path.relative(rootResolved, full).replace(/\\/g, "/");
+        matches.push(rel.startsWith("/") ? rel.slice(1) : rel);
       }
       if (dent.isDirectory()) queue.push(full);
     }
@@ -268,29 +288,179 @@ async function dispatchMethod(
       const limit =
         typeof payload.limit === "number" && payload.limit > 0
           ? payload.limit
-          : 20;
-      return ok(gitLog(cwd, limit));
+          : typeof payload.count === "number" && payload.count > 0
+            ? payload.count
+            : 20;
+      const skip =
+        typeof payload.skip === "number" && payload.skip > 0
+          ? payload.skip
+          : 0;
+      // Client expects a bare array.
+      return ok(gitLog(cwd, limit, skip));
+    }
+    case "git.diff": {
+      const filePath =
+        typeof payload.path === "string" ? payload.path : undefined;
+      return ok(gitDiff(cwd, filePath, payload.staged === true));
+    }
+    case "git.commit-diff": {
+      const hash = typeof payload.hash === "string" ? payload.hash : "";
+      return ok(gitCommitDiff(cwd, hash));
+    }
+    case "git.stage": {
+      const filePath =
+        typeof payload.path === "string" ? payload.path : undefined;
+      return ok(gitStage(cwd, filePath));
+    }
+    case "git.unstage": {
+      const filePath =
+        typeof payload.path === "string" ? payload.path : undefined;
+      return ok(gitUnstage(cwd, filePath));
+    }
+    case "git.commit": {
+      const message =
+        typeof payload.message === "string" ? payload.message : "";
+      return ok(gitCommit(cwd, message));
+    }
+    case "git.checkout": {
+      const branch = typeof payload.branch === "string" ? payload.branch : "";
+      return ok(gitCheckout(cwd, branch));
+    }
+    case "git.discard": {
+      const filePath = typeof payload.path === "string" ? payload.path : "";
+      return ok(gitDiscard(cwd, filePath));
+    }
+    case "git.revert": {
+      const hash = typeof payload.hash === "string" ? payload.hash : "";
+      return ok(gitRevert(cwd, hash));
+    }
+    case "git.cherry-pick": {
+      const hash = typeof payload.hash === "string" ? payload.hash : "";
+      return ok(gitCherryPick(cwd, hash));
     }
     case "terminal.deps":
-      // Interactive shell is `/sidebar/ws/terminal` on Host (node-pty).
-      // If spawn fails the socket closes with reason `pty-deps-missing`.
-      return ok({ ok: true, adapter: "xrk-host-pty" });
-    case "jobs.output":
-      return ok({ text: "", jobs: [] });
+      // Repair panel reads command/profile/note when WS closes with pty-deps-missing.
+      return ok({
+        ready: true,
+        ok: true,
+        adapter: "xrk-host-pty",
+        platform: process.platform,
+        profile: null,
+        command: "pnpm add -D node-pty@1.2.0-beta.15",
+        note: "XRK Host serves /sidebar/ws/terminal via node-pty when the package is installable.",
+      });
+    case "jobs.output": {
+      const bridge = options.sidebarFace;
+      const jobId =
+        typeof payload.jobId === "string"
+          ? payload.jobId
+          : typeof payload.id === "string"
+            ? payload.id
+            : "";
+      if (!bridge?.readJobOutput || !jobId) {
+        return ok({ text: "", truncated: false });
+      }
+      return ok(bridge.readJobOutput(jobId));
+    }
+    case "jobs.kill": {
+      const bridge = options.sidebarFace;
+      const jobId =
+        typeof payload.jobId === "string"
+          ? payload.jobId
+          : typeof payload.id === "string"
+            ? payload.id
+            : "";
+      const reason =
+        typeof payload.reason === "string" ? payload.reason : undefined;
+      if (!bridge?.killJob || !jobId) {
+        return ok({ ok: false, killed: false, reason: "no-background-job-host" });
+      }
+      return ok(await bridge.killJob(jobId, reason));
+    }
     case "subagents.live":
       return ok({ nodes: [] });
-    case "browser.probe":
-      return ok({
-        ok: false,
-        supported: false,
-        reason: "embedded-browser-host-unavailable",
+    case "browser.probe": {
+      const rawUrl =
+        typeof payload.url === "string"
+          ? payload.url
+          : typeof payload.href === "string"
+            ? payload.href
+            : "";
+      return ok(await probeBrowserUrl(rawUrl));
+    }
+    case "pty.close":
+    case "agent-pty.close":
+      // PTY lifecycle is WS-driven; explicit close is best-effort ack.
+      return ok({ closed: true });
+    case "open.external": {
+      const bridge = options.sidebarFace;
+      if (!bridge) {
+        return fail("unavailable", "open.external requires XRK Host Face bridge");
+      }
+      const action = payload.action === "url" ? "url" : "reveal";
+      const pathValue =
+        typeof payload.path === "string" ? payload.path : undefined;
+      const urlValue = typeof payload.url === "string" ? payload.url : undefined;
+      await bridge.openExternal({
+        action,
+        ...(pathValue ? { path: pathValue } : {}),
+        ...(urlValue ? { url: urlValue } : {}),
       });
+      return ok({ opened: true });
+    }
+    case "sidechat.start": {
+      const bridge = options.sidebarFace;
+      const parent =
+        typeof payload.sessionId === "string" ? payload.sessionId.trim() : "";
+      if (!bridge || !parent) {
+        return fail("unavailable", "sidechat requires XRK Host Face bridge");
+      }
+      const question =
+        typeof payload.question === "string" ? payload.question : "";
+      return ok(await bridge.startSidechat(parent, question));
+    }
+    case "sidechat.prompt": {
+      const bridge = options.sidebarFace;
+      const childId =
+        typeof payload.childId === "string" ? payload.childId.trim() : "";
+      const text = typeof payload.text === "string" ? payload.text : "";
+      if (!bridge || !childId || !text.trim()) {
+        return fail("invalid-payload", "childId and text required");
+      }
+      return ok(await bridge.promptSidechat(childId, text));
+    }
+    case "sidechat.cancel": {
+      const bridge = options.sidebarFace;
+      const childId =
+        typeof payload.childId === "string" ? payload.childId.trim() : "";
+      if (!bridge || !childId) {
+        return fail("invalid-payload", "childId required");
+      }
+      return ok(await bridge.cancelSidechat(childId));
+    }
+    case "sidechat.dispose": {
+      const bridge = options.sidebarFace;
+      const childId =
+        typeof payload.childId === "string" ? payload.childId.trim() : "";
+      if (!bridge || !childId) {
+        return fail("invalid-payload", "childId required");
+      }
+      return ok(await bridge.disposeSidechat(childId));
+    }
+    case "sidechat.info": {
+      const bridge = options.sidebarFace;
+      const childId =
+        typeof payload.childId === "string" ? payload.childId.trim() : "";
+      if (!bridge || !childId) {
+        return fail("invalid-payload", "childId required");
+      }
+      return ok(await bridge.infoSidechat(childId));
+    }
     default:
-      return ok({
-        adapter: "xrk-dsh-compat",
-        method,
-        acknowledged: true,
-      });
+      return fail(
+        "unsupported",
+        `sidebar method "${method}" is not implemented on XRK`,
+      );
   }
 }
 
@@ -362,6 +532,36 @@ export async function handleSidebarCompat(
   if (pathname === "/sidebar/upload") {
     if ((req.method ?? "GET").toUpperCase() !== "POST") {
       sendJson(res, 405, fail("method", "POST required"));
+      return true;
+    }
+    const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    const contentType = (req.headers["content-type"] ?? "").split(";")[0]?.trim();
+    if (contentType === "application/octet-stream") {
+      const sessionId = url.searchParams.get("sessionId") ?? undefined;
+      const cwdOverride = url.searchParams.get("cwd") ?? undefined;
+      const dir = url.searchParams.get("dir") ?? "";
+      const relativePath = url.searchParams.get("relativePath") ?? "";
+      const cwd = resolveCwd(options, sessionId, cwdOverride ?? undefined);
+      const baseDir = path.isAbsolute(dir) ? path.resolve(dir) : safeJoin(cwd, dir);
+      if (!baseDir) {
+        sendJson(res, 200, fail("path", "dir escapes workspace"));
+        return true;
+      }
+      const rel = relativePath.replace(/^[/\\]+/, "");
+      const abs = safeJoin(baseDir, rel);
+      if (!abs) {
+        sendJson(res, 200, fail("path", "relativePath escapes workspace"));
+        return true;
+      }
+      await mkdir(path.dirname(abs), { recursive: true });
+      const chunks: Buffer[] = [];
+      await new Promise<void>((resolve, reject) => {
+        req.on("data", (c) => chunks.push(Buffer.from(c)));
+        req.on("end", () => resolve());
+        req.on("error", reject);
+      });
+      await writeFile(abs, Buffer.concat(chunks));
+      sendJson(res, 200, ok({ uploaded: true, path: abs }));
       return true;
     }
     const raw = await readBody(req);
