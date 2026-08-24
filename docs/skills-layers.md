@@ -10,8 +10,8 @@ Three layers share skill/rules naming but differ in **audience and runtime**. Mi
 
 | 层 / Layer | 放哪 / Location | 谁读 / Who reads | 怎么进模型 / How it reaches the model |
 |----|------|------|------------|
-| **笔记 / Notes** | [AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/skills` | 维护者 · **Cursor/Codex 改本仓** | **不**进 XRK Host 产品 Agent / **Does not** enter the product Agent |
-| **产品 rules / 说明** | `{workspace}/.xrk/assistant.md` · `rules.md` · `context/*` · `subagents.md` | 运行中的产品 Agent | 持久 `user/message` · `source: agent-instructions`（[workspace-inject](./workspace-inject.md)） |
+| **笔记 / Notes** | [AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/skills` | 维护者 · **Cursor/Codex 改本仓** | 以该目录为 workspace 时：`AGENTS.md` · `.cursor/rules/*.mdc` → `agent-instructions`；维护向 `.cursor/skills` 可打 `disable-model-invocation` 不进 catalog |
+| **产品 rules / 说明** | `{workspace}/.xrk/*` · 多厂商约定路径（见 [workspace-inject](./workspace-inject.md)） | 运行中的产品 Agent | 持久 `user/message` · `source: agent-instructions` |
 | **产品 skills** | `{workspace}` 下 `.xrk|.agents|.claude|.codex|.cursor/skills`（及 `~/` 同名） | 运行中的产品 Agent | 目录 → `skill-catalog`；全文 → `skill` 工具或 `/skill-name` |
 
 教科书（`docs/`）写契约；笔记写改码红线。标准：[audiences.md](./audiences.md)。
@@ -20,11 +20,11 @@ Textbooks under `docs/` describe contracts; notes describe coding red lines. Sta
 
 ## 笔记（本仓 Coding Agent） / Notes (in-repo Coding Agent)
 
-- **Rules**：`.cursor/rules/*.mdc`（常驻或 glob 挂载）— 例如 Node ≥26、产品身份、发行说明文体。
+- **Rules**：`.cursor/rules/*.mdc` — 以该仓库为 workspace 时由 Host 注入；Cursor 自身亦可能读取。
 - **Skills**：`.cursor/skills/*/SKILL.md` — 长流程笔记（写文档身份、meter、发版）。
-- 本仓这些 SKILL 文首标 `disable-model-invocation: true` 与 `user-invocable: false`，以免以本仓为 workspace 时把维护笔记灌进产品 Agent 目录。
+- 本仓维护向 SKILL 文首标 `disable-model-invocation: true` 与 `user-invocable: false`，以免 catalog 灌满维护笔记；**rules / AGENTS.md 仍会注入**。
 
-Cursor may still read these files by its own mechanisms; the **XRK runtime** respects the frontmatter above.
+When this repo is the workspace, Host injects rules and root `AGENTS.md`. Maintenance skills should set `disable-model-invocation` so the catalog stays lean.
 
 ## 产品 inject（rules / assistant） / Product inject
 
@@ -34,6 +34,7 @@ Not a skill directory. Lives under `{workspace}/.xrk/` (optional; not forced):
 
 | 文件 / File | 含义 / Meaning |
 |------|------|
+| `SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` | 种子站立文件 / Seed standing files |
 | `assistant.md` | 人设 / 站立说明 / Persona / standing instructions |
 | `rules.md` | 项目规则 / Project rules |
 | `context/*` | 附加上下文 / Extra context |

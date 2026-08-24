@@ -5,7 +5,7 @@ import {
   withdrawAdmit,
 } from "@xrkseek/core-session";
 import { assertPolicyAllow } from "@xrkseek/policy";
-import { contentHasImage, type MessageContent } from "@xrkseek/protocol";
+import { contentHasImage, type MessageContent, type SessionEvent } from "@xrkseek/protocol";
 import { type FaceRuntime } from "../context.js";
 import {
   FACE_AGENT_PRESET_IDS,
@@ -14,7 +14,7 @@ import {
 import { toWireHistoryEntry, collectToolCallArgs } from "../adapt/index.js";
 import {
   DEFAULT_HISTORY_MAX_MESSAGES,
-  paginateSessionHistory,
+  paginateSessionHistoryForReplay,
 } from "../adapt/history-paginate.js";
 import { tryFaceSlashCommand } from "../slash.js";
 import { SessionTitleInvalidError } from "../projections/index.js";
@@ -207,6 +207,11 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
     };
   }
   const events = runtime.store.get(sessionId).events;
+  const seqByEvent = new Map<SessionEvent, number>();
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
+    if (event !== undefined) seqByEvent.set(event, i + 1);
+  }
 
   const beforeSeq =
     typeof p.beforeSeq === "number" ? p.beforeSeq : undefined;
@@ -215,7 +220,7 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       ? p.maxMessages
       : DEFAULT_HISTORY_MAX_MESSAGES;
 
-  const page = paginateSessionHistory(events, beforeSeq, maxMessages);
+  const page = paginateSessionHistoryForReplay(events, beforeSeq, maxMessages);
   const inbox = runtime.inboxWire.fresh();
   const toolArgs = collectToolCallArgs(events);
   const wireCtx = {
@@ -227,9 +232,8 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       ? { getTool: (name: string) => runtime.getTool!(sessionId, name) }
       : {}),
   };
-  const indexed = page.events.map((event, i) => {
-    const idx = events.indexOf(event);
-    const seq = idx >= 0 ? idx + 1 : i + 1;
+  const indexed = page.events.map((event) => {
+    const seq = seqByEvent.get(event) ?? 0;
     return toWireHistoryEntry(event, seq, wireCtx);
   });
   const hasMore = page.hasMore;
@@ -396,13 +400,16 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
       error: { code: "invalid-payload", message: "sessionId required" },
     };
   }
-  await runtime.drain.cancel(sessionId);
+  // Abort the agent turn latch first so in-flight LLM/tool work sees the
+  // cancellation immediately; then join the drain body (which shares the
+  // same abort signal path via continueTurn).
   try {
     const agent = await runtime.resolveAgent(sessionId);
     agent.abort({ kind: "user" });
   } catch {
     /* ignore */
   }
+  await runtime.drain.cancel(sessionId);
   runtime.bus.publishHost({
     type: "host/session-status",
     sessionId,

@@ -383,6 +383,7 @@ export async function workspaceArchiveSessionFace(
     };
   }
   const archivedSessionIds = runtime.workspaces.archiveSession(sessionId);
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
   runtime.bus.publishHost({
     type: "host/archived-sessions-changed",
     archivedSessionIds,

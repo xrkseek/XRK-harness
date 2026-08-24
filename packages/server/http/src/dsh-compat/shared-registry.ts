@@ -12,6 +12,7 @@ import {
 } from "./adapter-compose.js";
 import { resetDshCompatUpgrades } from "./dsh-compat-upgrades.js";
 import { resetHostApplyRegistry } from "./host-apply-registry.js";
+import { normalizeDshCompatWireCtx } from "./wire-normalize.js";
 
 function installKey(ctx: DshCompatWireOptions): string {
   return [ctx.pluginsDir ?? "", ctx.xrkHome ?? "", ctx.workspaceRoot ?? ""].join(
@@ -30,7 +31,8 @@ export function resetDshCompatRegistryCache(): void {
 export async function ensureDshCompatRegistry(
   ctx: DshCompatWireOptions,
 ): Promise<CordisCompatRegistry> {
-  const key = installKey(ctx);
+  const normalized = normalizeDshCompatWireCtx(ctx);
+  const key = installKey(normalized);
   if (bootPromise && bootKey === key) {
     return bootPromise;
   }
@@ -39,7 +41,7 @@ export async function ensureDshCompatRegistry(
     resetDshCompatUpgrades();
     resetHostApplyRegistry();
     const registry = createCordisCompatRegistry();
-    await installComposedAdapters(registry, ctx);
+    await installComposedAdapters(registry, normalized);
     return registry;
   })();
   return bootPromise;

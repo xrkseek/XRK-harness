@@ -112,3 +112,52 @@ export function paginateSessionHistory(
     hasMore: cutIndex > 0,
   };
 }
+
+/**
+ * One `session.history` replay page (DSH `historyPage` shape): message-boundary
+ * pagination, then drop streaming deltas superseded by durable surface rows.
+ *
+ * SQLite reload expands packed `text-chunks` / `tool-call-chunks` back into
+ * thousands of `assistant/chunk` events. Completed steps already expose
+ * `assistant/message`; tool args live on `tool/call`. The web client replays
+ * history through `installWindow` — shipping those deltas freezes the UI.
+ */
+export function paginateSessionHistoryForReplay(
+  events: readonly SessionEvent[],
+  beforeSeq: number | undefined,
+  maxMessages: number = DEFAULT_HISTORY_MAX_MESSAGES,
+): { readonly events: SessionEvent[]; readonly hasMore: boolean } {
+  const page = paginateSessionHistory(events, beforeSeq, maxMessages);
+  return {
+    events: dropSupersededStreamDeltas(page.events),
+    hasMore: page.hasMore,
+  };
+}
+
+function dropSupersededStreamDeltas(
+  events: readonly SessionEvent[],
+): SessionEvent[] {
+  const finalizedSteps = new Set<string>();
+  const finalizedToolCalls = new Set<string>();
+  for (const event of events) {
+    if (event.type === "assistant/message") {
+      finalizedSteps.add(`${event.turnId}\0${event.stepId}`);
+    } else if (event.type === "tool/call") {
+      finalizedToolCalls.add(event.call.id);
+    }
+  }
+  if (finalizedSteps.size === 0 && finalizedToolCalls.size === 0) {
+    return [...events];
+  }
+  return events.filter((event) => {
+    if (event.type !== "assistant/chunk") return true;
+    if (
+      event.kind === "tool-call"
+      && event.toolCallId !== undefined
+      && finalizedToolCalls.has(event.toolCallId)
+    ) {
+      return false;
+    }
+    return !finalizedSteps.has(`${event.turnId}\0${event.stepId}`);
+  });
+}

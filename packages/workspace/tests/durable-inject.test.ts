@@ -38,7 +38,7 @@ describe("durable workspace inject", () => {
 
     const out = await createWorkspaceInjector({ root, productDir: product }).inject();
     expect(out.instructions?.source.kind).toBe("agent-instructions");
-    expect(out.instructions?.content).toContain("## Assistant");
+    expect(out.instructions?.content).toContain("## .xrk/assistant.md");
     expect(out.skillCatalog?.source.kind).toBe("skill-catalog");
     expect(out.skillCatalog?.source.entries).toEqual([
       { name: "skill-a", description: "Alpha skill" },

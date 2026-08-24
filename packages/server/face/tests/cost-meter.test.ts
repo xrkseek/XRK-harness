@@ -5,9 +5,13 @@ import { describe, expect, it } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import {
   configureCostMeterHome,
+  costMeterAggregateUsage,
   costMeterGetState,
   costMeterResetHistory,
+  loadLedger,
+  saveLedger,
 } from "../src/cost-meter-store.js";
+import { emptyDeepSeekBalance } from "../src/cost-meter-balance.js";
 import { costMeterImportLegacyHistoryFromStore } from "../src/cost-meter-record.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
@@ -137,5 +141,62 @@ describe("cost-meter ledger", () => {
     if (!res.result.ok) throw new Error("import");
     const body = res.result.value as { imported: number };
     expect(body.imported).toBe(1);
+  });
+
+  it("aggregateUsage exposes tokenledger totals and DSH balance status", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-cost-meter-agg-"));
+    configureCostMeterHome(home);
+    costMeterResetHistory();
+
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({ store, productDir: home });
+    const session = store.create("sess-agg");
+    const ts = Date.now();
+
+    store.append(session.id, {
+      type: "request/header",
+      ts,
+      turnId: "turn-agg",
+      reason: "initial",
+      header: {
+        config: { provider: "deepseek", model: "deepseek-chat" },
+      },
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts,
+      turnId: "turn-agg",
+      stepId: "step-agg",
+      content: "hello",
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        cacheReadTokens: 5,
+      },
+    });
+
+    const agg = costMeterAggregateUsage() as {
+      totals: { tokens: number; requests: number };
+      windows: { today: { tokens: number } };
+      sites: Array<{ site: string; tokens: number }>;
+    };
+    expect(agg.totals.tokens).toBeGreaterThan(0);
+    expect(agg.totals.requests).toBeGreaterThan(0);
+    expect(agg.windows.today.tokens).toBeGreaterThan(0);
+    expect(agg.sites.some((row) => row.site === "direct")).toBe(true);
+
+    const state = costMeterGetState();
+    expect(state.balance.status).toBe("off");
+
+    const ledger = loadLedger();
+    ledger.balanceCache = {
+      ...emptyDeepSeekBalance("err", "Balance HTTP 401"),
+      fetchedAt: Date.now(),
+      currency: "CNY",
+    };
+    saveLedger(ledger);
+    expect(costMeterGetState().balance.status).toBe("error");
+    expect(costMeterGetState().balance.message).toBe("Balance HTTP 401");
+    void runtime;
   });
 });

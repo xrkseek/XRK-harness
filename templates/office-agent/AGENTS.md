@@ -1,7 +1,7 @@
 # AGENTS.md — 工作区运行规则（产品种子）
 
-> 本文件属于 **产品工作区种子**，由 `WorkspaceInjector` 注入。  
-> 仓库根目录的 Coding Agent `AGENTS.md` **不会**进入产品注入。
+> 本文件属于 **产品工作区种子**，由 `WorkspaceInjector` 注入（`.xrk/AGENTS.md`）。  
+> 工作区根 `AGENTS.md` 与 `.cursor/rules` 等亦会单独注入（见 `docs/workspace-inject.md`）。
 
 ## 角色
 

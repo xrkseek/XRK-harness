@@ -325,6 +325,10 @@ export class Session implements SessionFace {
     if (!result.ok) {
       this.promptError = { op: 'stop', error: result.error }
       this.notifier.markDirty()
+    } else {
+      // Optimistic idle: host/session-status follows after drain settles; the
+      // composer stop control should not wait on a slow tool tail.
+      this.handleRunning(false)
     }
     return result
   }

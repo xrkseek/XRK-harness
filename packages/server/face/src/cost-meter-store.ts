@@ -240,13 +240,22 @@ export function defaultCostMeterConfig(): Record<string, unknown> {
   };
 }
 
+/** dsh-cost-meter expects `error`; internal snapshots use `err`. */
+function dshBalanceStatus(
+  status: DeepSeekBalanceSnapshot["status"],
+): "ok" | "error" | "off" {
+  if (status === "ok") return "ok";
+  if (status === "err") return "error";
+  return "off";
+}
+
 function balanceFromCache(
   ledger: LedgerFile,
 ): Record<string, unknown> {
   const cached = ledger.balanceCache;
   if (cached) {
     return {
-      status: cached.status,
+      status: dshBalanceStatus(cached.status),
       message: cached.message,
       fetchedAt: cached.fetchedAt,
       currency: cached.currency,
@@ -262,7 +271,7 @@ function goQuotaFromCache(ledger: LedgerFile): Record<string, unknown> {
   const cached = ledger.goQuotaCache;
   if (cached) {
     return {
-      status: cached.status,
+      status: cached.status === "err" ? "error" : cached.status,
       message: cached.message,
       fetchedAt: cached.fetchedAt,
       rolling: cached.rolling,
@@ -277,7 +286,7 @@ function customBalanceFromCache(ledger: LedgerFile): Record<string, unknown> {
   const cached = ledger.customBalanceCache;
   if (cached) {
     return {
-      status: cached.status,
+      status: cached.status === "err" ? "error" : cached.status,
       message: cached.message,
       fetchedAt: cached.fetchedAt,
       label: cached.label,
@@ -609,11 +618,70 @@ export async function costMeterRefreshCodingPlan(
   };
 }
 
+function dayTokens(day: CostMeterDay): number {
+  return day.input + day.output + day.cacheRead + day.cacheWrite + day.reasoning;
+}
+
+function foldDays(days: readonly CostMeterDay[]): {
+  readonly input: number;
+  readonly output: number;
+  readonly cacheRead: number;
+  readonly cacheWrite: number;
+  readonly reasoning: number;
+  readonly cost: number;
+  readonly calls: number;
+} {
+  let input = 0;
+  let output = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  let reasoning = 0;
+  let cost = 0;
+  let calls = 0;
+  for (const day of days) {
+    input += day.input;
+    output += day.output;
+    cacheRead += day.cacheRead;
+    cacheWrite += day.cacheWrite;
+    reasoning += day.reasoning;
+    cost += day.cost;
+    calls += day.calls;
+  }
+  return { input, output, cacheRead, cacheWrite, reasoning, cost, calls };
+}
+
+function usageBucketFromFold(
+  fold: ReturnType<typeof foldDays>,
+): { tokens: number; inputTokens: number; outputTokens: number; cost: number } {
+  const tokens =
+    fold.input + fold.output + fold.cacheRead + fold.cacheWrite + fold.reasoning;
+  return {
+    tokens,
+    inputTokens: fold.input,
+    outputTokens: fold.output,
+    cost: fold.cost,
+  };
+}
+
+function siteIdForProvider(provider: string): string {
+  return provider === "deepseek" || provider === "deepseek-official"
+    ? "direct"
+    : provider;
+}
+
 /** DSH tokenledger / usage-stats aggregate from persisted ledger history. */
 export function costMeterAggregateUsage(query?: {
   readonly days?: number;
 }): Record<string, unknown> {
   const ledger = loadLedger();
+  const exchangeRate =
+    typeof ledger.config.exchangeRate === "number"
+      ? ledger.config.exchangeRate
+      : 7.2;
+  const currency =
+    typeof ledger.config.currency === "string" && ledger.config.currency.trim()
+      ? ledger.config.currency
+      : "CNY";
   const days =
     typeof query?.days === "number" && Number.isFinite(query.days)
       ? Math.max(1, Math.floor(query.days))
@@ -626,24 +694,30 @@ export function costMeterAggregateUsage(query?: {
       ? history.slice(-days)
       : history;
 
-  let input = 0;
-  let output = 0;
-  let cacheRead = 0;
-  let cacheWrite = 0;
-  let reasoning = 0;
-  let cost = 0;
+  const todayKey = dayKey();
+  const monthPrefix = monthKey();
+  const todayFold = foldDays(history.filter((d) => d.date === todayKey));
+  const monthFold = foldDays(history.filter((d) => d.date.startsWith(monthPrefix)));
+  const allFold = foldDays(history);
+  const rangeFold = foldDays(slice);
+
   const activity: Array<{ day: string; tokens: number; cost?: number }> = [];
-  const modelMap = new Map<string, { tokens: number; cost: number }>();
+  const modelMap = new Map<
+    string,
+    {
+      tokens: number;
+      cost: number;
+      inputTokens: number;
+      cacheReadTokens: number;
+      outputTokens: number;
+      requests: number;
+    }
+  >();
+  const siteMap = new Map<string, number>();
+  let lastActivityAt = 0;
 
   for (const day of slice) {
-    const tokens =
-      day.input + day.output + day.cacheRead + day.cacheWrite + day.reasoning;
-    input += day.input;
-    output += day.output;
-    cacheRead += day.cacheRead;
-    cacheWrite += day.cacheWrite;
-    reasoning += day.reasoning;
-    cost += day.cost;
+    const tokens = dayTokens(day);
     activity.push({ day: day.date, tokens, cost: day.cost });
     for (const [model, buckets] of Object.entries(day.byModel)) {
       const rowTokens =
@@ -652,32 +726,113 @@ export function costMeterAggregateUsage(query?: {
         buckets.cacheRead +
         buckets.cacheWrite +
         buckets.reasoning;
-      const prev = modelMap.get(model) ?? { tokens: 0, cost: 0 };
+      const prev = modelMap.get(model) ?? {
+        tokens: 0,
+        cost: 0,
+        inputTokens: 0,
+        cacheReadTokens: 0,
+        outputTokens: 0,
+        requests: 0,
+      };
       modelMap.set(model, {
         tokens: prev.tokens + rowTokens,
         cost: prev.cost + buckets.cost,
+        inputTokens: prev.inputTokens + buckets.input + buckets.cacheWrite,
+        cacheReadTokens: prev.cacheReadTokens + buckets.cacheRead,
+        outputTokens: prev.outputTokens + buckets.output,
+        requests: prev.requests + day.calls,
       });
+    }
+    for (const [providerModel, buckets] of Object.entries(day.byProviderModel)) {
+      const provider = providerModel.split(":")[0] ?? providerModel;
+      const site = siteIdForProvider(provider);
+      const rowTokens =
+        buckets.input +
+        buckets.output +
+        buckets.cacheRead +
+        buckets.cacheWrite +
+        buckets.reasoning;
+      siteMap.set(site, (siteMap.get(site) ?? 0) + rowTokens);
+    }
+    for (const session of day.sessions) {
+      const lastAt = Number(session.lastAt ?? 0);
+      if (lastAt > lastActivityAt) lastActivityAt = lastAt;
     }
   }
 
-  const tokens = input + output + cacheRead + cacheWrite + reasoning;
-  const bucket = { tokens, inputTokens: input, outputTokens: output, cost };
+  const tokens = rangeFold.input + rangeFold.output + rangeFold.cacheRead
+    + rangeFold.cacheWrite + rangeFold.reasoning;
+  const cacheHitRate =
+    tokens > 0
+      ? Math.round((rangeFold.cacheRead / tokens) * 1000) / 10
+      : 0;
   const models = [...modelMap.entries()].map(([model, row]) => ({
     model,
     tokens: row.tokens,
     cost: row.cost,
+    inputTokens: row.inputTokens,
+    cacheReadTokens: row.cacheReadTokens,
+    outputTokens: row.outputTokens,
+    requests: row.requests,
   }));
+  const pricedRows = models.map((row) => ({
+    model: row.model,
+    cost: row.cost * exchangeRate,
+    currency,
+  }));
+  const pricedTotal = rangeFold.cost * exchangeRate;
+  const sites = [...siteMap.entries()]
+    .map(([site, siteTokens]) => ({ site, tokens: siteTokens }))
+    .sort((a, b) => b.tokens - a.tokens);
 
   return {
     ok: true,
-    windows: { today: bucket, week: bucket, month: bucket },
+    totals: {
+      tokens,
+      requests: rangeFold.calls,
+      cacheHitRate,
+      inputTokens: rangeFold.input + rangeFold.cacheWrite,
+      outputTokens: rangeFold.output,
+    },
+    windows: {
+      today: usageBucketFromFold(todayFold),
+      week: usageBucketFromFold(rangeFold),
+      month: usageBucketFromFold(monthFold),
+      all: usageBucketFromFold(allFold),
+    },
     activity,
     activityModels: models,
-    sites: [],
+    sites,
+    directory: sites.map((row) => ({
+      id: row.site,
+      routes: row.site === "direct" ? ["api.deepseek.com"] : [row.site],
+    })),
     models,
-    cost,
+    priced: {
+      totals: pricedTotal > 0 ? { [currency]: pricedTotal } : {},
+      rows: pricedRows,
+    },
+    accounts: [{ id: "default", displayName: "DeepSeek Official" }],
+    lastSweepAt: Date.now(),
+    diagnostics: {
+      ...(lastActivityAt > 0 ? { lastUpdatedAt: lastActivityAt } : {}),
+      unattributedRows: 0,
+    },
+    timeZone: {
+      offset: formatTimezoneOffset(new Date().getTimezoneOffset()),
+      name: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+    cost: rangeFold.cost,
     adapter: "xrk-dsh-compat",
   };
+}
+
+function formatTimezoneOffset(offsetMinutes: number): string {
+  const sign = offsetMinutes <= 0 ? "+" : "-";
+  const abs = Math.abs(offsetMinutes);
+  const hours = String(Math.floor(abs / 60)).padStart(2, "0");
+  const minutes = String(abs % 60).padStart(2, "0");
+  return `${sign}${hours}:${minutes}`;
 }
 
 export interface CostMeterSessionTotals {

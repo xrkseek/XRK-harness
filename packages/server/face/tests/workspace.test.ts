@@ -121,7 +121,7 @@ describe("Face workspace U2", () => {
       expect(v.blockCount).toBeGreaterThan(0);
       expect(v.totalChars).toBeGreaterThan(0);
       expect(v.blocks[0]?.heading).toBeTruthy();
-      expect(v.blocks[0]?.preview).toContain("Assistant");
+      expect(v.blocks[0]?.preview).toContain(".xrk/assistant.md");
     }
 
     const badTemplate = await dispatchFaceMethod(
@@ -443,5 +443,47 @@ describe("Face workspace U2", () => {
       listed.result.value as { items: { sessionId: string; cwd: string }[] }
     ).items.find((i) => i.sessionId === sessionId);
     expect(item?.cwd).toBe(path.resolve(other));
+  });
+
+  it("persists archivedSessionIds across Face rebuild", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-archive-"));
+    const productDir = path.join(root, ".xrk");
+    const store = createMemorySessionStore();
+    const first = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const sess = await dispatchFaceMethod(first, "session.create", "a1", {});
+    expect(sess.result.ok).toBe(true);
+    if (!sess.result.ok) return;
+    const sessionId = (sess.result.value as { sessionId: string }).sessionId;
+
+    const archived = await dispatchFaceMethod(
+      first,
+      "workspace.archiveSession",
+      "a2",
+      { sessionId },
+    );
+    expect(archived.result.ok).toBe(true);
+
+    const second = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const listed = await dispatchFaceMethod(second, "workspace.list", "a3", {});
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) return;
+    const v = listed.result.value as { archivedSessionIds: string[] };
+    expect(v.archivedSessionIds).toEqual([sessionId]);
   });
 });

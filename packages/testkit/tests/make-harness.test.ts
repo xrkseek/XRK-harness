@@ -69,7 +69,7 @@ describe("makeHarness", () => {
     const agent = await composition.createAgent();
     await agent.continueTurn({ text: "hi" });
     expect(systemText).not.toContain("INJECT-MARKER");
-    expect(userTexts.some((t) => t.includes("## Assistant"))).toBe(true);
+    expect(userTexts.some((t) => t.includes("## .xrk/assistant.md"))).toBe(true);
     expect(userTexts.some((t) => t.includes("INJECT-MARKER"))).toBe(true);
 
     const events = composition.store.get(composition.sessionId).events;

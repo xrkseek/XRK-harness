@@ -23,6 +23,8 @@ export interface WorkspacePersistDoc {
   readonly membership?: Readonly<Record<string, string>>;
   /** Sidebar session order per workspace. */
   readonly sessionOrder?: Readonly<Record<string, readonly string[]>>;
+  /** Registry-global archive set (hidden from grouping surfaces). */
+  readonly archivedSessionIds?: readonly string[];
 }
 
 export function workspacesJsonPath(runtime: FaceRuntime): string {
@@ -80,12 +82,16 @@ export function loadWorkspaceDoc(runtime: FaceRuntime): WorkspacePersistDoc | nu
         sessionOrder[wsId] = ids.filter((id): id is string => typeof id === "string");
       }
     }
+    const archivedSessionIds = Array.isArray(doc.archivedSessionIds)
+      ? doc.archivedSessionIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+      : [];
     return {
       order,
       entries,
       seq,
       ...(Object.keys(membership).length ? { membership } : {}),
       ...(Object.keys(sessionOrder).length ? { sessionOrder } : {}),
+      ...(archivedSessionIds.length ? { archivedSessionIds } : {}),
     };
   } catch {
     return null;

@@ -8,7 +8,7 @@ import {
 } from "../src/index.js";
 
 describe("WorkspaceInjector", () => {
-  it("injects in fixed order and respects budget", async () => {
+  it("injects ecosystem paths in order and respects budget", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-ws-"));
     const product = path.join(root, ".xrk");
     await mkdir(path.join(product, "context"), { recursive: true });
@@ -23,19 +23,20 @@ describe("WorkspaceInjector", () => {
       "utf8",
     );
     await writeFile(path.join(product, "subagents.md"), "S", "utf8");
-    await writeFile(path.join(root, "AGENTS.md"), "REPO AGENTS — must not inject", "utf8");
+    await writeFile(path.join(root, "AGENTS.md"), "REPO AGENTS", "utf8");
 
     const inj = createWorkspaceInjector({ root, productDir: product });
     const out = await inj.inject({ maxChars: 10_000 });
     expect(out.blocks.map((b) => b.split("\n")[0])).toEqual([
-      "## Assistant",
-      "## Context: c1.md",
-      "## Rules",
+      "## .xrk/assistant.md",
+      "## .xrk/context/c1.md",
+      "## .xrk/rules.md",
+      "## .xrk/subagents.md",
+      "## AGENTS.md",
       "## Skills",
-      "## Subagents",
     ]);
     expect(out.blocks.join("\n")).toContain("**skill-a**");
-    expect(out.blocks.join("\n")).not.toContain("REPO AGENTS");
+    expect(out.blocks.join("\n")).toContain("REPO AGENTS");
   });
 
   it("syncSeeds fills missing without overwrite", async () => {

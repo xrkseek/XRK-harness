@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { contextForm, contextProvenance } from '../src/client/sessions/context-provenance.ts'
+import { contextForm, contextProvenance, sessionRecallLabels } from '../src/client/sessions/context-provenance.ts'
 
 describe('contextProvenance', () => {
   it('names a plugin producer by its logged plugin id', () => {
@@ -61,6 +61,17 @@ describe('contextProvenance', () => {
     expect(contextProvenance([{ kind: 'plugin' }])).toEqual(unnamed)
     expect(contextProvenance({ plugin: 'dsh-tool-skill' })).toEqual(unnamed)
     expect(contextProvenance({ kind: 42 })).toEqual(unnamed)
+  })
+})
+
+describe('sessionRecallLabels', () => {
+  it('returns reference labels for session-reference sources only', () => {
+    expect(sessionRecallLabels({
+      kind: 'session-reference',
+      references: [{ sessionId: 's1', label: 'Refactor the loader' }, { sessionId: 's2', label: 'Fix CI' }],
+    })).toEqual(['Refactor the loader', 'Fix CI'])
+    expect(sessionRecallLabels({ kind: 'plugin', plugin: 'x' })).toEqual([])
+    expect(sessionRecallLabels(null)).toEqual([])
   })
 })
 

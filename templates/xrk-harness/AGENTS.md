@@ -1,6 +1,6 @@
 # AGENTS.md — XRK 插件开发工作区
 
-> 产品工作区种子（`WorkspaceInjector`）。仓库根 Coding Agent `AGENTS.md` 不会进入产品注入。
+> 产品工作区种子（`WorkspaceInjector`）。工作区根 `AGENTS.md` 与 `.cursor/rules` 亦会经 ecosystem 注入。
 
 ## 角色
 

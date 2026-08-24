@@ -12,7 +12,9 @@ assistant / context / rules / recipes / seed sync 默认：`{workspaceRoot}/.xrk
 
 **Skills 不强制该目录。** Inject / `skill` / `skill.list` 自动导入已有 skill 树；缺目录则跳过（不 mkdir）。
 
-Never injects the host repo’s root `AGENTS.md` (Coding Agent docs ≠ product seed). Layer map: [skills-layers.md](./skills-layers.md).
+工作区根及多厂商约定路径会进入 **agent-instructions**（见下节顺序）。`{workspaceRoot}/AGENTS.md` 与 `.cursor/rules/*.mdc` 在对应 workspace 为根时**会**注入。分层说明：[skills-layers.md](./skills-layers.md)。
+
+Workspace root and multi-vendor convention paths enter **agent-instructions** (order below). `{workspaceRoot}/AGENTS.md` and `.cursor/rules/*.mdc` **are** injected when that directory is the workspace root. Layering: [skills-layers.md](./skills-layers.md).
 
 ## Skills 根 / Skills roots
 
@@ -35,7 +37,7 @@ Never injects the host repo’s root `AGENTS.md` (Coding Agent docs ≠ product 
 | 载荷 / Payload | `user/message.source` | 模型侧正文 / Model-facing body |
 |---------|----------------------|-------------------|
 | Skill catalog（name + description） | `skill-catalog` · `form: catalog` | `<available_skills>` … |
-| assistant / context / rules / subagents | `agent-instructions` · `form: instructions` + `changes[]` | Markdown sections |
+| 多厂商约定 + `.xrk` 站立说明 | `agent-instructions` · `form: instructions` + `changes[]` | Markdown sections（`## path`） |
 
 每条 inject（及人类 prompt）有唯一 `messageId`。Face wire `data.id` 使用该 id — **不是**裸 `turnId` — 以便同 turn 同时展示 inject 行与人类行而不挤掉对话。
 
@@ -49,11 +51,19 @@ Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Traje
 
 ## 顺序（instruction 节） / Order (instruction sections)
 
-1. `assistant.md` / `ASSISTANT.md`  
-2. `context/*`（排序）  
-3. `rules.md` / `RULES.md`  
-4. Skills → 独立 catalog inject（不是 instruction markdown）  
-5. `subagents.md`
+低 → 高优先级（后列更接近当轮任务）。**Skills 正文**仍为独立 catalog inject，不在此列表。
+
+Low → high priority (later sections are closer to the turn). **Skill bodies** stay in the separate catalog inject.
+
+1. `.codex/AGENTS.md` · 根 `CODEX.md`  
+2. `.claude/CLAUDE.md` · `.claude/rules/**`  
+3. `.agents/AGENTS.md` · `.agents/rules/**`（不含 `skills/` · `notes/`）  
+4. `.cursor/rules/**`（`.mdc` 去 frontmatter）  
+5. `.github/copilot-instructions.md` · `.github/instructions/**`  
+6. `.xrk/`：`SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` / `ASSISTANT.md` · `context/*` · `rules.md` / `RULES.md` · `subagents.md`  
+7. 工作区根 `AGENTS.md`  
+8. 工作区根 `CLAUDE.md`（仅 `@AGENTS.md` 单行时跳过，避免重复）  
+9. Skills → 独立 catalog inject（不是 instruction markdown）
 
 ## API
 

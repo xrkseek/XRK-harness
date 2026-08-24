@@ -280,6 +280,7 @@ export class FaceWorkspaceRegistry {
     seq: number;
     membership: Record<string, string>;
     sessionOrder: Record<string, string[]>;
+    archivedSessionIds: string[];
   } {
     const entries: Record<
       string,
@@ -307,6 +308,7 @@ export class FaceWorkspaceRegistry {
       seq: this.seq,
       membership,
       sessionOrder,
+      archivedSessionIds: [...this.archived],
     };
   }
 
@@ -327,6 +329,7 @@ export class FaceWorkspaceRegistry {
       seq: number;
       membership?: Readonly<Record<string, string>>;
       sessionOrder?: Readonly<Record<string, readonly string[]>>;
+      archivedSessionIds?: readonly string[];
     },
     fallbackRoot: string,
   ): void {
@@ -406,6 +409,16 @@ export class FaceWorkspaceRegistry {
         if (!bucket.includes(sid)) {
           bucket.push(sid);
           this.sessionOrder.set(wsId, bucket);
+        }
+      }
+    }
+    if (doc.archivedSessionIds) {
+      for (const sid of doc.archivedSessionIds) {
+        if (typeof sid !== "string" || sid.length === 0) continue;
+        this.archived.add(sid);
+        this.membership.delete(sid);
+        for (const wsId of this.order) {
+          this.removeFromOrder(wsId, sid);
         }
       }
     }

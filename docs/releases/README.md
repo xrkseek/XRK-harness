@@ -8,7 +8,7 @@ The public line keeps only two releases:
 
 | 档 / Line | 版本 / Version | 说明 / Notes |
 |------|------|------|
-| **正式 / Formal** | [v0.1.7](./v0.1.7.md) · [GitHub Release](https://github.com/xrkseek/XRK-harness/releases/tag/v0.1.7) | 当前推荐安装 / Current recommended install |
+| **正式 / Formal** | [v0.1.8](./v0.1.8.md) · [GitHub Release](https://github.com/xrkseek/XRK-harness/releases/tag/v0.1.8) | 当前推荐安装 / Current recommended install |
 | **预览 / Preview** | [v0.0.11](./v0.0.11.md) · [GitHub Release](https://github.com/xrkseek/XRK-harness/releases/tag/v0.0.11) | 历史预览线唯一保留；npm tag **`preview`** / Sole retained preview; npm tag **`preview`** |
 
 上一正式版 / Previous formal: [v0.1.5](./v0.1.5.md)。
@@ -21,7 +21,7 @@ Install and publish: [publishing.md](../publishing.md). Intermediate numbers are
 
 | 用途 / Use | 命令 / Command |
 |------|------|
-| 正式 / Formal | `npx @xrkseek/harness-cli@0.1.7 web` 或 `npm i -g @xrkseek/harness-cli@latest` |
+| 正式 / Formal | `npx @xrkseek/harness-cli@0.1.8 web` 或 `npm i -g @xrkseek/harness-cli@latest` |
 | 预览 / Preview | `npx @xrkseek/harness-cli@0.0.11 web` 或 `npm i -g @xrkseek/harness-cli@preview` |
 
 发行说明正文里的文档链接使用 GitHub **blob/main** 绝对 URL，以便在 GitHub Release 页面也能点开；在本仓浏览时 `./v*.md` 相对链接同样可用。

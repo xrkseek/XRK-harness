@@ -1,13 +1,17 @@
 import { mkdir, readFile, readdir, writeFile, access, stat } from "node:fs/promises";
 import path from "node:path";
 import { newUserMessageId } from "@xrkseek/protocol";
+import {
+  collectEcosystemInstructions,
+  sectionsToInstructionBlocks,
+  sectionsToInstructionChanges,
+} from "./ecosystem-instructions.js";
 import { formatSkillCatalog, listSkills } from "./skills.js";
 import {
   buildInstructionsPayload,
   buildSkillCatalogPayload,
   foldLatestWorkspaceInjectDigests,
   planWorkspaceInjectAppends,
-  type InstructionChange,
   type WorkspaceBudgetEvent,
   type WorkspaceDurableInject,
   type WorkspaceInjectAppend,
@@ -24,7 +28,7 @@ export interface WorkspaceInjector {
 
 export interface WorkspaceInjectorOptions {
   readonly root: string;
-  /** Product inject root — never the repo AGENTS.md at monorepo root. */
+  /** Product inject overlay — default `{root}/.xrk` (see ecosystem paths). */
   readonly productDir?: string;
 }
 
@@ -34,14 +38,6 @@ async function exists(p: string): Promise<boolean> {
     return true;
   } catch {
     return false;
-  }
-}
-
-async function readIfExists(p: string): Promise<string | undefined> {
-  try {
-    return await readFile(p, "utf8");
-  } catch {
-    return undefined;
   }
 }
 
@@ -75,12 +71,9 @@ function clip(
 }
 
 /**
- * Injection order:
- * 1 assistant md · 2 contextFiles · 3 rules · 4 skills cards · 5 subagents list
- * Root AGENTS.md of the host repo is never injected (productDir isolation).
- *
- * Durable path: instructions (1–3, 5) + skill catalog (4) as separate
- * `user/message` payloads; `blocks` kept for previewInject only.
+ * Multi-vendor instruction paths + skill catalog (see `ecosystem-instructions.ts`
+ * and `docs/workspace-inject.md`). Durable: agent-instructions + skill-catalog
+ * as separate `user/message` payloads; `blocks` kept for previewInject only.
  */
 export function createWorkspaceInjector(
   options: WorkspaceInjectorOptions,
@@ -93,59 +86,16 @@ export function createWorkspaceInjector(
   return {
     async inject({ maxChars = 32_000 } = {}) {
       const budget = { left: maxChars, events: [] as WorkspaceBudgetEvent[] };
-      const instructionBlocks: string[] = [];
-      const changes: InstructionChange[] = [];
 
-      // 1. assistant md
-      const assistant =
-        (await readIfExists(path.join(productDir, "assistant.md"))) ??
-        (await readIfExists(path.join(productDir, "ASSISTANT.md")));
-      if (assistant) {
-        const t = clip("assistant", assistant, budget);
-        if (t) {
-          instructionBlocks.push(`## Assistant\n${t}`);
-          changes.push({
-            action: "set",
-            path: (await exists(path.join(productDir, "assistant.md")))
-              ? "assistant.md"
-              : "ASSISTANT.md",
-          });
-        }
-      }
+      const sections = await collectEcosystemInstructions({
+        root,
+        productDir,
+        budget,
+      });
+      const instructionBlocks = sectionsToInstructionBlocks(sections);
+      const changes = sectionsToInstructionChanges(sections);
 
-      // 2. contextFiles
-      const ctxDir = path.join(productDir, "context");
-      if (await exists(ctxDir)) {
-        const files = (await readdir(ctxDir)).sort();
-        for (const f of files) {
-          const text = await readIfExists(path.join(ctxDir, f));
-          if (!text) continue;
-          const t = clip(`context:${f}`, text, budget);
-          if (t) {
-            instructionBlocks.push(`## Context: ${f}\n${t}`);
-            changes.push({ action: "merge", path: `context/${f}` });
-          }
-        }
-      }
-
-      // 3. rules full text
-      const rules =
-        (await readIfExists(path.join(productDir, "rules.md"))) ??
-        (await readIfExists(path.join(productDir, "RULES.md")));
-      if (rules) {
-        const t = clip("rules", rules, budget);
-        if (t) {
-          instructionBlocks.push(`## Rules\n${t}`);
-          changes.push({
-            action: "merge",
-            path: (await exists(path.join(productDir, "rules.md")))
-              ? "rules.md"
-              : "RULES.md",
-          });
-        }
-      }
-
-      // 4. skills — durable catalog; preview `blocks` still include markdown cards
+      // Skills — durable catalog; preview `blocks` still include markdown cards
       const skills = await listSkills({
         workspaceRoot: root,
         productDir,
@@ -158,28 +108,9 @@ export function createWorkspaceInjector(
         if (t) skillBlock = t;
       }
 
-      // 5. subagents list
-      const subagents =
-        (await readIfExists(path.join(productDir, "subagents.md"))) ?? "";
-      if (subagents.trim()) {
-        const t = clip("subagents", subagents, budget);
-        if (t) {
-          instructionBlocks.push(`## Subagents\n${t}`);
-          changes.push({ action: "merge", path: "subagents.md" });
-        }
-      }
-
-      // Isolation: never read root AGENTS.md as product inject
-      const rootAgents = path.join(root, "AGENTS.md");
-      if (await exists(rootAgents)) {
-        // explicit no-op — documented for tests
-      }
-
-      // Preview order: assistant · context · rules · skills · subagents
       const previewBlocks = [
-        ...instructionBlocks.filter((b) => !b.startsWith("## Subagents")),
+        ...instructionBlocks,
         ...(skillBlock ? [skillBlock] : []),
-        ...instructionBlocks.filter((b) => b.startsWith("## Subagents")),
       ];
 
       const skillCatalog = buildSkillCatalogPayload(skills, budget.events);
@@ -306,7 +237,7 @@ export {
 
 /**
  * Options for resolving product-workspace injects.
- * Default product dir: `{root}/.xrk` (never repo-root AGENTS.md).
+ * Default product dir: `{root}/.xrk` plus ecosystem convention paths.
  */
 export interface ResolveWorkspaceInjectOptions {
   readonly root: string;

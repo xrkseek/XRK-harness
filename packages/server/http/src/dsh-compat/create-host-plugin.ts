@@ -17,6 +17,7 @@ import {
   type TokenLedgerOptions,
   type XrkWalletPort,
 } from "./index.js";
+import { normalizeDshCompatWireCtx } from "./wire-normalize.js";
 
 export const DSH_COMPAT_HOST_PLUGIN_ID = "dsh-compat-host";
 
@@ -35,35 +36,45 @@ export type DshCompatHostPluginOptions = Omit<
   readonly walletPort?: XrkWalletPort;
 };
 
+/** Flatten {@link HostWireContext} for dsh-compat registry / HTTP (exported for Host prewarm). */
+export function hostWireToDshCompatOptions(
+  ctx: HostWireContext,
+  extra: DshCompatHostPluginOptions = {},
+): DshCompatOptions {
+  const fromExtra = extra.tokenLedger;
+  const merged: HostWireContext = {
+    ...ctx,
+    ...(fromExtra?.aggregateUsage || fromExtra?.fetchBalance
+      ? {
+          tokenLedger: {
+            ...ctx.tokenLedger,
+            ...(fromExtra.aggregateUsage
+              ? { aggregateUsage: fromExtra.aggregateUsage }
+              : {}),
+            ...(fromExtra.fetchBalance
+              ? { fetchBalance: fromExtra.fetchBalance }
+              : {}),
+          },
+        }
+      : {}),
+    ...(extra.harnessConnector?.onJobAccepted
+      ? {
+          harnessConnector: {
+            ...ctx.harnessConnector,
+            onJobAccepted: extra.harnessConnector.onJobAccepted,
+          },
+        }
+      : {}),
+    ...(extra.walletPort ? { walletPort: extra.walletPort } : {}),
+  };
+  return normalizeDshCompatWireCtx(merged as Parameters<typeof normalizeDshCompatWireCtx>[0]);
+}
+
 function optionsFromWire(
   ctx: HostWireContext,
   extra: DshCompatHostPluginOptions = {},
 ): DshCompatOptions {
-  const fromCtx = ctx.tokenLedger;
-  const fromExtra = extra.tokenLedger;
-  const aggregateUsage =
-    fromExtra?.aggregateUsage ?? fromCtx?.aggregateUsage;
-  const fetchBalance = fromExtra?.fetchBalance ?? fromCtx?.fetchBalance;
-  const listUsageProviders = fromCtx?.listUsageProviders;
-  const onJobAccepted =
-    ctx.harnessConnector?.onJobAccepted ?? extra.harnessConnector?.onJobAccepted;
-  const walletPort = (ctx.walletPort ?? extra.walletPort) as
-    | XrkWalletPort
-    | undefined;
-  return {
-    ...(ctx.pluginsDir ? { pluginsDir: ctx.pluginsDir } : {}),
-    ...(ctx.xrkHome ? { xrkHome: ctx.xrkHome } : {}),
-    ...(ctx.workspaceRoot ? { workspaceRoot: ctx.workspaceRoot } : {}),
-    ...(ctx.defaultCwd ? { defaultCwd: ctx.defaultCwd } : {}),
-    ...(ctx.resolveSessionCwd
-      ? { resolveSessionCwd: ctx.resolveSessionCwd }
-      : {}),
-    ...(aggregateUsage ? { aggregateUsage } : {}),
-    ...(fetchBalance ? { fetchBalance } : {}),
-    ...(listUsageProviders ? { listUsageProviders } : {}),
-    ...(onJobAccepted ? { onJobAccepted } : {}),
-    ...(walletPort ? { walletPort } : {}),
-  };
+  return hostWireToDshCompatOptions(ctx, extra);
 }
 
 /**

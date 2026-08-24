@@ -113,6 +113,7 @@ export { buildMnemonStatus, buildMnemonVersions } from "./mnemon.js";
 export {
   createDshCompatHostPlugin,
   ensureDshCompatHostPlugin,
+  hostWireToDshCompatOptions,
   DSH_COMPAT_HOST_PLUGIN_ID,
   type DshCompatHostPluginOptions,
 } from "./create-host-plugin.js";

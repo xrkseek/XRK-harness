@@ -4,6 +4,7 @@ import {
   DEFAULT_HISTORY_MAX_MESSAGES,
   messageGroupStartIndex,
   paginateSessionHistory,
+  paginateSessionHistoryForReplay,
 } from "../src/adapt/history-paginate.js";
 
 function chunk(
@@ -88,5 +89,24 @@ describe("Face history message-boundary pagination (DSH parity)", () => {
     expect(messageGroupStartIndex(events, assistantIdx)).toBe(
       events.findIndex((e) => e.type === "step/start"),
     );
+  });
+
+  it("paginateSessionHistoryForReplay drops deltas superseded by assistant/message", () => {
+    const events = plainTurn("t1", "s1", "hi", 120);
+    const page = paginateSessionHistoryForReplay(events, undefined, 2);
+    expect(page.hasMore).toBe(false);
+    expect(page.events.filter((e) => e.type === "assistant/chunk")).toHaveLength(0);
+    expect(page.events.some((e) => e.type === "assistant/message")).toBe(true);
+  });
+
+  it("paginateSessionHistoryForReplay keeps open-step chunks without assistant/message", () => {
+    const events: SessionEvent[] = [
+      { type: "turn/start", ts: 1, turnId: "t1" },
+      { type: "user/message", ts: 2, turnId: "t1", content: "hi" },
+      { type: "step/start", ts: 3, turnId: "t1", stepId: "s1" },
+      chunk("t1", "s1", "partial"),
+    ];
+    const page = paginateSessionHistoryForReplay(events, undefined, 50);
+    expect(page.events.filter((e) => e.type === "assistant/chunk")).toHaveLength(1);
   });
 });
