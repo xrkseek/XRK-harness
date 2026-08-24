@@ -1,11 +1,12 @@
 /** Deterministic provider-independent image normalization. */
 
-import sharp, { type Sharp } from 'sharp'
+import type { Sharp } from 'sharp'
 import { AttachmentError } from '@xrkseek/attachment'
 import type { ImageMediaType } from '@xrkseek/attachment'
 import { encodeFirstWithinLimit, isExhaustedEncoding } from './encoding.js'
 import { detectImage, encodedAlphaIsCompatible } from './image.js'
 import type { DetectedImage } from './image.js'
+import { getSharp, getSharpModule } from './sharp-module.js'
 
 /** Deployment-resolved policy for the persisted normalized attachment. */
 export interface NormalizationPolicy {
@@ -71,12 +72,13 @@ export function canPassThroughNormalization(
  * @returns whether the nearest-neighbour sample stays within the low-color threshold.
  */
 export async function hasLowColourCount(pipeline: Sharp): Promise<boolean> {
+  const mod = await getSharpModule()
   const { data, info } = await pipeline.clone().resize({
     width: LOW_COLOUR_SAMPLE_EDGE,
     height: LOW_COLOUR_SAMPLE_EDGE,
     fit: 'inside',
     withoutEnlargement: true,
-    kernel: sharp.kernel.nearest,
+    kernel: mod.default.kernel.nearest,
     fastShrinkOnLoad: false,
   }).raw().toBuffer({ resolveWithObject: true })
   const colours = new Set<number>()
@@ -114,7 +116,8 @@ async function verifyNormalizedImage(
 }
 
 /** Build one fixed-size, oriented, metadata-free sRGB pipeline from submitted bytes. */
-function preparedPipeline(data: Uint8Array, width: number, height: number): Sharp {
+async function preparedPipeline(data: Uint8Array, width: number, height: number): Promise<Sharp> {
+  const sharp = await getSharp()
   return sharp(data, { failOn: 'error', limitInputPixels: false })
     .rotate()
     .toColourspace('srgb')
@@ -131,14 +134,14 @@ function initialDimensions(detected: DetectedImage, maxDimension: number): { wid
 }
 
 /** Lazy encoding order for one size, separated by sampled colour complexity and alpha. */
-function encodingAttemptsAtSize(
+async function encodingAttemptsAtSize(
   data: Uint8Array,
   width: number,
   height: number,
   hasAlpha: boolean,
   lowColour: boolean,
-): Array<() => Promise<NormalizedImage>> {
-  const prepared = preparedPipeline(data, width, height)
+): Promise<Array<() => Promise<NormalizedImage>>> {
+  const prepared = await preparedPipeline(data, width, height)
   const webp = NORMALIZATION_QUALITIES.map(quality => (
     () => encode(prepared.clone(), 'image/webp', quality)
   ))
@@ -170,6 +173,7 @@ export async function normalizeImage(
     return { data, mediaType: detected.mediaType, width: detected.width, height: detected.height }
   }
   try {
+    const sharp = await getSharp()
     let { width, height } = initialDimensions(detected, policy.maxDimension)
     const classificationPipeline = sharp(data, { failOn: 'error', limitInputPixels: false })
       .rotate()
@@ -177,7 +181,7 @@ export async function normalizeImage(
     const lowColour = await hasLowColourCount(classificationPipeline)
     for (;;) {
       const encoded = await encodeFirstWithinLimit(
-        encodingAttemptsAtSize(data, width, height, detected.hasAlpha, lowColour),
+        await encodingAttemptsAtSize(data, width, height, detected.hasAlpha, lowColour),
         policy.maxBytes,
       )
       if (!isExhaustedEncoding(encoded)) {

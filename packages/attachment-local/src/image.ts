@@ -1,15 +1,16 @@
 /** Raster inspection: full decode at admission, header-only probe on verified reads. */
 
-import sharp, { type Sharp } from 'sharp'
+import type { Sharp } from 'sharp'
 import { AttachmentError } from '@xrkseek/attachment'
 import type { ImageMediaType } from '@xrkseek/attachment'
+import { getSharp } from './sharp-module.js'
 
 /** Decoded metadata from a supported image. */
 export interface DetectedImage {
   mediaType: ImageMediaType
-  /** Intrinsic width with EXIF orientation applied â€?the width a viewer perceives. */
+  /** Intrinsic width with EXIF orientation applied ï¿½?the width a viewer perceives. */
   width: number
-  /** Intrinsic height with EXIF orientation applied â€?the height a viewer perceives. */
+  /** Intrinsic height with EXIF orientation applied ï¿½?the height a viewer perceives. */
   height: number
   /** Whether the container carries more than one frame. */
   animated: boolean
@@ -90,6 +91,7 @@ async function imageMetadata(image: Sharp): Promise<DetectedImage> {
  */
 export async function probeImage(data: Uint8Array): Promise<DetectedImage> {
   try {
+    const sharp = await getSharp()
     return await imageMetadata(sharp(data, { failOn: 'error', limitInputPixels: false }))
   } catch (error) {
     if (error instanceof AttachmentError) throw error
@@ -113,6 +115,7 @@ export interface DecodedImageLimits {
  */
 export async function detectImage(data: Uint8Array, limits?: DecodedImageLimits): Promise<DetectedImage> {
   try {
+    const sharp = await getSharp()
     const image = sharp(data, { failOn: 'error', limitInputPixels: false })
     const detected = await imageMetadata(image)
     if (limits?.maxPixels !== undefined && detected.width * detected.height > limits.maxPixels) {

@@ -15,6 +15,7 @@ export interface FaceWorkspaceView {
 }
 
 export class FaceWorkspaceRegistry {
+  private readonly root: string;
   private readonly workspaces = new Map<string, Omit<FaceWorkspaceView, "sessionIds">>();
   private readonly order: string[] = [];
   private readonly membership = new Map<string, string>();
@@ -25,6 +26,7 @@ export class FaceWorkspaceRegistry {
 
   constructor(root: string) {
     const abs = path.resolve(root);
+    this.root = abs;
     const id = "ws_default";
     const now = new Date().toISOString();
     this.workspaces.set(id, {
@@ -80,7 +82,7 @@ export class FaceWorkspaceRegistry {
   resolveAttachTarget(opts: {
     workspaceId?: string;
     cwd?: string;
-  }): { workspaceId: string; cwd: string } | { error: string } {
+  }): { workspaceId?: string; cwd: string } | { error: string } {
     if (opts.workspaceId && opts.cwd) {
       return { error: "workspaceId or cwd, not both" };
     }
@@ -98,8 +100,12 @@ export class FaceWorkspaceRegistry {
       const created = this.create(abs);
       return { workspaceId: created.workspace.workspaceId, cwd: created.workspace.path };
     }
-    const def = this.workspaces.get(this.defaultId())!;
-    return { workspaceId: def.workspaceId, cwd: def.path };
+    const def = this.workspaces.get(this.defaultId());
+    if (def) {
+      return { workspaceId: def.workspaceId, cwd: def.path };
+    }
+    // Default registration was removed — cwd-only attach (session stays Ungrouped).
+    return { cwd: this.root };
   }
 
   create(absPath: string): { workspace: FaceWorkspaceView; created: boolean } {
@@ -142,25 +148,27 @@ export class FaceWorkspaceRegistry {
   }
 
   /**
-   * Remove a non-default workspace. Sessions move to the default workspace.
+   * Remove one workspace registration (including the bootstrap default).
+   * Sessions lose their accounting slot and appear under Ungrouped; logs and
+   * directories stay untouched.
    */
   delete(workspaceId: string): { ok: true; movedSessionIds: string[] } | { ok: false; reason: string } {
-    if (workspaceId === this.defaultId()) {
-      return { ok: false, reason: "cannot delete default workspace" };
-    }
     if (!this.workspaces.has(workspaceId)) {
       return { ok: false, reason: `unknown workspaceId: ${workspaceId}` };
     }
-    const moved = [...(this.sessionOrder.get(workspaceId) ?? [])];
-    const def = this.defaultId();
-    for (const sid of moved) {
-      this.attachSession(sid, def);
+    const released = new Set<string>(this.sessionOrder.get(workspaceId) ?? []);
+    for (const [sid, ws] of this.membership) {
+      if (ws === workspaceId) released.add(sid);
+    }
+    for (const sid of released) {
+      this.membership.delete(sid);
+      this.removeFromOrder(workspaceId, sid);
     }
     this.workspaces.delete(workspaceId);
     this.sessionOrder.delete(workspaceId);
     const idx = this.order.indexOf(workspaceId);
     if (idx >= 0) this.order.splice(idx, 1);
-    return { ok: true, movedSessionIds: moved };
+    return { ok: true, movedSessionIds: [...released] };
   }
 
   /** Reorder workspaces so `workspaceId` sits immediately before `beforeId`. */
@@ -196,9 +204,8 @@ export class FaceWorkspaceRegistry {
     if (this.archived.has(sessionId) || this.archived.has(beforeSessionId)) {
       return undefined;
     }
-    const targetWs =
-      this.membership.get(beforeSessionId) ?? this.defaultId();
-    if (!this.workspaces.has(targetWs)) return undefined;
+    const targetWs = this.membership.get(beforeSessionId);
+    if (targetWs === undefined || !this.workspaces.has(targetWs)) return undefined;
     this.attachSession(sessionId, targetWs);
     const bucket = this.sessionOrder.get(targetWs) ?? [];
     const from = bucket.indexOf(sessionId);
@@ -223,20 +230,11 @@ export class FaceWorkspaceRegistry {
         (sid) =>
           allSessionIds.includes(sid) &&
           !this.archived.has(sid) &&
-          (this.membership.get(sid) ?? this.defaultId()) === id,
+          this.membership.get(sid) === id,
       );
       byWs.set(id, ordered);
       for (const sid of ordered) assigned.add(sid);
     }
-
-    const def = this.defaultId();
-    const orphanBucket = byWs.get(def) ?? [];
-    for (const sessionId of allSessionIds) {
-      if (this.archived.has(sessionId) || assigned.has(sessionId)) continue;
-      orphanBucket.push(sessionId);
-    }
-    byWs.set(def, orphanBucket);
-    this.sessionOrder.set(def, orphanBucket);
 
     const items = this.order.map((id) => this.view(id, byWs.get(id) ?? [])!);
     return {
@@ -342,15 +340,28 @@ export class FaceWorkspaceRegistry {
     const root = path.resolve(fallbackRoot);
     const defaultId = "ws_default";
     const now = new Date().toISOString();
-    this.workspaces.set(defaultId, {
-      workspaceId: defaultId,
-      path: root,
-      title: path.basename(root) || "workspace",
-      createdAt: now,
-      updatedAt: now,
-    });
-    this.order.push(defaultId);
-    this.sessionOrder.set(defaultId, []);
+    const persistedDefault = doc.entries[defaultId];
+    const wantsDefault =
+      doc.order.includes(defaultId) ||
+      persistedDefault !== undefined ||
+      (doc.order.length === 0 && Object.keys(doc.entries).length === 0);
+    if (wantsDefault) {
+      const row = persistedDefault ?? {
+        path: root,
+        title: path.basename(root) || "workspace",
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.workspaces.set(defaultId, {
+        workspaceId: defaultId,
+        path: path.resolve(row.path),
+        title: row.title,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      });
+      if (!this.order.includes(defaultId)) this.order.push(defaultId);
+      this.sessionOrder.set(defaultId, []);
+    }
 
     for (const id of doc.order) {
       if (id === defaultId) continue;

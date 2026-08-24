@@ -34,6 +34,39 @@ function run(cmd, args, cwd = ROOT, extraEnv = {}) {
   if (r.status !== 0) process.exit(r.status ?? 1);
 }
 
+/** npm via node npm-cli.js — same argv on Windows / Linux / macOS (no shell). */
+function npmSpawn(args, opts = {}) {
+  const npmCli = path.join(
+    path.dirname(process.execPath),
+    "node_modules",
+    "npm",
+    "bin",
+    "npm-cli.js",
+  );
+  const cmd = existsSync(npmCli) ? process.execPath : process.platform === "win32" ? "npm.cmd" : "npm";
+  const npmArgs = existsSync(npmCli) ? [npmCli, ...args] : args;
+  return spawnSync(cmd, npmArgs, {
+    cwd: opts.cwd ?? ROOT,
+    encoding: opts.encoding ?? "utf8",
+    stdio: opts.stdio ?? "pipe",
+    shell: false,
+    env: { ...process.env, ...opts.env },
+  });
+}
+
+function extractTarGz(tgzPath, destDir) {
+  run("tar", ["-xzf", tgzPath, "-C", destDir, "--strip-components=1"]);
+}
+
+/** After staging on any OS, npm global installs must find these sharp runtimes. */
+const SHARP_PLATFORM_SPOT_CHECKS = [
+  "@img/sharp-linux-x64",
+  "@img/sharp-libvips-linux-x64",
+  "@img/sharp-darwin-arm64",
+  "@img/sharp-darwin-x64",
+  "@img/sharp-win32-x64",
+];
+
 /** pnpm deploy 用 junction；tar/npm 装完解析不到嵌套包。把 .pnpm 里的包抬到 node_modules 顶层。 */
 function hoistPnpmStore(nm) {
   const pnpmDir = path.join(nm, ".pnpm");
@@ -74,6 +107,59 @@ function bundledNames(nm) {
     } else names.push(name);
   }
   return names;
+}
+
+/**
+ * pnpm deploy on one OS only installs that host's sharp optional binaries.
+ * Stage on Windows / Linux / macOS: npm pack + tar pulls every missing @img/* optional.
+ */
+function bundleSharpPlatforms(stageDir) {
+  const sharpPkgPath = path.join(stageDir, "node_modules", "sharp", "package.json");
+  if (!existsSync(sharpPkgPath)) return;
+
+  const sharpPkg = JSON.parse(readFileSync(sharpPkgPath, "utf8").replace(/^\uFEFF/, ""));
+  const optional = sharpPkg.optionalDependencies ?? {};
+  const missing = [];
+  for (const [name, ver] of Object.entries(optional)) {
+    if (!name.startsWith("@img/")) continue;
+    const pkgPath = path.join(stageDir, "node_modules", ...name.split("/"), "package.json");
+    if (!existsSync(pkgPath)) missing.push([name, ver]);
+  }
+  if (missing.length === 0) return;
+
+  const tmp = path.join(stageDir, ".sharp-platform-bundle");
+  rmSync(tmp, { recursive: true, force: true });
+  mkdirSync(tmp, { recursive: true });
+
+  console.log(`stage: bundling ${missing.length} sharp platform packages (${process.platform})`);
+  for (const [name, ver] of missing) {
+    const pack = npmSpawn(["pack", `${name}@${ver}`, "--pack-destination", tmp], { cwd: tmp });
+    if (pack.status !== 0) {
+      console.error(`stage: npm pack failed for ${name}@${ver}`);
+      process.stderr.write(pack.stderr || pack.stdout || "");
+      process.exit(pack.status ?? 1);
+    }
+    const tgz = pack.stdout.trim().split(/\r?\n/).filter(Boolean).pop();
+    if (!tgz) {
+      console.error(`stage: npm pack produced no tarball for ${name}@${ver}`);
+      process.exit(1);
+    }
+    const tgzPath = path.isAbsolute(tgz) ? tgz : path.join(tmp, tgz);
+    const dest = path.join(stageDir, "node_modules", ...name.split("/"));
+    rmSync(dest, { recursive: true, force: true });
+    mkdirSync(dest, { recursive: true });
+    extractTarGz(tgzPath, dest);
+    rmSync(tgzPath, { force: true });
+  }
+  rmSync(tmp, { recursive: true, force: true });
+
+  for (const required of SHARP_PLATFORM_SPOT_CHECKS) {
+    const pkgPath = path.join(stageDir, "node_modules", ...required.split("/"), "package.json");
+    if (!existsSync(pkgPath)) {
+      console.error(`stage: missing ${required} after sharp platform bundle`);
+      process.exit(1);
+    }
+  }
 }
 
 /** pnpm deploy omits gitignored dist/; copy compiled context runtime into the bundle. */
@@ -143,6 +229,7 @@ delete staged.private;
 hoistPnpmStore(path.join(STAGE, "node_modules"));
 rmSync(path.join(STAGE, "node_modules", ".pnpm"), { recursive: true, force: true });
 syncContextDistIntoStage(STAGE);
+bundleSharpPlatforms(STAGE);
 
 for (const rel of [
   "node_modules/@xrkseek/xrk-file-reference/dist/grammar.js",

@@ -3,7 +3,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import sharp, { type Sharp } from 'sharp'
+import type { Sharp } from 'sharp'
 import { AttachmentError } from '@xrkseek/attachment'
 import type {
   ImageMediaType,
@@ -15,6 +15,7 @@ import type {
 import { hasLowColourCount } from './normalization.js'
 import { encodeFirstWithinLimit, isExhaustedEncoding } from './encoding.js'
 import { detectImage, encodedAlphaIsCompatible, probeImage } from './image.js'
+import { getSharp } from './sharp-module.js'
 
 /** Transform version included in every cache and upload-index identity. */
 export const REQUEST_IMAGE_TRANSFORM_VERSION = 'request-image-v4'
@@ -109,12 +110,13 @@ export function requestImageVariantId(
   return `sha256:${digest(descriptor(attachment, policy))}`
 }
 
-function pipeline(attachment: StoredImageAttachment, width: number, height: number): Sharp {
-  return sourcePipeline(attachment)
+async function pipeline(attachment: StoredImageAttachment, width: number, height: number): Promise<Sharp> {
+  return (await sourcePipeline(attachment))
     .resize({ width, height, fit: 'inside', withoutEnlargement: true })
 }
 
-function sourcePipeline(attachment: StoredImageAttachment): Sharp {
+async function sourcePipeline(attachment: StoredImageAttachment): Promise<Sharp> {
+  const sharp = await getSharp()
   return sharp(attachment.data, { failOn: 'error', limitInputPixels: false }).toColourspace('srgb')
 }
 
@@ -133,14 +135,14 @@ async function encoded(
   return { data: new Uint8Array(data), mediaType, width: info.width, height: info.height }
 }
 
-function encodingAttempts(
+async function encodingAttempts(
   attachment: StoredImageAttachment,
   width: number,
   height: number,
   hasAlpha: boolean,
   lowColour: boolean,
-): Array<() => Promise<EncodedRequestImage>> {
-  const prepared = pipeline(attachment, width, height)
+): Promise<Array<() => Promise<EncodedRequestImage>>> {
+  const prepared = await pipeline(attachment, width, height)
   const webp = REQUEST_IMAGE_QUALITIES.map(quality => (
     () => encoded(prepared.clone(), 'image/webp', quality)
   ))
@@ -167,10 +169,10 @@ async function createRequestImage(
       height: attachment.ref.height,
     }
   }
-  const lowColour = await hasLowColourCount(sourcePipeline(attachment))
+  const lowColour = await hasLowColourCount(await sourcePipeline(attachment))
   for (;;) {
     const encodedVersion = await encodeFirstWithinLimit(
-      encodingAttempts(attachment, dimensions.width, dimensions.height, hasAlpha, lowColour),
+      await encodingAttempts(attachment, dimensions.width, dimensions.height, hasAlpha, lowColour),
       policy.maxBytes,
     )
     if (!isExhaustedEncoding(encodedVersion)) return encodedVersion

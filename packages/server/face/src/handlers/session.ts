@@ -101,10 +101,10 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       : runtime.ensureSession();
   runtime.watchSession(sessionId);
   runtime.sessionCwds.set(sessionId, attach.cwd);
-  const workspace = runtime.workspaces.attachSession(
-    sessionId,
-    attach.workspaceId,
-  );
+  const workspace =
+    attach.workspaceId === undefined
+      ? undefined
+      : runtime.workspaces.attachSession(sessionId, attach.workspaceId);
   if (agentPreset) {
     runtime.sessionAgentPresets.set(
       sessionId,

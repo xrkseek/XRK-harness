@@ -113,14 +113,13 @@ describe("Face host stream (DSH host frames)", () => {
           f.type === "host/workspace-removed" && f.workspaceId === extraId,
       ),
     ).toBe(true);
-    const afterDelete = host.filter(
-      (f) => f.type === "host/workspace-changed",
-    );
-    const lastChanged = afterDelete[afterDelete.length - 1];
-    expect(lastChanged).toMatchObject({
-      type: "host/workspace-changed",
-      workspace: { workspaceId: "ws_default" },
-    });
+    expect(
+      host.some(
+        (f) =>
+          f.type === "host/workspace-changed"
+          && f.workspace.workspaceId === "ws_default",
+      ),
+    ).toBe(false);
   });
 
   it("session.fork publishes session-added as subagent", async () => {

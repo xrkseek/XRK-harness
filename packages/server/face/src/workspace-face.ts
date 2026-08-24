@@ -418,7 +418,6 @@ export async function workspaceDeleteFace(
         },
       };
     }
-    // e.g. cannot delete default workspace
     return {
       ok: false,
       error: {
@@ -429,26 +428,10 @@ export async function workspaceDeleteFace(
     };
   }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
-  const defPath = runtime.workspaces.get(runtime.workspaces.defaultId())?.path;
-  if (defPath) {
-    for (const sid of result.movedSessionIds) {
-      runtime.sessionCwds.set(sid, defPath);
-    }
-  }
   runtime.bus.publishHost({
     type: "host/workspace-removed",
     workspaceId,
   });
-  const listed = runtime.workspaces.list(runtime.store.list());
-  const def = listed.items.find(
-    (w) => w.workspaceId === runtime.workspaces.defaultId(),
-  );
-  if (def) {
-    runtime.bus.publishHost({
-      type: "host/workspace-changed",
-      workspace: def,
-    });
-  }
   return {
     ok: true,
     value: { deleted: true as const },

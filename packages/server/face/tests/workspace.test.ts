@@ -178,7 +178,7 @@ describe("Face workspace U2", () => {
     expect(v.items[0]?.workspaceId).toBe("ws_default");
     expect(v.items[0]?.path).toBe(path.resolve(root));
     expect(v.items[0]?.title).toBe(path.basename(root));
-    expect(v.items[0]?.sessionIds).toContain("sess_a");
+    expect(v.items[0]?.sessionIds).toEqual([]);
     expect(v).not.toHaveProperty("entries");
     expect(v).not.toHaveProperty("exists");
   });
@@ -320,13 +320,25 @@ describe("Face workspace U2", () => {
       expect(items.map((w) => w.workspaceId)).toEqual(["ws_default"]);
     }
 
-    const refuseDefault = await dispatchFaceMethod(
+    const deleteDefault = await dispatchFaceMethod(
       runtime,
       "workspace.delete",
       "d2",
       { workspaceId: "ws_default" },
     );
-    expect(refuseDefault.result.ok).toBe(false);
+    expect(deleteDefault.result.ok).toBe(true);
+    if (deleteDefault.result.ok) {
+      expect(deleteDefault.result.value).toEqual({ deleted: true });
+    }
+
+    const afterDefault = await dispatchFaceMethod(runtime, "workspace.list", "l2", {});
+    expect(afterDefault.result.ok).toBe(true);
+    if (afterDefault.result.ok) {
+      const items = (
+        afterDefault.result.value as { items: { workspaceId: string }[] }
+      ).items;
+      expect(items).toEqual([]);
+    }
   });
 
   it("workspace.create persists to workspaces.json and reloads", async () => {
