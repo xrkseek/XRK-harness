@@ -1,0 +1,56 @@
+function headersOf(value) {
+			const headers = asRecord(value);
+			if (headers === null || !Array.isArray(headers.headers)) return null;
+			for (const h of headers.headers) {
+				if (h === null || typeof h !== "object") return null;
+				const entry = h;
+				if (!Array.isArray(entry.tools)) return null;
+				if (entry.system !== void 0 && typeof entry.system !== "string") return null;
+			}
+			return headers;
+		}
+		//#endregion
+		//#region src/client/assemble.ts
+		/** The header epoch in force at `seq` (last logged before it), or the newest. */
+		function headerAt(headers, seq) {
+			if (headers === null || headers.headers.length === 0) return null;
+			if (seq === null) return headers.headers[headers.headers.length - 1];
+			for (let i = headers.headers.length - 1; i >= 0; i--) if (headers.headers[i].seq < seq) return headers.headers[i];
+			return null;
+		}
+		/**
+		* Reconstruct the assembled surface for one step (`seq` = the request
+		* record's seq) or the live surface (`seq` = null).
+		*/
+		function assemble(data, headers, seq) {
+			const live = seq === null;
+			let nodes;
+			if (live) nodes = data.nodes.slice();
+			else {
+				const picked = [];
+				for (const n of data.nodes) if (n.seq < seq) picked.push(n);
+				for (const n of data.archive) if (n.seq < seq && n.gone !== void 0 && n.gone > seq) picked.push(n);
+				nodes = picked;
+			}
+			nodes.sort((a, b) => a.seq - b.seq);
+			let missingLive = 0;
+			if (data.droppedNodes > 0) {
+				if (live || data.surfaceFloor !== void 0 && seq > data.surfaceFloor) missingLive = data.droppedNodes;
+			}
+			const approximate = !live && data.archiveFloor !== void 0 && seq < data.archiveFloor;
+			return {
+				live,
+				header: headerAt(headers, seq),
+				nodes,
+				missingLive,
+				approximate
+			};
+		}
+		//#endregion
+		//#region src/client/react.ts
+		const React = require("react");
+		const h = React.createElement;
+		const ReactDOM = require("react-dom");
+		//#endregion
+		//#region src/client/components/nodes.tsx
+		/** One-line preview

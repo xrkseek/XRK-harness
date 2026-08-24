@@ -1,0 +1,13 @@
+function countOf(asm, c) {
+			if (c === "system") return asm.header !== null && asm.header.system !== void 0 ? 1 : 0;
+			if (c === "tools") return asm.header !== null ? asm.header.tools.length : 0;
+			return byCatOf(asm)[c]?.length ?? 0;
+		}
+		/** The last request of `turn` in a seq-ordered timeline, or null. */
+		function lastOfTurn(requests, turn) {
+			for (let i = requests.length - 1; i >= 0; i--) if ((requests[i].turn ?? 0) === turn) return requests[i];
+			return null;
+		}
+		function makeContextBrowser(kit, StackedBar) {
+			const { t, fmt, fmtTime, catLabel } = kit;
+			const nodeText = mak

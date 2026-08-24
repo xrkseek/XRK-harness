@@ -9,6 +9,7 @@ import {
   autoReviewClassifierUnavailable,
   honestReady,
 } from "./honest-envelope.js";
+import { parseAutoReviewSlashInput } from "./auto-review-slash.js";
 import { classifyAutoReviewHeuristic } from "./host-feature-bridge.js";
 import { hostIncomplete } from "./meta.js";
 import { createPersistedSettingsDocStore } from "./persisted-settings-store.js";
@@ -219,23 +220,21 @@ export function syncAutoReviewSlashCommand(
   options: AutoReviewOptions,
   args: string,
 ): void {
-  const input = args.trim();
-  if (input === "on" || input === "") {
+  const action = parseAutoReviewSlashInput(args);
+  if (!action) return;
+  if (action.kind === "enable") {
     setEnabled(options, true);
     return;
   }
-  if (input === "off") {
+  if (action.kind === "disable") {
     setEnabled(options, false);
     return;
   }
-  const approve = /^approve(?:\s+(\d+))?$/u.exec(input);
-  if (!approve) return;
-  const index = Number(approve[1] ?? "1") - 1;
   const stats = loadStats(options);
-  if (index < 0 || index >= stats.recentDenies.length) return;
+  if (action.index < 0 || action.index >= stats.recentDenies.length) return;
   saveStats(options, {
     ...stats,
-    recentDenies: stats.recentDenies.filter((_, i) => i !== index),
+    recentDenies: stats.recentDenies.filter((_, i) => i !== action.index),
     allows: stats.allows + 1,
   });
 }

@@ -2,6 +2,7 @@
  * Face → dsh-better-sidebar sidechat / open.external bridge.
  */
 import type { ShellService } from "@xrkseek/exec-shell";
+import type { SessionEvent } from "@xrkseek/protocol";
 import {
   dispatchFaceMethod,
   hostOpenPath,
@@ -14,6 +15,59 @@ const JOB_OUTPUT_LIMIT = 256_000;
 
 function parentOf(face: FaceRuntime, childId: string): string | undefined {
   return face.subagents.getByChild(childId)?.parentSessionId;
+}
+
+function collectDescendantIds(face: FaceRuntime, rootSessionId: string): string[] {
+  const out: string[] = [];
+  const queue = [rootSessionId];
+  const seen = new Set<string>([rootSessionId]);
+  while (queue.length > 0) {
+    const parent = queue.shift()!;
+    for (const link of face.subagents.list(parent)) {
+      if (seen.has(link.childSessionId)) continue;
+      seen.add(link.childSessionId);
+      out.push(link.childSessionId);
+      queue.push(link.childSessionId);
+    }
+  }
+  return out;
+}
+
+function liveLineFromEvents(
+  events: readonly SessionEvent[],
+): { text?: string; tool?: string; args?: string } | undefined {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const ev = events[i]!;
+    if (ev.type === "assistant/chunk") {
+      if (ev.kind === "tool-call" && ev.toolName) {
+        return {
+          tool: ev.toolName,
+          ...(ev.argumentsDelta
+            ? { args: ev.argumentsDelta.slice(0, 120) }
+            : {}),
+        };
+      }
+      const text = ev.text?.trim();
+      if (text) return { text: text.slice(0, 200) };
+      continue;
+    }
+    if (ev.type === "assistant/message") {
+      const text = ev.content?.trim();
+      if (text) return { text: text.slice(0, 200) };
+      continue;
+    }
+    if (ev.type === "tool/call") {
+      const raw =
+        typeof ev.call.arguments === "string"
+          ? ev.call.arguments
+          : JSON.stringify(ev.call.arguments ?? {});
+      return {
+        tool: ev.call.name,
+        args: raw.slice(0, 120),
+      };
+    }
+  }
+  return undefined;
 }
 
 export function createSidebarFaceBridgeFromFace(
@@ -193,6 +247,19 @@ export function createSidebarFaceBridgeFromFace(
         (forked.result.value as { sessionId: string }).sessionId,
       );
       return { sessionId: childId };
+    },
+
+    async listSubagentsLive(rootSessionId) {
+      const live: Record<
+        string,
+        { text?: string; tool?: string; args?: string }
+      > = {};
+      for (const childId of collectDescendantIds(face, rootSessionId)) {
+        if (!face.drain.isActive(childId)) continue;
+        const events = face.store.get(childId).events;
+        live[childId] = liveLineFromEvents(events) ?? {};
+      }
+      return { live };
     },
   };
 }

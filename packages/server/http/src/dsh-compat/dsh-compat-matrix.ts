@@ -206,8 +206,33 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
   },
 ] as const;
 
-/** Reserved for future XRK product capabilities (empty; see docs/community-plugins). */
-export const DSH_COMPAT_KNOWN_GAPS: readonly DshCompatCapabilityRow[] = [] as const;
+/** Reserved product gaps (aligned with docs/community-plugins · docs/status). */
+export const DSH_COMPAT_KNOWN_GAPS: readonly DshCompatCapabilityRow[] = [
+  {
+    id: "im-long-lived-gateway",
+    coverage: "missing",
+    genericModule: "im-*-bridge",
+    note: "Cloud long-lived IM gateway (webhook / short requests today)",
+  },
+  {
+    id: "taskflow-external-runtime",
+    coverage: "missing",
+    genericModule: "tongflow-node-runtime.ts",
+    note: "Optional vendor Python node runtime binding",
+  },
+  {
+    id: "cloud-vision-routing",
+    coverage: "honest-stub",
+    genericModule: "vision.ts",
+    note: "Cloud vision LLM routing (local OCR bridge today)",
+  },
+  {
+    id: "memory-embeddings",
+    coverage: "honest-stub",
+    genericModule: "mnemon.ts · noema.ts",
+    note: "Vector embedding / memory engine host",
+  },
+] as const;
 
 export function listDshCompatGenericIds(): readonly string[] {
   return DSH_COMPAT_GENERIC_CAPABILITIES.map((r) => r.id);

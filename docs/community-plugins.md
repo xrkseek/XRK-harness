@@ -57,6 +57,7 @@ When installing community packages **beyond the product-shell built-in clients**
 | Vision | paste/analyze · 本地 OCR | 云端 vision LLM 路由 / Cloud vision LLM routing |
 | 检索与记忆 / Search & memory | 本地 rg · keyword · 可选远程 | embedding 宿主 / Embedding host |
 | 自动审阅 / Auto-review | 启发式 classify · slash | 可插拔 classifier / Pluggable classifier |
+| 上下文浏览器 / Context browser | Face **`contextTimeline`** / **`contextHeaders`** · **`costUsage`** 计价 | 完整 Cordis Host timeline fold / Full Host timeline fold |
 | 移动访问 / Mobile access | 配对 · LAN/WAN PIN · 隧道 HTTP+WS | — |
 
 ## 回归 fixture / Regression Fixtures

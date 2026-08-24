@@ -3,6 +3,10 @@
  */
 import { providerUsageSample, type SessionEvent } from "@xrkseek/protocol";
 import type { ProjectionDefinition } from "../registry.js";
+import {
+  bundledCostMeterPriceConfig,
+  estimateUsageCostUsd,
+} from "../../cost-meter-pricing.js";
 
 export interface CostUsageBuckets {
   input: number;
@@ -65,16 +69,39 @@ function modelKeyFromRoute(
   return "deepseek:unknown";
 }
 
+const PRICE_CONFIG = bundledCostMeterPriceConfig();
+
 function bucketsFromUsage(
   usage: NonNullable<ReturnType<typeof providerUsageSample>>["usage"],
+  route: { provider: string; model: string } | null,
 ): CostUsageBuckets {
+  const input = usage.inputTokens;
+  const output = usage.outputTokens;
+  const cacheRead = usage.cacheReadTokens ?? 0;
+  const cacheWrite = usage.cacheWriteTokens ?? 0;
+  const reasoning = usage.reasoningTokens ?? 0;
+  const cost =
+    route !== null
+      ? estimateUsageCostUsd(
+          {
+            provider: route.provider,
+            model: route.model,
+            input,
+            output,
+            cacheRead,
+            cacheWrite,
+            reasoning,
+          },
+          PRICE_CONFIG,
+        )
+      : 0;
   return {
-    input: usage.inputTokens,
-    output: usage.outputTokens,
-    cacheRead: usage.cacheReadTokens ?? 0,
-    cacheWrite: usage.cacheWriteTokens ?? 0,
-    reasoning: usage.reasoningTokens ?? 0,
-    cost: 0,
+    input,
+    output,
+    cacheRead,
+    cacheWrite,
+    reasoning,
+    cost,
   };
 }
 
@@ -157,7 +184,7 @@ export function createCostUsageProjectionUnit(): ProjectionDefinition<
       const sample = providerUsageSample(event);
       if (!sample) return state;
       const modelKey = modelKeyFromRoute(state.route, event);
-      const buckets = bucketsFromUsage(sample.usage);
+      const buckets = bucketsFromUsage(sample.usage, state.route);
       const previous =
         state.last !== null &&
         state.last.turnId === sample.turnId &&

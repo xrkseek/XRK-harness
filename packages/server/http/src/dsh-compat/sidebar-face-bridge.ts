@@ -29,4 +29,12 @@ export interface SidebarFaceBridge {
     sessionId: string,
     beforeSeq: number,
   ) => Promise<{ sessionId: string }>;
+  /** Live activity lines for dsh-better-sidebar `subagents.live`. */
+  readonly listSubagentsLive?: (
+    rootSessionId: string,
+  ) => Promise<{
+    readonly live: Readonly<
+      Record<string, { readonly text?: string; readonly tool?: string; readonly args?: string }>
+    >;
+  }>;
 }

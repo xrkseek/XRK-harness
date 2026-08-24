@@ -956,6 +956,69 @@ describe("dsh-compat adapters", () => {
     });
   });
 
+  it("classifies auto-review when enabled via heuristic bridge", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-ar-"));
+    temps.push(root);
+    const handler = createDshCompatPublicHandler({ xrkHome: root });
+    await withPublicHandler(handler, async (base) => {
+      await fetch(`${base}/auto-review/toggle`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled: true }),
+      });
+      const res = await fetch(`${base}/auto-review/classify`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ toolName: "bash", args: "rm -rf /" }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        verdict?: string;
+        classifier?: string;
+      };
+      expect(body.ok).toBe(true);
+      expect(body.verdict).toBeDefined();
+      expect(body.classifier).toBe("xrk-heuristic");
+    });
+  });
+
+  it("analyzes vision-router paste payloads", async () => {
+    const handler = createDshCompatPublicHandler({});
+    await withPublicHandler(handler, async (base) => {
+      const res = await fetch(`${base}/_dsh/vision-router/analyze`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: "hello vision" }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        analyzed?: boolean;
+        images?: unknown[];
+        adapter?: string;
+      };
+      expect(body.ok).toBe(true);
+      expect(Array.isArray(body.images)).toBe(true);
+      expect(body.adapter).toBe("xrk-dsh-compat");
+    });
+  });
+
+  it("returns live map shape for subagents.live sidebar RPC", async () => {
+    const handler = createDshCompatPublicHandler({});
+    await withPublicHandler(handler, async (base) => {
+      const res = await fetch(`${base}/sidebar/api/subagents.live`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rootSessionId: "sess_root" }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        value?: { live?: Record<string, unknown> };
+      };
+      expect(body.ok).toBe(true);
+      expect(body.value?.live).toBeTypeOf("object");
+    });
+  });
+
   it("serves modsearch / usage-stats / turn-rewind / releases adapters", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-extra-adapters-"));
     temps.push(root);
@@ -1751,13 +1814,20 @@ describe("dsh-compat matrix", () => {
     } = await import("../src/dsh-compat/dsh-compat-matrix.js");
     expect(listDshCompatGenericIds().length).toBeGreaterThan(10);
     expect(listDshCompatGenericIds()).toContain("dynamic-cordis-runner");
-    expect(listDshCompatGapIds()).toEqual([]);
+    expect(listDshCompatGapIds()).toEqual([
+      "im-long-lived-gateway",
+      "taskflow-external-runtime",
+      "cloud-vision-routing",
+      "memory-embeddings",
+    ]);
     expect(listDshCompatGapIds()).not.toContain("cordis-fiber-subprocess");
     expect(
       DSH_COMPAT_GENERIC_CAPABILITIES.some((r) => r.id === "honest-http-catchall"),
     ).toBe(true);
     expect(
-      DSH_COMPAT_KNOWN_GAPS.some((r) => r.coverage === "missing"),
-    ).toBe(false);
+      DSH_COMPAT_KNOWN_GAPS.every((r) =>
+        ["missing", "honest-stub"].includes(r.coverage),
+      ),
+    ).toBe(true);
   });
 });

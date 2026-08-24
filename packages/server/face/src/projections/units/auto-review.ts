@@ -1,4 +1,5 @@
 import type { SessionEvent } from "@xrkseek/protocol";
+import { parseAutoReviewSlashInput } from "../../auto-review-slash.js";
 import type { ProjectionDefinition } from "../registry.js";
 
 export interface AutoReviewProjection {
@@ -75,23 +76,15 @@ function applyCommandArgs(
   state: AutoReviewUnitState,
   args: string,
 ): AutoReviewUnitState {
-  const input = args.trim();
-  if (input === "on" || input === "") {
-    return { ...state, enabled: true };
-  }
-  if (input === "off") {
-    return { ...state, enabled: false };
-  }
-  const approve = /^approve(?:\s+(\d+))?$/u.exec(input);
-  if (approve) {
-    const index = Number(approve[1] ?? "1") - 1;
-    if (index >= 0 && index < state.recentDenies.length) {
-      const recentDenies = state.recentDenies.filter((_, i) => i !== index);
-      return { ...state, recentDenies, allows: state.allows + 1 };
-    }
+  const action = parseAutoReviewSlashInput(args);
+  if (!action) return state;
+  if (action.kind === "enable") return { ...state, enabled: true };
+  if (action.kind === "disable") return { ...state, enabled: false };
+  if (action.index < 0 || action.index >= state.recentDenies.length) {
     return state;
   }
-  return state;
+  const recentDenies = state.recentDenies.filter((_, i) => i !== action.index);
+  return { ...state, recentDenies, allows: state.allows + 1 };
 }
 
 export function createAutoReviewProjectionUnit(): ProjectionDefinition<

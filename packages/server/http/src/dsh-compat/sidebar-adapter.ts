@@ -377,8 +377,17 @@ async function dispatchMethod(
       }
       return ok(await bridge.killJob(jobId, reason));
     }
-    case "subagents.live":
-      return ok({ nodes: [] });
+    case "subagents.live": {
+      const bridge = options.sidebarFace;
+      const rootSessionId =
+        typeof payload.rootSessionId === "string"
+          ? payload.rootSessionId.trim()
+          : "";
+      if (!bridge?.listSubagentsLive || !rootSessionId) {
+        return ok({ live: {} });
+      }
+      return ok(await bridge.listSubagentsLive(rootSessionId));
+    }
     case "browser.probe": {
       const rawUrl =
         typeof payload.url === "string"

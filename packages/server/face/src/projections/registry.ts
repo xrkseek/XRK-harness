@@ -112,6 +112,7 @@ export interface FaceProjectionMap {
   /** Header snapshots for dsh-context browser (may be empty). */
   readonly contextHeaders: {
     readonly headers: readonly {
+      readonly seq: number;
       readonly system?: string;
       readonly tools: readonly unknown[];
     }[];

@@ -49,6 +49,7 @@ export default defineConfig({
       pkg("session-projection", "packages/session/session-projection/src/index.ts"),
       pkg("web-runtime", "packages/web-runtime/src/index.ts"),
       pkg("harness", "packages/sdk/src/index.ts"),
+      pkg("client-ui-slots", "packages/client/ui-slots/src/index.ts"),
       pkg("preset-minimal", "presets/minimal/preset.ts"),
       pkg("preset-harness", "presets/harness/preset.ts"),
       pkg("preset-server", "presets/server/preset.ts"),

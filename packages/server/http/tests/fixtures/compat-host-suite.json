@@ -21,6 +21,7 @@
     "dsh-mobile": { "version": "1.0.0", "kind": "client" },
     "dsh-tongflow": { "version": "1.0.0", "kind": "client" },
     "dsh-cost-meter": { "version": "1.5.0", "kind": "client" },
+    "dsh-auto-review": { "version": "1.0.0", "kind": "client" },
     "dsh-context": { "version": "0.25.0", "kind": "client" },
     "@liustack/modsearch": { "version": "1.0.0", "kind": "client" },
     "@ychris12138/dsh-usage-stats": { "version": "1.0.0", "kind": "client" },

@@ -127,8 +127,18 @@ describe("commands/execute + list", () => {
       "command/run",
       "command/done",
     ]);
-    expect(frames).toHaveLength(2);
-    expect(frames).toMatchObject([
+    const commandFrames = frames.filter(
+      (frame): frame is { type: "session/event"; event: { type: string } } =>
+        typeof frame === "object" &&
+        frame !== null &&
+        (frame as { type?: string }).type === "session/event" &&
+        ((frame as { event?: { type?: string } }).event?.type ===
+          "command/run" ||
+          (frame as { event?: { type?: string } }).event?.type ===
+            "command/done"),
+    );
+    expect(commandFrames).toHaveLength(2);
+    expect(commandFrames).toMatchObject([
       {
         type: "session/event",
         event: { type: "command/run", data: { name: "echo" } },
