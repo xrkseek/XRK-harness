@@ -1,4 +1,5 @@
 import { access, readdir, readFile, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import type { InstructionChange, WorkspaceBudgetEvent } from "./durable-inject.js";
 
@@ -15,6 +16,13 @@ export interface CollectEcosystemInstructionsOptions {
     left: number;
     events: WorkspaceBudgetEvent[];
   };
+  /**
+   * Also inject user-home convention paths (`~/.agents`, `~/.xrk`, …).
+   * Default true — lower priority than workspace; workspace wins on duplicate body.
+   */
+  readonly includeUserHome?: boolean;
+  /** Test override for user-home root (default `os.homedir()`). */
+  readonly homeDir?: string;
 }
 
 async function exists(p: string): Promise<boolean> {
@@ -71,6 +79,16 @@ function stripMdcFrontmatter(raw: string): string {
   return body.slice(end + 4).replace(/^\r?\n/, "");
 }
 
+/** Frontmatter gate: `xrk-inject: false` skips Host product inject (Cursor may still read the rule). */
+function mdcHostInjectEnabled(raw: string): boolean {
+  const body = raw.replace(/^\uFEFF/, "");
+  if (!body.startsWith("---")) return true;
+  const end = body.indexOf("\n---", 3);
+  if (end <= 0) return true;
+  const fm = body.slice(3, end);
+  return !/^xrk-inject:\s*false\s*$/im.test(fm);
+}
+
 function isAgentsImportOnly(text: string): boolean {
   const trimmed = text.trim();
   return /^@AGENTS\.md\s*$/i.test(trimmed);
@@ -120,6 +138,7 @@ async function pushMarkdownDir(
     if (!/\.(md|mdc|markdown)$/i.test(name)) continue;
     const raw = await readIfExists(abs);
     if (!raw?.trim()) continue;
+    if (name.endsWith(".mdc") && !mdcHostInjectEnabled(raw)) continue;
     let body = raw;
     if (options?.stripMdc || name.endsWith(".mdc")) {
       body = stripMdcFrontmatter(raw);
@@ -143,101 +162,125 @@ const PRODUCT_STANDING_FILES = [
   "AGENTS.md",
 ] as const;
 
-/**
- * Gather agent instruction markdown from multi-vendor convention paths.
- * Low → high priority in output order (later sections appear closer to the turn).
- *
- * Skills trees and `.agents/skills` are handled separately (skill catalog).
- */
-export async function collectEcosystemInstructions(
-  options: CollectEcosystemInstructionsOptions,
-): Promise<InstructionSection[]> {
-  const root = path.resolve(options.root);
-  const productDir = path.resolve(options.productDir);
-  const sections: InstructionSection[] = [];
-  const seen = new Set<string>();
+type ConventionLayerOptions = {
+  readonly includeCodexRoot?: boolean;
+  readonly includeGithub?: boolean;
+};
 
-  // Codex
+/** Multi-vendor convention paths under one base directory. */
+async function pushConventionLayer(
+  sections: InstructionSection[],
+  base: string,
+  logicalPrefix: string,
+  budget: CollectEcosystemInstructionsOptions["budget"],
+  seen: Set<string>,
+  options: ConventionLayerOptions = {},
+): Promise<void> {
+  const lp = (suffix: string) =>
+    logicalPrefix ? `${logicalPrefix}${suffix}` : suffix;
+
   await pushFile(
     sections,
-    path.join(root, ".codex", "AGENTS.md"),
-    ".codex/AGENTS.md",
-    options.budget,
+    path.join(base, ".codex", "AGENTS.md"),
+    lp(".codex/AGENTS.md"),
+    budget,
     seen,
   );
-  await pushFile(
-    sections,
-    path.join(root, "CODEX.md"),
-    "CODEX.md",
-    options.budget,
-    seen,
-  );
+  if (options.includeCodexRoot !== false) {
+    await pushFile(
+      sections,
+      path.join(base, "CODEX.md"),
+      lp("CODEX.md"),
+      budget,
+      seen,
+    );
+  }
 
-  // Claude Code
   await pushFile(
     sections,
-    path.join(root, ".claude", "CLAUDE.md"),
-    ".claude/CLAUDE.md",
-    options.budget,
+    path.join(base, ".claude", "CLAUDE.md"),
+    lp(".claude/CLAUDE.md"),
+    budget,
     seen,
   );
   await pushMarkdownDir(
     sections,
-    path.join(root, ".claude", "rules"),
-    ".claude/rules/",
-    options.budget,
+    path.join(base, ".claude", "rules"),
+    lp(".claude/rules/"),
+    budget,
     seen,
   );
 
-  // Vendor-neutral `.agents` (exclude skills/ and notes/ trees)
   await pushFile(
     sections,
-    path.join(root, ".agents", "AGENTS.md"),
-    ".agents/AGENTS.md",
-    options.budget,
+    path.join(base, ".agents", "AGENTS.md"),
+    lp(".agents/AGENTS.md"),
+    budget,
     seen,
   );
   await pushMarkdownDir(
     sections,
-    path.join(root, ".agents", "rules"),
-    ".agents/rules/",
-    options.budget,
+    path.join(base, ".agents", "rules"),
+    lp(".agents/rules/"),
+    budget,
     seen,
   );
+  const agentsCtxDir = path.join(base, ".agents", "context");
+  if (await exists(agentsCtxDir)) {
+    const files = (await readdir(agentsCtxDir)).sort();
+    for (const f of files) {
+      await pushFile(
+        sections,
+        path.join(agentsCtxDir, f),
+        lp(`.agents/context/${f}`),
+        budget,
+        seen,
+      );
+    }
+  }
 
-  // Cursor rules (.mdc)
   await pushMarkdownDir(
     sections,
-    path.join(root, ".cursor", "rules"),
-    ".cursor/rules/",
-    options.budget,
+    path.join(base, ".cursor", "rules"),
+    lp(".cursor/rules/"),
+    budget,
     seen,
     { stripMdc: true },
   );
 
-  // GitHub Copilot / instructions
-  await pushFile(
-    sections,
-    path.join(root, ".github", "copilot-instructions.md"),
-    ".github/copilot-instructions.md",
-    options.budget,
-    seen,
-  );
-  await pushMarkdownDir(
-    sections,
-    path.join(root, ".github", "instructions"),
-    ".github/instructions/",
-    options.budget,
-    seen,
-  );
+  if (options.includeGithub !== false) {
+    await pushFile(
+      sections,
+      path.join(base, ".github", "copilot-instructions.md"),
+      lp(".github/copilot-instructions.md"),
+      budget,
+      seen,
+    );
+    await pushMarkdownDir(
+      sections,
+      path.join(base, ".github", "instructions"),
+      lp(".github/instructions/"),
+      budget,
+      seen,
+    );
+  }
+}
 
-  // XRK product dir standing files + context
+async function pushProductStanding(
+  sections: InstructionSection[],
+  productDir: string,
+  logicalPrefix: string,
+  budget: CollectEcosystemInstructionsOptions["budget"],
+  seen: Set<string>,
+): Promise<void> {
+  if (!(await exists(productDir))) return;
+
   for (const name of PRODUCT_STANDING_FILES) {
     await pushFile(
       sections,
       path.join(productDir, name),
-      `.xrk/${name}`,
-      options.budget,
+      `${logicalPrefix}${name}`,
+      budget,
       seen,
     );
   }
@@ -247,9 +290,9 @@ export async function collectEcosystemInstructions(
     (await readIfExists(path.join(productDir, "ASSISTANT.md")));
   if (assistant?.trim()) {
     const assistantPath = (await exists(path.join(productDir, "assistant.md")))
-      ? ".xrk/assistant.md"
-      : ".xrk/ASSISTANT.md";
-    const clipped = clip(assistantPath, assistant, options.budget);
+      ? `${logicalPrefix}assistant.md`
+      : `${logicalPrefix}ASSISTANT.md`;
+    const clipped = clip(assistantPath, assistant, budget);
     if (clipped.trim()) {
       const digest = clipped.trim();
       if (!seen.has(digest)) {
@@ -266,8 +309,8 @@ export async function collectEcosystemInstructions(
       await pushFile(
         sections,
         path.join(ctxDir, f),
-        `.xrk/context/${f}`,
-        options.budget,
+        `${logicalPrefix}context/${f}`,
+        budget,
         seen,
       );
     }
@@ -278,9 +321,9 @@ export async function collectEcosystemInstructions(
     (await readIfExists(path.join(productDir, "RULES.md")));
   if (rules?.trim()) {
     const rulesPath = (await exists(path.join(productDir, "rules.md")))
-      ? ".xrk/rules.md"
-      : ".xrk/RULES.md";
-    const clipped = clip(rulesPath, rules, options.budget);
+      ? `${logicalPrefix}rules.md`
+      : `${logicalPrefix}RULES.md`;
+    const clipped = clip(rulesPath, rules, budget);
     if (clipped.trim()) {
       const digest = clipped.trim();
       if (!seen.has(digest)) {
@@ -292,24 +335,66 @@ export async function collectEcosystemInstructions(
 
   const subagents = await readIfExists(path.join(productDir, "subagents.md"));
   if (subagents?.trim()) {
-    const clipped = clip(".xrk/subagents.md", subagents, options.budget);
+    const clipped = clip(`${logicalPrefix}subagents.md`, subagents, budget);
     if (clipped.trim()) {
       const digest = clipped.trim();
       if (!seen.has(digest)) {
         seen.add(digest);
-        sections.push({ path: ".xrk/subagents.md", body: clipped });
+        sections.push({ path: `${logicalPrefix}subagents.md`, body: clipped });
       }
     }
   }
+}
 
-  // Workspace root standing files (open standard + Claude bridge)
-  await pushFile(
-    sections,
-    path.join(root, "AGENTS.md"),
-    "AGENTS.md",
-    options.budget,
-    seen,
-  );
+/**
+ * Gather agent instruction markdown from multi-vendor convention paths.
+ * Low → high priority in output order (later sections appear closer to the turn):
+ *
+ * 1. User home (`~/.codex`, `~/.agents`, `~/.xrk`, …) when `includeUserHome`
+ * 2. Workspace convention paths
+ * 3. Workspace `{productDir}` (default `.xrk/`)
+ * 4. Workspace root `AGENTS.md` / `CLAUDE.md` (unless product overlay exists)
+ *
+ * Skills trees are handled separately (skill catalog).
+ */
+export async function collectEcosystemInstructions(
+  options: CollectEcosystemInstructionsOptions,
+): Promise<InstructionSection[]> {
+  const root = path.resolve(options.root);
+  const productDir = path.resolve(options.productDir);
+  const sections: InstructionSection[] = [];
+  const seen = new Set<string>();
+  const includeUserHome = options.includeUserHome !== false;
+
+  if (includeUserHome) {
+    const home = path.resolve(options.homeDir ?? homedir());
+    await pushConventionLayer(sections, home, "~/", options.budget, seen, {
+      includeCodexRoot: false,
+      includeGithub: false,
+    });
+    await pushProductStanding(
+      sections,
+      path.join(home, ".xrk"),
+      "~/.xrk/",
+      options.budget,
+      seen,
+    );
+  }
+
+  await pushConventionLayer(sections, root, "", options.budget, seen);
+  await pushProductStanding(sections, productDir, ".xrk/", options.budget, seen);
+
+  const productAgents = await readIfExists(path.join(productDir, "AGENTS.md"));
+  const agentsAgents = await readIfExists(path.join(root, ".agents", "AGENTS.md"));
+  if (!productAgents?.trim() && !agentsAgents?.trim()) {
+    await pushFile(
+      sections,
+      path.join(root, "AGENTS.md"),
+      "AGENTS.md",
+      options.budget,
+      seen,
+    );
+  }
 
   const claudeRoot = await readIfExists(path.join(root, "CLAUDE.md"));
   if (claudeRoot?.trim() && !isAgentsImportOnly(claudeRoot)) {

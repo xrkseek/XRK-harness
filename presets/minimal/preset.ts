@@ -69,6 +69,8 @@ export type WorkspaceInjectOption =
 
 export interface MinimalCompositionOptions {
   readonly workspaceRoot: string;
+  /** Sidebar workspace title — prepended to durable inject (display-only). */
+  readonly workspaceDisplayTitle?: string;
   readonly llm?: LlmAdapter;
   readonly system?: string;
   readonly sessionStore?: SessionStore;
@@ -131,9 +133,14 @@ function shouldInject(
 function toInjectOptions(
   root: string,
   opt: WorkspaceInjectOption | undefined,
+  displayTitle?: string,
 ): ResolveWorkspaceInjectOptions {
   const extra = typeof opt === "object" && opt ? opt : {};
-  return { root, ...extra };
+  return {
+    root,
+    ...extra,
+    ...(displayTitle?.trim() ? { displayTitle: displayTitle.trim() } : {}),
+  };
 }
 
 /** Composition only — fs tools, no shell. */
@@ -145,6 +152,7 @@ export function createMinimalComposition(
   const injectOpts = toInjectOptions(
     options.workspaceRoot,
     options.workspaceInject,
+    options.workspaceDisplayTitle,
   );
   const productDir =
     injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");

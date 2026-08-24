@@ -2,6 +2,8 @@
 
 > **读者**：维护者 · Coding Agent（**笔记**，不是终端用户手册）。
 
+> **Host inject**：若工作区存在 **`.agents/AGENTS.md`**（或 `.xrk/AGENTS.md`），产品 Agent **不注入**根维护者 `AGENTS.md`（对标 XRK-AGT 根 `AGENTS.md` vs `agents/workspace/AGENTS.md`）。**Cursor 改内核仍读本文件。**
+
 面向**克隆本仓、改代码 / 写测 / 同步教科书**的人。
 
 | 读什么 | 角色 |
@@ -34,7 +36,7 @@
 ## 栈与启动
 
 - **Node ≥ 26** · **pnpm** 精确版钉在根 `packageManager`（当前 **11.22.0**）：本机 `npm install -g pnpm@…`；CI `pnpm/action-setup`；勿随手升大版本
-- **禁止**用 Cursor 自带 `helpers/node.exe`（常为 Node 22）跑门禁 / 发版；Windows 先把 `C:\Program Files\nodejs` 插到 `PATH` 最前（笔记 rule `xrk-node26`）
+- **禁止**用 Cursor 自带 `helpers/node.exe`（常为 Node 22）跑门禁 / 发版；Windows 上先把**本机 `where.exe node` 探测到的**系统 Node 目录插到 `PATH` 最前（见笔记 rule `xrk-node26`，**勿写死 C: 或其它盘符**）
 - 构建：`pnpm install` → `pnpm build`（或 `pnpm check`）
 - CLI：`node apps/cli/dist/bin.js run|serve|web|doctor|dump-config`
 - 首读（按任务）：
@@ -47,9 +49,13 @@
 | 工具 | [docs/tool-pipeline.md](./docs/tool-pipeline.md) · [seams](./docs/seams.md) |
 | Host / Face | [docs/host-face.md](./docs/host-face.md) · [http-api](./docs/http-api.md) |
 | MCP | [docs/modules/mcp.md](./docs/modules/mcp.md) · [policy](./docs/policy.md) |
+| **进程插件 / extensions** | [docs/plugin-development.md](./docs/plugin-development.md) · 笔记 **`xrk-plugin-dev`** · **`xrk-extensions`** |
+| **社区 Host / client** | [docs/community-plugins.md](./docs/community-plugins.md) · 笔记 **`xrk-community-plugins`** |
+| **产品 skill（插件教练）** | [`.agents/skills/`](./.agents/skills/) · 笔记 **`xrk-workspace-skills`** |
 | 壳 UI | [docs/host-face.md](./docs/host-face.md) · `apps/web` · `packages/client` |
 | 包落点 | [docs/modules/](./docs/modules/README.md) |
 | 门禁 | [docs/testing.md](./docs/testing.md) · [CONTRIBUTING.md](./CONTRIBUTING.md) |
+| **Skill 索引** | [`.cursor/skills/SKILL_INDEX.md`](./.cursor/skills/SKILL_INDEX.md) |
 | 教科书 vs 笔记 | [docs/audiences.md](./docs/audiences.md) · [docs/README.md](./docs/README.md) · `.cursor/rules/xrk-product-identity.mdc` |
 | 交接 / 发版 | [docs/maintainer.md](./docs/maintainer.md) · [docs/publishing.md](./docs/publishing.md) · 发行说明 skill `xrk-release-notes` |
 

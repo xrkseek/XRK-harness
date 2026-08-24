@@ -10,7 +10,6 @@ packages:
   - "packages/exec/*"
   - "packages/server/*"
   - "presets/*"
-  - "examples/*"
   - "extensions/*"
 # pnpm ≥10：仅允许下列包跑 lifecycle
 allowBuilds:

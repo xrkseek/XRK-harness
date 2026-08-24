@@ -17,6 +17,7 @@ export const hostDescribe: FaceHandler = async (runtime) => {
     ok: true,
     value: {
       version: runtime.version,
+      hostRoot: runtime.workspaceRoot,
       cwd: runtime.workspaceRoot,
       ...(first ? { provider: first.id } : {}),
       ...(brand?.defaultModel ? { model: brand.defaultModel } : {}),

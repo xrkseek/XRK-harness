@@ -6,11 +6,11 @@
 import { access, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import {
-  createWorkspaceInjector,
   resolveWorkspaceInject,
 } from "@xrkseek/workspace";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
+import { resolveSessionCwd } from "./session-cwd.js";
 import { canOpenNativePath } from "./host-open-path.js";
 import { persistWorkspaceDoc } from "./workspace-store.js";
 
@@ -27,9 +27,27 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
-export function resolveProductDir(runtime: FaceRuntime): string {
+export function resolveProductDir(root: string): string {
   // Workspace inject / skills stay under the project; user settings use resolveHarnessHome.
-  return path.resolve(runtime.workspaceRoot, ".xrk");
+  return path.resolve(root, ".xrk");
+}
+
+function payloadSessionId(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object") return undefined;
+  const sessionId = (payload as { sessionId?: unknown }).sessionId;
+  return typeof sessionId === "string" && sessionId.trim()
+    ? sessionId.trim()
+    : undefined;
+}
+
+/** Session cwd when `sessionId` is present; else Host serve root. */
+export function resolveFaceWorkspaceRoot(
+  runtime: FaceRuntime,
+  payload?: unknown,
+): string {
+  const sessionId = payloadSessionId(payload);
+  if (sessionId) return resolveSessionCwd(runtime, sessionId);
+  return path.resolve(runtime.workspaceRoot);
 }
 
 /** Ensure candidate resolves under root (or equals root). */
@@ -111,11 +129,14 @@ function blockHeading(text: string): string {
 
 export async function workspaceDescribe(
   runtime: FaceRuntime,
+  _rpcId?: string,
+  payload?: unknown,
 ): Promise<FaceRpcResult<unknown>> {
-  const root = path.resolve(runtime.workspaceRoot);
-  const productDir = resolveProductDir(runtime);
+  const root = resolveFaceWorkspaceRoot(runtime, payload);
+  const productDir = resolveProductDir(root);
   const productExists = await exists(productDir);
-  const templates = Object.keys(runtime.seedTemplateDirs ?? {});
+  const agentsDir = path.join(root, ".agents");
+  const agentsExists = await exists(agentsDir);
   return {
     ok: true,
     value: {
@@ -123,17 +144,21 @@ export async function workspaceDescribe(
       productDir,
       productExists,
       canOpenPath: canOpenNativePath(),
-      seedTemplates: templates,
+      agentsDir,
+      agentsExists,
     },
   };
 }
 
 export async function workspaceListProduct(
   runtime: FaceRuntime,
+  _rpcId?: string,
+  payload?: unknown,
 ): Promise<FaceRpcResult<unknown>> {
-  const productDir = resolveProductDir(runtime);
+  const root = resolveFaceWorkspaceRoot(runtime, payload);
+  const productDir = resolveProductDir(root);
   try {
-    assertUnderRoot(runtime.workspaceRoot, productDir);
+    assertUnderRoot(root, productDir);
   } catch (err) {
     return {
       ok: false,
@@ -166,9 +191,10 @@ export async function workspacePreviewInject(
   const maxChars =
     typeof p.maxChars === "number" && p.maxChars > 0 ? p.maxChars : 32_000;
   const includeText = p.includeText === true;
-  const productDir = resolveProductDir(runtime);
+  const root = resolveFaceWorkspaceRoot(runtime, payload);
+  const productDir = resolveProductDir(root);
   try {
-    assertUnderRoot(runtime.workspaceRoot, productDir);
+    assertUnderRoot(root, productDir);
   } catch (err) {
     return {
       ok: false,
@@ -180,9 +206,20 @@ export async function workspacePreviewInject(
   }
 
   const resolved = await resolveWorkspaceInject({
-    root: runtime.workspaceRoot,
+    root,
     productDir,
     maxChars,
+    ...(typeof p.displayTitle === "string" && p.displayTitle.trim()
+      ? { displayTitle: p.displayTitle.trim() }
+      : (() => {
+          const sessionId = payloadSessionId(payload);
+          if (!sessionId) return {};
+          const wsId = runtime.workspaces.workspaceIdOf(sessionId);
+          const title = wsId
+            ? runtime.workspaces.get(wsId)?.title
+            : undefined;
+          return title?.trim() ? { displayTitle: title.trim() } : {};
+        })()),
   });
 
   const blocks = resolved.blocks.map((text, index) => ({
@@ -202,92 +239,6 @@ export async function workspacePreviewInject(
       blockCount: blocks.length,
       blocks,
       events: resolved.events,
-    },
-  };
-}
-
-export async function workspaceSyncSeeds(
-  runtime: FaceRuntime,
-  payload: unknown,
-): Promise<FaceRpcResult<unknown>> {
-  const p =
-    payload && typeof payload === "object"
-      ? (payload as Record<string, unknown>)
-      : {};
-  const template =
-    typeof p.template === "string" ? p.template.trim() : undefined;
-  const seedDirRaw =
-    typeof p.seedDir === "string" ? p.seedDir.trim() : undefined;
-
-  let seedDir: string | undefined;
-  if (template) {
-    const mapped = runtime.seedTemplateDirs?.[template];
-    if (!mapped) {
-      return {
-        ok: false,
-        error: {
-          code: "seed-template-not-found",
-          message: `unknown seed template: ${template}`,
-        },
-      };
-    }
-    seedDir = path.resolve(mapped);
-  } else if (seedDirRaw) {
-    try {
-      seedDir = assertUnderRoot(runtime.workspaceRoot, seedDirRaw);
-    } catch (err) {
-      return {
-        ok: false,
-        error: {
-          code: "path-escape",
-          message: err instanceof Error ? err.message : String(err),
-        },
-      };
-    }
-  } else {
-    return {
-      ok: false,
-      error: {
-        code: "invalid-payload",
-        message: "template or seedDir required",
-      },
-    };
-  }
-
-  if (!(await exists(seedDir))) {
-    return {
-      ok: false,
-      error: {
-        code: "seed-dir-not-found",
-        message: seedDir,
-      },
-    };
-  }
-
-  const productDir = resolveProductDir(runtime);
-  try {
-    assertUnderRoot(runtime.workspaceRoot, productDir);
-  } catch (err) {
-    return {
-      ok: false,
-      error: {
-        code: "path-escape",
-        message: err instanceof Error ? err.message : String(err),
-      },
-    };
-  }
-
-  const injector = createWorkspaceInjector({
-    root: runtime.workspaceRoot,
-    productDir,
-  });
-  const { created } = await injector.syncSeeds(seedDir);
-  return {
-    ok: true,
-    value: {
-      productDir,
-      seedDir,
-      created,
     },
   };
 }

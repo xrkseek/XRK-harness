@@ -1,51 +1,36 @@
-# Skills · Rules · 笔记分层 / Skills · Rules · Notes Layers
+# Skills 与 Rules 分层 / Skills and Rules Layers
 
-> **读者 / Audience**：集成者 · 贡献者 · 维护者 / Integrators · Contributors · Maintainers
+> **读者 / Audience**：集成者 · 终端用户（高级） / Integrators · End users (advanced)
 
-三套东西名字都像「skill / rules」，但**读者与运行时不同**。混用会导致：改本仓的 Coding Agent 笔记进产品 Agent 目录、或产品 skill 被当成发版红线。
+运行中的产品 Agent 从**全局**与**工作区**两层读取 rules 与 skills。同名时工作区覆盖全局。Inject 细节见 [workspace-inject.md](./workspace-inject.md)。
 
-Three layers share skill/rules naming but differ in **audience and runtime**. Mixing them can inject Coding Agent notes into the product Agent directory, or treat product skills as release red lines.
+The product Agent reads rules and skills from **global** and **workspace** layers. The workspace layer wins on clashes. Inject details: [workspace-inject.md](./workspace-inject.md).
 
 ## 一览 / Overview
 
-| 层 / Layer | 放哪 / Location | 谁读 / Who reads | 怎么进模型 / How it reaches the model |
-|----|------|------|------------|
-| **笔记 / Notes** | [AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/skills` | 维护者 · **Cursor/Codex 改本仓** | 以该目录为 workspace 时：`AGENTS.md` · `.cursor/rules/*.mdc` → `agent-instructions`；维护向 `.cursor/skills` 可打 `disable-model-invocation` 不进 catalog |
-| **产品 rules / 说明** | `{workspace}/.xrk/*` · 多厂商约定路径（见 [workspace-inject](./workspace-inject.md)） | 运行中的产品 Agent | 持久 `user/message` · `source: agent-instructions` |
-| **产品 skills** | `{workspace}` 下 `.xrk|.agents|.claude|.codex|.cursor/skills`（及 `~/` 同名） | 运行中的产品 Agent | 目录 → `skill-catalog`；全文 → `skill` 工具或 `/skill-name` |
+| 种类 / Kind | 典型路径 / Typical paths | 进模型方式 / How it reaches the model |
+|----|------|------------|
+| **Rules / 站立说明** | `~/.agents/` · `~/.xrk/` · `{workspace}/.agents/` · `{workspace}/.xrk/` · 多厂商约定路径 | 持久 `user/message` · `source: agent-instructions` |
+| **Skills** | 同上目录下的 `skills/<name>/SKILL.md`（及 `~/.codex/skills` 等） | `skill-catalog` 注入 + `skill` 工具或 `/skill-name` 加载正文 |
 
-教科书（`docs/`）写契约；笔记写改码红线。标准：[audiences.md](./audiences.md)。
+## 站立文件（`.xrk/` 与 `.agents/`） / Standing files
 
-Textbooks under `docs/` describe contracts; notes describe coding red lines. Standard: [audiences.md](./audiences.md).
+可选目录，**不强制创建**。常用文件：
 
-## 笔记（本仓 Coding Agent） / Notes (in-repo Coding Agent)
-
-- **Rules**：`.cursor/rules/*.mdc` — 以该仓库为 workspace 时由 Host 注入；Cursor 自身亦可能读取。
-- **Skills**：`.cursor/skills/*/SKILL.md` — 长流程笔记（写文档身份、meter、发版）。
-- 本仓维护向 SKILL 文首标 `disable-model-invocation: true` 与 `user-invocable: false`，以免 catalog 灌满维护笔记；**rules / AGENTS.md 仍会注入**。
-
-When this repo is the workspace, Host injects rules and root `AGENTS.md`. Maintenance skills should set `disable-model-invocation` so the catalog stays lean.
-
-## 产品 inject（rules / assistant） / Product inject
-
-不是 skill 目录。落在 `{workspace}/.xrk/`（可选，不强制建）：
-
-Not a skill directory. Lives under `{workspace}/.xrk/` (optional; not forced):
+Optional directories; **never auto-created**. Common files:
 
 | 文件 / File | 含义 / Meaning |
 |------|------|
-| `SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` | 种子站立文件 / Seed standing files |
-| `assistant.md` | 人设 / 站立说明 / Persona / standing instructions |
+| `AGENTS.md` | 工作区角色与边界 / Workspace role and boundaries |
+| `SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` | 人格与偏好 / Persona and preferences |
+| `assistant.md` | 站立说明 / Standing instructions |
 | `rules.md` | 项目规则 / Project rules |
 | `context/*` | 附加上下文 / Extra context |
 | `subagents.md` | 子代理说明 / Subagent notes |
 | `recipes/*.yaml` | `/id` 斜杠配方 / Slash recipes |
+| `skills/*/SKILL.md` | Skill 目录 / Skill trees |
 
-进 session 的是 **agent-instructions** 注入行，不是 system 大段（保 prompt cache）。每条 inject 与人类 prompt 都有独立 `messageId`（Face `data.id`）。详见 [workspace-inject.md](./workspace-inject.md)。
-
-Session receives **agent-instructions** inject rows, not a large system blob (prompt-cache stability). Each inject and the human prompt has its own `messageId`.
-
-## 产品 skills（运行时） / Product skills (runtime)
+## Skills（运行时） / Skills (runtime)
 
 | 机制 / Mechanism | 行为 / Behavior |
 |------|------|
@@ -53,13 +38,24 @@ Session receives **agent-instructions** inject rows, not a large system blob (pr
 | `disable-model-invocation: true` | 不进 catalog、`skill` 工具拒绝 |
 | `user-invocable: false` | `/skill-name` 不展开 |
 | 非法布尔 frontmatter | **整 skill 丢弃**（fail-closed） |
-| 优先级 / Priority | 后列根覆盖同名：`.codex` → `.claude` → `.agents` → `.cursor` → `.xrk` |
+| 优先级 / Priority | 用户主目录 → 工作区；同层内后列根覆盖：`.codex` → `.claude` → `.agents` → `.cursor` → `.xrk` |
 
-用户项目里的 `.cursor/skills` **可以**是产品 skill。只有「给改 harness 源码用的笔记」才应打 `disable-model-invocation`。
+## Harness 源码仓写插件 / Plugin authoring in this repo
 
-`.cursor/skills` in a user project **may** be product skills. Only notes for editing harness source should set `disable-model-invocation`.
+以本仓库为工作区时，插件写在 **`extensions/<plugin-id>/`**。产品 Agent 读 **`.agents/`**（非仓库根 `AGENTS.md`）。
+
+When this repository is the workspace, plugins live under **`extensions/<plugin-id>/`**. The product Agent reads **`.agents/`** (not the repository-root `AGENTS.md`).
+
+| 产品 skill（`.agents/skills/`） | 用途 / Purpose |
+|------------|------|
+| **`xrk-harness-monorepo`** | monorepo 总控 / Monorepo router |
+| `xrk-plugin-kind` | kind / MCP / client 选型 / Choose kind |
+| `xrk-plugin-author` | 写插件 / Author plugins |
+| `xrk-plugin-verify` | 安装与验证 / Install and verify |
+
+对照 XRK-AGT：AGT 工作区写 `core/workspace-Core/` ↔ Harness 工作区写 `extensions/`。
 
 ## 相关 / Related
 
-- [workspace-inject.md](./workspace-inject.md) · [slash-recipes.md](./slash-recipes.md) · [configuration.md](./configuration.md)
-- Face：`skill.list`（带 `modelInvocable` / `userInvocable`）
+- [workspace-inject.md](./workspace-inject.md) · [slash-recipes.md](./slash-recipes.md) · [plugin-development.md](./plugin-development.md)
+- Face：`skill.list`（`modelInvocable` · `userInvocable`）

@@ -1,4 +1,5 @@
 ---
+xrk-inject: false
 description: Meter/compaction 改码笔记（非教科书）
 globs: packages/protocol/src/token-usage.ts,packages/core/session/src/{compaction,surface-*,request-header}.ts,packages/core/agent-loop/src/{compaction,request-header-log}.ts,packages/server/face/src/projections/**/*
 alwaysApply: false

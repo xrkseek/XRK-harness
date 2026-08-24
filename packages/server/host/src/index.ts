@@ -136,19 +136,6 @@ function logMcpReconcile(
   }
 }
 
-async function resolveOfficeAgentSeedDir(
-  workspaceRoot: string,
-): Promise<string | undefined> {
-  const candidate = path.resolve(workspaceRoot, "templates", "office-agent");
-  try {
-    await access(candidate);
-    return candidate;
-  } catch {
-    return undefined;
-  }
-}
-
-/** `{pluginsDir}/web` overlay: extra client.js + optional `boot.json`. */
 async function resolveWebPluginOverlay(
   pluginsDir: string | undefined,
 ): Promise<string | undefined> {
@@ -204,6 +191,8 @@ export type AgentFactory = (input: {
   sessionId: string;
   store: SessionStore;
   workspaceRoot: string;
+  /** Sidebar workspace title for durable inject anchor (display-only). */
+  workspaceDisplayTitle?: string;
   /**
    * Session Face `agentPreset` (header badge). Host factory must honor this for
    * tool composition — it is not cosmetic. Falls back to Host `--preset`.
@@ -248,6 +237,8 @@ export type AgentFactory = (input: {
   };
   /** Merged Face web-search + vault keys for `createDefaultWebAccess({ search })`. */
   webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
+  /** Face `workspace-inject.injectMaxChars` — rules/skills inject budget. */
+  workspaceInject?: { readonly maxChars?: number };
 }) => Promise<AgentHandle>;
 
 export type { SessionDrainControl } from "./drain-status.js";
@@ -401,6 +392,7 @@ export function createHostManager(): HostManager {
           llmRetryMaxRetries?: number;
           bashLimits?: { timeoutMs?: number; maxOutputBytes?: number };
           webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
+          workspaceInject?: { readonly maxChars?: number };
         };
       } = {};
       const sessionCwdBox: {
@@ -423,6 +415,8 @@ export function createHostManager(): HostManager {
         const sessionRoot =
           sessionCwdBox.get?.(sessionId) ?? config.runtime.workspaceRoot;
         const agentPreset = sessionPresetBox.get?.(sessionId);
+        const wsId = faceRuntime.workspaces.workspaceIdOf(sessionId);
+        const wsRow = wsId ? faceRuntime.workspaces.get(wsId) : undefined;
         return agentCache.resolve(
           sessionId,
           async () => {
@@ -431,6 +425,7 @@ export function createHostManager(): HostManager {
               sessionId,
               store,
               workspaceRoot: sessionRoot,
+              ...(wsRow?.title ? { workspaceDisplayTitle: wsRow.title } : {}),
               plugins: loader.list(),
               attachments,
               routeAllowsImage: () =>
@@ -471,6 +466,9 @@ export function createHostManager(): HostManager {
                 : {}),
               ...(pluginSettings.webSearch
                 ? { webSearch: pluginSettings.webSearch }
+                : {}),
+              ...(pluginSettings.workspaceInject
+                ? { workspaceInject: pluginSettings.workspaceInject }
                 : {}),
             });
             if (faceBox.approvals) {
@@ -527,9 +525,6 @@ export function createHostManager(): HostManager {
         lastDrainResult,
       );
 
-      const officeAgent = await resolveOfficeAgentSeedDir(
-        config.runtime.workspaceRoot,
-      );
       const webOverlay = await resolveWebPluginOverlay(
         config.runtime.pluginsDir,
       );
@@ -673,9 +668,6 @@ export function createHostManager(): HostManager {
           },
         },
         bootstrapApiKey: config.credentials.apiKey,
-        ...(officeAgent
-          ? { seedTemplateDirs: { "office-agent": officeAgent } }
-          : {}),
         ...(policy ? { policy } : {}),
         ...(config.runtime.policyFile
           ? { settingsDocumentPath: path.resolve(config.runtime.policyFile) }
@@ -726,6 +718,8 @@ export function createHostManager(): HostManager {
           unknown
         >;
         const webSearchNs = faceRuntime.settingsNamespaces.view("web-search")
+          .value as Record<string, unknown>;
+        const injectNs = faceRuntime.settingsNamespaces.view("workspace-inject")
           .value as Record<string, unknown>;
         const maxParallelToolCalls =
           typeof loop.maxParallelToolCalls === "number" &&
@@ -796,6 +790,13 @@ export function createHostManager(): HostManager {
               }
             : {}),
         };
+        const injectMaxCharsRaw = injectNs.injectMaxChars;
+        const injectMaxChars =
+          typeof injectMaxCharsRaw === "number" &&
+          Number.isFinite(injectMaxCharsRaw) &&
+          injectMaxCharsRaw >= 4_000
+            ? Math.min(128_000, Math.floor(injectMaxCharsRaw))
+            : undefined;
         return {
           ...(maxParallelToolCalls !== undefined ? { maxParallelToolCalls } : {}),
           ...(maxSteps !== undefined ? { maxSteps } : {}),
@@ -811,6 +812,9 @@ export function createHostManager(): HostManager {
               }
             : {}),
           webSearch,
+          ...(injectMaxChars !== undefined
+            ? { workspaceInject: { maxChars: injectMaxChars } }
+            : {}),
         };
       };
       faceRuntime.bus.subscribeHost((_rpcId, frame) => {

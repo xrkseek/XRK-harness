@@ -1,4 +1,3 @@
-import { mkdir, readFile, readdir, writeFile, access, stat } from "node:fs/promises";
 import path from "node:path";
 import { newUserMessageId } from "@xrkseek/protocol";
 import {
@@ -16,6 +15,7 @@ import {
   type WorkspaceDurableInject,
   type WorkspaceInjectAppend,
 } from "./durable-inject.js";
+import { formatWorkspaceRootAnchor } from "./workspace-anchor.js";
 
 export type { WorkspaceBudgetEvent } from "./durable-inject.js";
 
@@ -23,22 +23,16 @@ export type WorkspaceInjectResult = WorkspaceDurableInject;
 
 export interface WorkspaceInjector {
   inject(options?: { maxChars?: number }): Promise<WorkspaceInjectResult>;
-  syncSeeds(seedDir: string): Promise<{ created: string[] }>;
 }
 
 export interface WorkspaceInjectorOptions {
   readonly root: string;
   /** Product inject overlay — default `{root}/.xrk` (see ecosystem paths). */
   readonly productDir?: string;
-}
-
-async function exists(p: string): Promise<boolean> {
-  try {
-    await access(p);
-    return true;
-  } catch {
-    return false;
-  }
+  /** Include user-home global layer (default true). */
+  readonly includeUserHome?: boolean;
+  /** Test override for user-home root. */
+  readonly homeDir?: string;
 }
 
 function clip(
@@ -91,6 +85,10 @@ export function createWorkspaceInjector(
         root,
         productDir,
         budget,
+        ...(options.includeUserHome !== undefined
+          ? { includeUserHome: options.includeUserHome }
+          : {}),
+        ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
       });
       const instructionBlocks = sectionsToInstructionBlocks(sections);
       const changes = sectionsToInstructionChanges(sections);
@@ -99,7 +97,9 @@ export function createWorkspaceInjector(
       const skills = await listSkills({
         workspaceRoot: root,
         productDir,
-        includeUserHome: false,
+        ...(options.includeUserHome !== undefined
+          ? { includeUserHome: options.includeUserHome }
+          : {}),
       });
       const skillCards = formatSkillCatalog(skills);
       let skillBlock: string | undefined;
@@ -127,40 +127,6 @@ export function createWorkspaceInjector(
         ...(skillCatalog ? { skillCatalog } : {}),
         ...(instructions ? { instructions } : {}),
       };
-    },
-
-    async syncSeeds(seedDir) {
-      // Explicit seed only — inject / skill import never mkdir `.xrk`.
-      const created: string[] = [];
-      if (!(await exists(seedDir))) {
-        return { created };
-      }
-      await mkdir(productDir, { recursive: true });
-
-      async function walk(rel: string): Promise<void> {
-        const srcBase = path.join(seedDir, rel);
-        const entries = await readdir(srcBase).catch(() => [] as string[]);
-        for (const name of entries) {
-          if (name === "README.md") continue;
-          const relPath = rel ? path.join(rel, name) : name;
-          const src = path.join(seedDir, relPath);
-          const dest = path.join(productDir, relPath);
-          const s = await stat(src);
-          if (s.isDirectory()) {
-            await mkdir(dest, { recursive: true });
-            await walk(relPath);
-            continue;
-          }
-          if (await exists(dest)) continue; // 缺补不覆盖
-          const text = await readFile(src, "utf8");
-          await mkdir(path.dirname(dest), { recursive: true });
-          await writeFile(dest, text, "utf8");
-          created.push(relPath.replace(/\\/g, "/"));
-        }
-      }
-
-      await walk("");
-      return { created };
     },
   };
 }
@@ -243,11 +209,8 @@ export interface ResolveWorkspaceInjectOptions {
   readonly root: string;
   readonly productDir?: string;
   readonly maxChars?: number;
-  /**
-   * If set, run syncSeeds before inject (缺补不覆盖).
-   * Typical: path to templates/office-agent.
-   */
-  readonly syncSeedsFrom?: string;
+  /** Sidebar workspace title — injected as display-only (not a path). */
+  readonly displayTitle?: string;
 }
 
 export interface ResolvedWorkspaceInject {
@@ -256,12 +219,10 @@ export interface ResolvedWorkspaceInject {
   readonly instructionBlocks: readonly string[];
   readonly events: readonly WorkspaceBudgetEvent[];
   readonly durable: WorkspaceDurableInject;
-  /** Files created by optional syncSeeds (empty if not synced). */
-  readonly seeded: readonly string[];
 }
 
 /**
- * Create injector, optional seed sync, then resolve durable + preview blocks.
+ * Create injector, then resolve durable + preview blocks.
  * Presets call this once per createAgent(); durable injects append at turn start.
  */
 export async function resolveWorkspaceInject(
@@ -274,23 +235,35 @@ export async function resolveWorkspaceInject(
       : {}),
   });
 
-  let seeded: string[] = [];
-  if (options.syncSeedsFrom) {
-    const result = await injector.syncSeeds(options.syncSeedsFrom);
-    seeded = [...result.created];
-  }
-
   const out = await injector.inject(
     options.maxChars !== undefined ? { maxChars: options.maxChars } : {},
   );
 
+  const anchor = formatWorkspaceRootAnchor(options.root, options.displayTitle);
+  const instructionBlocks = anchor
+    ? [anchor, ...out.instructionBlocks]
+    : out.instructionBlocks;
+  const priorChanges = out.instructions?.source.changes ?? [{ action: "set" as const }];
+  const instructionChanges = anchor
+    ? [{ action: "set" as const, path: "workspace-root" }, ...priorChanges]
+    : priorChanges;
+  const instructions = buildInstructionsPayload(
+    instructionBlocks,
+    instructionChanges,
+    out.events,
+  );
+  const durable: WorkspaceDurableInject = {
+    ...out,
+    instructionBlocks,
+    ...(instructions ? { instructions } : {}),
+  };
+
   return {
     injector,
-    blocks: out.blocks,
-    instructionBlocks: out.instructionBlocks,
+    blocks: anchor ? [anchor, ...out.blocks] : out.blocks,
+    instructionBlocks,
     events: out.events,
-    durable: out,
-    seeded,
+    durable,
   };
 }
 

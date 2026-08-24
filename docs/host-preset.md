@@ -8,7 +8,7 @@
 |-------|------|------|
 | Session | `minimal` / `harness`（UI：**XRK Harness**） | tools + persona + pipeline + workspace inject |
 | Host | `server`（CLI / `@xrkseek/preset-server`） | HTTP lifecycle + agent factory；**工具面 = harness** / **tool surface = harness** |
-| Workspace seed | `templates/office-agent` · `templates/xrk-harness` | `.xrk` 人格 / 插件开发喂法 / `.xrk` persona / plugin-authoring seeds |
+| Workspace agent | 仓库 `.agents/` · `~/.agents/` · `{workspace}/.xrk` | inject + skills / persona / plugin-authoring |
 
 `server` 不是第三套工具表。产品徽章只展示 Minimal / XRK Harness；遗留 wire 值 `server` → `harness`。选型表：[profiles.md](./profiles.md)。
 

@@ -27,6 +27,22 @@ const MODELLED = ["antigravity-cli", "grok-cli"] as const;
 export interface ModsearchOptions {
   readonly xrkHome?: string;
   readonly workspaceRoot?: string;
+  readonly defaultCwd?: string;
+  readonly resolveSessionCwd?: (sessionId: string) => string | undefined;
+}
+
+function modsearchWorkspaceRoot(
+  payload: Record<string, unknown>,
+  options: ModsearchOptions,
+): string | undefined {
+  const sessionId =
+    typeof payload.sessionId === "string" ? payload.sessionId.trim() : "";
+  if (sessionId && options.resolveSessionCwd) {
+    const fromSession = options.resolveSessionCwd(sessionId);
+    if (fromSession?.trim()) return fromSession.trim();
+  }
+  const fromHost = options.workspaceRoot?.trim() || options.defaultCwd?.trim();
+  return fromHost || undefined;
 }
 
 interface EngineRow {
@@ -193,8 +209,9 @@ export async function handleModsearchRpc(
       typeof payload.engine === "string" && payload.engine
         ? payload.engine
         : store.engine || "local";
+    const workspaceRoot = modsearchWorkspaceRoot(payload, options);
     return runModsearchQuery(query, {
-      ...(options.workspaceRoot ? { workspaceRoot: options.workspaceRoot } : {}),
+      ...(workspaceRoot ? { workspaceRoot } : {}),
       engine,
       engines: store.engines,
     });

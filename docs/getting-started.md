@@ -92,7 +92,7 @@ When `serve`/`web` lack `apps/web/dist`, the three assemble steps above run auto
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 ```
 
-示例工程 / Example project：[examples/hello-agent](../examples/hello-agent)。
+插件样例 / Plugin sample：[extensions/example-tools](../extensions/example-tools)；工作区 Agent 入口 / workspace agent entry：[.agents/AGENTS.md](../.agents/AGENTS.md)。
 
 ---
 

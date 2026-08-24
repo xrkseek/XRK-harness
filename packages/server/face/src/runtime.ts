@@ -83,8 +83,6 @@ export interface CreateFaceRuntimeOptions {
   readonly workspaceRoot: string;
   /** Override harness home for settings/creds (default `~/.xrk`). Workspace inject stays `{workspaceRoot}/.xrk`. */
   readonly productDir?: string;
-  /** Named templates for Face `workspace.syncSeeds({ template })`. */
-  readonly seedTemplateDirs?: Readonly<Record<string, string>>;
   readonly version?: string;
   readonly defaultAgentPreset?: string;
   readonly registry?: ProviderRegistry;
@@ -499,9 +497,6 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     workspaceRoot: options.workspaceRoot,
     ...(options.productDir !== undefined
       ? { productDir: options.productDir }
-      : {}),
-    ...(options.seedTemplateDirs !== undefined
-      ? { seedTemplateDirs: options.seedTemplateDirs }
       : {}),
     version: options.version ?? "0.0.0",
     uiSettings: options.uiSettings

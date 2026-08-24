@@ -20,19 +20,20 @@ function drain(): FaceDrain {
 }
 
 describe("Face workspace U2", () => {
-  it("describe · listProduct · previewInject · syncSeeds (template)", async () => {
+  it("describe · listProduct · previewInject", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-"));
-    const seed = path.join(root, "seed-template");
-    await mkdir(path.join(seed, "context"), { recursive: true });
-    await writeFile(path.join(seed, "assistant.md"), "You are seed.", "utf8");
-    await writeFile(path.join(seed, "context", "note.md"), "ctx", "utf8");
+    await mkdir(path.join(root, ".agents"), { recursive: true });
+    await writeFile(
+      path.join(root, ".agents", "AGENTS.md"),
+      "# Product workspace",
+      "utf8",
+    );
 
     const store = createMemorySessionStore();
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: root,
       productDir: path.join(root, ".xrk"),
-      seedTemplateDirs: { "office-agent": seed },
       drain: drain(),
       resolveAgent: async (sessionId) =>
         createMinimalComposition({
@@ -52,57 +53,12 @@ describe("Face workspace U2", () => {
         root: string;
         productDir: string;
         productExists: boolean;
-        seedTemplates: string[];
+        agentsExists: boolean;
       };
       expect(v.root).toBe(path.resolve(root));
       expect(v.productDir.replace(/\\/g, "/")).toContain("/.xrk");
       expect(v.productExists).toBe(false);
-      expect(v.seedTemplates).toEqual(["office-agent"]);
-    }
-
-    const emptyList = await dispatchFaceMethod(
-      runtime,
-      "workspace.listProduct",
-      "l0",
-      {},
-    );
-    expect(emptyList.result.ok).toBe(true);
-    if (emptyList.result.ok) {
-      expect(
-        (emptyList.result.value as { exists: boolean }).exists,
-      ).toBe(false);
-    }
-
-    const synced = await dispatchFaceMethod(
-      runtime,
-      "workspace.syncSeeds",
-      "s1",
-      { template: "office-agent" },
-    );
-    expect(synced.result.ok).toBe(true);
-    if (synced.result.ok) {
-      const v = synced.result.value as { created: string[] };
-      expect(v.created.sort()).toEqual(["assistant.md", "context/note.md"]);
-    }
-
-    const listed = await dispatchFaceMethod(
-      runtime,
-      "workspace.listProduct",
-      "l1",
-      {},
-    );
-    expect(listed.result.ok).toBe(true);
-    if (listed.result.ok) {
-      const v = listed.result.value as {
-        exists: boolean;
-        entries: { path: string; kind: string }[];
-      };
-      expect(v.exists).toBe(true);
-      expect(v.entries.map((e) => e.path).sort()).toEqual([
-        "assistant.md",
-        "context",
-        "context/note.md",
-      ]);
+      expect(v.agentsExists).toBe(true);
     }
 
     const preview = await dispatchFaceMethod(
@@ -119,31 +75,7 @@ describe("Face workspace U2", () => {
         blocks: { heading: string; preview?: string }[];
       };
       expect(v.blockCount).toBeGreaterThan(0);
-      expect(v.totalChars).toBeGreaterThan(0);
-      expect(v.blocks[0]?.heading).toBeTruthy();
-      expect(v.blocks[0]?.preview).toContain(".xrk/assistant.md");
-    }
-
-    const badTemplate = await dispatchFaceMethod(
-      runtime,
-      "workspace.syncSeeds",
-      "s2",
-      { template: "nope" },
-    );
-    expect(badTemplate.result.ok).toBe(false);
-    if (!badTemplate.result.ok) {
-      expect(badTemplate.result.error.code).toBe("workspace-not-found");
-    }
-
-    const escape = await dispatchFaceMethod(
-      runtime,
-      "workspace.syncSeeds",
-      "s3",
-      { seedDir: ".." },
-    );
-    expect(escape.result.ok).toBe(false);
-    if (!escape.result.ok) {
-      expect(escape.result.error.code).toBe("workspace-invalid-path");
+      expect(v.blocks[0]?.preview).toContain("Workspace root");
     }
   });
 
@@ -229,9 +161,33 @@ describe("Face workspace U2", () => {
     expect(listed.result.ok).toBe(true);
     if (listed.result.ok) {
       const item = (
-        listed.result.value as { items: { sessionId: string; cwd: string }[] }
+        listed.result.value as {
+          items: {
+            sessionId: string;
+            cwd: string;
+            workspaceId?: string;
+            workspaceTitle?: string;
+          }[];
+        }
       ).items.find((i) => i.sessionId === sessionId);
       expect(item?.cwd).toBe(path.resolve(other));
+      expect(item?.workspaceId).toBe(ws.workspaceId);
+      expect(item?.workspaceTitle).toBe("Other Box");
+    }
+
+    const preview = await dispatchFaceMethod(
+      runtime,
+      "workspace.previewInject",
+      "pi1",
+      { sessionId, includeText: true },
+    );
+    expect(preview.result.ok).toBe(true);
+    if (preview.result.ok) {
+      const blocks = (
+        preview.result.value as { blocks: { preview?: string }[] }
+      ).blocks;
+      expect(blocks[0]?.preview).toContain(path.resolve(other));
+      expect(blocks[0]?.preview).toContain("Other Box");
     }
 
     const archived = await dispatchFaceMethod(

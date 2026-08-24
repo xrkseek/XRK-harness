@@ -87,7 +87,7 @@ node apps/cli/dist/bin.js web --workspace .
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 ```
 
-示例 / Example：[examples/hello-agent](./examples/hello-agent)。
+插件样例 / Plugin sample：[extensions/example-tools](./extensions/example-tools)；工作区 Agent 入口 / workspace agent entry：[.agents/AGENTS.md](./.agents/AGENTS.md)。
 
 ### 接真模型 / Connect a real model
 

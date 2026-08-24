@@ -1,0 +1,22 @@
+---
+description: 插件 / extensions / loader / MCP / 社区包 — 任务路由到 .cursor/skills
+alwaysApply: true
+xrk-inject: false
+---
+
+# 插件开发 · 任务路由
+
+改 **XRK-Harness 源码**或 **extensions 金样**前：读 [`.cursor/skills/SKILL_INDEX.md`](../skills/SKILL_INDEX.md)。
+
+| 任务 | Skill |
+|------|-------|
+| loader · preset · Face inventory | `xrk-plugin-dev` |
+| `tools` / `prompt` / `commands` | `xrk-extensions` |
+| MCP vs 进程插件 | `xrk-mcp-plugins` |
+| 社区 client · dsh-compat | `xrk-community-plugins` |
+| 写 `.xrk/skills` 产品 skill | `xrk-workspace-skills` |
+
+教科书真源：`docs/plugin-development.md` · `docs/plugin-loader.md`。  
+**不要**在 skill 里编造契约；冲突以 **代码 > status > docs** 为准。
+
+产品里教用户写插件：本仓 **`.agents/`**（含 `skills/`），徽章 **harness**。

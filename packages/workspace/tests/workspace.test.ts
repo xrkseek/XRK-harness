@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -25,7 +25,11 @@ describe("WorkspaceInjector", () => {
     await writeFile(path.join(product, "subagents.md"), "S", "utf8");
     await writeFile(path.join(root, "AGENTS.md"), "REPO AGENTS", "utf8");
 
-    const inj = createWorkspaceInjector({ root, productDir: product });
+    const inj = createWorkspaceInjector({
+      root,
+      productDir: product,
+      includeUserHome: false,
+    });
     const out = await inj.inject({ maxChars: 10_000 });
     expect(out.blocks.map((b) => b.split("\n")[0])).toEqual([
       "## .xrk/assistant.md",
@@ -37,24 +41,6 @@ describe("WorkspaceInjector", () => {
     ]);
     expect(out.blocks.join("\n")).toContain("**skill-a**");
     expect(out.blocks.join("\n")).toContain("REPO AGENTS");
-  });
-
-  it("syncSeeds fills missing without overwrite", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "xrk-ws-"));
-    const product = path.join(root, ".xrk");
-    const seeds = path.join(root, "seeds");
-    await mkdir(seeds, { recursive: true });
-    await mkdir(product, { recursive: true });
-    await writeFile(path.join(seeds, "assistant.md"), "seed", "utf8");
-    await writeFile(path.join(product, "assistant.md"), "existing", "utf8");
-    await writeFile(path.join(seeds, "rules.md"), "rules-seed", "utf8");
-
-    const inj = createWorkspaceInjector({ root, productDir: product });
-    const { created } = await inj.syncSeeds(seeds);
-    expect(created).toEqual(["rules.md"]);
-    expect(await readFile(path.join(product, "assistant.md"), "utf8")).toBe(
-      "existing",
-    );
   });
 
   it("isolates root AGENTS.md from product inject path", () => {

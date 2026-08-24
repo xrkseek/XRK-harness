@@ -1,6 +1,7 @@
 ---
 description: 本机与 Agent 必须用系统 Node ≥26；禁止 Cursor 自带 Node 22
 alwaysApply: true
+xrk-inject: false
 ---
 
 # Node ≥26（工具链真源）
@@ -9,19 +10,31 @@ alwaysApply: true
 
 ## 用哪份 node
 
-| 来源 | 路径特征 | 可否用 |
+| 来源 | 识别方式 | 可否用 |
 |------|----------|--------|
-| 系统安装 | `C:\Program Files\nodejs\node.exe`（或同版在 PATH 最前） | **必须** |
-| Cursor helper | `…\cursor\resources\app\resources\helpers\node.exe`（常为 **22**） | **禁止** |
+| Cursor helper | 路径含 `cursor/resources/app/resources/helpers/node.exe`（常为 **22.x**） | **禁止** |
+| 系统安装 | `where.exe node`（Windows）或 `which -a node`（Unix）里**非 helper** 的条目 | **必须**，且 `node -v` ≥ 26 |
+
+**勿写死盘符或目录**（例如 `C:\Program Files\nodejs`）。Node 可能在 C/D/E 盘、nvm、fnm、Homebrew 等；以**当前机器**探测为准。
 
 Agent / 本机 shell 跑 `pnpm` · `tsc` · `vitest` · `pnpm check` · `pnpm release` 前：
 
 ```powershell
-$env:Path = "C:\Program Files\nodejs;" + $env:Path
+# Windows — 选 PATH 上第一个非 Cursor helper 的 node，把它所在目录 prepend 到 PATH
+$pick = @(where.exe node 2>$null) | Where-Object {
+  $_ -notmatch '\\cursor\\resources\\app\\resources\\helpers\\node\.exe$'
+} | Select-Object -First 1
+if (-not $pick) { throw 'No system Node on PATH' }
+$env:Path = "$(Split-Path -Parent $pick);$env:Path"
 node -v   # 须 ≥26
 ```
 
-若 `where.exe node` 先命中 Cursor helper，或 `node -v` 显示 22.x：**先改 PATH，再执行**，不要带着 22 过门禁。
+```bash
+# macOS / Linux — 若 `command -v node` 命中 Cursor helper，改用 PATH 上下一个 node
+node -v   # 须 ≥26；若为 22.x 或路径含 cursor/.../helpers/node，换系统 Node 再试
+```
+
+若 `node -v` 仍为 22.x：**先修正 PATH / 安装 Node ≥26**，不要带着 22 过门禁。
 
 ## pnpm
 
@@ -31,4 +44,4 @@ node -v   # 须 ≥26
 
 ## 勿写进教科书
 
-本条是 **笔记红线**（Agent / 维护者）。用户说明书只写「需要 Node ≥26」，不写 Cursor helper 路径。
+本条是 **笔记红线**（Cursor 里改本仓的 Coding Agent）。用户说明书只写「需要 Node ≥26」，不写 Cursor helper 路径，也不写某台机器的盘符。

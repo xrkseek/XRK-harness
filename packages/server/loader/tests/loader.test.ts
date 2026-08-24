@@ -103,11 +103,8 @@ describe("plugin discover", () => {
     await expect(loader.load(hit!)).rejects.toThrow(/id mismatch/);
   });
 
-  it("loadAll on repo extensions/example-tools", async () => {
-    const extRoot = path.resolve(
-      import.meta.dirname,
-      "../../../../extensions",
-    );
+  it("loadAll on loader fixture example-tools", async () => {
+    const extRoot = path.resolve(import.meta.dirname, "../../../../extensions");
     const loader = createPluginLoader();
     const ids = await loader.loadAll(extRoot);
     expect(ids).toContain("example-tools");

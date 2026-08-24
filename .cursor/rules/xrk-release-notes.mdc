@@ -1,5 +1,6 @@
 ---
 description: 发行说明文体（对照 DSH Release）· 新增/完善/删除/修复 · 禁止日记腔
+xrk-inject: false
 globs: docs/releases/**/*.md
 alwaysApply: false
 ---

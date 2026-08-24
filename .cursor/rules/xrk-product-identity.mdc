@@ -1,6 +1,7 @@
 ---
 description: 文档身份（用户/集成/贡献/维护）· 教科书 vs 笔记 · 写作禁旁白
 alwaysApply: true
+xrk-inject: false
 ---
 
 # 文档身份与载体

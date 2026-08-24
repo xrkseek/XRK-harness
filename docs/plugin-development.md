@@ -99,26 +99,24 @@ Reload with **`restart`** (pid lock stops this Host). `--force` only stops recog
 
 Same-name builtins and reserved prompt ids are **not** overridden by plugins.
 
-## 工作区喂法（让 Agent 会写插件） / Workspace Seeds (Teach Agents to Author Plugins)
+## 工作区喂法（让 Agent 会写插件） / Workspace Agent Layer (Teach Agents to Author Plugins)
 
-把 [templates/xrk-harness](../templates/xrk-harness/) 同步进 `{workspace}/.xrk`（`assistant.md` / `AGENTS.md`），会话徽章用 **XRK Harness**（`harness`）。之后模型在对话里能读到「怎么写 `xrk.plugin.json`、怎么 `plugin add`、社区包见 community-plugins」。
+本仓自带 **`.agents/`**（`AGENTS.md` · `context/` · `skills/` · `recipes/`），**无需**模板 sync。会话徽章用 **XRK Harness**（`harness`）。**工作区根即本 monorepo 时**，插件写在 **`extensions/<plugin-id>/`**；Host **只注入** `.agents/AGENTS.md`，**不**灌根维护者 `AGENTS.md`。跨项目人格放 **`~/.agents/`** 或 **`~/.xrk/`**（低优先级，工作区覆盖）。先加载 skill **`xrk-harness-monorepo`**。
 
-Sync [templates/xrk-harness](../templates/xrk-harness/) into `{workspace}/.xrk` (`assistant.md` / `AGENTS.md`) and use the **XRK Harness** session badge (`harness`). The model then sees how to write `xrk.plugin.json`, run `plugin add`, and follow community-plugins for community packages.
+This repo ships **`.agents/`** (`AGENTS.md` · `context/` · `skills/` · `recipes/`) — **no** template sync. Use the **XRK Harness** session badge (`harness`). When the workspace root **is this monorepo**, plugins belong under **`extensions/<plugin-id>/`**; Host injects **`.agents/AGENTS.md` only** (skips root maintainer `AGENTS.md`). Global persona lives under **`~/.agents/`** or **`~/.xrk/`** (lower priority; workspace wins). Load skill **`xrk-harness-monorepo`** first.
 
-```ts
-import { createWorkspaceInjector } from "@xrkseek/workspace";
-import path from "node:path";
+### 产品 skills（catalog） / Product Skills (Catalog)
 
-const inj = createWorkspaceInjector({
-  root: process.cwd(),
-  productDir: path.join(process.cwd(), ".xrk"),
-});
-await inj.syncSeeds(path.join("templates", "xrk-harness"));
-```
+`.agents/skills/` 与 `{workspace}/.xrk/skills/` 进入 `<available_skills>`（仅 frontmatter `name` + `description`）：
 
-通用办公种子仍用 [templates/office-agent](../templates/office-agent/)。
+| Skill | 用途 / Purpose |
+|-------|----------------|
+| **`xrk-harness-monorepo`** | monorepo 总控 / Monorepo router |
+| `xrk-plugin-kind` | kind / MCP / client 选型 / Choose kind |
+| `xrk-plugin-author` | 写插件 / Author plugins |
+| `xrk-plugin-verify` | 安装与验证 / Install & verify |
 
-For a general office persona, keep using [templates/office-agent](../templates/office-agent/).
+维护者改内核见 [maintainer.md](./maintainer.md)。分层说明：[skills-layers.md](./skills-layers.md)。
 
 ## Client 叠加（可选） / Client Overlay (Optional)
 
@@ -143,7 +141,7 @@ xrkh restart
 | [community-plugins.md](./community-plugins.md) | Host 契约 · 已实现 / 待补 · fixture / Host contracts · Implemented / Planned · fixtures |
 | [plugin-loader.md](./plugin-loader.md) | discover · `host.mjs` apply · subprocess |
 
-实现笔记 / Implementation notes：[`packages/server/http/src/dsh-compat/README.md`](../packages/server/http/src/dsh-compat/README.md)。
+详见 [community-plugins.md](./community-plugins.md) 与 [`packages/server/http/src/dsh-compat/README.md`](../packages/server/http/src/dsh-compat/README.md)。
 
 ## 明确不做 / Explicit Non-Goals
 

@@ -1,0 +1,34 @@
+---
+description: 本仓作 XRK-Harness 工作区时的双模式：产品写插件 vs Cursor 改内核
+alwaysApply: true
+xrk-inject: false
+---
+
+# 工作区双模式（Harness 源码仓）
+
+本仓库**常被设为工作区**做两件事，**不要混用**：
+
+| 模式 | 运行环境 | 写入沙箱 | 索引 |
+|------|----------|----------|------|
+| **产品写插件** | XRK Harness UI · 徽章 `harness` | `extensions/<plugin-id>/` | `.agents/skills/xrk-harness-monorepo` |
+| **改内核** | Cursor · Coding Agent | `packages/` · `apps/` · `presets/` | `.cursor/skills/SKILL_INDEX.md` |
+
+## 产品模式（对标 AGT「工作区写 Core」）
+
+1. 仓库内 **`.agents/`** 即产品 Agent 层（`AGENTS.md` · `context/` · `skills/` · `recipes/`）— **无需 sync 模板**。  
+2. Host **只注入** `.agents/AGENTS.md`，**跳过**根维护者 `AGENTS.md`。  
+3. 跨项目人格放 **`~/.agents/`** 或 **`~/.xrk/`**（全局层，工作区覆盖）。  
+4. `.cursor/rules` 带 `xrk-inject: false` — **不进**产品 inject。  
+5. 插件落点：**`extensions/`**（对照 `example-tools`）。  
+6. 总控 skill：**`xrk-harness-monorepo`**。
+
+## Cursor 模式（改内核）
+
+- 读根 **`AGENTS.md`** · **`.cursor/skills/xrk-*`** · rule **`xrk-plugin-dev`**。  
+- 改 loader / preset / Face 时走维护者 skill，**不是** `.agents/skills`。
+
+## 禁止
+
+- 产品 Agent 默认改 `packages/`（除非用户明确要求维护内核）  
+- 把 `.cursor` 维护笔记当用户环境说明（Node 路径写死等）  
+- 根 `AGENTS.md` 与 `.agents/AGENTS.md` 同时灌进 Host（已由 inject 逻辑避免）

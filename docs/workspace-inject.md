@@ -6,15 +6,28 @@
 
 Product context is injected as **durable** `user/message` events, not into the three-layer **system** string. System keeps persona / plugin `promptSections` for prompt-cache stability.
 
+## 两层模型 / Two-layer model
+
+对标 Codex / Claude / DSH：**用户主目录 = 全局养 AI**，**工作区 = 项目覆盖**。
+
+Like Codex / Claude / DSH: **user home = global persona**, **workspace = project overlay**.
+
+| 层 / Layer | 路径 / Paths | 优先级 / Priority |
+|------|------|------|
+| **全局 / Global** | `~/.agents/` · `~/.xrk/` · `~/.claude/` · `~/.codex/` · `~/.cursor/rules/` | 低 / Low |
+| **工作区 / Workspace** | `{workspace}/.agents/` · `{workspace}/.xrk/` · 同上厂商路径 | 高 / High |
+
+Inject 按节顺序追加；同名正文 dedupe；**后出现的节更接近当轮任务**。Skills catalog 同样：`~/…/skills` 低优先级，项目内高优先级。
+
+Sections append in order; duplicate bodies dedupe; **later sections are closer to the turn**. Skill catalog follows the same rule: `~/…/skills` is lower priority than project trees.
+
 ## 产品目录 / Product dir
 
-assistant / context / rules / recipes / seed sync 默认：`{workspaceRoot}/.xrk`
+assistant / context / rules / recipes 默认：`{workspaceRoot}/.xrk`（**不强制 mkdir**）。
 
-**Skills 不强制该目录。** Inject / `skill` / `skill.list` 自动导入已有 skill 树；缺目录则跳过（不 mkdir）。
+**Skills 不强制该目录。** Inject / `skill` / `skill.list` 自动导入已有 skill 树；缺目录则跳过。
 
-工作区根及多厂商约定路径会进入 **agent-instructions**（见下节顺序）。`{workspaceRoot}/AGENTS.md` 与 `.cursor/rules/*.mdc` 在对应 workspace 为根时**会**注入。分层说明：[skills-layers.md](./skills-layers.md)。
-
-Workspace root and multi-vendor convention paths enter **agent-instructions** (order below). `{workspaceRoot}/AGENTS.md` and `.cursor/rules/*.mdc` **are** injected when that directory is the workspace root. Layering: [skills-layers.md](./skills-layers.md).
+工作区根及多厂商约定路径会进入 **agent-instructions**。`{workspaceRoot}/AGENTS.md` 与 `.cursor/rules/*.mdc` 在对应 workspace 为根时**会**注入（除非已有 `.agents/AGENTS.md` 或 `.xrk/AGENTS.md` 定义产品角色）。分层说明：[skills-layers.md](./skills-layers.md)。
 
 ## Skills 根 / Skills roots
 
@@ -28,7 +41,7 @@ Workspace root and multi-vendor convention paths enter **agent-instructions** (o
 | `.cursor/skills/` | Cursor |
 | `.xrk/skills/` | XRK 原生叠加（优先） / XRK-native overlay (wins) |
 
-用户主目录下同相对路径（`~/.claude/skills` … `~/.xrk/skills`）亦扫描，供 `skill` 工具与 Face `skill.list`（优先级更低）。Inject catalog **仅用项目根**。缺则不创建。
+用户主目录下同相对路径（`~/.agents/skills` … `~/.xrk/skills`）亦扫描，供 `skill` 工具、Face `skill.list` 与 inject catalog（优先级更低）。缺则不创建。
 
 ## 持久注入（会话日志） / Durable inject (session log)
 
@@ -45,7 +58,7 @@ Digest last-wins：未变 → 不新开行；已变 → 全量替换（catalog �
 
 Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Trajectory 按 producer 列出。
 
-预算：字符上限（默认 32k）→ durable inject 上的 `source.budgetTruncations[]`（会话可见）。
+预算：字符上限（默认 32k，Settings `workspace-inject.injectMaxChars` 可调）→ durable inject 上的 `source.budgetTruncations[]`（会话可见）。
 
 `workspace.previewInject` 仍返回 markdown `blocks`（含 skill 卡片）仅供 UI 预览 — **不**拷进 system。
 
@@ -53,17 +66,26 @@ Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Traje
 
 低 → 高优先级（后列更接近当轮任务）。**Skills 正文**仍为独立 catalog inject，不在此列表。
 
-Low → high priority (later sections are closer to the turn). **Skill bodies** stay in the separate catalog inject.
+1. **用户主目录** / User home：`~/.codex/AGENTS.md` · `~/.claude/*` · `~/.agents/AGENTS.md` · `~/.agents/rules/**` · `~/.agents/context/*` · `~/.cursor/rules/**` · `~/.xrk/` 站立文件  
+2. **工作区** / Workspace：同上路径（无前缀）  
+3. `.github/copilot-instructions.md` · `.github/instructions/**`（仅工作区）  
+4. `{workspace}/.xrk/`：`SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` · `context/*` · `rules.md` · `subagents.md`  
+5. 工作区根 `AGENTS.md`（无 `.agents/` 或 `.xrk/AGENTS.md` 时）  
+6. 工作区根 `CLAUDE.md`（仅 `@AGENTS.md` 单行时跳过）  
+7. Skills → 独立 catalog inject
 
-1. `.codex/AGENTS.md` · 根 `CODEX.md`  
-2. `.claude/CLAUDE.md` · `.claude/rules/**`  
-3. `.agents/AGENTS.md` · `.agents/rules/**`（不含 `skills/` · `notes/`）  
-4. `.cursor/rules/**`（`.mdc` 去 frontmatter）  
-5. `.github/copilot-instructions.md` · `.github/instructions/**`  
-6. `.xrk/`：`SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` / `ASSISTANT.md` · `context/*` · `rules.md` / `RULES.md` · `subagents.md`  
-7. 工作区根 `AGENTS.md`  
-8. 工作区根 `CLAUDE.md`（仅 `@AGENTS.md` 单行时跳过，避免重复）  
-9. Skills → 独立 catalog inject（不是 instruction markdown）
+## 养 AI 放哪 / Where to put persona
+
+| 目的 / Goal | 放哪 / Location |
+|------|------|
+| 跨项目人格、语气、习惯 | `~/.agents/AGENTS.md` · `~/.agents/rules/` · `~/.xrk/SOUL.md` · `~/.xrk/USER.md` |
+| 跨项目 skill | `~/.agents/skills/<name>/SKILL.md` |
+| 单项目插件开发 / 架构 | 仓库内 `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/` |
+| 本机私密偏好（不进 git） | `~/.xrk/` 或 `~/.agents/` |
+
+存在 `.agents/AGENTS.md` 或 `.xrk/AGENTS.md` 时，工作区根 `AGENTS.md` **不**注入。
+
+When `.agents/AGENTS.md` or `.xrk/AGENTS.md` exists, the workspace-root `AGENTS.md` is **not** injected.
 
 ## API
 
@@ -75,7 +97,7 @@ import {
   listSkillsFromWorkspace,
 } from "@xrkseek/workspace";
 
-const { blocks, durable, events, seeded } = await resolveWorkspaceInject({
+const { blocks, durable, events } = await resolveWorkspaceInject({
   root: workspaceRoot,
 });
 
@@ -88,8 +110,6 @@ await appendWorkspaceInjectsIfChanged({
 });
 ```
 
-`syncSeeds` = 缺补不覆盖（显式调用才创建 `{productDir}`；日常 inject / skill 导入不强制建 `.xrk`）。
-
 ## Presets
 
 `minimal` / `harness` 在 `assemble !== false` 时默认开启：
@@ -98,10 +118,10 @@ await appendWorkspaceInjectsIfChanged({
 |--------|---------|
 | omit / `true` | turn 开始时 durable inject + 多根 skill catalog |
 | `false` | 跳过 inject |
-| `{ productDir, maxChars, syncSeedsFrom }` | 调产品目录 / seeds |
+| `{ productDir, maxChars }` | 调产品目录 / 预算 |
 
-Composition 暴露 `composition.workspace`（`WorkspaceInjector`）供手动 sync/inject。
+Composition 暴露 `composition.workspace`（`WorkspaceInjector`）供手动 inject。
 
-斜杠：`{productDir}/recipes` 加 `/skill-name`（多根 skills）— 见 [slash-recipes.md](./slash-recipes.md)。`slashRecipes: false` 仅跳过 recipes。
+斜杠：`{workspace}/.agents/recipes` 与 `{productDir}/recipes` 加 `/skill-name`（多根 skills）— 见 [slash-recipes.md](./slash-recipes.md)。`slashRecipes: false` 仅跳过 recipes。
 
-参见 / See also：[host-preset.md](./host-preset.md) · `templates/office-agent/README.md`。
+参见 / See also：[host-preset.md](./host-preset.md) · [skills-layers.md](./skills-layers.md)

@@ -35,7 +35,7 @@ The product UI exposes **exactly two tool surfaces**: **Minimal** and **XRK Harn
 |----|------|------|----------|
 | **Session 工具面 / Session tool surface** | `minimal` · `harness`（UI：**XRK Harness**） | 会话徽章 / Face `agentPreset` | **实际工具组合** / Actual tool composition |
 | **Host CLI** | `--preset` / `XRK_PRESET` | 进程启动 / Process startup | 新会话默认徽章种子；`server` = Host 工厂名 / Default badge seed for new sessions; `server` = Host factory name |
-| **工作区种子 / Workspace seeds** | `templates/office-agent` · `templates/xrk-harness` | `{workspace}/.xrk` | 人格 / 规则 / 插件开发喂法（inject） / Persona / rules / plugin-authoring inject |
+| **工作区 Agent 层 / Workspace agent layer** | 仓库 `.agents/` · 用户 `~/.agents/` · `{workspace}/.xrk` | inject + skills | 人格 / 规则 / 插件开发喂法 / Persona / rules / plugin-authoring |
 
 Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。产品 UI **不**单独展示 Server。
 
@@ -76,27 +76,17 @@ A Session is one conversation thread in the sidebar (id, event log, optional sub
 
 Host vs Session：[host-preset.md](./host-preset.md)。
 
-## 工作区种子（喂模型，不是第三种工具面） / Workspace Seeds (Feed the Model, Not a Third Tool Surface)
+## 工作区 Agent 层（喂模型，不是第三种工具面） / Workspace Agent Layer (Feed the Model, Not a Third Tool Surface)
 
-种子 = 仓库里的**模板目录**，`syncSeeds` 拷进你的项目 `{workspace}/.xrk/`。每轮 turn 开始时，内容以 durable `user/message`（skill-catalog / agent-instructions）注入，模型当上下文读。
+**全局 + 工作区**两层 inject（低 → 高）：`~/.agents/` · `~/.xrk/` → `{workspace}/.agents/` · `{workspace}/.xrk/`。每轮 turn 开始时以 durable `user/message`（skill-catalog / agent-instructions）注入。
 
-Seeds are **template directories** in the repo; `syncSeeds` copies them into `{workspace}/.xrk/`. At each turn start they are injected as durable `user/message` rows (skill-catalog / agent-instructions) for the model to read as context.
+Two inject layers (low → high): `~/.agents/` · `~/.xrk/` → `{workspace}/.agents/` · `{workspace}/.xrk/`. At each turn start they are injected as durable `user/message` rows.
 
-| 模板 / Template | 用途 / Purpose |
+| 路径 / Path | 用途 / Purpose |
 |------|------|
-| [templates/office-agent](../templates/office-agent/) | 通用办公助手人格 / recipes / General office-assistant persona / recipes |
-| [templates/xrk-harness](../templates/xrk-harness/) | **插件怎么开发**（进程 kind + CLI） / **How to develop plugins** (process kinds + CLI) |
-
-```ts
-import { createWorkspaceInjector } from "@xrkseek/workspace";
-import path from "node:path";
-
-const inj = createWorkspaceInjector({
-  root: process.cwd(),
-  productDir: path.join(process.cwd(), ".xrk"),
-});
-await inj.syncSeeds(path.join("templates", "xrk-harness"));
-```
+| [`.agents/`](../.agents/)（本仓） | **插件怎么开发**（进程 kind + CLI） / **How to develop plugins** |
+| `~/.agents/` · `~/.xrk/` | 跨项目人格 / 规则 / Global persona / rules |
+| `{workspace}/.xrk/` | 本机私密偏好（gitignore） / Local preferences (gitignored) |
 
 详见 / Details：[workspace-inject.md](./workspace-inject.md) · [plugin-development.md](./plugin-development.md)。
 

@@ -104,6 +104,8 @@ function ensureSession(store: SessionStore, id?: string): string {
 
 export interface HarnessCompositionOptions {
   readonly workspaceRoot: string;
+  /** Sidebar workspace title — prepended to durable inject (display-only). */
+  readonly workspaceDisplayTitle?: string;
   readonly llm?: LlmAdapter;
   readonly system?: string;
   readonly sessionStore?: SessionStore;
@@ -226,9 +228,14 @@ function shouldInject(
 function toInjectOptions(
   root: string,
   opt: WorkspaceInjectOption | undefined,
+  displayTitle?: string,
 ): ResolveWorkspaceInjectOptions {
   const extra = typeof opt === "object" && opt ? opt : {};
-  return { root, ...extra };
+  return {
+    root,
+    ...extra,
+    ...(displayTitle?.trim() ? { displayTitle: displayTitle.trim() } : {}),
+  };
 }
 
 /** Composition: fs + shell + sandbox guards + workspace inject. */
@@ -251,6 +258,7 @@ export function createHarnessComposition(
   const injectOpts = toInjectOptions(
     options.workspaceRoot,
     options.workspaceInject,
+    options.workspaceDisplayTitle,
   );
   const productDir =
     injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
@@ -464,11 +472,17 @@ export function createHarnessComposition(
         injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
       let recipes: Awaited<ReturnType<typeof loadOfficeRecipes>> = [];
       if (useAssemble && options.slashRecipes !== false) {
-        const recipesDir =
-          typeof options.slashRecipes === "string"
-            ? options.slashRecipes
-            : path.join(productDir, "recipes");
-        recipes = await loadOfficeRecipes(recipesDir);
+        if (typeof options.slashRecipes === "string") {
+          recipes = await loadOfficeRecipes(options.slashRecipes);
+        } else {
+          const fromAgents = await loadOfficeRecipes(
+            path.join(injectOpts.root, ".agents", "recipes"),
+          );
+          const fromProduct = await loadOfficeRecipes(
+            path.join(productDir, "recipes"),
+          );
+          recipes = [...fromAgents, ...fromProduct];
+        }
       }
       return createAgent({
         sessionId,

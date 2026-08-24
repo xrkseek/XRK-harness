@@ -55,11 +55,6 @@ export interface FaceRuntime {
   readonly workspaceRoot: string;
   /** Product inject dir override for tests; Host leaves unset → `{workspace}/.xrk`. Settings/creds use `resolveHarnessHome` (`~/.xrk`). */
   readonly productDir?: string;
-  /**
-   * Named seed templates for `workspace.syncSeeds({ template })`.
-   * Values are absolute directories (e.g. office-agent template path).
-   */
-  readonly seedTemplateDirs?: Readonly<Record<string, string>>;
   readonly version: string;
   readonly defaultAgentPreset?: string;
   readonly bus: FaceBus;

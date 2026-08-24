@@ -16,22 +16,9 @@ The host is **TypeScript-only (Node ≥26)**. The session source of truth is app
 | [0004](./adr/0004-no-effect-runtime.md) | 无代数效应运行时内核 / No algebraic-effect runtime kernel |
 | [0005](./adr/0005-compose-leaf.md) | 组合叶包 `@xrkseek/compose` / Composition leaf `@xrkseek/compose` |
 
-## 文档分层 / Documentation Layers
+文档读者与写作标准见 [audiences.md](./audiences.md)。能力矩阵：[status.md](./status.md)。
 
-完整身份与写作标准见 [audiences.md](./audiences.md)。摘要：
-
-Full audience and writing standards: [audiences.md](./audiences.md). Summary:
-
-| 层 / Layer | 形态 / Form | 写什么 / Include | 不写什么 / Exclude |
-|----|------|--------|----------|
-| 根 README · `docs/*` · 包 README · ADR | **教科书 / Textbook** | 产品、契约、用法、能力边界 / Product, contracts, usage, capability bounds | 发版口令当用户 FAQ、Agent 红线 / Release commands as user FAQ; Agent red lines |
-| [maintainer](./maintainer.md) · [publishing](./publishing.md) | 教科书（**维护者专章**） / Textbook (**maintainer chapters**) | 交接、发版 / Handoff, release | 塞进根 README 正文 / Dump into root README body |
-| [AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/skills` | **笔记 / Notes** | 角色、红线、改哪测哪 / Roles, red lines, what to change/test | 假 API 当规格 / Fake APIs as specs |
-| Canvas（本机） / Canvas (local) | **草稿 / Draft** | 对照 · 临时 TODO / Local contrasts · temporary TODOs | 入库 / Commit to the repo |
-
-依赖边见 [AGENTS.md](../AGENTS.md)。能力矩阵：[status.md](./status.md)。交接：[maintainer.md](./maintainer.md)。
-
-Dependency edges: [AGENTS.md](../AGENTS.md). Capability matrix: [status.md](./status.md). Handoff: [maintainer.md](./maintainer.md).
+Documentation audiences and writing standards: [audiences.md](./audiences.md). Capability matrix: [status.md](./status.md).
 
 ## 包平面 / Package Planes
 
@@ -80,8 +67,7 @@ XRK-harness/
 │   └── …
 ├── presets/{minimal,harness,server}/
 ├── extensions/              # 进程插件样例（tools / channels） / process plugin samples
-├── templates/office-agent/  # workspace.syncSeeds 种子 / workspace.syncSeeds templates
-├── examples/hello-agent/
+├── .agents/                 # 工作区 Agent 层（inject + skills）/ workspace agent layer
 ├── docs/                    # 规格真源；无 docs/learn/ 目录 / spec source of truth; no docs/learn/ directory
 └── scripts/
 ```

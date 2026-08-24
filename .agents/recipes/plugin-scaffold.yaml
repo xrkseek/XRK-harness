@@ -1,0 +1,12 @@
+id: plugin-scaffold
+title: 脚手架进程插件
+description: 生成最小 XRK tools 进程插件目录
+prompt: |
+  在 extensions/ 下创建最小 `tools` 进程插件：
+  - `xrk.plugin.json`（id / kind / entry）
+  - `plugin.mjs`（`createPlugin` + 一个示例工具）
+  形状见 docs/plugin-development.md 最小示例。
+  完成后给出：`xrkh plugin add <path>` 与 `xrkh restart`。
+instructions: |
+  只写能跑的最小文件。不要编造热重载；不要杀非 XRK 进程占端口。
+parameters: []

@@ -36,7 +36,11 @@ describe("durable workspace inject", () => {
       "utf8",
     );
 
-    const out = await createWorkspaceInjector({ root, productDir: product }).inject();
+    const out = await createWorkspaceInjector({
+      root,
+      productDir: product,
+      includeUserHome: false,
+    }).inject();
     expect(out.instructions?.source.kind).toBe("agent-instructions");
     expect(out.instructions?.content).toContain("## .xrk/assistant.md");
     expect(out.skillCatalog?.source.kind).toBe("skill-catalog");
@@ -57,6 +61,7 @@ describe("durable workspace inject", () => {
     const durable = await createWorkspaceInjector({
       root,
       productDir: product,
+      includeUserHome: false,
     }).inject();
     const first = planWorkspaceInjectAppends({
       durable,

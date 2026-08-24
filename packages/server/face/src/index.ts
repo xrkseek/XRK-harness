@@ -171,7 +171,6 @@ export {
   workspaceListProduct,
   workspacePreviewInject,
   workspaceRenameFace,
-  workspaceSyncSeeds,
   type WorkspaceProductEntry,
 } from "./workspace-face.js";
 export {

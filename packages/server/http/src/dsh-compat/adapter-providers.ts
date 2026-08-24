@@ -257,6 +257,10 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
     const opts = {
       ...(ctx.xrkHome ? { xrkHome: ctx.xrkHome } : {}),
       ...(ctx.workspaceRoot ? { workspaceRoot: ctx.workspaceRoot } : {}),
+      ...(ctx.defaultCwd ? { defaultCwd: ctx.defaultCwd } : {}),
+      ...(ctx.resolveSessionCwd
+        ? { resolveSessionCwd: ctx.resolveSessionCwd }
+        : {}),
     };
     if ("channel" in route) {
       const r = route;

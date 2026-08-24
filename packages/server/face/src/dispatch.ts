@@ -12,7 +12,6 @@ import {
   workspaceListProduct,
   workspacePreviewInject,
   workspaceRenameFace,
-  workspaceSyncSeeds,
 } from "./workspace-face.js";
 import {
   credentialsDescribe,
@@ -145,7 +144,6 @@ const HANDLERS: Record<string, FaceHandler> = {
   "workspace.insertBefore": bindPayload(workspaceInsertBeforeFace),
   "workspace.insertSessionBefore": bindPayload(workspaceInsertSessionBeforeFace),
   "workspace.previewInject": bindPayload(workspacePreviewInject),
-  "workspace.syncSeeds": bindPayload(workspaceSyncSeeds),
   "settings.get": bindPayload(settingsGet),
   "settings.describe": bindRuntime(settingsDescribeFace),
   "settings.mutate": bindPayload(settingsMutateFace),

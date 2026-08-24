@@ -160,6 +160,17 @@ const WebSearchConfig = Schema.object({
   region: Schema.string(),
 });
 
+export const DEFAULT_WORKSPACE_INJECT_MAX_CHARS = 32_000;
+
+const WorkspaceInjectConfig = Schema.object({
+  /** Total character budget for rules + skills catalog inject (per turn). */
+  injectMaxChars: Schema.number()
+    .step(1000)
+    .min(4_000)
+    .max(128_000)
+    .default(DEFAULT_WORKSPACE_INJECT_MAX_CHARS),
+});
+
 const UiConversationConfig = Schema.object({
   busyEnter: Schema.union(["queue", "steer"]),
 });
@@ -265,6 +276,12 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       ns: "web-search",
       schema: schemasteryJson(WebSearchConfig) as FaceSchemaEnvelope,
       base: { provider: "auto" },
+      applies: "live",
+    },
+    {
+      ns: "workspace-inject",
+      schema: schemasteryJson(WorkspaceInjectConfig) as FaceSchemaEnvelope,
+      base: { injectMaxChars: DEFAULT_WORKSPACE_INJECT_MAX_CHARS },
       applies: "live",
     },
     {

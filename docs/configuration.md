@@ -32,7 +32,7 @@ Leave `XRK_API_KEY` empty for local unauthenticated HTTP/Face debugging. Product
 |----|------|
 | **`~/.xrk`**（`XRK_HOME` / `XRK_DSH_HOME` / `DSH_HOME`） | 用户设置、凭据、会话、工作区列表、MCP desired — 对齐 DSH `~/.dsh` 布局 / User settings, credentials, sessions, workspace list, MCP desired — layout aligned with DSH `~/.dsh` |
 | **`{workspace}/.xrk`** | 可选：项目 assistant / context / rules / recipes；**不强制创建** / Optional project assistant / context / rules / recipes; **not required** |
-| **Skills** | 产品 skills：已存在的 `.claude/skills` 等（见 [skills-layers.md](./skills-layers.md)）；笔记 `.cursor/skills` 若标 `disable-model-invocation` 则不进产品 Agent / Product skills: existing `.claude/skills` and peers ([skills-layers.md](./skills-layers.md)); note skills under `.cursor/skills` with `disable-model-invocation` do not enter the product Agent |
+| **Skills** | 多根导入：`.agents/skills` · `.xrk/skills` · `.claude/skills` 等（见 [skills-layers.md](./skills-layers.md)） / Multi-root import: `.agents/skills` · `.xrk/skills` · `.claude/skills` and peers ([skills-layers.md](./skills-layers.md)) |
 
 | 路径 / Path | 用途 / Purpose | 入库 / In git |
 |------|------|------|

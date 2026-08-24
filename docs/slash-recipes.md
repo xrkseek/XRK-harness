@@ -37,10 +37,10 @@ Skill slash **不是** Face 命令：`session.prompt` 上未知 `/name` 先按�
 | `false` | 跳过 recipe 加载；skill slash 仍接线 |
 | `string` | 加载该 recipes 目录并接线 skill slash |
 
-种子示例：`templates/office-agent/recipes/daily-standup.yaml`（经 `syncSeedsFrom` 或复制到 `.xrk/recipes`）。
+示例：`.agents/recipes/plugin-scaffold.yaml` 或 `{productDir}/recipes/*.yaml`。
 
 ## 出站管道 / Outbound pipeline
 
 自定义出站链可用 `createSlashRecipeStep(resolve)`。默认 `slashRecipeStep` 为 no-op，除非传入 `createDefaultOutbound({ resolveSlash })` — 优先使用 assemble 热路径上的 `resolveSlash`。
 
-参见 / See also：[workspace-inject.md](./workspace-inject.md) · `templates/office-agent/README.md`。
+参见 / See also：[workspace-inject.md](./workspace-inject.md) · [plugin-development.md](./plugin-development.md)。

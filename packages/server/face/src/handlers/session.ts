@@ -101,6 +101,7 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       : runtime.ensureSession();
   runtime.watchSession(sessionId);
   runtime.sessionCwds.set(sessionId, attach.cwd);
+  void runtime.invalidateAgent?.(sessionId);
   const workspace =
     attach.workspaceId === undefined
       ? undefined
@@ -172,6 +173,8 @@ export const sessionList: FaceHandler = async (runtime) => {
     const lastPromptAt = meta?.lastPromptAt ?? null;
     const updatedAt = Math.max(last?.ts ?? 0, lastPromptAt ?? 0);
     const cwd = resolveSessionCwd(runtime, sessionId);
+    const wsId = runtime.workspaces.workspaceIdOf(sessionId);
+    const wsRow = wsId ? runtime.workspaces.get(wsId) : undefined;
     const agentPreset = runtime.sessionAgentPresets.get(sessionId);
     const lineage = runtime.subagents.getByChild(sessionId);
     return {
@@ -180,6 +183,8 @@ export const sessionList: FaceHandler = async (runtime) => {
       running: runtime.drain.isActive(sessionId),
       blank,
       cwd,
+      ...(wsId ? { workspaceId: wsId } : {}),
+      ...(wsRow?.title ? { workspaceTitle: wsRow.title } : {}),
       ...(agentPreset ? { agentPreset } : {}),
       ...(lineage
         ? {

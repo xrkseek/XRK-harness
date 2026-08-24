@@ -39,6 +39,7 @@ export function createServerAgentFactory(
     sessionId,
     store,
     workspaceRoot,
+    workspaceDisplayTitle,
     plugins,
     resolveImage,
     ptyService,
@@ -53,6 +54,7 @@ export function createServerAgentFactory(
     llmRetryMaxRetries,
     bashLimits,
     webSearch,
+    workspaceInject,
   }) => {
     const llm =
       resolveLlm?.(sessionId) ??
@@ -62,6 +64,9 @@ export function createServerAgentFactory(
 
     const composition = createHarnessComposition({
       workspaceRoot: workspaceRoot || options.workspaceRoot,
+      ...(workspaceDisplayTitle
+        ? { workspaceDisplayTitle }
+        : {}),
       sessionStore: store,
       sessionId,
       llm,
@@ -80,6 +85,7 @@ export function createServerAgentFactory(
       ...(llmRetryMaxRetries !== undefined ? { llmRetryMaxRetries } : {}),
       ...(bashLimits ? { bashLimits } : {}),
       ...(webSearch ? { webSearch } : {}),
+      ...(workspaceInject !== undefined ? { workspaceInject } : {}),
     });
     return composition.createAgent();
   };
