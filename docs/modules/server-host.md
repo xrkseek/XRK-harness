@@ -1,6 +1,6 @@
 # Module: `@xrkseek/server-host`
 
-> **读者 / Audience**：贡献者 · 维护者 / Contributors · Maintainers
+> **读者**：贡献者 · 维护者
 
 进程内 Host：config · store · drain · HTTP · Face · 插件 / MCP 装载。
 
@@ -90,3 +90,85 @@ Preset 须 `wireCompositionTools({ plugins })`（见 minimal/harness）。Host s
 1. 配了 `XRK_MCP_SERVERS` 但未 `XRK_MCP_ALLOW` 且无 policy allow → spawn 抛 policy deny。  
 2. MCP 插件 id 冲突：已存在同 id 则 skip register。  
 3. Face 与 REST 共用 store；改 session 别绕过 Face 投影假设。
+
+---
+
+# Module: `@xrkseek/server-host`
+
+> **Audience**: Contributors · Maintainers
+
+In-process Host: config · store · drain · HTTP · Face · plugin / MCP loading.
+
+Specs: [host-preset.md](../host-preset.md) · [http-api.md](../http-api.md).
+
+## File map
+
+| File | Role | Critical contract |
+|------|------|-------------------|
+| `index.ts` | `createHostManager` · spawn/stop | AgentHandle may be a cached binding, **not** the transcript |
+| `agent-cache.ts` | Per-session agent cache · `host.plugins` Scope | Root `agent:{id}`; child `openSubagentRealm` (`subagent:{id}`); invalidate parent unloads nested children |
+| `standing-tools.ts` | Preset standing tool table (Face `viewFor`) | Cold history does not resume the agent; minimal = fs+std+skill; harness/server add bash + web + lsp + pty |
+| `mcp-wire.ts` | `XRK_MCP_SERVERS` or `~/.xrk/host-settings.json` → synthetic `kind: tools` plugins; on file source of truth, Face mutate → `reconcileMcpToolPlugins` | Must allow; id = `mcp:<serverName>`; bounded stdio/HTTP reconnect; list_changed / health / gave-up refresh tools + invalidateAll; health pushes overlay; `gave-up` with same fingerprint still replaces; non-empty env/config wins over file (no live sync) |
+
+Config lives in `@xrkseek/server-config` (`loadHostConfig`).
+
+## Spawn order (troubleshooting)
+
+```text
+1. createMemorySessionStore or createPersistentSessionStore(XRK_SESSIONS_DIR) + PluginLoader
+2. loadAll(pluginsDir) if configured
+3. loadMcpToolPlugins(mcpServers) when specs exist (env/config or host-settings.json) and policy/XRK_MCP_ALLOW allows
+4. createHostAgentCache(loader.list())
+5. createFaceRuntime (policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`; file-sourced MCP gets `syncMcpServers`; `resolveAgent` binds `ask_user` / `exit_plan_mode`)
+6. createHttpServer + attachFace
+```
+
+Shutdown: `agentCache.dispose` → `shellJobs.dispose` (if any) → PTY `dispose` → close HTTP → `loader.unregister` each (including MCP `dispose`).
+
+## Env contract
+
+| Env | Meaning |
+|-----|---------|
+| `XRK_HOST` / `XRK_PORT` | Listen address |
+| `XRK_WORKSPACE` | workspaceRoot |
+| `XRK_PRESET` | minimal \| harness \| server |
+| `XRK_API_KEY` | Face/HTTP auth (empty = dev no-auth) |
+| `XRK_SESSIONS_DIR` | Session persistence dir (`sessions.db`); omit = in-memory store (CLI `serve` defaults to `~/.xrk/sessions`) |
+| `XRK_PLUGINS_DIR` | Process plugin root; `web/` is client overlay (boot + `/plugins/…`) |
+| `XRK_WEB_DIST` | Static shell override; CLI default is `product-web/` or apps/web/dist |
+| `XRK_POLICY_FILE` | Policy JSON |
+| `XRK_MCP_SERVERS` | JSON array: `[{serverName,command,args?,env?,cwd?}]` or `[{serverName,url}]`; empty falls back to `~/.xrk/host-settings.json` |
+| `XRK_MCP_ALLOW` | `1`/`true` → default-allow mcp.connect for this process |
+| `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY` | web_search; see [web-tools.md](../web-tools.md) |
+| `XRK_LSP_COMMAND` / `XRK_LSP_ARGS` | `lsp` stdio language server; see [lsp-tools.md](../lsp-tools.md) |
+
+## AgentFactory input
+
+```ts
+{
+  sessionId, store, workspaceRoot,
+  plugins: loader.list(), // directory plugins + mcp:*
+  resolveImage,            // Host attachment store → vision adapter
+  ptyService?,             // harness/server shared PTY (survives agent invalidate)
+  shellJobs?,              // harness/server shared jobs; composition isolates by sessionId
+}
+```
+
+Presets must call `wireCompositionTools({ plugins })` (see minimal/harness). Host stop: `shellJobs.dispose()` → PTY `dispose` → unregister plugins.
+
+## Tests
+
+| Test | Coverage |
+|------|----------|
+| `tests/mcp-wire.test.ts` | JSON parse · default deny · host-settings.json · fingerprint · reconcile |
+| `tests/http-chat.test.ts` | spawn · pluginsDir wiring |
+| `tests/product-shell.test.ts` | Requires full `apps/web/dist`: GET `/` · `__XRK_BOOT__` · no cordis UI / HMR · `/plugins/@xrkseek/client-runtime/client.js` 200 · Face immediate `xrk-typert-registry` · first-paint RPC · manifest name · welcome copy |
+| `apps/web/tests/product-shell-*.e2e.ts` | Not in `pnpm check`. Run via `pnpm test:web` (chrome / stream / tool / approval / inventory / question / thinking / todo / access / plan / plan-review / export / cancel / error) |
+| `tests/agent-cache.test.ts` | Dispose order |
+| `tests/standing-tools.test.ts` | minimal has no bash; harness/server expose bash presenter |
+
+## Common pitfalls
+
+1. `XRK_MCP_SERVERS` set without `XRK_MCP_ALLOW` and without policy allow → spawn throws policy deny.  
+2. MCP plugin id clash: existing id skips register.  
+3. Face and REST share the store; do not bypass Face projection assumptions when mutating sessions.

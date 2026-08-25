@@ -1,33 +1,31 @@
-# 维护者交接 / Maintainer Handoff
+# 维护者交接
 
-> **读者 / Audience**：维护者（仓库所有者 / 即将接手的人） / Maintainers (owners / incoming handoff)
+> **读者**：维护者（仓库所有者 / 即将接手的人）
 
 把「能跑的产品」交给下一个人时，按本页核对。细节契约仍在各教科书专题；改码红线在 [AGENTS.md](../AGENTS.md)。
 
-When handing a working product to the next owner, use this checklist. Detailed contracts stay in textbook topics; coding red lines live in [AGENTS.md](../AGENTS.md).
+## 30 分钟上手
 
-## 30 分钟上手 / 30-minute onboarding
-
-| 步 / Step | 做什么 / Action | 文档 / Doc |
+| 步 | 做什么 | 文档 |
 |----|--------|------|
-| 1 | 认身份与文档分层 / Audiences & carriers | [audiences](./audiences.md) · [docs/README](./README.md) |
-| 2 | 看什么能正式依赖 / What is dependable | [status](./status.md) |
-| 3 | 本机跑通源码 + 壳 / Run source + shell | [getting-started](./getting-started.md) 路径 B |
-| 4 | 门禁绿 / Green gate | [testing](./testing.md) · `pnpm check` |
-| 5 | 发版怎么打 / How to release | [publishing](./publishing.md) |
-| 6 | 包边界与依赖忌口 / Package boundaries | [architecture](./architecture.md) · [AGENTS](../AGENTS.md) |
+| 1 | 认身份与文档分层 | [audiences](./audiences.md) · [docs/README](./README.md) |
+| 2 | 看什么能正式依赖 | [status](./status.md) |
+| 3 | 本机跑通源码 + 壳 | [getting-started](./getting-started.md) 路径 B |
+| 4 | 门禁绿 | [testing](./testing.md) · `pnpm check` |
+| 5 | 发版怎么打 | [publishing](./publishing.md) |
+| 6 | 包边界与依赖忌口 | [architecture](./architecture.md) · [AGENTS](../AGENTS.md) |
 
-## 仓库真相 / Repository facts
+## 仓库真相
 
-| 项 / Item | 事实 / Fact |
+| 项 | 事实 |
 |----|------|
-| 对外发包 / Public package | 主要是 **`@xrkseek/harness-cli`**（npmjs + GitHub Release；含 `product-web/`） |
+| 对外发包 | 主要是 **`@xrkseek/harness-cli`**（npmjs + GitHub Release；含 `product-web/`） |
 | 其余 `@xrkseek/*` | 多数 **private**（workspace）；勿当已 npm 公开 SDK 对外承诺 |
-| 产品壳 / Product shell | `apps/web` + `packages/client` → 组装进 CLI（产品壳二次创作面） |
-| 会话 / 设置 / Sessions · settings | 用户机 `~/.xrk/` 或 workspace `.xrk/`（gitignore）；仓内只有 `*.example` |
-| 能力三态 / Capability states | **能跑 / 未稳 / 未做** — 只以 [status](./status.md) 对外说话 |
+| 产品壳 | `apps/web` + `packages/client` → 组装进 CLI |
+| 会话 / 设置 | 用户机 `~/.xrk/` 或 workspace `.xrk/`（gitignore）；仓内只有 `*.example` |
+| 能力三态 | **能跑 / 未稳 / 未做** — 只以 [status](./status.md) 对外说话 |
 
-## 日常命令 / Day-to-day commands
+## 日常命令
 
 ```bash
 npm install -g pnpm@11.22.0   # 与 package.json → packageManager 对齐
@@ -68,9 +66,9 @@ pnpm test:web              # 产品壳硬刷；不进 check
 | `docs/` · 根 README | 用户 / 集成能读的事实 |
 | `docs/maintainer.md` · `publishing.md` | 维护者流程 |
 | `AGENTS.md` · `.cursor/rules` · `.cursor/skills` | 改码红线、Agent 流程 |
-| Canvas | 本机路径、对照仓体量 — **不入库** |
+| Canvas | 本机路径、临时对照 — **不入库** |
 
-标准：[audiences](./audiences.md)。
+标准：[audiences](./audiences.md)。教科书用整篇中英对半；禁止日记腔与自证对照。
 
 ## 域地图（找人 / 找码）
 
@@ -86,14 +84,112 @@ pnpm test:web              # 产品壳硬刷；不进 check
 ## 交接检查清单
 
 - [ ] 继任者本机 Node ≥26；`npm install -g pnpm@…` 与根 `packageManager` 一致  
-
 - [ ] 读过 status「能跑 / 未稳 / 未做」，不对外承诺未做项  
 - [ ] `pnpm check` 绿；知道 `test:web` 单独跑  
-- [ ] 会按 publishing 打 Release / npmjs（或明确谁有 NPM_TOKEN）  
+- [ ] 会按 publishing 打 Release / npmjs（或明确谁有 `NPM_TOKEN`）  
 - [ ] 知道密钥只在本机、example 在仓内  
-- [ ] 知道 Cordis / DSH 对照只在 Canvas，不进 docs 当路线图  
-- [ ] 重大决策有 ADR；发行说明在 `docs/releases/`（新增/完善/删除/修复，非日记）  
+- [ ] 本机对照笔记只在 Canvas，不进 `docs/` 当路线图  
+- [ ] 重大决策有 ADR；发行说明在 `docs/releases/`（新增/完善/删除/修复）  
 
 ## 相关
+
+[CONTRIBUTING](../CONTRIBUTING.md) · [AGENTS](../AGENTS.md) · [publishing](./publishing.md) · [architecture](./architecture.md) · [releases/](./releases/)
+
+---
+
+# Maintainer handoff
+
+> **Audience**: Maintainers (owners / incoming handoff)
+
+When handing a working product to the next owner, use this checklist. Detailed contracts stay in textbook topics; coding red lines live in [AGENTS.md](../AGENTS.md).
+
+## 30-minute onboarding
+
+| Step | Action | Doc |
+|------|--------|-----|
+| 1 | Audiences & carriers | [audiences](./audiences.md) · [docs/README](./README.md) |
+| 2 | What is dependable | [status](./status.md) |
+| 3 | Run source + shell | [getting-started](./getting-started.md) Path B |
+| 4 | Green gate | [testing](./testing.md) · `pnpm check` |
+| 5 | How to release | [publishing](./publishing.md) |
+| 6 | Package boundaries | [architecture](./architecture.md) · [AGENTS](../AGENTS.md) |
+
+## Repository facts
+
+| Item | Fact |
+|------|------|
+| Public package | Primarily **`@xrkseek/harness-cli`** (npmjs + GitHub Release; includes `product-web/`) |
+| Other `@xrkseek/*` | Mostly **private** (workspace); do not promise a public SDK |
+| Product shell | `apps/web` + `packages/client` → assembled into the CLI |
+| Sessions / settings | User machine `~/.xrk/` or workspace `.xrk/` (gitignored); repo ships `*.example` only |
+| Capability states | **Working / Unstable / Not done** — speak only from [status](./status.md) |
+
+## Day-to-day commands
+
+```bash
+npm install -g pnpm@11.22.0   # match package.json → packageManager
+pnpm install
+pnpm check
+pnpm build
+pnpm web:build && pnpm client:bundle && pnpm web:assemble
+node apps/cli/dist/bin.js web --workspace .
+pnpm test:web              # product-shell soaks; not in check
+```
+
+Release: `pnpm release:stage` / `pnpm release` — [publishing](./publishing.md).
+
+## What to sync when changing
+
+Same as [CONTRIBUTING](../CONTRIBUTING.md); watch especially:
+
+| Change | Sync |
+|--------|------|
+| SessionEvent / HTTP | `session*.md` · `http-api.md` · protocol |
+| Tool pipeline / settle | `tool-*.md` |
+| Preset | `profiles.md` · preset README |
+| Dependability | **must** `status.md` |
+| Meter / compaction | `session-compaction.md` · `protocol-events.md` · note skill `xrk-meter-session` |
+
+Unfinished work: update status **Not done** only — never fake APIs.
+
+## Secrets and security
+
+- Never commit real `.credentials.yaml` · `settings.yaml` · `.env`  
+- Templates: `.xrk/*.example` · `.env.example`  
+- Checklist: [security-checklist](./security-checklist.md) · [policy](./policy.md)
+
+## Docs vs notes
+
+| Where | Content |
+|-------|---------|
+| `docs/` · root README | Facts users/integrators can read |
+| `docs/maintainer.md` · `publishing.md` | Maintainer process |
+| `AGENTS.md` · `.cursor/*` | Coding red lines, Agent flow |
+| Canvas | Local paths — **do not commit** |
+
+Standard: [audiences](./audiences.md). Textbooks use whole-document CN/EN halves; no diary or self-justifying contrast.
+
+## Domain map
+
+| Domain | Textbook | Packages |
+|--------|----------|----------|
+| Session / compaction | [session](./session.md) · [session-compaction](./session-compaction.md) | `packages/core/session` · `agent-loop` |
+| Face / HTTP | [host-face](./host-face.md) · [http-api](./http-api.md) | `packages/server/face` · `http` · `host` |
+| MCP | [modules/mcp](./modules/mcp.md) | `packages/mcp` |
+| LLM | [llm-provider-registry](./llm-provider-registry.md) | `packages/llm/*` |
+| Shell | [host-face](./host-face.md) | `apps/web` · `packages/client` |
+| Full index | [modules/](./modules/README.md) | |
+
+## Handoff checklist
+
+- [ ] Successor has Node ≥26; `pnpm` matches root `packageManager`  
+- [ ] Read status Working / Unstable / Not done; do not promise Not done  
+- [ ] `pnpm check` green; know `test:web` is separate  
+- [ ] Can release via publishing (or know who holds `NPM_TOKEN`)  
+- [ ] Secrets stay local; examples stay in-repo  
+- [ ] Local comparison notes stay in Canvas, not `docs/` roadmaps  
+- [ ] Major decisions have ADRs; release notes under `docs/releases/`  
+
+## Related
 
 [CONTRIBUTING](../CONTRIBUTING.md) · [AGENTS](../AGENTS.md) · [publishing](./publishing.md) · [architecture](./architecture.md) · [releases/](./releases/)

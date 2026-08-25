@@ -1,6 +1,6 @@
 # `@xrkseek/attachment`（文件地图）
 
-> **读者 / Audience**：贡献者 · 维护者 / Contributors · Maintainers
+> **读者**：贡献者 · 维护者
 
 | 文件 | 职责 |
 |------|------|
@@ -18,3 +18,26 @@
 3. Host Face：`inputModalities` 无 `image` → prompt 图在写盘前拒（`unsupported-modality`）。默认 Host 含 `image`；LLM 适配器仍可 text-only。
 
 相关：[protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) · [server-face.md](./server-face.md)
+
+---
+
+# `@xrkseek/attachment` (file map)
+
+> **Audience**: Contributors · Maintainers
+
+| File | Responsibility |
+|------|----------------|
+| `types.ts` | limits · SaveImage · StoredImage; `ImageAttachmentRef` from protocol |
+| `store.ts` | `AttachmentStore` seam |
+| `memory.ts` | Content-addressed in-memory store (Host default) |
+| `image-meta.ts` | Magic sniff + header width/height |
+| `digest.ts` | `sha256:<hex>` id |
+| `error.ts` | `AttachmentError` + stable `code` |
+
+## Invariants
+
+1. The event log stores refs only — never base64, paths, or URLs.  
+2. `saveImages` validates the whole batch before write; validation failure commits nothing.  
+3. Host Face: if `inputModalities` lacks `image`, prompt images are rejected before disk (`unsupported-modality`). Default Host includes `image`; LLM adapters may still be text-only.
+
+See: [protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) · [server-face.md](./server-face.md)

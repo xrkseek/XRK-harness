@@ -1,6 +1,6 @@
 # Module: `@xrkseek/server-loader`
 
-> **读者 / Audience**：贡献者 · 维护者 / Contributors · Maintainers
+> **读者**：贡献者 · 维护者
 
 进程插件登记 / 发现 / kind 接线。规格：[plugin-loader.md](../plugin-loader.md)。
 
@@ -18,7 +18,7 @@
 | `commands.ts` | `collectPluginCommands` | 命令名先登记者赢 |
 | `inventory.ts` | `toPluginInventoryEntries` | Cordis → `failed` / disabled |
 
-## Kind 表（标准化）
+## Kind 表
 
 | kind | 字段 | apply / wire | 状态 |
 |------|------|--------------|------|
@@ -42,4 +42,52 @@
 
 ## 测试
 
-`packages/server/loader/tests/loader.test.ts` — discover/load · tools · prompt · commands · dsh/deepseek 别名 · Cordis stub。
+`packages/server/loader/tests/loader.test.ts` — discover/load · tools · prompt · commands · 别名 · Cordis stub。
+
+---
+
+# Module: `@xrkseek/server-loader`
+
+> **Audience**: Contributors · Maintainers
+
+Process-plugin registration / discovery / kind wiring. Spec: [plugin-loader.md](../plugin-loader.md).
+
+## File map
+
+| File | Role | Critical contract |
+|------|------|-------------------|
+| `index.ts` | `createPluginLoader` · exports | register conflicts throw; unregister calls `dispose` |
+| `types.ts` | `RegisteredPlugin` · prompt / command contributions | kind + contribution fields; no cycle back into prompt |
+| `kinds.ts` | `PLUGIN_KINDS` · `RESERVED_*` · `isKnownPluginKind` | Prefer a new kind + apply* for new capabilities |
+| `manifest.ts` | `xrk.plugin.json` / `xrkseek`·`dsh`·`deepseek.plugin` / Cordis stub | Discover only; skip `web/` |
+| `load.ts` | Dynamic import · export shape checks | id/kind match manifest; `skipLoad` skips import |
+| `tools.ts` | `applyToolsPlugins` · `wireCompositionTools` | **Explicit same-name wins** (no silent overwrite) |
+| `prompt.ts` | `applyPromptPlugins` · `wireCompositionPrompts` | Reserved ids (default `base`) win |
+| `commands.ts` | `collectPluginCommands` | First registered command name wins |
+| `inventory.ts` | `toPluginInventoryEntries` | Cordis → `failed` / disabled |
+
+## Kind table
+
+| kind | Fields | apply / wire | Status |
+|------|--------|--------------|--------|
+| `tools` | `tools[]` | `wireCompositionTools` | Working |
+| `prompt` | `promptSections[]` | `wireCompositionPrompts` | Working |
+| `commands` | `commands[]` | Face `commands/*` | Working |
+| `channel` | (TBD) | — | Reserved |
+| `policy` | (TBD) | — | Reserved |
+| `llm` | (TBD) | — | Reserved |
+| `cordis` | — | no import | Inventory stub only |
+
+Discipline: **prefer a new kind for new Host capabilities** instead of Face/Host one-offs.
+
+## Invariants
+
+1. `types.ts` must not import `prompt.ts` (cycle).  
+2. `tools` / `prompt` / `commands` checks use `PLUGIN_KINDS.*` only.  
+3. Plugin failure must be reversible: `dispose` + unregister.  
+4. MCP Host wiring also yields `kind: "tools"` plugins (see [server-host.md](./server-host.md)).  
+5. Cordis packages must not be `import()`-ed (avoids `apply(ctx)` blowing up Host).
+
+## Tests
+
+`packages/server/loader/tests/loader.test.ts` — discover/load · tools · prompt · commands · aliases · Cordis stub.

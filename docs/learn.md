@@ -46,7 +46,7 @@
 
 - **已交付内核能力（摘要）**：`session.history` message 边界分页（50）；取消流式前缀固化；DeepSeek V4 默认模型；SQLite 持久化（**schema v3** 物理 `text-chunks` · lazy · batch · flush · repair）；ZIP 导出 `text-chunks` + zstd sidecar；`maxRequestImageBytes` 请求级图片 offload（20MiB）；HTTP **413** 请求体过大 → `UnsupportedContentError`；`web_search` 并发 `queries[]`；cancel e2e（`product-shell-cancel.e2e.ts`）。上下文换窗用单事件 `context/compaction.shadowedTokenCount` 缩 meter 窗口（见 [session-compaction.md](./session-compaction.md)）。
 
-- **能力边界（诚实）**：无 Codex/Claude Profile Bundle。DeepSeek **官方** Flash/Pro 仍 text-only；`deepseek-v4-flash-vision-exp` 标 `text+image`（自定义 gateway 默认可声明视觉）。交互式浏览器工具、完整 Cordis scaffold 套件等见 [status.md](./status.md)「未做 / Planned」。
+- **能力边界（诚实）**：DeepSeek **官方** Flash/Pro 仍 text-only；`deepseek-v4-flash-vision-exp` 标 `text+image`（自定义 gateway 默认可声明视觉）。交互式浏览器工具、完整 Cordis scaffold 套件等见 [status.md](./status.md)「未做」。
 
 - **附件 / 视觉**：`MessageContent` 可为块数组；`@xrkseek/attachment`；Face `session.attachment`；Host Face **intake** 默认 `text+image`（InputBar）。**Live 适配器 modality 以 Registry 为准**（官方 Flash/Pro text-only；`deepseek-v4-flash-vision-exp` 与自定义 gateway 可 `text+image`）——`resolveLlmForSelection` 不再把 Face intake 盖到 adapter 上。`session.prompt` / MCP `imageAdmission` 经 `liveRouteAllowsImageInput` 双闸（Face intake + live route）。openai-compatible 含 `image` 才走 `image_url` data URL。MCP 工具结果：有序块投影；准入成功时 `tool/result.content` 为 ContentBlock[]，否则 diagnostic（不 dump base64）。
 
@@ -142,7 +142,7 @@ Short digest of shipped capabilities; details live in topic docs and [modules/](
 
 - **Shipped kernel capabilities (summary)**: `session.history` message-boundary pagination (50); cancel-stream prefix solidify; DeepSeek V4 default models; SQLite persistence (**schema v3** physical `text-chunks` · lazy · batch · flush · repair); ZIP export `text-chunks` + zstd sidecar; `maxRequestImageBytes` request-level image offload (20MiB); HTTP **413** oversized body → `UnsupportedContentError`; `web_search` concurrent `queries[]`; cancel e2e (`product-shell-cancel.e2e.ts`). Context windowing uses a single `context/compaction.shadowedTokenCount` event to shrink the meter window ([session-compaction.md](./session-compaction.md)).
 
-- **Honest capability bounds**: No Codex/Claude Profile Bundle. Official DeepSeek Flash/Pro remain text-only; `deepseek-v4-flash-vision-exp` is marked `text+image` (custom gateways may declare vision by default). Interactive browser tools, full Cordis scaffold suite, and similar gaps are **Not done / Planned** in [status.md](./status.md).
+- **Honest capability bounds**: Official DeepSeek Flash/Pro remain text-only; `deepseek-v4-flash-vision-exp` is marked `text+image` (custom gateways may declare vision by default). Interactive browser tools, full Cordis scaffold suite, and similar gaps are **Not done** in [status.md](./status.md).
 
 - **Attachments / vision**: `MessageContent` may be a block array; `@xrkseek/attachment`; Face `session.attachment`; Host Face **intake** defaults to `text+image` (InputBar). **Live adapter modality follows the Registry** (official Flash/Pro text-only; `deepseek-v4-flash-vision-exp` and custom gateways may be `text+image`) — `resolveLlmForSelection` no longer overlays Face intake onto the adapter. `session.prompt` / MCP `imageAdmission` use the `liveRouteAllowsImageInput` dual gate (Face intake + live route). openai-compatible emits `image_url` data URLs only when `image` is present. MCP tool results: ordered block projection; on successful admission `tool/result.content` is ContentBlock[], otherwise a diagnostic (no base64 dump).
 
