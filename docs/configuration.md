@@ -135,12 +135,14 @@ Settings → Plugins mutates these runtime namespaces:
 |---------|------|------|
 | `mcp` | `servers` · `allowConnect` | 热挂载（文件源）；关 allow 则 park / Hot-mount (file-backed); park when allow is off |
 | `web-search` | `provider` · `region`（密钥走 Credentials） / keys via Credentials | 下次 agent 重建后作用于 `web_search` / Applies to `web_search` after the next agent rebuild |
-| `bash` | `timeoutMs` · `maxOutputBytes` | 下次 agent 重建后作用于 `bash` 工具 / Applies to the `bash` tool after the next agent rebuild |
+| `bash` | `timeoutMs` · `maxOutputBytes`（默认 **64_000**） | 下次 agent 重建后作用于 `bash` 捕获上限 / Applies to bash capture cap after the next agent rebuild (default **64_000**) |
 | `agent-loop` | `maxParallelToolCalls` | 下次 agent 重建后限制同一步并行 settle 池上限 / Caps the parallel settle pool for one step after the next agent rebuild |
 | `agent-loop` | `maxSteps` | 单次用户 turn 的 LLM 步数上限（默认 32） / Max LLM steps per user turn (default 32) |
 | `agent-loop` | `toolSettle` | `parallel`（默认，按 `isConcurrencySafe`）或 `serial` / `parallel` (default, by `isConcurrencySafe`) or `serial` |
 | `agent-loop` | `llmRetryMaxRetries` | 步内 provider 重试上限（默认 5；`0` 关闭） / In-step provider retry cap (default 5; `0` disables) |
 | `agent-loop` | `toolOrder` | DSH 风格工具线序（settings.yaml；恰好一个 `' '` rest） / DSH-style tool line order (settings.yaml; exactly one `' '` rest) |
+| `agent-loop` | `maxRequestTokens` · `keepTokens` · `bufferTokens` | 软上下文预算（默认 100k / 24k / 4k）；超限 prune → compact → fail-closed / Soft context budget (defaults 100k / 24k / 4k); over → prune → compact → fail-closed |
+| `agent-loop` | `toolResultMaxInlineBytes` | 工具正文 spill 上限（默认 **64_000**；`0` 关闭） / Tool-result spill ceiling (default **64_000**; `0` disables) |
 
 Tavily / Brave 密钥：Plugins → Web search 卡或 Settings → Credentials（同一槽 `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY`）。
 

@@ -53,6 +53,8 @@ export function createServerAgentFactory(
     toolSettle,
     llmRetryMaxRetries,
     bashLimits,
+    compaction,
+    toolResultMaxInlineBytes,
     webSearch,
     workspaceInject,
   }) => {
@@ -84,6 +86,10 @@ export function createServerAgentFactory(
       ...(toolSettle !== undefined ? { toolSettle } : {}),
       ...(llmRetryMaxRetries !== undefined ? { llmRetryMaxRetries } : {}),
       ...(bashLimits ? { bashLimits } : {}),
+      ...(compaction ? { compaction } : {}),
+      ...(toolResultMaxInlineBytes !== undefined
+        ? { toolResultMaxInlineBytes }
+        : {}),
       ...(webSearch ? { webSearch } : {}),
       ...(workspaceInject !== undefined ? { workspaceInject } : {}),
     });

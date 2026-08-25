@@ -202,6 +202,11 @@ export interface HarnessCompositionOptions {
     readonly maxOutputBytes?: number;
   };
   /**
+   * Face `agent-loop.toolResultMaxInlineBytes` — spill ceiling (`0` disables).
+   * Omit → kernel default 64_000.
+   */
+  readonly toolResultMaxInlineBytes?: number;
+  /**
    * Face `web-search` + Credentials vault (structured; preferred over env).
    */
   readonly webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
@@ -296,9 +301,8 @@ export function createHarnessComposition(
     ...(options.bashLimits?.timeoutMs !== undefined
       ? { timeoutMs: options.bashLimits.timeoutMs }
       : {}),
-    ...(options.bashLimits?.maxOutputBytes !== undefined
-      ? { maxOutputBytes: options.bashLimits.maxOutputBytes }
-      : {}),
+    // Cap shell dumps at capture (DSH bash default 64_000).
+    maxOutputBytes: options.bashLimits?.maxOutputBytes ?? 64_000,
     defaultCwd: options.workspaceRoot,
   })) tools.register(tool);
   for (const tool of createStdTools()) tools.register(tool);
@@ -568,6 +572,9 @@ export function createHarnessComposition(
                 keepTokens: 24_000,
                 bufferTokens: 4_000,
               }),
+        ...(options.toolResultMaxInlineBytes !== undefined
+          ? { toolResultMaxInlineBytes: options.toolResultMaxInlineBytes }
+          : {}),
         ...(options.maxParallelToolCalls !== undefined
           ? { maxParallelToolCalls: options.maxParallelToolCalls }
           : {}),

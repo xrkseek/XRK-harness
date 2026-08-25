@@ -59,6 +59,7 @@ export {
   buildCompactionPrompt,
   deriveMessagesUnwindowed,
   estimateMessagesTokens,
+  estimateRequestTokens,
   estimateTokens,
   findLatestCompaction,
   formatCompactionForModel,

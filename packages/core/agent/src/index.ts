@@ -153,6 +153,11 @@ export interface CreateAgentOptions {
   readonly llmRetry?: false | Partial<ResolvedRetryPolicy>;
   /** Opt-in context compaction / one overflow retry. */
   readonly compaction?: false | CompactionOptions;
+  /**
+   * Face `agent-loop.toolResultMaxInlineBytes` — spill ceiling (`0` disables).
+   * Forwarded to `runTurn`.
+   */
+  readonly toolResultMaxInlineBytes?: number;
   /** Forwarded to runTurn for vision adapters. */
   readonly resolveImage?: LlmChatRequest["resolveImage"];
   /** Optional Face `session/jobs` source (bash background jobs). */
@@ -315,6 +320,11 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
               : {}),
             ...(options.compaction !== undefined
               ? { compaction: options.compaction }
+              : {}),
+            ...(options.toolResultMaxInlineBytes !== undefined
+              ? {
+                  toolResultMaxInlineBytes: options.toolResultMaxInlineBytes,
+                }
               : {}),
             ...(options.resolveImage
               ? { resolveImage: options.resolveImage }

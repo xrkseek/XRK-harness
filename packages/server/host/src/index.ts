@@ -233,6 +233,14 @@ export type AgentFactory = (input: {
     timeoutMs?: number;
     maxOutputBytes?: number;
   };
+  /** Face `agent-loop` soft compaction budget (harness). */
+  compaction?: {
+    maxRequestTokens?: number;
+    keepTokens?: number;
+    bufferTokens?: number;
+  };
+  /** Face `agent-loop.toolResultMaxInlineBytes` — spill ceiling (`0` disables). */
+  toolResultMaxInlineBytes?: number;
   /** Merged Face web-search + vault keys for `createDefaultWebAccess({ search })`. */
   webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
   /** Face `workspace-inject.injectMaxChars` — rules/skills inject budget. */
@@ -390,6 +398,12 @@ export function createHostManager(): HostManager {
           toolSettle?: "serial" | "parallel";
           llmRetryMaxRetries?: number;
           bashLimits?: { timeoutMs?: number; maxOutputBytes?: number };
+          compaction?: {
+            maxRequestTokens?: number;
+            keepTokens?: number;
+            bufferTokens?: number;
+          };
+          toolResultMaxInlineBytes?: number;
           webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
           workspaceInject?: { readonly maxChars?: number };
         };
@@ -462,6 +476,15 @@ export function createHostManager(): HostManager {
                 : {}),
               ...(pluginSettings.bashLimits
                 ? { bashLimits: pluginSettings.bashLimits }
+                : {}),
+              ...(pluginSettings.compaction
+                ? { compaction: pluginSettings.compaction }
+                : {}),
+              ...(pluginSettings.toolResultMaxInlineBytes !== undefined
+                ? {
+                    toolResultMaxInlineBytes:
+                      pluginSettings.toolResultMaxInlineBytes,
+                  }
                 : {}),
               ...(pluginSettings.webSearch
                 ? { webSearch: pluginSettings.webSearch }
@@ -753,18 +776,43 @@ export function createHostManager(): HostManager {
           llmRetryMaxRetriesRaw >= 0
             ? Math.floor(llmRetryMaxRetriesRaw)
             : undefined;
+        const maxRequestTokens =
+          typeof loop.maxRequestTokens === "number" &&
+          Number.isFinite(loop.maxRequestTokens) &&
+          loop.maxRequestTokens >= 8_000
+            ? Math.floor(loop.maxRequestTokens)
+            : undefined;
+        const keepTokens =
+          typeof loop.keepTokens === "number" &&
+          Number.isFinite(loop.keepTokens) &&
+          loop.keepTokens >= 2_000
+            ? Math.floor(loop.keepTokens)
+            : undefined;
+        const bufferTokens =
+          typeof loop.bufferTokens === "number" &&
+          Number.isFinite(loop.bufferTokens) &&
+          loop.bufferTokens >= 0
+            ? Math.floor(loop.bufferTokens)
+            : undefined;
+        const toolResultMaxInlineBytes =
+          typeof loop.toolResultMaxInlineBytes === "number" &&
+          Number.isFinite(loop.toolResultMaxInlineBytes) &&
+          loop.toolResultMaxInlineBytes >= 0
+            ? Math.floor(loop.toolResultMaxInlineBytes)
+            : undefined;
         const timeoutMs =
           typeof bash.timeoutMs === "number" &&
           Number.isFinite(bash.timeoutMs) &&
           bash.timeoutMs > 0
             ? Math.floor(bash.timeoutMs)
             : undefined;
+        // DSH bash-local default 64_000 — always present so capture is bounded.
         const maxOutputBytes =
           typeof bash.maxOutputBytes === "number" &&
           Number.isFinite(bash.maxOutputBytes) &&
           bash.maxOutputBytes > 0
             ? Math.floor(bash.maxOutputBytes)
-            : undefined;
+            : 64_000;
         const provider =
           typeof webSearchNs.provider === "string"
             ? webSearchNs.provider.trim()
@@ -804,14 +852,26 @@ export function createHostManager(): HostManager {
           ...(toolOrder !== undefined ? { toolOrder } : {}),
           ...(toolSettle !== undefined ? { toolSettle } : {}),
           ...(llmRetryMaxRetries !== undefined ? { llmRetryMaxRetries } : {}),
-          ...(timeoutMs !== undefined || maxOutputBytes !== undefined
+          ...(maxRequestTokens !== undefined ||
+          keepTokens !== undefined ||
+          bufferTokens !== undefined
             ? {
-                bashLimits: {
-                  ...(timeoutMs !== undefined ? { timeoutMs } : {}),
-                  ...(maxOutputBytes !== undefined ? { maxOutputBytes } : {}),
+                compaction: {
+                  ...(maxRequestTokens !== undefined
+                    ? { maxRequestTokens }
+                    : {}),
+                  ...(keepTokens !== undefined ? { keepTokens } : {}),
+                  ...(bufferTokens !== undefined ? { bufferTokens } : {}),
                 },
               }
             : {}),
+          ...(toolResultMaxInlineBytes !== undefined
+            ? { toolResultMaxInlineBytes }
+            : {}),
+          bashLimits: {
+            ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+            maxOutputBytes,
+          },
           webSearch,
           ...(injectMaxChars !== undefined
             ? { workspaceInject: { maxChars: injectMaxChars } }

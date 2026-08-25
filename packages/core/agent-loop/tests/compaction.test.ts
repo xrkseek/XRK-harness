@@ -347,4 +347,49 @@ describe("runTurn compaction / overflow", () => {
         ),
     ).toBe(true);
   });
+
+  it("fail-closes soft budget when tool schemas alone exceed the ceiling", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const fatParams = {
+      type: "object",
+      properties: Object.fromEntries(
+        Array.from({ length: 40 }, (_, i) => [
+          `p${i}`,
+          { type: "string", description: "x".repeat(200) },
+        ]),
+      ),
+    };
+    const tools = createToolRegistry();
+    for (let i = 0; i < 30; i++) {
+      tools.register({
+        name: `fat_tool_${i}`,
+        description: "d".repeat(100),
+        parameters: fatParams,
+        async execute() {
+          return { content: "ok" };
+        },
+      });
+    }
+
+    await expect(
+      runTurn({
+        sessionId: session.id,
+        userText: "hi",
+        store,
+        llm: {
+          id: "should-not-run",
+          async chat() {
+            throw new Error("LLM must not be called when soft budget fails closed");
+          },
+        },
+        tools,
+        compaction: {
+          maxRequestTokens: 200,
+          keepTokens: 50,
+          bufferTokens: 0,
+        },
+      }),
+    ).rejects.toBeInstanceOf(ContextOverflowError);
+  });
 });

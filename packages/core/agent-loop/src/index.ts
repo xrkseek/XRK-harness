@@ -3,7 +3,7 @@ import {
   assertToolCallsSettled,
   deriveMessages,
   durableModelHistory,
-  estimateMessagesTokens,
+  estimateRequestTokens,
   promotePendingSteers,
   pruneOversizedToolResults,
   settleDanglingTools,
@@ -23,6 +23,7 @@ import {
 } from "@xrkseek/core-tools";
 import {
   finalizeLlmChatResponse,
+  ContextOverflowError,
   isContextOverflowError,
   isEmptyResponseError,
   isIncompleteToolCallError,
@@ -55,6 +56,7 @@ import {
 } from "@xrkseek/protocol";
 import { resolveCompactionOptions, runCompaction } from "./compaction.js";
 import { maybeAppendRequestHeader } from "./request-header-log.js";
+import { boundToolResultContent } from "./tool-result-bound.js";
 import {
   MAX_STEPS_PROMPT,
   MAX_STEPS_TOOL_DISABLED,
@@ -143,6 +145,11 @@ export interface RunTurnInput {
    * Pass `false` or omit to disable. Object enables auto + one overflow retry.
    */
   readonly compaction?: false | CompactionOptions;
+  /**
+   * Spill plain-text tool results over this UTF-8 ceiling (DSH spill-policy).
+   * Omit → 64_000; `0` disables spill. Face: `agent-loop.toolResultMaxInlineBytes`.
+   */
+  readonly toolResultMaxInlineBytes?: number;
   /**
    * Provider request retries within a step (DSH llm-retry).
    * Default: normal mode, max 5, retryable EMPTY_RESPONSE / RATE_LIMIT /
@@ -538,8 +545,9 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
 
     let req = buildReq();
 
-    // Soft budget: prune only under pressure (DSH: below-pressure never prune),
-    // remeasure, then summarize only if still over.
+    // Soft budget: count messages + tool schemas (tools alone can dwarf history).
+    // Prune under pressure, remeasure, summarize; fail closed if still over —
+    // do not ship a multi-hundred-k request that OOMs the Host before the API.
     if (
       compaction?.auto !== false &&
       compaction?.maxRequestTokens !== undefined
@@ -547,7 +555,13 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       const buffer =
         compaction.bufferTokens ?? DEFAULT_COMPACTION_BUFFER_TOKENS;
       const softCeiling = compaction.maxRequestTokens - buffer;
-      let used = estimateMessagesTokens(req.messages);
+      const measure = () =>
+        estimateRequestTokens({
+          messages: req.messages,
+          tools: req.tools,
+          ...(req.system !== undefined ? { system: req.system } : {}),
+        });
+      let used = measure();
       if (used > softCeiling) {
         const pruned = pruneOversizedToolResults(input.store, input.sessionId, {
           now,
@@ -556,7 +570,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         });
         if (pruned.pruned > 0) {
           req = buildReq();
-          used = estimateMessagesTokens(req.messages);
+          used = measure();
         }
         if (used > softCeiling) {
           const did = await runCompaction({
@@ -569,7 +583,15 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
             ...(input.signal ? { signal: input.signal } : {}),
             now,
           });
-          if (did.compacted) req = buildReq();
+          if (did.compacted) {
+            req = buildReq();
+            used = measure();
+          }
+        }
+        if (used > softCeiling) {
+          throw new ContextOverflowError(
+            `request ~${used} tokens exceeds soft budget ${softCeiling} after prune/compact`,
+          );
         }
       }
     }
@@ -871,7 +893,21 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         ts: now(),
         turnId,
         stepId,
-        result: outcome.result,
+        result: (() => {
+          const bound = boundToolResultContent({
+            sessionId: input.sessionId,
+            callId: outcome.result.toolCallId,
+            toolName: outcome.result.name,
+            content: outcome.result.content,
+            ...(input.toolResultMaxInlineBytes !== undefined
+              ? { maxInlineBytes: input.toolResultMaxInlineBytes }
+              : {}),
+          });
+          return {
+            ...outcome.result,
+            content: bound.content,
+          };
+        })(),
       });
       if (outcome.result.isError) toolFailed += 1;
       else toolOk += 1;
@@ -990,3 +1026,7 @@ export {
   type RunCompactionResult,
 } from "./compaction.js";
 export { maybeAppendRequestHeader } from "./request-header-log.js";
+export {
+  boundToolResultContent,
+  TOOL_RESULT_MAX_INLINE_BYTES,
+} from "./tool-result-bound.js";

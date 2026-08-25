@@ -107,9 +107,11 @@ Standing plan (`todos` projection) is orthogonal to windowing: `/compact` / `con
 ## Soft budget（`maxRequestTokens`）
 
 Harness 默认（`presets/harness`）：`maxRequestTokens: 100_000` · `keepTokens: 24_000` · `bufferTokens: 4_000`。  
-超 `maxRequestTokens − buffer` 时：先 prune，仍超则 `runCompaction({ reason: "auto" })`。`minimal` 预设默认仅 overflow（无主动软压）。
+估价 = **消息面 + 站立 tool schemas**（`estimateRequestTokens`）。超 `maxRequestTokens − buffer` 时：先 prune，仍超则 `runCompaction({ reason: "auto" })`；**仍超则 fail-closed**（抛 `ContextOverflowError`，不再出站）。  
+工具正文在进日志前按 DSH spill-policy 截断：超 **64KiB**（Face `agent-loop.toolResultMaxInlineBytes` 可调；`0` 关闭）落盘到 `~/.xrk/spill/`，模型只见 head/tail + 路径；`bash.maxOutputBytes` 默认同为 64KiB。上述预算与 spill 均可在 Settings → Plugins 调整。`minimal` 预设默认仅 overflow（无主动软压）。
 
-Harness defaults (`presets/harness`): soft ceiling at `maxRequestTokens − buffer`, prune-first, then `runCompaction({ reason: "auto" })`. The `minimal` preset stays overflow-only (no proactive soft budget).
+Harness defaults (`presets/harness`): soft ceiling at `maxRequestTokens − buffer`, priced with **messages + standing tool schemas** (`estimateRequestTokens`). Prune-first, then `runCompaction({ reason: "auto" })`; **still over → fail-closed** (`ContextOverflowError`, no outbound call).  
+Tool bodies are bounded **before** they enter the log (DSH spill-policy): over **64KiB** (Face `agent-loop.toolResultMaxInlineBytes`; `0` disables) spills to `~/.xrk/spill/` with a head/tail preview + path; `bash.maxOutputBytes` defaults to 64KiB too. Soft budget and spill are adjustable under Settings → Plugins. The `minimal` preset stays overflow-only.
 
 ## Token 估算 / Token estimates
 

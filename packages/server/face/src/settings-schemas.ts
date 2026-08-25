@@ -125,7 +125,8 @@ const AgentPresetsConfig = Schema.object({
 
 const BashConfig = Schema.object({
   timeoutMs: Schema.number().step(1).min(1),
-  maxOutputBytes: Schema.number().step(1).min(1),
+  /** Per-stream capture cap (DSH bash-local default 64_000). */
+  maxOutputBytes: Schema.number().step(1).min(1).default(64_000),
 });
 
 const AgentLoopConfig = Schema.object({
@@ -147,6 +148,20 @@ const AgentLoopConfig = Schema.object({
    * Omit → kernel default (5).
    */
   llmRetryMaxRetries: Schema.number().step(1).min(0).default(5),
+  /**
+   * Soft context budget (messages + tool schemas). Exceed → prune → compact →
+   * fail-closed. DSH-style soft pressure; harness default 100_000.
+   */
+  maxRequestTokens: Schema.number().step(1_000).min(8_000).default(100_000),
+  /** Tokens kept as recent tail after auto-compact. */
+  keepTokens: Schema.number().step(1_000).min(2_000).default(24_000),
+  /** Soft ceiling = maxRequestTokens − bufferTokens. */
+  bufferTokens: Schema.number().step(500).min(0).default(4_000),
+  /**
+   * Spill plain-text tool results over this UTF-8 byte ceiling (DSH spill-policy).
+   * `0` disables spill (not recommended). Default 64_000.
+   */
+  toolResultMaxInlineBytes: Schema.number().step(1_000).min(0).default(64_000),
 });
 
 const WebSearchConfig = Schema.object({
@@ -263,13 +278,21 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "bash",
       schema: schemasteryJson(BashConfig) as FaceSchemaEnvelope,
-      base: {},
+      base: { maxOutputBytes: 64_000 },
       applies: "live",
     },
     {
       ns: "agent-loop",
       schema: schemasteryJson(AgentLoopConfig) as FaceSchemaEnvelope,
-      base: { maxSteps: 32, toolSettle: "parallel", llmRetryMaxRetries: 5 },
+      base: {
+        maxSteps: 32,
+        toolSettle: "parallel",
+        llmRetryMaxRetries: 5,
+        maxRequestTokens: 100_000,
+        keepTokens: 24_000,
+        bufferTokens: 4_000,
+        toolResultMaxInlineBytes: 64_000,
+      },
       applies: "live",
     },
     {

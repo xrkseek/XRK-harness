@@ -44,6 +44,37 @@ export function estimateMessagesTokens(
   return n;
 }
 
+/**
+ * Soft-budget / overflow estimator for one outbound LLM request:
+ * message surface + standing tool schemas (system is already a message on
+ * the assemble path; tools were previously omitted and could bypass soft compact).
+ */
+export function estimateRequestTokens(input: {
+  readonly messages: readonly ChatMessage[];
+  readonly tools?: readonly {
+    readonly name: string;
+    readonly description: string;
+    readonly parameters: Record<string, unknown>;
+  }[];
+  readonly system?: string;
+}): number {
+  let n = estimateMessagesTokens(input.messages);
+  // Non-assemble callers may pass system only on the side; avoid double-count
+  // when the same text is already the leading system message.
+  if (input.system?.trim()) {
+    const leading = input.messages[0];
+    const leadingText =
+      leading?.role === "system" ? messagePlainText(leading) : "";
+    if (leadingText !== input.system) {
+      n += estimateTokens(input.system);
+    }
+  }
+  if (input.tools?.length) {
+    n += estimateTokens(JSON.stringify(input.tools));
+  }
+  return n;
+}
+
 export const COMPACTION_SUMMARY_TEMPLATE = `Output exactly this Markdown structure (keep section order). Do not mention that context was compacted.
 
 ## Objective
