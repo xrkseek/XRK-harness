@@ -1,39 +1,35 @@
-# Status（能力矩阵） / Capability Matrix
+# Status（能力矩阵）
 
-> **读者 / Audience**：全员 / Everyone（对外说话以本页为准 / Product capability truth）
+> **读者**：全员（对外说话以本页为准）
 
-三态：**能跑 / 未稳 / 未做**（Working / Unstable / Not done）。与代码对齐。基线 **v0.1.16**（当前正式公开线）。
+三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.1.16**（当前正式公开线）。
 
-Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.1.16** (current formal public line).
+**AI 调用链路**（maxSteps · prune/soft-compact · **request soft-budget fail-closed** · **tool-result spill（默认 64KiB）** · Face `bash`/`agent-loop`/`workspace-inject` 可调（设置 → Plugins） · reasoning passback · max-tokens keep/drop · EMPTY/未知 finish/残缺 tool · derive 跳过空 assistant · **reasoningEffort→DeepSeek thinking wire** · toolOrder · Anthropic cache · **LlmError HTTP 分类（含 gemini / openai-responses）· 步内 llm/retry（Face 可调）· TOOL_NOT_STARTED/OUTCOME_UNKNOWN/ABORTED_BEFORE_DISPATCH/`ABORTED` · isConcurrencySafe settle（只读工具已标）· tool-call stream + tool-call-chunks · concludesTurn / `extras.concludeTurn` · 取消 `AgentCancelCause` · 同轮 retry 耗尽后仍显示 turn-error · **DeepSeek vision-exp catalog** · **session-projection 状态/视图分离** · **durable workspace inject**）已跟至同基线。
 
-**AI 调用链路**（maxSteps · prune/soft-compact · **request soft-budget fail-closed** · **tool-result spill（默认 64KiB）** · Face `bash`/`agent-loop`/`workspace-inject` 可调（Settings → Plugins） · reasoning passback · max-tokens keep/drop · EMPTY/未知 finish/残缺 tool · derive 跳过空 assistant · **reasoningEffort→DeepSeek thinking wire** · toolOrder · Anthropic cache · **LlmError HTTP 分类（含 gemini / openai-responses）· 步内 llm/retry（Face 可调）· TOOL_NOT_STARTED/OUTCOME_UNKNOWN/ABORTED_BEFORE_DISPATCH/`ABORTED` · isConcurrencySafe settle（只读工具已标）· tool-call stream + tool-call-chunks · concludesTurn / `extras.concludeTurn` · 取消 `AgentCancelCause` · 同轮 retry 耗尽后仍显示 turn-error · **DeepSeek vision-exp catalog** · **session-projection 状态/视图分离** · **durable workspace inject**）已跟至同基线。
+## 能跑（本地 / Host 主路径）
 
-## 能跑（本地 / Host 主路径） / Working (local / Host main path)
+下面这些**现在就可以正常用**（`pnpm` 装好、`xrkh serve` / harness preset；有 LLM 密钥经 **设置 → 模型 / 凭据**，或 Host/CI 用 `XRK_LLM_*` / replay）：
 
-下面这些**现在就可以正常用**（`pnpm` 装好、`xrkh serve` / harness preset；有 `XRK_LLM_*` 或 replay）：
-
-These are **ready to use now** (`pnpm` installed, `xrkh serve` / harness preset; with `XRK_LLM_*` or replay):
-
-| 域 / Domain | 包 / 入口 / Package · entry | 规格 / Spec |
+| 域 | 包 / 入口 | 规格 |
 | --- | --- | --- |
 | Kernel / Compose C0·C1·C2 | `@xrkseek/kernel` · `@xrkseek/compose`；Host 子会话 `openSubagentRealm` | [architecture](./architecture.md) · [compose](./compose.md) · [ADR-0005](./adr/0005-compose-leaf.md) |
 | Session / Agent / Loop / Tools | `core-*`（`createPersistentSessionStore` SQLite + `XRK_SESSIONS_DIR`；**steer 可在 tool-step 边界 claim**） | [session.md](./session.md) · [session-delivery.md](./session-delivery.md) · [tool-pipeline.md](./tool-pipeline.md) · [tool-settlement.md](./tool-settlement.md) |
 | Session 投影（状态/视图） | `@xrkseek/session-projection`；Face 默认单元 + mux / history | [modules/session-projection.md](./modules/session-projection.md) · [host-face.md](./host-face.md) |
 | Exec / Workspace / Policy | `exec-*`（`web_*` · `lsp` · **`terminal_*`**）· `workspace`（**durable inject** · recipes · skill · **layers**）· `policy` | [seams.md](./seams.md) · [web-tools.md](./web-tools.md) · [lsp-tools.md](./lsp-tools.md) · [pty-tools.md](./pty-tools.md) · [workspace-inject.md](./workspace-inject.md) · [skills-layers.md](./skills-layers.md) · [slash-recipes.md](./slash-recipes.md) · [policy.md](./policy.md) |
 | Jobs | `job_list` / `job_output` / `job_kill` · `pty-send` · Face settle 通知 · Host 共享 + session 隔离 | [shell-jobs.md](./shell-jobs.md) |
-| 子代理委托 / Subagent delegation | 模型面 `subagent` · `list_agents` · `send_message` · `interrupt_agent`（深度≤3；系统提示 `tool:subagent`）；后台子代理 drain idle 向父 inbox 队列通知；Face `subagent.*` · Sidebar sidechat | [host-face.md](./host-face.md) · [session-delivery.md](./session-delivery.md) |
+| 子代理委托 | 模型面 `subagent` · `list_agents` · `send_message` · `interrupt_agent`（深度≤3；系统提示 `tool:subagent`）；后台子代理 drain idle 向父 inbox 队列通知；Face `subagent.*` · Sidebar sidechat | [host-face.md](./host-face.md) · [session-delivery.md](./session-delivery.md) |
 | HTTP + Host + Face 主路径 | `server-*`（产品 boot 省略 Cordis UI/HMR；工具卡 · `session/jobs` · standing 冷 history；`ask_user`；`/permission` · `/plan` · `/compact` · `/export` · `/feedback`） | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
 | CLI | `@xrkseek/harness-cli`（主 bin **`xrkh`**；`web`/`serve`；`restart`=停本机 XRK Host；`--force` 仅杀已识别 Host） | [apps/cli/README.md](../apps/cli/README.md) · [plugin-development](./plugin-development.md) |
 | LLM / Presets / SDK | `llm-*` · Registry R0+R1（openai-chat / completions 别名 · anthropic-messages · openai-responses · gemini-generate）· Face 手写 `llm-pi-ai` 路由（Custom provider）· `presets/*` · `@xrkseek/harness` | [llm-provider-registry.md](./llm-provider-registry.md) · [profiles.md](./profiles.md) |
 | MCP | `@xrkseek/mcp`（stdio/HTTP 有界进程重连 + SSE；有序 content 投影；可选 image → AttachmentStore）；Host `XRK_MCP_*` 或 Face `mcp.servers` + `allowConnect` 落盘热挂载（policy deny → **park**） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) |
 | Attachment / 插件 | Face 附件；进程插件 `tools` · `prompt` · `commands` · **`host`**；CLI 用户插件目录 + 客户端 `web/` 叠加；**社区 client** 免补 `xrk.host.json`（能力表 + `client.js` 扫描 + 约定 infer，见 [plugin-loader](./plugin-loader.md)） | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
-| 社区插件 Host（自研兼容器） | `extensions/dsh-compat` + bridge；Face **`contextTimeline`** / **`contextHeaders`** · **`costUsage`** · Sidebar **`subagents.live`**；fixture 见 [community-plugins](./community-plugins.md) | [community-plugins.md](./community-plugins.md) · [ADR-0002](./adr/0002-no-embed-upstream.md) |
+| 社区插件 Host | `extensions/dsh-compat` + bridge；Face **`contextTimeline`** / **`contextHeaders`** · **`costUsage`** · Sidebar **`subagents.live`**；fixture 见 [community-plugins](./community-plugins.md) | [community-plugins.md](./community-plugins.md) · [ADR-0002](./adr/0002-no-embed-upstream.md) |
 
-产品壳 = `apps/web` + `packages/client`；serve 用组装后的 dist / CLI `product-web/`。欢迎词与 Hero 标语为 XRK 自有（**向阳而生，驭光而行**；非上游营销体）。
+产品壳 = `apps/web` + `packages/client`；`serve` 用组装后的 dist / CLI `product-web/`。Hero 标语：**向阳而生，驭光而行**。
 
-## 正式使用 / Formal use levels
+## 正式使用
 
-| 层级 / Level | 能做什么 / What you can do | 前置 / Prerequisites |
+| 层级 | 能做什么 | 前置 |
 | --- | --- | --- |
 | **A — 能用** | `npx @xrkseek/harness-cli` 或源码 `build` + 组装壳后 `web`/`run`；**v0.1.16** 当前正式公开发版 | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
 | **B — 浏览器硬刷** | `pnpm test:web`（不进 `pnpm check`） | Chromium；完整 `apps/web/dist` |
@@ -41,23 +37,23 @@ These are **ready to use now** (`pnpm` installed, `xrkh serve` / harness preset;
 
 入门：[getting-started.md](./getting-started.md) · 配置：[configuration.md](./configuration.md) · 排障：[troubleshooting.md](./troubleshooting.md)。
 
-## 未稳 / Unstable
+## 未稳
 
-| 域 / Domain | 说明 / Notes |
+| 域 | 说明 |
 | --- | --- |
-| Host Face ↔ 产品 Web | 首屏 RPC（含 `settings.describe`）+ Context meter（`tokenUsage` / `contextPressure` / `contextBreakdown`；compaction 可带 `shadowedTokenCount`）+ 静态壳有测（`product-shell.test`）；Host-serve Playwright 硬刷欢迎窗 / 流式 / **stream aria golden** / 取消 / 工具卡 / 审批 / 提问 / inventory / Think / TodoDock / Access / Plan / plan-review / Session log 导出 / MCP 设置（`pnpm test:web`，不进 `pnpm check`）；Face 冷 history 含 reasoning / standing 工具卡；Cordis scaffold 全家桶未搬 |
+| Host Face ↔ 产品 Web | 首屏 RPC（含 `settings.describe`）+ Context meter（`tokenUsage` / `contextPressure` / `contextBreakdown`；compaction 可带 `shadowedTokenCount`）+ 静态壳有测（`product-shell.test`）；Host-serve Playwright 硬刷欢迎窗 / 流式 / **stream aria golden** / 取消 / 工具卡 / 审批 / 提问 / inventory / Think / TodoDock / Access / Plan / plan-review / Session log 导出 / MCP 设置（`pnpm test:web`，不进 `pnpm check`）；Face 冷 history 含 reasoning / standing 工具卡；完整 Cordis UI/HMR scaffold 未接入产品 boot |
 | 产品 Web | `pnpm web:build` + `client:bundle` + `web:assemble` → `apps/web/dist`（37 plugins，含 `client-ui-reference` · `client-session-log-export`；omit HMR / Cordis UI / native picker）；Face `@file` / `@session` 发现 remotes 已接；跨会话 prepare 未接 Face 主路径；Host-serve `product-shell-*.e2e.ts` 全勾 |
-| 保留插件 kind | `channel` / `policy` / `llm` 可发现、未自动接线；需 `host.mjs` 的社区宿主包走兼容器 stub / fiber |
+| 保留插件 kind | `channel` / `policy` / `llm` 可发现、未自动接线；需 `host.mjs` 的社区宿主包走适配器 stub / fiber |
 
-## 未做 / Not Done
+## 未做
 
-| 域 / Domain | 说明 / Notes |
+| 域 | 说明 |
 | --- | --- |
-| IM 长连接网关 / IM long-lived gateway | 当前 webhook / 短请求；厂商云端长会话可后续自研或外接 / Webhook and short requests today; cloud sessions are planned |
-| 任务流外部运行时 / External task runtime | 内置 TS 节点已可用；绑定第三方 Python 发行版另议 / Built-in TS nodes work; vendor Python runtimes are optional later |
-| 云端 Vision / 记忆 embedding / Cloud Vision & embeddings | 本地 OCR · keyword 已可用；云端路由与向量宿主待补 / Local OCR and keyword search work; cloud routing and vector hosts are planned |
+| IM 长连接网关 | 当前 webhook / 短请求；云端长会话可后续自研或外接 |
+| 任务流外部运行时 | 内置 TS 节点已可用；绑定第三方 Python 发行版另议 |
+| 云端 Vision / 记忆 embedding | 本地 OCR · keyword 已可用；云端路由与向量宿主待补 |
 
-## 依赖纪律 / Dependency discipline
+## 依赖纪律
 
 ```text
 apps → sdk | server | presets
@@ -65,8 +61,75 @@ presets / sdk / server → core* | llm | mcp | attachment | exec* | workspace | 
 core* / 能力叶 → kernel | protocol | compose
 ```
 
-外壳二次创作：`apps/web` + `packages/client`。品牌：`apps/web/public`。serve 用 `apps/web/dist`（`web:build` + `client:bundle` + `web:assemble`；gitignore）。不是 GitHub Fork。社区 client 经自研兼容器接入（见 [ADR-0002](./adr/0002-no-embed-upstream.md) · [community-plugins](./community-plugins.md)）。
+产品壳：`apps/web` + `packages/client`。品牌资源：`apps/web/public`。`serve` 用 `apps/web/dist`（`web:build` + `client:bundle` + `web:assemble`；gitignore）。社区 client 经 Host 适配器 `extensions/dsh-compat` 接入（见 [community-plugins](./community-plugins.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)）。
 
-The product shell is a second-creation surface (`apps/web` + `packages/client`). Brand assets live under `apps/web/public`. `serve` uses `apps/web/dist`. This is not a GitHub Fork. Community clients attach through the first-party Host adapter ([ADR-0002](./adr/0002-no-embed-upstream.md) · [community-plugins](./community-plugins.md)).
+[learn.md](./learn.md) · [modules/](./modules/README.md)
+
+---
+
+# Status (Capability Matrix)
+
+> **Audience**: Everyone (this page is the public capability truth)
+
+Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.1.16** (current formal public line).
+
+**AI call path** (maxSteps · prune/soft-compact · **request soft-budget fail-closed** · **tool-result spill (default 64KiB)** · Face-tunable `bash` / `agent-loop` / `workspace-inject` (Settings → Plugins) · reasoning passback · max-tokens keep/drop · EMPTY / unknown finish / incomplete tool · derive skips empty assistant · **reasoningEffort→DeepSeek thinking wire** · toolOrder · Anthropic cache · **LlmError HTTP classification (incl. gemini / openai-responses) · in-step llm/retry (Face-tunable) · TOOL_NOT_STARTED / OUTCOME_UNKNOWN / ABORTED_BEFORE_DISPATCH / `ABORTED` · isConcurrencySafe settle (read-only tools marked) · tool-call stream + tool-call-chunks · concludesTurn / `extras.concludeTurn` · cancel `AgentCancelCause` · turn-error still shown after same-turn retry exhaustion · **DeepSeek vision-exp catalog** · **session-projection state/view split** · **durable workspace inject**) is tracked to the same baseline.
+
+## Working (local / Host main path)
+
+These are **ready to use now** (`pnpm` installed, `xrkh serve` / harness preset; LLM keys via **Settings → Models / Credentials**, or Host/CI `XRK_LLM_*` / replay):
+
+| Domain | Package · entry | Spec |
+| --- | --- | --- |
+| Kernel / Compose C0·C1·C2 | `@xrkseek/kernel` · `@xrkseek/compose`; Host sub-session `openSubagentRealm` | [architecture](./architecture.md) · [compose](./compose.md) · [ADR-0005](./adr/0005-compose-leaf.md) |
+| Session / Agent / Loop / Tools | `core-*` (`createPersistentSessionStore` SQLite + `XRK_SESSIONS_DIR`; **steer can claim at tool-step boundary**) | [session.md](./session.md) · [session-delivery.md](./session-delivery.md) · [tool-pipeline.md](./tool-pipeline.md) · [tool-settlement.md](./tool-settlement.md) |
+| Session projection (state/view) | `@xrkseek/session-projection`; Face default unit + mux / history | [modules/session-projection.md](./modules/session-projection.md) · [host-face.md](./host-face.md) |
+| Exec / Workspace / Policy | `exec-*` (`web_*` · `lsp` · **`terminal_*`**) · `workspace` (**durable inject** · recipes · skill · **layers**) · `policy` | [seams.md](./seams.md) · [web-tools.md](./web-tools.md) · [lsp-tools.md](./lsp-tools.md) · [pty-tools.md](./pty-tools.md) · [workspace-inject.md](./workspace-inject.md) · [skills-layers.md](./skills-layers.md) · [slash-recipes.md](./slash-recipes.md) · [policy.md](./policy.md) |
+| Jobs | `job_list` / `job_output` / `job_kill` · `pty-send` · Face settle notify · Host shared + session isolation | [shell-jobs.md](./shell-jobs.md) |
+| Subagent delegation | Model surface `subagent` · `list_agents` · `send_message` · `interrupt_agent` (depth ≤3; system prompt `tool:subagent`); background subagent drain-idle queues parent inbox notify; Face `subagent.*` · Sidebar sidechat | [host-face.md](./host-face.md) · [session-delivery.md](./session-delivery.md) |
+| HTTP + Host + Face main path | `server-*` (product boot omits Cordis UI/HMR; tool cards · `session/jobs` · standing cold history; `ask_user`; `/permission` · `/plan` · `/compact` · `/export` · `/feedback`) | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
+| CLI | `@xrkseek/harness-cli` (primary bin **`xrkh`**; `web`/`serve`; `restart` stops local XRK Host; `--force` kills only recognized Host) | [apps/cli/README.md](../apps/cli/README.md) · [plugin-development](./plugin-development.md) |
+| LLM / Presets / SDK | `llm-*` · Registry R0+R1 (openai-chat / completions alias · anthropic-messages · openai-responses · gemini-generate) · Face handwritten `llm-pi-ai` routes (Custom provider) · `presets/*` · `@xrkseek/harness` | [llm-provider-registry.md](./llm-provider-registry.md) · [profiles.md](./profiles.md) |
+| MCP | `@xrkseek/mcp` (stdio/HTTP bounded process reconnect + SSE; ordered content projection; optional image → AttachmentStore); Host `XRK_MCP_*` or Face `mcp.servers` + `allowConnect` file-backed hot-mount (policy deny → **park**) | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) |
+| Attachment / plugins | Face attachments; process plugins `tools` · `prompt` · `commands` · **`host`**; CLI user plugin dir + client `web/` overlay; **community clients** need no `xrk.host.json` (capability table + `client.js` scan + convention infer — [plugin-loader](./plugin-loader.md)) | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
+| Community plugin Host | `extensions/dsh-compat` + bridge; Face **`contextTimeline`** / **`contextHeaders`** · **`costUsage`** · Sidebar **`subagents.live`**; fixtures in [community-plugins](./community-plugins.md) | [community-plugins.md](./community-plugins.md) · [ADR-0002](./adr/0002-no-embed-upstream.md) |
+
+Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CLI `product-web/`. Hero slogan: **向阳而生，驭光而行**.
+
+## Formal use levels
+
+| Level | What you can do | Prerequisites |
+| --- | --- | --- |
+| **A — Usable** | `npx @xrkseek/harness-cli` or source `build` + assembled shell then `web`/`run`; **v0.1.16** is the current formal public release | Node ≥26; live models need brand `apiKeyEnv` or replay |
+| **B — Browser soak** | `pnpm test:web` (not part of `pnpm check`) | Chromium; full `apps/web/dist` |
+| **C — Publish** | npmjs + GitHub Release (`@xrkseek/harness-cli`) | `pnpm release`; see [publishing.md](./publishing.md) |
+
+Getting started: [getting-started.md](./getting-started.md) · Configuration: [configuration.md](./configuration.md) · Troubleshooting: [troubleshooting.md](./troubleshooting.md).
+
+## Unstable
+
+| Domain | Notes |
+| --- | --- |
+| Host Face ↔ product Web | First-paint RPC (incl. `settings.describe`) + Context meter (`tokenUsage` / `contextPressure` / `contextBreakdown`; compaction may carry `shadowedTokenCount`) + static shell tests (`product-shell.test`); Host-serve Playwright soaks welcome / streaming / **stream aria golden** / cancel / tool cards / approval / ask / inventory / Think / TodoDock / Access / Plan / plan-review / Session log export / MCP settings (`pnpm test:web`, not in `pnpm check`); Face cold history includes reasoning / standing tool cards; full Cordis UI/HMR scaffold is not on the product boot path |
+| Product Web | `pnpm web:build` + `client:bundle` + `web:assemble` → `apps/web/dist` (37 plugins, incl. `client-ui-reference` · `client-session-log-export`; omit HMR / Cordis UI / native picker); Face `@file` / `@session` discovery remotes wired; cross-session prepare not on Face main path; Host-serve `product-shell-*.e2e.ts` fully checked |
+| Reserved plugin kinds | `channel` / `policy` / `llm` discoverable, not auto-wired; community host packages needing `host.mjs` go through adapter stub / fiber |
+
+## Not done
+
+| Domain | Notes |
+| --- | --- |
+| IM long-lived gateway | Webhook and short requests today; cloud long sessions are planned (first-party or external) |
+| External task runtime | Built-in TS nodes work; binding third-party Python distributions is optional later |
+| Cloud Vision / memory embeddings | Local OCR and keyword search work; cloud routing and vector hosts are planned |
+
+## Dependency discipline
+
+```text
+apps → sdk | server | presets
+presets / sdk / server → core* | llm | mcp | attachment | exec* | workspace | policy | compose
+core* / capability leaves → kernel | protocol | compose
+```
+
+Product shell: `apps/web` + `packages/client`. Brand assets: `apps/web/public`. `serve` uses `apps/web/dist` (`web:build` + `client:bundle` + `web:assemble`; gitignored). Community clients attach via Host adapter `extensions/dsh-compat` ([community-plugins](./community-plugins.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)).
 
 [learn.md](./learn.md) · [modules/](./modules/README.md)

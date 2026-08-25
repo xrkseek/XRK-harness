@@ -1,12 +1,10 @@
-# Session（索引） / Session (Index)
+# Session（索引）
 
-> **读者 / Audience**：集成者 · 贡献者 / Integrators · Contributors
+> **读者**：集成者 · 贡献者
 
 长寿 session + 短寿 turn（[ADR-0003](./adr/0003-session-long-loop-short.md)）。真源是事件日志；模型可见输入由 `deriveMessages` 重建。身份与文档分层见 [audiences.md](./audiences.md)。
 
-A long-lived session plus short-lived turns ([ADR-0003](./adr/0003-session-long-loop-short.md)). The source of truth is the event log; model-visible input is rebuilt by `deriveMessages`. Audience layering: [audiences.md](./audiences.md).
-
-| 文档 / Doc | 内容 / Content |
+| 文档 | 内容 |
 |------|------|
 | [protocol-events.md](./protocol-events.md) | 事件集合 · `aborted` vs `interrupted` · TokenUsage · `parseSessionEvent` · JSON Schema |
 | [session-api.md](./session-api.md) | `newSession` · `admit` · `continueTurn` |
@@ -16,21 +14,50 @@ A long-lived session plus short-lived turns ([ADR-0003](./adr/0003-session-long-
 | [session-compaction.md](./session-compaction.md) | 换窗压缩 · overflow · Token 估算 · Context meter |
 | [modules/session-projection.md](./modules/session-projection.md) | 投影状态/视图缝 · Face mux / history |
 | [tool-settlement.md](./tool-settlement.md) | dangling · 取消码 · 并行 settle · concludesTurn |
-| [http-api.md](./http-api.md) | HTTP 形状 / HTTP shapes |
+| [http-api.md](./http-api.md) | HTTP 形状 |
 | [workspace-inject.md](./workspace-inject.md) | `.xrk` → durable `user/message` injects（`messageId` 唯一；skill-catalog · agent-instructions） |
-| [slash-recipes.md](./slash-recipes.md) | `/recipe-id` · `/skill-name` 展开 / expansion |
-| [policy.md](./policy.md) | tool/provider/mcp 门禁 / gates |
+| [slash-recipes.md](./slash-recipes.md) | `/recipe-id` · `/skill-name` 展开 |
+| [policy.md](./policy.md) | tool/provider/mcp 门禁 |
 
-包 / Packages：`@xrkseek/protocol` · `@xrkseek/core-session` · `@xrkseek/core-agent`。
+包：`@xrkseek/protocol` · `@xrkseek/core-session` · `@xrkseek/core-agent`。
 
 JSONL 导出：`toJSONL` / `fromJSONL` / `parseJSONL`；ZIP 导出用 `toPackedJSONL`（`text-chunks` / `tool-call-chunks` 行压缩连续 `assistant/chunk`，≥3）+ 可选 `.jsonl.zst` sidecar；`fromPackedJSONL` / `parsePackedJSONL` / `fromPackedJSONLZstd` 可导入。
 
+**默认持久化**：`createPersistentSessionStore` → `{XRK_SESSIONS_DIR}/sessions.db`（WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · chunk 写批并物理打包 `text-chunks` / `tool-call-chunks` · `flush()` · open-turn 崩溃修复）。内存 API 仍为扁平 `SessionEvent[]`。`SessionStore.has` 不抛。`session.search` 持久化走 FTS 候选。
+
+**耐久屏障**：Host 在 drain idle（一轮工具/续写收敛后）与 `stop` 时调用 `store.flush()`，把已 append 的事件推到 SQLite，再对外暴露「可观察」状态。副作用（工具 body）仍在事件落库之后；不要在未 `flush` 的读路径上假设磁盘与内存一致。
+
+索引：[docs/README.md](./README.md)。
+
+---
+
+# Session (Index)
+
+> **Audience**: Integrators · Contributors
+
+A long-lived session plus short-lived turns ([ADR-0003](./adr/0003-session-long-loop-short.md)). The source of truth is the event log; model-visible input is rebuilt by `deriveMessages`. Audience layering: [audiences.md](./audiences.md).
+
+| Doc | Content |
+|-----|---------|
+| [protocol-events.md](./protocol-events.md) | Event set · `aborted` vs `interrupted` · TokenUsage · `parseSessionEvent` · JSON Schema |
+| [session-api.md](./session-api.md) | `newSession` · `admit` · `continueTurn` |
+| [session-delivery.md](./session-delivery.md) | steer / queue; batch merge · per-drain maxSteps |
+| [session-latch.md](./session-latch.md) | TurnLatch · DrainLatch · wake/resume |
+| [session-safety.md](./session-safety.md) | mistake · loop tracker |
+| [session-compaction.md](./session-compaction.md) | Window compaction · overflow · token estimate · context meter |
+| [modules/session-projection.md](./modules/session-projection.md) | Projection state/view seam · Face mux / history |
+| [tool-settlement.md](./tool-settlement.md) | dangling · cancel codes · parallel settle · concludesTurn |
+| [http-api.md](./http-api.md) | HTTP shapes |
+| [workspace-inject.md](./workspace-inject.md) | `.xrk` → durable `user/message` injects (`messageId` unique; skill-catalog · agent-instructions) |
+| [slash-recipes.md](./slash-recipes.md) | `/recipe-id` · `/skill-name` expansion |
+| [policy.md](./policy.md) | tool/provider/mcp gates |
+
+Packages: `@xrkseek/protocol` · `@xrkseek/core-session` · `@xrkseek/core-agent`.
+
 JSONL export uses `toJSONL` / `fromJSONL` / `parseJSONL`. ZIP export uses `toPackedJSONL` (packs consecutive `assistant/chunk` rows of kind `text-chunks` / `tool-call-chunks`, length ≥ 3) plus an optional `.jsonl.zst` sidecar; import via `fromPackedJSONL` / `parsePackedJSONL` / `fromPackedJSONLZstd`.
 
-**默认持久化 / Default persistence**：`createPersistentSessionStore` → `{XRK_SESSIONS_DIR}/sessions.db`（WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · chunk 写批并物理打包 `text-chunks` / `tool-call-chunks` · `flush()` · open-turn 崩溃修复）。内存 API 仍为扁平 `SessionEvent[]`。`SessionStore.has` 不抛。`session.search` 持久化走 FTS 候选。
+**Default persistence**: `createPersistentSessionStore` → `{XRK_SESSIONS_DIR}/sessions.db` (WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · batched chunk writes with physical packing · `flush()` · open-turn crash repair). The in-memory API remains a flat `SessionEvent[]`. `SessionStore.has` does not throw. Persistent `session.search` uses FTS candidates.
 
-Default persistence is `createPersistentSessionStore` → `{XRK_SESSIONS_DIR}/sessions.db` (WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · batched chunk writes with physical packing · `flush()` · open-turn crash repair). The in-memory API remains a flat `SessionEvent[]`. `SessionStore.has` does not throw. Persistent `session.search` uses FTS candidates.
+**Durability barrier**: Host calls `store.flush()` on drain idle (after a tool/continue wave settles) and on `stop`, so appended events reach SQLite before observers treat the session as settled. Tool side effects still run after the call is logged; do not assume disk matches memory on a read path that skipped `flush`.
 
-**耐久屏障 / Durability barrier（DSH `session/flush` 同形）**：Host 在 drain idle（一轮工具/续写收敛后）与 `stop` 时调用 `store.flush()`，把已 append 的事件推到 SQLite，再对外暴露「可观察」状态。副作用（工具 body）仍在事件落库之后；不要在未 `flush` 的读路径上假设磁盘与内存一致。
-
-**Durability barrier** (same shape as DSH `session/flush`): Host calls `store.flush()` on drain idle and on `stop`, so appended events reach SQLite before observers treat the session as settled. Tool side effects still run after the call is logged; do not assume disk matches memory on a read path that skipped `flush`.
+Index: [docs/README.md](./README.md).

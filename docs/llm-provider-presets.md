@@ -1,6 +1,6 @@
 # LLM Provider Brand Entries
 
-> **读者 / Audience**：贡献者 · 维护者 / Contributors · Maintainers
+> **读者**：贡献者 · 维护者
 
 从属 [llm-provider-registry.md](./llm-provider-registry.md)。条目数据，不是产品终点：对外走 **ProviderRegistry** `resolve` → `create`。
 
@@ -34,5 +34,46 @@ URL 以厂商文档为准；测例锁字符串。
 `openai-completions` 是 Chat Completions 工厂别名（settings UI 名）；不是 legacy Completions 文本接口。自定义网关可把任意 brand 的 `api` 改成上表协议之一。
 
 ## 相关
+
+[llm-provider-registry.md](./llm-provider-registry.md) · [llm-openai-compatible.md](./llm-openai-compatible.md) · [llm-deepseek.md](./llm-deepseek.md)
+
+---
+
+# LLM Provider Brand Entries
+
+> **Audience**: Contributors · Maintainers
+
+Subordinate to [llm-provider-registry.md](./llm-provider-registry.md). Entry data is not the product endpoint: external callers use **ProviderRegistry** `resolve` → `create`.
+
+## BrandEntries (OpenAI Chat · R0)
+
+| id | displayName | baseUrl (default) | apiKeyEnv |
+|----|-------------|-------------------|-----------|
+| `openai` | OpenAI | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
+| `deepseek` | DeepSeek | `https://api.deepseek.com` | `DEEPSEEK_API_KEY` |
+| `openrouter` | OpenRouter | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
+| `groq` | Groq | `https://api.groq.com/openai/v1` | `GROQ_API_KEY` |
+| `fireworks` | Fireworks | `https://api.fireworks.ai/inference/v1` | `FIREWORKS_API_KEY` |
+| `together` | Together | `https://api.together.xyz/v1` | `TOGETHER_API_KEY` |
+| `github-models` | GitHub Models | `https://models.inference.ai.azure.com` | `GITHUB_TOKEN` |
+| `ollama` | Ollama (compat endpoint) | `http://127.0.0.1:11434/v1` | (often none) |
+| `azure-openai` | Azure OpenAI (simple) | (required) | `AZURE_OPENAI_API_KEY` |
+| `newapi` | New API | (self-hosted) | `NEWAPI_API_KEY` |
+| `cherryin` | CherryIN | (self-hosted) | `CHERRYIN_API_KEY` |
+| `custom` | Custom | (required) | `OPENAI_API_KEY` |
+
+URLs follow vendor docs; tests lock the strings.
+
+## BrandEntries (official protocols · R1)
+
+| id | protocol | baseUrl (default) | apiKeyEnv |
+|----|----------|-------------------|-----------|
+| `anthropic` | `anthropic-messages` | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
+| `gemini` | `gemini-generate` | `https://generativelanguage.googleapis.com/v1beta` | `GEMINI_API_KEY` |
+| `openai-responses` | `openai-responses` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
+
+`openai-completions` is a Chat Completions factory alias (settings UI name); it is not the legacy Completions text API. Custom gateways may set any brand’s `api` to one of the protocols above.
+
+## Related
 
 [llm-provider-registry.md](./llm-provider-registry.md) · [llm-openai-compatible.md](./llm-openai-compatible.md) · [llm-deepseek.md](./llm-deepseek.md)

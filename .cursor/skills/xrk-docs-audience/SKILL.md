@@ -20,8 +20,9 @@ user-invocable: false
 2. 文首：`> **读者 / Audience**：… / …`（中英身份，勿夹「请去看某某」旁白）。  
 3. **中英双语、整篇对半**（标准见 [docs/audiences.md](../../../docs/audiences.md)「写作标准」）：先写完整中文半部，`---` 后再写镜像英文半部；**不要**段落交错中英。发行说明可按 `xrk-release-notes` 的并列节标题。  
 4. **代码注释**：纯英文，或「中文。 / English.」；禁止仅中文注释。  
-5. 只写该身份需要的命令、事实与契约；Host/社区插件写 XRK 自研能力与待补，勿写「未抄上游清单」。  
-6. **配置优先 Settings UI**（设置 → Models / Credentials / Plugins …）；env 仅作 Host/CI 旁路。
+5. 只写该身份需要的命令、事实与契约；陈述**怎么用 / 契约是什么 / 未做标诚实**。  
+6. **配置优先 Settings UI**（设置 → Models / Credentials / Plugins …）；env 仅作 Host/CI 旁路。  
+7. **语气**：教科书，不是日记。禁止自证/对照辩解（「未抄某某」「不是 Fork」「非上游营销体」「对齐某某以自证」）。边界用中性落点事实即可。
 
 ## 放哪儿
 
@@ -29,21 +30,22 @@ user-invocable: false
 |------|------|
 | 产品用法、契约、能力边界 | `docs/` · 根 README |
 | 发版、交接清单 | `docs/maintainer.md` · `docs/publishing.md` |
-| 发行说明（`docs/releases/v*`） | rule + skill `xrk-release-notes`（DSH 风：新增/完善/删除/修复） |
+| 发行说明（`docs/releases/v*`） | rule + skill `xrk-release-notes` |
 | 改码红线、测哪些、Agent 禁令 | `AGENTS.md` · `.cursor/rules` · `.cursor/skills` |
 | 本机路径、对照仓 | Canvas（不入库） |
 
 ## 根 README
 
 - 写：是什么、怎么跑、能用到什么程度、用户 FAQ、开发入口链接表。  
-- **不要写**：发版步骤、`pnpm release`、「不写某某因为那是维护者流程」、Agent「不要合并」类禁令、教科书 vs 笔记元叙事。  
+- **不要写**：发版步骤、`pnpm release`、Agent「不要合并」类禁令、教科书 vs 笔记元叙事、与第三方对比自证。  
 - 开发者只需一节链接表指向 CONTRIBUTING / maintainer / publishing / AGENTS。
 
 ## 语气
 
 - 直接陈述事实与步骤；删「可忽略本节」「不在本页展开」「那是维护者自己的事」等自我提醒。  
 - 身份分流靠**选对文件**，不靠在用户文里解释「为什么不写」。  
-- 本机 PATH / IDE Node 抢路径等细节放 [troubleshooting](../../../docs/troubleshooting.md)，不塞进根 README 开篇。
+- 本机 PATH / IDE Node 抢路径等细节放 [troubleshooting](../../../docs/troubleshooting.md)，不塞进根 README 开篇。  
+- 社区插件 / Host：写**已实现能力与待补**，帮助集成；不要写「我们没抄上游」。
 
 ## 勿做
 
@@ -51,6 +53,7 @@ user-invocable: false
 - 未做能力写成已支持 API  
 - 把 `.cursor` 段落粘进 `docs/` 当规格  
 - 在用户 FAQ 塞发版  
+- 教科书里自证「不是某某 / 未抄某某 / 非上游」  
 
 ## 改契约时同步
 
@@ -59,10 +62,10 @@ Meter / compaction → skill `xrk-meter-session`。
 
 ## 检查
 
-- [ ] 文首有 `> **读者 / Audience**：… / …`
+- [ ] 中文半部有 `> **读者**：…`；英文半部有 `> **Audience**: …`
 - [ ] 正文正式中英双语（**整篇先中后英**，以 `---` 分隔；非段落交错）
 - [ ] 终端用户配置路径优先写 Settings UI，不把 env 当主调参面
-- [ ] 无元旁白（「不写…」「可忽略…」「见文末维护流程」）
+- [ ] 无元旁白、无自证对照腔
 - [ ] 用户文无发版口令、无本机绝对路径
-- [ ] Host/社区写 XRK 自研与「待补 / Planned」，勿「未抄上游」
+- [ ] 未做标诚实（status / Planned），不写假 API
 - [ ] 导航能回到 [docs/README.md](../../../docs/README.md) 或 audiences

@@ -1,12 +1,10 @@
-# LLM Provider Registry / LLM Provider Registry
+# LLM Provider Registry
 
-> **读者 / Audience**：集成者 · 贡献者 / Integrators · Contributors
+> **读者**：集成者 · 贡献者
 
 产品规格。`@xrkseek/llm-registry`：单路径解析与创建适配器。BrandEntries：[llm-provider-presets.md](./llm-provider-presets.md)。
 
-Product spec. `@xrkseek/llm-registry` is the single path to resolve and create adapters. BrandEntries: [llm-provider-presets.md](./llm-provider-presets.md).
-
-## 目标 / Goals
+## 目标
 
 ```text
 resolve(input) → ProviderBinding → createAdapter(binding, secrets) → LlmAdapter
@@ -17,7 +15,7 @@ listForUi() / catalog() → Face `llm.providers` · `session.models`
 - 协议包 ≠ compat 工厂 ≠ 品牌条目  
 - 密钥仅运行时注入；不入库  
 
-## 状态 / Status
+## 状态
 
 **R0**：openai-chat brands + env + Face 投影 + `discoverModels` GET `/models`。  
 **R1 已交付**：官方协议包 + Registry 分发：
@@ -33,7 +31,7 @@ Face `llm-pi-ai.providers.*.api` 写入后经 `readProviderRoute` → `resolvePr
 
 ### Prompt cache（DeepSeek / Anthropic 等前缀缓存）
 
-对齐 DSH：模型可见前缀尽量 **append-only**。
+模型可见前缀尽量 **append-only**（已发出的前缀不回改）。
 
 | 做法 | 作用 |
 |------|------|
@@ -81,5 +79,91 @@ StatsLine「缓存命中」= `cacheReadTokens / (uncached + cacheRead + cacheWri
 见 [status.md](./status.md) · [llm-provider-presets.md](./llm-provider-presets.md) · [modules/server-face.md](./modules/server-face.md)。
 
 ## 相关
+
+[llm-provider-presets.md](./llm-provider-presets.md) · [llm-openai-compatible.md](./llm-openai-compatible.md) · [llm-deepseek.md](./llm-deepseek.md) · [host-face.md](./host-face.md)
+
+---
+
+# LLM Provider Registry
+
+> **Audience**: Integrators · Contributors
+
+Product spec. `@xrkseek/llm-registry` is the single path to resolve and create adapters. BrandEntries: [llm-provider-presets.md](./llm-provider-presets.md).
+
+## Goals
+
+```text
+resolve(input) → ProviderBinding → createAdapter(binding, secrets) → LlmAdapter
+listForUi() / catalog() → Face `llm.providers` · `session.models`
+```
+
+- Host / CLI / `provider.use` / Face use **only** the Registry  
+- Protocol package ≠ compat factory ≠ brand entry  
+- Secrets injected at runtime only; never committed  
+
+## Status
+
+**R0**: openai-chat brands + env + Face projection + `discoverModels` GET `/models`.  
+**R1 delivered**: official protocol packages + Registry dispatch:
+
+| ProtocolId | Package / factory | Brand |
+|------------|-----------|-------|
+| `openai-chat` / `openai-completions` | `@xrkseek/llm-openai-compatible` | R0 brands |
+| `anthropic-messages` | `@xrkseek/llm-anthropic` | `anthropic` |
+| `openai-responses` | `@xrkseek/llm-openai-responses` | `openai-responses` |
+| `gemini-generate` | `@xrkseek/llm-gemini` | `gemini` |
+
+After Face writes `llm-pi-ai.providers.*.api`, `readProviderRoute` → `resolveProviderBinding` selects the factory; protocol overrides use the target protocol’s default path.
+
+### Prompt cache (prefix cache for DeepSeek / Anthropic and similar)
+
+Keep model-visible prefixes **append-only** when possible (do not rewrite already-sent prefixes).
+
+| Practice | Effect |
+|------|------|
+| tools sorted **by name** | Register / MCP hot-mount order does not enter the wire |
+| Optional `toolOrder: string[]` (exactly one `' '` rest) | Pins common tools; mismatch fails loud; default = pure lexicographic. Face `agent-loop.toolOrder` → Host → `assemble.toolOrder` (settings.yaml); `@xrkseek/core-system-prompt` |
+| volatile **out of system** | Clock and session id only in the user suffix |
+| Later steps in the same turn: disable `[current message]` and volatile `time:` | Tool loops do not reshuffle mid-dialog each step |
+| Anthropic `cache_control: { type: "ephemeral" }` | Breakpoint on system text block + last tool definition; `chat`/`stream` usage maps `cache_read_input_tokens` / `cache_creation_input_tokens` → `cacheReadTokens` / `cacheWriteTokens` |
+
+StatsLine “cache hit” = `cacheReadTokens / (uncached + cacheRead + cacheWrite)` (`tokenUsage` projection). Changing model / system (plan · recipe) still full-misses.
+
+### Protocol / field aliases (keep)
+
+Aliases on the protocol stack are part of the contract — **do not** remove read-side compatibility for “dedup”:
+
+| Alias | Meaning |
+|------|------|
+| `openai-completions` | Same factory as `openai-chat` |
+| settings `baseURL` / `baseUrl` | Same endpoint; schema writes `baseURL`, readers accept both |
+| Registry brand `custom` | Preset placeholder (must supply baseUrl); **not** a Settings hand-written route id |
+
+## Settings hand-written routes (Custom provider)
+
+Product Settings → Models → Custom provider writes `llm-pi-ai.providers.<id>` (e.g. `xyt`). That id is **not** a Registry brand.
+
+| Surface | Behavior |
+|----|------|
+| `llm.providers` / `llm.models` / `session.models` | List declared routes (`declared: true`) |
+| `session.selectModel` · agent LLM | `resolveProviderBinding`: known brand → Registry; else **synthesize** `ProviderBinding` from profile |
+| Credentials | `apiKeyEnv` → `credentials` slot `llm.<id>` |
+| Forbidden | Product selection calling `registry.resolve(provider)` directly (yields `unknown provider`) |
+
+Implementation: `packages/server/face/src/llm-provider-context.ts` · `llm-resolve.ts` · `model-catalog.ts`.
+
+### Completion checklist when changing this path
+
+Missing any item = half-done change (list lights up, select fails):
+
+1. **List**: `listDeclaredPiAiProviders` → catalog / `llm.providers`
+2. **Resolve**: `resolveProviderBinding` (including synthesize) → `resolveLlmForSelection` / `session.selectModel` / discovery
+3. **Credentials**: `listSettingsProviderCredentialRefs` + vault `llm.<id>`
+4. **Test**: at least one Face test “mutate declared route → selectModel succeeds”
+5. **Build**: `tsc -b packages/server/face` (and host/cli that depend on it), then restart local `web`/`serve`
+
+See [status.md](./status.md) · [llm-provider-presets.md](./llm-provider-presets.md) · [modules/server-face.md](./modules/server-face.md).
+
+## Related
 
 [llm-provider-presets.md](./llm-provider-presets.md) · [llm-openai-compatible.md](./llm-openai-compatible.md) · [llm-deepseek.md](./llm-deepseek.md) · [host-face.md](./host-face.md)

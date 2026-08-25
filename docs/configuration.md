@@ -38,7 +38,7 @@ Agent 循环卡：软请求预算 · keep/buffer · 工具结果 spill。终端�
 
 | 根 | 用途 |
 |----|------|
-| **`~/.xrk`**（`XRK_HOME` / `XRK_DSH_HOME` / `DSH_HOME`） | 用户设置、凭据、会话、工作区列表、MCP desired — 对齐 DSH `~/.dsh` 布局 |
+| **`~/.xrk`**（`XRK_HOME` / `XRK_DSH_HOME` / `DSH_HOME`） | 用户设置、凭据、会话、工作区列表、MCP desired — 布局与 `~/.xrk` 约定 |
 | **`{workspace}/.xrk`** | 可选：项目 assistant / context / rules / recipes；**不强制创建** |
 | **Skills** | 多根导入：`.agents/skills` · `.xrk/skills` · `.claude/skills` 等（见 [skills-layers.md](./skills-layers.md)） |
 
@@ -144,7 +144,7 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `agent-loop` | `maxSteps` | 单次用户 turn 的 LLM 步数上限（默认 32） |
 | `agent-loop` | `toolSettle` | `parallel`（默认，按 `isConcurrencySafe`）或 `serial` |
 | `agent-loop` | `llmRetryMaxRetries` | 步内 provider 重试上限（默认 5；`0` 关闭） |
-| `agent-loop` | `toolOrder` | DSH 风格工具线序（settings.yaml；恰好一个 `' '` rest） |
+| `agent-loop` | `toolOrder` | 工具线序（settings.yaml；恰好一个 `' '` rest） |
 | `agent-loop` | `maxRequestTokens` · `keepTokens` · `bufferTokens` | 软上下文预算（默认 100k / 24k / 4k）；超限 prune → compact → fail-closed |
 | `agent-loop` | `toolResultMaxInlineBytes` | 工具正文 spill 上限（默认 **64_000**；`0` 关闭） |
 | `workspace-inject` | `injectMaxChars` | 下次 agent 重建后作用于 rules/skills 注入预算（默认 **32_000**） |
@@ -209,7 +209,7 @@ From-scratch install: [getting-started.md](./getting-started.md).
 
 | Root | Purpose |
 |----|------|
-| **`~/.xrk`** (`XRK_HOME` / `XRK_DSH_HOME` / `DSH_HOME`) | User settings, credentials, sessions, workspace list, MCP desired — layout aligned with DSH `~/.dsh` |
+| **`~/.xrk`** (`XRK_HOME` / `XRK_DSH_HOME` / `DSH_HOME`) | User settings, credentials, sessions, workspace list, MCP desired — layout per `~/.xrk` convention |
 | **`{workspace}/.xrk`** | Optional project assistant / context / rules / recipes; **not required** |
 | **Skills** | Multi-root import: `.agents/skills` · `.xrk/skills` · `.claude/skills` and peers ([skills-layers.md](./skills-layers.md)) |
 
@@ -315,7 +315,7 @@ Settings → Plugins mutates these runtime namespaces:
 | `agent-loop` | `maxSteps` | Max LLM steps per user turn (default 32) |
 | `agent-loop` | `toolSettle` | `parallel` (default, by `isConcurrencySafe`) or `serial` |
 | `agent-loop` | `llmRetryMaxRetries` | In-step provider retry cap (default 5; `0` disables) |
-| `agent-loop` | `toolOrder` | DSH-style tool line order (settings.yaml; exactly one `' '` rest) |
+| `agent-loop` | `toolOrder` | Tool line order (settings.yaml; exactly one `' '` rest) |
 | `agent-loop` | `maxRequestTokens` · `keepTokens` · `bufferTokens` | Soft context budget (defaults 100k / 24k / 4k); over → prune → compact → fail-closed |
 | `agent-loop` | `toolResultMaxInlineBytes` | Tool-result spill ceiling (default **64_000**; `0` disables) |
 | `workspace-inject` | `injectMaxChars` | Rules/skills inject budget after the next agent rebuild (default **32_000**) |

@@ -23,7 +23,7 @@ When handing a working product to the next owner, use this checklist. Detailed c
 |----|------|
 | 对外发包 / Public package | 主要是 **`@xrkseek/harness-cli`**（npmjs + GitHub Release；含 `product-web/`） |
 | 其余 `@xrkseek/*` | 多数 **private**（workspace）；勿当已 npm 公开 SDK 对外承诺 |
-| 产品壳 / Product shell | `apps/web` + `packages/client` → 组装进 CLI；**不是** deepseek-ai Fork，勿向上游提 PR |
+| 产品壳 / Product shell | `apps/web` + `packages/client` → 组装进 CLI（产品壳二次创作面） |
 | 会话 / 设置 / Sessions · settings | 用户机 `~/.xrk/` 或 workspace `.xrk/`（gitignore）；仓内只有 `*.example` |
 | 能力三态 / Capability states | **能跑 / 未稳 / 未做** — 只以 [status](./status.md) 对外说话 |
 

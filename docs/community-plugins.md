@@ -1,15 +1,26 @@
-# 社区插件与 Host 契约 / Community Plugins and Host Contracts
+# 社区插件与 Host 契约
 
-> **读者 / Audience**：集成者 · 贡献者 / Integrators · Contributors  
-> （安装社区 client、对照 Host 已实现能力与待补特性 / Install community clients; compare implemented Host surfaces and planned work）
+> **读者**：集成者 · 贡献者（安装社区 client、对照 Host 已实现能力与待补特性）
 
-XRK-Harness 的 **Host、HTTP、持久化与隧道门禁**均为自研。产品壳可加载社区 `client.js`；Host 侧由内置兼容器 `extensions/dsh-compat` 与 `@xrkseek/server-http/dsh-compat` 按 **路径与 RPC 形状**接线，不按包名堆叠适配器。不嵌入第三方 Host 内核（见 [ADR-0002](./adr/0002-no-embed-upstream.md)）。
+产品壳可加载社区 `client.js`。Host 侧由内置适配器 `extensions/dsh-compat` 与 `@xrkseek/server-http/dsh-compat` 按 **路径与 RPC 形状**接线，落盘与会话走 `~/.xrk`。实现笔记：[dsh-compat/README.md](../packages/server/http/src/dsh-compat/README.md) · 发包边界：[PACKAGE.md](../packages/server/http/src/dsh-compat/PACKAGE.md) · 发现：[plugin-loader.md](./plugin-loader.md)。
 
-XRK-Harness **Host, HTTP, persistence, and tunnel gating** are first-party. The product shell may load community `client.js`; the Host side is wired by the built-in adapter `extensions/dsh-compat` and `@xrkseek/server-http/dsh-compat` according to **path and RPC shape**, not per-package adapters. A third-party Host kernel is not embedded ([ADR-0002](./adr/0002-no-embed-upstream.md)).
+## 怎么安装与使用
 
-实现笔记 / Implementation notes：[dsh-compat/README.md](../packages/server/http/src/dsh-compat/README.md) · 发包边界 / Package boundary：[PACKAGE.md](../packages/server/http/src/dsh-compat/PACKAGE.md) · 发现 / Discover：[plugin-loader.md](./plugin-loader.md)。
+1. 装 CLI 后打开工作区：`npx @xrkseek/harness-cli web`（或源码 `xrkh web`）。
+2. 安装社区 client 包（落到用户插件目录）：
 
-## 架构 / Architecture
+```bash
+xrkh plugin add <包名>
+xrkh restart
+```
+
+示例包名：`dsh-wallet` · `@liustack/modsearch` 等（以 npm 实际包为准）。装完须 **`xrkh restart`** 重载 Host。
+
+3. 日常开关与配置优先 **设置 → Plugins**（及各插件自有面板）；Host/CI 无头场景再用 env / 落盘文件。
+4. 免补 `xrk.host.json`：loader 用能力表 + `client.js` 扫描 + 约定 infer（见 [plugin-loader.md](./plugin-loader.md)）。作者也可声明 `xrk.host.json` 或提供 `host.mjs`。
+5. 能用什么、待补什么以本页「Host 能力」与 [status.md](./status.md) 为准。
+
+## 架构
 
 ```text
 community client.js
@@ -19,91 +30,196 @@ community client.js
         → unlisted paths: honest JSON (not SPA 404)
 ```
 
-| 层 / Layer | 职责 / Responsibility | 代表 / Modules |
+| 层 | 职责 | 代表模块 |
 |----|------|------|
-| **底层 / Underlying** | `~/.xrk` I/O；诚实响应 | `underlying/*` · `wallet` · `im-channels` · `vision` |
+| **底层** | `~/.xrk` I/O；诚实响应 | `underlying/*` · `wallet` · `im-channels` · `vision` |
 | **Bridge** | 社区契约形状 → XRK 实现 | `host-feature-bridge` · `im-messaging-bridge` · `cordis-fiber-runner` |
-| **兼容器 / Adapter** | 装配、catch-all、registry | `adapter-compose` · `cordis-registry` |
+| **适配器** | 装配、catch-all、registry | `adapter-compose` · `cordis-registry` |
 
-## 接入层级（A–J） / Integration Tiers (A–J)
+## 接入层级（A–J）
 
-安装 **产品壳内置 client 之外**的社区包时，按 client 实际 HTTP/RPC 落入下表。
+安装 **产品壳内置 client 之外**的社区包时，按 client 实际 HTTP/RPC 落入下表：
 
-When installing community packages **beyond the product-shell built-in clients**, map each package by its actual HTTP/RPC surface:
-
-| 层级 / Tier | 触发 / Trigger | Host 行为 / Host behavior |
+| 层级 | 触发 | Host 行为 |
 |------|------|-----------|
-| **A** | 仅 Face / 壳 API | 通常可直接使用 / Usually works as-is |
-| **B** | 命中全局能力表 | XRK 底层持久化 / First-party persistence |
-| **C** | `*-settings` RPC | 设置文档 store / Settings document store |
-| **D** | `/_dsh/<pkg>/…` | 通用 JSON / Generic JSON |
+| **A** | 仅 Face / 壳 API | 通常可直接使用 |
+| **B** | 命中全局能力表 | XRK 底层持久化 |
+| **C** | `*-settings` RPC | 设置文档 store |
+| **D** | `/_dsh/<pkg>/…` | 通用 JSON |
 | **E** | 单段 slug | `community-root-http` |
-| **F** | 其它 GET | 诚实 catch-all / Honest catch-all |
+| **F** | 其它 GET | 诚实 catch-all |
 | **G** | 未注册 POST RPC | settings fallback / 空 ok |
-| **H** | `xrk.host.json` | 作者声明 provider / Author-declared provider |
+| **H** | `xrk.host.json` | 作者声明 provider |
 | **I** | `host.mjs` | 进程内 apply；失败则 **I′** 子进程 |
-| **J** | 外部云端 / 厂商发行版 | 见「待补」 / See Planned work |
+| **J** | 外部云端 / 厂商发行版 | 见「待补」 |
 
-## Host 能力 / Host Capabilities
+## Host 能力
 
-真源 / Source of truth：`dsh-compat-matrix.ts`。
+真源：`dsh-compat-matrix.ts`。
 
-| 能力 / Capability | 已实现 / Implemented | 待补 / Planned (XRK) |
-|------|--------|-------------|
-| `host.mjs` RPC | inventory · invoke · runHostHalf | 全量第三方 DI（非产品目标） / Full third-party DI (out of scope) |
-| IM | connector · OAuth · `message.send/list` · webhook | 云端长连接网关 / Cloud long-lived IM gateway |
-| 任务流 / Task flow | 持久化 · TS 节点 · scan | 绑定厂商 Python 发行版 / Vendor Python runtime binding |
-| GenUI | CRUD · HTML / React tree 预览 | 动态加载任意 npm 组件 / Dynamic arbitrary npm components |
-| Vision | paste/analyze · 本地 OCR | 云端 vision LLM 路由 / Cloud vision LLM routing |
-| 检索与记忆 / Search & memory | 本地 rg · keyword · 可选远程 | embedding 宿主 / Embedding host |
-| 自动审阅 / Auto-review | 启发式 classify · slash | 可插拔 classifier / Pluggable classifier |
-| 上下文浏览器 / Context browser | Face **`contextTimeline`**（requests 分项 · usage 盖章 · events）/ **`contextHeaders`** · **`costUsage`** 计价 | — |
-| 移动访问 / Mobile access | 配对 · LAN/WAN PIN · 隧道 HTTP+WS | — |
+| 能力 | 已实现 | 待补 |
+|------|--------|------|
+| `host.mjs` RPC | inventory · invoke · runHostHalf | 全量第三方 DI（非产品目标） |
+| IM | connector · OAuth · `message.send/list` · webhook | 云端长连接网关 |
+| 任务流 | 持久化 · TS 节点 · scan | 绑定厂商 Python 发行版 |
+| GenUI | CRUD · HTML / React tree 预览 | 动态加载任意 npm 组件 |
+| Vision | paste/analyze · 本地 OCR | 云端 vision LLM 路由 |
+| 检索与记忆 | 本地 rg · keyword · 可选远程 | embedding 宿主 |
+| 自动审阅 | 启发式 classify · slash | 可插拔 classifier |
+| 上下文浏览器 | Face **`contextTimeline`**（requests 分项 · usage 盖章 · events）/ **`contextHeaders`** · **`costUsage`** 计价 | — |
+| 移动访问 | 配对 · LAN/WAN PIN · 隧道 HTTP+WS | — |
 
-## 回归 fixture / Regression Fixtures
+本地消息、节点、OCR 与 GenUI 预览线已在适配器内可用。
 
-`packages/server/http/tests/fixtures/compat-host-suite.json` 为测例清单，**不是**唯一可装列表。体验以本页「已实现」为准。
+## 回归 fixture
 
-The fixture file is a regression inventory, **not** the exclusive installable set. Product behavior follows **Implemented** above.
+`packages/server/http/tests/fixtures/compat-host-suite.json` 为测例清单，**不是**唯一可装列表。产品行为以本页「已实现」为准。
 
-## 待补特性 / Planned Work (XRK)
+## 待补特性
 
-下列写入 [status.md](./status.md)「未做 / Not done」，表示产品后续可自研或外接，**不是**「上游未搬清单」。
+下列写入 [status.md](./status.md)「未做」，表示产品后续可自研或外接：
 
-The following are product **planned** items in [status.md](./status.md), not an unported-upstream checklist:
-
-| 特性 / Feature | 说明 / Notes |
+| 特性 | 说明 |
 |------|------|
-| IM 长连接网关 / IM long-lived gateway | 当前以 webhook / 短请求为主 / Webhook and short requests today |
-| 任务流外部运行时 / External task runtime | 可选接入第三方节点发行版 / Optional third-party node distributions |
-| 云端 Vision / Cloud Vision | 路由至已配置的 vision LLM / Route to configured vision LLMs |
-| 记忆 embedding / Memory embeddings | 向量索引宿主 / Vector index host |
+| IM 长连接网关 | 当前以 webhook / 短请求为主 |
+| 任务流外部运行时 | 可选接入第三方节点发行版 |
+| 云端 Vision | 路由至已配置的 vision LLM |
+| 记忆 embedding | 向量索引宿主 |
 
-本地消息、节点、OCR 与 GenUI 预览线已在兼容器内可用。  
-Local messaging, nodes, OCR, and GenUI preview are available inside the adapter today.
-
-## 本地审计 / Local Audit
+## 本地审计
 
 ```bash
 node scripts/dsh-community-audit.mjs
 ```
 
-对照 client 扫描路径与能力表；未入表路径仍返回诚实 JSON。  
-Compare scanned client paths with the capability table; unlisted paths still return honest JSON.
+对照 client 扫描路径与能力表；未入表路径仍返回诚实 JSON。
 
 ## Face：`dynamicCordisRunner/*`
 
-面板经 Face RPC 驱动兼容器，不嵌入第三方 Host。  
-The panel drives the adapter via Face RPC; no third-party Host is embedded.
+面板经 Face RPC 驱动适配器。
 
-| 方法 / Method | 行为 / Behavior |
+| 方法 | 行为 |
 |------|------|
-| `inventory` · `getClientCode` · `runHostHalf` | 兼容器 + 可选子进程 / Adapter + optional subprocess |
+| `inventory` · `getClientCode` · `runHostHalf` | 适配器 + 可选子进程 |
 | `invoke` | registry / 子进程 RPC |
-| `stopFromPanel` | 停止子进程 + ack / Stop subprocess + ack |
+| `stopFromPanel` | 停止子进程 + ack |
 
-见 / See：[host-face.md](./host-face.md)。
+见 [host-face.md](./host-face.md)。
 
-## 相关 / Related
+## 相关
+
+[status.md](./status.md) · [plugin-loader.md](./plugin-loader.md) · [host-face.md](./host-face.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)
+
+---
+
+# Community Plugins and Host Contracts
+
+> **Audience**: Integrators · Contributors (install community clients; compare implemented Host surfaces and planned work)
+
+The product shell may load community `client.js`. The Host side is wired by the built-in adapter `extensions/dsh-compat` and `@xrkseek/server-http/dsh-compat` according to **path and RPC shape**, with persistence under `~/.xrk`. Implementation notes: [dsh-compat/README.md](../packages/server/http/src/dsh-compat/README.md) · Package boundary: [PACKAGE.md](../packages/server/http/src/dsh-compat/PACKAGE.md) · Discover: [plugin-loader.md](./plugin-loader.md).
+
+## Install and use
+
+1. Start with a workspace: `npx @xrkseek/harness-cli web` (or source `xrkh web`).
+2. Install a community client package into the user plugin directory:
+
+```bash
+xrkh plugin add <package-name>
+xrkh restart
+```
+
+Example package names: `dsh-wallet` · `@liustack/modsearch` (use the real npm names). Always **`xrkh restart`** after install so Host reloads.
+
+3. Prefer **Settings → Plugins** (and each plugin’s own panel) for day-to-day toggles; use env / on-disk files for Host/CI headless runs.
+4. `xrk.host.json` is optional: the loader uses the capability table + `client.js` scan + convention infer ([plugin-loader.md](./plugin-loader.md)). Authors may still declare `xrk.host.json` or ship `host.mjs`.
+5. What works vs what is planned follows **Host capabilities** below and [status.md](./status.md).
+
+## Architecture
+
+```text
+community client.js
+    → Face wire or same-origin HTTP / RPC
+        → capability table + XRK underlying (~/.xrk)
+        → bridge (XRK impl / optional subprocess apply)
+        → unlisted paths: honest JSON (not SPA 404)
+```
+
+| Layer | Responsibility | Modules |
+|----|------|------|
+| **Underlying** | `~/.xrk` I/O; honest responses | `underlying/*` · `wallet` · `im-channels` · `vision` |
+| **Bridge** | Community contract shape → XRK implementation | `host-feature-bridge` · `im-messaging-bridge` · `cordis-fiber-runner` |
+| **Adapter** | Composition, catch-all, registry | `adapter-compose` · `cordis-registry` |
+
+## Integration tiers (A–J)
+
+When installing community packages **beyond the product-shell built-in clients**, map each package by its actual HTTP/RPC surface:
+
+| Tier | Trigger | Host behavior |
+|------|------|-----------|
+| **A** | Face / shell API only | Usually works as-is |
+| **B** | Hits global capability table | First-party persistence |
+| **C** | `*-settings` RPC | Settings document store |
+| **D** | `/_dsh/<pkg>/…` | Generic JSON |
+| **E** | Single-segment slug | `community-root-http` |
+| **F** | Other GET | Honest catch-all |
+| **G** | Unregistered POST RPC | Settings fallback / empty ok |
+| **H** | `xrk.host.json` | Author-declared provider |
+| **I** | `host.mjs` | In-process apply; on failure **I′** subprocess |
+| **J** | External cloud / vendor distribution | See Planned work |
+
+## Host capabilities
+
+Source of truth: `dsh-compat-matrix.ts`.
+
+| Capability | Implemented | Planned |
+|------|--------|------|
+| `host.mjs` RPC | inventory · invoke · runHostHalf | Full third-party DI (out of scope) |
+| IM | connector · OAuth · `message.send/list` · webhook | Cloud long-lived IM gateway |
+| Task flow | Persistence · TS nodes · scan | Vendor Python runtime binding |
+| GenUI | CRUD · HTML / React tree preview | Dynamic arbitrary npm components |
+| Vision | paste/analyze · local OCR | Cloud vision LLM routing |
+| Search & memory | Local rg · keyword · optional remote | Embedding host |
+| Auto-review | Heuristic classify · slash | Pluggable classifier |
+| Context browser | Face **`contextTimeline`** (per-request items · usage stamps · events) / **`contextHeaders`** · **`costUsage`** pricing | — |
+| Mobile access | Pairing · LAN/WAN PIN · tunnel HTTP+WS | — |
+
+Local messaging, nodes, OCR, and GenUI preview are available inside the adapter today.
+
+## Regression fixtures
+
+`packages/server/http/tests/fixtures/compat-host-suite.json` is a regression inventory, **not** the exclusive installable set. Product behavior follows **Implemented** above.
+
+## Planned work
+
+These appear under [status.md](./status.md) **Not done** as product follow-ons (first-party or external):
+
+| Feature | Notes |
+|------|------|
+| IM long-lived gateway | Webhook and short requests today |
+| External task runtime | Optional third-party node distributions |
+| Cloud Vision | Route to configured vision LLMs |
+| Memory embeddings | Vector index host |
+
+## Local audit
+
+```bash
+node scripts/dsh-community-audit.mjs
+```
+
+Compare scanned client paths with the capability table; unlisted paths still return honest JSON.
+
+## Face: `dynamicCordisRunner/*`
+
+The panel drives the adapter via Face RPC.
+
+| Method | Behavior |
+|------|------|
+| `inventory` · `getClientCode` · `runHostHalf` | Adapter + optional subprocess |
+| `invoke` | Registry / subprocess RPC |
+| `stopFromPanel` | Stop subprocess + ack |
+
+See [host-face.md](./host-face.md).
+
+## Related
 
 [status.md](./status.md) · [plugin-loader.md](./plugin-loader.md) · [host-face.md](./host-face.md) · [ADR-0002](./adr/0002-no-embed-upstream.md)
