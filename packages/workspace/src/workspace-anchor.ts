@@ -12,7 +12,8 @@ export function formatWorkspaceRootAnchor(
     "## Workspace root",
     `\`${path}\``,
     ...(title ? [`Display name: ${title} (sidebar label — not a filesystem path).`] : []),
-    "All relative tool paths resolve here. Do not search other drives for the project.",
+    "All relative tool paths resolve here. Shell tools default their cwd to this root — `pwd` / `Get-Location` must show this path, not the Host process directory.",
+    "Do not search other drives for the project.",
   ];
   return lines.join("\n");
 }

@@ -24,8 +24,8 @@
 2. loadAll(pluginsDir) 若配置
 3. loadMcpToolPlugins(mcpServers) 若有 spec（env/config 或 host-settings.json）且 policy/XRK_MCP_ALLOW 允许
 4. createHostAgentCache(loader.list())
-5. createFaceRuntime（policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`；文件真源 MCP 时 `syncMcpServers`）
-6. AgentFactory 内 `bindAskUserTool`（Face broker）；createHttpServer + attachFace
+5. createFaceRuntime（policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`；文件真源 MCP 时 `syncMcpServers`；`resolveAgent` 内 bind `ask_user` / `exit_plan_mode`）
+6. createHttpServer + attachFace
 ```
 
 停机：`agentCache.dispose` → `shellJobs.dispose`（若有）→ PTY `dispose` → 关 HTTP → `loader.unregister` 逐个（含 MCP `dispose`）。

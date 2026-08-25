@@ -240,6 +240,40 @@ describe("dsh-compat adapters", () => {
     });
   });
 
+  it("serves HTML preview via /sidebar/html/ with MIME", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-sidebar-html-"));
+    temps.push(root);
+    const htmlPath = path.join(root, "www", "index.html");
+    mkdirSync(path.dirname(htmlPath), { recursive: true });
+    writeFileSync(htmlPath, "<html><body>ok</body></html>");
+    writeFileSync(path.join(root, "www", "app.css"), "body{color:red}");
+    const handler = compatHandler({
+      defaultCwd: root,
+      resolveSessionCwd: () => root,
+    });
+    await withPublicHandler(handler, async (base) => {
+      const segs = htmlPath
+        .split(/[\\/]+/)
+        .filter((s) => s !== "")
+        .map(encodeURIComponent)
+        .join("/");
+      const res = await fetch(`${base}/sidebar/html/s1/${segs}`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toMatch(/text\/html/);
+      expect(await res.text()).toContain("<body>ok</body>");
+
+      const cssSegs = path
+        .join(root, "www", "app.css")
+        .split(/[\\/]+/)
+        .filter((s) => s !== "")
+        .map(encodeURIComponent)
+        .join("/");
+      const css = await fetch(`${base}/sidebar/html/s1/${cssSegs}`);
+      expect(css.status).toBe(200);
+      expect(css.headers.get("content-type")).toMatch(/text\/css/);
+    });
+  });
+
   it("lists workspace via /sidebar/api/fs.tree", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-sidebar-"));
     temps.push(root);

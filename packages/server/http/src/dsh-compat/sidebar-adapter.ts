@@ -1,6 +1,6 @@
 /**
  * dsh-better-sidebar Host routes → XRK workspace FS (compat).
- * Primary: POST /sidebar/api/{method} · GET/POST /sidebar/upload · GET /sidebar/file
+ * Primary: POST /sidebar/api/{method} · GET /sidebar/html/… · GET/POST /sidebar/upload · GET /sidebar/file
  */
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { mkdir, opendir, readFile, unlink, writeFile } from "node:fs/promises";
@@ -26,6 +26,7 @@ import {
   saveSidebarPrefs,
 } from "./sidebar-prefs-store.js";
 import { probeBrowserUrl } from "./sidebar-browser.js";
+import { handleSidebarHtml } from "./sidebar-html.js";
 
 import type { SidebarFaceBridge } from "./sidebar-face-bridge.js";
 
@@ -479,6 +480,10 @@ export async function handleSidebarCompat(
   pathname: string,
   options: SidebarCompatOptions,
 ): Promise<boolean> {
+  if (await handleSidebarHtml(req, res, pathname, options)) {
+    return true;
+  }
+
   if (pathname.startsWith("/sidebar/api/")) {
     if ((req.method ?? "GET").toUpperCase() !== "POST") {
       sendJson(res, 405, fail("method", "POST required"));

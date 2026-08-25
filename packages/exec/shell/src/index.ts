@@ -1,7 +1,18 @@
+import path from "node:path";
 import type { ToolDefinition } from "@xrkseek/core-tools";
 import type { SubprocessHandle, SubprocessService } from "@xrkseek/exec-subprocess";
 import { fitWithSuffix } from "./bytes.js";
 import { presentBashCall, presentBashResult } from "./present.js";
+import {
+  PWSH_ENCODING_PREAMBLE,
+  resolvePwshPath,
+} from "./resolve-pwsh.js";
+
+export {
+  candidatePwshPaths,
+  PWSH_ENCODING_PREAMBLE,
+  resolvePwshPath,
+} from "./resolve-pwsh.js";
 
 export type ShellBackend = "bash" | "cmd" | "pwsh";
 
@@ -139,6 +150,14 @@ export interface ShellService {
 export interface ShellLocalOptions {
   readonly subprocess: SubprocessService;
   readonly backend?: ShellBackend;
+  /** Explicit pwsh/powershell path when backend is `pwsh`. */
+  readonly pwshPath?: string;
+  /**
+   * Default spawn cwd when callers omit it (session workspace root).
+   * Prevents `pwd` / relative tools from landing on the Host process cwd
+   * (often a drive root when the Host was launched from Desktop).
+   */
+  readonly defaultCwd?: string;
   /** Max retained jobs (active + finished). Default 64. */
   readonly maxJobs?: number;
   /**
@@ -169,17 +188,22 @@ function isTerminalStatus(status: ShellJobStatus): boolean {
   return status === "exited" || status === "killed" || status === "failed";
 }
 
-function argvFor(backend: ShellBackend, command: string): string[] {
+function argvFor(
+  backend: ShellBackend,
+  command: string,
+  pwshPath: string,
+): string[] {
   switch (backend) {
     case "cmd":
       return ["cmd.exe", "/c", command];
     case "pwsh":
       return [
-        "pwsh",
+        pwshPath,
         "-NoLogo",
         "-NoProfile",
+        "-NonInteractive",
         "-Command",
-        command,
+        `${PWSH_ENCODING_PREAMBLE}${command}`,
       ];
     case "bash":
     default:
@@ -187,8 +211,9 @@ function argvFor(backend: ShellBackend, command: string): string[] {
   }
 }
 
+/** Windows → PowerShell (DSH / Codex); POSIX → bash. */
 function defaultBackend(): ShellBackend {
-  return process.platform === "win32" ? "cmd" : "bash";
+  return process.platform === "win32" ? "pwsh" : "bash";
 }
 
 function nextKindJobId(counts: Map<string, number>, kind: string): string {
@@ -200,8 +225,26 @@ function nextKindJobId(counts: Map<string, number>, kind: string): string {
 
 const DEFAULT_MAX_CONCURRENT_JOBS = 10;
 
+function resolveSpawnCwd(
+  cwd: string | undefined,
+  defaultCwd: string | undefined,
+): string | undefined {
+  const trimmed = cwd?.trim();
+  if (trimmed && trimmed.length > 0) {
+    if (path.isAbsolute(trimmed)) return trimmed;
+    if (defaultCwd && defaultCwd.trim().length > 0) {
+      return path.resolve(defaultCwd.trim(), trimmed);
+    }
+    return path.resolve(trimmed);
+  }
+  const fallback = defaultCwd?.trim();
+  return fallback && fallback.length > 0 ? fallback : undefined;
+}
+
 export function createLocalShell(options: ShellLocalOptions): ShellService {
   const backend = options.backend ?? defaultBackend();
+  const pwshPath = resolvePwshPath(options.pwshPath);
+  const defaultCwd = options.defaultCwd?.trim() || undefined;
   const maxJobs = options.maxJobs ?? 64;
   const maxConcurrent = options.maxConcurrentJobs ?? DEFAULT_MAX_CONCURRENT_JOBS;
   if (!Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1) {
@@ -340,9 +383,10 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
 
   return {
     async run(command, cwd, opts) {
-      const argv = argvFor(backend, command);
+      const argv = argvFor(backend, command, pwshPath);
+      const spawnCwd = resolveSpawnCwd(cwd, defaultCwd);
       const result = await options.subprocess.spawn(argv, {
-        ...(cwd ? { cwd } : {}),
+        ...(spawnCwd ? { cwd: spawnCwd } : {}),
         ...(opts?.signal ? { signal: opts.signal } : {}),
         ...(opts?.timeoutMs !== undefined
           ? { timeoutMs: opts.timeoutMs }
@@ -359,9 +403,10 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
       assertOpen();
       const ownerSessionId = opts?.ownerSessionId?.trim() || undefined;
       assertAdmission(ownerSessionId);
-      const argv = argvFor(backend, command);
+      const argv = argvFor(backend, command, pwshPath);
+      const spawnCwd = resolveSpawnCwd(cwd, defaultCwd);
       const handle = options.subprocess.start(argv, {
-        ...(cwd ? { cwd } : {}),
+        ...(spawnCwd ? { cwd: spawnCwd } : {}),
         ...(opts?.signal ? { signal: opts.signal } : {}),
         ...(opts?.timeoutMs !== undefined
           ? { timeoutMs: opts.timeoutMs }
@@ -736,6 +781,8 @@ export function createBashTools(
   options: {
     readonly timeoutMs?: number;
     readonly maxOutputBytes?: number;
+    /** Default process cwd for bash/pwsh (session workspace root). */
+    readonly defaultCwd?: string;
   } = {},
 ): ToolDefinition[] {
   const timeoutMs =
@@ -750,25 +797,51 @@ export function createBashTools(
     options.maxOutputBytes > 0
       ? Math.floor(options.maxOutputBytes)
       : undefined;
+  const defaultCwd =
+    typeof options.defaultCwd === "string" && options.defaultCwd.trim().length > 0
+      ? options.defaultCwd.trim()
+      : undefined;
+  const dialect =
+    process.platform === "win32"
+      ? "PowerShell (pwsh). Prefer PowerShell syntax (`Get-ChildItem`, `$env:NAME`, `Set-Location`). Use workdir instead of cd when possible."
+      : "bash. Use POSIX shell syntax.";
   return [
     {
       name: "bash",
       description:
-        "Run a shell command. Set background=true to start a job and return its id.",
+        `Run a shell command via ${dialect} ` +
+        "Default cwd is the session workspace root (not the Host process cwd) — " +
+        "`pwd` / `Get-Location` should show the workspace. Prefer relative paths; " +
+        "set workdir only when another directory is required. " +
+        "Set background=true to start a job and return its id.",
       parameters: {
         type: "object",
         properties: {
           command: { type: "string" },
           background: { type: "boolean" },
+          workdir: {
+            type: "string",
+            description:
+              "Working directory for this command. Relative paths resolve against the session workspace. Defaults to the session workspace root.",
+          },
         },
         required: ["command"],
       },
       async execute(args, signal) {
-        const a = args as { command?: string; background?: boolean };
+        const a = args as {
+          command?: string;
+          background?: boolean;
+          workdir?: string;
+        };
         const command = String(a.command ?? "");
+        const workdirRaw = String(a.workdir ?? "").trim();
+        const cwd =
+          workdirRaw.length > 0
+            ? workdirRaw
+            : defaultCwd;
         try {
           if (a.background) {
-            const started = await shell.startJob(command, undefined, {
+            const started = await shell.startJob(command, cwd, {
               ...(signal ? { signal } : {}),
               ...(timeoutMs !== undefined ? { timeoutMs } : {}),
             });
@@ -778,7 +851,7 @@ export function createBashTools(
               }`,
             };
           }
-          const out = await shell.run(command, undefined, {
+          const out = await shell.run(command, cwd, {
             ...(signal ? { signal } : {}),
             ...(timeoutMs !== undefined ? { timeoutMs } : {}),
           });
@@ -794,29 +867,6 @@ export function createBashTools(
       },
       presentCall: presentBashCall,
       presentResult: presentBashResult,
-    },
-    {
-      name: "bash_jobs",
-      description:
-        "List background jobs (bash subprocess and pty-send). Shows id, kind, status, label.",
-      parameters: { type: "object", properties: {} },
-      async execute() {
-        const list = await shell.listJobs();
-        if (!list.length) return { content: "(no jobs)" };
-        return {
-          content: list
-            .map(
-              (j) =>
-                `${j.id}\t${j.kind}\t${j.status}\t${j.command}${
-                  j.exitCode !== undefined && j.exitCode !== null
-                    ? `\texit=${j.exitCode}`
-                    : ""
-                }${j.detail ? `\t${j.detail}` : ""}`,
-            )
-            .join("\n"),
-        };
-      },
-      isConcurrencySafe: () => true,
     },
     {
       name: "job_list",
@@ -904,27 +954,6 @@ export function createBashTools(
         (args as { wait?: boolean }).wait !== true,
     },
     {
-      name: "bash_kill",
-      description: "Kill a background job by id from bash_jobs (bash or pty-send).",
-      parameters: {
-        type: "object",
-        properties: {
-          id: { type: "string" },
-        },
-        required: ["id"],
-      },
-      async execute(args) {
-        const id = String((args as { id?: string }).id ?? "");
-        try {
-          await shell.killJob(id);
-          return { content: `killed ${id}` };
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          return { content: message, isError: true };
-        }
-      },
-    },
-    {
       name: "job_kill",
       description:
         "Request cancellation of a running background job by job id. Returns immediately; the job settles as killed once its work actually stops.",
@@ -991,4 +1020,4 @@ export {
 
 /** DSH tool-jobs system prompt (order 106). */
 export const JOBS_PROMPT_TEXT =
-  "Track every background job id you start. You are notified in-session when a job finishes — do not busy-poll or sleep on one; keep working on independent steps and do not duplicate a running job's work. Before giving a final answer, collect every still-relevant job with job_output (set wait: true only when you are genuinely blocked on it), and job_kill jobs that stopped mattering.";
+  "Track every background job id you start (`bash` with background=true, or terminal background sends). You are notified in-session when a job finishes — do not busy-poll or sleep on one; keep working on independent steps and do not duplicate a running job's work. Before giving a final answer, collect every still-relevant job with job_output (set wait: true only when you are genuinely blocked on it), and job_kill jobs that stopped mattering. Use job_list / job_output / job_kill.";

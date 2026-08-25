@@ -34,8 +34,11 @@ export function createStandingToolRegistry(options: {
   if (preset === "harness" || preset === "server") {
     const shell = createLocalShell({
       subprocess: createLocalSubprocess(),
+      defaultCwd: options.workspaceRoot,
     });
-    for (const tool of createBashTools(shell)) tools.register(tool);
+    for (const tool of createBashTools(shell, {
+      defaultCwd: options.workspaceRoot,
+    })) tools.register(tool);
     for (const tool of createWebTools(createDefaultWebAccess())) tools.register(tool);
     for (const tool of createLspTools({
       workspaceRoot: options.workspaceRoot,

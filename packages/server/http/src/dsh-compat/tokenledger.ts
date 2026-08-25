@@ -94,7 +94,13 @@ export function createTokenLedgerBridgeFromFace(face: {
         cacheWrite += tu.cacheWriteTokens ?? 0;
       }
       const tokens = input + output + cacheRead + cacheWrite;
-      const day = new Date().toISOString().slice(0, 10);
+      const day = (() => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        const d = String(now.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      })();
       const bucket = { tokens, inputTokens: input, outputTokens: output };
       const requests = face.store.list().length;
       return {

@@ -49,12 +49,13 @@ Host（harness/server）共享一份 root registry；composition 用 `createSess
 | Tool | Role |
 |------|------|
 | `bash` | `command` + optional `background: true` → `bash-N`。Foreground：`[stderr]` + 非零 `[exit code: N]`（不是 `isError`） |
-| `bash_jobs` | list（含 `pty-send`）：本仓历史名 |
-| `job_list` | DSH 名：`id [kind] status — label` |
+| `job_list` | list（含 `pty-send`）：`id [kind] status — label` |
 | `job_output` | 末行 `statusLine`；`wait: true` 等到终态或超时 |
-| `bash_kill` / `job_kill` | cancel → `stopping`；已终态则 `already finished` + `statusLine` |
+| `job_kill` | cancel → `stopping`；已终态则 `already finished` + `statusLine` |
 
-Harness 登记 `tool:jobs` 系统提示；composition `dispose()` 调 `shell.dispose()`。
+Model-facing surface uses only `job_*` tools.
+
+Harness 登记 `tool:fs-routing` · `tool:shell-routing` · `tool:jobs` 系统提示；composition `dispose()` 调 `shell.dispose()`。
 
 ## Completion notice（Face）
 

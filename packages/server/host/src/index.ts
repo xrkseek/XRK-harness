@@ -41,11 +41,9 @@ import {
 } from "@xrkseek/server-http";
 import {
   attachFaceUpgrades,
-  bindAskUserTool,
-  bindExitPlanModeTool,
+  bindSubagentTools,
   createFaceRuntime,
   effectiveHostApiKey,
-  formatQuestionAnswer,
   isLoopbackAddress,
   publishRemoteEvent,
   createSessionRoutingLlm,
@@ -379,6 +377,7 @@ export function createHostManager(): HostManager {
       const faceBox: {
         approvals?: FaceApprovalBroker;
         questions?: FaceQuestionBroker;
+        runtime?: FaceRuntime;
       } = {};
       const llmResolverBox: {
         resolve?: (sessionId: string) => LlmAdapter | undefined;
@@ -474,13 +473,12 @@ export function createHostManager(): HostManager {
             if (faceBox.approvals) {
               agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
             }
-            if (faceBox.questions && agent.tools) {
-              bindAskUserTool(agent.tools, (qs, signal) =>
-                faceBox.questions!.ask(sessionId, qs, signal).then(formatQuestionAnswer),
-              );
-              bindExitPlanModeTool(agent.tools, store, sessionId, (qs, signal) =>
-                faceBox.questions!.ask(sessionId, qs, signal),
-              );
+            // ask_user / exit_plan_mode: Face resolveAgent rebinds once.
+            if (agent.tools && faceBox.runtime) {
+              bindSubagentTools(agent.tools, {
+                runtime: faceBox.runtime,
+                parentSessionId: sessionId,
+              });
             }
             return agent;
           },
@@ -681,6 +679,7 @@ export function createHostManager(): HostManager {
           wake: (sessionId) => drain.wake(sessionId),
           cancel: (sessionId) => drain.cancel(sessionId),
           isActive: (sessionId) => drain.isActive(sessionId),
+          run: (sessionId) => hub.run(sessionId),
         },
       });
       // Authorize DSH client settings namespaces so panels do not fail
@@ -695,6 +694,7 @@ export function createHostManager(): HostManager {
       faceForModality.current = faceRuntime;
       faceBox.approvals = faceRuntime.approvals;
       faceBox.questions = faceRuntime.questions;
+      faceBox.runtime = faceRuntime;
       sessionCwdBox.get = (sessionId) =>
         resolveSessionCwd(faceRuntime, sessionId);
       sessionPresetBox.get = (sessionId) =>
@@ -705,6 +705,7 @@ export function createHostManager(): HostManager {
           sessionId,
           running,
         });
+        faceRuntime.onSessionDrainStatus(sessionId, running);
       };
       llmResolverBox.resolve = (sessionId) =>
         createSessionRoutingLlm(faceRuntime, sessionId);

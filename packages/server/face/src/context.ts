@@ -37,6 +37,8 @@ export interface FaceDrain {
   wake(sessionId: string): void;
   cancel(sessionId: string): Promise<void>;
   isActive(sessionId: string): boolean;
+  /** Wait until the session drain settles (Host hub.run). */
+  run?(sessionId: string): Promise<void>;
 }
 
 export interface FaceRuntime {
@@ -166,4 +168,9 @@ export interface FaceRuntime {
     boundaryIndex?: number,
     childId?: string,
   ): SessionRecord;
+  /**
+   * Host drain status hook. Continuable children notify the parent on idle
+   * (same wake budget as job completions).
+   */
+  onSessionDrainStatus(sessionId: string, running: boolean): void;
 }

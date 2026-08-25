@@ -55,6 +55,11 @@ describe("cost-meter ledger", () => {
     expect(state.today.output).toBe(40);
     expect(state.today.cacheRead).toBe(10);
     expect(state.today.cost).toBeGreaterThan(0);
+    // flash rates: 120 miss ×0.22 + 40 out ×0.66 + 10 hit ×0.007
+    expect(state.today.cost).toBeCloseTo(
+      (120 * 0.22 + 40 * 0.66 + 10 * 0.007) / 1_000_000,
+      10,
+    );
     expect(state.today.sessions[0]?.id).toBe("sess-cost");
     void runtime;
   });

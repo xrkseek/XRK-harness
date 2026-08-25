@@ -24,6 +24,7 @@ export {
   newSession,
   promoteNextAdmit,
   promoteAdmitsForTurn,
+  promotePendingSteers,
   type AdmitReceipt,
   type AdmitPromptOptions,
   type PromoteForTurnResult,

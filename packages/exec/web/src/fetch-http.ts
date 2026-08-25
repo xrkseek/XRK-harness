@@ -212,7 +212,7 @@ export function createHttpFetchProvider(
           const validated = assertHttpUrl(next.href, limits.maxUrlLength);
           if (!isSameOrigin(current, validated)) {
             throw new WebError(
-              "cross-origin redirect is not followed",
+              `cross-origin redirect is not followed; call web_fetch on Location: ${validated.href}`,
               "WEB_REDIRECT_BLOCKED",
             );
           }

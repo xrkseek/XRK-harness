@@ -3,6 +3,7 @@ import {
   assertToolCallsSettled,
   deriveMessages,
   estimateMessagesTokens,
+  promotePendingSteers,
   pruneOversizedToolResults,
   settleDanglingTools,
   DEFAULT_COMPACTION_BUFFER_TOKENS,
@@ -477,6 +478,24 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       throw new DOMException("aborted", "AbortError");
     }
     steps += 1;
+    // Step-boundary steer (session-delivery): claim pending steers before
+    // the next model request so mid-turn redirects do not wait for turn end.
+    // Queues stay pending until continueTurn / drain idle.
+    if (steps > 1) {
+      const steers = promotePendingSteers(input.store, input.sessionId, {
+        now,
+      });
+      if (steers) {
+        append(input.store, input.sessionId, {
+          type: "user/message",
+          ts: now(),
+          turnId,
+          messageId: newUserMessageId(),
+          content: steers.content,
+          source: { kind: "user" },
+        });
+      }
+    }
     commitPendingPlanMode(input.store, input.sessionId, now);
     const stepId = id("step");
     activeStepId = stepId;

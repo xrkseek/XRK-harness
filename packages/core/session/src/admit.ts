@@ -223,3 +223,18 @@ export function promoteAdmitsForTurn(
     steerBatch: true,
   };
 }
+
+/**
+ * Promote pending steers only (leave queues). Used at tool-step boundaries
+ * inside an in-flight turn — never promotes queue.
+ * Returns undefined when no steers are pending.
+ */
+export function promotePendingSteers(
+  store: SessionStore,
+  sessionId: string,
+  options?: { readonly now?: () => number },
+): PromoteForTurnResult | undefined {
+  const pending = listPendingAdmits(store.get(sessionId).events, sessionId);
+  if (!pending.some((p) => p.delivery === "steer")) return undefined;
+  return promoteAdmitsForTurn(store, sessionId, options);
+}

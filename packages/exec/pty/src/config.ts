@@ -1,3 +1,5 @@
+import { resolvePtyShell } from "./resolve-shell.js";
+
 export interface PtyBackendConfig {
   readonly backendType: string;
   readonly shellPath: string;
@@ -46,10 +48,11 @@ export function validatePtyBackendConfig(
 export function defaultPtyBackendConfig(
   overrides: Partial<PtyBackendConfig> = {},
 ): PtyBackendConfig {
+  const shell = resolvePtyShell();
   const resolved: PtyBackendConfig = {
     backendType: "shell",
-    shellPath: process.platform === "win32" ? "bash" : "/bin/bash",
-    shellArgs: ["--noprofile", "--norc", "-i"],
+    shellPath: shell.shellPath,
+    shellArgs: [...shell.shellArgs],
     rows: 40,
     cols: 160,
     scrollbackLines: 10_000,

@@ -17,7 +17,7 @@ Lists only controls **already implemented in this repository**; unfinished items
 | Tool denylist / policy engine | `@xrkseek/policy` | 见 [policy.md](./policy.md) |
 | Write-intent | `createWriteIntentGuard` | 默认 `apply_edit` 须先 `read_file` |
 | Sandbox argv | `exec-sandbox` + guard | Workspace cwd + DenyList |
-| Path jail | `exec-fs` `resolveWithinRoot` | 拒绝对路径与 `..` 逃逸 |
+| Path jail | `exec-fs` `resolveWithinRoot` | 相对路径与 workspace 内绝对路径均可；拒绝对出界与 `..` 逃逸 |
 | Web URL 卫生 | `exec-web` `assertHttpUrl` | 仅 http(s)、拒凭据；字面量私网；**无** DNS 再绑定 |
 | LSP 路径 | `exec-lsp` `resolveWithinRoot` | 查询文件必须落在 `workspaceRoot` 内 |
 | PTY cwd | `exec-pty` `resolvePtyCwd` | cwd 必须落在 `workspaceRoot` 内；拒绝对 shell `SIGKILL` |

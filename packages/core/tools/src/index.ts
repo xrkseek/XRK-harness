@@ -53,12 +53,12 @@ export {
 export {
   createPolicyToolCallGuard,
   createReadTracker,
-  createSandboxArgvWrapGuard,
   createWriteIntentGuard,
   extractPathArg,
   foldGuardVerdicts,
   runGuards,
 } from "./guards.js";
+export { SUBAGENT_ROUTING_PROMPT_TEXT } from "./subagent-prompt.js";
 export {
   materializeTools,
   type MaterializeToolsOptions,

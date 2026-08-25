@@ -9,5 +9,7 @@ export function resolveWorkspacePath(cwd: string | undefined, path: string): str
   if (cwd === undefined || cwd === '') return path
   const base = cwd.replace(/[/\\]+$/, '')
   const rel = path.replace(/^[/\\]+/, '')
+  // Produced-files "show in folder" opens `.` → workspace root, not `cwd/.`.
+  if (rel === '' || rel === '.') return base
   return `${base}/${rel}`
 }

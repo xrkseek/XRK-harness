@@ -8,13 +8,19 @@ import css from './TurnTailNodeView.module.css'
 type TurnTailNodeViewProps = ChatNodeViewProps<'turn-tail'>
   & PropsRenderSlots<'conversation.chat.turnTail' | 'conversation.chat.assistant-actions'>
 
-/** Turn-local actions and feature tail over the Location index, independent of Assistant placement. */
+/**
+ * Turn-local feature tail + message actions.
+ * Copy / feedback / branch only after the session is idle — while the agent
+ * is still running, completed-turn footers must not sit above live tool rows
+ * (stricter than DSH, matches product: actions appear when the run finishes).
+ */
 export const TurnTailNodeView = memo(function TurnTailNodeView({
   node, openFile, forkAt, renderSlot, renderSlotChain, t, useSession,
 }: TurnTailNodeViewProps) {
   const data = node.data
   const hasLaterChatNode = useSession(snapshot =>
     snapshot.chat.locations.getTurn(data.turn).at(-1) !== node.key)
+  const sessionRunning = useSession(snapshot => snapshot.running === true)
   const turn = node.location.kind === 'turn' || node.location.kind === 'step'
     ? node.location.turn
     : undefined
@@ -29,25 +35,28 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   // Interruption-frozen partials carry no messageId, so they address no
   // durable message and contribute no per-message actions.
   const messageId = closing.finalNode.messageId
-  const assistantActions = messageId === undefined
+  const showMessageActions = !sessionRunning
+  const assistantActions = !showMessageActions || messageId === undefined
     ? null
     : renderSlot('conversation.chat.assistant-actions', { messageId })
   return (
     <div className={css.root} data-turn-tail={data.turn} data-time-hover-root>
       {tail}
-      <MessageIconActions
-        text={assistantText(closing.blocks)}
-        time={closing.time}
-        runMs={runMs}
-        ttftMs={data.ttftMs}
-        tokensPerSecond={data.tokensPerSecond}
-        clock="end"
-        onBranch={() => { forkAt(closing.finalNode.seq) }}
-        branchUnavailable={data.branchUnavailable || hasLaterChatNode}
-        className={css.actions}
-        extraActions={assistantActions}
-        t={t}
-      />
+      {showMessageActions ? (
+        <MessageIconActions
+          text={assistantText(closing.blocks)}
+          time={closing.time}
+          runMs={runMs}
+          ttftMs={data.ttftMs}
+          tokensPerSecond={data.tokensPerSecond}
+          clock="end"
+          onBranch={() => { forkAt(closing.finalNode.seq) }}
+          branchUnavailable={data.branchUnavailable || hasLaterChatNode}
+          className={css.actions}
+          extraActions={assistantActions}
+          t={t}
+        />
+      ) : null}
     </div>
   )
 })

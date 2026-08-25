@@ -241,4 +241,4 @@ export const WEB_SEARCH_GUIDANCE =
   "Use the web_search tool to discover current information on the web. It returns an optional answer plus a list of source URLs. Follow up with web_fetch when you need the full content of a specific result, and cite the relevant URLs as markdown links.";
 
 export const WEB_FETCH_GUIDANCE =
-  "Use the web_fetch tool to retrieve the content of a specific HTTP(S) URL (for example a result from web_search). It returns the page content decoded to text. Cite the URL as a markdown link when you use its content.";
+  "Use the web_fetch tool to retrieve one specific HTTP(S) URL as decoded text (~30s timeout). Prefer concrete page URLs over homepages. Cross-origin redirects are not followed — if the error names a Location URL, call web_fetch on that URL next. Cite the URL as a markdown link when you use its content.";

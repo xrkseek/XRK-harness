@@ -136,6 +136,7 @@ describe("tool pipeline", () => {
     });
     expect(body).not.toHaveBeenCalled();
     expect(out.result.isError).toBe(true);
+    expect(out.result.content).toMatch(/read_file .* before apply_edit/);
   });
 
   it("retries transient errors up to maxRetries", async () => {

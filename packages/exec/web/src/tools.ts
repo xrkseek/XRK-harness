@@ -131,7 +131,9 @@ export function createWebTools(
   const fetchTool: ToolDefinition<{ url: string }> = {
     name: "web_fetch",
     description:
-      "Fetch the content of a specific HTTP(S) URL and return it decoded to text.",
+      "Fetch one specific HTTP(S) URL and return decoded text (~30s timeout). Prefer concrete page URLs over homepages. " +
+      "Cross-origin redirects are not followed — if the error mentions Location, call web_fetch on that URL next. " +
+      "Use web_search when you do not yet have a URL.",
     parameters: {
       type: "object",
       properties: {

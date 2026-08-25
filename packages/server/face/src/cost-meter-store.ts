@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { bundledCostMeterPriceConfig } from "./cost-meter-pricing.js";
+import { bundledCostMeterPriceConfig, estimateBucketsCostUsd } from "./cost-meter-pricing.js";
 import {
   emptyDeepSeekBalance,
   queryDeepSeekBalance,
@@ -299,6 +299,135 @@ function customBalanceFromCache(ledger: LedgerFile): Record<string, unknown> {
   return { ...emptyCustomBalanceSnapshot() };
 }
 
+function looksLikeLegacyV3UsdTable(prices: unknown): boolean {
+  if (!prices || typeof prices !== "object") return false;
+  const p = prices as Record<string, unknown>;
+  const def = (p.default ?? (p.models as Record<string, unknown> | undefined)?.["deepseek-chat"]) as
+    | Record<string, unknown>
+    | undefined;
+  if (!def) return false;
+  return def.cacheHit === 0.07 && def.cacheMiss === 0.27 && def.output === 1.1;
+}
+
+/**
+ * Upgrade V3-era bundled tables to V4 flash/pro and recompute every stored cost
+ * from disjoint token buckets (dsh-cost-meter costOf). Returns true when ledger mutated.
+ */
+export function migrateAndRepriceLedger(ledger: LedgerFile): boolean {
+  let changed = false;
+  if (looksLikeLegacyV3UsdTable(ledger.config.prices)) {
+    ledger.config = {
+      ...ledger.config,
+      prices: bundledCostMeterPriceConfig(),
+      priceSource: "bundled-v4",
+    };
+    changed = true;
+  } else {
+    const prices = (ledger.config.prices as Record<string, unknown>) ?? {};
+    const models = {
+      ...(bundledCostMeterPriceConfig().models as Record<string, unknown>),
+      ...((prices.models as Record<string, unknown>) ?? {}),
+    };
+    const before = JSON.stringify(prices.models ?? {});
+    const nextPrices = {
+      ...bundledCostMeterPriceConfig(),
+      ...prices,
+      models,
+      default: prices.default ?? bundledCostMeterPriceConfig().default,
+    };
+    if (JSON.stringify(nextPrices.models) !== before) {
+      ledger.config = { ...ledger.config, prices: nextPrices };
+      changed = true;
+    }
+  }
+
+  for (const day of ledger.history) {
+    let dayCost = 0;
+    for (const session of day.sessions) {
+      const provider = String(session.provider ?? "deepseek");
+      const model = String(session.model ?? "unknown");
+      const buckets = {
+        input: Number(session.input ?? 0),
+        output: Number(session.output ?? 0),
+        cacheRead: Number(session.cacheRead ?? 0),
+        cacheWrite: Number(session.cacheWrite ?? 0),
+        reasoning: Number(session.reasoning ?? 0),
+      };
+      const lastAt = Number(session.lastAt ?? 0);
+      const cost = estimateBucketsCostUsd(
+        buckets,
+        provider,
+        model,
+        ledger.config,
+        lastAt > 0 ? lastAt : undefined,
+      );
+      if (Math.abs(Number(session.cost ?? 0) - cost) > 1e-12) {
+        session.cost = cost;
+        changed = true;
+      }
+      dayCost += cost;
+
+      const byPm = session.byProviderModel as
+        | Record<string, CostMeterBuckets>
+        | undefined;
+      if (byPm) {
+        for (const [key, row] of Object.entries(byPm)) {
+          const [prov, ...rest] = key.split(":");
+          const mdl = rest.join(":") || model;
+          const next = estimateBucketsCostUsd(
+            row,
+            prov || provider,
+            mdl,
+            ledger.config,
+            lastAt > 0 ? lastAt : undefined,
+          );
+          if (Math.abs(row.cost - next) > 1e-12) {
+            row.cost = next;
+            changed = true;
+          }
+        }
+      }
+      const byModel = session.byModel as Record<string, CostMeterBuckets> | undefined;
+      if (byModel) {
+        for (const [mdl, row] of Object.entries(byModel)) {
+          const next = estimateBucketsCostUsd(
+            row,
+            provider,
+            mdl,
+            ledger.config,
+            lastAt > 0 ? lastAt : undefined,
+          );
+          if (Math.abs(row.cost - next) > 1e-12) {
+            row.cost = next;
+            changed = true;
+          }
+        }
+      }
+    }
+    if (Math.abs(day.cost - dayCost) > 1e-12) {
+      day.cost = dayCost;
+      changed = true;
+    }
+  }
+
+  if (ledger.pendingByKey) {
+    for (const [key, sample] of Object.entries(ledger.pendingByKey)) {
+      const next = estimateBucketsCostUsd(
+        sample,
+        sample.provider,
+        sample.model,
+        ledger.config,
+        sample.ts,
+      );
+      if (Math.abs(sample.cost - next) > 1e-12) {
+        ledger.pendingByKey[key] = { ...sample, cost: next };
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
 export function loadLedger(): LedgerFile {
   const file = ledgerFile();
   try {
@@ -306,7 +435,7 @@ export function loadLedger(): LedgerFile {
       return { config: defaultCostMeterConfig(), history: [] };
     }
     const raw = JSON.parse(readFileSync(file, "utf8")) as LedgerFile;
-    return {
+    const ledger: LedgerFile = {
       config: {
         ...defaultCostMeterConfig(),
         ...(raw.config && typeof raw.config === "object" ? raw.config : {}),
@@ -332,6 +461,14 @@ export function loadLedger(): LedgerFile {
           }
         : {}),
     };
+    if (migrateAndRepriceLedger(ledger)) {
+      try {
+        saveLedger(ledger);
+      } catch {
+        // Read path must not fail closed if the file is momentarily locked.
+      }
+    }
+    return ledger;
   } catch {
     return { config: defaultCostMeterConfig(), history: [] };
   }
@@ -762,9 +899,11 @@ export function costMeterAggregateUsage(query?: {
 
   const tokens = rangeFold.input + rangeFold.output + rangeFold.cacheRead
     + rangeFold.cacheWrite + rangeFold.reasoning;
+  // DSH: cacheRead / (cacheRead + uncached input); not / all tokens.
+  const cacheDenom = rangeFold.cacheRead + rangeFold.input;
   const cacheHitRate =
-    tokens > 0
-      ? Math.round((rangeFold.cacheRead / tokens) * 1000) / 10
+    cacheDenom > 0
+      ? Math.round((rangeFold.cacheRead / cacheDenom) * 1000) / 10
       : 0;
   const models = [...modelMap.entries()].map(([model, row]) => ({
     model,
@@ -877,7 +1016,7 @@ export function costMeterSessionTotals(
   };
 }
 
-/** dsh-wallet `usage` panel: recent daily cost from ledger (CNY display). */
+/** dsh-wallet usage panel: recent daily cost from ledger (CNY display). */
 export function costMeterDisplayExchangeRate(): number {
   const ledger = loadLedger();
   return typeof ledger.config.exchangeRate === "number"
@@ -885,7 +1024,7 @@ export function costMeterDisplayExchangeRate(): number {
     : 7.2;
 }
 
-/** dsh-wallet `usage` panel: recent daily cost from ledger (CNY display). */
+/** Recent daily cost for dsh-wallet (CNY). */
 export function costMeterWalletUsage(days = 7): {
   readonly today: { date: string; cost: number };
   readonly days: Array<{ date: string; cost: number }>;
@@ -911,6 +1050,6 @@ export function costMeterWalletUsage(days = 7): {
     today: todayRow ?? { date: todayKey, cost: 0 },
     days: mapped,
     ready: mapped.length > 0,
-    degraded: mapped.every((d) => d.cost === 0),
+    degraded: false,
   };
 }

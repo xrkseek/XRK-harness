@@ -195,7 +195,10 @@ export function createSidebarFaceBridgeFromFace(
         return { ok: true };
       }
       if (payload.action === "reveal" && payload.path?.trim()) {
-        const opened = await hostOpenPath({ path: payload.path.trim() });
+        const opened = await hostOpenPath({
+          path: payload.path.trim(),
+          reveal: true,
+        });
         if (!opened.ok) {
           throw new Error(opened.error.message);
         }

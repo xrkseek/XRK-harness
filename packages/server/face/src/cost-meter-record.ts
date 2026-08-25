@@ -189,10 +189,8 @@ function sampleKey(sample: CostMeterUsageSample): string {
 
 export function applyCostMeterUsageSample(sample: CostMeterUsageSample): void {
   const ledger = loadLedger();
-  const cost =
-    sample.cost > 0
-      ? sample.cost
-      : estimateUsageCostUsd(sample, ledger.config);
+  // Always price from disjoint token buckets (never trust a stale sample.cost).
+  const cost = estimateUsageCostUsd(sample, ledger.config);
   const enriched: CostMeterUsageSample = { ...sample, cost };
   const key = sampleKey(enriched);
   const prev = ledger.pendingByKey?.[key];
@@ -216,7 +214,7 @@ export function usageSampleFromMessage(
   if (event.type !== "assistant/message" || !event.usage) return undefined;
   const buckets = bucketsFromUsage(event.usage);
   const cost = estimateUsageCostUsd(
-    { provider, model, ...buckets },
+    { provider, model, ...buckets, ts: event.ts },
     loadLedger().config,
   );
   return {
@@ -262,10 +260,7 @@ export function costMeterImportLegacyHistoryFromStore(
       }
       const enriched: CostMeterUsageSample = {
         ...sample,
-        cost:
-          sample.cost > 0
-            ? sample.cost
-            : estimateUsageCostUsd(sample, ledger.config),
+        cost: estimateUsageCostUsd(sample, ledger.config),
       };
       const day = ensureDay(ledger.history, dayKeyFromTs(enriched.ts));
       applySampleToDay(day, enriched, 1, true);

@@ -628,7 +628,7 @@ describe('ChatView', () => {
     expect(branchButtons.map(button => button.getAttribute('aria-disabled'))).toEqual([null, null])
   })
 
-  it('withholds assistant IconActions while the turn is still running', () => {
+  it('withholds assistant IconActions while the session is still running', () => {
     const h = makeHarness({
       running: true,
       runningCalls: [runningCall('a')],
@@ -642,12 +642,12 @@ describe('ChatView', () => {
       turnEnds: new Map([[1, 3]]),
     })
     const view = render(<h.ChatView {...h.props} />)
-    // 2 user + the settled turn-1 tail, which keeps its seat while a later
-    // turn runs; turn 2's narration stays chrome-free while its tool runs, so
-    // the footer never appears and then moves.
-    expect(view.getAllByRole('button', { name: '复制' })).toHaveLength(3)
+    // While the agent run is live, hide every assistant footer (copy / feedback /
+    // branch) so a settled turn-1 bar cannot sit above turn-2's live tool rows.
+    // User bubbles keep copy alone.
+    expect(view.getAllByRole('button', { name: '复制' })).toHaveLength(2)
     expect(view.getByText('mid-turn text')).toBeTruthy()
-    // turn/end lands: the same node becomes the settled answer and takes the seat.
+    // Session idle: settled turn tails reclaim their action seats.
     act(() => { h.set({ running: false, runningCalls: [], turnEnds: new Map([[1, 3], [2, 6]]) }) })
     expect(view.getAllByRole('button', { name: '复制' })).toHaveLength(4)
   })

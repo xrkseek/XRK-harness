@@ -101,7 +101,9 @@ export function createStdTools(
       name: "ask_user",
       description:
         "Ask the user a concise question when you need confirmation, a choice, or missing information. " +
-        "Prefer `questions` (stable ids, optional options / multi_select); `question` is a single free-text shortcut.",
+        "Prefer `questions` (stable ids, optional options / multi_select / detail). " +
+        "`question` is a single free-text shortcut. " +
+        "Do not set `intent` for ordinary asks — plan-review intent is reserved for exit_plan_mode.",
       parameters: {
         type: "object",
         properties: {
@@ -128,6 +130,11 @@ export function createStdTools(
                   type: "string",
                   description: "Optional short heading.",
                 },
+                detail: {
+                  type: "string",
+                  description:
+                    "Optional longer body shown under the question (e.g. plan markdown).",
+                },
                 options: {
                   type: "array",
                   description:
@@ -144,6 +151,22 @@ export function createStdTools(
                 multi_select: {
                   type: "boolean",
                   description: "Allow more than one option. Defaults to false.",
+                },
+                intent: {
+                  type: "object",
+                  description:
+                    "Reserved: plan-review for exit_plan_mode. Do not set on casual ask_user calls.",
+                  properties: {
+                    kind: {
+                      type: "string",
+                      description: 'Must be "plan-review".',
+                    },
+                    approve: {
+                      type: "string",
+                      description: "Label of the approve option.",
+                    },
+                  },
+                  required: ["kind", "approve"],
                 },
               },
               required: ["id", "question"],
@@ -170,14 +193,34 @@ export function createStdTools(
       async execute(args) {
         const a = args as {
           question?: string;
-          questions?: { question?: string }[];
+          questions?: { id?: string; question?: string; header?: string }[];
         };
+        const questions = Array.isArray(a.questions)
+          ? a.questions
+              .map((q) => ({
+                id: String(q?.id ?? "").trim(),
+                question: String(q?.question ?? "").trim(),
+                header: String(q?.header ?? "").trim(),
+              }))
+              .filter((q) => q.question.length > 0)
+          : [];
         const q =
           String(a.question ?? "").trim() ||
-          String(a.questions?.[0]?.question ?? "").trim();
+          questions.map((row) => row.question).join("\n") ||
+          "";
         if (!options.askUser) {
+          const preview =
+            questions.length > 0
+              ? questions
+                  .map((row) =>
+                    row.id
+                      ? `[${row.id}] ${row.header ? `${row.header}: ` : ""}${row.question}`
+                      : row.question,
+                  )
+                  .join("\n")
+              : q;
           return {
-            content: `ask_user unavailable (no UI): ${q || "(empty)"}`,
+            content: `ask_user unavailable (no UI): ${preview || "(empty)"}`,
             isError: true,
           };
         }

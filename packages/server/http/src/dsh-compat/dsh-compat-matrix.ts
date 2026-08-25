@@ -119,7 +119,7 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
     id: "sidebar-fs-git",
     coverage: "full",
     genericModule: "sidebar-adapter.ts + sidebar-prefs-store",
-    note: "FS · git · prefs · upload · bundle",
+    note: "FS · git · prefs · upload · bundle · HTML preview (/sidebar/html/)",
   },
   {
     id: "wallpaper-skin-market",

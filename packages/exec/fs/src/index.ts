@@ -6,6 +6,15 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import type { ToolDefinition } from "@xrkseek/core-tools";
+import {
+  applyLiteralEdit,
+  detectLineEndings,
+  normalizeLineEndings,
+  restoreLineEndings,
+  stripCarriageReturn,
+  EditAmbiguousError,
+} from "./edit-text.js";
+import { formatReadWindow } from "./read-window.js";
 import { resolveWithinRoot } from "./paths.js";
 import {
   globUnderRoot,
@@ -28,6 +37,23 @@ import {
 } from "./present.js";
 
 export { PathEscapeError, resolveWithinRoot } from "./paths.js";
+export {
+  applyLiteralEdit,
+  detectLineEndings,
+  normalizeLineEndings,
+  restoreLineEndings,
+  stripCarriageReturn,
+  EditAmbiguousError,
+  type LineEndings,
+} from "./edit-text.js";
+export {
+  DEFAULT_READ_LINE_LIMIT,
+  formatReadWindow,
+} from "./read-window.js";
+export {
+  FS_ROUTING_PROMPT_TEXT,
+  SHELL_ROUTING_PROMPT_TEXT,
+} from "./routing-prompt.js";
 export {
   createReadImageTool,
   formatImageReadOutput,
@@ -71,6 +97,11 @@ export class EditMismatchError extends Error {
   }
 }
 
+export type FsEditOptions = {
+  /** Replace every match (default: require a unique match). */
+  readonly replaceAll?: boolean;
+};
+
 export interface FsReadResult {
   readonly content: string;
   readonly truncated?: boolean;
@@ -95,11 +126,16 @@ export interface FsService {
   /** Read raw bytes (binary files, images). */
   readBytes(userPath: string, maxBytes?: number): Promise<Uint8Array>;
   write(userPath: string, content: string): Promise<void>;
-  /** Replace only when on-disk content matches `oldContent`. */
+  /**
+   * Literal substring replace (DSH-style): match in LF-normalized space,
+   * write back preserving on-disk CRLF/LF. `oldContent` is a unique snippet
+   * (or the whole file); not a full-file CAS unless the snippet is the file.
+   */
   edit(
     userPath: string,
     oldContent: string,
     newContent: string,
+    options?: FsEditOptions,
   ): Promise<void>;
   stat(userPath: string): Promise<FsStatResult>;
   mkdir(userPath: string): Promise<void>;
@@ -165,19 +201,32 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
       await mkdir(path.dirname(abs), { recursive: true });
       await writeFile(abs, content, "utf8");
     },
-    async edit(userPath, oldContent, newContent) {
+    async edit(userPath, oldContent, newContent, options) {
       if (oldContent === undefined || oldContent === null) {
         throw new EditWithoutOldError("edit requires oldContent");
       }
       emit("fs/write-intent", userPath);
       const abs = resolveWithinRoot(root, userPath);
-      const current = await fsReadFile(abs, "utf8");
-      if (current !== oldContent) {
-        throw new EditMismatchError(
-          `edit mismatch for ${userPath}: on-disk content differs from oldContent`,
+      const raw = await fsReadFile(abs, "utf8");
+      const endings = detectLineEndings(raw);
+      const currentLf = normalizeLineEndings(raw);
+      try {
+        const { content } = applyLiteralEdit(
+          currentLf,
+          String(oldContent),
+          String(newContent ?? ""),
+          options?.replaceAll === true,
+          userPath,
         );
+        await writeFile(abs, restoreLineEndings(content, endings), "utf8");
+      } catch (err) {
+        if (err instanceof EditAmbiguousError) throw err;
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.includes("edit mismatch") || message.includes("not found")) {
+          throw new EditMismatchError(message);
+        }
+        throw err;
       }
-      await writeFile(abs, newContent, "utf8");
     },
     async stat(userPath) {
       const abs = resolveWithinRoot(root, userPath);
@@ -212,18 +261,41 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
   return [
     {
       name: "read_file",
-      description: "Read a UTF-8 file relative to the workspace root.",
+      description:
+        "Read a UTF-8 file with 1-based line numbers (`N|line`). Prefer this over shell cat/head. " +
+        "Use offset/limit for large files. Path may be workspace-relative or absolute under the workspace root. " +
+        "Line endings are normalized to LF in the tool output.",
       parameters: {
         type: "object",
-        properties: { path: { type: "string" } },
+        properties: {
+          path: { type: "string" },
+          offset: {
+            type: "number",
+            description: "1-based start line (default 1).",
+          },
+          limit: {
+            type: "number",
+            description: "Max lines to return (default 2000).",
+          },
+        },
         required: ["path"],
       },
       async execute(args) {
-        const p = String((args as { path?: string }).path ?? "");
+        const a = args as {
+          path?: string;
+          offset?: number;
+          limit?: number;
+        };
+        const p = String(a.path ?? "");
         try {
           const out = await fs.read(p);
-          const suffix = out.truncated ? "\n[truncated]" : "";
-          return { content: out.content + suffix };
+          const body = stripCarriageReturn(out.content);
+          const windowed = formatReadWindow(body, {
+            ...(typeof a.offset === "number" ? { offset: a.offset } : {}),
+            ...(typeof a.limit === "number" ? { limit: a.limit } : {}),
+          });
+          const suffix = out.truncated ? "\n[byte-truncated]" : "";
+          return { content: windowed.content + suffix };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return { content: message, isError: true };
@@ -235,7 +307,9 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
     },
     {
       name: "write_file",
-      description: "Write/create a UTF-8 file (full replace).",
+      description:
+        "Create or fully overwrite a UTF-8 file. Prefer `apply_edit` for surgical changes. " +
+        "Read the path in this turn first (write-intent). Path may be workspace-relative or absolute under the workspace root.",
       parameters: {
         type: "object",
         properties: {
@@ -261,13 +335,17 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
     {
       name: "apply_edit",
       description:
-        "Replace file content only if old_content matches on disk.",
+        "Replace a unique old_content snippet with content (literal substring edit). " +
+        "Read the path in this turn first (write-intent). Paths may be workspace-relative or absolute under the workspace root. " +
+        "Line endings are matched in LF space and preserved on write. Use replace_all when the snippet appears more than once. " +
+        "For whole-file overwrite prefer write_file.",
       parameters: {
         type: "object",
         properties: {
           path: { type: "string" },
           old_content: { type: "string" },
           content: { type: "string" },
+          replace_all: { type: "boolean" },
         },
         required: ["path", "old_content", "content"],
       },
@@ -276,13 +354,16 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
           path?: string;
           old_content?: string;
           content?: string;
+          replace_all?: boolean;
         };
         const p = String(a.path ?? "");
         try {
           if (a.old_content === undefined) {
             throw new EditWithoutOldError("old_content is required");
           }
-          await fs.edit(p, String(a.old_content), String(a.content ?? ""));
+          await fs.edit(p, String(a.old_content), String(a.content ?? ""), {
+            replaceAll: a.replace_all === true,
+          });
           return { content: `edited ${p}` };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -295,19 +376,34 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
     {
       name: "glob",
       description:
-        "List workspace-relative file paths matching a glob (`*`, `**`).",
+        "List workspace-relative file paths matching a glob. Prefer this over shell find/ls. " +
+        "`*.ts` matches basenames at any depth; use `**/*.ts` or a path prefix for directory scoping. " +
+        "Optional path scopes under a subdirectory.",
       parameters: {
         type: "object",
         properties: {
           pattern: { type: "string" },
+          path: {
+            type: "string",
+            description: "Optional subdirectory or file to scope the search (workspace-relative).",
+          },
           max_results: { type: "number" },
         },
         required: ["pattern"],
       },
       async execute(args) {
-        const a = args as { pattern?: string; max_results?: number };
+        const a = args as {
+          pattern?: string;
+          path?: string;
+          max_results?: number;
+        };
         try {
-          const files = await fs.glob(String(a.pattern ?? ""), {
+          const pattern = String(a.pattern ?? "");
+          const scoped =
+            a.path !== undefined && String(a.path).trim().length > 0
+              ? `${String(a.path).replace(/\\/g, "/").replace(/\/+$/, "")}/${pattern.replace(/^\.\//, "")}`
+              : pattern;
+          const files = await fs.glob(scoped, {
             ...(typeof a.max_results === "number"
               ? { maxResults: a.max_results }
               : {}),
@@ -327,7 +423,8 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
     {
       name: "grep",
       description:
-        "Search UTF-8 files with a JS RegExp. Optional path + glob filter.",
+        "Search UTF-8 files with a JS RegExp (path:line:text). Prefer this over shell rg/grep. " +
+        "Optional path scopes a file/dir; glob filters file names (e.g. **/*.ts). Default cap ~200 hits.",
       parameters: {
         type: "object",
         properties: {
@@ -372,11 +469,6 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       isConcurrencySafe: () => true,
     },
   ];
-}
-
-/** @deprecated Prefer createFsLocalProvider + createFsTools(fs). */
-export function createFsToolsForRoot(root: string): ToolDefinition[] {
-  return createFsTools(createFsLocalProvider({ root }));
 }
 
 /** Back-compat helpers used by older tests. */

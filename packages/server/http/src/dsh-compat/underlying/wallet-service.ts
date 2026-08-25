@@ -39,6 +39,14 @@ function defaultThreshold(state: WalletPersistedState): number {
   return typeof state.threshold === "number" ? state.threshold : 5;
 }
 
+/** Process-local calendar day (aligned with Face cost-meter dayKey). */
+function localDayKey(now = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function splitCostBreakdown(
   costCny: number,
   input: number,
@@ -203,7 +211,7 @@ export function createXrkWalletPort(
       const timeline = face
         ? await face.getUsageTimeline()
         : {
-            today: { date: new Date().toISOString().slice(0, 10), cost: 0 },
+            today: { date: localDayKey(), cost: 0 },
             days: [],
             ready: false,
             degraded: true,

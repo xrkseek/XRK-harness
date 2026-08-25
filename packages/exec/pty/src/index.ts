@@ -36,6 +36,7 @@ export {
   validatePtyBackendConfig,
   type PtyBackendConfig,
 } from "./config.js";
+export { resolvePtyShell } from "./resolve-shell.js";
 export {
   DSH_ENV_PREFIX,
   SENSITIVE_ENV_PATTERN,

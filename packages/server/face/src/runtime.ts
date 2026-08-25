@@ -37,6 +37,7 @@ import {
   type FaceJobsSource,
   type JobView,
 } from "./adapt/job-view.js";
+import { formatSubagentCompletionNotice } from "./adapt/subagent-notice.js";
 import { toQueueItems } from "./queue.js";
 import type {
   FaceProcessPlugin,
@@ -303,6 +304,34 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     reportedJobIds.set(sessionId, reported);
   };
 
+  /** Child session ids already notified for the current idle stretch. */
+  const reportedSubagentIdle = new Set<string>();
+
+  /**
+   * Mirror job completions: when a continuable child drain goes idle, admit a
+   * queue notice on the parent (+ wake under the same budget).
+   */
+  const deliverOwnedSubagentCompletion = (childSessionId: string): void => {
+    const link = subagents.getByChild(childSessionId);
+    if (!link || link.mode !== "continuable") return;
+    if (reportedSubagentIdle.has(childSessionId)) return;
+    reportedSubagentIdle.add(childSessionId);
+    const parentId = link.parentSessionId;
+    void resolveAgent(parentId).then((parent) => {
+      const idle = !parent.isBusy();
+      const spent = spentWakes.get(parentId) ?? 0;
+      const followup = idle && spent < JOB_COMPLETION_MAX_WAKES;
+      if (followup) spentWakes.set(parentId, spent + 1);
+      const events = store.get(childSessionId).events;
+      const receipt = parent.admit(
+        formatSubagentCompletionNotice(link, events),
+        { delivery: "queue" },
+      );
+      noticeAdmitIds.add(receipt.admitId);
+      if (followup || !idle) options.drain.wake(parentId);
+    });
+  };
+
   const getTool = (sessionId: string, name: string) => {
     const fromAgent = rememberedTools.get(sessionId)?.get(name);
     if (fromAgent) return fromAgent;
@@ -347,6 +376,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         rememberedJobs.delete(sessionId);
         reportedJobIds.delete(sessionId);
         spentWakes.delete(sessionId);
+        reportedSubagentIdle.delete(sessionId);
         await options.invalidateAgent!(sessionId);
       }
     : undefined;
@@ -602,6 +632,13 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       } finally {
         replayingLog = false;
       }
+    },
+    onSessionDrainStatus(sessionId, running) {
+      if (running) {
+        reportedSubagentIdle.delete(sessionId);
+        return;
+      }
+      deliverOwnedSubagentCompletion(sessionId);
     },
     ...(options.defaultAgentPreset
       ? { defaultAgentPreset: options.defaultAgentPreset }

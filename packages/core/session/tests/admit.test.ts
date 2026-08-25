@@ -7,6 +7,7 @@ import {
   newSession,
   promoteNextAdmit,
   promoteAdmitsForTurn,
+  promotePendingSteers,
   withdrawAdmit,
   NoPendingAdmitError,
 } from "../src/index.js";
@@ -103,5 +104,21 @@ describe("newSession / admit", () => {
     expect(one.steerBatch).toBe(false);
     expect(one.content).toBe("a");
     expect(listPendingAdmits(store.get(s.id).events)).toHaveLength(1);
+  });
+
+  it("promotePendingSteers claims steers only; leaves queues", () => {
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    admitPrompt(store, s.id, "q1");
+    admitPrompt(store, s.id, "steer-x", { delivery: "steer" });
+    admitPrompt(store, s.id, "q2");
+
+    const claimed = promotePendingSteers(store, s.id);
+    expect(claimed?.content).toBe("steer-x");
+    expect(claimed?.steerBatch).toBe(true);
+    expect(
+      listPendingAdmits(store.get(s.id).events).map((p) => p.content),
+    ).toEqual(["q1", "q2"]);
+    expect(promotePendingSteers(store, s.id)).toBeUndefined();
   });
 });

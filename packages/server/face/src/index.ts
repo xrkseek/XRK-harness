@@ -125,6 +125,7 @@ export {
   faceToolLookup,
   jobViews,
   formatJobCompletionNotice,
+  formatSubagentCompletionNotice,
   isSettledJobStatus,
   JOB_COMPLETION_MAX_WAKES,
   presentToolView,
@@ -202,6 +203,8 @@ export {
   canOpenNativePath,
   hostOpenPath,
   openNativePath,
+  revealNativePath,
+  normalizeOpenPath,
 } from "./host-open-path.js";
 export {
   resolveLlmForSession,
@@ -274,6 +277,12 @@ export {
   type PendingQuestionItem,
 } from "./questions.js";
 export {
+  bindSubagentTools,
+  subagentDepth,
+  SUBAGENT_ROUTING_PROMPT_TEXT,
+  type BindSubagentToolsOptions,
+} from "./subagent-tools.js";
+export {
   costMeterAggregateUsage,
   costMeterDisplayExchangeRate,
   costMeterGetState,
@@ -281,4 +290,11 @@ export {
   costMeterSessionTotals,
   costMeterWalletUsage,
   configureCostMeterHome,
+  migrateAndRepriceLedger,
 } from "./cost-meter-store.js";
+export {
+  estimateUsageCostUsd,
+  estimateBucketsCostUsd,
+  bundledCostMeterPriceConfig,
+  BUNDLED_MODEL_PRICES,
+} from "./cost-meter-pricing.js";

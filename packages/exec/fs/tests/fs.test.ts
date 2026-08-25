@@ -12,12 +12,18 @@ import {
 } from "../src/index.js";
 
 describe("FsService", () => {
-  it("rejects absolute and .. escape", async () => {
+  it("rejects .. escape and absolute paths outside the root", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-"));
     expect(() => resolveWithinRoot(root, "../x")).toThrow(PathEscapeError);
     expect(() =>
       resolveWithinRoot(root, path.resolve(root, "../outside.txt")),
     ).toThrow(PathEscapeError);
+  });
+
+  it("allows absolute paths that stay inside the workspace root", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-"));
+    const inside = path.join(root, "nested", "a.txt");
+    expect(resolveWithinRoot(root, inside)).toBe(path.resolve(inside));
   });
 
   it("reads/writes and emits intents", async () => {
@@ -34,15 +40,15 @@ describe("FsService", () => {
     ]);
   });
 
-  it("edit fails without matching old content", async () => {
+  it("edit replaces a unique LF-normalized snippet and preserves CRLF", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-"));
     const fs = createFsLocalProvider({ root });
-    await fs.write("a.txt", "old");
-    await expect(fs.edit("a.txt", "wrong", "new")).rejects.toBeInstanceOf(
+    await fs.write("a.txt", "line1\r\nold\r\nline3\r\n");
+    await expect(fs.edit("a.txt", "missing", "new")).rejects.toBeInstanceOf(
       EditMismatchError,
     );
     await fs.edit("a.txt", "old", "new");
-    expect((await fs.read("a.txt")).content).toBe("new");
+    expect((await fs.read("a.txt")).content).toBe("line1\r\nnew\r\nline3\r\n");
   });
 
   it("tools consume FsService — stub provider needs no tool changes", async () => {
@@ -66,8 +72,32 @@ describe("FsService", () => {
     const tools = createFsTools(stub);
     const read = tools.find((t) => t.name === "read_file")!;
     const out = await read.execute({ path: "x" });
-    expect(out.content).toBe("stub");
+    expect(out.content).toBe("1|stub");
     expect(stub.read).toHaveBeenCalledWith("x");
+  });
+
+  it("read_file window uses offset/limit and line numbers", async () => {
+    const stub = {
+      root: "/virtual",
+      resolvePath: (p: string) => p,
+      read: vi.fn(async () => ({ content: "a\nb\nc\nd\n" })),
+      readBytes: vi.fn(async () => new Uint8Array()),
+      write: vi.fn(async () => {}),
+      edit: vi.fn(async () => {}),
+      stat: vi.fn(async () => ({
+        size: 0,
+        isFile: true,
+        isDirectory: false,
+      })),
+      mkdir: vi.fn(async () => {}),
+      glob: vi.fn(async () => []),
+      grep: vi.fn(async () => []),
+      onIntent: () => () => {},
+    };
+    const tools = createFsTools(stub);
+    const read = tools.find((t) => t.name === "read_file")!;
+    const out = await read.execute({ path: "x", offset: 2, limit: 2 });
+    expect(out.content).toBe("2|b\n3|c\n\n[… 2 more lines; use offset=4]");
   });
 
   it("registers read_file write_file apply_edit glob grep", async () => {

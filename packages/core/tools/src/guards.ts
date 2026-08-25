@@ -44,13 +44,9 @@ export function createPolicyToolCallGuard(
   return (ctx) => (set.has(ctx.call.name) ? "deny" : "abstain");
 }
 
-/** sandbox argv wrap — stub: always abstain (wire in exec-sandbox later). */
-export function createSandboxArgvWrapGuard(): MonotonicGuard {
-  return () => "abstain";
-}
-
 /**
- * fs write-intent: deny apply_edit (or listed write tools) unless path was read.
+ * fs write-intent: deny apply_edit / write_file (or listed tools) unless path was read.
+ * Sets ctx.denyReason so the model sees an actionable message (DSH observation policy).
  */
 export function createWriteIntentGuard(options: {
   hasRead: (path: string) => boolean;
@@ -59,12 +55,19 @@ export function createWriteIntentGuard(options: {
   const writes =
     options.writeToolNames instanceof Set
       ? options.writeToolNames
-      : new Set(options.writeToolNames ?? ["apply_edit"]);
+      : new Set(options.writeToolNames ?? ["apply_edit", "write_file"]);
   return (ctx) => {
     if (!writes.has(ctx.call.name)) return "abstain";
     const path = extractPathArg(ctx.args);
-    if (!path) return "deny";
-    return options.hasRead(path) ? "allow" : "deny";
+    if (!path) {
+      ctx.denyReason = `${ctx.call.name} requires a path argument`;
+      return "deny";
+    }
+    if (!options.hasRead(path)) {
+      ctx.denyReason = `read_file "${path}" before ${ctx.call.name} (write-intent)`;
+      return "deny";
+    }
+    return "allow";
   };
 }
 

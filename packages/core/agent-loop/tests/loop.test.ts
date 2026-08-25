@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMemorySessionStore, deriveMessages } from "@xrkseek/core-session";
+import { createMemorySessionStore, deriveMessages, admitPrompt, listPendingAdmits } from "@xrkseek/core-session";
 import { createStdTools, createToolRegistry } from "@xrkseek/core-tools";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { runTurn } from "../src/index.js";
@@ -181,6 +181,53 @@ describe("runTurn", () => {
     expect(result.steps).toBe(2);
     const roles = deriveMessages(store.get(session.id).events).map((m) => m.role);
     expect(roles).toEqual(["user", "assistant", "tool", "assistant"]);
+  });
+
+  it("claims pending steers between tool steps", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    tools.register({
+      name: "mark",
+      description: "mark",
+      parameters: { type: "object" },
+      async execute() {
+        admitPrompt(store, session.id, "redirect mid-turn", {
+          delivery: "steer",
+        });
+        admitPrompt(store, session.id, "queued-later");
+        return { content: "marked" };
+      },
+    });
+    const llm = createReplayAdapter([
+      {
+        content: "",
+        toolCalls: [{ id: "c1", name: "mark", arguments: {} }],
+      },
+      { content: "got redirect" },
+    ]);
+
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "start",
+      store,
+      llm,
+      tools,
+    });
+
+    expect(result.assistantText).toBe("got redirect");
+    const msgs = deriveMessages(store.get(session.id).events);
+    expect(msgs.map((m) => m.role)).toEqual([
+      "user",
+      "assistant",
+      "tool",
+      "user",
+      "assistant",
+    ]);
+    expect(msgs[3]?.content).toBe("redirect mid-turn");
+    expect(listPendingAdmits(store.get(session.id).events).map((p) => p.content)).toEqual([
+      "queued-later",
+    ]);
   });
 
   it("passbacks reasoning on every reasoned assistant when calling LLM again (rc.8)", async () => {

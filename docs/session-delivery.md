@@ -47,20 +47,25 @@ These are first-class product semantics, not a UI copy difference from a single 
 
 ### steer（已落地） / steer (shipped)
 
-1. Promote 仅在 **provider-turn 边界**（今日 = `continueTurn` 入口）。  
+1. Promote 在两类 **安全边界**：  
+   - **turn 入口**（`continueTurn` / drain）：`promoteAdmitsForTurn`  
+   - **tool-step 边界**（`runTurn` 第 2+ 步开始前）：`promotePendingSteers`（只 claim steer，不碰 queue）  
 2. **`promoteAdmitsForTurn`**：若有任意 pending steer，**一次 promote 全部 steer**（FIFO among steers），正文用 `\n\n` 合并进 **一条** `user/message` → **一次** `runTurn`。中间夹杂的 queue **仍留 pending**。  
-3. Abort / soft interrupt 语义另见 latch；steer ≠ `cancel`。
+3. Step 边界 claim 把合并正文追加到 **当前 turn** 的 `user/message`，下一轮模型请求即可看见。  
+4. Abort / soft interrupt 语义另见 latch；steer ≠ `cancel`。
 
-`promoteNextAdmit` 仍是「只 promote 一条」（优先最老 steer）——底层/测试用；产品热路径用 `promoteAdmitsForTurn`。
+`promoteNextAdmit` 仍是「只 promote 一条」（优先最老 steer）——底层/测试用；产品热路径用 `promoteAdmitsForTurn` / `promotePendingSteers`。
 
 ---
 
 ## 4. 明确不做（本阶段） / Explicitly out of scope (this phase)
 
 - SQLite / 集群 durable inbox  
-- 立即 abort 正在执行的 tool body 来塞用户字  
+- 立即 abort 正在执行的 tool body 来塞用户字（须等当前 tool settle 完才到 next-step）  
 - 把 steer 写成第二条 HTTP 路径却语义与 admit 相同  
-- Continuation 中途插入 steer（仍仅 turn 入口）
+- DSH `inject`（next-step 且不 wake）与显式 `cancel keepInbox` 产品旗标 — Host 尚未暴露；XRK `session.cancel` 本身已保留 pending admits  
+
+产品「插话」= Face/HTTP `delivery: "steer"`（turn / next-step 边界优先于 queue）。「排队」= `delivery: "queue"`（默认）。任务「暂停」今日走 `session.cancel` / 子代理 `interrupt_agent`，不是 inbox soft-pause。
 
 ---
 
@@ -72,6 +77,7 @@ These are first-class product semantics, not a UI copy difference from a single 
 4. ~~HTTP：`admit` body 透传 `delivery`~~  
 5. ~~Drain：continuation 不 promote + idle 前一次一条 queue~~  
 6. ~~同批 steer 合并 + 单次 step 配额（`promoteAdmitsForTurn`）~~  
+7. ~~tool-step 边界 claim（`promotePendingSteers`）~~  
 
 ---
 

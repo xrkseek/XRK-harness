@@ -35,3 +35,4 @@ export {
   type JobView,
   type JobViewStatus,
 } from "./job-view.js";
+export { formatSubagentCompletionNotice } from "./subagent-notice.js";

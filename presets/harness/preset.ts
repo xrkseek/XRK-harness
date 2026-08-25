@@ -15,6 +15,7 @@ import {
   createToolRegistry,
   createWriteIntentGuard,
   extractPathArg,
+  SUBAGENT_ROUTING_PROMPT_TEXT,
   type ToolDefinition,
   type ToolPipeline,
   type ToolRegistry,
@@ -23,6 +24,8 @@ import {
   createFsLocalProvider,
   createFsTools,
   createReadImageTool,
+  FS_ROUTING_PROMPT_TEXT,
+  SHELL_ROUTING_PROMPT_TEXT,
   type FsService,
 } from "@xrkseek/exec-fs";
 import type { AttachmentStore } from "@xrkseek/attachment";
@@ -50,7 +53,13 @@ import {
   createSandboxWrapGuard,
   createWorkspaceSandbox,
 } from "@xrkseek/exec-sandbox";
-import { createBashTools, createLocalShell, createSessionScopedShell, toJobView, JOBS_PROMPT_TEXT } from "@xrkseek/exec-shell";
+import {
+  createBashTools,
+  createLocalShell,
+  createSessionScopedShell,
+  toJobView,
+  JOBS_PROMPT_TEXT,
+} from "@xrkseek/exec-shell";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
 import {
   createRunCodeTool,
@@ -247,7 +256,10 @@ export function createHarnessComposition(
   const sharedShell = options.shell;
   const rootShell =
     sharedShell ??
-    createLocalShell({ subprocess: createLocalSubprocess() });
+    createLocalShell({
+      subprocess: createLocalSubprocess(),
+      defaultCwd: options.workspaceRoot,
+    });
   const store = options.sessionStore ?? createMemorySessionStore();
   const sessionId = ensureSession(store, options.sessionId);
   const shell = createSessionScopedShell(rootShell, sessionId);
@@ -287,6 +299,7 @@ export function createHarnessComposition(
     ...(options.bashLimits?.maxOutputBytes !== undefined
       ? { maxOutputBytes: options.bashLimits.maxOutputBytes }
       : {}),
+    defaultCwd: options.workspaceRoot,
   })) tools.register(tool);
   for (const tool of createStdTools()) tools.register(tool);
   for (const tool of createSkillTools({
@@ -363,7 +376,7 @@ export function createHarnessComposition(
     pipeline.onGuard(
       createWriteIntentGuard({
         hasRead: (p) => tracker.hasRead(p),
-        writeToolNames: ["apply_edit"],
+        writeToolNames: ["apply_edit", "write_file"],
       }),
     );
   }
@@ -428,16 +441,34 @@ export function createHarnessComposition(
     });
   }
   prompts.register({
+    id: "tool:fs-routing",
+    order: 104,
+    content: () => FS_ROUTING_PROMPT_TEXT,
+  });
+  prompts.register({
+    id: "tool:shell-routing",
+    order: 105,
+    content: () => SHELL_ROUTING_PROMPT_TEXT,
+  });
+  prompts.register({
     id: "tool:jobs",
     order: 106,
     content: () => JOBS_PROMPT_TEXT,
+  });
+  prompts.register({
+    id: "tool:subagent",
+    order: 107,
+    content: () => SUBAGENT_ROUTING_PROMPT_TEXT,
   });
   wireCompositionPrompts(prompts, {
     ...(options.plugins ? { plugins: options.plugins } : {}),
     reservedIds: [
       "base",
       "tool:skill",
+      "tool:fs-routing",
+      "tool:shell-routing",
       "tool:jobs",
+      "tool:subagent",
       ...(options.webTools !== false ? ["tool:web_search", "tool:web_fetch"] : []),
       ...(options.lspTools !== false ? ["tool:lsp"] : []),
       ...(options.ptyTools !== false ? ["tool:pty"] : []),
