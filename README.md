@@ -151,20 +151,20 @@ docs/             Usage and contract docs
 
 ## 常见问题 / FAQ
 
-**打开 `web` / `serve` 没有界面？ / No UI after `web` / `serve`?**  
-发行版 CLI 应自带产品壳。本仓库源码需先完成 `web:build` · `client:bundle` · `web:assemble`。  
+**打开 `web` / `serve` 没有界面？ / No UI after `web` / `serve`?**
+发行版 CLI 应自带产品壳。本仓库源码需先完成 `web:build` · `client:bundle` · `web:assemble`。
 Released CLI builds ship the product shell. From this repository, run `web:build` · `client:bundle` · `web:assemble` first.
 
-**MCP 连不上？ / MCP will not connect?**  
-默认拒绝连接。在设置里配置并放行，或设 `XRK_MCP_ALLOW=1`。见 [configuration](./docs/configuration.md) · [MCP](./docs/modules/mcp.md)。  
+**MCP 连不上？ / MCP will not connect?**
+默认拒绝连接。在设置里配置并放行，或设 `XRK_MCP_ALLOW=1`。见 [configuration](./docs/configuration.md) · [MCP](./docs/modules/mcp.md)。
 Connections are denied by default. Configure and allow in Settings, or set `XRK_MCP_ALLOW=1`.
 
-**对话太长、上下文爆了？ / Context overflow on long chats?**  
-可用压缩（loop 配置或壳内 `/compact`）。见 [session-compaction](./docs/session-compaction.md)。  
+**对话太长、上下文爆了？ / Context overflow on long chats?**
+可用压缩（loop 配置或壳内 `/compact`）。见 [session-compaction](./docs/session-compaction.md)。
 Use compaction (loop config or in-shell `/compact`).
 
-**装了社区插件但面板报 incomplete？ / Community plugin panel shows incomplete?**  
-多数路径已有自研兼容器；云端 IM 长连接、外部任务运行时等见 [community-plugins](./docs/community-plugins.md) 与 [status](./docs/status.md)「未做 / Not done」。  
+**装了社区插件但面板报 incomplete？ / Community plugin panel shows incomplete?**
+多数路径已有自研兼容器；云端 IM 长连接、外部任务运行时等见 [community-plugins](./docs/community-plugins.md) 与 [status](./docs/status.md)「未做 / Not done」。
 Most paths are covered by the first-party adapter; cloud IM gateways and external task runtimes are listed as planned work.
 
 更多 / More：[troubleshooting](./docs/troubleshooting.md)。
