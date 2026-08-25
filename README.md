@@ -16,7 +16,7 @@ Grow toward the sun · Assembled Node host · Session events as dialogue source 
 [![GitHub](https://img.shields.io/badge/github-xrkseek%2FXRK--harness-black.svg)](https://github.com/xrkseek/XRK-harness)
 [![npm](https://img.shields.io/npm/v/@xrkseek/harness-cli?label=npm)](https://www.npmjs.com/package/@xrkseek/harness-cli)
 
-[入门 / Getting started](./docs/getting-started.md) · [配置 / Configuration](./docs/configuration.md) · [能力矩阵 / Status](./docs/status.md) · [文档中心 / Docs hub](./docs/README.md) · [v0.1.15 发行说明 / Release notes](./docs/releases/v0.1.15.md)
+[入门 / Getting started](./docs/getting-started.md) · [配置 / Configuration](./docs/configuration.md) · [能力矩阵 / Status](./docs/status.md) · [文档中心 / Docs hub](./docs/README.md) · [v0.1.16 发行说明 / Release notes](./docs/releases/v0.1.16.md)
 
 </div>
 
@@ -53,7 +53,7 @@ Use the **CLI** (`xrkh run`, also `xrk-harness`) or the **web shell** (`xrkh web
 
 ```sh
 mkdir my-workspace && cd my-workspace
-npx @xrkseek/harness-cli@0.1.15 web
+npx @xrkseek/harness-cli@0.1.16 web
 # 全局安装后日常用缩写：xrkh web
 ```
 
@@ -112,7 +112,7 @@ npx @xrkseek/harness-cli serve --preset harness --workspace .
 | 多厂商 LLM Registry / Multi-provider LLM Registry | **能跑 / Working** |
 | 社区 client（自研兼容器） / Community clients (first-party adapter) | **能跑 / Working**（云端长连接等见 status「未做 / Not done」） |
 | 产品网页与浏览器 E2E / Product web & browser E2E | **未稳 / Unstable**（有测，但不挡日常 `pnpm check`） |
-| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑 / Working**（**v0.1.15**；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
+| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑 / Working**（**v0.1.16**；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
 
 完整说明 / Full matrix：[docs/status.md](./docs/status.md)。
 
@@ -130,7 +130,7 @@ npx @xrkseek/harness-cli serve --preset harness --workspace .
 | 自己写工具 / 进程插件 / Tools & process plugins | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | 排障 / Troubleshoot | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 / Short digest | [learn](./docs/learn.md) |
-| 版本发行说明 / Release notes | [releases](./docs/releases/)（正式 [v0.1.15](./docs/releases/v0.1.15.md) · 预览 [v0.0.11](./docs/releases/v0.0.11.md)） |
+| 版本发行说明 / Release notes | [releases](./docs/releases/)（正式 [v0.1.16](./docs/releases/v0.1.16.md) · 预览 [v0.0.11](./docs/releases/v0.0.11.md)） |
 | 全部专题索引 / Full index | [docs/README.md](./docs/README.md) |
 
 ---

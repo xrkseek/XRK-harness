@@ -9,9 +9,7 @@ import { CardForm, numberField, textField, type CardActions, type CardFieldState
  */
 export const AGENT_LOOP_NS = 'agent-loop'
 
-/** The agent-loop fields this card edits. The Host section carries only this
- * field — the composed `agents` array is deliberately not part of it.
- */
+/** The agent-loop fields this card edits. */
 export interface AgentLoopSettings {
   /** Upper bound on parallel-safe tool calls in flight per step. */
   maxParallelToolCalls?: number
@@ -21,6 +19,14 @@ export interface AgentLoopSettings {
   toolSettle?: 'parallel' | 'serial'
   /** Max provider retries per step; `0` disables. */
   llmRetryMaxRetries?: number
+  /** Soft context budget (messages + tool schemas). */
+  maxRequestTokens?: number
+  /** Tokens kept as recent tail after auto-compact. */
+  keepTokens?: number
+  /** Soft ceiling = maxRequestTokens − bufferTokens. */
+  bufferTokens?: number
+  /** Spill plain-text tool results over this UTF-8 ceiling; `0` disables. */
+  toolResultMaxInlineBytes?: number
 }
 
 /** What the agent-loop card renders. */
@@ -33,6 +39,14 @@ export interface AgentLoopCardState extends CardShell {
   toolSettle: CardFieldState
   /** Provider retry cap. */
   llmRetryMaxRetries: CardFieldState
+  /** Soft request budget. */
+  maxRequestTokens: CardFieldState
+  /** Compaction keep tail. */
+  keepTokens: CardFieldState
+  /** Soft-budget buffer. */
+  bufferTokens: CardFieldState
+  /** Tool-result spill ceiling. */
+  toolResultMaxInlineBytes: CardFieldState
 }
 
 /** The registration-side face the agent-loop card's slot entry injects. */
@@ -55,6 +69,10 @@ export class AgentLoopCardController {
       numberField('maxSteps'),
       textField('toolSettle'),
       numberField('llmRetryMaxRetries'),
+      numberField('maxRequestTokens'),
+      numberField('keepTokens'),
+      numberField('bufferTokens'),
+      numberField('toolResultMaxInlineBytes'),
     ])
     this.store = this.form.bind(() => this.projection())
   }
@@ -66,6 +84,10 @@ export class AgentLoopCardController {
       maxSteps: this.form.field('maxSteps'),
       toolSettle: this.form.field('toolSettle'),
       llmRetryMaxRetries: this.form.field('llmRetryMaxRetries'),
+      maxRequestTokens: this.form.field('maxRequestTokens'),
+      keepTokens: this.form.field('keepTokens'),
+      bufferTokens: this.form.field('bufferTokens'),
+      toolResultMaxInlineBytes: this.form.field('toolResultMaxInlineBytes'),
     }
   }
 

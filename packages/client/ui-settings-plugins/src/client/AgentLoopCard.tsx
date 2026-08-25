@@ -79,6 +79,58 @@ export function AgentLoopCard(props: AgentLoopCardProps) {
         onEdit={(text) => { props.edit('llmRetryMaxRetries', text) }}
         onReset={() => { props.resetField('llmRetryMaxRetries') }}
       />
+      <ValueField
+        id="plugin-config-agent-loop-max-request-tokens"
+        label={t('agentLoopMaxRequestTokens')}
+        hint={t('agentLoopMaxRequestTokensHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        disabled={!state.writable}
+        {...state.maxRequestTokens}
+        onEdit={(text) => { props.edit('maxRequestTokens', text) }}
+        onReset={() => { props.resetField('maxRequestTokens') }}
+      />
+      <ValueField
+        id="plugin-config-agent-loop-keep-tokens"
+        label={t('agentLoopKeepTokens')}
+        hint={t('agentLoopKeepTokensHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        disabled={!state.writable}
+        {...state.keepTokens}
+        onEdit={(text) => { props.edit('keepTokens', text) }}
+        onReset={() => { props.resetField('keepTokens') }}
+      />
+      <ValueField
+        id="plugin-config-agent-loop-buffer-tokens"
+        label={t('agentLoopBufferTokens')}
+        hint={t('agentLoopBufferTokensHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        disabled={!state.writable}
+        {...state.bufferTokens}
+        onEdit={(text) => { props.edit('bufferTokens', text) }}
+        onReset={() => { props.resetField('bufferTokens') }}
+      />
+      <ValueField
+        id="plugin-config-agent-loop-tool-result-inline"
+        label={t('agentLoopToolResultMaxInline')}
+        hint={t('agentLoopToolResultMaxInlineHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        disabled={!state.writable}
+        {...state.toolResultMaxInlineBytes}
+        onEdit={(text) => { props.edit('toolResultMaxInlineBytes', text) }}
+        onReset={() => { props.resetField('toolResultMaxInlineBytes') }}
+      />
     </PluginCard>
   )
 }

@@ -9,6 +9,18 @@ import css from './PermissionSelect.module.css'
 
 const FULL_ACCESS = 'danger-full-access'
 
+const PRESET_LABEL_KEYS = {
+  'read-only': 'access.preset.read-only',
+  'workspace-write': 'access.preset.workspace-write',
+  [FULL_ACCESS]: 'access.preset.danger-full-access',
+} as const
+
+const PRESET_DESC_KEYS = {
+  'read-only': 'access.desc.read-only',
+  'workspace-write': 'access.desc.workspace-write',
+  [FULL_ACCESS]: 'access.desc.danger-full-access',
+} as const
+
 /* Shield glyphs (design set 1556): check = read-only, pencil = workspace
    write, exclamation = full access. currentColor so the trigger and menu
    rows tint them with their own text color. */
@@ -45,20 +57,9 @@ function permissionGlyph(value: string): ReactNode | undefined {
   return permissionGlyphs[value]
 }
 
-/**
- * Display transform: kebab-case machine names render as title-case labels
- * (`workspace-write` → `Workspace Write`); non-kebab host-configured names
- * pass through. Full access intentionally overrides the machine-name
- * transform so both permission surfaces use the product label `Full access`;
- * the warning body remains locale-aware.
- */
-function displayName(name: string): string {
+function fallbackDisplayName(name: string): string {
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(name)) return name
   return name.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
-}
-
-function optionLabel(option: PermissionSelectValue['options'][number]): string {
-  return option.value === FULL_ACCESS ? 'Full access' : displayName(option.name)
 }
 
 export interface PermissionSelectProps {
@@ -84,15 +85,28 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
 
   if (value === undefined) return null
 
+  const labelOf = (option: PermissionSelectValue['options'][number]): string => {
+    const key = PRESET_LABEL_KEYS[option.value as keyof typeof PRESET_LABEL_KEYS]
+    return key !== undefined ? t(key) : fallbackDisplayName(option.name)
+  }
+
+  const descOf = (option: PermissionSelectValue['options'][number]): string => {
+    const key = PRESET_DESC_KEYS[option.value as keyof typeof PRESET_DESC_KEYS]
+    return key !== undefined ? t(key) : (option.description ?? '')
+  }
+
   const currentValue = pick ?? value.currentValue
   const current = value.options.find(option => option.value === currentValue)
   const busy = pick !== null || confirmation !== null
+  const currentLabel = current === undefined
+    ? fallbackDisplayName(currentValue)
+    : labelOf(current)
 
   const items: MenuEntry[] = value.options
     .filter(o => o.value !== 'custom')
     .map((option) => {
       const icon = permissionGlyph(option.value)
-      return { id: option.value, label: optionLabel(option), ...icon === undefined ? {} : { icon } }
+      return { id: option.value, label: labelOf(option), ...icon === undefined ? {} : { icon } }
     })
 
   const submit = (id: string): void => {
@@ -138,15 +152,15 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
           <button
             type="button"
             className={css.trigger}
-            aria-label={t('input.accessMode', { name: current === undefined ? displayName(currentValue) : optionLabel(current) })}
-            title={current?.description}
+            aria-label={t('input.accessMode', { name: currentLabel })}
+            title={current === undefined ? undefined : descOf(current)}
             disabled={locked || busy}
             onClick={() => { setOpen(!open) }}
           >
             {permissionGlyph(currentValue) !== undefined && (
               <span className={css.triggerIcon} aria-hidden>{permissionGlyph(currentValue)}</span>
             )}
-            <span className={css.triggerLabel}>{current === undefined ? displayName(currentValue) : optionLabel(current)}</span>
+            <span className={css.triggerLabel}>{currentLabel}</span>
             {/* Same glyph + open rotation as the sibling ModelSelect trigger. */}
             <span className={clsx(css.chevron, open && css.chevronOpen)} aria-hidden>
               <IconChevronDownOutline14 />

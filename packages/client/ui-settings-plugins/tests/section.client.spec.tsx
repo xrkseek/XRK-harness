@@ -19,11 +19,14 @@ import { PluginsSettingsSection } from '../src/client/PluginsSettingsSection.tsx
 import type { PluginsSettingsSectionProps, PluginsSettingsTabEntry } from '../src/client/PluginsSettingsSection.tsx'
 import { McpCard } from '../src/client/McpCard.tsx'
 import type { McpCardProps } from '../src/client/McpCard.tsx'
+import { WorkspaceInjectCard } from '../src/client/WorkspaceInjectCard.tsx'
+import type { WorkspaceInjectCardProps } from '../src/client/WorkspaceInjectCard.tsx'
 import type { AgentLoopCardState } from '../src/client/agent-loop-card-controller.ts'
 import type { BashCardState } from '../src/client/bash-card-controller.ts'
 import type { CardFieldState, CardShell } from '../src/client/card-form.ts'
 import type { ConfigurablePluginsTabState } from '../src/client/tab-store.ts'
 import type { McpCardState } from '../src/client/mcp-card-controller.ts'
+import type { WorkspaceInjectCardState } from '../src/client/workspace-inject-card-controller.ts'
 import { en } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -315,6 +318,10 @@ describe('AgentLoopCard', () => {
       maxSteps: field('32'),
       toolSettle: field('parallel'),
       llmRetryMaxRetries: field('5'),
+      maxRequestTokens: field('100000'),
+      keepTokens: field('24000'),
+      bufferTokens: field('4000'),
+      toolResultMaxInlineBytes: field('64000'),
     })
     const actions = cardActions()
     const props = {
@@ -339,6 +346,10 @@ describe('AgentLoopCard', () => {
       maxSteps: field('32'),
       toolSettle: field('parallel'),
       llmRetryMaxRetries: field('5'),
+      maxRequestTokens: field('100000'),
+      keepTokens: field('24000'),
+      bufferTokens: field('4000'),
+      toolResultMaxInlineBytes: field('64000'),
     })
     const actions = cardActions()
     const props = {
@@ -352,6 +363,30 @@ describe('AgentLoopCard', () => {
     fireEvent.click(screen.getByRole('button', { name: en.reset }))
 
     expect(actions.resetField).toHaveBeenCalledWith('maxParallelToolCalls')
+  })
+})
+
+describe('WorkspaceInjectCard', () => {
+  it('stages and saves the inject budget field', () => {
+    const store = createSnapshotStore<WorkspaceInjectCardState>({
+      ...settled,
+      dirty: true,
+      injectMaxChars: field('32000'),
+    })
+    const actions = cardActions()
+    const props = {
+      ...actions,
+      t,
+      useWorkspaceInjectCard: bindSnapshotSelector(store),
+    } as unknown as WorkspaceInjectCardProps
+    render(<WorkspaceInjectCard {...props} />)
+
+    fireEvent.click(screen.getByText(en.workspaceInjectTitle))
+    fireEvent.change(screen.getByLabelText(en.workspaceInjectMaxChars), { target: { value: '48000' } })
+    fireEvent.click(screen.getByRole('button', { name: en.save }))
+
+    expect(actions.edit).toHaveBeenCalledWith('injectMaxChars', '48000')
+    expect(actions.save).toHaveBeenCalledOnce()
   })
 })
 

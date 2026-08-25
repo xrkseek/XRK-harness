@@ -11,6 +11,12 @@ export type PluginsSettingsLocaleKey =
   | 'agentLoopMaxSteps' | 'agentLoopMaxStepsHint'
   | 'agentLoopToolSettle' | 'agentLoopToolSettleHint'
   | 'agentLoopLlmRetry' | 'agentLoopLlmRetryHint'
+  | 'agentLoopMaxRequestTokens' | 'agentLoopMaxRequestTokensHint'
+  | 'agentLoopKeepTokens' | 'agentLoopKeepTokensHint'
+  | 'agentLoopBufferTokens' | 'agentLoopBufferTokensHint'
+  | 'agentLoopToolResultMaxInline' | 'agentLoopToolResultMaxInlineHint'
+  | 'workspaceInjectTitle' | 'workspaceInjectDescription'
+  | 'workspaceInjectMaxChars' | 'workspaceInjectMaxCharsHint'
   | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading'
   | 'mcpServersHeading' | 'mcpServersEmpty' | 'mcpAddServer' | 'mcpRemoveServer'
   | 'mcpPaste' | 'mcpPasteHint' | 'mcpPasteEmpty' | 'mcpPasteInvalid'
@@ -53,9 +59,9 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   bashTimeoutMs: 'Command timeout (ms)',
   bashTimeoutMsHint: 'How long one command may run before it is terminated.',
   bashMaxOutputBytes: 'Output cap per stream (bytes)',
-  bashMaxOutputBytesHint: 'Output beyond this spills to a temporary file rather than being lost.',
+  bashMaxOutputBytesHint: 'Stdout/stderr are truncated at this size when captured (default 64000).',
   agentLoopTitle: 'Agent loop',
-  agentLoopDescription: 'How the agent dispatches tool calls.',
+  agentLoopDescription: 'How the agent dispatches tool calls, budgets context, and spills large tool results.',
   agentLoopMaxParallel: 'Parallel tool calls',
   agentLoopMaxParallelHint: 'Upper bound on parallel-safe calls running at once within one step.',
   agentLoopMaxSteps: 'Max steps per turn',
@@ -64,6 +70,18 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopToolSettleHint: 'parallel (default): overlap only isConcurrencySafe tools. serial: one call at a time.',
   agentLoopLlmRetry: 'LLM retries per step',
   agentLoopLlmRetryHint: 'Retry empty / rate-limit / server / timeout failures within one step. 0 disables. Default 5.',
+  agentLoopMaxRequestTokens: 'Soft request budget (tokens)',
+  agentLoopMaxRequestTokensHint: 'Messages + standing tool schemas. Over budget → prune → compact → fail-closed. Default 100000.',
+  agentLoopKeepTokens: 'Keep tokens after compact',
+  agentLoopKeepTokensHint: 'Recent tail kept when auto-compacting. Default 24000.',
+  agentLoopBufferTokens: 'Soft-budget buffer (tokens)',
+  agentLoopBufferTokensHint: 'Soft ceiling = max request tokens − this buffer. Default 4000.',
+  agentLoopToolResultMaxInline: 'Tool result spill ceiling (bytes)',
+  agentLoopToolResultMaxInlineHint: 'Plain-text tool bodies over this spill to ~/.xrk/spill/ with a head/tail preview. 0 disables. Default 64000.',
+  workspaceInjectTitle: 'Workspace inject',
+  workspaceInjectDescription: 'How much of the workspace rules and skills catalog may enter the system prompt each turn.',
+  workspaceInjectMaxChars: 'Inject character budget',
+  workspaceInjectMaxCharsHint: 'Total characters for rules + skills catalog inject. Default 32000 (range 4000–128000).',
   mcpTitle: 'MCP servers',
   mcpDescription: 'Paste Cursor / Trae style JSON, then save — servers mount on save (no separate env step).',
   mcpConnectedHeading: 'Connected now',
@@ -143,9 +161,9 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   bashTimeoutMs: '命令超时（毫秒）',
   bashTimeoutMsHint: '单条命令允许运行多久，超时即终止。',
   bashMaxOutputBytes: '单流输出上限（字节）',
-  bashMaxOutputBytesHint: '超出部分会转存到临时文件，而不是被丢弃。',
+  bashMaxOutputBytesHint: '捕获时截断 stdout/stderr（默认 64000）。',
   agentLoopTitle: 'Agent 循环',
-  agentLoopDescription: 'Agent 如何派发工具调用。',
+  agentLoopDescription: '工具派发、软上下文预算，以及过大工具结果的 spill。',
   agentLoopMaxParallel: '并行工具调用数',
   agentLoopMaxParallelHint: '同一步内最多同时运行多少个可并行的调用。',
   agentLoopMaxSteps: '每轮最大步数',
@@ -154,6 +172,18 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopToolSettleHint: 'parallel（默认）：仅 isConcurrencySafe 的工具可重叠。serial：逐步独占。',
   agentLoopLlmRetry: '步内 LLM 重试次数',
   agentLoopLlmRetryHint: '对空响应 / 限流 / 服务端 / 超时在同一步内重试。0 关闭。默认 5。',
+  agentLoopMaxRequestTokens: '软请求预算（token）',
+  agentLoopMaxRequestTokensHint: '消息面 + 站立 tool schemas。超限 → prune → compact → fail-closed。默认 100000。',
+  agentLoopKeepTokens: '压缩后保留 token',
+  agentLoopKeepTokensHint: '自动压缩时保留的近期尾部。默认 24000。',
+  agentLoopBufferTokens: '软预算缓冲（token）',
+  agentLoopBufferTokensHint: '软上限 = 软请求预算 − 该缓冲。默认 4000。',
+  agentLoopToolResultMaxInline: '工具结果 spill 上限（字节）',
+  agentLoopToolResultMaxInlineHint: '纯文本工具正文超过此值会落盘到 ~/.xrk/spill/，模型只见 head/tail。0 关闭。默认 64000。',
+  workspaceInjectTitle: '工作区注入',
+  workspaceInjectDescription: '每轮系统提示里可注入多少工作区 rules / skills 目录字符。',
+  workspaceInjectMaxChars: '注入字符预算',
+  workspaceInjectMaxCharsHint: 'rules + skills 目录注入的总字符上限。默认 32000（范围 4000–128000）。',
   mcpTitle: 'MCP 服务器',
   mcpDescription: '粘贴 Trae / Cursor 风格 mcpServers JSON，保存后会挂载（不必再先开环境变量）。',
   mcpConnectedHeading: '当前已连接',

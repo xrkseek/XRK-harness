@@ -38,12 +38,13 @@ A Coding Agent is **not** a fifth product audience: it reads [AGENTS.md](../AGEN
 When creating or substantially revising a document:
 
 1. **文首读者 / Audience line**：`> **读者 / Audience**：终端用户 · 集成者 / End users · Integrators`（可多选，须诚实）。
-2. **中英双语 / Bilingual**：正文采用正式中英对照——标题 `中文 / English`；关键段落先中文、后英文；表格列可用 `中文 / English` 表头。代码注释：**纯英文**，或「中文。 / English.」双语，禁止仅中文注释。
+2. **中英双语 / Bilingual（整篇对半）**：正文采用**先整篇中文、再整篇英文**——中文半部写完后用 `---` 分隔，再写英文半部（标题与结构镜像）。**不要**在同一小节内交错「中文段 + 英文段」。发行说明（`docs/releases/v*`）可按既有「中英并列节标题」体例。代码注释：**纯英文**，或「中文。 / English.」双语，禁止仅中文注释。
 3. **只写该身份需要的命令与概念**；发版、Agent 禁令、本机绝对路径不进用户文。 / Include only commands and concepts for that audience; release steps, Agent prohibitions, and absolute local paths stay out of end-user docs.
 4. **能力边界**指向 [status.md](./status.md)；未做只标「未做 / Not done」，不写假 API。 / Capability truth is [status.md](./status.md); unfinished work is marked **Not done**, never as a fake API.
 5. **改契约**必须改对应教科书 + status；改码红线只改笔记。 / Contract changes update the textbook + status; coding red lines update notes only.
 6. 标题与导航用**用户语言**；少用内部黑话。 / Prefer user-facing wording in titles and navigation; avoid internal jargon.
 7. **Host / 社区插件**文档写 **XRK 自研能力与待补特性**，不以「未抄上游清单」表述。 / Host and community-plugin docs describe **XRK first-party capabilities and planned work**, not an “unported upstream checklist.”
+8. **配置优先 Settings UI**：终端用户路径写 **设置 → …**；环境变量留给 Host 启动 / CI / 无头，不当日常调参主路径。 / Prefer **Settings → …** for end users; keep env vars for Host boot / CI / headless, not day-to-day tuning.
 
 ## 按身份阅读路径 / Reading Paths
 

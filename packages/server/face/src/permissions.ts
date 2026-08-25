@@ -46,20 +46,22 @@ export const FACE_PERMISSION_TABLE: Readonly<
     sandbox: "read-only",
     approval: "ask",
     name: "read-only",
-    description: "Read tools only; writes and shell are denied.",
+    description:
+      "Read tools only. Writes, bash, and mutating terminals are denied.",
   },
   "workspace-write": {
     sandbox: "workspace-write",
     approval: "ask",
     name: "workspace-write",
     description:
-      "Write inside the workspace; wider retries require approval.",
+      "Write inside the workspace; shell stays confined. Wider retries need approval.",
   },
   "danger-full-access": {
     sandbox: "danger-full-access",
     approval: "never",
     name: "danger-full-access",
-    description: "Full access without approval prompts.",
+    description:
+      "No approval prompts; shell is not sandboxed. File tools still cannot leave the workspace root.",
   },
 };
 

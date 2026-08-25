@@ -2,11 +2,11 @@
 
 > **读者 / Audience**：全员 / Everyone（对外说话以本页为准 / Product capability truth）
 
-三态：**能跑 / 未稳 / 未做**（Working / Unstable / Not done）。与代码对齐。基线 **v0.1.15**（当前正式公开线）。
+三态：**能跑 / 未稳 / 未做**（Working / Unstable / Not done）。与代码对齐。基线 **v0.1.16**（当前正式公开线）。
 
-Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.1.15** (current formal public line).
+Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.1.16** (current formal public line).
 
-**AI 调用链路**（maxSteps · prune/soft-compact · **request soft-budget fail-closed** · **tool-result spill（默认 64KiB）** · Face `bash`/`agent-loop` 软预算与 spill 可调 · reasoning passback · max-tokens keep/drop · EMPTY/未知 finish/残缺 tool · derive 跳过空 assistant · **reasoningEffort→DeepSeek thinking wire** · toolOrder · Anthropic cache · **LlmError HTTP 分类（含 gemini / openai-responses）· 步内 llm/retry（Face 可调）· TOOL_NOT_STARTED/OUTCOME_UNKNOWN/ABORTED_BEFORE_DISPATCH/`ABORTED` · isConcurrencySafe settle（只读工具已标）· tool-call stream + tool-call-chunks · concludesTurn / `extras.concludeTurn` · 取消 `AgentCancelCause` · 同轮 retry 耗尽后仍显示 turn-error · **DeepSeek vision-exp catalog** · **session-projection 状态/视图分离** · **durable workspace inject**）已跟至同基线。
+**AI 调用链路**（maxSteps · prune/soft-compact · **request soft-budget fail-closed** · **tool-result spill（默认 64KiB）** · Face `bash`/`agent-loop`/`workspace-inject` 可调（Settings → Plugins） · reasoning passback · max-tokens keep/drop · EMPTY/未知 finish/残缺 tool · derive 跳过空 assistant · **reasoningEffort→DeepSeek thinking wire** · toolOrder · Anthropic cache · **LlmError HTTP 分类（含 gemini / openai-responses）· 步内 llm/retry（Face 可调）· TOOL_NOT_STARTED/OUTCOME_UNKNOWN/ABORTED_BEFORE_DISPATCH/`ABORTED` · isConcurrencySafe settle（只读工具已标）· tool-call stream + tool-call-chunks · concludesTurn / `extras.concludeTurn` · 取消 `AgentCancelCause` · 同轮 retry 耗尽后仍显示 turn-error · **DeepSeek vision-exp catalog** · **session-projection 状态/视图分离** · **durable workspace inject**）已跟至同基线。
 
 ## 能跑（本地 / Host 主路径） / Working (local / Host main path)
 
@@ -35,7 +35,7 @@ These are **ready to use now** (`pnpm` installed, `xrkh serve` / harness preset;
 
 | 层级 / Level | 能做什么 / What you can do | 前置 / Prerequisites |
 | --- | --- | --- |
-| **A — 能用** | `npx @xrkseek/harness-cli` 或源码 `build` + 组装壳后 `web`/`run`；**v0.1.15** 当前正式公开发版 | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
+| **A — 能用** | `npx @xrkseek/harness-cli` 或源码 `build` + 组装壳后 `web`/`run`；**v0.1.16** 当前正式公开发版 | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
 | **B — 浏览器硬刷** | `pnpm test:web`（不进 `pnpm check`） | Chromium；完整 `apps/web/dist` |
 | **C — 上架** | npmjs + GitHub Release（`@xrkseek/harness-cli`） | `pnpm release`；见 [publishing.md](./publishing.md) |
 

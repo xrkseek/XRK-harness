@@ -4,7 +4,7 @@
  *
  * The section declares `settings.plugins.tab`; its own `configurable` tab then
  * declares `settings.plugin.item` and renders whatever cards were registered
- * into it. Shipped cards: MCP, shell (`bash`), agent-loop, web-search.
+ * into it. Shipped cards: MCP, shell (`bash`), agent-loop, workspace-inject, web-search.
  */
 
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
@@ -23,12 +23,14 @@ import { BashCard } from './BashCard.tsx'
 import { ConfigurablePluginsTab } from './ConfigurablePluginsTab.tsx'
 import { McpCard } from './McpCard.tsx'
 import { WebSearchCard } from './WebSearchCard.tsx'
+import { WorkspaceInjectCard } from './WorkspaceInjectCard.tsx'
 import { PluginsSettingsSection } from './PluginsSettingsSection.tsx'
 import type { PluginsSettingsSectionInjected, PluginsSettingsTabEntry } from './PluginsSettingsSection.tsx'
 import { AGENT_LOOP_NS, AgentLoopCardController } from './agent-loop-card-controller.ts'
 import { SHELL_NS, BashCardController } from './bash-card-controller.ts'
 import { MCP_NS, McpCardController } from './mcp-card-controller.ts'
 import { WEB_SEARCH_NS, WebSearchCardController, WEB_SEARCH_BRAVE_REF, WEB_SEARCH_TAVILY_REF } from './web-search-card-controller.ts'
+import { WORKSPACE_INJECT_NS, WorkspaceInjectCardController } from './workspace-inject-card-controller.ts'
 import { ConfigurablePluginsTabController } from './tab-store.ts'
 import { en, zh } from './locales.ts'
 
@@ -45,11 +47,16 @@ export type { AgentLoopCardFace, AgentLoopCardState } from './agent-loop-card-co
 export type { BashCardFace, BashCardState } from './bash-card-controller.ts'
 export type { McpCardFace, McpCardState, McpServerDraft, McpConnectedEntry } from './mcp-card-controller.ts'
 export type { WebSearchCardFace, WebSearchCardState } from './web-search-card-controller.ts'
+export type {
+  WorkspaceInjectCardFace,
+  WorkspaceInjectCardState,
+} from './workspace-inject-card-controller.ts'
 export {
   WEB_SEARCH_NS,
   WEB_SEARCH_TAVILY_REF,
   WEB_SEARCH_BRAVE_REF,
 } from './web-search-card-controller.ts'
+export { WORKSPACE_INJECT_NS } from './workspace-inject-card-controller.ts'
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'settings.plugins'
@@ -68,6 +75,9 @@ export function apply(ctx: ClientContext): void {
 
   const bash = new BashCardController(ctx.settingsScope.bind({ namespace: SHELL_NS }))
   const agentLoop = new AgentLoopCardController(ctx.settingsScope.bind({ namespace: AGENT_LOOP_NS }))
+  const workspaceInject = new WorkspaceInjectCardController(
+    ctx.settingsScope.bind({ namespace: WORKSPACE_INJECT_NS }),
+  )
   const mcp = new McpCardController(ctx.settingsScope.bind({ namespace: MCP_NS }))
   const webSearch = new WebSearchCardController(ctx.settingsScope.bind({ namespace: WEB_SEARCH_NS }), api)
 
@@ -186,5 +196,11 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: () => agentLoop.inject(),
     }, AgentLoopCard)
+    yield ctx.slots.register({
+      name: 'settings.plugin.item',
+      key: WORKSPACE_INJECT_NS,
+      locale: NS,
+      inject: () => workspaceInject.inject(),
+    }, WorkspaceInjectCard)
   })
 }
