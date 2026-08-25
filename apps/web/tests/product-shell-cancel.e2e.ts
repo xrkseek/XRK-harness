@@ -1,5 +1,10 @@
 /**
- * Host-serve cancel: slow replay stream -> Stop -> aborted turn in log.
+ * Host-serve cancel: hung replay stream -> Stop ->
+ * turn/end aborted + assistant interrupted + UI "Stopped" (E.3 / DSH).
+ *
+ * `invokeLlmWithRetry` buffers chunks until success or cancel flush, so the
+ * shell does not paint streaming text while `hangBeforeDone` is parked.
+ * Wait past inject + first deltas so the buffer is non-empty, then Stop.
  */
 import { describe, expect, it } from "vitest";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
@@ -16,13 +21,13 @@ const MARKER = "cancel-prefix-marker";
 
 describe.skipIf(!HAS_SHELL)("product shell cancel", () => {
   it(
-    "stops mid-stream and records an aborted turn",
+    "stops a hung stream and records an aborted turn with Stopped UI",
     async () => {
       const shell = await spawnRegisteredWorkspace({
         label: "xrk-cancel-",
         llm: createReplayAdapter([{ content: MARKER }], {
           enableStream: true,
-          streamDelayMs: 120,
+          streamDelayMs: 0,
           hangBeforeDone: true,
         }),
       });
@@ -31,34 +36,33 @@ describe.skipIf(!HAS_SHELL)("product shell cancel", () => {
         await prepareLiveComposer(page, shell, pageErrors);
         await sendComposerPrompt(page, "stream slowly");
 
-        const stop = page.getByRole("button", { name: "Stop generating" });
-        await stop.waitFor({ timeout: 20_000 });
-
-        const chunkDeadline = Date.now() + 10_000;
-        while (Date.now() < chunkDeadline) {
-          const peek = readFirstPersistedSessionLog(shell.sessionsDir);
-          if (peek.includes('"type":"assistant/chunk"')) break;
-          await new Promise((r) => setTimeout(r, 50));
-        }
-
-        await stop.click();
+        const stop = page.getByRole("button", {
+          name: /Stop generating|停止生成/,
+        });
+        await stop.waitFor({ state: "visible", timeout: 20_000 });
+        // Turn starts before the LLM; give inject + buffered deltas time to land.
+        await new Promise((r) => setTimeout(r, 2_500));
+        await stop.waitFor({ state: "visible", timeout: 5_000 });
+        await stop.click({ timeout: 10_000 });
 
         await page
-          .getByRole("button", { name: "Send message" })
+          .getByRole("button", { name: /Send message|发送消息/ })
           .waitFor({ timeout: 30_000 });
 
-        let log = "";
-        const deadline = Date.now() + 20_000;
-        while (Date.now() < deadline) {
-          log = readFirstPersistedSessionLog(shell.sessionsDir);
-          if (log.includes('"kind":"interrupted"')) break;
-          await new Promise((r) => setTimeout(r, 200));
-        }
+        await page.getByText(/Stopped|已停止/).waitFor({ timeout: 15_000 });
+        await page.getByText(MARKER).waitFor({ timeout: 10_000 });
+
+        const log = readFirstPersistedSessionLog(shell.sessionsDir);
         expect(log).toContain('"type":"turn/end"');
-        expect(log).toContain('"kind":"interrupted"');
-        if (log.includes('"type":"assistant/message"')) {
-          expect(log).toContain('"interrupted":true');
-        }
+        expect(log).toContain('"kind":"aborted"');
+        expect(log).not.toContain('"kind":"interrupted"');
+        expect(log).toContain('"interrupted":true');
+        expect(log).toContain(MARKER);
+
+        expect(
+          pageErrors,
+          `page errors: ${pageErrors.join(" | ") || "(none)"}`,
+        ).toEqual([]);
       } finally {
         await browser.close();
         await shell.dispose();

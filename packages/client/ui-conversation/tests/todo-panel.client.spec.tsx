@@ -124,6 +124,24 @@ describe('TodoDock', () => {
     expect(screen.queryByTestId('todo-panel')).toBeNull()
   })
 
+  it('keeps the strip after a non-null update, then retires on turn/start null', () => {
+    // Mirrors Face: todo/write → list; turn/end keeps list; next turn/start → null.
+    const store = createSnapshotStore<{ value: readonly TodoItem[] | null | undefined }>({
+      value: [{ content: 'standing', status: 'in_progress' }],
+    })
+    render(<TodoDock {...dockProps(store)} />)
+    expect(screen.getByTestId('todo-panel')).toBeTruthy()
+    act(() => {
+      store.set({ value: [
+        { content: 'standing', status: 'completed' },
+        { content: 'next', status: 'in_progress' },
+      ] })
+    })
+    expect(screen.getByText('1 已完成 · 1 进行中')).toBeTruthy()
+    act(() => { store.set({ value: null }) })
+    expect(screen.queryByTestId('todo-panel')).toBeNull()
+  })
+
   it('registers before the goal and queue entries', () => {
     expect(todoDockEntry.name).toBe('conversation-todo-dock')
     expect(todoDockEntry.inject).toEqual(['slots'])

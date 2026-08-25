@@ -460,6 +460,78 @@ describe("openai-compatible adapter", () => {
     });
   });
 
+  it("keeps streamed tool identity when a later delta sends blank id/name", async () => {
+    // Repro: early deltas carry id+name; later fragments send blank identity.
+    // send "" and must not wipe identity (DSH pi-ai keeps non-empty only).
+    const payload = [
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "call_abc",
+                  function: { name: "bash", arguments: "" },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "",
+                  function: {
+                    name: "",
+                    arguments: '{"command":"pwd"}',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      JSON.stringify({
+        choices: [{ finish_reason: "tool_calls", delta: {} }],
+      }),
+    ]
+      .map((row) => `data: ${row}\n\n`)
+      .join("");
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        new Response(`${payload}data: [DONE]\n\n`, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        })) as unknown as typeof fetch,
+    });
+    const events = [];
+    for await (const ev of llm.stream!({
+      messages: [{ role: "user", content: "hi" }],
+    })) {
+      events.push(ev);
+    }
+    const done = events.find((e) => e.type === "done");
+    expect(done).toMatchObject({
+      type: "done",
+      finishReason: "tool-calls",
+      toolCalls: [
+        {
+          id: "call_abc",
+          name: "bash",
+          arguments: { command: "pwd" },
+        },
+      ],
+    });
+  });
+
   it("sends image_url data URLs when image modality is enabled", async () => {
     const png = Uint8Array.from(
       Buffer.from(

@@ -8,7 +8,7 @@ A long-lived session plus short-lived turns ([ADR-0003](./adr/0003-session-long-
 
 | 文档 / Doc | 内容 / Content |
 |------|------|
-| [protocol-events.md](./protocol-events.md) | 事件集合 · TokenUsage helpers · `parseSessionEvent` · JSON Schema |
+| [protocol-events.md](./protocol-events.md) | 事件集合 · `aborted` vs `interrupted` · TokenUsage · `parseSessionEvent` · JSON Schema |
 | [session-api.md](./session-api.md) | `newSession` · `admit` · `continueTurn` |
 | [session-delivery.md](./session-delivery.md) | steer / queue；批合并 · 单次 maxSteps |
 | [session-latch.md](./session-latch.md) | TurnLatch · DrainLatch · wake/resume |
@@ -30,3 +30,7 @@ JSONL export uses `toJSONL` / `fromJSONL` / `parseJSONL`. ZIP export uses `toPac
 **默认持久化 / Default persistence**：`createPersistentSessionStore` → `{XRK_SESSIONS_DIR}/sessions.db`（WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · chunk 写批并物理打包 `text-chunks` / `tool-call-chunks` · `flush()` · open-turn 崩溃修复）。内存 API 仍为扁平 `SessionEvent[]`。`SessionStore.has` 不抛。`session.search` 持久化走 FTS 候选。
 
 Default persistence is `createPersistentSessionStore` → `{XRK_SESSIONS_DIR}/sessions.db` (WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · batched chunk writes with physical packing · `flush()` · open-turn crash repair). The in-memory API remains a flat `SessionEvent[]`. `SessionStore.has` does not throw. Persistent `session.search` uses FTS candidates.
+
+**耐久屏障 / Durability barrier（DSH `session/flush` 同形）**：Host 在 drain idle（一轮工具/续写收敛后）与 `stop` 时调用 `store.flush()`，把已 append 的事件推到 SQLite，再对外暴露「可观察」状态。副作用（工具 body）仍在事件落库之后；不要在未 `flush` 的读路径上假设磁盘与内存一致。
+
+**Durability barrier** (same shape as DSH `session/flush`): Host calls `store.flush()` on drain idle and on `stop`, so appended events reach SQLite before observers treat the session as settled. Tool side effects still run after the call is logged; do not assume disk matches memory on a read path that skipped `flush`.

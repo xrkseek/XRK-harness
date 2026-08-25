@@ -39,6 +39,10 @@ npx @xrkseek/harness-cli web
 
 Do not run `web` directly in the user home directory (cwd becomes the workspace and the Agent writable scope becomes too large). `~/.xrk` holds settings and sessions; it is not the project root. Open the URL printed in the terminal (default `http://127.0.0.1:8787`).
 
+长任务可用模型工具 `todo_write` 维护站立计划（下一轮用户发言清空条带），必要时壳内 `/compact` 换窗。
+
+For long tasks, the model can keep a standing plan with `todo_write` (cleared on the next user turn); use in-shell `/compact` when the context window needs a swap.
+
 | 步骤 / Step | 说明 / Notes |
 |------|------|
 | 1 | 首次启动会在 **`~/.xrk/`**（可用 `XRK_HOME` 改）创建 `settings.yaml`、会话库等；`--workspace` 只钉项目根 / First launch creates `settings.yaml`, the session store, and related files under **`~/.xrk/`** (override with `XRK_HOME`); `--workspace` only pins the project root |

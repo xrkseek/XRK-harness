@@ -2,6 +2,7 @@ import {
   assertModelVisible,
   assertToolCallsSettled,
   deriveMessages,
+  durableModelHistory,
   estimateMessagesTokens,
   promotePendingSteers,
   pruneOversizedToolResults,
@@ -303,7 +304,6 @@ function buildModelRequest(input: {
   slashSystemExtra?: string;
 }): { system?: string; messages: ChatMessage[]; tools: AssembledRequest["tools"] } {
   const derived = deriveMessages(input.events);
-  assertModelVisible(input.events, derived);
 
   const toolDefs = [...input.tools.list()]
     .map((t) => ({
@@ -322,6 +322,8 @@ function buildModelRequest(input: {
     const messages: ChatMessage[] = [];
     if (system) messages.push({ role: "system", content: system });
     messages.push(...derived);
+    // Wire history ≡ log derivation (system lives in header / leading role).
+    assertModelVisible(input.events, durableModelHistory(messages));
     return {
       ...(system ? { system } : {}),
       messages,
@@ -572,10 +574,17 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       }
     }
 
-    // Legacy invariant: logged history reconstructible (excluding ephemeral volatile).
+    // Step open: tools settled; non-assemble durable history ≡ deriveMessages.
     const snapEvents = input.store.get(input.sessionId).events;
     assertToolCallsSettled(snapEvents);
-    assertModelVisible(snapEvents, deriveMessages(snapEvents));
+    const assembled =
+      input.assemble !== undefined && input.assemble.enabled !== false;
+    if (!assembled) {
+      assertModelVisible(
+        snapEvents,
+        durableModelHistory(req.messages),
+      );
+    }
 
     maybeAppendRequestHeader({
       store: input.store,
@@ -679,17 +688,25 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
             response = await invokeLlm(input, req, onChunk);
           } catch (retryErr) {
             if (!isContextOverflowError(retryErr)) throw retryErr;
-            const did = await runCompaction({
-              store: input.store,
-              sessionId: input.sessionId,
-              llm: input.llm,
-              reason: "overflow",
-              keepTokens:
-                compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
-              turnId,
-              ...(input.signal ? { signal: input.signal } : {}),
-              now,
-            });
+            // Still overflowing after durable prune → optional head summary.
+            // Summarizer failure must not mask the original overflow.
+            let did: Awaited<ReturnType<typeof runCompaction>>;
+            try {
+              did = await runCompaction({
+                store: input.store,
+                sessionId: input.sessionId,
+                llm: input.llm,
+                reason: "overflow",
+                keepTokens:
+                  compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
+                turnId,
+                ...(input.signal ? { signal: input.signal } : {}),
+                now,
+              });
+            } catch (compactErr) {
+              if (input.signal?.aborted) throw compactErr;
+              throw retryErr;
+            }
             if (!did.compacted) throw retryErr;
             req = buildReq();
             assertToolCallsSettled(input.store.get(input.sessionId).events);
@@ -706,17 +723,23 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
             response = await invokeLlm(input, req, onChunk);
           }
         } else {
-          const did = await runCompaction({
-            store: input.store,
-            sessionId: input.sessionId,
-            llm: input.llm,
-            reason: "overflow",
-            keepTokens:
-              compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
-            turnId,
-            ...(input.signal ? { signal: input.signal } : {}),
-            now,
-          });
+          let did: Awaited<ReturnType<typeof runCompaction>>;
+          try {
+            did = await runCompaction({
+              store: input.store,
+              sessionId: input.sessionId,
+              llm: input.llm,
+              reason: "overflow",
+              keepTokens:
+                compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
+              turnId,
+              ...(input.signal ? { signal: input.signal } : {}),
+              now,
+            });
+          } catch (compactErr) {
+            if (input.signal?.aborted) throw compactErr;
+            throw err;
+          }
           if (!did.compacted) throw err;
           req = buildReq();
           assertToolCallsSettled(input.store.get(input.sessionId).events);
@@ -738,7 +761,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     }
 
     assistantText = response.content;
-    // DSH: max-tokens is sticky for the turn; keep/drop already stripped tools.
+    // max-tokens is sticky for the turn; keep/drop already stripped tools.
     if (response.finishReason === "max-tokens") {
       turnEndReason = { kind: "max-tokens" };
     }
@@ -890,7 +913,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     });
     activeStepId = undefined;
 
-    // DSH: any successful tool with concludesTurn ends the turn at this step.
+    // Any successful tool with concludesTurn ends the turn at this step.
     if (outcomes.some((o) => o.concludesTurn === true)) {
       break;
     }

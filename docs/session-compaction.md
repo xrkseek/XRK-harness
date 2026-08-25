@@ -88,10 +88,28 @@ No arguments. Busy / summarize failure → error; nothing compactable → succes
 
 ## Overflow 一次恢复 / One-shot overflow recovery
 
-1. Provider 调用抛 `ContextOverflowError`
-2. `runCompaction({ reason: "overflow" })`
-3. 用新窗口重建请求，再 chat **恰好一次** / Rebuild and chat **exactly once**
-4. 再次溢出则原样抛出 / Re-throw on a second overflow
+对齐 DSH compaction-basic（prune-first，一轮恢复）：
+
+Aligned with DSH compaction-basic (prune-first, one recovery):
+
+1. Provider 抛 `ContextOverflowError`
+2. **Model-free prune** 超大 `tool/result`（若有）→ 重建请求再 chat
+3. 仍溢出 → `runCompaction({ reason: "overflow" })` 摘要换窗 → 再 chat **恰好一次**
+4. 摘要失败或空结果 → **保留原始** `ContextOverflowError`（不掩盖成摘要错误）
+5. 再次溢出 → 原样抛出（不再二次恢复）
+
+Prune alone may clear overflow with **no** `context/compaction` event.
+
+Standing plan（`todos` 投影）与换窗正交：`/compact` / `context/compaction` **不清** todo 列表；仅下一轮 `turn/start` 清空。
+
+Standing plan (`todos` projection) is orthogonal to windowing: `/compact` / `context/compaction` do **not** clear the todo list; only the next `turn/start` does.
+
+## Soft budget（`maxRequestTokens`）
+
+Harness 默认（`presets/harness`）：`maxRequestTokens: 100_000` · `keepTokens: 24_000` · `bufferTokens: 4_000`。  
+超 `maxRequestTokens − buffer` 时：先 prune，仍超则 `runCompaction({ reason: "auto" })`。`minimal` 预设默认仅 overflow（无主动软压）。
+
+Harness defaults (`presets/harness`): soft ceiling at `maxRequestTokens − buffer`, prune-first, then `runCompaction({ reason: "auto" })`. The `minimal` preset stays overflow-only (no proactive soft budget).
 
 ## Token 估算 / Token estimates
 

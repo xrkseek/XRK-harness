@@ -46,6 +46,8 @@ async function markerFingerprint(base: string, rel: string): Promise<string> {
 /**
  * Cheap invalidation token — stat markers only, no file reads.
  * Codex rebuilds instructions once per session; we invalidate when mtimes move.
+ * Skill-dir fingerprint follows {@link InjectFingerprintOptions.includeUserHomeSkills}
+ * so catalog-only workspaces are not invalidated by unrelated home skill churn.
  */
 export async function computeInjectFingerprint(
   options: InjectFingerprintOptions,
@@ -74,8 +76,8 @@ export async function computeInjectFingerprint(
     workspaceRoot: root,
     productDir,
     includeUserHome:
-      options.includeUserHome !== false
-      && options.includeUserHomeSkills !== false,
+      options.includeUserHome !== false &&
+      options.includeUserHomeSkills === true,
     ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
   });
   parts.push(await skillDirsFingerprint(skillDirs));

@@ -430,6 +430,72 @@ describe("/compact", () => {
       sourceEventSeq: events.indexOf(compaction!) + 1,
     });
   });
+
+  it("keeps standing todos projection after /compact", async () => {
+    const store = createMemorySessionStore();
+    const agents = new Map<string, ReturnType<typeof createAgent>>();
+    const runtime = createBareFaceRuntime({
+      store,
+      loadSlashRecipes: async () => [],
+      resolveAgent: async (sessionId) => {
+        let agent = agents.get(sessionId);
+        if (!agent) {
+          agent = createAgent({
+            sessionId,
+            store,
+            llm: {
+              async chat() {
+                return {
+                  content: "## Objective\n- face-compact",
+                  toolCalls: [],
+                };
+              },
+            },
+            tools: createToolRegistry(),
+            compaction: { keepTokens: 1 },
+          });
+          agents.set(sessionId, agent);
+        }
+        return agent;
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const plan = [{ content: "survive compact", status: "in_progress" as const }];
+    runtime.store.append(sessionId, {
+      type: "user/message",
+      ts: 10,
+      turnId: "t0",
+      content: "long thread for compact",
+    });
+    runtime.store.append(sessionId, {
+      type: "assistant/message",
+      ts: 11,
+      turnId: "t0",
+      stepId: "s0",
+      content: "noted",
+    });
+    runtime.store.append(sessionId, {
+      type: "todo/write",
+      ts: 12,
+      todos: plan,
+    });
+    expect(runtime.projections.snapshot(sessionId).values.todos).toEqual(plan);
+
+    const exec = await dispatchFaceMethod(runtime, "commands/execute", "e", {
+      args: { agentId: sessionId, line: "/compact" },
+    });
+    expect(exec.result.ok).toBe(true);
+    expect(
+      runtime.store
+        .get(sessionId)
+        .events.some(
+          (e) => e.type === "context/compaction" && e.reason === "manual",
+        ),
+    ).toBe(true);
+    expect(runtime.projections.snapshot(sessionId).values.todos).toEqual(plan);
+  });
 });
 
 describe("/feedback", () => {

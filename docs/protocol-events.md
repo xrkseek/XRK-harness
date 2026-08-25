@@ -12,11 +12,11 @@ Append-only session facts (`@xrkseek/protocol`). Model-visible history is rebuil
 
 | `type` | 必填字段（除 `ts`） / Required fields (beyond `ts`) | 说明 / Notes |
 |--------|-------------------------------|--------|
-| `turn/start` · `turn/end` | `turnId` | Turn bracket；`turn/end.reason` 含 `completed` · `aborted` · `error` · `max-tokens` · `interrupted` · `blocked`。OpenAI `finish_reason: length` / Anthropic `stop_reason: max_tokens` → keep/drop 去截断 toolCalls → `{ kind: "max-tokens" }`（sticky）。`stop` 且无内容/推理/工具 → `EMPTY_RESPONSE`；未知 finish（如 `content_filter`）→ `ProviderFinishError`；非 max-tokens 的残缺 tool JSON → `IncompleteToolCallError`；三者均写 `turn/end` `{ kind: "error" }` 后抛出 |
+| `turn/start` · `turn/end` | `turnId` | Turn bracket；`turn/end.reason` 见下节「结束原因」。OpenAI `finish_reason: length` / Anthropic `stop_reason: max_tokens` → keep/drop 去截断 toolCalls → `{ kind: "max-tokens" }`（sticky）。`stop` 且无内容/推理/工具 → `EMPTY_RESPONSE`；未知 finish（如 `content_filter`）→ `ProviderFinishError`；非 max-tokens 的残缺 tool JSON → `IncompleteToolCallError`；三者均写 `turn/end` `{ kind: "error" }` 后抛出 |
 | `step/start` · `step/end` | `turnId`, `stepId` | Provider step |
 | `user/message` | `turnId`, `content` | `content`: `string` **或** `ContentBlock[]`（text / image+`ImageAttachmentRef`）；可选 `messageId`（Face 行 id；同 turn 多条 inject/人话必须唯一）；可选 `rpcId`；可选 `source`（DSH：`user` · `skill-catalog` · `agent-instructions` · `plugin`；非 `user` = 持久上下文注入，仍进 `deriveMessages`） |
 | `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta；可选 `kind`：`text`\|`reasoning`\|`usage`\|`tool-call`；`usage` 时带 `usage`；`tool-call` 时带 `toolCallId` · 可选 `toolName` · `argumentsDelta`；可选 `index` |
-| `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls`；可选 `reasoning`（`deriveMessages` 在有文本时回传，DSH rc.8 每轮 CoT）；可选 `interrupted`；可选 `usage`（`TokenUsage`；Face `sessionStats.decodeTokens` + `tokenUsage`） |
+| `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls`；可选 `reasoning`（`deriveMessages` 在有文本时回传，DSH rc.8 每轮 CoT）；可选 **`interrupted: true`**（流式取消固化前缀，**不是** `turn/end.reason`）；可选 `usage`（`TokenUsage`；Face `sessionStats.decodeTokens` + `tokenUsage`） |
 | `request/header` | `turnId`, `reason`, `header.config` | 非模型可见；`provider`/`model`；可选 `reasoningEffort` · `contextWindow`；可选 `system` · `tools[]`（Face `contextBreakdown` / envelope 重价） |
 | `llm/retry` · `llm/retry-started` | `turnId`, `stepId`, `retryId`, `retry`, … | 非模型可见；步内可重试失败后写 `llm/retry`（delay / failure.code），backoff 结束写 `llm/retry-started`；失败尝试的 stream chunk **不**落库 |
 | `tool/call` | `turnId`, `stepId`, `call` | Before pipeline body |
@@ -37,6 +37,22 @@ Append-only session facts (`@xrkseek/protocol`). Model-visible history is rebuil
 | `approval/policy` | `policy`（ask\|never） | **Log-only** — `never` 时审批自动放行 |
 | `plan/mode` | `active` | **Log-only** — Face `plan` 投影 · `/plan`；last-wins，缺省 inactive |
 | `feedback/record` | `text` | **Log-only** — `/feedback`；不进 `deriveMessages`；捕获壳无专用卡（wire `ignorable`） |
+
+## 结束原因：`aborted` vs `interrupted` / End reasons: aborted vs interrupted
+
+两处「中断」含义不同，勿混用。 / Two different “interrupt” surfaces — do not conflate them.
+
+| 位置 / Where | 形状 / Shape | 何时 / When | 谁写 / Writer |
+|------|------|------|------|
+| `assistant/message.interrupted` | `true` | 用户/宿主 **取消** 时，已流式到达的文本/推理/工具前缀固化进日志，使 `deriveMessages` 与用户所见一致 | `finalizeCancelledTurn`（`@xrkseek/core-agent-loop`） |
+| `turn/end.reason` · `aborted` | `{ kind: "aborted", reason: AgentCancelCause }` | **实时取消**（Stop / 父会话 / hook / dispose / legacy） | 同上；`reason` 为 `user` · `parent` · `hook` · `disposed` · `legacy` |
+| `turn/end.reason` · `interrupted` | `{ kind: "interrupted" }` | **仅崩溃恢复**：进程挂了留下未闭合 turn/step；加载时合成闭合 | `repairOpenTurnEvents`（`@xrkseek/core-session`） |
+
+对照：活会话点 Stop → 消息可带 `interrupted: true`，turn 仍是 **`aborted`**；壳英文 UI 显示 `Stopped`（`message.stopped`）。冷启动修开洞 turn → turn 是 **`interrupted`**，没有 `AgentCancelCause`。产品壳验收：`product-shell-cancel.e2e.ts`。
+
+Live Stop: message may set `interrupted: true`; turn ends as **`aborted`**; English shell shows `Stopped` (after cancel flushes the llm-retry chunk buffer). Crash repair: turn ends as **`interrupted`** with no cancel cause. Product-shell gate: `product-shell-cancel.e2e.ts`.
+
+其它 `turn/end.reason`：`completed` · `error` · `max-tokens` · `blocked`。`error` 的壳展示见 `displayFailureMessage`（AUTH 脱敏）与 `product-shell-error.e2e.ts`。工具悬挂结算见 [tool-settlement.md](./tool-settlement.md)。
 
 ## Runtime validation
 

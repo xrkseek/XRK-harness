@@ -165,4 +165,85 @@ describe("durable workspace inject", () => {
     const second = await injector.inject();
     expect(second).toBe(first);
   });
+
+  it("skips when disk unchanged even if only skill-catalog was standing (C.2)", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-ws-cat-only-"));
+    const product = path.join(root, ".xrk");
+    await mkdir(path.join(product, "skills", "solo"), { recursive: true });
+    await writeFile(
+      path.join(product, "skills", "solo", "SKILL.md"),
+      "---\ndescription: Solo\n---\n# S\n",
+      "utf8",
+    );
+    // No assistant.md → instructions may be empty; catalog still stands.
+    const store = memoryStore();
+    const injector = createWorkspaceInjector({
+      root,
+      productDir: product,
+      includeUserHome: false,
+    });
+    const a1 = await appendWorkspaceInjectsIfChanged({
+      store,
+      sessionId: "s1",
+      turnId: "t1",
+      now: () => 1,
+      injectOptions: { root, productDir: product },
+      injector,
+    });
+    expect(a1.some((x) => x.source.kind === "skill-catalog")).toBe(true);
+    expect(await injector.isDiskUnchanged()).toBe(true);
+
+    const a2 = await appendWorkspaceInjectsIfChanged({
+      store,
+      sessionId: "s1",
+      turnId: "t2",
+      now: () => 2,
+      injectOptions: { root, productDir: product },
+      injector,
+    });
+    expect(a2).toEqual([]);
+  });
+
+  it("excludes home skills from standing catalog by default (Codex progressive disclosure)", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-ws-no-home-cat-"));
+    const home = await mkdtemp(path.join(tmpdir(), "xrk-home-skills-"));
+    const product = path.join(root, ".xrk");
+    await mkdir(path.join(product, "skills", "proj"), { recursive: true });
+    await mkdir(path.join(home, ".agents", "skills", "home-only"), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(product, "skills", "proj", "SKILL.md"),
+      "---\ndescription: Project\n---\n# P\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(home, ".agents", "skills", "home-only", "SKILL.md"),
+      "---\ndescription: HomeOnly\n---\n# H\n",
+      "utf8",
+    );
+
+    const defaultInj = createWorkspaceInjector({
+      root,
+      productDir: product,
+      homeDir: home,
+      includeUserHome: true,
+    });
+    const def = await defaultInj.inject();
+    expect(def.skillCatalog?.source.entries.map((e) => e.name)).toEqual([
+      "proj",
+    ]);
+
+    const withHome = createWorkspaceInjector({
+      root,
+      productDir: product,
+      homeDir: home,
+      includeUserHome: true,
+      includeUserHomeSkills: true,
+    });
+    const opted = await withHome.inject();
+    expect(opted.skillCatalog?.source.entries.map((e) => e.name).sort()).toEqual(
+      ["home-only", "proj"],
+    );
+  });
 });

@@ -75,12 +75,13 @@ Preset 须 `wireCompositionTools({ plugins })`（见 minimal/harness）。Host s
 | `apps/web/tests/product-shell-inventory.e2e.ts` | 不进 `pnpm check`。Settings → Plugins：进程插件 `example-tools` + boot `@xrkseek/client-runtime` · `@xrkseek/client-session-log-export` |
 | `apps/web/tests/product-shell-question.e2e.ts` | 不进 `pnpm check`。replay `ask_user` → `[data-question-key]` 选选项 Submit → `/api/respond` |
 | `apps/web/tests/product-shell-thinking.e2e.ts` | 不进 `pnpm check`。replay `reasoning` 流 → `[data-variant="think"]` |
-| `apps/web/tests/product-shell-todo.e2e.ts` | 不进 `pnpm check`。`todo_write` → `[data-testid="todo-panel"]` |
+| `apps/web/tests/product-shell-todo.e2e.ts` | 不进 `pnpm check`。`todo_write` → TodoDock；下一轮 `turn/start` 清空站立计划 |
 | `apps/web/tests/product-shell-access.e2e.ts` | 不进 `pnpm check`。Access chip → Read Only（`/permission`） |
 | `apps/web/tests/product-shell-plan.e2e.ts` | 不进 `pnpm check`。`/plan` → Plan chip + JSONL `plan/mode` |
 | `apps/web/tests/product-shell-plan-review.e2e.ts` | 不进 `pnpm check`。Host-serve：`exit_plan_mode` → Approve。Cordis scaffold 孪生：`plan-review.e2e.ts`（不进 `test:web`） |
 | `apps/web/tests/product-shell-export.e2e.ts` | 不进 `pnpm check`。Session log → HEAD `/api/session.export` + `xrk-session-*.zip` |
-| `apps/web/tests/product-shell-cancel.e2e.ts` | 不进 `pnpm check`。流式中 Stop → `assistant/message` interrupted + `turn/end` aborted |
+| `apps/web/tests/product-shell-cancel.e2e.ts` | 不进 `pnpm check`。流式中 Stop → UI `Stopped` · `assistant/message.interrupted` · `turn/end` **`aborted`**（非崩溃修复的 `interrupted`） |
+| `apps/web/tests/product-shell-error.e2e.ts` | 不进 `pnpm check`。AUTH → UI `This turn failed` + 脱敏 `API key is invalid`；日志可含原文，页面不含密钥 |
 | `tests/agent-cache.test.ts` | 卸序 |
 | `tests/standing-tools.test.ts` | minimal 无 bash；harness/server 有 bash presenter |
 

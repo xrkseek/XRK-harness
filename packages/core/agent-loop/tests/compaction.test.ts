@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   createMemorySessionStore,
   deriveMessages,
+  priceCurrentSurfaceWindow,
+  foldSurfaceTokens,
+  formatCompactionForModel,
+  estimateMessageContent,
 } from "@xrkseek/core-session";
 import { createToolRegistry } from "@xrkseek/core-tools";
 import {
@@ -11,6 +15,7 @@ import {
   type LlmChatResponse,
 } from "@xrkseek/llm";
 import { runTurn } from "../src/index.js";
+import { runCompaction } from "../src/compaction.js";
 
 describe("runTurn compaction / overflow", () => {
   it("recovers once from ContextOverflowError", async () => {
@@ -66,16 +71,65 @@ describe("runTurn compaction / overflow", () => {
     });
 
     expect(result.assistantText).toBe("ok-after-compact");
-    expect(
-      store
-        .get(session.id)
-        .events.some(
-          (e) => e.type === "context/compaction" && e.reason === "overflow",
-        ),
-    ).toBe(true);
+    const compactEv = store
+      .get(session.id)
+      .events.find(
+        (e) => e.type === "context/compaction" && e.reason === "overflow",
+      );
+    expect(compactEv?.type).toBe("context/compaction");
+    if (compactEv?.type === "context/compaction") {
+      expect(compactEv.shadowedTokenCount).toBeTypeOf("number");
+      expect(compactEv.shadowedTokenCount).toBeGreaterThan(0);
+    }
     const msgs = deriveMessages(store.get(session.id).events);
     expect(msgs.some((m) => String(m.content).includes("recovered"))).toBe(
       true,
+    );
+  });
+
+  it("runCompaction stamps shadowedTokenCount from priceCurrentSurfaceWindow", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t0",
+      content: "history alpha beta gamma",
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 2,
+      turnId: "t0",
+      stepId: "s0",
+      content: "reply delta",
+    });
+    const before = store.get(session.id).events;
+    const expectedShadow = priceCurrentSurfaceWindow(before);
+    expect(expectedShadow).toBeGreaterThan(0);
+
+    const llm: LlmAdapter = {
+      id: "summarizer",
+      async chat() {
+        return { content: "## Objective\n- stamp-test" };
+      },
+    };
+    const did = await runCompaction({
+      store,
+      sessionId: session.id,
+      llm,
+      reason: "manual",
+      keepTokens: 8,
+    });
+    expect(did.compacted).toBe(true);
+    expect(did.event?.shadowedTokenCount).toBe(expectedShadow);
+
+    // Meter fold: surface shrinks to the compaction checkpoint price.
+    let surface = 0;
+    for (const ev of store.get(session.id).events) {
+      surface = foldSurfaceTokens(surface, ev);
+    }
+    expect(surface).toBe(
+      estimateMessageContent(formatCompactionForModel(did.event!)),
     );
   });
 
@@ -116,7 +170,7 @@ describe("runTurn compaction / overflow", () => {
     ).rejects.toBeInstanceOf(ContextOverflowError);
   });
 
-  it("prunes oversized tool results before overflow compact", async () => {
+  it("prunes alone without writing context/compaction (DSH prune-first)", async () => {
     const store = createMemorySessionStore();
     const session = store.create();
     const big = "Z".repeat(9000);
@@ -143,7 +197,7 @@ describe("runTurn compaction / overflow", () => {
     });
 
     let sawOverflow = false;
-    let chatsAfterOverflow = 0;
+    let summarizerCalls = 0;
     const llm: LlmAdapter = {
       id: "overflow-prune",
       async chat(req: LlmChatRequest): Promise<LlmChatResponse> {
@@ -153,14 +207,15 @@ describe("runTurn compaction / overflow", () => {
           req.messages[0]?.role === "user" &&
           text.includes("Create a new anchored summary");
         if (isSummarizer) {
-          return { content: "## Objective\n- pruned\n## Next\n1. continue" };
+          summarizerCalls += 1;
+          // If prune alone clears overflow, summarizer must not run.
+          throw new Error("summarizer must not run when prune clears overflow");
         }
         if (!sawOverflow) {
           sawOverflow = true;
           throw new ContextOverflowError("too long");
         }
-        chatsAfterOverflow += 1;
-        return { content: "ok" };
+        return { content: "ok-from-prune" };
       },
     };
 
@@ -172,9 +227,13 @@ describe("runTurn compaction / overflow", () => {
       tools: createToolRegistry(),
       compaction: { keepTokens: 40 },
     });
-    expect(result.assistantText).toBe("ok");
-    // Prune alone can clear overflow — summarizer may be skipped.
-    expect(chatsAfterOverflow).toBeGreaterThanOrEqual(1);
+    expect(result.assistantText).toBe("ok-from-prune");
+    expect(summarizerCalls).toBe(0);
+    expect(
+      store
+        .get(session.id)
+        .events.some((e) => e.type === "context/compaction"),
+    ).toBe(false);
     const toolResults = store
       .get(session.id)
       .events.filter((e) => e.type === "tool/result");
@@ -182,5 +241,110 @@ describe("runTurn compaction / overflow", () => {
     const latest = toolResults[toolResults.length - 1]!;
     expect(String(latest.result.content).length).toBeLessThan(big.length);
     expect(String(latest.result.content)).toContain("chars omitted");
+  });
+
+  it("preserves ContextOverflowError when summarizer throws after prune retry", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    // Short tool result — prune may run but not clear enough; force post-prune
+    // overflow then a failing summarizer (DSH: keep original provider error).
+    store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "old",
+      content: "seed-" + "x".repeat(200),
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 2,
+      turnId: "old",
+      stepId: "s0",
+      content: "a",
+    });
+
+    let conversationCalls = 0;
+    const llm: LlmAdapter = {
+      id: "overflow-summarizer-throws",
+      async chat(req: LlmChatRequest): Promise<LlmChatResponse> {
+        const text = req.messages.map((m) => m.content).join("\n");
+        const isSummarizer =
+          req.messages.length === 1 &&
+          req.messages[0]?.role === "user" &&
+          text.includes("Create a new anchored summary");
+        if (isSummarizer) {
+          throw new Error("summary unavailable after prune");
+        }
+        conversationCalls += 1;
+        throw new ContextOverflowError("still too long");
+      },
+    };
+
+    await expect(
+      runTurn({
+        sessionId: session.id,
+        userText: "go",
+        store,
+        llm,
+        tools: createToolRegistry(),
+        compaction: { keepTokens: 40 },
+      }),
+    ).rejects.toBeInstanceOf(ContextOverflowError);
+    expect(conversationCalls).toBeGreaterThanOrEqual(1);
+  });
+
+  it("auto-compacts when soft budget maxRequestTokens is exceeded", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    for (let i = 0; i < 8; i++) {
+      store.append(session.id, {
+        type: "user/message",
+        ts: i * 2,
+        turnId: `old${i}`,
+        content: `msg-${i}-` + "y".repeat(80),
+      });
+      store.append(session.id, {
+        type: "assistant/message",
+        ts: i * 2 + 1,
+        turnId: `old${i}`,
+        stepId: `s${i}`,
+        content: `ans-${i}-` + "z".repeat(40),
+      });
+    }
+
+    const llm: LlmAdapter = {
+      id: "soft-budget",
+      async chat(req: LlmChatRequest): Promise<LlmChatResponse> {
+        const text = req.messages.map((m) => m.content).join("\n");
+        const isSummarizer =
+          req.messages.length === 1 &&
+          req.messages[0]?.role === "user" &&
+          text.includes("Create a new anchored summary");
+        if (isSummarizer) {
+          return { content: "## Objective\n- soft\n## Next\n1. go" };
+        }
+        return { content: "ok-after-soft-compact" };
+      },
+    };
+
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "continue",
+      store,
+      llm,
+      tools: createToolRegistry(),
+      compaction: {
+        maxRequestTokens: 50,
+        keepTokens: 20,
+        bufferTokens: 0,
+      },
+    });
+    expect(result.assistantText).toBe("ok-after-soft-compact");
+    expect(
+      store
+        .get(session.id)
+        .events.some(
+          (e) => e.type === "context/compaction" && e.reason === "auto",
+        ),
+    ).toBe(true);
   });
 });

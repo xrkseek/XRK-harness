@@ -286,6 +286,11 @@ function parseArguments(raw: unknown): unknown {
   }
 }
 
+/** Non-blank string; empty wire fields must not clobber earlier stream identity. */
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
 function parseToolCalls(raw: unknown): ToolCall[] | undefined {
   if (!Array.isArray(raw) || raw.length === 0) return undefined;
   const calls: ToolCall[] = [];
@@ -295,12 +300,10 @@ function parseToolCalls(raw: unknown): ToolCall[] | undefined {
       id?: unknown;
       function?: { name?: unknown; arguments?: unknown };
     };
-    const name =
-      typeof o.function?.name === "string" ? o.function.name : "unknown";
+    // Blank `name`/`id` count as missing (compat gateways often send "" later).
+    const name = nonEmptyString(o.function?.name) ?? "unknown";
     const id =
-      typeof o.id === "string" && o.id
-        ? o.id
-        : `call_${index}_${name.replace(/\W/g, "_")}`;
+      nonEmptyString(o.id) ?? `call_${index}_${name.replace(/\W/g, "_")}`;
     calls.push({
       id,
       name,
@@ -574,24 +577,30 @@ async function* streamSse(
         };
         const idx = typeof tc.index === "number" ? tc.index : 0;
         const cur = toolAcc.get(idx) ?? { arguments: "" };
-        if (typeof tc.id === "string") cur.id = tc.id;
-        if (typeof tc.function?.name === "string") cur.name = tc.function.name;
+        // Keep only non-empty id/name; later blank deltas must not wipe identity.
+        const idPiece = nonEmptyString(tc.id);
+        const namePiece = nonEmptyString(tc.function?.name);
+        if (idPiece) cur.id = idPiece;
+        if (namePiece) cur.name = namePiece;
         if (typeof tc.function?.arguments === "string") {
           cur.arguments += tc.function.arguments;
         }
         toolAcc.set(idx, cur);
-        const id = cur.id ?? `call_${idx}_${(cur.name ?? "unknown").replace(/\W/g, "_")}`;
+        const name = nonEmptyString(cur.name) ?? "unknown";
+        const id =
+          nonEmptyString(cur.id) ??
+          `call_${idx}_${name.replace(/\W/g, "_")}`;
         const argsPiece =
           typeof tc.function?.arguments === "string"
             ? tc.function.arguments
             : "";
         // Emit when we learn identity or receive an arguments fragment.
-        if (typeof tc.id === "string" || typeof tc.function?.name === "string" || argsPiece) {
+        if (idPiece || namePiece || argsPiece) {
           yield {
             type: "tool-call-delta" as const,
             index: idx,
             id,
-            ...(cur.name ? { name: cur.name } : {}),
+            ...(nonEmptyString(cur.name) ? { name: cur.name } : {}),
             argumentsDelta: argsPiece,
           };
         }
@@ -614,9 +623,11 @@ async function* streamSse(
 
   const toolCalls: ToolCall[] = [];
   for (const [idx, acc] of [...toolAcc.entries()].sort((a, b) => a[0] - b[0])) {
-    const name = acc.name ?? "unknown";
+    const name = nonEmptyString(acc.name) ?? "unknown";
     toolCalls.push({
-      id: acc.id ?? `call_${idx}_${name.replace(/\W/g, "_")}`,
+      id:
+        nonEmptyString(acc.id) ??
+        `call_${idx}_${name.replace(/\W/g, "_")}`,
       name,
       arguments: parseArguments(acc.arguments),
     });

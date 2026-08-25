@@ -102,11 +102,68 @@ describe("contextTimeline projection", () => {
     expect(view.requests).toHaveLength(1);
     expect(view.requests[0]!.turn).toBe(1);
     expect(view.requests[0]!.step).toBe(1);
+    expect(view.requests[0]!.total).toBe(
+      view.current.system + view.current.tools + view.current.user,
+    );
+    expect(view.requests[0]!.system).toBe(view.current.system);
+    expect(view.requests[0]!.user).toBe(view.current.user);
+    expect(view.requests[0]!.prompt).toBeUndefined();
     expect(view.current.total).toBe(
       view.current.system +
         view.current.tools +
         view.current.user,
     );
+  });
+
+  it("stamps provider prompt/output on the open request and emits inject events", () => {
+    const unit = createContextTimelineProjectionUnit();
+    let state = unit.init();
+    const apply = (ev: Parameters<typeof unit.apply>[1]) => {
+      state = unit.apply(state, ev);
+    };
+
+    apply({ type: "turn/start", ts: 1, turnId: "t1" });
+    apply({ type: "step/start", ts: 2, turnId: "t1", stepId: "s1" });
+    apply({
+      type: "user/message",
+      ts: 3,
+      turnId: "t1",
+      content: "catalog body",
+      source: {
+        kind: "skill-catalog",
+        form: "catalog",
+        entries: [{ name: "x", description: "y" }],
+      },
+    });
+    apply({
+      type: "request/header",
+      ts: 4,
+      turnId: "t1",
+      reason: "initial",
+      header: {
+        config: { provider: "deepseek", model: "deepseek-v4-flash" },
+        system: "sys",
+      },
+    });
+    apply({
+      type: "assistant/message",
+      ts: 5,
+      turnId: "t1",
+      stepId: "s1",
+      content: "ok",
+      usage: {
+        inputTokens: 18_000,
+        outputTokens: 12,
+        cacheReadTokens: 100,
+      },
+    });
+
+    const view = unit.wire!.view(state);
+    expect(view.events.some((e) => e.kind === "inject")).toBe(true);
+    expect(view.requests).toHaveLength(1);
+    expect(view.requests[0]!.total).toBeGreaterThan(0);
+    expect(view.requests[0]!.prompt).toBe(18_100);
+    expect(view.requests[0]!.output).toBe(12);
   });
 
   it("folds assistant, tool results, and inject sources into node cats", () => {

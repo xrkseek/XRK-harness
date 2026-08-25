@@ -5,9 +5,11 @@ import {
   estimateMessageContent,
   estimateSystemTokens,
   estimateToolsTokens,
+  foldSurfaceTokens,
   formatCompactionForModel,
   newSession,
 } from "@xrkseek/core-session";
+import type { ContextCompactionEvent } from "@xrkseek/protocol";
 import {
   createContextBreakdownProjectionUnit,
   createContextPressureProjectionUnit,
@@ -263,6 +265,7 @@ describe("Face tokenUsage / contextPressure / contextBreakdown", () => {
       getEvents: (id) => store.get(id).events,
     });
     registry.register(createContextBreakdownProjectionUnit());
+    registry.register(createContextPressureProjectionUnit());
 
     store.append(session.id, {
       type: "user/message",
@@ -276,12 +279,16 @@ describe("Face tokenUsage / contextPressure / contextBreakdown", () => {
       turnId: "t1",
       stepId: "s1",
       content: "bbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      usage: { inputTokens: 40, outputTokens: 4 },
     });
     driveAll(registry, session.id, store);
 
     const before = registry.snapshot(session.id).values.contextBreakdown!
       .messageTokens;
     expect(before).toBeGreaterThan(20);
+    const pressureBefore = registry.snapshot(session.id).values.contextPressure!
+      .projectedTokens;
+    expect(pressureBefore).toBeGreaterThan(20);
 
     const summary = "short";
     const recent = "";
@@ -303,6 +310,10 @@ describe("Face tokenUsage / contextPressure / contextBreakdown", () => {
       toolsTokens: 0,
       messageTokens: checkpoint,
     });
+    // Same foldSurfaceTokens signed delta on both meters (projected ≠ surface).
+    const pressureAfter = registry.snapshot(session.id).values.contextPressure!
+      .projectedTokens!;
+    expect(pressureBefore! - pressureAfter).toBe(before - checkpoint);
   });
 
   it("keeps pressure surfaceTokens equal to breakdown messageTokens", () => {
@@ -327,6 +338,7 @@ describe("Face tokenUsage / contextPressure / contextBreakdown", () => {
       stepId: "s1",
       content: "hi",
       toolCalls: [{ id: "c1", name: "read", arguments: { path: "a.ts" } }],
+      usage: { inputTokens: 12, outputTokens: 2 },
     });
     store.append(session.id, {
       type: "tool/result",
@@ -339,22 +351,39 @@ describe("Face tokenUsage / contextPressure / contextBreakdown", () => {
         content: "file body",
       },
     });
+    driveAll(registry, session.id, store);
+    const beforeBreakdown = registry.snapshot(session.id).values.contextBreakdown!
+      .messageTokens;
+    const beforePressure = registry.snapshot(session.id).values.contextPressure!
+      .projectedTokens!;
+
+    let surface = 0;
+    for (const ev of store.get(session.id).events) {
+      surface = foldSurfaceTokens(surface, ev);
+    }
     store.append(session.id, {
       type: "context/compaction",
       ts: 4,
       reason: "auto",
       summary: "s",
       recent: "r",
+      shadowedTokenCount: surface,
     });
-    driveAll(registry, session.id, store);
+    const events = store.get(session.id).events;
+    registry.drive(session.id, events[events.length - 1]!, events.length);
 
     const breakdown = registry.snapshot(session.id).values.contextBreakdown!;
-    const expected =
-      estimateMessageContent("hello") +
-      estimateAssistantSurface("hi", [
-        { id: "c1", name: "read", arguments: { path: "a.ts" } },
-      ]) +
-      estimateMessageContent("file body");
-    expect(breakdown.messageTokens).toBe(expected);
+    const pressure = registry.snapshot(session.id).values.contextPressure!;
+    const compactEv = events.find(
+      (e): e is ContextCompactionEvent => e.type === "context/compaction",
+    );
+    expect(compactEv).toBeDefined();
+    const checkpoint = estimateMessageContent(
+      formatCompactionForModel(compactEv!),
+    );
+    expect(breakdown.messageTokens).toBe(checkpoint);
+    expect(beforePressure - pressure.projectedTokens!).toBe(
+      beforeBreakdown - checkpoint,
+    );
   });
 });

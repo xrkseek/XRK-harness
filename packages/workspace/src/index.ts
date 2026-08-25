@@ -38,8 +38,15 @@ export interface WorkspaceInjectorOptions {
   readonly root: string;
   /** Product inject overlay — default `{root}/.xrk` (see ecosystem paths). */
   readonly productDir?: string;
-  /** Include user-home global layer (default true). */
+  /** Include user-home global layer for instructions (default true). */
   readonly includeUserHome?: boolean;
+  /**
+   * Include `~/…/skills` in the durable skill-catalog inject (default **false**).
+   * Codex / DSH progressive disclosure: home skills stay reachable via the
+   * `skill` tool / `skill.list`; the standing catalog is workspace-scoped so
+   * hundreds of home skills do not re-enter every turn.
+   */
+  readonly includeUserHomeSkills?: boolean;
   /** Test override for user-home root. */
   readonly homeDir?: string;
 }
@@ -67,7 +74,8 @@ export function createWorkspaceInjector(
       ? { includeUserHome: options.includeUserHome }
       : {}),
     ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
-    includeUserHomeSkills: true,
+    // Catalog defaults off; fingerprint must match what inject() lists.
+    includeUserHomeSkills: options.includeUserHomeSkills === true,
   });
 
   return {
@@ -108,11 +116,13 @@ export function createWorkspaceInjector(
       const instructionBlocks = sectionsToInstructionBlocks(sections);
       const changes = sectionsToInstructionChanges(sections);
 
-      const includeHome = options.includeUserHome !== false;
+      // Standing catalog = workspace skills only unless opted in (Codex).
+      const includeHomeSkills = options.includeUserHomeSkills === true;
       const skillDirs = await resolveSkillDirs({
         workspaceRoot: root,
         productDir,
-        includeUserHome: includeHome,
+        includeUserHome: includeHomeSkills,
+        ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
       });
       const skills = await listSkills({ skillDirs });
       const skillCatalog = buildSkillCatalogPayload(skills, budget);
@@ -304,11 +314,13 @@ export async function appendWorkspaceInjectsIfChanged(input: {
     input.store.get(input.sessionId).events,
   );
 
-  // DSH / Codex: disk unchanged and session already has instructions → skip.
+  // DSH / Codex: disk unchanged and session already has a standing inject → skip
+  // full resolve (instructions and/or skill-catalog).
   if (
     input.injector !== undefined
     && (await input.injector.isDiskUnchanged())
-    && previous.instructions !== undefined
+    && (previous.instructions !== undefined
+      || previous.skillCatalog !== undefined)
   ) {
     return [];
   }

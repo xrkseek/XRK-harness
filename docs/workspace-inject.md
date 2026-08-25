@@ -41,7 +41,9 @@ assistant / context / rules / recipes 默认：`{workspaceRoot}/.xrk`（**不强
 | `.cursor/skills/` | Cursor |
 | `.xrk/skills/` | XRK 原生叠加（优先） / XRK-native overlay (wins) |
 
-用户主目录下同相对路径（`~/.agents/skills` … `~/.xrk/skills`）亦扫描，供 `skill` 工具、Face `skill.list` 与 inject catalog（优先级更低）。缺则不创建。
+用户主目录下同相对路径（`~/.agents/skills` … `~/.xrk/skills`）亦扫描，供 **`skill` 工具** 与 Face `skill.list`。站立 **skill-catalog inject 默认只含工作区 skills**（Codex 渐进披露：避免数百个 home skill 每轮进日志）；需要时可设 `includeUserHomeSkills: true`。
+
+User-home skill trees are scanned for the **`skill` tool** and Face `skill.list`. The standing **skill-catalog inject defaults to workspace skills only** (Codex progressive disclosure); set `includeUserHomeSkills: true` to opt in.
 
 ## 持久注入（会话日志） / Durable inject (session log)
 
@@ -54,7 +56,9 @@ assistant / context / rules / recipes 默认：`{workspaceRoot}/.xrk`（**不强
 
 每条 inject（及人类 prompt）有唯一 `messageId`。Face wire `data.id` 使用该 id — **不是**裸 `turnId` — 以便同 turn 同时展示 inject 行与人类行而不挤掉对话。
 
-Digest last-wins：未变 → 不新开行；已变 → 全量替换（catalog 上 `update: true`）。Skill **正文**仍经 `skill` 工具或 `/skill-name` 加载（见 [slash-recipes.md](./slash-recipes.md)）。
+Digest last-wins：未变 → 不新开行；已变 → 全量替换（catalog 上 `update: true`）。盘未变且会话已有 instructions **或** skill-catalog → `appendWorkspaceInjectsIfChanged` **整段跳过**（不重扫，Codex/DSH digest 快路径）。Skill **正文**仍经 `skill` 工具或 `/skill-name` 加载（见 [slash-recipes.md](./slash-recipes.md)）。
+
+Digest last-wins: unchanged → no new row; changed → full replace (`update: true` on catalog). When disk is unchanged and the session already has instructions **or** a skill-catalog, `appendWorkspaceInjectsIfChanged` **skips entirely** (Codex/DSH digest fast path). Skill **bodies** still load via the `skill` tool or `/skill-name` ([slash-recipes.md](./slash-recipes.md)).
 
 Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Trajectory 按 producer 列出。
 

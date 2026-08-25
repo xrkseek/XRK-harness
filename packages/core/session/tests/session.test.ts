@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { SessionEvent } from "@xrkseek/protocol";
+import type { ChatMessage, SessionEvent } from "@xrkseek/protocol";
 import {
   assertModelVisible,
   createMemorySessionStore,
   deriveMessages,
+  durableModelHistory,
   forkSession,
   fromJSONL,
   ModelVisibleInvariantError,
@@ -67,6 +68,19 @@ describe("deriveMessages + invariant", () => {
       { role: "assistant", content: "hello" },
     ]);
     assertModelVisible(sampleTurn(), msgs);
+  });
+
+  it("durableModelHistory drops system roles before the invariant", () => {
+    const wire: ChatMessage[] = [
+      { role: "system", content: "persona" },
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hello" },
+    ];
+    expect(durableModelHistory(wire)).toEqual([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hello" },
+    ]);
+    assertModelVisible(sampleTurn(), durableModelHistory(wire));
   });
 
   it("fails invariant when request diverges", () => {

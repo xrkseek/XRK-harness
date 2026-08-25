@@ -11,7 +11,7 @@ The product Agent reads rules and skills from **global** and **workspace** layer
 | 种类 / Kind | 典型路径 / Typical paths | 进模型方式 / How it reaches the model |
 |----|------|------------|
 | **Rules / 站立说明** | `~/.agents/` · `~/.xrk/` · `{workspace}/.agents/` · `{workspace}/.xrk/` · 多厂商约定路径 | 持久 `user/message` · `source: agent-instructions` |
-| **Skills** | 同上目录下的 `skills/<name>/SKILL.md`（及 `~/.codex/skills` 等） | `skill-catalog` 注入 + `skill` 工具或 `/skill-name` 加载正文 |
+| **Skills** | 同上目录下的 `skills/<name>/SKILL.md`（及 `~/.codex/skills` 等） | 工作区 → 站立 `skill-catalog`；主目录 → `skill` 工具 / `skill.list`（catalog 默认不灌入） / Workspace → standing `skill-catalog`; home → `skill` tool / `skill.list` (catalog excludes home by default) |
 
 ## 站立文件（`.xrk/` 与 `.agents/`） / Standing files
 

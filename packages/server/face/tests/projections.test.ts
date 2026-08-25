@@ -269,4 +269,36 @@ describe("createFaceRuntime projection wire", () => {
       ),
     ).toBe(true);
   });
+
+  it("todos standing plan survives context/compaction (DSH: plan ⊥ window)", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    installDefaultFaceProjections(registry);
+
+    const plan = [
+      { content: "keep me", status: "in_progress" as const },
+      { content: "also keep", status: "pending" as const },
+    ];
+    const w = store.append(session.id, {
+      type: "todo/write",
+      ts: 1,
+      todos: plan,
+    });
+    registry.drive(session.id, w, 1);
+    expect(registry.snapshot(session.id).values.todos).toEqual(plan);
+
+    const compact = store.append(session.id, {
+      type: "context/compaction",
+      ts: 2,
+      reason: "manual",
+      summary: "## Objective\n- window swap",
+      recent: "",
+      shadowedTokenCount: 10,
+    });
+    registry.drive(session.id, compact, 2);
+    expect(registry.snapshot(session.id).values.todos).toEqual(plan);
+  });
 });

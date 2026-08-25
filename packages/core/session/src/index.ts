@@ -219,8 +219,21 @@ export class ModelVisibleInvariantError extends Error {
 }
 
 /**
- * Assert that every message in a model request can be reconstructed from the log.
- * M0: compare JSON of deriveMessages(events) with requestMessages.
+ * History portion of a wire LLM request (drop `system` roles).
+ * DSH keeps system on the header / `system` slot; our non-assemble path may
+ * also prepend a system message — durable history must still equal
+ * {@link deriveMessages}.
+ */
+export function durableModelHistory(
+  messages: readonly ChatMessage[],
+): ChatMessage[] {
+  return messages.filter((m) => m.role !== "system");
+}
+
+/**
+ * Assert that durable model-visible history reconstructs from the log.
+ * Pass {@link durableModelHistory} of the wire request (not a tautological
+ * re-derive). Assemble's ephemeral volatile user is outside this check.
  */
 export function assertModelVisible(
   events: readonly SessionEvent[],

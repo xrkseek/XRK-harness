@@ -1,6 +1,7 @@
 /**
- * Host-serve TodoDock: replay todo_write â†?Face todos projection
- * â†?`[data-testid="todo-panel"]` above the composer.
+ * Host-serve TodoDock: replay todo_write -> Face todos projection
+ * -> [data-testid="todo-panel"] above the composer.
+ * Next user turn's turn/start clears the standing plan (DSH lifetime).
  */
 import { describe, expect, it } from "vitest";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
@@ -15,10 +16,11 @@ import {
 
 const TODO = "dock the plan strip";
 const MARKER = "todo-dock-ok";
+const MARKER2 = "todo-dock-cleared";
 
 describe.skipIf(!HAS_SHELL)("product shell todo dock", () => {
   it(
-    "shows the standing todo panel after todo_write",
+    "shows the standing todo panel after todo_write, then clears on next turn",
     async () => {
       const shell = await spawnRegisteredWorkspace({
         label: "xrk-dock-",
@@ -39,6 +41,7 @@ describe.skipIf(!HAS_SHELL)("product shell todo dock", () => {
             ],
           },
           { content: MARKER },
+          { content: MARKER2 },
         ]),
       });
       const { browser, page, pageErrors } = await openEnglishPage(shell.base);
@@ -58,6 +61,13 @@ describe.skipIf(!HAS_SHELL)("product shell todo dock", () => {
         await panel.getByRole("button").first().click();
         await panel.getByText(TODO).waitFor({ timeout: 10_000 });
         await page.getByText(MARKER).waitFor({ timeout: 20_000 });
+        // turn/end keeps the standing plan visible while the user reads.
+        await panel.waitFor({ state: "visible", timeout: 5_000 });
+
+        await sendComposerPrompt(page, "next turn clears the plan");
+        await page.getByText(MARKER2).waitFor({ timeout: 20_000 });
+        // Next turn/start clears todos projection -> dock retires.
+        await panel.waitFor({ state: "hidden", timeout: 15_000 });
 
         expect(
           pageErrors,
@@ -68,11 +78,12 @@ describe.skipIf(!HAS_SHELL)("product shell todo dock", () => {
         expect(log).toContain('"type":"todo/write"');
         expect(log).toContain(TODO);
         expect(log).toContain(MARKER);
+        expect(log).toContain(MARKER2);
       } finally {
         await browser.close();
         await shell.dispose();
       }
     },
-    90_000,
+    120_000,
   );
 });

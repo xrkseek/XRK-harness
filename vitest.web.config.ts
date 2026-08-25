@@ -16,6 +16,7 @@ export default defineConfig({
       "apps/web/tests/product-shell-stream.e2e.ts",
       "apps/web/tests/product-shell-stream-aria.e2e.ts",
       "apps/web/tests/product-shell-cancel.e2e.ts",
+      "apps/web/tests/product-shell-error.e2e.ts",
       "apps/web/tests/product-shell-tool.e2e.ts",
       "apps/web/tests/product-shell-approval.e2e.ts",
       "apps/web/tests/product-shell-inventory.e2e.ts",

@@ -28,7 +28,7 @@ Short digest of shipped capabilities; details live in topic docs and [modules/](
 
 - **Face wire / 历史 / Face wire / history**：`turn/end` wire 必带 `reason`（协议必填）。`session.history` 按 **message 边界**分页（`user/message` + `assistant/message`，默认 50），chunk/turn 脚手架跟消息组一起走，不是按原始事件条数切页。 / `turn/end` wire must include `reason` (protocol-required). `session.history` paginates on **message boundaries** (`user/message` + `assistant/message`, default 50); chunk/turn scaffolding travels with the message group, not by raw event count.
 
-- **取消流式 / Cancel streaming**：abort 时把已落库 `assistant/chunk` 固化为 `assistant/message`（`interrupted: true`），再关 step/turn；壳 assistant 节点读 `data.interrupted`。 / On abort, persisted `assistant/chunk` events are solidified into `assistant/message` (`interrupted: true`) before closing step/turn; the shell assistant node reads `data.interrupted`.
+- **取消流式 / Cancel streaming**：abort 时把已落库 `assistant/chunk` 固化为 `assistant/message`（**字段** `interrupted: true`），`turn/end.reason` 仍是 **`aborted`**（带 `AgentCancelCause`）。进程崩溃留下的开洞 turn 由 `repairOpenTurnEvents` 闭合为 **`interrupted`**（无 cancel cause）。对照表见 [protocol-events.md](./protocol-events.md#结束原因aborted-vs-interrupted--end-reasons-aborted-vs-interrupted)。 / On abort, chunks solidify into `assistant/message` (`interrupted: true`); turn ends as **`aborted`**. Crash-open turns repair as **`interrupted`**. See the protocol-events table.
 
 - **会话归档 / Session archive**：侧栏会话行 `⋯` →「归档会话」（`workspace.archiveSession`）；从列表隐藏、**不删** SQLite 日志（DSH 同语义，无硬删除按钮）。 / Sidebar session row `⋯` → “Archive session” (`workspace.archiveSession`); hides from the list and **does not delete** the SQLite log (same semantics as DSH; no hard-delete button).
 
