@@ -1,6 +1,8 @@
-import { access, readdir, readFile, stat } from "node:fs/promises";
+import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import { skillDirsFingerprint } from "./inject-fingerprint.js";
+import { shouldSkipScanDir } from "./scan-guards.js";
 
 export interface SkillSummary {
   readonly name: string;
@@ -42,6 +44,29 @@ export interface SkillSourceOptions {
 }
 
 const MAX_NAME = 128;
+/** Frontmatter + description fit in the first slice; avoids reading huge SKILL.md bodies for catalog scans. */
+const SKILL_HEAD_BYTES = 16_384;
+
+const skillListCache = new Map<
+  string,
+  { readonly skills: readonly SkillSummary[] }
+>();
+
+/** Test / hot-reload hook. */
+export function clearSkillListCache(): void {
+  skillListCache.clear();
+}
+
+async function readSkillHead(skillFile: string): Promise<string> {
+  const handle = await open(skillFile, "r");
+  try {
+    const buf = Buffer.alloc(SKILL_HEAD_BYTES);
+    const { bytesRead } = await handle.read(buf, 0, SKILL_HEAD_BYTES, 0);
+    return buf.toString("utf8", 0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
 
 /**
  * Relative project skill roots, low → high priority (later wins on name clash).
@@ -232,6 +257,7 @@ export async function listSkillsInDir(
 
   const out: SkillSummary[] = [];
   for (const dirName of names) {
+    if (shouldSkipScanDir(dirName)) continue;
     if (!isSkillName(dirName)) continue;
     const directory = path.join(root, dirName);
     try {
@@ -243,7 +269,7 @@ export async function listSkillsInDir(
     const skillFile = path.join(directory, "SKILL.md");
     let parsed: ParsedSkillFrontmatter;
     try {
-      const raw = await readFile(skillFile, "utf8");
+      const raw = await readSkillHead(skillFile);
       parsed = parseSkillMarkdown(raw, dirName);
     } catch {
       parsed = {
@@ -281,13 +307,22 @@ export async function listSkills(
   const dirs = await resolveSkillDirs(options);
   if (dirs.length === 0) return [];
 
+  const fingerprint = await skillDirsFingerprint(dirs);
+  const hit = skillListCache.get(fingerprint);
+  if (hit !== undefined) return hit.skills;
+
   const byName = new Map<string, SkillSummary>();
   for (const dir of dirs) {
     for (const skill of await listSkillsInDir(dir)) {
       byName.set(skill.name, skill);
     }
   }
-  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const skills = [...byName.values()].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  skillListCache.clear();
+  skillListCache.set(fingerprint, { skills });
+  return skills;
 }
 
 export async function listSkillsFromWorkspace(

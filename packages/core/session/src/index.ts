@@ -124,8 +124,12 @@ export {
   type RequestHeaderSnapshot,
 } from "./request-header.js";
 
-export type { SessionRecord, SessionStore } from "./store.js";
-import type { SessionRecord, SessionStore } from "./store.js";
+export type {
+  SessionListHints,
+  SessionRecord,
+  SessionStore,
+} from "./store.js";
+import type { SessionListHints, SessionRecord, SessionStore } from "./store.js";
 import { deepFreeze, newSessionId } from "./freeze.js";
 
 export function createMemorySessionStore(): SessionStore {
@@ -165,6 +169,28 @@ export function createMemorySessionStore(): SessionStore {
 
     list(): readonly string[] {
       return [...sessions.keys()];
+    },
+
+    listHints(id: string): SessionListHints {
+      const events = sessions.get(id);
+      if (!events || events.length === 0) {
+        return { lastEventTs: null, hasTurnStart: false };
+      }
+      let hasTurnStart = false;
+      for (const event of events) {
+        if (event.type === "turn/start") {
+          hasTurnStart = true;
+          break;
+        }
+      }
+      return {
+        lastEventTs: events[events.length - 1]?.ts ?? null,
+        hasTurnStart,
+      };
+    },
+
+    isLoaded(id: string): boolean {
+      return sessions.has(id);
     },
   };
 }

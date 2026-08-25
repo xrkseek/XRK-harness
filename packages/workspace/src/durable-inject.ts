@@ -8,6 +8,7 @@ import type {
   UserMessageSource,
   WorkspaceBudgetTruncation,
 } from "@xrkseek/protocol";
+import { clipToBudget, type InjectBudget } from "./inject-budget.js";
 import type { SkillSummary } from "./skills.js";
 
 export interface WorkspaceBudgetEvent {
@@ -78,13 +79,18 @@ export interface InstructionChange {
 
 export function buildSkillCatalogPayload(
   skills: readonly SkillSummary[],
-  budgetEvents: readonly WorkspaceBudgetEvent[],
+  budget: InjectBudget,
   options?: { readonly update?: boolean },
 ): DurableSkillCatalogPayload | undefined {
   const listed = skills.filter((s) => s.modelInvocable);
   if (listed.length === 0) return undefined;
-  const content = formatAvailableSkillsXml(listed);
-  const skillBudget = budgetEvents.filter((e) => e.section === "skills");
+  const full = formatAvailableSkillsXml(listed);
+  const content = clipToBudget("skills", full, budget, {
+    suffix: "\n[skill catalog truncated]",
+  });
+  if (!content.trim()) return undefined;
+  const included = listedForClippedCatalog(listed, content);
+  const skillBudget = budget.events.filter((e) => e.section === "skills");
   const truncations = budgetEventsToTruncations(skillBudget);
   const digest = digestWorkspaceText(content);
   return {
@@ -93,15 +99,22 @@ export function buildSkillCatalogPayload(
     source: {
       kind: "skill-catalog",
       form: "catalog",
-      entries: listed.map((s) => ({
+      entries: included.map((s) => ({
         name: s.name,
         description: s.description,
       })),
       digest,
-      ...(options?.update ? { update: true } : {}),
+      ...(options?.update ? { update: true as const } : {}),
       ...(truncations.length > 0 ? { budgetTruncations: truncations } : {}),
     },
   };
+}
+
+function listedForClippedCatalog(
+  listed: readonly SkillSummary[],
+  content: string,
+): readonly SkillSummary[] {
+  return listed.filter((s) => content.includes(`\`${s.name}\``));
 }
 
 export function buildInstructionsPayload(
@@ -138,13 +151,23 @@ export function foldLatestWorkspaceInjectDigests(
 ): LatestWorkspaceInjectDigests {
   let skillCatalog: string | undefined;
   let instructions: string | undefined;
-  for (const ev of events) {
-    if (ev.type !== "user/message" || !ev.source) continue;
-    if (ev.source.kind === "skill-catalog" && ev.source.digest) {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev === undefined || ev.type !== "user/message" || !ev.source) continue;
+    if (
+      skillCatalog === undefined
+      && ev.source.kind === "skill-catalog"
+      && ev.source.digest
+    ) {
       skillCatalog = ev.source.digest;
-    } else if (ev.source.kind === "agent-instructions" && ev.source.digest) {
+    } else if (
+      instructions === undefined
+      && ev.source.kind === "agent-instructions"
+      && ev.source.digest
+    ) {
       instructions = ev.source.digest;
     }
+    if (skillCatalog !== undefined && instructions !== undefined) break;
   }
   return {
     ...(skillCatalog !== undefined ? { skillCatalog } : {}),

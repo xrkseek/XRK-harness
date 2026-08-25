@@ -298,6 +298,7 @@ export function createMinimalComposition(
                 await appendWorkspaceInjectsIfChanged({
                   ...ctx,
                   injectOptions: injectOpts,
+                  injector: workspace,
                 });
               },
             }

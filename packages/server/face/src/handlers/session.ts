@@ -164,14 +164,16 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
 
 export const sessionList: FaceHandler = async (runtime) => {
   const items = runtime.store.list().map((sessionId) => {
-    const events = runtime.store.get(sessionId).events;
-    const last = events[events.length - 1];
-    const snap = runtime.projections.snapshot(sessionId);
-    const meta = snap.values.sessionListMetadata;
-    const blank =
-      meta?.blank ?? !events.some((e) => e.type === "turn/start");
+    const hints = runtime.store.listHints?.(sessionId);
+    const loaded = runtime.store.isLoaded?.(sessionId) ?? true;
+    const snap =
+      hints !== undefined && !loaded
+        ? undefined
+        : runtime.projections.snapshot(sessionId);
+    const meta = snap?.values.sessionListMetadata;
+    const blank = meta?.blank ?? !(hints?.hasTurnStart ?? false);
     const lastPromptAt = meta?.lastPromptAt ?? null;
-    const updatedAt = Math.max(last?.ts ?? 0, lastPromptAt ?? 0);
+    const updatedAt = Math.max(hints?.lastEventTs ?? 0, lastPromptAt ?? 0);
     const cwd = resolveSessionCwd(runtime, sessionId);
     const wsId = runtime.workspaces.workspaceIdOf(sessionId);
     const wsRow = wsId ? runtime.workspaces.get(wsId) : undefined;
@@ -192,11 +194,15 @@ export const sessionList: FaceHandler = async (runtime) => {
             origin: "subagent" as const,
           }
         : {}),
-      title: snap.values.title ?? null,
-      projections: {
-        asOfSeq: snap.asOfSeq,
-        values: snap.values,
-      },
+      title: snap?.values.title ?? null,
+      ...(snap
+        ? {
+            projections: {
+              asOfSeq: snap.asOfSeq,
+              values: snap.values,
+            },
+          }
+        : {}),
     };
   });
   return { ok: true, value: { items } };

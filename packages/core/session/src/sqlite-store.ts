@@ -14,7 +14,7 @@ import {
 import { deepFreeze, newSessionId } from "./freeze.js";
 import { repairOpenTurnEvents } from "./repair-open-turn.js";
 import { extractEventSearchText } from "./search-text.js";
-import type { SessionRecord, SessionStore } from "./store.js";
+import type { SessionRecord, SessionListHints, SessionStore } from "./store.js";
 
 function openDatabase(dbPath: string): DatabaseSync {
   const { DatabaseSync: Db } = process.getBuiltinModule(
@@ -189,6 +189,24 @@ function nextSeqFromDb(db: DatabaseSync, sessionId: string): number {
   return row.maxSeq + 1;
 }
 
+function hasTurnStartInDb(db: DatabaseSync, sessionId: string): boolean {
+  const row = db
+    .prepare(
+      `SELECT 1 AS hit FROM events
+       WHERE session_id = ? AND json_extract(payload, '$.type') = 'turn/start'
+       LIMIT 1`,
+    )
+    .get(sessionId) as { hit: number } | undefined;
+  return row !== undefined;
+}
+
+function lastEventTsFromDb(db: DatabaseSync, sessionId: string): number | null {
+  const row = db
+    .prepare("SELECT MAX(ts) AS ts FROM events WHERE session_id = ?")
+    .get(sessionId) as { ts: number | null } | undefined;
+  return row?.ts ?? null;
+}
+
 function loadSessionIds(db: DatabaseSync): Set<string> {
   const ids = new Set<string>();
   const rows = db.prepare("SELECT id FROM sessions").all() as { id: string }[];
@@ -334,6 +352,34 @@ export function createPersistentSessionStore(dir: string): PersistentSessionStor
 
     list(): readonly string[] {
       return [...sessionIds];
+    },
+
+    listHints(id: string): SessionListHints {
+      if (!sessionIds.has(id)) {
+        throw new Error(`session not found: ${id}`);
+      }
+      const cached = sessions.get(id);
+      if (cached !== undefined) {
+        let hasTurnStart = false;
+        for (const event of cached) {
+          if (event.type === "turn/start") {
+            hasTurnStart = true;
+            break;
+          }
+        }
+        return {
+          lastEventTs: cached[cached.length - 1]?.ts ?? null,
+          hasTurnStart,
+        };
+      }
+      return {
+        lastEventTs: lastEventTsFromDb(db, id),
+        hasTurnStart: hasTurnStartInDb(db, id),
+      };
+    },
+
+    isLoaded(id: string): boolean {
+      return sessions.has(id);
     },
 
     searchSessionIds(query: string): readonly string[] {

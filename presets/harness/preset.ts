@@ -521,6 +521,7 @@ export function createHarnessComposition(
                 await appendWorkspaceInjectsIfChanged({
                   ...ctx,
                   injectOptions: injectOpts,
+                  injector: workspace,
                 });
               },
             }

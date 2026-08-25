@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { SessionEvent } from "@xrkseek/protocol";
 import {
   appendWorkspaceInjectsIfChanged,
+  buildSkillCatalogPayload,
   createWorkspaceInjector,
   foldLatestWorkspaceInjectDigests,
   planWorkspaceInjectAppends,
@@ -94,6 +95,11 @@ describe("durable workspace inject", () => {
 
     const store = memoryStore();
     const injectOptions = { root, productDir: product };
+    const injector = createWorkspaceInjector({
+      root,
+      productDir: product,
+      includeUserHome: false,
+    });
 
     const a1 = await appendWorkspaceInjectsIfChanged({
       store,
@@ -101,6 +107,7 @@ describe("durable workspace inject", () => {
       turnId: "t1",
       now: () => 1,
       injectOptions,
+      injector,
     });
     expect(a1.some((x) => x.source.kind === "skill-catalog")).toBe(true);
     expect(a1.some((x) => x.source.kind === "agent-instructions")).toBe(true);
@@ -111,11 +118,51 @@ describe("durable workspace inject", () => {
       turnId: "t2",
       now: () => 2,
       injectOptions,
+      injector,
     });
     expect(a2).toEqual([]);
+
+    expect(await injector.isDiskUnchanged()).toBe(true);
 
     const digests = foldLatestWorkspaceInjectDigests(store.events);
     expect(digests.skillCatalog).toBeTruthy();
     expect(digests.instructions).toBeTruthy();
+  });
+
+  it("clips durable skill catalog to inject budget (DSH progressive disclosure)", () => {
+    const skills = Array.from({ length: 40 }, (_, i) => ({
+      name: `skill-${i}`,
+      description: `Description for skill number ${i}`,
+      modelInvocable: true,
+      userInvocable: true,
+      dirName: `skill-${i}`,
+      directory: `/tmp/skill-${i}`,
+    }));
+    const budget = { left: 400, events: [] as import("../src/index.js").WorkspaceBudgetEvent[] };
+    const payload = buildSkillCatalogPayload(skills, budget);
+    expect(payload).toBeDefined();
+    expect(payload!.content.length).toBeLessThanOrEqual(400 + 32);
+    expect(payload!.content).toContain("[skill catalog truncated]");
+    expect(payload!.source.entries.length).toBeLessThan(skills.length);
+  });
+
+  it("memoizes inject across turns when injector is reused", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-ws-memo-"));
+    const product = path.join(root, ".xrk");
+    await mkdir(path.join(product, "skills", "ping"), { recursive: true });
+    await writeFile(path.join(product, "assistant.md"), "Assist", "utf8");
+    await writeFile(
+      path.join(product, "skills", "ping", "SKILL.md"),
+      "---\ndescription: Ping\n---\n# P\n",
+      "utf8",
+    );
+    const injector = createWorkspaceInjector({
+      root,
+      productDir: product,
+      includeUserHome: false,
+    });
+    const first = await injector.inject();
+    const second = await injector.inject();
+    expect(second).toBe(first);
   });
 });

@@ -1,7 +1,17 @@
 import { access, readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
-import type { InstructionChange, WorkspaceBudgetEvent } from "./durable-inject.js";
+import type { InstructionChange } from "./durable-inject.js";
+import {
+  boundInstructionFile,
+  clipToBudget,
+  type InjectBudget,
+} from "./inject-budget.js";
+import {
+  DEFAULT_MARKDOWN_DIR_MAX_DEPTH,
+  nextScanDepth,
+  shouldSkipScanDir,
+} from "./scan-guards.js";
 
 export interface InstructionSection {
   /** Stable path for `changes[]` and section headers (posix-style). */
@@ -12,10 +22,7 @@ export interface InstructionSection {
 export interface CollectEcosystemInstructionsOptions {
   readonly root: string;
   readonly productDir: string;
-  readonly budget: {
-    left: number;
-    events: WorkspaceBudgetEvent[];
-  };
+  readonly budget: InjectBudget;
   /**
    * Also inject user-home convention paths (`~/.agents`, `~/.xrk`, …).
    * Default true — lower priority than workspace; workspace wins on duplicate body.
@@ -36,39 +43,11 @@ async function exists(p: string): Promise<boolean> {
 
 async function readIfExists(p: string): Promise<string | undefined> {
   try {
-    return await readFile(p, "utf8");
+    const raw = await readFile(p, "utf8");
+    return boundInstructionFile(raw);
   } catch {
     return undefined;
   }
-}
-
-function clip(
-  section: string,
-  text: string,
-  budget: CollectEcosystemInstructionsOptions["budget"],
-): string {
-  if (budget.left <= 0) {
-    budget.events.push({
-      type: "workspace/budget-truncation",
-      section,
-      originalChars: text.length,
-      keptChars: 0,
-    });
-    return "";
-  }
-  if (text.length <= budget.left) {
-    budget.left -= text.length;
-    return text;
-  }
-  const kept = text.slice(0, budget.left);
-  budget.events.push({
-    type: "workspace/budget-truncation",
-    section,
-    originalChars: text.length,
-    keptChars: kept.length,
-  });
-  budget.left = 0;
-  return kept + "\n[truncated]";
 }
 
 function stripMdcFrontmatter(raw: string): string {
@@ -98,14 +77,14 @@ async function pushFile(
   sections: InstructionSection[],
   absPath: string,
   logicalPath: string,
-  budget: CollectEcosystemInstructionsOptions["budget"],
+  budget: InjectBudget,
   seen: Set<string>,
 ): Promise<void> {
   const raw = await readIfExists(absPath);
   if (!raw?.trim()) return;
   const digest = raw.trim();
   if (seen.has(digest)) return;
-  const clipped = clip(logicalPath, raw, budget);
+  const clipped = clipToBudget(logicalPath, raw, budget);
   if (!clipped.trim()) return;
   seen.add(digest);
   sections.push({ path: logicalPath, body: clipped });
@@ -115,22 +94,33 @@ async function pushMarkdownDir(
   sections: InstructionSection[],
   dir: string,
   prefix: string,
-  budget: CollectEcosystemInstructionsOptions["budget"],
+  budget: InjectBudget,
   seen: Set<string>,
+  depth: number,
   options?: { readonly stripMdc?: boolean },
 ): Promise<void> {
+  if (budget.left <= 0) return;
   if (!(await exists(dir))) return;
   const names = (await readdir(dir)).sort();
   for (const name of names) {
+    if (shouldSkipScanDir(name)) continue;
     const abs = path.join(dir, name);
-    const entryStat = await stat(abs);
+    let entryStat;
+    try {
+      entryStat = await stat(abs);
+    } catch {
+      continue;
+    }
     if (entryStat.isDirectory()) {
+      const nextDepth = nextScanDepth(depth, DEFAULT_MARKDOWN_DIR_MAX_DEPTH);
+      if (nextDepth === null) continue;
       await pushMarkdownDir(
         sections,
         abs,
         `${prefix}${name}/`,
         budget,
         seen,
+        nextDepth,
         options,
       );
       continue;
@@ -147,7 +137,7 @@ async function pushMarkdownDir(
     const logical = `${prefix}${name}`.replace(/\\/g, "/");
     const digest = body.trim();
     if (seen.has(digest)) continue;
-    const clipped = clip(logical, body, budget);
+    const clipped = clipToBudget(logical, body, budget);
     if (!clipped.trim()) continue;
     seen.add(digest);
     sections.push({ path: logical, body: clipped });
@@ -172,7 +162,7 @@ async function pushConventionLayer(
   sections: InstructionSection[],
   base: string,
   logicalPrefix: string,
-  budget: CollectEcosystemInstructionsOptions["budget"],
+  budget: InjectBudget,
   seen: Set<string>,
   options: ConventionLayerOptions = {},
 ): Promise<void> {
@@ -209,6 +199,7 @@ async function pushConventionLayer(
     lp(".claude/rules/"),
     budget,
     seen,
+    0,
   );
 
   await pushFile(
@@ -224,6 +215,7 @@ async function pushConventionLayer(
     lp(".agents/rules/"),
     budget,
     seen,
+    0,
   );
   const agentsCtxDir = path.join(base, ".agents", "context");
   if (await exists(agentsCtxDir)) {
@@ -245,6 +237,7 @@ async function pushConventionLayer(
     lp(".cursor/rules/"),
     budget,
     seen,
+    0,
     { stripMdc: true },
   );
 
@@ -262,6 +255,7 @@ async function pushConventionLayer(
       lp(".github/instructions/"),
       budget,
       seen,
+      0,
     );
   }
 }
@@ -270,7 +264,7 @@ async function pushProductStanding(
   sections: InstructionSection[],
   productDir: string,
   logicalPrefix: string,
-  budget: CollectEcosystemInstructionsOptions["budget"],
+  budget: InjectBudget,
   seen: Set<string>,
 ): Promise<void> {
   if (!(await exists(productDir))) return;
@@ -292,7 +286,7 @@ async function pushProductStanding(
     const assistantPath = (await exists(path.join(productDir, "assistant.md")))
       ? `${logicalPrefix}assistant.md`
       : `${logicalPrefix}ASSISTANT.md`;
-    const clipped = clip(assistantPath, assistant, budget);
+    const clipped = clipToBudget(assistantPath, assistant, budget);
     if (clipped.trim()) {
       const digest = clipped.trim();
       if (!seen.has(digest)) {
@@ -323,7 +317,7 @@ async function pushProductStanding(
     const rulesPath = (await exists(path.join(productDir, "rules.md")))
       ? `${logicalPrefix}rules.md`
       : `${logicalPrefix}RULES.md`;
-    const clipped = clip(rulesPath, rules, budget);
+    const clipped = clipToBudget(rulesPath, rules, budget);
     if (clipped.trim()) {
       const digest = clipped.trim();
       if (!seen.has(digest)) {
@@ -335,7 +329,7 @@ async function pushProductStanding(
 
   const subagents = await readIfExists(path.join(productDir, "subagents.md"));
   if (subagents?.trim()) {
-    const clipped = clip(`${logicalPrefix}subagents.md`, subagents, budget);
+    const clipped = clipToBudget(`${logicalPrefix}subagents.md`, subagents, budget);
     if (clipped.trim()) {
       const digest = clipped.trim();
       if (!seen.has(digest)) {
@@ -398,7 +392,7 @@ export async function collectEcosystemInstructions(
 
   const claudeRoot = await readIfExists(path.join(root, "CLAUDE.md"));
   if (claudeRoot?.trim() && !isAgentsImportOnly(claudeRoot)) {
-    const clipped = clip("CLAUDE.md", claudeRoot, options.budget);
+    const clipped = clipToBudget("CLAUDE.md", claudeRoot, options.budget);
     if (clipped.trim()) {
       const digest = clipped.trim();
       if (!seen.has(digest)) {

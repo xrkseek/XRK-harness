@@ -79,11 +79,13 @@ export function listSessionReferenceCandidates(
     const cwd = resolveSessionCwd(runtime, sessionId);
     const title = snap.values.title ?? null;
     const label = title ?? sessionId;
-    const events = runtime.store.get(sessionId).events;
     const meta = snap.values.sessionListMetadata;
     const lastPromptAt = meta?.lastPromptAt ?? null;
-    const last = events[events.length - 1];
-    const createdAt = Math.max(last?.ts ?? 0, lastPromptAt ?? 0);
+    const hints = runtime.store.listHints?.(sessionId);
+    const createdAt = Math.max(
+      hints?.lastEventTs ?? 0,
+      lastPromptAt ?? 0,
+    );
     return [{ sessionId, cwd, label, createdAt, index }];
   });
 
