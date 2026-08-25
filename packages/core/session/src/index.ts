@@ -242,6 +242,7 @@ export {
   SESSION_DB_FILENAME,
   SESSION_SCHEMA_VERSION,
   type PersistentSessionStore,
+  type PersistentSessionStoreOptions,
 } from "./sqlite-store.js";
 export {
   expandPackedStorageRecords,

@@ -11,7 +11,7 @@ import {
   FACE_AGENT_PRESET_IDS,
   canonicalAgentPresetId,
 } from "../presets-catalog.js";
-import { toWireHistoryEntry, collectToolCallArgs } from "../adapt/index.js";
+import { toWireHistoryEntry, collectToolCallArgsForPage } from "../adapt/index.js";
 import {
   DEFAULT_HISTORY_MAX_MESSAGES,
   paginateSessionHistoryForReplay,
@@ -41,6 +41,11 @@ import {
 import { publishRemoteEvent } from "../remote-event.js";
 import { persistWorkspaceDoc } from "../workspace-store.js";
 import { resolveSessionCwd } from "../session-cwd.js";
+import {
+  SESSION_HISTORY_PROJECTION_KEYS,
+  SESSION_LIST_PROJECTION_KEYS,
+  snapshotWireBlock,
+} from "../projections/snapshot-keys.js";
 
 function sessionHasImageContent(runtime: FaceRuntime, sessionId: string): boolean {
   for (const ev of runtime.store.get(sessionId).events) {
@@ -169,7 +174,9 @@ export const sessionList: FaceHandler = async (runtime) => {
     const snap =
       hints !== undefined && !loaded
         ? undefined
-        : runtime.projections.snapshot(sessionId);
+        : runtime.projections.snapshot(sessionId, {
+            keys: [...SESSION_LIST_PROJECTION_KEYS],
+          });
     const meta = snap?.values.sessionListMetadata;
     const blank = meta?.blank ?? !(hints?.hasTurnStart ?? false);
     const lastPromptAt = meta?.lastPromptAt ?? null;
@@ -195,14 +202,7 @@ export const sessionList: FaceHandler = async (runtime) => {
           }
         : {}),
       title: snap?.values.title ?? null,
-      ...(snap
-        ? {
-            projections: {
-              asOfSeq: snap.asOfSeq,
-              values: snap.values,
-            },
-          }
-        : {}),
+      ...(snap ? { projections: snapshotWireBlock(snap) } : {}),
     };
   });
   return { ok: true, value: { items } };
@@ -233,7 +233,7 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
 
   const page = paginateSessionHistoryForReplay(events, beforeSeq, maxMessages);
   const inbox = runtime.inboxWire.fresh();
-  const toolArgs = collectToolCallArgs(events);
+  const toolArgs = collectToolCallArgsForPage(events, page.events, seqByEvent);
   const wireCtx = {
     sessionId,
     ids: runtime.wireIds,
@@ -254,11 +254,11 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
     }
   }
 
-  const snap = runtime.projections.snapshot(sessionId);
+  const snap = runtime.projections.snapshot(sessionId, {
+    keys: [...SESSION_HISTORY_PROJECTION_KEYS],
+  });
   const projections =
-    Object.keys(snap.values).length > 0
-      ? { asOfSeq: snap.asOfSeq, values: snap.values }
-      : undefined;
+    Object.keys(snap.values).length > 0 ? snapshotWireBlock(snap) : undefined;
 
   return {
     ok: true,

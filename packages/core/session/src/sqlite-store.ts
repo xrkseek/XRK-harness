@@ -33,12 +33,25 @@ export interface PersistentSessionStore extends SessionStore {
    * Empty when no searchable hit; Face still builds snippets from events.
    */
   searchSessionIds(query: string): readonly string[];
+  /**
+   * Live event log without defensive copy (projection / internal reads).
+   * Throws when session is not resident — call after {@link get} or {@link append}.
+   */
+  eventsRef(id: string): readonly SessionEvent[];
+  /** Wire projection eviction when an in-memory log is dropped (LRU). */
+  bindSessionEviction(handler: (sessionId: string) => void): void;
+}
+
+export interface PersistentSessionStoreOptions {
+  /** Max sessions kept resident in memory (default 8). */
+  readonly maxResidentSessions?: number;
 }
 
 const ID_RE = /^[A-Za-z0-9._-]+$/;
 /** v3: durable rows may be packed `text-chunks` / `tool-call-chunks` (expanded on load). */
 const SCHEMA_VERSION = 3;
 const DB_NAME = "sessions.db";
+const DEFAULT_MAX_RESIDENT_SESSIONS = 8;
 
 interface PendingEvent {
   readonly sessionId: string;
@@ -220,7 +233,12 @@ function loadSessionIds(db: DatabaseSync): Set<string> {
  * tool-call argument deltas pack as `tool-call-chunks` (≥3);
  * FTS5 trigram search. In-memory API stays flat SessionEvent[].
  */
-export function createPersistentSessionStore(dir: string): PersistentSessionStore {
+export function createPersistentSessionStore(
+  dir: string,
+  options: PersistentSessionStoreOptions = {},
+): PersistentSessionStore {
+  const maxResident =
+    options.maxResidentSessions ?? DEFAULT_MAX_RESIDENT_SESSIONS;
   const root = path.resolve(dir);
   mkdirSync(root, { recursive: true });
   const dbPath = path.join(root, DB_NAME);
@@ -229,8 +247,27 @@ export function createPersistentSessionStore(dir: string): PersistentSessionStor
 
   const sessionIds = loadSessionIds(db);
   const sessions = new Map<string, SessionEvent[]>();
+  const residentOrder: string[] = [];
+  let onEvict: ((sessionId: string) => void) | undefined;
   const nextSeqBySession = new Map<string, number>();
   let pending: PendingEvent[] = [];
+
+  const touchResident = (id: string): void => {
+    const idx = residentOrder.indexOf(id);
+    if (idx >= 0) residentOrder.splice(idx, 1);
+    residentOrder.push(id);
+  };
+
+  const evictResidents = (keepId?: string): void => {
+    while (sessions.size >= maxResident) {
+      const victim = residentOrder.find((sid) => sid !== keepId);
+      if (victim === undefined) break;
+      const idx = residentOrder.indexOf(victim);
+      if (idx >= 0) residentOrder.splice(idx, 1);
+      if (!sessions.delete(victim)) continue;
+      onEvict?.(victim);
+    }
+  };
 
   const insertSession = db.prepare("INSERT INTO sessions (id) VALUES (?)");
   const insertEvent = db.prepare(
@@ -298,7 +335,12 @@ export function createPersistentSessionStore(dir: string): PersistentSessionStor
 
   const ensureLoaded = (id: string): SessionEvent[] => {
     const cached = sessions.get(id);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      touchResident(id);
+      return cached;
+    }
+
+    evictResidents(id);
 
     const events = loadSessionEvents(db, id);
     const repairs = repairOpenTurnEvents(events);
@@ -310,6 +352,7 @@ export function createPersistentSessionStore(dir: string): PersistentSessionStor
       }
     }
     sessions.set(id, events);
+    touchResident(id);
     return events;
   };
 
@@ -320,7 +363,9 @@ export function createPersistentSessionStore(dir: string): PersistentSessionStor
         throw new Error(`session already exists: ${sid}`);
       }
       sessionIds.add(sid);
+      evictResidents(sid);
       sessions.set(sid, []);
+      touchResident(sid);
       nextSeqBySession.set(sid, 0);
       insertSession.run(sid);
       return { id: sid, events: [] };
@@ -331,7 +376,7 @@ export function createPersistentSessionStore(dir: string): PersistentSessionStor
         throw new Error(`session not found: ${id}`);
       }
       const events = ensureLoaded(id);
-      return { id, events: [...events] };
+      return { id, events };
     },
 
     has(id: string): boolean {
@@ -409,6 +454,21 @@ export function createPersistentSessionStore(dir: string): PersistentSessionStor
       } catch {
         /* already closed */
       }
+    },
+
+    eventsRef(id: string): readonly SessionEvent[] {
+      if (!sessionIds.has(id)) {
+        throw new Error(`session not found: ${id}`);
+      }
+      const events = sessions.get(id);
+      if (events === undefined) {
+        throw new Error(`session not resident: ${id}`);
+      }
+      return events;
+    },
+
+    bindSessionEviction(handler: (sessionId: string) => void): void {
+      onEvict = handler;
     },
   };
 }

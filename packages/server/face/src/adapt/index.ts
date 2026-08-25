@@ -19,6 +19,7 @@ export { FaceWireIdMaps } from "./wire-ids.js";
 export {
   presentToolView,
   collectToolCallArgs,
+  collectToolCallArgsForPage,
   FaceToolArgMaps,
   faceToolLookup,
   type PresentToolLookup,

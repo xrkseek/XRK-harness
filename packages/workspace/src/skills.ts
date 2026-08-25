@@ -1,8 +1,13 @@
-import { access, open, readdir, readFile, stat } from "node:fs/promises";
-import { homedir } from "node:os";
+import { open, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { skillDirsFingerprint } from "./inject-fingerprint.js";
+import { resolveSkillDirs, skillDirsFingerprint } from "./skill-dirs.js";
 import { shouldSkipScanDir } from "./scan-guards.js";
+
+export {
+  PROJECT_SKILL_REL_DIRS,
+  USER_SKILL_REL_DIRS,
+  resolveSkillDirs,
+} from "./skill-dirs.js";
 
 export interface SkillSummary {
   readonly name: string;
@@ -41,6 +46,7 @@ export interface SkillSourceOptions {
    * Default true. Tests that assert exact lists should pass false.
    */
   readonly includeUserHome?: boolean;
+  readonly homeDir?: string;
 }
 
 const MAX_NAME = 128;
@@ -67,27 +73,6 @@ async function readSkillHead(skillFile: string): Promise<string> {
     await handle.close();
   }
 }
-
-/**
- * Relative project skill roots, low → high priority (later wins on name clash).
- * Matches Cursor/Claude/Codex layouts; `.xrk/skills` is the XRK-native overlay.
- */
-export const PROJECT_SKILL_REL_DIRS = [
-  ".codex/skills",
-  ".claude/skills",
-  ".agents/skills",
-  ".cursor/skills",
-  ".xrk/skills",
-] as const;
-
-/** User-home skill roots (same order; lower than any project root). */
-export const USER_SKILL_REL_DIRS = [
-  ".codex/skills",
-  ".claude/skills",
-  ".agents/skills",
-  ".cursor/skills",
-  ".xrk/skills",
-] as const;
 
 export function isSkillName(name: string): boolean {
   const trimmed = name.trim();
@@ -125,6 +110,7 @@ function parseFrontmatterBool(
 export function parseSkillMarkdown(
   raw: string,
   fallbackName: string,
+  options?: { readonly catalogOnly?: boolean },
 ): ParsedSkillFrontmatter {
   let body = raw.replace(/^\uFEFF/, "");
   let name = fallbackName;
@@ -166,9 +152,10 @@ export function parseSkillMarkdown(
     }
   }
 
-  const content = body.trim();
+  const catalogOnly = options?.catalogOnly === true;
+  const content = catalogOnly ? "" : body.trim();
   if (!description) {
-    const first = content
+    const first = (catalogOnly ? body : content)
       .split(/\r?\n/)
       .map((l) => l.replace(/^#+\s*/, "").trim())
       .find((l) => l.length > 0);
@@ -184,63 +171,6 @@ export function parseSkillMarkdown(
     userInvocable,
     invalid,
   };
-}
-
-async function dirExists(p: string): Promise<boolean> {
-  try {
-    await access(p);
-    const st = await stat(p);
-    return st.isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Existing skill directories only — never creates paths.
- * Order: user homes (if enabled) → project vendors → optional productDir/skills.
- */
-export async function resolveSkillDirs(
-  options: SkillSourceOptions,
-): Promise<readonly string[]> {
-  if (options.skillDirs && options.skillDirs.length > 0) {
-    const out: string[] = [];
-    for (const dir of options.skillDirs) {
-      const abs = path.resolve(dir);
-      if (await dirExists(abs)) out.push(abs);
-    }
-    return out;
-  }
-
-  const out: string[] = [];
-  const seen = new Set<string>();
-  const push = async (abs: string) => {
-    const key = path.resolve(abs);
-    if (seen.has(key)) return;
-    if (!(await dirExists(key))) return;
-    seen.add(key);
-    out.push(key);
-  };
-
-  if (options.workspaceRoot) {
-    const root = path.resolve(options.workspaceRoot);
-    const includeUser = options.includeUserHome !== false;
-    if (includeUser) {
-      const home = homedir();
-      for (const rel of USER_SKILL_REL_DIRS) {
-        await push(path.join(home, rel));
-      }
-    }
-    for (const rel of PROJECT_SKILL_REL_DIRS) {
-      await push(path.join(root, rel));
-    }
-  }
-
-  if (options.productDir) {
-    await push(path.join(path.resolve(options.productDir), "skills"));
-  }
-
-  return out;
 }
 
 /** Scan one skills directory for child SKILL.md folders (missing root → []). */
@@ -270,7 +200,7 @@ export async function listSkillsInDir(
     let parsed: ParsedSkillFrontmatter;
     try {
       const raw = await readSkillHead(skillFile);
-      parsed = parseSkillMarkdown(raw, dirName);
+      parsed = parseSkillMarkdown(raw, dirName, { catalogOnly: true });
     } catch {
       parsed = {
         name: dirName,
@@ -320,7 +250,6 @@ export async function listSkills(
   const skills = [...byName.values()].sort((a, b) =>
     a.name.localeCompare(b.name),
   );
-  skillListCache.clear();
   skillListCache.set(fingerprint, { skills });
   return skills;
 }

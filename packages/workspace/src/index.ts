@@ -5,7 +5,7 @@ import {
   sectionsToInstructionBlocks,
   sectionsToInstructionChanges,
 } from "./ecosystem-instructions.js";
-import { formatSkillCatalog, listSkills } from "./skills.js";
+import { formatSkillCatalog, listSkills, resolveSkillDirs, clearSkillListCache } from "./skills.js";
 import {
   buildInstructionsPayload,
   buildSkillCatalogPayload,
@@ -75,6 +75,7 @@ export function createWorkspaceInjector(
       cachedInject = undefined;
       cachedMaxChars = undefined;
       cachedFingerprint = undefined;
+      clearSkillListCache();
     },
 
     async isDiskUnchanged(): Promise<boolean> {
@@ -107,15 +108,13 @@ export function createWorkspaceInjector(
       const instructionBlocks = sectionsToInstructionBlocks(sections);
       const changes = sectionsToInstructionChanges(sections);
 
-      // Skills — progressive disclosure catalog (name + description); budget-clipped.
-      // Home + workspace roots (Codex); cached via mtime fingerprint between turns.
       const includeHome = options.includeUserHome !== false;
-      const skills = await listSkills({
+      const skillDirs = await resolveSkillDirs({
         workspaceRoot: root,
         productDir,
         includeUserHome: includeHome,
       });
-      // Durable XML catalog consumes model budget; preview markdown is UI-only.
+      const skills = await listSkills({ skillDirs });
       const skillCatalog = buildSkillCatalogPayload(skills, budget);
       const skillBlock = formatSkillCatalog(skills);
 
@@ -305,12 +304,11 @@ export async function appendWorkspaceInjectsIfChanged(input: {
     input.store.get(input.sessionId).events,
   );
 
-  // DSH / Codex: digests already in session and disk unchanged → skip inject work.
+  // DSH / Codex: disk unchanged and session already has instructions → skip.
   if (
-    previous.instructions !== undefined
-    && previous.skillCatalog !== undefined
-    && input.injector !== undefined
+    input.injector !== undefined
     && (await input.injector.isDiskUnchanged())
+    && previous.instructions !== undefined
   ) {
     return [];
   }

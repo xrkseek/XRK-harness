@@ -106,7 +106,10 @@ export interface SessionProjectionRegistry {
    */
   drive(sessionId: string, event: SessionEvent, seq: number): void;
   /** Client-visible cut: wired keys + sidecars only. */
-  snapshot(sessionId: string): ProjectionSnapshot;
+  snapshot(
+    sessionId: string,
+    options?: { readonly keys?: readonly string[] },
+  ): ProjectionSnapshot;
   /**
    * Borrow live host fold state for one key. Callers must not mutate.
    * `undefined` when the key is not registered (DSH `stateOf`).
@@ -146,6 +149,8 @@ export interface SessionProjectionRegistry {
     value: unknown,
     seq: number,
   ): void;
+  /** Drop cached fold state for one session (SQLite LRU eviction). */
+  evictSession(sessionId: string): void;
 }
 
 function eraseDefinition<K extends string, S, V>(
@@ -188,6 +193,16 @@ export function createSessionProjectionRegistry(
   const registrations = new Map<string, Registration>();
   const listeners = new Set<ProjectionChangeListener>();
   const sidecars = new Map<string, Map<string, unknown>>();
+  const eventLogCache = new Map<string, readonly SessionEvent[]>();
+
+  function eventsFor(sessionId: string): readonly SessionEvent[] {
+    let events = eventLogCache.get(sessionId);
+    if (events === undefined) {
+      events = options.getEvents(sessionId);
+      eventLogCache.set(sessionId, events);
+    }
+    return events;
+  }
 
   function buildCell(
     def: ErasedDefinition,
@@ -207,7 +222,7 @@ export function createSessionProjectionRegistry(
   ): UnitCell {
     let cell = registration.cells.get(sessionId);
     if (cell === undefined) {
-      cell = buildCell(registration.def, options.getEvents(sessionId));
+      cell = buildCell(registration.def, eventsFor(sessionId));
       registration.cells.set(sessionId, cell);
     }
     return cell;
@@ -258,10 +273,11 @@ export function createSessionProjectionRegistry(
     },
 
     drive(sessionId, event, seq) {
+      eventLogCache.delete(sessionId);
       for (const registration of registrations.values()) {
         let cell = registration.cells.get(sessionId);
         if (cell === undefined) {
-          const all = options.getEvents(sessionId);
+          const all = eventsFor(sessionId);
           const prefix = all.slice(0, seq - 1);
           cell = buildCell(registration.def, prefix);
           registration.cells.set(sessionId, cell);
@@ -279,21 +295,29 @@ export function createSessionProjectionRegistry(
       }
     },
 
-    snapshot(sessionId) {
-      const events = options.getEvents(sessionId);
+    snapshot(sessionId, snapshotOptions) {
+      const events = eventsFor(sessionId);
+      const keyFilter = snapshotOptions?.keys
+        ? new Set(snapshotOptions.keys)
+        : undefined;
       const values: Record<string, unknown> = {};
+      let asOfSeq = events.length === 0 ? -1 : events.length;
       for (const registration of registrations.values()) {
         if (!registration.def.wired) continue;
+        if (keyFilter && !keyFilter.has(registration.def.key)) continue;
         const cell = cellFor(registration, sessionId);
+        asOfSeq = Math.max(asOfSeq, cell.observedSeq);
         values[registration.def.key] = registration.def.parse(
           registration.def.view(cell.state),
         );
       }
       const extra = sidecars.get(sessionId);
       if (extra) {
-        for (const [key, value] of extra) values[key] = value;
+        for (const [key, value] of extra) {
+          if (keyFilter && !keyFilter.has(key)) continue;
+          values[key] = value;
+        }
       }
-      const asOfSeq = events.length === 0 ? -1 : events.length;
       return { asOfSeq, values };
     },
 
@@ -406,6 +430,14 @@ export function createSessionProjectionRegistry(
       for (const listener of listeners) {
         listener(sessionId, key, value ?? null, seq);
       }
+    },
+
+    evictSession(sessionId) {
+      eventLogCache.delete(sessionId);
+      for (const registration of registrations.values()) {
+        registration.cells.delete(sessionId);
+      }
+      sidecars.delete(sessionId);
     },
   };
 }

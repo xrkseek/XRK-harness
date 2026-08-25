@@ -234,4 +234,26 @@ describe("createPersistentSessionStore", () => {
     const b = track(createPersistentSessionStore(dir));
     expect(b.get("flush-me").events).toHaveLength(1);
   });
+
+  it("evicts oldest resident sessions when maxResidentSessions is exceeded", () => {
+    const dir = tempDir();
+    const evicted: string[] = [];
+    const store = track(
+      createPersistentSessionStore(dir, { maxResidentSessions: 2 }),
+    );
+    store.bindSessionEviction((id) => evicted.push(id));
+    const s1 = store.create("s1").id;
+    const s2 = store.create("s2").id;
+    store.append(s1, { type: "turn/start", ts: 1, turnId: "t1" });
+    store.append(s2, { type: "turn/start", ts: 2, turnId: "t2" });
+    expect(store.isLoaded?.(s1)).toBe(true);
+    expect(store.isLoaded?.(s2)).toBe(true);
+
+    const s3 = store.create("s3").id;
+    store.append(s3, { type: "turn/start", ts: 3, turnId: "t3" });
+    expect(store.isLoaded?.(s3)).toBe(true);
+    expect(store.isLoaded?.(s1)).toBe(false);
+    expect(store.isLoaded?.(s2)).toBe(true);
+    expect(evicted).toContain("s1");
+  });
 });

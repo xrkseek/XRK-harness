@@ -3,6 +3,7 @@ import {
   forkSession,
   listPendingAdmits,
   newSession,
+  type PersistentSessionStore,
   type SessionStore,
 } from "@xrkseek/core-session";
 import type { AgentHandle } from "@xrkseek/core-agent";
@@ -156,10 +157,22 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const store = options.store;
   const originalAppend = store.append.bind(store);
 
+  const readEvents = (sessionId: string): readonly SessionEvent[] => {
+    const persistent = store as PersistentSessionStore;
+    if (typeof persistent.eventsRef === "function") {
+      try {
+        return persistent.eventsRef(sessionId);
+      } catch {
+        return store.get(sessionId).events;
+      }
+    }
+    return store.get(sessionId).events;
+  };
+
   const projections =
     options.projections ??
     createFaceProjectionRegistry({
-      getEvents: (sessionId) => store.get(sessionId).events,
+      getEvents: readEvents,
     });
 
   if (!options.skipDefaultProjections && !options.projections) {
@@ -186,6 +199,14 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const goals = new FaceGoalStore(options.goalPersistPath);
   const wireIds = new FaceWireIdMaps();
   const toolArgMaps = new FaceToolArgMaps();
+  if (
+    typeof (store as PersistentSessionStore).bindSessionEviction === "function"
+  ) {
+    (store as PersistentSessionStore).bindSessionEviction((sessionId) => {
+      projections.evictSession(sessionId);
+      toolArgMaps.forSession(sessionId).clear();
+    });
+  }
   const inboxWire = new FaceInboxWireMaps(admitRpcMap);
   const rememberedTools = new Map<string, ToolRegistry>();
   const rememberedJobs = new Map<string, NonNullable<AgentHandle["jobs"]>>();

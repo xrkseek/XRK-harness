@@ -75,17 +75,24 @@ export function listSessionReferenceCandidates(
   const needle = query.toLocaleLowerCase();
   const records = runtime.store.list().flatMap((sessionId, index) => {
     if (sessionId === agentId) return [];
-    const snap = runtime.projections.snapshot(sessionId);
     const cwd = resolveSessionCwd(runtime, sessionId);
-    const title = snap.values.title ?? null;
-    const label = title ?? sessionId;
-    const meta = snap.values.sessionListMetadata;
-    const lastPromptAt = meta?.lastPromptAt ?? null;
     const hints = runtime.store.listHints?.(sessionId);
-    const createdAt = Math.max(
-      hints?.lastEventTs ?? 0,
-      lastPromptAt ?? 0,
-    );
+    const loaded = runtime.store.isLoaded?.(sessionId) ?? false;
+    let label = sessionId;
+    let lastPromptAt: number | null = null;
+    if (loaded) {
+      const title = runtime.projections.stateOf(sessionId, "title") as
+        | string
+        | null
+        | undefined;
+      if (typeof title === "string" && title.trim()) label = title;
+      const meta = runtime.projections.stateOf(
+        sessionId,
+        "sessionListMetadata",
+      ) as { readonly lastPromptAt?: number | null } | undefined;
+      lastPromptAt = meta?.lastPromptAt ?? null;
+    }
+    const createdAt = Math.max(hints?.lastEventTs ?? 0, lastPromptAt ?? 0);
     return [{ sessionId, cwd, label, createdAt, index }];
   });
 

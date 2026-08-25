@@ -66,6 +66,38 @@ export function collectToolCallArgs(
   return map;
 }
 
+/** Collect tool args only for calls referenced by a history page (bounded scan). */
+export function collectToolCallArgsForPage(
+  events: readonly SessionEvent[],
+  pageEvents: readonly SessionEvent[],
+  seqByEvent: ReadonlyMap<SessionEvent, number>,
+): Map<string, ToolCallPairing> {
+  const needed = new Set<string>();
+  for (const event of pageEvents) {
+    if (event.type === "tool/result") needed.add(event.result.toolCallId);
+  }
+  if (needed.size === 0) return new Map();
+
+  const map = new Map<string, ToolCallPairing>();
+  let maxSeq = 0;
+  for (const event of pageEvents) {
+    const seq = seqByEvent.get(event) ?? 0;
+    if (seq > maxSeq) maxSeq = seq;
+  }
+  for (let i = events.length - 1; i >= 0 && needed.size > 0; i--) {
+    const event = events[i]!;
+    const seq = i + 1;
+    if (seq > maxSeq) continue;
+    if (event.type !== "tool/call" || !needed.has(event.call.id)) continue;
+    map.set(event.call.id, {
+      name: event.call.name,
+      args: event.call.arguments,
+    });
+    needed.delete(event.call.id);
+  }
+  return map;
+}
+
 export function faceToolLookup(
   getTool: PresentToolLookup["getTool"],
   argsByCallId?: ReadonlyMap<string, ToolCallPairing>,
