@@ -23,6 +23,7 @@
     "client:types:all": "node ./scripts/emit-client-types-all.mjs",
     "stub:types": "node ./scripts/emit-stub-types.mjs",
     "client:bundle": "node ./scripts/bundle-client-js.mjs",
+    "dev:web": "node ./scripts/dev-web.mjs",
     "xrk": "node ./apps/cli/dist/bin.js",
     "serve": "node ./apps/cli/dist/bin.js serve",
     "release:stage": "node ./scripts/stage-cli-release.mjs",

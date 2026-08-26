@@ -78,7 +78,7 @@
 | 浏览器诊断偏少 | 控制台看 `HH:mm:ss.sss level  ns  msg`；或 `window.__XRK_DIAG__.recent`。级别：`?xrkLog=debug` / `localStorage.XRK_LOG=debug` / `window.__XRK_LOG__` |
 | 面板 `incomplete` / `*-host` | 对照 [community-plugins.md](./community-plugins.md)；多数 wire 已由 Host 适配层桥接，少数大规模外部发行版见「**待补 / Planned**」 |
 | IM OAuth 后仍无厂商推送 | 本地 `message.send` / webhook 已可用；云端长连接网关见 status「**未做 / Not done**」与 [community-plugins.md](./community-plugins.md)「待补」 |
-| TongFlow 任务立刻完成 | 内置节点已执行；复杂 Python 独占节点见 status「**未做 / Not done**」 |
+| TongFlow 任务立刻完成 | 内置 **TS** 节点（echo 等）会立刻完成；`kind: external` 须配置 `config.command`，否则返回 honest gap（[ADR-0007](./adr/0007-taskflow-external-runtime.md)） |
 | Cordis 面板 `fiber-unavailable` | 包需 `host.mjs` 或 staged `client.js`；见 `dynamicCordisRunner/runHostHalf` 与 [community-plugins.md](./community-plugins.md) |
 
 本机审计：`node scripts/dsh-community-audit.mjs`。安装步骤：[getting-started.md](./getting-started.md#社区-client-插件可选--community-client-plugins-optional)。
@@ -189,7 +189,7 @@ The tools below may still appear in the tool table when **unconfigured**; execut
 | Sparse browser diagnostics | Console format `HH:mm:ss.sss level  ns  msg`, or `window.__XRK_DIAG__.recent`. Level: `?xrkLog=debug` / `localStorage.XRK_LOG=debug` / `window.__XRK_LOG__` |
 | Panel `incomplete` / `*-host` | See [community-plugins.md](./community-plugins.md); most wires are bridged by the Host adapter layer; a few large external distributions are **Planned** |
 | No vendor push after IM OAuth | Local `message.send` / webhook work; cloud long-lived IM gateway is **Not done** / **Planned** |
-| TongFlow tasks finish immediately | Built-in nodes run; complex Python-exclusive nodes are **Not done** |
+| TongFlow tasks finish immediately | Built-in **TS** nodes (echo, etc.) complete inline; `kind: external` requires `config.command` or returns an honest gap ([ADR-0007](./adr/0007-taskflow-external-runtime.md)) |
 | Cordis panel `fiber-unavailable` | Package needs `host.mjs` or staged `client.js`; see `dynamicCordisRunner/runHostHalf` and [community-plugins.md](./community-plugins.md) |
 
 Local audit: `node scripts/dsh-community-audit.mjs`. Install steps: [getting-started.md](./getting-started.md#社区-client-插件可选--community-client-plugins-optional).

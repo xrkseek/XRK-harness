@@ -20,10 +20,11 @@ import {
 } from "../xrk/plugin-services.js";
 import { dataPath } from "./underlying/json-store.js";
 import { honestReady } from "./honest-envelope.js";
+import { scanTongflowRegistryFromInventory } from "./host-feature-bridge.js";
 import {
-  scanTongflowRegistryFromInventory,
   tryPythonTongflowScan,
-} from "./host-feature-bridge.js";
+  tongflowPythonStatus,
+} from "./tongflow-python-bridge.js";
 import {
   executeTongflowNode,
   mergeTongflowRegistry,
@@ -143,7 +144,9 @@ function completeTask(
   const store = loadTasks(options);
   const row = store.tasks[taskId];
   if (!row) return undefined;
-  const executed = executeTongflowNode(nodeId ?? row.nodeId, row.config);
+  const executed = executeTongflowNode(nodeId ?? row.nodeId, row.config, {
+    ...(options.xrkHome ? { xrkHome: options.xrkHome } : {}),
+  });
   row.status = executed.ok ? "COMPLETED" : "FAILED";
   if (nodeId) row.nodeId = nodeId;
   row.data = {
@@ -384,14 +387,16 @@ export async function handleTongflowStudioHttp(
   }
 
   if (pathname === "/tongflow/health") {
+    const py = tongflowPythonStatus(options.xrkHome);
     sendJson(res, 200, {
       ok: true,
-      python: false,
-      scanner: false,
+      python: py.configured === true,
+      scanner: py.configured === true,
+      pythonBridge: py,
       connection: {
         mode: "http-bridge",
         stream: false,
-        note: "XRK TypeScript node runtime; no Python TongFlow socket",
+        note: "XRK TypeScript node runtime + optional user Python bridge",
       },
       adapter: DSH_COMPAT_ADAPTER,
       note: "TongFlow studio engine not embedded; canvas-compat /api/* is file-backed.",
@@ -434,7 +439,11 @@ export async function handleTongflowStudioHttp(
   }
 
   if (pathname === "/tongflow/scan" || pathname.startsWith("/tongflow/scan")) {
-    const pythonScan = tryPythonTongflowScan(options.workspaceRoot);
+    const pythonScan = tryPythonTongflowScan(
+      options.workspaceRoot,
+      process.env,
+      options.xrkHome,
+    );
     const inventory = readXrkPluginInventory(options);
     const registry = mergeTongflowRegistry(
       pythonScan ?? scanTongflowRegistryFromInventory(inventory.packages),

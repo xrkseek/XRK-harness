@@ -8,6 +8,7 @@ export type {
   PluginCommand,
   PluginCommandContext,
   PluginCommandResult,
+  PluginChannelDescriptor,
   HostWireContext,
   HostPublicHandlerFn,
 } from "./types.js";
@@ -45,6 +46,32 @@ export {
   type PluginFiberPhase,
   type PluginInventoryEntry,
 } from "./inventory.js";
+export {
+  collectPolicyRules,
+  applyPolicyPlugins,
+  isPolicyPlugin,
+  wireCompositionPolicy,
+  createPolicyEngineFromPlugins,
+  type AppliedPluginPolicyRule,
+} from "./policy.js";
+export {
+  collectChannelPlugins,
+  collectChannelPluginRegistrations,
+  isChannelPlugin,
+  wireCompositionChannels,
+  type AppliedPluginChannel,
+  type PluginChannelRegistration,
+} from "./channel.js";
+export {
+  applyLlmPlugins,
+  collectLlmBrands,
+  createProviderRegistryFromPlugins,
+  isLlmPlugin,
+  wireCompositionLlm,
+  type AppliedPluginLlmBrand,
+  type ApplyLlmPluginsResult,
+  type SkippedPluginLlmBrand,
+} from "./llm.js";
 export { isHostPlugin, listHostPlugins } from "./host.js";
 
 export interface PluginLoader {

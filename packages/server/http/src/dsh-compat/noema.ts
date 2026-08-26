@@ -5,6 +5,14 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { rpcOk, sendJson } from "./underlying/http-json.js";
 import { searchNoemaMemories } from "./host-feature-bridge.js";
+import {
+  dropEmbeddedVectorRow,
+  memoryEmbeddingsStatus,
+  searchMemoryEmbeddings,
+  searchMemoryEmbeddingsAsync,
+  syncEmbeddedVectorRow,
+} from "./memory-embeddings.js";
+import { searchEmbeddedVectorStore } from "./embedded-vector-store.js";
 import { honestReady } from "./honest-envelope.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
@@ -132,6 +140,7 @@ export function handleNoemaRpc(
       ...memories,
       memories: [row, ...memories.memories].slice(0, memories.maxEntries),
     });
+    syncEmbeddedVectorRow(options.xrkHome, row);
     return { ok: true, memory: row, total: next.memories.length };
   }
 
@@ -147,10 +156,11 @@ export function handleNoemaRpc(
       ...memories,
       memories: memories.memories.filter((m) => m.id !== id),
     });
+    dropEmbeddedVectorRow(options.xrkHome, id);
     return { ok: true, total: next.memories.length };
   }
 
-  if (endpoint === "memory.search" || endpoint === "memories.search" || endpoint === "embedding.search") {
+  if (endpoint === "memory.search" || endpoint === "memories.search") {
     const query =
       typeof payload.query === "string"
         ? payload.query
@@ -163,9 +173,53 @@ export function handleNoemaRpc(
       ok: true,
       query,
       hits,
-      mode: endpoint.startsWith("embedding") ? "keyword-bridge" : "keyword",
+      mode: "keyword",
       note: "Keyword search via XRK bridge (no embedding host).",
     };
+  }
+
+  if (endpoint === "embedding.search" || endpoint === "embeddings.search") {
+    const query =
+      typeof payload.query === "string"
+        ? payload.query
+        : typeof payload.q === "string"
+          ? payload.q
+          : "";
+    const limit =
+      typeof payload.limit === "number" && Number.isFinite(payload.limit)
+        ? payload.limit
+        : 16;
+    const memories = loadMemories(options);
+    const embeddedHits = searchEmbeddedVectorStore(
+      options.xrkHome,
+      query,
+      limit,
+    );
+    if (embeddedHits.length > 0) {
+      return {
+        ok: true,
+        query,
+        hits: embeddedHits,
+        mode: "embedded-host",
+        ...memoryEmbeddingsStatus(options.xrkHome),
+      };
+    }
+    const hits = searchMemoryEmbeddings(memories.memories, query, limit);
+    return {
+      ok: true,
+      query,
+      hits,
+      mode: "local-embedding-bridge",
+      ...memoryEmbeddingsStatus(options.xrkHome),
+    };
+  }
+
+  if (
+    endpoint === "embedding.status" ||
+    endpoint === "embeddings.status" ||
+    endpoint === "embedding.describe"
+  ) {
+    return memoryEmbeddingsStatus(options.xrkHome);
   }
 
   if (endpoint === "runner.start" || endpoint === "start") {
@@ -210,6 +264,41 @@ export function handleNoemaRpc(
   return honestReady({ endpoint });
 }
 
+export async function handleNoemaRpcAsync(
+  endpoint: string,
+  payload: Record<string, unknown>,
+  options: NoemaOptions,
+): Promise<Record<string, unknown>> {
+  if (endpoint === "embedding.search" || endpoint === "embeddings.search") {
+    const query =
+      typeof payload.query === "string"
+        ? payload.query
+        : typeof payload.q === "string"
+          ? payload.q
+          : "";
+    const limit =
+      typeof payload.limit === "number" && Number.isFinite(payload.limit)
+        ? payload.limit
+        : 16;
+    const memories = loadMemories(options);
+    const { hits, mode } = await searchMemoryEmbeddingsAsync(
+      memories.memories,
+      query,
+      limit,
+      process.env,
+      options.xrkHome,
+    );
+    return {
+      ok: true,
+      query,
+      hits,
+      mode,
+      ...memoryEmbeddingsStatus(options.xrkHome),
+    };
+  }
+  return handleNoemaRpc(endpoint, payload, options);
+}
+
 export async function handleNoemaHttp(
   req: IncomingMessage,
   res: ServerResponse,
@@ -232,7 +321,10 @@ export async function handleNoemaHttp(
         sendJson(
           res,
           200,
-          rpcOk(body.rpcId, handleNoemaRpc(rpcMethod, payload, options)),
+          rpcOk(
+            body.rpcId,
+            await handleNoemaRpcAsync(rpcMethod, payload, options),
+          ),
         );
         return true;
       }

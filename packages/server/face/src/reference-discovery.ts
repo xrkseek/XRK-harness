@@ -1,7 +1,5 @@
 /**
  * Face-path discovery for `@file` and `@session` reference remotes.
- * Reuses bounded workspace search and session-list metadata; does not require
- * Cordis `ctx.sessionQuery` or session-reference prepare.
  */
 import type { FileReferenceCandidate } from "@xrkseek/xrk-file-reference/types";
 import {
@@ -10,8 +8,10 @@ import {
   DEFAULT_FILE_SEARCH_MAX_RESULTS,
   WorkspaceFileSearch,
 } from "@xrkseek/xrk-file-reference-local/search";
-import { DEFAULT_CANDIDATE_LIMIT } from "@xrkseek/xrk-session-reference/config";
-import { formatSessionReferenceMention } from "@xrkseek/xrk-session-reference/uri";
+import {
+  listFaceSessionReferenceCandidates,
+  type FaceSessionListProjections,
+} from "@xrkseek/face-session-query";
 import type { SessionReferenceMentionCandidate } from "@xrkseek/xrk-session-reference/types";
 import type { FaceRuntime } from "./context.js";
 import { resolveSessionCwd } from "./session-cwd.js";
@@ -52,13 +52,23 @@ export async function listFileReferenceCandidates(
   return fileSearchFor(sessionId, cwd).list(query, signal);
 }
 
-function candidateRank(
-  candidateCwd: string | undefined,
-  targetCwd: string,
-): number {
-  if (candidateCwd !== undefined && candidateCwd === targetCwd) return 0;
-  if (candidateCwd === undefined) return 1;
-  return 2;
+function faceProjections(runtime: FaceRuntime): FaceSessionListProjections {
+  return {
+    titleOf(sessionId) {
+      const title = runtime.projections.stateOf(sessionId, "title") as
+        | string
+        | null
+        | undefined;
+      return title;
+    },
+    lastPromptAtOf(sessionId) {
+      const meta = runtime.projections.stateOf(
+        sessionId,
+        "sessionListMetadata",
+      ) as { readonly lastPromptAt?: number | null } | undefined;
+      return meta?.lastPromptAt ?? null;
+    },
+  };
 }
 
 /** List session mention candidates from Face session list metadata. */
@@ -66,71 +76,13 @@ export function listSessionReferenceCandidates(
   runtime: FaceRuntime,
   agentId: string,
   query: string,
-  limit: number = DEFAULT_CANDIDATE_LIMIT,
+  limit?: number,
 ): SessionReferenceMentionCandidate[] {
-  if (!Number.isSafeInteger(limit) || limit <= 0) {
-    throw new Error("session-reference candidate limit must be a positive safe integer");
-  }
-  const targetCwd = resolveSessionCwd(runtime, agentId);
-  const needle = query.toLocaleLowerCase();
-  const records = runtime.store.list().flatMap((sessionId, index) => {
-    if (sessionId === agentId) return [];
-    const cwd = resolveSessionCwd(runtime, sessionId);
-    const hints = runtime.store.listHints?.(sessionId);
-    const loaded = runtime.store.isLoaded?.(sessionId) ?? false;
-    let label = sessionId;
-    let lastPromptAt: number | null = null;
-    if (loaded) {
-      const title = runtime.projections.stateOf(sessionId, "title") as
-        | string
-        | null
-        | undefined;
-      if (typeof title === "string" && title.trim()) label = title;
-      const meta = runtime.projections.stateOf(
-        sessionId,
-        "sessionListMetadata",
-      ) as { readonly lastPromptAt?: number | null } | undefined;
-      lastPromptAt = meta?.lastPromptAt ?? null;
-    }
-    const createdAt = Math.max(hints?.lastEventTs ?? 0, lastPromptAt ?? 0);
-    return [{ sessionId, cwd, label, createdAt, index }];
-  });
-
-  const inspected =
-    needle === ""
-      ? [...records]
-          .sort(
-            (a, b) =>
-              candidateRank(a.cwd, targetCwd) -
-                candidateRank(b.cwd, targetCwd) || a.index - b.index,
-          )
-          .slice(0, limit)
-      : records;
-
-  const filtered = inspected
-    .filter(({ sessionId, cwd, label }) => {
-      if (needle === "") return true;
-      return (
-        sessionId.toLocaleLowerCase().includes(needle) ||
-        cwd.toLocaleLowerCase().includes(needle) ||
-        label.toLocaleLowerCase().includes(needle)
-      );
-    })
-    .sort(
-      (a, b) =>
-        candidateRank(a.cwd, targetCwd) - candidateRank(b.cwd, targetCwd) ||
-        a.index - b.index,
-    )
-    .slice(0, limit);
-
-  return filtered.map(({ sessionId, cwd, label, createdAt }) => {
-    const id = sessionId as SessionReferenceMentionCandidate["sessionId"];
-    return {
-      sessionId: id,
-      label,
-      createdAt,
-      ...(cwd.length > 0 ? { cwd } : {}),
-      mention: formatSessionReferenceMention({ sessionId: id, label }),
-    };
+  return listFaceSessionReferenceCandidates(runtime.store, {
+    agentId,
+    query,
+    ...(limit !== undefined ? { limit } : {}),
+    resolveCwd: (sessionId) => resolveSessionCwd(runtime, sessionId),
+    projections: faceProjections(runtime),
   });
 }

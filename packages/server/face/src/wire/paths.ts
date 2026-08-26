@@ -31,6 +31,7 @@ export const FACE_REMOTE_NAMESPACES = new Set([
   "commands",
   "goals",
   "pluginInventory",
+  "processChannels",
   "messageFeedback",
   "dynamicCordisRunner",
   "costMeter",

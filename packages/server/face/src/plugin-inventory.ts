@@ -46,6 +46,11 @@ export interface FaceProcessPlugin {
   readonly commands?: readonly FacePluginCommand[];
   /** `kind: tools` contributions — Face `viewFor` standing lookup. */
   readonly tools?: readonly ToolDefinition[];
+  /** `kind: channel` IM / notification descriptors (process plugin discover). */
+  readonly channels?: readonly {
+    readonly channelId: string;
+    readonly displayName?: string;
+  }[];
   /** MCP supervisor health (Host `mcp:*` plugins). */
   readonly mcpHealth?: "connected" | "reconnecting" | "gave-up";
 }

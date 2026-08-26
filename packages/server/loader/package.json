@@ -15,7 +15,9 @@
   ],
   "dependencies": {
     "@xrkseek/core-system-prompt": "workspace:*",
-    "@xrkseek/core-tools": "workspace:*"
+    "@xrkseek/core-tools": "workspace:*",
+    "@xrkseek/llm-registry": "workspace:*",
+    "@xrkseek/policy": "workspace:*"
   },
   "license": "MIT",
   "repository": {

@@ -34,6 +34,7 @@ import {
   FACE_PRODUCT_SETTINGS_NAMESPACES,
   schemaEnvelopeOf,
 } from "./settings-schemas.js";
+import { buildFaceChannelDiscover, resolveImGatewayWired } from "./process-channels.js";
 import { listSettingsProviderCredentialRefs } from "./llm-provider-context.js";
 
 export type UiTheme = "system" | "light" | "dark";
@@ -58,6 +59,12 @@ export interface FaceHostPublicSettings {
   readonly cordisHostPackages?: readonly {
     readonly packageName: string;
     readonly rpcChannels: readonly string[];
+  }[];
+  /** Process `kind: channel` rows wired on Host spawn (inventory). */
+  readonly processChannels?: readonly {
+    readonly pluginId: string;
+    readonly channelId: string;
+    readonly displayName?: string;
   }[];
 }
 
@@ -1000,6 +1007,18 @@ export async function settingsDescribeFace(
         "host",
         { ...runtime.hostPublic },
         FACE_EMPTY_OBJECT_SCHEMA,
+      ),
+    );
+    namespaces.push(
+      runtime.settingsNamespaces.view(
+        "process-channels",
+        {
+          ...buildFaceChannelDiscover(runtime.plugins, {
+            imGatewayWired: resolveImGatewayWired(),
+          }),
+        },
+        FACE_EMPTY_OBJECT_SCHEMA,
+        "live",
       ),
     );
   }

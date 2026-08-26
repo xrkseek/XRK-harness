@@ -14,6 +14,7 @@
 | 4 | 门禁绿 | [testing](./testing.md) · `pnpm check` |
 | 5 | 发版怎么打 | [publishing](./publishing.md) |
 | 6 | 包边界与依赖忌口 | [architecture](./architecture.md) · [AGENTS](../AGENTS.md) |
+| 7 | 跟进 status 与 community-plugins 能力表 | [status](./status.md) · [community-plugins](./community-plugins.md) · [ADR-0006](./adr/0006-im-long-lived-gateway.md) · [ADR-0007](./adr/0007-taskflow-external-runtime.md) |
 
 ## 仓库真相
 
@@ -113,6 +114,7 @@ When handing a working product to the next owner, use this checklist. Detailed c
 | 4 | Green gate | [testing](./testing.md) · `pnpm check` |
 | 5 | How to release | [publishing](./publishing.md) |
 | 6 | Package boundaries | [architecture](./architecture.md) · [AGENTS](../AGENTS.md) |
+| 7 | Track status and community-plugins capability table | [status](./status.md) · [community-plugins](./community-plugins.md) · [ADR-0006](./adr/0006-im-long-lived-gateway.md) · [ADR-0007](./adr/0007-taskflow-external-runtime.md) |
 
 ## Repository facts
 

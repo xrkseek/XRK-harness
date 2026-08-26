@@ -1,7 +1,8 @@
-import { existsSync } from "node:fs";
-import { stat } from "node:fs/promises";
-import { spawnSync } from "node:child_process";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { stat } from "node:fs/promises";
+import { resolveXrkHome } from "@xrkseek/server-config";
 import {
   PRODUCT_SHELL_BUILD_HINT,
   harnessAppsRoot,
@@ -11,6 +12,41 @@ import {
 export interface DoctorResult {
   readonly ok: boolean;
   readonly checks: readonly { name: string; ok: boolean; detail: string }[];
+}
+
+function countStagedCommunityClients(pluginsRoot: string): number {
+  if (!existsSync(pluginsRoot)) return 0;
+  let count = 0;
+  const walk = (dir: string): void => {
+    for (const name of readdirSync(dir)) {
+      const full = path.join(dir, name);
+      try {
+        if (!statSync(full).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+      if (existsSync(path.join(full, "client.js"))) {
+        count += 1;
+        continue;
+      }
+      walk(full);
+    }
+  };
+  walk(pluginsRoot);
+  return count;
+}
+
+function communityEnvSummary(): string {
+  const parts: string[] = [];
+  if (process.env.XRK_IM_GATEWAY_WS_URL?.trim()) {
+    parts.push("IM WS");
+  } else if (process.env.XRK_IM_GATEWAY_URL?.trim()) {
+    parts.push("IM sidecar");
+  }
+  if (process.env.XRK_MEMORY_EMBED_URL?.trim()) parts.push("memory sidecar");
+  if (process.env.XRK_GENUI_NPM_ALLOWLIST?.trim()) parts.push("genui npm");
+  if (process.env.XRK_TONGFLOW_PYTHON?.trim()) parts.push("tongflow python");
+  return parts.length > 0 ? parts.join(" · ") : "none (embedded defaults)";
 }
 
 export async function runDoctor(workspace: string): Promise<DoctorResult> {
@@ -60,6 +96,47 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
         : "missing — reinstall CLI (product-web) or set XRK_WEB_DIST"),
   });
 
+  const xrkHome = resolveXrkHome();
+  const xrkHomeOk = existsSync(xrkHome);
+  checks.push({
+    name: "xrk-home",
+    ok: true,
+    detail: xrkHomeOk
+      ? xrkHome
+      : `${xrkHome} (created on first serve/web)`,
+  });
+
+  const pluginsRoot = path.join(xrkHome, "plugins", "web", "plugins");
+  const communityCount = countStagedCommunityClients(pluginsRoot);
+  checks.push({
+    name: "community-plugins",
+    ok: true,
+    detail:
+      communityCount > 0
+        ? `${communityCount} client package(s) under ${pluginsRoot}`
+        : `none staged — xrkh plugin add <pkg> then xrkh restart`,
+  });
+
+  const dshCompatExt = path.join(
+    workspace,
+    "extensions",
+    "dsh-compat",
+    "xrk.plugin.json",
+  );
+  if (existsSync(dshCompatExt)) {
+    checks.push({
+      name: "dsh-compat-host",
+      ok: true,
+      detail: "extensions/dsh-compat present (dev tree)",
+    });
+  }
+
+  checks.push({
+    name: "community-env",
+    ok: true,
+    detail: communityEnvSummary(),
+  });
+
   const llm = Boolean(process.env.XRK_LLM_PRESET?.trim());
   checks.push({
     name: "llm-preset",
@@ -75,7 +152,11 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
         (c) =>
           c.name !== "llm-preset" &&
           c.name !== "pnpm" &&
-          c.name !== "product-ui",
+          c.name !== "product-ui" &&
+          c.name !== "xrk-home" &&
+          c.name !== "community-plugins" &&
+          c.name !== "community-env" &&
+          c.name !== "dsh-compat-host",
       )
       .every((c) => c.ok),
     checks,

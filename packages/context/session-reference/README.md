@@ -24,7 +24,7 @@ The context source is `{ kind: 'session-reference', version: 1, references }`; e
 | `candidateLimit` | `50` | Default candidate count returned to a host. |
 | `maxReferenceBytes` | `65536` | Maximum serialized JSON bytes for one reference object. |
 
-Retention applies `maxReferenceBytes` independently to each source, keeps compact checkpoints and the newest message before dropping older non-checkpoint units, and uses `dsh-output-retention` head/tail truncation with an exact UTF-8 omission notice. If one source's fixed serialized fields cannot fit, preparation fails with `SESSION_REFERENCE_BUDGET_EXCEEDED` instead of returning a partial context.
+Retention applies `maxReferenceBytes` independently to each source, keeps compact checkpoints and the newest message before dropping older non-checkpoint units, and uses `@xrkseek/xrk-output-retention` head/tail truncation with an exact UTF-8 omission notice. If one source's fixed serialized fields cannot fit, preparation fails with `SESSION_REFERENCE_BUDGET_EXCEEDED` instead of returning a partial context.
 
 ## Model Experience
 

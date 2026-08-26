@@ -24,6 +24,12 @@
 | Code worker | `code-runtime` | `run_code` 进 worker（实验） |
 | Safety loop/mistake | `core-session` safety | soft/hard notice；可 abort turn |
 | 密钥不入库 | `.gitignore` + 示例模板 | 仓内仅 `*.example` |
+| IM webhook  ingress | `dsh-compat` `im-messaging-bridge` | `/api/im/{channel}/webhook` 无 vendor secret 校验（开发联调）；生产应置于反向代理后并限流 |
+| IM gateway relay | `im-gateway-sidecar` | `/api/im/gateway/relay`：本机 localhost 或 `XRK_IM_GATEWAY_TOKEN`；生产必须设 token |
+| IM vendor WS | `im-vendor-ws-client` | `XRK_IM_GATEWAY_WS_URL` / 自 `XRK_IM_GATEWAY_URL` 推导；`XRK_IM_GATEWAY_TOKEN` 鉴权；勿暴露到浏览器 |
+| Memory embed sidecar | `memory-embeddings` | `XRK_MEMORY_EMBED_URL` 外接向量 HTTP；token 勿入库；未接时走 embedded `~/.xrk/memory-embeddings` |
+| GenUI npm allowlist | `genui-npm-bridge` | `XRK_GENUI_NPM_ALLOWLIST` 仅允许列出的包名；resolve 在 Host 侧，勿把 token 放进 schema |
+| TongFlow Python | `tongflow-python-bridge` | `XRK_TONGFLOW_PYTHON*` 执行用户脚本；仅信任自运维路径；`~/.xrk/tongflow/python.json` 勿提交 |
 
 ## 明确未做（勿宣传）
 
@@ -75,6 +81,12 @@ Lists only controls **already implemented in this repository**; unfinished items
 | Code worker | `code-runtime` | `run_code` in a worker (experimental) |
 | Safety loop/mistake | `core-session` safety | soft/hard notice; may abort turn |
 | Secrets not in repo | `.gitignore` + example templates | Only `*.example` in-tree |
+| IM webhook ingress | `dsh-compat` `im-messaging-bridge` | `/api/im/{channel}/webhook` has no vendor secret check (dev integration); production should sit behind a reverse proxy with rate limits |
+| IM gateway relay | `im-gateway-sidecar` | `/api/im/gateway/relay`: localhost only or `XRK_IM_GATEWAY_TOKEN`; set token in production |
+| IM vendor WS | `im-vendor-ws-client` | `XRK_IM_GATEWAY_WS_URL` / inferred from `XRK_IM_GATEWAY_URL`; `XRK_IM_GATEWAY_TOKEN` auth; do not expose to browser |
+| Memory embed sidecar | `memory-embeddings` | `XRK_MEMORY_EMBED_URL` external vector HTTP; do not commit tokens; falls back to embedded `~/.xrk/memory-embeddings` |
+| GenUI npm allowlist | `genui-npm-bridge` | `XRK_GENUI_NPM_ALLOWLIST` limits package names; resolve runs on Host; do not put tokens in schema |
+| TongFlow Python | `tongflow-python-bridge` | `XRK_TONGFLOW_PYTHON*` runs user scripts; trust only self-operated paths; do not commit `~/.xrk/tongflow/python.json` |
 
 ## Explicitly not shipped (do not advertise)
 

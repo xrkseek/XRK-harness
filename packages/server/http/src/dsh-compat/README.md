@@ -21,10 +21,12 @@ This directory is the XRK **first-party** Host-side community adapter (`@xrkseek
 5. honest GET catch-all
 6. cordis-registry RPC + POST catch-all
 7. Host attachExtras (after upgrade prewarm)
+8. `bootDshCompatServices` — embedded vector reindex · optional IM WS client (env)
 ```
 
-`serve` 经 `ensureDshCompatHostPlugin()` 加载 `extensions/dsh-compat`；实现位于本目录。  
-`serve` loads `extensions/dsh-compat` via `ensureDshCompatHostPlugin()`; implementation lives here.
+`serve` 经 `ensureDshCompatHostPlugin()` 加载 `extensions/dsh-compat`；`prewarmDshCompatAdapters` 在 registry compose 后调用 boot。Host shutdown 经 `shutdownDshCompatServices` 停止 WS 客户端。
+
+`serve` loads `extensions/dsh-compat` via `ensureDshCompatHostPlugin()`; `prewarmDshCompatAdapters` runs boot after registry compose. Host shutdown calls `shutdownDshCompatServices` to stop the WS client.
 
 ## 三层 / Three Layers
 
@@ -75,9 +77,9 @@ The product-shell plugin count in `status` refers to `@xrkseek/client-*` boot en
 
 ## 待补特性 / Planned Work
 
-见教科书 [community-plugins.md](../../../../docs/community-plugins.md)「待补 / Planned」与 [status.md](../../../../docs/status.md)「未做 / Not done」。按 **XRK 产品路线**列出，不以「上游未搬」表述。
+主路径（IM · Vision · 记忆 · GenUI npm · TongFlow Python/external）已在 [community-plugins.md](../../../../docs/community-plugins.md)「已实现」列。后续仅列 **XRK 产品路线**增量（如 GenUI 浏览器端 bundle），不以「上游未搬」表述。
 
-See the textbook sections above. List items as **XRK product roadmap**, not an unported-upstream inventory.
+Main path items are **Working** in [community-plugins.md](../../../../docs/community-plugins.md). Further items are **XRK roadmap** only (e.g. GenUI browser bundle), not an unported-upstream inventory.
 
 ## 扩展入口 / Extension Entry
 

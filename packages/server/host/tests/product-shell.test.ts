@@ -171,6 +171,21 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
             row.hostBridge === "xrk-dsh-compat",
         ),
       ).toBe(true);
+
+      const created = await faceRpc(base, "session.create", {});
+      expect(created.ok).toBe(true);
+      const sessionId = (created.value as { sessionId: string }).sessionId;
+      const history = await faceRpc(base, "session.history", { sessionId });
+      expect(history.ok).toBe(true);
+      const projections = (
+        history.value as {
+          projections?: { values?: Record<string, unknown> };
+        }
+      ).projections?.values;
+      expect(projections).toBeTypeOf("object");
+      expect(projections).toHaveProperty("tokenUsage");
+      expect(projections).toHaveProperty("contextPressure");
+      expect(projections).toHaveProperty("contextBreakdown");
     } finally {
       await manager.stopAll();
     }

@@ -4,6 +4,7 @@ import {
   type CompactionOptions,
   type SessionStore,
 } from "@xrkseek/core-session";
+import { prepareFaceSessionReferences } from "@xrkseek/xrk-session-reference/prepare-face";
 import {
   createSystemPromptAssembler,
   type SystemPromptAssembler,
@@ -77,6 +78,7 @@ import {
   shouldConfineSandbox,
 } from "@xrkseek/protocol";
 import {
+  createPolicyEngineFromPlugins,
   wireCompositionTools,
   wireCompositionPrompts,
   type RegisteredPlugin,
@@ -369,8 +371,12 @@ export function createHarnessComposition(
   const pipeline = createToolPipeline({
     outputBound: { persist: (full) => toolOutputPersist.persist(full) },
   });
-  if (options.policy) {
-    pipeline.onPre(createPolicyToolPre(options.policy));
+  const policyEngine = createPolicyEngineFromPlugins({
+    ...(options.policy !== undefined ? { engine: options.policy } : {}),
+    ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
+  });
+  if (policyEngine) {
+    pipeline.onPre(createPolicyToolPre(policyEngine));
   }
   if (sandboxMode === "read-only") {
     pipeline.onPre(createReadOnlyToolPre());
@@ -561,6 +567,14 @@ export function createHarnessComposition(
               },
             }
           : {}),
+        prepareUserContent: ({ content, text, signal }) =>
+          prepareFaceSessionReferences({
+            targetSessionId: sessionId,
+            content,
+            text,
+            readEvents: (id) => store.get(id).events,
+            ...(signal ? { signal } : {}),
+          }),
         ...(options.resolveImage
           ? { resolveImage: options.resolveImage }
           : {}),
@@ -603,7 +617,12 @@ export function createHarnessComposition(
         workspaceInject: options.workspaceInject !== false,
         slashRecipes: options.slashRecipes !== false,
         plugins: (options.plugins ?? []).map((p) => p.id),
-        policy: Boolean(options.policy),
+        policy: Boolean(
+          createPolicyEngineFromPlugins({
+            ...(options.policy !== undefined ? { engine: options.policy } : {}),
+            ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
+          }),
+        ),
         ...patch,
       };
     },

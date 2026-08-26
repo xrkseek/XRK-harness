@@ -3,6 +3,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { handleImGatewaySidecarHttp } from "./im-gateway-sidecar.js";
 import { sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
@@ -194,6 +195,9 @@ export async function handleImMessagingHttp(
   pathname: string,
   xrkHome: string | undefined,
 ): Promise<boolean> {
+  if (await handleImGatewaySidecarHttp(req, res, pathname, xrkHome)) {
+    return true;
+  }
   if (await handleImMessagingStream(req, res, pathname, xrkHome)) {
     return true;
   }

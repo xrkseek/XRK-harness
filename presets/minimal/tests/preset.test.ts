@@ -66,4 +66,29 @@ describe("minimal preset plugins + policy", () => {
     expect(result.isError).toBe(true);
     expect(result.content).toMatch(/policy|denied|deny/i);
   });
+
+  it("wires kind:policy plugin rules when no explicit engine is passed", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-pol-plug-"));
+    const composition = createMinimalComposition({
+      workspaceRoot: root,
+      assemble: false,
+      workspaceInject: false,
+      slashRecipes: false,
+      llm: createReplayAdapter([{ content: "x" }]),
+      plugins: [
+        {
+          id: "plug-policy",
+          kind: "policy",
+          policyRules: [denyToolNames(["apply_edit"])],
+        },
+      ],
+    });
+    const result = await runTool({
+      registry: composition.tools,
+      pipeline: composition.pipeline,
+      call: { id: "1", name: "apply_edit", arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/policy|denied|deny/i);
+  });
 });

@@ -151,6 +151,25 @@ Settings → Plugins 里会动到运行时的命名空间：
 
 Tavily / Brave 密钥：Plugins → Web search 卡或 Settings → Credentials（同一槽 `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY`）。
 
+## 社区插件 Host（可选 env）
+
+联调 [community-plugins.md](./community-plugins.md) 社区 client 时；Host 核心不嵌入 sidecar / 厂商 SDK。日常仍优先 **Settings → Plugins**；下列供 CI / 无头。
+
+| 变量 | 含义 |
+|------|------|
+| `XRK_IM_GATEWAY_URL` | 外接 IM relay 基址（HTTP health；WS `/ws` 可推导） |
+| `XRK_IM_GATEWAY_WS_URL` | 显式 IM WebSocket 网关（优先于 URL 推导） |
+| `XRK_IM_GATEWAY_TOKEN` | relay / WS Bearer |
+| `XRK_MEMORY_EMBED_URL` | 外接向量库 HTTP（如 Qdrant）；未设则用 embedded host |
+| `XRK_MEMORY_EMBED_TOKEN` | 向量库 API key（可选） |
+| `XRK_MEMORY_EMBED_COLLECTION` | 集合名（可选） |
+| `XRK_GENUI_NPM_ALLOWLIST` | 逗号分隔 npm 包，合并进 GenUI component registry |
+| `XRK_TONGFLOW_PYTHON` | 用户 Python 解释器（`/tongflow/scan` · `kind:python` 节点） |
+| `XRK_TONGFLOW_PYTHON_SCAN` | 自定义 scan 脚本路径 |
+| `XRK_TONGFLOW_PYTHON_RUNNER` | 自定义 Python 节点 runner 脚本 |
+
+落盘：`~/.xrk/tongflow/python.json`（`command` · `scanScript` · `nodeRunner`）· `~/.xrk/genui/npm-components.json`。Host boot（`prewarmDshCompatAdapters`）会重建 embedded 向量索引并按 env 启动 IM WS。
+
 ## CLI 常用标志
 
 ```text
@@ -321,6 +340,25 @@ Settings → Plugins mutates these runtime namespaces:
 | `workspace-inject` | `injectMaxChars` | Rules/skills inject budget after the next agent rebuild (default **32_000**) |
 
 Tavily / Brave keys: Plugins → Web search card or Settings → Credentials (same slots `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY`).
+
+## Community plugin Host (optional env)
+
+For [community-plugins.md](./community-plugins.md) clients; the Host core does not embed sidecars or vendor SDKs. Prefer **Settings → Plugins** for day-to-day use; these are for CI / headless.
+
+| Variable | Meaning |
+|------|------|
+| `XRK_IM_GATEWAY_URL` | External IM relay base (HTTP health; WS `/ws` may be inferred) |
+| `XRK_IM_GATEWAY_WS_URL` | Explicit IM WebSocket gateway (overrides URL inference) |
+| `XRK_IM_GATEWAY_TOKEN` | relay / WS Bearer |
+| `XRK_MEMORY_EMBED_URL` | External vector HTTP (e.g. Qdrant); embedded host when unset |
+| `XRK_MEMORY_EMBED_TOKEN` | Vector API key (optional) |
+| `XRK_MEMORY_EMBED_COLLECTION` | Collection name (optional) |
+| `XRK_GENUI_NPM_ALLOWLIST` | Comma-separated npm packages merged into GenUI registry |
+| `XRK_TONGFLOW_PYTHON` | User Python interpreter (`/tongflow/scan` · `kind:python` nodes) |
+| `XRK_TONGFLOW_PYTHON_SCAN` | Custom scan script path |
+| `XRK_TONGFLOW_PYTHON_RUNNER` | Custom Python node runner script |
+
+On disk: `~/.xrk/tongflow/python.json` (`command` · `scanScript` · `nodeRunner`) · `~/.xrk/genui/npm-components.json`. Host boot (`prewarmDshCompatAdapters`) rebuilds the embedded vector index and starts IM WS when env is set.
 
 ## Common CLI flags
 

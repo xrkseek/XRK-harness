@@ -1967,6 +1967,9 @@ importers:
       '@xrkseek/protocol':
         specifier: workspace:*
         version: link:../../protocol
+      '@xrkseek/xrk-output-retention':
+        specifier: workspace:*
+        version: link:../../util/output-retention
 
   packages/cordis:
     dependencies:
@@ -2385,6 +2388,9 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+      '@xrkseek/face-session-query':
+        specifier: workspace:*
+        version: link:../../session/face-session-query
       '@xrkseek/llm':
         specifier: workspace:*
         version: link:../../llm/llm
@@ -2403,6 +2409,9 @@ importers:
       '@xrkseek/server-config':
         specifier: workspace:*
         version: link:../config
+      '@xrkseek/server-loader':
+        specifier: workspace:*
+        version: link:../loader
       '@xrkseek/session-projection':
         specifier: workspace:*
         version: link:../../session/session-projection
@@ -2550,6 +2559,24 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+      '@xrkseek/llm-registry':
+        specifier: workspace:*
+        version: link:../../llm/registry
+      '@xrkseek/policy':
+        specifier: workspace:*
+        version: link:../../policy
+
+  packages/session/face-session-query:
+    dependencies:
+      '@xrkseek/core-session':
+        specifier: workspace:*
+        version: link:../../core/session
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../../protocol
+      '@xrkseek/xrk-session-reference':
+        specifier: workspace:*
+        version: link:../../context/session-reference
 
   packages/session/session-projection:
     dependencies:
@@ -2963,6 +2990,25 @@ importers:
         specifier: workspace:^
         version: link:../xrk-session
 
+  packages/stubs/xrk-session-query:
+    dependencies:
+      '@xrkseek/xrk-llm':
+        specifier: workspace:^
+        version: link:../xrk-llm
+      '@xrkseek/xrk-session':
+        specifier: workspace:^
+        version: link:../xrk-session
+      '@xrkseek/xrk-session-title':
+        specifier: workspace:^
+        version: link:../xrk-session-title
+    devDependencies:
+      '@xrkseek/cordis':
+        specifier: workspace:^
+        version: link:../../cordis
+      '@xrkseek/xrk-brand':
+        specifier: workspace:^
+        version: link:../xrk-brand
+
   packages/stubs/xrk-session-stats:
     dependencies:
       zod:
@@ -3224,6 +3270,8 @@ importers:
         specifier: workspace:*
         version: link:../../presets/minimal
 
+  packages/util/output-retention: {}
+
   packages/web-runtime:
     dependencies:
       '@xrkseek/protocol':
@@ -3298,6 +3346,9 @@ importers:
       '@xrkseek/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
+      '@xrkseek/xrk-session-reference':
+        specifier: workspace:*
+        version: link:../../packages/context/session-reference
 
   presets/minimal:
     dependencies:
@@ -3334,6 +3385,9 @@ importers:
       '@xrkseek/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
+      '@xrkseek/xrk-session-reference':
+        specifier: workspace:*
+        version: link:../../packages/context/session-reference
 
   presets/server:
     dependencies:

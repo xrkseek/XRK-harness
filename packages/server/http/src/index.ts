@@ -24,6 +24,7 @@ export {
   type DshCompatHostPluginOptions,
   type UsageStatsProviderRow,
   prewarmDshCompatAdapters,
+  shutdownDshCompatServices,
   applyHostPackageByName,
   stopHostPackageFiber,
   listHostAppliedPackages,

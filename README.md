@@ -18,7 +18,7 @@
 
 向阳而生，驭光而行
 
-[入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md) · [v0.1.16 发行说明](./docs/releases/v0.1.16.md)
+[入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md) · [v0.1.17 发行说明](./docs/releases/v0.1.17.md)
 
 ## 这是什么
 
@@ -45,7 +45,7 @@ XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agen
 
 ```sh
 mkdir my-workspace && cd my-workspace
-npx @xrkseek/harness-cli@0.1.16 web
+npx @xrkseek/harness-cli@0.1.17 web
 # 全局安装后日常用缩写：xrkh web
 ```
 
@@ -90,7 +90,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 多厂商 LLM Registry | **能跑** |
 | 社区 client（自研兼容器） | **能跑**（云端长连接等见 status「未做」） |
 | 产品网页与浏览器 E2E | **未稳**（有测，但不挡日常 `pnpm check`） |
-| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（**v0.1.16**；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
+| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（**v0.1.17**；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
 
 完整说明：[docs/status.md](./docs/status.md)。
 
@@ -106,7 +106,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 自己写工具 / 进程插件 | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | 排障 | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 | [learn](./docs/learn.md) |
-| 版本发行说明 | [releases](./docs/releases/)（正式 [v0.1.16](./docs/releases/v0.1.16.md) · 预览 [v0.0.11](./docs/releases/v0.0.11.md)） |
+| 版本发行说明 | [releases](./docs/releases/)（正式 [v0.1.17](./docs/releases/v0.1.17.md) · 预览 [v0.0.11](./docs/releases/v0.0.11.md)） |
 | 全部专题索引 | [docs/README.md](./docs/README.md) |
 
 ## 仓库里有什么
@@ -157,7 +157,7 @@ docs/             用法与契约教科书
 
 Grow toward the sun · ride the light
 
-[Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Status](./docs/status.md) · [Docs hub](./docs/README.md) · [v0.1.16 release notes](./docs/releases/v0.1.16.md)
+[Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Status](./docs/status.md) · [Docs hub](./docs/README.md) · [v0.1.17 release notes](./docs/releases/v0.1.17.md)
 
 ## What this is
 
@@ -168,7 +168,7 @@ XRK-Harness (npm **`@xrkseek/*`**) is a pure **TypeScript / Node ≥26** Agent r
 | **Session as source of truth** | Dialogue and tools live in an append-only event log and are rebuildable; turn / loop are short-lived |
 | **Composable** | Presets `minimal` / `harness` / `server` only wire packages; they contain no business logic |
 | **Host + Face** | HTTP, unary RPC, dual WebSocket; the browser product shell ships with the CLI (**37** boot plugins) |
-| **Mentions** | Composer `@file` / `@session` completion (Face discovers remotes; cross-session prepare: see status) |
+| **Mentions** | Composer `@file` / `@session` completion + cross-session prepare (Face `prepare-face`) |
 | **Attachments** | Composer attachment bar and message images; local normalize and vision upload pipeline |
 | **Community clients** | Install npm community packages with `plugin add`; first-party Host adapter ([community-plugins](./docs/community-plugins.md)) |
 | **MCP** | stdio / streamable-http; configure and hot-mount under **Settings → Plugins** |
@@ -184,7 +184,7 @@ Requires **Node.js ≥26**.
 
 ```sh
 mkdir my-workspace && cd my-workspace
-npx @xrkseek/harness-cli@0.1.16 web
+npx @xrkseek/harness-cli@0.1.17 web
 # after global install: xrkh web
 ```
 
@@ -229,7 +229,7 @@ Optional: copy `.xrk/.credentials.yaml.example`, or use a brand `apiKeyEnv` (e.g
 | Multi-provider LLM Registry | **Working** |
 | Community clients (first-party adapter) | **Working** (cloud long-lived links etc.: status **Not done**) |
 | Product web & browser E2E | **Unstable** (tests exist; not gated by day-to-day `pnpm check`) |
-| Public CLI package `@xrkseek/harness-cli` | **Working** (**v0.1.16**; primary bin **`xrkh`**, also **`xrk-harness`**) |
+| Public CLI package `@xrkseek/harness-cli` | **Working** (**v0.1.17**; primary bin **`xrkh`**, also **`xrk-harness`**) |
 
 Full matrix: [docs/status.md](./docs/status.md).
 
@@ -245,7 +245,7 @@ Full matrix: [docs/status.md](./docs/status.md).
 | Author tools / process plugins | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | Troubleshoot | [troubleshooting](./docs/troubleshooting.md) |
 | Short digest | [learn](./docs/learn.md) |
-| Release notes | [releases](./docs/releases/) (formal [v0.1.16](./docs/releases/v0.1.16.md) · preview [v0.0.11](./docs/releases/v0.0.11.md)) |
+| Release notes | [releases](./docs/releases/) (formal [v0.1.17](./docs/releases/v0.1.17.md) · preview [v0.0.11](./docs/releases/v0.0.11.md)) |
 | Full index | [docs/README.md](./docs/README.md) |
 
 ## Repository layout

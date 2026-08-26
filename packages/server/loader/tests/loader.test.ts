@@ -459,3 +459,157 @@ describe("host plugins", () => {
   });
 });
 
+describe("policy plugins", () => {
+  it("collects kind:policy rules via wireCompositionPolicy", async () => {
+    const { wireCompositionPolicy, applyPolicyPlugins } = await import(
+      "../src/index.js"
+    );
+    const { denyToolNames } = await import("@xrkseek/policy");
+    const base = denyToolNames(["builtin"]);
+    const pluginRule = denyToolNames(["plugin-danger"]);
+    const plugins = [
+      {
+        id: "my-policy",
+        kind: "policy",
+        policyRules: [pluginRule],
+      },
+    ];
+    const merged = wireCompositionPolicy({ baseRules: [base], plugins });
+    expect(merged).toHaveLength(2);
+    expect(merged[0]?.id).toBe(base.id);
+    expect(merged[1]?.id).toBe(pluginRule.id);
+    expect(applyPolicyPlugins(plugins)).toEqual({
+      applied: [{ pluginId: "my-policy", ruleId: pluginRule.id }],
+    });
+  });
+
+  it("createPolicyEngineFromPlugins prefers explicit engine", async () => {
+    const { createPolicyEngineFromPlugins } = await import("../src/index.js");
+    const { createPolicyEngine, denyToolNames } = await import("@xrkseek/policy");
+    const explicit = createPolicyEngine({
+      rules: [denyToolNames(["explicit"])],
+    });
+    const fromPlugins = createPolicyEngineFromPlugins({
+      engine: explicit,
+      plugins: [
+        {
+          id: "ignored",
+          kind: "policy",
+          policyRules: [denyToolNames(["plugin"])],
+        },
+      ],
+    });
+    expect(fromPlugins).toBe(explicit);
+    expect(
+      fromPlugins?.evaluate({ kind: "tool.call", name: "plugin" }).verdict,
+    ).toBe("allow");
+  });
+});
+
+describe("channel plugins", () => {
+  it("collects kind:channel descriptors without IM wire", async () => {
+    const { collectChannelPlugins, wireCompositionChannels } = await import(
+      "../src/index.js"
+    );
+    const plugins = [
+      {
+        id: "im-stub",
+        kind: "channel",
+        channels: [{ channelId: "slack", displayName: "Slack" }],
+      },
+    ];
+    expect(collectChannelPlugins(plugins)).toEqual([
+      { channelId: "slack", displayName: "Slack" },
+    ]);
+    expect(wireCompositionChannels({ plugins })).toEqual({
+      applied: [{ pluginId: "im-stub", channelId: "slack" }],
+    });
+    expect(
+      (
+        await import("../src/channel.js")
+      ).collectChannelPluginRegistrations(plugins),
+    ).toEqual([
+      {
+        pluginId: "im-stub",
+        channelId: "slack",
+        displayName: "Slack",
+      },
+    ]);
+  });
+});
+
+describe("llm plugins", () => {
+  it("registers plugin brands when registry id is free", async () => {
+    const { wireCompositionLlm, applyLlmPlugins } = await import(
+      "../src/index.js"
+    );
+    const { createProviderRegistry } = await import("@xrkseek/llm-registry");
+    const registry = createProviderRegistry({ brands: [] });
+    const entry = {
+      id: "plugin-brand",
+      displayName: "Plugin Brand",
+      protocol: "openai-chat" as const,
+      defaultModel: "gpt-4o-mini",
+    };
+    const plugins = [{ id: "llm-plug", kind: "llm", llmBrands: [entry] }];
+    expect(applyLlmPlugins(plugins)).toEqual({
+      applied: [{ pluginId: "llm-plug", brandId: "plugin-brand" }],
+    });
+    const result = wireCompositionLlm(registry, { plugins });
+    expect(result.applied).toEqual([
+      { pluginId: "llm-plug", brandId: "plugin-brand" },
+    ]);
+    expect(result.skipped).toEqual([]);
+    expect(registry.listBrands().some((b) => b.id === "plugin-brand")).toBe(
+      true,
+    );
+  });
+
+  it("skips plugin brand when explicit registry id exists", async () => {
+    const { wireCompositionLlm } = await import("../src/index.js");
+    const { createProviderRegistry } = await import("@xrkseek/llm-registry");
+    const existing = {
+      id: "deepseek",
+      displayName: "DeepSeek",
+      protocol: "r1" as const,
+      defaultModel: "deepseek-chat",
+    };
+    const registry = createProviderRegistry({ brands: [existing] });
+    const plugins = [
+      {
+        id: "llm-plug",
+        kind: "llm",
+        llmBrands: [{ ...existing, displayName: "Override" }],
+      },
+    ];
+    const result = wireCompositionLlm(registry, { plugins });
+    expect(result.applied).toEqual([]);
+    expect(result.skipped).toEqual([
+      {
+        pluginId: "llm-plug",
+        brandId: "deepseek",
+        reason: "explicit_wins",
+      },
+    ]);
+  });
+
+  it("createProviderRegistryFromPlugins registers plugin brands on a fresh registry", async () => {
+    const { createProviderRegistryFromPlugins } = await import(
+      "../src/index.js"
+    );
+    const entry = {
+      id: "from-plugin",
+      displayName: "From Plugin",
+      protocol: "openai-chat" as const,
+      defaultModel: "gpt-4o-mini",
+    };
+    const registry = createProviderRegistryFromPlugins({
+      brands: [],
+      plugins: [{ id: "p", kind: "llm", llmBrands: [entry] }],
+    });
+    expect(registry.listBrands().some((b) => b.id === "from-plugin")).toBe(
+      true,
+    );
+  });
+});
+

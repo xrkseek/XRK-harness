@@ -3,6 +3,7 @@ import {
   listFaceCommandDescriptors,
 } from "../slash.js";
 import { listFacePluginInventory } from "../plugin-inventory.js";
+import { buildFaceChannelDiscover, resolveImGatewayWired } from "../process-channels.js";
 import { remoteArgs, type FaceHandler } from "./types.js";
 
 function sessionFromAgentId(
@@ -52,6 +53,14 @@ export const commandsExecute: FaceHandler = async (runtime, _rpcId, payload) => 
 export const pluginInventoryList: FaceHandler = async (runtime) => ({
   ok: true,
   value: { entries: listFacePluginInventory(runtime) },
+});
+
+/** DSH `processChannels/list` — plugin channel contributions + IM vendor stubs. */
+export const processChannelsList: FaceHandler = async (runtime) => ({
+  ok: true,
+  value: buildFaceChannelDiscover(runtime.plugins, {
+    imGatewayWired: resolveImGatewayWired(),
+  }),
 });
 
 /** DSH Typert `messageFeedback/list` — nested `{ ok, value|error }`. */

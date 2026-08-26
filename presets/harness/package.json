@@ -28,7 +28,8 @@
     "@xrkseek/policy": "workspace:*",
     "@xrkseek/protocol": "workspace:*",
     "@xrkseek/server-loader": "workspace:*",
-    "@xrkseek/workspace": "workspace:*"
+    "@xrkseek/workspace": "workspace:*",
+    "@xrkseek/xrk-session-reference": "workspace:*"
   },
   "license": "MIT",
   "repository": {

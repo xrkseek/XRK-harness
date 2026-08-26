@@ -1,15 +1,26 @@
 /**
  * Cordis fiber subprocess runner — isolated Node child for community host.mjs RPC.
  */
+import { existsSync } from "node:fs";
 import { fork, type ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { CordisRpcHandler } from "./cordis-registry.js";
 import type { DshAdapterContribution, DshCompatWireOptions } from "./adapter-types.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 
-const WORKER_PATH = fileURLToPath(
-  new URL("./cordis-fiber-worker.js", import.meta.url),
-);
+function resolveFiberWorkerEntry(): string {
+  const beside = fileURLToPath(
+    new URL("./cordis-fiber-worker.js", import.meta.url),
+  );
+  if (existsSync(beside)) return beside;
+  const fromSrc = fileURLToPath(
+    new URL("../../../dist/dsh-compat/cordis-fiber-worker.js", import.meta.url),
+  );
+  if (existsSync(fromSrc)) return fromSrc;
+  return beside;
+}
+
+const WORKER_PATH = resolveFiberWorkerEntry();
 
 interface PendingReq {
   resolve: (value: unknown) => void;
@@ -118,7 +129,7 @@ export async function startCordisFiber(options: {
       if (!sessions.has(name)) {
         fail("fiber-init-timeout");
       }
-    }, 30_000);
+    }, 60_000);
   });
 }
 
@@ -138,7 +149,7 @@ export async function invokeCordisFiberRpc(
       if (!session.pending.has(id)) return;
       session.pending.delete(id);
       reject(new Error("cordis-fiber-invoke-timeout"));
-    }, 30_000);
+    }, 60_000);
   });
 }
 

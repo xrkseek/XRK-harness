@@ -13,6 +13,8 @@ describe("cli doctor", () => {
     expect(names.workspace?.ok).toBe(true);
     expect(names["product-ui"]).toBeDefined();
     expect(names["product-ui"]?.detail).not.toMatch(/Face console/i);
+    expect(names["xrk-home"]).toBeDefined();
+    expect(names["community-plugins"]).toBeDefined();
     expect(result.ok).toBe(true);
   });
 

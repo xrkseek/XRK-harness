@@ -16,6 +16,9 @@
 | `tools.ts` | `applyToolsPlugins` · `wireCompositionTools` | **显式同名优先**（不覆盖） |
 | `prompt.ts` | `applyPromptPlugins` · `wireCompositionPrompts` | 保留 id（默认 `base`）优先 |
 | `commands.ts` | `collectPluginCommands` | 命令名先登记者赢 |
+| `policy.ts` | `wireCompositionPolicy` · `createPolicyEngineFromPlugins` | preset 默认合并 |
+| `channel.ts` | `collectChannelPlugins` · `wireCompositionChannels` | Face `processChannels/list` · dsh-compat IM bridge |
+| `llm.ts` | `wireCompositionLlm` · `collectLlmBrands` | Registry 显式 id 优先 |
 | `inventory.ts` | `toPluginInventoryEntries` | Cordis → `failed` / disabled |
 
 ## Kind 表
@@ -25,9 +28,9 @@
 | `tools` | `tools[]` | `wireCompositionTools` | 能跑 |
 | `prompt` | `promptSections[]` | `wireCompositionPrompts` | 能跑 |
 | `commands` | `commands[]` | Face `commands/*` | 能跑 |
-| `channel` | （未定） | — | 保留 |
-| `policy` | （未定） | — | 保留 |
-| `llm` | （未定） | — | 保留 |
+| `channel` | `channels[]` | `wireCompositionChannels` | 能跑 · discover |
+| `policy` | `policyRules[]` | `wireCompositionPolicy` · preset | 能跑 |
+| `llm` | `llmBrands[]` | `wireCompositionLlm` · Host spawn | 能跑 |
 | `cordis` | — | 不 import | 仅 inventory stub |
 
 纪律：**新 Host 能力先想 kind**，不要只在 Face/Host 写特例。
@@ -64,6 +67,9 @@ Process-plugin registration / discovery / kind wiring. Spec: [plugin-loader.md](
 | `tools.ts` | `applyToolsPlugins` · `wireCompositionTools` | **Explicit same-name wins** (no silent overwrite) |
 | `prompt.ts` | `applyPromptPlugins` · `wireCompositionPrompts` | Reserved ids (default `base`) win |
 | `commands.ts` | `collectPluginCommands` | First registered command name wins |
+| `policy.ts` | `wireCompositionPolicy` · `createPolicyEngineFromPlugins` | Merged in presets by default |
+| `channel.ts` | `collectChannelPlugins` · `wireCompositionChannels` | Face `processChannels/list` · dsh-compat IM bridge |
+| `llm.ts` | `wireCompositionLlm` · `collectLlmBrands` | Registry explicit id wins |
 | `inventory.ts` | `toPluginInventoryEntries` | Cordis → `failed` / disabled |
 
 ## Kind table
@@ -73,9 +79,9 @@ Process-plugin registration / discovery / kind wiring. Spec: [plugin-loader.md](
 | `tools` | `tools[]` | `wireCompositionTools` | Working |
 | `prompt` | `promptSections[]` | `wireCompositionPrompts` | Working |
 | `commands` | `commands[]` | Face `commands/*` | Working |
-| `channel` | (TBD) | — | Reserved |
-| `policy` | (TBD) | — | Reserved |
-| `llm` | (TBD) | — | Reserved |
+| `channel` | `channels[]` | `wireCompositionChannels` | Working · discover |
+| `policy` | `policyRules[]` | `wireCompositionPolicy` · preset | Working |
+| `llm` | `llmBrands[]` | `wireCompositionLlm` · Host spawn | Working |
 | `cordis` | — | no import | Inventory stub only |
 
 Discipline: **prefer a new kind for new Host capabilities** instead of Face/Host one-offs.

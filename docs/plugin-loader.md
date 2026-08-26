@@ -22,8 +22,11 @@
 | `prompt` | `promptSections[]` | `wireCompositionPrompts` → SystemPromptAssembler（`base` 等保留 id 优先） |
 | `commands` | `commands[]` | Face `commands/list` + `commands/execute`（插件名优先于 workspace recipe） |
 | `host` | `createPublicHandler(ctx)` | HTTP `tryHandlePublic` 链（SPA 前同源路由；`webServer.register` 形注册，无 Cordis `apply()`） |
+| `policy` | `policyRules[]` | `wireCompositionPolicy` → preset `createPolicyEngineFromPlugins`（无显式 engine 时合并） |
+| `channel` | `channels[]` | `collectChannelPlugins` · `wireCompositionChannels` · Face `processChannels/list` |
+| `llm` | `llmBrands[]` | `wireCompositionLlm` → Host `ProviderRegistry`（显式 brand id 优先；`refreshFacePlugins` 时重入） |
 
-保留（可发现、尚未自动接线）：`channel` · `policy` · `llm`。
+**未做（外置）**：各厂商 IM WS 客户端 · 云端 vision inference · 向量库 embedded host（bridge/sidecar 已能跑，见 [status.md](./status.md)）。
 
 `cordis`：社区 Cordis 宿主包；经 `extensions/dsh-compat` 的 `host.mjs` + 可选 **`cordis-fiber-runner` 子进程**，Face `dynamicCordisRunner/*` 由 `cordis-stub` 转发（见 [community-plugins.md](./community-plugins.md)）。
 
@@ -238,8 +241,11 @@ On XRK-Harness, prefer shipping extensions as plugins, then wire them through pr
 | `prompt` | `promptSections[]` | `wireCompositionPrompts` → SystemPromptAssembler (reserved ids such as `base` win) |
 | `commands` | `commands[]` | Face `commands/list` + `commands/execute` (plugin name before workspace recipe) |
 | `host` | `createPublicHandler(ctx)` | HTTP `tryHandlePublic` chain (same-origin routes before SPA; `webServer.register`-shaped registration, no Cordis `apply()`) |
+| `policy` | `policyRules[]` | `wireCompositionPolicy` → preset `createPolicyEngineFromPlugins` (merged when no explicit engine) |
+| `channel` | `channels[]` | `collectChannelPlugins` · `wireCompositionChannels` · Face `processChannels/list` |
+| `llm` | `llmBrands[]` | `wireCompositionLlm` → Host `ProviderRegistry` (explicit brand id wins; re-entrant on `refreshFacePlugins`) |
 
-Reserved (discoverable, not yet auto-wired): `channel` · `policy` · `llm`.
+**Not done (external)**: per-vendor IM WS clients · cloud vision inference · embedded vector host (bridge/sidecar works today — [status.md](./status.md)).
 
 `cordis`: community Cordis host packages; wired via `extensions/dsh-compat` `host.mjs` plus optional **`cordis-fiber-runner` subprocess**; Face `dynamicCordisRunner/*` is forwarded by `cordis-stub` (see [community-plugins.md](./community-plugins.md)).
 

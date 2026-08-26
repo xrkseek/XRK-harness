@@ -5,6 +5,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { sendJson } from "./underlying/http-json.js";
 import { renderGenuiFromSchema } from "./host-feature-bridge.js";
+import {
+  genuiNpmRegistryStatus,
+  listGenuiNpmComponents,
+  registerGenuiNpmComponent,
+  resolveGenuiNpmPackage,
+  unregisterGenuiNpmComponent,
+} from "./genui-npm-bridge.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
 
@@ -185,7 +192,9 @@ export async function handleGenuiHttp(
       return true;
     }
     if (method === "POST" || method === "PUT") {
-      const rendered = renderGenuiFromSchema(design?.schema ?? {});
+      const rendered = renderGenuiFromSchema(design?.schema ?? {}, {
+        ...(options.xrkHome ? { xrkHome: options.xrkHome } : {}),
+      });
       sendJson(res, 200, {
         ok: true,
         design_id: id,
@@ -207,6 +216,66 @@ export async function handleGenuiHttp(
 
   if (pathname === "/.well-known/dsh-genui") {
     sendJson(res, 200, { route_prefix: "/_dsh/genui" });
+    return true;
+  }
+
+  if (pathname === "/_dsh/genui/components/registry") {
+    if (method === "GET") {
+      sendJson(res, 200, genuiNpmRegistryStatus(options.xrkHome));
+      return true;
+    }
+    if (method === "POST") {
+      const body = await parseJsonBody(req);
+      const pkg =
+        typeof body.package === "string"
+          ? body.package
+          : typeof body.spec === "string"
+            ? body.spec
+            : "";
+      if (!pkg.trim()) {
+        sendJson(res, 400, { ok: false, error: "package-required" });
+        return true;
+      }
+      const row = registerGenuiNpmComponent(options.xrkHome, {
+        package: pkg,
+        ...(typeof body.export === "string" ? { exportName: body.export } : {}),
+        ...(typeof body.exportName === "string"
+          ? { exportName: body.exportName }
+          : {}),
+        ...(typeof body.version === "string" ? { version: body.version } : {}),
+      });
+      sendJson(res, 201, { ok: true, component: row, ...genuiNpmRegistryStatus(options.xrkHome) });
+      return true;
+    }
+  }
+
+  if (pathname === "/_dsh/genui/components/resolve") {
+    if (method === "POST" || method === "PUT") {
+      const body = await parseJsonBody(req);
+      const spec =
+        typeof body.spec === "string"
+          ? body.spec
+          : typeof body.package === "string"
+            ? body.package
+            : "";
+      const resolved = resolveGenuiNpmPackage(spec);
+      sendJson(res, resolved.ok ? 200 : 400, {
+        ...resolved,
+        registry: listGenuiNpmComponents(options.xrkHome),
+      });
+      return true;
+    }
+    sendJson(res, 405, { ok: false, error: "method-not-allowed" });
+    return true;
+  }
+
+  const npmDeleteMatch = /^\/_dsh\/genui\/components\/registry\/([^/]+)$/.exec(
+    pathname,
+  );
+  if (npmDeleteMatch && method === "DELETE") {
+    const pkg = decodeURIComponent(npmDeleteMatch[1]!);
+    unregisterGenuiNpmComponent(options.xrkHome, pkg);
+    sendJson(res, 200, { ok: true, ...genuiNpmRegistryStatus(options.xrkHome) });
     return true;
   }
 

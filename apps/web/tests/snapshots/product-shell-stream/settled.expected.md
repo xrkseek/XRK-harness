@@ -4,6 +4,7 @@
 - button "New session":
   - img
   - text: New Session
+- button "Memory System"
 - text: Workspaces
 - button "Search sessions":
   - img
@@ -20,6 +21,20 @@
     - img
     - text: workspace
   - treeitem "say the marker now" [selected]
+- button "Balance Query failed"
+- text: Today ¥0
+- button "移动访问"
+- button "Import Sessions"
+- button "Token Ledger":
+  - img
+  - text: Token Ledger
+- text: DeepSeek 钱包
+- button "刷新": ↻
+- text: 余额 ¥0.00 CNY 今日累计 -- 本会话消耗 基础价 ¥0.00 提醒阈值 ¥
+- spinbutton: "5.00"
+- button "充值"
+- button "API Key"
+- button "明细"
 - button "Settings":
   - img
   - text: Settings
@@ -28,15 +43,31 @@
     - button "say the marker" [disabled]
   - img
   - text: XRK Harness
+  - button "Undo the last config change":
+    - img
+    - text: Undo
+  - button "Redo the last undone change":
+    - img
+    - text: Redo
+  - button "Save a snapshot of the current config now":
+    - img
+    - text: Snapshots
+  - button "Auto-snapshot status; click to open": 0 snapshot(s)
   - button "Session log":
     - text: Session log
     - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+    - tab "Context"
+- button "Context injection workspace-root, ~/.agents/AGENTS.md, ~/.cursor/rules/no-cursor-coauthor.mdc, ~/.cursor/rules/xrk-identity.mdc, ~/.cursor/rules/xrk-npm-token.mdc":
+  - img
+  - img
+  - text: Context injection workspace-root, ~/.agents/AGENTS.md, ~/.cursor/rules/no-cursor-coauthor.mdc, ~/.cursor/rules/xrk-identity.mdc, ~/.cursor/rules/xrk-npm-token.mdc
 - text: say the marker {{clock}}
 - button "Copy":
   - img
+- button "恢复到发送这条消息之前"
 - paragraph: aria-stream-marker
 - button "Copy":
   - img
@@ -44,17 +75,28 @@
   - img
 - button "Bad response":
   - img
+- button "Save to memory":
+  - img
 - button "Branch into a new conversation":
   - img
-- text: {{clock}} Ran for {{duration}} TTFT {{duration}}
+- text: {{clock}} Ran for {{duration}} TTFT {{duration}} {{throughput}} tok/s
 - textbox "Message the agent"
 - button "Commands":
   - img
-- 'button "Access mode, current: Workspace Write"': Workspace Write
+- 'button "Access mode, current: Workspace write"': Workspace write
 - button "Select model, current DeepSeek V4 Flash":
   - text: DeepSeek V4 Flash
   - img
 - button "Send message" [disabled]
-- text: 1 turns · 1 steps LLM {{duration}} TTFT avg {{duration}} Cache hit 0% Input 3 tok · Output 2 tok Details
+- text: 1 turns · 1 steps LLM {{duration}} TTFT avg {{duration}} · {{throughput}} tok/s Cache hit 0% Input 3 tok · Output 2 tok This session ¥0 · Input 3 · Cache 0 · Output 2
+- button "鞭子"
+- text: Details
 - button "Close details"
 - text: Click a tool row in the message flow to view its details
+- button "🧠 Memory"
+- img
+- text: 妈~~妈~~
+- button "Expand bottom panel":
+  - img
+- button "Expand sidebar":
+  - img

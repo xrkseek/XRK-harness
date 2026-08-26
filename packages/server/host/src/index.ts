@@ -20,6 +20,7 @@ import {
   createHttpServer,
   createXrkPluginPublicHandler,
   prewarmDshCompatAdapters,
+  shutdownDshCompatServices,
   applyHostPackageByName,
   stopHostPackageFiber,
   listHostAppliedPackages,
@@ -57,6 +58,9 @@ import {
 } from "@xrkseek/server-face";
 import {
   createPluginLoader,
+  wireCompositionChannels,
+  wireCompositionLlm,
+  collectChannelPluginRegistrations,
   type PluginLoader,
   type RegisteredPlugin,
 } from "@xrkseek/server-loader";
@@ -295,6 +299,7 @@ export function createHostManager(): HostManager {
         ? createPersistentSessionStore(sessionsDir)
         : createMemorySessionStore();
       const loader = createPluginLoader();
+      const registry = createProviderRegistry();
 
       let loadedPluginIds: string[] = [];
       if (config.runtime.pluginsDir) {
@@ -304,6 +309,29 @@ export function createHostManager(): HostManager {
       const policy = config.runtime.policyFile
         ? await createPolicyEngineFromFile(config.runtime.policyFile)
         : undefined;
+
+      const hostPublic = {
+        host: config.runtime.host,
+        port: config.runtime.port,
+        workspaceRoot: config.runtime.workspaceRoot,
+        preset: config.runtime.preset,
+        corsOrigin: String(config.runtime.corsOrigin),
+        rateLimitPerMinute: config.runtime.rateLimitPerMinute,
+        ...(config.runtime.pluginsDir
+          ? { pluginsDir: config.runtime.pluginsDir }
+          : {}),
+        webDistConfigured: Boolean(config.runtime.webDist),
+        cordisHostApplied: [] as string[],
+        cordisHostPackages: [] as Array<{
+          packageName: string;
+          rpcChannels: string[];
+        }>,
+        processChannels: [] as Array<{
+          pluginId: string;
+          channelId: string;
+          displayName?: string;
+        }>,
+      };
 
       const mcpSpecs = resolveMcpSpecs(config);
       const mcpFileSourced = configuredMcpSpecs(config).length === 0;
@@ -318,6 +346,17 @@ export function createHostManager(): HostManager {
       const facePlugins: RegisteredPlugin[] = [];
       const refreshFacePlugins = () => {
         facePlugins.splice(0, facePlugins.length, ...loader.list());
+        wireCompositionLlm(registry, { plugins: loader.list() });
+        wireCompositionChannels({ plugins: loader.list() });
+        hostPublic.processChannels = collectChannelPluginRegistrations(
+          loader.list(),
+        ).map((row) => ({
+          pluginId: row.pluginId,
+          channelId: row.channelId,
+          ...(row.displayName !== undefined
+            ? { displayName: row.displayName }
+            : {}),
+        }));
       };
       let notifyMcpOverlay: () => void = () => {
         refreshFacePlugins();
@@ -558,23 +597,6 @@ export function createHostManager(): HostManager {
           config.runtime.webDist,
         ),
       );
-      const hostPublic = {
-        host: config.runtime.host,
-        port: config.runtime.port,
-        workspaceRoot: config.runtime.workspaceRoot,
-        preset: config.runtime.preset,
-        corsOrigin: String(config.runtime.corsOrigin),
-        rateLimitPerMinute: config.runtime.rateLimitPerMinute,
-        ...(config.runtime.pluginsDir
-          ? { pluginsDir: config.runtime.pluginsDir }
-          : {}),
-        webDistConfigured: Boolean(config.runtime.webDist),
-        cordisHostApplied: [] as string[],
-        cordisHostPackages: [] as Array<{
-          packageName: string;
-          rpcChannels: string[];
-        }>,
-      };
       const hostWireRef: { ctx?: DshCompatOptions } = {};
       const syncCordisHostApplied = () => {
         hostPublic.cordisHostApplied = listHostAppliedPackages().map(
@@ -597,7 +619,7 @@ export function createHostManager(): HostManager {
         }),
         version: "0.0.0",
         defaultAgentPreset: canonicalAgentPresetId(config.runtime.preset),
-        registry: createProviderRegistry(),
+        registry,
         attachments,
         // Face intake only (InputBar paste). Live adapter modalities come from
         // Registry — official DeepSeek text models stay text-only; vision-exp
@@ -1027,6 +1049,7 @@ export function createHostManager(): HostManager {
               sidebarPty.close();
               dshUpgrades.close();
               face.close();
+              shutdownDshCompatServices();
             },
           };
         },

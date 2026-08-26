@@ -108,6 +108,24 @@ export type UserMessageSource =
       readonly budgetTruncations?: readonly WorkspaceBudgetTruncation[];
     }
   | {
+      /** Cross-session `@session` snapshot inject (Face prepare / DSH recall). */
+      readonly kind: "session-reference";
+      readonly form: "recall";
+      readonly version: 1;
+      readonly references: readonly {
+        readonly sessionId: string;
+        readonly label: string;
+        readonly capturedThroughSeq: number | null;
+        readonly compacted: boolean;
+        readonly originalMessages: number;
+        readonly retainedMessages: number;
+        readonly omittedMessages: number;
+        readonly omittedBytes: number;
+        readonly truncated: boolean;
+        readonly inputIndex: number;
+      }[];
+    }
+  | {
       readonly kind: "plugin";
       readonly plugin?: string;
       readonly form?: string;

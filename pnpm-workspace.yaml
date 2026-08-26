@@ -5,6 +5,7 @@ packages:
   - "packages/context/*"
   - "packages/stubs/*"
   - "packages/core/*"
+  - "packages/util/*"
   - "packages/session/*"
   - "packages/llm/*"
   - "packages/exec/*"

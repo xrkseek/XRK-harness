@@ -2,7 +2,7 @@
 
 > **读者**：贡献者 · 维护者
 
-产品壳 `@` 引用栈：`ui-reference` 插件 + `packages/context/*` 契约 + Face 发现 remotes。跨会话 **prepare**（把快照注入 prompt）尚未接到 Face 主路径（见 [status.md](../status.md)）。
+产品壳 `@` 引用栈：`ui-reference` 插件 + `packages/context/*` 契约 + Face 发现 remotes + Face **prepare**（`@xrkseek/xrk-session-reference/prepare-face`，经 preset `prepareUserContent` → `runTurn`）。
 
 ## 包地图
 
@@ -11,7 +11,7 @@
 | `@xrkseek/client-ui-reference` | `packages/client/ui-reference` | Web 统一 `@file` / `@session` input source |
 | `@xrkseek/xrk-file-reference` | `packages/context/file-reference` | `@file` grammar + Remote 契约 |
 | `@xrkseek/xrk-file-reference-local` | `packages/context/file-reference-local` | 本地 `WorkspaceFileSearch` |
-| `@xrkseek/xrk-session-reference` | `packages/context/session-reference` | `dsh-session:` URI · prepare 服务 |
+| `@xrkseek/xrk-session-reference` | `packages/context/session-reference` | `dsh-session:` URI · Face `prepare-face` · Cordis prepare 源 |
 
 Face 薄实现：`packages/server/face/src/reference-discovery.ts` · `handlers/references.ts`（复用 search + session list 投影）。
 
@@ -44,7 +44,7 @@ node scripts/resync-client-from-bar.mjs ui-input-trigger   # @ 语法 / quoted t
 
 > **Audience**: Contributors · Maintainers
 
-Product-shell `@` stack: `ui-reference` plugin + `packages/context/*` contracts + Face discovery remotes. Cross-session **prepare** (injecting a snapshot into the prompt) is not yet on the Face main path (see [status.md](../status.md)).
+Product-shell `@` stack: `ui-reference` plugin + `packages/context/*` contracts + Face discovery remotes + Face **prepare** (`@xrkseek/xrk-session-reference/prepare-face` via preset `prepareUserContent` → `runTurn`).
 
 ## Package map
 
@@ -53,7 +53,7 @@ Product-shell `@` stack: `ui-reference` plugin + `packages/context/*` contracts 
 | `@xrkseek/client-ui-reference` | `packages/client/ui-reference` | Unified Web `@file` / `@session` input source |
 | `@xrkseek/xrk-file-reference` | `packages/context/file-reference` | `@file` grammar + Remote contract |
 | `@xrkseek/xrk-file-reference-local` | `packages/context/file-reference-local` | Local `WorkspaceFileSearch` |
-| `@xrkseek/xrk-session-reference` | `packages/context/session-reference` | `dsh-session:` URI · prepare service |
+| `@xrkseek/xrk-session-reference` | `packages/context/session-reference` | `dsh-session:` URI · Face `prepare-face` · Cordis prepare source |
 
 Thin Face implementation: `packages/server/face/src/reference-discovery.ts` · `handlers/references.ts` (reuses search + session list projections).
 

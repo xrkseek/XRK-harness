@@ -14,8 +14,9 @@ notes: |
     · ui-reference → 统一 @file / @session；已进 boot（37 plugins）
   context 已搬：file-reference · file-reference-local · session-reference
   ui-input-trigger：rc.2 @ 语法（quoted token · section 分组）已 resync
-  Face remotes：fileReferences/list · sessionReferenceResolver/candidates（发现；prepare 未接）
+  Face remotes：fileReferences/list · sessionReferenceResolver/candidates（发现）
+  Face prepare：@xrkseek/xrk-session-reference/prepare-face → preset prepareUserContent → runTurn
   教科书：[modules/references.md](../docs/modules/references.md)
   工具：scripts/resync-client-from-bar.mjs · scripts/resync-context-from-bar.mjs
   未整包搬：ui-renderer / ui-brand-official（XRK 有 web-react · 自有品牌）。
-  Cordis 缺口（全量 session-reference）：xrk-session-query · xrk-output-retention
+  Cordis 全量 session-reference（sessionQuery / output-retention）仍可选；Face 路径不依赖

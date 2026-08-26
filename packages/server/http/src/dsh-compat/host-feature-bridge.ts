@@ -3,10 +3,12 @@
  * Local / heuristic / optional remote — not upstream Cordis parity.
  */
 import { createHash } from "node:crypto";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
+import { mergeGenuiComponentRegistry } from "./genui-npm-bridge.js";
+export { tryPythonTongflowScan } from "./tongflow-python-bridge.js";
 
 export interface ModsearchHit {
   readonly title: string;
@@ -214,6 +216,15 @@ function buildGenuiReactTree(node: unknown): Record<string, unknown> {
   }
   const row = node as Record<string, unknown>;
   const rawType = String(row.type ?? "Box");
+  if (rawType.toLowerCase() === "npm") {
+    return {
+      type: "NpmComponent",
+      props: {
+        package: row.package,
+        export: row.export ?? row.exportName,
+      },
+    };
+  }
   const normalized =
     rawType.length > 0
       ? rawType.charAt(0).toUpperCase() + rawType.slice(1)
@@ -237,6 +248,7 @@ function buildGenuiReactTree(node: unknown): Record<string, unknown> {
 
 export function renderGenuiFromSchema(
   schema: Record<string, unknown>,
+  options: { readonly xrkHome?: string; readonly env?: NodeJS.ProcessEnv } = {},
 ): {
   preview: string;
   tree: Record<string, unknown>;
@@ -244,6 +256,7 @@ export function renderGenuiFromSchema(
   reactTree: Record<string, unknown>;
   componentRegistry: readonly string[];
   live: boolean;
+  npmComponents?: readonly string[];
 } {
   const lines: string[] = [];
   const walk = (node: unknown, depth: number, label: string) => {
@@ -272,13 +285,22 @@ export function renderGenuiFromSchema(
   walk(schema, 0, "root");
   const html = renderGenuiHtmlFromSchema(schema);
   const reactTree = buildGenuiReactTree(schema);
+  const env = options.env ?? process.env;
+  const componentRegistry = mergeGenuiComponentRegistry(
+    GENUI_COMPONENT_REGISTRY,
+    options.xrkHome,
+    schema,
+    env,
+  );
+  const npmComponents = componentRegistry.filter((row) => row.startsWith("npm:"));
   return {
     preview: lines.join("\n"),
     tree: schema,
     html,
     reactTree,
-    componentRegistry: GENUI_COMPONENT_REGISTRY,
+    componentRegistry,
     live: true,
+    ...(npmComponents.length > 0 ? { npmComponents } : {}),
   };
 }
 
@@ -537,28 +559,6 @@ export function scanTongflowRegistryFromInventory(
   };
 }
 
-export function tryPythonTongflowScan(
-  workspaceRoot?: string,
-): Record<string, unknown> | null {
-  const script = [
-    "import json,sys",
-    "print(json.dumps({'plugins':{},'nodePluginMap':{},'official':[],'scanner':'python-stub','python':True}))",
-  ].join("\n");
-  for (const bin of ["python3", "python"]) {
-    const res = spawnSync(bin, ["-c", script], {
-      encoding: "utf8",
-      timeout: 5000,
-      cwd: workspaceRoot,
-    });
-    if (res.status !== 0 || !res.stdout?.trim()) continue;
-    try {
-      return JSON.parse(res.stdout) as Record<string, unknown>;
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
 
 export function searchNoemaMemories(
   memories: readonly { id: string; text: string; tags: readonly string[] }[],

@@ -78,6 +78,7 @@ import {
   messageFeedbackList,
   messageFeedbackPut,
   pluginInventoryList,
+  processChannelsList,
 } from "./handlers/remotes.js";
 import {
   costMeterFetchPricesRemote,
@@ -171,6 +172,7 @@ const HANDLERS: Record<string, FaceHandler> = {
   "commands/list": commandsList,
   "commands/execute": commandsExecute,
   "pluginInventory/list": pluginInventoryList,
+  "processChannels/list": processChannelsList,
   "messageFeedback/list": messageFeedbackList,
   "messageFeedback/put": messageFeedbackPut,
   "messageFeedback/delete": messageFeedbackDelete,

@@ -1,5 +1,5 @@
 /**
- * Host-serve Access chip: Permissions projection �?switch Read Only
+ * Host-serve Access chip: Permissions projection -> switch Read only
  * via the composer Access mode control (runs `/permission`).
  */
 import { describe, expect, it } from "vitest";
@@ -14,7 +14,7 @@ import {
 
 describe.skipIf(!HAS_SHELL)("product shell access", () => {
   it(
-    "switches Access mode to Read Only without page errors",
+    "switches Access mode to Read only without page errors",
     async () => {
       const shell = await spawnRegisteredWorkspace({
         label: "xrk-access-",
@@ -25,7 +25,7 @@ describe.skipIf(!HAS_SHELL)("product shell access", () => {
         await prepareLiveComposer(page, shell, pageErrors);
 
         const access = page.getByRole("button", {
-          name: /Access mode|访问模式/,
+          name: /Access mode/i,
         });
         try {
           await access.waitFor({ timeout: 20_000 });
@@ -37,13 +37,13 @@ describe.skipIf(!HAS_SHELL)("product shell access", () => {
         }
         await access.click();
         await page
-          .getByRole("menuitem", { name: /Read Only|只读/ })
+          .getByRole("menuitem", { name: /Read only/i })
           .click({ timeout: 10_000 });
         await expect
           .poll(async () => access.getAttribute("aria-label"), {
             timeout: 10_000,
           })
-          .toMatch(/Read Only|只读|read-only/i);
+          .toMatch(/Read only|read-only/i);
 
         expect(
           pageErrors,

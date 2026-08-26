@@ -32,6 +32,8 @@
     { "path": "packages/code-runtime" },
     { "path": "packages/testkit" },
     { "path": "packages/session/session-projection" },
+    { "path": "packages/session/face-session-query" },
+    { "path": "packages/util/output-retention" },
     { "path": "packages/server/http" },
     { "path": "packages/server/face" },
     { "path": "packages/server/loader" },

@@ -25,6 +25,42 @@ describe("parseSessionEvent", () => {
     });
   });
 
+  it("parses user/message session-reference source", () => {
+    const ev = parseSessionEvent({
+      type: "user/message",
+      ts: 3,
+      turnId: "t1",
+      content: "## Referenced sessions\n...",
+      source: {
+        kind: "session-reference",
+        form: "recall",
+        version: 1,
+        references: [
+          {
+            sessionId: "src-1",
+            label: "Other",
+            capturedThroughSeq: 4,
+            compacted: false,
+            originalMessages: 2,
+            retainedMessages: 2,
+            omittedMessages: 0,
+            omittedBytes: 0,
+            truncated: false,
+            inputIndex: 0,
+          },
+        ],
+      },
+    });
+    expect(ev).toMatchObject({
+      source: {
+        kind: "session-reference",
+        form: "recall",
+        version: 1,
+        references: [{ sessionId: "src-1", label: "Other" }],
+      },
+    });
+  });
+
   it("parses user/message skill-catalog source", () => {
     const ev = parseSessionEvent({
       type: "user/message",

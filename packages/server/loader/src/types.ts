@@ -1,5 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { BrandEntry } from "@xrkseek/llm-registry";
 import type { ToolDefinition } from "@xrkseek/core-tools";
+import type { PolicyRule } from "@xrkseek/policy";
 
 /** Runtime context passed when a `kind: host` plugin builds its public handler. */
 export interface HostWireContext {
@@ -48,6 +50,12 @@ export interface PluginPromptSection {
   readonly content: string | (() => string | Promise<string>);
 }
 
+/** One IM / notification channel contribution (`kind: "channel"`). */
+export interface PluginChannelDescriptor {
+  readonly channelId: string;
+  readonly displayName?: string;
+}
+
 /** Slash command contribution (`kind: "commands"`). */
 export interface PluginCommandResult {
   readonly kind: "success" | "error";
@@ -91,6 +99,21 @@ export interface RegisteredPlugin {
    * Collected via `collectPluginCommands` — first name wins.
    */
   readonly commands?: readonly PluginCommand[];
+  /**
+   * When `kind === "policy"`: ordered policy rules for `wireCompositionPolicy`.
+   * Merged before `createPolicyEngine` in presets (reserved kind).
+   */
+  readonly policyRules?: readonly PolicyRule[];
+  /**
+   * When `kind === "channel"`: IM / notification channel descriptors.
+   * Collected via `collectChannelPlugins` — wire pending IM gateway.
+   */
+  readonly channels?: readonly PluginChannelDescriptor[];
+  /**
+   * When `kind === "llm"`: LLM registry brand rows for `wireCompositionLlm`.
+   * Explicit registry brands win on id clashes.
+   */
+  readonly llmBrands?: readonly BrandEntry[];
   /**
    * When `kind === "host"`: claims paths before SPA static (community client
    * plugins expect Cordis Host routes on the product origin).

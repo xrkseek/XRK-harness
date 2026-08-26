@@ -1,0 +1,51 @@
+{
+  "name": "@xrkseek/xrk-session-query",
+  "description": "Session query seam: surface snapshots, lineage, and search types (Cordis service stub on XRK Host Face path)",
+  "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/stubs/xrk-session-query"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@xrkseek/xrk-llm": "workspace:^",
+    "@xrkseek/xrk-session": "workspace:^",
+    "@xrkseek/xrk-session-title": "workspace:^"
+  },
+  "peerDependencies": {
+    "@xrkseek/xrk-brand": "workspace:^",
+    "@xrkseek/xrk-llm": "workspace:^",
+    "@xrkseek/xrk-session": "workspace:^",
+    "@xrkseek/xrk-session-title": "workspace:^",
+    "@xrkseek/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@xrkseek/xrk-brand": "workspace:^",
+    "@xrkseek/xrk-llm": "workspace:^",
+    "@xrkseek/xrk-session": "workspace:^",
+    "@xrkseek/xrk-session-title": "workspace:^",
+    "@xrkseek/cordis": "workspace:^"
+  },
+  "private": true
+}

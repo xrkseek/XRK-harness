@@ -214,13 +214,41 @@ export async function dismissWelcome(page: Page): Promise<void> {
   await dialog.waitFor({ state: "hidden", timeout: 10_000 });
 }
 
+/** Dismiss optional first-run product prompts that block the composer chrome. */
+export async function dismissOptionalProductDialogs(page: Page): Promise<void> {
+  await dismissWelcome(page);
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const guides = page.locator(
+      '[role="dialog"]:not([aria-label="Settings"])',
+    );
+    const count = await guides.count();
+    if (count === 0) break;
+    let dismissed = false;
+    for (let i = 0; i < count; i += 1) {
+      const dialog = guides.nth(i);
+      if (!(await dialog.isVisible().catch(() => false))) continue;
+      const skip = dialog
+        .getByRole("button", {
+          name: /Not now|Got it|Maybe later|Skip|Dismiss/i,
+        })
+        .first();
+      if (await skip.isVisible().catch(() => false)) {
+        await skip.click();
+        dismissed = true;
+        await dialog.waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+      }
+    }
+    if (!dismissed) break;
+  }
+}
+
 /** DSH lane: welcome → connect workspace → enabled hero composer. */
 export async function prepareLiveComposer(
   page: Page,
   shell: { readonly workspaceRoot: string },
   pageErrors: readonly string[] = [],
 ): Promise<void> {
-  await dismissWelcome(page);
+  await dismissOptionalProductDialogs(page);
   const live = page.locator(
     'textarea:enabled[placeholder="Describe what you want to build"]',
   );

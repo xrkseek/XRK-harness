@@ -5,6 +5,17 @@
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src/types.ts", "src/config.ts", "src/uri.ts"],
-  "references": [{ "path": "../../protocol" }]
+  "include": [
+    "src/types.ts",
+    "src/config.ts",
+    "src/uri.ts",
+    "src/serialization.ts",
+    "src/surface.ts",
+    "src/retention.ts",
+    "src/prepare-face.ts"
+  ],
+  "references": [
+    { "path": "../../protocol" },
+    { "path": "../../util/output-retention" }
+  ]
 }

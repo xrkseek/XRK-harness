@@ -169,6 +169,13 @@ export interface CreateAgentOptions {
   readonly beforeUserMessage?: Parameters<
     typeof runTurn
   >[0]["beforeUserMessage"];
+  /**
+   * Cross-session `@session` prepare (Face / Host). Forwarded to `runTurn`.
+   * Presets wire `@xrkseek/xrk-session-reference/prepare-face`.
+   */
+  readonly prepareUserContent?: Parameters<
+    typeof runTurn
+  >[0]["prepareUserContent"];
 }
 
 function mergeSignals(
@@ -331,6 +338,9 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
               : {}),
             ...(options.beforeUserMessage
               ? { beforeUserMessage: options.beforeUserMessage }
+              : {}),
+            ...(options.prepareUserContent
+              ? { prepareUserContent: options.prepareUserContent }
               : {}),
           });
         } catch (err) {

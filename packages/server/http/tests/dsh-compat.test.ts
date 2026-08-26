@@ -1396,6 +1396,70 @@ describe("dsh-compat adapters", () => {
     });
   });
 
+  it("IM messaging HTTP round-trip via bridge", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-im-http-"));
+    temps.push(root);
+    const handler = compatHandler({ xrkHome: path.join(root, "home") });
+    await withPublicHandler(handler, async (base) => {
+      const send = await fetch(`${base}/api/im/weixin/send`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ botId: "b1", text: "hello http" }),
+      });
+      const sendBody = (await send.json()) as { ok: boolean; messageId?: string };
+      expect(sendBody.ok).toBe(true);
+      expect(sendBody.messageId).toBeTruthy();
+
+      const webhook = await fetch(`${base}/api/im/weixin/webhook`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ botId: "b1", text: "inbound http" }),
+      });
+      const webhookBody = (await webhook.json()) as {
+        ok: boolean;
+        received?: boolean;
+      };
+      expect(webhookBody.ok).toBe(true);
+      expect(webhookBody.received).toBe(true);
+
+      const list = await fetch(`${base}/api/im/weixin/messages?botId=b1`);
+      const listBody = (await list.json()) as {
+        ok: boolean;
+        messages: unknown[];
+      };
+      expect(listBody.ok).toBe(true);
+      expect(listBody.messages.length).toBe(2);
+
+      const stream = await fetch(`${base}/api/im/weixin/stream?botId=b1`, {
+        headers: { accept: "text/event-stream" },
+      });
+      expect(stream.status).toBe(200);
+      const sse = await stream.text();
+      expect(sse).toContain("event: snapshot");
+      expect(sse).toContain("inbound http");
+
+      const gateway = await fetch(`${base}/weixin/connection.gateway.status`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "client-request",
+          rpcId: "gw1",
+          method: "connection.gateway.status",
+          payload: {},
+        }),
+      });
+      const gwBody = (await gateway.json()) as {
+        result: {
+          ok: boolean;
+          value: { state?: string; incomplete?: string[] };
+        };
+      };
+      expect(gwBody.result.ok).toBe(true);
+      expect(gwBody.result.value.state).toBe("bridge");
+      expect(gwBody.result.value.incomplete ?? []).toEqual([]);
+    });
+  });
+
   it("serves harness connector heartbeat and office RPC for dsh-im", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-im-office-"));
     temps.push(root);
@@ -1848,12 +1912,7 @@ describe("dsh-compat matrix", () => {
     } = await import("../src/dsh-compat/dsh-compat-matrix.js");
     expect(listDshCompatGenericIds().length).toBeGreaterThan(10);
     expect(listDshCompatGenericIds()).toContain("dynamic-cordis-runner");
-    expect(listDshCompatGapIds()).toEqual([
-      "im-long-lived-gateway",
-      "taskflow-external-runtime",
-      "cloud-vision-routing",
-      "memory-embeddings",
-    ]);
+    expect(listDshCompatGapIds()).toEqual([]);
     expect(listDshCompatGapIds()).not.toContain("cordis-fiber-subprocess");
     expect(
       DSH_COMPAT_GENERIC_CAPABILITIES.some((r) => r.id === "honest-http-catchall"),

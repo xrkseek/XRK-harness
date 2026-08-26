@@ -24,6 +24,21 @@
       "import": "./dist/uri.js",
       "default": "./dist/uri.js"
     },
+    "./prepare-face": {
+      "types": "./dist/prepare-face.d.ts",
+      "import": "./dist/prepare-face.js",
+      "default": "./dist/prepare-face.js"
+    },
+    "./surface": {
+      "types": "./dist/surface.d.ts",
+      "import": "./dist/surface.js",
+      "default": "./dist/surface.js"
+    },
+    "./retention": {
+      "types": "./dist/retention.d.ts",
+      "import": "./dist/retention.js",
+      "default": "./dist/retention.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -33,7 +48,8 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@xrkseek/protocol": "workspace:*"
+    "@xrkseek/protocol": "workspace:*",
+    "@xrkseek/xrk-output-retention": "workspace:*"
   },
   "private": true
 }

@@ -51,7 +51,7 @@ community client.js
 | **G** | 未注册 POST RPC | settings fallback / 空 ok |
 | **H** | `xrk.host.json` | 作者声明 provider |
 | **I** | `host.mjs` | 进程内 apply；失败则 **I′** 子进程 |
-| **J** | 外部云端 / 厂商发行版 | 见「待补」 |
+| **J** | 外部云端 / 厂商发行版 | 可选 sidecar env（IM · 向量库）；`xrkh serve` boot 自动接线 |
 
 ## Host 能力
 
@@ -60,11 +60,11 @@ community client.js
 | 能力 | 已实现 | 待补 |
 |------|--------|------|
 | `host.mjs` RPC | inventory · invoke · runHostHalf | 全量第三方 DI（非产品目标） |
-| IM | connector · OAuth · `message.send/list` · webhook | 云端长连接网关 |
-| 任务流 | 持久化 · TS 节点 · scan | 绑定厂商 Python 发行版 |
-| GenUI | CRUD · HTML / React tree 预览 | 动态加载任意 npm 组件 |
-| Vision | paste/analyze · 本地 OCR | 云端 vision LLM 路由 |
-| 检索与记忆 | 本地 rg · keyword · 可选远程 | embedding 宿主 |
+| IM | connector · OAuth · `message.send/list` · webhook · poll/SSE · sidecar relay · **in-process WS client** | — |
+| 任务流 | 持久化 · TS 节点 · scan · `external` 子进程 · **Python bridge**（`XRK_TONGFLOW_PYTHON`） | — |
+| GenUI | CRUD · HTML / React tree 预览 · **npm 组件 registry/resolve** | — |
+| Vision | paste/analyze · 本地 OCR · OpenAI-compatible · **anthropic-messages** · **gemini-generate** | — |
+| 检索与记忆 | 本地 rg · keyword · **`embedding.search` embedded host** · optional `XRK_MEMORY_EMBED_*` sidecar | — |
 | 自动审阅 | 启发式 classify · slash | 可插拔 classifier |
 | 上下文浏览器 | Face **`contextTimeline`**（requests 分项 · usage 盖章 · events）/ **`contextHeaders`** · **`costUsage`** 计价 | — |
 | 移动访问 | 配对 · LAN/WAN PIN · 隧道 HTTP+WS | — |
@@ -77,14 +77,30 @@ community client.js
 
 ## 待补特性
 
-下列写入 [status.md](./status.md)「未做」，表示产品后续可自研或外接：
+当前 Host 能力表「已实现」列已覆盖 IM · Vision · 记忆 · GenUI npm · TongFlow Python bridge。后续社区扩展写入 status 时须代码对齐。
 
 | 特性 | 说明 |
 |------|------|
-| IM 长连接网关 | 当前以 webhook / 短请求为主 |
-| 任务流外部运行时 | 可选接入第三方节点发行版 |
-| 云端 Vision | 路由至已配置的 vision LLM |
-| 记忆 embedding | 向量索引宿主 |
+| GenUI 浏览器端 bundle | Host 侧 registry/resolve 已能跑；壳内动态 import 由 community client 负责 |
+
+## 可选外接 env（不进仓依赖）
+
+联调自运维 sidecar 时使用；Host 核心不嵌入这些服务。
+
+| 变量 | 用途 |
+| --- | --- |
+| `XRK_IM_GATEWAY_URL` | 外接 IM relay 基址（HTTP health + WS `/ws` 推导） |
+| `XRK_IM_GATEWAY_WS_URL` | 显式 IM WebSocket 网关地址（优先于 URL 推导） |
+| `XRK_IM_GATEWAY_TOKEN` | relay / WS 鉴权 Bearer |
+| `XRK_MEMORY_EMBED_URL` | 外接向量库 HTTP 基址（如 Qdrant REST）；未接时仍走本地 hash bridge |
+| `XRK_MEMORY_EMBED_TOKEN` | 向量库 API key（可选） |
+| `XRK_MEMORY_EMBED_COLLECTION` | 集合 / index 名（可选） |
+| `XRK_GENUI_NPM_ALLOWLIST` | 逗号分隔 npm 包名，合并进 GenUI component registry |
+| `XRK_TONGFLOW_PYTHON` | 用户 Python 解释器（scan / `kind:python` 节点） |
+| `XRK_TONGFLOW_PYTHON_SCAN` | 自定义 `/tongflow/scan` 脚本路径 |
+| `XRK_TONGFLOW_PYTHON_RUNNER` | 自定义 Python 节点 runner 脚本 |
+
+Sidecar 契约：`im-gateway-sidecar.ts` · `memory-embeddings.ts` · [ADR-0006](./adr/0006-im-long-lived-gateway.md)。
 
 ## 本地审计
 
@@ -165,7 +181,7 @@ When installing community packages **beyond the product-shell built-in clients**
 | **G** | Unregistered POST RPC | Settings fallback / empty ok |
 | **H** | `xrk.host.json` | Author-declared provider |
 | **I** | `host.mjs` | In-process apply; on failure **I′** subprocess |
-| **J** | External cloud / vendor distribution | See Planned work |
+| **J** | External cloud / vendor distribution | Optional sidecar env (IM · vectors); wired on `xrkh serve` boot |
 
 ## Host capabilities
 
@@ -174,11 +190,11 @@ Source of truth: `dsh-compat-matrix.ts`.
 | Capability | Implemented | Planned |
 |------|--------|------|
 | `host.mjs` RPC | inventory · invoke · runHostHalf | Full third-party DI (out of scope) |
-| IM | connector · OAuth · `message.send/list` · webhook | Cloud long-lived IM gateway |
-| Task flow | Persistence · TS nodes · scan | Vendor Python runtime binding |
-| GenUI | CRUD · HTML / React tree preview | Dynamic arbitrary npm components |
-| Vision | paste/analyze · local OCR | Cloud vision LLM routing |
-| Search & memory | Local rg · keyword · optional remote | Embedding host |
+| IM | connector · OAuth · `message.send/list` · webhook · poll/SSE · sidecar relay · **in-process WS client** | — |
+| Task flow | Persistence · TS nodes · scan · `external` subprocess · **Python bridge** (`XRK_TONGFLOW_PYTHON`) | — |
+| GenUI | CRUD · HTML / React tree preview · **npm component registry/resolve** | — |
+| Vision | paste/analyze · local OCR · OpenAI-compatible · **anthropic-messages** · **gemini-generate** | — |
+| Search & memory | Local rg · keyword · **`embedding.search` embedded host** · optional `XRK_MEMORY_EMBED_*` sidecar | — |
 | Auto-review | Heuristic classify · slash | Pluggable classifier |
 | Context browser | Face **`contextTimeline`** (per-request items · usage stamps · events) / **`contextHeaders`** · **`costUsage`** pricing | — |
 | Mobile access | Pairing · LAN/WAN PIN · tunnel HTTP+WS | — |
@@ -191,14 +207,30 @@ Local messaging, nodes, OCR, and GenUI preview are available inside the adapter 
 
 ## Planned work
 
-These appear under [status.md](./status.md) **Not done** as product follow-ons (first-party or external):
+Host **Implemented** covers IM · vision · memory · GenUI npm registry · TongFlow Python bridge. Follow-ons (sync to [status.md](./status.md) only when code-aligned):
 
 | Feature | Notes |
 |------|------|
-| IM long-lived gateway | Webhook and short requests today |
-| External task runtime | Optional third-party node distributions |
-| Cloud Vision | Route to configured vision LLMs |
-| Memory embeddings | Vector index host |
+| GenUI browser bundle | Host registry/resolve works; dynamic import stays in community client |
+
+## Optional external env (not in-repo dependencies)
+
+For self-hosted sidecars; Host core does not embed these services.
+
+| Variable | Purpose |
+| --- | --- |
+| `XRK_IM_GATEWAY_URL` | External IM relay base (HTTP health; WS `/ws` inferred) |
+| `XRK_IM_GATEWAY_WS_URL` | Explicit IM WebSocket gateway URL (overrides inference) |
+| `XRK_IM_GATEWAY_TOKEN` | Bearer for relay / WS auth |
+| `XRK_MEMORY_EMBED_URL` | External vector DB HTTP base (e.g. Qdrant REST); local hash bridge when unset |
+| `XRK_MEMORY_EMBED_TOKEN` | Vector DB API key (optional) |
+| `XRK_MEMORY_EMBED_COLLECTION` | Collection / index name (optional) |
+| `XRK_GENUI_NPM_ALLOWLIST` | Comma-separated npm packages merged into GenUI registry |
+| `XRK_TONGFLOW_PYTHON` | User Python interpreter (scan / `kind:python` nodes) |
+| `XRK_TONGFLOW_PYTHON_SCAN` | Custom `/tongflow/scan` script path |
+| `XRK_TONGFLOW_PYTHON_RUNNER` | Custom Python node runner script |
+
+Sidecar contracts: `im-gateway-sidecar.ts` · `memory-embeddings.ts` · [ADR-0006](./adr/0006-im-long-lived-gateway.md).
 
 ## Local audit
 

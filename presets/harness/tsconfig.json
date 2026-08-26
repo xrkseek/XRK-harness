@@ -24,6 +24,7 @@
     { "path": "../../packages/llm/replay" },
     { "path": "../../packages/policy" },
     { "path": "../../packages/server/loader" },
-    { "path": "../../packages/workspace" }
+    { "path": "../../packages/workspace" },
+    { "path": "../../packages/context/session-reference" }
   ]
 }

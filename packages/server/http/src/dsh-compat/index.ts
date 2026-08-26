@@ -6,6 +6,10 @@ import type { PublicRouteHandlerFn } from "./underlying/public-handler.js";
 import type { DshCompatWireOptions } from "./adapter-types.js";
 import { ensureDshCompatRegistry } from "./shared-registry.js";
 import {
+  bootDshCompatServices,
+  shutdownDshCompatServices,
+} from "./dsh-compat-boot.js";
+import {
   createMobileAccessGateChecker,
   createMobileAccessGateHandler,
   tryHandleMobileAccessGate,
@@ -185,7 +189,12 @@ export async function prewarmDshCompatAdapters(
   options: DshCompatOptions = {},
 ): Promise<void> {
   await ensureDshCompatRegistry(options);
+  shutdownDshCompatServices();
+  await bootDshCompatServices(options);
 }
+
+export { shutdownDshCompatServices } from "./dsh-compat-boot.js";
+export type { DshCompatBootResult } from "./dsh-compat-boot.js";
 
 export function createDshCompatPublicHandler(
   options: DshCompatOptions = {},

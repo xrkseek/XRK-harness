@@ -9,6 +9,7 @@ import {
   cancelImProvision,
   pollImProvision,
 } from "./im-provision-bridge.js";
+import { handleImLongLivedGatewayRpc } from "./im-long-lived-gateway.js";
 import { handleImMessagingRpc } from "./im-messaging-bridge.js";
 import { tag } from "./meta.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
@@ -376,6 +377,15 @@ export function handleImChannelRpc(
     );
     return imChannelSnapshot(name, store);
   }
+
+  const gateway = handleImLongLivedGatewayRpc(
+    name,
+    endpoint,
+    payload,
+    process.env,
+    home,
+  );
+  if (gateway) return gateway;
 
   const messaging = handleImMessagingRpc(name, endpoint, payload, home);
   if (messaging) return messaging;

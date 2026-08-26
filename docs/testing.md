@@ -50,6 +50,10 @@ Vitest 别名把 `@xrkseek/*` 指到各包 **src**（见根 `vitest.config.ts`�
 4. **Exec**：临时目录 `mkdtemp`；测完清理；测路径逃逸与 stub Provider。  
 5. **HTTP**：`createHostManager` + `XRK_PORT=0`；测后 `stopAll`。产品壳首屏测在有 `apps/web/dist` 时跑。  
 6. **产品壳浏览器硬刷**（不进 `pnpm check`）：`pnpm test:web` → `vitest.web.config.ts` 只收 `product-shell-*.e2e.ts`。Playwright 在 `@xrkseek/web-frontend` 的 devDependency；`pnpm install` **不**下浏览器。要跑时：`pnpm --filter @xrkseek/web-frontend exec playwright install chromium`。  
+   **Stream aria golden**（`product-shell-stream-aria.e2e.ts`）：快照在 `apps/web/tests/snapshots/product-shell-stream/settled.expected.md`。有意改聊天区可访问性树时刷新：`XRK_SNAPSHOT=refresh pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/product-shell-stream-aria.e2e.ts`（勿带 `refresh` 做 CI 断言）。  
+   **社区 client 审计**（`scripts/dsh-community-audit.mjs`）：对照 client 扫描路径与 `dsh-compat` 能力表；先 `pnpm exec tsc -b packages/server/http`。  
+   **Cordis fiber**（`packages/server/http/tests/cordis-fiber-runner.test.ts`）：先 `pnpm exec tsc -b packages/server/http`，测试从 **dist** 导入 runner。  
+   **遗留 HMR soak**（`apps/web/tests/hmr-live.e2e.ts`）：DSH Cordis scaffold；不进 `pnpm test:web`。产品路径用 `pnpm dev:web` + 硬刷新（[getting-started](./getting-started.md)）。  
 7. **Preset**：`@xrkseek/testkit` 的 `makeHarness` 或直接 `createMinimalComposition`。  
 8. **Face 闲置 runtime**：共用 `tests/helpers/bare-runtime.ts`。  
 9. **Node**：本地/CI 用系统 Node ≥26；勿让 IDE 自带的旧 Node 抢 PATH。
@@ -118,6 +122,10 @@ Vitest aliases map `@xrkseek/*` to each package **src** (see root `vitest.config
 4. **Exec**: `mkdtemp` temp dirs; clean up; test path escape and stub Providers.  
 5. **HTTP**: `createHostManager` + `XRK_PORT=0`; `stopAll` after. Product-shell first-paint tests run when `apps/web/dist` exists.  
 6. **Product-shell browser hard refresh** (not in `pnpm check`): `pnpm test:web` → `vitest.web.config.ts` only collects `product-shell-*.e2e.ts`. Playwright is a `@xrkseek/web-frontend` devDependency; `pnpm install` does **not** download browsers. To run: `pnpm --filter @xrkseek/web-frontend exec playwright install chromium`.  
+   **Stream aria golden** (`product-shell-stream-aria.e2e.ts`): snapshot at `apps/web/tests/snapshots/product-shell-stream/settled.expected.md`. After intentional chat-region a11y changes, refresh with `XRK_SNAPSHOT=refresh pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/product-shell-stream-aria.e2e.ts` (CI must run without `refresh`).  
+   **Community client audit** (`scripts/dsh-community-audit.mjs`): compare scanned client paths with the `dsh-compat` capability table; run `pnpm exec tsc -b packages/server/http` first.  
+   **Cordis fiber** (`packages/server/http/tests/cordis-fiber-runner.test.ts`): run `pnpm exec tsc -b packages/server/http` first; tests import the runner from **dist**.  
+   **Legacy HMR soak** (`apps/web/tests/hmr-live.e2e.ts`): DSH Cordis scaffold; not in `pnpm test:web`. Product path: `pnpm dev:web` + hard refresh ([getting-started](./getting-started.md)).    
 7. **Preset**: `@xrkseek/testkit` `makeHarness` or direct `createMinimalComposition`.  
 8. **Face idle runtime**: shared `tests/helpers/bare-runtime.ts`.  
 9. **Node**: local/CI use system Node ≥26; do not let an IDE-bundled older Node win PATH.

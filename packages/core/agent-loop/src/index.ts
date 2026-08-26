@@ -43,6 +43,7 @@ import type {
   SessionEvent,
   TokenUsage,
   TurnEndReason,
+  UserMessageSource,
 } from "@xrkseek/protocol";
 import {
   contentHasImage,
@@ -167,6 +168,32 @@ export interface RunTurnInput {
     readonly turnId: string;
     readonly now: () => number;
   }) => void | Promise<void>;
+  /**
+   * Face cross-session `@session` prepare: rewrite mention tokens and return
+   * zero-or-more context rows to append immediately after the human message
+   * (and after mid-turn steers). Omit → no prepare.
+   */
+  readonly prepareUserContent?: (ctx: {
+    readonly content: MessageContent;
+    readonly text: string;
+    readonly signal?: AbortSignal;
+  }) =>
+    | {
+        readonly content: MessageContent;
+        readonly text: string;
+        readonly contexts: readonly {
+          readonly content: MessageContent;
+          readonly source?: UserMessageSource;
+        }[];
+      }
+    | Promise<{
+        readonly content: MessageContent;
+        readonly text: string;
+        readonly contexts: readonly {
+          readonly content: MessageContent;
+          readonly source?: UserMessageSource;
+        }[];
+      }>;
 }
 
 export interface RunTurnResult {
@@ -468,6 +495,22 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       now,
     });
   }
+
+  let preparedContexts: readonly {
+    readonly content: MessageContent;
+    readonly source?: UserMessageSource;
+  }[] = [];
+  if (input.prepareUserContent) {
+    const prepared = await input.prepareUserContent({
+      content: userContent,
+      text: userText,
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+    userContent = prepared.content;
+    userText = prepared.text;
+    preparedContexts = prepared.contexts;
+  }
+
   append(input.store, input.sessionId, {
     type: "user/message",
     ts: now(),
@@ -476,6 +519,16 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     content: userContent,
     source: { kind: "user" },
   });
+  for (const ctx of preparedContexts) {
+    append(input.store, input.sessionId, {
+      type: "user/message",
+      ts: now(),
+      turnId,
+      messageId: newUserMessageId(),
+      content: ctx.content,
+      ...(ctx.source ? { source: ctx.source } : {}),
+    });
+  }
 
   let activeStepId: string | undefined;
   /** Sticky: once any step hits max-tokens, the turn ends that way (DSH). */
@@ -495,14 +548,38 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         now,
       });
       if (steers) {
+        let steerContent = steers.content;
+        let steerContexts: readonly {
+          readonly content: MessageContent;
+          readonly source?: UserMessageSource;
+        }[] = [];
+        if (input.prepareUserContent) {
+          const prepared = await input.prepareUserContent({
+            content: steers.content,
+            text: steers.text,
+            ...(input.signal ? { signal: input.signal } : {}),
+          });
+          steerContent = prepared.content;
+          steerContexts = prepared.contexts;
+        }
         append(input.store, input.sessionId, {
           type: "user/message",
           ts: now(),
           turnId,
           messageId: newUserMessageId(),
-          content: steers.content,
+          content: steerContent,
           source: { kind: "user" },
         });
+        for (const ctx of steerContexts) {
+          append(input.store, input.sessionId, {
+            type: "user/message",
+            ts: now(),
+            turnId,
+            messageId: newUserMessageId(),
+            content: ctx.content,
+            ...(ctx.source ? { source: ctx.source } : {}),
+          });
+        }
       }
     }
     commitPendingPlanMode(input.store, input.sessionId, now);

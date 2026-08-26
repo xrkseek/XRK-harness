@@ -37,7 +37,7 @@ npx @xrkseek/harness-cli web
 | 1 | 首次启动会在 **`~/.xrk/`**（可用 `XRK_HOME` 改）创建 `settings.yaml`、会话库等；`--workspace` 只钉项目根 |
 | 2 | **无 LLM 密钥**也可打开壳；发话需接模型或 `--preset minimal` + replay |
 | 3 | 接真模型：**设置 → 模型 / 凭据**（推荐），见下文 |
-| 4 | 可选装用户插件：`xrkh plugin add <包名>`（落到 `~/.xrk/plugins`；装完 **`xrkh restart`** 重载 Host） |
+| 4 | 可选装用户插件：`xrkh plugin add <包名>`（落到 `~/.xrk/plugins`；装完 **`xrkh restart`** 重载 Host）；`xrkh doctor` 可查看 xrk-home 与已装 community client |
 
 **社区 client 包**（如 `dsh-wallet` · `@liustack/modsearch`）同样用 `plugin add` 安装；经自研 Host 兼容器接入。能用什么、待补什么见 [community-plugins.md](./community-plugins.md)；安装与 discover 见 [plugin-loader.md](./plugin-loader.md)。
 
@@ -72,6 +72,22 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 ```
 
 插件样例：[extensions/example-tools](../extensions/example-tools)；工作区 Agent 入口：[.agents/AGENTS.md](../.agents/AGENTS.md)。
+
+### 产品 boot 与客户端热开发（Cordis UI / HMR）
+
+**产品 `serve` / `web` 故意省略** Cordis 历史 UI 面板与 `@xrkseek/client-hmr`（`applyXrkProductBootPolicy` · [ADR-0002](./adr/0002-no-embed-upstream.md)）。这是 UX 选择，不是缺 dist。
+
+改 **`packages/client/*`** 客户端插件时：
+
+| 步骤 | 命令 |
+|------|------|
+| 1 | 终端 A：`pnpm dev:web`（监视 `src/client` 并自动 `client:bundle`） |
+| 2 | 终端 B：`node apps/cli/dist/bin.js web --workspace .`（或 `xrkh web`） |
+| 3 | 浏览器 **硬刷新** 当前 Host URL（产品 boot 无 HMR 行；见 [testing.md](./testing.md)） |
+
+改 **`apps/web` 壳** 或 `boot.json` 图：另跑 `pnpm web:build` · `pnpm web:assemble`。维护者 Face 验证台：`apps/console`（`?console=1`），**不是**产品入口。
+
+遗留 DSH 全 Cordis scaffold + 浏览器 HMR 测例：`apps/web/tests/hmr-live.e2e.ts`（**不进** `pnpm test:web` / `pnpm check`）。
 
 ## 开发环境 vs 生产环境
 
@@ -186,7 +202,7 @@ Open a **concrete project folder** as the workspace — not the Desktop root (re
 | 1 | First launch creates `settings.yaml`, the session store, and related files under **`~/.xrk/`** (override with `XRK_HOME`); `--workspace` only pins the project root |
 | 2 | The shell opens **without an LLM key**; sending messages requires a model or `--preset minimal` plus replay |
 | 3 | Connect a live model via **Settings → Models / Credentials** (recommended); see below |
-| 4 | Optionally install user plugins with `xrkh plugin add <package>` (into `~/.xrk/plugins`; then **`xrkh restart`** to reload Host) |
+| 4 | Optionally install user plugins with `xrkh plugin add <package>` (into `~/.xrk/plugins`; then **`xrkh restart`** to reload Host); `xrkh doctor` reports xrk-home and staged community clients |
 
 **Community client packages** (for example `dsh-wallet` · `@liustack/modsearch`) also install via `plugin add` and connect through the first-party Host adapter. Implemented vs planned surfaces: [community-plugins.md](./community-plugins.md); install and discover: [plugin-loader.md](./plugin-loader.md).
 
@@ -221,6 +237,22 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 ```
 
 Plugin sample: [extensions/example-tools](../extensions/example-tools); workspace agent entry: [.agents/AGENTS.md](../.agents/AGENTS.md).
+
+### Product boot vs client dev loop (Cordis UI / HMR)
+
+**Product `serve` / `web` intentionally omits** legacy Cordis UI panels and `@xrkseek/client-hmr` (`applyXrkProductBootPolicy` · [ADR-0002](./adr/0002-no-embed-upstream.md)). This is a deliberate UX choice, not a missing dist.
+
+When editing **`packages/client/*`** client plugins:
+
+| Step | Command |
+|------|---------|
+| 1 | Terminal A: `pnpm dev:web` (watches `src/client` and runs `client:bundle`) |
+| 2 | Terminal B: `node apps/cli/dist/bin.js web --workspace .` (or `xrkh web`) |
+| 3 | **Hard-refresh** the Host URL in the browser (product boot has no HMR row; see [testing.md](./testing.md)) |
+
+For **`apps/web` shell** or `boot.json` graph changes, also run `pnpm web:build` · `pnpm web:assemble`. Maintainer Face console: `apps/console` (`?console=1`), **not** the product entry.
+
+Legacy DSH full Cordis scaffold + browser HMR soak: `apps/web/tests/hmr-live.e2e.ts` (**not** in `pnpm test:web` / `pnpm check`).
 
 ## Development vs production
 

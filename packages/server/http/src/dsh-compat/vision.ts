@@ -1,11 +1,14 @@
 ﻿/**
  * Vision toolkit + vision-router same-origin routes.
- * Settings persist under ~/.xrk/vision/; analysis hosts stay honest incomplete.
+ * Settings persist under ~/.xrk/vision/; analyze POST may call OpenAI-compatible cloud inference.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "./underlying/http-json.js";
 import { sendDshErr, sendDshOk } from "./dsh-envelope.js";
-import { analyzePastePayload } from "./host-feature-bridge.js";
+import {
+  analyzeWithCloudVisionRouteAsync,
+  cloudVisionModelCapabilities,
+} from "./cloud-vision-routing.js";
 import {
   honestReady,
   visionHostUnavailable,
@@ -135,7 +138,7 @@ export async function handleVisionToolkitHttp(
     if (method === "POST") {
       const raw = await readBody(req);
       const bytes = Buffer.byteLength(raw);
-      const analysis = analyzePastePayload(raw);
+      const analysis = await analyzeWithCloudVisionRouteAsync(raw, options);
       const queue = pushPasteQueue(options, bytes);
       sendDshOk(res, {
         images: analysis.images,
@@ -155,12 +158,12 @@ export async function handleVisionToolkitHttp(
 
   if (pathname === "/_dsh/vision-toolkit/analyze-images" && method === "POST") {
     const raw = await readBody(req);
-    const analysis = analyzePastePayload(raw);
+    const analysis = await analyzeWithCloudVisionRouteAsync(raw, options);
     sendDshOk(res, {
       images: analysis.images,
       analyzed: analysis.analyzed,
       adapter: "xrk-dsh-compat",
-      mode: "xrk-bridge",
+      mode: analysis.mode ?? "xrk-bridge",
     });
     return;
   }
@@ -176,46 +179,34 @@ export async function handleVisionRouterHttp(
   options: VisionOptions = {},
 ): Promise<void> {
   const method = (req.method ?? "GET").toUpperCase();
-  void options;
 
   if (pathname === "/_dsh/vision-router/model-capabilities") {
     sendJson(res, 200, {
-      models: [
-        {
-          id: "xrk-local-vision",
-          provider: "xrk-bridge",
-          modalities: ["image", "text"],
-          ocr: true,
-        },
-      ],
-      capabilities: { ocr: true, metadata: true },
-      builtinFallback: ["xrk-local-vision"],
-      anonymousRpmPerModel: 8,
+      ...cloudVisionModelCapabilities(options),
       ...honestReady(),
       adapter: "xrk-dsh-compat",
     });
     return;
   }
   if (pathname === "/_dsh/vision-router/test-connection") {
+    const route = cloudVisionModelCapabilities(options).route as {
+      routed?: boolean;
+    };
     sendJson(res, 200, {
       ok: true,
       connected: true,
-      mode: "xrk-bridge",
+      mode: route.routed ? "cloud-routed" : "xrk-bridge",
       adapter: "xrk-dsh-compat",
-      note: "Vision bridge with local OCR heuristic + metadata analysis.",
+      note: route.routed
+        ? "Vision cloud route configured (Registry apiKeyEnv)."
+        : "Vision bridge with local OCR heuristic + metadata analysis.",
     });
     return;
   }
   if (pathname === "/_dsh/vision-router/analyze" && method === "POST") {
     const raw = await readBody(req);
-    const analysis = analyzePastePayload(raw);
-    sendJson(res, 200, {
-      ok: true,
-      analyzed: analysis.analyzed,
-      images: analysis.images,
-      mode: "xrk-bridge",
-      adapter: "xrk-dsh-compat",
-    });
+    const analysis = await analyzeWithCloudVisionRouteAsync(raw, options);
+    sendJson(res, 200, analysis);
     return;
   }
   if (pathname === "/_dsh/vision-router/settings-save-diagnostics") {

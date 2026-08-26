@@ -172,6 +172,90 @@ function parseUserMessageSource(
     };
   }
 
+  if (kind === "session-reference") {
+    if (raw.form !== undefined && raw.form !== "recall") {
+      throw new SessionEventParseError(
+        'session-reference form must be "recall"',
+        path,
+      );
+    }
+    if (raw.version !== 1) {
+      throw new SessionEventParseError(
+        "session-reference version must be 1",
+        path,
+      );
+    }
+    const refsRaw = raw.references;
+    if (!Array.isArray(refsRaw)) {
+      throw new SessionEventParseError("references must be array", path);
+    }
+    const references: {
+      sessionId: string;
+      label: string;
+      capturedThroughSeq: number | null;
+      compacted: boolean;
+      originalMessages: number;
+      retainedMessages: number;
+      omittedMessages: number;
+      omittedBytes: number;
+      truncated: boolean;
+      inputIndex: number;
+    }[] = [];
+    for (let i = 0; i < refsRaw.length; i++) {
+      const row = refsRaw[i];
+      if (!isObject(row)) {
+        throw new SessionEventParseError(
+          "invalid reference",
+          `${path}.references[${i}]`,
+        );
+      }
+      const captured = row.capturedThroughSeq;
+      if (
+        captured !== null &&
+        (typeof captured !== "number" || !Number.isSafeInteger(captured))
+      ) {
+        throw new SessionEventParseError(
+          "capturedThroughSeq must be null or safe integer",
+          `${path}.references[${i}]`,
+        );
+      }
+      references.push({
+        sessionId: reqString(row, "sessionId", `${path}.references[${i}]`),
+        label: reqString(row, "label", `${path}.references[${i}]`),
+        capturedThroughSeq: captured,
+        compacted: row.compacted === true,
+        originalMessages: reqSafeInt(
+          row,
+          "originalMessages",
+          `${path}.references[${i}]`,
+        ),
+        retainedMessages: reqSafeInt(
+          row,
+          "retainedMessages",
+          `${path}.references[${i}]`,
+        ),
+        omittedMessages: reqSafeInt(
+          row,
+          "omittedMessages",
+          `${path}.references[${i}]`,
+        ),
+        omittedBytes: reqSafeInt(
+          row,
+          "omittedBytes",
+          `${path}.references[${i}]`,
+        ),
+        truncated: row.truncated === true,
+        inputIndex: reqSafeInt(row, "inputIndex", `${path}.references[${i}]`),
+      });
+    }
+    return {
+      kind: "session-reference",
+      form: "recall",
+      version: 1,
+      references,
+    };
+  }
+
   // plugin + forward-compat opaque kinds: keep as plugin bag when kind is plugin,
   // otherwise wrap unknown kinds as plugin with the durable kind string preserved
   // via a `plugin` label when absent.
@@ -204,6 +288,21 @@ function reqString(
   const v = obj[key];
   if (typeof v !== "string") {
     throw new SessionEventParseError(`expected string "${key}"`, path);
+  }
+  return v;
+}
+
+function reqSafeInt(
+  obj: Record<string, unknown>,
+  key: string,
+  path: string,
+): number {
+  const v = obj[key];
+  if (typeof v !== "number" || !Number.isSafeInteger(v)) {
+    throw new SessionEventParseError(
+      `expected safe integer "${key}"`,
+      path,
+    );
   }
   return v;
 }

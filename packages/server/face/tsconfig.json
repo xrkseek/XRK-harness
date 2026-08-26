@@ -16,10 +16,12 @@
     { "path": "../../policy" },
     { "path": "../../protocol" },
     { "path": "../config" },
+    { "path": "../loader" },
     { "path": "../../session/session-projection" },
     { "path": "../../workspace" },
     { "path": "../../context/file-reference" },
     { "path": "../../context/file-reference-local" },
+    { "path": "../../session/face-session-query" },
     { "path": "../../context/session-reference" }
   ]
 }

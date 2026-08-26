@@ -6,10 +6,10 @@
 
 | 档 | 版本 | 说明 |
 |------|------|------|
-| **正式** | [v0.1.16](./v0.1.16.md) · [GitHub Release](https://github.com/xrkseek/XRK-harness/releases/tag/v0.1.16) | 当前推荐安装 |
+| **正式** | [v0.1.17](./v0.1.17.md) · [GitHub Release](https://github.com/xrkseek/XRK-harness/releases/tag/v0.1.17) | 当前推荐安装 |
 | **预览** | [v0.0.11](./v0.0.11.md) · [GitHub Release](https://github.com/xrkseek/XRK-harness/releases/tag/v0.0.11) | 历史预览线唯一保留；npm tag **`preview`** |
 
-上一正式版：[v0.1.14](./v0.1.14.md)。
+上一正式版：[v0.1.16](./v0.1.16.md)。
 
 安装与发包见 [publishing.md](../publishing.md)。中间号按 [publishing.md](../publishing.md) 弃用；GitHub 保留上表两档 Release。
 
@@ -17,7 +17,7 @@
 
 | 用途 | 命令 |
 |------|------|
-| 正式 | `npx @xrkseek/harness-cli@0.1.16 web` 或 `npm i -g @xrkseek/harness-cli@latest` |
+| 正式 | `npx @xrkseek/harness-cli@0.1.17 web` 或 `npm i -g @xrkseek/harness-cli@latest` |
 | 预览 | `npx @xrkseek/harness-cli@0.0.11 web` 或 `npm i -g @xrkseek/harness-cli@preview` |
 
 规格索引：[docs/README.md](../README.md)。
@@ -32,10 +32,10 @@ The public line keeps only two releases:
 
 | Line | Version | Notes |
 |------|---------|-------|
-| **Formal** | [v0.1.16](./v0.1.16.md) · [GitHub Release](https://github.com/xrkseek/XRK-harness/releases/tag/v0.1.16) | Current recommended install |
+| **Formal** | [v0.1.17](./v0.1.17.md) · [GitHub Release](https://github.com/xrkseek/XRK-harness/releases/tag/v0.1.17) | Current recommended install |
 | **Preview** | [v0.0.11](./v0.0.11.md) · [GitHub Release](https://github.com/xrkseek/XRK-harness/releases/tag/v0.0.11) | Sole retained preview line; npm tag **`preview`** |
 
-Previous formal: [v0.1.14](./v0.1.14.md).
+Previous formal: [v0.1.16](./v0.1.16.md).
 
 Install and publish: [publishing.md](../publishing.md). Intermediate numbers are deprecated on npm per [publishing.md](../publishing.md); GitHub keeps the two releases above.
 
@@ -43,7 +43,7 @@ Install and publish: [publishing.md](../publishing.md). Intermediate numbers are
 
 | Use | Command |
 |-----|---------|
-| Formal | `npx @xrkseek/harness-cli@0.1.16 web` or `npm i -g @xrkseek/harness-cli@latest` |
+| Formal | `npx @xrkseek/harness-cli@0.1.17 web` or `npm i -g @xrkseek/harness-cli@latest` |
 | Preview | `npx @xrkseek/harness-cli@0.0.11 web` or `npm i -g @xrkseek/harness-cli@preview` |
 
 Spec index: [docs/README.md](../README.md).

@@ -174,9 +174,9 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
   },
   {
     id: "genui-library",
-    coverage: "bridge",
-    genericModule: "genui.ts · host-feature-bridge.ts",
-    note: "design CRUD/import + schema/HTML/React tree live preview",
+    coverage: "full",
+    genericModule: "genui.ts · genui-npm-bridge.ts · host-feature-bridge.ts",
+    note: "Design CRUD/import + schema/HTML/React tree preview + npm component registry",
   },
   {
     id: "noema-memory",
@@ -204,35 +204,38 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
       "cordis-fiber-runner.ts · face/handlers/cordis-stub.ts · shared-registry.ts",
     note: "Subprocess RPC when in-process host.mjs apply fails; inventory / invoke / runHostHalf",
   },
-] as const;
-
-/** Reserved product gaps (aligned with docs/community-plugins · docs/status). */
-export const DSH_COMPAT_KNOWN_GAPS: readonly DshCompatCapabilityRow[] = [
   {
     id: "im-long-lived-gateway",
-    coverage: "missing",
-    genericModule: "im-*-bridge",
-    note: "Cloud long-lived IM gateway (webhook / short requests today)",
-  },
-  {
-    id: "taskflow-external-runtime",
-    coverage: "missing",
-    genericModule: "tongflow-node-runtime.ts",
-    note: "Optional vendor Python node runtime binding",
+    coverage: "bridge",
+    genericModule:
+      "im-long-lived-gateway.ts · im-vendor-ws-client.ts · im-gateway-sidecar.ts",
+    note: "Webhook/poll bridge · sidecar relay · in-process WS client (ADR-0006)",
   },
   {
     id: "cloud-vision-routing",
-    coverage: "honest-stub",
-    genericModule: "vision.ts",
-    note: "Cloud vision LLM routing (local OCR bridge today)",
+    coverage: "full",
+    genericModule:
+      "cloud-vision-routing.ts · cloud-vision-inference.ts · vision.ts",
+    note: "OpenAI-compatible · anthropic-messages · gemini-generate vision inference",
   },
   {
     id: "memory-embeddings",
-    coverage: "honest-stub",
-    genericModule: "mnemon.ts · noema.ts",
-    note: "Vector embedding / memory engine host",
+    coverage: "full",
+    genericModule:
+      "memory-embeddings.ts · embedded-vector-store.ts · noema.ts",
+    note: "Embedded vector host + optional XRK_MEMORY_EMBED_* sidecar",
+  },
+  {
+    id: "taskflow-external-runtime",
+    coverage: "full",
+    genericModule:
+      "tongflow-node-runtime.ts · tongflow-python-bridge.ts",
+    note: "External subprocess + user Python interpreter bridge (ADR-0007)",
   },
 ] as const;
+
+/** Reserved product gaps (aligned with docs/community-plugins · docs/status). */
+export const DSH_COMPAT_KNOWN_GAPS: readonly DshCompatCapabilityRow[] = [] as const;
 
 export function listDshCompatGenericIds(): readonly string[] {
   return DSH_COMPAT_GENERIC_CAPABILITIES.map((r) => r.id);
