@@ -113,7 +113,7 @@ node scripts/npm-prune-withdrawn.mjs            # deprecate intermediate version
 
 | Line | Version | Use |
 |------|---------|-----|
-| **Formal** | **0.1.18** | Current recommended |
+| **Formal** | **0.1.20** | Current recommended |
 | **Preview** | **0.0.11** | npm tag **`preview`** |
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Deprecate intermediate numbers with `npm-prune-withdrawn.mjs` (Granular tokens usually cannot unpublish). **Do not** deprecate with spaces / broken quotes — that corrupts registry metadata; clearing a deprecation requires a real empty string (the script goes through `npm-cli.js` so Windows `npm.cmd` does not swallow the empty arg).
