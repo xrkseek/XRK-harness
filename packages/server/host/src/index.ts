@@ -629,6 +629,10 @@ export function createHostManager(): HostManager {
           ? {
               subagentPersistPath: path.join(sessionsDir, "subagents.json"),
               goalPersistPath: path.join(sessionsDir, "goals.json"),
+              listProjectionCachePath: path.join(
+                sessionsDir,
+                "projection-list-cache.json",
+              ),
             }
           : {}),
         plugins: facePlugins,

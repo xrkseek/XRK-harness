@@ -5,12 +5,13 @@ import type { ProjectionSnapshot } from "@xrkseek/session-projection";
  *
  * | Carrier | When | Fold budget |
  * |---------|------|-------------|
- * | `session.list` | loaded session only | {@link SESSION_LIST_PROJECTION_KEYS} |
+ * | `session.list` | loaded | {@link SESSION_LIST_PROJECTION_KEYS} live fold |
+ * | `session.list` | cold | list-checkpoint cache · else hints-only |
  * | `session.history` tail | `beforeSeq` absent | light + {@link SESSION_CONTEXT_PROJECTION_KEYS} |
  * | `session.history` older | `beforeSeq` set | **none** — no `projections` block |
  * | mux | live events | `session/projection` push frames |
  *
- * Cold list rows use {@link SessionStore.listHints} — no log load, no fold.
+ * Cold list never loads the session log for projections (Codex / api-proxy posture).
  */
 
 /** DSH sidebar list — title + blank bit only (no contextTimeline). */

@@ -23,9 +23,11 @@ import { createFaceBus, type FaceBus } from "./bus.js";
 import type { FaceDrain, FaceRuntime } from "./context.js";
 import { createFaceSeqClock, type FaceSeqClock } from "./seq.js";
 import {
+  createFaceListProjectionCache,
   createFaceProjectionRegistry,
   FaceTitleController,
   installDefaultFaceProjections,
+  type FaceListProjectionCache,
   type FaceProjectionRegistry,
 } from "./projections/index.js";
 import { FaceInboxWireMaps, FaceToolArgMaps, toMuxSessionEvent } from "./adapt/index.js";
@@ -146,6 +148,11 @@ export interface CreateFaceRuntimeOptions {
   readonly subagentPersistPath?: string;
   /** Optional JSON sidecar for Face goals (sessions directory). */
   readonly goalPersistPath?: string;
+  /**
+   * Cold `session.list` projection column (`title` · `sessionListMetadata`).
+   * Typical path: `{sessionsDir}/projection-list-cache.json`.
+   */
+  readonly listProjectionCachePath?: string;
 }
 
 /**
@@ -184,6 +191,16 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     });
   }
 
+  const listProjectionCache: FaceListProjectionCache =
+    createFaceListProjectionCache(options.listProjectionCachePath);
+  const rememberListProjections = (sessionId: string): void => {
+    try {
+      listProjectionCache.remember(sessionId, projections.checkpoint(sessionId));
+    } catch {
+      /* cold column is best-effort */
+    }
+  };
+
   const rpcAdmitMap = new Map<string, string>();
   const admitRpcMap = new Map<string, string>();
   const pendingUserRpc = new Map<string, string>();
@@ -204,6 +221,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     typeof (store as PersistentSessionStore).bindSessionEviction === "function"
   ) {
     (store as PersistentSessionStore).bindSessionEviction((sessionId) => {
+      rememberListProjections(sessionId);
       projections.evictSession(sessionId);
       toolArgMaps.forSession(sessionId).clear();
     });
@@ -577,6 +595,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     bus,
     seq,
     projections,
+    listProjectionCache,
     titles,
     approvals,
     questions,

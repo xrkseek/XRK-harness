@@ -39,6 +39,11 @@ export interface PersistentSessionStore extends SessionStore {
    */
   eventsRef(id: string): readonly SessionEvent[];
   /** Wire projection eviction when an in-memory log is dropped (LRU). */
+  /**
+   * Called immediately before an in-memory session log is dropped (LRU).
+   * The session is still resident during the callback so `eventsRef` works;
+   * Face writes list-tier checkpoints here, then clears projection cells.
+   */
   bindSessionEviction(handler: (sessionId: string) => void): void;
 }
 
@@ -264,8 +269,10 @@ export function createPersistentSessionStore(
       if (victim === undefined) break;
       const idx = residentOrder.indexOf(victim);
       if (idx >= 0) residentOrder.splice(idx, 1);
-      if (!sessions.delete(victim)) continue;
+      // Notify while the log is still resident so Face can checkpoint via
+      // eventsRef without store.get() re-hydrating the victim (recursion).
       onEvict?.(victim);
+      sessions.delete(victim);
     }
   };
 

@@ -266,6 +266,34 @@ describe("contextTimeline projection", () => {
     expect(headers.headers[0]!.system).toBe("sys");
     expect(headers.headers[0]!.tools.length).toBe(1);
   });
+
+  it("records compaction events even without shadowedTokenCount", () => {
+    const unit = createContextTimelineProjectionUnit();
+    let state = unit.init();
+    state = unit.apply(state, {
+      type: "turn/start",
+      ts: 1,
+      turnId: "t1",
+    });
+    state = unit.apply(state, {
+      type: "user/message",
+      ts: 2,
+      turnId: "t1",
+      content: "before compact",
+    });
+    state = unit.apply(state, {
+      type: "context/compaction",
+      ts: 3,
+      reason: "manual",
+      summary: "## Summary\nok",
+      recent: "",
+    });
+    const view = unit.wire!.view(state);
+    expect(view.events.some((e) => e.kind === "compaction")).toBe(true);
+    expect(view.nodes).toHaveLength(1);
+    expect(view.nodes[0]!.form).toBe("snapshot");
+    expect(view.archive.length).toBeGreaterThan(0);
+  });
 });
 
 describe("contextHeaders projection", () => {

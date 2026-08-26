@@ -487,10 +487,7 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
         });
       }
 
-      if (
-        event.type === "context/compaction" &&
-        event.shadowedTokenCount !== undefined
-      ) {
+      if (event.type === "context/compaction") {
         const archive = [
           ...next.archive,
           ...next.nodes.map((n) => ({ ...n, gone: seq })),

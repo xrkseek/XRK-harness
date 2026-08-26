@@ -57,3 +57,16 @@ export {
   type TitleControllerOptions,
 } from "./title-controller.js";
 export { installDefaultFaceProjections } from "./install-defaults.js";
+export {
+  createFaceListProjectionCache,
+  type FaceListProjectionCache,
+} from "./list-checkpoint-cache.js";
+export {
+  SESSION_CONTEXT_PROJECTION_KEYS,
+  SESSION_HISTORY_PROJECTION_KEYS,
+  SESSION_LIST_PROJECTION_KEYS,
+  historyPageIncludesProjections,
+  sessionHistoryProjectionKeys,
+  sessionHistoryTailProjectionKeys,
+  snapshotWireBlock,
+} from "./snapshot-keys.js";

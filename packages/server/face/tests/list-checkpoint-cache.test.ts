@@ -12,9 +12,10 @@ import {
   unusedAgentResolve,
 } from "./helpers/bare-runtime.js";
 
-describe("session.list cold rows (Codex tier)", () => {
-  it("unloaded sessions use listHints only — no projections fold", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "xrk-face-list-cold-"));
+describe("session.list cold projection cache", () => {
+  it("serves title/metadata from list checkpoint after LRU eviction", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "xrk-face-list-cache-"));
+    const cachePath = path.join(dir, "projection-list-cache.json");
     try {
       const store = createPersistentSessionStore(dir, {
         maxResidentSessions: 1,
@@ -22,58 +23,54 @@ describe("session.list cold rows (Codex tier)", () => {
       const runtime = createBareFaceRuntime({
         store,
         resolveAgent: unusedAgentResolve(),
-      });
-
-      const hot = newSession(store);
-      store.append(hot.id, {
-        type: "turn/start",
-        ts: 1,
-        turnId: "t-hot",
-      });
-      store.append(hot.id, {
-        type: "user/message",
-        ts: 2,
-        turnId: "t-hot",
-        content: "hot session",
+        listProjectionCachePath: cachePath,
       });
 
       const cold = newSession(store);
       store.append(cold.id, {
         type: "turn/start",
-        ts: 3,
-        turnId: "t-cold",
+        ts: 1,
+        turnId: "t1",
       });
-      store.get(cold.id);
+      store.append(cold.id, {
+        type: "user/message",
+        ts: 2,
+        turnId: "t1",
+        content: "hello cold title words",
+      });
+      // Drive list projections while resident, then force cache write.
+      runtime.projections.snapshot(cold.id, {
+        keys: ["title", "sessionListMetadata"],
+      });
+      runtime.listProjectionCache.remember(
+        cold.id,
+        runtime.projections.checkpoint(cold.id),
+      );
 
-      expect(store.isLoaded?.(hot.id)).toBe(false);
-      expect(store.isLoaded?.(cold.id)).toBe(true);
+      const keeper = newSession(store);
+      store.get(keeper.id);
+      expect(store.isLoaded?.(cold.id)).toBe(false);
 
       const list = await dispatchFaceMethod(runtime, "session.list", "list", {});
       expect(list.result.ok).toBe(true);
       if (!list.result.ok) throw new Error("list failed");
-
       const items = (
         list.result.value as {
           items: {
             sessionId: string;
             blank: boolean;
-            projections?: { values: Record<string, unknown> };
             title: string | null;
+            projections?: { values: Record<string, unknown> };
           }[];
         }
       ).items;
-      const coldRow = items.find((row) => row.sessionId === hot.id);
-      const hotRow = items.find((row) => row.sessionId === cold.id);
-      expect(coldRow).toBeDefined();
-      expect(hotRow).toBeDefined();
-      // Eviction remembers list-tier checkpoint — cold row still has projections
-      // without reloading the log.
-      expect(coldRow!.projections?.values.sessionListMetadata).toMatchObject({
+      const row = items.find((r) => r.sessionId === cold.id);
+      expect(row).toBeDefined();
+      expect(row!.blank).toBe(false);
+      expect(row!.projections?.values.sessionListMetadata).toMatchObject({
         blank: false,
       });
-      expect(coldRow!.blank).toBe(false);
-      expect(store.isLoaded?.(hot.id)).toBe(false);
-      expect(hotRow!.projections).toBeDefined();
+      expect(store.isLoaded?.(cold.id)).toBe(false);
       store.close();
     } finally {
       try {

@@ -11,6 +11,7 @@ import type {
   FaceProjectionRegistry,
   FaceTitleController,
 } from "./projections/index.js";
+import type { FaceListProjectionCache } from "./projections/list-checkpoint-cache.js";
 import type {
   FaceProcessPlugin,
   FaceWebPlugin,
@@ -62,6 +63,11 @@ export interface FaceRuntime {
   readonly bus: FaceBus;
   readonly seq: FaceSeqClock;
   readonly projections: FaceProjectionRegistry;
+  /**
+   * Cold list column for `title` / `sessionListMetadata` (Codex-style).
+   * Written on list-key changes and before SQLite LRU eviction.
+   */
+  readonly listProjectionCache: FaceListProjectionCache;
   readonly titles: FaceTitleController;
   /** rpcId (unary) → admitId */
   readonly rpcAdmitMap: Map<string, string>;

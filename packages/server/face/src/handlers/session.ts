@@ -174,7 +174,10 @@ export const sessionList: FaceHandler = async (runtime) => {
     const loaded = runtime.store.isLoaded?.(sessionId) ?? true;
     const snap =
       hints !== undefined && !loaded
-        ? undefined
+        ? runtime.listProjectionCache.cachedSnapshot(
+            sessionId,
+            runtime.projections,
+          )
         : runtime.projections.snapshot(sessionId, {
             keys: [...SESSION_LIST_PROJECTION_KEYS],
           });
@@ -263,6 +266,10 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
     if (Object.keys(snap.values).length > 0) {
       projections = snapshotWireBlock(snap);
     }
+    runtime.listProjectionCache.remember(
+      sessionId,
+      runtime.projections.checkpoint(sessionId),
+    );
   }
 
   return {
