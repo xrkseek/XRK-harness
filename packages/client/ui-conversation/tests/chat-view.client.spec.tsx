@@ -8,7 +8,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { useEffect } from 'react'
 import type {
   AssistantMessageNode, CommandNode, CompactionSummaryNode, ConversationNode, ConversationSnapshot,
-  ModelRetryNode, RunningToolCall, SessionId, SessionListState, ToolCallBlock, ToolResultNode, TurnErrorNode,
+  ModelRetryNode, RunningToolCall, SessionId, SessionListState, SteeringMessageNode, ToolCallBlock, ToolResultNode, TurnErrorNode,
   TurnMaxTokensNode, UserMessageNode, WorkspaceListState,
 } from '@xrkseek/client-runtime/client'
 import { bindSnapshotSelector } from '@xrkseek/client-test-runtime'
@@ -91,6 +91,14 @@ function makeSource(init?: Partial<ConversationSnapshot>) {
 
 const user = (seq: number, text: string): UserMessageNode => ({
   kind: 'user',
+  seq,
+  time: seq * 1000,
+  content: [{ type: 'text', text }] as never,
+  source: null,
+})
+const steering = (seq: number, text: string): SteeringMessageNode => ({
+  kind: 'steering',
+  messageId: `steer-${seq}` as SteeringMessageNode['messageId'],
   seq,
   time: seq * 1000,
   content: [{ type: 'text', text }] as never,
@@ -932,7 +940,7 @@ describe('ChatView', () => {
     expect(unmounted).not.toHaveBeenCalled()
   })
 
-  it('the running clock uses turn/start, ignores steering, and stays out of the live region', () => {
+  it('keeps the flow waiting line visible while steering is pending', () => {
     const startTime = Date.now() - 125_000
     const phrase = zh[`turnStatus.${((startTime % 16) + 16) % 16}` as keyof typeof zh]
     const trigger: UserMessageNode = { ...user(1, 'go'), time: startTime + 1 }
@@ -954,7 +962,46 @@ describe('ChatView', () => {
         text: 'also',
       }] })
     })
-    expect(status.textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}2分0\\d秒$`))
+    expect(view.getByRole('status').textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}2分0\\d秒$`))
+  })
+
+  it('shows the flow waiting line after pending steering even while tools are live', () => {
+    const pending = {
+      id: 'steer-occurrence' as never,
+      messageId: 'steer-message' as never,
+      placement: 'steering' as const,
+      content: [{ type: 'text' as const, text: 'interrupt now' }],
+      preview: 'interrupt now',
+      text: 'interrupt now',
+    }
+    const h = makeHarness({
+      runningCalls: [runningCall('r1')],
+      queue: [pending],
+      running: true,
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByTestId('tool-seat-r1')).toBeTruthy()
+    expect(view.getByRole('status').textContent).toBe(zh['turnStatus.0'])
+  })
+
+  it('shows the flow waiting line after send before the first Think token', () => {
+    const h = makeHarness({
+      nodes: [user(1, 'hello')],
+      running: true,
+      partial: { turn: 1, step: 0, blocks: [{ kind: 'reasoning', text: '' }] },
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByRole('status').textContent).toBe(zh['turnStatus.0'])
+  })
+
+  it('shows the flow waiting line after durable steering while a stale partial is visible', () => {
+    const h = makeHarness({
+      nodes: [assistant(2, 'earlier answer'), steering(3, 'redirect')],
+      running: true,
+      partial: { turn: 1, step: 2, blocks: [{ kind: 'reasoning', text: 'old think still mounted' }] },
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByRole('status').textContent).toBe(zh['turnStatus.0'])
   })
 
   it('hides the idle waiting label once streaming Think content is live', () => {

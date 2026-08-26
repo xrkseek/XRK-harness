@@ -896,6 +896,16 @@ export class SessionManager {
       if (kept.length === 0) this.pendingBuffers.delete(sessionId)
       else this.pendingBuffers.set(sessionId, kept)
     }
+    // Drop optimistic running bits until the next list/resync baseline arrives.
+    // Host crash or stream loss can omit running:false; stale true traps Stop.
+    for (const session of this.sessions.values()) {
+      session.handleRunning(false)
+    }
+    for (const summary of this.summaries) {
+      if (summary.running) {
+        this.recordMutation({ kind: 'status', sessionId: summary.sessionId, running: false })
+      }
+    }
   }
 
   /** After each connection generation: refresh the session baseline and rebuild opened windows. */

@@ -2409,6 +2409,9 @@ importers:
       '@xrkseek/server-config':
         specifier: workspace:*
         version: link:../config
+      '@xrkseek/server-http':
+        specifier: workspace:*
+        version: link:../http
       '@xrkseek/server-loader':
         specifier: workspace:*
         version: link:../loader

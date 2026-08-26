@@ -655,3 +655,4 @@ export {
   tryServeWebStatic,
   type WebStaticOptions,
 } from "./static.js";
+export { attachmentContentDisposition } from "./content-disposition.js";

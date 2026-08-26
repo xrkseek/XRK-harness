@@ -27,6 +27,7 @@ import {
 } from "./sidebar-prefs-store.js";
 import { probeBrowserUrl } from "./sidebar-browser.js";
 import { handleSidebarHtml } from "./sidebar-html.js";
+import { attachmentContentDisposition } from "../content-disposition.js";
 
 import type { SidebarFaceBridge } from "./sidebar-face-bridge.js";
 
@@ -535,7 +536,7 @@ export async function handleSidebarCompat(
       "content-length": st.size,
       ...(download
         ? {
-            "content-disposition": `attachment; filename="${path.basename(abs)}"`,
+            "content-disposition": attachmentContentDisposition(path.basename(abs)),
           }
         : {}),
     });

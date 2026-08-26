@@ -6,6 +6,7 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { createServer } from "node:http";
 import { listPendingAdmits } from "@xrkseek/core-session";
 import { WebSocketServer, type WebSocket } from "ws";
+import { attachmentContentDisposition } from "@xrkseek/server-http";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
 import { approvalRequestedFrame } from "./approvals.js";
@@ -112,7 +113,7 @@ function handleSessionExport(
   const filename = sessionExportFilename(sessionId);
   const headers = {
     "content-type": "application/zip",
-    "content-disposition": `attachment; filename="${filename}"`,
+    "content-disposition": attachmentContentDisposition(filename),
     "cache-control": "no-store",
   };
   if (req.method === "HEAD") {

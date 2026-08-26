@@ -14,12 +14,11 @@
 // lifecycle updates replace only their own row without remounting it.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type {
-  AssistantBlock, ConversationTimelineSnapshot, PartialAssistant,
-} from '@xrkseek/client-runtime/client'
+import type { ConversationTimelineSnapshot } from '@xrkseek/client-runtime/client'
 import { Button, IconChevronDownOutline14, Modal } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble } from './MessageItem.tsx'
+import { shouldShowFlowWaiting } from './flow-waiting.ts'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
 import { formatRunDuration } from './message-chrome.ts'
 import css from './ChatView.module.css'
@@ -119,22 +118,6 @@ function runningTurnStartTime(timeline: ConversationTimelineSnapshot): number | 
   return latest
 }
 
-function blockHasVisibleContent(block: AssistantBlock): boolean {
-  if (block.kind === 'tool-call') return false
-  if (block.kind === 'text' || block.kind === 'reasoning') return block.text.trim() !== ''
-  return true
-}
-
-/** True once the flow already shows Think / text / tools — idle waiting copy must yield. */
-function hasLiveTurnSurface(
-  partial: PartialAssistant | null,
-  runningCallCount: number,
-): boolean {
-  if (runningCallCount > 0) return true
-  if (partial === null) return false
-  return partial.blocks.some(blockHasVisibleContent)
-}
-
 function turnStatusPhrase(
   startTime: number | null,
   t: ChatViewSlotProps['t'],
@@ -145,9 +128,8 @@ function turnStatusPhrase(
 }
 
 /**
- * First-token / empty-turn waiting label only. Once Think, text, or a tool
- * row is live in the flow, this yields so streaming content is not masked
- * by the idle shimmer.
+ * Flow-tail waiting label (`turnStatus.*`). Yields once tools or a streaming
+ * partial are the active surface; step gaps and steer waits keep it visible.
  */
 function TurnStatus({ startTime, t }: {
   /** The running turn's logged `turn/start` time; null falls back to mount
@@ -251,7 +233,6 @@ export function ChatView({
     [loadImage, renderSlot],
   )
   const runningTurnStart = useMemo(() => runningTurnStartTime(timeline), [timeline])
-  const showTurnStatus = running && !hasLiveTurnSurface(partial, runningCallCount)
 
   const listRef = useRef<HTMLDivElement | null>(null)
   const columnRef = useRef<HTMLDivElement | null>(null)
@@ -275,6 +256,14 @@ export function ChatView({
   const firstSeq = firstKey === undefined ? null : nodeStore.get(firstKey)?.anchorSeq ?? null
   const lastKey = order.at(-1) ?? null
   const lastNode = lastKey === null ? undefined : nodeStore.get(lastKey)
+  const showFlowWaiting = shouldShowFlowWaiting({
+    running,
+    partial,
+    runningCallCount,
+    timeline,
+    pendingSteerCount: pendingSteering.length,
+    tailKind: lastNode?.kind,
+  })
   const lastSteeringId = pendingSteering[pendingSteering.length - 1]?.id ?? null
   const followSig = `${openState}:${firstSeq}:${lastKey}:${order.length}:${running ? 1 : 0}:${lastSteeringId ?? ''}`
 
@@ -485,9 +474,6 @@ export function ChatView({
           {/* No pending placeholders: questions (ui-user-questions) and approvals
               (ApprovalPanel) both take over the composer, so a flow card would
               double-render the same wait. */}
-          {/* Idle waiting only: hide once Think / text / tools are live so the
-              shimmer does not mask streaming reasoning until the user pauses. */}
-          {showTurnStatus && <TurnStatus startTime={runningTurnStart} t={t} />}
           {pendingSteering.map(item => (
             <PendingSteeringBubble
               key={item.id}
@@ -496,6 +482,7 @@ export function ChatView({
               t={t}
             />
           ))}
+          {showFlowWaiting && <TurnStatus startTime={runningTurnStart} t={t} />}
         </div>
         {!atBottom && (
           <div className={css.toBottomSlot}>

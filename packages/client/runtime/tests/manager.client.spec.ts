@@ -1012,6 +1012,16 @@ describe('pending-interaction list status', () => {
     expect(manager.getListSnapshot().items[0]?.pendingInteraction).toBe('approval')
   })
 
+  it('generation death clears optimistic running until the next list baseline', () => {
+    const manager = new SessionManager(new FakeApiClient(), fakeRemote())
+    manager.handleHostEnvelope({ rpcId: 'h1' as never, payload: { type: 'host/session-added', sessionId: S1, blank: false } })
+    manager.handleHostEnvelope({ rpcId: 'h2' as never, payload: { type: 'host/session-status', sessionId: S1, running: true } })
+    expect(manager.getListSnapshot().items[0]?.running).toBe(true)
+    manager.handleDisconnected()
+    expect(manager.getListSnapshot().items[0]?.running).toBe(false)
+    expect(manager.get(S1).getSnapshot().running).toBe(false)
+  })
+
   it('generation death drops buffered answerable frames (a dead generation cannot be answered)', () => {
     const manager = new SessionManager(new FakeApiClient(), fakeRemote())
     manager.handleHostEnvelope({ rpcId: 'h1' as never, payload: { type: 'host/session-added', sessionId: S1, blank: false } })
