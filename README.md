@@ -155,7 +155,7 @@ docs/             用法与契约教科书
 
 # English
 
-Grow toward the sun · ride the light
+Grow toward the sun. Harness the light.
 
 [Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Status](./docs/status.md) · [Docs hub](./docs/README.md) · [v0.1.21 release notes](./docs/releases/v0.1.21.md)
 
