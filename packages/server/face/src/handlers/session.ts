@@ -42,8 +42,8 @@ import { publishRemoteEvent } from "../remote-event.js";
 import { persistWorkspaceDoc } from "../workspace-store.js";
 import { resolveSessionCwd } from "../session-cwd.js";
 import {
-  SESSION_HISTORY_PROJECTION_KEYS,
   SESSION_LIST_PROJECTION_KEYS,
+  sessionHistoryProjectionKeys,
   snapshotWireBlock,
 } from "../projections/snapshot-keys.js";
 
@@ -255,7 +255,7 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
   }
 
   const snap = runtime.projections.snapshot(sessionId, {
-    keys: [...SESSION_HISTORY_PROJECTION_KEYS],
+    keys: [...sessionHistoryProjectionKeys(beforeSeq)],
   });
   const projections =
     Object.keys(snap.values).length > 0 ? snapshotWireBlock(snap) : undefined;

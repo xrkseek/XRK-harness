@@ -8,7 +8,8 @@ export const SESSION_LIST_PROJECTION_KEYS = [
 
 /**
  * History tail baseline: stats + composer meter (DSH StatsLine / ContextMeter).
- * Exclude contextTimeline + contextHeaders (Codex-style: heavy keys on demand).
+ * Heavy dsh-context keys ride the tail page only — see
+ * {@link sessionHistoryProjectionKeys}.
  */
 export const SESSION_HISTORY_PROJECTION_KEYS = [
   "title",
@@ -24,6 +25,23 @@ export const SESSION_HISTORY_PROJECTION_KEYS = [
   "autoReview",
   "imageLimits",
 ] as const;
+
+/**
+ * dsh-context tab (`useProjection('contextTimeline'|'contextHeaders')`).
+ * Folded on the history tail page only — not list rows, not loadOlder pages.
+ */
+export const SESSION_CONTEXT_PROJECTION_KEYS = [
+  "contextTimeline",
+  "contextHeaders",
+] as const;
+
+/** Projection keys for one `session.history` response. */
+export function sessionHistoryProjectionKeys(
+  beforeSeq?: number,
+): readonly string[] {
+  if (beforeSeq !== undefined) return SESSION_HISTORY_PROJECTION_KEYS;
+  return [...SESSION_HISTORY_PROJECTION_KEYS, ...SESSION_CONTEXT_PROJECTION_KEYS];
+}
 
 export function snapshotWireBlock(
   snap: ProjectionSnapshot,
