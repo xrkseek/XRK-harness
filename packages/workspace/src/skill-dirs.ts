@@ -1,7 +1,17 @@
 import { access, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import {
+  USER_HOME_SKILL_REL_DIRS,
+  WORKSPACE_SKILL_REL_DIRS,
+} from "./inject-sources.js";
 import { shouldSkipScanDir } from "./scan-guards.js";
+
+/** @deprecated Use {@link WORKSPACE_SKILL_REL_DIRS} from `inject-sources.ts`. */
+export const PROJECT_SKILL_REL_DIRS = WORKSPACE_SKILL_REL_DIRS;
+
+/** @deprecated Use {@link USER_HOME_SKILL_REL_DIRS} from `inject-sources.ts`. */
+export const USER_SKILL_REL_DIRS = USER_HOME_SKILL_REL_DIRS;
 
 /** Shared skill-source options (DSH / Codex multi-root). */
 export interface SkillDirSourceOptions {
@@ -11,29 +21,6 @@ export interface SkillDirSourceOptions {
   readonly includeUserHome?: boolean;
   readonly homeDir?: string;
 }
-
-/**
- * Relative project skill roots, low → high priority (later wins on name clash).
- * Matches Cursor/Claude/Codex layouts; `.xrk/skills` is the XRK-native overlay.
- */
-export const PROJECT_SKILL_REL_DIRS = [
-  ".codex/skills",
-  ".claude/skills",
-  ".agents/skills",
-  ".cursor/skills",
-  ".xrk/skills",
-] as const;
-
-/** User-home skill roots (same order; lower than any project root). */
-export const USER_SKILL_REL_DIRS = [
-  ".codex/skills",
-  ".claude/skills",
-  ".agents/skills",
-  ".cursor/skills",
-  ".xrk/skills",
-] as const;
-
-const SKILL_DIR_ENTRY_CAP = 512;
 
 async function dirExists(p: string): Promise<boolean> {
   try {
@@ -48,6 +35,7 @@ async function dirExists(p: string): Promise<boolean> {
 /**
  * Existing skill directories only — never creates paths.
  * Order: user homes (if enabled) → project vendors → optional productDir/skills.
+ * Policy: {@link USER_HOME_SKILL_REL_DIRS} · {@link WORKSPACE_SKILL_REL_DIRS}.
  */
 export async function resolveSkillDirs(
   options: SkillDirSourceOptions,
@@ -76,11 +64,11 @@ export async function resolveSkillDirs(
     const includeUser = options.includeUserHome !== false;
     if (includeUser) {
       const home = path.resolve(options.homeDir ?? homedir());
-      for (const rel of USER_SKILL_REL_DIRS) {
+      for (const rel of USER_HOME_SKILL_REL_DIRS) {
         await push(path.join(home, rel));
       }
     }
-    for (const rel of PROJECT_SKILL_REL_DIRS) {
+    for (const rel of WORKSPACE_SKILL_REL_DIRS) {
       await push(path.join(root, rel));
     }
   }
@@ -91,6 +79,8 @@ export async function resolveSkillDirs(
 
   return out;
 }
+
+const SKILL_DIR_ENTRY_CAP = 512;
 
 /** Directory entry count + max mtime — O(children) stats, no SKILL.md reads. */
 export async function skillDirFingerprint(skillsRoot: string): Promise<string> {

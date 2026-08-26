@@ -182,7 +182,17 @@ export {
 } from "./slash.js";
 
 export {
-  SKILL_TOOL_GUIDANCE,
+  HOME_CONVENTION_INJECT,
+  HOME_INSTRUCTION_FINGERPRINT_MARKERS,
+  SKILL_VENDOR_PRIORITY,
+  USER_HOME_SKILL_REL_DIRS,
+  WORKSPACE_CONVENTION_INJECT,
+  WORKSPACE_INSTRUCTION_FINGERPRINT_MARKERS,
+  WORKSPACE_SKILL_REL_DIRS,
+  type ConventionInjectProfile,
+} from "./inject-sources.js";
+
+export {
   PROJECT_SKILL_REL_DIRS,
   USER_SKILL_REL_DIRS,
   formatSkillCatalog,
@@ -194,6 +204,7 @@ export {
   parseSkillMarkdown,
   renderSkillContent,
   resolveSkillDirs,
+  SKILL_TOOL_GUIDANCE,
   type SkillDefinition,
   type SkillSourceOptions,
   type SkillSummary,

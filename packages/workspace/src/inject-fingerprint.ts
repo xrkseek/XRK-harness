@@ -2,6 +2,10 @@ import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import {
+  HOME_INSTRUCTION_FINGERPRINT_MARKERS,
+  WORKSPACE_INSTRUCTION_FINGERPRINT_MARKERS,
+} from "./inject-sources.js";
+import {
   resolveSkillDirs,
   skillDirsFingerprint,
 } from "./skill-dirs.js";
@@ -13,25 +17,6 @@ export interface InjectFingerprintOptions {
   readonly homeDir?: string;
   readonly includeUserHomeSkills?: boolean;
 }
-
-const INSTRUCTION_MARKERS = [
-  ".codex/AGENTS.md",
-  "CODEX.md",
-  ".claude/CLAUDE.md",
-  ".agents/AGENTS.md",
-  ".agents/rules",
-  ".agents/context",
-  ".cursor/rules",
-  ".github/copilot-instructions.md",
-  ".github/instructions",
-  ".xrk/AGENTS.md",
-  ".xrk/SOUL.md",
-  "AGENTS.md",
-  "CLAUDE.md",
-  "assistant.md",
-  "rules.md",
-  "subagents.md",
-] as const;
 
 async function markerFingerprint(base: string, rel: string): Promise<string> {
   const abs = path.join(base, ...rel.split("/"));
@@ -45,9 +30,8 @@ async function markerFingerprint(base: string, rel: string): Promise<string> {
 
 /**
  * Cheap invalidation token — stat markers only, no file reads.
- * Codex rebuilds instructions once per session; we invalidate when mtimes move.
- * Skill-dir fingerprint follows {@link InjectFingerprintOptions.includeUserHomeSkills}
- * so catalog-only workspaces are not invalidated by unrelated home skill churn.
+ * Markers follow {@link HOME_INSTRUCTION_FINGERPRINT_MARKERS} and
+ * {@link WORKSPACE_INSTRUCTION_FINGERPRINT_MARKERS} in `inject-sources.ts`.
  */
 export async function computeInjectFingerprint(
   options: InjectFingerprintOptions,
@@ -56,21 +40,20 @@ export async function computeInjectFingerprint(
   const productDir = path.resolve(options.productDir);
   const parts: string[] = [`root:${root}`, `product:${productDir}`];
 
-  const bases: string[] = [];
   if (options.includeUserHome !== false) {
-    bases.push(path.resolve(options.homeDir ?? homedir()));
+    const home = path.resolve(options.homeDir ?? homedir());
+    for (const rel of HOME_INSTRUCTION_FINGERPRINT_MARKERS) {
+      parts.push(`home:${await markerFingerprint(home, rel)}`);
+    }
+    parts.push(
+      `home-product:${await markerFingerprint(path.join(home, ".xrk"), "AGENTS.md")}`,
+    );
   }
-  bases.push(root);
 
-  for (const base of bases) {
-    const prefix = base === root ? "ws" : "home";
-    for (const rel of INSTRUCTION_MARKERS) {
-      parts.push(`${prefix}:${await markerFingerprint(base, rel)}`);
-    }
-    if (base === root) {
-      parts.push(`ws-product:${await markerFingerprint(productDir, "AGENTS.md")}`);
-    }
+  for (const rel of WORKSPACE_INSTRUCTION_FINGERPRINT_MARKERS) {
+    parts.push(`ws:${await markerFingerprint(root, rel)}`);
   }
+  parts.push(`ws-product:${await markerFingerprint(productDir, "AGENTS.md")}`);
 
   const skillDirs = await resolveSkillDirs({
     workspaceRoot: root,

@@ -1,5 +1,6 @@
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { SKILL_VENDOR_PRIORITY } from "./inject-sources.js";
 import { resolveSkillDirs, skillDirsFingerprint } from "./skill-dirs.js";
 import { shouldSkipScanDir } from "./scan-guards.js";
 
@@ -228,9 +229,35 @@ export async function listSkillsInDir(
 }
 
 /**
- * Merge skill roots; later roots win on name / dirName clash.
+ * Merge skill roots; {@link SKILL_VENDOR_PRIORITY} wins on name clash (workspace layer beats home).
  * Missing dirs are skipped (no mkdir).
  */
+function vendorRank(skillsRoot: string): number {
+  const norm = path.resolve(skillsRoot).replace(/\\/g, "/");
+  for (let i = 0; i < SKILL_VENDOR_PRIORITY.length; i++) {
+    const suffix = SKILL_VENDOR_PRIORITY[i]!;
+    if (norm.endsWith(suffix)) return i;
+  }
+  // `{productDir}/skills` and other overlays beat vendor trees.
+  return -1;
+}
+
+function skillSourceBeats(
+  candidateDir: string,
+  incumbentDir: string,
+  workspaceRoot: string | undefined,
+): boolean {
+  const ws = workspaceRoot ? path.resolve(workspaceRoot) : undefined;
+  const layer = (dir: string) =>
+    ws && path.resolve(dir).startsWith(ws) ? 1 : 0;
+  const candidateLayer = layer(candidateDir);
+  const incumbentLayer = layer(incumbentDir);
+  if (candidateLayer !== incumbentLayer) {
+    return candidateLayer > incumbentLayer;
+  }
+  return vendorRank(candidateDir) < vendorRank(incumbentDir);
+}
+
 export async function listSkills(
   options: SkillSourceOptions & { readonly productDir?: string },
 ): Promise<readonly SkillSummary[]> {
@@ -244,7 +271,13 @@ export async function listSkills(
   const byName = new Map<string, SkillSummary>();
   for (const dir of dirs) {
     for (const skill of await listSkillsInDir(dir)) {
-      byName.set(skill.name, skill);
+      const prev = byName.get(skill.name);
+      if (
+        prev === undefined
+        || skillSourceBeats(skill.directory, prev.directory, options.workspaceRoot)
+      ) {
+        byName.set(skill.name, skill);
+      }
     }
   }
   const skills = [...byName.values()].sort((a, b) =>

@@ -3,6 +3,11 @@ import { homedir } from "node:os";
 import path from "node:path";
 import type { InstructionChange } from "./durable-inject.js";
 import {
+  HOME_CONVENTION_INJECT,
+  WORKSPACE_CONVENTION_INJECT,
+  type ConventionInjectProfile,
+} from "./inject-sources.js";
+import {
   boundInstructionFile,
   clipToBudget,
   type InjectBudget,
@@ -152,11 +157,6 @@ const PRODUCT_STANDING_FILES = [
   "AGENTS.md",
 ] as const;
 
-type ConventionLayerOptions = {
-  readonly includeCodexRoot?: boolean;
-  readonly includeGithub?: boolean;
-};
-
 /** Multi-vendor convention paths under one base directory. */
 async function pushConventionLayer(
   sections: InstructionSection[],
@@ -164,19 +164,21 @@ async function pushConventionLayer(
   logicalPrefix: string,
   budget: InjectBudget,
   seen: Set<string>,
-  options: ConventionLayerOptions = {},
+  profile: ConventionInjectProfile,
 ): Promise<void> {
   const lp = (suffix: string) =>
     logicalPrefix ? `${logicalPrefix}${suffix}` : suffix;
 
-  await pushFile(
-    sections,
-    path.join(base, ".codex", "AGENTS.md"),
-    lp(".codex/AGENTS.md"),
-    budget,
-    seen,
-  );
-  if (options.includeCodexRoot !== false) {
+  if (profile.codexAgents) {
+    await pushFile(
+      sections,
+      path.join(base, ".codex", "AGENTS.md"),
+      lp(".codex/AGENTS.md"),
+      budget,
+      seen,
+    );
+  }
+  if (profile.codexRootMd) {
     await pushFile(
       sections,
       path.join(base, "CODEX.md"),
@@ -186,62 +188,68 @@ async function pushConventionLayer(
     );
   }
 
-  await pushFile(
-    sections,
-    path.join(base, ".claude", "CLAUDE.md"),
-    lp(".claude/CLAUDE.md"),
-    budget,
-    seen,
-  );
-  await pushMarkdownDir(
-    sections,
-    path.join(base, ".claude", "rules"),
-    lp(".claude/rules/"),
-    budget,
-    seen,
-    0,
-  );
+  if (profile.claude) {
+    await pushFile(
+      sections,
+      path.join(base, ".claude", "CLAUDE.md"),
+      lp(".claude/CLAUDE.md"),
+      budget,
+      seen,
+    );
+    await pushMarkdownDir(
+      sections,
+      path.join(base, ".claude", "rules"),
+      lp(".claude/rules/"),
+      budget,
+      seen,
+      0,
+    );
+  }
 
-  await pushFile(
-    sections,
-    path.join(base, ".agents", "AGENTS.md"),
-    lp(".agents/AGENTS.md"),
-    budget,
-    seen,
-  );
-  await pushMarkdownDir(
-    sections,
-    path.join(base, ".agents", "rules"),
-    lp(".agents/rules/"),
-    budget,
-    seen,
-    0,
-  );
-  const agentsCtxDir = path.join(base, ".agents", "context");
-  if (await exists(agentsCtxDir)) {
-    const files = (await readdir(agentsCtxDir)).sort();
-    for (const f of files) {
-      await pushFile(
-        sections,
-        path.join(agentsCtxDir, f),
-        lp(`.agents/context/${f}`),
-        budget,
-        seen,
-      );
+  if (profile.agents) {
+    await pushFile(
+      sections,
+      path.join(base, ".agents", "AGENTS.md"),
+      lp(".agents/AGENTS.md"),
+      budget,
+      seen,
+    );
+    await pushMarkdownDir(
+      sections,
+      path.join(base, ".agents", "rules"),
+      lp(".agents/rules/"),
+      budget,
+      seen,
+      0,
+    );
+    const agentsCtxDir = path.join(base, ".agents", "context");
+    if (await exists(agentsCtxDir)) {
+      const files = (await readdir(agentsCtxDir)).sort();
+      for (const f of files) {
+        await pushFile(
+          sections,
+          path.join(agentsCtxDir, f),
+          lp(`.agents/context/${f}`),
+          budget,
+          seen,
+        );
+      }
     }
   }
 
-  await pushMarkdownDir(
-    sections,
-    path.join(base, ".cursor", "rules"),
-    lp(".cursor/rules/"),
-    budget,
-    seen,
-    0,
-    { stripMdc: true },
-  );
+  if (profile.cursorRules) {
+    await pushMarkdownDir(
+      sections,
+      path.join(base, ".cursor", "rules"),
+      lp(".cursor/rules/"),
+      budget,
+      seen,
+      0,
+      { stripMdc: true },
+    );
+  }
 
-  if (options.includeGithub !== false) {
+  if (profile.github) {
     await pushFile(
       sections,
       path.join(base, ".github", "copilot-instructions.md"),
@@ -342,9 +350,10 @@ async function pushProductStanding(
 
 /**
  * Gather agent instruction markdown from multi-vendor convention paths.
+ * Policy: {@link HOME_CONVENTION_INJECT} · {@link WORKSPACE_CONVENTION_INJECT} in `inject-sources.ts`.
  * Low → high priority in output order (later sections appear closer to the turn):
  *
- * 1. User home (`~/.codex`, `~/.agents`, `~/.xrk`, …) when `includeUserHome`
+ * 1. User home when `includeUserHome`
  * 2. Workspace convention paths
  * 3. Workspace `{productDir}` (default `.xrk/`)
  * 4. Workspace root `AGENTS.md` / `CLAUDE.md` (unless product overlay exists)
@@ -362,10 +371,14 @@ export async function collectEcosystemInstructions(
 
   if (includeUserHome) {
     const home = path.resolve(options.homeDir ?? homedir());
-    await pushConventionLayer(sections, home, "~/", options.budget, seen, {
-      includeCodexRoot: false,
-      includeGithub: false,
-    });
+    await pushConventionLayer(
+      sections,
+      home,
+      "~/",
+      options.budget,
+      seen,
+      HOME_CONVENTION_INJECT,
+    );
     await pushProductStanding(
       sections,
       path.join(home, ".xrk"),
@@ -375,7 +388,14 @@ export async function collectEcosystemInstructions(
     );
   }
 
-  await pushConventionLayer(sections, root, "", options.budget, seen);
+  await pushConventionLayer(
+    sections,
+    root,
+    "",
+    options.budget,
+    seen,
+    WORKSPACE_CONVENTION_INJECT,
+  );
   await pushProductStanding(sections, productDir, ".xrk/", options.budget, seen);
 
   const productAgents = await readIfExists(path.join(productDir, "AGENTS.md"));

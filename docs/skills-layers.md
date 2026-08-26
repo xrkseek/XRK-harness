@@ -8,8 +8,8 @@
 
 | 种类 | 典型路径 | 进模型方式 |
 |----|------|------------|
-| **Rules / 站立说明** | `~/.agents/` · `~/.xrk/` · `{workspace}/.agents/` · `{workspace}/.xrk/` · 多厂商约定路径 | 持久 `user/message` · `source: agent-instructions` |
-| **Skills** | 同上目录下的 `skills/<name>/SKILL.md`（及 `~/.codex/skills` 等） | 工作区 → 站立 `skill-catalog`；主目录 → `skill` 工具 / `skill.list`（catalog 默认不灌入） |
+| **Rules / 站立说明** | `~/.agents/` · `~/.xrk/` · `{workspace}/.agents/` · `{workspace}/.xrk/` · 工作区 `.cursor/rules/**` | 持久 `user/message` · `source: agent-instructions` |
+| **Skills** | 工作区 `skills/<name>/SKILL.md`；home 经 `skill` 工具（**不含** `~/.cursor/skills`） | 工作区 → 站立 `skill-catalog`；home → `skill` 工具 / `skill.list`（catalog 默认不灌入） |
 
 ## 站立文件（`.xrk/` 与 `.agents/`）
 
@@ -34,7 +34,7 @@
 | `disable-model-invocation: true` | 不进 catalog、`skill` 工具拒绝 |
 | `user-invocable: false` | `/skill-name` 不展开 |
 | 非法布尔 frontmatter | **整 skill 丢弃**（fail-closed） |
-| 优先级 | 用户主目录 → 工作区；同层内后列根覆盖：`.codex` → `.claude` → `.agents` → `.cursor` → `.xrk` |
+| 优先级 | 工作区 > 用户主目录；同层内 **`.xrk` 原生优先**：`.xrk` → `.agents` → `.cursor` → `.claude` → `.codex`（**home 层无 `.cursor/skills`**） |
 
 ## Harness 源码仓写插件
 
@@ -66,8 +66,8 @@ The product Agent reads rules and skills from **global** and **workspace** layer
 
 | Kind | Typical paths | How it reaches the model |
 |----|------|------------|
-| **Rules / standing instructions** | `~/.agents/` · `~/.xrk/` · `{workspace}/.agents/` · `{workspace}/.xrk/` · multi-vendor convention paths | Durable `user/message` · `source: agent-instructions` |
-| **Skills** | `skills/<name>/SKILL.md` under those trees (and `~/.codex/skills`, etc.) | Workspace → standing `skill-catalog`; home → `skill` tool / `skill.list` (catalog excludes home by default) |
+| **Rules / standing instructions** | `~/.agents/` · `~/.xrk/` · `{workspace}/.agents/` · `{workspace}/.xrk/` · workspace `.cursor/rules/**` | Durable `user/message` · `source: agent-instructions` |
+| **Skills** | Workspace `skills/<name>/SKILL.md`; home via `skill` tool (**excludes** `~/.cursor/skills`) | Workspace → standing `skill-catalog`; home → `skill` tool / `skill.list` (catalog excludes home by default) |
 
 ## Standing files (`.xrk/` and `.agents/`)
 
@@ -92,7 +92,7 @@ Optional directories; **never auto-created**. Common files:
 | `disable-model-invocation: true` | Out of catalog; `skill` tool rejects |
 | `user-invocable: false` | `/skill-name` does not expand |
 | Illegal boolean frontmatter | **Whole skill discarded** (fail-closed) |
-| Priority | User home → workspace; within a layer later roots win: `.codex` → `.claude` → `.agents` → `.cursor` → `.xrk` |
+| Priority | Workspace > user home; within a layer **`.xrk` native wins**: `.xrk` → `.agents` → `.cursor` → `.claude` → `.codex` (**home layer has no `.cursor/skills`**) |
 
 ## Plugin authoring in this repo
 

@@ -10,10 +10,26 @@
 
 | 层 | 路径 | 优先级 |
 |----|------|--------|
-| **全局** | `~/.agents/` · `~/.xrk/` · `~/.claude/` · `~/.codex/` · `~/.cursor/rules/` | 低 |
-| **工作区** | `{workspace}/.agents/` · `{workspace}/.xrk/` · 同上厂商路径 | 高 |
+| **全局** | `~/.codex/` · `~/.claude/` · `~/.agents/` · `~/.xrk/` | 低 |
+| **工作区** | `{workspace}/` 下同厂商路径 + `.xrk/` | 高 |
 
-Inject 按节顺序追加；同名正文 dedupe；**后出现的节更接近当轮任务**。Skills catalog 同样：`~/…/skills` 低优先级，项目内高优先级。
+Inject 按节顺序追加；同名正文 dedupe；**后出现的节更接近当轮任务**。Skills catalog 同样：home 低优先级，项目内高优先级。
+
+**真源**：`packages/workspace/src/inject-sources.ts`（`HOME_CONVENTION_INJECT` · `WORKSPACE_CONVENTION_INJECT` · skill 根列表）。
+
+## 注入策略（Codex 对齐）
+
+与 Codex 相同的核心原则：**instructions 窄、skills 渐进披露**。
+
+| 种类 | 全局 `~/…` | 工作区 `{root}/…` |
+|------|------------|-------------------|
+| **Instructions** | `.codex/AGENTS.md` · `.claude/*` · `.agents/*` · `~/.xrk/` 站立文件 | 同上 + `CODEX.md` · `.cursor/rules/**` · `.github/*` · 根 `AGENTS.md`/`CLAUDE.md`（有产品 overlay 时跳过根 `AGENTS.md`） |
+| **`~/.cursor/**`** | **永不注入**（Cursor IDE 维护树） | — |
+| **`{root}/.cursor/rules/**`** | — | **注入**（单文件 `xrk-inject: false` 可跳过） |
+| **Skill catalog** | 默认**不含** home skills | **`.xrk/skills`** → `.agents` → `.cursor` → `.claude` → `.codex`（兼容） |
+| **Skill 工具 / `skill.list`** | **`~/.xrk/skills`** · `~/.agents` · `~/.claude` · `~/.codex`（**不含** `~/.cursor/skills`） | 同上 + `{productDir}/skills` |
+
+跨项目人格放 **`~/.agents/`** 或 **`~/.xrk/`**，不要放 **`~/.cursor/`**。
 
 ## 产品目录
 
@@ -21,21 +37,7 @@ assistant / context / rules / recipes 默认：`{workspaceRoot}/.xrk`（**不强
 
 **Skills 不强制该目录。** Inject / `skill` / `skill.list` 自动导入已有 skill 树；缺目录则跳过。
 
-工作区根及多厂商约定路径会进入 **agent-instructions**。`{workspaceRoot}/AGENTS.md` 与 `.cursor/rules/*.mdc` 在对应 workspace 为根时**会**注入（除非已有 `.agents/AGENTS.md` 或 `.xrk/AGENTS.md` 定义产品角色）。分层说明：[skills-layers.md](./skills-layers.md)。
-
-## Skills 根
-
-项目内（低 → 高优先级；同名后列覆盖）：
-
-| 路径 | 说明 |
-|------|------|
-| `.codex/skills/` | Codex 兼容 |
-| `.claude/skills/` | Claude Code |
-| `.agents/skills/` | 厂商中立 |
-| `.cursor/skills/` | Cursor |
-| `.xrk/skills/` | XRK 原生叠加（优先） |
-
-用户主目录下同相对路径（`~/.agents/skills` … `~/.xrk/skills`）亦扫描，供 **`skill` 工具** 与 Face `skill.list`。站立 **skill-catalog inject 默认只含工作区 skills**（避免数百个 home skill 每轮进日志）；需要时可设 `includeUserHomeSkills: true`。
+存在 `{workspace}/.agents/AGENTS.md` 或 `{workspace}/.xrk/AGENTS.md` 时，工作区根 `AGENTS.md` **不**注入。分层说明：[skills-layers.md](./skills-layers.md)。
 
 ## 持久注入（会话日志）
 
@@ -60,13 +62,12 @@ Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Traje
 
 低 → 高优先级（后列更接近当轮任务）。**Skills 正文**仍为独立 catalog inject，不在此列表。
 
-1. **用户主目录**：`~/.codex/AGENTS.md` · `~/.claude/*` · `~/.agents/AGENTS.md` · `~/.agents/rules/**` · `~/.agents/context/*` · `~/.cursor/rules/**` · `~/.xrk/` 站立文件
-2. **工作区**：同上路径（无前缀）
-3. `.github/copilot-instructions.md` · `.github/instructions/**`（仅工作区）
-4. `{workspace}/.xrk/`：`SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` · `context/*` · `rules.md` · `subagents.md`
-5. 工作区根 `AGENTS.md`（无 `.agents/` 或 `.xrk/AGENTS.md` 时）
-6. 工作区根 `CLAUDE.md`（仅 `@AGENTS.md` 单行时跳过）
-7. Skills → 独立 catalog inject
+1. **用户主目录**（`HOME_CONVENTION_INJECT`）：`~/.codex/AGENTS.md` · `~/.claude/*` · `~/.agents/*` · `~/.xrk/` 站立文件
+2. **工作区**（`WORKSPACE_CONVENTION_INJECT`）：同上 + `CODEX.md` · `.cursor/rules/**` · `.github/*`
+3. `{workspace}/.xrk/`：`SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` · `context/*` · `rules.md` · `subagents.md`
+4. 工作区根 `AGENTS.md`（无 `.agents/` 或 `.xrk/AGENTS.md` 时）
+5. 工作区根 `CLAUDE.md`（仅 `@AGENTS.md` 单行时跳过）
+6. Skills → 独立 catalog inject（仅工作区根，除非 `includeUserHomeSkills: true`）
 
 ## 养 AI 放哪
 
@@ -74,10 +75,9 @@ Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Traje
 |------|------|
 | 跨项目人格、语气、习惯 | `~/.agents/AGENTS.md` · `~/.agents/rules/` · `~/.xrk/SOUL.md` · `~/.xrk/USER.md` |
 | 跨项目 skill | `~/.agents/skills/<name>/SKILL.md` |
+| 单项目规则（含 Cursor 格式） | `{workspace}/.cursor/rules/*.mdc`（**不是** `~/.cursor/rules`） |
 | 单项目插件开发 / 架构 | 仓库内 `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/` |
 | 本机私密偏好（不进 git） | `~/.xrk/` 或 `~/.agents/` |
-
-存在 `.agents/AGENTS.md` 或 `.xrk/AGENTS.md` 时，工作区根 `AGENTS.md` **不**注入。
 
 ## API
 
@@ -87,6 +87,8 @@ import {
   resolveWorkspaceInject,
   appendWorkspaceInjectsIfChanged,
   listSkillsFromWorkspace,
+  HOME_CONVENTION_INJECT,
+  WORKSPACE_CONVENTION_INJECT,
 } from "@xrkseek/workspace";
 
 const { blocks, durable, events } = await resolveWorkspaceInject({
@@ -111,6 +113,7 @@ await appendWorkspaceInjectsIfChanged({
 | omit / `true` | turn 开始时 durable inject + 多根 skill catalog |
 | `false` | 跳过 inject |
 | `{ productDir, maxChars }` | 调产品目录 / 预算 |
+| `includeUserHomeSkills: true` | standing catalog 也含 `~/…/skills`（默认 false） |
 
 Composition 暴露 `composition.workspace`（`WorkspaceInjector`）供手动 inject。
 
@@ -132,10 +135,26 @@ Product context is injected as **durable** `user/message` events, not into the t
 
 | Layer | Paths | Priority |
 |-------|-------|----------|
-| **Global** | `~/.agents/` · `~/.xrk/` · `~/.claude/` · `~/.codex/` · `~/.cursor/rules/` | Low |
-| **Workspace** | `{workspace}/.agents/` · `{workspace}/.xrk/` · same vendor paths | High |
+| **Global** | `~/.codex/` · `~/.claude/` · `~/.agents/` · `~/.xrk/` | Low |
+| **Workspace** | Same vendor paths under `{workspace}/` + `.xrk/` | High |
 
-Sections append in order; duplicate bodies dedupe; **later sections are closer to the turn**. Skill catalog follows the same rule: `~/…/skills` is lower priority than project trees.
+Sections append in order; duplicate bodies dedupe; **later sections are closer to the turn**. Skill catalog follows the same rule: home is lower priority than project trees.
+
+**Source of truth**: `packages/workspace/src/inject-sources.ts` (`HOME_CONVENTION_INJECT` · `WORKSPACE_CONVENTION_INJECT` · skill root lists).
+
+## Inject policy (Codex-aligned)
+
+Same core principle as Codex: **narrow instructions, progressive skill disclosure**.
+
+| Kind | Global `~/…` | Workspace `{root}/…` |
+|------|--------------|----------------------|
+| **Instructions** | `.codex/AGENTS.md` · `.claude/*` · `.agents/*` · `~/.xrk/` standing files | Same + `CODEX.md` · `.cursor/rules/**` · `.github/*` · root `AGENTS.md`/`CLAUDE.md` (root `AGENTS.md` skipped when product overlay exists) |
+| **`~/.cursor/**`** | **Never injected** (Cursor IDE maintainer tree) | — |
+| **`{root}/.cursor/rules/**`** | — | **Injected** (per-file opt-out via `xrk-inject: false`) |
+| **Skill catalog** | Home skills **excluded by default** | **`.xrk/skills`** → `.agents` → `.cursor` → `.claude` → `.codex` (compat) |
+| **`skill` tool / `skill.list`** | **`~/.xrk/skills`** · `~/.agents` · `~/.claude` · `~/.codex` (**excludes** `~/.cursor/skills`) | Same + `{productDir}/skills` |
+
+Put cross-project persona under **`~/.agents/`** or **`~/.xrk/`**, not **`~/.cursor/`**.
 
 ## Product dir
 
@@ -143,21 +162,7 @@ assistant / context / rules / recipes default to `{workspaceRoot}/.xrk` (**no fo
 
 **Skills do not require that directory.** Inject / `skill` / `skill.list` import existing skill trees automatically; missing dirs are skipped.
 
-Workspace-root and multi-vendor convention paths enter **agent-instructions**. `{workspaceRoot}/AGENTS.md` and `.cursor/rules/*.mdc` **are** injected when that workspace is the root (unless `.agents/AGENTS.md` or `.xrk/AGENTS.md` already defines the product role). Layering: [skills-layers.md](./skills-layers.md).
-
-## Skills roots
-
-In-project (low → high priority; later same names win):
-
-| Path | Notes |
-|------|-------|
-| `.codex/skills/` | Codex-compatible |
-| `.claude/skills/` | Claude Code |
-| `.agents/skills/` | Vendor-neutral |
-| `.cursor/skills/` | Cursor |
-| `.xrk/skills/` | XRK-native overlay (wins) |
-
-User-home trees with the same relative paths (`~/.agents/skills` … `~/.xrk/skills`) are also scanned for the **`skill` tool** and Face `skill.list`. The standing **skill-catalog inject defaults to workspace skills only** (avoids hundreds of home skills entering the log every turn); set `includeUserHomeSkills: true` to opt in.
+When `{workspace}/.agents/AGENTS.md` or `{workspace}/.xrk/AGENTS.md` exists, the workspace-root `AGENTS.md` is **not** injected. Layering: [skills-layers.md](./skills-layers.md).
 
 ## Durable inject (session log)
 
@@ -182,13 +187,12 @@ Budget: character cap (default 32k; **Settings → Plugins → Plugin configurat
 
 Low → high priority (later rows closer to the turn). Skill **bodies** remain a separate catalog inject, not in this list.
 
-1. **User home**: `~/.codex/AGENTS.md` · `~/.claude/*` · `~/.agents/AGENTS.md` · `~/.agents/rules/**` · `~/.agents/context/*` · `~/.cursor/rules/**` · `~/.xrk/` standing files
-2. **Workspace**: same paths (no home prefix)
-3. `.github/copilot-instructions.md` · `.github/instructions/**` (workspace only)
-4. `{workspace}/.xrk/`: `SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` · `context/*` · `rules.md` · `subagents.md`
-5. Workspace-root `AGENTS.md` (when neither `.agents/` nor `.xrk/AGENTS.md` exists)
-6. Workspace-root `CLAUDE.md` (skipped when it is only a single `@AGENTS.md` line)
-7. Skills → separate catalog inject
+1. **User home** (`HOME_CONVENTION_INJECT`): `~/.codex/AGENTS.md` · `~/.claude/*` · `~/.agents/*` · `~/.xrk/` standing files
+2. **Workspace** (`WORKSPACE_CONVENTION_INJECT`): same + `CODEX.md` · `.cursor/rules/**` · `.github/*`
+3. `{workspace}/.xrk/`: `SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` · `context/*` · `rules.md` · `subagents.md`
+4. Workspace-root `AGENTS.md` (when neither `.agents/` nor `.xrk/AGENTS.md` exists)
+5. Workspace-root `CLAUDE.md` (skipped when it is only a single `@AGENTS.md` line)
+6. Skills → separate catalog inject (workspace roots only unless `includeUserHomeSkills: true`)
 
 ## Where to put persona
 
@@ -196,10 +200,9 @@ Low → high priority (later rows closer to the turn). Skill **bodies** remain a
 |------|----------|
 | Cross-project persona, tone, habits | `~/.agents/AGENTS.md` · `~/.agents/rules/` · `~/.xrk/SOUL.md` · `~/.xrk/USER.md` |
 | Cross-project skill | `~/.agents/skills/<name>/SKILL.md` |
+| Project rules (including Cursor format) | `{workspace}/.cursor/rules/*.mdc` (**not** `~/.cursor/rules`) |
 | Single-project plugin / architecture | In-repo `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/` |
 | Local private preferences (not in git) | `~/.xrk/` or `~/.agents/` |
-
-When `.agents/AGENTS.md` or `.xrk/AGENTS.md` exists, the workspace-root `AGENTS.md` is **not** injected.
 
 ## API
 
@@ -209,6 +212,8 @@ import {
   resolveWorkspaceInject,
   appendWorkspaceInjectsIfChanged,
   listSkillsFromWorkspace,
+  HOME_CONVENTION_INJECT,
+  WORKSPACE_CONVENTION_INJECT,
 } from "@xrkseek/workspace";
 
 const { blocks, durable, events } = await resolveWorkspaceInject({
@@ -233,6 +238,7 @@ await appendWorkspaceInjectsIfChanged({
 | omit / `true` | Durable inject + multi-root skill catalog at turn start |
 | `false` | Skip inject |
 | `{ productDir, maxChars }` | Tune product dir / budget |
+| `includeUserHomeSkills: true` | Standing catalog also includes `~/…/skills` (default false) |
 
 Composition exposes `composition.workspace` (`WorkspaceInjector`) for manual inject.
 

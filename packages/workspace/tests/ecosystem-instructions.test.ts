@@ -105,6 +105,38 @@ describe("ecosystem instruction inject", () => {
     expect(paths).not.toContain("## CLAUDE.md");
   });
 
+  it("excludes user-home ~/.cursor/rules from Host inject", async () => {
+    const root = await import("node:fs/promises").then((fs) =>
+      fs.mkdtemp(path.join(tmpdir(), "xrk-eco6-")),
+    );
+    const home = path.join(root, "home");
+    await mkdir(path.join(home, ".cursor", "rules"), { recursive: true });
+    await writeFile(
+      path.join(home, ".cursor", "rules", "maintainer.mdc"),
+      "---\ndescription: Cursor maintainer\n---\n# Cursor-only maintainer note\n",
+      "utf8",
+    );
+    await mkdir(path.join(root, ".agents"), { recursive: true });
+    await writeFile(
+      path.join(root, ".agents", "AGENTS.md"),
+      "# Project role\n",
+      "utf8",
+    );
+
+    const { collectEcosystemInstructions, sectionsToInstructionBlocks } =
+      await import("../src/ecosystem-instructions.js");
+    const sections = await collectEcosystemInstructions({
+      root,
+      productDir: path.join(root, ".xrk"),
+      budget: { left: 32_000, events: [] },
+      includeUserHome: true,
+      homeDir: home,
+    });
+    const joined = sectionsToInstructionBlocks(sections).join("\n");
+    expect(joined).not.toContain("Cursor-only maintainer note");
+    expect(joined).not.toContain("## ~/.cursor/rules/");
+  });
+
   it("includes user-home ~/.agents rules before workspace overlay", async () => {
     const root = await import("node:fs/promises").then((fs) =>
       fs.mkdtemp(path.join(tmpdir(), "xrk-eco5-")),
