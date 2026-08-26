@@ -42,8 +42,9 @@ import { publishRemoteEvent } from "../remote-event.js";
 import { persistWorkspaceDoc } from "../workspace-store.js";
 import { resolveSessionCwd } from "../session-cwd.js";
 import {
+  historyPageIncludesProjections,
   SESSION_LIST_PROJECTION_KEYS,
-  sessionHistoryProjectionKeys,
+  sessionHistoryTailProjectionKeys,
   snapshotWireBlock,
 } from "../projections/snapshot-keys.js";
 
@@ -254,11 +255,15 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
     }
   }
 
-  const snap = runtime.projections.snapshot(sessionId, {
-    keys: [...sessionHistoryProjectionKeys(beforeSeq)],
-  });
-  const projections =
-    Object.keys(snap.values).length > 0 ? snapshotWireBlock(snap) : undefined;
+  let projections: ReturnType<typeof snapshotWireBlock> | undefined;
+  if (historyPageIncludesProjections(beforeSeq)) {
+    const snap = runtime.projections.snapshot(sessionId, {
+      keys: [...sessionHistoryTailProjectionKeys()],
+    });
+    if (Object.keys(snap.values).length > 0) {
+      projections = snapshotWireBlock(snap);
+    }
+  }
 
   return {
     ok: true,
