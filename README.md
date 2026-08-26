@@ -18,7 +18,7 @@
 
 向阳而生，驭光而行
 
-[入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md) · [v0.1.17 发行说明](./docs/releases/v0.1.17.md)
+[入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md) · [v0.1.18 发行说明](./docs/releases/v0.1.18.md)
 
 ## 这是什么
 
@@ -45,8 +45,8 @@ XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agen
 
 ```sh
 mkdir my-workspace && cd my-workspace
-npx @xrkseek/harness-cli@0.1.17 web
-# 全局安装后日常用缩写：xrkh web
+npm install -g @xrkseek/harness-cli@0.1.18
+xrkh web
 ```
 
 默认 **harness** preset（含 `web_search` / `web_fetch`）。仅要 fs 烟测时加 `--preset minimal`。
@@ -54,7 +54,7 @@ npx @xrkseek/harness-cli@0.1.17 web
 无界面：
 
 ```sh
-npx @xrkseek/harness-cli run --preset minimal --prompt "ping"
+xrkh run --preset minimal --prompt "ping"
 ```
 
 当前目录即 workspace。首次运行会在 `~/.xrk/` 写下用户设置与会话（可用 `XRK_HOME` 改）；`--workspace` 只钉项目根。细节：[docs/getting-started.md](./docs/getting-started.md)。
@@ -90,7 +90,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 多厂商 LLM Registry | **能跑** |
 | 社区 client（自研兼容器） | **能跑**（IM WS/sidecar · Vision · 记忆 · GenUI npm · TongFlow；`xrkh doctor`） |
 | 产品网页与浏览器 E2E | **能跑**（Playwright **17/17**；`pnpm test:web` 不进 `pnpm check`） |
-| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（**v0.1.17**；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
+| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（**v0.1.18**；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
 
 完整说明：[docs/status.md](./docs/status.md)。
 
@@ -106,7 +106,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 自己写工具 / 进程插件 | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | 排障 | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 | [learn](./docs/learn.md) |
-| 版本发行说明 | [releases](./docs/releases/)（正式 [v0.1.17](./docs/releases/v0.1.17.md) · 预览 [v0.0.11](./docs/releases/v0.0.11.md)） |
+| 版本发行说明 | [releases](./docs/releases/)（正式 [v0.1.18](./docs/releases/v0.1.18.md) · 预览 [v0.0.11](./docs/releases/v0.0.11.md)） |
 | 全部专题索引 | [docs/README.md](./docs/README.md) |
 
 ## 仓库里有什么
@@ -157,7 +157,7 @@ docs/             用法与契约教科书
 
 Grow toward the sun · ride the light
 
-[Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Status](./docs/status.md) · [Docs hub](./docs/README.md) · [v0.1.17 release notes](./docs/releases/v0.1.17.md)
+[Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Status](./docs/status.md) · [Docs hub](./docs/README.md) · [v0.1.18 release notes](./docs/releases/v0.1.18.md)
 
 ## What this is
 
@@ -184,8 +184,8 @@ Requires **Node.js ≥26**.
 
 ```sh
 mkdir my-workspace && cd my-workspace
-npx @xrkseek/harness-cli@0.1.17 web
-# after global install: xrkh web
+npm install -g @xrkseek/harness-cli@0.1.18
+xrkh web
 ```
 
 The default preset is **harness** (includes `web_search` / `web_fetch`). For an fs-only smoke test, add `--preset minimal`.
@@ -193,7 +193,7 @@ The default preset is **harness** (includes `web_search` / `web_fetch`). For an 
 Headless:
 
 ```sh
-npx @xrkseek/harness-cli run --preset minimal --prompt "ping"
+xrkh run --preset minimal --prompt "ping"
 ```
 
 The current directory is the workspace. First run writes user settings and sessions under `~/.xrk/` (`XRK_HOME` may override); `--workspace` only pins the project root. Details: [docs/getting-started.md](./docs/getting-started.md).
@@ -229,7 +229,7 @@ Optional: copy `.xrk/.credentials.yaml.example`, or use a brand `apiKeyEnv` (e.g
 | Multi-provider LLM Registry | **Working** |
 | Community clients (first-party adapter) | **Working** (IM WS/sidecar · vision · memory · GenUI npm · TongFlow; `xrkh doctor`) |
 | Product web & browser E2E | **Working** (Playwright **17/17**; `pnpm test:web` not in `pnpm check`) |
-| Public CLI package `@xrkseek/harness-cli` | **Working** (**v0.1.17**; primary bin **`xrkh`**, also **`xrk-harness`**) |
+| Public CLI package `@xrkseek/harness-cli` | **Working** (**v0.1.18**; primary bin **`xrkh`**, also **`xrk-harness`**) |
 
 Full matrix: [docs/status.md](./docs/status.md).
 
@@ -245,7 +245,7 @@ Full matrix: [docs/status.md](./docs/status.md).
 | Author tools / process plugins | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | Troubleshoot | [troubleshooting](./docs/troubleshooting.md) |
 | Short digest | [learn](./docs/learn.md) |
-| Release notes | [releases](./docs/releases/) (formal [v0.1.17](./docs/releases/v0.1.17.md) · preview [v0.0.11](./docs/releases/v0.0.11.md)) |
+| Release notes | [releases](./docs/releases/) (formal [v0.1.18](./docs/releases/v0.1.18.md) · preview [v0.0.11](./docs/releases/v0.0.11.md)) |
 | Full index | [docs/README.md](./docs/README.md) |
 
 ## Repository layout

@@ -10,7 +10,7 @@
 
 | # | 产物 | 去向 | 用户怎么用 |
 |---|------|------|------------|
-| 1 | npm pack | **npmjs.org** | `npx @xrkseek/harness-cli web` / `npm i -g @xrkseek/harness-cli` |
+| 1 | npm pack | **npmjs.org** | `npm i -g @xrkseek/harness-cli` → `xrkh web` |
 | 2 | `xrkseek-harness-cli-<ver>.tgz` | GitHub **Release** | 下载离线包 |
 
 不发 GitHub Packages。发布页：https://github.com/xrkseek/XRK-harness/releases
@@ -51,7 +51,7 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留 formal +
 
 | 档 | 版本 | 用途 |
 |------|------|------|
-| **正式** | **0.1.17** | 当前推荐 |
+| **正式** | **0.1.18** | 当前推荐 |
 | **预览** | **0.0.11** | npm tag **`preview`** |
 
 npm **不能**同号重发；改坏包就升修订号。中间号用 `npm-prune-withdrawn.mjs` deprecate（Granular token 通常无法 unpublish）。**勿**用空格 / 乱引号 deprecate——会破坏 registry 元数据；清弃用必须传真正的空字符串（脚本经 `npm-cli.js` 处理，避免 Windows `npm.cmd` 吞掉空参）。
@@ -72,7 +72,7 @@ Version source of truth: `apps/cli/package.json` → `version`. Release notes: `
 
 | # | Artifact | Destination | How users consume |
 |---|----------|-------------|-------------------|
-| 1 | npm pack | **npmjs.org** | `npx @xrkseek/harness-cli web` / `npm i -g @xrkseek/harness-cli` |
+| 1 | npm pack | **npmjs.org** | `npm i -g @xrkseek/harness-cli` → `xrkh web` |
 | 2 | `xrkseek-harness-cli-<ver>.tgz` | GitHub **Release** | Offline tarball download |
 
 Do not publish to GitHub Packages. Releases: https://github.com/xrkseek/XRK-harness/releases
@@ -113,7 +113,7 @@ node scripts/npm-prune-withdrawn.mjs            # deprecate intermediate version
 
 | Line | Version | Use |
 |------|---------|-----|
-| **Formal** | **0.1.17** | Current recommended |
+| **Formal** | **0.1.18** | Current recommended |
 | **Preview** | **0.0.11** | npm tag **`preview`** |
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Deprecate intermediate numbers with `npm-prune-withdrawn.mjs` (Granular tokens usually cannot unpublish). **Do not** deprecate with spaces / broken quotes — that corrupts registry metadata; clearing a deprecation requires a real empty string (the script goes through `npm-cli.js` so Windows `npm.cmd` does not swallow the empty arg).
