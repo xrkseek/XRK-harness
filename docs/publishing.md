@@ -51,7 +51,7 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留 formal +
 
 | 档 | 版本 | 用途 |
 |------|------|------|
-| **正式** | **0.1.19** | 当前推荐 |
+| **正式** | **0.1.20** | 当前推荐 |
 | **预览** | **0.0.11** | npm tag **`preview`** |
 
 npm **不能**同号重发；改坏包就升修订号。中间号用 `npm-prune-withdrawn.mjs` deprecate（Granular token 通常无法 unpublish）。**勿**用空格 / 乱引号 deprecate——会破坏 registry 元数据；清弃用必须传真正的空字符串（脚本经 `npm-cli.js` 处理，避免 Windows `npm.cmd` 吞掉空参）。
