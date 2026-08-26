@@ -147,6 +147,7 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
       items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
       baselinesReady: true, recentWorkspaceId: undefined,
     })),
+    useConnectionState: bindSnapshotSelector(createSnapshotStore(undefined)),
     useProjection: (() => undefined),
     useInput: bindSnapshotSelector(shell.state),
     inputActions: shell.actions,

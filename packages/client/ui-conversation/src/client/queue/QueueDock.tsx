@@ -17,7 +17,7 @@ import css from './QueueDock.module.css'
 
 /** Queue operations injected by the session-scoped registration. */
 export interface QueueDockInjected {
-  updateQueue: (itemId: QueueItemId, action: QueueAction) => Promise<void>
+  updateQueue: (itemId: QueueItemId, action: QueueAction) => Promise<'ok' | 'steer-queued'>
   notify: (level: 'info' | 'error', text: string) => void
 }
 
@@ -56,7 +56,8 @@ export function QueueDock({ useSession, updateQueue, notify, t }: QueueDockProps
   ): Promise<boolean> => {
     setBusy(itemId)
     try {
-      await updateQueue(itemId, action)
+      const outcome = await updateQueue(itemId, action)
+      if (outcome === 'steer-queued') notify('info', t('queue.steer.queued'))
       return true
     } catch {
       notify('error', failure)
@@ -96,7 +97,18 @@ export function QueueDock({ useSession, updateQueue, notify, t }: QueueDockProps
         )}
         <ul id={listId} className={css.list} hidden={!listVisible}>
           {listVisible && queue.map(row => (
-            <li key={row.id} className={css.row}>
+            <li
+              key={row.id}
+              className={css.row}
+              tabIndex={queueMutable && editing === null && busy === null ? 0 : undefined}
+              onKeyDown={(event) => {
+                if (editing !== null || busy !== null || !queueMutable || !running) return
+                if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
+                if (event.target !== event.currentTarget) return
+                event.preventDefault()
+                void applyAction(row.id, { kind: 'steer' }, t('queue.steerFailed'))
+              }}
+            >
               {/* Single-item strip has no count header, so the row itself carries the queue glyph. */}
               {queue.length === 1 && <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>}
               {editing?.id === row.id

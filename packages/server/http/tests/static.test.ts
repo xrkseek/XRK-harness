@@ -111,7 +111,7 @@ describe("boot inject", () => {
     expect(runtime?.immediately).toBe(true);
   });
 
-  it("product boot policy drops Cordis chrome and HMR ids", () => {
+  it("product boot policy drops Cordis chrome, HMR, and dsh-pocket", () => {
     const filtered = applyXrkProductBootPolicy({
       rev: "cap",
       entries: [
@@ -136,6 +136,12 @@ describe("boot inject", () => {
         {
           id: "@xrkseek/client-hmr",
           url: "/plugins/hmr.js",
+          rev: "1",
+          inject: [],
+        },
+        {
+          id: "dsh-pocket",
+          url: "/plugins/dsh-pocket/client.js",
           rev: "1",
           inject: [],
         },

@@ -7,7 +7,7 @@ import {
 } from "../src/llm-retry.js";
 
 describe("invokeLlmWithRetry", () => {
-  it("retries EMPTY_RESPONSE then succeeds; discards failed chunks", async () => {
+  it("retries EMPTY_RESPONSE then succeeds; live-flushes every attempt", async () => {
     const store = createMemorySessionStore();
     const session = store.create("retry");
     let calls = 0;
@@ -39,7 +39,8 @@ describe("invokeLlmWithRetry", () => {
 
     expect(response.content).toBe("ok");
     expect(calls).toBe(2);
-    expect(flushed).toEqual(["attempt-2"]);
+    // Live flush paints attempt-1; llm/retry clears the client surface.
+    expect(flushed).toEqual(["attempt-1", "attempt-2"]);
     const types = store.get(session.id).events.map((e) => e.type);
     expect(types).toEqual(["llm/retry", "llm/retry-started"]);
   });

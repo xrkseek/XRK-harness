@@ -45,6 +45,7 @@ export const XRK_OMIT_CLIENT_PLUGIN_IDS = [
   "@xrkseek/client-ui-cordis",
   "@xrkseek/xrk-cordis-client-runner",
   "@xrkseek/client-hmr",
+  "dsh-pocket",
 ] as const;
 
 /** Drop product-omitted ids. Overlay cannot put them back. */

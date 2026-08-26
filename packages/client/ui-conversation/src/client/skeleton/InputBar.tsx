@@ -76,11 +76,19 @@ function editRangeOf(pending: PendingEdit | null, prevLength: number, nextLength
 
 export type InputBarProps = ComposerBarProps
 
+function blockHasVisibleContent(block: { kind: string; text?: string }): boolean {
+  if (block.kind === 'tool-call') return false
+  if (block.kind === 'text' || block.kind === 'reasoning') {
+    return typeof block.text === 'string' && block.text.trim() !== ''
+  }
+  return true
+}
+
 export function InputBar({
   useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages,
   resolveSubmitMode, toggleCommandMenu, stop, command, t,
   renderSlot, useNotices, useLexicon, useMenuLauncher,
-  useProjection, sessionId, variant, disabled: inert = false, blocked,
+  useProjection, useConnectionState, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessory, overlay, leftItems, rightItems, footer,
 }: InputBarProps) {
@@ -90,8 +98,11 @@ export function InputBar({
   const commandMenuOpen = useMenuLauncher(source => source === 'command')
   const promptError = useSession(s => s.promptError) ?? null
   const running = useSession(s => s.running) ?? false
+  const partial = useSession(s => s.partial) ?? null
+  const runningCallCount = useSession(s => s.runningCalls.length) ?? 0
   const subagent = useSession(s => s.subagent) ?? null
   const removed = useSession(s => s.removed) ?? false
+  const reconnecting = useConnectionState(state => state === 'reconnecting')
   // Plan mode swaps the textarea placeholder (the projection is the folded
   // host value; owner-prop placeholders — hero, session-unavailable — win).
   const planActive = useProjection('plan', plan => plan !== undefined && (plan.pending ? !plan.active : plan.active))
@@ -106,6 +117,11 @@ export function InputBar({
     [draftImages, input?.imageIds],
   )
   const empty = draft.trim() === '' && attachments.length === 0
+  // Keep Send↔Stop aligned with an open turn tail: optimistic cancel clears
+  // `running` before partial/tool rows settle (DSH drain-latch posture).
+  const agentActive = running
+    || runningCallCount > 0
+    || (partial !== null && partial.blocks.some(blockHasVisibleContent))
   // Transient error banner (machine notices, image-intake rejections, and
   // prompt failures): the seq keys the Toast so an identical repeated message
   // restarts the hold-then-fade cycle instead of reusing the faded one.
@@ -162,16 +178,17 @@ export function InputBar({
   const continuable = subagent?.address.mode === 'continuable'
   const parentOffline = continuable && !subagent.parentAvailable
   // Running input stays free; locked = session removed, the
-  // inert no-workspace state, the machine faces absent (no session), or a
-  // parent-offline continuable child. An owner block also disables input;
-  // adjudicating and submitting render read-only so the draft stays visible.
-  const disabled = removed || inert || !live || blocked !== undefined || parentOffline
+  // inert no-workspace state, the machine faces absent (no session),
+  // reconnecting wire, or a parent-offline continuable child. An owner block
+  // also disables input; adjudicating and submitting render read-only so the
+  // draft stays visible.
+  const disabled = removed || inert || !live || blocked !== undefined || parentOffline || reconnecting
   const locked = disabled
   // The model seat is the ONE control a block leaves live: every block this
   // contract has is cleared by choosing a model, so locking it too would leave
   // the composer asking for the only thing it prevents. The other reasons to
   // be disabled do lock it — there is no session to choose a model for.
-  const modelSeatLocked = removed || inert || !live
+  const modelSeatLocked = removed || inert || !live || reconnecting
   const machineBusy = input?.phase === 'adjudicating' || input?.phase === 'submitting'
   // The no-workspace textarea remains the resident DOM node but acts as the
   // existing picker trigger. Message controls stay locked until a Session
@@ -179,8 +196,17 @@ export function InputBar({
   // and keyboard users can reach the recovery action.
   const workspaceTrigger = inert && !removed && onRequestWorkspace !== undefined
   const textareaDisabled = removed || (locked && !workspaceTrigger)
-  const canSteerQueue = !locked && !machineBusy && !commandMenuOpen && empty && running && subagent === null
+  // Steer / busy-Enter follow Host `running` (open next-step window), not the
+  // drain latch: after cancel, partial/tool tails keep Stop via `agentActive`
+  // but must not advertise chords the Host will reject as steer-unavailable.
+  const steeringAvailable = subagent === null
+  const canSteerQueue = !locked && !machineBusy && !commandMenuOpen && empty && running && steeringAvailable
     && input.queue.some(row => row.placement === 'queued')
+  // Chord hints only when a non-empty draft can actually submit — empty Enter
+  // is a no-op; whole-queue flush is Cmd/Ctrl+Enter only.
+  const busyEnterHint = running && steeringAvailable && !canSteerQueue && !disabled && !empty
+    ? resolveSubmitMode(running, 'enter', steeringAvailable)
+    : null
 
   useEffect(() => {
     if (input === undefined || inputActions === undefined) return
@@ -422,8 +448,8 @@ export function InputBar({
     // Empty-draft accelerated Enter acts on the queue instead of the (empty)
     // draft: the machine rejects empty drafts, so the gesture steers every
     // still-pending queued message into the running turn (the dock's per-row
-    // steer button applied to the whole queue). Steering needs the same
-    // window as the per-row button: a running ordinary session.
+    // steer button applied to the whole queue). Plain Enter with an empty
+    // draft stays a no-op — per-row steer lives on the dock (button or row Enter).
     if (accelerated && canSteerQueue) {
       keyboard.steerQueue()
       return
@@ -431,7 +457,7 @@ export function InputBar({
     keyboard.submit(resolveSubmitMode(
       running,
       accelerated ? 'accelerated' : 'enter',
-      subagent === null,
+      steeringAvailable,
     ))
   }
 
@@ -506,9 +532,13 @@ export function InputBar({
   // a projected limit is refused as a whole batch, announced immediately, and
   // never enters the rail — no more submit-time failure rolling the rail
   // back. The host enforces the same limits at submit for callers that bypass
-  // this composer.
+  // this composer. Subagent sessions reject images at intake (not only at RPC).
   const intakeImages = useCallback((files: readonly File[]): void => {
     if (addImages === undefined || files.length === 0) return
+    if (subagent !== null) {
+      showToast(t('image.subagentUnsupported'))
+      return
+    }
     const rejected = ((): string | null => {
       if (imageLimits !== undefined) {
         // Format precedes limits (DeepSeek Chat's filter order): a batch with
@@ -532,9 +562,9 @@ export function InputBar({
       return addImages(files)
     })()
     if (rejected !== null) showToast(rejected)
-  }, [addImages, attachments, imageLimits, showToast, t])
+  }, [addImages, attachments, imageLimits, showToast, subagent, t])
 
-  const canAcceptDrop = !locked && !machineBusy && addImages !== undefined
+  const canAcceptDrop = !locked && !machineBusy && addImages !== undefined && subagent === null
 
   const onSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>): void => {
     // Any caret/selection gesture ends a live paste attempt (the machine
@@ -560,8 +590,10 @@ export function InputBar({
   // Ordinary sessions retain their primary Send/Stop toggle. A continuable
   // child keeps Send as the primary action and exposes Stop independently so
   // pointer users can queue follow-ups while its current turn is running.
-  const primaryStops = running && subagent === null
-  const interruptible = running && continuable
+  // `agentActive` covers the post-cancel window where `running` cleared but
+  // the streaming tail has not settled yet.
+  const primaryStops = agentActive && subagent === null
+  const interruptible = agentActive && continuable
   const primaryLabel = primaryStops ? t('input.stop') : t('input.send')
   const onPrimary = (): void => {
     if (primaryStops) {
@@ -744,16 +776,22 @@ export function InputBar({
               aria-haspopup={workspaceTrigger ? 'menu' : undefined}
               aria-expanded={workspaceTrigger ? workspacePickerOpen : undefined}
               data-phase={input?.phase ?? 'inert'}
-              placeholder={placeholder ?? (parentOffline
-                ? t('placeholder.parentOffline')
-                : disabled
-                  ? t('placeholder.unavailable')
-                  // The steer hint deliberately outranks the plan placeholder:
-                  // while it shows, the whole-queue gesture is genuinely available
-                  // (the gate never consults plan mode), so the actionable hint wins.
-                  : canSteerQueue
-                    ? t('placeholder.steerQueue')
-                    : planActive ? t('placeholder.plan') : t('placeholder.default'))}
+              placeholder={placeholder ?? (reconnecting
+                ? t('placeholder.reconnecting')
+                : parentOffline
+                  ? t('placeholder.parentOffline')
+                  : disabled
+                    ? t('placeholder.unavailable')
+                    // The steer hint deliberately outranks the plan placeholder:
+                    // while it shows, the whole-queue gesture is genuinely available
+                    // (the gate never consults plan mode), so the actionable hint wins.
+                    : canSteerQueue
+                      ? t('placeholder.steerQueue')
+                      : busyEnterHint === 'queue'
+                        ? t('placeholder.busyQueue')
+                        : busyEnterHint === 'steer'
+                          ? t('placeholder.busySteer')
+                          : planActive ? t('placeholder.plan') : t('placeholder.default'))}
               rows={2}
               onChange={onChange}
               onKeyDown={onKeyDown}

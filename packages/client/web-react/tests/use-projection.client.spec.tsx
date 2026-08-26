@@ -61,6 +61,7 @@ function makeHost() {
       provideInfo: provide,
     },
     workspaces: { list: observable<unknown>({ items: [] }) },
+    connection: { state: observable<undefined>(undefined) },
   }
   return {
     host,

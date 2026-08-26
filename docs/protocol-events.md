@@ -16,7 +16,7 @@ Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deri
 | `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta；可选 `kind`：`text`\|`reasoning`\|`usage`\|`tool-call`；`usage` 时带 `usage`；`tool-call` 时带 `toolCallId` · 可选 `toolName` · `argumentsDelta`；可选 `index` |
 | `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls`；可选 `reasoning`（`deriveMessages` 在有文本时回传）；可选 **`interrupted: true`**（流式取消固化前缀，**不是** `turn/end.reason`）；可选 `usage`（`TokenUsage`；Face `sessionStats.decodeTokens` + `tokenUsage`） |
 | `request/header` | `turnId`, `reason`, `header.config` | 非模型可见；`provider`/`model`；可选 `reasoningEffort` · `contextWindow`；可选 `system` · `tools[]`（Face `contextBreakdown` / envelope 重价） |
-| `llm/retry` · `llm/retry-started` | `turnId`, `stepId`, `retryId`, `retry`, … | 非模型可见；步内可重试失败后写 `llm/retry`（delay / failure.code），backoff 结束写 `llm/retry-started`；失败尝试的 stream chunk **不**落库 |
+| `llm/retry` · `llm/retry-started` | `turnId`, `stepId`, `retryId`, `retry`, … | 非模型可见；步内可重试失败后写 `llm/retry`（delay / failure.code），backoff 结束写 `llm/retry-started`；失败尝试的 stream chunk **仍会** live 落库以便 UI 即时显示，客户端在 `llm/retry` 时清空该步表面，取消/修复折叠只取该步最近一次 `llm/retry` 之后的 chunk |
 | `tool/call` | `turnId`, `stepId`, `call` | Before pipeline body |
 | `tool/result` | `turnId`, `stepId`, `result` | Settled result；`result.content` = MessageContent（string \| ContentBlock[]，MCP 可准入 image ref）；`result.meta` 可选（壳卡回放，不进 `deriveMessages`） |
 | `prompt/admitted` | `admitId`, `content` | MessageContent（string \| blocks）；可选 `delivery`: steer\|queue |
@@ -104,7 +104,7 @@ Window compaction: [session-compaction.md](./session-compaction.md).
 | `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta; optional `kind`: `text`\|`reasoning`\|`usage`\|`tool-call`; `usage` carries `usage`; `tool-call` carries `toolCallId` · optional `toolName` · `argumentsDelta`; optional `index` |
 | `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls`; optional `reasoning` (returned by `deriveMessages` when text is present); optional **`interrupted: true`** (stream cancel freezes the prefix — **not** `turn/end.reason`); optional `usage` (`TokenUsage`; Face `sessionStats.decodeTokens` + `tokenUsage`) |
 | `request/header` | `turnId`, `reason`, `header.config` | Not model-visible; `provider`/`model`; optional `reasoningEffort` · `contextWindow`; optional `system` · `tools[]` (Face `contextBreakdown` / envelope reprice) |
-| `llm/retry` · `llm/retry-started` | `turnId`, `stepId`, `retryId`, `retry`, … | Not model-visible; after a retriable in-step failure write `llm/retry` (delay / failure.code), then `llm/retry-started` when backoff ends; failed-attempt stream chunks are **not** persisted |
+| `llm/retry` · `llm/retry-started` | `turnId`, `stepId`, `retryId`, `retry`, … | Not model-visible; after a retriable in-step failure write `llm/retry` (delay / failure.code), then `llm/retry-started` when backoff ends; failed-attempt stream chunks **are** live-persisted for UI throughput, the client clears that step surface on `llm/retry`, and cancel/repair folds only chunks after the latest in-step `llm/retry` |
 | `tool/call` | `turnId`, `stepId`, `call` | Before pipeline body |
 | `tool/result` | `turnId`, `stepId`, `result` | Settled result; `result.content` = MessageContent (string \| ContentBlock[]; MCP may admit image refs); optional `result.meta` (shell card replay; not in `deriveMessages`) |
 | `prompt/admitted` | `admitId`, `content` | MessageContent (string \| blocks); optional `delivery`: steer\|queue |
@@ -134,7 +134,7 @@ Two different “interrupt” surfaces — do not conflate them.
 | `turn/end.reason` · `aborted` | `{ kind: "aborted", reason: AgentCancelCause }` | **Live cancel** (Stop / parent session / hook / dispose / legacy) | Same; `reason` is `user` · `parent` · `hook` · `disposed` · `legacy` |
 | `turn/end.reason` · `interrupted` | `{ kind: "interrupted" }` | **Crash recovery only**: process died with an open turn/step; synthesize closure on load | `repairOpenTurnEvents` (`@xrkseek/core-session`) |
 
-Live Stop: message may set `interrupted: true`; turn ends as **`aborted`**; English shell shows `Stopped` (`message.stopped`, after cancel flushes the llm-retry chunk buffer). Cold-start repair of an open turn: turn ends as **`interrupted`** with no `AgentCancelCause`. Product-shell gate: `product-shell-cancel.e2e.ts`.
+Live Stop: message may set `interrupted: true`; turn ends as **`aborted`**; English shell shows `Stopped` (`message.stopped`). Cold-start repair of an open turn: turn ends as **`interrupted`** with no `AgentCancelCause`. Product-shell gate: `product-shell-cancel.e2e.ts`.
 
 Other `turn/end.reason` values: `completed` · `error` · `max-tokens` · `blocked`. Shell display for `error`: `displayFailureMessage` (AUTH redaction) and `product-shell-error.e2e.ts`. Dangling tool settlement: [tool-settlement.md](./tool-settlement.md).
 

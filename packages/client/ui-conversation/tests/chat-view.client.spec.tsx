@@ -44,6 +44,10 @@ beforeEach(() => {
   localStorage.clear()
 })
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 const SID = 's1' as SessionId
 type RoutedChatNodeOwner = ChatNodeOwnerProps & { readonly node: ChatNode }
 
@@ -267,6 +271,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     useSession: bindSnapshotSelector(source),
     useSessions: emptySessions(),
     useWorkspaces: emptyWorkspaces(),
+    useConnectionState: bindSnapshotSelector(createSnapshotStore(undefined)),
     useProjection: (() => undefined),
     useInput: (() => { throw new Error('unused') }),
     inputActions: {
@@ -870,12 +875,13 @@ describe('ChatView', () => {
     expect(h.toolOwners.at(-1)?.selectedCallId).toBe('a')
   })
 
-  it('hands running calls to a live Tool group', () => {
+  it('hands running calls to a live Tool group and drops the idle waiting label', () => {
     const h = makeHarness({ runningCalls: [runningCall('r1')], running: true })
     const view = render(<h.ChatView {...h.props} />)
     expect(view.getByTestId('tool-seat-r1')).toBeTruthy()
     expect(h.toolOwners[0]?.block).toMatchObject({ callId: 'r1', argsRaw: '{"command":"cmd-r1"}' })
-    expect(view.getByRole('status').textContent).toBe('Deep diving...')
+    // Tools are the live surface — idle TurnStatus must not mask them.
+    expect(view.queryByRole('status')).toBeNull()
   })
 
   it('keeps the Tool renderer mounted when a running call settles into log order', () => {
@@ -928,6 +934,7 @@ describe('ChatView', () => {
 
   it('the running clock uses turn/start, ignores steering, and stays out of the live region', () => {
     const startTime = Date.now() - 125_000
+    const phrase = zh[`turnStatus.${((startTime % 16) + 16) % 16}` as keyof typeof zh]
     const trigger: UserMessageNode = { ...user(1, 'go'), time: startTime + 1 }
     const h = makeHarness({
       nodes: [trigger], turnTimings: new Map([[1, { startTime }]]), running: true,
@@ -935,7 +942,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     // Freshly mounted (as after a reload) yet already past the 15s gate.
     const status = view.getByRole('status')
-    expect(status.textContent).toMatch(/^Deep diving\.\.\.2分0\d秒$/)
+    expect(status.textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}2分0\\d秒$`))
     expect(status.querySelector('[aria-hidden="true"]')).not.toBeNull()
     act(() => {
       h.set({ queue: [{
@@ -947,7 +954,22 @@ describe('ChatView', () => {
         text: 'also',
       }] })
     })
-    expect(status.textContent).toMatch(/^Deep diving\.\.\.2分0\d秒$/)
+    expect(status.textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}2分0\\d秒$`))
+  })
+
+  it('hides the idle waiting label once streaming Think content is live', () => {
+    const h = makeHarness({
+      running: true,
+      partial: { turn: 1, step: 0, blocks: [{ kind: 'reasoning', text: 'plan step one' }] },
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.queryByRole('status')).toBeNull()
+  })
+
+  it('keeps an idle waiting phrase while the turn runs with no live surface yet', () => {
+    const h = makeHarness({ running: true })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByRole('status').textContent).toBe(zh['turnStatus.0'])
   })
 
   it('hands each ordered root call to the keyed business-node slot', () => {

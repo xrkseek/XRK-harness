@@ -4,6 +4,7 @@ import {
   listDanglingToolCalls,
 } from "./dangling.js";
 
+/** Latest attempt only — skip chunks before the last in-step `llm/retry`. */
 function foldStepStreamChunks(
   events: readonly SessionEvent[],
   turnId: string,
@@ -13,14 +14,26 @@ function foldStepStreamChunks(
   readonly reasoning: string;
   readonly toolCalls: import("@xrkseek/protocol").ToolCall[];
 } {
+  let attemptStart = 0;
+  for (let i = 0; i < events.length; i += 1) {
+    const boundary = events[i];
+    if (
+      boundary?.type === "llm/retry" &&
+      boundary.turnId === turnId &&
+      boundary.stepId === stepId
+    ) {
+      attemptStart = i + 1;
+    }
+  }
   let content = "";
   let reasoning = "";
   const byIndex = new Map<
     number,
     { id: string; name?: string; arguments: string }
   >();
-  for (const ev of events) {
-    if (ev.type !== "assistant/chunk") continue;
+  for (let i = attemptStart; i < events.length; i += 1) {
+    const ev = events[i];
+    if (ev === undefined || ev.type !== "assistant/chunk") continue;
     if (ev.turnId !== turnId || ev.stepId !== stepId) continue;
     if (ev.kind === "usage") continue;
     if (ev.kind === "tool-call") {

@@ -147,6 +147,10 @@ declare module '@xrkseek/client-ui-slots' {
     useSessions: SnapshotSelectorHook<SessionListState>
     /** Selector hook over real Workspaces and their independent baseline lifecycle. */
     useWorkspaces: SnapshotSelectorHook<import('./workspaces/service.ts').WorkspaceListState>
+    /** Coarse wire connection state (`undefined` = pre-connect). */
+    useConnectionState: SnapshotSelectorHook<
+      import('@xrkseek/client-connection/client').ConnectionState | undefined
+    >
   }
 }
 

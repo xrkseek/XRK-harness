@@ -11,9 +11,11 @@ import type { ClientContext } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-ui-theme/client'
 import type { PanelActions } from './service.ts'
 import { AppFrame } from './AppFrame.tsx'
+import { ConnectionOverlay } from './ConnectionOverlay.tsx'
 import { createLayoutStore } from './stores.ts'
 import { LayoutController } from './service.ts'
 import { ThemePresenter } from './theme-presenter.ts'
+import { NS, en, zh } from './locales.ts'
 
 // Contract exports only (export-convergence rule: cross-package consumers
 // keep a symbol exported; test-only/package-internal symbols live off /src).
@@ -105,7 +107,7 @@ export interface ConvOwnerProps {}
 export interface DetailsOwnerProps {}
 
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
-export const inject = ['slots', 'theme']
+export const inject = ['slots', 'theme', 'locale']
 
 /**
  * Client plugin body: provide ctx.layout, then one register() call — AppFrame
@@ -141,6 +143,15 @@ export function apply(ctx: ClientContext): void {
       void disposeService()
     }
   }, 'ui-layout: service + root registration')
+
+  ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'connection',
+    order: 0,
+    locale: NS,
+  }, ConnectionOverlay)
+
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-layout: dictionaries')
 
   // Theme presentation: pure DOM writes from resolved snapshots — initial
   // state through the getter once, then event-driven only; no React path.

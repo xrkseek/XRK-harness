@@ -2,9 +2,8 @@
  * Host-serve cancel: hung replay stream -> Stop ->
  * turn/end aborted + assistant interrupted + UI "Stopped" (E.3 / DSH).
  *
- * `invokeLlmWithRetry` buffers chunks until success or cancel flush, so the
- * shell does not paint streaming text while `hangBeforeDone` is parked.
- * Wait past inject + first deltas so the buffer is non-empty, then Stop.
+ * Chunks flush live while the provider streams, so Stop can land after the
+ * first deltas are already in the session log (and visible in the shell).
  */
 import { describe, expect, it } from "vitest";
 import { createReplayAdapter } from "@xrkseek/llm-replay";

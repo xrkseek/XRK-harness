@@ -14,7 +14,9 @@
 // lifecycle updates replace only their own row without remounting it.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ConversationTimelineSnapshot } from '@xrkseek/client-runtime/client'
+import type {
+  AssistantBlock, ConversationTimelineSnapshot, PartialAssistant,
+} from '@xrkseek/client-runtime/client'
 import { Button, IconChevronDownOutline14, Modal } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble } from './MessageItem.tsx'
@@ -23,6 +25,8 @@ import { formatRunDuration } from './message-chrome.ts'
 import css from './ChatView.module.css'
 
 const FOLLOW_THRESHOLD = 24
+/** Idle waiting copy pool (`turnStatus.0` …); one pick stays for the whole turn. */
+const TURN_STATUS_PHRASE_COUNT = 16
 
 /** Active column host when present; otherwise the view-local scroller. */
 function scrollerOf(from: HTMLElement): HTMLElement {
@@ -115,7 +119,36 @@ function runningTurnStartTime(timeline: ConversationTimelineSnapshot): number | 
   return latest
 }
 
-/** Turn-level model activity label retained across first-token, tool, and streaming phases. */
+function blockHasVisibleContent(block: AssistantBlock): boolean {
+  if (block.kind === 'tool-call') return false
+  if (block.kind === 'text' || block.kind === 'reasoning') return block.text.trim() !== ''
+  return true
+}
+
+/** True once the flow already shows Think / text / tools — idle waiting copy must yield. */
+function hasLiveTurnSurface(
+  partial: PartialAssistant | null,
+  runningCallCount: number,
+): boolean {
+  if (runningCallCount > 0) return true
+  if (partial === null) return false
+  return partial.blocks.some(blockHasVisibleContent)
+}
+
+function turnStatusPhrase(
+  startTime: number | null,
+  t: ChatViewSlotProps['t'],
+): string {
+  const seed = startTime ?? 0
+  const index = ((seed % TURN_STATUS_PHRASE_COUNT) + TURN_STATUS_PHRASE_COUNT) % TURN_STATUS_PHRASE_COUNT
+  return t(`turnStatus.${index}`)
+}
+
+/**
+ * First-token / empty-turn waiting label only. Once Think, text, or a tool
+ * row is live in the flow, this yields so streaming content is not masked
+ * by the idle shimmer.
+ */
 function TurnStatus({ startTime, t }: {
   /** The running turn's logged `turn/start` time; null falls back to mount
    *  time when that boundary is outside the window. */
@@ -128,6 +161,7 @@ function TurnStatus({ startTime, t }: {
   // elapsed time and the final footer's Ran-for label matches this clock.
   const anchor = startTime ?? mountedAt
   const [elapsedMs, setElapsedMs] = useState(() => Math.max(0, Date.now() - anchor))
+  const phrase = useMemo(() => turnStatusPhrase(startTime, t), [startTime, t])
   useEffect(() => {
     const tick = (): void => {
       setElapsedMs(Math.max(0, Date.now() - anchor))
@@ -141,7 +175,7 @@ function TurnStatus({ startTime, t }: {
   const showClock = elapsedMs >= 15_000
   return (
     <div className={css.turnStatus} role="status" aria-live="polite">
-      Deep diving...
+      {phrase}
       {showClock && (
         <span className={css.turnStatusClock} aria-hidden>
           {formatRunDuration(elapsedMs, t)}
@@ -163,6 +197,8 @@ export function ChatView({
   const nodeStore = useSession(s => s.chat.nodes)
   const timeline = useSession(s => s.chat.timeline)
   const inbox = useSession(s => s.queue)
+  const partial = useSession(s => s.partial)
+  const runningCallCount = useSession(s => s.runningCalls.length)
   // Workspace root off the session list row: path summaries display relative to it.
   const cwd = useSessions(s => s.byId[sessionId]?.cwd)
   const running = useSession(s => s.running)
@@ -215,6 +251,7 @@ export function ChatView({
     [loadImage, renderSlot],
   )
   const runningTurnStart = useMemo(() => runningTurnStartTime(timeline), [timeline])
+  const showTurnStatus = running && !hasLiveTurnSurface(partial, runningCallCount)
 
   const listRef = useRef<HTMLDivElement | null>(null)
   const columnRef = useRef<HTMLDivElement | null>(null)
@@ -448,9 +485,9 @@ export function ChatView({
           {/* No pending placeholders: questions (ui-user-questions) and approvals
               (ApprovalPanel) both take over the composer, so a flow card would
               double-render the same wait. */}
-          {/* Turn-level loading signal: rides the whole running turn (first-token
-              wait, tool execution, streaming) so it never flickers per step. */}
-          {running && <TurnStatus startTime={runningTurnStart} t={t} />}
+          {/* Idle waiting only: hide once Think / text / tools are live so the
+              shimmer does not mask streaming reasoning until the user pauses. */}
+          {showTurnStatus && <TurnStatus startTime={runningTurnStart} t={t} />}
           {pendingSteering.map(item => (
             <PendingSteeringBubble
               key={item.id}

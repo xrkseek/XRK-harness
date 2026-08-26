@@ -44,9 +44,10 @@ export interface IConversation {
    * Apply one edit, remove, or strict steer operation to a pending queue occurrence.
    * @param itemId - agent-owned inbox occurrence identity.
    * @param action - requested queue operation.
-   * @returns completion; converged strict-steer races resolve, while other failures reject.
+   * @returns `ok` on success; `steer-queued` when steer lost the next-step window
+   *   and the message remains queued for normal delivery.
    */
-  updateQueue(itemId: QueueItemId, action: QueueAction): Promise<void>
+  updateQueue(itemId: QueueItemId, action: QueueAction): Promise<'ok' | 'steer-queued'>
   /**
    * Cancel the scoped session's in-flight turn while preserving its pending Queue.
    * @returns completion; failures reject as in send.
@@ -283,16 +284,23 @@ export class ConversationController extends Service implements IConversation {
   }
 
   /** Apply one operation to a pending queue occurrence. */
-  async updateQueue(itemId: QueueItemId, action: QueueAction): Promise<void> {
+  /** Apply one operation to a pending queue occurrence. */
+  async updateQueue(itemId: QueueItemId, action: QueueAction): Promise<'ok' | 'steer-queued'> {
     const session = this.scopedSession('updateQueue')
     const result = await session.updateQueue(itemId, action)
     if (!result.ok) {
+      if (action.kind === 'steer' && result.error.code === 'steer-unavailable') {
+        return 'steer-queued'
+      }
       if (
         action.kind === 'steer'
-        && (result.error.code === 'steer-unavailable' || result.error.code === 'queue-item-not-found')
-      ) return
+        && result.error.code === 'queue-item-not-found'
+      ) {
+        return 'ok'
+      }
       throw new Error(`conversation.updateQueue failed: ${result.error.code}: ${result.error.message}`)
     }
+    return 'ok'
   }
 
   /** Cancel the scoped session's in-flight turn while preserving Queue (failures land in promptError and reject, as in send). */

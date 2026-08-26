@@ -25,6 +25,8 @@ function latestLine(text: string): string {
  * @returns the reasoning disclosure.
  */
 export function ReasoningRow({ text, running, t }: { text: string; running: boolean; t: ChatViewSlotProps['t'] }) {
+  // Collapsed by default (Codex/DSH posture): the one-line summary follows the
+  // latest streamed line; expand only when the reader opens the full body.
   const [expanded, setExpanded] = useState(false)
   const summaryRef = useRef<HTMLSpanElement>(null)
   const summary = running ? latestLine(text) : firstLine(text)

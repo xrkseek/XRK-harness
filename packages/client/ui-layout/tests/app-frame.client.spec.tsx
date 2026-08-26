@@ -87,6 +87,7 @@ function mountFrame() {
       renderSlot={renderSlot}
       useSessions={useSessions}
       useWorkspaces={((sel: (s: WorkspaceListState) => unknown) => sel(workspaceState)) as never}
+      useConnectionState={((sel: (s: undefined) => unknown) => sel(undefined)) as never}
       SessionProvider={SessionProviderStub}
     />
   )

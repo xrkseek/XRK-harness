@@ -221,14 +221,14 @@ export function apply(ctx: Context): void {
           const draft = from.snapshot.draft
           const imageIds = from.snapshot.imageIds
           const next = inputHub.shell(nextId)
-          if (imageIds.length === 0 || next.addImages(imageIds)) {
-            if (draft !== '') {
-              next.setDraft(draft)
-              from.setDraft('')
-            }
-            if (imageIds.length > 0) {
-              for (const id of imageIds) from.removeImage(id)
-            }
+          // Always move text; image intake may refuse on the destination —
+          // leave images on the prior session rather than stranding the draft.
+          if (draft !== '') {
+            next.setDraft(draft)
+            from.setDraft('')
+          }
+          if (imageIds.length > 0 && next.addImages(imageIds)) {
+            for (const id of imageIds) from.removeImage(id)
           }
         }
         sessions.open(nextId)

@@ -5,7 +5,10 @@ import {
   createMemorySessionStore,
   listDanglingToolCalls,
 } from "@xrkseek/core-session";
-import { finalizeCancelledTurn } from "../src/cancel-finalize.js";
+import {
+  finalizeCancelledTurn,
+  foldStepStreamChunks,
+} from "../src/cancel-finalize.js";
 
 describe("finalizeCancelledTurn (DSH abort settle)", () => {
   it("settles open tool/call as ABORTED_BEFORE_DISPATCH", () => {
@@ -44,6 +47,55 @@ describe("finalizeCancelledTurn (DSH abort settle)", () => {
     expect(turnEnd?.type === "turn/end" && turnEnd.reason).toEqual({
       kind: "aborted",
       reason: { kind: "user" },
+    });
+  });
+
+  it("folds only stream chunks after the latest in-step llm/retry", () => {
+    const events = [
+      {
+        type: "assistant/chunk" as const,
+        ts: 1,
+        turnId: "t1",
+        stepId: "s1",
+        text: "discard-me",
+        kind: "text" as const,
+        index: 0,
+      },
+      {
+        type: "llm/retry" as const,
+        ts: 2,
+        turnId: "t1",
+        stepId: "s1",
+        retryId: "r1",
+        retry: 1,
+        maxRetries: 2,
+        delayMs: 0,
+        mode: "normal" as const,
+        failure: { message: "empty", code: "EMPTY_RESPONSE" },
+      },
+      {
+        type: "assistant/chunk" as const,
+        ts: 3,
+        turnId: "t1",
+        stepId: "s1",
+        text: "keep-me",
+        kind: "text" as const,
+        index: 0,
+      },
+      {
+        type: "assistant/chunk" as const,
+        ts: 4,
+        turnId: "t1",
+        stepId: "s1",
+        text: " and-more",
+        kind: "reasoning" as const,
+        index: 0,
+      },
+    ];
+    expect(foldStepStreamChunks(events, "t1", "s1")).toEqual({
+      content: "keep-me",
+      reasoning: " and-more",
+      toolCalls: [],
     });
   });
 });

@@ -40,7 +40,7 @@ const t = makeTranslate(zh, commonZh)
 const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
 
 describe('ReasoningRow', () => {
-  it('follows the latest streaming line, scrolls to its end, then restores the settled first line', () => {
+  it('streams Think collapsed with a live latest-line summary, then settles to the first line', () => {
     const view = render(
       <AssistantMarkdown
         t={t}
@@ -50,11 +50,9 @@ describe('ReasoningRow', () => {
       />,
     )
     expect(view.getByText('运行中')).toBeTruthy()
-    const summary = view.getByText('Newest reasoning tokens')
-    Object.defineProperties(summary, {
-      scrollWidth: { configurable: true, value: 300 },
-      clientWidth: { configurable: true, value: 100 },
-    })
+    const row = view.getByRole('button')
+    expect(row.getAttribute('aria-expanded')).toBe('false')
+    expect(view.getByText(/Newest reasoning tokens/)).toBeTruthy()
 
     view.rerender(
       <AssistantMarkdown
@@ -64,12 +62,7 @@ describe('ReasoningRow', () => {
         renderMessageImages={renderMessageImages}
       />,
     )
-    expect(summary.scrollLeft).toBe(0)
-    flushAnimationFrames(2)
-    expect(summary.scrollLeft).toBe(0)
-    flushAnimationFrames(1)
-    expect(summary.scrollLeft).toBe(200)
-    expect(summary.getAttribute('data-follow-end')).toBe('true')
+    expect(view.getByText(/keep arriving/)).toBeTruthy()
 
     view.rerender(
       <AssistantMarkdown
@@ -80,10 +73,9 @@ describe('ReasoningRow', () => {
       />,
     )
     flushAnimationFrames(3)
+    expect(row.getAttribute('aria-expanded')).toBe('false')
     expect(view.getByText('Inspect the session')).toBeTruthy()
     expect(view.queryByText('运行中')).toBeNull()
-    expect(summary.scrollLeft).toBe(0)
-    expect(summary.hasAttribute('data-follow-end')).toBe(false)
   })
 
   it('expands from either Think or the reasoning summary', () => {
@@ -118,6 +110,5 @@ describe('ReasoningRow', () => {
     expect(view.getAllByText(/Inspect the session/)).toHaveLength(1)
     expect(view.queryByText('IN')).toBeNull()
     expect(view.container.querySelector('[class*="ioCard"]')).toBeNull()
-    expect(view.container.querySelector('[class*="thinkBody"]')).not.toBeNull()
   })
 })

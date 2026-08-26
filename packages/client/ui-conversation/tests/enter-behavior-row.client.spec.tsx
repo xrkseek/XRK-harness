@@ -27,12 +27,17 @@ function emptyWorkspaces() {
   }))
 }
 
+function emptyConnection() {
+  return bindSnapshotSelector(createSnapshotStore(undefined))
+}
+
 function mount() {
   const policy = new ComposerSubmissionPolicy()
   const setBusyEnter = vi.fn((behavior: 'queue' | 'steer') => { policy.setBusyEnter(behavior) })
   const props: EnterBehaviorRowProps = {
     useSessions: emptySessions(),
     useWorkspaces: emptyWorkspaces(),
+    useConnectionState: emptyConnection(),
     useBusyEnter: bindSnapshotSelector(policy.busyEnter),
     setBusyEnter,
     t: makeTranslate(en),

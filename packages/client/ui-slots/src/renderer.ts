@@ -177,6 +177,10 @@ export interface SlotRendererHost {
     /** Workspace list source backing the useWorkspaces standard hook. */
     list: HostObservable<unknown>
   }
+  /** Wire-side connection state backing the useConnectionState standard hook. */
+  connection: {
+    state: HostObservable<import('@xrkseek/client-connection/client').ConnectionState | undefined>
+  }
   /**
    * Installed locale face backing the `t` standard seat (absent until the
    * locale plugin installs one; rendering an entry that declared `locale:`

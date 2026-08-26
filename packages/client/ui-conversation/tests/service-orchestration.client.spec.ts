@@ -70,11 +70,11 @@ describe('ConversationController', () => {
     b.updateQueue.mockResolvedValueOnce({
       ok: false, error: { code: 'steer-unavailable', message: 'closed', details: {} },
     } as never)
-    await expect(b.scoped.updateQueue('item-1' as never, { kind: 'steer' })).resolves.toBeUndefined()
+    await expect(b.scoped.updateQueue('item-1' as never, { kind: 'steer' })).resolves.toBe('steer-queued')
     b.updateQueue.mockResolvedValueOnce({
       ok: false, error: { code: 'queue-item-not-found', message: 'claimed', details: {} },
     } as never)
-    await expect(b.scoped.updateQueue('item-2' as never, { kind: 'steer' })).resolves.toBeUndefined()
+    await expect(b.scoped.updateQueue('item-2' as never, { kind: 'steer' })).resolves.toBe('ok')
     b.updateQueue.mockResolvedValueOnce({
       ok: false, error: { code: 'queue-item-not-found', message: 'claimed', details: {} },
     } as never)
@@ -171,29 +171,36 @@ describe('InputHub queue steering (empty-draft accelerated Enter)', () => {
     await b.runtime.dispose()
   })
 
-  it('converges silently when the turn closes or a row is claimed mid-steer', async () => {
+  it('stops with an info notice when the turn closes mid-flush', async () => {
     const b = await bench()
     await b.runtime.sessions.updateSnapshot('s1', (draft) => {
       draft.queue = [row('q-1'), row('q-2')]
     })
-    // The turn closes before the second row: the flush stops, silently.
     b.updateQueue.mockResolvedValueOnce({
       ok: false, error: { code: 'steer-unavailable', message: 'closed', details: {} },
     } as never)
     b.shell.steerQueue()
     await vi.waitFor(() => { expect(b.updateQueue).toHaveBeenCalledTimes(1) })
-    expect(b.shell.notices.getSnapshot()).toBeNull()
+    expect(b.shell.notices.getSnapshot()).toEqual(
+      expect.objectContaining({ level: 'info', text: '插话窗口已关闭，消息保留在排队中' }),
+    )
+    await b.runtime.dispose()
+  })
 
-    // A row the host already claimed (e.g. a repeated empty-draft chord):
-    // the duplicate strict steer is a silent no-op.
+  it('skips a claimed row and continues flushing later queued rows', async () => {
+    const b = await bench()
     await b.runtime.sessions.updateSnapshot('s1', (draft) => {
-      draft.queue = [row('q-3')]
+      draft.queue = [row('q-1'), row('q-2')]
     })
-    b.updateQueue.mockResolvedValueOnce({
-      ok: false, error: { code: 'queue-item-not-found', message: 'claimed', details: {} },
-    } as never)
+    b.updateQueue
+      .mockResolvedValueOnce({
+        ok: false, error: { code: 'queue-item-not-found', message: 'claimed', details: {} },
+      } as never)
+      .mockResolvedValueOnce({ ok: true as const, value: { accepted: true as const } })
     b.shell.steerQueue()
     await vi.waitFor(() => { expect(b.updateQueue).toHaveBeenCalledTimes(2) })
+    expect(b.updateQueue).toHaveBeenNthCalledWith(1, 'q-1', { kind: 'steer' })
+    expect(b.updateQueue).toHaveBeenNthCalledWith(2, 'q-2', { kind: 'steer' })
     expect(b.shell.notices.getSnapshot()).toBeNull()
     await b.runtime.dispose()
   })

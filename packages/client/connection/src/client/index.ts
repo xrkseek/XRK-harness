@@ -49,6 +49,14 @@ export interface HostDescriptionSource {
   subscribe(listener: () => void): () => void
 }
 
+/** Observable coarse connection state for UI chrome and composer gating. */
+export interface ConnectionStateSource {
+  /** Latest state; undefined before the first connected generation. */
+  getSnapshot(): ConnectionState | undefined
+  /** Subscribe to state transitions (deduplicated). */
+  subscribe(listener: () => void): () => void
+}
+
 /** Required services (none — this is the wire root). */
 export const inject: string[] = []
 
@@ -64,6 +72,8 @@ export interface ConnectionHandle {
   readonly isLoopback: boolean
   /** Generation-scoped Host facts, including native path-open capability. */
   readonly hostDescription: HostDescriptionSource
+  /** Coarse reconnect/connected state for product chrome. */
+  readonly connectionState: ConnectionStateSource
   /** Generic logical RPC channels over the same Connection transport. */
   readonly rpc: ClientConnectionRpc
   /**
@@ -89,7 +99,9 @@ export function apply(ctx: Context): void {
   const rpc = fixtureClient?.rpc ?? createWebConnectionRpc()
   let started = false
   let description: HostDescription | undefined
+  let connectionState: ConnectionState | undefined
   const descriptionListeners = new Set<() => void>()
+  const stateListeners = new Set<() => void>()
   const publishDescription = (next: HostDescription | undefined): void => {
     if (Object.is(description, next)) return
     description = next
@@ -101,6 +113,17 @@ export function apply(ctx: Context): void {
       }
     }
   }
+  const publishState = (next: ConnectionState | undefined): void => {
+    if (Object.is(connectionState, next)) return
+    connectionState = next
+    for (const listener of [...stateListeners]) {
+      try {
+        listener()
+      } catch (error) {
+        console.error('[web-runtime] connection-state listener threw:', error)
+      }
+    }
+  }
   const handle: ConnectionHandle = {
     api,
     isLoopback: pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
@@ -109,6 +132,13 @@ export function apply(ctx: Context): void {
       subscribe: (listener) => {
         descriptionListeners.add(listener)
         return () => { descriptionListeners.delete(listener) }
+      },
+    },
+    connectionState: {
+      getSnapshot: () => connectionState,
+      subscribe: (listener) => {
+        stateListeners.add(listener)
+        return () => { stateListeners.delete(listener) }
       },
     },
     rpc,
@@ -128,6 +158,7 @@ export function apply(ctx: Context): void {
         },
         onStateChange: (state) => {
           if (state === 'reconnecting') publishDescription(undefined)
+          publishState(state)
           sinks.onStateChange?.(state)
         },
       }, config ?? {})
@@ -136,6 +167,7 @@ export function apply(ctx: Context): void {
         stop: () => {
           controller.stop()
           publishDescription(undefined)
+          publishState(undefined)
         },
       }
     },

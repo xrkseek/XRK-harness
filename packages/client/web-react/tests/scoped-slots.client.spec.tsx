@@ -87,6 +87,7 @@ function makeHost() {
   const storeCache = new Map<StoredEntry, Map<string, StoreInstanceLike>>()
   const list = observable<{ ids: string[] }>({ ids: [] })
   const workspaces = observable<{ ids: string[] }>({ ids: [] })
+  const connectionState = observable<string | undefined>(undefined)
   const absentInfo: SessionMaybeProvideInfo = { sessionId: undefined, hooks: {}, props: {} }
   const provide = observable<SessionMaybeProvideInfo>(absentInfo)
   let currentId: string | undefined
@@ -153,6 +154,7 @@ function makeHost() {
       provideInfo: provide,
     },
     workspaces: { list: workspaces },
+    connection: { state: connectionState },
   }
   return {
     host,
@@ -958,6 +960,7 @@ describe('inject: execution point, parameter derivation, cache granularity', () 
     const props = seen.at(-1)!
     expect(typeof props['useSessions']).toBe('function')   // kit always present
     expect(typeof props['useWorkspaces']).toBe('function')
+    expect(typeof props['useConnectionState']).toBe('function')
     expect(props['fromInject']).toBe('inject')
     expect(props['owner']).toBe('owner')
     expect(props['shared']).toBe('owner')   // owner overrides inject

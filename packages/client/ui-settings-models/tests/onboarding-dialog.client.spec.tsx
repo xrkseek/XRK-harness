@@ -134,6 +134,7 @@ function harness(options: {
     openSection,
     useSessions: unusedHook,
     useWorkspaces: unusedHook,
+    useConnectionState: unusedHook,
     controller,
     useModels: bindSnapshotSelector(controller.store),
     api: face as never,

@@ -406,6 +406,10 @@ export class SlotRegistry extends Service {
     if (workspaces === undefined) {
       throw new Error("renderSlot('root') before the workspaces service mounted — boot order puts runtime apply first")
     }
+    const connection = this.ctx.get('connection') as import('@xrkseek/client-connection/client').ConnectionHandle | undefined
+    if (connection === undefined) {
+      throw new Error("renderSlot('root') before the connection service mounted — boot order puts connection apply first")
+    }
     // `locale` is a live getter: the face installs (and, under HMR, swaps)
     // on the locale plugin's own fiber lifetime, while this host object is
     // built once — a captured value would strand renders on a dead face. The
@@ -427,6 +431,7 @@ export class SlotRegistry extends Service {
         provideInfo: sessions.currentProvideInfo,
       },
       workspaces: { list: workspaces.list },
+      connection: { state: connection.connectionState },
       get locale() { return service._locale },
     }
     return this._host

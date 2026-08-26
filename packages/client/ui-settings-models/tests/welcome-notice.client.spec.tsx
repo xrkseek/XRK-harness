@@ -53,6 +53,7 @@ function mount(version?: string, mutateImpl: () => Promise<unknown> = () => Prom
     openSection: vi.fn(),
     useSessions: unusedHook,
     useWorkspaces: unusedHook,
+    useConnectionState: unusedHook,
     controller,
     useWelcome: bindSnapshotSelector(controller.store),
     t: key => zh[key],

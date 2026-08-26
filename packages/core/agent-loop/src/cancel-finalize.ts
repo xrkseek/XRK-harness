@@ -23,7 +23,12 @@ function parseArgsFragment(raw: string): unknown {
   }
 }
 
-/** Fold logged stream chunks for one step into assistant text / tool surfaces. */
+/**
+ * Fold logged stream chunks for one step into assistant text / tool surfaces.
+ * Only the latest attempt after the last in-step `llm/retry` (client
+ * `resetForRetry` parity) so a discarded provider attempt does not paste into
+ * the interrupted message.
+ */
 export function foldStepStreamChunks(
   events: readonly SessionEvent[],
   turnId: string,
@@ -33,14 +38,26 @@ export function foldStepStreamChunks(
   readonly reasoning: string;
   readonly toolCalls: readonly ToolCall[];
 } {
+  let attemptStart = 0;
+  for (let i = 0; i < events.length; i += 1) {
+    const boundary = events[i];
+    if (
+      boundary?.type === "llm/retry" &&
+      boundary.turnId === turnId &&
+      boundary.stepId === stepId
+    ) {
+      attemptStart = i + 1;
+    }
+  }
   let content = "";
   let reasoning = "";
   const byIndex = new Map<
     number,
     { id: string; name?: string; arguments: string }
   >();
-  for (const ev of events) {
-    if (ev.type !== "assistant/chunk") continue;
+  for (let i = attemptStart; i < events.length; i += 1) {
+    const ev = events[i];
+    if (ev === undefined || ev.type !== "assistant/chunk") continue;
     if (ev.turnId !== turnId || ev.stepId !== stepId) continue;
     if (ev.kind === "usage") continue;
     if (ev.kind === "tool-call") {

@@ -1,5 +1,10 @@
 /**
  * Step-scoped LLM invoke with durable llm/retry events (DSH llm-retry subset).
+ *
+ * Chunks flush live so Face/UI see Think and text as the provider streams
+ * (Codex/DSH live-reasoning posture). A failed attempt still lands in the
+ * session log; `llm/retry` clears the client surface, and cancel/repair
+ * folds only the latest attempt after the last in-step `llm/retry`.
  */
 import {
   cancellableDelay,
@@ -60,17 +65,13 @@ export async function invokeLlmWithRetry(input: {
     if (input.signal?.aborted) {
       throw new DOMException("aborted", "AbortError");
     }
-    const buffered: Parameters<ChunkSink>[0][] = [];
     try {
-      const response = await input.invoke((chunk) => {
-        buffered.push(chunk);
+      return await input.invoke((chunk) => {
+        input.flushChunk(chunk);
       });
-      for (const chunk of buffered) input.flushChunk(chunk);
-      return response;
     } catch (err) {
       if (isAbortError(err, input.signal)) {
-        // Cancel finalize needs the streamed prefix in the session log.
-        for (const chunk of buffered) input.flushChunk(chunk);
+        // Live-flushed prefix is already in the session log for cancel finalize.
         throw err;
       }
       // Overflow has its own prune/compact path outside retry.
@@ -123,7 +124,7 @@ export async function invokeLlmWithRetry(input: {
         retryId,
         retry: attempt,
       });
-      // Discard buffered chunks from the failed attempt (DSH).
+      // Client resetForRetry / foldStepStreamChunks drop the failed attempt surface.
     }
   }
 }

@@ -12,11 +12,9 @@
     "test": "vitest run",
     "test:web": "vitest run --config vitest.web.config.ts",
     "test:kernel-coverage": "vitest run --config vitest.kernel.config.ts --coverage",
-
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-
     "web:build": "pnpm --filter @xrkseek/web-frontend run build",
     "web:assemble": "node ./scripts/assemble-web-dist.mjs",
     "client:types": "node ./scripts/emit-client-types.mjs",
@@ -35,8 +33,8 @@
     "@vitest/coverage-v8": "2.1.9",
     "eslint": "^10.8.1",
     "eslint-config-prettier": "^10.1.8",
-    "prettier": "^3.9.6",
     "lightningcss": "^1.32.0",
+    "prettier": "^3.9.6",
     "tsdown": "^0.22.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.67.0",

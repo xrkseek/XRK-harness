@@ -47,6 +47,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
       items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
       baselinesReady: true, recentWorkspaceId: undefined,
     })),
+    useConnectionState: bindSnapshotSelector(createSnapshotStore(undefined)),
     useProjection: (() => undefined),
     useInput: bindSnapshotSelector(shell.state),
     inputActions: shell.actions,

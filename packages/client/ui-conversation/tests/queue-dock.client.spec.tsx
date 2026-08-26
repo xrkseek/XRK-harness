@@ -75,12 +75,13 @@ function kitFor(snapshot: ConversationSnapshot, injected: Partial<QueueDockInjec
     t,
     useSessions: (() => { throw new Error('unused') }) as unknown as SnapshotSelectorHook<SessionListState>,
     useWorkspaces: (() => { throw new Error('unused') }) as never,
+    useConnectionState: (() => undefined) as never,
     useProjection: (() => undefined) as never,
     useInput: (() => { throw new Error('unused') }) as never,
     inputActions: { setDraft: () => {}, submit: () => {} } as never,
     session: snapshot,
     input: INPUT_STATE,
-    updateQueue: vi.fn(() => Promise.resolve()),
+    updateQueue: vi.fn(() => Promise.resolve('ok' as const)),
     notify: vi.fn(),
     ...injected,
   }
@@ -297,7 +298,7 @@ describe('QueueDock', () => {
   it('strictly steers complete row content only while the agent is running', async () => {
     const running = snapshotWith([row('i-steer', null, 'image [image]')])
     const source = liveSession(running)
-    const updateQueue = vi.fn(() => Promise.resolve())
+    const updateQueue = vi.fn(() => Promise.resolve('ok' as const))
     const rendered = render(
       <QueueDock {...kitFor(running, { updateQueue })} useSession={source.useSession} />,
     )
@@ -312,6 +313,22 @@ describe('QueueDock', () => {
     act(() => { source.push({ ...running, running: false }) })
     expect(rendered.getByLabelText('插话发送')).toHaveProperty('disabled', true)
     expect(rendered.getByLabelText('插话发送').getAttribute('title')).toBe('仅运行中可插话发送')
+  })
+
+  it('steers a focused queue row on Enter', async () => {
+    const snap = snapshotWith([row('i-enter', 'steer via keyboard')])
+    const source = liveSession(snap)
+    const updateQueue = vi.fn(() => Promise.resolve('ok' as const))
+    const { getByText } = render(
+      <QueueDock {...kitFor(snap, { updateQueue })} useSession={source.useSession} />,
+    )
+
+    const row = getByText('steer via keyboard').closest('li')!
+    row.focus()
+    fireEvent.keyDown(row, { key: 'Enter' })
+    await waitFor(() => {
+      expect(updateQueue).toHaveBeenCalledWith(iid('i-enter'), { kind: 'steer' })
+    })
   })
 
   it('renders a session-backed subagent Queue without unsupported actions', () => {

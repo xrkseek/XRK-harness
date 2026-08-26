@@ -52,6 +52,7 @@ function mount({
   const props: SettingsRootComponentProps = {
     useSessions,
     useWorkspaces: unusedHook,
+    useConnectionState: unusedHook,
     wide,
     useOnboardingSteps: select => select(steps),
     useSections: (select) => {

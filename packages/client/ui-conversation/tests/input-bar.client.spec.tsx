@@ -70,6 +70,11 @@ interface BenchOptions {
   }
   draft?: string
   running?: boolean
+  /** Streaming partial; keeps Stop when `running` already cleared after cancel. */
+  partial?: ConversationSnapshot['partial']
+  runningCalls?: ConversationSnapshot['runningCalls']
+  /** Coarse wire state; `reconnecting` locks the composer. */
+  connectionState?: 'connected' | 'reconnecting' | undefined
   subagent?: Exclude<ConversationSnapshot['subagent'], null>
   disabled?: boolean
   inert?: boolean
@@ -114,11 +119,14 @@ function bench(over?: BenchOptions) {
   const lex = over?.lexicon
   const session = createSnapshotStore<ConversationSnapshot>(snapshotOf({
     running: over?.running ?? false,
+    partial: over?.partial ?? null,
+    runningCalls: over?.runningCalls ?? [],
     subagent: over?.subagent ?? null,
     removed: over?.disabled ?? false,
     promptError: over?.promptError ?? null,
     queue: over?.queue ?? [],
   }))
+  const connection = createSnapshotStore<'connected' | 'reconnecting' | undefined>(over?.connectionState)
   type ShellDeps = ConstructorParameters<typeof SessionInputShell>[0]
   const shell = new SessionInputShell({
     actx: SCTX,
@@ -163,6 +171,7 @@ function bench(over?: BenchOptions) {
       items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
       baselinesReady: true, recentWorkspaceId: undefined,
     })),
+    useConnectionState: bindSnapshotSelector(connection),
     useProjection: ((key: string, selector?: (v: unknown) => unknown) =>
       (selector ?? (v => v))(key === 'permissions'
         ? over?.permissions
@@ -202,7 +211,13 @@ function bench(over?: BenchOptions) {
   }
   const view = render(<InputBar {...props} />)
   const textarea = view.container.querySelector('textarea')!
-  const primaryStops = over?.running === true && over.subagent === undefined
+  const hasPartial = over?.partial !== null && over?.partial !== undefined
+    && over.partial.blocks.some(block =>
+      (block.kind === 'text' || block.kind === 'reasoning') && block.text.trim() !== '')
+  const agentActive = (over?.running === true)
+    || (over?.runningCalls?.length ?? 0) > 0
+    || hasPartial
+  const primaryStops = agentActive && over?.subagent === undefined
   const button = view.container.querySelector<HTMLButtonElement>(
     `button[aria-label="${primaryStops ? '停止生成' : '发送消息'}"]`,
   )!
@@ -417,12 +432,29 @@ describe('Enter semantics', () => {
   it('advertises the empty-draft whole-queue steering gesture when it is available', () => {
     const { textarea } = bench({ running: true, queue: [row('q-1')], steerQueue: vi.fn() })
     expect(textarea.placeholder).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
+    // Preference does not move whole-queue flush onto plain Enter.
+    expect(bench({
+      running: true,
+      queue: [row('q-1')],
+      busyEnter: 'steer',
+      steerQueue: vi.fn(),
+    }).textarea.placeholder).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
+  })
+
+  it('advertises queue vs steer chords while the agent is running with a draftable composer', () => {
+    expect(bench({ running: true, draft: 'typing' }).textarea.placeholder)
+      .toBe('Enter 排队发送 · Cmd/Ctrl+Enter 插话发送')
+    expect(bench({ running: true, busyEnter: 'steer', draft: 'typing' }).textarea.placeholder)
+      .toBe('Enter 插话发送 · Cmd/Ctrl+Enter 排队发送')
   })
 
   it('keeps the owning placeholder or ordinary guidance when whole-queue steering is unavailable', () => {
+    // Empty + running with nothing to send: do not lie that Enter queues.
     expect(bench({ running: true }).textarea.placeholder).toBe('给智能体发消息')
     expect(bench({ queue: [row('q-1')] }).textarea.placeholder).toBe('给智能体发消息')
-    expect(bench({ running: true, queue: [row('q-1')], draft: '消息' }).textarea.placeholder).toBe('给智能体发消息')
+    // Non-empty draft while running advertises the busy Enter / chord pair.
+    expect(bench({ running: true, queue: [row('q-1')], draft: '消息' }).textarea.placeholder)
+      .toBe('Enter 排队发送 · Cmd/Ctrl+Enter 插话发送')
     expect(bench({
       running: true,
       queue: [row('q-1')],
@@ -442,6 +474,13 @@ describe('Enter semantics', () => {
       running: true,
       queue: [row('q-1')],
       commandMenuOpen: true,
+    }).textarea.placeholder).toBe('给智能体发消息')
+    // Drain latch (partial after running clears): Stop stays, steer chords do not.
+    expect(bench({
+      running: false,
+      partial: { turn: 1, step: 0, blocks: [{ kind: 'text', text: 'tail' }] },
+      queue: [row('q-1')],
+      steerQueue: vi.fn(),
     }).textarea.placeholder).toBe('给智能体发消息')
     // The steer hint intentionally outranks the plan placeholder: while it
     // shows, the whole-queue gesture is genuinely available in plan mode.
@@ -519,6 +558,17 @@ describe('Enter semantics', () => {
     fireEvent.keyDown(ctrl.textarea, { key: 'Enter', ctrlKey: true })
     expect(ctrl.steerQueue).toHaveBeenCalledTimes(1)
     expect(ctrl.sink).not.toHaveBeenCalled()
+
+    // Still the accelerated chord under the busy Steer preference (plain Enter
+    // never flushes the queue — that stays on the dock row).
+    const steerPref = bench({
+      running: true,
+      busyEnter: 'steer',
+      queue,
+      steerQueue: vi.fn(),
+    })
+    fireEvent.keyDown(steerPref.textarea, { key: 'Enter', metaKey: true })
+    expect(steerPref.steerQueue).toHaveBeenCalledTimes(1)
   })
 
   it('queue steering stays gated: idle, subagent, plain Enter, empty queue, or steering-only rows', () => {
@@ -621,6 +671,51 @@ describe('running and lock semantics', () => {
     expect(button.getAttribute('aria-label')).toBe('停止生成')
     fireEvent.click(button)
     expect(stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps Stop while a streaming partial remains after running clears', () => {
+    const { button, stop } = bench({
+      running: false,
+      partial: { turn: 1, step: 0, blocks: [{ kind: 'text', text: 'still streaming' }] },
+      draft: 'next',
+    })
+    expect(button.getAttribute('aria-label')).toBe('停止生成')
+    fireEvent.click(button)
+    expect(stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('locks the composer while the wire is reconnecting', () => {
+    const { textarea, button, sink } = bench({
+      connectionState: 'reconnecting',
+      draft: '不能发',
+    })
+    expect(textarea.disabled).toBe(true)
+    expect(textarea.placeholder).toBe('连接已断开，正在重连…')
+    expect(button.disabled).toBe(true)
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(sink).not.toHaveBeenCalled()
+  })
+
+  it('refuses image intake on subagent sessions at the composer', () => {
+    const addImages = vi.fn(() => null)
+    const { view } = bench({
+      addImages,
+      subagent: {
+        address: {
+          parentSessionId: 'parent' as SessionId,
+          childSessionId: SID,
+          mode: 'continuable',
+        },
+        parentAvailable: true,
+      },
+    })
+    const file = new File([Uint8Array.of(1)], 'a.png', { type: 'image/png' })
+    const data = new DataTransfer()
+    data.items.add(file)
+    const textarea = view.container.querySelector('textarea')!
+    fireEvent.paste(textarea, { clipboardData: data })
+    expect(addImages).not.toHaveBeenCalled()
+    expect(view.getByText('子智能体会话暂不支持图片')).toBeTruthy()
   })
 
   it('running plain Enter follows the busy-state Steer preference', () => {

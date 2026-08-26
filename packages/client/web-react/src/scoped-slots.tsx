@@ -418,6 +418,7 @@ function standardProps(
       root: {
         useSessions: observableHook(host.sessions.list),
         useWorkspaces: observableHook(host.workspaces.list),
+        useConnectionState: observableHook(host.connection.state),
       },
       session: new WeakMap(),
       sessionMaybe: new WeakMap(),
