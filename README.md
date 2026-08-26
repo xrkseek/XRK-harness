@@ -88,8 +88,8 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 |----|------|
 | 内核 · Session · Agent · 工具 · HTTP · Host Face · MCP | **能跑** |
 | 多厂商 LLM Registry | **能跑** |
-| 社区 client（自研兼容器） | **能跑**（云端长连接等见 status「未做」） |
-| 产品网页与浏览器 E2E | **未稳**（有测，但不挡日常 `pnpm check`） |
+| 社区 client（自研兼容器） | **能跑**（IM WS/sidecar · Vision · 记忆 · GenUI npm · TongFlow；`xrkh doctor`） |
+| 产品网页与浏览器 E2E | **能跑**（Playwright **17/17**；`pnpm test:web` 不进 `pnpm check`） |
 | 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（**v0.1.17**；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
 
 完整说明：[docs/status.md](./docs/status.md)。
@@ -132,8 +132,8 @@ docs/             用法与契约教科书
 **对话太长、上下文爆了？**  
 可用压缩（Settings → 插件 → Agent 循环，或壳内 `/compact`）。见 [session-compaction](./docs/session-compaction.md)。
 
-**装了社区插件但面板报 incomplete？**  
-多数路径已有自研兼容器；云端 IM 长连接、外部任务运行时等见 [community-plugins](./docs/community-plugins.md) 与 [status](./docs/status.md)「未做」。
+**装了社区插件但面板报 incomplete？**
+装完后须 **`xrkh restart`**；`xrkh doctor` 查 staging 与可选 env。主路径见 [community-plugins](./docs/community-plugins.md)；壳内 GenUI 浏览器 bundle 仍由 community client 负责。
 
 更多：[troubleshooting](./docs/troubleshooting.md)。
 
@@ -227,8 +227,8 @@ Optional: copy `.xrk/.credentials.yaml.example`, or use a brand `apiKeyEnv` (e.g
 |--------|--------|
 | Kernel · Session · Agent · tools · HTTP · Host Face · MCP | **Working** |
 | Multi-provider LLM Registry | **Working** |
-| Community clients (first-party adapter) | **Working** (cloud long-lived links etc.: status **Not done**) |
-| Product web & browser E2E | **Unstable** (tests exist; not gated by day-to-day `pnpm check`) |
+| Community clients (first-party adapter) | **Working** (IM WS/sidecar · vision · memory · GenUI npm · TongFlow; `xrkh doctor`) |
+| Product web & browser E2E | **Working** (Playwright **17/17**; `pnpm test:web` not in `pnpm check`) |
 | Public CLI package `@xrkseek/harness-cli` | **Working** (**v0.1.17**; primary bin **`xrkh`**, also **`xrk-harness`**) |
 
 Full matrix: [docs/status.md](./docs/status.md).
@@ -271,8 +271,8 @@ Connections are denied by default. Configure and allow under **Settings → Plug
 **Context overflow on long chats?**  
 Use compaction (Settings → Plugins → Agent loop, or in-shell `/compact`). See [session-compaction](./docs/session-compaction.md).
 
-**Community plugin panel shows incomplete?**  
-Most paths are covered by the first-party adapter; cloud IM gateways and external task runtimes are listed as planned work in [community-plugins](./docs/community-plugins.md) and [status](./docs/status.md) **Not done**.
+**Community plugin panel shows incomplete?**
+Run **`xrkh restart`** after install; use `xrkh doctor` for staging and optional env. Main path: [community-plugins](./docs/community-plugins.md); GenUI browser bundle in the shell still comes from the community client.
 
 More: [troubleshooting](./docs/troubleshooting.md).
 

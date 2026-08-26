@@ -41,6 +41,7 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留 formal +
 ## 发版前核对
 
 - [ ] `apps/cli` 版本已 bump；`docs/releases/v…md` 已写
+- [ ] 根 **README.md**「现在能用到什么程度」与 FAQ 已与 [status.md](./status.md) 对齐（版本号 · 能跑/未稳）
 - [ ] `NPM_TOKEN` / `npm whoami`；`gh auth status`
 - [ ] `pnpm check` 绿；status / 契约已同步
 - [ ] stage 日志含 `sharp platform packages`；`.release/harness-cli/node_modules/@img/sharp-linux-x64` 存在
@@ -102,6 +103,7 @@ node scripts/npm-prune-withdrawn.mjs            # deprecate intermediate version
 ## Pre-release checklist
 
 - [ ] `apps/cli` version bumped; `docs/releases/v…md` written
+- [ ] Root **README.md** maturity table + FAQ aligned with [status.md](./status.md) (version · Working/Unstable)
 - [ ] `NPM_TOKEN` / `npm whoami`; `gh auth status`
 - [ ] `pnpm check` green; status / contracts synced
 - [ ] stage log includes `sharp platform packages`; `.release/harness-cli/node_modules/@img/sharp-linux-x64` exists
