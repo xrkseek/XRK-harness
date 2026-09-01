@@ -14,3 +14,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+@media (max-width: 767px) {
+  .action {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .error {
+    max-width: min(180px, 42vw);
+  }
+}

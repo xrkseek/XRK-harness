@@ -1,6 +1,9 @@
 .root {
   position: relative;
   display: inline-flex;
+  /* Avoid flex stretch widening the portal anchor past the trigger pill. */
+  width: fit-content;
+  max-width: 100%;
 }
 
 /* Dropdown card (figma MenuDropdown 122:9481 / 419:16920): menu surface,
@@ -65,6 +68,12 @@
  * staying short. */
 .scrollable {
   max-height: calc(100vh - 24px);
+}
+
+@supports (height: 100dvh) {
+  .scrollable {
+    max-height: calc(100dvh - 24px);
+  }
 }
 
 .viewport {
@@ -239,4 +248,20 @@
   bottom: 0;
   left: -10px;
   width: 10px;
+}
+
+@media (max-width: 767px) {
+  .item,
+  .denseList .item {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .compactList .item {
+    min-height: 40px;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+    line-height: 20px;
+  }
 }

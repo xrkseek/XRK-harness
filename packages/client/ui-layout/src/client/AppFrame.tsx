@@ -9,23 +9,36 @@
  * entries retain identity. Pure component: everything arrives
  * through the three framework shares — zero cordis or framework imports,
  * zero self-made hooks.
+ *
+ * Phone viewports (< PHONE_MAX) keep the same React tree but zero the sidebar
+ * and details tracks so the conversation is full-bleed; the sidebar becomes a
+ * drawer overlay (always wide) and details a full-screen sheet. Narrow tablet
+ * viewports (PHONE_MAX..SIDEBAR_AUTO_COLLAPSE) keep the compact rail.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@xrkseek/client-ui-slots'
-import { computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
+import type { PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@xrkseek/client-ui-slots'
+import {
+  computeColumns, phoneDrawerWidth, resolveShellTracks,
+  SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT,
+} from './columns.ts'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
-/** Full composed props: runtime share + child-slot render share + store share. */
+/** Full composed props: runtime share + child-slot render share + store share + locale. */
 export type AppFrameProps =
   & PropsRuntime<'root'>
   & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'shell.overlay'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
+  & PropsLocale<'layout'>
 
 /** Center column grid item (session-body building block). */
-function CenterColumn(props: { children?: ReactNode }) {
-  return <div className={css.centerCol}>{props.children}</div>
+function CenterColumn(props: { children?: ReactNode; inert?: boolean }) {
+  return (
+    <div className={css.centerCol} inert={props.inert || undefined}>
+      {props.children}
+    </div>
+  )
 }
 
 /** Details column grid item; width 0 keeps the subtree mounted (never unmount on close). */
@@ -89,8 +102,10 @@ export function AppFrame({
   useSessions,
   actions,
   renderSlot,
+  t,
 }: AppFrameProps) {
   const panels = useStore(s => s)
+  const currentSession = useSessions(s => s.current)
   const detailsSession = useSessions((s) => {
     const current = s.current
     return current !== undefined && s.byId[current]?.blank === false ? current : undefined
@@ -132,16 +147,53 @@ export function AppFrame({
   // re-expand override, stores.ts). Collapsed is decided here, so the
   // solver stays breakpoint-free: a narrow re-expand passes the preference
   // (or the default when the wide preference is closed) and the center
-  // absorbs the squeeze.
+  // absorbs the squeeze. Phone inherits the same narrow flag / override.
   const narrow = viewport < SIDEBAR_AUTO_COLLAPSE
   useEffect(() => { actions.setNarrow(narrow) }, [actions, narrow])
   const sidebarCollapsed = narrow ? !panels.narrowExpanded : panels.sidebar === 0
   const sidebarPreference = sidebarCollapsed
     ? 0
     : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
-  const cols = computeColumns(viewport, sidebarPreference, detailsSession === undefined ? 0 : panels.details)
-  const colsRef = useRef(cols)
-  colsRef.current = cols
+  const detailsPreference = detailsSession === undefined ? 0 : panels.details
+  const solved = computeColumns(viewport, sidebarPreference, detailsPreference)
+  const { tracks: cols, phone } = resolveShellTracks(viewport, solved)
+  const drawerWidth = phoneDrawerWidth(viewport)
+  const detailsCollapsed = phone ? detailsPreference === 0 : cols.details === 0
+  const colsRef = useRef(solved)
+  colsRef.current = solved
+
+  // Phone: picking a session (or starting a blank) should tuck the drawer away
+  // so the conversation is immediately usable — same expectation as native
+  // chat shells. Skip the first paint so a restore into an already-open
+  // override does not bounce closed. Collapsed is read from a ref so opening
+  // the drawer alone does not re-fire this effect.
+  const sidebarCollapsedRef = useRef(sidebarCollapsed)
+  sidebarCollapsedRef.current = sidebarCollapsed
+  const phoneSessionPrimed = useRef(false)
+  useEffect(() => {
+    if (!phone) { phoneSessionPrimed.current = false; return }
+    if (!phoneSessionPrimed.current) { phoneSessionPrimed.current = true; return }
+    if (!sidebarCollapsedRef.current) actions.toggleSidebar()
+  }, [actions, currentSession, phone])
+
+  // Phone: opening the details sheet yields the stack to the sheet — a drawer
+  // sitting above it would trap the user with no clear path to the sheet.
+  useEffect(() => {
+    if (!phone || detailsCollapsed || sidebarCollapsed) return
+    actions.toggleSidebar()
+  }, [actions, detailsCollapsed, phone, sidebarCollapsed])
+
+  // Escape closes the topmost phone overlay (drawer first, then details).
+  useEffect(() => {
+    if (!phone) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      if (!sidebarCollapsed) { actions.toggleSidebar(); return }
+      if (!detailsCollapsed) actions.closeDetails()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey) }
+  }, [actions, detailsCollapsed, phone, sidebarCollapsed])
 
   // The drag base is the rendered width captured at drag start (grabbing a
   // concession-clamped panel must not jump back to the stored preference);
@@ -161,24 +213,113 @@ export function AppFrame({
     actions.setDetails(detailsBase.current - dx)
   }, [actions])
 
+  const drawerOpen = phone && !sidebarCollapsed
+  const menuRef = useRef<HTMLButtonElement | null>(null)
+  const drawerWasOpen = useRef(false)
+  const swipeOrigin = useRef<{ x: number; y: number; pointerId: number } | null>(null)
+  const swipeTracking = useRef(false)
+  const [drawerShift, setDrawerShift] = useState(0)
+
+  // Return focus to the floating open control only when that control is
+  // actually shown (drawer closed AND details sheet closed). Opening details
+  // also collapses the drawer; focusing a missing menu would be a no-op at
+  // best and a confusing tab stop at worst.
+  useEffect(() => {
+    const wasOpen = drawerWasOpen.current
+    drawerWasOpen.current = drawerOpen
+    if (!wasOpen || drawerOpen || !detailsCollapsed || !phone) return
+    const id = requestAnimationFrame(() => { menuRef.current?.focus() })
+    return () => { cancelAnimationFrame(id) }
+  }, [detailsCollapsed, drawerOpen, phone])
+
+  // Drop any in-flight swipe offset when the drawer closes by another path
+  // (Escape, session pick, details sheet) so the next open starts at rest.
+  useEffect(() => {
+    if (!drawerOpen) setDrawerShift(0)
+  }, [drawerOpen])
+
+  // Phone drawer: horizontal drag-left closes (vertical scroll stays free until
+  // the gesture resolves as horizontal). Shift is applied via --phone-drawer-shift.
+  const onDrawerPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drawerOpen || e.button !== 0) return
+    swipeOrigin.current = { x: e.clientX, y: e.clientY, pointerId: e.pointerId }
+    swipeTracking.current = false
+  }, [drawerOpen])
+  const onDrawerPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const origin = swipeOrigin.current
+    if (origin === null || origin.pointerId !== e.pointerId) return
+    const dx = e.clientX - origin.x
+    const dy = e.clientY - origin.y
+    if (!swipeTracking.current) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return
+      // Vertical intent → abandon (let the session list scroll).
+      if (Math.abs(dy) >= Math.abs(dx) || dx > 0) {
+        swipeOrigin.current = null
+        return
+      }
+      swipeTracking.current = true
+      e.currentTarget.setPointerCapture(e.pointerId)
+    }
+    setDrawerShift(Math.min(0, dx))
+  }, [])
+  const endDrawerSwipe = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const origin = swipeOrigin.current
+    if (origin === null || origin.pointerId !== e.pointerId) return
+    const tracking = swipeTracking.current
+    const shift = tracking ? Math.min(0, e.clientX - origin.x) : 0
+    swipeOrigin.current = null
+    swipeTracking.current = false
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    setDrawerShift(0)
+    if (tracking && shift <= -72) actions.toggleSidebar()
+  }, [actions])
+
   return (
     <div
       ref={frameRef}
       className={css.frame}
-      style={{ gridTemplateColumns: `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px` }}
+      style={{
+        // Phone: one in-flow track only. Absolute sidebar/details leave the
+        // grid formatting context; with `0 1fr 0` the lone center item
+        // auto-places into the first (0px) track and the conversation
+        // collapses to width 0 (device emulation looked empty aside from the menu).
+        gridTemplateColumns: phone
+          ? 'minmax(0, 1fr)'
+          : `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px`,
+        ...(phone
+          ? {
+              ['--phone-drawer-width' as string]: `${drawerWidth}px`,
+              ['--phone-drawer-shift' as string]: `${drawerShift}px`,
+            }
+          : null),
+      }}
       data-sidebar-collapsed={sidebarCollapsed || undefined}
-      data-details-collapsed={cols.details === 0 || undefined}
+      data-details-collapsed={detailsCollapsed || undefined}
       data-dragging={dragging || undefined}
+      data-phone={phone || undefined}
+      data-drawer-swiping={drawerShift !== 0 || undefined}
     >
-      <div className={css.sidebarCol}>
+      <div
+        className={css.sidebarCol}
+        style={phone ? { width: drawerWidth } : undefined}
+        onPointerDown={phone ? onDrawerPointerDown : undefined}
+        onPointerMove={phone ? onDrawerPointerMove : undefined}
+        onPointerUp={phone ? endDrawerSwipe : undefined}
+        onPointerCancel={phone ? endDrawerSwipe : undefined}
+        {...(drawerOpen
+          ? { role: 'dialog' as const, 'aria-modal': true as const, 'aria-label': t('sidebar.dialog') }
+          : {})}
+      >
         {/* Render-site slot call with live concession output: a closed
             sidebar keeps the mounted slot at the compact-rail width, and the
             component sees its rendered state as owner params decided here
             (collapsed follows the resolved rail, so a derived auto-collapse
-            renders the rail UI too). */}
+            renders the rail UI too). Phone always feeds the wide drawer. */}
         {renderSlot('sidebar', {
-          collapsed: sidebarCollapsed,
-          width: cols.sidebar,
+          collapsed: phone ? false : sidebarCollapsed,
+          width: phone ? drawerWidth : cols.sidebar,
         })}
       </div>
       <>
@@ -187,15 +328,39 @@ export function AppFrame({
             the shell's own pending rendering. The conversation
             is session-maybe; the strict details entry naturally renders
             empty while no session is current. */}
-        <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
+        <CenterColumn inert={drawerOpen}>{renderSlot('conversation', {})}</CenterColumn>
         <DetailsColumn>{renderSlot('details', {})}</DetailsColumn>
       </>
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}
       </div>
-      {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
-      {cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
+      {phone && sidebarCollapsed && detailsCollapsed && (
+        <button
+          ref={menuRef}
+          type="button"
+          className={css.phoneMenu}
+          aria-label={t('sidebar.open')}
+          onClick={() => { actions.toggleSidebar() }}
+        >
+          <span className={css.phoneMenuIcon} aria-hidden />
+        </button>
+      )}
+      {drawerOpen && (
+        <button
+          type="button"
+          className={css.phoneScrim}
+          aria-label={t('sidebar.close')}
+          onClick={() => { actions.toggleSidebar() }}
+        />
+      )}
+      {/* The collapsed rail is fixed-width: no resize handle while closed.
+          Phone overlays skip drag handles entirely. */}
+      {!phone && !sidebarCollapsed && (
+        <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />
+      )}
+      {!phone && cols.details > 0 && (
+        <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />
+      )}
     </div>
   )
 }

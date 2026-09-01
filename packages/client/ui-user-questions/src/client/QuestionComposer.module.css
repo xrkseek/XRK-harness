@@ -390,11 +390,24 @@
 
 @media (max-width: 720px) {
   .card {
+    max-height: min(70dvh, 560px);
     border-radius: 16px;
+  }
+
+  @supports not (height: 100dvh) {
+    .card {
+      max-height: min(70vh, 560px);
+    }
   }
 
   .header {
     padding: 10px 12px 0 18px;
+  }
+
+  .iconButton {
+    width: 40px;
+    height: 40px;
+    touch-action: manipulation;
   }
 
   .options {
@@ -408,7 +421,9 @@
 
   .option,
   .customRow {
-    padding: 8px 6px;
+    min-height: 44px;
+    padding: 10px 8px;
+    touch-action: manipulation;
   }
 
   .footer {

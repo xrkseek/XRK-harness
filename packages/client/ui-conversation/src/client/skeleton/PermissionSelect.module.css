@@ -74,3 +74,17 @@
 .chevronOpen {
   transform: rotate(180deg);
 }
+
+@media (max-width: 767px) {
+  .trigger {
+    height: 40px;
+    max-width: min(220px, 46vw);
+    touch-action: manipulation;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}

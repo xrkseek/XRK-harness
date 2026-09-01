@@ -758,6 +758,8 @@ export interface ChatViewInjected {
    */
   openFile: (path: string) => Promise<void>
   loadOlder: () => void
+  /** Page history until the window covers `seq` (unloaded rail mark jump). */
+  loadThrough: (seq: number) => Promise<void>
   /** Resolve a session-authorized historical image for inline display. */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
   /** Hand a call off to the trajectory view: write the one-shot inspect target and switch tabs. */

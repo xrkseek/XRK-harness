@@ -947,6 +947,94 @@ function sessionStatsOf(log: readonly SessionEvent[]): {
   return value
 }
 
+/** Prompt / response preview budgets mirroring Face turnOutline + the rail card. */
+const OUTLINE_PROMPT_LIMIT = 50
+const OUTLINE_RESPONSE_LIMIT = 120
+
+interface FixtureTurnOutlineEntry {
+  readonly turn: number
+  readonly seq: number
+  readonly prompt: string
+  readonly response: string
+}
+
+/** Space-join text blocks, collapse whitespace, cap with a trailing ellipsis. */
+function outlinePreview(blocks: readonly ContentBlock[], limit: number): string {
+  let text = ''
+  let unread = false
+  for (const block of blocks) {
+    if (block.type !== 'text') continue
+    if (text.length >= limit * 2) {
+      unread = true
+      break
+    }
+    const clipped = block.text.length > limit * 2
+    const chunk = clipped ? block.text.slice(0, limit * 2) : block.text
+    text += text === '' ? chunk : ` ${chunk}`
+    if (clipped) {
+      unread = true
+      break
+    }
+  }
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (normalized.length > limit - 1) {
+    return `${normalized.slice(0, limit - 1).trimEnd()}…`
+  }
+  return unread ? `${normalized}…` : normalized
+}
+
+/**
+ * Fixture parallel of Face `turnOutline`: every started turn with its
+ * turn/start seq and bounded previews. Uses the wire `data.turn` number
+ * (fixture history samples may start at 0); Face live folds use 1-based
+ * FaceWireIdMaps order instead.
+ */
+function turnOutlineOf(log: readonly SessionEvent[]): readonly FixtureTurnOutlineEntry[] {
+  const turns: FixtureTurnOutlineEntry[] = []
+  let draft = ''
+  for (const event of log) {
+    switch (event.type) {
+      case 'turn/start': {
+        const turn = event.data.turn
+        const last = turns.at(-1)
+        if (last !== undefined && turn <= last.turn) break
+        turns.push({ turn, seq: event.seq, prompt: '', response: '' })
+        draft = ''
+        break
+      }
+      case 'user/message': {
+        if (event.data.source.kind !== 'user') break
+        const last = turns.at(-1)
+        if (last === undefined || last.prompt !== '') break
+        const prompt = outlinePreview(event.data.content, OUTLINE_PROMPT_LIMIT)
+        if (prompt === '') break
+        turns[turns.length - 1] = { ...last, prompt }
+        break
+      }
+      case 'assistant/message': {
+        const next = outlinePreview(event.data.message.content, OUTLINE_RESPONSE_LIMIT)
+        if (next === '' || next === draft) break
+        draft = next
+        break
+      }
+      case 'turn/end': {
+        if (draft === '') break
+        const last = turns.at(-1)
+        if (last === undefined || last.response === draft) {
+          draft = ''
+          break
+        }
+        turns[turns.length - 1] = { ...last, response: draft }
+        draft = ''
+        break
+      }
+      default:
+        break
+    }
+  }
+  return turns
+}
+
 interface FixtureRequestContext {
   provider: string
   model: string
@@ -1067,6 +1155,8 @@ function projectionValuesOf(log: readonly SessionEvent[]): Record<string, unknow
   values['contextBreakdown'] = contextBreakdownOf(log)
   // Always present (session-stats unit composed): whole-log turn/step counts.
   values['sessionStats'] = sessionStatsOf(log)
+  // Always present (turn-outline unit composed): every started turn + previews.
+  values['turnOutline'] = turnOutlineOf(log)
   // Always present (attachment service composed): the deployment image
   // limits, constant per boot (mirrors the attachment-local defaults).
   // Deliberate host divergence: the real gateway never pushes an imageLimits
@@ -1125,6 +1215,19 @@ function projectionFramesOf(id: SessionId, log: readonly SessionEvent[], event: 
       seq: event.seq,
     })
   }
+  // Human prompt fills the newest outline entry (ride the same user/message cut).
+  if (
+    type === 'user/message'
+    && (event as { data?: { source?: { kind?: string } } }).data?.source?.kind === 'user'
+  ) {
+    frames.push({
+      type: 'session/projection',
+      sessionId: id,
+      key: 'turnOutline',
+      value: turnOutlineOf(log),
+      seq: event.seq,
+    })
+  }
   if (frames.length > 0) return frames
   if (type === 'session/title') {
     const values = projectionValuesOf(log)
@@ -1137,12 +1240,33 @@ function projectionFramesOf(id: SessionId, log: readonly SessionEvent[], event: 
     return [{ type: 'session/projection', sessionId: id, key: 'goal', value: backscanGoal(log), seq: event.seq }]
   }
   // Standing-plan fold: writes replace the list; turn/start clears it (null).
+  // turn/start also advances the turn outline (boundary entry).
   if (type === 'todo/write' || type === 'turn/start') {
-    return [{
+    const out: Extract<MuxFrame, { type: 'session/projection' }>[] = [{
       type: 'session/projection',
       sessionId: id,
       key: 'todos',
       value: backscanTodos(log) ?? null,
+      seq: event.seq,
+    }]
+    if (type === 'turn/start') {
+      out.push({
+        type: 'session/projection',
+        sessionId: id,
+        key: 'turnOutline',
+        value: turnOutlineOf(log),
+        seq: event.seq,
+      })
+    }
+    return out
+  }
+  // Outline response commits at turn/end (draft-only assistant/message stays quiet).
+  if (type === 'turn/end') {
+    return [{
+      type: 'session/projection',
+      sessionId: id,
+      key: 'turnOutline',
+      value: turnOutlineOf(log),
       seq: event.seq,
     }]
   }

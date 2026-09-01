@@ -111,6 +111,7 @@ Promote 规则：有 pending **steer** 时优先于更早的 queue（见 [sessio
 
 - Host：`host.describe` · `host.pickDirectory` · `host.listDirectory` · `host.createDirectory` · `host.openPath`
 - Session：`session.create` · `list` · `history` · `search` · `prompt` · `cancel` · `models` · `selectModel` · `rename` · `updateQueue` · `fork` · `respondApproval` · `attachment` · `export`（HTTP GET/HEAD）
+  - `session.history` **尾页**可带 `projections`（含 **`turnOutline`** 等）；带 `beforeSeq` 的更旧页省略整块。见 [session-projection.md](./modules/session-projection.md) · [host-face.md](./host-face.md)
 - LLM：`llm.providers` · `llm.models` · `llm.discoverModels`
 - 工作区 / 设置 / 凭据：`workspace.*` · `settings.*` · `credentials.*` · `agentPreset.list|select|read`
 - 其它：`skill.list` · `commands/list` · `commands/execute` · `pluginInventory/list` · `fileReferences/list` · `sessionReferenceResolver/candidates` · `subagent.*` · `messageFeedback.*` · `goals.*` / `goal.*`
@@ -278,6 +279,7 @@ Runnable method families (summary; full table and behavior in [host-face.md](./h
 
 - Host: `host.describe` · `host.pickDirectory` · `host.listDirectory` · `host.createDirectory` · `host.openPath`
 - Session: `session.create` · `list` · `history` · `search` · `prompt` · `cancel` · `models` · `selectModel` · `rename` · `updateQueue` · `fork` · `respondApproval` · `attachment` · `export` (HTTP GET/HEAD)
+  - `session.history` **tail** may carry `projections` (including **`turnOutline`**); older pages with `beforeSeq` omit the whole block. See [session-projection.md](./modules/session-projection.md) · [host-face.md](./host-face.md)
 - LLM: `llm.providers` · `llm.models` · `llm.discoverModels`
 - Workspace / settings / credentials: `workspace.*` · `settings.*` · `credentials.*` · `agentPreset.list|select|read`
 - Other: `skill.list` · `commands/list` · `commands/execute` · `pluginInventory/list` · `fileReferences/list` · `sessionReferenceResolver/candidates` · `subagent.*` · `messageFeedback.*` · `goals.*` / `goal.*`

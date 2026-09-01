@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Button, ConnectionBanner, Input, Menu, Modal, Pill } from '@xrkseek/client-ui-primitives'
+import {
+  Button, ConnectionIndicator, Input, Menu, Modal, Pill,
+} from '@xrkseek/client-ui-primitives'
 import { POINTER_GRACE_MS } from '../src/pointer-grace.ts'
 
 afterEach(cleanup)
@@ -345,6 +347,56 @@ describe('Menu', () => {
     expect(menu.style.bottom).toBe('')
   })
 
+  it('portal align=end anchors to the trigger pill, not a stretched flex wrapper', () => {
+    const triggerRect = {
+      left: 200, right: 296, top: 200, bottom: 236, width: 96, height: 36, x: 200, y: 200, toJSON: () => ({}),
+    } as DOMRect
+    const wideRect = {
+      left: 0, right: 390, top: 200, bottom: 236, width: 390, height: 36, x: 0, y: 200, toJSON: () => ({}),
+    } as DOMRect
+    const spy = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this instanceof HTMLSpanElement && this.textContent === 'trigger') return triggerRect
+      return wideRect
+    })
+    const widthDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth')
+    const heightDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.getAttribute('role') === 'menu' ? 218 : 0
+      },
+    })
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.getAttribute('role') === 'menu' ? 80 : 0
+      },
+    })
+    try {
+      render(
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: 390 }}>
+          <Menu
+            portal
+            open
+            align="end"
+            anchor={<span>trigger</span>}
+            items={items}
+            onSelect={() => {}}
+            onClose={() => {}}
+          />
+        </div>)
+      const menu = screen.getByRole('menu')
+      // end-align against the 96px pill (right 296 → 78), not the 390px row (right 390 → 172).
+      expect(menu.style.left).toBe('78px')
+    } finally {
+      spy.mockRestore()
+      if (widthDesc) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', widthDesc)
+      else Reflect.deleteProperty(HTMLElement.prototype, 'offsetWidth')
+      if (heightDesc) Object.defineProperty(HTMLElement.prototype, 'offsetHeight', heightDesc)
+      else Reflect.deleteProperty(HTMLElement.prototype, 'offsetHeight')
+    }
+  })
+
   it('renders footer rows in a pinned section below the items; they still select', () => {
     const onSelect = vi.fn()
     render(
@@ -408,11 +460,37 @@ describe('Modal', () => {
   })
 })
 
-describe('ConnectionBanner', () => {
-  it('renders only while reconnecting', () => {
-    const { container, rerender } = render(<ConnectionBanner reconnecting={false} />)
+describe('ConnectionIndicator', () => {
+  it('renders outage, attempt progress, and recovered states without a native tooltip', () => {
+    const reconnect = vi.fn()
+    const labels = {
+      disconnectedLabel: 'Disconnected',
+      reconnectLabel: 'Reconnect',
+      connectingLabel: 'Connecting',
+      recoveredLabel: 'Connected',
+      reconnectActionLabel: 'Disconnected, reconnect now',
+      restartActionLabel: 'Connecting, restart now',
+      onReconnect: reconnect,
+    }
+    const { container, rerender } = render(
+      <ConnectionIndicator state={undefined} {...labels} />,
+    )
     expect(container.firstChild).toBeNull()
-    rerender(<ConnectionBanner reconnecting />)
-    expect(container.textContent).toContain('重连')
+    rerender(<ConnectionIndicator state="disconnected" {...labels} />)
+    const indicator = screen.getByRole('button', { name: 'Disconnected, reconnect now' })
+    expect(indicator.textContent).toContain('Disconnected')
+    expect(indicator.textContent).toContain('Reconnect')
+    expect(indicator.hasAttribute('title')).toBe(false)
+    expect(indicator.querySelector('svg')).toBeTruthy()
+    fireEvent.click(indicator)
+    expect(reconnect).toHaveBeenCalledOnce()
+
+    rerender(<ConnectionIndicator state="connecting" {...labels} />)
+    expect(screen.getByRole('button', { name: 'Connecting, restart now' }).textContent)
+      .toContain('Connecting...')
+
+    rerender(<ConnectionIndicator state="recovered" {...labels} />)
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.getByRole('status', { name: 'Connected' })).toBeTruthy()
   })
 })

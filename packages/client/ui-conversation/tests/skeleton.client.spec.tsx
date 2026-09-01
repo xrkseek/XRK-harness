@@ -38,19 +38,49 @@ function fakeWiring() {
   return { wiring: shell, sink, shell }
 }
 
-/** jsdom has no ResizeObserver; the composer seat publishes its height through one. */
+/** jsdom has no ResizeObserver; the root publishes its width and the composer
+ * seat its height through one. Observed targets are recorded so a case can
+ * fire the callback against a chosen element. */
+const resizeObservers: { callback: ResizeObserverCallback; targets: Element[] }[] = []
 class ResizeObserverStub {
-  observe(): void {}
+  targets: Element[] = []
+  constructor(callback: ResizeObserverCallback) {
+    resizeObservers.push({ callback, targets: this.targets })
+  }
+
+  observe(target: Element): void { this.targets.push(target) }
   unobserve(): void {}
-  disconnect(): void {}
+  disconnect(): void { this.targets.length = 0 }
+}
+
+/** Fires every recorded observer whose target list includes the element. */
+function fireResize(el: Element): void {
+  for (const entry of resizeObservers) {
+    if (entry.targets.includes(el)) entry.callback([], undefined as never)
+  }
 }
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  resizeObservers.length = 0
 })
 beforeEach(() => {
-  localStorage.clear()
+  // Node ≥26 vitest forks omit the Web Storage globals unless configured;
+  // keep a tiny in-memory map so width-preference tests can round-trip.
+  if (typeof globalThis.localStorage?.clear !== 'function') {
+    const store = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value) },
+      removeItem: (key: string) => { store.delete(key) },
+      clear: () => { store.clear() },
+      get length() { return store.size },
+      key: (index: number) => [...store.keys()][index] ?? null,
+    })
+  } else {
+    localStorage.clear()
+  }
   vi.stubGlobal('ResizeObserver', ResizeObserverStub)
 })
 
@@ -544,5 +574,43 @@ describe('ConversationRoot resident composer', () => {
     }))
     expect(b.view.getByRole('alert').textContent).toContain('Message send failed (offline)')
     expect(b.view.queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  it('publishes the column width as a px variable for the shared width axis', () => {
+    const b = mount(conversationSnapshot())
+    const root = b.view.container.querySelector('[data-phase]') as HTMLElement
+    // jsdom offsetWidth is 0 until faked: the observer publishes whatever the
+    // layout reports, and the CSS clamp() floors the axis at 680px either way.
+    Object.defineProperty(root, 'offsetWidth', { value: 1200, configurable: true })
+    act(() => { fireResize(root) })
+    expect(root.style.getPropertyValue('--dsh-conversation-column-width')).toBe('1200px')
+    // No dragged preference: the user-width override stays absent so the
+    // adaptive clamp term applies.
+    expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('')
+  })
+
+  it('drag → persist → window clamp round-trip on a width handle', () => {
+    const b = mount(conversationSnapshot())
+    const root = b.view.container.querySelector('[data-phase]') as HTMLElement
+    Object.defineProperty(root, 'offsetWidth', { value: 1600, configurable: true })
+    act(() => { fireResize(root) })
+    expect(b.view.container.querySelector('[data-width-handle="right"]')).not.toBeNull()
+    // Seed a dragged preference (the pointer-capture gesture is covered in the
+    // browser; jsdom's PointerEvent path is uneven across Node/React versions).
+    localStorage.setItem('dsh.conversation.contentWidth', '970')
+    act(() => { fireResize(root) })
+    expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('970px')
+    expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('970')
+    // Window shrinks: the displayed width re-clamps (900 − 176 = 724) but the
+    // preference stays.
+    Object.defineProperty(root, 'offsetWidth', { value: 900, configurable: true })
+    act(() => { fireResize(root) })
+    expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('724px')
+    expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('970')
+  })
+
+  it('hero phase renders no width handles (no transcript to size)', () => {
+    const b = mount(conversationSnapshot({ composerPhase: 'blank', blank: true }))
+    expect(b.view.container.querySelector('[data-width-handle]')).toBeNull()
   })
 })

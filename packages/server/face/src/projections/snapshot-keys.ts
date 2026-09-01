@@ -32,6 +32,7 @@ export const SESSION_HISTORY_PROJECTION_KEYS = [
   "permissions",
   "plan",
   "sessionStats",
+  "turnOutline",
   "tokenUsage",
   "costUsage",
   "contextPressure",

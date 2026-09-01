@@ -12,6 +12,12 @@
   overflow-y: auto;
 }
 
+@supports (height: 100dvh) {
+  .content {
+    max-height: calc(100dvh - 48px);
+  }
+}
+
 .title {
   margin: 0;
   font-size: 20px;
@@ -28,5 +34,21 @@
 @media (max-width: 560px) {
   .content {
     padding: 24px;
+  }
+}
+
+@media (max-width: 767px) {
+  .content {
+    max-height: calc(100vh - 24px);
+    padding: max(20px, env(safe-area-inset-top, 0px))
+      max(20px, env(safe-area-inset-right, 0px))
+      max(20px, env(safe-area-inset-bottom, 0px))
+      max(20px, env(safe-area-inset-left, 0px));
+  }
+
+  @supports (height: 100dvh) {
+    .content {
+      max-height: calc(100dvh - 24px);
+    }
   }
 }

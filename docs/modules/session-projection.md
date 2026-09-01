@@ -54,9 +54,31 @@ Face 封装：`createFaceProjectionRegistry` ≡ `createSessionProjectionRegistr
 | --- | --- |
 | `session.list`（已加载） | `title` · `sessionListMetadata` |
 | `session.list`（冷） | list-checkpoint 文件列；miss 则仅 `listHints` |
-| `session.history` 尾页 | 轻量 meter/stats + `contextTimeline` / `contextHeaders` |
+| `session.history` 尾页 | 轻量 meter/stats · **`turnOutline`** + `contextTimeline` / `contextHeaders` |
 | `session.history` + `beforeSeq` | **无** `projections` 块 |
 | SQLite LRU 淘汰 | 先写 list checkpoint，再 `evictSession` |
+
+## Face 默认键：`turnOutline`
+
+整段日志的轮次阶梯，供壳侧聊天轨（rail）跳转。客户端**不**从已加载窗口自己拼完整阶梯——只消费 wire 全量值。
+
+| 字段 | 含义 |
+| --- | --- |
+| `turn` | Face wire 轮次号（首次见到的 `turnId` 顺序，从 **1** 起） |
+| `seq` | 该轮 `turn/start` 的 Face seq（`Session.loadThrough(seq)` 目标） |
+| `prompt` | 首条人类提示预览（有界；空串 = 尚未落地） |
+| `response` | 终稿回复预览（有界；空串 = 尚未在 `turn/end` 提交） |
+
+推送纪律：
+
+| 事件 | mux `session/projection` · `turnOutline` |
+| --- | --- |
+| `turn/start` | 推：新阶梯项（`prompt`/`response` 为空） |
+| 首条 human `user/message` | 推：填入 `prompt` |
+| `assistant/message` | **不推**（host-only draft；同引用保静默） |
+| `turn/end` | 推：提交 `response` |
+
+载体：`session.history` **尾页**基线 + live mux。`beforeSeq` 的 loadOlder 页**不**带 `projections`。键类型在 `@xrkseek/xrk-host-apiproxy`（`TurnOutlineEntry`）；壳包镜像 declare-merge 供 tsc emit。
 
 ## 相关
 
@@ -77,7 +99,7 @@ This repo has **no** Cordis `ctx.sessionProjections`. Face persists a **list-tie
 | Map | Who merges | Who reads |
 | --- | --- | --- |
 | `SessionProjectionMap` | Client stub / Face declare-merge | mux · history · React |
-| `SessionProjectionStateMap` | host units (optional) | `stateOf` / `checkpoint` only |
+| `SessionProjectionStateMap` | Host units (optional) | `stateOf` / `checkpoint` only |
 
 Host-only keys go only into StateMap (unit omits `wire`) — `snapshot` / `onChanged` do **not** emit them.
 
@@ -120,9 +142,31 @@ Face wrapper: `createFaceProjectionRegistry` ≡ `createSessionProjectionRegistr
 | --- | --- |
 | `session.list` (loaded) | `title` · `sessionListMetadata` |
 | `session.list` (cold) | list-checkpoint file column; miss → `listHints` only |
-| `session.history` tail | light meter/stats + `contextTimeline` / `contextHeaders` |
+| `session.history` tail | light meter/stats · **`turnOutline`** + `contextTimeline` / `contextHeaders` |
 | `session.history` with `beforeSeq` | **no** `projections` block |
 | SQLite LRU eviction | write list checkpoint, then `evictSession` |
+
+## Face default key: `turnOutline`
+
+Whole-log turn ladder for the shell chat rail. Clients do **not** rebuild the full ladder from a paged window — they only consume finished wire values.
+
+| Field | Meaning |
+| --- | --- |
+| `turn` | Face wire turn number (order of first-seen `turnId`; starts at **1**) |
+| `seq` | Face seq of that turn's `turn/start` (`Session.loadThrough(seq)` target) |
+| `prompt` | First human-prompt preview (bounded; `''` until landed) |
+| `response` | Final response preview (bounded; `''` until committed at `turn/end`) |
+
+Push rules:
+
+| Event | mux `session/projection` · `turnOutline` |
+| --- | --- |
+| `turn/start` | Push: new ladder entry (`prompt`/`response` empty) |
+| First human `user/message` | Push: fill `prompt` |
+| `assistant/message` | **No push** (host-only draft; same reference stays quiet) |
+| `turn/end` | Push: commit `response` |
+
+Carriers: `session.history` **tail** baseline + live mux. loadOlder pages with `beforeSeq` omit the whole `projections` block. Wire type: `@xrkseek/xrk-host-apiproxy` (`TurnOutlineEntry`); shell packages mirror declare-merge for tsc emit.
 
 ## Related
 

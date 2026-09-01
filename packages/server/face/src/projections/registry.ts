@@ -12,6 +12,7 @@ import {
 } from "@xrkseek/session-projection";
 import type { PermissionSelect } from "../permissions.js";
 import type { AutoReviewProjection } from "./units/auto-review.js";
+import type { TurnOutlineEntry } from "./units/turn-outline.js";
 
 export type {
   ProjectionChangeListener,
@@ -41,6 +42,12 @@ export interface FaceProjectionMap {
    * Face has an AttachmentStore; constant per boot — no change frames.
    */
   readonly imageLimits: ImageAttachmentLimits;
+  /**
+   * Whole-log turn outline for the chat rail (DSH turnOutline): every started
+   * turn with its `turn/start` Face seq and bounded previews. Paging cannot
+   * shrink the ladder — unloaded marks jump via loadThrough.
+   */
+  readonly turnOutline: readonly TurnOutlineEntry[];
   /**
    * Whole-log turn/step counts and wall times (DSH sessionStats).
    * StatsLine reads this so paging cannot change the strip.

@@ -69,11 +69,12 @@
   line-height: 20px;
   opacity: 1;
   visibility: visible;
+  /* No transform: the phone drawer also translates; a nested transform
+     transition promotes a compositor layer that outlives drawer hide. */
   transition:
     max-width 180ms var(--ds-ease-in-out),
     margin-right 180ms var(--ds-ease-in-out),
     opacity 120ms var(--ds-ease-in-out),
-    transform 180ms var(--ds-ease-in-out),
     visibility 0s linear;
 }
 
@@ -81,9 +82,8 @@
   max-width: 0;
   margin-right: -4px;
   opacity: 0;
-  transform: translateX(-4px);
   visibility: hidden;
-  transition-delay: 0s, 0s, 0s, 0s, 180ms;
+  transition-delay: 0s, 0s, 0s, 180ms;
 }
 
 .searchSlot {
@@ -117,17 +117,15 @@
   transition:
     max-width 180ms var(--ds-ease-in-out),
     opacity 120ms var(--ds-ease-in-out),
-    transform 180ms var(--ds-ease-in-out),
     visibility 0s linear;
 }
 
 .headerActionsHidden {
   max-width: 0;
   opacity: 0;
-  transform: translateX(4px);
   visibility: hidden;
   pointer-events: none;
-  transition-delay: 0s, 0s, 0s, 180ms;
+  transition-delay: 0s, 0s, 180ms;
 }
 
 /* Inline search always fills the room between the title and trailing actions;
@@ -502,5 +500,12 @@
   .searchInput,
   .headerActions {
     transition: none;
+  }
+}
+
+/* Phone: drawer owns motion — skip the wide remount fade. */
+@media (max-width: 767px) {
+  .wide {
+    animation: none;
   }
 }

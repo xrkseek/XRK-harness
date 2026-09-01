@@ -410,6 +410,12 @@ export function InputBar({
       if (keyboard.arbitrate(e.key === 'ArrowUp' ? 'up' : 'down', composing) === 'consumed') e.preventDefault()
       return
     }
+    if (e.key === 'Tab') {
+      // Tab completes the highlighted slash/mention candidate when the menu
+      // owns the gesture; otherwise native focus traversal keeps the key.
+      if (keyboard.arbitrate('tab', composing) !== 'pass') e.preventDefault()
+      return
+    }
     if (e.key === 'Escape') {
       // Escape layering: an open overlay closes; claimed without an overlay
       // does NOT release (backspacing the token is the only exit gesture).

@@ -375,7 +375,7 @@ describe("openai-compatible adapter", () => {
     const out = await llm.chat({
       messages: [{ role: "user", content: "hi" }],
     });
-    expect(out.usage).toEqual({ inputTokens: 11, outputTokens: 3 });
+    expect(out.usage).toEqual({ inputTokens: 11, outputTokens: 3, totalTokens: 14 });
   });
 
   it("streams usage on done and requests stream_options.include_usage", async () => {

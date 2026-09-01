@@ -17,7 +17,7 @@ export type {
   SettingsApi, SettingsNamespaceView, SettingsPathOpView, SettingsSecretView,
   CredentialsApi, CredentialView, ConfigurableProviderView, DiscoveredModelView, LlmApi,
   SubagentsApi, SubagentAddress, SubagentCatalog, SubagentListEntry, SubagentPromptReceipt,
-  JobView,
+  JobView, TurnOutlineEntry,
 } from '@xrkseek/xrk-host-apiproxy/api'
 export type { ToolCallView, ToolResultView } from '@xrkseek/xrk-tools/presentation'
 export type {

@@ -73,6 +73,14 @@ export interface ISession {
    */
   loadOlder(): Promise<void>
   /**
+   * Page history backwards until the window covers `seq` (rail jump into
+   * unloaded turns). Concurrent calls retarget the in-flight loop; a plain
+   * {@link loadOlder} that owns the busy flag makes this a no-op so the
+   * caller can retry after that pull settles.
+   * @param seq - Face event seq the window must reach (typically turn/start).
+   */
+  loadThrough(seq: number): Promise<void>
+  /**
    * Execute one slash-command line against this session's agent — pure
    * admission semantics (the host executor durably logs the lifecycle).
    * @param line - the full command line, leading slash included.

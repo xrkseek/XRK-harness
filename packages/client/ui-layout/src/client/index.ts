@@ -11,7 +11,6 @@ import type { ClientContext } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-ui-theme/client'
 import type { PanelActions } from './service.ts'
 import { AppFrame } from './AppFrame.tsx'
-import { ConnectionOverlay } from './ConnectionOverlay.tsx'
 import { createLayoutStore } from './stores.ts'
 import { LayoutController } from './service.ts'
 import { ThemePresenter } from './theme-presenter.ts'
@@ -47,6 +46,8 @@ declare module '@xrkseek/client-ui-slots' {
      *
      * The occupant receives the frame's live column state (collapsed, width)
      * and is expected to render the compact control rail while collapsed.
+     * On phone viewports the frame feeds collapsed=false and hosts the column
+     * as a drawer overlay instead of an in-flow rail.
      */
     'sidebar': { kind: 'single'; scope: 'root'; owner: SidebarOwnerProps }
     /**
@@ -121,6 +122,7 @@ export function apply(ctx: ClientContext): void {
     const disposeService = ctx.reflect.provide('layout', layout)
     const disposeRegistration = ctx.slots.register({
       name: 'root',
+      locale: NS,
       children: {
         'sidebar': { kind: 'single', scope: 'root' },
         'conversation': { kind: 'single', scope: 'session-maybe' },
@@ -143,13 +145,6 @@ export function apply(ctx: ClientContext): void {
       void disposeService()
     }
   }, 'ui-layout: service + root registration')
-
-  ctx.slots.register({
-    name: 'shell.overlay',
-    id: 'connection',
-    order: 0,
-    locale: NS,
-  }, ConnectionOverlay)
 
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-layout: dictionaries')
 

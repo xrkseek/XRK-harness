@@ -76,6 +76,19 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+@media (max-width: 767px) {
+  .actions {
+    height: 40px;
+    gap: 6px;
+  }
+
+  .action {
+    width: 40px;
+    height: 40px;
+    touch-action: manipulation;
+  }
+}
+
 .visuallyHidden {
   position: absolute;
   width: 1px;

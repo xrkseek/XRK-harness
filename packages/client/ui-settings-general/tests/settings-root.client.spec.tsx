@@ -4,8 +4,12 @@ import { useEffect, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts'
 import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
+import { en, type SettingsKey } from '../src/client/locales.ts'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 type Row = { id: string; order: number; label: string }
 type Step = { id: string; order: number }
@@ -18,8 +22,13 @@ const SEAT_CONTENT: Record<string, string> = {
   'settings.close': 'Close',
 }
 
+type ConnectionSnapshot = Parameters<Parameters<SettingsRootComponentProps['useConnectionState']>[0]>[0]
+
+const t: SettingsRootComponentProps['t'] = (key) => en[key as SettingsKey]
+
 function mount({
   wide = true,
+  connectionState = 'connected' as ConnectionSnapshot,
   onboardingActive = true,
   rows = [
     { id: 'general', order: 0, label: 'General' },
@@ -30,11 +39,20 @@ function mount({
     { id: 'welcome', order: -100 },
     { id: 'credential', order: 0 },
   ],
-}: { wide?: boolean; onboardingActive?: boolean; rows?: Row[]; steps?: Step[] } = {}) {
+}: {
+  wide?: boolean
+  connectionState?: ConnectionSnapshot
+  onboardingActive?: boolean
+  rows?: Row[]
+  steps?: Step[]
+} = {}) {
   // Mutable row source standing in for the bound useSections hook; bump()
   // plays a ledger change through the same observable contract.
   let current = rows
+  let currentConnectionState = connectionState
   const listeners = new Set<() => void>()
+  const connectionListeners = new Set<() => void>()
+  const reconnect = vi.fn()
   const renderSlot = vi.fn(
     ((key: string, _owner: unknown, opts?: { only?: string }) => {
       if (key === 'settings.section') return <div data-testid={`section-${opts?.only ?? 'all'}`} />
@@ -52,8 +70,18 @@ function mount({
   const props: SettingsRootComponentProps = {
     useSessions,
     useWorkspaces: unusedHook,
-    useConnectionState: unusedHook,
     wide,
+    reconnect,
+    t,
+    useConnectionState: (select) => {
+      const [, force] = useState(0)
+      useEffect(() => {
+        const listener = () => { force(n => n + 1) }
+        connectionListeners.add(listener)
+        return () => { connectionListeners.delete(listener) }
+      }, [])
+      return select(currentConnectionState)
+    },
     useOnboardingSteps: select => select(steps),
     useSections: (select) => {
       const [, force] = useState(0)
@@ -73,7 +101,13 @@ function mount({
       for (const fn of [...listeners]) fn()
     })
   }
-  return { view, renderSlot, bump, listeners }
+  const setConnectionState = (next: typeof currentConnectionState) => {
+    act(() => {
+      currentConnectionState = next
+      for (const fn of [...connectionListeners]) fn()
+    })
+  }
+  return { view, renderSlot, bump, listeners, reconnect, setConnectionState }
 }
 
 function openPanel() {
@@ -95,6 +129,32 @@ describe('SettingsRoot trigger', () => {
   it('hands the rail state to the trigger seat', () => {
     const { renderSlot } = mount({ wide: false })
     expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: false })
+  })
+
+  it('shows retry progress and a two-second recovery confirmation', () => {
+    vi.useFakeTimers()
+    const mounted = mount()
+    expect(screen.queryByRole('button', { name: 'Connecting, restart now' })).toBeNull()
+
+    mounted.setConnectionState('reconnecting')
+    const indicator = screen.getByRole('button', { name: 'Connecting, restart now' })
+    expect(indicator.textContent).toContain('Connecting')
+    expect(indicator.hasAttribute('title')).toBe(false)
+    expect(indicator.querySelector('svg')).toBeTruthy()
+    fireEvent.click(indicator)
+    expect(mounted.reconnect).toHaveBeenCalledOnce()
+
+    mounted.setConnectionState('connected')
+    expect(screen.getByRole('status', { name: 'Connected' })).toBeTruthy()
+    act(() => { vi.advanceTimersByTime(1_999) })
+    expect(screen.getByRole('status', { name: 'Connected' })).toBeTruthy()
+    act(() => { vi.advanceTimersByTime(1) })
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('keeps the reconnect indicator out of the collapsed rail', () => {
+    mount({ wide: false, connectionState: 'reconnecting' })
+    expect(screen.queryByRole('button', { name: 'Connecting, restart now' })).toBeNull()
   })
 })
 
@@ -160,6 +220,16 @@ describe('SettingsPanel close paths', () => {
     openPanel()
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
   })
+
+  it('returns focus to the Settings trigger when the dialog closes', () => {
+    mount()
+    const trigger = screen.getByRole('button', { name: 'Settings' })
+    openPanel()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+  })
 })
 
 describe('SettingsPanel navigation', () => {
@@ -169,9 +239,10 @@ describe('SettingsPanel navigation', () => {
     expect(screen.getByRole('button', { name: 'General' }).getAttribute('aria-current')).toBe('true')
     expect(screen.getByRole('button', { name: 'Models' }).getAttribute('aria-current')).toBeNull()
     expect(screen.getByTestId('section-general')).toBeTruthy()
+    expect(screen.queryByTestId('section-models')).toBeNull()
   })
 
-  it('gives every section a nav glyph, distinct for the ids the shell knows', () => {
+  it('picks a distinct glyph per known section id and falls back to the gear', () => {
     mount({
       rows: [
         { id: 'general', order: 0, label: 'General' },
@@ -187,7 +258,7 @@ describe('SettingsPanel navigation', () => {
       .map(name => screen.getByRole('button', { name }).querySelector('svg')?.innerHTML)
 
     expect(glyphs.every(glyph => glyph !== undefined && glyph !== '')).toBe(true)
-    // The three ids the shell names get their own glyph; every other section —
+    // The three ids the shell names get their own glyph; every other section
     // including one this package never heard of — shares the gear.
     expect(new Set(glyphs.slice(0, 4)).size).toBe(4)
     expect(glyphs[4]).toBe(glyphs[0])

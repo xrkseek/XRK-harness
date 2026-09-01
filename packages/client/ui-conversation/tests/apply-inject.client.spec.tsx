@@ -40,6 +40,7 @@ function sessionFakeFor() {
   return {
     open: vi.fn(() => Promise.resolve()),
     loadOlder: vi.fn<ISession['loadOlder']>(() => Promise.resolve()),
+    loadThrough: vi.fn<ISession['loadThrough']>(() => Promise.resolve()),
     prompt: vi.fn<ISession['prompt']>(() => Promise.resolve({ ok: true, value: { accepted: true } })),
     cancel: vi.fn<ISession['cancel']>(() => Promise.resolve({ ok: true, value: { accepted: true } })),
   } satisfies SessionBehaviorOverrides
@@ -140,6 +141,8 @@ describe('conversation slot inject API', () => {
     const chatView = b.chatViewApi(ROOT)
     chatView.injected.loadOlder()
     expect(b.sessionFake.loadOlder).toHaveBeenCalledTimes(1)
+    await chatView.injected.loadThrough(42)
+    expect(b.sessionFake.loadThrough).toHaveBeenCalledWith(42)
     chatView.injected.forkAt(17)
     await vi.waitFor(() => {
       expect(b.runtime.sessions.calls).toContainEqual({ method: 'open', args: [ROOT] })

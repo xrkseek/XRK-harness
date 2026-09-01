@@ -21,15 +21,17 @@ describe('ui-theme host', () => {
     const fiber = ctx.plugin({ apply })
     await fiber.await()
     const ns = settingsNamespace(THEME_SETTINGS_NAMESPACE)
-    expect(ctx.settings.get(ns)).toEqual({ preference: DEFAULT_PREFERENCE })
-    await ctx.settings.update(ns, { preference: 'dark' })
-    expect(ctx.settings.get(ns)).toEqual({ preference: 'dark' })
+    expect(ctx.settings.get(ns)).toEqual({ preference: DEFAULT_PREFERENCE, fontSize: 14 })
+    await ctx.settings.update(ns, { preference: 'dark', fontSize: 16 })
+    expect(ctx.settings.get(ns)).toEqual({ preference: 'dark', fontSize: 16 })
     await expect(ctx.settings.update(ns, { preference: 'sepia' })).rejects.toThrow()
+    await expect(ctx.settings.update(ns, { fontSize: 11 })).rejects.toThrow()
+    await expect(ctx.settings.update(ns, { fontSize: 18 })).rejects.toThrow()
     await fiber.dispose()
     expect(ctx.settings.describe().map(row => row.ns)).not.toContain(ns)
   })
 
-  it('renders the current durable preference and disposes the index transform', async () => {
+  it('renders the current durable preference and font size and disposes the index transform', async () => {
     const ctx = new Context()
     await ctx.plugin(MemorySettings).await()
     let transform: ((html: string) => string) | undefined
@@ -43,8 +45,10 @@ describe('ui-theme host', () => {
     const fiber = ctx.plugin({ apply })
     await fiber.await()
     expect(transform?.('<body></body>')).toContain('const preference = "system"')
-    await ctx.settings.update(settingsNamespace(THEME_SETTINGS_NAMESPACE), { preference: 'dark' })
+    expect(transform?.('<body></body>')).toContain('"14px"')
+    await ctx.settings.update(settingsNamespace(THEME_SETTINGS_NAMESPACE), { preference: 'dark', fontSize: 17 })
     expect(transform?.('<body></body>')).toContain('const preference = "dark"')
+    expect(transform?.('<body></body>')).toContain('"17px"')
     await fiber.dispose()
     expect(disposed).toBe(true)
     expect(transform?.('<body></body>')).toContain('const preference = "system"')

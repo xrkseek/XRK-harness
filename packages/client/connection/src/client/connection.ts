@@ -62,7 +62,9 @@ export class ConnectionController {
   private generation = 0
   private attempt = 0
   private current: AbortController | null = null
+  private retryIdle: AbortController | null = null
   private running = false
+  private immediateRetry = false
   private lastState: ConnectionState | null = null
   private readonly config: Required<ConnectionConfig>
 
@@ -86,6 +88,17 @@ export class ConnectionController {
     this.running = false
     this.current?.abort()
     this.current = null
+    this.retryIdle?.abort()
+    this.retryIdle = null
+  }
+
+  /** Reset backoff and replace the current generation or retry delay immediately. */
+  reconnect(): void {
+    if (!this.running) return
+    this.attempt = 0
+    this.immediateRetry = true
+    this.current?.abort()
+    this.retryIdle?.abort()
   }
 
   private backoffDelay(attempt: number): number {
@@ -161,10 +174,22 @@ export class ConnectionController {
       await failed
       if (!this.isRunning()) return
       this.emitState('reconnecting')
+      const immediate = this.immediateRetry
+      this.immediateRetry = false
+      if (immediate) {
+        this.attempt = 0
+        continue
+      }
       this.attempt += 1
       console.warn(`[web-runtime] connection lost, retry #${this.attempt}`)
       const idle = new AbortController()
+      this.retryIdle = idle
       await sleep(this.backoffDelay(this.attempt), idle.signal)
+      if (this.retryIdle === idle) this.retryIdle = null
+      if (this.immediateRetry) {
+        this.immediateRetry = false
+        this.attempt = 0
+      }
     }
   }
 

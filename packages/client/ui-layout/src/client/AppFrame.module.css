@@ -1,9 +1,11 @@
 .frame {
   position: relative; /* anchors the drag handles, which straddle column borders */
   display: grid;
-  grid-template-rows: 100%;
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
+  min-height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
   background: var(--dsw-alias-bg-base);
   /* Collapse/expand animates the tracks on the deepsuite sider curve
      (--ds-ease-in-out / --ds-transition-duration-slow, ui-theme base.css). */
@@ -31,9 +33,19 @@
 
 .centerCol {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Phone: keep the conversation above collapsed overlay columns that still
+   paint a full-bleed base fill (details uses inset:0 while closed). Absolute
+   overlays are out of flow — pin the center to the sole 1fr track. */
+.frame[data-phone] .centerCol {
+  position: relative;
+  z-index: 1;
+  grid-column: 1;
 }
 
 .detailsCol {
@@ -116,4 +128,179 @@
 
 .overlayLayer > * {
   pointer-events: auto;
+}
+
+/* Phone: conversation is full-bleed. Sidebar leaves the grid track and
+   slides in as a drawer; details become a full-frame sheet. */
+.frame[data-phone] .sidebarCol {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 32;
+  width: var(--phone-drawer-width, 280px);
+  max-width: calc(100% - 48px);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  box-sizing: border-box;
+  transform: translateX(-105%);
+  border-right: 1px solid var(--dsw-alias-border-l1);
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.frame[data-phone][data-sidebar-collapsed] .sidebarCol {
+  /* Hide after the slide so child layers are not orphaned mid-transition. */
+  visibility: hidden;
+  transition:
+    transform var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    visibility 0s linear var(--ds-transition-duration-slow);
+}
+
+.frame[data-phone]:not([data-sidebar-collapsed]) .sidebarCol {
+  visibility: visible;
+  transform: translateX(var(--phone-drawer-shift, 0px));
+  pointer-events: auto;
+  touch-action: pan-y;
+  box-shadow: 8px 0 24px color-mix(in srgb, var(--dsw-alias-text-primary) 12%, transparent);
+  transition:
+    transform var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    visibility 0s linear;
+}
+
+.frame[data-phone][data-drawer-swiping] .sidebarCol {
+  transition: none;
+}
+
+.frame[data-phone] .detailsCol {
+  position: absolute;
+  inset: 0;
+  z-index: 28;
+  width: auto;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+  border-left: none;
+  background: var(--dsw-alias-bg-base);
+  transform: translateX(105%);
+  pointer-events: none;
+  transition: transform var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.frame[data-phone][data-details-collapsed] .detailsCol {
+  /* Collapse out of the paint path: translateX(105%) alone still left a
+     full-frame opaque layer over the conversation in device emulation. */
+  visibility: hidden;
+  inset: auto;
+  top: 0;
+  left: 100%;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  background: transparent;
+  transform: none;
+}
+
+.frame[data-phone]:not([data-details-collapsed]) .detailsCol {
+  visibility: visible;
+  inset: 0;
+  width: auto;
+  height: auto;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-base);
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.frame[data-phone][data-dragging] .sidebarCol,
+.frame[data-phone][data-dragging] .detailsCol {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame[data-phone] .sidebarCol,
+  .frame[data-phone] .detailsCol {
+    transition: none;
+  }
+}
+
+.phoneScrim {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--dsw-alias-text-primary) 36%, transparent);
+  cursor: pointer;
+  touch-action: manipulation;
+  animation: phone-scrim-in var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.frame[data-drawer-swiping] .phoneScrim {
+  animation: none;
+  /* Dim with the drag: shift is ≤ 0; full width → opacity toward 0. */
+  opacity: calc(1 + (var(--phone-drawer-shift, 0px) / var(--phone-drawer-width, 280px)));
+}
+
+@keyframes phone-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phoneScrim {
+    animation: none;
+  }
+}
+
+.phoneMenu {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  left: max(8px, env(safe-area-inset-left, 0px));
+  z-index: 24;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-button-floating-fill);
+  color: var(--dsw-alias-text-primary);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--dsw-alias-text-primary) 8%, transparent);
+}
+
+.phoneMenu:hover {
+  background: var(--dsw-alias-button-floating-hover);
+}
+
+.phoneMenu:active {
+  transform: scale(0.96);
+}
+
+.phoneMenu:focus-visible {
+  outline: 2px solid var(--dsw-alias-text-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phoneMenu:active {
+    transform: none;
+  }
+}
+
+.phoneMenuIcon {
+  display: block;
+  width: 16px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  box-shadow: 0 -5px 0 currentColor, 0 5px 0 currentColor;
 }

@@ -2,7 +2,8 @@
  * Trigger candidate menu: renders the InputTriggerService menu store into the
  * conversation.input.overlay anchor. Closed state renders null (the overlay
  * slot stays mounted); groups render in roster order under localized title
- * rows, pending groups as a loading row; pointer picks route back through
+ * rows, empty pending groups as a loading row (stale items stay visible while
+ * a refinement fetch is pending); pointer picks route back through
  * the service (combobox pattern — focus never leaves the textarea, so rows
  * are mousedown-handled and the highlight is exposed via
  * aria-activedescendant on the listbox).
@@ -84,7 +85,7 @@ export function MenuView({ menu, onPick, onDismiss, t }: MenuViewProps) {
               {group.showGroupTitle === false || group.items.some(item => item.section !== undefined)
                 ? null
                 : <div className={css.groupTitle} role="presentation" data-source={group.source}>{t(group.source as MenuKey)}</div>}
-              {group.status === 'pending'
+              {group.status === 'pending' && group.items.length === 0
                 ? <div className={css.loading} data-source={group.source}>{t('loading')}</div>
                 : group.items.map((item, index) => {
                   const active = highlight !== null && highlight.source === group.source && highlight.index === index

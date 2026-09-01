@@ -116,3 +116,24 @@
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
 }
+
+@media (max-width: 767px) {
+  .row {
+    min-height: 44px;
+    padding: 10px 10px;
+    touch-action: manipulation;
+  }
+
+  .search {
+    /* 16px avoids iOS focus zoom on inputs. */
+    font-size: 16px;
+    min-height: 40px;
+    padding: 8px 10px;
+  }
+
+  .retry {
+    min-height: 36px;
+    padding: 6px 12px;
+    touch-action: manipulation;
+  }
+}

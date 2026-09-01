@@ -19,9 +19,10 @@ async function bench(readAttachment?: SessionFace['readAttachment']) {
   const updateQueue = vi.fn(() => Promise.resolve({ ok: true as const, value: { accepted: true as const } }))
   const cancel = vi.fn(() => Promise.resolve({ ok: true as const, value: { accepted: true as const } }))
   const loadOlder = vi.fn(() => Promise.resolve())
+  const loadThrough = vi.fn(() => Promise.resolve())
   await runtime.sessions.add({
     id: 's1',
-    session: { prompt, updateQueue, cancel, loadOlder, ...(readAttachment === undefined ? {} : { readAttachment }) },
+    session: { prompt, updateQueue, cancel, loadOlder, loadThrough, ...(readAttachment === undefined ? {} : { readAttachment }) },
   })
   // config.input is required (the apply shares its hub with the inject
   // factories); the bench passes its own instance explicitly.

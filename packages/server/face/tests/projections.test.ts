@@ -270,6 +270,105 @@ describe("createFaceRuntime projection wire", () => {
     ).toBe(true);
   });
 
+  it("Face patched append publishes session/projection turnOutline; draft stays quiet until turn/end", () => {
+    const store = createMemorySessionStore();
+    const mux: { type?: string; key?: string; value?: unknown; seq?: number }[] = [];
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: {
+        wake() {},
+        async cancel() {},
+        isActive() {
+          return false;
+        },
+      },
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    runtime.bus.subscribeMux((_id, f) => mux.push(f as (typeof mux)[number]));
+
+    const created = store.create();
+    expect(runtime.projections.snapshot(created.id).values.turnOutline).toEqual(
+      [],
+    );
+
+    store.append(created.id, {
+      type: "turn/start",
+      ts: 1,
+      turnId: "t1",
+    });
+    expect(runtime.projections.snapshot(created.id).values.turnOutline).toEqual([
+      { turn: 1, seq: 1, prompt: "", response: "" },
+    ]);
+    expect(
+      mux.some(
+        (f) =>
+          f.type === "session/projection" &&
+          f.key === "turnOutline" &&
+          Array.isArray(f.value) &&
+          (f.value as { turn: number }[])[0]?.turn === 1,
+      ),
+    ).toBe(true);
+
+    const outlineBeforePrompt = mux.filter(
+      (f) => f.type === "session/projection" && f.key === "turnOutline",
+    ).length;
+    store.append(created.id, {
+      type: "user/message",
+      ts: 2,
+      turnId: "t1",
+      content: "ask rail",
+    });
+    expect(runtime.projections.snapshot(created.id).values.turnOutline).toEqual([
+      { turn: 1, seq: 1, prompt: "ask rail", response: "" },
+    ]);
+    expect(
+      mux.filter(
+        (f) => f.type === "session/projection" && f.key === "turnOutline",
+      ).length,
+    ).toBeGreaterThan(outlineBeforePrompt);
+
+    const outlineBeforeDraft = mux.filter(
+      (f) => f.type === "session/projection" && f.key === "turnOutline",
+    ).length;
+    store.append(created.id, {
+      type: "assistant/message",
+      ts: 3,
+      turnId: "t1",
+      stepId: "s1",
+      content: "draft body",
+    });
+    expect(
+      mux.filter(
+        (f) => f.type === "session/projection" && f.key === "turnOutline",
+      ).length,
+    ).toBe(outlineBeforeDraft);
+    expect(runtime.projections.snapshot(created.id).values.turnOutline).toEqual([
+      { turn: 1, seq: 1, prompt: "ask rail", response: "" },
+    ]);
+
+    store.append(created.id, {
+      type: "turn/end",
+      ts: 4,
+      turnId: "t1",
+      reason: { kind: "completed" },
+    });
+    expect(runtime.projections.snapshot(created.id).values.turnOutline).toEqual([
+      { turn: 1, seq: 1, prompt: "ask rail", response: "draft body" },
+    ]);
+    expect(
+      mux.some(
+        (f) =>
+          f.type === "session/projection" &&
+          f.key === "turnOutline" &&
+          Array.isArray(f.value) &&
+          (f.value as { response: string }[])[0]?.response === "draft body",
+      ),
+    ).toBe(true);
+  });
+
   it("todos standing plan survives context/compaction (DSH: plan ⊥ window)", () => {
     const store = createMemorySessionStore();
     const session = newSession(store);

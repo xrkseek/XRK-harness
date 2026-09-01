@@ -53,6 +53,7 @@ export type {
   SettingsScope, SettingsScopeSnapshot, SettingsScopeSpec,
 } from './contract/settings-scope.ts'
 export type { Session } from './sessions/session.ts'
+export { JUMP_PAGE_MESSAGES } from './sessions/session.ts'
 export type { ISession, ProjectionsFace, SessionFace } from './contract/session.ts'
 export type { AgentContext, ISessions } from './contract/sessions.ts'
 export type { IWorkspaces } from './contract/workspaces.ts'
@@ -74,11 +75,11 @@ export type {
 export type {
   AssistantBlock, AssistantMessageNode, AssistantProvenanceView, AssistantRequestConfig,
   AssistantTiming, ChatLocationNodeIndex, ChatNodeStore, ChatSnapshot,
-  CommandNode, CompactionSummaryNode, ComposerPhase,
+  ChatTurnNavigationIndex, CommandNode, CompactionSummaryNode, ComposerPhase,
   ContextMessageNode, ConversationNode, ConversationSnapshot, ModelRetryNode, QueuedMessage,
   LegacyConversationSlice, PartialAssistant, RunningToolCall,
   SteeringMessageNode, TodoItem, ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode,
-  UnknownSurfaceNode, UserMessageNode,
+  TurnNavigationItem, UnknownSurfaceNode, UserMessageNode,
 } from './sessions/conversation.ts'
 export {
   EMPTY_CHAT_SNAPSHOT, EMPTY_CONVERSATION_VIEWS, toAssistantBlock, toAssistantBlocks,

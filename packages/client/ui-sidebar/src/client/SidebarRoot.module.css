@@ -211,6 +211,23 @@
   background: transparent;
 }
 
+/* Phone drawer (AppFrame always feeds wide chrome below PHONE_MAX): enlarge
+   the fold toggle for thumb reach without changing the desktop rail. */
+@media (max-width: 767px) {
+  .iconButton {
+    width: 40px;
+    height: 40px;
+  }
+
+  .newSession {
+    min-height: 44px;
+  }
+
+  .logoRow {
+    height: 52px;
+  }
+}
+
 .collapsed .newSession:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }

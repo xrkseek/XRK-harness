@@ -11,6 +11,26 @@
   padding: 0 24px;
 }
 
+@media (max-width: 767px) {
+  .root {
+    padding: 0 16px;
+  }
+
+  .headline {
+    font-size: 22px;
+    line-height: 28px;
+  }
+
+  .workspace {
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+
+  .workspaceRow {
+    padding-left: 4px;
+  }
+}
+
 /* Cap matches the InputBar card. Glow may paint past the sides. */
 .stack {
   display: flex;

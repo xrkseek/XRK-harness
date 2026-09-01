@@ -4,6 +4,8 @@ import type {
 } from '@xrkseek/client-runtime/client'
 import { isAppendSurfaceEvent, toAssistantBlocks } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/xrk-llm-retry/types'
+import type { SessionEvent } from '@xrkseek/xrk-session/types'
+import { deriveTurnTokenUsage } from '@xrkseek/xrk-token-meter/client'
 import type {
   AssistantChatData, FinalAssistantChatData, TurnTailChatData,
 } from '../contract/chat-nodes.ts'
@@ -34,6 +36,12 @@ interface StepEvidence {
   readonly finalized: boolean
 }
 
+function isSessionEvent(event: ConversationMatch['event']): event is SessionEvent {
+  return event.type !== 'chunkrow/text-chunks'
+    && event.type !== 'chunkrow/reasoning-chunks'
+    && event.type !== 'chunkrow/tool-call-chunks'
+}
+
 function hasTextAssistant(event: Parameters<ConversationNodeDefinition['match']>[0]): boolean {
   return event.type === 'assistant/message'
     && isAppendSurfaceEvent(event)
@@ -56,10 +64,13 @@ function turnCoordinates(event: Parameters<ConversationNodeDefinition['match']>[
 } | undefined {
   if (event.type === 'assistant/message'
     || event.type === 'assistant/chunk'
+    || event.type === 'step/start'
     || event.type === 'step/end') {
     return { turn: event.data.turn, step: event.data.step }
   }
-  if (event.type === 'llm/retry') return { turn: event.data.turn, step: event.data.step }
+  if (event.type === 'llm/retry' || event.type === 'llm/retry-started') {
+    return { turn: event.data.turn, step: event.data.step }
+  }
   return undefined
 }
 
@@ -137,6 +148,9 @@ function tailData(context: ConversationNodeContext<TurnTailState>): TurnTailChat
     }
   }
   const metrics = deriveTurnMetrics(finalized.map(candidate => candidate.finalNode)).get(end.event.data.turn)
+  const tokenUsage = context.start?.event.type === 'turn/start'
+    ? deriveTurnTokenUsage(context.matches.map(match => match.event).filter(isSessionEvent))
+    : undefined
   return {
     turn: end.event.data.turn,
     seq: end.event.seq,
@@ -145,6 +159,7 @@ function tailData(context: ConversationNodeContext<TurnTailState>): TurnTailChat
     branchUnavailable: closing === null || latestTranscriptSeq !== closing.finalNode.seq,
     ...metrics?.ttftMs === undefined ? {} : { ttftMs: metrics.ttftMs },
     ...metrics?.tokensPerSecond === undefined ? {} : { tokensPerSecond: metrics.tokensPerSecond },
+    ...tokenUsage === undefined ? {} : { tokenUsage },
   }
 }
 

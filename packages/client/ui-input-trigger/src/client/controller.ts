@@ -176,7 +176,11 @@ export class InputTriggerController {
    * Keyboard arbitration while the menu is open.
    * @param key - intercepted key.
    * @param composing - inside IME composition: everything passes.
-   * @returns consumed / pick-highlighted / pass.
+   * @returns `pass` when the browser keeps the key (closed menu, no
+   * highlight, or a vanished candidate), `consumed` when the menu handled
+   * the key without a settling pick (move, close, or a pending-refinement
+   * no-op), or `pick-highlighted` when the highlighted candidate settled
+   * and the menu closed.
    */
   arbitrate(key: ArbitrateKey, composing: boolean): ArbitrateOutcome {
     if (composing || this.disposed) return 'pass'
@@ -198,6 +202,22 @@ export class InputTriggerController {
       }
       case 'enter': {
         if (state.highlight === null) return 'pass'
+        // Refinement keeps the previous rows and highlight visible while the
+        // next fetch is pending; Enter then neither picks the stale row nor
+        // falls through to submit — an explicit no-op until the group is ready.
+        const group = state.groups.find(g => g.source === state.highlight?.source)
+        if (group === undefined || group.status !== 'ready') return 'consumed'
+        this.pick(state.highlight.source, state.highlight.index)
+        return 'pick-highlighted'
+      }
+      case 'tab': {
+        if (state.highlight === null) return 'pass'
+        const group = state.groups.find(g => g.source === state.highlight?.source)
+        // Pending refinement keeps the stale highlight visible: consume the
+        // gesture rather than pick a stale row or let Tab move focus away.
+        if (group === undefined || group.status !== 'ready') return 'consumed'
+        const item = group.items[state.highlight.index]
+        if (item === undefined) return 'pass'
         this.pick(state.highlight.source, state.highlight.index)
         return 'pick-highlighted'
       }

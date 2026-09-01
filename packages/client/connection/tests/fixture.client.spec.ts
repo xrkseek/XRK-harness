@@ -168,6 +168,8 @@ describe('createFixtureApi', () => {
         sessionStats: {
           turns: 0, steps: 0, llmMs: 0, toolMs: 0, ttftMs: 0, ttftSteps: 0, decodeMs: 0, decodeTokens: 0,
         },
+        // Turn-outline unit composed: empty ladder until the first turn/start.
+        turnOutline: [],
         imageLimits: {
           maxImageBytes: 5 * 1024 * 1024,
           maxImagesPerMessage: 20,
@@ -328,11 +330,22 @@ describe('createFixtureApi', () => {
     expect(frames.some(frame =>
       frame.type === 'session/projection'
       && frame.key === 'contextPressure'
-      && (frame.value as { contextWindow?: number }).contextWindow === 128_000)).toBe(true)
+      && (frame.value as { contextWindow?: number }).contextWindow === 1_000_000)).toBe(true)
     expect(frames.some(frame =>
       frame.type === 'session/projection'
       && frame.key === 'contextBreakdown'
       && (frame.value as { messageTokens?: number }).messageTokens! > 0)).toBe(true)
+    // Live outline: turn/start opens a ladder entry; user/message fills the prompt;
+    // turn/end commits the draft. todos must still ride turn/start (not dropped).
+    expect(frames.some(frame =>
+      frame.type === 'session/projection'
+      && frame.key === 'todos'
+      && frame.value === null)).toBe(true)
+    const outlineFrames = frames.filter((frame): frame is Extract<MuxFrame, { type: 'session/projection'; key: 'turnOutline' }> =>
+      frame.type === 'session/projection' && frame.key === 'turnOutline')
+    expect(outlineFrames.length).toBeGreaterThanOrEqual(2)
+    const lastOutline = outlineFrames.at(-1)?.value as readonly { turn: number; prompt: string; response?: string }[]
+    expect(lastOutline?.some(entry => entry.prompt.includes('render markdown'))).toBe(true)
     const finalize = frames.find((f): f is Extract<MuxFrame, { type: 'session/event' }> => f.type === 'session/event' && f.event.type === 'assistant/message')
     expect(JSON.stringify(finalize?.event.data)).toContain('（已中断）')
     // Idle cancel: no replay in flight, must not explode; running flips false.
@@ -387,14 +400,19 @@ describe('createFixtureApi', () => {
     expect((first[8]?.payload as { value: { messageTokens: number } }).value.messageTokens).toBeGreaterThan(0)
     expect(first[9]?.payload).toMatchObject({ type: 'session/projection', sessionId: 'fx-alpha', key: 'sessionStats' })
     expect((first[9]?.payload as { value: { turns: number; steps: number } }).value.steps).toBeGreaterThan(0)
-    expect(first[10]?.payload).toMatchObject({
+    expect(first[10]?.payload).toMatchObject({ type: 'session/projection', sessionId: 'fx-alpha', key: 'turnOutline' })
+    const outline = (first[10]?.payload as { value: readonly { turn: number; seq: number; prompt: string }[] }).value
+    expect(outline.length).toBeGreaterThan(1)
+    expect(outline[0]).toMatchObject({ turn: 0, seq: expect.any(Number) })
+    expect(outline[0]?.prompt.length).toBeGreaterThan(0)
+    expect(first[11]?.payload).toMatchObject({
       type: 'session/projection', sessionId: 'fx-alpha', key: 'imageLimits',
       value: { maxImagesPerMessage: 20, maxImageBytes: 5 * 1024 * 1024 },
     })
-    expect(first[11]?.payload).toMatchObject({ type: 'approval/requested', toolName: 'dangerous_tool' })
-    expect(second[11]?.rpcId).toBe(first[11]?.rpcId) // stable rpcId across replays (host replay semantics)
-    expect(first[12]?.payload).toMatchObject({ type: 'question/requested', sessionId: 'fx-alpha' })
-    expect(second[12]?.rpcId).toBe(first[12]?.rpcId)
+    expect(first[12]?.payload).toMatchObject({ type: 'approval/requested', toolName: 'dangerous_tool' })
+    expect(second[12]?.rpcId).toBe(first[12]?.rpcId) // stable rpcId across replays (host replay semantics)
+    expect(first[13]?.payload).toMatchObject({ type: 'question/requested', sessionId: 'fx-alpha' })
+    expect(second[13]?.rpcId).toBe(first[13]?.rpcId)
   })
 
   it('steer with no replay in flight falls through to a fresh queued turn; non-text blocks stringify empty', async () => {

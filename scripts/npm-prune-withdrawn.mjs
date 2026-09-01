@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Withdraw redundant @xrkseek/harness-cli versions on npmjs.
- * Keeps formal latest (0.1.4+) and preview (0.0.11). Tries unpublish first, then deprecate.
+ * Keeps formal latest (apps/cli version) and preview (0.0.11). Tries unpublish first, then deprecate.
  *
  * Auth: NPM_TOKEN or npm login. Write actions may need NPM_CONFIG_OTP (6-digit TOTP or one 64-char recovery code).
  *
@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cliPkg = JSON.parse(
   readFileSync(path.join(ROOT, "apps/cli/package.json"), "utf8").replace(/^\uFEFF/, ""),
 );
-const formal = typeof cliPkg.version === "string" ? cliPkg.version : "0.1.4";
+const formal = typeof cliPkg.version === "string" ? cliPkg.version : "0.1.23";
 
 const PKG = "@xrkseek/harness-cli";
 const KEEP = new Set(["0.0.11", formal]);

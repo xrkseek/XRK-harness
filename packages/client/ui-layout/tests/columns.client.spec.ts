@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   CENTER_MIN, clampWidth, computeColumns,
-  DETAILS_DEFAULT, DETAILS_MIN, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_MIN,
+  DETAILS_DEFAULT, DETAILS_MIN, PHONE_MAX, phoneDrawerWidth, resolveShellTracks,
+  SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_MIN,
 } from '@xrkseek/client-ui-layout/src/client/columns.ts'
 
 // Numeric preference form (0 = closed); helpers keep the scenario names readable.
@@ -91,5 +92,35 @@ describe('computeColumns — degenerate viewports', () => {
     // Reaches step 3's auto-close with the compact rail sidebar.
     expect(computeColumns(500, closed(300), open(DETAILS_DEFAULT)))
       .toEqual({ sidebar: SIDEBAR_COLLAPSED, center: 500 - SIDEBAR_COLLAPSED, details: 0 })
+  })
+})
+
+describe('resolveShellTracks / phoneDrawerWidth', () => {
+  it('phone zeros in-flow sidebar and details tracks', () => {
+    const solved = computeColumns(390, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT))
+    expect(solved.sidebar).toBe(SIDEBAR_DEFAULT)
+    expect(resolveShellTracks(390, solved)).toEqual({
+      phone: true,
+      tracks: { sidebar: 0, center: 390, details: 0 },
+    })
+  })
+
+  it('tablet and desktop keep the concession solve', () => {
+    const tablet = computeColumns(980, closed(300), closed(360))
+    expect(resolveShellTracks(980, tablet)).toEqual({ phone: false, tracks: tablet })
+    const desktop = computeColumns(1920, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT))
+    expect(resolveShellTracks(1920, desktop)).toEqual({ phone: false, tracks: desktop })
+  })
+
+  it('PHONE_MAX is the exclusive upper bound for phone chrome', () => {
+    const solved = computeColumns(PHONE_MAX, open(SIDEBAR_DEFAULT), closed(360))
+    expect(resolveShellTracks(PHONE_MAX, solved).phone).toBe(false)
+    expect(resolveShellTracks(PHONE_MAX - 1, solved).phone).toBe(true)
+  })
+
+  it('phoneDrawerWidth prefers the contract default and leaves a scrim gap', () => {
+    expect(phoneDrawerWidth(390)).toBe(SIDEBAR_DEFAULT)
+    expect(phoneDrawerWidth(280)).toBe(SIDEBAR_MIN)
+    expect(phoneDrawerWidth(200)).toBe(SIDEBAR_MIN)
   })
 })

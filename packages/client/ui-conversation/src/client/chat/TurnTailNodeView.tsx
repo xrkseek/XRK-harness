@@ -2,6 +2,7 @@ import { memo } from 'react'
 import type { PropsRenderSlots } from '@xrkseek/client-ui-slots'
 import type { ChatNodeViewProps, TurnTailOwnerProps } from '../contract/slots.ts'
 import { MessageIconActions } from './MessageIconActions.tsx'
+import { TurnTimePanel, TurnUsagePanel } from './TurnUsagePanel.tsx'
 import { assistantText } from './turn-assistant.ts'
 import css from './TurnTailNodeView.module.css'
 
@@ -46,14 +47,26 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
         <MessageIconActions
           text={assistantText(closing.blocks)}
           time={closing.time}
-          runMs={runMs}
-          ttftMs={data.ttftMs}
-          tokensPerSecond={data.tokensPerSecond}
           clock="end"
           onBranch={() => { forkAt(closing.finalNode.seq) }}
           branchUnavailable={data.branchUnavailable || hasLaterChatNode}
           className={css.actions}
           extraActions={assistantActions}
+          usageAction={data.tokenUsage === undefined && runMs === undefined
+            ? undefined
+            : (
+              <>
+                {data.tokenUsage !== undefined && <TurnUsagePanel usage={data.tokenUsage} t={t} />}
+                {runMs !== undefined && (
+                  <TurnTimePanel
+                    runMs={runMs}
+                    tokensPerSecond={data.tokensPerSecond}
+                    ttftMs={data.ttftMs}
+                    t={t}
+                  />
+                )}
+              </>
+            )}
           t={t}
         />
       ) : null}

@@ -123,8 +123,12 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
       if (getAnchorRect !== undefined) {
         r = getAnchorRect()
       } else {
-        /* v8 ignore next 2 -- the ref is attached before the layout effect runs and the listeners die with it. */
-        r = rootRef.current?.getBoundingClientRect() ?? null
+        /* v8 ignore next 3 -- the ref is attached before the layout effect runs and the listeners die with it. */
+        // Prefer the trigger (first child) over the wrapper: a flex parent with
+        // align-items:stretch can widen the span past the visible pill.
+        const root = rootRef.current
+        const trigger = root?.firstElementChild
+        r = (trigger ?? root)?.getBoundingClientRect() ?? null
       }
       if (r === null) return
       const MARGIN = 12

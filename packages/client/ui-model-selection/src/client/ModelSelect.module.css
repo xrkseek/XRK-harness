@@ -89,6 +89,41 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+@supports (height: 100dvh) {
+  .menu {
+    max-height: min(360px, calc(100dvh - 96px));
+  }
+}
+
+@media (max-width: 767px) {
+  .trigger {
+    height: 40px;
+    max-width: min(220px, 46vw);
+    touch-action: manipulation;
+  }
+
+  .menu {
+    width: min(280px, calc(100vw - 24px));
+    max-height: min(50dvh, calc(100vh - 120px));
+  }
+
+  @supports (height: 100dvh) {
+    .menu {
+      max-height: min(50dvh, calc(100dvh - 120px));
+    }
+  }
+
+  .cell {
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .option {
+    min-height: 44px;
+    padding: 8px;
+  }
+}
+
 .status,
 .empty {
   padding: 10px;

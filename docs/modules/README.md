@@ -14,7 +14,7 @@
 
 | 包 | 笔记 | 规格 |
 | --- | --- | --- |
-| `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) | 投影驱动缝（状态/视图） |
+| `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) | 投影驱动缝（状态/视图；含 Face `turnOutline`） |
 | `@xrkseek/server-face` | [server-face.md](./server-face.md) | [host-face.md](../host-face.md) |
 | `@xrkseek/server-host` | [server-host.md](./server-host.md) | [host-preset.md](../host-preset.md) · [http-api.md](../http-api.md) |
 | `@xrkseek/server-loader` | [server-loader.md](./server-loader.md) | [plugin-loader.md](../plugin-loader.md) |
@@ -98,7 +98,7 @@ Package file maps. Contracts live in parent `docs/`; this page only points to im
 
 | Package | Note | Spec |
 | --- | --- | --- |
-| `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) | Projection drive seam (state/view) |
+| `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) | Projection drive seam (state/view; Face `turnOutline`) |
 | `@xrkseek/server-face` | [server-face.md](./server-face.md) | [host-face.md](../host-face.md) |
 | `@xrkseek/server-host` | [server-host.md](./server-host.md) | [host-preset.md](../host-preset.md) · [http-api.md](../http-api.md) |
 | `@xrkseek/server-loader` | [server-loader.md](./server-loader.md) | [plugin-loader.md](../plugin-loader.md) |

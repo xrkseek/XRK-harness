@@ -71,3 +71,33 @@
 .confirmAction {
   min-width: 136px;
 }
+
+@media (max-width: 767px) {
+  .confirmation {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+  }
+
+  @supports (height: 100dvh) {
+    .confirmation {
+      max-height: calc(100dvh - 24px);
+    }
+  }
+
+  .acknowledgement {
+    min-height: 44px;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .acknowledgement input {
+    width: 22px;
+    height: 22px;
+    margin: 0;
+  }
+
+  .modalAction,
+  .confirmAction {
+    min-height: 40px;
+  }
+}

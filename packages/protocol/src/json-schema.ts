@@ -21,6 +21,7 @@ const tokenUsageSchema = {
   properties: {
     inputTokens: { type: "integer", minimum: 0 },
     outputTokens: { type: "integer", minimum: 0 },
+    totalTokens: { type: "integer", minimum: 0 },
     cacheReadTokens: { type: "integer", minimum: 0 },
     cacheWriteTokens: { type: "integer", minimum: 0 },
     reasoningTokens: { type: "integer", minimum: 0 },

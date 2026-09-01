@@ -1,6 +1,8 @@
 # @xrkseek/session-projection
 
-> Session-projection **seam**: dual type tables + drive registry.
+> **Audience**: Integrators · Contributors
+
+Session-projection **seam**: dual type tables + drive registry.
 
 Host Face (or any carrier) owns mux / history blocks. Domain code registers
 pure fold units. Clients never fold domain events — they receive finished
@@ -16,6 +18,8 @@ wire values.
 | `createSessionProjectionRegistry` | `register` · `drive` · `snapshot` (views only) · `stateOf` · `checkpoint` · `restoreFloor` / `viewCheckpoint` / `restore` · `onChanged` · `setSidecar` |
 
 No Cordis. No protocol vocabulary on this layer.
+
+Face default keys (including **`turnOutline`**) and push tiers: [docs/modules/session-projection.md](../../../docs/modules/session-projection.md).
 
 ## Related
 

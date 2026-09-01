@@ -30,7 +30,13 @@ const CSS_VIRTUAL_SUFFIX = '.mjs'
  * Everything else under @xrkseek/* is either a module-table entry
  * (external) or a leak the purity gate rejects.
  */
-export const INLINE_SAFE = /^@xrkseek\/xrk-(host-apiproxy|session|llm|tools|brand)(\/|$)/
+/**
+ * Wire layers safe to inline into a browser plugin bundle (no shared
+ * Cordis service identity). `xrk-token-meter/client` is the DSH-shaped
+ * browser fold (`deriveTurnTokenUsage`); the Node token-meter service
+ * remains out of this allow-list.
+ */
+export const INLINE_SAFE = /^(?:@xrkseek\/xrk-(?:host-apiproxy|session|llm|tools|brand)(?:\/|$)|@xrkseek\/xrk-token-meter\/client$)/
 
 /**
  * Vendored framework libraries: rescoped into @xrkseek, so the gate below

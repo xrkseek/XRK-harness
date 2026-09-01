@@ -49,6 +49,9 @@ describe("session.history projections", () => {
     const tailValue = tail.result.value as HistoryValue;
     expect(tailValue.projections?.values.contextTimeline).toBeDefined();
     expect(tailValue.projections?.values.contextHeaders).toBeDefined();
+    expect(tailValue.projections?.values.turnOutline).toEqual([
+      { turn: 1, seq: 1, prompt: "hello", response: "" },
+    ]);
 
     const firstSeq = tailValue.events[0]?.event.seq;
     expect(firstSeq).toBeGreaterThan(0);

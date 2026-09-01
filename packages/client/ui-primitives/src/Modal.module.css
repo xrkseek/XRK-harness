@@ -101,3 +101,42 @@
   gap: 8px;
   padding: 0 24px;
 }
+
+@media (max-width: 767px) {
+  .root {
+    align-items: stretch;
+    justify-content: flex-end;
+    padding: 0;
+  }
+
+  .dialog {
+    width: 100%;
+    max-height: calc(100vh - env(safe-area-inset-top, 0px));
+    border-radius: 20px 20px 0 0;
+    padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  }
+
+  @supports (height: 100dvh) {
+    .dialog {
+      max-height: calc(100dvh - env(safe-area-inset-top, 0px));
+    }
+  }
+
+  .header {
+    padding: 18px max(14px, env(safe-area-inset-right, 0px)) 12px
+      max(20px, env(safe-area-inset-left, 0px));
+  }
+
+  .close {
+    width: 40px;
+    height: 40px;
+    touch-action: manipulation;
+  }
+
+  .description,
+  .body,
+  .footer {
+    padding-left: max(20px, env(safe-area-inset-left, 0px));
+    padding-right: max(20px, env(safe-area-inset-right, 0px));
+  }
+}

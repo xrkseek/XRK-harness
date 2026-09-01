@@ -120,3 +120,11 @@
   line-height: 22px;
   color: var(--dsw-alias-label-dimmed);
 }
+
+@media (max-width: 767px) {
+  .item,
+  .loading {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+}

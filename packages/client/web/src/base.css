@@ -15,6 +15,24 @@ body,
   margin: 0;
 }
 
+/* Prefer a floor that survives DevTools device mode: replacing height with
+   only 100dvh has left #root at 0px in some emulators (menu still paints as
+   absolute chrome, conversation collapses). Keep the % chain and floor with dvh. */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    min-height: 100dvh;
+  }
+}
+
+html {
+  /* Keep rubber-band overscroll from yanking the whole shell. */
+  overscroll-behavior: none;
+  /* Phone checklist: no accidental horizontal scroll from padding/safe-area. */
+  overflow-x: clip;
+}
+
 body {
   font-family: var(--dsw-font-family);
   /* Grayscale antialiasing over subpixel rendering: WebKit/Blink and the
@@ -23,6 +41,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-base);
+  /* Kill the default tap flash on phone chrome; focus rings stay via :focus-visible. */
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: clip;
 }
 
 /* Form controls don't inherit the body font (UA sheets pin their families —

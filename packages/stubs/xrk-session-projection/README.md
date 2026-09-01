@@ -12,7 +12,7 @@ declaration merge). This stub does **not** own the Host drive registry.
 | --- | --- |
 | Drive registry + dual tables + optional `wire` | `@xrkseek/session-projection` |
 | Default units + mux / history carrier | `@xrkseek/server-face` (`projections/`) |
-| Client typed keys | this stub + other `xrk-*` stubs that declare-merge `SessionProjectionMap` |
+| Client typed keys | this stub + other `xrk-*` stubs / apiproxy declare-merge (`turnOutline`, `imageLimits`, …) |
 
 Clients only consume **wire views** (`SessionProjectionMap`). Host fold state
 stays on the server (`stateOf` / checkpoint); do not treat stub Cordis-shaped

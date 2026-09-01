@@ -166,6 +166,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
   const openDetails = vi.fn<(t: SelectionTarget) => void>()
   const openFile = vi.fn<(path: string) => Promise<void>>().mockResolvedValue(undefined)
   const loadOlder = vi.fn()
+  const loadThrough = vi.fn(() => Promise.resolve())
   const inspectCall = vi.fn<(callId: string) => void>()
   // In-memory scroll memory matching the apply.ts per-session map contract.
   let savedScroll: ReturnType<ChatViewSlotProps['chatScroll']['read']> = null
@@ -296,6 +297,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     openDetails,
     openFile,
     loadOlder,
+    loadThrough,
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
     inspectCall,
     chatScroll,
@@ -678,7 +680,7 @@ describe('ChatView', () => {
     })
     const view = render(<h.ChatView {...h.props} />)
     // The exact turn/end includes trailing tool activity after the final text.
-    expect(view.getAllByText(/用时 19秒/)).toHaveLength(1)
+    expect(view.getByRole('button', { name: /用时 19秒/ })).toBeTruthy()
   })
 
   it('the settled footer appends first-step ttft and turn decode throughput', () => {
@@ -698,10 +700,14 @@ describe('ChatView', () => {
       turnEnds: new Map([[1, 20]]),
     })
     const view = render(<h.ChatView {...h.props} />)
-    // First-step ttft (1.2s) plus 100 tokens over 5s of decode.
-    expect(view.getAllByText(/用时 19秒/)).toHaveLength(1)
-    expect(view.getAllByText(/首 token 1\.2秒/)).toHaveLength(1)
-    expect(view.getAllByText(/20 tok\/s/)).toHaveLength(1)
+    // Pill label keeps wall time; TTFT / throughput open in the turn-time dialog.
+    const timePill = view.getByRole('button', { name: /用时 19秒/ })
+    expect(timePill).toBeTruthy()
+    fireEvent.click(timePill)
+    const dialog = view.getByRole('dialog', { name: '本轮耗时' })
+    expect(dialog.textContent).toMatch(/首 token/)
+    expect(dialog.textContent).toMatch(/1\.2/)
+    expect(dialog.textContent).toMatch(/20 tok\/s/)
   })
 
   it('withholds ttft and throughput while the turn is still running', () => {

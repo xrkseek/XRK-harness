@@ -43,10 +43,37 @@
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .close:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--dsw-alias-text-primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .root {
+    border-left: none;
+  }
+
+  .header {
+    padding: 12px 12px 12px max(12px, env(safe-area-inset-left, 0px));
+    min-height: 48px;
+  }
+
+  .close {
+    width: 40px;
+    height: 40px;
+  }
+
+  .body {
+    padding: 12px max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px))
+      max(16px, env(safe-area-inset-left, 0px));
+  }
 }
 
 .body {

@@ -135,6 +135,14 @@ export type FinishReason = FinishReasonMap[keyof FinishReasonMap]
 export interface TokenUsage {
   inputTokens: number
   outputTokens: number
+  /**
+   * Exact full-call total including aggregate prompt and output tokens.
+   *
+   * Adapters preserve a provider total or derive it from authoritative
+   * aggregate prompt/output counters; they omit it when unavailable or
+   * inconsistent.
+   */
+  totalTokens?: number
   cacheReadTokens?: number
   cacheWriteTokens?: number
   reasoningTokens?: number

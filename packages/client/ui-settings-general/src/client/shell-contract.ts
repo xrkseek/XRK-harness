@@ -6,7 +6,9 @@
  * reference graph closes a cycle through ui-sidebar → ui-layout → ui-theme.
  * The settings SLOT types (what registrants contribute) stay in ui-settings.
  */
-import type { HostObservable, InjectFace, PropsRenderSlots, PropsRuntime } from '@xrkseek/client-ui-slots'
+import type {
+  HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
+} from '@xrkseek/client-ui-slots'
 // Type-only: pulls ui-sidebar's SlotMap merge (the 'sidebar.settings' entry)
 // into every program that sees this contract.
 import type {} from '@xrkseek/client-ui-sidebar/client'
@@ -30,8 +32,12 @@ export interface SettingsOnboardingStep {
  * Registrant-private injected share of the settings shell (assembled in
  * apply): the ledger's nav-row projection as a hooks-compartment source —
  * the shell reads no locale state and subscribes through the bound hook.
+ * Reconnect is a plain callback so the shell can request an immediate retry
+ * without taking a value dependency on the connection package.
  */
 export type SettingsRootInjected = {
+  /** Request a fresh generation and skip the current backoff delay. */
+  reconnect: () => void
   hooks: {
     /** settings.section ledger projected into ordered nav rows. */
     sections: HostObservable<readonly SettingsSectionRow[]>
@@ -57,3 +63,4 @@ export type SettingsRootComponentProps =
     | 'settings.onboarding'
   >
   & InjectFace<SettingsRootInjected>
+  & PropsLocale<'settings'>

@@ -27,18 +27,47 @@
   box-shadow: var(--dsw-shadow-lv3);
 }
 
+@supports (height: 100dvh) {
+  .image {
+    max-height: calc(100dvh - 80px);
+  }
+}
+
 .close {
   position: fixed;
-  top: 20px;
-  right: 20px;
+  top: max(20px, env(safe-area-inset-top, 0px));
+  right: max(20px, env(safe-area-inset-right, 0px));
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
   border-radius: 999px;
   background: var(--dsw-specific-input-major);
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
+  touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+  .backdrop {
+    padding: 16px;
+  }
+
+  .close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .image {
+    max-height: calc(100vh - 48px);
+    border-radius: 8px;
+  }
+
+  @supports (height: 100dvh) {
+    .image {
+      max-height: calc(100dvh - 48px);
+    }
+  }
 }

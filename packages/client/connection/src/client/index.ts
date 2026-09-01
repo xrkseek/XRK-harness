@@ -22,7 +22,7 @@ export type {
   ModelCatalogFailure, ModelCatalogModel, ModelProviderGroup, ModelReasoning,
   MessageId, ModelReasoningEffort, ModelSelection, QueueAction, QueuedInboxItem, SessionModels,
   SubagentsApi, SubagentAddress, SubagentCatalog, SubagentListEntry, SubagentPromptReceipt,
-  JobView,
+  JobView, TurnOutlineEntry,
   RpcRequest, RpcResponse, RpcResult, RpcError, RpcErrorCode,
   ClientRequest, ServerResponse, ServerRequest, ClientResponse, RpcMessage, RpcReceipt,
   HostDescription, IApiClient, SessionId, SessionEvent, ContentBlock, StreamChunk,
@@ -85,6 +85,8 @@ export interface ConnectionHandle {
    * @returns stop handle for the loop.
    */
   start(sinks: ConnectionSinks, config?: ConnectionConfig): { stop(): void }
+  /** Reset backoff and replace the live generation or retry delay immediately. */
+  reconnect(): void
 }
 
 /**
@@ -98,6 +100,7 @@ export function apply(ctx: Context): void {
   const api: IApiClient = fixtureClient ?? new WebApiClient()
   const rpc = fixtureClient?.rpc ?? createWebConnectionRpc()
   let started = false
+  let controller: ConnectionController | undefined
   let description: HostDescription | undefined
   let connectionState: ConnectionState | undefined
   const descriptionListeners = new Set<() => void>()
@@ -142,10 +145,13 @@ export function apply(ctx: Context): void {
       },
     },
     rpc,
+    reconnect() {
+      controller?.reconnect()
+    },
     start(sinks, config) {
       if (started) throw new Error('connection: the stream loop is already owned by another consumer')
       started = true
-      const controller = new ConnectionController(api, {
+      controller = new ConnectionController(api, {
         ...sinks,
         onConnected: (next) => {
           publishDescription(next)
@@ -165,7 +171,8 @@ export function apply(ctx: Context): void {
       controller.start()
       return {
         stop: () => {
-          controller.stop()
+          controller?.stop()
+          controller = undefined
           publishDescription(undefined)
           publishState(undefined)
         },

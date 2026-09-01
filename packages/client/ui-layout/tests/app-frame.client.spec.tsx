@@ -15,7 +15,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { AppFrame } from '@xrkseek/client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@xrkseek/client-ui-layout/src/client/AppFrame.tsx'
-import { SIDEBAR_COLLAPSED } from '@xrkseek/client-ui-layout/src/client/columns.ts'
+import { SIDEBAR_COLLAPSED, PHONE_MAX } from '@xrkseek/client-ui-layout/src/client/columns.ts'
 import { createLayoutStore } from '@xrkseek/client-ui-layout/src/client/stores.ts'
 import type {
   SessionId, SessionListState, WorkspaceListState,
@@ -53,6 +53,8 @@ function hookOf<T>(inst: { subscribe: (fn: () => void) => () => void; getSnapsho
 }
 
 function mountFrame() {
+  // Update the mobile-web-ui skill note about zoom? optional skip
+
   window.innerWidth = frameWidth // first-render viewport source before the observer fires
   const instance = createLayoutStore().create()
   const slotCalls: { key: string; props: unknown }[] = []
@@ -80,6 +82,11 @@ function mountFrame() {
     items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
     baselinesReady: baselinesReady.current, recentWorkspaceId: undefined,
   }
+  const t = ((key: string) => ({
+    'sidebar.open': 'Open sidebar',
+    'sidebar.close': 'Close sidebar',
+    'sidebar.dialog': 'Sidebar',
+  }[key] ?? key)) as AppFrameProps['t']
   const element = () => (
     <AppFrame
       useStore={hookOf(instance)}
@@ -89,6 +96,7 @@ function mountFrame() {
       useWorkspaces={((sel: (s: WorkspaceListState) => unknown) => sel(workspaceState)) as never}
       useConnectionState={((sel: (s: undefined) => unknown) => sel(undefined)) as never}
       SessionProvider={SessionProviderStub}
+      t={t}
     />
   )
   const utils = render(element())
@@ -97,6 +105,8 @@ function mountFrame() {
 }
 
 function tracks(frame: HTMLElement): number[] {
+  const phone = frame.style.gridTemplateColumns.trim()
+  if (phone === 'minmax(0, 1fr)') return [0, 0]
   const m = /^(\d+)px minmax\(0, 1fr\) (\d+)px$/.exec(frame.style.gridTemplateColumns)
   if (m === null) throw new Error(`unexpected template: ${frame.style.gridTemplateColumns}`)
   return [Number(m[1]), Number(m[2])]
@@ -326,6 +336,89 @@ describe('AppFrame — narrow-viewport auto-collapse', () => {
     frameWidth = 1920
     act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
     expect(tracks(frame)).toEqual([400, 0])
+  })
+})
+
+describe('AppFrame — phone drawer chrome', () => {
+  it('zeros in-flow tracks and shows the menu while collapsed', () => {
+    frameWidth = PHONE_MAX - 1
+    const { frame, slotCalls, getByLabelText } = mountFrame()
+    expect(frame.hasAttribute('data-phone')).toBe(true)
+    expect(frame.style.gridTemplateColumns).toBe('minmax(0, 1fr)')
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
+    expect(getByLabelText('Open sidebar')).toBeTruthy()
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({
+      collapsed: false,
+      width: 280,
+    })
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
+  })
+
+  it('toggle opens a drawer over full-bleed center without growing grid tracks', () => {
+    frameWidth = 390
+    const { frame, instance, queryByLabelText, getByLabelText } = mountFrame()
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.style.gridTemplateColumns).toBe('minmax(0, 1fr)')
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
+    expect(queryByLabelText('Open sidebar')).toBeNull()
+    expect(getByLabelText('Close sidebar')).toBeTruthy()
+    act(() => { getByLabelText('Close sidebar').click() })
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
+  })
+
+  it('details open as a sheet without taking a grid track', () => {
+    frameWidth = 390
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.openDetails() })
+    expect(frame.style.gridTemplateColumns).toBe('minmax(0, 1fr)')
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(false)
+  })
+
+  it('opening details while the drawer is open closes the drawer', () => {
+    frameWidth = 390
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
+    act(() => { instance.actions.openDetails() })
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(false)
+  })
+
+  it('Escape closes the drawer, then the details sheet', () => {
+    frameWidth = 390
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.toggleSidebar() })
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
+    act(() => { instance.actions.openDetails() })
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(true)
+  })
+
+  it('changing the current session closes an open drawer', () => {
+    frameWidth = 390
+    const { frame, instance, rerenderFrame } = mountFrame()
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
+    selectedSession.current = 's-other' as SessionId
+    act(() => { rerenderFrame() })
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
+  })
+
+  it('drag-left on the drawer beyond the threshold closes it', () => {
+    frameWidth = 390
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.toggleSidebar() })
+    const drawer = frame.querySelector('[class*="sidebarCol"]') as HTMLElement
+    act(() => {
+      drawer.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, clientX: 200, clientY: 120, button: 0, bubbles: true }))
+      drawer.dispatchEvent(new PointerEvent('pointermove', { pointerId: 7, clientX: 120, clientY: 122, bubbles: true }))
+      drawer.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, clientX: 110, clientY: 122, bubbles: true }))
+    })
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
   })
 })
 

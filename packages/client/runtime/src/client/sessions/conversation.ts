@@ -382,6 +382,28 @@ export interface ChatLocationNodeIndex {
   getStep(turn: number, step: number): readonly string[]
 }
 
+/** One loaded Turn projected into the compact Chat navigation rail. */
+export interface TurnNavigationItem {
+  readonly turn: number
+  /** Stable Conversation Context key the rail scrolls to. */
+  readonly anchorKey: string
+  /** Bounded prompt preview; empty when the loaded window starts mid-Turn. */
+  readonly prompt: string
+  /** Bounded assistant-response preview; empty until the Turn answers. */
+  readonly response: string
+}
+
+/** Stable live navigation projection of the loaded Turns. */
+export interface ChatTurnNavigationIndex {
+  /**
+   * Loaded Turns that have a visible anchor, in timeline order. The array
+   * identity changes exactly when a Turn enters, leaves, or changes preview,
+   * so a renderer can select it directly as its change signal.
+   * @returns current navigation items.
+   */
+  items(): readonly TurnNavigationItem[]
+}
+
 /** Compatibility projection backing StatsLine and the legacy top-level snapshot fields. */
 export interface LegacyConversationSlice {
   readonly nodes: readonly ConversationNode[]
@@ -396,6 +418,7 @@ export interface ChatSnapshot {
   readonly order: readonly string[]
   readonly nodes: ChatNodeStore
   readonly locations: ChatLocationNodeIndex
+  readonly navigation: ChatTurnNavigationIndex
   readonly timeline: ConversationTimelineSnapshot
   readonly legacy: LegacyConversationSlice
 }
@@ -418,6 +441,9 @@ export const EMPTY_CHAT_SNAPSHOT: ChatSnapshot = {
   locations: {
     getTurn: () => EMPTY_LIST,
     getStep: () => EMPTY_LIST,
+  },
+  navigation: {
+    items: () => EMPTY_LIST,
   },
   timeline: EMPTY_TIMELINE,
   legacy: {

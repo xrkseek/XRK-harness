@@ -11,7 +11,7 @@
 | --- | --- |
 | 驱动注册表 · 双表 · 可选 `wire` | `@xrkseek/session-projection` |
 | 默认单元 + mux / history 载体 | `@xrkseek/server-face`（`projections/`） |
-| 客户端键类型 | 本 stub + 其它合并 `SessionProjectionMap` 的 `xrk-*` stub |
+| 客户端键类型 | 本 stub + 其它 / apiproxy 的 declare-merge（`turnOutline` · `imageLimits` 等） |
 
 客户端只读 **wire 视图**。Host 折叠状态留在服务端（`stateOf` / checkpoint）。
 

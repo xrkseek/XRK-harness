@@ -31,6 +31,9 @@ import { SessionQueueMirror } from './queue-mirror.ts'
 /** Messages requested per history page. */
 export const PAGE_MESSAGES = 50
 
+/** Larger page size while jumping the rail through unloaded history. */
+export const JUMP_PAGE_MESSAGES = 200
+
 /** Manager-owned observers of a Session object's local state edges. */
 export interface SessionOptions {
   /** Catalog-discovered address selecting non-activating subagent transport. */
@@ -78,6 +81,10 @@ export class Session implements SessionFace {
    *  passes drop all writes once the generation moves on. */
   private openGeneration = 0
   private loadingOlder = false
+  /** Lowest seq a mid-flight loadThrough should cover; cleared in the loop finally. */
+  private jumpTargetSeq: number | null = null
+  /** In-flight loadThrough promise (retargetable while running). */
+  private jumpPromise: Promise<void> | null = null
   private pending = new Map<string, PendingInteraction>()
   private pendingRev = 0
   private pendingCache: { rev: number; value: PendingInteraction[] } | null = null
@@ -383,34 +390,85 @@ export class Session implements SessionFace {
     this.loadingOlder = true
     this.notifier.markDirty()
     try {
-      const { result } = await this.history({ beforeSeq: this.baseSeq, maxMessages: PAGE_MESSAGES })
-      if (!result.ok) return // keep the window as-is; do not overwrite openError (open already succeeded)
-      const older = result.value.events
-      if (older.length === 0) {
-        this.hasMore = result.value.hasMore
-        this.conversation.prepend([], this.hasMore)
-        return
-      }
-      const tail = older[older.length - 1]
-      if (tail === undefined || tail.event.seq + 1 !== this.baseSeq) {
-        // Continuity assertion: on violation drop the page fail-soft rather than render an out-of-order stream.
-        console.error(`[web-runtime] history page discontinuous: tail seq ${tail?.event.seq} vs baseSeq ${this.baseSeq}`)
-        this.hasMore = false
-        this.conversation.prepend([], false)
-        return
-      }
-      this.events = [...older.map(e => e.event), ...this.events]
-      this.views = [...older.map(e => e.view), ...this.views]
-      /* v8 ignore next -- the ?? arm needs older[0] undefined, but the empty-page branch above already returned. */
-      this.baseSeq = older[0]?.event.seq ?? this.baseSeq
-      this.hasMore = result.value.hasMore
-      this.conversation.prepend(older.map(conversationInput), this.hasMore)
+      await this.prependHistoryPage(PAGE_MESSAGES)
     } catch (error) {
       console.error('[web-runtime] loadOlder failed:', error)
     } finally {
       this.loadingOlder = false
       this.notifier.markDirty()
     }
+  }
+
+  /**
+   * Jump loader: page backwards until the window covers `seq` (rail unloaded
+   * marks). Concurrent calls retarget the lowest requested seq onto the
+   * running loop; a plain loadOlder that owns the busy flag makes this a
+   * no-op so ChatView can retry after that pull settles.
+   */
+  loadThrough(seq: number): Promise<void> {
+    if (this.openState !== 'open' || !this.hasMore || this.baseSeq <= seq) {
+      return Promise.resolve()
+    }
+    if (this.jumpPromise !== null) {
+      this.jumpTargetSeq = Math.min(this.jumpTargetSeq ?? seq, seq)
+      return this.jumpPromise
+    }
+    if (this.loadingOlder) return Promise.resolve()
+    this.jumpTargetSeq = seq
+    this.loadingOlder = true
+    this.notifier.markDirty()
+    const generation = this.openGeneration
+    this.jumpPromise = (async () => {
+      try {
+        while (
+          this.hasMore
+          && this.jumpTargetSeq !== null
+          && this.baseSeq > this.jumpTargetSeq
+        ) {
+          if (generation !== this.openGeneration) return
+          const before = this.baseSeq
+          await this.prependHistoryPage(JUMP_PAGE_MESSAGES)
+          // No-progress guard: an empty or dropped page must end the loop.
+          if (this.baseSeq >= before) return
+        }
+      } catch (error) {
+        console.error('[web-runtime] loadThrough failed:', error)
+      } finally {
+        this.jumpTargetSeq = null
+        this.jumpPromise = null
+        this.loadingOlder = false
+        this.notifier.markDirty()
+      }
+    })()
+    return this.jumpPromise
+  }
+
+  /**
+   * Pull one earlier history page and prepend it. Caller owns `loadingOlder`.
+   * Fail-soft: bad continuity or empty pages update hasMore without throwing.
+   */
+  private async prependHistoryPage(maxMessages: number): Promise<void> {
+    const { result } = await this.history({ beforeSeq: this.baseSeq, maxMessages })
+    if (!result.ok) return // keep the window as-is; do not overwrite openError
+    const older = result.value.events
+    if (older.length === 0) {
+      this.hasMore = result.value.hasMore
+      this.conversation.prepend([], this.hasMore)
+      return
+    }
+    const tail = older[older.length - 1]
+    if (tail === undefined || tail.event.seq + 1 !== this.baseSeq) {
+      console.error(`[web-runtime] history page discontinuous: tail seq ${tail?.event.seq} vs baseSeq ${this.baseSeq}`)
+      this.hasMore = false
+      this.conversation.prepend([], false)
+      return
+    }
+    this.events = [...older.map(e => e.event), ...this.events]
+    this.views = [...older.map(e => e.view), ...this.views]
+    /* v8 ignore next -- the ?? arm needs older[0] undefined, but the empty-page branch above already returned. */
+    this.baseSeq = older[0]?.event.seq ?? this.baseSeq
+    this.hasMore = result.value.hasMore
+    this.conversation.prepend(older.map(conversationInput), this.hasMore)
   }
 
   /** Reconnect rebuild (manager calls this on onConnected for instances that were opened):

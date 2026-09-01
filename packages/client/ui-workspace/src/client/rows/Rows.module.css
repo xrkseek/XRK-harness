@@ -354,3 +354,36 @@
     transition: none;
   }
 }
+
+/* Phone / touch: taller rows, and surface trailing actions without hover
+   (coarse pointers never get :hover, so the ellipsis would stay unreachable). */
+@media (max-width: 767px) {
+  .projectRow {
+    height: 44px;
+  }
+
+  .sessionRow {
+    height: 44px;
+  }
+
+  .iconButton {
+    width: 40px;
+    height: 40px;
+    touch-action: manipulation;
+  }
+
+  .rowActions {
+    gap: 4px;
+  }
+}
+
+@media (hover: none) {
+  .projectRow .rowActions,
+  .sessionRow .rowActions {
+    display: inline-flex;
+  }
+
+  .sessionRow .time {
+    display: none;
+  }
+}

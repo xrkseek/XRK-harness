@@ -25,6 +25,11 @@ export {
   type SessionStatsProjection,
 } from "./units/session-stats.js";
 export {
+  createTurnOutlineProjectionUnit,
+  type TurnOutlineEntry,
+  type TurnOutlineState,
+} from "./units/turn-outline.js";
+export {
   createTokenUsageProjectionUnit,
   type TokenUsageProjection,
 } from "./units/token-usage.js";

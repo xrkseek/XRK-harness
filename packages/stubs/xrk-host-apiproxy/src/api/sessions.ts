@@ -32,7 +32,27 @@ declare module '@xrkseek/xrk-session-projection/types' {
      * composed — clients skip the pre-check and let the host answer.
      */
     imageLimits: ImageAttachmentLimits
+    /**
+     * Whole-log turn outline for the chat rail: every started turn with its
+     * `turn/start` Face seq (loadThrough target) and bounded previews.
+     * Independent of a client's paged event window — unloaded marks jump via
+     * loadThrough. Key absence means no outline unit (rail falls back to the
+     * loaded window only).
+     */
+    turnOutline: readonly TurnOutlineEntry[]
   }
+}
+
+/** One started turn's outline facts on the wire (Face `turnOutline` view). */
+export interface TurnOutlineEntry {
+  /** Face wire turn number (order of first-seen turnId; starts at 1). */
+  readonly turn: number
+  /** Face seq of this turn's `turn/start` (loadThrough target). */
+  readonly seq: number
+  /** Bounded first-human-prompt preview; `''` until an eligible prompt lands. */
+  readonly prompt: string
+  /** Bounded final-response preview; `''` until turn/end commits assistant text. */
+  readonly response: string
 }
 
 /** Persisted hints used to summarize a cold Session without reading a large log. */

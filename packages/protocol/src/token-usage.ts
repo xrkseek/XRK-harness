@@ -5,6 +5,11 @@ import type { SessionEvent } from "./session-events.js";
 export interface TokenUsage {
   readonly inputTokens: number;
   readonly outputTokens: number;
+  /**
+   * Exact full-call total (aggregate prompt + output). Omitted when the
+   * provider total is unavailable or inconsistent with the known buckets.
+   */
+  readonly totalTokens?: number;
   readonly cacheReadTokens?: number;
   readonly cacheWriteTokens?: number;
   readonly reasoningTokens?: number;
@@ -26,6 +31,9 @@ export function parseTokenUsage(value: unknown): TokenUsage {
   return {
     inputTokens: asNonNegInt(o.inputTokens, "inputTokens"),
     outputTokens: asNonNegInt(o.outputTokens, "outputTokens"),
+    ...(o.totalTokens !== undefined
+      ? { totalTokens: asNonNegInt(o.totalTokens, "totalTokens") }
+      : {}),
     ...(o.cacheReadTokens !== undefined
       ? { cacheReadTokens: asNonNegInt(o.cacheReadTokens, "cacheReadTokens") }
       : {}),
@@ -110,12 +118,23 @@ export function tryParseOpenAiUsage(value: unknown): TokenUsage | undefined {
       : undefined;
 
   const promptTotal = Math.trunc(input);
+  const outputTokens = Math.trunc(output);
   const uncached =
     cacheRead !== undefined ? Math.max(0, promptTotal - cacheRead) : promptTotal;
+  const combined = promptTotal + outputTokens;
+  const wireTotal = o.total_tokens ?? o.totalTokens;
+  const hasExactTotal =
+    Number.isSafeInteger(combined)
+    && combined >= 0
+    && (wireTotal === undefined
+      || (typeof wireTotal === "number"
+        && Number.isSafeInteger(wireTotal)
+        && wireTotal === combined));
 
   return {
     inputTokens: uncached,
-    outputTokens: Math.trunc(output),
+    outputTokens,
+    ...(hasExactTotal ? { totalTokens: combined } : {}),
     ...(cacheRead !== undefined ? { cacheReadTokens: cacheRead } : {}),
     ...(cacheWrite !== undefined ? { cacheWriteTokens: cacheWrite } : {}),
     ...(reasoning !== undefined ? { reasoningTokens: reasoning } : {}),

@@ -31,6 +31,13 @@
   color: var(--dsw-alias-label-quaternary);
 }
 
+@media (max-width: 767px) {
+  .seat {
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+}
+
 .seatIcon {
   flex: none;
   color: var(--dsw-alias-label-primary);

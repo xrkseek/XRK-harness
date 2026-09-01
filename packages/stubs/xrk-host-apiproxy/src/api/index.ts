@@ -46,6 +46,7 @@ export type {
   HistoryEntry, ModelCatalogFailure, ModelCatalogModel, ModelProviderGroup, ModelReasoning,
   ModelReasoningEffort, ModelSelection, PromptContentPart, QueueAction, SessionModels,
   SessionListMetadata, SessionProjectionsBlock, SessionSearchItem, SessionsApi, SessionSummary,
+  TurnOutlineEntry,
 } from './sessions.ts'
 export type { DirectoryEntry, DirectoryListing, HostApi } from './host.ts'
 export type {

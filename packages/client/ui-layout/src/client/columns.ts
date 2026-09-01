@@ -31,6 +31,10 @@ export const SIDEBAR_COLLAPSED = 56
  * LG breakpoint); a manual toggle below it re-expands over the squeezed center
  * (stores.ts narrowExpanded). */
 export const SIDEBAR_AUTO_COLLAPSE = 1024
+/** Viewport width below which AppFrame switches to phone chrome: full-bleed
+ * center, zero in-flow rail, sidebar/details as overlays (drawer / sheet).
+ * Stays below SIDEBAR_AUTO_COLLAPSE so phone inherits narrow toggle semantics. */
+export const PHONE_MAX = 768
 /** Details drag clamp floor. */
 export const DETAILS_MIN = 300
 /** Details drag clamp ceiling. */
@@ -74,4 +78,30 @@ export function computeColumns(viewport: number, sidebar: number, details: numbe
   // Step 3: auto-close details (derived — preferences untouched); center
   // absorbs any remaining deficit (may drop below CENTER_MIN).
   return { sidebar: s, center: Math.max(0, viewport - s), details: 0 }
+}
+
+/**
+ * Map a concession solve onto the CSS grid tracks AppFrame actually paints.
+ * Phone viewports full-bleed the center; sidebar/details leave the grid.
+ * @param viewport - available frame width in px.
+ * @param solved - output of {@link computeColumns}.
+ * @returns grid tracks plus whether phone chrome applies.
+ */
+export function resolveShellTracks(viewport: number, solved: Columns): { tracks: Columns; phone: boolean } {
+  const phone = viewport < PHONE_MAX
+  if (phone) return { tracks: { sidebar: 0, center: viewport, details: 0 }, phone: true }
+  return { tracks: solved, phone: false }
+}
+
+/**
+ * Drawer width for phone sidebar overlay: contract default, clamped into the
+ * sidebar range and leaving a finger-width of scrim when the viewport is tight.
+ * @param viewport - available frame width in px.
+ * @returns drawer width in px.
+ */
+export function phoneDrawerWidth(viewport: number): number {
+  return Math.min(
+    SIDEBAR_MAX,
+    Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_DEFAULT, Math.max(0, viewport - 48))),
+  )
 }

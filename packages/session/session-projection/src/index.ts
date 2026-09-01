@@ -40,8 +40,9 @@ export interface ProjectionDefinition<K extends string, S, V = unknown> {
   /**
    * Pure transition. Return the **same reference** when unchanged
    * (`Object.is`) so the change feed stays quiet.
+   * `seq` is the Face host watermark for this event (1-based log index).
    */
-  apply(state: S, event: SessionEvent): S;
+  apply(state: S, event: SessionEvent, seq: number): S;
   /** Client view. Omit for host-only units. */
   readonly wire?: ProjectionWire<S, V>;
 }
@@ -74,7 +75,7 @@ interface ErasedDefinition {
   readonly stateVersion: number;
   readonly wired: boolean;
   init(): unknown;
-  apply(state: unknown, event: SessionEvent): unknown;
+  apply(state: unknown, event: SessionEvent, seq: number): unknown;
   view(state: unknown): unknown;
   parse(value: unknown): unknown;
 }
@@ -163,7 +164,7 @@ function eraseDefinition<K extends string, S, V>(
       stateVersion: definition.stateVersion,
       wired: true,
       init: () => definition.init(),
-      apply: (state, event) => definition.apply(state as S, event),
+      apply: (state, event, seq) => definition.apply(state as S, event, seq),
       view: (state) => wire.view(state as S),
       parse: (value) => wire.parse(value),
     };
@@ -173,7 +174,7 @@ function eraseDefinition<K extends string, S, V>(
     stateVersion: definition.stateVersion,
     wired: false,
     init: () => definition.init(),
-    apply: (state, event) => definition.apply(state as S, event),
+    apply: (state, event, seq) => definition.apply(state as S, event, seq),
     view: () => {
       throw new Error(
         `projection ${JSON.stringify(definition.key)} is host-only (no wire)`,
@@ -207,12 +208,16 @@ export function createSessionProjectionRegistry(
   function buildCell(
     def: ErasedDefinition,
     events: readonly SessionEvent[],
+    baseSeq = 1,
   ): UnitCell {
     let state = def.init();
-    for (const event of events) state = def.apply(state, event);
+    for (let i = 0; i < events.length; i++) {
+      state = def.apply(state, events[i]!, baseSeq + i);
+    }
     return {
       state,
-      observedSeq: events.length === 0 ? -1 : events.length,
+      observedSeq:
+        events.length === 0 ? baseSeq - 1 : baseSeq + events.length - 1,
     };
   }
 
@@ -282,7 +287,7 @@ export function createSessionProjectionRegistry(
           cell = buildCell(registration.def, prefix);
           registration.cells.set(sessionId, cell);
         }
-        const next = registration.def.apply(cell.state, event);
+        const next = registration.def.apply(cell.state, event, seq);
         const changed = !Object.is(next, cell.state);
         cell.state = next;
         cell.observedSeq = seq;
@@ -379,7 +384,7 @@ export function createSessionProjectionRegistry(
         const from = usable ? row.seq : baseSeq - 1;
         for (let i = 0; i < events.length; i++) {
           const seq = baseSeq + i;
-          if (seq > from) state = def.apply(state, events[i]!);
+          if (seq > from) state = def.apply(state, events[i]!, seq);
         }
         if (def.wired) values[def.key] = def.parse(def.view(state));
         refreshed[def.key] = {

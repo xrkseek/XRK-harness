@@ -48,7 +48,11 @@ Wire：`session/queue` 带完整 `message` 块；`prompt/*` → mux/history `age
 
 ### 工具卡与投影
 
-工具卡：mux/history `view` 来自工具自己的 `presentCall` / `presentResult`（Face 只 lookup；抛错 / 缺 pairing / 无 presenter → 没 view，壳 generic；不写进 session 日志）。投影默认含 `todos`（`todo/write` 站立计划；下一 `turn/start` 清 null）、`permissions` · `plan`；有 AttachmentStore 时再登记 **`imageLimits`**（壳侧 InputBar 摄入预检：`maxImageBytes` / `maxImagesPerMessage` / `maxMessageImageBytes` / `maxImagePixels` / `mediaTypes`；boot 常量，只靠 history 尾页 / 列表基线携带，**不**推 `session/projection` 变更帧；无仓则键缺席）。投影驱动见 `@xrkseek/session-projection`（状态/视图分离；[session-projection.md](./modules/session-projection.md)）。
+工具卡：mux/history `view` 来自工具自己的 `presentCall` / `presentResult`（Face 只 lookup；抛错 / 缺 pairing / 无 presenter → 没 view，壳 generic；不写进 session 日志）。
+
+投影默认含 `todos`（`todo/write` 站立计划；下一 `turn/start` 清 null）、`permissions` · `plan` · **`turnOutline`**。有 AttachmentStore 时再登记 **`imageLimits`**（壳侧 InputBar 摄入预检：`maxImageBytes` / `maxImagesPerMessage` / `maxMessageImageBytes` / `maxImagePixels` / `mediaTypes`；boot 常量，只靠 history 尾页 / 列表基线携带，**不**推 `session/projection` 变更帧；无仓则键缺席）。投影驱动见 `@xrkseek/session-projection`（状态/视图分离；[session-projection.md](./modules/session-projection.md)）。
+
+**`turnOutline`**：整段日志轮次阶梯（`turn` · `seq` · `prompt` · `response`）。`seq` 是该轮 `turn/start` 的 Face seq，供壳侧 rail 对未加载轮次调用 `Session.loadThrough(seq)`。`turn/start` 与首条 human `user/message` 推变更帧；draft-only `assistant/message` **不**推；`turn/end` 才提交 `response`。字段与推送表见 [session-projection.md](./modules/session-projection.md)「Face 默认键：`turnOutline`」。
 
 ### Host MCP
 
@@ -128,7 +132,11 @@ End-user tuning prefers **Settings → Models / Credentials / Plugins / Permissi
 
 ### Tool cards and projections
 
-Tool cards: mux/history `view` comes from the tool’s own `presentCall` / `presentResult` (Face only looks up; throw / missing pairing / no presenter → no view, shell uses generic; not written to the session log). Default projections include `todos` (`todo/write` standing plan; cleared to null on next `turn/start`), `permissions` · `plan`; with an AttachmentStore, also register **`imageLimits`** (shell InputBar ingest precheck: `maxImageBytes` / `maxImagesPerMessage` / `maxMessageImageBytes` / `maxImagePixels` / `mediaTypes`; boot constants carried only on history tail / list baseline, **no** `session/projection` change frames; key absent without a store). Projection driver: `@xrkseek/session-projection` (state/view split; [session-projection.md](./modules/session-projection.md)).
+Tool cards: mux/history `view` comes from the tool’s own `presentCall` / `presentResult` (Face only looks up; throw / missing pairing / no presenter → no view, shell uses generic; not written to the session log).
+
+Default projections include `todos` (`todo/write` standing plan; cleared to null on next `turn/start`), `permissions` · `plan` · **`turnOutline`**. With an AttachmentStore, also register **`imageLimits`** (shell InputBar ingest precheck: `maxImageBytes` / `maxImagesPerMessage` / `maxMessageImageBytes` / `maxImagePixels` / `mediaTypes`; boot constants carried only on history tail / list baseline, **no** `session/projection` change frames; key absent without a store). Projection driver: `@xrkseek/session-projection` (state/view split; [session-projection.md](./modules/session-projection.md)).
+
+**`turnOutline`**: whole-log turn ladder (`turn` · `seq` · `prompt` · `response`). `seq` is that turn’s `turn/start` Face seq so the shell rail can call `Session.loadThrough(seq)` for unloaded marks. `turn/start` and the first human `user/message` push change frames; draft-only `assistant/message` does **not**; `turn/end` commits `response`. Field and push tables: [session-projection.md](./modules/session-projection.md) “Face default key: `turnOutline`”.
 
 ### Host MCP
 

@@ -443,6 +443,24 @@ describe('paging', () => {
     await Promise.all([first, second])
     expect(api.callsOf('session.history')).toHaveLength(2) // open + one page, not two
   })
+
+  it('loadThrough pages with JUMP_PAGE_MESSAGES until baseSeq covers the target', async () => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse(plainTurn(6, 1, 'tail', 'now'), true)
+    await session.open()
+    const pages: Array<{ beforeSeq?: number; maxMessages?: number }> = []
+    api.onHistory = (payload) => {
+      pages.push({ beforeSeq: payload.beforeSeq, maxMessages: payload.maxMessages })
+      return histResponse(plainTurn(0, 0, 'old', 'o'), false)
+    }
+    await session.loadThrough(1)
+    expect(pages).toEqual([{ beforeSeq: 6, maxMessages: 200 }])
+    expect(session.getSnapshot().loadingOlder).toBe(false)
+    expect(session.getSnapshot().hasMore).toBe(false)
+    // Already covered: no further history traffic.
+    await session.loadThrough(0)
+    expect(pages).toHaveLength(1)
+  })
 })
 
 describe('prompt and cancel errors', () => {

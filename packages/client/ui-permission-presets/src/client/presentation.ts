@@ -1,3 +1,5 @@
+import { en } from './locales.ts'
+
 /** Machine value of the preset that requires an explicit GUI risk gate. */
 export const FULL_ACCESS_PRESET = 'danger-full-access'
 
@@ -10,11 +12,22 @@ export const PERMISSION_PRESET_IDS = [
 
 export type PermissionPresetId = (typeof PERMISSION_PRESET_IDS)[number]
 
-/** Product labels — keep composer chip and Settings row consistent. */
-const PRODUCT_LABEL_EN: Record<PermissionPresetId, string> = {
-  'read-only': 'Read only',
-  'workspace-write': 'Workspace write',
-  'danger-full-access': 'Full access',
+/** Locale dictionary key for a built-in permission preset label. */
+export type PermissionPresetLabelKey =
+  | 'preset.readOnly'
+  | 'preset.workspaceWrite'
+  | 'preset.fullAccess'
+
+const PRESET_LABEL_KEYS = new Map<string, PermissionPresetLabelKey>([
+  ['read-only', 'preset.readOnly'],
+  ['workspace-write', 'preset.workspaceWrite'],
+  [FULL_ACCESS_PRESET, 'preset.fullAccess'],
+])
+
+const DEFAULT_PRESET_LABELS: Record<PermissionPresetLabelKey, string> = {
+  'preset.readOnly': en['preset.readOnly'],
+  'preset.workspaceWrite': en['preset.workspaceWrite'],
+  'preset.fullAccess': en['preset.fullAccess'],
 }
 
 /**
@@ -28,15 +41,20 @@ export function displayPresetName(name: string): string {
 }
 
 /**
- * Render a permission preset under its product label (English default).
- * Locale surfaces may override via their own dictionaries.
+ * Render a permission preset under its product label.
  * @param value - preset machine value.
- * @param name - host-supplied preset name (fallback when unknown).
- * @returns product label for known presets, else title-cased name.
+ * @param name - host-supplied preset name.
+ * @param t - optional locale dictionary lookup for built-in product labels.
+ * @returns the built-in product label or the conventional display name.
  */
-export function displayPermissionPreset(value: string, name: string): string {
-  if (value in PRODUCT_LABEL_EN) {
-    return PRODUCT_LABEL_EN[value as PermissionPresetId]
+export function displayPermissionPreset(
+  value: string,
+  name: string,
+  t?: (key: PermissionPresetLabelKey) => string,
+): string {
+  const key = PRESET_LABEL_KEYS.get(value)
+  if (key !== undefined && (name === value || name === DEFAULT_PRESET_LABELS[key])) {
+    return t?.(key) ?? DEFAULT_PRESET_LABELS[key]
   }
   return displayPresetName(name)
 }

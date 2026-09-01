@@ -71,9 +71,29 @@ function mergeAnthropicUsagePartial(
     inputTokens = prev.inputTokens;
   }
 
+  const outputTokens = output ?? prev?.outputTokens ?? 0;
+  // Exact total needs both sides: Anthropic streams input on message_start and
+  // output on message_delta. Recompute only when the prompt aggregate is known.
+  let totalTokens = prev?.totalTokens;
+  if (input !== undefined && (output !== undefined || prev?.outputTokens !== undefined)) {
+    const combined = input + outputTokens;
+    totalTokens = Number.isSafeInteger(combined) ? combined : undefined;
+  } else if (
+    output !== undefined
+    && prev?.totalTokens !== undefined
+    && prev.outputTokens !== undefined
+  ) {
+    const prompt = prev.totalTokens - prev.outputTokens;
+    const combined = prompt + outputTokens;
+    totalTokens = prompt >= 0 && Number.isSafeInteger(combined) ? combined : undefined;
+  } else if (input !== undefined && output === undefined && prev?.outputTokens === undefined) {
+    totalTokens = undefined;
+  }
+
   return {
     inputTokens,
-    outputTokens: output ?? prev?.outputTokens ?? 0,
+    outputTokens,
+    ...(totalTokens !== undefined ? { totalTokens } : {}),
     ...(cacheRead !== undefined
       ? { cacheReadTokens: cacheRead }
       : prev?.cacheReadTokens !== undefined

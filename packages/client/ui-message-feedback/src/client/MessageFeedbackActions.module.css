@@ -106,3 +106,35 @@
   font-size: 13px;
   line-height: 28px;
 }
+
+@media (max-width: 767px) {
+  .action {
+    width: 40px;
+    height: 40px;
+    touch-action: manipulation;
+  }
+
+  .noteOpen {
+    max-width: min(220px, 48vw);
+    min-height: 40px;
+    line-height: 40px;
+    touch-action: manipulation;
+  }
+
+  .noteInput {
+    width: min(260px, calc(100vw - 96px));
+    font-size: 16px;
+  }
+
+  .noteSave,
+  .noteCancel {
+    min-height: 40px;
+    height: 40px;
+    padding: 0 12px;
+    touch-action: manipulation;
+  }
+
+  .failure {
+    line-height: 40px;
+  }
+}

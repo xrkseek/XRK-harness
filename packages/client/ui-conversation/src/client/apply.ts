@@ -40,6 +40,8 @@ import { registerConversationNodes } from './conversation-nodes/register.ts'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
 // Side-effect: merge Face `imageLimits` into SessionProjectionMap for InputBar.
 import './image-limits-projection.ts'
+// Side-effect: merge Face `turnOutline` into SessionProjectionMap for ChatView.
+import './turn-outline-projection.ts'
 import { CONVERSATION_SETTINGS_NAMESPACE, type ConversationSettings } from '../submission-settings.ts'
 
 declare module '@xrkseek/client-ui-slots' {
@@ -404,6 +406,7 @@ export function apply(ctx: Context): void {
           return workspaces.openPath(resolveWorkspacePath(cwd, path))
         },
         loadOlder: () => { void scoped.loadOlder() },
+        loadThrough: (seq) => scoped.loadThrough(seq),
         loadImage: attachment => conversation.resolveImage(sessionId, attachment),
         // Unregistered 'trajectory' id is safe: the tab ring falls back to
         // the first view, and the untouched inspect target stays inert.

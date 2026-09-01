@@ -4,15 +4,30 @@
    panel is a two-column layout — 188px nav rail + content column with a
    54px header and the 24px-padded options area. */
 
-/* Trigger row: the 42px foot-row box shared with the Cordis footer action. */
-.trigger {
+.triggerRow {
   flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
   width: calc(100% + 4px);
-  height: 42px;
   margin: 4px -2px;
+}
+
+.triggerRow.railRow {
+  width: 36px;
+  margin: 8px 0 10px;
+}
+
+/* Trigger: the 42px foot-row box shared with the Cordis footer action. */
+.trigger {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  height: 42px;
+  margin: 0;
   padding: 0 10px 0 8px;
   box-sizing: border-box;
   border: none;
@@ -32,9 +47,10 @@
 
 /* Rail trigger: the same 36x36 circle box as the other rail controls. */
 .trigger.rail {
+  flex: none;
   width: 36px;
   height: 36px;
-  margin: 8px 0 10px;
+  margin: 0;
   justify-content: center;
   gap: 0;
   padding: 0;
@@ -88,6 +104,12 @@
      styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+@supports (height: 100dvh) {
+  .panel {
+    height: min(800px, calc(100dvh - 48px));
+  }
 }
 
 /* Nav rail (figma .Setting-nav 501:29958): 188 wide, pad (12,22,12,0),
@@ -159,10 +181,13 @@
   text-overflow: ellipsis;
 }
 
-/* Content column (figma Content 501:29980): header + options. */
+/* Content column (figma Content 501:29980): header + options.
+ * min-height:0 so a column panel (phone) can shrink this track and let
+ * `.options` scroll instead of growing past the viewport and clipping. */
 .content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -212,7 +237,10 @@
   flex: 1;
   min-height: 0;
   padding: 0 24px 24px;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Visually-hidden text seat (close button accessible name from slot content). */
@@ -223,4 +251,106 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/* Phone overrides after base rules (same specificity) so they win the cascade. */
+@media (max-width: 767px) {
+  .overlay {
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .panel {
+    flex-direction: column;
+    width: 100%;
+    max-width: 100vw;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+
+  @supports (height: 100dvh) {
+    .panel {
+      height: 100dvh;
+      max-height: 100dvh;
+    }
+  }
+
+  .nav {
+    width: 100%;
+    flex: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: max(12px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) 10px
+      max(12px, env(safe-area-inset-left, 0px));
+    border-bottom: 1px solid var(--dsw-alias-border-l2);
+    box-sizing: border-box;
+  }
+
+  .navTitle {
+    flex: 1 1 100%;
+    padding: 0 4px 2px 0;
+    white-space: nowrap;
+  }
+
+  .navList {
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 4px;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 8px;
+  }
+
+  .navList::-webkit-scrollbar {
+    display: none;
+  }
+
+  .navCell {
+    flex: none;
+    padding: 8px 12px;
+    touch-action: manipulation;
+    scroll-snap-align: start;
+  }
+
+  .navLabel {
+    flex: none;
+  }
+
+  .content {
+    width: 100%;
+  }
+
+  .header {
+    height: auto;
+    min-height: 40px;
+    align-items: center;
+    padding: 6px max(12px, env(safe-area-inset-right, 0px)) 4px
+      max(12px, env(safe-area-inset-left, 0px));
+  }
+
+  .close {
+    width: 40px;
+    height: 40px;
+    touch-action: manipulation;
+  }
+
+  .options {
+    padding: 0 max(16px, env(safe-area-inset-right, 0px))
+      max(24px, env(safe-area-inset-bottom, 0px))
+      max(16px, env(safe-area-inset-left, 0px));
+  }
+
+  .trigger {
+    min-height: 44px;
+    height: 44px;
+    touch-action: manipulation;
+  }
 }

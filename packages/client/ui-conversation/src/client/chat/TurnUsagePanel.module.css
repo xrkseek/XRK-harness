@@ -1,0 +1,140 @@
+/* Icon-row Turn-stat pill plus its click-open details dialog (menu surface). */
+
+.root {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.root + .root {
+  margin-left: -6px;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 28px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 28px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 24px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trigger svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+@media (max-width: 480px) {
+  .trigger {
+    justify-content: center;
+    width: 28px;
+    padding: 6px;
+  }
+
+  .trigger .label {
+    display: none;
+  }
+
+  .root + .root {
+    margin-left: 0;
+  }
+}
+
+.panel {
+  position: fixed;
+  z-index: 1100;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: min(300px, calc(100vw - 24px));
+  max-width: min(440px, calc(100vw - 24px));
+  padding: 16px;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  box-shadow: var(--dsw-shadow-lv3);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: default;
+}
+
+.title {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.titleValue {
+  font-variant-numeric: tabular-nums;
+}
+
+.titleRule {
+  margin-bottom: 10px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.titleLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.titleLabel svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.details {
+  display: grid;
+  grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.details dt,
+.details dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.details dd {
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.details .route {
+  overflow-wrap: anywhere;
+}
+
+.reasoning {
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}

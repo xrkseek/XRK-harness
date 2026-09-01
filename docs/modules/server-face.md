@@ -105,7 +105,7 @@ HTTP/WS (attach-http)
 | --- | --- |
 | `registry.ts` | Face 薄封装 → `@xrkseek/session-projection`（`stateOf` · wire-only snapshot） |
 | `title-controller.ts` / `title-normalize.ts` | 标题 |
-| `units/*` · `parse-int.ts` | StatsLine / ContextMeter 投影单元；整数 parse 共用 |
+| `units/*` · `parse-int.ts` | StatsLine / ContextMeter / **turnOutline** 等默认单元；整数 parse 共用 |
 | `install-defaults.ts` | 默认安装 |
 | `../permissions.ts` | 预设表 · pin · `/permission` 写 knobs |
 | `../plan-mode.ts` | `/plan` 选择预览 · idle 提交 `plan/mode` |
@@ -143,7 +143,8 @@ HTTP/WS (attach-http)
 | `tests/subagent.test.ts` | create-with-parent · list/history/prompt/interrupt · fork 登记 |
 | `tests/workspace.test.ts` | list/create/rename/archive · delete/insert* |
 | `tests/host-frames.test.ts` | session-added 子会话字段 · workspace-removed / order-changed · fork · `host/remote-event` |
-| `tests/projections.test.ts` | title · list metadata · todos 站立计划（write 后 turn/start 清 null） |
+| `tests/projections.test.ts` | title · list metadata · todos 站立计划（write 后 turn/start 清 null）· **turnOutline** mux（draft 静默 / turn/end 提交） |
+| `tests/turn-outline.test.ts` | turnOutline 折叠：wire 号 · seq · prompt/response · FaceWireIdMaps 对齐 |
 | `tests/session-stats.test.ts` | sessionStats：step/end 计数 · llm/ttft/tool 墙钟 · usage→decode · 取消不计入 llmMs |
 | `tests/token-usage.test.ts` | tokenUsage 同 step 替换；contextPressure surface projected；contextBreakdown；toolCalls；shadowedTokenCount 缩小 |
 | `tests/permissions.test.ts` | pin · `/permission` · never 自动放行 · read-only deny |
@@ -264,7 +265,7 @@ Driver registry lives in `@xrkseek/session-projection` (spec: [session-projectio
 | --- | --- |
 | `registry.ts` | Thin Face wrapper → `@xrkseek/session-projection` (`stateOf` · wire-only snapshot) |
 | `title-controller.ts` / `title-normalize.ts` | Title |
-| `units/*` · `parse-int.ts` | StatsLine / ContextMeter units; shared int parse |
+| `units/*` · `parse-int.ts` | StatsLine / ContextMeter / **turnOutline** default units; shared int parse |
 | `install-defaults.ts` | Default install |
 | `../permissions.ts` | Preset table · pin · `/permission` writes knobs |
 | `../plan-mode.ts` | `/plan` selection preview · idle commits `plan/mode` |
@@ -302,7 +303,8 @@ Driver registry lives in `@xrkseek/session-projection` (spec: [session-projectio
 | `tests/subagent.test.ts` | create-with-parent · list/history/prompt/interrupt · fork registry |
 | `tests/workspace.test.ts` | list/create/rename/archive · delete/insert* |
 | `tests/host-frames.test.ts` | session-added child fields · workspace-removed / order-changed · fork · `host/remote-event` |
-| `tests/projections.test.ts` | title · list metadata · todos standing plan (cleared null on turn/start after write) |
+| `tests/projections.test.ts` | title · list metadata · todos standing plan (cleared null on turn/start after write) · **turnOutline** mux (quiet draft / commit at turn/end) |
+| `tests/turn-outline.test.ts` | turnOutline fold: wire number · seq · prompt/response · FaceWireIdMaps alignment |
 | `tests/session-stats.test.ts` | sessionStats: step/end counts · llm/ttft/tool wall clock · usage→decode · cancel excluded from llmMs |
 | `tests/token-usage.test.ts` | tokenUsage same-step replace; contextPressure surface projected; contextBreakdown; toolCalls; shadowedTokenCount shrink |
 | `tests/permissions.test.ts` | pin · `/permission` · never auto-allow · read-only deny |

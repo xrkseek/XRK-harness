@@ -7,6 +7,7 @@ import { createPermissionsProjectionUnit } from "./units/permissions.js";
 import { createPlanProjectionUnit } from "./units/plan.js";
 import { createImageLimitsProjectionUnit } from "./units/image-limits.js";
 import { createSessionStatsProjectionUnit } from "./units/session-stats.js";
+import { createTurnOutlineProjectionUnit } from "./units/turn-outline.js";
 import { createTokenUsageProjectionUnit } from "./units/token-usage.js";
 import { createContextPressureProjectionUnit } from "./units/context-pressure.js";
 import { createContextBreakdownProjectionUnit } from "./units/context-breakdown.js";
@@ -34,6 +35,7 @@ export function installDefaultFaceProjections(
   const offPerm = registry.register(createPermissionsProjectionUnit());
   const offPlan = registry.register(createPlanProjectionUnit());
   const offStats = registry.register(createSessionStatsProjectionUnit());
+  const offTurnOutline = registry.register(createTurnOutlineProjectionUnit());
   const offTokenUsage = registry.register(createTokenUsageProjectionUnit());
   const offPressure = registry.register(createContextPressureProjectionUnit());
   const offBreakdown = registry.register(createContextBreakdownProjectionUnit());
@@ -53,6 +55,7 @@ export function installDefaultFaceProjections(
       offPerm();
       offPlan();
       offStats();
+      offTurnOutline();
       offTokenUsage();
       offPressure();
       offBreakdown();

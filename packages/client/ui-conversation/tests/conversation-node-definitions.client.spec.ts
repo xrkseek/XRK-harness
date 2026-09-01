@@ -1055,4 +1055,82 @@ describe('built-in conversation node Definitions', () => {
       compaction: { summary: 'manual summary', summaryEventSeq: 20 },
     })
   })
+
+  it('derives exact turn tokenUsage once the full turn window is loaded', () => {
+    const value = assembler([
+      at(3, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: assistantMessage('usage-assistant', 'done'),
+        usage: {
+          inputTokens: 10,
+          outputTokens: 4,
+          totalTokens: 17,
+          cacheReadTokens: 2,
+          cacheWriteTokens: 1,
+          reasoningTokens: 1,
+        },
+      }, { surfaceOp: 'append' }),
+      at(4, 'step/end', { turn: 1, step: 1 }),
+      at(5, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+    ], true)
+
+    expect((node(snapshot(value), 'turn-tail')?.data as TurnTailChatData).tokenUsage).toBeUndefined()
+
+    value.prepend([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+    ], false)
+    value.flush()
+
+    expect((node(snapshot(value), 'turn-tail')?.data as TurnTailChatData).tokenUsage).toEqual({
+      uncachedInputTokens: 10,
+      outputTokens: 4,
+      totalTokens: 17,
+      cacheReadTokens: 2,
+      cacheWriteTokens: 1,
+      reasoningTokens: 1,
+      routes: [{ provider: 'fake', model: 'fake' }],
+    })
+  })
+
+  it('keeps the Turn rail projection current when a chunk updates one node in place', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'user/message', textMessage('user-1', 'navigate here'), { surfaceOp: 'append' }),
+      at(3, 'step/start', { turn: 1, step: 1 }),
+      at(4, 'assistant/chunk', {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'text-delta', index: 0, text: 'first' },
+      }),
+    ])
+    const opening = snapshot(value).navigation.items()
+    expect(opening).toHaveLength(1)
+    expect(opening[0]?.turn).toBe(1)
+    expect(opening[0]?.prompt).toBe('navigate here')
+    expect(opening[0]?.response).toBe('first')
+
+    // Content-only upsert: the node keeps its key, so the rail's preview has to
+    // follow the in-place update rather than the last structural publication.
+    value.append(at(5, 'assistant/chunk', {
+      turn: 1,
+      step: 1,
+      chunk: { type: 'text-delta', index: 0, text: ' and more' },
+    }))
+    value.flush()
+    const streamed = snapshot(value).navigation.items()
+    expect(streamed[0]?.response).toBe('first and more')
+    expect(streamed).not.toBe(opening)
+  })
+
+  it('bounds each rail preview instead of copying the whole transcript', () => {
+    const long = 'x'.repeat(400)
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'user/message', textMessage('user-1', long), { surfaceOp: 'append' }),
+    ])
+    const items = snapshot(value).navigation.items()
+    expect(items[0]?.prompt.length).toBe(160)
+  })
 })
