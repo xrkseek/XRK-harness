@@ -223,6 +223,18 @@ if (!existsSync(path.join(STAGE, "product-web", "index.html"))) {
   process.exit(1);
 }
 
+const SEEDS = path.join(CLI, "seeds");
+if (existsSync(SEEDS)) {
+  cpSync(SEEDS, path.join(STAGE, "seeds"), { recursive: true });
+} else {
+  console.error("stage: missing apps/cli/seeds/");
+  process.exit(1);
+}
+if (!existsSync(path.join(STAGE, "seeds", "skills", "xrk-capability-attach", "SKILL.md"))) {
+  console.error("stage: seeds/skills/xrk-capability-attach missing");
+  process.exit(1);
+}
+
 const stagedPkgPath = path.join(STAGE, "package.json");
 const staged = JSON.parse(readFileSync(stagedPkgPath, "utf8").replace(/^\uFEFF/, ""));
 delete staged.private;
@@ -255,7 +267,7 @@ for (const n of names) {
 }
 staged.dependencies = dependencies;
 staged.bundleDependencies = names;
-staged.files = ["dist", "product-web", "README.md"];
+staged.files = ["dist", "product-web", "seeds", "README.md"];
 staged.publishConfig = {
   access: "public",
   registry: "https://registry.npmjs.org",

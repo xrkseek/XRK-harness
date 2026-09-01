@@ -58,8 +58,9 @@ description: 何时用：用户说「…」；做什么一句话（触发语写�
 
 | Skill | 职责 |
 |-------|------|
+| `xrk-capability-attach` | MCP Settings 挂载（CLI `seeds/skills` → `~/.xrk/skills`） |
 | `xrk-plugin-author` | 写脚手架、manifest、createPlugin |
-| `xrk-plugin-kind` | kind / MCP 选型 |
+| `xrk-plugin-kind` | kind / MCP 选型（默认 MCP） |
 | `xrk-plugin-verify` | add · restart · 可见性 |
 
 ## recipes vs skills
@@ -68,15 +69,15 @@ description: 何时用：用户说「…」；做什么一句话（触发语写�
 |--|--------------------------------|--------|
 | 触发 | `/recipe-id` 斜杠 | catalog 匹配 + `/skill-name` |
 | 内容 | 固定 prompt 模板 | 分步 playbook |
-| 示例 | `plugin-scaffold` | `xrk-plugin-author` |
+| 示例 | `plugin-scaffold` · `mcp-attach` | `xrk-plugin-author` · `xrk-capability-attach` |
 
 同名冲突：recipe 与 skill **不同命名空间**；避免同 id 混淆用户。
 
 ## 执行步骤（新增产品 skill）
 
-1. 在 `templates/xrk-harness/skills/<name>/SKILL.md` 起草。  
-2. 只 frontmatter `name` + `description`（无 `disable-model-invocation`）。  
-3. 更新 [templates/xrk-harness/README.md](../../../templates/xrk-harness/README.md) 表。  
+1. **跨工作区默认**：写 `apps/cli/seeds/skills/<name>/SKILL.md`（随 CLI 发布 → `~/.xrk/skills`）。  
+2. **本仓工作区教练**：写 `.agents/skills/<name>/SKILL.md`（Host 扫工作区 catalog）。  
+3. 只 frontmatter `name` + `description`（无 `disable-model-invocation`）。  
 4. 若改 inject 行为 → [docs/workspace-inject.md](../../../docs/workspace-inject.md)。  
 5. 维护者索引 → [SKILL_INDEX.md](../SKILL_INDEX.md)。
 

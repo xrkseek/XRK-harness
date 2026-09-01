@@ -14,6 +14,7 @@ describe("cli doctor", () => {
     expect(names["product-ui"]).toBeDefined();
     expect(names["product-ui"]?.detail).not.toMatch(/Face console/i);
     expect(names["xrk-home"]).toBeDefined();
+    expect(names["user-skills"]).toBeDefined();
     expect(names["community-plugins"]).toBeDefined();
     expect(result.ok).toBe(true);
   });

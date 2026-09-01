@@ -1,0 +1,13 @@
+id: mcp-attach
+title: 挂载 MCP 能力
+description: 经 Settings MCP 粘贴 mcpServers 并确认连接
+prompt: |
+  按 skill **xrk-capability-attach** 帮我挂 MCP 工具：
+  1. 确认 command+args 或 url、服务器 id、是否立刻允许连接
+  2. 给出可粘贴的 `{"mcpServers":{…}}`（禁止 env；密钥走 Credentials）
+  3. 引导：设置 → 插件 → 插件配置 → 从 JSON 添加 → Save
+  4. 仅在我明确授权后才 settings.mutate ns=mcp
+  5. 校验行状态与工具 inventory；policy deny 说明 park
+instructions: |
+  MCP 优先于进程插件脚手架。未经用户确认不得 mutate。不要编造 Cursor hooks。
+parameters: []

@@ -17,20 +17,33 @@
 
 插件沙箱：**`extensions/<plugin-id>/`**。工作区根见 inject **Workspace root** 块，勿搜其它盘符。
 
+## Capability attach（能力挂载）
+
+默认把「给 Agent 新工具」当成 **挂载**，不是堆 rules / 假 hooks。
+
+1. **MCP 优先** — 设置 → 插件 → 插件配置：粘贴 Trae/Cursor 风格 `mcpServers` JSON → 开「允许连接」→ Save（本进程 remount）。禁在 `mcp.servers` 写 `env`；密钥走 Credentials。
+2. **进程插件次之** — 仅简单自有 JS：写 `extensions/<id>/` → `xrkh plugin add` → **`xrkh restart`**。禁止假装插件热重载。
+3. **人格另层** — `IDENTITY.md` · `SOUL.md` · `TOOLS.md` 管语气与边界，不替代工具表。
+
+用户说「装 MCP / 挂工具 / attach」→ skill **`xrk-capability-attach`**。  
+**未经用户确认**不得 `settings.mutate` ns=`mcp` 或代跑 `plugin add` / restart。
+
 ## 办事流程
 
 1. 不懂结构 → skill **`xrk-harness-architecture`**
-2. 写插件 → **`xrk-harness-monorepo`** → **`xrk-plugin-author`**
-3. 验证 → **`xrk-plugin-verify`**
+2. 挂 MCP / 接外部工具 → **`xrk-capability-attach`**
+3. 写进程插件 → **`xrk-harness-monorepo`** → **`xrk-plugin-author`**
+4. 验证 → **`xrk-plugin-verify`**（MCP 则看 Settings 行状态 / 工具 inventory）
 
-细则：`.agents/context/workspace-plugin-dev.md` · `docs/plugin-development.md`
+细则：`.agents/context/workspace-plugin-dev.md` · `docs/plugin-development.md` · `docs/modules/mcp.md`
 
 ## 常见任务 → skill
 
 | 意图 | 先读 |
 |------|------|
 | 这仓库什么结构 | **xrk-harness-architecture** |
+| 装 MCP / 挂工具 / attach | **xrk-capability-attach** |
+| kind / 要不要起 MCP | **xrk-plugin-kind** |
 | 写插件 / 脚手架 | **xrk-harness-monorepo** → **xrk-plugin-author** |
-| kind / MCP 选型 | **xrk-plugin-kind** |
 | 装好了吗 / git pull 后 | **xrk-plugin-verify** |
 | 改 loader 内核 | 超出默认角色；需维护者 |

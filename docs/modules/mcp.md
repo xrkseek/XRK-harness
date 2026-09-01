@@ -56,6 +56,10 @@ createMcpClient({
 
 Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目可 `command` 或 `url`；空 env 时读 `~/.xrk/host-settings.json` 的 `mcp.servers`）。Face `settings.mutate` 写 desired `servers`（禁 `env`）；文件真源时 Host `reconcileMcpToolPlugins` 热挂载（`applies: live`）；`XRK_MCP_SERVERS` / config 非空则仍赢过文件且 mutate 为 `applies: restart`。
 
+## 终端用户如何挂能力
+
+产品壳 **设置 → 插件 → 插件配置**：粘贴 Trae / Cursor 风格 `{"mcpServers":{…}}`，打开 **允许连接**，Save 后在本进程 remount（无需先设 `XRK_MCP_*`）。行状态反映 connected / park / 失败；policy deny 时保留 desired、不 spawn。密钥不进 `mcp.servers`，走 Credentials。分层与选型见 [skills-layers.md](../skills-layers.md)（能力挂载）；进程内自有函数仍走 `extensions/` 插件（需 restart）。
+
 ## 不变量（防 bug）
 
 1. **永不跳过 policy**：即使测试注入 transport，也要走 `assertPolicyAllow`。  
@@ -136,6 +140,10 @@ createMcpClient({
 ```
 
 Host batch wiring: [server-host.md](./server-host.md) (`XRK_MCP_*`; entries may use `command` or `url`; empty env reads `mcp.servers` from `~/.xrk/host-settings.json`). Face `settings.mutate` writes desired `servers` (no `env`); with file source of truth, Host `reconcileMcpToolPlugins` hot-mounts (`applies: live`); non-empty `XRK_MCP_SERVERS` / config still wins over file and mutate is `applies: restart`.
+
+## How end users attach capabilities
+
+In the product shell: **Settings → Plugins → Plugin config**. Paste Trae / Cursor-style `{"mcpServers":{…}}`, enable **Allow connect**, then Save to remount in this process (no prior `XRK_MCP_*` required). Row status shows connected / park / failure; on policy deny the desired list is kept and nothing is spawned. Keep secrets out of `mcp.servers`; use Credentials. Layers and routing: [skills-layers.md](../skills-layers.md) (capability attach). In-repo JS tools still use `extensions/` plugins (restart required).
 
 ## Invariants (bug prevention)
 

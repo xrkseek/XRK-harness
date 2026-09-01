@@ -8,6 +8,7 @@ import {
   harnessAppsRoot,
   resolveProductWebDist,
 } from "../product-paths.js";
+import { ensureUserSkillSeeds } from "../user-skill-seeds.js";
 
 export interface DoctorResult {
   readonly ok: boolean;
@@ -106,6 +107,16 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
       : `${xrkHome} (created on first serve/web)`,
   });
 
+  const seeded = await ensureUserSkillSeeds(xrkHome);
+  checks.push({
+    name: "user-skills",
+    ok: true,
+    detail:
+      seeded.installed.length > 0
+        ? `seeded ${seeded.installed.join(", ")} → ${seeded.homeSkills}`
+        : `ok ${seeded.homeSkills} (product seeds present or none bundled)`,
+  });
+
   const pluginsRoot = path.join(xrkHome, "plugins", "web", "plugins");
   const communityCount = countStagedCommunityClients(pluginsRoot);
   checks.push({
@@ -154,6 +165,7 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
           c.name !== "pnpm" &&
           c.name !== "product-ui" &&
           c.name !== "xrk-home" &&
+          c.name !== "user-skills" &&
           c.name !== "community-plugins" &&
           c.name !== "community-env" &&
           c.name !== "dsh-compat-host",

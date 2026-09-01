@@ -31,10 +31,23 @@
 | 机制 | 行为 |
 |------|------|
 | 多根导入 | 已存在的目录自动扫；缺则跳过（不 mkdir） |
+| **CLI 用户种子** | `xrkh doctor` / `serve`/`web` 把 `apps/cli/seeds/skills/*` **仅在缺失时**装入 `~/.xrk/skills/`（不覆盖用户改过的 `SKILL.md`） |
 | `disable-model-invocation: true` | 不进 catalog、`skill` 工具拒绝 |
 | `user-invocable: false` | `/skill-name` 不展开 |
 | 非法布尔 frontmatter | **整 skill 丢弃**（fail-closed） |
 | 优先级 | 工作区 > 用户主目录；同层内 **`.xrk` 原生优先**：`.xrk` → `.agents` → `.cursor` → `.claude` → `.codex`（**home 层无 `.cursor/skills`**） |
+
+产品默认挂载剧本 **`xrk-capability-attach`**：真源在 GitHub 仓 `apps/cli/seeds/skills/`（随 `@xrkseek/harness-cli` 发布）→ 用户目录 `~/.xrk/skills/`；本仓工作区另有 `.agents/skills/` 覆盖层。
+
+## 能力挂载（与人格分工）
+
+| 层 | 管什么 | 典型落点 |
+|----|--------|----------|
+| **人格 / 站立** | 像谁、边界、语气 | `.agents/` 的 `IDENTITY` · `SOUL` · `TOOLS` · `AGENTS.md` |
+| **MCP 挂载（默认）** | 模型可调外部工具 | 设置 → 插件 → MCP；见 [modules/mcp.md](./modules/mcp.md)「终端用户如何挂能力」 |
+| **进程插件** | 仓库内自有 tools/prompt/commands | `extensions/<id>/` + `plugin add` + restart |
+
+给 Agent 新工具时 **先 MCP Settings**，再考虑脚手架插件。产品剧本：skill **`xrk-capability-attach`**。
 
 ## Harness 源码仓写插件
 
@@ -42,6 +55,7 @@
 
 | 产品 skill（`.agents/skills/`） | 用途 |
 |------------|------|
+| **`xrk-capability-attach`** | 挂 MCP / 接外部工具（默认路径） |
 | **`xrk-harness-monorepo`** | monorepo 总控 |
 | `xrk-plugin-kind` | kind / MCP / client 选型 |
 | `xrk-plugin-author` | 写插件 |
@@ -51,7 +65,7 @@
 
 ## 相关
 
-- [workspace-inject.md](./workspace-inject.md) · [slash-recipes.md](./slash-recipes.md) · [plugin-development.md](./plugin-development.md)
+- [workspace-inject.md](./workspace-inject.md) · [slash-recipes.md](./slash-recipes.md) · [plugin-development.md](./plugin-development.md) · [modules/mcp.md](./modules/mcp.md)
 - Face：`skill.list`（`modelInvocable` · `userInvocable`）
 
 ---
@@ -89,10 +103,23 @@ Optional directories; **never auto-created**. Common files:
 | Mechanism | Behavior |
 |------|------|
 | Multi-root import | Scan existing dirs; skip missing (no mkdir) |
+| **CLI user seeds** | `xrkh doctor` / `serve`/`web` install `apps/cli/seeds/skills/*` into `~/.xrk/skills/` **only when missing** (never overwrite an edited `SKILL.md`) |
 | `disable-model-invocation: true` | Out of catalog; `skill` tool rejects |
 | `user-invocable: false` | `/skill-name` does not expand |
 | Illegal boolean frontmatter | **Whole skill discarded** (fail-closed) |
 | Priority | Workspace > user home; within a layer **`.xrk` native wins**: `.xrk` → `.agents` → `.cursor` → `.claude` → `.codex` (**home layer has no `.cursor/skills`**) |
+
+Default attach playbook **`xrk-capability-attach`**: source of truth in the GitHub tree at `apps/cli/seeds/skills/` (ships with `@xrkseek/harness-cli`) → user home `~/.xrk/skills/`; this repo’s `.agents/skills/` is a workspace overlay.
+
+## Capability attach (vs persona)
+
+| Layer | Owns | Typical landing |
+|----|------|----------|
+| **Persona / standing** | Voice and boundaries | `.agents/` `IDENTITY` · `SOUL` · `TOOLS` · `AGENTS.md` |
+| **MCP attach (default)** | External model-callable tools | Settings → Plugins → MCP; see [modules/mcp.md](./modules/mcp.md) “How end users attach capabilities” |
+| **Process plugins** | In-repo tools/prompt/commands | `extensions/<id>/` + `plugin add` + restart |
+
+Prefer **MCP Settings** before scaffolding a process plugin. Product playbook: skill **`xrk-capability-attach`**.
 
 ## Plugin authoring in this repo
 
@@ -100,6 +127,7 @@ When this repository is the workspace, plugins live under **`extensions/<plugin-
 
 | Product skill (`.agents/skills/`) | Purpose |
 |------------|------|
+| **`xrk-capability-attach`** | Attach MCP / external tools (default path) |
 | **`xrk-harness-monorepo`** | Monorepo router |
 | `xrk-plugin-kind` | Choose kind / MCP / client |
 | `xrk-plugin-author` | Author plugins |
@@ -109,5 +137,5 @@ Product surface in this repo: `extensions/` (see `example-tools`).
 
 ## Related
 
-- [workspace-inject.md](./workspace-inject.md) · [slash-recipes.md](./slash-recipes.md) · [plugin-development.md](./plugin-development.md)
+- [workspace-inject.md](./workspace-inject.md) · [slash-recipes.md](./slash-recipes.md) · [plugin-development.md](./plugin-development.md) · [modules/mcp.md](./modules/mcp.md)
 - Face: `skill.list` (`modelInvocable` · `userInvocable`)
