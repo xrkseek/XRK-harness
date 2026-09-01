@@ -47,9 +47,9 @@ chat.js / MCP
 |------|------|
 | `createPersistentSessionStore` | AGT 进程内跨 turn 持久 session（`data/harness-sessions`） |
 | `createMemorySessionStore` | 测例 / 回退；历史 seed（含 `tool/call` · `tool/result`） |
-| `createToolRegistry` + `register` | MCP → harness 工具（只读启发式并行；`reply` → `concludesTurn`） |
+| `createToolRegistry` + `register` | MCP → harness 工具（只读启发式并行；`reply` → `concludesTurn`）；同 session + 同 workflows 复用 registry/pipeline |
 | `createToolPipeline` + 自动批准 | IM / bot |
-| `createAgent` · `continueTurn` | Loop · session safety · `toolSettle`；`sessionKey` 复用 |
+| `createAgent` · `continueTurn` | Loop · session safety · `toolSettle`；`sessionKey` 复用；无工具时 `maxSteps=1` |
 | `settleDanglingTools` · `assertToolCallsSettled` · `listDanglingToolCalls` | Turn 后收口悬挂 tool |
 | `compaction` | 来自 Provider `contextWindow` |
 | `llmRetry` | 来自 `llm.retry`（`enabled:false` 关闭；`maxAttempts`/`delay`/`retryOn` 映射） |
@@ -123,9 +123,9 @@ chat.js / MCP
 |--------|------|
 | `createPersistentSessionStore` | Cross-turn durable sessions in AGT (`data/harness-sessions`) |
 | `createMemorySessionStore` | Tests / fallback; history seed (`tool/call` · `tool/result`) |
-| `createToolRegistry` + `register` | MCP → harness tools (read-only parallel heuristic; `reply` → `concludesTurn`) |
+| `createToolRegistry` + `register` | MCP → harness tools (read-only parallel heuristic; `reply` → `concludesTurn`); reuse registry/pipeline for same session + workflows |
 | `createToolPipeline` + auto-approve | IM / bot |
-| `createAgent` · `continueTurn` | Loop · session safety · `toolSettle`; `sessionKey` reuse |
+| `createAgent` · `continueTurn` | Loop · session safety · `toolSettle`; `sessionKey` reuse; `maxSteps=1` when no tools |
 | `settleDanglingTools` · `assertToolCallsSettled` · `listDanglingToolCalls` | Close dangling tools after turn |
 | `compaction` | From Provider `contextWindow` |
 | `llmRetry` | From `llm.retry` (`enabled:false` off; map `maxAttempts` / `delay` / `retryOn`) |
