@@ -165,6 +165,19 @@ function asPlugin(value: unknown, label: string): RegisteredPlugin {
 }
 
 /**
+ * Native dynamic import that Vitest/Vite cannot rewrite.
+ * Needed for percent-encoded non-ASCII file URLs (e.g. Chinese path segments).
+ */
+function importHref(href: string): Promise<Record<string, unknown>> {
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval -- Vitest rewrites import(); Function keeps Node native loader
+  const run = new Function(
+    "specifier",
+    "return import(specifier)",
+  ) as (specifier: string) => Promise<Record<string, unknown>>;
+  return run(href);
+}
+
+/**
  * Dynamic-import a plugin entry module.
  * Accepts: `createPlugin()`, default export factory, or `export const plugin`.
  */
@@ -174,10 +187,7 @@ export async function loadPluginModule(
   // realpath avoids Windows 8.3 short paths that break Vite/Vitest dynamic import
   const resolved = await realpath(entryPath);
   const href = pathToFileURL(resolved).href;
-  const mod = (await import(/* @vite-ignore */ href)) as Record<
-    string,
-    unknown
-  >;
+  const mod = await importHref(href);
 
   if (typeof mod.createPlugin === "function") {
     return asPlugin(

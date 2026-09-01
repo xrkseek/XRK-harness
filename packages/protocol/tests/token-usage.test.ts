@@ -71,6 +71,7 @@ describe("token-usage event helpers", () => {
       outputTokens: 69,
       cacheReadTokens: 256,
       reasoningTokens: 24,
+      totalTokens: 352,
     });
     expect(
       tryParseOpenAiUsage({
@@ -78,9 +79,14 @@ describe("token-usage event helpers", () => {
         completion_tokens: 2,
         prompt_cache_hit_tokens: 8,
       }),
-    ).toEqual({ inputTokens: 2, outputTokens: 2, cacheReadTokens: 8 });
+    ).toEqual({
+      inputTokens: 2,
+      outputTokens: 2,
+      cacheReadTokens: 8,
+      totalTokens: 12,
+    });
     expect(
       tryParseOpenAiUsage({ prompt_tokens: 10, completion_tokens: 2 }),
-    ).toEqual({ inputTokens: 10, outputTokens: 2 });
+    ).toEqual({ inputTokens: 10, outputTokens: 2, totalTokens: 12 });
   });
 });

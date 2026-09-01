@@ -12,6 +12,7 @@ import {
 
 describe("cost-meter coding plan", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     configureCostMeterHome(undefined);
   });
@@ -66,6 +67,9 @@ describe("cost-meter coding plan", () => {
   });
 
   it("refreshCodingPlan estimates SCNet from ledger history", async () => {
+    // Freeze inside the Aug plan window so Date.now() does not roll the period.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T12:00:00"));
     const home = mkdtempSync(path.join(tmpdir(), "xrk-scnet-"));
     configureCostMeterHome(home);
     costMeterResetHistory();
