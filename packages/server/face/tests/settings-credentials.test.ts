@@ -178,6 +178,16 @@ describe("Face settings U2", () => {
     expect(v.namespaces.some((n) => n.ns === "ui-onboarding")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "locale")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "ui-theme")).toBe(true);
+    const themeNs = v.namespaces.find((n) => n.ns === "ui-theme") as {
+      ns: string;
+      value: { preference: string; fontSize: number };
+      schema: { uid: number; refs: Record<string, { type: string; dict?: Record<string, number> }> };
+    };
+    expect(themeNs.value).toEqual({ preference: "system", fontSize: 14 });
+    expect(themeNs.schema.refs["5"]?.dict).toMatchObject({
+      preference: 4,
+      fontSize: 6,
+    });
     expect(v.namespaces.some((n) => n.ns === "permission")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "llm-deepseek")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "agent-presets")).toBe(true);
@@ -225,6 +235,47 @@ describe("Face settings U2", () => {
       }
     ).namespaces.find((n) => n.ns === "ui-onboarding");
     expect(ns?.value.welcomeNoticeVersion).toBe("2026-08-17.xrk1");
+  });
+
+  it("ui-theme describe includes default fontSize; mutate persists it", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-font-size-"));
+    const rt = runtime({ productDir: dir, hostPublic: true });
+    const desc = await dispatchFaceMethod(rt, "settings.describe", "fs0", {});
+    expect(desc.result.ok).toBe(true);
+    if (!desc.result.ok) return;
+    const theme0 = (
+      desc.result.value as {
+        namespaces: { ns: string; value: Record<string, unknown> }[];
+      }
+    ).namespaces.find((n) => n.ns === "ui-theme");
+    expect(theme0?.value).toMatchObject({ preference: "system", fontSize: 14 });
+
+    const mut = await dispatchFaceMethod(rt, "settings.mutate", "fs1", {
+      ns: "ui-theme",
+      ops: [{ op: "set", path: ["fontSize"], value: 16 }],
+    });
+    expect(mut.result.ok).toBe(true);
+    if (!mut.result.ok) return;
+    expect(mut.result.value).toMatchObject({
+      ns: "ui-theme",
+      value: { preference: "system", fontSize: 16 },
+    });
+
+    const again = await dispatchFaceMethod(rt, "settings.describe", "fs2", {});
+    expect(again.result.ok).toBe(true);
+    if (!again.result.ok) return;
+    const theme1 = (
+      again.result.value as {
+        namespaces: { ns: string; value: Record<string, unknown> }[];
+      }
+    ).namespaces.find((n) => n.ns === "ui-theme");
+    expect(theme1?.value).toMatchObject({ preference: "system", fontSize: 16 });
+
+    const bad = await dispatchFaceMethod(rt, "settings.mutate", "fs3", {
+      ns: "ui-theme",
+      ops: [{ op: "set", path: ["fontSize"], value: 99 }],
+    });
+    expect(bad.result.ok).toBe(false);
   });
 
   it("permission mutate keeps schemastery envelope; rejects unknown preset", async () => {

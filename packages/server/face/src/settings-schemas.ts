@@ -13,6 +13,7 @@ import {
   FACE_ONBOARDING_SCHEMA,
   FACE_PERMISSION_SCHEMA,
   FACE_THEME_SCHEMA,
+  FACE_FONT_SIZE_DEFAULT,
 } from "./face-schema.js";
 
 /** Wire protocols the models settings UI may offer (custom / gateway routes). */
@@ -236,7 +237,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "ui-theme",
       schema: FACE_THEME_SCHEMA,
-      base: { preference: "system" },
+      base: { preference: "system", fontSize: FACE_FONT_SIZE_DEFAULT },
       applies: "live",
     },
     {

@@ -19,12 +19,15 @@ import {
 } from "./settings-schemas.js";
 import { FACE_AGENT_PRESET_IDS, canonicalAgentPresetId } from "./presets-catalog.js";
 import {
+  isFacePermissionPreset,
+  validateFaceFontSize,
+} from "./face-schema.js";
+import {
   listSettingsProviderCredentialRefs,
   providerApiKeyEnv,
 } from "./llm-provider-context.js";
 import { mergeLayers } from "./settings-layers.js";
 import type { FaceSettingsNamespaces } from "./settings-credentials.js";
-import { isFacePermissionPreset } from "./face-schema.js";
 
 export { mergeLayers } from "./settings-layers.js";
 
@@ -231,6 +234,9 @@ export function validateSettingsNamespace(
     ) {
       return `unknown theme preference: ${String(pref)}`;
     }
+    const fontSize = merged.fontSize;
+    const fontErr = validateFaceFontSize(fontSize);
+    if (fontErr) return fontErr;
   }
   return undefined;
 }

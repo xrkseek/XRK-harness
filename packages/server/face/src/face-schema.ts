@@ -47,9 +47,33 @@ export const FACE_THEME_SCHEMA: FaceSchemaEnvelope = {
     2: { type: "const", value: "light" },
     3: { type: "const", value: "dark" },
     4: { type: "union", list: [1, 2, 3] },
-    5: { type: "object", dict: { preference: 4 } },
+    /** Conversation content font size (px); range enforced via {@link validateFaceFontSize}. */
+    6: { type: "number" },
+    5: { type: "object", dict: { preference: 4, fontSize: 6 } },
   },
 };
+
+/** Matches client `FONT_SIZE_*` in `@xrkseek/client-ui-theme`. */
+export const FACE_FONT_SIZE_MIN = 12;
+export const FACE_FONT_SIZE_MAX = 17;
+export const FACE_FONT_SIZE_DEFAULT = 14;
+
+/**
+ * Validate optional `fontSize` on a ui-theme section.
+ * @returns error message, or undefined when absent / valid.
+ */
+export function validateFaceFontSize(fontSize: unknown): string | undefined {
+  if (fontSize === undefined) return undefined;
+  if (
+    typeof fontSize !== "number" ||
+    !Number.isInteger(fontSize) ||
+    fontSize < FACE_FONT_SIZE_MIN ||
+    fontSize > FACE_FONT_SIZE_MAX
+  ) {
+    return `fontSize must be an integer in ${FACE_FONT_SIZE_MIN}..${FACE_FONT_SIZE_MAX}`;
+  }
+  return undefined;
+}
 
 /** Same preset ids as the permission-presets settings row enum. */
 export const FACE_PERMISSION_PRESETS = [

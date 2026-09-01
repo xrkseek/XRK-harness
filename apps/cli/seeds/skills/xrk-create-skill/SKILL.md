@@ -1,41 +1,77 @@
 ---
 name: xrk-create-skill
 description: >-
-  新建 XRKH 产品 skill（~/.xrk/skills 或工作区 .xrk/.agents/skills）。
-  用户说「写 skill」「create skill」「自我升级」「教 agent」时使用。
+  Author a new XRK-Harness product skill (SKILL.md under ~/.xrk/skills or a
+  user-owned workspace skills tree). Use when the user asks to create a skill,
+  teach the agent a workflow, self-upgrade, or 「写 skill」「create skill」
+  「自我升级」「教 agent」.
 ---
 
-# 创建产品 skill（自我升级）
+# Create product skill
 
-对标 Cursor create-skill：**写进用户/工作区 skill 树**，不读 `~/.cursor/skills-cursor`。
+Teach a reusable workflow the agent can rediscover later. Prefer **home**
+(`~/.xrk/skills`) for cross-workspace habits; use the **workspace** tree only
+when the user wants project-local rules.
 
-## 落点（择一）
+## Gather (before writing)
 
-| 范围 | 路径 | 何时 |
-|------|------|------|
-| **产品默认（system data）** | `~/.xrk/skills/<name>/SKILL.md`（`XRK_HOME`） | **`xrkh web` 首次/启动**自动种子（缺才装） |
-| **工作区（用户自建）** | `{workspace}/.xrk/skills/` 或 `.agents/skills/` | **仅当用户已建该目录或明确要求创建** |
+1. Purpose — one task the skill owns
+2. Location — home vs workspace (ask if unclear)
+3. Triggers — phrases the user will say (put them in `description`)
+4. Steps / templates the model would not already know
+5. Output shape — JSON, checklist, file layout
 
-产品 Agent **无权**在工作区自动 `mkdir` `.xrk`。会话/历史只写 system data，不写项目树。
-需要补种时再开一次 `web` 或跑 `xrkh doctor`（同样只写 home）。
+## Locations
 
-## 最小形
+| Scope | Path | Rule |
+|-------|------|------|
+| Home (default) | `~/.xrk/skills/<name>/SKILL.md` | Product may seed missing bundled skills on `xrkh web`; never overwrite an existing `SKILL.md` |
+| Workspace | `{workspace}/.xrk/skills/` or `.agents/skills/` | **Only** if the user already has that tree or **explicitly** asks to create it |
+
+Do **not** auto-`mkdir` `.xrk` / `.agents` in a blank folder. Sessions stay in system data.
+
+## SKILL.md shape
 
 ```yaml
 ---
 name: my-skill
-description: 何时用：用户说「…」；一句话做什么（触发语写进 description）
+description: >-
+  Does X. Use when the user asks for Y, or says 「触发语」.
 ---
 ```
 
-正文：短步骤；契约链到 `docs/`，勿整篇粘贴。
+```markdown
+# Short title
 
-## 工程习惯（精简）
+## Workflow
+1. …
+2. …
 
-- 小而可组合；同名工作区覆盖 home  
-- 非法 frontmatter 整 skill 丢弃 — 布尔字段写对  
-- home skills 默认不进站立 catalog，靠 `skill` / `skill.list` 拉取（progressive disclosure）
+## Example
+…
+```
 
-## 完成后
+### Description rules (discovery)
 
-请用户新开一轮或 `skill.list` 确认可见。全局种子随 **`xrkh web`** 写入 `~/.xrk/skills`（无需额外 CLI 开关）。
+- Third person; **WHAT** + **WHEN**; include trigger phrases
+- Specific > vague (`Attach Playwright MCP` beats `Helps with tools`)
+- Keep under ~1024 chars; `name` = directory name, kebab-case
+
+### Body rules (tokens)
+
+- Assume the agent is capable — only add product-specific facts
+- Prefer short workflows + one concrete example
+- Link docs by path; do not paste whole manuals
+- One default path; one escape hatch (not a menu of five equals)
+
+### Anti-patterns
+
+- Diary / self-proof (“not Cursor”, “we are better than…”)
+- Windows-only backslash paths in examples
+- Secrets in the skill body
+- Illegal boolean frontmatter (product **drops** the whole skill)
+
+## After write
+
+Ask the user to start a new turn or run `skill.list` so the skill is visible.
+Home bundled seeds install on **`xrkh web`** (missing only).

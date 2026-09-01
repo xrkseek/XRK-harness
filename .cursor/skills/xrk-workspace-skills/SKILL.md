@@ -18,7 +18,7 @@ user-invocable: false
 | **维护笔记** | `.cursor/skills/xrk-*` | `disable-model-invocation: true` | `user-invocable: false` |
 | **产品 skill** | `.xrk/skills/<name>/` | **仅** `name` + `description` 进 catalog | `/name` 可展开 |
 
-种子真源：`templates/xrk-harness/skills/` → `syncSeeds` → `{workspace}/.xrk/skills/`。
+种子真源：`apps/cli/seeds/skills/` → `xrkh web` → `~/.xrk/skills/`（缺才装）。本仓教练另写 `.agents/skills/`。
 
 ## 产品 SKILL 最小形
 
@@ -32,9 +32,12 @@ user-invocable: false
 ```yaml
 ---
 name: my-skill
-description: 何时用：用户说「…」；做什么一句话（触发语写进 description）
+description: >-
+  Does X. Use when the user asks for Y, or says 「触发语」.
 ---
 ```
+
+Authoring（对标 Cursor create-skill）：第三人称 description（WHAT + WHEN）；正文精简、一默认路径 + 一逃生口；具体示例；禁日记腔 / 自证腔；勿自动 mkdir 工作区 `.xrk`。
 
 ```markdown
 ## 步骤

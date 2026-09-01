@@ -5,7 +5,7 @@ import type {} from '@xrkseek/xrk-host-webserver'
 import { settingsNamespace } from '@xrkseek/xrk-settings'
 import { injectBootTheme } from './boot-theme.ts'
 import {
-  DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema,
+  DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, FONT_SIZE_MAX, FONT_SIZE_MIN, THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema,
   type ThemePreference, type ThemeSettings,
 } from './theme-settings.ts'
 
@@ -24,7 +24,16 @@ function readSection(ctx: Context): { preference: ThemePreference; fontSize: num
   if (settings === undefined) return fallback
   const section = settings.get(THEME_NAMESPACE) as ThemeSettings | undefined
   if (section === undefined) return fallback
-  return section
+  const fontSize = typeof section.fontSize === 'number'
+    && Number.isInteger(section.fontSize)
+    && section.fontSize >= FONT_SIZE_MIN
+    && section.fontSize <= FONT_SIZE_MAX
+    ? section.fontSize
+    : DEFAULT_FONT_SIZE
+  return {
+    preference: section.preference ?? DEFAULT_PREFERENCE,
+    fontSize,
+  }
 }
 
 /**

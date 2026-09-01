@@ -986,7 +986,10 @@ export async function settingsDescribeFace(
       namespaces.push(
         runtime.settingsNamespaces.view(
           "ui-theme",
-          { preference: runtime.uiSettings.theme },
+          {
+            ...spec.base,
+            preference: runtime.uiSettings.theme,
+          },
           THEME_SCHEMA,
         ),
       );

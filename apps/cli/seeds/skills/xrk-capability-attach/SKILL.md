@@ -1,33 +1,63 @@
 ---
 name: xrk-capability-attach
 description: >-
-  挂 MCP / 接外部工具 / attach：Settings 粘贴 mcpServers、允许连接、用户确认后 mutate。
-  用户说「装 MCP」「挂工具」「接服务器」「attach」「加工具」时使用。
+  Attach external tools via MCP in XRK-Harness Settings (paste mcpServers JSON,
+  allow connect, confirm before mutate). Use when the user asks to install MCP,
+  add tools, connect a server, attach Playwright/filesystem/browser MCP, or
+  「装 MCP」「挂工具」「接服务器」「attach」「加工具」.
 ---
 
-# 能力挂载（MCP 优先）
+# Attach capability (MCP)
 
-本 skill 由 **`xrkh web` / `serve` 启动时**自动装入 `~/.xrk/skills/`（system data，对标 Cursor 首次打开写用户目录）。工作区可自建 skills 覆盖；**产品不**在工作区自动建 `.xrk`。
+Default path for new tools: **Settings → Plugins → Plugin config**.
+Do not invent Cursor hooks, workspace `.xrk` folders, or process plugins unless the user needs in-repo JS.
 
-轻便专业：默认走 **设置 → 插件 → 插件配置**；不堆 Cursor `hooks.json`。
+Writes land in **system data** (`~/.xrk/host-settings.json`), not the project tree.
 
-## 步骤
+## Workflow
 
-1. **选型**  
-   - 已有 / 可起 MCP → 本流程（默认）  
-   - 项目内简单自有 JS → 进程插件 `kind: tools`（须 `plugin add` + restart）
-
-2. **问清** — stdio（`command`+`args`）或 HTTP（`url`）；服务器 id；是否立刻 **允许连接**
-
-3. **产出可粘贴 JSON**（禁 `env`；密钥 → Credentials）
-
-```json
-{"mcpServers":{"demo":{"command":"npx","args":["-y","demo-mcp"]}}}
+```
+- [ ] 1. Choose path (MCP vs process plugin)
+- [ ] 2. Collect server id + stdio/HTTP details
+- [ ] 3. Emit pasteable JSON (no env)
+- [ ] 4. Land with user confirmation
+- [ ] 5. Verify row status + tool inventory
 ```
 
-4. **落地（须用户确认）**  
-   - **推荐**：用户在 Settings 粘贴 → 允许连接 → **Save**  
-   - **仅当用户明确授权「你来改设置」** 时再 `settings.mutate`：
+### 1. Choose path
+
+| Need | Do |
+|------|-----|
+| Public / npm MCP server (Playwright, filesystem, …) | **This skill** (default) |
+| Small in-repo JS tools | Process plugin (`kind: tools`) + `plugin add` + **restart** |
+
+### 2. Collect
+
+- Transport: stdio (`command` + `args`, optional `cwd`) **or** HTTP (`url`)
+- Server id (key under `mcpServers`)
+- Connect now? (`allowConnect`)
+
+### 3. Emit pasteable JSON
+
+No `env` in servers. Secrets → **Credentials**.
+
+Stdio:
+
+```json
+{"mcpServers":{"playwright":{"command":"npx","args":["-y","@playwright/mcp@latest"]}}}
+```
+
+HTTP:
+
+```json
+{"mcpServers":{"remote":{"url":"https://example.com/mcp"}}}
+```
+
+### 4. Land (confirmation required)
+
+**Preferred:** guide the user — Settings → Plugins → Plugin config → “Add from JSON” → allow connect → **Save**.
+
+**Only if** the user explicitly says to change settings / mutate for them:
 
 ```json
 {
@@ -36,18 +66,26 @@ description: >-
     {
       "op": "set",
       "path": ["servers"],
-      "value": [{ "serverName": "demo", "command": "npx", "args": ["-y", "demo-mcp"] }]
+      "value": [{
+        "serverName": "playwright",
+        "command": "npx",
+        "args": ["-y", "@playwright/mcp@latest"]
+      }]
     },
     { "op": "set", "path": ["allowConnect"], "value": true }
   ]
 }
 ```
 
-   未确认不得 mutate。勿写 `connected` overlay；勿在 servers 条目塞 `env`。
+Never mutate without confirmation. Never write `connected` / `parked` overlays. Never put `env` on server entries.
 
-5. **校验** — 行状态 connected / park / 失败；工具名 `mcp__<server>__…`；policy deny → park。
+### 5. Verify
 
-## 相关
+- Row: connected / **park** / failed
+- Inventory shows `mcp__<server>__…`
+- Policy deny → **park** (desired kept, process not spawned) — explain; do not pretend it connected
 
-- 契约：产品文档 `docs/modules/mcp.md` · `docs/host-face.md`  
-- 分层：`docs/skills-layers.md`
+## Related
+
+- Product docs: `docs/modules/mcp.md`, `docs/host-face.md`, `docs/skills-layers.md`
+- Self-upgrade playbooks: `xrk-create-skill`, `xrk-adapt-workspace`

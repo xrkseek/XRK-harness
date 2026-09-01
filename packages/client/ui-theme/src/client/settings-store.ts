@@ -59,7 +59,7 @@ export function createFontSizeRowStore(): EngineStoreHandle<FontSizeRowState, Fo
     actions: {
       sync: (d, fontSize: number, revision: number) => {
         if (revision <= d.revision) return
-        d.fontSize = fontSize
+        d.fontSize = Number.isInteger(fontSize) ? fontSize : DEFAULT_FONT_SIZE
         d.revision = revision
       },
     },

@@ -98,6 +98,18 @@ describe('ThemeRuntime', () => {
     expect(host.set).not.toHaveBeenCalled()
   })
 
+  it('keeps the default font size when Host section omits fontSize (older docs)', () => {
+    const { theme, host } = make()
+    host.publish({
+      status: 'ready',
+      value: { preference: 'dark' } as ThemeSettings,
+      revision: 1,
+      writable: true,
+    })
+    expect(theme.getTheme().preference).toBe('dark')
+    expect(theme.getTheme().fontSize).toBe(14)
+  })
+
   it('adopts a section already standing at construction', () => {
     const host = stubSettingsScope<ThemeSettings>()
     host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14 }, revision: 1, writable: true })

@@ -259,9 +259,13 @@ export class ThemeRuntime {
   private adopt(): void {
     const section = this.host.getSnapshot().value
     if (section === undefined) return
-    if (this.preference === section.preference && this.fontSize === section.fontSize) return
-    this.preference = section.preference
-    this.fontSize = section.fontSize
+    const preference = isThemePreference(section.preference)
+      ? section.preference
+      : DEFAULT_PREFERENCE
+    const fontSize = coerceFontSize(section.fontSize)
+    if (this.preference === preference && this.fontSize === fontSize) return
+    this.preference = preference
+    this.fontSize = fontSize
     this.publish()
   }
 
@@ -371,8 +375,16 @@ function bootstrapFontSize(): number {
   if (typeof document === 'undefined') return DEFAULT_FONT_SIZE
   const raw = document.body.style.getPropertyValue('--dsh-content-font-size')
   const parsed = Number.parseInt(raw, 10)
-  return Number.isInteger(parsed) && parsed >= FONT_SIZE_MIN && parsed <= FONT_SIZE_MAX
-    ? parsed
+  return coerceFontSize(parsed)
+}
+
+/** Accept a Host-backed font size or fall back when older docs omit the field. */
+function coerceFontSize(raw: unknown): number {
+  return typeof raw === 'number'
+    && Number.isInteger(raw)
+    && raw >= FONT_SIZE_MIN
+    && raw <= FONT_SIZE_MAX
+    ? raw
     : DEFAULT_FONT_SIZE
 }
 
