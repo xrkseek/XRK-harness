@@ -7,7 +7,7 @@ description: >-
 
 # 能力挂载（MCP 优先）
 
-本 skill 由 **XRK Harness CLI** 种子提供；**仅当用户 opt-in** 时装入 `~/.xrk/skills/`（`xrkh doctor --seed-skills` 或 `XRK_SEED_SKILLS=1`）。默认**不**自动创建 `~/.xrk` 或工作区 `.xrk`（对标 Cursor / Trae）。
+本 skill 由 **`xrkh web` / `serve` 启动时**自动装入 `~/.xrk/skills/`（system data，对标 Cursor 首次打开写用户目录）。工作区可自建 skills 覆盖；**产品不**在工作区自动建 `.xrk`。
 
 轻便专业：默认走 **设置 → 插件 → 插件配置**；不堆 Cursor `hooks.json`。
 

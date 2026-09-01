@@ -15,7 +15,7 @@
 
 | 谁 | 可以 | 不可以 |
 |----|------|--------|
-| **产品（XRKH）** | 在 **system data**（`XRK_HOME` / `~/.xrk`：会话库、设置、可选 `skills/`）落盘 | **无权**在用户工作区自动 `mkdir` `.xrk` / `.agents` |
+| **产品（XRKH）** | 在 **system data**（`XRK_HOME` / `~/.xrk`：会话库、设置、**启动时种子 `skills/`**）落盘 | **无权**在用户工作区自动 `mkdir` `.xrk` / `.agents` |
 | **用户** | 自愿在工作区建 `.xrk/skills` 或 `.agents/skills` | — |
 
 会话 / 聊天历史落在 system data（如 `~/.xrk/sessions`），不写入项目树。
@@ -40,13 +40,13 @@
 | 机制 | 行为 |
 |------|------|
 | 多根导入 | 已存在的目录自动扫；缺则跳过（不 mkdir） |
-| **CLI 用户种子** | **可选**：`xrkh doctor --seed-skills` 或 `XRK_SEED_SKILLS=1`（或已有 `~/.xrk/skills`）才把 `apps/cli/seeds/skills/*` 装入 home；**默认不 mkdir** `~/.xrk` / 工作区 `.xrk` |
+| **CLI 用户种子** | **`xrkh web` / `serve` 启动时**自动把 `apps/cli/seeds/skills/*` 装入 **`~/.xrk/skills`**（system data；缺才装、不覆盖用户改过的 `SKILL.md`）。**绝不**在工作区 mkdir `.xrk` |
 | `disable-model-invocation: true` | 不进 catalog、`skill` 工具拒绝 |
 | `user-invocable: false` | `/skill-name` 不展开 |
 | 非法布尔 frontmatter | **整 skill 丢弃**（fail-closed） |
 | 优先级 | 工作区 > 用户主目录；同层内 **`.xrk` 原生优先**：`.xrk` → `.agents` → `.cursor` → `.claude` → `.codex`（**home 层无 `.cursor/skills`**） |
 
-产品默认挂载 / 适应 / 建 skill 剧本在 GitHub：`apps/cli/seeds/skills/`（`xrk-capability-attach` · `xrk-adapt-workspace` · `xrk-create-skill`）。装入用户目录须 **opt-in**（`--seed-skills` / env）；工作区 `.agents/skills/` 为本仓覆盖层。
+产品默认挂载 / 适应 / 建 skill 剧本在 GitHub：`apps/cli/seeds/skills/`。**启动产品（web）即写入用户主目录** `~/.xrk/skills/`；工作区 skills 仅用户自建。
 
 ## 能力挂载（与人格分工）
 
@@ -96,7 +96,7 @@ The product Agent reads rules and skills from **global** and **workspace** layer
 
 | Who | May | Must not |
 |----|------|----------|
-| **Product (XRKH)** | Write under **system data** (`XRK_HOME` / `~/.xrk`: sessions, settings, optional `skills/`) | **Auto-`mkdir`** `.xrk` / `.agents` inside the user’s workspace |
+| **Product (XRKH)** | Write under **system data** (`XRK_HOME` / `~/.xrk`: sessions, settings, **`skills/` seeded on app start**) | **Auto-`mkdir`** `.xrk` / `.agents` inside the user’s workspace |
 | **User** | Freely create workspace `.xrk/skills` or `.agents/skills` | — |
 
 Chat / session history lives in system data (e.g. `~/.xrk/sessions`), not the project tree.
@@ -121,13 +121,13 @@ Optional directories; **never auto-created**. Common files:
 | Mechanism | Behavior |
 |------|------|
 | Multi-root import | Scan existing dirs; skip missing (no mkdir) |
-| **CLI user seeds** | **Opt-in**: `xrkh doctor --seed-skills` or `XRK_SEED_SKILLS=1` (or an existing `~/.xrk/skills`) installs `apps/cli/seeds/skills/*` into home; **default: no mkdir** of `~/.xrk` or workspace `.xrk` |
+| **CLI user seeds** | On **`xrkh web` / `serve`**, install `apps/cli/seeds/skills/*` into **`~/.xrk/skills`** (system data; missing only, never overwrite edits). **Never** mkdir workspace `.xrk` |
 | `disable-model-invocation: true` | Out of catalog; `skill` tool rejects |
 | `user-invocable: false` | `/skill-name` does not expand |
 | Illegal boolean frontmatter | **Whole skill discarded** (fail-closed) |
 | Priority | Workspace > user home; within a layer **`.xrk` native wins**: `.xrk` → `.agents` → `.cursor` → `.claude` → `.codex` (**home layer has no `.cursor/skills`**) |
 
-Default attach / adapt / create-skill playbooks live in the GitHub tree at `apps/cli/seeds/skills/` (`xrk-capability-attach` · `xrk-adapt-workspace` · `xrk-create-skill`). Installing into the user home is **opt-in** (`--seed-skills` / env); this repo’s `.agents/skills/` is a workspace overlay.
+Default attach / adapt / create-skill playbooks live in the GitHub tree at `apps/cli/seeds/skills/`. **Starting the product (`xrkh web`) writes them under** `~/.xrk/skills/`; this repo’s `.agents/skills/` is a workspace overlay only.
 
 ## Capability attach (vs persona)
 

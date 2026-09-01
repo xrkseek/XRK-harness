@@ -13,10 +13,11 @@ description: >-
 
 | 范围 | 路径 | 何时 |
 |------|------|------|
-| **产品默认（system data）** | `~/.xrk/skills/<name>/SKILL.md`（`XRK_HOME`） | 用户 opt-in 种子或已有 home `skills/` |
+| **产品默认（system data）** | `~/.xrk/skills/<name>/SKILL.md`（`XRK_HOME`） | **`xrkh web` 首次/启动**自动种子（缺才装） |
 | **工作区（用户自建）** | `{workspace}/.xrk/skills/` 或 `.agents/skills/` | **仅当用户已建该目录或明确要求创建** |
 
-产品 Agent **无权**为「方便」在工作区自动 `mkdir` `.xrk`。会话/历史只写 system data，不写项目树。
+产品 Agent **无权**在工作区自动 `mkdir` `.xrk`。会话/历史只写 system data，不写项目树。
+需要补种时再开一次 `web` 或跑 `xrkh doctor`（同样只写 home）。
 
 ## 最小形
 
@@ -37,4 +38,4 @@ description: 何时用：用户说「…」；一句话做什么（触发语写�
 
 ## 完成后
 
-请用户新开一轮或 `skill.list` 确认可见；需要全局种子时：`XRK_SEED_SKILLS=1` 或 `xrkh doctor --seed-skills`。
+请用户新开一轮或 `skill.list` 确认可见。全局种子随 **`xrkh web`** 写入 `~/.xrk/skills`（无需额外 CLI 开关）。

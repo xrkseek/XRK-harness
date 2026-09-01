@@ -1,5 +1,5 @@
 import { resolveToolPreset } from "@xrkseek/server-face";
-import { loadHostConfig, defaultSessionsDir } from "@xrkseek/server-config";
+import { loadHostConfig, defaultSessionsDir, resolveXrkHome } from "@xrkseek/server-config";
 import { createHostManager, type AgentFactory } from "@xrkseek/server-host";
 import {
   createServerAgentFactory,
@@ -17,6 +17,7 @@ import {
   ensureProductWebDist,
   repoRoot,
 } from "../product-paths.js";
+import { ensureUserSkillSeeds } from "../user-skill-seeds.js";
 import { createCliLogger, resolveLogLevel, type CliLogger } from "../log.js";
 import { clearHostLock, writeHostLock } from "../host-lock.js";
 import { forceFreeXrkPort } from "../port.js";
@@ -85,6 +86,14 @@ export async function runServe(args: ParsedArgs): Promise<number> {
   const log = createCliLogger(
     resolveLogLevel({ verbose: args.verbose, quiet: args.quiet }),
   );
+
+  // Product establish: seed skills into system data (~/.xrk), never the workspace.
+  const seeded = await ensureUserSkillSeeds(resolveXrkHome());
+  if (seeded.installed.length > 0) {
+    log.info(
+      `home skills: ${seeded.installed.join(", ")} → ${seeded.homeSkills}`,
+    );
+  }
 
   const patch: Record<string, unknown> = {
     ...args.patch,

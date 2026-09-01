@@ -35,9 +35,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       case "run":
         return await runCommand(args);
       case "doctor": {
-        const result = await runDoctor(args.workspace, {
-          seedSkills: args.seedSkills,
-        });
+        const result = await runDoctor(args.workspace);
         for (const c of result.checks) {
           process.stdout.write(
             `${c.ok ? "ok" : "FAIL"}  ${c.name}: ${c.detail}\n`,

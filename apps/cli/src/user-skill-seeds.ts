@@ -1,7 +1,7 @@
 /**
- * Opt-in install of packaged product skills into `{XRK_HOME}/skills/`.
- * Never creates `~/.xrk` or `skills/` unless the user opts in (Cursor/Trae:
- * no surprise project/home dirs). Missing skills only — never overwrite edits.
+ * On product establish (serve/web), install packaged skills into
+ * `{XRK_HOME}/skills/` — system data only (Cursor-style home defaults).
+ * Never writes the workspace. Missing skills only — never overwrite user edits.
  */
 import { cp, mkdir, readdir, access } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -22,31 +22,18 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
-function envSeedRequested(): boolean {
-  const raw = process.env.XRK_SEED_SKILLS?.trim() ?? "";
-  return /^(1|true|yes)$/i.test(raw);
-}
-
 export interface EnsureUserSkillSeedsResult {
   readonly homeSkills: string;
   readonly installed: readonly string[];
   readonly skipped: readonly string[];
-  /** True when no install ran (opt-in not set / home skills dir absent). */
-  readonly deferred: boolean;
-}
-
-export interface EnsureUserSkillSeedsOptions {
-  /** Explicit install (e.g. `xrkh doctor --seed-skills`). */
-  readonly force?: boolean;
 }
 
 /**
- * Copy each `seeds/skills/<name>/` into `{XRK_HOME}/skills/<name>/` when absent.
- * Runs only if `force`, `XRK_SEED_SKILLS=1`, or `{XRK_HOME}/skills` already exists.
+ * Ensure `{XRK_HOME}/skills/<name>/` for each bundled seed (create home skills dir).
+ * Call from app start (`xrkh web` / `serve`) — not from workspace tooling.
  */
 export async function ensureUserSkillSeeds(
   xrkHome: string = resolveXrkHome(),
-  options: EnsureUserSkillSeedsOptions = {},
 ): Promise<EnsureUserSkillSeedsResult> {
   const homeSkills = path.join(path.resolve(xrkHome), "skills");
   const seedRoot = bundledSkillSeedsRoot();
@@ -54,13 +41,7 @@ export async function ensureUserSkillSeeds(
   const skipped: string[] = [];
 
   if (!existsSync(seedRoot)) {
-    return { homeSkills, installed, skipped, deferred: true };
-  }
-
-  const optedIn =
-    options.force === true || envSeedRequested() || existsSync(homeSkills);
-  if (!optedIn) {
-    return { homeSkills, installed, skipped, deferred: true };
+    return { homeSkills, installed, skipped };
   }
 
   await mkdir(homeSkills, { recursive: true });
@@ -80,5 +61,5 @@ export async function ensureUserSkillSeeds(
     installed.push(name);
   }
 
-  return { homeSkills, installed, skipped, deferred: false };
+  return { homeSkills, installed, skipped };
 }
