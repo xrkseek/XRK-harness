@@ -7,6 +7,8 @@ description: >-
 
 # 能力挂载（MCP 优先）
 
+本 skill 真源在 CLI 包 `apps/cli/seeds/skills/xrk-capability-attach/`；用户可选装到 `~/.xrk/skills/`（`xrkh doctor --seed-skills` 或 `XRK_SEED_SKILLS=1`）。**默认不自动创建** `~/.xrk` / 工作区 `.xrk`。
+
 轻便专业：默认走 **设置 → 插件 → 插件配置**，不堆 Cursor hooks，不假装插件热重载。
 
 ## 步骤
@@ -61,6 +63,6 @@ HTTP 例：`{"mcpServers":{"remote":{"url":"https://example.com/mcp"}}}`
 
 ## 相关
 
-- 用户目录种子：`~/.xrk/skills/xrk-capability-attach`（CLI `seeds/skills`，`doctor`/`serve` 缺失才装）  
+- 用户目录种子（可选）：`xrkh doctor --seed-skills` → `~/.xrk/skills/xrk-capability-attach`  
 - 契约：[docs/modules/mcp.md](../../../docs/modules/mcp.md) · [docs/host-face.md](../../../docs/host-face.md)  
 - 分层：[docs/skills-layers.md](../../../docs/skills-layers.md)

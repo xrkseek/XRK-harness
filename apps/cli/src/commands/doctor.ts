@@ -50,7 +50,10 @@ function communityEnvSummary(): string {
   return parts.length > 0 ? parts.join(" · ") : "none (embedded defaults)";
 }
 
-export async function runDoctor(workspace: string): Promise<DoctorResult> {
+export async function runDoctor(
+  workspace: string,
+  options: { readonly seedSkills?: boolean } = {},
+): Promise<DoctorResult> {
   const checks: { name: string; ok: boolean; detail: string }[] = [];
 
   const nodeMajor = Number(process.versions.node.split(".")[0] ?? 0);
@@ -107,14 +110,17 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
       : `${xrkHome} (created on first serve/web)`,
   });
 
-  const seeded = await ensureUserSkillSeeds(xrkHome);
+  const seeded = await ensureUserSkillSeeds(xrkHome, {
+    force: options.seedSkills === true,
+  });
   checks.push({
     name: "user-skills",
     ok: true,
-    detail:
-      seeded.installed.length > 0
+    detail: seeded.deferred
+      ? `deferred (opt-in: xrkh doctor --seed-skills or XRK_SEED_SKILLS=1) → ${seeded.homeSkills}`
+      : seeded.installed.length > 0
         ? `seeded ${seeded.installed.join(", ")} → ${seeded.homeSkills}`
-        : `ok ${seeded.homeSkills} (product seeds present or none bundled)`,
+        : `ok ${seeded.homeSkills}`,
   });
 
   const pluginsRoot = path.join(xrkHome, "plugins", "web", "plugins");

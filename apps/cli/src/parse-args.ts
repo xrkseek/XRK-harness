@@ -23,6 +23,8 @@ export interface ParsedArgs {
   readonly persist: boolean;
   /** OpenClaw-style: free the listen port before bind. */
   readonly force: boolean;
+  /** `doctor --seed-skills`: opt-in copy of CLI seeds into ~/.xrk/skills. */
+  readonly seedSkills: boolean;
   readonly verbose: boolean;
   readonly quiet: boolean;
   readonly host?: string;
@@ -75,6 +77,7 @@ function emptyArgs(partial: Partial<ParsedArgs> & { command: CliCommand }): Pars
     open: false,
     persist: true,
     force: false,
+    seedSkills: false,
     verbose: false,
     quiet: false,
     ...partial,
@@ -127,6 +130,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   let open = false;
   let persist = true;
   let force = false;
+  let seedSkills = false;
   let verbose = false;
   let quiet = false;
   let host: string | undefined;
@@ -152,6 +156,10 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     }
     if (a === "--force") {
       force = true;
+      continue;
+    }
+    if (a === "--seed-skills") {
+      seedSkills = true;
       continue;
     }
     if (a === "--verbose" || a === "-v") {
@@ -259,6 +267,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     open,
     persist,
     force,
+    seedSkills,
     verbose,
     quiet,
     ...(host ? { host } : {}),
@@ -287,6 +296,8 @@ Options:
                         · web/serve/restart default: harness (XRK Harness tools)
                         · run default: minimal
                         · server = Host factory name; tools same as harness
+  --seed-skills       With doctor: opt-in install CLI skill seeds into ~/.xrk/skills
+                        (also XRK_SEED_SKILLS=1). Default: do not create ~/.xrk for seeds.
   --prompt <text>     User prompt for run (or positional tokens)
   --workspace <path>  User workspace (default: cwd)
   --host <addr>       Bind host (default: 127.0.0.1; not 0.0.0.0)
