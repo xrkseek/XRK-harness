@@ -25,6 +25,7 @@
     "xrk": "node ./apps/cli/dist/bin.js",
     "serve": "node ./apps/cli/dist/bin.js serve",
     "release:stage": "node ./scripts/stage-cli-release.mjs",
+    "release:stage:sdk": "node ./scripts/stage-sdk-release.mjs",
     "release": "node ./scripts/release.mjs"
   },
   "devDependencies": {

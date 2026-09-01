@@ -45,6 +45,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 |--------|------|
 | 懂架构 | [architecture](./architecture.md) → [compose](./compose.md) → [adr/](./adr/README.md) |
 | 接 HTTP / Face | [http-api](./http-api.md) · [host-face](./host-face.md) |
+| **接 XRK-AGT（通道平台）** | **[integrators/agt-bridge](./integrators/agt-bridge.md)** |
 | 选 preset | [profiles](./profiles.md) · [host-preset](./host-preset.md) |
 | 写进程插件 | [plugin-development](./plugin-development.md) · [plugin-loader](./plugin-loader.md) · [community-plugins](./community-plugins.md) |
 | 写工具 / 守卫 | [tool-pipeline](./tool-pipeline.md) · [seams](./seams.md) · [policy](./policy.md) |
@@ -183,6 +184,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 
 | Goal | Open |
 |------|------|
+| Embed from XRK-AGT | [integrators/agt-bridge](./integrators/agt-bridge.md) |
 | Architecture | [architecture](./architecture.md) → [compose](./compose.md) → [adr/](./adr/README.md) |
 | HTTP / Face | [http-api](./http-api.md) · [host-face](./host-face.md) |
 | Choose preset | [profiles](./profiles.md) · [host-preset](./host-preset.md) |

@@ -2,16 +2,23 @@
 
 > **读者**：维护者
 
-对外只发 **`@xrkseek/harness-cli`**（含组装好的 `product-web/`）。workspace 其余包保持 **`private`**，随 CLI 捆绑。
+对外发两类产物：
 
-版本真源：`apps/cli/package.json` → `version`。发行说明：`docs/releases/vX.Y.Z.md`。
+| 包 | 用途 |
+|----|------|
+| **`@xrkseek/harness-cli`** | 含组装好的 `product-web/`；终端用户 `xrkh` |
+| **`@xrkseek/harness`** | 嵌入式 SDK（`createAgent` 等）；XRK-AGT 等集成方 |
+
+workspace 其余包保持 **`private`**，经 `pnpm deploy` 打进上述两包的 `bundleDependencies`。
+
+版本真源：`apps/cli/package.json` → `version`（SDK stage 会同步 `packages/sdk`）。发行说明：`docs/releases/vX.Y.Z.md`。
 
 ## 双通道
 
 | # | 产物 | 去向 | 用户怎么用 |
 |---|------|------|------------|
-| 1 | npm pack | **npmjs.org** | `npm i -g @xrkseek/harness-cli` → `xrkh web` |
-| 2 | `xrkseek-harness-cli-<ver>.tgz` | GitHub **Release** | 下载离线包 |
+| 1 | npm pack | **npmjs.org** | `npm i -g @xrkseek/harness-cli` · `pnpm add @xrkseek/harness` |
+| 2 | `xrkseek-harness-cli-<ver>.tgz` · `xrkseek-harness-<ver>.tgz` | GitHub **Release** | 下载离线包 / `pnpm add <tarball-url>` |
 
 不发 GitHub Packages。发布页：https://github.com/xrkseek/XRK-harness/releases
 
@@ -26,13 +33,15 @@ gh auth status
 export NPM_CONFIG_OTP=123456   # PowerShell: $env:NPM_CONFIG_OTP="123456"
 ```
 
-`pnpm release` 会把 `NPM_CONFIG_OTP` / `NPM_OTP` 传给 `npm publish --otp`。发版脚本**不改写** workspace `package.json`。
+`pnpm release` 会把 `NPM_CONFIG_OTP` / `NPM_OTP` 传给 `npm publish --otp`。发版脚本**不改写** workspace `package.json`（SDK 版本号除外，与 CLI 对齐）。
 
 ## 命令
 
 ```bash
-pnpm release:stage                              # → .release/
-pnpm release                                    # GitHub Release + npmjs
+pnpm release:stage                              # CLI → .release/
+pnpm release:stage:sdk                          # SDK → .release/harness + tgz
+pnpm release                                    # GitHub Release + npmjs（CLI + SDK）
+XRK_RELEASE_SKIP_SDK=1 pnpm release             # 仅 CLI
 XRK_RELEASE_SKIP_NPM=1 pnpm release             # 仅 GitHub
 XRK_RELEASE_SKIP_GH_RELEASE=1 pnpm release      # 仅 npmjs
 node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留 formal + 0.0.11）
@@ -45,6 +54,7 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留 formal +
 - [ ] `NPM_TOKEN` / `npm whoami`；`gh auth status`
 - [ ] `pnpm check` 绿；status / 契约已同步
 - [ ] stage 日志含 `sharp platform packages`；`.release/harness-cli/node_modules/@img/sharp-linux-x64` 存在
+- [ ] `.release/harness/dist/index.js` 与 `xrkseek-harness-<ver>.tgz` 存在（未 `SKIP_SDK`）
 - [ ] 密钥未进产物 / git
 
 ## 版本线
@@ -64,16 +74,23 @@ npm **不能**同号重发；改坏包就升修订号。中间号用 `npm-prune-
 
 > **Audience**: Maintainers
 
-Only **`@xrkseek/harness-cli`** is published (including assembled `product-web/`). Other workspace packages stay **`private`** and ship bundled with the CLI.
+Two public packages:
 
-Version source of truth: `apps/cli/package.json` → `version`. Release notes: `docs/releases/vX.Y.Z.md`.
+| Package | Role |
+|---------|------|
+| **`@xrkseek/harness-cli`** | Assembled `product-web/`; end-user `xrkh` |
+| **`@xrkseek/harness`** | Embeddable SDK (`createAgent`, …); XRK-AGT and other integrators |
+
+Other workspace packages stay **`private`** and ship via `pnpm deploy` `bundleDependencies`.
+
+Version source of truth: `apps/cli/package.json` → `version` (SDK stage syncs `packages/sdk`). Release notes: `docs/releases/vX.Y.Z.md`.
 
 ## Dual channels
 
 | # | Artifact | Destination | How users consume |
 |---|----------|-------------|-------------------|
-| 1 | npm pack | **npmjs.org** | `npm i -g @xrkseek/harness-cli` → `xrkh web` |
-| 2 | `xrkseek-harness-cli-<ver>.tgz` | GitHub **Release** | Offline tarball download |
+| 1 | npm pack | **npmjs.org** | `npm i -g @xrkseek/harness-cli` · `pnpm add @xrkseek/harness` |
+| 2 | `xrkseek-harness-cli-<ver>.tgz` · `xrkseek-harness-<ver>.tgz` | GitHub **Release** | Offline tarball / `pnpm add <tarball-url>` |
 
 Do not publish to GitHub Packages. Releases: https://github.com/xrkseek/XRK-harness/releases
 
@@ -88,13 +105,15 @@ gh auth status
 export NPM_CONFIG_OTP=123456   # PowerShell: $env:NPM_CONFIG_OTP="123456"
 ```
 
-`pnpm release` forwards `NPM_CONFIG_OTP` / `NPM_OTP` to `npm publish --otp`. The release script does **not** rewrite workspace `package.json`.
+`pnpm release` forwards `NPM_CONFIG_OTP` / `NPM_OTP` to `npm publish --otp`. The release script does **not** rewrite workspace `package.json` (except SDK version aligned to CLI).
 
 ## Commands
 
 ```bash
-pnpm release:stage                              # → .release/
-pnpm release                                    # GitHub Release + npmjs
+pnpm release:stage                              # CLI → .release/
+pnpm release:stage:sdk                          # SDK → .release/harness + tgz
+pnpm release                                    # GitHub Release + npmjs (CLI + SDK)
+XRK_RELEASE_SKIP_SDK=1 pnpm release             # CLI only
 XRK_RELEASE_SKIP_NPM=1 pnpm release             # GitHub only
 XRK_RELEASE_SKIP_GH_RELEASE=1 pnpm release      # npmjs only
 node scripts/npm-prune-withdrawn.mjs            # deprecate intermediate versions (keep formal + 0.0.11)
@@ -107,6 +126,7 @@ node scripts/npm-prune-withdrawn.mjs            # deprecate intermediate version
 - [ ] `NPM_TOKEN` / `npm whoami`; `gh auth status`
 - [ ] `pnpm check` green; status / contracts synced
 - [ ] stage log includes `sharp platform packages`; `.release/harness-cli/node_modules/@img/sharp-linux-x64` exists
+- [ ] `.release/harness/dist/index.js` and `xrkseek-harness-<ver>.tgz` exist (unless `SKIP_SDK`)
 - [ ] secrets not in artifacts / git
 
 ## Version line
