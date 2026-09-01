@@ -22,16 +22,13 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json",
     "./api": {
-      "types": "./lib/types/api/index.d.ts",
-      "default": "./lib/types/api/index.js"
+      "types": "./src/api/index.ts",
+      "default": "./src/api/index.ts"
     },
-    "./api/*": {
-      "types": "./lib/types/api/*.d.ts",
-      "default": "./lib/types/api/*.js"
-    },
+    "./api/*": "./src/api/*",
     "./client": {
-      "types": "./lib/types/fetch/client.d.ts",
-      "default": "./lib/types/fetch/client.js"
+      "types": "./src/fetch/client.ts",
+      "default": "./src/fetch/client.ts"
     }
   },
   "files": [
