@@ -128,6 +128,11 @@ const BashConfig = Schema.object({
   timeoutMs: Schema.number().step(1).min(1),
   /** Per-stream capture cap (DSH bash-local default 64_000). */
   maxOutputBytes: Schema.number().step(1).min(1).default(64_000),
+  /**
+   * Foreground bash yield (ms): return early with job id while the process
+   * keeps running. Codex unified_exec clamps 250–30_000.
+   */
+  foregroundYieldMs: Schema.number().step(1).min(250).max(30_000).default(30_000),
 });
 
 const AgentLoopConfig = Schema.object({
@@ -279,7 +284,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "bash",
       schema: schemasteryJson(BashConfig) as FaceSchemaEnvelope,
-      base: { maxOutputBytes: 64_000 },
+      base: { maxOutputBytes: 64_000, foregroundYieldMs: 30_000 },
       applies: "live",
     },
     {

@@ -198,10 +198,11 @@ export interface HarnessCompositionOptions {
    * Forwarded into `assemble.toolOrder`.
    */
   readonly toolOrder?: readonly string[];
-  /** Face `bash.timeoutMs` / `maxOutputBytes` — applied to the bash tool. */
+  /** Face `bash.timeoutMs` / `maxOutputBytes` / `foregroundYieldMs` — applied to the bash tool. */
   readonly bashLimits?: {
     readonly timeoutMs?: number;
     readonly maxOutputBytes?: number;
+    readonly foregroundYieldMs?: number;
   };
   /**
    * Face `agent-loop.toolResultMaxInlineBytes` — spill ceiling (`0` disables).
@@ -302,6 +303,9 @@ export function createHarnessComposition(
   for (const tool of createBashTools(shell, {
     ...(options.bashLimits?.timeoutMs !== undefined
       ? { timeoutMs: options.bashLimits.timeoutMs }
+      : {}),
+    ...(options.bashLimits?.foregroundYieldMs !== undefined
+      ? { foregroundYieldMs: options.bashLimits.foregroundYieldMs }
       : {}),
     // Cap shell dumps at capture (DSH bash default 64_000).
     maxOutputBytes: options.bashLimits?.maxOutputBytes ?? 64_000,

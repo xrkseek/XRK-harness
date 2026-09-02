@@ -236,6 +236,7 @@ export type AgentFactory = (input: {
   bashLimits?: {
     timeoutMs?: number;
     maxOutputBytes?: number;
+    foregroundYieldMs?: number;
   };
   /** Face `agent-loop` soft compaction budget (harness). */
   compaction?: {
@@ -436,7 +437,11 @@ export function createHostManager(): HostManager {
           toolOrder?: readonly string[];
           toolSettle?: "serial" | "parallel";
           llmRetryMaxRetries?: number;
-          bashLimits?: { timeoutMs?: number; maxOutputBytes?: number };
+          bashLimits?: {
+            timeoutMs?: number;
+            maxOutputBytes?: number;
+            foregroundYieldMs?: number;
+          };
           compaction?: {
             maxRequestTokens?: number;
             keepTokens?: number;
@@ -840,6 +845,12 @@ export function createHostManager(): HostManager {
           bash.maxOutputBytes > 0
             ? Math.floor(bash.maxOutputBytes)
             : 64_000;
+        const foregroundYieldMs =
+          typeof bash.foregroundYieldMs === "number" &&
+          Number.isFinite(bash.foregroundYieldMs) &&
+          bash.foregroundYieldMs >= 250
+            ? Math.min(30_000, Math.floor(bash.foregroundYieldMs))
+            : undefined;
         const provider =
           typeof webSearchNs.provider === "string"
             ? webSearchNs.provider.trim()
@@ -898,6 +909,9 @@ export function createHostManager(): HostManager {
           bashLimits: {
             ...(timeoutMs !== undefined ? { timeoutMs } : {}),
             maxOutputBytes,
+            ...(foregroundYieldMs !== undefined
+              ? { foregroundYieldMs }
+              : {}),
           },
           webSearch,
           ...(injectMaxChars !== undefined
