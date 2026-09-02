@@ -88,7 +88,8 @@ describe("bash foreground yield semantics", () => {
       const content = String(out.content);
       expect(content).not.toContain("still running");
       // Settled foreground keeps the legacy shape: exit marker, no trailer.
-      expect(content).toContain("[exit code:");
+      // POSIX timeout kills often have null exitCode → `[killed by signal: …]`.
+      expect(content).toMatch(/\[exit code:|\[killed by signal:/);
       const job = shell.listJobsNow().find((j) => j.command === BLOCK);
       expect(job?.status).toBe("killed");
     } finally {

@@ -36,6 +36,8 @@ export interface ShellJobInfo {
   readonly startedAt: number;
   readonly pid?: number;
   readonly exitCode?: number | null;
+  /** Set when the subprocess exits on a signal (POSIX timeout/abort kills). */
+  readonly signal?: NodeJS.Signals | null;
   readonly stdout?: string;
   readonly stderr?: string;
   /** Managed-job producer detail (DSH JobOutcome.detail). */
@@ -366,6 +368,9 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
           ...cur.info,
           status: r.killed ? "killed" : "exited",
           exitCode: r.exitCode,
+          ...(r.signal !== null && r.signal !== undefined
+            ? { signal: r.signal }
+            : {}),
           stdout: r.stdout,
           stderr: r.stderr,
           finishedAt: Date.now(),
@@ -765,6 +770,32 @@ function faceJobStatus(status: ShellJobStatus): string {
   return status === "exited" ? "completed" : status;
 }
 
+/** Legacy foreground markers for UI exit pills (DSH `[exit code: N]` / `[killed by signal: X]`). */
+function appendLegacyExitMarker(
+  content: string,
+  snapshot: Pick<ShellJobInfo, "status" | "exitCode" | "signal">,
+): string {
+  if (snapshot.status === "killed") {
+    if (
+      snapshot.exitCode !== null &&
+      snapshot.exitCode !== undefined &&
+      snapshot.exitCode !== 0
+    ) {
+      return `${content}\n[exit code: ${snapshot.exitCode}]`;
+    }
+    const sig = snapshot.signal ?? "SIGTERM";
+    return `${content}\n[killed by signal: ${sig}]`;
+  }
+  if (
+    snapshot.exitCode !== null &&
+    snapshot.exitCode !== undefined &&
+    snapshot.exitCode !== 0
+  ) {
+    return `${content}\n[exit code: ${snapshot.exitCode}]`;
+  }
+  return content;
+}
+
 function formatJobOutput(
   text: string,
   snapshot: Pick<ShellJobInfo, "status" | "detail" | "outputLimitBytes">,
@@ -936,11 +967,8 @@ export function createBashTools(
               "job_kill to stop, or leave it in background]";
           } else {
             // Settled: keep the legacy foreground shape (`[stderr]` section +
-            // trailing `[exit code: N]`) so the UI exit pill still parses.
-            content = body;
-            if (snapshot.exitCode !== null && snapshot.exitCode !== 0) {
-              content += `\n[exit code: ${snapshot.exitCode}]`;
-            }
+            // trailing exit marker) so the UI exit pill still parses.
+            content = appendLegacyExitMarker(body, snapshot);
           }
           if (maxOutputBytes !== undefined) {
             content = fitWithSuffix(content, "\n[truncated]", maxOutputBytes);
