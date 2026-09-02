@@ -16,6 +16,8 @@ export interface BashSettings {
   timeoutMs?: number
   /** Per-stream in-memory output cap in bytes. */
   maxOutputBytes?: number
+  /** Foreground bash yield before returning job id (Codex 250–30_000 ms). */
+  foregroundYieldMs?: number
 }
 
 /** What the shell card renders. */
@@ -24,6 +26,8 @@ export interface BashCardState extends CardShell {
   timeoutMs: CardFieldState
   /** Per-stream output cap in bytes. */
   maxOutputBytes: CardFieldState
+  /** Foreground yield cap in milliseconds. */
+  foregroundYieldMs: CardFieldState
 }
 
 /** The registration-side face the shell card's slot entry injects. */
@@ -41,7 +45,11 @@ export class BashCardController {
 
   /** @param scope - the bound settings scope for the `bash` namespace. */
   constructor(scope: SettingsScope<BashSettings>) {
-    this.form = new CardForm(scope, [numberField('timeoutMs'), numberField('maxOutputBytes')])
+    this.form = new CardForm(scope, [
+      numberField('timeoutMs'),
+      numberField('maxOutputBytes'),
+      numberField('foregroundYieldMs'),
+    ])
     this.store = this.form.bind(() => this.projection())
   }
 
@@ -50,6 +58,7 @@ export class BashCardController {
       ...this.form.shell(),
       timeoutMs: this.form.field('timeoutMs'),
       maxOutputBytes: this.form.field('maxOutputBytes'),
+      foregroundYieldMs: this.form.field('foregroundYieldMs'),
     }
   }
 

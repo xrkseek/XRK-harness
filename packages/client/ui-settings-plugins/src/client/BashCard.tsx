@@ -56,6 +56,19 @@ export function BashCard(props: BashCardProps) {
         onEdit={(text) => { props.edit('maxOutputBytes', text) }}
         onReset={() => { props.resetField('maxOutputBytes') }}
       />
+      <ValueField
+        id="plugin-config-bash-yield"
+        label={t('bashForegroundYieldMs')}
+        hint={t('bashForegroundYieldMsHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        disabled={disabled}
+        {...state.foregroundYieldMs}
+        onEdit={(text) => { props.edit('foregroundYieldMs', text) }}
+        onReset={() => { props.resetField('foregroundYieldMs') }}
+      />
     </PluginCard>
   )
 }

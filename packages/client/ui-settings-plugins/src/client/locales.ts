@@ -7,6 +7,7 @@ export type PluginsSettingsLocaleKey =
   | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
   | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
   | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
+  | 'bashForegroundYieldMs' | 'bashForegroundYieldMsHint'
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
   | 'agentLoopMaxSteps' | 'agentLoopMaxStepsHint'
   | 'agentLoopToolSettle' | 'agentLoopToolSettleHint'
@@ -60,6 +61,8 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   bashTimeoutMsHint: 'How long one command may run before it is terminated.',
   bashMaxOutputBytes: 'Output cap per stream (bytes)',
   bashMaxOutputBytesHint: 'Stdout/stderr are truncated at this size when captured (default 64000).',
+  bashForegroundYieldMs: 'Foreground yield (ms)',
+  bashForegroundYieldMsHint: 'How long bash waits before returning a job id while the process keeps running (250–30000, default 30000).',
   agentLoopTitle: 'Agent loop',
   agentLoopDescription: 'How the agent dispatches tool calls, budgets context, and spills large tool results.',
   agentLoopMaxParallel: 'Parallel tool calls',
@@ -162,6 +165,8 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   bashTimeoutMsHint: '单条命令允许运行多久，超时即终止。',
   bashMaxOutputBytes: '单流输出上限（字节）',
   bashMaxOutputBytesHint: '捕获时截断 stdout/stderr（默认 64000）。',
+  bashForegroundYieldMs: '前台 yield（毫秒）',
+  bashForegroundYieldMsHint: 'bash 在返回 job id 前最多等待多久，进程继续运行（250–30000，默认 30000）。',
   agentLoopTitle: 'Agent 循环',
   agentLoopDescription: '工具派发、软上下文预算，以及过大工具结果的 spill。',
   agentLoopMaxParallel: '并行工具调用数',
