@@ -57,11 +57,8 @@ describe("bash presenters (DSH tool-bash)", () => {
     });
   });
 
-  it("createBashTools hangs presenters; formatRun uses DSH markers, not isError", async () => {
+  it("createBashTools hangs presenters; foreground keeps DSH markers, not isError", async () => {
     const shell: ShellService = {
-      async run() {
-        return { stdout: "hi", stderr: "", exitCode: 2 };
-      },
       async startJob() {
         return { id: "job_1" };
       },
@@ -69,7 +66,17 @@ describe("bash presenters (DSH tool-bash)", () => {
         return [];
       },
       listJobsNow() {
-        return [];
+        return [
+          {
+            id: "job_1",
+            kind: "bash",
+            command: "false",
+            status: "exited",
+            startedAt: 0,
+            exitCode: 2,
+            reported: true,
+          },
+        ];
       },
       async killJob() {
         return "requested" as const;
@@ -78,9 +85,15 @@ describe("bash presenters (DSH tool-bash)", () => {
         return { id: "pty-send-1" };
       },
       readJobOutput() {
-        return "";
+        return "hi";
       },
       async waitJob() {},
+      attachForegroundWait() {
+        return new AbortController().signal;
+      },
+      detachForegroundWait() {
+        return true;
+      },
       markJobReported() {},
       onJobsChanged() {
         return () => {};

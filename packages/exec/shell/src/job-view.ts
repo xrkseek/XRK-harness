@@ -18,6 +18,7 @@ export interface ShellJobView {
   readonly detail?: string;
   readonly startedAt: number;
   readonly finishedAt?: number;
+  readonly foreground?: boolean;
 }
 
 export interface ShellJobViewInput {
@@ -31,6 +32,8 @@ export interface ShellJobViewInput {
   readonly stderr?: string;
   /** Managed-job producer detail (e.g. `wait: stdin_read`). */
   readonly detail?: string;
+  /** True while a foreground tool call is attached. */
+  readonly foreground?: boolean;
 }
 
 function statusOf(info: ShellJobViewInput): ShellJobViewStatus {
@@ -60,5 +63,6 @@ export function toJobView(info: ShellJobViewInput): ShellJobView {
     ...(detail === undefined ? {} : { detail }),
     startedAt: info.startedAt,
     ...(info.finishedAt === undefined ? {} : { finishedAt: info.finishedAt }),
+    ...(info.foreground ? { foreground: true as const } : {}),
   };
 }

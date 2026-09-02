@@ -16,12 +16,6 @@ export {
 
 export type ShellBackend = "bash" | "cmd" | "pwsh";
 
-export interface ShellRunResult {
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly exitCode: number | null;
-}
-
 /**
  * Lifecycle (CV DSH JobStatus): `running` → optional `stopping` → one terminal
  * (`exited` | `killed` | `failed`). Face maps `exited` → `completed`.
@@ -60,6 +54,11 @@ export interface ShellJobInfo {
    * Face wire omits this; Agent `jobs.list` filters by it.
    */
   readonly ownerSessionId?: string;
+  /**
+   * True while a foreground tool call is attached (waiting on this job).
+   * UI offers "move to background" only for awaited jobs; dropped on settle.
+   */
+  readonly foreground?: boolean;
 }
 
 export interface ShellStartJobResult {
@@ -96,11 +95,6 @@ export interface ManagedJobStart {
 }
 
 export interface ShellService {
-  run(
-    command: string,
-    cwd?: string,
-    opts?: { signal?: AbortSignal; timeoutMs?: number },
-  ): Promise<ShellRunResult>;
   /** Start command without waiting; track via listJobs / killJob. Ids are `bash-N`. */
   startJob(
     command: string,
@@ -136,6 +130,14 @@ export interface ShellService {
    * Settlement while waiting marks `reported` before listeners (no duplicate notice).
    */
   waitJob(id: string, timeoutMs: number, signal?: AbortSignal): Promise<void>;
+  /**
+   * Attach the foreground wait of `id` (one per job): the returned signal
+   * aborts when the wait is detached (UI "move to background"), letting the
+   * caller stop waiting without killing the process.
+   */
+  attachForegroundWait(id: string): AbortSignal;
+  /** Abort + drop the foreground wait of `id`. False when none was attached. */
+  detachForegroundWait(id: string): boolean;
   /** Mark delivery reported without reading (tests / teardown). */
   markJobReported(id: string): void;
   /** DSH `onJobsChanged` — fires after register / stopping / settle / teardown clear. */
@@ -251,6 +253,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
     throw new Error("maxConcurrentJobs must be a positive safe integer");
   }
   const jobs = new Map<string, InternalJob>();
+  const foregroundWaits = new Map<string, AbortController>();
   const kindSeq = new Map<string, number>();
   const changed = new Set<() => void>();
   let disposed = false;
@@ -270,7 +273,11 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
   }
 
   function listNow(): readonly ShellJobInfo[] {
-    return [...jobs.values()].map((j) => j.info);
+    return [...jobs.values()].map((j) =>
+      foregroundWaits.has(j.info.id)
+        ? { ...j.info, foreground: true }
+        : j.info,
+    );
   }
 
   function activeCount(ownerSessionId: string | undefined): number {
@@ -320,6 +327,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
   /** First-wins terminal commit; live waiters mark reported before listeners (DSH). */
   function settleAndNotify(job: InternalJob, next: ShellJobInfo): void {
     if (isTerminalStatus(job.info.status)) return;
+    foregroundWaits.delete(job.info.id);
     const reported = job.waiters > 0 || next.reported;
     job.info = { ...next, reported };
     job.markSettled();
@@ -382,23 +390,6 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
   }
 
   return {
-    async run(command, cwd, opts) {
-      const argv = argvFor(backend, command, pwshPath);
-      const spawnCwd = resolveSpawnCwd(cwd, defaultCwd);
-      const result = await options.subprocess.spawn(argv, {
-        ...(spawnCwd ? { cwd: spawnCwd } : {}),
-        ...(opts?.signal ? { signal: opts.signal } : {}),
-        ...(opts?.timeoutMs !== undefined
-          ? { timeoutMs: opts.timeoutMs }
-          : {}),
-      });
-      return {
-        stdout: result.stdout,
-        stderr: result.stderr,
-        exitCode: result.exitCode,
-      };
-    },
-
     async startJob(command, cwd, opts) {
       assertOpen();
       const ownerSessionId = opts?.ownerSessionId?.trim() || undefined;
@@ -590,6 +581,26 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
       });
     },
 
+    attachForegroundWait(id) {
+      assertOpen();
+      if (!jobs.has(id)) throw new Error(`shell job not found: ${id}`);
+      const previous = foregroundWaits.get(id);
+      if (previous) previous.abort();
+      const controller = new AbortController();
+      foregroundWaits.set(id, controller);
+      notifyChanged();
+      return controller.signal;
+    },
+
+    detachForegroundWait(id) {
+      const controller = foregroundWaits.get(id);
+      if (!controller) return false;
+      foregroundWaits.delete(id);
+      controller.abort();
+      notifyChanged();
+      return true;
+    },
+
     markJobReported(id) {
       const job = jobs.get(id);
       if (!job) throw new Error(`shell job not found: ${id}`);
@@ -668,12 +679,11 @@ export function createSessionScopedShell(
       .filter(visible)
       .map(
         (j) =>
-          `${j.id}:${j.status}:${j.reported ? 1 : 0}:${j.finishedAt ?? 0}`,
+          `${j.id}:${j.status}:${j.reported ? 1 : 0}:${j.finishedAt ?? 0}:${j.foreground ? 1 : 0}`,
       )
       .join("|");
 
   return {
-    run: (command, cwd, opts) => shell.run(command, cwd, opts),
     startJob: (command, cwd, opts) =>
       shell.startJob(command, cwd, {
         ...opts,
@@ -697,6 +707,14 @@ export function createSessionScopedShell(
     waitJob: (id, timeoutMs, signal) => {
       expectVisible(id);
       return shell.waitJob(id, timeoutMs, signal);
+    },
+    attachForegroundWait: (id) => {
+      expectVisible(id);
+      return shell.attachForegroundWait(id);
+    },
+    detachForegroundWait: (id) => {
+      expectVisible(id);
+      return shell.detachForegroundWait(id);
     },
     markJobReported: (id) => {
       expectVisible(id);
@@ -727,28 +745,14 @@ export function statusLine(opts: {
     : `[status: ${opts.status}]`;
 }
 
-/**
- * Model-facing foreground text. Copied from `@xrkseek/xrk-tool-bash`
- * `renderResult`: stderr section, then `[exit code: N]` last so `parseExitStatus`
- * can split the pill. Non-zero exits are reported, not `isError`.
- */
-function formatRun(out: ShellRunResult): string {
-  let body = out.stdout;
-  const err = out.stderr;
-  if (err.length > 0) {
-    if (body.length > 0 && !body.endsWith("\n")) body += "\n";
-    body += `[stderr]\n${err}`;
-  }
-  if (body.length === 0) body = "(no output)";
-  if (out.exitCode !== null && out.exitCode !== 0) {
-    if (!body.endsWith("\n")) body += "\n";
-    body += `[exit code: ${out.exitCode}]`;
-  }
-  return body;
-}
-
 const JOB_OUTPUT_WAIT_DEFAULT_MS = 30_000;
 const JOB_OUTPUT_WAIT_CAP_MS = 600_000;
+
+function positiveMs(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : undefined;
+}
 
 function requireJobId(args: unknown): string {
   const a = args as { job_id?: string; id?: string };
@@ -776,6 +780,16 @@ function formatJobOutput(
   return fitWithSuffix(content, trailer, limit);
 }
 
+/**
+ * Foreground wait cap (codex-style yield): when it elapses, the call returns
+ * with the job still running instead of blocking the turn forever. The yield
+ * kills nothing — waiting again (job_output wait) extends, job_kill stops.
+ * Codex clamps interactive yields to 250–30_000 ms; 60 s is the XRK chat-side
+ * balance: worst-case turn block stays short while a typical command settles
+ * inside one wait. Long tasks continue via job_output(wait:true) chunks.
+ */
+export const DEFAULT_FOREGROUND_YIELD_MS = 60_000;
+
 export function createBashTools(
   shell: ShellService,
   options: {
@@ -783,6 +797,8 @@ export function createBashTools(
     readonly maxOutputBytes?: number;
     /** Default process cwd for bash/pwsh (session workspace root). */
     readonly defaultCwd?: string;
+    /** Foreground yield cap; defaults to DEFAULT_FOREGROUND_YIELD_MS. */
+    readonly foregroundYieldMs?: number;
   } = {},
 ): ToolDefinition[] {
   const timeoutMs =
@@ -801,6 +817,12 @@ export function createBashTools(
     typeof options.defaultCwd === "string" && options.defaultCwd.trim().length > 0
       ? options.defaultCwd.trim()
       : undefined;
+  const yieldMs =
+    typeof options.foregroundYieldMs === "number" &&
+    Number.isFinite(options.foregroundYieldMs) &&
+    options.foregroundYieldMs > 0
+      ? Math.floor(options.foregroundYieldMs)
+      : DEFAULT_FOREGROUND_YIELD_MS;
   const dialect =
     process.platform === "win32"
       ? "PowerShell (pwsh). Prefer PowerShell syntax (`Get-ChildItem`, `$env:NAME`, `Set-Location`). Use workdir instead of cd when possible."
@@ -813,7 +835,10 @@ export function createBashTools(
         "Default cwd is the session workspace root (not the Host process cwd) — " +
         "`pwd` / `Get-Location` should show the workspace. Prefer relative paths; " +
         "set workdir only when another directory is required. " +
-        "Set background=true to start a job and return its id.",
+        `Foreground waits up to ${Math.round(yieldMs / 1000)}s (yield): if the command is still running then, the call returns its job id and the process keeps running — ` +
+        "call job_output(wait:true) to keep waiting (each wait extends the deadline, so long tasks never die on a timeout), job_kill to stop, or leave it in background. " +
+        "Set background=true to start a job and return its id immediately. " +
+        "timeout_ms sets a hard kill deadline for this call.",
       parameters: {
         type: "object",
         properties: {
@@ -823,6 +848,11 @@ export function createBashTools(
             type: "string",
             description:
               "Working directory for this command. Relative paths resolve against the session workspace. Defaults to the session workspace root.",
+          },
+          timeout_ms: {
+            type: "number",
+            description:
+              "Optional hard kill deadline in ms for this call: the process is killed when it elapses. Omit to rely on the foreground yield (returns early, process keeps running).",
           },
         },
         required: ["command"],
@@ -851,11 +881,58 @@ export function createBashTools(
               }`,
             };
           }
-          const out = await shell.run(command, cwd, {
+          const hardTimeoutMs =
+            positiveMs((args as { timeout_ms?: unknown }).timeout_ms) ??
+            timeoutMs;
+          const started = await shell.startJob(command, cwd, {
             ...(signal ? { signal } : {}),
-            ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+            ...(hardTimeoutMs !== undefined
+              ? { timeoutMs: hardTimeoutMs }
+              : {}),
           });
-          let content = formatRun(out);
+          // Yield semantics: the wait is bounded, the process is not. A detach
+          // (UI "move to background") aborts only the wait; the turn signal
+          // kills the process via startJob above.
+          const detachSignal = shell.attachForegroundWait(started.id);
+          const waitMerge = new AbortController();
+          const onTurnAbort = () => waitMerge.abort(signal?.reason);
+          const onDetach = () => waitMerge.abort(detachSignal.reason);
+          if (signal?.aborted === true) waitMerge.abort(signal.reason);
+          else signal?.addEventListener("abort", onTurnAbort, { once: true });
+          if (detachSignal.aborted) waitMerge.abort(detachSignal.reason);
+          else detachSignal.addEventListener("abort", onDetach, { once: true });
+          let turnAborted = false;
+          try {
+            await shell.waitJob(started.id, yieldMs, waitMerge.signal);
+          } catch {
+            turnAborted = signal?.aborted === true;
+          } finally {
+            signal?.removeEventListener("abort", onTurnAbort);
+            detachSignal.removeEventListener("abort", onDetach);
+            shell.detachForegroundWait(started.id);
+          }
+          const snapshot = shell
+            .listJobsNow()
+            .find((j) => j.id === started.id);
+          if (!snapshot) throw new Error(`shell job not found: ${started.id}`);
+          const body = shell.readJobOutput(started.id);
+          let content: string;
+          if (turnAborted) {
+            content = formatJobOutput(body, snapshot);
+          } else if (isActiveStatus(snapshot.status)) {
+            content =
+              formatJobOutput(body, snapshot) +
+              `\n[still running after ${yieldMs} ms — job ${started.id} keeps running: ` +
+              "job_output(wait:true) to keep waiting (each wait extends), " +
+              "job_kill to stop, or leave it in background]";
+          } else {
+            // Settled: keep the legacy foreground shape (`[stderr]` section +
+            // trailing `[exit code: N]`) so the UI exit pill still parses.
+            content = body;
+            if (snapshot.exitCode !== null && snapshot.exitCode !== 0) {
+              content += `\n[exit code: ${snapshot.exitCode}]`;
+            }
+          }
           if (maxOutputBytes !== undefined) {
             content = fitWithSuffix(content, "\n[truncated]", maxOutputBytes);
           }
