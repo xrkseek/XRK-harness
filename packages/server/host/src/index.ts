@@ -730,6 +730,7 @@ export function createHostManager(): HostManager {
           isActive: (sessionId) => drain.isActive(sessionId),
           run: (sessionId) => hub.run(sessionId),
         },
+        ...(sharedShell ? { shell: sharedShell } : {}),
       });
       // Authorize DSH client settings namespaces so panels do not fail
       // "Host 未授权设置 RPC" when Cordis Host is absent (empty docs).

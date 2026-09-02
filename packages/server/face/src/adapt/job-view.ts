@@ -1,7 +1,8 @@
 /**
  * Wire `JobView` (copied from `@xrkseek/xrk-host-apiproxy` `api/jobs.ts`).
  * Registry internals (`ownerSession`, `reported`, `outputLimitBytes`) stay off
- * the wire — the mux frame's `sessionId` is the owner.
+ * the wire — the mux frame's `sessionId` is the owner. Optional `foreground`
+ * marks a yield-attached wait.
  */
 
 import { Buffer } from "node:buffer";
@@ -21,6 +22,7 @@ export interface JobView {
   readonly detail?: string;
   readonly startedAt: number;
   readonly finishedAt?: number;
+  readonly foreground?: boolean;
 }
 
 /**
@@ -36,6 +38,7 @@ export function jobViews(snapshots: readonly JobView[]): JobView[] {
     ...(job.detail === undefined ? {} : { detail: job.detail }),
     startedAt: job.startedAt,
     ...(job.finishedAt === undefined ? {} : { finishedAt: job.finishedAt }),
+    ...(job.foreground ? { foreground: true as const } : {}),
   }));
 }
 

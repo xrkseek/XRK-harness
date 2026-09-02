@@ -71,6 +71,7 @@ import {
   subagentList,
   subagentPrompt,
 } from "./handlers/subagent.js";
+import { jobBackground, jobKill } from "./handlers/job.js";
 import {
   commandsExecute,
   commandsList,
@@ -169,6 +170,8 @@ const HANDLERS: Record<string, FaceHandler> = {
   "subagent.history": subagentHistory,
   "subagent.prompt": subagentPrompt,
   "subagent.interrupt": subagentInterrupt,
+  "job.kill": jobKill,
+  "job.background": jobBackground,
   "commands/list": commandsList,
   "commands/execute": commandsExecute,
   "pluginInventory/list": pluginInventoryList,

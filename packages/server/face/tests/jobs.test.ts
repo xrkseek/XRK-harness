@@ -73,6 +73,11 @@ describe("jobViews (DSH apiproxy)", () => {
       "status",
     ]);
   });
+
+  it("passes foreground when set", () => {
+    const views = jobViews([runningJob({ foreground: true })]);
+    expect(views[0]?.foreground).toBe(true);
+  });
 });
 
 describe("session/jobs without the registry", () => {
@@ -329,6 +334,7 @@ describe("job completion notices (DSH tool-jobs wakeup)", () => {
     for (const listener of listeners) listener();
     expect(admits).toHaveLength(1);
     expect(admits[0]?.content).toContain("background job bash-2");
+    expect(admits[0]?.delivery).toBe("steer");
     expect(wakes).toContain(sessionId);
   });
 
@@ -400,6 +406,7 @@ describe("job completion notices (DSH tool-jobs wakeup)", () => {
   it("busy agent still wakes; over-budget idle admits without wake", async () => {
     const store = createMemorySessionStore();
     const wakes: string[] = [];
+    const deliveries: string[] = [];
     let busy = true;
     let items: JobView[] = [];
     const listeners = new Set<() => void>();
@@ -427,7 +434,10 @@ describe("job completion notices (DSH tool-jobs wakeup)", () => {
       },
       resolveAgent: async (sessionId) =>
         ({
-          admit: (content, opts) => admitPrompt(store, sessionId, content, opts),
+          admit: (content, opts) => {
+            if (opts?.delivery) deliveries.push(opts.delivery);
+            return admitPrompt(store, sessionId, content, opts);
+          },
           pendingAdmits: () => [],
           continueTurn: async () => ({}) as never,
           run: async () => ({}) as never,
@@ -459,6 +469,7 @@ describe("job completion notices (DSH tool-jobs wakeup)", () => {
 
     settle("b1");
     expect(wakes.filter((s) => s === sessionId)).toHaveLength(1);
+    expect(deliveries.every((d) => d === "steer")).toBe(true);
 
     busy = false;
     wakes.length = 0;

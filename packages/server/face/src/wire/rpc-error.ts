@@ -44,6 +44,9 @@ export const FACE_RPC_ERROR_CODES = [
   "subagent-not-resumable",
   "subagent-unauthorized",
   "subagent-delivery-unavailable",
+  "job-not-found",
+  "job-host-unavailable",
+  "job-not-foreground",
   "internal",
 ] as const;
 

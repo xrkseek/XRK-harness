@@ -13,6 +13,7 @@ import {
   type ProviderRegistry,
 } from "@xrkseek/llm-registry";
 import type { PolicyEngine } from "@xrkseek/policy";
+import type { ShellService } from "@xrkseek/exec-shell";
 import type { SessionEvent } from "@xrkseek/protocol";
 import {
   flattenText,
@@ -153,6 +154,8 @@ export interface CreateFaceRuntimeOptions {
    * Typical path: `{sessionsDir}/projection-list-cache.json`.
    */
   readonly listProjectionCachePath?: string;
+  /** Shared shell job registry (harness/server preset). */
+  readonly shell?: ShellService;
 }
 
 /**
@@ -287,9 +290,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   };
 
   /**
-   * DSH tool-jobs `onJobDone`: idle + wake budget → followup (admit + wake);
-   * busy → inject (admit + wake, promotes at next turn entry); idle over budget
-   * → inject without followup (admit only; waits for other wake).
+   * DSH tool-jobs `onJobDone`: idle + wake budget → steer + wake;
+   * busy → steer (+ wake, promotes at next tool-step / turn boundary);
+   * idle over budget → steer only (waits for other wake).
+   *
+   * Steer matches Codex inject-into-running-turn: background jobs exist so the
+   * agent can read results without waiting in the user FIFO queue.
    */
   const deliverOwnedJobCompletions = (
     sessionId: string,
@@ -313,7 +319,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       const receipt = agent.admit(
         formatJobCompletionNotice(job, job.outputLimitBytes),
         {
-          delivery: "queue",
+          delivery: "steer",
         },
       );
       noticeAdmitIds.add(receipt.admitId);
@@ -327,7 +333,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
 
   /**
    * Mirror job completions: when a continuable child drain goes idle, admit a
-   * queue notice on the parent (+ wake under the same budget).
+   * steer notice on the parent (+ wake under the same budget).
+   *
+   * Steer (not queue) matches Codex `inject_fragment_without_turn`: parent
+   * must see child results at the next tool-step / turn boundary while still
+   * running — subagent spawn is for fast information, not user-style FIFO.
    */
   const deliverOwnedSubagentCompletion = (childSessionId: string): void => {
     const link = subagents.getByChild(childSessionId);
@@ -343,7 +353,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       const events = store.get(childSessionId).events;
       const receipt = parent.admit(
         formatSubagentCompletionNotice(link, events),
-        { delivery: "queue" },
+        { delivery: "steer" },
       );
       noticeAdmitIds.add(receipt.admitId);
       if (followup || !idle) options.drain.wake(parentId);
@@ -666,6 +676,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     ...(options.hasPtyActivity
       ? { hasPtyActivity: options.hasPtyActivity }
       : {}),
+    ...(options.shell ? { shell: options.shell } : {}),
   };
   runtimeBox.current = runtime;
   goals.bind(runtime);

@@ -5,6 +5,7 @@ import type { ToolDefinition } from "@xrkseek/core-tools";
 import type { JobView } from "./adapt/job-view.js";
 import type { ProviderRegistry } from "@xrkseek/llm-registry";
 import type { PolicyEngine } from "@xrkseek/policy";
+import type { ShellService } from "@xrkseek/exec-shell";
 import type { FaceBus } from "./bus.js";
 import type { FaceSeqClock } from "./seq.js";
 import type {
@@ -179,4 +180,6 @@ export interface FaceRuntime {
    * (same wake budget as job completions).
    */
   onSessionDrainStatus(sessionId: string, running: boolean): void;
+  /** Shared shell registry for session-scoped job kill / background RPC. */
+  readonly shell?: ShellService;
 }
