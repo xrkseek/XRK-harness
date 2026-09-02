@@ -1,12 +1,22 @@
 /**
- * Sidebar terminal WebSocket (`/sidebar/ws/terminal`) for dsh-better-sidebar.
- * Wire: text frames ↔ node-pty; JSON `{type:"resize"|"close"}` control.
+ * Sidebar terminal WebSocket for xrkh-better-sidebar (dsh-compat).
+ * Wire: text frames ↔ node-pty; JSON `{type:"resize"|"close"|"park"}` control.
+ *
+ * Contract notes (match plugin PtyManager expectations):
+ * - Key UI tabs by `sessionId` + `tab`; bare socket drop starts a reconnect
+ *   grace instead of killing the shell immediately (React remounts / panel
+ *   toggles would otherwise spin 「终端连接断开，重连中…」).
+ * - PTY process exit must NOT close the socket with code 1000 (client treats
+ *   that as a transient drop and retries forever).
  */
 import type { IncomingMessage, Server } from "node:http";
+import { homedir } from "node:os";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket, type RawData } from "ws";
 
 const PTY_DEPS_MISSING = "pty-deps-missing";
+/** Reconnect grace after bare socket drop / park (ms). */
+const RECONNECT_GRACE_MS = 30_000;
 
 export interface SidebarPtyOptions {
   readonly defaultCwd: string;
@@ -21,6 +31,16 @@ interface InteractivePty {
   onExit(cb: () => void): { dispose(): void };
 }
 
+interface PtySlot {
+  term: InteractivePty;
+  /** Attached browser sockets (usually 0 or 1). */
+  clients: Set<WebSocket>;
+  graceTimer: ReturnType<typeof setTimeout> | undefined;
+  exited: boolean;
+  dataDisposable: { dispose(): void };
+  exitDisposable: { dispose(): void };
+}
+
 function defaultShellArgv(): string[] {
   if (process.platform === "win32") {
     const comspec = process.env.ComSpec?.trim();
@@ -30,13 +50,22 @@ function defaultShellArgv(): string[] {
   return [shell && shell.length > 0 ? shell : "/bin/bash", "-l"];
 }
 
-function resolveCwd(req: IncomingMessage, fallback: string): string {
+function resolveQuery(req: IncomingMessage): {
+  cwd: string | undefined;
+  key: string | undefined;
+} {
   try {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
-    const cwd = url.searchParams.get("cwd")?.trim();
-    return cwd && cwd.length > 0 ? cwd : fallback;
+    const cwd = url.searchParams.get("cwd")?.trim() || undefined;
+    const sessionId = url.searchParams.get("sessionId")?.trim();
+    const tab = url.searchParams.get("tab")?.trim();
+    const key =
+      sessionId && sessionId.length > 0 && tab && tab.length > 0
+        ? `${sessionId}\0${tab}`
+        : undefined;
+    return { cwd, key };
   } catch {
-    return fallback;
+    return { cwd: undefined, key: undefined };
   }
 }
 
@@ -53,7 +82,7 @@ async function spawnInteractivePty(
     ) => InteractivePty;
   };
   try {
-    ptyMod = (await import("node-pty"));
+    ptyMod = await import("node-pty");
   } catch {
     throw new Error(PTY_DEPS_MISSING);
   }
@@ -73,6 +102,29 @@ async function spawnInteractivePty(
   });
 }
 
+async function spawnWithCwdFallback(
+  cwd: string,
+  fallback: string,
+  cols: number,
+  rows: number,
+): Promise<InteractivePty> {
+  try {
+    return await spawnInteractivePty(cwd, cols, rows);
+  } catch (first) {
+    if (first instanceof Error && first.message === PTY_DEPS_MISSING) throw first;
+    const home = homedir();
+    for (const next of [fallback, home]) {
+      if (!next || next === cwd) continue;
+      try {
+        return await spawnInteractivePty(next, cols, rows);
+      } catch {
+        /* try next */
+      }
+    }
+    throw first;
+  }
+}
+
 function rawToText(raw: RawData): string {
   if (typeof raw === "string") return raw;
   if (Buffer.isBuffer(raw)) return raw.toString("utf8");
@@ -80,97 +132,31 @@ function rawToText(raw: RawData): string {
   return Buffer.from(raw).toString("utf8");
 }
 
-function bindTerminalSocket(
-  ws: WebSocket,
-  req: IncomingMessage,
-  options: SidebarPtyOptions,
-): void {
-  let closed = false;
-  let cols = 80;
-  let rows = 24;
-  let term: InteractivePty | undefined;
-  const cwd = resolveCwd(req, options.defaultCwd);
-
-  const shutdown = (code = 1000, reason = "") => {
-    if (closed) return;
-    closed = true;
-    try {
-      term?.kill();
-    } catch {
-      /* ignore */
-    }
-    term = undefined;
-    if (ws.readyState === ws.OPEN || ws.readyState === ws.CONNECTING) {
-      try {
-        ws.close(code, reason.slice(0, 123));
-      } catch {
-        /* ignore */
-      }
-    }
-  };
-
-  void (async () => {
-    try {
-      term = await spawnInteractivePty(cwd, cols, rows);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      shutdown(1011, msg === PTY_DEPS_MISSING ? PTY_DEPS_MISSING : msg);
-      return;
-    }
-    term.onData((data) => {
-      if (ws.readyState === ws.OPEN) ws.send(data);
-    });
-    term.onExit(() => {
-      shutdown(1000, "");
-    });
-  })();
-
-  ws.on("message", (raw) => {
-    if (closed || !term) return;
-    const text = rawToText(raw);
-    if (text.startsWith("{")) {
-      try {
-        const msg = JSON.parse(text) as {
-          type?: string;
-          cols?: number;
-          rows?: number;
-        };
-        if (msg.type === "close") {
-          shutdown(1000, "");
-          return;
-        }
-        if (msg.type === "resize") {
-          const nextCols =
-            typeof msg.cols === "number" && msg.cols > 0 ? msg.cols : cols;
-          const nextRows =
-            typeof msg.rows === "number" && msg.rows > 0 ? msg.rows : rows;
-          cols = nextCols;
-          rows = nextRows;
-          try {
-            term.resize(cols, rows);
-          } catch {
-            /* ignore */
-          }
-          return;
-        }
-      } catch {
-        /* fall through as raw input */
-      }
-    }
-    try {
-      term.write(text);
-    } catch {
-      /* ignore */
-    }
-  });
-
-  ws.on("close", () => shutdown(1000, ""));
-  ws.on("error", () => shutdown(1011, "socket-error"));
+function destroySlot(slot: PtySlot): void {
+  if (slot.graceTimer !== undefined) {
+    clearTimeout(slot.graceTimer);
+    slot.graceTimer = undefined;
+  }
+  try {
+    slot.dataDisposable.dispose();
+  } catch {
+    /* ignore */
+  }
+  try {
+    slot.exitDisposable.dispose();
+  } catch {
+    /* ignore */
+  }
+  try {
+    slot.term.kill();
+  } catch {
+    /* ignore */
+  }
+  slot.clients.clear();
 }
 
 /**
- * Attach `/sidebar/ws/terminal` + `/sidebar/ws/agent-terminals`.
- * Face upgrades ignore non-Face paths, so this listener coexists safely.
+ * Attach `/sidebar/ws/terminal`, `/sidebar/ws/agent-terminals`, `/sidebar/ws/agent-opens`.
  */
 export function attachSidebarPtyUpgrades(
   server: Server,
@@ -178,7 +164,200 @@ export function attachSidebarPtyUpgrades(
 ): { close(): void } {
   const terminalWss = new WebSocketServer({ noServer: true });
   const agentWss = new WebSocketServer({ noServer: true });
+  const agentOpensWss = new WebSocketServer({ noServer: true });
+  const slots = new Map<string, PtySlot>();
   let closed = false;
+
+  const releaseSlot = (key: string | undefined, slot: PtySlot): void => {
+    destroySlot(slot);
+    if (key) slots.delete(key);
+  };
+
+  const bindTerminalSocket = (ws: WebSocket, req: IncomingMessage): void => {
+    let socketClosed = false;
+    let cols = 80;
+    let rows = 24;
+    const { cwd: queryCwd, key } = resolveQuery(req);
+    const cwd = queryCwd && queryCwd.length > 0 ? queryCwd : options.defaultCwd;
+    let slot: PtySlot | undefined;
+    let anonymous = false;
+
+    const closeSocket = (code = 1000, reason = ""): void => {
+      if (socketClosed) return;
+      socketClosed = true;
+      if (ws.readyState === ws.OPEN || ws.readyState === ws.CONNECTING) {
+        try {
+          ws.close(code, reason.slice(0, 123));
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+
+    const detachClient = (opts: { kill: boolean; park: boolean }): void => {
+      if (!slot) {
+        closeSocket();
+        return;
+      }
+      slot.clients.delete(ws);
+      if (opts.kill || anonymous || !key) {
+        releaseSlot(key, slot);
+        slot = undefined;
+        closeSocket();
+        return;
+      }
+      // Park / bare drop: keep PTY for reconnect grace.
+      if (slot.clients.size === 0 && !slot.exited) {
+        if (slot.graceTimer !== undefined) clearTimeout(slot.graceTimer);
+        const graceMs = opts.park ? RECONNECT_GRACE_MS * 10 : RECONNECT_GRACE_MS;
+        slot.graceTimer = setTimeout(() => {
+          const current = key ? slots.get(key) : undefined;
+          if (current !== undefined && current === slot && current.clients.size === 0) {
+            releaseSlot(key, current);
+          }
+        }, graceMs);
+      }
+      closeSocket();
+    };
+
+    void (async () => {
+      try {
+        if (key) {
+          const existing = slots.get(key);
+          if (existing && !existing.exited) {
+            slot = existing;
+            if (slot.graceTimer !== undefined) {
+              clearTimeout(slot.graceTimer);
+              slot.graceTimer = undefined;
+            }
+            slot.clients.add(ws);
+            return;
+          }
+        }
+
+        const term = await spawnWithCwdFallback(
+          cwd,
+          options.defaultCwd,
+          cols,
+          rows,
+        );
+        if (socketClosed) {
+          try {
+            term.kill();
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
+
+        const next: PtySlot = {
+          term,
+          clients: new Set([ws]),
+          graceTimer: undefined,
+          exited: false,
+          dataDisposable: term.onData((data) => {
+            for (const client of next.clients) {
+              if (client.readyState === client.OPEN) {
+                try {
+                  client.send(data);
+                } catch {
+                  /* ignore */
+                }
+              }
+            }
+          }),
+          exitDisposable: term.onExit(() => {
+            next.exited = true;
+            for (const client of [...next.clients]) {
+              if (client.readyState === client.OPEN) {
+                try {
+                  client.send("\r\n[process exited]\r\n");
+                } catch {
+                  /* ignore */
+                }
+              }
+            }
+            if (key) slots.delete(key);
+            // Do not close client sockets with 1000 — that triggers soft-reconnect forever.
+          }),
+        };
+        slot = next;
+        if (key) slots.set(key, next);
+        else anonymous = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        closeSocket(1011, msg === PTY_DEPS_MISSING ? PTY_DEPS_MISSING : msg);
+      }
+    })();
+
+    ws.on("message", (raw) => {
+      if (socketClosed || !slot || slot.exited) return;
+      const text = rawToText(raw);
+      if (text.startsWith("{")) {
+        try {
+          const msg = JSON.parse(text) as {
+            type?: string;
+            cols?: number;
+            rows?: number;
+          };
+          if (msg.type === "close") {
+            detachClient({ kill: true, park: false });
+            return;
+          }
+          if (msg.type === "park") {
+            detachClient({ kill: false, park: true });
+            return;
+          }
+          if (msg.type === "resize") {
+            const nextCols =
+              typeof msg.cols === "number" && msg.cols > 0 ? msg.cols : cols;
+            const nextRows =
+              typeof msg.rows === "number" && msg.rows > 0 ? msg.rows : rows;
+            cols = nextCols;
+            rows = nextRows;
+            try {
+              slot.term.resize(cols, rows);
+            } catch {
+              /* ignore */
+            }
+            return;
+          }
+        } catch {
+          /* fall through as raw input */
+        }
+      }
+      try {
+        slot.term.write(text);
+      } catch {
+        /* ignore */
+      }
+    });
+
+    ws.on("close", () => {
+      if (socketClosed) return;
+      socketClosed = true;
+      if (!slot) return;
+      slot.clients.delete(ws);
+      if (anonymous || !key) {
+        releaseSlot(key, slot);
+        return;
+      }
+      if (slot.clients.size === 0 && !slot.exited) {
+        if (slot.graceTimer !== undefined) clearTimeout(slot.graceTimer);
+        slot.graceTimer = setTimeout(() => {
+          const current = slots.get(key);
+          if (current !== undefined && current === slot && current.clients.size === 0) {
+            releaseSlot(key, current);
+          }
+        }, RECONNECT_GRACE_MS);
+      }
+    });
+
+    ws.on("error", () => {
+      if (socketClosed) return;
+      detachClient({ kill: false, park: false });
+    });
+  };
 
   const onUpgrade = (
     req: IncomingMessage,
@@ -188,7 +367,8 @@ export function attachSidebarPtyUpgrades(
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     if (
       url.pathname !== "/sidebar/ws/terminal" &&
-      url.pathname !== "/sidebar/ws/agent-terminals"
+      url.pathname !== "/sidebar/ws/agent-terminals" &&
+      url.pathname !== "/sidebar/ws/agent-opens"
     ) {
       return;
     }
@@ -198,7 +378,11 @@ export function attachSidebarPtyUpgrades(
       return;
     }
     const wss =
-      url.pathname === "/sidebar/ws/agent-terminals" ? agentWss : terminalWss;
+      url.pathname === "/sidebar/ws/agent-terminals"
+        ? agentWss
+        : url.pathname === "/sidebar/ws/agent-opens"
+          ? agentOpensWss
+          : terminalWss;
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit("connection", ws, req);
     });
@@ -207,7 +391,7 @@ export function attachSidebarPtyUpgrades(
   server.on("upgrade", onUpgrade);
 
   terminalWss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
-    bindTerminalSocket(ws, req, options);
+    bindTerminalSocket(ws, req);
   });
 
   agentWss.on("connection", (ws: WebSocket) => {
@@ -219,27 +403,30 @@ export function attachSidebarPtyUpgrades(
     ws.on("close", () => clearInterval(timer));
   });
 
+  agentOpensWss.on("connection", (ws: WebSocket) => {
+    ws.on("error", () => {
+      /* ignore */
+    });
+  });
+
   return {
     close() {
       if (closed) return;
       closed = true;
       server.off("upgrade", onUpgrade);
-      for (const client of terminalWss.clients) {
-        try {
-          client.terminate();
-        } catch {
-          /* ignore */
-        }
+      for (const [key, slot] of slots) {
+        releaseSlot(key, slot);
       }
-      for (const client of agentWss.clients) {
-        try {
-          client.terminate();
-        } catch {
-          /* ignore */
+      for (const wss of [terminalWss, agentWss, agentOpensWss]) {
+        for (const client of wss.clients) {
+          try {
+            client.terminate();
+          } catch {
+            /* ignore */
+          }
         }
+        wss.close();
       }
-      terminalWss.close();
-      agentWss.close();
     },
   };
 }

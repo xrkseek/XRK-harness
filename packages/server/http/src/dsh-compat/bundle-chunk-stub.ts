@@ -29,7 +29,6 @@ const DEFAULT_SIDEBAR_EXPORTS: Readonly<Record<string, readonly string[]>> = {
   browser: ["BrowserView"],
   search: ["SearchView"],
   jobs: ["JobsView"],
-  sidechat: ["SideChatView"],
   diff: ["DiffView"],
   media: ["MediaView"],
 };
