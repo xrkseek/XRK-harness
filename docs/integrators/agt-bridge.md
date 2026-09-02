@@ -11,13 +11,13 @@ AGT 保留通道业务（Tasker / Core / `chat.js` / MCPServer）。Agent loop�
 只依赖 SDK 门面，不要把 `@xrkseek/core-*` / `llm-*` 叶包写进集成方 `package.json`。
 
 ```bash
-pnpm add @xrkseek/harness@0.1.27
+pnpm add @xrkseek/harness@0.1.28
 ```
 
 离线或锁定 Release 资产时：
 
 ```bash
-pnpm add https://github.com/xrkseek/XRK-harness/releases/download/v0.1.27/xrkseek-harness-0.1.27.tgz
+pnpm add https://github.com/xrkseek/XRK-harness/releases/download/v0.1.28/xrkseek-harness-0.1.28.tgz
 ```
 
 开发期若需尚未发布的构建产物，用环境变量指向 **已构建的 SDK 入口文件**（绝对路径），勿把本机目录布局写进教科书或提交进仓：
@@ -87,13 +87,13 @@ AGT keeps channel business (Tasker / Core / `chat.js` / MCPServer). The agent lo
 Depend on the SDK façade only. Do not add leaf `@xrkseek/core-*` / `llm-*` packages to the integrator `package.json`.
 
 ```bash
-pnpm add @xrkseek/harness@0.1.27
+pnpm add @xrkseek/harness@0.1.28
 ```
 
 Offline / pin a Release asset:
 
 ```bash
-pnpm add https://github.com/xrkseek/XRK-harness/releases/download/v0.1.27/xrkseek-harness-0.1.27.tgz
+pnpm add https://github.com/xrkseek/XRK-harness/releases/download/v0.1.28/xrkseek-harness-0.1.28.tgz
 ```
 
 For unpublished local builds, point an env var at the **built SDK entry file** (absolute path). Do not commit machine layout into docs or the repo:

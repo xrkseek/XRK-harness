@@ -132,7 +132,10 @@ function bundleSharpPlatforms(stageDir) {
   mkdirSync(tmp, { recursive: true });
 
   console.log(`stage: bundling ${missing.length} sharp platform packages (${process.platform})`);
+  let sharpIndex = 0;
   for (const [name, ver] of missing) {
+    sharpIndex += 1;
+    console.log(`stage: sharp [${sharpIndex}/${missing.length}] ${name}@${ver}`);
     const pack = npmSpawn(["pack", `${name}@${ver}`, "--pack-destination", tmp], { cwd: tmp });
     if (pack.status !== 0) {
       console.error(`stage: npm pack failed for ${name}@${ver}`);
@@ -216,6 +219,7 @@ mkdirSync(path.join(ROOT, ".release"), { recursive: true });
 
 run("pnpm", ["--filter", "@xrkseek/harness-cli", "deploy", "--prod", "--legacy", STAGE], ROOT, {
   CI: "true",
+  npm_config_confirm_modules_purge: "false",
 });
 
 if (!existsSync(path.join(STAGE, "product-web", "index.html"))) {
