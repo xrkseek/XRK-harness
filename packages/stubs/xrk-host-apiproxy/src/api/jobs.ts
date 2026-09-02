@@ -5,6 +5,8 @@
  */
 
 import type { JobId } from '@xrkseek/xrk-jobs/brand'
+import type { SessionId } from '@xrkseek/xrk-session/types'
+import type { RpcRequest, RpcResponse } from './rpc.ts'
 
 /**
  * One background job as the client sees it.
@@ -33,4 +35,30 @@ export interface JobView {
   startedAt: number
   /** Epoch ms when the task settled; absent while live. */
   finishedAt?: number
+  /**
+   * True while a foreground tool call is attached (bounded yield wait).
+   * UI offers background only for these rows.
+   */
+  foreground?: boolean
+}
+
+/** `job.kill` outcome — mirrors shell `KillJobResult`. */
+export type JobKillOutcome = 'requested' | 'already-finished'
+
+/** Uniform acknowledgement that one background detach was accepted. */
+export interface JobBackgroundReceipt {
+  accepted: true
+}
+
+/** Background-job unary methods (list is push-only via `session/jobs`). */
+export interface JobsApi {
+  kill(
+    request: RpcRequest<{ sessionId: SessionId; jobId: JobId }>,
+    signal?: AbortSignal,
+  ): Promise<RpcResponse<{ outcome: JobKillOutcome }>>
+
+  background(
+    request: RpcRequest<{ sessionId: SessionId; jobId: JobId }>,
+    signal?: AbortSignal,
+  ): Promise<RpcResponse<JobBackgroundReceipt>>
 }

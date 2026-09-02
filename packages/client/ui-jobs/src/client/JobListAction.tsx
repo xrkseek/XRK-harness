@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import type { JobView } from '@xrkseek/client-runtime/client'
 import { IconChevronDownOutline14, StateDot, useDismissOnOutsidePointer, type StateDotState } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@xrkseek/client-ui-slots'
@@ -6,9 +6,15 @@ import { NS } from './locales.ts'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import css from './JobListAction.module.css'
 
+/** Business actions supplied by the slot registration. */
+export interface JobListInjected {
+  killJob(jobId: string): void
+  backgroundJob(jobId: string): void
+}
+
 /** Full props for the session-header background-job action. */
 export type JobListActionProps =
-  PropsRuntime<'conversation.session.header.actions'> & PropsLocale<typeof NS>
+  PropsRuntime<'conversation.session.header.actions'> & JobListInjected & PropsLocale<typeof NS>
 
 /** Stable empty list so a session with no jobs keeps one array identity. */
 const NO_TASKS: readonly JobView[] = []
@@ -91,7 +97,7 @@ function ordered(jobs: readonly JobView[]): JobView[] {
  * @param props - runtime slot currency plus the namespace translator.
  * @returns the trigger and its popover list, or null when there is nothing to show.
  */
-export function JobListAction({ sessionId, useSessions, t }: JobListActionProps) {
+export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, t }: JobListActionProps) {
   const jobs = useSessions(state => state.jobsBySession[sessionId]) ?? NO_TASKS
   const [open, setOpen] = useState(false)
   const [now, setNow] = useState(() => Date.now())
@@ -129,6 +135,16 @@ export function JobListAction({ sessionId, useSessions, t }: JobListActionProps)
     event.preventDefault()
     setOpen(false)
     triggerRef.current?.focus()
+  }
+
+  const onStop = (event: MouseEvent<HTMLButtonElement>, job: JobView): void => {
+    event.stopPropagation()
+    killJob(job.id)
+  }
+
+  const onBackground = (event: MouseEvent<HTMLButtonElement>, job: JobView): void => {
+    event.stopPropagation()
+    backgroundJob(job.id)
   }
 
   return (
@@ -172,6 +188,30 @@ export function JobListAction({ sessionId, useSessions, t }: JobListActionProps)
                   >
                     {duration}
                   </span>
+                  {live
+                    ? (
+                      <button
+                        type="button"
+                        className={css.action}
+                        aria-label={t('action.stop.aria', { label: job.label })}
+                        onClick={(event) => { onStop(event, job) }}
+                      >
+                        {t('action.stop')}
+                      </button>
+                    )
+                    : null}
+                  {job.foreground && job.status === 'running'
+                    ? (
+                      <button
+                        type="button"
+                        className={css.action}
+                        aria-label={t('action.background.aria', { label: job.label })}
+                        onClick={(event) => { onBackground(event, job) }}
+                      >
+                        {t('action.background')}
+                      </button>
+                    )
+                    : null}
                 </li>
               )
             })}

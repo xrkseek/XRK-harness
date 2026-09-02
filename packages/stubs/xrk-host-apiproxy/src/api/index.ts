@@ -10,6 +10,7 @@ import type { WorkspaceApi } from './workspace.ts'
 import type { AgentPresetsApi } from './agent-presets.ts'
 import type { SkillsApi } from './skills.ts'
 import type { SubagentsApi } from './subagents.ts'
+import type { JobsApi } from './jobs.ts'
 import type { EventsApi } from './events.ts'
 import type { GoalsApi } from './goals.ts'
 import type { SettingsApi } from './settings.ts'
@@ -22,6 +23,7 @@ import type { ClientResponse, RpcReceipt } from './rpc.ts'
 export interface ApiProxy {
   sessions: SessionsApi
   subagents: SubagentsApi
+  jobs: JobsApi
   host: HostApi
   workspace: WorkspaceApi
   skills: SkillsApi
@@ -53,7 +55,7 @@ export type {
   SubagentAddress, SubagentCatalog, SubagentInterruptReceipt, SubagentListEntry,
   SubagentPromptReceipt, SubagentsApi,
 } from './subagents.ts'
-export type { JobView } from './jobs.ts'
+export type { JobView, JobsApi, JobKillOutcome, JobBackgroundReceipt } from './jobs.ts'
 export type { WorkspaceApi, WorkspaceId, WorkspaceView } from './workspace.ts'
 export type { SkillsApi, SkillEntry } from './skills.ts'
 export type { AgentPresetsApi, AgentPresetEntry } from './agent-presets.ts'

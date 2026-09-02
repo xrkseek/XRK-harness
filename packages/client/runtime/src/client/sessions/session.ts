@@ -340,6 +340,24 @@ export class Session implements SessionFace {
     return result
   }
 
+  /** Request cancellation of one session-owned background job. */
+  async killJob(jobId: string): Promise<RpcResult<{ outcome: 'requested' | 'already-finished' }>> {
+    try {
+      return (await this.api.jobs.kill({ sessionId: this.sessionId, jobId: jobId as never })).result
+    } catch (error) {
+      return transportError(error)
+    }
+  }
+
+  /** Detach a foreground-yield wait without killing the process. */
+  async backgroundJob(jobId: string): Promise<RpcResult<{ accepted: true }>> {
+    try {
+      return (await this.api.jobs.background({ sessionId: this.sessionId, jobId: jobId as never })).result
+    } catch (error) {
+      return transportError(error)
+    }
+  }
+
   /**
    * Rename: contract session.rename 1:1. On success settle the 'title'
    * projection cell from the response's `{title, seq}` under the store's

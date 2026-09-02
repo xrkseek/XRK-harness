@@ -33,7 +33,10 @@ function job(over: Partial<JobView> = {}): JobView {
   }
 }
 
-function props(jobs: readonly JobView[] | undefined): JobListActionProps {
+function props(
+  jobs: readonly JobView[] | undefined,
+  actions: Partial<Pick<JobListActionProps, 'killJob' | 'backgroundJob'>> = {},
+): JobListActionProps {
   const state = {
     ids: [SESSION],
     byId: {},
@@ -46,7 +49,13 @@ function props(jobs: readonly JobView[] | undefined): JobListActionProps {
   function useSessions<T>(select: (snapshot: SessionListState) => T): T {
     return select(state)
   }
-  return { sessionId: SESSION, useSessions, t } as unknown as JobListActionProps
+  return {
+    sessionId: SESSION,
+    useSessions,
+    t,
+    killJob: actions.killJob ?? vi.fn(),
+    backgroundJob: actions.backgroundJob ?? vi.fn(),
+  } as unknown as JobListActionProps
 }
 
 /**
@@ -210,6 +219,31 @@ describe('JobListAction dismissal', () => {
 
     fireEvent.pointerDown(document.body)
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  })
+})
+
+describe('JobListAction actions', () => {
+  it('offers stop for live jobs and routes clicks to killJob', () => {
+    const killJob = vi.fn()
+    render(<JobListAction {...props([job()], { killJob })} />)
+    fireEvent.click(screen.getByRole('button', { name: '1 个后台任务运行中' }))
+    const stop = within(screen.getByRole('list', { name: zh['list.aria'] }))
+      .getByRole('button', { name: '停止任务 pnpm run build' })
+    fireEvent.click(stop)
+    expect(killJob).toHaveBeenCalledWith('bash-1')
+  })
+
+  it('offers background only for foreground running jobs', () => {
+    const backgroundJob = vi.fn()
+    render(<JobListAction {...props([
+      job({ foreground: true }),
+      job({ id: 'bash-2' as JobView['id'], label: 'plain', foreground: false }),
+    ], { backgroundJob })} />)
+    fireEvent.click(screen.getByRole('button'))
+    const list = within(screen.getByRole('list', { name: zh['list.aria'] }))
+    expect(list.getAllByRole('button', { name: /后台/ })).toHaveLength(1)
+    fireEvent.click(list.getByRole('button', { name: '将任务 pnpm run build 移至后台' }))
+    expect(backgroundJob).toHaveBeenCalledWith('bash-1')
   })
 })
 

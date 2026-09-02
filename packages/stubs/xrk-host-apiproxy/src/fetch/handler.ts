@@ -70,6 +70,10 @@ import {
   subagentListRequestSchema,
   subagentPromptRequestSchema,
 } from '../api/subagents.schema.ts'
+import {
+  jobBackgroundRequestSchema,
+  jobKillRequestSchema,
+} from '../api/jobs.schema.ts'
 
 /**
  * Unary dispatch table, keyed by (and compiler-locked to) RpcMethodMap: a map row without a
@@ -104,6 +108,8 @@ const UNARY_ROUTES: UnaryRoutes = {
   'subagent.history': { schema: subagentHistoryRequestSchema, invoke: (api, r, signal) => api.subagents.history(r, signal) },
   'subagent.prompt': { schema: subagentPromptRequestSchema, invoke: (api, r, signal) => api.subagents.prompt(r, signal) },
   'subagent.interrupt': { schema: subagentInterruptRequestSchema, invoke: (api, r) => api.subagents.interrupt(r) },
+  'job.kill': { schema: jobKillRequestSchema, invoke: (api, r) => api.jobs.kill(r) },
+  'job.background': { schema: jobBackgroundRequestSchema, invoke: (api, r) => api.jobs.background(r) },
   'host.describe': { schema: hostDescribeRequestSchema, invoke: (api, r) => api.host.describe(r) },
   'host.pickDirectory': { schema: hostPickDirectoryRequestSchema, invoke: (api, r, signal) => api.host.pickDirectory(r, signal) },
   'host.listDirectory': { schema: hostListDirectoryRequestSchema, invoke: (api, r, signal) => api.host.listDirectory(r, signal) },

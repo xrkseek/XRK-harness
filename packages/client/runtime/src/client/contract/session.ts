@@ -60,6 +60,10 @@ export interface ISession {
    * @returns acceptance, or the business error.
    */
   cancel(): Promise<RpcResult<{ accepted: true }>>
+  /** Request cancellation of one background job owned by this session. */
+  killJob(jobId: string): Promise<RpcResult<{ outcome: 'requested' | 'already-finished' }>>
+  /** Detach a foreground-yield wait so the job keeps running in the background. */
+  backgroundJob(jobId: string): Promise<RpcResult<{ accepted: true }>>
   /**
    * Rename this session (explicit user title; pins it against automatic
    * regeneration).

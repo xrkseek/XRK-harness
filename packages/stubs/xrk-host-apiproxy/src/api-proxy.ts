@@ -350,6 +350,15 @@ function err<T>(request: RpcRequest<unknown>, error: RpcError): RpcResponse<T> {
   return { rpcId: request.rpcId, result: { ok: false, error } }
 }
 
+/** Cordis apiproxy has no shared shell registry — harness Face owns job control. */
+function jobHostUnavailable<T>(request: RpcRequest<unknown>): RpcResponse<T> {
+  return err(request, {
+    code: 'job-host-unavailable',
+    message: 'background job host unavailable',
+    details: {},
+  })
+}
+
 /**
  * The RPC refusal a preset failure becomes, or undefined when the failure is
  * about something else.
@@ -463,6 +472,7 @@ function jobViews(snapshots: readonly JobSnapshot[]): JobView[] {
     ...job.detail === undefined ? {} : { detail: job.detail },
     startedAt: job.startedAt,
     ...job.finishedAt === undefined ? {} : { finishedAt: job.finishedAt },
+    ...job.foreground ? { foreground: true as const } : {},
   }))
 }
 
@@ -2737,6 +2747,11 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
         return Promise.resolve(ok(request, { accepted: true as const }))
       },
+    },
+
+    jobs: {
+      kill: request => jobHostUnavailable(request),
+      background: request => jobHostUnavailable(request),
     },
 
     workspace: {
