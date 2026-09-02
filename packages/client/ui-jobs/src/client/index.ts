@@ -6,6 +6,7 @@
  */
 import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
 import { JobListAction, type JobListInjected } from './JobListAction.tsx'
+import { JobInputDock } from './JobInputDock.tsx'
 import type {} from '@xrkseek/client-locale/client'
 import { en, NS, zh, type JobKey } from './locales.ts'
 
@@ -46,5 +47,16 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: jobActions,
     }, JobListAction),
+  )
+  ctx.slots.inject(
+    'conversation.input.dock',
+    () => ctx.slots.register({
+      name: 'conversation.input.dock',
+      id: 'job-dock',
+      // After Todo (0) and before Goal (10): live jobs near the composer.
+      order: 5,
+      locale: NS,
+      inject: jobActions,
+    }, JobInputDock),
   )
 }

@@ -24,6 +24,8 @@ export const zh = {
   'action.background': '后台',
   'action.stop.aria': '停止任务 {label}',
   'action.background.aria': '将任务 {label} 移至后台',
+  'dock.title': '后台任务',
+  'dock.aria': '运行中的后台任务',
 } as const
 
 /** English dictionary, key-identical to the Chinese source of truth. */
@@ -47,6 +49,8 @@ export const en: Record<JobKey, string> = {
   'action.background': 'Background',
   'action.stop.aria': 'Stop job {label}',
   'action.background.aria': 'Move job {label} to background',
+  'dock.title': 'Background jobs',
+  'dock.aria': 'Running background jobs',
 }
 
 /** Key domain of the `job` namespace (zh is the source of truth). */
