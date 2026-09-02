@@ -52,7 +52,7 @@ Host（harness/server）共享一份 root registry；composition 用 `createSess
 | `job.kill` | `{ sessionId, jobId }` → `{ outcome: requested \| already-finished }`；经 `createSessionScopedShell` owner fence |
 | `job.background` | 同上；`detachForegroundWait` → `{ accepted: true }`；无 foreground wait → `job-not-foreground` |
 
-产品壳 **`client-ui-jobs`**：会话头 job 列表对 live 行提供 **停止**；`foreground===true` 的运行行提供 **后台**（经 `Session.killJob` / `Session.backgroundJob`）。
+产品壳 UI 详见下文 **产品壳** 节；RPC：`Session.killJob` / `Session.backgroundJob`。
 
 ### `reported` / `statusLine` / `outputLimitBytes` / 并发
 
@@ -67,7 +67,7 @@ Host（harness/server）共享一份 root registry；composition 用 `createSess
 
 | Tool | Role |
 |------|------|
-| `bash` | `command` + optional `background: true` → `bash-N`。Foreground = job + 有界 wait（yield，默认 60s，`timeout_ms` 可硬杀）：超时不杀、返回 job id 与指引（job_output wait 延时 / job_kill 停 / 留后台）；settle 时 `[stderr]` + 非零 `[exit code: N]`（不是 `isError`） |
+| `bash` | `command` + optional `background: true` → `bash-N`。Foreground = job + 有界 wait（yield，默认 **30s**，Settings → Plugins → Shell 可调 250–30_000 ms；`timeout_ms` 可硬杀）：超时不杀、返回 job id 与指引（job_output wait 延时 / job_kill 停 / 留后台）；settle 时 `[stderr]` + 非零 `[exit code: N]`（不是 `isError`） |
 | `job_list` | list（含 `pty-send`）：`id [kind] status — label` |
 | `job_output` | 末行 `statusLine`；`wait: true` 等到终态或超时 |
 | `job_kill` | cancel → `stopping`；已终态则 `already finished` + `statusLine` |
@@ -88,6 +88,27 @@ Harness 登记 `tool:fs-routing` · `tool:shell-routing` · `tool:jobs` 系统�
 | `reported === true`（或 bind 时已 settled） | 跳过 |
 
 文案 `formatJobCompletionNotice`；有 `outputLimitBytes` 时预留 id 前缀与收集指令。
+
+## 产品壳（`client-ui-jobs`）
+
+> **读者**：终端用户 · 集成者（网页壳可见行为）
+
+| 界面 | 行为 |
+|------|------|
+| **何时出现** | 仅当**本会话**至少有一个 job 时，会话标题栏才显示作业控件；全部结束后隐藏 |
+| **触发器** | 如「2 个后台任务运行中」/「1 个后台任务」；有运行中 job 时带**进行中**状态点 |
+| **展开列表** | 每行：**kind** · **label** · **status/detail** · **已运行/耗时**；列表打开时运行中行每秒刷新 |
+| **停止** | `running` / `stopping` 行 → 等同 `job_kill` / RPC `job.kill` |
+| **后台** | 仅 wire **`foreground: true`** 且仍在 `running` 的行（前台 bash yield wait 仍附着）→ 解除 turn 阻塞，进程继续 |
+| **输入区 dock** | 有 live job 时在 composer 上方显示折叠条（`order: 5`），展开后与会话头共用行控件 |
+
+排序：运行中按开始时间；已结束按完成时间（新的在上）。
+
+**对话里的前台 bash（30s yield，可配置）：** 非 `background: true` 的 `bash` 默认最多等 **30s**（Codex 上限），超时 tool 结果返回 **job id** 且不杀进程；**turn 可继续**。yield 窗口内会话头与输入区 dock 可对 **foreground** 行点 **后台**；yield 后通常只剩 **停止**。
+
+**时间线里的 steer 完成通知：** job / 后台子代理 settle 用 **`delivery: steer`**，**不进**输入框排队；在 tool-step / turn 边界 promote 为注入式 `user/message`（非用户手打气泡）。Job 示例：`background job bash-1 … finished … Read its output with job_output.`
+
+RPC：`Session.killJob` / `Session.backgroundJob` · Face `job.kill` / `job.background`（见上文 RPC 表）。
 
 ## Limits
 
@@ -153,7 +174,7 @@ During a foreground `bash` yield the shell attaches an `AbortSignal`; wire `JobV
 | `job.kill` | `{ sessionId, jobId }` → `{ outcome: requested \| already-finished }`; owner fence via `createSessionScopedShell` |
 | `job.background` | Same ids; `detachForegroundWait` → `{ accepted: true }`; no foreground wait → `job-not-foreground` |
 
-Product shell **`client-ui-jobs`**: session-header job list offers **Stop** on live rows; **Background** when `foreground===true` (via `Session.killJob` / `Session.backgroundJob`).
+Product-shell UI: see **Product shell** below; RPC: `Session.killJob` / `Session.backgroundJob`.
 
 ### `reported` / `statusLine` / `outputLimitBytes` / concurrency
 
@@ -168,7 +189,7 @@ Product shell **`client-ui-jobs`**: session-header job list offers **Stop** on l
 
 | Tool | Role |
 |------|------|
-| `bash` | `command` + optional `background: true` → `bash-N`. Foreground = job + bounded wait (yield, default 60s; `timeout_ms` hard-kills): a yield kills nothing and returns the job id with guidance (job_output wait extends / job_kill stops / leave in background); settled output keeps `[stderr]` + non-zero `[exit code: N]` (not `isError`) |
+| `bash` | `command` + optional `background: true` → `bash-N`. Foreground = job + bounded wait (yield, default **30s**; Settings → Plugins → Shell **250–30_000 ms**; `timeout_ms` hard-kills): a yield kills nothing and returns the job id with guidance (job_output wait extends / job_kill stops / leave in background); settled output keeps `[stderr]` + non-zero `[exit code: N]` (not `isError`) |
 | `job_list` | list (includes `pty-send`): `id [kind] status — label` |
 | `job_output` | Last line `statusLine`; `wait: true` waits for terminal or timeout |
 | `job_kill` | cancel → `stopping`; already terminal → `already finished` + `statusLine` |
@@ -189,6 +210,27 @@ Settle notices use **`delivery: steer`** (Codex-style inject into a running turn
 | `reported === true` (or already settled at bind) | skip |
 
 Copy via `formatJobCompletionNotice`; with `outputLimitBytes`, reserve id prefix and collect instructions.
+
+## Product shell (`client-ui-jobs`)
+
+> **Audience**: End users · integrators (visible web-shell behavior)
+
+| UI | Behavior |
+|----|----------|
+| **When it appears** | Session header control only when **this session** has at least one job; hidden when the set is empty |
+| **Trigger** | Copy like “2 background jobs running” / “1 background job”; **ongoing** dot while any job is live |
+| **Popover list** | **kind** · **label** · **status/detail** · **elapsed/duration** per row; live rows tick every second while open |
+| **Stop** | On `running` / `stopping` rows → same as model `job_kill` / RPC `job.kill` |
+| **Background** | Only on live `running` rows with wire **`foreground: true`** (foreground bash yield wait still attached) → unblocks the turn, process keeps running |
+| **Input dock** | When any job is live, a collapsible strip above the composer (`order: 5`) mirrors header row actions |
+
+Sort: live rows by start time; settled rows newest-first.
+
+**Foreground bash (30s yield, configurable) in chat:** a non-`background` `bash` waits up to **30s** by default (Codex cap), then returns a **job id** without killing the process; the **turn continues**. **Background** is available on **foreground** rows during the yield window; after yield, **Stop** remains.
+
+**Steer completion in the timeline:** job / background-subagent settle notices use **`delivery: steer`** — they **do not** enter the composer queue; they promote at tool-step / turn boundaries as injected `user/message` context (not a user-typed bubble). Example job copy: `background job bash-1 … finished … Read its output with job_output.`
+
+RPC wiring: `Session.killJob` / `Session.backgroundJob` · Face `job.kill` / `job.background` (see tables above).
 
 ## Limits
 
