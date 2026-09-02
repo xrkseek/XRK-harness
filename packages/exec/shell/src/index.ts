@@ -784,11 +784,19 @@ function formatJobOutput(
  * Foreground wait cap (codex-style yield): when it elapses, the call returns
  * with the job still running instead of blocking the turn forever. The yield
  * kills nothing — waiting again (job_output wait) extends, job_kill stops.
- * Codex clamps interactive yields to 250–30_000 ms; 60 s is the XRK chat-side
- * balance: worst-case turn block stays short while a typical command settles
- * inside one wait. Long tasks continue via job_output(wait:true) chunks.
+ * Codex clamps interactive yields to 250–30_000 ms (see unified_exec/mod.rs).
  */
-export const DEFAULT_FOREGROUND_YIELD_MS = 60_000;
+export const MIN_FOREGROUND_YIELD_MS = 250;
+export const MAX_FOREGROUND_YIELD_MS = 30_000;
+export const DEFAULT_FOREGROUND_YIELD_MS = 30_000;
+
+/** Clamp a settings or tool override to the Codex-style yield window. */
+export function clampForegroundYieldMs(ms: number): number {
+  return Math.min(
+    MAX_FOREGROUND_YIELD_MS,
+    Math.max(MIN_FOREGROUND_YIELD_MS, Math.floor(ms)),
+  );
+}
 
 export function createBashTools(
   shell: ShellService,
@@ -817,12 +825,13 @@ export function createBashTools(
     typeof options.defaultCwd === "string" && options.defaultCwd.trim().length > 0
       ? options.defaultCwd.trim()
       : undefined;
-  const yieldMs =
+  const yieldMs = clampForegroundYieldMs(
     typeof options.foregroundYieldMs === "number" &&
-    Number.isFinite(options.foregroundYieldMs) &&
-    options.foregroundYieldMs > 0
-      ? Math.floor(options.foregroundYieldMs)
-      : DEFAULT_FOREGROUND_YIELD_MS;
+      Number.isFinite(options.foregroundYieldMs) &&
+      options.foregroundYieldMs > 0
+      ? options.foregroundYieldMs
+      : DEFAULT_FOREGROUND_YIELD_MS,
+  );
   const dialect =
     process.platform === "win32"
       ? "PowerShell (pwsh). Prefer PowerShell syntax (`Get-ChildItem`, `$env:NAME`, `Set-Location`). Use workdir instead of cd when possible."
