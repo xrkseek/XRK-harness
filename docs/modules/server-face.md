@@ -94,7 +94,8 @@ HTTP/WS (attach-http)
 | `adapt/wire-event.ts` | session 事件 → 壳 wire | |
 | `adapt/wire-ids.ts` | 稳定数字 id 映射 | |
 | `adapt/tool-view.ts` | 工具卡 lookup | `presentCall` / `presentResult` 在工具上；Face `viewFor` 软失败 |
-| `adapt/job-view.ts` | `JobView` / `jobViews` | mux `session/jobs`；基线非空才发；变更可推 `[]` |
+| `adapt/job-view.ts` | `JobView` / `jobViews` | mux `session/jobs`；基线非空才发；变更可推 `[]`；可选 `foreground` |
+| `handlers/job.ts` | `job.kill` / `job.background` | 共享 shell + session owner fence |
 | `adapt/index.ts` | 适配导出 | |
 
 ### 投影（`projections/`）
@@ -135,6 +136,7 @@ HTTP/WS (attach-http)
 | `tests/tool-view.test.ts` | lookup only；无 getTool 则没 view |
 | `tests/standing-tools.test.ts` | 冷 history 用 standing registry，不 wake agent |
 | `tests/jobs.test.ts` | `session/jobs` 基线非空才发；变更可推 `[]` |
+| `tests/job-handlers.test.ts` | `job.kill` / `job.background` owner fence |
 | `tests/commands.test.ts` | `commands/list` · `commands/execute` · `/compact` · `/export` · `/feedback` · `pluginInventory/list` · Cordis stub |
 | `tests/wire.test.ts` | respond 解析 · 路径 |
 | `tests/rpc-error.test.ts` | 错误码映射 |
@@ -254,7 +256,8 @@ HTTP/WS (attach-http)
 | `adapt/wire-event.ts` | session events → shell wire | |
 | `adapt/wire-ids.ts` | Stable numeric id map | |
 | `adapt/tool-view.ts` | Tool-card lookup | `presentCall` / `presentResult` on tools; Face `viewFor` soft-fails |
-| `adapt/job-view.ts` | `JobView` / `jobViews` | mux `session/jobs`; emit only when baseline non-empty; changes may push `[]` |
+| `adapt/job-view.ts` | `JobView` / `jobViews` | mux `session/jobs`; emit only when baseline non-empty; changes may push `[]`; optional `foreground` |
+| `handlers/job.ts` | `job.kill` / `job.background` | shared shell + session owner fence |
 | `adapt/index.ts` | Adapter exports | |
 
 ### Projections (`projections/`)
@@ -295,6 +298,7 @@ Driver registry lives in `@xrkseek/session-projection` (spec: [session-projectio
 | `tests/tool-view.test.ts` | lookup only; no getTool → no view |
 | `tests/standing-tools.test.ts` | cold history uses standing registry; does not wake agent |
 | `tests/jobs.test.ts` | `session/jobs` emits only when baseline non-empty; changes may push `[]` |
+| `tests/job-handlers.test.ts` | `job.kill` / `job.background` owner fence |
 | `tests/commands.test.ts` | `commands/list` · `commands/execute` · `/compact` · `/export` · `/feedback` · `pluginInventory/list` · Cordis stub |
 | `tests/wire.test.ts` | respond parse · paths |
 | `tests/rpc-error.test.ts` | error-code mapping |
