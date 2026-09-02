@@ -41,7 +41,7 @@ export interface TextRefRange {
   readonly end: number
   readonly trigger: '/' | '@'
   /** Optional icon domain for syntax-recognizable plain references. */
-  readonly appearance?: 'folder'
+  readonly appearance?: 'folder' | 'file'
 }
 
 /** Decoration product: claim token range + chip instructions + text-ref ranges + the ghost hint. */
@@ -58,7 +58,35 @@ export interface DraftDecorations {
 
 /** Token matcher: a trigger char at line start or after whitespace, then a word-ish name (never crosses \n). */
 const TEXT_REF_RE = /(^|\s)([/@])([\w-]+)/g
-const FOLDER_REF_RE = /(^|\s)(@(?:"[^"\n]*\/|[^\s"]+\/))/g
+/**
+ * Directory `@path/` — the trailing slash must end the token. A mid-path slash
+ * before a filename (`@dir/file.png`) must not paint as a folder prefix.
+ */
+const FOLDER_REF_RE = /(^|\s)(@(?:"[^"\n]*\/(?=["\s]|$)|[^\s"]*\/(?=\s|$)))/g
+/**
+ * File `@dir/name` — contains `/` but does not end with `/` (directories own
+ * the trailing-slash form). Quoted paths need a closing quote.
+ */
+const FILE_REF_RE = /(^|\s)(@(?:"[^"\n]+"|[^\s"]+\/[^\s"]+))(?=\s|$)/g
+
+function pushPathRef(
+  out: TextRefRange[],
+  match: RegExpExecArray,
+  appearance: 'folder' | 'file',
+): void {
+  const token = match[2] ?? ''
+  const start = match.index + (match[1]?.length ?? 0)
+  const end = start + token.length
+  if (out.some(range => range.start < end && range.end > start)) return
+  if (appearance === 'file') {
+    const inner = token.startsWith('@"') && token.endsWith('"')
+      ? token.slice(2, -1)
+      : token.slice(1)
+    // Bare `@name` stays lexicon-only; closed `@"dir/"` is a directory.
+    if (!inner.includes('/') || inner.endsWith('/')) return
+  }
+  out.push({ start, end, trigger: '@', appearance })
+}
 
 /**
  * Scan the draft for plain-text reference tokens against the hot lexicons.
@@ -89,12 +117,12 @@ export function scanTextRefs(
   FOLDER_REF_RE.lastIndex = 0
   let folder: RegExpExecArray | null
   while ((folder = FOLDER_REF_RE.exec(draft)) !== null) {
-    const token = folder[2] ?? ''
-    const start = folder.index + (folder[1]?.length ?? 0)
-    const end = start + token.length
-    if (!out.some(range => range.start < end && range.end > start)) {
-      out.push({ start, end, trigger: '@', appearance: 'folder' })
-    }
+    pushPathRef(out, folder, 'folder')
+  }
+  FILE_REF_RE.lastIndex = 0
+  let file: RegExpExecArray | null
+  while ((file = FILE_REF_RE.exec(draft)) !== null) {
+    pushPathRef(out, file, 'file')
   }
   return out.sort((left, right) => left.start - right.start)
 }

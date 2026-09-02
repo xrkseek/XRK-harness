@@ -684,14 +684,15 @@ export function InputBar({
         // icon for every character typed ahead of it. Structured references
         // key by occurrenceId, the identity their occurrence table owns.
         const text = draft.slice(b.ref.start, b.ref.end)
+        const pathAppearance = b.ref.appearance
         backdrop.push(
           <mark key={`ref-${b.ordinal}`} className={css.textRef} data-decoration="text-ref">
-            {b.ref.appearance === 'folder'
+            {pathAppearance === 'folder' || pathAppearance === 'file'
               ? (
                 <>
                   <span className={css.textRefTrigger}>
                     <span className={css.textRefTriggerGlyph}>{text[0]}</span>
-                    <ReferenceIcon kind="folder" size={16} className={css.textRefIcon} />
+                    <ReferenceIcon kind={pathAppearance} size={16} className={css.textRefIcon} />
                   </span>
                   {text.slice(1)}
                 </>

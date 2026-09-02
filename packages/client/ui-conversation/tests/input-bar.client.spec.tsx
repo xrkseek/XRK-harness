@@ -1471,6 +1471,16 @@ describe('decorations', () => {
     expect(shell.snapshot.draft).toBe('see @src/components/')
   })
 
+  it('a nested file path paints the whole token as a file reference', () => {
+    const { view, shell } = bench()
+    const draft = 'see @downloads/原文/2027-目录调整表-预通知1732.png'
+    act(() => { shell.setDraft(draft) })
+    const mark = view.container.querySelector('[data-decoration="text-ref"]')
+    expect(mark?.textContent).toBe('@downloads/原文/2027-目录调整表-预通知1732.png')
+    expect(mark?.querySelector('svg')).not.toBeNull()
+    expect(shell.snapshot.draft).toBe(draft)
+  })
+
   it('a plain-text reference keeps its nodes while earlier text shifts its offset', () => {
     const { view, textarea, shell } = bench()
     act(() => { shell.setDraft('see @src/components/ here') })

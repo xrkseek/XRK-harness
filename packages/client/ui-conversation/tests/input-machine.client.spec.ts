@@ -719,6 +719,22 @@ describe('decorations: scanTextRefs', () => {
     ])
   })
 
+  it('does not paint a folder prefix out of a nested file path', () => {
+    const draft = '@downloads/原文/2027-目录调整表-预通知1732.png'
+    expect(scanTextRefs(draft, new Map())).toEqual([
+      { start: 0, end: draft.length, trigger: '@', appearance: 'file' },
+    ])
+    expect(scanTextRefs('see @src/components/Button.tsx please', new Map())).toEqual([
+      { start: 4, end: 30, trigger: '@', appearance: 'file' },
+    ])
+  })
+
+  it('quoted file paths keep the whole token as a file reference', () => {
+    expect(scanTextRefs('open @"docs/design notes/a.md"', new Map())).toEqual([
+      { start: 5, end: 30, trigger: '@', appearance: 'file' },
+    ])
+  })
+
   it('names off the lexicon do not match; triggers are routed per lexicon list', () => {
     expect(scanTextRefs('/unknown @commit-helper', LEX)).toEqual([])
   })
