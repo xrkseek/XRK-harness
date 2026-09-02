@@ -44,7 +44,7 @@ describe.skipIf(!HAS_SHELL)("product shell mcp settings", () => {
             },
           },
         }));
-        await dialog.getByRole("button", { name: "Add from JSON" }).click();
+        await dialog.getByRole("button", { name: "Add" }).click();
         await dialog.getByText("fixture-fs").waitFor({ timeout: 5_000 });
         await dialog.getByRole("button", { name: "Save", exact: true }).click();
 

@@ -5,7 +5,7 @@ prompt: |
   Follow skill **xrk-capability-attach**:
   1. Confirm command+args or url, server id, allowConnect
   2. Emit pasteable {"mcpServers":{…}} (no env; secrets → Credentials)
-  3. Guide: Settings → Plugins → Plugin config → Add from JSON → Save
+  3. Guide: Settings → Plugins → Plugin config → paste JSON → **添加** → Allow connect → Save
   4. settings.mutate ns=mcp only with my explicit OK
   5. Verify row status + inventory; explain park on policy deny
 instructions: |

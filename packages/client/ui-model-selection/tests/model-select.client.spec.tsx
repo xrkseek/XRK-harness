@@ -167,6 +167,43 @@ describe('ModelSelect reasoning effort', () => {
     expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
   })
 
+  it('filters models by search when the catalog is large', () => {
+    const directory = createSnapshotStore(state({
+      groups: [{
+        id: 'openai',
+        name: 'OpenAI',
+        models: [
+          { id: 'gpt-4o', name: 'GPT-4o' },
+          { id: 'gpt-4o-mini', name: 'GPT-4o mini' },
+          { id: 'o3', name: 'o3' },
+          { id: 'o4-mini', name: 'o4 mini' },
+          { id: 'gpt-4.1', name: 'GPT-4.1' },
+          { id: 'gpt-4.1-mini', name: 'GPT-4.1 mini' },
+        ],
+      }],
+      current: { provider: 'openai', model: 'gpt-4o' },
+    }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    const search = screen.getByRole('searchbox', { name: '筛选模型' })
+    fireEvent.change(search, { target: { value: 'mini' } })
+    expect(screen.getByRole('menuitemradio', { name: /GPT-4o mini/ })).toBeTruthy()
+    expect(screen.getByRole('menuitemradio', { name: /o4 mini/ })).toBeTruthy()
+    expect(screen.getByRole('menuitemradio', { name: /GPT-4.1 mini/ })).toBeTruthy()
+    expect(screen.queryByRole('menuitemradio', { name: /^GPT-4o$/ })).toBeNull()
+    fireEvent.change(search, { target: { value: 'zzz' } })
+    expect(screen.getByText('没有匹配的模型。')).toBeTruthy()
+  })
+
   it('renders no Agent-bound control for an addressed subagent session', () => {
     const load = vi.fn()
     render(<ModelSelect

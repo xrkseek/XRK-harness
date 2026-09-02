@@ -16,6 +16,7 @@ description: >-
 |------|------|
 | 跨项目习惯（默认） | `~/.xrk/skills/<name>/SKILL.md` |
 | 仅本仓库 | `{workspace}/.agents/skills/` 或 `.xrk/skills/`（**须用户同意**再建目录） |
+| 随 CLI 发布模板 | `apps/cli/seeds/skills/<name>/`（维护者双写） |
 
 `xrkh web` 仅**缺才装** bundled seeds，不覆盖已有 `SKILL.md`。
 
@@ -40,8 +41,8 @@ description: >-
 | `alwaysApply` | 写进 `AGENTS.md` 角色/边界 |
 | `globs` | 任务 skill 或 `context/` 分文件 |
 
-工作区 **不**自动建 `.agents`；会话在 `~/.xrk/sessions`。
+内核维护者改码用 `.cursor/rules/xrk-*`（不进 Host inject）。
 
 ## 写完
 
-新 turn 或 `skill.list` 确认可见。范例：`xrk-capability-attach` · `xrk-models-settings`。
+新 turn 或 `skill.list` 确认可见。维护者细则 → **`xrk-workspace-skills`**（Cursor 只读改 Harness 源码时）。

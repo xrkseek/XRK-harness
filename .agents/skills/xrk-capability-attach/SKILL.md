@@ -9,80 +9,28 @@ description: >-
 
 # Attach capability (MCP)
 
-Default path for new tools: **Settings → Plugins → Plugin config**.
-Writes land in **system data** (`~/.xrk/host-settings.json`), not the project tree.
-
-Harness monorepo workspace: unclear kind → **`xrk-plugin-kind`**; in-repo JS →
-**`xrk-plugin-author`** then **`xrk-plugin-verify`**. Home seed truth:
-`apps/cli/seeds/skills/xrk-capability-attach/` (copied on `xrkh web`).
-
-## Workflow
+默认新工具走 **Settings → Plugins → Plugin config**（数据在 `~/.xrk/host-settings.json`）。  
+进程内 JS → **`xrk-plugin-author`** + restart。
 
 ```
-- [ ] 1. Choose path (MCP vs process plugin)
-- [ ] 2. Collect server id + stdio/HTTP details
-- [ ] 3. Emit pasteable JSON (no env)
-- [ ] 4. Land with user confirmation
-- [ ] 5. Verify row status + tool inventory
+- [ ] 1. MCP vs 进程插件
+- [ ] 2. 收集 id + command/url
+- [ ] 3. 给出可粘贴 JSON（无 env）
+- [ ] 4. 引导 UI 或经确认 mutate
+- [ ] 5. 看行状态 + 工具 inventory
 ```
 
-### 1. Choose path
-
-| Need | Do |
-|------|-----|
-| Public / npm MCP server | **This skill** (default) |
-| In-repo JS tools | **`xrk-plugin-author`** + restart |
-
-### 2. Collect
-
-- stdio (`command` + `args`, optional `cwd`) or HTTP (`url`)
-- Server id; connect now? (`allowConnect`)
-
-### 3. Emit pasteable JSON
-
-No `env`. Secrets → Credentials.
+## JSON 示例
 
 ```json
 {"mcpServers":{"playwright":{"command":"npx","args":["-y","@playwright/mcp@latest"]}}}
 ```
 
-```json
-{"mcpServers":{"remote":{"url":"https://example.com/mcp"}}}
-```
+## UI（与 locales 一致）
 
-### 4. Land (confirmation required)
+设置 → 插件 → 插件配置 → 粘贴 JSON → **添加** → **允许连接** → **保存**  
+（English: Settings → Plugins → Plugin config → **Add** → **Allow connect** → **Save**）
 
-**Preferred:** Settings → Plugins → Plugin config → Add from JSON → allow connect → **Save**.
+未经确认勿 `settings.mutate` ns=`mcp`。勿写 `env` / `connected` overlay。
 
-**Only if** user authorizes mutate:
-
-```json
-{
-  "ns": "mcp",
-  "ops": [
-    {
-      "op": "set",
-      "path": ["servers"],
-      "value": [{
-        "serverName": "playwright",
-        "command": "npx",
-        "args": ["-y", "@playwright/mcp@latest"]
-      }]
-    },
-    { "op": "set", "path": ["allowConnect"], "value": true }
-  ]
-}
-```
-
-No mutate without confirmation. No `connected`/`parked` overlays. No `env` on servers.
-
-### 5. Verify
-
-Row connected / **park** / failed; inventory `mcp__<server>__…`; policy deny → park.
-
-Slash: `/mcp-attach` (`.agents/recipes/mcp-attach.yaml`).
-
-## Related
-
-- `docs/modules/mcp.md` · `docs/host-face.md` · `docs/skills-layers.md`
-- `xrk-create-skill` · `xrk-adapt-workspace`
+验证：`mcp__<server>__…`；policy deny → **park**。斜杠 **`/mcp-attach`**。

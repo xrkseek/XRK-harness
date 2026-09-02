@@ -46,7 +46,7 @@
 | 非法布尔 frontmatter | **整 skill 丢弃**（fail-closed） |
 | 优先级 | 工作区 > 用户主目录；同层内 **`.xrk` 原生优先**：`.xrk` → `.agents` → `.cursor` → `.claude` → `.codex`（**home 层无 `.cursor/skills`**） |
 
-产品默认挂载 / 适应 / 建 skill 剧本在 GitHub：`apps/cli/seeds/skills/`。**启动产品（web）即写入用户主目录** `~/.xrk/skills/`；工作区 skills 仅用户自建。
+产品默认 playbook 在 **`apps/cli/seeds/skills/`**（`xrkh web` 装入 `~/.xrk/skills`）；写法**对标 Cursor** `create-skill` / `create-rule`，落点见 **`xrk-create-skill`**。
 
 ## 能力挂载（与人格分工）
 
@@ -65,6 +65,8 @@
 | 产品 skill（`.agents/skills/`） | 用途 |
 |------------|------|
 | **`xrk-capability-attach`** | 挂 MCP / 接外部工具（默认路径） |
+| **`xrk-models-settings`** | 配模型：手动 ID、获取列表、对话搜索 |
+| **`xrk-create-skill`** | 写 skill / standing（对标 Cursor） |
 | **`xrk-harness-monorepo`** | monorepo 总控 |
 | `xrk-plugin-kind` | kind / MCP / client 选型 |
 | `xrk-plugin-author` | 写插件 |
@@ -127,7 +129,7 @@ Optional directories; **never auto-created**. Common files:
 | Illegal boolean frontmatter | **Whole skill discarded** (fail-closed) |
 | Priority | Workspace > user home; within a layer **`.xrk` native wins**: `.xrk` → `.agents` → `.cursor` → `.claude` → `.codex` (**home layer has no `.cursor/skills`**) |
 
-Default attach / adapt / create-skill playbooks live in the GitHub tree at `apps/cli/seeds/skills/`. **Starting the product (`xrkh web`) writes them under** `~/.xrk/skills/`; this repo’s `.agents/skills/` is a workspace overlay only.
+Default playbooks: **`apps/cli/seeds/skills/`** (`xrkh web` → `~/.xrk/skills`). Same shape as Cursor **`create-skill`** / **`create-rule`**; XRK paths in **`xrk-create-skill`**. Workspace overlay: this repo’s `.agents/skills/`.
 
 ## Capability attach (vs persona)
 
@@ -146,6 +148,8 @@ When this repository is the workspace, plugins live under **`extensions/<plugin-
 | Product skill (`.agents/skills/`) | Purpose |
 |------------|------|
 | **`xrk-capability-attach`** | Attach MCP / external tools (default path) |
+| **`xrk-models-settings`** | Models: manual ID, provider fetch, chat search |
+| **`xrk-create-skill`** | Author skills / standing (Cursor-shaped) |
 | **`xrk-harness-monorepo`** | Monorepo router |
 | `xrk-plugin-kind` | Choose kind / MCP / client |
 | `xrk-plugin-author` | Author plugins |

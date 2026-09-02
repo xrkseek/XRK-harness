@@ -1,96 +1,59 @@
 ---
 name: xrk-workspace-skills
 description: >-
-  编写 Harness 产品 skill（.xrk/skills、templates/xrk-harness/skills）：
-  frontmatter、catalog、与 recipes 分工。新增或改产品 SKILL.md 时使用。
+  编写 Harness 产品 skill / 对照 Cursor create-skill·create-rule。新增或改
+  .agents/skills、seeds、recipes 时使用。
 disable-model-invocation: true
 user-invocable: false
 ---
 
-# 笔记 · 产品 skill（Harness）
+# 笔记 · 产品 skill / standing（Harness）
 
 分层：[docs/skills-layers.md](../../../docs/skills-layers.md) · 注入：[docs/workspace-inject.md](../../../docs/workspace-inject.md)。
 
+## 对标 Cursor（只写 XRK 差异）
+
+| Cursor 产品 | XRK Harness |
+|-------------|-------------|
+| Skill 目录 + `SKILL.md` + frontmatter | **同形**；见下路径 |
+| `create-skill`：WHAT+WHEN description、checklist、一默认路径 | 产品 skill **`xrk-create-skill`**（种子）教用户 |
+| `~/.cursor/skills/` | **`~/.xrk/skills/`**（`xrkh web` 缺才装 seeds） |
+| `.cursor/skills/`（项目） | **`{workspace}/.agents/skills/`** 或 `.xrk/skills/` |
+| `.cursor/skills-cursor/`（内置） | **无**；维护者 **`.cursor/skills/xrk-*`**（`disable-model-invocation`） |
+| `create-rule` · `.cursor/rules/*.mdc` | 工作区 **`.agents/AGENTS.md`** · **`rules.md`** · **`context/*`**（Host inject，非 `.mdc`） |
+| 改内核 `.cursor/rules` | 本仓 **`.cursor/rules/xrk-*`**，`xrk-inject: false`，Cursor 改码用 |
+
+**写法**：沿用 Cursor create-skill 的 description / 步骤 / 反模式；**只追加** XRK 路径、Settings 真按钮名、`settings.mutate` 须确认。
+
 ## 两套 skill，不要混
 
-| 层 | 目录 | catalog | 斜杠 |
-|----|------|---------|------|
-| **维护笔记** | `.cursor/skills/xrk-*` | `disable-model-invocation: true` | `user-invocable: false` |
-| **产品 skill** | `.xrk/skills/<name>/` | **仅** `name` + `description` 进 catalog | `/name` 可展开 |
+| 层 | 目录 | catalog |
+|----|------|---------|
+| 维护笔记 | `.cursor/skills/xrk-*` | 不进产品 catalog |
+| 产品 skill | `.xrk/skills` · `.agents/skills` | 仅 `name` + `description` |
 
-种子真源：`apps/cli/seeds/skills/` → `xrkh web` → `~/.xrk/skills/`（缺才装）。本仓教练另写 `.agents/skills/`。
+## 双写真源（改流程必同步）
 
-## 产品 SKILL 最小形
-
-```text
-.xrk/skills/my-skill/
-  SKILL.md
-  references/   # 可选
-  scripts/      # 可选
-```
-
-```yaml
----
-name: my-skill
-description: >-
-  Does X. Use when the user asks for Y, or says 「触发语」.
----
-```
-
-Authoring（对标 Cursor create-skill）：第三人称 description（WHAT + WHEN）；正文精简、一默认路径 + 一逃生口；具体示例；禁日记腔 / 自证腔；勿自动 mkdir 工作区 `.xrk`。
-
-```markdown
-## 步骤
-1. …
-2. 契约细节 → 读 docs/plugin-development.md，不要凭印象编造 API
-```
-
-| 字段 | 要求 |
+| 受众 | 路径 |
 |------|------|
-| `name` | 与目录名一致；kebab-case |
-| `description` | **中文可**；必须含用户会说的触发语 |
-| 正文 | 步骤优先；表格列真实 CLI / 工具名 |
+| 用户主目录 | `apps/cli/seeds/skills/<name>/` → `~/.xrk/skills/` |
+| 本仓教练 | `.agents/skills/<name>/` |
 
-**不要**在产品 skill 里复制整份 docs；**不要**写维护者红线（Node 26、禁止 commit 等）。
+UI 按钮名以 `packages/client/*/src/client/locales.ts` 为准。
 
-## 优先级（项目内多根）
+## recipes
 
-低 → 高（后列覆盖同名）：`.codex` → `.claude` → `.agents` → `.cursor` → **`.xrk/skills`**。
+`.agents/recipes/*.yaml` = 斜杠固定 prompt，**指向 skill 名**；不与 skill 同 id。
 
-插件教练三件套（种子）：
+## 新增 checklist
 
-| Skill | 职责 |
-|-------|------|
-| `xrk-capability-attach` | MCP Settings 挂载（CLI `seeds/skills` → `~/.xrk/skills`） |
-| `xrk-plugin-author` | 写脚手架、manifest、createPlugin |
-| `xrk-plugin-kind` | kind / MCP 选型（默认 MCP） |
-| `xrk-plugin-verify` | add · restart · 可见性 |
+1. seeds + `.agents` 各一份（正文宜相同、宜短）
+2. `name` = 目录名；description 含触发语
+3. [SKILL_INDEX.md](../SKILL_INDEX.md) · [docs/skills-layers.md](../../../docs/skills-layers.md) · `.agents/AGENTS.md` 路由表
+4. 改 Settings 可见流程 → rule [`xrk-client-face-ui`](../../rules/xrk-client-face-ui.mdc)
 
-## recipes vs skills
+## 陷阱
 
-| | recipes (`.xrk/recipes/*.yaml`) | skills |
-|--|--------------------------------|--------|
-| 触发 | `/recipe-id` 斜杠 | catalog 匹配 + `/skill-name` |
-| 内容 | 固定 prompt 模板 | 分步 playbook |
-| 示例 | `plugin-scaffold` · `mcp-attach` | `xrk-plugin-author` · `xrk-capability-attach` |
-
-同名冲突：recipe 与 skill **不同命名空间**；避免同 id 混淆用户。
-
-## 执行步骤（新增产品 skill）
-
-1. **跨工作区默认**：写 `apps/cli/seeds/skills/<name>/SKILL.md`（随 CLI 发布 → `~/.xrk/skills`）。  
-2. **本仓工作区教练**：写 `.agents/skills/<name>/SKILL.md`（Host 扫工作区 catalog）。  
-3. 只 frontmatter `name` + `description`（无 `disable-model-invocation`）。  
-4. 若改 inject 行为 → [docs/workspace-inject.md](../../../docs/workspace-inject.md)。  
-5. 维护者索引 → [SKILL_INDEX.md](../SKILL_INDEX.md)。
-
-## 常见陷阱
-
-- 把 `.cursor/skills/xrk-plugin-dev` 复制到 `.xrk/skills` — 受众错误。  
-- description 只写「插件开发」无触发语 — catalog 无法路由。  
-- 超长正文挤占 inject 预算 — 细节放 `references/`，正文保持 checklist。
-
-## 对照 XRK-AGT
-
-AGT **`agent-build-skill`** = 本 skill 的产品侧写法；  
-AGT **`agents/skills/standard/`** = Harness **`templates/xrk-harness/skills/`**。
+- 把 `xrk-plugin-dev` 复制到 `.xrk/skills`
+- 在工作区 auto-mkdir `.xrk` / `.agents`
+- 产品 skill 里写 Node 26 / 禁止 commit 等维护者红线

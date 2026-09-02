@@ -18,9 +18,10 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **kind 选型**（tools / prompt / commands / client） | `xrk-extensions` · 产品 `xrk-plugin-kind` |
 | **MCP vs 进程插件** | `xrk-mcp-plugins` · [docs/modules/mcp.md](../../docs/modules/mcp.md) |
 | **社区 client / host.mjs / dsh-compat** | `xrk-community-plugins` · [docs/community-plugins.md](../../docs/community-plugins.md) |
-| **写产品 SKILL.md**（`.agents/skills`） | `xrk-workspace-skills` · 产品 `xrk-plugin-author` |
+| **写产品 SKILL.md** | `xrk-workspace-skills`（对标 Cursor create-skill / create-rule） |
 | **改 loader / discover / inventory** | `xrk-plugin-dev` · [docs/plugin-loader.md](../../docs/plugin-loader.md) |
 | **改 preset 接线** | `xrk-plugin-dev` · [docs/profiles.md](../../docs/profiles.md) |
+| **Settings / 模型 / MCP 设置 UI** | rule `xrk-client-face-ui` |
 | Session / meter / compaction | `xrk-meter-session` |
 | 写 / 改文档 | `xrk-docs-audience` |
 | 发行说明 | `xrk-release-notes` |
@@ -49,6 +50,9 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **`xrk-plugin-author`** | 写插件、脚手架、`xrk.plugin.json`、`createPlugin` |
 | **`xrk-plugin-kind`** | 选 kind、tools 还是 prompt、要不要 MCP |
 | **`xrk-plugin-verify`** | `plugin add`、`restart`、工具是否可见 |
+| **`xrk-create-skill`** | 写 skill（对标 Cursor create-skill） |
+| **`xrk-models-settings`** | 配模型、手动 ID、获取列表、对话搜索 |
+| **`xrk-capability-attach`** | 挂 MCP、Settings 粘贴 JSON |
 
 会话徽章用 **XRK Harness**（`harness`）；全局人格可放 `~/.agents/`。见 [`.agents/README.md`](../../.agents/README.md)。
 

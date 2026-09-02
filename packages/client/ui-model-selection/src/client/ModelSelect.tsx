@@ -28,6 +28,23 @@ import css from './ModelSelect.module.css'
 /** Which pane the dropdown shows: the two-row root or one drilled-in list. */
 type Pane = 'root' | 'model' | 'effort'
 
+/** Case-insensitive substring match over model id, name, and provider group. */
+function matchesModelQuery(
+  query: string,
+  groupName: string,
+  model: { id: string; name: string; description?: string },
+): boolean {
+  const needle = query.trim().toLowerCase()
+  if (needle.length === 0) return true
+  const haystack = [
+    groupName,
+    model.id,
+    model.name,
+    model.description ?? '',
+  ].join('\n').toLowerCase()
+  return haystack.includes(needle)
+}
+
 /** One dynamic effort row; undefined means preserve the provider default. */
 interface EffortChoice {
   key: string
@@ -52,6 +69,8 @@ export function ModelSelect(
   )
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
+  const [search, setSearch] = useState('')
+  const searchRef = useRef<HTMLInputElement | null>(null)
   // The in-menu error strip serves catalog loads (its Retry re-runs the
   // load); a rejected SELECTION announces through the transient toast
   // instead, so the strip renders only while the latest failure-capable
@@ -76,6 +95,13 @@ export function ModelSelect(
           : { reasoningEffort: model.reasoning.defaultEffort },
       } satisfies ModelSelection,
     }))), [state.groups])
+  const modelCount = choices.length
+  const filteredGroups = useMemo(() => state.groups
+    .map(group => ({
+      ...group,
+      models: group.models.filter(model => matchesModelQuery(search, group.name, model)),
+    }))
+    .filter(group => group.models.length > 0), [search, state.groups])
   const selectedIndex = state.current === null
     ? -1
     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
@@ -116,6 +142,10 @@ export function ModelSelect(
   }, [available, load])
 
   useEffect(() => {
+    if (open && pane === 'model') searchRef.current?.focus()
+  }, [open, pane])
+
+  useEffect(() => {
     if (!open) return
     const closeOutside = (event: MouseEvent): void => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
@@ -128,6 +158,7 @@ export function ModelSelect(
 
   const show = (): void => {
     setPane('root')
+    setSearch('')
     setOpen(true)
     reload()
   }
@@ -135,6 +166,7 @@ export function ModelSelect(
   const close = (restoreFocus = false): void => {
     setOpen(false)
     setPane('root')
+    setSearch('')
     if (restoreFocus) queueMicrotask(() => { triggerRef.current?.focus() })
   }
 
@@ -150,11 +182,20 @@ export function ModelSelect(
     if (event.key === 'Escape' && open) {
       event.preventDefault()
       // Escape backs out of a drilled pane first, then closes.
-      if (pane !== 'root') setPane('root')
-      else close(true)
+      if (pane !== 'root') {
+        setPane('root')
+        setSearch('')
+      } else close(true)
       return
     }
     if (!open) return
+    if (pane === 'model' && event.target === searchRef.current) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        moveFocus(event.key === 'ArrowDown' ? 1 : -1)
+      }
+      return
+    }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
       moveFocus(event.key === 'ArrowDown' ? 1 : -1)
@@ -251,7 +292,7 @@ export function ModelSelect(
         >
           {pane === 'root' && (
             <>
-              <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { setPane('model') }}>
+              <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { setSearch(''); setPane('model') }}>
                 <span className={css.cellLabel}>{t('menu.model')}</span>
                 <span className={css.cellValue}>{modelLabel}</span>
                 <IconChevronRightOutline14 className={css.cellChevron} />
@@ -283,43 +324,63 @@ export function ModelSelect(
                   <button type="button" className={css.retry} onClick={reload}>{t('retry')}</button>
                 </div>
               ))}
-              <div className={clsx(css.groups, 'scrollable')}>
-                {state.groups.map((group) => {
-                  const headingId = `${id}-${group.id}`
-                  return (
-                    <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
-                      <div className={css.groupTitle} id={headingId}>{group.name}</div>
-                      {group.models.map((model) => {
-                        const selected = state.current?.provider === group.id && state.current.model === model.id
-                        return (
-                          <button
-                            ref={itemRef()}
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={selected}
-                            className={clsx(css.option, selected && css.selected)}
-                            key={model.id}
-                            title={model.name}
-                            disabled={busy}
-                            onClick={() => { choose({ provider: group.id, model: model.id }) }}
-                          >
-                            <span className={css.optionCopy}>
-                              <span className={css.modelName}>{model.name}</span>
-                              {model.description !== undefined && (
-                                <span className={css.description}>{model.description}</span>
-                              )}
-                            </span>
-                            <span className={css.check}>
-                              {selected ? <IconCheckOutline16 /> : null}
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </section>
-                  )
-                })}
-              </div>
-              {state.status === 'ready' && choices.length === 0 && (
+              {modelCount > 5 && (
+                <input
+                  ref={searchRef}
+                  className={css.search}
+                  type="search"
+                  value={search}
+                  placeholder={t('search.placeholder')}
+                  aria-label={t('search.aria')}
+                  onChange={(event) => { setSearch(event.target.value) }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.preventDefault()
+                  }}
+                />
+              )}
+              {filteredGroups.length > 0
+                ? (
+                  <div className={clsx(css.groups, 'scrollable')}>
+                    {filteredGroups.map((group) => {
+                      const headingId = `${id}-${group.id}`
+                      return (
+                        <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
+                          <div className={css.groupTitle} id={headingId}>{group.name}</div>
+                          {group.models.map((model) => {
+                            const selected = state.current?.provider === group.id && state.current.model === model.id
+                            return (
+                              <button
+                                ref={itemRef()}
+                                type="button"
+                                role="menuitemradio"
+                                aria-checked={selected}
+                                className={clsx(css.option, selected && css.selected)}
+                                key={model.id}
+                                title={model.name}
+                                disabled={busy}
+                                onClick={() => { choose({ provider: group.id, model: model.id }) }}
+                              >
+                                <span className={css.optionCopy}>
+                                  <span className={css.modelName}>{model.name}</span>
+                                  {model.description !== undefined && (
+                                    <span className={css.description}>{model.description}</span>
+                                  )}
+                                </span>
+                                <span className={css.check}>
+                                  {selected ? <IconCheckOutline16 /> : null}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </section>
+                      )
+                    })}
+                  </div>
+                )
+                : state.status === 'ready' && modelCount > 0
+                  ? <div className={css.empty}>{t('search.noResults')}</div>
+                  : null}
+              {state.status === 'ready' && modelCount === 0 && (
                 <div className={css.empty}>{t('empty.models')}</div>
               )}
             </>

@@ -9,83 +9,27 @@ description: >-
 
 # Attach capability (MCP)
 
-Default path for new tools: **Settings → Plugins → Plugin config**.
-Do not invent Cursor hooks, workspace `.xrk` folders, or process plugins unless the user needs in-repo JS.
-
-Writes land in **system data** (`~/.xrk/host-settings.json`), not the project tree.
-
-## Workflow
+默认新工具走 **Settings → Plugins → Plugin config**（数据在 `~/.xrk/host-settings.json`）。  
+进程内 JS → process plugin + **`plugin add`** + restart。
 
 ```
-- [ ] 1. Choose path (MCP vs process plugin)
-- [ ] 2. Collect server id + stdio/HTTP details
-- [ ] 3. Emit pasteable JSON (no env)
-- [ ] 4. Land with user confirmation
-- [ ] 5. Verify row status + tool inventory
+- [ ] 1. MCP vs 进程插件
+- [ ] 2. 收集 id + command/url
+- [ ] 3. 给出可粘贴 JSON（无 env）
+- [ ] 4. 引导 UI 或经确认 mutate
+- [ ] 5. 看行状态 + 工具 inventory
 ```
 
-### 1. Choose path
-
-| Need | Do |
-|------|-----|
-| Public / npm MCP server (Playwright, filesystem, …) | **This skill** (default) |
-| Small in-repo JS tools | Process plugin (`kind: tools`) + `plugin add` + **restart** |
-
-### 2. Collect
-
-- Transport: stdio (`command` + `args`, optional `cwd`) **or** HTTP (`url`)
-- Server id (key under `mcpServers`)
-- Connect now? (`allowConnect`)
-
-### 3. Emit pasteable JSON
-
-No `env` in servers. Secrets → **Credentials**.
-
-Stdio:
+## JSON 示例
 
 ```json
 {"mcpServers":{"playwright":{"command":"npx","args":["-y","@playwright/mcp@latest"]}}}
 ```
 
-HTTP:
+## UI
 
-```json
-{"mcpServers":{"remote":{"url":"https://example.com/mcp"}}}
-```
+Settings → Plugins → Plugin config → paste JSON → **Add** / **添加** → **Allow connect** → **Save**
 
-### 4. Land (confirmation required)
+Never mutate `mcp` without confirmation. No `env` on servers.
 
-**Preferred:** guide the user — Settings → Plugins → Plugin config → “Add from JSON” → allow connect → **Save**.
-
-**Only if** the user explicitly says to change settings / mutate for them:
-
-```json
-{
-  "ns": "mcp",
-  "ops": [
-    {
-      "op": "set",
-      "path": ["servers"],
-      "value": [{
-        "serverName": "playwright",
-        "command": "npx",
-        "args": ["-y", "@playwright/mcp@latest"]
-      }]
-    },
-    { "op": "set", "path": ["allowConnect"], "value": true }
-  ]
-}
-```
-
-Never mutate without confirmation. Never write `connected` / `parked` overlays. Never put `env` on server entries.
-
-### 5. Verify
-
-- Row: connected / **park** / failed
-- Inventory shows `mcp__<server>__…`
-- Policy deny → **park** (desired kept, process not spawned) — explain; do not pretend it connected
-
-## Related
-
-- Product docs: `docs/modules/mcp.md`, `docs/host-face.md`, `docs/skills-layers.md`
-- Self-upgrade playbooks: `xrk-create-skill`, `xrk-adapt-workspace`
+Verify `mcp__<server>__…`; policy deny → **park**.

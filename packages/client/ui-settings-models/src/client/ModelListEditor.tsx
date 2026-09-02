@@ -242,16 +242,16 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         setFailure(response.result.error.message)
         return
       }
-      const found = response.result.value.models
+      const found: readonly DiscoveredModelView[] = response.result.value.models
       if (found.length === 0) {
         setFailure(t('fetchEmpty'))
         return
       }
-      // Everything already configured starts unchecked, so adopting a
-      // selection never silently rewrites a capacity the user corrected.
-      const known = new Set(models.map(model => textOf(model, 'id')))
+      // Default every discovered model to checked; the user can deselect
+      // before adopting. Already-configured rows are merged without
+      // overwriting tuned capacities.
       setCandidates(found)
-      setPicked(new Set(found.filter(model => !known.has(model.id)).map(model => model.id)))
+      setPicked(new Set(found.map(model => model.id)))
     } catch (error) {
       // The transport rejected rather than answering; without this the button
       // would stay busy with nothing shown.
@@ -288,6 +288,18 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
       if (!next.delete(id)) next.add(id)
       return next
     })
+  }
+
+  const allCandidatesPicked = candidates !== undefined
+    && candidates.length > 0
+    && candidates.every(candidate => picked.has(candidate.id))
+
+  const toggleAllCandidates = (): void => {
+    /* v8 ignore next -- the dialog only renders with candidates loaded */
+    if (candidates === undefined) return
+    setPicked(allCandidatesPicked
+      ? new Set()
+      : new Set(candidates.map(candidate => candidate.id)))
   }
 
   // A route the adapter already describes answers without an endpoint; only a
@@ -441,10 +453,23 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         footer={(
           <>
             <Button variant="outline" onClick={closePicker}>{t('cancel')}</Button>
-            <Button variant="outline" onClick={adoptPicked}>{t('fetchAdopt')}</Button>
+            <Button variant="outline" onClick={adoptPicked} disabled={picked.size === 0}>{t('fetchAdopt')}</Button>
           </>
         )}
       >
+        {candidates !== undefined && candidates.length > 0
+          ? (
+            <div className={styles['fetchPickerToolbar']}>
+              <button
+                type="button"
+                className={styles['linkButton']}
+                onClick={toggleAllCandidates}
+              >
+                {allCandidatesPicked ? t('fetchDeselectAll') : t('fetchSelectAll')}
+              </button>
+            </div>
+          )
+          : null}
         <ul className={styles['candidateList']}>
           {(candidates ?? []).map(candidate => (
             <li key={candidate.id} className={styles['candidate']}>

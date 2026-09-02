@@ -32,8 +32,9 @@
 
 1. 不懂结构 → skill **`xrk-harness-architecture`**
 2. 挂 MCP / 接外部工具 → **`xrk-capability-attach`**
-3. 写进程插件 → **`xrk-harness-monorepo`** → **`xrk-plugin-author`**
-4. 验证 → **`xrk-plugin-verify`**（MCP 则看 Settings 行状态 / 工具 inventory）
+3. 配模型 / API / 模型列表 → **`xrk-models-settings`**
+4. 写进程插件 → **`xrk-harness-monorepo`** → **`xrk-plugin-author`**
+5. 验证 → **`xrk-plugin-verify`**（MCP 则看 Settings 行状态 / 工具 inventory）
 
 细则：`.agents/context/workspace-plugin-dev.md` · `docs/plugin-development.md` · `docs/modules/mcp.md`
 
@@ -43,6 +44,8 @@
 |------|------|
 | 这仓库什么结构 | **xrk-harness-architecture** |
 | 装 MCP / 挂工具 / attach | **xrk-capability-attach** |
+| 写 skill / 自我升级 | **xrk-create-skill** |
+| 配模型 / 模型列表 | **xrk-models-settings** |
 | kind / 要不要起 MCP | **xrk-plugin-kind** |
 | 写插件 / 脚手架 | **xrk-harness-monorepo** → **xrk-plugin-author** |
 | 装好了吗 / git pull 后 | **xrk-plugin-verify** |

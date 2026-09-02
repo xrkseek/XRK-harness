@@ -122,6 +122,13 @@
     min-height: 44px;
     padding: 8px;
   }
+
+  .search {
+    /* 16px avoids iOS focus zoom on inputs. */
+    font-size: 16px;
+    min-height: 40px;
+    padding: 8px 10px;
+  }
 }
 
 .status,
@@ -161,6 +168,24 @@
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+.search {
+  flex: 0 0 auto;
+  margin: 2px 2px 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 8px;
+  outline: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.search:focus-visible {
+  border-color: var(--dsw-alias-border-l3);
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
 }
 
 .groups {

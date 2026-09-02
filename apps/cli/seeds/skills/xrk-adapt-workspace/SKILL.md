@@ -1,56 +1,27 @@
 ---
 name: xrk-adapt-workspace
 description: >-
-  Orient to a blank or unfamiliar workspace: read-only stack probe, optional
-  standing files only with consent, then attach capabilities. Use when the user
-  opens an empty folder, a new project, or asks 「空项目」「新工作区」
-  「适应这个仓库」「这是什么项目」.
+  Orient to a blank or unfamiliar workspace: read-only probe, optional standing
+  files only with consent. Use when the user opens an empty folder, a new
+  project, or asks 「空项目」「新工作区」「适应这个仓库」「这是什么项目」.
 ---
 
 # Adapt workspace
 
-Goal: be useful **without** littering a blank folder. Complexity in the project
-tree stays **zero** unless the user asks for project-local files.
-
-## Workflow
+**不要**在空白工作区 auto-mkdir `.xrk` / `.agents`。会话在 `~/.xrk`。
 
 ```
-- [ ] 1. Read-only probe
-- [ ] 2. Summarize stack (or “empty”)
-- [ ] 3. Capabilities only if asked
-- [ ] 4. Standing files / skills only with consent
+- [ ] 1. 只读探测（package.json、README…）
+- [ ] 2. 一句话总结栈或「空」
+- [ ] 3. 若要能力 → xrk-capability-attach / xrk-plugin-author
+- [ ] 4. 若要人格或 skill → 用户同意后再写 standing 文件
 ```
 
-### 1. Read-only probe
+| 用户要 | Skill |
+|--------|-------|
+| MCP / 外部工具 | **`xrk-capability-attach`** |
+| 写 skill | **`xrk-create-skill`**（结构同 Cursor create-skill） |
+| 写项目规则 | **`xrk-create-skill`** § Standing rules（对标 Cursor create-rule → `.agents/AGENTS.md`） |
+| 进程插件 | author + verify + restart |
 
-Look for: `package.json`, lockfiles, `Cargo.toml`, `go.mod`, `pyproject.toml`,
-`README*`. Do **not** create `.xrk` / `.agents` “for convenience”.
-
-### 2. Summarize
-
-Tell the user what you found in one short paragraph. If empty: say the folder
-can stay empty; product data lives under `~/.xrk`.
-
-### 3. Capabilities (when asked)
-
-| Ask | Skill / path |
-|-----|----------------|
-| Install MCP / external tools | **`xrk-capability-attach`** → Settings MCP → `~/.xrk/host-settings.json` |
-| In-repo JS tools | Process plugin + restart |
-
-Blank folder **does not** gain files from MCP attach.
-
-### 4. Standing files / new skills (consent)
-
-| Ask | Where |
-|-----|--------|
-| Global habit / skill | `~/.xrk/skills/` via **`xrk-create-skill`** |
-| Project AGENTS / rules / skills | Workspace `.agents/` or `.xrk/` **only after explicit yes** |
-
-Default: **do not create** workspace standing files.
-
-## Hard rules
-
-- No auto-`mkdir` of `.xrk` / `.agents` in the workspace
-- Secrets → Credentials, never skill or AGENTS body
-- Prefer MCP Settings over scaffolding plugins for third-party tools
+Secrets → Credentials，不进 AGENTS / skill 正文。

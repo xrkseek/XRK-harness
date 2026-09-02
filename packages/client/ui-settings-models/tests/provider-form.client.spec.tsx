@@ -475,9 +475,13 @@ describe('endpoint interrogation', () => {
 
     fireEvent.click(screen.getByText(en.fetchModels))
     await screen.findByText(en.fetchTitle)
-    // The already-configured row starts unchecked; the new one starts checked.
+    // Every discovered model starts checked; deselect before adopting if needed.
     const boxes = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
-    expect(boxes.map(box => box.checked)).toEqual([false, true])
+    expect(boxes.map(box => box.checked)).toEqual([true, true])
+    fireEvent.click(screen.getByText(en.fetchDeselectAll))
+    expect(boxes.map(box => box.checked)).toEqual([false, false])
+    fireEvent.click(screen.getByText(en.fetchSelectAll))
+    expect(boxes.map(box => box.checked)).toEqual([true, true])
     fireEvent.click(screen.getByText(en.fetchAdopt))
 
     fireEvent.click(screen.getByText(en.apply))

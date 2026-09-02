@@ -15,6 +15,7 @@ xrk-inject: false
 | MCP vs 进程插件 | `xrk-mcp-plugins` |
 | 社区 client · dsh-compat | `xrk-community-plugins` |
 | 写 `.xrk/skills` 产品 skill | `xrk-workspace-skills` |
+| Settings / 模型 / MCP 卡 UI | rule `xrk-client-face-ui` |
 
 教科书真源：`docs/plugin-development.md` · `docs/plugin-loader.md`。  
 **不要**在 skill 里编造契约；冲突以 **代码 > status > docs** 为准。

@@ -1,0 +1,22 @@
+---
+description: Settings / 模型选择 client UI 改码笔记
+globs: packages/client/ui-settings-*/**/*,packages/client/ui-model-selection/**/*
+alwaysApply: false
+xrk-inject: false
+---
+
+# 笔记 · Settings UI
+
+真源：`docs/host-face.md` · `docs/llm-provider-registry.md` · `docs/modules/mcp.md`。
+
+| 面 | 包 |
+|----|-----|
+| Models | `ui-settings-models` |
+| Plugins / MCP | `ui-settings-plugins` |
+| 对话模型 | `ui-model-selection`（搜索 >5 模型；样式对齐 `ui-commands` PopupSelectView） |
+
+- 文案只在 **`locales.ts`**（en/zh 同键）
+- 长列表：本地 filter，勿重查 API
+- 改可见流程：同步 `.agents/skills` + `apps/cli/seeds/skills`（见 **`xrk-workspace-skills`**）
+
+改完：`pnpm client:bundle` · `pnpm web:assemble` · 硬刷新。

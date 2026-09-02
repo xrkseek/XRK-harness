@@ -11,9 +11,10 @@ description: >-
 
 1. 缺结构认知 → **`xrk-harness-architecture`**
 2. 挂 MCP / 外部工具 → **`xrk-capability-attach`**（用户目录种子或本仓 `.agents`）
-3. 确认 Workspace root inject — 勿搜其它盘符
-4. 写插件 → **`xrk-plugin-author`** → `extensions/<plugin-id>/`
-5. 验证 → **`xrk-plugin-verify`**
+3. 配模型 / API → **`xrk-models-settings`**
+4. 确认 Workspace root inject — 勿搜其它盘符
+5. 写插件 → **`xrk-plugin-author`** → `extensions/<plugin-id>/`
+6. 验证 → **`xrk-plugin-verify`**
 
 ## 写入落点
 
@@ -29,6 +30,7 @@ description: >-
 | 用户说 | 顺序 |
 |--------|------|
 | 装 MCP / attach | capability-attach |
+| 配模型 / 模型 ID | models-settings |
 | 写 ping 插件 | author → verify |
 | kind 不确定 | kind → author（或 capability-attach） |
 | git pull 后 | verify（lock 变才 pnpm install） |
