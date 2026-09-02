@@ -2388,6 +2388,9 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+      '@xrkseek/exec-shell':
+        specifier: workspace:*
+        version: link:../../exec/shell
       '@xrkseek/face-session-query':
         specifier: workspace:*
         version: link:../../session/face-session-query
@@ -2443,6 +2446,9 @@ importers:
       '@types/ws':
         specifier: ^8.5.13
         version: 8.18.1
+      '@xrkseek/exec-subprocess':
+        specifier: workspace:*
+        version: link:../../exec/subprocess
       '@xrkseek/llm-replay':
         specifier: workspace:*
         version: link:../../llm/replay

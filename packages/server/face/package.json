@@ -18,6 +18,7 @@
     "@xrkseek/core-agent": "workspace:*",
     "@xrkseek/core-session": "workspace:*",
     "@xrkseek/core-tools": "workspace:*",
+    "@xrkseek/exec-shell": "workspace:*",
     "@xrkseek/llm": "workspace:*",
     "@xrkseek/llm-registry": "workspace:*",
     "@xrkseek/policy": "workspace:*",
@@ -39,6 +40,8 @@
     "@types/js-yaml": "^4.0.9",
     "@types/ws": "^8.5.13",
     "@xrkseek/core-tools": "workspace:*",
+    "@xrkseek/exec-subprocess": "workspace:*",
+    "@xrkseek/exec-shell": "workspace:*",
     "@xrkseek/llm-replay": "workspace:*",
     "@xrkseek/preset-minimal": "workspace:*"
   },
