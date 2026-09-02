@@ -1,7 +1,15 @@
 import {
   spawn as nodeSpawn,
-  type ChildProcessWithoutNullStreams,
+  spawnSync,
+  type ChildProcess,
 } from "node:child_process";
+
+/**
+ * After a stop request (abort / timeout / kill), `close` can be delayed forever
+ * when an orphaned grandchild still holds the stdout pipe. The stop request
+ * must still settle the call, so force-settle once this grace elapses.
+ */
+export const KILL_SETTLE_GRACE_MS = 5_000;
 
 export interface SpawnOptions {
   readonly cwd?: string;
@@ -35,10 +43,34 @@ export interface SubprocessService {
   start(argv: readonly string[], opts?: SpawnOptions): SubprocessHandle;
 }
 
+/**
+ * Best-effort process-tree kill. `child.kill` only reaches the direct child:
+ * on Windows the shell's own children (node.exe, git.exe, …) survive it and can
+ * hold the stdout pipe open, delaying `close`. `taskkill /T` walks the tree.
+ */
 function killTree(
-  child: ChildProcessWithoutNullStreams,
+  child: ChildProcess,
   signal: NodeJS.Signals = "SIGTERM",
 ): void {
+  if (child.pid !== undefined) {
+    if (process.platform === "win32") {
+      try {
+        spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+          windowsHide: true,
+        });
+      } catch {
+        // taskkill unavailable — the direct kill below still applies
+      }
+    } else {
+      // POSIX: a negative pid reaches the whole process group when the child
+      // leads one; ESRCH/EPERM otherwise is expected and ignored.
+      try {
+        process.kill(-child.pid, signal);
+      } catch {
+        // not a group leader — the direct kill below still applies
+      }
+    }
+  }
   try {
     child.kill(signal);
   } catch {
@@ -58,6 +90,9 @@ function startLocal(
     cwd: opts.cwd,
     env: opts.env,
     windowsHide: true,
+    // One-shot shells have no input channel: an open-but-never-ended stdin
+    // pipe would make any stdin-reading command block forever without EOF.
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
   let stdout = "";
@@ -65,6 +100,7 @@ function startLocal(
   let settled = false;
   let killed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let graceTimer: ReturnType<typeof setTimeout> | undefined;
   let resolveResult!: (r: SubprocessResult) => void;
   let rejectResult!: (err: Error) => void;
   const resultPromise = new Promise<SubprocessResult>((resolve, reject) => {
@@ -76,13 +112,28 @@ function startLocal(
     if (settled) return;
     settled = true;
     if (timer) clearTimeout(timer);
+    if (graceTimer) clearTimeout(graceTimer);
     opts.signal?.removeEventListener("abort", onAbort);
     resolveResult(result);
   };
 
-  const onAbort = () => {
+  // Orphaned grandchildren can keep the stdout pipe open forever, so a stop
+  // request force-settles once the grace elapses instead of awaiting `close`.
+  const armSettleGrace = () => {
+    if (settled || graceTimer !== undefined) return;
+    graceTimer = setTimeout(() => {
+      finish({ stdout, stderr, exitCode: null, signal: null, killed: true });
+    }, KILL_SETTLE_GRACE_MS);
+  };
+
+  const stopChild = (signal: NodeJS.Signals = "SIGTERM") => {
     killed = true;
-    killTree(child);
+    killTree(child, signal);
+    armSettleGrace();
+  };
+
+  const onAbort = () => {
+    stopChild();
   };
 
   if (opts.signal) {
@@ -95,8 +146,7 @@ function startLocal(
 
   if (opts.timeoutMs !== undefined && opts.timeoutMs > 0) {
     timer = setTimeout(() => {
-      killed = true;
-      killTree(child);
+      stopChild();
     }, opts.timeoutMs);
   }
 
@@ -130,8 +180,7 @@ function startLocal(
       return child.pid;
     },
     kill(signal = "SIGTERM") {
-      killed = true;
-      killTree(child, signal);
+      stopChild(signal);
     },
     result() {
       return resultPromise;
