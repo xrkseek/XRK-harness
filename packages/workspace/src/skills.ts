@@ -126,11 +126,46 @@ export function parseSkillMarkdown(
     if (end > 0) {
       const fm = body.slice(3, end).trim();
       body = body.slice(end + 4).replace(/^\r?\n/, "");
-      for (const line of fm.split(/\r?\n/)) {
-        const m = /^([\w-]+)\s*:\s*(.*)$/.exec(line.trim());
+      const lines = fm.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const m = /^([\w-]+)\s*:\s*(.*)$/.exec(lines[i]!.trim());
         if (!m) continue;
         const key = m[1]!;
-        const val = m[2]!.replace(/^["']|["']$/g, "").trim();
+        let val = m[2]!.trim();
+
+        // YAML block scalar (`description: >-`, `|`, `>+`, `|2`…): the value
+        // lives on the following more-indented lines. Folded (`>`) joins with
+        // spaces, literal (`|`) keeps newlines. Chomping indicators (`-` / `+`)
+        // only affect trailing newlines, which `.trim()` already normalizes.
+        // Without this the indicator itself parsed as the whole description.
+        const block = /^([>|])[+-]?\d*$/.exec(val);
+        if (block) {
+          const folded = block[1] === ">";
+          const parts: string[] = [];
+          let j = i + 1;
+          while (j < lines.length) {
+            const cont = lines[j]!;
+            if (cont.trim() === "") {
+              parts.push("");
+              j++;
+              continue;
+            }
+            if (!/^\s/.test(cont)) break; // dedented → block scalar ends
+            parts.push(cont.trim());
+            j++;
+          }
+          while (parts.length > 0 && parts[0] === "") parts.shift();
+          while (parts.length > 0 && parts[parts.length - 1] === "") {
+            parts.pop();
+          }
+          val = folded
+            ? parts.join(" ").replace(/\s+/g, " ").trim()
+            : parts.join("\n").trim();
+          i = j - 1; // skip the lines this block scalar consumed
+        } else {
+          val = val.replace(/^["']|["']$/g, "").trim();
+        }
+
         if (key === "name" && val) name = val;
         if (key === "description" && val) description = val;
         if ((key === "whenToUse" || key === "when_to_use") && val) {
