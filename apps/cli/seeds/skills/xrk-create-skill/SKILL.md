@@ -17,7 +17,7 @@ description: >-
 | 跨项目习惯（默认） | `~/.xrk/skills/<name>/SKILL.md` |
 | 仅本仓库 | `{workspace}/.agents/skills/` 或 `.xrk/skills/`（**须用户同意**再建目录） |
 
-`xrkh web` 仅**缺才装** bundled seeds，不覆盖已有 `SKILL.md`。
+`xrkh web` 缺才装 bundled seeds；seed 内容更新且本地副本未被改过时按 `.seed-manifest.json` 指纹自动刷新；用户改过的永不覆盖。
 
 ## Frontmatter
 

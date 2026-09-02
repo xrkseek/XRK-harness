@@ -108,12 +108,20 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
   });
 
   const seeded = await ensureUserSkillSeeds(xrkHome);
+  const seedNotes = [
+    ...(seeded.installed.length > 0
+      ? [`seeded ${seeded.installed.join(", ")}`]
+      : []),
+    ...(seeded.refreshed.length > 0
+      ? [`refreshed ${seeded.refreshed.join(", ")}`]
+      : []),
+  ];
   checks.push({
     name: "user-skills",
     ok: true,
     detail:
-      seeded.installed.length > 0
-        ? `seeded ${seeded.installed.join(", ")} → ${seeded.homeSkills}`
+      seedNotes.length > 0
+        ? `${seedNotes.join("; ")} → ${seeded.homeSkills}`
         : `ok ${seeded.homeSkills}`,
   });
 

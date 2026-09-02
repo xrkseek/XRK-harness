@@ -94,6 +94,11 @@ export async function runServe(args: ParsedArgs): Promise<number> {
       `home skills: ${seeded.installed.join(", ")} → ${seeded.homeSkills}`,
     );
   }
+  if (seeded.refreshed.length > 0) {
+    log.info(
+      `home skills refreshed from newer bundle: ${seeded.refreshed.join(", ")}`,
+    );
+  }
 
   const patch: Record<string, unknown> = {
     ...args.patch,

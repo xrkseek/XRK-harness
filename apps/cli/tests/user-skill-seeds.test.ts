@@ -1,9 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ensureUserSkillSeeds } from "../src/user-skill-seeds.js";
+
+/** Build a fake bundled-seed root: `{ seedRoot }/<name>/<file>`. */
+async function makeSeedRoot(
+  seedRoot: string,
+  skills: Record<string, Record<string, string>>,
+): Promise<void> {
+  for (const [name, files] of Object.entries(skills)) {
+    const dir = path.join(seedRoot, name);
+    await mkdir(dir, { recursive: true });
+    for (const [file, content] of Object.entries(files)) {
+      await writeFile(path.join(dir, file), content, "utf8");
+    }
+  }
+}
+
+const skillMd = (name: string, description: string): string =>
+  `---\nname: ${name}\ndescription: ${description}\n---\n# ${description}\n`;
+
+async function withTempDirs(
+  run: (home: string, seeds: string) => Promise<void>,
+): Promise<void> {
+  const home = await mkdtemp(path.join(os.tmpdir(), "xrk-skill-seed-home-"));
+  const seeds = await mkdtemp(path.join(os.tmpdir(), "xrk-skill-seed-src-"));
+  try {
+    await run(home, seeds);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+    await rm(seeds, { recursive: true, force: true });
+  }
+}
 
 describe("ensureUserSkillSeeds", () => {
   it("creates home skills on establish and skips existing SKILL.md", async () => {
@@ -30,5 +60,153 @@ describe("ensureUserSkillSeeds", () => {
     } finally {
       await rm(home, { recursive: true, force: true });
     }
+  });
+
+  it("refreshes a pristine home copy when the bundled seed changes", async () => {
+    await withTempDirs(async (home, seeds) => {
+      await makeSeedRoot(seeds, { demo: { "SKILL.md": skillMd("demo", "v1") } });
+      const dest = path.join(home, "skills", "demo", "SKILL.md");
+
+      const first = await ensureUserSkillSeeds(home, seeds);
+      expect(first.installed).toEqual(["demo"]);
+      expect(first.refreshed).toEqual([]);
+      expect(await readFile(dest, "utf8")).toContain("v1");
+
+      // The CLI ships a newer generation of the same seed.
+      await writeFile(
+        path.join(seeds, "demo", "SKILL.md"),
+        skillMd("demo", "v2"),
+        "utf8",
+      );
+
+      const second = await ensureUserSkillSeeds(home, seeds);
+      expect(second.installed).toEqual([]);
+      expect(second.refreshed).toEqual(["demo"]);
+      expect(await readFile(dest, "utf8")).toContain("v2");
+
+      // Idempotent: an unchanged bundle is a no-op.
+      const third = await ensureUserSkillSeeds(home, seeds);
+      expect(third.installed).toEqual([]);
+      expect(third.refreshed).toEqual([]);
+      expect(third.skipped).toContain("demo");
+    });
+  });
+
+  it("never clobbers a user edit, even when the seed changes", async () => {
+    await withTempDirs(async (home, seeds) => {
+      await makeSeedRoot(seeds, { demo: { "SKILL.md": skillMd("demo", "v1") } });
+      await ensureUserSkillSeeds(home, seeds);
+      const dest = path.join(home, "skills", "demo", "SKILL.md");
+
+      await writeFile(dest, "user-edited\n", "utf8");
+      await writeFile(
+        path.join(seeds, "demo", "SKILL.md"),
+        skillMd("demo", "v2"),
+        "utf8",
+      );
+
+      const second = await ensureUserSkillSeeds(home, seeds);
+      expect(second.refreshed).toEqual([]);
+      expect(second.skipped).toContain("demo");
+      expect(await readFile(dest, "utf8")).toBe("user-edited\n");
+    });
+  });
+
+  it("leaves a pre-manifest home copy alone (provenance unknown)", async () => {
+    await withTempDirs(async (home, seeds) => {
+      // Simulate an install written by an older CLI: no `.seed-manifest.json`.
+      const dir = path.join(home, "skills", "demo");
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        path.join(dir, "SKILL.md"),
+        skillMd("demo", "ancient"),
+        "utf8",
+      );
+      await makeSeedRoot(seeds, { demo: { "SKILL.md": skillMd("demo", "v2") } });
+
+      const res = await ensureUserSkillSeeds(home, seeds);
+      expect(res.installed).toEqual([]);
+      expect(res.refreshed).toEqual([]);
+      expect(res.skipped).toContain("demo");
+      expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toContain(
+        "ancient",
+      );
+    });
+  });
+
+  it("drops seed files that disappeared, instead of merging them in", async () => {
+    await withTempDirs(async (home, seeds) => {
+      await makeSeedRoot(seeds, {
+        demo: { "SKILL.md": skillMd("demo", "v1"), "legacy.md": "obsolete\n" },
+      });
+      await ensureUserSkillSeeds(home, seeds);
+      const legacy = path.join(home, "skills", "demo", "legacy.md");
+      expect(existsSync(legacy)).toBe(true);
+
+      // Newer bundle no longer ships `legacy.md`.
+      await rm(path.join(seeds, "demo", "legacy.md"), { force: true });
+      await writeFile(
+        path.join(seeds, "demo", "SKILL.md"),
+        skillMd("demo", "v2"),
+        "utf8",
+      );
+
+      const second = await ensureUserSkillSeeds(home, seeds);
+      expect(second.refreshed).toEqual(["demo"]);
+      expect(existsSync(legacy)).toBe(false);
+    });
+  });
+
+  it("writes a machine-readable seed manifest next to the skills", async () => {
+    await withTempDirs(async (home, seeds) => {
+      await makeSeedRoot(seeds, { demo: { "SKILL.md": skillMd("demo", "v1") } });
+      await ensureUserSkillSeeds(home, seeds);
+
+      const manifestFile = path.join(home, "skills", ".seed-manifest.json");
+      expect(existsSync(manifestFile)).toBe(true);
+      const parsed = JSON.parse(await readFile(manifestFile, "utf8")) as Record<
+        string,
+        unknown
+      >;
+      expect(Object.keys(parsed)).toEqual(["demo"]);
+      expect(typeof parsed.demo).toBe("string");
+      expect((parsed.demo as string)).toHaveLength(64); // sha256 hex
+    });
+  });
+
+  it("survives a corrupt manifest without touching home copies", async () => {
+    await withTempDirs(async (home, seeds) => {
+      await makeSeedRoot(seeds, { demo: { "SKILL.md": skillMd("demo", "v1") } });
+      await ensureUserSkillSeeds(home, seeds);
+
+      await writeFile(
+        path.join(home, "skills", ".seed-manifest.json"),
+        "{not json",
+        "utf8",
+      );
+      await writeFile(
+        path.join(seeds, "demo", "SKILL.md"),
+        skillMd("demo", "v2"),
+        "utf8",
+      );
+
+      const res = await ensureUserSkillSeeds(home, seeds);
+      // Unreadable manifest → unknown provenance → leave the home copy alone.
+      expect(res.refreshed).toEqual([]);
+      expect(res.skipped).toContain("demo");
+      expect(
+        await readFile(path.join(home, "skills", "demo", "SKILL.md"), "utf8"),
+      ).toContain("v1");
+    });
+  });
+
+  it("is a no-op when the bundled seed root is missing", async () => {
+    await withTempDirs(async (home, seeds) => {
+      const res = await ensureUserSkillSeeds(home, path.join(seeds, "absent"));
+      expect(res.installed).toEqual([]);
+      expect(res.refreshed).toEqual([]);
+      expect(res.skipped).toEqual([]);
+      expect(res.homeSkills).toBe(path.join(home, "skills"));
+    });
   });
 });
