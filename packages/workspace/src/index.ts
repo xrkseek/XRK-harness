@@ -193,8 +193,6 @@ export {
 } from "./inject-sources.js";
 
 export {
-  PROJECT_SKILL_REL_DIRS,
-  USER_SKILL_REL_DIRS,
   formatSkillCatalog,
   isSkillName,
   listSkills,
@@ -309,6 +307,12 @@ export async function appendWorkspaceInjectsIfChanged(input: {
     get(sessionId: string): {
       readonly events: readonly import("@xrkseek/protocol").SessionEvent[];
     };
+    /** Prefer when present (same contract as SessionStore.readEvents). */
+    readEvents?(
+      sessionId: string,
+      fromSeq?: number,
+      toSeqExclusive?: number,
+    ): readonly import("@xrkseek/protocol").SessionEvent[];
     append(
       sessionId: string,
       event: import("@xrkseek/protocol").SessionEvent,
@@ -321,9 +325,11 @@ export async function appendWorkspaceInjectsIfChanged(input: {
   /** Reuse preset injector so inject is memoized across turns (DSH digest path). */
   readonly injector?: WorkspaceInjector;
 }): Promise<readonly WorkspaceInjectAppend[]> {
-  const previous = foldLatestWorkspaceInjectDigests(
-    input.store.get(input.sessionId).events,
-  );
+  const log =
+    typeof input.store.readEvents === "function"
+      ? input.store.readEvents(input.sessionId)
+      : input.store.get(input.sessionId).events;
+  const previous = foldLatestWorkspaceInjectDigests(log);
 
   // DSH / Codex: disk unchanged and session already has a standing inject → skip
   // full resolve (instructions and/or skill-catalog).

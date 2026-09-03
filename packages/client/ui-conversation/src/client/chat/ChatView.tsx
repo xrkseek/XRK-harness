@@ -158,30 +158,28 @@ function turnStatusPhrase(
 /**
  * Flow-tail waiting label (`turnStatus.*`). Yields once tools or a streaming
  * partial are the active surface; step gaps and steer waits keep it visible.
+ * The phrase stays stable for the open turn; the clock measures this waiting
+ * episode (mount → now), not wall time since `turn/start` — whole-turn duration
+ * belongs on the settled Ran-for footer.
  */
 function TurnStatus({ startTime, t }: {
-  /** The running turn's logged `turn/start` time; null falls back to mount
-   *  time when that boundary is outside the window. */
+  /** Open turn's `turn/start` time — seeds the waiting phrase only. */
   startTime: number | null
   /** The owning view's locale seat. */
   t: ChatViewSlotProps['t']
 }) {
   const [mountedAt] = useState(() => Date.now())
-  // Anchored to turn/start so a mid-turn reload keeps the real
-  // elapsed time and the final footer's Ran-for label matches this clock.
-  const anchor = startTime ?? mountedAt
-  const [elapsedMs, setElapsedMs] = useState(() => Math.max(0, Date.now() - anchor))
+  const [elapsedMs, setElapsedMs] = useState(0)
   const phrase = useMemo(() => turnStatusPhrase(startTime, t), [startTime, t])
   useEffect(() => {
     const tick = (): void => {
-      setElapsedMs(Math.max(0, Date.now() - anchor))
+      setElapsedMs(Math.max(0, Date.now() - mountedAt))
     }
     tick()
     const id = setInterval(tick, 1000)
     return () => { clearInterval(id) }
-  }, [anchor])
-  // Short turns keep the plain label; the clock only appears once the turn
-  // has clearly been running for a while.
+  }, [mountedAt])
+  // Brief gaps stay label-only; the clock appears once this wait itself is long.
   const showClock = elapsedMs >= 15_000
   return (
     <div className={css.turnStatus} role="status" aria-live="polite">

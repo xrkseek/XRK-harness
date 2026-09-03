@@ -1,7 +1,7 @@
 /**
  * Append provider usage samples into the cost-meter ledger (live + import).
  */
-import type { SessionStore } from "@xrkseek/core-session";
+import { readSessionEvents, type SessionStore } from "@xrkseek/core-session";
 import type { SessionEvent, TokenUsage } from "@xrkseek/protocol";
 import {
   buildCostMeterState,
@@ -246,7 +246,7 @@ export function costMeterImportLegacyHistoryFromStore(
   for (const sessionId of store.list()) {
     let provider = sessionModels.get(sessionId)?.provider ?? "deepseek";
     let model = sessionModels.get(sessionId)?.model ?? "unknown";
-    for (const event of store.get(sessionId).events) {
+    for (const event of readSessionEvents(store, sessionId)) {
       if (event.type === "request/header") {
         provider = event.header.config.provider;
         model = event.header.config.model;

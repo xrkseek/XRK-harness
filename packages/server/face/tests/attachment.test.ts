@@ -186,6 +186,8 @@ describe("Face session.attachment / image prompt", () => {
       ],
     });
     expect(prompt.result.ok).toBe(true);
+    expect(runtime.sessionHasImage.has(sessionId)).toBe(true);
+    expect(runtime.sessionImageScanned.has(sessionId)).toBe(true);
 
     const pending = listPendingAdmits(store.get(sessionId).events, sessionId);
     expect(pending).toHaveLength(1);

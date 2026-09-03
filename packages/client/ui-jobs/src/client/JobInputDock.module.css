@@ -1,27 +1,52 @@
+/* Live background-job strip in the composer context stack: same dock column
+   as Todo / GoalBar (card cap minus four insets). Tip surface + 12px radius
+   so the three cards read as one family. */
+
 .root {
-  width: 100%;
+  box-sizing: border-box;
+  flex: none;
+  margin: 0 auto;
+  width: calc(
+    100% -
+    var(--dsh-composer-side-clearance) -
+    var(--dsh-composer-side-clearance) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset)
+  );
+  max-width: calc(
+    var(--dsh-composer-card-max-width) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset)
+  );
 }
 
 .body {
-  border: 1px solid var(--dsw-alias-border-l2);
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 12px;
-  background: var(--dsw-alias-bg-layer-1);
+  background: var(--dsw-specific-tip);
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 .header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   box-sizing: border-box;
   width: 100%;
   min-height: 36px;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border: 0;
   border-radius: 12px;
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
-  line-height: 18px;
+  line-height: 24px;
   cursor: pointer;
   text-align: left;
 }
@@ -46,7 +71,9 @@
 }
 
 .chevron {
+  display: grid;
   flex: none;
+  place-items: center;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -57,9 +84,6 @@
   margin: 0;
   padding: 0 4px 4px;
   list-style: none;
-}
-
-.list .row,
-.list .rowSettled {
-  border-radius: 8px;
+  max-height: 180px;
+  overflow-y: auto;
 }

@@ -1,6 +1,7 @@
 import type { SessionEvent } from "@xrkseek/protocol";
 import {
   extractSessionSearchTexts,
+  readSessionEvents,
   type SessionStore,
 } from "@xrkseek/core-session";
 import type { FaceRpcResult } from "./types.js";
@@ -118,10 +119,15 @@ export function searchSessions(
 
   for (const sessionId of candidateIds) {
     if (!store.has(sessionId)) continue;
-    const events = store.get(sessionId).events;
+    const events = readSessionEvents(store, sessionId);
     const snippet = bestSnippet(extractSessionSearchTexts(events), query);
     if (snippet === undefined) continue;
-    hits.push({ sessionId, snippet, lastTs: lastEventTs(events) });
+    const hintTs = store.listHints?.(sessionId)?.lastEventTs;
+    hits.push({
+      sessionId,
+      snippet,
+      lastTs: hintTs ?? lastEventTs(events),
+    });
   }
 
   hits.sort((a, b) => b.lastTs - a.lastTs || 0);

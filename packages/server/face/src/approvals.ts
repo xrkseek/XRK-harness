@@ -4,8 +4,8 @@
  * or `session.respondApproval`.
  */
 
+import { readSessionEvents, type SessionStore } from "@xrkseek/core-session";
 import { randomUUID } from "node:crypto";
-import type { SessionStore } from "@xrkseek/core-session";
 import type {
   ApprovalHandler,
   ToolPipelineContext,
@@ -88,7 +88,7 @@ export class FaceApprovalBroker {
   /** Pipeline `ApprovalHandler` bound to a session. */
   handlerFor(sessionId: string): ApprovalHandler {
     return async (ctx, reason) => {
-      if (effectiveApprovalPolicy(this.store.get(sessionId).events) === "never") {
+      if (effectiveApprovalPolicy(readSessionEvents(this.store, sessionId)) === "never") {
         return true;
       }
       return this.request(sessionId, ctx, reason);

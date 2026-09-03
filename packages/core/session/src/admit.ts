@@ -1,3 +1,4 @@
+import { readSessionEvents } from "./seq.js";
 import type { SessionEvent, PromptDelivery, MessageContent } from "@xrkseek/protocol";
 import { flattenText, isPromptDelivery, mergeMessageContents } from "@xrkseek/protocol";
 import type { SessionRecord, SessionStore } from "./index.js";
@@ -128,7 +129,7 @@ export function withdrawAdmit(
   admitId: string,
   options?: { readonly now?: () => number },
 ): void {
-  const pending = listPendingAdmits(store.get(sessionId).events, sessionId);
+  const pending = listPendingAdmits(readSessionEvents(store, sessionId), sessionId);
   if (!pending.some((p) => p.admitId === admitId)) {
     throw new AdmitNotPendingError(admitId);
   }
@@ -150,7 +151,7 @@ export function promoteNextAdmit(
   sessionId: string,
   options?: { readonly now?: () => number },
 ): AdmitReceipt {
-  const events = store.get(sessionId).events;
+  const events = readSessionEvents(store, sessionId);
   const pending = listPendingAdmits(events, sessionId);
   const next =
     pending.find((p) => p.delivery === "steer") ?? pending[0];
@@ -191,7 +192,7 @@ export function promoteAdmitsForTurn(
   sessionId: string,
   options?: { readonly now?: () => number },
 ): PromoteForTurnResult {
-  const pending = listPendingAdmits(store.get(sessionId).events, sessionId);
+  const pending = listPendingAdmits(readSessionEvents(store, sessionId), sessionId);
   if (!pending.length) throw new NoPendingAdmitError();
 
   const hasSteer = pending.some((p) => p.delivery === "steer");
@@ -208,7 +209,7 @@ export function promoteAdmitsForTurn(
 
   const receipts: AdmitReceipt[] = [];
   for (;;) {
-    const still = listPendingAdmits(store.get(sessionId).events, sessionId);
+    const still = listPendingAdmits(readSessionEvents(store, sessionId), sessionId);
     const nextSteer = still.find((p) => p.delivery === "steer");
     if (!nextSteer) break;
     receipts.push(promoteNextAdmit(store, sessionId, options));
@@ -234,7 +235,7 @@ export function promotePendingSteers(
   sessionId: string,
   options?: { readonly now?: () => number },
 ): PromoteForTurnResult | undefined {
-  const pending = listPendingAdmits(store.get(sessionId).events, sessionId);
+  const pending = listPendingAdmits(readSessionEvents(store, sessionId), sessionId);
   if (!pending.some((p) => p.delivery === "steer")) return undefined;
   return promoteAdmitsForTurn(store, sessionId, options);
 }

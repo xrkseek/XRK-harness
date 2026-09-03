@@ -2,6 +2,11 @@ import type { SessionEvent } from "@xrkseek/protocol";
 
 export interface SessionRecord {
   readonly id: string;
+  /**
+   * Append-only log view. Do not mutate.
+   * Memory and persistent stores both reuse the resident array identity for
+   * full-range reads; prefer {@link SessionStore.readEvents} / `readSessionEvents`.
+   */
   readonly events: readonly SessionEvent[];
 }
 
@@ -19,7 +24,18 @@ export interface SessionStore {
   append(id: string, event: SessionEvent): SessionEvent;
   list(): readonly string[];
   /**
-   * Sidebar metadata without hydrating the full event log (DSH list fast path).
+   * Half-open event range `[fromSeq, toSeqExclusive)`.
+   * Full-range hits reuse the resident array identity.
+   * Persistent cold miss hydrates once (packed rows expand in memory —
+   * disk-level event-index range IO is not available while storage packs chunks).
+   */
+  readEvents(
+    id: string,
+    fromSeq?: number,
+    toSeqExclusive?: number,
+  ): readonly SessionEvent[];
+  /**
+   * Sidebar metadata without hydrating the full event log (list fast path).
    * Omit on lightweight test doubles.
    */
   listHints?(id: string): SessionListHints;

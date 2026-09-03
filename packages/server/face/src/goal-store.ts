@@ -4,7 +4,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { admitPrompt, listPendingAdmits } from "@xrkseek/core-session";
+import { admitPrompt, listPendingAdmits, readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import { tryWriteJsonSidecar } from "./json-sidecar.js";
@@ -92,7 +92,7 @@ export class FaceGoalStore {
     const goal = this.bySession.get(sessionId);
     if (!runtime || !goal) return;
     if (goal.phase !== "active" || goal.activation !== "armed") return;
-    if (listPendingAdmits(runtime.store.get(sessionId).events, sessionId).length > 0) {
+    if (listPendingAdmits(readSessionEvents(runtime.store, sessionId), sessionId).length > 0) {
       runtime.drain.wake(sessionId);
       return;
     }

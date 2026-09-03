@@ -33,7 +33,7 @@
 | `protocol/` | `@xrkseek/protocol` | [protocol-events.md](../protocol-events.md) |
 | `compose/` | `@xrkseek/compose` | [compose.md](../compose.md) |
 | `session/session-projection/` | `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) |
-| `core/session/` | `@xrkseek/core-session` | [session.md](../session.md) · [session-compaction.md](../session-compaction.md) |
+| `core/session/` | `@xrkseek/core-session` | [session.md](../session.md) · [session-log.md](../session-log.md) · [session-compaction.md](../session-compaction.md) |
 | `core/agent/` | `@xrkseek/core-agent` | [session-api.md](../session-api.md) |
 | `core/agent-loop/` | `@xrkseek/core-agent-loop` | [tool-pipeline.md](../tool-pipeline.md) |
 | `core/tools/` | `@xrkseek/core-tools` | [tool-pipeline.md](../tool-pipeline.md) · [tool-settlement.md](../tool-settlement.md) |
@@ -117,7 +117,7 @@ Paths relative to `packages/`. Packages without a dedicated note use README + `s
 | `protocol/` | `@xrkseek/protocol` | [protocol-events.md](../protocol-events.md) |
 | `compose/` | `@xrkseek/compose` | [compose.md](../compose.md) |
 | `session/session-projection/` | `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) |
-| `core/session/` | `@xrkseek/core-session` | [session.md](../session.md) · [session-compaction.md](../session-compaction.md) |
+| `core/session/` | `@xrkseek/core-session` | [session.md](../session.md) · [session-log.md](../session-log.md) · [session-compaction.md](../session-compaction.md) |
 | `core/agent/` | `@xrkseek/core-agent` | [session-api.md](../session-api.md) |
 | `core/agent-loop/` | `@xrkseek/core-agent-loop` | [tool-pipeline.md](../tool-pipeline.md) |
 | `core/tools/` | `@xrkseek/core-tools` | [tool-pipeline.md](../tool-pipeline.md) · [tool-settlement.md](../tool-settlement.md) |

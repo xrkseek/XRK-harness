@@ -1,4 +1,5 @@
 import { foldPlanMode } from "@xrkseek/protocol";
+import { readSessionEvents, sessionEventCount } from "@xrkseek/core-session";
 import {
   loadOfficeRecipes,
   tryApplySlashRecipe,
@@ -200,7 +201,7 @@ export async function executeFaceCommand(
     const name = parsed.rawInput.trim();
     if (name === "") {
       const current = permissionSelectFromEvents(
-        runtime.store.get(sessionId).events,
+        readSessionEvents(runtime.store, sessionId),
       ).currentValue;
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "success",
@@ -247,7 +248,7 @@ export async function executeFaceCommand(
 
   if (parsed.name === "plan") {
     const wanted = planWantedFromArgs(parsed.rawInput);
-    const events = runtime.store.get(sessionId).events;
+    const events = readSessionEvents(runtime.store, sessionId);
     const loggedActive = foldPlanMode(events);
     const outcome = previewPlanSet(events, wanted);
     const text = narratePlanCommand(outcome, wanted, loggedActive);
@@ -323,7 +324,7 @@ export async function executeFaceCommand(
       ts: ts + 1,
       text,
     });
-    const summarySeq = runtime.store.get(sessionId).events.length;
+    const summarySeq = sessionEventCount(runtime.store, sessionId);
     runtime.store.append(sessionId, {
       type: "command/done",
       ts: ts + 2,

@@ -5,8 +5,6 @@ import { resolveSkillDirs, skillDirsFingerprint } from "./skill-dirs.js";
 import { shouldSkipScanDir } from "./scan-guards.js";
 
 export {
-  PROJECT_SKILL_REL_DIRS,
-  USER_SKILL_REL_DIRS,
   resolveSkillDirs,
 } from "./skill-dirs.js";
 

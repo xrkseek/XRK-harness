@@ -1,3 +1,4 @@
+import { readSessionEvents } from "./seq.js";
 import type { SessionEvent, ToolCall } from "@xrkseek/protocol";
 import {
   TOOL_ABORTED_BEFORE_DISPATCH,
@@ -152,7 +153,7 @@ export function settleDanglingTools(
   options: SettleDanglingOptions = {},
 ): SettleDanglingResult {
   const now = options.now ?? Date.now;
-  const dangling = listDanglingToolCalls(store.get(sessionId).events);
+  const dangling = listDanglingToolCalls(readSessionEvents(store, sessionId));
   for (const d of dangling) {
     const settled =
       options.kind === "aborted-before-dispatch"

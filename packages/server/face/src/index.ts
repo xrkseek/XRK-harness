@@ -33,7 +33,7 @@ export {
   type ParsedClientResponse,
 } from "./wire/index.js";
 export { createFaceBus, type FaceBus } from "./bus.js";
-export { createFaceSeqClock, type FaceSeqClock } from "./seq.js";
+export { createFaceSeqClock, FaceMuxSeq, type FaceMuxSeq, type FaceSeqClock } from "./seq.js";
 export {
   type FaceDrain,
   type FaceRuntime,
@@ -108,13 +108,17 @@ export {
   type PlanSetOutcome,
 } from "./plan-mode.js";
 export {
-  attachFaceToServer,
   attachFaceUpgrades,
   createFaceOnlyServer,
   handleFaceHttpRequest,
   tryHandleFaceHttp,
   type AttachFaceOptions,
 } from "./attach-http.js";
+export {
+  FACE_WS_HEARTBEAT_INTERVAL_MS,
+  startWsHeartbeat,
+  type WsHeartbeat,
+} from "./ws-heartbeat.js";
 export {
   EVENT_ISOMORPHISM,
   FaceInboxWireMaps,

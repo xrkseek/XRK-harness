@@ -5,7 +5,7 @@
  * @module @xrkseek/face-session-query
  */
 
-import type { SessionStore } from "@xrkseek/core-session";
+import { readSessionEvents, type SessionStore } from "@xrkseek/core-session";
 import type { SessionReferenceMentionCandidate } from "@xrkseek/xrk-session-reference/types";
 import { DEFAULT_CANDIDATE_LIMIT } from "@xrkseek/xrk-session-reference/config";
 import { formatSessionReferenceMention } from "@xrkseek/xrk-session-reference/uri";
@@ -144,7 +144,7 @@ export function readFaceSessionSurface(
   sessionId: string,
   cwd?: string,
 ): FaceSessionSurface {
-  return buildFaceSessionSurface(sessionId, store.get(sessionId).events, cwd);
+  return buildFaceSessionSurface(sessionId, readSessionEvents(store, sessionId), cwd);
 }
 
 /** Project + retain one referenced session under a byte budget. */

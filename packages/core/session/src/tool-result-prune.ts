@@ -4,6 +4,7 @@
  * original. `deriveMessages` / surface pricing fold to the latest per callId.
  */
 
+import { readSessionEvents } from "./seq.js";
 import type { MessageContent, SessionEvent, ToolResultEvent } from "@xrkseek/protocol";
 import { estimateMessageContent } from "./surface-estimate.js";
 import { findLatestCompaction } from "./compaction.js";
@@ -91,7 +92,7 @@ export function pruneOversizedToolResults(
   const headChars = options.headChars ?? TOOL_RESULT_PRUNE_HEAD_CHARS;
   const tailChars = options.tailChars ?? TOOL_RESULT_PRUNE_TAIL_CHARS;
   const now = options.now ?? Date.now;
-  const events = store.get(sessionId).events;
+  const events = readSessionEvents(store, sessionId);
   const latestCompaction = findLatestCompaction(events);
   const start = latestCompaction ? latestCompaction.index + 1 : 0;
   const latest = latestToolResultByCallId(events, start);

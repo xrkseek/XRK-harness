@@ -3,7 +3,7 @@
  * Shell: dsh-session-log-export HEAD then browser download.
  */
 
-import { toPackedJSONL, zstdCompressUtf8 } from "@xrkseek/core-session";
+import { readSessionEvents, toPackedJSONL, zstdCompressUtf8 } from "@xrkseek/core-session";
 import { listImageRefs, type SessionEvent } from "@xrkseek/protocol";
 import type { FaceRuntime } from "./context.js";
 import { buildStoredZip, zipEntryName, type ZipStoreEntry } from "./zip-store.js";
@@ -82,7 +82,7 @@ export async function buildSessionExportZip(
       missing.push(id);
       continue;
     }
-    const events = runtime.store.get(id).events;
+    const events = readSessionEvents(runtime.store, id);
     const packed = toPackedJSONL(events);
     entries.push({
       name: zipEntryName(`sessions/${id}.jsonl`),

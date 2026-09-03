@@ -3,6 +3,7 @@ import {
   forkSession,
   listPendingAdmits,
   newSession,
+  readSessionEvents,
   type PersistentSessionStore,
   type SessionStore,
 } from "@xrkseek/core-session";
@@ -16,6 +17,7 @@ import type { PolicyEngine } from "@xrkseek/policy";
 import type { ShellService } from "@xrkseek/exec-shell";
 import type { SessionEvent } from "@xrkseek/protocol";
 import {
+  contentHasImage,
   flattenText,
   isHumanUserMessageSource,
   newUserMessageId,
@@ -168,17 +170,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const store = options.store;
   const originalAppend = store.append.bind(store);
 
-  const readEvents = (sessionId: string): readonly SessionEvent[] => {
-    const persistent = store as PersistentSessionStore;
-    if (typeof persistent.eventsRef === "function") {
-      try {
-        return persistent.eventsRef(sessionId);
-      } catch {
-        return store.get(sessionId).events;
-      }
-    }
-    return store.get(sessionId).events;
-  };
+  const readEvents = (sessionId: string): readonly SessionEvent[] =>
+    readSessionEvents(store, sessionId);
 
   const projections =
     options.projections ??
@@ -214,6 +207,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const costMeterRoutes = new Map<string, { provider: string; model: string }>();
   const sessionAgentPresets = new Map<string, string>();
   const sessionCwds = new Map<string, string>();
+  const sessionHasImage = new Set<string>();
+  const sessionImageScanned = new Set<string>();
   const workspaces = new FaceWorkspaceRegistry(options.workspaceRoot);
   const subagents = new FaceSubagentRegistry(options.subagentPersistPath);
   const messageFeedback = new FaceMessageFeedbackStore();
@@ -350,7 +345,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       const spent = spentWakes.get(parentId) ?? 0;
       const followup = idle && spent < JOB_COMPLETION_MAX_WAKES;
       if (followup) spentWakes.set(parentId, spent + 1);
-      const events = store.get(childSessionId).events;
+      const events = readEvents(childSessionId);
       const receipt = parent.admit(
         formatSubagentCompletionNotice(link, events),
         { delivery: "steer" },
@@ -461,6 +456,14 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     }
 
     const frozen = originalAppend(id, next);
+    if (
+      (frozen.type === "user/message" || frozen.type === "prompt/admitted")
+      && frozen.content !== undefined
+      && contentHasImage(frozen.content)
+    ) {
+      sessionHasImage.add(id);
+      sessionImageScanned.add(id);
+    }
     const eventSeq = seq.next(id);
     toolArgMaps.remember(id, frozen);
     bus.publishMux(
@@ -528,7 +531,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
 
   const titles = new FaceTitleController({
     append: (sessionId, event) => appendPatched(sessionId, event),
-    getEvents: (sessionId) => store.get(sessionId).events,
+    getEvents: readEvents,
     projections,
   });
   titleBox.controller = titles;
@@ -615,6 +618,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     sessionModels,
     sessionAgentPresets,
     sessionCwds,
+    sessionHasImage,
+    sessionImageScanned,
     workspaces,
     subagents,
     messageFeedback,
@@ -634,10 +639,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       ? { webPlugins: options.webPlugins }
       : {}),
     publishQueue(sessionId) {
-      const pending = listPendingAdmits(
-        store.get(sessionId).events,
-        sessionId,
-      );
+      const pending = listPendingAdmits(readEvents(sessionId), sessionId);
       bus.publishMux({
         type: "session/queue",
         sessionId,

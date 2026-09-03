@@ -101,7 +101,9 @@ Harness 默认（`presets/harness`）：`maxRequestTokens: 100_000` · `keepToke
 | 用途 | API（`@xrkseek/core-session`） | 说明 |
 |------|-------------------------------|------|
 | 压缩预算、挑选 `recent` | `estimateTokens` · `estimateMessagesTokens` | 纯文本约按 chars/4 |
-| Context meter、`shadowedTokenCount` | `foldSurfaceTokens` · `priceCurrentSurfaceWindow` | 计入消息块与 toolCalls 开销 |
+| Context meter、`shadowedTokenCount` | `foldSurfaceTokens` · `priceCurrentSurfaceWindow` | 计入消息块与 toolCalls；压缩事件用 `shadowedTokenCount` 做有符号缩小（缺省不缩小） |
+
+日志位置与读面见 [session-log.md](./session-log.md)。
 
 Provider 上报的 usage 样本见 `@xrkseek/protocol` 与 [protocol-events.md](./protocol-events.md) 的 TokenUsage 节。
 
@@ -210,6 +212,8 @@ Tool bodies are bounded **before** they enter the log (spill policy): over **64K
 | Use | API (`@xrkseek/core-session`) | Notes |
 |------|-------------------------------|------|
 | Compaction budget, picking `recent` | `estimateTokens` · `estimateMessagesTokens` | Plain text ≈ chars/4 |
-| Context meter, `shadowedTokenCount` | `foldSurfaceTokens` · `priceCurrentSurfaceWindow` | Includes message blocks and toolCalls overhead |
+| Context meter, `shadowedTokenCount` | `foldSurfaceTokens` · `priceCurrentSurfaceWindow` | Includes message blocks and toolCalls; compaction uses `shadowedTokenCount` for a signed shrink (absent → no shrink) |
+
+Log positions / read surface: [session-log.md](./session-log.md).
 
 Provider-reported usage samples: `@xrkseek/protocol` and the TokenUsage section of [protocol-events.md](./protocol-events.md).

@@ -47,6 +47,21 @@ describe("memory session store", () => {
     expect(store.has("missing")).toBe(false);
   });
 
+  it("listHints throws for missing sessions and folds turn/start", () => {
+    const store = createMemorySessionStore();
+    expect(() => store.listHints!("missing")).toThrow(/session not found/);
+    const s = store.create("hints");
+    expect(store.listHints!(s.id)).toEqual({
+      lastEventTs: null,
+      hasTurnStart: false,
+    });
+    store.append(s.id, { type: "turn/start", ts: 10, turnId: "t" });
+    expect(store.listHints!(s.id)).toEqual({
+      lastEventTs: 10,
+      hasTurnStart: true,
+    });
+  });
+
   it("rejects invalid events on append", () => {
     const store = createMemorySessionStore();
     const s = store.create("bad");

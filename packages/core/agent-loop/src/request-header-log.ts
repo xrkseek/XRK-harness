@@ -1,12 +1,7 @@
 /**
  * Append `request/header` when the active LLM route changes (DSH reconstructable requests).
  */
-import {
-  foldRequestHeader,
-  requestHeaderEquals,
-  type RequestHeaderSnapshot,
-  type SessionStore,
-} from "@xrkseek/core-session";
+import { foldRequestHeader, requestHeaderEquals, type RequestHeaderSnapshot, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import type { LlmAdapter } from "@xrkseek/llm";
 import type {
   RequestHeaderReason,
@@ -24,10 +19,6 @@ function resolveHeaderSnapshot(
   return { config: route };
 }
 
-function peekLlmRoute(llm: LlmAdapter): RequestHeaderSnapshot | undefined {
-  return resolveHeaderSnapshot(llm);
-}
-
 export function maybeAppendRequestHeader(input: {
   readonly store: SessionStore;
   readonly sessionId: string;
@@ -40,7 +31,7 @@ export function maybeAppendRequestHeader(input: {
   /** Standing tool schemas for this step. */
   readonly tools?: readonly RequestHeaderToolSchema[];
 }): void {
-  const route = peekLlmRoute(input.llm);
+  const route = resolveHeaderSnapshot(input.llm);
   if (!route) return;
   const snap: RequestHeaderSnapshot = {
     config: route.config,
@@ -48,7 +39,7 @@ export function maybeAppendRequestHeader(input: {
     ...(input.tools && input.tools.length > 0 ? { tools: input.tools } : {}),
     ...(route.adapterDefaults ? { adapterDefaults: route.adapterDefaults } : {}),
   };
-  const events = input.store.get(input.sessionId).events;
+  const events = readSessionEvents(input.store, input.sessionId);
   const prev = foldRequestHeader(events);
   if (prev && requestHeaderEquals(prev, snap)) return;
   const reason: RequestHeaderReason =

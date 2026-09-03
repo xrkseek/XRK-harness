@@ -36,7 +36,7 @@ export function JobInputDock({ sessionId, useSessions, killJob, backgroundJob, t
 
   if (liveJobs.length === 0) return null
 
-  const rows = orderedJobs(jobs)
+  const rows = orderedJobs(liveJobs)
   const countKey = liveJobs.length === 1 ? 'count.live.one' : 'count.live.other'
   const summary = t(countKey, { count: liveJobs.length })
   const actions: JobListActions = { killJob, backgroundJob }

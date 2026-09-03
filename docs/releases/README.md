@@ -2,14 +2,14 @@
 
 > **读者**：终端用户 · 维护者
 
-公开线只保留两档：
+GitHub Release 公开页只保留两档：
 
 | 档 | 版本 | 说明 |
 |------|------|------|
-| **正式** | [v0.1.31](./v0.1.31.md) | 当前推荐安装（发版后挂 GitHub Release） |
-| **预览** | [v0.0.11](./v0.0.11.md) · [GitHub Release](https://github.com/xrkseek/XRK-harness/releases/tag/v0.0.11) | 历史预览线；npm tag **`preview`** |
+| **当前（@latest）** | [v0.2.0](./v0.2.0.md) | 0.2 预览线；推荐 `npm i -g @xrkseek/harness-cli@latest` |
+| **上一正式** | [v0.1.31](./v0.1.31.md) | 稳定留档 |
 
-上一正式版：[v0.1.30](./v0.1.30.md)。
+仓库内仍保留历史 `docs/releases/v*` 文稿供查阅；npm 上旧号可能仍可解析，以 deprecate / 文档指引为准。
 
 安装与发包见 [publishing.md](../publishing.md)。
 
@@ -17,8 +17,8 @@
 
 | 用途 | 命令 |
 |------|------|
-| 正式 | `npm i -g @xrkseek/harness-cli@0.1.31` 后 `xrkh web`，或 `npm i -g @xrkseek/harness-cli@latest` |
-| 预览 | `npm i -g @xrkseek/harness-cli@0.0.11` 后 `xrkh web`，或 `npm i -g @xrkseek/harness-cli@preview` |
+| 当前 | `npm i -g @xrkseek/harness-cli@0.2.0` 后 `xrkh web`，或 `npm i -g @xrkseek/harness-cli@latest` |
+| 上一正式 | `npm i -g @xrkseek/harness-cli@0.1.31` 后 `xrkh web` |
 
 规格索引：[docs/README.md](../README.md)。
 
@@ -28,14 +28,14 @@
 
 > **Audience**: End users · Maintainers
 
-The public line keeps only two releases:
+The GitHub Releases page keeps only two entries:
 
 | Line | Version | Notes |
 |------|---------|-------|
-| **Formal** | [v0.1.31](./v0.1.31.md) | Current recommended install (GitHub Release after publish) |
-| **Preview** | [v0.0.11](./v0.0.11.md) · [GitHub Release](https://github.com/xrkseek/XRK-harness/releases/tag/v0.0.11) | Historical preview; npm tag **`preview`** |
+| **Current (@latest)** | [v0.2.0](./v0.2.0.md) | 0.2 preview line; prefer `npm i -g @xrkseek/harness-cli@latest` |
+| **Previous formal** | [v0.1.31](./v0.1.31.md) | Stable archive |
 
-Previous formal: [v0.1.30](./v0.1.30.md).
+Historical `docs/releases/v*` files remain in the repo for reference; older npm versions may still resolve — follow deprecate notices and this index.
 
 Install and publish: [publishing.md](../publishing.md).
 
@@ -43,7 +43,7 @@ Install and publish: [publishing.md](../publishing.md).
 
 | Use | Command |
 |-----|---------|
-| Formal | `npm i -g @xrkseek/harness-cli@0.1.31` then `xrkh web`, or `npm i -g @xrkseek/harness-cli@latest` |
-| Preview | `npm i -g @xrkseek/harness-cli@0.0.11` then `xrkh web`, or `npm i -g @xrkseek/harness-cli@preview` |
+| Current | `npm i -g @xrkseek/harness-cli@0.2.0` then `xrkh web`, or `npm i -g @xrkseek/harness-cli@latest` |
+| Previous formal | `npm i -g @xrkseek/harness-cli@0.1.31` then `xrkh web` |
 
 Spec index: [docs/README.md](../README.md).

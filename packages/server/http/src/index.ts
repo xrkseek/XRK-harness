@@ -7,12 +7,7 @@ import {
 import type { SessionEvent, PromptDelivery } from "@xrkseek/protocol";
 import { parsePromptDelivery } from "@xrkseek/protocol";
 import type { AgentHandle } from "@xrkseek/core-agent";
-import {
-  NoPendingAdmitError,
-  SessionBusyError,
-  SessionSafetyLimitError,
-  type SessionStore,
-} from "@xrkseek/core-session";
+import { NoPendingAdmitError, SessionBusyError, SessionSafetyLimitError, type SessionStore, lastSessionEvent, readSessionEvents, sessionEventCount, sessionEventsFrom } from "@xrkseek/core-session";
 import { tryServeWebStatic, type WebStaticOptions } from "./static.js";
 export {
   createDshCompatPublicHandler,
@@ -317,10 +312,9 @@ export function createHttpServer(
         }
         const sessionId = options.ensureSession(body.sessionId);
         const agent = await options.resolveAgent(sessionId);
-        const before = options.store.get(sessionId).events.length;
+        const before = sessionEventCount(options.store, sessionId);
         const result = await agent.continueTurn({ text: body.message });
-        const events = options.store.get(sessionId).events;
-        for (const ev of events.slice(before)) {
+        for (const ev of sessionEventsFrom(options.store, sessionId, before)) {
           publish(sessionId, ev);
         }
         const out: HttpChatResponse = {
@@ -353,10 +347,9 @@ export function createHttpServer(
         };
         write("session", { sessionId });
         const agent = await options.resolveAgent(sessionId);
-        const before = options.store.get(sessionId).events.length;
+        const before = sessionEventCount(options.store, sessionId);
         const result = await agent.continueTurn({ text: body.message });
-        const events = options.store.get(sessionId).events;
-        for (const ev of events.slice(before)) {
+        for (const ev of sessionEventsFrom(options.store, sessionId, before)) {
           write("session_event", ev);
           publish(sessionId, ev);
         }
@@ -397,9 +390,7 @@ export function createHttpServer(
             );
             return;
           }
-          try {
-            options.store.get(sessionId);
-          } catch {
+          if (!options.store.has(sessionId)) {
             sendJson(res, 404, { error: "session not found" }, cors);
             return;
           }
@@ -412,7 +403,7 @@ export function createHttpServer(
           );
 
           if (body.resume) {
-            const before = options.store.get(sessionId).events.length;
+            const before = sessionEventCount(options.store, sessionId);
             let result:
               | {
                   turnId: string;
@@ -435,8 +426,7 @@ export function createHttpServer(
               );
               return;
             }
-            const events = options.store.get(sessionId).events;
-            for (const ev of events.slice(before)) {
+            for (const ev of sessionEventsFrom(options.store, sessionId, before)) {
               publish(sessionId, ev);
             }
             sendJson(
@@ -460,7 +450,7 @@ export function createHttpServer(
 
           if (body.wake) {
             options.drain?.wake(sessionId);
-            publish(sessionId, options.store.get(sessionId).events.at(-1)!);
+            publish(sessionId, lastSessionEvent(options.store, sessionId)!);
             sendJson(
               res,
               202,
@@ -476,7 +466,7 @@ export function createHttpServer(
             return;
           }
 
-          publish(sessionId, options.store.get(sessionId).events.at(-1)!);
+          publish(sessionId, lastSessionEvent(options.store, sessionId)!);
           sendJson(
             res,
             202,
@@ -494,21 +484,18 @@ export function createHttpServer(
         if (req.method === "POST" && rest === "turn") {
           const raw = await readBody(req);
           const body = JSON.parse(raw || "{}") as HttpTurnRequest;
-          try {
-            options.store.get(sessionId);
-          } catch {
+          if (!options.store.has(sessionId)) {
             sendJson(res, 404, { error: "session not found" }, cors);
             return;
           }
           const agent = await options.resolveAgent(sessionId);
-          const before = options.store.get(sessionId).events.length;
+          const before = sessionEventCount(options.store, sessionId);
           const result = await agent.continueTurn(
             body.message?.trim()
               ? { text: body.message }
               : {},
           );
-          const events = options.store.get(sessionId).events;
-          for (const ev of events.slice(before)) {
+          for (const ev of sessionEventsFrom(options.store, sessionId, before)) {
             publish(sessionId, ev);
           }
           sendJson(
@@ -540,7 +527,7 @@ export function createHttpServer(
           }
           set.add(res);
           try {
-            for (const ev of options.store.get(sessionId).events) {
+            for (const ev of readSessionEvents(options.store, sessionId)) {
               res.write(`data: ${JSON.stringify(ev)}\n\n`);
             }
           } catch {
@@ -553,7 +540,7 @@ export function createHttpServer(
         }
         if (req.method === "GET" && !rest) {
           try {
-            const events = options.store.get(sessionId).events;
+            const events = readSessionEvents(options.store, sessionId);
             sendJson(res, 200, { sessionId, events }, cors);
           } catch {
             sendJson(res, 404, { error: "session not found" }, cors);

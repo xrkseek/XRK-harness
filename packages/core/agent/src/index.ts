@@ -1,4 +1,3 @@
-import type { CompactionOptions } from "@xrkseek/core-session";
 import type { LlmAdapter, LlmChatRequest, ResolvedRetryPolicy } from "@xrkseek/llm";
 import type { AgentCancelCause } from "@xrkseek/protocol";
 import {
@@ -14,7 +13,10 @@ import {
   DEFAULT_COMPACTION_KEEP_TOKENS,
   deriveMessagesUnwindowed,
   selectHeadRecent,
+  readSessionEvents,
+  sessionEventCount,
   type AdmitReceipt,
+  type CompactionOptions,
   type SessionSafety,
   type SessionSafetyOptions,
   type SessionStore,
@@ -363,7 +365,7 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
                 signature: snap.lastToolSignature,
               });
             // Notice may already be in the log from the hard tool's batch flush.
-            const events = options.store.get(options.sessionId).events;
+            const events = readSessionEvents(options.store, options.sessionId);
             const already = events.some(
               (e) =>
                 e.type === "safety/notice" &&
@@ -459,7 +461,7 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
     },
     pendingAdmits() {
       return listPendingAdmits(
-        options.store.get(options.sessionId).events,
+        readSessionEvents(options.store, options.sessionId),
         options.sessionId,
       );
     },
@@ -481,7 +483,7 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
             (options.compaction !== false &&
               options.compaction?.keepTokens) ||
             DEFAULT_COMPACTION_KEEP_TOKENS;
-          const events = options.store.get(options.sessionId).events;
+          const events = readSessionEvents(options.store, options.sessionId);
           const selected = selectHeadRecent(
             deriveMessagesUnwindowed(events),
             keep,
@@ -504,8 +506,8 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
           return {
             compacted: true as const,
             shadowedMessages: selected.headMessageCount,
-            shadowedTokens: result.event!.shadowedTokenCount!,
-            summarySeq: options.store.get(options.sessionId).events.length,
+            shadowedTokens: result.event?.shadowedTokenCount ?? 0,
+            summarySeq: sessionEventCount(options.store, options.sessionId),
           };
         });
       } catch (err) {

@@ -80,7 +80,12 @@ export function paginateSessionHistory(
   events: readonly SessionEvent[],
   beforeSeq: number | undefined,
   maxMessages: number,
-): { readonly events: SessionEvent[]; readonly hasMore: boolean } {
+): {
+  readonly events: SessionEvent[];
+  readonly hasMore: boolean;
+  /** Absolute 0-based index of `events[0]` in the full log (0 when empty). */
+  readonly startIndex: number;
+} {
   let windowEnd = events.length;
   if (beforeSeq !== undefined) {
     windowEnd = 0;
@@ -91,7 +96,7 @@ export function paginateSessionHistory(
   }
   const window = events.slice(0, windowEnd);
   if (window.length === 0) {
-    return { events: [], hasMore: false };
+    return { events: [], hasMore: false, startIndex: 0 };
   }
 
   let count = 0;
@@ -110,6 +115,7 @@ export function paginateSessionHistory(
   return {
     events: window.slice(cutIndex),
     hasMore: cutIndex > 0,
+    startIndex: cutIndex,
   };
 }
 
@@ -126,15 +132,20 @@ export function paginateSessionHistoryForReplay(
   events: readonly SessionEvent[],
   beforeSeq: number | undefined,
   maxMessages: number = DEFAULT_HISTORY_MAX_MESSAGES,
-): { readonly events: SessionEvent[]; readonly hasMore: boolean } {
+): {
+  readonly events: SessionEvent[];
+  readonly hasMore: boolean;
+  readonly startIndex: number;
+} {
   const page = paginateSessionHistory(events, beforeSeq, maxMessages);
   return {
     events: dropSupersededStreamDeltas(page.events),
     hasMore: page.hasMore,
+    startIndex: page.startIndex,
   };
 }
 
-function dropSupersededStreamDeltas(
+export function dropSupersededStreamDeltas(
   events: readonly SessionEvent[],
 ): SessionEvent[] {
   const finalizedSteps = new Set<string>();

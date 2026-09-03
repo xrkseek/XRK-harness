@@ -84,6 +84,13 @@ export interface FaceRuntime {
   readonly sessionAgentPresets: Map<string, string>;
   /** sessionId → project cwd (DSH session.list / blank reuse). */
   readonly sessionCwds: Map<string, string>;
+  /**
+   * Sessions known to contain image-bearing user/admit content.
+   * Maintained on append; first miss may scan once then mark {@link sessionImageScanned}.
+   */
+  readonly sessionHasImage: Set<string>;
+  /** Sessions whose image presence has been resolved (hit or miss). */
+  readonly sessionImageScanned: Set<string>;
   /** In-memory workspace registry for the product shell. */
   readonly workspaces: FaceWorkspaceRegistry;
   /** Direct subagent children (fork / create-with-parent). */

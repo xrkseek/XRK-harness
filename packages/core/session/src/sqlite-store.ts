@@ -14,6 +14,8 @@ import {
 import { deepFreeze, newSessionId } from "./freeze.js";
 import { repairOpenTurnEvents } from "./repair-open-turn.js";
 import { extractEventSearchText } from "./search-text.js";
+import { snapshotEvents } from "./seq.js";
+import { computeListHints } from "./list-hints.js";
 import type { SessionRecord, SessionListHints, SessionStore } from "./store.js";
 
 function openDatabase(dbPath: string): DatabaseSync {
@@ -35,10 +37,10 @@ export interface PersistentSessionStore extends SessionStore {
   searchSessionIds(query: string): readonly string[];
   /**
    * Live event log without defensive copy (projection / internal reads).
-   * Throws when session is not resident — call after {@link get} or {@link append}.
+   * Throws when session is not resident — call after {@link get}, {@link append},
+   * or {@link readEvents}.
    */
   eventsRef(id: string): readonly SessionEvent[];
-  /** Wire projection eviction when an in-memory log is dropped (LRU). */
   /**
    * Called immediately before an in-memory session log is dropped (LRU).
    * The session is still resident during the callback so `eventsRef` works;
@@ -412,17 +414,7 @@ export function createPersistentSessionStore(
       }
       const cached = sessions.get(id);
       if (cached !== undefined) {
-        let hasTurnStart = false;
-        for (const event of cached) {
-          if (event.type === "turn/start") {
-            hasTurnStart = true;
-            break;
-          }
-        }
-        return {
-          lastEventTs: cached[cached.length - 1]?.ts ?? null,
-          hasTurnStart,
-        };
+        return computeListHints(cached);
       }
       return {
         lastEventTs: lastEventTsFromDb(db, id),
@@ -472,6 +464,18 @@ export function createPersistentSessionStore(
         throw new Error(`session not resident: ${id}`);
       }
       return events;
+    },
+
+    readEvents(
+      id: string,
+      fromSeq = 0,
+      toSeqExclusive?: number,
+    ): readonly SessionEvent[] {
+      if (!sessionIds.has(id)) {
+        throw new Error(`session not found: ${id}`);
+      }
+      const events = ensureLoaded(id);
+      return snapshotEvents({ id, events }, fromSeq, toSeqExclusive);
     },
 
     bindSessionEviction(handler: (sessionId: string) => void): void {

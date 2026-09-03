@@ -3,12 +3,7 @@
  * Logs `shadowedTokenCount` from the same surface estimator Face meter uses.
  */
 
-import {
-  DEFAULT_COMPACTION_KEEP_TOKENS,
-  prepareCompactionPayload,
-  priceCurrentSurfaceWindow,
-  type CompactionOptions,
-} from "@xrkseek/core-session";
+import { DEFAULT_COMPACTION_KEEP_TOKENS, prepareCompactionPayload, priceCurrentSurfaceWindow, type CompactionOptions, readSessionEvents } from "@xrkseek/core-session";
 import type { SessionStore } from "@xrkseek/core-session";
 import type { LlmAdapter } from "@xrkseek/llm";
 import type {
@@ -36,7 +31,7 @@ export async function runCompaction(
   input: RunCompactionInput,
 ): Promise<RunCompactionResult> {
   const keep = input.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS;
-  const events = input.store.get(input.sessionId).events;
+  const events = readSessionEvents(input.store, input.sessionId);
   const payload = prepareCompactionPayload(events, keep);
   if (!payload) return { compacted: false };
 

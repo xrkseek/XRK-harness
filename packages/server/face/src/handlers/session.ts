@@ -2,6 +2,8 @@ import {
   AdmitNotPendingError,
   admitPrompt,
   listPendingAdmits,
+  readSessionEvents,
+  sessionEventCount,
   withdrawAdmit,
 } from "@xrkseek/core-session";
 import { assertPolicyAllow } from "@xrkseek/policy";
@@ -14,7 +16,8 @@ import {
 import { toWireHistoryEntry, collectToolCallArgsForPage } from "../adapt/index.js";
 import {
   DEFAULT_HISTORY_MAX_MESSAGES,
-  paginateSessionHistoryForReplay,
+  dropSupersededStreamDeltas,
+  paginateSessionHistory,
 } from "../adapt/history-paginate.js";
 import { tryFaceSlashCommand } from "../slash.js";
 import { SessionTitleInvalidError } from "../projections/index.js";
@@ -49,11 +52,18 @@ import {
 } from "../projections/snapshot-keys.js";
 
 function sessionHasImageContent(runtime: FaceRuntime, sessionId: string): boolean {
-  for (const ev of runtime.store.get(sessionId).events) {
+  if (runtime.sessionHasImage.has(sessionId)) return true;
+  if (runtime.sessionImageScanned.has(sessionId)) return false;
+  for (const ev of readSessionEvents(runtime.store, sessionId)) {
     if (ev.type !== "user/message" && ev.type !== "prompt/admitted") continue;
     const content = (ev as { content?: MessageContent }).content;
-    if (content !== undefined && contentHasImage(content)) return true;
+    if (content !== undefined && contentHasImage(content)) {
+      runtime.sessionHasImage.add(sessionId);
+      runtime.sessionImageScanned.add(sessionId);
+      return true;
+    }
   }
+  runtime.sessionImageScanned.add(sessionId);
   return false;
 }
 
@@ -221,12 +231,7 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       error: { code: "invalid-payload", message: "sessionId required" },
     };
   }
-  const events = runtime.store.get(sessionId).events;
-  const seqByEvent = new Map<SessionEvent, number>();
-  for (let i = 0; i < events.length; i++) {
-    const event = events[i];
-    if (event !== undefined) seqByEvent.set(event, i + 1);
-  }
+  const events = readSessionEvents(runtime.store, sessionId);
 
   const beforeSeq =
     typeof p.beforeSeq === "number" ? p.beforeSeq : undefined;
@@ -235,9 +240,15 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       ? p.maxMessages
       : DEFAULT_HISTORY_MAX_MESSAGES;
 
-  const page = paginateSessionHistoryForReplay(events, beforeSeq, maxMessages);
+  const raw = paginateSessionHistory(events, beforeSeq, maxMessages);
+  const seqByEvent = new Map<SessionEvent, number>();
+  for (let i = 0; i < raw.events.length; i++) {
+    const event = raw.events[i];
+    if (event !== undefined) seqByEvent.set(event, raw.startIndex + i + 1);
+  }
+  const pageEvents = dropSupersededStreamDeltas(raw.events);
   const inbox = runtime.inboxWire.fresh();
-  const toolArgs = collectToolCallArgsForPage(events, page.events, seqByEvent);
+  const toolArgs = collectToolCallArgsForPage(events, pageEvents, seqByEvent);
   const wireCtx = {
     sessionId,
     ids: runtime.wireIds,
@@ -247,16 +258,16 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       ? { getTool: (name: string) => runtime.getTool!(sessionId, name) }
       : {}),
   };
-  const indexed = page.events.map((event) => {
+  const indexed = pageEvents.map((event) => {
     const seq = seqByEvent.get(event) ?? 0;
     return toWireHistoryEntry(event, seq, wireCtx);
   });
-  const hasMore = page.hasMore;
+  const hasMore = raw.hasMore;
+  let maxWireSeq = 0;
   for (const row of indexed) {
-    while (runtime.seq.last(sessionId) < row.event.seq) {
-      runtime.seq.next(sessionId);
-    }
+    if (row.event.seq > maxWireSeq) maxWireSeq = row.event.seq;
   }
+  if (maxWireSeq > 0) runtime.seq.ensureAtLeast(sessionId, maxWireSeq);
 
   let projections: ReturnType<typeof snapshotWireBlock> | undefined;
   if (historyPageIncludesProjections(beforeSeq)) {
@@ -616,6 +627,10 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
   runtime.watchSession(child.id);
   const parentCwd = runtime.sessionCwds.get(sessionId);
   if (parentCwd) runtime.sessionCwds.set(child.id, parentCwd);
+  if (boundary === undefined && runtime.sessionHasImage.has(sessionId)) {
+    runtime.sessionHasImage.add(child.id);
+    runtime.sessionImageScanned.add(child.id);
+  }
   const parentWs =
     runtime.workspaces.workspaceIdOf(sessionId) ??
     runtime.workspaces.defaultId();
@@ -640,7 +655,7 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
     value: {
       sessionId: child.id,
       parentSessionId: sessionId,
-      eventCount: child.events.length,
+      eventCount: sessionEventCount(runtime.store, child.id),
       ...(beforeSeq !== undefined ? { beforeSeq } : {}),
     },
   };
@@ -746,7 +761,7 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
   }
   const kind = Reflect.get(action, "kind");
   const pending = listPendingAdmits(
-    runtime.store.get(sessionId).events,
+    readSessionEvents(runtime.store, sessionId),
     sessionId,
   );
   const target = pending.find((a) => a.admitId === itemId);

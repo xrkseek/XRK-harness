@@ -1,17 +1,4 @@
-import {
-  assertModelVisible,
-  assertToolCallsSettled,
-  deriveMessages,
-  durableModelHistory,
-  estimateRequestTokens,
-  promotePendingSteers,
-  pruneOversizedToolResults,
-  settleDanglingTools,
-  DEFAULT_COMPACTION_BUFFER_TOKENS,
-  DEFAULT_COMPACTION_KEEP_TOKENS,
-  type CompactionOptions,
-  type SessionStore,
-} from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, deriveMessages, durableModelHistory, estimateRequestTokens, promotePendingSteers, pruneOversizedToolResults, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   type AssembledRequest,
@@ -222,7 +209,7 @@ function commitPendingPlanMode(
   sessionId: string,
   now: () => number,
 ): void {
-  const target = pendingPlanTarget(store.get(sessionId).events);
+  const target = pendingPlanTarget(readSessionEvents(store, sessionId));
   if (target === null) return;
   append(store, sessionId, {
     type: "plan/mode",
@@ -384,6 +371,7 @@ function buildModelRequest(input: {
     }
   }
 
+  const planActive = foldPlanMode(input.events);
   const assembled = assembleThreeLayers({
     skeletonSystem: {
       ...(input.assemble?.persona !== undefined
@@ -410,16 +398,14 @@ function buildModelRequest(input: {
     ...(input.assemble?.toolOrder ? { toolOrder: input.assemble.toolOrder } : {}),
     ...(input.assemble?.workspaceBlocks ||
     input.slashSystemExtra ||
-    foldPlanMode(input.events)
+    planActive
       ? {
           workspaceBlocks: [
             ...(input.assemble?.workspaceBlocks ?? []),
             ...(input.slashSystemExtra?.trim()
               ? [`## Recipe\n${input.slashSystemExtra.trim()}`]
               : []),
-            ...(foldPlanMode(input.events)
-              ? [DEFAULT_PLAN_POLICY_SECTION]
-              : []),
+            ...(planActive ? [DEFAULT_PLAN_POLICY_SECTION] : []),
           ],
         }
       : {}),
@@ -607,7 +593,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
 
     const buildReq = () =>
       buildModelRequest({
-        events: input.store.get(input.sessionId).events,
+        events: readSessionEvents(input.store, input.sessionId),
         sessionId: input.sessionId,
         ...(input.system !== undefined ? { system: input.system } : {}),
         ...(input.assemble ? { assemble: input.assemble } : {}),
@@ -674,7 +660,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     }
 
     // Step open: tools settled; non-assemble durable history ≡ deriveMessages.
-    const snapEvents = input.store.get(input.sessionId).events;
+    const snapEvents = readSessionEvents(input.store, input.sessionId);
     assertToolCallsSettled(snapEvents);
     const assembled =
       input.assemble !== undefined && input.assemble.enabled !== false;
@@ -772,7 +758,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         });
         if (pruned.pruned > 0) {
           req = buildReq();
-          assertToolCallsSettled(input.store.get(input.sessionId).events);
+          assertToolCallsSettled(readSessionEvents(input.store, input.sessionId));
           maybeAppendRequestHeader({
             store: input.store,
             sessionId: input.sessionId,
@@ -808,7 +794,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
             }
             if (!did.compacted) throw retryErr;
             req = buildReq();
-            assertToolCallsSettled(input.store.get(input.sessionId).events);
+            assertToolCallsSettled(readSessionEvents(input.store, input.sessionId));
             maybeAppendRequestHeader({
               store: input.store,
               sessionId: input.sessionId,
@@ -841,7 +827,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
           }
           if (!did.compacted) throw err;
           req = buildReq();
-          assertToolCallsSettled(input.store.get(input.sessionId).events);
+          assertToolCallsSettled(readSessionEvents(input.store, input.sessionId));
           maybeAppendRequestHeader({
             store: input.store,
             sessionId: input.sessionId,

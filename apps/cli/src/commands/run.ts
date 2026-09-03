@@ -1,4 +1,8 @@
-import { toJSONL, createMemorySessionStore } from "@xrkseek/core-session";
+import {
+  toJSONL,
+  createMemorySessionStore,
+  readSessionEvents,
+} from "@xrkseek/core-session";
 import { resolveLlmFromEnv } from "@xrkseek/llm-registry";
 import { createHarnessComposition } from "@xrkseek/preset-harness";
 import { createMinimalComposition } from "@xrkseek/preset-minimal";
@@ -75,7 +79,10 @@ export async function runCommand(args: ParsedArgs): Promise<number> {
 
   process.stdout.write(`${result.text}\n`);
   if (process.env.XRK_DUMP_SESSION === "1") {
-    const events = composition.store.get(composition.sessionId).events;
+    const events = readSessionEvents(
+      composition.store,
+      composition.sessionId,
+    );
     process.stderr.write(toJSONL(events));
   }
   return 0;

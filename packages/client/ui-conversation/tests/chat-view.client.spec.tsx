@@ -947,28 +947,36 @@ describe('ChatView', () => {
   })
 
   it('keeps the flow waiting line visible while steering is pending', () => {
-    const startTime = Date.now() - 125_000
-    const phrase = zh[`turnStatus.${((startTime % 16) + 16) % 16}` as keyof typeof zh]
-    const trigger: UserMessageNode = { ...user(1, 'go'), time: startTime + 1 }
-    const h = makeHarness({
-      nodes: [trigger], turnTimings: new Map([[1, { startTime }]]), running: true,
-    })
-    const view = render(<h.ChatView {...h.props} />)
-    // Freshly mounted (as after a reload) yet already past the 15s gate.
-    const status = view.getByRole('status')
-    expect(status.textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}2分0\\d秒$`))
-    expect(status.querySelector('[aria-hidden="true"]')).not.toBeNull()
-    act(() => {
-      h.set({ queue: [{
-        id: 'steering-occurrence' as never,
-        messageId: 'steering-message' as never,
-        placement: 'steering',
-        content: [{ type: 'text', text: 'also' }],
-        preview: 'also',
-        text: 'also',
-      }] })
-    })
-    expect(view.getByRole('status').textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}2分0\\d秒$`))
+    vi.useFakeTimers()
+    try {
+      const startTime = Date.now() - 125_000
+      const phrase = zh[`turnStatus.${((startTime % 16) + 16) % 16}` as keyof typeof zh]
+      const trigger: UserMessageNode = { ...user(1, 'go'), time: startTime + 1 }
+      const h = makeHarness({
+        nodes: [trigger], turnTimings: new Map([[1, { startTime }]]), running: true,
+      })
+      const view = render(<h.ChatView {...h.props} />)
+      // Phrase stays turn-stable; the clock measures this wait episode, not
+      // wall time since turn/start (125s into the turn still starts under 15s).
+      const status = view.getByRole('status')
+      expect(status.textContent).toBe(phrase)
+      expect(status.querySelector('[aria-hidden="true"]')).toBeNull()
+      act(() => {
+        h.set({ queue: [{
+          id: 'steering-occurrence' as never,
+          messageId: 'steering-message' as never,
+          placement: 'steering',
+          content: [{ type: 'text', text: 'also' }],
+          preview: 'also',
+          text: 'also',
+        }] })
+      })
+      expect(view.getByRole('status').textContent).toBe(phrase)
+      act(() => { vi.advanceTimersByTime(15_000) })
+      expect(view.getByRole('status').textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}15秒$`))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('shows the flow waiting line after pending steering even while tools are live', () => {

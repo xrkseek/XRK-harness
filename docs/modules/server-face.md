@@ -47,9 +47,10 @@ HTTP/WS (attach-http)
 | `runtime.ts` | `createFaceRuntime` | 组装 bus/seq/projections/approvals/questions |
 | `dispatch.ts` | **RPC 路由表** | 未知 method → NI；新方法在此登记 |
 | `handlers/` | 按域 handler | `session` · `host` · `catalog` · `remotes` · `cordis-stub` · `session-added` |
-| `attach-http.ts` | HTTP 挂载 + WS · mux 重连基线 | pending 补 queue / 审批 / 提问 |
+| `attach-http.ts` | HTTP 挂载 + WS · mux 重连基线 · Ping 心跳 | pending 补 queue / 审批 / 提问；`ws-heartbeat` 默认 2s / 2 miss |
+| `ws-heartbeat.ts` | mux/host Ping/Pong 看门狗 | 半开连接 terminate |
 | `bus.ts` | mux/host 订阅扇出 | `publishMux(frame, rpcId?)` 审批用稳定 id |
-| `seq.ts` | Face 1-based seq 时钟 | 与 history 对齐 |
+| `seq.ts` | `FaceMuxSeq` · `FaceSeqClock`（1-based） | **不是** Session `SessionSeq`；见 [session-log.md](../session-log.md) |
 
 ### 会话 / 队列 / 审批
 
@@ -209,9 +210,10 @@ HTTP/WS (attach-http)
 | `runtime.ts` | `createFaceRuntime` | Assembles bus/seq/projections/approvals/questions |
 | `dispatch.ts` | **RPC route table** | Unknown method → NI; register new methods here |
 | `handlers/` | Domain handlers | `session` · `host` · `catalog` · `remotes` · `cordis-stub` · `session-added` |
-| `attach-http.ts` | HTTP mount + WS · mux reconnect baseline | Pending fills queue / approvals / questions |
+| `attach-http.ts` | HTTP mount + WS · mux reconnect baseline · Ping heartbeats | Pending fills queue / approvals / questions; `ws-heartbeat` default 2s / 2 miss |
+| `ws-heartbeat.ts` | mux/host Ping/Pong watchdog | Terminate half-open peers |
 | `bus.ts` | mux/host fan-out | `publishMux(frame, rpcId?)` uses stable ids for approvals |
-| `seq.ts` | Face 1-based seq clock | Aligned with history |
+| `seq.ts` | `FaceMuxSeq` · `FaceSeqClock` (1-based) | **Not** Session `SessionSeq`; see [session-log.md](../session-log.md) |
 
 ### Session / queue / approval
 

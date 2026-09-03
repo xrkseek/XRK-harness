@@ -49,7 +49,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 选 preset | [profiles](./profiles.md) · [host-preset](./host-preset.md) |
 | 写进程插件 | [plugin-development](./plugin-development.md) · [plugin-loader](./plugin-loader.md) · [community-plugins](./community-plugins.md) |
 | 写工具 / 守卫 | [tool-pipeline](./tool-pipeline.md) · [seams](./seams.md) · [policy](./policy.md) |
-| Session / 压缩 / meter | [session](./session.md) · [session-compaction](./session-compaction.md) · [modules/session-projection](./modules/session-projection.md)（含 `turnOutline`） · [protocol-events](./protocol-events.md) |
+| Session / 压缩 / meter | [session](./session.md) · [session-log](./session-log.md) · [session-compaction](./session-compaction.md) · [modules/session-projection](./modules/session-projection.md)（含 `turnOutline`） · [protocol-events](./protocol-events.md) |
 | 看包落点 | [modules/](./modules/README.md) |
 
 ### 贡献 / 维护
@@ -59,7 +59,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 跑测 / 提 PR | [testing](./testing.md) · [CONTRIBUTING](../CONTRIBUTING.md) |
 | 交接本仓 | [maintainer](./maintainer.md) · [audiences](./audiences.md) |
 | 发版 | [publishing](./publishing.md)（维护者） |
-| 版本说明 | [releases/](./releases/)（正式 [v0.1.24](./releases/v0.1.24.md) · 预览 [v0.0.11](./releases/v0.0.11.md)） |
+| 版本说明 | [releases/](./releases/)（当前 [v0.2.0](./releases/v0.2.0.md) · 上一正式 [v0.1.31](./releases/v0.1.31.md)） |
 | 改码笔记 | [AGENTS](../AGENTS.md) · `.cursor/skills` |
 
 ## 规格索引
@@ -81,6 +81,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 文档 | 内容 |
 |------|------|
 | [session.md](./session.md) | Session 索引 |
+| [session-log.md](./session-log.md) | 日志位置品牌 · 必选 `readEvents` · store accessors |
 | [protocol-events.md](./protocol-events.md) | 事件 · TokenUsage · Schema |
 | [session-api.md](./session-api.md) | newSession · admit · continueTurn |
 | [session-delivery.md](./session-delivery.md) | steer / queue |
@@ -135,7 +136,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [learn.md](./learn.md) | 要义摘录 |
 | [modules/](./modules/README.md) | 包文件地图 |
 | [adr/](./adr/README.md) | 架构决策 |
-| [releases/](./releases/) | 发行说明（正式 [v0.1.24](./releases/v0.1.24.md) · 预览 [v0.0.11](./releases/v0.0.11.md)） |
+| [releases/](./releases/) | 发行说明（当前 [v0.2.0](./releases/v0.2.0.md) · 上一正式 [v0.1.31](./releases/v0.1.31.md)） |
 
 ---
 
@@ -190,7 +191,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | Choose preset | [profiles](./profiles.md) · [host-preset](./host-preset.md) |
 | Process plugins | [plugin-development](./plugin-development.md) · [plugin-loader](./plugin-loader.md) · [community-plugins](./community-plugins.md) |
 | Tools / guards | [tool-pipeline](./tool-pipeline.md) · [seams](./seams.md) · [policy](./policy.md) |
-| Session / compaction / meter | [session](./session.md) · [session-compaction](./session-compaction.md) · [modules/session-projection](./modules/session-projection.md) (incl. `turnOutline`) · [protocol-events](./protocol-events.md) |
+| Session / compaction / meter | [session](./session.md) · [session-log](./session-log.md) · [session-compaction](./session-compaction.md) · [modules/session-projection](./modules/session-projection.md) (incl. `turnOutline`) · [protocol-events](./protocol-events.md) |
 | Package map | [modules/](./modules/README.md) |
 
 ### Contribute / maintain
@@ -200,7 +201,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | Test / PR | [testing](./testing.md) · [CONTRIBUTING](../CONTRIBUTING.md) |
 | Handoff | [maintainer](./maintainer.md) · [audiences](./audiences.md) |
 | Release | [publishing](./publishing.md) (maintainers) |
-| Release notes | [releases/](./releases/) (formal [v0.1.24](./releases/v0.1.24.md) · preview [v0.0.11](./releases/v0.0.11.md)) |
+| Release notes | [releases/](./releases/) (current [v0.2.0](./releases/v0.2.0.md) · previous formal [v0.1.31](./releases/v0.1.31.md)) |
 | Coding notes | [AGENTS](../AGENTS.md) · `.cursor/skills` |
 
 ## Spec index
@@ -222,6 +223,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | Doc | Content |
 |-----|---------|
 | [session.md](./session.md) | Session index |
+| [session-log.md](./session-log.md) | Log position brands · required `readEvents` · store accessors |
 | [protocol-events.md](./protocol-events.md) | Events · TokenUsage · Schema |
 | [session-api.md](./session-api.md) | newSession · admit · continueTurn |
 | [session-delivery.md](./session-delivery.md) | steer / queue |
@@ -276,4 +278,4 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [learn.md](./learn.md) | Short digest |
 | [modules/](./modules/README.md) | Package file map |
 | [adr/](./adr/README.md) | Architecture decisions |
-| [releases/](./releases/) | Release notes (formal [v0.1.24](./releases/v0.1.24.md) · preview [v0.0.11](./releases/v0.0.11.md)) |
+| [releases/](./releases/) | Release notes (current [v0.2.0](./releases/v0.2.0.md) · previous formal [v0.1.31](./releases/v0.1.31.md)) |

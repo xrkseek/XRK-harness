@@ -1,4 +1,5 @@
 import { discoverOpenAiChatModels } from "@xrkseek/llm-registry";
+import { readSessionEvents } from "@xrkseek/core-session";
 import { FACE_AGENT_PRESETS, FACE_AGENT_PRESET_IDS, canonicalAgentPresetId } from "../presets-catalog.js";
 import { resolveDefaultAgentPreset } from "../settings-document.js";
 import { buildFaceModelCatalog, routeServed } from "../model-catalog.js";
@@ -298,7 +299,7 @@ export const sessionAttachment: FaceHandler = async (runtime, _rpcId, payload) =
       error: { code: "not-found", message: "session not found" },
     };
   }
-  const events = runtime.store.get(sessionId).events;
+  const events = readSessionEvents(runtime.store, sessionId);
   const result = await readSessionAttachment({
     events,
     attachments: runtime.attachments,

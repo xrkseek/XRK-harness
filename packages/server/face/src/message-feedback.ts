@@ -4,7 +4,7 @@
  * carrier failure from business codes (session-not-found, version-conflict, …).
  */
 
-import type { SessionStore } from "@xrkseek/core-session";
+import { readSessionEvents, type SessionStore } from "@xrkseek/core-session";
 import type { FaceRpcResult } from "./types.js";
 
 export const MESSAGE_FEEDBACK_NOTE_MAX_BYTES = 4096;
@@ -39,7 +39,7 @@ function assistantMessageExists(
   sessionId: string,
   messageId: string,
 ): boolean {
-  const events = store.get(sessionId).events;
+  const events = readSessionEvents(store, sessionId);
   for (const e of events) {
     if (e.type !== "assistant/message") continue;
     if (`${e.turnId}:${e.stepId}` === messageId) return true;

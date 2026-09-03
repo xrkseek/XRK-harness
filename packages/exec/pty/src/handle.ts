@@ -6,6 +6,7 @@ import {
   createProcessInspector,
   type ProcessIdentity,
   type ProcessInspector,
+  type ProcessSnapshot,
 } from "./process-inspector.js";
 import { withResolvers } from "./defer.js";
 import {
@@ -104,7 +105,8 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
   ) {
     this.pid = terminal.pid;
     this.rootIdentity = inspector
-      .processTree(this.pid)
+      .snapshot()
+      .tree(this.pid)
       .find((member) => member.pid === this.pid);
     this.done = this.outcome.promise;
     ensureHostExitHook();
@@ -133,12 +135,12 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
   }
 
   async inspectForeground(): Promise<TerminalForeground | undefined> {
-    this.descendants();
+    this.descendants(this.inspector.snapshot());
     const processGroupId = this.inspector.foregroundPgid(this.pid);
     if (processGroupId === undefined) return undefined;
     return {
       processGroupId,
-      inputWaiting: this.inspector.isStdinWaiting(processGroupId),
+      inputWaiting: this.inspector.isStdinWaiting(processGroupId, this.pid),
     };
   }
 
@@ -192,12 +194,18 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
     }
   }
 
-  private survivors(members: ProcessIdentity[]): ProcessIdentity[] {
-    return members.filter((member) => this.inspector.isAlive(member));
+  private survivors(
+    members: ProcessIdentity[],
+    observed: ProcessSnapshot,
+  ): ProcessIdentity[] {
+    return members.filter((member) => observed.alive(member));
   }
 
-  private descendants(): ProcessIdentity[] {
-    const tree = this.inspector.processTree(this.pid);
+  private descendants(observed: ProcessSnapshot): ProcessIdentity[] {
+    // Adopt newly scanned members only while the numeric root pid still
+    // carries the spawned shell's start identity: after the shell dies, a
+    // recycled pid's tree/session must not donate unrelated children.
+    const tree = observed.tree(this.pid);
     const root = tree.find((member) => member.pid === this.pid);
     const rootVerified =
       this.rootIdentity !== undefined &&
@@ -206,10 +214,9 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
     this.trackedDescendants = this.survivors(
       this.unionMembers(
         this.trackedDescendants,
-        ...(rootVerified
-          ? [tree, this.inspector.processSession(this.pid)]
-          : []),
+        ...(rootVerified ? [tree, observed.session(this.pid)] : []),
       ).filter((member) => member.pid !== this.pid),
+      observed,
     );
     return this.trackedDescendants;
   }
@@ -217,11 +224,12 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
   private async waitForMembers(
     members: ProcessIdentity[],
   ): Promise<ProcessIdentity[]> {
+    if (members.length === 0) return [];
     const until = Date.now() + this.graceMs;
-    let survivors = this.survivors(members);
+    let survivors = this.survivors(members, this.inspector.snapshot());
     while (survivors.length > 0 && Date.now() < until) {
       await delay(Math.min(25, Math.max(1, until - Date.now())));
-      survivors = this.survivors(members);
+      survivors = this.survivors(members, this.inspector.snapshot());
     }
     return survivors;
   }
@@ -242,7 +250,7 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
   private forceStopDescendants(): void {
     let members = this.trackedDescendants;
     try {
-      members = this.descendants();
+      members = this.descendants(this.inspector.snapshot());
     } catch {
       // Preserve already-captured identities when a final process-table scan fails.
     }
@@ -264,13 +272,20 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
   }
 
   private async stopDescendants(): Promise<ProcessIdentity[]> {
-    const captured = this.descendants();
+    const captured = this.descendants(this.inspector.snapshot());
     this.signalMembers(captured, "SIGTERM");
     const capturedSurvivors = await this.waitForMembers(captured);
-    const members = this.unionMembers(capturedSurvivors, this.descendants());
+    const members = this.unionMembers(
+      capturedSurvivors,
+      this.descendants(this.inspector.snapshot()),
+    );
     this.signalMembers(members, "SIGKILL");
     const survivors = await this.waitForMembers(members);
-    return this.survivors(this.unionMembers(survivors, this.descendants()));
+    const observed = this.inspector.snapshot();
+    return this.survivors(
+      this.unionMembers(survivors, this.descendants(observed)),
+      observed,
+    );
   }
 
   private async stopShell(): Promise<void> {

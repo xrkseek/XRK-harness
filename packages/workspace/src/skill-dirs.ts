@@ -7,12 +7,6 @@ import {
 } from "./inject-sources.js";
 import { shouldSkipScanDir } from "./scan-guards.js";
 
-/** @deprecated Use {@link WORKSPACE_SKILL_REL_DIRS} from `inject-sources.ts`. */
-export const PROJECT_SKILL_REL_DIRS = WORKSPACE_SKILL_REL_DIRS;
-
-/** @deprecated Use {@link USER_HOME_SKILL_REL_DIRS} from `inject-sources.ts`. */
-export const USER_SKILL_REL_DIRS = USER_HOME_SKILL_REL_DIRS;
-
 /** Shared skill-source options (DSH / Codex multi-root). */
 export interface SkillDirSourceOptions {
   readonly workspaceRoot?: string;

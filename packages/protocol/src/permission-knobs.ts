@@ -54,7 +54,11 @@ export function effectiveApprovalPolicy(
   events: readonly SessionEvent[],
   fallback: ApprovalPolicy = "ask",
 ): ApprovalPolicy {
-  return foldPermissionKnobs(events).approval ?? fallback;
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i];
+    if (event?.type === "approval/policy") return event.policy;
+  }
+  return fallback;
 }
 
 /** Whether workspace wrap / write-intent should stay on (not danger-full-access). */

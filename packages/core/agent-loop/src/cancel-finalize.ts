@@ -1,8 +1,5 @@
 import type { SessionEvent, ToolCall, TurnEndCancelCause } from "@xrkseek/protocol";
-import {
-  settleDanglingTools,
-  type SessionStore,
-} from "@xrkseek/core-session";
+import { settleDanglingTools, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 
 export function isAbortError(
   err: unknown,
@@ -128,7 +125,7 @@ export function finalizeCancelledTurn(input: {
   /** Durable cancel cause (DSH). Default `{ kind: "legacy" }`. */
   readonly cancelCause?: TurnEndCancelCause;
 }): void {
-  const events = () => input.store.get(input.sessionId).events;
+  const events = () => readSessionEvents(input.store, input.sessionId);
 
   if (input.stepId !== undefined && !stepHasEnd(events(), input.turnId, input.stepId)) {
     if (!stepHasAssistantMessage(events(), input.turnId, input.stepId)) {

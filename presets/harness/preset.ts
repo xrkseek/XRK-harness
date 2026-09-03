@@ -1,6 +1,7 @@
 import { createAgent, type AgentHandle } from "@xrkseek/core-agent";
 import {
   createMemorySessionStore,
+  readSessionEvents,
   type CompactionOptions,
   type SessionStore,
 } from "@xrkseek/core-session";
@@ -283,7 +284,7 @@ export function createHarnessComposition(
   const productDir =
     injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
   const sandboxMode = effectiveSandboxMode(
-    store.get(sessionId).events,
+    readSessionEvents(store, sessionId),
     "workspace-write",
   );
 
@@ -576,7 +577,7 @@ export function createHarnessComposition(
             targetSessionId: sessionId,
             content,
             text,
-            readEvents: (id) => store.get(id).events,
+            readEvents: (id) => readSessionEvents(store, id),
             ...(signal ? { signal } : {}),
           }),
         ...(options.resolveImage

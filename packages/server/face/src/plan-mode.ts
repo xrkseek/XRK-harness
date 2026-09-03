@@ -3,8 +3,7 @@
  * `plan/mode` commits immediately between turns; queued while a turn is open.
  */
 
-import { admitPrompt } from "@xrkseek/core-session";
-import type { SessionStore } from "@xrkseek/core-session";
+import { admitPrompt, type SessionStore } from "@xrkseek/core-session";
 import { foldPlanMode, hasOpenTurn, pendingPlanTarget } from "@xrkseek/protocol";
 
 export type PlanSetOutcome = "committed" | "queued" | "cancelled" | "noop";

@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import { SUBAGENT_ROUTING_PROMPT_TEXT } from "@xrkseek/core-tools";
+import { readSessionEvents } from "@xrkseek/core-session";
 import type { SessionEvent } from "@xrkseek/protocol";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
@@ -185,7 +186,7 @@ function createSubagentTool(
         return { content: `subagent failed: ${message}`, isError: true };
       }
       const text = lastAssistantText(
-        options.runtime.store.get(childId).events,
+        readSessionEvents(options.runtime.store, childId),
       );
       if (!text) {
         return {

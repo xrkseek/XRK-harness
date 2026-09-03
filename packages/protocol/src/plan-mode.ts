@@ -25,14 +25,12 @@ export function foldPlanMode(
   events: readonly SessionEvent[],
   end = events.length,
 ): boolean {
-  let active = false;
-  let index = 0;
-  for (const event of events) {
-    if (index >= end) break;
-    index += 1;
-    if (event.type === "plan/mode") active = event.active;
+  const limit = Math.min(end, events.length);
+  for (let i = limit - 1; i >= 0; i--) {
+    const event = events[i];
+    if (event?.type === "plan/mode") return event.active;
   }
-  return active;
+  return false;
 }
 
 export function hasOpenTurn(events: readonly SessionEvent[]): boolean {

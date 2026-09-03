@@ -44,7 +44,7 @@ pnpm release                                    # GitHub Release + npmjs（CLI +
 XRK_RELEASE_SKIP_SDK=1 pnpm release             # 仅 CLI
 XRK_RELEASE_SKIP_NPM=1 pnpm release             # 仅 GitHub
 XRK_RELEASE_SKIP_GH_RELEASE=1 pnpm release      # 仅 npmjs
-node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留 formal + 0.0.11）
+node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留当前版 + 0.1.31）
 ```
 
 ## 发版前核对
@@ -61,10 +61,12 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留 formal +
 
 | 档 | 版本 | 用途 |
 |------|------|------|
-| **正式** | **0.1.31** | 当前推荐 |
-| **预览** | **0.0.11** | npm tag **`preview`** |
+| **当前（@latest）** | **0.2.0** | 0.2 预览线；`npm i -g @xrkseek/harness-cli@latest` |
+| **上一正式** | **0.1.31** | 稳定留档 |
 
 npm **不能**同号重发；改坏包就升修订号。中间号用 `npm-prune-withdrawn.mjs` deprecate（Granular token 通常无法 unpublish）。**勿**用空格 / 乱引号 deprecate——会破坏 registry 元数据；清弃用必须传真正的空字符串（脚本经 `npm-cli.js` 处理，避免 Windows `npm.cmd` 吞掉空参）。
+
+GitHub Release 公开页只保留 **v0.1.31** 与 **v0.2.0**。
 
 完整交接：[maintainer](./maintainer.md)。发行说明索引：[releases/](./releases/)。
 
@@ -116,7 +118,7 @@ pnpm release                                    # GitHub Release + npmjs (CLI + 
 XRK_RELEASE_SKIP_SDK=1 pnpm release             # CLI only
 XRK_RELEASE_SKIP_NPM=1 pnpm release             # GitHub only
 XRK_RELEASE_SKIP_GH_RELEASE=1 pnpm release      # npmjs only
-node scripts/npm-prune-withdrawn.mjs            # deprecate intermediate versions (keep formal + 0.0.11)
+node scripts/npm-prune-withdrawn.mjs            # deprecate intermediate versions (keep current + 0.1.31)
 ```
 
 ## Pre-release checklist
@@ -133,9 +135,11 @@ node scripts/npm-prune-withdrawn.mjs            # deprecate intermediate version
 
 | Line | Version | Use |
 |------|---------|-----|
-| **Formal** | **0.1.31** | Current recommended |
-| **Preview** | **0.0.11** | npm tag **`preview`** |
+| **Current (@latest)** | **0.2.0** | 0.2 preview line; `npm i -g @xrkseek/harness-cli@latest` |
+| **Previous formal** | **0.1.31** | Stable archive |
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Deprecate intermediate numbers with `npm-prune-withdrawn.mjs` (Granular tokens usually cannot unpublish). **Do not** deprecate with spaces / broken quotes — that corrupts registry metadata; clearing a deprecation requires a real empty string (the script goes through `npm-cli.js` so Windows `npm.cmd` does not swallow the empty arg).
+
+The GitHub Releases page keeps only **v0.1.31** and **v0.2.0**.
 
 Full handoff: [maintainer](./maintainer.md). Release notes index: [releases/](./releases/).

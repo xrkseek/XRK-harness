@@ -3,6 +3,7 @@
  * rpcId is the question's stable id (core has none); mux reconnect replays pending.
  */
 
+import { readSessionEvents, type SessionStore } from "@xrkseek/core-session";
 import { randomUUID } from "node:crypto";
 import type { ToolRegistry } from "@xrkseek/core-tools";
 import {
@@ -12,7 +13,6 @@ import {
   createExitPlanModeTool,
 } from "@xrkseek/core-tools";
 import { foldPlanMode } from "@xrkseek/protocol";
-import type { SessionStore } from "@xrkseek/core-session";
 import type {
   FaceQuestionAnswer,
   FaceQuestionAnswerItem,
@@ -415,7 +415,7 @@ export function bindExitPlanModeTool(
   ) => Promise<FaceQuestionAnswer>,
 ): void {
   const bound = createExitPlanModeTool({
-    isActive: () => foldPlanMode(store.get(sessionId).events),
+    isActive: () => foldPlanMode(readSessionEvents(store, sessionId)),
     async askReview(plan, signal) {
       try {
         const answer = await ask(planReviewQuestions(plan), signal);

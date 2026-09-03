@@ -131,7 +131,36 @@ export type {
   SessionRecord,
   SessionStore,
 } from "./store.js";
+export {
+  SessionLogOffset,
+  SessionSeq,
+  SessionSeqCursor,
+  eventAt,
+  eventCount,
+  lastSessionEvent,
+  readSessionEvents,
+  resolveHalfOpenEventRange,
+  sessionEventAt,
+  sessionEventCount,
+  sessionEventsFrom,
+  snapshotEvents,
+  type SessionLogOffset as SessionLogOffsetType,
+  type SessionLogReader,
+  type SessionSeq as SessionSeqType,
+  type SessionSeqCursor as SessionSeqCursorType,
+} from "./seq.js";
+export {
+  computeListHints,
+  sessionListHints,
+} from "./list-hints.js";
 import type { SessionListHints, SessionRecord, SessionStore } from "./store.js";
+import {
+  SessionLogOffset,
+  readSessionEvents,
+  sessionEventCount,
+  snapshotEvents,
+} from "./seq.js";
+import { computeListHints } from "./list-hints.js";
 import { deepFreeze, newSessionId } from "./freeze.js";
 
 export function createMemorySessionStore(): SessionStore {
@@ -151,7 +180,8 @@ export function createMemorySessionStore(): SessionStore {
       if (!events) {
         throw new Error(`session not found: ${id}`);
       }
-      return { id, events: [...events] };
+      // Resident identity (events are deep-frozen); do not mutate.
+      return { id, events };
     },
 
     has(id: string): boolean {
@@ -173,22 +203,24 @@ export function createMemorySessionStore(): SessionStore {
       return [...sessions.keys()];
     },
 
+    readEvents(
+      id: string,
+      fromSeq = 0,
+      toSeqExclusive?: number,
+    ): readonly SessionEvent[] {
+      const events = sessions.get(id);
+      if (!events) {
+        throw new Error(`session not found: ${id}`);
+      }
+      return snapshotEvents({ id, events }, fromSeq, toSeqExclusive);
+    },
+
     listHints(id: string): SessionListHints {
       const events = sessions.get(id);
-      if (!events || events.length === 0) {
-        return { lastEventTs: null, hasTurnStart: false };
+      if (!events) {
+        throw new Error(`session not found: ${id}`);
       }
-      let hasTurnStart = false;
-      for (const event of events) {
-        if (event.type === "turn/start") {
-          hasTurnStart = true;
-          break;
-        }
-      }
-      return {
-        lastEventTs: events[events.length - 1]?.ts ?? null,
-        hasTurnStart,
-      };
+      return computeListHints(events);
     },
 
     isLoaded(id: string): boolean {
@@ -289,13 +321,15 @@ export function forkSession(
   boundaryIndex?: number,
   childId?: string,
 ): SessionRecord {
-  const source = store.get(sourceId);
-  const end =
+  const total = sessionEventCount(store, sourceId);
+  const end = SessionLogOffset(
     boundaryIndex === undefined
-      ? source.events.length
-      : Math.max(0, Math.min(boundaryIndex, source.events.length));
+      ? total
+      : Math.max(0, Math.min(boundaryIndex, total)),
+  );
+  const prefix = readSessionEvents(store, sourceId, SessionLogOffset(0), end);
   const child = store.create(childId);
-  for (const ev of source.events.slice(0, end)) {
+  for (const ev of prefix) {
     store.append(child.id, ev);
   }
   return store.get(child.id);

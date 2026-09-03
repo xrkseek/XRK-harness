@@ -11,6 +11,18 @@
 3. 认证：`XRK_API_KEY`（Bearer / `x-api-key`）；产品壳同源回环可无头
 4. 未实现 → `ok: false` + 稳定 `error.code`（禁止假成功）
 
+## WebSocket 心跳
+
+mux / host 升级后的套接字由 Host 发 **Ping** 控制帧（默认间隔 **2s**）。连续 **2** 次未收到 Pong 则 `terminate` 该对端，避免半开连接占住扇出。实现：`ws-heartbeat.ts`，经 `attachFaceUpgrades` 挂载；测例可注入更短 `heartbeatIntervalMs`。
+
+## Face mux 序号
+
+每会话 mux 帧序号由 `FaceSeqClock` / `FaceMuxSeq` 发出（1-based；`last` 在尚未 `next` 时为 `0`）。**独立于** Session 日志的 `SessionSeq` / `SessionLogOffset`（见 [session-log.md](./session-log.md)）。history / `turnOutline.seq` 对齐的是 Face mux 时钟，不是日志下标的另一套命名。
+
+`session.history` 回放时用 `ensureAtLeast(sessionId, maxSeq)` 一次跳齐水位，避免按 `next` 空转 O(maxSeq)。history 页只为当页事件建 seq 映射（`startIndex + i`），不为整本日志建 `Map`。
+
+含图会话：append `user/message` / `prompt/admitted` 若带图，记入 `sessionHasImage`；`session.selectModel` 换无图模型时 O(1) 拒绝（冷会话首次 miss 扫一次后写入 `sessionImageScanned`）。日志读取统一走 `readSessionEvents`（见 [session-log.md](./session-log.md)）。
+
 ## 信封
 
 | 方向 | 形状 |
@@ -94,6 +106,18 @@ mode: queue | steer → admit（slash → recipe / skill 写入 user）→ wake 
 2. WS: `/api/events.mux` · `/api/events.host` (and `/api/face/events.*`)
 3. Auth: `XRK_API_KEY` (Bearer / `x-api-key`); product-shell same-origin loopback may omit headers
 4. Unimplemented → `ok: false` + stable `error.code` (no fake success)
+
+## WebSocket heartbeats
+
+After mux / host upgrade, the Host sends **Ping** control frames (default interval **2s**). After **2** consecutive missed Pongs the peer is `terminate`d so half-open sockets do not retain fan-out. Implementation: `ws-heartbeat.ts`, wired through `attachFaceUpgrades`; tests may inject a shorter `heartbeatIntervalMs`.
+
+## Face mux sequence
+
+Per-session mux frame numbers come from `FaceSeqClock` / `FaceMuxSeq` (1-based; `last` is `0` before any `next`). They are **independent of** Session log `SessionSeq` / `SessionLogOffset` (see [session-log.md](./session-log.md)). History / `turnOutline.seq` align with the Face mux clock, not a second name for log indices.
+
+`session.history` replay uses `ensureAtLeast(sessionId, maxSeq)` to jump the watermark once instead of spinning `next` O(maxSeq). The history page builds seq maps only for page events (`startIndex + i`), not a `Map` over the full log.
+
+Image-bearing sessions: appending `user/message` / `prompt/admitted` with images records `sessionHasImage`; `session.selectModel` rejects a text-only model in O(1) (a cold miss scans once, then marks `sessionImageScanned`). Log reads go through `readSessionEvents` (see [session-log.md](./session-log.md)).
 
 ## Envelope
 

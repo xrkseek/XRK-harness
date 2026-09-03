@@ -58,6 +58,7 @@ export {
   type ProcessIdentity,
   type ProcessInspector,
   type ProcessInspectorInternals,
+  type ProcessSnapshot,
 } from "./process-inspector.js";
 export {
   LocalTerminalHandle,

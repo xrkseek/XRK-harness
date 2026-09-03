@@ -256,4 +256,43 @@ describe("createPersistentSessionStore", () => {
     expect(store.isLoaded?.(s2)).toBe(true);
     expect(evicted).toContain("s1");
   });
+
+  it("readEvents reuses resident identity and slices ranges after cold hydrate", () => {
+    const dir = tempDir();
+    const a = track(createPersistentSessionStore(dir));
+    const id = a.create("range").id;
+    a.append(id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t",
+      content: "a",
+    });
+    a.append(id, {
+      type: "user/message",
+      ts: 2,
+      turnId: "t",
+      content: "b",
+    });
+    a.append(id, {
+      type: "user/message",
+      ts: 3,
+      turnId: "t",
+      content: "c",
+    });
+    a.flush();
+    a.close();
+
+    const b = track(
+      createPersistentSessionStore(dir, { maxResidentSessions: 1 }),
+    );
+    expect(b.isLoaded?.(id)).toBe(false);
+    const page = b.readEvents(id, 1, 3);
+    expect(page.map((e) => ("content" in e ? e.content : undefined))).toEqual([
+      "b",
+      "c",
+    ]);
+    expect(b.isLoaded?.(id)).toBe(true);
+    expect(b.readEvents(id)).toBe(b.eventsRef(id));
+    expect(() => b.readEvents(id, -1)).toThrow(TypeError);
+  });
 });

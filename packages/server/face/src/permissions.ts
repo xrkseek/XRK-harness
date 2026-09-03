@@ -3,7 +3,7 @@
  * Projection `permissions` + `/permission` write path; approval `never` auto-allows.
  */
 
-import type { SessionStore } from "@xrkseek/core-session";
+import { readSessionEvents, type SessionStore } from "@xrkseek/core-session";
 import {
   foldPermissionKnobs,
   type ApprovalPolicy,
@@ -164,7 +164,7 @@ export function pinInitialPermission(
   sessionId: string,
   preset: FacePermissionPreset,
 ): void {
-  const events = store.get(sessionId).events;
+  const events = readSessionEvents(store, sessionId);
   if (hasAnyKnob(events)) return;
   const spec = FACE_PERMISSION_TABLE[preset];
   const ts = now();
@@ -206,7 +206,7 @@ export function applyPermissionPreset(
       message: `unknown preset "${name}" (available: ${FACE_PERMISSION_PRESETS.join(", ")})`,
     };
   }
-  const events = store.get(sessionId).events;
+  const events = readSessionEvents(store, sessionId);
   const current = permissionSelectFromEvents(events).currentValue;
   if (current === name) return { ok: true, changed: false };
   const spec = FACE_PERMISSION_TABLE[name];

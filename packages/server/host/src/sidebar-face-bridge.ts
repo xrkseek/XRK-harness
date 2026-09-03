@@ -1,6 +1,7 @@
 /**
  * Face → dsh-better-sidebar sidechat / open.external bridge.
  */
+import { readSessionEvents } from "@xrkseek/core-session";
 import type { ShellService } from "@xrkseek/exec-shell";
 import type { SessionEvent } from "@xrkseek/protocol";
 import {
@@ -259,7 +260,7 @@ export function createSidebarFaceBridgeFromFace(
       > = {};
       for (const childId of collectDescendantIds(face, rootSessionId)) {
         if (!face.drain.isActive(childId)) continue;
-        const events = face.store.get(childId).events;
+        const events = readSessionEvents(face.store, childId);
         live[childId] = liveLineFromEvents(events) ?? {};
       }
       return { live };

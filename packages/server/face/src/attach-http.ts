@@ -4,7 +4,7 @@
 
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { createServer } from "node:http";
-import { listPendingAdmits } from "@xrkseek/core-session";
+import { listPendingAdmits, readSessionEvents } from "@xrkseek/core-session";
 import { WebSocketServer, type WebSocket } from "ws";
 import { attachmentContentDisposition } from "@xrkseek/server-http";
 import type { FaceRuntime } from "./context.js";
@@ -28,10 +28,19 @@ import {
   isSessionExportPath,
   sessionExportFilename,
 } from "./session-export.js";
+import {
+  FACE_WS_HEARTBEAT_INTERVAL_MS,
+  startWsHeartbeat,
+} from "./ws-heartbeat.js";
 
 export interface AttachFaceOptions {
   readonly apiKey: string;
   checkAuth(req: IncomingMessage): boolean;
+  /**
+   * Mux/host WebSocket Ping cadence (ms). Defaults to
+   * {@link FACE_WS_HEARTBEAT_INTERVAL_MS}; tests may shorten it.
+   */
+  readonly heartbeatIntervalMs?: number;
 }
 
 export { FACE_WS_PATHS, faceMethodFromPath, isFaceWsPath };
@@ -182,6 +191,10 @@ export function attachFaceUpgrades(
 ): { close(): void } {
   const muxWss = new WebSocketServer({ noServer: true });
   const hostWss = new WebSocketServer({ noServer: true });
+  const heartbeat = startWsHeartbeat(
+    [muxWss, hostWss],
+    options.heartbeatIntervalMs ?? FACE_WS_HEARTBEAT_INTERVAL_MS,
+  );
   let closed = false;
   const onUpgrade = (
     req: IncomingMessage,
@@ -199,6 +212,7 @@ export function attachFaceUpgrades(
     }
     const wss = url.pathname.endsWith("mux") ? muxWss : hostWss;
     wss.handleUpgrade(req, socket, head, (ws) => {
+      heartbeat.watch(ws);
       wss.emit("connection", ws, req);
     });
   };
@@ -217,7 +231,7 @@ export function attachFaceUpgrades(
         ),
       );
       const pendingAdmits = listPendingAdmits(
-        runtime.store.get(sessionId).events,
+        readSessionEvents(runtime.store, sessionId),
         sessionId,
       );
       if (pendingAdmits.length > 0) {
@@ -307,6 +321,7 @@ export function attachFaceUpgrades(
     close() {
       if (closed) return;
       closed = true;
+      heartbeat.stop();
       server.off("upgrade", onUpgrade);
       for (const client of muxWss.clients) {
         try {
@@ -375,18 +390,6 @@ export function createFaceOnlyServer(
       return closing;
     },
   };
-}
-
-/** @deprecated use tryHandleFaceHttp + attachFaceUpgrades */
-export function attachFaceToServer(
-  server: Server,
-  runtime: FaceRuntime,
-  options: AttachFaceOptions,
-): { close(): void } {
-  server.on("request", (req, res) => {
-    tryHandleFaceHttp(req, res, runtime, options);
-  });
-  return attachFaceUpgrades(server, runtime, options);
 }
 
 export async function handleFaceHttpRequest(

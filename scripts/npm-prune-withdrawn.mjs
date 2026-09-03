@@ -20,10 +20,10 @@ const cliPkg = JSON.parse(
 const formal = typeof cliPkg.version === "string" ? cliPkg.version : "0.1.23";
 
 const PKG = "@xrkseek/harness-cli";
-const KEEP = new Set(["0.0.11", formal]);
+const KEEP = new Set(["0.1.31", formal]);
 const REGISTRY = "https://registry.npmjs.org";
 const DEPRECATE_MSG =
-  `Withdrawn. Use @xrkseek/harness-cli@${formal} (formal) or @0.0.11 (preview).`;
+  `Withdrawn. Use @xrkseek/harness-cli@${formal} (current) or @0.1.31 (previous formal).`;
 
 const deprecateOnly = process.argv.includes("--deprecate-only");
 

@@ -39,7 +39,15 @@ Host（harness/server）共享一份 PTY registry：跨 agent invalidate 仍保�
 | `timeout` | 到达 `timeoutMs`（默认 30s） |
 | `session_exit` | shell 退出 |
 
-前台探测走 `subprocess-local` process-inspector。**Windows**：用 **no-op inspector**（`inspectForeground` → `undefined`），就绪主要靠 OSC prompt / 静默 / 超时——ConPTY 会话仍能跑，不假装有 `/proc`。
+前台探测走 process-inspector（`@xrkseek/exec-pty`）。
+
+| 平台 | 行为 |
+|------|------|
+| **Linux** | `/proc`：tid 级 fdinfo · 多 ABI syscall 表 · 按 shell TTY 过滤 stdin-wait，避免管道成员误判「可 settle」 |
+| **macOS** | `/bin/ps`；一次就绪/teardown 轮询共用一份 **`ProcessSnapshot`**（进程表最多读一次），代价不随后代数量放大；`isAlive` 仍读当前态作信号围栏 |
+| **Windows** | **no-op inspector**（`inspectForeground` → `undefined`）；就绪主要靠 OSC prompt / 静默 / 超时——ConPTY 会话仍能跑，不假装有 `/proc` |
+
+`processTree` / `processSession` 是 `snapshot()` 的便利包装；同一次轮询里问多项时应用 `snapshot()`。
 
 terminate：descendant SIGTERM→grace→SIGKILL，再杀 shell；拒绝对 shell 本体 `SIGKILL`（用 `terminal_close`）。
 
@@ -100,7 +108,15 @@ When the network is restricted, configure npm/Git proxy **on the machine**; do n
 | `timeout` | Hit `timeoutMs` (default 30s) |
 | `session_exit` | Shell exited |
 
-Foreground probe uses the `subprocess-local` process-inspector. **Windows**: **no-op inspector** (`inspectForeground` → `undefined`); readiness relies on OSC prompt / silence / timeout — ConPTY sessions still run; the product does not pretend `/proc` exists.
+Foreground probe uses the process-inspector in `@xrkseek/exec-pty`.
+
+| Platform | Behavior |
+|----------|----------|
+| **Linux** | `/proc`: tid-scoped fdinfo · multi-ABI syscall tables · TTY-filtered stdin-wait so pipeline members do not false-settle |
+| **macOS** | `/bin/ps`; one readiness/teardown poll shares a **`ProcessSnapshot`** (at most one table read) so cost does not grow with descendant count; `isAlive` still reads current state for the signal fence |
+| **Windows** | **no-op inspector** (`inspectForeground` → `undefined`); readiness relies on OSC prompt / silence / timeout — ConPTY sessions still run; the product does not pretend `/proc` exists |
+
+`processTree` / `processSession` are convenience wrappers over `snapshot()`; prefer `snapshot()` when asking several questions in one poll.
 
 Terminate: descendant SIGTERM→grace→SIGKILL, then kill the shell; rejects `SIGKILL` on the shell itself (use `terminal_close`).
 
