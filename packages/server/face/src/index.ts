@@ -33,7 +33,7 @@ export {
   type ParsedClientResponse,
 } from "./wire/index.js";
 export { createFaceBus, type FaceBus } from "./bus.js";
-export { createFaceSeqClock, FaceMuxSeq, type FaceMuxSeq, type FaceSeqClock } from "./seq.js";
+export { createFaceSeqClock, FaceMuxSeq, type FaceSeqClock } from "./seq.js";
 export {
   type FaceDrain,
   type FaceRuntime,
