@@ -5,7 +5,6 @@
  * as a first-class public handler — not via dsh-compat capability table.
  * Community clients that also call `/sidebar/*` share this same Host surface.
  */
-import type { IncomingMessage, ServerResponse } from "node:http";
 import type { PublicRouteHandlerFn } from "../public-routes.js";
 import {
   handleBundleChunkStub,
