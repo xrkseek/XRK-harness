@@ -11,7 +11,9 @@ packages:
   - "packages/exec/*"
   - "packages/server/*"
   - "presets/*"
-  - "extensions/*"
+  - "extensions/example-tools"
+  - "extensions/example-channel"
+  - "extensions/dsh-compat"
 # pnpm ≥10：仅允许下列包跑 lifecycle
 allowBuilds:
   "@xrkseek/exec-pty": true

@@ -38,3 +38,12 @@ apps/cli/product-web/
 .playwright-mcp/
 .tmp-*.mjs
 .tmp-*/
+
+# extensions/: deny-by-default; only committed samples are tracked
+/extensions/*
+!/extensions/example-tools/
+!/extensions/example-tools/**
+!/extensions/example-channel/
+!/extensions/example-channel/**
+!/extensions/dsh-compat/
+!/extensions/dsh-compat/**

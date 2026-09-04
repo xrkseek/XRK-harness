@@ -8,7 +8,7 @@ import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 export interface BundleChunkOptions {
-  /** Global registry key on window (DSH default `__dshChunks__`). */
+  /** Global registry key on window (XRKH client: `__xrkhChunks__`). */
   readonly registryGlobal?: string;
   /** URL prefix including trailing path, e.g. `/sidebar/bundle`. */
   readonly urlPrefix: string;
@@ -89,16 +89,18 @@ function findInstalledChunk(
       }
     }
   }
-  // Prefer explicit chunks/<name>.js if present under any plugin.
-  const preferred = path.join(
-    pluginsDir,
-    "web",
-    "plugins",
-    "dsh-better-sidebar",
-    "chunks",
-    `${chunkName}.js`,
-  );
-  if (existsSync(preferred)) return preferred;
+  // Prefer staged chunks under the XRKH package id; fall back to legacy id.
+  for (const pkg of ["xrkh-better-sidebar", "dsh-better-sidebar"] as const) {
+    const preferred = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      pkg,
+      "chunks",
+      `${chunkName}.js`,
+    );
+    if (existsSync(preferred)) return preferred;
+  }
   return undefined;
 }
 
@@ -146,7 +148,7 @@ export function handleBundleChunkStub(
     const exports = map[name] ?? ["default"];
     body = stubScript(
       name,
-      options.registryGlobal ?? "__dshChunks__",
+      options.registryGlobal ?? "__xrkhChunks__",
       exports,
     );
   }

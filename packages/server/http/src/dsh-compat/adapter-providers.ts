@@ -123,6 +123,7 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
             handleBundleChunkStub(req, res, pathname, {
               urlPrefix: "/sidebar/bundle",
               exportsByChunk: DEFAULT_SIDEBAR_EXPORTS,
+              registryGlobal: "__xrkhChunks__",
               ...(ctx.pluginsDir ? { pluginsDir: ctx.pluginsDir } : {}),
             }),
         },

@@ -228,15 +228,40 @@ describe("dsh-compat adapters", () => {
     });
   });
 
-  it("serves sidebar chunk stub that registers __dshChunks__", async () => {
+  it("serves sidebar chunk stub that registers __xrkhChunks__", async () => {
     const handler = compatHandler();
     await withPublicHandler(handler, async (base) => {
       const res = await fetch(`${base}/sidebar/bundle/terminal.js`);
       expect(res.status).toBe(200);
       const text = await res.text();
-      expect(text).toContain("__dshChunks__");
+      expect(text).toContain("__xrkhChunks__");
       expect(text).toContain("terminal");
       expect(text).toContain("TerminalView");
+    });
+  });
+
+  it("prefers xrkh-better-sidebar staged chunks over stub", async () => {
+    const root = tempPlugins();
+    const chunks = path.join(
+      root,
+      "web",
+      "plugins",
+      "xrkh-better-sidebar",
+      "chunks",
+    );
+    mkdirSync(chunks, { recursive: true });
+    writeFileSync(
+      path.join(chunks, "terminal.js"),
+      `globalThis.__xrkhChunks__=globalThis.__xrkhChunks__||{};globalThis.__xrkhChunks__["terminal"]=()=>({TerminalView:1});\n`,
+    );
+    seedCompatHostSuite(root, ["xrkh-better-sidebar"]);
+    const handler = compatHandler({ pluginsDir: root });
+    await withPublicHandler(handler, async (base) => {
+      const res = await fetch(`${base}/sidebar/bundle/terminal.js`);
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      expect(text).toContain('__xrkhChunks__["terminal"]');
+      expect(text).not.toContain("Host incomplete");
     });
   });
 

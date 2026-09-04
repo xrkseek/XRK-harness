@@ -330,6 +330,21 @@ describe('host frame routing', () => {
 })
 
 describe('subagent catalogs', () => {
+  it('publishes empty entries when the wire catalog omits the array', async () => {
+    const api = new FakeApiClient()
+    api.onList = () => Promise.resolve(ok({ items: [summary(S1)] as never[] }))
+    api.onSubagentList = () => Promise.resolve(ok({
+      parentAvailable: true,
+    } as never))
+    const manager = new SessionManager(api, fakeRemote())
+    await manager.refreshList()
+    await manager.refreshSubagents(S1)
+    const catalog = manager.getListSnapshot().subagentsByParent[S1]
+    expect(catalog?.state).toBe('ready')
+    expect(catalog?.entries).toEqual([])
+    expect(catalog?.entries.length).toBe(0)
+  })
+
   it('keeps a catalog-discovered child address across ordinary selection and status frames', async () => {
     const api = new FakeApiClient()
     api.onList = () => Promise.resolve(ok({ items: [

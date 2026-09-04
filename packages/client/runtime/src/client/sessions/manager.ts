@@ -979,11 +979,14 @@ export class SessionManager {
 
   /** Fold request-local row mutations into one catalog result before publication. */
   private withCatalogMutations(
-    entries: SubagentCatalog['entries'],
+    entries: SubagentCatalog['entries'] | undefined | null,
     expandableRows: ReadonlySet<SessionId>,
     activityRows: ReadonlyMap<SessionId, 'running' | 'inactive'>,
   ): SubagentCatalog['entries'] {
-    return entries.map((entry) => {
+    // Wire / incomplete payloads must never publish `entries: undefined` —
+    // consumers read `.length` on catalog entries unconditionally.
+    const rows = entries ?? []
+    return rows.map((entry) => {
       if (entry.kind !== 'child') return entry
       const activity = activityRows.get(entry.id)
       if (!expandableRows.has(entry.id) && activity === undefined) return entry

@@ -79,6 +79,21 @@ xrkh restart
 
 重载：用 **`restart`**（pid 锁停自己的 Host）。`--force` 只杀已识别的 XRK 监听；不会误杀 nginx 等。
 
+### 插件开发边界（仓内 `extensions/`）
+
+| 类别 | 落点 | 是否进主仓 git / pnpm workspace |
+|------|------|--------------------------------|
+| **金样 / 内置适配** | `extensions/example-tools` · `example-channel` · `dsh-compat` | **是**（`.gitignore` / `pnpm-workspace` 白名单） |
+| **第三方 / 本地工作树** | `extensions/<plugin-id>/`（对标 AGT 本地 Core） | **默认忽略**；可联调，勿提交进主仓 |
+| **用户全局安装** | `~/.xrk/plugins`（`xrkh plugin add`） | 不在源码仓内 |
+
+边界：
+
+- **产品 Agent / 插件作者**：只写 `extensions/<id>/`；勿改 `packages/` · `apps/` · `presets/`（除非明确维护内核）。
+- **Client 叠加包**（`xrk.client`）：装到 `plugins/web/`，不参与进程 `kind` discover；Host 面契约见 [community-plugins.md](./community-plugins.md)。
+- **标准侧栏**（`xrkh-better-sidebar`）：**Host 拥有** `/sidebar/*`；插件只挂 client；勿在插件 host 半包抢同一前缀。
+- 无热重载：改完 **`xrkh restart`**（或重启 `web`）。
+
 ### 接线发生在哪
 
 1. Host `loadAll(pluginsDir)` → `RegisteredPlugin[]`
@@ -217,6 +232,21 @@ xrkh restart
 Use `plugin list` / `plugin path` to inspect `~/.xrk/plugins` (overridable with `XRK_HOME` / `XRK_PLUGINS_DIR`).
 
 Reload with **`restart`** (pid lock stops this Host). `--force` only stops recognized XRK listeners; it will not kill nginx and similar.
+
+### Plugin boundaries (`extensions/` in this monorepo)
+
+| Kind | Location | In main-repo git / pnpm workspace? |
+|------|----------|-------------------------------------|
+| **Samples / built-in adapter** | `extensions/example-tools` · `example-channel` · `dsh-compat` | **Yes** (`.gitignore` / `pnpm-workspace` whitelist) |
+| **Third-party / local working tree** | `extensions/<plugin-id>/` (AGT-style local Core) | **Ignored by default**; OK for local smoke tests, do not commit into the main repo |
+| **User global install** | `~/.xrk/plugins` (`xrkh plugin add`) | Outside the monorepo |
+
+Boundaries:
+
+- **Product Agent / plugin authors**: write only under `extensions/<id>/`; do not change `packages/` · `apps/` · `presets/` unless explicitly maintaining the kernel.
+- **Client overlay packages** (`xrk.client`): install under `plugins/web/`; not process `kind` discover; Host contracts in [community-plugins.md](./community-plugins.md).
+- **Standard sidebar** (`xrkh-better-sidebar`): **Host owns** `/sidebar/*`; the package injects client UI only — do not claim the same prefix from a plugin host half.
+- No hot reload: **`xrkh restart`** (or restart `web`) after changes.
 
 ### Where wiring happens
 

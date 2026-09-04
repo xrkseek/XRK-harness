@@ -13,10 +13,13 @@
 
 | 路径 | 用途 | 插件作者 |
 |------|------|----------|
-| `extensions/` | 用户插件 + 内置 `dsh-compat` | **写入** |
+| `extensions/example-tools` · `example-channel` · `dsh-compat` | 金样 / 内置适配（主仓白名单，可提交） | 对照只读；改金样需维护者意图 |
+| `extensions/<其他 id>/` | 第三方 / 本地工作树（主仓默认 ignore） | **写入**；勿 `git add` 进 XRK-harness |
 | `.agents/skills/` | 架构 + 插件 coach（catalog 自动扫） | 只读 |
-| `docs/` | 契约 | 只读 |
+| `docs/` | 契约（含「插件开发边界」） | 只读 |
 | `packages/` · `apps/` · `presets/` | 内核 | **勿写** |
+
+Client 叠加 / 侧栏 Host 契约：`docs/community-plugins.md`（Host 拥有 `/sidebar/*`）。
 
 ## 最小 tools 骨架
 
