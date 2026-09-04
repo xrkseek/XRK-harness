@@ -46,9 +46,11 @@ describe("dsh-community-infer", () => {
     expect(httpCapabilityForPath("/api/wallet/snapshot")?.provider).toBe(
       "xrk-wallet",
     );
-    expect(httpCapabilityForPath("/sidebar/api/fs.tree")?.provider).toBe(
-      "xrk-sidebar",
-    );
+    // `/sidebar/*` is Host-native (`createSidebarPublicHandler`), not dsh-compat.
+    expect(httpCapabilityForPath("/sidebar/api/fs.tree")).toBeUndefined();
+    expect(
+      listDshHttpCapabilityPrefixes().some((p) => p.startsWith("/sidebar")),
+    ).toBe(false);
     expect(listDshHttpCapabilityPrefixes().length).toBeGreaterThan(10);
   });
 
