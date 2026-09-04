@@ -36,11 +36,17 @@ describe("session.list cold rows (Codex tier)", () => {
         turnId: "t-hot",
         content: "hot session",
       });
+      store.append(hot.id, {
+        type: "turn/end",
+        ts: 3,
+        turnId: "t-hot",
+        reason: { kind: "completed" },
+      });
 
       const cold = newSession(store);
       store.append(cold.id, {
         type: "turn/start",
-        ts: 3,
+        ts: 4,
         turnId: "t-cold",
       });
       store.get(cold.id);

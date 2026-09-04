@@ -12,7 +12,10 @@ import {
   type PackedStorageRecord,
 } from "./chunk-pack.js";
 import { deepFreeze, newSessionId } from "./freeze.js";
-import { repairOpenTurnEvents } from "./repair-open-turn.js";
+import {
+  repairOpenTurnEvents,
+  sessionHasOpenTurn,
+} from "./repair-open-turn.js";
 import { extractEventSearchText } from "./search-text.js";
 import { snapshotEvents } from "./seq.js";
 import { computeListHints } from "./list-hints.js";
@@ -50,7 +53,11 @@ export interface PersistentSessionStore extends SessionStore {
 }
 
 export interface PersistentSessionStoreOptions {
-  /** Max sessions kept resident in memory (default 8). */
+  /**
+   * Soft cap on sessions kept resident in memory (default 8).
+   * Sessions with an open turn are never evicted; the resident set may
+   * temporarily exceed this cap while many turns are in flight.
+   */
   readonly maxResidentSessions?: number;
 }
 
@@ -267,10 +274,21 @@ export function createPersistentSessionStore(
 
   const evictResidents = (keepId?: string): void => {
     while (sessions.size >= maxResident) {
-      const victim = residentOrder.find((sid) => sid !== keepId);
+      // Pin open turns: re-hydrate runs repairOpenTurnEvents and can insert an
+      // interrupted assistant(toolCalls) while the live loop is still
+      // streaming; a later complete assistant then breaks OpenAI tool-call
+      // adjacency (HTTP 400). When every resident is pinned, allow temporary
+      // over-capacity rather than evicting an in-flight turn.
+      const victim = residentOrder.find((sid) => {
+        if (sid === keepId) return false;
+        const events = sessions.get(sid);
+        return events === undefined || !sessionHasOpenTurn(events);
+      });
       if (victim === undefined) break;
       const idx = residentOrder.indexOf(victim);
       if (idx >= 0) residentOrder.splice(idx, 1);
+      // Drain chunk batches before Face checkpoints / drops the resident log.
+      flushPending();
       // Notify while the log is still resident so Face can checkpoint via
       // eventsRef without store.get() re-hydrating the victim (recursion).
       onEvict?.(victim);

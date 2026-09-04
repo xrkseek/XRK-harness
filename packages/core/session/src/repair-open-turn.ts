@@ -83,6 +83,11 @@ function findOpenTurnId(events: readonly SessionEvent[]): string | undefined {
   return lastOpen;
 }
 
+/** True when the log has a `turn/start` with no matching `turn/end`. */
+export function sessionHasOpenTurn(events: readonly SessionEvent[]): boolean {
+  return findOpenTurnId(events) !== undefined;
+}
+
 function findOpenStepId(
   events: readonly SessionEvent[],
   turnId: string,

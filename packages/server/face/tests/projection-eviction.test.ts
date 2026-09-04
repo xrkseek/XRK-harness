@@ -35,6 +35,12 @@ describe("projection LRU eviction (Codex tier)", () => {
         turnId: "t1",
         content: "before eviction",
       });
+      store.append(evicted.id, {
+        type: "turn/end",
+        ts: 3,
+        turnId: "t1",
+        reason: { kind: "completed" },
+      });
       const before = runtime.projections.snapshot(evicted.id, {
         keys: ["sessionListMetadata"],
       });

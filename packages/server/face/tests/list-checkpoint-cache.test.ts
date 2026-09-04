@@ -38,6 +38,12 @@ describe("session.list cold projection cache", () => {
         turnId: "t1",
         content: "hello cold title words",
       });
+      store.append(cold.id, {
+        type: "turn/end",
+        ts: 3,
+        turnId: "t1",
+        reason: { kind: "completed" },
+      });
       // Drive list projections while resident, then force cache write.
       runtime.projections.snapshot(cold.id, {
         keys: ["title", "sessionListMetadata"],

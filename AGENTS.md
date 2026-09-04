@@ -29,7 +29,7 @@
 | **Preset** | `presets/minimal\|harness\|server` | 业务逻辑、密钥、绕过 policy 的默认放行 |
 | **进程插件** | `extensions/*`（`kind: tools\|prompt\|commands`） | 依赖 `apps` 内部私有路径 |
 | **文档 / 发布** | `docs/*`（教科书）· `CONTRIBUTING` · `publishing` | 把未实现写成规格；本机路径进教科书；把笔记红线写进 `docs/` |
-| **Coding Agent** | 用户指定切片 | 擅自 commit / push；带 Cursor co-author trailer；跳过 `pnpm check` |
+| **Coding Agent** | 用户指定切片 | 擅自 commit / push；跳过 `pnpm check` |
 
 ---
 
@@ -38,7 +38,6 @@
 - **Node ≥ 26** · **pnpm** 精确版钉在根 `packageManager`（当前 **11.22.0**）：本机 `npm install -g pnpm@…`；CI `pnpm/action-setup`；勿随手升大版本
 - **禁止**用 Cursor 自带 `helpers/node.exe`（常为 Node 22）跑门禁 / 发版；Windows 上先把**本机 `where.exe node` 探测到的**系统 Node 目录插到 `PATH` 最前（见笔记 rule `xrk-node26`，**勿写死 C: 或其它盘符**）
 - 构建：`pnpm install` → `pnpm build`（或 `pnpm check`）
-- 新 clone 防 Cursor co-author：`node scripts/install-git-hooks.mjs`（见 rule `no-cursor-coauthor`）
 - CLI：`node apps/cli/dist/bin.js run|serve|web|doctor|dump-config`
 - 首读（按任务）：
 

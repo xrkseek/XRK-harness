@@ -74,7 +74,6 @@ sdk · server · presets → core* / llm / mcp / attachment / exec* / workspace 
 
 - 默认分支 `main`  
 - 不要代提交，除非维护者明确要求  
-- Commit 勿带 Cursor co-author trailer  
 - 密钥永不入库  
 
 ## 文档入口
@@ -167,7 +166,6 @@ Example: `extensions/example-tools` ([docs/plugin-loader.md](./docs/plugin-loade
 
 - Default branch `main`  
 - Do not commit on others’ behalf unless maintainers ask  
-- No Cursor co-author trailer  
 - Secrets never enter the repo  
 
 ## Doc entry points

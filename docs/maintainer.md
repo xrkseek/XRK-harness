@@ -40,12 +40,6 @@ pnpm test:web              # 产品壳硬刷；不进 check
 
 发版：`pnpm release:stage` / `pnpm release` — 见 [publishing](./publishing.md)。
 
-## Git / Cursor attribution
-
-- Commit 勿带 `Co-authored-by: Cursor <cursoragent@cursor.com>`；笔记 rule `no-cursor-coauthor`。
-- 新 clone：`node scripts/install-git-hooks.mjs`（`prepare-commit-msg` 自动剔除）。
-- 已进历史的 trailer：需 `git filter-branch` / `filter-repo` 改写 + force push；GitHub Contributors 侧边栏可能滞后数小时，可推空 commit 或联系 Support 刷新缓存。
-
 ## 改什么同步什么
 
 与 [CONTRIBUTING](../CONTRIBUTING.md) 一致，交接时尤其盯：
@@ -145,12 +139,6 @@ pnpm test:web              # product-shell soaks; not in check
 ```
 
 Release: `pnpm release:stage` / `pnpm release` — [publishing](./publishing.md).
-
-## Git / Cursor attribution
-
-- No `Co-authored-by: Cursor <cursoragent@cursor.com>` on commits; see note rule `no-cursor-coauthor`.
-- Fresh clone: `node scripts/install-git-hooks.mjs` (`prepare-commit-msg` strips trailers).
-- Trailers already in history: rewrite with `git filter-branch` / `filter-repo` + force push; GitHub’s Contributors sidebar may lag for hours — empty commit or Support cache refresh.
 
 ## What to sync when changing
 

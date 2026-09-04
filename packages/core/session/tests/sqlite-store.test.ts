@@ -244,17 +244,75 @@ describe("createPersistentSessionStore", () => {
     store.bindSessionEviction((id) => evicted.push(id));
     const s1 = store.create("s1").id;
     const s2 = store.create("s2").id;
+    // Closed turns are eligible for eviction (open turns are pinned).
     store.append(s1, { type: "turn/start", ts: 1, turnId: "t1" });
-    store.append(s2, { type: "turn/start", ts: 2, turnId: "t2" });
+    store.append(s1, {
+      type: "turn/end",
+      ts: 2,
+      turnId: "t1",
+      reason: { kind: "completed" },
+    });
+    store.append(s2, { type: "turn/start", ts: 3, turnId: "t2" });
+    store.append(s2, {
+      type: "turn/end",
+      ts: 4,
+      turnId: "t2",
+      reason: { kind: "completed" },
+    });
     expect(store.isLoaded?.(s1)).toBe(true);
     expect(store.isLoaded?.(s2)).toBe(true);
 
     const s3 = store.create("s3").id;
-    store.append(s3, { type: "turn/start", ts: 3, turnId: "t3" });
+    store.append(s3, { type: "turn/start", ts: 5, turnId: "t3" });
     expect(store.isLoaded?.(s3)).toBe(true);
     expect(store.isLoaded?.(s1)).toBe(false);
     expect(store.isLoaded?.(s2)).toBe(true);
     expect(evicted).toContain("s1");
+  });
+
+  it("does not evict a session that still has an open turn", () => {
+    const dir = tempDir();
+    const evicted: string[] = [];
+    const store = track(
+      createPersistentSessionStore(dir, { maxResidentSessions: 2 }),
+    );
+    store.bindSessionEviction((id) => evicted.push(id));
+    const open = store.create("open").id;
+    const closed = store.create("closed").id;
+    store.append(open, { type: "turn/start", ts: 1, turnId: "live" });
+    store.append(closed, { type: "turn/start", ts: 2, turnId: "done" });
+    store.append(closed, {
+      type: "turn/end",
+      ts: 3,
+      turnId: "done",
+      reason: { kind: "completed" },
+    });
+
+    const third = store.create("third").id;
+    store.append(third, { type: "turn/start", ts: 4, turnId: "t3" });
+    expect(store.isLoaded?.(open)).toBe(true);
+    expect(store.isLoaded?.(closed)).toBe(false);
+    expect(store.isLoaded?.(third)).toBe(true);
+    expect(evicted).toEqual(["closed"]);
+  });
+
+  it("allows temporary over-capacity when every resident turn is open", () => {
+    const dir = tempDir();
+    const evicted: string[] = [];
+    const store = track(
+      createPersistentSessionStore(dir, { maxResidentSessions: 2 }),
+    );
+    store.bindSessionEviction((id) => evicted.push(id));
+    const a = store.create("a").id;
+    const b = store.create("b").id;
+    store.append(a, { type: "turn/start", ts: 1, turnId: "ta" });
+    store.append(b, { type: "turn/start", ts: 2, turnId: "tb" });
+    const c = store.create("c").id;
+    store.append(c, { type: "turn/start", ts: 3, turnId: "tc" });
+    expect(store.isLoaded?.(a)).toBe(true);
+    expect(store.isLoaded?.(b)).toBe(true);
+    expect(store.isLoaded?.(c)).toBe(true);
+    expect(evicted).toEqual([]);
   });
 
   it("readEvents reuses resident identity and slices ranges after cold hydrate", () => {

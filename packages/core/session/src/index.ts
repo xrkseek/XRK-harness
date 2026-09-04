@@ -308,7 +308,10 @@ export {
   type TextChunkRow,
   type ToolCallChunkRow,
 } from "./chunk-pack.js";
-export { repairOpenTurnEvents } from "./repair-open-turn.js";
+export {
+  repairOpenTurnEvents,
+  sessionHasOpenTurn,
+} from "./repair-open-turn.js";
 export {
   extractEventSearchText,
   extractSessionSearchTexts,
