@@ -5,13 +5,17 @@ import type {
   CordisHttpHandler,
   CordisRpcHandler,
 } from "./cordis-registry.js";
-import type { SidebarCompatOptions } from "./sidebar-adapter.js";
-import type { SidebarFaceBridge } from "./sidebar-face-bridge.js";
+import type {
+  SidebarHostOptions,
+  SidebarFaceBridge,
+} from "../sidebar/index.js";
 import type { TokenLedgerOptions } from "./tokenledger.js";
 import type { HarnessConnectorOptions } from "./harness-connector.js";
 import type { WalletOptions } from "./wallet.js";
 import type { XrkPluginServicesOptions } from "../xrk/plugin-services.js";
 
+/** @deprecated Prefer {@link SidebarHostOptions}. */
+export type SidebarCompatOptions = SidebarHostOptions;
 export interface DshAdapterMeta {
   readonly id: string;
   readonly package?: string;

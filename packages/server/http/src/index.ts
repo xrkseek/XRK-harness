@@ -35,8 +35,15 @@ export {
   mapSessionCostToDsh,
   type WalletFaceBridge,
   type XrkWalletPort,
-  type SidebarFaceBridge,
 } from "./dsh-compat/index.js";
+export {
+  createSidebarPublicHandler,
+  handleSidebarHost,
+  handleSidebarCompat,
+  type SidebarFaceBridge,
+  type SidebarSubagentLiveActivity,
+  type SidebarHostOptions,
+} from "./sidebar/index.js";
 export {
   createHostPluginsPublicHandler,
   type HostWireContext,

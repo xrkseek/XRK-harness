@@ -13,7 +13,7 @@ import {
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { dataPath } from "./underlying/json-store.js";
-import { gitStatus } from "./sidebar-git.js";
+import { gitStatus } from "../sidebar/sidebar-git.js";
 import {
   type RewindChange,
   type RewindMarker,

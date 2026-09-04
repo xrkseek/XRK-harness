@@ -207,7 +207,7 @@ export class SessionManager {
    */
   selectSubagent(address: SubagentAddress): void {
     const catalog = this.catalogs.get(address.parentSessionId)
-    const entry = catalog?.entries.find(candidate => candidate.id === address.childSessionId)
+    const entry = (catalog?.entries ?? []).find(candidate => candidate.id === address.childSessionId)
     if (entry === undefined || entry.kind !== 'child' || entry.mode !== address.mode) {
       throw new Error(`sessions.selectSubagent: ${address.childSessionId} is not a healthy catalog child`)
     }
@@ -243,7 +243,7 @@ export class SessionManager {
     const retained = this.addresses.get(sessionId)
     if (retained !== undefined) return retained
     for (const [parentSessionId, catalog] of this.catalogs) {
-      const child = catalog.entries.find(entry => entry.kind === 'child' && entry.id === sessionId)
+      const child = (catalog.entries ?? []).find(entry => entry.kind === 'child' && entry.id === sessionId)
       if (child?.kind === 'child') {
         return { parentSessionId, childSessionId: sessionId, mode: child.mode }
       }
@@ -943,9 +943,10 @@ export class SessionManager {
     }
     let changed = false
     for (const [parentSessionId, catalog] of this.catalogs) {
-      if (!catalog.entries.some(entry =>
+      const rows = catalog.entries ?? []
+      if (!rows.some(entry =>
         entry.kind === 'child' && entry.id === childSessionId && entry.activity !== activity)) continue
-      const entries = catalog.entries.map((entry) => {
+      const entries = rows.map((entry) => {
         if (entry.kind !== 'child' || entry.id !== childSessionId) return entry
         return { ...entry, activity }
       })
@@ -965,9 +966,10 @@ export class SessionManager {
   private applyCatalogParentExpandable(parentSessionId: SessionId): void {
     let changed = false
     for (const [catalogParentId, catalog] of this.catalogs) {
-      if (!catalog.entries.some(entry =>
+      const rows = catalog.entries ?? []
+      if (!rows.some(entry =>
         entry.kind === 'child' && entry.id === parentSessionId && !entry.hasChildren)) continue
-      const entries = catalog.entries.map((entry) => {
+      const entries = rows.map((entry) => {
         if (entry.kind !== 'child' || entry.id !== parentSessionId || entry.hasChildren) return entry
         return { ...entry, hasChildren: true }
       })

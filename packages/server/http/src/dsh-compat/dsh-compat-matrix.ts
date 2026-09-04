@@ -117,9 +117,9 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
   },
   {
     id: "sidebar-fs-git",
-    coverage: "full",
-    genericModule: "sidebar-adapter.ts + sidebar-prefs-store",
-    note: "FS · git · prefs · upload · bundle · HTML preview (/sidebar/html/)",
+    coverage: "bridge",
+    genericModule: "packages/server/http/src/sidebar (Host-native)",
+    note: "Not dsh-compat: Host mounts createSidebarPublicHandler; DSH clients share the same /sidebar/* contract",
   },
   {
     id: "wallpaper-skin-market",

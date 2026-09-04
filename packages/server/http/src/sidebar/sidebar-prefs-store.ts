@@ -1,7 +1,8 @@
 /**
- * dsh-better-sidebar prefs — file-backed under ~/.xrk/sidebar/prefs.json
+ * Host sidebar prefs — file-backed under ~/.xrk/sidebar/prefs.json
+ * (shared Host doc-store primitive; not a dsh-compat feature module).
  */
-import { createXrkDocStore } from "./underlying/doc-store.js";
+import { createXrkDocStore } from "../dsh-compat/underlying/doc-store.js";
 
 export const SIDEBAR_PREFS_DEFAULT: Record<string, unknown> = {
   openByDefault: false,

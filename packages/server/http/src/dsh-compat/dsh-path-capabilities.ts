@@ -28,7 +28,6 @@ export const DSH_HTTP_CAPABILITIES: readonly DshHttpCapability[] = [
   { prefix: "/_dsh/dsh-noema", provider: "xrk-noema" },
   { prefix: "/dsh-market", provider: "xrk-market" },
   { prefix: "/api/dsh-market", provider: "xrk-market" },
-  { prefix: "/sidebar/", provider: "xrk-sidebar" },
   { prefix: "/dream-skin/", provider: "xrk-dream-skin" },
   { prefix: "/api/undo", provider: "xrk-undo" },
   { prefix: "/wallpaper-engine", provider: "xrk-wallpaper" },

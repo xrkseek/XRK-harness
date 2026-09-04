@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeSidebarHtmlPath } from "../src/dsh-compat/sidebar-html.js";
+import { decodeSidebarHtmlPath } from "../src/sidebar/sidebar-html.js";
 
 describe("decodeSidebarHtmlPath", () => {
   it("decodes Windows drive paths", () => {

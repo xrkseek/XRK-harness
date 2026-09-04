@@ -11,11 +11,6 @@ import type {
   PluginHostHttpRoute,
   PluginHostRpcRoute,
 } from "./adapter-types.js";
-import { handleSidebarCompat } from "./sidebar-adapter.js";
-import {
-  handleBundleChunkStub,
-  DEFAULT_SIDEBAR_EXPORTS,
-} from "./bundle-chunk-stub.js";
 import { handleGenericDshHttp } from "./generic-dsh-http.js";
 import { stubHttpProvider, stubRpcHandler } from "./wire/stub-handlers.js";
 import { settingsRpcProvider } from "./wire/settings-provider.js";
@@ -112,29 +107,6 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
       },
     ],
   }),
-
-  "xrk-sidebar": (ctx, route) => {
-    const r = route as PluginHostHttpRoute;
-    return {
-      http: [
-        {
-          match: (p) => p.startsWith("/sidebar/bundle/"),
-          handle: (req, res, pathname) =>
-            handleBundleChunkStub(req, res, pathname, {
-              urlPrefix: "/sidebar/bundle",
-              exportsByChunk: DEFAULT_SIDEBAR_EXPORTS,
-              registryGlobal: "__xrkhChunks__",
-              ...(ctx.pluginsDir ? { pluginsDir: ctx.pluginsDir } : {}),
-            }),
-        },
-        {
-          match: prefixMatcher(r.prefix),
-          handle: (req, res, pathname) =>
-            handleSidebarCompat(req, res, pathname, ctx),
-        },
-      ],
-    };
-  },
 
   "xrk-market": (ctx, route) => ({
     http: [

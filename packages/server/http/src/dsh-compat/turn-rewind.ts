@@ -5,7 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
-import type { SidebarFaceBridge } from "./sidebar-face-bridge.js";
+import type { SidebarFaceBridge } from "../sidebar/index.js";
 import {
   findRewindMarker,
   type RewindMarker,

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   chainPublicHandlers,
   createDshCompatPublicHandler,
+  createSidebarPublicHandler,
   createXrkPluginPublicHandler,
 } from "../src/index.js";
 import { readXrkPluginInventory } from "../src/xrk/plugin-services.js";
@@ -82,14 +83,26 @@ function tempPlugins(): string {
 
 function compatHandler(
   options: Parameters<typeof createDshCompatPublicHandler>[0] = {},
-): ReturnType<typeof createDshCompatPublicHandler> {
-  const pluginsDir =
-    options.pluginsDir ?? compatPlugins();
-  return createDshCompatPublicHandler({ ...options, pluginsDir });
+): ReturnType<typeof chainPublicHandlers> {
+  const pluginsDir = options.pluginsDir ?? compatPlugins();
+  const opts = { ...options, pluginsDir };
+  // Product Host mounts native sidebar before dsh-compat; tests mirror that.
+  return chainPublicHandlers(
+    createSidebarPublicHandler({
+      ...(opts.xrkHome ? { xrkHome: opts.xrkHome } : {}),
+      ...(opts.pluginsDir ? { pluginsDir: opts.pluginsDir } : {}),
+      ...(opts.defaultCwd ? { defaultCwd: opts.defaultCwd } : {}),
+      ...(opts.resolveSessionCwd
+        ? { resolveSessionCwd: opts.resolveSessionCwd }
+        : {}),
+      ...(opts.sidebarFace ? { sidebarFace: opts.sidebarFace } : {}),
+    }),
+    createDshCompatPublicHandler(opts),
+  );
 }
 
 async function withPublicHandler(
-  handler: ReturnType<typeof createDshCompatPublicHandler>,
+  handler: ReturnType<typeof chainPublicHandlers>,
   run: (base: string) => Promise<void>,
 ): Promise<void> {
   const server = createServer((req, res) => {
@@ -1062,7 +1075,7 @@ describe("dsh-compat adapters", () => {
   });
 
   it("returns live map shape for subagents.live sidebar RPC", async () => {
-    const handler = createDshCompatPublicHandler({});
+    const handler = compatHandler();
     await withPublicHandler(handler, async (base) => {
       const res = await fetch(`${base}/sidebar/api/subagents.live`, {
         method: "POST",

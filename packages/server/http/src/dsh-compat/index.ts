@@ -167,7 +167,15 @@ export {
   type WalletFaceBridge,
   type XrkWalletPort,
 } from "./wallet.js";
-export type { SidebarFaceBridge } from "./sidebar-face-bridge.js";
+export type {
+  SidebarFaceBridge,
+  SidebarSubagentLiveActivity,
+} from "../sidebar/index.js";
+export {
+  createSidebarPublicHandler,
+  handleSidebarHost,
+  handleSidebarCompat,
+} from "../sidebar/index.js";
 export {
   syncAutoReviewSlashCommand,
   recordAutoReviewDeny,

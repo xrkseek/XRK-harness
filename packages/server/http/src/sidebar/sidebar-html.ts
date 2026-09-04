@@ -1,12 +1,12 @@
 /**
- * dsh-better-sidebar HTML preview: GET /sidebar/html/<sessionId>/<abs-path-segments…>
+ * Host sidebar HTML preview: GET /sidebar/html/<sessionId>/<abs-path-segments…>
  * Serves workspace files with real MIME so the iframe does not fall through to the SPA.
  */
 
 import { createReadStream, existsSync, statSync } from "node:fs";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson } from "./underlying/http-json.js";
+import { sendJson } from "../http-json.js";
 
 const HTML_PREFIX = "/sidebar/html/";
 

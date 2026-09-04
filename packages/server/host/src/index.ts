@@ -19,6 +19,7 @@ import {
   createHostPluginsPublicHandler,
   createHttpServer,
   createXrkPluginPublicHandler,
+  createSidebarPublicHandler,
   prewarmDshCompatAdapters,
   shutdownDshCompatServices,
   applyHostPackageByName,
@@ -1017,6 +1018,16 @@ export function createHostManager(): HostManager {
         drain,
         tryHandlePublic: chainPublicHandlers(
           createMobileAccessGateHandler({ xrkHome: resolveXrkHome() }),
+          createSidebarPublicHandler({
+            xrkHome: resolveXrkHome(),
+            defaultCwd: faceRuntime.workspaceRoot,
+            resolveSessionCwd: (sessionId: string) =>
+              resolveSessionCwd(faceRuntime, sessionId),
+            sidebarFace: hostWireCtx.sidebarFace,
+            ...(config.runtime.pluginsDir
+              ? { pluginsDir: config.runtime.pluginsDir }
+              : {}),
+          }),
           createXrkPluginPublicHandler({
             ...(config.runtime.pluginsDir
               ? { pluginsDir: config.runtime.pluginsDir }

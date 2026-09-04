@@ -9,6 +9,10 @@ This directory is the XRK **first-party** Host-side community adapter (`@xrkseek
 
 发包检查单 / Extraction checklist：[PACKAGE.md](./PACKAGE.md)。集成者 / Integrators：[docs/community-plugins.md](../../../../docs/community-plugins.md)。
 
+**侧栏不在此目录。** `/sidebar/*` 由 Host 原生 `createSidebarPublicHandler`（`../sidebar/` · 子路径 `@xrkseek/server-http/sidebar`）挂载；本包仅 **re-export** 类型与工厂供旧 import，**不**经 dsh-compat 能力表。`underlying/doc-store` 等 primitive 可被侧栏复用，但侧栏不是兼容特性。
+
+**Sidebar is not owned here.** Host mounts `/sidebar/*` via native `createSidebarPublicHandler` (`../sidebar/`, subpath `@xrkseek/server-http/sidebar`). This package only re-exports types/factories for legacy imports — **not** via the dsh-compat capability table. Shared primitives under `underlying/` may be reused by sidebar; sidebar is not a compat feature.
+
 **原则 / Principles**：通用底层 + 薄装配 + 具名 bridge；按路径/RPC 形状扩展；不为单个 npm 包 fork adapter。矩阵真源 / Matrix source：`dsh-compat-matrix.ts`。
 
 ## 装配顺序 / Composition Order

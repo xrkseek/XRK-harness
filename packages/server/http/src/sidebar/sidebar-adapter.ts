@@ -1,12 +1,12 @@
 /**
- * dsh-better-sidebar Host routes → XRK workspace FS (compat).
- * Primary: POST /sidebar/api/{method} · GET /sidebar/html/… · GET/POST /sidebar/upload · GET /sidebar/file
+ * Native Host sidebar HTTP surface (`/sidebar/*`).
+ * Product client: `xrkh-better-sidebar` (kind: client). Not a dsh-compat path.
  */
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { mkdir, opendir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readBody, sendJson } from "./underlying/http-json.js";
+import { readBody, sendJson } from "../http-json.js";
 import {
   gitBranches,
   gitCherryPick,
@@ -31,15 +31,20 @@ import { attachmentContentDisposition } from "../content-disposition.js";
 
 import type { SidebarFaceBridge } from "./sidebar-face-bridge.js";
 
-export interface SidebarCompatOptions {
+export interface SidebarHostOptions {
   /** Resolve session workspace cwd (Face). */
   readonly resolveSessionCwd?: (sessionId: string) => string | undefined;
   /** Fallback when session unknown. */
   readonly defaultCwd?: string;
   readonly xrkHome?: string;
-  /** Side Chat + open.external (Host injects from Face). */
+  /** Face inject: open.external · jobs · subagents.live · rewind. */
   readonly sidebarFace?: SidebarFaceBridge;
+  /** Installed client plugins dir (chunk staging for `/sidebar/bundle`). */
+  readonly pluginsDir?: string;
 }
+
+/** @deprecated Use {@link SidebarHostOptions}. */
+export type SidebarCompatOptions = SidebarHostOptions;
 
 /** NUL / high ratio of non-text bytes → treat as binary for editor routing. */
 function looksBinary(buf: Buffer): boolean {
@@ -63,7 +68,7 @@ function fail(code: string, message: string): unknown {
 }
 
 function resolveCwd(
-  options: SidebarCompatOptions,
+  options: SidebarHostOptions,
   sessionId: string | undefined,
   override?: string,
 ): string {
@@ -164,7 +169,7 @@ async function searchFiles(
 async function dispatchMethod(
   method: string,
   payload: Record<string, unknown>,
-  options: SidebarCompatOptions,
+  options: SidebarHostOptions,
 ): Promise<unknown> {
   const sessionId =
     typeof payload.sessionId === "string" ? payload.sessionId : undefined;
@@ -419,54 +424,6 @@ async function dispatchMethod(
       });
       return ok({ opened: true });
     }
-    case "sidechat.start": {
-      const bridge = options.sidebarFace;
-      const parent =
-        typeof payload.sessionId === "string" ? payload.sessionId.trim() : "";
-      if (!bridge || !parent) {
-        return fail("unavailable", "sidechat requires XRK Host Face bridge");
-      }
-      const question =
-        typeof payload.question === "string" ? payload.question : "";
-      return ok(await bridge.startSidechat(parent, question));
-    }
-    case "sidechat.prompt": {
-      const bridge = options.sidebarFace;
-      const childId =
-        typeof payload.childId === "string" ? payload.childId.trim() : "";
-      const text = typeof payload.text === "string" ? payload.text : "";
-      if (!bridge || !childId || !text.trim()) {
-        return fail("invalid-payload", "childId and text required");
-      }
-      return ok(await bridge.promptSidechat(childId, text));
-    }
-    case "sidechat.cancel": {
-      const bridge = options.sidebarFace;
-      const childId =
-        typeof payload.childId === "string" ? payload.childId.trim() : "";
-      if (!bridge || !childId) {
-        return fail("invalid-payload", "childId required");
-      }
-      return ok(await bridge.cancelSidechat(childId));
-    }
-    case "sidechat.dispose": {
-      const bridge = options.sidebarFace;
-      const childId =
-        typeof payload.childId === "string" ? payload.childId.trim() : "";
-      if (!bridge || !childId) {
-        return fail("invalid-payload", "childId required");
-      }
-      return ok(await bridge.disposeSidechat(childId));
-    }
-    case "sidechat.info": {
-      const bridge = options.sidebarFace;
-      const childId =
-        typeof payload.childId === "string" ? payload.childId.trim() : "";
-      if (!bridge || !childId) {
-        return fail("invalid-payload", "childId required");
-      }
-      return ok(await bridge.infoSidechat(childId));
-    }
     default:
       return fail(
         "unsupported",
@@ -475,11 +432,11 @@ async function dispatchMethod(
   }
 }
 
-export async function handleSidebarCompat(
+export async function handleSidebarHost(
   req: IncomingMessage,
   res: ServerResponse,
   pathname: string,
-  options: SidebarCompatOptions,
+  options: SidebarHostOptions,
 ): Promise<boolean> {
   if (await handleSidebarHtml(req, res, pathname, options)) {
     return true;
@@ -611,3 +568,6 @@ export async function handleSidebarCompat(
 
   return false;
 }
+
+/** @deprecated Prefer {@link handleSidebarHost}. */
+export const handleSidebarCompat = handleSidebarHost;
