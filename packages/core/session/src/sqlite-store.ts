@@ -285,14 +285,15 @@ export function createPersistentSessionStore(
         return events === undefined || !sessionHasOpenTurn(events);
       });
       if (victim === undefined) break;
-      const idx = residentOrder.indexOf(victim);
-      if (idx >= 0) residentOrder.splice(idx, 1);
       // Drain chunk batches before Face checkpoints / drops the resident log.
       flushPending();
-      // Notify while the log is still resident so Face can checkpoint via
-      // eventsRef without store.get() re-hydrating the victim (recursion).
+      // Notify while still resident so Face can checkpoint. Do not remove from
+      // residentOrder yet — onEvict may touchResident via readEvents/get; splice
+      // only after the callback so a re-touch cannot leave a stale LRU entry.
       onEvict?.(victim);
       sessions.delete(victim);
+      const idx = residentOrder.indexOf(victim);
+      if (idx >= 0) residentOrder.splice(idx, 1);
     }
   };
 

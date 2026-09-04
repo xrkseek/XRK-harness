@@ -76,7 +76,7 @@ const cursor = SessionSeqCursor(-1);
 
 ## 持久化仓
 
-`createPersistentSessionStore`：打开时懒加载会话 id；`get` / `readEvents` 时水合事件。`eventsRef(id)` 返回已驻留数组。列表元数据走 `listHints`。驻留 LRU 默认上限 8；**未闭合 turn 不驱逐**（可临时超上限）。淘汰前 `flush` chunk 批，再通知 Face checkpoint。
+`createPersistentSessionStore`：打开时懒加载会话 id；`get` / `readEvents` 时水合事件。`eventsRef(id)` 返回已驻留数组。列表元数据走 `listHints`。驻留 LRU 默认上限 8；**未闭合 turn 不驱逐**（可临时超上限）。淘汰前 `flush` chunk 批，再通知 Face checkpoint（`onEvict` 结束后再从 LRU 摘除，避免回调内 `get` 留下幽灵驻留项）。
 
 物理行可为 `text-chunks` / `tool-call-chunks`；展开后的事件下标与磁盘 `seq` 不同，因此区间读在冷 miss 时先水合全文再切片。耐久屏障是 `flush()`（见 [session.md](./session.md)）。
 
@@ -164,7 +164,7 @@ const cursor = SessionSeqCursor(-1);
 
 ## Persistent store
 
-`createPersistentSessionStore` lazy-loads session ids on open and hydrates on `get` / `readEvents`. `eventsRef(id)` returns the resident array. List metadata uses `listHints`. Resident LRU defaults to 8; **open turns are never evicted** (the set may temporarily exceed the cap). Eviction flushes chunk batches, then notifies Face for checkpoints.
+`createPersistentSessionStore` lazy-loads session ids on open and hydrates on `get` / `readEvents`. `eventsRef(id)` returns the resident array. List metadata uses `listHints`. Resident LRU defaults to 8; **open turns are never evicted** (the set may temporarily exceed the cap). Eviction flushes chunk batches, then notifies Face for checkpoints (residentOrder is updated only after `onEvict`, so a callback `get` cannot leave a stale LRU entry).
 
 Physical rows may be `text-chunks` / `tool-call-chunks`; expanded event indices differ from disk `seq`, so cold range reads hydrate the full log then slice in memory. Durability barrier: `flush()` (see [session.md](./session.md)).
 

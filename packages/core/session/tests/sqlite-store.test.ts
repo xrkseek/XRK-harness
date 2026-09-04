@@ -315,6 +315,40 @@ describe("createPersistentSessionStore", () => {
     expect(evicted).toEqual([]);
   });
 
+  it("onEvict may re-touch the victim without leaving a stale LRU entry", () => {
+    const dir = tempDir();
+    const store = track(
+      createPersistentSessionStore(dir, { maxResidentSessions: 1 }),
+    );
+    store.bindSessionEviction((id) => {
+      // Mimic Face checkpoint rebuild that reads the log during eviction.
+      store.get(id);
+    });
+    const closed = store.create("closed").id;
+    store.append(closed, { type: "turn/start", ts: 1, turnId: "t1" });
+    store.append(closed, {
+      type: "turn/end",
+      ts: 2,
+      turnId: "t1",
+      reason: { kind: "completed" },
+    });
+    const next = store.create("next").id;
+    expect(store.isLoaded?.(closed)).toBe(false);
+    expect(store.isLoaded?.(next)).toBe(true);
+    // Closed session must stay cold after a further create (no sticky LRU ghost).
+    store.append(next, { type: "turn/start", ts: 3, turnId: "tn" });
+    store.append(next, {
+      type: "turn/end",
+      ts: 4,
+      turnId: "tn",
+      reason: { kind: "completed" },
+    });
+    const third = store.create("third").id;
+    expect(store.isLoaded?.(closed)).toBe(false);
+    expect(store.isLoaded?.(next)).toBe(false);
+    expect(store.isLoaded?.(third)).toBe(true);
+  });
+
   it("readEvents reuses resident identity and slices ranges after cold hydrate", () => {
     const dir = tempDir();
     const a = track(createPersistentSessionStore(dir));

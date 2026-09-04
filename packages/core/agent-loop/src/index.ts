@@ -1,4 +1,4 @@
-import { assertModelVisible, assertToolCallsSettled, deriveMessages, durableModelHistory, estimateRequestTokens, promotePendingSteers, pruneOversizedToolResults, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, estimateRequestTokens, promotePendingSteers, pruneOversizedToolResults, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   type AssembledRequest,
@@ -426,6 +426,12 @@ function buildModelRequest(input: {
   };
 }
 
+/** Fail closed before every LLM call: settle ids + OpenAI tool-call adjacency. */
+function assertReadyForLlm(events: readonly SessionEvent[]): void {
+  assertToolCallsSettled(events);
+  assertAssistantToolCallAdjacency(deriveMessages(events));
+}
+
 /**
  * Turn driver with optional three-layer assemble on the model request path.
  * Session log remains append-only source of truth; volatile user is ephemeral.
@@ -659,9 +665,9 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       }
     }
 
-    // Step open: tools settled; non-assemble durable history ≡ deriveMessages.
+    // Step open: tools settled + OpenAI tool-call adjacency; non-assemble durable history ≡ deriveMessages.
     const snapEvents = readSessionEvents(input.store, input.sessionId);
-    assertToolCallsSettled(snapEvents);
+    assertReadyForLlm(snapEvents);
     const assembled =
       input.assemble !== undefined && input.assemble.enabled !== false;
     if (!assembled) {
@@ -758,7 +764,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         });
         if (pruned.pruned > 0) {
           req = buildReq();
-          assertToolCallsSettled(readSessionEvents(input.store, input.sessionId));
+          assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
           maybeAppendRequestHeader({
             store: input.store,
             sessionId: input.sessionId,
@@ -794,7 +800,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
             }
             if (!did.compacted) throw retryErr;
             req = buildReq();
-            assertToolCallsSettled(readSessionEvents(input.store, input.sessionId));
+            assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
             maybeAppendRequestHeader({
               store: input.store,
               sessionId: input.sessionId,
@@ -827,7 +833,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
           }
           if (!did.compacted) throw err;
           req = buildReq();
-          assertToolCallsSettled(readSessionEvents(input.store, input.sessionId));
+          assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
           maybeAppendRequestHeader({
             store: input.store,
             sessionId: input.sessionId,

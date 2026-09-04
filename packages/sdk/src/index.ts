@@ -44,6 +44,8 @@ export {
   settleDanglingTools,
   listDanglingToolCalls,
   assertToolCallsSettled,
+  assertAssistantToolCallAdjacency,
+  ToolAdjacencyError,
   TOOL_INTERRUPTED_MESSAGE,
   type SessionStore,
   type TurnLatch,

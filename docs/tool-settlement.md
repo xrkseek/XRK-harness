@@ -15,6 +15,7 @@
 | `listDanglingToolCalls(events)` | 纯扫描未结 call |
 | `settleDanglingTools(store, sessionId)` | 追加 `isError` 的 `tool/result`（带结构化 `error`） |
 | `assertToolCallsSettled(events)` | 仍有悬挂则抛 `ToolSettlementError` |
+| `assertAssistantToolCallAdjacency(messages)` | 模型可见历史：`assistant(toolCalls)` 后须紧跟匹配 `tool`；拒 orphan / 错 id / 双 assistant 夹断 |
 | `danglingSettlement(d)` | 按来源返回文案与码 |
 
 结算码（模型读 `content`；Face 可读 `result.error`）：
@@ -26,7 +27,9 @@
 | 取消路径：body 已调用 | `ABORTED` | 取消发生在开跑之后 |
 | 取消路径：未开跑槽位 | `ABORTED_BEFORE_DISPATCH` | 取消阻止了 body；可按需重试 |
 
-`runTurn` **入口**先 `settleDanglingTools`（崩溃码）；取消 finalize 用 `aborted-before-dispatch`，并把 `AgentCancelCause` 写入 `turn/end.reason`（`user` / `parent` / `hook` / `disposed` / `legacy`）。每步 LLM 前再 `assertToolCallsSettled`。
+`runTurn` **入口**先 `settleDanglingTools`（崩溃码）；取消 finalize 用 `aborted-before-dispatch`，并把 `AgentCancelCause` 写入 `turn/end.reason`（`user` / `parent` / `hook` / `disposed` / `legacy`）。每步 LLM 前再 `assertToolCallsSettled` + `assertAssistantToolCallAdjacency`。
+
+持久化水合 `repairOpenTurnEvents`：先结算日志上已有悬挂 call，再折叠 stream 前缀；若折叠出 `toolCalls`，**同批再结算一轮**，再写 `step/end` / `turn/end`（interrupted），避免「有 toolCalls、无 result」的邻接洞。
 
 ## 并行 settle（`isConcurrencySafe`）
 
@@ -95,6 +98,7 @@ After crash or abort, do not silently replay side effects: write a failed `tool/
 | `listDanglingToolCalls(events)` | Pure scan of unsettled calls |
 | `settleDanglingTools(store, sessionId)` | Append `isError` `tool/result` (with structured `error`) |
 | `assertToolCallsSettled(events)` | Throw `ToolSettlementError` if any remain dangling |
+| `assertAssistantToolCallAdjacency(messages)` | Model-facing history: `assistant(toolCalls)` must be followed by matching `tool` messages; rejects orphans / wrong ids / adjacent assistants |
 | `danglingSettlement(d)` | Copy and code by source |
 
 Settlement codes (model reads `content`; Face may read `result.error`):
@@ -106,7 +110,9 @@ Settlement codes (model reads `content`; Face may read `result.error`):
 | Cancel path: body already invoked | `ABORTED` | Cancel after start |
 | Cancel path: slot never started | `ABORTED_BEFORE_DISPATCH` | Cancel blocked the body; retry if needed |
 
-`runTurn` **entry** first calls `settleDanglingTools` (crash codes). Cancel finalize uses `aborted-before-dispatch` and writes `AgentCancelCause` into `turn/end.reason` (`user` / `parent` / `hook` / `disposed` / `legacy`). Before each LLM step, `assertToolCallsSettled` runs again.
+`runTurn` **entry** first calls `settleDanglingTools` (crash codes). Cancel finalize uses `aborted-before-dispatch` and writes `AgentCancelCause` into `turn/end.reason` (`user` / `parent` / `hook` / `disposed` / `legacy`). Before each LLM step, `assertToolCallsSettled` and `assertAssistantToolCallAdjacency` run again.
+
+Persistent hydrate `repairOpenTurnEvents`: settle dangling calls already on the log, fold the stream prefix, then **settle again in the same batch** if folding introduced `toolCalls`, before writing `step/end` / `turn/end` (`interrupted`) — so rehydrate does not leave assistant toolCalls without adjacent results.
 
 ## Parallel settle (`isConcurrencySafe`)
 

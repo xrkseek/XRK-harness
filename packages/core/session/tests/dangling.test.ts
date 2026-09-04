@@ -5,6 +5,7 @@ import {
   TOOL_OUTCOME_UNKNOWN_MESSAGE,
   TOOL_NOT_STARTED,
   TOOL_NOT_STARTED_MESSAGE,
+  assertAssistantToolCallAdjacency,
   assertToolCallsSettled,
   createMemorySessionStore,
   deriveMessages,
@@ -167,5 +168,114 @@ describe("settleDanglingTools", () => {
       },
     ];
     expect(() => assertToolCallsSettled(events)).toThrow(/unsettled/);
+  });
+});
+
+describe("assertAssistantToolCallAdjacency", () => {
+  it("passes settled assistant→tool→assistant", () => {
+    assertAssistantToolCallAdjacency([
+      { role: "user", content: "hi" },
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [{ id: "c1", name: "echo", arguments: {} }],
+      },
+      { role: "tool", content: "ok", toolCallId: "c1" },
+      { role: "assistant", content: "done" },
+    ]);
+  });
+
+  it("throws when trailing assistant tool_calls lack tool results", () => {
+    expect(() =>
+      assertAssistantToolCallAdjacency([
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "c1", name: "echo", arguments: {} }],
+        },
+      ]),
+    ).toThrow(/pending: c1/);
+  });
+
+  it("throws on orphan tool messages and unexpected toolCallId", () => {
+    expect(() =>
+      assertAssistantToolCallAdjacency([
+        { role: "tool", content: "x", toolCallId: "orphan" },
+      ]),
+    ).toThrow(/orphan tool message/);
+    expect(() =>
+      assertAssistantToolCallAdjacency([
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "c1", name: "echo", arguments: {} }],
+        },
+        { role: "tool", content: "x", toolCallId: "other" },
+      ]),
+    ).toThrow(/unexpected tool result id other/);
+  });
+
+  it("throws on duplicate assistant(toolCalls) even when ids later settle", () => {
+    // Pre-0.2.1 / eviction-repair corruption shape: settlement-by-id can pass.
+    const messages = [
+      { role: "user" as const, content: "hi" },
+      {
+        role: "assistant" as const,
+        content: "",
+        toolCalls: [{ id: "c1", name: "echo", arguments: {} }],
+      },
+      {
+        role: "assistant" as const,
+        content: "",
+        toolCalls: [{ id: "c1", name: "echo", arguments: {} }],
+      },
+      { role: "tool" as const, content: "ok", toolCallId: "c1" },
+    ];
+    expect(() => assertAssistantToolCallAdjacency(messages)).toThrow(
+      /tool_calls must be followed/,
+    );
+  });
+
+  it("detects the corrupt log that settle-by-id misses", () => {
+    const events: SessionEvent[] = [
+      {
+        type: "user/message",
+        ts: 1,
+        turnId: "t",
+        content: "hi",
+      },
+      {
+        type: "assistant/message",
+        ts: 2,
+        turnId: "t",
+        stepId: "s1",
+        content: "",
+        toolCalls: [{ id: "c1", name: "echo", arguments: {} }],
+        interrupted: true,
+      },
+      {
+        type: "assistant/message",
+        ts: 3,
+        turnId: "t",
+        stepId: "s2",
+        content: "",
+        toolCalls: [{ id: "c1", name: "echo", arguments: {} }],
+      },
+      {
+        type: "tool/result",
+        ts: 4,
+        turnId: "t",
+        stepId: "s2",
+        result: {
+          toolCallId: "c1",
+          name: "echo",
+          content: "ok",
+        },
+      },
+    ];
+    expect(() => assertToolCallsSettled(events)).not.toThrow();
+    expect(() =>
+      assertAssistantToolCallAdjacency(deriveMessages(events)),
+    ).toThrow(/tool_calls must be followed/);
   });
 });

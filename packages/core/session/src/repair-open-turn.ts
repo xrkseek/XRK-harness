@@ -121,8 +121,8 @@ function stepHasAssistantMessage(
 
 /**
  * Events to append after a crash left a turn/step open in durable storage.
- * Settles dangling tools, folds streamed prefix, closes step/turn with
- * `reason: { kind: "interrupted" }`.
+ * Settles dangling tools (including toolCalls folded from stream chunks),
+ * folds streamed prefix, closes step/turn with `reason: { kind: "interrupted" }`.
  */
 export function repairOpenTurnEvents(
   events: readonly SessionEvent[],
@@ -134,22 +134,27 @@ export function repairOpenTurnEvents(
   const out: SessionEvent[] = [];
   const ts = () => now();
 
-  for (const d of listDanglingToolCalls(events)) {
-    const settled = danglingSettlement(d);
-    out.push({
-      type: "tool/result",
-      ts: ts(),
-      turnId: d.turnId,
-      stepId: d.stepId,
-      result: {
-        toolCallId: d.call.id,
-        name: d.call.name,
-        content: settled.content,
-        isError: true,
-        error: settled.error,
-      },
-    });
-  }
+  const pushSettlements = (log: readonly SessionEvent[]): void => {
+    for (const d of listDanglingToolCalls(log)) {
+      const settled = danglingSettlement(d);
+      out.push({
+        type: "tool/result",
+        ts: ts(),
+        turnId: d.turnId,
+        stepId: d.stepId,
+        result: {
+          toolCallId: d.call.id,
+          name: d.call.name,
+          content: settled.content,
+          isError: true,
+          error: settled.error,
+        },
+      });
+    }
+  };
+
+  // First pass: settle calls already on the durable log.
+  pushSettlements(events);
 
   const stepId = findOpenStepId(events, turnId);
   if (stepId !== undefined) {
@@ -174,6 +179,9 @@ export function repairOpenTurnEvents(
             : {}),
           interrupted: true,
         });
+        // Second pass: settle toolCalls introduced by the folded assistant
+        // (Codex-style: missing outputs must sit adjacent before close).
+        pushSettlements([...events, ...out]);
       }
     }
     out.push({

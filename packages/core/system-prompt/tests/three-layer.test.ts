@@ -145,6 +145,34 @@ describe("outbound pipeline", () => {
     ).rejects.toThrow(/toolPair/);
   });
 
+  it("toolPair rejects adjacent duplicate assistant tool_calls", async () => {
+    const pipeline = createOutboundPipeline();
+    pipeline.use(createToolPairStep());
+    await expect(
+      pipeline.run({
+        request: {
+          system: "",
+          messages: [
+            {
+              role: "assistant",
+              content: "",
+              toolCalls: [{ id: "c1", name: "x", arguments: {} }],
+            },
+            {
+              role: "assistant",
+              content: "",
+              toolCalls: [{ id: "c1", name: "x", arguments: {} }],
+            },
+            { role: "tool", content: "ok", toolCallId: "c1" },
+          ],
+          tools: [],
+        },
+        history: [],
+        meta: {},
+      }),
+    ).rejects.toThrow(/followed by tool messages/);
+  });
+
   it("sorts tools lexicographically by default", () => {
     const req = assembleThreeLayers({
       skeletonSystem: { persona: "P" },

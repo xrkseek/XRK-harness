@@ -2,7 +2,7 @@
 
 > **读者**：全员（对外说话以本页为准）
 
-三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.2.1**（当前公开线，0.2 预览；上一正式 **v0.1.31**）。**本页主路径表当前均为能跑**；未稳/未做仅用于后续新增能力登记。
+三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.2.2**（当前公开线，0.2 预览；上一正式 **v0.1.31**）。**本页主路径表当前均为能跑**；未稳/未做仅用于后续新增能力登记。
 
 **AI 调用链路**（maxSteps · prune/soft-compact · **request soft-budget fail-closed** · **tool-result spill（默认 64KiB）** · Face `bash`/`agent-loop`/`workspace-inject` 可调（设置 → Plugins） · reasoning passback · max-tokens keep/drop · EMPTY/未知 finish/残缺 tool · derive 跳过空 assistant · **reasoningEffort→DeepSeek thinking wire** · toolOrder · Anthropic cache · **LlmError HTTP 分类（含 gemini / openai-responses）· 步内 llm/retry（Face 可调）· TOOL_NOT_STARTED/OUTCOME_UNKNOWN/ABORTED_BEFORE_DISPATCH/`ABORTED` · isConcurrencySafe settle（只读工具已标）· tool-call stream + tool-call-chunks · concludesTurn / `extras.concludeTurn` · 取消 `AgentCancelCause` · 同轮 retry 耗尽后仍显示 turn-error · **DeepSeek vision-exp catalog** · **session-projection 状态/视图分离** · **durable workspace inject**）已跟至同基线。
 
@@ -38,7 +38,7 @@
 
 | 层级 | 能做什么 | 前置 |
 | --- | --- | --- |
-| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.2.1** 当前公开线（上一正式 **v0.1.31**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
+| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.2.2** 当前公开线（上一正式 **v0.1.31**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
 | **B — 浏览器硬刷** | `pnpm test:web`（不进 `pnpm check`） | Chromium；完整 `apps/web/dist` |
 | **C — 上架** | npmjs + GitHub Release（`@xrkseek/harness-cli`） | `pnpm release`；见 [publishing.md](./publishing.md) |
 
@@ -62,7 +62,7 @@ core* / 能力叶 → kernel | protocol | compose
 
 > **Audience**: Everyone (this page is the public capability truth)
 
-Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.2.1** (current public line, 0.2 preview; previous formal **v0.1.31**). **Main-path rows on this page are Working today**; Unstable/Not done are reserved for newly tracked gaps.
+Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.2.2** (current public line, 0.2 preview; previous formal **v0.1.31**). **Main-path rows on this page are Working today**; Unstable/Not done are reserved for newly tracked gaps.
 
 **AI call path** (maxSteps · prune/soft-compact · **request soft-budget fail-closed** · **tool-result spill (default 64KiB)** · Face-tunable `bash` / `agent-loop` / `workspace-inject` (Settings → Plugins) · reasoning passback · max-tokens keep/drop · EMPTY / unknown finish / incomplete tool · derive skips empty assistant · **reasoningEffort→DeepSeek thinking wire** · toolOrder · Anthropic cache · **LlmError HTTP classification (incl. gemini / openai-responses) · in-step llm/retry (Face-tunable) · TOOL_NOT_STARTED / OUTCOME_UNKNOWN / ABORTED_BEFORE_DISPATCH / `ABORTED` · isConcurrencySafe settle (read-only tools marked) · tool-call stream + tool-call-chunks · concludesTurn / `extras.concludeTurn` · cancel `AgentCancelCause` · turn-error still shown after same-turn retry exhaustion · **DeepSeek vision-exp catalog** · **session-projection state/view split** · **durable workspace inject**) is tracked to the same baseline.
 
@@ -92,7 +92,7 @@ Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CL
 
 | Level | What you can do | Prerequisites |
 | --- | --- | --- |
-| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.2.1** is the current public release (previous formal **v0.1.31**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
+| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.2.2** is the current public release (previous formal **v0.1.31**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
 | **B — Browser soak** | `pnpm test:web` (not part of `pnpm check`) | Chromium; full `apps/web/dist` |
 | **C — Publish** | npmjs + GitHub Release (`@xrkseek/harness-cli`) | `pnpm release`; see [publishing.md](./publishing.md) |
 

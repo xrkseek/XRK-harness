@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@xrkseek/protocol";
+import { assertAssistantToolCallAdjacency } from "@xrkseek/core-session";
 import type { AssembledRequest } from "./three-layer.js";
 
 export interface PipelineStepContext {
@@ -94,22 +95,14 @@ export function createAssembleStep(
   };
 }
 
-/** Ensure assistant tool_calls have matching tool results in history. */
+/** Ensure assistant tool_calls have matching adjacent tool results in history. */
 export function createToolPairStep(): PipelineStep {
   return async (ctx, next) => {
-    const pending = new Set<string>();
-    for (const m of ctx.request.messages) {
-      if (m.role === "assistant" && m.toolCalls) {
-        for (const c of m.toolCalls) pending.add(c.id);
-      }
-      if (m.role === "tool") {
-        pending.delete(m.toolCallId);
-      }
-    }
-    if (pending.size > 0) {
-      throw new Error(
-        `toolPair validation failed: missing results for ${[...pending].join(",")}`,
-      );
+    try {
+      assertAssistantToolCallAdjacency(ctx.request.messages);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`toolPair validation failed: ${detail}`, { cause: err });
     }
     await next();
   };

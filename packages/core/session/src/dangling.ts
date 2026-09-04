@@ -1,5 +1,5 @@
 import { readSessionEvents } from "./seq.js";
-import type { SessionEvent, ToolCall } from "@xrkseek/protocol";
+import type { ChatMessage, SessionEvent, ToolCall } from "@xrkseek/protocol";
 import {
   TOOL_ABORTED_BEFORE_DISPATCH,
   TOOL_ABORTED_BEFORE_DISPATCH_MESSAGE,
@@ -95,6 +95,60 @@ export function assertToolCallsSettled(events: readonly SessionEvent[]): void {
   const dangling = listDanglingToolCalls(events);
   if (dangling.length > 0) {
     throw new ToolSettlementError(dangling);
+  }
+}
+
+/**
+ * OpenAI-compatible wire rule: after an assistant message that names
+ * `toolCalls`, the next messages must be the matching `tool` results before
+ * another assistant (or user/system) appears. Settlement-by-id alone is not
+ * enough — duplicate assistants with overlapping toolCalls still settle while
+ * breaking adjacency (HTTP 400).
+ */
+export class ToolAdjacencyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ToolAdjacencyError";
+  }
+}
+
+/** Throws if model-facing history breaks assistant→tool adjacency. */
+export function assertAssistantToolCallAdjacency(
+  messages: readonly ChatMessage[],
+): void {
+  let pending: Set<string> | undefined;
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i]!;
+    if (pending && pending.size > 0) {
+      if (m.role === "tool") {
+        if (!pending.has(m.toolCallId)) {
+          throw new ToolAdjacencyError(
+            `unexpected tool result id ${m.toolCallId} while pending ${[...pending].join(", ")} (at messages[${i}])`,
+          );
+        }
+        pending.delete(m.toolCallId);
+        continue;
+      }
+      const still = [...pending].join(", ");
+      throw new ToolAdjacencyError(
+        `assistant tool_calls must be followed by tool messages (pending: ${still}; interrupted at messages[${i}] role=${m.role})`,
+      );
+    }
+    if (m.role === "tool") {
+      throw new ToolAdjacencyError(
+        `orphan tool message toolCallId=${m.toolCallId} at messages[${i}] (no preceding assistant tool_calls)`,
+      );
+    }
+    if (m.role === "assistant" && m.toolCalls?.length) {
+      pending = new Set(m.toolCalls.map((c) => c.id));
+    } else {
+      pending = undefined;
+    }
+  }
+  if (pending && pending.size > 0) {
+    throw new ToolAdjacencyError(
+      `assistant tool_calls must be followed by tool messages (pending: ${[...pending].join(", ")})`,
+    );
   }
 }
 
