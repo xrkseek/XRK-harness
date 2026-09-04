@@ -94,4 +94,49 @@ describe("subagent tools", () => {
     expect(out.isError).toBe(true);
     expect(out.content).toMatch(/max depth/);
   });
+
+  it("caps concurrent active children under one parent", async () => {
+    const store = createMemorySessionStore();
+    const active = new Set<string>();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: {
+        wake() {},
+        async cancel() {},
+        isActive(sessionId: string) {
+          return active.has(sessionId);
+        },
+        async run() {},
+      },
+      resolveAgent: async () => stubAgent(),
+    });
+    const parent = runtime.ensureSession("parent");
+    const childA = runtime.ensureSession("child-a");
+    const childB = runtime.ensureSession("child-b");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: childA,
+      mode: "continuable",
+      label: "a",
+    });
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: childB,
+      mode: "continuable",
+      label: "b",
+    });
+    active.add(childA);
+    active.add(childB);
+
+    const tools = createToolRegistry();
+    bindSubagentTools(tools, {
+      runtime,
+      parentSessionId: parent,
+      maxActiveChildren: 2,
+    });
+    const out = await tools.get("subagent")!.execute({ prompt: "third" });
+    expect(out.isError).toBe(true);
+    expect(out.content).toMatch(/max active children/);
+  });
 });

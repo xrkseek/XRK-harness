@@ -5,6 +5,7 @@ import { resolveLlmFromEnv } from "@xrkseek/llm-registry";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import type { PolicyEngine } from "@xrkseek/policy";
 import { createHarnessComposition } from "@xrkseek/preset-harness";
+import { resolveAgentPresetProfile } from "@xrkseek/server-face";
 import type { AgentFactory } from "@xrkseek/server-host";
 
 export const presetId = "server" as const;
@@ -21,6 +22,7 @@ export interface ServerCompositionOptions {
 /**
  * Host-plane composition: returns an AgentFactory for server/host spawn.
  * Preset wires plugins from the host factory input into harness tools.
+ * Session `agentPreset` selects tool flags + subagent routing (Face catalog).
  * When `llm` omitted: `resolveLlmFromEnv` if `XRK_LLM_PRESET` set, else replay.
  */
 export function createServerAgentFactory(
@@ -40,6 +42,7 @@ export function createServerAgentFactory(
     store,
     workspaceRoot,
     workspaceDisplayTitle,
+    agentPreset,
     plugins,
     resolveImage,
     ptyService,
@@ -64,6 +67,8 @@ export function createServerAgentFactory(
       resolveLlmFromEnv(options.env ?? process.env)?.adapter ??
       fallbackLlm;
 
+    const profile = resolveAgentPresetProfile(agentPreset, "harness");
+
     const composition = createHarnessComposition({
       workspaceRoot: workspaceRoot || options.workspaceRoot,
       ...(workspaceDisplayTitle
@@ -74,11 +79,18 @@ export function createServerAgentFactory(
       llm,
       assemble: true,
       plugins,
+      subagentRouting: profile.subagentRouting,
+      webTools: profile.tools.web,
+      lspTools: profile.tools.lsp,
+      ...(profile.tools.pty
+        ? ptyService
+          ? { ptyTools: ptyService }
+          : {}
+        : { ptyTools: false }),
       ...(options.policy ? { policy: options.policy } : {}),
       ...(resolveImage ? { resolveImage } : {}),
       ...(attachments ? { attachments } : {}),
       ...(routeAllowsImage ? { routeAllowsImage } : {}),
-      ...(ptyService ? { ptyTools: ptyService } : {}),
       ...(shellJobs ? { shell: shellJobs } : {}),
       ...(maxParallelToolCalls !== undefined ? { maxParallelToolCalls } : {}),
       ...(maxSteps !== undefined ? { maxSteps } : {}),

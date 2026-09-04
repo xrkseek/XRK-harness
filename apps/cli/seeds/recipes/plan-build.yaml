@@ -1,0 +1,12 @@
+id: plan-build
+title: Plan → Build
+description: 先计划再实现（同会话 exit_plan_mode）
+prompt: |
+  按 skill **xrk-plan-build**：
+  1. 确认或打开计划模式（Plan 徽章 / `/plan`）
+  2. 只读探索后写出以 `#` 开头的 markdown 计划
+  3. 调用 `exit_plan_mode` 请用户批准
+  4. 批准后在同一会话实现；Keep planning 则修订再提审
+instructions: |
+  计划未批准前不要大范围改业务代码。不要另开「Build」会话。
+parameters: []

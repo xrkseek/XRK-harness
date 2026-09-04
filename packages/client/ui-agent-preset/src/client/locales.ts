@@ -5,6 +5,10 @@ export type AgentPresetSettingsKey =
   | 'title' | 'description' | 'loading' | 'error' | 'userTrust' | 'seatHint' | 'headerHint'
   | 'nav' | 'sectionIntro' | 'builtIn' | 'setDefault' | 'view'
   | 'presetMinimalName' | 'presetMinimalDescription'
+  | 'presetShellName' | 'presetShellDescription'
+  | 'presetFrugalName' | 'presetFrugalDescription'
+  | 'presetPlanName' | 'presetPlanDescription'
+  | 'presetShallowName' | 'presetShallowDescription'
   | 'presetHarnessName' | 'presetHarnessDescription'
   | 'duplicate' | 'duplicateUnavailable' | 'delete' | 'presetId' | 'presetIdPlaceholder' | 'copyOf'
   | 'displayName' | 'displayNamePlaceholder'
@@ -27,17 +31,29 @@ export const en: Record<AgentPresetSettingsKey, string> = {
   headerHint: 'Tool surface this session runs, fixed when it started',
   nav: 'Agent presets',
   sectionIntro:
-    'XRK ships two built-in tool surfaces: Minimal and XRK Harness. '
-    + 'A session badge picks which tools the agent may call; workspace seeds under .xrk feed personality and rules separately.',
+    'XRK ships six built-in tool surfaces — from Minimal and Shell through Frugal, Plan, and Shallow up to XRK Harness. '
+    + 'A session badge picks tools, subagents, and whether plan mode starts on; workspace seeds under .xrk feed personality and rules separately.',
   builtIn: 'Built-in',
   setDefault: 'Set as default',
   view: 'View',
   presetMinimalName: 'Minimal',
   presetMinimalDescription:
-    'Filesystem, skill, and std tools only — no bash, web, lsp, or PTY.',
+    'Filesystem, skill, and std tools only — no bash, web, lsp, PTY, or subagents.',
+  presetShellName: 'Shell',
+  presetShellDescription:
+    'Filesystem, bash, and terminal (PTY) — no web, lsp, or subagents.',
+  presetFrugalName: 'Frugal',
+  presetFrugalDescription:
+    'Full coding tools without subagents — lower bill risk.',
+  presetPlanName: 'Plan',
+  presetPlanDescription:
+    'Full tools; starts in plan mode. Approve exit_plan_mode to continue building on the same session.',
+  presetShallowName: 'Shallow',
+  presetShallowDescription:
+    'Full coding tools with one-level subagents only (capped concurrency).',
   presetHarnessName: 'XRK Harness',
   presetHarnessDescription:
-    'Full coding agent: filesystem, bash, web search/fetch, lsp, and terminal tools.',
+    'Full coding agent: filesystem, bash, web, lsp, terminal, and nested subagents.',
   duplicate: 'Duplicate',
   duplicateUnavailable: 'This deployment has no writable preset directory',
   delete: 'Delete',
@@ -87,16 +103,25 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
   headerHint: '本会话的工具面，开始时即固定',
   nav: 'Agent 预设',
   sectionIntro:
-    'XRK 内置两种工具面：Minimal 与 XRK Harness。'
-    + '会话徽章决定 Agent 能调哪些工具；工作区 .xrk 种子则另路喂人格与规则。',
+    'XRK 内置六种工具面：从 Minimal、Shell，到 Frugal、Plan、Shallow，再到 XRK Harness。'
+    + '会话徽章决定工具、子代理与是否默认进入计划模式；工作区 .xrk 种子则另路喂人格与规则。',
   builtIn: '内置',
   setDefault: '设为默认',
   view: '查看',
   presetMinimalName: 'Minimal',
-  presetMinimalDescription: '仅文件系统、skill 与 std 工具；无 bash / 联网 / lsp / PTY。',
+  presetMinimalDescription: '仅文件系统、skill 与 std 工具；无 bash / 联网 / lsp / PTY / 子代理。',
+  presetShellName: 'Shell',
+  presetShellDescription: '文件系统 + bash + 终端（PTY）；无联网 / lsp / 子代理。',
+  presetFrugalName: 'Frugal',
+  presetFrugalDescription: '完整编码工具，关闭子代理 — 降低账单风险（省钱）。',
+  presetPlanName: 'Plan',
+  presetPlanDescription:
+    '完整工具；默认进入计划模式。批准 exit_plan_mode 后在同一会话继续构建。',
+  presetShallowName: 'Shallow',
+  presetShallowDescription: '完整编码工具，仅一层子代理（并限制并发）。',
   presetHarnessName: 'XRK Harness',
   presetHarnessDescription:
-    '完整编码 Agent：文件系统、bash、网页检索/抓取、lsp 与终端工具。',
+    '完整编码 Agent：文件系统、bash、联网、lsp、终端与嵌套子代理。',
   duplicate: '复制',
   duplicateUnavailable: '此部署未配置可写的预设目录',
   delete: '删除',
@@ -157,10 +182,14 @@ interface PresetLocaleKeys {
   readonly description: AgentPresetSettingsKey
 }
 
-/** Only the two Face catalog ids XRK actually ships. */
+/** Face catalog ids XRK ships (six tiers). */
 const BUILT_IN_PRESET_KEYS: Readonly<Partial<Record<string, PresetLocaleKeys>>> = {
-  harness: { name: 'presetHarnessName', description: 'presetHarnessDescription' },
   minimal: { name: 'presetMinimalName', description: 'presetMinimalDescription' },
+  shell: { name: 'presetShellName', description: 'presetShellDescription' },
+  frugal: { name: 'presetFrugalName', description: 'presetFrugalDescription' },
+  plan: { name: 'presetPlanName', description: 'presetPlanDescription' },
+  shallow: { name: 'presetShallowName', description: 'presetShallowDescription' },
+  harness: { name: 'presetHarnessName', description: 'presetHarnessDescription' },
 }
 
 /**

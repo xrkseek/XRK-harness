@@ -4,12 +4,13 @@ import { readSessionEvents } from "@xrkseek/core-session";
 import type { SessionEvent } from "@xrkseek/protocol";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
+import { DEFAULT_MAX_ACTIVE_CHILDREN } from "./presets-catalog.js";
 
 const DEFAULT_MAX_DEPTH = 3;
 const FOREGROUND_WAIT_MS = 10 * 60 * 1000;
 const POLL_MS = 50;
 
-export { SUBAGENT_ROUTING_PROMPT_TEXT };
+export { SUBAGENT_ROUTING_PROMPT_TEXT, DEFAULT_MAX_ACTIVE_CHILDREN };
 
 export function subagentDepth(
   runtime: FaceRuntime,
@@ -64,35 +65,54 @@ export interface BindSubagentToolsOptions {
   readonly runtime: FaceRuntime;
   readonly parentSessionId: string;
   readonly maxDepth?: number;
+  /**
+   * Max concurrent *active* (draining) direct children under this parent.
+   * Omit → {@link DEFAULT_MAX_ACTIVE_CHILDREN} (4).
+   */
+  readonly maxActiveChildren?: number;
+}
+
+function countActiveChildren(
+  runtime: FaceRuntime,
+  parentSessionId: string,
+): number {
+  let n = 0;
+  for (const link of runtime.subagents.list(parentSessionId)) {
+    if (runtime.drain.isActive(link.childSessionId)) n += 1;
+  }
+  return n;
 }
 
 function createSubagentTool(
   options: BindSubagentToolsOptions,
 ): ToolDefinition {
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
+  const maxActiveChildren =
+    options.maxActiveChildren ?? DEFAULT_MAX_ACTIVE_CHILDREN;
   return {
     name: "subagent",
     description:
       "Delegate a self-contained task to a subagent (separate session/context). " +
-      "Use for focused independent work — research, a scoped implementation, analysis — " +
+      "Use for focused independent work — research, a scoped implementation, analysis, or read-only review — " +
       "so it does not consume this conversation's context. " +
-      "By default waits for the result; set run_in_background true to get a durable child id.",
+      "Give a complete standalone prompt (the child cannot see this chat). " +
+      "By default waits for the result; set run_in_background true to get a durable child id and continue later via send_message.",
     parameters: {
       type: "object",
       properties: {
         description: {
           type: "string",
-          description: "Short (3-5 word) label for the delegated task.",
+          description: "Short (3-5 word) label for the delegated task (sidebar).",
         },
         prompt: {
           type: "string",
           description:
-            "Complete self-contained task for the subagent. It does not see this conversation.",
+            "Complete self-contained task for the subagent. Include paths, goals, and constraints; it does not see this conversation.",
         },
         run_in_background: {
           type: "boolean",
           description:
-            "If true, return the child session id immediately (continuable). Default false (wait for result).",
+            "If true, return the child session id immediately (continuable). Default false (wait for the child's final answer).",
         },
       },
       required: ["prompt"],
@@ -122,6 +142,16 @@ function createSubagentTool(
       if (depth >= maxDepth) {
         return {
           content: `subagent: max depth ${maxDepth} reached (current depth ${depth})`,
+          isError: true,
+        };
+      }
+      const active = countActiveChildren(
+        options.runtime,
+        options.parentSessionId,
+      );
+      if (active >= maxActiveChildren) {
+        return {
+          content: `subagent: max active children ${maxActiveChildren} reached (active ${active})`,
           isError: true,
         };
       }
@@ -256,7 +286,9 @@ function createSendMessageTool(
   return {
     name: "send_message",
     description:
-      "Send a follow-up message to a continuable background subagent by child session id.",
+      "Send a follow-up to a continuable background subagent by child session id. " +
+      "If the child is still working, the message waits in its inbox (does not steer the in-flight turn). " +
+      "Returns delivery confirmation only — not the child's answer.",
     parameters: {
       type: "object",
       properties: {

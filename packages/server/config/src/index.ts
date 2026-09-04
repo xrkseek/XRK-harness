@@ -27,11 +27,28 @@ export interface HostCredentials {
   readonly apiKey: string;
 }
 
+/** Host `--preset` / `XRK_PRESET` ids (mirrors Face `HOST_CLI_PRESET_IDS`). */
+export const HOST_RUNTIME_PRESET_IDS = [
+  "minimal",
+  "shell",
+  "frugal",
+  "plan",
+  "shallow",
+  "harness",
+  "server",
+] as const;
+
+export type HostRuntimePresetId = (typeof HOST_RUNTIME_PRESET_IDS)[number];
+
+export function isHostRuntimePresetId(v: string): v is HostRuntimePresetId {
+  return (HOST_RUNTIME_PRESET_IDS as readonly string[]).includes(v);
+}
+
 export interface HostRuntimeConfig {
   readonly host: string;
   readonly port: number;
   readonly workspaceRoot: string;
-  readonly preset: "minimal" | "harness" | "server";
+  readonly preset: HostRuntimePresetId;
   readonly corsOrigin: string | "*";
   readonly rateLimitPerMinute: number;
   /**
@@ -102,8 +119,8 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
     host: String(env.XRK_HOST ?? defaults.host),
     port: num(env.XRK_PORT, defaults.port),
     workspaceRoot: String(env.XRK_WORKSPACE ?? defaults.workspaceRoot),
-    preset: (["minimal", "harness", "server"].includes(String(env.XRK_PRESET))
-      ? (env.XRK_PRESET as HostRuntimeConfig["preset"])
+    preset: (isHostRuntimePresetId(String(env.XRK_PRESET ?? ""))
+      ? (env.XRK_PRESET as HostRuntimePresetId)
       : defaults.preset),
     corsOrigin: String(env.XRK_CORS_ORIGIN ?? defaults.corsOrigin),
     rateLimitPerMinute: num(
@@ -161,11 +178,8 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
   if (typeof patch.workspaceRoot === "string") {
     mutable.workspaceRoot = patch.workspaceRoot;
   }
-  if (
-    typeof patch.preset === "string" &&
-    ["minimal", "harness", "server"].includes(patch.preset)
-  ) {
-    mutable.preset = patch.preset as HostRuntimeConfig["preset"];
+  if (typeof patch.preset === "string" && isHostRuntimePresetId(patch.preset)) {
+    mutable.preset = patch.preset;
   }
   if (typeof patch.pluginsDir === "string") {
     const dir = patch.pluginsDir.trim();

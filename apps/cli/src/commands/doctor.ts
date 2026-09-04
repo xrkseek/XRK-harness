@@ -8,7 +8,7 @@ import {
   harnessAppsRoot,
   resolveProductWebDist,
 } from "../product-paths.js";
-import { ensureUserSkillSeeds } from "../user-skill-seeds.js";
+import { ensureUserHomeSeeds } from "../user-skill-seeds.js";
 
 export interface DoctorResult {
   readonly ok: boolean;
@@ -107,22 +107,22 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
       : `${xrkHome} (created on first serve/web)`,
   });
 
-  const seeded = await ensureUserSkillSeeds(xrkHome);
-  const seedNotes = [
-    ...(seeded.installed.length > 0
-      ? [`seeded ${seeded.installed.join(", ")}`]
-      : []),
-    ...(seeded.refreshed.length > 0
-      ? [`refreshed ${seeded.refreshed.join(", ")}`]
-      : []),
+  const seeded = await ensureUserHomeSeeds(xrkHome);
+  const parts = [
+    ...seeded.skills.installed.map((n) => `skill:${n}`),
+    ...seeded.skills.refreshed.map((n) => `skill~${n}`),
+    ...seeded.standing.installed.map((n) => `standing:${n}`),
+    ...seeded.standing.refreshed.map((n) => `standing~${n}`),
+    ...seeded.recipes.installed.map((n) => `recipe:${n}`),
+    ...seeded.recipes.refreshed.map((n) => `recipe~${n}`),
   ];
   checks.push({
-    name: "user-skills",
+    name: "user-home-seeds",
     ok: true,
     detail:
-      seedNotes.length > 0
-        ? `${seedNotes.join("; ")} → ${seeded.homeSkills}`
-        : `ok ${seeded.homeSkills}`,
+      parts.length > 0
+        ? `${parts.join(", ")} → ${xrkHome}`
+        : `ok ${path.join(xrkHome, "skills")}`,
   });
 
   const pluginsRoot = path.join(xrkHome, "plugins", "web", "plugins");
@@ -173,7 +173,7 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
           c.name !== "pnpm" &&
           c.name !== "product-ui" &&
           c.name !== "xrk-home" &&
-          c.name !== "user-skills" &&
+          c.name !== "user-home-seeds" &&
           c.name !== "community-plugins" &&
           c.name !== "community-env" &&
           c.name !== "dsh-compat-host",

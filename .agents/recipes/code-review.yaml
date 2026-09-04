@@ -1,0 +1,10 @@
+id: code-review
+title: Code review
+description: 只读缺陷优先审查（Codex review 风格）
+prompt: |
+  按 skill **xrk-code-review** 审查用户指定的改动（diff / PR / 未提交）：
+  只报本改动引入的可行动缺陷；输出 `[P0]…[P3]` 列表或 `No findings.`
+  不要改文件、不要 commit。
+instructions: |
+  大范围时可 subagent 委派只读审查，brief 写全。
+parameters: []

@@ -1,0 +1,13 @@
+id: mcp-attach
+title: 挂载 MCP 能力
+description: 经 Settings MCP 粘贴 mcpServers 并确认连接
+prompt: |
+  Follow skill **xrk-capability-attach**:
+  1. Confirm command+args or url, server id, allowConnect
+  2. Emit pasteable {"mcpServers":{…}} (no env; secrets → Credentials)
+  3. Guide: Settings → Plugins → Plugin config → paste JSON → **添加** → Allow connect → Save
+  4. settings.mutate ns=mcp only with my explicit OK
+  5. Verify row status + inventory; explain park on policy deny
+instructions: |
+  Prefer MCP Settings over process-plugin scaffolding. No mutate without confirmation. Do not invent Cursor hooks or auto-mkdir workspace .xrk.
+parameters: []

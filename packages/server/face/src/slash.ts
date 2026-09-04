@@ -1,10 +1,13 @@
 import { foldPlanMode } from "@xrkseek/protocol";
 import { readSessionEvents, sessionEventCount } from "@xrkseek/core-session";
+import { resolveXrkHome } from "@xrkseek/server-config";
 import {
   loadOfficeRecipes,
+  mergeRecipesById,
   tryApplySlashRecipe,
   type Recipe,
 } from "@xrkseek/workspace";
+import path from "node:path";
 import type { FaceRpcResult } from "./types.js";
 import type { FaceRuntime } from "./context.js";
 import {
@@ -27,8 +30,22 @@ import { narrateAutoReviewCommand } from "./projections/units/auto-review.js";
 
 export type SlashRecipesLoader = () => Promise<readonly Recipe[]> | readonly Recipe[];
 
+/**
+ * Home system recipes (`~/.xrk/recipes`, seeded by CLI) then workspace
+ * `.agents/recipes` then `.xrk/recipes` (later id wins).
+ */
 export function defaultRecipesLoader(workspaceRoot: string): SlashRecipesLoader {
-  return () => loadOfficeRecipes(`${workspaceRoot}/.xrk/recipes`);
+  return async () => {
+    const home = resolveXrkHome();
+    const homeRecipes = await loadOfficeRecipes(path.join(home, "recipes"));
+    const agents = await loadOfficeRecipes(
+      path.join(workspaceRoot, ".agents", "recipes"),
+    );
+    const product = await loadOfficeRecipes(
+      path.join(workspaceRoot, ".xrk", "recipes"),
+    );
+    return mergeRecipesById(homeRecipes, agents, product);
+  };
 }
 
 /** DSH command name (lowercase, no slash). */

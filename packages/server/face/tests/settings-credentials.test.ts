@@ -97,8 +97,29 @@ describe("Face settings U2", () => {
     const presets = (listAfter.result.value as {
       presets: { id: string; isDefault: boolean }[];
     }).presets;
+    expect(presets.map((p) => p.id)).toEqual([
+      "minimal",
+      "shell",
+      "frugal",
+      "plan",
+      "shallow",
+      "harness",
+    ]);
     expect(presets.find((p) => p.id === "harness")?.isDefault).toBe(true);
     expect(presets.find((p) => p.id === "minimal")?.isDefault).toBe(false);
+
+    const frugal = await dispatchFaceMethod(rt, "settings.update", "u1", {
+      ns: "agent-presets",
+      patch: { default: "frugal" },
+    });
+    expect(frugal.result.ok).toBe(true);
+    const listFrugal = await dispatchFaceMethod(rt, "agentPreset.list", "l2", {});
+    expect(listFrugal.result.ok).toBe(true);
+    if (!listFrugal.result.ok) return;
+    expect(
+      (listFrugal.result.value as { presets: { id: string; isDefault: boolean }[] })
+        .presets.find((p) => p.id === "frugal")?.isDefault,
+    ).toBe(true);
   });
 
   it("get returns ui · host · llm scopes; set ui only", async () => {

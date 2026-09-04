@@ -8,7 +8,7 @@
 | `IDENTITY.md` · `SOUL.md` · `TOOLS.md` | 薄人格与能力挂载习惯 |
 | `context/` | 常驻边界（inject） |
 | `skills/` | 工作区产品 skill（可覆盖 `~/.xrk/skills`） |
-| `recipes/` | 斜杠配方（`/mcp-attach` · `/plugin-scaffold`） |
+| `recipes/` | 斜杠配方（`/mcp-attach` · `/plugin-scaffold` · `/plan-build` · `/code-review`） |
 
 跨工作区默认 skill 真源在 GitHub：`apps/cli/seeds/skills/` → 安装到用户目录 **`~/.xrk/skills/`**（`xrkh doctor` / `serve`）。
 

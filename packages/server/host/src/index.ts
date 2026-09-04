@@ -52,6 +52,7 @@ import {
   liveRouteAllowsImageInput,
   resolveSessionCwd,
   canonicalAgentPresetId,
+  resolveAgentPresetProfile,
   tryHandleFaceHttp,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
@@ -543,10 +544,25 @@ export function createHostManager(): HostManager {
             }
             // ask_user / exit_plan_mode: Face resolveAgent rebinds once.
             if (agent.tools && faceBox.runtime) {
-              bindSubagentTools(agent.tools, {
-                runtime: faceBox.runtime,
-                parentSessionId: sessionId,
-              });
+              const profile = resolveAgentPresetProfile(
+                agentPreset ?? config.runtime.preset,
+                config.runtime.preset,
+              );
+              if (profile.subagents.mode === "on") {
+                bindSubagentTools(agent.tools, {
+                  runtime: faceBox.runtime,
+                  parentSessionId: sessionId,
+                  ...(profile.subagents.maxDepth !== undefined
+                    ? { maxDepth: profile.subagents.maxDepth }
+                    : {}),
+                  ...(profile.subagents.maxActiveChildren !== undefined
+                    ? {
+                        maxActiveChildren:
+                          profile.subagents.maxActiveChildren,
+                      }
+                    : {}),
+                });
+              }
             }
             return agent;
           },

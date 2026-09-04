@@ -165,6 +165,7 @@ export function isProductInjectPath(
 export {
   applyRecipe,
   loadOfficeRecipes,
+  mergeRecipesById,
   loadRecipeFile,
   parseRecipeYaml,
   type Recipe,

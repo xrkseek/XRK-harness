@@ -6,12 +6,13 @@
 
 | 你听到的词 | 它到底是什么 | 决定什么 | **不是**什么 |
 |------------|--------------|----------|--------------|
-| **Session / 会话徽章** | 一条对话上钉死的「工具面」id：`minimal` 或 `harness` | Agent **能调用哪些工具** | 人格文案、工作区文件、Host 进程本身 |
+| **Session / 会话徽章** | 一条对话上钉死的工具面 id（六档内置 + 可选自定义） | Agent **能调用哪些工具**、是否挂子代理、是否默认进计划模式 | 人格文案、工作区文件、Host 进程本身 |
 | **工作区种子** | 拷进 `{workspace}/.xrk` 的 markdown / recipes 模板 | 模型读到的**人格、规则、插件怎么写**（durable inject） | 工具开没开 |
 | **Host `--preset`** | 起 `web`/`serve` 时给**新会话**的默认徽章 | 只影响**之后新建**的会话 | 不会改已有会话的徽章 |
 
-产品 UI 里**只有两种工具面**：**Minimal** 与 **XRK Harness**（id `harness`）。没有第三种内置工具表。  
-`server` 只是 Host 工厂的旧名字，工具面 = harness。
+产品 UI 内置六档：**Minimal** · **Shell** · **Frugal** · **Plan** · **Shallow** · **XRK Harness**（id `harness`）。  
+实现上只有两套 composition 包（`minimal` / `harness`）；其余档位是 Face `AgentPresetProfile` 对工具开关与子代理策略的组合。  
+`server` 只是 Host 工厂的旧名字，工具面与 harness 相同。
 
 ```text
 你打开 web
@@ -20,7 +21,7 @@
     │
     └─ 侧栏里每一条 Session（一次对话）
            │
-           ├─ agentPreset = minimal | harness   ← 工具开哪些
+           ├─ agentPreset = minimal|shell|frugal|plan|shallow|harness
            └─ 读 workspace/.xrk/*               ← 种子喂什么话
 ```
 
@@ -28,20 +29,24 @@
 
 | 层 | 名字 | 落点 | 决定什么 |
 |----|------|------|----------|
-| **Session 工具面** | `minimal` · `harness`（UI：**XRK Harness**） | 会话徽章 / Face `agentPreset` | **实际工具组合** |
+| **Session 工具面** | 六档徽章（UI 名见下表） | 会话徽章 / Face `agentPreset` | **实际工具组合与子代理策略** |
 | **Host CLI** | `--preset` / `XRK_PRESET` | 进程启动 | 新会话默认徽章种子；`server` = Host 工厂名 |
 | **工作区 Agent 层** | 仓库 `.agents/` · 用户 `~/.agents/` · `{workspace}/.xrk` | inject + skills | 人格 / 规则 / 插件开发喂法 |
 
 Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。产品 UI **不**单独展示 Server。
 
-## Session 工具面（只有这两种）
+## Session 工具面（六档）
 
-| `agentPreset` | UI 名 | 工具 | 适用 |
-|---------------|-------|------|------|
-| **minimal** | Minimal | fs · skill · std（todo / ask_user / exit_plan_mode） | 烟测、无 shell / 无联网 |
-| **harness** | **XRK Harness** | minimal + bash · web_search/web_fetch · lsp · terminal_* · sandbox | 完整编码 Agent（**`web` / `serve` 默认**） |
+| `agentPreset` | UI 名 | 工具 / 策略 | 适用 |
+|---------------|-------|-------------|------|
+| **minimal** | Minimal | fs · skill · std；无 bash / web / lsp / PTY / 子代理 | 烟测、无 shell |
+| **shell** | Shell | harness 面：fs + bash + PTY；关 web / lsp / 子代理 | 本机 shell 为主 |
+| **frugal** | Frugal | 完整编码工具；**关子代理**（省钱） | 不想刷子会话账单 |
+| **plan** | Plan | 完整工具；**创建时默认进入计划模式**；批准 `exit_plan_mode` 后在同一会话继续构建 | 先设计后动手 |
+| **shallow** | Shallow | 完整工具；子代理 **depth ≤1**、并发封顶 | 需要轻量子任务 |
+| **harness** | **XRK Harness** | 完整工具 + 嵌套子代理（depth ≤3）；**`web` / `serve` 默认** | 完整编码 Agent |
 
-实现包：`presets/minimal` · `presets/harness`。`presets/server` **不是**第三套工具表，只导出 Host `AgentFactory`（内部调用 harness）。
+实现包：`presets/minimal` · `presets/harness`。`presets/server` **不是**第三套工具表，只导出 Host `AgentFactory`（内部调用 harness，并按会话徽章套用 profile）。
 
 **Session 是什么**：侧栏里的一条对话线程（有 id、事件日志、可选子代理）。创建时钉上 `agentPreset`；已跑着的会话保持开始时的工具面。
 
@@ -49,11 +54,10 @@ Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。�
 
 | Host `--preset` | 含义 |
 |-----------------|------|
-| `minimal` | 新会话默认徽章 = minimal |
-| `harness` | 新会话默认徽章 = harness（`web` / `serve` / `restart` 默认） |
+| `minimal` · `shell` · `frugal` · `plan` · `shallow` · `harness` | 新会话默认徽章 = 该 id |
 | `server` | 与 harness **同一套工具**；`@xrkseek/preset-server` 的 Host factory 接线名 |
 
-`run` / `dump-config` 默认 **minimal**。Host `--preset` **不会**覆盖已有会话徽章。
+`web` / `serve` / `restart` 默认 **harness**。`run` / `dump-config` 默认 **minimal**。Host `--preset` **不会**覆盖已有会话徽章。
 
 `restart`：停本机先前记下的 **XRK Host**（`~/.xrk/run/host-<port>.pid.json`）再起。  
 `--force`：只停指纹匹配的 XRK Host。
@@ -91,7 +95,7 @@ Host vs Session：[host-preset.md](./host-preset.md)。
 | `slashRecipes` | 随 assemble | `.xrk/recipes` |
 | `plugins` | 无 | 进程插件接线 |
 
-Harness 另有：`presentation` · `webTools` · `lspTools` · `ptyTools`。
+Harness 另有：`presentation` · `webTools` · `lspTools` · `ptyTools` · `subagentRouting`。
 
 ## CLI
 
@@ -99,13 +103,14 @@ Harness 另有：`presentation` · `webTools` · `lspTools` · `ptyTools`。
 node apps/cli/dist/bin.js web --workspace .
 node apps/cli/dist/bin.js restart
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
+node apps/cli/dist/bin.js web --preset frugal
 ```
 
 ## 扩展新工具面
 
-1. 新建 `presets/<id>/`：只组合现有包。
-2. 写入 Face `FACE_AGENT_PRESETS` + CLI factory。
-3. 更新本页与 [status.md](./status.md)。
+1. 在 Face `FACE_AGENT_PRESETS` 增加 `AgentPresetProfile`（工具开关 / 子代理 / 计划模式）。
+2. 更新 UI locale 与本页、[status.md](./status.md)。
+3. 一般**不必**新建 `presets/<id>/` 包——复用 `minimal` / `harness` composition。
 
 相关：[workspace-inject.md](./workspace-inject.md) · [plugin-development.md](./plugin-development.md) · [code-mode.md](./code-mode.md)
 
@@ -119,12 +124,13 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 
 | Term you hear | What it is | What it controls | What it is **not** |
 |---------------|------------|------------------|--------------------|
-| **Session badge** | Tool-surface id pinned on a conversation: `minimal` or `harness` | Which tools the Agent may call | Persona copy, workspace files, or the Host process |
+| **Session badge** | Tool-surface id pinned on a conversation (six built-ins + optional custom) | Which tools the Agent may call, subagent policy, and whether plan mode starts on | Persona copy, workspace files, or the Host process |
 | **Workspace seeds** | Markdown / recipes templates copied into `{workspace}/.xrk` | Persona, rules, and plugin-authoring guidance the model reads (durable inject) | Whether tools are enabled |
 | **Host `--preset`** | Default badge for **new** sessions when starting `web`/`serve` | Only sessions created afterward | Badges on existing sessions |
 
-The product UI exposes **exactly two tool surfaces**: **Minimal** and **XRK Harness** (id `harness`). There is no third built-in tool table.  
-`server` is only a legacy Host-factory name; its tool surface is harness.
+The product UI ships six built-ins: **Minimal** · **Shell** · **Frugal** · **Plan** · **Shallow** · **XRK Harness** (id `harness`).  
+There are only two composition packages (`minimal` / `harness`); other badges are Face `AgentPresetProfile` combinations of tool flags and subagent policy.  
+`server` is only a legacy Host-factory name; its tool surface matches harness.
 
 ```text
 You open web
@@ -133,7 +139,7 @@ You open web
     │
     └─ Each Session in the sidebar (one conversation)
            │
-           ├─ agentPreset = minimal | harness   ← which tools
+           ├─ agentPreset = minimal|shell|frugal|plan|shallow|harness
            └─ reads workspace/.xrk/*            ← what seeds inject
 ```
 
@@ -141,20 +147,24 @@ You open web
 
 | Layer | Name | Location | Controls |
 |-------|------|----------|----------|
-| **Session tool surface** | `minimal` · `harness` (UI: **XRK Harness**) | Session badge / Face `agentPreset` | **Actual tool composition** |
+| **Session tool surface** | Six badges (UI names below) | Session badge / Face `agentPreset` | **Actual tool composition and subagent policy** |
 | **Host CLI** | `--preset` / `XRK_PRESET` | Process startup | Default badge seed for new sessions; `server` = Host factory name |
 | **Workspace agent layer** | Repo `.agents/` · user `~/.agents/` · `{workspace}/.xrk` | Inject + skills | Persona / rules / plugin-authoring |
 
 Legacy wire value **`server`** normalizes to **`harness`** for storage and badges. The product UI does **not** show Server as its own badge.
 
-## Session tool surfaces (exactly two)
+## Session tool surfaces (six tiers)
 
-| `agentPreset` | UI name | Tools | Use when |
-|---------------|---------|-------|----------|
-| **minimal** | Minimal | fs · skill · std (todo / ask_user / exit_plan_mode) | Smoke tests; no shell / no network |
-| **harness** | **XRK Harness** | minimal + bash · web_search/web_fetch · lsp · terminal_* · sandbox | Full coding Agent (**default for `web` / `serve`**) |
+| `agentPreset` | UI name | Tools / policy | Use when |
+|---------------|---------|----------------|----------|
+| **minimal** | Minimal | fs · skill · std; no bash / web / lsp / PTY / subagents | Smoke tests; no shell |
+| **shell** | Shell | Harness plane: fs + bash + PTY; web / lsp / subagents off | Local shell focus |
+| **frugal** | Frugal | Full coding tools; **subagents off** (lower bill risk) | Avoid nested-agent spend |
+| **plan** | Plan | Full tools; **starts in plan mode**; approve `exit_plan_mode` to keep building on the same session | Design first, then build |
+| **shallow** | Shallow | Full tools; subagents **depth ≤1**, concurrency capped | Light helper tasks |
+| **harness** | **XRK Harness** | Full tools + nested subagents (depth ≤3); **default for `web` / `serve`** | Full coding Agent |
 
-Implementation packages: `presets/minimal` · `presets/harness`. `presets/server` is **not** a third tool table; it only exports the Host `AgentFactory` (which calls harness internally).
+Implementation packages: `presets/minimal` · `presets/harness`. `presets/server` is **not** a third tool table; it only exports the Host `AgentFactory` (calls harness and applies the session badge profile).
 
 **What a Session is**: one conversation thread in the sidebar (id, event log, optional subagents). `agentPreset` is pinned at create time; running sessions keep the tool surface they started with.
 
@@ -162,11 +172,10 @@ Implementation packages: `presets/minimal` · `presets/harness`. `presets/server
 
 | Host `--preset` | Meaning |
 |-----------------|---------|
-| `minimal` | New-session default badge = minimal |
-| `harness` | New-session default = harness (default for `web` / `serve` / `restart`) |
+| `minimal` · `shell` · `frugal` · `plan` · `shallow` · `harness` | New-session default badge = that id |
 | `server` | **Same tools** as harness; Host factory wiring name for `@xrkseek/preset-server` |
 
-`run` / `dump-config` default to **minimal**. Host `--preset` does **not** override badges on existing sessions.
+`web` / `serve` / `restart` default to **harness**. `run` / `dump-config` default to **minimal**. Host `--preset` does **not** override badges on existing sessions.
 
 `restart` stops the previously recorded local **XRK Host** (`~/.xrk/run/host-<port>.pid.json`) and starts again.  
 `--force` stops only fingerprint-matched XRK Hosts.
@@ -204,7 +213,7 @@ Details: [workspace-inject.md](./workspace-inject.md) · [plugin-development.md]
 | `slashRecipes` | Follows assemble | `.xrk/recipes` |
 | `plugins` | None | Process plugin wiring |
 
-Harness also has: `presentation` · `webTools` · `lspTools` · `ptyTools`.
+Harness also has: `presentation` · `webTools` · `lspTools` · `ptyTools` · `subagentRouting`.
 
 ## CLI
 
@@ -212,12 +221,13 @@ Harness also has: `presentation` · `webTools` · `lspTools` · `ptyTools`.
 node apps/cli/dist/bin.js web --workspace .
 node apps/cli/dist/bin.js restart
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
+node apps/cli/dist/bin.js web --preset frugal
 ```
 
 ## Adding a new tool surface
 
-1. Create `presets/<id>/`: compose existing packages only.
-2. Register Face `FACE_AGENT_PRESETS` + CLI factory.
-3. Update this page and [status.md](./status.md).
+1. Add an `AgentPresetProfile` to Face `FACE_AGENT_PRESETS` (tool flags / subagents / plan mode).
+2. Update UI locales, this page, and [status.md](./status.md).
+3. Usually **do not** add a new `presets/<id>/` package — reuse `minimal` / `harness` composition.
 
 Related: [workspace-inject.md](./workspace-inject.md) · [plugin-development.md](./plugin-development.md) · [code-mode.md](./code-mode.md)

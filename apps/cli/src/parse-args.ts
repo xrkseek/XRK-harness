@@ -283,8 +283,9 @@ Commands:
   help          Show this help
 
 Options:
-  --preset <id>       Preset id (minimal|harness|server)
-                        · web/serve/restart default: harness (XRK Harness tools)
+  --preset <id>       Session badge seed / run composition
+                        (minimal|shell|frugal|plan|shallow|harness|server)
+                        · web/serve/restart default: harness
                         · run default: minimal
                         · server = Host factory name; tools same as harness
   --workspace <path>  Workspace root (default: cwd)

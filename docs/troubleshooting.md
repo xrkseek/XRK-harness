@@ -60,7 +60,7 @@
 
 | 症状 | 处理 |
 |------|------|
-| 工具表只有 fs、没有 `web_search` | 会话徽章是 **Minimal** 时工具面就是 fs。改选 **Harness**（或新建 Harness 会话）。Host `--preset server` 与 harness 工具相同，不会单独出「Server」工具面。见 [profiles.md](./profiles.md) |
+| 工具表只有 fs、没有 `web_search` | 会话徽章是 **Minimal**（或 **Shell**）时没有联网工具。改选 **Frugal** / **Harness**（或新建对应会话）。Host `--preset server` 与 harness 工具相同。见 [profiles.md](./profiles.md) |
 | Agent 改不了 `~/.xrk` / Settings | 正常：harness home 不在会话 workspace 内。改设置用产品 Settings；要让 Agent 改某目录，把该目录加成工作区 |
 | `web_search` 执行失败 | Settings → Plugins → Web search 钉了无效提供方，或钉了 Tavily/Brave 却无密钥；默认无 key 走 parallel-free，失败回退 DuckDuckGo |
 | `lsp` 失败 | 无 `XRK_LSP_COMMAND` |
@@ -171,7 +171,7 @@ See: [modules/mcp.md](./modules/mcp.md) · [policy.md](./policy.md).
 
 | Symptom | Remedy |
 |------|------|
-| Tool table is fs-only, no `web_search` | A **Minimal** session badge exposes fs only. Switch to **Harness** (or create a Harness session). Host `--preset server` shares the harness tool surface and does not expose a separate “Server” tool set. See [profiles.md](./profiles.md) |
+| Tool table is fs-only, no `web_search` | A **Minimal** (or **Shell**) session badge has no web tools. Switch to **Frugal** / **Harness** (or create such a session). Host `--preset server` shares the harness tool surface. See [profiles.md](./profiles.md) |
 | Agent cannot edit `~/.xrk` / Settings | Expected: harness home is outside the session workspace. Change settings in the product Settings UI; to let the Agent edit a directory, add that directory as a workspace |
 | `web_search` execute fails | Settings → Plugins → Web search pinned an invalid provider, or Tavily/Brave without keys; default without keys is parallel-free, then DuckDuckGo fallback |
 | `lsp` fails | Missing `XRK_LSP_COMMAND` |

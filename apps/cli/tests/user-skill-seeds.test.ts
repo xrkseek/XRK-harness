@@ -3,7 +3,12 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ensureUserSkillSeeds } from "../src/user-skill-seeds.js";
+import {
+  ensureUserHomeSeeds,
+  ensureUserSkillSeeds,
+  ensureUserStandingSeeds,
+  ensureUserRecipeSeeds,
+} from "../src/user-skill-seeds.js";
 
 /** Build a fake bundled-seed root: `{ seedRoot }/<name>/<file>`. */
 async function makeSeedRoot(
@@ -44,6 +49,9 @@ describe("ensureUserSkillSeeds", () => {
       expect(first.installed).toContain("xrk-capability-attach");
       expect(first.installed).toContain("xrk-create-skill");
       expect(first.installed).toContain("xrk-adapt-workspace");
+      expect(first.installed).toContain("xrk-plan-build");
+      expect(first.installed).toContain("xrk-delegate");
+      expect(first.installed).toContain("xrk-code-review");
       const skillPath = path.join(
         home,
         "skills",
@@ -207,6 +215,54 @@ describe("ensureUserSkillSeeds", () => {
       expect(res.refreshed).toEqual([]);
       expect(res.skipped).toEqual([]);
       expect(res.homeSkills).toBe(path.join(home, "skills"));
+    });
+  });
+
+  it("seeds a thin AGENTS.md and recipes under home", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "xrk-home-seed-"));
+    try {
+      const all = await ensureUserHomeSeeds(home);
+      expect(all.standing.installed).toContain("AGENTS.md");
+      expect(await readFile(path.join(home, "AGENTS.md"), "utf8")).toContain(
+        "Global preferences",
+      );
+      expect(all.recipes.installed.length).toBeGreaterThan(0);
+      expect(existsSync(path.join(home, "recipes", "plan-build.yaml"))).toBe(
+        true,
+      );
+      // No persona stack dumped into home.
+      expect(existsSync(path.join(home, "SOUL.md"))).toBe(false);
+      expect(existsSync(path.join(home, "IDENTITY.md"))).toBe(false);
+
+      const again = await ensureUserStandingSeeds(home);
+      expect(again.installed).toEqual([]);
+      expect(again.skipped).toContain("AGENTS.md");
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("refreshes a pristine recipe when the bundle changes", async () => {
+    await withTempDirs(async (home, seeds) => {
+      const seedRecipes = path.join(seeds, "recipes");
+      await mkdir(seedRecipes, { recursive: true });
+      await writeFile(
+        path.join(seedRecipes, "demo.yaml"),
+        "id: demo\ntitle: Demo\nprompt: |\n  v1\nparameters: []\n",
+        "utf8",
+      );
+      const first = await ensureUserRecipeSeeds(home, seedRecipes);
+      expect(first.installed).toEqual(["demo.yaml"]);
+      await writeFile(
+        path.join(seedRecipes, "demo.yaml"),
+        "id: demo\ntitle: Demo\nprompt: |\n  v2\nparameters: []\n",
+        "utf8",
+      );
+      const second = await ensureUserRecipeSeeds(home, seedRecipes);
+      expect(second.refreshed).toEqual(["demo.yaml"]);
+      expect(
+        await readFile(path.join(home, "recipes", "demo.yaml"), "utf8"),
+      ).toContain("v2");
     });
   });
 });

@@ -15,6 +15,7 @@ import {
   FACE_THEME_SCHEMA,
   FACE_FONT_SIZE_DEFAULT,
 } from "./face-schema.js";
+import { HOST_CLI_PRESET_IDS } from "./presets-catalog.js";
 
 /** Wire protocols the models settings UI may offer (custom / gateway routes). */
 const PI_AI_PROTOCOLS = [
@@ -121,7 +122,7 @@ const AgentDefaultModelConfig = Schema.object({
 });
 
 const AgentPresetsConfig = Schema.object({
-  default: Schema.union(["minimal", "harness", "server"]),
+  default: Schema.union([...HOST_CLI_PRESET_IDS]),
 });
 
 const BashConfig = Schema.object({

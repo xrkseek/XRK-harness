@@ -28,6 +28,14 @@ export function bundledSkillSeedsRoot(): string {
   return path.join(cliPackageRoot(), "seeds", "skills");
 }
 
+export function bundledStandingSeedsRoot(): string {
+  return path.join(cliPackageRoot(), "seeds", "standing");
+}
+
+export function bundledRecipeSeedsRoot(): string {
+  return path.join(cliPackageRoot(), "seeds", "recipes");
+}
+
 /** Records, per skill name, the fingerprint of the seed we last wrote home. */
 const SEED_MANIFEST_NAME = ".seed-manifest.json";
 
@@ -185,4 +193,132 @@ export async function ensureUserSkillSeeds(
   }
 
   return { homeSkills, installed, refreshed, skipped };
+}
+
+async function fingerprintFile(file: string): Promise<string | undefined> {
+  try {
+    const buf = await readFile(file);
+    return createHash("sha256").update(buf).digest("hex");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Seed flat files from `seedRoot` into `destDir` with the same refresh policy
+ * as skills (manifest beside dest; never clobber user edits).
+ */
+async function ensureFlatFileSeeds(
+  destDir: string,
+  seedRoot: string,
+  manifestName: string,
+  fileFilter?: (name: string) => boolean,
+): Promise<EnsureUserSkillSeedsResult> {
+  const installed: string[] = [];
+  const refreshed: string[] = [];
+  const skipped: string[] = [];
+
+  if (!existsSync(seedRoot)) {
+    return { homeSkills: destDir, installed, refreshed, skipped };
+  }
+
+  await mkdir(destDir, { recursive: true });
+  const names = (await readdir(seedRoot, { withFileTypes: true }))
+    .filter((e) => e.isFile() && (fileFilter ? fileFilter(e.name) : true))
+    .map((e) => e.name)
+    .sort();
+
+  const manifestFile = path.join(destDir, manifestName);
+  const manifest = await readManifest(manifestFile);
+  let manifestDirty = false;
+
+  for (const name of names) {
+    const src = path.join(seedRoot, name);
+    const dest = path.join(destDir, name);
+    const seedFingerprint = await fingerprintFile(src);
+    if (!seedFingerprint) {
+      skipped.push(name);
+      continue;
+    }
+
+    if (!(await pathExists(dest))) {
+      await writeFile(dest, await readFile(src));
+      manifest[name] = seedFingerprint;
+      manifestDirty = true;
+      installed.push(name);
+      continue;
+    }
+
+    const recorded = manifest[name];
+    if (!recorded) {
+      skipped.push(name);
+      continue;
+    }
+    if (recorded === seedFingerprint) {
+      skipped.push(name);
+      continue;
+    }
+    if ((await fingerprintFile(dest)) === recorded) {
+      await writeFile(dest, await readFile(src));
+      manifest[name] = seedFingerprint;
+      manifestDirty = true;
+      refreshed.push(name);
+      continue;
+    }
+    skipped.push(name);
+  }
+
+  if (manifestDirty) {
+    await writeFile(
+      manifestFile,
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      "utf8",
+    );
+  }
+
+  return { homeSkills: destDir, installed, refreshed, skipped };
+}
+
+/** Codex-style global `AGENTS.md` only (`~/.xrk/AGENTS.md`). */
+export async function ensureUserStandingSeeds(
+  xrkHome: string = resolveXrkHome(),
+  seedRoot: string = bundledStandingSeedsRoot(),
+): Promise<EnsureUserSkillSeedsResult> {
+  return ensureFlatFileSeeds(
+    path.resolve(xrkHome),
+    seedRoot,
+    ".standing-seed-manifest.json",
+    (name) => name === "AGENTS.md",
+  );
+}
+
+/** Slash recipes under `{XRK_HOME}/recipes/`. */
+export async function ensureUserRecipeSeeds(
+  xrkHome: string = resolveXrkHome(),
+  seedRoot: string = bundledRecipeSeedsRoot(),
+): Promise<EnsureUserSkillSeedsResult> {
+  return ensureFlatFileSeeds(
+    path.join(path.resolve(xrkHome), "recipes"),
+    seedRoot,
+    SEED_MANIFEST_NAME,
+    (name) => name.endsWith(".yaml") || name.endsWith(".yml"),
+  );
+}
+
+export interface EnsureUserHomeSeedsResult {
+  readonly skills: EnsureUserSkillSeedsResult;
+  readonly standing: EnsureUserSkillSeedsResult;
+  readonly recipes: EnsureUserSkillSeedsResult;
+}
+
+/** Skills + global AGENTS.md + slash recipes under `{XRK_HOME}`. */
+export async function ensureUserHomeSeeds(
+  xrkHome: string = resolveXrkHome(),
+): Promise<EnsureUserHomeSeedsResult> {
+  const home = path.resolve(xrkHome);
+  return {
+    skills: await ensureUserSkillSeeds(home),
+    standing: await ensureUserStandingSeeds(home),
+    recipes: await ensureUserRecipeSeeds(home),
+  };
 }

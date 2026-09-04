@@ -33,10 +33,13 @@
 1. 不懂结构 → skill **`xrk-harness-architecture`**
 2. 挂 MCP / 接外部工具 → **`xrk-capability-attach`**
 3. 配模型 / API / 模型列表 → **`xrk-models-settings`**
-4. 写进程插件 → **`xrk-harness-monorepo`** → **`xrk-plugin-author`**
-5. 验证 → **`xrk-plugin-verify`**（MCP 则看 Settings 行状态 / 工具 inventory）
+4. 先计划再动手 → **`xrk-plan-build`**（Plan 徽章 / `/plan` · `exit_plan_mode`）
+5. 委派子代理 → **`xrk-delegate`**（注意 Frugal / Shallow 徽章）
+6. 只读审 diff → **`xrk-code-review`**
+7. 写进程插件 → **`xrk-harness-monorepo`** → **`xrk-plugin-author`**
+8. 验证 → **`xrk-plugin-verify`**（MCP 则看 Settings 行状态 / 工具 inventory）
 
-细则：`.agents/context/workspace-plugin-dev.md` · `docs/plugin-development.md` · `docs/modules/mcp.md`
+细则：`.agents/context/workspace-plugin-dev.md` · `.agents/context/subagents.md` · `docs/plugin-development.md` · `docs/modules/mcp.md`
 
 ## 常见任务 → skill
 
@@ -46,6 +49,9 @@
 | 装 MCP / 挂工具 / attach | **xrk-capability-attach** |
 | 写 skill / 自我升级 | **xrk-create-skill** |
 | 配模型 / 模型列表 | **xrk-models-settings** |
+| Plan → Build / 先计划 | **xrk-plan-build** |
+| 开子代理 / 并行委派 | **xrk-delegate** |
+| 审 diff / code review | **xrk-code-review** |
 | kind / 要不要起 MCP | **xrk-plugin-kind** |
 | 写插件 / 脚手架 | **xrk-harness-monorepo** → **xrk-plugin-author** |
 | 装好了吗 / git pull 后 | **xrk-plugin-verify** |

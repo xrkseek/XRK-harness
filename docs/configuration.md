@@ -79,7 +79,7 @@ Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-c
 
 | 变量 | 含义 |
 |------|------|
-| `XRK_PRESET` | Host 入口：`minimal` \| `harness` \| `server`（`server` = harness 工具 + Host factory；会话徽章见 [profiles.md](./profiles.md)） |
+| `XRK_PRESET` | Host 入口默认徽章：`minimal` \| `shell` \| `frugal` \| `plan` \| `shallow` \| `harness` \| `server`（`server` = harness 工具 + Host factory；会话徽章见 [profiles.md](./profiles.md)） |
 | `XRK_WORKSPACE` | workspace 根 |
 | `XRK_WEB_DIST` | 产品壳静态根。默认：CLI 包内 `product-web/`，或 monorepo `apps/web/dist`。设了则必须已存在 |
 | `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db` · WAL）；Host 省略 = 内存（CLI serve 另有默认） |
@@ -269,7 +269,7 @@ Path jail: `exec-fs` `resolveWithinRoot` ([security-checklist.md](./security-che
 
 | Variable | Meaning |
 |------|------|
-| `XRK_PRESET` | Host entry: `minimal` \| `harness` \| `server` (`server` = harness tools + Host factory; session badge: [profiles.md](./profiles.md)) |
+| `XRK_PRESET` | Host entry default badge: `minimal` \| `shell` \| `frugal` \| `plan` \| `shallow` \| `harness` \| `server` (`server` = harness tools + Host factory; session badge: [profiles.md](./profiles.md)) |
 | `XRK_WORKSPACE` | Workspace root |
 | `XRK_WEB_DIST` | Product-shell static root. Default: `product-web/` inside the CLI package, or monorepo `apps/web/dist`. If set, the path must already exist |
 | `XRK_SESSIONS_DIR` | Session persistence directory (`sessions.db` · WAL); Host omit = in-memory (CLI serve has its own default) |

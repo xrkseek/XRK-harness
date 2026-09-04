@@ -12,6 +12,7 @@ import { type FaceRuntime } from "../context.js";
 import {
   FACE_AGENT_PRESET_IDS,
   canonicalAgentPresetId,
+  resolveAgentPresetProfile,
 } from "../presets-catalog.js";
 import { toWireHistoryEntry, collectToolCallArgsForPage } from "../adapt/index.js";
 import {
@@ -20,6 +21,7 @@ import {
   paginateSessionHistory,
 } from "../adapt/history-paginate.js";
 import { tryFaceSlashCommand } from "../slash.js";
+import { commitPlanMode } from "../plan-mode.js";
 import { SessionTitleInvalidError } from "../projections/index.js";
 import { parseSearchQuery, searchSessions } from "../session-search.js";
 import { durablePromptContent, type PromptWirePart } from "../durable-prompt.js";
@@ -161,6 +163,15 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     sessionId,
     defaultPermissionPreset(runtime),
   );
+  const boundPreset =
+    runtime.sessionAgentPresets.get(sessionId) ??
+    canonicalAgentPresetId(resolveDefaultAgentPreset(runtime));
+  if (
+    !parentSessionId &&
+    resolveAgentPresetProfile(boundPreset).planModeDefault
+  ) {
+    commitPlanMode(runtime.store, sessionId, true);
+  }
   publishSessionAdded(runtime, sessionId);
   if (workspace) {
     runtime.bus.publishHost({

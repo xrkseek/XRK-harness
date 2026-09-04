@@ -53,8 +53,11 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **`xrk-create-skill`** | 写 skill（对标 Cursor create-skill） |
 | **`xrk-models-settings`** | 配模型、手动 ID、获取列表、对话搜索 |
 | **`xrk-capability-attach`** | 挂 MCP、Settings 粘贴 JSON |
+| **`xrk-plan-build`** | Plan → Build、`exit_plan_mode`、先计划 |
+| **`xrk-delegate`** | 子代理委派、Frugal/Shallow、并行 |
+| **`xrk-code-review`** | 只读审 diff（Codex review 风格） |
 
-会话徽章用 **XRK Harness**（`harness`）；全局人格可放 `~/.agents/`。见 [`.agents/README.md`](../../.agents/README.md)。
+会话徽章用 **XRK Harness**（`harness`）或 **Frugal**（省钱）；全局人格可放 `~/.agents/`。见 [`.agents/README.md`](../../.agents/README.md)。
 
 ## 与 XRK-AGT 对照
 

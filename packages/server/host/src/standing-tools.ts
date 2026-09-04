@@ -15,6 +15,7 @@ import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
 import { createDefaultWebAccess, createWebTools } from "@xrkseek/exec-web";
 import { createLspTools } from "@xrkseek/exec-lsp";
 import { createPtyTools } from "@xrkseek/exec-pty";
+import { resolveToolPreset } from "@xrkseek/server-face";
 import { createSkillTools } from "@xrkseek/workspace";
 
 export function createStandingToolRegistry(options: {
@@ -30,16 +31,24 @@ export function createStandingToolRegistry(options: {
   })) {
     tools.register(tool);
   }
-  const preset = options.preset ?? "minimal";
-  if (preset === "harness" || preset === "server") {
+  // Display-only presenters for cold history. When Host composition is harness
+  // (any of shell/frugal/plan/shallow/harness/server), register the full tool
+  // surface so a session badge with more tools than the Host default still
+  // renders cards without resuming the agent.
+  const composition = resolveToolPreset(options.preset, "minimal");
+  if (composition === "harness") {
     const shell = createLocalShell({
       subprocess: createLocalSubprocess(),
       defaultCwd: options.workspaceRoot,
     });
     for (const tool of createBashTools(shell, {
       defaultCwd: options.workspaceRoot,
-    })) tools.register(tool);
-    for (const tool of createWebTools(createDefaultWebAccess())) tools.register(tool);
+    })) {
+      tools.register(tool);
+    }
+    for (const tool of createWebTools(createDefaultWebAccess())) {
+      tools.register(tool);
+    }
     for (const tool of createLspTools({
       workspaceRoot: options.workspaceRoot,
     })) {

@@ -104,3 +104,14 @@ export async function loadOfficeRecipes(
   }
   return out;
 }
+
+/** Later lists override earlier entries with the same `id`. */
+export function mergeRecipesById(
+  ...lists: readonly (readonly Recipe[])[]
+): Recipe[] {
+  const map = new Map<string, Recipe>();
+  for (const list of lists) {
+    for (const recipe of list) map.set(recipe.id, recipe);
+  }
+  return [...map.values()];
+}

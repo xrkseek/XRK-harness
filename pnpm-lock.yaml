@@ -3421,6 +3421,9 @@ importers:
       '@xrkseek/preset-harness':
         specifier: workspace:*
         version: link:../harness
+      '@xrkseek/server-face':
+        specifier: workspace:*
+        version: link:../../packages/server/face
       '@xrkseek/server-host':
         specifier: workspace:*
         version: link:../../packages/server/host

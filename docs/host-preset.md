@@ -6,11 +6,11 @@
 
 | 平面 | 名字 | 职责 |
 |------|------|------|
-| Session | `minimal` / `harness`（UI：**XRK Harness**） | tools + persona + pipeline + workspace inject |
-| Host | `server`（CLI / `@xrkseek/preset-server`） | HTTP lifecycle + agent factory；**工具面 = harness** |
+| Session | 六档徽章（Minimal … Harness） | tools + persona + pipeline + workspace inject；子代理 / 计划模式由 profile 决定 |
+| Host | `server`（CLI / `@xrkseek/preset-server`） | HTTP lifecycle + agent factory；默认徽章种子见 [profiles.md](./profiles.md) |
 | Workspace agent | 仓库 `.agents/` · `~/.agents/` · `{workspace}/.xrk` | inject + skills / persona / plugin-authoring |
 
-`server` 不是第三套工具表。产品徽章只展示 Minimal / XRK Harness；遗留 wire 值 `server` → `harness`。选型表：[profiles.md](./profiles.md)。
+`server` 不是第三套工具表。产品徽章展示六档内置；遗留 wire 值 `server` → `harness`。选型表：[profiles.md](./profiles.md)。
 
 Presets 不得向根 realm 发布冲突服务——只做组合。
 
@@ -47,11 +47,11 @@ Host 工厂按**会话徽章**选 composition；`--preset` 只种子化新会话
 
 | Plane | Name | Role |
 |-------|------|------|
-| Session | `minimal` / `harness` (UI: **XRK Harness**) | tools + persona + pipeline + workspace inject |
-| Host | `server` (CLI / `@xrkseek/preset-server`) | HTTP lifecycle + agent factory; **tool surface = harness** |
+| Session | Six badges (Minimal … Harness) | tools + persona + pipeline + workspace inject; subagents / plan mode from profile |
+| Host | `server` (CLI / `@xrkseek/preset-server`) | HTTP lifecycle + agent factory; default badge seed in [profiles.md](./profiles.md) |
 | Workspace agent | Repo `.agents/` · `~/.agents/` · `{workspace}/.xrk` | inject + skills / persona / plugin-authoring |
 
-`server` is not a third tool table. Product badges show only Minimal / XRK Harness; legacy wire value `server` → `harness`. Selection table: [profiles.md](./profiles.md).
+`server` is not a third tool table. Product badges show six built-ins; legacy wire value `server` → `harness`. Selection table: [profiles.md](./profiles.md).
 
 Presets must not publish conflicting services to a root realm — composition only.
 

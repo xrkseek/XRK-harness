@@ -85,12 +85,14 @@ import {
   type RegisteredPlugin,
 } from "@xrkseek/server-loader";
 import path from "node:path";
+import { homedir } from "node:os";
 import {
   createWorkspaceInjector,
   createWorkspaceToolOutputPersist,
   createSkillTools,
   createSlashResolver,
   loadOfficeRecipes,
+  mergeRecipesById,
   appendWorkspaceInjectsIfChanged,
   SKILL_TOOL_GUIDANCE,
   type ResolveWorkspaceInjectOptions,
@@ -105,6 +107,15 @@ export type PresentationMode = "tools" | "code";
 export type WorkspaceInjectOption =
   | boolean
   | Omit<ResolveWorkspaceInjectOptions, "root">;
+
+/** System data home for seeded recipes (no server-config dep). */
+function resolveHarnessHome(): string {
+  for (const key of ["XRK_HOME", "XRK_DSH_HOME", "DSH_HOME"] as const) {
+    const v = process.env[key]?.trim();
+    if (v) return path.resolve(v);
+  }
+  return path.join(homedir(), ".xrk");
+}
 
 function ensureSession(store: SessionStore, id?: string): string {
   if (id) {
@@ -214,6 +225,11 @@ export interface HarnessCompositionOptions {
    * Face `web-search` + Credentials vault (structured; preferred over env).
    */
   readonly webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
+  /**
+   * Register `tool:subagent` routing prompt. Default true.
+   * Frugal / no-subagent session badges set false (Host still gates bindSubagentTools).
+   */
+  readonly subagentRouting?: boolean;
 }
 
 export interface HarnessComposition {
@@ -470,11 +486,13 @@ export function createHarnessComposition(
     order: 106,
     content: () => JOBS_PROMPT_TEXT,
   });
-  prompts.register({
-    id: "tool:subagent",
-    order: 107,
-    content: () => SUBAGENT_ROUTING_PROMPT_TEXT,
-  });
+  if (options.subagentRouting !== false) {
+    prompts.register({
+      id: "tool:subagent",
+      order: 107,
+      content: () => SUBAGENT_ROUTING_PROMPT_TEXT,
+    });
+  }
   wireCompositionPrompts(prompts, {
     ...(options.plugins ? { plugins: options.plugins } : {}),
     reservedIds: [
@@ -483,7 +501,7 @@ export function createHarnessComposition(
       "tool:fs-routing",
       "tool:shell-routing",
       "tool:jobs",
-      "tool:subagent",
+      ...(options.subagentRouting !== false ? ["tool:subagent"] : []),
       ...(options.webTools !== false ? ["tool:web_search", "tool:web_fetch"] : []),
       ...(options.lspTools !== false ? ["tool:lsp"] : []),
       ...(options.ptyTools !== false ? ["tool:pty"] : []),
@@ -521,13 +539,16 @@ export function createHarnessComposition(
         if (typeof options.slashRecipes === "string") {
           recipes = await loadOfficeRecipes(options.slashRecipes);
         } else {
+          const fromHome = await loadOfficeRecipes(
+            path.join(resolveHarnessHome(), "recipes"),
+          );
           const fromAgents = await loadOfficeRecipes(
             path.join(injectOpts.root, ".agents", "recipes"),
           );
           const fromProduct = await loadOfficeRecipes(
             path.join(productDir, "recipes"),
           );
-          recipes = [...fromAgents, ...fromProduct];
+          recipes = mergeRecipesById(fromHome, fromAgents, fromProduct);
         }
       }
       return createAgent({

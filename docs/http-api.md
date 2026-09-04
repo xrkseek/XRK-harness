@@ -136,7 +136,7 @@ index.html 由 host 注入 `__XRK_BOOT__`（`boot.json` merge `{XRK_PLUGINS_DIR}
 | `XRK_HOST` | 绑定主机 |
 | `XRK_PORT` | 绑定端口 |
 | `XRK_WORKSPACE` | 工作区根 |
-| `XRK_PRESET` | `minimal` \| `harness` \| `server` |
+| `XRK_PRESET` | `minimal` \| `shell` \| `frugal` \| `plan` \| `shallow` \| `harness` \| `server` |
 | `XRK_CORS_ORIGIN` | CORS origin（默认 `*`） |
 | `XRK_RATE_LIMIT` | 每 IP 每分钟请求数 |
 | `XRK_PLUGINS_DIR` | 可选插件根 → `loadAll` + factory `plugins` → preset `wireCompositionTools`；`web/` 为客户端叠加 |
@@ -304,7 +304,7 @@ Full ops set: [configuration.md](./configuration.md). This table summarizes comm
 | `XRK_HOST` | Bind host |
 | `XRK_PORT` | Bind port |
 | `XRK_WORKSPACE` | Workspace root |
-| `XRK_PRESET` | `minimal` \| `harness` \| `server` |
+| `XRK_PRESET` | `minimal` \| `shell` \| `frugal` \| `plan` \| `shallow` \| `harness` \| `server` |
 | `XRK_CORS_ORIGIN` | CORS origin (`*` default) |
 | `XRK_RATE_LIMIT` | Requests / IP / minute |
 | `XRK_PLUGINS_DIR` | Optional plugin root → `loadAll` + factory `plugins` → preset `wireCompositionTools`; `web/` is client overlay |

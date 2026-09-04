@@ -122,11 +122,12 @@ describe('the preset list', () => {
     expect(screen.queryByRole('heading', { name: en.customGroup })).toBeNull()
   })
 
-  it('leads with the two built-in tool surfaces in the intro', () => {
+  it('leads with the six built-in tool surfaces in the intro', () => {
     renderSection()
 
     expect(screen.getByText(new RegExp('XRK Harness'))).toBeTruthy()
     expect(screen.getByText(new RegExp('Minimal'))).toBeTruthy()
+    expect(screen.getByText(new RegExp('Frugal'))).toBeTruthy()
   })
 
   it('picks a preset by clicking its card, and the one in use is inert', () => {

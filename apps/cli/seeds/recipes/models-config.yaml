@@ -1,0 +1,12 @@
+id: models-config
+title: 配置模型
+description: Settings 添加模型 ID 或从提供方获取
+prompt: |
+  Follow skill **xrk-models-settings**:
+  1. Settings → Models: provider + API key (+ base URL if custom)
+  2. Prefer **添加模型** + Model ID; optional **获取可用模型** (default all checked, deselect extras)
+  3. Apply/Save provider card
+  4. In chat: model chip search when many models, or /model
+instructions: |
+  Do not require fetch before manual ID. Do not mutate settings without confirmation.
+parameters: []

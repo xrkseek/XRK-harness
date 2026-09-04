@@ -73,7 +73,8 @@ Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Traje
 
 | 目的 | 放哪 |
 |------|------|
-| 跨项目人格、语气、习惯 | `~/.agents/AGENTS.md` · `~/.agents/rules/` · `~/.xrk/SOUL.md` · `~/.xrk/USER.md` |
+| 跨项目默认偏好（产品种子） | `~/.xrk/AGENTS.md`（`xrkh web` 写入；薄全局说明，对标 Codex；**不**自动种 SOUL/IDENTITY） |
+| 跨项目人格、语气、习惯 | `~/.agents/AGENTS.md` · `~/.agents/rules/` · 自写 `~/.xrk/SOUL.md` · `USER.md` |
 | 跨项目 skill | `~/.agents/skills/<name>/SKILL.md` |
 | 单项目规则（含 Cursor 格式） | `{workspace}/.cursor/rules/*.mdc`（**不是** `~/.cursor/rules`） |
 | 单项目插件开发 / 架构 | 仓库内 `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/` |
@@ -198,7 +199,8 @@ Low → high priority (later rows closer to the turn). Skill **bodies** remain a
 
 | Goal | Location |
 |------|----------|
-| Cross-project persona, tone, habits | `~/.agents/AGENTS.md` · `~/.agents/rules/` · `~/.xrk/SOUL.md` · `~/.xrk/USER.md` |
+| Cross-project defaults (product seed) | `~/.xrk/AGENTS.md` (`xrkh web`; thin Codex-style globals; **does not** auto-seed SOUL/IDENTITY) |
+| Cross-project persona, tone, habits | `~/.agents/AGENTS.md` · `~/.agents/rules/` · hand-authored `~/.xrk/SOUL.md` · `USER.md` |
 | Cross-project skill | `~/.agents/skills/<name>/SKILL.md` |
 | Project rules (including Cursor format) | `{workspace}/.cursor/rules/*.mdc` (**not** `~/.cursor/rules`) |
 | Single-project plugin / architecture | In-repo `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/` |

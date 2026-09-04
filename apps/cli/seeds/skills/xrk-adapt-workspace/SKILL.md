@@ -22,6 +22,9 @@ description: >-
 | MCP / 外部工具 | **`xrk-capability-attach`** |
 | 写 skill | **`xrk-create-skill`**（结构同 Cursor create-skill） |
 | 写项目规则 | **`xrk-create-skill`** § Standing rules（对标 Cursor create-rule → `.agents/AGENTS.md`） |
+| 先计划再做 | **`xrk-plan-build`** |
+| 开子代理 | **`xrk-delegate`** |
+| 审代码 | **`xrk-code-review`** |
 | 进程插件 | author + verify + restart |
 
 Secrets → Credentials，不进 AGENTS / skill 正文。

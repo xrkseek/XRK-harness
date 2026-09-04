@@ -61,13 +61,13 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留当前版
 
 | 档 | 版本 | 用途 |
 |------|------|------|
-| **当前（@latest）** | **0.2.3** | 0.2 预览线；`npm i -g @xrkseek/harness-cli@latest` |
-| **上一预览** | **0.2.2** | 同线前一版 |
+| **当前（@latest）** | **0.2.4** | 0.2 预览线；`npm i -g @xrkseek/harness-cli@latest` |
+| **上一预览** | **0.2.3** | 同线前一版 |
 | **上一正式** | **0.1.31** | 稳定留档 |
 
 npm **不能**同号重发；改坏包就升修订号。中间号用 `npm-prune-withdrawn.mjs` deprecate（Granular token 通常无法 unpublish）。**勿**用空格 / 乱引号 deprecate——会破坏 registry 元数据；清弃用必须传真正的空字符串（脚本经 `npm-cli.js` 处理，避免 Windows `npm.cmd` 吞掉空参）。
 
-GitHub Release 公开页只保留 **v0.1.31** 与 **v0.2.3**。
+GitHub Release 公开页只保留 **v0.1.31** 与 **v0.2.4**。
 
 完整交接：[maintainer](./maintainer.md)。发行说明索引：[releases/](./releases/)。
 
@@ -136,12 +136,12 @@ node scripts/npm-prune-withdrawn.mjs            # deprecate intermediate version
 
 | Line | Version | Use |
 |------|---------|-----|
-| **Current (@latest)** | **0.2.3** | 0.2 preview line; `npm i -g @xrkseek/harness-cli@latest` |
-| **Previous preview** | **0.2.2** | Prior build on the same line |
+| **Current (@latest)** | **0.2.4** | 0.2 preview line; `npm i -g @xrkseek/harness-cli@latest` |
+| **Previous preview** | **0.2.3** | Prior build on the same line |
 | **Previous formal** | **0.1.31** | Stable archive |
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Deprecate intermediate numbers with `npm-prune-withdrawn.mjs` (Granular tokens usually cannot unpublish). **Do not** deprecate with spaces / broken quotes — that corrupts registry metadata; clearing a deprecation requires a real empty string (the script goes through `npm-cli.js` so Windows `npm.cmd` does not swallow the empty arg).
 
-The GitHub Releases page keeps only **v0.1.31** and **v0.2.3**.
+The GitHub Releases page keeps only **v0.1.31** and **v0.2.4**.
 
 Full handoff: [maintainer](./maintainer.md). Release notes index: [releases/](./releases/).

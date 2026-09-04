@@ -4,7 +4,7 @@
 
 Agent preset 表层：General 默认工具面、新建会话 chip、会话标题旁只读标签、设置页名单管理。
 
-XRK Face **只内置两种工具面**：`minimal` 与 `harness`（UI：**XRK Harness**）。工作区 `.xrk` 种子是另一层（人格 / 规则），不是第三种工具表。见 [docs/profiles.md](../../../docs/profiles.md)。
+XRK Face **内置六种工具面**：`minimal` · `shell` · `frugal` · `plan` · `shallow` · `harness`（UI：**XRK Harness**）。工作区 `.xrk` 种子是另一层（人格 / 规则），不是又一种工具表。见 [docs/profiles.md](../../../docs/profiles.md)。
 
 ## 为什么是「新建会话」偏好
 
@@ -14,7 +14,7 @@ XRK Face **只内置两种工具面**：`minimal` 与 `harness`（UI：**XRK Har
 
 `agentPreset.list` 一次给出名单与默认；写入 `agent-presets.default`。
 
-内置 id（`minimal` / `harness`）且 `trust: system` 时，名称与描述走 Web locale；其余用文件元数据。
+内置六档 id 且 `trust: system` 时，名称与描述走 Web locale；其余用文件元数据。
 
 ## 管理分区
 

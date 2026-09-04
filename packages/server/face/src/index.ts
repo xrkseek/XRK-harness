@@ -151,9 +151,17 @@ export {
 export {
   FACE_AGENT_PRESETS,
   FACE_AGENT_PRESET_IDS,
+  HOST_CLI_PRESET_IDS,
   canonicalAgentPresetId,
   resolveToolPreset,
+  resolveAgentPresetProfile,
+  DEFAULT_MAX_ACTIVE_CHILDREN,
   type AgentPresetInfo,
+  type AgentPresetProfile,
+  type AgentSubagentPolicy,
+  type AgentToolComposition,
+  type AgentToolFlags,
+  type CatalogAgentPresetId,
 } from "./presets-catalog.js";
 export {
   toQueueItems,

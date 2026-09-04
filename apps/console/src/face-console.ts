@@ -52,7 +52,14 @@ export function mountFaceConsole(root: HTMLElement): void {
   const renameInput = input("text", "");
   renameInput.placeholder = "rename title";
   const presetSelect = document.createElement("select");
-  for (const id of ["minimal", "harness"]) {
+  for (const id of [
+    "minimal",
+    "shell",
+    "frugal",
+    "plan",
+    "shallow",
+    "harness",
+  ]) {
     const opt = document.createElement("option");
     opt.value = id;
     opt.textContent = id;

@@ -1,5 +1,10 @@
-import { resolveToolPreset } from "@xrkseek/server-face";
-import { loadHostConfig, defaultSessionsDir, resolveXrkHome } from "@xrkseek/server-config";
+import { resolveAgentPresetProfile } from "@xrkseek/server-face";
+import {
+  loadHostConfig,
+  defaultSessionsDir,
+  resolveXrkHome,
+  isHostRuntimePresetId,
+} from "@xrkseek/server-config";
 import { createHostManager, type AgentFactory } from "@xrkseek/server-host";
 import {
   createServerAgentFactory,
@@ -17,7 +22,7 @@ import {
   ensureProductWebDist,
   repoRoot,
 } from "../product-paths.js";
-import { ensureUserSkillSeeds } from "../user-skill-seeds.js";
+import { ensureUserHomeSeeds } from "../user-skill-seeds.js";
 import { createCliLogger, resolveLogLevel, type CliLogger } from "../log.js";
 import { clearHostLock, writeHostLock } from "../host-lock.js";
 import { forceFreeXrkPort } from "../port.js";
@@ -76,8 +81,8 @@ function factoryForPreset(
   });
 
   return async (input) => {
-    const preset = resolveToolPreset(input.agentPreset, hostPreset);
-    if (preset === "minimal") return minimalFactory(input);
+    const profile = resolveAgentPresetProfile(input.agentPreset, hostPreset);
+    if (profile.composition === "minimal") return minimalFactory(input);
     return harnessFactory(input);
   };
 }
@@ -87,18 +92,20 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     resolveLogLevel({ verbose: args.verbose, quiet: args.quiet }),
   );
 
-  // Product establish: seed skills into system data (~/.xrk), never the workspace.
-  const seeded = await ensureUserSkillSeeds(resolveXrkHome());
-  if (seeded.installed.length > 0) {
-    log.info(
-      `home skills: ${seeded.installed.join(", ")} → ${seeded.homeSkills}`,
-    );
-  }
-  if (seeded.refreshed.length > 0) {
-    log.info(
-      `home skills refreshed from newer bundle: ${seeded.refreshed.join(", ")}`,
-    );
-  }
+  // Product establish: seed system data (~/.xrk), never the workspace.
+  const home = resolveXrkHome();
+  const seeded = await ensureUserHomeSeeds(home);
+  const note = (label: string, r: { installed: readonly string[]; refreshed: readonly string[] }) => {
+    if (r.installed.length > 0) {
+      log.info(`home ${label}: ${r.installed.join(", ")} → ${home}`);
+    }
+    if (r.refreshed.length > 0) {
+      log.info(`home ${label} refreshed: ${r.refreshed.join(", ")}`);
+    }
+  };
+  note("skills", seeded.skills);
+  note("standing", seeded.standing);
+  note("recipes", seeded.recipes);
 
   const patch: Record<string, unknown> = {
     ...args.patch,
@@ -121,12 +128,9 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     }
   }
 
-  const preset =
-    args.preset === "minimal" ||
-    args.preset === "harness" ||
-    args.preset === "server"
-      ? args.preset
-      : config.runtime.preset;
+  const preset = isHostRuntimePresetId(args.preset)
+    ? args.preset
+    : config.runtime.preset;
 
   const policy = config.runtime.policyFile
     ? await createPolicyEngineFromFile(config.runtime.policyFile)
@@ -220,9 +224,9 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     log.info("  apiKey=set");
   }
   if (policy) log.info("  policy=on");
-  const home = path.resolve(os.homedir());
+  const userHome = path.resolve(os.homedir());
   const ws = path.resolve(config.runtime.workspaceRoot);
-  if (ws === home || ws.startsWith(home + path.sep + ".xrk")) {
+  if (ws === userHome || ws.startsWith(userHome + path.sep + ".xrk")) {
     log.info(
       "  tip: workspace is your user home (or ~/.xrk) — prefer `cd <project> && xrkh web`",
     );

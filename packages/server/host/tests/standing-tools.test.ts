@@ -94,4 +94,26 @@ describe("createStandingToolRegistry", () => {
       }).get("web_fetch")?.presentCall,
     ).toBeTypeOf("function");
   });
+
+  it("shell Host standing still has full presenters (session badge may enable web)", () => {
+    const names = createStandingToolRegistry({
+      workspaceRoot: process.cwd(),
+      preset: "shell",
+    })
+      .list()
+      .map((t) => t.name);
+    expect(names).toContain("bash");
+    expect(names).toContain("terminal_open");
+    expect(names).toContain("web_search");
+    expect(names).toContain("lsp");
+  });
+
+  it("frugal standing table matches full harness tools", () => {
+    const frugal = createStandingToolRegistry({
+      workspaceRoot: process.cwd(),
+      preset: "frugal",
+    });
+    expect(frugal.get("bash")?.presentCall).toBeTypeOf("function");
+    expect(frugal.get("web_search")?.presentCall).toBeTypeOf("function");
+  });
 });

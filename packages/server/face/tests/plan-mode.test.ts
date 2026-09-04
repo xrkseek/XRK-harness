@@ -19,6 +19,25 @@ function bareRuntime(store = createMemorySessionStore()) {
 }
 
 describe("Face plan mode", () => {
+  it("plan agentPreset seeds plan/mode active on session.create", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "plan",
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    expect(runtime.projections.snapshot(sessionId).values.plan).toEqual({
+      active: true,
+      pending: false,
+    });
+    expect(
+      runtime.store.get(sessionId).events.some(
+        (e) => e.type === "plan/mode" && (e as { active?: boolean }).active === true,
+      ),
+    ).toBe(true);
+  });
+
   it("pins inactive plan projection; /plan commits between turns", async () => {
     const runtime = bareRuntime();
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {});

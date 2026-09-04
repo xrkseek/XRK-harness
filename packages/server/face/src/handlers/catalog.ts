@@ -1,6 +1,11 @@
 import { discoverOpenAiChatModels } from "@xrkseek/llm-registry";
 import { readSessionEvents } from "@xrkseek/core-session";
-import { FACE_AGENT_PRESETS, FACE_AGENT_PRESET_IDS, canonicalAgentPresetId } from "../presets-catalog.js";
+import {
+  FACE_AGENT_PRESETS,
+  FACE_AGENT_PRESET_IDS,
+  canonicalAgentPresetId,
+  resolveAgentPresetProfile,
+} from "../presets-catalog.js";
 import { resolveDefaultAgentPreset } from "../settings-document.js";
 import { buildFaceModelCatalog, routeServed } from "../model-catalog.js";
 import {
@@ -55,12 +60,27 @@ export const agentPresetRead: FaceHandler = async (_runtime, _rpcId, payload) =>
   }
   const id = canonicalAgentPresetId(agentPreset);
   const info = FACE_AGENT_PRESETS.find((x) => x.id === id)!;
+  const profile = resolveAgentPresetProfile(info.id);
+  const toolBits = [
+    profile.composition === "minimal" ? "fs · skill · std" : "fs · skill · std · bash",
+    profile.tools.web ? "web" : null,
+    profile.tools.lsp ? "lsp" : null,
+    profile.tools.pty ? "pty" : null,
+  ].filter(Boolean);
+  const subagentLine =
+    profile.subagents.mode === "off"
+      ? "subagents: off"
+      : `subagents: on (maxDepth ${profile.subagents.maxDepth ?? 3}, maxActiveChildren ${profile.subagents.maxActiveChildren ?? 4})`;
   const content = [
     `# ${info.displayName}`,
     "",
     info.description,
     "",
     `id: ${info.id}`,
+    `composition: ${profile.composition}`,
+    `tools: ${toolBits.join(" · ")}`,
+    subagentLine,
+    `planModeDefault: ${profile.planModeDefault}`,
     "trust: system",
     "authorable: false",
   ].join("\n");

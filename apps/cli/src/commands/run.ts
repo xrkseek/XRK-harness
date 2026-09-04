@@ -8,6 +8,7 @@ import { createHarnessComposition } from "@xrkseek/preset-harness";
 import { createMinimalComposition } from "@xrkseek/preset-minimal";
 import {
   createFaceRuntime,
+  resolveAgentPresetProfile,
   resolveLlmForSession,
 } from "@xrkseek/server-face";
 import type { ParsedArgs } from "../parse-args.js";
@@ -55,24 +56,22 @@ async function resolvePrompt(args: ParsedArgs): Promise<string> {
 export async function runCommand(args: ParsedArgs): Promise<number> {
   const prompt = await resolvePrompt(args);
   const llm = resolveWorkspaceLlm(args.workspace);
+  const profile = resolveAgentPresetProfile(args.preset, "minimal");
   const composition =
-    args.preset === "harness" || args.preset === "server"
-      ? createHarnessComposition({
+    profile.composition === "minimal"
+      ? createMinimalComposition({
           workspaceRoot: args.workspace,
-          presentation: args.presentation,
           ...(llm ? { llm } : {}),
         })
-      : args.preset === "minimal"
-        ? createMinimalComposition({
-            workspaceRoot: args.workspace,
-            ...(llm ? { llm } : {}),
-          })
-        : null;
-  if (!composition) {
-    throw new Error(
-      `unsupported preset: ${args.preset} (use minimal|harness|server)`,
-    );
-  }
+      : createHarnessComposition({
+          workspaceRoot: args.workspace,
+          presentation: args.presentation,
+          subagentRouting: profile.subagentRouting,
+          webTools: profile.tools.web,
+          lspTools: profile.tools.lsp,
+          ...(profile.tools.pty ? {} : { ptyTools: false }),
+          ...(llm ? { llm } : {}),
+        });
 
   const agent = await composition.createAgent();
   const result = await agent.run({ text: prompt });

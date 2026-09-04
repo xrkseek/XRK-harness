@@ -17,6 +17,7 @@
     "@xrkseek/llm-replay": "workspace:*",
     "@xrkseek/policy": "workspace:*",
     "@xrkseek/preset-harness": "workspace:*",
+    "@xrkseek/server-face": "workspace:*",
     "@xrkseek/server-host": "workspace:*"
   },
   "license": "MIT",

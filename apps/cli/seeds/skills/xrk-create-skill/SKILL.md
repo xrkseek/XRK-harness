@@ -31,6 +31,7 @@ description: >-
 
 - 第三人称；一默认路径 + 一逃生口；正文宜 <500 行
 - 非法布尔 frontmatter → 整 skill 丢弃
+- **渐进披露**（对标 Codex skill-creator）：name/description 管发现；正文只放改决策的约束；大段 schema/示例放 `references/`，用到再读
 
 ## Standing rules（对标 Cursor create-rule）
 
@@ -44,4 +45,4 @@ description: >-
 
 ## 写完
 
-新 turn 或 `skill.list` 确认可见。范例：`xrk-capability-attach` · `xrk-models-settings`。
+新 turn 或 `skill.list` 确认可见。范例：`xrk-capability-attach` · `xrk-models-settings` · `xrk-plan-build` · `xrk-delegate` · `xrk-code-review`。
