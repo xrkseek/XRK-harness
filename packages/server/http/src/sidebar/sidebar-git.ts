@@ -53,16 +53,20 @@ export interface GitStatusEntry {
 
 export function gitStatus(cwd: string): {
   available: boolean;
+  /** better-sidebar client field (same as `available`). */
+  isRepo: boolean;
   branch: string | null;
   entries: GitStatusEntry[];
+  /** Absolute repo / checkout root when available. */
+  root?: string;
 } {
   if (!isGitRepo(cwd)) {
-    return { available: false, branch: null, entries: [] };
+    return { available: false, isRepo: false, branch: null, entries: [] };
   }
   const branch = runGit(cwd, ["branch", "--show-current"]);
   const porcelain = runGit(cwd, ["status", "--porcelain", "-uall"]);
   if (porcelain === null) {
-    return { available: false, branch, entries: [] };
+    return { available: false, isRepo: false, branch, entries: [] };
   }
   const entries: GitStatusEntry[] = [];
   for (const line of porcelain.split(/\r?\n/)) {
@@ -81,7 +85,136 @@ export function gitStatus(cwd: string): {
       path: filePath,
     });
   }
-  return { available: true, branch, entries };
+  const root =
+    runGit(cwd, ["rev-parse", "--show-toplevel"]) ?? path.resolve(cwd);
+  return { available: true, isRepo: true, branch, entries, root };
+}
+
+/** One linked checkout (`git.worktrees` → bare array). */
+export interface GitWorktree {
+  readonly path: string;
+  readonly branch: string;
+  readonly current: boolean;
+  readonly changes: number;
+}
+
+/** Raw `git worktree list --porcelain` record. */
+export interface GitWorktreeRecord {
+  readonly path: string;
+  readonly branch: string;
+  readonly locked: boolean;
+  readonly prunable: boolean;
+}
+
+/** Platform-aware identity for comparing absolute checkout roots. */
+function pathIdentity(p: string): string {
+  const absolute = path.resolve(p).replace(/[\\/]+$/, "");
+  return process.platform === "win32" ? absolute.toLowerCase() : absolute;
+}
+
+/**
+ * Parse `git worktree list --porcelain` (NUL or newline framed).
+ * Prunable rows stay in the parse result; callers filter them out.
+ */
+export function parseWorktreeList(output: string): GitWorktreeRecord[] {
+  const rows: GitWorktreeRecord[] = [];
+  let wtPath: string | undefined;
+  let branch = "HEAD";
+  let locked = false;
+  let prunable = false;
+  const flush = (): void => {
+    if (wtPath !== undefined) {
+      rows.push({ path: wtPath, branch, locked, prunable });
+    }
+    wtPath = undefined;
+    branch = "HEAD";
+    locked = false;
+    prunable = false;
+  };
+  const sep = output.includes("\0") ? "\0" : "\n";
+  const framed = output.endsWith(sep) ? output : `${output}${sep}`;
+  for (const line of framed.split(sep)) {
+    if (line === "") {
+      flush();
+    } else if (line.startsWith("worktree ")) {
+      wtPath = line.slice("worktree ".length);
+    } else if (line.startsWith("branch refs/heads/")) {
+      branch = line.slice("branch refs/heads/".length);
+    } else if (line === "locked" || line.startsWith("locked ")) {
+      locked = true;
+    } else if (line === "prunable" || line.startsWith("prunable ")) {
+      prunable = true;
+    }
+  }
+  return rows;
+}
+
+/** Usable linked checkouts (prunable paths omitted). */
+function listedWorktrees(cwd: string): GitWorktreeRecord[] {
+  if (!isGitRepo(cwd)) return [];
+  const currentRoot =
+    runGit(cwd, ["rev-parse", "--show-toplevel"]) ?? path.resolve(cwd);
+  const raw = runGit(cwd, ["worktree", "list", "--porcelain", "-z"], {
+    allowFail: true,
+  });
+  if (raw === null) {
+    return [
+      {
+        path: currentRoot,
+        branch: runGit(cwd, ["branch", "--show-current"]) || "HEAD",
+        locked: false,
+        prunable: false,
+      },
+    ];
+  }
+  const listed = parseWorktreeList(raw).filter((entry) => !entry.prunable);
+  if (listed.length > 0) return listed;
+  return [
+    {
+      path: currentRoot,
+      branch: runGit(cwd, ["branch", "--show-current"]) || "HEAD",
+      locked: false,
+      prunable: false,
+    },
+  ];
+}
+
+/**
+ * Linked checkouts for the repo containing `cwd`.
+ * Current checkout is first; prunable (missing) paths are omitted.
+ */
+export function gitWorktrees(cwd: string): GitWorktree[] {
+  if (!isGitRepo(cwd)) return [];
+  const currentRoot =
+    runGit(cwd, ["rev-parse", "--show-toplevel"]) ?? path.resolve(cwd);
+  const listed = listedWorktrees(cwd);
+  const currentId = pathIdentity(currentRoot);
+  const rows: GitWorktree[] = listed.map((entry) => ({
+    path: entry.path,
+    branch: entry.branch,
+    current: pathIdentity(entry.path) === currentId,
+    changes: gitStatus(entry.path).entries.length,
+  }));
+  return rows.sort((a, b) => Number(b.current) - Number(a.current));
+}
+
+/**
+ * Resolve a client-selected linked checkout. Rejects paths outside the
+ * session repository's worktree list (membership only — no status scan).
+ */
+export function resolveGitWorktree(
+  cwd: string,
+  requested: string | undefined,
+): string {
+  if (requested === undefined || requested.trim() === "") return cwd;
+  const identity = pathIdentity(requested);
+  const match = listedWorktrees(cwd).find(
+    (entry) => pathIdentity(entry.path) === identity,
+  );
+  if (!match) {
+    throw new Error(`unknown linked worktree: ${requested}`);
+  }
+  return match.path;
 }
 
 /** Client expects `{ current, names }` (not `branches`). */

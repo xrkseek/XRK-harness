@@ -8,6 +8,15 @@ export type SidebarSubagentLiveActivity = {
   readonly tool?: { readonly name: string; readonly args: string };
 };
 
+/** One Face-wire session event for the changes tab (`tool/call` · `tool/result`). */
+export type SidebarChangesWireEvent = {
+  readonly type: string;
+  readonly seq: number;
+  readonly time: number;
+  readonly data: unknown;
+  readonly surfaceOp?: string | { readonly op: string; readonly start: number; readonly end: number };
+};
+
 export interface SidebarFaceBridge {
   readonly openExternal: (payload: {
     action: "reveal" | "url";
@@ -34,4 +43,15 @@ export interface SidebarFaceBridge {
   ) => Promise<{
     readonly live: Readonly<Record<string, SidebarSubagentLiveActivity>>;
   }>;
+  /**
+   * Session file-tool delta for `POST /sidebar/api/changes.ops`
+   * (`tool/call` + `tool/result` past `afterSeq`, Face wire shape).
+   */
+  readonly listChangesOps?: (
+    sessionId: string,
+    afterSeq: number,
+  ) => {
+    readonly events: readonly SidebarChangesWireEvent[];
+    readonly lastSeq: number;
+  };
 }

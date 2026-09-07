@@ -20,6 +20,8 @@ import {
   gitStage,
   gitStatus,
   gitUnstage,
+  gitWorktrees,
+  resolveGitWorktree,
 } from "./sidebar-git.js";
 import {
   loadSidebarPrefs,
@@ -92,6 +94,21 @@ function safeJoin(root: string, rel: string): string | undefined {
     return undefined;
   }
   return target;
+}
+
+/** Prefer `worktree` / `repoRoot` from better-sidebar git payloads. */
+function resolveSidebarGitCwd(
+  sessionCwd: string,
+  payload: Record<string, unknown>,
+): string {
+  const repoRoot =
+    typeof payload.repoRoot === "string" && payload.repoRoot.trim()
+      ? path.resolve(payload.repoRoot.trim())
+      : sessionCwd;
+  const worktree =
+    typeof payload.worktree === "string" ? payload.worktree.trim() : "";
+  if (!worktree) return repoRoot;
+  return resolveGitWorktree(repoRoot, worktree);
 }
 
 async function listTree(
@@ -287,11 +304,20 @@ async function dispatchMethod(
         shell: process.env.ComSpec || process.env.SHELL || "cmd.exe",
         displayName: "system",
       });
+    case "git.worktrees": {
+      const repoRoot =
+        typeof payload.repoRoot === "string" && payload.repoRoot.trim()
+          ? path.resolve(payload.repoRoot.trim())
+          : cwd;
+      // Client expects a bare GitWorktree[].
+      return ok(gitWorktrees(repoRoot));
+    }
     case "git.status":
-      return ok(gitStatus(cwd));
+      return ok(gitStatus(resolveSidebarGitCwd(cwd, payload)));
     case "git.branch":
-      return ok(gitBranches(cwd));
+      return ok(gitBranches(resolveSidebarGitCwd(cwd, payload)));
     case "git.log": {
+      const gitCwd = resolveSidebarGitCwd(cwd, payload);
       const limit =
         typeof payload.limit === "number" && payload.limit > 0
           ? payload.limit
@@ -303,47 +329,53 @@ async function dispatchMethod(
           ? payload.skip
           : 0;
       // Client expects a bare array.
-      return ok(gitLog(cwd, limit, skip));
+      return ok(gitLog(gitCwd, limit, skip));
     }
     case "git.diff": {
       const filePath =
         typeof payload.path === "string" ? payload.path : undefined;
-      return ok(gitDiff(cwd, filePath, payload.staged === true));
+      return ok(
+        gitDiff(
+          resolveSidebarGitCwd(cwd, payload),
+          filePath,
+          payload.staged === true,
+        ),
+      );
     }
     case "git.commit-diff": {
       const hash = typeof payload.hash === "string" ? payload.hash : "";
-      return ok(gitCommitDiff(cwd, hash));
+      return ok(gitCommitDiff(resolveSidebarGitCwd(cwd, payload), hash));
     }
     case "git.stage": {
       const filePath =
         typeof payload.path === "string" ? payload.path : undefined;
-      return ok(gitStage(cwd, filePath));
+      return ok(gitStage(resolveSidebarGitCwd(cwd, payload), filePath));
     }
     case "git.unstage": {
       const filePath =
         typeof payload.path === "string" ? payload.path : undefined;
-      return ok(gitUnstage(cwd, filePath));
+      return ok(gitUnstage(resolveSidebarGitCwd(cwd, payload), filePath));
     }
     case "git.commit": {
       const message =
         typeof payload.message === "string" ? payload.message : "";
-      return ok(gitCommit(cwd, message));
+      return ok(gitCommit(resolveSidebarGitCwd(cwd, payload), message));
     }
     case "git.checkout": {
       const branch = typeof payload.branch === "string" ? payload.branch : "";
-      return ok(gitCheckout(cwd, branch));
+      return ok(gitCheckout(resolveSidebarGitCwd(cwd, payload), branch));
     }
     case "git.discard": {
       const filePath = typeof payload.path === "string" ? payload.path : "";
-      return ok(gitDiscard(cwd, filePath));
+      return ok(gitDiscard(resolveSidebarGitCwd(cwd, payload), filePath));
     }
     case "git.revert": {
       const hash = typeof payload.hash === "string" ? payload.hash : "";
-      return ok(gitRevert(cwd, hash));
+      return ok(gitRevert(resolveSidebarGitCwd(cwd, payload), hash));
     }
     case "git.cherry-pick": {
       const hash = typeof payload.hash === "string" ? payload.hash : "";
-      return ok(gitCherryPick(cwd, hash));
+      return ok(gitCherryPick(resolveSidebarGitCwd(cwd, payload), hash));
     }
     case "terminal.deps":
       // Repair panel reads command/profile/note when WS closes with pty-deps-missing.
@@ -394,6 +426,30 @@ async function dispatchMethod(
         return ok({ live: {} });
       }
       return ok(await bridge.listSubagentsLive(rootSessionId));
+    }
+    case "changes.ops": {
+      const bridge = options.sidebarFace;
+      const sid =
+        typeof payload.sessionId === "string" ? payload.sessionId.trim() : "";
+      if (!sid) {
+        return fail("bad-request", "sessionId required");
+      }
+      const rawAfter = payload.afterSeq;
+      if (
+        rawAfter !== undefined &&
+        (typeof rawAfter !== "number" ||
+          !Number.isSafeInteger(rawAfter) ||
+          rawAfter < 0)
+      ) {
+        return fail("bad-request", "afterSeq must be a non-negative integer");
+      }
+      // Absent cursor = whole window (floor -1 so seq 0 is not dropped).
+      const afterSeq =
+        typeof rawAfter === "number" ? rawAfter : -1;
+      if (!bridge?.listChangesOps) {
+        return ok({ events: [], lastSeq: Math.max(afterSeq, 0) });
+      }
+      return ok(bridge.listChangesOps(sid, afterSeq));
     }
     case "browser.probe": {
       const rawUrl =

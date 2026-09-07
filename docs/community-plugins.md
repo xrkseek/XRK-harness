@@ -68,7 +68,7 @@ community client.js
 | 自动审阅 | 启发式 classify · slash | 可插拔 classifier |
 | 上下文浏览器 | Face **`contextTimeline`**（requests 分项 · usage 盖章 · events）/ **`contextHeaders`** · **`costUsage`** 计价 | — |
 | 移动访问 | 配对 · LAN/WAN PIN · 隧道 HTTP+WS | — |
-| **侧栏（`xrkh-better-sidebar`）** | Host 原生 `createSidebarPublicHandler`（见下节；非 dsh-compat 能力表） | `changes.ops` · 真实 agent-opens 推送 |
+| **侧栏（`xrkh-better-sidebar`）** | Host 原生 `createSidebarPublicHandler`（见下节；非 dsh-compat 能力表）；含 `git.worktrees` · `changes.ops` | 真实 agent-opens 推送（现为空闲 stub） |
 
 本地消息、节点、OCR 与 GenUI 预览线已在适配器内可用。
 
@@ -80,7 +80,7 @@ community client.js
 
 | 表面 | Host 落点 | 插件职责 |
 |------|-----------|----------|
-| `POST /sidebar/api/<method>` | `packages/server/http/src/sidebar/`（FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **open.external**） | 调 API；勿在 client 里再实现一份 Host |
+| `POST /sidebar/api/<method>` | `packages/server/http/src/sidebar/`（FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **changes.ops** · **open.external**） | 调 API；勿在 client 里再实现一份 Host |
 | `/sidebar/file` · `upload` · `html` · `bundle` | 同上 + 插件目录 `chunks/` | 发布 `lib/client-*.js` 供 bundle 回落 |
 | `/sidebar/ws/terminal` | Host `sidebar-pty`（真实 node-pty · session+tab 保活） | TerminalView 连同源 WS |
 | `/sidebar/ws/agent-terminals` · `agent-opens` | 空闲 stub（防客户端重连风暴） | 有数据再由 Host 扩展，勿在插件 host 半包假实现 |
@@ -219,7 +219,7 @@ Source of truth: `dsh-compat-matrix.ts`.
 | Auto-review | Heuristic classify · slash | Pluggable classifier |
 | Context browser | Face **`contextTimeline`** (per-request items · usage stamps · events) / **`contextHeaders`** · **`costUsage`** pricing | — |
 | Mobile access | Pairing · LAN/WAN PIN · tunnel HTTP+WS | — |
-| **Sidebar (`xrkh-better-sidebar`)** | Host owns `/sidebar/*` (see below) | `changes.ops` · real agent-opens push |
+| **Sidebar (`xrkh-better-sidebar`)** | Host owns `/sidebar/*` (see below); includes `git.worktrees` · `changes.ops` | Real agent-opens push (idle stub today) |
 
 Local messaging, nodes, OCR, and GenUI preview are available inside the adapter today.
 
@@ -229,7 +229,7 @@ The standard sidebar package **`xrkh-better-sidebar`** (`kind: client`) injects 
 
 | Surface | Host landing | Plugin role |
 |------|-----------|----------|
-| `POST /sidebar/api/<method>` | `sidebar-adapter` (FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **open.external**) | Call the API; do not reimplement Host in the client |
+| `POST /sidebar/api/<method>` | `sidebar-adapter` (FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **changes.ops** · **open.external**) | Call the API; do not reimplement Host in the client |
 | `/sidebar/file` · `upload` · `html` · `bundle` | dsh-compat routes + plugin `chunks/` | Ship `lib/client-*.js` for bundle fallback |
 | `/sidebar/ws/terminal` | Host `sidebar-pty` (real node-pty · session+tab reuse) | TerminalView connects same-origin WS |
 | `/sidebar/ws/agent-terminals` · `agent-opens` | Idle stubs (avoid client reconnect storms) | Extend Host when real data exists; do not fake via plugin host half |

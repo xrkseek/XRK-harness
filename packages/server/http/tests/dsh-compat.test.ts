@@ -1174,18 +1174,60 @@ describe("dsh-compat adapters", () => {
         ok: boolean;
         value: {
           available: boolean;
+          isRepo: boolean;
+          root?: string;
           branch: string | null;
           entries: Array<{ xy: string; path: string }>;
         };
       };
       expect(status.ok).toBe(true);
       expect(status.value.available).toBe(true);
+      expect(status.value.isRepo).toBe(true);
       expect(status.value.branch).toBeTruthy();
+      expect(status.value.root).toBeTruthy();
       expect(status.value.entries.length).toBeGreaterThan(0);
       for (const entry of status.value.entries) {
         expect(entry.xy).toMatch(/^[\sMADRCU?!]{2}$/);
         expect(entry.path).toBeTruthy();
       }
+
+      const worktreesRes = await fetch(`${base}/sidebar/api/git.worktrees`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: "s1" }),
+      });
+      const worktrees = (await worktreesRes.json()) as {
+        ok: boolean;
+        value: Array<{
+          path: string;
+          branch: string;
+          current: boolean;
+          changes: number;
+        }>;
+      };
+      expect(worktrees.ok).toBe(true);
+      expect(Array.isArray(worktrees.value)).toBe(true);
+      expect(worktrees.value.length).toBeGreaterThanOrEqual(1);
+      expect(worktrees.value.some((row) => row.current)).toBe(true);
+      for (const row of worktrees.value) {
+        expect(row.path).toBeTruthy();
+        expect(typeof row.branch).toBe("string");
+        expect(typeof row.changes).toBe("number");
+      }
+
+      const changesRes = await fetch(`${base}/sidebar/api/changes.ops`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: "s1" }),
+      });
+      const changes = (await changesRes.json()) as {
+        ok: boolean;
+        value: { events: unknown[]; lastSeq: number };
+      };
+      // Without Face bridge: honest empty window (not "unsupported").
+      expect(changes.ok).toBe(true);
+      expect(Array.isArray(changes.value.events)).toBe(true);
+      expect(typeof changes.value.lastSeq).toBe("number");
 
       const branchRes = await fetch(`${base}/sidebar/api/git.branch`, {
         method: "POST",

@@ -18,6 +18,7 @@ import {
 export type {
   SidebarFaceBridge,
   SidebarSubagentLiveActivity,
+  SidebarChangesWireEvent,
 } from "./sidebar-face-bridge.js";
 export type { SidebarHostOptions, SidebarCompatOptions } from "./sidebar-adapter.js";
 export {

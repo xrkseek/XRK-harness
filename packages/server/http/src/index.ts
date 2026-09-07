@@ -42,6 +42,7 @@ export {
   handleSidebarCompat,
   type SidebarFaceBridge,
   type SidebarSubagentLiveActivity,
+  type SidebarChangesWireEvent,
   type SidebarHostOptions,
 } from "./sidebar/index.js";
 export {

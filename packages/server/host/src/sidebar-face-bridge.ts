@@ -8,15 +8,18 @@ import {
   dispatchFaceMethod,
   hostOpenPath,
   openNativePath,
+  toFaceWireSessionEvent,
   type FaceRuntime,
 } from "@xrkseek/server-face";
 import type {
+  SidebarChangesWireEvent,
   SidebarFaceBridge,
   SidebarSubagentLiveActivity,
 } from "@xrkseek/server-http";
 import { liveLineFromSessionEvents } from "./sidebar-live-line.js";
 
 const JOB_OUTPUT_LIMIT = 256_000;
+const CHANGES_EVENTS_CAP = 4000;
 
 function collectDescendantIds(face: FaceRuntime, rootSessionId: string): string[] {
   const out: string[] = [];
@@ -111,6 +114,27 @@ export function createSidebarFaceBridgeFromFace(
         live[childId] = liveLineFromSessionEvents(events) ?? {};
       }
       return { live };
+    },
+
+    listChangesOps(sessionId, afterSeq) {
+      const events = readSessionEvents(face.store, sessionId);
+      const wireCtx = { sessionId, ids: face.wireIds };
+      const filtered: SidebarChangesWireEvent[] = [];
+      for (let i = 0; i < events.length; i += 1) {
+        const ev = events[i]!;
+        if (ev.type !== "tool/call" && ev.type !== "tool/result") continue;
+        const seq = i + 1;
+        if (seq <= afterSeq) continue;
+        filtered.push(toFaceWireSessionEvent(ev, seq, wireCtx));
+      }
+      const window =
+        filtered.length > CHANGES_EVENTS_CAP
+          ? filtered.slice(filtered.length - CHANGES_EVENTS_CAP)
+          : filtered;
+      return {
+        events: window,
+        lastSeq: window.at(-1)?.seq ?? Math.max(afterSeq, 0),
+      };
     },
   };
 }
