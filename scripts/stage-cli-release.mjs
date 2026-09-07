@@ -232,22 +232,26 @@ rmSync(PRODUCT_WEB, { recursive: true, force: true });
 cpSync(WEB_DIST, PRODUCT_WEB, { recursive: true });
 
 const releaseRoot = path.join(ROOT, ".release");
+mkdirSync(releaseRoot, { recursive: true });
+// Prefer clearing only the deploy tree — wiping all of `.release` can EPERM on Windows
+// when a previous stage handle is still open.
 try {
-  rmSync(releaseRoot, { recursive: true, force: true });
+  rmSync(STAGE, { recursive: true, force: true });
 } catch (err) {
-  // Windows may keep a handle on .release mid-stage; park it and continue.
-  const parked = `${releaseRoot}-parked-${Date.now()}`;
+  const parked = path.join(releaseRoot, `harness-cli-parked-${Date.now()}`);
   try {
-    renameSync(releaseRoot, parked);
-    console.warn(`stage: could not rm .release (${err instanceof Error ? err.message : err}); parked as ${path.basename(parked)}`);
+    if (existsSync(STAGE)) renameSync(STAGE, parked);
+    console.warn(
+      `stage: could not rm harness-cli (${err instanceof Error ? err.message : err}); parked as ${path.basename(parked)}`,
+    );
   } catch (renameErr) {
     console.error(
-      `stage: cannot clear .release — close processes locking it, then retry (${renameErr instanceof Error ? renameErr.message : renameErr})`,
+      `stage: cannot clear ${STAGE} — close processes locking it, then retry (${renameErr instanceof Error ? renameErr.message : renameErr})`,
     );
     process.exit(1);
   }
 }
-mkdirSync(releaseRoot, { recursive: true });
+mkdirSync(STAGE, { recursive: true });
 
 run("pnpm", ["--filter", "@xrkseek/harness-cli", "deploy", "--prod", "--legacy", STAGE], ROOT, {
   CI: "true",
