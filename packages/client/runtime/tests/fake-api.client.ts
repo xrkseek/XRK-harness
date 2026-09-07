@@ -321,7 +321,7 @@ export class FakeApiClient implements IApiClient {
     for (const conn of [...this.hostConns]) conn.feed({ kind: 'frame', envelope: { rpcId: RpcId(rpcId ?? `push-${nextRpc++}`), payload: frame } })
   }
 
-  /** End (clean close) or fail (throw) every open stream â€?reconnect-path material. */
+  /** End (clean close) or fail (throw) every open stream â€” reconnect-path material. */
   endStreams(): void {
     for (const conn of [...this.muxConns, ...this.hostConns]) conn.feed({ kind: 'end' })
   }
