@@ -16,6 +16,19 @@ describe("createProviderRegistry", () => {
     expect(b.factoryKind).toBe("compat");
   });
 
+  it("resolves OpenCode Zen and Go gateways", () => {
+    const reg = createProviderRegistry();
+    const zen = reg.resolve({ provider: "opencode" });
+    expect(zen.baseUrl).toBe("https://opencode.ai/zen/v1");
+    expect(zen.apiKeyEnv).toBe("OPENCODE_API_KEY");
+    expect(zen.model).toBe("big-pickle");
+    expect(zen.factoryKind).toBe("compat");
+    const go = reg.resolve({ provider: "opencode-go", model: "glm-5" });
+    expect(go.baseUrl).toBe("https://opencode.ai/zen/go/v1");
+    expect(go.apiKeyEnv).toBe("OPENCODE_GO_API_KEY");
+    expect(go.model).toBe("glm-5");
+  });
+
   it("uses defaultProvider and brand defaultModel", () => {
     const reg = createProviderRegistry({ defaultProvider: "deepseek" });
     const b = reg.resolve({});

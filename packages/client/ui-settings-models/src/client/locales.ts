@@ -93,11 +93,6 @@ export const en = {
   welcomeBody: WELCOME_NOTICE_COPY.en.body,
   welcomeContinue: WELCOME_NOTICE_COPY.en.continueLabel,
   welcomeError: 'The acknowledgement could not be saved. Please try again.',
-  onboardingTitle: 'Add an API key to get started',
-  onboardingDescription: 'Configure the official DeepSeek provider to start building.',
-  onboardingLater: 'Configure later',
-  onboardingSave: 'Save and continue',
-  onboardingSaving: 'Saving…',
   keyRequired: 'Enter an API key to continue.',
 }
 
@@ -195,10 +190,5 @@ export const zh: { [Key in keyof typeof en]: string } = {
   welcomeBody: WELCOME_NOTICE_COPY.zh.body,
   welcomeContinue: WELCOME_NOTICE_COPY.zh.continueLabel,
   welcomeError: '暂时无法保存确认状态，请重试。',
-  onboardingTitle: '添加一个 API Key 开始使用',
-  onboardingDescription: '配置 DeepSeek 官方模型，即可开始使用。',
-  onboardingLater: '稍后配置',
-  onboardingSave: '保存并继续',
-  onboardingSaving: '保存中…',
   keyRequired: '请输入 API 密钥后继续。',
 }

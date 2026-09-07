@@ -255,15 +255,23 @@ export function readProviderApiKey(
     return { apiKey: checked.value, source: "vault" };
   }
   const envName = providerApiKeyEnv(runtime, provider);
-  if (envName) {
-    const fromEnv = process.env[envName]?.trim();
-    if (fromEnv) {
-      const checked = normalizeApiKey(fromEnv);
-      if (!checked.ok) {
-        throw new Error(`environment ${envName} resolves to an unusable API key`);
-      }
-      return { apiKey: checked.value, source: "env" };
+  const key = provider.trim().toLowerCase();
+  // OpenCode Go accepts the Zen key as env fallback.
+  const envCandidates =
+    key === "opencode-go"
+      ? [envName, "OPENCODE_API_KEY"]
+      : key === "opencode"
+        ? [envName, "OPENCODE_API_KEY"]
+        : [envName];
+  for (const name of envCandidates) {
+    if (!name) continue;
+    const fromEnv = process.env[name]?.trim();
+    if (!fromEnv) continue;
+    const checked = normalizeApiKey(fromEnv);
+    if (!checked.ok) {
+      throw new Error(`environment ${name} resolves to an unusable API key`);
     }
+    return { apiKey: checked.value, source: "env" };
   }
   return { source: "none" };
 }

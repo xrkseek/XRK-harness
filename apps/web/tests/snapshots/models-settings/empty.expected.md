@@ -19,45 +19,51 @@
     - text: 关闭
   - heading "模型" [level=2]
   - paragraph: 填入各提供方的 API 密钥即可使用其模型。
-  - list
+  - list:
+    - listitem:
+      - text: DeepSeek（兼容面）
+      - img "API 密钥缺失"
+      - button "编辑 DeepSeek（兼容面） (deepseek-official)": 编辑
+    - listitem:
+      - text: Ollama（OpenAI 兼容端口）
+      - button "编辑 Ollama（OpenAI 兼容端口） (ollama)": 编辑
   - text: 提供方
   - combobox "提供方":
-    - option "amazon-bedrock"
-    - option "ant-ling"
-    - option "anthropic"
-    - option "azure-openai-responses"
-    - option "cerebras"
-    - option "cloudflare-ai-gateway"
-    - option "cloudflare-workers-ai"
-    - option "deepseek"
-    - option "fireworks"
-    - option "github-copilot"
-    - option "google"
-    - option "google-vertex"
-    - option "groq"
-    - option "huggingface"
-    - option "kimi-coding"
-    - option "minimax"
-    - option "minimax-cn" [selected]
-    - option "mistral"
-    - option "moonshotai"
-    - option "moonshotai-cn"
-    - option "nvidia"
-    - option "openai"
-    - option "opencode"
-    - option "opencode-go"
-    - option "openrouter"
-    - option "qwen-token-plan"
-    - option "qwen-token-plan-cn"
-    - option "together"
-    - option "vercel-ai-gateway"
-    - option "xai"
-    - option "xiaomi"
-    - option "xiaomi-token-plan-ams"
-    - option "xiaomi-token-plan-cn"
-    - option "xiaomi-token-plan-sgp"
-    - option "zai"
-    - option "zai-coding-cn"
+    - option "OpenAI"
+    - option "OpenCode Zen"
+    - option "OpenCode Go"
+    - option "OpenRouter"
+    - option "Groq" [selected]
+    - option "Fireworks"
+    - option "Together"
+    - option "GitHub Models"
+    - option "xAI"
+    - option "Mistral"
+    - option "Cerebras"
+    - option "Deep Infra"
+    - option "NovitaAI"
+    - option "SiliconFlow"
+    - option "SiliconFlow (China)"
+    - option "Moonshot AI"
+    - option "Moonshot AI (China)"
+    - option "MiniMax (minimax.io)"
+    - option "MiniMax (minimaxi.com)"
+    - option "Z.AI"
+    - option "Zhipu AI"
+    - option "Perplexity"
+    - option "Hugging Face"
+    - option "Nvidia"
+    - option "Baseten"
+    - option "Vercel AI Gateway"
+    - option "AIHubMix"
+    - option "LM Studio"
+    - option "Azure OpenAI（简易）"
+    - option "New API"
+    - option "CherryIN"
+    - option "Custom OpenAI-compatible"
+    - option "Anthropic"
+    - option "Google Gemini"
+    - option "OpenAI Responses"
   - text: API 密钥
   - textbox "API 密钥":
     - /placeholder: 输入 API 密钥，或留空使用环境认证

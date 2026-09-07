@@ -1,10 +1,6 @@
 /**
  * DSH-aligned settings namespace schemas + composition bases for Face `settings.describe`.
  */
-import {
-  OPENAI_CHAT_BRANDS,
-  R1_PROTOCOL_BRANDS,
-} from "@xrkseek/llm-registry";
 import Schema from "@xrkseek/schemastery";
 import type { FaceSchemaEnvelope } from "./face-schema.js";
 import {
@@ -197,20 +193,20 @@ const UiConversationConfig = Schema.object({
   busyEnter: Schema.union(["queue", "steer"]),
 });
 
-/** Shipped openai-chat + R1 protocol catalog (excludes DeepSeek → `llm-deepseek`). */
+/**
+ * Settings base for `llm-pi-ai`: zero-config routes only.
+ * Registry brands surface via `llm.providers` as the Settings add directory.
+ */
 function buildPiAiCatalogBase(): Record<string, unknown> {
-  const providers: Record<string, Record<string, unknown>> = {};
-  for (const brand of [...OPENAI_CHAT_BRANDS, ...R1_PROTOCOL_BRANDS]) {
-    if (brand.id === "deepseek") continue;
-    const profile: Record<string, unknown> = {
-      displayName: brand.displayName,
-      api: brand.protocol,
-    };
-    if (brand.apiKeyEnv) profile.apiKeyEnv = brand.apiKeyEnv;
-    if (brand.baseUrl) profile.baseURL = brand.baseUrl;
-    providers[brand.id] = profile;
-  }
-  return { providers };
+  return {
+    providers: {
+      ollama: {
+        displayName: "Ollama（OpenAI 兼容端口）",
+        api: "openai-chat",
+        baseURL: "http://127.0.0.1:11434/v1",
+      },
+    },
+  };
 }
 
 export interface FaceSettingsNamespaceSpec {

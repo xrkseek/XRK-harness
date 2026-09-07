@@ -21,14 +21,21 @@
   - paragraph: 填入各提供方的 API 密钥即可使用其模型。
   - list:
     - listitem:
-      - text: minimax-cn
-      - img "API 密钥已配置"
-      - button "编辑 minimax-cn": 编辑
-      - button "删除 minimax-cn": 删除
-    - listitem:
       - text: Acme Gateway 自定义
       - button "编辑 Acme Gateway (acme-gateway)": 编辑
       - button "删除 Acme Gateway (acme-gateway)": 删除
+    - listitem:
+      - text: DeepSeek（兼容面）
+      - img "API 密钥缺失"
+      - button "编辑 DeepSeek（兼容面） (deepseek-official)": 编辑
+    - listitem:
+      - text: Groq
+      - img "API 密钥已配置"
+      - button "编辑 Groq (groq)": 编辑
+      - button "删除 Groq (groq)": 删除
+    - listitem:
+      - text: Ollama（OpenAI 兼容端口）
+      - button "编辑 Ollama（OpenAI 兼容端口） (ollama)": 编辑
   - button "添加提供方":
     - img
     - text: 添加提供方

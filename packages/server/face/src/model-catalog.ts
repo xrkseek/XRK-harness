@@ -99,7 +99,8 @@ function modelsForBrand(
   if (brand.id === "deepseek") return deepseekModels(runtime);
   const configured = piAiProviderModels(runtime, brand.id);
   if (configured.length > 0) return configured;
-  if (brand.defaultModel) {
+  // Seed defaultModel only when a profile already exists for this brand.
+  if (brand.defaultModel && piAiProviderProfile(runtime, brand.id)) {
     return [{ id: brand.defaultModel, name: brand.defaultModel }];
   }
   return [];
@@ -116,7 +117,14 @@ export function buildFaceModelCatalog(
 ): { groups: FaceModelProviderGroup[]; failures: [] } {
   const groups: FaceModelProviderGroup[] = [];
   for (const brand of runtime.registry.listBrands()) {
+    if (brand.id === "deepseek") {
+      const models = deepseekModels(runtime);
+      if (models.length === 0) continue;
+      groups.push({ id: brand.id, name: brand.displayName, models });
+      continue;
+    }
     if (!brand.baseUrl && brand.id !== "ollama") continue;
+    if (!piAiProviderProfile(runtime, brand.id)) continue;
     const models = modelsForBrand(runtime, brand);
     if (models.length === 0) continue;
     groups.push({
