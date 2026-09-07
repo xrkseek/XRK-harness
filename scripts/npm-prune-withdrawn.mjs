@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Withdraw redundant @xrkseek/harness-cli versions on npmjs.
- * Keeps formal latest (apps/cli version) and previous formal (0.1.31).
- * Tries unpublish first, then deprecate. Drops leftover `preview` dist-tag.
+ * Keeps current formal (apps/cli version) and last preview (0.2.7).
+ * Odd minors = formal; even = preview. Tries unpublish first, then deprecate.
+ * Drops leftover `preview` dist-tag (legacy 0.0.11).
  *
  * Auth: NPM_TOKEN or npm login. Write actions may need NPM_CONFIG_OTP (6-digit TOTP or one 64-char recovery code).
  *
@@ -21,11 +22,12 @@ const cliPkg = JSON.parse(
 const formal = typeof cliPkg.version === "string" ? cliPkg.version : "0.3.0";
 
 const PKG = "@xrkseek/harness-cli";
-const PREVIOUS_FORMAL = "0.1.31";
-const KEEP = new Set([PREVIOUS_FORMAL, formal]);
+/** Last even-line preview archive (was 0.0.11). */
+const LAST_PREVIEW = "0.2.7";
+const KEEP = new Set([LAST_PREVIEW, formal]);
 const REGISTRY = "https://registry.npmjs.org";
 const DEPRECATE_MSG =
-  `Withdrawn. Use @xrkseek/harness-cli@${formal} (current) or @${PREVIOUS_FORMAL} (previous formal).`;
+  `Withdrawn. Use @xrkseek/harness-cli@${formal} (current formal) or @${LAST_PREVIEW} (last preview).`;
 
 const deprecateOnly = process.argv.includes("--deprecate-only");
 

@@ -106,7 +106,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 自己写工具 / 进程插件 | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | 排障 | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 | [learn](./docs/learn.md) |
-| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.3.0](./docs/releases/v0.3.0.md) · 上一正式 [v0.1.31](./docs/releases/v0.1.31.md)） |
+| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.3.0](./docs/releases/v0.3.0.md) · 预览末号 [v0.2.7](./docs/releases/v0.2.7.md)） |
 | 全部专题索引 | [docs/README.md](./docs/README.md) |
 
 ## 仓库里有什么
@@ -245,7 +245,7 @@ Full matrix: [docs/status.md](./docs/status.md).
 | Author tools / process plugins | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | Troubleshoot | [troubleshooting](./docs/troubleshooting.md) |
 | Short digest | [learn](./docs/learn.md) |
-| Release notes | [releases](./docs/releases/) (current [v0.3.0](./docs/releases/v0.3.0.md) · previous formal [v0.1.31](./docs/releases/v0.1.31.md)) |
+| Release notes | [releases](./docs/releases/) (current [v0.3.0](./docs/releases/v0.3.0.md) · last preview [v0.2.7](./docs/releases/v0.2.7.md)) |
 | Full index | [docs/README.md](./docs/README.md) |
 
 ## Repository layout

@@ -2,14 +2,16 @@
 
 > **读者**：终端用户 · 维护者
 
-GitHub Release 公开页只保留两档：
+版本约定：**奇数次版本号 = 正式**，**偶数 = 预览**。
+
+GitHub Release 公开页保留两档（正式当前 + 预览末号）：
 
 | 档 | 版本 | 说明 |
 |------|------|------|
-| **当前（@latest）** | [v0.3.0](./v0.3.0.md) | 正式线；推荐 `npm i -g @xrkseek/harness-cli@latest` |
-| **上一正式** | [v0.1.31](./v0.1.31.md) | 稳定留档 |
+| **正式 · 当前（@latest）** | [v0.3.0](./v0.3.0.md) | 奇数正式线；推荐 `npm i -g @xrkseek/harness-cli@latest` |
+| **预览 · 末号** | [v0.2.7](./v0.2.7.md) | 偶数预览线结束；对照留档，不推荐日常安装 |
 
-**0.2.7** 为预览线末号（已并入正式线说明）；**0.0.11** 预览留档已撤下。仓库内仍保留历史 `docs/releases/v*` 文稿供查阅；npm 上旧号可能仍可解析，以 deprecate / 文档指引为准。
+对照：昔日正式 [v0.1.31](./v0.1.31.md) → 现 **v0.3.0**；昔日预览 **0.0.11**（已撤）→ 现末号 **v0.2.7**。仓库内其余 `docs/releases/v*` 仍可查阅；npm 旧号以 deprecate 为准。
 
 安装与发包见 [publishing.md](../publishing.md)。
 
@@ -17,8 +19,8 @@ GitHub Release 公开页只保留两档：
 
 | 用途 | 命令 |
 |------|------|
-| 当前 | `npm i -g @xrkseek/harness-cli@0.3.0` 后 `xrkh web`，或 `npm i -g @xrkseek/harness-cli@latest` |
-| 上一正式 | `npm i -g @xrkseek/harness-cli@0.1.31` 后 `xrkh web` |
+| 正式（推荐） | `npm i -g @xrkseek/harness-cli@0.3.0` 后 `xrkh web`，或 `@latest` |
+| 预览末号（对照） | `npm i -g @xrkseek/harness-cli@0.2.7` 后 `xrkh web` |
 
 规格索引：[docs/README.md](../README.md)。
 
@@ -28,14 +30,16 @@ GitHub Release 公开页只保留两档：
 
 > **Audience**: End users · Maintainers
 
-The GitHub Releases page keeps only two entries:
+Version rule: **odd minors = formal**, **even = preview**.
+
+The GitHub Releases page keeps two entries (current formal + last preview):
 
 | Line | Version | Notes |
 |------|---------|-------|
-| **Current (@latest)** | [v0.3.0](./v0.3.0.md) | Formal line; prefer `npm i -g @xrkseek/harness-cli@latest` |
-| **Previous formal** | [v0.1.31](./v0.1.31.md) | Stable archive |
+| **Formal · current (@latest)** | [v0.3.0](./v0.3.0.md) | Odd formal line; prefer `npm i -g @xrkseek/harness-cli@latest` |
+| **Preview · last** | [v0.2.7](./v0.2.7.md) | Even preview line ended; archive only — not for daily install |
 
-**0.2.7** was the last preview release (folded into the formal notes); preview archive **0.0.11** is withdrawn. Historical `docs/releases/v*` files remain in the repo for reference; older npm versions may still resolve — follow deprecate notices and this index.
+Succession: formal [v0.1.31](./v0.1.31.md) → **v0.3.0**; preview **0.0.11** (withdrawn) → last **v0.2.7**. Other `docs/releases/v*` remain for reference; npm older numbers follow deprecate notices.
 
 Install and publish: [publishing.md](../publishing.md).
 
@@ -43,7 +47,7 @@ Install and publish: [publishing.md](../publishing.md).
 
 | Use | Command |
 |-----|---------|
-| Current | `npm i -g @xrkseek/harness-cli@0.3.0` then `xrkh web`, or `npm i -g @xrkseek/harness-cli@latest` |
-| Previous formal | `npm i -g @xrkseek/harness-cli@0.1.31` then `xrkh web` |
+| Formal (recommended) | `npm i -g @xrkseek/harness-cli@0.3.0` then `xrkh web`, or `@latest` |
+| Last preview (reference) | `npm i -g @xrkseek/harness-cli@0.2.7` then `xrkh web` |
 
 Spec index: [docs/README.md](../README.md).
