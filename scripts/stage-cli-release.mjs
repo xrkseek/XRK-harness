@@ -188,7 +188,23 @@ function syncContextDistIntoStage(stageDir) {
   }
 }
 
-run("pnpm", ["exec", "tsc", "-b", "apps/cli", "--pretty", "false"]);
+function runNode(script, args, cwd = ROOT) {
+  const r = spawnSync(process.execPath, [script, ...args], {
+    cwd,
+    stdio: "inherit",
+    shell: false,
+    env: process.env,
+  });
+  if (r.status !== 0) process.exit(r.status ?? 1);
+}
+
+/** Prefer repo-local tsc — avoid `pnpm exec` purging workspace deps on Windows. */
+const tscCli = path.join(ROOT, "node_modules", "typescript", "bin", "tsc");
+if (!existsSync(tscCli)) {
+  console.error("stage: missing node_modules/typescript — run pnpm install");
+  process.exit(1);
+}
+runNode(tscCli, ["-b", "apps/cli", "--pretty", "false"]);
 
 const CONTEXT_RUNTIME = [
   "packages/context/file-reference/dist/grammar.js",
