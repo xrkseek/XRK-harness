@@ -41,6 +41,9 @@ export {
 export { createFaceRuntime, type CreateFaceRuntimeOptions } from "./runtime.js";
 export {
   listFacePluginInventory,
+  readDisabledPluginIdsAt,
+  reconcileManagedClientBoot,
+  resolveManagedPluginDir,
   type FacePluginInventoryEntry,
   type FaceProcessPlugin,
   type FaceWebPlugin,

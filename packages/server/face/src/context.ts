@@ -152,10 +152,17 @@ export interface FaceRuntime {
   /** Native folder chooser; default platform `pickNativeDirectory`. Cancel → `null`. */
   pickNativeDirectory?(signal: AbortSignal): Promise<string | null>;
   /**
-   * Remove a user-installed plugin (`xrk-harness plugin remove`). Host wires
+   * Remove a user-installed plugin (`xrkh plugin remove`). Host wires
    * CLI mutate; absent → inventory remove returns a CLI hint.
    */
   removeUserPlugin?(
+    spec: string,
+  ): Promise<{ readonly ok: boolean; readonly error?: string }>;
+  /**
+   * Reinstall / bump a user plugin (`xrkh plugin add <spec>`). Spec is the
+   * inventory `source` when known, else `name@latest`.
+   */
+  updateUserPlugin?(
     spec: string,
   ): Promise<{ readonly ok: boolean; readonly error?: string }>;
   /** Human approval waiters (tool policy `ask`). */

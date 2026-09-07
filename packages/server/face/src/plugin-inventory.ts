@@ -3,7 +3,7 @@
  * User-installed packages (`~/.xrk/plugins/.xrk-plugins.json`) are marked
  * `managed` so the Settings inventory can pin them and offer remove/disable.
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import type { ToolDefinition } from "@xrkseek/core-tools";
 import { resolveCordisFiberState } from "./cordis-bridge.js";
@@ -92,15 +92,13 @@ export function readUserPluginNames(
   return names;
 }
 
-function disabledListPath(runtime: Pick<FaceRuntime, "productDir">): string {
-  return path.join(pluginsDirOf(runtime), ".xrk-plugins-disabled.json");
+function disabledListPath(pluginsDir: string): string {
+  return path.join(pluginsDir, ".xrk-plugins-disabled.json");
 }
 
-/** Soft-disabled managed plugin ids (Settings inventory toggle). */
-export function readDisabledPluginIds(
-  runtime: Pick<FaceRuntime, "productDir">,
-): Set<string> {
-  const file = disabledListPath(runtime);
+/** Soft-disabled managed plugin ids under a plugins directory. */
+export function readDisabledPluginIdsAt(pluginsDir: string): Set<string> {
+  const file = disabledListPath(pluginsDir);
   const out = new Set<string>();
   if (!existsSync(file)) return out;
   try {
@@ -115,6 +113,13 @@ export function readDisabledPluginIds(
   return out;
 }
 
+/** Soft-disabled managed plugin ids (Settings inventory toggle). */
+export function readDisabledPluginIds(
+  runtime: Pick<FaceRuntime, "productDir">,
+): Set<string> {
+  return readDisabledPluginIdsAt(pluginsDirOf(runtime));
+}
+
 export function writeDisabledPluginIds(
   runtime: Pick<FaceRuntime, "productDir">,
   ids: ReadonlySet<string>,
@@ -122,7 +127,7 @@ export function writeDisabledPluginIds(
   const dir = pluginsDirOf(runtime);
   mkdirSync(dir, { recursive: true });
   writeFileSync(
-    disabledListPath(runtime),
+    disabledListPath(dir),
     `${JSON.stringify({ ids: [...ids].sort() }, null, 2)}\n`,
     "utf8",
   );
@@ -135,12 +140,83 @@ export function resolveManagedPluginDir(
   moduleName?: string,
 ): string | undefined {
   const root = pluginsDirOf(runtime);
-  for (const name of [entryId, moduleName ?? ""]) {
-    if (!name.trim()) continue;
-    const candidate = path.join(root, name.trim());
-    if (existsSync(candidate)) return candidate;
+  const names = [entryId, moduleName ?? ""].map((n) => n.trim()).filter(Boolean);
+  for (const name of names) {
+    // Client halves stage under web/plugins/<name>; process plugins may sit at
+    // the inventory root. Prefer the staged client layout (what Settings opens).
+    const candidates = [
+      path.join(root, "web", "plugins", ...name.split("/")),
+      path.join(root, ...name.split("/")),
+      path.join(root, name),
+    ];
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) return candidate;
+    }
   }
   return undefined;
+}
+
+/**
+ * Rewrite `{pluginsDir}/web/boot.json` from inventory client rows, omitting
+ * soft-disabled ids so the next Host start does not load them.
+ */
+export function reconcileManagedClientBoot(
+  runtime: Pick<FaceRuntime, "productDir">,
+): void {
+  const root = pluginsDirOf(runtime);
+  const invPath = path.join(root, ".xrk-plugins.json");
+  const disabled = readDisabledPluginIdsAt(root);
+  const entries: {
+    id: string;
+    url: string;
+    rev: string;
+    inject: readonly string[];
+    immediately?: boolean;
+  }[] = [];
+  if (existsSync(invPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(invPath, "utf8")) as {
+        packages?: Record<
+          string,
+          {
+            name?: string;
+            version?: string;
+            kind?: string;
+            clientInject?: readonly string[];
+            clientImmediately?: boolean;
+          }
+        >;
+      };
+      for (const entry of Object.values(raw.packages ?? {})) {
+        const name = entry.name?.trim();
+        if (!name) continue;
+        if (entry.kind !== "client" && entry.kind !== "both") continue;
+        if (disabled.has(name)) continue;
+        entries.push({
+          id: name,
+          url: `/plugins/${name}/client.js`,
+          rev: typeof entry.version === "string" ? entry.version : "0",
+          inject: entry.clientInject ?? [],
+          ...(entry.clientImmediately ? { immediately: true } : {}),
+        });
+      }
+    } catch {
+      /* leave entries empty → drop stale boot.json */
+    }
+  }
+  entries.sort((a, b) => a.id.localeCompare(b.id));
+  const webDir = path.join(root, "web");
+  mkdirSync(webDir, { recursive: true });
+  const bootPath = path.join(webDir, "boot.json");
+  if (entries.length === 0) {
+    if (existsSync(bootPath)) rmSync(bootPath, { force: true });
+    return;
+  }
+  writeFileSync(
+    bootPath,
+    `${JSON.stringify({ rev: `xrk-plugins-${Date.now()}`, entries }, null, 2)}\n`,
+    "utf8",
+  );
 }
 
 function isManagedProcessPlugin(
@@ -149,8 +225,8 @@ function isManagedProcessPlugin(
 ): boolean {
   if (plugin.id.startsWith("mcp:")) return false;
   if (userNames.has(plugin.id)) return true;
+  // Cordis community packages are user-installed; product-shell rows are not.
   if (plugin.kind === "cordis") return true;
-  if (/better-sidebar|xrkh-/i.test(plugin.id)) return true;
   return false;
 }
 
@@ -191,10 +267,7 @@ export function listFacePluginInventory(
   }
   for (const web of runtime.webPlugins ?? []) {
     const managed =
-      userNames.has(web.id) ||
-      userNames.has(web.moduleName ?? "") ||
-      /better-sidebar|xrkh-/i.test(web.id) ||
-      /better-sidebar|xrkh-/i.test(web.moduleName ?? "");
+      userNames.has(web.id) || userNames.has(web.moduleName ?? "");
     const softDisabled = managed && disabled.has(web.id);
     push({
       entryId: web.id,
@@ -241,5 +314,6 @@ export function setFacePluginInventoryEnabled(
   if (enabled) disabled.delete(entryId);
   else disabled.add(entryId);
   writeDisabledPluginIds(runtime, disabled);
+  reconcileManagedClientBoot(runtime);
   return { ok: true };
 }

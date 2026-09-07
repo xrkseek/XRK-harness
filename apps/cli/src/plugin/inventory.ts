@@ -13,6 +13,7 @@ import path from "node:path";
 import type { PluginKind } from "./classify.js";
 
 export const INVENTORY_FILE = ".xrk-plugins.json";
+export const DISABLED_FILE = ".xrk-plugins-disabled.json";
 
 export interface InventoryEntry {
   readonly name: string;
@@ -46,6 +47,27 @@ export interface WebBootManifest {
 
 export function inventoryPath(pluginsDir: string): string {
   return path.join(pluginsDir, INVENTORY_FILE);
+}
+
+export function disabledPath(pluginsDir: string): string {
+  return path.join(pluginsDir, DISABLED_FILE);
+}
+
+/** Soft-disabled managed plugin ids (Settings inventory toggle). */
+export function readDisabledPluginIds(pluginsDir: string): Set<string> {
+  const file = disabledPath(pluginsDir);
+  const out = new Set<string>();
+  if (!existsSync(file)) return out;
+  try {
+    const raw = JSON.parse(readFileSync(file, "utf8")) as { ids?: unknown };
+    if (!Array.isArray(raw.ids)) return out;
+    for (const id of raw.ids) {
+      if (typeof id === "string" && id.trim()) out.add(id.trim());
+    }
+  } catch {
+    /* empty */
+  }
+  return out;
 }
 
 export function readInventory(pluginsDir: string): PluginInventory {
@@ -132,9 +154,11 @@ export function clientInstallDir(pluginsDir: string, name: string): string {
  */
 export function reconcileBoot(pluginsDir: string): WebBootManifest {
   const inv = readInventory(pluginsDir);
+  const disabled = readDisabledPluginIds(pluginsDir);
   const entries: WebBootEntry[] = [];
   for (const entry of Object.values(inv.packages)) {
     if (entry.kind !== "client" && entry.kind !== "both") continue;
+    if (disabled.has(entry.name)) continue;
     entries.push({
       id: entry.name,
       url: `/plugins/${entry.name}/client.js`,

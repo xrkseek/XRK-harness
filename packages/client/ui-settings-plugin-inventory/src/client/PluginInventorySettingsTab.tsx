@@ -16,6 +16,8 @@ export interface PluginInventorySettingsTabInjected {
   setEnabled: (entryId: PluginEntryId, enabled: boolean) => Promise<void>
   /** Remove a managed plugin from the CLI inventory. */
   remove: (entryId: PluginEntryId) => Promise<void>
+  /** Reinstall / bump a managed plugin from its install source. */
+  update: (entryId: PluginEntryId) => Promise<void>
   /** Open the managed plugin install folder in the OS. */
   open: (entryId: PluginEntryId) => Promise<void>
 }
@@ -74,6 +76,7 @@ export function PluginInventorySettingsTab({
   list,
   setEnabled,
   remove,
+  update,
   open: openFolder,
   t,
 }: PluginInventorySettingsTabProps): ReactNode {
@@ -251,6 +254,16 @@ export function PluginInventorySettingsTab({
                                 }}
                               >
                                 {busy ? t('actionBusy') : t('edit')}
+                              </button>
+                              <button
+                                type="button"
+                                className={css.action}
+                                disabled={busy}
+                                onClick={() => {
+                                  void runManaged(entry.entryId, () => update(entry.entryId))
+                                }}
+                              >
+                                {busy ? t('actionBusy') : t('update')}
                               </button>
                               <button
                                 type="button"

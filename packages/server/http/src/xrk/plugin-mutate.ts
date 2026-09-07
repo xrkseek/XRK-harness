@@ -30,7 +30,11 @@ function resolveCliInvocation(): { command: string; prefixArgs: string[] } {
   if (existsSync(binJs)) {
     return { command: process.execPath, prefixArgs: [binJs] };
   }
-  return { command: "xrk-harness", prefixArgs: [] };
+  // Global npm shims: prefer xrkh (primary), then legacy xrk-harness.
+  return {
+    command: process.platform === "win32" ? "xrkh.cmd" : "xrkh",
+    prefixArgs: [],
+  };
 }
 
 export async function runPluginMutate(options: {
@@ -53,6 +57,7 @@ export async function runPluginMutate(options: {
       env,
       timeout: 180_000,
       maxBuffer: 4 * 1024 * 1024,
+      shell: process.platform === "win32",
     });
     return {
       ok: true,

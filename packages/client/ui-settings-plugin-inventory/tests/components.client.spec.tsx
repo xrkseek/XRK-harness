@@ -22,6 +22,7 @@ function props(
     list,
     setEnabled: overrides.setEnabled ?? vi.fn(async () => {}),
     remove: overrides.remove ?? vi.fn(async () => {}),
+    update: overrides.update ?? vi.fn(async () => {}),
     open: overrides.open ?? vi.fn(async () => {}),
   } as PluginInventorySettingsTabProps
 }
@@ -45,8 +46,9 @@ describe('PluginInventorySettingsTab', () => {
     const list = vi.fn(() => deferred.promise)
     const setEnabled = vi.fn(async () => {})
     const remove = vi.fn(async () => {})
+    const update = vi.fn(async () => {})
     const open = vi.fn(async () => {})
-    const view = render(<PluginInventorySettingsTab {...props(list, { setEnabled, remove, open })} />)
+    const view = render(<PluginInventorySettingsTab {...props(list, { setEnabled, remove, update, open })} />)
     expect(screen.getByText(en.loading)).toBeTruthy()
 
     await act(async () => { deferred.resolve(SNAPSHOT) })
@@ -62,8 +64,11 @@ describe('PluginInventorySettingsTab', () => {
     const managed = screen.getByRole('button', { name: 'better-sidebar, Custom, Enabled' })
     fireEvent.click(managed)
     expect(screen.getByRole('button', { name: en.edit })).toBeTruthy()
+    expect(screen.getByRole('button', { name: en.update })).toBeTruthy()
     expect(screen.getByRole('button', { name: en.disable })).toBeTruthy()
     expect(screen.getByRole('button', { name: en.remove })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.update }))
+    await waitFor(() => { expect(update).toHaveBeenCalledWith('xrkh-better-sidebar') })
     fireEvent.click(screen.getByRole('button', { name: en.disable }))
     await waitFor(() => { expect(setEnabled).toHaveBeenCalledWith('xrkh-better-sidebar', false) })
 

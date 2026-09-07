@@ -6,10 +6,16 @@ import {
   listFacePluginInventory,
   resolveManagedPluginDir,
   setFacePluginInventoryEnabled,
+  readDisabledPluginIds,
+  writeDisabledPluginIds,
+  reconcileManagedClientBoot,
 } from "../plugin-inventory.js";
 import { openNativePath } from "../host-open-path.js";
 import { buildFaceChannelDiscover, resolveImGatewayWired } from "../process-channels.js";
 import { remoteArgs, type FaceHandler } from "./types.js";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { resolveHarnessHome } from "../settings-document.js";
 
 function sessionFromAgentId(
   runtime: Parameters<FaceHandler>[0],
@@ -111,7 +117,69 @@ export const pluginInventoryRemove: FaceHandler = async (runtime, _rpcId, payloa
       },
     };
   }
+  // Drop soft-disable markers and refresh boot overlay so the next start
+  // does not resurrect a deleted package from a stale boot.json.
+  const disabled = readDisabledPluginIds(runtime);
+  if (disabled.delete(entryId)) writeDisabledPluginIds(runtime, disabled);
+  reconcileManagedClientBoot(runtime);
   return { ok: true, value: { entryId, removed: true as const } };
+};
+
+/** Reinstall / bump a managed plugin from its inventory source (or name@latest). */
+export const pluginInventoryUpdate: FaceHandler = async (runtime, _rpcId, payload) => {
+  const args = remoteArgs(payload);
+  const entryId = String(args.entryId ?? "").trim();
+  if (!entryId) {
+    return { ok: false, error: { code: "invalid-payload", message: "entryId required" } };
+  }
+  const entry = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
+  if (!entry) {
+    return { ok: false, error: { code: "not-found", message: entryId } };
+  }
+  if (!entry.managed) {
+    return {
+      ok: false,
+      error: { code: "refused", message: "builtin plugins cannot be updated here" },
+    };
+  }
+  if (!runtime.updateUserPlugin) {
+    return {
+      ok: false,
+      error: {
+        code: "unavailable",
+        message: `Use: xrkh plugin add ${entryId}@latest`,
+      },
+    };
+  }
+  const pluginsDir = path.join(resolveHarnessHome(runtime), "plugins");
+  const invPath = path.join(pluginsDir, ".xrk-plugins.json");
+  let spec = `${entryId}@latest`;
+  if (existsSync(invPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(invPath, "utf8")) as {
+        packages?: Record<string, { source?: string }>;
+      };
+      const source = raw.packages?.[entryId]?.source?.trim();
+      if (source) spec = source;
+    } catch {
+      /* keep @latest */
+    }
+  }
+  const result = await runtime.updateUserPlugin(spec);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: {
+        code: "failed",
+        message: result.error ?? `plugin update failed for ${entryId}`,
+      },
+    };
+  }
+  // Re-enable after a successful update so the new build is bootable.
+  const disabled = readDisabledPluginIds(runtime);
+  if (disabled.delete(entryId)) writeDisabledPluginIds(runtime, disabled);
+  reconcileManagedClientBoot(runtime);
+  return { ok: true, value: { entryId, updated: true as const } };
 };
 
 /** Open the on-disk install folder for a managed plugin (Settings “edit”). */

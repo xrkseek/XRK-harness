@@ -45,11 +45,15 @@ export function apply(ctx: ClientContext): void {
     const result = await ctx.remote.pluginInventory.remove(entryId as PluginEntryId)
     if (!result.ok) throwRemote('pluginInventory.remove', result)
   }
+  const update: PluginInventorySettingsTabInjected['update'] = async (entryId) => {
+    const result = await ctx.remote.pluginInventory.update(entryId as PluginEntryId)
+    if (!result.ok) throwRemote('pluginInventory.update', result)
+  }
   const open: PluginInventorySettingsTabInjected['open'] = async (entryId) => {
     const result = await ctx.remote.pluginInventory.open(entryId as PluginEntryId)
     if (!result.ok) throwRemote('pluginInventory.open', result)
   }
-  const injected = (): PluginInventorySettingsTabInjected => ({ list, setEnabled, remove, open })
+  const injected = (): PluginInventorySettingsTabInjected => ({ list, setEnabled, remove, update, open })
 
   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
     name: 'settings.plugins.tab',

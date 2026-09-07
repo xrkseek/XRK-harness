@@ -56,6 +56,7 @@ import {
   canonicalAgentPresetId,
   resolveAgentPresetProfile,
   tryHandleFaceHttp,
+  readDisabledPluginIdsAt,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
   type FaceRuntime,
@@ -615,11 +616,25 @@ export function createHostManager(): HostManager {
       const webOverlay = await resolveWebPluginOverlay(
         config.runtime.pluginsDir,
       );
+      const overlayBoot = webOverlay
+        ? loadBootManifestFromWebDist(webOverlay)
+        : undefined;
+      const pluginsRoot =
+        config.runtime.pluginsDir?.trim() ||
+        path.join(resolveXrkHome(), "plugins");
+      const disabledIds = readDisabledPluginIdsAt(pluginsRoot);
+      const filteredOverlay =
+        overlayBoot === undefined || disabledIds.size === 0
+          ? overlayBoot
+          : {
+              rev: overlayBoot.rev,
+              entries: overlayBoot.entries.filter((e) => !disabledIds.has(e.id)),
+            };
       const boot = applyXrkProductBootPolicy(
         ensureXrkPlatformClientBootEntries(
           mergeWebBootManifests(
             resolveWebBootManifest(config.runtime.webDist),
-            webOverlay ? loadBootManifestFromWebDist(webOverlay) : undefined,
+            filteredOverlay,
           ),
           config.runtime.webDist,
         ),
@@ -669,6 +684,19 @@ export function createHostManager(): HostManager {
             path.join(resolveXrkHome(), "plugins");
           const result = await runPluginMutate({
             action: "remove",
+            spec,
+            pluginsDir,
+          });
+          return result.ok
+            ? { ok: true as const }
+            : { ok: false as const, error: result.error ?? result.stderr };
+        },
+        updateUserPlugin: async (spec) => {
+          const pluginsDir =
+            config.runtime.pluginsDir?.trim() ||
+            path.join(resolveXrkHome(), "plugins");
+          const result = await runPluginMutate({
+            action: "add",
             spec,
             pluginsDir,
           });

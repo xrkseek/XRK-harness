@@ -133,8 +133,12 @@ export interface CreateFaceRuntimeOptions {
   readonly openNativePath?: (target: string) => Promise<void>;
   /** Inject native folder chooser (tests). Default `pickNativeDirectory`. */
   readonly pickNativeDirectory?: (signal: AbortSignal) => Promise<string | null>;
-  /** Host wires `xrk-harness plugin remove` for Settings inventory. */
+  /** Host wires `xrkh plugin remove` for Settings inventory. */
   readonly removeUserPlugin?: (
+    spec: string,
+  ) => Promise<{ readonly ok: boolean; readonly error?: string }>;
+  /** Host wires `xrkh plugin add` for Settings inventory update. */
+  readonly updateUserPlugin?: (
     spec: string,
   ) => Promise<{ readonly ok: boolean; readonly error?: string }>;
   /** Durable image store (default none → image RPCs unavailable). */
@@ -613,6 +617,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       : {}),
     ...(options.removeUserPlugin !== undefined
       ? { removeUserPlugin: options.removeUserPlugin }
+      : {}),
+    ...(options.updateUserPlugin !== undefined
+      ? { updateUserPlugin: options.updateUserPlugin }
       : {}),
     bus,
     seq,

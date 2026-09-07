@@ -23,13 +23,14 @@ export const zh = {
   failed: '挂载失败',
   unloading: '卸载中',
   edit: '打开目录',
+  update: '更新',
   disable: '停用',
   enable: '启用',
   remove: '删除',
   removeConfirm: '确认删除',
   actionBusy: '处理中…',
   actionFailed: '操作失败',
-  restartHint: '停用后下次启动生效；删除需重启 Host。',
+  restartHint: '停用后下次启动生效；删除 / 更新后请重启 Host。',
 } satisfies Record<string, string>
 
 /** Plugin inventory locale key union. */
@@ -58,11 +59,12 @@ export const en = {
   failed: 'Mount failed',
   unloading: 'Unloading',
   edit: 'Open folder',
+  update: 'Update',
   disable: 'Disable',
   enable: 'Enable',
   remove: 'Delete',
   removeConfirm: 'Confirm delete',
   actionBusy: 'Working…',
   actionFailed: 'Action failed',
-  restartHint: 'Disable applies on next start; delete requires a Host restart.',
+  restartHint: 'Disable applies on next start; delete / update require a Host restart.',
 } satisfies Record<PluginInventoryLocaleKey, string>
