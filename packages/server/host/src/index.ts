@@ -12,6 +12,7 @@ import {
 import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { createPolicyEngineFromFile } from "@xrkseek/policy";
 import { hostSettingsPath, resolveXrkHome, type HostConfig } from "@xrkseek/server-config";
+import { installOutboundHttpProxy } from "./http-proxy.js";
 import {
   applyXrkProductBootPolicy,
   chainPublicHandlers,
@@ -29,6 +30,7 @@ import {
   attachDshCompatUpgrades,
   DSH_SETTINGS_NAMESPACES,
   DSH_SETTINGS_DEFAULTS,
+  runPluginMutate,
   type HarnessHttpServer,
   type DshCompatOptions,
   ensureXrkPlatformClientBootEntries,
@@ -296,6 +298,9 @@ export function createHostManager(): HostManager {
   return {
     async spawn(config, factory, options) {
       const log = options?.logger;
+      if (installOutboundHttpProxy()) {
+        log?.info("outbound HTTP proxy installed (HTTP(S)_PROXY / ALL_PROXY / NO_PROXY)");
+      }
       const id = `host_${++seq}`;
       const sessionsDir = config.runtime.sessionsDir?.trim();
       const store: SessionStore = sessionsDir
@@ -658,6 +663,19 @@ export function createHostManager(): HostManager {
             }
           : {}),
         plugins: facePlugins,
+        removeUserPlugin: async (spec) => {
+          const pluginsDir =
+            config.runtime.pluginsDir?.trim() ||
+            path.join(resolveXrkHome(), "plugins");
+          const result = await runPluginMutate({
+            action: "remove",
+            spec,
+            pluginsDir,
+          });
+          return result.ok
+            ? { ok: true as const }
+            : { ok: false as const, error: result.error ?? result.stderr };
+        },
         ...(mcpFileSourced
           ? {
               syncMcpServers: async (

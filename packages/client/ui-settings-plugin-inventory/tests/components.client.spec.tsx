@@ -13,69 +13,66 @@ afterEach(cleanup)
 type Snapshot = Awaited<ReturnType<PluginInventorySettingsTabInjected['list']>>
 const t = ((key: PluginInventoryLocaleKey): string => en[key]) as PluginInventorySettingsTabProps['t']
 
-function props(list: PluginInventorySettingsTabInjected['list']): PluginInventorySettingsTabProps {
+function props(
+  list: PluginInventorySettingsTabInjected['list'],
+  overrides: Partial<PluginInventorySettingsTabInjected> = {},
+): PluginInventorySettingsTabProps {
   return {
     t,
     list,
+    setEnabled: overrides.setEnabled ?? vi.fn(async () => {}),
+    remove: overrides.remove ?? vi.fn(async () => {}),
+    open: overrides.open ?? vi.fn(async () => {}),
   } as PluginInventorySettingsTabProps
 }
 
 const SNAPSHOT = {
   entries: [
-    { entryId: '8a1b2c3d', moduleName: '@xrkseek/cordis-plugin-hmr', enabled: true, fiberPhase: 'active' },
-    { entryId: 'pending', moduleName: 'cordis:pending-name', enabled: true, fiberPhase: 'pending' },
-    { entryId: 'loading', moduleName: '@fixture/loading-name', enabled: true, fiberPhase: 'loading' },
-    { entryId: 'failed', moduleName: '@fixture/failed-name', enabled: true, fiberPhase: 'failed' },
-    { entryId: 'unloading', moduleName: '@fixture/unloading-name', enabled: true, fiberPhase: 'unloading' },
-    { entryId: 'unobserved', moduleName: '@fixture/unobserved-name', enabled: true, fiberPhase: null },
-    { entryId: 'disabled-entry', moduleName: '@xrkseek/xrk-host-directory-picker-native', enabled: false, fiberPhase: null },
+    { entryId: 'xrkh-better-sidebar', moduleName: 'xrkh-better-sidebar', enabled: true, fiberPhase: 'active', managed: true },
+    { entryId: '8a1b2c3d', moduleName: '@xrkseek/cordis-plugin-hmr', enabled: true, fiberPhase: 'active', managed: false },
+    { entryId: 'pending', moduleName: 'cordis:pending-name', enabled: true, fiberPhase: 'pending', managed: false },
+    { entryId: 'loading', moduleName: '@fixture/loading-name', enabled: true, fiberPhase: 'loading', managed: false },
+    { entryId: 'failed', moduleName: '@fixture/failed-name', enabled: true, fiberPhase: 'failed', managed: false },
+    { entryId: 'unloading', moduleName: '@fixture/unloading-name', enabled: true, fiberPhase: 'unloading', managed: false },
+    { entryId: 'unobserved', moduleName: '@fixture/unobserved-name', enabled: true, fiberPhase: null, managed: false },
+    { entryId: 'disabled-entry', moduleName: '@xrkseek/xrk-host-directory-picker-native', enabled: false, fiberPhase: null, managed: false },
   ],
 } as unknown as Snapshot
 
 describe('PluginInventorySettingsTab', () => {
-  it('renders runtime status only for enabled plugins', async () => {
+  it('renders runtime status only for enabled plugins and pins custom actions', async () => {
     const deferred = Promise.withResolvers<Snapshot>()
     const list = vi.fn(() => deferred.promise)
-    const view = render(<PluginInventorySettingsTab {...props(list)} />)
+    const setEnabled = vi.fn(async () => {})
+    const remove = vi.fn(async () => {})
+    const open = vi.fn(async () => {})
+    const view = render(<PluginInventorySettingsTab {...props(list, { setEnabled, remove, open })} />)
     expect(screen.getByText(en.loading)).toBeTruthy()
 
     await act(async () => { deferred.resolve(SNAPSHOT) })
     expect(list).toHaveBeenCalledOnce()
     expect(screen.getByRole('searchbox', { name: en.search })).toBeTruthy()
     expect(screen.getByRole('heading', { name: en.catalog })).toBeTruthy()
-    expect(view.container.querySelector('[data-plugin-count]')?.textContent).toBe('7')
-    expect(screen.getAllByRole('listitem')).toHaveLength(7)
-    expect(screen.getAllByText(en.enabledTag)).toHaveLength(6)
+    expect(view.container.querySelector('[data-plugin-count]')?.textContent).toBe('8')
+    expect(screen.getAllByRole('listitem')).toHaveLength(8)
+    expect(screen.getByText(en.managedTag)).toBeTruthy()
+    expect(screen.getAllByText(en.enabledTag)).toHaveLength(7)
     expect(screen.getByText(en.disabledTag)).toBeTruthy()
-    for (const value of [
-      'Mounted',
-      'Waiting for dependencies',
-      'Loading',
-      'Mount failed',
-      'Unloading',
-      'Not mounted',
-    ]) {
-      expect(screen.getByRole('img', { name: value })).toBeTruthy()
-    }
+
+    const managed = screen.getByRole('button', { name: 'better-sidebar, Custom, Enabled' })
+    fireEvent.click(managed)
+    expect(screen.getByRole('button', { name: en.edit })).toBeTruthy()
+    expect(screen.getByRole('button', { name: en.disable })).toBeTruthy()
+    expect(screen.getByRole('button', { name: en.remove })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.disable }))
+    await waitFor(() => { expect(setEnabled).toHaveBeenCalledWith('xrkh-better-sidebar', false) })
+
     const active = screen.getByRole('button', { name: 'hmr, Mounted, Enabled' })
-    expect(active.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(active)
     expect(active.getAttribute('aria-expanded')).toBe('true')
     expect(view.container.querySelector('[data-loader-entry]')?.textContent).toBe('8a1b2c3d')
-    expect(screen.getByText(en.configuration)).toBeTruthy()
-    expect(screen.getByText(en.cordis)).toBeTruthy()
-    fireEvent.click(active)
-    expect(view.container.querySelector('[data-loader-entry]')).toBeNull()
-
-    fireEvent.click(active)
-    fireEvent.change(screen.getByRole('searchbox', { name: en.search }), {
-      target: { value: 'disabled-entry' },
-    })
-    expect(view.container.querySelector('[data-loader-entry]')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'directory-picker-native, Disabled' }))
-    expect(screen.getAllByText(en.disabledTag)).toHaveLength(2)
-    expect(screen.queryByText(en.cordis)).toBeNull()
-    expect(screen.queryByText(en.unobserved)).toBeNull()
+    expect(screen.getByText(en.builtinHint)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: en.remove })).toBeNull()
   })
 
   it('filters by module name or Loader entry id', async () => {

@@ -1,13 +1,10 @@
 id: mcp-attach
-title: 挂载 MCP 能力
-description: 经 Settings MCP 粘贴 mcpServers 并确认连接
+title: 挂载 / 改 MCP
+description: settings_mutate ns=mcp（全局 Host ~/.xrk）
 prompt: |
-  Follow skill **xrk-capability-attach**:
-  1. Confirm command+args or url, server id, allowConnect
-  2. Emit pasteable {"mcpServers":{…}} (no env; secrets → Credentials)
-  3. Guide: Settings → Plugins → Plugin config → paste JSON → **添加** → Allow connect → Save
-  4. settings.mutate ns=mcp only with my explicit OK
-  5. Verify row status + inventory; explain park on policy deny
+  Use **settings_get** / **settings_mutate** on Host Settings (global ~/.xrk — not the workspace folder).
+  For MCP: set/merge servers[] + allowConnect; may edit args/cwd/proxy env (HTTP_PROXY…).
+  Wait for tool result (connect). Verify with /mcp.
 instructions: |
-  Prefer MCP Settings over process-plugin scaffolding. No mutate without confirmation. Do not invent Cursor hooks or auto-mkdir workspace .xrk.
+  Prefer settings_mutate over coaching Settings paste. Do not write secrets into mcp env.
 parameters: []

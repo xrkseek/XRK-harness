@@ -101,7 +101,6 @@ describe("Face settings U2", () => {
       "minimal",
       "shell",
       "frugal",
-      "plan",
       "shallow",
       "harness",
     ]);
@@ -149,7 +148,7 @@ describe("Face settings U2", () => {
     if (setUi.result.ok) {
       expect(setUi.result.value).toMatchObject({
         scope: "ui",
-        values: { theme: "dark", locale: "zh-CN" },
+        values: { theme: "dark", locale: "zh" },
       });
     }
 
@@ -161,7 +160,24 @@ describe("Face settings U2", () => {
       const v = scoped.result.value as {
         values: { ui: { theme: string; locale: string } };
       };
-      expect(v.values.ui).toEqual({ theme: "dark", locale: "zh-CN" });
+      expect(v.values.ui).toEqual({ theme: "dark", locale: "zh" });
+    }
+
+    const described = await dispatchFaceMethod(rt, "settings.describe", "d0", {});
+    expect(described.result.ok).toBe(true);
+    if (described.result.ok) {
+      const themeNs = (
+        described.result.value as {
+          namespaces: { ns: string; value: Record<string, unknown> }[];
+        }
+      ).namespaces.find((n) => n.ns === "ui-theme");
+      const localeNs = (
+        described.result.value as {
+          namespaces: { ns: string; value: Record<string, unknown> }[];
+        }
+      ).namespaces.find((n) => n.ns === "locale");
+      expect(themeNs?.value).toMatchObject({ preference: "dark" });
+      expect(localeNs?.value).toMatchObject({ preference: "zh" });
     }
 
     const badTheme = await dispatchFaceMethod(rt, "settings.set", "s2", {
@@ -299,6 +315,26 @@ describe("Face settings U2", () => {
     expect(bad.result.ok).toBe(false);
   });
 
+  it("ui-theme preference light applies live to runtime.uiSettings", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-theme-live-"));
+    const rt = runtime({ productDir: dir, hostPublic: true });
+    await dispatchFaceMethod(rt, "settings.describe", "tl0", {});
+    expect(rt.uiSettings.theme).toBe("system");
+
+    const mut = await dispatchFaceMethod(rt, "settings.mutate", "tl1", {
+      ns: "ui-theme",
+      ops: [{ op: "set", path: ["preference"], value: "light" }],
+    });
+    expect(mut.result.ok).toBe(true);
+    if (!mut.result.ok) return;
+    expect(mut.result.value).toMatchObject({
+      ns: "ui-theme",
+      applies: "live",
+      value: { preference: "light" },
+    });
+    expect(rt.uiSettings.theme).toBe("light");
+  });
+
   it("permission mutate keeps schemastery envelope; rejects unknown preset", async () => {
     const rt = runtime();
     await dispatchFaceMethod(rt, "settings.describe", "pd", {});
@@ -428,7 +464,39 @@ describe("Face settings U2", () => {
     });
     expect(withEnv.result.ok).toBe(false);
     if (!withEnv.result.ok) {
-      expect(withEnv.result.error.code).toBe("settings-rejected");
+      expect(withEnv.result.error.message).toMatch(/not allowed|Credentials/i);
+    }
+
+    const withProxy = await dispatchFaceMethod(rt, "settings.mutate", "mpx", {
+      ns: "mcp",
+      ops: [
+        {
+          op: "set",
+          path: ["servers"],
+          value: [
+            {
+              serverName: "proxied",
+              command: "npx",
+              env: { HTTPS_PROXY: "http://127.0.0.1:7897" },
+            },
+          ],
+        },
+      ],
+    });
+    expect(withProxy.result.ok).toBe(true);
+    if (withProxy.result.ok) {
+      const servers = (
+        withProxy.result.value as {
+          value: { servers: { serverName: string; env?: Record<string, string> }[] };
+        }
+      ).value.servers;
+      expect(servers).toEqual([
+        {
+          serverName: "proxied",
+          command: "npx",
+          env: { HTTPS_PROXY: "http://127.0.0.1:7897" },
+        },
+      ]);
     }
 
     const overlay = await dispatchFaceMethod(rt, "settings.mutate", "mc", {

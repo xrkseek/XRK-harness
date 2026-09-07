@@ -3,14 +3,14 @@
 export type AgentToolComposition = "minimal" | "harness";
 
 /**
- * Built-in session badges (six tiers).
+ * Built-in session badges (five tiers).
+ * Plan mode is `/plan` / `exit_plan_mode`, not a badge.
  * Order matches product picker: lighter → fuller.
  */
 export type CatalogAgentPresetId =
   | "minimal"
   | "shell"
   | "frugal"
-  | "plan"
   | "shallow"
   | "harness";
 
@@ -41,8 +41,8 @@ export interface AgentPresetProfile {
   /** Skip harness `tool:subagent` routing prompt when subagents are off. */
   readonly subagentRouting: boolean;
   /**
-   * Seed `plan/mode` active on session.create (Codex/Cursor Plan).
-   * Leaving plan via `exit_plan_mode` continues on the same tool surface (Build).
+   * Seed `plan/mode` active on session.create.
+   * Prefer `/plan` for collaboration mode; badges keep this false.
    */
   readonly planModeDefault: boolean;
 }
@@ -110,20 +110,6 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     },
   },
   {
-    id: "plan",
-    displayName: "Plan",
-    description:
-      "Full tools; starts in plan mode (explore/design). exit_plan_mode approval → Build on the same session",
-    profile: {
-      id: "plan",
-      composition: "harness",
-      tools: FULL_TOOLS,
-      subagents: SUBAGENTS_OFF,
-      subagentRouting: false,
-      planModeDefault: true,
-    },
-  },
-  {
     id: "shallow",
     displayName: "Shallow",
     description:
@@ -165,29 +151,33 @@ const PROFILE_BY_ID = new Map(
   FACE_AGENT_PRESETS.map((p) => [p.id, p.profile] as const),
 );
 
-/** Host `--preset` / env ids (includes legacy `server`). */
+/** Host `--preset` / env ids (includes legacy `server` / `plan` → harness). */
 export const HOST_CLI_PRESET_IDS = [
   ...FACE_AGENT_PRESETS.map((p) => p.id),
   "server",
+  "plan",
 ] as const;
 
-/** Ids accepted on the wire (includes legacy `server` → harness). */
+/** Ids accepted on the wire (includes legacy `server` / `plan` → harness). */
 export const FACE_AGENT_PRESET_IDS = new Set<string>(HOST_CLI_PRESET_IDS);
 
 /**
  * Normalize wire / Host `--preset` to a catalog profile.
  * Unknown ids fall back to `hostFallback` (default harness).
+ * Legacy `server` and `plan` map to harness tools (`/plan` owns collaboration mode).
  */
 export function resolveAgentPresetProfile(
   agentPreset: string | undefined,
   hostFallback = "harness",
 ): AgentPresetProfile {
   const raw = (agentPreset?.trim() || hostFallback).trim();
-  if (raw === "server") return PROFILE_BY_ID.get("harness")!;
+  if (raw === "server" || raw === "plan") return PROFILE_BY_ID.get("harness")!;
   const hit = PROFILE_BY_ID.get(raw as CatalogAgentPresetId);
   if (hit) return hit;
   const fallbackRaw = hostFallback.trim();
-  if (fallbackRaw === "server") return PROFILE_BY_ID.get("harness")!;
+  if (fallbackRaw === "server" || fallbackRaw === "plan") {
+    return PROFILE_BY_ID.get("harness")!;
+  }
   return (
     PROFILE_BY_ID.get(fallbackRaw as CatalogAgentPresetId) ??
     PROFILE_BY_ID.get("harness")!

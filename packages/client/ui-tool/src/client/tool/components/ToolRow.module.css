@@ -263,6 +263,7 @@
 .terminalBody,
 .diffBody,
 .readBody,
+.imageBody,
 .searchBody,
 .webBody {
   margin: 4px 0 4px 4px;
@@ -273,6 +274,20 @@
    retained rows. Same column indent as the card body. */
 .searchRecovery {
   margin: 4px 0 4px 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.imageLabel {
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+  font: var(--dsw-font-sm-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.imageMeta {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: var(--dsw-font-xs-13);

@@ -8,6 +8,7 @@
  * client half (see the contract module doc). Export discipline:
  * packages/client/AGENTS.md.
  */
+import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import type { HostObservable } from '@xrkseek/client-ui-slots'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -20,7 +21,8 @@ import { en, zh, type WorkspaceKey } from './locales.ts'
 
 export type {
   DirectoryFlowOwnerProps, DirectoryFlowSlotName, DirectoryPickingHooks, DirectoryPickingInjected,
-  WorkspaceBrowserInjected, WorkspaceBrowserProps, WorkspacePickerInjected, WorkspacePickerProps,
+  WorkspaceBrowserInjected, WorkspaceBrowserProps, WorkspaceHostHooks, WorkspacePickerInjected,
+  WorkspacePickerProps,
 } from './contract/slots.ts'
 export type { WorkspaceKey } from './locales.ts'
 
@@ -42,7 +44,7 @@ const NS = 'workspace'
  * provides a waitable service. apply therefore depends on each slot
  * declaration through `slots.inject()` instead of assuming order.
  */
-export const inject = ['slots', 'sessions', 'workspaces', 'locale']
+export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'connection']
 
 /**
  * Register the browser and picker once their slot declarations are on the
@@ -52,6 +54,7 @@ export const inject = ['slots', 'sessions', 'workspaces', 'locale']
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workspace: dictionaries')
+  const connection = ctx.get('connection') as ConnectionHandle
 
   const searchSessions: WorkspaceBrowserInjected['searchSessions'] = async (query, signal) => {
     const result = await ctx.sessions.search(query, signal)
@@ -99,7 +102,10 @@ export function apply(ctx: ClientContext): void {
       await ctx.workspaces.insertSessionBefore(workspaceId, sessionId, beforeSessionId)
     },
     createWorkspace: input => ctx.workspaces.create(input),
-    hooks: { directoryFlow: browserFlowSource },
+    hooks: {
+      directoryFlow: browserFlowSource,
+      hostDescription: connection.hostDescription,
+    },
   })
   const pickerInjected = (): WorkspacePickerInjected => ({
     createWorkspace: input => ctx.workspaces.create(input),

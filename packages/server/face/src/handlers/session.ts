@@ -6,9 +6,7 @@ import {
   sessionEventCount,
   withdrawAdmit,
 } from "@xrkseek/core-session";
-import { assertPolicyAllow } from "@xrkseek/policy";
-import { contentHasImage, type MessageContent, type SessionEvent } from "@xrkseek/protocol";
-import { type FaceRuntime } from "../context.js";
+import { type SessionEvent } from "@xrkseek/protocol";
 import {
   FACE_AGENT_PRESET_IDS,
   canonicalAgentPresetId,
@@ -36,14 +34,9 @@ import {
   buildFaceModelCatalog,
   resolveSessionModelSelection,
   routeServed,
-  saveAgentDefaultModel,
-  type FaceModelSelection,
 } from "../model-catalog.js";
-import {
-  liveRouteAllowsImageInput,
-  resolveLlmForSelection,
-} from "../llm-resolve.js";
-import { publishRemoteEvent } from "../remote-event.js";
+import { liveRouteAllowsImageInput } from "../llm-resolve.js";
+import { selectSessionModel } from "../select-session-model.js";
 import { persistWorkspaceDoc } from "../workspace-store.js";
 import { resolveSessionCwd } from "../session-cwd.js";
 import {
@@ -52,22 +45,6 @@ import {
   sessionHistoryTailProjectionKeys,
   snapshotWireBlock,
 } from "../projections/snapshot-keys.js";
-
-function sessionHasImageContent(runtime: FaceRuntime, sessionId: string): boolean {
-  if (runtime.sessionHasImage.has(sessionId)) return true;
-  if (runtime.sessionImageScanned.has(sessionId)) return false;
-  for (const ev of readSessionEvents(runtime.store, sessionId)) {
-    if (ev.type !== "user/message" && ev.type !== "prompt/admitted") continue;
-    const content = (ev as { content?: MessageContent }).content;
-    if (content !== undefined && contentHasImage(content)) {
-      runtime.sessionHasImage.add(sessionId);
-      runtime.sessionImageScanned.add(sessionId);
-      return true;
-    }
-  }
-  runtime.sessionImageScanned.add(sessionId);
-  return false;
-}
 
 export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   const p = asRecord(payload);
@@ -481,92 +458,14 @@ export const sessionModels: FaceHandler = async (runtime, _rpcId, payload) => {
 
 export const sessionSelectModel: FaceHandler = async (runtime, _rpcId, payload) => {
   const p = asRecord(payload);
-  const sessionId = String(p.sessionId ?? "");
-  const provider = String(p.provider ?? "");
-  const model = String(p.model ?? "");
-  if (!sessionId || !provider || !model) {
-    return {
-      ok: false,
-      error: {
-        code: "invalid-payload",
-        message: "sessionId, provider, model required",
-      },
-    };
-  }
-  if (!runtime.store.has(sessionId)) {
-    return {
-      ok: false,
-      error: { code: "session-not-found", message: sessionId },
-    };
-  }
-  if (runtime.policy) {
-    try {
-      assertPolicyAllow(runtime.policy, {
-        kind: "provider.use",
-        providerId: provider,
-      });
-    } catch (err) {
-      return {
-        ok: false,
-        error: {
-          code: "policy-denied",
-          message: err instanceof Error ? err.message : String(err),
-        },
-      };
-    }
-  }
-  const selected: FaceModelSelection = {
-    provider,
-    model,
-    ...(typeof p.reasoningEffort === "string" && p.reasoningEffort.trim()
-      ? { reasoningEffort: p.reasoningEffort.trim() }
+  return selectSessionModel(runtime, {
+    sessionId: String(p.sessionId ?? ""),
+    provider: String(p.provider ?? ""),
+    model: String(p.model ?? ""),
+    ...(typeof p.reasoningEffort === "string"
+      ? { reasoningEffort: p.reasoningEffort }
       : {}),
-  };
-  let resolved;
-  try {
-    resolved = resolveLlmForSelection(runtime, selected);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (/unknown provider/i.test(message)) {
-      return {
-        ok: false,
-        error: {
-          code: "provider-not-found",
-          message: `unknown provider: ${provider}`,
-        },
-      };
-    }
-    return {
-      ok: false,
-      error: {
-        code: "model-unavailable",
-        message,
-        details: { provider, model },
-      },
-    };
-  }
-  const modalities = resolved.adapter.inputModalities ?? ["text"];
-  if (sessionHasImageContent(runtime, sessionId) && !modalities.includes("image")) {
-    return {
-      ok: false,
-      error: {
-        code: "model-unavailable",
-        message: `Model "${model}" does not accept image input, but this session already contains images; select an image-capable model.`,
-        details: { provider, model },
-      },
-    };
-  }
-  runtime.sessionModels.set(sessionId, selected);
-  try {
-    await saveAgentDefaultModel(runtime, selected);
-    publishRemoteEvent(runtime.bus, "settings/document-updated", [
-      "agent-default-model",
-      runtime.settingsNamespaces.ensure("agent-default-model").revision,
-    ]);
-  } catch {
-    /* session selection still applies */
-  }
-  return { ok: true, value: { selected } };
+  });
 };
 
 export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {

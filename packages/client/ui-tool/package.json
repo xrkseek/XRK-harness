@@ -29,6 +29,7 @@
   "xrk": {
     "client": {
       "inject": [
+        "@xrkseek/client-connection",
         "@xrkseek/client-runtime",
         "@xrkseek/client-locale",
         "@xrkseek/client-ui-conversation"
@@ -47,11 +48,13 @@
   "peerDependencies": {
     "@xrkseek/cordis": "workspace:^",
     "@xrkseek/xrk-api-remotes": "workspace:^",
+    "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-ui-conversation": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/xrk-attachment": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "react": "^18.2.0"
   },
@@ -66,6 +69,7 @@
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/client-web-react": "workspace:^",
+    "@xrkseek/xrk-attachment": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@testing-library/react": "^16.1.0",
     "@types/react": "~18.3.1",

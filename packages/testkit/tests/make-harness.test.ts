@@ -21,6 +21,9 @@ describe("makeHarness", () => {
     const names = h.composition.tools.list().map((t) => t.name);
     expect(names).toContain("todo_write");
     expect(names).toContain("ask_user");
+    expect(names).toContain("settings_get");
+    expect(names).toContain("settings_mutate");
+    expect(names).not.toContain("mcp_attach");
     expect(names).toContain("web_search");
     expect(names).toContain("web_fetch");
     expect(names).toContain("skill");

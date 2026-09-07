@@ -46,6 +46,8 @@ export interface HostApi {
   describe(request: RpcRequest<{}>): Promise<RpcResponse<{
     version: string
     cwd: string
+    /** Host account home; POSIX tool/workspace paths may display as `~`. */
+    home: string
     provider?: string
     model?: string
     attachedSessions: number

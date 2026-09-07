@@ -56,7 +56,6 @@ export function mountFaceConsole(root: HTMLElement): void {
     "minimal",
     "shell",
     "frugal",
-    "plan",
     "shallow",
     "harness",
   ]) {

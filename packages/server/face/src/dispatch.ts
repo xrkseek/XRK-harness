@@ -79,6 +79,9 @@ import {
   messageFeedbackList,
   messageFeedbackPut,
   pluginInventoryList,
+  pluginInventoryOpen,
+  pluginInventoryRemove,
+  pluginInventorySetEnabled,
   processChannelsList,
 } from "./handlers/remotes.js";
 import {
@@ -175,6 +178,9 @@ const HANDLERS: Record<string, FaceHandler> = {
   "commands/list": commandsList,
   "commands/execute": commandsExecute,
   "pluginInventory/list": pluginInventoryList,
+  "pluginInventory/setEnabled": pluginInventorySetEnabled,
+  "pluginInventory/remove": pluginInventoryRemove,
+  "pluginInventory/open": pluginInventoryOpen,
   "processChannels/list": processChannelsList,
   "messageFeedback/list": messageFeedbackList,
   "messageFeedback/put": messageFeedbackPut,

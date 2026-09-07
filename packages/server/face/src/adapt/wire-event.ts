@@ -110,13 +110,29 @@ function wireContentBlocks(content: MessageContent): readonly (
         width: number;
         height: number;
         name?: string;
+        originalDimensions?: { width: number; height: number };
       };
     }
 )[] {
   return asContentBlocks(content).map((block) =>
     block.type === "text"
       ? { type: "text" as const, text: block.text }
-      : { type: "image" as const, attachment: { ...block.attachment } },
+      : {
+          type: "image" as const,
+          attachment: {
+            attachmentId: block.attachment.attachmentId,
+            mediaType: block.attachment.mediaType,
+            bytes: block.attachment.bytes,
+            width: block.attachment.width,
+            height: block.attachment.height,
+            ...(block.attachment.name !== undefined
+              ? { name: block.attachment.name }
+              : {}),
+            ...(block.attachment.originalDimensions !== undefined
+              ? { originalDimensions: { ...block.attachment.originalDimensions } }
+              : {}),
+          },
+        },
   );
 }
 
@@ -302,6 +318,7 @@ export function toFaceWireSessionEvent(
             ],
             source: { callId: event.result.toolCallId },
           },
+          ...(event.result.meta !== undefined ? { meta: event.result.meta } : {}),
           ...(event.result.isError
             ? {
                 error: {

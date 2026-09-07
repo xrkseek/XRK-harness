@@ -30,12 +30,13 @@ type RemoteLookup<T> = (
 
 function request(
   query: string,
-  options: { quoted?: boolean; signal?: AbortSignal } = {},
+  options: { quoted?: boolean; drilled?: boolean; signal?: AbortSignal } = {},
 ): CandidateRequest {
   return {
     query,
     quoted: options.quoted ?? false,
     position: 'inline',
+    drilled: options.drilled ?? false,
     signal: options.signal ?? new AbortController().signal,
   }
 }
@@ -209,6 +210,7 @@ describe('candidates', () => {
       session,
       position: 'inline',
       via: 'menu',
+      action: 'pick',
       span: { start: 0, end: 6, draftRev: 1 },
     })).toEqual({
       insert: {
@@ -276,18 +278,33 @@ describe('candidates', () => {
 })
 
 describe('pick and codec', () => {
-  const pick = (source: InputTriggerSource, candidate: InputTriggerCandidate) => source.onPick({
+  const pick = (
+    source: InputTriggerSource,
+    candidate: InputTriggerCandidate,
+    action: 'pick' | 'drill' = 'pick',
+  ) => source.onPick({
     candidate,
     session,
     position: 'inline',
     via: 'menu',
+    action,
     span: { start: 0, end: 1, draftRev: 1 },
   })
 
-  it('inserts files as atomic icon labels while keeping directory completion open', async () => {
+  it('inserts files and folders as atomic icon labels; Tab drills directories', async () => {
     const { source } = await bench()
     const [directory, file] = await source.candidates(session, request(''))
-    expect(pick(source, directory!)).toEqual({ text: '@src/', continue: true })
+    expect(directory).toMatchObject({ drill: true })
+    expect(pick(source, directory!)).toEqual({
+      insert: {
+        source: 'reference',
+        ref: '@src/',
+        label: 'src/',
+        appearance: 'folder',
+        clipboardText: '@src/',
+      },
+    })
+    expect(pick(source, directory!, 'drill')).toEqual({ text: '@src/', continue: true })
     expect(pick(source, file!)).toEqual({
       insert: {
         source: 'reference',
@@ -298,7 +315,16 @@ describe('pick and codec', () => {
       },
     })
     const [quotedDirectory] = await source.candidates(session, request('', { quoted: true }))
-    expect(pick(source, quotedDirectory!)).toEqual({ text: '@"src/', continue: true })
+    expect(pick(source, quotedDirectory!, 'drill')).toEqual({ text: '@"src/', continue: true })
+    expect(pick(source, quotedDirectory!)).toEqual({
+      insert: {
+        source: 'reference',
+        ref: '@"src/',
+        label: 'src/',
+        appearance: 'folder',
+        clipboardText: '@"src/',
+      },
+    })
   })
 
   it('inserts sessions as atomic chips whose clipboard and model forms are canonical mentions', async () => {

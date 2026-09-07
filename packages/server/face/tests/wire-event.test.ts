@@ -324,6 +324,57 @@ describe("Face DSH wire-event adapt", () => {
     });
   });
 
+  it("tool/result forwards presentation meta and image content blocks", () => {
+    const wire = toFaceWireSessionEvent(
+      {
+        type: "tool/result",
+        ts: 14,
+        turnId: "t1",
+        stepId: "s1",
+        result: {
+          toolCallId: "img1",
+          name: "read_image",
+          content: [
+            { type: "text", text: "<path>a.png</path>\n<type>image</type>\n<content>\nx\n</content>" },
+            {
+              type: "image",
+              attachment: {
+                attachmentId: "sha256:ab",
+                mediaType: "image/png",
+                bytes: 12,
+                width: 2,
+                height: 2,
+              },
+            },
+          ],
+          meta: { path: "a.png" },
+        },
+      },
+      7,
+    );
+    expect(wire.data).toMatchObject({
+      meta: { path: "a.png" },
+      message: {
+        content: [{
+          content: [
+            { type: "text" },
+            {
+              type: "image",
+              attachment: {
+                attachmentId: "sha256:ab",
+                mediaType: "image/png",
+                bytes: 12,
+                width: 2,
+                height: 2,
+              },
+            },
+          ],
+        }],
+        source: { callId: "img1" },
+      },
+    });
+  });
+
   it("turn/end preserves stored reason on wire", () => {
     const wire = toFaceWireSessionEvent(
       {

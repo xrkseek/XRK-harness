@@ -17,7 +17,7 @@
 
 Recipe instructions 以 `## Recipe` workspace 块进入三层 system 字符串（`systemExtra`）。站立 workspace assistant/rules 与 skill catalog 是 durable `user/message` injects — 见 [workspace-inject.md](./workspace-inject.md)。Skill slash 正文留在用户事件中。
 
-Skill slash **不是** Face 命令：`session.prompt` 上未知 `/name` 先按文本 admit，再在此展开。`commands/list` / `commands/execute` 仍只覆盖 builtins、进程插件与 recipes。
+Skill slash **不是** Face 命令：未知 `/name` 与 **workspace recipe** 在 `session.prompt` 上均 **admit 为文本**，再由 assemble 展开。Face `commands/list` 仍可列出 recipes（标注 expands），但 `commands/execute` **不**执行 recipes——只执行 builtins（含 `/plan` · `/permission` · `/mcp` · `/compact` …）与进程 `kind: commands` 插件。
 
 ## Presets
 
@@ -58,7 +58,7 @@ Resolve/apply: `@xrkseek/workspace` (`createSlashResolver` · `tryApplySlashReci
 
 Recipe instructions enter the three-layer system string as a `## Recipe` workspace block (`systemExtra`). Standing workspace assistant/rules and the skill catalog are durable `user/message` injects — see [workspace-inject.md](./workspace-inject.md). Skill slash body stays in the user event.
 
-Skill slash is **not** a Face command: unknown `/name` on `session.prompt` is admitted as text first, then expanded here. `commands/list` / `commands/execute` still cover only builtins, process plugins, and recipes.
+Skill slash is **not** a Face command: unknown `/name` **and workspace recipes** are **admitted as text** on `session.prompt`, then expanded here. Face `commands/list` may still list recipes (marked expands), but `commands/execute` does **not** run recipes — only builtins (`/plan` · `/permission` · `/mcp` · `/compact` …) and process `kind: commands` plugins.
 
 ## Presets
 

@@ -11,7 +11,7 @@ import type {} from '@xrkseek/xrk-api-remotes/client'
 import type {} from '@xrkseek/client-locale/client'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import type {
-  ClientSessionContext, InputTriggerServiceContract, InputTriggerSource,
+  ClientSessionContext, InputTriggerCrumb, InputTriggerServiceContract, InputTriggerSource,
 } from '@xrkseek/client-ui-input-trigger/client'
 import { formatFileMention } from '@xrkseek/xrk-file-reference/grammar'
 import type { FileReferenceCandidate } from '@xrkseek/xrk-file-reference/types'
@@ -34,7 +34,7 @@ export function apply(ctx: ClientContext): void {
     trigger: '@',
     name: 'reference',
     showGroupTitle: false,
-    async candidates(session: ClientSessionContext, { query, quoted, signal }) {
+    async candidates(session: ClientSessionContext, { query, quoted, drilled, signal }) {
       const files = ctx.remote.fileReferences.list(session.sessionId, query, signal).then(
         result => result.ok ? result.value : [],
         () => [],
@@ -47,25 +47,36 @@ export function apply(ctx: ClientContext): void {
         )
       const [fileItems, sessionItems] = await Promise.all([files, sessions])
       if (signal.aborted) return []
+      // The header already names the directory being listed; rows repeat path
+      // only when there is no header to carry it.
+      const withLocation = crumbsFor(query, quoted === true, drilled, t) === undefined
       return [
-        ...fileItems.flatMap(candidate => fileCandidate(candidate, quoted === true, t)),
+        ...fileItems.flatMap(candidate => fileCandidate(candidate, quoted === true, withLocation, t)),
         ...sessionItems.map(candidate => sessionCandidate(candidate, t)),
       ]
     },
-    onPick({ candidate }) {
+    header(_session, req) {
+      return crumbsFor(req.query, req.quoted === true, req.drilled, t)
+    },
+    onPick({ candidate, action }) {
       const value = parseCandidate(candidate.value)
       if (value?.kind === 'file') {
-        return value.fileKind === 'directory'
-          ? { text: value.mention, continue: true }
-          : {
-            insert: {
-              source: 'reference',
-              ref: value.mention,
-              label: value.label,
-              appearance: 'file',
-              clipboardText: value.mention,
-            },
-          }
+        // A directory row carries two verbs: the settling pick resolves the
+        // folder itself as an atomic reference, while the drill action (Tab /
+        // row chevron / a header crumb) keeps the literal descent text and
+        // the open menu.
+        if (value.fileKind === 'directory' && action === 'drill') {
+          return { text: value.mention, continue: true }
+        }
+        return {
+          insert: {
+            source: 'reference',
+            ref: value.mention,
+            label: value.fileKind === 'directory' ? `${value.label}/` : value.label,
+            appearance: value.fileKind === 'directory' ? 'folder' : 'file',
+            clipboardText: value.mention,
+          },
+        }
       }
       if (value?.kind === 'session') {
         return {
@@ -95,7 +106,49 @@ type ReferenceCandidateValue =
   | { kind: 'file'; fileKind: FileReferenceCandidate['kind']; label: string; mention: string }
   | { kind: 'session'; label: string; mention: string }
 
-function fileCandidate(candidate: FileReferenceCandidate, preserveQuote: boolean, t: Translate) {
+/**
+ * The breadcrumb of a drilled directory listing, from the workspace root down
+ * to the directory being listed. Only a drill produces one.
+ */
+function crumbsFor(
+  query: string,
+  quoted: boolean,
+  drilled: boolean,
+  t: Translate,
+): readonly InputTriggerCrumb[] | undefined {
+  if (!drilled) return undefined
+  const slash = query.lastIndexOf('/')
+  if (slash < 0) return undefined
+  const segments = query.slice(0, slash).split('/').filter(segment => segment !== '')
+  const crumbs: InputTriggerCrumb[] = [{
+    label: t('crumb.root'),
+    value: directoryValue(t('crumb.root'), quoted ? '@"' : '@'),
+  }]
+  for (const [index, segment] of segments.entries()) {
+    const path = segments.slice(0, index + 1).join('/')
+    const mention = formatFileMention({ path, kind: 'directory' }, quoted)
+    if (mention === undefined) return undefined
+    crumbs.push({
+      label: segment,
+      value: directoryValue(segment, mention),
+      ...(index === segments.length - 1 ? { current: true } : {}),
+    })
+  }
+  return crumbs
+}
+
+/** Project one directory destination as the drill payload `onPick` already understands. */
+function directoryValue(label: string, mention: string): string {
+  const value: ReferenceCandidateValue = { kind: 'file', fileKind: 'directory', label, mention }
+  return JSON.stringify(value)
+}
+
+function fileCandidate(
+  candidate: FileReferenceCandidate,
+  preserveQuote: boolean,
+  withLocation: boolean,
+  t: Translate,
+) {
   const mention = formatFileMention(candidate, preserveQuote)
   if (mention === undefined) return []
   const name = candidate.path.slice(candidate.path.lastIndexOf('/') + 1)
@@ -108,9 +161,10 @@ function fileCandidate(candidate: FileReferenceCandidate, preserveQuote: boolean
   }
   return [{
     name: `${t(directory ? 'candidate.folder' : 'candidate.file')} · ${name}${directory ? '/' : ''}`,
-    description: candidate.path,
+    ...(withLocation ? { description: candidate.path } : {}),
     section: t('section.files'),
     value: JSON.stringify(value),
+    ...(directory ? { drill: true as const } : {}),
   }]
 }
 

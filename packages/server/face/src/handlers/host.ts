@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import {
   hostCreateDirectory,
   hostListDirectory,
@@ -19,6 +20,7 @@ export const hostDescribe: FaceHandler = async (runtime) => {
       version: runtime.version,
       hostRoot: runtime.workspaceRoot,
       cwd: runtime.workspaceRoot,
+      home: homedir(),
       ...(first ? { provider: first.id } : {}),
       ...(brand?.defaultModel ? { model: brand.defaultModel } : {}),
       attachedSessions: runtime.store.list().length,

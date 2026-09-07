@@ -733,6 +733,23 @@ describe('arbitrate', () => {
     expect(controller.menu.getSnapshot().open).toBe(false)
   })
 
+  it('tab drills into a drillable highlight and picks a plain completion', async () => {
+    const drillable = readySource('/', 'command', [{ name: 'src', drill: true }, { name: 'plan' }], () => undefined)
+    const { controller } = controllerBench([drillable.source])
+    controller.track('/s', 2, { tier: 'plain' }, 1)
+    await tick()
+    expect(controller.arbitrate('tab', false)).toBe('consumed')
+    expect(drillable.picks[0]!.action).toBe('drill')
+    expect(drillable.picks[0]!.candidate.name).toBe('src')
+    // Plain row (no drill flag): Tab settles the highlighted completion.
+    controller.track('/p', 2, { tier: 'plain' }, 2)
+    await tick()
+    controller.arbitrate('down', false)
+    expect(controller.arbitrate('tab', false)).toBe('pick-highlighted')
+    expect(drillable.picks[1]!.action).toBe('pick')
+    expect(drillable.picks[1]!.candidate.name).toBe('plan')
+  })
+
   it('tab during a pending refinement is consumed: no pick, no focus traversal', async () => {
     const picks: string[] = []
     const cmd = deferredSource('/', 'command', {

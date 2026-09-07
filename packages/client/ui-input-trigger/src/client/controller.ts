@@ -13,7 +13,8 @@ import { detectTrigger } from '../core/detect.ts'
 import { MENU_CLOSED, menuReduce, seedGroups } from '../core/menu.ts'
 import type { MenuEvent, MenuState, TriggerHit } from '../core/contract.ts'
 import type {
-  ArbitrateKey, ArbitrateOutcome, ClientSessionContext, PickOutcome, InputTriggerSource, SubmitEnvelope, TriggerChar, TriggerGuard,
+  ArbitrateKey, ArbitrateOutcome, ClientSessionContext, InputTriggerCandidate, InputTriggerCrumb,
+  InputTriggerSource, PickAction, PickOutcome, SubmitEnvelope, TriggerChar, TriggerGuard,
 } from '../types.ts'
 
 /** Roster access the controller borrows from the root service (registration order preserved). */
@@ -58,11 +59,19 @@ export class InputTriggerController {
    */
   readonly lexicon: SnapshotStore<ReadonlyMap<TriggerChar, readonly string[]>> =
     createSnapshotStore<ReadonlyMap<TriggerChar, readonly string[]>>(new Map())
+  /**
+   * Crumbs published by each header-bearing source for the open menu, keyed
+   * by source name. Empty while closed or when no source publishes a header.
+   */
+  readonly headers: SnapshotStore<ReadonlyMap<string, readonly InputTriggerCrumb[]>> =
+    createSnapshotStore<ReadonlyMap<string, readonly InputTriggerCrumb[]>>(new Map())
 
   /** The authoritative hit: single truth for span CAS material (menu snapshot never carries it alone). */
   private hit: TriggerHit | null = null
   private fetch: AbortController | null = null
   private disposed = false
+  /** Whether the open menu was reached by a drill pick; cleared with the menu. */
+  private drilled = false
   /** Per-source lexicon unsubscribers (sources without the hook never enter). */
   private readonly lexiconOffs = new Map<InputTriggerSource, () => void>()
 
@@ -115,6 +124,7 @@ export class InputTriggerController {
       this.menu.set(seedGroups(this.menu.getSnapshot(), roster))
     }
     this.reduce({ type: 'hit', hit })
+    this.refreshHeaders(hit, roster)
     this.fetchCandidates(hit, roster)
   }
 
@@ -142,6 +152,7 @@ export class InputTriggerController {
     this.launcher.set(source)
     this.menu.set(seedGroups(this.menu.getSnapshot(), [match]))
     this.reduce({ type: 'hit', hit })
+    this.refreshHeaders(hit, [match])
     this.fetchCandidates(hit, [match])
   }
 
@@ -150,8 +161,9 @@ export class InputTriggerController {
    * and execute claim/insert outcomes via the scoped input events.
    * @param source - source (group) name.
    * @param index - candidate index within the group.
+   * @param action - settling pick (default) or the candidate's drill action.
    */
-  pick(source: string, index: number): void {
+  pick(source: string, index: number, action: PickAction = 'pick'): void {
     const state = this.menu.getSnapshot()
     const hit = this.hit
     if (this.disposed || !state.open || hit === null) return
@@ -160,16 +172,24 @@ export class InputTriggerController {
     if (candidate === undefined) return
     const src = this.deps.roster.sources(hit.trigger).find(s => s.name === source)
     if (src === undefined) return
-    const outcome = src.onPick({
-      candidate,
-      session: this.project(),
-      position: hit.position,
-      via: 'menu',
-      span: hit.span,
-    })
-    this.stopFetch()
-    this.reduce({ type: 'close' })
-    this.execute(outcome, hit.span)
+    this.settle(src, candidate, hit, action)
+  }
+
+  /**
+   * Pointer pick on one crumb of a source's menu header: route it through the
+   * same drill path a folder row takes, so returning to a step and descending
+   * into one share one outcome.
+   * @param source - source (group) name.
+   * @param index - crumb index within that source's published header.
+   */
+  pickCrumb(source: string, index: number): void {
+    const hit = this.hit
+    if (this.disposed || !this.menu.getSnapshot().open || hit === null) return
+    const crumb = this.headers.getSnapshot().get(source)?.[index]
+    if (crumb === undefined || crumb.current === true) return
+    const src = this.deps.roster.sources(hit.trigger).find(s => s.name === source)
+    if (src === undefined) return
+    this.settle(src, { name: crumb.label, value: crumb.value }, hit, 'drill')
   }
 
   /**
@@ -178,9 +198,9 @@ export class InputTriggerController {
    * @param composing - inside IME composition: everything passes.
    * @returns `pass` when the browser keeps the key (closed menu, no
    * highlight, or a vanished candidate), `consumed` when the menu handled
-   * the key without a settling pick (move, close, or a pending-refinement
-   * no-op), or `pick-highlighted` when the highlighted candidate settled
-   * and the menu closed.
+   * the key without a settling pick (move, close, drill descent, or a
+   * pending-refinement no-op), or `pick-highlighted` when the highlighted
+   * candidate settled and the menu closed.
    */
   arbitrate(key: ArbitrateKey, composing: boolean): ArbitrateOutcome {
     if (composing || this.disposed) return 'pass'
@@ -218,6 +238,10 @@ export class InputTriggerController {
         if (group === undefined || group.status !== 'ready') return 'consumed'
         const item = group.items[state.highlight.index]
         if (item === undefined) return 'pass'
+        if (item.drill === true) {
+          this.pick(state.highlight.source, state.highlight.index, 'drill')
+          return 'consumed'
+        }
         this.pick(state.highlight.source, state.highlight.index)
         return 'pick-highlighted'
       }
@@ -396,6 +420,7 @@ export class InputTriggerController {
           query: hit.query,
           quoted: hit.quoted,
           position: hit.position,
+          drilled: this.drilled,
           signal: controller.signal,
         })
         .then(
@@ -417,6 +442,64 @@ export class InputTriggerController {
     this.fetch = null
   }
 
+  /**
+   * Run one candidate (or crumb) through its source and apply the outcome.
+   *
+   * A drill is the one pick that leaves the menu open, so it is also the one
+   * that records how the next query was reached; every other pick closes the
+   * menu, which clears that record.
+   */
+  private settle(
+    src: InputTriggerSource,
+    candidate: InputTriggerCandidate,
+    hit: TriggerHit,
+    action: PickAction,
+  ): void {
+    const outcome = src.onPick({
+      candidate,
+      session: this.project(),
+      position: hit.position,
+      via: 'menu',
+      action,
+      span: hit.span,
+    })
+    this.stopFetch()
+    this.reduce({ type: 'close' })
+    // Claimed before the edit, and after the close above so the reducer's own
+    // teardown cannot clear it: the input may apply the descent through a
+    // synchronous editor commit that re-enters track(), and the header and
+    // candidate requests raised there read this flag. A refused edit (stale
+    // draft revision, or an unmappable span) mutates nothing and so reaches
+    // no re-entry, which is why withdrawing the claim afterwards still keeps
+    // a header off a draft nobody descended into.
+    this.drilled = action === 'drill'
+    if (!this.execute(outcome, hit.span)) this.drilled = false
+  }
+
+  /** Re-poll every header-bearing source in the hit roster and publish their crumbs. */
+  private refreshHeaders(hit: TriggerHit, roster: readonly InputTriggerSource[]): void {
+    const projection = this.project()
+    const crumbs = new Map<string, readonly InputTriggerCrumb[]>()
+    for (const src of roster) {
+      if (src.header === undefined) continue
+      let published: readonly InputTriggerCrumb[] | undefined
+      try {
+        published = src.header(projection, { query: hit.query, quoted: hit.quoted, drilled: this.drilled })
+      } catch (error) {
+        console.error(`[ui-input-trigger] source "${src.name}" header failed:`, error)
+        continue
+      }
+      if (published === undefined || published.length === 0) continue
+      crumbs.set(src.name, published)
+    }
+    this.setHeaders(crumbs)
+  }
+
+  private setHeaders(next: ReadonlyMap<string, readonly InputTriggerCrumb[]>): void {
+    if (this.headers.getSnapshot().size === 0 && next.size === 0) return
+    this.headers.set(next)
+  }
+
   private clearLauncher(): void {
     if (this.launcher.getSnapshot() !== null) this.launcher.set(null)
   }
@@ -425,6 +508,9 @@ export class InputTriggerController {
     const cur = this.menu.getSnapshot()
     const next = menuReduce(cur, ev)
     if (next !== cur) this.menu.set(next)
-    if (!next.open) this.clearLauncher()
+    if (next.open) return
+    this.clearLauncher()
+    this.drilled = false
+    this.setHeaders(new Map())
   }
 }

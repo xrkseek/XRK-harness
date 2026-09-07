@@ -101,6 +101,55 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* Trailing seat on drillable rows (directories): the Tab keycap hint plus the
+   drill chevron, revealed while the row holds the shared highlight. */
+.trailing {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.drillHintText {
+  display: none;
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.drillHint {
+  display: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-caption);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.item.active .drillHintText,
+.item.active .drillHint {
+  display: inline-flex;
+}
+
+.drill {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.drill:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
 /* Heading row above a source group: non-interactive small grey text,
  * padding aligned with items (mirrors ui-primitives Menu .label). */
 .groupTitle {
@@ -119,6 +168,53 @@
   font-size: 14px;
   line-height: 22px;
   color: var(--dsw-alias-label-dimmed);
+}
+
+/* Breadcrumb header of a drilled source: pinned outside .viewport. */
+.crumbs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px 4px 6px;
+  margin-bottom: 2px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.crumb {
+  flex: 0 1 auto;
+  max-width: 40%;
+  overflow: hidden;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crumb:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.crumbCurrent,
+.crumbCurrent:hover {
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: default;
+}
+
+.crumbSeparator {
+  flex: none;
+  display: inline-flex;
+  color: var(--dsw-alias-label-caption);
 }
 
 @media (max-width: 767px) {

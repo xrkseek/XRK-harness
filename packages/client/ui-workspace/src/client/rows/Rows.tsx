@@ -11,6 +11,7 @@ import {
   HoverCard, IconArchiveOutline20, IconBranchOutline16, IconEditOutline16,
   IconEllipsisOutline16, IconFolderClose16, IconFolderOpen16, IconPlusOutline16,
   IconTrashOutline16, IconTriangleRightFill14, Menu, StateDot,
+  abbreviateHomePath,
 } from '@xrkseek/client-ui-primitives'
 import type { StateDotState } from '@xrkseek/client-ui-primitives'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
@@ -104,10 +105,11 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
  * @param props.onToggle - expand/collapse the group.
  * @param props.onCreate - start a frontend Session inside this Workspace.
  * @param props.drag - optional workspace-row drag wiring.
+ * @param props.home - host account home for POSIX hover-path abbreviation.
  * @param props.t - the browser root's locale seat.
  * @returns the row element.
  */
-export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: {
+export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home, t }: {
   group: GroupNode
   onToggle: () => void
   onCreate: () => void
@@ -115,6 +117,8 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
   actions?: { rename: () => void; delete: () => void } | undefined
   /** Present only for real Workspace rows in the grouped view. */
   drag?: WorkspaceRowDragProps | undefined
+  /** Host account home; POSIX home-rooted hover paths display as `~`. */
+  home?: string | undefined
   t: RowTranslate
 }) {
   const row = group
@@ -196,7 +200,12 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
   return (
     <HoverCard
       anchor={ownRow}
-      content={<WorkspaceHoverContent label={row.label} cwd={row.cwd} createdAt={row.createdAt} t={t} />}
+      content={<WorkspaceHoverContent
+        label={row.label}
+        cwd={row.cwd === undefined ? undefined : abbreviateHomePath(row.cwd, home)}
+        createdAt={row.createdAt}
+        t={t}
+      />}
       disabled={menuOpen}
       copyText={row.cwd}
       copyLabel={t('copy')}

@@ -14,6 +14,7 @@ export const hostDescribeRequestSchema = z.object({}) satisfies z.ZodType<Wire<R
 export const hostDescribeValueSchema = z.object({
   version: z.string(),
   cwd: z.string(),
+  home: z.string(),
   provider: z.string().optional(),
   model: z.string().optional(),
   attachedSessions: z.number().int().nonnegative(),

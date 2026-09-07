@@ -82,3 +82,77 @@ describe("exit_plan_mode", () => {
     expect(out.toolEvents).toEqual([{ type: "plan/mode", payload: { active: false } }]);
   });
 });
+
+describe("settings_get / settings_mutate", () => {
+  it("errors when Face channel is unbound", async () => {
+    const tools = createToolRegistry();
+    for (const t of createStdTools()) tools.register(t);
+    const get = await runToolDetailed({
+      registry: tools,
+      call: { id: "c1", name: "settings_get", arguments: {} },
+    });
+    expect(get.result.isError).toBe(true);
+    expect(get.result.content).toContain("unavailable");
+
+    const mut = await runToolDetailed({
+      registry: tools,
+      call: {
+        id: "c2",
+        name: "settings_mutate",
+        arguments: {
+          ns: "mcp",
+          ops: [{ op: "set", path: ["allowConnect"], value: true }],
+        },
+      },
+    });
+    expect(mut.result.isError).toBe(true);
+  });
+
+  it("mutates and surfaces mcp connect failures", async () => {
+    const tools = createToolRegistry();
+    for (const t of createStdTools({
+      settingsGet: async (ns) => ({
+        ok: true,
+        message: ns ? `ns=${ns}` : "list",
+        payload: ns ? { ns, value: { allowConnect: false } } : [{ ns: "mcp" }],
+      }),
+      settingsMutate: async (ns, ops) => {
+        expect(ns).toBe("mcp");
+        expect(ops[0]?.path).toEqual(["servers"]);
+        return {
+          ok: true,
+          message: "settings.mutate ns=mcp ok",
+          failures: [{ serverName: "demo", message: "spawn failed" }],
+        };
+      },
+    })) {
+      tools.register(t);
+    }
+    const okGet = await runToolDetailed({
+      registry: tools,
+      call: { id: "g1", name: "settings_get", arguments: { ns: "mcp" } },
+    });
+    expect(okGet.result.isError).toBeFalsy();
+    expect(okGet.result.content).toContain("allowConnect");
+
+    const fail = await runToolDetailed({
+      registry: tools,
+      call: {
+        id: "m1",
+        name: "settings_mutate",
+        arguments: {
+          ns: "mcp",
+          ops: [
+            {
+              op: "set",
+              path: ["servers"],
+              value: [{ serverName: "demo", command: "npx" }],
+            },
+          ],
+        },
+      },
+    });
+    expect(fail.result.isError).toBe(true);
+    expect(fail.result.content).toContain("spawn failed");
+  });
+});

@@ -108,6 +108,8 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   const rootRef = useRef<HTMLSpanElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null)
+  /** Submenu opens to the end (right in LTR) by default; flip to start when clipped. */
+  const [submenuPlacement, setSubmenuPlacement] = useState<'end' | 'start'>('end')
   const [fixedPos, setFixedPos] = useState<CSSProperties | null>(null)
   const { arm: armClose, cancel: cancelClose } = usePointerGrace(onClose)
 
@@ -171,6 +173,7 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   useEffect(() => {
     if (!open) {
       setOpenSubmenuId(null)
+      setSubmenuPlacement('end')
       return
     }
     const onPointerDown = (e: PointerEvent) => {
@@ -190,6 +193,28 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [open, onClose])
+
+  // Keep nested cards inside the viewport: measure after open and flip to the
+  // start side when the default end placement would overflow (file-tree menus
+  // sit on the right edge — without this the "Open with" card goes off-screen).
+  useLayoutEffect(() => {
+    if (!open || openSubmenuId === null) {
+      setSubmenuPlacement('end')
+      return
+    }
+    const list = listRef.current
+    if (list === null) return
+    const wrap = Array.from(list.querySelectorAll<HTMLElement>('[data-submenu-parent]'))
+      .find(el => el.getAttribute('data-submenu-parent') === openSubmenuId)
+    const sub = wrap?.querySelector<HTMLElement>('[data-submenu]')
+    if (wrap === undefined || sub === null || sub === undefined) return
+    const MARGIN = 8
+    const wrapRect = wrap.getBoundingClientRect()
+    const subWidth = Math.max(sub.offsetWidth, 163)
+    const spaceEnd = window.innerWidth - wrapRect.right - MARGIN
+    const spaceStart = wrapRect.left - MARGIN
+    setSubmenuPlacement(spaceEnd < subWidth && spaceStart > spaceEnd ? 'start' : 'end')
+  }, [open, openSubmenuId, compact])
 
   // A close from selection/Escape/outside click outruns a pending grace close;
   // left armed it would shut a list reopened inside the grace window. Its own
@@ -217,6 +242,7 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
       <div
         key={entry.id}
         className={css.itemWrap}
+        data-submenu-parent={hasSub ? entry.id : undefined}
         onMouseEnter={() => { setOpenSubmenuId(hasSub ? entry.id : null) }}
         onMouseLeave={() => { setOpenSubmenuId(null) }}
       >
@@ -242,7 +268,15 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
           {selected && <IconCheckOutline16 className={css.check} />}
         </button>
         {subOpen && entry.submenu !== undefined && (
-          <div className={clsx(css.submenu, compact && css.compactList)} role="menu">
+          <div
+            className={clsx(
+              css.submenu,
+              compact && css.compactList,
+              submenuPlacement === 'start' && css.submenuStart,
+            )}
+            role="menu"
+            data-submenu
+          >
             {entry.submenu.map(sub => (
               <button
                 key={sub.id}

@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
-import type { PluginInventorySnapshot } from '@xrkseek/xrk-api-remotes/client'
+import type { PluginEntryId, PluginInventorySnapshot } from '@xrkseek/xrk-api-remotes/client'
 import {
   IconChevronDownOutline14,
   IconSearchOutline16,
@@ -12,6 +12,12 @@ import css from './PluginInventorySettingsTab.module.css'
 export interface PluginInventorySettingsTabInjected {
   /** Read a current Host inventory snapshot. */
   list: () => Promise<PluginInventorySnapshot>
+  /** Soft-disable / re-enable a managed plugin. */
+  setEnabled: (entryId: PluginEntryId, enabled: boolean) => Promise<void>
+  /** Remove a managed plugin from the CLI inventory. */
+  remove: (entryId: PluginEntryId) => Promise<void>
+  /** Open the managed plugin install folder in the OS. */
+  open: (entryId: PluginEntryId) => Promise<void>
 }
 
 type PluginInventoryEntry = PluginInventorySnapshot['entries'][number]
@@ -53,6 +59,7 @@ function moduleShortName(moduleName: string): string {
     .replace(/^dsh-(?:host-|client-)?/, '')
     .replace(/^client-/, '')
     .replace(/^xrk-/, '')
+    .replace(/^xrkh-/, '')
 }
 
 /** Whether an inventory row matches the local catalog query. */
@@ -62,13 +69,22 @@ function matches(entry: PluginInventoryEntry, normalizedQuery: string): boolean 
     .some(value => value.toLocaleLowerCase().includes(normalizedQuery))
 }
 
-/** Render the read-only current Loader inventory. */
-export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsTabProps): ReactNode {
+/** Render the Host plugin inventory (managed plugins pin first on the server). */
+export function PluginInventorySettingsTab({
+  list,
+  setEnabled,
+  remove,
+  open: openFolder,
+  t,
+}: PluginInventorySettingsTabProps): ReactNode {
   const catalogId = useId()
   const [request, setRequest] = useState(0)
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<PluginInventoryEntry['entryId'] | null>(null)
   const [state, setState] = useState<ViewState>({ status: 'loading' })
+  const [busyId, setBusyId] = useState<PluginInventoryEntry['entryId'] | null>(null)
+  const [confirmRemoveId, setConfirmRemoveId] = useState<PluginInventoryEntry['entryId'] | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
     let current = true
@@ -95,7 +111,29 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
 
   const retry = (): void => {
     setState({ status: 'loading' })
+    setActionError(null)
     setRequest(value => value + 1)
+  }
+
+  const runManaged = async (
+    entryId: PluginInventoryEntry['entryId'],
+    action: () => Promise<void>,
+    options: { refresh?: boolean } = {},
+  ): Promise<void> => {
+    setBusyId(entryId)
+    setActionError(null)
+    try {
+      await action()
+      setConfirmRemoveId(null)
+      if (options.refresh !== false) {
+        setState({ status: 'loading' })
+        setRequest(value => value + 1)
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : t('actionFailed'))
+    } finally {
+      setBusyId(null)
+    }
   }
 
   return (
@@ -124,6 +162,7 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
             <h3>{t('catalog')}</h3>
             <span data-plugin-count={filteredEntries.length}>{filteredEntries.length}</span>
           </div>
+          {actionError !== null ? <p className={css.actionError} role="alert">{actionError}</p> : null}
           {state.snapshot.entries.length === 0 ? <p className={css.status}>{t('empty')}</p> : null}
           {state.snapshot.entries.length > 0 && filteredEntries.length === 0
             ? <p className={css.status}>{t('emptySearch')}</p>
@@ -134,13 +173,17 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
                 const status = phaseLabel(entry.fiberPhase, t)
                 const title = moduleShortName(entry.moduleName)
                 const configuration = t(entry.enabled ? 'enabledTag' : 'disabledTag')
+                const managed = entry.managed === true
                 const open = expanded === entry.entryId
                 const detailId = `${catalogId}-details-${encodeURIComponent(entry.entryId)}`
+                const busy = busyId === entry.entryId
+                const confirmRemove = confirmRemoveId === entry.entryId
                 return (
                   <li
                     className={css.card}
                     key={entry.entryId}
                     data-plugin-entry={entry.entryId}
+                    data-managed={managed ? 'true' : undefined}
                     data-open={open ? 'true' : undefined}
                   >
                     <button
@@ -148,13 +191,23 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
                       type="button"
                       aria-expanded={open}
                       aria-controls={detailId}
-                      aria-label={entry.enabled ? `${title}, ${status}, ${configuration}` : `${title}, ${configuration}`}
+                      aria-label={
+                        managed
+                          ? `${title}, ${t('managedTag')}, ${configuration}`
+                          : entry.enabled
+                            ? `${title}, ${status}, ${configuration}`
+                            : `${title}, ${configuration}`
+                      }
                       onClick={() => {
+                        setConfirmRemoveId(null)
                         setExpanded(current => current === entry.entryId ? null : entry.entryId)
                       }}
                     >
                       <strong className={css.cardTitle} title={entry.moduleName}>{title}</strong>
                       <span className={css.cardTrailing}>
+                        {managed ? (
+                          <span className={css.managedTag}>{t('managedTag')}</span>
+                        ) : null}
                         {entry.enabled ? (
                           <span
                             className={css.statusDot}
@@ -185,6 +238,49 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
                             </div>
                           ) : null}
                         </dl>
+                        {managed ? (
+                          <div className={css.actions}>
+                            <p className={css.restartHint}>{t('restartHint')}</p>
+                            <div className={css.actionRow}>
+                              <button
+                                type="button"
+                                className={css.action}
+                                disabled={busy}
+                                onClick={() => {
+                                  void runManaged(entry.entryId, () => openFolder(entry.entryId), { refresh: false })
+                                }}
+                              >
+                                {busy ? t('actionBusy') : t('edit')}
+                              </button>
+                              <button
+                                type="button"
+                                className={css.action}
+                                disabled={busy}
+                                onClick={() => {
+                                  void runManaged(entry.entryId, () => setEnabled(entry.entryId, !entry.enabled))
+                                }}
+                              >
+                                {entry.enabled ? t('disable') : t('enable')}
+                              </button>
+                              <button
+                                type="button"
+                                className={css.actionDanger}
+                                disabled={busy}
+                                onClick={() => {
+                                  if (!confirmRemove) {
+                                    setConfirmRemoveId(entry.entryId)
+                                    return
+                                  }
+                                  void runManaged(entry.entryId, () => remove(entry.entryId))
+                                }}
+                              >
+                                {confirmRemove ? t('removeConfirm') : t('remove')}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className={css.builtinHint}>{t('builtinHint')}</p>
+                        )}
                       </div>
                     ) : null}
                   </li>

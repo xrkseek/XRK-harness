@@ -253,6 +253,7 @@ export {
   hydrateFaceHostSettings,
   listCredentialSlots,
   parseFaceMcpServers,
+  formatMcpInventoryText,
   settingsDescribeFace,
   settingsGet,
   settingsMutateFace,
@@ -288,6 +289,7 @@ export {
   type FaceQuestionHooks,
   type PendingQuestionItem,
 } from "./questions.js";
+export { bindSettingsTools } from "./settings-agent-tools.js";
 export {
   bindSubagentTools,
   subagentDepth,

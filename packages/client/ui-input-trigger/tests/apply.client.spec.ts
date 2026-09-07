@@ -80,8 +80,11 @@ describe('apply', () => {
       (ctx.get('sessions') as { scope(id: SessionId): Context }).scope(sid('a')),
     )
     expect(injected.menu).toBe(controller.menu)
+    expect(injected.headers).toBe(controller.headers)
     // The pick face routes into the controller pipeline (closed menu → no-op).
     injected.onPick('command', 0)
+    expect(controller.menu.getSnapshot().open).toBe(false)
+    injected.onCrumb('command', 0)
     expect(controller.menu.getSnapshot().open).toBe(false)
     // The dismiss face routes into the controller too (closed menu → no-op).
     injected.onDismiss()

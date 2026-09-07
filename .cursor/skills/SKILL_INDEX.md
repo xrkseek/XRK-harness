@@ -52,7 +52,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **`xrk-plugin-verify`** | `plugin add`、`restart`、工具是否可见 |
 | **`xrk-create-skill`** | 写 skill（对标 Cursor create-skill） |
 | **`xrk-models-settings`** | 配模型、手动 ID、获取列表、对话搜索 |
-| **`xrk-capability-attach`** | 挂 MCP、Settings 粘贴 JSON |
+| **`xrk-capability-attach`** | 挂/改 MCP · Settings · 外观（settings_mutate） |
 | **`xrk-plan-build`** | Plan → Build、`exit_plan_mode`、先计划 |
 | **`xrk-delegate`** | 子代理委派、Frugal/Shallow、并行 |
 | **`xrk-code-review`** | 只读审 diff（Codex review 风格） |

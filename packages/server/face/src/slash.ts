@@ -2,9 +2,9 @@ import { foldPlanMode } from "@xrkseek/protocol";
 import { readSessionEvents, sessionEventCount } from "@xrkseek/core-session";
 import { resolveXrkHome } from "@xrkseek/server-config";
 import {
+  listSkillsFromWorkspace,
   loadOfficeRecipes,
   mergeRecipesById,
-  tryApplySlashRecipe,
   type Recipe,
 } from "@xrkseek/workspace";
 import path from "node:path";
@@ -27,6 +27,10 @@ import {
   steerPlanMessage,
 } from "./plan-mode.js";
 import { narrateAutoReviewCommand } from "./projections/units/auto-review.js";
+import { formatMcpInventoryText, settingsMutateFace } from "./settings-credentials.js";
+import { resolveSessionCwd } from "./session-cwd.js";
+import { resolveSessionModelSelection } from "./model-catalog.js";
+import { selectSessionModel } from "./select-session-model.js";
 
 export type SlashRecipesLoader = () => Promise<readonly Recipe[]> | readonly Recipe[];
 
@@ -134,8 +138,8 @@ export async function listFaceCommandDescriptors(
           {
             name: "permission",
             description:
-              "Switch the permission preset (sandbox mode + approval policy)",
-            input: { hint: "<preset>" },
+              "Switch sandbox mode + approval policy (not the session tool badge)",
+            input: { hint: "<mode>" },
           },
         ]),
     ...(used.has("plan")
@@ -143,8 +147,53 @@ export async function listFaceCommandDescriptors(
       : [
           {
             name: "plan",
-            description: "Enter or leave plan mode",
+            description: "Enter or leave plan mode (session collaboration; not a tool badge)",
             input: { hint: "[off|message]" },
+          },
+        ]),
+    ...(used.has("mcp")
+      ? []
+      : [
+          {
+            name: "mcp",
+            description:
+              "List configured MCP servers and mount status (mcp verbose for detail)",
+            input: { hint: "[verbose]" },
+          },
+        ]),
+    ...(used.has("status")
+      ? []
+      : [
+          {
+            name: "status",
+            description: "Show session badge, permission, plan, theme, model, cwd",
+          },
+        ]),
+    ...(used.has("model")
+      ? []
+      : [
+          {
+            name: "model",
+            description:
+              "Show or switch provider/model (Codex-style /model provider/model)",
+            input: { hint: "[provider/model]" },
+          },
+        ]),
+    ...(used.has("theme")
+      ? []
+      : [
+          {
+            name: "theme",
+            description: "Set appearance preference (live): light|dark|system",
+            input: { hint: "light|dark|system" },
+          },
+        ]),
+    ...(used.has("skills")
+      ? []
+      : [
+          {
+            name: "skills",
+            description: "List workspace skills",
           },
         ]),
     ...(used.has("auto-review")
@@ -160,17 +209,24 @@ export async function listFaceCommandDescriptors(
   used.add("goal");
   used.add("permission");
   used.add("plan");
+  used.add("mcp");
+  used.add("status");
+  used.add("model");
+  used.add("theme");
+  used.add("skills");
   used.add("auto-review");
   used.add("compact");
   used.add("export");
   used.add("feedback");
+  // Recipes stay listed for discovery; Face does not execute them — session.prompt
+  // admits `/id` so assemble expands (skills/recipes). Builtins/plugins only here.
   const fromRecipes = recipes
     .filter((r) => COMMAND_NAME.test(r.id) && !used.has(r.id))
     .map((r) => {
       const hint = r.parameters.map((p) => p.name).join(" ");
       return {
         name: r.id,
-        description: r.description ?? r.title,
+        description: `${r.description ?? r.title} (expands into the prompt)`,
         ...(hint ? { input: { hint } } : {}),
       };
     });
@@ -181,9 +237,10 @@ export async function listFaceCommandDescriptors(
 }
 
 /**
- * Execute a slash line: plugin command (first) or workspace recipe → log
- * `command/run`+`command/done`. Miss (syntax / unknown name) → `undefined`
- *（不入账，与 DSH 一致）.
+ * Execute a Face builtin or process `kind: commands` plugin.
+ * Workspace recipes are listed but not executed here — return `undefined` so
+ * `session.prompt` admits the slash line and assemble expands it.
+ * Miss (syntax / unknown name) → `undefined`（不入账，与 DSH 一致）.
  */
 export async function executeFaceCommand(
   runtime: FaceRuntime,
@@ -222,7 +279,7 @@ export async function executeFaceCommand(
       ).currentValue;
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "success",
-        text: `current preset ${current} (available: ${FACE_PERMISSION_PRESETS.join(", ")})`,
+        text: `current permission mode ${current} (available: ${FACE_PERMISSION_PRESETS.join(", ")})`,
       });
     }
     const applied = applyPermissionPreset(runtime.store, sessionId, name, {
@@ -241,7 +298,141 @@ export async function executeFaceCommand(
     }
     return appendCommandPair(runtime, sessionId, parsed, {
       kind: "success",
-      text: `preset ${name}`,
+      text: `permission mode ${name}`,
+    });
+  }
+
+  if (parsed.name === "mcp") {
+    const arg = parsed.rawInput.trim().toLowerCase();
+    if (arg !== "" && arg !== "verbose") {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: "Usage: /mcp [verbose]. Attach/edit via settings_mutate ns=mcp or Settings → Plugins.",
+      });
+    }
+    return appendCommandPair(runtime, sessionId, parsed, {
+      kind: "success",
+      text: formatMcpInventoryText(runtime, { verbose: arg === "verbose" }),
+    });
+  }
+
+  if (parsed.name === "status") {
+    if (parsed.rawInput.trim().length > 0) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: "Usage: /status",
+      });
+    }
+    const events = readSessionEvents(runtime.store, sessionId);
+    const badge =
+      runtime.sessionAgentPresets.get(sessionId) ?? "(default)";
+    const permission = permissionSelectFromEvents(events).currentValue;
+    const plan = foldPlanMode(events) ? "on" : "off";
+    const model = resolveSessionModelSelection(runtime, sessionId);
+    const cwd = resolveSessionCwd(runtime, sessionId);
+    const text = [
+      `badge: ${badge}`,
+      `permission: ${permission}`,
+      `plan: ${plan} (toggle with /plan · /plan off)`,
+      `theme: ${runtime.uiSettings.theme} (/theme light|dark|system)`,
+      `model: ${model.provider}/${model.model}`,
+      `cwd: ${cwd}`,
+      `events: ${sessionEventCount(runtime.store, sessionId)}`,
+    ].join("\n");
+    return appendCommandPair(runtime, sessionId, parsed, {
+      kind: "success",
+      text,
+    });
+  }
+
+  if (parsed.name === "theme") {
+    const pref = parsed.rawInput.trim().toLowerCase();
+    if (pref !== "light" && pref !== "dark" && pref !== "system") {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: "Usage: /theme light|dark|system",
+      });
+    }
+    const mut = await settingsMutateFace(runtime, {
+      ns: "ui-theme",
+      ops: [{ op: "set", path: ["preference"], value: pref }],
+    });
+    if (!mut.ok) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: mut.error.message,
+      });
+    }
+    return appendCommandPair(runtime, sessionId, parsed, {
+      kind: "success",
+      text: `Appearance ${pref} (live)`,
+    });
+  }
+
+  if (parsed.name === "model") {
+    const raw = parsed.rawInput.trim();
+    if (!raw) {
+      const model = resolveSessionModelSelection(runtime, sessionId);
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "success",
+        text: `Current model: ${model.provider}/${model.model}${
+          model.reasoningEffort ? ` (effort ${model.reasoningEffort})` : ""
+        }\nSwitch: /model <provider>/<model>`,
+      });
+    }
+    const slash = raw.indexOf("/");
+    const provider =
+      slash > 0 ? raw.slice(0, slash).trim() : raw.split(/\s+/)[0] ?? "";
+    const model =
+      slash > 0
+        ? raw.slice(slash + 1).trim().split(/\s+/)[0] ?? ""
+        : raw.split(/\s+/).slice(1).join(" ").trim();
+    if (!provider || !model) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: "Usage: /model [provider/model]",
+      });
+    }
+    const selected = await selectSessionModel(runtime, {
+      sessionId,
+      provider,
+      model,
+    });
+    if (!selected.ok) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: selected.error.message,
+      });
+    }
+    return appendCommandPair(runtime, sessionId, parsed, {
+      kind: "success",
+      text: `Model set to ${selected.value.selected.provider}/${selected.value.selected.model}`,
+    });
+  }
+
+  if (parsed.name === "skills") {
+    if (parsed.rawInput.trim().length > 0) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: "Usage: /skills",
+      });
+    }
+    const skills = await listSkillsFromWorkspace(runtime.workspaceRoot);
+    if (skills.length === 0) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "success",
+        text: "No skills found under workspace / home skill roots.",
+      });
+    }
+    const lines = skills.map((s) => {
+      const desc = s.description?.trim()
+        ? ` — ${s.description.trim().slice(0, 80)}`
+        : "";
+      return `- ${s.name}${desc}`;
+    });
+    return appendCommandPair(runtime, sessionId, parsed, {
+      kind: "success",
+      text: `Skills (${skills.length}):\n${lines.join("\n")}`,
     });
   }
 
@@ -413,16 +604,8 @@ export async function executeFaceCommand(
     }
   }
 
-  const recipes = runtime.loadSlashRecipes
-    ? await runtime.loadSlashRecipes()
-    : [];
-  const hit = tryApplySlashRecipe(`/${parsed.name}${parsed.rawInput}`, recipes);
-  if (!hit) return undefined;
-
-  return appendCommandPair(runtime, sessionId, parsed, {
-    kind: "success",
-    text: hit.userPrompt,
-  });
+  // Recipes / unknown names: not Face commands — caller admits as text.
+  return undefined;
 }
 
 function mintCommandId(): string {

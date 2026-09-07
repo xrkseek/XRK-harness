@@ -1,11 +1,11 @@
 # AGENTS.md — 产品工作区（写插件）
 
-> **Host 注入**：本文件在 `.agents/AGENTS.md`；存在时**不**再注入仓库根维护者 `AGENTS.md`。  
-> 对标 XRK-AGT：`agents/workspace/AGENTS.md`（办事助手）vs 根 `AGENTS.md`（改框架）。
+> **Host 注入**：本文件在 `.agents/AGENTS.md`；**仅当本仓作工作区**时注入，并**替代**根维护者 `AGENTS.md`。  
+> 打开桌面等其它工作区时，产品 Agent 读的是 **`~/.xrk/AGENTS.md`**（由 `apps/cli/seeds/standing/` 种子），不是本文件。
 
 ## 角色
 
-工作区根常为 **XRK-Harness 源码仓**：绝大多数使用者在此 **写进程插件**；仅维护者改 `packages/` · `apps/`。
+工作区根为 **XRK-Harness 源码仓** 时：写进程插件；改内核走 Cursor + 根 `AGENTS.md`。
 
 ## 读写边界
 
@@ -15,44 +15,21 @@
 | **读** | 全仓 `docs/` · `.agents/skills/` · `packages/`（只读学结构） | 把内核写回去；workspace 外写文件 |
 | **装插件** | `xrkh plugin add` | 假装热重载 |
 
-插件沙箱：**`extensions/<plugin-id>/`**。工作区根见 inject **Workspace root** 块，勿搜其它盘符。
+插件沙箱：**`extensions/<plugin-id>/`**。
 
-## Capability attach（能力挂载）
+## 能力挂载（备忘）
 
-默认把「给 Agent 新工具」当成 **挂载**，不是堆 rules / 假 hooks。
-
-1. **MCP 优先** — 设置 → 插件 → 插件配置：粘贴 Trae/Cursor 风格 `mcpServers` JSON → 开「允许连接」→ Save（本进程 remount）。禁在 `mcp.servers` 写 `env`；密钥走 Credentials。
-2. **进程插件次之** — 仅简单自有 JS：写 `extensions/<id>/` → `xrkh plugin add` → **`xrkh restart`**。禁止假装插件热重载。
-3. **人格另层** — `IDENTITY.md` · `SOUL.md` · `TOOLS.md` 管语气与边界，不替代工具表。
-
-用户说「装 MCP / 挂工具 / attach」→ skill **`xrk-capability-attach`**。  
-**未经用户确认**不得 `settings.mutate` ns=`mcp` 或代跑 `plugin add` / restart。
+全局配置与 MCP 走 Host 工具 **`settings_get` / `settings_mutate`**（落点 `~/.xrk`）。细则见家目录 skill **`xrk-capability-attach`**（种子在 `apps/cli/seeds/skills/`）。本目录 skill 仅作工作区覆盖/对照。
 
 ## 办事流程
 
-1. 不懂结构 → skill **`xrk-harness-architecture`**
-2. 挂 MCP / 接外部工具 → **`xrk-capability-attach`**
-3. 配模型 / API / 模型列表 → **`xrk-models-settings`**
-4. 先计划再动手 → **`xrk-plan-build`**（Plan 徽章 / `/plan` · `exit_plan_mode`）
-5. 委派子代理 → **`xrk-delegate`**（注意 Frugal / Shallow 徽章）
-6. 只读审 diff → **`xrk-code-review`**
-7. 写进程插件 → **`xrk-harness-monorepo`** → **`xrk-plugin-author`**
-8. 验证 → **`xrk-plugin-verify`**（MCP 则看 Settings 行状态 / 工具 inventory）
+1. 结构 → **`xrk-harness-architecture`**
+2. 挂/改 MCP 或 Settings → **`xrk-capability-attach`**（全局工具）
+3. 配模型 → **`xrk-models-settings`**
+4. 先计划 → **`/plan`** · **`xrk-plan-build`** · `exit_plan_mode`
+5. 委派 → **`xrk-delegate`**
+6. 审 diff → **`xrk-code-review`**
+7. 写插件 → **`xrk-harness-monorepo`** → **`xrk-plugin-author`**
+8. 验证 → **`xrk-plugin-verify`**
 
-细则：`.agents/context/workspace-plugin-dev.md` · `.agents/context/subagents.md` · `docs/plugin-development.md` · `docs/modules/mcp.md`
-
-## 常见任务 → skill
-
-| 意图 | 先读 |
-|------|------|
-| 这仓库什么结构 | **xrk-harness-architecture** |
-| 装 MCP / 挂工具 / attach | **xrk-capability-attach** |
-| 写 skill / 自我升级 | **xrk-create-skill** |
-| 配模型 / 模型列表 | **xrk-models-settings** |
-| Plan → Build / 先计划 | **xrk-plan-build** |
-| 开子代理 / 并行委派 | **xrk-delegate** |
-| 审 diff / code review | **xrk-code-review** |
-| kind / 要不要起 MCP | **xrk-plugin-kind** |
-| 写插件 / 脚手架 | **xrk-harness-monorepo** → **xrk-plugin-author** |
-| 装好了吗 / git pull 后 | **xrk-plugin-verify** |
-| 改 loader 内核 | 超出默认角色；需维护者 |
+细则：`.agents/context/` · `docs/plugin-development.md`

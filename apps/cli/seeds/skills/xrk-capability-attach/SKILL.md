@@ -1,35 +1,19 @@
 ---
 name: xrk-capability-attach
 description: >-
-  Attach external tools via MCP in XRK-Harness Settings (paste mcpServers JSON,
-  allow connect, confirm before mutate). Use when the user asks to install MCP,
-  add tools, connect a server, attach Playwright/filesystem/browser MCP, or
-  「装 MCP」「挂工具」「接服务器」「attach」「加工具」.
+  Attach or edit MCP / Host Settings via settings_mutate (global ~/.xrk).
+  Use when the user asks to install MCP, fix MCP args/proxy, change Settings,
+  switch light/dark theme, or 「装 MCP」「改设置」「白天模式」「夜间模式」.
 ---
 
-# Attach capability (MCP)
+# Host Settings + MCP
 
-默认新工具走 **Settings → Plugins → Plugin config**（数据在 `~/.xrk/host-settings.json`）。  
-进程内 JS → process plugin + **`plugin add`** + restart。
+**真源**：本 skill 随 `xrkh web`/`serve` **指纹种子**装到 **`~/.xrk/skills/`**（未改过的家目录副本可随 CLI 刷新；用户改过的永不覆盖）。配置也在 **`~/.xrk`**，与当前工作区无关。
 
-```
-- [ ] 1. MCP vs 进程插件
-- [ ] 2. 收集 id + command/url
-- [ ] 3. 给出可粘贴 JSON（无 env）
-- [ ] 4. 引导 UI 或经确认 mutate
-- [ ] 5. 看行状态 + 工具 inventory
-```
+- `settings_get` — 列 ns / 读当前值  
+- `settings_mutate` — 与 Settings UI Save 同路径；多数 ns **live**（含 `ui-theme`）；`ns=mcp` 等 remount/connect  
 
-## JSON 示例
+MCP：增删改 `servers[]`、`args`、`cwd`；代理用 `env.HTTP_PROXY` 等（仅代理键）。密钥 → Credentials。  
+外观：`/theme light|dark|system` 或 `ns=ui-theme` · `preference`。
 
-```json
-{"mcpServers":{"playwright":{"command":"npx","args":["-y","@playwright/mcp@latest"]}}}
-```
-
-## UI
-
-Settings → Plugins → Plugin config → paste JSON → **Add** / **添加** → **Allow connect** → **Save**
-
-Never mutate `mcp` without confirmation. No `env` on servers.
-
-Verify `mcp__<server>__…`; policy deny → **park**.
+验证：`/mcp` · `mcp__…`；policy deny → park。

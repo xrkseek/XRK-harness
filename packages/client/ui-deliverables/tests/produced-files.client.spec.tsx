@@ -286,7 +286,7 @@ describe('ProducedFiles row', () => {
   ): Pick<ProducedFilesProps, 'isLoopback' | 'useHostDescription'> => {
     const description = canOpenPath === undefined
       ? undefined
-      : { version: 'test', cwd: '/workspace', attachedSessions: 1, canOpenPath }
+      : { version: 'test', cwd: '/workspace', home: '/home/u', attachedSessions: 1, canOpenPath }
     return {
       isLoopback,
       useHostDescription: selector => selector(description),
@@ -344,7 +344,7 @@ describe('ProducedFiles row', () => {
     if (!(row instanceof HTMLElement)) throw new Error('produced row missing')
     // The third probe is 100px: two chips plus the remainder fit, three do not.
     expect(within(row).getAllByRole('button')).toHaveLength(2)
-    expect(within(row).getByText('+ 5 个文件')).toBeTruthy()
+    expect(within(row).getByText('+ 5 个文�?)).toBeTruthy()
     const chip = view.getByRole('button', { name: '打开 deep/a.html' })
     expect(chip.textContent).toBe('a.html')
     expect(chip.getAttribute('title')).toBe('deep/a.html')
@@ -352,14 +352,14 @@ describe('ProducedFiles row', () => {
     fireEvent.click(chip)
     expect(openFile).toHaveBeenCalledWith('deep/a.html')
 
-    const showFolder = view.getByRole('button', { name: '在文件夹中显示' })
+    const showFolder = view.getByRole('button', { name: '在文件夹中显�? })
     fireEvent.click(showFolder)
     expect(openFile).toHaveBeenLastCalledWith('.')
 
     available = 150
     act(() => { resize?.([], {} as ResizeObserver) })
     expect(within(row).getAllByRole('button')).toHaveLength(1)
-    expect(within(row).getByText('+ 6 个文件')).toBeTruthy()
+    expect(within(row).getByText('+ 6 个文�?)).toBeTruthy()
 
     // A missing/unsupported computed gap falls back to zero rather than NaN.
     vi.stubGlobal('getComputedStyle', () => ({ columnGap: '', gap: '' } as CSSStyleDeclaration))
@@ -387,10 +387,10 @@ describe('ProducedFiles row', () => {
       <ProducedFiles matched={['a.md']} openFile={openFile} {...capability(true)} t={t} />,
     )
     const overflowing = ['a.md', 'b.md', 'c.md', 'd.md', 'e.md', 'f.md', 'g.md']
-    expect(view.queryByRole('button', { name: '在文件夹中显示' })).toBeNull()
+    expect(view.queryByRole('button', { name: '在文件夹中显�? })).toBeNull()
     for (const unavailable of [capability(false), capability(true, false), capability(undefined)]) {
       view.rerender(<ProducedFiles matched={overflowing} openFile={openFile} {...unavailable} t={t} />)
-      expect(view.queryByRole('button', { name: '在文件夹中显示' })).toBeNull()
+      expect(view.queryByRole('button', { name: '在文件夹中显�? })).toBeNull()
     }
   })
 

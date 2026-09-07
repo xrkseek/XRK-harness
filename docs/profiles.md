@@ -6,11 +6,11 @@
 
 | 你听到的词 | 它到底是什么 | 决定什么 | **不是**什么 |
 |------------|--------------|----------|--------------|
-| **Session / 会话徽章** | 一条对话上钉死的工具面 id（六档内置 + 可选自定义） | Agent **能调用哪些工具**、是否挂子代理、是否默认进计划模式 | 人格文案、工作区文件、Host 进程本身 |
+| **Session / 会话徽章** | 一条对话上钉死的工具面 id（五档内置 + 可选自定义） | Agent **能调用哪些工具**、是否挂子代理 | 人格文案、工作区文件、Host 进程本身、计划模式（用 `/plan`） |
 | **工作区种子** | 拷进 `{workspace}/.xrk` 的 markdown / recipes 模板 | 模型读到的**人格、规则、插件怎么写**（durable inject） | 工具开没开 |
 | **Host `--preset`** | 起 `web`/`serve` 时给**新会话**的默认徽章 | 只影响**之后新建**的会话 | 不会改已有会话的徽章 |
 
-产品 UI 内置六档：**Minimal** · **Shell** · **Frugal** · **Plan** · **Shallow** · **XRK Harness**（id `harness`）。  
+产品 UI 内置五档：**Minimal** · **Shell** · **Frugal** · **Shallow** · **XRK Harness**（id `harness`）。计划模式用 **`/plan`**，不是徽章。  
 实现上只有两套 composition 包（`minimal` / `harness`）；其余档位是 Face `AgentPresetProfile` 对工具开关与子代理策略的组合。  
 `server` 只是 Host 工厂的旧名字，工具面与 harness 相同。
 
@@ -21,7 +21,7 @@
     │
     └─ 侧栏里每一条 Session（一次对话）
            │
-           ├─ agentPreset = minimal|shell|frugal|plan|shallow|harness
+           ├─ agentPreset = minimal|shell|frugal|shallow|harness
            └─ 读 workspace/.xrk/*               ← 种子喂什么话
 ```
 
@@ -29,22 +29,23 @@
 
 | 层 | 名字 | 落点 | 决定什么 |
 |----|------|------|----------|
-| **Session 工具面** | 六档徽章（UI 名见下表） | 会话徽章 / Face `agentPreset` | **实际工具组合与子代理策略** |
+| **Session 工具面** | 五档徽章（UI 名见下表） | 会话徽章 / Face `agentPreset` | **实际工具组合与子代理策略** |
 | **Host CLI** | `--preset` / `XRK_PRESET` | 进程启动 | 新会话默认徽章种子；`server` = Host 工厂名 |
 | **工作区 Agent 层** | 仓库 `.agents/` · 用户 `~/.agents/` · `{workspace}/.xrk` | inject + skills | 人格 / 规则 / 插件开发喂法 |
 
 Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。产品 UI **不**单独展示 Server。
 
-## Session 工具面（六档）
+## Session 工具面（五档）
 
-| `agentPreset` | UI 名 | 工具 / 策略 | 适用 |
-|---------------|-------|-------------|------|
-| **minimal** | Minimal | fs · skill · std；无 bash / web / lsp / PTY / 子代理 | 烟测、无 shell |
-| **shell** | Shell | harness 面：fs + bash + PTY；关 web / lsp / 子代理 | 本机 shell 为主 |
-| **frugal** | Frugal | 完整编码工具；**关子代理**（省钱） | 不想刷子会话账单 |
-| **plan** | Plan | 完整工具；**创建时默认进入计划模式**；批准 `exit_plan_mode` 后在同一会话继续构建 | 先设计后动手 |
-| **shallow** | Shallow | 完整工具；子代理 **depth ≤1**、并发封顶 | 需要轻量子任务 |
-| **harness** | **XRK Harness** | 完整工具 + 嵌套子代理（depth ≤3）；**`web` / `serve` 默认** | 完整编码 Agent |
+| id | UI 名 | 工具面 | 用途 |
+|----|-------|--------|------|
+| **minimal** | Minimal | fs + skill + std | 最小 |
+| **shell** | Shell | + bash + PTY | 本机 shell |
+| **frugal** | Frugal | 完整工具，无子代理 | 省钱 |
+| **shallow** | Shallow | 完整工具，一层子代理 | 浅委派 |
+| **harness** | XRK Harness | 完整工具 + 嵌套子代理 | 默认产品面 |
+
+计划模式：斜杠 **`/plan`** / Plan 芯片 / `exit_plan_mode`（与徽章正交）。旧 id **`plan`** 仅作 Host 兼容别名 → harness。
 
 实现包：`presets/minimal` · `presets/harness`。`presets/server` **不是**第三套工具表，只导出 Host `AgentFactory`（内部调用 harness，并按会话徽章套用 profile）。
 
@@ -54,8 +55,8 @@ Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。�
 
 | Host `--preset` | 含义 |
 |-----------------|------|
-| `minimal` · `shell` · `frugal` · `plan` · `shallow` · `harness` | 新会话默认徽章 = 该 id |
-| `server` | 与 harness **同一套工具**；`@xrkseek/preset-server` 的 Host factory 接线名 |
+| `minimal` · `shell` · `frugal` · `shallow` · `harness` | 新会话默认徽章 = 该 id |
+| `server` · `plan`（遗留） | 与 harness **同一套工具**；计划模式请用 `/plan` |
 
 `web` / `serve` / `restart` 默认 **harness**。`run` / `dump-config` 默认 **minimal**。Host `--preset` **不会**覆盖已有会话徽章。
 
@@ -124,11 +125,11 @@ node apps/cli/dist/bin.js web --preset frugal
 
 | Term you hear | What it is | What it controls | What it is **not** |
 |---------------|------------|------------------|--------------------|
-| **Session badge** | Tool-surface id pinned on a conversation (six built-ins + optional custom) | Which tools the Agent may call, subagent policy, and whether plan mode starts on | Persona copy, workspace files, or the Host process |
+| **Session badge** | Tool-surface id pinned on a conversation (five built-ins + optional custom) | Which tools the Agent may call and subagent policy | Persona copy, workspace files, Host process, or plan mode (use `/plan`) |
 | **Workspace seeds** | Markdown / recipes templates copied into `{workspace}/.xrk` | Persona, rules, and plugin-authoring guidance the model reads (durable inject) | Whether tools are enabled |
 | **Host `--preset`** | Default badge for **new** sessions when starting `web`/`serve` | Only sessions created afterward | Badges on existing sessions |
 
-The product UI ships six built-ins: **Minimal** · **Shell** · **Frugal** · **Plan** · **Shallow** · **XRK Harness** (id `harness`).  
+The product UI ships five built-ins: **Minimal** · **Shell** · **Frugal** · **Shallow** · **XRK Harness** (id `harness`). Plan mode is **`/plan`**, not a badge.  
 There are only two composition packages (`minimal` / `harness`); other badges are Face `AgentPresetProfile` combinations of tool flags and subagent policy.  
 `server` is only a legacy Host-factory name; its tool surface matches harness.
 
@@ -139,7 +140,7 @@ You open web
     │
     └─ Each Session in the sidebar (one conversation)
            │
-           ├─ agentPreset = minimal|shell|frugal|plan|shallow|harness
+           ├─ agentPreset = minimal|shell|frugal|shallow|harness
            └─ reads workspace/.xrk/*            ← what seeds inject
 ```
 
@@ -147,22 +148,23 @@ You open web
 
 | Layer | Name | Location | Controls |
 |-------|------|----------|----------|
-| **Session tool surface** | Six badges (UI names below) | Session badge / Face `agentPreset` | **Actual tool composition and subagent policy** |
+| **Session tool surface** | Five badges (UI names below) | Session badge / Face `agentPreset` | **Actual tool composition and subagent policy** |
 | **Host CLI** | `--preset` / `XRK_PRESET` | Process startup | Default badge seed for new sessions; `server` = Host factory name |
 | **Workspace agent layer** | Repo `.agents/` · user `~/.agents/` · `{workspace}/.xrk` | Inject + skills | Persona / rules / plugin-authoring |
 
 Legacy wire value **`server`** normalizes to **`harness`** for storage and badges. The product UI does **not** show Server as its own badge.
 
-## Session tool surfaces (six tiers)
+## Session tool surfaces (five tiers)
 
 | `agentPreset` | UI name | Tools / policy | Use when |
 |---------------|---------|----------------|----------|
 | **minimal** | Minimal | fs · skill · std; no bash / web / lsp / PTY / subagents | Smoke tests; no shell |
 | **shell** | Shell | Harness plane: fs + bash + PTY; web / lsp / subagents off | Local shell focus |
 | **frugal** | Frugal | Full coding tools; **subagents off** (lower bill risk) | Avoid nested-agent spend |
-| **plan** | Plan | Full tools; **starts in plan mode**; approve `exit_plan_mode` to keep building on the same session | Design first, then build |
 | **shallow** | Shallow | Full tools; subagents **depth ≤1**, concurrency capped | Light helper tasks |
 | **harness** | **XRK Harness** | Full tools + nested subagents (depth ≤3); **default for `web` / `serve`** | Full coding Agent |
+
+Plan mode is **`/plan`** / Plan chip / `exit_plan_mode` (orthogonal to badges). Legacy id **`plan`** aliases to harness.
 
 Implementation packages: `presets/minimal` · `presets/harness`. `presets/server` is **not** a third tool table; it only exports the Host `AgentFactory` (calls harness and applies the session badge profile).
 
@@ -172,8 +174,8 @@ Implementation packages: `presets/minimal` · `presets/harness`. `presets/server
 
 | Host `--preset` | Meaning |
 |-----------------|---------|
-| `minimal` · `shell` · `frugal` · `plan` · `shallow` · `harness` | New-session default badge = that id |
-| `server` | **Same tools** as harness; Host factory wiring name for `@xrkseek/preset-server` |
+| `minimal` · `shell` · `frugal` · `shallow` · `harness` | New-session default badge = that id |
+| `server` · `plan` (legacy) | **Same tools** as harness; use `/plan` for plan mode |
 
 `web` / `serve` / `restart` default to **harness**. `run` / `dump-config` default to **minimal**. Host `--preset` does **not** override badges on existing sessions.
 

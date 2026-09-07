@@ -31,7 +31,10 @@ async function bench() {
   new RemoteService(ctx)
   const list = vi.fn<() => Promise<ListResult>>()
     .mockResolvedValue({ ok: true, value: EMPTY })
-  ctx.provide('remote.pluginInventory', { list })
+  const setEnabled = vi.fn(async () => ({ ok: true as const, value: { entryId: 'x', enabled: true } }))
+  const remove = vi.fn(async () => ({ ok: true as const, value: { entryId: 'x', removed: true as const } }))
+  const open = vi.fn(async () => ({ ok: true as const, value: { entryId: 'x', opened: true as const } }))
+  ctx.provide('remote.pluginInventory', { list, setEnabled, remove, open })
   return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, list }
 }
 

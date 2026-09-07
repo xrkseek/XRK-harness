@@ -13,6 +13,7 @@ export const zh = {
   'candidate.folder': '文件夹',
   'candidate.session': 'Session',
   'candidate.noCwd': '（无工作目录）',
+  'crumb.root': '工作区',
 } satisfies Record<string, string>
 
 /** The reference namespace key union. */
@@ -33,4 +34,5 @@ export const en = {
   'candidate.folder': 'Folder',
   'candidate.session': 'Session',
   'candidate.noCwd': '(no cwd)',
+  'crumb.root': 'Workspace',
 } satisfies Record<ReferenceKey, string>

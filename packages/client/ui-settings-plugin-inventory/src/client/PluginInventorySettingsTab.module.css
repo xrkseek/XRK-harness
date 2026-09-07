@@ -256,6 +256,78 @@
   line-height: 17px;
 }
 
+.managedTag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  border-radius: 5px;
+  padding: 1px 6px;
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
+  color: var(--dsw-alias-state-business-primary);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.card[data-managed='true'] {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 35%, var(--dsw-alias-border-l2));
+}
+
+.builtinHint,
+.restartHint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.actions {
+  margin-top: 10px;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.action,
+.actionDanger {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled),
+.actionDanger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.action:disabled,
+.actionDanger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.actionDanger {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 40%, var(--dsw-alias-border-l2));
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.actionError {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
 .visuallyHidden {
   position: absolute;
   width: 1px;

@@ -75,7 +75,7 @@ describe("Face adapt / slash / queue / presets", () => {
     ).toBeUndefined();
   });
 
-  it("session.prompt slash hits recipe without admit", async () => {
+  it("session.prompt recipe slash admits so assemble can expand", async () => {
     const runtime = bareRuntime();
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
     if (!created.result.ok) throw new Error("create");
@@ -85,22 +85,15 @@ describe("Face adapt / slash / queue / presets", () => {
       mode: "queue",
       content: [{ type: "text", text: "/ping" }],
     });
-    expect(slash.result).toEqual({
-      ok: true,
-      value: {
-        accepted: true,
-        command: { kind: "success", text: "PONG_CMD" },
-      },
-    });
+    expect(slash.result).toEqual({ ok: true, value: { accepted: true } });
+    expect(
+      runtime.store
+        .get(sessionId)
+        .events.some((e) => e.type === "prompt/admitted"),
+    ).toBe(true);
     expect(
       runtime.store.get(sessionId).events.map((e) => e.type),
-    ).toEqual([
-      "permission/preset",
-      "sandbox/mode",
-      "approval/policy",
-      "command/run",
-      "command/done",
-    ]);
+    ).not.toContain("command/run");
   });
 
   it("session.prompt unknown slash admits as text (shell command schema is success-only)", async () => {
@@ -171,12 +164,11 @@ describe("Face adapt / slash / queue / presets", () => {
       expect(v.hasDocument).toBe(false);
       expect(v.presets.some((p) => p.id === "minimal")).toBe(true);
       expect(v.presets.some((p) => p.id === "frugal")).toBe(true);
-      expect(v.presets.some((p) => p.id === "plan")).toBe(true);
+      expect(v.presets.some((p) => p.id === "plan")).toBe(false);
       expect(v.presets.map((p) => p.id)).toEqual([
         "minimal",
         "shell",
         "frugal",
-        "plan",
         "shallow",
         "harness",
       ]);
@@ -203,14 +195,14 @@ describe("Face adapt / slash / queue / presets", () => {
       expect(row.content).toContain("id: minimal");
     }
 
-    const readPlan = await dispatchFaceMethod(runtime, "agentPreset.read", "rp", {
+    const readLegacyPlan = await dispatchFaceMethod(runtime, "agentPreset.read", "rp", {
       agentPreset: "plan",
     });
-    expect(readPlan.result.ok).toBe(true);
-    if (readPlan.result.ok) {
-      const row = readPlan.result.value as { content: string };
-      expect(row.content).toContain("planModeDefault: true");
-      expect(row.content).toContain("subagents: off");
+    expect(readLegacyPlan.result.ok).toBe(true);
+    if (readLegacyPlan.result.ok) {
+      const row = readLegacyPlan.result.value as { agentPreset: string; content: string };
+      expect(row.agentPreset).toBe("harness");
+      expect(row.content).toContain("planModeDefault: false");
     }
 
     const unknown = await dispatchFaceMethod(runtime, "agentPreset.read", "r2", {

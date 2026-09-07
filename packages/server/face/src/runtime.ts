@@ -72,6 +72,7 @@ import {
   questionRequestedFrame,
   questionResolvedFrame,
 } from "./questions.js";
+import { bindSettingsTools } from "./settings-agent-tools.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import { hydrateWorkspaceRegistry } from "./workspace-store.js";
 import { FaceSubagentRegistry } from "./subagent-registry.js";
@@ -132,6 +133,10 @@ export interface CreateFaceRuntimeOptions {
   readonly openNativePath?: (target: string) => Promise<void>;
   /** Inject native folder chooser (tests). Default `pickNativeDirectory`. */
   readonly pickNativeDirectory?: (signal: AbortSignal) => Promise<string | null>;
+  /** Host wires `xrk-harness plugin remove` for Settings inventory. */
+  readonly removeUserPlugin?: (
+    spec: string,
+  ) => Promise<{ readonly ok: boolean; readonly error?: string }>;
   /** Durable image store (default none → image RPCs unavailable). */
   readonly attachments?: AttachmentStore;
   /** Standing tool registry (preset layer) when no live agent is remembered. */
@@ -386,6 +391,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       bindExitPlanModeTool(agent.tools, store, sessionId, (qs, signal) =>
         questions.ask(sessionId, qs, signal),
       );
+      bindSettingsTools(agent.tools, runtimeBox.current!);
     }
     bindAgentJobs(sessionId, agent);
     return agent;
@@ -604,6 +610,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       : {}),
     ...(options.pickNativeDirectory !== undefined
       ? { pickNativeDirectory: options.pickNativeDirectory }
+      : {}),
+    ...(options.removeUserPlugin !== undefined
+      ? { removeUserPlugin: options.removeUserPlugin }
       : {}),
     bus,
     seq,

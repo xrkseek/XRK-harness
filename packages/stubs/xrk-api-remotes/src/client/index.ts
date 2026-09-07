@@ -30,6 +30,9 @@ const FACE_REMOTES: FaceRemoteSpec = {
   },
   pluginInventory: {
     list: [],
+    setEnabled: ['entryId', 'enabled'],
+    remove: ['entryId'],
+    open: ['entryId'],
   },
   messageFeedback: {
     list: 'args',

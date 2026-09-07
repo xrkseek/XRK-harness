@@ -2,7 +2,12 @@ import {
   executeFaceCommand,
   listFaceCommandDescriptors,
 } from "../slash.js";
-import { listFacePluginInventory } from "../plugin-inventory.js";
+import {
+  listFacePluginInventory,
+  resolveManagedPluginDir,
+  setFacePluginInventoryEnabled,
+} from "../plugin-inventory.js";
+import { openNativePath } from "../host-open-path.js";
 import { buildFaceChannelDiscover, resolveImGatewayWired } from "../process-channels.js";
 import { remoteArgs, type FaceHandler } from "./types.js";
 
@@ -54,6 +59,95 @@ export const pluginInventoryList: FaceHandler = async (runtime) => ({
   ok: true,
   value: { entries: listFacePluginInventory(runtime) },
 });
+
+/** Soft-disable / re-enable a managed (user) plugin in the inventory UI. */
+export const pluginInventorySetEnabled: FaceHandler = async (runtime, _rpcId, payload) => {
+  const args = remoteArgs(payload);
+  const entryId = String(args.entryId ?? "").trim();
+  const enabled = args.enabled === true;
+  if (!entryId) {
+    return { ok: false, error: { code: "invalid-payload", message: "entryId required" } };
+  }
+  const result = setFacePluginInventoryEnabled(runtime, entryId, enabled);
+  if (!result.ok) {
+    return { ok: false, error: { code: "refused", message: result.error } };
+  }
+  return { ok: true, value: { entryId, enabled } };
+};
+
+/** Remove a managed user plugin via Host CLI mutate when wired. */
+export const pluginInventoryRemove: FaceHandler = async (runtime, _rpcId, payload) => {
+  const args = remoteArgs(payload);
+  const entryId = String(args.entryId ?? "").trim();
+  if (!entryId) {
+    return { ok: false, error: { code: "invalid-payload", message: "entryId required" } };
+  }
+  const entry = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
+  if (!entry) {
+    return { ok: false, error: { code: "not-found", message: entryId } };
+  }
+  if (!entry.managed) {
+    return {
+      ok: false,
+      error: { code: "refused", message: "builtin plugins cannot be removed here" },
+    };
+  }
+  if (!runtime.removeUserPlugin) {
+    return {
+      ok: false,
+      error: {
+        code: "unavailable",
+        message: `Use: xrk-harness plugin remove ${entryId}`,
+      },
+    };
+  }
+  const result = await runtime.removeUserPlugin(entryId);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: {
+        code: "failed",
+        message: result.error ?? `plugin remove failed for ${entryId}`,
+      },
+    };
+  }
+  return { ok: true, value: { entryId, removed: true as const } };
+};
+
+/** Open the on-disk install folder for a managed plugin (Settings “edit”). */
+export const pluginInventoryOpen: FaceHandler = async (runtime, _rpcId, payload) => {
+  const args = remoteArgs(payload);
+  const entryId = String(args.entryId ?? "").trim();
+  if (!entryId) {
+    return { ok: false, error: { code: "invalid-payload", message: "entryId required" } };
+  }
+  const entry = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
+  if (!entry) {
+    return { ok: false, error: { code: "not-found", message: entryId } };
+  }
+  if (!entry.managed) {
+    return {
+      ok: false,
+      error: { code: "refused", message: "builtin plugins cannot be edited here" },
+    };
+  }
+  const dir = resolveManagedPluginDir(runtime, entry.entryId, entry.moduleName);
+  if (!dir) {
+    return {
+      ok: false,
+      error: {
+        code: "not-found",
+        message: `plugin folder not found for ${entryId}`,
+      },
+    };
+  }
+  if (runtime.openNativePath) {
+    await runtime.openNativePath(dir);
+  } else {
+    await openNativePath(dir);
+  }
+  return { ok: true, value: { entryId, opened: true as const } };
+};
 
 /** DSH `processChannels/list` — plugin channel contributions + IM vendor stubs. */
 export const processChannelsList: FaceHandler = async (runtime) => ({

@@ -96,6 +96,17 @@ export {
   type PlanReviewAnswer,
 } from "./std-tools.js";
 export {
+  createSettingsTools,
+  createSettingsGetTool,
+  createSettingsMutateTool,
+  SETTINGS_GET,
+  SETTINGS_MUTATE,
+  type SettingsToolsOptions,
+  type SettingsPathOp,
+  type SettingsGetResult,
+  type SettingsMutateResult,
+} from "./settings-tools.js";
+export {
   isTransientError,
   transientError,
   type ApprovalHandler,

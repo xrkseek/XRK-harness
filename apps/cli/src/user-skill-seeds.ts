@@ -3,11 +3,12 @@
  * `{XRK_HOME}/skills/` — system data only (Cursor-style home defaults).
  * Never writes the workspace.
  *
- * Refresh policy: a seed is installed when missing, and **re-installed only
- * when the home copy is still byte-identical to the seed we originally wrote**
- * (tracked in `.seed-manifest.json`). Any user edit wins forever — we never
- * clobber it. Copies that predate the manifest are left alone, since their
- * provenance cannot be proven.
+ * Refresh policy (fingerprint copy into ~/.xrk):
+ * - Install when missing (new bundled seeds always land).
+ * - Re-install only when the home copy is still byte-identical to the seed we
+ *   originally wrote (tracked in `.seed-manifest.json`).
+ * - Any user edit wins forever — we never clobber it.
+ * - Copies that predate the manifest are left alone (provenance unknown).
  */
 import {
   access,

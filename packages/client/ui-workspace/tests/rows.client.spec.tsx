@@ -285,18 +285,18 @@ describe('workspace browser rows', () => {
     const restoreClipboard = installClipboard(writeText)
     try {
       const group: GroupNode = {
-        key: 'project', workspaceId: wid('project'), cwd: '/projects/project', createdAt: 0, label: 'Project',
+        key: 'project', workspaceId: wid('project'), cwd: '/home/user/projects/project', createdAt: 0, label: 'Project',
         sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
       }
-      render(<ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
+      render(<ProjectRowItem group={group} home="/home/user" onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
       fireEvent.pointerEnter(screen.getByRole('treeitem').parentElement as HTMLElement)
       act(() => { vi.advanceTimersByTime(500) })
-      // Card body: full title + cwd + absolute creation time.
+      // Card body: full title + abbreviated cwd + absolute creation time; copy stays absolute.
       expect(screen.getAllByText('Project')).toHaveLength(2)
-      expect(screen.getByText('/projects/project')).toBeTruthy()
+      expect(screen.getByText('~/projects/project')).toBeTruthy()
       expect(screen.getByText(/^创建于 \d+年\d+月\d+日 /)).toBeTruthy()
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: '复制: /projects/project' })) })
-      expect(writeText).toHaveBeenCalledWith('/projects/project')
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: '复制: /home/user/projects/project' })) })
+      expect(writeText).toHaveBeenCalledWith('/home/user/projects/project')
       expect(screen.getByRole('status').textContent).toBe('已复制')
     } finally {
       restoreClipboard()

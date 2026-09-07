@@ -36,11 +36,13 @@ async function bench() {
     create, startSession, rename, insertSessionBefore,
   } as never)
   ctx.provide('sessions', { open, clear, search, searchResultLimit: 20, binding, fork } as never)
+  const hostDescription = { getSnapshot: () => ({ home: '/home/user' }), subscribe: () => () => {} }
+  ctx.provide('connection', { hostDescription } as never)
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, startSession, rename,
-    insertSessionBefore, open, clear, search, renameSession, binding, fork,
+    insertSessionBefore, open, clear, search, renameSession, binding, fork, hostDescription,
   }
 }
 
@@ -54,7 +56,7 @@ function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
 
 describe('ui-workspace apply', () => {
   it('declares the services it drives', () => {
-    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'locale'])
+    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'locale', 'connection'])
   })
 
   it('registers browser and pickers for declarations arriving before or after apply', async () => {
@@ -109,6 +111,7 @@ describe('ui-workspace apply', () => {
     expect(b.insertSessionBefore).toHaveBeenCalledWith('ws', 's1', 's2')
     await browser.createWorkspace({ path: '/tmp/browser-project' })
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/browser-project' })
+    expect(browser.hooks.hostDescription).toBe(b.hostDescription)
 
     const picker = (b.slots.entries('conversation.hero.workspace')[0]!.inject as () => WorkspacePickerInjected)()
     await picker.createWorkspace({ path: '/tmp/project' })

@@ -36,6 +36,10 @@
   cursor: default;
 }
 
+.pending {
+  opacity: 0.85;
+}
+
 .close {
   display: inline-flex;
   align-items: center;

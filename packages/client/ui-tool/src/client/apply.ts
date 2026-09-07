@@ -1,4 +1,5 @@
 /** Register the Tool call tree, details renderer, and built-in atomic views. */
+import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import { ToolCallTree } from './tool/ToolCallTree.tsx'
@@ -8,18 +9,21 @@ import { askQuestionToolview } from './tool/toolviews/ask-question-row.tsx'
 import { bashToolviewSample } from './tool/toolviews/bash-sample.tsx'
 import { fileMutationToolview } from './tool/toolviews/file-mutation-row.tsx'
 import { readToolview } from './tool/toolviews/read-row.tsx'
+import { readImageToolview } from './tool/toolviews/read-image-row.tsx'
 import { searchToolview } from './tool/toolviews/search-row.tsx'
 import { todoToolview } from './tool/toolviews/todo-row.tsx'
 import { webToolview } from './tool/toolviews/web-row.tsx'
 
-/** Required service: the slot registry that owns both Tool render seats. */
-export const inject = ['slots']
+/** Required services: slot registry + connection Host facts for POSIX `~`. */
+export const inject = ['slots', 'connection']
 
 /**
  * Mount the whole-Tool renderers and built-in atomic Tool registrations.
  * @param ctx - Client root context.
  */
 export function apply(ctx: ClientContext): void {
+  const connection = ctx.get('connection') as ConnectionHandle
+  const toolInject = () => ({ hooks: { hostDescription: connection.hostDescription } })
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node',
     key: 'tool-call',
@@ -27,15 +31,18 @@ export function apply(ctx: ClientContext): void {
     children: {
       'tool.call.toolview': { kind: 'keyed', scope: 'session' },
     },
+    inject: toolInject,
   }, ToolCallTree))
 
   ctx.slots.inject('conversation.details.tool', () => ctx.slots.register({
     name: 'conversation.details.tool',
     locale: NS,
+    inject: toolInject,
   }, ToolDetails))
 
   ctx.plugin(bashToolviewSample)
   ctx.plugin(readToolview)
+  ctx.plugin(readImageToolview)
   ctx.plugin(fileMutationToolview)
   ctx.plugin(searchToolview)
   ctx.plugin(webToolview)

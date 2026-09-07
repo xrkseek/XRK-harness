@@ -67,6 +67,10 @@ export {
   type XrkPluginServicesOptions,
   type XrkPluginInventory,
 } from "./xrk/plugin-services.js";
+export {
+  runPluginMutate,
+  type PluginMutateResult,
+} from "./xrk/plugin-mutate.js";
 
 export interface HttpChatRequest {
   readonly sessionId?: string;

@@ -170,7 +170,7 @@ describe('apply', () => {
 })
 
 describe('candidates: sessionId addressing', () => {
-  it('lists via {sessionId} and filters by startsWith(query)', async () => {
+  it('lists via {sessionId} and filters by fuzzy subsequence (prefix preferred)', async () => {
     const { list, payloads } = countingList()
     const { source } = await bench(list)
     const items = await source.candidates(proj('s1'), req('co'))
@@ -180,6 +180,9 @@ describe('candidates: sessionId addressing', () => {
       { name: 'commit-helper', description: 'commit flow' },
       { name: 'code-review', description: 'review flow' },
     ])
+    // Non-prefix ordered subsequence still matches (same ranking as ui-commands).
+    const fuzzy = await source.candidates(proj('s1'), req('crv'))
+    expect(fuzzy.map(item => item.name)).toContain('code-review')
   })
 
   it('rejects on a failed result (the slash shell owns the menu-side fold)', async () => {

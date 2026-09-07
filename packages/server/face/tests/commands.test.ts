@@ -62,7 +62,7 @@ describe("commands/execute + list", () => {
         },
         {
           name: "echo",
-          description: "echo args",
+          description: "echo args (expands into the prompt)",
           input: { hint: "text" },
         },
         {
@@ -80,21 +80,47 @@ describe("commands/execute + list", () => {
           input: { hint: "objective" },
         },
         {
+          name: "mcp",
+          description:
+            "List configured MCP servers and mount status (mcp verbose for detail)",
+          input: { hint: "[verbose]" },
+        },
+        {
+          name: "model",
+          description:
+            "Show or switch provider/model (Codex-style /model provider/model)",
+          input: { hint: "[provider/model]" },
+        },
+        {
           name: "permission",
           description:
-            "Switch the permission preset (sandbox mode + approval policy)",
-          input: { hint: "<preset>" },
+            "Switch sandbox mode + approval policy (not the session tool badge)",
+          input: { hint: "<mode>" },
         },
         {
           name: "plan",
-          description: "Enter or leave plan mode",
+          description:
+            "Enter or leave plan mode (session collaboration; not a tool badge)",
           input: { hint: "[off|message]" },
+        },
+        {
+          name: "skills",
+          description: "List workspace skills",
+        },
+        {
+          name: "status",
+          description: "Show session badge, permission, plan, theme, model, cwd",
+        },
+        {
+          name: "theme",
+          description: "Set appearance preference (live): light|dark|system",
+          input: { hint: "light|dark|system" },
         },
       ]);
     }
   });
 
-  it("executes a known slash line and logs command/run + command/done", async () => {
+  it("executes a known Face builtin and logs command/run + command/done", async () => {
     const runtime = bareRuntime();
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
     if (!created.result.ok) throw new Error("create");
@@ -106,7 +132,7 @@ describe("commands/execute + list", () => {
     });
 
     const exec = await dispatchFaceMethod(runtime, "commands/execute", "e", {
-      args: { agentId: sessionId, line: "/echo hello world" },
+      args: { agentId: sessionId, line: "/mcp" },
     });
     off();
     expect(exec.result.ok).toBe(true);
@@ -117,7 +143,7 @@ describe("commands/execute + list", () => {
     };
     expect(value.commandId).toMatch(/^cmd_/);
     expect(value.result).toMatchObject({ kind: "success" });
-    expect(value.result.text).toContain("hello world");
+    expect(value.result.text).toContain("Allow connect:");
 
     const events = runtime.store.get(sessionId).events;
     expect(events.map((e) => e.type)).toEqual([
@@ -141,12 +167,59 @@ describe("commands/execute + list", () => {
     expect(commandFrames).toMatchObject([
       {
         type: "session/event",
-        event: { type: "command/run", data: { name: "echo" } },
+        event: { type: "command/run", data: { name: "mcp" } },
       },
       {
         type: "session/event",
         event: { type: "command/done", data: { kind: "success" } },
       },
+    ]);
+  });
+
+  it("/theme light applies live uiSettings", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    expect(runtime.uiSettings.theme).toBe("system");
+
+    const exec = await dispatchFaceMethod(runtime, "commands/execute", "t", {
+      args: { agentId: sessionId, line: "/theme light" },
+    });
+    expect(exec.result.ok).toBe(true);
+    if (exec.result.ok) {
+      expect(exec.result.value).toMatchObject({
+        result: { kind: "success", text: "Appearance light (live)" },
+      });
+    }
+    expect(runtime.uiSettings.theme).toBe("light");
+
+    const status = await dispatchFaceMethod(runtime, "commands/execute", "s", {
+      args: { agentId: sessionId, line: "/status" },
+    });
+    expect(status.result.ok).toBe(true);
+    if (status.result.ok) {
+      expect(
+        (status.result.value as { result: { text: string } }).result.text,
+      ).toContain("theme: light");
+    }
+  });
+
+  it("does not Face-execute recipes (admit path owns expansion)", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const exec = await dispatchFaceMethod(runtime, "commands/execute", "e", {
+      args: { agentId: sessionId, line: "/echo hello world" },
+    });
+    expect(exec.result.ok).toBe(true);
+    if (exec.result.ok) expect(exec.result.value).toBeUndefined();
+    expect(runtime.store.get(sessionId).events.map((e) => e.type)).toEqual([
+      "permission/preset",
+      "sandbox/mode",
+      "approval/policy",
     ]);
   });
 
@@ -234,16 +307,42 @@ describe("commands/execute + list", () => {
           input: { hint: "objective" },
         },
         {
+          name: "mcp",
+          description:
+            "List configured MCP servers and mount status (mcp verbose for detail)",
+          input: { hint: "[verbose]" },
+        },
+        {
+          name: "model",
+          description:
+            "Show or switch provider/model (Codex-style /model provider/model)",
+          input: { hint: "[provider/model]" },
+        },
+        {
           name: "permission",
           description:
-            "Switch the permission preset (sandbox mode + approval policy)",
-          input: { hint: "<preset>" },
+            "Switch sandbox mode + approval policy (not the session tool badge)",
+          input: { hint: "<mode>" },
         },
         { name: "ping", description: "plugin ping" },
         {
           name: "plan",
-          description: "Enter or leave plan mode",
+          description:
+            "Enter or leave plan mode (session collaboration; not a tool badge)",
           input: { hint: "[off|message]" },
+        },
+        {
+          name: "skills",
+          description: "List workspace skills",
+        },
+        {
+          name: "status",
+          description: "Show session badge, permission, plan, theme, model, cwd",
+        },
+        {
+          name: "theme",
+          description: "Set appearance preference (live): light|dark|system",
+          input: { hint: "light|dark|system" },
         },
       ]);
     }
@@ -675,22 +774,25 @@ describe("pluginInventory/list", () => {
     expect(listed.result.value).toEqual({
       entries: [
         {
-          entryId: "example-tools",
-          moduleName: "example-tools",
-          enabled: true,
-          fiberPhase: "active",
-        },
-        {
           entryId: "community-cordis",
           moduleName: "community-cordis",
           enabled: false,
           fiberPhase: "failed",
+          managed: true,
         },
         {
           entryId: "@xrkseek/client-runtime",
           moduleName: "@xrkseek/client-runtime",
           enabled: true,
           fiberPhase: "active",
+          managed: false,
+        },
+        {
+          entryId: "example-tools",
+          moduleName: "example-tools",
+          enabled: true,
+          fiberPhase: "active",
+          managed: false,
         },
       ],
     });
@@ -726,6 +828,7 @@ describe("pluginInventory/list", () => {
           moduleName: "community-cordis",
           enabled: true,
           fiberPhase: "active",
+          managed: true,
         },
       ],
     });

@@ -29,6 +29,9 @@ export type TriggerPosition = 'leading' | 'inline'
 /** Which of the three pick paths produced a pick. */
 export type PickVia = 'menu' | 'space' | 'enter'
 
+/** What a pick asks for: resolve the candidate, or drill into it in place. */
+export type PickAction = 'pick' | 'drill'
+
 /** One menu candidate. Pure display data — zero behavior declaration. */
 export interface InputTriggerCandidate {
   readonly name: string
@@ -39,6 +42,40 @@ export interface InputTriggerCandidate {
   readonly section?: string
   /** Opaque source-owned pick payload. */
   readonly value?: string
+  /**
+   * The row offers a drill action beside the settling pick: Tab or the row's
+   * chevron refines the query in place (directory descent) instead of
+   * resolving the candidate.
+   */
+  readonly drill?: boolean
+}
+
+/**
+ * One crumb of a source's menu header. The pipeline treats `value` as opaque
+ * and hands it straight back on pick, so a source names its own destinations.
+ */
+export interface InputTriggerCrumb {
+  /** Rendered text of this step. */
+  readonly label: string
+  /** Opaque source-owned pick payload, returned through `onPick`. */
+  readonly value: string
+  /** The step the menu is currently showing; rendered as the trailing, unclickable crumb. */
+  readonly current?: boolean
+}
+
+/** What a source needs to decide the header of the open menu. */
+export interface HeaderRequest {
+  /** Text between the trigger char and the caret, live-filtered. */
+  readonly query: string
+  /** Whether the active @file token is an open quoted path. */
+  readonly quoted?: boolean
+  /**
+   * True while this menu was opened or last re-scoped by a drill pick. It
+   * survives further typing and clears when the menu closes, so a query typed
+   * after a drill still reads as drilled. The pipeline owns the fact; what it
+   * means for a header is the source's to decide.
+   */
+  readonly drilled: boolean
 }
 
 /** Pick-moment snapshot of the trigger token span. CAS: stale draftRev ⇒ the whole action no-ops. */
@@ -136,6 +173,8 @@ export interface CandidateRequest {
   /** Whether the active @file token is an open quoted path. */
   readonly quoted?: boolean
   readonly position: TriggerPosition
+  /** Whether this menu was opened or last re-scoped by a drill pick; see {@link HeaderRequest.drilled}. */
+  readonly drilled: boolean
   readonly signal: AbortSignal
 }
 
@@ -145,6 +184,8 @@ export interface InputTriggerPick {
   readonly session: ClientSessionContext
   readonly position: TriggerPosition
   readonly via: PickVia
+  /** Settling pick, or the candidate's drill action (Tab / row chevron). */
+  readonly action: PickAction
   readonly span: TokenSpan
 }
 
@@ -182,6 +223,15 @@ export interface InputTriggerSource {
   /** Whether the menu renders the source-title row; defaults to true. */
   readonly showGroupTitle?: boolean
   candidates(session: ClientSessionContext, req: CandidateRequest): Promise<readonly InputTriggerCandidate[]>
+  /**
+   * Synchronous breadcrumb rendered above this source's group, re-polled on
+   * every hit. Implementing IS the participation claim; `undefined` means
+   * this request needs no header. A crumb pick routes back through
+   * {@link InputTriggerSource.onPick} with `action: 'drill'` and the crumb's
+   * `value` as the candidate value, so returning to a step and descending
+   * into one are the same outcome.
+   */
+  header?(session: ClientSessionContext, req: HeaderRequest): readonly InputTriggerCrumb[] | undefined
   /** Every pick lands here; claim/insert outcomes are executed by the pipeline via the scoped input events. */
   onPick(pick: InputTriggerPick): PickOutcome
   /** Synchronous space-time adjudication over hot state only. `token` is the just-completed leading token (e.g. '/goal'). */

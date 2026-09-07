@@ -22,6 +22,7 @@
  * and a hole has exactly one declaring entry — they carry the same owner
  * contract and the same occupant.
  */
+import type { HostDescription, HostDescriptionSource } from '@xrkseek/client-connection/client'
 import type { HostObservable, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore, SnapshotSelectorHook } from '@xrkseek/client-ui-slots'
 // Type-only: pull the owner SlotMap merges into programs that resolve the
 // runtime shares below.
@@ -84,12 +85,25 @@ export type DirectoryPickingHooks = {
   useDirectoryFlow: SnapshotSelectorHook<boolean>
 }
 
+/** Browser-only Host description hook (POSIX hover paths may display as `~`). */
+export type WorkspaceHostHooks = {
+  /** Selector hook over the generation-scoped Host description (`info => info?.home`). */
+  useHostDescription: SnapshotSelectorHook<HostDescription | undefined>
+}
+
 /**
  * Browser-private injected share (arrives via the register inject factory).
  * Data reads use the global framework hooks; these are the Host actions the
  * browsing region drives.
  */
 export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
+  hooks: DirectoryPickingInjected['hooks'] & {
+    /**
+     * Fixed Host facts via hook (not frozen inject values): select
+     * `info => info?.home` for POSIX hover-path abbreviation.
+     */
+    hostDescription: HostDescriptionSource
+  }
   /**
    * Start a New Session in a Workspace: reuse-or-create its blank session and
    * open it; without an explicit workspace, inherit the current Session
@@ -144,6 +158,7 @@ export type WorkspaceBrowserProps =
   & PropsStore<ReturnType<typeof createWorkspaceViewStore>>
   & Omit<WorkspaceBrowserInjected, 'hooks'>
   & DirectoryPickingHooks
+  & WorkspaceHostHooks
   & PropsLocale<'workspace'>
 
 /**

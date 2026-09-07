@@ -29,6 +29,7 @@
   "xrk": {
     "client": {
       "inject": [
+        "@xrkseek/client-connection",
         "@xrkseek/client-locale",
         "@xrkseek/client-runtime",
         "@xrkseek/client-ui-conversation",
@@ -46,6 +47,7 @@
     "clsx": "^2.0.0"
   },
   "peerDependencies": {
+    "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
@@ -55,6 +57,7 @@
     "react": "^18.2.0"
   },
   "devDependencies": {
+    "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-test-runtime": "workspace:^",

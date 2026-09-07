@@ -122,7 +122,7 @@ describe('the preset list', () => {
     expect(screen.queryByRole('heading', { name: en.customGroup })).toBeNull()
   })
 
-  it('leads with the six built-in tool surfaces in the intro', () => {
+  it('leads with the five built-in tool surfaces in the intro', () => {
     renderSection()
 
     expect(screen.getByText(new RegExp('XRK Harness'))).toBeTruthy()

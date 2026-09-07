@@ -59,10 +59,14 @@ const t = makeTranslate(zh, commonZh)
 
 function mount(state: MenuState) {
   const menu = createSnapshotStore<MenuState>(state)
+  const headers = createSnapshotStore<ReadonlyMap<string, readonly { label: string; value: string; current?: boolean }[]>>(new Map())
   const onPick = vi.fn()
+  const onCrumb = vi.fn()
   const onDismiss = vi.fn()
-  const view = render(<MenuView menu={menu} onPick={onPick} onDismiss={onDismiss} t={t} />)
-  return { menu, onPick, onDismiss, view }
+  const view = render(
+    <MenuView menu={menu} headers={headers} onPick={onPick} onCrumb={onCrumb} onDismiss={onDismiss} t={t} />,
+  )
+  return { menu, headers, onPick, onCrumb, onDismiss, view }
 }
 
 /** The non-interactive group title rows (role=presentation), in document order. */
@@ -162,23 +166,24 @@ describe('MenuView', () => {
   it('caps the list height at the design maximum when the composer sits low enough', () => {
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ bottom: 800 } as DOMRect)
     mount(openState())
-    expect(screen.getByRole('listbox').style.maxHeight).toBe('320px')
+    expect((document.querySelector('[data-trigger-menu]') as HTMLElement).style.maxHeight).toBe('320px')
   })
 
   it('clamps the list height to the space above the composer minus the safe margin', () => {
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ bottom: 200 } as DOMRect)
     mount(openState())
-    expect(screen.getByRole('listbox').style.maxHeight).toBe('188px')
+    expect((document.querySelector('[data-trigger-menu]') as HTMLElement).style.maxHeight).toBe('188px')
   })
 
   it('re-fits the height when the window resizes', () => {
     const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect')
     rect.mockReturnValue({ bottom: 800 } as DOMRect)
     mount(openState())
-    expect(screen.getByRole('listbox').style.maxHeight).toBe('320px')
+    const shell = document.querySelector('[data-trigger-menu]') as HTMLElement
+    expect(shell.style.maxHeight).toBe('320px')
     rect.mockReturnValue({ bottom: 100 } as DOMRect)
     act(() => { window.dispatchEvent(new Event('resize')) })
-    expect(screen.getByRole('listbox').style.maxHeight).toBe('88px')
+    expect(shell.style.maxHeight).toBe('88px')
   })
 
   it('pointerdown outside the menu (no composer card ancestor) dismisses', () => {
@@ -195,10 +200,18 @@ describe('MenuView', () => {
 
   it('pointerdown inside the surrounding composer card does not dismiss; outside it does', () => {
     const menu = createSnapshotStore<MenuState>(openState())
+    const headers = createSnapshotStore<ReadonlyMap<string, readonly { label: string; value: string }[]>>(new Map())
     const onDismiss = vi.fn()
     render(
       <div data-composer-card="">
-        <MenuView menu={menu} onPick={vi.fn()} onDismiss={onDismiss} t={t} />
+        <MenuView
+          menu={menu}
+          headers={headers}
+          onPick={vi.fn()}
+          onCrumb={vi.fn()}
+          onDismiss={onDismiss}
+          t={t}
+        />
         <button type="button" data-testid="composer-button" />
       </div>,
     )
@@ -206,6 +219,27 @@ describe('MenuView', () => {
     expect(onDismiss).not.toHaveBeenCalled()
     fireEvent.pointerDown(document.body)
     expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders the drill chevron only on drillable rows and routes its own action', () => {
+    const { onPick } = mount(openState({
+      groups: [{
+        source: 'reference',
+        status: 'ready',
+        items: [
+          { name: 'Folder · src/', drill: true },
+          { name: 'File · plan' },
+        ],
+      }],
+      highlight: { source: 'reference', index: 0 },
+    }))
+    expect(screen.getByRole('button', { name: '进入目录' })).toBeTruthy()
+    expect(screen.getByText('Tab')).toBeTruthy()
+    fireEvent.mouseDown(screen.getByRole('button', { name: '进入目录' }))
+    expect(onPick).toHaveBeenCalledWith('reference', 0, 'drill')
+    onPick.mockClear()
+    fireEvent.mouseDown(screen.getAllByRole('option')[0]!)
+    expect(onPick).toHaveBeenCalledWith('reference', 0)
   })
 
   it('ignores a pointerdown whose target is not a DOM node', () => {

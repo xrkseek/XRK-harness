@@ -250,6 +250,17 @@
   width: 10px;
 }
 
+/* Flip when the default right placement would leave the viewport. */
+.submenuStart {
+  left: auto;
+  right: calc(100% + 10px);
+}
+
+.submenuStart::before {
+  left: auto;
+  right: -10px;
+}
+
 @media (max-width: 767px) {
   .item,
   .denseList .item {

@@ -10,8 +10,10 @@
 // contract only forwards it (type-definition authority stays with the layer
 // that produces the values).
 import type { ToolCallBlock, ToolResultNode } from '@xrkseek/client-runtime/client'
+import { abbreviateHomePath } from '@xrkseek/client-ui-primitives'
 
 export type { ToolCallBlock } from '@xrkseek/client-runtime/client'
+export { abbreviateHomePath } from '@xrkseek/client-ui-primitives'
 
 /** Tool-call row variants selected by the generic atomic renderer. */
 export type ToolRowVariant = 'search' | 'read' | 'bash' | 'write' | 'edit' | 'code' | 'others'
@@ -40,6 +42,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
   // with its own title from TOOL_TITLES, not the generic `others` row.
   pwsh: 'bash',
   read: 'read',
+  read_image: 'read',
   web_fetch: 'read',
   web_search: 'search',
   grep: 'search',
@@ -66,6 +69,7 @@ const TOOL_TITLES: Record<string, string> = {
   cordis_stop: 'Stop Cordis Plugin',
   cordis_undefine: 'Remove Cordis Plugin',
   pwsh: 'Pwsh',
+  read_image: 'Read image',
 }
 
 /**
@@ -206,19 +210,24 @@ function deriveBody(variant: ToolRowVariant, argsRaw: string): string | null {
  * @param toolName - wire tool name (dispatch-supplied; survives windowless results).
  * @param block - RunningToolCall or ToolResultNode off the snapshot caches.
  * @param cwd - session workspace root; workspace-rooted path summaries display relative to it.
+ * @param home - host account home; leftover POSIX home paths display as `~`.
  * @returns the row model.
  */
-export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: string): ToolRowModel {
+export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: string, home?: string): ToolRowModel {
   const variant = classifyTool(toolName)
   const done = 'kind' in block
   const argsRaw = (done ? block.call?.argsRaw : block.argsRaw) ?? ''
   const state: ToolRowState = !done ? 'running'
     : block.error?.code === 'interrupted' ? 'stopped'
       : block.isError ? 'error' : 'ok'
-  const base = argsRaw === '' ? block.callId : relativizeToCwd(deriveSummary(variant, argsRaw), cwd)
+  const base = argsRaw === ''
+    ? block.callId
+    : abbreviateHomePath(relativizeToCwd(deriveSummary(variant, argsRaw), cwd), home)
   const toolTitle = TOOL_TITLES[toolName]
   // Others keeps the static "Tool call" title (figma literal); the real tool
   // name rides the mutable summary slot unless the tool owns a specific title.
+  // Tool-owned titles (incl. read_image) replace the variant literal.
+  const title = toolTitle ?? VARIANT_TITLES[variant]
   const summary = variant === 'others' && toolName !== '' && toolTitle === undefined
     ? `${toolName} · ${base}`
     : base
@@ -229,7 +238,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   const errorSummary = state === 'error' && output !== null ? firstLine(output) : null
   return {
     variant,
-    title: toolTitle ?? VARIANT_TITLES[variant],
+    title,
     summary,
     filePath: deriveFilePath(variant, argsRaw),
     body: deriveBody(variant, argsRaw),

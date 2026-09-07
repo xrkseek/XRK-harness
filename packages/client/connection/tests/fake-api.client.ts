@@ -77,7 +77,7 @@ export class FakeApiClient implements IApiClient {
     canOpenPath: boolean
   }>> =
     () => Promise.resolve(ok({
-      version: '0-fake', cwd: '/f', attachedSessions: 0, canOpenPath: true,
+      version: '0-fake', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true,
     }))
   onPickDirectory: (payload: unknown) => Promise<RpcResponse<{ path: string | null }>> =
     () => Promise.resolve(ok({ path: null }))
@@ -267,7 +267,7 @@ export class FakeApiClient implements IApiClient {
     for (const conn of [...this.hostConns]) conn.feed({ kind: 'frame', envelope: { rpcId: RpcId(rpcId ?? `push-${nextRpc++}`), payload: frame } })
   }
 
-  /** End (clean close) or fail (throw) every open stream â€” reconnect-path material. */
+  /** End (clean close) or fail (throw) every open stream â€?reconnect-path material. */
   endStreams(): void {
     for (const conn of [...this.muxConns, ...this.hostConns]) conn.feed({ kind: 'end' })
   }

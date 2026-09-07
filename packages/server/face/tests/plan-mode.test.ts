@@ -19,7 +19,7 @@ function bareRuntime(store = createMemorySessionStore()) {
 }
 
 describe("Face plan mode", () => {
-  it("plan agentPreset seeds plan/mode active on session.create", async () => {
+  it("legacy plan agentPreset maps to harness without seeding plan mode", async () => {
     const runtime = bareRuntime();
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
       agentPreset: "plan",
@@ -27,15 +27,13 @@ describe("Face plan mode", () => {
     expect(created.result.ok).toBe(true);
     if (!created.result.ok) return;
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    expect((created.result.value as { agentPreset?: string }).agentPreset).toBe(
+      "harness",
+    );
     expect(runtime.projections.snapshot(sessionId).values.plan).toEqual({
-      active: true,
+      active: false,
       pending: false,
     });
-    expect(
-      runtime.store.get(sessionId).events.some(
-        (e) => e.type === "plan/mode" && (e as { active?: boolean }).active === true,
-      ),
-    ).toBe(true);
   });
 
   it("pins inactive plan projection; /plan commits between turns", async () => {

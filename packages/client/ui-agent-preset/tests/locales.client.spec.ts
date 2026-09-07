@@ -1,4 +1,4 @@
-/** Web-localized copy for the six shipped tool surfaces. */
+/** Web-localized copy for the five shipped tool surfaces. */
 
 import { describe, expect, it } from 'vitest'
 import { en, presetDisplayText, zh } from '../src/client/locales.ts'
@@ -10,7 +10,6 @@ describe('preset display copy', () => {
     ['minimal', 'presetMinimalName', 'presetMinimalDescription'],
     ['shell', 'presetShellName', 'presetShellDescription'],
     ['frugal', 'presetFrugalName', 'presetFrugalDescription'],
-    ['plan', 'presetPlanName', 'presetPlanDescription'],
     ['shallow', 'presetShallowName', 'presetShallowDescription'],
     ['harness', 'presetHarnessName', 'presetHarnessDescription'],
   ] as const)('localizes the shipped %s preset in English and Chinese', (id, nameKey, descriptionKey) => {

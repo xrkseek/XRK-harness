@@ -165,6 +165,29 @@ describe("ensureUserSkillSeeds", () => {
     });
   });
 
+  it("installs a newly bundled skill without touching existing ones", async () => {
+    await withTempDirs(async (home, seeds) => {
+      await makeSeedRoot(seeds, { demo: { "SKILL.md": skillMd("demo", "v1") } });
+      await ensureUserSkillSeeds(home, seeds);
+
+      await makeSeedRoot(seeds, {
+        demo: { "SKILL.md": skillMd("demo", "v1") },
+        newbie: { "SKILL.md": skillMd("newbie", "fresh") },
+      });
+
+      const second = await ensureUserSkillSeeds(home, seeds);
+      expect(second.installed).toEqual(["newbie"]);
+      expect(second.refreshed).toEqual([]);
+      expect(second.skipped).toContain("demo");
+      expect(
+        await readFile(path.join(home, "skills", "newbie", "SKILL.md"), "utf8"),
+      ).toContain("fresh");
+      expect(
+        await readFile(path.join(home, "skills", "demo", "SKILL.md"), "utf8"),
+      ).toContain("v1");
+    });
+  });
+
   it("writes a machine-readable seed manifest next to the skills", async () => {
     await withTempDirs(async (home, seeds) => {
       await makeSeedRoot(seeds, { demo: { "SKILL.md": skillMd("demo", "v1") } });

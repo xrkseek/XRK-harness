@@ -18,7 +18,7 @@
 | Exec / Workspace / Policy | `exec-*`（`web_*` · `lsp` · **`terminal_*`** · Linux stdin-wait · **`ProcessSnapshot`**）· `workspace`（**durable inject** · recipes · skill · **layers**）· `policy` | [seams.md](./seams.md) · [web-tools.md](./web-tools.md) · [lsp-tools.md](./lsp-tools.md) · [pty-tools.md](./pty-tools.md) · [workspace-inject.md](./workspace-inject.md) · [skills-layers.md](./skills-layers.md) · [slash-recipes.md](./slash-recipes.md) · [policy.md](./policy.md) |
 | Jobs | `job_list` / `job_output` / `job_kill` · 前台 bash **30s yield**（Settings 可调）· `pty-send` · Face settle **steer** 通知 · Host 共享 + session 隔离 · **`job.kill` / `job.background` RPC** · 壳 **停止/后台**（会话头 + 输入区 dock） | [shell-jobs.md](./shell-jobs.md) |
 | 子代理委托 | 模型面 `subagent` · `list_agents` · `send_message` · `interrupt_agent`（深度≤3；系统提示 `tool:subagent`）；后台 continuable 子代理 drain idle 向父 inbox **steer** 完成通知（对标 Codex `inject_fragment_without_turn`，不受用户 queue 偏好影响）；Face `subagent.*` · Sidebar `subagents.live` / jobs | [host-face.md](./host-face.md) · [session-delivery.md](./session-delivery.md) · [community-plugins.md](./community-plugins.md) |
-| HTTP + Host + Face 主路径 | `server-*`（产品 boot 省略 Cordis UI/HMR；工具卡 · `session/jobs` · standing 冷 history；`ask_user`；`/permission` · `/plan` · `/compact` · `/export` · `/feedback`；mux/host **WS Ping 心跳** · **`FaceMuxSeq`**） | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
+| HTTP + Host + Face 主路径 | `server-*`（产品 boot 省略 Cordis UI/HMR；工具卡 · `session/jobs` · standing 冷 history；`ask_user`；`settings_get`/`settings_mutate`；`/permission` · `/plan` · `/mcp` · `/status` · `/model` · `/theme` · `/skills` · `/compact` · `/export` · `/feedback` · `/auto-review`；mux/host **WS Ping 心跳** · **`FaceMuxSeq`**） | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
 ## AGT 通道集成
 
 | 模式 | 说明 | 文档 |
@@ -27,12 +27,24 @@
 
 | CLI | `@xrkseek/harness-cli`（主 bin **`xrkh`**；`web`/`serve`；`restart`=停本机 XRK Host；`--force` 仅杀已识别 Host） | [apps/cli/README.md](../apps/cli/README.md) · [plugin-development](./plugin-development.md) |
 | LLM / Presets / SDK | `llm-*` · Registry R0+R1（openai-chat / completions 别名 · anthropic-messages · openai-responses · gemini-generate）· Face 手写 `llm-pi-ai` 路由（Custom provider）· `presets/*` · `@xrkseek/harness` | [llm-provider-registry.md](./llm-provider-registry.md) · [profiles.md](./profiles.md) |
-| MCP | `@xrkseek/mcp`（stdio/HTTP 有界进程重连 + SSE；有序 content 投影；可选 image → AttachmentStore）；Host `XRK_MCP_*` 或 Face `mcp.servers` + `allowConnect` 落盘热挂载（policy deny → **park**）；产品挂载剧本 **`xrk-capability-attach`**（`web`/`serve` 种子 `~/.xrk`：`skills/*` · 薄 `AGENTS.md` · `recipes/*`；不 mkdir 工作区） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) · [skills-layers.md](./skills-layers.md) |
+| MCP | `@xrkseek/mcp`（stdio/HTTP 有界重连 + SSE；有序内容投影；可选 image → AttachmentStore）；Host `XRK_MCP_*` 或 Face `mcp.servers` + `allowConnect` 文件真源热挂载（policy deny → **park**）；Agent **`settings_get`/`settings_mutate`**（全局 `~/.xrk`，MCP 增删改与代理 env）；`/mcp` 清单；playbook **`xrk-capability-attach`**（`web`/`serve` 种子 `~/.xrk`：`skills/*` · 薄 `AGENTS.md` · `recipes/*`；不 mkdir 工作区） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) · [skills-layers.md](./skills-layers.md) |
 | Attachment / 插件 | Face 附件；进程插件 `tools` · `prompt` · `commands` · **`host`** · **`channel`** · **`policy`** · **`llm`**；CLI 用户插件目录 + 客户端 `web/` 叠加；Host `wireComposition*` 自动接线；**社区 client** 免补 `xrk.host.json`（能力表 + `client.js` 扫描 + 约定 infer，见 [plugin-loader](./plugin-loader.md)） | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
 | 社区插件 Host | `extensions/dsh-compat` + bridge；Face **`contextTimeline`** / **`contextHeaders`** · **`costUsage`** · **`processChannels/list`**；IM WS/sidecar · Vision 全路由 · embedded 向量 · GenUI npm · TongFlow Python；`xrkh doctor` · boot 自动接线 | [community-plugins.md](./community-plugins.md) · [ADR-0006](./adr/0006-im-long-lived-gateway.md) · [ADR-0007](./adr/0007-taskflow-external-runtime.md) |
 | 产品 Web | `apps/web` + `packages/client`；dist 组装 · `@file`/`@session` · 跨会话 prepare · **轮次轨 / `turnOutline` · `loadThrough`** · Playwright **17/17**（`pnpm test:web`） | [host-face.md](./host-face.md) · [testing.md](./testing.md) · Cordis UI/HMR 仅 `pnpm dev:web` 开发路径 |
 
 产品壳 = `apps/web` + `packages/client`；`serve` 用组装后的 dist / CLI `product-web/`。Hero 标语：**向阳而生，驭光而行**。
+
+### 对照 DSH v0.1.3-alpha.1（已补 / 暂缓）
+
+| 项 | 状态 |
+| --- | --- |
+| 出站 `HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY` → undici 全局 dispatcher | **能跑**（Host `spawn` 安装；依赖 `undici`） |
+| Skill `/` 菜单模糊子序列（对齐 commands） | **能跑** |
+| `read_image` 结果 content=`[text,image]` + Face `meta` + Web 工具卡 | **能跑** |
+| Host `home` + 工具行 POSIX `~` 缩写（read / read_image / Generic） | **能跑** |
+| Workspace hover POSIX `~` 缩写（`hostDescription.home`；复制仍绝对路径） | **能跑** |
+| `@` 目录 Tab / 行 chevron drill + 面包屑（Enter 插入 folder chip） | **能跑** |
+| 任意文件上传 / SessionHandle v2 / Agent Team steer / Python wheel | **未做**（本轮不跟） |
 
 ## 正式使用
 
@@ -78,15 +90,27 @@ These are **ready to use now** (`pnpm` installed, `xrkh serve` / harness preset;
 | Exec / Workspace / Policy | `exec-*` (`web_*` · `lsp` · **`terminal_*`** · Linux stdin-wait · **`ProcessSnapshot`**) · `workspace` (**durable inject** · recipes · skill · **layers**) · `policy` | [seams.md](./seams.md) · [web-tools.md](./web-tools.md) · [lsp-tools.md](./lsp-tools.md) · [pty-tools.md](./pty-tools.md) · [workspace-inject.md](./workspace-inject.md) · [skills-layers.md](./skills-layers.md) · [slash-recipes.md](./slash-recipes.md) · [policy.md](./policy.md) |
 | Jobs | `job_list` / `job_output` / `job_kill` · foreground bash **30s yield** (Settings) · `pty-send` · Face settle **steer** notify · Host shared + session isolation · **`job.kill` / `job.background` RPC** · shell **Stop/Background** (header + input dock) | [shell-jobs.md](./shell-jobs.md) |
 | Subagent delegation | Model surface `subagent` · `list_agents` · `send_message` · `interrupt_agent` (depth ≤3; system prompt `tool:subagent`); background continuable subagent drain-idle **steers** completion notice to parent inbox (Codex `inject_fragment_without_turn`; not gated by user queue preference); Face `subagent.*` · Sidebar `subagents.live` / jobs | [host-face.md](./host-face.md) · [session-delivery.md](./session-delivery.md) · [community-plugins.md](./community-plugins.md) |
-| HTTP + Host + Face main path | `server-*` (product boot omits Cordis UI/HMR; tool cards · `session/jobs` · standing cold history; `ask_user`; `/permission` · `/plan` · `/compact` · `/export` · `/feedback`; mux/host **WS Ping heartbeats** · **`FaceMuxSeq`**) | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
+| HTTP + Host + Face main path | `server-*` (product boot omits Cordis UI/HMR; tool cards · `session/jobs` · standing cold history; `ask_user`; `settings_get`/`settings_mutate`; `/permission` · `/plan` · `/mcp` · `/status` · `/model` · `/theme` · `/skills` · `/compact` · `/export` · `/feedback` · `/auto-review`; mux/host **WS Ping heartbeats** · **`FaceMuxSeq`**) | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
 | CLI | `@xrkseek/harness-cli` (primary bin **`xrkh`**; `web`/`serve`; `restart` stops local XRK Host; `--force` kills only recognized Host) | [apps/cli/README.md](../apps/cli/README.md) · [plugin-development](./plugin-development.md) |
 | LLM / Presets / SDK | `llm-*` · Registry R0+R1 (openai-chat / completions alias · anthropic-messages · openai-responses · gemini-generate) · Face handwritten `llm-pi-ai` routes (Custom provider) · `presets/*` · `@xrkseek/harness` | [llm-provider-registry.md](./llm-provider-registry.md) · [profiles.md](./profiles.md) |
-| MCP | `@xrkseek/mcp` (stdio/HTTP bounded process reconnect + SSE; ordered content projection; optional image → AttachmentStore); Host `XRK_MCP_*` or Face `mcp.servers` + `allowConnect` file-backed hot-mount (policy deny → **park**); attach playbook **`xrk-capability-attach`** (`web`/`serve` seed `~/.xrk`: `skills/*` · thin `AGENTS.md` · `recipes/*`; no workspace mkdir) | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) · [skills-layers.md](./skills-layers.md) |
+| MCP | `@xrkseek/mcp` (stdio/HTTP bounded process reconnect + SSE; ordered content projection; optional image → AttachmentStore); Host `XRK_MCP_*` or Face `mcp.servers` + `allowConnect` file-backed hot-mount (policy deny → **park**); Agent **`settings_get`/`settings_mutate`** (global `~/.xrk`, MCP CRUD + proxy env) · `/mcp` inventory; playbook **`xrk-capability-attach`** (`web`/`serve` seed `~/.xrk`: `skills/*` · thin `AGENTS.md` · `recipes/*`; no workspace mkdir) | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) · [skills-layers.md](./skills-layers.md) |
 | Attachment / plugins | Face attachments; process plugins `tools` · `prompt` · `commands` · **`host`** · **`channel`** · **`policy`** · **`llm`**; CLI user plugin dir + client `web/` overlay; Host `wireComposition*` auto-wiring; **community clients** need no `xrk.host.json` (capability table + `client.js` scan + convention infer — [plugin-loader](./plugin-loader.md)) | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
 | Community plugin Host | `extensions/dsh-compat` + bridge; Face **`contextTimeline`** / **`contextHeaders`** · **`costUsage`** · **`processChannels/list`**; IM WS/sidecar · full-route vision · embedded vectors · GenUI npm · TongFlow Python; `xrkh doctor` · boot auto-wiring | [community-plugins.md](./community-plugins.md) · [ADR-0006](./adr/0006-im-long-lived-gateway.md) · [ADR-0007](./adr/0007-taskflow-external-runtime.md) |
 | Product Web | `apps/web` + `packages/client`; dist assembly · `@file`/`@session` · cross-session prepare · **turn rail / `turnOutline` · `loadThrough`** · Playwright **17/17** (`pnpm test:web`) | [host-face.md](./host-face.md) · [testing.md](./testing.md) · Cordis UI/HMR dev-only via `pnpm dev:web` |
 
 Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CLI `product-web/`. Hero slogan: **向阳而生，驭光而行**.
+
+### vs DSH v0.1.3-alpha.1 (filled / deferred)
+
+| Item | Status |
+| --- | --- |
+| Outbound `HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY` → undici global dispatcher | **Working** (Host `spawn` install; `undici` dep) |
+| Skill `/` menu fuzzy subsequence (aligned with commands) | **Working** |
+| `read_image` content=`[text,image]` + Face `meta` + Web tool card | **Working** |
+| Host `home` + tool-row POSIX `~` abbreviation (read / read_image / Generic) | **Working** |
+| Workspace hover POSIX `~` abbreviation (`hostDescription.home`; copy stays absolute) | **Working** |
+| `@` directory Tab / row-chevron drill + breadcrumb (Enter inserts folder chip) | **Working** |
+| Arbitrary file upload / SessionHandle v2 / Agent Team steer / Python wheel | **Not done** (deferred this round) |
 
 ## Formal use levels
 

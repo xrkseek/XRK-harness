@@ -6,8 +6,9 @@ import { readFileSync } from "node:fs";
 import { access, constants, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
-  mcpServersContainEnv,
+  mcpServersForbiddenEnvMessage,
   parseMcpServersValue,
+  pickMcpAllowedEnv,
 } from "@xrkseek/server-config";
 import Schema from "@xrkseek/schemastery";
 import type { FaceRuntime } from "./context.js";
@@ -421,7 +422,6 @@ export async function settingsSet(
     };
   }
 
-  const next: FaceUiSettings = { ...runtime.uiSettings };
   if ("theme" in patch) {
     const theme = String(patch.theme);
     if (!UI_THEMES.has(theme as UiTheme)) {
@@ -433,7 +433,11 @@ export async function settingsSet(
         },
       };
     }
-    next.theme = theme as UiTheme;
+    const mut = await settingsMutateFace(runtime, {
+      ns: "ui-theme",
+      ops: [{ op: "set", path: ["preference"], value: theme }],
+    });
+    if (!mut.ok) return mut;
   }
   if ("locale" in patch) {
     const locale = String(patch.locale).trim();
@@ -446,19 +450,18 @@ export async function settingsSet(
         },
       };
     }
-    next.locale = locale;
+    const mut = await settingsMutateFace(runtime, {
+      ns: "locale",
+      ops: [
+        {
+          op: "set",
+          path: ["preference"],
+          value: faceLocalePreference(locale),
+        },
+      ],
+    });
+    if (!mut.ok) return mut;
   }
-
-  runtime.uiSettings.theme = next.theme;
-  runtime.uiSettings.locale = next.locale;
-  publishRemoteEvent(runtime.bus, "settings/document-updated", [
-    "ui-theme",
-    runtime.settingsNamespaces.view("ui-theme").revision,
-  ]);
-  publishRemoteEvent(runtime.bus, "settings/document-updated", [
-    "locale",
-    runtime.settingsNamespaces.view("locale").revision,
-  ]);
 
   return { ok: true, value: { scope: "ui", values: { ...runtime.uiSettings } } };
 }
@@ -841,23 +844,32 @@ export interface FaceMcpServerDraft {
   readonly url?: string;
   readonly args?: readonly string[];
   readonly cwd?: string;
+  /** Proxy-only env (HTTP_PROXY / …); secrets stay in Credentials. */
+  readonly env?: Readonly<Record<string, string>>;
 }
 
-/** Parse Face/host-settings MCP drafts. Accepts array or `{ mcpServers: { name: { command } } }`. `env` is dropped. */
+/** Parse Face/host-settings MCP drafts. Proxy env kept; other env keys rejected. */
 export function parseFaceMcpServers(raw: unknown): FaceMcpServerDraft[] {
-  return parseMcpServersValue(raw, { throwOnInvalid: true }).map((row) => ({
-    serverName: row.serverName,
-    ...(row.url ? { url: row.url } : {}),
-    ...(row.command ? { command: row.command } : {}),
-    ...(row.args && row.args.length > 0 ? { args: [...row.args] } : {}),
-    ...(row.cwd ? { cwd: row.cwd } : {}),
-  }));
+  const forbidden = mcpServersForbiddenEnvMessage(raw);
+  if (forbidden) throw new Error(forbidden);
+  return parseMcpServersValue(raw, { throwOnInvalid: true, keepEnv: true }).map(
+    (row) => {
+      const env = pickMcpAllowedEnv(row.env);
+      return {
+        serverName: row.serverName,
+        ...(row.url ? { url: row.url } : {}),
+        ...(row.command ? { command: row.command } : {}),
+        ...(row.args && row.args.length > 0 ? { args: [...row.args] } : {}),
+        ...(row.cwd ? { cwd: row.cwd } : {}),
+        ...(env ? { env } : {}),
+      };
+    },
+  );
 }
 
 function validateMcpServersValue(raw: unknown): string | undefined {
-  if (mcpServersContainEnv(raw)) {
-    return "mcp.servers must not include env; use process environment / credentials";
-  }
+  const forbidden = mcpServersForbiddenEnvMessage(raw);
+  if (forbidden) return forbidden;
   try {
     parseFaceMcpServers(raw);
     return undefined;
@@ -1219,6 +1231,59 @@ function mcpServersFromRuntime(runtime: FaceRuntime): FaceMcpServerDraft[] {
   } catch {
     return [];
   }
+}
+
+/** Slash `/mcp` inventory text (desired servers + live mount status). */
+export function formatMcpInventoryText(
+  runtime: FaceRuntime,
+  options: { readonly verbose?: boolean } = {},
+): string {
+  const servers = mcpServersFromRuntime(runtime);
+  const allow = mcpAllowFromRuntime(runtime);
+  const connected = mcpConnected(runtime);
+  const byName = new Map(connected.map((c) => [c.serverName, c]));
+  const lines: string[] = [
+    `Allow connect: ${allow ? "yes" : "no"}`,
+    `Desired servers: ${servers.length}`,
+  ];
+  if (servers.length === 0) {
+    lines.push(
+      "(none) — use settings_mutate ns=mcp or Settings → Plugins → Plugin config",
+    );
+  } else {
+    for (const s of servers) {
+      const live = byName.get(s.serverName);
+      const transport = s.url
+        ? s.url
+        : `${s.command ?? "?"}${(s.args ?? []).length ? ` ${(s.args ?? []).join(" ")}` : ""}`;
+      const status = live
+        ? `${live.status}, ${live.toolCount} tools`
+        : allow
+          ? "not mounted"
+          : "parked (connect off)";
+      lines.push(`- ${s.serverName}: ${transport} · ${status}`);
+      if (options.verbose && s.cwd) {
+        lines.push(`    cwd: ${s.cwd}`);
+      }
+    }
+  }
+  const extras = connected.filter(
+    (c) => !servers.some((s) => s.serverName === c.serverName),
+  );
+  for (const c of extras) {
+    lines.push(`- ${c.serverName}: (live only) · ${c.status}, ${c.toolCount} tools`);
+  }
+  if (options.verbose) {
+    const tools = (runtime.plugins ?? [])
+      .filter((p) => p.id.startsWith("mcp:"))
+      .flatMap((p) => (p.tools ?? []).map((t) => t.name));
+    lines.push(`Mounted tools: ${tools.length}`);
+    for (const name of tools.slice(0, 40)) {
+      lines.push(`  · ${name}`);
+    }
+    if (tools.length > 40) lines.push(`  … +${tools.length - 40} more`);
+  }
+  return lines.join("\n");
 }
 
   /** Load `~/.xrk/host-settings.json` mcp.servers (+ allowConnect) into the namespace user layer. */

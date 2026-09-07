@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/client-ui-settings-plugin-inventory",
-  "description": "Read-only Cordis Loader inventory tab in Web Plugins settings",
+  "description": "Host plugin inventory tab in Web Plugins settings (custom plugins pin first with manage actions)",
   "version": "0.1.0-rc.8",
   "repository": {
     "type": "git",

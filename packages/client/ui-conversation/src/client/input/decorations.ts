@@ -69,21 +69,30 @@ const FOLDER_REF_RE = /(^|\s)(@(?:"[^"\n]*\/(?=["\s]|$)|[^\s"]*\/(?=\s|$)))/g
  */
 const FILE_REF_RE = /(^|\s)(@(?:"[^"\n]+"|[^\s"]+\/[^\s"]+))(?=\s|$)/g
 
+/** Leaf name looks like a file (has an extension segment). */
+function leafHasExtension(innerPath: string): boolean {
+  const leaf = innerPath.slice(innerPath.lastIndexOf('/') + 1)
+  return /\.[A-Za-z0-9][\w.-]*$/.test(leaf)
+}
+
 function pushPathRef(
   out: TextRefRange[],
   match: RegExpExecArray,
   appearance: 'folder' | 'file',
+  draftLength: number,
 ): void {
   const token = match[2] ?? ''
   const start = match.index + (match[1]?.length ?? 0)
   const end = start + token.length
   if (out.some(range => range.start < end && range.end > start)) return
   if (appearance === 'file') {
-    const inner = token.startsWith('@"') && token.endsWith('"')
-      ? token.slice(2, -1)
-      : token.slice(1)
+    const quoted = token.startsWith('@"') && token.endsWith('"')
+    const inner = quoted ? token.slice(2, -1) : token.slice(1)
     // Bare `@name` stays lexicon-only; closed `@"dir/"` is a directory.
     if (!inner.includes('/') || inner.endsWith('/')) return
+    // Unquoted path still being typed at EOL (no extension yet) must not
+    // keep painting subsequent keystrokes blue (`@dir/name` + `11`).
+    if (!quoted && end === draftLength && !leafHasExtension(inner)) return
   }
   out.push({ start, end, trigger: '@', appearance })
 }
@@ -117,12 +126,12 @@ export function scanTextRefs(
   FOLDER_REF_RE.lastIndex = 0
   let folder: RegExpExecArray | null
   while ((folder = FOLDER_REF_RE.exec(draft)) !== null) {
-    pushPathRef(out, folder, 'folder')
+    pushPathRef(out, folder, 'folder', draft.length)
   }
   FILE_REF_RE.lastIndex = 0
   let file: RegExpExecArray | null
   while ((file = FILE_REF_RE.exec(draft)) !== null) {
-    pushPathRef(out, file, 'file')
+    pushPathRef(out, file, 'file', draft.length)
   }
   return out.sort((left, right) => left.start - right.start)
 }

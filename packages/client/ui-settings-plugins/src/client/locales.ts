@@ -40,7 +40,7 @@ export type PluginsSettingsLocaleKey =
 export const en: Record<PluginsSettingsLocaleKey, string> = {
   nav: 'Plugins',
   title: 'Plugins',
-  intro: 'Configure and inspect the plugins installed in this deployment.',
+  intro: 'Configure Host plugins: MCP, Shell, agent loop, web search, and workspace inject.',
   tabs: 'Plugin views',
   configurableTab: 'Plugin configuration',
   empty: 'This deployment exposes no plugin settings.',
@@ -144,7 +144,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
 export const zh: Record<PluginsSettingsLocaleKey, string> = {
   nav: '插件',
   title: '插件',
-  intro: '配置和查看本部署已安装的插件。',
+  intro: '配置 Host 插件：MCP、终端、Agent 循环、联网搜索与工作区 inject。',
   tabs: '插件视图',
   configurableTab: '插件配置',
   empty: '本部署没有开放任何插件设置。',

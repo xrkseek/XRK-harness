@@ -126,6 +126,7 @@ export const FACE_MCP_SCHEMA: FaceSchemaEnvelope = {
         url: 1,
         args: 2,
         cwd: 1,
+        env: 15,
       },
     },
     4: { type: "array", inner: 3 },
@@ -137,6 +138,7 @@ export const FACE_MCP_SCHEMA: FaceSchemaEnvelope = {
     },
     7: { type: "array", inner: 6 },
     8: { type: "string" },
+    15: { type: "object", dict: { "*": 1 } },
     10: {
       type: "object",
       dict: { serverName: 1, message: 1 },

@@ -53,6 +53,8 @@ export interface PluginInventoryEntry {
   readonly moduleName: string
   readonly enabled: boolean
   readonly fiberPhase: PluginFiberPhase
+  /** User-installed — Settings may offer edit / disable / delete. */
+  readonly managed: boolean
 }
 
 /** Point-in-time inventory returned by the plugin inventory Remote. */
@@ -73,6 +75,16 @@ declare module '@xrkseek/xrk-typert-protocol' {
     }
     pluginInventory: {
       list: () => Promise<RemoteResult<PluginInventorySnapshot>>
+      setEnabled: (
+        entryId: PluginEntryId,
+        enabled: boolean,
+      ) => Promise<RemoteResult<{ entryId: PluginEntryId; enabled: boolean }>>
+      remove: (
+        entryId: PluginEntryId,
+      ) => Promise<RemoteResult<{ entryId: PluginEntryId; removed: true }>>
+      open: (
+        entryId: PluginEntryId,
+      ) => Promise<RemoteResult<{ entryId: PluginEntryId; opened: true }>>
     }
     fileReferences: {
       list: (

@@ -151,9 +151,27 @@ export function createReadImageTool(
               : {}),
           },
         };
+        // Model + Face wire: text envelope beside a durable image block (DSH).
+        // `meta.path` is presentation-only — the attachment lives only in content.
         return {
-          content: formatImageReadOutput(value.path, value.image),
-          structured: value,
+          content: [
+            { type: "text" as const, text: formatImageReadOutput(value.path, value.image) },
+            {
+              type: "image" as const,
+              attachment: {
+                attachmentId: value.image.attachmentId,
+                mediaType: value.image.mediaType,
+                bytes: value.image.bytes,
+                width: value.image.width,
+                height: value.image.height,
+                ...(value.image.name !== undefined ? { name: value.image.name } : {}),
+                ...(value.image.originalDimensions !== undefined
+                  ? { originalDimensions: { ...value.image.originalDimensions } }
+                  : {}),
+              },
+            },
+          ],
+          meta: { path: value.path },
         };
       } catch (err) {
         if (err instanceof AttachmentError) {

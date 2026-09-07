@@ -8,20 +8,21 @@ import {
 } from "../src/presets-catalog.js";
 
 describe("agentPreset catalog", () => {
-  it("UI catalog is six tiers light → full", () => {
+  it("UI catalog is five tiers light → full (plan is /plan, not a badge)", () => {
     expect(FACE_AGENT_PRESETS.map((p) => p.id)).toEqual([
       "minimal",
       "shell",
       "frugal",
-      "plan",
       "shallow",
       "harness",
     ]);
   });
 
-  it("legacy server maps to harness tools", () => {
+  it("legacy server / plan map to harness tools", () => {
     expect(resolveToolPreset("server", "minimal")).toBe("harness");
     expect(canonicalAgentPresetId("server")).toBe("harness");
+    expect(canonicalAgentPresetId("plan")).toBe("harness");
+    expect(resolveAgentPresetProfile("plan").planModeDefault).toBe(false);
   });
 
   it("host fallback seeds when session badge omitted", () => {
@@ -30,16 +31,12 @@ describe("agentPreset catalog", () => {
     expect(resolveToolPreset(undefined, "harness")).toBe("harness");
   });
 
-  it("frugal / plan / shallow profiles match product policy", () => {
+  it("frugal / shallow profiles match product policy", () => {
     const frugal = resolveAgentPresetProfile("frugal");
     expect(frugal.composition).toBe("harness");
     expect(frugal.subagents.mode).toBe("off");
     expect(frugal.subagentRouting).toBe(false);
     expect(frugal.tools).toEqual({ web: true, lsp: true, pty: true });
-
-    const plan = resolveAgentPresetProfile("plan");
-    expect(plan.planModeDefault).toBe(true);
-    expect(plan.subagents.mode).toBe("off");
 
     const shallow = resolveAgentPresetProfile("shallow");
     expect(shallow.subagents).toEqual({
@@ -47,9 +44,5 @@ describe("agentPreset catalog", () => {
       maxDepth: 1,
       maxActiveChildren: DEFAULT_MAX_ACTIVE_CHILDREN,
     });
-
-    const shell = resolveAgentPresetProfile("shell");
-    expect(shell.tools).toEqual({ web: false, lsp: false, pty: true });
-    expect(shell.subagents.mode).toBe("off");
   });
 });

@@ -14,7 +14,7 @@
  * @module
  */
 import type { ReadBlockLine, ReadBlockProps } from '@xrkseek/client-ui-primitives'
-import { relativizeToCwd, type ToolCallBlock } from './tool-call-model.ts'
+import { abbreviateHomePath, relativizeToCwd, type ToolCallBlock } from './tool-call-model.ts'
 
 /**
  * Content lines the chat row's resident read body shows before collapsing the
@@ -57,9 +57,10 @@ export type ReadCardModel = Pick<ReadBlockProps, 'label' | 'lines' | 'totalLines
  * @param block - RunningToolCall or ToolResultNode off the snapshot caches.
  * @param sessionCwd - the session workspace root; a workspace-rooted absolute
  *   path label displays relative to it. Absent leaves the path as authored.
+ * @param home - host account home; leftover POSIX home paths display as `~`.
  * @returns the read-card props, or null for the generic path.
  */
-export function readCardModel(block: ToolCallBlock, sessionCwd?: string): ReadCardModel | null {
+export function readCardModel(block: ToolCallBlock, sessionCwd?: string, home?: string): ReadCardModel | null {
   // Running has no result view; a read carries no content until execute returns.
   if (!('kind' in block)) return null
   const result = block.resultView?.card === 'read' ? block.resultView : null
@@ -68,7 +69,7 @@ export function readCardModel(block: ToolCallBlock, sessionCwd?: string): ReadCa
   // shape so the card never holds a reference into the runtime's cache.
   const lines: ReadBlockLine[] = result.lines.map(line => ({ number: line.number, text: line.text }))
   return {
-    label: result.title ?? relativizeToCwd(result.path, sessionCwd),
+    label: result.title ?? abbreviateHomePath(relativizeToCwd(result.path, sessionCwd), home),
     lines,
     totalLines: result.totalLines,
     lang: result.lang,

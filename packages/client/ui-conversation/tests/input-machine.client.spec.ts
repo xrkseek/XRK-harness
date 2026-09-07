@@ -729,6 +729,14 @@ describe('decorations: scanTextRefs', () => {
     ])
   })
 
+  it('does not keep painting an unfinished unquoted path while typing at EOL', () => {
+    expect(scanTextRefs('@extensions/dsh-compat', new Map())).toEqual([])
+    expect(scanTextRefs('@extensions/dsh-compat11', new Map())).toEqual([])
+    expect(scanTextRefs('@extensions/dsh-compat next', new Map())).toEqual([
+      { start: 0, end: 22, trigger: '@', appearance: 'file' },
+    ])
+  })
+
   it('quoted file paths keep the whole token as a file reference', () => {
     expect(scanTextRefs('open @"docs/design notes/a.md"', new Map())).toEqual([
       { start: 5, end: 30, trigger: '@', appearance: 'file' },

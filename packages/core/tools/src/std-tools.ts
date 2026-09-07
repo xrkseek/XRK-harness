@@ -1,5 +1,6 @@
 import type { TodoItem, TodoItemStatus } from "@xrkseek/protocol";
 import type { ToolDefinition, ToolExecuteExtras } from "./definition.js";
+import { createSettingsTools } from "./settings-tools.js";
 
 export const EXIT_PLAN_MODE = "exit_plan_mode";
 export const PLAN_REVIEW_ID = "plan-review";
@@ -22,6 +23,9 @@ export interface StdToolsOptions {
     plan: string,
     signal?: AbortSignal,
   ) => Promise<PlanReviewAnswer>;
+  /** Host Settings get/mutate (Face bind). */
+  settingsGet?: import("./settings-tools.js").SettingsToolsOptions["get"];
+  settingsMutate?: import("./settings-tools.js").SettingsToolsOptions["mutate"];
 }
 
 const TODO_STATUSES = new Set<TodoItemStatus>([
@@ -43,7 +47,7 @@ function toWireTodos(
   return out;
 }
 
-/** Standard session tools: todo_write + ask_user + exit_plan_mode. */
+/** Standard session tools: todo_write + ask_user + exit_plan_mode + settings_*. */
 export function createStdTools(
   options: StdToolsOptions = {},
 ): ToolDefinition[] {
@@ -236,6 +240,10 @@ export function createStdTools(
       ...(options.askPlanReview
         ? { askReview: options.askPlanReview }
         : {}),
+    }),
+    ...createSettingsTools({
+      ...(options.settingsGet ? { get: options.settingsGet } : {}),
+      ...(options.settingsMutate ? { mutate: options.settingsMutate } : {}),
     }),
   ];
 }

@@ -20,9 +20,10 @@ export type { MenuViewProps } from './MenuView.tsx'
 export type { MenuKey } from './locales.ts'
 export type {
   ArbitrateKey, ArbitrateOutcome, BeginCommandRequest, CandidateRequest, ClientSessionContext,
-  CommandClaim, ConsumeTokenRequest, InsertReferenceRequest, PickOutcome, PickVia, ReferenceCodec,
-  ReferenceInsert, InputTriggerCandidate, InputTriggerPick, InputTriggerSource, SubmitEnvelope,
-  SubmitImageAttachment, SubmitOutcome, TokenSpan, TriggerChar, TriggerGuard, TriggerPosition,
+  CommandClaim, ConsumeTokenRequest, HeaderRequest, InsertReferenceRequest, PickAction, PickOutcome,
+  PickVia, ReferenceCodec, ReferenceInsert, InputTriggerCandidate, InputTriggerCrumb, InputTriggerPick,
+  InputTriggerSource, SubmitEnvelope, SubmitImageAttachment, SubmitOutcome, TokenSpan, TriggerChar,
+  TriggerGuard, TriggerPosition,
 } from '../types.ts'
 export type { DetectTrigger, ExactMatch, MenuEvent, MenuReduce, MenuState, TriggerHit } from '../core/contract.ts'
 export type { InputTriggerServiceContract } from './contract.ts'
@@ -71,7 +72,9 @@ export function apply(ctx: ClientContext): void {
         const controller = inputTriggers.sessionOf(actx)
         return {
           menu: controller.menu,
-          onPick: (source, index) => { controller.pick(source, index) },
+          headers: controller.headers,
+          onPick: (source, index, action) => { controller.pick(source, index, action) },
+          onCrumb: (source, index) => { controller.pickCrumb(source, index) },
           onDismiss: () => { controller.dismiss() },
         }
       },

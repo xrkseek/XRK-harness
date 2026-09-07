@@ -421,6 +421,8 @@ export interface ChatNodeOwnerProps {
   openFile: (path: string) => void
   inspectCall: (callId: CallId) => void
   forkAt: (seq: number) => void
+  /** Session-authorized durable image loader (tool image cards + message galleries). */
+  loadImage: (attachment: ImageAttachmentRef) => Promise<string>
   /** Render a historical image group through the attachment slot. */
   renderMessageImages: RenderMessageImages
   fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined

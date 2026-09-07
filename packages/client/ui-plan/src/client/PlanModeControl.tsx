@@ -52,7 +52,7 @@ export function PlanChip({ useProjection, locked, exitPlanMode, t }: PlanChipPro
     <span className={css.wrap}>
       <button
         type="button"
-        className={css.chip}
+        className={plan.pending ? `${css.chip} ${css.pending}` : css.chip}
         aria-label={t('chip.on.aria')}
         title={t('chip.on.title')}
         disabled={locked || leaving}

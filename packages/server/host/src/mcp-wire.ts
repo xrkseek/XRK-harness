@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import {
   parseMcpServersJson,
   parseMcpServersValue,
+  pickMcpAllowedEnv,
 } from "@xrkseek/server-config";
 import {
   createMcpClient,
@@ -38,13 +39,14 @@ export type McpServerSpec =
       readonly requestInit?: RequestInit;
     };
 
-/** Face draft shape (no env) → Host stdio/http specs. */
+/** Face draft shape → Host stdio/http specs (proxy env allowed). */
 export type McpServerDraft = {
   readonly serverName: string;
   readonly command?: string;
   readonly url?: string;
   readonly args?: readonly string[];
   readonly cwd?: string;
+  readonly env?: Readonly<Record<string, string>>;
 };
 
 /** Plugin carrying supervisor health + desired-spec fingerprint for reconcile. */
@@ -86,8 +88,8 @@ export function parseMcpServersEnv(
 }
 
 /**
- * Face dump `{ mcp.servers }` / root `mcpServers` → Host specs. Env maps in the
- * file are ignored (secrets stay in process env / credentials). Missing → [].
+ * Face dump `{ mcp.servers }` / root `mcpServers` → Host specs.
+ * Proxy env keys are kept; other env keys are dropped.
  */
 export function readMcpServersFromHostSettings(
   file: string,
@@ -107,13 +109,17 @@ export function readMcpServersFromHostSettings(
   const servers = root.mcp?.servers;
   if (servers === undefined) return [];
   return mcpDraftsToSpecs(
-    parseMcpServersValue(servers).map((row) => ({
-      serverName: row.serverName,
-      ...(row.url ? { url: row.url } : {}),
-      ...(row.command ? { command: row.command } : {}),
-      ...(row.args ? { args: [...row.args] } : {}),
-      ...(row.cwd ? { cwd: row.cwd } : {}),
-    })),
+    parseMcpServersValue(servers, { keepEnv: true }).map((row) => {
+      const env = pickMcpAllowedEnv(row.env);
+      return {
+        serverName: row.serverName,
+        ...(row.url ? { url: row.url } : {}),
+        ...(row.command ? { command: row.command } : {}),
+        ...(row.args ? { args: [...row.args] } : {}),
+        ...(row.cwd ? { cwd: row.cwd } : {}),
+        ...(env ? { env } : {}),
+      };
+    }),
   );
 }
 

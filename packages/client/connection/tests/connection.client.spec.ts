@@ -2,7 +2,7 @@
  * ConnectionController: stream pumping into sinks, the strict readiness
  * handshake (describe + both streams' onOpen, timeout-guarded), generation
  * abort on loss, backoff reconnection, state transitions, and sink-exception
- * isolation. Real (short) timers — the timeout and backoff are configurable,
+ * isolation. Real (short) timers �?the timeout and backoff are configurable,
  * so tests run them at millisecond scale.
  */
 
@@ -80,7 +80,7 @@ describe('connection lifecycle', () => {
     try {
       await vi.waitFor(() => { expect(describeCalls).toBe(2) }) // retried after backoff
       expect(connected).toBe(0) // never announced during the failed generation
-      gate.resolve(ok({ version: '0', cwd: '/f', attachedSessions: 0, canOpenPath: true }))
+      gate.resolve(ok({ version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true }))
       await vi.waitFor(() => { expect(connected).toBe(1) })
     } finally {
       controller.stop()
@@ -102,7 +102,7 @@ describe('connection lifecycle', () => {
           },
         })
       }
-      return Promise.resolve(ok({ version: '0', cwd: '/f', attachedSessions: 0, canOpenPath: true }))
+      return Promise.resolve(ok({ version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true }))
     }
     let connected = 0
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -130,7 +130,7 @@ describe('connection lifecycle', () => {
     try {
       await vi.waitFor(() => { expect(connected).toBe(1) })
       api.pushMux({ type: 'stream/error', error: { code: 'internal', message: 'impl broke', details: {} } })
-      await vi.waitFor(() => { expect(connected).toBe(2) }) // treated as loss → reconnect
+      await vi.waitFor(() => { expect(connected).toBe(2) }) // treated as loss �?reconnect
       expect(muxSeen).toEqual([]) // never forwarded to the business sink
     } finally {
       controller.stop()
@@ -188,7 +188,7 @@ describe('connection lifecycle', () => {
       describeCalls++
       return describeCalls === 1
         ? firstDescribe.promise
-        : Promise.resolve(ok({ version: '0', cwd: '/f', attachedSessions: 0, canOpenPath: true }))
+        : Promise.resolve(ok({ version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true }))
     }
     const states: ConnectionState[] = []
     let connected = 0
@@ -201,7 +201,7 @@ describe('connection lifecycle', () => {
     try {
       await vi.waitFor(() => { expect(api.openMuxCount).toBe(1) })
       api.endStreams()
-      firstDescribe.resolve(ok({ version: '0', cwd: '/f', attachedSessions: 0, canOpenPath: true }))
+      firstDescribe.resolve(ok({ version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true }))
 
       await vi.waitFor(() => { expect(describeCalls).toBe(2) })
       await vi.waitFor(() => { expect(connected).toBe(1) })
@@ -283,7 +283,7 @@ describe('connection lifecycle', () => {
     controller.start()
     try {
       await vi.waitFor(() => { expect(describeCalls).toBe(3) })
-      gate.resolve(ok({ version: '0', cwd: '/f', attachedSessions: 0, canOpenPath: true }))
+      gate.resolve(ok({ version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true }))
       await vi.waitFor(() => { expect(connected).toBe(1) })
       expect(states).toEqual(['reconnecting', 'connected']) // two failures, one reconnecting emission
     } finally {
@@ -343,7 +343,7 @@ describe('connection lifecycle', () => {
       expect(describeCalls).toBe(1)
       controller.reconnect()
       await vi.waitFor(() => { expect(describeCalls).toBe(2) })
-      gate.resolve(ok({ version: '0', cwd: '/f', attachedSessions: 0, canOpenPath: true }))
+      gate.resolve(ok({ version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true }))
       await vi.waitFor(() => { expect(connected).toBe(1) })
       expect(states).toEqual(['reconnecting', 'connected'])
     } finally {

@@ -134,7 +134,38 @@ export function parseMcpServersJson(raw: string): McpServerRow[] {
   return parseMcpServersValue(parsed, { throwOnInvalid: true, keepEnv: true });
 }
 
-/** True when any row carries an `env` map (Face rejects persist). */
+/**
+ * Proxy-related env keys Face may persist on MCP servers (stdio spawn).
+ * API tokens and other secrets stay in Credentials / process env.
+ */
+export const MCP_PROXY_ENV_KEYS = new Set([
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+  "no_proxy",
+]);
+
+/** Keep only proxy allowlist keys from an env map. */
+export function pickMcpAllowedEnv(
+  env: unknown,
+): Record<string, string> | undefined {
+  if (!env || typeof env !== "object" || Array.isArray(env)) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(env as Record<string, unknown>)) {
+    if (!MCP_PROXY_ENV_KEYS.has(k)) continue;
+    if (typeof v !== "string") continue;
+    const trimmed = v.trim();
+    if (!trimmed) continue;
+    out[k] = trimmed;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** True when any row carries an `env` map (any keys). */
 export function mcpServersContainEnv(raw: unknown): boolean {
   const rows: unknown[] = Array.isArray(raw)
     ? raw
@@ -146,4 +177,27 @@ export function mcpServersContainEnv(raw: unknown): boolean {
       && !Array.isArray(row)
       && (row as { env?: unknown }).env !== undefined,
   );
+}
+
+/**
+ * Error message when MCP drafts include non-proxy env keys; undefined if ok.
+ */
+export function mcpServersForbiddenEnvMessage(raw: unknown): string | undefined {
+  const rows: unknown[] = Array.isArray(raw)
+    ? raw
+    : Object.values(mcpServersObjectMap(raw) ?? {});
+  for (const row of rows) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+    const env = (row as { env?: unknown }).env;
+    if (env === undefined) continue;
+    if (!env || typeof env !== "object" || Array.isArray(env)) {
+      return "mcp.servers env must be a string map of proxy keys only";
+    }
+    for (const k of Object.keys(env)) {
+      if (!MCP_PROXY_ENV_KEYS.has(k)) {
+        return `mcp.servers env key "${k}" is not allowed; only proxy keys (${[...MCP_PROXY_ENV_KEYS].filter((x) => x === x.toUpperCase()).join(", ")}) or use Credentials`;
+      }
+    }
+  }
+  return undefined;
 }

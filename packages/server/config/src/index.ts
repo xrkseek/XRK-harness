@@ -17,9 +17,12 @@ export {
 } from "./home.js";
 export {
   mcpServersContainEnv,
+  mcpServersForbiddenEnvMessage,
   mcpServersObjectMap,
   parseMcpServersJson,
   parseMcpServersValue,
+  pickMcpAllowedEnv,
+  MCP_PROXY_ENV_KEYS,
 } from "./mcp-servers.js";
 
 export interface HostCredentials {
@@ -32,10 +35,11 @@ export const HOST_RUNTIME_PRESET_IDS = [
   "minimal",
   "shell",
   "frugal",
-  "plan",
   "shallow",
   "harness",
   "server",
+  // Legacy alias → harness tools; use `/plan` for plan mode.
+  "plan",
 ] as const;
 
 export type HostRuntimePresetId = (typeof HOST_RUNTIME_PRESET_IDS)[number];

@@ -54,11 +54,11 @@ createMcpClient({
 });
 ```
 
-Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目可 `command` 或 `url`；空 env 时读 `~/.xrk/host-settings.json` 的 `mcp.servers`）。Face `settings.mutate` 写 desired `servers`（禁 `env`）；文件真源时 Host `reconcileMcpToolPlugins` 热挂载（`applies: live`）；`XRK_MCP_SERVERS` / config 非空则仍赢过文件且 mutate 为 `applies: restart`。
+Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目可 `command` 或 `url`；空 env 时读 `~/.xrk/host-settings.json` 的 `mcp.servers`）。Face `settings.mutate` 写 desired `servers`（`env` 仅允许代理键 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`）；文件真源时 Host `reconcileMcpToolPlugins` 热挂载（`applies: live`）；`XRK_MCP_SERVERS` / config 非空则仍赢过文件且 mutate 为 `applies: restart`。
 
 ## 终端用户如何挂能力
 
-产品壳 **设置 → 插件 → 插件配置**：粘贴 Trae / Cursor 风格 `{"mcpServers":{…}}`，打开 **允许连接**，Save 后在本进程 remount（无需先设 `XRK_MCP_*`）。行状态反映 connected / park / 失败；policy deny 时保留 desired、不 spawn。密钥不进 `mcp.servers`，走 Credentials。分层与选型见 [skills-layers.md](../skills-layers.md)（能力挂载）；进程内自有函数仍走 `extensions/` 插件（需 restart）。
+产品壳 Agent 可调用 **`settings_get` / `settings_mutate`**（与设置 UI Save 同路径；`ns=mcp` 时本进程 remount/connect，工具结果含失败信息）。也可用 **设置 → 插件 → 插件配置**：粘贴 Trae / Cursor 风格 `{"mcpServers":{…}}`，打开 **允许连接**，Save。用斜杠 **`/mcp`** 查看 desired / 挂载状态。行状态反映 connected / park / 失败；policy deny 时保留 desired、不 spawn。密钥不进 `mcp.servers.env`，走 Credentials。分层与选型见 [skills-layers.md](../skills-layers.md)（能力挂载；全局种子 `apps/cli/seeds` → `~/.xrk`）；进程内自有函数仍走 `extensions/` 插件（需 restart）。
 
 ## 不变量（防 bug）
 
@@ -139,11 +139,11 @@ createMcpClient({
 });
 ```
 
-Host batch wiring: [server-host.md](./server-host.md) (`XRK_MCP_*`; entries may use `command` or `url`; empty env reads `mcp.servers` from `~/.xrk/host-settings.json`). Face `settings.mutate` writes desired `servers` (no `env`); with file source of truth, Host `reconcileMcpToolPlugins` hot-mounts (`applies: live`); non-empty `XRK_MCP_SERVERS` / config still wins over file and mutate is `applies: restart`.
+Host batch wiring: [server-host.md](./server-host.md) (`XRK_MCP_*`; entries may use `command` or `url`; empty env reads `mcp.servers` from `~/.xrk/host-settings.json`). Face `settings.mutate` writes desired `servers` (`env` allows proxy keys only: `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`); with file source of truth, Host `reconcileMcpToolPlugins` hot-mounts (`applies: live`); non-empty `XRK_MCP_SERVERS` / config still wins over file and mutate is `applies: restart`.
 
 ## How end users attach capabilities
 
-In the product shell: **Settings → Plugins → Plugin config**. Paste Trae / Cursor-style `{"mcpServers":{…}}`, enable **Allow connect**, then Save to remount in this process (no prior `XRK_MCP_*` required). Row status shows connected / park / failure; on policy deny the desired list is kept and nothing is spawned. Keep secrets out of `mcp.servers`; use Credentials. Layers and routing: [skills-layers.md](../skills-layers.md) (capability attach). In-repo JS tools still use `extensions/` plugins (restart required).
+The product Agent may call **`settings_get` / `settings_mutate`** (same path as Settings UI Save; for `ns=mcp`, remount/connect in-process and surface connect failures in the tool result). Or use **Settings → Plugins → Plugin config**: paste Trae / Cursor-style `{"mcpServers":{…}}`, enable **Allow connect**, then Save. Slash **`/mcp`** lists desired / mount status. Row status shows connected / park / failure; on policy deny the desired list is kept and nothing is spawned. Keep secrets out of `mcp.servers.env`; use Credentials. Layers and routing: [skills-layers.md](../skills-layers.md) (capability attach; global seeds `apps/cli/seeds` → `~/.xrk`). In-repo JS tools still use `extensions/` plugins (restart required).
 
 ## Invariants (bug prevention)
 

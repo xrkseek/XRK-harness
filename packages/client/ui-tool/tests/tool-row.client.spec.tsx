@@ -35,6 +35,7 @@ describe('tool-call-model', () => {
     expect(classifyTool('bash')).toBe('bash')
     expect(classifyTool('pwsh')).toBe('bash')
     expect(classifyTool('read')).toBe('read')
+    expect(classifyTool('read_image')).toBe('read')
     expect(classifyTool('web_fetch')).toBe('read')
     expect(classifyTool('web_search')).toBe('search')
     expect(classifyTool('grep')).toBe('search')

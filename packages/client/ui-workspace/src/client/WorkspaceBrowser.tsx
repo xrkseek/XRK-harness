@@ -450,6 +450,7 @@ function SessionTree({
             >
               <ProjectRowItem
                 group={group}
+                home={home}
                 t={t}
                 onToggle={() => {
                   if (group.expanded) {
@@ -758,6 +759,7 @@ export function WorkspaceBrowser({
   searchSessions,
   searchResultLimit,
   useDirectoryFlow,
+  useHostDescription,
   renderSlot,
   t,
 }: WorkspaceBrowserProps) {
@@ -767,6 +769,7 @@ export function WorkspaceBrowser({
   // Live occupancy of this surface's directory-flow hole (the same source the
   // flow reads): a composition without a picking affordance can add nothing.
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
+  const home = useHostDescription(info => info?.home)
   const groupBy = useStore(s => s.groupBy)
   const orderBy = useStore(s => s.orderBy)
   const groupExpansion = useStore(s => s.groupExpansion)

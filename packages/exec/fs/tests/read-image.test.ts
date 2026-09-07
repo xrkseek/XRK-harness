@@ -14,4 +14,17 @@ describe("formatImageReadOutput", () => {
     expect(text).toContain("multiply coordinates by 2.00");
     expect(text).toContain("downscaled from 1024x512 px");
   });
+
+  it("matches the image-card envelope recognition shape", () => {
+    const text = formatImageReadOutput("a.png", {
+      attachmentId: "sha256:x",
+      mediaType: "image/png",
+      bytes: 1,
+      width: 1,
+      height: 1,
+    });
+    expect(text).toMatch(
+      /^<path>[^\n]*<\/path>\n<type>image<\/type>\n<content>\n[\s\S]*\n<\/content>$/u,
+    );
+  });
 });

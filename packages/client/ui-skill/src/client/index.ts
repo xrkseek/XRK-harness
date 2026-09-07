@@ -32,7 +32,7 @@
 // Type-only: the carrier types, the forwarded Host-event face and the ctx.remote merge.
 import type { ConnectionHandle, SessionId, SkillEntry } from '@xrkseek/xrk-api-remotes/client'
 import type { ClientContext, ISessions } from '@xrkseek/client-runtime/client'
-import type { InputTriggerServiceContract, InputTriggerSource } from '@xrkseek/client-ui-input-trigger/client'
+import type { InputTriggerServiceContract, InputTriggerSource, InputTriggerCandidate } from '@xrkseek/client-ui-input-trigger/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@xrkseek/client-locale/client'
 import { SkillRow } from './SkillRow.tsx'
@@ -43,6 +43,68 @@ declare module '@xrkseek/client-ui-slots' {
     /** The dedicated skill tool row's copy. */
     skill: SkillKey
   }
+}
+
+/** One fuzzy match with its stable source position (mirrors ui-commands). */
+interface RankedCandidate {
+  readonly candidate: InputTriggerCandidate
+  readonly index: number
+  readonly prefix: boolean
+  readonly score: number
+}
+
+/** Extra weight for name starts and separator boundaries. */
+function boundaryBonus(name: string, index: number): number {
+  return index === 0 || name.charAt(index - 1) === '-' || name.charAt(index - 1) === '_' ? 8 : 0
+}
+
+/**
+ * Score the strongest ordered-subsequence alignment in O(name × query).
+ * Same weighting as ui-commands so `/` skill and command menus feel alike.
+ */
+function fuzzyScore(name: string, query: string): number | undefined {
+  if (query === '') return 0
+  if (query.length > name.length) return undefined
+  const noMatch = Number.NEGATIVE_INFINITY
+  let previous = Array<number>(name.length).fill(noMatch)
+  for (let index = 0; index < name.length; index++) {
+    if (name.charAt(index) === query.charAt(0)) previous[index] = 1 + boundaryBonus(name, index) - index
+  }
+  for (let queryIndex = 1; queryIndex < query.length; queryIndex++) {
+    const current = Array<number>(name.length).fill(noMatch)
+    let bestGapped = noMatch
+    for (let index = 0; index < name.length; index++) {
+      const gappedIndex = index - 2
+      if (gappedIndex >= 0) {
+        const prior = previous[gappedIndex] ?? noMatch
+        if (prior !== noMatch) bestGapped = Math.max(bestGapped, prior + gappedIndex)
+      }
+      if (name.charAt(index) !== query.charAt(queryIndex)) continue
+      const bonus = 1 + boundaryBonus(name, index)
+      const adjacent = index > 0 ? previous[index - 1] ?? noMatch : noMatch
+      if (adjacent !== noMatch) current[index] = adjacent + bonus + 4
+      if (bestGapped !== noMatch) current[index] = Math.max(current[index] ?? noMatch, bestGapped + bonus + 1 - index)
+    }
+    previous = current
+  }
+  let best = noMatch
+  for (const score of previous) best = Math.max(best, score)
+  return best === noMatch ? undefined : best
+}
+
+/** Case-insensitive fuzzy filtering with stable ordering for equal matches. */
+function fuzzyCandidates(candidates: readonly InputTriggerCandidate[], rawQuery: string): readonly InputTriggerCandidate[] {
+  const query = rawQuery.toLowerCase()
+  if (query === '') return candidates
+  const ranked: RankedCandidate[] = []
+  candidates.forEach((candidate, index) => {
+    const name = candidate.name.toLowerCase()
+    const score = fuzzyScore(name, query)
+    if (score !== undefined) ranked.push({ candidate, index, prefix: name.startsWith(query), score })
+  })
+  ranked.sort((left, right) =>
+    Number(right.prefix) - Number(left.prefix) || right.score - left.score || left.index - right.index)
+  return ranked.map(match => match.candidate)
 }
 
 /** One session's catalog fetch: the shared promise plus its own abort handle. */
@@ -138,14 +200,13 @@ export function apply(ctx: ClientContext): void {
       const skills = await fetchCatalog(session.sessionId)
       // Superseded keystroke: the shared fetch stays warm, this caller yields.
       if (signal.aborted) return []
-      return skills
-        .filter(skill => skill.name.startsWith(query))
-        .map(skill => ({
-          name: skill.name,
-          // The user-only marker rides the description (the menu's only
-          // secondary text); `hint` is the claim-state ghost text, not a badge.
-          description: skill.modelInvocable ? skill.description : `${t('menu.userOnly')} · ${skill.description}`,
-        }))
+      const mapped = skills.map(skill => ({
+        name: skill.name,
+        // The user-only marker rides the description (the menu's only
+        // secondary text); `hint` is the claim-state ghost text, not a badge.
+        description: skill.modelInvocable ? skill.description : `${t('menu.userOnly')} · ${skill.description}`,
+      }))
+      return fuzzyCandidates(mapped, query)
     },
     warm(session) {
       // Fire-and-forget scope-birth prewarm; the shared fetch reports
