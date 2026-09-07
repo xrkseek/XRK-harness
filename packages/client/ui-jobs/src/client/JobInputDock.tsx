@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { JobView } from '@xrkseek/client-runtime/client'
 import type { PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { IconChevronDownOutline14, IconChevronUpOutline14 } from '@xrkseek/client-ui-primitives'
 import { isLiveJob, orderedJobs, type JobListActions } from './job-list-shared.ts'
 import { JobRows } from './JobRows.tsx'
 import type { JobListInjected } from './JobListAction.tsx'
+import { useJobClock } from './use-job-clock.ts'
 import { NS } from './locales.ts'
 import css from './JobInputDock.module.css'
 import headerCss from './JobListAction.module.css'
@@ -25,14 +26,7 @@ export function JobInputDock({ sessionId, useSessions, killJob, backgroundJob, t
   const jobs = useSessions(state => state.jobsBySession[sessionId]) ?? NO_TASKS
   const liveJobs = useMemo(() => jobs.filter(isLiveJob), [jobs])
   const [collapsed, setCollapsed] = useState(true)
-  const [now, setNow] = useState(() => Date.now())
-
-  useEffect(() => {
-    if (liveJobs.length === 0) return
-    setNow(Date.now())
-    const timer = setInterval(() => { setNow(Date.now()) }, 1_000)
-    return () => { clearInterval(timer) }
-  }, [liveJobs.length])
+  const now = useJobClock(liveJobs.length > 0)
 
   if (liveJobs.length === 0) return null
 

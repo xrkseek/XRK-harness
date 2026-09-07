@@ -12,7 +12,7 @@ import {
   canonicalAgentPresetId,
   resolveAgentPresetProfile,
 } from "../presets-catalog.js";
-import { toWireHistoryEntry, collectToolCallArgsForPage } from "../adapt/index.js";
+import { toWireHistoryEntry, collectToolCallArgsForPage, routeFromRequestHeader } from "../adapt/index.js";
 import {
   DEFAULT_HISTORY_MAX_MESSAGES,
   dropSupersededStreamDeltas,
@@ -237,7 +237,7 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
   const pageEvents = dropSupersededStreamDeltas(raw.events);
   const inbox = runtime.inboxWire.fresh();
   const toolArgs = collectToolCallArgsForPage(events, pageEvents, seqByEvent);
-  const wireCtx = {
+  const wireCtxBase = {
     sessionId,
     ids: runtime.wireIds,
     inbox,
@@ -246,10 +246,23 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       ? { getTool: (name: string) => runtime.getTool!(sessionId, name) }
       : {}),
   };
-  const indexed = pageEvents.map((event) => {
+  // Walk the durable log so each assistant/message inherits the latest
+  // request/header route (same attribution cost-meter uses live).
+  let modelRoute = runtime.sessionModels.get(sessionId);
+  const pageSet = new Set(pageEvents);
+  const indexed: ReturnType<typeof toWireHistoryEntry>[] = [];
+  for (const event of events) {
+    const fromHeader = routeFromRequestHeader(event);
+    if (fromHeader) modelRoute = fromHeader;
+    if (!pageSet.has(event)) continue;
     const seq = seqByEvent.get(event) ?? 0;
-    return toWireHistoryEntry(event, seq, wireCtx);
-  });
+    indexed.push(
+      toWireHistoryEntry(event, seq, {
+        ...wireCtxBase,
+        ...(modelRoute ? { modelRoute } : {}),
+      }),
+    );
+  }
   const hasMore = raw.hasMore;
   let maxWireSeq = 0;
   for (const row of indexed) {

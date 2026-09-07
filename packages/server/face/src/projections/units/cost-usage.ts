@@ -56,17 +56,9 @@ const ZERO: CostUsageProjection = {
 
 function modelKeyFromRoute(
   route: { provider: string; model: string } | null,
-  event: SessionEvent,
 ): string {
   if (route) return `${route.provider}:${route.model}`;
-  if (event.type === "assistant/chunk" || event.type === "assistant/message") {
-    const model =
-      "model" in event && typeof event.model === "string"
-        ? event.model
-        : "unknown";
-    return `deepseek:${model}`;
-  }
-  return "deepseek:unknown";
+  return "unknown:unknown";
 }
 
 const PRICE_CONFIG = bundledCostMeterPriceConfig();
@@ -183,7 +175,7 @@ export function createCostUsageProjectionUnit(): ProjectionDefinition<
       }
       const sample = providerUsageSample(event);
       if (!sample) return state;
-      const modelKey = modelKeyFromRoute(state.route, event);
+      const modelKey = modelKeyFromRoute(state.route);
       const buckets = bucketsFromUsage(sample.usage, state.route);
       const previous =
         state.last !== null &&

@@ -6,6 +6,7 @@ import { NS } from './locales.ts'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import { isLiveJob, orderedJobs } from './job-list-shared.ts'
 import { JobRows } from './JobRows.tsx'
+import { useJobClock } from './use-job-clock.ts'
 import css from './JobListAction.module.css'
 
 /** Business actions supplied by the slot registration. */
@@ -31,22 +32,14 @@ const NO_TASKS: readonly JobView[] = []
 export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, t }: JobListActionProps) {
   const jobs = useSessions(state => state.jobsBySession[sessionId]) ?? NO_TASKS
   const [open, setOpen] = useState(false)
-  const [now, setNow] = useState(() => Date.now())
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
 
   const rows = useMemo(() => orderedJobs(jobs), [jobs])
   const liveCount = useMemo(() => jobs.filter(isLiveJob).length, [jobs])
+  const now = useJobClock(open && liveCount > 0)
 
   useDismissOnOutsidePointer(rootRef, open, setOpen)
-
-  // The clock only runs while an open list is showing something that moves.
-  useEffect(() => {
-    if (!open || liveCount === 0) return
-    setNow(Date.now())
-    const timer = setInterval(() => { setNow(Date.now()) }, 1_000)
-    return () => { clearInterval(timer) }
-  }, [open, liveCount])
 
   // The last job disappearing removes this control; close first so focus does
   // not vanish from an unmounting node.
@@ -77,7 +70,6 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
         aria-expanded={open}
         aria-label={countLabel}
         onClick={() => {
-          setNow(Date.now())
           setOpen(current => !current)
         }}
       >

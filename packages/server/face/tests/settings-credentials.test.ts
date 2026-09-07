@@ -524,6 +524,47 @@ describe("Face settings U2", () => {
     }
   });
 
+  it("mcp mutate normalizes Cursor-style server maps to arrays", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-mcp-map-"));
+    const rt = runtime({ productDir: dir });
+    const mut = await dispatchFaceMethod(rt, "settings.mutate", "mm-map", {
+      ns: "mcp",
+      ops: [
+        {
+          op: "set",
+          path: ["servers"],
+          value: {
+            arxiv: { command: "npx", args: ["-y", "@modelcontextprotocol/server-everything"] },
+          },
+        },
+      ],
+    });
+    expect(mut.result.ok).toBe(true);
+    if (!mut.result.ok) return;
+    expect(mut.result.value).toMatchObject({
+      ns: "mcp",
+      value: {
+        servers: [
+          {
+            serverName: "arxiv",
+            command: "npx",
+            args: ["-y", "@modelcontextprotocol/server-everything"],
+          },
+        ],
+      },
+    });
+    const dumped = JSON.parse(
+      await readFile(path.join(dir, "host-settings.json"), "utf8"),
+    ) as { mcp: { servers: unknown } };
+    expect(dumped.mcp.servers).toEqual([
+      {
+        serverName: "arxiv",
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-everything"],
+      },
+    ]);
+  });
+
   it("mcp mutate applies live when Host syncMcpServers is wired", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-mcp-live-"));
     const facePlugins: {

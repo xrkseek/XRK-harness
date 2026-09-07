@@ -119,21 +119,25 @@ export function createSettingsMutateTool(
     name: SETTINGS_MUTATE,
     description:
       "Change Host Settings (global ~/.xrk — same as Settings UI). " +
-      "Use path ops: set/unset. Examples: ui-theme.preference light|dark|system (live appearance), " +
-      "mcp.servers (add/edit/remove MCP, args, cwd, proxy env HTTP_PROXY/HTTPS_PROXY/NO_PROXY), " +
-      "mcp.allowConnect, bash.maxOutputBytes, permission.defaultPreset, llm-deepseek.baseURL, agent-presets.default. " +
-      "Secrets: use Credentials UI / credentials tools — do not put API keys in mcp.servers env (proxy keys only). " +
-      "Most namespaces apply live; for MCP, waits until remount/connect finishes; connect failures return isError.",
+      "Args shape: { ns, ops:[{ op:\"set\"|\"unset\", path:[...], value? }] }. " +
+      "Examples: ns=ui-theme ops=[{op:\"set\",path:[\"preference\"],value:\"dark\"}]; " +
+      "ns=mcp ops=[{op:\"set\",path:[\"servers\"],value:[{serverName,command,args?}]}] " +
+      "(Cursor-style {name:{command,args}} maps also accepted); " +
+      "also mcp.allowConnect, bash.maxOutputBytes, permission.defaultPreset, llm-deepseek.baseURL, agent-presets.default. " +
+      "Secrets: Credentials UI / credentials tools — not API keys in mcp.servers env (proxy env only). " +
+      "Most namespaces apply live; MCP waits for remount/connect; connect failures return isError.",
     parameters: {
       type: "object",
       properties: {
         ns: {
           type: "string",
-          description: "Settings namespace to mutate.",
+          description: "Settings namespace to mutate (e.g. mcp, ui-theme, bash).",
         },
         ops: {
           type: "array",
-          description: 'Path operations: { op:"set"|"unset", path:["field",...], value? }',
+          description:
+            'Path ops only: [{ op:"set"|"unset", path:["field",...], value? }]. ' +
+            'Not a bare { servers: … } body — wrap under ops with path ["servers"].',
           items: {
             type: "object",
             properties: {

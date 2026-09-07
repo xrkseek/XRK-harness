@@ -9,6 +9,14 @@ export {
   type WireHistoryEntry,
 } from "./wire-event.js";
 export {
+  assistantMessageSource,
+  FACE_ASSISTANT_SOURCE_PLACEHOLDER,
+  FACE_USAGE_ROUTE_PLACEHOLDER,
+  providerModelKey,
+  routeFromRequestHeader,
+  type FaceModelRoute,
+} from "./model-route.js";
+export {
   FaceInboxWireMaps,
   FaceInboxWireProjector,
   type FaceInboxSplice,

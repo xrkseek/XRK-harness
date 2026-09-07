@@ -121,12 +121,12 @@ describe('JobListAction rows', () => {
     expect(rowCells().map(cells => cells[1])).toEqual(['first', 'second'])
   })
 
-  it('prefers the producer detail over the generic status word', () => {
+  it('keeps the status word and appends producer detail', () => {
     render(<JobListAction {...props([
       job({ status: 'killed', detail: 'signal: SIGTERM', finishedAt: START + 2_000 }),
     ])} />)
     fireEvent.click(screen.getByRole('button'))
-    expect(rowCells()[0]).toContain('signal: SIGTERM')
+    expect(rowCells()[0]?.[2]).toBe('已取消 · signal: SIGTERM')
   })
 
   it('renders every status word, including the stopping transition', () => {
@@ -157,6 +157,18 @@ describe('JobListAction duration', () => {
     act(() => { vi.advanceTimersByTime(2_000) })
     expect(rowCells()[0]).toContain('3秒')
     expect(rowCells()[1]).toContain('4秒')
+  })
+
+  it('shows tenths under ten seconds so sub-second settles are not zero', () => {
+    render(<JobListAction {...props([
+      job({ id: 'bash-1' as JobView['id'], label: 'fast', status: 'completed', finishedAt: START + 450 }),
+      job({ id: 'bash-2' as JobView['id'], label: 'exit', status: 'completed', detail: 'exit code: 0', finishedAt: START + 1_250 }),
+    ])} />)
+    fireEvent.click(screen.getByRole('button'))
+    expect(rowCells().map(cells => [cells[1], cells[2], cells[3]])).toEqual([
+      ['exit', '已完成 · exit code: 0', '1.3秒'],
+      ['fast', '已完成', '0.5秒'],
+    ])
   })
 
   it('widens to minutes and then hours, and never shows a negative figure', () => {

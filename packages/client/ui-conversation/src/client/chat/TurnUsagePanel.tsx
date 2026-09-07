@@ -98,7 +98,17 @@ export function TurnUsagePanel({ usage, t }: TurnUsagePanelProps) {
     ? null
     : formatCacheHitPercent(usage.cacheReadTokens, usage.totalTokens - usage.outputTokens, 1)
   const total = formatCompactCount(usage.totalTokens, t)
-  const routes = usage.routes?.map(route => `${route.provider}/${route.model}`).join(', ') ?? ''
+  // Face used to stamp placeholder `xrk/unknown` before request/header wiring;
+  // hide that so the dialog never advertises a fake route.
+  const routes = (usage.routes ?? [])
+    .filter((route) => {
+      const provider = route.provider.trim()
+      const model = route.model.trim()
+      if (!provider || !model) return false
+      return !(provider === 'xrk' && model === 'unknown')
+    })
+    .map((route) => `${route.provider}/${route.model}`)
+    .join(', ')
 
   return (
     <span ref={rootRef} className={css.root}>

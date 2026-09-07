@@ -76,6 +76,19 @@ describe('TurnUsagePanel', () => {
     expect(screen.queryByText(/reasoning/)).toBeNull()
   })
 
+  it('hides the legacy Face placeholder route xrk/unknown', () => {
+    const usage: TurnTokenUsage = {
+      uncachedInputTokens: 10,
+      outputTokens: 2,
+      totalTokens: 12,
+      routes: [{ provider: 'xrk', model: 'unknown' }],
+    }
+    render(<TurnUsagePanel usage={usage} t={tEn} />)
+    fireEvent.click(screen.getByRole('button'))
+    expect(screen.queryByText('Provider / model')).toBeNull()
+    expect(screen.queryByText('xrk/unknown')).toBeNull()
+  })
+
   it('keeps a partial cache hit below 100 and closes on Escape or outside pointerdown', () => {
     const usage: TurnTokenUsage = {
       uncachedInputTokens: 1,

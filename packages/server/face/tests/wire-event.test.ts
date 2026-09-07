@@ -260,7 +260,37 @@ describe("Face DSH wire-event adapt", () => {
       id: "c1",
       name: "bash",
     });
-    expect(data.message.source).toEqual({ provider: "xrk", model: "unknown" });
+    expect(data.message.source).toEqual({
+      kind: "model",
+      provider: "xrk",
+      model: "unknown",
+    });
+  });
+
+  it("assistant/message source uses modelRoute when provided", () => {
+    const wire = toFaceWireSessionEvent(
+      {
+        type: "assistant/message",
+        ts: 12,
+        turnId: "t1",
+        stepId: "s1",
+        content: "done",
+      },
+      5,
+      {
+        sessionId: "sess",
+        ids: new FaceWireIdMaps(),
+        modelRoute: { provider: "minimax", model: "minimax-m2.5:free" },
+      },
+    );
+    const data = wire.data as {
+      message: { source: { kind: string; provider: string; model: string } };
+    };
+    expect(data.message.source).toEqual({
+      kind: "model",
+      provider: "minimax",
+      model: "minimax-m2.5:free",
+    });
   });
 
   it("tool/call is flat callId/name/arguments; view uses for/card", () => {

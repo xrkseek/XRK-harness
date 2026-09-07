@@ -39,15 +39,35 @@ export function jobStatusLabel(status: JobView['status'], t: TranslateNS<'job'>)
   }
 }
 
-/** Elapsed time in at most two adjacent units. */
+/**
+ * Elapsed time in at most two adjacent units.
+ * Under 10s uses one decimal so sub-second settles are not labeled `0秒`.
+ */
 export function formatJobDuration(elapsedMs: number, t: TranslateNS<'job'>): string {
-  const total = Math.max(0, Math.floor(elapsedMs / 1_000))
+  const ms = Math.max(0, elapsedMs)
+  if (ms < 10_000) {
+    let tenths = Math.round(ms / 100) / 10
+    // Sub-50ms settles still took wall time — never label a real run as 0.
+    if (ms > 0 && tenths === 0) tenths = 0.1
+    return t('duration.seconds', { seconds: tenths })
+  }
+  const total = Math.floor(ms / 1_000)
   const seconds = total % 60
   const minutes = Math.floor(total / 60) % 60
   const hours = Math.floor(total / 3_600)
   if (hours > 0) return t('duration.hours', { hours, minutes })
   if (minutes > 0) return t('duration.minutes', { minutes, seconds })
   return t('duration.seconds', { seconds })
+}
+
+/** Status word, with producer detail when present (`已完成 · exit code: 0`). */
+export function jobStatusText(
+  job: Pick<JobView, 'status' | 'detail'>,
+  t: TranslateNS<'job'>,
+): string {
+  const label = jobStatusLabel(job.status, t)
+  const detail = job.detail?.trim()
+  return detail !== undefined && detail.length > 0 ? `${label} · ${detail}` : label
 }
 
 /** Live rows first in start order, then settled rows newest-first. */

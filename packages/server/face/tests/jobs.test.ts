@@ -78,6 +78,13 @@ describe("jobViews (DSH apiproxy)", () => {
     const views = jobViews([runningJob({ foreground: true })]);
     expect(views[0]?.foreground).toBe(true);
   });
+
+  it("passes finishedAt when set", () => {
+    const views = jobViews([
+      runningJob({ status: "completed", finishedAt: 1_500 }),
+    ]);
+    expect(views[0]?.finishedAt).toBe(1_500);
+  });
 });
 
 describe("session/jobs without the registry", () => {

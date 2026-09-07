@@ -33,7 +33,7 @@ import {
   type FaceListProjectionCache,
   type FaceProjectionRegistry,
 } from "./projections/index.js";
-import { FaceInboxWireMaps, FaceToolArgMaps, toMuxSessionEvent } from "./adapt/index.js";
+import { FaceInboxWireMaps, FaceToolArgMaps, toMuxSessionEvent, routeFromRequestHeader, FACE_USAGE_ROUTE_PLACEHOLDER } from "./adapt/index.js";
 import {
   formatJobCompletionNotice,
   isSettledJobStatus,
@@ -481,6 +481,14 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     }
     const eventSeq = seq.next(id);
     toolArgMaps.remember(id, frozen);
+    // Keep the live route map ahead of mux so assistant/message source matches
+    // this attempt's request/header (cost-meter samples stay gated below).
+    if (frozen.type === "request/header") {
+      const route = routeFromRequestHeader(frozen);
+      if (route) costMeterRoutes.set(id, route);
+    }
+    const modelRoute =
+      costMeterRoutes.get(id) ?? sessionModels.get(id);
     bus.publishMux(
       toMuxSessionEvent(id, frozen, eventSeq, {
         sessionId: id,
@@ -488,20 +496,15 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         inbox: inboxWire.forSession(id),
         toolArgs: toolArgMaps.forSession(id),
         getTool: (name) => getTool(id, name),
+        ...(modelRoute ? { modelRoute } : {}),
       }),
     );
     projections.drive(id, frozen, eventSeq);
     if (!replayingLog) {
-      if (frozen.type === "request/header") {
-        costMeterRoutes.set(id, {
-          provider: frozen.header.config.provider,
-          model: frozen.header.config.model,
-        });
-      }
       if (frozen.type === "assistant/message" && frozen.usage) {
         const route =
           costMeterRoutes.get(id) ??
-          sessionModels.get(id) ?? { provider: "deepseek", model: "unknown" };
+          sessionModels.get(id) ?? FACE_USAGE_ROUTE_PLACEHOLDER;
         const sample = usageSampleFromMessage(
           id,
           frozen,

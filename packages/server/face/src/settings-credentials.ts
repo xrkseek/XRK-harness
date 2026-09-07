@@ -776,8 +776,22 @@ export class FaceSettingsNamespaces {
     }
     const nextUser = { ...slot.user };
     for (const op of ops) {
-      if (op.op === "set") setAtPath(nextUser, op.path, op.value);
-      else unsetAtPath(nextUser, op.path);
+      if (op.op === "set") {
+        let value = op.value;
+        // Parser accepts Cursor-style maps; FACE_MCP_SCHEMA stores arrays only.
+        if (ns === "mcp") {
+          const normalized = normalizeMcpServersOp(op.path, value);
+          if (!normalized.ok) {
+            return {
+              ok: false,
+              code: "settings-invalid",
+              message: normalized.message,
+            };
+          }
+          value = normalized.value;
+        }
+        setAtPath(nextUser, op.path, value);
+      } else unsetAtPath(nextUser, op.path);
     }
     const merged = mergeLayers(
       slot.base,
@@ -865,6 +879,38 @@ export function parseFaceMcpServers(raw: unknown): FaceMcpServerDraft[] {
       };
     },
   );
+}
+
+/**
+ * Coerce mcp.servers set values to the array shape FACE_MCP_SCHEMA expects.
+ * `parseMcpServersValue` also accepts Cursor maps / `{ mcpServers: … }`.
+ */
+function normalizeMcpServersOp(
+  path: readonly string[],
+  value: unknown,
+): { ok: true; value: unknown } | { ok: false; message: string } {
+  try {
+    if (path.length === 1 && path[0] === "servers") {
+      return { ok: true, value: parseFaceMcpServers(value) };
+    }
+    if (
+      path.length === 0 &&
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      "servers" in value
+    ) {
+      const next = { ...(value as Record<string, unknown>) };
+      next.servers = parseFaceMcpServers(next.servers);
+      return { ok: true, value: next };
+    }
+    return { ok: true, value };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 function validateMcpServersValue(raw: unknown): string | undefined {

@@ -14,6 +14,10 @@ import {
 } from "./inbox-wire.js";
 import { presentToolView, type PresentToolLookup, type ToolEventView } from "./tool-view.js";
 import type { FaceWireIdMaps } from "./wire-ids.js";
+import {
+  assistantMessageSource,
+  type FaceModelRoute,
+} from "./model-route.js";
 
 /** Published isomorphism keys (XRK type → wire role). */
 export const EVENT_ISOMORPHISM = {
@@ -87,6 +91,11 @@ export interface WireAdaptContext {
   >;
   /** Tool presenter lookup (standing tools get). Omit ? no view. */
   readonly getTool?: PresentToolLookup["getTool"];
+  /**
+   * LLM route for this session's current attempt (`request/header` / session
+   * model). Used as `assistant/message` wire `source`; omit → placeholder.
+   */
+  readonly modelRoute?: FaceModelRoute;
 }
 
 /** Face wire `tool/call` / assistant tool-call block `arguments` is a JSON string. */
@@ -241,7 +250,8 @@ export function toFaceWireSessionEvent(
                   },
         },
       };
-    case "assistant/message":
+    case "assistant/message": {
+      const source = assistantMessageSource(ctx?.modelRoute);
       return {
         type: "assistant/message",
         seq,
@@ -253,12 +263,13 @@ export function toFaceWireSessionEvent(
           message: {
             id: `${event.turnId}:${event.stepId}`,
             content: assistantMessageContent(event),
-            source: { provider: "xrk", model: "unknown" },
+            source,
           },
           ...(event.interrupted === true ? { interrupted: true } : {}),
           ...(event.usage ? { usage: event.usage } : {}),
         },
       };
+    }
     case "turn/start":
       return {
         type: event.type,
@@ -477,6 +488,7 @@ export function toMuxSessionEvent(
     ...(ctx?.inbox ? { inbox: ctx.inbox } : {}),
     ...(ctx?.toolArgs ? { toolArgs: ctx.toolArgs } : {}),
     ...(ctx?.getTool ? { getTool: ctx.getTool } : {}),
+    ...(ctx?.modelRoute ? { modelRoute: ctx.modelRoute } : {}),
   };
   return {
     type: "session/event",

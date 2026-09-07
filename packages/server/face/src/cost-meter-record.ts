@@ -3,6 +3,7 @@
  */
 import { readSessionEvents, type SessionStore } from "@xrkseek/core-session";
 import type { SessionEvent, TokenUsage } from "@xrkseek/protocol";
+import { FACE_USAGE_ROUTE_PLACEHOLDER } from "./adapt/model-route.js";
 import {
   buildCostMeterState,
   type CostMeterBuckets,
@@ -244,8 +245,10 @@ export function costMeterImportLegacyHistoryFromStore(
   let skipped = 0;
 
   for (const sessionId of store.list()) {
-    let provider = sessionModels.get(sessionId)?.provider ?? "deepseek";
-    let model = sessionModels.get(sessionId)?.model ?? "unknown";
+    let provider =
+      sessionModels.get(sessionId)?.provider ?? FACE_USAGE_ROUTE_PLACEHOLDER.provider;
+    let model =
+      sessionModels.get(sessionId)?.model ?? FACE_USAGE_ROUTE_PLACEHOLDER.model;
     for (const event of readSessionEvents(store, sessionId)) {
       if (event.type === "request/header") {
         provider = event.header.config.provider;

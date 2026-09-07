@@ -6,7 +6,7 @@ import {
   formatJobDuration,
   isLiveJob,
   jobDotState,
-  jobStatusLabel,
+  jobStatusText,
   type JobListActions,
   type JobRowStyle,
 } from './job-list-shared.ts'
@@ -40,13 +40,13 @@ export function JobRows({ rows, now, t, css, killJob, backgroundJob }: JobRowsPr
         const live = isLiveJob(job)
         const elapsed = live ? now - job.startedAt : (job.finishedAt ?? job.startedAt) - job.startedAt
         const duration = formatJobDuration(elapsed, t)
-        const status = jobStatusLabel(job.status, t)
+        const status = jobStatusText(job, t)
         return (
           <li key={job.id} className={live ? css.row : `${css.row} ${css.rowSettled}`}>
             <StateDot state={jobDotState(job.status)} className={css.rowDot} />
             <span className={css.kind}>{job.kind}</span>
             <span className={css.label} title={job.label}>{job.label}</span>
-            <span className={css.status} title={job.detail ?? status}>{job.detail ?? status}</span>
+            <span className={css.status} title={status}>{status}</span>
             <span
               className={css.duration}
               title={t(live ? 'duration.title.live' : 'duration.title.done', { duration })}

@@ -59,7 +59,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 跑测 / 提 PR | [testing](./testing.md) · [CONTRIBUTING](../CONTRIBUTING.md) |
 | 交接本仓 | [maintainer](./maintainer.md) · [audiences](./audiences.md) |
 | 发版 | [publishing](./publishing.md)（维护者） |
-| 版本说明 | [releases/](./releases/)（当前 [v0.3.0](./releases/v0.3.0.md) · 预览末号 [v0.2.7](./releases/v0.2.7.md)） |
+| 版本说明 | [releases/](./releases/)（当前 [v0.3.1](./releases/v0.3.1.md) · 预览末号 [v0.2.7](./releases/v0.2.7.md)） |
 | 改码笔记 | [AGENTS](../AGENTS.md) · `.cursor/skills` |
 
 ## 规格索引
@@ -136,7 +136,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [learn.md](./learn.md) | 要义摘录 |
 | [modules/](./modules/README.md) | 包文件地图 |
 | [adr/](./adr/README.md) | 架构决策 |
-| [releases/](./releases/) | 发行说明（当前 [v0.3.0](./releases/v0.3.0.md) · 预览末号 [v0.2.7](./releases/v0.2.7.md)） |
+| [releases/](./releases/) | 发行说明（当前 [v0.3.1](./releases/v0.3.1.md) · 预览末号 [v0.2.7](./releases/v0.2.7.md)） |
 
 ---
 
@@ -201,7 +201,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | Test / PR | [testing](./testing.md) · [CONTRIBUTING](../CONTRIBUTING.md) |
 | Handoff | [maintainer](./maintainer.md) · [audiences](./audiences.md) |
 | Release | [publishing](./publishing.md) (maintainers) |
-| Release notes | [releases/](./releases/) (current [v0.3.0](./releases/v0.3.0.md) · last preview [v0.2.7](./releases/v0.2.7.md)) |
+| Release notes | [releases/](./releases/) (current [v0.3.1](./releases/v0.3.1.md) · last preview [v0.2.7](./releases/v0.2.7.md)) |
 | Coding notes | [AGENTS](../AGENTS.md) · `.cursor/skills` |
 
 ## Spec index
@@ -278,4 +278,4 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [learn.md](./learn.md) | Short digest |
 | [modules/](./modules/README.md) | Package file map |
 | [adr/](./adr/README.md) | Architecture decisions |
-| [releases/](./releases/) | Release notes (current [v0.3.0](./releases/v0.3.0.md) · last preview [v0.2.7](./releases/v0.2.7.md)) |
+| [releases/](./releases/) | Release notes (current [v0.3.1](./releases/v0.3.1.md) · last preview [v0.2.7](./releases/v0.2.7.md)) |
