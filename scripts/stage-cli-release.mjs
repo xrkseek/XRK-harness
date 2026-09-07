@@ -11,6 +11,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -230,8 +231,23 @@ if (!existsSync(path.join(WEB_DIST, "index.html"))) {
 rmSync(PRODUCT_WEB, { recursive: true, force: true });
 cpSync(WEB_DIST, PRODUCT_WEB, { recursive: true });
 
-rmSync(path.join(ROOT, ".release"), { recursive: true, force: true });
-mkdirSync(path.join(ROOT, ".release"), { recursive: true });
+const releaseRoot = path.join(ROOT, ".release");
+try {
+  rmSync(releaseRoot, { recursive: true, force: true });
+} catch (err) {
+  // Windows may keep a handle on .release mid-stage; park it and continue.
+  const parked = `${releaseRoot}-parked-${Date.now()}`;
+  try {
+    renameSync(releaseRoot, parked);
+    console.warn(`stage: could not rm .release (${err instanceof Error ? err.message : err}); parked as ${path.basename(parked)}`);
+  } catch (renameErr) {
+    console.error(
+      `stage: cannot clear .release — close processes locking it, then retry (${renameErr instanceof Error ? renameErr.message : renameErr})`,
+    );
+    process.exit(1);
+  }
+}
+mkdirSync(releaseRoot, { recursive: true });
 
 run("pnpm", ["--filter", "@xrkseek/harness-cli", "deploy", "--prod", "--legacy", STAGE], ROOT, {
   CI: "true",
