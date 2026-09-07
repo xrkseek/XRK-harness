@@ -2,9 +2,12 @@
  * XRK-native plugin inventory + community catalog (底层能力).
  * DSH market adapters map onto these shapes — do not put `/dsh-*` paths here.
  */
-import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import {
+  readDisabledPluginIdsAt,
+  readManagedPluginPackagesAt,
+} from "@xrkseek/server-loader";
 import type { Json } from "../http-json.js";
 
 export interface XrkInstalledPackage {
@@ -46,59 +49,34 @@ export function resolvePluginsDir(
   return path.join(homedir(), ".xrk", "plugins");
 }
 
+/** Soft-disabled managed plugin ids (shared loader disk contract). */
+export function readXrkDisabledPluginIds(
+  options: XrkPluginServicesOptions = {},
+): readonly string[] {
+  return [...readDisabledPluginIdsAt(resolvePluginsDir(options))].sort();
+}
+
 /** Read CLI inventory `{pluginsDir}/.xrk-plugins.json`. */
 export function readXrkPluginInventory(
   options: XrkPluginServicesOptions = {},
 ): XrkPluginInventory {
   const pluginsDir = resolvePluginsDir(options);
-  const invPath = path.join(pluginsDir, ".xrk-plugins.json");
   const packages: XrkInstalledPackage[] = [];
   const installedMap: Record<string, { version?: string; kind?: string }> = {};
   const present: string[] = [];
 
-  if (existsSync(invPath)) {
-    try {
-      const raw = JSON.parse(readFileSync(invPath, "utf8")) as {
-        packages?: Record<
-          string,
-          {
-            name?: string;
-            version?: string;
-            kind?: string;
-            source?: string;
-            installedAt?: string;
-          }
-        >;
-      };
-      for (const [name, entry] of Object.entries(raw.packages ?? {})) {
-        const version =
-          typeof entry.version === "string" && entry.version.trim()
-            ? entry.version.trim()
-            : "0.0.0";
-        const kind =
-          typeof entry.kind === "string" && entry.kind.trim()
-            ? entry.kind.trim()
-            : "unknown";
-        packages.push({
-          name,
-          version,
-          kind,
-          ...(typeof entry.source === "string"
-            ? { source: entry.source }
-            : {}),
-          ...(typeof entry.installedAt === "string"
-            ? { installedAt: entry.installedAt }
-            : {}),
-        });
-        const row: { version?: string; kind?: string } = {};
-        row.version = version;
-        row.kind = kind;
-        installedMap[name] = row;
-        present.push(name);
-      }
-    } catch {
-      /* empty */
-    }
+  for (const [name, entry] of readManagedPluginPackagesAt(pluginsDir)) {
+    const version = entry.version ?? "0.0.0";
+    const kind = entry.kind ?? "unknown";
+    packages.push({
+      name,
+      version,
+      kind,
+      ...(entry.source ? { source: entry.source } : {}),
+      ...(entry.installedAt ? { installedAt: entry.installedAt } : {}),
+    });
+    installedMap[name] = { version, kind };
+    present.push(name);
   }
 
   return { pluginsDir, packages, installedMap, present };

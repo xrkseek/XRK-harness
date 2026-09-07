@@ -10,7 +10,8 @@ function isCordisHostApplied(
   return ids.some((id) => id.trim() && applied.has(id.trim()));
 }
 
-function hasStagedCordisClient(
+/** True when a community client half is staged under Host `pluginsDir`. */
+export function hasStagedCordisClient(
   runtime: Pick<FaceRuntime, "hostPublic">,
   ...ids: readonly string[]
 ): boolean {

@@ -42,12 +42,33 @@ export { createFaceRuntime, type CreateFaceRuntimeOptions } from "./runtime.js";
 export {
   listFacePluginInventory,
   readDisabledPluginIdsAt,
+  writeDisabledPluginIdsAt,
+  clearSoftDisabledIdsAt,
+  setSoftDisabledAt,
+  isPluginSoftDisabledAt,
+  lookupManagedPluginSourceAt,
   reconcileManagedClientBoot,
   resolveManagedPluginDir,
+  resolveManagedPluginUpdateSpec,
+  resolveManagedPluginsDir,
   type FacePluginInventoryEntry,
   type FaceProcessPlugin,
   type FaceWebPlugin,
 } from "./plugin-inventory.js";
+export {
+  DISABLED_PLUGINS_FILE,
+  readManagedPackageIndexAt,
+  readManagedPluginPackagesAt,
+  type ManagedPackageIndex,
+  type ManagedPluginPackageMeta,
+} from "./plugin-disabled.js";
+export {
+  reconcileClientBootAt,
+  atomicWriteText,
+  type ClientBootEntry,
+  type ClientBootReconcileResult,
+} from "./plugin-boot.js";
+export { reconcileManagedProcessPlugins } from "@xrkseek/server-loader";
 export {
   FaceMessageFeedbackStore,
   MESSAGE_FEEDBACK_NOTE_MAX_BYTES,

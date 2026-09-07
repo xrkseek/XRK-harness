@@ -293,4 +293,63 @@ describe("plugin add/remove/list", () => {
     });
     expect(existsSync(scopeDir)).toBe(false);
   });
+
+  it("plugin add re-enables a soft-disabled client and rewrites boot.json", () => {
+    const home = tempDir("xrk-plug-reenable-");
+    const env = { XRK_HOME: home };
+    const pluginsDir = resolvePluginsDir(env);
+    const fixture = writeClientFixture(home, "side-whip");
+
+    addPlugin(fixture, {
+      env,
+      pluginsDir,
+      io: { log: () => {}, warn: () => {} },
+    });
+    writeFileSync(
+      path.join(pluginsDir, ".xrk-plugins-disabled.json"),
+      `${JSON.stringify({ ids: ["side-whip"] }, null, 2)}\n`,
+    );
+    reconcilePluginsDir(pluginsDir, { log: () => {}, warn: () => {} });
+    expect(existsSync(path.join(pluginsDir, "web", "boot.json"))).toBe(false);
+
+    const logs: string[] = [];
+    addPlugin(fixture, {
+      env,
+      pluginsDir,
+      io: {
+        log: (l) => logs.push(l),
+        warn: () => {},
+      },
+    });
+    expect(logs.some((l) => l.includes("re-enabled side-whip"))).toBe(true);
+    expect(existsSync(path.join(pluginsDir, ".xrk-plugins-disabled.json"))).toBe(
+      false,
+    );
+    const boot = JSON.parse(
+      readFileSync(path.join(pluginsDir, "web", "boot.json"), "utf8"),
+    ) as { entries: { id: string }[] };
+    expect(boot.entries.map((e) => e.id)).toEqual(["side-whip"]);
+  });
+
+  it("reconcile prunes orphan soft-disable ids not in inventory", () => {
+    const home = tempDir("xrk-plug-orphan-dis-");
+    const env = { XRK_HOME: home };
+    const pluginsDir = resolvePluginsDir(env);
+    const fixture = writeClientFixture(home, "alive");
+    addPlugin(fixture, {
+      env,
+      pluginsDir,
+      io: { log: () => {}, warn: () => {} },
+    });
+    writeFileSync(
+      path.join(pluginsDir, ".xrk-plugins-disabled.json"),
+      `${JSON.stringify({ ids: ["alive", "ghost"] }, null, 2)}\n`,
+    );
+    reconcilePluginsDir(pluginsDir, { log: () => {}, warn: () => {} });
+    const disabled = JSON.parse(
+      readFileSync(path.join(pluginsDir, ".xrk-plugins-disabled.json"), "utf8"),
+    ) as { ids: string[] };
+    expect(disabled.ids).toEqual(["alive"]);
+    expect(existsSync(path.join(pluginsDir, "web", "boot.json"))).toBe(false);
+  });
 });

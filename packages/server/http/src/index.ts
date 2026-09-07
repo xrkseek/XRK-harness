@@ -60,6 +60,7 @@ export {
 } from "./xrk/plugin-routes.js";
 export {
   readXrkPluginInventory,
+  readXrkDisabledPluginIds,
   fetchXrkPluginCatalog,
   resolvePluginsDir,
   DSH_SETTINGS_NAMESPACES,
@@ -69,7 +70,12 @@ export {
 } from "./xrk/plugin-services.js";
 export {
   runPluginMutate,
+  listCliInvocationCandidates,
+  cliInvocationNeedsShell,
+  planCliInvocation,
+  quoteWindowsCmdArg,
   type PluginMutateResult,
+  type CliInvocation,
 } from "./xrk/plugin-mutate.js";
 
 export interface HttpChatRequest {

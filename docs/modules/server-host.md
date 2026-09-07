@@ -21,10 +21,10 @@
 
 ```text
 1. createMemorySessionStore 或 createPersistentSessionStore(XRK_SESSIONS_DIR) + PluginLoader
-2. loadAll(pluginsDir) 若配置
+2. reconcileManagedProcessPlugins(resolvedPluginsDir) 当目录存在（跳过 soft-disable；Settings 变更后再跑；与 hostPublic.pluginsDir 同路径）
 3. loadMcpToolPlugins(mcpServers) 若有 spec（env/config 或 host-settings.json）且 policy/XRK_MCP_ALLOW 允许
 4. createHostAgentCache(loader.list())
-5. createFaceRuntime（policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`；文件真源 MCP 时 `syncMcpServers`；`resolveAgent` 内 bind `ask_user` / `exit_plan_mode`）
+5. createFaceRuntime（policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`；文件真源 MCP 时 `syncMcpServers`；`resolveAgent` 内 bind `ask_user` / `exit_plan_mode`；`syncManagedProcessPlugins`）
 6. createHttpServer + attachFace
 ```
 
@@ -116,10 +116,10 @@ Config lives in `@xrkseek/server-config` (`loadHostConfig`).
 
 ```text
 1. createMemorySessionStore or createPersistentSessionStore(XRK_SESSIONS_DIR) + PluginLoader
-2. loadAll(pluginsDir) if configured
+2. reconcileManagedProcessPlugins(resolvedPluginsDir) when the directory exists (skips soft-disabled; re-run after Settings mutations; same path as hostPublic.pluginsDir)
 3. loadMcpToolPlugins(mcpServers) when specs exist (env/config or host-settings.json) and policy/XRK_MCP_ALLOW allows
 4. createHostAgentCache(loader.list())
-5. createFaceRuntime (policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`; file-sourced MCP gets `syncMcpServers`; `resolveAgent` binds `ask_user` / `exit_plan_mode`)
+5. createFaceRuntime (policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`; file-sourced MCP gets `syncMcpServers`; `resolveAgent` binds `ask_user` / `exit_plan_mode`; `syncManagedProcessPlugins`)
 6. createHttpServer + attachFace
 ```
 

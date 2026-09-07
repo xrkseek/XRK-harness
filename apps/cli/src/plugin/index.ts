@@ -16,6 +16,7 @@ import {
   removeProcessPlugin,
 } from "./install-process.js";
 import {
+  clearDisabledPluginId,
   readInventory,
   reconcileBoot,
   removeInventoryEntry,
@@ -29,8 +30,11 @@ export { anchorPathSpec, fetchPackage } from "./fetch-pack.js";
 export { classifyPackage } from "./classify.js";
 export { remapInjectId, remapInjectList } from "./remap-inject.js";
 export {
+  clearDisabledPluginId,
+  readDisabledPluginIds,
   readInventory,
   reconcileBoot,
+  writeDisabledPluginIds,
   type InventoryEntry,
   type PluginInventory,
 } from "./inventory.js";
@@ -115,6 +119,12 @@ export function addPlugin(
         : {}),
     };
     upsertInventoryEntry(pluginsDir, entry);
+    // Re-install implies intent to load: clear Settings soft-disable so
+    // reconcileBoot writes web/boot.json (otherwise add succeeds but Host
+    // never overlays the client half).
+    if (clearDisabledPluginId(pluginsDir, entry.name)) {
+      io.log(`xrkh: re-enabled ${entry.name} (was soft-disabled)`);
+    }
     reconcilePluginsDir(pluginsDir, io);
     io.log(
       `xrkh: installed ${entry.name}@${entry.version} (${entry.kind}) → ${pluginsDir}`,
@@ -148,6 +158,8 @@ export function removePlugin(
     removeProcessPlugin(pluginsDir, name);
   }
   removeInventoryEntry(pluginsDir, name);
+  // Drop soft-disable markers so a later add is not blocked by a stale id.
+  clearDisabledPluginId(pluginsDir, name);
   reconcilePluginsDir(pluginsDir, io);
   io.log(`xrkh: removed ${name}`);
 }

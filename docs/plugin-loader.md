@@ -172,31 +172,45 @@ xrkh plugin path
 
 | 子命令 | 作用 |
 |--------|------|
-| `add <spec…>` | `npm pack` 拉包；识别 `xrk.client`/`dsh.client`（写 `web/` 叠加，inject 里 `@deepseek-ai/dsh-client-*` → `@xrkseek/client-*`）与进程 manifest；client 半部同时复制 **`xrk.host.json`**（或 `package.json` → `xrkseek.host` / `dsh.host`） |
-| `remove <name…>` | 按 `.xrk-plugins.json` 删文件并重写 `web/boot.json`；空 `@scope` 父目录会一并 prune |
-| `reconcile` | 以 inventory 为真源：删 `web/plugins` 孤儿目录、重写 `web/boot.json`（inventory 空则删 boot） |
-| `list` / `path` | 清单与根路径 |
+| `add <spec…>` | `npm pack` 拉包；识别 `xrk.client`/`dsh.client`（写 `web/` 叠加，inject 里 `@deepseek-ai/dsh-client-*` → `@xrkseek/client-*`）与进程 manifest；client 半部同时复制 **`xrk.host.json`**（或 `package.json` → `xrkseek.host` / `dsh.host`）；若该 id 曾在 Settings 停用，会清 soft-disable 并重写 boot |
+| `remove <name…>` | 按 `.xrk-plugins.json` 删文件、清 soft-disable 标记并重写 `web/boot.json`；空 `@scope` 父目录会一并 prune |
+| `reconcile` | 以 inventory 为真源：删 `web/plugins` 孤儿目录、重写 `web/boot.json`（跳过 soft-disable；全空则删 boot） |
+| `list` / `path` | 清单与根路径（`list` 对停用项附加 `disabled`） |
 
 布局：
 
 ```text
 ~/.xrk/plugins/
   .xrk-plugins.json
+  .xrk-plugins-disabled.json   # Settings 软停用 id（可选）
   web/boot.json
   web/plugins/<id>/client.js
   web/plugins/<id>/xrk.host.json   # 可选；Host provider 装配
   <id>/   # 进程插件（discover 跳过 web/）
 ```
 
-装完须重启 `web` / `serve`。`add` / `remove` 会自动 reconcile；手删目录或 inventory 不同步时跑 `plugin reconcile`。
+装完后：**进程半部**经 Settings 停用/启用可即时 reconcile；**client 半部**（或新装后首次进壳）仍须刷新页面 / 重启 `web`·`serve`（`needsRestart`）。`add` / `remove` 会自动 reconcile boot；手删目录或 inventory 不同步时跑 `plugin reconcile`。Host 经 Settings 调 mutate 时按序尝试：`XRK_HARNESS_BIN` → 仓内 `apps/cli/dist/bin.js` → `xrkh` → 旧名 `xrk-harness`（仅在命令不存在时回退）。全程 **不用** `shell: true`：`node` + `.js` 直接 argv（兼容 `Program Files` / 含空格或非 ASCII 路径）；Windows 裸 `.cmd` 经 `ComSpec /d /s /c` 正规转义。
 
-**Inventory 与磁盘**：`.xrk-plugins.json` 是 client 半部真源。`web/plugins/<id>/` 仅应存在 inventory 里 `kind: client|both` 的包；孤儿目录会导致 overlay `boot.json` 引用已删 `client.js`，浏览器 boot 失败或 slot 崩溃。`reconcile` 按 inventory 清理 staging 并重写 boot。
+**Inventory 与磁盘**：`.xrk-plugins.json` 是 managed 包真源。`web/plugins/<id>/` 仅应存在 inventory 里 `kind: client|both` 的包；孤儿目录会导致 overlay `boot.json` 引用已删 `client.js`，浏览器 boot 失败或 slot 崩溃。`reconcile` 按 inventory 清理 staging 并重写 boot。
 
-Host 在 `XRK_PLUGINS_DIR` 未设且该目录已存在时自动用作 `pluginsDir`。
+**Settings 软停用**：写入 `.xrk-plugins-disabled.json` 后从 `web/boot.json` 去掉该 client 条目。Host 对**进程半部**即时调用 `reconcileManagedProcessPlugins`（停用 unregister、启用再 load；跳过 `mcp:*`；磁盘已删的也卸）。Client 半部仍需浏览器刷新（列表标 `needsRestart`）。`pluginInventory/list` 仍从 inventory 列出停用行（`enabled: false`，并带 `version` / `kind` / `source`），以便再启用。Face 读写优先 Host `hostPublic.pluginsDir`（绝对路径，含 `XRK_PLUGINS_DIR`）。
+
+软停用磁盘契约（`@xrkseek/server-loader` `managed-state`，Face / HTTP / CLI / Host 共用）：
+
+| 规则 | 说明 |
+|------|------|
+| 真源叶 | 软停用与 inventory 读盘在 loader，避免 Face↔HTTP 环依赖 |
+| durable id | inventory 包名；reconcile 规范化别名并剪 orphan |
+| 写盘 | boot / inventory / disabled 原子写；内容不变不重写 |
+| 进程半部 | Settings 变更后本进程 reconcile；client 仍要刷新页面 |
+
+产品壳 cordis **不会**仅因 `kind:cordis` 变成可管理项。DSH market `disabled` 与 soft-disable 列表对齐。
+
+Host 在 `XRK_PLUGINS_DIR` 未设且该目录已存在时自动用作 `pluginsDir`。即便启动时未配置，只要 `{XRK_HOME}/plugins` 已存在，Host 也会按该绝对路径 reconcile 进程插件与 soft-disable。
 
 ## Host / preset
 
-`XRK_PLUGINS_DIR`（或存在的 `~/.xrk/plugins`）→ `loadAll` → factory 收到 `plugins` → minimal / harness 调用 `wireCompositionTools` + `wireCompositionPrompts`；Face 读同一列表做 `pluginInventory/list` 与 slash。
+`XRK_PLUGINS_DIR`（或存在的 `~/.xrk/plugins`）→ `reconcileManagedProcessPlugins`（discover + load 未停用项）→ factory 收到 `plugins` → minimal / harness 调用 `wireCompositionTools` + `wireCompositionPrompts`；Face 读同一列表做 `pluginInventory/list` 与 slash。Settings 停用/删除/更新后 Host 再跑同一 reconcile，并刷新 Face `plugins`。
 
 `{pluginsDir}/web/`：客户端叠加（可选 `boot.json` + 静态文件）。Host 把它 merge 进产品壳 boot，再 `applyXrkProductBootPolicy`（Cordis 客户端 id 与 HMR 仍会被去掉），并作为 `extraRoots` 提供 `/plugins/…`。不作为进程插件扫描。
 
@@ -206,7 +220,8 @@ XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js serve
 
 ## 明确不做
 
-- 热重载 / watch  
+- 任意目录 watch / 未声明入口的热重载  
+- 浏览器 client 半部热装卸（停用后仍须刷新页面）  
 - 未声明入口的任意执行  
 - 插件覆盖同名 builtin / 保留 prompt id  
 - 保留 kind 的自动接线（先登记，后补 apply*）  
@@ -391,31 +406,45 @@ xrkh plugin path
 
 | Subcommand | Behavior |
 |------------|----------|
-| `add <spec…>` | Fetch via `npm pack`; detect `xrk.client`/`dsh.client` (write `web/` overlay; inject remaps `@deepseek-ai/dsh-client-*` → `@xrkseek/client-*`) and process manifests; for the client half also copy **`xrk.host.json`** (or `package.json` → `xrkseek.host` / `dsh.host`) |
-| `remove <name…>` | Delete per `.xrk-plugins.json` inventory and rewrite `web/boot.json`; prune empty `@scope` parents |
-| `reconcile` | Inventory as source of truth: remove orphan `web/plugins` dirs, rewrite `web/boot.json` (delete boot when inventory is empty) |
-| `list` / `path` | Inventory and root path |
+| `add <spec…>` | Fetch via `npm pack`; detect `xrk.client`/`dsh.client` (write `web/` overlay; inject remaps `@deepseek-ai/dsh-client-*` → `@xrkseek/client-*`) and process manifests; for the client half also copy **`xrk.host.json`** (or `package.json` → `xrkseek.host` / `dsh.host`); clears a prior Settings soft-disable for that id and rewrites boot |
+| `remove <name…>` | Delete per `.xrk-plugins.json` inventory, clear soft-disable markers, and rewrite `web/boot.json`; prune empty `@scope` parents |
+| `reconcile` | Inventory as source of truth: remove orphan `web/plugins` dirs, rewrite `web/boot.json` (skip soft-disabled; delete boot when empty) |
+| `list` / `path` | Inventory and root path (`list` appends `disabled` for soft-disabled rows) |
 
 Layout:
 
 ```text
 ~/.xrk/plugins/
   .xrk-plugins.json
+  .xrk-plugins-disabled.json   # optional Settings soft-disable ids
   web/boot.json
   web/plugins/<id>/client.js
   web/plugins/<id>/xrk.host.json   # optional; Host provider assembly
   <id>/   # process plugins (discover skips web/)
 ```
 
-After install, restart `web` / `serve`. `add` / `remove` auto-reconcile; run `plugin reconcile` when directories were deleted by hand or inventory drifts.
+After install: the **process half** can live-reconcile on Settings enable/disable; the **client half** (or first shell load after install) still needs a page refresh / restart of `web`·`serve` (`needsRestart`). `add` / `remove` auto-reconcile boot; run `plugin reconcile` when directories were deleted by hand or inventory drifts. Host Settings mutate tries, in order: `XRK_HARNESS_BIN` → repo `apps/cli/dist/bin.js` → `xrkh` → legacy `xrk-harness` (fallback only when the binary is missing). Never uses `shell: true`: `node` + `.js` is a direct argv (safe for `Program Files` / spaces / non-ASCII paths); bare Windows `.cmd` shims go through `ComSpec /d /s /c` with proper quoting.
 
-**Inventory vs disk**: `.xrk-plugins.json` is the source of truth for the client half. `web/plugins/<id>/` must only hold packages listed as `kind: client|both`; orphans make overlay `boot.json` point at deleted `client.js` and break boot or slots. `reconcile` cleans staging from inventory and rewrites boot.
+**Inventory vs disk**: `.xrk-plugins.json` is the source of truth for managed packages. `web/plugins/<id>/` must only hold packages listed as `kind: client|both`; orphans make overlay `boot.json` point at deleted `client.js` and break boot or slots. `reconcile` cleans staging from inventory and rewrites boot.
 
-When `XRK_PLUGINS_DIR` is unset and that directory exists, the Host uses it as `pluginsDir`.
+**Settings soft-disable**: writes `.xrk-plugins-disabled.json` and drops the client entry from `web/boot.json`. Host **live-reconciles** the process half via `reconcileManagedProcessPlugins` (unregister on disable, reload on enable; skips `mcp:*`; also drops plugins removed from disk). The client half still needs a browser refresh (`needsRestart` on the list). `pluginInventory/list` still surfaces the disabled row from inventory (`enabled: false`, plus `version` / `kind` / `source`) so it can be re-enabled. Face I/O prefers Host `hostPublic.pluginsDir` (absolute, including `XRK_PLUGINS_DIR`).
+
+Soft-disable disk contract (`@xrkseek/server-loader` `managed-state`, shared by Face / HTTP / CLI / Host):
+
+| Rule | Meaning |
+|------|---------|
+| Shared leaf | Soft-disable and inventory reads live in loader (avoids a Face↔HTTP cycle) |
+| Durable id | Inventory package name; reconcile canonicalizes aliases and prunes orphans |
+| Writes | Atomic boot / inventory / disabled; skip rewrite when content is unchanged |
+| Process half | In-process reconcile after Settings mutations; client still needs a page refresh |
+
+Product-shell cordis is **not** managed merely because `kind:cordis`. DSH market `disabled` mirrors the soft-disable list.
+
+When `XRK_PLUGINS_DIR` is unset and that directory exists, the Host uses it as `pluginsDir`. Even if unset at spawn, as long as `{XRK_HOME}/plugins` exists the Host reconciles process plugins and soft-disable against that absolute path.
 
 ## Host / preset
 
-`XRK_PLUGINS_DIR` (or existing `~/.xrk/plugins`) → `loadAll` → factory receives `plugins` → minimal / harness call `wireCompositionTools` + `wireCompositionPrompts`; Face uses the same list for `pluginInventory/list` and slash commands.
+`XRK_PLUGINS_DIR` (or existing `~/.xrk/plugins`) → `reconcileManagedProcessPlugins` (discover + load non-disabled) → factory receives `plugins` → minimal / harness call `wireCompositionTools` + `wireCompositionPrompts`; Face uses the same list for `pluginInventory/list` and slash commands. After Settings disable/remove/update, the Host runs the same reconcile and refreshes Face `plugins`.
 
 `{pluginsDir}/web/`: client overlay (optional `boot.json` + static files). The Host merges it into the product-shell boot, then `applyXrkProductBootPolicy` (Cordis client ids and HMR are still stripped), and serves `/plugins/…` via `extraRoots`. Not scanned as process plugins.
 
@@ -425,7 +454,8 @@ XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js serve
 
 ## Explicit non-goals
 
-- Hot reload / watch  
+- Arbitrary directory watch / undeclared-entry hot reload  
+- Hot unload/reload of the browser client half (page refresh still required after disable)  
 - Arbitrary execution without a declared entry  
 - Plugins overriding same-name builtins or reserved prompt ids  
 - Auto-wiring reserved kinds (register first; apply* later)  

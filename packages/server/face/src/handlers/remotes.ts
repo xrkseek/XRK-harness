@@ -5,17 +5,16 @@ import {
 import {
   listFacePluginInventory,
   resolveManagedPluginDir,
+  resolveManagedPluginUpdateSpec,
+  resolveManagedPluginsDir,
   setFacePluginInventoryEnabled,
-  readDisabledPluginIds,
-  writeDisabledPluginIds,
+  clearSoftDisabledIdsAt,
+  lookupManagedPluginSourceAt,
   reconcileManagedClientBoot,
 } from "../plugin-inventory.js";
 import { openNativePath } from "../host-open-path.js";
 import { buildFaceChannelDiscover, resolveImGatewayWired } from "../process-channels.js";
 import { remoteArgs, type FaceHandler } from "./types.js";
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { resolveHarnessHome } from "../settings-document.js";
 
 function sessionFromAgentId(
   runtime: Parameters<FaceHandler>[0],
@@ -78,6 +77,8 @@ export const pluginInventorySetEnabled: FaceHandler = async (runtime, _rpcId, pa
   if (!result.ok) {
     return { ok: false, error: { code: "refused", message: result.error } };
   }
+  // Process half applies in-process; client half still needs a page reload.
+  await runtime.syncManagedProcessPlugins?.();
   return { ok: true, value: { entryId, enabled } };
 };
 
@@ -117,11 +118,9 @@ export const pluginInventoryRemove: FaceHandler = async (runtime, _rpcId, payloa
       },
     };
   }
-  // Drop soft-disable markers and refresh boot overlay so the next start
-  // does not resurrect a deleted package from a stale boot.json.
-  const disabled = readDisabledPluginIds(runtime);
-  if (disabled.delete(entryId)) writeDisabledPluginIds(runtime, disabled);
+  // Refresh boot overlay; orphan soft-disable markers are pruned here too.
   reconcileManagedClientBoot(runtime);
+  await runtime.syncManagedProcessPlugins?.();
   return { ok: true, value: { entryId, removed: true as const } };
 };
 
@@ -151,20 +150,13 @@ export const pluginInventoryUpdate: FaceHandler = async (runtime, _rpcId, payloa
       },
     };
   }
-  const pluginsDir = path.join(resolveHarnessHome(runtime), "plugins");
-  const invPath = path.join(pluginsDir, ".xrk-plugins.json");
-  let spec = `${entryId}@latest`;
-  if (existsSync(invPath)) {
-    try {
-      const raw = JSON.parse(readFileSync(invPath, "utf8")) as {
-        packages?: Record<string, { source?: string }>;
-      };
-      const source = raw.packages?.[entryId]?.source?.trim();
-      if (source) spec = source;
-    } catch {
-      /* keep @latest */
-    }
-  }
+  const pluginsDir = resolveManagedPluginsDir(runtime);
+  const source = lookupManagedPluginSourceAt(
+    pluginsDir,
+    entryId,
+    entry.moduleName,
+  );
+  const spec = resolveManagedPluginUpdateSpec(entryId, source);
   const result = await runtime.updateUserPlugin(spec);
   if (!result.ok) {
     return {
@@ -175,10 +167,15 @@ export const pluginInventoryUpdate: FaceHandler = async (runtime, _rpcId, payloa
       },
     };
   }
-  // Re-enable after a successful update so the new build is bootable.
-  const disabled = readDisabledPluginIds(runtime);
-  if (disabled.delete(entryId)) writeDisabledPluginIds(runtime, disabled);
+  // Re-enable after a successful update so the new build is bootable
+  // (clear entryId + moduleName aliases via shared soft-disable helper).
+  clearSoftDisabledIdsAt(
+    pluginsDir,
+    entryId,
+    entry.moduleName,
+  );
   reconcileManagedClientBoot(runtime);
+  await runtime.syncManagedProcessPlugins?.();
   return { ok: true, value: { entryId, updated: true as const } };
 };
 

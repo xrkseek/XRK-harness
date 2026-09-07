@@ -29,7 +29,7 @@ function props(
 
 const SNAPSHOT = {
   entries: [
-    { entryId: 'xrkh-better-sidebar', moduleName: 'xrkh-better-sidebar', enabled: true, fiberPhase: 'active', managed: true },
+    { entryId: 'xrkh-better-sidebar', moduleName: 'xrkh-better-sidebar', enabled: true, fiberPhase: 'active', managed: true, version: '0.18.2', kind: 'client', source: 'xrkh-better-sidebar@0.18.2' },
     { entryId: '8a1b2c3d', moduleName: '@xrkseek/cordis-plugin-hmr', enabled: true, fiberPhase: 'active', managed: false },
     { entryId: 'pending', moduleName: 'cordis:pending-name', enabled: true, fiberPhase: 'pending', managed: false },
     { entryId: 'loading', moduleName: '@fixture/loading-name', enabled: true, fiberPhase: 'loading', managed: false },
@@ -37,6 +37,7 @@ const SNAPSHOT = {
     { entryId: 'unloading', moduleName: '@fixture/unloading-name', enabled: true, fiberPhase: 'unloading', managed: false },
     { entryId: 'unobserved', moduleName: '@fixture/unobserved-name', enabled: true, fiberPhase: null, managed: false },
     { entryId: 'disabled-entry', moduleName: '@xrkseek/xrk-host-directory-picker-native', enabled: false, fiberPhase: null, managed: false },
+    { entryId: 'pending-restart', moduleName: 'pending-restart', enabled: true, fiberPhase: null, managed: true, version: '1.0.0', kind: 'client', needsRestart: true },
   ],
 } as unknown as Snapshot
 
@@ -55,14 +56,19 @@ describe('PluginInventorySettingsTab', () => {
     expect(list).toHaveBeenCalledOnce()
     expect(screen.getByRole('searchbox', { name: en.search })).toBeTruthy()
     expect(screen.getByRole('heading', { name: en.catalog })).toBeTruthy()
-    expect(view.container.querySelector('[data-plugin-count]')?.textContent).toBe('8')
-    expect(screen.getAllByRole('listitem')).toHaveLength(8)
-    expect(screen.getByText(en.managedTag)).toBeTruthy()
-    expect(screen.getAllByText(en.enabledTag)).toHaveLength(7)
-    expect(screen.getByText(en.disabledTag)).toBeTruthy()
+    expect(view.container.querySelector('[data-plugin-count]')?.textContent).toBe('9')
+    expect(screen.getAllByRole('listitem')).toHaveLength(9)
+    expect(screen.getAllByText(en.managedTag).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('0.18.2')).toBeTruthy()
+    expect(screen.getAllByText(en.needsRestartTag).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(en.enabledTag)).toHaveLength(8)
+    expect(screen.getAllByText(en.disabledTag).length).toBeGreaterThanOrEqual(1)
 
-    const managed = screen.getByRole('button', { name: 'better-sidebar, Custom, Enabled' })
+    const managed = screen.getByRole('button', { name: 'better-sidebar, Custom, Enabled, 0.18.2' })
     fireEvent.click(managed)
+    expect(screen.getByText(en.kind)).toBeTruthy()
+    expect(screen.getByText('client')).toBeTruthy()
+    expect(screen.getByText(en.source)).toBeTruthy()
     expect(screen.getByRole('button', { name: en.edit })).toBeTruthy()
     expect(screen.getByRole('button', { name: en.update })).toBeTruthy()
     expect(screen.getByRole('button', { name: en.disable })).toBeTruthy()
@@ -72,7 +78,19 @@ describe('PluginInventorySettingsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: en.disable }))
     await waitFor(() => { expect(setEnabled).toHaveBeenCalledWith('xrkh-better-sidebar', false) })
 
-    const active = screen.getByRole('button', { name: 'hmr, Mounted, Enabled' })
+    // Collapse managed details before filter chips (avoid leftover action buttons).
+    fireEvent.click(managed)
+
+    fireEvent.click(screen.getByRole('button', { name: en.filterCustom }))
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: en.filterDisabled }))
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: en.filterAll }))
+    expect(screen.getAllByRole('listitem')).toHaveLength(9)
+
+    const hmrCard = view.container.querySelector('[data-plugin-entry="8a1b2c3d"]')
+    expect(hmrCard).toBeTruthy()
+    const active = hmrCard!.querySelector('button')!
     fireEvent.click(active)
     expect(active.getAttribute('aria-expanded')).toBe('true')
     expect(view.container.querySelector('[data-loader-entry]')?.textContent).toBe('8a1b2c3d')
@@ -86,7 +104,11 @@ describe('PluginInventorySettingsTab', () => {
 
     fireEvent.change(search, { target: { value: 'disabled-entry' } })
     expect(screen.getAllByRole('listitem')).toHaveLength(1)
-    expect(screen.getByText('directory-picker-native')).toBeTruthy()
+    expect(screen.getByText('host-directory-picker-native')).toBeTruthy()
+
+    fireEvent.change(search, { target: { value: '0.18.2' } })
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.getByText('better-sidebar')).toBeTruthy()
 
     fireEvent.change(search, { target: { value: 'cordis-plugin-hmr' } })
     expect(screen.getAllByRole('listitem')).toHaveLength(1)

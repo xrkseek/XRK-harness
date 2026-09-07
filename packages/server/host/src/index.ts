@@ -56,7 +56,10 @@ import {
   canonicalAgentPresetId,
   resolveAgentPresetProfile,
   tryHandleFaceHttp,
+  isPluginSoftDisabledAt,
   readDisabledPluginIdsAt,
+  readManagedPackageIndexAt,
+  reconcileManagedProcessPlugins,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
   type FaceRuntime,
@@ -69,6 +72,7 @@ import {
   type PluginLoader,
   type RegisteredPlugin,
 } from "@xrkseek/server-loader";
+import { existsSync } from "node:fs";
 import { access } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import path from "node:path";
@@ -309,10 +313,25 @@ export function createHostManager(): HostManager {
         : createMemorySessionStore();
       const loader = createPluginLoader();
       const registry = createProviderRegistry();
+      // Face / mutate / soft-disable always share this absolute path. Config may
+      // omit pluginsDir until ~/.xrk/plugins exists; still reconcile when the
+      // directory is present so Settings install/disable works in-process.
+      const configuredPluginsDir = config.runtime.pluginsDir?.trim();
+      const resolvedPluginsDir = configuredPluginsDir
+        ? path.resolve(configuredPluginsDir)
+        : path.join(resolveXrkHome(), "plugins");
+      const managedPluginsRootReady = () => existsSync(resolvedPluginsDir);
 
       let loadedPluginIds: string[] = [];
-      if (config.runtime.pluginsDir) {
-        loadedPluginIds = [...(await loader.loadAll(config.runtime.pluginsDir))];
+      if (managedPluginsRootReady()) {
+        // Single path with Settings soft-disable: discover+load enabled,
+        // skip soft-disabled (never mcp:*).
+        loadedPluginIds = [
+          ...(await reconcileManagedProcessPlugins(
+            loader,
+            resolvedPluginsDir,
+          )),
+        ];
       }
 
       const policy = config.runtime.policyFile
@@ -326,9 +345,8 @@ export function createHostManager(): HostManager {
         preset: config.runtime.preset,
         corsOrigin: String(config.runtime.corsOrigin),
         rateLimitPerMinute: config.runtime.rateLimitPerMinute,
-        ...(config.runtime.pluginsDir
-          ? { pluginsDir: config.runtime.pluginsDir }
-          : {}),
+        // Always absolute so Face inventory / soft-disable match mutate + overlay.
+        pluginsDir: resolvedPluginsDir,
         webDistConfigured: Boolean(config.runtime.webDist),
         cordisHostApplied: [] as string[],
         cordisHostPackages: [] as Array<{
@@ -613,22 +631,23 @@ export function createHostManager(): HostManager {
         lastDrainResult,
       );
 
-      const webOverlay = await resolveWebPluginOverlay(
-        config.runtime.pluginsDir,
-      );
+      const webOverlay = await resolveWebPluginOverlay(resolvedPluginsDir);
       const overlayBoot = webOverlay
         ? loadBootManifestFromWebDist(webOverlay)
         : undefined;
-      const pluginsRoot =
-        config.runtime.pluginsDir?.trim() ||
-        path.join(resolveXrkHome(), "plugins");
-      const disabledIds = readDisabledPluginIdsAt(pluginsRoot);
+      // Defense only: reconcileBoot already omits soft-disabled ids. Still
+      // filter here so a stale web/boot.json cannot load a disabled client
+      // (including inventory key/name aliases).
+      const disabledIds = readDisabledPluginIdsAt(resolvedPluginsDir);
+      const packageIndex = readManagedPackageIndexAt(resolvedPluginsDir);
       const filteredOverlay =
         overlayBoot === undefined || disabledIds.size === 0
           ? overlayBoot
           : {
               rev: overlayBoot.rev,
-              entries: overlayBoot.entries.filter((e) => !disabledIds.has(e.id)),
+              entries: overlayBoot.entries.filter(
+                (e) => !isPluginSoftDisabledAt(e.id, disabledIds, packageIndex),
+              ),
             };
       const boot = applyXrkProductBootPolicy(
         ensureXrkPlatformClientBootEntries(
@@ -679,30 +698,35 @@ export function createHostManager(): HostManager {
           : {}),
         plugins: facePlugins,
         removeUserPlugin: async (spec) => {
-          const pluginsDir =
-            config.runtime.pluginsDir?.trim() ||
-            path.join(resolveXrkHome(), "plugins");
           const result = await runPluginMutate({
             action: "remove",
             spec,
-            pluginsDir,
+            pluginsDir: resolvedPluginsDir,
           });
           return result.ok
             ? { ok: true as const }
             : { ok: false as const, error: result.error ?? result.stderr };
         },
         updateUserPlugin: async (spec) => {
-          const pluginsDir =
-            config.runtime.pluginsDir?.trim() ||
-            path.join(resolveXrkHome(), "plugins");
           const result = await runPluginMutate({
             action: "add",
             spec,
-            pluginsDir,
+            pluginsDir: resolvedPluginsDir,
           });
           return result.ok
             ? { ok: true as const }
             : { ok: false as const, error: result.error ?? result.stderr };
+        },
+        syncManagedProcessPlugins: async () => {
+          if (!managedPluginsRootReady()) return;
+          loadedPluginIds = [
+            ...(await reconcileManagedProcessPlugins(
+              loader,
+              resolvedPluginsDir,
+            )),
+          ];
+          refreshFacePlugins();
+          await invalidateAgents();
         },
         ...(mcpFileSourced
           ? {
@@ -1042,9 +1066,7 @@ export function createHostManager(): HostManager {
       refreshFacePlugins();
 
       const hostWireCtx = {
-        ...(config.runtime.pluginsDir
-          ? { pluginsDir: config.runtime.pluginsDir }
-          : {}),
+        pluginsDir: resolvedPluginsDir,
         xrkHome: resolveXrkHome(),
         workspaceRoot: faceRuntime.workspaceRoot,
         defaultCwd: faceRuntime.workspaceRoot,
@@ -1086,14 +1108,10 @@ export function createHostManager(): HostManager {
             resolveSessionCwd: (sessionId: string) =>
               resolveSessionCwd(faceRuntime, sessionId),
             sidebarFace: hostWireCtx.sidebarFace,
-            ...(config.runtime.pluginsDir
-              ? { pluginsDir: config.runtime.pluginsDir }
-              : {}),
+            pluginsDir: resolvedPluginsDir,
           }),
           createXrkPluginPublicHandler({
-            ...(config.runtime.pluginsDir
-              ? { pluginsDir: config.runtime.pluginsDir }
-              : {}),
+            pluginsDir: resolvedPluginsDir,
             xrkHome: resolveXrkHome(),
           }),
           createHostPluginsPublicHandler(loader.list(), hostWireCtx),

@@ -5,6 +5,7 @@
 import {
   addPlugin,
   listPlugins,
+  readDisabledPluginIds,
   reconcilePluginsDir,
   removePlugin,
   resolvePluginsDir,
@@ -91,14 +92,16 @@ export async function runPlugin(argv: readonly string[]): Promise<number> {
       case "ls": {
         const pluginsDir = resolvePluginsDir();
         const entries = listPlugins({ pluginsDir });
+        const disabled = readDisabledPluginIds(pluginsDir);
         if (entries.length === 0) {
           process.stdout.write(`(none)  root=${pluginsDir}\n`);
           return 0;
         }
         process.stdout.write(`root=${pluginsDir}\n`);
         for (const e of entries) {
+          const flag = disabled.has(e.name) ? "\tdisabled" : "";
           process.stdout.write(
-            `${e.name}\t${e.version}\t${e.kind}\t${e.source}\n`,
+            `${e.name}\t${e.version}\t${e.kind}\t${e.source}${flag}\n`,
           );
         }
         return 0;

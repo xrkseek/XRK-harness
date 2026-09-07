@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/harness-cli",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "private": true,
   "description": "XRK Harness CLI - primary bin xrkh (also xrk-harness). run / serve / web / plugin.",
   "type": "module",
@@ -30,7 +30,8 @@
     "@xrkseek/preset-server": "workspace:*",
     "@xrkseek/server-config": "workspace:*",
     "@xrkseek/server-face": "workspace:*",
-    "@xrkseek/server-host": "workspace:*"
+    "@xrkseek/server-host": "workspace:*",
+    "@xrkseek/server-loader": "workspace:*"
   },
   "license": "MIT",
   "repository": {

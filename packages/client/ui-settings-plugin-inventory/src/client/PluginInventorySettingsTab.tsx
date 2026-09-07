@@ -24,6 +24,7 @@ export interface PluginInventorySettingsTabInjected {
 
 type PluginInventoryEntry = PluginInventorySnapshot['entries'][number]
 type PluginFiberPhase = PluginInventoryEntry['fiberPhase']
+type CatalogFilter = 'all' | 'custom' | 'disabled'
 
 /** Full component props assembled by the Settings slot renderer. */
 export type PluginInventorySettingsTabProps =
@@ -67,8 +68,15 @@ function moduleShortName(moduleName: string): string {
 /** Whether an inventory row matches the local catalog query. */
 function matches(entry: PluginInventoryEntry, normalizedQuery: string): boolean {
   if (normalizedQuery.length === 0) return true
-  return [entry.moduleName, entry.entryId]
+  return [entry.moduleName, entry.entryId, entry.version, entry.kind, entry.source]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .some(value => value.toLocaleLowerCase().includes(normalizedQuery))
+}
+
+function matchesFilter(entry: PluginInventoryEntry, filter: CatalogFilter): boolean {
+  if (filter === 'custom') return entry.managed === true
+  if (filter === 'disabled') return entry.enabled === false
+  return true
 }
 
 /** Render the Host plugin inventory (managed plugins pin first on the server). */
@@ -83,6 +91,7 @@ export function PluginInventorySettingsTab({
   const catalogId = useId()
   const [request, setRequest] = useState(0)
   const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<CatalogFilter>('all')
   const [expanded, setExpanded] = useState<PluginInventoryEntry['entryId'] | null>(null)
   const [state, setState] = useState<ViewState>({ status: 'loading' })
   const [busyId, setBusyId] = useState<PluginInventoryEntry['entryId'] | null>(null)
@@ -101,9 +110,11 @@ export function PluginInventorySettingsTab({
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const filteredEntries = useMemo(
     () => state.status === 'ready'
-      ? state.snapshot.entries.filter(entry => matches(entry, normalizedQuery))
+      ? state.snapshot.entries.filter(
+        entry => matchesFilter(entry, filter) && matches(entry, normalizedQuery),
+      )
       : [],
-    [normalizedQuery, state],
+    [filter, normalizedQuery, state],
   )
 
   useEffect(() => {
@@ -139,6 +150,12 @@ export function PluginInventorySettingsTab({
     }
   }
 
+  const filters: { readonly id: CatalogFilter; readonly label: string }[] = [
+    { id: 'all', label: t('filterAll') },
+    { id: 'custom', label: t('filterCustom') },
+    { id: 'disabled', label: t('filterDisabled') },
+  ]
+
   return (
     <div className={css.section} aria-busy={state.status === 'loading'}>
       {state.status === 'loading' ? <p className={css.status}>{t('loading')}</p> : null}
@@ -161,6 +178,20 @@ export function PluginInventorySettingsTab({
               onChange={(event) => { setQuery(event.currentTarget.value) }}
             />
           </label>
+          <div className={css.filterRow} role="toolbar" aria-label={t('catalog')}>
+            {filters.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={css.filterChip}
+                data-active={filter === item.id ? 'true' : undefined}
+                aria-pressed={filter === item.id}
+                onClick={() => { setFilter(item.id) }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
           <div className={css.catalogHeading}>
             <h3>{t('catalog')}</h3>
             <span data-plugin-count={filteredEntries.length}>{filteredEntries.length}</span>
@@ -177,16 +208,25 @@ export function PluginInventorySettingsTab({
                 const title = moduleShortName(entry.moduleName)
                 const configuration = t(entry.enabled ? 'enabledTag' : 'disabledTag')
                 const managed = entry.managed === true
+                const needsRestart = entry.needsRestart === true
                 const open = expanded === entry.entryId
                 const detailId = `${catalogId}-details-${encodeURIComponent(entry.entryId)}`
                 const busy = busyId === entry.entryId
                 const confirmRemove = confirmRemoveId === entry.entryId
+                const ariaBits = [
+                  title,
+                  managed ? t('managedTag') : null,
+                  configuration,
+                  needsRestart ? t('needsRestartTag') : null,
+                  entry.version ?? null,
+                ].filter(Boolean).join(', ')
                 return (
                   <li
                     className={css.card}
                     key={entry.entryId}
                     data-plugin-entry={entry.entryId}
                     data-managed={managed ? 'true' : undefined}
+                    data-needs-restart={needsRestart ? 'true' : undefined}
                     data-open={open ? 'true' : undefined}
                   >
                     <button
@@ -194,22 +234,24 @@ export function PluginInventorySettingsTab({
                       type="button"
                       aria-expanded={open}
                       aria-controls={detailId}
-                      aria-label={
-                        managed
-                          ? `${title}, ${t('managedTag')}, ${configuration}`
-                          : entry.enabled
-                            ? `${title}, ${status}, ${configuration}`
-                            : `${title}, ${configuration}`
-                      }
+                      aria-label={ariaBits}
                       onClick={() => {
                         setConfirmRemoveId(null)
                         setExpanded(current => current === entry.entryId ? null : entry.entryId)
                       }}
                     >
-                      <strong className={css.cardTitle} title={entry.moduleName}>{title}</strong>
+                      <span className={css.cardTitleBlock}>
+                        <strong className={css.cardTitle} title={entry.moduleName}>{title}</strong>
+                        {entry.version ? (
+                          <span className={css.versionTag} title={t('version')}>{entry.version}</span>
+                        ) : null}
+                      </span>
                       <span className={css.cardTrailing}>
                         {managed ? (
                           <span className={css.managedTag}>{t('managedTag')}</span>
+                        ) : null}
+                        {needsRestart ? (
+                          <span className={css.restartTag}>{t('needsRestartTag')}</span>
                         ) : null}
                         {entry.enabled ? (
                           <span
@@ -234,10 +276,34 @@ export function PluginInventorySettingsTab({
                             <dt>{t('configuration')}</dt>
                             <dd>{configuration}</dd>
                           </div>
+                          {entry.kind ? (
+                            <div>
+                              <dt>{t('kind')}</dt>
+                              <dd>{entry.kind}</dd>
+                            </div>
+                          ) : null}
+                          {entry.version ? (
+                            <div>
+                              <dt>{t('version')}</dt>
+                              <dd>{entry.version}</dd>
+                            </div>
+                          ) : null}
+                          {entry.source ? (
+                            <div>
+                              <dt>{t('source')}</dt>
+                              <dd className={css.sourceValue}>{entry.source}</dd>
+                            </div>
+                          ) : null}
                           {entry.enabled ? (
                             <div>
                               <dt>{t('cordis')}</dt>
                               <dd>{status}</dd>
+                            </div>
+                          ) : null}
+                          {needsRestart ? (
+                            <div>
+                              <dt>{t('needsRestartTag')}</dt>
+                              <dd>{t('restartHint')}</dd>
                             </div>
                           ) : null}
                         </dl>

@@ -1,19 +1,22 @@
 /**
  * Inventory of CLI-installed plugins under `{pluginsDir}/.xrk-plugins.json`.
- * `reconcileBoot` regenerates `{pluginsDir}/web/boot.json` from this list.
+ * Soft-disable disk I/O: `@xrkseek/server-loader`; boot reconcile: Face.
  */
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import {
+  DISABLED_PLUGINS_FILE,
+  atomicWriteText,
+  clearSoftDisabledIdsAt,
+  readDisabledPluginIdsAt,
+  writeDisabledPluginIdsAt,
+} from "@xrkseek/server-loader";
+import { reconcileClientBootAt } from "@xrkseek/server-face";
 import type { PluginKind } from "./classify.js";
 
 export const INVENTORY_FILE = ".xrk-plugins.json";
-export const DISABLED_FILE = ".xrk-plugins-disabled.json";
+/** @deprecated Prefer loader `DISABLED_PLUGINS_FILE`. */
+export const DISABLED_FILE = DISABLED_PLUGINS_FILE;
 
 export interface InventoryEntry {
   readonly name: string;
@@ -55,19 +58,26 @@ export function disabledPath(pluginsDir: string): string {
 
 /** Soft-disabled managed plugin ids (Settings inventory toggle). */
 export function readDisabledPluginIds(pluginsDir: string): Set<string> {
-  const file = disabledPath(pluginsDir);
-  const out = new Set<string>();
-  if (!existsSync(file)) return out;
-  try {
-    const raw = JSON.parse(readFileSync(file, "utf8")) as { ids?: unknown };
-    if (!Array.isArray(raw.ids)) return out;
-    for (const id of raw.ids) {
-      if (typeof id === "string" && id.trim()) out.add(id.trim());
-    }
-  } catch {
-    /* empty */
-  }
-  return out;
+  return readDisabledPluginIdsAt(pluginsDir);
+}
+
+/** Persist soft-disable list (empty set removes the marker file). */
+export function writeDisabledPluginIds(
+  pluginsDir: string,
+  ids: ReadonlySet<string>,
+): void {
+  writeDisabledPluginIdsAt(pluginsDir, ids);
+}
+
+/**
+ * Drop one id (and inventory aliases) from the soft-disable list.
+ * Returns true when the on-disk set changed.
+ */
+export function clearDisabledPluginId(
+  pluginsDir: string,
+  name: string,
+): boolean {
+  return clearSoftDisabledIdsAt(pluginsDir, name);
 }
 
 export function readInventory(pluginsDir: string): PluginInventory {
@@ -97,11 +107,16 @@ export function writeInventory(
   inventory: PluginInventory,
 ): void {
   mkdirSync(pluginsDir, { recursive: true });
-  writeFileSync(
-    inventoryPath(pluginsDir),
-    `${JSON.stringify(inventory, null, 2)}\n`,
-    "utf8",
-  );
+  const file = inventoryPath(pluginsDir);
+  const body = `${JSON.stringify(inventory, null, 2)}\n`;
+  if (existsSync(file)) {
+    try {
+      if (readFileSync(file, "utf8") === body) return;
+    } catch {
+      /* rewrite */
+    }
+  }
+  atomicWriteText(file, body);
 }
 
 export function upsertInventoryEntry(
@@ -151,34 +166,18 @@ export function clientInstallDir(pluginsDir: string, name: string): string {
 
 /**
  * Rewrite `web/boot.json` from inventory client entries only.
+ * Face `reconcileClientBootAt` (stable rev · atomic · canonicalize disabled).
  */
 export function reconcileBoot(pluginsDir: string): WebBootManifest {
-  const inv = readInventory(pluginsDir);
-  const disabled = readDisabledPluginIds(pluginsDir);
-  const entries: WebBootEntry[] = [];
-  for (const entry of Object.values(inv.packages)) {
-    if (entry.kind !== "client" && entry.kind !== "both") continue;
-    if (disabled.has(entry.name)) continue;
-    entries.push({
-      id: entry.name,
-      url: `/plugins/${entry.name}/client.js`,
-      rev: entry.version,
-      inject: entry.clientInject ?? [],
-      ...(entry.clientImmediately ? { immediately: true } : {}),
-    });
-  }
-  entries.sort((a, b) => a.id.localeCompare(b.id));
-  const manifest: WebBootManifest = {
-    rev: `xrk-plugins-${Date.now()}`,
-    entries,
+  const result = reconcileClientBootAt(pluginsDir);
+  return {
+    rev: result.rev,
+    entries: result.entries.map((e) => ({
+      id: e.id,
+      url: e.url,
+      rev: e.rev,
+      inject: e.inject,
+      ...(e.immediately ? { immediately: true } : {}),
+    })),
   };
-  const webDir = path.join(pluginsDir, "web");
-  mkdirSync(webDir, { recursive: true });
-  const bootPath = path.join(webDir, "boot.json");
-  if (entries.length === 0) {
-    if (existsSync(bootPath)) rmSync(bootPath, { force: true });
-    return manifest;
-  }
-  writeFileSync(bootPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-  return manifest;
 }

@@ -165,6 +165,12 @@ export interface FaceRuntime {
   updateUserPlugin?(
     spec: string,
   ): Promise<{ readonly ok: boolean; readonly error?: string }>;
+  /**
+   * After soft-disable / remove / update mutates disk: Host reconciles the
+   * in-process plugin loader (unload disabled / missing, load newly enabled).
+   * Client half still needs a browser reload (`needsRestart`).
+   */
+  syncManagedProcessPlugins?(): Promise<void>;
   /** Human approval waiters (tool policy `ask`). */
   readonly approvals: FaceApprovalBroker;
   /** DSH user-questions (`question/requested` + `/api/respond`). */

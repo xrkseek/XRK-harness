@@ -774,18 +774,21 @@ describe("pluginInventory/list", () => {
     expect(listed.result.value).toEqual({
       entries: [
         {
-          entryId: "community-cordis",
-          moduleName: "community-cordis",
-          enabled: false,
-          fiberPhase: "failed",
-          managed: true,
-        },
-        {
           entryId: "@xrkseek/client-runtime",
           moduleName: "@xrkseek/client-runtime",
           enabled: true,
           fiberPhase: "active",
           managed: false,
+          kind: "client",
+        },
+        {
+          entryId: "community-cordis",
+          moduleName: "community-cordis",
+          enabled: false,
+          fiberPhase: "failed",
+          // Product-shell cordis stub — not Settings-managed without staged client.
+          managed: false,
+          kind: "cordis",
         },
         {
           entryId: "example-tools",
@@ -793,6 +796,7 @@ describe("pluginInventory/list", () => {
           enabled: true,
           fiberPhase: "active",
           managed: false,
+          kind: "process",
         },
       ],
     });
@@ -828,7 +832,9 @@ describe("pluginInventory/list", () => {
           moduleName: "community-cordis",
           enabled: true,
           fiberPhase: "active",
-          managed: true,
+          // Applied host fiber ≠ CLI-managed; disable/delete stay off without inventory.
+          managed: false,
+          kind: "cordis",
         },
       ],
     });

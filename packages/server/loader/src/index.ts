@@ -73,6 +73,26 @@ export {
   type SkippedPluginLlmBrand,
 } from "./llm.js";
 export { isHostPlugin, listHostPlugins } from "./host.js";
+export { atomicWriteText } from "./atomic-write.js";
+export {
+  DISABLED_PLUGINS_FILE,
+  MANAGED_PLUGINS_INVENTORY_FILE,
+  canonicalizeDisabledPluginIdsAt,
+  clearSoftDisabledIdsAt,
+  disabledPluginsPath,
+  isPluginSoftDisabledAt,
+  lookupManagedPluginSourceAt,
+  managedPluginsInventoryPath,
+  readDisabledPluginIdsAt,
+  readManagedPackageIndexAt,
+  readManagedPluginPackagesAt,
+  reconcileManagedProcessPlugins,
+  setSoftDisabledAt,
+  writeDisabledPluginIdsAt,
+  type ManagedPackageIndex,
+  type ManagedPluginPackageMeta,
+  type SoftDisableReconcileLoader,
+} from "./managed-state.js";
 
 export interface PluginLoader {
   register(plugin: RegisteredPlugin): void;

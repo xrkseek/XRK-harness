@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Withdraw redundant @xrkseek/harness-cli versions on npmjs.
- * Keeps formal latest (apps/cli version) and preview (0.0.11). Tries unpublish first, then deprecate.
+ * Keeps formal latest (apps/cli version) and previous formal (0.1.31).
+ * Tries unpublish first, then deprecate. Drops leftover `preview` dist-tag.
  *
  * Auth: NPM_TOKEN or npm login. Write actions may need NPM_CONFIG_OTP (6-digit TOTP or one 64-char recovery code).
  *
@@ -17,13 +18,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cliPkg = JSON.parse(
   readFileSync(path.join(ROOT, "apps/cli/package.json"), "utf8").replace(/^\uFEFF/, ""),
 );
-const formal = typeof cliPkg.version === "string" ? cliPkg.version : "0.1.23";
+const formal = typeof cliPkg.version === "string" ? cliPkg.version : "0.3.0";
 
 const PKG = "@xrkseek/harness-cli";
-const KEEP = new Set(["0.1.31", formal]);
+const PREVIOUS_FORMAL = "0.1.31";
+const KEEP = new Set([PREVIOUS_FORMAL, formal]);
 const REGISTRY = "https://registry.npmjs.org";
 const DEPRECATE_MSG =
-  `Withdrawn. Use @xrkseek/harness-cli@${formal} (current) or @0.1.31 (previous formal).`;
+  `Withdrawn. Use @xrkseek/harness-cli@${formal} (current) or @${PREVIOUS_FORMAL} (previous formal).`;
 
 const deprecateOnly = process.argv.includes("--deprecate-only");
 
@@ -64,10 +66,9 @@ try {
 const withdrawn = versions.filter((v) => !KEEP.has(v));
 if (withdrawn.length === 0) {
   console.log("npm-prune: nothing to withdraw");
-  process.exit(0);
+} else {
+  console.log(`npm-prune: withdrawing ${withdrawn.length} version(s): ${withdrawn.join(", ")}`);
 }
-
-console.log(`npm-prune: withdrawing ${withdrawn.length} version(s): ${withdrawn.join(", ")}`);
 
 for (const ver of withdrawn) {
   if (!deprecateOnly) {
@@ -100,5 +101,16 @@ for (const ver of KEEP) {
   }
 }
 
+// Drop leftover preview dist-tag (0.0.11 era).
 const tags = npm(["dist-tag", "ls", PKG]);
-console.log(tags.out || "dist-tag ls done");
+if (/\bpreview\b/.test(tags.out || "")) {
+  const rm = npm(["dist-tag", "rm", PKG, "preview"]);
+  if (rm.status === 0) {
+    console.log("  dist-tag rm preview ok");
+  } else {
+    console.warn(`  dist-tag rm preview: ${rm.out.slice(0, 160)}`);
+  }
+}
+
+const tagsAfter = npm(["dist-tag", "ls", PKG]);
+console.log(tagsAfter.out || "dist-tag ls done");

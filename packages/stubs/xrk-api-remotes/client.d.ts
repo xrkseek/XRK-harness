@@ -55,6 +55,14 @@ export interface PluginInventoryEntry {
   readonly fiberPhase: PluginFiberPhase
   /** User-installed — Settings may offer edit / disable / delete. */
   readonly managed: boolean
+  /** CLI inventory version when known. */
+  readonly version?: string
+  /** `client` | `process` | `both` | `mcp` | `cordis` | `builtin`. */
+  readonly kind?: string
+  /** Original install spec when managed. */
+  readonly source?: string
+  /** Disk toggle differs from this Host live set — restart to apply. */
+  readonly needsRestart?: boolean
 }
 
 /** Point-in-time inventory returned by the plugin inventory Remote. */

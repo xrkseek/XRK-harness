@@ -3,12 +3,34 @@
  * User-installed packages (`~/.xrk/plugins/.xrk-plugins.json`) are marked
  * `managed` so the Settings inventory can pin them and offer remove/disable.
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import type { ToolDefinition } from "@xrkseek/core-tools";
-import { resolveCordisFiberState } from "./cordis-bridge.js";
+import {
+  isPluginSoftDisabledAt,
+  readDisabledPluginIdsAt,
+  readManagedPackageIndexAt,
+  readManagedPluginPackagesAt,
+  setSoftDisabledAt,
+  writeDisabledPluginIdsAt,
+} from "@xrkseek/server-loader";
+import { resolveCordisFiberState, hasStagedCordisClient } from "./cordis-bridge.js";
 import type { FaceRuntime } from "./context.js";
+import { reconcileClientBootAt } from "./plugin-boot.js";
 import { resolveHarnessHome } from "./settings-document.js";
+
+export {
+  DISABLED_PLUGINS_FILE,
+  clearSoftDisabledIdsAt,
+  canonicalizeDisabledPluginIdsAt,
+  isPluginSoftDisabledAt,
+  lookupManagedPluginSourceAt,
+  readDisabledPluginIdsAt,
+  readManagedPackageIndexAt,
+  readManagedPluginPackagesAt,
+  setSoftDisabledAt,
+  writeDisabledPluginIdsAt,
+} from "./plugin-disabled.js";
 
 /** DSH `pluginInventory/list` fiber phase. */
 export type FacePluginFiberPhase =
@@ -29,6 +51,23 @@ export interface FacePluginInventoryEntry {
    * edit / disable / delete. Built-in product-shell and MCP rows stay false.
    */
   readonly managed: boolean;
+  /** CLI inventory version when known (Codex-style plugin summary). */
+  readonly version?: string;
+  /** `client` | `process` | `both` | `mcp` | `cordis` | `builtin`. */
+  readonly kind?: string;
+  /** Original `plugin add` spec when managed. */
+  readonly source?: string;
+  /**
+   * Soft-disable / re-enable / install changed disk state but this Host
+   * process still has the opposite live set — restart to apply.
+   */
+  readonly needsRestart?: boolean;
+}
+
+export interface FaceManagedPluginMeta {
+  readonly version?: string;
+  readonly kind?: string;
+  readonly source?: string;
 }
 
 export interface FaceWebPlugin {
@@ -68,74 +107,90 @@ export interface FaceProcessPlugin {
   readonly mcpHealth?: "connected" | "reconnecting" | "gave-up";
 }
 
-function pluginsDirOf(runtime: Pick<FaceRuntime, "productDir">): string {
+/**
+ * Managed plugins root: Host `pluginsDir` (incl. `XRK_PLUGINS_DIR`) wins;
+ * otherwise `{harnessHome}/plugins`.
+ */
+export function resolveManagedPluginsDir(
+  runtime: Pick<FaceRuntime, "productDir" | "hostPublic">,
+): string {
+  const fromHost = runtime.hostPublic?.pluginsDir?.trim();
+  if (fromHost) return path.resolve(fromHost);
   return path.join(resolveHarnessHome(runtime as FaceRuntime), "plugins");
+}
+
+/** Alias used by inventory helpers in this module. */
+function pluginsDirOf(
+  runtime: Pick<FaceRuntime, "productDir" | "hostPublic">,
+): string {
+  return resolveManagedPluginsDir(runtime);
+}
+
+/**
+ * Reinstall/update spec: keep registry / github sources; local path installs
+ * are cwd-sensitive after Host restart → fall back to `name@latest`.
+ */
+export function resolveManagedPluginUpdateSpec(
+  entryId: string,
+  source: string | undefined,
+): string {
+  const id = entryId.trim();
+  const s = source?.trim();
+  if (!id) return "unknown@latest";
+  if (!s) return `${id}@latest`;
+  if (/^(file:|link:)/i.test(s)) return `${id}@latest`;
+  if (path.isAbsolute(s) || s.startsWith(".")) return `${id}@latest`;
+  // Unscoped path-like strings (`ext/pkg`) without a registry/git scheme.
+  if (
+    !s.startsWith("@") &&
+    !s.includes("@") &&
+    !/^[a-z][a-z0-9+.-]*:/i.test(s) &&
+    /[/\\]/.test(s)
+  ) {
+    return `${id}@latest`;
+  }
+  return s;
 }
 
 /** Package names recorded by `xrk-harness plugin add`. */
 export function readUserPluginNames(
-  runtime: Pick<FaceRuntime, "productDir">,
+  runtime: Pick<FaceRuntime, "productDir" | "hostPublic">,
 ): Set<string> {
-  const invPath = path.join(pluginsDirOf(runtime), ".xrk-plugins.json");
-  const names = new Set<string>();
-  if (!existsSync(invPath)) return names;
-  try {
-    const raw = JSON.parse(readFileSync(invPath, "utf8")) as {
-      packages?: Record<string, unknown>;
-    };
-    for (const name of Object.keys(raw.packages ?? {})) {
-      if (name.trim()) names.add(name.trim());
-    }
-  } catch {
-    /* empty */
-  }
-  return names;
+  return new Set(readUserPluginPackages(runtime).keys());
 }
 
-function disabledListPath(pluginsDir: string): string {
-  return path.join(pluginsDir, ".xrk-plugins-disabled.json");
-}
-
-/** Soft-disabled managed plugin ids under a plugins directory. */
-export function readDisabledPluginIdsAt(pluginsDir: string): Set<string> {
-  const file = disabledListPath(pluginsDir);
-  const out = new Set<string>();
-  if (!existsSync(file)) return out;
-  try {
-    const raw = JSON.parse(readFileSync(file, "utf8")) as { ids?: unknown };
-    if (!Array.isArray(raw.ids)) return out;
-    for (const id of raw.ids) {
-      if (typeof id === "string" && id.trim()) out.add(id.trim());
-    }
-  } catch {
-    /* empty */
+/** CLI inventory rows keyed by package name (version / kind / source). */
+export function readUserPluginPackages(
+  runtime: Pick<FaceRuntime, "productDir" | "hostPublic">,
+): Map<string, FaceManagedPluginMeta> {
+  const out = new Map<string, FaceManagedPluginMeta>();
+  for (const [name, meta] of readManagedPluginPackagesAt(pluginsDirOf(runtime))) {
+    out.set(name, {
+      ...(meta.version ? { version: meta.version } : {}),
+      ...(meta.kind ? { kind: meta.kind } : {}),
+      ...(meta.source ? { source: meta.source } : {}),
+    });
   }
   return out;
 }
 
 /** Soft-disabled managed plugin ids (Settings inventory toggle). */
 export function readDisabledPluginIds(
-  runtime: Pick<FaceRuntime, "productDir">,
+  runtime: Pick<FaceRuntime, "productDir" | "hostPublic">,
 ): Set<string> {
   return readDisabledPluginIdsAt(pluginsDirOf(runtime));
 }
 
 export function writeDisabledPluginIds(
-  runtime: Pick<FaceRuntime, "productDir">,
+  runtime: Pick<FaceRuntime, "productDir" | "hostPublic">,
   ids: ReadonlySet<string>,
 ): void {
-  const dir = pluginsDirOf(runtime);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    disabledListPath(dir),
-    `${JSON.stringify({ ids: [...ids].sort() }, null, 2)}\n`,
-    "utf8",
-  );
+  writeDisabledPluginIdsAt(pluginsDirOf(runtime), ids);
 }
 
 /** Absolute install directory for a managed plugin, if it exists on disk. */
 export function resolveManagedPluginDir(
-  runtime: Pick<FaceRuntime, "productDir">,
+  runtime: Pick<FaceRuntime, "productDir" | "hostPublic">,
   entryId: string,
   moduleName?: string,
 ): string | undefined {
@@ -157,82 +212,37 @@ export function resolveManagedPluginDir(
 }
 
 /**
- * Rewrite `{pluginsDir}/web/boot.json` from inventory client rows, omitting
- * soft-disabled ids so the next Host start does not load them.
+ * Rewrite `{pluginsDir}/web/boot.json` from inventory client rows.
+ * Delegates to shared {@link reconcileClientBootAt} (stable rev · atomic write).
  */
 export function reconcileManagedClientBoot(
-  runtime: Pick<FaceRuntime, "productDir">,
+  runtime: Pick<FaceRuntime, "productDir" | "hostPublic">,
 ): void {
-  const root = pluginsDirOf(runtime);
-  const invPath = path.join(root, ".xrk-plugins.json");
-  const disabled = readDisabledPluginIdsAt(root);
-  const entries: {
-    id: string;
-    url: string;
-    rev: string;
-    inject: readonly string[];
-    immediately?: boolean;
-  }[] = [];
-  if (existsSync(invPath)) {
-    try {
-      const raw = JSON.parse(readFileSync(invPath, "utf8")) as {
-        packages?: Record<
-          string,
-          {
-            name?: string;
-            version?: string;
-            kind?: string;
-            clientInject?: readonly string[];
-            clientImmediately?: boolean;
-          }
-        >;
-      };
-      for (const entry of Object.values(raw.packages ?? {})) {
-        const name = entry.name?.trim();
-        if (!name) continue;
-        if (entry.kind !== "client" && entry.kind !== "both") continue;
-        if (disabled.has(name)) continue;
-        entries.push({
-          id: name,
-          url: `/plugins/${name}/client.js`,
-          rev: typeof entry.version === "string" ? entry.version : "0",
-          inject: entry.clientInject ?? [],
-          ...(entry.clientImmediately ? { immediately: true } : {}),
-        });
-      }
-    } catch {
-      /* leave entries empty → drop stale boot.json */
-    }
-  }
-  entries.sort((a, b) => a.id.localeCompare(b.id));
-  const webDir = path.join(root, "web");
-  mkdirSync(webDir, { recursive: true });
-  const bootPath = path.join(webDir, "boot.json");
-  if (entries.length === 0) {
-    if (existsSync(bootPath)) rmSync(bootPath, { force: true });
-    return;
-  }
-  writeFileSync(
-    bootPath,
-    `${JSON.stringify({ rev: `xrk-plugins-${Date.now()}`, entries }, null, 2)}\n`,
-    "utf8",
-  );
+  reconcileClientBootAt(pluginsDirOf(runtime));
 }
 
 function isManagedProcessPlugin(
   plugin: FaceProcessPlugin,
   userNames: ReadonlySet<string>,
+  runtime: Pick<FaceRuntime, "hostPublic">,
 ): boolean {
   if (plugin.id.startsWith("mcp:")) return false;
   if (userNames.has(plugin.id)) return true;
-  // Cordis community packages are user-installed; product-shell rows are not.
-  if (plugin.kind === "cordis") return true;
+  // Only staged / inventory community cordis are managed — not product-shell
+  // cordis stubs (those must not gain Settings disable/delete).
+  if (plugin.kind === "cordis") {
+    return hasStagedCordisClient(runtime, plugin.id);
+  }
   return false;
 }
 
 /**
  * Host process plugins first (user-managed sorted ahead), then product-shell
- * boot entries. Cordis uses dsh-compat host.mjs apply or staged `client.js`.
+ * boot entries, then CLI inventory packages missing from live boot.
+ *
+ * Soft-disabled client packages are dropped from `web/boot.json` (and thus from
+ * Host `webPlugins`) so they do not load — but Settings must still list them
+ * from `.xrk-plugins.json`, otherwise there is no row to re-enable.
  */
 export function listFacePluginInventory(
   runtime: Pick<
@@ -241,12 +251,22 @@ export function listFacePluginInventory(
   >,
 ): FacePluginInventoryEntry[] {
   const seen = new Set<string>();
+  const liveIds = new Set<string>();
   const entries: FacePluginInventoryEntry[] = [];
-  const userNames = readUserPluginNames(runtime);
+  const packages = readUserPluginPackages(runtime);
+  const userNames = new Set(packages.keys());
   const disabled = readDisabledPluginIds(runtime);
-  const push = (entry: FacePluginInventoryEntry) => {
+  const packageIndex = readManagedPackageIndexAt(pluginsDirOf(runtime));
+  const softDisabledOf = (...ids: readonly string[]) =>
+    ids.some((id) => isPluginSoftDisabledAt(id, disabled, packageIndex));
+  const metaOf = (id: string): FaceManagedPluginMeta => packages.get(id) ?? {};
+  const push = (
+    entry: FacePluginInventoryEntry,
+    options: { readonly live?: boolean } = {},
+  ) => {
     if (seen.has(entry.entryId)) return;
     seen.add(entry.entryId);
+    if (options.live) liveIds.add(entry.entryId);
     entries.push(entry);
   };
 
@@ -255,27 +275,76 @@ export function listFacePluginInventory(
     const fiber = cordis
       ? resolveCordisFiberState(runtime, plugin.id)
       : { enabled: true, fiberPhase: "active" as const };
-    const managed = isManagedProcessPlugin(plugin, userNames);
-    const softDisabled = managed && disabled.has(plugin.id);
-    push({
-      entryId: plugin.id,
-      moduleName: plugin.id,
-      enabled: softDisabled ? false : fiber.enabled,
-      fiberPhase: softDisabled ? null : fiber.fiberPhase,
-      managed,
-    });
+    const managed = isManagedProcessPlugin(plugin, userNames, runtime);
+    const softDisabled = managed && softDisabledOf(plugin.id);
+    const meta = metaOf(plugin.id);
+    const kind =
+      meta.kind ??
+      (plugin.id.startsWith("mcp:")
+        ? "mcp"
+        : cordis
+          ? "cordis"
+          : "process");
+    push(
+      {
+        entryId: plugin.id,
+        moduleName: plugin.id,
+        enabled: softDisabled ? false : fiber.enabled,
+        fiberPhase: softDisabled ? null : fiber.fiberPhase,
+        managed,
+        ...(meta.version ? { version: meta.version } : {}),
+        kind,
+        ...(meta.source ? { source: meta.source } : {}),
+      },
+      { live: true },
+    );
   }
   for (const web of runtime.webPlugins ?? []) {
     const managed =
       userNames.has(web.id) || userNames.has(web.moduleName ?? "");
-    const softDisabled = managed && disabled.has(web.id);
+    const softDisabled =
+      managed && softDisabledOf(web.id, web.moduleName ?? "");
+    const meta =
+      packages.get(web.id) ?? packages.get(web.moduleName ?? "") ?? {};
+    push(
+      {
+        entryId: web.id,
+        moduleName: web.moduleName ?? web.id,
+        enabled: softDisabled ? false : true,
+        fiberPhase: softDisabled ? null : "active",
+        managed,
+        ...(meta.version ? { version: meta.version } : {}),
+        kind: meta.kind ?? "client",
+        ...(meta.source ? { source: meta.source } : {}),
+      },
+      { live: true },
+    );
+  }
+  // Inventory is the durable source for managed packages. Client-only rows that
+  // were soft-disabled (or installed after this Host start) are not in webPlugins.
+  for (const [name, meta] of packages) {
+    if (seen.has(name)) continue;
+    const softDisabled = softDisabledOf(name);
     push({
-      entryId: web.id,
-      moduleName: web.moduleName ?? web.id,
-      enabled: softDisabled ? false : true,
-      fiberPhase: softDisabled ? null : "active",
-      managed,
+      entryId: name,
+      moduleName: name,
+      enabled: !softDisabled,
+      fiberPhase: null,
+      managed: true,
+      ...(meta.version ? { version: meta.version } : {}),
+      kind: meta.kind ?? "client",
+      ...(meta.source ? { source: meta.source } : {}),
     });
+  }
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]!;
+    if (!entry.managed) continue;
+    const live = liveIds.has(entry.entryId);
+    const needsRestart =
+      (entry.enabled && !live) || (!entry.enabled && live);
+    if (!needsRestart) continue;
+    entries[i] = { ...entry, needsRestart: true };
   }
 
   entries.sort((a, b) => {
@@ -310,10 +379,12 @@ export function setFacePluginInventoryEnabled(
   const entry = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
   if (!entry) return { ok: false, error: "plugin not found" };
   if (!entry.managed) return { ok: false, error: "builtin plugins cannot be toggled here" };
-  const disabled = readDisabledPluginIds(runtime);
-  if (enabled) disabled.delete(entryId);
-  else disabled.add(entryId);
-  writeDisabledPluginIds(runtime, disabled);
+  // Durable key = CLI inventory package name; aliases stripped on write.
+  setSoftDisabledAt(pluginsDirOf(runtime), {
+    enabled,
+    entryId: entry.entryId,
+    aliases: [entry.moduleName],
+  });
   reconcileManagedClientBoot(runtime);
   return { ok: true };
 }

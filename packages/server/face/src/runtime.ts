@@ -141,6 +141,11 @@ export interface CreateFaceRuntimeOptions {
   readonly updateUserPlugin?: (
     spec: string,
   ) => Promise<{ readonly ok: boolean; readonly error?: string }>;
+  /**
+   * Live-reconcile process plugins after inventory soft-disable / remove /
+   * update (Host). Client boot still needs a page reload.
+   */
+  readonly syncManagedProcessPlugins?: () => Promise<void>;
   /** Durable image store (default none → image RPCs unavailable). */
   readonly attachments?: AttachmentStore;
   /** Standing tool registry (preset layer) when no live agent is remembered. */
@@ -620,6 +625,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       : {}),
     ...(options.updateUserPlugin !== undefined
       ? { updateUserPlugin: options.updateUserPlugin }
+      : {}),
+    ...(options.syncManagedProcessPlugins !== undefined
+      ? { syncManagedProcessPlugins: options.syncManagedProcessPlugins }
       : {}),
     bus,
     seq,

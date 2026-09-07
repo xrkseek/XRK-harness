@@ -6,6 +6,7 @@ import path from "node:path";
 import { sendJson } from "./underlying/http-json.js";
 import {
   fetchXrkPluginCatalog,
+  readXrkDisabledPluginIds,
   readXrkPluginInventory,
   type XrkPluginServicesOptions,
 } from "../xrk/plugin-services.js";
@@ -58,10 +59,11 @@ export async function handleDshMarketHttp(
 
   if (pathname === "/dsh-market/installed" && method === "GET") {
     const inv = readXrkPluginInventory(options);
+    const disabled = readXrkDisabledPluginIds(options);
     sendJson(res, 200, tag({
       installed: inv.installedMap,
       present: inv.present,
-      disabled: [],
+      disabled,
       live: [],
       repoIdentities: {},
       repoHints: {},

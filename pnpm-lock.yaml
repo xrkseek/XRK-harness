@@ -71,6 +71,9 @@ importers:
       '@xrkseek/server-host':
         specifier: workspace:*
         version: link:../../packages/server/host
+      '@xrkseek/server-loader':
+        specifier: workspace:*
+        version: link:../../packages/server/loader
 
   apps/console:
     dependencies:
