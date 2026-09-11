@@ -9,6 +9,8 @@ import {
 import type {} from '@xrkseek/client-ui-settings/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@xrkseek/client-locale/client'
+// Type-only: pulls ctx.layout — inject waits until ui-layout declares `conversation`.
+import type {} from '@xrkseek/client-ui-layout/client'
 import type { ViewTab } from './contract/views.ts'
 import type {
   ApprovalWait, ChatNodeTurnDataInjected, ChatScrollPosition, ChatViewInjected, ComposerBarInjected,
@@ -50,9 +52,13 @@ declare module '@xrkseek/client-ui-slots' {
   }
 }
 
-/** Services required by the conversation plugin. */
+/** Services required by the conversation plugin.
+ * `layout` mirrors ui-sidebar: ui-layout provides it in the same effect that
+ * declares the `conversation` slot — without it, apply can race and throw
+ * "slot conversation is not declared".
+ */
 export const inject = [
-  'slots', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'settingsScope',
+  'slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'settingsScope',
   'conversationEvents', 'conversationViews',
 ]
 
