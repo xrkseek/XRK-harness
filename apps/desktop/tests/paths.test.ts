@@ -9,9 +9,14 @@ import {
   resolveDesktopPaths,
 } from "../src/paths.js";
 
+/** Absolute fixture root (Linux CI must not treat drive-letter joins as relative). */
+function fixtureRoot(...parts: string[]): string {
+  return path.resolve(path.sep, "xrk-desktop-fixture", ...parts);
+}
+
 describe("resolveDesktopPaths", () => {
   it("places profile and desktop roots under the given harness home", () => {
-    const home = path.join("C:", "tmp", "xrk-desktop-paths-home");
+    const home = fixtureRoot("tmp", "xrk-desktop-paths-home");
     const paths = resolveDesktopPaths(home);
     expect(paths.profile).toBe(path.join(home, "profiles", DESKTOP_PROFILE_NAME));
     expect(paths.root).toBe(path.join(home, "desktop"));
@@ -22,7 +27,7 @@ describe("resolveDesktopPaths", () => {
 
 describe("development home isolation", () => {
   it("defaults unpackaged home under .desktop-build, not the OS user ~/.xrk", () => {
-    const appRoot = path.join("C:", "repo", "apps", "desktop");
+    const appRoot = fixtureRoot("repo", "apps", "desktop");
     const layout = resolveDesktopDevelopmentLayout(appRoot, {});
     const userXrk = path.join(os.homedir(), ".xrk");
     expect(layout.home).toBe(
@@ -38,8 +43,8 @@ describe("development home isolation", () => {
   });
 
   it("honors explicit XRK_HOME in development without using ~/.xrk", () => {
-    const appRoot = path.join("C:", "repo", "apps", "desktop");
-    const override = path.join("C:", "tmp", "xrk-dev-override");
+    const appRoot = fixtureRoot("repo", "apps", "desktop");
+    const override = fixtureRoot("tmp", "xrk-dev-override");
     const layout = resolveDesktopDevelopmentLayout(appRoot, {
       XRK_HOME: override,
     });
@@ -47,8 +52,8 @@ describe("development home isolation", () => {
   });
 
   it("uses resolveXrkHome only when packaged", () => {
-    const appRoot = path.join("C:", "repo", "apps", "desktop");
-    const packagedHome = path.join("C:", "tmp", "xrk-packaged-home");
+    const appRoot = fixtureRoot("repo", "apps", "desktop");
+    const packagedHome = fixtureRoot("tmp", "xrk-packaged-home");
     expect(
       resolveDesktopHarnessHome({
         isPackaged: true,

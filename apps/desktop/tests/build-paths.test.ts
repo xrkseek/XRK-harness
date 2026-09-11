@@ -1,4 +1,4 @@
-import { join, sep } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   desktopTargetBuildPaths,
@@ -6,9 +6,13 @@ import {
   resolveDesktopTargetBuildPaths,
 } from "../src/build-paths.js";
 
+function fixtureAppRoot(): string {
+  return resolve(sep, "xrk-desktop-fixture", "repo", "apps", "desktop");
+}
+
 describe("desktop build paths (target matrix)", () => {
   it("isolates mutable prep directories by first-wave target", () => {
-    const appRoot = join("C:", "repo", "apps", "desktop");
+    const appRoot = fixtureAppRoot();
     const win = desktopTargetBuildPaths("win-x64", appRoot);
     const mac = desktopTargetBuildPaths("mac-arm64", appRoot);
     const mutableKeys = [
@@ -31,7 +35,7 @@ describe("desktop build paths (target matrix)", () => {
   });
 
   it("shares only the immutable upstream download cache", () => {
-    const appRoot = join("C:", "repo", "apps", "desktop");
+    const appRoot = fixtureAppRoot();
     const win = desktopTargetBuildPaths("win-x64", appRoot);
     const mac = desktopTargetBuildPaths("mac-arm64", appRoot);
     expect(win.downloads).toBe(mac.downloads);
@@ -67,7 +71,7 @@ describe("desktop build paths (target matrix)", () => {
   });
 
   it("resolveDesktopTargetBuildPaths follows the selected target", () => {
-    const appRoot = join("C:", "repo", "apps", "desktop");
+    const appRoot = fixtureAppRoot();
     const paths = resolveDesktopTargetBuildPaths(
       { XRK_DESKTOP_TARGET: "win-x64" },
       appRoot,

@@ -33,11 +33,18 @@ describe("desktop seed/store strategy (MVP)", () => {
   });
 
   it("resolves packaged seed resource and user store paths", () => {
-    const resources = path.join("C:", "App", "Resources");
+    const resources = path.resolve(path.sep, "xrk-desktop-fixture", "App", "Resources");
     expect(resolveDesktopSeedResourceRoot(resources)).toBe(
       path.join(resources, "seed"),
     );
-    const store = path.join("C:", "home", "desktop", "pnpm", "store");
+    const store = path.resolve(
+      path.sep,
+      "xrk-desktop-fixture",
+      "home",
+      "desktop",
+      "pnpm",
+      "store",
+    );
     expect(resolveDesktopUserPnpmStore(store)).toBe(path.resolve(store));
   });
 });

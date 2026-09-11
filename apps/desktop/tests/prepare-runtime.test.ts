@@ -49,7 +49,7 @@ describe("desktop build target selection", () => {
   });
 
   it("places runtime under .desktop-build/targets/<target>", () => {
-    const appRoot = path.join("C:", "repo", "apps", "desktop");
+    const appRoot = path.resolve(path.sep, "xrk-desktop-fixture", "repo", "apps", "desktop");
     const paths = desktopTargetBuildPaths("win-x64", appRoot);
     expect(paths.runtime).toBe(
       path.join(appRoot, ".desktop-build", "targets", "win-x64", "runtime"),
