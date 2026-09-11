@@ -21,18 +21,18 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | Jobs | `job_list` / `job_output` / `job_kill` · 前台 bash **30s yield**（Settings 可调）· `pty-send` · Face settle **steer** 通知 · Host 共享 + session 隔离 · **`job.kill` / `job.background` RPC** · 壳 **停止/后台**（会话头 + 输入区 dock） | [shell-jobs.md](./shell-jobs.md) |
 | 子代理委托 | 模型面 `subagent` · `list_agents` · `send_message` · `interrupt_agent`（深度≤3；系统提示 `tool:subagent`）；后台 continuable 子代理 drain idle 向父 inbox **steer** 完成通知（对标 Codex `inject_fragment_without_turn`，不受用户 queue 偏好影响）；Face `subagent.*` · Sidebar `subagents.live` / jobs | [host-face.md](./host-face.md) · [session-delivery.md](./session-delivery.md) · [community-plugins.md](./community-plugins.md) |
 | HTTP + Host + Face 主路径 | `server-*`（产品 boot 省略 Cordis UI/HMR；工具卡 · `session/jobs` · standing 冷 history；`ask_user`；`settings_get`/`settings_mutate`；`/permission` · `/plan` · `/mcp` · `/status` · `/model` · `/theme` · `/skills` · `/compact` · `/export` · `/feedback` · `/auto-review`；mux/host **WS Ping 心跳** · **`FaceMuxSeq`**） | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
-## AGT 通道集成
-
-| 模式 | 说明 | 文档 |
-|------|------|------|
-| **SDK 模块（唯一）** | AGT `callAI` / `/v1` → `@xrkseek/harness`；持久 session · OpenAI live SSE；工厂仅单次补全 | AGT `docs/harness-module-loop.md` · [integrators/agt-bridge.md](./integrators/agt-bridge.md) |
-
 | CLI | `@xrkseek/harness-cli`（主 bin **`xrkh`**；`web`/`serve`；`restart`=停本机 XRK Host；`--force` 仅杀已识别 Host） | [apps/cli/README.md](../apps/cli/README.md) · [plugin-development](./plugin-development.md) |
 | LLM / Presets / SDK | `llm-*` · Registry R0+R1（openai-chat 含 OpenCode Zen/Go 与一批兼容网关 · completions 别名 · anthropic-messages · openai-responses · gemini-generate）· Face 手写 `llm-pi-ai` 路由（Custom provider）· `presets/*` · `@xrkseek/harness` | [llm-provider-registry.md](./llm-provider-registry.md) · [llm-provider-presets.md](./llm-provider-presets.md) · [profiles.md](./profiles.md) |
 | MCP | `@xrkseek/mcp`（stdio/HTTP 有界重连 + SSE；有序内容投影；可选 image → AttachmentStore）；Host `XRK_MCP_*` 或 Face `mcp.servers` + `allowConnect` 文件真源热挂载（policy deny → **park**）；Agent **`settings_get`/`settings_mutate`**（全局 `~/.xrk`，MCP 增删改与代理 env）；`/mcp` 清单；playbook **`xrk-capability-attach`**（`web`/`serve` 种子 `~/.xrk`：`skills/*` · 薄 `AGENTS.md` · `recipes/*`；不 mkdir 工作区） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) · [skills-layers.md](./skills-layers.md) |
 | Attachment / 插件 | Face 附件；进程插件 `tools` · `prompt` · `commands` · **`host`** · **`channel`** · **`policy`** · **`llm`**；CLI 用户插件目录 + 客户端 `web/` 叠加；Host `wireComposition*` 自动接线；**社区 client** 免补 `xrk.host.json`（能力表 + `client.js` 扫描 + 约定 infer，见 [plugin-loader](./plugin-loader.md)） | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
 | 社区插件 Host | `extensions/dsh-compat` + bridge；Face **`contextTimeline`** / **`contextHeaders`** · **`costUsage`** · **`processChannels/list`**；IM WS/sidecar · Vision 全路由 · embedded 向量 · GenUI npm · TongFlow Python；`xrkh doctor` · boot 自动接线 | [community-plugins.md](./community-plugins.md) · [ADR-0006](./adr/0006-im-long-lived-gateway.md) · [ADR-0007](./adr/0007-taskflow-external-runtime.md) |
 | 产品 Web | `apps/web` + `packages/client`；dist 组装 · `@file`/`@session` · 跨会话 prepare · **轮次轨 / `turnOutline` · `loadThrough`** · Playwright **21/21**（`pnpm test:web`） | [host-face.md](./host-face.md) · [testing.md](./testing.md) · Cordis UI/HMR 仅 `pnpm dev:web` 开发路径 |
+
+### AGT 通道集成
+
+| 模式 | 说明 | 文档 |
+| --- | --- | --- |
+| **SDK 模块（唯一）** | AGT `callAI` / `/v1` → `@xrkseek/harness`；持久 session · OpenAI live SSE；工厂仅单次补全 | AGT `docs/harness-module-loop.md` · [integrators/agt-bridge.md](./integrators/agt-bridge.md) |
 
 产品壳 = `apps/web` + `packages/client`；`serve` 用组装后的 dist / CLI `product-web/`。Hero 标语：**向阳而生，驭光而行**。
 
@@ -102,6 +102,12 @@ These are **ready to use now** (`pnpm` installed, `xrkh serve` / harness preset;
 | Attachment / plugins | Face attachments; process plugins `tools` · `prompt` · `commands` · **`host`** · **`channel`** · **`policy`** · **`llm`**; CLI user plugin dir + client `web/` overlay; Host `wireComposition*` auto-wiring; **community clients** need no `xrk.host.json` (capability table + `client.js` scan + convention infer — [plugin-loader](./plugin-loader.md)) | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
 | Community plugin Host | `extensions/dsh-compat` + bridge; Face **`contextTimeline`** / **`contextHeaders`** · **`costUsage`** · **`processChannels/list`**; IM WS/sidecar · full-route vision · embedded vectors · GenUI npm · TongFlow Python; `xrkh doctor` · boot auto-wiring | [community-plugins.md](./community-plugins.md) · [ADR-0006](./adr/0006-im-long-lived-gateway.md) · [ADR-0007](./adr/0007-taskflow-external-runtime.md) |
 | Product Web | `apps/web` + `packages/client`; dist assembly · `@file`/`@session` · cross-session prepare · **turn rail / `turnOutline` · `loadThrough`** · Playwright **21/21** (`pnpm test:web`) | [host-face.md](./host-face.md) · [testing.md](./testing.md) · Cordis UI/HMR dev-only via `pnpm dev:web` |
+
+### AGT channel integration
+
+| Mode | Notes | Docs |
+| --- | --- | --- |
+| **SDK module (only)** | AGT `callAI` / `/v1` → `@xrkseek/harness`; durable session · OpenAI live SSE; factory is single-shot completion only | AGT `docs/harness-module-loop.md` · [integrators/agt-bridge.md](./integrators/agt-bridge.md) |
 
 Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CLI `product-web/`. Hero slogan: **向阳而生，驭光而行**.
 
