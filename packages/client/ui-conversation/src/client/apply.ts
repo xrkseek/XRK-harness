@@ -7,14 +7,13 @@ import {
 // Type-only: the ctx.settingsScope Context merge. Cross-plugin collaboration
 // goes through the service, never a value import (client bundle purity gate).
 import type {} from '@xrkseek/client-ui-settings/client'
-import type {} from '@xrkseek/client-ui-layout/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@xrkseek/client-locale/client'
 import type { ViewTab } from './contract/views.ts'
 import type {
   ApprovalWait, ChatNodeTurnDataInjected, ChatScrollPosition, ChatViewInjected, ComposerBarInjected,
   ComposerChainProps, ConversationInjected, ConversationSessionHeaderInjected, ConversationSessionInjected,
-  DetailsInjected,
+  DraftFileUploads,
 } from './contract/slots.ts'
 import type { InputNotice } from './input/contract.ts'
 import { createChatStore } from './stores.ts'
@@ -34,12 +33,12 @@ import { todoDockEntry } from './skeleton/TodoPanel.tsx'
 import { queueDockEntry } from './queue/QueueDock.tsx'
 import { ConversationRoot } from './skeleton/ConversationRoot.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
-import { DetailsPanel } from './skeleton/DetailsPanel.tsx'
 import { en, NS, zh, type ConversationKey } from './locales.ts'
 import { registerConversationNodes } from './conversation-nodes/register.ts'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
 // Side-effect: merge Face `imageLimits` into SessionProjectionMap for InputBar.
 import './image-limits-projection.ts'
+import './file-limits-projection.ts'
 // Side-effect: merge Face `turnOutline` into SessionProjectionMap for ChatView.
 import './turn-outline-projection.ts'
 import { CONVERSATION_SETTINGS_NAMESPACE, type ConversationSettings } from '../submission-settings.ts'
@@ -53,7 +52,7 @@ declare module '@xrkseek/client-ui-slots' {
 
 /** Services required by the conversation plugin. */
 export const inject = [
-  'slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'settingsScope',
+  'slots', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'settingsScope',
   'conversationEvents', 'conversationViews',
 ]
 
@@ -76,6 +75,11 @@ const ABSENT_LEXICON = {
 }
 const ABSENT_MENU_LAUNCHER = {
   getSnapshot: (): string | null => null,
+  subscribe: () => () => {},
+}
+const EMPTY_FILE_UPLOADS: DraftFileUploads = {}
+const ABSENT_FILE_UPLOADS = {
+  getSnapshot: () => EMPTY_FILE_UPLOADS,
   subscribe: () => () => {},
 }
 
@@ -119,7 +123,6 @@ function selectApproval({ interactions }: ComposerChainProps): ApprovalWait | nu
 export function apply(ctx: Context): void {
   const sessions = ctx.sessions
   const workspaces = ctx.workspaces
-  const layout = ctx.layout
   const slots = ctx.slots
 
   registerConversationNodes(ctx)
@@ -299,12 +302,17 @@ export function apply(ctx: Context): void {
           addImages: undefined,
           removeImage: undefined,
           draftImages: undefined,
-          resolveSubmitMode: (running, gesture, steeringAvailable) =>
-            submissionPolicy.resolve(running, gesture, steeringAvailable),
+          retryFile: undefined,
           toggleCommandMenu: undefined,
           stop: undefined,
           command: undefined,
-          hooks: { notices: ABSENT_NOTICES, lexicon: ABSENT_LEXICON, menuLauncher: ABSENT_MENU_LAUNCHER },
+          hooks: {
+            busyEnter: submissionPolicy.busyEnter,
+            notices: ABSENT_NOTICES,
+            lexicon: ABSENT_LEXICON,
+            menuLauncher: ABSENT_MENU_LAUNCHER,
+            fileUploads: ABSENT_FILE_UPLOADS,
+          },
         }
       }
       const conversation = concreteConversation(ctx)
@@ -333,8 +341,7 @@ export function apply(ctx: Context): void {
           shell.removeImage(id)
         },
         draftImages: ids => conversation.draftImages(ids),
-        resolveSubmitMode: (running, gesture, steeringAvailable) =>
-          submissionPolicy.resolve(running, gesture, steeringAvailable),
+        retryFile: (id) => { conversation.retryFileUpload(id) },
         toggleCommandMenu: inputTriggers === undefined
           ? undefined
           : (selection) => {
@@ -360,9 +367,11 @@ export function apply(ctx: Context): void {
           return result.ok && result.value.matched
         },
         hooks: {
+          busyEnter: submissionPolicy.busyEnter,
           notices: shell.notices,
           lexicon: shell.lexicon,
           menuLauncher: inputTriggers?.launcher ?? ABSENT_MENU_LAUNCHER,
+          fileUploads: conversation.fileUploads,
         },
       }
     },
@@ -396,10 +405,10 @@ export function apply(ctx: Context): void {
       const conversation = concreteConversation(ctx)
       const scoped = scopedConversation(sessions, sessionId)
       return {
-        openDetails: (target) => {
-          actions.select(target)
-          layout.openDetails()
-        },
+        // Demoted: product no longer opens the right Detail column. File
+        // preview is Host `/sidebar/*` + community `xrkh-better-sidebar`
+        // wrapping `workspaces.openPath` (see docs/community-plugins.md).
+        openDetails: (_target) => {},
         fileMentions: owner => ctx.get('chatFileMentions')?.forClosing(owner),
         openFile: (path) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
@@ -432,7 +441,7 @@ export function apply(ctx: Context): void {
     },
   }, ChatView)
 
-  // Session stats stick with the composer (composer.dock = stats-line family).
+  // Session stats dual pills stick with the composer (composer.dock).
   slots.register({ name: 'conversation.composer.dock', id: 'stats', order: 0, locale: NS }, StatsLine)
 
   // Class-plugin mount (packages/AGENTS.md service form): the service
@@ -448,16 +457,7 @@ export function apply(ctx: Context): void {
   // registration path into the input dock declared above.
   ctx.plugin(queueDockEntry)
 
-  slots.register({
-    name: 'details',
-    locale: NS,
-    children: {
-      'conversation.details.tool': { kind: 'single', scope: 'session' },
-    },
-    store: chatStore,
-    inject: (): DetailsInjected => ({
-      closeDetails: () => { layout.closeDetails() },
-    }),
-  }, DetailsPanel)
-
+  // Right `details` column stays a layout track (default closed) but is no
+  // longer occupied by DetailsPanel / ToolDetails — demoted in favor of
+  // Host-native `/sidebar/*` + `xrkh-better-sidebar` (overlay panel host).
 }

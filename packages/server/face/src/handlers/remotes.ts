@@ -14,6 +14,7 @@ import {
 } from "../plugin-inventory.js";
 import { openNativePath } from "../host-open-path.js";
 import { buildFaceChannelDiscover, resolveImGatewayWired } from "../process-channels.js";
+import { sessionFeedbackRecord } from "../session-feedback.js";
 import { remoteArgs, type FaceHandler } from "./types.js";
 
 function sessionFromAgentId(
@@ -256,4 +257,26 @@ export const messageFeedbackDelete: FaceHandler = async (
     messageId: String(args.messageId ?? ""),
     ifVersion: args.ifVersion,
   });
+};
+
+/** DSH Typert `sessionFeedback/record` — session-level remark (+ optional slice). */
+export const sessionFeedbackRecordHandler: FaceHandler = async (
+  runtime,
+  _rpcId,
+  payload,
+) => {
+  const args = remoteArgs(payload);
+  return sessionFeedbackRecord(
+    runtime.store,
+    {
+      sessionId: String(args.sessionId ?? ""),
+      text: args.text,
+      category: args.category,
+    },
+    {
+      ...(runtime.feedbackSlicesDir !== undefined
+        ? { slicesDir: runtime.feedbackSlicesDir }
+        : {}),
+    },
+  );
 };

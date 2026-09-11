@@ -8,6 +8,7 @@
 import { Service } from '@xrkseek/cordis'
 import type { Context } from '@xrkseek/cordis'
 import type { ClientContext, ISessions, SessionId } from '@xrkseek/client-runtime/client'
+import type {} from '@xrkseek/client-locale/client'
 import type { InputTriggerSource } from '../types.ts'
 import { InputTriggerController } from './controller.ts'
 import type { InputTriggerServiceContract } from './contract.ts'
@@ -35,6 +36,11 @@ export class InputTriggerService extends Service implements InputTriggerServiceC
    */
   constructor(ctx: Context) {
     super(ctx, 'inputTriggers')
+    // Re-fetch open menus on locale change so built-in descriptions refresh
+    // while the typed query / hit span stay put.
+    ctx.on('locale/change', () => {
+      for (const controller of this.live.controllers.values()) controller.refreshOpenMenu()
+    })
   }
 
   /**

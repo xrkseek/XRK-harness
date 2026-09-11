@@ -44,6 +44,8 @@
     { "path": "presets/minimal" },
     { "path": "presets/harness" },
     { "path": "presets/server" },
-    { "path": "apps/cli" }
+    { "path": "apps/cli" },
+    { "path": "apps/desktop" },
+    { "path": "apps/desktop-host" }
   ]
 }

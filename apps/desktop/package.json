@@ -1,0 +1,42 @@
+{
+  "name": "@xrkseek/harness-desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "XRK Harness Electron desktop shell (private package; not published to public npm). See ADR-0008.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=26"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "apps/desktop"
+  },
+  "main": "./dist/main.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "node ../../scripts/dev-desktop.mjs",
+    "start": "node ../../scripts/dev-desktop.mjs --skip-build",
+    "prepare:runtime": "node ./scripts/prepare-runtime.mjs",
+    "prepare:package-set": "node ./scripts/prepare-package-set.mjs"
+  },
+  "dependencies": {
+    "@xrkseek/server-config": "workspace:*"
+  },
+  "devDependencies": {
+    "pnpm": "11.22.0",
+    "typescript": "^5.7.2"
+  }
+}

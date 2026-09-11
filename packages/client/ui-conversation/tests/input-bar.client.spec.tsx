@@ -68,6 +68,12 @@ interface BenchOptions {
     maxImageDimension: number
     mediaTypes: readonly ('image/png' | 'image/jpeg' | 'image/webp' | 'image/gif')[]
   }
+  /** The `fileLimits` projection value (absent = non-images rejected at intake). */
+  fileLimits?: {
+    maxFileBytes: number
+    maxFilesPerMessage: number
+    maxMessageFileBytes: number
+  }
   draft?: string
   running?: boolean
   /** Streaming partial; keeps Stop when `running` already cleared after cancel. */
@@ -151,6 +157,7 @@ function bench(over?: BenchOptions) {
   if (over?.attachments !== undefined) shell.addImages(over.attachments.map(attachment => attachment.id))
   const stop = vi.fn()
   const removeImage = vi.fn((id: DraftAttachmentId) => { shell.removeImage(id) })
+  const busyEnter = createSnapshotStore<'queue' | 'steer'>(over?.busyEnter ?? 'queue')
   const menuLauncher = createSnapshotStore<string | null>(over?.commandMenuOpen === true ? 'command' : null)
   const slotCalls: { key: string; owner: unknown }[] = []
   const renderSlot = ((key: string, owner: object) => {
@@ -175,7 +182,10 @@ function bench(over?: BenchOptions) {
     useProjection: ((key: string, selector?: (v: unknown) => unknown) =>
       (selector ?? (v => v))(key === 'permissions'
         ? over?.permissions
-        : key === 'plan' ? over?.plan : key === 'imageLimits' ? over?.imageLimits : undefined)),
+        : key === 'plan' ? over?.plan
+          : key === 'imageLimits' ? over?.imageLimits
+            : key === 'fileLimits' ? over?.fileLimits
+              : undefined)),
     useInput: bindSnapshotSelector(shell.state),
     inputActions: shell.actions,
     keyboard: shell,
@@ -185,15 +195,13 @@ function bench(over?: BenchOptions) {
       const attachment = over?.attachments?.find(candidate => candidate.id === id)
       return attachment === undefined ? [] : [attachment]
     }),
-    resolveSubmitMode: (running, gesture, steeringAvailable) => {
-      if (!running || !steeringAvailable) return 'queue'
-      const preferred = over?.busyEnter ?? 'queue'
-      return gesture === 'enter' ? preferred : preferred === 'queue' ? 'steer' : 'queue'
-    },
+    useBusyEnter: bindSnapshotSelector(busyEnter),
     toggleCommandMenu: over?.toggleCommandMenu ?? vi.fn(),
     useNotices: bindSnapshotSelector(shell.notices),
     useLexicon: bindSnapshotSelector(shell.lexicon),
     useMenuLauncher: bindSnapshotSelector(menuLauncher),
+    useFileUploads: bindSnapshotSelector(createSnapshotStore<Record<string, never>>({})),
+    retryFile: vi.fn(),
     stop,
     command: over?.command ?? (() => Promise.resolve(true)),
     // Mirrors the real lookup chain (conversation namespace, then common).
@@ -217,14 +225,24 @@ function bench(over?: BenchOptions) {
   const agentActive = (over?.running === true)
     || (over?.runningCalls?.length ?? 0) > 0
     || hasPartial
-  const primaryStops = agentActive && over?.subagent === undefined
+  const sendableDraft = (over?.draft?.trim() ?? '') !== '' || (over?.attachments?.length ?? 0) > 0
+  const primaryStops = agentActive && over?.subagent === undefined && !sendableDraft
+  const steeringAvailable = over?.subagent === undefined || over.subagent.address.mode === 'continuable'
+  const composerLocked = over?.disabled === true || over?.inert === true
+    || (over?.subagent?.address.mode === 'continuable' && over.subagent.parentAvailable !== true)
+  const plainMessageDraft = sendableDraft && !(over?.draft?.trimStart().startsWith('/') ?? false)
+  const primaryLabel = primaryStops
+    ? '停止生成'
+    : over?.running === true && steeringAvailable && !composerLocked && plainMessageDraft
+      ? (over.busyEnter === 'steer' ? '插话发送' : '排队发送')
+      : '发送消息'
   const button = view.container.querySelector<HTMLButtonElement>(
-    `button[aria-label="${primaryStops ? '停止生成' : '发送消息'}"]`,
+    `button[aria-label="${primaryLabel}"]`,
   )!
   const interruptButton = view.container.querySelector<HTMLButtonElement>('button[aria-label="停止生成"]')
   return {
     view, textarea, button, interruptButton, props, sink, shell, wiring: shell, session, stop, removeImage, slotCalls,
-    menuLauncher,
+    menuLauncher, busyEnter,
     steerQueue: over?.steerQueue,
   }
 }
@@ -662,22 +680,43 @@ describe('Enter semantics', () => {
 })
 
 describe('running and lock semantics', () => {
-  it('running keeps the input free (typing + Enter queue) while the primary turns stop', () => {
-    const { textarea, button, stop, sink } = bench({ running: true, draft: '排队消息' })
+  it('running switches the primary between Stop and Queue Send with the draft', () => {
+    const { textarea, button, stop, sink, shell } = bench({ running: true })
     expect(textarea.disabled).toBe(false)
-    fireEvent.change(textarea, { target: { value: '排队消息2' } })
-    fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('排队消息2', [], 'queue', expect.any(AbortSignal))
     expect(button.getAttribute('aria-label')).toBe('停止生成')
     fireEvent.click(button)
     expect(stop).toHaveBeenCalledTimes(1)
+
+    act(() => { shell.setDraft('排队消息') })
+    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    act(() => { shell.setDraft('   ') })
+    expect(button.getAttribute('aria-label')).toBe('停止生成')
+    act(() => { shell.setDraft('排队消息2') })
+    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    fireEvent.click(button)
+    expect(sink).toHaveBeenCalledWith('排队消息2', [], 'queue', expect.any(AbortSignal))
   })
 
-  it('keeps Stop while a streaming partial remains after running clears', () => {
+  it('running Send follows the busy-state Steer preference and labels the delivery', () => {
+    const { button, sink } = bench({ running: true, busyEnter: 'steer', draft: '按钮插话' })
+    expect(button.getAttribute('aria-label')).toBe('插话发送')
+    fireEvent.click(button)
+    expect(sink).toHaveBeenCalledWith('按钮插话', [], 'steer', expect.any(AbortSignal))
+  })
+
+  it('running Send relabels when the busy-state preference changes live', () => {
+    const { button, busyEnter, sink } = bench({ running: true, draft: '跟随设置' })
+    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    act(() => { busyEnter.set('steer') })
+    expect(button.getAttribute('aria-label')).toBe('插话发送')
+    fireEvent.click(button)
+    expect(sink).toHaveBeenCalledWith('跟随设置', [], 'steer', expect.any(AbortSignal))
+  })
+
+  it('keeps Stop while a streaming partial remains after running clears (empty draft)', () => {
     const { button, stop } = bench({
       running: false,
       partial: { turn: 1, step: 0, blocks: [{ kind: 'text', text: 'still streaming' }] },
-      draft: 'next',
     })
     expect(button.getAttribute('aria-label')).toBe('停止生成')
     fireEvent.click(button)
@@ -747,7 +786,7 @@ describe('running and lock semantics', () => {
         parentAvailable: true,
       },
     })
-    expect(button.getAttribute('aria-label')).toBe('发送消息')
+    expect(button.getAttribute('aria-label')).toBe('排队发送')
     expect(interruptButton).not.toBeNull()
     expect(textarea.disabled).toBe(false)
     fireEvent.click(button)
@@ -797,12 +836,30 @@ describe('running and lock semantics', () => {
     expect(stop).not.toHaveBeenCalled()
   })
 
-  it('keeps both running subagent Enter gestures on Queue transport', () => {
+  it('applies the ordinary Queue/Steer preference to a running continuable child', () => {
     const subagent = {
       address: {
         parentSessionId: 'parent' as SessionId,
         childSessionId: SID,
         mode: 'continuable' as const,
+      },
+      parentAvailable: true,
+    }
+    const plain = bench({ running: true, busyEnter: 'steer', draft: 'plain', subagent })
+    fireEvent.keyDown(plain.textarea, { key: 'Enter' })
+    expect(plain.sink).toHaveBeenCalledWith('plain', [], 'steer', expect.any(AbortSignal))
+
+    const accelerated = bench({ running: true, busyEnter: 'steer', draft: 'accelerated', subagent })
+    fireEvent.keyDown(accelerated.textarea, { key: 'Enter', metaKey: true })
+    expect(accelerated.sink).toHaveBeenCalledWith('accelerated', [], 'queue', expect.any(AbortSignal))
+  })
+
+  it('keeps both running one-shot Enter gestures on Queue transport', () => {
+    const subagent = {
+      address: {
+        parentSessionId: 'parent' as SessionId,
+        childSessionId: SID,
+        mode: 'one-shot' as const,
       },
       parentAvailable: true,
     }

@@ -312,6 +312,38 @@ describe("dsh-compat adapters", () => {
     });
   });
 
+  it("serves /sidebar/file with media MIME for pdf/image/md", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-sidebar-file-"));
+    temps.push(root);
+    writeFileSync(path.join(root, "note.md"), "# hi\n");
+    writeFileSync(path.join(root, "dot.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    writeFileSync(path.join(root, "doc.pdf"), "%PDF-1.4\n");
+    const handler = compatHandler({
+      defaultCwd: root,
+      resolveSessionCwd: () => root,
+    });
+    await withPublicHandler(handler, async (base) => {
+      const md = await fetch(
+        `${base}/sidebar/file?sessionId=s1&path=${encodeURIComponent(path.join(root, "note.md"))}`,
+      );
+      expect(md.status).toBe(200);
+      expect(md.headers.get("content-type")).toMatch(/text\/markdown/);
+      expect(await md.text()).toContain("# hi");
+
+      const png = await fetch(
+        `${base}/sidebar/file?sessionId=s1&path=${encodeURIComponent("dot.png")}`,
+      );
+      expect(png.status).toBe(200);
+      expect(png.headers.get("content-type")).toBe("image/png");
+
+      const pdf = await fetch(
+        `${base}/sidebar/file?sessionId=s1&path=${encodeURIComponent("doc.pdf")}`,
+      );
+      expect(pdf.status).toBe(200);
+      expect(pdf.headers.get("content-type")).toBe("application/pdf");
+    });
+  });
+
   it("lists workspace via /sidebar/api/fs.tree", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-sidebar-"));
     temps.push(root);
@@ -796,6 +828,23 @@ describe("dsh-compat adapters", () => {
         await fetch(`${base}/_dsh/genui/manage/designs`)
       ).json();
       expect(Array.isArray(designs.designs)).toBe(true);
+
+      const promptGet = await fetch(`${base}/api/dsh-genui/prompt`);
+      expect(promptGet.status).toBe(200);
+      const promptBody = (await promptGet.json()) as { enabled: boolean };
+      expect(promptBody.enabled).toBe(false);
+      const promptPost = await fetch(`${base}/api/dsh-genui/prompt`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled: true }),
+      });
+      expect(
+        ((await promptPost.json()) as { enabled: boolean }).enabled,
+      ).toBe(true);
+      const runtime = await fetch(`${base}/dsh-genui/runtime.js`);
+      expect(runtime.status).toBe(200);
+      expect(runtime.headers.get("content-type") ?? "").toMatch(/javascript/);
+      expect(await runtime.text()).toContain("honest stub");
 
       const noema = await (
         await fetch(`${base}/_dsh/dsh-noema/status`)
@@ -1980,6 +2029,209 @@ describe("dsh-compat adapters", () => {
       expect(body.incomplete).toContain("dsh-host");
     });
   });
+
+  it("keeps /_dsh · wallet · mnemon · cost-meter · sidebar honest under product shell chain", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-honest-five-"));
+    temps.push(root);
+    const ws = path.join(root, "ws");
+    mkdirSync(ws, { recursive: true });
+    writeFileSync(path.join(ws, "note.txt"), "hi\n");
+    const pluginsDir = compatPlugins(["dsh-mnemon", "dsh-wallet", "dsh-cost-meter"]);
+    const handler = compatHandler({
+      pluginsDir,
+      xrkHome: path.join(root, "home"),
+      defaultCwd: ws,
+      resolveSessionCwd: () => ws,
+    });
+    await withPublicHandler(handler, async (base) => {
+      // /_dsh/* — generic honest JSON (incomplete: dsh-host), never SPA HTML
+      const dsh = await fetch(`${base}/_dsh/unknown-pkg/status`);
+      expect(dsh.status).toBe(200);
+      expect(dsh.headers.get("content-type") ?? "").toMatch(/json/i);
+      const dshBody = (await dsh.json()) as {
+        ok: boolean;
+        incomplete?: string[];
+        adapter?: string;
+      };
+      expect(dshBody.ok).toBe(true);
+      expect(dshBody.adapter).toBe("xrk-dsh-compat");
+      expect(dshBody.incomplete).toContain("dsh-host");
+
+      // wallet — ready snapshot; balance without Face tags wallet-host (not HTML)
+      const snap = (await (
+        await fetch(`${base}/api/wallet/snapshot`)
+      ).json()) as { ok: boolean; incomplete?: string[] };
+      expect(snap.ok).toBe(true);
+      expect(snap.incomplete).toBeUndefined();
+      const bal = (await (
+        await fetch(`${base}/wallet/api/balance`)
+      ).json()) as { incomplete?: string[] };
+      expect(bal.incomplete).toContain("wallet-host");
+
+      // mnemon — settings RPC scope snapshot (no Cordis host)
+      const mn = await fetch(`${base}/dsh-mnemon-settings/get`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "client-request",
+          rpcId: "m1",
+          method: "get",
+          payload: { namespace: "mnemon" },
+        }),
+      });
+      const mnBody = (await mn.json()) as {
+        result: { ok: boolean; value: { status?: string } };
+      };
+      expect(mnBody.result.ok).toBe(true);
+      expect(mnBody.result.value.status).toBe("ready");
+
+      // cost-meter — *-settings remote-describe seeded defaults (not blank / HTML)
+      const cm = await fetch(`${base}/cost-meter-settings/describe`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "client-request",
+          rpcId: "c1",
+          method: "describe",
+          payload: {},
+        }),
+      });
+      const cmBody = (await cm.json()) as {
+        result: { ok: boolean; value: { enabled?: boolean } };
+      };
+      expect(cmBody.result.ok).toBe(true);
+      expect(cmBody.result.value.enabled).toBe(true);
+
+      // sidebar — Host-native; unknown method → honest JSON error (≠ dsh-compat table)
+      const side = await fetch(`${base}/sidebar/api/no.such.method`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: "s1" }),
+      });
+      expect(side.status).toBe(200);
+      expect(side.headers.get("content-type") ?? "").toMatch(/json/i);
+      const sideBody = (await side.json()) as {
+        ok: boolean;
+        error?: { code?: string; message?: string } | string;
+      };
+      expect(sideBody.ok).toBe(false);
+      expect(sideBody.error).toBeTruthy();
+      if (typeof sideBody.error === "object") {
+        expect(sideBody.error.code).toBe("unsupported");
+      }
+
+      // sidebar changes.ops without Face → empty window (not "unsupported")
+      const changes = (await (
+        await fetch(`${base}/sidebar/api/changes.ops`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sessionId: "s1" }),
+        })
+      ).json()) as { ok: boolean; value: { events: unknown[] } };
+      expect(changes.ok).toBe(true);
+      expect(Array.isArray(changes.value.events)).toBe(true);
+    });
+  });
+
+  it("drives new shape probes from compat-host-suite.json fixture", async () => {
+    const suite = JSON.parse(readFileSync(FIXTURE_SUITE, "utf8")) as {
+      packages: Record<string, SuiteRow>;
+      shapes?: {
+        http?: Array<{
+          path: string;
+          method?: string;
+          body?: Record<string, unknown>;
+          expect: string;
+          incomplete?: string;
+        }>;
+        rpc?: Array<{
+          channel: string;
+          method: string;
+          payload?: Record<string, unknown>;
+          expect: string;
+        }>;
+      };
+    };
+    expect(suite.packages["xrkh-better-sidebar"]?.kind).toBe("client");
+    expect(suite.packages["dsh-genui"]?.version).toBe("0.2.1");
+    expect(suite.packages["dsh-context"]?.version).toBe("0.49.4");
+    expect(Array.isArray(suite.shapes?.http)).toBe(true);
+    expect(Array.isArray(suite.shapes?.rpc)).toBe(true);
+
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-suite-shapes-"));
+    temps.push(root);
+    const handler = compatHandler({
+      pluginsDir: compatPlugins([
+        "dsh-wallet",
+        "dsh-mnemon",
+        "dsh-cost-meter",
+        "dsh-genui",
+      ]),
+      xrkHome: path.join(root, "home"),
+    });
+    await withPublicHandler(handler, async (base) => {
+      for (const row of suite.shapes!.http!) {
+        const method = (row.method ?? "GET").toUpperCase();
+        const res = await fetch(`${base}${row.path}`, {
+          method,
+          ...(row.body
+            ? {
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(row.body),
+              }
+            : {}),
+        });
+        expect(res.status, row.path).toBe(200);
+        if (row.expect === "js-stub") {
+          expect(res.headers.get("content-type") ?? "").toMatch(/javascript/i);
+          expect(await res.text()).toContain("honest stub");
+          continue;
+        }
+        expect(res.headers.get("content-type") ?? "").toMatch(/json/i);
+        const body = (await res.json()) as Record<string, unknown>;
+        if (row.expect === "json-ok") {
+          expect(body.ok, row.path).toBe(true);
+        } else if (row.expect === "json-incomplete") {
+          expect(body.ok, row.path).toBe(true);
+          expect(
+            (body.incomplete as string[] | undefined) ?? [],
+            row.path,
+          ).toContain(row.incomplete);
+        } else if (row.expect === "json-ok-events") {
+          expect(body.ok, row.path).toBe(true);
+          const value = body.value as { events?: unknown[] };
+          expect(Array.isArray(value?.events), row.path).toBe(true);
+        } else {
+          throw new Error(`unknown http expect: ${row.expect}`);
+        }
+      }
+
+      for (const row of suite.shapes!.rpc!) {
+        const res = await fetch(`${base}${row.channel}/${row.method}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            type: "client-request",
+            rpcId: `suite-${row.channel}`,
+            method: row.method,
+            payload: row.payload ?? {},
+          }),
+        });
+        expect(res.status, row.channel).toBe(200);
+        const body = (await res.json()) as {
+          result: { ok: boolean; value: Record<string, unknown> };
+        };
+        expect(body.result.ok, row.channel).toBe(true);
+        if (row.expect === "rpc-ready") {
+          expect(body.result.value.status, row.channel).toBe("ready");
+        } else if (row.expect === "rpc-enabled") {
+          expect(body.result.value.enabled, row.channel).toBe(true);
+        } else {
+          throw new Error(`unknown rpc expect: ${row.expect}`);
+        }
+      }
+    });
+  });
 });
 
 describe("dsh-compat matrix", () => {
@@ -1992,6 +2244,7 @@ describe("dsh-compat matrix", () => {
     } = await import("../src/dsh-compat/dsh-compat-matrix.js");
     expect(listDshCompatGenericIds().length).toBeGreaterThan(10);
     expect(listDshCompatGenericIds()).toContain("dynamic-cordis-runner");
+    expect(listDshCompatGenericIds()).toContain("genui-browser-runtime");
     expect(listDshCompatGapIds()).toEqual([]);
     expect(listDshCompatGapIds()).not.toContain("cordis-fiber-subprocess");
     expect(

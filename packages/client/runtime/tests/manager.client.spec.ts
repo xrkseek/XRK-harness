@@ -389,6 +389,7 @@ describe('subagent catalogs', () => {
       {
         parentSessionId: S1, childSessionId: S2, mode: 'continuable',
         content: [{ type: 'text', text: 'continue' }],
+        delivery: 'queue',
         clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
     ])

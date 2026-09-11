@@ -69,4 +69,18 @@ describe("createRoutingLlmAdapter", () => {
     await routing.chat({ messages: [{ role: "user", content: "hi" }] });
     expect(routing.peekRoute()?.contextWindow).toBe(128_000);
   });
+
+  it("forwards inner systemPromptUpdate for live routes", () => {
+    const routing = createRoutingLlmAdapter({
+      id: "route-spu",
+      getSelection: () => ({ provider: "deepseek", model: "deepseek-flash" }),
+      resolveAdapter: () => {
+        const inner = createReplayAdapter([{ content: "ok" }]);
+        (inner as { systemPromptUpdate?: "in-history" }).systemPromptUpdate =
+          "in-history";
+        return inner;
+      },
+    });
+    expect(routing.systemPromptUpdate).toBe("in-history");
+  });
 });

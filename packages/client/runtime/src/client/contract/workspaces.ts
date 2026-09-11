@@ -54,10 +54,12 @@ export interface IWorkspaces {
    */
   createDirectory(path: string, name: string): Promise<string>
   /**
-   * Open a filesystem path with the Host operating system's default application.
+   * Open a filesystem path with the Host operating system's default application,
+   * or reveal it in the desktop file manager when `reveal` is set.
    * @param path - absolute or host-resolvable path.
+   * @param options - optional reveal-in-folder gesture.
    */
-  openPath(path: string): Promise<void>
+  openPath(path: string, options?: { readonly reveal?: boolean }): Promise<void>
   /**
    * Rename a Workspace.
    * @param workspaceId - target workspace.

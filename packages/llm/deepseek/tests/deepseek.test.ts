@@ -12,6 +12,7 @@ import {
   isDeepSeekVisionModel,
   isOfficialDeepSeekBaseUrl,
   resolveDeepSeekInputModalities,
+  resolveDeepSeekSystemPromptUpdate,
 } from "../src/index.js";
 import { DeepSeekUploadIndex } from "../src/upload-index.js";
 
@@ -27,6 +28,19 @@ describe("deepseek adapter", () => {
   it("detects official baseUrl", () => {
     expect(isOfficialDeepSeekBaseUrl(DEEPSEEK_DEFAULT_BASE_URL)).toBe(true);
     expect(isOfficialDeepSeekBaseUrl("https://gateway.example/v1")).toBe(false);
+  });
+
+  it("catalog declares in-history only for deepseek-flash", () => {
+    expect(resolveDeepSeekSystemPromptUpdate("deepseek-flash")).toBe(
+      "in-history",
+    );
+    expect(resolveDeepSeekSystemPromptUpdate("deepseek-v4-flash")).toBe(
+      undefined,
+    );
+    expect(
+      DEEPSEEK_DEFAULT_CATALOG.find((m) => m.id === "deepseek-flash")
+        ?.systemPromptUpdate,
+    ).toBe("in-history");
   });
 
   it("defaults baseUrl and model; bearer auth", async () => {
@@ -50,7 +64,8 @@ describe("deepseek adapter", () => {
       fetch: fetchMock as unknown as typeof fetch,
     });
     expect(llm.id).toBe("deepseek");
-    expect(llm.inputModalities).toEqual(["text"]);
+    expect(llm.inputModalities).toEqual(["text", "image"]);
+    expect(llm.systemPromptUpdate).toBe("in-history");
     expect(llm.stream).toBeTypeOf("function");
 
     const out = await llm.chat({
@@ -103,6 +118,30 @@ describe("deepseek adapter", () => {
     expect(DEEPSEEK_DEFAULT_CATALOG.map((m) => m.id)).toContain(
       DEEPSEEK_VISION_EXP_MODEL,
     );
+  });
+
+  it("defaults to deepseek-flash with image modality; explicit override wins", () => {
+    expect(DEEPSEEK_DEFAULT_MODEL).toBe("deepseek-flash");
+    expect(DEEPSEEK_DEFAULT_CATALOG[0]?.id).toBe("deepseek-flash");
+    expect(
+      resolveDeepSeekInputModalities({
+        baseUrl: DEEPSEEK_DEFAULT_BASE_URL,
+        model: "deepseek-flash",
+      }),
+    ).toEqual(["text", "image"]);
+    expect(
+      resolveDeepSeekInputModalities({
+        baseUrl: DEEPSEEK_DEFAULT_BASE_URL,
+        model: "deepseek-v4-flash",
+      }),
+    ).toEqual(["text"]);
+    expect(
+      resolveDeepSeekInputModalities({
+        baseUrl: DEEPSEEK_DEFAULT_BASE_URL,
+        model: "deepseek-flash",
+        override: ["text"],
+      }),
+    ).toEqual(["text"]);
   });
 
   it("emits thinking wire when reasoningEffort is set", async () => {
@@ -210,5 +249,90 @@ describe("deepseek adapter", () => {
     expect(
       fetchMock.mock.calls.some(([u]) => String(u).endsWith("/files")),
     ).toBe(true);
+  });
+
+  it("stream keeps tool identity across empty continuation deltas", async () => {
+    // DeepSeek routes through openai-compatible SSE; blank id/name must not
+    // wipe the first-delta identity (corrupt session / Unknown tool loops).
+    const payload = [
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "call_00_x",
+                  type: "function",
+                  function: { name: "get_weather", arguments: "" },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "",
+                  type: "function",
+                  function: { name: "", arguments: '{"city"' },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "",
+                  function: { name: "", arguments: ': "Paris"}' },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      JSON.stringify({
+        choices: [{ finish_reason: "tool_calls", delta: {} }],
+      }),
+    ]
+      .map((row) => `data: ${row}\n\n`)
+      .join("");
+    const llm = createDeepSeekAdapter({
+      apiKey: "sk-ds",
+      fetch: (async () =>
+        new Response(`${payload}data: [DONE]\n\n`, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        })) as unknown as typeof fetch,
+    });
+    const events = [];
+    for await (const ev of llm.stream!({
+      messages: [{ role: "user", content: "hi" }],
+    })) {
+      events.push(ev);
+    }
+    const done = events.find((e) => e.type === "done");
+    expect(done).toMatchObject({
+      type: "done",
+      finishReason: "tool-calls",
+      toolCalls: [
+        {
+          id: "call_00_x",
+          name: "get_weather",
+          arguments: { city: "Paris" },
+        },
+      ],
+    });
   });
 });

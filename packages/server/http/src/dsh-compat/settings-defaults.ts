@@ -138,6 +138,9 @@ export const DSH_SETTINGS_DEFAULTS: Readonly<
     enabled: true,
     designs: [],
   },
+  genuiPrompt: {
+    enabled: false,
+  },
   "chat-import": {
     enabled: true,
     formats: ["json", "markdown"],

@@ -38,6 +38,8 @@ import {
   hostCreateDirectoryHandler,
   hostDescribe,
   hostListDirectoryHandler,
+  hostListOpenInAppsHandler,
+  hostOpenInAppHandler,
   hostOpenPathHandler,
   hostPickDirectory,
 } from "./handlers/host.js";
@@ -84,6 +86,7 @@ import {
   pluginInventorySetEnabled,
   pluginInventoryUpdate,
   processChannelsList,
+  sessionFeedbackRecordHandler,
 } from "./handlers/remotes.js";
 import {
   costMeterFetchPricesRemote,
@@ -118,6 +121,8 @@ const HANDLERS: Record<string, FaceHandler> = {
   "host.listDirectory": hostListDirectoryHandler,
   "host.createDirectory": hostCreateDirectoryHandler,
   "host.openPath": hostOpenPathHandler,
+  "host.listOpenInApps": hostListOpenInAppsHandler,
+  "host.openInApp": hostOpenInAppHandler,
   "session.create": sessionCreate,
   "session.list": sessionList,
   "session.history": sessionHistory,
@@ -187,6 +192,7 @@ const HANDLERS: Record<string, FaceHandler> = {
   "messageFeedback/list": messageFeedbackList,
   "messageFeedback/put": messageFeedbackPut,
   "messageFeedback/delete": messageFeedbackDelete,
+  "sessionFeedback/record": sessionFeedbackRecordHandler,
   "costMeter/getState": bindRuntime(() => costMeterGetStateRemote()),
   "costMeter/updateConfig": bindPayload(costMeterUpdateConfigRemote),
   "costMeter/fetchPrices": bindRuntime(() => costMeterFetchPricesRemote()),

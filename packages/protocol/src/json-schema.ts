@@ -522,10 +522,22 @@ export const sessionEventJsonSchema = {
     },
     {
       type: "object",
-      required: ["type", "ts", "text"],
+      required: ["type", "ts"],
       properties: baseProps({
         type: { const: "feedback/record" },
         text: { type: "string" },
+        category: {
+          enum: [
+            "task-result",
+            "instruction-following",
+            "product-interaction",
+            "service-stability",
+            "resource-cost",
+            "security-privacy-permission",
+            "other",
+          ],
+        },
+        sliceId: { type: "string" },
       }),
       additionalProperties: false,
     },

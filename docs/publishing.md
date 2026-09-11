@@ -63,14 +63,14 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留当前正
 
 | 档 | 版本 | 用途 |
 |------|------|------|
-| **正式 · 当前（@latest）** | **0.3.3** | 奇数正式线；`npm i -g @xrkseek/harness-cli@latest` |
+| **正式 · 当前（@latest）** | **0.3.4** | 奇数正式线；`npm i -g @xrkseek/harness-cli@latest` |
 | **预览 · 末号** | **0.2.7** | 偶数预览线结束；对照留档，不推荐日常安装 |
 
-昔日正式 **0.1.31** → 现 **0.3.3**（经 0.3.0/0.3.1）；昔日预览 **0.0.11**（已撤）→ 现末号 **0.2.7**。预览基线不再作为推荐入口；`preview` dist-tag 去掉。
+昔日正式 **0.1.31** → 现 **0.3.4**（经 0.3.0/0.3.3）；昔日预览 **0.0.11**（已撤）→ 现末号 **0.2.7**。预览基线不再作为推荐入口；`preview` dist-tag 去掉。
 
 npm **不能**同号重发；改坏包就升修订号。中间号用 `npm-prune-withdrawn.mjs` deprecate（Granular token 通常无法 unpublish）。**勿**用空格 / 乱引号 deprecate——会破坏 registry 元数据；清弃用必须传真正的空字符串（脚本经 `npm-cli.js` 处理，避免 Windows `npm.cmd` 吞掉空参）。
 
-GitHub Release 公开页只保留 **v0.3.3** 与 **v0.2.7**。
+GitHub Release 公开页只保留 **v0.3.4** 与 **v0.2.7**。
 
 完整交接：[maintainer](./maintainer.md)。发行说明索引：[releases/](./releases/)。
 
@@ -141,13 +141,13 @@ Rule: **odd minors = formal**, **even = preview**.
 
 | Line | Version | Use |
 |------|---------|-----|
-| **Formal · current (@latest)** | **0.3.3** | Odd formal line; `npm i -g @xrkseek/harness-cli@latest` |
+| **Formal · current (@latest)** | **0.3.4** | Odd formal line; `npm i -g @xrkseek/harness-cli@latest` |
 | **Preview · last** | **0.2.7** | Even preview line ended; archive only |
 
-Formal **0.1.31** → **0.3.3** (via 0.3.0/0.3.1); preview **0.0.11** (withdrawn) → last **0.2.7**. Drop the `preview` dist-tag.
+Formal **0.1.31** → **0.3.4** (via 0.3.0/0.3.3); preview **0.0.11** (withdrawn) → last **0.2.7**. Drop the `preview` dist-tag.
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Deprecate intermediate numbers with `npm-prune-withdrawn.mjs` (Granular tokens usually cannot unpublish). **Do not** deprecate with spaces / broken quotes — that corrupts registry metadata; clearing a deprecation requires a real empty string (the script goes through `npm-cli.js` so Windows `npm.cmd` does not swallow the empty arg).
 
-The GitHub Releases page keeps only **v0.3.3** and **v0.2.7**.
+The GitHub Releases page keeps only **v0.3.4** and **v0.2.7**.
 
 Full handoff: [maintainer](./maintainer.md). Release notes index: [releases/](./releases/).

@@ -1,6 +1,6 @@
 /**
  * Face prompt content → durable ContentBlock[] (DSH-aligned).
- * Wire may carry temporary base64; session log only stores ImageAttachmentRef.
+ * Wire may carry temporary base64; session log only stores attachment refs.
  */
 
 import type { AttachmentStore } from "@xrkseek/attachment";
@@ -19,6 +19,12 @@ export type PromptWirePart =
       readonly mediaType: string;
       readonly data: string;
       readonly name?: string;
+    }
+  | {
+      readonly type: "file";
+      readonly data: string;
+      readonly name?: string;
+      readonly mediaType?: string;
     };
 
 export type DurablePromptResult =
@@ -28,6 +34,13 @@ export type DurablePromptResult =
       readonly code: string;
       readonly message: string;
     };
+
+/** True when content has a non-text part or non-whitespace text (attachment-only OK). */
+export function hasPromptContent(parts: readonly PromptWirePart[]): boolean {
+  return parts.some(
+    (part) => part.type !== "text" || part.text.trim().length > 0,
+  );
+}
 
 function decodeBase64(data: string): Uint8Array | undefined {
   try {
@@ -39,10 +52,18 @@ function decodeBase64(data: string): Uint8Array | undefined {
   }
 }
 
+function mapAttachmentError(err: AttachmentError): DurablePromptResult {
+  return {
+    ok: false,
+    code: err.code.toLowerCase().replaceAll("_", "-"),
+    message: err.message,
+  };
+}
+
 /**
  * Build durable message content from Face `session.prompt` parts.
  * - all text → string (legacy-friendly)
- * - any image → ContentBlock[] after AttachmentStore.saveImages
+ * - any image/file → ContentBlock[] after AttachmentStore admission
  */
 export async function durablePromptContent(
   parts: readonly PromptWirePart[],
@@ -52,8 +73,10 @@ export async function durablePromptContent(
     return { ok: false, code: "invalid-payload", message: "content required" };
   }
 
-  const hasImage = parts.some((p) => p.type === "image");
-  if (!hasImage) {
+  const hasAttachment = parts.some(
+    (p) => p.type === "image" || p.type === "file",
+  );
+  if (!hasAttachment) {
     const text = parts
       .filter((p): p is Extract<PromptWirePart, { type: "text" }> => p.type === "text")
       .map((p) => p.text)
@@ -64,15 +87,20 @@ export async function durablePromptContent(
     return { ok: true, content: text };
   }
 
-  type Pending = {
-    readonly kind: "text";
-    readonly text: string;
-  } | {
-    readonly kind: "image";
-    readonly mediaType: ImageMediaType;
-    readonly data: Uint8Array;
-    readonly name?: string;
-  };
+  type Pending =
+    | { readonly kind: "text"; readonly text: string }
+    | {
+        readonly kind: "image";
+        readonly mediaType: ImageMediaType;
+        readonly data: Uint8Array;
+        readonly name?: string;
+      }
+    | {
+        readonly kind: "file";
+        readonly data: Uint8Array;
+        readonly name?: string;
+        readonly mediaType?: string;
+      };
 
   const pending: Pending[] = [];
   for (const part of parts) {
@@ -80,34 +108,52 @@ export async function durablePromptContent(
       pending.push({ kind: "text", text: part.text });
       continue;
     }
-    if (part.type !== "image") {
-      return {
-        ok: false,
-        code: "invalid-payload",
-        message: "unknown content part",
-      };
+    if (part.type === "image") {
+      if (!isImageMediaType(part.mediaType)) {
+        return {
+          ok: false,
+          code: "unsupported-image-type",
+          message: `unsupported mediaType: ${part.mediaType}`,
+        };
+      }
+      const data = decodeBase64(part.data);
+      if (!data || data.byteLength === 0) {
+        return {
+          ok: false,
+          code: "invalid-payload",
+          message: "image data must be non-empty base64",
+        };
+      }
+      pending.push({
+        kind: "image",
+        mediaType: part.mediaType,
+        data,
+        ...(part.name !== undefined ? { name: part.name } : {}),
+      });
+      continue;
     }
-    if (!isImageMediaType(part.mediaType)) {
-      return {
-        ok: false,
-        code: "unsupported-image-type",
-        message: `unsupported mediaType: ${part.mediaType}`,
-      };
+    if (part.type === "file") {
+      const data = decodeBase64(part.data);
+      if (!data || data.byteLength === 0) {
+        return {
+          ok: false,
+          code: "invalid-payload",
+          message: "file data must be non-empty base64",
+        };
+      }
+      pending.push({
+        kind: "file",
+        data,
+        ...(part.name !== undefined ? { name: part.name } : {}),
+        ...(part.mediaType !== undefined ? { mediaType: part.mediaType } : {}),
+      });
+      continue;
     }
-    const data = decodeBase64(part.data);
-    if (!data || data.byteLength === 0) {
-      return {
-        ok: false,
-        code: "invalid-payload",
-        message: "image data must be non-empty base64",
-      };
-    }
-    pending.push({
-      kind: "image",
-      mediaType: part.mediaType,
-      data,
-      ...(part.name !== undefined ? { name: part.name } : {}),
-    });
+    return {
+      ok: false,
+      code: "invalid-payload",
+      message: "unknown content part",
+    };
   }
 
   const imageInputs = pending
@@ -117,18 +163,25 @@ export async function durablePromptContent(
       mediaType: p.mediaType,
       ...(p.name !== undefined ? { name: p.name } : {}),
     }));
+  const fileInputs = pending
+    .filter((p): p is Extract<Pending, { kind: "file" }> => p.kind === "file")
+    .map((p) => ({
+      data: p.data,
+      ...(p.name !== undefined ? { name: p.name } : {}),
+      ...(p.mediaType !== undefined ? { mediaType: p.mediaType } : {}),
+    }));
 
-  let refs;
+  let imageRefs;
+  let fileRefs;
   try {
-    refs = await attachments.saveImages(imageInputs);
+    imageRefs =
+      imageInputs.length > 0
+        ? await attachments.saveImages(imageInputs)
+        : [];
+    fileRefs =
+      fileInputs.length > 0 ? await attachments.saveFiles(fileInputs) : [];
   } catch (err) {
-    if (isAttachmentError(err)) {
-      return {
-        ok: false,
-        code: err.code.toLowerCase().replaceAll("_", "-"),
-        message: err.message,
-      };
-    }
+    if (isAttachmentError(err)) return mapAttachmentError(err);
     if (err instanceof AttachmentError) {
       return { ok: false, code: "attachment-error", message: err.message };
     }
@@ -137,13 +190,17 @@ export async function durablePromptContent(
 
   const blocks: ContentBlock[] = [];
   let imageIndex = 0;
+  let fileIndex = 0;
   for (const p of pending) {
     if (p.kind === "text") {
       if (p.text.length > 0) blocks.push({ type: "text", text: p.text });
       continue;
     }
-    const ref = refs[imageIndex++]!;
-    blocks.push({ type: "image", attachment: ref });
+    if (p.kind === "image") {
+      blocks.push({ type: "image", attachment: imageRefs[imageIndex++]! });
+      continue;
+    }
+    blocks.push({ type: "file", attachment: fileRefs[fileIndex++]! });
   }
 
   if (blocks.length === 0) {

@@ -1,6 +1,6 @@
 /**
  * Face Client remotes assembly: mount commands / goals / pluginInventory /
- * messageFeedback / dynamicCordisRunner onto `ctx.remote` via the Face gateway.
+ * messageFeedback / sessionFeedback / dynamicCordisRunner onto `ctx.remote` via the Face gateway.
  * Type-only Cordis; no value import of the gateway (bundle purity).
  */
 
@@ -39,6 +39,9 @@ const FACE_REMOTES: FaceRemoteSpec = {
     list: 'args',
     put: 'args',
     delete: 'args',
+  },
+  sessionFeedback: {
+    record: 'args',
   },
   costMeter: {
     getState: [],

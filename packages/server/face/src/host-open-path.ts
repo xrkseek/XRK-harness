@@ -9,9 +9,17 @@ import { dirname } from "node:path";
 import { fullyQualified } from "./host-directory.js";
 import type { FaceRpcResult } from "./types.js";
 
+/**
+ * Whether Face may advertise `canOpenPath` / run `host.openPath`.
+ * Desktop Host sets `XRK_NATIVE_OPEN=1` so the bit stays true without a second opener.
+ */
 export function canOpenNativePath(
   platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
 ): boolean {
+  if (env.XRK_NATIVE_OPEN === "1" || env.XRK_NATIVE_OPEN === "true") {
+    return true;
+  }
   return platform === "win32" || platform === "darwin" || platform === "linux";
 }
 

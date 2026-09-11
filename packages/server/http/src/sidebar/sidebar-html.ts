@@ -7,30 +7,9 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { sendJson } from "../http-json.js";
+import { mediaTypeForPath } from "./sidebar-media-type.js";
 
 const HTML_PREFIX = "/sidebar/html/";
-
-const MIME_BY_EXT: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".htm": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".ico": "image/x-icon",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-  ".ttf": "font/ttf",
-  ".map": "application/json",
-  ".txt": "text/plain; charset=utf-8",
-  ".wasm": "application/wasm",
-};
 
 function fail(code: string, message: string): unknown {
   return { ok: false, error: { code, message } };
@@ -83,11 +62,6 @@ export function decodeSidebarHtmlPath(pathname: string): {
   }
   // POSIX absolute
   return { sessionId, absPath: path.posix.join("/", ...decoded) };
-}
-
-function mimeFor(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  return MIME_BY_EXT[ext] ?? "application/octet-stream";
 }
 
 function underRoot(root: string, target: string): boolean {
@@ -143,7 +117,7 @@ export async function handleSidebarHtml(
     return true;
   }
   res.writeHead(200, {
-    "content-type": mimeFor(abs),
+    "content-type": mediaTypeForPath(abs),
     "content-length": st.size,
     // Preview iframes must not be framed as the product SPA; no CSP that blocks scripts in games.
     "x-content-type-options": "nosniff",

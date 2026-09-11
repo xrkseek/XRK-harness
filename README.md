@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 <img src="./docs/assets/logo-plate.png" alt="XRK Harness" width="128" />
 
@@ -18,7 +18,9 @@
 
 向阳而生，驭光而行
 
-[入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md) · [v0.3.3 发行说明](./docs/releases/v0.3.3.md)
+XRK-Harness 为自研 TypeScript Agent Harness + Server Kit。设计吸收 Codex 与业界 agent harness 在会话、工具与壳交互上的长处；契约以本仓为准。
+
+[入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md) · [v0.3.4 发行说明](./docs/releases/v0.3.4.md)
 
 ## 这是什么
 
@@ -45,7 +47,7 @@ XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agen
 
 ```sh
 mkdir my-workspace && cd my-workspace
-npm install -g @xrkseek/harness-cli@0.3.3
+npm install -g @xrkseek/harness-cli@0.3.4
 xrkh web
 ```
 
@@ -62,7 +64,7 @@ xrkh run --preset minimal --prompt "ping"
 ### 从本仓库源码跑
 
 ```sh
-npm install -g pnpm@11.22.0   # 与 package.json → packageManager 对齐
+npm install -g pnpm@11.22.0 # 与 package.json → packageManager 对齐
 pnpm install
 pnpm build
 pnpm web:build && pnpm client:bundle && pnpm web:assemble
@@ -79,7 +81,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 
 ### 接真模型
 
-优先：网页壳 **设置 → 模型 / 凭据**。  
+优先：网页壳 **设置 → 模型 / 凭据**。 
 可选：复制 `.xrk/.credentials.yaml.example`，或用 brand `apiKeyEnv`（如 `DEEPSEEK_API_KEY`）作无头/CI 旁路。说明：[docs/configuration.md](./docs/configuration.md)。
 
 ## 现在能用到什么程度
@@ -90,7 +92,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 多厂商 LLM Registry | **能跑** |
 | 社区 client（自研兼容器） | **能跑**（IM WS/sidecar · Vision · 记忆 · GenUI npm · TongFlow；`xrkh doctor`） |
 | 产品网页与浏览器 E2E | **能跑**（Playwright **17/17**；`pnpm test:web` 不进 `pnpm check`） |
-| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（**v0.3.3**；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
+| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（**v0.3.4**；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
 
 完整说明：[docs/status.md](./docs/status.md)。
 
@@ -106,30 +108,30 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 自己写工具 / 进程插件 | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | 排障 | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 | [learn](./docs/learn.md) |
-| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.3.3](./docs/releases/v0.3.3.md) · 预览末号 [v0.2.7](./docs/releases/v0.2.7.md)） |
+| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.3.4](./docs/releases/v0.3.4.md) · 预览末号 [v0.2.7](./docs/releases/v0.2.7.md)） |
 | 全部专题索引 | [docs/README.md](./docs/README.md) |
 
 ## 仓库里有什么
 
 ```text
-apps/cli          CLI 入口（@xrkseek/harness-cli；主 bin xrkh）
-apps/web          产品壳源码（组装进 CLI product-web）
-packages/client   浏览器插件（ui-conversation · ui-reference · …）
-packages/context  @file / @session 引用契约（Face 发现路径）
-packages/*        运行时库（仓内多为 private）
-presets/*         接线组合
-docs/             用法与契约教科书
+apps/cli CLI 入口（@xrkseek/harness-cli；主 bin xrkh）
+apps/web 产品壳源码（组装进 CLI product-web）
+packages/client 浏览器插件（ui-conversation · ui-reference · …）
+packages/context @file / @session 引用契约（Face 发现路径）
+packages/* 运行时库（仓内多为 private）
+presets/* 接线组合
+docs/ 用法与契约教科书
 ```
 
 ## 常见问题
 
-**打开 `web` / `serve` 没有界面？**  
+**打开 `web` / `serve` 没有界面？** 
 发行版 CLI 应自带产品壳。本仓库源码需先完成 `web:build` · `client:bundle` · `web:assemble`。
 
-**MCP 连不上？**  
+**MCP 连不上？** 
 默认拒绝连接。在 **设置 → 插件 → MCP** 配置并放行；无头/CI 才用 `XRK_MCP_ALLOW=1`。见 [configuration](./docs/configuration.md) · [MCP](./docs/modules/mcp.md)。
 
-**对话太长、上下文爆了？**  
+**对话太长、上下文爆了？** 
 可用压缩（Settings → 插件 → Agent 循环，或壳内 `/compact`）。见 [session-compaction](./docs/session-compaction.md)。
 
 **装了社区插件但面板报 incomplete？**
@@ -157,7 +159,9 @@ docs/             用法与契约教科书
 
 Grow toward the sun. Harness the light.
 
-[Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Status](./docs/status.md) · [Docs hub](./docs/README.md) · [v0.3.3 release notes](./docs/releases/v0.3.3.md)
+XRK-Harness is an independently developed TypeScript Agent Harness + Server Kit. It absorbs strengths from Codex and peer agent harnesses; this repo’s contracts are authoritative.
+
+[Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Status](./docs/status.md) · [Docs hub](./docs/README.md) · [v0.3.4 release notes](./docs/releases/v0.3.4.md)
 
 ## What this is
 
@@ -184,7 +188,7 @@ Requires **Node.js ≥26**.
 
 ```sh
 mkdir my-workspace && cd my-workspace
-npm install -g @xrkseek/harness-cli@0.3.3
+npm install -g @xrkseek/harness-cli@0.3.4
 xrkh web
 ```
 
@@ -201,7 +205,7 @@ The current directory is the workspace. First run writes user settings and sessi
 ### Run from this repository
 
 ```sh
-npm install -g pnpm@11.22.0   # match package.json → packageManager
+npm install -g pnpm@11.22.0 # match package.json → packageManager
 pnpm install
 pnpm build
 pnpm web:build && pnpm client:bundle && pnpm web:assemble
@@ -218,7 +222,7 @@ Plugin sample: [extensions/example-tools](./extensions/example-tools); workspace
 
 ### Connect a real model
 
-Prefer: web shell **Settings → Models / Credentials**.  
+Prefer: web shell **Settings → Models / Credentials**. 
 Optional: copy `.xrk/.credentials.yaml.example`, or use a brand `apiKeyEnv` (e.g. `DEEPSEEK_API_KEY`) for headless/CI. Details: [docs/configuration.md](./docs/configuration.md).
 
 ## Current maturity
@@ -229,7 +233,7 @@ Optional: copy `.xrk/.credentials.yaml.example`, or use a brand `apiKeyEnv` (e.g
 | Multi-provider LLM Registry | **Working** |
 | Community clients (first-party adapter) | **Working** (IM WS/sidecar · vision · memory · GenUI npm · TongFlow; `xrkh doctor`) |
 | Product web & browser E2E | **Working** (Playwright **17/17**; `pnpm test:web` not in `pnpm check`) |
-| Public CLI package `@xrkseek/harness-cli` | **Working** (**v0.3.3**; primary bin **`xrkh`**, also **`xrk-harness`**) |
+| Public CLI package `@xrkseek/harness-cli` | **Working** (**v0.3.4**; primary bin **`xrkh`**, also **`xrk-harness`**) |
 
 Full matrix: [docs/status.md](./docs/status.md).
 
@@ -245,30 +249,30 @@ Full matrix: [docs/status.md](./docs/status.md).
 | Author tools / process plugins | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | Troubleshoot | [troubleshooting](./docs/troubleshooting.md) |
 | Short digest | [learn](./docs/learn.md) |
-| Release notes | [releases](./docs/releases/) (current [v0.3.3](./docs/releases/v0.3.3.md) · last preview [v0.2.7](./docs/releases/v0.2.7.md)) |
+| Release notes | [releases](./docs/releases/) (current [v0.3.4](./docs/releases/v0.3.4.md) · last preview [v0.2.7](./docs/releases/v0.2.7.md)) |
 | Full index | [docs/README.md](./docs/README.md) |
 
 ## Repository layout
 
 ```text
-apps/cli          CLI entry (@xrkseek/harness-cli; primary bin xrkh)
-apps/web          Product shell source (assembled into CLI product-web)
-packages/client   Browser plugins (ui-conversation · ui-reference · …)
-packages/context  @file / @session mention contracts (Face discovery path)
-packages/*        Runtime libraries (mostly private in-repo)
-presets/*         Wiring compositions
-docs/             Usage and contract docs
+apps/cli CLI entry (@xrkseek/harness-cli; primary bin xrkh)
+apps/web Product shell source (assembled into CLI product-web)
+packages/client Browser plugins (ui-conversation · ui-reference · …)
+packages/context @file / @session mention contracts (Face discovery path)
+packages/* Runtime libraries (mostly private in-repo)
+presets/* Wiring compositions
+docs/ Usage and contract docs
 ```
 
 ## FAQ
 
-**No UI after `web` / `serve`?**  
+**No UI after `web` / `serve`?** 
 Released CLI builds ship the product shell. From this repository, run `web:build` · `client:bundle` · `web:assemble` first.
 
-**MCP will not connect?**  
+**MCP will not connect?** 
 Connections are denied by default. Configure and allow under **Settings → Plugins → MCP**; use `XRK_MCP_ALLOW=1` only for headless/CI. See [configuration](./docs/configuration.md) · [MCP](./docs/modules/mcp.md).
 
-**Context overflow on long chats?**  
+**Context overflow on long chats?** 
 Use compaction (Settings → Plugins → Agent loop, or in-shell `/compact`). See [session-compaction](./docs/session-compaction.md).
 
 **Community plugin panel shows incomplete?**

@@ -34,6 +34,7 @@ export interface ShellJobInfo {
   readonly command: string;
   readonly status: ShellJobStatus;
   readonly startedAt: number;
+  /** Optional; ordinary piped bash jobs omit this (subprocess handle has no pid). */
   readonly pid?: number;
   readonly exitCode?: number | null;
   /** Set when the subprocess exits on a signal (POSIX timeout/abort kills). */
@@ -65,6 +66,7 @@ export interface ShellJobInfo {
 
 export interface ShellStartJobResult {
   readonly id: string;
+  /** Present only when a producer supplies it; ordinary subprocess jobs omit pid. */
   readonly pid?: number;
 }
 
@@ -352,7 +354,6 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
       status: "running",
       startedAt: Date.now(),
       reported: false,
-      ...(handle.pid !== undefined ? { pid: handle.pid } : {}),
       ...(ownerSessionId !== undefined ? { ownerSessionId } : {}),
     };
     jobs.set(id, { info, handle, waiters: 0, settled, markSettled });
@@ -388,10 +389,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
         });
       });
 
-    return {
-      id,
-      ...(handle.pid !== undefined ? { pid: handle.pid } : {}),
-    };
+    return { id };
   }
 
   return {

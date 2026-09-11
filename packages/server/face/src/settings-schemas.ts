@@ -31,6 +31,14 @@ export const DEFAULT_DEEPSEEK_MODELS: ReadonlyArray<{
   readonly inputModalities: Array<"text" | "image">;
 }> = [
   {
+    id: "deepseek-flash",
+    name: "DeepSeek-V41-Flash",
+    description: "",
+    contextWindow: 1_000_000,
+    maxTokens: 384_000,
+    inputModalities: ["text", "image"],
+  },
+  {
     id: "deepseek-v4-flash",
     name: "DeepSeek V4 Flash",
     description: "",
@@ -251,7 +259,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "agent-default-model",
       schema: schemasteryJson(AgentDefaultModelConfig) as FaceSchemaEnvelope,
-      base: { provider: "deepseek", model: "deepseek-v4-flash" },
+      base: { provider: "deepseek", model: "deepseek-flash" },
       applies: "live",
     },
     {

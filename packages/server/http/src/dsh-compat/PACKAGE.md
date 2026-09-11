@@ -23,6 +23,7 @@ Implementation currently lives under `@xrkseek/server-http` at `src/dsh-compat/`
 | `../xrk/plugin-services` · `plugin-mutate` | Inject inventory / mutate ports, or peer the `server-http` xrk surface |
 | `create-host-plugin` → `server-loader` | `peerDependency` |
 | Face bridges（wallet · tokenledger · sidebar） | Optional injection; Host-side `create*FromFace` |
+| Face 面板 `dynamicCordisRunner/*`（`cordis-stub`） | Stays in `@xrkseek/server-face`; inject `cordisHostBridge` / inventory ports — **do not** move into `underlying/` |
 
 ## 迁出步骤 / Extraction Steps
 
@@ -35,5 +36,7 @@ Implementation currently lives under `@xrkseek/server-http` at `src/dsh-compat/`
 ## 红线 / Hard Rules
 
 - Do not import `apps/`, Face runtime, or per-package forks into `underlying/`.  
+- Panel Face (`dynamicCordisRunner/*`) stays in `server-face`; this package only exposes apply / RPC bridges the panel calls.  
 - New capabilities extend the capability table plus named modules; do not stack adapters for a single community package.  
 - Community clients install on the user’s machine; this package only provides the **XRK Host contract**.
+- Regression shapes for HTTP/RPC live in `tests/fixtures/compat-host-suite.json` (`shapes`), not as per-package adapter forks.

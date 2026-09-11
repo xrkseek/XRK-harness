@@ -331,7 +331,7 @@ describe('QueueDock', () => {
     })
   })
 
-  it('renders a session-backed subagent Queue without unsupported actions', () => {
+  it('renders ordinary queue actions for a continuable child', () => {
     const snap = {
       ...snapshotWith([row('i-subagent', 'pending child follow-up')]),
       subagent: {
@@ -339,6 +339,29 @@ describe('QueueDock', () => {
           parentSessionId: 'parent' as SessionId,
           childSessionId: SID,
           mode: 'continuable' as const,
+        },
+        parentAvailable: false,
+      },
+    }
+    const source = liveSession(snap)
+    const view = render(
+      <QueueDock {...kitFor(snap)} useSession={source.useSession} />,
+    )
+
+    expect(view.getByText('pending child follow-up')).toBeTruthy()
+    expect(view.getByLabelText('编辑排队消息')).toBeTruthy()
+    expect(view.getByLabelText('删除排队消息')).toBeTruthy()
+    expect(view.getByLabelText('插话发送')).toBeTruthy()
+  })
+
+  it('keeps a one-shot child Queue read-only', () => {
+    const snap = {
+      ...snapshotWith([row('i-subagent', 'pending child follow-up')]),
+      subagent: {
+        address: {
+          parentSessionId: 'parent' as SessionId,
+          childSessionId: SID,
+          mode: 'one-shot' as const,
         },
         parentAvailable: true,
       },

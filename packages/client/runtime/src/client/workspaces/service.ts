@@ -239,11 +239,16 @@ export class WorkspaceRuntime implements IWorkspaces {
   }
 
   /**
-   * Open a filesystem path with the Host operating system's default application.
+   * Open a filesystem path with the Host operating system's default application,
+   * or reveal it in the desktop file manager when `options.reveal` is set.
    * @param path - absolute or host-resolvable path.
+   * @param options - optional reveal-in-folder gesture.
    */
-  async openPath(path: string): Promise<void> {
-    const response = await this.api.host.openPath({ path })
+  async openPath(path: string, options?: { readonly reveal?: boolean }): Promise<void> {
+    const response = await this.api.host.openPath({
+      path,
+      ...(options?.reveal === true ? { reveal: true } : {}),
+    })
     if (!response.result.ok) {
       throw new Error(`path open failed: ${response.result.error.message}`)
     }

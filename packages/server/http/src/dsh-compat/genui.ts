@@ -1,4 +1,4 @@
-﻿/**
+/**
  * dsh-genui — file-backed design library under ~/.xrk/genui.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -14,6 +14,8 @@ import {
 } from "./genui-npm-bridge.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
+import { createPersistedSettingsDocStore } from "./persisted-settings-store.js";
+import { dshSettingsDefaults } from "./settings-defaults.js";
 
 export interface GenuiOptions {
   readonly xrkHome?: string;
@@ -97,22 +99,64 @@ function mergeImportedDesigns(
   return next;
 }
 
+/** Composer GenUI prompt toggle — same-origin `/api/dsh-genui/prompt`. */
+function promptControlStore(options: GenuiOptions) {
+  return createPersistedSettingsDocStore(
+    options.xrkHome,
+    "genuiPrompt",
+    dshSettingsDefaults("genuiPrompt"),
+  );
+}
+
+const GENUI_RUNTIME_STUB = `/* xrk-dsh-compat: GenUI Vue/OpenTiny browser runtime not bundled (honest stub). */
+export {};
+`;
+
 export async function handleGenuiHttp(
   req: IncomingMessage,
   res: ServerResponse,
   pathname: string,
   options: GenuiOptions,
 ): Promise<boolean> {
-  if (
-    pathname !== "/.well-known/dsh-genui" &&
-    !pathname.startsWith("/_dsh/genui/") &&
-    pathname !== "/import" &&
-    pathname !== "/default" &&
-    !pathname.startsWith("/preview/")
-  ) {
+  if (!isGenuiPath(pathname)) {
     return false;
   }
   const method = (req.method ?? "GET").toUpperCase();
+
+  // Prompt toggle (dsh-genui composer control) — settings shape, not design CRUD.
+  if (pathname === "/api/dsh-genui/prompt" || pathname === "/api/dsh-genui/prompt/") {
+    const store = promptControlStore(options);
+    if (method === "POST" || method === "PUT" || method === "PATCH") {
+      const body = await parseJsonBody(req);
+      if (typeof body.enabled === "boolean") {
+        store.replaceUser({ enabled: body.enabled });
+      }
+    }
+    const enabled = store.value().enabled === true;
+    sendJson(res, 200, {
+      ok: true,
+      enabled,
+      adapter: "xrk-dsh-compat",
+    });
+    return true;
+  }
+
+  // Browser Vue/OpenTiny CE bundle — product still deferred; stub so script load is honest JSON-free JS.
+  if (pathname === "/dsh-genui/runtime.js") {
+    if (method !== "GET" && method !== "HEAD") {
+      res.writeHead(405, { Allow: "GET, HEAD" });
+      res.end();
+      return true;
+    }
+    res.writeHead(200, {
+      "Content-Type": "text/javascript; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    if (method !== "HEAD") res.end(GENUI_RUNTIME_STUB);
+    else res.end();
+    return true;
+  }
+
   let store = loadStore(options);
 
   if (pathname === "/import") {
@@ -352,6 +396,11 @@ export function isGenuiPath(pathname: string): boolean {
     pathname.startsWith("/_dsh/genui/") ||
     pathname === "/import" ||
     pathname === "/default" ||
-    pathname.startsWith("/preview/")
+    pathname.startsWith("/preview/") ||
+    pathname === "/api/dsh-genui/prompt" ||
+    pathname === "/api/dsh-genui/prompt/" ||
+    pathname.startsWith("/api/dsh-genui/") ||
+    pathname === "/dsh-genui/runtime.js" ||
+    pathname.startsWith("/dsh-genui/")
   );
 }

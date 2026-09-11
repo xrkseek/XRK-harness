@@ -1,6 +1,6 @@
 import type { AgentHandle, AgentRunResult } from "@xrkseek/core-agent";
 import type { LlmAdapter } from "@xrkseek/llm";
-import { createLocalAttachmentStore } from "@xrkseek/attachment-local";
+import { createLocalAttachmentStore, resolveLocalAttachmentsRoot } from "@xrkseek/attachment-local";
 import {
   createMemorySessionStore,
   createPersistentSessionStore,
@@ -213,8 +213,19 @@ export type AgentFactory = (input: {
   plugins: readonly RegisteredPlugin[];
   /** Attachment bytes for vision user content (Host local store). */
   resolveImage?: AgentImageResolver;
+  /**
+   * Resolve uploaded file attachment refs to host paths for model `read_file`
+   * (AttachmentStore.fileHostPath).
+   */
+  resolveFilePath?: (
+    ref: import("@xrkseek/protocol").FileAttachmentRef,
+  ) => string | undefined;
   /** Shared attachment store for tools + vision. */
   attachments?: import("@xrkseek/attachment").AttachmentStore;
+  /**
+   * Extra absolute roots the model may `read_file` (attachment alias tree · spill).
+   */
+  hostReadableRoots?: readonly string[];
   /** Live route image gate for `read_image`. */
   routeAllowsImage?: () => boolean;
   /**
@@ -391,6 +402,7 @@ export function createHostManager(): HostManager {
       const attachments = createLocalAttachmentStore({
         xrkHome: resolveXrkHome(),
       });
+      const attachmentsRoot = resolveLocalAttachmentsRoot(resolveXrkHome());
       /** Filled after Face boot — MCP image gate reads live Registry modalities. */
       const faceForModality: { current?: FaceRuntime } = {};
       const mcpImageAdmission = {
@@ -511,6 +523,10 @@ export function createHostManager(): HostManager {
               ...(wsRow?.title ? { workspaceDisplayTitle: wsRow.title } : {}),
               plugins: loader.list(),
               attachments,
+              hostReadableRoots: [
+                attachmentsRoot,
+                path.join(resolveXrkHome(), "spill"),
+              ],
               routeAllowsImage: () =>
                 faceForModality.current
                   ? liveRouteAllowsImageInput(faceForModality.current, sessionId)
@@ -524,6 +540,7 @@ export function createHostManager(): HostManager {
                   ref: stored.ref,
                 };
               },
+              resolveFilePath: (ref) => attachments.fileHostPath?.(ref),
               ...(sharedPty ? { ptyService: sharedPty.service } : {}),
               ...(sharedShell ? { shellJobs: sharedShell } : {}),
               ...(llmResolverBox.resolve
@@ -690,6 +707,7 @@ export function createHostManager(): HostManager {
           ? {
               subagentPersistPath: path.join(sessionsDir, "subagents.json"),
               goalPersistPath: path.join(sessionsDir, "goals.json"),
+              feedbackSlicesDir: path.join(sessionsDir, "feedback-slices"),
               listProjectionCachePath: path.join(
                 sessionsDir,
                 "projection-list-cache.json",
@@ -1165,8 +1183,15 @@ export function createHostManager(): HostManager {
         },
       });
 
-      const addr = await http.listen();
-      log?.info(`listening ${config.runtime.host}:${addr.port}`);
+      const shouldListen = config.runtime.listen !== false;
+      const addr = shouldListen
+        ? await http.listen()
+        : { host: config.runtime.host, port: 0 };
+      if (shouldListen) {
+        log?.info(`listening ${config.runtime.host}:${addr.port}`);
+      } else {
+        log?.info("http stack ready (listen disabled — pipe / fetch transport)");
+      }
       let status: HostInstance["status"] = "running";
       let stopPromise: Promise<void> | undefined;
 
@@ -1187,7 +1212,7 @@ export function createHostManager(): HostManager {
           return {
             ok: status === "running",
             status,
-            port: addr.port,
+            ...(shouldListen ? { port: addr.port } : {}),
             mcpAllowConnect,
             ...(loadedPluginIds.length
               ? { plugins: loadedPluginIds }

@@ -26,6 +26,7 @@ export {
   handleSidebarCompat,
 } from "./sidebar-adapter.js";
 export { decodeSidebarHtmlPath } from "./sidebar-html.js";
+export { mediaTypeForPath } from "./sidebar-media-type.js";
 export { gitStatus } from "./sidebar-git.js";
 export {
   handleBundleChunkStub,

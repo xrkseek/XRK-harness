@@ -86,6 +86,11 @@ export interface HostRuntimeConfig {
    * Omit → in-memory store (process lifetime only).
    */
   readonly sessionsDir?: string;
+  /**
+   * When `false`, Host builds the HTTP stack but does **not** bind a listen socket
+   * (Desktop pipe transport). Env: `XRK_LISTEN=0`. Default `true`.
+   */
+  readonly listen?: boolean;
 }
 
 export interface HostConfig {
@@ -164,6 +169,11 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
     ...(env.XRK_SESSIONS_DIR && String(env.XRK_SESSIONS_DIR).trim()
       ? { sessionsDir: String(env.XRK_SESSIONS_DIR).trim() }
       : {}),
+    ...(env.XRK_LISTEN === "0" ||
+    env.XRK_LISTEN === "false" ||
+    defaults.listen === false
+      ? { listen: false as const }
+      : {}),
   } as HostRuntimeConfig;
 
   const patch = { ...(input.patch ?? {}) };
@@ -176,6 +186,7 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
     webDist?: string;
     policyFile?: string;
     sessionsDir?: string;
+    listen?: boolean;
   };
   if (typeof patch.port === "number") mutable.port = patch.port;
   if (typeof patch.host === "string") mutable.host = patch.host;
@@ -205,6 +216,7 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
     if (d) mutable.sessionsDir = d;
     else delete mutable.sessionsDir;
   }
+  if (typeof patch.listen === "boolean") mutable.listen = patch.listen;
 
   return {
     credentials: {

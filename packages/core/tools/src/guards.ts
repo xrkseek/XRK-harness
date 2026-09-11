@@ -1,4 +1,20 @@
+import { TOOL_FS_NOT_OBSERVED } from "@xrkseek/protocol";
 import type { GuardVerdict, MonotonicGuard, ToolPipelineContext } from "./types.js";
+
+/** Model-visible FS_NOT_OBSERVED body: path + code + reason. */
+export function formatFsNotObservedContent(path: string): string {
+  return (
+    `Error [${TOOL_FS_NOT_OBSERVED}]: cannot modify "${path}": ` +
+    "file has not been read — read the file, then retry"
+  );
+}
+
+export function fsNotObservedDenyError(): {
+  readonly name: string;
+  readonly code: string;
+} {
+  return { name: "FsNotObservedError", code: TOOL_FS_NOT_OBSERVED };
+}
 
 /**
  * Fold guard verdicts in registration order.
@@ -46,7 +62,7 @@ export function createPolicyToolCallGuard(
 
 /**
  * fs write-intent: deny apply_edit / write_file (or listed tools) unless path was read.
- * Sets ctx.denyReason so the model sees an actionable message (DSH observation policy).
+ * Sets denyReason + denyError (`FS_NOT_OBSERVED`: path + code + reason).
  */
 export function createWriteIntentGuard(options: {
   hasRead: (path: string) => boolean;
@@ -64,7 +80,8 @@ export function createWriteIntentGuard(options: {
       return "deny";
     }
     if (!options.hasRead(path)) {
-      ctx.denyReason = `read_file "${path}" before ${ctx.call.name} (write-intent)`;
+      ctx.denyReason = formatFsNotObservedContent(path);
+      ctx.denyError = fsNotObservedDenyError();
       return "deny";
     }
     return "allow";

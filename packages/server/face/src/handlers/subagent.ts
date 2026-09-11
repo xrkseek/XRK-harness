@@ -141,9 +141,12 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
       },
     };
   }
+  const deliveryRaw = p.delivery
+  const delivery =
+    deliveryRaw === "steer" || deliveryRaw === "queue" ? deliveryRaw : "queue"
   const prompted = await sessionPrompt(runtime, rpcId, {
     sessionId: childSessionId,
-    mode: "queue",
+    mode: delivery,
     content: p.content,
     ...(typeof p.clientTimeZone === "string"
       ? { clientTimeZone: p.clientTimeZone }

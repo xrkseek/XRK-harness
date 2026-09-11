@@ -32,7 +32,9 @@ export function QueueDock({ useSession, updateQueue, notify, t }: QueueDockProps
   const inbox = useSession(s => s.queue)
   const queue = useMemo(() => inbox.filter(row => row.placement === 'queued'), [inbox])
   const running = useSession(s => s.running)
-  const queueMutable = useSession(s => s.subagent === null)
+  // Continuable children share the Host session queue (edit / remove / steer);
+  // one-shot stays a read-only projection of any residual inbox rows.
+  const queueMutable = useSession(s => s.subagent === null || s.subagent.address.mode === 'continuable')
   const [editing, setEditing] = useState<{ id: QueueItemId; text: string } | null>(null)
   const [busy, setBusy] = useState<QueueItemId | null>(null)
   const [collapsed, setCollapsed] = useState(true)

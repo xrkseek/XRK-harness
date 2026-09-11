@@ -11,6 +11,12 @@ export const TOOL_ABORTED_MESSAGE = "Error: tool call aborted";
 export const TOOL_ABORTED_BEFORE_DISPATCH_MESSAGE =
   "Error: tool call aborted before dispatch";
 
+/**
+ * Write-intent observation: path was not read before modify
+ * (DSH `FS_NOT_OBSERVED` / remediateFsError).
+ */
+export const TOOL_FS_NOT_OBSERVED = "FS_NOT_OBSERVED";
+
 export interface ToolCall {
   readonly id: string;
   readonly name: string;

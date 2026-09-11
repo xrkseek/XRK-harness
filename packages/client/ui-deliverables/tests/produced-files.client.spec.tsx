@@ -283,12 +283,14 @@ describe('ProducedFiles row', () => {
   const capability = (
     canOpenPath: boolean | undefined,
     isLoopback = true,
-  ): Pick<ProducedFilesProps, 'isLoopback' | 'useHostDescription'> => {
+    openNativePath: ProducedFilesProps['openNativePath'] = vi.fn(async () => {}),
+  ): Pick<ProducedFilesProps, 'isLoopback' | 'useHostDescription' | 'openNativePath'> => {
     const description = canOpenPath === undefined
       ? undefined
       : { version: 'test', cwd: '/workspace', home: '/home/u', attachedSessions: 1, canOpenPath }
     return {
       isLoopback,
+      openNativePath,
       useHostDescription: selector => selector(description),
     }
   }
@@ -309,6 +311,7 @@ describe('ProducedFiles row', () => {
   it('keeps one measured line, updates on resize, and opens a file or the workspace folder', () => {
     const paths = ['deep/a.html', 'b.css', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts']
     const openFile = vi.fn<(path: string) => void>()
+    const openNativePath = vi.fn(async () => {})
     let available = 226
     let resize: ResizeObserverCallback | undefined
     const disconnect = vi.fn()
@@ -337,43 +340,52 @@ describe('ProducedFiles row', () => {
       })
 
     const view = render(
-      <ProducedFiles matched={paths} openFile={openFile} {...capability(true)} t={t} />,
+      <ProducedFiles matched={paths} openFile={openFile} {...capability(true, true, openNativePath)} t={t} />,
     )
     expect(view.getByText('产物')).toBeTruthy()
     const row = view.container.querySelector('[data-produced-files-row]')
     if (!(row instanceof HTMLElement)) throw new Error('produced row missing')
-    // The third probe is 100px: two chips plus the remainder fit, three do not.
-    expect(within(row).getAllByRole('button')).toHaveLength(2)
+    // Two preview chips (+ two action chevrons when canOpenPath).
+    expect(within(row).getAllByRole('button', { name: /预览/ })).toHaveLength(2)
     expect(within(row).getByText('+ 5 个文件')).toBeTruthy()
-    const chip = view.getByRole('button', { name: '打开 deep/a.html' })
+    const chip = view.getByRole('button', { name: '预览 deep/a.html' })
     expect(chip.textContent).toBe('a.html')
     expect(chip.getAttribute('title')).toBe('deep/a.html')
-    expect(view.queryByRole('button', { name: '打开 g.ts' })).toBeNull()
+    expect(view.queryByRole('button', { name: '预览 g.ts' })).toBeNull()
     fireEvent.click(chip)
     expect(openFile).toHaveBeenCalledWith('deep/a.html')
 
+    fireEvent.click(view.getByRole('button', { name: 'deep/a.html 的更多操作' }))
+    fireEvent.click(view.getByRole('menuitem', { name: '用默认应用打开' }))
+    expect(openNativePath).toHaveBeenCalledWith('deep/a.html', {})
+
+    // Menu closes; reopen for reveal.
+    fireEvent.click(view.getByRole('button', { name: 'deep/a.html 的更多操作' }))
+    fireEvent.click(view.getByRole('menuitem', { name: '在资源管理器中显示' }))
+    expect(openNativePath).toHaveBeenCalledWith('deep/a.html', { reveal: true })
+
     const showFolder = view.getByRole('button', { name: '在文件夹中显示' })
     fireEvent.click(showFolder)
-    expect(openFile).toHaveBeenLastCalledWith('.')
+    expect(openNativePath).toHaveBeenLastCalledWith('.', { reveal: true })
 
     available = 150
     act(() => { resize?.([], {} as ResizeObserver) })
-    expect(within(row).getAllByRole('button')).toHaveLength(1)
+    expect(within(row).getAllByRole('button', { name: /预览/ })).toHaveLength(1)
     expect(within(row).getByText('+ 6 个文件')).toBeTruthy()
 
     // A missing/unsupported computed gap falls back to zero rather than NaN.
     vi.stubGlobal('getComputedStyle', () => ({ columnGap: '', gap: '' } as CSSStyleDeclaration))
     available = 165
     act(() => { resize?.([], {} as ResizeObserver) })
-    expect(within(row).getAllByRole('button')).toHaveLength(2)
+    expect(within(row).getAllByRole('button', { name: /预览/ })).toHaveLength(2)
 
     // Ref callbacks leave nulls in the probe arrays when the candidate set
     // shrinks; the replacement observer must skip those stale slots.
     observeNode.mockClear()
     view.rerender(
-      <ProducedFiles matched={paths.slice(0, 1)} openFile={openFile} {...capability(true)} t={t} />,
+      <ProducedFiles matched={paths.slice(0, 1)} openFile={openFile} {...capability(true, true, openNativePath)} t={t} />,
     )
-    expect(within(row).getAllByRole('button')).toHaveLength(1)
+    expect(within(row).getAllByRole('button', { name: /预览/ })).toHaveLength(1)
     expect(observeNode).toHaveBeenCalledTimes(3)
 
     view.unmount()
@@ -462,9 +474,20 @@ describe('plugin registration', () => {
     } as never, () => null)
     const hostDescription = { getSnapshot: () => undefined, subscribe: () => () => {} }
     ctx.provide('connection', {
-      api: { settings: {} },
+      api: {
+        settings: {},
+        host: {
+          openPath: async () => ({ result: { ok: true, value: { opened: true } } }),
+        },
+      },
       isLoopback: false,
       hostDescription,
+    } as never)
+    ctx.provide('sessions', {
+      list: {
+        getSnapshot: () => ({ current: undefined, byId: {} }),
+        subscribe: () => () => {},
+      },
     } as never)
     // ui-theme's Appearance row binds a durable scope through these two.
     ctx.provide('remote', { $on: () => () => {} } as never)
@@ -475,7 +498,14 @@ describe('plugin registration', () => {
     await fiber.await()
     const [entry] = ctx.slots.entries('conversation.chat.turnTail')
     expect(entry).toBeDefined()
-    expect(entry?.inject?.()).toEqual({ isLoopback: false, hooks: { hostDescription } })
+    const injected = entry?.inject?.() as {
+      isLoopback: boolean
+      openNativePath: (path: string) => Promise<void>
+      hooks: { hostDescription: unknown }
+    }
+    expect(injected.isLoopback).toBe(false)
+    expect(injected.hooks).toEqual({ hostDescription })
+    expect(typeof injected.openNativePath).toBe('function')
 
     // The prose face is live while the plugin is: a produced turn yields a
     // resolver whose matches open through the owner-supplied opener.

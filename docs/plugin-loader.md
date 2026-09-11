@@ -204,7 +204,7 @@ xrkh plugin path
 | 写盘 | boot / inventory / disabled 原子写；内容不变不重写 |
 | 进程半部 | Settings 变更后本进程 reconcile；client 仍要刷新页面 |
 
-产品壳 cordis **不会**仅因 `kind:cordis` 变成可管理项。DSH market `disabled` 与 soft-disable 列表对齐。
+产品壳 cordis **不会**仅因 `kind:cordis` 变成可管理项。soft-disable market `disabled` 与 soft-disable 列表对齐。
 
 Host 在 `XRK_PLUGINS_DIR` 未设且该目录已存在时自动用作 `pluginsDir`。即便启动时未配置，只要 `{XRK_HOME}/plugins` 已存在，Host 也会按该绝对路径 reconcile 进程插件与 soft-disable。
 
@@ -438,7 +438,7 @@ Soft-disable disk contract (`@xrkseek/server-loader` `managed-state`, shared by 
 | Writes | Atomic boot / inventory / disabled; skip rewrite when content is unchanged |
 | Process half | In-process reconcile after Settings mutations; client still needs a page refresh |
 
-Product-shell cordis is **not** managed merely because `kind:cordis`. DSH market `disabled` mirrors the soft-disable list.
+Product-shell cordis is **not** managed merely because `kind:cordis`. soft-disable market `disabled` mirrors the soft-disable list.
 
 When `XRK_PLUGINS_DIR` is unset and that directory exists, the Host uses it as `pluginsDir`. Even if unset at spawn, as long as `{XRK_HOME}/plugins` exists the Host reconciles process plugins and soft-disable against that absolute path.
 

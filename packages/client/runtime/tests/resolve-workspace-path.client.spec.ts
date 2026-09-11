@@ -11,6 +11,13 @@ describe('resolveWorkspacePath', () => {
     expect(resolveWorkspacePath('/proj', 'src/a.ts')).toBe('/proj/src/a.ts')
   })
 
+  it('keeps Windows drive-root join qualified', () => {
+    expect(resolveWorkspacePath('C:\\', 'src\\a.ts')).toBe('C:\\src\\a.ts')
+    expect(resolveWorkspacePath('C:\\work\\', 'src\\a.ts')).toBe('C:\\work\\src\\a.ts')
+    expect(resolveWorkspacePath('C:/work/', 'src/a.ts')).toBe('C:/work/src/a.ts')
+    expect(resolveWorkspacePath('C:\\', '.')).toBe('C:\\')
+  })
+
   it('keeps absolute paths', () => {
     expect(resolveWorkspacePath('/proj', '/abs/x')).toBe('/abs/x')
   })

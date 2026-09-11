@@ -136,7 +136,13 @@ describe("tool pipeline", () => {
     });
     expect(body).not.toHaveBeenCalled();
     expect(out.result.isError).toBe(true);
-    expect(out.result.content).toMatch(/read_file .* before apply_edit/);
+    expect(out.result.content).toBe(
+      'Error [FS_NOT_OBSERVED]: cannot modify "a.txt": file has not been read — read the file, then retry',
+    );
+    expect(out.result.error).toEqual({
+      name: "FsNotObservedError",
+      code: "FS_NOT_OBSERVED",
+    });
   });
 
   it("retries transient errors up to maxRetries", async () => {

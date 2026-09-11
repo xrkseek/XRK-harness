@@ -89,6 +89,8 @@ compose        → 零或薄依赖（禁止 kernel → compose）
 |----|------|------|
 | CLI | `apps/cli` | bin **`xrkh`**（亦 `xrk-harness`） |
 | 产品壳 | `apps/web` + `packages/client/*` | serve 用 `apps/web/dist`（gitignore）；组装 `web:build` · `client:bundle` · `web:assemble` |
+| Desktop 壳 | `apps/desktop`（`@xrkseek/harness-desktop`，**private**） | 不进公共 npm；决策 [ADR-0008](./docs/adr/0008-desktop-shell-private-host.md)；根脚本 `build:desktop` / `dev:desktop` / `start:desktop`；能力未做完前勿当产品入口 |
+| Desktop Host | `apps/desktop-host`（`@xrkseek/harness-desktop-host`，**private**） | 上游 Node 子进程入口；组合本仓 Host / Face / Web dist；**禁止** Cordis boot/overlay |
 | Face 验证台 | `apps/console` | `?console=1`；维护者接线工具，**不是** `serve` 缺 dist 时的产品替代 |
 | SDK 表面 | `packages/sdk`（`@xrkseek/harness`） | 对外组合入口 |
 | Host 接线 | `packages/server/host` · `face` · `http` · `config` · `loader` | Face 只对接 wire |

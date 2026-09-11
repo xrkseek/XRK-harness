@@ -91,6 +91,38 @@ importers:
         specifier: ^6.0.0
         version: 6.4.3(@types/node@24.13.3)(lightningcss@1.33.0)
 
+  apps/desktop:
+    dependencies:
+      '@xrkseek/server-config':
+        specifier: workspace:*
+        version: link:../../packages/server/config
+    devDependencies:
+      pnpm:
+        specifier: 11.22.0
+        version: 11.22.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  apps/desktop-host:
+    dependencies:
+      '@xrkseek/harness-desktop':
+        specifier: workspace:*
+        version: link:../desktop
+      '@xrkseek/preset-server':
+        specifier: workspace:*
+        version: link:../../presets/server
+      '@xrkseek/server-config':
+        specifier: workspace:*
+        version: link:../../packages/server/config
+      '@xrkseek/server-host':
+        specifier: workspace:*
+        version: link:../../packages/server/host
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   apps/web:
     devDependencies:
       '@types/node':
@@ -927,6 +959,9 @@ importers:
       '@xrkseek/client-test-runtime':
         specifier: workspace:^
         version: link:../../stubs/xrk-client-test-runtime
+      '@xrkseek/client-ui-commands':
+        specifier: workspace:^
+        version: link:../ui-commands
       '@xrkseek/client-ui-conversation':
         specifier: workspace:^
         version: link:../ui-conversation
@@ -1005,6 +1040,40 @@ importers:
       react:
         specifier: ^18.2.0
         version: 18.3.1
+
+  packages/client/ui-open-in-app:
+    dependencies:
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+    devDependencies:
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.31
+      '@xrkseek/client-connection':
+        specifier: workspace:^
+        version: link:../connection
+      '@xrkseek/client-locale':
+        specifier: workspace:^
+        version: link:../locale
+      '@xrkseek/client-runtime':
+        specifier: workspace:^
+        version: link:../runtime
+      '@xrkseek/client-ui-conversation':
+        specifier: workspace:^
+        version: link:../ui-conversation
+      '@xrkseek/client-ui-primitives':
+        specifier: workspace:^
+        version: link:../ui-primitives
+      '@xrkseek/client-ui-slots':
+        specifier: workspace:^
+        version: link:../ui-slots
+      '@xrkseek/cordis':
+        specifier: workspace:^
+        version: link:../../cordis
+      '@xrkseek/xrk-invariants':
+        specifier: workspace:^
+        version: link:../../stubs/xrk-invariants
 
   packages/client/ui-permission-presets:
     devDependencies:
@@ -5943,6 +6012,11 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
+  pnpm@11.22.0:
+    resolution: {integrity: sha512-H/hwxMYTPf2I+yr8Rt0T1H8JyXlLQ4xv20fKmMrzvBY4HuC+k6CRuOOCTPAfiJ9G19niCRD7C+GrD7W6qA3WIQ==}
+    engines: {node: '>=22.13'}
+    hasBin: true
+
   postcss@8.5.26:
     resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
     engines: {node: ^10 || ^12 || >=14}
@@ -9051,6 +9125,8 @@ snapshots:
       playwright-core: 1.62.1
     optionalDependencies:
       fsevents: 2.3.2
+
+  pnpm@11.22.0: {}
 
   postcss@8.5.26:
     dependencies:

@@ -5,21 +5,29 @@ import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import {
   AttachmentError,
+  DEFAULT_FILE_LIMITS,
   type AttachmentStore,
+  type FileAttachmentLimits,
+  type FileAttachmentRef,
   type ImageAttachmentLimits,
   type ImageAttachmentRef,
   type ImageRequestPolicy,
   type RequestImageAttachment,
+  type SaveFileAttachment,
   type SaveImageAttachment,
+  type StoredFileAttachment,
   type StoredImageAttachment,
 } from "@xrkseek/attachment";
 import { CompressionLimiter } from "./compression-limiter.js";
 import type { NormalizationPolicy } from "./normalization.js";
 import {
+  commitFileAttachment,
   commitPreparedImageFile,
   prepareImageFile,
+  readFileByAttachmentId,
   readImageByAttachmentId,
   readImageFile,
+  storedFilePath,
   validateImageFile,
 } from "./store.js";
 import { readRequestImageFile, requestImageVariantId } from "./request-image.js";
@@ -30,6 +38,7 @@ export {
   commitPreparedImageFile,
   prepareImageFile,
   readImageFile,
+  storedFilePath,
   validateImageFile,
 } from "./store.js";
 export type { PreparedImageFile } from "./store.js";
@@ -40,6 +49,10 @@ export {
   REQUEST_IMAGE_TRANSFORM_VERSION,
 } from "./request-image.js";
 
+/** Absolute `{XRK_HOME}/attachments/v1` root used by the local store. */
+export function resolveLocalAttachmentsRoot(xrkHome?: string): string {
+  return resolveAttachmentsRoot(xrkHome);
+}
 export const DEFAULT_MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 export const DEFAULT_MAX_IMAGES_PER_MESSAGE = 20;
 export const DEFAULT_MAX_MESSAGE_IMAGE_BYTES = 200 * 1024 * 1024;
@@ -61,6 +74,9 @@ export interface CreateLocalAttachmentStoreOptions {
   readonly normalizedImageMaxDimension?: number;
   readonly normalizedImageMaxBytes?: number;
   readonly imageCompressionConcurrency?: number;
+  readonly maxFileBytes?: number;
+  readonly maxFilesPerMessage?: number;
+  readonly maxMessageFileBytes?: number;
 }
 
 function resolveAttachmentsRoot(xrkHome?: string): string {
@@ -167,6 +183,18 @@ export function createLocalAttachmentStore(
       "image/gif",
     ],
   };
+  const fileLimits: FileAttachmentLimits = {
+    ...DEFAULT_FILE_LIMITS,
+    ...(options.maxFileBytes !== undefined
+      ? { maxFileBytes: options.maxFileBytes }
+      : {}),
+    ...(options.maxFilesPerMessage !== undefined
+      ? { maxFilesPerMessage: options.maxFilesPerMessage }
+      : {}),
+    ...(options.maxMessageFileBytes !== undefined
+      ? { maxMessageFileBytes: options.maxMessageFileBytes }
+      : {}),
+  };
   const normalizationPolicy: Readonly<NormalizationPolicy> = {
     maxDimension:
       options.normalizedImageMaxDimension ??
@@ -234,6 +262,7 @@ export function createLocalAttachmentStore(
 
   return {
     imageLimits,
+    fileLimits,
     async validateImage(input: SaveImageAttachment): Promise<void> {
       await compression.run(() =>
         validateImageFile(input, imageLimits, normalizationPolicy),
@@ -297,6 +326,90 @@ export function createLocalAttachmentStore(
           .catch(() => {});
       }
       return operation.wait(signal);
+    },
+    async validateFile(input: SaveFileAttachment): Promise<void> {
+      if (input.data.byteLength === 0) {
+        throw new AttachmentError(
+          "File bytes must be non-empty.",
+          "INVALID_ATTACHMENT_REF",
+        );
+      }
+      if (input.data.byteLength > fileLimits.maxFileBytes) {
+        throw new AttachmentError(
+          "File exceeds the configured byte limit.",
+          "FILE_TOO_LARGE",
+        );
+      }
+    },
+    async saveFiles(
+      inputs: readonly SaveFileAttachment[],
+    ): Promise<readonly FileAttachmentRef[]> {
+      if (inputs.length > fileLimits.maxFilesPerMessage) {
+        throw new AttachmentError(
+          "File batch exceeds the configured file-count limit.",
+          "TOO_MANY_FILES",
+        );
+      }
+      const totalBytes = inputs.reduce((sum, x) => sum + x.data.byteLength, 0);
+      if (totalBytes > fileLimits.maxMessageFileBytes) {
+        throw new AttachmentError(
+          "File batch exceeds the configured aggregate file-byte limit.",
+          "FILES_TOO_LARGE",
+        );
+      }
+      for (const input of inputs) {
+        if (input.data.byteLength === 0) {
+          throw new AttachmentError(
+            "File bytes must be non-empty.",
+            "INVALID_ATTACHMENT_REF",
+          );
+        }
+        if (input.data.byteLength > fileLimits.maxFileBytes) {
+          throw new AttachmentError(
+            "File exceeds the configured byte limit.",
+            "FILE_TOO_LARGE",
+          );
+        }
+      }
+      const refs: FileAttachmentRef[] = [];
+      for (const input of inputs) {
+        refs.push(await commitFileAttachment(root, input));
+      }
+      return refs;
+    },
+    async saveFile(input: SaveFileAttachment): Promise<FileAttachmentRef> {
+      if (input.data.byteLength === 0) {
+        throw new AttachmentError(
+          "File bytes must be non-empty.",
+          "INVALID_ATTACHMENT_REF",
+        );
+      }
+      if (input.data.byteLength > fileLimits.maxFileBytes) {
+        throw new AttachmentError(
+          "File exceeds the configured byte limit.",
+          "FILE_TOO_LARGE",
+        );
+      }
+      return commitFileAttachment(root, input);
+    },
+    async readFile(attachmentId: string): Promise<StoredFileAttachment> {
+      try {
+        return await readFileByAttachmentId(root, attachmentId);
+      } catch (err) {
+        if (
+          err instanceof AttachmentError &&
+          err.code === "ATTACHMENT_NOT_FOUND"
+        ) {
+          throw new AttachmentError(
+            `Attachment not found: ${attachmentId}`,
+            "NOT_FOUND",
+          );
+        }
+        throw err;
+      }
+    },
+    fileHostPath(ref: FileAttachmentRef): string {
+      return storedFilePath(root, ref);
     },
   };
 }

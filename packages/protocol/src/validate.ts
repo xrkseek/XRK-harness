@@ -870,11 +870,37 @@ export function parseSessionEvent(value: unknown): SessionEvent {
       return { type, ts, active };
     }
     case "feedback/record": {
-      const text = reqString(value, "text", type);
-      if (!text.trim()) {
-        throw new SessionEventParseError("text must be non-empty", type);
+      const textRaw = value.text;
+      const text =
+        typeof textRaw === "string" && textRaw.trim().length > 0
+          ? textRaw.trim()
+          : undefined;
+      const categoryRaw = value.category;
+      const category =
+        categoryRaw === "task-result" ||
+        categoryRaw === "instruction-following" ||
+        categoryRaw === "product-interaction" ||
+        categoryRaw === "service-stability" ||
+        categoryRaw === "resource-cost" ||
+        categoryRaw === "security-privacy-permission" ||
+        categoryRaw === "other"
+          ? categoryRaw
+          : undefined;
+      if (categoryRaw !== undefined && category === undefined) {
+        throw new SessionEventParseError("invalid feedback category", type);
       }
-      return { type, ts, text };
+      const sliceIdRaw = value.sliceId;
+      const sliceId =
+        typeof sliceIdRaw === "string" && sliceIdRaw.trim().length > 0
+          ? sliceIdRaw.trim()
+          : undefined;
+      return {
+        type,
+        ts,
+        ...(text !== undefined ? { text } : {}),
+        ...(category !== undefined ? { category } : {}),
+        ...(sliceId !== undefined ? { sliceId } : {}),
+      };
     }
     case "request/header": {
       const reasonRaw = value.reason;

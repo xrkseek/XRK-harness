@@ -25,6 +25,7 @@ import type { ComposerBarProps } from '../contract/slots.ts'
 import { deriveDecorations } from '../input/decorations.ts'
 import type { DraftDecorations } from '../input/decorations.ts'
 import type { EditRange } from '../input/contract.ts'
+import { resolveSubmitMode } from '../input/resolve-submit-mode.ts'
 import { attachmentErrorText, imageSizeText } from '../image-labels.ts'
 import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
 import { ContextMeter } from './ContextMeter.tsx'
@@ -85,9 +86,9 @@ function blockHasVisibleContent(block: { kind: string; text?: string }): boolean
 }
 
 export function InputBar({
-  useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages,
-  resolveSubmitMode, toggleCommandMenu, stop, command, t,
-  renderSlot, useNotices, useLexicon, useMenuLauncher,
+  useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages, retryFile,
+  toggleCommandMenu, stop, command, t,
+  renderSlot, useBusyEnter, useNotices, useLexicon, useMenuLauncher, useFileUploads,
   useProjection, useConnectionState, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessory, overlay, leftItems, rightItems, footer,
@@ -95,6 +96,8 @@ export function InputBar({
   const input = useInput(s => s)
   const notice = useNotices(s => s)
   const lexicon = useLexicon(s => s)
+  const fileUploads = useFileUploads(s => s)
+  const busyEnter = useBusyEnter(s => s)
   const commandMenuOpen = useMenuLauncher(source => source === 'command')
   const promptError = useSession(s => s.promptError) ?? null
   const running = useSession(s => s.running) ?? false
@@ -117,6 +120,11 @@ export function InputBar({
     [draftImages, input?.imageIds],
   )
   const empty = draft.trim() === '' && attachments.length === 0
+  const filesNotReady = attachments.some((attachment) => {
+    if (attachment.kind !== 'file') return false
+    const upload = fileUploads?.[attachment.id]
+    return upload === undefined || upload.status !== 'ready'
+  })
   // Keep Send↔Stop aligned with an open turn tail: optimistic cancel clears
   // `running` before partial/tool rows settle (DSH drain-latch posture).
   const agentActive = running
@@ -135,6 +143,7 @@ export function InputBar({
   // The deployment's image-intake limits (absent while no attachment service
   // is composed — the pre-check below then defers entirely to the host).
   const imageLimits = useProjection('imageLimits')
+  const fileLimits = useProjection('fileLimits')
   // Prompt failures are ordinary failures (no create/attach transaction exists
   // anymore): the toast announces promptError, the draft stays in the machine,
   // and the user resubmits. A remount over a session whose machine still holds
@@ -199,13 +208,15 @@ export function InputBar({
   // Steer / busy-Enter follow Host `running` (open next-step window), not the
   // drain latch: after cancel, partial/tool tails keep Stop via `agentActive`
   // but must not advertise chords the Host will reject as steer-unavailable.
-  const steeringAvailable = subagent === null
+  // Continuable children share busy-Enter Queue/Steer and whole-queue flush;
+  // one-shot stays Queue-only and never exposes interrupt chrome.
+  const steeringAvailable = subagent === null || subagent.address.mode === 'continuable'
   const canSteerQueue = !locked && !machineBusy && !commandMenuOpen && empty && running && steeringAvailable
     && input.queue.some(row => row.placement === 'queued')
   // Chord hints only when a non-empty draft can actually submit — empty Enter
   // is a no-op; whole-queue flush is Cmd/Ctrl+Enter only.
   const busyEnterHint = running && steeringAvailable && !canSteerQueue && !disabled && !empty
-    ? resolveSubmitMode(running, 'enter', steeringAvailable)
+    ? resolveSubmitMode(busyEnter, running, 'enter', steeringAvailable)
     : null
 
   useEffect(() => {
@@ -449,7 +460,7 @@ export function InputBar({
     }
     e.preventDefault()
     if (e.repeat) return // held-down Enter must not machine-gun sends
-    if (locked || machineBusy) return
+    if (locked || machineBusy || filesNotReady) return
     const accelerated = e.ctrlKey || e.metaKey
     // Empty-draft accelerated Enter acts on the queue instead of the (empty)
     // draft: the machine rejects empty drafts, so the gesture steers every
@@ -461,6 +472,7 @@ export function InputBar({
       return
     }
     keyboard.submit(resolveSubmitMode(
+      busyEnter,
       running,
       accelerated ? 'accelerated' : 'enter',
       steeringAvailable,
@@ -538,7 +550,7 @@ export function InputBar({
   // a projected limit is refused as a whole batch, announced immediately, and
   // never enters the rail — no more submit-time failure rolling the rail
   // back. The host enforces the same limits at submit for callers that bypass
-  // this composer. Subagent sessions reject images at intake (not only at RPC).
+  // this composer. Subagent sessions reject attachments at intake (not only at RPC).
   const intakeImages = useCallback((files: readonly File[]): void => {
     if (addImages === undefined || files.length === 0) return
     if (subagent !== null) {
@@ -546,29 +558,53 @@ export function InputBar({
       return
     }
     const rejected = ((): string | null => {
-      if (imageLimits !== undefined) {
-        // Format precedes limits (DeepSeek Chat's filter order): a batch with
-        // a non-image must announce the format problem, not a count or size
-        // it could never pass anyway — addImages rejects it authoritatively.
-        if (files.some(file => !(imageLimits.mediaTypes as readonly string[]).includes(file.type))) {
-          return addImages(files)
-        }
-        if (attachments.length + files.length > imageLimits.maxImagesPerMessage) {
+      const imageTypes = imageLimits?.mediaTypes as readonly string[] | undefined
+      const imageFiles = imageTypes === undefined
+        ? []
+        : files.filter(file => imageTypes.includes(file.type))
+      const otherFiles = imageTypes === undefined
+        ? [...files]
+        : files.filter(file => !imageTypes.includes(file.type))
+
+      if (otherFiles.length > 0 && fileLimits === undefined) {
+        // No fileLimits projection: shell only accepts image MIME types.
+        return t('image.unsupportedType')
+      }
+
+      if (imageLimits !== undefined && imageFiles.length > 0) {
+        const existingImages = attachments.filter(attachment => attachment.kind === 'image')
+        if (existingImages.length + imageFiles.length > imageLimits.maxImagesPerMessage) {
           return t('image.tooMany', { count: imageLimits.maxImagesPerMessage })
         }
-        if (files.some(file => file.size > imageLimits.maxImageBytes)) {
+        if (imageFiles.some(file => file.size > imageLimits.maxImageBytes)) {
           return t('image.fileTooLarge', { size: imageSizeText(imageLimits.maxImageBytes) })
         }
-        const total = attachments.reduce((sum, attachment) => sum + attachment.file.size, 0)
-          + files.reduce((sum, file) => sum + file.size, 0)
+        const total = existingImages.reduce((sum, attachment) => sum + attachment.file.size, 0)
+          + imageFiles.reduce((sum, file) => sum + file.size, 0)
         if (total > imageLimits.maxMessageImageBytes) {
           return t('image.totalTooLarge', { size: imageSizeText(imageLimits.maxMessageImageBytes) })
         }
       }
+
+      if (fileLimits !== undefined && otherFiles.length > 0) {
+        const existingFiles = attachments.filter(attachment => attachment.kind === 'file')
+        if (existingFiles.length + otherFiles.length > fileLimits.maxFilesPerMessage) {
+          return t('file.tooMany', { count: fileLimits.maxFilesPerMessage })
+        }
+        if (otherFiles.some(file => file.size > fileLimits.maxFileBytes)) {
+          return t('file.fileTooLarge', { size: imageSizeText(fileLimits.maxFileBytes) })
+        }
+        const total = existingFiles.reduce((sum, attachment) => sum + attachment.file.size, 0)
+          + otherFiles.reduce((sum, file) => sum + file.size, 0)
+        if (total > fileLimits.maxMessageFileBytes) {
+          return t('file.totalTooLarge', { size: imageSizeText(fileLimits.maxMessageFileBytes) })
+        }
+      }
+
       return addImages(files)
     })()
     if (rejected !== null) showToast(rejected)
-  }, [addImages, attachments, imageLimits, showToast, subagent, t])
+  }, [addImages, attachments, fileLimits, imageLimits, showToast, subagent, t])
 
   const canAcceptDrop = !locked && !machineBusy && addImages !== undefined && subagent === null
 
@@ -593,22 +629,33 @@ export function InputBar({
     if (el !== null) toggleCommandMenu?.(selectionOf(el))
   }
 
-  // Ordinary sessions retain their primary Send/Stop toggle. A continuable
-  // child keeps Send as the primary action and exposes Stop independently so
-  // pointer users can queue follow-ups while its current turn is running.
-  // `agentActive` covers the post-cancel window where `running` cleared but
-  // the streaming tail has not settled yet.
-  const primaryStops = agentActive && subagent === null
+  // An ordinary running session keeps Stop while the composer is empty or
+  // owner-blocked; an actionable draft gets the busy Send action, delivered
+  // through the same mode plain Enter resolves to. The label names that mode
+  // only when the click would deliver a plain message right now — an enabled
+  // button (no pending upload) over a non-empty draft that is neither a
+  // claimed command nor a `/` line headed for adjudication — so it never
+  // describes a delivery the click cannot or does not perform; every other
+  // state keeps plain Send. `agentActive` covers the post-cancel window where
+  // `running` cleared but the streaming tail has not settled yet. A continuable
+  // child keeps Send primary and exposes Stop independently.
+  const primaryStops = agentActive && subagent === null && (empty || blocked !== undefined)
   const interruptible = agentActive && continuable
-  const primaryLabel = primaryStops ? t('input.stop') : t('input.send')
+  const primarySubmitMode = resolveSubmitMode(busyEnter, running, 'enter', steeringAvailable)
+  const plainMessageDraft = !empty && input?.phase === 'plain' && !draft.trimStart().startsWith('/')
+  const primaryLabel = primaryStops
+    ? t('input.stop')
+    : running && steeringAvailable && !disabled && !filesNotReady && plainMessageDraft
+      ? t(primarySubmitMode === 'steer' ? 'input.send.steer' : 'input.send.queue')
+      : t('input.send')
   const onPrimary = (): void => {
     if (primaryStops) {
       stop?.()
       return
     }
-    if (inputActions === undefined) return // absent machine: the button is disabled
-    /* v8 ignore next -- defensive: the primary button is disabled while empty||disabled, so a click cannot reach the false arm. */
-    if (!empty && !disabled && !machineBusy) inputActions.submit()
+    if (keyboard === undefined) return // absent machine: the button is disabled
+    /* v8 ignore next -- defensive: the primary button is disabled for empty, disabled, and pending-upload states. */
+    if (!empty && !disabled && !machineBusy && !filesNotReady) keyboard.submit(primarySubmitMode)
   }
 
   // The Access seat: the projection-fed permission chip (renders nothing
@@ -751,10 +798,20 @@ export function InputBar({
           canAcceptDrop,
           onAddImages: intakeImages,
           onRemoveImage: (id) => { removeImage?.(id) },
-          dropLimits: imageLimits === undefined ? undefined : {
-            count: imageLimits.maxImagesPerMessage,
-            size: imageSizeText(imageLimits.maxImageBytes),
-          },
+          uploads: fileUploads ?? {},
+          onRetryFile: (id) => { retryFile?.(id) },
+          dropLimits: imageLimits === undefined && fileLimits === undefined
+            ? undefined
+            : {
+              count: Math.max(
+                imageLimits?.maxImagesPerMessage ?? 0,
+                fileLimits?.maxFilesPerMessage ?? 0,
+              ),
+              size: imageSizeText(Math.max(
+                imageLimits?.maxImageBytes ?? 0,
+                fileLimits?.maxFileBytes ?? 0,
+              )),
+            },
         })}
         {/* One scrollport, two text layers. The hidden mirror renders draft+'\n' and stretches the
             stack to the draft's FULL height (counting rows by '\n' cannot see soft wraps); the
@@ -859,7 +916,7 @@ export function InputBar({
                 type="button"
                 className={css.primary}
                 aria-label={primaryLabel}
-                disabled={primaryStops ? stop === undefined : empty || disabled || machineBusy}
+                disabled={primaryStops ? stop === undefined : empty || disabled || machineBusy || filesNotReady}
                 onMouseDown={keepFocus}
                 onClick={onPrimary}
               >

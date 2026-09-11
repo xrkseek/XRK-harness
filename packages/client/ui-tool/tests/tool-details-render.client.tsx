@@ -1,4 +1,4 @@
-/** Test adapter for the production conversation.details.tool registration. */
+/** Test adapter for direct ToolDetails mounts (production seat demoted). */
 import type {
   ChatConversationViewNode, ChatSnapshot, ConversationNode, RunningToolCall, SessionId,
 } from '@xrkseek/client-runtime/client'

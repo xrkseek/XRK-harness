@@ -8,7 +8,7 @@
 
 import type { SessionEvent } from "@xrkseek/protocol";
 
-/** DSH default when callers omit maxMessages. */
+/** DSH default when callers omit maxMessages (keep equal to client `PAGE_MESSAGES`). */
 export const DEFAULT_HISTORY_MAX_MESSAGES = 50;
 
 const MESSAGE_TYPES = new Set<string>(["user/message", "assistant/message"]);

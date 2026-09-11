@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/client-ui-conversation",
-  "description": "Conversation domain: skeleton, ordered chat flow, composer with the Host-backed busy-Enter preference, and details host",
+  "description": "Conversation domain: skeleton, ordered chat flow, composer with Host-backed busy send behavior (Enter + Send), and details host",
   "version": "0.1.0-rc.8",
   "repository": {
     "type": "git",

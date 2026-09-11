@@ -1,0 +1,40 @@
+{
+  "name": "@xrkseek/harness-desktop-host",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Private upstream-Node Desktop Host entry for Electron (XRK compose/Face; no Cordis boot). Not published to public npm. See ADR-0008.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=26"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "apps/desktop-host"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@xrkseek/harness-desktop": "workspace:*",
+    "@xrkseek/preset-server": "workspace:*",
+    "@xrkseek/server-config": "workspace:*",
+    "@xrkseek/server-host": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

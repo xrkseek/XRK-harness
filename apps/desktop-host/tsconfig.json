@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../desktop" },
+    { "path": "../../packages/server/host" },
+    { "path": "../../packages/server/config" },
+    { "path": "../../presets/server" }
+  ]
+}

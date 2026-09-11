@@ -627,7 +627,7 @@ describe("/feedback", () => {
     }
   });
 
-  it("records trimmed text once and omits command/run args", async () => {
+  it("records trimmed text once, omits command/run args, and may attach sliceId", async () => {
     const runtime = bareRuntime();
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
     if (!created.result.ok) throw new Error("create");

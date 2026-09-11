@@ -153,6 +153,33 @@ describe('scope tree', () => {
     expect(b.svc.scope(sid('s1'))).toBeUndefined()
   })
 
+  it('does not prune scopes while the list phase is still pending', async () => {
+    const b = bench()
+    expect(b.svc.list.getSnapshot().phase).toBe('pending')
+    b.svc.handleHostEnvelope({
+      rpcId: 'added' as never,
+      payload: {
+        type: 'host/session-added',
+        sessionId: sid('early'),
+        blank: true,
+      } as never,
+    })
+    await Promise.resolve()
+    expect(b.svc.list.getSnapshot().phase).toBe('pending')
+    const scoped = b.svc.scope(sid('early'))
+    expect(scoped).toBeDefined()
+    // Removal while still pending would empty ids and make eligible() false;
+    // prune must no-op until the first successful list lands (ready).
+    b.svc.handleHostEnvelope({
+      rpcId: 'removed' as never,
+      payload: { type: 'host/session-removed', sessionId: sid('early') } as never,
+    })
+    await Promise.resolve()
+    expect(b.svc.list.getSnapshot().phase).toBe('pending')
+    expect(b.svc.list.getSnapshot().ids).not.toContain(sid('early'))
+    expect(b.svc.scope(sid('early'))).toBe(scoped)
+  })
+
   it('keeps the scope when the session merely stops running (frozen ≠ removed)', async () => {
     const b = bench()
     await feedList(b, [{ id: 's1', running: true }])

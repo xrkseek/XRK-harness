@@ -29,6 +29,7 @@ import {
 } from "./sidebar-prefs-store.js";
 import { probeBrowserUrl } from "./sidebar-browser.js";
 import { handleSidebarHtml } from "./sidebar-html.js";
+import { mediaTypeForPath } from "./sidebar-media-type.js";
 import { attachmentContentDisposition } from "../content-disposition.js";
 
 import type { SidebarFaceBridge } from "./sidebar-face-bridge.js";
@@ -545,8 +546,10 @@ export async function handleSidebarHost(
       return true;
     }
     res.writeHead(200, {
-      "content-type": "application/octet-stream",
+      "content-type": mediaTypeForPath(abs),
       "content-length": st.size,
+      "cache-control": "no-cache",
+      "x-content-type-options": "nosniff",
       ...(download
         ? {
             "content-disposition": attachmentContentDisposition(path.basename(abs)),

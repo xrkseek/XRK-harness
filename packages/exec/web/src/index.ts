@@ -73,6 +73,8 @@ export {
   fetchMetaFromValue,
   formatFetchOutput,
   formatSearchOutput,
+  formatWebFetchGuidance,
+  formatWebSearchGuidance,
   presentFetchCall,
   presentFetchResult,
   presentSearchCall,
@@ -80,6 +82,7 @@ export {
   projectSource,
   searchMetaFromResult,
   searchMetaFromValue,
+  type ToolNameSet as WebRoutingToolNameSet,
   type WebFetchMeta,
   type WebSearchMeta,
 } from "./format.js";

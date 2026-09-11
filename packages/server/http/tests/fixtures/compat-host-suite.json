@@ -2,6 +2,7 @@
   "packages": {
     "dshmarket": { "version": "1.0.0", "kind": "client" },
     "dsh-better-sidebar": { "version": "1.0.0", "kind": "client" },
+    "xrkh-better-sidebar": { "version": "0.18.2", "kind": "client" },
     "dsh-mnemon": { "version": "1.0.0", "kind": "client" },
     "vision-router": { "version": "1.0.0", "kind": "client" },
     "vision-toolkit": { "version": "1.0.0", "kind": "client" },
@@ -10,7 +11,7 @@
     "dsh-modlens": { "version": "1.0.0", "kind": "client" },
     "dsh-chat-import": { "version": "1.0.0", "kind": "client" },
     "dsh-pocket": { "version": "1.0.0", "kind": "client" },
-    "dsh-genui": { "version": "1.0.0", "kind": "client" },
+    "dsh-genui": { "version": "0.2.1", "kind": "client" },
     "dsh-noema": { "version": "1.0.0", "kind": "client" },
     "dsh-im-weixin": { "version": "1.0.0", "kind": "client" },
     "dsh-dream-skin": { "version": "1.0.0", "kind": "client" },
@@ -22,11 +23,65 @@
     "dsh-tongflow": { "version": "1.0.0", "kind": "client" },
     "dsh-cost-meter": { "version": "1.5.0", "kind": "client" },
     "dsh-auto-review": { "version": "1.0.0", "kind": "client" },
-    "dsh-context": { "version": "0.25.0", "kind": "client" },
+    "dsh-context": { "version": "0.49.4", "kind": "client" },
     "@liustack/modsearch": { "version": "1.0.0", "kind": "client" },
     "@ychris12138/dsh-usage-stats": { "version": "1.0.0", "kind": "client" },
     "@anionex/dsh-turn-rewind": { "version": "1.0.0", "kind": "client" },
     "@xmanrui/dsh-im": { "version": "1.0.0", "kind": "client" },
     "@xrkseek/dsh-compat": { "version": "0.0.0", "kind": "client" }
+  },
+  "shapes": {
+    "http": [
+      {
+        "path": "/_dsh/unknown-pkg/status",
+        "expect": "json-incomplete",
+        "incomplete": "dsh-host",
+        "note": "Generic /_dsh/* honest JSON (not SPA)"
+      },
+      {
+        "path": "/api/wallet/snapshot",
+        "expect": "json-ok",
+        "note": "Wallet snapshot without Face stays JSON"
+      },
+      {
+        "path": "/wallet/api/balance",
+        "expect": "json-incomplete",
+        "incomplete": "wallet-host",
+        "note": "Balance without Face tags wallet-host"
+      },
+      {
+        "path": "/api/dsh-genui/prompt",
+        "expect": "json-ok",
+        "note": "GenUI composer prompt toggle (0.1.5 shape)"
+      },
+      {
+        "path": "/dsh-genui/runtime.js",
+        "expect": "js-stub",
+        "note": "GenUI browser CE runtime honest ESM stub"
+      },
+      {
+        "path": "/sidebar/api/changes.ops",
+        "method": "POST",
+        "body": { "sessionId": "s1" },
+        "expect": "json-ok-events",
+        "note": "Host-native sidebar; Face-less empty window"
+      }
+    ],
+    "rpc": [
+      {
+        "channel": "/dsh-mnemon-settings",
+        "method": "get",
+        "payload": { "namespace": "mnemon" },
+        "expect": "rpc-ready",
+        "note": "Mnemon settings scope snapshot"
+      },
+      {
+        "channel": "/cost-meter-settings",
+        "method": "describe",
+        "payload": {},
+        "expect": "rpc-enabled",
+        "note": "cost-meter remote-describe seeded defaults"
+      }
+    ]
   }
 }

@@ -2,9 +2,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import { stubSettingsScope } from '@xrkseek/client-test-runtime'
 import {
-  ComposerSubmissionPolicy, DEFAULT_BUSY_ENTER_BEHAVIOR,
+  ComposerSubmissionPolicy, DEFAULT_BUSY_ENTER_BEHAVIOR, resolveSubmitMode,
 } from '../src/client/input/submission-policy.ts'
 import type { ConversationSettings } from '../src/submission-settings.ts'
+
+describe('resolveSubmitMode', () => {
+  it('shares Enter and Send (enter gesture) against the busy preference', () => {
+    expect(resolveSubmitMode('queue', true, 'enter', true)).toBe('queue')
+    expect(resolveSubmitMode('queue', true, 'accelerated', true)).toBe('steer')
+    expect(resolveSubmitMode('steer', true, 'enter', true)).toBe('steer')
+    expect(resolveSubmitMode('steer', true, 'accelerated', true)).toBe('queue')
+    expect(resolveSubmitMode('steer', false, 'enter', true)).toBe('queue')
+    expect(resolveSubmitMode('steer', true, 'enter', false)).toBe('queue')
+  })
+})
 
 describe('ComposerSubmissionPolicy', () => {
   it('defaults to Queue and only applies the preference while running', () => {

@@ -60,12 +60,13 @@ export function estimateRequestTokens(input: {
 }): number {
   let n = estimateMessagesTokens(input.messages);
   // Non-assemble callers may pass system only on the side; avoid double-count
-  // when the same text is already the leading system message.
+  // when the same text is already any system message (leading or in-history
+  // trailing append).
   if (input.system?.trim()) {
-    const leading = input.messages[0];
-    const leadingText =
-      leading?.role === "system" ? messagePlainText(leading) : "";
-    if (leadingText !== input.system) {
+    const alreadyCounted = input.messages.some(
+      (m) => m.role === "system" && messagePlainText(m) === input.system,
+    );
+    if (!alreadyCounted) {
       n += estimateTokens(input.system);
     }
   }

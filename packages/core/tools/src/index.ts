@@ -56,6 +56,8 @@ export {
   createWriteIntentGuard,
   extractPathArg,
   foldGuardVerdicts,
+  formatFsNotObservedContent,
+  fsNotObservedDenyError,
   runGuards,
 } from "./guards.js";
 export { SUBAGENT_ROUTING_PROMPT_TEXT } from "./subagent-prompt.js";

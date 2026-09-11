@@ -1,5 +1,7 @@
 /**
  * Scan staged community client.js against dsh-compat HTTP capability table.
+ * Compare baseline shape: dsh-v0.1.5-rc.1 (audit-only; ADR-0002).
+ * `/sidebar/*` is Host-native (host-sidebar), not a dsh-compat gap.
  *
  *   pnpm exec tsc -b packages/server/http
  *   node scripts/dsh-community-audit.mjs [pluginsRoot]
@@ -68,9 +70,11 @@ if (!fs.existsSync(root)) {
 
 walk(root);
 if (missingByPlugin.size === 0) {
-  console.log("All scanned HTTP paths are covered by the capability table.");
+  console.log(
+    "No dsh-compat uncovered HTTP paths (capability / host-sidebar / npm-registry / community-root / …).",
+  );
 } else {
-  console.log("--- uncovered HTTP paths ---");
+  console.log("--- dsh-compat uncovered HTTP paths ---");
   for (const [id, paths] of [...missingByPlugin.entries()].sort()) {
     console.log(id, paths.join(", "));
   }

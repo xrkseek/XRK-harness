@@ -654,6 +654,33 @@ describe('provider rows', () => {
     // must not have its routes labelled either way.
     expect(screen.queryByText(en.customTag)).toBeNull()
   })
+
+  it('shows a catalog diagnostic while keeping the provider editable', async () => {
+    const failure = 'llm-pi-ai: provider "openai" needs an api'
+    const scripted = scriptedFace({ providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY' } } })
+    scripted.face.llm.providers = vi.fn(() => Promise.resolve(ok({
+      providers: [{
+        provider: 'openai',
+        displayName: 'openai',
+        settingsNs: 'llm-pi-ai',
+        settingsPath: ['providers', 'openai'],
+        active: false,
+        error: failure,
+      }],
+    }))) as never
+    const controller = new ModelsSettingsStore(scripted.face as unknown as WireFace)
+    await controller.load()
+    render(<ModelsSection
+      controller={controller}
+      useSnapshot={bindSnapshotSelector(controller.store)}
+      api={scripted.face as never}
+      t={t}
+    />)
+    expect(screen.getByRole('alert').textContent).toBe(failure)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit openai' }))
+    expect(await screen.findByLabelText(en.keyInput)).toBeTruthy()
+    expect(screen.getByRole('button', { name: en.add })).toBeTruthy()
+  })
 })
 
 describe('hand-declared providers', () => {
@@ -1094,6 +1121,62 @@ describe('hand-declared providers', () => {
     expect(buttonNamed(en.create).disabled).toBe(true)
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
     expect(buttonNamed(en.create).disabled).toBe(false)
+  })
+
+  it.each(['not-a-url', 'localhost:11434', 'ftp://gateway.acme.example/v1'])(
+    'rejects the non-HTTP base URL %j before discovery or creation', (baseURL) => {
+      const { discover, mutate } = mountCard()
+      fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
+      fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+      fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
+      fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: baseURL } })
+
+      expect(screen.getByText(en.customBaseUrlInvalid)).toBeTruthy()
+      expect(screen.getByLabelText(en.baseUrl).getAttribute('aria-invalid')).toBe('true')
+      expect(buttonNamed(en.fetchModels).disabled).toBe(true)
+      expect(buttonNamed(en.fetchModels).title).toBe(en.customBaseUrlInvalid)
+      expect(buttonNamed(en.create).disabled).toBe(true)
+      expect(discover).not.toHaveBeenCalled()
+      expect(mutate).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each([
+    'http://localhost:11434/v1',
+    'http://127.0.0.1:8080/v1',
+    'https://gateway.acme.example:8443/v1',
+  ])('allows the HTTP base URL %j to be interrogated', (baseURL) => {
+    const { discover } = mountCard()
+    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
+    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: baseURL } })
+
+    expect(screen.queryByText(en.customBaseUrlInvalid)).toBeNull()
+    expect(buttonNamed(en.fetchModels).disabled).toBe(false)
+    expect(buttonNamed(en.create).disabled).toBe(false)
+    fireEvent.click(screen.getByText(en.fetchModels))
+    expect(firstProbe(discover)).toMatchObject({ baseURL })
+  })
+
+  it('normalizes surrounding whitespace before interrogating and storing a base URL', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok([{ id: 'm' }])))
+    const { mutate, onClose } = mountCard({}, { discover })
+    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
+    fireEvent.change(screen.getByLabelText(en.baseUrl), {
+      target: { value: '  https://gateway.acme.example/v1  ' },
+    })
+
+    expect(screen.queryByText(en.customBaseUrlInvalid)).toBeNull()
+    fireEvent.click(screen.getByText(en.fetchModels))
+    await waitFor(() => { expect(discover).toHaveBeenCalledTimes(1) })
+    expect(firstProbe(discover)).toMatchObject({ baseURL: 'https://gateway.acme.example/v1' })
+
+    fireEvent.click(await screen.findByText(en.fetchAdopt))
+    await waitFor(() => { expect(buttonNamed(en.create).disabled).toBe(false) })
+    fireEvent.click(screen.getByText(en.create))
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    expect(firstMutate(mutate).ops[0]?.value).toMatchObject({ baseURL: 'https://gateway.acme.example/v1' })
   })
 
   it('surfaces a refused write and a rejected transport without closing', async () => {

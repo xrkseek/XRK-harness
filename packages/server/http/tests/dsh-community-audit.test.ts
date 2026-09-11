@@ -24,6 +24,21 @@ describe("audit-community-client", () => {
     expect(classifyCommunityHttpPath("/api/wallet/snapshot")).toBe("capability");
   });
 
+  it("classifies Host-native /sidebar/* as host-sidebar (not missing)", () => {
+    expect(classifyCommunityHttpPath("/sidebar/api")).toBe("host-sidebar");
+    expect(classifyCommunityHttpPath("/sidebar/upload")).toBe("host-sidebar");
+    expect(classifyCommunityHttpPath("/sidebar/ws/agent-opens")).toBe(
+      "host-sidebar",
+    );
+  });
+
+  it("classifies npm registry /{pkg}/latest probes as npm-registry (not Host gaps)", () => {
+    expect(classifyCommunityHttpPath("/dsh-context/latest")).toBe(
+      "npm-registry",
+    );
+    expect(classifyCommunityHttpPath("/latest")).not.toBe("npm-registry");
+  });
+
   it("flags unknown HTTP paths from client.js scan", () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-audit-"));
     temps.push(root);
@@ -32,11 +47,19 @@ describe("audit-community-client", () => {
       `
       fetch("/wallet/api/balance");
       fetch("/wallet/api/cost?session=s1");
+      fetch("/sidebar/api/fs.tree");
+      fetch("/dsh-context/latest");
+      fetch("/api/dsh-genui/prompt");
+      fetch("/dsh-genui/runtime.js");
       fetch("/totally-unknown/custom-api");
     `,
     );
     const audit = auditCommunityClientSurface(root);
     expect(audit.missingHttp).toEqual(["/totally-unknown/custom-api"]);
     expect(audit.coverage["/wallet/api/balance"]).toBe("capability");
+    expect(audit.coverage["/sidebar/api/fs.tree"]).toBe("host-sidebar");
+    expect(audit.coverage["/dsh-context/latest"]).toBe("npm-registry");
+    expect(audit.coverage["/api/dsh-genui/prompt"]).toBe("capability");
+    expect(audit.coverage["/dsh-genui/runtime.js"]).toBe("capability");
   });
 });

@@ -45,6 +45,14 @@ export interface ToolPipelineContext {
   stage: PipelineStage;
   skippedBody: boolean;
   denyReason?: string;
+  /**
+   * Structured deny class (e.g. `FS_NOT_OBSERVED`).
+   * Copied onto `tool/result.error` when pre/guards deny.
+   */
+  denyError?: {
+    readonly name: string;
+    readonly code: string;
+  };
   readonly additionalContexts: string[];
   /** Typed safety notices → session `safety/notice` (not opaque user/message). */
   readonly safetyNotices: SafetyNoticePayload[];

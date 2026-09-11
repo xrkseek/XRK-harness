@@ -107,7 +107,7 @@ import {
   hasApiRemoteSubagentOwner,
   inspectApiRemoteSession,
 } from '@xrkseek/xrk-api-remotes'
-import { canOpenNativePath, openNativePath, openNativeTextFile } from './native-path-opener.ts'
+import { canOpenNativePath, openNativePath, openNativeTextFile, revealNativePath } from './native-path-opener.ts'
 
 /** Page size when history is called without maxMessages. */
 const DEFAULT_MAX_MESSAGES = 50
@@ -1883,6 +1883,15 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     return openTarget(request, path, signal, open)
   }
 
+  /** Reveal one Host-resolved path in the desktop file manager. */
+  function revealPath(
+    request: RpcRequest<unknown>, path: string, signal: AbortSignal,
+  ): Promise<RpcResponse<{ opened: true }>> {
+    return openTarget(request, path, signal, (target, openSignal) =>
+      revealNativePath(target, openSignal),
+    )
+  }
+
   /** Open one Host-resolved text document in a native editor. */
   function openTextFile(
     request: RpcRequest<unknown>, path: string, signal: AbortSignal,
@@ -2961,7 +2970,32 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
 
       async openPath(request, signal) {
+        if (request.payload.reveal === true) {
+          return revealPath(request, request.payload.path, signal)
+        }
         return openPath(request, request.payload.path, signal)
+      },
+
+      async listOpenInApps(request) {
+        if (!canOpenPaths()) return ok(request, { apps: [] as string[] })
+        const platform = process.platform
+        const id = platform === 'darwin' ? 'finder' : platform === 'win32' ? 'explorer' : 'filemanager'
+        // Stub / non-Face compositions: file-manager only. Product Host Face
+        // probes editors/terminals via host.listOpenInApps.
+        return ok(request, { apps: [id] })
+      },
+
+      async openInApp(request, signal) {
+        const { app, path: target } = request.payload
+        const platform = process.platform
+        const fileManager = platform === 'darwin' ? 'finder' : platform === 'win32' ? 'explorer' : 'filemanager'
+        if (app !== fileManager) {
+          return err(request, {
+            code: 'not-found',
+            message: `app not available: ${app}`,
+          })
+        }
+        return openPath(request, target, signal)
       },
     },
 

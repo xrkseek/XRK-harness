@@ -19,6 +19,13 @@
   padding: 0 var(--dsh-composer-side-clearance) 8px;
 }
 
+/* A mounted stats row in the composer dock (data-composer-stats, StatsLine
+   dual pills) brings its own 4px top pad, so the root's bottom clearance
+   tightens to keep the drawn B8 rhythm. */
+.root:has([data-composer-stats]) {
+  padding-bottom: 4px;
+}
+
 .hero {
   /* No bottom pad in the centered hero, but the side clearance must survive:
      the hero wrapper is full-width on narrow viewports, so this padding is

@@ -18,11 +18,13 @@ import type {
   CandidateRequest, ClientSessionContext, CommandClaim, PickOutcome, InputTriggerCandidate, InputTriggerPick,
   SubmitOutcome,
 } from '@xrkseek/client-ui-input-trigger/client'
-import type { CommandContribution, CommandDecoration, CommandUiContract } from './contract.ts'
+import type { CommandContribution, CommandDecoration, CommandUiContract, CommandUiSpec } from './contract.ts'
 import type { CommandDescriptor } from './directory.ts'
 import { CommandDirectory } from './directory.ts'
 import { PopupSelectController } from './popup.ts'
 import type { TokenSegment } from './popup.ts'
+import { localizeHostCommandDescription } from './host-description.ts'
+import type { TranslateNS } from '@xrkseek/client-locale/client'
 
 declare module '@xrkseek/cordis' {
   interface Events {
@@ -122,6 +124,8 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
 
   private readonly directory: CommandDirectory
   private readonly live: LiveState = { contributions: new Map(), decorations: new Map(), popups: new Map() }
+  /** `command`-namespace translator (built-in Host descriptions). */
+  private readonly t: TranslateNS<'command'>
 
   /**
    * @param ctx - owning root context (plugin fiber; the service registers
@@ -129,6 +133,9 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
    */
   constructor(ctx: Context) {
     super(ctx, 'commandUi')
+    const locale = ctx.get('locale')
+    if (locale === undefined) throw new Error('ui-commands: locale service unavailable')
+    this.t = locale.bind('command')
     this.directory = new CommandDirectory(async (sessionId) => {
       if (this.sessions().subagentAddress(sessionId) !== undefined) return []
       const result = await ctx.remote.commands.list(sessionId)
@@ -246,7 +253,11 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     const seen = new Set<string>()
     for (const c of list) {
       seen.add(c.name)
-      rows.push({ name: c.name, description: c.description, ...(c.input !== undefined ? { hint: c.input.hint } : {}) })
+      rows.push({
+        name: c.name,
+        description: this.hostDescription(c),
+        ...(c.input !== undefined ? { hint: c.input.hint } : {}),
+      })
     }
     for (const contribution of this.live.contributions.values()) {
       if (!contribution.available(session)) continue
@@ -261,22 +272,27 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     )
   }
 
-  /** Decision table, menu column: contribution/decorated-host → popup; host input → claim; host bare → detached execute. */
+  /** Translate exact built-in Host copy while preserving scoped or third-party descriptors verbatim. */
+  private hostDescription(command: CommandDescriptor): string {
+    return localizeHostCommandDescription(command.name, command.description, this.t)
+  }
+
+  /** Decision table, menu column: contribution/decorated-host → popup or action; host input → claim; host bare → detached execute. */
   private dispatch(pick: InputTriggerPick): PickOutcome {
     const name = pick.candidate.name
     const contribution = this.live.contributions.get(name)
     if (contribution !== undefined && contribution.available(pick.session)) {
-      this.openPopup(name, contribution.ui, pick.session, { via: 'menu', span: pick.span })
+      this.invokeUi(name, contribution.ui, pick.session, { via: 'menu', span: pick.span })
       return 'handled'
     }
     const desc = this.directory.resolve(pick.session.sessionId, name)
     if (desc === undefined) return undefined // snapshot swapped between menu and pick → miss
-    // A decoration replaces the HOST row's bare invocation with its popup;
+    // A decoration replaces the HOST row's bare invocation with its UI;
     // it decorates only a resolvable host command (checked above), never
     // manufactures one, and never touches the argument claim below.
     const decoration = this.live.decorations.get(name)
     if (decoration !== undefined && decoration.available(pick.session)) {
-      this.openPopup(name, decoration.ui, pick.session, { via: 'menu', span: pick.span })
+      this.invokeUi(name, decoration.ui, pick.session, { via: 'menu', span: pick.span })
       return 'handled'
     }
     if (desc.input !== undefined) return { claim: this.leadingClaim(desc, pick.session) }
@@ -314,18 +330,18 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     const contribution = this.live.contributions.get(name)
     if (contribution !== undefined && contribution.available(session)) {
       if (!bare) return undefined
-      this.openPopup(name, contribution.ui, session, { via: 'enter', token })
+      this.invokeUi(name, contribution.ui, session, { via: 'enter', token })
       return 'handled'
     }
     await this.directory.ensureReady(session.sessionId, signal)
     const desc = this.directory.resolve(session.sessionId, name)
     if (desc === undefined) return undefined
-    // Bare enter on a decorated host command opens its popup; an argued line
+    // Bare enter on a decorated host command opens its UI; an argued line
     // never consults the decoration (the claim/detached paths below own it).
     if (bare) {
       const decoration = this.live.decorations.get(name)
       if (decoration !== undefined && decoration.available(session)) {
-        this.openPopup(name, decoration.ui, session, { via: 'enter', token })
+        this.invokeUi(name, decoration.ui, session, { via: 'enter', token })
         return 'handled'
       }
     }
@@ -336,10 +352,30 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     return 'handled'
   }
 
+  /**
+   * Run a contribution/decoration UI: action consumes the token and runs;
+   * popupSelect opens the shared shell.
+   */
+  private invokeUi(
+    name: string,
+    ui: CommandUiSpec,
+    session: ClientSessionContext,
+    segment: TokenSegment,
+  ): void {
+    if (ui.kind === 'action') {
+      this.consumeVia(session.sessionId, segment)
+      void Promise.resolve(ui.run(session)).catch((error: unknown) => {
+        console.error(`[ui-commands] action failed for /${name}:`, error)
+      })
+      return
+    }
+    this.openPopup(name, ui, session, segment)
+  }
+
   /** Open the session's popup for one contribution or decoration (menu pick / bare enter). */
   private openPopup(
     name: string,
-    ui: CommandContribution['ui'],
+    ui: Extract<CommandUiSpec, { kind: 'popupSelect' }>,
     session: ClientSessionContext,
     segment: TokenSegment,
   ): void {

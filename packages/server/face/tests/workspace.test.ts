@@ -115,6 +115,34 @@ describe("Face workspace U2", () => {
     expect(v).not.toHaveProperty("exists");
   });
 
+  it("workspace.create rejects paths that are not fully qualified", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-fq-"));
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+
+    const relative = await dispatchFaceMethod(runtime, "workspace.create", "bad1", {
+      path: "relative-only",
+    });
+    expect(relative.result.ok).toBe(false);
+    if (!relative.result.ok) {
+      expect(relative.result.error.code).toBe("bad-request");
+      expect(relative.result.error.message).toMatch(/not fully qualified/);
+    }
+
+    const bareDrive = await dispatchFaceMethod(runtime, "workspace.create", "bad2", {
+      path: "C:",
+    });
+    expect(bareDrive.result.ok).toBe(false);
+  });
+
   it("workspace.create · rename · archiveSession + session cwd attach", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-reg-"));
     const other = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-other-"));

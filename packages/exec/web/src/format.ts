@@ -237,8 +237,46 @@ export function presentFetchResult(
   };
 }
 
-export const WEB_SEARCH_GUIDANCE =
-  "Use the web_search tool to discover current information on the web. It returns an optional answer plus a list of source URLs. Follow up with web_fetch when you need the full content of a specific result, and cite the relevant URLs as markdown links.";
+export type ToolNameSet = ReadonlySet<string> | Iterable<string>;
 
-export const WEB_FETCH_GUIDANCE =
-  "Use the web_fetch tool to retrieve one specific HTTP(S) URL as decoded text (~30s timeout). Prefer concrete page URLs over homepages. Cross-origin redirects are not followed — if the error names a Location URL, call web_fetch on that URL next. Cite the URL as a markdown link when you use its content.";
+function asSet(available: ToolNameSet): ReadonlySet<string> {
+  return available instanceof Set ? available : new Set(available);
+}
+
+/**
+ * web_search guidance; empty when the tool is not available.
+ * Mentions web_fetch only while that tool is also visible (DSH section gate).
+ */
+export function formatWebSearchGuidance(available: ToolNameSet): string {
+  const names = asSet(available);
+  if (!names.has("web_search")) return "";
+  if (names.has("web_fetch")) {
+    return "Use the web_search tool to discover current information on the web. It returns an optional answer plus a list of source URLs. Follow up with web_fetch when you need the full content of a specific result, and cite the relevant URLs as markdown links.";
+  }
+  return "Use the web_search tool to discover current information on the web. It returns an optional answer plus a list of source URLs. Use the returned source snippets when available, and cite the relevant URLs as markdown links.";
+}
+
+/**
+ * web_fetch guidance; empty when the tool is not available.
+ * Mentions web_search only while that tool is also visible.
+ */
+export function formatWebFetchGuidance(available: ToolNameSet): string {
+  const names = asSet(available);
+  if (!names.has("web_fetch")) return "";
+  const searchHint = names.has("web_search")
+    ? " (for example a result from web_search)"
+    : "";
+  return `Use the web_fetch tool to retrieve one specific HTTP(S) URL as decoded text (~30s timeout). Prefer concrete page URLs over homepages${searchHint}. Cross-origin redirects are not followed — if the error names a Location URL, call web_fetch on that URL next. Cite the URL as a markdown link when you use its content.`;
+}
+
+/** Full-surface defaults (both web tools present). */
+export const WEB_SEARCH_GUIDANCE = formatWebSearchGuidance([
+  "web_search",
+  "web_fetch",
+]);
+
+/** Full-surface defaults (both web tools present). */
+export const WEB_FETCH_GUIDANCE = formatWebFetchGuidance([
+  "web_search",
+  "web_fetch",
+]);

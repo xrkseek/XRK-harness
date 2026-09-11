@@ -1,4 +1,4 @@
-import type { ImageAttachmentLimits } from "@xrkseek/attachment";
+import type { FileAttachmentLimits, ImageAttachmentLimits } from "@xrkseek/attachment";
 import type { FaceProjectionRegistry } from "./registry.js";
 import { createTitleProjectionUnit } from "./units/title.js";
 import { createSessionListMetadataUnit } from "./units/session-list-metadata.js";
@@ -6,6 +6,7 @@ import { createTodosProjectionUnit } from "./units/todos.js";
 import { createPermissionsProjectionUnit } from "./units/permissions.js";
 import { createPlanProjectionUnit } from "./units/plan.js";
 import { createImageLimitsProjectionUnit } from "./units/image-limits.js";
+import { createFileLimitsProjectionUnit } from "./units/file-limits.js";
 import { createSessionStatsProjectionUnit } from "./units/session-stats.js";
 import { createTurnOutlineProjectionUnit } from "./units/turn-outline.js";
 import { createTokenUsageProjectionUnit } from "./units/token-usage.js";
@@ -22,6 +23,11 @@ export interface InstallDefaultFaceProjectionsOptions {
    * AttachmentStore — shell treats missing key as no upload surface.
    */
   readonly imageLimits?: ImageAttachmentLimits;
+  /**
+   * When set, register `fileLimits` (boot-constant). Usually paired with
+   * imageLimits while an AttachmentStore is composed.
+   */
+  readonly fileLimits?: FileAttachmentLimits;
 }
 
 /** Register Face default projection units. */
@@ -43,9 +49,13 @@ export function installDefaultFaceProjections(
   const offHeaders = registry.register(createContextHeadersProjectionUnit());
   const offAutoReview = registry.register(createAutoReviewProjectionUnit());
   const offCostUsage = registry.register(createCostUsageProjectionUnit());
-  const offLimits =
+  const offImageLimits =
     options.imageLimits !== undefined
       ? registry.register(createImageLimitsProjectionUnit(options.imageLimits))
+      : undefined;
+  const offFileLimits =
+    options.fileLimits !== undefined
+      ? registry.register(createFileLimitsProjectionUnit(options.fileLimits))
       : undefined;
   return {
     dispose() {
@@ -63,7 +73,8 @@ export function installDefaultFaceProjections(
       offHeaders();
       offAutoReview();
       offCostUsage();
-      offLimits?.();
+      offImageLimits?.();
+      offFileLimits?.();
     },
   };
 }

@@ -76,6 +76,59 @@ describe("goals remotes", () => {
     );
   });
 
+  it("host pause aborts the live agent turn and cancels drain", async () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const aborts: unknown[] = [];
+    const cancels: string[] = [];
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: async () =>
+        ({
+          admit: () => {
+            throw new Error("unused");
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => true,
+          abort(cause) {
+            aborts.push(cause);
+          },
+          setApprovalHandler() {},
+        }) as never,
+      drain: {
+        wake() {},
+        async cancel(id) {
+          cancels.push(id);
+        },
+        isActive() {
+          return true;
+        },
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "goals/create", "g1", {
+      args: {
+        agentId: session.id,
+        request: { objective: "abort on pause" },
+      },
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const ref = (created.result.value as { ref: { id: string; revision: number } })
+      .ref;
+    const paused = await dispatchFaceMethod(runtime, "goals/pause", "g2", {
+      args: { agentId: session.id, ref },
+    });
+    expect(paused.result.ok).toBe(true);
+    expect(aborts).toEqual([{ kind: "user" }]);
+    expect(cancels).toEqual([session.id]);
+    expect(runtime.goals.get(session.id)).toMatchObject({
+      phase: "paused",
+      activation: "disarmed",
+    });
+  });
+
   it("blocks after maxGoalRounds on turn/end", async () => {
     const store = createMemorySessionStore();
     const session = newSession(store);
@@ -136,6 +189,9 @@ describe("goals remotes", () => {
     expect(restored?.revision).toBe(saved?.revision);
     expect(restored?.roundsStarted).toBe(1);
     expect(restored?.objective).toBe("persist me");
+    // Host bind disarms process-local activation so auto-rounds cannot resume
+    // without an explicit user resume after restart.
+    expect(restored?.activation).toBe("disarmed");
     expect(
       listPendingAdmits(store.get(session.id).events, session.id).length,
     ).toBe(admitsBefore);

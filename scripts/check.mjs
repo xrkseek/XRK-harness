@@ -78,6 +78,8 @@ const LINT_PATHS = [
   "packages/sdk",
   "presets",
   "apps/cli/src",
+  "apps/desktop/src",
+  "apps/desktop-host/src",
 ];
 
 // Invoke repo-local CLIs through this script's Node (≥26), not `pnpm exec`
@@ -93,6 +95,20 @@ runNode(path.join(ROOT, "node_modules/eslint/bin/eslint.js"), [
   "--cache-location",
   ".eslintcache",
 ]);
+// Desktop shell menus/dialogs: locale-owned copy (English fallback).
+// Full Client tree shares this checker; AST roll-in deferred until inline copy migrates.
+{
+  const r = spawnSync(
+    NODE,
+    [
+      "--experimental-strip-types",
+      path.join(ROOT, "scripts/verify-client-ui-i18n.ts"),
+      "--desktop-only",
+    ],
+    { stdio: "inherit", cwd: ROOT, env: childEnv() },
+  );
+  if (r.status !== 0) process.exit(r.status ?? 1);
+}
 runNode(path.join(ROOT, "node_modules/vitest/vitest.mjs"), ["run"]);
 runNode(path.join(ROOT, "node_modules/vitest/vitest.mjs"), [
   "run",

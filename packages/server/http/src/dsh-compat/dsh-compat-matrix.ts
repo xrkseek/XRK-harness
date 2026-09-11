@@ -176,7 +176,13 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
     id: "genui-library",
     coverage: "full",
     genericModule: "genui.ts · genui-npm-bridge.ts · host-feature-bridge.ts",
-    note: "Design CRUD/import + schema/HTML/React tree preview + npm component registry",
+    note: "Design CRUD/import + schema/HTML/React tree preview + npm component registry + /api/dsh-genui/prompt toggle",
+  },
+  {
+    id: "genui-browser-runtime",
+    coverage: "honest-stub",
+    genericModule: "genui.ts (/dsh-genui/runtime.js)",
+    note: "Vue/OpenTiny CE bundle not shipped; honest empty ESM stub (community client load may no-op)",
   },
   {
     id: "noema-memory",

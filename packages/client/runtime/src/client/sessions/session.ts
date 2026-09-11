@@ -28,7 +28,11 @@ import type { ProjectionsBaseline } from './projection-store.ts'
 import { resolvedClientTimeZone } from '../time-zone.ts'
 import { SessionQueueMirror } from './queue-mirror.ts'
 
-/** Messages requested per history page. */
+/**
+ * Messages requested per history page (open / loadOlder).
+ * Keep equal to Face `DEFAULT_HISTORY_MAX_MESSAGES` in
+ * `packages/server/face/src/adapt/history-paginate.ts`.
+ */
 export const PAGE_MESSAGES = 50
 
 /** Larger page size while jumping the rail through unloaded history. */
@@ -237,6 +241,7 @@ export class Session implements SessionFace {
             content: content.flatMap(part => part.type === 'text'
               ? [{ type: 'text' as const, text: part.text }]
               : []),
+            delivery: mode,
             clientTimeZone: resolvedClientTimeZone(),
           })).result
           result = routed.ok ? { ok: true, value: { accepted: true } } : routed

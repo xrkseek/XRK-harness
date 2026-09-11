@@ -4,6 +4,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { assertPolicyAllow } from "@xrkseek/policy";
+import { drainToolsListPages } from "./list-tools.js";
 import { assertServerName } from "./names.js";
 import { mapMcpCallContent } from "./project-content.js";
 import { resolveReconnectPolicy } from "./reconnect.js";
@@ -382,19 +383,32 @@ export function createMcpClient(options: McpClientOptions): McpClient {
     },
 
     async listTools() {
-      const result = await requireLive().listTools();
-      return result.tools.map((t): McpToolInfo => {
-        const annotations = parseMcpToolAnnotations(
-          (t as { annotations?: unknown }).annotations,
+      const live = requireLive();
+      return drainToolsListPages(options.serverName, async (cursor) => {
+        const result = await live.listTools(
+          cursor === undefined ? undefined : { cursor },
         );
         return {
-          name: t.name,
-          description: t.description ?? "",
-          inputSchema:
-            t.inputSchema && typeof t.inputSchema === "object"
-              ? (t.inputSchema)
-              : { type: "object", properties: {} },
-          ...(annotations ? { annotations } : {}),
+          tools: result.tools.map((t): McpToolInfo => {
+            const annotations = parseMcpToolAnnotations(
+              (t as { annotations?: unknown }).annotations,
+            );
+            return {
+              name: t.name,
+              description: t.description ?? "",
+              inputSchema:
+                t.inputSchema && typeof t.inputSchema === "object"
+                  ? t.inputSchema
+                  : { type: "object", properties: {} },
+              ...(annotations ? { annotations } : {}),
+            };
+          }),
+          ...("nextCursor" in result
+            ? {
+                nextCursor: (result as { nextCursor?: string | null })
+                  .nextCursor,
+              }
+            : {}),
         };
       });
     },

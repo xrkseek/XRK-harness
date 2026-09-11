@@ -434,6 +434,8 @@ describe('workspaceLabel', () => {
     expect(workspaceLabel('/projects/demo/')).toBe('demo')
     expect(workspaceLabel('C:\\projects\\demo\\')).toBe('demo')
     expect(workspaceLabel('/')).toBe('/')
+    expect(workspaceLabel('C:\\')).toBe('C:\\')
+    expect(workspaceLabel('C:/')).toBe('C:/')
   })
 })
 

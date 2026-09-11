@@ -36,7 +36,7 @@ user-invocable: false
 - Face estimate/fold shim  
 - 搬 Cordis `xrk-token-meter` 进内核  
 - 在 `docs/` 写「不要合并 / 本刀 / shim」  
-- 假扮 DSH 多事件 `summary|prune` + surfaceOp（本仓单事件 shadow 字段）
+- 假扮多事件 `summary|prune` + surfaceOp（本仓单事件 shadow 字段）
 
 ## 教科书 vs 笔记
 

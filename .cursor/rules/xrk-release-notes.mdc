@@ -1,5 +1,5 @@
 ---
-description: 发行说明文体（对照 DSH Release）· 新增/完善/删除/修复 · 禁止日记腔
+description: 发行说明文体 · 新增/完善/删除/修复 · 禁止日记腔
 xrk-inject: false
 globs: docs/releases/**/*.md
 alwaysApply: false
@@ -7,7 +7,7 @@ alwaysApply: false
 
 # 发行说明（`docs/releases/`）
 
-对照：[DSH GitHub Release](https://github.com/deepseek-ai/deepseek-harness/releases)（`新增功能` / `问题修复` / `体验优化` / `其他变更`）。本仓用四类 + 可选「其他」。
+本仓四类 + 可选「其他」：`新增` / `完善` / `删除` / `修复`（+ `其他变更`）。结构对齐常见开源 Release 归类，不以第三方产品说明为基线。
 
 ## 结构
 

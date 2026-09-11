@@ -289,11 +289,15 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
           const namespace = state.namespaces.get(target.settingsNs)
           /* v8 ignore next -- the join marks a row configured only when its namespace resolved */
           if (namespace === undefined) return null
+          const error = row.entry.error === undefined
+            ? null
+            : <p role="alert" className={styles['error']}>{row.entry.error}</p>
           if (needsSetup(row, anyUsable) && !dismissedSetup.has(row.entry.provider)) {
             // First-run posture: the provider exists but has no key — the
             // setup card IS its presence on the page, until the user closes it.
             return (
               <li key={row.entry.provider} className={styles['setupCard']}>
+                {error}
                 {renderProviderEditor({
                   target,
                   namespace,
@@ -377,6 +381,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                     : null}
                 </span>
               </div>
+              {error}
               {open
                 ? renderProviderEditor({
                   target,

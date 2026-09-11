@@ -64,10 +64,10 @@ declare module '@xrkseek/client-ui-slots' {
      */
     'conversation': { kind: 'single'; scope: 'session-maybe'; owner: ConvOwnerProps }
     /**
-     * The right details column, shown when the layout opens it. OCCUPIED by
-     * ui-conversation's DetailsPanel, which declares the tool-details seat
-     * inside it — registering here replaces the column and takes that seat
-     * with it. Absent an occupant the column renders nothing.
+     * The right details column track (layout geometry only). Product no longer
+     * occupies it with a Detail panel — demoted; file preview and workbench UI
+     * use Host `/sidebar/*` + community `xrkh-better-sidebar` (overlay host).
+     * Absent an occupant the column renders nothing; default preference is closed.
      *
      * No owner props: the framework injects the session id and hooks for the
      * `session` scope, and `ctx.layout` owns whether the column is open.

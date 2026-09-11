@@ -26,9 +26,12 @@ export interface SubprocessResult {
   readonly killed: boolean;
 }
 
-/** Non-blocking child — await `result()` to settle. */
+/**
+ * Non-blocking ordinary child — await `result()` to settle.
+ * Does not expose `pid` (ordinary piped spawn); terminal handles keep `pid`
+ * on `@xrkseek/exec-pty` `SubprocessTerminalHandle`.
+ */
 export interface SubprocessHandle {
-  readonly pid: number | undefined;
   kill(signal?: NodeJS.Signals): void;
   result(): Promise<SubprocessResult>;
 }
@@ -44,6 +47,25 @@ export interface SubprocessService {
 }
 
 /**
+ * Terminate one Windows process tree with `taskkill /T /F`.
+ * Contained like POSIX group signalling — absent trees, nonzero status, and a
+ * missing taskkill binary must not break idempotent teardown.
+ * `stdio: 'ignore'` + `windowsHide` keep the helper from flashing a console.
+ * @param pid - root process id, when the spawn published one.
+ * @param run - injectable `spawnSync` (tests).
+ */
+export function taskkillProcessTree(
+  pid: number | undefined,
+  run: typeof spawnSync = spawnSync,
+): void {
+  if (pid === undefined || pid <= 0) return;
+  run("taskkill", ["/PID", String(pid), "/T", "/F"], {
+    stdio: "ignore",
+    windowsHide: true,
+  });
+}
+
+/**
  * Best-effort process-tree kill. `child.kill` only reaches the direct child:
  * on Windows the shell's own children (node.exe, git.exe, …) survive it and can
  * hold the stdout pipe open, delaying `close`. `taskkill /T` walks the tree.
@@ -54,13 +76,7 @@ function killTree(
 ): void {
   if (child.pid !== undefined) {
     if (process.platform === "win32") {
-      try {
-        spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
-          windowsHide: true,
-        });
-      } catch {
-        // taskkill unavailable — the direct kill below still applies
-      }
+      taskkillProcessTree(child.pid);
     } else {
       // POSIX: a negative pid reaches the whole process group when the child
       // leads one; ESRCH/EPERM otherwise is expected and ignored.
@@ -89,7 +105,11 @@ function startLocal(
   const child = nodeSpawn(cmd!, args, {
     cwd: opts.cwd,
     env: opts.env,
+    // Non-terminal children: hide the console window on Windows so background
+    // bash/cmd/pwsh jobs do not steal focus (terminals stay on the PTY path).
     windowsHide: true,
+    // Explicit: do not detach on win32 (tree kill is taskkill-by-root-pid).
+    detached: false,
     // One-shot shells have no input channel: an open-but-never-ended stdin
     // pipe would make any stdin-reading command block forever without EOF.
     stdio: ["ignore", "pipe", "pipe"],
@@ -162,6 +182,7 @@ function startLocal(
     if (settled) return;
     settled = true;
     if (timer) clearTimeout(timer);
+    if (graceTimer) clearTimeout(graceTimer);
     opts.signal?.removeEventListener("abort", onAbort);
     rejectResult(err);
   });
@@ -176,9 +197,6 @@ function startLocal(
   });
 
   return {
-    get pid() {
-      return child.pid;
-    },
     kill(signal = "SIGTERM") {
       stopChild(signal);
     },

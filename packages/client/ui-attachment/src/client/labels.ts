@@ -1,6 +1,7 @@
 import type { TranslateNS } from '@xrkseek/client-ui-slots'
 import type { AttachmentRailLabels } from '../AttachmentRail.tsx'
 import type { DropOverlayLabels } from '../DropOverlay.tsx'
+import type { FileCardLabels } from '../FileCard.tsx'
 import type { ImageLightboxLabels } from '../ImageLightbox.tsx'
 import type { MessageImageLabels } from '../MessageImage.tsx'
 
@@ -56,8 +57,23 @@ export function dropOverlayLabels(
 export function attachmentRailLabels(t: TranslateNS<'conversation'>): AttachmentRailLabels {
   return {
     group: t('image.pending'),
-    open: t('image.openOriginal'),
     scrollLeft: t('image.scrollLeft'),
     scrollRight: t('image.scrollRight'),
+  }
+}
+
+/**
+ * Resolve generic-file card strings from the conversation namespace.
+ * @param t - conversation namespace translator.
+ * @param name - the file basename for remove copy.
+ * @returns translated file-card labels.
+ */
+export function fileCardLabels(t: TranslateNS<'conversation'>, name: string): FileCardLabels {
+  return {
+    remove: t('file.remove', { name }),
+    uploading: t('file.uploading'),
+    failed: t('file.failed'),
+    retry: t('file.retry'),
+    pending: t('file.pending'),
   }
 }

@@ -99,7 +99,13 @@ interface Group {
  */
 export function workspaceLabel(cwd: string | undefined): string {
   if (cwd === undefined || cwd === '') return UNGROUPED_LABEL
-  const base = cwd.replace(/[/\\]+$/, '').split(/[/\\]/).pop()
+  const trimmed = cwd.replace(/[/\\]+$/, '')
+  // Drive root: keep complete root spelling (`C:\`), not bare `C:`.
+  if (/^[A-Za-z]:$/i.test(trimmed)) {
+    const sep = cwd.includes('/') && !cwd.includes('\\') ? '/' : '\\'
+    return `${trimmed}${sep}`
+  }
+  const base = trimmed.split(/[/\\]/).pop()
   return base !== undefined && base !== '' ? base : cwd
 }
 

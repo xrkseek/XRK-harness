@@ -8,6 +8,8 @@ export type {
 } from "./messages.js";
 export type {
   ContentBlock,
+  FileAttachmentRef,
+  FileBlock,
   ImageAttachmentRef,
   ImageBlock,
   ImageMediaType,
@@ -16,15 +18,22 @@ export type {
 } from "./content.js";
 export {
   asContentBlocks,
+  contentHasFile,
   contentHasImage,
+  fileHandleText,
   flattenText,
   isContentBlock,
+  isFileAttachmentRef,
+  isFileBlock,
   isImageAttachmentRef,
   isImageBlock,
   isImageMediaType,
   isTextBlock,
+  listFileRefs,
   listImageRefs,
   mergeMessageContents,
+  projectFileContentToText,
+  projectFilesToText,
 } from "./content.js";
 export {
   isSessionEvent,
@@ -62,6 +71,7 @@ export {
   type SandboxModeEvent,
   type ApprovalPolicyEvent,
   type PlanModeEvent,
+  type FeedbackCategory,
   type FeedbackRecordEvent,
   type LlmRequestConfig,
   type LlmRetryEvent,
@@ -110,6 +120,7 @@ export {
   TOOL_ABORTED_BEFORE_DISPATCH,
   TOOL_ABORTED_MESSAGE,
   TOOL_ABORTED_BEFORE_DISPATCH_MESSAGE,
+  TOOL_FS_NOT_OBSERVED,
 } from "./tools.js";
 export {
   inputPressureTokens,

@@ -39,6 +39,7 @@ export const SESSION_HISTORY_PROJECTION_KEYS = [
   "contextBreakdown",
   "autoReview",
   "imageLimits",
+  "fileLimits",
 ] as const;
 
 /**

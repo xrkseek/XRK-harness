@@ -1,11 +1,13 @@
 // ProducedFiles: the produced-file row a finished turn ends with. The paths
 // come pre-matched by the turn-tail chain from the mutation tools'
-// follow-along locations, never from the closing prose. Clicking one goes
-// through the same openFile the tool rows use — the Host's own opener, on the
-// Host machine.
+// follow-along locations, never from the closing prose. Chip click previews
+// through openFile (sidebar plugins may intercept). Native default-app open
+// and file-manager reveal reuse host.openPath (reveal flag), bypassing any
+// openPath wrap so OS actions stay available.
 
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { HostDescriptionSource } from '@xrkseek/client-connection/client'
+import { Menu } from '@xrkseek/client-ui-primitives'
 import type { InjectFace, PropsLocale } from '@xrkseek/client-ui-slots'
 import type { TurnTailOwnerProps } from '@xrkseek/client-ui-conversation/client'
 import { basename } from './turn-deliverables.ts'
@@ -46,10 +48,18 @@ export function fitProducedFiles(
   return largestFit
 }
 
+/** Native open / reveal through Face `host.openPath` (not workspaces.openPath wrap). */
+export type OpenNativePath = (
+  path: string,
+  options?: { readonly reveal?: boolean },
+) => Promise<void>
+
 /** Registration-side Host capability facts. */
 export interface ProducedFilesInjected {
   /** Whether the browser itself is connected over loopback. */
   isLoopback: boolean
+  /** Default-app open and file-manager reveal (Host `host.openPath`). */
+  openNativePath: OpenNativePath
   hooks: {
     /** Current generation's Host description, bound by the slot renderer. */
     hostDescription: HostDescriptionSource
@@ -65,13 +75,68 @@ function moreLabel(t: ProducedFilesProps['t'], count: number): string {
   return count === 1 ? t('produced.moreOne') : t('produced.more', { count: String(count) })
 }
 
+function ProducedFileChip({
+  path, openFile, canOpenPath, openNativePath, t,
+}: {
+  path: string
+  openFile: (path: string) => void
+  canOpenPath: boolean
+  openNativePath: OpenNativePath
+  t: ProducedFilesProps['t']
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  return (
+    <span className={css.chip}>
+      <button
+        type="button"
+        className={css.file}
+        title={path}
+        aria-label={t('produced.preview', { name: path })}
+        onClick={() => { openFile(path) }}
+      >
+        {basename(path)}
+      </button>
+      {canOpenPath && (
+        <Menu
+          className={css.menu}
+          open={menuOpen}
+          portal
+          align="end"
+          dense
+          onClose={() => { setMenuOpen(false) }}
+          anchor={(
+            <button
+              type="button"
+              className={css.actions}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label={t('produced.actions', { name: path })}
+              onClick={() => { setMenuOpen(value => !value) }}
+            >
+              ▾
+            </button>
+          )}
+          items={[
+            { id: 'open', label: t('produced.defaultApp') },
+            { id: 'reveal', label: t('produced.reveal') },
+          ]}
+          onSelect={(id) => {
+            setMenuOpen(false)
+            void openNativePath(path, id === 'reveal' ? { reveal: true } : {})
+          }}
+        />
+      )}
+    </span>
+  )
+}
+
 /**
  * Render one turn's produced files as openable chips.
  * @param props - selector-matched paths, the chat view's file opener, and the locale seat.
  * @returns The produced-files row.
  */
 export function ProducedFiles({
-  matched: paths, openFile, isLoopback, useHostDescription, t,
+  matched: paths, openFile, isLoopback, openNativePath, useHostDescription, t,
 }: ProducedFilesProps) {
   const hostCanOpenPath = useHostDescription(description => description?.canOpenPath === true)
   const canOpenPath = isLoopback && hostCanOpenPath
@@ -117,23 +182,23 @@ export function ProducedFiles({
       <span className={css.label}>{t('produced.label')}</span>
       <div ref={rowRef} className={css.row} data-produced-files-row>
         {shown.map(path => (
-          <button
+          <ProducedFileChip
             key={path}
-            type="button"
-            className={css.file}
-            // The full path is the disambiguator when two turns produce files
-            // that share a basename; the chip itself stays short.
-            title={path}
-            aria-label={t('produced.open', { name: path })}
-            onClick={() => { openFile(path) }}
-          >
-            {basename(path)}
-          </button>
+            path={path}
+            openFile={openFile}
+            canOpenPath={canOpenPath}
+            openNativePath={openNativePath}
+            t={t}
+          />
         ))}
         {hidden > 0 && <span className={css.more}>{moreLabel(t, hidden)}</span>}
       </div>
       {hidden > 0 && canOpenPath && (
-        <button type="button" className={css.showFolder} onClick={() => { openFile('.') }}>
+        <button
+          type="button"
+          className={css.showFolder}
+          onClick={() => { void openNativePath('.', { reveal: true }) }}
+        >
           {t('produced.showInFolder')}
         </button>
       )}

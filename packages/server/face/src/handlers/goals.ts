@@ -67,8 +67,30 @@ function mutateRef(
   return runtime.goals.clear(id, ref);
 }
 
-export const goalsPause: FaceHandler = async (runtime, _rpcId, payload) =>
-  mutateRef(runtime, payload, "pause");
+/**
+ * Host/Web pause: CAS the durable phase, then abort the live turn so the model
+ * cannot keep acting or self-continue in the same turn. Auto-rounds stay off
+ * because pause also disarms activation (user `/goal resume` / dock resume owns rearm).
+ */
+export const goalsPause: FaceHandler = async (runtime, _rpcId, payload) => {
+  const result = mutateRef(runtime, payload, "pause");
+  if (!result.ok) return result;
+  const sessionId = agentId(remoteArgs(payload));
+  if (!sessionId) return result;
+  try {
+    const agent = await runtime.resolveAgent(sessionId);
+    agent.abort({ kind: "user" });
+  } catch {
+    /* absent / already torn down */
+  }
+  await runtime.drain.cancel(sessionId);
+  runtime.bus.publishHost({
+    type: "host/session-status",
+    sessionId,
+    running: false,
+  });
+  return result;
+};
 export const goalsResume: FaceHandler = async (runtime, _rpcId, payload) =>
   mutateRef(runtime, payload, "resume");
 export const goalsComplete: FaceHandler = async (runtime, _rpcId, payload) =>

@@ -33,7 +33,7 @@ describe("createProviderRegistry", () => {
     const reg = createProviderRegistry({ defaultProvider: "deepseek" });
     const b = reg.resolve({});
     expect(b.provider).toBe("deepseek");
-    expect(b.model).toBe("deepseek-v4-flash");
+    expect(b.model).toBe("deepseek-flash");
   });
 
   it("throws on unknown provider", () => {
@@ -84,7 +84,7 @@ describe("createProviderRegistry", () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 
-  it("openai adapter declares image; deepseek stays text-only; vision-exp declares image", () => {
+  it("openai and deepseek-flash declare image; v4-flash stays text-only; vision-exp declares image", () => {
     const reg = createProviderRegistry();
     const openai = reg.createAdapter(
       reg.resolve({ provider: "openai", model: "m" }),
@@ -92,6 +92,10 @@ describe("createProviderRegistry", () => {
     );
     const deepseek = reg.createAdapter(
       reg.resolve({ provider: "deepseek" }),
+      {},
+    );
+    const v4Flash = reg.createAdapter(
+      reg.resolve({ provider: "deepseek", model: "deepseek-v4-flash" }),
       {},
     );
     const vision = reg.createAdapter(
@@ -102,7 +106,10 @@ describe("createProviderRegistry", () => {
       {},
     );
     expect(openai.inputModalities).toEqual(["text", "image"]);
-    expect(deepseek.inputModalities).toEqual(["text"]);
+    expect(deepseek.inputModalities).toEqual(["text", "image"]);
+    expect(deepseek.systemPromptUpdate).toBe("in-history");
+    expect(v4Flash.inputModalities).toEqual(["text"]);
+    expect(v4Flash.systemPromptUpdate).toBeUndefined();
     expect(vision.inputModalities).toEqual(["text", "image"]);
   });
 

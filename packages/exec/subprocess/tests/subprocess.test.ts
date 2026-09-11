@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { createLocalSubprocess } from "../src/index.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+  createLocalSubprocess,
+  taskkillProcessTree,
+} from "../src/index.js";
 
 const NODE = process.execPath;
 
@@ -90,5 +93,27 @@ describe("createLocalSubprocess", () => {
     expect(result.stdout.trim()).toBe("hello");
     expect(result.exitCode).toBe(3);
     expect(result.killed).toBe(false);
+  });
+
+  it("hides the taskkill helper window (stdio ignore + windowsHide)", () => {
+    const run = vi.fn();
+    taskkillProcessTree(77, run as never);
+    expect(run).toHaveBeenCalledWith(
+      "taskkill",
+      ["/PID", "77", "/T", "/F"],
+      { stdio: "ignore", windowsHide: true },
+    );
+    expect(() => taskkillProcessTree(undefined, run as never)).not.toThrow();
+    expect(() => taskkillProcessTree(0, run as never)).not.toThrow();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("ordinary handle does not expose pid (terminal handle keeps it)", async () => {
+    const subprocess = createLocalSubprocess();
+    const handle = subprocess.start([NODE, "-e", "setTimeout(()=>{},30000);"]);
+    expect(Object.hasOwn(handle, "pid")).toBe(false);
+    expect("pid" in handle).toBe(false);
+    handle.kill();
+    await handle.result();
   });
 });

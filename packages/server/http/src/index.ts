@@ -4,6 +4,7 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
+import { dispatchHttpServerFetch } from "./fetch-dispatch.js";
 import type { SessionEvent, PromptDelivery } from "@xrkseek/protocol";
 import { parsePromptDelivery } from "@xrkseek/protocol";
 import type { AgentHandle } from "@xrkseek/core-agent";
@@ -180,6 +181,8 @@ export interface HttpServerOptions {
 export interface HarnessHttpServer {
   readonly server: Server;
   listen(): Promise<{ host: string; port: number }>;
+  /** Dispatch a Fetch Request without binding a listen port (Desktop pipe transport). */
+  fetch(request: Request): Promise<Response>;
   close(): Promise<void>;
 }
 
@@ -623,6 +626,9 @@ export function createHttpServer(
         });
       });
     },
+    fetch(request) {
+      return dispatchHttpServerFetch(server, request);
+    },
     close() {
       if (closing) return closing;
       closing = new Promise((resolve, reject) => {
@@ -634,6 +640,11 @@ export function createHttpServer(
         // Open SSE / keep-alive / WS upgrades otherwise block server.close.
         if (typeof server.closeAllConnections === "function") {
           server.closeAllConnections();
+        }
+        // Never listened: close() still succeeds.
+        if (!server.listening) {
+          resolve();
+          return;
         }
         server.close((err) => (err ? reject(err) : resolve()));
       });

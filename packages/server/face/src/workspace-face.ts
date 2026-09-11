@@ -12,6 +12,7 @@ import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import { resolveSessionCwd } from "./session-cwd.js";
 import { canOpenNativePath } from "./host-open-path.js";
+import { fullyQualified } from "./host-directory.js";
 import { persistWorkspaceDoc } from "./workspace-store.js";
 
 const MAX_LIST_ENTRIES = 200;
@@ -268,6 +269,16 @@ export async function workspaceCreateFace(
     return {
       ok: false,
       error: { code: "invalid-payload", message: "path required" },
+    };
+  }
+  // Reject cwd/current-drive relatives (`C:`, `\work`, `./x`); accept `C:\` / UNC / POSIX abs.
+  if (!fullyQualified(raw)) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: `Workspace path is not fully qualified: '${raw}'`,
+      },
     };
   }
   const result = runtime.workspaces.create(raw);

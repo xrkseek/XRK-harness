@@ -24,6 +24,15 @@ export interface FaceWireUserMessage {
           readonly name?: string;
         };
       }
+    | {
+        readonly type: "file";
+        readonly attachment: {
+          readonly attachmentId: string;
+          readonly name: string;
+          readonly bytes: number;
+          readonly mediaType?: string;
+        };
+      }
   )[];
   readonly source: {
     readonly kind: "user";
@@ -47,11 +56,13 @@ function userMessage(
   return {
     id,
     role: "user",
-    content: asContentBlocks(content).map((block) =>
-      block.type === "text"
-        ? { type: "text" as const, text: block.text }
-        : { type: "image" as const, attachment: { ...block.attachment } },
-    ),
+    content: asContentBlocks(content).map((block) => {
+      if (block.type === "text") return { type: "text" as const, text: block.text };
+      if (block.type === "file") {
+        return { type: "file" as const, attachment: { ...block.attachment } };
+      }
+      return { type: "image" as const, attachment: { ...block.attachment } };
+    }),
     source: {
       kind: "user",
       ...(rpcId !== undefined && rpcId !== "" ? { rpcId } : {}),

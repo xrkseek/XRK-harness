@@ -10,7 +10,6 @@ function stubSubprocess() {
     killed: false,
   }));
   const start = vi.fn(() => ({
-    pid: 1,
     kill: () => {},
     result: async () => ({
       stdout: "",

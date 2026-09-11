@@ -166,6 +166,11 @@ export interface CreateFaceRuntimeOptions {
   /** Optional JSON sidecar for Face goals (sessions directory). */
   readonly goalPersistPath?: string;
   /**
+   * Directory for conversation-slice JSON written on session feedback
+   * (`{sessionsDir}/feedback-slices`).
+   */
+  readonly feedbackSlicesDir?: string;
+  /**
    * Cold `session.list` projection column (`title` · `sessionListMetadata`).
    * Typical path: `{sessionsDir}/projection-list-cache.json`.
    */
@@ -196,7 +201,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   if (!options.skipDefaultProjections && !options.projections) {
     installDefaultFaceProjections(projections, {
       ...(options.attachments
-        ? { imageLimits: options.attachments.imageLimits }
+        ? {
+            imageLimits: options.attachments.imageLimits,
+            fileLimits: options.attachments.fileLimits,
+          }
         : {}),
     });
   }
@@ -650,6 +658,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     workspaces,
     subagents,
     messageFeedback,
+    ...(options.feedbackSlicesDir !== undefined
+      ? { feedbackSlicesDir: options.feedbackSlicesDir }
+      : {}),
     goals,
     wireIds,
     inboxWire,

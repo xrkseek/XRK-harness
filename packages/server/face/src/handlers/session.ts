@@ -1,6 +1,5 @@
 import {
   AdmitNotPendingError,
-  admitPrompt,
   listPendingAdmits,
   readSessionEvents,
   sessionEventCount,
@@ -13,6 +12,7 @@ import {
   resolveAgentPresetProfile,
 } from "../presets-catalog.js";
 import { toWireHistoryEntry, collectToolCallArgsForPage, routeFromRequestHeader } from "../adapt/index.js";
+import { rewritePendingAdmit } from "../update-queue-rewrite.js";
 import {
   DEFAULT_HISTORY_MAX_MESSAGES,
   dropSupersededStreamDeltas,
@@ -22,7 +22,11 @@ import { tryFaceSlashCommand } from "../slash.js";
 import { commitPlanMode } from "../plan-mode.js";
 import { SessionTitleInvalidError } from "../projections/index.js";
 import { parseSearchQuery, searchSessions } from "../session-search.js";
-import { durablePromptContent, type PromptWirePart } from "../durable-prompt.js";
+import {
+  durablePromptContent,
+  hasPromptContent,
+  type PromptWirePart,
+} from "../durable-prompt.js";
 import { asRecord, type FaceHandler } from "./types.js";
 import { publishSessionAdded } from "./session-added.js";
 import {
@@ -343,23 +347,53 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
       });
       continue;
     }
+    if (x.type === "file") {
+      if (typeof x.data !== "string") {
+        return {
+          ok: false,
+          error: {
+            code: "invalid-payload",
+            message: "file part requires data",
+          },
+        };
+      }
+      parts.push({
+        type: "file",
+        data: x.data,
+        ...(typeof x.name === "string" ? { name: x.name } : {}),
+        ...(typeof x.mediaType === "string" ? { mediaType: x.mediaType } : {}),
+      });
+      continue;
+    }
     return {
       ok: false,
       error: { code: "invalid-payload", message: "unknown content part" },
     };
   }
 
+  if (!hasPromptContent(parts)) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: "prompt must include non-whitespace text or an attachment",
+      },
+    };
+  }
+
   const hasImage = parts.some((x) => x.type === "image");
+  const hasFile = parts.some((x) => x.type === "file");
+  const hasAttachment = hasImage || hasFile;
+  if (hasAttachment && !runtime.attachments) {
+    return {
+      ok: false,
+      error: {
+        code: "attachment-unavailable",
+        message: "attachment store not configured",
+      },
+    };
+  }
   if (hasImage) {
-    if (!runtime.attachments) {
-      return {
-        ok: false,
-        error: {
-          code: "attachment-unavailable",
-          message: "attachment store not configured",
-        },
-      };
-    }
     // Face intake max (Host may allow paste) AND live adapter route (Registry).
     const faceIntake = runtime.inputModalities ?? ["text"];
     if (!faceIntake.includes("image")) {
@@ -383,7 +417,7 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   }
 
   let admitContent;
-  if (hasImage) {
+  if (hasAttachment) {
     const durable = await durablePromptContent(parts, runtime.attachments!);
     if (!durable.ok) {
       return {
@@ -401,12 +435,6 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
       runtime.watchSession(sessionId);
       const slash = await tryFaceSlashCommand(runtime, sessionId, text);
       if (slash) return slash;
-    }
-    if (!text) {
-      return {
-        ok: false,
-        error: { code: "invalid-payload", message: "empty text" },
-      };
     }
     admitContent = text;
   }
@@ -682,6 +710,24 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
       error: { code: "invalid-payload", message: "action.kind required" },
     };
   }
+
+  // Subagent-owned sessions: only continuable children expose queue mutation.
+  // One-shot stays read-only; do not cold-resume an agent to satisfy the call.
+  const subLink = runtime.subagents.getByChild(sessionId);
+  if (subLink?.mode === "one-shot") {
+    return {
+      ok: false,
+      error: {
+        code: "subagent-not-resumable",
+        message: sessionId,
+        details: {
+          parentSessionId: subLink.parentSessionId,
+          childSessionId: sessionId,
+        },
+      },
+    };
+  }
+
   const kind = Reflect.get(action, "kind");
   const pending = listPendingAdmits(
     readSessionEvents(runtime.store, sessionId),
@@ -695,23 +741,34 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
     };
   }
 
+  const maps = {
+    admitRpcMap: runtime.admitRpcMap,
+    rpcAdmitMap: runtime.rpcAdmitMap,
+  };
+
   try {
     if (kind === "remove") {
       withdrawAdmit(runtime.store, sessionId, itemId);
       runtime.admitRpcMap.delete(itemId);
     } else if (kind === "steer") {
-      withdrawAdmit(runtime.store, sessionId, itemId);
-      const rpc = runtime.admitRpcMap.get(itemId);
-      runtime.admitRpcMap.delete(itemId);
-      const admitId = `admit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-      if (rpc) {
-        runtime.admitRpcMap.set(admitId, rpc);
-        runtime.rpcAdmitMap.set(rpc, admitId);
+      if (!runtime.drain.isActive(sessionId)) {
+        return {
+          ok: false,
+          error: {
+            code: "steer-unavailable",
+            message: "agent is not running",
+          },
+        };
       }
-      admitPrompt(runtime.store, sessionId, target.content, {
-        delivery: "steer",
-        admitId,
-      });
+      rewritePendingAdmit(
+        runtime.store,
+        sessionId,
+        itemId,
+        target.content,
+        "steer",
+        maps,
+      );
+      runtime.drain.wake(sessionId);
     } else if (kind === "edit") {
       const content = (action as { content?: unknown }).content;
       if (!Array.isArray(content)) {
@@ -731,18 +788,14 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
           error: { code: "invalid-payload", message: "edit text empty" },
         };
       }
-      withdrawAdmit(runtime.store, sessionId, itemId);
-      const rpc = runtime.admitRpcMap.get(itemId);
-      runtime.admitRpcMap.delete(itemId);
-      const admitId = `admit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-      if (rpc) {
-        runtime.admitRpcMap.set(admitId, rpc);
-        runtime.rpcAdmitMap.set(rpc, admitId);
-      }
-      admitPrompt(runtime.store, sessionId, text, {
-        delivery: target.delivery,
-        admitId,
-      });
+      rewritePendingAdmit(
+        runtime.store,
+        sessionId,
+        itemId,
+        text,
+        target.delivery,
+        maps,
+      );
     } else {
       return {
         ok: false,

@@ -25,6 +25,12 @@ describe("pickNativeDirectory", () => {
     expect(canPickNativeDirectory("freebsd")).toBe(false);
   });
 
+  it("XRK_NATIVE_OPEN forces pick capability (Desktop Host declaration)", () => {
+    expect(canPickNativeDirectory("freebsd", { XRK_NATIVE_OPEN: "1" })).toBe(
+      true,
+    );
+  });
+
   it("darwin osascript: path, cancel, unexpected failure", async () => {
     const signal = new AbortController().signal;
     const run: DirectoryPickerRunner = async (command, args) => {

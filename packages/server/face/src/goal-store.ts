@@ -70,16 +70,23 @@ export class FaceGoalStore {
 
   bind(runtime: FaceRuntime): void {
     this.runtime = runtime;
-    let pruned = false;
+    let dirty = false;
     for (const sessionId of [...this.bySession.keys()]) {
       if (!sessionExists(runtime, sessionId)) {
         this.bySession.delete(sessionId);
-        pruned = true;
+        dirty = true;
         continue;
+      }
+      // Activation is process-local: a Host (re)bind must not inherit a prior
+      // process's armed latch, or onTurnEnd would auto-continue without a user resume.
+      const goal = this.bySession.get(sessionId);
+      if (goal && goal.phase === "active" && goal.activation === "armed") {
+        goal.activation = "disarmed";
+        dirty = true;
       }
       this.publish(sessionId, false);
     }
-    if (pruned) this.save();
+    if (dirty) this.save();
   }
 
   get(sessionId: string): GoalView | undefined {

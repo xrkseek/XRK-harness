@@ -20,6 +20,7 @@ export { createTodosProjectionUnit } from "./units/todos.js";
 export { createPermissionsProjectionUnit } from "./units/permissions.js";
 export { createPlanProjectionUnit } from "./units/plan.js";
 export { createImageLimitsProjectionUnit } from "./units/image-limits.js";
+export { createFileLimitsProjectionUnit } from "./units/file-limits.js";
 export {
   createSessionStatsProjectionUnit,
   type SessionStatsProjection,

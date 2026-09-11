@@ -3,8 +3,8 @@
 // API: the strict session API (views triple, draft mirror), the
 // provide-channel input face (machine-sink submit choreography incl.
 // transactional clear + failure retention), the resident API (selectWorkspace
-// draft carrying), the composer-bar stop face, openDetails = select action +
-// layout orchestration, and the closeDetails details API. Complements
+// draft carrying), the composer-bar stop face, and openDetails demotion
+// (Detail panel unregistered). Complements
 // chat-apply.spec.tsx (registration) and selection-survival.spec.tsx (store
 // axis). History opening is NOT an inject concern — the runtime sessions
 // service opens on watch (sessions-service.spec.ts owns that behavior).
@@ -22,7 +22,7 @@ import type { ISession, SessionId } from '@xrkseek/client-runtime/client'
 import { apply, inject } from '@xrkseek/client-ui-conversation/client'
 import type {
   ChatViewInjected, ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected,
-  ConversationSessionInjected, DetailsInjected,
+  ConversationSessionInjected,
 } from '@xrkseek/client-ui-conversation/client'
 import type { createChatStore } from '../src/client/stores.ts'
 
@@ -223,16 +223,12 @@ describe('conversation slot inject API', () => {
     await b.runtime.dispose()
   })
 
-  it('openDetails (chat view face) writes the selection through the store actions and opens the panel', async () => {
+  it('openDetails (chat view face) is a no-op after Detail-panel demotion', async () => {
     const b = await bench()
     const { instance, injected } = b.chatViewApi(ROOT)
     injected.openDetails({ turnSeq: 2, callId: 'c1' })
-    expect(instance.store.getSnapshot().selection).toEqual({ turnSeq: 2, callId: 'c1' })
-    expect(b.layoutFake.openDetails).toHaveBeenCalledTimes(1)
-    // The chat view shares the conversation entry's store instance: selection
-    // writes land where the skeleton and details read.
-    const conv = b.conversationApi(ROOT)
-    expect(conv.instance).toBe(instance)
+    expect(instance.store.getSnapshot().selection).toBeNull()
+    expect(b.layoutFake.openDetails).not.toHaveBeenCalled()
     await b.runtime.dispose()
   })
 
@@ -349,18 +345,10 @@ describe('conversation slot inject API', () => {
   })
 })
 
-describe('details inject API', () => {
-  it('details injects the one layout callback; selection rides the shared store instead', async () => {
+describe('details demotion', () => {
+  it('conversation apply does not occupy the layout details slot', async () => {
     const b = await bench()
-    const entry = b.entryOf('details')
-    const injected = (entry.inject as unknown as () => DetailsInjected)()
-    expect(Object.keys(injected)).toEqual(['closeDetails'])
-    injected.closeDetails()
-    expect(b.layoutFake.closeDetails).toHaveBeenCalledTimes(1)
-    // The shared handle: details resolves the SAME instance conversation writes.
-    const conv = b.runtime.storeOf('conversation.session', ROOT)
-    const details = b.runtime.storeOf('details', ROOT)
-    expect(details).toBe(conv)
+    expect(b.runtime.slots.entries('details')).toEqual([])
     await b.runtime.dispose()
   })
 })

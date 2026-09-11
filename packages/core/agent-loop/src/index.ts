@@ -22,9 +22,11 @@ import {
   type LlmChatRequest,
   type LlmChatResponse,
   type ResolvedRetryPolicy,
+  type SystemPromptUpdate,
 } from "@xrkseek/llm";
 import type {
   ChatMessage,
+  FileAttachmentRef,
   MessageContent,
   SafetyNoticePayload,
   SessionEvent,
@@ -38,6 +40,7 @@ import {
   newUserMessageId,
   parseSessionEvent,
   parseTurnEndCancelCause,
+  projectFilesToText,
   DEFAULT_PLAN_POLICY_SECTION,
   foldPlanMode,
   pendingPlanTarget,
@@ -59,8 +62,24 @@ import {
   resolveRetryPolicy,
 } from "./llm-retry.js";
 
+/** Context for a turn's persona (tool catalog after materialize / filter). */
+export interface AssemblePersonaContext {
+  readonly toolNames: readonly string[];
+}
+
+export type AssemblePersona =
+  | string
+  | ((
+      ctx: AssemblePersonaContext,
+    ) => string | Promise<string>);
+
 export interface AssembleOptions {
-  readonly persona?: string;
+  /**
+   * Skeleton persona. String is static; function is rebuilt each provider
+   * step from the materialized tool catalog (omit empty routing sections for
+   * tools absent after filter / agent restriction).
+   */
+  readonly persona?: AssemblePersona;
   readonly mcpProtocol?: string;
   readonly owner?: string;
   readonly workspaceBlocks?: readonly string[];
@@ -94,6 +113,17 @@ export interface AssembleOptions {
       >;
 }
 
+async function resolveAssemblePersona(
+  persona: AssemblePersona | undefined,
+  toolNames: readonly string[],
+): Promise<string | undefined> {
+  if (persona === undefined) return undefined;
+  if (typeof persona === "function") {
+    return persona({ toolNames });
+  }
+  return persona;
+}
+
 export interface RunTurnInput {
   readonly sessionId: string;
   readonly userText: string;
@@ -108,6 +138,12 @@ export interface RunTurnInput {
    * Required by vision adapters; unused on text-only routes.
    */
   readonly resolveImage?: LlmChatRequest["resolveImage"];
+  /**
+   * Resolve a durable file attachment to an absolute path the model may
+   * `read_file`. When set, agent-loop projects FileBlocks to handle text
+   * before every LLM request (via AttachmentStore.fileHostPath).
+   */
+  readonly resolveFilePath?: (ref: FileAttachmentRef) => string | undefined;
   readonly system?: string;
   readonly assemble?: AssembleOptions;
   readonly store: SessionStore;
@@ -234,8 +270,12 @@ function toLlmRequest(
   } catch {
     reasoningEffort = input.llm.peekRoute?.()?.reasoningEffort;
   }
+  const messages = projectFilesToText(
+    req.messages,
+    (ref) => input.resolveFilePath?.(ref),
+  );
   return {
-    messages: req.messages,
+    messages,
     ...(req.tools.length ? { tools: req.tools } : {}),
     ...(input.signal ? { signal: input.signal } : {}),
     ...(input.resolveImage ? { resolveImage: input.resolveImage } : {}),
@@ -311,11 +351,54 @@ async function invokeLlm(
   });
 }
 
-function buildModelRequest(input: {
+function placeSystemOnWire(input: {
+  systemText: string;
+  history: readonly ChatMessage[];
+  systemPromptUpdate?: SystemPromptUpdate;
+  seriesBaselineSystem?: string;
+}): {
+  messages: ChatMessage[];
+  /** Anchoring system text for the current KV-cache series (leading message). */
+  seriesBaselineSystem?: string;
+} {
+  const text = input.systemText;
+  if (!text.trim()) {
+    return {
+      messages: [...input.history],
+      ...(input.seriesBaselineSystem !== undefined
+        ? { seriesBaselineSystem: input.seriesBaselineSystem }
+        : {}),
+    };
+  }
+  const inHistory = input.systemPromptUpdate === "in-history";
+  if (
+    inHistory &&
+    input.seriesBaselineSystem !== undefined &&
+    input.seriesBaselineSystem !== text
+  ) {
+    // Keep message 0 byte-stable; append the new effective prompt after history.
+    return {
+      messages: [
+        { role: "system", content: input.seriesBaselineSystem },
+        ...input.history,
+        { role: "system", content: text },
+      ],
+      seriesBaselineSystem: input.seriesBaselineSystem,
+    };
+  }
+  return {
+    messages: [{ role: "system", content: text }, ...input.history],
+    seriesBaselineSystem: text,
+  };
+}
+
+async function buildModelRequest(input: {
   events: readonly SessionEvent[];
   sessionId: string;
   system?: string;
   assemble?: AssembleOptions;
+  /** Resolved persona for this step (string form of assemble.persona). */
+  resolvedPersona?: string;
   tools: { list(): readonly { name: string; description: string; parameters: Record<string, unknown> }[] };
   nowIso: string;
   /** First LLM call in the turn still treats userText as skeleton user. */
@@ -323,7 +406,16 @@ function buildModelRequest(input: {
   userText: string;
   /** Recipe instructions from slash expand (appended as workspace block). */
   slashSystemExtra?: string;
-}): { system?: string; messages: ChatMessage[]; tools: AssembledRequest["tools"] } {
+  /** Model-declared mode; omit → always lead with system. */
+  systemPromptUpdate?: SystemPromptUpdate;
+  /** Leading system text retained for the current request series. */
+  seriesBaselineSystem?: string;
+}): Promise<{
+  system?: string;
+  messages: ChatMessage[];
+  tools: AssembledRequest["tools"];
+  seriesBaselineSystem?: string;
+}> {
   const derived = deriveMessages(input.events);
 
   const toolDefs = [...input.tools.list()]
@@ -340,15 +432,25 @@ function buildModelRequest(input: {
       ? DEFAULT_PLAN_POLICY_SECTION
       : "";
     const system = [input.system, planExtra].filter((s) => s?.trim()).join("\n\n");
-    const messages: ChatMessage[] = [];
-    if (system) messages.push({ role: "system", content: system });
-    messages.push(...derived);
-    // Wire history ≡ log derivation (system lives in header / leading role).
-    assertModelVisible(input.events, durableModelHistory(messages));
+    const placed = placeSystemOnWire({
+      systemText: system,
+      history: derived,
+      ...(input.systemPromptUpdate !== undefined
+        ? { systemPromptUpdate: input.systemPromptUpdate }
+        : {}),
+      ...(input.seriesBaselineSystem !== undefined
+        ? { seriesBaselineSystem: input.seriesBaselineSystem }
+        : {}),
+    });
+    // Wire history ≡ log derivation (system lives in header / wire roles only).
+    assertModelVisible(input.events, durableModelHistory(placed.messages));
     return {
       ...(system ? { system } : {}),
-      messages,
+      messages: placed.messages,
       tools: toolDefs,
+      ...(placed.seriesBaselineSystem !== undefined
+        ? { seriesBaselineSystem: placed.seriesBaselineSystem }
+        : {}),
     };
   }
 
@@ -372,13 +474,15 @@ function buildModelRequest(input: {
   }
 
   const planActive = foldPlanMode(input.events);
+  const personaText =
+    input.resolvedPersona !== undefined
+      ? input.resolvedPersona
+      : typeof input.assemble?.persona === "string"
+        ? input.assemble.persona
+        : input.system;
   const assembled = assembleThreeLayers({
     skeletonSystem: {
-      ...(input.assemble?.persona !== undefined
-        ? { persona: input.assemble.persona }
-        : input.system !== undefined
-          ? { persona: input.system }
-          : {}),
+      ...(personaText !== undefined ? { persona: personaText } : {}),
       ...(input.assemble?.mcpProtocol
         ? { mcpProtocol: input.assemble.mcpProtocol }
         : {}),
@@ -412,17 +516,28 @@ function buildModelRequest(input: {
   });
 
   // Drop zero-width-only skeleton user on follow-up steps
-  const messages = assembled.messages.filter(
+  const historyMessages = assembled.messages.filter(
     (m) => !(m.role === "user" && m.content === "\u200b"),
   );
 
+  const placed = placeSystemOnWire({
+    systemText: assembled.system,
+    history: historyMessages,
+    ...(input.systemPromptUpdate !== undefined
+      ? { systemPromptUpdate: input.systemPromptUpdate }
+      : {}),
+    ...(input.seriesBaselineSystem !== undefined
+      ? { seriesBaselineSystem: input.seriesBaselineSystem }
+      : {}),
+  });
+
   return {
     system: assembled.system,
-    messages: [
-      { role: "system", content: assembled.system },
-      ...messages,
-    ],
+    messages: placed.messages,
     tools: assembled.tools,
+    ...(placed.seriesBaselineSystem !== undefined
+      ? { seriesBaselineSystem: placed.seriesBaselineSystem }
+      : {}),
   };
 }
 
@@ -446,6 +561,8 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   let toolFailed = 0;
   const compaction = resolveCompactionOptions(input.compaction);
   let overflowRecovered = false;
+  /** Leading system text for in-history KV-cache series within this turn. */
+  let seriesBaselineSystem: string | undefined;
 
   let userText = input.userText;
   let userContent: MessageContent = input.userContent ?? input.userText;
@@ -597,12 +714,19 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     }
     const table = isLastStep ? undefined : materializeTools(input.tools);
 
-    const buildReq = () =>
-      buildModelRequest({
+    const buildReq = async () => {
+      const toolNames = (table?.list() ?? []).map((t) => t.name);
+      const resolvedPersona = input.assemble
+        ? await resolveAssemblePersona(input.assemble.persona, toolNames)
+        : undefined;
+      const built = await buildModelRequest({
         events: readSessionEvents(input.store, input.sessionId),
         sessionId: input.sessionId,
         ...(input.system !== undefined ? { system: input.system } : {}),
         ...(input.assemble ? { assemble: input.assemble } : {}),
+        ...(resolvedPersona !== undefined
+          ? { resolvedPersona }
+          : {}),
         tools: table ?? { list: () => [] },
         nowIso: new Date(now()).toISOString(),
         firstStep: steps === 1,
@@ -610,9 +734,20 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         ...(slashSystemExtra !== undefined
           ? { slashSystemExtra }
           : {}),
+        ...(input.llm.systemPromptUpdate !== undefined
+          ? { systemPromptUpdate: input.llm.systemPromptUpdate }
+          : {}),
+        ...(seriesBaselineSystem !== undefined
+          ? { seriesBaselineSystem }
+          : {}),
       });
+      if (built.seriesBaselineSystem !== undefined) {
+        seriesBaselineSystem = built.seriesBaselineSystem;
+      }
+      return built;
+    };
 
-    let req = buildReq();
+    let req = await buildReq();
 
     // Soft budget: count messages + tool schemas (tools alone can dwarf history).
     // Prune under pressure, remeasure, summarize; fail closed if still over —
@@ -638,7 +773,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
           stepId,
         });
         if (pruned.pruned > 0) {
-          req = buildReq();
+          req = await buildReq();
           used = measure();
         }
         if (used > softCeiling) {
@@ -653,7 +788,9 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
             now,
           });
           if (did.compacted) {
-            req = buildReq();
+            // Compaction breaks the cached prefix → re-baseline system at head.
+            seriesBaselineSystem = undefined;
+            req = await buildReq();
             used = measure();
           }
         }
@@ -763,7 +900,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
           stepId,
         });
         if (pruned.pruned > 0) {
-          req = buildReq();
+          req = await buildReq();
           assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
           maybeAppendRequestHeader({
             store: input.store,
@@ -799,7 +936,8 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
               throw retryErr;
             }
             if (!did.compacted) throw retryErr;
-            req = buildReq();
+            seriesBaselineSystem = undefined;
+            req = await buildReq();
             assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
             maybeAppendRequestHeader({
               store: input.store,
@@ -832,7 +970,8 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
             throw err;
           }
           if (!did.compacted) throw err;
-          req = buildReq();
+          seriesBaselineSystem = undefined;
+          req = await buildReq();
           assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
           maybeAppendRequestHeader({
             store: input.store,

@@ -11,6 +11,8 @@
 | [0005](./0005-compose-leaf.md) | `@xrkseek/compose` 叶包 | Accepted |
 | [0006](./0006-im-long-lived-gateway.md) | IM 长连接网关 | Accepted |
 | [0007](./0007-taskflow-external-runtime.md) | 任务流外部运行时 | Accepted |
+| [0008](./0008-desktop-shell-private-host.md) | Desktop 壳与私有 Host | Proposed |
+| [0009](./0009-session-format-v3-vs-sqlite-schema-v3.md) | Session Format V3 ≠ SQLite schema v3 | Accepted |
 
 产品入口：[docs/README.md](../README.md) · [status.md](../status.md)。
 
@@ -29,5 +31,7 @@
 | [0005](./0005-compose-leaf.md) | `@xrkseek/compose` leaf package | Accepted |
 | [0006](./0006-im-long-lived-gateway.md) | IM long-lived gateway | Accepted |
 | [0007](./0007-taskflow-external-runtime.md) | Task flow external runtime | Accepted |
+| [0008](./0008-desktop-shell-private-host.md) | Desktop shell and private Host | Proposed |
+| [0009](./0009-session-format-v3-vs-sqlite-schema-v3.md) | Session Format V3 ≠ SQLite schema v3 | Accepted |
 
 Product entry: [docs/README.md](../README.md) · [status.md](../status.md).

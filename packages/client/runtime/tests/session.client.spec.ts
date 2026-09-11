@@ -483,6 +483,7 @@ describe('prompt and cancel errors', () => {
       {
         parentSessionId: PARENT, childSessionId: SID, mode: 'continuable',
         content: [{ type: 'text', text: '继续' }],
+        delivery: 'queue',
         clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
     ])
@@ -498,6 +499,25 @@ describe('prompt and cancel errors', () => {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
       parentAvailable: true,
     })
+  })
+
+  it('forwards composer Steer as subagent.prompt delivery', async () => {
+    const api = new FakeApiClient()
+    const session = new Session(SID, api, fakeRemote(), {
+      address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
+      parentAvailable: true,
+    })
+    await session.open()
+    const prompted = await session.prompt([{ type: 'text', text: '插话' }], 'steer')
+    expect(prompted).toEqual({ ok: true, value: { accepted: true } })
+    expect(api.callsOf('subagent.prompt')).toEqual([
+      {
+        parentSessionId: PARENT, childSessionId: SID, mode: 'continuable',
+        content: [{ type: 'text', text: '插话' }],
+        delivery: 'steer',
+        clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+    ])
   })
 
   it('lands an interrupt business failure in promptError with op=stop', async () => {

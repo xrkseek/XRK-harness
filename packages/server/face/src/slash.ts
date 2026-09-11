@@ -31,6 +31,10 @@ import { formatMcpInventoryText, settingsMutateFace } from "./settings-credentia
 import { resolveSessionCwd } from "./session-cwd.js";
 import { resolveSessionModelSelection } from "./model-catalog.js";
 import { selectSessionModel } from "./select-session-model.js";
+import {
+  FEEDBACK_TEXT_MAX_CHARS,
+  recordSessionFeedback,
+} from "./session-feedback.js";
 
 export type SlashRecipesLoader = () => Promise<readonly Recipe[]> | readonly Recipe[];
 
@@ -505,14 +509,14 @@ export async function executeFaceCommand(
         null,
       );
     }
-    if (text.length > 8192) {
+    if (text.length > FEEDBACK_TEXT_MAX_CHARS) {
       return appendCommandPair(
         runtime,
         sessionId,
         parsed,
         {
           kind: "error",
-          text: "Feedback text must be at most 8192 characters.",
+          text: `Feedback text must be at most ${FEEDBACK_TEXT_MAX_CHARS} characters.`,
         },
         undefined,
         null,
@@ -527,25 +531,32 @@ export async function executeFaceCommand(
       name: "feedback",
       source: { kind: "user" },
     });
-    runtime.store.append(sessionId, {
-      type: "feedback/record",
-      ts: ts + 1,
-      text,
-    });
+    recordSessionFeedback(
+      runtime.store,
+      sessionId,
+      { text },
+      {
+        ...(runtime.feedbackSlicesDir !== undefined
+          ? { slicesDir: runtime.feedbackSlicesDir }
+          : {}),
+        ts: ts + 1,
+      },
+    );
     const summarySeq = sessionEventCount(runtime.store, sessionId);
+    const ack = `Feedback recorded for session ${sessionId}. Session sharing is not configured.`;
     runtime.store.append(sessionId, {
       type: "command/done",
       ts: ts + 2,
       commandId,
       kind: "success",
-      text: `Feedback recorded for session ${sessionId}. Session sharing is not configured.`,
+      text: ack,
       sourceEventSeq: summarySeq,
     });
     return {
       commandId,
       result: {
         kind: "success",
-        text: `Feedback recorded for session ${sessionId}. Session sharing is not configured.`,
+        text: ack,
       },
     };
   }

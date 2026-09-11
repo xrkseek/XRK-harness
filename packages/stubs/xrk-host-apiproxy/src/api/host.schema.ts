@@ -67,9 +67,29 @@ export const hostCreateDirectoryValueSchema = z.object({
 /** host.openPath request payload. */
 export const hostOpenPathRequestSchema = z.object({
   path: z.string().min(1),
+  reveal: z.boolean().optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'host.openPath'>>>
 
 /** host.openPath response value. */
 export const hostOpenPathValueSchema = z.object({
   opened: z.literal(true),
 }) satisfies z.ZodType<Wire<ResponseValue<'host.openPath'>>>
+
+/** host.listOpenInApps request payload. */
+export const hostListOpenInAppsRequestSchema = z.object({}) satisfies z.ZodType<Wire<RequestPayload<'host.listOpenInApps'>>>
+
+/** host.listOpenInApps response value. */
+export const hostListOpenInAppsValueSchema = z.object({
+  apps: z.array(z.string()),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.listOpenInApps'>>>
+
+/** host.openInApp request payload. */
+export const hostOpenInAppRequestSchema = z.object({
+  app: z.string().min(1),
+  path: z.string().min(1),
+}) satisfies z.ZodType<Wire<RequestPayload<'host.openInApp'>>>
+
+/** host.openInApp response value. */
+export const hostOpenInAppValueSchema = z.object({
+  opened: z.literal(true),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.openInApp'>>>

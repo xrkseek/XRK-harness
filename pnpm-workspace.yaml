@@ -1,4 +1,5 @@
 packages:
+  # Product apps: cli · web · console · desktop · desktop-host (Node ≥26)
   - "apps/*"
   - "packages/*"
   - "packages/client/*"

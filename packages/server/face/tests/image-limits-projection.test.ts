@@ -89,6 +89,7 @@ describe("Face imageLimits projection (DSH attachment intake)", () => {
       }
     ).projections;
     expect(projections?.values.imageLimits).toEqual(attachments.imageLimits);
+    expect(projections?.values.fileLimits).toEqual(attachments.fileLimits);
   });
 
   it("leaves imageLimits absent when no AttachmentStore", async () => {
@@ -112,6 +113,7 @@ describe("Face imageLimits projection (DSH attachment intake)", () => {
       }
     ).projections;
     expect("imageLimits" in (projections?.values ?? {})).toBe(false);
+    expect("fileLimits" in (projections?.values ?? {})).toBe(false);
   });
 
   it("patched append never mux-pushes imageLimits", () => {

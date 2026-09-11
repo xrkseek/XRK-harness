@@ -17,6 +17,7 @@ import { hostFrameSchema, muxFrameSchema } from '../api/events.schema.ts'
 import {
   hostCreateDirectoryValueSchema, hostDescribeValueSchema,
   hostListDirectoryValueSchema, hostOpenPathValueSchema, hostPickDirectoryValueSchema,
+  hostListOpenInAppsValueSchema, hostOpenInAppValueSchema,
 } from '../api/host.schema.ts'
 import {
   sessionCancelValueSchema,
@@ -120,6 +121,8 @@ export interface IApiClient {
     listDirectory(payload: RequestPayload<'host.listDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.listDirectory'>>>
     createDirectory(payload: RequestPayload<'host.createDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.createDirectory'>>>
     openPath(payload: RequestPayload<'host.openPath'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.openPath'>>>
+    listOpenInApps(payload: RequestPayload<'host.listOpenInApps'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.listOpenInApps'>>>
+    openInApp(payload: RequestPayload<'host.openInApp'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.openInApp'>>>
   }
   workspace: {
     list(payload: RequestPayload<'workspace.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.list'>>>
@@ -202,6 +205,8 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'host.listDirectory': hostListDirectoryValueSchema,
   'host.createDirectory': hostCreateDirectoryValueSchema,
   'host.openPath': hostOpenPathValueSchema,
+  'host.listOpenInApps': hostListOpenInAppsValueSchema,
+  'host.openInApp': hostOpenInAppValueSchema,
   'workspace.list': workspaceListValueSchema,
   'workspace.create': workspaceCreateValueSchema,
   'workspace.rename': workspaceRenameValueSchema,
@@ -456,6 +461,8 @@ export abstract class AbstractApiClient implements IApiClient {
     listDirectory: (payload, signal) => this.callUnary('host.listDirectory', payload, signal),
     createDirectory: (payload, signal) => this.callUnary('host.createDirectory', payload, signal),
     openPath: (payload, signal) => this.callUnary('host.openPath', payload, signal),
+    listOpenInApps: (payload, signal) => this.callUnary('host.listOpenInApps', payload, signal),
+    openInApp: (payload, signal) => this.callUnary('host.openInApp', payload, signal),
   }
 
   readonly workspace: IApiClient['workspace'] = {

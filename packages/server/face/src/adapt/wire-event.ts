@@ -122,27 +122,50 @@ function wireContentBlocks(content: MessageContent): readonly (
         originalDimensions?: { width: number; height: number };
       };
     }
+  | {
+      type: "file";
+      attachment: {
+        attachmentId: string;
+        name: string;
+        bytes: number;
+        mediaType?: string;
+      };
+    }
 )[] {
-  return asContentBlocks(content).map((block) =>
-    block.type === "text"
-      ? { type: "text" as const, text: block.text }
-      : {
-          type: "image" as const,
-          attachment: {
-            attachmentId: block.attachment.attachmentId,
-            mediaType: block.attachment.mediaType,
-            bytes: block.attachment.bytes,
-            width: block.attachment.width,
-            height: block.attachment.height,
-            ...(block.attachment.name !== undefined
-              ? { name: block.attachment.name }
-              : {}),
-            ...(block.attachment.originalDimensions !== undefined
-              ? { originalDimensions: { ...block.attachment.originalDimensions } }
-              : {}),
-          },
+  return asContentBlocks(content).map((block) => {
+    if (block.type === "text") {
+      return { type: "text" as const, text: block.text };
+    }
+    if (block.type === "file") {
+      return {
+        type: "file" as const,
+        attachment: {
+          attachmentId: block.attachment.attachmentId,
+          name: block.attachment.name,
+          bytes: block.attachment.bytes,
+          ...(block.attachment.mediaType !== undefined
+            ? { mediaType: block.attachment.mediaType }
+            : {}),
         },
-  );
+      };
+    }
+    return {
+      type: "image" as const,
+      attachment: {
+        attachmentId: block.attachment.attachmentId,
+        mediaType: block.attachment.mediaType,
+        bytes: block.attachment.bytes,
+        width: block.attachment.width,
+        height: block.attachment.height,
+        ...(block.attachment.name !== undefined
+          ? { name: block.attachment.name }
+          : {}),
+        ...(block.attachment.originalDimensions !== undefined
+          ? { originalDimensions: { ...block.attachment.originalDimensions } }
+          : {}),
+      },
+    };
+  });
 }
 
 /**

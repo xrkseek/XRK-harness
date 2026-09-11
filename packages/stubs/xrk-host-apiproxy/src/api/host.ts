@@ -87,12 +87,29 @@ export interface HostApi {
 
   /**
    * Open a filesystem path with the operating system's default application
-   * (Finder / Explorer / xdg-open hand-off). The browser carrier's
-   * prefix-wide trust fence covers this privileged method like every other
-   * `/api` request.
+   * (Finder / Explorer / xdg-open hand-off), or reveal it in the file manager
+   * when `reveal` is true. The browser carrier's prefix-wide trust fence covers
+   * this privileged method like every other `/api` request.
    */
   openPath(
-    request: RpcRequest<{ path: string }>,
+    request: RpcRequest<{ path: string; reveal?: boolean }>,
+    signal: AbortSignal,
+  ): Promise<RpcResponse<{ opened: true }>>
+
+  /**
+   * List catalog application ids this Host probed as installed (editors,
+   * terminals, file managers). Empty when `canOpenPath` is false or the Host
+   * process launched under SSH. Once per process.
+   */
+  listOpenInApps(
+    request: RpcRequest<{}>,
+  ): Promise<RpcResponse<{ apps: readonly string[] }>>
+
+  /**
+   * Open an absolute workspace directory in one probed application.
+   */
+  openInApp(
+    request: RpcRequest<{ app: string; path: string }>,
     signal: AbortSignal,
   ): Promise<RpcResponse<{ opened: true }>>
 }

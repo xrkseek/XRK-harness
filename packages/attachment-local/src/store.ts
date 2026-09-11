@@ -4,11 +4,14 @@ import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { chmod, link, mkdir, open, readFile, unlink } from 'node:fs/promises'
 import { dirname, join, parse, resolve } from 'node:path'
-import { AttachmentError } from '@xrkseek/attachment'
+import { AttachmentError, sanitizeAttachmentFileName } from '@xrkseek/attachment'
 import type {
+  FileAttachmentRef,
   ImageAttachmentLimits,
   ImageAttachmentRef,
+  SaveFileAttachment,
   SaveImageAttachment,
+  StoredFileAttachment,
   StoredImageAttachment,
 } from '@xrkseek/attachment'
 import { normalizeImage } from './normalization.js'
@@ -344,4 +347,112 @@ export async function readImageByAttachmentId(
     height: metadata.height,
   };
   return readImageFile(root, ref, signal);
+}
+
+
+/**
+ * Absolute immutable alias path for one stored file. Digest names a directory
+ * so the sanitized display name stays the leaf — models see a path ending in
+ * the real filename.
+ */
+export function storedFilePath(root: string, ref: FileAttachmentRef): string {
+  const match = ID_PATTERN.exec(String(ref.attachmentId))
+  if (match?.[1] === undefined) {
+    throw new AttachmentError('Attachment reference is invalid.', 'INVALID_ATTACHMENT_REF')
+  }
+  const name = sanitizeAttachmentFileName(ref.name)
+  if (name !== ref.name) {
+    throw new AttachmentError('File attachment reference is invalid.', 'INVALID_ATTACHMENT_REF')
+  }
+  return join(root, 'files', match[1].slice(0, 2), match[1], name)
+}
+
+/** Hard-link a content-addressed object under a filename alias (read-only). */
+async function publishFileAlias(
+  root: string,
+  objectDest: string,
+  alias: string,
+  sha256: string,
+): Promise<void> {
+  await mkdir(dirname(alias), { recursive: true })
+  try {
+    await link(objectDest, alias)
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error
+    const existing = digest(new Uint8Array(await readFile(alias)))
+    if (existing !== sha256) {
+      throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
+    }
+  }
+  await chmod(alias, 0o400)
+}
+
+export async function commitFileAttachment(
+  root: string,
+  input: SaveFileAttachment,
+): Promise<FileAttachmentRef> {
+  if (input.data.byteLength === 0) {
+    throw new AttachmentError('File bytes must be non-empty.', 'INVALID_ATTACHMENT_REF')
+  }
+  const sha256 = digest(input.data)
+  const attachmentId = `sha256:${sha256}`
+  const dest = objectPath(root, sha256)
+  await mkdir(dirname(dest), { recursive: true })
+  try {
+    await open(dest, 'wx').then(async (handle) => {
+      try {
+        await handle.writeFile(input.data)
+        await handle.close()
+      } catch (error) {
+        await handle.close().catch(() => {})
+        throw error
+      }
+    })
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error
+  }
+  const ref: FileAttachmentRef = {
+    attachmentId,
+    name: sanitizeAttachmentFileName(input.name),
+    bytes: input.data.byteLength,
+    ...(input.mediaType !== undefined && input.mediaType.length > 0
+      ? { mediaType: input.mediaType }
+      : {}),
+  }
+  await publishFileAlias(root, dest, storedFilePath(root, ref), sha256)
+  return ref
+}
+
+export async function readFileByAttachmentId(
+  root: string,
+  attachmentId: string,
+  signal?: AbortSignal,
+): Promise<StoredFileAttachment> {
+  const match = ID_PATTERN.exec(attachmentId)
+  if (match?.[1] === undefined) {
+    throw new AttachmentError('Attachment reference is invalid.', 'INVALID_ATTACHMENT_REF')
+  }
+  const dest = objectPath(root, match[1])
+  signal?.throwIfAborted()
+  let data: Uint8Array
+  try {
+    data = new Uint8Array(await readFile(dest))
+  } catch (error) {
+    signal?.throwIfAborted()
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      throw new AttachmentError('Attachment object is missing.', 'ATTACHMENT_NOT_FOUND')
+    }
+    throw new AttachmentError('Unable to read file attachment.', 'ATTACHMENT_READ_FAILED', { cause: error })
+  }
+  if (digest(data) !== match[1]) {
+    throw new AttachmentError('Attachment bytes do not match the recorded digest.', 'ATTACHMENT_CORRUPT')
+  }
+  return {
+    ref: {
+      attachmentId,
+      name: 'file',
+      bytes: data.byteLength,
+    },
+    data,
+  }
 }

@@ -335,7 +335,7 @@ describe("face dispatch", () => {
       expect(res.result.value).toEqual({
         models: [
           { id: "acme-large", name: "Acme Large", contextWindow: 65536 },
-          { id: "acme-small" },
+          { id: "acme-small", name: "acme-small" },
         ],
       });
     } finally {

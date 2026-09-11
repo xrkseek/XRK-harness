@@ -26,14 +26,14 @@ import {
   createFsLocalProvider,
   createFsTools,
   createReadImageTool,
-  FS_ROUTING_PROMPT_TEXT,
-  SHELL_ROUTING_PROMPT_TEXT,
+  formatFsRoutingPrompt,
+  formatShellRoutingPrompt,
   type FsService,
 } from "@xrkseek/exec-fs";
 import type { AttachmentStore } from "@xrkseek/attachment";
 import {
-  WEB_FETCH_GUIDANCE,
-  WEB_SEARCH_GUIDANCE,
+  formatWebFetchGuidance,
+  formatWebSearchGuidance,
   createDefaultWebAccess,
   createWebTools,
   type WebAccess,
@@ -182,6 +182,13 @@ export interface HarnessCompositionOptions {
   readonly policy?: PolicyEngine;
   /** Host vision: resolve attachment bytes for image user content. */
   readonly resolveImage?: Parameters<typeof createAgent>[0]["resolveImage"];
+  /** Host: AttachmentStore.fileHostPath → absolute path for uploaded files. */
+  readonly resolveFilePath?: Parameters<typeof createAgent>[0]["resolveFilePath"];
+  /**
+   * Absolute host directories `read_file` may open outside the workspace
+   * (attachment alias root). Writes remain workspace-bound.
+   */
+  readonly hostReadableRoots?: readonly string[];
   /** Durable image store — enables `read_image` when set. */
   readonly attachments?: AttachmentStore;
   /** Gate `read_image` on live route image modality (Host). */
@@ -277,7 +284,13 @@ export function createHarnessComposition(
   options: HarnessCompositionOptions,
 ): HarnessComposition {
   const fs =
-    options.fs ?? createFsLocalProvider({ root: options.workspaceRoot });
+    options.fs ??
+    createFsLocalProvider({
+      root: options.workspaceRoot,
+      ...(options.hostReadableRoots?.length
+        ? { hostReadableRoots: options.hostReadableRoots }
+        : {}),
+    });
   const sharedShell = options.shell;
   const rootShell =
     sharedShell ??
@@ -434,6 +447,10 @@ export function createHarnessComposition(
   const persona =
     options.system ??
     "You are a coding agent with filesystem, shell, and web tools.";
+  /** When set, routing sections follow this catalog (materialize / filter); else live registry. */
+  let routingNames: ReadonlySet<string> | undefined;
+  const availableToolNames = (): ReadonlySet<string> =>
+    routingNames ?? new Set(tools.list().map((t) => t.name));
   const prompts = createSystemPromptAssembler();
   prompts.register({
     id: "base",
@@ -444,12 +461,12 @@ export function createHarnessComposition(
     prompts.register({
       id: "tool:web_search",
       order: 110,
-      content: () => WEB_SEARCH_GUIDANCE,
+      content: () => formatWebSearchGuidance(availableToolNames()),
     });
     prompts.register({
       id: "tool:web_fetch",
       order: 111,
-      content: () => WEB_FETCH_GUIDANCE,
+      content: () => formatWebFetchGuidance(availableToolNames()),
     });
   }
   prompts.register({
@@ -461,35 +478,58 @@ export function createHarnessComposition(
     prompts.register({
       id: "tool:lsp",
       order: 113,
-      content: () => LSP_PROMPT_TEXT,
+      content: () =>
+        availableToolNames().has("lsp") ? LSP_PROMPT_TEXT : "",
     });
   }
   if (options.ptyTools !== false) {
     prompts.register({
       id: "tool:pty",
       order: 114,
-      content: () => PTY_PROMPT_TEXT,
+      content: () => {
+        const names = availableToolNames();
+        const hasTerminal =
+          names.has("terminal_open") ||
+          names.has("terminal_send") ||
+          names.has("terminal_read") ||
+          names.has("terminal_list") ||
+          names.has("terminal_close") ||
+          names.has("terminal_signal");
+        return hasTerminal ? PTY_PROMPT_TEXT : "";
+      },
     });
   }
   prompts.register({
     id: "tool:fs-routing",
     order: 104,
-    content: () => FS_ROUTING_PROMPT_TEXT,
+    content: () => formatFsRoutingPrompt(availableToolNames()),
   });
   prompts.register({
     id: "tool:shell-routing",
     order: 105,
-    content: () => SHELL_ROUTING_PROMPT_TEXT,
+    content: () => formatShellRoutingPrompt(availableToolNames()),
   });
   prompts.register({
     id: "tool:jobs",
     order: 106,
-    content: () => JOBS_PROMPT_TEXT,
+    content: () => {
+      const names = availableToolNames();
+      if (
+        !names.has("job_list") &&
+        !names.has("job_output") &&
+        !names.has("job_kill")
+      ) {
+        return "";
+      }
+      return JOBS_PROMPT_TEXT;
+    },
   });
   if (options.subagentRouting !== false) {
     prompts.register({
       id: "tool:subagent",
       order: 107,
+      // Bound on the live agent after createAgent (Host); keep section when
+      // composition opts in — do not require names on the freeze-time registry.
       content: () => SUBAGENT_ROUTING_PROMPT_TEXT,
     });
   }
@@ -528,7 +568,6 @@ export function createHarnessComposition(
     sessionId,
     prompts,
     async createAgent() {
-      const system = await prompts.assemble();
       const useAssemble = options.assemble !== false;
       const injectOn =
         shouldInject(options.assemble, options.workspaceInject);
@@ -551,13 +590,22 @@ export function createHarnessComposition(
           recipes = mergeRecipesById(fromHome, fromAgents, fromProduct);
         }
       }
+      const assemblePersona = async (ctx: {
+        readonly toolNames: readonly string[];
+      }) => {
+        routingNames = new Set(ctx.toolNames);
+        try {
+          return await prompts.assemble();
+        } finally {
+          routingNames = undefined;
+        }
+      };
       return createAgent({
         sessionId,
         store,
         llm,
         tools,
         pipeline,
-        system,
         jobs: {
           list: () =>
             shell.listJobsNow().map((j) => ({
@@ -572,7 +620,7 @@ export function createHarnessComposition(
         ...(useAssemble
           ? {
               assemble: {
-                persona: system,
+                persona: assemblePersona,
                 ...(options.toolOrder ? { toolOrder: options.toolOrder } : {}),
                 resolveSlash: createSlashResolver({
                   workspaceRoot: injectOpts.root,
@@ -581,7 +629,10 @@ export function createHarnessComposition(
                 }),
               },
             }
-          : {}),
+          : {
+              // Legacy path: freeze once (no per-step tool visibility).
+              system: await prompts.assemble(),
+            }),
         ...(injectOn
           ? {
               beforeUserMessage: async (ctx) => {
@@ -603,6 +654,9 @@ export function createHarnessComposition(
           }),
         ...(options.resolveImage
           ? { resolveImage: options.resolveImage }
+          : {}),
+        ...(options.resolveFilePath
+          ? { resolveFilePath: options.resolveFilePath }
           : {}),
         compaction:
           options.compaction === false

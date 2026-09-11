@@ -349,7 +349,7 @@ export function ConversationRoot({
     leftItems: zone === undefined ? null : renderSlot('conversation.input.left', zone),
     rightItems: zone === undefined ? null : renderSlot('conversation.input.right', zone),
     // Stats band under the card, inside the bar's width column so both
-    // share one constraint (composer.dock = stats-line family).
+    // share one constraint (composer.dock = dual session-stats pills).
     footer: !heroChrome && zone !== undefined ? renderSlot('conversation.composer.dock', zone) : null,
   })
 

@@ -68,10 +68,29 @@ This directory is the XRK **first-party** Host-side community adapter (`@xrkseek
 | 形状 / Shape | XRK 落点 / XRK landing |
 |------|----------|
 | `fetch("/api/…")` · `/_dsh/…` | Global capability table |
+| `/api/dsh-genui/prompt` · `/dsh-genui/*` | GenUI prompt toggle + runtime stub (`genui.ts`) |
 | `POST /{channel}` · `*-settings` | Settings store |
 | `client.js` paths / channels | `dsh-client-scan` inference |
+| `/sidebar/*` (audit) | **Host-native** (`host-sidebar`) — not a dsh-compat gap; see `audit-community-client` |
+| `/{pkg}/latest` (audit) | **npm-registry** metadata probe — not a Host gap |
 | Unlisted GET/POST | Honest JSON |
-| Panel `dynamicCordisRunner/*` | Face `cordis-stub` |
+| Panel `dynamicCordisRunner/*` | Face `cordis-stub`（见下）— **≠** Cordis Host embed |
+
+### 插件面板 Face / Plugin panel Face
+
+真源 / Source：`packages/server/face/src/handlers/cordis-stub.ts`（产品壳 Settings → Plugins 面板）。
+
+| Face 方法 / Method | dsh-compat 落点 / Landing |
+|------|----------|
+| `inventory` | Bridged package inventory（对齐 pluginInventory） |
+| `syncInspectManifest` · `resolveInspectQuery` · `resolveRequestRun` | Manifest / accept gates → `hostBridge: xrk-dsh-compat` |
+| `getClientCode` | Staged `client.js` |
+| `runHostHalf` | `host-apply-bridge`（on-demand `host.mjs`） |
+| `invoke` | Registry / fiber RPC forward；未桥接 → `fiber-unavailable` |
+| `stopFromPanel` · `undefineFromPanel` · `settleUserRun` | Stop / undefine / settle |
+| `reportRenderFailure` · `reportClientGuardFailure` | Ack only |
+
+回归形状清单 / Shape regression inventory：`tests/fixtures/compat-host-suite.json` → `shapes.http` · `shapes.rpc`。
 
 ## 与产品壳插件的关系 / Relation to Product-Shell Plugins
 

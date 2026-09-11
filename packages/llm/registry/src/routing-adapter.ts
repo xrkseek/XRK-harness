@@ -7,6 +7,7 @@ import type {
   LlmChatRequest,
   LlmChatResponse,
   LlmStreamEvent,
+  SystemPromptUpdate,
 } from "@xrkseek/llm";
 import type { LlmRequestConfig } from "@xrkseek/protocol";
 
@@ -118,6 +119,18 @@ export function createRoutingLlmAdapter(
       if (options.inputModalities !== undefined) return options.inputModalities;
       try {
         return resolveInner().inputModalities;
+      } catch {
+        return undefined;
+      }
+    },
+  });
+
+  Object.defineProperty(adapter, "systemPromptUpdate", {
+    enumerable: true,
+    configurable: true,
+    get(): SystemPromptUpdate | undefined {
+      try {
+        return resolveInner().systemPromptUpdate;
       } catch {
         return undefined;
       }

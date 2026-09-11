@@ -227,7 +227,7 @@ export function resolveSessionModelSelection(
 
   const deepseek = deepseekModels(runtime)[0];
   if (deepseek) return { provider: "deepseek", model: deepseek.id };
-  return { provider: "deepseek", model: "deepseek-v4-flash" };
+  return { provider: "deepseek", model: "deepseek-flash" };
 }
 
 export async function saveAgentDefaultModel(

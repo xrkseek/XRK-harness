@@ -55,6 +55,12 @@ describe("retainProjectedConversation", () => {
     );
     expect(retained.stats.truncated).toBe(true);
     expect(retained.stats.compacted).toBe(true);
+    expect(retained.fullData.conversation.map((r) => r.text)).toEqual(
+      projected.map((r) => r.text),
+    );
+    expect(retained.fullData.conversation.length).toBeGreaterThan(
+      retained.data.conversation.length,
+    );
   });
 
   it("returns undefined when fixed envelope fields cannot fit", () => {

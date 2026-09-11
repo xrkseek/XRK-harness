@@ -23,7 +23,13 @@ export function retainReferencedSession(
   snapshot: SessionSurfaceSnapshot,
   label: string,
   maxBytes: number,
-): { data: ReferencedSessionData; stats: ReferenceRetentionStats } | undefined {
+):
+  | {
+      data: ReferencedSessionData;
+      fullData: ReferencedSessionData;
+      stats: ReferenceRetentionStats;
+    }
+  | undefined {
   const projected = projectSessionConversation(snapshot);
   return retainProjectedConversation(
     {

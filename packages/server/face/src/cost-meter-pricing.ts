@@ -54,6 +54,7 @@ function withPeak(off: ModelPriceTier, peak: ModelPriceTier): ModelPriceRow {
 /** DeepSeek + aliases (per-million USD). Keys are lowercase product ids. */
 export const BUNDLED_MODEL_PRICES: Readonly<Record<string, ModelPriceRow>> =
   Object.freeze({
+    "deepseek-flash": withPeak(FLASH_OFF, FLASH_PEAK),
     "deepseek-v4-flash": withPeak(FLASH_OFF, FLASH_PEAK),
     "deepseek-v4-flash-vision": withPeak(FLASH_OFF, FLASH_PEAK),
     "deepseek-v4-flash-vision-exp": withPeak(FLASH_OFF, FLASH_PEAK),

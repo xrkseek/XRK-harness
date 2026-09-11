@@ -4,6 +4,7 @@
  */
 
 import path from "node:path";
+import { defaultWorkspaceTitle } from "./workspace-paths.js";
 
 export interface FaceWorkspaceView {
   readonly workspaceId: string;
@@ -32,7 +33,7 @@ export class FaceWorkspaceRegistry {
     this.workspaces.set(id, {
       workspaceId: id,
       path: abs,
-      title: path.basename(abs) || "workspace",
+      title: defaultWorkspaceTitle(abs),
       createdAt: now,
       updatedAt: now,
     });
@@ -120,7 +121,7 @@ export class FaceWorkspaceRegistry {
     this.workspaces.set(id, {
       workspaceId: id,
       path: abs,
-      title: path.basename(abs) || "workspace",
+      title: defaultWorkspaceTitle(abs),
       createdAt: now,
       updatedAt: now,
     });
@@ -351,7 +352,7 @@ export class FaceWorkspaceRegistry {
     if (wantsDefault) {
       const row = persistedDefault ?? {
         path: root,
-        title: path.basename(root) || "workspace",
+        title: defaultWorkspaceTitle(root),
         createdAt: now,
         updatedAt: now,
       };

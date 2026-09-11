@@ -1,4 +1,4 @@
-/** General Settings row for the Composer's busy-state Enter preference. */
+/** General Settings row for the Composer's busy-state send behavior (Enter and Send). */
 import { useState } from 'react'
 import type { SnapshotStore } from '@xrkseek/client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
@@ -13,7 +13,7 @@ export interface EnterBehaviorRowInjected {
     /** Persisted busy-state preference bound as useBusyEnter. */
     busyEnter: SnapshotStore<BusyEnterBehavior>
   }
-  /** Change the busy-state plain-Enter behavior. */
+  /** Change the busy-state submission behavior (Enter and Send). */
   setBusyEnter: (behavior: BusyEnterBehavior) => void
 }
 
@@ -32,7 +32,7 @@ const OPTIONS: readonly {
 ]
 
 /**
- * Render the busy-state Enter behavior selector.
+ * Render the busy-state send-behavior selector (Enter + primary Send).
  * @param props - composed Settings slot props.
  * @returns the preference row.
  */

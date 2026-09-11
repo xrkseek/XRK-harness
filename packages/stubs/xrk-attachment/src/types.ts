@@ -32,6 +32,13 @@ export interface ImageAttachmentLimits {
   mediaTypes: readonly ImageMediaType[]
 }
 
+/** Deployment-resolved limits for generic file admission. */
+export interface FileAttachmentLimits {
+  maxFileBytes: number
+  maxFilesPerMessage: number
+  maxMessageFileBytes: number
+}
+
 /** Request to validate and durably commit one image. */
 export interface SaveImageAttachment {
   data: Uint8Array

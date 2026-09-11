@@ -12,6 +12,7 @@
     "src/serialization.ts",
     "src/surface.ts",
     "src/retention.ts",
+    "src/spill.ts",
     "src/prepare-face.ts"
   ],
   "references": [

@@ -47,7 +47,13 @@ export function retainProjectedConversation(
   envelope: ReferencedSessionEnvelope,
   projected: readonly ProjectedConversationItem[],
   maxBytes: number,
-): { data: ReferencedSessionData; stats: ReferenceRetentionStats } | undefined {
+):
+  | {
+      data: ReferencedSessionData;
+      fullData: ReferencedSessionData;
+      stats: ReferenceRetentionStats;
+    }
+  | undefined {
   const original = projected.map((item) => ({ ...item }));
   const retained = original.map((item) => ({ ...item }));
   let omittedMessages = 0;
@@ -60,6 +66,14 @@ export function retainProjectedConversation(
     capturedThroughSeq: envelope.capturedThroughSeq,
     conversation: retained.map(({ role, text }) => ({ role, text })),
   });
+  /** Full projection before drop/truncate — spill target when the preview omits text. */
+  const fullData: ReferencedSessionData = {
+    sessionId: envelope.sessionId,
+    label: envelope.label,
+    cwd: envelope.cwd,
+    capturedThroughSeq: envelope.capturedThroughSeq,
+    conversation: original.map(({ role, text }) => ({ role, text })),
+  };
   const size = (): number =>
     Buffer.byteLength(stringifyTagSafeJson(data()), "utf8");
 
@@ -113,6 +127,7 @@ export function retainProjectedConversation(
   const omittedBytes = retainedOmittedBytes + droppedOmittedBytes;
   return {
     data: data(),
+    fullData,
     stats: {
       compacted,
       originalMessages: original.length,

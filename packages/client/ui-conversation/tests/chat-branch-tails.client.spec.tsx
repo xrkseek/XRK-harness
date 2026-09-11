@@ -1039,6 +1039,9 @@ describe('small branch tails', () => {
           : undefined}
       />,
     )
-    expect(view.container.textContent).toBe('1 轮 · 1 步| 输入 0 tok · 输出 10 tok')
+    expect(view.getByText('1 轮 · 1 步')).toBeTruthy()
+    const usagePill = view.getAllByRole('button')[0]!
+    expect(usagePill.textContent).toBe('10 tok')
+    expect(usagePill.getAttribute('aria-label')).toBe('10 tok')
   })
 })

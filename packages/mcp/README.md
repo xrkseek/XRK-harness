@@ -6,7 +6,7 @@ MCP client：stdio 或 streamable-http（或测试注入 transport）→ `listTo
 
 **能跑**：stdio · streamable-http · 命名 `mcp__<server>__<tool>` · `registerMcpTools` · **默认 `mcp.connect` deny** · **stdio/HTTP 有界进程重连**（`Client.onclose`；HTTP 另有 SDK SSE `reconnectionOptions`）。  
 Host 接线：`XRK_MCP_SERVERS`（`command` 或 `url`）+ `XRK_MCP_ALLOW=1`（见 [server-host 模块笔记](../../docs/modules/server-host.md)）。  
-`registerMcpTools` 默认 watch `tools/list_changed`（拉表失败保留上一代；gave-up 卸工具）。Face `mcp.servers` 可落盘；空 `XRK_MCP_SERVERS` 时 Host 在 mutate 后热挂载。Plugins → MCP 卡硬刷见 `product-shell-mcp.e2e.ts`。
+`registerMcpTools` 默认 watch `tools/list_changed`（拉表失败含重复分页游标时保留上一代；gave-up 卸工具）。`listTools` 排空分页并拒绝重复 `nextCursor`。Face `mcp.servers` 可落盘；空 `XRK_MCP_SERVERS` 时 Host 在 mutate 后热挂载。Plugins → MCP 卡硬刷见 `product-shell-mcp.e2e.ts`。
 
 门禁见 [docs/policy.md](../../docs/policy.md)。状态：[docs/status.md](../../docs/status.md)。  
 **文件地图**：[docs/modules/mcp.md](../../docs/modules/mcp.md)。

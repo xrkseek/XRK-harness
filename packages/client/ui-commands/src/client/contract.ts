@@ -26,16 +26,22 @@ export interface SelectOption {
 }
 
 /**
- * Business registration for the popupSelect command kind. Data is
- * self-served: options/onSelect use the business package's own protocol.
- * The shell component is owned by ui-commands; business never sees it. Both
- * callbacks receive the ClientSessionContext captured at popup open.
+ * Business registration for a command UI kind. Data is self-served:
+ * popupSelect options/onSelect use the business package's own protocol;
+ * action runs a bare client verb (e.g. open a dialog) without a popup.
+ * The shell component is owned by ui-commands; business never sees it.
+ * Callbacks receive the ClientSessionContext captured at invocation.
  */
-export type CommandUiSpec = {
-  readonly kind: 'popupSelect'
-  options(session: ClientSessionContext, signal: AbortSignal): Promise<readonly SelectOption[]>
-  onSelect(option: SelectOption, session: ClientSessionContext): void | Promise<void>
-}
+export type CommandUiSpec =
+  | {
+    readonly kind: 'popupSelect'
+    options(session: ClientSessionContext, signal: AbortSignal): Promise<readonly SelectOption[]>
+    onSelect(option: SelectOption, session: ClientSessionContext): void | Promise<void>
+  }
+  | {
+    readonly kind: 'action'
+    run(session: ClientSessionContext): void | Promise<void>
+  }
 
 /**
  * One client-owned command contribution: a slash-menu entry whose behavior
@@ -50,7 +56,7 @@ export interface CommandContribution {
   readonly description: string
   /** Capability filter, called with a fresh projection per candidate pass. */
   available(session: ClientSessionContext): boolean
-  /** The command's UI behavior (this phase: popupSelect only). */
+  /** The command's UI behavior (popupSelect or bare action). */
   readonly ui: CommandUiSpec
 }
 
@@ -68,7 +74,7 @@ export interface CommandDecoration {
   readonly name: string
   /** Capability filter, called with a fresh projection per bare invocation. */
   available(session: ClientSessionContext): boolean
-  /** The bare-invocation UI (this phase: popupSelect only). */
+  /** The bare-invocation UI (popupSelect or bare action). */
   readonly ui: CommandUiSpec
 }
 

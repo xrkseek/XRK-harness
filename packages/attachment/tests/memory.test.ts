@@ -57,4 +57,38 @@ describe("@xrkseek/attachment memory store", () => {
     const b = await store.saveImage({ data: pngBytes(), mediaType: "image/png" });
     expect(a.attachmentId).toBe(b.attachmentId);
   });
+
+  it("saveFiles then readFile round-trips", async () => {
+    const store = createMemoryAttachmentStore();
+    const data = new TextEncoder().encode("hello-file");
+    const [ref] = await store.saveFiles([
+      { data, name: "note.txt", mediaType: "text/plain" },
+    ]);
+    expect(ref!.attachmentId.startsWith("sha256:")).toBe(true);
+    expect(ref!.name).toBe("note.txt");
+    expect(ref!.bytes).toBe(data.byteLength);
+    expect(ref!.mediaType).toBe("text/plain");
+    const stored = await store.readFile(ref!.attachmentId);
+    expect(stored.ref).toEqual(ref);
+    expect(stored.data).toEqual(data);
+  });
+
+  it("rejects path-like file names by sanitizing to leaf", async () => {
+    const store = createMemoryAttachmentStore();
+    const ref = await store.saveFile({
+      data: new TextEncoder().encode("x"),
+      name: "C:\\\\Users\\\\x\\\\evil.pdf",
+    });
+    expect(ref.name).toBe("evil.pdf");
+    expect(ref.name.includes("\\")).toBe(false);
+  });
+
+  it("rejects oversized single file", async () => {
+    const store = createMemoryAttachmentStore({
+      fileLimits: { maxFileBytes: 4 },
+    });
+    await expect(
+      store.saveFiles([{ data: new TextEncoder().encode("too-big"), name: "a.bin" }]),
+    ).rejects.toMatchObject({ code: "FILE_TOO_LARGE" });
+  });
 });

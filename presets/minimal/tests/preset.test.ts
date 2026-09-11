@@ -8,6 +8,29 @@ import { runTool } from "@xrkseek/core-tools";
 import { createMinimalComposition } from "../preset.js";
 
 describe("minimal preset plugins + policy", () => {
+  it("defaults to fs read/write/edit tools without bash", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-min-tools-"));
+    const composition = createMinimalComposition({
+      workspaceRoot: root,
+      assemble: false,
+      workspaceInject: false,
+      slashRecipes: false,
+      llm: createReplayAdapter([{ content: "x" }]),
+    });
+    for (const name of [
+      "read_file",
+      "write_file",
+      "apply_edit",
+      "glob",
+      "grep",
+      "skill",
+    ] as const) {
+      expect(composition.tools.get(name)).toBeTruthy();
+    }
+    expect(composition.tools.get("bash")).toBeUndefined();
+    expect(composition.tools.get("terminal_open")).toBeUndefined();
+  });
+
   it("wires plugin tools and respects explicit_wins", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-min-"));
     const composition = createMinimalComposition({

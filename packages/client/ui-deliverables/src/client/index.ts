@@ -9,6 +9,7 @@
  */
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
+import { resolveWorkspacePath } from '@xrkseek/client-runtime/client'
 import type { ChatFileMentions } from '@xrkseek/client-ui-conversation/client'
 import type {} from '@xrkseek/client-locale/client'
 import { ProducedFiles } from './ProducedFiles.tsx'
@@ -28,7 +29,7 @@ export { ProducedFiles, type ProducedFilesProps } from './ProducedFiles.tsx'
 export { producedForClosing } from './turn-deliverables.ts'
 
 /** Required services for the tail-slot registration and its dictionaries. */
-export const inject = ['slots', 'locale', 'conversationEvents', 'connection']
+export const inject = ['slots', 'locale', 'conversationEvents', 'connection', 'sessions']
 
 /**
  * Client plugin body: register the dictionaries and the turn-tail entry.
@@ -46,6 +47,19 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: () => ({
         isLoopback: connection.isLoopback,
+        openNativePath: async (path: string, options?: { readonly reveal?: boolean }) => {
+          const snap = ctx.sessions.list.getSnapshot()
+          const cwd = snap.current === undefined
+            ? undefined
+            : snap.byId[snap.current]?.cwd
+          const response = await connection.api.host.openPath({
+            path: resolveWorkspacePath(cwd, path),
+            ...(options?.reveal === true ? { reveal: true } : {}),
+          })
+          if (!response.result.ok) {
+            throw new Error(`path open failed: ${response.result.error.message}`)
+          }
+        },
         hooks: { hostDescription: connection.hostDescription },
       }),
     }, ProducedFiles),

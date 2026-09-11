@@ -258,6 +258,7 @@ export function createToolPipeline(
         ctx.result = {
           content: ctx.denyReason ?? "denied by pre-execute",
           isError: true,
+          ...(ctx.denyError ? { error: ctx.denyError } : {}),
         };
       } else {
         stages.push("guards");
@@ -269,6 +270,7 @@ export function createToolPipeline(
           ctx.result = {
             content: ctx.denyReason,
             isError: true,
+            ...(ctx.denyError ? { error: ctx.denyError } : {}),
           };
         } else if (!tool) {
           ctx.skippedBody = true;

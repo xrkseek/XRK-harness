@@ -30,8 +30,14 @@ packages/stubs/**/lib/
 # Accidental cwd dump when harness home resolves to repo root
 /workspaces.json
 
+# Desktop unpackaged build / isolated development home (ADR-0008)
+apps/desktop/.desktop-build/
+
 # Release staging (fat CLI)
 .release/
+.release-dead*/
+.release-park*/
+.release-old*/
 apps/cli/product-web/
 
 # Local probes / Playwright MCP dumps (never commit)

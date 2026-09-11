@@ -97,6 +97,11 @@ export interface FaceRuntime {
   readonly subagents: FaceSubagentRegistry;
   /** Per-session assistant-message ratings (process-local CAS). */
   readonly messageFeedback: FaceMessageFeedbackStore;
+  /**
+   * Directory for conversation-slice JSON on session feedback
+   * (`feedback/record` · `sessionFeedback/record`).
+   */
+  readonly feedbackSlicesDir?: string;
   /** Per-session Goal sidecar (projection key `goal`). */
   readonly goals: FaceGoalStore;
   /** Session-scoped turn/step numbers for DSH wire events. */

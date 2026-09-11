@@ -3,7 +3,7 @@ name: xrk-release-notes
 description: >-
   Write or revise XRK-Harness version release notes under docs/releases/ and
   GitHub Release bodies. Use when shipping a version, drafting v*.md, or editing
-  publishing release checklist. Enforces DSH-style Added/Improved/Removed/Fixed
+  publishing release checklist. Enforces Added/Improved/Removed/Fixed
   sections; forbids diary voice.
 disable-model-invocation: true
 user-invocable: false
@@ -12,7 +12,6 @@ user-invocable: false
 # 笔记 · 写发行说明
 
 规则全文（打开 `docs/releases/**` 时自动挂载）：`.cursor/rules/xrk-release-notes.mdc`。  
-对照：[DSH Releases](https://github.com/deepseek-ai/deepseek-harness/releases)（rc.8 等）。  
 发版命令：[docs/publishing.md](../../../docs/publishing.md)。
 
 ## 动手顺序

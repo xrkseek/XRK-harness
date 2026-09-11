@@ -87,7 +87,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 
 改 **`apps/web` 壳** 或 `boot.json` 图：另跑 `pnpm web:build` · `pnpm web:assemble`。维护者 Face 验证台：`apps/console`（`?console=1`），**不是**产品入口。
 
-遗留 DSH 全 Cordis scaffold + 浏览器 HMR 测例：`apps/web/tests/hmr-live.e2e.ts`（**不进** `pnpm test:web` / `pnpm check`）。
+遗留全 Cordis scaffold + 浏览器 HMR 测例：`apps/web/tests/hmr-live.e2e.ts`（**不进** `pnpm test:web` / `pnpm check`）。
 
 ## 开发环境 vs 生产环境
 
@@ -252,7 +252,7 @@ When editing **`packages/client/*`** client plugins:
 
 For **`apps/web` shell** or `boot.json` graph changes, also run `pnpm web:build` · `pnpm web:assemble`. Maintainer Face console: `apps/console` (`?console=1`), **not** the product entry.
 
-Legacy DSH full Cordis scaffold + browser HMR soak: `apps/web/tests/hmr-live.e2e.ts` (**not** in `pnpm test:web` / `pnpm check`).
+Legacy full Cordis scaffold + browser HMR soak: `apps/web/tests/hmr-live.e2e.ts` (**not** in `pnpm test:web` / `pnpm check`).
 
 ## Development vs production
 

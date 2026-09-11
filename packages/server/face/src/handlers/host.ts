@@ -4,6 +4,10 @@ import {
   hostListDirectory,
 } from "../host-directory.js";
 import { canOpenNativePath, hostOpenPath } from "../host-open-path.js";
+import {
+  hostListOpenInApps,
+  hostOpenInApp,
+} from "../host-open-in-app.js";
 import { hostPickDirectoryRpc } from "../host-pick-directory.js";
 import type { FaceHandler } from "./types.js";
 
@@ -49,3 +53,12 @@ export const hostOpenPathHandler: FaceHandler = async (
   _rpcId,
   payload,
 ) => hostOpenPath(payload);
+
+export const hostListOpenInAppsHandler: FaceHandler = async () =>
+  hostListOpenInApps();
+
+export const hostOpenInAppHandler: FaceHandler = async (
+  _runtime,
+  _rpcId,
+  payload,
+) => hostOpenInApp(payload);

@@ -172,6 +172,14 @@ export const llmProviders: FaceHandler = async (runtime) => {
     };
   });
   for (const declared of listDeclaredPiAiProviders(runtime)) {
+    let error: string | undefined;
+    if (!declared.api) {
+      error = `llm-pi-ai: provider "${declared.id}" needs an api`;
+    } else if (!declared.baseUrl) {
+      error = `llm-pi-ai: provider "${declared.id}" needs a baseURL`;
+    } else if (declared.models.length === 0) {
+      error = `llm-pi-ai: provider "${declared.id}" resolves no models`;
+    }
     providers.push({
       provider: declared.id,
       displayName: declared.displayName,
@@ -179,6 +187,7 @@ export const llmProviders: FaceHandler = async (runtime) => {
       settingsPath: ["providers", declared.id],
       active: routeServed(runtime, declared.id),
       declared: true,
+      ...(error !== undefined ? { error } : {}),
     });
   }
   return { ok: true, value: { providers } };
@@ -188,7 +197,7 @@ export const llmModels: FaceHandler = async (runtime) => {
   return { ok: true, value: buildFaceModelCatalog(runtime) };
 };
 
-/** Namespaces this Host can interrogate (openai-chat GET /models). */
+/** Namespaces this Host can interrogate (OpenAI-compatible + Anthropic listing). */
 const DISCOVERY_NS = new Set(["llm-deepseek", "llm-pi-ai"]);
 
 function resolveDiscoveryBaseUrl(

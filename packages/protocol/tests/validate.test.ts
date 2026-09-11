@@ -409,9 +409,28 @@ describe("parseSessionEvent", () => {
       type: "feedback/record",
       text: "the diff view is unreadable",
     });
-    expect(() =>
+    expect(
       parseSessionEvent({ type: "feedback/record", ts: 6, text: "  " }),
-    ).toThrow(/non-empty/);
+    ).toEqual({ type: "feedback/record", ts: 6 });
+    expect(
+      parseSessionEvent({
+        type: "feedback/record",
+        ts: 6,
+        category: "task-result",
+        sliceId: "slice-1",
+      }),
+    ).toMatchObject({
+      type: "feedback/record",
+      category: "task-result",
+      sliceId: "slice-1",
+    });
+    expect(() =>
+      parseSessionEvent({
+        type: "feedback/record",
+        ts: 6,
+        category: "not-real",
+      }),
+    ).toThrow(/category/);
 
     expect(
       parseSessionEvent({

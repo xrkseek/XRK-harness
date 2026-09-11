@@ -16,3 +16,18 @@ export function isLoopbackHostname(hostname: string): boolean {
     && parts[0] === '127'
     && parts.every(part => /^\d{1,3}$/.test(part) && Number(part) <= 255)
 }
+
+/**
+ * Whether the page may use Host-local capabilities (`canOpenPath` UI gates, etc.).
+ * Desktop: `__XRK_TRANSPORT__.ownsHost` or `xrk-app:` protocol; else loopback / non-browser.
+ */
+export function isPrivilegedClientSurface(options: {
+  readonly ownsHost?: boolean
+  readonly pageLocation?: { readonly hostname: string; readonly protocol?: string }
+}): boolean {
+  if (options.ownsHost === true) return true
+  const page = options.pageLocation
+  if (page === undefined) return true
+  if (isLoopbackHostname(page.hostname)) return true
+  return page.protocol === 'xrk-app:'
+}

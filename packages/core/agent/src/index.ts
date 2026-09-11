@@ -32,6 +32,8 @@ import {
   runCompaction,
   runTurn,
   type AssembleOptions,
+  type AssemblePersona,
+  type AssemblePersonaContext,
 } from "@xrkseek/core-agent-loop";
 import type { PromptDelivery, SafetyNoticePayload, MessageContent } from "@xrkseek/protocol";
 
@@ -163,6 +165,8 @@ export interface CreateAgentOptions {
   readonly toolResultMaxInlineBytes?: number;
   /** Forwarded to runTurn for vision adapters. */
   readonly resolveImage?: LlmChatRequest["resolveImage"];
+  /** Forwarded to runTurn — AttachmentStore.fileHostPath for uploaded files. */
+  readonly resolveFilePath?: Parameters<typeof runTurn>[0]["resolveFilePath"];
   /** Optional Face `session/jobs` source (bash background jobs). */
   readonly jobs?: AgentHandle["jobs"];
   /**
@@ -338,6 +342,9 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
               : {}),
             ...(options.resolveImage
               ? { resolveImage: options.resolveImage }
+              : {}),
+            ...(options.resolveFilePath
+              ? { resolveFilePath: options.resolveFilePath }
               : {}),
             ...(options.beforeUserMessage
               ? { beforeUserMessage: options.beforeUserMessage }
@@ -520,4 +527,10 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
   };
 }
 
-export type { AssembleOptions, AdmitReceipt, SessionSafetyOptions };
+export type {
+  AssembleOptions,
+  AssemblePersona,
+  AssemblePersonaContext,
+  AdmitReceipt,
+  SessionSafetyOptions,
+};

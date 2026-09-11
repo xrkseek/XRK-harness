@@ -29,6 +29,12 @@ export interface ConfigurableProviderView {
    * surface must treat absence as "unknown", not as "shipped".
    */
   declared?: boolean
+  /**
+   * Configuration diagnostic that keeps the row visible and editable when the
+   * route cannot yet serve requests (missing api / baseURL / models). Absent
+   * when the profile is sound.
+   */
+  error?: string
 }
 
 /** Llm-domain unary methods (the map keys llm.* of RpcMethodMap). */

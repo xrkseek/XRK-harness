@@ -18,6 +18,7 @@ import type {
   LlmChatRequest,
   LlmChatResponse,
   LlmStreamEvent,
+  SystemPromptUpdate,
 } from "@xrkseek/llm";
 import type {
   ChatMessage,
@@ -68,6 +69,11 @@ export interface OpenAiCompatibleOptions {
   readonly enableStream?: boolean;
   /** Declared modalities; default `["text"]`. Include `"image"` for vision wire. */
   readonly inputModalities?: readonly ("text" | "image")[];
+  /**
+   * When `'in-history'`, the agent loop may append a changed system prompt
+   * after cached history (KV-cache friendly). See `@xrkseek/llm` `LlmAdapter`.
+   */
+  readonly systemPromptUpdate?: SystemPromptUpdate;
   /** Max inlined base64 image bytes per request (DSH rc.8 default 20MiB). */
   readonly maxRequestImageBytes?: number;
   /**
@@ -160,6 +166,7 @@ async function userContentToWire(
       if (block.text) parts.push({ type: "text", text: block.text });
       continue;
     }
+    if (block.type !== "image") continue;
     const stored = await resolveImage(block.attachment.attachmentId);
     if (wireImagePart && wireCtx.apiKey.trim()) {
       parts.push(
@@ -286,7 +293,11 @@ function parseArguments(raw: unknown): unknown {
   }
 }
 
-/** Non-blank string; empty wire fields must not clobber earlier stream identity. */
+/**
+ * Accept one streamed identity field for a tool call (DSH llm-deepseek
+ * `acceptIdentity`). `id` / `name` are set once on the first delta; a
+ * continuation that re-sends `""` or `null` means "no update", never clear.
+ */
 function nonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
@@ -572,28 +583,26 @@ async function* streamSse(
         if (!raw || typeof raw !== "object") continue;
         const tc = raw as {
           index?: number;
-          id?: string;
-          function?: { name?: string; arguments?: string };
+          id?: unknown;
+          function?: { name?: unknown; arguments?: unknown };
         };
         const idx = typeof tc.index === "number" ? tc.index : 0;
         const cur = toolAcc.get(idx) ?? { arguments: "" };
-        // Keep only non-empty id/name; later blank deltas must not wipe identity.
+        // Identity: keep only non-empty id/name ("" / null must not wipe).
         const idPiece = nonEmptyString(tc.id);
         const namePiece = nonEmptyString(tc.function?.name);
         if (idPiece) cur.id = idPiece;
         if (namePiece) cur.name = namePiece;
-        if (typeof tc.function?.arguments === "string") {
-          cur.arguments += tc.function.arguments;
+        const argsRaw = tc.function?.arguments;
+        if (typeof argsRaw === "string") {
+          cur.arguments += argsRaw;
         }
         toolAcc.set(idx, cur);
         const name = nonEmptyString(cur.name) ?? "unknown";
         const id =
           nonEmptyString(cur.id) ??
           `call_${idx}_${name.replace(/\W/g, "_")}`;
-        const argsPiece =
-          typeof tc.function?.arguments === "string"
-            ? tc.function.arguments
-            : "";
+        const argsPiece = typeof argsRaw === "string" ? argsRaw : "";
         // Emit when we learn identity or receive an arguments fragment.
         if (idPiece || namePiece || argsPiece) {
           yield {
@@ -722,6 +731,9 @@ export function createOpenAiCompatibleAdapter(
   const adapter: LlmAdapter = {
     id,
     inputModalities,
+    ...(options.systemPromptUpdate !== undefined
+      ? { systemPromptUpdate: options.systemPromptUpdate }
+      : {}),
     async chat(request: LlmChatRequest): Promise<LlmChatResponse> {
       const res = await post(request, false);
       const text = await res.text();

@@ -1,24 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { IconCloseFill14 } from '@xrkseek/client-ui-primitives'
 import type {
-  ComposerAttachment, ComposerAttachmentsProps,
+  ComposerAttachment, ComposerAttachmentsProps, ComposerImageAttachment,
 } from '@xrkseek/client-ui-conversation/client'
 import { AttachmentRail } from '../AttachmentRail.tsx'
-import type { AttachmentRailItem } from '../AttachmentRail.tsx'
 import { DropOverlay } from '../DropOverlay.tsx'
+import { FileCard } from '../FileCard.tsx'
 import { ImageLightbox } from '../ImageLightbox.tsx'
-import { attachmentRailLabels, dropOverlayLabels, lightboxLabels } from './labels.ts'
+import { attachmentRailLabels, dropOverlayLabels, fileCardLabels, lightboxLabels } from './labels.ts'
 import css from './ComposerAttachments.module.css'
-
-/** Rail item retaining its browser-owned attachment for callbacks. */
-interface ComposerRailItem extends AttachmentRailItem {
-  attachment: ComposerAttachment
-}
 
 /** Draft-image rail, document drop target, and original-image preview slot entry. */
 export function ComposerAttachments({
-  attachments, canAcceptDrop, onAddImages, onRemoveImage, dropLimits, t,
+  attachments, canAcceptDrop, onAddImages, onRemoveImage, dropLimits, uploads, onRetryFile, t,
 }: ComposerAttachmentsProps) {
-  const [preview, setPreview] = useState<ComposerAttachment | null>(null)
+  const [preview, setPreview] = useState<ComposerImageAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const dragDepth = useRef(0)
   const closePreview = useCallback(() => { setPreview(null) }, [])
@@ -78,13 +74,40 @@ export function ComposerAttachments({
     }
   }, [canAcceptDrop, onAddImages])
 
-  const railItems = useMemo<ComposerRailItem[]>(() => attachments.map(attachment => ({
-    id: attachment.id,
-    previewUrl: attachment.previewUrl,
-    alt: attachment.file.name || t('image.pending'),
-    removeLabel: t('image.remove', { name: attachment.file.name }),
-    attachment,
-  })), [attachments, t])
+  const renderItem = useCallback((attachment: ComposerAttachment) => {
+    if (attachment.kind === 'image') {
+      const alt = attachment.file.name || t('image.pending')
+      return (
+        <div className={css.imageItem}>
+          <button
+            type="button"
+            className={css.thumbnail}
+            title={t('image.openOriginal')}
+            onClick={() => { setPreview(attachment) }}
+          >
+            <img src={attachment.previewUrl} alt={alt} />
+          </button>
+          <button
+            type="button"
+            className={css.remove}
+            aria-label={t('image.remove', { name: attachment.file.name })}
+            onClick={() => { onRemoveImage(attachment.id) }}
+          >
+            <IconCloseFill14 size={12} />
+          </button>
+        </div>
+      )
+    }
+    return (
+      <FileCard
+        file={attachment.file}
+        upload={uploads[attachment.id]}
+        labels={fileCardLabels(t, attachment.file.name)}
+        onRemove={() => { onRemoveImage(attachment.id) }}
+        onRetry={() => { onRetryFile(attachment.id) }}
+      />
+    )
+  }, [onRemoveImage, onRetryFile, t, uploads])
 
   return (
     <>
@@ -94,13 +117,12 @@ export function ComposerAttachments({
           labels={dropOverlayLabels(t, canAcceptDrop, dropLimits)}
         />
       )}
-      {railItems.length > 0 && (
+      {attachments.length > 0 && (
         <div className={css.rail}>
           <AttachmentRail
-            items={railItems}
+            items={attachments}
             labels={attachmentRailLabels(t)}
-            onOpen={(item) => { setPreview(item.attachment) }}
-            onRemove={(item) => { onRemoveImage(item.attachment.id) }}
+            renderItem={renderItem}
           />
         </div>
       )}

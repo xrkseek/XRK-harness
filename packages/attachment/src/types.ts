@@ -1,9 +1,10 @@
 import type {
+  FileAttachmentRef,
   ImageAttachmentRef,
   ImageMediaType,
 } from "@xrkseek/protocol";
 
-export type { ImageAttachmentRef, ImageMediaType };
+export type { FileAttachmentRef, ImageAttachmentRef, ImageMediaType };
 
 export const IMAGE_MEDIA_TYPES = [
   "image/png",
@@ -30,14 +31,39 @@ export const DEFAULT_IMAGE_LIMITS: ImageAttachmentLimits = {
   mediaTypes: IMAGE_MEDIA_TYPES,
 };
 
+/** Generic-file admission limits (byte-for-byte store; no media sniff). */
+export interface FileAttachmentLimits {
+  readonly maxFileBytes: number;
+  readonly maxFilesPerMessage: number;
+  readonly maxMessageFileBytes: number;
+}
+
+export const DEFAULT_FILE_LIMITS: FileAttachmentLimits = {
+  maxFileBytes: 20 * 1024 * 1024,
+  maxFilesPerMessage: 20,
+  maxMessageFileBytes: 40 * 1024 * 1024,
+};
+
 export interface SaveImageAttachment {
   readonly data: Uint8Array;
   readonly mediaType: ImageMediaType;
   readonly name?: string;
 }
 
+export interface SaveFileAttachment {
+  readonly data: Uint8Array;
+  /** Display leaf name; never interpreted as a path. */
+  readonly name?: string;
+  readonly mediaType?: string;
+}
+
 export interface StoredImageAttachment {
   readonly ref: ImageAttachmentRef;
+  readonly data: Uint8Array;
+}
+
+export interface StoredFileAttachment {
+  readonly ref: FileAttachmentRef;
   readonly data: Uint8Array;
 }
 
@@ -59,4 +85,16 @@ export interface RequestImageAttachment {
   readonly depth: "uchar";
   readonly space: "srgb";
   readonly hasAlpha: boolean;
+}
+
+/** Sanitize a browser/provider filename to a path-free leaf. */
+export function sanitizeAttachmentFileName(
+  name: string | undefined,
+  fallback = "file",
+): string {
+  const raw = (name ?? "").trim() || fallback;
+  const leaf = raw.replaceAll("\\", "/").split("/").pop() ?? fallback;
+  /* eslint-disable-next-line no-control-regex -- strip C0 controls from filenames */
+  const cleaned = leaf.replace(/[\u0000-\u001f<>:"|?*]/g, "_").trim() || fallback;
+  return cleaned.slice(0, 255);
 }

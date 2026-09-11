@@ -5,14 +5,16 @@ import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import type { FaceDrain } from "../src/context.js";
 
-function stubAgent(): AgentHandle {
+function stubAgent(admits: Array<{ delivery: string; content: unknown }> = []): AgentHandle {
   return {
     admit(content, options) {
+      const delivery = options?.delivery ?? "queue";
+      admits.push({ delivery, content });
       return {
         admitId: options?.admitId ?? "admit_stub",
         sessionId: "stub",
         content,
-        delivery: options?.delivery ?? "queue",
+        delivery,
       };
     },
     pendingAdmits() {
@@ -47,11 +49,12 @@ function drain(active = new Set<string>()): FaceDrain {
 describe("Face subagent", () => {
   it("create-with-parent + list/history/prompt/interrupt", async () => {
     const store = createMemorySessionStore();
+    const admits: Array<{ delivery: string; content: unknown }> = [];
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: process.cwd(),
       drain: drain(),
-      resolveAgent: async () => stubAgent(),
+      resolveAgent: async () => stubAgent(admits),
     });
 
     const parent = await dispatchFaceMethod(runtime, "session.create", "p", {});
@@ -115,6 +118,17 @@ describe("Face subagent", () => {
         (prompted.result.value as { messageId: string }).messageId,
       ).toBeTruthy();
     }
+
+    const steered = await dispatchFaceMethod(runtime, "subagent.prompt", "pr-steer", {
+      parentSessionId: parentId,
+      childSessionId: childId,
+      mode: "continuable",
+      delivery: "steer",
+      content: [{ type: "text", text: "插话" }],
+    });
+    expect(steered.result.ok).toBe(true);
+    expect(admits.map((a) => a.delivery)).toEqual(["queue", "steer"]);
+    expect(admits[1]?.content).toBe("插话");
 
     const stopped = await dispatchFaceMethod(runtime, "subagent.interrupt", "i", {
       parentSessionId: parentId,

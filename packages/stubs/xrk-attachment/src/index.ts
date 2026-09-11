@@ -14,6 +14,7 @@ export { AttachmentError, isImageAdmissionError } from './error.ts'
 export type { AttachmentErrorCode, ImageAdmissionErrorCode } from './error.ts'
 export type {
   AttachmentId as AttachmentIdType,
+  FileAttachmentLimits,
   ImageAttachmentLimits,
   ImageAttachmentRef,
   ImageMediaType,

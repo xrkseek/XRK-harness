@@ -218,10 +218,23 @@ export function finalizeLlmChatResponse(
   return dropped;
 }
 
+/**
+ * Model-declared system-prompt update mode (DSH `SystemPromptUpdate`).
+ * Only `'in-history'` is defined: the endpoint treats the latest `system`
+ * message at any position as the effective prompt.
+ */
+export type SystemPromptUpdate = "in-history";
+
 export interface LlmAdapter {
   readonly id: string;
   /** Declared input modalities; default text-only. */
   readonly inputModalities?: readonly ("text" | "image")[];
+  /**
+   * When `'in-history'`, the agent loop may append a changed system prompt
+   * after the cached conversation instead of rewriting message 0 (KV-cache
+   * friendly). Omitted → always place system at the head of the request.
+   */
+  readonly systemPromptUpdate?: SystemPromptUpdate;
   chat(request: LlmChatRequest): Promise<LlmChatResponse>;
   /**
    * Optional SSE / incremental stream. When present, agent-loop prefers this

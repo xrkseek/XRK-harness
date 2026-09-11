@@ -10,7 +10,7 @@ import { RpcId } from '../src/client/api.ts'
 import { FixtureApiClient } from '../src/client/fixture.ts'
 import { WebApiClient } from '../src/client/web-api-client.ts'
 
-type Win = { location?: { hostname: string; search: string; origin?: string } }
+type Win = { location?: { hostname: string; search: string; origin?: string; protocol?: string } }
 type WebSocketGlobal = { WebSocket?: typeof WebSocket }
 
 const originalWebSocket = globalThis.WebSocket
@@ -49,6 +49,7 @@ class FakeWebSocket extends EventTarget {
 
 afterEach(() => {
   delete (globalThis as Win).location
+  delete (globalThis as { __XRK_TRANSPORT__?: unknown }).__XRK_TRANSPORT__
   sockets.length = 0
   if (originalWebSocket === undefined) delete (globalThis as WebSocketGlobal).WebSocket
   else globalThis.WebSocket = originalWebSocket
@@ -82,6 +83,18 @@ describe('connection client apply', () => {
   it('reports non-loopback page authority through the connection handle', async () => {
     ;(globalThis as Win).location = { hostname: '192.0.2.20', search: '' }
     expect((await mount()).isLoopback).toBe(false)
+  })
+
+  it('treats Desktop xrk-app pages and __XRK_TRANSPORT__.ownsHost as privileged', async () => {
+    ;(globalThis as Win).location = { hostname: 'app', search: '', protocol: 'xrk-app:' }
+    expect((await mount()).isLoopback).toBe(true)
+    delete (globalThis as Win).location
+    ;(globalThis as Win).location = { hostname: '192.0.2.20', search: '' }
+    ;(globalThis as { __XRK_TRANSPORT__?: { ownsHost: boolean } }).__XRK_TRANSPORT__ = {
+      ownsHost: true,
+    }
+    expect((await mount()).isLoopback).toBe(true)
+    delete (globalThis as { __XRK_TRANSPORT__?: unknown }).__XRK_TRANSPORT__
   })
 
   it('start() hands out one loop, rejects a second consumer, and stop() aborts the streams', async () => {

@@ -25,6 +25,12 @@ describe("host.openPath + skill.list", () => {
     expect(canOpenNativePath("freebsd")).toBe(false);
   });
 
+  it("XRK_NATIVE_OPEN forces canOpenPath true (Desktop Host declaration)", () => {
+    expect(canOpenNativePath("freebsd", { XRK_NATIVE_OPEN: "1" })).toBe(true);
+    expect(canOpenNativePath("freebsd", { XRK_NATIVE_OPEN: "true" })).toBe(true);
+    expect(canOpenNativePath("freebsd", {})).toBe(false);
+  });
+
   it("host.describe reports canOpenPath for desktop platforms", async () => {
     const runtime = bareRuntime(process.cwd());
     const d = await dispatchFaceMethod(runtime, "host.describe", "r1", {});
@@ -44,6 +50,29 @@ describe("host.openPath + skill.list", () => {
     expect(res.result.ok).toBe(false);
     if (!res.result.ok) {
       expect(res.result.error.code).toBe("bad-request");
+    }
+  });
+
+  it("host.openPath accepts reveal for an existing absolute path", async () => {
+    const root = path.join(os.tmpdir(), `xrk-open-reveal-${Date.now()}`);
+    await mkdir(root, { recursive: true });
+    const file = path.join(root, "note.txt");
+    await writeFile(file, "hi\n", "utf8");
+    const runtime = bareRuntime(root);
+    const open = await dispatchFaceMethod(runtime, "host.openPath", "r-open", {
+      path: file,
+    });
+    const reveal = await dispatchFaceMethod(runtime, "host.openPath", "r-reveal", {
+      path: file,
+      reveal: true,
+    });
+    // Platforms without a desktop opener still return not-implemented; others accept.
+    if (canOpenNativePath()) {
+      expect(open.result.ok).toBe(true);
+      expect(reveal.result.ok).toBe(true);
+    } else {
+      expect(open.result.ok).toBe(false);
+      expect(reveal.result.ok).toBe(false);
     }
   });
 

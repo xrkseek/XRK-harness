@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
-// StatsLine (composer.dock entry): totals derivation + the RFC hard
-// acceptance — zero renders during streaming.
+// StatsLine (composer.dock entry): dual pills (speed + token/cache) + derivation.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import type {
   AssistantMessageNode, ConversationSnapshot, SessionId, ToolResultNode,
@@ -16,23 +15,12 @@ import { StatsLine, contextOccupancy, deriveStats, formatDuration, formatTokens,
 import { en, zh } from '../src/client/locales.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
-// Mirrors the real lookup chain (conversation namespace, then common).
 const t: StatsLineProps['t'] = makeTranslate(zh, commonZh)
 const tEn: StatsLineProps['t'] = makeTranslate(en, commonEn)
 
-/** jsdom has no ResizeObserver; StatsLine watches its row for ellipsis truncation through one. */
-class ResizeObserverStub {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-}
-
-beforeEach(() => { vi.stubGlobal('ResizeObserver', ResizeObserverStub) })
 afterEach(() => {
   cleanup()
-  vi.unstubAllGlobals()
   vi.restoreAllMocks()
-  vi.useRealTimers()
 })
 
 const SID = 's1' as SessionId
@@ -98,11 +86,6 @@ describe('deriveStats', () => {
     ])
     expect(stats.turns).toBe(2)
     expect(stats.steps).toBe(3)
-    // The window fold's counts are only the fallback for assemblies without
-    // the sessionStats projection; the paged window is not an accounting
-    // source either, so the fold exposes no billing fields (billing rides the
-    // tokenUsage projection); decodeTokens is a throughput input, not a
-    // billed total.
     expect(Object.keys(stats).sort()).toEqual(
       ['decodeMs', 'decodeTokens', 'llmMs', 'steps', 'toolMs', 'ttftMs', 'ttftSteps', 'turns'],
     )
@@ -148,7 +131,6 @@ describe('deriveStats', () => {
     const stats = deriveStats([sampled, ttftOnly, assistant(3, 2)])
     expect(stats.ttftMs).toBe(1_200)
     expect(stats.ttftSteps).toBe(2)
-    // The usage-less step contributes no decode share, keeping the ratio honest.
     expect(stats.decodeMs).toBe(3_000)
     expect(stats.decodeTokens).toBe(40)
   })
@@ -163,15 +145,14 @@ describe('formatters', () => {
   })
 
   it('formats durations under and over a minute', () => {
-    expect(formatDuration(45_230)).toBe('45.2s')
-    expect(formatDuration(162_000)).toBe('2m42s')
+    expect(formatDuration(45_230, tEn)).toBe('45.2s')
+    expect(formatDuration(162_000, tEn)).toBe('2m42s')
   })
 })
 
 describe('StatsLine', () => {
   const USAGE = { uncachedInputTokens: 10, outputTokens: 5, cacheReadTokens: 90, cacheWriteTokens: 0 }
 
-  /** A whole-log sessionStats value: zeros plus overrides. */
   function sessionStats(overrides: Record<string, number>): Record<string, number> {
     return {
       turns: 0, steps: 0, llmMs: 0, toolMs: 0, ttftMs: 0, ttftSteps: 0, decodeMs: 0, decodeTokens: 0,
@@ -179,7 +160,6 @@ describe('StatsLine', () => {
     }
   }
 
-  /** Stub the projection seat: a key-addressed table of whole values. */
   function projections(values: Record<string, unknown>): StatsLineProps['useProjection'] {
     return (key: string) => values[key]
   }
@@ -188,25 +168,37 @@ describe('StatsLine', () => {
     source: { getSnapshot(): ConversationSnapshot; subscribe(fn: () => void): () => void },
     values: Record<string, unknown> = { tokenUsage: USAGE },
   ): StatsLineProps {
-    return { useSession: bindSnapshotSelector(source), useProjection: projections(values), t: tEn }
+    return {
+      useSession: bindSnapshotSelector(source),
+      useProjection: projections(values),
+      t: tEn,
+    }
   }
 
   function tokenUsage(cacheReadTokens: number, uncachedInputTokens: number) {
     return { uncachedInputTokens, outputTokens: 1, cacheReadTokens, cacheWriteTokens: 0 }
   }
 
-  it('renders the grouped stats row and hides a brand-new empty session', () => {
+  const timedStep = (): AssistantMessageNode => ({
+    ...assistant(1, 1, { outputTokens: 60 }),
+    timing: { stepStartTime: 1_000, firstTokenTime: 1_800, completedTime: 4_800 },
+  })
+
+  it('renders the counts reading and usage pill and hides a brand-new empty session', () => {
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsLine {...props(source)} />)
-    // No timing on the fixture: the duration group drops out whole. Tokens come
-    // from the projection, so paging the window cannot change them.
-    expect(view.container.textContent).toBe('1 turns · 1 steps| Cache hit 90%| Input 100 tok · Output 5 tok')
+    expect(view.container.querySelector('[data-composer-stats]')).toBeTruthy()
+    expect(view.getByText('1 turns · 1 steps').closest('button')).toBeNull()
+    const usagePill = view.getAllByRole('button')
+    expect(usagePill.map(pill => pill.textContent)).toEqual(['105 tok·Cache hit 90%'])
+    expect(usagePill[0]!.getAttribute('aria-label')).toBe('105 tok · Cache hit 90%')
     const empty = makeSource()
     const emptyView = render(<StatsLine {...props(empty.source, {
       tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
       contextPressure: {},
     })} />)
     expect(emptyView.container.textContent).toBe('')
+    expect(emptyView.container.querySelector('[data-composer-stats]')).toBeNull()
   })
 
   it.each([
@@ -229,111 +221,153 @@ describe('StatsLine', () => {
   ])('formats an actual $actual cache-hit ratio as $expected', ({ tokenUsageValue, expected }) => {
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsLine {...props(source, { tokenUsage: tokenUsageValue })} />)
-    expect(view.container.textContent).toContain(expected)
+    expect(view.getAllByRole('button')[0]!.textContent).toContain(expected)
   })
 
-  it('reveals the full line in a delayed hover tooltip only while the row is clipped', () => {
-    vi.useFakeTimers()
-    // jsdom lays nothing out; fake a row narrower than its content.
-    vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(800)
-    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(400)
-    const { source } = makeSource({ nodes: [assistant(1, 1)] })
-    const view = render(<StatsLine {...props(source, { tokenUsage: tokenUsage(9_995, 5) })} />)
-    expect(view.container.textContent).toContain('Cache hit 99.95%')
-    fireEvent.mouseEnter(view.container.firstElementChild!)
-    act(() => { vi.advanceTimersByTime(499) })
-    expect(view.container.querySelector('[role="tooltip"]')).toBeNull()
-    act(() => { vi.advanceTimersByTime(1) })
-    expect(view.container.querySelector('[role="tooltip"]')?.textContent)
-      .toBe('1 turns · 1 steps | Cache hit 99.95% | Input 10K tok · Output 1 tok')
-  })
-
-  it('suppresses the tooltip while the row fits without truncation', () => {
-    vi.useFakeTimers()
-    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+  it('exposes output speed on the counts pill when decode timing exists', () => {
+    const { source } = makeSource({ nodes: [timedStep()] })
     const view = render(<StatsLine {...props(source)} />)
-    fireEvent.mouseEnter(view.container.firstElementChild!)
-    act(() => { vi.advanceTimersByTime(500) })
-    expect(view.container.querySelector('[role="tooltip"]')).toBeNull()
+    const timePill = view.getAllByRole('button')[0]!
+    expect(timePill.textContent).toBe('1 turns · 1 steps·20 tok/s')
+    expect(timePill.getAttribute('aria-label')).toBe('1 turns · 1 steps · 20 tok/s')
   })
 
-  it('renders window latency and throughput beside the wall-time group', () => {
-    const timed: AssistantMessageNode = {
-      ...assistant(1, 1, { outputTokens: 60 }),
-      timing: { stepStartTime: 1_000, firstTokenTime: 1_800, completedTime: 4_800 },
-    }
-    const { source } = makeSource({ nodes: [timed] })
+  it('click-opens the time-and-speed dialog carrying the time split and speeds', () => {
+    const { source } = makeSource({ nodes: [timedStep()] })
     const view = render(<StatsLine {...props(source)} />)
-    expect(view.container.textContent).toContain('LLM 3.8s| TTFT avg 0.8s · 20 tok/s')
+
+    const timePill = view.getAllByRole('button')[0]!
+    expect(timePill.getAttribute('aria-haspopup')).toBe('dialog')
+    expect(timePill.getAttribute('aria-expanded')).toBe('false')
+    expect(view.queryByRole('dialog')).toBeNull()
+
+    fireEvent.click(timePill)
+    expect(timePill.getAttribute('aria-expanded')).toBe('true')
+    const dialog = view.getByRole('dialog')
+    expect(dialog.getAttribute('aria-label')).toBe('Session statistics')
+    expect(dialog.parentElement).toBe(document.body)
+    expect(dialog.firstChild?.textContent).toBe('Session statistics')
+    const details = dialog.querySelector('[data-session-stats-details]') as HTMLElement
+    expect(details).toBeTruthy()
+    expect(details.textContent).toContain('LLM time3.8s')
+    expect(details.textContent).not.toContain('Tool time')
+    expect(details.textContent).toContain('Avg time to first token (TTFT)0.8s')
+    expect(details.textContent).toContain('Tokens per second (TPS)20 tok/s')
+    expect(dialog.textContent).not.toContain('Token usage')
   })
 
-  it('takes every stats label from the active locale', () => {
-    const timed: AssistantMessageNode = {
-      ...assistant(1, 1, { outputTokens: 60 }),
-      timing: { stepStartTime: 1_000, firstTokenTime: 1_800, completedTime: 4_800 },
-    }
-    const { source } = makeSource({ nodes: [timed] })
+  it('click-opens the token-usage dialog carrying the headline total and exact buckets', () => {
+    const { source } = makeSource({ nodes: [timedStep()] })
+    const view = render(<StatsLine {...props(source)} />)
+
+    const usagePill = view.getAllByRole('button')[1]!
+    fireEvent.click(usagePill)
+    expect(usagePill.getAttribute('aria-expanded')).toBe('true')
+    const dialog = view.getByRole('dialog')
+    expect(dialog.getAttribute('aria-label')).toBe('Token usage')
+    expect(dialog.parentElement).toBe(document.body)
+    expect(dialog.firstChild?.textContent).toBe('Token usage105 tok')
+    const tokens = dialog.querySelector('[data-session-stats-usage]') as HTMLElement
+    expect(tokens).toBeTruthy()
+    expect(tokens.textContent).toContain('Cache hit90%')
+    expect(tokens.textContent).toContain('Uncached input10 tok')
+    expect(tokens.textContent).toContain('Cached input90 tok')
+    expect(tokens.textContent).not.toContain('Cache write')
+    expect(tokens.textContent).toContain('Output5 tok')
+    expect(dialog.textContent).not.toContain('LLM time')
+  })
+
+  it('closes the dialog on Escape or outside pointerdown', () => {
+    const { source } = makeSource({ nodes: [timedStep()] })
+    const view = render(<StatsLine {...props(source)} />)
+    const timePill = view.getAllByRole('button')[0]!
+
+    fireEvent.click(timePill)
+    expect(view.queryByRole('dialog')).toBeTruthy()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(view.queryByRole('dialog')).toBeNull()
+    expect(timePill.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(timePill)
+    fireEvent.pointerDown(view.getByRole('dialog'))
+    expect(view.queryByRole('dialog')).toBeTruthy()
+    fireEvent.pointerDown(document.body)
+    expect(view.queryByRole('dialog')).toBeNull()
+  })
+
+  it('keeps at most one dialog open: a sibling pill click swaps, never stacks', () => {
+    const { source } = makeSource({ nodes: [timedStep()] })
+    const view = render(<StatsLine {...props(source)} />)
+    const [timePill, usagePill] = [...view.getAllByRole('button')] as [HTMLElement, HTMLElement]
+
+    fireEvent.click(timePill)
+    expect(view.getByRole('dialog').getAttribute('aria-label')).toBe('Session statistics')
+    fireEvent.click(usagePill)
+    const dialogs = view.getAllByRole('dialog')
+    expect(dialogs).toHaveLength(1)
+    expect(dialogs[0]!.getAttribute('aria-label')).toBe('Token usage')
+    expect(timePill.getAttribute('aria-expanded')).toBe('false')
+    expect(usagePill.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('takes every pill and dialog label from the active locale', () => {
+    const { source } = makeSource({ nodes: [timedStep()] })
     const view = render(<StatsLine {...props(source, { tokenUsage: tokenUsage(9_995, 5) })} t={t} />)
-    expect(view.container.textContent)
-      .toBe('1 轮 · 1 步| LLM 3.8s| 首 token 平均 0.8s · 20 tok/s| 缓存命中 99.95%| 输入 10K tok · 输出 1 tok')
+    const [timePill, usagePill] = [...view.getAllByRole('button')] as [HTMLElement, HTMLElement]
+    expect(timePill.textContent).toBe('1 轮 · 1 步·20 tok/s')
+    expect(usagePill.textContent).toBe('10K tok·缓存命中 99.95%')
+    fireEvent.click(timePill)
+    const timeDialog = view.getByRole('dialog')
+    expect(timeDialog.getAttribute('aria-label')).toBe('会话统计')
+    expect(timeDialog.textContent).toContain('模型用时3.8秒')
+    expect(timeDialog.textContent).toContain('首 token 平均（TTFT）0.8秒')
+    expect(timeDialog.textContent).toContain('输出速度（TPS）20 tok/s')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(usagePill)
+    const usageDialog = view.getByRole('dialog')
+    expect(usageDialog.getAttribute('aria-label')).toBe('Token 用量')
+    expect(usageDialog.textContent).toContain('未缓存输入5 tok')
   })
 
-  it('renders without ResizeObserver support', () => {
-    vi.unstubAllGlobals()
-    const { source } = makeSource({ nodes: [assistant(1, 1)] })
-    expect(() => render(<StatsLine {...props(source)} />)).not.toThrow()
-  })
-
-  it('keeps durable token groups after the visible step window is empty', () => {
+  it('keeps the durable usage pill after the visible step window is empty', () => {
     const { source } = makeSource()
     const view = render(<StatsLine {...props(source, {
       tokenUsage: USAGE,
       contextPressure: { pressureTokens: 32_000, contextWindow: 128_000 },
     })} />)
-    // Context occupancy lives on the composer's ContextMeter ring, not here.
-    expect(view.container.textContent)
-      .toBe('Cache hit 90%| Input 100 tok · Output 5 tok')
+    const pills = view.getAllByRole('button')
+    expect(pills).toHaveLength(1)
+    expect(pills[0]!.textContent).toBe('105 tok·Cache hit 90%')
   })
 
   it('computes context occupancy only when both a numerator and capacity are known', () => {
-    // The projected figure wins: it is the provider sample carried forward over
-    // the surface's movement, so a compaction shows without waiting a request.
     expect(contextOccupancy({ pressureTokens: 32_000, projectedTokens: 6_000, contextWindow: 128_000 }))
       .toEqual({ percent: 5, usedTokens: 6_000, contextWindow: 128_000 })
-    // A log whose projection predates the field still reads its bare sample.
     expect(contextOccupancy({ pressureTokens: 32_000, contextWindow: 128_000 }))
       .toEqual({ percent: 25, usedTokens: 32_000, contextWindow: 128_000 })
-    // A numerator without capacity has no denominator; capacity without a
-    // provider sample has no numerator yet, rather than a synthetic 0%.
     expect(contextOccupancy({ pressureTokens: 32_000 })).toBeNull()
     expect(contextOccupancy({ contextWindow: 128_000 })).toBeNull()
     expect(contextOccupancy(undefined)).toBeNull()
-    // Capacity and the sample are independent last-wins fields, so a model
-    // switch can pair a smaller new window with the previous route's prompt.
     expect(contextOccupancy({ pressureTokens: 300_000, contextWindow: 128_000 })?.percent).toBe(100)
   })
 
-  it('drops every token group when no projection is composed', () => {
+  it('drops the usage pill when no projection is composed', () => {
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsLine {...props(source, {})} />)
     expect(view.container.textContent).toBe('1 turns · 1 steps')
+    expect(view.queryAllByRole('button')).toHaveLength(0)
   })
 
   it('renders whole-session counts from the sessionStats projection over the paged window', () => {
-    // The bug's acceptance at unit level: one loaded page must not scope the
-    // counter — the durable projection's totals win over the window fold.
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsLine {...props(source, {
       tokenUsage: USAGE,
       sessionStats: sessionStats({ turns: 10, steps: 89 }),
     })} />)
-    expect(view.container.textContent)
-      .toBe('10 turns · 89 steps| Cache hit 90%| Input 100 tok · Output 5 tok')
+    expect(view.getByText('10 turns · 89 steps')).toBeTruthy()
   })
 
   it('treats a defined zero-count projection as empty, not as fallback', () => {
-    // A composed unit always serves the key; all-zero genuinely means no
-    // closed step in the whole log, so nothing renders on a brand-new session.
     const empty = makeSource()
     const view = render(<StatsLine {...props(empty.source, {
       tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
@@ -342,33 +376,26 @@ describe('StatsLine', () => {
     expect(view.container.textContent).toBe('')
   })
 
-  it('hides the zero-token group when steps closed without any billed activity', () => {
-    // A session whose only turn failed before billing (e.g. an auth error):
-    // the counts group renders alone, not an uninformative zero-token group.
+  it('hides the usage pill when steps closed without any billed activity', () => {
     const { source } = makeSource()
     const view = render(<StatsLine {...props(source, {
       tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
       sessionStats: sessionStats({ turns: 1, steps: 1 }),
     })} />)
     expect(view.container.textContent).toBe('1 turns · 1 steps')
+    expect(view.queryAllByRole('button')).toHaveLength(0)
   })
 
-  it('keeps the counts group over an empty visible window when the projection carries totals', () => {
-    // Extends the durable-groups guarantee: full-session counts survive a
-    // window that compaction (or paging) left without assistant nodes.
+  it('keeps the counts pill over an empty visible window when the projection carries totals', () => {
     const { source } = makeSource()
     const view = render(<StatsLine {...props(source, {
       tokenUsage: USAGE,
       sessionStats: sessionStats({ turns: 7, steps: 44 }),
     })} />)
-    expect(view.container.textContent)
-      .toBe('7 turns · 44 steps| Cache hit 90%| Input 100 tok · Output 5 tok')
+    expect(view.getByText('7 turns · 44 steps')).toBeTruthy()
   })
 
-  it('renders whole-log wall times and speeds from the projection, not the loaded window', () => {
-    // The 加载更早 hazard beyond counts: LLM/tool durations and the TTFT and
-    // throughput figures must not grow per loaded page either. An untimed
-    // 1-node window renders the projection's whole-log figures verbatim.
+  it('renders whole-log speed and dialog figures from the projection, not the loaded window', () => {
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsLine {...props(source, {
       tokenUsage: USAGE,
@@ -377,20 +404,29 @@ describe('StatsLine', () => {
         ttftMs: 1_600, ttftSteps: 2, decodeMs: 3_000, decodeTokens: 60,
       }),
     })} />)
-    expect(view.container.textContent).toBe(
-      '200 turns · 200 steps| LLM 1m40s · Tool call 1m2s| TTFT avg 0.8s · 20 tok/s| Cache hit 90%| Input 100 tok · Output 5 tok',
-    )
+    const timePill = view.getAllByRole('button')[0]!
+    expect(timePill.textContent).toBe('200 turns · 200 steps·20 tok/s')
+    fireEvent.click(timePill)
+    const dialog = view.getByRole('dialog')
+    expect(dialog.textContent).toContain('LLM time1m40s')
+    expect(dialog.textContent).toContain('Tool time1m2s')
+    expect(dialog.textContent).toContain('Avg time to first token (TTFT)0.8s')
+    expect(dialog.textContent).toContain('Tokens per second (TPS)20 tok/s')
   })
 
-  it('omits cache hit when nothing was billed on the input side', () => {
+  it('omits the cache-hit segment when nothing was billed on the input side', () => {
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsLine {...props(source, {
       tokenUsage: { uncachedInputTokens: 0, outputTokens: 7, cacheReadTokens: 0, cacheWriteTokens: 0 },
     })} />)
-    expect(view.container.textContent).toBe('1 turns · 1 steps| Input 0 tok · Output 7 tok')
+    const usagePill = view.getAllByRole('button')[0]!
+    expect(usagePill.textContent).toBe('7 tok')
+    expect(usagePill.getAttribute('aria-label')).toBe('7 tok')
+    fireEvent.click(usagePill)
+    expect(view.getByRole('dialog').textContent).toContain('Output7 tok')
   })
 
-  it('includes cache writes in billed input and the cache-hit denominator', () => {
+  it('includes cache writes in the total and the cache-hit denominator', () => {
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsLine {...props(source, {
       tokenUsage: {
@@ -400,8 +436,9 @@ describe('StatsLine', () => {
         cacheWriteTokens: 100,
       },
     })} />)
-    expect(view.container.textContent)
-      .toBe('1 turns · 1 steps| Cache hit 45%| Input 200 tok · Output 7 tok')
+    expect(view.getAllByRole('button')[0]!.textContent).toBe('207 tok·Cache hit 45%')
+    fireEvent.click(view.getAllByRole('button')[0]!)
+    expect(view.getByRole('dialog').textContent).toContain('Cache write100 tok')
   })
 
   it('renders ZERO times during streaming chunk frames (RFC hard acceptance)', () => {
@@ -413,7 +450,6 @@ describe('StatsLine', () => {
     }
     render(<Counting {...props(source)} />)
     const before = renders
-    // Chunk frames swap partial only; nodes keeps its reference (object-layer contract).
     act(() => { set({ partial: { turn: 1, step: 2, blocks: [{ kind: 'text', text: 'a' }] } }) })
     act(() => { set({ partial: { turn: 1, step: 2, blocks: [{ kind: 'text', text: 'ab' }] } }) })
     act(() => { set({ running: true }) })

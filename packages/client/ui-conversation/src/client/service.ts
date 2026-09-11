@@ -13,9 +13,13 @@ import type { Context } from '@xrkseek/cordis'
 // error, so scope resolution goes through the sessions service (scopeOf
 // method) instead of the standalone helper.
 import type { ISessions, SessionFace, SessionId } from '@xrkseek/client-runtime/client'
+import { createSnapshotStore } from '@xrkseek/client-runtime/client'
 import type { SubmitImageAttachment, SubmitOutcome } from '@xrkseek/client-ui-input-trigger/client'
 import type { ImageAttachmentRef, ImageMediaType } from '@xrkseek/xrk-attachment'
-import type { ComposerAttachment } from './contract/slots.ts'
+import type {
+  ComposerAttachment, ComposerFileAttachment, ComposerImageAttachment,
+  DraftFileUpload, DraftFileUploads,
+} from './contract/slots.ts'
 import type { QueueAction, QueueItemId } from './contract/queue.ts'
 import type { ComposerBlocks } from './input/blocks.ts'
 import { randomUuid } from '@xrkseek/xrk-host-apiproxy/api'
@@ -66,12 +70,21 @@ export interface IConversation {
   loadThrough(seq: number): Promise<void>
 }
 
-/** Create one browser-only draft descriptor; only its id enters input state. */
-function browserDraftAttachment(file: File): ComposerAttachment {
+/** Create one browser-only image draft; only its id enters input state. */
+function browserDraftImage(file: File): ComposerImageAttachment {
   return {
     kind: 'image',
     id: randomUuid() as DraftAttachmentId,
     previewUrl: URL.createObjectURL(file),
+    file,
+  }
+}
+
+/** Create one browser-only file draft (bytes encode in the background). */
+function browserDraftFile(file: File): ComposerFileAttachment {
+  return {
+    kind: 'file',
+    id: randomUuid() as DraftAttachmentId,
     file,
   }
 }
@@ -101,7 +114,10 @@ export class ConversationController extends Service implements IConversation {
   readonly input: SessionInputResolver
   /** The per-session composer-block registry. */
   readonly blocks: ComposerBlocks
+  /** Live file-draft encode states (survives session switches until release). */
+  readonly fileUploads = createSnapshotStore<DraftFileUploads>({})
   private readonly draftAttachments = new Map<DraftAttachmentId, ComposerAttachment>()
+  private readonly fileEncodeControllers = new Map<DraftAttachmentId, AbortController>()
   private readonly imageUrls = new Map<string, ImageUrlEntry>()
   private readonly imageGenerations = new Map<SessionId, number>()
   private readonly createdImageUrls = new Set<string>()
@@ -120,9 +136,12 @@ export class ConversationController extends Service implements IConversation {
     this.blocks = config.blocks
     ctx.effect(() => () => {
       this.disposed = true
+      for (const controller of this.fileEncodeControllers.values()) controller.abort()
+      this.fileEncodeControllers.clear()
       for (const url of this.createdImageUrls) revokePreview(url)
       this.createdImageUrls.clear()
       this.draftAttachments.clear()
+      this.fileUploads.set({})
       this.imageUrls.clear()
       this.imageGenerations.clear()
     }, 'conversation attachment URL cache')
@@ -141,10 +160,11 @@ export class ConversationController extends Service implements IConversation {
   }
 
   /**
-   * Submit ordered draft images with text through one host admission.
+   * Submit ordered draft attachments with text through one host admission.
+   * Images encode at send; files use their background-ready base64.
    * @param session - target session.
    * @param text - serialized prompt text.
-   * @param imageIds - ordered draft-local attachment ids.
+   * @param imageIds - ordered draft-local attachment ids (images and files).
    * @param mode - queue or steer delivery selected by composer policy.
    * @param signal - optional cancellation for the complete Host admission.
    * @returns the Host admission outcome; local attachment preparation failures reject.
@@ -158,33 +178,67 @@ export class ConversationController extends Service implements IConversation {
   ): Promise<SubmitOutcome> {
     const attachments = this.draftImages(imageIds)
     if (attachments.length !== imageIds.length) {
-      throw new Error('conversation.sendSession: one or more draft images are no longer available')
+      throw new Error('conversation.sendSession: one or more draft attachments are no longer available')
     }
-    const uploaded = await this.serializeImages(attachments.map(attachment => attachment.file))
-    const content = [...uploaded, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
-    const result = await session.prompt(content, mode, signal)
+    const uploads = this.fileUploads.getSnapshot()
+    const content = await Promise.all(attachments.map(async (attachment) => {
+      if (attachment.kind === 'image') {
+        return { type: 'image' as const, ...await this.encodeImage(attachment.file) }
+      }
+      const upload = uploads[attachment.id]
+      if (upload === undefined || upload.status !== 'ready') {
+        throw new Error('conversation.sendSession: one or more files have not finished uploading')
+      }
+      return {
+        type: 'file' as const,
+        data: upload.data,
+        ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
+        ...(attachment.file.type === '' ? {} : { mediaType: attachment.file.type }),
+      }
+    }))
+    if (signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
+    const parts = [...content, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
+    const result = await session.prompt(parts, mode)
     if (!result.ok) return { kind: 'error' }
     this.releaseDraftImages(attachments)
     return { kind: 'success' }
   }
 
   /**
-   * Create runtime-only draft images and their object URLs.
-   * @param files - browser files to register after MIME validation.
+   * Create runtime-only draft attachments. Image MIME types become image
+   * drafts; every other file becomes a file draft whose background encode
+   * starts immediately and remains owned across session navigation.
+   * @param files - browser files to register.
    * @returns ordered draft descriptors.
    */
   createDraftImages(files: readonly File[]): readonly ComposerAttachment[] {
-    for (const file of files) imageMediaType(file.type)
     return files.map((file) => {
-      const attachment = browserDraftAttachment(file)
+      if (isAcceptedImageMediaType(file.type)) {
+        const attachment = browserDraftImage(file)
+        this.draftAttachments.set(attachment.id, attachment)
+        this.createdImageUrls.add(attachment.previewUrl)
+        return attachment
+      }
+      const attachment = browserDraftFile(file)
       this.draftAttachments.set(attachment.id, attachment)
-      this.createdImageUrls.add(attachment.previewUrl)
+      this.beginFileEncode(attachment)
       return attachment
     })
   }
 
   /**
-   * Resolve ordered input-state ids to runtime-owned draft images.
+   * Restart encoding for one failed file draft.
+   * @param id - draft attachment id whose encode previously failed.
+   */
+  retryFileUpload(id: DraftAttachmentId): void {
+    const attachment = this.draftAttachments.get(id)
+    if (attachment === undefined || attachment.kind !== 'file') return
+    if (this.fileUploads.getSnapshot()[id]?.status !== 'error') return
+    this.beginFileEncode(attachment)
+  }
+
+  /**
+   * Resolve ordered input-state ids to runtime-owned draft attachments.
    * @param ids - draft attachment ids.
    * @returns descriptors that remain live, in requested order.
    */
@@ -199,8 +253,8 @@ export class ConversationController extends Service implements IConversation {
 
   /**
    * Serialize ordered draft images to command-submit wire payloads without
-   * sending or releasing them (the composer releases only after the command
-   * settles successfully).
+   * sending or releasing them. Generic file drafts are refused (commands do
+   * not accept file attachments).
    * @param imageIds - ordered draft-local attachment ids.
    * @returns base64 payloads in id order.
    */
@@ -209,23 +263,35 @@ export class ConversationController extends Service implements IConversation {
     if (attachments.length !== imageIds.length) {
       throw new Error('conversation.serializeDraftImages: one or more draft images are no longer available')
     }
+    if (attachments.some(attachment => attachment.kind === 'file')) {
+      throw new Error('conversation.serializeDraftImages: file attachments are not supported on commands')
+    }
     return Promise.all(attachments.map(attachment => this.encodeImage(attachment.file)))
   }
 
   /**
-   * Release one browser-owned draft image and preview URL.
+   * Release one browser-owned draft attachment and preview URL / encode.
    * @param id - draft attachment id.
    */
   releaseDraftImage(id: DraftAttachmentId): void {
     const attachment = this.draftAttachments.get(id)
     if (attachment === undefined) return
     this.draftAttachments.delete(id)
-    this.createdImageUrls.delete(attachment.previewUrl)
-    revokePreview(attachment.previewUrl)
+    const controller = this.fileEncodeControllers.get(id)
+    this.fileEncodeControllers.delete(id)
+    controller?.abort()
+    if (attachment.kind === 'image') {
+      this.createdImageUrls.delete(attachment.previewUrl)
+      revokePreview(attachment.previewUrl)
+      return
+    }
+    const next = { ...this.fileUploads.getSnapshot() }
+    delete next[id]
+    this.fileUploads.set(next)
   }
 
   /**
-   * Release a set of browser-owned draft images.
+   * Release a set of browser-owned draft attachments.
    * @param attachments - descriptors to release.
    */
   releaseDraftImages(attachments: readonly ComposerAttachment[]): void {
@@ -290,7 +356,6 @@ export class ConversationController extends Service implements IConversation {
   }
 
   /** Apply one operation to a pending queue occurrence. */
-  /** Apply one operation to a pending queue occurrence. */
   async updateQueue(itemId: QueueItemId, action: QueueAction): Promise<'ok' | 'steer-queued'> {
     const session = this.scopedSession('updateQueue')
     const result = await session.updateQueue(itemId, action)
@@ -351,9 +416,41 @@ export class ConversationController extends Service implements IConversation {
     return sessions
   }
 
-  /** Convert browser files to canonical base64 prompt parts. */
-  private serializeImages(images: readonly File[]): Promise<Parameters<SessionFace['prompt']>[0]> {
-    return Promise.all(images.map(async file => ({ type: 'image' as const, ...await this.encodeImage(file) })))
+  /** Start (or restart) background base64 encode for one file draft. */
+  private beginFileEncode(attachment: ComposerFileAttachment): void {
+    this.fileEncodeControllers.get(attachment.id)?.abort()
+    const controller = new AbortController()
+    this.fileEncodeControllers.set(attachment.id, controller)
+    this.patchFileUpload(attachment.id, { status: 'uploading', loaded: 0, total: attachment.file.size })
+    void readFileAsBase64(attachment.file, controller.signal, (loaded, total) => {
+      if (this.fileEncodeControllers.get(attachment.id) !== controller) return
+      this.patchFileUpload(attachment.id, { status: 'uploading', loaded, total })
+    }).then(
+      (data) => {
+        if (this.fileEncodeControllers.get(attachment.id) !== controller) return
+        this.fileEncodeControllers.delete(attachment.id)
+        this.patchFileUpload(attachment.id, { status: 'ready', data })
+      },
+      (error: unknown) => {
+        if (this.fileEncodeControllers.get(attachment.id) !== controller) return
+        this.fileEncodeControllers.delete(attachment.id)
+        if (controller.signal.aborted) {
+          this.patchFileUpload(attachment.id, undefined)
+          return
+        }
+        this.patchFileUpload(attachment.id, {
+          status: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        })
+      },
+    )
+  }
+
+  private patchFileUpload(id: DraftAttachmentId, value: DraftFileUpload | undefined): void {
+    const next = { ...this.fileUploads.getSnapshot() }
+    if (value === undefined) delete next[id]
+    else next[id] = value
+    this.fileUploads.set(next)
   }
 
   /** Canonical base64 wire form of one browser image file. */
@@ -364,6 +461,13 @@ export class ConversationController extends Service implements IConversation {
       ...(file.name === '' ? {} : { name: file.name }),
     }
   }
+}
+
+function isAcceptedImageMediaType(value: string): boolean {
+  return value === 'image/png'
+    || value === 'image/jpeg'
+    || value === 'image/webp'
+    || value === 'image/gif'
 }
 
 function imageMediaType(value: string): ImageMediaType {
@@ -389,4 +493,47 @@ function bytesToBase64(data: Uint8Array): string {
 
 function revokePreview(url: string): void {
   if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+}
+
+/** Progressive FileReader encode with AbortSignal. */
+function readFileAsBase64(
+  file: File,
+  signal: AbortSignal,
+  onProgress: (loaded: number, total: number) => void,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException('The operation was aborted.', 'AbortError'))
+      return
+    }
+    const reader = new FileReader()
+    const onAbort = (): void => {
+      reader.abort()
+      reject(new DOMException('The operation was aborted.', 'AbortError'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    reader.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded, event.total)
+      else onProgress(event.loaded, file.size)
+    }
+    reader.onerror = () => {
+      signal.removeEventListener('abort', onAbort)
+      reject(reader.error ?? new Error('file read failed'))
+    }
+    reader.onabort = () => {
+      signal.removeEventListener('abort', onAbort)
+      reject(new DOMException('The operation was aborted.', 'AbortError'))
+    }
+    reader.onload = () => {
+      signal.removeEventListener('abort', onAbort)
+      const buffer = reader.result
+      if (!(buffer instanceof ArrayBuffer)) {
+        reject(new Error('file read produced no ArrayBuffer'))
+        return
+      }
+      onProgress(buffer.byteLength, buffer.byteLength)
+      resolve(bytesToBase64(new Uint8Array(buffer)))
+    }
+    reader.readAsArrayBuffer(file)
+  })
 }

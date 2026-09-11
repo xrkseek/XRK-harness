@@ -9,7 +9,7 @@
  */
 
 import { release as osRelease } from 'node:os'
-import { extname } from 'node:path'
+import { dirname, extname } from 'node:path'
 import { runNativeCommand, type NativeCommandRunner } from '@xrkseek/xrk-native-command'
 
 /** Testable command boundary; native implementations never invoke a shell. */
@@ -199,4 +199,32 @@ export function openNativeTextFile(
   internals: PathOpenerInternals = {},
 ): Promise<void> {
   return openNativePathWithIntent(path, signal, 'text-editor', internals)
+}
+
+/**
+ * Reveal a filesystem path in the desktop file manager (select the file when possible).
+ * @param path - absolute or host-resolvable path.
+ * @param signal - caller/connection lifetime; abort terminates the native command.
+ * @param internals - Platform and runner hooks for deterministic tests.
+ */
+export async function revealNativePath(
+  path: string,
+  signal: AbortSignal,
+  internals: PathOpenerInternals = {},
+): Promise<void> {
+  const platform = internals.platform ?? process.platform
+  const run = internals.run ?? runNativeCommand
+  if (platform === 'darwin') {
+    await run('open', ['-R', path], signal)
+    return
+  }
+  if (platform === 'win32') {
+    await run('explorer.exe', [`/select,${path}`], signal)
+    return
+  }
+  if (platform === 'linux') {
+    await run('xdg-open', [dirname(path)], signal)
+    return
+  }
+  throw new Error(`native path reveal is unsupported on ${platform}`)
 }

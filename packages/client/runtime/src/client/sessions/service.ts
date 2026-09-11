@@ -159,7 +159,13 @@ export { scopeOf } from '../agents/scope.ts'
  * @returns basename title, or '' when no non-empty segment exists.
  */
 export function workspaceTitleOf(cwd: string): string {
-  return cwd.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? ''
+  const trimmed = cwd.replace(/[/\\]+$/, '')
+  // Drive root: keep complete root spelling (`C:\`), not bare `C:`.
+  if (/^[A-Za-z]:$/i.test(trimmed)) {
+    const sep = cwd.includes('/') && !cwd.includes('\\') ? '/' : '\\'
+    return `${trimmed}${sep}`
+  }
+  return trimmed.split(/[/\\]/).pop() ?? ''
 }
 
 /**
@@ -735,6 +741,11 @@ export class SessionRuntime implements ISessions {
 
   /** Tear down scope + instance for no-longer-eligible sessions off stage; the staged one defers until the stage moves. */
   private pruneScopes(): void {
+    // First list arrival is still pending: an empty projection must not tear
+    // down scopes minted from host/session-added (or a restored selection)
+    // before the baseline pull lands — that would force a cold reopen and
+    // erase the already-paged history window (long-session resume stutter).
+    if (this.list.getSnapshot().phase === 'pending') return
     for (const [id, record] of this.scopes) {
       if (this.eligible(id)) continue
       if (id === this.watched) {

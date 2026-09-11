@@ -25,7 +25,7 @@ export function extractEventSearchText(event: SessionEvent): string {
     return event.todos.map((item) => item.content).filter(Boolean).join(" ");
   }
   if (event.type === "feedback/record") {
-    return event.text;
+    return [event.category, event.text].filter(Boolean).join(" ");
   }
   return "";
 }

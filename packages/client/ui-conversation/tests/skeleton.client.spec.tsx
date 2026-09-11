@@ -253,11 +253,13 @@ function mount(
           addImages={() => null}
           removeImage={() => {}}
           draftImages={() => []}
-          resolveSubmitMode={() => 'queue'}
+          useBusyEnter={bindSnapshotSelector(createSnapshotStore<'queue' | 'steer'>('queue'))}
           toggleCommandMenu={vi.fn()}
           useNotices={bindSnapshotSelector(wiring.notices)}
           useLexicon={bindSnapshotSelector(wiring.lexicon)}
           useMenuLauncher={bindSnapshotSelector(createSnapshotStore<string | null>(null))}
+          useFileUploads={bindSnapshotSelector(createSnapshotStore({}))}
+          retryFile={vi.fn()}
           stop={stop}
           command={() => Promise.resolve(true)}
           t={t}

@@ -10,7 +10,7 @@ import {
   type SessionStore,
 } from "@xrkseek/core-session";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
-import { contentHasImage, listImageRefs } from "@xrkseek/protocol";
+import { contentHasFile, contentHasImage, listImageRefs } from "@xrkseek/protocol";
 import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 
@@ -90,6 +90,69 @@ async function face(opts?: {
 }
 
 describe("Face session.attachment / image prompt", () => {
+  it("rejects empty and whitespace-only text with no attachment", async () => {
+    const { runtime } = await face();
+    const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});
+    if (!created.result.ok) throw new Error("create failed");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    for (const content of [
+      [],
+      [{ type: "text", text: "" }],
+      [{ type: "text", text: "   \n\t" }],
+    ]) {
+      const res = await dispatchFaceMethod(runtime, "session.prompt", "r-empty", {
+        sessionId,
+        mode: "queue",
+        content,
+      });
+      expect(res.result.ok).toBe(false);
+      if (!res.result.ok) {
+        // Face maps invalid-payload → wire bad-request (rpc-error.ts).
+        expect(res.result.error.code).toBe("bad-request");
+        expect(res.result.error.message).toMatch(/attachment|empty|whitespace/i);
+      }
+    }
+  });
+
+  it("accepts image-only and file-only prompts", async () => {
+    const { runtime, store } = await face({
+      modalities: ["text", "image"],
+      visionRoute: true,
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});
+    if (!created.result.ok) throw new Error("create failed");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const imageOnly = await dispatchFaceMethod(runtime, "session.prompt", "r-img", {
+      sessionId,
+      mode: "queue",
+      content: [
+        { type: "image", mediaType: "image/png", data: PNG_B64, name: "dot.png" },
+      ],
+    });
+    expect(imageOnly.result.ok).toBe(true);
+
+    const fileOnly = await dispatchFaceMethod(runtime, "session.prompt", "r-file", {
+      sessionId,
+      mode: "queue",
+      content: [
+        {
+          type: "file",
+          data: Buffer.from("hello\n", "utf8").toString("base64"),
+          name: "note.txt",
+          mediaType: "text/plain",
+        },
+      ],
+    });
+    expect(fileOnly.result.ok).toBe(true);
+
+    const pending = listPendingAdmits(store.get(sessionId).events, sessionId);
+    expect(pending).toHaveLength(2);
+    expect(contentHasImage(pending[0]!.content)).toBe(true);
+    expect(contentHasFile(pending[1]!.content)).toBe(true);
+  });
+
   it("rejects image when Face intake is text-only", async () => {
     const { runtime } = await face({ modalities: ["text"] });
     const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});

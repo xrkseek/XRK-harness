@@ -843,6 +843,9 @@ describe("Face credentials U2", () => {
         "  models:",
         "    - id: deepseek-v4-flash",
         "      name: DeepSeek Flash",
+        "agent-default-model:",
+        "  provider: deepseek",
+        "  model: deepseek-v4-flash",
         "",
       ].join("\n"),
       "utf8",
@@ -868,8 +871,9 @@ describe("Face credentials U2", () => {
       groups: { id: string; models: { id: string; name: string }[] }[];
     };
     const deepseek = catalog.groups.find((g) => g.id === "deepseek");
-    expect(deepseek?.models.map((m) => m.id)).toContain("deepseek-v4-flash");
+    expect(deepseek?.models.map((m) => m.id)).toEqual(["deepseek-v4-flash"]);
     expect(deepseek?.models.some((m) => m.id === "default")).toBe(false);
+    expect(deepseek?.models.some((m) => m.id === "deepseek-flash")).toBe(false);
     expect(catalog.current.model).toBe("deepseek-v4-flash");
 
     const desc = await dispatchFaceMethod(rt, "settings.describe", "mc2", {});
@@ -901,6 +905,41 @@ describe("Face credentials U2", () => {
     expect(
       (modelsAfter.result.value as { routable: boolean }).routable,
     ).toBe(true);
+  });
+
+  it("defaults deepseek catalog and agent model to deepseek-flash when unset", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-model-flash-"));
+    await writeFile(
+      path.join(dir, "settings.yaml"),
+      ["locale:", "  preference: zh", ""].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(dir, ".credentials.yaml"),
+      "DEEPSEEK_API_KEY: sk-test-flash-default\n",
+      "utf8",
+    );
+    const rt = runtime({ productDir: dir });
+    const created = await dispatchFaceMethod(rt, "session.create", "mf0", {});
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const models = await dispatchFaceMethod(rt, "session.models", "mf1", {
+      sessionId,
+    });
+    expect(models.result.ok).toBe(true);
+    if (!models.result.ok) return;
+    const catalog = models.result.value as {
+      current: { provider: string; model: string };
+      groups: { id: string; models: { id: string }[] }[];
+    };
+    const deepseek = catalog.groups.find((g) => g.id === "deepseek");
+    expect(deepseek?.models.map((m) => m.id)[0]).toBe("deepseek-flash");
+    expect(deepseek?.models.map((m) => m.id)).toContain("deepseek-v4-flash");
+    expect(catalog.current).toEqual({
+      provider: "deepseek",
+      model: "deepseek-flash",
+    });
   });
 
   it("settings-declared pi-ai apiKeyEnv becomes a credential slot", async () => {
@@ -973,6 +1012,44 @@ describe("Face credentials U2", () => {
       active: true,
       displayName: "My Gateway",
     });
+    expect((row as { error?: string }).error).toBeUndefined();
+  });
+
+  it("llm.providers keeps a broken declared route with a diagnostic error", async () => {
+    const rt = runtime({ bootstrapApiKey: "" });
+    const mutate = await dispatchFaceMethod(rt, "settings.mutate", "c-broken", {
+      ns: "llm-pi-ai",
+      ops: [
+        {
+          op: "set",
+          path: ["providers", "retired-route"],
+          value: {},
+        },
+      ],
+    });
+    expect(mutate.result.ok).toBe(true);
+    if (!mutate.result.ok) {
+      expect.fail(mutate.result.error.message);
+    }
+    const listed = await dispatchFaceMethod(rt, "llm.providers", "c-broken-list", {});
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) return;
+    const row = (
+      listed.result.value as {
+        providers: {
+          provider: string;
+          declared?: boolean;
+          error?: string;
+          active: boolean;
+        }[];
+      }
+    ).providers.find((p) => p.provider === "retired-route");
+    expect(row).toMatchObject({
+      provider: "retired-route",
+      declared: true,
+      active: false,
+    });
+    expect(row?.error).toContain("needs an api");
   });
 
   it("session.selectModel accepts settings-declared custom routes", async () => {

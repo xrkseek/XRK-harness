@@ -153,4 +153,15 @@ describe("FsService", () => {
       (await grepTool.execute({ pattern: "findme" })).content,
     ).toContain("readme.txt:1:");
   });
+
+  it("read_file may open absolute paths under hostReadableRoots", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-ws-"));
+    const host = await mkdtemp(path.join(tmpdir(), "xrk-fs-host-"));
+    const alias = path.join(host, "files", "ab", "digest", "note.txt");
+    await mkdir(path.dirname(alias), { recursive: true });
+    await writeFile(alias, "from-attachment\n", "utf8");
+    const fs = createFsLocalProvider({ root, hostReadableRoots: [host] });
+    expect((await fs.read(alias)).content).toBe("from-attachment\n");
+    await expect(fs.write(alias, "nope")).rejects.toThrow(PathEscapeError);
+  });
 });

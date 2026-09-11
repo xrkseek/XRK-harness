@@ -92,12 +92,15 @@ export interface SubagentsApi {
    * Delivers human content to a continuable child through the exact live
    * parent's continuation owner. Success identifies the message accepted by
    * the child's FIFO inbox; later execution is independent of this request.
+   * `delivery` selects Queue (default) or Steer into the child's current turn.
    * Optional browser-zone provenance is validated and logged on that message.
    */
   prompt(
     request: RpcRequest<
       Extract<SubagentAddress, { mode: 'continuable' }> & {
         content: ContentBlock[]
+        /** Queue appends after the turn; steer interrupts the running turn. */
+        delivery?: 'queue' | 'steer'
         /** Optional browser zone sampled for this exact human prompt. */
         clientTimeZone?: string
       }

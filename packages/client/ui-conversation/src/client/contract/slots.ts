@@ -18,30 +18,53 @@ import type {
   ComposerKeyboard, DraftAttachmentId, EditSelection, InputActions, InputNotice, InputState,
 } from '../input/contract.ts'
 import type { createChatStore } from '../stores.ts'
-import type { ComposerSubmitGesture, InputSubmitMode } from './composer-submission.ts'
+import type { BusyEnterBehavior } from './composer-submission.ts'
 import type { ChatNode, ChatNodeKind } from './chat-nodes.ts'
 import type { CallId, SelectionTarget, ViewTab } from './views.ts'
 
-/** Browser-owned image that has not crossed the durable host boundary. */
-export interface ComposerAttachment {
+/** Browser-owned draft image that has not crossed the durable host boundary. */
+export interface ComposerImageAttachment {
   kind: 'image'
   id: DraftAttachmentId
   file: File
   previewUrl: string
 }
 
+/** Browser-owned draft file awaiting base64 encoding for the prompt wire. */
+export interface ComposerFileAttachment {
+  kind: 'file'
+  id: DraftAttachmentId
+  file: File
+}
+
+/** Browser-owned draft attachment (image or generic file) in input order. */
+export type ComposerAttachment = ComposerImageAttachment | ComposerFileAttachment
+
+/** Per-file upload/readiness tracked while a draft file is on the rail. */
+export type DraftFileUpload =
+  | { readonly status: 'uploading'; readonly loaded: number; readonly total?: number }
+  | { readonly status: 'ready'; readonly data: string }
+  | { readonly status: 'error'; readonly message: string }
+
+/** Upload state keyed by draft attachment id (files only). */
+export type DraftFileUploads = Readonly<Record<string, DraftFileUpload>>
+
 /** Input state handed to the optional attachment presentation plugin. */
 export interface ComposerAttachmentsOwnerProps {
-  /** Browser-owned draft images in input order. */
+  /** Browser-owned draft attachments in input order. */
   attachments: readonly ComposerAttachment[]
-  /** Whether a document-level file drop may add images now. */
+  /** Whether a document-level file drop may add attachments now. */
   canAcceptDrop: boolean
   /** Add one dropped batch through the composer's validation path. */
   onAddImages: (files: readonly File[]) => void
-  /** Remove one draft image through the conversation service. */
+  /** Remove one draft attachment through the conversation service. */
   onRemoveImage: (id: DraftAttachmentId) => void
   /** Display-ready limits for the drop invitation. */
   dropLimits?: { readonly count: number; readonly size: string } | undefined
+  /** Base64 encoding progress for draft files keyed by attachment id. */
+  uploads: DraftFileUploads
+  /** Re-run encoding for one failed draft file. */
+  onRetryFile: (id: DraftAttachmentId) => void
 }
 
 /** Historical image group handed to the optional attachment presentation plugin. */
@@ -555,18 +578,14 @@ export interface ComposerBarOwnerProps {
 export interface ComposerBarInjected {
   /** The InputBar-exclusive keyboard/DOM command face (private plane); absent with the session. */
   keyboard: ComposerKeyboard | undefined
-  /** Create previews and append image ids to the session input. */
+  /** Create previews and append attachment ids to the session input. */
   addImages: ((files: readonly File[]) => string | null) | undefined
-  /** Release one preview and remove its id from session input. */
+  /** Release one draft and remove its id from session input. */
   removeImage: ((id: DraftAttachmentId) => void) | undefined
-  /** Resolve ordered input ids to browser-owned draft images. */
+  /** Resolve ordered input ids to browser-owned draft attachments. */
   draftImages: ((ids: readonly DraftAttachmentId[]) => readonly ComposerAttachment[]) | undefined
-  /** Resolve one keyboard submission gesture against the current running state and persisted preference. */
-  resolveSubmitMode: (
-    running: boolean,
-    gesture: ComposerSubmitGesture,
-    steeringAvailable: boolean,
-  ) => InputSubmitMode
+  /** Restart encoding for one failed file draft; absent with the session. */
+  retryFile: ((id: DraftAttachmentId) => void) | undefined
   /** Toggle the shared slash menu with only its command source; absent without ui-input-trigger or a session. */
   toggleCommandMenu: ((selection: EditSelection) => void) | undefined
   /** Cancel the in-flight turn; absent with the session. */
@@ -580,10 +599,15 @@ export interface ComposerBarInjected {
   command: ((line: string) => Promise<boolean>) | undefined
   /**
    * Registrant hooks compartment: the renderer binds these to
-   * useNotices/useLexicon (static absent sources without a session — hook
+   * useNotices/useLexicon/useFileUploads (static absent sources without a session — hook
    * order stays constant).
    */
   hooks: {
+    /**
+     * Live busy-state submission preference: the delivery mode plain Enter
+     * and the primary Send button use while the addressed agent is busy.
+     */
+    busyEnter: ObservableSnapshot<BusyEnterBehavior>
     /** Latest surfaced notice (null after none; seq keys re-render of repeats). */
     notices: ObservableSnapshot<InputNotice | null>
     /** Hot plain-text reference lexicon for the decoration scan (plain-text-reference decision;
@@ -591,6 +615,8 @@ export interface ComposerBarInjected {
     lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>>
     /** Source name opened by the programmatic menu launcher, or null. */
     menuLauncher: ObservableSnapshot<string | null>
+    /** Per-draft file encode/upload states (empty when no file drafts). */
+    fileUploads: ObservableSnapshot<DraftFileUploads>
   }
 }
 

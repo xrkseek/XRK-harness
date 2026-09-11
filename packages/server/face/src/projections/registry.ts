@@ -3,7 +3,7 @@
  * Units live here; the seam owns drive / dual maps / optional wire.
  */
 
-import type { ImageAttachmentLimits } from "@xrkseek/attachment";
+import type { FileAttachmentLimits, ImageAttachmentLimits } from "@xrkseek/attachment";
 import type { PlanProjection, TodoItem } from "@xrkseek/protocol";
 import {
   createSessionProjectionRegistry,
@@ -42,6 +42,11 @@ export interface FaceProjectionMap {
    * Face has an AttachmentStore; constant per boot — no change frames.
    */
   readonly imageLimits: ImageAttachmentLimits;
+  /**
+   * Generic-file intake limits. Present only while Face has an AttachmentStore;
+   * constant per boot — no change frames.
+   */
+  readonly fileLimits: FileAttachmentLimits;
   /**
    * Whole-log turn outline for the chat rail (DSH turnOutline): every started
    * turn with its `turn/start` Face seq and bounded previews. Paging cannot

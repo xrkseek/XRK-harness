@@ -1,7 +1,7 @@
 /**
- * Composer submission policy. It owns the live busy-Enter
- * preference and resolves keyboard gestures into queue/steer delivery modes;
- * Host and Agent keep the actual delivery-window authority.
+ * Composer submission policy. It owns the live busy-Enter preference and
+ * resolves submission gestures into queue/steer delivery modes; Host and
+ * Agent keep the actual delivery-window authority.
  */
 import {
   createSnapshotStore, type SettingsScope, type SnapshotStore,
@@ -11,16 +11,18 @@ import type {
 } from '../contract/composer-submission.ts'
 import { BUSY_ENTER_FIELD, DEFAULT_BUSY_ENTER_BEHAVIOR } from '../../submission-settings.ts'
 import type { ConversationSettings } from '../../submission-settings.ts'
+import { resolveSubmitMode } from './resolve-submit-mode.ts'
 
 export { DEFAULT_BUSY_ENTER_BEHAVIOR } from '../../submission-settings.ts'
+export { resolveSubmitMode } from './resolve-submit-mode.ts'
 
 /**
- * Busy-Enter policy used by both the composer inject face and its Settings row.
- * Direct `steer` is intentionally best-effort: AgentLoop turns a closed-window
- * submission into the next waking Queue item.
+ * Busy-Enter preference shared by the composer bar inject face and its
+ * Settings row: one live store the bar's submission gestures and Send label
+ * read, backed by the Host user-settings document when one is composed.
  */
 export class ComposerSubmissionPolicy {
-  /** Reactive preference source for the Settings row. */
+  /** Reactive preference source for the composer bar and the Settings row. */
   readonly busyEnter: SnapshotStore<BusyEnterBehavior> = createSnapshotStore(DEFAULT_BUSY_ENTER_BEHAVIOR)
   private readonly host: SettingsScope<ConversationSettings> | undefined
 
@@ -50,15 +52,12 @@ export class ComposerSubmissionPolicy {
     gesture: ComposerSubmitGesture,
     steeringAvailable: boolean,
   ): InputSubmitMode {
-    if (!running || !steeringAvailable) return 'queue'
-    const preferred = this.busyEnter.getSnapshot()
-    if (gesture === 'enter') return preferred
-    return preferred === 'queue' ? 'steer' : 'queue'
+    return resolveSubmitMode(this.busyEnter.getSnapshot(), running, gesture, steeringAvailable)
   }
 
   /**
-   * Change the plain-Enter behavior used during busy state; the live value
-   * publishes before the durable write starts.
+   * Change the busy-state submission behavior; the live value publishes
+   * before the durable write starts.
    * @param behavior - Queue or Steer.
    */
   setBusyEnter(behavior: BusyEnterBehavior): void {

@@ -160,7 +160,7 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
       file: new File([Uint8Array.of(1)], `${id}.png`, { type: 'image/png' }),
       previewUrl: `blob:${id}`,
     })),
-    resolveSubmitMode: () => 'queue',
+    useBusyEnter: bindSnapshotSelector(createSnapshotStore<'queue' | 'steer'>('queue')),
     toggleCommandMenu: (selection) => {
       const snapshot = shell.snapshot
       controller.toggleSource('command', {
@@ -174,6 +174,8 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
     useNotices: bindSnapshotSelector(shell.notices),
     useLexicon: bindSnapshotSelector(shell.lexicon),
     useMenuLauncher: bindSnapshotSelector(controller.launcher),
+    useFileUploads: bindSnapshotSelector(createSnapshotStore({})),
+    retryFile: vi.fn(),
     renderSlot: (() => null) as InputBarProps['renderSlot'],
     stop: vi.fn(),
     command: () => Promise.resolve(true),

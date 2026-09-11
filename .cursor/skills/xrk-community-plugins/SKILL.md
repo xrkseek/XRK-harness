@@ -21,25 +21,27 @@ user-invocable: false
 
 | Tier | 触发 | Host |
 |------|------|------|
-| A | 仅 Face / 壳 API | 通常直接可用 |
+| A | 仅 Face / 壳 API（含面板 `dynamicCordisRunner/*`） | 通常直接可用；不嵌 Cordis Host |
 | B | 全局能力表 | XRK 持久化 |
 | C | `*-settings` RPC | settings store |
 | D | `/_dsh/<pkg>/…` | 通用 JSON |
 | E–G | slug / catch-all / 未注册 POST | 诚实降级 |
 | H | `xrk.host.json` | 作者声明 provider |
-| I | `host.mjs` | 进程内 apply；失败 I′ 子进程 |
+| I | `host.mjs`（含面板 `runHostHalf`） | 进程内 apply；失败 I′ 子进程 |
 | J | 外部云端发行版 | 见 status「未做」 |
 
 **不要**把「未实现」写成已支持；对照 [docs/status.md](../../../docs/status.md)。
 
-## 与进程插件（tools/prompt/commands）边界
+## 与进程插件 / Desktop 安装面边界
 
-| | 进程插件 | 社区 host/client |
-|--|----------|------------------|
-| Manifest | `xrk.plugin.json` | 常含 `xrk.host.json` + `host.mjs` / client 包 |
-| 目的 | 模型工具 / prompt / 命令 | 壳 UI · Host RPC 形状兼容 |
-| 安装 | `xrkh plugin add` | 同 CLI + 可能 web overlay |
-| 重载 | **`xrkh restart`** | 同左 |
+| | 进程插件 | 社区 host/client | Desktop 插件安装面 |
+|--|----------|------------------|-------------------|
+| Manifest | `xrk.plugin.json` | 常含 `xrk.host.json` + `host.mjs` / client 包 | profile 依赖图（npm name/version） |
+| 目的 | 模型工具 / prompt / 命令 | 壳 UI · Host RPC 形状兼容 | 桌面 profile 可执行闭包 |
+| 安装 | `xrkh plugin add` | 同 CLI + 可能 **`web/boot.json` overlay** | 结构化 list/add/remove/update + 内置 pnpm（设计；未就绪） |
+| 重载 | **`xrkh restart`** | 同左 | Desktop Host / 壳生命周期（实现时） |
+
+**不要**把 Desktop 安装通道与社区 web overlay / dsh-compat 能力表混为一谈。教科书边界表：[docs/community-plugins.md](../../../docs/community-plugins.md)「Desktop 插件 vs 社区 client」。
 
 ## 权威入口
 
@@ -59,7 +61,7 @@ user-invocable: false
 ## 常见陷阱
 
 - 按**包名**堆适配器 — Harness 按**路径与 RPC 形状**接线。  
-- 对 deepseek-ai / 上游提 PR — **禁止**（产品身份规则）。  
+- 对上游第三方仓提 PR — **禁止**（产品身份规则；ADR-0002）。  
 - 把 maintainer `.cursor` 笔记当社区包规格。
 
 ## 相关

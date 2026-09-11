@@ -15,7 +15,7 @@ import {
   EditAmbiguousError,
 } from "./edit-text.js";
 import { formatReadWindow } from "./read-window.js";
-import { resolveWithinRoot } from "./paths.js";
+import { PathEscapeError, resolveWithinRoot } from "./paths.js";
 import {
   globUnderRoot,
   grepUnderRoot,
@@ -53,6 +53,9 @@ export {
 export {
   FS_ROUTING_PROMPT_TEXT,
   SHELL_ROUTING_PROMPT_TEXT,
+  formatFsRoutingPrompt,
+  formatShellRoutingPrompt,
+  type ToolNameSet as FsRoutingToolNameSet,
 } from "./routing-prompt.js";
 export {
   createReadImageTool,
@@ -152,11 +155,42 @@ export interface FsService {
 export interface FsLocalOptions {
   readonly root: string;
   readonly defaultMaxBytes?: number;
+  /**
+   * Absolute host directories whose files may be read by absolute path
+   * (attachment alias roots). Writes still require the workspace root.
+   */
+  readonly hostReadableRoots?: readonly string[];
+}
+
+function resolveReadablePath(
+  root: string,
+  hostReadableRoots: readonly string[],
+  userPath: string,
+): string {
+  try {
+    return resolveWithinRoot(root, userPath);
+  } catch (error) {
+    if (!(error instanceof PathEscapeError) || !path.isAbsolute(userPath)) {
+      throw error;
+    }
+    const abs = path.resolve(userPath);
+    for (const hostRoot of hostReadableRoots) {
+      const hostAbs = path.resolve(hostRoot);
+      const rel = path.relative(hostAbs, abs);
+      if (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)) {
+        return abs;
+      }
+    }
+    throw error;
+  }
 }
 
 /** Provider — local disk bound to workspace root. */
 export function createFsLocalProvider(options: FsLocalOptions): FsService {
   const root = path.resolve(options.root);
+  const hostReadableRoots = (options.hostReadableRoots ?? []).map((r) =>
+    path.resolve(r),
+  );
   const defaultMaxBytes = options.defaultMaxBytes ?? 512_000;
   const intentHandlers = new Set<FsIntentHandler>();
 
@@ -170,11 +204,11 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
   return {
     root,
     resolvePath(userPath) {
-      return resolveWithinRoot(root, userPath);
+      return resolveReadablePath(root, hostReadableRoots, userPath);
     },
     async read(userPath, maxBytes = defaultMaxBytes) {
       emit("fs/read-intent", userPath);
-      const abs = resolveWithinRoot(root, userPath);
+      const abs = resolveReadablePath(root, hostReadableRoots, userPath);
       const buf = await fsReadFile(abs);
       if (buf.byteLength > maxBytes) {
         return {
@@ -186,7 +220,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
     },
     async readBytes(userPath, maxBytes = defaultMaxBytes) {
       emit("fs/read-intent", userPath);
-      const abs = resolveWithinRoot(root, userPath);
+      const abs = resolveReadablePath(root, hostReadableRoots, userPath);
       const buf = await fsReadFile(abs);
       if (buf.byteLength > maxBytes) {
         throw new Error(
@@ -229,23 +263,24 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
       }
     },
     async stat(userPath) {
-      const abs = resolveWithinRoot(root, userPath);
-      const s = await fsStat(abs);
+      const abs = resolveReadablePath(root, hostReadableRoots, userPath);
+      const st = await fsStat(abs);
       return {
-        size: s.size,
-        isFile: s.isFile(),
-        isDirectory: s.isDirectory(),
+        size: st.size,
+        isFile: st.isFile(),
+        isDirectory: st.isDirectory(),
       };
     },
     async mkdir(userPath) {
+      emit("fs/write-intent", userPath);
       const abs = resolveWithinRoot(root, userPath);
       await mkdir(abs, { recursive: true });
     },
-    async glob(pattern, opts) {
-      return globUnderRoot(root, pattern, opts);
+    async glob(pattern, options) {
+      return globUnderRoot(root, pattern, options);
     },
-    async grep(pattern, opts) {
-      return grepUnderRoot(root, pattern, opts);
+    async grep(pattern, options) {
+      return grepUnderRoot(root, pattern, options);
     },
     onIntent(handler) {
       intentHandlers.add(handler);
@@ -263,7 +298,8 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       name: "read_file",
       description:
         "Read a UTF-8 file with 1-based line numbers (`N|line`). Prefer this over shell cat/head. " +
-        "Use offset/limit for large files. Path may be workspace-relative or absolute under the workspace root. " +
+        "Use offset/limit for large files. Path may be workspace-relative or absolute under the workspace root " +
+        "(uploaded attachment paths from the conversation are also readable). " +
         "Line endings are normalized to LF in the tool output.",
       parameters: {
         type: "object",

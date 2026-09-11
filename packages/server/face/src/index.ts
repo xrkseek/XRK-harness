@@ -76,6 +76,16 @@ export {
   type MessageFeedbackRating,
 } from "./message-feedback.js";
 export {
+  FEEDBACK_CATEGORIES,
+  FEEDBACK_TEXT_MAX_CHARS,
+  isFeedbackCategory,
+  normalizeFeedbackEntry,
+  recordSessionFeedback,
+  sessionFeedbackRecord,
+  writeFeedbackConversationSlice,
+  type SessionFeedbackEntry,
+} from "./session-feedback.js";
+export {
   FaceGoalStore,
   DEFAULT_MAX_GOAL_ROUNDS,
   type GoalActivation,
@@ -100,6 +110,7 @@ export {
   createTitleProjectionUnit,
   createSessionListMetadataUnit,
   createImageLimitsProjectionUnit,
+  createFileLimitsProjectionUnit,
   installDefaultFaceProjections,
   FaceTitleController,
   SessionTitleInvalidError,
@@ -220,6 +231,7 @@ export {
   FaceWorkspaceRegistry,
   type FaceWorkspaceView,
 } from "./workspace-registry.js";
+export { defaultWorkspaceTitle } from "./workspace-paths.js";
 export {
   FaceSubagentRegistry,
   type FaceSubagentLink,

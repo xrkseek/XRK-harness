@@ -4,7 +4,9 @@
 |-----|------|
 | `assembleThreeLayers` | 骨架 system（+ workspaceBlocks）· 历史 · skeleton user · volatile user；**tools 按 name 字典序** |
 | `createSystemPromptAssembler` | 分段 system 字符串（preset persona） |
-| `createOutboundPipeline` / `createDefaultOutbound` | 出站链：slash → assemble → toolPair → compaction → window → invariant |
+| `createOutboundPipeline` / `createDefaultOutbound` | 出站链：slash → assemble → toolPair · compaction · window · invariant |
+
+骨架人设是单一 `persona` 字符串（agent-loop `assemble.persona` 可为其函数形）；**没有** `personaPrefix` / `personaSuffix` 配置轴。分段靠 assembler 的 `id`/`order`，不是部署级前后缀拆分。
 
 **注意：** 出站默认 `slashRecipeStep` 仍为 noop；传入 `createDefaultOutbound({ resolveSlash })` 或用 `createSlashRecipeStep`。热路径 slash 在 agent-loop `assemble.resolveSlash`。真 compaction 在 agent-loop；recipe 解析在 `@xrkseek/workspace`。
 

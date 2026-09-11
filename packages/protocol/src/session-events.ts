@@ -436,9 +436,23 @@ export interface PlanModeEvent extends SessionEventBase {
 }
 
 /** Human session remark (DSH `feedback/record`). Log-only; not model-visible. */
+export type FeedbackCategory =
+  | "task-result"
+  | "instruction-following"
+  | "product-interaction"
+  | "service-stability"
+  | "resource-cost"
+  | "security-privacy-permission"
+  | "other";
+
 export interface FeedbackRecordEvent extends SessionEventBase {
   readonly type: "feedback/record";
-  readonly text: string;
+  /** Free-text remark; omitted when blank. */
+  readonly text?: string;
+  /** Fixed product category when the human picked one. */
+  readonly category?: FeedbackCategory;
+  /** Sidecar id for the related conversation slice written at record time. */
+  readonly sliceId?: string;
 }
 
 /** Per-conversation LLM route snapshot (DSH `LlmCallConfig` subset). */

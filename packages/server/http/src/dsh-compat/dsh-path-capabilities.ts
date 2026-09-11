@@ -25,6 +25,8 @@ export const DSH_HTTP_CAPABILITIES: readonly DshHttpCapability[] = [
   { prefix: "/api-import/", provider: "xrk-chat-import" },
   { prefix: "/.well-known/dsh-genui", provider: "xrk-genui" },
   { prefix: "/_dsh/genui/", provider: "xrk-genui" },
+  { prefix: "/api/dsh-genui/", provider: "xrk-genui" },
+  { prefix: "/dsh-genui/", provider: "xrk-genui" },
   { prefix: "/_dsh/dsh-noema", provider: "xrk-noema" },
   { prefix: "/dsh-market", provider: "xrk-market" },
   { prefix: "/api/dsh-market", provider: "xrk-market" },

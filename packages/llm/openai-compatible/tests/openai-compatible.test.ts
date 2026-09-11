@@ -462,7 +462,7 @@ describe("openai-compatible adapter", () => {
 
   it("keeps streamed tool identity when a later delta sends blank id/name", async () => {
     // Repro: early deltas carry id+name; later fragments send blank identity.
-    // send "" and must not wipe identity (DSH pi-ai keeps non-empty only).
+    // "" must not wipe identity (DSH llm-deepseek acceptIdentity).
     const payload = [
       JSON.stringify({
         choices: [
@@ -528,6 +528,142 @@ describe("openai-compatible adapter", () => {
           name: "bash",
           arguments: { command: "pwd" },
         },
+      ],
+    });
+  });
+
+  it("keeps streamed tool identity when a later delta sends null id/name", async () => {
+    // Gateways sometimes fill continuation identity with null (not omit).
+    const payload = [
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "call_1",
+                  function: { name: "Glob", arguments: "" },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: null,
+                  function: { name: null, arguments: "{}" },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      JSON.stringify({
+        choices: [{ finish_reason: "tool_calls", delta: {} }],
+      }),
+    ]
+      .map((row) => `data: ${row}\n\n`)
+      .join("");
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        new Response(`${payload}data: [DONE]\n\n`, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        })) as unknown as typeof fetch,
+    });
+    const events = [];
+    for await (const ev of llm.stream!({
+      messages: [{ role: "user", content: "hi" }],
+    })) {
+      events.push(ev);
+    }
+    const done = events.find((e) => e.type === "done");
+    expect(done).toMatchObject({
+      type: "done",
+      finishReason: "tool-calls",
+      toolCalls: [{ id: "call_1", name: "Glob", arguments: {} }],
+    });
+  });
+
+  it("keeps parallel tool identities under empty continuation deltas", async () => {
+    const payload = [
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "a",
+                  function: { name: "one", arguments: "" },
+                },
+                {
+                  index: 1,
+                  id: "b",
+                  function: { name: "two", arguments: "" },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 1,
+                  id: "",
+                  function: { name: "", arguments: '{"b":1}' },
+                },
+                {
+                  index: 0,
+                  id: "",
+                  function: { name: "", arguments: '{"a":1}' },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      JSON.stringify({
+        choices: [{ finish_reason: "tool_calls", delta: {} }],
+      }),
+    ]
+      .map((row) => `data: ${row}\n\n`)
+      .join("");
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        new Response(`${payload}data: [DONE]\n\n`, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        })) as unknown as typeof fetch,
+    });
+    const events = [];
+    for await (const ev of llm.stream!({
+      messages: [{ role: "user", content: "hi" }],
+    })) {
+      events.push(ev);
+    }
+    const done = events.find((e) => e.type === "done");
+    expect(done).toMatchObject({
+      type: "done",
+      finishReason: "tool-calls",
+      toolCalls: [
+        { id: "a", name: "one", arguments: { a: 1 } },
+        { id: "b", name: "two", arguments: { b: 1 } },
       ],
     });
   });

@@ -9,7 +9,7 @@ import { ConnectionController, type ConnectionConfig, type ConnectionSinks, type
 import { FixtureApiClient } from './fixture.ts'
 import { WebApiClient } from './web-api-client.ts'
 import { createWebConnectionRpc } from './rpc.ts'
-import { isLoopbackHostname } from '../loopback-hostname.ts'
+import { isPrivilegedClientSurface } from '../loopback-hostname.ts'
 import type { ClientConnectionRpc } from '../rpc.ts'
 
 // ---- Contract re-exports (browser-safe apiproxy channels + core types) ----
@@ -41,6 +41,19 @@ export {
 export type { ConnectionConfig, ConnectionSinks, ConnectionState }
 export type { ClientConnectionRpc } from '../rpc.ts'
 
+/**
+ * Page global set by the Desktop shell when the renderer owns the private Host
+ * (custom protocol + pipe Fetch). Absent in the served web app.
+ */
+export interface XrkClientTransportHooks {
+  /** When true, `isLoopback` is true regardless of page hostname (desktop owns Host). */
+  readonly ownsHost?: boolean
+}
+
+interface XrkClientTransportGlobal {
+  __XRK_TRANSPORT__?: XrkClientTransportHooks
+}
+
 /** Observable Host description published by each completed connection handshake. */
 export interface HostDescriptionSource {
   /** Latest connected-generation description; absent before connect and while reconnecting. */
@@ -68,7 +81,10 @@ export const inject: string[] = []
 export interface ConnectionHandle {
   /** Shared api client (fixture or real, decided at boot from the page URL). */
   readonly api: IApiClient
-  /** Whether the current page authority is loopback; non-browser contexts default to true. */
+  /**
+   * Privileged surface: loopback hostname, Desktop `__XRK_TRANSPORT__.ownsHost`,
+   * `xrk-app:` page, or non-browser context.
+   */
   readonly isLoopback: boolean
   /** Generation-scoped Host facts, including native path-open capability. */
   readonly hostDescription: HostDescriptionSource
@@ -95,6 +111,7 @@ export interface ConnectionHandle {
  */
 export function apply(ctx: Context): void {
   const pageLocation = typeof location === 'undefined' ? undefined : location
+  const transport = (globalThis as XrkClientTransportGlobal).__XRK_TRANSPORT__
   const fixture = pageLocation !== undefined && new URLSearchParams(pageLocation.search).has('fixture')
   const fixtureClient = fixture ? new FixtureApiClient() : undefined
   const api: IApiClient = fixtureClient ?? new WebApiClient()
@@ -129,7 +146,10 @@ export function apply(ctx: Context): void {
   }
   const handle: ConnectionHandle = {
     api,
-    isLoopback: pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
+    isLoopback: isPrivilegedClientSurface({
+      ownsHost: transport?.ownsHost === true,
+      pageLocation,
+    }),
     hostDescription: {
       getSnapshot: () => description,
       subscribe: (listener) => {
