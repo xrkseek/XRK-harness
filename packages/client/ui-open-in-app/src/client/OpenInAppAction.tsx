@@ -121,12 +121,11 @@ export function OpenInAppAction(props: OpenInAppActionProps): ReactNode {
         launch(id)
       }}
       anchor={(
-        <div className={css.split}>
+        <div className={css.split} data-state={phase}>
           <Tooltip label={phase === 'error' ? t('open.error') : t('open.tooltip')} side="bottom">
             <button
               type="button"
               className={css.main}
-              data-state={phase}
               disabled={phase === 'busy'}
               aria-label={title}
               onClick={() => { launch(current) }}

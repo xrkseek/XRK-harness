@@ -75,7 +75,8 @@ HTTP/WS (attach-http)
 | 文件 | 作用 | 关键契约 |
 | --- | --- | --- |
 | `host-directory.ts` | list/createDirectory · `fullyQualified` | 绝对路径；条目上限 |
-| `host-open-path.ts` | `host.openPath` · `canOpenNativePath` | 仅绝对路径；Win/mac/Linux 可开 |
+| `host-open-path.ts` | `host.openPath` · `canOpenNativePath` · `spawnDetached` | 仅绝对路径；Win `cmd /c start`；与 open-in-app 共用 spawn |
+| `host-open-in-app.ts` | `host.listOpenInApps` · `host.openInApp` | 白名单探测；Win 编辑器优先真 `.exe`；`wt` 不用 Apps 别名路径 |
 | `remote-event.ts` | `host/remote-event` 白名单转发 | 无 Cordis inspect/run |
 | `host-pick-directory.ts` | `host.pickDirectory` | 系统选目录；取消 `null`；缺 picker 用 `directory-picker-unavailable` |
 | `workspace-face.ts` | workspace.* Face | 路径不得逃出 root |
@@ -126,6 +127,8 @@ HTTP/WS (attach-http)
 | `tests/harness-path.test.ts` | prompt → tool → cancel → ask |
 | `tests/session-search.test.ts` | search 校验 / 命中 / 近因 / FTS 候选 |
 | `tests/open-path-skills.test.ts` | canOpenPath 三端 · skill.list |
+| `tests/open-path-normalize.test.ts` | 尾部 `/.` · 盘符根 · Explorer 反斜杠 |
+| `tests/open-in-app.test.ts` | 目录约束 · SSH 空目录 · Win 真 `.exe` / `wt` |
 | `tests/pick-directory.test.ts` | 三端 picker 命令 / 取消 null / 注入 RPC |
 | `tests/message-feedback.test.ts` | list/put/delete CAS · 嵌套 Typert |
 | `tests/goals.test.ts` | create/pause CAS · `/goal` · `goal.create` 点号 |
@@ -238,7 +241,8 @@ HTTP/WS (attach-http)
 | File | Role | Critical contract |
 | --- | --- | --- |
 | `host-directory.ts` | list/createDirectory · `fullyQualified` | Absolute paths; entry caps |
-| `host-open-path.ts` | `host.openPath` · `canOpenNativePath` | Absolute only; Win/mac/Linux openable |
+| `host-open-path.ts` | `host.openPath` · `canOpenNativePath` · `spawnDetached` | Absolute only; Win `cmd /c start`; shared spawn with open-in-app |
+| `host-open-in-app.ts` | `host.listOpenInApps` · `host.openInApp` | Whitelist probe; Win editors prefer real `.exe`; `wt` skips Apps alias paths |
 | `remote-event.ts` | `host/remote-event` allowlisted forward | No Cordis inspect/run |
 | `host-pick-directory.ts` | `host.pickDirectory` | System picker; cancel `null`; missing picker → `directory-picker-unavailable` |
 | `workspace-face.ts` | workspace.* Face | Paths must not escape root |
@@ -289,6 +293,8 @@ Driver registry lives in `@xrkseek/session-projection` (spec: [session-projectio
 | `tests/harness-path.test.ts` | prompt → tool → cancel → ask |
 | `tests/session-search.test.ts` | search validation / hits / recency / FTS candidates |
 | `tests/open-path-skills.test.ts` | canOpenPath three platforms · skill.list |
+| `tests/open-path-normalize.test.ts` | Trailing `/.` · drive root · Explorer backslashes |
+| `tests/open-in-app.test.ts` | Directory-only · SSH empty catalog · Win real `.exe` / `wt` |
 | `tests/pick-directory.test.ts` | three-platform picker / cancel null / injected RPC |
 | `tests/message-feedback.test.ts` | list/put/delete CAS · nested Typert |
 | `tests/goals.test.ts` | create/pause CAS · `/goal` · `goal.create` dotted |

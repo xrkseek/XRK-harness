@@ -38,15 +38,22 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.main[data-state='busy'] {
+.split[data-state='busy'] .main {
   opacity: 0.55;
   cursor: wait;
 }
 
-.main[data-state='error'] {
-  outline: 1px solid var(--dsw-alias-state-error-primary);
-  outline-offset: -1px;
+.split[data-state='error'] {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+.split[data-state='error'] .main,
+.split[data-state='error'] .chevron {
   color: var(--dsw-alias-state-error-primary);
+}
+
+.split[data-state='error'] .chevron {
+  border-left-color: var(--dsw-alias-state-error-primary);
 }
 
 .main:disabled {

@@ -68,7 +68,7 @@ Wire：`session/queue` 带完整 `message` 块；`prompt/*` → mux/history `age
 
 ### 打开路径、模型发现与预设
 
-`host.openPath` / `settings.openDocument`：Win `cmd start` · macOS `open` · Linux `xdg-open`（桌面 `canOpenPath: true`；openDocument 忽略客户端 path，优先 `XRK_POLICY_FILE`，否则写 redacted `host-settings.json`）。`llm.discoverModels`：draft 探测 openai-chat `GET /models`（`settingsNs` = `llm` 或 `llm-pi-ai`）；失败 `model-discovery-failed`，details 不含密钥；不落盘。`agentPreset.read` 只读 catalog（`trust: system`）；创作面因 `authorable: false` 回 `agent-preset-read-only`（不是 `internal`）。`goal.*` 与 `goals/*` 同一套 handler。Cordis 面板 `dynamicCordisRunner/inventory` 回空数组，不嵌 `apply(ctx)`。
+`host.openPath` / `settings.openDocument`：Win `cmd /c start`（ShellExecute；勿直接 `explorer.exe <dir>`）· macOS `open` · Linux `xdg-open`（桌面 `canOpenPath: true`；openDocument 忽略客户端 path，优先 `XRK_POLICY_FILE`，否则写 redacted `host-settings.json`）。打开路径去掉客户端拼接的尾部 `/.`，保留 `/` 与盘符根 `C:\`。`host.openInApp`：Win 编辑器优先真 `.exe`（不用 WindowsApps 别名路径）；`wt -d` 且 `windowsHide: false`；路径须为绝对目录。`llm.discoverModels`：draft 探测 openai-chat `GET /models`（`settingsNs` = `llm` 或 `llm-pi-ai`）；失败 `model-discovery-failed`，details 不含密钥；不落盘。`agentPreset.read` 只读 catalog（`trust: system`）；创作面因 `authorable: false` 回 `agent-preset-read-only`（不是 `internal`）。`goal.*` 与 `goals/*` 同一套 handler。Cordis 面板 `dynamicCordisRunner/inventory` 回空数组，不嵌 `apply(ctx)`。
 
 ### 工具卡与投影
 
@@ -176,7 +176,7 @@ End-user tuning prefers the **Settings** pages (via Face `settings.*` / `credent
 
 ### Open path, model discovery, and presets
 
-`host.openPath` / `settings.openDocument`: Win `cmd start` · macOS `open` · Linux `xdg-open` (desktop `canOpenPath: true`; openDocument ignores client path, prefers `XRK_POLICY_FILE`, else writes redacted `host-settings.json`). `llm.discoverModels`: draft probe of openai-chat `GET /models` (`settingsNs` = `llm` or `llm-pi-ai`); failure → `model-discovery-failed`, details omit secrets; not persisted. `agentPreset.read` is catalog-only (`trust: system`); authoring surfaces return `agent-preset-read-only` because `authorable: false` (not `internal`). `goal.*` and `goals/*` share handlers. Cordis panel `dynamicCordisRunner/inventory` returns `[]`; Cordis `apply(ctx)` is not embedded.
+`host.openPath` / `settings.openDocument`: Win `cmd /c start` (ShellExecute; do not CreateProcess `explorer.exe <dir>`) · macOS `open` · Linux `xdg-open` (desktop `canOpenPath: true`; openDocument ignores client path, prefers `XRK_POLICY_FILE`, else writes redacted `host-settings.json`). Open paths strip client-joined trailing `/.` while keeping `/` and drive-root `C:\`. `host.openInApp`: on Windows prefer real `.exe` over WindowsApps alias paths; `wt -d` with `windowsHide: false`; path must be an absolute directory. `llm.discoverModels`: draft probe of openai-chat `GET /models` (`settingsNs` = `llm` or `llm-pi-ai`); failure → `model-discovery-failed`, details omit secrets; not persisted. `agentPreset.read` is catalog-only (`trust: system`); authoring surfaces return `agent-preset-read-only` because `authorable: false` (not `internal`). `goal.*` and `goals/*` share handlers. Cordis panel `dynamicCordisRunner/inventory` returns `[]`; Cordis `apply(ctx)` is not embedded.
 
 ### Tool cards and projections
 

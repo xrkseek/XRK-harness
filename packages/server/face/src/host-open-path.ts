@@ -1,6 +1,7 @@
 /**
  * host.openPath / reveal — open or select a filesystem path in the OS shell.
- * Win: explorer /select · macOS: open -R · Linux: xdg-open (dir) / containing folder.
+ * Win folders: `cmd /c start` (ShellExecute). Win files: explorer /select.
+ * macOS: open. Linux: xdg-open.
  */
 
 import { access, constants, stat } from "node:fs/promises";
@@ -23,15 +24,23 @@ export function canOpenNativePath(
   return platform === "win32" || platform === "darwin" || platform === "linux";
 }
 
-function runDetached(
+/**
+ * Detached GUI/CLI spawn shared by openPath and open-in-app.
+ * `windowsHide` defaults true (hide console stubs). Pass false for processes
+ * that own the visible window (e.g. `wt`); GUI subsystem apps like
+ * `explorer.exe` / `Cursor.exe` stay visible either way.
+ */
+export function spawnDetached(
   command: string,
   args: readonly string[],
+  options: { readonly windowsHide?: boolean } = {},
 ): Promise<void> {
+  const windowsHide = options.windowsHide !== false;
   return new Promise((resolve, reject) => {
     const child = spawn(command, [...args], {
       detached: true,
       stdio: "ignore",
-      windowsHide: true,
+      windowsHide,
       shell: false,
     });
     child.once("error", reject);
@@ -48,6 +57,14 @@ export function normalizeOpenPath(target: string): string {
   // `C:\proj/.` or `/proj/.` → strip trailing slash-dot
   while (p.endsWith("/.") || p.endsWith("\\.")) {
     p = p.slice(0, -2);
+  }
+  // `/.` must stay POSIX root; `C:\.` / `C:/.` must stay a drive root.
+  if (p === "" && /^[\\/]/.test(target.trim())) {
+    return "/";
+  }
+  if (/^[A-Za-z]:$/.test(p)) {
+    const sep = target.includes("/") && !target.includes("\\") ? "/" : "\\";
+    return `${p}${sep}`;
   }
   while (
     (p.endsWith("/") || p.endsWith("\\")) &&
@@ -76,15 +93,20 @@ export async function openNativePath(
       ? windowsExplorerPath(target)
       : normalizeOpenPath(target);
   if (platform === "win32") {
-    // Empty title argument required by `start`. Quote-safe via argv (no shell).
-    await runDetached("cmd.exe", ["/c", "start", "", path]);
+    // ShellExecute via `start`. Direct `explorer.exe <dir>` CreateProcess is a
+    // no-op when Explorer is already the desktop shell (child exits 0, no window).
+    // Empty title is required by `start`. windowsHide must be false: CREATE_NO_WINDOW
+    // on this cmd also leaves the folder window unmapped.
+    await spawnDetached("cmd.exe", ["/c", "start", "", path], {
+      windowsHide: false,
+    });
     return;
   }
   if (platform === "darwin") {
-    await runDetached("open", [path]);
+    await spawnDetached("open", [path]);
     return;
   }
-  await runDetached("xdg-open", [path]);
+  await spawnDetached("xdg-open", [path]);
 }
 
 /**
@@ -108,22 +130,22 @@ export async function revealNativePath(
       // Caller usually validated existence; fall through to /select.
     }
     // `/select,<path>` — no space after the comma (Explorer quirk).
-    await runDetached("explorer.exe", [`/select,${path}`]);
+    await spawnDetached("explorer.exe", [`/select,${path}`]);
     return;
   }
   const path = normalizeOpenPath(target);
   if (platform === "darwin") {
-    await runDetached("open", ["-R", path]);
+    await spawnDetached("open", ["-R", path]);
     return;
   }
   let st;
   try {
     st = await stat(path);
   } catch {
-    await runDetached("xdg-open", [dirname(path)]);
+    await spawnDetached("xdg-open", [dirname(path)]);
     return;
   }
-  await runDetached("xdg-open", [st.isDirectory() ? path : dirname(path)]);
+  await spawnDetached("xdg-open", [st.isDirectory() ? path : dirname(path)]);
 }
 
 export async function hostOpenPath(

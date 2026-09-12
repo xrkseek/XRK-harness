@@ -9,6 +9,15 @@ describe("normalizeOpenPath", () => {
     expect(normalizeOpenPath("C:\\proj\\.")).toBe("C:\\proj");
     expect(normalizeOpenPath("/proj/.")).toBe("/proj");
     expect(normalizeOpenPath("/proj/")).toBe("/proj");
+    expect(normalizeOpenPath("/proj/./.")).toBe("/proj");
+  });
+
+  it("keeps POSIX and Windows drive roots qualified", () => {
+    expect(normalizeOpenPath("/.")).toBe("/");
+    expect(normalizeOpenPath("/")).toBe("/");
+    expect(normalizeOpenPath("C:\\.")).toBe("C:\\");
+    expect(normalizeOpenPath("C:/.")).toBe("C:/");
+    expect(normalizeOpenPath("C:\\")).toBe("C:\\");
   });
 });
 
@@ -20,5 +29,6 @@ describe("windowsExplorerPath", () => {
     expect(windowsExplorerPath("C:\\Users\\x\\proj\\.")).toBe(
       "C:\\Users\\x\\proj",
     );
+    expect(windowsExplorerPath("C:/.")).toBe("C:\\");
   });
 });
