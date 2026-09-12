@@ -54,7 +54,7 @@ createMcpClient({
 });
 ```
 
-Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目可 `command` 或 `url`；空 env 时读 `~/.xrk/host-settings.json` 的 `mcp.servers`）。Face `settings.mutate` 写 desired `servers`（`env` 仅允许代理键 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`）；文件真源时 Host `reconcileMcpToolPlugins` 热挂载（`applies: live`）；`XRK_MCP_SERVERS` / config 非空则仍赢过文件且 mutate 为 `applies: restart`。
+Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目可 `command` 或 `url`；空 env 时读 `~/.xrk/host-settings.json` 的 `mcp.servers`）。Face `settings.mutate` 写 desired `servers`（`env` 仅允许代理键 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`）；文件真源时 Host `reconcileMcpToolPlugins` 热挂载（`applies: live`）；`XRK_MCP_SERVERS` / config 非空则仍赢过文件且 mutate 为 `applies: restart`。stdio 未写 `cwd` 时默认 `~/.xrk/mcp-cwd/<serverName>`（避免 `@playwright/mcp` 等在工作区落 `.playwright-mcp`）；Settings 显式 `cwd` 优先生效。
 
 ## 终端用户如何挂能力
 
@@ -139,7 +139,7 @@ createMcpClient({
 });
 ```
 
-Host batch wiring: [server-host.md](./server-host.md) (`XRK_MCP_*`; entries may use `command` or `url`; empty env reads `mcp.servers` from `~/.xrk/host-settings.json`). Face `settings.mutate` writes desired `servers` (`env` allows proxy keys only: `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`); with file source of truth, Host `reconcileMcpToolPlugins` hot-mounts (`applies: live`); non-empty `XRK_MCP_SERVERS` / config still wins over file and mutate is `applies: restart`.
+Host batch wiring: [server-host.md](./server-host.md) (`XRK_MCP_*`; entries may use `command` or `url`; empty env reads `mcp.servers` from `~/.xrk/host-settings.json`). Face `settings.mutate` writes desired `servers` (`env` allows proxy keys only: `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`); with file source of truth, Host `reconcileMcpToolPlugins` hot-mounts (`applies: live`); non-empty `XRK_MCP_SERVERS` / config still wins over file and mutate is `applies: restart`. When stdio omits `cwd`, Host defaults to `~/.xrk/mcp-cwd/<serverName>` (so `@playwright/mcp` does not drop `.playwright-mcp` into the workspace); an explicit Settings `cwd` wins.
 
 ## How end users attach capabilities
 

@@ -20,7 +20,7 @@
 | LSP 路径 | `exec-lsp` `resolveWithinRoot` | 查询文件必须落在 `workspaceRoot` 内 |
 | PTY cwd | `exec-pty` `resolvePtyCwd` | cwd 必须落在 `workspaceRoot` 内；拒绝对 shell `SIGKILL` |
 | PTY native | `node-pty@1.2.0-beta.15` | NAPI prebuild；Win inspector 为 no-op |
-| Tool output bound | pipeline `bound` + persist | 大结果外溢到 `.xrk/tool-outputs/` |
+| Tool output bound | pipeline `bound` + persist | 大结果外溢到 `~/.xrk/spill/tool-outputs/` |
 | Code worker | `code-runtime` | `run_code` 进 worker（实验） |
 | Safety loop/mistake | `core-session` safety | soft/hard notice；可 abort turn |
 | 密钥不入库 | `.gitignore` + 示例模板 | 仓内仅 `*.example` |
@@ -77,7 +77,7 @@ Lists only controls **already implemented in this repository**; unfinished items
 | LSP paths | `exec-lsp` `resolveWithinRoot` | Query files must stay under `workspaceRoot` |
 | PTY cwd | `exec-pty` `resolvePtyCwd` | cwd must stay under `workspaceRoot`; rejects `SIGKILL` on the shell itself |
 | PTY native | `node-pty@1.2.0-beta.15` | NAPI prebuild; Win inspector is a no-op |
-| Tool output bound | pipeline `bound` + persist | Large results spill to `.xrk/tool-outputs/` |
+| Tool output bound | pipeline `bound` + persist | Large results spill to `~/.xrk/spill/tool-outputs/` |
 | Code worker | `code-runtime` | `run_code` in a worker (experimental) |
 | Safety loop/mistake | `core-session` safety | soft/hard notice; may abort turn |
 | Secrets not in repo | `.gitignore` + example templates | Only `*.example` in-tree |

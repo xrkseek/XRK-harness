@@ -9,8 +9,10 @@ export type { McpServerRow };
 export {
   XRK_HOME_DIR_NAME,
   XRK_HOME_ENVS,
+  defaultMcpStdioCwd,
   defaultPluginsDir,
   defaultSessionsDir,
+  defaultSpillDir,
   defaultXrkHome,
   hostSettingsPath,
   resolveXrkHome,

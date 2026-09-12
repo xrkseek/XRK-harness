@@ -48,7 +48,11 @@ export function deepSeekFileScope(
 
 function resolveIndexPath(custom?: string): string {
   if (custom) return custom;
-  const home = process.env.XRK_HOME?.trim() || path.join(homedir(), ".xrk");
+  const home =
+    process.env.XRK_HOME?.trim() ||
+    process.env.XRK_DSH_HOME?.trim() ||
+    process.env.DSH_HOME?.trim() ||
+    path.join(homedir(), ".xrk");
   return path.join(home, "llm-deepseek", "files-v3.json");
 }
 

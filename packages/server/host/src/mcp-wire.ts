@@ -6,8 +6,10 @@
  * live reconcile after `settings.mutate` (no spawn restart) when file-sourced.
  */
 
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import {
+  defaultMcpStdioCwd,
   parseMcpServersJson,
   parseMcpServersValue,
   pickMcpAllowedEnv,
@@ -216,7 +218,14 @@ async function connectOneMcpPlugin(
           command: spec.command,
           ...(spec.args ? { args: spec.args } : {}),
           ...(spec.env ? { env: spec.env } : {}),
-          ...(spec.cwd ? { cwd: spec.cwd } : {}),
+          // Explicit Settings cwd wins; else product home so MCP dumps
+          // (e.g. .playwright-mcp) never land in the session workspace.
+          cwd: (() => {
+            const raw = spec.cwd?.trim() || defaultMcpStdioCwd(spec.serverName);
+            const cwd = path.resolve(raw);
+            mkdirSync(cwd, { recursive: true });
+            return cwd;
+          })(),
           policy,
           ...(imageAdmission ? { imageAdmission } : {}),
         });

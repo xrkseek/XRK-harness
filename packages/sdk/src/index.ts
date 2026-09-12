@@ -151,6 +151,8 @@ export {
   resolveWorkspaceInject,
   appendWorkspaceInjectsIfChanged,
   createWorkspaceToolOutputPersist,
+  resolveProductHome,
+  resolveSpillRoot,
   applyRecipe,
   parseRecipeYaml,
   tryApplySlashRecipe,

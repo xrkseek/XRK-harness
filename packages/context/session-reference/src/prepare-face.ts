@@ -43,7 +43,7 @@ export type {
   ReferencedSessionData as FaceReferencedSessionData,
   ReferenceRetentionStats as FaceReferenceRetentionStats,
 } from "./retention.js";
-export { SESSION_REFERENCE_SPILL_ROOT } from "./spill.js";
+export { resolveSessionReferenceSpillRoot } from "./spill.js";
 
 const PROMPT_PREFIX = `## Referenced sessions
 

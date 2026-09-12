@@ -13,7 +13,7 @@
 | `index.ts` | `createHostManager` · spawn/stop | AgentHandle 可缓存绑定，**不可**当 transcript |
 | `agent-cache.ts` | 按 session 缓存 agent · `host.plugins` Scope | 根会话 `agent:{id}`；子会话 `openSubagentRealm`（`subagent:{id}`）；invalidate 父卸嵌套子 |
 | `standing-tools.ts` | preset standing 工具表（Face `viewFor`） | 冷 history 不 resume agent；Host composition=`minimal` → fs+std+skill；其余徽章 → 完整 harness presenters（bash+web+lsp+pty） |
-| `mcp-wire.ts` | `XRK_MCP_SERVERS` 或 `~/.xrk/host-settings.json` → 合成 `kind: tools` 插件；文件真源时 Face mutate → `reconcileMcpToolPlugins` | 须 allow；id = `mcp:<serverName>`；stdio/HTTP 有界重连；list_changed / health / gave-up 刷新 tools + invalidateAll；health 推 overlay；`gave-up` 同 fingerprint 也会 replace；env/config 非空赢过文件（无 live sync） |
+| `mcp-wire.ts` | `XRK_MCP_SERVERS` 或 `~/.xrk/host-settings.json` → 合成 `kind: tools` 插件；文件真源时 Face mutate → `reconcileMcpToolPlugins`；stdio 默认 cwd = `~/.xrk/mcp-cwd/<name>` | 须 allow；id = `mcp:<serverName>`；stdio/HTTP 有界重连；list_changed / health / gave-up 刷新 tools + invalidateAll；health 推 overlay；`gave-up` 同 fingerprint 也会 replace；env/config 非空赢过文件（无 live sync） |
 
 配置在 `@xrkseek/server-config`（`loadHostConfig`）。
 
@@ -108,7 +108,7 @@ Specs: [host-preset.md](../host-preset.md) · [http-api.md](../http-api.md).
 | `index.ts` | `createHostManager` · spawn/stop | AgentHandle may be a cached binding, **not** the transcript |
 | `agent-cache.ts` | Per-session agent cache · `host.plugins` Scope | Root `agent:{id}`; child `openSubagentRealm` (`subagent:{id}`); invalidate parent unloads nested children |
 | `standing-tools.ts` | Preset standing tool table (Face `viewFor`) | Cold history does not resume the agent; Host composition=`minimal` → fs+std+skill; other badges → full harness presenters (bash+web+lsp+pty) |
-| `mcp-wire.ts` | `XRK_MCP_SERVERS` or `~/.xrk/host-settings.json` → synthetic `kind: tools` plugins; on file source of truth, Face mutate → `reconcileMcpToolPlugins` | Must allow; id = `mcp:<serverName>`; bounded stdio/HTTP reconnect; list_changed / health / gave-up refresh tools + invalidateAll; health pushes overlay; `gave-up` with same fingerprint still replaces; non-empty env/config wins over file (no live sync) |
+| `mcp-wire.ts` | `XRK_MCP_SERVERS` or `~/.xrk/host-settings.json` → synthetic `kind: tools` plugins; on file source of truth, Face mutate → `reconcileMcpToolPlugins`; stdio default cwd = `~/.xrk/mcp-cwd/<name>` | Must allow; id = `mcp:<serverName>`; bounded stdio/HTTP reconnect; list_changed / health / gave-up refresh tools + invalidateAll; health pushes overlay; `gave-up` with same fingerprint still replaces; non-empty env/config wins over file (no live sync) |
 
 Config lives in `@xrkseek/server-config` (`loadHostConfig`).
 

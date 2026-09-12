@@ -83,6 +83,8 @@ function resolveAttachmentsRoot(xrkHome?: string): string {
   const home =
     xrkHome?.trim() ||
     process.env.XRK_HOME?.trim() ||
+    process.env.XRK_DSH_HOME?.trim() ||
+    process.env.DSH_HOME?.trim() ||
     join(homedir(), ".xrk");
   return resolve(join(home, "attachments", "v1"));
 }

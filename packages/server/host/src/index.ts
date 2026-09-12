@@ -11,7 +11,7 @@ import {
 } from "@xrkseek/core-session";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { createPolicyEngineFromFile } from "@xrkseek/policy";
-import { hostSettingsPath, resolveXrkHome, type HostConfig } from "@xrkseek/server-config";
+import { hostSettingsPath, defaultSpillDir, resolveXrkHome, type HostConfig } from "@xrkseek/server-config";
 import { installOutboundHttpProxy } from "./http-proxy.js";
 import {
   applyXrkProductBootPolicy,
@@ -542,7 +542,7 @@ export function createHostManager(): HostManager {
               attachments,
               hostReadableRoots: [
                 attachmentsRoot,
-                path.join(resolveXrkHome(), "spill"),
+                defaultSpillDir(),
               ],
               routeAllowsImage: () =>
                 faceForModality.current

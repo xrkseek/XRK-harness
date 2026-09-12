@@ -213,6 +213,8 @@ export { createSkillTools, presentSkillCall } from "./skill-tools.js";
 
 export {
   createWorkspaceToolOutputPersist,
+  resolveProductHome,
+  resolveSpillRoot,
   type WorkspaceToolOutputPersist,
   type WorkspaceToolOutputPersistOptions,
 } from "./tool-output-persist.js";

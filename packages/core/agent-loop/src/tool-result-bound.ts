@@ -13,7 +13,22 @@ import type { MessageContent } from "@xrkseek/protocol";
 /** DSH bash / spill-policy inline ceiling (UTF-8 bytes). */
 export const TOOL_RESULT_MAX_INLINE_BYTES = 64_000;
 
-const SPILL_ROOT = path.join(homedir(), ".xrk", "spill");
+function expandHomePath(value: string): string {
+  if (value === "~") return homedir();
+  if (value.startsWith("~/") || value.startsWith("~\\")) {
+    return path.join(homedir(), value.slice(2));
+  }
+  return value;
+}
+
+/** Spill root: `XRK_HOME/spill` (same tree Host adds to hostReadableRoots). */
+function spillRoot(): string {
+  for (const key of ["XRK_HOME", "XRK_DSH_HOME", "DSH_HOME"] as const) {
+    const raw = process.env[key]?.trim();
+    if (raw) return path.join(path.resolve(expandHomePath(raw)), "spill");
+  }
+  return path.join(homedir(), ".xrk", "spill");
+}
 
 /** Tools that must stay inline (DSH skips `read` to avoid read → spill → read). */
 const NO_SPILL = new Set(["read_file", "read", "read_image"]);
@@ -105,7 +120,7 @@ export function boundToolResultContent(input: {
   }
 
   const sessionDir = path.join(
-    SPILL_ROOT,
+    spillRoot(),
     input.sessionId.replace(/[^\w.-]+/g, "_"),
   );
   mkdirSync(sessionDir, { recursive: true });

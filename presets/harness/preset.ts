@@ -85,7 +85,6 @@ import {
   type RegisteredPlugin,
 } from "@xrkseek/server-loader";
 import path from "node:path";
-import { homedir } from "node:os";
 import {
   createWorkspaceInjector,
   createWorkspaceToolOutputPersist,
@@ -94,6 +93,7 @@ import {
   loadOfficeRecipes,
   mergeRecipesById,
   appendWorkspaceInjectsIfChanged,
+  resolveProductHome,
   SKILL_TOOL_GUIDANCE,
   type ResolveWorkspaceInjectOptions,
   type WorkspaceInjector,
@@ -107,15 +107,6 @@ export type PresentationMode = "tools" | "code";
 export type WorkspaceInjectOption =
   | boolean
   | Omit<ResolveWorkspaceInjectOptions, "root">;
-
-/** System data home for seeded recipes (no server-config dep). */
-function resolveHarnessHome(): string {
-  for (const key of ["XRK_HOME", "XRK_DSH_HOME", "DSH_HOME"] as const) {
-    const v = process.env[key]?.trim();
-    if (v) return path.resolve(v);
-  }
-  return path.join(homedir(), ".xrk");
-}
 
 function ensureSession(store: SessionStore, id?: string): string {
   if (id) {
@@ -399,9 +390,7 @@ export function createHarnessComposition(
   });
 
   const tracker = createReadTracker();
-  const toolOutputPersist = createWorkspaceToolOutputPersist({
-    root: options.workspaceRoot,
-  });
+  const toolOutputPersist = createWorkspaceToolOutputPersist();
   const pipeline = createToolPipeline({
     outputBound: { persist: (full) => toolOutputPersist.persist(full) },
   });
@@ -579,7 +568,7 @@ export function createHarnessComposition(
           recipes = await loadOfficeRecipes(options.slashRecipes);
         } else {
           const fromHome = await loadOfficeRecipes(
-            path.join(resolveHarnessHome(), "recipes"),
+            path.join(resolveProductHome(), "recipes"),
           );
           const fromAgents = await loadOfficeRecipes(
             path.join(injectOpts.root, ".agents", "recipes"),

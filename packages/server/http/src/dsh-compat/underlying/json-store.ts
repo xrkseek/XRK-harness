@@ -5,6 +5,33 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
+const HOME_ENVS = ["XRK_HOME", "XRK_DSH_HOME", "DSH_HOME"] as const;
+
+function expandHomePath(value: string): string {
+  if (value === "~") return homedir();
+  if (value.startsWith("~/") || value.startsWith("~\\")) {
+    return path.join(homedir(), value.slice(2));
+  }
+  return value;
+}
+
+/**
+ * Product home for dsh-compat stores. Mirrors server-config `resolveXrkHome`
+ * without taking that dependency (http stays below Host).
+ */
+export function resolveCompatHome(
+  xrkHome?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const explicit = xrkHome?.trim();
+  if (explicit) return path.resolve(expandHomePath(explicit));
+  for (const key of HOME_ENVS) {
+    const raw = env[key]?.trim();
+    if (raw) return path.resolve(expandHomePath(raw));
+  }
+  return path.resolve(path.join(homedir(), ".xrk"));
+}
+
 export function ensureDir(dir: string): void {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
@@ -27,9 +54,5 @@ export function dataPath(
   xrkHome: string | undefined,
   ...parts: string[]
 ): string {
-  const home =
-    xrkHome?.trim() ||
-    process.env.XRK_HOME?.trim() ||
-    path.join(homedir(), ".xrk");
-  return path.join(path.resolve(home), ...parts);
+  return path.join(resolveCompatHome(xrkHome), ...parts);
 }

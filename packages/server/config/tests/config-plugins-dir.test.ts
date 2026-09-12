@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   defaultPluginsDir,
   loadHostConfig,
-  resolveXrkHome,
 } from "../src/index.js";
 
 const temps: string[] = [];
@@ -60,12 +59,5 @@ describe("loadHostConfig pluginsDir", () => {
       env: { XRK_HOME: home, XRK_PLUGINS_DIR: "./ext" },
     });
     expect(cfg.runtime.pluginsDir).toBe("./ext");
-  });
-});
-
-describe("resolveXrkHome", () => {
-  it("honors XRK_HOME over default", () => {
-    const home = resolveXrkHome({ XRK_HOME: "C:/tmp/xrk-home-test" });
-    expect(home.replace(/\\/g, "/")).toMatch(/tmp\/xrk-home-test$/);
   });
 });

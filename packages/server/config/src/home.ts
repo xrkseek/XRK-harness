@@ -60,3 +60,26 @@ export function defaultPluginsDir(
 ): string {
   return path.join(resolveXrkHome(env), "plugins");
 }
+
+/**
+ * `{home}/spill` — tool-result / session-reference / pipeline tool-output
+ * persist root (Host `hostReadableRoots`).
+ */
+export function defaultSpillDir(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return path.join(resolveXrkHome(env), "spill");
+}
+
+/**
+ * Default stdio MCP `cwd` when Settings omit `cwd`.
+ * Keeps servers like `@playwright/mcp` from writing `.playwright-mcp/` into
+ * the session workspace (Host process cwd). Explicit Settings `cwd` wins.
+ */
+export function defaultMcpStdioCwd(
+  serverName: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const safe = serverName.replace(/[^\w.-]+/g, "_") || "server";
+  return path.join(resolveXrkHome(env), "mcp-cwd", safe);
+}

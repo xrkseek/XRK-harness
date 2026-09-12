@@ -20,7 +20,7 @@
 boundToolOutput(text, { maxLines, maxBytes, persist? })
 createToolPipeline({ outputBound: false | { … } }) // default on (no persist = truncate only)
 createMemoryToolOutputPersist() // tests / no disk
-createWorkspaceToolOutputPersist({ root }) // host disk: `.xrk/tool-outputs/`
+createWorkspaceToolOutputPersist() // host disk: `~/.xrk/spill/tool-outputs/`
 ```
 
 `minimal` / `harness` preset 默认挂 workspace persist。  
@@ -31,7 +31,7 @@ createWorkspaceToolOutputPersist({ root }) // host disk: `.xrk/tool-outputs/`
 - 不做执行授权（仍是 guards）
 - 不替代叶内 capture 限额（如 shell stdout 自限）
 - 会话日志存 **bound 后** 文本（模型可见 ≡ 日志）
-- 完整正文在 workspace 相对路径（默认 `.xrk/tool-outputs/…`），不进 session 事件
+- 完整正文在产品 home（默认 `~/.xrk/spill/tool-outputs/…`），不进 session 事件、不写入工作区
 
 ---
 
@@ -57,7 +57,7 @@ Over limit: head/tail preview + marker; if `persist(full) → path` is provided,
 boundToolOutput(text, { maxLines, maxBytes, persist? })
 createToolPipeline({ outputBound: false | { … } }) // default on (no persist = truncate only)
 createMemoryToolOutputPersist() // tests / no disk
-createWorkspaceToolOutputPersist({ root }) // host disk: `.xrk/tool-outputs/`
+createWorkspaceToolOutputPersist() // host disk: `~/.xrk/spill/tool-outputs/`
 ```
 
 `minimal` / `harness` presets mount workspace persist by default.  
@@ -68,4 +68,4 @@ createWorkspaceToolOutputPersist({ root }) // host disk: `.xrk/tool-outputs/`
 - Does not authorize execution (still guards)
 - Does not replace leaf capture limits (e.g. shell stdout self-limits)
 - Session log stores **post-bound** text (model-visible ≡ log)
-- Full body stays on a workspace-relative path (default `.xrk/tool-outputs/…`) and does not enter session events
+- Full body stays under product home (default `~/.xrk/spill/tool-outputs/…`) and does not enter session events or the workspace tree

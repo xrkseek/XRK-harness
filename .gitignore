@@ -23,9 +23,11 @@ packages/stubs/**/lib/
 .xrk/.credentials.yaml
 .xrk/settings.yaml
 .xrk/workspaces.json
+# Legacy workspace-relative spill (now ~/.xrk/spill/tool-outputs)
 .xrk/tool-outputs/
 .xrk/sessions/
 .xrk/host-settings.json
+.xrk/mnemon/
 .xrk-harness/
 # Accidental cwd dump when harness home resolves to repo root
 /workspaces.json

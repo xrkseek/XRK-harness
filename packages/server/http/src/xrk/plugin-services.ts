@@ -44,7 +44,11 @@ export function resolvePluginsDir(
   if (options.pluginsDir?.trim()) {
     return path.resolve(options.pluginsDir.trim());
   }
-  const home = options.xrkHome?.trim() || process.env.XRK_HOME?.trim();
+  const home =
+    options.xrkHome?.trim() ||
+    process.env.XRK_HOME?.trim() ||
+    process.env.XRK_DSH_HOME?.trim() ||
+    process.env.DSH_HOME?.trim();
   if (home) return path.join(path.resolve(home), "plugins");
   return path.join(homedir(), ".xrk", "plugins");
 }

@@ -7,8 +7,8 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
+import { resolveXrkHome } from "@xrkseek/server-config";
 import { bundledCostMeterPriceConfig, estimateBucketsCostUsd } from "./cost-meter-pricing.js";
 import {
   emptyDeepSeekBalance,
@@ -115,10 +115,7 @@ export function configureCostMeterHome(home?: string): void {
 }
 
 function xrkHomeDir(): string {
-  return (
-    configuredHome ??
-    (process.env.XRK_HOME?.trim() || path.join(homedir(), ".xrk"))
-  );
+  return configuredHome ?? resolveXrkHome();
 }
 
 function ledgerFile(): string {

@@ -1,7 +1,9 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  defaultMcpStdioCwd,
   defaultSessionsDir,
+  defaultSpillDir,
   loadHostConfig,
   parseMcpServersJson,
   parseMcpServersValue,
@@ -63,6 +65,16 @@ describe("resolveXrkHome", () => {
   it("sessions dir sits under harness home", () => {
     const env = { XRK_HOME: path.join("C:", "tmp", "xrk-sess") };
     expect(defaultSessionsDir(env)).toBe(path.join(resolveXrkHome(env), "sessions"));
+  });
+
+  it("spill and mcp-cwd sit under harness home", () => {
+    const env = { XRK_HOME: "C:/tmp/xrk-paths" };
+    expect(defaultSpillDir(env).replace(/\\/g, "/")).toMatch(
+      /tmp\/xrk-paths\/spill$/,
+    );
+    expect(defaultMcpStdioCwd("playwright", env).replace(/\\/g, "/")).toMatch(
+      /tmp\/xrk-paths\/mcp-cwd\/playwright$/,
+    );
   });
 });
 

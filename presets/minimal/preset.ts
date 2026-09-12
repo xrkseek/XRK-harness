@@ -175,9 +175,7 @@ export function createMinimalComposition(
   });
 
   const tracker = createReadTracker();
-  const toolOutputPersist = createWorkspaceToolOutputPersist({
-    root: options.workspaceRoot,
-  });
+  const toolOutputPersist = createWorkspaceToolOutputPersist();
   const store = options.sessionStore ?? createMemorySessionStore();
   const sessionId = ensureSession(store, options.sessionId);
   const pipeline = createToolPipeline({

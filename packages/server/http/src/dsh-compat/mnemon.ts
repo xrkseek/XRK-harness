@@ -3,9 +3,9 @@
  * Not a real memory engine — honest stubs under ~/.xrk/mnemon.
  */
 import { existsSync, mkdirSync } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
+import { resolveCompatHome } from "./underlying/json-store.js";
 import {
   countMnemonDocuments,
   getMnemonDocument,
@@ -57,7 +57,7 @@ function scope(kind: "global" | "workspace" | "custom", root: string) {
 }
 
 export function buildMnemonStatus(options: MnemonStatusOptions = {}): unknown {
-  const home = options.xrkHome?.trim() || path.join(homedir(), ".xrk");
+  const home = resolveCompatHome(options.xrkHome);
   const globalRoot = path.join(home, "mnemon");
   try {
     mkdirSync(globalRoot, { recursive: true });
@@ -72,22 +72,16 @@ export function buildMnemonStatus(options: MnemonStatusOptions = {}): unknown {
   const workspaceRoot = options.workspaceRoot
     ? path.join(options.workspaceRoot, ".xrk", "mnemon")
     : undefined;
+  // Opt-in only: never auto-mkdir `{workspace}/.xrk/mnemon` (Desktop litter).
+  const workspaceExists =
+    workspaceRoot !== undefined && existsSync(workspaceRoot);
 
   const scopes = [scope("global", globalRoot)];
-  if (workspaceRoot) {
-    try {
-      mkdirSync(workspaceRoot, { recursive: true });
-      mkdirSync(path.join(workspaceRoot, "runtime"), { recursive: true });
-      mkdirSync(path.join(workspaceRoot, "bodies"), { recursive: true });
-      mkdirSync(path.join(workspaceRoot, "documents"), { recursive: true });
-      mkdirSync(path.join(workspaceRoot, "state"), { recursive: true });
-    } catch {
-      /* ignore */
-    }
+  if (workspaceRoot && workspaceExists) {
     scopes.push(scope("workspace", workspaceRoot));
   }
 
-  const activeKind = workspaceRoot ? "workspace" : "global";
+  const activeKind = workspaceExists ? "workspace" : "global";
   const activeRoot =
     scopes.find((s) => s.kind === activeKind)?.root ?? globalRoot;
 
