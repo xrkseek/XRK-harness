@@ -59,18 +59,18 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留当前正
 
 ## 版本线
 
-约定：`MAJOR.MINOR.PATCH` 的 **MINOR（第二位）**——**奇数正式**（`0.3.x`）、**偶数预览**（`0.2.x`）。**勿**用 PATCH 奇偶判档；正式线补丁顺序递增（`0.3.8` → `0.3.9`）。
+约定：`MAJOR.MINOR.PATCH` 的 **MINOR（第二位）**——**奇数正式**（`0.3.x`）、**偶数预览**（`0.2.x`）。**勿**用 PATCH 奇偶判档；正式线补丁顺序递增（`0.3.9` → `0.3.10`）。
 
 | 档 | 版本 | 用途 |
 |------|------|------|
-| **正式 · 当前（@latest）** | **0.3.9** | `MINOR=3` 正式线；`npm i -g @xrkseek/harness-cli@latest` |
+| **正式 · 当前（@latest）** | **0.3.10** | `MINOR=3` 正式线；`npm i -g @xrkseek/harness-cli@latest` |
 | **预览 · 末号** | **0.2.7** | `MINOR=2` 预览线结束；对照留档，不推荐日常安装 |
 
-昔日正式 **0.1.31** → 现 **0.3.9**（经 0.3.0/0.3.3/0.3.5/0.3.7/0.3.8）；昔日预览 **0.0.11**（已撤）→ 现末号 **0.2.7**。预览基线不再作为推荐入口；`preview` dist-tag 去掉。
+昔日正式 **0.1.31** → 现 **0.3.10**（经 0.3.0/0.3.3/0.3.5/0.3.7/0.3.8/0.3.9）；昔日预览 **0.0.11**（已撤）→ 现末号 **0.2.7**。预览基线不再作为推荐入口；`preview` dist-tag 去掉。
 
 npm **不能**同号重发；改坏包就升修订号。中间号用 `npm-prune-withdrawn.mjs` deprecate（Granular token 通常无法 unpublish）。**勿**用空格 / 乱引号 deprecate——会破坏 registry 元数据；清弃用必须传真正的空字符串（脚本经 `npm-cli.js` 处理，避免 Windows `npm.cmd` 吞掉空参）。
 
-GitHub Release 公开页只保留 **v0.3.9** 与 **v0.2.7**。
+GitHub Release 公开页只保留 **v0.3.10** 与 **v0.2.7**。
 
 完整交接：[maintainer](./maintainer.md)。发行说明索引：[releases/](./releases/)。
 
@@ -137,17 +137,17 @@ node scripts/npm-prune-withdrawn.mjs            # deprecate intermediate version
 
 ## Version line
 
-Rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = formal** (`0.3.x`), **even = preview** (`0.2.x`). **Not** PATCH parity; formal-line patches increment in order (`0.3.8` → `0.3.9`).
+Rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = formal** (`0.3.x`), **even = preview** (`0.2.x`). **Not** PATCH parity; formal-line patches increment in order (`0.3.9` → `0.3.10`).
 
 | Line | Version | Use |
 |------|---------|-----|
-| **Formal · current (@latest)** | **0.3.9** | `MINOR=3` formal line; `npm i -g @xrkseek/harness-cli@latest` |
+| **Formal · current (@latest)** | **0.3.10** | `MINOR=3` formal line; `npm i -g @xrkseek/harness-cli@latest` |
 | **Preview · last** | **0.2.7** | `MINOR=2` preview line ended; archive only |
 
-Formal **0.1.31** → **0.3.9** (via 0.3.0/0.3.3/0.3.5/0.3.7/0.3.8); preview **0.0.11** (withdrawn) → last **0.2.7**. Drop the `preview` dist-tag.
+Formal **0.1.31** → **0.3.10** (via 0.3.0/0.3.3/0.3.5/0.3.7/0.3.8/0.3.9); preview **0.0.11** (withdrawn) → last **0.2.7**. Drop the `preview` dist-tag.
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Deprecate intermediate numbers with `npm-prune-withdrawn.mjs` (Granular tokens usually cannot unpublish). **Do not** deprecate with spaces / broken quotes — that corrupts registry metadata; clearing a deprecation requires a real empty string (the script goes through `npm-cli.js` so Windows `npm.cmd` does not swallow the empty arg).
 
-The GitHub Releases page keeps only **v0.3.9** and **v0.2.7**.
+The GitHub Releases page keeps only **v0.3.10** and **v0.2.7**.
 
 Full handoff: [maintainer](./maintainer.md). Release notes index: [releases/](./releases/).

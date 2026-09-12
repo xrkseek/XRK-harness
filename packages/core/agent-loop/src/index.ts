@@ -1,3 +1,4 @@
+import { scheduler } from "node:timers/promises";
 import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, estimateRequestTokens, promotePendingSteers, pruneOversizedToolResults, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
@@ -61,6 +62,7 @@ import {
   invokeLlmWithRetry,
   resolveRetryPolicy,
 } from "./llm-retry.js";
+import { createDeltaCoalescer } from "./delta-coalesce.js";
 
 /** Context for a turn's persona (tool catalog after materialize / filter). */
 export interface AssemblePersonaContext {
@@ -283,6 +285,9 @@ function toLlmRequest(
   };
 }
 
+/** Let Face WS Ping fire during a tight reasoning / tool-call delta burst. */
+const STREAM_YIELD_INTERVAL_MS = 16;
+
 async function invokeLlm(
   input: RunTurnInput,
   req: { messages: ChatMessage[]; tools: AssembledRequest["tools"] },
@@ -306,40 +311,52 @@ async function invokeLlm(
   let usage: TokenUsage | undefined;
   let finishReason: LlmChatResponse["finishReason"];
   let finishError: LlmChatResponse["finishError"];
-  for await (const ev of input.llm.stream(request)) {
-    if (input.signal?.aborted) {
-      throw new DOMException("aborted", "AbortError");
-    }
-    if (ev.type === "reasoning-delta") {
-      if (ev.text) {
-        reasoning += ev.text;
-        onChunk({ kind: "reasoning", index: ev.index, text: ev.text });
+  let lastYieldAt = 0;
+  const live = createDeltaCoalescer(onChunk);
+  try {
+    for await (const ev of input.llm.stream(request)) {
+      if (input.signal?.aborted) {
+        throw new DOMException("aborted", "AbortError");
       }
-    } else if (ev.type === "text-delta") {
-      if (ev.text) {
-        content += ev.text;
-        onChunk({ kind: "text", index: ev.index, text: ev.text });
+      if (ev.type === "reasoning-delta") {
+        if (ev.text) {
+          reasoning += ev.text;
+          live.push({ kind: "reasoning", index: ev.index, text: ev.text });
+        }
+      } else if (ev.type === "text-delta") {
+        if (ev.text) {
+          content += ev.text;
+          live.push({ kind: "text", index: ev.index, text: ev.text });
+        }
+      } else if (ev.type === "tool-call-delta") {
+        live.push({
+          kind: "tool-call",
+          index: ev.index,
+          text: ev.argumentsDelta,
+          toolCallId: ev.id,
+          ...(ev.name ? { toolName: ev.name } : {}),
+          argumentsDelta: ev.argumentsDelta,
+        });
+      } else if (ev.type === "usage") {
+        usage = ev.usage;
+        live.push({ kind: "usage", index: 0, text: "", usage: ev.usage });
+      } else if (ev.type === "done") {
+        content = ev.content || content;
+        if (ev.reasoning) reasoning = ev.reasoning;
+        if (ev.toolCalls) toolCalls = ev.toolCalls;
+        if (ev.usage) usage = ev.usage;
+        if (ev.finishReason) finishReason = ev.finishReason;
+        if (ev.finishError) finishError = ev.finishError;
       }
-    } else if (ev.type === "tool-call-delta") {
-      onChunk({
-        kind: "tool-call",
-        index: ev.index,
-        text: ev.argumentsDelta,
-        toolCallId: ev.id,
-        ...(ev.name ? { toolName: ev.name } : {}),
-        argumentsDelta: ev.argumentsDelta,
-      });
-    } else if (ev.type === "usage") {
-      usage = ev.usage;
-      onChunk({ kind: "usage", index: 0, text: "", usage: ev.usage });
-    } else if (ev.type === "done") {
-      content = ev.content || content;
-      if (ev.reasoning) reasoning = ev.reasoning;
-      if (ev.toolCalls) toolCalls = ev.toolCalls;
-      if (ev.usage) usage = ev.usage;
-      if (ev.finishReason) finishReason = ev.finishReason;
-      if (ev.finishError) finishError = ev.finishError;
+      const now = performance.now();
+      if (now - lastYieldAt >= STREAM_YIELD_INTERVAL_MS) {
+        lastYieldAt = now;
+        live.flush();
+        await scheduler.yield();
+      }
     }
+  } finally {
+    live.flush();
   }
   return finalizeLlmChatResponse({
     content,

@@ -74,4 +74,23 @@ describe('TurnNavigator', () => {
     expect(navigation.style.getPropertyValue('--turn-natural-height')).toBe('402px')
     expect(view.getAllByRole('button')).toHaveLength(40)
   })
+
+  it('portals the ladder into the conversation overlay instead of the transcript', () => {
+    const column = document.createElement('div')
+    const scroll = document.createElement('div')
+    scroll.setAttribute('data-conversation-scroll', '')
+    const host = document.createElement('div')
+    host.setAttribute('data-turn-rail-host', '')
+    column.append(scroll, host)
+    document.body.append(column)
+    const view = render(
+      <TurnNavigator items={items} activeTurn={2} busyTurn={null} onNavigate={vi.fn()} t={t} />,
+      { container: scroll },
+    )
+    expect(scroll.querySelector('[role="navigation"]')).toBeNull()
+    expect(host.querySelector('[role="navigation"]')).not.toBeNull()
+    expect(host.querySelectorAll('[role="navigation"]')).toHaveLength(1)
+    view.unmount()
+    column.remove()
+  })
 })

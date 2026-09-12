@@ -168,11 +168,17 @@ export function ConversationRoot({
     const scroller = seat?.parentElement ?? null
     if (seat === null || scroller === null) return
     seatObserver.current = new ResizeObserver(() => {
-      scroller.style.setProperty('--dsh-composer-height', `${seat.offsetHeight}px`)
-      scroller.style.setProperty(
-        '--dsh-conversation-viewport-height',
-        `${scroller.clientHeight}px`,
-      )
+      const composer = `${seat.offsetHeight}px`
+      const viewport = `${scroller.clientHeight}px`
+      scroller.style.setProperty('--dsh-composer-height', composer)
+      scroller.style.setProperty('--dsh-conversation-viewport-height', viewport)
+      // The turn rail portals onto this box (sibling of the scrollport), so
+      // the band measurements have to live here, not only on the scroller.
+      const bandHost = scroller.parentElement
+      if (bandHost !== null) {
+        bandHost.style.setProperty('--dsh-composer-height', composer)
+        bandHost.style.setProperty('--dsh-conversation-viewport-height', viewport)
+      }
     })
     seatObserver.current.observe(seat)
     seatObserver.current.observe(scroller)
@@ -388,6 +394,7 @@ export function ConversationRoot({
           {renderSlot('conversation.session', {})}
           {composerSeat}
         </div>
+        <div className={css.turnRailHost} data-turn-rail-host="" />
         {/* Width handles only while a transcript is on screen; the hero has no
             content column to size. */}
         {phase === 'active' && (['left', 'right'] as const).map(side => (

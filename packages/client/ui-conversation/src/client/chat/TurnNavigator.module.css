@@ -1,11 +1,26 @@
 /* Zero-height sticky slot, like the back-to-bottom control: the rail floats
-   over the transcript's right gutter without extending scrollHeight. */
+   over the transcript's right gutter without extending scrollHeight. Product
+   ConversationRoot portals the slot into [data-turn-rail-host] instead — a
+   sticky overflowing child of the transcript paints a second, unclickable copy. */
 .slot {
   position: sticky;
   top: 0;
   z-index: 6;
   height: 0;
   pointer-events: none;
+}
+
+/* Locator only: ChatView keeps this in the transcript so the rail can find
+   the conversation overlay. */
+.probe {
+  display: none;
+}
+
+:global([data-turn-rail-host]) .slot {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  z-index: 0;
 }
 
 .frame {
@@ -20,9 +35,12 @@
 
   position: absolute;
   top: calc(var(--turn-rail-band) / 2);
-  /* Flush with the scrollport edge: the slot sits inside the transcript's side
-     padding, so the rail gives that inset back and keeps 12px of its own. */
-  right: calc(12px - (var(--dsh-composer-side-clearance) + 16px));
+  /* Overlay / column gutter: the host is the conversation body, so this is
+     the same axis as the width handles — not the padded transcript edge. */
+  right: max(
+    12px,
+    calc((100% - var(--dsh-chat-content-width)) / 2 - 16px)
+  );
   width: 28px;
   /* Fixed-pitch marks never compress: a ladder taller than the band scrolls
      inside this frame instead of pushing marks under the composer or above

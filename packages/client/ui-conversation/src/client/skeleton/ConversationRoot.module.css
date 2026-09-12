@@ -324,6 +324,21 @@
   display: none;
 }
 
+/* Overlay sibling of the scrollport: the turn ladder portals here so it is
+   not a sticky overflowing child of the transcript (that paints twice). */
+.turnRailHost {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+  /* Same inline-size query the transcript used so the rail still hides under 900px. */
+  container-type: inline-size;
+}
+
+.root:has([data-conversation-composer-overlay]) .turnRailHost {
+  display: none;
+}
+
 .scrollBody {
   display: flex;
   flex: 1;

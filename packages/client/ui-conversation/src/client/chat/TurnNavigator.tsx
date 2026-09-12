@@ -1,7 +1,8 @@
 import {
-  memo, useEffect, useId, useRef, useState,
+  memo, useEffect, useId, useLayoutEffect, useRef, useState,
   type CSSProperties, type MouseEvent, type PointerEvent,
 } from 'react'
+import { createPortal } from 'react-dom'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import type { TurnRailItem } from './turn-rail-items.ts'
 import css from './TurnNavigator.module.css'
@@ -18,6 +19,8 @@ interface TurnNavigatorProps {
 const TURN_SPACING_PX = 10
 /** Rail padding above the first mark and below the last one, per end. */
 const RAIL_INSET_PX = 6
+/** Fade band the mask reserves at a scrollable end. */
+const FADE_PX = 24
 
 type TurnPositionStyle = CSSProperties & {
   readonly '--turn-natural-position': string
@@ -62,6 +65,16 @@ interface RailScrollState {
 
 const RAIL_AT_REST: RailScrollState = { top: 0, canScrollUp: false, canScrollDown: false }
 
+/** Overlay beside the conversation scrollport — keeps the ladder out of the
+ *  transcript flow (a sticky zero-height slot paints a second, unclickable copy). */
+function resolveTurnRailHost(from: Element | null): Element | null {
+  if (from === null) return null
+  const scroller = from.closest('[data-conversation-scroll]')
+  const parent = scroller?.parentElement
+  if (parent === undefined || parent === null) return null
+  return parent.querySelector('[data-turn-rail-host]')
+}
+
 function railScrollState(scroller: HTMLElement): RailScrollState {
   const top = scroller.scrollTop
   return {
@@ -80,6 +93,8 @@ function sameRailScrollState(left: RailScrollState, right: RailScrollState): boo
 function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnNavigatorProps) {
   const [previewTurn, setPreviewTurn] = useState<number | null>(null)
   const [scrollState, setScrollState] = useState<RailScrollState>(RAIL_AT_REST)
+  const [railHost, setRailHost] = useState<Element | null | undefined>(undefined)
+  const probeRef = useRef<HTMLSpanElement | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   /** While the pointer works the rail, follow must not move it under the hand. */
   const pointerInsideRef = useRef(false)
@@ -104,15 +119,32 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
 
   useEffect(syncScrollState, [items.length])
 
+  useLayoutEffect(() => {
+    if (items.length < 2) {
+      setRailHost(undefined)
+      return
+    }
+    const next = resolveTurnRailHost(probeRef.current)
+    setRailHost(current => (current === next ? current : next))
+  }, [items.length])
+
+  // Keep the active mark in the unfaded band; do not re-centre it on every
+  // stream commit (that pins the latest turn mid-frame and fights wheel).
   useEffect(() => {
-    if (pointerInsideRef.current) return
     const scroller = scrollerRef.current
-    if (scroller === null || activeTurn === null) return
     const index = items.findIndex(item => item.turn === activeTurn)
-    if (index < 0) return
-    const markCenter = RAIL_INSET_PX + index * TURN_SPACING_PX
-    const nextTop = Math.max(0, markCenter - scroller.clientHeight / 2)
-    if (Math.abs(scroller.scrollTop - nextTop) > 1) scroller.scrollTop = nextTop
+    if (scroller === null || index < 0 || pointerInsideRef.current) return
+    const markTop = index * TURN_SPACING_PX + RAIL_INSET_PX
+    const viewTop = scroller.scrollTop
+    const viewHeight = scroller.clientHeight
+    if (viewHeight <= 0 || (markTop >= viewTop + FADE_PX && markTop <= viewTop + viewHeight - FADE_PX)) return
+    const target = Math.max(0, markTop - viewHeight / 2)
+    const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (typeof scroller.scrollTo === 'function') {
+      scroller.scrollTo({ top: target, behavior: reduced ? 'auto' : 'smooth' })
+    } else {
+      scroller.scrollTop = target
+    }
     syncScrollState()
   }, [activeTurn, items])
 
@@ -122,18 +154,20 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
   const previewPosition = previewIndex < 0 ? undefined : itemPosition(previewIndex)
 
   const previewAtPointer = (event: PointerEvent<HTMLElement>): void => {
-    setPreviewTurn(itemAtPointer(items, event.currentTarget, scrollState.top, event.clientY)?.turn ?? null)
+    const scrollTop = scrollerRef.current?.scrollTop ?? 0
+    setPreviewTurn(itemAtPointer(items, event.currentTarget, scrollTop, event.clientY)?.turn ?? null)
   }
 
   const navigateAtPointer = (event: MouseEvent<HTMLElement>): void => {
-    const item = itemAtPointer(items, event.currentTarget, scrollState.top, event.clientY)
+    const scrollTop = scrollerRef.current?.scrollTop ?? 0
+    const item = itemAtPointer(items, event.currentTarget, scrollTop, event.clientY)
     if (item !== undefined) onNavigate(item)
   }
 
   const fadeClasses = [css.scroller]
   if (scrollState.canScrollUp) fadeClasses.push(css.fadeTop)
   if (scrollState.canScrollDown) fadeClasses.push(css.fadeBottom)
-  return (
+  const rail = (
     <div className={css.slot}>
       <nav
         className={css.frame}
@@ -154,20 +188,25 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
         >
           <div className={css.marks}>
             {items.map((item, index) => {
+              const active = item.turn === activeTurn
+              const showingPreview = item.turn === previewTurn
               const classes = [css.mark]
-              if (item.turn === activeTurn) classes.push(css.markActive)
-              if (item.turn === previewTurn) classes.push(css.markPreview)
-              if (item.turn === busyTurn) classes.push(css.markBusy)
               if (item.anchor.kind === 'unloaded') classes.push(css.markUnloaded)
+              if (active) classes.push(css.markActive)
+              else if (showingPreview) classes.push(css.markPreview)
+              if (item.turn === busyTurn) classes.push(css.markBusy)
               return (
                 <div key={item.turn} className={css.markPosition} style={itemPosition(index)}>
                   <button
                     type="button"
                     className={classes.join(' ')}
-                    aria-label={t('chat.turnNavigation.jump', { turn: item.turn })}
-                    aria-current={item.turn === activeTurn ? 'true' : undefined}
+                    aria-label={t(
+                      item.anchor.kind === 'loaded' ? 'chat.turnNavigation.jump' : 'chat.turnNavigation.jumpLoad',
+                      { turn: item.turn },
+                    )}
+                    aria-current={active ? 'true' : undefined}
                     aria-busy={item.turn === busyTurn ? 'true' : undefined}
-                    aria-describedby={item.turn === previewTurn ? previewId : undefined}
+                    aria-describedby={showingPreview ? previewId : undefined}
                     onClick={(event) => {
                       event.stopPropagation()
                       onNavigate(item)
@@ -190,6 +229,14 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
         )}
       </nav>
     </div>
+  )
+  return (
+    <>
+      <span ref={probeRef} className={css.probe} hidden />
+      {railHost === undefined
+        ? null
+        : railHost !== null ? createPortal(rail, railHost) : rail}
+    </>
   )
 }
 

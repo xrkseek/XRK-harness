@@ -13,7 +13,7 @@
 
 ## WebSocket 心跳
 
-mux / host 升级后的套接字由 Host 发 **Ping** 控制帧（默认间隔 **2s**）。连续 **2** 次未收到 Pong 则 `terminate` 该对端，避免半开连接占住扇出。实现：`ws-heartbeat.ts`，经 `attachFaceUpgrades` 挂载；测例可注入更短 `heartbeatIntervalMs`。
+mux / host 升级后的套接字由 Host 发 **Ping** 控制帧（默认间隔 **2s**）。连续 **2** 次未收到 Pong 则 `terminate` 该对端，避免半开连接占住扇出。实现：`ws-heartbeat.ts`，经 `attachFaceUpgrades` 挂载；测例可注入更短 `heartbeatIntervalMs`。写出走 `ws-send-queue.ts`：同一套接字上的 JSON 帧串行、等 `send` 回调再发下一帧，Think / 工具突发不会把 TCP 缓冲和 Ping 定时器挤死。Agent loop 在流式 `assistant/chunk` 期间按约 **16ms** 让出事件循环；同一 text / reasoning / tool-call run 的**首片立即落库**，后续片段合并到下一次让出，mux seq 仍连续（壳把 seq 空洞当断线补洞，禁止跳号）。
 
 ## Face mux 序号
 
@@ -121,7 +121,7 @@ mode: queue | steer → admit（slash → recipe / skill 写入 user）→ wake 
 
 ## WebSocket heartbeats
 
-After mux / host upgrade, the Host sends **Ping** control frames (default interval **2s**). After **2** consecutive missed Pongs the peer is `terminate`d so half-open sockets do not retain fan-out. Implementation: `ws-heartbeat.ts`, wired through `attachFaceUpgrades`; tests may inject a shorter `heartbeatIntervalMs`.
+After mux / host upgrade, the Host sends **Ping** control frames (default interval **2s**). After **2** consecutive missed Pongs the peer is `terminate`d so half-open sockets do not retain fan-out. Implementation: `ws-heartbeat.ts`, wired through `attachFaceUpgrades`; tests may inject a shorter `heartbeatIntervalMs`. Writes go through `ws-send-queue.ts`: JSON frames on one socket are serialized and wait for the `send` callback before the next frame, so Think / tool bursts do not starve the TCP buffer or Ping timer. The agent loop yields about every **16ms** while streaming `assistant/chunk`; the first fragment of a text / reasoning / tool-call run is durable immediately and later fragments coalesce until the next yield. Mux seq stays contiguous (the shell treats a seq hole as a reconnect gap).
 
 ## Face mux sequence
 

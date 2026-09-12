@@ -32,6 +32,7 @@ import {
   FACE_WS_HEARTBEAT_INTERVAL_MS,
   startWsHeartbeat,
 } from "./ws-heartbeat.js";
+import { createFaceSocketSendQueue } from "./ws-send-queue.js";
 
 export interface AttachFaceOptions {
   readonly apiKey: string;
@@ -220,99 +221,71 @@ export function attachFaceUpgrades(
   server.on("upgrade", onUpgrade);
 
   muxWss.on("connection", (ws: WebSocket) => {
+    const queue = createFaceSocketSendQueue(ws);
     for (const sessionId of runtime.store.list()) {
-      ws.send(
-        JSON.stringify(
-          serverRequestFrame(newRpcId(), {
-            type: "session/subscribed",
-            sessionId,
-            lastSeq: runtime.seq.last(sessionId),
-          }),
-        ),
+      queue.sendJson(
+        serverRequestFrame(newRpcId(), {
+          type: "session/subscribed",
+          sessionId,
+          lastSeq: runtime.seq.last(sessionId),
+        }),
       );
       const pendingAdmits = listPendingAdmits(
         readSessionEvents(runtime.store, sessionId),
         sessionId,
       );
       if (pendingAdmits.length > 0) {
-        ws.send(
-          JSON.stringify(
-            serverRequestFrame(newRpcId(), {
-              type: "session/queue",
-              sessionId,
-              items: toQueueItems(pendingAdmits, runtime.admitRpcMap),
-            }),
-          ),
+        queue.sendJson(
+          serverRequestFrame(newRpcId(), {
+            type: "session/queue",
+            sessionId,
+            items: toQueueItems(pendingAdmits, runtime.admitRpcMap),
+          }),
         );
       }
       for (const item of runtime.approvals.listPending(sessionId)) {
-        ws.send(
-          JSON.stringify(
-            serverRequestFrame(item.rpcId, approvalRequestedFrame(item)),
-          ),
+        queue.sendJson(
+          serverRequestFrame(item.rpcId, approvalRequestedFrame(item)),
         );
       }
       for (const item of runtime.questions.listPending(sessionId)) {
-        ws.send(
-          JSON.stringify(
-            serverRequestFrame(item.rpcId, questionRequestedFrame(item)),
-          ),
+        queue.sendJson(
+          serverRequestFrame(item.rpcId, questionRequestedFrame(item)),
         );
       }
       const jobViews = runtime.jobViewsFor(sessionId);
       if (jobViews && jobViews.length > 0) {
-        ws.send(
-          JSON.stringify(
-            serverRequestFrame(newRpcId(), {
-              type: "session/jobs",
-              sessionId,
-              jobs: jobViews,
-            }),
-          ),
+        queue.sendJson(
+          serverRequestFrame(newRpcId(), {
+            type: "session/jobs",
+            sessionId,
+            jobs: jobViews,
+          }),
         );
       }
       const snap = runtime.projections.snapshot(sessionId);
       for (const [key, value] of Object.entries(snap.values)) {
-        ws.send(
-          JSON.stringify(
-            serverRequestFrame(newRpcId(), {
-              type: "session/projection",
-              sessionId,
-              key,
-              value,
-              seq: snap.asOfSeq < 0 ? 0 : snap.asOfSeq,
-            }),
-          ),
+        queue.sendJson(
+          serverRequestFrame(newRpcId(), {
+            type: "session/projection",
+            sessionId,
+            key,
+            value,
+            seq: snap.asOfSeq < 0 ? 0 : snap.asOfSeq,
+          }),
         );
       }
     }
     const off = runtime.bus.subscribeMux((rpcId, frame) => {
-      if (ws.readyState === ws.OPEN) {
-        ws.send(
-          JSON.stringify(
-            serverRequestFrame(
-              rpcId,
-              frame,
-            ),
-          ),
-        );
-      }
+      queue.sendJson(serverRequestFrame(rpcId, frame));
     });
     ws.on("close", off);
   });
 
   hostWss.on("connection", (ws: WebSocket) => {
+    const queue = createFaceSocketSendQueue(ws);
     const off = runtime.bus.subscribeHost((rpcId, frame) => {
-      if (ws.readyState === ws.OPEN) {
-        ws.send(
-          JSON.stringify(
-            serverRequestFrame(
-              rpcId,
-              frame,
-            ),
-          ),
-        );
-      }
+      queue.sendJson(serverRequestFrame(rpcId, frame));
     });
     ws.on("close", off);
   });
