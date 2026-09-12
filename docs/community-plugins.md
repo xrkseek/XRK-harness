@@ -1,4 +1,4 @@
-# 社区插件与 Host 契约
+﻿# 社区插件与 Host 契约
 
 > **读者**：集成者 · 贡献者（安装社区 client、对照 Host 已实现能力与待补特性）
 
@@ -74,7 +74,7 @@ community client.js
 
 ## 侧栏插件契约（Host 原生，client 只挂 UI）
 
-标准侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.18.3**）只向壳注入 `lib/client.js`。**不要**指望插件 Cordis host 半包在 XRK 上挂 `/sidebar/*`。
+标准侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.18.4**）只向壳注入 `lib/client.js`。**不要**指望插件 Cordis host 半包在 XRK 上挂 `/sidebar/*`。
 
 产品 Host 通过 **`createSidebarPublicHandler`**（`@xrkseek/server-http/sidebar`）挂载同源 `/sidebar/*`，再经 `attachSidebarPtyUpgrades` 挂终端 WS。这是 **Host 原生表面**，与 `dsh-compat` 能力表无关；目录名 `dsh-compat` 是历史兼容器，**不**表示侧栏走「社区插件旁路」。社区客户端若也调用 `/sidebar/*`，共用同一 Host 契约。
 
@@ -225,7 +225,7 @@ Local messaging, nodes, OCR, and GenUI preview are available inside the adapter 
 
 ## Sidebar plugin contract (Host owns; client UI only)
 
-The standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.18.3**) injects `lib/client.js` into the shell only. **Do not** expect the plugin Cordis host half to serve `/sidebar/*` on XRK — the product Host already provides that prefix via dsh-compat (**historical folder name**, not a community-plugin host path) + `attachSidebarPtyUpgrades`.
+The standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.18.4**) injects `lib/client.js` into the shell only. **Do not** expect the plugin Cordis host half to serve `/sidebar/*` on XRK — the product Host already provides that prefix via dsh-compat (**historical folder name**, not a community-plugin host path) + `attachSidebarPtyUpgrades`.
 
 | Surface | Host landing | Plugin role |
 |------|-----------|----------|

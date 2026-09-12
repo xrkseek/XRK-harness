@@ -309,7 +309,8 @@ export function PluginInventorySettingsTab({
                         </dl>
                         {managed ? (
                           <div className={css.actions}>
-                            <p className={css.restartHint}>{t('restartHint')}</p>
+                            {/* Restart copy lives in the details dl when needsRestart;
+                                do not repeat it under every managed card. */}
                             <div className={css.actionRow}>
                               <button
                                 type="button"

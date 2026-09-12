@@ -105,6 +105,8 @@ export class SessionInputShell implements SessionInput {
   private disposed = false
   /** Draft persistence mirror (chat store write; receives the clipboard projection, never display-only ranges). */
   private mirrorFn: ((text: string) => void) | undefined
+  /** DOM focus implementation registered by InputBar (null until the bar mounts). */
+  private focusTarget: (() => void) | null = null
 
   constructor(private readonly deps: SessionInputDeps) {
     this.state = createSnapshotStore<InputState>(this.compose())
@@ -121,6 +123,26 @@ export class SessionInputShell implements SessionInput {
    */
   setDraft(text: string, editRange?: EditRange): void {
     this.run(this.core.dispatch({ type: 'draft-changed', draft: text, ...(editRange !== undefined ? { editRange } : {}) }))
+  }
+
+  /** See {@link SessionInput.focus}. */
+  focus(): void {
+    // Button clicks steal focus after the click handler returns; schedule so
+    // the composer wins after the explorer `@` button finishes its turn.
+    const run = (): void => { this.focusTarget?.() }
+    run()
+    queueMicrotask(run)
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => { requestAnimationFrame(run) })
+    }
+  }
+
+  /** See {@link ComposerKeyboard.bindFocusTarget}. */
+  bindFocusTarget(focus: () => void): () => void {
+    this.focusTarget = focus
+    return () => {
+      if (this.focusTarget === focus) this.focusTarget = null
+    }
   }
 
   /** Append ordered image ids unless an admission transaction is locked. */

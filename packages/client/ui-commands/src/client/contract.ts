@@ -3,7 +3,7 @@
  * CommandUiRuntime (`ctx.commandUi`) implements this face; business packages
  * consume `register` alone.
  */
-import type { ClientContext } from '@xrkseek/client-runtime/client'
+import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
 import type { ClientSessionContext } from '@xrkseek/client-ui-input-trigger/client'
 
 /** Copy for an option that must be acknowledged before onSelect can run. */
@@ -46,8 +46,8 @@ export type CommandUiSpec =
 /**
  * One client-owned command contribution: a slash-menu entry whose behavior
  * lives entirely on the client (no host descriptor). Merged with the host
- * catalog by name — a collision with a host command fails loud at candidate
- * synthesis, never shadows.
+ * catalog by name — a collision with a host command is skipped (logged),
+ * never shadows the host row and never fails the whole Commands group.
  */
 export interface CommandContribution {
   /** Command name without the leading slash (unique across contributions). */
@@ -92,4 +92,9 @@ export interface CommandUiContract {
   decorate(decoration: CommandDecoration): () => void
   /** Resolve the per-session popup controller for one session scope (wiring/overlay layer). */
   popupFor(actx: ClientContext): unknown
+  /**
+   * Bind the composer textarea focus for one session (popup Escape / select
+   * restore). InputBar registers; dispose on unmount.
+   */
+  bindComposerFocus(sessionId: SessionId, focus: () => void): () => void
 }

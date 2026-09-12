@@ -98,6 +98,28 @@ describe("FaceProjectionRegistry", () => {
       lastPromptAt: null,
     });
   });
+
+  it("sessionListMetadata flips blank on command/run", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    registry.register(createSessionListMetadataUnit());
+
+    const run = store.append(session.id, {
+      type: "command/run",
+      ts: 1,
+      commandId: "c1",
+      name: "mcp",
+      source: { kind: "user" },
+    });
+    registry.drive(session.id, run, 1);
+    expect(registry.snapshot(session.id).values.sessionListMetadata).toEqual({
+      blank: false,
+      lastPromptAt: null,
+    });
+  });
 });
 
 describe("FaceTitleController", () => {

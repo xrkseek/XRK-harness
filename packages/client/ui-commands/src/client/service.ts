@@ -262,7 +262,12 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     for (const contribution of this.live.contributions.values()) {
       if (!contribution.available(session)) continue
       if (seen.has(contribution.name)) {
-        throw new Error(`ui-commands: contribution /${contribution.name} collides with a host command`)
+        // Skip — do not throw: one colliding contribution used to wipe the
+        // whole slash "Commands" group (source-failed), leaving only Skills.
+        console.error(
+          `ui-commands: contribution /${contribution.name} collides with a host command; skipping`,
+        )
+        continue
       }
       rows.push({ name: contribution.name, description: contribution.description })
     }

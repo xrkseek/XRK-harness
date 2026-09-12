@@ -1,7 +1,7 @@
 /**
  * ui-model-selection browser half on a real cordis Context with fake command/slots/
  * connection faces and real session scopes: the plugin mounts ModelDirectoryResolver
- * as `models`, the /model contribution and the conversation.input.model
+ * as `models`, the /model decoration and the conversation.input.model
  * seat both register, and BOTH entries resolve the SAME per-session
  * directory through the service — a selection submitted through the seat's
  * inject face is the current the popup's next options pass marks active
@@ -15,7 +15,7 @@ import type { SessionId } from '@xrkseek/client-runtime/client'
 import { LocaleRuntime } from '@xrkseek/client-locale/client'
 import { TestRemote } from '@xrkseek/client-test-runtime'
 import type { ModelSelection } from '@xrkseek/xrk-api-remotes/client'
-import type { CommandContribution, SelectOption } from '@xrkseek/client-ui-commands/client'
+import type { CommandDecoration, SelectOption } from '@xrkseek/client-ui-commands/client'
 import type { ModelSelectInjected } from '../src/client/slots.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { zh } from '../src/client/locales.ts'
@@ -86,11 +86,11 @@ async function bench() {
       set: (id: SessionId, block: { reason: string } | undefined) => { blocks.set(id, block) },
     },
   })
-  let contribution: CommandContribution | undefined
+  let decoration: CommandDecoration | undefined
   ctx.provide('commandUi', {
-    register(c: CommandContribution) {
-      contribution = c
-      return () => { contribution = undefined }
+    decorate(c: CommandDecoration) {
+      decoration = c
+      return () => { decoration = undefined }
     },
   })
   const seats = new Map<string, {
@@ -124,7 +124,7 @@ async function bench() {
   }
   return {
     ctx, fiber, mint, calls,
-    contribution: () => contribution!,
+    contribution: () => decoration!,
     seat: () => seats.get('conversation.input.model')!,
     hostCurrent: () => current,
     setHostCurrent: (selection: ModelSelection) => { current = selection },
@@ -137,7 +137,7 @@ async function bench() {
 const projection = (id: string) => ({ sessionId: sid(id) })
 
 describe('ui-model-selection dual entry', () => {
-  it('registers the /model contribution and the composer model seat', async () => {
+  it('decorates Host /model and registers the composer model seat', async () => {
     const b = await bench()
     expect(b.contribution().name).toBe('model')
     expect(b.contribution().ui.kind).toBe('popupSelect')

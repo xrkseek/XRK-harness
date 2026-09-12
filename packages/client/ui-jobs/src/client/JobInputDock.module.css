@@ -1,11 +1,12 @@
 /* Live background-job strip in the composer context stack: same dock column
-   as Todo / GoalBar (card cap minus four insets). Tip surface + 12px radius
-   so the three cards read as one family. */
+   as Todo / GoalBar. Collapsed multi-job chrome stays one thin row so Stop
+   stays reachable without expanding; a single job skips the chrome entirely. */
 
 .root {
   box-sizing: border-box;
   flex: none;
-  margin: 0 auto;
+  /* Tuck into the stack gap like QueueDock — less empty air above the input. */
+  margin: 0 auto calc(0px - var(--dsh-composer-stack-gap, 6px));
   width: calc(
     100% -
     var(--dsh-composer-side-clearance) -
@@ -36,19 +37,27 @@
 .header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   box-sizing: border-box;
-  width: 100%;
-  min-height: 36px;
-  padding: 6px 12px;
+  flex: 1;
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 10px;
   border: 0;
   border-radius: 12px;
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
-  line-height: 24px;
+  line-height: 20px;
   cursor: pointer;
   text-align: left;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
 }
 
 .header:hover,
@@ -84,6 +93,11 @@
   margin: 0;
   padding: 0 4px 4px;
   list-style: none;
-  max-height: 180px;
+  max-height: 140px;
   overflow-y: auto;
+}
+
+/* Single-job: the list is the whole card — keep one quiet pad. */
+.body > .list:first-child {
+  padding: 4px;
 }

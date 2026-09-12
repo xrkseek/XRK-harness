@@ -13,7 +13,13 @@ export interface SessionRecord {
 /** Face `session.list` fast path — avoid loading full logs for cold sessions. */
 export interface SessionListHints {
   readonly lastEventTs: number | null;
+  /** Agent turn started — session leaves the blank / New Session reuse pool. */
   readonly hasTurnStart: boolean;
+  /**
+   * Slash command logged (`command/run`) — also leaves blank so Hero can show
+   * the durable command card without waiting for a turn.
+   */
+  readonly hasCommandRun: boolean;
 }
 
 export interface SessionStore {

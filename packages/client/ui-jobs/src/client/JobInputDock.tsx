@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type MouseEvent } from 'react'
 import type { JobView } from '@xrkseek/client-runtime/client'
 import type { PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { IconChevronDownOutline14, IconChevronUpOutline14 } from '@xrkseek/client-ui-primitives'
@@ -19,8 +19,9 @@ export type JobInputDockProps =
 /**
  * Input-zone strip for live background jobs (TodoDock posture): visible while
  * at least one job is running so Stop / Background stay near the composer.
+ * One live job renders the action row directly (no empty collapsible chrome).
  * @param props - session jobs mirror plus stop/background actions.
- * @returns collapsible dock card or null when nothing is live.
+ * @returns dock card or null when nothing is live.
  */
 export function JobInputDock({ sessionId, useSessions, killJob, backgroundJob, t }: JobInputDockProps) {
   const jobs = useSessions(state => state.jobsBySession[sessionId]) ?? NO_TASKS
@@ -31,26 +32,52 @@ export function JobInputDock({ sessionId, useSessions, killJob, backgroundJob, t
   if (liveJobs.length === 0) return null
 
   const rows = orderedJobs(liveJobs)
-  const countKey = liveJobs.length === 1 ? 'count.live.one' : 'count.live.other'
-  const summary = t(countKey, { count: liveJobs.length })
   const actions: JobListActions = { killJob, backgroundJob }
+  const single = rows.length === 1
+  const expanded = single || !collapsed
+  const primary = rows[0]
+
+  const onStopPrimary = (event: MouseEvent<HTMLButtonElement>): void => {
+    event.stopPropagation()
+    if (primary !== undefined) killJob(primary.id)
+  }
 
   return (
     <section className={css.root} data-testid="job-input-dock" aria-label={t('dock.aria')}>
       <div className={css.body}>
-        <button
-          type="button"
-          className={css.header}
-          aria-expanded={!collapsed}
-          onClick={() => { setCollapsed(v => !v) }}
-        >
-          <span className={css.title}>{t('dock.title')}</span>
-          <span className={css.summary}>{summary}</span>
-          <span className={css.chevron} aria-hidden>
-            {collapsed ? <IconChevronUpOutline14 /> : <IconChevronDownOutline14 />}
-          </span>
-        </button>
-        {!collapsed
+        {!single
+          ? (
+            <div className={css.headerRow}>
+              <button
+                type="button"
+                className={css.header}
+                aria-expanded={expanded}
+                onClick={() => { setCollapsed(value => !value) }}
+              >
+                <span className={css.title}>{t('dock.title')}</span>
+                <span className={css.summary}>
+                  {t('count.live.other', { count: liveJobs.length })}
+                </span>
+                <span className={css.chevron} aria-hidden>
+                  {collapsed ? <IconChevronUpOutline14 /> : <IconChevronDownOutline14 />}
+                </span>
+              </button>
+              {collapsed && primary !== undefined
+                ? (
+                  <button
+                    type="button"
+                    className={headerCss.action}
+                    aria-label={t('action.stop.aria', { label: primary.label })}
+                    onClick={onStopPrimary}
+                  >
+                    {t('action.stop')}
+                  </button>
+                )
+                : null}
+            </div>
+          )
+          : null}
+        {expanded
           ? (
             <ul className={css.list} aria-label={t('list.aria')}>
               <JobRows

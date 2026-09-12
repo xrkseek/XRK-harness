@@ -33,6 +33,12 @@ export interface InputTarget {
 export interface SessionInput extends InputTarget {
   /** Single write path for draft text (all mutation rides machine events). */
   setDraft(text: string): void
+  /**
+   * Return keyboard focus to this session's composer textarea and place the
+   * caret at the draft end. Used by sidebar `@` mention / external draft
+   * appenders after they write — `setDraft` alone never steals focus.
+   */
+  focus(): void
   /** Append ordered browser-owned image ids; busy admission phases refuse. */
   addImages(ids: readonly DraftAttachmentId[]): boolean
   /** Remove one browser-owned image id; busy admission phases refuse. */
@@ -124,6 +130,16 @@ export interface ComposerKeyboard {
   space(): boolean
   /** Dismiss the popupSelect shell (any interaction outside the box). */
   dismissPopup(): void
+  /**
+   * Return focus to the composer textarea (sidebar `@` mention, etc.).
+   * No-op until {@link bindFocusTarget} registers the DOM implementation.
+   */
+  focus(): void
+  /**
+   * InputBar mounts the textarea focus implementation; returns the disposer.
+   * Package-internal — rides the keyboard face, never a plugin contract.
+   */
+  bindFocusTarget(focus: () => void): () => void
 }
 
 /** One independently addressable row projected from the transient queue snapshot. */

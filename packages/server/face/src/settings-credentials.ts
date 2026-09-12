@@ -1294,7 +1294,7 @@ export function formatMcpInventoryText(
   ];
   if (servers.length === 0) {
     lines.push(
-      "(none) — use settings_mutate ns=mcp or Settings → Plugins → Plugin config",
+      "(none) — add servers in Settings → Plugins → Plugin config",
     );
   } else {
     for (const s of servers) {

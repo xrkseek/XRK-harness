@@ -312,6 +312,7 @@ export function apply(ctx: Context): void {
           toggleCommandMenu: undefined,
           stop: undefined,
           command: undefined,
+          bindCommandComposerFocus: undefined,
           hooks: {
             busyEnter: submissionPolicy.busyEnter,
             notices: ABSENT_NOTICES,
@@ -324,8 +325,14 @@ export function apply(ctx: Context): void {
       const conversation = concreteConversation(ctx)
       const shell = inputHub.shell(sessionId)
       const inputTriggers = inputHub.inputTriggers(sessionId)
+      const commandUi = ctx.get('commandUi') as
+        | { bindComposerFocus(id: typeof sessionId, focus: () => void): () => void }
+        | undefined
       return {
         keyboard: shell,
+        bindCommandComposerFocus: commandUi === undefined
+          ? undefined
+          : (focus) => commandUi.bindComposerFocus(sessionId, focus),
         addImages: (files) => {
           try {
             const images = conversation.createDraftImages(files)

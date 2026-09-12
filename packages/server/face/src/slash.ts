@@ -161,7 +161,7 @@ export async function listFaceCommandDescriptors(
           {
             name: "mcp",
             description:
-              "List configured MCP servers and mount status (mcp verbose for detail)",
+              "List configured MCP servers and mount status (/mcp verbose for detail)",
             input: { hint: "[verbose]" },
           },
         ]),
@@ -311,7 +311,7 @@ export async function executeFaceCommand(
     if (arg !== "" && arg !== "verbose") {
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "error",
-        text: "Usage: /mcp [verbose]. Attach/edit via settings_mutate ns=mcp or Settings → Plugins.",
+        text: "Usage: /mcp [verbose]. Attach or edit servers in Settings → Plugins.",
       });
     }
     return appendCommandPair(runtime, sessionId, parsed, {

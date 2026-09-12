@@ -64,10 +64,11 @@ const TEXT_REF_RE = /(^|\s)([/@])([\w-]+)/g
  */
 const FOLDER_REF_RE = /(^|\s)(@(?:"[^"\n]*\/(?=["\s]|$)|[^\s"]*\/(?=\s|$)))/g
 /**
- * File `@dir/name` — contains `/` but does not end with `/` (directories own
- * the trailing-slash form). Quoted paths need a closing quote.
+ * File `@dir/name` or root `@README.md` — nested paths contain `/`; workspace
+ * root leaves need an extension segment. Directories own the trailing-slash
+ * form. Quoted paths need a closing quote.
  */
-const FILE_REF_RE = /(^|\s)(@(?:"[^"\n]+"|[^\s"]+\/[^\s"]+))(?=\s|$)/g
+const FILE_REF_RE = /(^|\s)(@(?:"[^"\n]+"|[^\s"]+\/[^\s"]+|[^\s"/]+\.[A-Za-z0-9][\w.-]*))(?=\s|$)/g
 
 /** Leaf name looks like a file (has an extension segment). */
 function leafHasExtension(innerPath: string): boolean {
@@ -88,10 +89,14 @@ function pushPathRef(
   if (appearance === 'file') {
     const quoted = token.startsWith('@"') && token.endsWith('"')
     const inner = quoted ? token.slice(2, -1) : token.slice(1)
-    // Bare `@name` stays lexicon-only; closed `@"dir/"` is a directory.
-    if (!inner.includes('/') || inner.endsWith('/')) return
+    // Closed `@"dir/"` is owned by the folder scanner; bare `@name` (no slash,
+    // no extension) stays lexicon-only. Root `@README.md` paints as a file.
+    if (inner.endsWith('/')) return
+    if (!inner.includes('/') && !leafHasExtension(inner)) return
     // Unquoted path still being typed at EOL (no extension yet) must not
     // keep painting subsequent keystrokes blue (`@dir/name` + `11`).
+    // Complete directories from the sidebar use the trailing-slash grammar
+    // (`@dir/name/`) owned by the folder scanner.
     if (!quoted && end === draftLength && !leafHasExtension(inner)) return
   }
   out.push({ start, end, trigger: '@', appearance })

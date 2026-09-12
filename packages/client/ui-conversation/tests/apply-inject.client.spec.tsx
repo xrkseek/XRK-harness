@@ -212,6 +212,7 @@ describe('conversation slot inject API', () => {
     expect(absent.keyboard).toBeUndefined()
     expect(absent.toggleCommandMenu).toBeUndefined()
     expect(absent.stop).toBeUndefined()
+    expect(absent.bindCommandComposerFocus).toBeUndefined()
     expect(absent.hooks.notices.getSnapshot()).toBeNull()
     expect(absent.hooks.lexicon.getSnapshot().size).toBe(0)
     expect(absent.hooks.menuLauncher.getSnapshot()).toBeNull()

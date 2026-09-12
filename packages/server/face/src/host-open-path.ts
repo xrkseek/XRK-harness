@@ -59,11 +59,22 @@ export function normalizeOpenPath(target: string): string {
   return p;
 }
 
+/**
+ * Win32 path for Explorer argv. Forward slashes must become `\`: Explorer
+ * treats `/seg` after `/select,` as another switch, so reveal silently no-ops.
+ */
+export function windowsExplorerPath(target: string): string {
+  return normalizeOpenPath(target).replace(/\//g, "\\");
+}
+
 export async function openNativePath(
   target: string,
   platform: NodeJS.Platform = process.platform,
 ): Promise<void> {
-  const path = normalizeOpenPath(target);
+  const path =
+    platform === "win32"
+      ? windowsExplorerPath(target)
+      : normalizeOpenPath(target);
   if (platform === "win32") {
     // Empty title argument required by `start`. Quote-safe via argv (no shell).
     await runDetached("cmd.exe", ["/c", "start", "", path]);
@@ -83,12 +94,24 @@ export async function revealNativePath(
   target: string,
   platform: NodeJS.Platform = process.platform,
 ): Promise<void> {
-  const path = normalizeOpenPath(target);
   if (platform === "win32") {
+    const path = windowsExplorerPath(target);
+    // Directories: `/select` only highlights the folder in its parent and often
+    // fails to focus when Explorer is already running (sidebar "open with"
+    // Explorer on a folder looks like a no-op). Open the folder instead.
+    try {
+      if ((await stat(path)).isDirectory()) {
+        await openNativePath(path, platform);
+        return;
+      }
+    } catch {
+      // Caller usually validated existence; fall through to /select.
+    }
     // `/select,<path>` — no space after the comma (Explorer quirk).
     await runDetached("explorer.exe", [`/select,${path}`]);
     return;
   }
+  const path = normalizeOpenPath(target);
   if (platform === "darwin") {
     await runDetached("open", ["-R", path]);
     return;

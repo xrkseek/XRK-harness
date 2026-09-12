@@ -105,6 +105,12 @@ export class McpCardController {
   private allowConnect = false
   /** True after the user toggles Allow connect (so save respects an explicit park). */
   private allowTouched = false
+  /**
+   * True while the card holds local edits the user has not saved/discarded.
+   * Distinct from `dirty()`: an external `settings.mutate` also makes local≠scope,
+   * but that must reseed — not freeze an empty draft as「未保存」.
+   */
+  private userStaged = false
   private seeded = false
   private saving = false
   private failed = false
@@ -124,10 +130,14 @@ export class McpCardController {
       this.publish()
       return
     }
-    if (!this.seeded || (force && !this.dirty())) {
+    // Reseed when never seeded, forced, or the user has no local draft.
+    // Do not use dirty() here: agent/UI mutate updates the scope and would
+    // look "dirty" against a stale empty seed, then skip reseed forever.
+    if (!this.seeded || force || !this.userStaged) {
       this.rows = serversOf(snapshot).map(draft => rowToUi(draft, snapshot))
       this.allowConnect = allowOf(snapshot)
       this.allowTouched = false
+      this.userStaged = false
       this.seeded = true
       this.failed = false
       this.showErrors = false
@@ -156,12 +166,21 @@ export class McpCardController {
     }
   }
 
-  private dirty(): boolean {
-    if (!this.seeded) return false
+  private contentDiffers(): boolean {
     const snapshot = this.scope.getSnapshot()
     if (snapshot.status !== 'ready') return false
     if (this.allowConnect !== allowOf(snapshot)) return true
     return JSON.stringify(this.rows.map(rowFromUi)) !== JSON.stringify(serversOf(snapshot))
+  }
+
+  private dirty(): boolean {
+    return this.seeded && this.userStaged && this.contentDiffers()
+  }
+
+  /** Mark a local edit; drop the staged flag when the draft matches scope again. */
+  private touchLocal(): void {
+    this.userStaged = true
+    if (!this.contentDiffers()) this.userStaged = false
   }
 
   private publish(): void {
@@ -186,6 +205,7 @@ export class McpCardController {
   private setAllowConnect(allow: boolean): void {
     this.allowConnect = allow
     this.allowTouched = true
+    this.touchLocal()
     this.failed = false
     this.publish()
   }
@@ -200,6 +220,7 @@ export class McpCardController {
         : { ...next, url: '' }
     }
     this.rows = this.rows.with(index, next)
+    this.touchLocal()
     this.failed = false
     if (!this.rows.some(r => validateRow(r) !== undefined)) this.showErrors = false
     this.publish()
@@ -214,6 +235,7 @@ export class McpCardController {
     this.rows = mergeRowsByName(this.rows, imported).map(row => enrichRowStatus(row, snapshot))
     // Paste implies connect (DSH: configured servers come up live).
     this.allowConnect = true
+    this.touchLocal()
     this.failed = false
     this.publish()
     return 'ok'
@@ -226,6 +248,7 @@ export class McpCardController {
       this.allowConnect = false
       this.allowTouched = false
     }
+    this.touchLocal()
     this.failed = false
     if (!this.rows.some(r => validateRow(r) !== undefined)) this.showErrors = false
     this.publish()
@@ -237,6 +260,7 @@ export class McpCardController {
     this.rows = serversOf(snapshot).map(draft => rowToUi(draft, snapshot))
     this.allowConnect = allowOf(snapshot)
     this.allowTouched = false
+    this.userStaged = false
     this.failed = false
     this.showErrors = false
     this.publish()
@@ -276,6 +300,7 @@ export class McpCardController {
     if (landed) {
       this.seeded = true
       this.allowTouched = false
+      this.userStaged = false
       this.rows = serversOf(after).map(draft => rowToUi(draft, after))
       this.allowConnect = allowOf(after)
     }

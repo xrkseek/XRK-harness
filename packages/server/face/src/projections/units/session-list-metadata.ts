@@ -15,7 +15,12 @@ export function createSessionListMetadataUnit(): ProjectionDefinition<
     stateVersion: 1,
     init: () => ({ blank: true, lastPromptAt: null }),
     apply(state, event: SessionEvent): SessionListMetadata {
-      const blank = state.blank && event.type !== "turn/start";
+      // Leave blank on the first agent turn *or* slash command so Hero can
+      // render durable command cards (/mcp, /status, …) without a prompt.
+      const blank =
+        state.blank &&
+        event.type !== "turn/start" &&
+        event.type !== "command/run";
       const lastPromptAt =
         event.type === "user/message" &&
         isHumanUserMessageSource(event.source)

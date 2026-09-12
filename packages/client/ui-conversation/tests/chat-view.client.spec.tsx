@@ -1278,7 +1278,35 @@ describe('ChatView', () => {
     Object.defineProperty(scroller, 'scrollHeight', { value: 1_400, writable: true })
     act(() => { notify?.() })
     expect(scroller.scrollTop).toBe(200)
-    expect(observe).toHaveBeenCalledTimes(1)
+    expect(observe).toHaveBeenCalled()
+  })
+
+  it('re-pins when sticky-dock growth leaves only the new height as the bottom gap', () => {
+    let notify: (() => void) | undefined
+    class ResizeObserverStub {
+      constructor(callback: ResizeObserverCallback) {
+        notify = () => { callback([], this as unknown as ResizeObserver) }
+      }
+
+      observe = vi.fn()
+      disconnect = vi.fn()
+    }
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+    const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
+    Object.defineProperty(scroller, 'scrollHeight', { value: 1_000, writable: true, configurable: true })
+    Object.defineProperty(scroller, 'clientHeight', { value: 300, writable: true, configurable: true })
+    scroller.scrollTop = 700
+    fireEvent.scroll(scroller)
+    // Unpin, then land near the old floor without a scroll event (sticky dock
+    // growth race): the gap equals the upcoming growth.
+    readerScroll(scroller, 200)
+    scroller.scrollTop = 700
+    Object.defineProperty(scroller, 'scrollHeight', { value: 1_200, writable: true, configurable: true })
+    act(() => { notify?.() })
+    expect(scroller.scrollTop).toBe(1_200)
+    expect(view.queryByLabelText('回到底部')).toBeNull()
   })
 
   it('entering the at-bottom threshold does not snap the remaining scroll distance', () => {

@@ -54,6 +54,30 @@ describe("createHostAgentCache", () => {
     await cache.dispose();
   });
 
+  it("invalidateAll skip leaves matching agents running", async () => {
+    const cache = createHostAgentCache([]);
+    const active = fakeAgent();
+    const idle = fakeAgent();
+    await cache.resolve("active", async () => active);
+    await cache.resolve("idle", async () => idle);
+
+    await cache.invalidateAll({
+      skip: (id) => id === "active",
+    });
+    expect(active.aborted).toBe(false);
+    expect(idle.aborted).toBe(true);
+
+    const create = vi.fn(async () => fakeAgent());
+    await cache.resolve("active", create);
+    expect(create).toHaveBeenCalledTimes(0);
+    await cache.resolve("idle", create);
+    expect(create).toHaveBeenCalledTimes(1);
+
+    await cache.invalidate("active");
+    expect(active.aborted).toBe(true);
+    await cache.dispose();
+  });
+
   it("opens a nested subagent realm; invalidate parent aborts the child", async () => {
     const cache = createHostAgentCache([]);
     const parent = fakeAgent();

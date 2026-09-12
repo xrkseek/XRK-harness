@@ -153,6 +153,7 @@ export {
 } from "./seq.js";
 export {
   computeListHints,
+  sessionHintsBlank,
   sessionListHints,
 } from "./list-hints.js";
 import type { SessionListHints, SessionRecord, SessionStore } from "./store.js";

@@ -19,6 +19,7 @@ import { Button, IconChevronDownOutline14, Modal } from '@xrkseek/client-ui-prim
 import type { ChatViewSlotProps, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble } from './MessageItem.tsx'
 import { shouldShowFlowWaiting } from './flow-waiting.ts'
+import { shouldFollowContentGrowth } from './follow-growth.ts'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
 import { TurnNavigator } from './TurnNavigator.tsx'
 import { mergeTurnRailItems, type TurnRailItem } from './turn-rail-items.ts'
@@ -361,10 +362,13 @@ export function ChatView({
     scheduleActiveTurn()
   }, [scheduleActiveTurn])
 
+  const lastScrollHeightRef = useRef(0)
+
   const toBottom = (el: HTMLElement): void => {
     anchorRef.current = null
     el.scrollTop = el.scrollHeight
     observedTopRef.current = el.scrollTop
+    lastScrollHeightRef.current = el.scrollHeight
     atBottomRef.current = true
     setAtBottom(true)
     chatScroll.save(null)
@@ -545,29 +549,58 @@ export function ChatView({
   const followRef = useRef<(() => void) | null>(null)
   followRef.current = () => {
     const local = listRef.current
-    if (local !== null && atBottomRef.current) {
-      const el = scrollerOf(local)
-      el.scrollTop = el.scrollHeight
-      observedTopRef.current = el.scrollTop
-      chatScroll.save(null)
+    if (local === null) return
+    const el = scrollerOf(local)
+    const prevHeight = lastScrollHeightRef.current
+    const nextHeight = el.scrollHeight
+    const growth = nextHeight - prevHeight
+    lastScrollHeightRef.current = nextHeight
+    const floor = Math.max(0, nextHeight - el.clientHeight)
+    const distance = floor - el.scrollTop
+    if (!shouldFollowContentGrowth({
+      atBottom: atBottomRef.current,
+      distanceFromBottom: distance,
+      growth,
+      threshold: FOLLOW_THRESHOLD,
+    })) return
+    el.scrollTop = el.scrollHeight
+    observedTopRef.current = el.scrollTop
+    if (!atBottomRef.current) {
+      atBottomRef.current = true
+      setAtBottom(true)
     }
+    chatScroll.save(null)
   }
   // Streaming, tool disclosures, and other flow changes resize the column;
-  // the sticky composer resizes outside it. This observer owns ChatView's
-  // dynamic-height follow decisions and writes only while the reader is pinned.
+  // the sticky composer (jobs/todo/queue docks) resizes outside it. This
+  // observer owns ChatView's dynamic-height follow decisions.
   useEffect(() => {
     const column = columnRef.current
     const local = listRef.current
     if (column === null || local === null || typeof ResizeObserver === 'undefined') return
     const scrollport = scrollerOf(local)
+    lastScrollHeightRef.current = scrollport.scrollHeight
     const composer = scrollport.querySelector<HTMLElement>('[data-composer-seat]')
+    let followRaf = 0
     const observer = new ResizeObserver(() => {
       followRef.current?.()
+      // Second frame: sticky dock height / --dsh-composer-height can settle
+      // one paint after the first ResizeObserver callback.
+      if (typeof requestAnimationFrame !== 'undefined') {
+        if (followRaf !== 0) cancelAnimationFrame(followRaf)
+        followRaf = requestAnimationFrame(() => {
+          followRaf = 0
+          followRef.current?.()
+        })
+      }
       activeTurnRef.current?.()
     })
     observer.observe(column)
     if (composer !== null) observer.observe(composer)
-    return () => { observer.disconnect() }
+    return () => {
+      if (followRaf !== 0) cancelAnimationFrame(followRaf)
+      observer.disconnect()
+    }
   }, [])
 
   // A failed/empty page leaves the head unchanged. Once the request leaves

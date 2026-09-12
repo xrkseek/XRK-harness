@@ -20,7 +20,7 @@
 
 - **Host Face**：Unary RPC + mux/host 双流；未实现方法 `not-implemented`。
 
-- **Host 流**：`host/session-status` 由 drain latch settle 推送（`session.prompt` 不 poll）。`host/session-added` 含 `sessionListFields`（子会话 `parentSessionId` + `origin: "subagent"`；`blank` = 无 `turn/start`）。`workspace.delete` → `host/workspace-removed`；`insertBefore` → `host/workspace-order-changed`。凭据 / 设置 / preset 真改发 `host/remote-event`（`credentials/updated` · `settings/document-updated` · `agent-preset/selected` · `llm/adapters-updated`）。无 dispose，不发 `host/session-removed`。
+- **Host 流**：`host/session-status` 由 drain latch settle 推送（`session.prompt` 不 poll）。`host/session-added` 含 `sessionListFields`（子会话 `parentSessionId` + `origin: "subagent"`；`blank` = 无 `turn/start` 且无 `command/run`）。`workspace.delete` → `host/workspace-removed`；`insertBefore` → `host/workspace-order-changed`。凭据 / 设置 / preset 真改发 `host/remote-event`（`credentials/updated` · `settings/document-updated` · `agent-preset/selected` · `llm/adapters-updated`）。无 dispose，不发 `host/session-removed`。
 
 - **Session cwd**：`session.create({ workspaceId })` 钉 `sessionCwds`；Host agent factory 用会话 cwd（非仅 serve `--workspace` 根）。Glob/bash 读会话 cwd；skill 多根导入；工作区根 `AGENTS.md` · `.cursor/rules` 等经 `agent-instructions` 注入（见 [workspace-inject](./workspace-inject.md)）。
 
@@ -116,7 +116,7 @@ Short digest of shipped capabilities; details live in topic docs and [modules/](
 
 - **Host Face**: Unary RPC + mux/host dual streams; unimplemented methods return `not-implemented`.
 
-- **Host streams**: `host/session-status` is pushed on drain latch settle (`session.prompt` does not poll). `host/session-added` includes `sessionListFields` (child sessions carry `parentSessionId` + `origin: "subagent"`; `blank` = no `turn/start`). `workspace.delete` → `host/workspace-removed`; `insertBefore` → `host/workspace-order-changed`. Real credential / settings / preset changes emit `host/remote-event` (`credentials/updated` · `settings/document-updated` · `agent-preset/selected` · `llm/adapters-updated`). No dispose path; `host/session-removed` is not emitted.
+- **Host streams**: `host/session-status` is pushed on drain latch settle (`session.prompt` does not poll). `host/session-added` includes `sessionListFields` (child sessions carry `parentSessionId` + `origin: "subagent"`; `blank` = no `turn/start` and no `command/run`). `workspace.delete` → `host/workspace-removed`; `insertBefore` → `host/workspace-order-changed`. Real credential / settings / preset changes emit `host/remote-event` (`credentials/updated` · `settings/document-updated` · `agent-preset/selected` · `llm/adapters-updated`). No dispose path; `host/session-removed` is not emitted.
 
 - **Session cwd**: `session.create({ workspaceId })` pins `sessionCwds`; the Host agent factory uses the session cwd (not only the serve `--workspace` root). Glob/bash read the session cwd; skill multi-root import; workspace-root `AGENTS.md` and `.cursor/rules` inject via `agent-instructions` ([workspace-inject](./workspace-inject.md)).
 

@@ -598,6 +598,11 @@ export interface ComposerBarInjected {
    */
   command: ((line: string) => Promise<boolean>) | undefined
   /**
+   * Optional: bind this session's composer DOM focus into commandUi (popup
+   * Escape / select restore). Absent when ui-commands is not mounted.
+   */
+  bindCommandComposerFocus: ((focus: () => void) => () => void) | undefined
+  /**
    * Registrant hooks compartment: the renderer binds these to
    * useNotices/useLexicon/useFileUploads (static absent sources without a session — hook
    * order stays constant).

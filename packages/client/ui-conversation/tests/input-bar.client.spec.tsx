@@ -204,6 +204,7 @@ function bench(over?: BenchOptions) {
     retryFile: vi.fn(),
     stop,
     command: over?.command ?? (() => Promise.resolve(true)),
+    bindCommandComposerFocus: undefined,
     // Mirrors the real lookup chain (conversation namespace, then common).
     t: over?.t ?? makeTranslate(zh, commonZh),
     renderSlot,

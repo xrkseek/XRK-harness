@@ -743,6 +743,26 @@ describe('decorations: scanTextRefs', () => {
     ])
   })
 
+  it('recognizes workspace-root files with an extension (sidebar @ append)', () => {
+    expect(scanTextRefs('@README.md', new Map())).toEqual([
+      { start: 0, end: 10, trigger: '@', appearance: 'file' },
+    ])
+    expect(scanTextRefs('see @"README.md" please', new Map())).toEqual([
+      { start: 4, end: 16, trigger: '@', appearance: 'file' },
+    ])
+    expect(scanTextRefs('@package.json next', new Map())).toEqual([
+      { start: 0, end: 13, trigger: '@', appearance: 'file' },
+    ])
+    expect(scanTextRefs('@README', new Map())).toEqual([])
+  })
+
+  it('directories need a trailing slash (sidebar appends @path/ + space)', () => {
+    expect(scanTextRefs('@知识库/英语一', new Map())).toEqual([])
+    expect(scanTextRefs('@知识库/英语一/', new Map())).toEqual([
+      { start: 0, end: 9, trigger: '@', appearance: 'folder' },
+    ])
+  })
+
   it('names off the lexicon do not match; triggers are routed per lexicon list', () => {
     expect(scanTextRefs('/unknown @commit-helper', LEX)).toEqual([])
   })

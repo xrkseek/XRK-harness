@@ -9,6 +9,17 @@ alwaysApply: false
 
 本仓四类 + 可选「其他」：`新增` / `完善` / `删除` / `修复`（+ `其他变更`）。结构对齐常见开源 Release 归类，不以第三方产品说明为基线。
 
+## 版本号（先读）
+
+`MAJOR.MINOR.PATCH`：
+
+| 位 | 名称 | 本仓用途 |
+|----|------|----------|
+| 第二位 `MINOR` | 次版本号 | **奇 = 正式线**（`0.3.x`），**偶 = 预览线**（`0.2.x`） |
+| 第三位 `PATCH` | 修订号 | **同一线上顺序 +1**（`0.3.7` 后下一正式补丁是 `0.3.8`，**不是**跳到 `0.3.9`） |
+
+禁止把 PATCH 奇偶当成正式/预览。真源表：[docs/releases/README.md](../../docs/releases/README.md) · [docs/publishing.md](../../docs/publishing.md)。
+
 ## 结构
 
 ```markdown

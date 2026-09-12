@@ -54,11 +54,30 @@ describe("memory session store", () => {
     expect(store.listHints!(s.id)).toEqual({
       lastEventTs: null,
       hasTurnStart: false,
+      hasCommandRun: false,
     });
     store.append(s.id, { type: "turn/start", ts: 10, turnId: "t" });
     expect(store.listHints!(s.id)).toEqual({
       lastEventTs: 10,
       hasTurnStart: true,
+      hasCommandRun: false,
+    });
+  });
+
+  it("listHints folds command/run as non-blank activity", () => {
+    const store = createMemorySessionStore();
+    const s = store.create("cmd-hints");
+    store.append(s.id, {
+      type: "command/run",
+      ts: 3,
+      commandId: "c1",
+      name: "mcp",
+      source: { kind: "user" },
+    });
+    expect(store.listHints!(s.id)).toEqual({
+      lastEventTs: 3,
+      hasTurnStart: false,
+      hasCommandRun: true,
     });
   });
 

@@ -265,7 +265,7 @@ describe('live event path', () => {
     expect(session.getSnapshot().nodes).toEqual(before.nodes)
   })
 
-  it('keeps the authoritative host blank bit across unrelated log events', async () => {
+  it('engages the session when a slash command lands on a blank Hero', async () => {
     const { session } = await opened([])
     session.handleBlank(true)
     expect(session.getSnapshot().composerPhase).toBe('blank')
@@ -274,7 +274,7 @@ describe('live event path', () => {
     feed(ev.commandDone(1, 'cmd-perm', 'success', 'preset danger-full-access'))
     const snapshot = session.getSnapshot()
     expect(chatSeqs(snapshot)).toEqual([0, 1])
-    expect(snapshot.composerPhase).toBe('blank')
+    expect(snapshot).toMatchObject({ blank: false, composerPhase: 'active' })
   })
 
   it('activates a fresh conversation for a command-input View Node without opening a model turn', async () => {
@@ -287,7 +287,7 @@ describe('live event path', () => {
     feed(ev.commandDone(1, 'cmd-goal', 'success', 'No goal is currently set.'))
 
     expect(session.getSnapshot()).toMatchObject({
-      blank: true,
+      blank: false,
       composerPhase: 'active',
     })
     expect(session.getSnapshot().chat.order.map(

@@ -227,6 +227,17 @@ function hasTurnStartInDb(db: DatabaseSync, sessionId: string): boolean {
   return row !== undefined;
 }
 
+function hasCommandRunInDb(db: DatabaseSync, sessionId: string): boolean {
+  const row = db
+    .prepare(
+      `SELECT 1 AS hit FROM events
+       WHERE session_id = ? AND json_extract(payload, '$.type') = 'command/run'
+       LIMIT 1`,
+    )
+    .get(sessionId) as { hit: number } | undefined;
+  return row !== undefined;
+}
+
 function lastEventTsFromDb(db: DatabaseSync, sessionId: string): number | null {
   const row = db
     .prepare("SELECT MAX(ts) AS ts FROM events WHERE session_id = ?")
@@ -438,6 +449,7 @@ export function createPersistentSessionStore(
       return {
         lastEventTs: lastEventTsFromDb(db, id),
         hasTurnStart: hasTurnStartInDb(db, id),
+        hasCommandRun: hasCommandRunInDb(db, id),
       };
     },
 

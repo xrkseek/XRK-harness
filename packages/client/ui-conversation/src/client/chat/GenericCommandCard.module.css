@@ -33,6 +33,18 @@
   flex-shrink: 0;
 }
 
+.slashMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .chevron {
   color: var(--dsw-alias-label-secondary);
 }

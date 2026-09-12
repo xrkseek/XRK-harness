@@ -620,4 +620,74 @@ describe('McpCardController', () => {
       },
     ])
   })
+
+  it('reseeds from an external mutate instead of freezing an empty unsaved draft', () => {
+    const host = stubSettingsScope<McpSettings>()
+    const controller = new McpCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { servers: [], allowConnect: false, connected: [] },
+      base: { servers: [], allowConnect: false },
+      user: {},
+    })
+    const face = controller.inject()
+    expect(face.hooks.mcpCard.getSnapshot()).toMatchObject({
+      dirty: false,
+      allowConnect: false,
+      rows: [],
+    })
+
+    // Agent / Face settings.mutate landed servers while the card still showed empty.
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: {
+        servers: [{ serverName: 'context7', command: 'npx', args: ['-y', '@upstash/context7-mcp'] }],
+        allowConnect: true,
+        connected: [{ id: 'mcp:context7', serverName: 'context7', kind: 'tools', toolCount: 2, status: 'connected' }],
+      },
+      user: {
+        servers: [{ serverName: 'context7', command: 'npx', args: ['-y', '@upstash/context7-mcp'] }],
+        allowConnect: true,
+      },
+    })
+
+    const snap = face.hooks.mcpCard.getSnapshot()
+    expect(snap.dirty).toBe(false)
+    expect(snap.allowConnect).toBe(true)
+    expect(snap.rows).toMatchObject([
+      { serverName: 'context7', status: 'connected', toolCount: 2 },
+    ])
+  })
+
+  it('keeps local paste edits when the scope updates underneath', () => {
+    const host = stubSettingsScope<McpSettings>()
+    const controller = new McpCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { servers: [], allowConnect: false },
+      base: {},
+      user: {},
+    })
+    const face = controller.inject()
+    face.addRow(JSON.stringify({
+      mcpServers: { local: { command: 'npx', args: ['local-mcp'] } },
+    }))
+    expect(face.hooks.mcpCard.getSnapshot().dirty).toBe(true)
+
+    host.publish({
+      value: {
+        servers: [{ serverName: 'remote', command: 'npx' }],
+        allowConnect: true,
+        connected: [{ id: 'mcp:remote', serverName: 'remote', kind: 'tools', toolCount: 1 }],
+      },
+      user: { servers: [{ serverName: 'remote', command: 'npx' }], allowConnect: true },
+    })
+
+    const snap = face.hooks.mcpCard.getSnapshot()
+    expect(snap.dirty).toBe(true)
+    expect(snap.rows.map(r => r.serverName)).toEqual(['local'])
+  })
 })

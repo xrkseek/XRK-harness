@@ -11,7 +11,8 @@ export function sessionAddedFrame(
   runtime: FaceRuntime,
   sessionId: string,
 ): Extract<HostFrame, { type: "host/session-added" }> {
-  const blank = !sessionListHints(runtime.store, sessionId).hasTurnStart;
+  const hints = sessionListHints(runtime.store, sessionId);
+  const blank = !hints.hasTurnStart && !hints.hasCommandRun;
   const cwd = resolveSessionCwd(runtime, sessionId);
   const agentPreset = runtime.sessionAgentPresets.get(sessionId);
   const lineage = runtime.subagents.getByChild(sessionId);

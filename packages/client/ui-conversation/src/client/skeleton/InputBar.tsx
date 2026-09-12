@@ -87,7 +87,7 @@ function blockHasVisibleContent(block: { kind: string; text?: string }): boolean
 
 export function InputBar({
   useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages, retryFile,
-  toggleCommandMenu, stop, command, t,
+  toggleCommandMenu, stop, command, bindCommandComposerFocus, t,
   renderSlot, useBusyEnter, useNotices, useLexicon, useMenuLauncher, useFileUploads,
   useProjection, useConnectionState, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
@@ -297,6 +297,29 @@ export function InputBar({
     el.focus({ preventScroll: true })
     revealSelectionFocus(el)
   }, [locked, sessionId])
+
+  // External draft writers (sidebar `@` mention) call SessionInput.focus(); the
+  // bar owns the textarea, so it registers the DOM implementation on the
+  // keyboard face. Caret lands at draft end — appenders write then focus.
+  // Also bind commandUi's composer-focus hook (popup Escape path) to the same
+  // target so both planes share one implementation.
+  useEffect(() => {
+    if (keyboard === undefined) return
+    const focusDom = (): void => {
+      const el = inputRef.current
+      if (el === null || locked) return
+      el.focus({ preventScroll: true })
+      const end = el.value.length
+      el.setSelectionRange(end, end)
+      revealCaret(end)
+    }
+    const offKeyboard = keyboard.bindFocusTarget(focusDom)
+    const offCommand = bindCommandComposerFocus?.(focusDom)
+    return () => {
+      offKeyboard()
+      offCommand?.()
+    }
+  }, [keyboard, bindCommandComposerFocus, locked, sessionId])
 
   // A persisted draft arrives AFTER the unlock effect: ConversationSession
   // adopts it in its own mount effect, and a parent's mount effect runs after

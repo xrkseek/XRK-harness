@@ -116,16 +116,16 @@ export function apply(ctx: ClientContext): void {
   // a locale change reaches the next publish.
   ctx.plugin(ModelDirectoryResolver, { blockReason: () => t('blocked.composer') })
 
-  // Entry 1: the /model popupSelect over the shared directory. The command
-  // description is registry-held text: it reads t() once at registration and
-  // refreshes only on re-registration, not on locale change.
+  // Entry 1: decorate Host `/model` with popupSelect (same pattern as
+  // /permission and /feedback). Must not `register` — a contribution that
+  // collides with the Host catalog throws and drops the whole slash command
+  // group, leaving only Skills in the menu.
   ctx.inject(['commandUi', 'modelDirectories'], (scope: ClientContext) => {
     const command = scope.get('commandUi') as CommandUiContract
     const models = scope.modelDirectories
     const sessions = scope.sessions
-    scope.effect(() => command.register({
+    scope.effect(() => command.decorate({
       name: 'model',
-      description: t('command.description'),
       available: session => sessions.subagentAddress(session.sessionId) === undefined,
       ui: {
         kind: 'popupSelect',
@@ -147,7 +147,7 @@ export function apply(ctx: ClientContext): void {
           await directory.select(selection)
         },
       },
-    }), 'ui-model-selection: /model contribution')
+    }), 'ui-model-selection: /model decoration')
   })
 
   // Entry 2: the composer's named model seat over the SAME directory.

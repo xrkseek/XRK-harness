@@ -184,7 +184,9 @@ export const sessionList: FaceHandler = async (runtime) => {
             keys: [...SESSION_LIST_PROJECTION_KEYS],
           });
     const meta = snap?.values.sessionListMetadata;
-    const blank = meta?.blank ?? !(hints?.hasTurnStart ?? false);
+    const blank =
+      meta?.blank ??
+      !(hints?.hasTurnStart === true || hints?.hasCommandRun === true);
     const lastPromptAt = meta?.lastPromptAt ?? null;
     const updatedAt = Math.max(hints?.lastEventTs ?? 0, lastPromptAt ?? 0);
     const cwd = resolveSessionCwd(runtime, sessionId);

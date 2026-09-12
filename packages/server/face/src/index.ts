@@ -259,6 +259,7 @@ export {
   openNativePath,
   revealNativePath,
   normalizeOpenPath,
+  windowsExplorerPath,
 } from "./host-open-path.js";
 export {
   resolveLlmForSession,

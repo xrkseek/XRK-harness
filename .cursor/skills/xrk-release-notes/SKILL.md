@@ -14,6 +14,10 @@ user-invocable: false
 规则全文（打开 `docs/releases/**` 时自动挂载）：`.cursor/rules/xrk-release-notes.mdc`。  
 发版命令：[docs/publishing.md](../../../docs/publishing.md)。
 
+## 版本号
+
+`MAJOR.MINOR.PATCH`：**第二位 MINOR** 奇偶分正式/预览（`0.3.x` / `0.2.x`）；**第三位 PATCH** 同线上顺序递增。`0.3.7` 下一版是 **`0.3.8`**，不要按补丁奇偶跳号。详见 rule `xrk-release-notes`「版本号」与 [releases/README](../../../docs/releases/README.md)。
+
 ## 动手顺序
 
 1. 改 `apps/cli/package.json` → `version`（公开线真源）。  

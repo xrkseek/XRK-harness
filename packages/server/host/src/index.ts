@@ -101,6 +101,7 @@ import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
 import type { HostLogger, HostSpawnOptions } from "./log.js";
 
 export { createHostAgentCache, HOST_PLUGINS_KEY } from "./agent-cache.js";
+export type { InvalidateAllOpts } from "./agent-cache.js";
 export { createStandingToolRegistry } from "./standing-tools.js";
 export type { AgentResolveOpts, HostAgentCache } from "./agent-cache.js";
 export type { HostLogger, HostSpawnOptions } from "./log.js";
@@ -380,6 +381,11 @@ export function createHostManager(): HostManager {
         );
       }
       let invalidateAgents: () => Promise<void> = async () => {};
+      /** Sessions skipped mid-turn; invalidate once drain goes idle. */
+      const pendingAgentInvalidate = new Set<string>();
+      const drainActiveBox: { isActive: (sessionId: string) => boolean } = {
+        isActive: () => false,
+      };
       /** Mutable Face inventory — Host splices after MCP reconcile / health. */
       const facePlugins: RegisteredPlugin[] = [];
       const refreshFacePlugins = () => {
@@ -442,7 +448,18 @@ export function createHostManager(): HostManager {
       refreshFacePlugins();
 
       const agentCache = createHostAgentCache(loader.list(), { hostId: id });
-      invalidateAgents = () => agentCache.invalidateAll();
+      // MCP remount / settings_mutate runs inside an active drain. Aborting that
+      // agent mid-tool yields "Error: tool call aborted". Skip active sessions
+      // and invalidate them after the turn settles.
+      invalidateAgents = async () => {
+        await agentCache.invalidateAll({
+          skip: (sessionId) => {
+            if (!drainActiveBox.isActive(sessionId)) return false;
+            pendingAgentInvalidate.add(sessionId);
+            return true;
+          },
+        });
+      };
       let mcpSyncTail: Promise<unknown> = Promise.resolve();
       const lastDrainResult = new Map<string, AgentRunResult>();
 
@@ -634,6 +651,10 @@ export function createHostManager(): HostManager {
               ) {
                 (store as { flush: () => void }).flush();
               }
+              if (!running && pendingAgentInvalidate.has(sid)) {
+                pendingAgentInvalidate.delete(sid);
+                void agentCache.invalidate(sid);
+              }
               hostStatusBox.publish?.(sid, running);
             });
           }
@@ -647,6 +668,7 @@ export function createHostManager(): HostManager {
         },
         lastDrainResult,
       );
+      drainActiveBox.isActive = (sessionId) => drain.isActive(sessionId);
 
       const webOverlay = await resolveWebPluginOverlay(resolvedPluginsDir);
       const overlayBoot = webOverlay

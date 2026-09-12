@@ -8,7 +8,7 @@ export const zh = {
   'description.goal': '设置或替换会话目标',
   'description.permission': '切换沙箱模式与审批策略（不是会话工具徽章）',
   'description.plan': '进入或退出计划模式（会话协作；不是工具徽章）',
-  'description.mcp': '列出已配置的 MCP 服务器与挂载状态（mcp verbose 看详情）',
+  'description.mcp': '列出已配置的 MCP 服务器与挂载状态（/mcp verbose 看详情）',
   'description.status': '显示会话徽章、权限、计划、主题、模型、工作目录',
   'description.model': '查看或切换提供方/模型（Codex 风格 /model provider/model）',
   'description.theme': '设置外观偏好（即时生效）：light|dark|system',
@@ -41,7 +41,7 @@ export const en = {
   'description.plan':
     'Enter or leave plan mode (session collaboration; not a tool badge)',
   'description.mcp':
-    'List configured MCP servers and mount status (mcp verbose for detail)',
+    'List configured MCP servers and mount status (/mcp verbose for detail)',
   'description.status': 'Show session badge, permission, plan, theme, model, cwd',
   'description.model':
     'Show or switch provider/model (Codex-style /model provider/model)',

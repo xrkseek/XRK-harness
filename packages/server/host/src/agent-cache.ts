@@ -15,6 +15,14 @@ export interface AgentResolveOpts {
   readonly parentSessionId?: string;
 }
 
+export interface InvalidateAllOpts {
+  /**
+   * Skip dispose/abort for matching sessions (e.g. mid-turn MCP remount via
+   * `settings_mutate`). Caller should invalidate them once the turn is idle.
+   */
+  readonly skip?: (sessionId: string) => boolean;
+}
+
 export interface HostAgentCache {
   readonly hostScope: Scope;
   resolve(
@@ -25,7 +33,7 @@ export interface HostAgentCache {
   /** Drop cached agent with compose Ordering (abort via scope effects). */
   invalidate(sessionId: string): Promise<void>;
   /** Drop every cached agent (e.g. MCP tools/list_changed). */
-  invalidateAll(): Promise<void>;
+  invalidateAll(opts?: InvalidateAllOpts): Promise<void>;
   /** Dispose host scope (all agent children first). */
   dispose(): Promise<void>;
 }
@@ -80,9 +88,12 @@ export function createHostAgentCache(
     pruneDisposed();
   }
 
-  async function invalidateAll(): Promise<void> {
+  async function invalidateAll(opts?: InvalidateAllOpts): Promise<void> {
     const ids = [...scopes.keys()];
-    for (const id of ids) await invalidate(id);
+    for (const id of ids) {
+      if (opts?.skip?.(id)) continue;
+      await invalidate(id);
+    }
   }
 
   return {

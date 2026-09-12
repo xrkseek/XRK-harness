@@ -2,7 +2,7 @@
  * CommandUiRuntime tests on a real cordis Context with fake slash/connection
  * faces and real session scopes (createScope): session-keyed candidate
  * synthesis (host catalog by sessionId + contributions by availability,
- * collision fail-loud), the dispatch decision table cell by cell, matchSpace
+ * collision skip-and-log), the dispatch decision table cell by cell, matchSpace
  * hot-key policy, matchEnter strong-wait / reject, the sessionId execute
  * payload, the scoped consume-token dispatch, per-session popupFor
  * lifecycle, and the directory invalidation event subscriptions.
@@ -305,10 +305,16 @@ describe('candidates', () => {
     ])
   })
 
-  it('a contribution/host name collision fails loud', async () => {
+  it('a contribution/host name collision is skipped so the Commands group still loads', async () => {
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { command, source } = await bench()
     command.register(themeContribution({ name: 'plan' }))
-    await expect(source.candidates(proj('s1'), req(''))).rejects.toThrow('collides with a host command')
+    const names = (await source.candidates(proj('s1'), req(''))).map(c => c.name)
+    expect(names).toEqual(['plan', 'goal'])
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('collides with a host command'),
+    )
+    warn.mockRestore()
   })
 
 })

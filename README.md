@@ -20,7 +20,7 @@
 
 XRK-Harness 为自研 TypeScript Agent Harness + Server Kit。设计吸收 Codex 与业界 agent harness 在会话、工具与壳交互上的长处；契约以本仓为准。
 
-[入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md) · [v0.3.5 发行说明](./docs/releases/v0.3.5.md)
+[入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md) · [v0.3.8 发行说明](./docs/releases/v0.3.8.md)
 
 ## 这是什么
 
@@ -47,7 +47,7 @@ XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agen
 
 ```sh
 mkdir my-workspace && cd my-workspace
-npm install -g @xrkseek/harness-cli@0.3.5
+npm install -g @xrkseek/harness-cli@0.3.8
 xrkh web
 ```
 
@@ -92,7 +92,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 多厂商 LLM Registry | **能跑** |
 | 社区 client（自研兼容器） | **能跑**（IM WS/sidecar · Vision · 记忆 · GenUI npm · TongFlow；`xrkh doctor`） |
 | 产品网页与浏览器 E2E | **能跑**（Playwright **17/17**；`pnpm test:web` 不进 `pnpm check`） |
-| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（**v0.3.5**；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
+| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（**v0.3.8**；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
 
 完整说明：[docs/status.md](./docs/status.md)。
 
@@ -108,7 +108,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 自己写工具 / 进程插件 | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | 排障 | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 | [learn](./docs/learn.md) |
-| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.3.5](./docs/releases/v0.3.5.md) · 预览末号 [v0.2.7](./docs/releases/v0.2.7.md)） |
+| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.3.8](./docs/releases/v0.3.8.md) · 预览末号 [v0.2.7](./docs/releases/v0.2.7.md)） |
 | 全部专题索引 | [docs/README.md](./docs/README.md) |
 
 ## 仓库里有什么
@@ -161,7 +161,7 @@ Grow toward the sun. Harness the light.
 
 XRK-Harness is an independently developed TypeScript Agent Harness + Server Kit. It absorbs strengths from Codex and peer agent harnesses; this repo’s contracts are authoritative.
 
-[Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Status](./docs/status.md) · [Docs hub](./docs/README.md) · [v0.3.5 release notes](./docs/releases/v0.3.5.md)
+[Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Status](./docs/status.md) · [Docs hub](./docs/README.md) · [v0.3.8 release notes](./docs/releases/v0.3.8.md)
 
 ## What this is
 
@@ -188,7 +188,7 @@ Requires **Node.js ≥26**.
 
 ```sh
 mkdir my-workspace && cd my-workspace
-npm install -g @xrkseek/harness-cli@0.3.5
+npm install -g @xrkseek/harness-cli@0.3.8
 xrkh web
 ```
 
@@ -233,7 +233,7 @@ Optional: copy `.xrk/.credentials.yaml.example`, or use a brand `apiKeyEnv` (e.g
 | Multi-provider LLM Registry | **Working** |
 | Community clients (first-party adapter) | **Working** (IM WS/sidecar · vision · memory · GenUI npm · TongFlow; `xrkh doctor`) |
 | Product web & browser E2E | **Working** (Playwright **17/17**; `pnpm test:web` not in `pnpm check`) |
-| Public CLI package `@xrkseek/harness-cli` | **Working** (**v0.3.5**; primary bin **`xrkh`**, also **`xrk-harness`**) |
+| Public CLI package `@xrkseek/harness-cli` | **Working** (**v0.3.8**; primary bin **`xrkh`**, also **`xrk-harness`**) |
 
 Full matrix: [docs/status.md](./docs/status.md).
 
@@ -249,7 +249,7 @@ Full matrix: [docs/status.md](./docs/status.md).
 | Author tools / process plugins | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | Troubleshoot | [troubleshooting](./docs/troubleshooting.md) |
 | Short digest | [learn](./docs/learn.md) |
-| Release notes | [releases](./docs/releases/) (current [v0.3.5](./docs/releases/v0.3.5.md) · last preview [v0.2.7](./docs/releases/v0.2.7.md)) |
+| Release notes | [releases](./docs/releases/) (current [v0.3.8](./docs/releases/v0.3.8.md) · last preview [v0.2.7](./docs/releases/v0.2.7.md)) |
 | Full index | [docs/README.md](./docs/README.md) |
 
 ## Repository layout

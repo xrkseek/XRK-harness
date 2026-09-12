@@ -82,7 +82,7 @@ describe("commands/execute + list", () => {
         {
           name: "mcp",
           description:
-            "List configured MCP servers and mount status (mcp verbose for detail)",
+            "List configured MCP servers and mount status (/mcp verbose for detail)",
           input: { hint: "[verbose]" },
         },
         {
@@ -309,7 +309,7 @@ describe("commands/execute + list", () => {
         {
           name: "mcp",
           description:
-            "List configured MCP servers and mount status (mcp verbose for detail)",
+            "List configured MCP servers and mount status (/mcp verbose for detail)",
           input: { hint: "[verbose]" },
         },
         {

@@ -257,16 +257,14 @@ export class Session implements SessionFace {
     }
     // Blank flips on ACCEPTANCE, not attempt: an accepted prompt starts the
     // conversation's first turn on the host (the host criterion — a logged
-    // turn/start — is fact, not optimism; standalone command and projection
-    // events never flip it), while a rejected first prompt must keep the
-    // session blank — the client-side blank mirror only ever lowers, so
-    // flipping early on a failure would surface the session forever and
-    // strip its connectWorkspace reuse eligibility against the host's
-    // authority.
+    // turn/start — is fact, not optimism). Slash `command/run` also engages
+    // so Hero can show the durable command card without a prompt. A rejected
+    // first prompt must keep the session blank — the client-side blank mirror
+    // only ever lowers, so flipping early on a failure would surface the
+    // session forever and strip its connectWorkspace reuse eligibility against
+    // the host's authority.
     if (this.blankBit) {
-      this.blankBit = false
-      this.options.onEngaged?.(this)
-      this.notifier.markDirty()
+      this.engageFromContent()
     }
     return result
   }
@@ -606,10 +604,7 @@ export class Session implements SessionFace {
   handleRunning(running: boolean): void {
     // Turn-start conversion: a blank session never runs, so the first
     // running:true proves another side's first message landed.
-    if (running && this.blankBit) {
-      this.blankBit = false
-      this.notifier.markDirty()
-    }
+    if (running && this.blankBit) this.engageFromContent()
     if (running) this.firstPromptPendingTurn = false
     if (this.running === running) return
     this.running = running
@@ -645,14 +640,27 @@ export class Session implements SessionFace {
   /**
    * Blank-bit relay from the authoritative summary source (list baseline and
    * the session-added frame). Monotone: once any signal (local first send,
-   * running flip, an earlier summary) cleared it, a stale true never
-   * re-blanks.
+   * slash command, running flip, an earlier summary) cleared it, a stale true
+   * never re-blanks.
    * @param blank - the summary's derived empty-log bit.
    */
   handleBlank(blank: boolean): void {
     if (blank === this.blankBit) return
+    // Once content engaged the session, host list lag must not hide it again.
+    if (blank && !this.blankBit) return
     if (blank && (this.promptAttempted || this.running)) return
     this.blankBit = blank
+    this.notifier.markDirty()
+  }
+
+  /**
+   * Leave the Hero blank pool after durable content (accepted prompt or
+   * slash `command/run`) without waiting for the next list pull.
+   */
+  private engageFromContent(): void {
+    if (!this.blankBit) return
+    this.blankBit = false
+    this.options.onEngaged?.(this)
     this.notifier.markDirty()
   }
 
@@ -741,6 +749,10 @@ export class Session implements SessionFace {
     this.baseSeq = this.events[0]?.seq ?? 0
     this.hasMore = hasMore
     if (this.events.some(event => event.type === 'turn/start')) this.firstPromptPendingTurn = false
+    if (this.blankBit && this.events.some(event =>
+      event.type === 'turn/start' || event.type === 'command/run')) {
+      this.engageFromContent()
+    }
     this.conversation.replaceWindow(entries.map(conversationInput), hasMore)
     if (projections !== undefined) this.projections.seed(projections)
     const buffered = this.liveBuffer
@@ -756,6 +768,7 @@ export class Session implements SessionFace {
     this.events.push(event)
     this.views.push(view)
     if (event.type === 'turn/start') this.firstPromptPendingTurn = false
+    if (event.type === 'command/run' || event.type === 'turn/start') this.engageFromContent()
     const queueChanged = this.queueMirror.acceptDurable(event)
     const publication = this.conversation.append({ event, view })
     return queueChanged ? 'immediate' : publication
@@ -869,9 +882,9 @@ function conversationInput(entry: HistoryEntry): ConversationEventInput {
   return { event: entry.event, view: entry.view }
 }
 
-/** A generic command row alone remains control-plane content; every other visible Chat Node activates the conversation. */
+/** Any durable Chat Node (including slash-command cards) activates the conversation. */
 function hasVisibleConversationContent(chat: ChatSnapshot): boolean {
-  return chat.order.some(key => chat.nodes.get(key)?.kind !== 'command')
+  return chat.order.length > 0
 }
 
 /**
