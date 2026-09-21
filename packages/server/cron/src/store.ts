@@ -75,7 +75,7 @@ export function createCronJobStore(options: {
     } catch (err) {
       const code =
         err && typeof err === "object" && "code" in err
-          ? String((err as { code: unknown }).code)
+          ? String(err.code)
           : "";
       if (code === "ENOENT") {
         jobs = [];

@@ -26,7 +26,7 @@ export function recordFromSessionEvent(
   seq: number,
 ): SessionTelemetryRecord {
   const { type, ts, ...rest } = event;
-  let body: unknown = rest;
+  let body: unknown;
   try {
     body = JSON.parse(JSON.stringify(rest)) as unknown;
   } catch {

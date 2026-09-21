@@ -75,7 +75,9 @@ export async function listSshDirectory(
     target = resolveWithinRemoteRoot(home, raw);
   } catch (err) {
     if (err instanceof PathEscapeError) {
-      throw new Error(`cannot list "${raw}": outside remote workspace`);
+      throw new Error(`cannot list "${raw}": outside remote workspace`, {
+        cause: err,
+      });
     }
     throw err;
   }

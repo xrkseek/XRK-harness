@@ -117,7 +117,7 @@ function resolveConfig(options: CodeRuntimeOptions): {
     maxOutputBytes,
     maxOldGenerationSizeMb,
   })) {
-    assertPositiveFinite(value as number, key);
+    assertPositiveFinite(value, key);
   }
   if (timeoutMs > MAX_TIMER_DELAY_MS || maxTimeoutMs > MAX_TIMER_DELAY_MS) {
     throw new Error("code-runtime: timeout exceeds the supported timer range");

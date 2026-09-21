@@ -181,7 +181,9 @@ function withFileLock<T>(lockPath: string, fn: () => T): T {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== "EEXIST") throw err;
       if (Date.now() - start > 3000) {
-        throw new Error(`curated memory lock timed out: ${lockPath}`);
+        throw new Error(`curated memory lock timed out: ${lockPath}`, {
+          cause: err,
+        });
       }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 15);
     }

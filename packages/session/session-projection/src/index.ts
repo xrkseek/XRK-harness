@@ -4,10 +4,7 @@
  */
 
 import type { SessionEvent } from "@xrkseek/protocol";
-import type {
-  SessionProjectionMap,
-  SessionProjectionStateMap,
-} from "./types.js";
+import type { SessionProjectionMap } from "./types.js";
 
 export type {
   SessionProjectionMap,

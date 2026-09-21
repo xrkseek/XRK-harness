@@ -26,8 +26,8 @@ export function createMemoryComputerUseProvider(
     { index: 1, role: "button", name: "OK" },
     { index: 2, role: "textbox", name: "Search" },
   ]).map((e) => ({ ...e }));
-  let app = options.app ?? "MemoryApp";
-  let windowTitle = options.windowTitle ?? "Memory Window";
+  const app = options.app ?? "MemoryApp";
+  const windowTitle = options.windowTitle ?? "Memory Window";
   const windows = options.windows ?? [
     { title: windowTitle, app, pid: 1 },
   ];

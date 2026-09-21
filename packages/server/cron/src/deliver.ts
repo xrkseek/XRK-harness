@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { createHmac, randomUUID } from "node:crypto";
-import type { CronDeliverer, CronJob, CronRunResult } from "./types.js";
+import type { CronDeliverer } from "./types.js";
 
 export interface CreateCronDelivererOptions {
   readonly env?: NodeJS.ProcessEnv;
