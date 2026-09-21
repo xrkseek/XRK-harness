@@ -9,14 +9,16 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
-  defaultMcpStdioCwd,
   parseMcpServersJson,
   parseMcpServersValue,
   pickMcpAllowedEnv,
+  resolveMcpStdioCwd,
 } from "@xrkseek/server-config";
 import {
   createMcpClient,
+  createMcpResourceTools,
   mcpToolDefinition,
+  MCP_RESOURCES_PLUGIN_ID,
   type McpClient,
   type McpConnectionStatus,
 } from "@xrkseek/mcp";
@@ -34,6 +36,7 @@ export type McpServerSpec =
       readonly args?: readonly string[];
       readonly env?: Readonly<Record<string, string>>;
       readonly cwd?: string;
+      readonly cwdAllowWorkspace?: boolean;
     }
   | {
       readonly serverName: string;
@@ -48,6 +51,7 @@ export type McpServerDraft = {
   readonly url?: string;
   readonly args?: readonly string[];
   readonly cwd?: string;
+  readonly cwdAllowWorkspace?: boolean;
   readonly env?: Readonly<Record<string, string>>;
 };
 
@@ -55,6 +59,8 @@ export type McpServerDraft = {
 export type McpRegisteredPlugin = RegisteredPlugin & {
   mcpHealth: McpConnectionStatus;
   mcpFingerprint: string;
+  /** Live client for shared resource tools (`mcp-resources`). */
+  mcpClient: McpClient;
 };
 
 function rowToSpec(row: {
@@ -64,6 +70,7 @@ function rowToSpec(row: {
   readonly args?: readonly string[];
   readonly env?: Readonly<Record<string, string>>;
   readonly cwd?: string;
+  readonly cwdAllowWorkspace?: boolean;
 }): McpServerSpec | undefined {
   const serverName = row.serverName.trim();
   if (!serverName) return undefined;
@@ -77,6 +84,7 @@ function rowToSpec(row: {
     ...(row.args && row.args.length > 0 ? { args: [...row.args] } : {}),
     ...(row.env ? { env: { ...row.env } } : {}),
     ...(row.cwd?.trim() ? { cwd: row.cwd.trim() } : {}),
+    ...(row.cwdAllowWorkspace === true ? { cwdAllowWorkspace: true } : {}),
   };
 }
 
@@ -92,49 +100,154 @@ export function parseMcpServersEnv(
 /**
  * Face dump `{ mcp.servers }` / root `mcpServers` → Host specs.
  * Proxy env keys are kept; other env keys are dropped.
+ * Parse failure keeps the last successfully read specs for that file
+ * (DSH last-good; keyed by absolute path).
  */
+const lastGoodMcpSpecsByFile = new Map<string, readonly McpServerSpec[]>();
+/** Last successfully read `mcp.allowConnect` per host-settings path. */
+const lastGoodMcpAllowByFile = new Map<string, boolean>();
+
+/** Test helper — clear Host MCP last-good caches. */
+export function resetLastGoodHostMcpWireCaches(): void {
+  lastGoodMcpSpecsByFile.clear();
+  lastGoodMcpAllowByFile.clear();
+}
+
 export function readMcpServersFromHostSettings(
   file: string,
 ): readonly McpServerSpec[] {
+  const key = path.resolve(file);
+  const lastGood = lastGoodMcpSpecsByFile.get(key);
+  let raw: string;
+  try {
+    raw = readFileSync(file, "utf8");
+  } catch (err) {
+    if (
+      err &&
+      typeof err === "object" &&
+      (err as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
+      return lastGood ?? [];
+    }
+    console.warn(
+      `[host] ${file}: read failed; keeping last good MCP specs (${
+        err instanceof Error ? err.message : String(err)
+      })`,
+    );
+    return lastGood ?? [];
+  }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(file, "utf8"));
-  } catch {
-    return [];
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    console.warn(
+      `[host] ${file}: parse failed; keeping last good MCP specs (${
+        err instanceof Error ? err.message : String(err)
+      })`,
+    );
+    return lastGood ?? [];
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return [];
+    console.warn(
+      `[host] ${file}: root must be an object; keeping last good MCP specs`,
+    );
+    return lastGood ?? [];
   }
   const root = parsed as {
     mcp?: { servers?: unknown };
   };
   const servers = root.mcp?.servers;
-  if (servers === undefined) return [];
-  return mcpDraftsToSpecs(
-    parseMcpServersValue(servers, { keepEnv: true }).map((row) => {
-      const env = pickMcpAllowedEnv(row.env);
-      return {
-        serverName: row.serverName,
-        ...(row.url ? { url: row.url } : {}),
-        ...(row.command ? { command: row.command } : {}),
-        ...(row.args ? { args: [...row.args] } : {}),
-        ...(row.cwd ? { cwd: row.cwd } : {}),
-        ...(env ? { env } : {}),
-      };
-    }),
-  );
+  if (servers === undefined) {
+    // Truncated / partial write — do not wipe last-good with an empty list.
+    if (lastGood !== undefined) {
+      console.warn(
+        `[host] ${file}: mcp.servers missing; keeping last good MCP specs`,
+      );
+      return lastGood;
+    }
+    return [];
+  }
+  try {
+    const specs = mcpDraftsToSpecs(
+      parseMcpServersValue(servers, { keepEnv: true }).map((row) => {
+        const env = pickMcpAllowedEnv(row.env);
+        return {
+          serverName: row.serverName,
+          ...(row.url ? { url: row.url } : {}),
+          ...(row.command ? { command: row.command } : {}),
+          ...(row.args ? { args: [...row.args] } : {}),
+          ...(row.cwd ? { cwd: row.cwd } : {}),
+          ...(env ? { env } : {}),
+        };
+      }),
+    );
+    lastGoodMcpSpecsByFile.set(key, specs);
+    return specs;
+  } catch (err) {
+    console.warn(
+      `[host] ${file}: mcp.servers invalid; keeping last good MCP specs (${
+        err instanceof Error ? err.message : String(err)
+      })`,
+    );
+    return lastGood ?? [];
+  }
 }
 
-/** Face dump `mcp.allowConnect` (Web Settings). Missing / false → false. */
+/**
+ * Face dump `mcp.allowConnect` (Web Settings).
+ * Parse/read failure keeps last good for that file (aligned with servers).
+ */
 export function readMcpAllowFromHostSettings(file: string): boolean {
+  const key = path.resolve(file);
+  const lastGood = lastGoodMcpAllowByFile.get(key);
+  let raw: string;
   try {
-    const parsed = JSON.parse(readFileSync(file, "utf8")) as {
-      mcp?: { allowConnect?: unknown };
-    };
-    return parsed.mcp?.allowConnect === true;
-  } catch {
+    raw = readFileSync(file, "utf8");
+  } catch (err) {
+    if (
+      err &&
+      typeof err === "object" &&
+      (err as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
+      return lastGood ?? false;
+    }
+    console.warn(
+      `[host] ${file}: read failed; keeping last good mcp.allowConnect (${
+        err instanceof Error ? err.message : String(err)
+      })`,
+    );
+    return lastGood ?? false;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    console.warn(
+      `[host] ${file}: parse failed; keeping last good mcp.allowConnect (${
+        err instanceof Error ? err.message : String(err)
+      })`,
+    );
+    return lastGood ?? false;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    console.warn(
+      `[host] ${file}: root must be an object; keeping last good mcp.allowConnect`,
+    );
+    return lastGood ?? false;
+  }
+  const mcp = (parsed as { mcp?: { allowConnect?: unknown } }).mcp;
+  if (mcp === undefined || typeof mcp !== "object" || Array.isArray(mcp)) {
+    if (lastGood !== undefined) {
+      console.warn(
+        `[host] ${file}: mcp section missing; keeping last good mcp.allowConnect`,
+      );
+      return lastGood;
+    }
     return false;
   }
+  const allow = mcp.allowConnect === true;
+  lastGoodMcpAllowByFile.set(key, allow);
+  return allow;
 }
 
 /** Convert Face desired drafts into Host connect specs (skips incomplete rows). */
@@ -161,6 +274,7 @@ export function mcpFingerprint(spec: McpServerSpec): string {
     c: spec.command,
     a: [...(spec.args ?? [])],
     d: spec.cwd ?? "",
+    w: spec.cwdAllowWorkspace === true,
     e: env,
   });
 }
@@ -183,7 +297,61 @@ async function toolsFromClient(client: McpClient) {
 }
 
 function isMcpPlugin(plugin: RegisteredPlugin): plugin is McpRegisteredPlugin {
-  return plugin.id.startsWith("mcp:");
+  return (
+    plugin.id.startsWith("mcp:") &&
+    typeof (plugin as McpRegisteredPlugin).mcpFingerprint === "string" &&
+    (plugin as McpRegisteredPlugin).mcpClient !== undefined
+  );
+}
+
+/** Resolve live MCP client for shared resource tools. */
+function resolveMcpClientFromList(
+  list: () => readonly RegisteredPlugin[],
+  serverName: string,
+): McpClient | undefined {
+  const plugin = list().find(
+    (p): p is McpRegisteredPlugin =>
+      isMcpPlugin(p) && p.id === `mcp:${serverName}`,
+  );
+  if (!plugin || plugin.mcpHealth === "gave-up") return undefined;
+  return plugin.mcpClient;
+}
+
+/**
+ * Keep one shared `mcp-resources` plugin while any MCP server is connected.
+ * Tools disappear when the last server unloads (DSH mcp-resources).
+ * `retained` covers mid-drain soft-detached clients still serving in-flight tools.
+ */
+async function syncMcpResourcePlugin(options: {
+  readonly list: () => readonly RegisteredPlugin[];
+  readonly retained?: () => readonly RegisteredPlugin[];
+  readonly register: (plugin: RegisteredPlugin) => void;
+  readonly unregister: (id: string) => Promise<void>;
+}): Promise<void> {
+  const live = options.list().filter(
+    (p): p is McpRegisteredPlugin =>
+      isMcpPlugin(p) && p.mcpHealth !== "gave-up",
+  );
+  const existing = options.list().find((p) => p.id === MCP_RESOURCES_PLUGIN_ID);
+  if (live.length === 0) {
+    if (existing) await options.unregister(MCP_RESOURCES_PLUGIN_ID);
+    return;
+  }
+  if (existing) return;
+  const clients = () => {
+    const retained = options.retained?.() ?? [];
+    return retained.length > 0
+      ? [...options.list(), ...retained]
+      : options.list();
+  };
+  options.register({
+    id: MCP_RESOURCES_PLUGIN_ID,
+    kind: "tools",
+    tools: createMcpResourceTools({
+      resolveClient: (serverName) =>
+        resolveMcpClientFromList(clients, serverName),
+    }),
+  });
 }
 
 async function connectOneMcpPlugin(
@@ -197,6 +365,7 @@ async function connectOneMcpPlugin(
     ) => void | Promise<void>;
   },
   imageAdmission?: import("@xrkseek/mcp").McpImageAdmission,
+  workspaceRoot?: string,
 ): Promise<McpRegisteredPlugin> {
   assertPolicyAllow(policy, {
     kind: "mcp.connect",
@@ -218,11 +387,16 @@ async function connectOneMcpPlugin(
           command: spec.command,
           ...(spec.args ? { args: spec.args } : {}),
           ...(spec.env ? { env: spec.env } : {}),
-          // Explicit Settings cwd wins; else product home so MCP dumps
-          // (e.g. .playwright-mcp) never land in the session workspace.
+          // Omit cwd → ~/.xrk/mcp-cwd/<name>. Workspace cwd needs cwdAllowWorkspace.
           cwd: (() => {
-            const raw = spec.cwd?.trim() || defaultMcpStdioCwd(spec.serverName);
-            const cwd = path.resolve(raw);
+            const cwd = resolveMcpStdioCwd({
+              serverName: spec.serverName,
+              workspaceRoot: workspaceRoot ?? process.cwd(),
+              ...(spec.cwd ? { cwd: spec.cwd } : {}),
+              ...(spec.cwdAllowWorkspace === true
+                ? { cwdAllowWorkspace: true }
+                : {}),
+            });
             mkdirSync(cwd, { recursive: true });
             return cwd;
           })(),
@@ -251,6 +425,7 @@ async function connectOneMcpPlugin(
       tools,
       mcpHealth: "connected",
       mcpFingerprint: mcpFingerprint(spec),
+      mcpClient: client,
       async dispose() {
         unsubState();
         unsub();
@@ -294,6 +469,8 @@ export async function loadMcpToolPlugins(options: {
   readonly policy?: PolicyEngine;
   /** When true (XRK_MCP_ALLOW=1), elevate mcp.connect default to allow. */
   readonly allowConnect?: boolean;
+  /** Host workspace root — used to gate stdio cwd under the workspace. */
+  readonly workspaceRoot?: string;
   /** Fired after a successful list_changed re-list (not on fetch failure). */
   readonly onToolsChanged?: (serverName: string) => void | Promise<void>;
   /** Fired on supervisor health transitions (connected / reconnecting / gave-up). */
@@ -325,6 +502,7 @@ export async function loadMcpToolPlugins(options: {
           policy,
           hooks,
           options.imageAdmission,
+          options.workspaceRoot,
         ),
       );
     }
@@ -364,6 +542,13 @@ export async function reconcileMcpToolPlugins(options: {
   readonly unregister: (id: string) => Promise<void>;
   readonly policy?: PolicyEngine;
   readonly allowConnect?: boolean;
+  /** Host workspace root — used to gate stdio cwd under the workspace. */
+  readonly workspaceRoot?: string;
+  /**
+   * Soft-detached MCP plugins still alive for mid-drain tool calls.
+   * Used only by `mcp-resources` client resolution — not by reconcile keep/drop.
+   */
+  readonly retained?: () => readonly RegisteredPlugin[];
   readonly onToolsChanged?: (serverName: string) => void | Promise<void>;
   readonly onHealthChanged?: (
     serverName: string,
@@ -392,6 +577,10 @@ export async function reconcileMcpToolPlugins(options: {
     for (const plugin of current) {
       await options.unregister(plugin.id);
       removed.push(plugin.id);
+    }
+    if (options.list().some((p) => p.id === MCP_RESOURCES_PLUGIN_ID)) {
+      await options.unregister(MCP_RESOURCES_PLUGIN_ID);
+      removed.push(MCP_RESOURCES_PLUGIN_ID);
     }
     return {
       failures: [],
@@ -439,6 +628,7 @@ export async function reconcileMcpToolPlugins(options: {
         policy,
         hooks,
         options.imageAdmission,
+        options.workspaceRoot,
       );
       options.register(plugin);
       added.push(plugin.id);
@@ -449,6 +639,13 @@ export async function reconcileMcpToolPlugins(options: {
       });
     }
   }
+
+  await syncMcpResourcePlugin({
+    list: options.list,
+    ...(options.retained ? { retained: options.retained } : {}),
+    register: options.register,
+    unregister: options.unregister,
+  });
 
   return { failures, parked, added, removed, kept };
 }

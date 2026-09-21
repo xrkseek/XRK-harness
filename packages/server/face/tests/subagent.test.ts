@@ -154,8 +154,24 @@ describe("Face subagent", () => {
     const parent = await dispatchFaceMethod(runtime, "session.create", "p", {});
     if (!parent.result.ok) throw new Error("parent");
     const parentId = (parent.result.value as { sessionId: string }).sessionId;
+    store.append(parentId, { type: "turn/start", ts: 1, turnId: "t1" });
+    store.append(parentId, {
+      type: "user/message",
+      ts: 2,
+      turnId: "t1",
+      content: "hi",
+    });
+    store.append(parentId, {
+      type: "turn/end",
+      ts: 3,
+      turnId: "t1",
+      reason: { kind: "completed" },
+    });
     const forked = await dispatchFaceMethod(runtime, "session.fork", "f", {
       sessionId: parentId,
+      // `subagent.list` is tool-delegated children only; a plain UI fork
+      // (default linkMode "fork") is deliberately not listed there.
+      linkMode: "continuable",
     });
     expect(forked.result.ok).toBe(true);
     if (!forked.result.ok) return;

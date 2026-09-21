@@ -183,6 +183,23 @@ export interface CreateAgentOptions {
   readonly prepareUserContent?: Parameters<
     typeof runTurn
   >[0]["prepareUserContent"];
+  /**
+   * Session cwd for turn-end `workspace/changes`. Forwarded to `runTurn`.
+   * Presets pass the composition `workspaceRoot`.
+   */
+  readonly cwd?: string;
+  /**
+   * After a successful turn (turn/end already logged). Failures here must not
+   * fail the turn — the caller swallows throws. Harness uses this to append
+   * reusable notes to curated memory.
+   */
+  readonly afterTurn?: (ctx: {
+    readonly turnId: string;
+    readonly userText?: string;
+    readonly assistantText: string;
+    readonly toolOk: number;
+    readonly toolFailed: number;
+  }) => void | Promise<void>;
 }
 
 function mergeSignals(
@@ -352,6 +369,7 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
             ...(options.prepareUserContent
               ? { prepareUserContent: options.prepareUserContent }
               : {}),
+            ...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
           });
         } catch (err) {
           if (
@@ -431,6 +449,20 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
               );
             }
             throw limitErr;
+          }
+        }
+
+        if (options.afterTurn) {
+          try {
+            await options.afterTurn({
+              turnId: result.turnId,
+              ...(userText !== undefined ? { userText } : {}),
+              assistantText: result.assistantText,
+              toolOk: result.toolOk,
+              toolFailed: result.toolFailed,
+            });
+          } catch {
+            // A memory write must not fail the turn the user already finished.
           }
         }
 

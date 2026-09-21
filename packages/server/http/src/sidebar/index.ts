@@ -20,18 +20,35 @@ export type {
   SidebarSubagentLiveActivity,
   SidebarChangesWireEvent,
 } from "./sidebar-face-bridge.js";
-export type { SidebarHostOptions, SidebarCompatOptions } from "./sidebar-adapter.js";
-export {
-  handleSidebarHost,
-  handleSidebarCompat,
-} from "./sidebar-adapter.js";
+export type { SidebarHostOptions, SidebarAgentRegistries } from "./sidebar-adapter.js";
+export { handleSidebarHost } from "./sidebar-adapter.js";
 export { decodeSidebarHtmlPath } from "./sidebar-html.js";
 export { mediaTypeForPath } from "./sidebar-media-type.js";
+export {
+  OfficeToPdfError,
+  createSofficeOfficeToPdfProvider,
+  officePreviewExtension,
+  type OfficeToPdfProvider,
+  type OfficeToPdfRequest,
+  type OfficeToPdfResult,
+} from "./office-to-pdf.js";
 export { gitStatus } from "./sidebar-git.js";
 export {
   handleBundleChunkStub,
   DEFAULT_SIDEBAR_EXPORTS,
 } from "./bundle-chunk-stub.js";
+export {
+  loadSidebarPrefs,
+  saveSidebarPrefs,
+  patchSidebarPrefs,
+  SIDEBAR_PREFS_DEFAULT,
+} from "./sidebar-prefs-store.js";
+export {
+  enforceSidebarPolicy,
+  sidebarPolicyDenied,
+  type SidebarPolicyAskResolver,
+  type SidebarPolicyFailure,
+} from "./sidebar-policy.js";
 
 /**
  * Claim `/sidebar/*` before SPA static and before dsh-compat catch-alls.

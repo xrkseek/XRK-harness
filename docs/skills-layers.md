@@ -48,6 +48,21 @@
 
 产品默认 playbook 在 **`apps/cli/seeds/`**（`skills/` · `standing/AGENTS.md` · `recipes/` → `xrkh web` 写入 `~/.xrk`）；写法**对标 Cursor** `create-skill`，落点见 **`xrk-create-skill`**。
 
+## 安装 skills（`xrkh skill`）
+
+除手写 `SKILL.md` 外，可从本地目录或 git 仓库安装到工作区 skills 根（默认 **`.agents/skills`**，或 `XRK_SKILLS_DIR` / `--dir`）：
+
+| 命令 | 行为 |
+|------|------|
+| `xrkh skill add <spec…>` | 校验后安装；`--force` 覆盖，`--ref <git-ref>` 选分支 / 标签 |
+| `xrkh skill remove <name…>` | 删除已安装 skill（不存在时报 `missing`，不算错误） |
+| `xrkh skill list [--json]` | 列出 skills 根内的 skill 与描述 |
+| `xrkh skill path` | 打印解析后的 skills 根 |
+
+Spec 形态：`./path` · `file:` / `link:` 本地目录；`github:owner/repo` · `git:https://…` · `git+https://…` · `https://…` · `ssh://…` · `git@…` git 远端；`<spec>#subdir` 在含多个 skill 的仓库里选一个。
+
+安装**失败关闭**：缺 `SKILL.md`、frontmatter 布尔非法、名字越界（含路径分隔符）一律拒绝，且写入**永不出** skills 根。多 skill 仓库必须用 `#subdir` 指明，否则报 `SKILL_AMBIGUOUS`。这与上文「产品 vs 用户」边界一致：安装是**用户主动**动作，只在工作区落盘，不自动 `mkdir`。
+
 ## 能力挂载（与人格分工）
 
 | 层 | 管什么 | 典型落点 |
@@ -133,6 +148,21 @@ Optional directories; **never auto-created**. Common files:
 | Priority | Workspace > user home; within a layer **`.xrk` native wins**: `.xrk` → `.agents` → `.cursor` → `.claude` → `.codex` (**home layer has no `.cursor/skills`**) |
 
 Default playbooks: **`apps/cli/seeds/`** (`skills/` · `standing/AGENTS.md` · `recipes/`) → `~/.xrk` on `xrkh web`. Same skill shape as Cursor **`create-skill`**; XRK paths in **`xrk-create-skill`**. Workspace overlay: this repo’s `.agents/skills/`.
+
+## Installing skills (`xrkh skill`)
+
+Beyond hand-written `SKILL.md` files, skills install into the workspace skills root (default **`.agents/skills`**, or `XRK_SKILLS_DIR` / `--dir`) from a local directory or a git repository:
+
+| Command | Behavior |
+|------|------|
+| `xrkh skill add <spec…>` | Validate then install; `--force` overwrites, `--ref <git-ref>` picks a branch / tag |
+| `xrkh skill remove <name…>` | Delete an installed skill (`missing` is reported, not an error) |
+| `xrkh skill list [--json]` | List skills in the root with descriptions |
+| `xrkh skill path` | Print the resolved skills root |
+
+Spec shapes: `./path` · `file:` / `link:` for local directories; `github:owner/repo` · `git:https://…` · `git+https://…` · `https://…` · `ssh://…` · `git@…` for git remotes; `<spec>#subdir` selects one skill inside a multi-skill repository.
+
+Installs **fail closed**: a missing `SKILL.md`, illegal boolean frontmatter, or an out-of-bounds name (one containing a path separator) is rejected, and writes **never** escape the skills root. A repository holding several skills must name one with `#subdir`, else it reports `SKILL_AMBIGUOUS`. This matches the “product vs user” boundary above: installing is a **deliberate user** action that writes only inside the workspace and never auto-`mkdir`s.
 
 ## Capability attach (vs persona)
 

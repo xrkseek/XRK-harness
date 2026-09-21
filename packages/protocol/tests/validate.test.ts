@@ -25,6 +25,123 @@ describe("parseSessionEvent", () => {
     });
   });
 
+  it("parses user/message ContentBlock[] with image, offloaded, and file", () => {
+    const ev = parseSessionEvent({
+      type: "user/message",
+      ts: 1,
+      turnId: "t1",
+      content: [
+        { type: "text", text: "see" },
+        {
+          type: "image",
+          attachment: {
+            attachmentId: "sha256:abc",
+            mediaType: "image/png",
+            bytes: 12,
+            width: 2,
+            height: 2,
+            originalDimensions: { width: 4, height: 4 },
+          },
+          offloaded: true,
+        },
+        {
+          type: "file",
+          attachment: {
+            attachmentId: "sha256:def",
+            name: "notes.txt",
+            bytes: 3,
+            mediaType: "text/plain",
+          },
+        },
+      ],
+    });
+    expect(ev.type).toBe("user/message");
+    if (ev.type !== "user/message") throw new Error("narrow");
+    expect(Array.isArray(ev.content)).toBe(true);
+    const blocks = ev.content as readonly {
+      type: string;
+      offloaded?: true;
+    }[];
+    expect(blocks.map((b) => b.type)).toEqual(["text", "image", "file"]);
+    expect(blocks[1]?.offloaded).toBe(true);
+  });
+
+  it("rejects image offloaded other than true and invalid file names", () => {
+    expect(() =>
+      parseSessionEvent({
+        type: "user/message",
+        ts: 1,
+        turnId: "t1",
+        content: [
+          {
+            type: "image",
+            attachment: {
+              attachmentId: "a",
+              mediaType: "image/png",
+              bytes: 1,
+              width: 1,
+              height: 1,
+            },
+            offloaded: false,
+          },
+        ],
+      }),
+    ).toThrow(/invalid ContentBlock/);
+    expect(() =>
+      parseSessionEvent({
+        type: "user/message",
+        ts: 1,
+        turnId: "t1",
+        content: [
+          {
+            type: "file",
+            attachment: {
+              attachmentId: "a",
+              name: "dir/notes.txt",
+              bytes: 1,
+            },
+          },
+        ],
+      }),
+    ).toThrow(/invalid ContentBlock/);
+  });
+
+  it("parses image/offload and rejects non-increasing indexes", () => {
+    const ev = parseSessionEvent({
+      type: "image/offload",
+      ts: 9,
+      targets: [
+        { seq: 0, imageIndexes: [0, 2] },
+        { seq: 3, imageIndexes: [1] },
+      ],
+    });
+    expect(ev).toEqual({
+      type: "image/offload",
+      ts: 9,
+      targets: [
+        { seq: 0, imageIndexes: [0, 2] },
+        { seq: 3, imageIndexes: [1] },
+      ],
+    });
+    expect(() =>
+      parseSessionEvent({
+        type: "image/offload",
+        ts: 9,
+        targets: [{ seq: 0, imageIndexes: [2, 1] }],
+      }),
+    ).toThrow(/strictly increasing/);
+    expect(() =>
+      parseSessionEvent({
+        type: "image/offload",
+        ts: 9,
+        targets: [
+          { seq: 1, imageIndexes: [0] },
+          { seq: 1, imageIndexes: [1] },
+        ],
+      }),
+    ).toThrow(/duplicate target seq/);
+  });
+
   it("parses user/message session-reference source", () => {
     const ev = parseSessionEvent({
       type: "user/message",
@@ -370,6 +487,39 @@ describe("parseSessionEvent", () => {
     });
   });
 
+  it("parses workspace/changes (log-only turn file card)", () => {
+    const summary = {
+      turnId: "t1",
+      cwd: "/work",
+      files: [
+        { path: "a.ts", display: "a.ts", added: 2, deleted: 1 },
+      ],
+      total: 1,
+      added: 2,
+      deleted: 1,
+    };
+    const ev = parseSessionEvent({
+      type: "workspace/changes",
+      ts: 9,
+      turnId: "t1",
+      summary,
+    });
+    expect(ev).toEqual({
+      type: "workspace/changes",
+      ts: 9,
+      turnId: "t1",
+      summary,
+    });
+    expect(() =>
+      parseSessionEvent({
+        type: "workspace/changes",
+        ts: 9,
+        turnId: "t1",
+        summary: { ...summary, turnId: "other" },
+      }),
+    ).toThrow(/turnId/);
+  });
+
   it("parses permission knobs (log-only)", () => {
     expect(
       parseSessionEvent({
@@ -499,8 +649,38 @@ describe("sessionEventJsonSchema", () => {
       "request/header",
       "llm/retry",
       "llm/retry-started",
+      "image/offload",
+      "workspace/changes",
     ];
     expect(types.sort()).toEqual([...expected].sort());
     expect(sessionEventJsonSchema.$id).toContain("session-event");
+  });
+
+  it("messageContentSchema covers image offloaded + file blocks", () => {
+    const userMsg = sessionEventJsonSchema.oneOf.find(
+      (s) => (s.properties.type as { const: string }).const === "user/message",
+    );
+    expect(userMsg).toBeDefined();
+    const content = userMsg!.properties.content as {
+      oneOf: Array<{
+        type?: string;
+        items?: {
+          oneOf: Array<{
+            properties: {
+              type: { const: string };
+              offloaded?: { const: true };
+            };
+          }>;
+        };
+      }>;
+    };
+    const blocks = content.oneOf.find((b) => b.type === "array")?.items?.oneOf;
+    expect(blocks?.map((b) => b.properties.type.const).sort()).toEqual([
+      "file",
+      "image",
+      "text",
+    ]);
+    const image = blocks?.find((b) => b.properties.type.const === "image");
+    expect(image?.properties.offloaded).toEqual({ const: true });
   });
 });

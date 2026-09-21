@@ -27,6 +27,10 @@ export interface AgentLoopSettings {
   bufferTokens?: number
   /** Spill plain-text tool results over this UTF-8 ceiling; `0` disables. */
   toolResultMaxInlineBytes?: number
+  /** Max subagent nesting depth (parent = 0). */
+  maxSubagentDepth?: number
+  /** Max concurrently draining direct children under one parent. */
+  maxActiveSubagents?: number
 }
 
 /** What the agent-loop card renders. */
@@ -47,6 +51,10 @@ export interface AgentLoopCardState extends CardShell {
   bufferTokens: CardFieldState
   /** Tool-result spill ceiling. */
   toolResultMaxInlineBytes: CardFieldState
+  /** Subagent nesting depth cap. */
+  maxSubagentDepth: CardFieldState
+  /** Concurrent active subagent cap. */
+  maxActiveSubagents: CardFieldState
 }
 
 /** The registration-side face the agent-loop card's slot entry injects. */
@@ -73,6 +81,8 @@ export class AgentLoopCardController {
       numberField('keepTokens'),
       numberField('bufferTokens'),
       numberField('toolResultMaxInlineBytes'),
+      numberField('maxSubagentDepth'),
+      numberField('maxActiveSubagents'),
     ])
     this.store = this.form.bind(() => this.projection())
   }
@@ -88,6 +98,8 @@ export class AgentLoopCardController {
       keepTokens: this.form.field('keepTokens'),
       bufferTokens: this.form.field('bufferTokens'),
       toolResultMaxInlineBytes: this.form.field('toolResultMaxInlineBytes'),
+      maxSubagentDepth: this.form.field('maxSubagentDepth'),
+      maxActiveSubagents: this.form.field('maxActiveSubagents'),
     }
   }
 

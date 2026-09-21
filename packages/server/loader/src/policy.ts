@@ -1,5 +1,6 @@
 import {
   createPolicyEngine,
+  type CreatePolicyEngineOptions,
   type PolicyEngine,
   type PolicyRule,
 } from "@xrkseek/policy";
@@ -11,9 +12,10 @@ export interface AppliedPluginPolicyRule {
 }
 
 /**
- * `kind: "policy"` plugins contribute ordered {@link PolicyRule} rows merged
- * before {@link createPolicyEngine} in presets. Reserved kind — no runtime wire
- * beyond rule collection until Host policy reload is defined.
+ * `kind: "policy"` plugins contribute ordered {@link PolicyRule} rows.
+ * Presets use {@link createPolicyEngineFromPlugins}. Product Host uses
+ * {@link composeHostPolicyEngine} so file rules stay first and plugin rules
+ * still apply (rebuilt when the plugin list refreshes).
  */
 export function isPolicyPlugin(
   plugin: RegisteredPlugin,
@@ -67,6 +69,27 @@ export function createPolicyEngineFromPlugins(
   });
   if (rules.length === 0) return undefined;
   return createPolicyEngine({ rules });
+}
+
+/**
+ * Product Host engine: file/default rules first, then `kind: "policy"` plugins.
+ * Empty input matches {@link createDefaultPolicyEngine} verdicts.
+ */
+export function composeHostPolicyEngine(options: {
+  readonly file?: CreatePolicyEngineOptions;
+  readonly plugins?: readonly RegisteredPlugin[];
+} = {}): PolicyEngine {
+  return createPolicyEngine({
+    ...(options.file?.defaults !== undefined
+      ? { defaults: options.file.defaults }
+      : {}),
+    rules: wireCompositionPolicy({
+      ...(options.file?.rules !== undefined
+        ? { baseRules: options.file.rules }
+        : {}),
+      ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
+    }),
+  });
 }
 
 /** Inventory helper: which policy rules each plugin registered. */

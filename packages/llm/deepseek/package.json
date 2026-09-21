@@ -17,7 +17,8 @@
     "@xrkseek/attachment": "workspace:*",
     "@xrkseek/llm": "workspace:*",
     "@xrkseek/llm-openai-compatible": "workspace:*",
-    "@xrkseek/protocol": "workspace:*"
+    "@xrkseek/protocol": "workspace:*",
+    "@xrkseek/xrk-home-paths": "workspace:*"
   },
   "license": "MIT",
   "repository": {

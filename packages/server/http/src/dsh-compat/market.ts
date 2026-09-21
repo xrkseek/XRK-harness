@@ -1,4 +1,4 @@
-﻿/**
+/**
  * DSH `/dsh-market/*` and `/api/dsh-market` → XRK plugin inventory + catalog.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -188,11 +188,12 @@ export async function handleDshMarketHttp(
         action === "approve-builds"
       ) {
         sendJson(res, 200, {
-          ok: true,
-          accepted: true,
+          ok: false,
+          accepted: false,
           deferred: true,
           action,
           adapter: DSH_COMPAT_ADAPTER,
+          incomplete: ["market-host"],
           note: "Market maintenance actions are CLI-deferred on XRK.",
         });
         return;
@@ -219,21 +220,24 @@ export async function handleDshMarketHttp(
             })
           : undefined;
       const inv = readXrkPluginInventory({ ...options, pluginsDir });
+      const accepted = mutate?.ok === true;
       sendJson(res, 200, {
-        ok: mutate?.ok ?? Boolean(spec),
-        accepted: true,
-        deferred: !mutate?.ok,
+        ok: accepted,
+        accepted,
+        deferred: !accepted,
         adapter: DSH_COMPAT_ADAPTER,
         spec,
         via: "/xrk/plugins/inventory",
         installed: inv.present,
-        ...(mutate?.ok
+        ...(accepted
           ? { mutated: true, restartRequired: true }
           : {
               cli: spec
-                ? `xrk-harness plugin ${remove ? "remove" : "add"} ${spec}`
-                : `xrk-harness plugin ${remove ? "remove" : "add"} <spec>`,
+                ? `xrkh plugin ${remove ? "remove" : "add"} ${spec}`
+                : `xrkh plugin ${remove ? "remove" : "add"} <spec>`,
               error: mutate?.error,
+              incomplete: ["market-host"],
+              note: "Remote/npm installs are CLI-deferred; only local plugin specs mutate inventory.",
             }),
       });
       return;

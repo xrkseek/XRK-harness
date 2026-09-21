@@ -198,8 +198,6 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
     }> = [];
     if (
       prefix.startsWith("/api/") ||
-      prefix === "/plugins/install" ||
-      prefix === "/plugins" ||
       prefix === "/health" ||
       isTongflowCanvasPath(prefix)
     ) {
@@ -308,6 +306,10 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
     const r = route as PluginHostRpcRoute;
     const officeOpts = {
       ...(ctx.xrkHome ? { xrkHome: ctx.xrkHome } : {}),
+      ...(ctx.policy ? { policy: ctx.policy } : {}),
+      ...(ctx.resolvePolicyAsk
+        ? { resolvePolicyAsk: ctx.resolvePolicyAsk }
+        : {}),
     };
     return {
       rpc: {

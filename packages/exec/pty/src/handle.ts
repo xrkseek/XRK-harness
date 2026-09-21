@@ -9,6 +9,7 @@ import {
   type ProcessSnapshot,
 } from "./process-inspector.js";
 import { withResolvers } from "./defer.js";
+import { windowsPtySpawnOptions } from "./windows-pty.js";
 import {
   TerminalError,
   type SubprocessTerminalHandle,
@@ -364,6 +365,7 @@ export async function spawnNodePtyTerminal(
     rows: spec.rows,
     cwd: spec.cwd,
     env,
+    ...windowsPtySpawnOptions(),
   });
   return new LocalTerminalHandle(terminal, inspector, spec.graceMs);
 }

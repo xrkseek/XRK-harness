@@ -27,3 +27,20 @@ export function createReadOnlyToolPre(
     };
   };
 }
+
+/**
+ * Live sandbox gate: re-reads mode on every tool call so `/permission` /
+ * Settings live defaultPreset take effect without relying solely on agent
+ * rebuild timing (stale create-time `createReadOnlyToolPre` kept asking /
+ * denying against the wrong preset).
+ */
+export function createSessionReadOnlyToolPre(
+  isReadOnly: () => boolean,
+  denyNames: ReadonlySet<string> = READ_ONLY_DENIED_TOOLS,
+): PreHandler {
+  const staticDeny = createReadOnlyToolPre(denyNames);
+  return (ctx) => {
+    if (!isReadOnly()) return { action: "continue", args: ctx.args };
+    return staticDeny(ctx);
+  };
+}

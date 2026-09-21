@@ -171,6 +171,55 @@ export interface ShellLocalOptions {
    * Default 10.
    */
   readonly maxConcurrentJobs?: number;
+  /**
+   * Async argv preparation before spawn (DSH sandbox confine). Shares the
+   * startJob deadline with process lifetime — prep time counts toward timeout.
+   */
+  readonly prepareArgv?: (
+    argv: readonly string[],
+    cwd: string | undefined,
+    signal: AbortSignal | undefined,
+  ) => Promise<readonly string[]>;
+}
+
+/**
+ * One AbortSignal for preparation + execution (DSH bash-local `deadline`).
+ * Timeout is armed immediately so slow confine counts against the budget.
+ * Uses `setTimeout` (not `AbortSignal.timeout`) so callers/tests share one
+ * timer domain with the rest of the Host.
+ */
+export function shellStartDeadline(
+  upstream: AbortSignal | undefined,
+  timeoutMs: number | undefined,
+): AbortSignal | undefined {
+  const hasTimeout =
+    typeof timeoutMs === "number" &&
+    Number.isFinite(timeoutMs) &&
+    timeoutMs > 0;
+  if (!hasTimeout) return upstream;
+  const ctrl = new AbortController();
+  const ms = Math.floor(timeoutMs);
+  const timer = setTimeout(() => {
+    upstream?.removeEventListener("abort", onUpstream);
+    if (!ctrl.signal.aborted) {
+      ctrl.abort(new DOMException(`timed out after ${ms}ms`, "TimeoutError"));
+    }
+  }, ms);
+  const onUpstream = () => {
+    clearTimeout(timer);
+    if (!ctrl.signal.aborted) {
+      ctrl.abort(upstream?.reason);
+    }
+  };
+  if (upstream) {
+    if (upstream.aborted) {
+      clearTimeout(timer);
+      ctrl.abort(upstream.reason);
+    } else {
+      upstream.addEventListener("abort", onUpstream, { once: true });
+    }
+  }
+  return ctrl.signal;
 }
 
 interface InternalJob {
@@ -397,14 +446,23 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
       assertOpen();
       const ownerSessionId = opts?.ownerSessionId?.trim() || undefined;
       assertAdmission(ownerSessionId);
-      const argv = argvFor(backend, command, pwshPath);
       const spawnCwd = resolveSpawnCwd(cwd, defaultCwd);
+      // Arm timeout before prepare so confinement counts toward the budget
+      // (DSH foreground-timeout: one deadline across prep + native execution).
+      const deadline = shellStartDeadline(opts?.signal, opts?.timeoutMs);
+      deadline?.throwIfAborted();
+      let argv: readonly string[] = argvFor(backend, command, pwshPath);
+      if (options.prepareArgv) {
+        argv = await options.prepareArgv(argv, spawnCwd, deadline);
+        deadline?.throwIfAborted();
+      }
+      if (!argv.length) {
+        throw new Error("shell: prepareArgv returned empty argv");
+      }
       const handle = options.subprocess.start(argv, {
         ...(spawnCwd ? { cwd: spawnCwd } : {}),
-        ...(opts?.signal ? { signal: opts.signal } : {}),
-        ...(opts?.timeoutMs !== undefined
-          ? { timeoutMs: opts.timeoutMs }
-          : {}),
+        // Remaining budget lives on `deadline` — do not restart timeoutMs.
+        ...(deadline ? { signal: deadline } : {}),
       });
       return track(command, handle, ownerSessionId);
     },

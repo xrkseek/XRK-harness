@@ -6,18 +6,20 @@ import {
   createPersistentSessionStore,
   createSessionDrainHub,
   newSession,
+  SessionsDirInUseError,
   type SessionDrainHub,
   type SessionStore,
 } from "@xrkseek/core-session";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
-import { createPolicyEngineFromFile } from "@xrkseek/policy";
+import { loadPolicyRulesetFile } from "@xrkseek/policy";
 import { hostSettingsPath, defaultSpillDir, resolveXrkHome, type HostConfig } from "@xrkseek/server-config";
 import { installOutboundHttpProxy } from "./http-proxy.js";
+import { watchPolicyFile } from "./policy-file-watch.js";
 import {
   applyXrkProductBootPolicy,
   chainPublicHandlers,
   ensureDshCompatHostPlugin,
-  createHostPluginsPublicHandler,
+  createLiveHostPluginsPublicHandler,
   createHttpServer,
   createXrkPluginPublicHandler,
   createSidebarPublicHandler,
@@ -42,6 +44,7 @@ import {
   createXrkWalletPort,
   createMobileAccessGateChecker,
   createMobileAccessGateHandler,
+  loadSidebarPrefs,
 } from "@xrkseek/server-http";
 import {
   attachFaceUpgrades,
@@ -55,6 +58,8 @@ import {
   resolveSessionCwd,
   canonicalAgentPresetId,
   resolveAgentPresetProfile,
+  DEFAULT_MAX_DEPTH,
+  DEFAULT_MAX_ACTIVE_CHILDREN,
   tryHandleFaceHttp,
   isPluginSoftDisabledAt,
   readDisabledPluginIdsAt,
@@ -66,6 +71,7 @@ import {
 } from "@xrkseek/server-face";
 import {
   createPluginLoader,
+  composeHostPolicyEngine,
   wireCompositionChannels,
   wireCompositionLlm,
   collectChannelPluginRegistrations,
@@ -77,8 +83,14 @@ import { access } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import path from "node:path";
 import { createHostAgentCache } from "./agent-cache.js";
+import { createHostCron, type CronScheduler } from "@xrkseek/server-cron";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { wireDrainStatus, publishDrainIdle, type SessionDrainControl } from "./drain-status.js";
 import { attachSidebarPtyUpgrades } from "./sidebar-pty.js";
+import { AgentOpenRegistry } from "./sidebar-agent-opens.js";
+import { AgentPtyRegistry } from "./sidebar-agent-pty.js";
+import { createSshDirectoryBackend } from "./ssh-directory-backend.js";
+import { bindSidebarAgentTools } from "./sidebar-agent-tools.js";
 import { createUsageStatsBridgeFromFace } from "./usage-stats-bridge.js";
 import { createCostMeterUsageBridge } from "./cost-meter-bridge.js";
 import { createHarnessConnectorBridgeFromFace } from "./harness-connector-bridge.js";
@@ -94,11 +106,20 @@ import {
   type McpServerDraft,
   type McpServerSpec,
 } from "./mcp-wire.js";
+import { createMcpDeferredDispose } from "./mcp-deferred-dispose.js";
 import { createStandingToolRegistry } from "./standing-tools.js";
 import { createDefaultPtyAccess } from "@xrkseek/exec-pty";
 import { createLocalShell } from "@xrkseek/exec-shell";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
+import {
+  createSshExecutionWorld,
+  resolveSshConfigFromEnv,
+  type SshExecutionWorld,
+} from "@xrkseek/exec-ssh";
 import type { HostLogger, HostSpawnOptions } from "./log.js";
+
+/** True while an unattended cron agent turn is running — skip cron tools to avoid recursion. */
+const cronAgentDepth = new AsyncLocalStorage<boolean>();
 
 export { createHostAgentCache, HOST_PLUGINS_KEY } from "./agent-cache.js";
 export type { InvalidateAllOpts } from "./agent-cache.js";
@@ -113,6 +134,7 @@ export {
   readMcpAllowFromHostSettings,
   readMcpServersFromHostSettings,
   reconcileMcpToolPlugins,
+  resetLastGoodHostMcpWireCaches,
   type McpRegisteredPlugin,
   type McpServerDraft,
   type McpServerSpec,
@@ -224,7 +246,9 @@ export type AgentFactory = (input: {
   /** Shared attachment store for tools + vision. */
   attachments?: import("@xrkseek/attachment").AttachmentStore;
   /**
-   * Extra absolute roots the model may `read_file` (attachment alias tree · spill).
+   * Extra absolute roots the model may `read_file`.
+   * Whitelist only: attachment alias tree and `{XRK_HOME}/spill` — not all of
+   * product home. Symlink escape out of a listed root is denied.
    */
   hostReadableRoots?: readonly string[];
   /** Live route image gate for `read_image`. */
@@ -239,6 +263,20 @@ export type AgentFactory = (input: {
    * Host stop disposes. Survives agent invalidate like PTY.
    */
   shellJobs?: import("@xrkseek/exec-shell").ShellService;
+  /**
+   * Host cron scheduler — registers `cronjob` tool for unattended turns / scripts.
+   * Omitted inside nested cron agent runs to prevent recursive scheduling.
+   */
+  cronScheduler?: import("@xrkseek/server-cron").CronScheduler;
+  /**
+   * Optional FsService override (SSH remote workspace). When set with
+   * `remoteExecution`, tools use remote path coordinates.
+   */
+  fs?: import("@xrkseek/exec-fs").FsService;
+  /** Pair with `fs` for SSH — skip local path.resolve sandbox. */
+  remoteExecution?: boolean;
+  /** Optional `run_code` backend (SSH Node when remote). */
+  codeRuntime?: import("@xrkseek/code-runtime").CodeRuntime;
   /**
    * Face-backed LLM when settings + credentials are configured.
    * Host wires this after Face runtime starts; falls back to env/replay in presets.
@@ -320,9 +358,18 @@ export function createHostManager(): HostManager {
       }
       const id = `host_${++seq}`;
       const sessionsDir = config.runtime.sessionsDir?.trim();
-      const store: SessionStore = sessionsDir
-        ? createPersistentSessionStore(sessionsDir)
-        : createMemorySessionStore();
+      let store: SessionStore;
+      try {
+        store = sessionsDir
+          ? createPersistentSessionStore(sessionsDir)
+          : createMemorySessionStore();
+      } catch (err) {
+        if (err instanceof SessionsDirInUseError) {
+          log?.error(err.message);
+          throw err;
+        }
+        throw err;
+      }
       const loader = createPluginLoader();
       const registry = createProviderRegistry();
       // Face / mutate / soft-disable always share this absolute path. Config may
@@ -337,17 +384,52 @@ export function createHostManager(): HostManager {
       let loadedPluginIds: string[] = [];
       if (managedPluginsRootReady()) {
         // Single path with Settings soft-disable: discover+load enabled,
-        // skip soft-disabled (never mcp:*).
-        loadedPluginIds = [
-          ...(await reconcileManagedProcessPlugins(
-            loader,
-            resolvedPluginsDir,
-          )),
-        ];
+        // skip soft-disabled (never mcp:*). Optional load failures warn;
+        // required failures throw (abort spawn).
+        const bootPlugins = await reconcileManagedProcessPlugins(
+          loader,
+          resolvedPluginsDir,
+        );
+        loadedPluginIds = [...bootPlugins.ids];
+        for (const failure of bootPlugins.failures) {
+          log?.warn(
+            `plugin load failed (${failure.id}): ${failure.message}`,
+          );
+        }
       }
 
-      const policy = config.runtime.policyFile
-        ? await createPolicyEngineFromFile(config.runtime.policyFile)
+      // File rules first, then kind:policy plugins. Delegate so a later
+      // plugin refresh / policy-file watch rebuilds without swapping captures.
+      let filePolicy = config.runtime.policyFile
+        ? await loadPolicyRulesetFile(config.runtime.policyFile)
+        : undefined;
+      let policyEngine = composeHostPolicyEngine({
+        ...(filePolicy !== undefined ? { file: filePolicy } : {}),
+        plugins: loader.list(),
+      });
+      const policy = {
+        evaluate: (subject: Parameters<typeof policyEngine.evaluate>[0]) =>
+          policyEngine.evaluate(subject),
+      };
+      const rebuildPolicyEngine = (): void => {
+        policyEngine = composeHostPolicyEngine({
+          ...(filePolicy !== undefined ? { file: filePolicy } : {}),
+          plugins: loader.list(),
+        });
+      };
+      const policyFileWatch = config.runtime.policyFile
+        ? watchPolicyFile({
+            filePath: config.runtime.policyFile,
+            onReload: (next) => {
+              filePolicy = next;
+              rebuildPolicyEngine();
+              log?.info(`policy reloaded (${config.runtime.policyFile})`);
+            },
+            onError: (err) => {
+              const msg = err instanceof Error ? err.message : String(err);
+              log?.warn(`policy reload skipped: ${msg}`);
+            },
+          })
         : undefined;
 
       const hostPublic = {
@@ -383,8 +465,24 @@ export function createHostManager(): HostManager {
       let invalidateAgents: () => Promise<void> = async () => {};
       /** Sessions skipped mid-turn; invalidate once drain goes idle. */
       const pendingAgentInvalidate = new Set<string>();
-      const drainActiveBox: { isActive: (sessionId: string) => boolean } = {
+      const drainActiveBox: {
+        isActive: (sessionId: string) => boolean;
+        activeIds: () => readonly string[];
+      } = {
         isActive: () => false,
+        activeIds: () => [],
+      };
+      /** Soft-detach MCP while drains hold mid-turn tool handles. */
+      const mcpDeferred = createMcpDeferredDispose({
+        detach: (id) => loader.detach(id),
+        unregister: (id) => loader.unregister(id),
+        isBusy: () =>
+          drainActiveBox.activeIds().length > 0 ||
+          pendingAgentInvalidate.size > 0,
+      });
+      const mcpUnregister = async (pluginId: string) => {
+        await mcpDeferred.remove(pluginId);
+        loadedPluginIds = loadedPluginIds.filter((x) => x !== pluginId);
       };
       /** Mutable Face inventory — Host splices after MCP reconcile / health. */
       const facePlugins: RegisteredPlugin[] = [];
@@ -392,6 +490,7 @@ export function createHostManager(): HostManager {
         facePlugins.splice(0, facePlugins.length, ...loader.list());
         wireCompositionLlm(registry, { plugins: loader.list() });
         wireCompositionChannels({ plugins: loader.list() });
+        rebuildPolicyEngine();
         hostPublic.processChannels = collectChannelPluginRegistrations(
           loader.list(),
         ).map((row) => ({
@@ -434,12 +533,11 @@ export function createHostManager(): HostManager {
               loadedPluginIds = [...loadedPluginIds, plugin.id];
             }
           },
-          unregister: async (pluginId) => {
-            await loader.unregister(pluginId);
-            loadedPluginIds = loadedPluginIds.filter((x) => x !== pluginId);
-          },
-          ...(policy ? { policy } : {}),
+          unregister: mcpUnregister,
+          retained: () => mcpDeferred.retained(),
+          policy,
           allowConnect: mcpAllowConnect,
+          workspaceRoot: config.runtime.workspaceRoot,
           imageAdmission: mcpImageAdmission,
           ...mcpHooks,
         });
@@ -450,7 +548,8 @@ export function createHostManager(): HostManager {
       const agentCache = createHostAgentCache(loader.list(), { hostId: id });
       // MCP remount / settings_mutate runs inside an active drain. Aborting that
       // agent mid-tool yields "Error: tool call aborted". Skip active sessions
-      // and invalidate them after the turn settles.
+      // and invalidate them after the turn settles. Soft-detach (not dispose)
+      // MCP clients until those drains go idle — see mcpDeferred.
       invalidateAgents = async () => {
         await agentCache.invalidateAll({
           skip: (sessionId) => {
@@ -459,12 +558,33 @@ export function createHostManager(): HostManager {
             return true;
           },
         });
+        await mcpDeferred.flush();
       };
       let mcpSyncTail: Promise<unknown> = Promise.resolve();
       const lastDrainResult = new Map<string, AgentRunResult>();
 
+      // Local Host + remote cwd: swap fs/shell (Hermes/DSH provider pattern).
+      let sshWorld: SshExecutionWorld | undefined;
+      /** Local Host cwd before SSH workspace swap (browse/settings anchor). */
+      let localHostRoot: string | undefined;
+      try {
+        const sshConfig = resolveSshConfigFromEnv(process.env);
+        if (sshConfig) {
+          localHostRoot = config.runtime.workspaceRoot;
+          sshWorld = createSshExecutionWorld({ config: sshConfig });
+          // Tool coordinates are the remote workspace; Face session cwd follows.
+          (config.runtime as { workspaceRoot: string }).workspaceRoot =
+            sshWorld.workspaceRoot;
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`SSH remote workspace: ${message}`, { cause: err });
+      }
+
       const sharedPty =
-        config.runtime.preset === "harness" || config.runtime.preset === "server"
+        !sshWorld &&
+        (config.runtime.preset === "harness" ||
+          config.runtime.preset === "server")
           ? createDefaultPtyAccess({
               workspaceRoot: config.runtime.workspaceRoot,
             })
@@ -472,7 +592,12 @@ export function createHostManager(): HostManager {
 
       const sharedShell =
         config.runtime.preset === "harness" || config.runtime.preset === "server"
-          ? createLocalShell({ subprocess: createLocalSubprocess() })
+          ? createLocalShell({
+              subprocess: sshWorld
+                ? sshWorld.subprocess
+                : createLocalSubprocess(),
+              defaultCwd: config.runtime.workspaceRoot,
+            })
           : undefined;
 
       const ensureSession = (sid?: string) => newSession(store, sid).id;
@@ -503,6 +628,8 @@ export function createHostManager(): HostManager {
             bufferTokens?: number;
           };
           toolResultMaxInlineBytes?: number;
+          maxSubagentDepth?: number;
+          maxActiveSubagents?: number;
           webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
           workspaceInject?: { readonly maxChars?: number };
         };
@@ -520,6 +647,11 @@ export function createHostManager(): HostManager {
       const lineage: { parentOf: (sessionId: string) => string | undefined } = {
         parentOf: () => undefined,
       };
+
+      // Sidebar agent-opens / agent-terminals — Host registries (not plugin host.mjs).
+      const agentOpenRegistry = new AgentOpenRegistry();
+      const agentPtyRegistry = new AgentPtyRegistry();
+      const cronBox: { scheduler?: CronScheduler | undefined } = {};
 
       const resolveAgent = async (sessionId: string) => {
         // Cache composition binding only — never treat AgentHandle as transcript source (ADR-0003).
@@ -540,6 +672,7 @@ export function createHostManager(): HostManager {
               ...(wsRow?.title ? { workspaceDisplayTitle: wsRow.title } : {}),
               plugins: loader.list(),
               attachments,
+              // Spill subtree + attachments only — never resolveXrkHome().
               hostReadableRoots: [
                 attachmentsRoot,
                 defaultSpillDir(),
@@ -560,6 +693,16 @@ export function createHostManager(): HostManager {
               resolveFilePath: (ref) => attachments.fileHostPath?.(ref),
               ...(sharedPty ? { ptyService: sharedPty.service } : {}),
               ...(sharedShell ? { shellJobs: sharedShell } : {}),
+              ...(cronBox.scheduler && !cronAgentDepth.getStore()
+                ? { cronScheduler: cronBox.scheduler }
+                : {}),
+              ...(sshWorld
+                ? {
+                    fs: sshWorld.fs,
+                    remoteExecution: true as const,
+                    codeRuntime: sshWorld.codeRuntime,
+                  }
+                : {}),
               ...(llmResolverBox.resolve
                 ? { resolveLlm: llmResolverBox.resolve }
                 : {}),
@@ -607,18 +750,61 @@ export function createHostManager(): HostManager {
                 config.runtime.preset,
               );
               if (profile.subagents.mode === "on") {
+                const faceDepth =
+                  pluginSettings.maxSubagentDepth ?? DEFAULT_MAX_DEPTH;
+                const faceActive =
+                  pluginSettings.maxActiveSubagents ??
+                  DEFAULT_MAX_ACTIVE_CHILDREN;
+                const presetDepth = profile.subagents.maxDepth;
+                const presetActive = profile.subagents.maxActiveChildren;
+                const maxDepth =
+                  presetDepth !== undefined
+                    ? Math.min(faceDepth, presetDepth)
+                    : faceDepth;
+                const maxActiveChildren =
+                  presetActive !== undefined
+                    ? Math.min(faceActive, presetActive)
+                    : faceActive;
                 bindSubagentTools(agent.tools, {
                   runtime: faceBox.runtime,
                   parentSessionId: sessionId,
-                  ...(profile.subagents.maxDepth !== undefined
-                    ? { maxDepth: profile.subagents.maxDepth }
-                    : {}),
-                  ...(profile.subagents.maxActiveChildren !== undefined
-                    ? {
-                        maxActiveChildren:
-                          profile.subagents.maxActiveChildren,
-                      }
-                    : {}),
+                  maxDepth,
+                  maxActiveChildren,
+                });
+              }
+              const prefs = loadSidebarPrefs(resolveXrkHome()).value;
+              if (
+                prefs.agentOpenTools === true ||
+                prefs.agentTerminalTools === true
+              ) {
+                bindSidebarAgentTools(agent.tools, {
+                  sessionId,
+                  agentOpens: agentOpenRegistry,
+                  agentPty: agentPtyRegistry,
+                  resolveCwd: (sid) =>
+                    resolveSessionCwd(faceBox.runtime!, sid) ??
+                    faceBox.runtime!.workspaceRoot,
+                  readPrefs: () => loadSidebarPrefs(resolveXrkHome()).value,
+                  readShellOverrides: () => {
+                    const p = loadSidebarPrefs(resolveXrkHome()).value;
+                    const shell =
+                      typeof p.terminalShell === "string" &&
+                      p.terminalShell.trim()
+                        ? p.terminalShell.trim()
+                        : undefined;
+                    const shellArgsRaw =
+                      typeof p.terminalShellArgs === "string"
+                        ? p.terminalShellArgs.trim()
+                        : "";
+                    const shellArgs =
+                      shellArgsRaw.length > 0
+                        ? shellArgsRaw.split(/\s+/).filter(Boolean)
+                        : undefined;
+                    return {
+                      ...(shell ? { shell } : {}),
+                      ...(shellArgs ? { shellArgs } : {}),
+                    };
+                  },
                 });
               }
             }
@@ -653,7 +839,9 @@ export function createHostManager(): HostManager {
               }
               if (!running && pendingAgentInvalidate.has(sid)) {
                 pendingAgentInvalidate.delete(sid);
-                void agentCache.invalidate(sid);
+                void agentCache.invalidate(sid).then(() => mcpDeferred.flush());
+              } else if (!running) {
+                void mcpDeferred.flush();
               }
               hostStatusBox.publish?.(sid, running);
             });
@@ -669,6 +857,44 @@ export function createHostManager(): HostManager {
         lastDrainResult,
       );
       drainActiveBox.isActive = (sessionId) => drain.isActive(sessionId);
+      drainActiveBox.activeIds = () => hub.activeIds();
+
+      cronBox.scheduler = createHostCron({
+        productHome: resolveXrkHome(),
+        workspaceRoot: config.runtime.workspaceRoot,
+        runAgent: async (job, signal) => {
+          const run = job.run;
+          if (run.kind !== "agent") {
+            return {
+              ok: false,
+              output: "",
+              error: "not an agent job",
+            };
+          }
+          return cronAgentDepth.run(true, async () => {
+            const session = store.create();
+            const agent = await resolveAgent(session.id);
+            const result = await agent.continueTurn({
+              text: `[cron ${job.id}${job.name ? ` ${job.name}` : ""}]\n${run.prompt}`,
+              ...(signal ? { signal } : {}),
+            });
+            return {
+              ok: true,
+              output: result.text,
+              sessionId: session.id,
+            };
+          });
+        },
+        onError: (err) => {
+          log?.warn(
+            `cron: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        },
+      });
+      cronBox.scheduler?.start();
+      if (cronBox.scheduler) {
+        log?.info("cron ticker started (~/.xrk/cron/jobs.json)");
+      }
 
       const webOverlay = await resolveWebPluginOverlay(resolvedPluginsDir);
       const overlayBoot = webOverlay
@@ -697,6 +923,45 @@ export function createHostManager(): HostManager {
           config.runtime.webDist,
         ),
       );
+      // Mutable like facePlugins: soft-disable / remove rewrite boot.json, so
+      // inventory must re-read overlay or removed clients stay as active ghosts.
+      const faceWebPlugins: { id: string }[] = [];
+      const refreshFaceWebPlugins = async () => {
+        if (!config.runtime.webDist) {
+          faceWebPlugins.splice(0, faceWebPlugins.length);
+          return;
+        }
+        const overlayRoot = await resolveWebPluginOverlay(resolvedPluginsDir);
+        const nextOverlay = overlayRoot
+          ? loadBootManifestFromWebDist(overlayRoot)
+          : undefined;
+        const disabled = readDisabledPluginIdsAt(resolvedPluginsDir);
+        const index = readManagedPackageIndexAt(resolvedPluginsDir);
+        const filtered =
+          nextOverlay === undefined || disabled.size === 0
+            ? nextOverlay
+            : {
+                rev: nextOverlay.rev,
+                entries: nextOverlay.entries.filter(
+                  (e) => !isPluginSoftDisabledAt(e.id, disabled, index),
+                ),
+              };
+        const nextBoot = applyXrkProductBootPolicy(
+          ensureXrkPlatformClientBootEntries(
+            mergeWebBootManifests(
+              resolveWebBootManifest(config.runtime.webDist),
+              filtered,
+            ),
+            config.runtime.webDist,
+          ),
+        );
+        faceWebPlugins.splice(
+          0,
+          faceWebPlugins.length,
+          ...nextBoot.entries.map((e) => ({ id: e.id })),
+        );
+      };
+      faceWebPlugins.push(...boot.entries.map((e) => ({ id: e.id })));
       const hostWireRef: { ctx?: DshCompatOptions } = {};
       const syncCordisHostApplied = () => {
         hostPublic.cordisHostApplied = listHostAppliedPackages().map(
@@ -711,6 +976,13 @@ export function createHostManager(): HostManager {
         store,
         resolveAgent,
         workspaceRoot: config.runtime.workspaceRoot,
+        ...(sshWorld
+          ? {
+              remoteExecution: true as const,
+              ...(localHostRoot !== undefined ? { localHostRoot } : {}),
+              directoryBackend: createSshDirectoryBackend(sshWorld),
+            }
+          : {}),
         // Face settings / credentials / workspaces.json / host-settings → harness home.
         productDir: resolveXrkHome(),
         tools: createStandingToolRegistry({
@@ -759,13 +1031,18 @@ export function createHostManager(): HostManager {
         },
         syncManagedProcessPlugins: async () => {
           if (!managedPluginsRootReady()) return;
-          loadedPluginIds = [
-            ...(await reconcileManagedProcessPlugins(
-              loader,
-              resolvedPluginsDir,
-            )),
-          ];
+          const synced = await reconcileManagedProcessPlugins(
+            loader,
+            resolvedPluginsDir,
+          );
+          loadedPluginIds = [...synced.ids];
+          for (const failure of synced.failures) {
+            log?.warn(
+              `plugin load failed (${failure.id}): ${failure.message}`,
+            );
+          }
           refreshFacePlugins();
+          await refreshFaceWebPlugins();
           await invalidateAgents();
         },
         ...(mcpFileSourced
@@ -788,14 +1065,11 @@ export function createHostManager(): HostManager {
                         loadedPluginIds = [...loadedPluginIds, plugin.id];
                       }
                     },
-                    unregister: async (pluginId) => {
-                      await loader.unregister(pluginId);
-                      loadedPluginIds = loadedPluginIds.filter(
-                        (x) => x !== pluginId,
-                      );
-                    },
-                    ...(policy ? { policy } : {}),
+                    unregister: mcpUnregister,
+                    retained: () => mcpDeferred.retained(),
+                    policy,
                     allowConnect: mcpAllowConnect,
+                    workspaceRoot: config.runtime.workspaceRoot,
                     imageAdmission: mcpImageAdmission,
                     ...mcpHooks,
                   });
@@ -817,7 +1091,7 @@ export function createHostManager(): HostManager {
             }
           : {}),
         ...(config.runtime.webDist
-          ? { webPlugins: boot.entries.map((e) => ({ id: e.id })) }
+          ? { webPlugins: faceWebPlugins }
           : {}),
         hostPublic,
         cordisHostBridge: {
@@ -847,14 +1121,17 @@ export function createHostManager(): HostManager {
           },
         },
         bootstrapApiKey: config.credentials.apiKey,
-        ...(policy ? { policy } : {}),
+        policy,
         ...(config.runtime.policyFile
           ? { settingsDocumentPath: path.resolve(config.runtime.policyFile) }
           : {}),
         invalidateAgent: (sessionId) => agentCache.invalidate(sessionId),
         ...createAutoReviewBridgeFromHost(resolveXrkHome()),
         ...(sharedPty
-          ? { hasPtyActivity: () => sharedPty.service.hasActivity() }
+          ? {
+              // Agent terminal_* registry only — never sidebar user PTYs.
+              hasPtyActivity: () => sharedPty.service.hasActivity(),
+            }
           : {}),
         drain: {
           wake: (sessionId) => drain.wake(sessionId),
@@ -877,6 +1154,41 @@ export function createHostManager(): HostManager {
       faceBox.approvals = faceRuntime.approvals;
       faceBox.questions = faceRuntime.questions;
       faceBox.runtime = faceRuntime;
+      // Face hydrate may migrate legacy settings.yaml mcp → host-settings after
+      // boot reconcile already ran with []. Remount once when file-sourced.
+      if (mcpFileSourced && mcpSpecs.length === 0) {
+        const mcpUser = faceRuntime.settingsNamespaces.ensure("mcp").user;
+        const drafts = Array.isArray(mcpUser.servers)
+          ? (mcpUser.servers as McpServerDraft[])
+          : [];
+        const desired = mcpDraftsToSpecs(drafts);
+        if (desired.length > 0) {
+          mcpAllowConnect = resolveMcpAllowConnect(
+            config,
+            mcpUser.allowConnect === true,
+          );
+          const migrated = await reconcileMcpToolPlugins({
+            desired,
+            list: () => loader.list(),
+            register: (plugin) => {
+              loader.register(plugin);
+              if (!loadedPluginIds.includes(plugin.id)) {
+                loadedPluginIds = [...loadedPluginIds, plugin.id];
+              }
+            },
+            unregister: mcpUnregister,
+            retained: () => mcpDeferred.retained(),
+            policy,
+            allowConnect: mcpAllowConnect,
+            workspaceRoot: config.runtime.workspaceRoot,
+            imageAdmission: mcpImageAdmission,
+            ...mcpHooks,
+          });
+          logMcpReconcile(log, "yaml-migrate", migrated);
+          refreshFacePlugins();
+          await invalidateAgents();
+        }
+      }
       sessionCwdBox.get = (sessionId) =>
         resolveSessionCwd(faceRuntime, sessionId);
       sessionPresetBox.get = (sessionId) =>
@@ -959,6 +1271,18 @@ export function createHostManager(): HostManager {
           loop.toolResultMaxInlineBytes >= 0
             ? Math.floor(loop.toolResultMaxInlineBytes)
             : undefined;
+        const maxSubagentDepth =
+          typeof loop.maxSubagentDepth === "number" &&
+          Number.isFinite(loop.maxSubagentDepth) &&
+          loop.maxSubagentDepth >= 1
+            ? Math.min(3, Math.floor(loop.maxSubagentDepth))
+            : undefined;
+        const maxActiveSubagents =
+          typeof loop.maxActiveSubagents === "number" &&
+          Number.isFinite(loop.maxActiveSubagents) &&
+          loop.maxActiveSubagents >= 1
+            ? Math.min(16, Math.floor(loop.maxActiveSubagents))
+            : undefined;
         const timeoutMs =
           typeof bash.timeoutMs === "number" &&
           Number.isFinite(bash.timeoutMs) &&
@@ -1033,6 +1357,8 @@ export function createHostManager(): HostManager {
           ...(toolResultMaxInlineBytes !== undefined
             ? { toolResultMaxInlineBytes }
             : {}),
+          ...(maxSubagentDepth !== undefined ? { maxSubagentDepth } : {}),
+          ...(maxActiveSubagents !== undefined ? { maxActiveSubagents } : {}),
           bashLimits: {
             ...(timeoutMs !== undefined ? { timeoutMs } : {}),
             maxOutputBytes,
@@ -1124,6 +1450,19 @@ export function createHostManager(): HostManager {
           ...(sharedShell ? { shell: sharedShell } : {}),
         }),
         harnessConnector: createHarnessConnectorBridgeFromFace(faceRuntime),
+        policy,
+        resolvePolicyAsk: async (args: {
+          readonly subject: { readonly kind: string };
+          readonly reason: string;
+          readonly sessionId?: string;
+        }) => {
+          if (!args.sessionId) return undefined;
+          return faceRuntime.approvals.requestHostGate(args.sessionId, {
+            kind: args.subject.kind,
+            reason: args.reason,
+            summary: JSON.stringify(args.subject),
+          });
+        },
       };
       hostWireRef.ctx = hostWireCtx;
 
@@ -1149,12 +1488,20 @@ export function createHostManager(): HostManager {
               resolveSessionCwd(faceRuntime, sessionId),
             sidebarFace: hostWireCtx.sidebarFace,
             pluginsDir: resolvedPluginsDir,
+            agentRegistries: {
+              closeAgentPty: (uuid) => agentPtyRegistry.close(uuid),
+            },
+            policy,
+            resolvePolicyAsk: hostWireCtx.resolvePolicyAsk,
           }),
           createXrkPluginPublicHandler({
             pluginsDir: resolvedPluginsDir,
             xrkHome: resolveXrkHome(),
           }),
-          createHostPluginsPublicHandler(loader.list(), hostWireCtx),
+          createLiveHostPluginsPublicHandler(
+            () => loader.list(),
+            hostWireCtx,
+          ),
         ),
         ...(log
           ? {
@@ -1190,13 +1537,21 @@ export function createHostManager(): HostManager {
           const dshUpgrades = attachDshCompatUpgrades(server, {
             checkAuth: faceCheckAuth,
           });
-          const sidebarPty = attachSidebarPtyUpgrades(server, {
-            defaultCwd: faceRuntime.workspaceRoot,
-            checkAuth: faceCheckAuth,
-          });
+          // Sidebar interactive PTY is Host-local node-pty — not SSH. Skip when
+          // remote so defaultCwd is never a remote POSIX path on the Host disk.
+          const sidebarPty = sshWorld
+            ? { close() {} }
+            : attachSidebarPtyUpgrades(server, {
+                defaultCwd: faceRuntime.workspaceRoot,
+                checkAuth: faceCheckAuth,
+                agentPty: agentPtyRegistry,
+                agentOpens: agentOpenRegistry,
+              });
           return {
             close() {
               sidebarPty.close();
+              agentPtyRegistry.disposeAll();
+              agentOpenRegistry.dispose();
               dshUpgrades.close();
               face.close();
               shutdownDshCompatServices();
@@ -1245,6 +1600,8 @@ export function createHostManager(): HostManager {
           if (stopPromise) return stopPromise;
           status = "stopped";
           stopPromise = (async () => {
+            cronBox.scheduler?.stop();
+            policyFileWatch?.dispose();
             await http.close();
             await agentCache.dispose();
             if (sharedShell) {
@@ -1252,6 +1609,13 @@ export function createHostManager(): HostManager {
                 await sharedShell.dispose();
               } catch {
                 // Host stop must continue even if jobs teardown partially fails.
+              }
+            }
+            if (sshWorld) {
+              try {
+                sshWorld.dispose();
+              } catch {
+                // Host stop must continue even if SSH ControlMaster exit fails.
               }
             }
             if (sharedPty) {

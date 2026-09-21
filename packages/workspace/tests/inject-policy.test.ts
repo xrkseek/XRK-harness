@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { computeInjectFingerprint } from "../src/inject-fingerprint.js";
 import {
   HOME_CONVENTION_INJECT,
+  HOME_OS_INSTRUCTION_FINGERPRINT_MARKERS,
   SKILL_VENDOR_PRIORITY,
   USER_HOME_SKILL_REL_DIRS,
   WORKSPACE_CONVENTION_INJECT,
@@ -28,7 +29,16 @@ describe("inject policy (inject-sources)", () => {
 
   it("home skill roots omit .cursor/skills", () => {
     expect(USER_HOME_SKILL_REL_DIRS).not.toContain(".cursor/skills");
+    expect(USER_HOME_SKILL_REL_DIRS[0]).toBe(".xrk/skills");
     expect(WORKSPACE_SKILL_REL_DIRS).toContain(".cursor/skills");
+  });
+
+  it("home OS fingerprint markers omit .xrk (product home is separate)", () => {
+    expect(
+      HOME_OS_INSTRUCTION_FINGERPRINT_MARKERS.some((m) =>
+        m.startsWith(".xrk"),
+      ),
+    ).toBe(false);
   });
 
   it("resolveSkillDirs skips ~/.cursor/skills even when includeUserHome", async () => {

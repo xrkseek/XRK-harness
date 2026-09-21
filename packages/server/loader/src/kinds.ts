@@ -23,10 +23,15 @@ export const PLUGIN_KINDS = {
 export type KnownPluginKind =
   (typeof PLUGIN_KINDS)[keyof typeof PLUGIN_KINDS];
 
-/** Reserved / discovered but not auto-wired yet. */
+/**
+ * Kinds Host wires by name (`channel` / `policy` / `llm` on plugin refresh).
+ * `cordis` is listed only — never `import()` / `apply()`.
+ */
 export const RESERVED_PLUGIN_KINDS = [
   "channel",
   "policy",
+  /** In-process pre/post tool intercept → `wireCompositionHooks`. */
+  "hooks",
   "llm",
   /** DSH Cordis host package: listed, never `import()` / `apply()`. */
   "cordis",

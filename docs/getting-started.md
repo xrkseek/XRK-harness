@@ -119,7 +119,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 |------|------|
 | 模型与密钥 | **设置 → 模型** · **设置 → 凭据** |
 | MCP / 搜索 / 终端 / Agent 循环 / 工作区注入 | **设置 → 插件 → 插件配置** |
-| 默认权限档 | **设置 → 权限**；会话内 Access 芯片或 `/permission` |
+| 默认权限档 | **设置 → 权限**（live：仍停在旧默认的会话会跟推）；会话内 Access 芯片或 `/permission` |
 | 软预算 · spill · bash 输出上限 | 插件配置 → **Agent 循环** / **终端** |
 
 环境变量留给 Host 监听、鉴权、CI；日常调参不要靠 env。细节：[configuration.md](./configuration.md)。
@@ -284,7 +284,7 @@ After starting `web`:
 |------|------|
 | Model and keys | **Settings → Models** · **Settings → Credentials** |
 | MCP / search / shell / agent loop / workspace inject | **Settings → Plugins → Plugin configuration** |
-| Default permission preset | **Settings → Permissions**; in-session Access chip or `/permission` |
+| Default permission preset | **Settings → Permissions** (live: sessions still on the prior default follow); in-session Access chip or `/permission` |
 | Soft budget · spill · bash output cap | Plugin configuration → **Agent loop** / **Shell** |
 
 Environment variables are for Host listen/auth and CI — not day-to-day tuning. Details: [configuration.md](./configuration.md).

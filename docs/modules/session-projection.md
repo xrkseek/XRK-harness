@@ -53,10 +53,10 @@ Face 封装：`createFaceProjectionRegistry` ≡ `createSessionProjectionRegistr
 | 载体 | 预算 |
 | --- | --- |
 | `session.list`（已加载） | `title` · `sessionListMetadata` |
-| `session.list`（冷） | list-checkpoint 文件列；miss 则仅 `listHints` |
+| `session.list`（冷） | list-checkpoint 文件列；miss / 解析残缺 → 仅 `listHints`（禁止静默半截错状态） |
 | `session.history` 尾页 | 轻量 meter/stats · **`turnOutline`** + `contextTimeline` / `contextHeaders` |
 | `session.history` + `beforeSeq` | **无** `projections` 块 |
-| SQLite LRU 淘汰 | 先写 list checkpoint，再 `evictSession` |
+| SQLite LRU 淘汰 | 先 remember list checkpoint（磁盘 I/O best-effort，内存行保留），再 `evictSession`；remember 失败则跳过淘汰 |
 
 ## Face 默认键：`turnOutline`
 
@@ -141,10 +141,10 @@ Face wrapper: `createFaceProjectionRegistry` ≡ `createSessionProjectionRegistr
 | Carrier | Budget |
 | --- | --- |
 | `session.list` (loaded) | `title` · `sessionListMetadata` |
-| `session.list` (cold) | list-checkpoint file column; miss → `listHints` only |
+| `session.list` (cold) | list-checkpoint file column; miss / corrupt parse → `listHints` only (never partial silent wrong) |
 | `session.history` tail | light meter/stats · **`turnOutline`** + `contextTimeline` / `contextHeaders` |
 | `session.history` with `beforeSeq` | **no** `projections` block |
-| SQLite LRU eviction | write list checkpoint, then `evictSession` |
+| SQLite LRU eviction | remember list checkpoint (I/O best-effort, in-memory retained), then `evictSession`; remember failure skips eviction |
 
 ## Face default key: `turnOutline`
 

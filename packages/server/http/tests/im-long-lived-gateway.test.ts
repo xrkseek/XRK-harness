@@ -23,9 +23,10 @@ afterEach(() => {
 
 describe("im-long-lived-gateway", () => {
   it("reports bridge mode with webhook/poll paths by default", () => {
-    const status = imLongLivedGatewayStatus("weixin");
+    const status = imLongLivedGatewayStatus("weixin", {});
     expect(status.ok).toBe(true);
     expect(status.state).toBe("bridge");
+    expect(status.localWsPath).toBe("/api/im/gateway/ws");
     expect(status.incomplete).toBeUndefined();
     const bridge = status.bridge as Record<string, string>;
     expect(bridge.webhook).toBe("/api/im/weixin/webhook");

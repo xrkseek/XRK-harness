@@ -16,8 +16,13 @@ import path from "node:path";
 import { readBody, sendJson } from "./underlying/http-json.js";
 import {
   readXrkPluginInventory,
+  resolvePluginsDir,
   type XrkPluginServicesOptions,
 } from "../xrk/plugin-services.js";
+import {
+  runPluginMutate,
+  type PluginMutateResult,
+} from "../xrk/plugin-mutate.js";
 import { dataPath } from "./underlying/json-store.js";
 import { honestReady } from "./honest-envelope.js";
 import { scanTongflowRegistryFromInventory } from "./host-feature-bridge.js";
@@ -35,6 +40,11 @@ import { parseJsonBody } from "./underlying/http-kit.js";
 
 export interface TongflowOptions extends XrkPluginServicesOptions {
   readonly workspaceRoot?: string;
+  /** Test seam. Production calls `xrkh plugin add` via `runPluginMutate`. */
+  installPlugin?(
+    spec: string,
+    pluginsDir: string,
+  ): Promise<PluginMutateResult>;
 }
 
 interface TaskRow {
@@ -180,18 +190,6 @@ export async function handleTongflowCanvasHttp(
       status: "ok",
       adapter: DSH_COMPAT_ADAPTER,
       python: false,
-    });
-    return true;
-  }
-
-  if (pathname === "/plugins/install" && method === "POST") {
-    const body = await parseJsonBody(req);
-    sendJson(res, 200, {
-      ok: true,
-      accepted: true,
-      spec: typeof body.spec === "string" ? body.spec : "",
-      adapter: DSH_COMPAT_ADAPTER,
-      note: "Use xrk-harness plugin add for XRK inventory installs.",
     });
     return true;
   }
@@ -374,6 +372,45 @@ export async function handleTongflowCanvasHttp(
   return false;
 }
 
+function pluginSpec(body: Record<string, unknown>): string {
+  for (const key of ["spec", "package", "name", "id"] as const) {
+    const value = body[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+/** Real install: `xrkh plugin add`. Does not revive `/plugins/install` `{ accepted: true }`. */
+async function installTongflowPlugin(
+  res: ServerResponse,
+  options: TongflowOptions,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const spec = pluginSpec(body);
+  if (!spec) {
+    sendJson(res, 400, {
+      ok: false,
+      error: "missing spec",
+      via: "xrkh plugin add",
+    });
+    return;
+  }
+  const pluginsDir = resolvePluginsDir(options);
+  const result = options.installPlugin
+    ? await options.installPlugin(spec, pluginsDir)
+    : await runPluginMutate({ action: "add", spec, pluginsDir });
+  sendJson(res, result.ok ? 200 : 502, {
+    ok: result.ok,
+    spec,
+    via: "xrkh plugin add",
+    command: `xrkh plugin add ${spec}`,
+    restartRequired: result.ok,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    ...(result.error ? { error: result.error } : {}),
+  });
+}
+
 export async function handleTongflowStudioHttp(
   req: IncomingMessage,
   res: ServerResponse,
@@ -382,7 +419,14 @@ export async function handleTongflowStudioHttp(
 ): Promise<boolean> {
   if (!pathname.startsWith("/tongflow/")) return false;
   const method = (req.method ?? "GET").toUpperCase();
-  if (method === "POST" || method === "PUT" || method === "PATCH") {
+  const installBody =
+    method === "POST" && pathname === "/tongflow/plugins"
+      ? await parseJsonBody(req)
+      : undefined;
+  if (
+    installBody === undefined &&
+    (method === "POST" || method === "PUT" || method === "PATCH")
+  ) {
     await readBody(req);
   }
 
@@ -420,6 +464,10 @@ export async function handleTongflowStudioHttp(
   }
 
   if (pathname === "/tongflow/env" || pathname === "/tongflow/plugins") {
+    if (pathname === "/tongflow/plugins" && method === "POST") {
+      await installTongflowPlugin(res, options, installBody ?? {});
+      return true;
+    }
     sendJson(res, 200, {
       ok: true,
       registry: buildRegistry(options),
@@ -471,8 +519,6 @@ export async function handleTongflowStudioHttp(
 export function isTongflowCanvasPath(pathname: string): boolean {
   return (
     pathname === "/health" ||
-    pathname === "/plugins" ||
-    pathname === "/plugins/install" ||
     pathname === "/api/plugins/registry" ||
     pathname === "/api/users" ||
     pathname === "/api/material" ||

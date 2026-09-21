@@ -60,4 +60,35 @@ describe("offloadRequestImages", () => {
     });
     expect(first[1]).toEqual({ type: "text", text: "keep" });
   });
+
+  it("projects durable offloaded marks to placeholder text before size trim", () => {
+    const messages = [
+      {
+        role: "user" as const,
+        content: [
+          {
+            type: "image" as const,
+            attachment: {
+              attachmentId: "a1",
+              mediaType: "image/png" as const,
+              bytes: 1000,
+              width: 10,
+              height: 10,
+            },
+            offloaded: true as const,
+          },
+          { type: "text" as const, text: "keep" },
+        ],
+      },
+    ];
+    const out = offloadRequestImages(messages, DEFAULT_MAX_REQUEST_IMAGE_BYTES);
+    const content = out[0]!.content;
+    expect(typeof content).not.toBe("string");
+    if (typeof content === "string") throw new Error("expected blocks");
+    expect(content[0]).toEqual({
+      type: "text",
+      text: REQUEST_IMAGE_OFFLOAD_PLACEHOLDER,
+    });
+    expect(content[1]).toEqual({ type: "text", text: "keep" });
+  });
 });

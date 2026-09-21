@@ -47,9 +47,18 @@ importers:
       '@xrkseek/core-session':
         specifier: workspace:*
         version: link:../../packages/core/session
+      '@xrkseek/exec-shell':
+        specifier: workspace:*
+        version: link:../../packages/exec/shell
+      '@xrkseek/exec-ssh':
+        specifier: workspace:*
+        version: link:../../packages/exec/ssh
       '@xrkseek/llm-registry':
         specifier: workspace:*
         version: link:../../packages/llm/registry
+      '@xrkseek/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@xrkseek/policy':
         specifier: workspace:*
         version: link:../../packages/policy
@@ -62,6 +71,9 @@ importers:
       '@xrkseek/preset-server':
         specifier: workspace:*
         version: link:../../presets/server
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@xrkseek/server-config':
         specifier: workspace:*
         version: link:../../packages/server/config
@@ -74,6 +86,12 @@ importers:
       '@xrkseek/server-loader':
         specifier: workspace:*
         version: link:../../packages/server/loader
+      '@xrkseek/workspace':
+        specifier: workspace:*
+        version: link:../../packages/workspace
+      '@xrkseek/xrk-home-paths':
+        specifier: workspace:*
+        version: link:../../packages/util/home-paths
 
   apps/console:
     dependencies:
@@ -203,9 +221,14 @@ importers:
       '@xrkseek/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@xrkseek/xrk-home-paths':
+        specifier: workspace:*
+        version: link:../util/home-paths
       sharp:
         specifier: ^0.35.3
         version: 0.35.3(@types/node@24.13.3)
+
+  packages/checkpoint: {}
 
   packages/client/connection:
     dependencies:
@@ -707,6 +730,9 @@ importers:
       '@xrkseek/cordis':
         specifier: workspace:^
         version: link:../../cordis
+      '@xrkseek/xrk-api-remotes':
+        specifier: workspace:^
+        version: link:../../stubs/xrk-api-remotes
       '@xrkseek/xrk-invariants':
         specifier: workspace:^
         version: link:../../stubs/xrk-invariants
@@ -1146,6 +1172,9 @@ importers:
       '@xrkseek/client-ui-conversation':
         specifier: workspace:^
         version: link:../ui-conversation
+      '@xrkseek/client-ui-layout':
+        specifier: workspace:^
+        version: link:../ui-layout
       '@xrkseek/client-ui-primitives':
         specifier: workspace:^
         version: link:../ui-primitives
@@ -2048,6 +2077,9 @@ importers:
       '@xrkseek/protocol':
         specifier: workspace:*
         version: link:../../protocol
+      '@xrkseek/xrk-home-paths':
+        specifier: workspace:*
+        version: link:../../util/home-paths
       '@xrkseek/xrk-output-retention':
         specifier: workspace:*
         version: link:../../util/output-retention
@@ -2138,6 +2170,9 @@ importers:
       '@xrkseek/protocol':
         specifier: workspace:*
         version: link:../../protocol
+      '@xrkseek/xrk-home-paths':
+        specifier: workspace:*
+        version: link:../../util/home-paths
     devDependencies:
       '@xrkseek/llm-replay':
         specifier: workspace:*
@@ -2166,6 +2201,12 @@ importers:
 
   packages/cosmokit: {}
 
+  packages/exec/computer-use:
+    dependencies:
+      '@xrkseek/core-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
+
   packages/exec/fs:
     dependencies:
       '@xrkseek/attachment':
@@ -2178,11 +2219,29 @@ importers:
         specifier: workspace:*
         version: link:../../protocol
 
+  packages/exec/image-gen:
+    dependencies:
+      '@xrkseek/attachment':
+        specifier: workspace:*
+        version: link:../../attachment
+      '@xrkseek/core-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
+
   packages/exec/lsp:
     dependencies:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+
+  packages/exec/memory:
+    dependencies:
+      '@xrkseek/core-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
+      '@xrkseek/xrk-home-paths':
+        specifier: workspace:*
+        version: link:../../util/home-paths
 
   packages/exec/pty:
     dependencies:
@@ -2209,7 +2268,34 @@ importers:
         specifier: workspace:*
         version: link:../subprocess
 
+  packages/exec/ssh:
+    dependencies:
+      '@xrkseek/code-runtime':
+        specifier: workspace:*
+        version: link:../../code-runtime
+      '@xrkseek/exec-fs':
+        specifier: workspace:*
+        version: link:../fs
+      '@xrkseek/exec-subprocess':
+        specifier: workspace:*
+        version: link:../subprocess
+
   packages/exec/subprocess: {}
+
+  packages/exec/video-gen:
+    dependencies:
+      '@xrkseek/attachment':
+        specifier: workspace:*
+        version: link:../../attachment
+      '@xrkseek/core-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
+
+  packages/exec/voice:
+    dependencies:
+      '@xrkseek/core-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
 
   packages/exec/web:
     dependencies:
@@ -2245,6 +2331,9 @@ importers:
       '@xrkseek/protocol':
         specifier: workspace:*
         version: link:../../protocol
+      '@xrkseek/xrk-home-paths':
+        specifier: workspace:*
+        version: link:../../util/home-paths
 
   packages/llm/gemini:
     dependencies:
@@ -2344,6 +2433,16 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../core/tools
+      js-yaml:
+        specifier: ^4.3.1
+        version: 4.3.1
+      smol-toml:
+        specifier: ^1.8.0
+        version: 1.8.0
+    devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
 
   packages/protocol: {}
 
@@ -2454,6 +2553,15 @@ importers:
       '@xrkseek/protocol':
         specifier: workspace:*
         version: link:../../protocol
+      '@xrkseek/xrk-home-paths':
+        specifier: workspace:*
+        version: link:../../util/home-paths
+
+  packages/server/cron:
+    dependencies:
+      '@xrkseek/core-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
 
   packages/server/face:
     dependencies:
@@ -2463,6 +2571,9 @@ importers:
       '@xrkseek/core-agent':
         specifier: workspace:*
         version: link:../../core/agent
+      '@xrkseek/core-agent-loop':
+        specifier: workspace:*
+        version: link:../../core/agent-loop
       '@xrkseek/core-session':
         specifier: workspace:*
         version: link:../../core/session
@@ -2545,6 +2656,9 @@ importers:
       '@xrkseek/attachment-local':
         specifier: workspace:*
         version: link:../../attachment-local
+      '@xrkseek/code-runtime':
+        specifier: workspace:*
+        version: link:../../code-runtime
       '@xrkseek/compose':
         specifier: workspace:*
         version: link:../../compose
@@ -2569,6 +2683,9 @@ importers:
       '@xrkseek/exec-shell':
         specifier: workspace:*
         version: link:../../exec/shell
+      '@xrkseek/exec-ssh':
+        specifier: workspace:*
+        version: link:../../exec/ssh
       '@xrkseek/exec-subprocess':
         specifier: workspace:*
         version: link:../../exec/subprocess
@@ -2593,6 +2710,9 @@ importers:
       '@xrkseek/server-config':
         specifier: workspace:*
         version: link:../config
+      '@xrkseek/server-cron':
+        specifier: workspace:*
+        version: link:../cron
       '@xrkseek/server-face':
         specifier: workspace:*
         version: link:../face
@@ -2634,12 +2754,18 @@ importers:
       '@xrkseek/core-session':
         specifier: workspace:*
         version: link:../../core/session
+      '@xrkseek/policy':
+        specifier: workspace:*
+        version: link:../../policy
       '@xrkseek/protocol':
         specifier: workspace:*
         version: link:../../protocol
       '@xrkseek/server-loader':
         specifier: workspace:*
         version: link:../loader
+      '@xrkseek/xrk-home-paths':
+        specifier: workspace:*
+        version: link:../../util/home-paths
       qrcode-generator:
         specifier: 1.4.4
         version: 1.4.4
@@ -2673,6 +2799,15 @@ importers:
 
   packages/session/session-projection:
     dependencies:
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../../protocol
+
+  packages/session/session-telemetry:
+    dependencies:
+      '@xrkseek/core-session':
+        specifier: workspace:*
+        version: link:../../core/session
       '@xrkseek/protocol':
         specifier: workspace:*
         version: link:../../protocol
@@ -3281,6 +3416,9 @@ importers:
 
   packages/stubs/xrk-tools:
     dependencies:
+      '@xrkseek/core-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
       '@xrkseek/schemastery':
         specifier: workspace:^
         version: link:../../schemastery
@@ -3363,6 +3501,8 @@ importers:
         specifier: workspace:*
         version: link:../../presets/minimal
 
+  packages/util/home-paths: {}
+
   packages/util/output-retention: {}
 
   packages/web-runtime:
@@ -3379,6 +3519,9 @@ importers:
       '@xrkseek/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@xrkseek/xrk-home-paths':
+        specifier: workspace:*
+        version: link:../util/home-paths
 
   presets/harness:
     dependencies:
@@ -3400,12 +3543,21 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../packages/core/tools
+      '@xrkseek/exec-computer-use':
+        specifier: workspace:*
+        version: link:../../packages/exec/computer-use
       '@xrkseek/exec-fs':
         specifier: workspace:*
         version: link:../../packages/exec/fs
+      '@xrkseek/exec-image-gen':
+        specifier: workspace:*
+        version: link:../../packages/exec/image-gen
       '@xrkseek/exec-lsp':
         specifier: workspace:*
         version: link:../../packages/exec/lsp
+      '@xrkseek/exec-memory':
+        specifier: workspace:*
+        version: link:../../packages/exec/memory
       '@xrkseek/exec-pty':
         specifier: workspace:*
         version: link:../../packages/exec/pty
@@ -3418,6 +3570,12 @@ importers:
       '@xrkseek/exec-subprocess':
         specifier: workspace:*
         version: link:../../packages/exec/subprocess
+      '@xrkseek/exec-video-gen':
+        specifier: workspace:*
+        version: link:../../packages/exec/video-gen
+      '@xrkseek/exec-voice':
+        specifier: workspace:*
+        version: link:../../packages/exec/voice
       '@xrkseek/exec-web':
         specifier: workspace:*
         version: link:../../packages/exec/web
@@ -3433,9 +3591,15 @@ importers:
       '@xrkseek/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@xrkseek/server-cron':
+        specifier: workspace:*
+        version: link:../../packages/server/cron
       '@xrkseek/server-loader':
         specifier: workspace:*
         version: link:../../packages/server/loader
+      '@xrkseek/session-telemetry':
+        specifier: workspace:*
+        version: link:../../packages/session/session-telemetry
       '@xrkseek/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
@@ -6207,6 +6371,10 @@ packages:
   signal-exit@4.1.0:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
+
+  smol-toml@1.8.0:
+    resolution: {integrity: sha512-kCZr2V3ch9i00x8zXRhjUNVcjG9ijES5dDudkXvUVCT5QlJNQWElSJdZqyPemffHoLNUYwOcou0Fy+ojN0uHSQ==}
+    engines: {node: '>= 18'}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -9404,6 +9572,8 @@ snapshots:
   siginfo@2.0.0: {}
 
   signal-exit@4.1.0: {}
+
+  smol-toml@1.8.0: {}
 
   source-map-js@1.2.1: {}
 

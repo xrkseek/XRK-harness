@@ -87,20 +87,6 @@ export function listCliInvocationCandidates(
 }
 
 /**
- * @deprecated Prefer {@link planCliInvocation}; kept for call sites that only
- * need “will this go through cmd.exe?”. Always false for `shell` itself —
- * we never set `shell: true`.
- */
-export function cliInvocationNeedsShell(
-  invocation: CliInvocation,
-  platform: NodeJS.Platform = process.platform,
-): boolean {
-  void invocation;
-  void platform;
-  return false;
-}
-
-/**
  * Build a shell-free execFile plan for any platform.
  * - `node` + script / unix binary / non-.cmd exe → direct argv
  * - Windows `.cmd` → `ComSpec /d /s /c` + one quoted command line
@@ -164,6 +150,7 @@ async function execPluginCli(
     maxBuffer: 4 * 1024 * 1024,
     encoding: "utf8",
     shell: false,
+    windowsHide: true,
     ...(plan.windowsVerbatimArguments
       ? { windowsVerbatimArguments: true }
       : {}),

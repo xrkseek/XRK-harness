@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -7,6 +8,7 @@ import {
   loadHostConfig,
   parseMcpServersJson,
   parseMcpServersValue,
+  resolveMcpStdioCwd,
   resolveXrkHome,
 } from "../src/index.js";
 
@@ -62,6 +64,14 @@ describe("resolveXrkHome", () => {
     expect(home.replace(/\\/g, "/")).toMatch(/tmp\/xrk-home-test$/);
   });
 
+  it("expands ~ and falls through empty XRK_HOME to DSH_HOME", () => {
+    const home = resolveXrkHome({
+      XRK_HOME: "  ",
+      DSH_HOME: "~/dsh-fallback",
+    });
+    expect(home).toBe(path.resolve(path.join(homedir(), "dsh-fallback")));
+  });
+
   it("sessions dir sits under harness home", () => {
     const env = { XRK_HOME: path.join("C:", "tmp", "xrk-sess") };
     expect(defaultSessionsDir(env)).toBe(path.join(resolveXrkHome(env), "sessions"));
@@ -75,6 +85,45 @@ describe("resolveXrkHome", () => {
     expect(defaultMcpStdioCwd("playwright", env).replace(/\\/g, "/")).toMatch(
       /tmp\/xrk-paths\/mcp-cwd\/playwright$/,
     );
+  });
+
+  it("resolveMcpStdioCwd defaults to product home and gates workspace cwd", () => {
+    const env = { XRK_HOME: "C:/tmp/xrk-mcp-home" };
+    const workspace = "C:/tmp/xrk-ws";
+    const def = resolveMcpStdioCwd({
+      serverName: "playwright",
+      workspaceRoot: workspace,
+      env,
+    });
+    expect(def.replace(/\\/g, "/")).toMatch(/xrk-mcp-home\/mcp-cwd\/playwright$/);
+
+    expect(
+      resolveMcpStdioCwd({
+        serverName: "playwright",
+        cwd: "C:/tmp/elsewhere",
+        workspaceRoot: workspace,
+        env,
+      }).replace(/\\/g, "/"),
+    ).toMatch(/\/tmp\/elsewhere$/);
+
+    expect(() =>
+      resolveMcpStdioCwd({
+        serverName: "playwright",
+        cwd: path.join(workspace, "nested"),
+        workspaceRoot: workspace,
+        env,
+      }),
+    ).toThrow(/cwdAllowWorkspace/);
+
+    expect(
+      resolveMcpStdioCwd({
+        serverName: "playwright",
+        cwd: path.join(workspace, "nested"),
+        cwdAllowWorkspace: true,
+        workspaceRoot: workspace,
+        env,
+      }).replace(/\\/g, "/"),
+    ).toMatch(/xrk-ws\/nested$/);
   });
 });
 

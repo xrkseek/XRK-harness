@@ -3,7 +3,8 @@
 | API | 作用 |
 |-----|------|
 | `assembleThreeLayers` | 骨架 system（+ workspaceBlocks）· 历史 · skeleton user · volatile user；**tools 按 name 字典序** |
-| `createSystemPromptAssembler` | 分段 system 字符串（preset persona） |
+| `createSystemPromptAssembler` | 分段 system 字符串（preset persona）；可选 `variable` / 段上 `interpolate: false` |
+| `renderPromptSections` · `interpolatePromptText` | 严格 `{{name}}` 插值；`tools:sdk` 等工具文档段应 `interpolate: false`，避免说明里的双花括号破坏提示词 / PTC SDK |
 | `createOutboundPipeline` / `createDefaultOutbound` | 出站链：slash → assemble → toolPair · compaction · window · invariant |
 
 骨架人设是单一 `persona` 字符串（agent-loop `assemble.persona` 可为其函数形）；**没有** `personaPrefix` / `personaSuffix` 配置轴。分段靠 assembler 的 `id`/`order`，不是部署级前后缀拆分。

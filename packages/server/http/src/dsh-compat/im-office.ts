@@ -1,6 +1,8 @@
 /**
  * @xmanrui/dsh-im — AI Office channel RPC (`/office`).
+ * Mutating connect endpoints evaluate Host `office.connect` policy.
  */
+import type { PolicyEngine } from "@xrkseek/policy";
 import {
   connectorJobSummary,
   readConnectorHeartbeat,
@@ -8,6 +10,11 @@ import {
 import { honestReady } from "./honest-envelope.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
+import {
+  enforceSidebarPolicy,
+  type SidebarPolicyAskResolver,
+} from "../sidebar/sidebar-policy.js";
+import { HostPolicyError } from "../host-policy-error.js";
 
 const PROTOCOL = "office-harness.v1";
 
@@ -23,6 +30,8 @@ const OFFICE_STORE = createXrkDocStore(
 
 export interface ImOfficeOptions {
   readonly xrkHome?: string;
+  readonly policy?: PolicyEngine;
+  readonly resolvePolicyAsk?: SidebarPolicyAskResolver;
 }
 
 interface OfficeConfig {
@@ -95,17 +104,68 @@ function statusPayload(
   };
 }
 
-export function handleOfficeRpc(
+function policyFail(wire: {
+  readonly code: "policy-denied" | "policy-ask";
+  readonly message: string;
+  readonly details: {
+    readonly kind: string;
+    readonly reason: string;
+    readonly ruleId?: string;
+  };
+}): never {
+  throw new HostPolicyError(wire.code, wire.message, wire.details);
+}
+
+/** Endpoints that establish / change Office connector state. */
+function isOfficeConnectMutation(endpoint: string): boolean {
+  return (
+    endpoint === "connector.configure" ||
+    endpoint === "configure" ||
+    endpoint === "connector.reconnect" ||
+    endpoint === "reconnect" ||
+    endpoint === "connector.test" ||
+    endpoint === "test" ||
+    endpoint === "connector.remove" ||
+    endpoint === "remove"
+  );
+}
+
+export async function handleOfficeRpc(
   endpoint: string,
   payload: Record<string, unknown>,
   options: ImOfficeOptions = {},
-): unknown {
+): Promise<unknown> {
   const home = options.xrkHome;
   const loaded = OFFICE_STORE.read(home);
   const store = loaded.data;
 
   if (endpoint === "connection.status" || endpoint === "status") {
     return statusPayload(store, home, loaded.revision);
+  }
+
+  if (isOfficeConnectMutation(endpoint)) {
+    const sessionId =
+      typeof payload.sessionId === "string" && payload.sessionId.trim()
+        ? payload.sessionId.trim()
+        : undefined;
+    const connectorId =
+      typeof payload.deviceId === "string" && payload.deviceId.trim()
+        ? payload.deviceId.trim()
+        : store.config?.deviceId;
+    const denied = await enforceSidebarPolicy(
+      options.policy,
+      {
+        kind: "office.connect",
+        ...(connectorId ? { connectorId } : {}),
+      },
+      {
+        ...(options.resolvePolicyAsk
+          ? { resolveAsk: options.resolvePolicyAsk }
+          : {}),
+        ...(sessionId ? { sessionId } : {}),
+      },
+    );
+    if (denied) return policyFail(denied);
   }
 
   if (endpoint === "connector.configure" || endpoint === "configure") {

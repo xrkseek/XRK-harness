@@ -95,13 +95,21 @@ function inventoryFromRuntime(
   runtime: Parameters<FaceHandler>[0],
 ): Array<Record<string, unknown>> {
   return listFacePluginInventory(runtime).map((row) => {
-    const cordisFailed = row.fiberPhase === "failed";
-    const active = row.fiberPhase === "active";
+    // Soft-disabled / unobserved rows keep fiberPhase null — do not invent
+    // "failed" (that looks like a live stubFromManifest ghost).
+    const fiberPhase =
+      row.fiberPhase != null
+        ? row.fiberPhase
+        : row.enabled
+          ? "active"
+          : null;
+    const cordisFailed = fiberPhase === "failed";
+    const active = fiberPhase === "active";
     const hostPkg = hostPackageRecord(runtime, row.moduleName);
     return {
       pluginId: row.entryId,
       packageId: row.moduleName,
-      fiberPhase: row.fiberPhase ?? (row.enabled ? "active" : "failed"),
+      fiberPhase,
       ...(hostPkg?.rpcChannels.length
         ? { rpcChannels: [...hostPkg.rpcChannels] }
         : {}),

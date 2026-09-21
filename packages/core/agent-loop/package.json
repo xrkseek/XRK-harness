@@ -18,7 +18,8 @@
     "@xrkseek/core-system-prompt": "workspace:*",
     "@xrkseek/core-tools": "workspace:*",
     "@xrkseek/llm": "workspace:*",
-    "@xrkseek/protocol": "workspace:*"
+    "@xrkseek/protocol": "workspace:*",
+    "@xrkseek/xrk-home-paths": "workspace:*"
   },
   "devDependencies": {
     "@xrkseek/llm": "workspace:*",

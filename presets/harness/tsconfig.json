@@ -15,6 +15,11 @@
     { "path": "../../packages/core/tools" },
     { "path": "../../packages/exec/fs" },
     { "path": "../../packages/exec/web" },
+    { "path": "../../packages/exec/computer-use" },
+    { "path": "../../packages/exec/voice" },
+    { "path": "../../packages/exec/image-gen" },
+    { "path": "../../packages/exec/video-gen" },
+    { "path": "../../packages/exec/memory" },
     { "path": "../../packages/exec/lsp" },
     { "path": "../../packages/exec/pty" },
     { "path": "../../packages/exec/sandbox" },
@@ -24,6 +29,7 @@
     { "path": "../../packages/llm/replay" },
     { "path": "../../packages/policy" },
     { "path": "../../packages/server/loader" },
+    { "path": "../../packages/session/session-telemetry" },
     { "path": "../../packages/workspace" },
     { "path": "../../packages/context/session-reference" }
   ]

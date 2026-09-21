@@ -1,16 +1,27 @@
 /**
- * Mnemon status / storage shapes + RPC handlers.
- * Not a real memory engine — honest stubs under ~/.xrk/mnemon.
+ * Mnemon status / document CRUD under ~/.xrk/mnemon.
+ * search / graph / bodies run on the stored documents (keyword + mention graph).
+ * Unknown RPCs still return {@link mnemonEngineUnavailable}.
  */
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { mnemonEngineUnavailable } from "./honest-envelope.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
+import {
+  buildMnemonGraph,
+  collectMnemonEntities,
+  mnemonBodies,
+  relatedMnemonDocuments,
+  searchMnemonDocuments,
+} from "./mnemon-engine.js";
 import { resolveCompatHome } from "./underlying/json-store.js";
 import {
   countMnemonDocuments,
   getMnemonDocument,
+  listAllMnemonDocuments,
   listMnemonDocuments,
   upsertMnemonDocument,
+  type MnemonDocument,
 } from "./mnemon-store.js";
 
 export interface MnemonStatusOptions {
@@ -22,6 +33,7 @@ function area(
   kind: "runtime" | "memory-bodies" | "documents" | "state",
   root: string,
   details: Record<string, unknown>,
+  itemCount = 0,
 ) {
   const dir =
     kind === "runtime"
@@ -34,23 +46,40 @@ function area(
   return {
     kind,
     path: dir,
-    status: existsSync(dir) ? "empty" : "missing",
-    itemCount: 0,
+    status: existsSync(dir) ? (itemCount > 0 ? "ready" : "empty") : "missing",
+    itemCount,
     bytes: 0,
     details,
   };
 }
 
-function scope(kind: "global" | "workspace" | "custom", root: string) {
+function scope(
+  kind: "global" | "workspace" | "custom",
+  root: string,
+  counts: { active: number; archived: number } = { active: 0, archived: 0 },
+) {
   return {
     kind,
     root,
     available: true,
     totalBytes: 0,
     areas: [
-      area("runtime", root, { userEntries: 0, memoryEntries: 0 }),
-      area("memory-bodies", root, { activeBodies: 0, databases: 0 }),
-      area("documents", root, { activeDocuments: 0, archivedDocuments: 0 }),
+      area("runtime", root, { userEntries: 0, memoryEntries: counts.active }),
+      area(
+        "memory-bodies",
+        root,
+        { activeBodies: counts.active, databases: 0 },
+        counts.active,
+      ),
+      area(
+        "documents",
+        root,
+        {
+          activeDocuments: counts.active,
+          archivedDocuments: counts.archived,
+        },
+        counts.active,
+      ),
       area("state", root, { reviewLedger: false }),
     ],
   };
@@ -76,7 +105,9 @@ export function buildMnemonStatus(options: MnemonStatusOptions = {}): unknown {
   const workspaceExists =
     workspaceRoot !== undefined && existsSync(workspaceRoot);
 
-  const scopes = [scope("global", globalRoot)];
+  const docCounts = countMnemonDocuments(home);
+  const bodies = mnemonBodies(listMnemonDocuments(home));
+  const scopes = [scope("global", globalRoot, docCounts)];
   if (workspaceRoot && workspaceExists) {
     scopes.push(scope("workspace", workspaceRoot));
   }
@@ -84,8 +115,6 @@ export function buildMnemonStatus(options: MnemonStatusOptions = {}): unknown {
   const activeKind = workspaceExists ? "workspace" : "global";
   const activeRoot =
     scopes.find((s) => s.kind === activeKind)?.root ?? globalRoot;
-
-  const docCounts = countMnemonDocuments(home);
 
   return {
     ok: true,
@@ -96,15 +125,16 @@ export function buildMnemonStatus(options: MnemonStatusOptions = {}): unknown {
     version: "xrk-compat",
     dshMnemonVersion: "compat",
     adapter: DSH_COMPAT_ADAPTER,
-    memoryBodies: [],
+    engine: "mnemon-documents",
+    memoryBodies: bodies,
     providerServices: [
       {
         providerId: "mnemon-native",
         label: "mnemon",
         enabled: true,
-        status: "idle",
-        activeMemoryBodyCount: 0,
-        memoryBodyCount: 0,
+        status: bodies.length > 0 ? "ready" : "idle",
+        activeMemoryBodyCount: bodies.length,
+        memoryBodyCount: bodies.length,
       },
     ],
     stats: { totalInsights: docCounts.active },
@@ -163,15 +193,16 @@ export const MNEMON_UI_SETTINGS_DEFAULTS: Record<string, unknown> = {
   saveAction: true,
 };
 
-const MNEMON_LIST_ENDPOINTS = new Set([
-  "list",
-  "documents",
+/** Engine RPCs over stored documents (keyword search · mention graph · bodies). */
+const MNEMON_ENGINE_ENDPOINTS = new Set([
   "entities",
   "search",
   "related",
   "graph",
   "bodies",
   "body-directory",
+  "runtime-memory",
+  "turn-activities",
 ]);
 
 /** Provider catalog shape expected by dsh-mnemon settings (`catalog.providers.map`). */
@@ -217,6 +248,121 @@ export function buildMnemonTaskAgentModels(): {
   };
 }
 
+function queryText(payload: Record<string, unknown>): string {
+  for (const key of ["query", "q", "text", "prompt"] as const) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function queryLimit(payload: Record<string, unknown>, fallback = 20): number {
+  const raw = payload.limit;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+    return Math.min(50, Math.floor(raw));
+  }
+  return fallback;
+}
+
+function documentId(payload: Record<string, unknown>): string {
+  if (typeof payload.id === "string" && payload.id.trim()) return payload.id.trim();
+  if (typeof payload.documentId === "string" && payload.documentId.trim()) {
+    return payload.documentId.trim();
+  }
+  return "";
+}
+
+/** Keyword / mention answers. No `incomplete` tag — empty `items` means no hits. */
+function queryMnemonEngine(
+  endpoint: string,
+  docs: readonly MnemonDocument[],
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const engine = "mnemon-documents";
+  const limit = queryLimit(payload);
+  if (endpoint === "search") {
+    const query = queryText(payload);
+    return {
+      ok: true,
+      endpoint,
+      engine,
+      query,
+      items: searchMnemonDocuments(docs, query, limit),
+    };
+  }
+  if (endpoint === "entities") {
+    return { ok: true, endpoint, engine, items: collectMnemonEntities(docs) };
+  }
+  if (endpoint === "related") {
+    const id = documentId(payload);
+    return {
+      ok: true,
+      endpoint,
+      engine,
+      id,
+      items: relatedMnemonDocuments(docs, id, limit),
+    };
+  }
+  if (endpoint === "graph") {
+    const graph = buildMnemonGraph(docs);
+    return {
+      ok: true,
+      endpoint,
+      engine,
+      nodes: graph.nodes,
+      edges: graph.edges,
+      items: graph.nodes,
+    };
+  }
+  if (endpoint === "bodies") {
+    const items = mnemonBodies(docs);
+    return { ok: true, endpoint, engine, items, memoryBodies: items };
+  }
+  if (endpoint === "body-directory") {
+    const items = mnemonBodies(docs).map((body) => ({
+      id: body.id,
+      title: body.title,
+      bytes: body.bytes,
+      updatedAt: body.updatedAt,
+    }));
+    return { ok: true, endpoint, engine, items };
+  }
+  if (endpoint === "runtime-memory") {
+    const items = docs
+      .filter((doc) => !doc.archived)
+      .slice()
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, limit)
+      .map((doc) => ({
+        id: doc.id,
+        title: doc.title,
+        updatedAt: doc.updatedAt,
+        kind: "document",
+      }));
+    return { ok: true, endpoint, engine, items };
+  }
+  const turnId =
+    typeof payload.turnId === "string"
+      ? payload.turnId
+      : typeof payload.turn === "string"
+        ? payload.turn
+        : "";
+  const items = turnId
+    ? docs
+        .filter(
+          (doc) =>
+            !doc.archived && `${doc.title}\n${doc.body}`.includes(turnId),
+        )
+        .map((doc) => ({
+          id: doc.id,
+          title: doc.title,
+          turnId,
+          updatedAt: doc.updatedAt,
+        }))
+    : [];
+  return { ok: true, endpoint: "turn-activities", engine, turnId, items };
+}
+
 export function handleMnemonRead(
   endpoint: string,
   options: MnemonStatusOptions,
@@ -227,13 +373,12 @@ export function handleMnemonRead(
     return buildMnemonStatus(options);
   }
   if (endpoint === "versions") return buildMnemonVersions();
-  if (endpoint === "turn-activities") {
-    return { cursor: -1, activities: [] };
-  }
   if (endpoint === "documents" || endpoint === "list") {
     return listMnemonDocuments(home);
   }
-  if (MNEMON_LIST_ENDPOINTS.has(endpoint)) return [];
+  if (MNEMON_ENGINE_ENDPOINTS.has(endpoint)) {
+    return queryMnemonEngine(endpoint, listAllMnemonDocuments(home), payload);
+  }
   if (endpoint === "provider-services") {
     return buildMnemonProviderCatalog();
   }
@@ -241,11 +386,10 @@ export function handleMnemonRead(
     const id = typeof payload.id === "string" ? payload.id : "";
     return id ? getMnemonDocument(home, id) : null;
   }
-  if (endpoint === "runtime-memory") return null;
   if (endpoint === "task-agent-models") {
     return buildMnemonTaskAgentModels();
   }
-  return { ok: true, endpoint, items: [] };
+  return mnemonEngineUnavailable(endpoint);
 }
 
 export function handleMnemonWrite(

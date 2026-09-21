@@ -144,7 +144,7 @@ describe("managed-state soft-disable", () => {
     writeDisabledPluginIdsAt(root, new Set(["drop-tools"]));
     const loader = createPluginLoader();
     const kept = await reconcileManagedProcessPlugins(loader, root);
-    expect(kept).toEqual(["keep-tools"]);
+    expect(kept.ids).toEqual(["keep-tools"]);
   });
 
   it("readManagedPluginPackagesAt + lookupManagedPluginSourceAt", () => {
@@ -202,6 +202,139 @@ describe("managed-state soft-disable", () => {
     writeDisabledPluginIdsAt(root, new Set(["drop-tools"]));
     const loader = createPluginLoader();
     const kept = await reconcileManagedProcessPlugins(loader, root);
-    expect(kept).toEqual(["keep-tools"]);
+    expect(kept.ids).toEqual(["keep-tools"]);
+  });
+
+  it("optional load failure does not block siblings; required fails closed", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-loader-opt-"));
+    temps.push(root);
+    mkdirSync(path.join(root, "good"), { recursive: true });
+    writeFileSync(
+      path.join(root, "good", "xrk.plugin.json"),
+      JSON.stringify({ id: "good", kind: "tools", entry: "./plugin.mjs" }),
+    );
+    writeFileSync(
+      path.join(root, "good", "plugin.mjs"),
+      `export function createPlugin() {
+  return { id: "good", kind: "tools", tools: [] };
+}
+`,
+    );
+    mkdirSync(path.join(root, "broken"), { recursive: true });
+    writeFileSync(
+      path.join(root, "broken", "xrk.plugin.json"),
+      JSON.stringify({
+        id: "broken",
+        kind: "tools",
+        entry: "./missing.mjs",
+      }),
+    );
+
+    const loader = createPluginLoader();
+    const result = await reconcileManagedProcessPlugins(loader, root);
+    expect(result.ids).toEqual(["good"]);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]?.id).toBe("broken");
+    expect(result.failures[0]?.required).toBe(false);
+
+    mkdirSync(path.join(root, "must"), { recursive: true });
+    writeFileSync(
+      path.join(root, "must", "xrk.plugin.json"),
+      JSON.stringify({
+        id: "must",
+        kind: "tools",
+        entry: "./missing.mjs",
+        required: true,
+      }),
+    );
+    const { RequiredPluginLoadError } = await import("../src/index.js");
+    await expect(reconcileManagedProcessPlugins(loader, root)).rejects.toThrow(
+      RequiredPluginLoadError,
+    );
+  });
+
+  it("soft-disable unload pairs dispose", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-loader-dispose-"));
+    temps.push(root);
+    mkdirSync(path.join(root, "drop-tools"), { recursive: true });
+    writeFileSync(
+      path.join(root, "drop-tools", "xrk.plugin.json"),
+      JSON.stringify({
+        id: "drop-tools",
+        kind: "tools",
+        entry: "./plugin.mjs",
+      }),
+    );
+    writeFileSync(
+      path.join(root, "drop-tools", "plugin.mjs"),
+      `export function createPlugin() {
+  return { id: "drop-tools", kind: "tools", tools: [] };
+}
+`,
+    );
+    const loader = createPluginLoader();
+    await reconcileManagedProcessPlugins(loader, root);
+    let disposed = false;
+    const live = loader.list().find((p) => p.id === "drop-tools");
+    expect(live).toBeDefined();
+    // Replace with a dispose-instrumented registration of the same id.
+    await loader.unregister("drop-tools");
+    loader.register({
+      id: "drop-tools",
+      kind: "tools",
+      tools: [],
+      dispose: () => {
+        disposed = true;
+      },
+    });
+    writeDisabledPluginIdsAt(root, new Set(["drop-tools"]));
+    const keptAfter = await reconcileManagedProcessPlugins(loader, root);
+    expect(disposed).toBe(true);
+    expect(loader.list().map((p) => p.id)).toEqual([]);
+    expect(keptAfter.pairing?.paired).toBe(true);
+    expect(keptAfter.pairing?.stillLoaded).toEqual([]);
+  });
+
+  it("loadAll skips soft-disabled ids (incl. skipLoad cordis stubs)", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-loader-loadall-soft-"));
+    temps.push(root);
+    mkdirSync(path.join(root, "keep-tools"), { recursive: true });
+    writeFileSync(
+      path.join(root, "keep-tools", "xrk.plugin.json"),
+      JSON.stringify({ id: "keep-tools", kind: "tools", entry: "./plugin.mjs" }),
+    );
+    writeFileSync(
+      path.join(root, "keep-tools", "plugin.mjs"),
+      `export function createPlugin() {
+  return { id: "keep-tools", kind: "tools", tools: [] };
+}
+`,
+    );
+    mkdirSync(path.join(root, "ghost-cordis"), { recursive: true });
+    writeFileSync(
+      path.join(root, "ghost-cordis", "package.json"),
+      JSON.stringify({
+        name: "ghost-cordis",
+        peerDependencies: { "@xrkseek/cordis": "*" },
+        main: "./boom.mjs",
+      }),
+    );
+    writeFileSync(
+      path.join(root, "ghost-cordis", "boom.mjs"),
+      `throw new Error("must not import");
+`,
+    );
+    writeInventory(root, {
+      "ghost-cordis": {
+        name: "ghost-cordis",
+        version: "1.0.0",
+        kind: "process",
+      },
+    });
+    writeDisabledPluginIdsAt(root, new Set(["ghost-cordis"]));
+    const loader = createPluginLoader();
+    const loaded = await loader.loadAll(root);
+    expect(loaded.ids).toEqual(["keep-tools"]);
+    expect(loader.list().map((p) => p.id)).toEqual(["keep-tools"]);
   });
 });

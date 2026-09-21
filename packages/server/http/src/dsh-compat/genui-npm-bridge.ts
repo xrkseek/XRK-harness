@@ -89,6 +89,8 @@ export function resolveGenuiNpmPackage(
   const res = spawnSync(npmCmd, ["view", trimmed, "name", "version", "description", "--json"], {
     encoding: "utf8",
     timeout: 20_000,
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "pipe"],
   });
   if (res.status !== 0) {
     return {

@@ -26,9 +26,36 @@ describe("cli parseArgs", () => {
     expect(a.persist).toBe(true);
   });
 
-  it("parses presentation code", () => {
-    const a = parseArgs(["run", "--presentation", "code"]);
-    expect(a.presentation).toBe("code");
+  it("parses --json and --session-id for run", () => {
+    const a = parseArgs([
+      "run",
+      "--json",
+      "--session-id",
+      "sess_abc",
+      "continue",
+    ]);
+    expect(a.json).toBe(true);
+    expect(a.sessionId).toBe("sess_abc");
+    expect(a.prompt).toBe("continue");
+    expect(a.promptExplicit).toBe(true);
+    expect(a.promptFromStdin).toBe(false);
+  });
+
+  it("treats lone - as stdin marker", () => {
+    const a = parseArgs(["run", "-"]);
+    expect(a.promptFromStdin).toBe(true);
+    expect(a.promptExplicit).toBe(false);
+    expect(a.prompt).toBe("-");
+  });
+
+  it("rejects - mixed with other task words", () => {
+    expect(() => parseArgs(["run", "-", "extra"])).toThrow(/only task/);
+  });
+
+  it("rejects empty --session-id", () => {
+    expect(() => parseArgs(["run", "--session-id", "", "hi"])).toThrow(
+      /non-empty/,
+    );
   });
 
   it("treats web as serve", () => {
@@ -37,6 +64,28 @@ describe("cli parseArgs", () => {
     expect(a.port).toBe(8080);
     expect(a.open).toBe(true);
     expect(a.preset).toBe("harness");
+  });
+
+  it("treats Host preset id as web --preset (DSH-style shortcut)", () => {
+    const a = parseArgs(["frugal", "--port", "8791", "--open"]);
+    expect(a.command).toBe("serve");
+    expect(a.preset).toBe("frugal");
+    expect(a.port).toBe(8791);
+    expect(a.open).toBe(true);
+    expect(parseArgs(["shallow"]).preset).toBe("shallow");
+    expect(parseArgs(["minimal"]).preset).toBe("minimal");
+    expect(parseArgs(["harness"]).preset).toBe("harness");
+    expect(parseArgs(["server"]).preset).toBe("server");
+    expect(parseArgs(["plan"]).preset).toBe("plan");
+  });
+
+  it("lets --preset override a profile shortcut", () => {
+    expect(parseArgs(["frugal", "--preset", "minimal"]).preset).toBe("minimal");
+  });
+
+  it("rejects unknown first tokens that are not Host presets", () => {
+    expect(() => parseArgs(["not-a-preset"])).toThrow(/unknown command/);
+    expect(() => parseArgs(["not-a-preset"])).toThrow(/Host preset/);
   });
 
   it("defaults run to minimal and serve/restart to harness", () => {
@@ -91,12 +140,61 @@ describe("cli parseArgs", () => {
     ]);
   });
 
+  it("parses skill and keeps remaining argv (flags are subcommand-scoped)", () => {
+    const a = parseArgs([
+      "skill",
+      "add",
+      "./skills/office-ping",
+      "--force",
+      "--workspace",
+      ".",
+    ]);
+    expect(a.command).toBe("skill");
+    expect(a.skillArgv).toEqual([
+      "add",
+      "./skills/office-ping",
+      "--force",
+      "--workspace",
+      ".",
+    ]);
+    // `skill` owns its argv, so top-level flags stay untouched.
+    expect(a.pluginArgv).toEqual([]);
+    expect(a.force).toBe(false);
+  });
+
+  it("parses mcp and keeps remaining argv (subcommand + server + flags)", () => {
+    const a = parseArgs([
+      "mcp",
+      "login",
+      "linear",
+      "--client-id",
+      "xrk-cli",
+      "--json",
+    ]);
+    expect(a.command).toBe("mcp");
+    expect(a.mcpArgv).toEqual([
+      "login",
+      "linear",
+      "--client-id",
+      "xrk-cli",
+      "--json",
+    ]);
+    // `mcp` owns its argv, so sibling buckets stay empty and top-level flags
+    // are not stolen from the subcommand parser.
+    expect(a.skillArgv).toEqual([]);
+    expect(a.pluginArgv).toEqual([]);
+    expect(a.force).toBe(false);
+  });
+
   it("help text mentions web and persist", () => {
     expect(helpText()).toContain("xrkh —");
     expect(helpText()).toContain("doctor");
     expect(helpText()).toContain("web");
     expect(helpText()).toContain("restart");
     expect(helpText()).toContain("plugin");
+    expect(helpText()).toContain("skill");
+    expect(helpText()).toContain("mcp");
+    expect(helpText()).toContain("acp");
     expect(helpText()).toContain("--force");
     expect(helpText()).toContain("--verbose");
     expect(helpText()).toContain("--no-persist");

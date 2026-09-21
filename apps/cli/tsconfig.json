@@ -9,9 +9,12 @@
   "references": [
     { "path": "../../packages/core/session" },
     { "path": "../../packages/llm/registry" },
+    { "path": "../../packages/mcp" },
     { "path": "../../packages/policy" },
     { "path": "../../packages/server/config" },
     { "path": "../../packages/server/host" },
+    { "path": "../../packages/util/home-paths" },
+    { "path": "../../packages/workspace" },
     { "path": "../../presets/minimal" },
     { "path": "../../presets/harness" },
     { "path": "../../presets/server" }

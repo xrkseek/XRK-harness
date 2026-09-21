@@ -1,5 +1,5 @@
-import { realpath } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
+import { access, realpath } from "node:fs/promises";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@xrkseek/core-tools";
 import type {
   RegisteredPlugin,
@@ -167,14 +167,31 @@ function asPlugin(value: unknown, label: string): RegisteredPlugin {
 /**
  * Native dynamic import that Vitest/Vite cannot rewrite.
  * Needed for percent-encoded non-ASCII file URLs (e.g. Chinese path segments).
+ * Under Vitest's VM, Function-eval'd `import()` lacks a dynamic-import callback —
+ * fall back to importing the decoded absolute path with `@vite-ignore`
+ * (percent-encoded `file:` URLs are mis-resolved by Vite as literal `%XX` paths).
  */
-function importHref(href: string): Promise<Record<string, unknown>> {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval -- Vitest rewrites import(); Function keeps Node native loader
-  const run = new Function(
-    "specifier",
-    "return import(specifier)",
-  ) as (specifier: string) => Promise<Record<string, unknown>>;
-  return run(href);
+async function importHref(href: string): Promise<Record<string, unknown>> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval -- Vitest rewrites import(); Function keeps Node native loader
+    const run = new Function(
+      "specifier",
+      "return import(specifier)",
+    ) as (specifier: string) => Promise<Record<string, unknown>>;
+    return await run(href);
+  } catch (err) {
+    if (
+      !(err instanceof Error) ||
+      !/dynamic import callback was not specified/i.test(err.message)
+    ) {
+      throw err;
+    }
+    const absPath = fileURLToPath(href);
+    return (await import(/* @vite-ignore */ absPath)) as Record<
+      string,
+      unknown
+    >;
+  }
 }
 
 /**
@@ -214,9 +231,13 @@ export async function loadPluginModule(
 }
 
 export function stubFromManifest(
-  manifest: Pick<PluginManifest, "id" | "kind">,
+  manifest: Pick<PluginManifest, "id" | "kind" | "required">,
 ): RegisteredPlugin {
-  return { id: manifest.id, kind: manifest.kind };
+  return {
+    id: manifest.id,
+    kind: manifest.kind,
+    ...(manifest.required === true ? { required: true as const } : {}),
+  };
 }
 
 export async function loadDiscoveryHit(
@@ -224,6 +245,13 @@ export async function loadDiscoveryHit(
 ): Promise<RegisteredPlugin> {
   if (hit.manifest.skipLoad) {
     return stubFromManifest(hit.manifest);
+  }
+  try {
+    await access(hit.entry);
+  } catch {
+    throw new Error(
+      `plugin ${hit.manifest.id}: entry not found: ${hit.manifest.entry} (resolved ${hit.entry})`,
+    );
   }
   const plugin = await loadPluginModule(hit.entry);
   if (plugin.id !== hit.manifest.id) {
@@ -235,6 +263,9 @@ export async function loadDiscoveryHit(
     throw new Error(
       `plugin kind mismatch: manifest=${hit.manifest.kind} module=${plugin.kind}`,
     );
+  }
+  if (hit.manifest.required === true && plugin.required !== true) {
+    return { ...plugin, required: true };
   }
   return plugin;
 }

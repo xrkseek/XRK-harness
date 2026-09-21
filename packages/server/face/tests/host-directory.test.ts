@@ -93,11 +93,15 @@ describe("host directory (DSH browse shapes)", () => {
       const v = desc.result.value as {
         version: string;
         canOpenPath: boolean;
+        canPty?: boolean;
+        remoteExecution?: boolean;
         model?: string;
         provider?: string;
       };
       expect(v.version).toBe("test");
       expect(v.canOpenPath).toBe(true);
+      expect(v.canPty).toBe(true);
+      expect(v.remoteExecution).toBeUndefined();
       if (v.provider) {
         expect(typeof v.model === "string" || v.model === undefined).toBe(true);
       }
@@ -126,6 +130,97 @@ describe("host directory (DSH browse shapes)", () => {
     expect(open.result.ok).toBe(true);
     if (open.result.ok) {
       expect(open.result.value).toEqual({ opened: true });
+    }
+  });
+
+  it("remoteExecution gates native open/pick and routes directoryBackend", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: "/remote/work",
+      localHostRoot: process.cwd(),
+      remoteExecution: true,
+      directoryBackend: {
+        async list() {
+          return {
+            ok: true,
+            value: {
+              path: "/remote/work",
+              home: "/remote/work",
+              crumbs: [
+                { name: "/", path: "/", hidden: false },
+                { name: "remote", path: "/remote", hidden: false },
+                { name: "work", path: "/remote/work", hidden: false },
+              ],
+              entries: [
+                { name: "src", path: "/remote/work/src", hidden: false },
+              ],
+              truncated: false,
+            },
+          };
+        },
+        async create() {
+          return { ok: true, value: { path: "/remote/work/src/box" } };
+        },
+      },
+      version: "test-ssh",
+      registry: createProviderRegistry(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+
+    const desc = await dispatchFaceMethod(runtime, "host.describe", "rd1", {});
+    expect(desc.result.ok).toBe(true);
+    if (desc.result.ok) {
+      const v = desc.result.value as {
+        cwd: string;
+        hostRoot: string;
+        home: string;
+        canOpenPath: boolean;
+        canPty: boolean;
+        remoteExecution: boolean;
+        localHostRoot: string;
+      };
+      expect(v.remoteExecution).toBe(true);
+      expect(v.canOpenPath).toBe(false);
+      expect(v.canPty).toBe(false);
+      expect(v.cwd).toBe("/remote/work");
+      expect(v.home).toBe("/remote/work");
+      expect(v.hostRoot).toBe(process.cwd());
+      expect(v.localHostRoot).toBe(process.cwd());
+    }
+
+    const listed = await dispatchFaceMethod(
+      runtime,
+      "host.listDirectory",
+      "rl1",
+      {},
+    );
+    expect(listed.result.ok).toBe(true);
+    if (listed.result.ok) {
+      const v = listed.result.value as { entries: { name: string }[] };
+      expect(v.entries.some((e) => e.name === "src")).toBe(true);
+    }
+
+    const pick = await dispatchFaceMethod(
+      runtime,
+      "host.pickDirectory",
+      "rp1",
+      {},
+    );
+    expect(pick.result.ok).toBe(false);
+    if (!pick.result.ok) {
+      expect(pick.result.error.code).toBe("directory-picker-unavailable");
+    }
+
+    const open = await dispatchFaceMethod(runtime, "host.openPath", "ro1", {
+      path: "/remote/work",
+    });
+    expect(open.result.ok).toBe(false);
+    if (!open.result.ok) {
+      expect(open.result.error.code).toBe("bad-request");
     }
   });
 });

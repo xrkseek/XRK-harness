@@ -2,13 +2,15 @@ import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import {
-  HOME_INSTRUCTION_FINGERPRINT_MARKERS,
+  HOME_OS_INSTRUCTION_FINGERPRINT_MARKERS,
+  HOME_PRODUCT_INSTRUCTION_FINGERPRINT_MARKERS,
   WORKSPACE_INSTRUCTION_FINGERPRINT_MARKERS,
 } from "./inject-sources.js";
 import {
   resolveSkillDirs,
   skillDirsFingerprint,
 } from "./skill-dirs.js";
+import { resolveUserProductHome } from "./user-product-home.js";
 
 export interface InjectFingerprintOptions {
   readonly root: string;
@@ -30,7 +32,8 @@ async function markerFingerprint(base: string, rel: string): Promise<string> {
 
 /**
  * Cheap invalidation token — stat markers only, no file reads.
- * Markers follow {@link HOME_INSTRUCTION_FINGERPRINT_MARKERS} and
+ * Markers follow {@link HOME_OS_INSTRUCTION_FINGERPRINT_MARKERS},
+ * {@link HOME_PRODUCT_INSTRUCTION_FINGERPRINT_MARKERS}, and
  * {@link WORKSPACE_INSTRUCTION_FINGERPRINT_MARKERS} in `inject-sources.ts`.
  */
 export async function computeInjectFingerprint(
@@ -42,12 +45,15 @@ export async function computeInjectFingerprint(
 
   if (options.includeUserHome !== false) {
     const home = path.resolve(options.homeDir ?? homedir());
-    for (const rel of HOME_INSTRUCTION_FINGERPRINT_MARKERS) {
+    for (const rel of HOME_OS_INSTRUCTION_FINGERPRINT_MARKERS) {
       parts.push(`home:${await markerFingerprint(home, rel)}`);
     }
-    parts.push(
-      `home-product:${await markerFingerprint(path.join(home, ".xrk"), "AGENTS.md")}`,
-    );
+    const userProduct = resolveUserProductHome(options.homeDir);
+    for (const rel of HOME_PRODUCT_INSTRUCTION_FINGERPRINT_MARKERS) {
+      parts.push(
+        `home-product:${await markerFingerprint(userProduct, rel)}`,
+      );
+    }
   }
 
   for (const rel of WORKSPACE_INSTRUCTION_FINGERPRINT_MARKERS) {

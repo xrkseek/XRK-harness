@@ -13,7 +13,7 @@
 | `index.ts` | `createHostManager` · spawn/stop | AgentHandle 可缓存绑定，**不可**当 transcript |
 | `agent-cache.ts` | 按 session 缓存 agent · `host.plugins` Scope | 根会话 `agent:{id}`；子会话 `openSubagentRealm`（`subagent:{id}`）；invalidate 父卸嵌套子 |
 | `standing-tools.ts` | preset standing 工具表（Face `viewFor`） | 冷 history 不 resume agent；Host composition=`minimal` → fs+std+skill；其余徽章 → 完整 harness presenters（bash+web+lsp+pty） |
-| `mcp-wire.ts` | `XRK_MCP_SERVERS` 或 `~/.xrk/host-settings.json` → 合成 `kind: tools` 插件；文件真源时 Face mutate → `reconcileMcpToolPlugins`；stdio 默认 cwd = `~/.xrk/mcp-cwd/<name>` | 须 allow；id = `mcp:<serverName>`；stdio/HTTP 有界重连；list_changed / health / gave-up 刷新 tools + invalidateAll；health 推 overlay；`gave-up` 同 fingerprint 也会 replace；env/config 非空赢过文件（无 live sync） |
+| `mcp-wire.ts` | `XRK_MCP_SERVERS` 或 `~/.xrk/host-settings.json` → 合成 `kind: tools` 插件；文件真源时 Face mutate → `reconcileMcpToolPlugins`；stdio 默认 cwd = `~/.xrk/mcp-cwd/<name>`；工作区 cwd 须 `cwdAllowWorkspace`；有活 server 时挂 `mcp-resources` 共享工具 | 须 allow；id = `mcp:<serverName>`；stdio/HTTP 有界重连；list_changed / health / gave-up 刷新 tools + invalidateAll；health 推 overlay；`gave-up` 同 fingerprint 也会 replace；env/config 非空赢过文件（无 live sync） |
 
 配置在 `@xrkseek/server-config`（`loadHostConfig`）。
 
@@ -38,7 +38,7 @@
 | `XRK_WORKSPACE` | workspaceRoot |
 | `XRK_PRESET` | minimal \| shell \| frugal \| plan \| shallow \| harness \| server |
 | `XRK_API_KEY` | Face/HTTP 鉴权（空=开发免鉴权） |
-| `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db`）；省略 = 内存 store（CLI `serve` 另有默认 `~/.xrk/sessions`） |
+| `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db`）；独占写锁，第二实例拒绝抢写；省略 = 内存 store（CLI `serve` 另有默认 `~/.xrk/sessions`） |
 | `XRK_PLUGINS_DIR` | 进程插件根；`web/` 子目录为客户端叠加（boot + `/plugins/…`） |
 | `XRK_WEB_DIST` | 静态壳覆盖；缺省见 CLI（`product-web/` 或 apps/web/dist） |
 | `XRK_POLICY_FILE` | policy JSON |
@@ -108,7 +108,7 @@ Specs: [host-preset.md](../host-preset.md) · [http-api.md](../http-api.md).
 | `index.ts` | `createHostManager` · spawn/stop | AgentHandle may be a cached binding, **not** the transcript |
 | `agent-cache.ts` | Per-session agent cache · `host.plugins` Scope | Root `agent:{id}`; child `openSubagentRealm` (`subagent:{id}`); invalidate parent unloads nested children |
 | `standing-tools.ts` | Preset standing tool table (Face `viewFor`) | Cold history does not resume the agent; Host composition=`minimal` → fs+std+skill; other badges → full harness presenters (bash+web+lsp+pty) |
-| `mcp-wire.ts` | `XRK_MCP_SERVERS` or `~/.xrk/host-settings.json` → synthetic `kind: tools` plugins; on file source of truth, Face mutate → `reconcileMcpToolPlugins`; stdio default cwd = `~/.xrk/mcp-cwd/<name>` | Must allow; id = `mcp:<serverName>`; bounded stdio/HTTP reconnect; list_changed / health / gave-up refresh tools + invalidateAll; health pushes overlay; `gave-up` with same fingerprint still replaces; non-empty env/config wins over file (no live sync) |
+| `mcp-wire.ts` | `XRK_MCP_SERVERS` or `~/.xrk/host-settings.json` → synthetic `kind: tools` plugins; on file source of truth, Face mutate → `reconcileMcpToolPlugins`; stdio default cwd = `~/.xrk/mcp-cwd/<name>`; workspace cwd requires `cwdAllowWorkspace`; registers `mcp-resources` shared tools while any server is live | Must allow; id = `mcp:<serverName>`; bounded stdio/HTTP reconnect; list_changed / health / gave-up refresh tools + invalidateAll; health pushes overlay; `gave-up` with same fingerprint still replaces; non-empty env/config wins over file (no live sync) |
 
 Config lives in `@xrkseek/server-config` (`loadHostConfig`).
 
@@ -133,7 +133,7 @@ Shutdown: `agentCache.dispose` → `shellJobs.dispose` (if any) → PTY `dispose
 | `XRK_WORKSPACE` | workspaceRoot |
 | `XRK_PRESET` | minimal \| shell \| frugal \| plan \| shallow \| harness \| server |
 | `XRK_API_KEY` | Face/HTTP auth (empty = dev no-auth) |
-| `XRK_SESSIONS_DIR` | Session persistence dir (`sessions.db`); omit = in-memory store (CLI `serve` defaults to `~/.xrk/sessions`) |
+| `XRK_SESSIONS_DIR` | Session persistence dir (`sessions.db`); exclusive write lock — a second instance refuses to steal; omit = in-memory store (CLI `serve` defaults to `~/.xrk/sessions`) |
 | `XRK_PLUGINS_DIR` | Process plugin root; `web/` is client overlay (boot + `/plugins/…`) |
 | `XRK_WEB_DIST` | Static shell override; CLI default is `product-web/` or apps/web/dist |
 | `XRK_POLICY_FILE` | Policy JSON |

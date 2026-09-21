@@ -9,6 +9,7 @@ import {
   startImVendorWsClient,
   stopImVendorWsClient,
 } from "./im-vendor-ws-client.js";
+import { configureImGatewayLocalWs } from "./im-gateway-local-ws.js";
 import { rebuildEmbeddedVectorIndex } from "./memory-embeddings.js";
 import { resolveTongflowPythonCommand } from "./tongflow-python-bridge.js";
 
@@ -27,6 +28,10 @@ export async function bootDshCompatServices(
 ): Promise<DshCompatBootResult & { close(): void }> {
   const env = process.env;
   const xrkHome = options.xrkHome;
+  configureImGatewayLocalWs({
+    ...(xrkHome ? { xrkHome } : {}),
+    env,
+  });
   const embeddedRows = rebuildEmbeddedVectorIndex(xrkHome);
 
   const wsUrl = readImVendorWsUrl(env);

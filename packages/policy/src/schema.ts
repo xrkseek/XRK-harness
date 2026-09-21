@@ -20,6 +20,11 @@ export const policyRulesetJsonSchema = {
         "tool.call": { enum: ["allow", "deny", "ask"] },
         "provider.use": { enum: ["allow", "deny", "ask"] },
         "mcp.connect": { enum: ["allow", "deny", "ask"] },
+        "mcp.resource": { enum: ["allow", "deny", "ask"] },
+        "host.open": { enum: ["allow", "deny", "ask"] },
+        "sidebar.embed": { enum: ["allow", "deny", "ask"] },
+        "sidebar.fs": { enum: ["allow", "deny", "ask"] },
+        "office.connect": { enum: ["allow", "deny", "ask"] },
       },
     },
     rules: {
@@ -38,7 +43,16 @@ export const policyRulesetJsonSchema = {
             additionalProperties: false,
             properties: {
               kind: {
-                enum: ["tool.call", "provider.use", "mcp.connect"],
+                enum: [
+                  "tool.call",
+                  "provider.use",
+                  "mcp.connect",
+                  "mcp.resource",
+                  "host.open",
+                  "sidebar.embed",
+                  "sidebar.fs",
+                  "office.connect",
+                ],
               },
               names: {
                 type: "array",

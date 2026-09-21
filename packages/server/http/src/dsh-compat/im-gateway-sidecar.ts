@@ -5,6 +5,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { ingestImWebhook } from "./im-messaging-bridge.js";
 import { adapterEcho } from "./honest-envelope.js";
+import { IM_GATEWAY_LOCAL_WS_PATH } from "./im-gateway-local-ws.js";
 import { sendJson } from "./underlying/http-json.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
 
@@ -76,11 +77,14 @@ export function imGatewaySidecarStatusPayload(
     return {
       ok: true,
       channel,
-      state: "unavailable",
-      transport: null,
+      state: "bridge",
+      transport: "host-ingress",
       sidecar: null,
+      localWsPath: IM_GATEWAY_LOCAL_WS_PATH,
       relayPath: "/api/im/gateway/relay",
+      healthPath: "/api/im/gateway/health",
       env: [IM_GATEWAY_ENV_URL, IM_GATEWAY_ENV_TOKEN],
+      note: "No external gateway env. Local WS and relay accept push; webhook/poll stay available.",
       adr: "docs/adr/0006-im-long-lived-gateway.md",
       ...adapterEcho(),
     };
@@ -105,6 +109,7 @@ export function imGatewaySidecarStatusPayload(
     },
     relayPath: "/api/im/gateway/relay",
     healthPath: "/api/im/gateway/health",
+    localWsPath: IM_GATEWAY_LOCAL_WS_PATH,
     env: [IM_GATEWAY_ENV_URL, IM_GATEWAY_ENV_TOKEN],
     note: reachable
       ? "Sidecar reachable; push vendor events to relayPath with gateway token."
@@ -129,10 +134,14 @@ export async function handleImGatewaySidecarHttp(
     sendJson(res, 200, {
       ok: true,
       configured: !!config,
+      localWsPath: IM_GATEWAY_LOCAL_WS_PATH,
       probe,
       relayPath: "/api/im/gateway/relay",
       env: [IM_GATEWAY_ENV_URL, IM_GATEWAY_ENV_TOKEN],
       adapter: "xrk-dsh-compat",
+      note: config
+        ? "External sidecar configured. Local WS ingress stays available."
+        : "Local WS ingress is up without XRK_IM_GATEWAY_*.",
     });
     return true;
   }

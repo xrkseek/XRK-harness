@@ -49,6 +49,8 @@ export const EVENT_ISOMORPHISM = {
   "request/header": "request.header",
   "llm/retry": "llm.retry",
   "llm/retry-started": "llm.retry-started",
+  "image/offload": "image/offload",
+  "workspace/changes": "workspace/changes",
 } as const satisfies Record<SessionEvent["type"], string>;
 
 /** SessionEvent envelope on the Face wire. */
@@ -423,11 +425,25 @@ export function toFaceWireSessionEvent(
     case "request/header":
     case "llm/retry":
     case "llm/retry-started":
+    case "image/offload":
       return {
         type: event.type,
         seq,
         time,
         data: stripBase(event),
+        ignorable: true,
+      };
+    case "workspace/changes":
+      // Numeric `turn` for conversation turn-tail fold; Face `seq` is the envelope.
+      return {
+        type: event.type,
+        seq,
+        time,
+        data: {
+          turn: turnNum(ctx, event.turnId),
+          turnId: event.turnId,
+          summary: event.summary,
+        },
         ignorable: true,
       };
     case "prompt/admitted":

@@ -1,6 +1,7 @@
 import type { ToolCall, ToolResult } from "./tools.js";
 import type { MessageContent } from "./content.js";
 import type { TokenUsage } from "./token-usage.js";
+import type { WorkspaceChangesSummary } from "./workspace-changes.js";
 import { randomUUID } from "node:crypto";
 
 /** Append-only session facts (M0 minimal set). */
@@ -519,6 +520,35 @@ export interface LlmRetryStartedEvent extends SessionEventBase {
   readonly retry: number;
 }
 
+/**
+ * Permanently omit selected input-image occurrences from subsequent model
+ * requests. `seq` is the 0-based durable-log index of a `user/message` or
+ * `tool/result`. `imageIndexes` are zero-based depth-first image indexes
+ * within that event's content (including already-offloaded images). Message
+ * events stay unchanged; deriveMessages projects `ImageBlock.offloaded`.
+ */
+export interface ImageOffloadTarget {
+  readonly seq: number;
+  readonly imageIndexes: readonly number[];
+}
+
+export interface ImageOffloadEvent extends SessionEventBase {
+  readonly type: "image/offload";
+  readonly targets: readonly ImageOffloadTarget[];
+}
+
+/**
+ * Turn-end changed-files announcement (DSH `workspace/changes`).
+ * Log-only — Face `workspaceChanges` projection; not model-visible.
+ * Summary is embedded so cold reopen can render the conversation card without
+ * Host-only capture memory. Per-file hunks stay on-demand (`WorkspaceFileDiff`).
+ */
+export interface WorkspaceChangesEvent extends SessionEventBase {
+  readonly type: "workspace/changes";
+  readonly turnId: string;
+  readonly summary: WorkspaceChangesSummary;
+}
+
 export type SessionEvent =
   | TurnStartEvent
   | TurnEndEvent
@@ -547,7 +577,10 @@ export type SessionEvent =
   | FeedbackRecordEvent
   | RequestHeaderEvent
   | LlmRetryEvent
-  | LlmRetryStartedEvent;
+  | LlmRetryStartedEvent
+  | ImageOffloadEvent
+  | WorkspaceChangesEvent;
+
 
 const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "turn/start",
@@ -578,6 +611,8 @@ const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "request/header",
   "llm/retry",
   "llm/retry-started",
+  "image/offload",
+  "workspace/changes",
 ]);
 
 /**

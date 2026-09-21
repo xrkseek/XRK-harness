@@ -26,8 +26,10 @@
   "dependencies": {
     "@xrkseek/core-agent": "workspace:*",
     "@xrkseek/core-session": "workspace:*",
+    "@xrkseek/policy": "workspace:*",
     "@xrkseek/protocol": "workspace:*",
     "@xrkseek/server-loader": "workspace:*",
+    "@xrkseek/xrk-home-paths": "workspace:*",
     "qrcode-generator": "1.4.4"
   },
   "license": "MIT",

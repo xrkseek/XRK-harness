@@ -1,9 +1,11 @@
 /**
  * Plan control plugin, browser half: occupies the composer's named
- * `conversation.input.plan` seat with an active-state status chip. Plan mode
- * is entered through the command source; while the projection's effective
- * target is plan mode the chip renders and executes /plan off through
- * `command.execute`, otherwise the seat stays empty. Reads ride the generic
+ * `conversation.input.plan` seat with an active-state status chip, and the
+ * details column with plan / Office preview tabs. Plan mode is entered
+ * through the command source; while the projection's effective target is
+ * plan mode the chip renders and executes /plan off through
+ * `command.execute`, otherwise the seat stays empty. The preview tabs read
+ * existing `plan.preview` and `/office` status. Chip reads ride the generic
  * projection pair through the standard-kit `useProjection`; zero client-side
  * plan state.
  */
@@ -13,9 +15,12 @@ import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-ui-conversation/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@xrkseek/client-locale/client'
+// Type-only: pulls ctx.layout so the preview column can open and close.
+import type {} from '@xrkseek/client-ui-layout/client'
 // Type-only: pulls the `plan` SessionProjectionMap merge for useProjection.
 import type {} from '@xrkseek/xrk-plan-mode/client'
 import { PlanChip } from './PlanModeControl.tsx'
+import { PreviewOpenButton, PreviewTabs } from './PreviewTabs.tsx'
 import { en, zh, type PlanKey } from './locales.ts'
 
 export type { PlanKey } from './locales.ts'
@@ -39,8 +44,8 @@ export interface PlanChipInjected {
   exitPlanMode: () => Promise<string | null>
 }
 
-/** Required services: the seat's slot registry, commands Remote, and locale registry. */
-export const inject = ['slots', 'remote', 'remote.commands', 'locale']
+/** Required services: slots, commands Remote, locale, and the layout column. */
+export const inject = ['slots', 'remote', 'remote.commands', 'locale', 'layout']
 
 /**
  * Client plugin body: register the plan chip over the command channel.
@@ -62,4 +67,22 @@ export function apply(ctx: ClientContext): void {
       },
     }),
   }, PlanChip))
+
+  ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
+    name: 'conversation.composer.dock',
+    id: 'preview',
+    order: 10,
+    locale: NS,
+    inject: () => ({
+      openPreview: () => { ctx.layout.openDetails() },
+    }),
+  }, PreviewOpenButton))
+
+  ctx.slots.inject('details', () => ctx.slots.register({
+    name: 'details',
+    locale: NS,
+    inject: () => ({
+      closeDetails: () => { ctx.layout.closeDetails() },
+    }),
+  }, PreviewTabs))
 }

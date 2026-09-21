@@ -6,7 +6,6 @@
  * | `GET /xrk/plugins/inventory` | CLI-installed user plugins |
  * | `GET /xrk/plugins/catalog` | Community catalog (awesome) |
  */
-import type { IncomingMessage, ServerResponse } from "node:http";
 import { sendJson } from "../http-json.js";
 import {
   createPublicRouteHandler,
@@ -63,13 +62,4 @@ export function createXrkPluginPublicHandler(
   options: XrkPluginServicesOptions = {},
 ): PublicRouteHandlerFn {
   return createPublicRouteHandler(createXrkPluginRoutes(options));
-}
-
-/** @deprecated use createXrkPluginPublicHandler — kept for call-site clarity */
-export function handleXrkPluginRequest(
-  req: IncomingMessage,
-  res: ServerResponse,
-  options: XrkPluginServicesOptions = {},
-): Promise<boolean> {
-  return Promise.resolve(createXrkPluginPublicHandler(options)(req, res));
 }

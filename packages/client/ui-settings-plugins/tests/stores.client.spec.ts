@@ -384,6 +384,34 @@ describe('AgentLoopCardController', () => {
     })
   })
 
+  it('saves subagent depth and active caps when edited', async () => {
+    const host = stubSettingsScope<AgentLoopSettings>()
+    acceptWrites(host)
+    const controller = new AgentLoopCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { maxSubagentDepth: 2, maxActiveSubagents: 2 },
+      base: { maxSubagentDepth: 2, maxActiveSubagents: 2 },
+      user: {},
+    })
+    const face = controller.inject()
+
+    face.edit('maxSubagentDepth', '1')
+    face.edit('maxActiveSubagents', '3')
+    face.save()
+    await vi.waitFor(() => {
+      expect(host.set).toHaveBeenCalledWith('maxSubagentDepth', 1)
+      expect(host.set).toHaveBeenCalledWith('maxActiveSubagents', 3)
+    })
+
+    expect(face.hooks.agentLoopCard.getSnapshot()).toMatchObject({
+      dirty: false,
+      maxSubagentDepth: { text: '1', overridden: true },
+      maxActiveSubagents: { text: '3', overridden: true },
+    })
+  })
+
   it('reports a read-only document so the card can disable its controls', () => {
     const host = stubSettingsScope<AgentLoopSettings>()
     const controller = new AgentLoopCardController(host.scope)
@@ -609,6 +637,9 @@ describe('McpCardController', () => {
         url: '',
         args: '-y, demo-mcp',
         cwd: '',
+        cwdAllowWorkspace: false,
+        status: 'idle',
+        toolCount: 0,
       },
       {
         serverName: 'other',
@@ -617,8 +648,42 @@ describe('McpCardController', () => {
         url: '',
         args: 'other-mcp',
         cwd: '',
+        cwdAllowWorkspace: false,
+        status: 'idle',
+        toolCount: 0,
       },
     ])
+  })
+
+  it('requires workspace-cwd ack before save when cwd is set', async () => {
+    const host = stubSettingsScope<McpSettings>()
+    const controller = new McpCardController(host.scope)
+    host.publish({ status: 'ready', writable: true, value: { servers: [] }, base: {}, user: {} })
+    const face = controller.inject()
+    face.addRow(JSON.stringify({
+      mcpServers: {
+        pw: { command: 'npx', args: ['-y', '@playwright/mcp'], cwd: '.' },
+      },
+    }))
+    expect(face.hooks.mcpCard.getSnapshot()).toMatchObject({
+      cwdNeedsAck: true,
+      dirty: true,
+    })
+    face.save()
+    expect(host.set).not.toHaveBeenCalled()
+    expect(face.hooks.mcpCard.getSnapshot().showErrors).toBe(true)
+
+    face.setAllowWorkspaceCwd(true)
+    expect(face.hooks.mcpCard.getSnapshot().cwdNeedsAck).toBe(false)
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalled() })
+    expect(host.set).toHaveBeenCalledWith('servers', [{
+      serverName: 'pw',
+      command: 'npx',
+      args: ['-y', '@playwright/mcp'],
+      cwd: '.',
+      cwdAllowWorkspace: true,
+    }])
   })
 
   it('reseeds from an external mutate instead of freezing an empty unsaved draft', () => {

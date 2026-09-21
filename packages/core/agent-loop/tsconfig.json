@@ -11,6 +11,7 @@
     { "path": "../system-prompt" },
     { "path": "../tools" },
     { "path": "../../llm/llm" },
-    { "path": "../../protocol" }
+    { "path": "../../protocol" },
+    { "path": "../../util/home-paths" }
   ]
 }

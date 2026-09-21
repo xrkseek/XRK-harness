@@ -2,37 +2,26 @@
  * Full projected transcripts for bounded `@session` previews.
  * When retention truncates, the complete capture is written under
  * `~/.xrk/spill/<ownerSessionId>/` so the model can `read_file` it
- * (same root as tool-result spill; Host adds that root to hostReadableRoots).
+ * (Host `hostReadableRoots` includes `~/.xrk/spill`). Tool-result bodies
+ * use `spill/tool-outputs/` — this directory is transcripts only.
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
+import { resolveXrkHome, capSpillText, pruneSpillTree } from "@xrkseek/xrk-home-paths";
 import type {
   ReferencedSessionData,
   ReferenceRetentionStats,
 } from "./retention.js";
 
-function expandHomePath(value: string): string {
-  if (value === "~") return homedir();
-  if (value.startsWith("~/") || value.startsWith("~\\")) {
-    return path.join(homedir(), value.slice(2));
-  }
-  return value;
-}
-
 /**
- * Shared with tool-result spill (`@xrkseek/core-agent-loop` tool-result-bound).
+ * Parent of tool-result files (`spill/tool-outputs`) and these transcripts.
  * Resolved at call time so `XRK_HOME` set in tests after import still applies.
  */
 export function resolveSessionReferenceSpillRoot(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  for (const key of ["XRK_HOME", "XRK_DSH_HOME", "DSH_HOME"] as const) {
-    const raw = env[key]?.trim();
-    if (raw) return path.join(path.resolve(expandHomePath(raw)), "spill");
-  }
-  return path.join(homedir(), ".xrk", "spill");
+  return path.join(resolveXrkHome(env), "spill");
 }
 
 /** Warning shared by inline previews and retrievable full transcripts. */
@@ -80,13 +69,15 @@ export function prepareReferenceOmission(
       resolveSessionReferenceSpillRoot(),
       ownerSessionId.replace(/[^\w.-]+/g, "_"),
     );
+    pruneSpillTree(resolveSessionReferenceSpillRoot());
     mkdirSync(sessionDir, { recursive: true });
     const locator = path.join(
       sessionDir,
       `session-reference-${inputIndex + 1}.txt`,
     );
-    writeFileSync(locator, content, "utf8");
-    const bytes = Buffer.byteLength(content, "utf8");
+    const body = capSpillText(content);
+    writeFileSync(locator, body, "utf8");
+    const bytes = Buffer.byteLength(body, "utf8");
     fullSnapshot = {
       status: "saved",
       locator,

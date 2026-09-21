@@ -40,11 +40,16 @@ export function loadBootManifestFromWebDist(
   }
 }
 
-/** Historical Cordis UI / runner ids (no longer in-tree) plus HMR. */
+/**
+ * Product SPA boot omit list (mirrored by `scripts/product-boot-omit.mjs`).
+ * Historical Cordis UI / runner (out of tree), HMR, native OS picker
+ * (fights in-app browse), dsh-pocket. Overlay cannot put them back.
+ */
 export const XRK_OMIT_CLIENT_PLUGIN_IDS = [
   "@xrkseek/client-ui-cordis",
   "@xrkseek/xrk-cordis-client-runner",
   "@xrkseek/client-hmr",
+  "@xrkseek/client-ui-directory-picker-native",
   "dsh-pocket",
 ] as const;
 

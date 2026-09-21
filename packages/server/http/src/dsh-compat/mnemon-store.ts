@@ -26,6 +26,11 @@ export function listMnemonDocuments(xrkHome?: string): MnemonDocument[] {
   return MNEMON_DOCS.read(xrkHome).data.documents.filter((d) => !d.archived);
 }
 
+/** Active + archived rows (engine index). */
+export function listAllMnemonDocuments(xrkHome?: string): MnemonDocument[] {
+  return [...MNEMON_DOCS.read(xrkHome).data.documents];
+}
+
 export function countMnemonDocuments(xrkHome?: string): {
   active: number;
   archived: number;

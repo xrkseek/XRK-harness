@@ -1,10 +1,10 @@
 /**
- * Honest stub for cloud IM long-lived gateway (vendor push / persistent tunnel).
- * Short-request bridge: im-messaging-bridge.ts (webhook · poll · SSE snapshot).
- * Optional sidecar: im-gateway-sidecar.ts (XRK_IM_GATEWAY_* env).
- * In-process WS client: im-vendor-ws-client.ts (XRK_IM_GATEWAY_WS_URL or sidecar /ws).
+ * Cloud IM long-lived gateway status + connect RPC (ADR-0006).
+ * Product path today: webhook/poll bridge always; optional sidecar / Host WS client.
+ * Not a fake empty product — bridge paths are real; vendor cloud push needs env.
  */
 import { adapterEcho } from "./honest-envelope.js";
+import { IM_CHANNEL_NAMES } from "./im-vendors.js";
 import {
   imGatewaySidecarStatusPayload,
   probeImGatewaySidecar,
@@ -16,19 +16,10 @@ import {
   startImVendorWsClient,
   stopImVendorWsClient,
 } from "./im-vendor-ws-client.js";
+import { IM_GATEWAY_LOCAL_WS_PATH } from "./im-gateway-local-ws.js";
 
-/** Vendor channel ids aligned with im-channels.ts. */
-export const IM_GATEWAY_VENDORS = [
-  "dingtalk",
-  "feishu",
-  "wecom",
-  "qq",
-  "telegram",
-  "discord",
-  "whatsapp",
-  "slack",
-  "weixin",
-] as const;
+/** @deprecated Prefer {@link IM_CHANNEL_NAMES} — kept for existing test imports. */
+export const IM_GATEWAY_VENDORS = IM_CHANNEL_NAMES;
 
 export function imLongLivedGatewayBridgePaths(
   channel: string,
@@ -39,6 +30,17 @@ export function imLongLivedGatewayBridgePaths(
     send: `/api/im/${channel}/send`,
     messages: `/api/im/${channel}/messages`,
     mode: "xrk-bridge",
+  };
+}
+
+function gatewayMeta(channel: string): Record<string, unknown> {
+  return {
+    channel,
+    vendors: [...IM_CHANNEL_NAMES],
+    bridge: imLongLivedGatewayBridgePaths(channel),
+    adr: "docs/adr/0006-im-long-lived-gateway.md",
+    localWsPath: IM_GATEWAY_LOCAL_WS_PATH,
+    ...adapterEcho(),
   };
 }
 
@@ -54,17 +56,13 @@ export function imLongLivedGatewayStatus(
   }
   return {
     ok: true,
-    channel,
     state: wsUrl ? (ws.connected ? "ws-connected" : "ws-configured") : "bridge",
     transport: wsUrl ? "websocket-client" : "http-bridge",
-    bridge: imLongLivedGatewayBridgePaths(channel),
     ws: wsUrl ? { url: wsUrl, ...ws } : null,
-    vendors: [...IM_GATEWAY_VENDORS],
-    adr: "docs/adr/0006-im-long-lived-gateway.md",
     note: wsUrl
       ? "Generic vendor WS client configured; webhook/poll bridge always available."
-      : "Webhook/poll/SSE bridge active; set XRK_IM_GATEWAY_URL or XRK_IM_GATEWAY_WS_URL for long-lived push.",
-    ...adapterEcho(),
+      : "Webhook/poll/SSE bridge active. Local WS ingress is up without XRK_IM_GATEWAY_*; set that env only to dial an external vendor relay.",
+    ...gatewayMeta(channel),
   };
 }
 
@@ -110,40 +108,33 @@ export function handleImLongLivedGatewayRpc(
     if (sidecar) {
       return {
         ok: true,
-        channel,
         mode: "sidecar",
         sidecarUrl: sidecar.url,
         relayPath: "/api/im/gateway/relay",
         healthPath: "/api/im/gateway/health",
         note: "Sidecar configured; vendor WS client runs out-of-process and relays inbound to Host.",
         bridgeAlternative: imLongLivedGatewayBridgePaths(channel),
-        adr: "docs/adr/0006-im-long-lived-gateway.md",
-        ...adapterEcho(),
+        ...gatewayMeta(channel),
       };
     }
     if (wsUrl) {
       const ws = startImVendorWsClient({ ...(xrkHome ? { xrkHome } : {}), env });
       return {
         ok: true,
-        channel,
         mode: "ws-client",
         wsUrl,
         connected: ws.connected,
         reconnects: ws.reconnects,
         note: "Host WebSocket client started; inbound JSON { channel, ... } ingests via im-messaging bridge.",
         bridgeAlternative: imLongLivedGatewayBridgePaths(channel),
-        adr: "docs/adr/0006-im-long-lived-gateway.md",
-        ...adapterEcho(),
+        ...gatewayMeta(channel),
       };
     }
     return {
       ok: true,
-      channel,
       mode: "bridge",
-      bridge: imLongLivedGatewayBridgePaths(channel),
-      note: "Long-lived push uses webhook/poll bridge until gateway env is configured.",
-      adr: "docs/adr/0006-im-long-lived-gateway.md",
-      ...adapterEcho(),
+      note: "Long-lived local ingress is /api/im/gateway/ws. External vendor dial waits for gateway env. Webhook/poll unchanged.",
+      ...gatewayMeta(channel),
     };
   }
   if (

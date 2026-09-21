@@ -392,4 +392,86 @@ describe("runTurn compaction / overflow", () => {
       }),
     ).rejects.toBeInstanceOf(ContextOverflowError);
   });
+
+  it("does not false-kill when bufferTokens >= maxRequestTokens", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const llm: LlmAdapter = {
+      id: "buffer-clamp",
+      async chat() {
+        return { content: "ok-despite-fat-buffer" };
+      },
+    };
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "hi",
+      store,
+      llm,
+      tools: createToolRegistry(),
+      compaction: {
+        maxRequestTokens: 100,
+        bufferTokens: 10_000,
+        keepTokens: 40,
+      },
+    });
+    expect(result.assistantText).toBe("ok-despite-fat-buffer");
+  });
+
+  it("soft-budgets long assistant reasoning (no leak past ceiling)", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t0",
+      content: "ask",
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 2,
+      turnId: "t0",
+      stepId: "s0",
+      content: "ans",
+      reasoning: "think-".repeat(400),
+    });
+
+    let summaryCalls = 0;
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "next",
+      store,
+      llm: {
+        id: "reasoning-soft-budget",
+        async chat(req: LlmChatRequest) {
+          const text = req.messages.map((m) => m.content).join("\n");
+          const isSummarizer =
+            req.messages.length === 1 &&
+            req.messages[0]?.role === "user" &&
+            text.includes("Create a new anchored summary");
+          if (isSummarizer) {
+            summaryCalls += 1;
+            return { content: "## Objective\n- x\n## Next\n1. y" };
+          }
+          // Main path must only run after soft budget saw reasoning and compacted.
+          expect(summaryCalls).toBeGreaterThan(0);
+          return { content: "ok-after-reasoning-compact" };
+        },
+      },
+      tools: createToolRegistry(),
+      compaction: {
+        maxRequestTokens: 80,
+        keepTokens: 20,
+        bufferTokens: 0,
+      },
+    });
+    expect(summaryCalls).toBeGreaterThan(0);
+    expect(
+      store
+        .get(session.id)
+        .events.some(
+          (e) => e.type === "context/compaction" && e.reason === "auto",
+        ),
+    ).toBe(true);
+    expect(result.assistantText).toBe("ok-after-reasoning-compact");
+  });
 });

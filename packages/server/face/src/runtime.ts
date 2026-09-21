@@ -2,6 +2,7 @@ import type { AttachmentStore } from "@xrkseek/attachment";
 import {
   forkSession,
   listPendingAdmits,
+  listSessionsWithPendingAdmits,
   newSession,
   readSessionEvents,
   type PersistentSessionStore,
@@ -23,7 +24,7 @@ import {
   newUserMessageId,
 } from "@xrkseek/protocol";
 import { createFaceBus, type FaceBus } from "./bus.js";
-import type { FaceDrain, FaceRuntime } from "./context.js";
+import type { FaceDrain, FaceDirectoryBackend, FaceRuntime } from "./context.js";
 import { createFaceSeqClock, type FaceSeqClock } from "./seq.js";
 import {
   createFaceListProjectionCache,
@@ -76,6 +77,7 @@ import { bindSettingsTools } from "./settings-agent-tools.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import { hydrateWorkspaceRegistry } from "./workspace-store.js";
 import { FaceSubagentRegistry } from "./subagent-registry.js";
+import { AgentTeamGraph, agentTeamGraphPath } from "./agent-team-graph.js";
 import { FaceMessageFeedbackStore } from "./message-feedback.js";
 import { FaceGoalStore } from "./goal-store.js";
 import { FaceWireIdMaps } from "./adapt/wire-ids.js";
@@ -89,6 +91,12 @@ export interface CreateFaceRuntimeOptions {
   readonly resolveAgent: (sessionId: string) => Promise<AgentHandle>;
   readonly drain: FaceDrain;
   readonly workspaceRoot: string;
+  /** SSH remote execution world — see {@link FaceRuntime.remoteExecution}. */
+  readonly remoteExecution?: boolean;
+  /** Local Host cwd before SSH swap — see {@link FaceRuntime.localHostRoot}. */
+  readonly localHostRoot?: string;
+  /** SSH-backed directory browse — see {@link FaceRuntime.directoryBackend}. */
+  readonly directoryBackend?: FaceDirectoryBackend;
   /** Override harness home for settings/creds (default `~/.xrk`). Workspace inject stays `{workspaceRoot}/.xrk`. */
   readonly productDir?: string;
   readonly version?: string;
@@ -153,8 +161,9 @@ export interface CreateFaceRuntimeOptions {
   /** Standing / unowned jobs (DSH `ctx.jobs` without an owner). */
   readonly jobs?: FaceJobsSource;
   /**
-   * When true, `/permission` refuses sandbox mode changes while PTY sessions
-   * are open or spawning (CV DSH terminal-bash sandbox fence).
+   * When true, `/permission` refuses sandbox mode changes while **Agent**
+   * `terminal_*` PTY sessions are open or spawning (CV DSH terminal-bash
+   * sandbox fence). Sidebar user terminals must not be reported here.
    */
   readonly hasPtyActivity?: () => boolean;
   /** Host input modalities; default text-only. */
@@ -211,12 +220,14 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
 
   const listProjectionCache: FaceListProjectionCache =
     createFaceListProjectionCache(options.listProjectionCachePath);
+  /**
+   * Persist list-tier before eviction. Must not swallow checkpoint errors —
+   * a failed remember + successful evict drops live cells with no cold column
+   * (silent untitled / blank-wrong cold `session.list`). Disk I/O failures are
+   * best-effort inside the cache (in-memory row retained).
+   */
   const rememberListProjections = (sessionId: string): void => {
-    try {
-      listProjectionCache.remember(sessionId, projections.checkpoint(sessionId));
-    } catch {
-      /* cold column is best-effort */
-    }
+    listProjectionCache.remember(sessionId, projections.checkpoint(sessionId));
   };
 
   const rpcAdmitMap = new Map<string, string>();
@@ -232,7 +243,13 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const sessionHasImage = new Set<string>();
   const sessionImageScanned = new Set<string>();
   const workspaces = new FaceWorkspaceRegistry(options.workspaceRoot);
-  const subagents = new FaceSubagentRegistry(options.subagentPersistPath);
+  const agentTeams = new AgentTeamGraph(
+    agentTeamGraphPath(options.subagentPersistPath),
+  );
+  const subagents = new FaceSubagentRegistry(options.subagentPersistPath, {
+    onAttach: (link) => agentTeams.recordDelegation(link),
+  });
+  agentTeams.rebuildDelegations(subagents.entries());
   const messageFeedback = new FaceMessageFeedbackStore();
   const goals = new FaceGoalStore(options.goalPersistPath);
   const wireIds = new FaceWireIdMaps();
@@ -241,7 +258,13 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     typeof (store as PersistentSessionStore).bindSessionEviction === "function"
   ) {
     (store as PersistentSessionStore).bindSessionEviction((sessionId) => {
-      rememberListProjections(sessionId);
+      try {
+        rememberListProjections(sessionId);
+      } catch {
+        // Fail closed: keep live projection cells rather than evict with no
+        // cold column (silent untitled / blank-wrong after restart).
+        return;
+      }
       projections.evictSession(sessionId);
       toolArgMaps.forSession(sessionId).clear();
     });
@@ -347,6 +370,14 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
 
   /** Child session ids already notified for the current idle stretch. */
   const reportedSubagentIdle = new Set<string>();
+  /**
+   * Bumped when a child drain goes running. In-flight idle notifies that
+   * captured an older epoch are dropped (avoids duplicate steer after a
+   * quick re-wake), and failed delivers may retry only on the same epoch.
+   */
+  const subagentIdleEpoch = new Map<string, number>();
+  /** Failed deliver attempts in the current epoch (cap 1 auto-retry). */
+  const subagentIdleFailCount = new Map<string, number>();
 
   /**
    * Mirror job completions: when a continuable child drain goes idle, admit a
@@ -361,20 +392,38 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     if (!link || link.mode !== "continuable") return;
     if (reportedSubagentIdle.has(childSessionId)) return;
     reportedSubagentIdle.add(childSessionId);
+    const epoch = subagentIdleEpoch.get(childSessionId) ?? 0;
     const parentId = link.parentSessionId;
-    void resolveAgent(parentId).then((parent) => {
-      const idle = !parent.isBusy();
-      const spent = spentWakes.get(parentId) ?? 0;
-      const followup = idle && spent < JOB_COMPLETION_MAX_WAKES;
-      if (followup) spentWakes.set(parentId, spent + 1);
-      const events = readEvents(childSessionId);
-      const receipt = parent.admit(
-        formatSubagentCompletionNotice(link, events),
-        { delivery: "steer" },
-      );
-      noticeAdmitIds.add(receipt.admitId);
-      if (followup || !idle) options.drain.wake(parentId);
-    });
+    void resolveAgent(parentId)
+      .then((parent) => {
+        // Child re-entered drain (or this stretch was cleared) — drop stale.
+        if ((subagentIdleEpoch.get(childSessionId) ?? 0) !== epoch) return;
+        if (!reportedSubagentIdle.has(childSessionId)) return;
+        const idle = !parent.isBusy();
+        const spent = spentWakes.get(parentId) ?? 0;
+        const followup = idle && spent < JOB_COMPLETION_MAX_WAKES;
+        if (followup) spentWakes.set(parentId, spent + 1);
+        const events = readEvents(childSessionId);
+        const receipt = parent.admit(
+          formatSubagentCompletionNotice(link, events),
+          { delivery: "steer" },
+        );
+        noticeAdmitIds.add(receipt.admitId);
+        subagentIdleFailCount.delete(childSessionId);
+        if (followup || !idle) options.drain.wake(parentId);
+      })
+      .catch(() => {
+        if ((subagentIdleEpoch.get(childSessionId) ?? 0) !== epoch) return;
+        reportedSubagentIdle.delete(childSessionId);
+        const fails = subagentIdleFailCount.get(childSessionId) ?? 0;
+        if (fails >= 1) return;
+        subagentIdleFailCount.set(childSessionId, fails + 1);
+        queueMicrotask(() => {
+          if ((subagentIdleEpoch.get(childSessionId) ?? 0) !== epoch) return;
+          if (reportedSubagentIdle.has(childSessionId)) return;
+          deliverOwnedSubagentCompletion(childSessionId);
+        });
+      });
   };
 
   const getTool = (sessionId: string, name: string) => {
@@ -423,6 +472,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         reportedJobIds.delete(sessionId);
         spentWakes.delete(sessionId);
         reportedSubagentIdle.delete(sessionId);
+        subagentIdleEpoch.delete(sessionId);
+        subagentIdleFailCount.delete(sessionId);
         await options.invalidateAgent!(sessionId);
       }
     : undefined;
@@ -603,6 +654,13 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     drain: options.drain,
     registry: options.registry ?? createProviderRegistry(),
     workspaceRoot: options.workspaceRoot,
+    ...(options.remoteExecution ? { remoteExecution: true as const } : {}),
+    ...(options.localHostRoot !== undefined
+      ? { localHostRoot: options.localHostRoot }
+      : {}),
+    ...(options.directoryBackend !== undefined
+      ? { directoryBackend: options.directoryBackend }
+      : {}),
     ...(options.productDir !== undefined
       ? { productDir: options.productDir }
       : {}),
@@ -657,6 +715,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     sessionImageScanned,
     workspaces,
     subagents,
+    agentTeams,
     messageFeedback,
     ...(options.feedbackSlicesDir !== undefined
       ? { feedbackSlicesDir: options.feedbackSlicesDir }
@@ -669,6 +728,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     ...(options.syncMcpServers !== undefined
       ? { syncMcpServers: options.syncMcpServers }
       : {}),
+    mcpSyncOverlay: { connectFailures: [], parked: [] },
     ...(options.autoReviewSlashPersist !== undefined
       ? { autoReviewSlashPersist: options.autoReviewSlashPersist }
       : {}),
@@ -704,7 +764,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     },
     onSessionDrainStatus(sessionId, running) {
       if (running) {
+        subagentIdleEpoch.set(
+          sessionId,
+          (subagentIdleEpoch.get(sessionId) ?? 0) + 1,
+        );
         reportedSubagentIdle.delete(sessionId);
+        subagentIdleFailCount.delete(sessionId);
         return;
       }
       deliverOwnedSubagentCompletion(sessionId);
@@ -720,6 +785,18 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   };
   runtimeBox.current = runtime;
   goals.bind(runtime);
+  // Durable Inbox SoT is the session log (`prompt/admitted`). After Host
+  // restart, republish queue baselines and wake drains so pending queue/steer
+  // resume. Skip sessions whose goal bind() just disarmed — user must resume
+  // (same fence as goals rehydrate; do not auto-continue).
+  for (const sessionId of listSessionsWithPendingAdmits(store)) {
+    runtime.publishQueue(sessionId);
+    const goal = goals.get(sessionId);
+    if (goal && goal.phase === "active" && goal.activation === "disarmed") {
+      continue;
+    }
+    options.drain.wake(sessionId);
+  }
   hydrateFaceSettingsDocument(runtime);
   hydrateFaceHostSettings(runtime);
   hydrateWorkspaceRegistry(runtime, workspaces);

@@ -85,9 +85,9 @@ function createConditionalHangAdapter(): LlmAdapter {
   };
 }
 
-/** Idle-only: second SQLite open is safe after the turn has ended. */
+/** Read while Host may still hold the exclusive write lease. */
 function readSessionLog(sessionsDir: string, sessionId: string): string {
-  const store = createPersistentSessionStore(sessionsDir);
+  const store = createPersistentSessionStore(sessionsDir, { shared: true });
   try {
     return toJSONL(store.get(sessionId).events);
   } finally {

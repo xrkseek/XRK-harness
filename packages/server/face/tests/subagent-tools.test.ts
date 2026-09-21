@@ -75,6 +75,19 @@ describe("subagent tools", () => {
     expect(subagentDepth(runtime, child)).toBe(1);
     expect(subagentDepth(runtime, grand)).toBe(2);
 
+    // UI/rewind fork lineage must not consume tool depth budget.
+    const forked = runtime.ensureSession("forked");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: forked,
+      mode: "fork",
+      label: "rewind",
+    });
+    expect(subagentDepth(runtime, forked)).toBe(0);
+    expect(runtime.subagents.listDelegated(parent).map((l) => l.childSessionId)).toEqual([
+      child,
+    ]);
+
     const tools = createToolRegistry();
     bindSubagentTools(tools, { runtime, parentSessionId: parent });
     expect(tools.get("subagent")).toBeTruthy();

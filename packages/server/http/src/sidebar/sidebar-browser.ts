@@ -1,6 +1,7 @@
 /**
  * better-sidebar embedded browser probe — HEAD/GET remote URL headers.
  */
+import type { BrowserEmbedProbe } from "@xrkseek/protocol";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 
@@ -47,7 +48,6 @@ function probeOnce(url: URL): Promise<{
     );
     req.on("timeout", () => {
       req.destroy();
-      resolve({ reachable: false });
     });
     req.on("error", () => resolve({ reachable: false }));
     req.end();
@@ -57,7 +57,7 @@ function probeOnce(url: URL): Promise<{
 /** Probe embeddability headers for better-sidebar browser tabs. */
 export async function probeBrowserUrl(
   rawUrl: string,
-): Promise<Record<string, unknown>> {
+): Promise<BrowserEmbedProbe> {
   const trimmed = rawUrl.trim();
   if (!trimmed) {
     return { reachable: false, supported: false, reason: "empty-url" };

@@ -18,6 +18,16 @@ Host（harness/server）共享一份 PTY registry：跨 agent invalidate 仍保�
 
 `bash` 仍是一次性管道 job（[shell-jobs.md](./shell-jobs.md)）。持久会话走本包。`terminal_send.run_in_background` 经 composition `ShellService.startManagedJob` 登记 `pty-send`，用 `job_output` / `job_kill` 收集或取消。
 
+## Scrollback 截断 · 分页 · 内存上限
+
+| 旋钮 | 默认 | 作用 |
+|------|------|------|
+| `scrollbackMaxBytes` | 4 MiB | 会话保留历史的 UTF-8 字节硬顶（分块环形保留尾部；追加时摊销驱逐；超大写入先按 UTF-16 安全边界拆块，避免单块长期钉住超大字符串） |
+| `scrollbackLines` | 10_000 | 行数硬顶（与字节顶同时生效） |
+| `maxReadBytes` | 256 KiB | 单次 `terminal_read` / 结算 send 返回的字节上限（≤ `scrollbackMaxBytes`） |
+
+`terminal_read` 按**相对最新行**分页：`offset`（默认 0）+ `count`（默认 500）；结果带 `[lines: begin-end of total]`，上游或本页裁剪时附 `[output truncated]`。模型面渲染再经 `maxResultBytes` 尾部保留（同 DSH output-retention 语义）。超限历史**不**整份 spill 进会话；需要全文时写入工作区文件再 `read_file`。
+
 ## Native
 
 本仓 `optionalDependencies` 钉 `node-pty@1.2.0-beta.15`（含 `prebuilds/`）；`postinstall` 跑 `scripts/ensure-spawn-helper.mjs` 恢复 Linux/mac `spawn-helper` 可执行位。
@@ -45,7 +55,7 @@ Host（harness/server）共享一份 PTY registry：跨 agent invalidate 仍保�
 |------|------|
 | **Linux** | `/proc`：tid 级 fdinfo · 多 ABI syscall 表 · 按 shell TTY 过滤 stdin-wait，避免管道成员误判「可 settle」 |
 | **macOS** | `/bin/ps`；一次就绪/teardown 轮询共用一份 **`ProcessSnapshot`**（进程表最多读一次），代价不随后代数量放大；`isAlive` 仍读当前态作信号围栏 |
-| **Windows** | **no-op inspector**（`inspectForeground` → `undefined`）；就绪主要靠 OSC prompt / 静默 / 超时——ConPTY 会话仍能跑，不假装有 `/proc` |
+| **Windows** | **no-op inspector**（`inspectForeground` → `undefined`）；就绪主要靠 OSC prompt / 静默 / 超时——`useConpty: true` 隐藏 ConPTY 控制台闪窗；会话仍能跑，不假装有 `/proc` |
 
 `processTree` / `processSession` 是 `snapshot()` 的便利包装；同一次轮询里问多项时应用 `snapshot()`。
 
@@ -55,9 +65,9 @@ terminate：descendant SIGTERM→grace→SIGKILL，再杀 shell；拒绝对 shel
 
 ## 路径 / 沙箱
 
-`cwd` 必须落在 `workspaceRoot` 内。harness 在 `workspace-write` 下把 spawn argv 交给 `SandboxService.wrapArgv`。`read-only` 拒绝 `terminal_open/send/signal/close`（list/read 仍可）。
+`cwd` 必须落在 `workspaceRoot` 内。harness 在 `workspace-write` 下把 spawn argv 交给 `SandboxService.confine`（可取消）。`read-only` 拒绝 `terminal_open/send/signal/close`（list/read 仍可）。
 
-有 open / pending PTY 时，`/permission` 拒绝改 `sandbox/mode`（与终端 bash fence 同文案）。
+有 open / pending **Agent** `terminal_*` PTY 时，`/permission` 拒绝改 `sandbox/mode`（与终端 bash fence 同文案）。侧栏用户终端（`/sidebar/ws/terminal`）走系统用户权限、**不**套 Agent sandbox，也**不**参与该 fence。
 
 ## 卡回放
 
@@ -87,6 +97,16 @@ Host (harness/server) shares one PTY registry: sessions survive agent invalidate
 
 `bash` remains a one-shot pipe job ([shell-jobs.md](./shell-jobs.md)). Persistent sessions use this package. `terminal_send.run_in_background` registers `pty-send` via composition `ShellService.startManagedJob`, collected or cancelled with `job_output` / `job_kill`.
 
+## Scrollback truncation · pagination · memory caps
+
+| Knob | Default | Role |
+|------|---------|------|
+| `scrollbackMaxBytes` | 4 MiB | Hard UTF-8 byte ceiling for retained history (chunked ring keeps the tail; eviction is amortized on append; oversized writes are split on UTF-16-safe boundaries so one giant chunk cannot pin a multi-MiB string) |
+| `scrollbackLines` | 10_000 | Line ceiling (with the byte cap) |
+| `maxReadBytes` | 256 KiB | Cap for one `terminal_read` / settled send (≤ `scrollbackMaxBytes`) |
+
+`terminal_read` pages **newest-relative** lines: `offset` (default 0) + `count` (default 500); results include `[lines: begin-end of total]` and `[output truncated]` when scrollback or the page was clipped. Model-facing render applies a further `maxResultBytes` tail retain (same retention idea as DSH output-retention). Oversized history is **not** spilled whole into the session; write a workspace file and `read_file` when the full body is needed.
+
 ## Native
 
 This repo pins `node-pty@1.2.0-beta.15` in `optionalDependencies` (includes `prebuilds/`); `postinstall` runs `scripts/ensure-spawn-helper.mjs` to restore Linux/mac `spawn-helper` execute bits.
@@ -114,7 +134,7 @@ Foreground probe uses the process-inspector in `@xrkseek/exec-pty`.
 |----------|----------|
 | **Linux** | `/proc`: tid-scoped fdinfo · multi-ABI syscall tables · TTY-filtered stdin-wait so pipeline members do not false-settle |
 | **macOS** | `/bin/ps`; one readiness/teardown poll shares a **`ProcessSnapshot`** (at most one table read) so cost does not grow with descendant count; `isAlive` still reads current state for the signal fence |
-| **Windows** | **no-op inspector** (`inspectForeground` → `undefined`); readiness relies on OSC prompt / silence / timeout — ConPTY sessions still run; the product does not pretend `/proc` exists |
+| **Windows** | **no-op inspector** (`inspectForeground` → `undefined`); readiness relies on OSC prompt / silence / timeout — `useConpty: true` hides ConPTY console flashes; sessions still run; the product does not pretend `/proc` exists |
 
 `processTree` / `processSession` are convenience wrappers over `snapshot()`; prefer `snapshot()` when asking several questions in one poll.
 
@@ -124,9 +144,9 @@ Terminate: descendant SIGTERM→grace→SIGKILL, then kill the shell; rejects `S
 
 ## Paths / sandbox
 
-`cwd` must stay under `workspaceRoot`. Under harness `workspace-write`, spawn argv goes through `SandboxService.wrapArgv`. `read-only` rejects `terminal_open/send/signal/close` (list/read still OK).
+`cwd` must stay under `workspaceRoot`. Under harness `workspace-write`, spawn argv goes through `SandboxService.confine` (cancellable). `read-only` rejects `terminal_open/send/signal/close` (list/read still OK).
 
-With open / pending PTYs, `/permission` refuses changes to `sandbox/mode` (same copy as the terminal bash fence).
+With open / pending **Agent** `terminal_*` PTYs, `/permission` refuses changes to `sandbox/mode` (same copy as the terminal bash fence). Sidebar user terminals (`/sidebar/ws/terminal`) run with system-user permissions, **without** Agent sandbox confine, and **do not** participate in that fence.
 
 ## Card replay
 

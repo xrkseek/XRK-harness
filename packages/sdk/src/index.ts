@@ -46,7 +46,6 @@ export {
   assertToolCallsSettled,
   assertAssistantToolCallAdjacency,
   ToolAdjacencyError,
-  TOOL_INTERRUPTED_MESSAGE,
   type SessionStore,
   type TurnLatch,
   type SessionDrainLatch,

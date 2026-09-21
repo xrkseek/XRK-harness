@@ -34,11 +34,13 @@ describe("createSessionDrainHub", () => {
     });
 
     const runP = hub.run("s1");
+    expect(hub.activeIds()).toEqual(["s1"]);
     hub.wake("s1");
     hub.wake("s1");
     release();
     await vi.waitFor(() => expect(second).toBe(true));
     await runP;
     expect(forces).toEqual([true, false]);
+    expect(hub.activeIds()).toEqual([]);
   });
 });

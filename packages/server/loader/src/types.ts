@@ -1,6 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { BrandEntry } from "@xrkseek/llm-registry";
-import type { ToolDefinition } from "@xrkseek/core-tools";
+import type {
+  PostHandler,
+  PreHandler,
+  ToolDefinition,
+} from "@xrkseek/core-tools";
 import type { PolicyRule } from "@xrkseek/policy";
 
 /** Runtime context passed when a `kind: host` plugin builds its public handler. */
@@ -36,6 +40,17 @@ export interface HostWireContext {
   };
   /** {@link XrkWalletPort} from `@xrkseek/server-http` — typed at Host wire site. */
   readonly walletPort?: unknown;
+  /** Host policy engine (sidebar gates · `/office` `office.connect`). */
+  readonly policy?: import("@xrkseek/policy").PolicyEngine;
+  /**
+   * Face approval seam for policy `ask` (sidebar + Office).
+   * Typed as sidebar resolver at Host wire site.
+   */
+  readonly resolvePolicyAsk?: (args: {
+    readonly subject: import("@xrkseek/policy").PolicySubject;
+    readonly reason: string;
+    readonly sessionId?: string;
+  }) => Promise<boolean | undefined>;
 }
 
 export type HostPublicHandlerFn = (
@@ -105,6 +120,14 @@ export interface RegisteredPlugin {
    */
   readonly policyRules?: readonly PolicyRule[];
   /**
+   * When `kind === "hooks"`: in-process pre/post tool handlers for
+   * `wireCompositionHooks` (existing ToolPipeline — no pipeline fork).
+   */
+  readonly hooks?: {
+    readonly onPre?: readonly PreHandler[];
+    readonly onPost?: readonly PostHandler[];
+  };
+  /**
    * When `kind === "channel"`: IM / notification channel descriptors.
    * Collected via `collectChannelPlugins` — wire pending IM gateway.
    */
@@ -121,5 +144,10 @@ export interface RegisteredPlugin {
   readonly createPublicHandler?: (
     ctx: HostWireContext,
   ) => HostPublicHandlerFn;
+  /**
+   * From manifest `required`. Load failure for required plugins aborts
+   * Host spawn / reconcile; optional failures are isolated.
+   */
+  readonly required?: boolean;
   dispose?: () => void | Promise<void>;
 }

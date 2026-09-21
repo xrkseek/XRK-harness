@@ -17,6 +17,10 @@ import {
   nextScanDepth,
   shouldSkipScanDir,
 } from "./scan-guards.js";
+import {
+  resolveUserProductHome,
+  userProductHomeLogicalPrefix,
+} from "./user-product-home.js";
 
 export interface InstructionSection {
   /** Stable path for `changes[]` and section headers (posix-style). */
@@ -381,8 +385,8 @@ export async function collectEcosystemInstructions(
     );
     await pushProductStanding(
       sections,
-      path.join(home, ".xrk"),
-      "~/.xrk/",
+      resolveUserProductHome(options.homeDir),
+      userProductHomeLogicalPrefix(options.homeDir),
       options.budget,
       seen,
     );

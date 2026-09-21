@@ -9,6 +9,7 @@ export const SIDEBAR_PREFS_DEFAULT: Record<string, unknown> = {
   defaultWidthPercent: 35,
   autoOpenSubagent: true,
   autoOpenJobs: true,
+  agentOpenTools: false,
   agentTerminalTools: false,
   bottomPanelAutoTerminal: true,
   terminalFontFamily: "",

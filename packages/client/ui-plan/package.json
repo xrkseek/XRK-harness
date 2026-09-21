@@ -31,7 +31,8 @@
       "inject": [
         "@xrkseek/xrk-api-remotes",
         "@xrkseek/client-locale",
-        "@xrkseek/client-ui-conversation"
+        "@xrkseek/client-ui-conversation",
+        "@xrkseek/client-ui-layout"
       ],
       "platform": "web"
     }
@@ -46,6 +47,7 @@
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-ui-conversation": "workspace:^",
+    "@xrkseek/client-ui-layout": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/xrk-commands": "workspace:^",
@@ -60,6 +62,7 @@
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-test-runtime": "workspace:^",
     "@xrkseek/client-ui-conversation": "workspace:^",
+    "@xrkseek/client-ui-layout": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/client-web-react": "workspace:^",

@@ -21,6 +21,7 @@ function runGit(
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 8 * 1024 * 1024,
+      windowsHide: true,
     }).trimEnd();
   } catch (err) {
     if (options.allowFail) {
@@ -38,6 +39,7 @@ function runGitOrThrow(cwd: string, args: string[]): string {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: 8 * 1024 * 1024,
+    windowsHide: true,
   }).trimEnd();
 }
 

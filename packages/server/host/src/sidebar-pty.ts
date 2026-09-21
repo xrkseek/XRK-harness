@@ -8,11 +8,18 @@
  *   toggles would otherwise spin 「终端连接断开，重连中…」).
  * - PTY process exit must NOT close the socket with code 1000 (client treats
  *   that as a transient drop and retries forever).
+ *
+ * Permissions (DSH user-terminal-permissions): these shells run as the Host
+ * system user with **no Agent sandbox confine and no approval**. They must not
+ * be reported into Face `hasPtyActivity` — Agent `/permission` sandbox changes
+ * stay independent of open sidebar tabs.
  */
 import type { IncomingMessage, Server } from "node:http";
 import { homedir } from "node:os";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket, type RawData } from "ws";
+import type { AgentOpenRegistry } from "./sidebar-agent-opens.js";
+import type { AgentPtyRegistry } from "./sidebar-agent-pty.js";
 
 const PTY_DEPS_MISSING = "pty-deps-missing";
 /** Reconnect grace after bare socket drop / park (ms). */
@@ -21,6 +28,10 @@ const RECONNECT_GRACE_MS = 30_000;
 export interface SidebarPtyOptions {
   readonly defaultCwd: string;
   readonly checkAuth: (req: IncomingMessage) => boolean;
+  /** Agent `terminal_create` registry — drives `/sidebar/ws/agent-terminals`. */
+  readonly agentPty?: AgentPtyRegistry;
+  /** `sidebar_open` registry — drives `/sidebar/ws/agent-opens`. */
+  readonly agentOpens?: AgentOpenRegistry;
 }
 
 interface InteractivePty {
@@ -53,19 +64,27 @@ function defaultShellArgv(): string[] {
 function resolveQuery(req: IncomingMessage): {
   cwd: string | undefined;
   key: string | undefined;
+  uuid: string | undefined;
+  sessionId: string | undefined;
 } {
   try {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const cwd = url.searchParams.get("cwd")?.trim() || undefined;
-    const sessionId = url.searchParams.get("sessionId")?.trim();
+    const sessionId = url.searchParams.get("sessionId")?.trim() || undefined;
     const tab = url.searchParams.get("tab")?.trim();
+    const uuid = url.searchParams.get("uuid")?.trim() || undefined;
     const key =
       sessionId && sessionId.length > 0 && tab && tab.length > 0
         ? `${sessionId}\0${tab}`
         : undefined;
-    return { cwd, key };
+    return { cwd, key, uuid, sessionId };
   } catch {
-    return { cwd: undefined, key: undefined };
+    return {
+      cwd: undefined,
+      key: undefined,
+      uuid: undefined,
+      sessionId: undefined,
+    };
   }
 }
 
@@ -99,6 +118,9 @@ async function spawnInteractivePty(
     rows,
     cwd,
     env,
+    ...(process.platform === "win32"
+      ? { useConpty: true, conptyInheritCursor: false }
+      : {}),
   });
 }
 
@@ -173,7 +195,111 @@ export function attachSidebarPtyUpgrades(
     if (key) slots.delete(key);
   };
 
+  const bindAgentTerminalSocket = (ws: WebSocket, req: IncomingMessage): void => {
+    const { uuid } = resolveQuery(req);
+    const registry = options.agentPty;
+    if (!uuid || !registry) {
+      try {
+        ws.close(1008, "uuid is required");
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    const handle = registry.get(uuid);
+    if (!handle) {
+      try {
+        ws.close(1008, "agent terminal not found");
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    let socketClosed = false;
+    const closeSocket = (code = 1000, reason = ""): void => {
+      if (socketClosed) return;
+      socketClosed = true;
+      if (ws.readyState === ws.OPEN || ws.readyState === ws.CONNECTING) {
+        try {
+          ws.close(code, reason.slice(0, 123));
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+    // Replay retained transcript, then pump live output.
+    const replay = handle.transcript.snapshot().text;
+    if (replay.length > 0 && ws.readyState === ws.OPEN) {
+      try {
+        ws.send(replay);
+      } catch {
+        /* ignore */
+      }
+    }
+    const pump = handle.pty.onData((data) => {
+      if (socketClosed || ws.readyState !== ws.OPEN) return;
+      try {
+        ws.send(data);
+      } catch {
+        /* ignore */
+      }
+    });
+    ws.on("message", (raw) => {
+      if (socketClosed || handle.exited) return;
+      const text = rawToText(raw);
+      if (text.startsWith("{")) {
+        try {
+          const msg = JSON.parse(text) as {
+            type?: string;
+            cols?: number;
+            rows?: number;
+          };
+          if (msg.type === "close") {
+            registry.close(uuid);
+            closeSocket();
+            return;
+          }
+          if (msg.type === "resize") {
+            const cols =
+              typeof msg.cols === "number" && msg.cols > 0 ? msg.cols : 80;
+            const rows =
+              typeof msg.rows === "number" && msg.rows > 0 ? msg.rows : 24;
+            try {
+              registry.resize(uuid, cols, rows);
+            } catch {
+              /* ignore */
+            }
+            return;
+          }
+        } catch {
+          /* fall through */
+        }
+      }
+      try {
+        registry.send(uuid, text);
+      } catch {
+        /* ignore */
+      }
+    });
+    ws.on("close", () => {
+      socketClosed = true;
+      try {
+        pump.dispose();
+      } catch {
+        /* ignore */
+      }
+    });
+    ws.on("error", () => {
+      closeSocket();
+    });
+  };
+
   const bindTerminalSocket = (ws: WebSocket, req: IncomingMessage): void => {
+    const { uuid } = resolveQuery(req);
+    if (uuid) {
+      bindAgentTerminalSocket(ws, req);
+      return;
+    }
     let socketClosed = false;
     let cols = 80;
     let rows = 24;
@@ -394,18 +520,77 @@ export function attachSidebarPtyUpgrades(
     bindTerminalSocket(ws, req);
   });
 
-  agentWss.on("connection", (ws: WebSocket) => {
-    const push = () => {
-      if (ws.readyState === ws.OPEN) ws.send("[]");
+  agentWss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
+    const { sessionId } = resolveQuery(req);
+    if (!sessionId) {
+      try {
+        ws.close(1008, "sessionId is required");
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    const registry = options.agentPty;
+    const send = (): void => {
+      if (ws.readyState !== ws.OPEN) return;
+      try {
+        ws.send(JSON.stringify(registry?.list(sessionId) ?? []));
+      } catch {
+        /* ignore */
+      }
     };
-    push();
-    const timer = setInterval(push, 15_000);
-    ws.on("close", () => clearInterval(timer));
+    send();
+    const unsubscribe = registry?.subscribe(send);
+    // Keepalive empty push only when no registry (degraded Host) — avoids reconnect storms.
+    const timer =
+      registry === undefined
+        ? setInterval(send, 15_000)
+        : undefined;
+    const cleanup = (): void => {
+      unsubscribe?.();
+      if (timer !== undefined) clearInterval(timer);
+    };
+    ws.on("close", cleanup);
+    ws.on("error", cleanup);
   });
 
-  agentOpensWss.on("connection", (ws: WebSocket) => {
+  agentOpensWss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
+    const { sessionId } = resolveQuery(req);
+    if (!sessionId) {
+      try {
+        ws.close(1008, "sessionId is required");
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    const registry = options.agentOpens;
+    if (!registry) {
+      ws.on("error", () => {
+        /* idle stub without registry */
+      });
+      return;
+    }
+    const send = (request: {
+      id: string;
+      sessionId: string;
+      kind: string;
+      target: string;
+      title: string;
+    }): void => {
+      if (ws.readyState !== ws.OPEN) return;
+      try {
+        ws.send(JSON.stringify(request));
+      } catch {
+        /* ignore */
+      }
+    };
+    const unsubscribe = registry.attach(sessionId, send);
+    ws.on("close", () => {
+      unsubscribe();
+    });
     ws.on("error", () => {
-      /* ignore */
+      unsubscribe();
     });
   });
 

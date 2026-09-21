@@ -8,11 +8,11 @@
 
 | 文件 | 作用 | 关键契约 |
 |------|------|----------|
-| `index.ts` | `createPluginLoader` · 导出 | register 冲突抛错；unregister 调 `dispose` |
-| `types.ts` | `RegisteredPlugin` · prompt / command 贡献 | kind + 贡献字段；禁止环依赖回 prompt |
-| `kinds.ts` | `PLUGIN_KINDS` · `RESERVED_*` · `isKnownPluginKind` | 新能力优先新 kind + apply* |
-| `manifest.ts` | `xrk.plugin.json` / `xrkseek`·`dsh`·`deepseek.plugin` / Cordis stub | 只发现不执行；跳过 `web/` |
+| `index.ts` | `createPluginLoader` · 导出 | register 冲突抛错；unregister 成对 `dispose`（dispose 抛错仍卸登记） |
+| `manifest.ts` | `xrk.plugin.json` / `xrkseek`·`dsh`·`deepseek.plugin` / Cordis stub · 可选 `required` | 只发现不执行；跳过 `web/`；缺 entry 不中断同级 discover |
 | `load.ts` | 动态 import · 校验 export 形 | id/kind 与 manifest 一致；`skipLoad` 不 import |
+| `load-failures.ts` | `RequiredPluginLoadError` · 可选/必需失败形 | 必需失败才抛；可选记入 `failures[]` |
+| `managed-state.ts` | soft-disable · `reconcileManagedProcessPlugins` | 卸载走 unregister；可选 load 失败隔离 |
 | `tools.ts` | `applyToolsPlugins` · `wireCompositionTools` | **显式同名优先**（不覆盖） |
 | `prompt.ts` | `applyPromptPlugins` · `wireCompositionPrompts` | 保留 id（默认 `base`）优先 |
 | `commands.ts` | `collectPluginCommands` | 命令名先登记者赢 |
@@ -39,9 +39,10 @@
 
 1. `types.ts` 不 import `prompt.ts`（避免环）。  
 2. `tools` / `prompt` / `commands` 判定一律用 `PLUGIN_KINDS.*`。  
-3. 插件失败要可逆：`dispose` + unregister。  
-4. MCP Host 接线产出的也是 `kind: "tools"` 插件（见 [server-host.md](./server-host.md)）。  
-5. Cordis 包不得 `import()`（避免 `apply(ctx)` 炸 Host）。
+3. 插件失败要可逆：`dispose` + unregister（dispose 抛错仍卸登记）。  
+4. 可选插件 load 失败不拖垮兄弟；`required: true` 才中止 spawn / reconcile。  
+5. MCP Host 接线产出的也是 `kind: "tools"` 插件（见 [server-host.md](./server-host.md)）。  
+6. Cordis 包不得 `import()`（避免 `apply(ctx)` 炸 Host）。
 
 ## 测试
 
@@ -59,11 +60,13 @@ Process-plugin registration / discovery / kind wiring. Spec: [plugin-loader.md](
 
 | File | Role | Critical contract |
 |------|------|-------------------|
-| `index.ts` | `createPluginLoader` · exports | register conflicts throw; unregister calls `dispose` |
+| `index.ts` | `createPluginLoader` · exports | register conflicts throw; unregister pairs `dispose` (still unregisters if dispose throws) |
 | `types.ts` | `RegisteredPlugin` · prompt / command contributions | kind + contribution fields; no cycle back into prompt |
 | `kinds.ts` | `PLUGIN_KINDS` · `RESERVED_*` · `isKnownPluginKind` | Prefer a new kind + apply* for new capabilities |
-| `manifest.ts` | `xrk.plugin.json` / `xrkseek`·`dsh`·`deepseek.plugin` / Cordis stub | Discover only; skip `web/` |
+| `manifest.ts` | `xrk.plugin.json` / `xrkseek`·`dsh`·`deepseek.plugin` / Cordis stub · optional `required` | Discover only; skip `web/`; missing entry deferred to load |
 | `load.ts` | Dynamic import · export shape checks | id/kind match manifest; `skipLoad` skips import |
+| `load-failures.ts` | `RequiredPluginLoadError` · optional/required failure shape | required failures throw; optional → `failures[]` |
+| `managed-state.ts` | soft-disable · `reconcileManagedProcessPlugins` | unload via unregister; optional load failures isolated |
 | `tools.ts` | `applyToolsPlugins` · `wireCompositionTools` | **Explicit same-name wins** (no silent overwrite) |
 | `prompt.ts` | `applyPromptPlugins` · `wireCompositionPrompts` | Reserved ids (default `base`) win |
 | `commands.ts` | `collectPluginCommands` | First registered command name wins |
@@ -90,9 +93,10 @@ Discipline: **prefer a new kind for new Host capabilities** instead of Face/Host
 
 1. `types.ts` must not import `prompt.ts` (cycle).  
 2. `tools` / `prompt` / `commands` checks use `PLUGIN_KINDS.*` only.  
-3. Plugin failure must be reversible: `dispose` + unregister.  
-4. MCP Host wiring also yields `kind: "tools"` plugins (see [server-host.md](./server-host.md)).  
-5. Cordis packages must not be `import()`-ed (avoids `apply(ctx)` blowing up Host).
+3. Plugin failure must be reversible: `dispose` + unregister (still unregister if dispose throws).  
+4. Optional plugin load failures must not take down siblings; only `required: true` aborts spawn / reconcile.  
+5. MCP Host wiring also yields `kind: "tools"` plugins (see [server-host.md](./server-host.md)).  
+6. Cordis packages must not be `import()`-ed (avoids `apply(ctx)` blowing up Host).
 
 ## Tests
 

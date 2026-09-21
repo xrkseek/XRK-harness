@@ -6,12 +6,26 @@ import type {
   PolicySubjectKind,
   PolicyVerdict,
 } from "./types.js";
+import { PolicyGateError, policyWireError } from "./wire-error.js";
 
-const DEFAULT_VERDICTS: Record<PolicySubjectKind, PolicyVerdict> = {
+/** Product per-kind defaults when no rule matches (Host always injects an engine). */
+export const DEFAULT_POLICY_VERDICTS: Readonly<
+  Record<PolicySubjectKind, PolicyVerdict>
+> = {
   "tool.call": "allow",
   "provider.use": "allow",
   /** MCP client M0 exists; connect still defaults to deny until host allows. */
   "mcp.connect": "deny",
+  /** Resource list/read after a connected server — default allow (DSH/Codex). */
+  "mcp.resource": "allow",
+  /** Desktop open path/URL — allow; Host still validates targets. */
+  "host.open": "allow",
+  /** Sidebar URL embed — allow http(s); Host probe still required. */
+  "sidebar.embed": "allow",
+  /** Sidebar FS — allow; cwd sandbox remains the hard fence. */
+  "sidebar.fs": "allow",
+  /** Office connector — deny until configured (align mcp.connect). */
+  "office.connect": "deny",
 };
 
 export interface CreatePolicyEngineOptions {
@@ -24,18 +38,25 @@ function defaultReason(kind: PolicySubjectKind, verdict: PolicyVerdict): string 
   if (kind === "mcp.connect" && verdict === "deny") {
     return "mcp.connect denied by default";
   }
+  if (kind === "office.connect" && verdict === "deny") {
+    return "office.connect denied by default";
+  }
   return `default ${verdict} for ${kind}`;
 }
 
 /**
- * Ordered rule engine. First match wins; else per-kind defaults.
+ * Ordered rule engine. First match wins; else {@link DEFAULT_POLICY_VERDICTS}
+ * (or `options.defaults` overrides).
+ *
+ * Host always injects an engine — file ruleset **or** this constructor with no
+ * args — so sidebar / office never run ungated.
  */
 export function createPolicyEngine(
   options: CreatePolicyEngineOptions = {},
 ): PolicyEngine {
   const rules = options.rules ?? [];
   const defaults: Record<PolicySubjectKind, PolicyVerdict> = {
-    ...DEFAULT_VERDICTS,
+    ...DEFAULT_POLICY_VERDICTS,
     ...options.defaults,
   };
 
@@ -60,6 +81,14 @@ export function createPolicyEngine(
   };
 }
 
+/**
+ * Explicit product default (same as `createPolicyEngine()`).
+ * Prefer this name at Host / sidebar call sites that must not omit policy.
+ */
+export function createDefaultPolicyEngine(): PolicyEngine {
+  return createPolicyEngine();
+}
+
 /** Convenience: throw when evaluate is not allow (host / adapter gates). */
 export function assertPolicyAllow(
   engine: PolicyEngine,
@@ -67,8 +96,6 @@ export function assertPolicyAllow(
 ): void {
   const d = engine.evaluate(subject);
   if (d.verdict === "allow") return;
-  const label = d.ruleId ? `rule ${d.ruleId}` : "policy";
-  throw new Error(
-    `policy ${d.verdict}: ${d.reason ?? subject.kind} (${label})`,
-  );
+  const phase = d.verdict === "ask" ? "ask" : "deny";
+  throw new PolicyGateError(policyWireError(subject, d, phase));
 }

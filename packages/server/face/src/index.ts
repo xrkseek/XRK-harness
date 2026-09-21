@@ -36,6 +36,7 @@ export { createFaceBus, type FaceBus } from "./bus.js";
 export { createFaceSeqClock, FaceMuxSeq, type FaceSeqClock } from "./seq.js";
 export {
   type FaceDrain,
+  type FaceDirectoryBackend,
   type FaceRuntime,
 } from "./context.js";
 export { createFaceRuntime, type CreateFaceRuntimeOptions } from "./runtime.js";
@@ -126,6 +127,7 @@ export {
   FACE_PERMISSION_TABLE,
   CUSTOM_PERMISSION_PRESET,
   applyPermissionPreset,
+  applyLivePermissionDefaultPreset,
   defaultPermissionPreset,
   derivePermissionSelect,
   permissionSelectFromEvents,
@@ -165,6 +167,7 @@ export {
   jobViews,
   formatJobCompletionNotice,
   formatSubagentCompletionNotice,
+  lastAssistantBodyText,
   isSettledJobStatus,
   JOB_COMPLETION_MAX_WAKES,
   presentToolView,
@@ -197,6 +200,7 @@ export {
   resolveToolPreset,
   resolveAgentPresetProfile,
   DEFAULT_MAX_ACTIVE_CHILDREN,
+  DEFAULT_MAX_DEPTH,
   type AgentPresetInfo,
   type AgentPresetProfile,
   type AgentSubagentPolicy,
@@ -237,6 +241,16 @@ export {
   type FaceSubagentLink,
   type SubagentMode,
 } from "./subagent-registry.js";
+export {
+  AGENT_TEAM_ROLES,
+  AgentTeamGraph,
+  agentTeamGraphPath,
+  isAgentTeamRole,
+  type AgentTeamEdge,
+  type AgentTeamEdgeKind,
+  type AgentTeamNode,
+  type AgentTeamRole,
+} from "./agent-team-graph.js";
 export {
   fullyQualified,
   hostCreateDirectory,
@@ -297,6 +311,7 @@ export {
   listCredentialSlots,
   parseFaceMcpServers,
   formatMcpInventoryText,
+  resetLastGoodHostMcpCache,
   settingsDescribeFace,
   settingsGet,
   settingsMutateFace,
@@ -337,7 +352,14 @@ export {
   bindSubagentTools,
   subagentDepth,
   SUBAGENT_ROUTING_PROMPT_TEXT,
+  parseExternalAgentKind,
+  runExternalAgentTurn,
+  resolveExternalAgentLaunch,
+  ExternalAgentError,
   type BindSubagentToolsOptions,
+  type ExternalAgentKind,
+  type ExternalSpawn,
+  type RunExternalAgentOptions,
 } from "./subagent-tools.js";
 export {
   costMeterAggregateUsage,

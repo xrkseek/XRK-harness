@@ -75,6 +75,7 @@ export {
   formatSearchOutput,
   formatWebFetchGuidance,
   formatWebSearchGuidance,
+  formatBrowserGuidance,
   presentFetchCall,
   presentFetchResult,
   presentSearchCall,
@@ -90,6 +91,27 @@ export {
   createWebTools,
   type CreateWebToolsOptions,
 } from "./tools.js";
+export {
+  createHttpBrowserSession,
+  type BrowserActRequest,
+  type BrowserActResult,
+  type BrowserSession,
+  type BrowserSnapshotResult,
+} from "./browser-session.js";
+export {
+  browserCdpUrlFromEnv,
+  connectCdpWebSocket,
+  createBrowserSession,
+  createCdpBrowserSession,
+  resolveCdpDebuggerUrl,
+  type CdpCaller,
+} from "./browser-cdp.js";
+export { createBrowserTools } from "./browser-tools.js";
+export {
+  extractBrowserElements,
+  formatBrowserSnapshot,
+  type BrowserElement,
+} from "./browser-html.js";
 
 export interface DefaultWebAccessOptions {
   /** Face/Host structured search (preferred). */

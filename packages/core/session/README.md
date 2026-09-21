@@ -28,6 +28,6 @@ See [docs/session-latch.md](../../../docs/session-latch.md), [docs/session-api.m
 ## Store
 
 `createMemorySessionStore` — `append` runs `assertSessionEvent` then deep-freeze. `has(id)` 不抛。全量 `get` / `readEvents` 复用驻留数组身份。  
-`createPersistentSessionStore(dir)` — 工作区 `{dir}/sessions.db`（WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · chunk 写批并物理 `text-chunks` / `tool-call-chunks` · `flush()` · open-turn 崩溃修复）；Host 经 `XRK_SESSIONS_DIR` 默认选用；drain idle / `stop` 时 flush/close。ZIP 导出 `toPackedJSONL` + `.jsonl.zst` sidecar；`fromPackedJSONL` 可导入；`searchSessionIds` 供 Face `session.search`。
+`createPersistentSessionStore(dir)` — 工作区 `{dir}/sessions.db`（WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · chunk 写批并物理 `text-chunks` / `tool-call-chunks` · `flush()` · open-turn 崩溃修复）；打开时默认取得目录独占写锁（`sessions.write.lock`），第二实例抛 `SessionsDirInUseError`（提示退出其它 Host 后重试），`{ shared: true }` 以只读打开供巡检（禁止 create/append，崩溃修复仅内存）；Host 经 `XRK_SESSIONS_DIR` 默认选用；drain idle / `stop` 时 flush/close。ZIP 导出 `toPackedJSONL` + `.jsonl.zst` sidecar；`fromPackedJSONL` 可导入；`searchSessionIds` 供 Face `session.search`。
 
 日志位置与读面：`SessionSeq` · `SessionLogOffset` · `SessionSeqCursor` · 必选 `store.readEvents` · `readSessionEvents` · `sessionEventCount` / `lastSessionEvent` / `sessionEventsFrom` · `snapshotEvents` — 见 [docs/session-log.md](../../../docs/session-log.md)。

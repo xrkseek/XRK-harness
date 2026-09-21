@@ -269,6 +269,21 @@ export function formatWebFetchGuidance(available: ToolNameSet): string {
   return `Use the web_fetch tool to retrieve one specific HTTP(S) URL as decoded text (~30s timeout). Prefer concrete page URLs over homepages${searchHint}. Cross-origin redirects are not followed — if the error names a Location URL, call web_fetch on that URL next. Cite the URL as a markdown link when you use its content.`;
 }
 
+/**
+ * browser_* guidance; empty when browser_open is not available.
+ */
+export function formatBrowserGuidance(available: ToolNameSet): string {
+  const names = asSet(available);
+  if (!names.has("browser_open")) return "";
+  return (
+    "Use browser_open / browser_snapshot / browser_act for interactive page sessions " +
+    "(element refs like @e1). Use browser_vision for a screenshot the vision model can see. " +
+    "Prefer web_fetch or web_search for one-shot reads. " +
+    "The default session is an HTTP snapshot. XRK_BROWSER_CDP_URL selects Chrome DevTools. " +
+    "This is not a full desktop computer-use agent."
+  );
+}
+
 /** Full-surface defaults (both web tools present). */
 export const WEB_SEARCH_GUIDANCE = formatWebSearchGuidance([
   "web_search",

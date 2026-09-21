@@ -4,14 +4,23 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { assertPolicyAllow } from "@xrkseek/policy";
-import { drainToolsListPages } from "./list-tools.js";
+import {
+  drainToolsListPages,
+  isResourcesUnsupported,
+  isToolsListUnsupported,
+  MAX_TOOLS_LIST_PAGES,
+} from "./list-tools.js";
 import { assertServerName } from "./names.js";
+import { mergeAuthHeaders } from "./oauth-device.js";
 import { mapMcpCallContent } from "./project-content.js";
 import { resolveReconnectPolicy } from "./reconnect.js";
 import type {
   McpClient,
   McpClientOptions,
   McpConnectionState,
+  McpResourceContents,
+  McpResourceInfo,
+  McpResourceTemplateInfo,
   McpToolAnnotations,
   McpToolInfo,
 } from "./types.js";
@@ -19,9 +28,7 @@ import type {
 const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000;
 
 /** Parse MCP tool.annotations; only known boolean hints are kept. */
-export function parseMcpToolAnnotations(
-  raw: unknown,
-): McpToolAnnotations | undefined {
+export function parseMcpToolAnnotations(raw: unknown): McpToolAnnotations | undefined {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const o = raw as Record<string, unknown>;
   const out: {
@@ -92,8 +99,10 @@ async function openTransport(options: McpClientOptions): Promise<Transport> {
       ...DEFAULT_HTTP_RECONNECT,
       ...options.reconnectionOptions,
     };
+    const authHeaders = options.auth ? await options.auth.headers() : undefined;
+    const requestInit = mergeAuthHeaders(options.requestInit, authHeaders);
     return new StreamableHTTPClientTransport(new URL(url), {
-      ...(options.requestInit ? { requestInit: options.requestInit } : {}),
+      ...(requestInit ? { requestInit } : {}),
       reconnectionOptions,
     }) as unknown as Transport;
   }
@@ -121,12 +130,10 @@ async function openTransport(options: McpClientOptions): Promise<Transport> {
  */
 export function createMcpClient(options: McpClientOptions): McpClient {
   assertServerName(options.serverName);
-  if (
-    !options.createTransport &&
-    options.transport !== "http" &&
-    !options.command
-  ) {
-    throw new Error("createMcpClient: command, url (http), or createTransport required");
+  if (!options.createTransport && options.transport !== "http" && !options.command) {
+    throw new Error(
+      "createMcpClient: command, url (http), or createTransport required",
+    );
   }
 
   const reconnect = resolveReconnectPolicy(options.reconnect, "reconnect");
@@ -152,7 +159,8 @@ export function createMcpClient(options: McpClientOptions): McpClient {
     options.onLog?.(level, `${label}: ${message}`);
   };
 
-  const isCurrent = (generation: Client): boolean => !disposed && attempt === generation;
+  const isCurrent = (generation: Client): boolean =>
+    !disposed && attempt === generation;
 
   function emitState(state: McpConnectionState): void {
     for (const handler of [...stateHandlers]) {
@@ -185,6 +193,55 @@ export function createMcpClient(options: McpClientOptions): McpClient {
         resolve(true);
       });
     });
+  }
+
+  /** Drain paginated resources/list or templates/list (reuse tools page cap). */
+  async function drainResourcePages<T>(
+    serverName: string,
+    label: string,
+    keyOf: (item: T) => string,
+    fetchPage: (
+      cursor?: string,
+    ) => Promise<{ items: readonly T[]; nextCursor?: string | null }>,
+  ): Promise<T[]> {
+    const seenCursors = new Set<string>();
+    const out: T[] = [];
+    const seenKeys = new Set<string>();
+    let cursor: string | undefined;
+    let pages = 0;
+    do {
+      pages += 1;
+      if (pages > MAX_TOOLS_LIST_PAGES) {
+        throw new Error(
+          `mcp-client(${serverName}): ${label} exceeded ${MAX_TOOLS_LIST_PAGES} pages — invalid resource list`,
+        );
+      }
+      const page = await fetchPage(cursor);
+      for (const item of page.items) {
+        const key = keyOf(item);
+        if (seenKeys.has(key)) {
+          throw new Error(
+            `mcp-client(${serverName}): server listed ${label} entry "${key}" more than once — invalid resource list`,
+          );
+        }
+        seenKeys.add(key);
+        out.push(item);
+      }
+      const next =
+        typeof page.nextCursor === "string" && page.nextCursor.length > 0
+          ? page.nextCursor
+          : undefined;
+      if (next !== undefined) {
+        if (seenCursors.has(next)) {
+          throw new Error(
+            `mcp-client(${serverName}): server repeated a ${label} continuation cursor — invalid resource list`,
+          );
+        }
+        seenCursors.add(next);
+      }
+      cursor = next;
+    } while (cursor !== undefined);
+    return out;
   }
 
   function scheduleReconnect(): void {
@@ -228,7 +285,10 @@ export function createMcpClient(options: McpClientOptions): McpClient {
     const action = lostEstablished
       ? "connection lost; reconnecting"
       : "connection failed; retrying";
-    log("warn", `${action} in ${delayMs}ms (attempt ${failedAttempts}/${reconnect.maxAttempts})`);
+    log(
+      "warn",
+      `${action} in ${delayMs}ms (attempt ${failedAttempts}/${reconnect.maxAttempts})`,
+    );
     emitState({
       status: "reconnecting",
       attempt: failedAttempts,
@@ -266,10 +326,15 @@ export function createMcpClient(options: McpClientOptions): McpClient {
       serverId: options.serverName,
     });
 
-    const generation = new Client({
-      name: "xrkseek-mcp",
-      version: "0.0.0",
-    });
+    const generation = new Client(
+      {
+        name: "xrkseek-mcp",
+        version: "0.0.0",
+      },
+      // Advertise empty client capabilities; SDK connect() negotiates protocol
+      // version (SUPPORTED_PROTOCOL_VERSIONS) and stores server capabilities.
+      { capabilities: {} },
+    );
     const closed = withResolvers<void>();
     let attemptSettled = false;
     let closeObserved = false;
@@ -316,7 +381,7 @@ export function createMcpClient(options: McpClientOptions): McpClient {
         throw err;
       }
       if (!isCurrent(generation)) return;
-      const quiesced = closeObserved || await waitForClose(closed.promise);
+      const quiesced = closeObserved || (await waitForClose(closed.promise));
       if (!quiesced) {
         attempt = undefined;
         clientClosed = undefined;
@@ -384,33 +449,204 @@ export function createMcpClient(options: McpClientOptions): McpClient {
 
     async listTools() {
       const live = requireLive();
-      return drainToolsListPages(options.serverName, async (cursor) => {
-        const result = await live.listTools(
-          cursor === undefined ? undefined : { cursor },
+      // Servers that omit the tools capability (prompts/resources-only) must
+      // not receive tools/list — return an empty generation (DSH mcp-client).
+      if (live.getServerCapabilities()?.tools === undefined) {
+        return [];
+      }
+      try {
+        return await drainToolsListPages(options.serverName, async (cursor) => {
+          const result = await live.listTools(
+            cursor === undefined ? undefined : { cursor },
+          );
+          return {
+            tools: result.tools.map((t): McpToolInfo => {
+              const annotations = parseMcpToolAnnotations(
+                (t as { annotations?: unknown }).annotations,
+              );
+              return {
+                name: t.name,
+                description: t.description ?? "",
+                inputSchema:
+                  t.inputSchema && typeof t.inputSchema === "object"
+                    ? t.inputSchema
+                    : { type: "object", properties: {} },
+                ...(annotations ? { annotations } : {}),
+              };
+            }),
+            ...("nextCursor" in result
+              ? {
+                  nextCursor: (result as { nextCursor?: string | null }).nextCursor,
+                }
+              : {}),
+          };
+        });
+      } catch (err) {
+        // Some servers reject tools/list with MethodNotFound despite a weak
+        // capability advertisement — treat as no tools, not a hard failure.
+        if (isToolsListUnsupported(err)) return [];
+        throw err;
+      }
+    },
+
+    async listResources(listOpts) {
+      assertPolicyAllow(options.policy, {
+        kind: "mcp.resource",
+        serverId: options.serverName,
+        action: "list",
+      });
+      const live = requireLive();
+      if (live.getServerCapabilities()?.resources === undefined) {
+        return { items: [] };
+      }
+      try {
+        if (listOpts?.cursor !== undefined) {
+          const page = await live.listResources({ cursor: listOpts.cursor });
+          const next =
+            typeof page.nextCursor === "string" && page.nextCursor.length > 0
+              ? page.nextCursor
+              : undefined;
+          return {
+            items: page.resources.map((r): McpResourceInfo => ({
+              uri: r.uri,
+              name: r.name,
+              ...(r.description !== undefined ? { description: r.description } : {}),
+              ...(r.mimeType !== undefined ? { mimeType: r.mimeType } : {}),
+            })),
+            ...(next !== undefined ? { nextCursor: next } : {}),
+          };
+        }
+        const items = await drainResourcePages<McpResourceInfo>(
+          options.serverName,
+          "resources/list",
+          (r) => r.uri,
+          async (cursor) => {
+            const page = await live.listResources(
+              cursor === undefined ? undefined : { cursor },
+            );
+            const mapped: McpResourceInfo[] = page.resources.map((r) => ({
+              uri: r.uri,
+              name: r.name,
+              ...(r.description !== undefined ? { description: r.description } : {}),
+              ...(r.mimeType !== undefined ? { mimeType: r.mimeType } : {}),
+            }));
+            return {
+              items: mapped,
+              ...("nextCursor" in page
+                ? {
+                    nextCursor: (page as { nextCursor?: string | null }).nextCursor,
+                  }
+                : {}),
+            };
+          },
         );
-        return {
-          tools: result.tools.map((t): McpToolInfo => {
-            const annotations = parseMcpToolAnnotations(
-              (t as { annotations?: unknown }).annotations,
+        return { items };
+      } catch (err) {
+        if (isResourcesUnsupported(err)) return { items: [] };
+        throw err;
+      }
+    },
+
+    async listResourceTemplates(listOpts) {
+      assertPolicyAllow(options.policy, {
+        kind: "mcp.resource",
+        serverId: options.serverName,
+        action: "templates",
+      });
+      const live = requireLive();
+      if (live.getServerCapabilities()?.resources === undefined) {
+        return { items: [] };
+      }
+      try {
+        if (listOpts?.cursor !== undefined) {
+          const page = await live.listResourceTemplates({
+            cursor: listOpts.cursor,
+          });
+          const next =
+            typeof page.nextCursor === "string" && page.nextCursor.length > 0
+              ? page.nextCursor
+              : undefined;
+          return {
+            items: page.resourceTemplates.map((t): McpResourceTemplateInfo => ({
+              uriTemplate: t.uriTemplate,
+              name: t.name,
+              ...(t.description !== undefined ? { description: t.description } : {}),
+              ...(t.mimeType !== undefined ? { mimeType: t.mimeType } : {}),
+            })),
+            ...(next !== undefined ? { nextCursor: next } : {}),
+          };
+        }
+        const items = await drainResourcePages<McpResourceTemplateInfo>(
+          options.serverName,
+          "resources/templates/list",
+          (t) => t.uriTemplate,
+          async (cursor) => {
+            const page = await live.listResourceTemplates(
+              cursor === undefined ? undefined : { cursor },
+            );
+            const mapped: McpResourceTemplateInfo[] = page.resourceTemplates.map(
+              (t) => ({
+                uriTemplate: t.uriTemplate,
+                name: t.name,
+                ...(t.description !== undefined ? { description: t.description } : {}),
+                ...(t.mimeType !== undefined ? { mimeType: t.mimeType } : {}),
+              }),
             );
             return {
-              name: t.name,
-              description: t.description ?? "",
-              inputSchema:
-                t.inputSchema && typeof t.inputSchema === "object"
-                  ? t.inputSchema
-                  : { type: "object", properties: {} },
-              ...(annotations ? { annotations } : {}),
+              items: mapped,
+              ...("nextCursor" in page
+                ? {
+                    nextCursor: (page as { nextCursor?: string | null }).nextCursor,
+                  }
+                : {}),
             };
-          }),
-          ...("nextCursor" in result
-            ? {
-                nextCursor: (result as { nextCursor?: string | null })
-                  .nextCursor,
-              }
-            : {}),
-        };
+          },
+        );
+        return { items };
+      } catch (err) {
+        if (isResourcesUnsupported(err)) return { items: [] };
+        throw err;
+      }
+    },
+
+    async readResource(uri, signal) {
+      const trimmed = uri.trim();
+      if (!trimmed) throw new Error("readResource: uri required");
+      assertPolicyAllow(options.policy, {
+        kind: "mcp.resource",
+        serverId: options.serverName,
+        action: "read",
+        uri: trimmed,
       });
+      const live = requireLive();
+      if (live.getServerCapabilities()?.resources === undefined) {
+        throw new Error(
+          `mcp-client(${options.serverName}): server does not support resources`,
+        );
+      }
+      const result = await live.readResource(
+        { uri: trimmed },
+        {
+          timeout: timeoutMs,
+          ...(signal ? { signal } : {}),
+        },
+      );
+      return {
+        contents: result.contents.map((c): McpResourceContents["contents"][number] => {
+          if ("blob" in c && typeof c.blob === "string") {
+            return {
+              uri: c.uri,
+              blob: c.blob,
+              ...(c.mimeType !== undefined ? { mimeType: c.mimeType } : {}),
+            };
+          }
+          return {
+            uri: c.uri,
+            text: "text" in c && typeof c.text === "string" ? c.text : "",
+            ...(c.mimeType !== undefined ? { mimeType: c.mimeType } : {}),
+          };
+        }),
+      };
     },
 
     async callTool(rawName, args, signal) {
@@ -467,7 +703,11 @@ export function createMcpClient(options: McpClientOptions): McpClient {
       }
       await closeQuietly(live);
       await closeQuietly(liveTransport);
-      if (established && liveClosed !== undefined && !await waitForClose(liveClosed)) {
+      if (
+        established &&
+        liveClosed !== undefined &&
+        !(await waitForClose(liveClosed))
+      ) {
         log(
           "error",
           `generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms during disposal`,

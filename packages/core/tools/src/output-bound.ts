@@ -7,7 +7,12 @@ import type { MessageContent } from "@xrkseek/protocol";
 import { contentHasImage, flattenText } from "@xrkseek/protocol";
 
 export const DEFAULT_TOOL_OUTPUT_MAX_LINES = 2_000;
-export const DEFAULT_TOOL_OUTPUT_MAX_BYTES = 50 * 1024;
+/**
+ * Shared UTF-8 inline ceiling with agent-loop spill
+ * (`TOOL_RESULT_MAX_INLINE_BYTES`). One byte budget: this layer writes the
+ * full body when `persist` is set; the loop must not write a second copy.
+ */
+export const DEFAULT_TOOL_OUTPUT_MAX_BYTES = 64_000;
 
 export interface ToolOutputBoundLimits {
   readonly maxLines?: number;

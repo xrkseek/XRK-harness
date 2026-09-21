@@ -114,6 +114,7 @@ import {
   fileReferencesList,
   sessionReferenceResolverCandidates,
 } from "./handlers/references.js";
+import { changesFileDiff } from "./handlers/changes.js";
 
 const HANDLERS: Record<string, FaceHandler> = {
   "host.describe": hostDescribe,
@@ -227,6 +228,8 @@ const HANDLERS: Record<string, FaceHandler> = {
   "goal.clear": goalsClear,
   "fileReferences/list": fileReferencesList,
   "sessionReferenceResolver/candidates": sessionReferenceResolverCandidates,
+  "changes.fileDiff": changesFileDiff,
+  "changes/fileDiff": changesFileDiff,
 };
 
 export function getHandler(method: string): FaceHandler | undefined {

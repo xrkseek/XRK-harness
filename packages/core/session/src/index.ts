@@ -21,6 +21,7 @@ export {
   admitPrompt,
   withdrawAdmit,
   listPendingAdmits,
+  listSessionsWithPendingAdmits,
   newSession,
   promoteNextAdmit,
   promoteAdmitsForTurn,
@@ -56,6 +57,7 @@ export {
   COMPACTION_SUMMARY_TEMPLATE,
   DEFAULT_COMPACTION_BUFFER_TOKENS,
   DEFAULT_COMPACTION_KEEP_TOKENS,
+  DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS,
   buildCompactionPrompt,
   deriveMessagesUnwindowed,
   estimateMessagesTokens,
@@ -64,9 +66,18 @@ export {
   findLatestCompaction,
   formatCompactionForModel,
   prepareCompactionPayload,
+  resolveSoftBudgetCeiling,
   selectHeadRecent,
   type CompactionOptions,
 } from "./compaction.js";
+
+export {
+  DEFAULT_MAX_REQUEST_IMAGE_BYTES,
+  ensureDurableImageOffloads,
+  foldImageOffloadMarks,
+  planImageOffloadTargets,
+  projectOffloadedImages,
+} from "./image-offload.js";
 
 import {
   deriveMessagesUnwindowed,
@@ -87,7 +98,6 @@ export {
 } from "./surface-fold.js";
 
 export {
-  TOOL_INTERRUPTED_MESSAGE,
   TOOL_NOT_STARTED,
   TOOL_NOT_STARTED_MESSAGE,
   TOOL_OUTCOME_UNKNOWN,
@@ -242,7 +252,15 @@ export function deriveMessages(events: readonly SessionEvent[]): ChatMessage[] {
         content: formatCompactionForModel(compact.event),
       },
     ];
-    return messages.concat(deriveMessagesUnwindowed(events.slice(compact.index + 1)));
+    // `image/offload.targets.seq` is absolute durable-log index — fold marks
+    // from the full log and remap slice-local indices.
+    const sliceStart = compact.index + 1;
+    return messages.concat(
+      deriveMessagesUnwindowed(events.slice(sliceStart), {
+        indexOffset: sliceStart,
+        markSource: events,
+      }),
+    );
   }
   return deriveMessagesUnwindowed(events);
 }
@@ -287,10 +305,19 @@ export function assertModelVisible(
 
 export { fromJSONL, parseJSONL, toJSONL, type ParseJSONLResult } from "./jsonl.js";
 export {
+  exportSessionInterchange,
+  importSessionInterchange,
+  readSessionInterchange,
+  SESSION_INTERCHANGE_VERSION,
+  type InterchangeMessage,
+} from "./session-interchange.js";
+export {
   createPersistentSessionStore,
   ftsMatchQuery,
   SESSION_DB_FILENAME,
   SESSION_SCHEMA_VERSION,
+  SessionsDirInUseError,
+  SESSIONS_WRITE_LOCK_FILENAME,
   type PersistentSessionStore,
   type PersistentSessionStoreOptions,
 } from "./sqlite-store.js";

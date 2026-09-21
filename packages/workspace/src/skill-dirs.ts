@@ -6,6 +6,7 @@ import {
   WORKSPACE_SKILL_REL_DIRS,
 } from "./inject-sources.js";
 import { shouldSkipScanDir } from "./scan-guards.js";
+import { resolveUnderUserProductHome } from "./user-product-home.js";
 
 /** Shared skill-source options (DSH / Codex multi-root). */
 export interface SkillDirSourceOptions {
@@ -59,7 +60,8 @@ export async function resolveSkillDirs(
     if (includeUser) {
       const home = path.resolve(options.homeDir ?? homedir());
       for (const rel of USER_HOME_SKILL_REL_DIRS) {
-        await push(path.join(home, rel));
+        const underProduct = resolveUnderUserProductHome(rel, options.homeDir);
+        await push(underProduct ?? path.join(home, rel));
       }
     }
     for (const rel of WORKSPACE_SKILL_REL_DIRS) {

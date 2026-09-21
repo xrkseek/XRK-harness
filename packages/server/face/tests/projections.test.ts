@@ -237,6 +237,75 @@ describe("createFaceRuntime projection wire", () => {
     expect(registry.snapshot(session.id).values.todos).toBeNull();
   });
 
+  it("workspaceChanges: workspace/changes upserts by turnId", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    installDefaultFaceProjections(registry);
+
+    const summary1 = {
+      turnId: "t1",
+      cwd: "/w",
+      files: [{ path: "a.ts", display: "a.ts", added: 1, deleted: 0 }],
+      total: 1,
+      added: 1,
+      deleted: 0,
+    };
+    const first = store.append(session.id, {
+      type: "workspace/changes",
+      ts: 1,
+      turnId: "t1",
+      summary: summary1,
+    });
+    registry.drive(session.id, first, 1);
+    expect(registry.snapshot(session.id).values.workspaceChanges).toEqual([
+      { ...summary1, seq: 1 },
+    ]);
+
+    const summary1b = {
+      ...summary1,
+      files: [
+        { path: "a.ts", display: "a.ts", added: 2, deleted: 1 },
+        { path: "b.ts", display: "b.ts", added: 1, deleted: 0 },
+      ],
+      total: 2,
+      added: 3,
+      deleted: 1,
+    };
+    const replace = store.append(session.id, {
+      type: "workspace/changes",
+      ts: 2,
+      turnId: "t1",
+      summary: summary1b,
+    });
+    registry.drive(session.id, replace, 2);
+    expect(registry.snapshot(session.id).values.workspaceChanges).toEqual([
+      { ...summary1b, seq: 2 },
+    ]);
+
+    const summary2 = {
+      turnId: "t2",
+      cwd: "/w",
+      files: [{ path: "c.ts", display: "c.ts", added: 0, deleted: 1 }],
+      total: 1,
+      added: 0,
+      deleted: 1,
+    };
+    const second = store.append(session.id, {
+      type: "workspace/changes",
+      ts: 3,
+      turnId: "t2",
+      summary: summary2,
+    });
+    registry.drive(session.id, second, 3);
+    expect(registry.snapshot(session.id).values.workspaceChanges).toEqual([
+      { ...summary1b, seq: 2 },
+      { ...summary2, seq: 3 },
+    ]);
+  });
+
   it("Face patched append publishes session/projection todos then clears on turn/start", () => {
     const store = createMemorySessionStore();
     const mux: { type?: string; key?: string; value?: unknown }[] = [];

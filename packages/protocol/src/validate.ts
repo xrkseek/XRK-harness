@@ -1077,6 +1077,219 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         retry,
       };
     }
+    case "image/offload": {
+      const targetsRaw = value.targets;
+      if (!Array.isArray(targetsRaw) || targetsRaw.length === 0) {
+        throw new SessionEventParseError(
+          "targets must be a nonempty array",
+          type,
+        );
+      }
+      const seenSeq = new Set<number>();
+      const targets: import("./session-events.js").ImageOffloadTarget[] = [];
+      for (let ti = 0; ti < targetsRaw.length; ti++) {
+        const row = targetsRaw[ti];
+        if (row === null || typeof row !== "object" || Array.isArray(row)) {
+          throw new SessionEventParseError(
+            "invalid target",
+            `${type}.targets[${ti}]`,
+          );
+        }
+        const seq = Reflect.get(row, "seq");
+        const indexesRaw = Reflect.get(row, "imageIndexes");
+        if (
+          typeof seq !== "number" ||
+          !Number.isSafeInteger(seq) ||
+          seq < 0 ||
+          Object.is(seq, -0)
+        ) {
+          throw new SessionEventParseError(
+            "seq must be a non-negative safe integer",
+            `${type}.targets[${ti}]`,
+          );
+        }
+        if (seenSeq.has(seq)) {
+          throw new SessionEventParseError(
+            `duplicate target seq ${seq}`,
+            type,
+          );
+        }
+        seenSeq.add(seq);
+        if (!Array.isArray(indexesRaw) || indexesRaw.length === 0) {
+          throw new SessionEventParseError(
+            "imageIndexes must be a nonempty array",
+            `${type}.targets[${ti}]`,
+          );
+        }
+        let previous = -1;
+        const imageIndexes: number[] = [];
+        for (let ii = 0; ii < indexesRaw.length; ii++) {
+          const index = indexesRaw[ii];
+          if (
+            typeof index !== "number" ||
+            !Number.isSafeInteger(index) ||
+            index < 0 ||
+            Object.is(index, -0) ||
+            index <= previous
+          ) {
+            throw new SessionEventParseError(
+              "imageIndexes must be strictly increasing non-negative safe integers",
+              `${type}.targets[${ti}]`,
+            );
+          }
+          previous = index;
+          imageIndexes.push(index);
+        }
+        targets.push({ seq, imageIndexes });
+      }
+      return { type, ts, targets };
+    }
+    case "workspace/changes": {
+      const turnId = reqString(value, "turnId", type);
+      const summaryRaw = Reflect.get(value, "summary");
+      if (
+        summaryRaw === null ||
+        typeof summaryRaw !== "object" ||
+        Array.isArray(summaryRaw)
+      ) {
+        throw new SessionEventParseError("summary required", type);
+      }
+      const summaryObj = summaryRaw as Record<string, unknown>;
+      const summaryTurn = Reflect.get(summaryObj, "turnId");
+      const cwd = Reflect.get(summaryObj, "cwd");
+      const filesRaw = Reflect.get(summaryObj, "files");
+      const total = Reflect.get(summaryObj, "total");
+      const added = Reflect.get(summaryObj, "added");
+      const deleted = Reflect.get(summaryObj, "deleted");
+      if (typeof summaryTurn !== "string" || !summaryTurn.trim()) {
+        throw new SessionEventParseError("summary.turnId required", type);
+      }
+      if (summaryTurn !== turnId) {
+        throw new SessionEventParseError(
+          "summary.turnId must match event.turnId",
+          type,
+        );
+      }
+      if (typeof cwd !== "string") {
+        throw new SessionEventParseError("summary.cwd must be string", type);
+      }
+      if (!Array.isArray(filesRaw)) {
+        throw new SessionEventParseError("summary.files must be array", type);
+      }
+      if (
+        typeof total !== "number" ||
+        !Number.isFinite(total) ||
+        total < 0 ||
+        typeof added !== "number" ||
+        !Number.isFinite(added) ||
+        added < 0 ||
+        typeof deleted !== "number" ||
+        !Number.isFinite(deleted) ||
+        deleted < 0
+      ) {
+        throw new SessionEventParseError(
+          "summary total/added/deleted must be non-negative numbers",
+          type,
+        );
+      }
+      const files: import("./workspace-changes.js").WorkspaceChangedFile[] = [];
+      for (let i = 0; i < filesRaw.length; i++) {
+        const row = filesRaw[i];
+        if (row === null || typeof row !== "object" || Array.isArray(row)) {
+          throw new SessionEventParseError(
+            "invalid changed file",
+            `${type}.summary.files[${i}]`,
+          );
+        }
+        const path = Reflect.get(row, "path");
+        const display = Reflect.get(row, "display");
+        const fAdded = Reflect.get(row, "added");
+        const fDeleted = Reflect.get(row, "deleted");
+        const binary = Reflect.get(row, "binary");
+        const oversized = Reflect.get(row, "oversized");
+        if (typeof path !== "string" || !path.trim()) {
+          throw new SessionEventParseError(
+            "file.path must be non-empty string",
+            `${type}.summary.files[${i}]`,
+          );
+        }
+        if (typeof display !== "string" || !display.trim()) {
+          throw new SessionEventParseError(
+            "file.display must be non-empty string",
+            `${type}.summary.files[${i}]`,
+          );
+        }
+        if (
+          typeof fAdded !== "number" ||
+          !Number.isFinite(fAdded) ||
+          fAdded < 0 ||
+          typeof fDeleted !== "number" ||
+          !Number.isFinite(fDeleted) ||
+          fDeleted < 0
+        ) {
+          throw new SessionEventParseError(
+            "file.added/deleted must be non-negative numbers",
+            `${type}.summary.files[${i}]`,
+          );
+        }
+        if (binary !== undefined && binary !== true) {
+          throw new SessionEventParseError(
+            "file.binary must be true when set",
+            `${type}.summary.files[${i}]`,
+          );
+        }
+        if (oversized !== undefined && oversized !== true) {
+          throw new SessionEventParseError(
+            "file.oversized must be true when set",
+            `${type}.summary.files[${i}]`,
+          );
+        }
+        files.push({
+          path,
+          display,
+          added: fAdded,
+          deleted: fDeleted,
+          ...(binary === true ? { binary: true as const } : {}),
+          ...(oversized === true ? { oversized: true as const } : {}),
+        });
+      }
+      const snapshotRaw = Reflect.get(summaryObj, "snapshot");
+      let snapshot:
+        | { readonly before: string; readonly after: string }
+        | undefined;
+      if (snapshotRaw !== undefined) {
+        if (
+          snapshotRaw === null ||
+          typeof snapshotRaw !== "object" ||
+          Array.isArray(snapshotRaw)
+        ) {
+          throw new SessionEventParseError("invalid summary.snapshot", type);
+        }
+        const before = Reflect.get(snapshotRaw, "before");
+        const after = Reflect.get(snapshotRaw, "after");
+        if (typeof before !== "string" || typeof after !== "string") {
+          throw new SessionEventParseError(
+            "summary.snapshot.before/after must be strings",
+            type,
+          );
+        }
+        snapshot = { before, after };
+      }
+      return {
+        type,
+        ts,
+        turnId,
+        summary: {
+          turnId,
+          cwd,
+          files,
+          total,
+          added,
+          deleted,
+          ...(snapshot ? { snapshot } : {}),
+        },
+      };
+    }
     default:
       throw new SessionEventParseError(`unknown event type "${type}"`);
   }

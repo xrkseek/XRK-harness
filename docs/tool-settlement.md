@@ -43,7 +43,7 @@
 | 未声明 / 抛错 / 其它返回值 / 未知工具名 | **独占屏障** |
 | `toolSettle: "serial"` | 全部独占 |
 
-已标 concurrency-safe（只读）：`web_search` · `web_fetch` · `read_file` · `glob` · `grep` · `lsp` · `skill` · `terminal_list` · `terminal_read` · `job_list` · `job_output`（`wait≠true`）。写副作用工具默认独占。MCP 工具仅当 `annotations.readOnlyHint === true` 时标 safe。
+已标 concurrency-safe（只读）：`web_search` · `web_fetch` · `browser_snapshot` · `read_file` · `glob` · `grep` · `lsp` · `skill` · `terminal_list` · `terminal_read` · `job_list` · `job_output`（`wait≠true`）。写副作用工具默认独占。MCP 工具仅当 `annotations.readOnlyHint === true` 时标 safe。
 
 步内 LLM 重试：Face `agent-loop.llmRetryMaxRetries`（默认 5；`0` 关闭）→ Host → harness → `runTurn.llmRetry`。
 
@@ -126,7 +126,7 @@ Default `toolSettle: "parallel"`: within a step, all `tool/call` rows are durabl
 | Undeclared / throws / other return / unknown tool name | **Exclusive barrier** |
 | `toolSettle: "serial"` | All exclusive |
 
-Marked concurrency-safe (read-only): `web_search` · `web_fetch` · `read_file` · `glob` · `grep` · `lsp` · `skill` · `terminal_list` · `terminal_read` · `job_list` · `job_output` (`wait≠true`). Side-effect tools are exclusive by default. MCP tools are safe only when `annotations.readOnlyHint === true`.
+Marked concurrency-safe (read-only): `web_search` · `web_fetch` · `browser_snapshot` · `read_file` · `glob` · `grep` · `lsp` · `skill` · `terminal_list` · `terminal_read` · `job_list` · `job_output` (`wait≠true`). Side-effect tools are exclusive by default. MCP tools are safe only when `annotations.readOnlyHint === true`.
 
 In-step LLM retry: Face `agent-loop.llmRetryMaxRetries` (default 5; `0` disables) → Host → harness → `runTurn.llmRetry`.
 

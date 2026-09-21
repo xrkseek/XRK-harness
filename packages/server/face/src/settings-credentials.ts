@@ -2,9 +2,10 @@
  * Face U2 settings + credentials — public settings writable; secrets never logged / never on disk.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { access, constants, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import yaml from "js-yaml";
 import {
   mcpServersForbiddenEnvMessage,
   parseMcpServersValue,
@@ -23,14 +24,23 @@ import {
   FACE_THEME_SCHEMA,
   isFacePermissionPreset,
 } from "./face-schema.js";
+import { applyLivePermissionDefaultPreset } from "./permissions.js";
 import {
+  ConfigParseError,
   ensureSettingsDocument,
   mergeLayers,
   persistCredentialsFile,
   persistSettingsDocument,
   resolveHarnessHome,
+  settingsYamlPath,
   validateSettingsNamespace,
 } from "./settings-document.js";
+import {
+  classifyConfigDoc,
+  isEnoent,
+  keepLastGoodMessage,
+  refuseOverwriteDetail,
+} from "./last-good-config.js";
 import {
   FACE_PRODUCT_SETTINGS_NAMESPACES,
   schemaEnvelopeOf,
@@ -858,6 +868,8 @@ export interface FaceMcpServerDraft {
   readonly url?: string;
   readonly args?: readonly string[];
   readonly cwd?: string;
+  /** Required when `cwd` resolves under the Host workspace. */
+  readonly cwdAllowWorkspace?: boolean;
   /** Proxy-only env (HTTP_PROXY / …); secrets stay in Credentials. */
   readonly env?: Readonly<Record<string, string>>;
 }
@@ -875,6 +887,7 @@ export function parseFaceMcpServers(raw: unknown): FaceMcpServerDraft[] {
         ...(row.command ? { command: row.command } : {}),
         ...(row.args && row.args.length > 0 ? { args: [...row.args] } : {}),
         ...(row.cwd ? { cwd: row.cwd } : {}),
+        ...(row.cwdAllowWorkspace === true ? { cwdAllowWorkspace: true } : {}),
         ...(env ? { env } : {}),
       };
     },
@@ -971,24 +984,35 @@ function mcpAllowFromRuntime(runtime: FaceRuntime): boolean {
 
 function mcpDescribeBase(
   runtime: FaceRuntime,
-  connectFailures: readonly { readonly serverName: string; readonly message: string }[] = [],
+  connectFailures?: readonly {
+    readonly serverName: string;
+    readonly message: string;
+  }[],
   parkedExplicit?: readonly string[],
 ): Record<string, unknown> {
+  const overlay = runtime.mcpSyncOverlay;
+  const failures = connectFailures ?? overlay.connectFailures;
   const connected = mcpConnected(runtime);
   const connectedNames = new Set(connected.map((c) => c.serverName));
-  const failedNames = new Set(connectFailures.map((f) => f.serverName));
+  const failedNames = new Set(failures.map((f) => f.serverName));
+  const useOverlay =
+    parkedExplicit !== undefined ||
+    overlay.parked.length > 0 ||
+    overlay.connectFailures.length > 0;
   const parked =
     parkedExplicit ??
-    mcpServersFromRuntime(runtime)
-      .map((s) => s.serverName)
-      .filter((n) => !connectedNames.has(n) && !failedNames.has(n));
+    (useOverlay
+      ? overlay.parked
+      : mcpServersFromRuntime(runtime)
+          .map((s) => s.serverName)
+          .filter((n) => !connectedNames.has(n) && !failedNames.has(n)));
   return {
     servers: [],
     allowConnect: mcpAllowFromRuntime(runtime),
     connected,
     parked: [...parked],
     note: mcpSettingsNote(runtime),
-    ...(connectFailures.length > 0 ? { connectFailures } : {}),
+    ...(failures.length > 0 ? { connectFailures: failures } : {}),
   };
 }
 
@@ -1133,6 +1157,9 @@ export async function settingsMutateFace(
       };
     }
   }
+  const slot = runtime.settingsNamespaces.ensure(ns);
+  const snapshotUser = structuredClone(slot.user);
+  const snapshotRevision = slot.revision;
   const result = runtime.settingsNamespaces.mutate(ns, ops, expected);
   if (!result.ok) {
     console.warn(
@@ -1143,37 +1170,65 @@ export async function settingsMutateFace(
       error: { code: result.code, message: result.message, details: { ns } },
     };
   }
+  const rollback = (): void => {
+    slot.user = snapshotUser;
+    slot.revision = snapshotRevision;
+  };
   applyFaceUiPref(runtime, ns, result.view.value as Record<string, unknown>);
-  if (ns !== "mcp") {
-    publishRemoteEvent(runtime.bus, "settings/document-updated", [
-      ns,
-      result.view.revision,
-    ]);
-  }
-  if (ns === "llm-deepseek" || ns === "llm-pi-ai") {
-    publishRemoteEvent(runtime.bus, "llm/adapters-updated", []);
-  }
   if (ns === "mcp") {
     const applies = mcpApplies(runtime);
-    const slot = runtime.settingsNamespaces.ensure("mcp");
     const allowConnect = mcpAllowFromRuntime(runtime);
+    let servers: FaceMcpServerDraft[];
+    try {
+      servers = mcpServersFromRuntime(runtime);
+    } catch (err) {
+      rollback();
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[face] settings.mutate mcp parse failed; rolled back: ${message}`);
+      return {
+        ok: false,
+        error: {
+          code: "settings-invalid",
+          message,
+          details: { ns },
+        },
+      };
+    }
     slot.user = {
-      servers: mcpServersFromRuntime(runtime),
+      servers,
       allowConnect,
     };
     slot.applies = applies;
-    await persistHostSettings(runtime);
+    try {
+      await persistHostSettings(runtime);
+    } catch (err) {
+      rollback();
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[face] settings.mutate mcp persist failed; rolled back: ${message}`);
+      return {
+        ok: false,
+        error: {
+          code: "settings-persist-failed",
+          message,
+          details: { ns },
+        },
+      };
+    }
     let connectFailures: readonly {
       readonly serverName: string;
       readonly message: string;
     }[] = [];
     let parked: readonly string[] = [];
     if (runtime.syncMcpServers) {
-      const synced = await runtime.syncMcpServers(mcpServersFromRuntime(runtime), {
+      const synced = await runtime.syncMcpServers(servers, {
         allowConnect,
       });
       connectFailures = synced.failures;
       parked = synced.parked ?? [];
+      runtime.mcpSyncOverlay = {
+        connectFailures,
+        parked,
+      };
     }
     publishRemoteEvent(runtime.bus, "settings/document-updated", [
       ns,
@@ -1189,7 +1244,38 @@ export async function settingsMutateFace(
       ),
     };
   }
-  await persistSettingsDocument(runtime, runtime.settingsNamespaces);
+  try {
+    await persistSettingsDocument(runtime, runtime.settingsNamespaces);
+  } catch (err) {
+    rollback();
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[face] settings.mutate persist failed ns=${ns}; rolled back: ${message}`,
+    );
+    return {
+      ok: false,
+      error: {
+        code: "settings-persist-failed",
+        message,
+        details: { ns },
+      },
+    };
+  }
+  // Persist succeeded — then notify Host (DSH: persist before observers).
+  publishRemoteEvent(runtime.bus, "settings/document-updated", [
+    ns,
+    result.view.revision,
+  ]);
+  if (ns === "permission") {
+    await applyLivePermissionDefaultPreset(
+      runtime,
+      snapshotUser,
+      result.view.value,
+    );
+  }
+  if (ns === "llm-deepseek" || ns === "llm-pi-ai") {
+    publishRemoteEvent(runtime.bus, "llm/adapters-updated", []);
+  }
   return { ok: true, value: result.view };
 }
 
@@ -1272,11 +1358,9 @@ function hostSettingsPath(runtime: FaceRuntime): string {
 }
 
 function mcpServersFromRuntime(runtime: FaceRuntime): FaceMcpServerDraft[] {
-  try {
-    return parseFaceMcpServers(runtime.settingsNamespaces.ensure("mcp").user.servers);
-  } catch {
-    return [];
-  }
+  return parseFaceMcpServers(
+    runtime.settingsNamespaces.ensure("mcp").user.servers,
+  );
 }
 
 /** Slash `/mcp` inventory text (desired servers + live mount status). */
@@ -1284,7 +1368,13 @@ export function formatMcpInventoryText(
   runtime: FaceRuntime,
   options: { readonly verbose?: boolean } = {},
 ): string {
-  const servers = mcpServersFromRuntime(runtime);
+  let servers: FaceMcpServerDraft[] = [];
+  try {
+    servers = mcpServersFromRuntime(runtime);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return `MCP servers unavailable (parse failed; keeping last good in memory): ${message}`;
+  }
   const allow = mcpAllowFromRuntime(runtime);
   const connected = mcpConnected(runtime);
   const byName = new Map(connected.map((c) => [c.serverName, c]));
@@ -1332,39 +1422,209 @@ export function formatMcpInventoryText(
   return lines.join("\n");
 }
 
-  /** Load `~/.xrk/host-settings.json` mcp.servers (+ allowConnect) into the namespace user layer. */
+/** Last successfully parsed host-settings.json mcp section (keyed by abs path). */
+const lastGoodHostMcpByFile = new Map<
+  string,
+  {
+    readonly servers: FaceMcpServerDraft[];
+    readonly allowConnect: boolean;
+  }
+>();
+
+/** Test helper — clear host-settings last-good cache. */
+export function resetLastGoodHostMcpCache(): void {
+  lastGoodHostMcpByFile.clear();
+}
+
+/**
+ * One-shot: legacy `settings.yaml` `mcp:` → Face namespace + host-settings.json.
+ * Host never reads yaml; without this, yaml-only MCP never mounts.
+ * Writes host-settings synchronously so Host remount after Face boot sees it.
+ */
+function tryMigrateMcpFromSettingsYaml(runtime: FaceRuntime): boolean {
+  const yamlPath = settingsYamlPath(runtime);
+  let raw: string;
+  try {
+    raw = readFileSync(yamlPath, "utf8").replace(/^\uFEFF/, "");
+  } catch {
+    return false;
+  }
+  let parsed: unknown;
+  try {
+    parsed = yaml.load(raw);
+  } catch {
+    return false;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return false;
+  }
+  const mcp = (parsed as Record<string, unknown>).mcp;
+  if (!mcp || typeof mcp !== "object" || Array.isArray(mcp)) return false;
+  const section = mcp as { servers?: unknown; allowConnect?: unknown };
+  const servers = parseFaceMcpServers(section.servers);
+  const allowConnect = section.allowConnect === true;
+  if (servers.length === 0 && !allowConnect) return false;
+  const slot = runtime.settingsNamespaces.ensure("mcp");
+  slot.user = { servers, allowConnect };
+  slot.applies = mcpApplies(runtime);
+  const dump = hostSettingsPath(runtime);
+  const key = path.resolve(dump);
+  try {
+    mkdirSync(path.dirname(dump), { recursive: true });
+    const body = {
+      note: "Redacted Host snapshot. Secrets are never written here.",
+      ui: runtime.uiSettings,
+      host: runtime.hostPublic ?? null,
+      mcp: { servers, allowConnect },
+    };
+    writeFileSync(dump, `${JSON.stringify(body, null, 2)}\n`, "utf8");
+    lastGoodHostMcpByFile.set(key, {
+      servers: structuredClone(servers),
+      allowConnect,
+    });
+  } catch (err) {
+    console.warn(
+      `[face] migrate mcp from settings.yaml failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+  return true;
+}
+
+/** Load `~/.xrk/host-settings.json` mcp.servers (+ allowConnect) into the namespace user layer. */
 export function hydrateFaceHostSettings(runtime: FaceRuntime): void {
   const file = hostSettingsPath(runtime);
+  const key = path.resolve(file);
+  const lastGood = lastGoodHostMcpByFile.get(key);
+  let raw: string;
   try {
-    const parsed = JSON.parse(readFileSync(file, "utf8")) as {
+    raw = readFileSync(file, "utf8");
+  } catch (err) {
+    if (isEnoent(err)) {
+      tryMigrateMcpFromSettingsYaml(runtime);
+      return;
+    }
+    console.warn(
+      keepLastGoodMessage(
+        file,
+        err instanceof Error ? err.message : String(err),
+      ),
+    );
+    if (lastGood) {
+      const slot = runtime.settingsNamespaces.ensure("mcp");
+      slot.user = {
+        servers: structuredClone(lastGood.servers),
+        allowConnect: lastGood.allowConnect,
+      };
+      slot.applies = mcpApplies(runtime);
+    }
+    return;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const classified = classifyConfigDoc(parsed, undefined);
+    if (classified.status === "invalid") {
+      throw new Error(classified.error);
+    }
+    if (classified.status !== "ok") {
+      throw new Error("host-settings.json: unexpected load status");
+    }
+    const root = classified.doc as {
       mcp?: { servers?: unknown; allowConnect?: unknown };
     };
-    const servers = parseFaceMcpServers(parsed.mcp?.servers);
+    if (root.mcp?.servers === undefined) {
+      // Truncated write — keep last good rather than wiping Face MCP.
+      if (lastGood) {
+        console.warn(
+          keepLastGoodMessage(file, "mcp.servers missing"),
+        );
+        const slot = runtime.settingsNamespaces.ensure("mcp");
+        slot.user = {
+          servers: structuredClone(lastGood.servers),
+          allowConnect:
+            root.mcp?.allowConnect === true
+              ? true
+              : lastGood.allowConnect,
+        };
+        slot.applies = mcpApplies(runtime);
+        return;
+      }
+    }
+    const servers = parseFaceMcpServers(root.mcp?.servers);
+    const allowConnect = root.mcp?.allowConnect === true;
     const slot = runtime.settingsNamespaces.ensure("mcp");
     slot.user = {
       servers,
-      ...(parsed.mcp?.allowConnect === true ? { allowConnect: true } : { allowConnect: false }),
+      allowConnect,
     };
     slot.applies = mcpApplies(runtime);
-  } catch {
-    /* missing or malformed dump — next mutate rewrites */
+    lastGoodHostMcpByFile.set(key, {
+      servers: structuredClone(servers),
+      allowConnect,
+    });
+  } catch (err) {
+    console.warn(
+      keepLastGoodMessage(
+        file,
+        err instanceof Error ? err.message : String(err),
+      ),
+    );
+    if (lastGood) {
+      const slot = runtime.settingsNamespaces.ensure("mcp");
+      slot.user = {
+        servers: structuredClone(lastGood.servers),
+        allowConnect: lastGood.allowConnect,
+      };
+      slot.applies = mcpApplies(runtime);
+    }
   }
 }
 
 async function persistHostSettings(runtime: FaceRuntime): Promise<void> {
   const dump = hostSettingsPath(runtime);
+  const key = path.resolve(dump);
   await mkdir(path.dirname(dump), { recursive: true });
   let previous: Record<string, unknown> = {};
   if (await fileExists(dump)) {
+    let raw: string;
     try {
-      const parsed = JSON.parse(await readFile(dump, "utf8")) as unknown;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        previous = parsed as Record<string, unknown>;
+      raw = await readFile(dump, "utf8");
+    } catch (err) {
+      throw new ConfigParseError(
+        dump,
+        refuseOverwriteDetail(
+          err instanceof Error ? err.message : String(err),
+        ),
+      );
+    }
+    try {
+      const classified = classifyConfigDoc(JSON.parse(raw), undefined);
+      if (classified.status === "invalid") {
+        throw new ConfigParseError(
+          dump,
+          refuseOverwriteDetail(classified.error),
+        );
       }
-    } catch {
-      previous = {};
+      if (classified.status !== "ok") {
+        throw new ConfigParseError(
+          dump,
+          refuseOverwriteDetail("unexpected load status"),
+        );
+      }
+      previous = classified.doc;
+    } catch (err) {
+      if (err instanceof ConfigParseError) throw err;
+      throw new ConfigParseError(
+        dump,
+        refuseOverwriteDetail(
+          err instanceof Error ? err.message : String(err),
+        ),
+      );
     }
   }
+  const servers = mcpServersFromRuntime(runtime);
+  const allowConnect = mcpAllowFromRuntime(runtime);
   const body = {
     ...previous,
     note: "Redacted Host snapshot. Secrets are never written here.",
@@ -1375,11 +1635,15 @@ async function persistHostSettings(runtime: FaceRuntime): Promise<void> {
         ? runtime.settingsDocumentPath
         : (previous.policyFile ?? null),
     mcp: {
-      servers: mcpServersFromRuntime(runtime),
-      allowConnect: mcpAllowFromRuntime(runtime),
+      servers,
+      allowConnect,
     },
   };
   await writeFile(dump, `${JSON.stringify(body, null, 2)}\n`, "utf8");
+  lastGoodHostMcpByFile.set(key, {
+    servers: structuredClone(servers),
+    allowConnect,
+  });
 }
 
 /**

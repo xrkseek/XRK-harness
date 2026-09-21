@@ -68,6 +68,8 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
       expect(html).not.toContain("client-ui-cordis");
       expect(html).not.toContain("xrk-cordis-client-runner");
       expect(html).not.toContain("client-hmr");
+      expect(html).not.toContain("client-ui-directory-picker-native");
+      expect(html).not.toContain("dsh-pocket");
 
       const welcomeJs = await readFile(
         path.join(

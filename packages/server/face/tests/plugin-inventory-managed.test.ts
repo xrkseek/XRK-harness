@@ -97,6 +97,74 @@ describe("managed plugin inventory paths", () => {
     expect(boot.entries.map((e) => e.id)).toEqual(["keep-me"]);
   });
 
+  it("omits Cordis runner / HMR / native picker / dsh-pocket from web/boot.json", () => {
+    const productDir = mkdtempSync(path.join(tmpdir(), "xrk-boot-omit-"));
+    temps.push(productDir);
+    const plugins = path.join(productDir, "plugins");
+    const packages: Record<string, unknown> = {
+      "keep-me": {
+        name: "keep-me",
+        version: "1.0.0",
+        kind: "client",
+        source: "keep-me@1.0.0",
+        installedAt: new Date().toISOString(),
+        clientInject: [],
+      },
+      "@xrkseek/client-ui-cordis": {
+        name: "@xrkseek/client-ui-cordis",
+        version: "1.0.0",
+        kind: "client",
+        source: "@xrkseek/client-ui-cordis@1.0.0",
+        installedAt: new Date().toISOString(),
+        clientInject: [],
+      },
+      "@xrkseek/xrk-cordis-client-runner": {
+        name: "@xrkseek/xrk-cordis-client-runner",
+        version: "1.0.0",
+        kind: "client",
+        source: "@xrkseek/xrk-cordis-client-runner@1.0.0",
+        installedAt: new Date().toISOString(),
+        clientInject: [],
+      },
+      "@xrkseek/client-hmr": {
+        name: "@xrkseek/client-hmr",
+        version: "1.0.0",
+        kind: "client",
+        source: "@xrkseek/client-hmr@1.0.0",
+        installedAt: new Date().toISOString(),
+        clientInject: [],
+      },
+      "@xrkseek/client-ui-directory-picker-native": {
+        name: "@xrkseek/client-ui-directory-picker-native",
+        version: "1.0.0",
+        kind: "client",
+        source: "@xrkseek/client-ui-directory-picker-native@1.0.0",
+        installedAt: new Date().toISOString(),
+        clientInject: [],
+      },
+      "dsh-pocket": {
+        name: "dsh-pocket",
+        version: "1.0.0",
+        kind: "client",
+        source: "dsh-pocket@1.0.0",
+        installedAt: new Date().toISOString(),
+        clientInject: [],
+      },
+    };
+    mkdirSync(path.join(plugins, "web", "plugins", "keep-me"), {
+      recursive: true,
+    });
+    writeFileSync(
+      path.join(plugins, ".xrk-plugins.json"),
+      JSON.stringify({ rev: 1, packages }),
+    );
+    reconcileManagedClientBoot(runtimeAt(productDir));
+    const boot = JSON.parse(
+      readFileSync(path.join(plugins, "web", "boot.json"), "utf8"),
+    ) as { entries: { id: string }[] };
+    expect(boot.entries.map((e) => e.id)).toEqual(["keep-me"]);
+  });
+
   it("lists soft-disabled client packages from inventory when absent from webPlugins", () => {
     const productDir = mkdtempSync(path.join(tmpdir(), "xrk-list-"));
     temps.push(productDir);
@@ -139,6 +207,48 @@ describe("managed plugin inventory paths", () => {
       kind: "client",
     });
     expect(row?.needsRestart).toBeUndefined();
+  });
+
+  it("soft-disabled managed cordis keeps fiberPhase null (no failed ghost)", () => {
+    const productDir = mkdtempSync(path.join(tmpdir(), "xrk-soft-cordis-"));
+    temps.push(productDir);
+    const plugins = path.join(productDir, "plugins");
+    mkdirSync(path.join(plugins, "web", "plugins", "community-cordis"), {
+      recursive: true,
+    });
+    writeFileSync(
+      path.join(plugins, "web", "plugins", "community-cordis", "client.js"),
+      "export {}\n",
+    );
+    writeFileSync(
+      path.join(plugins, ".xrk-plugins.json"),
+      JSON.stringify({
+        rev: 1,
+        packages: {
+          "community-cordis": {
+            name: "community-cordis",
+            version: "1.0.0",
+            kind: "client",
+            source: "community-cordis@1.0.0",
+            installedAt: new Date().toISOString(),
+          },
+        },
+      }),
+    );
+    writeDisabledPluginIds(runtimeAt(productDir), new Set(["community-cordis"]));
+    const listed = listFacePluginInventory(
+      runtimeAt(productDir, {
+        plugins: [{ id: "community-cordis", kind: "cordis" }],
+        hostPublic: { pluginsDir: plugins },
+      }),
+    );
+    const row = listed.find((e) => e.entryId === "community-cordis");
+    expect(row).toMatchObject({
+      enabled: false,
+      fiberPhase: null,
+      managed: true,
+      kind: "client",
+    });
   });
 
   it("marks needsRestart when enabled inventory row is not live in Host", () => {

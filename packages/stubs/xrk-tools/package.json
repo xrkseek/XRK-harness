@@ -24,8 +24,8 @@
       "default": "./lib/types/types.js"
     },
     "./presentation": {
-      "types": "./lib/types/presentation.d.ts",
-      "default": "./lib/types/presentation.js"
+      "types": "./src/presentation.ts",
+      "default": "./src/presentation.ts"
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
@@ -34,7 +34,8 @@
     "lib/index.js",
     "lib/invariant.js",
     "lib/types/**/*.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "src/presentation.ts"
   ],
   "license": "MIT",
   "peerDependencies": {
@@ -44,6 +45,7 @@
     "@xrkseek/cordis": "workspace:^"
   },
   "dependencies": {
+    "@xrkseek/core-tools": "workspace:*",
     "@xrkseek/schemastery": "workspace:^"
   },
   "devDependencies": {

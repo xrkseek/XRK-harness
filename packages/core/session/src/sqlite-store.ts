@@ -20,12 +20,23 @@ import { extractEventSearchText } from "./search-text.js";
 import { snapshotEvents } from "./seq.js";
 import { computeListHints } from "./list-hints.js";
 import type { SessionRecord, SessionListHints, SessionStore } from "./store.js";
+import {
+  acquireSessionsDirLock,
+  type SessionsDirLock,
+} from "./store-lock.js";
 
-function openDatabase(dbPath: string): DatabaseSync {
+export {
+  acquireSessionsDirLock,
+  SessionsDirInUseError,
+  SESSIONS_WRITE_LOCK_FILENAME,
+  type SessionsDirLock,
+} from "./store-lock.js";
+
+function openDatabase(dbPath: string, readOnly = false): DatabaseSync {
   const { DatabaseSync: Db } = process.getBuiltinModule(
     "node:sqlite",
   );
-  return new Db(dbPath);
+  return readOnly ? new Db(dbPath, { readOnly: true }) : new Db(dbPath);
 }
 
 export interface PersistentSessionStore extends SessionStore {
@@ -59,6 +70,13 @@ export interface PersistentSessionStoreOptions {
    * temporarily exceed this cap while many turns are in flight.
    */
   readonly maxResidentSessions?: number;
+  /**
+   * When true, skip the exclusive write lease and open the DB read-only
+   * (inspect / secondary readers). Mutating APIs throw. Host and CLI writers
+   * must omit this so a second Host fails closed instead of silently sharing
+   * `sessions.db`.
+   */
+  readonly shared?: boolean;
 }
 
 const ID_RE = /^[A-Za-z0-9._-]+$/;
@@ -264,11 +282,31 @@ export function createPersistentSessionStore(
 ): PersistentSessionStore {
   const maxResident =
     options.maxResidentSessions ?? DEFAULT_MAX_RESIDENT_SESSIONS;
+  const shared = Boolean(options.shared);
   const root = path.resolve(dir);
   mkdirSync(root, { recursive: true });
+  const writeLock: SessionsDirLock | undefined = shared
+    ? undefined
+    : acquireSessionsDirLock(root);
   const dbPath = path.join(root, DB_NAME);
-  const db = openDatabase(dbPath);
-  initSchema(db);
+  let db: DatabaseSync;
+  try {
+    db = openDatabase(dbPath, shared);
+    if (!shared) {
+      initSchema(db);
+    }
+  } catch (err) {
+    writeLock?.release();
+    throw err;
+  }
+
+  const assertWritable = (): void => {
+    if (shared) {
+      throw new Error(
+        "persistent session store is read-only when opened with { shared: true }",
+      );
+    }
+  };
 
   const sessionIds = loadSessionIds(db);
   const sessions = new Map<string, SessionEvent[]>();
@@ -276,6 +314,11 @@ export function createPersistentSessionStore(
   let onEvict: ((sessionId: string) => void) | undefined;
   const nextSeqBySession = new Map<string, number>();
   let pending: PendingEvent[] = [];
+
+  const restoreSeqMap = (snapshot: Map<string, number>): void => {
+    nextSeqBySession.clear();
+    for (const [k, v] of snapshot) nextSeqBySession.set(k, v);
+  };
 
   const touchResident = (id: string): void => {
     const idx = residentOrder.indexOf(id);
@@ -308,13 +351,19 @@ export function createPersistentSessionStore(
     }
   };
 
-  const insertSession = db.prepare("INSERT INTO sessions (id) VALUES (?)");
-  const insertEvent = db.prepare(
-    "INSERT INTO events (session_id, seq, ts, payload) VALUES (?, ?, ?, ?)",
-  );
-  const insertFts = db.prepare(
-    "INSERT INTO search_fts (session_id, seq, text) VALUES (?, ?, ?)",
-  );
+  const insertSession = shared
+    ? undefined
+    : db.prepare("INSERT INTO sessions (id) VALUES (?)");
+  const insertEvent = shared
+    ? undefined
+    : db.prepare(
+        "INSERT INTO events (session_id, seq, ts, payload) VALUES (?, ?, ?, ?)",
+      );
+  const insertFts = shared
+    ? undefined
+    : db.prepare(
+        "INSERT INTO search_fts (session_id, seq, text) VALUES (?, ?, ?)",
+      );
 
   const allocateSeq = (sessionId: string): number => {
     let next = nextSeqBySession.get(sessionId);
@@ -327,16 +376,18 @@ export function createPersistentSessionStore(
 
   const writeRecord = (sessionId: string, record: PackedStorageRecord): void => {
     const seq = allocateSeq(sessionId);
-    insertEvent.run(sessionId, seq, storageTs(record), JSON.stringify(record));
+    insertEvent!.run(sessionId, seq, storageTs(record), JSON.stringify(record));
     const text = extractStorageSearchText(record);
-    if (text) insertFts.run(sessionId, seq, text);
+    if (text) insertFts!.run(sessionId, seq, text);
   };
 
   const flushPending = (): void => {
-    if (pending.length === 0) return;
+    if (shared || pending.length === 0) return;
+    const batch = pending;
+    pending = [];
     const order: string[] = [];
     const bySession = new Map<string, SessionEvent[]>();
-    for (const row of pending) {
+    for (const row of batch) {
       let list = bySession.get(row.sessionId);
       if (!list) {
         list = [];
@@ -345,7 +396,7 @@ export function createPersistentSessionStore(
       }
       list.push(row.event);
     }
-    pending = [];
+    const seqSnapshot = new Map(nextSeqBySession);
     db.exec("BEGIN IMMEDIATE");
     try {
       for (const sessionId of order) {
@@ -356,7 +407,15 @@ export function createPersistentSessionStore(
       }
       db.exec("COMMIT");
     } catch (err) {
-      db.exec("ROLLBACK");
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+        /* already rolled back / closed */
+      }
+      restoreSeqMap(seqSnapshot);
+      // Prepend failed batch so later flush/close can retry; keep any events
+      // appended while this flush ran.
+      pending = batch.concat(pending);
       throw err;
     }
   };
@@ -384,11 +443,30 @@ export function createPersistentSessionStore(
     const events = loadSessionEvents(db, id);
     const repairs = repairOpenTurnEvents(events);
     if (repairs.length > 0) {
-      for (const ev of repairs) {
-        const frozen = deepFreeze(structuredClone(assertSessionEvent(ev)));
-        events.push(frozen);
-        persistImmediate(id, frozen);
+      const frozenRepairs = repairs.map((ev) =>
+        deepFreeze(structuredClone(assertSessionEvent(ev))),
+      );
+      if (!shared) {
+        const seqSnapshot = new Map(nextSeqBySession);
+        db.exec("BEGIN IMMEDIATE");
+        try {
+          for (const frozen of frozenRepairs) {
+            persistImmediate(id, frozen);
+          }
+          db.exec("COMMIT");
+        } catch (err) {
+          try {
+            db.exec("ROLLBACK");
+          } catch {
+            /* ignore */
+          }
+          restoreSeqMap(seqSnapshot);
+          throw err;
+        }
       }
+      // Shared: apply repair in memory only (read-only DB). Exclusive: durable
+      // first, then memory — crash between COMMIT and push re-repairs on reload.
+      events.push(...frozenRepairs);
     }
     sessions.set(id, events);
     touchResident(id);
@@ -397,6 +475,7 @@ export function createPersistentSessionStore(
 
   return {
     create(id = newSessionId()): SessionRecord {
+      assertWritable();
       const sid = assertSafeId(id);
       if (sessionIds.has(sid)) {
         throw new Error(`session already exists: ${sid}`);
@@ -406,7 +485,7 @@ export function createPersistentSessionStore(
       sessions.set(sid, []);
       touchResident(sid);
       nextSeqBySession.set(sid, 0);
-      insertSession.run(sid);
+      insertSession!.run(sid);
       return { id: sid, events: [] };
     },
 
@@ -423,14 +502,28 @@ export function createPersistentSessionStore(
     },
 
     append(id: string, event: SessionEvent): SessionEvent {
+      assertWritable();
       if (!sessionIds.has(id)) {
         throw new Error(`session not found: ${id}`);
       }
       const events = ensureLoaded(id);
       const parsed = assertSessionEvent(event);
       const frozen = deepFreeze(structuredClone(parsed));
-      persistEvent(id, frozen);
       events.push(frozen);
+      try {
+        persistEvent(id, frozen);
+      } catch (err) {
+        events.pop();
+        // flushPending restores the whole batch on ROLLBACK; drop only this
+        // append so prior pending chunks remain retryable.
+        for (let i = pending.length - 1; i >= 0; i -= 1) {
+          if (pending[i]!.event === frozen) {
+            pending.splice(i, 1);
+            break;
+          }
+        }
+        throw err;
+      }
       return frozen;
     },
 
@@ -478,11 +571,15 @@ export function createPersistentSessionStore(
     },
 
     close() {
-      flushPending();
       try {
-        db.close();
-      } catch {
-        /* already closed */
+        flushPending();
+      } finally {
+        try {
+          db.close();
+        } catch {
+          /* already closed */
+        }
+        writeLock?.release();
       }
     },
 

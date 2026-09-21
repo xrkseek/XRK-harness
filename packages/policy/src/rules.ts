@@ -114,3 +114,118 @@ export function denyMcpConnect(options?: {
     },
   };
 }
+
+/** Deny MCP resource list/templates/read for listed server ids. */
+export function denyMcpResourceServers(
+  names: ReadonlySet<string> | readonly string[],
+  options?: { readonly id?: string; readonly reason?: string },
+): PolicyRule {
+  const set = asSet(names);
+  const id = options?.id ?? "deny-mcp-resource";
+  const reason = options?.reason ?? "mcp.resource denied for server";
+  return {
+    id,
+    match(subject: PolicySubject): PolicyDecision | undefined {
+      if (subject.kind !== "mcp.resource") return undefined;
+      if (!set.has(subject.serverId)) return undefined;
+      return { verdict: "deny", reason, ruleId: id };
+    },
+  };
+}
+
+/** Deny listed host.open actions (`path` · `url`). */
+export function denyHostOpenActions(
+  names: ReadonlySet<string> | readonly string[],
+  options?: { readonly id?: string; readonly reason?: string },
+): PolicyRule {
+  const set = asSet(names);
+  const id = options?.id ?? "deny-host-open";
+  const reason = options?.reason ?? "host.open denied for action";
+  return {
+    id,
+    match(subject: PolicySubject): PolicyDecision | undefined {
+      if (subject.kind !== "host.open") return undefined;
+      if (!set.has(subject.action)) return undefined;
+      return { verdict: "deny", reason, ruleId: id };
+    },
+  };
+}
+
+/** Require approval for listed host.open actions. */
+export function askHostOpenActions(
+  names: ReadonlySet<string> | readonly string[],
+  options?: { readonly id?: string; readonly reason?: string },
+): PolicyRule {
+  const set = asSet(names);
+  const id = options?.id ?? "ask-host-open";
+  const reason = options?.reason ?? "host.open requires approval";
+  return {
+    id,
+    match(subject: PolicySubject): PolicyDecision | undefined {
+      if (subject.kind !== "host.open") return undefined;
+      if (!set.has(subject.action)) return undefined;
+      return { verdict: "ask", reason, ruleId: id };
+    },
+  };
+}
+
+/** Deny sidebar.embed for listed URL schemes (`http` · `https` · …). */
+export function denySidebarEmbedSchemes(
+  names: ReadonlySet<string> | readonly string[],
+  options?: { readonly id?: string; readonly reason?: string },
+): PolicyRule {
+  const set = asSet([...asSet(names)].map((s) => s.toLowerCase()));
+  const id = options?.id ?? "deny-sidebar-embed";
+  const reason = options?.reason ?? "sidebar.embed denied for scheme";
+  return {
+    id,
+    match(subject: PolicySubject): PolicyDecision | undefined {
+      if (subject.kind !== "sidebar.embed") return undefined;
+      const scheme =
+        subject.scheme?.toLowerCase() ??
+        (() => {
+          try {
+            return new URL(subject.url).protocol.replace(/:$/, "").toLowerCase();
+          } catch {
+            return "";
+          }
+        })();
+      if (!scheme || !set.has(scheme)) return undefined;
+      return { verdict: "deny", reason, ruleId: id };
+    },
+  };
+}
+
+/** Deny listed sidebar.fs ops (`read` · `write` · `html`). */
+export function denySidebarFsOps(
+  names: ReadonlySet<string> | readonly string[],
+  options?: { readonly id?: string; readonly reason?: string },
+): PolicyRule {
+  const set = asSet(names);
+  const id = options?.id ?? "deny-sidebar-fs";
+  const reason = options?.reason ?? "sidebar.fs denied for op";
+  return {
+    id,
+    match(subject: PolicySubject): PolicyDecision | undefined {
+      if (subject.kind !== "sidebar.fs") return undefined;
+      if (!set.has(subject.op)) return undefined;
+      return { verdict: "deny", reason, ruleId: id };
+    },
+  };
+}
+
+/** Explicit deny for any office.connect (align mcp.connect). */
+export function denyOfficeConnect(options?: {
+  readonly id?: string;
+  readonly reason?: string;
+}): PolicyRule {
+  const id = options?.id ?? "deny-office-connect";
+  const reason = options?.reason ?? "office.connect denied by default";
+  return {
+    id,
+    match(subject: PolicySubject): PolicyDecision | undefined {
+      if (subject.kind !== "office.connect") return undefined;
+      return { verdict: "deny", reason, ruleId: id };
+    },
+  };
+}

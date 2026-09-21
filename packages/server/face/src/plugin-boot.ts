@@ -15,8 +15,11 @@ import {
   readManagedPluginPackagesAt,
   writeDisabledPluginIdsAt,
 } from "@xrkseek/server-loader";
+import { XRK_OMIT_CLIENT_PLUGIN_IDS } from "@xrkseek/server-http";
 
 export { atomicWriteText } from "@xrkseek/server-loader";
+
+const PRODUCT_BOOT_OMIT = new Set<string>(XRK_OMIT_CLIENT_PLUGIN_IDS);
 
 export interface ClientBootEntry {
   readonly id: string;
@@ -65,6 +68,7 @@ export function reconcileClientBootAt(
 
   for (const [name, entry] of packages) {
     if (entry.kind !== "client" && entry.kind !== "both") continue;
+    if (PRODUCT_BOOT_OMIT.has(name)) continue;
     if (isPluginSoftDisabledAt(name, disabled, index)) continue;
     entries.push({
       id: name,

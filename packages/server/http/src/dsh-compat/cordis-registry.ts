@@ -6,6 +6,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, rpcErr, rpcOk, sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { trySettingsFallbackRpc } from "./cordis-settings-fallback.js";
+import { HostPolicyError } from "../host-policy-error.js";
 
 export type CordisRpcHandler = (
   endpoint: string,
@@ -108,15 +109,29 @@ export function createCordisCompatRegistry(): CordisCompatRegistry {
           const value = await handler(method || endpoint, payload, req);
           sendJson(res, 200, rpcOk(rpcId, value));
         } catch (err) {
-          sendJson(
-            res,
-            200,
-            rpcErr(
-              rpcId,
-              "handler-failure",
-              err instanceof Error ? err.message : String(err),
-            ),
-          );
+          if (err instanceof HostPolicyError) {
+            sendJson(
+              res,
+              200,
+              rpcErr(rpcId, err.code, err.message, {
+                kind: err.details.kind,
+                reason: err.details.reason,
+                ...(err.details.ruleId
+                  ? { ruleId: err.details.ruleId }
+                  : {}),
+              }),
+            );
+          } else {
+            sendJson(
+              res,
+              200,
+              rpcErr(
+                rpcId,
+                "handler-failure",
+                err instanceof Error ? err.message : String(err),
+              ),
+            );
+          }
         }
         return true;
       }
@@ -163,8 +178,10 @@ export function createCordisCompatRegistry(): CordisCompatRegistry {
             path: pathname,
             ok: true,
             status: "ready",
-            writable: true,
+            writable: false,
             value: {},
+            incomplete: ["dsh-host"],
+            note: "XRK honest RPC catch-all; no registered provider for this channel.",
           }),
         );
         return true;

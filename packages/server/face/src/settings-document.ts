@@ -6,7 +6,6 @@ import {
   access,
   constants,
   mkdir,
-  readFile,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
@@ -28,8 +27,17 @@ import {
 } from "./llm-provider-context.js";
 import { mergeLayers } from "./settings-layers.js";
 import type { FaceSettingsNamespaces } from "./settings-credentials.js";
+import {
+  ConfigParseError,
+  classifyConfigDoc,
+  isEnoent,
+  keepLastGoodMessage,
+  refuseOverwriteDetail,
+  type ConfigDocLoad,
+} from "./last-good-config.js";
 
 export { mergeLayers } from "./settings-layers.js";
+export { ConfigParseError } from "./last-good-config.js";
 
 /** Harness home: explicit `productDir` (tests isolate settings/workspaces), else `XRK_HOME` / `~/.xrk`.
  * Not the workspace product tree — that is always `{workspaceRoot}/.xrk` via `resolveProductDir`.
@@ -47,17 +55,72 @@ export function credentialsYamlPath(runtime: FaceRuntime): string {
   return path.join(resolveHarnessHome(runtime), ".credentials.yaml");
 }
 
-function loadYamlFile(file: string): Record<string, unknown> {
+/** Last successfully parsed `settings.yaml` docs (keyed by abs path). */
+const lastGoodSettingsYamlByFile = new Map<string, Record<string, unknown>>();
+/** Last successfully parsed `.credentials.yaml` docs (keyed by abs path). */
+const lastGoodCredentialsYamlByFile = new Map<
+  string,
+  Record<string, unknown>
+>();
+
+/** Test helper — clear last-good caches between isolated productDir cases. */
+export function resetLastGoodConfigCaches(): void {
+  lastGoodSettingsYamlByFile.clear();
+  lastGoodCredentialsYamlByFile.clear();
+}
+
+function loadYamlDocument(
+  file: string,
+  lastGood: Record<string, unknown> | undefined,
+): ConfigDocLoad {
+  let raw: string;
   try {
-    const raw = readFileSync(file, "utf8").replace(/^\uFEFF/, "");
-    const parsed = yaml.load(raw);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
+    raw = readFileSync(file, "utf8").replace(/^\uFEFF/, "");
+  } catch (err) {
+    if (isEnoent(err)) {
+      // Absence is empty — not "keep last good" (that applies to corrupt reload).
+      return { status: "missing", doc: {} };
     }
-  } catch {
-    /* absent or malformed */
+    return {
+      status: "invalid",
+      error: err instanceof Error ? err.message : String(err),
+      doc: lastGood ? structuredClone(lastGood) : {},
+    };
   }
-  return {};
+  try {
+    return classifyConfigDoc(yaml.load(raw), lastGood);
+  } catch (err) {
+    return {
+      status: "invalid",
+      error: err instanceof Error ? err.message : String(err),
+      doc: lastGood ? structuredClone(lastGood) : {},
+    };
+  }
+}
+
+/**
+ * Read YAML mapping. Missing → empty. Invalid → warn + last good for this file
+ * (never silently pretend the file was empty for overwrite).
+ */
+function loadYamlFile(
+  file: string,
+  kind: "settings" | "credentials",
+): Record<string, unknown> {
+  const key = path.resolve(file);
+  const cache =
+    kind === "settings"
+      ? lastGoodSettingsYamlByFile
+      : lastGoodCredentialsYamlByFile;
+  const lastGood = cache.get(key);
+  const loaded = loadYamlDocument(file, lastGood);
+  if (loaded.status === "ok") {
+    cache.set(key, structuredClone(loaded.doc));
+    return loaded.doc;
+  }
+  if (loaded.status === "invalid") {
+    console.warn(keepLastGoodMessage(file, loaded.error));
+  }
+  return loaded.doc;
 }
 
 async function fileExists(target: string): Promise<boolean> {
@@ -84,8 +147,11 @@ export function resolveDefaultAgentPreset(runtime: FaceRuntime): string {
 }
 
 export function hydrateFaceSettingsDocument(runtime: FaceRuntime): void {
-  const doc = loadYamlFile(settingsYamlPath(runtime));
+  const doc = loadYamlFile(settingsYamlPath(runtime), "settings");
   for (const spec of FACE_PRODUCT_SETTINGS_NAMESPACES) {
+    // MCP SoT is `host-settings.json` (hydrateFaceHostSettings / persistHostSettings).
+    // Skipping yaml here avoids dual-source Face vs Host boot (Host never reads yaml).
+    if (spec.ns === "mcp") continue;
     const section =
       doc[spec.ns] &&
       typeof doc[spec.ns] === "object" &&
@@ -116,7 +182,7 @@ function applyUiFromSettings(runtime: FaceRuntime): void {
 }
 
 export function loadCredentialsFile(runtime: FaceRuntime): void {
-  const doc = loadYamlFile(credentialsYamlPath(runtime));
+  const doc = loadYamlFile(credentialsYamlPath(runtime), "credentials");
   for (const [ref, value] of Object.entries(doc)) {
     if (typeof value !== "string" || !value.trim()) continue;
     const slotId = resolveCredentialSlotForRef(runtime, ref);
@@ -159,18 +225,22 @@ function credentialRefForSlot(
 
 export async function persistCredentialsFile(runtime: FaceRuntime): Promise<void> {
   const file = credentialsYamlPath(runtime);
+  const key = path.resolve(file);
   await mkdir(path.dirname(file), { recursive: true });
-  let previous: Record<string, unknown> = {};
-  if (await fileExists(file)) {
-    try {
-      const parsed = yaml.load(await readFile(file, "utf8"));
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        previous = parsed as Record<string, unknown>;
-      }
-    } catch {
-      previous = {};
-    }
+  const loaded = loadYamlDocument(file, lastGoodCredentialsYamlByFile.get(key));
+  if (loaded.status === "invalid") {
+    throw new ConfigParseError(
+      file,
+      refuseOverwriteDetail(loaded.error),
+    );
   }
+  if (loaded.status === "ok") {
+    lastGoodCredentialsYamlByFile.set(key, structuredClone(loaded.doc));
+  }
+  const previous =
+    loaded.status === "missing"
+      ? {}
+      : structuredClone(loaded.doc);
   const next = { ...previous };
   for (const slot of runtime.credentials.listPersistedSlots()) {
     const ref = credentialRefForSlot(runtime, slot.slotId);
@@ -179,6 +249,7 @@ export async function persistCredentialsFile(runtime: FaceRuntime): Promise<void
     else next[ref] = slot.value;
   }
   await writeFile(file, yaml.dump(next, { lineWidth: 120 }), "utf8");
+  lastGoodCredentialsYamlByFile.set(key, structuredClone(next));
 }
 
 export async function persistSettingsDocument(
@@ -186,8 +257,23 @@ export async function persistSettingsDocument(
   namespaces: FaceSettingsNamespaces,
 ): Promise<void> {
   const file = settingsYamlPath(runtime);
+  const key = path.resolve(file);
   await mkdir(path.dirname(file), { recursive: true });
-  const previous = loadYamlFile(file);
+  const loaded = loadYamlDocument(file, lastGoodSettingsYamlByFile.get(key));
+  if (loaded.status === "invalid") {
+    // DSH: unparsable on-disk document fails the write loud — do not wipe.
+    throw new ConfigParseError(
+      file,
+      refuseOverwriteDetail(loaded.error),
+    );
+  }
+  if (loaded.status === "ok") {
+    lastGoodSettingsYamlByFile.set(key, structuredClone(loaded.doc));
+  }
+  const previous =
+    loaded.status === "missing"
+      ? {}
+      : structuredClone(loaded.doc);
   for (const spec of FACE_PRODUCT_SETTINGS_NAMESPACES) {
     if (spec.ns === "mcp") continue;
     const slot = namespaces.ensure(spec.ns);
@@ -198,6 +284,7 @@ export async function persistSettingsDocument(
     }
   }
   await writeFile(file, yaml.dump(previous, { lineWidth: 120 }), "utf8");
+  lastGoodSettingsYamlByFile.set(key, structuredClone(previous));
 }
 
 export async function ensureSettingsDocument(runtime: FaceRuntime): Promise<string> {

@@ -10,6 +10,8 @@ export type McpServerRow = {
   readonly args?: readonly string[];
   readonly env?: Readonly<Record<string, string>>;
   readonly cwd?: string;
+  /** Acknowledge workspace litter when `cwd` is under the Host workspace. */
+  readonly cwdAllowWorkspace?: boolean;
 };
 
 /** Cursor/Claude object map, or a bare `{ name: { command } }` map. */
@@ -63,6 +65,7 @@ function rowFromNamed(
         }
       : {}),
     ...(typeof o.cwd === "string" && o.cwd.trim() ? { cwd: o.cwd.trim() } : {}),
+    ...(o.cwdAllowWorkspace === true ? { cwdAllowWorkspace: true } : {}),
   };
 }
 

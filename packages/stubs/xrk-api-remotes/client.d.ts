@@ -35,6 +35,26 @@ import type { FileReferenceCandidate } from '@xrkseek/xrk-file-reference/types'
 import type { SessionReferenceMentionCandidate } from '@xrkseek/xrk-session-reference/types'
 import type { SessionId } from '@xrkseek/xrk-session/types'
 
+/** Per-file comparison returned by Face `changes/fileDiff` (protocol WorkspaceFileDiff). */
+export type WorkspaceFileDiff =
+  | {
+      readonly kind: 'text'
+      readonly path: string
+      readonly display: string
+      readonly before: boolean
+      readonly after: boolean
+      readonly hunks: readonly {
+        readonly oldStart: number
+        readonly oldLines: number
+        readonly newStart: number
+        readonly newLines: number
+        readonly lines: readonly string[]
+      }[]
+      readonly coarse: boolean
+    }
+  | { readonly kind: 'binary'; readonly path: string; readonly display: string }
+  | { readonly kind: 'oversized'; readonly path: string; readonly display: string }
+
 /** Stable Loader-tree identity of one configured plugin entry. */
 export type PluginEntryId = Branded<'PluginEntryId'>
 
@@ -110,6 +130,17 @@ declare module '@xrkseek/xrk-typert-protocol' {
         query: string,
         signal?: AbortSignal,
       ) => Promise<RemoteResult<readonly SessionReferenceMentionCandidate[]>>
+    }
+    changes: {
+      fileDiff: (
+        args: {
+          readonly sessionId?: SessionId
+          readonly agentId?: SessionId
+          readonly seq: number
+          readonly index: number
+        },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{ readonly diff: WorkspaceFileDiff | null }>>
     }
   }
 }

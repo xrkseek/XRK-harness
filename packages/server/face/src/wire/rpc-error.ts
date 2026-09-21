@@ -47,6 +47,8 @@ export const FACE_RPC_ERROR_CODES = [
   "job-not-found",
   "job-host-unavailable",
   "job-not-foreground",
+  "policy-denied",
+  "policy-ask",
   "internal",
 ] as const;
 
@@ -121,13 +123,27 @@ export function mapFaceRpcError(
       };
 
     case "provider-not-found":
-    case "policy-denied":
       return {
         code: "model-unavailable",
         message: `${code}: ${message}`,
         details: {
           provider: typeof hint?.provider === "string" ? hint.provider : "",
           model: typeof hint?.model === "string" ? hint.model : message,
+        },
+      };
+
+    case "policy-denied":
+    case "policy-ask":
+      return {
+        code,
+        message,
+        details: {
+          kind: typeof hint?.kind === "string" ? hint.kind : "",
+          reason:
+            typeof hint?.reason === "string" ? hint.reason : message,
+          ...(typeof hint?.ruleId === "string"
+            ? { ruleId: hint.ruleId }
+            : {}),
         },
       };
 
@@ -152,6 +168,7 @@ export function mapFaceRpcError(
     case "settings-scope-not-found":
     case "settings-readonly":
     case "settings-invalid":
+    case "settings-persist-failed":
       return {
         code: "settings-rejected",
         message,

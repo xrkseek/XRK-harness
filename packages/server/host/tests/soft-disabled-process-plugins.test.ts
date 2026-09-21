@@ -48,7 +48,7 @@ describe("Host soft-disabled process plugins", () => {
 
     const loader = createPluginLoader();
     const kept = await reconcileManagedProcessPlugins(loader, root);
-    expect(kept).toEqual(["keep-tools"]);
+    expect(kept.ids).toEqual(["keep-tools"]);
     expect(loader.list().map((p) => p.id)).toEqual(["keep-tools"]);
   });
 
@@ -68,7 +68,7 @@ describe("Host soft-disabled process plugins", () => {
       tools: [],
     } as never);
     const kept = await reconcileManagedProcessPlugins(loader, root);
-    expect([...kept].sort()).toEqual(["mcp:playwright"]);
+    expect([...kept.ids].sort()).toEqual(["mcp:playwright"]);
   });
 
   it("live-toggles: unload on disable then reload on enable", async () => {
@@ -93,15 +93,17 @@ describe("Host soft-disabled process plugins", () => {
     );
 
     const loader = createPluginLoader();
-    expect(await reconcileManagedProcessPlugins(loader, root)).toEqual([
+    expect((await reconcileManagedProcessPlugins(loader, root)).ids).toEqual([
       "toggle-tools",
     ]);
 
     writeDisabledPluginIdsAt(root, new Set(["toggle-tools"]));
-    expect(await reconcileManagedProcessPlugins(loader, root)).toEqual([]);
+    expect((await reconcileManagedProcessPlugins(loader, root)).ids).toEqual(
+      [],
+    );
 
     writeDisabledPluginIdsAt(root, new Set());
-    expect(await reconcileManagedProcessPlugins(loader, root)).toEqual([
+    expect((await reconcileManagedProcessPlugins(loader, root)).ids).toEqual([
       "toggle-tools",
     ]);
   });
@@ -111,11 +113,13 @@ describe("Host soft-disabled process plugins", () => {
     temps.push(root);
     await writeToolsPlugin(root, "gone-tools");
     const loader = createPluginLoader();
-    expect(await reconcileManagedProcessPlugins(loader, root)).toEqual([
+    expect((await reconcileManagedProcessPlugins(loader, root)).ids).toEqual([
       "gone-tools",
     ]);
 
     rmSync(path.join(root, "gone-tools"), { recursive: true, force: true });
-    expect(await reconcileManagedProcessPlugins(loader, root)).toEqual([]);
+    expect((await reconcileManagedProcessPlugins(loader, root)).ids).toEqual(
+      [],
+    );
   });
 });

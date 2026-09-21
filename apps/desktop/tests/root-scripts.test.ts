@@ -22,6 +22,9 @@ describe("desktop root scripts", () => {
     expect(pkg.scripts?.["start:desktop"]).toBe(
       "node ./scripts/dev-desktop.mjs --skip-build",
     );
+    expect(pkg.scripts?.["package:desktop"]).toBe(
+      "node ./scripts/package-desktop.mjs",
+    );
   });
 
   it("desktop package wires filter-friendly dev / start / prepare scripts", () => {

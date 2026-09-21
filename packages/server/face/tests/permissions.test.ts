@@ -5,7 +5,7 @@ import {
   createToolRegistry,
   runToolDetailed,
 } from "@xrkseek/core-tools";
-import { createReadOnlyToolPre } from "@xrkseek/policy";
+import { createReadOnlyToolPre, createSessionReadOnlyToolPre } from "@xrkseek/policy";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import {
   admittingAgentResolve,
@@ -193,5 +193,100 @@ describe("Face permission presets", () => {
     });
     expect(body).not.toHaveBeenCalled();
     expect(out.result.isError).toBe(true);
+  });
+
+  it("session read-only pre tracks live sandbox knob (no stale ask path)", async () => {
+    const store = createMemorySessionStore();
+    const runtime = bareRuntime(store);
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    let readOnly = false;
+    const pipeline = createToolPipeline();
+    pipeline.onPre(
+      createSessionReadOnlyToolPre(() => readOnly),
+    );
+    pipeline.setApprovalHandler(runtime.approvals.handlerFor(sessionId));
+    const reg = createToolRegistry();
+    const body = vi.fn(async () => ({ content: "wrote" }));
+    reg.register({
+      name: "apply_edit",
+      description: "w",
+      parameters: {},
+      execute: body,
+    });
+    pipeline.onPre(async () => ({ action: "ask", reason: "need?" }));
+
+    // Not read-only yet: ask path → approval never after danger preset.
+    await dispatchFaceMethod(runtime, "commands/execute", "sw", {
+      args: { agentId: sessionId, line: "/permission danger-full-access" },
+    });
+    const allowed = await runToolDetailed({
+      registry: reg,
+      call: { id: "c1", name: "apply_edit", arguments: {} },
+      pipeline,
+    });
+    expect(body).toHaveBeenCalled();
+    expect(allowed.result.content).toBe("wrote");
+    expect(runtime.approvals.listPending(sessionId)).toHaveLength(0);
+
+    body.mockClear();
+    readOnly = true;
+    const denied = await runToolDetailed({
+      registry: reg,
+      call: { id: "c2", name: "apply_edit", arguments: {} },
+      pipeline,
+    });
+    expect(body).not.toHaveBeenCalled();
+    expect(denied.result.isError).toBe(true);
+  });
+
+  it("settings permission.defaultPreset live-applies to sessions still on prior default", async () => {
+    const store = createMemorySessionStore();
+    const invalidated: string[] = [];
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+      invalidateAgent: async (id) => {
+        invalidated.push(id);
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    expect(
+      runtime.projections.snapshot(sessionId).values.permissions,
+    ).toMatchObject({ currentValue: "workspace-write" });
+
+    const mutated = await dispatchFaceMethod(runtime, "settings.mutate", "m", {
+      ns: "permission",
+      ops: [{ op: "set", path: ["defaultPreset"], value: "danger-full-access" }],
+    });
+    expect(mutated.result.ok).toBe(true);
+    expect(
+      runtime.projections.snapshot(sessionId).values.permissions,
+    ).toMatchObject({ currentValue: "danger-full-access" });
+    expect(invalidated).toContain(sessionId);
+
+    const pipeline = createToolPipeline();
+    pipeline.setApprovalHandler(runtime.approvals.handlerFor(sessionId));
+    pipeline.onPre(async () => ({ action: "ask", reason: "need human" }));
+    const reg = createToolRegistry();
+    const body = vi.fn(async () => ({ content: "ran" }));
+    reg.register({
+      name: "danger",
+      description: "d",
+      parameters: {},
+      execute: body,
+    });
+    const out = await runToolDetailed({
+      registry: reg,
+      call: { id: "call_live", name: "danger", arguments: {} },
+      pipeline,
+    });
+    expect(body).toHaveBeenCalled();
+    expect(out.result.content).toBe("ran");
+    expect(runtime.approvals.listPending(sessionId)).toHaveLength(0);
   });
 });

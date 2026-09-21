@@ -51,4 +51,45 @@ describe("mapFaceRpcError", () => {
       details: { extra: 1 },
     });
   });
+
+  it("maps policy-denied / policy-ask without collapsing to model-unavailable", () => {
+    expect(
+      mapFaceRpcError("policy-denied", "provider.use denied", {
+        kind: "provider.use",
+        reason: "provider.use denied",
+        ruleId: "deny-providers",
+      }),
+    ).toEqual({
+      code: "policy-denied",
+      message: "provider.use denied",
+      details: {
+        kind: "provider.use",
+        reason: "provider.use denied",
+        ruleId: "deny-providers",
+      },
+    });
+    expect(
+      mapFaceRpcError("policy-ask", "host.open requires approval", {
+        kind: "host.open",
+        reason: "host.open requires approval",
+      }),
+    ).toEqual({
+      code: "policy-ask",
+      message: "host.open requires approval",
+      details: {
+        kind: "host.open",
+        reason: "host.open requires approval",
+      },
+    });
+    expect(
+      mapFaceRpcError("provider-not-found", "no adapter", {
+        provider: "x",
+        model: "y",
+      }),
+    ).toEqual({
+      code: "model-unavailable",
+      message: "provider-not-found: no adapter",
+      details: { provider: "x", model: "y" },
+    });
+  });
 });

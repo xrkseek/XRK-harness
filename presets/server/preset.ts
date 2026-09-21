@@ -47,6 +47,7 @@ export function createServerAgentFactory(
     resolveImage,
     ptyService,
     shellJobs,
+    cronScheduler,
     resolveLlm,
     attachments,
     routeAllowsImage,
@@ -60,6 +61,9 @@ export function createServerAgentFactory(
     toolResultMaxInlineBytes,
     webSearch,
     workspaceInject,
+    fs,
+    remoteExecution,
+    codeRuntime,
   }) => {
     const llm =
       resolveLlm?.(sessionId) ??
@@ -87,11 +91,15 @@ export function createServerAgentFactory(
           ? { ptyTools: ptyService }
           : {}
         : { ptyTools: false }),
+      ...(remoteExecution ? { remoteExecution: true, ptyTools: false } : {}),
+      ...(fs ? { fs } : {}),
+      ...(codeRuntime ? { codeRuntime } : {}),
       ...(options.policy ? { policy: options.policy } : {}),
       ...(resolveImage ? { resolveImage } : {}),
       ...(attachments ? { attachments } : {}),
       ...(routeAllowsImage ? { routeAllowsImage } : {}),
       ...(shellJobs ? { shell: shellJobs } : {}),
+      ...(cronScheduler ? { cronScheduler } : {}),
       ...(maxParallelToolCalls !== undefined ? { maxParallelToolCalls } : {}),
       ...(maxSteps !== undefined ? { maxSteps } : {}),
       ...(toolOrder !== undefined ? { toolOrder } : {}),

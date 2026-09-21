@@ -40,14 +40,16 @@ export {
 export {
   createSidebarPublicHandler,
   handleSidebarHost,
-  handleSidebarCompat,
+  loadSidebarPrefs,
   type SidebarFaceBridge,
   type SidebarSubagentLiveActivity,
   type SidebarChangesWireEvent,
   type SidebarHostOptions,
+  type SidebarAgentRegistries,
 } from "./sidebar/index.js";
 export {
   createHostPluginsPublicHandler,
+  createLiveHostPluginsPublicHandler,
   type HostWireContext,
 } from "./host-wire.js";
 export {
@@ -73,7 +75,6 @@ export {
 export {
   runPluginMutate,
   listCliInvocationCandidates,
-  cliInvocationNeedsShell,
   planCliInvocation,
   quoteWindowsCmdArg,
   type PluginMutateResult,

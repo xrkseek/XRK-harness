@@ -102,6 +102,8 @@ export {
   type PtySandboxMode,
   type SandboxModeFenceCheck,
 } from "./sandbox-fence.js";
+export { windowsPtySpawnOptions } from "./windows-pty.js";
+export { BoundedTextBuffer, splitUtf16Safe } from "./bounded-text-buffer.js";
 
 export interface DefaultPtyAccessOptions {
   readonly workspaceRoot: string;
@@ -111,6 +113,11 @@ export interface DefaultPtyAccessOptions {
     argv: readonly string[],
     cwd?: string,
   ) => readonly string[];
+  readonly confine?: (
+    argv: readonly string[],
+    cwd?: string,
+    signal?: AbortSignal,
+  ) => Promise<readonly string[]>;
 }
 
 export interface DefaultPtyAccess {
@@ -130,6 +137,7 @@ export function createDefaultPtyAccess(
       workspaceRoot: options.workspaceRoot,
       spawnTerminal: options.spawnTerminal ?? spawnNodePtyTerminal,
       ...(options.wrapArgv ? { wrapArgv: options.wrapArgv } : {}),
+      ...(options.confine ? { confine: options.confine } : {}),
     }),
   );
   return { workspaceRoot: options.workspaceRoot, service };

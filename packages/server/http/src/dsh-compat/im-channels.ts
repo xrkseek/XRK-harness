@@ -11,22 +11,13 @@ import {
 } from "./im-provision-bridge.js";
 import { handleImLongLivedGatewayRpc } from "./im-long-lived-gateway.js";
 import { handleImMessagingRpc } from "./im-messaging-bridge.js";
+import { IM_CHANNEL_NAMES } from "./im-vendors.js";
 import { tag } from "./meta.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 
-const IM_CHANNELS = new Set([
-  "dingtalk",
-  "feishu",
-  "wecom",
-  "qq",
-  "telegram",
-  "discord",
-  "whatsapp",
-  "slack",
-  "weixin",
-]);
+const IM_CHANNELS = new Set<string>(IM_CHANNEL_NAMES);
 
-const IM_UNAVAILABLE_ENDPOINTS = new Set<string>();
+export { IM_CHANNEL_NAMES } from "./im-vendors.js";
 
 export function isImChannelName(channel: string): boolean {
   const name = channel.replace(/^\//, "");
@@ -154,10 +145,6 @@ export function handleImChannelRpc(
     endpoint === ""
   ) {
     return imChannelSnapshot(name, store);
-  }
-
-  if (IM_UNAVAILABLE_ENDPOINTS.has(endpoint)) {
-    return imHostActionUnavailable(name, endpoint);
   }
 
   if (endpoint === "provision.begin" || endpoint === "provision.start") {

@@ -115,6 +115,25 @@ export function listPendingAdmits(
   return out;
 }
 
+/**
+ * Session ids that still have pending Inbox rows (queue or steer).
+ * Used after Host restart to republish / wake without a separate inbox table.
+ */
+export function listSessionsWithPendingAdmits(
+  store: SessionStore,
+): readonly string[] {
+  const out: string[] = [];
+  for (const sessionId of store.list()) {
+    if (
+      listPendingAdmits(readSessionEvents(store, sessionId), sessionId).length >
+      0
+    ) {
+      out.push(sessionId);
+    }
+  }
+  return out;
+}
+
 export class AdmitNotPendingError extends Error {
   constructor(admitId: string) {
     super(`admit not pending: ${admitId}`);

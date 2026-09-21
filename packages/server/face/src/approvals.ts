@@ -85,6 +85,34 @@ export class FaceApprovalBroker {
     return out;
   }
 
+  /**
+   * Host sidebar / Office policy `ask` — synthetic tool name so the existing
+   * approval UI / `/api/respond` path works without a live tool call.
+   */
+  async requestHostGate(
+    sessionId: string,
+    gate: {
+      readonly kind: string;
+      readonly reason: string;
+      readonly summary?: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    if (effectiveApprovalPolicy(readSessionEvents(this.store, sessionId)) === "never") {
+      return true;
+    }
+    const synthetic: Pick<ToolPipelineContext, "call" | "args" | "signal"> = {
+      call: {
+        id: `host_${randomUUID()}`,
+        name: gate.kind,
+        arguments: gate.summary ? { summary: gate.summary } : {},
+      },
+      args: gate.summary ? { summary: gate.summary } : {},
+      ...(signal ? { signal } : {}),
+    };
+    return this.request(sessionId, synthetic, gate.reason);
+  }
+
   /** Pipeline `ApprovalHandler` bound to a session. */
   handlerFor(sessionId: string): ApprovalHandler {
     return async (ctx, reason) => {
@@ -97,9 +125,14 @@ export class FaceApprovalBroker {
 
   async request(
     sessionId: string,
-    ctx: ToolPipelineContext,
+    ctx: Pick<ToolPipelineContext, "call" | "args" | "signal">,
     reason: string,
   ): Promise<boolean> {
+    // Defense in depth: every ask path honors approval/policy never
+    // (handlerFor / requestHostGate also check; callers must not bypass).
+    if (effectiveApprovalPolicy(readSessionEvents(this.store, sessionId)) === "never") {
+      return true;
+    }
     const approvalId = `apr_${randomUUID()}`;
     const rpcId = mintRpcId();
     const argsSummary = summarizeArgs(ctx.args);

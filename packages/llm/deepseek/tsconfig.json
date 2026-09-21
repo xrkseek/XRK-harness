@@ -10,6 +10,7 @@
     { "path": "../../attachment" },
     { "path": "../llm" },
     { "path": "../openai-compatible" },
-    { "path": "../../protocol" }
+    { "path": "../../protocol" },
+    { "path": "../../util/home-paths" }
   ]
 }

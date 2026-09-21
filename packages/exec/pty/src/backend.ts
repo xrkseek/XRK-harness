@@ -13,10 +13,17 @@ export interface BashTerminalBackendOptions {
   readonly config: PtyBackendConfig;
   readonly workspaceRoot: string;
   readonly spawnTerminal: SpawnTerminalFn;
+  /** Sync wrap (legacy). Prefer {@link confine} when available. */
   readonly wrapArgv?: (
     argv: readonly string[],
     cwd?: string,
   ) => readonly string[];
+  /** Async confinement under the spawn signal (DSH terminal-bash). */
+  readonly confine?: (
+    argv: readonly string[],
+    cwd?: string,
+    signal?: AbortSignal,
+  ) => Promise<readonly string[]>;
 }
 
 /**
@@ -43,14 +50,19 @@ function childEnvironment(spec: TerminalBackendSpawnSpec): NodeJS.ProcessEnv {
 export function createBashTerminalBackend(
   options: BashTerminalBackendOptions,
 ): TerminalBackend {
-  const { config, workspaceRoot, spawnTerminal, wrapArgv } = options;
+  const { config, workspaceRoot, spawnTerminal, wrapArgv, confine } = options;
   return {
     type: config.backendType,
     async spawn(spec) {
       spec.signal?.throwIfAborted();
       const cwd = resolvePtyCwd(workspaceRoot, spec.cwd);
       const rawArgv = [config.shellPath, ...config.shellArgs];
-      const argv = wrapArgv ? [...wrapArgv(rawArgv, cwd)] : rawArgv;
+      const argv = confine
+        ? [...(await confine(rawArgv, cwd, spec.signal))]
+        : wrapArgv
+          ? [...wrapArgv(rawArgv, cwd)]
+          : rawArgv;
+      spec.signal?.throwIfAborted();
       if (argv[0] === undefined) {
         throw new Error("pty: sandbox returned empty argv");
       }

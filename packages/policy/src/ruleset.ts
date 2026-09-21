@@ -7,9 +7,15 @@ import type {
 import {
   allowProviderIdsOnly,
   allowToolNamesOnly,
+  askHostOpenActions,
   askToolNames,
+  denyHostOpenActions,
   denyMcpConnect,
+  denyMcpResourceServers,
+  denyOfficeConnect,
   denyProviderIds,
+  denySidebarEmbedSchemes,
+  denySidebarFsOps,
   denyToolNames,
 } from "./rules.js";
 import {
@@ -27,7 +33,10 @@ export interface PolicyRulesetRuleJson {
   readonly reason?: string;
   readonly match: {
     readonly kind: PolicySubjectKind;
-    /** Required for tool.call / provider.use (name lists). Ignored for mcp.connect deny. */
+    /**
+     * Name / id / action / scheme / op lists depending on kind.
+     * Ignored for mcp.connect / office.connect deny-all rules.
+     */
     readonly names?: readonly string[];
   };
 }
@@ -49,6 +58,11 @@ const KINDS = new Set<PolicySubjectKind>([
   "tool.call",
   "provider.use",
   "mcp.connect",
+  "mcp.resource",
+  "host.open",
+  "sidebar.embed",
+  "sidebar.fs",
+  "office.connect",
 ]);
 const VERDICTS = new Set<PolicyVerdict>(["allow", "deny", "ask"]);
 const ACTIONS = new Set<PolicyRuleAction>(["deny", "ask", "allow-only"]);
@@ -104,7 +118,7 @@ function ruleFromJson(raw: unknown, index: number): PolicyRule {
   const kind = raw.match.kind;
   if (typeof kind !== "string" || !KINDS.has(kind as PolicySubjectKind)) {
     throw new PolicyRulesetParseError(
-      `rule ${id}: match.kind must be tool.call|provider.use|mcp.connect`,
+      `rule ${id}: match.kind must be a known PolicySubjectKind`,
     );
   }
 
@@ -122,7 +136,53 @@ function ruleFromJson(raw: unknown, index: number): PolicyRule {
     return denyMcpConnect(opts);
   }
 
+  if (kind === "office.connect") {
+    if (action !== "deny") {
+      throw new PolicyRulesetParseError(
+        `rule ${id}: office.connect only supports action deny`,
+      );
+    }
+    return denyOfficeConnect(opts);
+  }
+
   const names = parseNames(raw.match.names, id);
+
+  if (kind === "mcp.resource") {
+    if (action !== "deny") {
+      throw new PolicyRulesetParseError(
+        `rule ${id}: mcp.resource only supports action deny`,
+      );
+    }
+    return denyMcpResourceServers(names, opts);
+  }
+
+  if (kind === "host.open") {
+    if (action === "allow-only") {
+      throw new PolicyRulesetParseError(
+        `rule ${id}: host.open does not support allow-only (use deny or ask)`,
+      );
+    }
+    if (action === "ask") return askHostOpenActions(names, opts);
+    return denyHostOpenActions(names, opts);
+  }
+
+  if (kind === "sidebar.embed") {
+    if (action !== "deny") {
+      throw new PolicyRulesetParseError(
+        `rule ${id}: sidebar.embed only supports action deny`,
+      );
+    }
+    return denySidebarEmbedSchemes(names, opts);
+  }
+
+  if (kind === "sidebar.fs") {
+    if (action !== "deny") {
+      throw new PolicyRulesetParseError(
+        `rule ${id}: sidebar.fs only supports action deny`,
+      );
+    }
+    return denySidebarFsOps(names, opts);
+  }
 
   if (kind === "tool.call") {
     if (action === "deny") return denyToolNames(names, opts);

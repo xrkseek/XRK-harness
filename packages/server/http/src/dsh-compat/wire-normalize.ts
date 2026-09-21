@@ -40,5 +40,9 @@ export function normalizeDshCompatWireCtx(
     ...(ctx.walletPort ? { walletPort: ctx.walletPort } : {}),
     ...(ctx.face ? { face: ctx.face } : {}),
     ...(ctx.sidebarFace ? { sidebarFace: ctx.sidebarFace } : {}),
+    ...(ctx.policy ? { policy: ctx.policy } : {}),
+    ...(ctx.resolvePolicyAsk
+      ? { resolvePolicyAsk: ctx.resolvePolicyAsk }
+      : {}),
   };
 }

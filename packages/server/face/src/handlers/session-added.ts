@@ -25,7 +25,9 @@ export function sessionAddedFrame(
     ...(lineage
       ? {
           parentSessionId: lineage.parentSessionId,
-          origin: "subagent" as const,
+          ...(lineage.mode !== "fork"
+            ? { origin: "subagent" as const }
+            : { origin: "fork" as const }),
         }
       : {}),
   };

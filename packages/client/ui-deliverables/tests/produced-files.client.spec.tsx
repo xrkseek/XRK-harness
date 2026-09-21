@@ -23,7 +23,7 @@ import {
   fitProducedFiles, ProducedFiles, type ProducedFilesProps,
 } from '../src/client/ProducedFiles.tsx'
 import {
-  basename, deliverablesDefinition, producedFileMentions, producedForClosing, selectProducedFiles,
+  basename, deliverablesDefinition, producedFileMentions, producedForClosing, selectDeliverables, selectProducedFiles,
   type DeliverablesTurnData,
 } from '../src/client/turn-deliverables.ts'
 import { apply, inject } from '../src/client/index.ts'
@@ -204,6 +204,48 @@ describe('produced-file Turn data', () => {
     expect(producedForClosing(deliverablesOf(value))).toEqual([
       'out/index.html', 'out/app.css', 'notes.md',
     ])
+  })
+
+  it('folds workspace/changes into turn deliverables for the changed-files card', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      {
+        event: {
+          type: 'workspace/changes',
+          seq: 2,
+          time: 2,
+          data: {
+            turn: 1,
+            turnId: 'turn_1',
+            summary: {
+              turnId: 'turn_1',
+              cwd: '/w',
+              files: [{ path: 'a.ts', display: 'a.ts', added: 2, deleted: 0 }],
+              total: 1,
+              added: 2,
+              deleted: 0,
+            },
+          },
+          ignorable: true,
+        },
+        view: null,
+      },
+      at(3, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+    ])
+    const data = deliverablesOf(value)
+    expect(data?.changes).toEqual({
+      seq: 2,
+      turnId: 'turn_1',
+      cwd: '/w',
+      files: [{ path: 'a.ts', display: 'a.ts', added: 2, deleted: 0 }],
+      total: 1,
+      added: 2,
+      deleted: 0,
+    })
+    expect(selectDeliverables(tailOwner(data, 3))).toEqual({
+      changes: data!.changes,
+      produced: [],
+    })
   })
 
   it('ignores calls without mutation locations, orphan results, and replacement results', () => {
@@ -489,8 +531,15 @@ describe('plugin registration', () => {
         subscribe: () => () => {},
       },
     } as never)
-    // ui-theme's Appearance row binds a durable scope through these two.
-    ctx.provide('remote', { $on: () => () => {} } as never)
+    ctx.provide('remote', {
+      $on: () => () => {},
+      changes: {
+        fileDiff: async () => ({ ok: true, value: { diff: null } }),
+      },
+    } as never)
+    ctx.provide('remote.changes', {
+      fileDiff: async () => ({ ok: true, value: { diff: null } }),
+    } as never)
     ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
     await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
 

@@ -33,6 +33,14 @@ export {
   startDesktopMain,
 } from "./desktop-bootstrap.js";
 export {
+  assertDesktopInstallerNotDefaultEntry,
+  DESKTOP_DEFAULT_PRODUCT_ENTRY,
+  DESKTOP_PRODUCT_PHASES,
+  resolveDesktopProductEntry,
+  type DesktopProductEntry,
+  type DesktopProductPhase,
+} from "./product-entry.js";
+export {
   DESKTOP_BUILDER_DRAFT,
   DESKTOP_UPLOAD_CREDENTIAL_ENV_NAMES,
   DESKTOP_WINDOWS_SIGNING_ENV_PREFIX,

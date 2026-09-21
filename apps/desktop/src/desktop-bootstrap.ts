@@ -3,9 +3,8 @@
  * (injectable for tests; Electron entry wires real `app` / `BrowserWindow`).
  */
 
-import {
-  claimDesktopSingleInstance,
-} from "./single-instance.js";
+import { resolveDesktopProductEntry } from "./product-entry.js";
+import { claimDesktopSingleInstance } from "./single-instance.js";
 import {
   attachDesktopWindowLifecycle,
   bindDesktopMainWindowClosed,
@@ -22,9 +21,9 @@ export const DESKTOP_PROFILE_NAME = "desktop" as const;
 /** Custom protocol scheme (locked): `xrk-app://`. */
 export const DESKTOP_PROTOCOL_SCHEME = "xrk-app" as const;
 
-/** Shell / protocol pieces exist; full Host composition still pending. */
+/** Shell pieces exist; installer is not the product entry (ADR-0008, no skip). */
 export function isDesktopProductReady(): boolean {
-  return false;
+  return resolveDesktopProductEntry().productReady;
 }
 
 export interface DesktopMainApplication {

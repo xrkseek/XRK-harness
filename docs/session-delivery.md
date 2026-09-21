@@ -47,10 +47,12 @@
 
 ## 4. 明确不做（本阶段）
 
-- SQLite / 集群 durable inbox  
+- 独立 inbox 表 / 集群多写 durable inbox（真源仍是 session log 的 `prompt/admitted`）  
 - 立即 abort 正在执行的 tool body 来塞用户字（须等当前 tool settle 完才到 next-step）  
 - 把 steer 写成第二条 HTTP 路径却语义与 admit 相同  
 - 产品「不 wake 的 next-step inject」与显式 `cancel keepInbox` 旗标 — Host 尚未暴露；XRK `session.cancel` 本身已保留 pending admits  
+
+**Host 重启恢复（已落地）**：pending queue/steer 随 `createPersistentSessionStore` 落盘；mux 重连补发 `session/queue`；Face 启动对有 pending 的 session `publishQueue` + `drain.wake`（刚被 `goals.bind` disarm 的 active goal 不 wake，须用户 resume）。冷 session 的 `session.updateQueue` 不依赖进程内 Agent。
 
 产品「插话」= Face/HTTP `delivery: "steer"`（turn / next-step 边界优先于 queue）。「排队」= `delivery: "queue"`（默认）。任务「暂停」今日走 `session.cancel` / 子代理 `interrupt_agent`，不是 inbox soft-pause。
 
@@ -63,6 +65,7 @@
 5. ~~Drain：continuation 不 promote + idle 前一次一条 queue~~  
 6. ~~同批 steer 合并 + 单次 step 配额（`promoteAdmitsForTurn`）~~  
 7. ~~tool-step 边界 claim（`promotePendingSteers`）~~  
+8. ~~Host 重启：session-log 持久化 + mux 基线 + Face wake（goal disarm 例外）~~  
 
 ## 6. 相关文档
 
@@ -122,10 +125,12 @@ Default `delivery` is **queue**.
 
 ## 4. Explicitly out of scope (this phase)
 
-- SQLite / clustered durable inbox  
+- A separate inbox table / clustered multi-writer durable inbox (SoT remains session-log `prompt/admitted`)  
 - Immediately aborting an in-flight tool body to inject user text (must wait for current tool settle before next-step)  
 - A second HTTP path named steer with the same semantics as admit  
 - Product “next-step inject without wake” and explicit `cancel keepInbox` flags — Host does not expose them yet; XRK `session.cancel` already keeps pending admits  
+
+**Host restart recovery (shipped):** pending queue/steer survive via `createPersistentSessionStore`; mux reconnect replays `session/queue`; Face boot `publishQueue` + `drain.wake` for sessions with pending work (skips active goals that `goals.bind` just disarmed — user must resume). Cold `session.updateQueue` does not require a live Agent.
 
 Product “interrupt” = Face/HTTP `delivery: "steer"` (turn / next-step boundary wins over queue). “Queue” = `delivery: "queue"` (default). Task “pause” today is `session.cancel` / subagent `interrupt_agent`, not inbox soft-pause.
 
@@ -138,6 +143,7 @@ Product “interrupt” = Face/HTTP `delivery: "steer"` (turn / next-step bounda
 5. ~~Drain: no promote during continuation + one queue item before idle~~  
 6. ~~Same-batch steer merge + single-step quota (`promoteAdmitsForTurn`)~~  
 7. ~~Tool-step boundary claim (`promotePendingSteers`)~~  
+8. ~~Host restart: session-log durability + mux baseline + Face wake (goal disarm exception)~~  
 
 ## 6. Related docs
 

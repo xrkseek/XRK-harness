@@ -133,7 +133,7 @@ export type HostFrame =
       readonly agentPreset?: string;
       readonly cwd?: string;
       readonly parentSessionId?: string;
-      readonly origin?: "subagent";
+      readonly origin?: "subagent" | "fork";
     }
   | {
       readonly type: "host/session-removed";

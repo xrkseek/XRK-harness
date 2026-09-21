@@ -6,7 +6,7 @@ import type { ProjectionSnapshot } from "@xrkseek/session-projection";
  * | Carrier | When | Fold budget |
  * |---------|------|-------------|
  * | `session.list` | loaded | {@link SESSION_LIST_PROJECTION_KEYS} live fold |
- * | `session.list` | cold | list-checkpoint cache · else hints-only |
+ * | `session.list` | cold | list-checkpoint cache · else hints-only (corrupt/partial parse → miss) |
  * | `session.history` tail | `beforeSeq` absent | light + {@link SESSION_CONTEXT_PROJECTION_KEYS} |
  * | `session.history` older | `beforeSeq` set | **none** — no `projections` block |
  * | mux | live events | `session/projection` push frames |
@@ -23,7 +23,7 @@ export const SESSION_LIST_PROJECTION_KEYS = [
 /**
  * History tail baseline: stats + composer meter (DSH StatsLine / ContextMeter).
  * Heavy dsh-context keys ride the tail page only — see
- * {@link sessionHistoryProjectionKeys}.
+ * {@link sessionHistoryTailProjectionKeys}.
  */
 export const SESSION_HISTORY_PROJECTION_KEYS = [
   "title",
@@ -62,17 +62,6 @@ export function historyPageIncludesProjections(
 /** Projection keys for one `session.history` tail response. */
 export function sessionHistoryTailProjectionKeys(): readonly string[] {
   return [...SESSION_HISTORY_PROJECTION_KEYS, ...SESSION_CONTEXT_PROJECTION_KEYS];
-}
-
-/**
- * @deprecated Prefer {@link historyPageIncludesProjections} + {@link sessionHistoryTailProjectionKeys}.
- * Kept for tests documenting loadOlder must not use heavy keys.
- */
-export function sessionHistoryProjectionKeys(
-  beforeSeq?: number,
-): readonly string[] {
-  if (beforeSeq !== undefined) return SESSION_HISTORY_PROJECTION_KEYS;
-  return sessionHistoryTailProjectionKeys();
 }
 
 export function snapshotWireBlock(

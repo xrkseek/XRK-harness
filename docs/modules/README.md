@@ -23,7 +23,7 @@
 | `@xrkseek/attachment` | [attachment.md](./attachment.md) | [protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) |
 | `@xrkseek/xrk-file-reference` 等 | [references.md](./references.md) | [host-face.md](../host-face.md) · `packages/context/*` |
 
-## 全包索引（37）
+## 全包索引（42）
 
 路径相对 `packages/`。未单列笔记的包以 README + `src/index.ts` 为准。
 
@@ -33,6 +33,7 @@
 | `protocol/` | `@xrkseek/protocol` | [protocol-events.md](../protocol-events.md) |
 | `compose/` | `@xrkseek/compose` | [compose.md](../compose.md) |
 | `session/session-projection/` | `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) |
+| `session/session-telemetry/` | `@xrkseek/session-telemetry` | [session-telemetry.md](../session-telemetry.md) |
 | `core/session/` | `@xrkseek/core-session` | [session.md](../session.md) · [session-log.md](../session-log.md) · [session-compaction.md](../session-compaction.md) |
 | `core/agent/` | `@xrkseek/core-agent` | [session-api.md](../session-api.md) |
 | `core/agent-loop/` | `@xrkseek/core-agent-loop` | [tool-pipeline.md](../tool-pipeline.md) |
@@ -50,22 +51,30 @@
 | `attachment/` | `@xrkseek/attachment` | [attachment.md](./attachment.md) |
 | `exec/fs/` | `@xrkseek/exec-fs` | [seams.md](../seams.md) |
 | `exec/web/` | `@xrkseek/exec-web` | [web-tools.md](../web-tools.md) · [seams.md](../seams.md) |
+| `exec/computer-use/` | `@xrkseek/exec-computer-use` | [computer-use.md](../computer-use.md) · [seams.md](../seams.md) |
+| `exec/voice/` | `@xrkseek/exec-voice` | [voice.md](../voice.md) · [seams.md](../seams.md) |
+| `exec/image-gen/` | `@xrkseek/exec-image-gen` | [image-gen.md](../image-gen.md) · [seams.md](../seams.md) |
+| `exec/memory/` | `@xrkseek/exec-memory` | [curated-memory.md](../curated-memory.md) · [seams.md](../seams.md) |
 | `exec/lsp/` | `@xrkseek/exec-lsp` | [lsp-tools.md](../lsp-tools.md) · [seams.md](../seams.md) |
 | `exec/pty/` | `@xrkseek/exec-pty` | [pty-tools.md](../pty-tools.md) · [seams.md](../seams.md) |
 | `exec/subprocess/` | `@xrkseek/exec-subprocess` | [seams.md](../seams.md) |
+| `exec/ssh/` | `@xrkseek/exec-ssh` | [seams.md](../seams.md) · [configuration.md](../configuration.md) |
 | `exec/shell/` | `@xrkseek/exec-shell` | [shell-jobs.md](../shell-jobs.md) |
-| `exec/sandbox/` | `@xrkseek/exec-sandbox` | [seams.md](../seams.md) · [policy.md](../policy.md) |
+| `exec/sandbox/` | `@xrkseek/exec-sandbox` | [sandbox.md](../sandbox.md) · [seams.md](../seams.md) |
 | `workspace/` | `@xrkseek/workspace` | [workspace-inject.md](../workspace-inject.md) · [slash-recipes.md](../slash-recipes.md) |
 | `policy/` | `@xrkseek/policy` | [policy.md](../policy.md) |
 | `code-runtime/` | `@xrkseek/code-runtime` | [code-mode.md](../code-mode.md) |
 | `web-runtime/` | `@xrkseek/web-runtime` | 验证台算法（非产品壳） |
 | `server/http/` | `@xrkseek/server-http` | [http-api.md](../http-api.md) |
 | `server/loader/` | `@xrkseek/server-loader` | [server-loader.md](./server-loader.md) |
+| `server/cron/` | `@xrkseek/server-cron` | [cron.md](../cron.md) |
 | `server/host/` | `@xrkseek/server-host` | [server-host.md](./server-host.md) |
 | `server/config/` | `@xrkseek/server-config` | [http-api.md](../http-api.md) |
 | `server/face/` | `@xrkseek/server-face` | [server-face.md](./server-face.md) |
 | `sdk/` | `@xrkseek/harness` | 包 README |
 | `testkit/` | `@xrkseek/testkit` | [testing.md](../testing.md) |
+
+Python 客户端不在本表：`sdks/python`（`HarnessClient`），见 [http-api.md](../http-api.md)。
 
 apps：`cli` · `web`（产品壳）· `console`（Face 验证台）。`packages/client` 与 `apps/web` 成对。presets：`minimal` · `harness` · `server`。
 
@@ -107,7 +116,7 @@ Package file maps. Contracts live in parent `docs/`; this page only points to im
 | `@xrkseek/attachment` | [attachment.md](./attachment.md) | [protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) |
 | `@xrkseek/xrk-file-reference` etc. | [references.md](./references.md) | [host-face.md](../host-face.md) · `packages/context/*` |
 
-## Full package index (37)
+## Full package index (42)
 
 Paths relative to `packages/`. Packages without a dedicated note use README + `src/index.ts`.
 
@@ -117,6 +126,7 @@ Paths relative to `packages/`. Packages without a dedicated note use README + `s
 | `protocol/` | `@xrkseek/protocol` | [protocol-events.md](../protocol-events.md) |
 | `compose/` | `@xrkseek/compose` | [compose.md](../compose.md) |
 | `session/session-projection/` | `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) |
+| `session/session-telemetry/` | `@xrkseek/session-telemetry` | [session-telemetry.md](../session-telemetry.md) |
 | `core/session/` | `@xrkseek/core-session` | [session.md](../session.md) · [session-log.md](../session-log.md) · [session-compaction.md](../session-compaction.md) |
 | `core/agent/` | `@xrkseek/core-agent` | [session-api.md](../session-api.md) |
 | `core/agent-loop/` | `@xrkseek/core-agent-loop` | [tool-pipeline.md](../tool-pipeline.md) |
@@ -134,22 +144,30 @@ Paths relative to `packages/`. Packages without a dedicated note use README + `s
 | `attachment/` | `@xrkseek/attachment` | [attachment.md](./attachment.md) |
 | `exec/fs/` | `@xrkseek/exec-fs` | [seams.md](../seams.md) |
 | `exec/web/` | `@xrkseek/exec-web` | [web-tools.md](../web-tools.md) · [seams.md](../seams.md) |
+| `exec/computer-use/` | `@xrkseek/exec-computer-use` | [computer-use.md](../computer-use.md) · [seams.md](../seams.md) |
+| `exec/voice/` | `@xrkseek/exec-voice` | [voice.md](../voice.md) · [seams.md](../seams.md) |
+| `exec/image-gen/` | `@xrkseek/exec-image-gen` | [image-gen.md](../image-gen.md) · [seams.md](../seams.md) |
+| `exec/memory/` | `@xrkseek/exec-memory` | [curated-memory.md](../curated-memory.md) · [seams.md](../seams.md) |
 | `exec/lsp/` | `@xrkseek/exec-lsp` | [lsp-tools.md](../lsp-tools.md) · [seams.md](../seams.md) |
 | `exec/pty/` | `@xrkseek/exec-pty` | [pty-tools.md](../pty-tools.md) · [seams.md](../seams.md) |
 | `exec/subprocess/` | `@xrkseek/exec-subprocess` | [seams.md](../seams.md) |
+| `exec/ssh/` | `@xrkseek/exec-ssh` | [seams.md](../seams.md) · [configuration.md](../configuration.md) |
 | `exec/shell/` | `@xrkseek/exec-shell` | [shell-jobs.md](../shell-jobs.md) |
-| `exec/sandbox/` | `@xrkseek/exec-sandbox` | [seams.md](../seams.md) · [policy.md](../policy.md) |
+| `exec/sandbox/` | `@xrkseek/exec-sandbox` | [sandbox.md](../sandbox.md) · [seams.md](../seams.md) |
 | `workspace/` | `@xrkseek/workspace` | [workspace-inject.md](../workspace-inject.md) · [slash-recipes.md](../slash-recipes.md) |
 | `policy/` | `@xrkseek/policy` | [policy.md](../policy.md) |
 | `code-runtime/` | `@xrkseek/code-runtime` | [code-mode.md](../code-mode.md) |
 | `web-runtime/` | `@xrkseek/web-runtime` | Console algorithms (not product shell) |
 | `server/http/` | `@xrkseek/server-http` | [http-api.md](../http-api.md) |
 | `server/loader/` | `@xrkseek/server-loader` | [server-loader.md](./server-loader.md) |
+| `server/cron/` | `@xrkseek/server-cron` | [cron.md](../cron.md) |
 | `server/host/` | `@xrkseek/server-host` | [server-host.md](./server-host.md) |
 | `server/config/` | `@xrkseek/server-config` | [http-api.md](../http-api.md) |
 | `server/face/` | `@xrkseek/server-face` | [server-face.md](./server-face.md) |
 | `sdk/` | `@xrkseek/harness` | Package README |
 | `testkit/` | `@xrkseek/testkit` | [testing.md](../testing.md) |
+
+The Python client is outside this table: `sdks/python` (`HarnessClient`). See [http-api.md](../http-api.md).
 
 apps: `cli` · `web` (product shell) · `console` (Face verification bench). `packages/client` pairs with `apps/web`. presets: `minimal` · `harness` · `server`.
 

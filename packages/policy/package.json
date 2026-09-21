@@ -14,7 +14,9 @@
     "README.md"
   ],
   "dependencies": {
-    "@xrkseek/core-tools": "workspace:*"
+    "@xrkseek/core-tools": "workspace:*",
+    "js-yaml": "^4.3.1",
+    "smol-toml": "^1.8.0"
   },
   "license": "MIT",
   "repository": {
@@ -22,5 +24,8 @@
     "url": "git+https://github.com/xrkseek/XRK-harness.git",
     "directory": "packages/policy"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9"
+  }
 }

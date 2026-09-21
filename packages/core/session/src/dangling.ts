@@ -12,9 +12,6 @@ export {
 } from "@xrkseek/protocol";
 import type { SessionStore } from "./index.js";
 
-/** @deprecated Prefer source-specific messages below. */
-export const TOOL_INTERRUPTED_MESSAGE = "Tool execution interrupted";
-
 /** Recovery code: assistant named the call but no `tool/call` was recorded. */
 export const TOOL_NOT_STARTED = "TOOL_NOT_STARTED";
 
@@ -183,8 +180,6 @@ export function abortedBeforeDispatchSettlement(): {
 
 export interface SettleDanglingOptions {
   readonly now?: () => number;
-  /** @deprecated Ignored; settlement text is source-specific (DSH repair). */
-  readonly message?: string;
   /**
    * `aborted-before-dispatch` — cancel path (known: body never ran).
    * Default `crash` — source-specific unknown / not-started codes.

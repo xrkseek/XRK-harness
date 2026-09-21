@@ -638,7 +638,8 @@ describe("Face settings U2", () => {
       productDir: dir,
       plugins: [],
       syncMcpServers: async () => ({
-        failures: [{ serverName: "gone", message: "policy deny" }],
+        failures: [{ serverName: "gone", message: "spawn failed" }],
+        parked: [],
       }),
     });
     const mut = await dispatchFaceMethod(rt, "settings.mutate", "mm-fail", {
@@ -657,9 +658,30 @@ describe("Face settings U2", () => {
       ns: "mcp",
       applies: "live",
       value: {
-        connectFailures: [{ serverName: "gone", message: "policy deny" }],
+        connectFailures: [{ serverName: "gone", message: "spawn failed" }],
+        parked: [],
       },
     });
+
+    // describe must keep failures (not reclassify as parked).
+    const desc = await dispatchFaceMethod(rt, "settings.describe", "md-fail", {});
+    expect(desc.result.ok).toBe(true);
+    if (!desc.result.ok) return;
+    const mcp = (
+      desc.result.value as {
+        namespaces: {
+          ns: string;
+          value: {
+            connectFailures?: { serverName: string; message: string }[];
+            parked: string[];
+          };
+        }[];
+      }
+    ).namespaces.find((n) => n.ns === "mcp");
+    expect(mcp?.value.connectFailures).toEqual([
+      { serverName: "gone", message: "spawn failed" },
+    ]);
+    expect(mcp?.value.parked).toEqual([]);
   });
 
   it("settings.replace replaces whole ns section", async () => {

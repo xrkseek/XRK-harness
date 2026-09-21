@@ -2,7 +2,7 @@
  * Local durable attachment backend under `{XRK_HOME}/attachments/v1`.
  */
 import { join, resolve } from "node:path";
-import { homedir } from "node:os";
+import { resolveConfiguredXrkHome, xrkCachePath } from "@xrkseek/xrk-home-paths";
 import {
   AttachmentError,
   DEFAULT_FILE_LIMITS,
@@ -53,6 +53,11 @@ export {
 export function resolveLocalAttachmentsRoot(xrkHome?: string): string {
   return resolveAttachmentsRoot(xrkHome);
 }
+
+/** Absolute `{XRK_HOME}/cache/attachments` root for rebuildable request-image variants. */
+export function resolveLocalAttachmentCacheRoot(xrkHome?: string): string {
+  return xrkCachePath(xrkHome === undefined ? {} : { xrkHome }, "attachments");
+}
 export const DEFAULT_MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 export const DEFAULT_MAX_IMAGES_PER_MESSAGE = 20;
 export const DEFAULT_MAX_MESSAGE_IMAGE_BYTES = 200 * 1024 * 1024;
@@ -80,13 +85,9 @@ export interface CreateLocalAttachmentStoreOptions {
 }
 
 function resolveAttachmentsRoot(xrkHome?: string): string {
-  const home =
-    xrkHome?.trim() ||
-    process.env.XRK_HOME?.trim() ||
-    process.env.XRK_DSH_HOME?.trim() ||
-    process.env.DSH_HOME?.trim() ||
-    join(homedir(), ".xrk");
-  return resolve(join(home, "attachments", "v1"));
+  return resolve(
+    join(resolveConfiguredXrkHome(xrkHome), "attachments", "v1"),
+  );
 }
 
 class SharedRequest<T> {
@@ -170,6 +171,8 @@ export function createLocalAttachmentStore(
   options: CreateLocalAttachmentStoreOptions = {},
 ): AttachmentStore {
   const root = resolveAttachmentsRoot(options.xrkHome);
+  // Rebuildable request variants — separate from durable originals under `root`.
+  const cacheRoot = resolveLocalAttachmentCacheRoot(options.xrkHome);
   const imageLimits: ImageAttachmentLimits = {
     maxImageBytes: options.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,
     maxImagesPerMessage:
@@ -312,7 +315,7 @@ export function createLocalAttachmentStore(
           (sharedSignal) =>
             compression.run(async () =>
               readRequestImageFile(
-                root,
+                cacheRoot,
                 await readImageFile(root, ref, sharedSignal),
                 policy,
                 sharedSignal,

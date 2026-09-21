@@ -5,11 +5,18 @@
 import { readSessionEvents } from "@xrkseek/core-session";
 import type { ShellService } from "@xrkseek/exec-shell";
 import {
+  SUBAGENT_PREVIEW_TEXT_MAX,
+  type SubagentPreviewSummary,
+} from "@xrkseek/protocol";
+import {
   dispatchFaceMethod,
   hostOpenPath,
+  isAgentTeamRole,
+  lastAssistantBodyText,
   openNativePath,
   toFaceWireSessionEvent,
   type FaceRuntime,
+  type FaceSubagentLink,
 } from "@xrkseek/server-face";
 import type {
   SidebarChangesWireEvent,
@@ -21,8 +28,12 @@ import { liveLineFromSessionEvents } from "./sidebar-live-line.js";
 const JOB_OUTPUT_LIMIT = 256_000;
 const CHANGES_EVENTS_CAP = 4000;
 
-function collectDescendantIds(face: FaceRuntime, rootSessionId: string): string[] {
-  const out: string[] = [];
+/** BFS over Face subagent links (root excluded). */
+function collectDescendantLinks(
+  face: FaceRuntime,
+  rootSessionId: string,
+): FaceSubagentLink[] {
+  const out: FaceSubagentLink[] = [];
   const queue = [rootSessionId];
   const seen = new Set<string>([rootSessionId]);
   while (queue.length > 0) {
@@ -30,7 +41,7 @@ function collectDescendantIds(face: FaceRuntime, rootSessionId: string): string[
     for (const link of face.subagents.list(parent)) {
       if (seen.has(link.childSessionId)) continue;
       seen.add(link.childSessionId);
-      out.push(link.childSessionId);
+      out.push(link);
       queue.push(link.childSessionId);
     }
   }
@@ -88,12 +99,12 @@ export function createSidebarFaceBridgeFromFace(
       }
     },
 
-    async forkSessionAt(sessionId, beforeSeq) {
+    async forkSessionAt(sessionId, atSeq) {
       const forked = await dispatchFaceMethod(
         face,
         "session.fork",
         `tr-${Date.now()}`,
-        { sessionId, beforeSeq },
+        { sessionId, atSeq },
       );
       if (!forked.result.ok) {
         throw new Error(
@@ -108,12 +119,70 @@ export function createSidebarFaceBridgeFromFace(
 
     async listSubagentsLive(rootSessionId) {
       const live: Record<string, SidebarSubagentLiveActivity> = {};
-      for (const childId of collectDescendantIds(face, rootSessionId)) {
+      for (const link of collectDescendantLinks(face, rootSessionId)) {
+        if (link.mode === "fork") continue;
+        const childId = link.childSessionId;
         if (!face.drain.isActive(childId)) continue;
         const events = readSessionEvents(face.store, childId);
         live[childId] = liveLineFromSessionEvents(events) ?? {};
       }
       return { live };
+    },
+
+    async listSubagentPreviews(rootSessionId) {
+      const previews: SubagentPreviewSummary[] = [];
+      for (const link of collectDescendantLinks(face, rootSessionId)) {
+        if (link.mode === "fork") continue;
+        if (!face.store.has(link.childSessionId)) continue;
+        const activity = face.drain.isActive(link.childSessionId)
+          ? ("running" as const)
+          : ("inactive" as const);
+        const events = readSessionEvents(face.store, link.childSessionId);
+        const live =
+          activity === "running"
+            ? liveLineFromSessionEvents(events)
+            : undefined;
+        const last = lastAssistantBodyText(events).trim();
+        const lastAssistantPreview =
+          last.length === 0
+            ? undefined
+            : last.length > SUBAGENT_PREVIEW_TEXT_MAX
+              ? last.slice(0, SUBAGENT_PREVIEW_TEXT_MAX)
+              : last;
+        previews.push({
+          childSessionId: link.childSessionId,
+          mode: link.mode,
+          activity,
+          ...(link.label ? { label: link.label } : {}),
+          ...(live !== undefined ? { live } : {}),
+          ...(lastAssistantPreview !== undefined
+            ? { lastAssistantPreview }
+            : {}),
+        });
+      }
+      return { previews };
+    },
+
+    async agentTeamGraph(rootSessionId, action) {
+      if (action?.op === "link") {
+        if (action.label) {
+          face.agentTeams.linkPeers(action.from, action.to, action.label);
+        } else {
+          face.agentTeams.linkPeers(action.from, action.to);
+        }
+      } else if (action?.op === "role") {
+        const role = isAgentTeamRole(action.role) ? action.role : undefined;
+        face.agentTeams.setRole(action.nodeId, role);
+      }
+      return face.agentTeams.view(rootSessionId);
+    },
+
+    async getPlanPreview(sessionId) {
+      const plan = face.projections.snapshot(sessionId).values.plan;
+      return {
+        active: plan?.active === true,
+        pending: plan?.pending === true,
+      };
     },
 
     listChangesOps(sessionId, afterSeq) {

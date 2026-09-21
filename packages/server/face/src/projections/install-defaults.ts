@@ -16,6 +16,7 @@ import { createContextTimelineProjectionUnit } from "./units/context-timeline.js
 import { createContextHeadersProjectionUnit } from "./units/context-headers.js";
 import { createAutoReviewProjectionUnit } from "./units/auto-review.js";
 import { createCostUsageProjectionUnit } from "./units/cost-usage.js";
+import { createWorkspaceChangesProjectionUnit } from "./units/workspace-changes.js";
 
 export interface InstallDefaultFaceProjectionsOptions {
   /**
@@ -49,6 +50,9 @@ export function installDefaultFaceProjections(
   const offHeaders = registry.register(createContextHeadersProjectionUnit());
   const offAutoReview = registry.register(createAutoReviewProjectionUnit());
   const offCostUsage = registry.register(createCostUsageProjectionUnit());
+  const offWorkspaceChanges = registry.register(
+    createWorkspaceChangesProjectionUnit(),
+  );
   const offImageLimits =
     options.imageLimits !== undefined
       ? registry.register(createImageLimitsProjectionUnit(options.imageLimits))
@@ -73,6 +77,7 @@ export function installDefaultFaceProjections(
       offHeaders();
       offAutoReview();
       offCostUsage();
+      offWorkspaceChanges();
       offImageLimits?.();
       offFileLimits?.();
     },

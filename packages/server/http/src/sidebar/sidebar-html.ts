@@ -6,13 +6,32 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type {
+  PolicyEngine,
+  PolicyWireDetails,
+} from "@xrkseek/policy";
 import { sendJson } from "../http-json.js";
 import { mediaTypeForPath } from "./sidebar-media-type.js";
+import {
+  enforceSidebarPolicy,
+  type SidebarPolicyAskResolver,
+} from "./sidebar-policy.js";
 
 const HTML_PREFIX = "/sidebar/html/";
 
-function fail(code: string, message: string): unknown {
-  return { ok: false, error: { code, message } };
+function fail(
+  code: string,
+  message: string,
+  details?: PolicyWireDetails | Record<string, unknown>,
+): unknown {
+  return {
+    ok: false,
+    error: {
+      code,
+      message,
+      ...(details ? { details } : {}),
+    },
+  };
 }
 
 /** Decode `/sidebar/html/<session>/<segments…>` into an absolute filesystem path. */
@@ -75,6 +94,8 @@ function underRoot(root: string, target: string): boolean {
 export interface SidebarHtmlOptions {
   readonly resolveSessionCwd?: (sessionId: string) => string | undefined;
   readonly defaultCwd?: string;
+  readonly policy?: PolicyEngine;
+  readonly resolvePolicyAsk?: SidebarPolicyAskResolver;
 }
 
 /**
@@ -95,6 +116,24 @@ export async function handleSidebarHtml(
   const decoded = decodeSidebarHtmlPath(pathname);
   if (!decoded) {
     sendJson(res, 400, fail("bad-request", "invalid html preview path"));
+    return true;
+  }
+  const denied = await enforceSidebarPolicy(
+    options.policy,
+    {
+      kind: "sidebar.fs",
+      op: "html",
+      path: decoded.absPath,
+    },
+    {
+      ...(options.resolvePolicyAsk
+        ? { resolveAsk: options.resolvePolicyAsk }
+        : {}),
+      sessionId: decoded.sessionId,
+    },
+  );
+  if (denied) {
+    sendJson(res, 403, fail(denied.code, denied.message, denied.details));
     return true;
   }
   const cwd =

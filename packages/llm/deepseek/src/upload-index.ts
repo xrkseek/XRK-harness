@@ -4,8 +4,8 @@
  */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import path from "node:path";
+import { resolveXrkHome } from "@xrkseek/xrk-home-paths";
 import {
   deepSeekFileId,
   deepSeekFileScopeDigest,
@@ -48,12 +48,7 @@ export function deepSeekFileScope(
 
 function resolveIndexPath(custom?: string): string {
   if (custom) return custom;
-  const home =
-    process.env.XRK_HOME?.trim() ||
-    process.env.XRK_DSH_HOME?.trim() ||
-    process.env.DSH_HOME?.trim() ||
-    path.join(homedir(), ".xrk");
-  return path.join(home, "llm-deepseek", "files-v3.json");
+  return path.join(resolveXrkHome(), "llm-deepseek", "files-v3.json");
 }
 
 function absent(error: unknown): boolean {

@@ -113,6 +113,7 @@ export type {
   ToolCallKind,
   FileLocation,
   FileDiff,
+  TextBlock,
   ReadFileLine,
   ToolCallView,
   GenericCallView,
@@ -132,7 +133,12 @@ export type {
   WebSearchResultView,
   WebFetchResultView,
   WebSource,
+  ToolEventView,
+  PresentableToolResult,
+  ParsedExitStatus,
 } from './presentation.ts'
+
+export { parseExitStatus } from './presentation.ts'
 
 declare module '@xrkseek/cordis' {
   interface Context {
@@ -872,10 +878,17 @@ export class ToolRuntime extends Service {
    * dropped from the rendered prompt.
    * @returns the section registration.
    */
-  private sdkSection(): { name: string; order: number; text: (context: { scope?: ScopeKey }) => string } {
+  private sdkSection(): {
+    name: string
+    order: number
+    /** Preserve literal `{{…}}` in tool descriptions / schemas during prompt render. */
+    interpolate: false
+    text: (context: { scope?: ScopeKey }) => string
+  } {
     return {
       name: 'tools:sdk',
       order: SDK_SECTION_ORDER,
+      interpolate: false,
       // Regenerate from the calling scope's visible tools in stable order.
       text: (context) => {
         const mode = this.modeFor(context.scope)

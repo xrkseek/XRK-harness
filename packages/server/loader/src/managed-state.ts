@@ -7,7 +7,23 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { atomicWriteText } from "./atomic-write.js";
+import {
+  checkPluginRegisterUnloadPair,
+  failureFromLoadError,
+  throwIfRequiredPluginFailures,
+  type PluginLoadFailure,
+  type ReconcileProcessPluginsResult,
+} from "./load-failures.js";
 import type { DiscoveryHit } from "./manifest.js";
+
+export type {
+  PluginLoadFailure,
+  ReconcileProcessPluginsResult,
+} from "./load-failures.js";
+export {
+  RequiredPluginLoadError,
+  throwIfRequiredPluginFailures,
+} from "./load-failures.js";
 
 export const DISABLED_PLUGINS_FILE = ".xrk-plugins-disabled.json";
 export const MANAGED_PLUGINS_INVENTORY_FILE = ".xrk-plugins.json";
@@ -365,9 +381,13 @@ export interface SoftDisableReconcileLoader {
 
 /**
  * Live reconcile process plugins with managed inventory + soft-disable:
- * - unregister soft-disabled ids (never `mcp:*`)
+ * - unregister soft-disabled ids (never `mcp:*`) — paired `dispose` via loader
  * - unregister ids no longer discoverable under `pluginsDir` (CLI remove)
  * - load discoverable ids that are enabled but missing from the loader
+ *
+ * Optional load failures are collected and do not abort siblings. A
+ * `required: true` failure throws {@link RequiredPluginLoadError} after the
+ * pass (DSH `auditStartupEntries`).
  *
  * Disk intent applies in-process for the process half; client half still
  * needs a browser reload (`needsRestart`).
@@ -375,7 +395,7 @@ export interface SoftDisableReconcileLoader {
 export async function reconcileManagedProcessPlugins(
   loader: SoftDisableReconcileLoader,
   pluginsDir: string,
-): Promise<readonly string[]> {
+): Promise<ReconcileProcessPluginsResult> {
   const root = path.resolve(pluginsDir);
   const disabled = readDisabledPluginIdsAt(root);
   const index = readManagedPackageIndexAt(root);
@@ -395,14 +415,32 @@ export async function reconcileManagedProcessPlugins(
   }
 
   const live = new Set(loader.list().map((p) => p.id));
+  const failures: PluginLoadFailure[] = [];
   for (const hit of hits) {
     const id = hit.manifest.id;
     if (live.has(id)) continue;
     if (id.startsWith("mcp:")) continue;
     if (isPluginSoftDisabledAt(id, disabled, index)) continue;
-    await loader.load(hit);
-    live.add(id);
+    try {
+      await loader.load(hit);
+      live.add(id);
+    } catch (err) {
+      failures.push(
+        failureFromLoadError(id, hit.manifest.required === true, err),
+      );
+    }
   }
-  return loader.list().map((p) => p.id);
+  throwIfRequiredPluginFailures(failures);
+  const pairing = checkPluginRegisterUnloadPair({
+    liveIds: loader.list().map((p) => p.id),
+    discoveredIds: [...discoveredIds],
+    isDisabled: (id) => isPluginSoftDisabledAt(id, disabled, index),
+    failedIds: failures.map((f) => f.id),
+  });
+  return {
+    ids: loader.list().map((p) => p.id),
+    failures,
+    pairing,
+  };
 }
 

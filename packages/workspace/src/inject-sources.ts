@@ -53,7 +53,10 @@ export const SKILL_VENDOR_PRIORITY = [
   ".codex/skills",
 ] as const;
 
-/** Relative skill roots under user home — `skill` tool only (not standing catalog by default). */
+/**
+ * Relative skill roots under user home — `skill` tool only (not standing catalog by default).
+ * `.xrk/skills` resolves via `@xrkseek/xrk-home-paths` (`XRK_HOME`); other vendors use OS home.
+ */
 export const USER_HOME_SKILL_REL_DIRS = [
   ".xrk/skills",
   ".agents/skills",
@@ -64,15 +67,32 @@ export const USER_HOME_SKILL_REL_DIRS = [
 /** Relative skill roots under workspace — standing catalog + `skill` tool. */
 export const WORKSPACE_SKILL_REL_DIRS = [...SKILL_VENDOR_PRIORITY] as readonly string[];
 
-/** Instruction fingerprint markers per layer (stat-only invalidation). */
-export const HOME_INSTRUCTION_FINGERPRINT_MARKERS = [
-  ".xrk/AGENTS.md",
-  ".xrk/SOUL.md",
+/**
+ * Home-layer fingerprint markers under the OS user home (stat-only).
+ * Product `.xrk/*` markers are resolved separately via {@link resolveUserProductHome}.
+ */
+export const HOME_OS_INSTRUCTION_FINGERPRINT_MARKERS = [
   ".agents/AGENTS.md",
   ".agents/rules",
   ".agents/context",
   ".claude/CLAUDE.md",
   ".codex/AGENTS.md",
+] as const;
+
+/** Standing files under the global product home (`XRK_HOME` / `~/.xrk`). */
+export const HOME_PRODUCT_INSTRUCTION_FINGERPRINT_MARKERS = [
+  "AGENTS.md",
+  "SOUL.md",
+] as const;
+
+/**
+ * Workspace-relative home-shaped markers (includes `.xrk/*` under the workspace root).
+ * Do not use against OS home when `XRK_HOME` may differ from `~/.xrk`.
+ */
+export const HOME_INSTRUCTION_FINGERPRINT_MARKERS = [
+  ".xrk/AGENTS.md",
+  ".xrk/SOUL.md",
+  ...HOME_OS_INSTRUCTION_FINGERPRINT_MARKERS,
 ] as const;
 
 export const WORKSPACE_INSTRUCTION_FINGERPRINT_MARKERS = [

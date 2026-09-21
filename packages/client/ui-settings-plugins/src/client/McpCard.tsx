@@ -66,6 +66,27 @@ export function McpCard(props: McpCardProps) {
           <span className={css.allowHint}>{t('mcpAllowConnectHint')}</span>
         </span>
       </label>
+      {state.rows.some(row => row.transport === 'stdio' && row.cwd.trim())
+        ? (
+          <label className={css.allowRow}>
+            <input
+              type="checkbox"
+              checked={state.rows
+                .filter(row => row.transport === 'stdio' && row.cwd.trim())
+                .every(row => row.cwdAllowWorkspace)}
+              disabled={disabled}
+              onChange={(event) => { props.setAllowWorkspaceCwd(event.target.checked) }}
+            />
+            <span>
+              <span className={css.allowTitle}>{t('mcpAllowWorkspaceCwd')}</span>
+              <span className={css.allowHint}>{t('mcpAllowWorkspaceCwdHint')}</span>
+            </span>
+          </label>
+        )
+        : null}
+      {state.showErrors && state.cwdNeedsAck
+        ? <p className={css.invalid} role="status">{t('mcpCwdNeedsAck')}</p>
+        : null}
       <section className={css.block} aria-label={t('mcpServersHeading')}>
         <h3 className={css.heading}>{t('mcpServersHeading')}</h3>
         {state.rows.length === 0
@@ -150,6 +171,9 @@ function ServerSummary({ t, row, disabled, onRemove }: ServerSummaryProps) {
   const summary = row.transport === 'http'
     ? row.url
     : [row.command, row.args].filter(part => part.trim()).join(' ')
+  const cwdLine = row.transport === 'stdio' && row.cwd.trim()
+    ? `${t('mcpCwd')}: ${row.cwd.trim()}`
+    : undefined
   return (
     <li className={css.entry} aria-label={row.serverName} data-mcp-status={row.status}>
       <div className={css.entryHead}>
@@ -169,6 +193,7 @@ function ServerSummary({ t, row, disabled, onRemove }: ServerSummaryProps) {
               : null}
           </div>
           <p className={css.empty}>{summary || t('mcpServerRow').replace('{index}', '')}</p>
+          {cwdLine ? <p className={css.empty}>{cwdLine}</p> : null}
           {row.failureMessage
             ? <p className={css.invalid} role="status">{row.failureMessage}</p>
             : null}

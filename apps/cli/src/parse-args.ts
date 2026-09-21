@@ -1,3 +1,5 @@
+import { HOST_RUNTIME_PRESET_IDS, isHostRuntimePresetId } from "@xrkseek/server-config";
+
 export type CliCommand =
   | "run"
   | "doctor"
@@ -5,15 +7,27 @@ export type CliCommand =
   | "serve"
   | "restart"
   | "plugin"
+  | "skill"
+  | "mcp"
+  | "acp"
   | "help";
 
 export interface ParsedArgs {
   readonly command: CliCommand;
   /** Remaining argv after `plugin` (subcommand + specs). */
   readonly pluginArgv: readonly string[];
+  /** Remaining argv after `skill` (subcommand + specs + flags). */
+  readonly skillArgv: readonly string[];
+  /** Remaining argv after `mcp` (subcommand + server + flags). */
+  readonly mcpArgv: readonly string[];
   readonly preset: string;
   readonly prompt: string;
   readonly promptExplicit: boolean;
+  /**
+   * When true, the task is the lone `-` stdin marker or was omitted on a pipe —
+   * `run` reads stdin (verbatim, including trailing newline when piped).
+   */
+  readonly promptFromStdin: boolean;
   readonly workspace: string;
   readonly patch: Record<string, unknown>;
   readonly presentation: "tools" | "code";
@@ -27,6 +41,13 @@ export interface ParsedArgs {
   readonly quiet: boolean;
   readonly host?: string;
   readonly port?: number;
+  /**
+   * Exact session identity to adopt for `run` (opaque; whitespace preserved).
+   * Unknown id fails before the turn.
+   */
+  readonly sessionId?: string;
+  /** `run`: newline-delimited session events on stdout instead of final text. */
+  readonly json: boolean;
 }
 
 function parsePatch(raw: string | undefined): Record<string, unknown> {
@@ -64,9 +85,12 @@ function parsePort(raw: string | undefined): number {
 function emptyArgs(partial: Partial<ParsedArgs> & { command: CliCommand }): ParsedArgs {
   return {
     pluginArgv: [],
+    skillArgv: [],
+    mcpArgv: [],
     preset: "minimal",
     prompt: "ping",
     promptExplicit: false,
+    promptFromStdin: false,
     workspace: process.cwd(),
     patch: {},
     presentation: "tools",
@@ -77,6 +101,7 @@ function emptyArgs(partial: Partial<ParsedArgs> & { command: CliCommand }): Pars
     force: false,
     verbose: false,
     quiet: false,
+    json: false,
     ...partial,
   };
 }
@@ -93,6 +118,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 
   const first = args.shift()!;
   let command: CliCommand;
+  /** `xrkh <preset>` → same as `xrkh web --preset <preset>` (DSH `dsh <name>`). */
+  let shorthandPreset: string | undefined;
   if (
     first === "run" ||
     first === "doctor" ||
@@ -100,13 +127,21 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     first === "serve" ||
     first === "restart" ||
     first === "plugin" ||
+    first === "skill" ||
+    first === "mcp" ||
+    first === "acp" ||
     first === "help"
   ) {
     command = first;
   } else if (first === "web") {
     command = "serve";
+  } else if (isHostRuntimePresetId(first)) {
+    command = "serve";
+    shorthandPreset = first;
   } else {
-    throw new Error(`unknown command: ${first}`);
+    throw new Error(
+      `unknown command: ${first} (try a command, or a Host preset: ${HOST_RUNTIME_PRESET_IDS.join("|")})`,
+    );
   }
 
   // `plugin` owns the rest of argv (subcommand + specs).
@@ -114,9 +149,21 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     return emptyArgs({ command: "plugin", pluginArgv: args });
   }
 
+  // `skill` owns the rest of argv too (subcommand + specs + flags), since its
+  // `--workspace` / `--dir` / `--force` flags are subcommand-scoped.
+  if (command === "skill") {
+    return emptyArgs({ command: "skill", skillArgv: args });
+  }
+
+  // `mcp` owns the rest of argv too (subcommand + server + flags).
+  if (command === "mcp") {
+    return emptyArgs({ command: "mcp", mcpArgv: args });
+  }
+
   /** Product Host (`web`/`serve`/`restart`) defaults to harness tools; `run` stays minimal for smoke. */
   let preset =
-    command === "serve" || command === "restart" ? "harness" : "minimal";
+    shorthandPreset ??
+    (command === "serve" || command === "restart" ? "harness" : "minimal");
   let promptFromFlag: string | undefined;
   const promptParts: string[] = [];
   let workspace = process.cwd();
@@ -131,6 +178,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   let quiet = false;
   let host: string | undefined;
   let port: number | undefined;
+  let sessionId: string | undefined;
+  let json = false;
 
   while (args.length) {
     const a = args.shift()!;
@@ -160,6 +209,27 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     }
     if (a === "--quiet" || a === "-q") {
       quiet = true;
+      continue;
+    }
+    if (a === "--json") {
+      json = true;
+      continue;
+    }
+    if (a === "--session-id") {
+      sessionId = args.shift();
+      if (sessionId === undefined) {
+        throw new Error("--session-id needs a value");
+      }
+      if (sessionId.trim() === "") {
+        throw new Error("--session-id requires a non-empty session id");
+      }
+      continue;
+    }
+    if (a.startsWith("--session-id=")) {
+      sessionId = a.slice("--session-id=".length);
+      if (sessionId.trim() === "") {
+        throw new Error("--session-id requires a non-empty session id");
+      }
       continue;
     }
     if (a === "--preset") {
@@ -229,28 +299,42 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       port = parsePort(a.slice("--port=".length));
       continue;
     }
-    if (!a.startsWith("-")) {
+    if (a === "-" || !a.startsWith("-")) {
       promptParts.push(a);
       continue;
     }
     throw new Error(`unknown flag: ${a}`);
   }
 
+  if (promptParts.includes("-") && promptParts.length > 1) {
+    throw new Error("`-` must be the only task argument");
+  }
+  if (promptParts.length > 0 && promptParts.join(" ").trim() === "") {
+    throw new Error('a task is required, for example: xrkh run "ping"');
+  }
+
+  const stdinMarker =
+    promptFromFlag === undefined && promptParts.length === 1 && promptParts[0] === "-";
   const promptExplicit =
-    promptFromFlag !== undefined || promptParts.length > 0;
+    promptFromFlag !== undefined || (promptParts.length > 0 && !stdinMarker);
   const prompt =
     promptFromFlag !== undefined
       ? promptFromFlag
-      : promptParts.length > 0
-        ? promptParts.join(" ")
-        : "ping";
+      : stdinMarker
+        ? "-"
+        : promptParts.length > 0
+          ? promptParts.join(" ")
+          : "ping";
 
   return {
     command: help && command !== "help" ? command : help ? "help" : command,
     pluginArgv: [],
+    skillArgv: [],
+    mcpArgv: [],
     preset,
     prompt,
     promptExplicit,
+    promptFromStdin: stdinMarker,
     workspace,
     patch: parsePatch(patchRaw),
     presentation,
@@ -261,8 +345,10 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     force,
     verbose,
     quiet,
+    json,
     ...(host ? { host } : {}),
     ...(port !== undefined ? { port } : {}),
+    ...(sessionId !== undefined ? { sessionId } : {}),
   };
 }
 
@@ -271,6 +357,7 @@ export function helpText(): string {
 
 Usage:
   xrkh <command> [options] [prompt]
+  xrkh <preset> [options]     Same as: xrkh web --preset <preset>
 
 Commands:
   run           One turn (default: minimal + replay; XRK_LLM_PRESET if set)
@@ -278,18 +365,26 @@ Commands:
   web           Alias for serve
   restart       Stop the previous XRK Host on this port (pid lock), then serve
   plugin        Install / remove / list user plugins (~/.xrk/plugins)
+  skill         Install / remove / list workspace skills (.agents/skills)
+  mcp           OAuth device-code login for HTTP MCP servers
+  acp           Stdio ACP server (editors spawn this process)
   doctor        Check node / workspace / product shell
   dump-config   Print layered config JSON
   help          Show this help
 
+Host presets (shortcut = web + --preset; ids match XRK_PRESET / Host --preset):
+  ${HOST_RUNTIME_PRESET_IDS.join(" | ")}
+
 Options:
   --preset <id>       Session badge seed / run composition
-                        (minimal|shell|frugal|plan|shallow|harness|server)
+                        (${HOST_RUNTIME_PRESET_IDS.join("|")})
                         · web/serve/restart default: harness
                         · run default: minimal
                         · server = Host factory name; tools same as harness
   --workspace <path>  Workspace root (default: cwd)
   --prompt <text>     User prompt for run (or positional tokens)
+  --session-id <id>   Resume a persisted session (unknown id fails)
+  --json              NDJSON session events on stdout (run); final text omitted
   --workspace <path>  User workspace (default: cwd)
   --host <addr>       Bind host (default: 127.0.0.1; not 0.0.0.0)
   --port <n>          Bind port (default: 8787; 0 = OS pick)
@@ -308,13 +403,23 @@ Env:
   XRK_LOG / XRK_LOG_LEVEL   silent|error|warn|info|debug (default info)
   XRK_MCP_ALLOW=1           Allow mcp.connect for configured / saved servers
   XRK_PLUGINS_DIR           Plugin root (default: ~/.xrk/plugins when present)
+  XRK_SESSIONS_DIR          Persistent sessions dir (default: ~/.xrk/sessions)
 
 Examples:
   xrkh web --workspace .
+  xrkh frugal                 Same as: xrkh web --preset frugal
+  xrkh shallow --port 8787
   xrkh restart --port 8787
   xrkh web --force --verbose
   xrkh plugin add ./extensions/example-tools
   xrkh plugin list
+  xrkh skill add ./skills/office-ping
+  xrkh skill add github:acme/skills#pdf-tools
+  xrkh skill list
+  xrkh mcp login linear --client-id xrk-cli
+  xrkh mcp status
   xrkh run --preset minimal "ping"
+  echo "summarize" | xrkh run --preset minimal
+  xrkh run --json --session-id sess_… "continue"
 `;
 }

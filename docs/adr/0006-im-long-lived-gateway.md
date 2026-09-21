@@ -14,9 +14,7 @@
 2. **消息面** — `message.send` / `message.list` · webhook 入站  
 3. **长连接网关** — 厂商云端推送 / 持久隧道（非单次 HTTP）
 
-XRK-Harness 今日在 `packages/server/http/src/dsh-compat/` 已实现 **(1)(2) 的本地 bridge**（`im-channels.ts` · `im-messaging-bridge.ts`）：凭据与 bot 状态落 `~/.xrk`；出站 ack 与入站 webhook 走短请求；客户端可用 HTTP poll 或 SSE snapshot（`/api/im/{channel}/stream`）。**未嵌入**厂商原生长连接 SDK 或云端 relay。
-
-[community-plugins.md](../community-plugins.md) 与 [status.md](../status.md) 将「云端长连接网关」标为待补；本 ADR 界定边界与后续实现路径。
+XRK-Harness 今日在 `packages/server/http/src/dsh-compat/` 已实现 **(1)(2) 的本地 bridge**（`im-channels.ts` · `im-messaging-bridge.ts`）：凭据与 bot 状态落 `~/.xrk`；出站 ack 与入站 webhook 走短请求；客户端可用 HTTP poll 或 SSE snapshot（`/api/im/{channel}/stream`）。**未嵌入**厂商原生长连接 SDK。无 `XRK_IM_GATEWAY_*` 时，Host 本地 `/api/im/gateway/ws` 与 relay 接收 push 并写入同一消息库；外连厂商仍是可选 env。
 
 ## 决策（提议）
 
@@ -70,7 +68,7 @@ Bridge 与 Gateway **并存**：未配置 WS/sidecar 时默认 `state: bridge`�
 
 ## 后果
 
-- `im-long-lived-gateway` matrix 行 `bridge`；in-process WS client + sidecar relay + webhook/poll 已能跑。  
+- `im-long-lived-gateway` matrix 行 `bridge`；本地 WS ingress（无 env）+ in-process WS client + sidecar relay + webhook/poll 已能跑。  
 - RPC 契约稳定后同步 `community-plugins.md` · `security-checklist.md`（webhook 暴露面）。  
 - Face `processChannels/list` 已暴露 `wired: sidecar` 与 gateway paths；社区 client UI 可选。
 
@@ -96,9 +94,7 @@ Community client `@xmanrui/dsh-im` and nine IM vendors (DingTalk · Feishu · We
 2. **Messaging** — `message.send` / `message.list` · webhook ingress  
 3. **Long-lived gateway** — vendor cloud push / persistent tunnel (not one-shot HTTP)
 
-XRK-Harness today implements **(1)(2) as a local bridge** under `packages/server/http/src/dsh-compat/` (`im-channels.ts` · `im-messaging-bridge.ts`): credentials and bot state under `~/.xrk`; outbound ack and inbound webhook via short requests; clients may HTTP poll or SSE snapshot (`/api/im/{channel}/stream`). **No** vendor-native long-connection SDK or cloud relay is embedded.
-
-[community-plugins.md](../community-plugins.md) and [status.md](../status.md) mark the cloud long-lived gateway as not done; this ADR defines boundaries and a forward path.
+XRK-Harness today implements **(1)(2) as a local bridge** under `packages/server/http/src/dsh-compat/` (`im-channels.ts` · `im-messaging-bridge.ts`): credentials and bot state under `~/.xrk`; outbound ack and inbound webhook via short requests; clients may HTTP poll or SSE snapshot (`/api/im/{channel}/stream`). **No** vendor-native long-connection SDK is embedded. Without `XRK_IM_GATEWAY_*`, Host-local `/api/im/gateway/ws` and the relay accept push into the same message store; dialing an external vendor stays optional env.
 
 ## Decision (proposed)
 
@@ -152,7 +148,7 @@ Documented in [modules/references.md](../modules/references.md); **no** codex so
 
 ## Consequences
 
-- Matrix row `im-long-lived-gateway` is `bridge`; in-process WS client + sidecar relay + webhook/poll works today.    
+- Matrix row `im-long-lived-gateway` is `bridge`; local WS ingress (no env) + in-process WS client + sidecar relay + webhook/poll works today.    
 - After RPC contracts stabilize, sync `community-plugins.md` · `security-checklist.md` (webhook exposure).  
 - Face `processChannels/list` surfaces `wired: sidecar` and gateway paths; community client UI optional.
 

@@ -1,11 +1,12 @@
 import { scheduler } from "node:timers/promises";
-import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, estimateRequestTokens, promotePendingSteers, pruneOversizedToolResults, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, promotePendingSteers, pruneOversizedToolResults, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   type AssembledRequest,
 } from "@xrkseek/core-system-prompt";
 import {
   materializeTools,
+  type FileDiff,
   type ToolPipeline,
   type ToolRegistry,
 } from "@xrkseek/core-tools";
@@ -63,6 +64,10 @@ import {
   resolveRetryPolicy,
 } from "./llm-retry.js";
 import { createDeltaCoalescer } from "./delta-coalesce.js";
+import {
+  appendWorkspaceChangesFromDiffs,
+  fileDiffsFromToolPresenters,
+} from "./workspace-changes-emit.js";
 
 /** Context for a turn's persona (tool catalog after materialize / filter). */
 export interface AssemblePersonaContext {
@@ -219,6 +224,11 @@ export interface RunTurnInput {
           readonly source?: UserMessageSource;
         }[];
       }>;
+  /**
+   * Session working directory for turn-end `workspace/changes` summaries.
+   * Omit → `process.cwd()`. Face/Host pass the session project root.
+   */
+  readonly cwd?: string;
 }
 
 export interface RunTurnResult {
@@ -613,6 +623,19 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     ts: now(),
     turnId,
   });
+  /** Per-tool FileDiff captures for turn-end `workspace/changes`. */
+  const turnFileDiffs: FileDiff[] = [];
+  const workspaceCwd = input.cwd ?? process.cwd();
+  const emitWorkspaceChanges = (): void => {
+    appendWorkspaceChangesFromDiffs({
+      store: input.store,
+      sessionId: input.sessionId,
+      turnId,
+      cwd: workspaceCwd,
+      diffs: turnFileDiffs,
+      now,
+    });
+  };
   if (input.beforeUserMessage) {
     await input.beforeUserMessage({
       store: input.store,
@@ -732,6 +755,12 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     const table = isLastStep ? undefined : materializeTools(input.tools);
 
     const buildReq = async () => {
+      ensureDurableImageOffloads(
+        input.store,
+        input.sessionId,
+        DEFAULT_MAX_REQUEST_IMAGE_BYTES,
+        now,
+      );
       const toolNames = (table?.list() ?? []).map((t) => t.name);
       const resolvedPersona = input.assemble
         ? await resolveAssemblePersona(input.assemble.persona, toolNames)
@@ -767,33 +796,46 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     let req = await buildReq();
 
     // Soft budget: count messages + tool schemas (tools alone can dwarf history).
-    // Prune under pressure, remeasure, summarize; fail closed if still over —
-    // do not ship a multi-hundred-k request that OOMs the Host before the API.
+    // Prune under pressure, remeasure, summarize (retry + remeasure); fail closed
+    // if still over — do not ship a multi-hundred-k request that OOMs the Host
+    // before the API.
     if (
       compaction?.auto !== false &&
       compaction?.maxRequestTokens !== undefined
     ) {
       const buffer =
         compaction.bufferTokens ?? DEFAULT_COMPACTION_BUFFER_TOKENS;
-      const softCeiling = compaction.maxRequestTokens - buffer;
-      const measure = () =>
-        estimateRequestTokens({
-          messages: req.messages,
+      const softCeiling = resolveSoftBudgetCeiling(
+        compaction.maxRequestTokens,
+        buffer,
+      );
+      const measure = () => {
+        // Align with toLlmRequest: file handles may grow after path projection.
+        const messages = projectFilesToText(
+          req.messages,
+          (ref) => input.resolveFilePath?.(ref),
+        );
+        return estimateRequestTokens({
+          messages,
           tools: req.tools,
           ...(req.system !== undefined ? { system: req.system } : {}),
         });
+      };
       let used = measure();
       if (used > softCeiling) {
-        const pruned = pruneOversizedToolResults(input.store, input.sessionId, {
+        pruneOversizedToolResults(input.store, input.sessionId, {
           now,
           turnId,
           stepId,
         });
-        if (pruned.pruned > 0) {
-          req = await buildReq();
-          used = measure();
-        }
-        if (used > softCeiling) {
+        // Always remeasure after the prune pass (DSH posture), even if pruned===0.
+        req = await buildReq();
+        used = measure();
+        let compactAttempts = 0;
+        while (
+          used > softCeiling &&
+          compactAttempts < DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS
+        ) {
           const did = await runCompaction({
             store: input.store,
             sessionId: input.sessionId,
@@ -804,12 +846,12 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
             ...(input.signal ? { signal: input.signal } : {}),
             now,
           });
-          if (did.compacted) {
-            // Compaction breaks the cached prefix → re-baseline system at head.
-            seriesBaselineSystem = undefined;
-            req = await buildReq();
-            used = measure();
-          }
+          if (!did.compacted) break;
+          compactAttempts += 1;
+          // Compaction breaks the cached prefix → re-baseline system at head.
+          seriesBaselineSystem = undefined;
+          req = await buildReq();
+          used = measure();
         }
         if (used > softCeiling) {
           throw new ContextOverflowError(
@@ -1113,27 +1155,38 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
           // Invalid side payload — skip; tool/result still settles.
         }
       }
+      const bound = boundToolResultContent({
+        sessionId: input.sessionId,
+        callId: outcome.result.toolCallId,
+        toolName: outcome.result.name,
+        content: outcome.result.content,
+        ...(input.toolResultMaxInlineBytes !== undefined
+          ? { maxInlineBytes: input.toolResultMaxInlineBytes }
+          : {}),
+        ...(outcome.outputPaths?.[0]
+          ? { savedPath: outcome.outputPaths[0] }
+          : {}),
+      });
+      const settledResult = {
+        ...outcome.result,
+        content: bound.content,
+      };
       append(input.store, input.sessionId, {
         type: "tool/result",
         ts: now(),
         turnId,
         stepId,
-        result: (() => {
-          const bound = boundToolResultContent({
-            sessionId: input.sessionId,
-            callId: outcome.result.toolCallId,
-            toolName: outcome.result.name,
-            content: outcome.result.content,
-            ...(input.toolResultMaxInlineBytes !== undefined
-              ? { maxInlineBytes: input.toolResultMaxInlineBytes }
-              : {}),
-          });
-          return {
-            ...outcome.result,
-            content: bound.content,
-          };
-        })(),
+        result: settledResult,
       });
+      const call = calls[i]!;
+      turnFileDiffs.push(
+        ...fileDiffsFromToolPresenters({
+          name: settledResult.name,
+          args: call.arguments,
+          result: settledResult,
+          getTool: (name) => input.tools.get(name),
+        }),
+      );
       if (outcome.result.isError) toolFailed += 1;
       else toolOk += 1;
       batchContexts.push(...outcome.additionalContexts);
@@ -1180,6 +1233,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     }
   }
 
+  emitWorkspaceChanges();
   append(input.store, input.sessionId, {
     type: "turn/end",
     ts: now(),
@@ -1190,6 +1244,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   return { turnId, assistantText, steps, toolOk, toolFailed };
   } catch (err) {
     if (isAbortError(err, input.signal)) {
+      emitWorkspaceChanges();
       finalizeCancelledTurn({
         store: input.store,
         sessionId: input.sessionId,
@@ -1221,6 +1276,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         isLlmError(err)
           ? (err as { code: string }).code
           : "ERROR";
+      emitWorkspaceChanges();
       append(input.store, input.sessionId, {
         type: "turn/end",
         ts: now(),
@@ -1253,5 +1309,10 @@ export {
 export { maybeAppendRequestHeader } from "./request-header-log.js";
 export {
   boundToolResultContent,
+  alreadySavedPath,
   TOOL_RESULT_MAX_INLINE_BYTES,
 } from "./tool-result-bound.js";
+export {
+  appendWorkspaceChangesFromDiffs,
+  fileDiffsFromToolPresenters,
+} from "./workspace-changes-emit.js";

@@ -14,6 +14,7 @@ import {
 } from "../honest-envelope.js";
 import { hostIncomplete, tag } from "../meta.js";
 
+
 export const EMPTY_PRESET_CATALOG = Object.freeze({
   defaultId: "",
   items: Object.freeze([]),
@@ -44,7 +45,7 @@ export function stubRpcHandler(
   kind: string,
   endpoint: string,
   _payload: Record<string, unknown>,
-  _feature = "plugin",
+  feature = "plugin",
 ): unknown {
   if (kind === "im-offline") {
     if (
@@ -64,12 +65,23 @@ export function stubRpcHandler(
       endpoint === "status-summary" ||
       endpoint === ""
     ) {
-      return honestReady({ value: {} });
+      return honestReady({ value: {}, writable: false });
     }
     if (endpoint === "set" || endpoint === "apply" || endpoint === "patch") {
-      return honestReady();
+      return hostIncomplete(feature, {
+        ok: false,
+        code: "STUB_WRITE_NOOP",
+        endpoint,
+        message:
+          "No underlying provider for this channel; writes are not persisted.",
+      });
     }
-    return honestReady({ endpoint });
+    return hostIncomplete(feature, {
+      ok: false,
+      code: "STUB_ENDPOINT",
+      endpoint,
+      message: "No underlying provider for this channel endpoint.",
+    });
   }
   return { ok: false, endpoint, kind, adapter: "xrk-dsh-compat" };
 }

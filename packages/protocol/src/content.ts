@@ -36,6 +36,11 @@ export interface TextBlock {
 export interface ImageBlock {
   readonly type: "image";
   readonly attachment: ImageAttachmentRef;
+  /**
+   * Durable omission from subsequent model requests (`image/offload`).
+   * Original event content stays unchanged; deriveMessages projects this mark.
+   */
+  readonly offloaded?: true;
 }
 
 /**
@@ -120,7 +125,11 @@ export function isImageBlock(value: unknown): value is ImageBlock {
     return false;
   }
   const o = value as Record<string, unknown>;
-  return o.type === "image" && isImageAttachmentRef(o.attachment);
+  return (
+    o.type === "image" &&
+    isImageAttachmentRef(o.attachment) &&
+    (o.offloaded === undefined || o.offloaded === true)
+  );
 }
 
 export function isFileAttachmentRef(
@@ -248,7 +257,7 @@ export function projectFilesToText(
 
 export function contentHasImage(content: MessageContent): boolean {
   if (typeof content === "string") return false;
-  return content.some(isImageBlock);
+  return content.some((block) => isImageBlock(block) && block.offloaded !== true);
 }
 
 /** Collect image refs from message content (no nested tool-result yet). */

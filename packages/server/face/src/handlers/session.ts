@@ -35,6 +35,11 @@ import {
 } from "../permissions.js";
 import { resolveDefaultAgentPreset } from "../settings-document.js";
 import {
+  modelSelectionFromPrefix,
+  prefixHasImageContent,
+  resolveForkCut,
+} from "../fork-cut.js";
+import {
   buildFaceModelCatalog,
   resolveSessionModelSelection,
   routeServed,
@@ -206,7 +211,9 @@ export const sessionList: FaceHandler = async (runtime) => {
       ...(lineage
         ? {
             parentSessionId: lineage.parentSessionId,
-            origin: "subagent" as const,
+            ...(lineage.mode !== "fork"
+              ? { origin: "subagent" as const }
+              : { origin: "fork" as const }),
           }
         : {}),
       title: snap?.values.title ?? null,
@@ -527,19 +534,14 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
     };
   }
 
+  const atSeq =
+    typeof p.atSeq === "number" && Number.isFinite(p.atSeq)
+      ? Math.floor(p.atSeq)
+      : undefined;
   const beforeSeq =
     typeof p.beforeSeq === "number" && Number.isFinite(p.beforeSeq)
       ? Math.floor(p.beforeSeq)
       : undefined;
-  if (beforeSeq !== undefined && beforeSeq < 0) {
-    return {
-      ok: false,
-      error: {
-        code: "invalid-payload",
-        message: "beforeSeq must be >= 0",
-      },
-    };
-  }
 
   const preferredChild =
     typeof p.newSessionId === "string" && p.newSessionId.trim()
@@ -555,32 +557,49 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
     };
   }
 
-  const boundary =
-    beforeSeq === undefined
-      ? undefined
-      : beforeSeq === 0
-        ? 0
-        : beforeSeq;
+  const linkModeRaw = typeof p.linkMode === "string" ? p.linkMode.trim() : "";
+  const linkMode =
+    linkModeRaw === "one-shot" || linkModeRaw === "continuable"
+      ? linkModeRaw
+      : "fork";
 
-  const child = runtime.forkSession(
-    sessionId,
-    boundary,
-    preferredChild,
-  );
-
-  const parentModel = runtime.sessionModels.get(sessionId);
-  if (parentModel) {
-    runtime.sessionModels.set(child.id, { ...parentModel });
+  const parentEvents = readSessionEvents(runtime.store, sessionId);
+  const cut = resolveForkCut(parentEvents, {
+    ...(atSeq !== undefined ? { atSeq } : {}),
+    ...(beforeSeq !== undefined ? { beforeSeq } : {}),
+  });
+  if (!cut.ok) {
+    return {
+      ok: false,
+      error: { code: cut.code, message: cut.message },
+    };
   }
+
+  const child = runtime.forkSession(sessionId, cut.cut, preferredChild);
+  const seed = readSessionEvents(runtime.store, child.id);
+
+  // Model route from the seed prefix only — never copy the parent's live map
+  // (post-turn selectModel must not leak into the child).
+  const seedModel = modelSelectionFromPrefix(seed);
+  if (seedModel) {
+    runtime.sessionModels.set(child.id, { ...seedModel });
+  }
+  // Agent preset stays with the source composition so seeded tool calls remain
+  // resolvable; durable knob events after the cut are already excluded.
   const parentPreset = runtime.sessionAgentPresets.get(sessionId);
   if (parentPreset) {
     runtime.sessionAgentPresets.set(child.id, parentPreset);
+  } else {
+    runtime.sessionAgentPresets.set(
+      child.id,
+      canonicalAgentPresetId(resolveDefaultAgentPreset(runtime)),
+    );
   }
 
   runtime.watchSession(child.id);
   const parentCwd = runtime.sessionCwds.get(sessionId);
   if (parentCwd) runtime.sessionCwds.set(child.id, parentCwd);
-  if (boundary === undefined && runtime.sessionHasImage.has(sessionId)) {
+  if (prefixHasImageContent(seed)) {
     runtime.sessionHasImage.add(child.id);
     runtime.sessionImageScanned.add(child.id);
   }
@@ -592,8 +611,15 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
   runtime.subagents.attach({
     parentSessionId: sessionId,
     childSessionId: child.id,
-    mode: "continuable",
-    label: typeof title === "string" && title.trim() ? title.trim() : "fork",
+    mode: linkMode,
+    label:
+      typeof p.label === "string" && p.label.trim()
+        ? p.label.trim()
+        : typeof title === "string" && title.trim()
+          ? title.trim()
+          : linkMode === "fork"
+            ? "fork"
+            : "subagent",
   });
   publishSessionAdded(runtime, child.id);
   if (workspace) {
@@ -609,7 +635,8 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
       sessionId: child.id,
       parentSessionId: sessionId,
       eventCount: sessionEventCount(runtime.store, child.id),
-      ...(beforeSeq !== undefined ? { beforeSeq } : {}),
+      ...(cut.atSeq !== undefined ? { atSeq: cut.atSeq } : {}),
+      ...(cut.beforeSeq !== undefined ? { beforeSeq: cut.beforeSeq } : {}),
     },
   };
 };

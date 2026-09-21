@@ -23,6 +23,9 @@
 | `commands` | `commands[]` | Face `commands/list` + `commands/execute`（插件名优先于 workspace recipe） |
 | `host` | `createPublicHandler(ctx)` | HTTP `tryHandlePublic` 链（SPA 前同源路由；`webServer.register` 形注册，无 Cordis `apply()`） |
 | `policy` | `policyRules[]` | `wireCompositionPolicy` → preset `createPolicyEngineFromPlugins`（无显式 engine 时合并） |
+| `hooks` | `hooks.onPre[]` · `hooks.onPost[]` | `wireCompositionHooks` → 现有 ToolPipeline（policy / read-only 之后；不另写瀑布） |
+| （文件）shell PreToolUse | `~/.xrk/hooks.json` · `{workspace}/.xrk/hooks.json` | `createShellHookPre` → `onPre`（exit 2 / JSON `decision:block` / `permissionDecision:deny` 阻断；非 0/2 fail-open） |
+| （文件）出站 webhook | `~/.xrk/webhooks.json` · `{workspace}/.xrk/webhooks.json` | `createLifecycleWebhookNotifier` → notify-only POST（`turn/start`·`turn/end`·`tool/post`；HMAC `secretEnv`；永不阻断回合） |
 | `channel` | `channels[]` | `collectChannelPlugins` · `wireCompositionChannels` · Face `processChannels/list` |
 | `llm` | `llmBrands[]` | `wireCompositionLlm` → Host `ProviderRegistry`（显式 brand id 优先；`refreshFacePlugins` 时重入） |
 
@@ -50,7 +53,7 @@ await loader.unregister("my");
 
 const hits = await loader.discover("./extensions");
 await loader.load(hits[0]!);
-const ids = await loader.loadAll("./extensions");
+const { ids } = await loader.loadAll("./extensions");
 
 wireCompositionTools(registry, {
   extraTools: [/* optional */],
@@ -62,7 +65,7 @@ wireCompositionPrompts(prompts, {
 });
 ```
 
-Host `stop` 会对已登记插件逐个 `unregister`（含 `dispose`）。
+Host `stop` 会对已登记插件逐个 `unregister`（含 `dispose`；dispose 抛错仍卸登记）。
 
 ## Manifest
 
@@ -77,6 +80,8 @@ Host `stop` 会对已登记插件逐个 `unregister`（含 `dispose`）。
   "entry": "./plugin.mjs"
 }
 ```
+
+可选 `"required": true`：加载失败则抛 `RequiredPluginLoadError` 并中止 Host spawn / reconcile；缺省为可选——单插件失败只记入 `failures`，不拖垮其余。
 
 或 `package.json` 同形字段：`xrkseek.plugin` · `dsh.plugin` · `deepseek.plugin`（嵌套 `dsh.plugin` / 顶层 `"dsh.plugin"` 均可）。
 
@@ -193,7 +198,7 @@ xrkh plugin path
 
 **Inventory 与磁盘**：`.xrk-plugins.json` 是 managed 包真源。`web/plugins/<id>/` 仅应存在 inventory 里 `kind: client|both` 的包；孤儿目录会导致 overlay `boot.json` 引用已删 `client.js`，浏览器 boot 失败或 slot 崩溃。`reconcile` 按 inventory 清理 staging 并重写 boot。
 
-**Settings 软停用**：写入 `.xrk-plugins-disabled.json` 后从 `web/boot.json` 去掉该 client 条目。Host 对**进程半部**即时调用 `reconcileManagedProcessPlugins`（停用 unregister、启用再 load；跳过 `mcp:*`；磁盘已删的也卸）。Client 半部仍需浏览器刷新（列表标 `needsRestart`）。`pluginInventory/list` 仍从 inventory 列出停用行（`enabled: false`，并带 `version` / `kind` / `source`），以便再启用。Face 读写优先 Host `hostPublic.pluginsDir`（绝对路径，含 `XRK_PLUGINS_DIR`）。
+**Settings 软停用**：写入 `.xrk-plugins-disabled.json` 后从 `web/boot.json` 去掉该 client 条目。Host 对**进程半部**即时调用 `reconcileManagedProcessPlugins`（停用 unregister+dispose、启用再 load；跳过 `mcp:*`；磁盘已删的也卸；可选 load 失败进 `failures`，`required` 失败抛错），并**刷新 Face `webPlugins`**（避免 remove/停用后仍列出已卸 client）。`loader.loadAll` 与 reconcile 同样跳过 soft-disable（含 `skipLoad` cordis stub），避免幽灵登记。Client 半部仍需浏览器刷新（列表标 `needsRestart`）。`pluginInventory/list` 仍从 inventory 列出停用行（`enabled: false`，`fiberPhase: null`，并带 `version` / `kind` / `source`），以便再启用；`dynamicCordisRunner/inventory` 对停用行保持 `fiberPhase: null`（不伪造 `failed`）。Face 读写优先 Host `hostPublic.pluginsDir`（绝对路径，含 `XRK_PLUGINS_DIR`）。
 
 软停用磁盘契约（`@xrkseek/server-loader` `managed-state`，Face / HTTP / CLI / Host 共用）：
 
@@ -202,7 +207,7 @@ xrkh plugin path
 | 真源叶 | 软停用与 inventory 读盘在 loader，避免 Face↔HTTP 环依赖 |
 | durable id | inventory 包名；reconcile 规范化别名并剪 orphan |
 | 写盘 | boot / inventory / disabled 原子写；内容不变不重写 |
-| 进程半部 | Settings 变更后本进程 reconcile；client 仍要刷新页面 |
+| 进程半部 | Settings 变更后本进程 reconcile，并做 unload/register 成对检查；`kind:host` 路由随注册表重建；client 仍要刷新页面 |
 
 产品壳 cordis **不会**仅因 `kind:cordis` 变成可管理项。soft-disable market `disabled` 与 soft-disable 列表对齐。
 
@@ -257,6 +262,9 @@ On XRK-Harness, prefer shipping extensions as plugins, then wire them through pr
 | `commands` | `commands[]` | Face `commands/list` + `commands/execute` (plugin name before workspace recipe) |
 | `host` | `createPublicHandler(ctx)` | HTTP `tryHandlePublic` chain (same-origin routes before SPA; `webServer.register`-shaped registration, no Cordis `apply()`) |
 | `policy` | `policyRules[]` | `wireCompositionPolicy` → preset `createPolicyEngineFromPlugins` (merged when no explicit engine) |
+| `hooks` | `hooks.onPre[]` · `hooks.onPost[]` | `wireCompositionHooks` → existing ToolPipeline (after policy / read-only; no second waterfall) |
+| (file) shell PreToolUse | `~/.xrk/hooks.json` · `{workspace}/.xrk/hooks.json` | `createShellHookPre` → `onPre` (exit 2 / JSON `decision:block` / `permissionDecision:deny` blocks; other exits fail-open) |
+| (file) outbound webhook | `~/.xrk/webhooks.json` · `{workspace}/.xrk/webhooks.json` | `createLifecycleWebhookNotifier` → notify-only POST (`turn/start` · `turn/end` · `tool/post`; HMAC via `secretEnv`; never blocks turns) |
 | `channel` | `channels[]` | `collectChannelPlugins` · `wireCompositionChannels` · Face `processChannels/list` |
 | `llm` | `llmBrands[]` | `wireCompositionLlm` → Host `ProviderRegistry` (explicit brand id wins; re-entrant on `refreshFacePlugins`) |
 
@@ -284,7 +292,7 @@ await loader.unregister("my");
 
 const hits = await loader.discover("./extensions");
 await loader.load(hits[0]!);
-const ids = await loader.loadAll("./extensions");
+const { ids } = await loader.loadAll("./extensions");
 
 wireCompositionTools(registry, {
   extraTools: [/* optional */],
@@ -296,7 +304,7 @@ wireCompositionPrompts(prompts, {
 });
 ```
 
-On Host `stop`, each registered plugin is `unregister`ed (including `dispose`).
+On Host `stop`, each registered plugin is `unregister`ed (including `dispose`; dispose errors still drop the registration).
 
 ## Manifest
 
@@ -311,6 +319,8 @@ Per plugin directory (priority top to bottom):
   "entry": "./plugin.mjs"
 }
 ```
+
+Optional `"required": true`: load failure throws `RequiredPluginLoadError` and aborts Host spawn / reconcile; default is optional — a single failure is recorded in `failures` without taking down siblings.
 
 Or equivalent fields in `package.json`: `xrkseek.plugin` · `dsh.plugin` · `deepseek.plugin` (nested `dsh.plugin` or top-level `"dsh.plugin"`).
 
@@ -427,7 +437,7 @@ After install: the **process half** can live-reconcile on Settings enable/disabl
 
 **Inventory vs disk**: `.xrk-plugins.json` is the source of truth for managed packages. `web/plugins/<id>/` must only hold packages listed as `kind: client|both`; orphans make overlay `boot.json` point at deleted `client.js` and break boot or slots. `reconcile` cleans staging from inventory and rewrites boot.
 
-**Settings soft-disable**: writes `.xrk-plugins-disabled.json` and drops the client entry from `web/boot.json`. Host **live-reconciles** the process half via `reconcileManagedProcessPlugins` (unregister on disable, reload on enable; skips `mcp:*`; also drops plugins removed from disk). The client half still needs a browser refresh (`needsRestart` on the list). `pluginInventory/list` still surfaces the disabled row from inventory (`enabled: false`, plus `version` / `kind` / `source`) so it can be re-enabled. Face I/O prefers Host `hostPublic.pluginsDir` (absolute, including `XRK_PLUGINS_DIR`).
+**Settings soft-disable**: writes `.xrk-plugins-disabled.json` and drops the client entry from `web/boot.json`. Host **live-reconciles** the process half via `reconcileManagedProcessPlugins` (unregister on disable, reload on enable; skips `mcp:*`; also drops plugins removed from disk) and **refreshes Face `webPlugins`** so remove/disable cannot leave stale active client rows. `loader.loadAll` skips soft-disabled ids the same way (including `skipLoad` cordis stubs) so stubs cannot reappear as live inventory ghosts. The client half still needs a browser refresh (`needsRestart` on the list). `pluginInventory/list` still surfaces the disabled row from inventory (`enabled: false`, `fiberPhase: null`, plus `version` / `kind` / `source`) so it can be re-enabled; `dynamicCordisRunner/inventory` keeps soft-disabled rows at `fiberPhase: null` (does not invent `failed`). Face I/O prefers Host `hostPublic.pluginsDir` (absolute, including `XRK_PLUGINS_DIR`).
 
 Soft-disable disk contract (`@xrkseek/server-loader` `managed-state`, shared by Face / HTTP / CLI / Host):
 
@@ -436,7 +446,7 @@ Soft-disable disk contract (`@xrkseek/server-loader` `managed-state`, shared by 
 | Shared leaf | Soft-disable and inventory reads live in loader (avoids a Face↔HTTP cycle) |
 | Durable id | Inventory package name; reconcile canonicalizes aliases and prunes orphans |
 | Writes | Atomic boot / inventory / disabled; skip rewrite when content is unchanged |
-| Process half | In-process reconcile after Settings mutations; client still needs a page refresh |
+| Process half | In-process reconcile after Settings mutations, with an unload/register pairing check; `kind:host` routes follow the live registry; client still needs a page refresh |
 
 Product-shell cordis is **not** managed merely because `kind:cordis`. soft-disable market `disabled` mirrors the soft-disable list.
 

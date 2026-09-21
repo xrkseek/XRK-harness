@@ -1,31 +1,17 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import {
+  capSpillText,
+  pruneSpillTree,
+  resolveXrkHome,
+} from "@xrkseek/xrk-home-paths";
 
-const HOME_ENVS = ["XRK_HOME", "XRK_DSH_HOME", "DSH_HOME"] as const;
-
-function expandHomePath(value: string): string {
-  if (value === "~") return homedir();
-  if (value.startsWith("~/") || value.startsWith("~\\")) {
-    return path.join(homedir(), value.slice(2));
-  }
-  return value;
-}
-
-/**
- * Product data root (`XRK_HOME` / `~/.xrk`). Never the session workspace.
- * Mirrors `@xrkseek/server-config` `resolveXrkHome` without taking that dep
- * (workspace is a leaf under presets).
- */
+/** Product data root (`XRK_HOME` / `~/.xrk`). Never the session workspace. */
 export function resolveProductHome(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  for (const key of HOME_ENVS) {
-    const raw = env[key]?.trim();
-    if (raw) return path.resolve(expandHomePath(raw));
-  }
-  return path.resolve(path.join(homedir(), ".xrk"));
+  return resolveXrkHome(env);
 }
 
 /** Shared spill tree: `{productHome}/spill` (Host `hostReadableRoots`). */
@@ -88,10 +74,17 @@ export function createWorkspaceToolOutputPersist(
   return {
     dir,
     async persist(fullContent: string): Promise<string> {
+      const spill = path.resolve(root, "spill");
+      const rel = path.relative(spill, dir);
+      const tree =
+        rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))
+          ? spill
+          : dir;
+      pruneSpillTree(tree);
       await ensureDir();
       const name = `tool_${Date.now().toString(36)}_${randomUUID().slice(0, 8)}.txt`;
       const abs = path.join(dir, name);
-      await writeFile(abs, fullContent, "utf8");
+      await writeFile(abs, capSpillText(fullContent), "utf8");
       return abs;
     },
   };

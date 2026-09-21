@@ -2,7 +2,16 @@
  * Native Host Face bridge contract for `/sidebar/*`.
  * Implementation: `@xrkseek/server-host` (`createSidebarFaceBridgeFromFace`).
  * Client: `xrkh-better-sidebar` (kind: client only).
+ *
+ * Preview seams (contract): Office stays on `/office`; plan/subagent full
+ * history stay on Face. Optional methods below are for richer sidebar cards
+ * without duplicating Face RPCs — wire incrementally.
  */
+import type {
+  PlanPreviewSummary,
+  SubagentPreviewSummary,
+} from "@xrkseek/protocol";
+
 export type SidebarSubagentLiveActivity = {
   readonly text?: string;
   readonly tool?: { readonly name: string; readonly args: string };
@@ -32,7 +41,7 @@ export interface SidebarFaceBridge {
   ) => Promise<{ ok: boolean; killed: boolean; reason?: string }>;
   readonly forkSessionAt?: (
     sessionId: string,
-    beforeSeq: number,
+    atSeq: number,
   ) => Promise<{ sessionId: string }>;
   /**
    * Running-child live lines for `POST /sidebar/api/subagents.live`.
@@ -43,6 +52,45 @@ export interface SidebarFaceBridge {
   ) => Promise<{
     readonly live: Readonly<Record<string, SidebarSubagentLiveActivity>>;
   }>;
+  /**
+   * Richer subagent cards for `POST /sidebar/api/subagents.preview`.
+   * Full history remains Face `subagent.history`.
+   */
+  readonly listSubagentPreviews?: (
+    rootSessionId: string,
+  ) => Promise<{
+    readonly previews: readonly SubagentPreviewSummary[];
+  }>;
+  /**
+   * Team graph for `POST /sidebar/api/subagents.graph`.
+   * Delegation edges come from the subagent registry; `link` adds a peer edge,
+   * `role` overrides one node's role (`delegator` / `worker` / `observer`).
+   */
+  readonly agentTeamGraph?: (
+    rootSessionId: string,
+    action?:
+      | { op: "link"; from: string; to: string; label?: string }
+      | { op: "role"; nodeId: string; role?: string },
+  ) => Promise<{
+    readonly nodes: readonly {
+      id: string;
+      label: string;
+      role?: "delegator" | "worker" | "observer";
+    }[];
+    readonly edges: readonly {
+      from: string;
+      to: string;
+      kind: "delegates" | "peer";
+      label?: string;
+    }[];
+  }>;
+  /**
+   * Plan chip for `POST /sidebar/api/plan.preview`
+   * (Face `plan` projection summary — no markdown body).
+   */
+  readonly getPlanPreview?: (
+    sessionId: string,
+  ) => Promise<PlanPreviewSummary>;
   /**
    * Session file-tool delta for `POST /sidebar/api/changes.ops`
    * (`tool/call` + `tool/result` past `afterSeq`, Face wire shape).

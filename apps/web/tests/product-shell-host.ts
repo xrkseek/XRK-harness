@@ -50,7 +50,7 @@ export const LIVE_PLACEHOLDER =
 
 /** Read the first persisted session log as JSONL text (SQLite or legacy import). */
 export function readFirstPersistedSessionLog(sessionsDir: string): string {
-  const store = createPersistentSessionStore(sessionsDir);
+  const store = createPersistentSessionStore(sessionsDir, { shared: true });
   try {
     const ids = store.list();
     if (ids.length === 0) {

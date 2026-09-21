@@ -18,7 +18,7 @@ export const subagentList: FaceHandler = async (runtime, _rpcId, payload) => {
     };
   }
   const available = parentAvailable(runtime, parentSessionId);
-  const entries = runtime.subagents.list(parentSessionId).map((link) => {
+  const entries = runtime.subagents.listDelegated(parentSessionId).map((link) => {
     if (!runtime.store.has(link.childSessionId)) {
       return {
         kind: "diagnostic" as const,
@@ -29,7 +29,9 @@ export const subagentList: FaceHandler = async (runtime, _rpcId, payload) => {
     const activity = runtime.drain.isActive(link.childSessionId)
       ? ("running" as const)
       : ("inactive" as const);
-    const hasChildren = runtime.subagents.hasChildren(link.childSessionId);
+    const hasChildren = runtime.subagents.hasDelegatedChildren(
+      link.childSessionId,
+    );
     if (link.mode === "one-shot") {
       return {
         kind: "child" as const,

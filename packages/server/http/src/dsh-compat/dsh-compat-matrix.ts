@@ -157,7 +157,13 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
     coverage: "bridge",
     genericModule:
       "auto-review-http.ts · host-feature-bridge.ts · persisted-settings-store",
-    note: "enabled/stats persistence + heuristic classify bridge",
+    note: "enabled/stats persistence + classifier seam (heuristic default, plugin or HTTP replace)",
+  },
+  {
+    id: "auto-review-pluggable-classifier",
+    coverage: "full",
+    genericModule: "auto-review-classifier.ts · auto-review-http.ts · host-feature-bridge.ts",
+    note: "Default heuristic; replace with options.classifier or XRK_AUTO_REVIEW_CLASSIFIER_URL (fail closed)",
   },
   {
     id: "im-channels",
@@ -180,9 +186,15 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
   },
   {
     id: "genui-browser-runtime",
-    coverage: "honest-stub",
-    genericModule: "genui.ts (/dsh-genui/runtime.js)",
-    note: "Vue/OpenTiny CE bundle not shipped; honest empty ESM stub (community client load may no-op)",
+    coverage: "full",
+    genericModule: "genui.ts · genui-browser-runtime.ts (/dsh-genui/runtime.js)",
+    note: "Browser ESM: mount/unmount/render · dsh-genui / xrk-genui custom elements · optional /preview fetch",
+  },
+  {
+    id: "mnemon-memory-engine",
+    coverage: "full",
+    genericModule: "mnemon.ts · mnemon-engine.ts · mnemon-store.ts",
+    note: "Document CRUD plus keyword search, mention graph, and memory bodies (not a vector DB)",
   },
   {
     id: "noema-memory",
@@ -215,7 +227,7 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
     coverage: "bridge",
     genericModule:
       "im-long-lived-gateway.ts · im-vendor-ws-client.ts · im-gateway-sidecar.ts",
-    note: "Webhook/poll bridge · sidecar relay · in-process WS client (ADR-0006)",
+    note: "Webhook/poll bridge · local WS ingress without env · optional sidecar / outbound WS client (ADR-0006)",
   },
   {
     id: "cloud-vision-routing",
@@ -238,9 +250,25 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
       "tongflow-node-runtime.ts · tongflow-python-bridge.ts",
     note: "External subprocess + user Python interpreter bridge (ADR-0007)",
   },
+  {
+    id: "im-vendor-cloud-push",
+    coverage: "full",
+    genericModule:
+      "im-gateway-local-ws.ts · im-gateway-sidecar.ts · im-long-lived-gateway.ts",
+    note: "Local /api/im/gateway/ws + relay without XRK_IM_GATEWAY_*; external vendor dial stays optional env",
+  },
+  {
+    id: "tongflow-plugins-install",
+    coverage: "full",
+    genericModule: "tongflow.ts",
+    note: "POST /tongflow/plugins runs xrkh plugin add via runPluginMutate; deleted /plugins/install accepted route stays gone",
+  },
 ] as const;
 
-/** Reserved product gaps (aligned with docs/community-plugins · docs/status). */
+/**
+ * Product gaps / honest stubs that must not be treated as Working.
+ * Synced with docs/status.md · docs/community-plugins.md「待补」.
+ */
 export const DSH_COMPAT_KNOWN_GAPS: readonly DshCompatCapabilityRow[] = [] as const;
 
 export function listDshCompatGenericIds(): readonly string[] {

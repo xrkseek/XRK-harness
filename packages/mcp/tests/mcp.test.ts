@@ -68,6 +68,15 @@ function stubClient(init: {
       }
       return init.tools;
     },
+    async listResources() {
+      return { items: [] };
+    },
+    async listResourceTemplates() {
+      return { items: [] };
+    },
+    async readResource() {
+      return { contents: [] };
+    },
     async callTool() {
       return { content: "" };
     },
@@ -215,6 +224,33 @@ describe("mcp client M0", () => {
     expect(registry.get("mcp__svc__ping")).toBeUndefined();
     await client.dispose();
     await linked.close();
+  });
+
+  it("connects to a server without tools capability and lists an empty set", async () => {
+    const { Server } = await import(
+      "@modelcontextprotocol/sdk/server/index.js"
+    );
+    const server = new Server(
+      { name: "prompts-only", version: "0.0.0" },
+      { capabilities: {} },
+    );
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = createMcpClient({
+      serverName: "notools",
+      command: "unused",
+      policy: allowPolicy(),
+      createTransport: async () => clientTransport,
+    });
+    await client.connect();
+    expect(await client.listTools()).toEqual([]);
+    const registry = createToolRegistry();
+    const wired = await registerMcpTools(registry, client);
+    expect(wired.applied).toEqual([]);
+    wired.dispose();
+    await client.dispose();
+    await server.close();
   });
 
   it("accepts streamable-http transport option", async () => {

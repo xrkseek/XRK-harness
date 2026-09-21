@@ -185,6 +185,8 @@ export {
 export {
   HOME_CONVENTION_INJECT,
   HOME_INSTRUCTION_FINGERPRINT_MARKERS,
+  HOME_OS_INSTRUCTION_FINGERPRINT_MARKERS,
+  HOME_PRODUCT_INSTRUCTION_FINGERPRINT_MARKERS,
   SKILL_VENDOR_PRIORITY,
   USER_HOME_SKILL_REL_DIRS,
   WORKSPACE_CONVENTION_INJECT,
@@ -192,6 +194,12 @@ export {
   WORKSPACE_SKILL_REL_DIRS,
   type ConventionInjectProfile,
 } from "./inject-sources.js";
+
+export {
+  resolveUnderUserProductHome,
+  resolveUserProductHome,
+  userProductHomeLogicalPrefix,
+} from "./user-product-home.js";
 
 export {
   formatSkillCatalog,
@@ -210,6 +218,22 @@ export {
 } from "./skills.js";
 
 export { createSkillTools, presentSkillCall } from "./skill-tools.js";
+
+export {
+  installSkill,
+  installSkillFromGit,
+  installSkillFromLocalDir,
+  isGitSkillSpec,
+  listInstalledSkills,
+  removeInstalledSkill,
+  resolveInstalledSkillsRoot,
+  SkillInstallError,
+  WORKSPACE_SKILLS_REL_DIR,
+  type InstalledSkillInfo,
+  type SkillInstallOptions,
+  type SkillInstallResult,
+  type SkillInstallSourceKind,
+} from "./skill-install.js";
 
 export {
   createWorkspaceToolOutputPersist,

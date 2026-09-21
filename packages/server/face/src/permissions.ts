@@ -189,8 +189,10 @@ export function pinInitialPermission(
  * Switch preset: append changed knobs only. Selecting the effective preset
  * again appends nothing.
  *
- * Optional `hasPtyActivity` fences sandbox mode changes while PTY sessions are
- * open or spawning (CV DSH terminal-bash `ensureSandboxModeFence`).
+ * Optional `hasPtyActivity` fences sandbox mode changes while **Agent**
+ * `terminal_*` PTY sessions are open or spawning (CV DSH terminal-bash
+ * `ensureSandboxModeFence` / `@xrkseek/exec-pty` `sandboxModeChangeBlockedMessage`).
+ * Sidebar user terminals are independent and must not be reported here.
  */
 export function applyPermissionPreset(
   store: SessionStore,
@@ -217,9 +219,11 @@ export function applyPermissionPreset(
     knobs.sandbox !== spec.sandbox &&
     options?.hasPtyActivity?.() === true
   ) {
+    // Keep wording aligned with `sandboxModeChangeBlockedMessage` in exec-pty
+    // (Face must not depend on node-pty / exec-pty for this leaf).
     return {
       ok: false,
-      message: `cannot change sandbox mode from "${currentSandbox}" to "${spec.sandbox}" while persistent terminal sessions are open or being created; wait for creation to settle and close them first`,
+      message: `cannot change sandbox mode from "${currentSandbox}" to "${spec.sandbox}" while Agent terminal_* sessions are open or being created; wait for creation to settle and close them first`,
     };
   }
   const ts = now();
@@ -245,4 +249,44 @@ export function applyPermissionPreset(
     });
   }
   return { ok: true, changed: true };
+}
+
+/**
+ * Settings `permission.defaultPreset` is `applies: live`. Push the new default
+ * onto sessions still on the previous default (not manually customized via
+ * Access / `/permission`), then invalidate so sandbox/approval rebuild.
+ */
+export async function applyLivePermissionDefaultPreset(
+  runtime: FaceRuntime,
+  previousUser: unknown,
+  nextValue: unknown,
+): Promise<void> {
+  const nextRaw =
+    nextValue && typeof nextValue === "object"
+      ? (nextValue as { defaultPreset?: unknown }).defaultPreset
+      : undefined;
+  if (!isFacePermissionPreset(nextRaw)) return;
+  const prevRaw =
+    previousUser && typeof previousUser === "object"
+      ? (previousUser as { defaultPreset?: unknown }).defaultPreset
+      : undefined;
+  const previousPreset: FacePermissionPreset = isFacePermissionPreset(prevRaw)
+    ? prevRaw
+    : "workspace-write";
+  if (previousPreset === nextRaw) return;
+
+  for (const sessionId of runtime.store.list()) {
+    const current = permissionSelectFromEvents(
+      readSessionEvents(runtime.store, sessionId),
+    ).currentValue;
+    if (current !== previousPreset) continue;
+    const applied = applyPermissionPreset(runtime.store, sessionId, nextRaw, {
+      ...(runtime.hasPtyActivity
+        ? { hasPtyActivity: () => runtime.hasPtyActivity!() }
+        : {}),
+    });
+    if (applied.ok && applied.changed) {
+      await runtime.invalidateAgent?.(sessionId);
+    }
+  }
 }

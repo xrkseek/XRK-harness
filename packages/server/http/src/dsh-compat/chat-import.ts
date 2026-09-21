@@ -2,8 +2,10 @@
  * dsh-chat-import — file-backed sync config + generic session discovery/import.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { importSessionInterchange, exportSessionInterchange } from "@xrkseek/core-session";
 import { sendJson } from "./underlying/http-json.js";
+import { dataPath, ensureDir } from "./underlying/json-store.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { httpMethod, isMutatingMethod, parseJsonBody } from "./underlying/http-kit.js";
 import {
@@ -310,12 +312,32 @@ export async function handleChatImportHttp(
         });
         continue;
       }
+      let xrkEventCount: number;
+      let inboxPath: string | undefined;
+      try {
+        const raw = readFileSync(sourcePath);
+        const text = raw.subarray(0, 512 * 1024).toString("utf8");
+        const events = importSessionInterchange(text);
+        xrkEventCount = events.length;
+        if (events.length > 0) {
+          inboxPath = dataPath(
+            options.xrkHome,
+            "chat-import",
+            "inbox",
+            `${fingerprint}.jsonl`,
+          );
+          ensureDir(dataPath(options.xrkHome, "chat-import", "inbox"));
+          writeFileSync(inboxPath, exportSessionInterchange(events), "utf8");
+        }
+      } catch {
+        xrkEventCount = 0;
+      }
       upsertImportRow(options.xrkHome, {
         format,
         sourcePath,
         sessionId: sessionId || sourcePath,
         status: "imported",
-        note: "metadata registered on XRK bridge; transcript import uses same fingerprint as dsh-chat-import",
+        note: "Role JSONL written to chat-import/inbox. Not sessions.db; not Session Format V3.",
       });
       results.push({
         sourcePath,
@@ -323,6 +345,9 @@ export async function handleChatImportHttp(
         mode: "single",
         status: "imported",
         sessionId: sessionId || sourcePath,
+        xrkEventCount,
+        ...(inboxPath ? { inboxPath } : {}),
+        interchange: "xrk-events",
       });
     }
     sendJson(res, 200, { ok: true, results });

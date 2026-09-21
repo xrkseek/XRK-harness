@@ -114,7 +114,18 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [tool-settlement.md](./tool-settlement.md) | dangling · parallel settle |
 | [tool-output-bound.md](./tool-output-bound.md) | 大结果 bound |
 | [seams.md](./seams.md) | Definition / Provider / Consumer |
-| [web-tools.md](./web-tools.md) | `web_search` / `web_fetch` |
+| [sandbox.md](./sandbox.md) | `createSandboxStack` · Docker / bwrap |
+| [cron.md](./cron.md) | Host `cronjob` 调度 · 回投 |
+| [acp.md](./acp.md) | `xrkh acp` stdio ACP server |
+| [external-agent.md](./external-agent.md) | `subagent.runtime` 外部 ACP / app-server / Claude Code |
+| [web-tools.md](./web-tools.md) | `web_search` / `web_fetch` / `browser_*` |
+| [computer-use.md](./computer-use.md) | 桌面 `computer_use`（AX + 输入 Provider） |
+| [curated-memory.md](./curated-memory.md) | 策展记忆 `memory`（MEMORY.md / USER.md） |
+| [voice.md](./voice.md) | 语音 Host：TTS · 听写 · realtime session |
+| [image-gen.md](./image-gen.md) | 文生图 `image_generate` |
+| [video-gen.md](./video-gen.md) | 文生视频 `video_generate`（异步作业） |
+| [turn-rewind.md](./turn-rewind.md) | 回合回退：工作区文件快照（影子 git） |
+| [session-telemetry.md](./session-telemetry.md) | OpenTelemetry 会话遥测 / OTLP logs |
 | [lsp-tools.md](./lsp-tools.md) | `lsp` 四操作 |
 | [pty-tools.md](./pty-tools.md) | `terminal_*` |
 | [shell-jobs.md](./shell-jobs.md) | shell 后台 job |
@@ -256,7 +267,16 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [tool-settlement.md](./tool-settlement.md) | dangling · parallel settle |
 | [tool-output-bound.md](./tool-output-bound.md) | Large-result bound |
 | [seams.md](./seams.md) | Definition / Provider / Consumer |
-| [web-tools.md](./web-tools.md) | `web_search` / `web_fetch` |
+| [sandbox.md](./sandbox.md) | `createSandboxStack` · Docker / bwrap |
+| [cron.md](./cron.md) | Host `cronjob` scheduler · delivery |
+| [acp.md](./acp.md) | `xrkh acp` stdio ACP server |
+| [external-agent.md](./external-agent.md) | `subagent.runtime` external ACP / app-server / Claude Code |
+| [voice.md](./voice.md) | Voice Host: TTS · dictation · realtime session |
+| [image-gen.md](./image-gen.md) | Text-to-image `image_generate` |
+| [video-gen.md](./video-gen.md) | Text-to-video `video_generate` (async job) |
+| [turn-rewind.md](./turn-rewind.md) | Turn rewind: workspace file snapshots (shadow git) |
+| [curated-memory.md](./curated-memory.md) | Curated memory `memory` (MEMORY.md / USER.md) |
+| [session-telemetry.md](./session-telemetry.md) | OpenTelemetry session telemetry / OTLP logs |
 | [lsp-tools.md](./lsp-tools.md) | `lsp` four operations |
 | [pty-tools.md](./pty-tools.md) | `terminal_*` |
 | [shell-jobs.md](./shell-jobs.md) | Background shell jobs |

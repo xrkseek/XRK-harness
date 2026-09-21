@@ -7,7 +7,7 @@ import { createDshCompatPublicHandler } from "../src/dsh-compat/index.js";
 import {
   honestReady,
   imHostActionUnavailable,
-  modsearchHostUnavailable,
+  mnemonEngineUnavailable,
 } from "../src/dsh-compat/honest-envelope.js";
 import { handleImChannelRpc } from "../src/dsh-compat/im-channels.js";
 import { handleModsearchRpc } from "../src/dsh-compat/modsearch.js";
@@ -57,8 +57,9 @@ describe("honest-envelope", () => {
     expect(im.incomplete).toEqual(["im-host"]);
     expect(im.code).toBe("IM_HOST_UNAVAILABLE");
 
-    const search = modsearchHostUnavailable("search", { query: "x" });
-    expect(search.incomplete).toEqual(["modsearch-host"]);
+    const mnemon = mnemonEngineUnavailable("unknown");
+    expect(mnemon.incomplete).toEqual(["mnemon-host"]);
+    expect(mnemon.endpoint).toBe("unknown");
   });
 });
 

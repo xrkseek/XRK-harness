@@ -40,6 +40,8 @@ export interface McpServerDraft {
   readonly url?: string
   readonly args?: readonly string[]
   readonly cwd?: string
+  /** Acknowledge workspace litter when `cwd` is under the Host workspace. */
+  readonly cwdAllowWorkspace?: boolean
 }
 
 /** Transport kind the card edits for one row. */
@@ -54,6 +56,8 @@ export interface McpServerRow {
   /** Comma-separated args in the editor. */
   readonly args: string
   readonly cwd: string
+  /** Staged ack for workspace cwd (saved as cwdAllowWorkspace). */
+  readonly cwdAllowWorkspace: boolean
   /** Derived live status for this desired name. */
   readonly status: McpRowStatus
   /** Tool count when connected; otherwise 0. */
@@ -72,6 +76,8 @@ export interface McpCardState extends CardShell {
   readonly note: string
   /** Whether any row fails client-side validation. */
   readonly rowInvalid: boolean
+  /** True when a staged stdio row has cwd but no workspace ack. */
+  readonly cwdNeedsAck: boolean
   /** Show field errors only after a blocked save. */
   readonly showErrors: boolean
 }
@@ -96,6 +102,12 @@ export interface McpCardFace extends CardActions {
   removeRow: (index: number) => void
   /** Stage Allow connect (saved with the server list). */
   setAllowConnect: (allow: boolean) => void
+  /**
+   * Acknowledge workspace cwd risk for staged rows that set `cwd`.
+   * Required before save when any stdio row has an explicit cwd without
+   * `cwdAllowWorkspace`.
+   */
+  setAllowWorkspaceCwd: (allow: boolean) => void
 }
 
 /** Bridges the `mcp` scope onto the card's staged server list. */
@@ -151,13 +163,17 @@ export class McpCardController {
   private projection(): McpCardState {
     const snapshot = this.scope.getSnapshot()
     const invalid = this.rows.some(row => validateRow(row) !== undefined)
+    const cwdNeedsAck = this.rows.some(
+      row => row.transport === 'stdio' && row.cwd.trim() && !row.cwdAllowWorkspace,
+    )
     return {
       available: snapshot.status === 'ready',
       writable: snapshot.writable,
       dirty: this.dirty(),
-      invalid,
+      invalid: invalid || cwdNeedsAck,
       rowInvalid: invalid,
-      showErrors: this.showErrors && invalid,
+      cwdNeedsAck,
+      showErrors: this.showErrors && (invalid || cwdNeedsAck),
       saving: this.saving,
       failed: this.failed,
       rows: this.rows,
@@ -195,6 +211,7 @@ export class McpCardController {
       addRow: (paste) => this.addRow(paste),
       removeRow: (index) => { this.removeRow(index) },
       setAllowConnect: (allow) => { this.setAllowConnect(allow) },
+      setAllowWorkspaceCwd: (allow) => { this.setAllowWorkspaceCwd(allow) },
       edit: () => { /* rows use paste merge */ },
       resetField: () => { /* n/a for MCP list */ },
       save: () => { void this.save() },
@@ -210,13 +227,27 @@ export class McpCardController {
     this.publish()
   }
 
+  private setAllowWorkspaceCwd(allow: boolean): void {
+    this.rows = this.rows.map((row) => {
+      if (row.transport !== 'stdio' || !row.cwd.trim()) return row
+      return { ...row, cwdAllowWorkspace: allow }
+    })
+    this.touchLocal()
+    this.failed = false
+    if (!this.rows.some(r => validateRow(r) !== undefined)
+      && !this.rows.some(r => r.transport === 'stdio' && r.cwd.trim() && !r.cwdAllowWorkspace)) {
+      this.showErrors = false
+    }
+    this.publish()
+  }
+
   private editRow(index: number, patch: Partial<McpServerRow>): void {
     const row = this.rows[index]
     if (row === undefined) return
     let next: McpServerRow = { ...row, ...patch }
     if (patch.transport !== undefined && patch.transport !== row.transport) {
       next = patch.transport === 'http'
-        ? { ...next, command: '', args: '', cwd: '' }
+        ? { ...next, command: '', args: '', cwd: '', cwdAllowWorkspace: false }
         : { ...next, url: '' }
     }
     this.rows = this.rows.with(index, next)
@@ -269,7 +300,11 @@ export class McpCardController {
   private async save(): Promise<void> {
     const snapshot = this.scope.getSnapshot()
     if (snapshot.status !== 'ready' || !snapshot.writable || this.saving) return
-    if (this.rows.some(row => validateRow(row) !== undefined)) {
+    const rowBad = this.rows.some(row => validateRow(row) !== undefined)
+    const cwdNeedsAck = this.rows.some(
+      row => row.transport === 'stdio' && row.cwd.trim() && !row.cwdAllowWorkspace,
+    )
+    if (rowBad || cwdNeedsAck) {
       this.showErrors = true
       this.publish()
       return
@@ -403,6 +438,7 @@ function normalizeStoredRow(raw: McpServerDraft): McpServerDraft {
     ...(command ? { command } : {}),
     ...(args && args.length > 0 ? { args } : {}),
     ...(cwd ? { cwd } : {}),
+    ...(raw.cwdAllowWorkspace === true ? { cwdAllowWorkspace: true } : {}),
   }
 }
 
@@ -416,6 +452,7 @@ function rowToUi(draft: McpServerDraft, snapshot: SettingsScopeSnapshot<McpSetti
     url: draft.url ?? '',
     args: (draft.args ?? []).join(', '),
     cwd: draft.cwd ?? '',
+    cwdAllowWorkspace: draft.cwdAllowWorkspace === true,
     ...resolved,
   }
 }
@@ -435,6 +472,7 @@ function rowFromUi(row: McpServerRow): McpServerDraft {
     command: row.command.trim(),
     ...(args.length > 0 ? { args } : {}),
     ...(cwd ? { cwd } : {}),
+    ...(cwd && row.cwdAllowWorkspace ? { cwdAllowWorkspace: true } : {}),
   }
 }
 
@@ -473,6 +511,7 @@ export function rowsFromMcpPaste(raw: string): McpServerRow[] {
     const url = typeof entry.url === 'string' ? entry.url.trim() : ''
     const command = typeof entry.command === 'string' ? entry.command.trim() : ''
     const cwd = typeof entry.cwd === 'string' ? entry.cwd.trim() : ''
+    const cwdAllowWorkspace = entry.cwdAllowWorkspace === true
     const argsList = Array.isArray(entry.args)
       ? entry.args.filter((part): part is string => typeof part === 'string')
       : []
@@ -484,6 +523,7 @@ export function rowsFromMcpPaste(raw: string): McpServerRow[] {
         url,
         args: '',
         cwd: '',
+        cwdAllowWorkspace: false,
         status: 'idle',
         toolCount: 0,
       })
@@ -497,6 +537,7 @@ export function rowsFromMcpPaste(raw: string): McpServerRow[] {
       url: '',
       args: argsList.join(', '),
       cwd,
+      cwdAllowWorkspace: Boolean(cwd) && cwdAllowWorkspace,
       status: 'idle',
       toolCount: 0,
     })

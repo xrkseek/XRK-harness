@@ -116,6 +116,7 @@ export function executeExternalTongflowNode(
     encoding: "utf8",
     timeout: timeoutMs,
     maxBuffer: 1024 * 1024,
+    windowsHide: true,
   });
   if (res.error) {
     return {

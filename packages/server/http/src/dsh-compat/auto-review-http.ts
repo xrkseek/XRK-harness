@@ -1,23 +1,26 @@
 ﻿/**
- * dsh-auto-review — settings + stats persist under ~/.xrk; classifier stays honest.
+ * dsh-auto-review — settings + stats persist under ~/.xrk.
+ * Classify uses the heuristic by default, or a plugged classifier
+ * (`options.classifier` / `XRK_AUTO_REVIEW_CLASSIFIER_URL`).
  * Face `autoReview` projection handles session slash; HTTP serves DSH client panel polls.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { sendJson } from "./underlying/http-json.js";
-import {
-  autoReviewClassifierUnavailable,
-  honestReady,
-} from "./honest-envelope.js";
+import { honestReady } from "./honest-envelope.js";
 import { parseAutoReviewSlashInput } from "./auto-review-slash.js";
-import { classifyAutoReviewHeuristic } from "./host-feature-bridge.js";
-import { hostIncomplete } from "./meta.js";
+import {
+  classifyAutoReview,
+  resolveAutoReviewClassifier,
+  type AutoReviewClassifierOptions,
+} from "./auto-review-classifier.js";
+import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { createPersistedSettingsDocStore } from "./persisted-settings-store.js";
 import { dshSettingsDefaults } from "./settings-defaults.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
 
-export interface AutoReviewOptions {
+export interface AutoReviewOptions extends AutoReviewClassifierOptions {
   readonly xrkHome?: string;
 }
 
@@ -73,19 +76,27 @@ function setEnabled(options: AutoReviewOptions, enabled: boolean): void {
 function statusPayload(options: AutoReviewOptions): Record<string, unknown> {
   const store = settingsStore(options);
   const stats = loadStats(options);
-  return hostIncomplete("auto-review", {
+  const classifier = resolveAutoReviewClassifier(options);
+  const enabled = isEnabled(options);
+  return {
     ok: true,
-    enabled: isEnabled(options),
-    status: isEnabled(options) ? "ready" : "offline",
+    enabled,
+    status: enabled ? "ready" : "offline",
     writable: true,
+    adapter: DSH_COMPAT_ADAPTER,
+    classifier: classifier.id,
+    classifierKind: classifier.kind,
     settingsRevision: store.revision(),
     allows: stats.allows,
     denies: stats.denies,
     verdictsUsed: stats.verdictsUsed,
     failuresUsed: stats.failuresUsed,
     recentDenies: stats.recentDenies,
-    note: "Toggle persists via autoReview settings; classifier host is not embedded on XRK.",
-  });
+    note:
+      classifier.kind === "heuristic"
+        ? "Default heuristic classifier. Replace with options.classifier or XRK_AUTO_REVIEW_CLASSIFIER_URL."
+        : `Classifier seam active (${classifier.kind}).`,
+  };
 }
 
 export async function handleAutoReviewHttp(
@@ -152,12 +163,27 @@ export async function handleAutoReviewHttp(
         ? await parseJsonBody(req)
         : {};
     if (!isEnabled(options)) {
-      sendJson(res, 200, autoReviewClassifierUnavailable(sub, { enabled: false }));
+      const classifier = resolveAutoReviewClassifier(options);
+      sendJson(res, 200, {
+        ok: false,
+        enabled: false,
+        code: "AUTO_REVIEW_DISABLED",
+        endpoint: sub,
+        classifier: classifier.id,
+        adapter: DSH_COMPAT_ADAPTER,
+        message: "Auto-review is disabled",
+      });
       return true;
     }
-    const verdict = classifyAutoReviewHeuristic(body);
+    const result = await classifyAutoReview(body, options);
     const stats = loadStats(options);
-    if (verdict.verdict === "deny") {
+    const verdict = result.classification.verdict;
+    if (!result.ok) {
+      saveStats(options, {
+        ...stats,
+        failuresUsed: stats.failuresUsed + 1,
+      });
+    } else if (verdict === "deny") {
       saveStats(options, {
         ...stats,
         denies: stats.denies + 1,
@@ -170,7 +196,7 @@ export async function handleAutoReviewHttp(
           ...stats.recentDenies,
         ].slice(0, 8),
       });
-    } else if (verdict.verdict === "allow") {
+    } else if (verdict === "allow") {
       saveStats(options, {
         ...stats,
         allows: stats.allows + 1,
@@ -178,11 +204,14 @@ export async function handleAutoReviewHttp(
       });
     }
     sendJson(res, 200, {
-      ok: true,
-      ...verdict,
-      classifier: "xrk-heuristic",
-      adapter: "xrk-dsh-compat",
-      note: "Heuristic classifier bridge — not upstream LLM classifier.",
+      ok: result.ok,
+      ...result.classification,
+      classifier: result.classifier,
+      adapter: DSH_COMPAT_ADAPTER,
+      ...(result.error ? { error: result.error } : {}),
+      note: result.ok
+        ? "Classifier seam. Default is the heuristic; plugin or HTTP may replace it."
+        : "Classifier failed closed (ask).",
     });
     return true;
   }

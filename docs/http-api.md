@@ -162,6 +162,10 @@ node apps/cli/dist/bin.js serve --preset server --workspace .
 node apps/cli/dist/bin.js web --open
 ```
 
+## Python
+
+客户端在 `sdks/python`（`from xrk_harness import HarnessClient`）。只调本页 REST（`/health` · `/api/sessions` · admit · turn · `/api/chat` · `/api/chat/stream`）。宿主仍是 TypeScript。
+
 索引：[docs/README.md](./README.md)。
 
 ---
@@ -329,5 +333,9 @@ Full ops set: [configuration.md](./configuration.md). This table summarizes comm
 node apps/cli/dist/bin.js serve --preset server --workspace .
 node apps/cli/dist/bin.js web --open
 ```
+
+## Python
+
+The client lives in `sdks/python` (`from xrk_harness import HarnessClient`). It calls only the REST on this page (`/health` · `/api/sessions` · admit · turn · `/api/chat` · `/api/chat/stream`). The host stays TypeScript.
 
 Index: [docs/README.md](./README.md).

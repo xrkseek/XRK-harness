@@ -92,8 +92,108 @@ describe("policy ruleset", () => {
     );
   });
 
-  it("exports json schema", () => {
-    expect(policyRulesetJsonSchema.$id).toContain("policy-ruleset");
-    expect(policyRulesetJsonSchema.properties.version.const).toBe(1);
+  it("loads YAML and TOML into the same engine schema", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-pol-fmt-"));
+    const yamlFile = path.join(dir, "policy.yaml");
+    const tomlFile = path.join(dir, "policy.toml");
+    await writeFile(
+      yamlFile,
+      [
+        "version: 1",
+        "rules:",
+        "  - id: d",
+        "    action: deny",
+        "    match:",
+        "      kind: tool.call",
+        "      names: [rm]",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      tomlFile,
+      [
+        "version = 1",
+        "",
+        "[[rules]]",
+        'id = "d"',
+        'action = "deny"',
+        'match = { kind = "tool.call", names = ["rm"] }',
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    for (const file of [yamlFile, tomlFile]) {
+      const engine = await createPolicyEngineFromFile(file);
+      expect(engine.evaluate({ kind: "tool.call", name: "rm" }).verdict).toBe(
+        "deny",
+      );
+      expect(
+        engine.evaluate({ kind: "tool.call", name: "bash" }).verdict,
+      ).toBe("allow");
+    }
+  });
+
+  it("parses mcp.resource deny by server names", () => {
+    const engine = createPolicyEngineFromRuleset({
+      version: 1,
+      rules: [
+        {
+          id: "deny-res",
+          action: "deny",
+          match: { kind: "mcp.resource", names: ["secret"] },
+        },
+      ],
+    });
+    expect(
+      engine.evaluate({
+        kind: "mcp.resource",
+        serverId: "secret",
+        action: "list",
+      }).verdict,
+    ).toBe("deny");
+  });
+
+  it("parses host/sidebar/office preview kinds", () => {
+    const engine = createPolicyEngineFromRuleset({
+      version: 1,
+      defaults: { "office.connect": "deny" },
+      rules: [
+        {
+          id: "ask-url",
+          action: "ask",
+          match: { kind: "host.open", names: ["url"] },
+        },
+        {
+          id: "deny-http",
+          action: "deny",
+          match: { kind: "sidebar.embed", names: ["http"] },
+        },
+        {
+          id: "deny-write",
+          action: "deny",
+          match: { kind: "sidebar.fs", names: ["write"] },
+        },
+        {
+          id: "deny-office",
+          action: "deny",
+          match: { kind: "office.connect" },
+        },
+      ],
+    });
+    expect(
+      engine.evaluate({ kind: "host.open", action: "url" }).verdict,
+    ).toBe("ask");
+    expect(
+      engine.evaluate({
+        kind: "sidebar.embed",
+        url: "http://x",
+        scheme: "http",
+      }).verdict,
+    ).toBe("deny");
+    expect(
+      engine.evaluate({ kind: "sidebar.fs", op: "write" }).verdict,
+    ).toBe("deny");
+    expect(engine.evaluate({ kind: "office.connect" }).verdict).toBe("deny");
   });
 });

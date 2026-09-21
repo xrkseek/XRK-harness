@@ -182,7 +182,5 @@ export async function handlePluginAssetHttp(
 }
 
 export function isPluginAssetPath(pathname: string): boolean {
-  return (
-    pathname.startsWith("/plugins/") && !pathname.startsWith("/plugins/install")
-  );
+  return pathname.startsWith("/plugins/");
 }

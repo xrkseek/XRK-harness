@@ -72,7 +72,6 @@ export {
   SESSION_HISTORY_PROJECTION_KEYS,
   SESSION_LIST_PROJECTION_KEYS,
   historyPageIncludesProjections,
-  sessionHistoryProjectionKeys,
   sessionHistoryTailProjectionKeys,
   snapshotWireBlock,
 } from "./snapshot-keys.js";

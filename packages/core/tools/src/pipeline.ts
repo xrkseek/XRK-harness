@@ -29,7 +29,8 @@ import {
 export type ToolPipelineOptions = {
   /**
    * Model-facing output bound after finalize.
-   * Default: enabled with 2000 lines / 50KiB. Pass `false` to disable.
+   * Default: enabled with 2000 lines / 64_000 bytes. Pass `false` to disable.
+   * Byte ceiling matches agent-loop spill; `persist` is the only full-body write.
    */
   readonly outputBound?: false | BoundToolOutputOptions;
 };

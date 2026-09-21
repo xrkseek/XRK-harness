@@ -93,14 +93,14 @@ Standing plan（`todos` 投影）与换窗正交：`/compact` / `context/compact
 ## Soft budget（`maxRequestTokens`）
 
 Harness 默认（`presets/harness`）：`maxRequestTokens: 100_000` · `keepTokens: 24_000` · `bufferTokens: 4_000`。  
-估价 = **消息面 + 站立 tool schemas**（`estimateRequestTokens`）。超 `maxRequestTokens − buffer` 时：先 prune，仍超则 `runCompaction({ reason: "auto" })`；**仍超则 fail-closed**（抛 `ContextOverflowError`，不再出站）。  
-工具正文在进日志前按 spill 策略截断：超 **64KiB**（Face `agent-loop.toolResultMaxInlineBytes` 可调；`0` 关闭）落盘到 `~/.xrk/spill/`，模型只见 head/tail + 路径；`bash.maxOutputBytes` 默认同为 64KiB。上述预算与 spill 均可在 **Settings → Plugins** 调整。`minimal` 预设默认仅 overflow（无主动软压）。
+估价 = **消息面 + 站立 tool schemas**（`estimateRequestTokens`；含 assistant `reasoning` 与非文本块，并按出站前 `projectFilesToText` 计价）。超 `maxRequestTokens − buffer`（`resolveSoftBudgetCeiling`：buffer ≥ max 时忽略 buffer，避免非正 ceiling 误杀）时：先 prune 并重测，仍超则最多 **2** 次 `runCompaction({ reason: "auto" })` + 重测；**仍超则 fail-closed**（抛 `ContextOverflowError`，不再出站）。  
+工具正文在进日志前按 spill 策略截断：超 **64KiB**（Face `agent-loop.toolResultMaxInlineBytes` 可调；`0` 关闭）全文只写一份到 `~/.xrk/spill/tool-outputs/`，模型只见 head/tail + 路径；`bash.maxOutputBytes` 默认同为 64KiB。上述预算与 spill 均可在 **Settings → Plugins** 调整。`minimal` 预设默认仅 overflow（无主动软压）。
 
 ## Token 估算
 
 | 用途 | API（`@xrkseek/core-session`） | 说明 |
 |------|-------------------------------|------|
-| 压缩预算、挑选 `recent` | `estimateTokens` · `estimateMessagesTokens` | 纯文本约按 chars/4 |
+| 压缩预算、挑选 `recent`、软预算 | `estimateTokens` · `estimateMessagesTokens` · `estimateRequestTokens` · `resolveSoftBudgetCeiling` | 纯文本约 chars/4；含 reasoning / 非文本块 |
 | Context meter、`shadowedTokenCount` | `foldSurfaceTokens` · `priceCurrentSurfaceWindow` | 计入消息块与 toolCalls；压缩事件用 `shadowedTokenCount` 做有符号缩小（缺省不缩小） |
 
 日志位置与读面见 [session-log.md](./session-log.md)。
@@ -204,14 +204,14 @@ Standing plan (`todos` projection) is orthogonal to windowing: `/compact` / `con
 ## Soft budget (`maxRequestTokens`)
 
 Harness defaults (`presets/harness`): `maxRequestTokens: 100_000` · `keepTokens: 24_000` · `bufferTokens: 4_000`.  
-Price = **messages + standing tool schemas** (`estimateRequestTokens`). Over `maxRequestTokens − buffer`: prune first, then `runCompaction({ reason: "auto" })`; **still over → fail-closed** (`ContextOverflowError`, no outbound call).  
-Tool bodies are bounded **before** they enter the log (spill policy): over **64KiB** (Face `agent-loop.toolResultMaxInlineBytes`; `0` disables) spills to `~/.xrk/spill/` with a head/tail preview + path; `bash.maxOutputBytes` defaults to 64KiB too. Soft budget and spill are adjustable under **Settings → Plugins**. The `minimal` preset stays overflow-only.
+Price = **messages + standing tool schemas** (`estimateRequestTokens`; includes assistant `reasoning` and non-text blocks, priced after outbound `projectFilesToText`). Over `maxRequestTokens − buffer` (`resolveSoftBudgetCeiling`: buffer ≥ max is ignored so a non-positive ceiling cannot fail-closed every turn): prune then remeasure, then up to **2** `runCompaction({ reason: "auto" })` + remeasure; **still over → fail-closed** (`ContextOverflowError`, no outbound call).  
+Tool bodies are bounded **before** they enter the log (one spill policy): over **64KiB** (Face `agent-loop.toolResultMaxInlineBytes`; `0` disables) writes the full body once under `~/.xrk/spill/tool-outputs/` with a head/tail preview + path; `bash.maxOutputBytes` defaults to 64KiB too. Soft budget and spill are adjustable under **Settings → Plugins**. The `minimal` preset stays overflow-only.
 
 ## Token estimates
 
 | Use | API (`@xrkseek/core-session`) | Notes |
 |------|-------------------------------|------|
-| Compaction budget, picking `recent` | `estimateTokens` · `estimateMessagesTokens` | Plain text ≈ chars/4 |
+| Compaction budget, picking `recent`, soft budget | `estimateTokens` · `estimateMessagesTokens` · `estimateRequestTokens` · `resolveSoftBudgetCeiling` | Plain text ≈ chars/4; includes reasoning / non-text blocks |
 | Context meter, `shadowedTokenCount` | `foldSurfaceTokens` · `priceCurrentSurfaceWindow` | Includes message blocks and toolCalls; compaction uses `shadowedTokenCount` for a signed shrink (absent → no shrink) |
 
 Log positions / read surface: [session-log.md](./session-log.md).

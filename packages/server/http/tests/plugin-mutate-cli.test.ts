@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  cliInvocationNeedsShell,
   listCliInvocationCandidates,
   planCliInvocation,
   quoteWindowsCmdArg,
@@ -138,25 +137,5 @@ describe("planCliInvocation", () => {
       file: "xrkh",
       args: ["plugin", "list"],
     });
-  });
-});
-
-describe("cliInvocationNeedsShell", () => {
-  it("always returns false (shell never used)", () => {
-    expect(
-      cliInvocationNeedsShell(
-        {
-          command: "C:\\Program Files\\nodejs\\node.exe",
-          prefixArgs: ["bin.js"],
-        },
-        "win32",
-      ),
-    ).toBe(false);
-    expect(
-      cliInvocationNeedsShell({ command: "xrkh.cmd", prefixArgs: [] }, "win32"),
-    ).toBe(false);
-    expect(
-      cliInvocationNeedsShell({ command: "xrkh", prefixArgs: [] }, "linux"),
-    ).toBe(false);
   });
 });

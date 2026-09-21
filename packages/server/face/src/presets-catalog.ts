@@ -17,11 +17,16 @@ export type CatalogAgentPresetId =
 /** Subagent policy for a session badge (Host binds tools from this). */
 export interface AgentSubagentPolicy {
   readonly mode: "off" | "on";
-  /** Max nesting depth when mode is on (default 3 for harness). */
+  /**
+   * Optional badge ceiling on nesting depth when mode is on.
+   * Live cap is Face `agent-loop.maxSubagentDepth` (default
+   * {@link DEFAULT_MAX_DEPTH}); effective = min(face, this) when set.
+   */
   readonly maxDepth?: number;
   /**
-   * Cap on concurrent active child sessions under one parent.
-   * Default 4 when mode is on.
+   * Optional badge ceiling on concurrent active children under one parent.
+   * Live cap is Face `agent-loop.maxActiveSubagents` (default
+   * {@link DEFAULT_MAX_ACTIVE_CHILDREN}).
    */
   readonly maxActiveChildren?: number;
 }
@@ -54,7 +59,10 @@ export interface AgentPresetInfo {
   readonly profile: AgentPresetProfile;
 }
 
-export const DEFAULT_MAX_ACTIVE_CHILDREN = 4;
+/** Face / tool default: nesting depth cap (Hermes-style tighter than historical 3). */
+export const DEFAULT_MAX_DEPTH = 2;
+/** Face / tool default: concurrent active children under one parent. */
+export const DEFAULT_MAX_ACTIVE_CHILDREN = 2;
 
 const FULL_TOOLS: AgentToolFlags = { web: true, lsp: true, pty: true };
 const SHELL_TOOLS: AgentToolFlags = { web: false, lsp: false, pty: true };
@@ -113,7 +121,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "shallow",
     displayName: "Shallow",
     description:
-      "Full coding tools with one-level subagents only (maxDepth 1, capped concurrency)",
+      "Full coding tools with one-level subagents only (maxDepth 1, Face concurrency cap)",
     profile: {
       id: "shallow",
       composition: "harness",
@@ -121,7 +129,6 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
       subagents: {
         mode: "on",
         maxDepth: 1,
-        maxActiveChildren: DEFAULT_MAX_ACTIVE_CHILDREN,
       },
       subagentRouting: true,
       planModeDefault: false,
@@ -131,15 +138,13 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "harness",
     displayName: "XRK Harness",
     description:
-      "Full coding agent: fs + bash + web + lsp + PTY + nested subagents (depth ≤3)",
+      "Full coding agent: fs + bash + web + lsp + PTY + nested subagents (Face depth/active caps)",
     profile: {
       id: "harness",
       composition: "harness",
       tools: FULL_TOOLS,
       subagents: {
         mode: "on",
-        maxDepth: 3,
-        maxActiveChildren: DEFAULT_MAX_ACTIVE_CHILDREN,
       },
       subagentRouting: true,
       planModeDefault: false,

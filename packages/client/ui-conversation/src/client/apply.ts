@@ -470,7 +470,7 @@ export function apply(ctx: Context): void {
   // registration path into the input dock declared above.
   ctx.plugin(queueDockEntry)
 
-  // Right `details` column stays a layout track (default closed) but is no
-  // longer occupied by DetailsPanel / ToolDetails — demoted in favor of
-  // Host-native `/sidebar/*` + `xrkh-better-sidebar` (overlay panel host).
+  // Right `details` column stays a layout track (default closed). Tool
+  // details stay demoted; ui-plan occupies the column with plan / Office
+  // preview tabs. File preview stays Host `/sidebar/*`.
 }

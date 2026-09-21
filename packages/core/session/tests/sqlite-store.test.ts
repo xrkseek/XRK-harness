@@ -6,6 +6,12 @@ import {
   createPersistentSessionStore,
   SESSION_DB_FILENAME,
   SESSION_SCHEMA_VERSION,
+  SessionsDirInUseError,
+  SESSIONS_WRITE_LOCK_FILENAME,
+  admitPrompt,
+  listPendingAdmits,
+  listSessionsWithPendingAdmits,
+  promoteNextAdmit,
   toJSONL,
 } from "../src/index.js";
 
@@ -44,10 +50,88 @@ describe("createPersistentSessionStore", () => {
       content: "hi",
     });
     expect(existsSync(path.join(dir, SESSION_DB_FILENAME))).toBe(true);
+    a.close();
 
     const b = track(createPersistentSessionStore(dir));
     expect(b.list()).toEqual(["sess-a"]);
     expect(b.get("sess-a").events).toHaveLength(1);
+  });
+
+  it("refuses a second exclusive writer while the first is open", () => {
+    const dir = tempDir();
+    const a = track(createPersistentSessionStore(dir));
+    expect(() => createPersistentSessionStore(dir)).toThrow(
+      SessionsDirInUseError,
+    );
+    const shared = track(createPersistentSessionStore(dir, { shared: true }));
+    expect(shared.list()).toEqual([]);
+    expect(() => shared.create("nope")).toThrow(/read-only/);
+  });
+
+  it("shared inspector is read-only and does not persist open-turn repair", () => {
+    const dir = tempDir();
+    const a = createPersistentSessionStore(dir);
+    const s = a.create("crash-shared").id;
+    a.append(s, { type: "turn/start", ts: 1, turnId: "t1" });
+    a.close();
+
+    const shared = track(createPersistentSessionStore(dir, { shared: true }));
+    const events = shared.get(s).events;
+    expect(events.some((e) => e.type === "turn/end")).toBe(true);
+    expect(() =>
+      shared.append(s, {
+        type: "user/message",
+        ts: 9,
+        turnId: "t9",
+        content: "x",
+      }),
+    ).toThrow(/read-only/);
+    shared.close();
+
+    // Exclusive reopen still sees unrepaired durable log, then repairs once.
+    const b = track(createPersistentSessionStore(dir));
+    const durable = b.get(s).events;
+    expect(durable.some((e) => e.type === "turn/end")).toBe(true);
+  });
+
+  it("restores pending and releases lock when flush fails", () => {
+    const dir = tempDir();
+    const store = createPersistentSessionStore(dir);
+    const s = store.create("flush-fail").id;
+    store.append(s, {
+      type: "assistant/chunk",
+      ts: 1,
+      turnId: "t",
+      stepId: "s",
+      text: "x",
+      kind: "text",
+      index: 0,
+    });
+
+    const { DatabaseSync } = process.getBuiltinModule(
+      "node:sqlite",
+    ) as typeof import("node:sqlite");
+    const evil = new DatabaseSync(path.join(dir, SESSION_DB_FILENAME));
+    evil.exec("DROP TABLE events");
+    evil.close();
+
+    expect(() =>
+      store.append(s, {
+        type: "assistant/message",
+        ts: 2,
+        turnId: "t",
+        stepId: "s",
+        content: "x",
+      }),
+    ).toThrow();
+    // Failed append must not stick in the resident log.
+    expect(store.get(s).events).toHaveLength(1);
+
+    expect(() => store.close()).toThrow();
+    // Lock released despite flush failure — exclusive reopen works.
+    expect(existsSync(path.join(dir, SESSIONS_WRITE_LOCK_FILENAME))).toBe(false);
+    const b = track(createPersistentSessionStore(dir));
+    expect(b.list()).toContain("flush-fail");
   });
 
   it("survives unrelated files in the sessions directory", () => {
@@ -66,6 +150,7 @@ describe("createPersistentSessionStore", () => {
       reason: { kind: "completed" },
     });
     writeFileSync(path.join(dir, "noop.txt"), "");
+    store.close();
     const reloaded = track(createPersistentSessionStore(dir));
     expect(reloaded.get(s.id).events).toHaveLength(2);
   });
@@ -104,6 +189,7 @@ describe("createPersistentSessionStore", () => {
     });
     expect(store.searchSessionIds("unique-fts-token")).toEqual(["hit"]);
     expect(store.searchSessionIds("no-such-token")).toEqual([]);
+    store.close();
 
     const reloaded = track(createPersistentSessionStore(dir));
     expect(reloaded.searchSessionIds("fts-token")).toEqual(["hit"]);
@@ -233,6 +319,28 @@ describe("createPersistentSessionStore", () => {
 
     const b = track(createPersistentSessionStore(dir));
     expect(b.get("flush-me").events).toHaveLength(1);
+  });
+
+  it("reloads pending queue and steer admits after Host-style reopen", () => {
+    const dir = tempDir();
+    const a = track(createPersistentSessionStore(dir));
+    const s = a.create("inbox-recover").id;
+    admitPrompt(a, s, "queued-first");
+    admitPrompt(a, s, "steer-me", { delivery: "steer" });
+    admitPrompt(a, s, "queued-second");
+    a.close();
+
+    const b = track(createPersistentSessionStore(dir));
+    expect(listSessionsWithPendingAdmits(b)).toEqual(["inbox-recover"]);
+    const pending = listPendingAdmits(b.get(s).events, s);
+    expect(pending.map((row) => ({ content: row.content, delivery: row.delivery }))).toEqual([
+      { content: "queued-first", delivery: "queue" },
+      { content: "steer-me", delivery: "steer" },
+      { content: "queued-second", delivery: "queue" },
+    ]);
+    const first = promoteNextAdmit(b, s);
+    expect(first.content).toBe("steer-me");
+    expect(first.delivery).toBe("steer");
   });
 
   it("evicts oldest resident sessions when maxResidentSessions is exceeded", () => {

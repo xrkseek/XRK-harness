@@ -1,15 +1,48 @@
-export {
-  createMcpClient,
-  parseMcpToolAnnotations,
-} from "./client.js";
+export { createMcpClient, parseMcpToolAnnotations } from "./client.js";
 export {
   drainToolsListPages,
+  isResourcesUnsupported,
+  isToolsListUnsupported,
+  MAX_TOOLS_LIST_PAGES,
   type McpToolsListPage,
 } from "./list-tools.js";
 export {
-  RECONNECT_DEFAULTS,
-  resolveReconnectPolicy,
-} from "./reconnect.js";
+  McpDeviceCodeError,
+  McpDeviceTokenStore,
+  assertDeviceCodeResponse,
+  deviceAuthorizationHeaders,
+  isTokenExpired,
+  loginWithDeviceCode,
+  mergeAuthHeaders,
+  parseDeviceCodeResponse,
+  parseTokenResponse,
+  pollDeviceToken,
+  refreshDeviceToken,
+  startDeviceAuthorization,
+  type McpDeviceCodeDeps,
+  type McpDeviceCodeEndpoints,
+  type McpDeviceCodeErrorCode,
+  type McpDeviceCodeStart,
+  type McpDeviceTokenSet,
+} from "./oauth-device.js";
+export {
+  McpOAuthDiscoveryError,
+  authorizationServerMetadataUrls,
+  discoverAuthorizationServerMetadata,
+  discoverDeviceCodeEndpoints,
+  discoverProtectedResource,
+  parseAuthorizationServerMetadata,
+  parseProtectedResourceMetadata,
+  parseResourceMetadataChallenge,
+  protectedResourceMetadataUrls,
+  type McpAuthorizationServerMetadata,
+  type McpDeviceCodeDiscoveryInput,
+  type McpDeviceCodeDiscoveryResult,
+  type McpOAuthDiscoveryDeps,
+  type McpOAuthDiscoveryErrorCode,
+  type McpProtectedResourceMetadata,
+} from "./oauth-discovery.js";
+export { RECONNECT_DEFAULTS, resolveReconnectPolicy } from "./reconnect.js";
 export {
   registerMcpTools,
   mcpToolDefinition,
@@ -18,6 +51,13 @@ export {
   type RegisterMcpToolsResult,
   type SkippedMcpTool,
 } from "./register.js";
+export {
+  MCP_RESOURCES_PLUGIN_ID,
+  MCP_RESOURCE_TOOL_NAMES,
+  createMcpResourceTools,
+  renderResourceResult,
+  type CreateMcpResourceToolsOptions,
+} from "./resources.js";
 export {
   SERVER_NAME_PATTERN,
   assertServerName,
@@ -36,8 +76,13 @@ export type {
   McpConnectionState,
   McpConnectionStatus,
   McpHttpOptions,
+  McpHttpAuthProvider,
   McpHttpReconnectionOptions,
   McpReconnectConfig,
+  McpResourceContents,
+  McpResourceInfo,
+  McpResourceListResult,
+  McpResourceTemplateInfo,
   McpStdioOptions,
   McpToolAnnotations,
   McpToolInfo,

@@ -468,7 +468,7 @@ describe("dsh-compat adapters", () => {
     });
   });
 
-  it("accepts dsh-market install as deferred CLI handoff", async () => {
+  it("rejects remote dsh-market install as deferred CLI handoff", async () => {
     const handler = compatHandler();
     await withPublicHandler(handler, async (base) => {
       const res = await fetch(`${base}/dsh-market/install`, {
@@ -481,10 +481,12 @@ describe("dsh-compat adapters", () => {
         accepted: boolean;
         deferred: boolean;
         cli?: string;
+        incomplete?: string[];
       };
-      expect(body.ok).toBe(true);
-      expect(body.accepted).toBe(true);
+      expect(body.ok).toBe(false);
+      expect(body.accepted).toBe(false);
       expect(body.deferred).toBe(true);
+      expect(body.incomplete).toContain("market-host");
       expect(body.cli).toContain("plugin add");
       expect(body.cli).toContain("dsh-poison-guard");
     });
@@ -844,7 +846,11 @@ describe("dsh-compat adapters", () => {
       const runtime = await fetch(`${base}/dsh-genui/runtime.js`);
       expect(runtime.status).toBe(200);
       expect(runtime.headers.get("content-type") ?? "").toMatch(/javascript/);
-      expect(await runtime.text()).toContain("honest stub");
+      const runtimeText = await runtime.text();
+      expect(runtimeText).toContain("export function mount");
+      expect(runtimeText).toContain("defineCustomElements");
+      expect(runtimeText).toContain("__xrkGenuiRuntime__");
+      expect(runtimeText).not.toContain("honest stub");
 
       const noema = await (
         await fetch(`${base}/_dsh/dsh-noema/status`)
@@ -1065,8 +1071,14 @@ describe("dsh-compat adapters", () => {
     const handler = createDshCompatPublicHandler({});
     await withPublicHandler(handler, async (base) => {
       const ar = await fetch(`${base}/auto-review/status`);
-      const arBody = (await ar.json()) as { incomplete?: string[] };
-      expect(arBody.incomplete).toContain("auto-review-host");
+      const arBody = (await ar.json()) as {
+        incomplete?: string[];
+        classifier?: string;
+        classifierKind?: string;
+      };
+      expect(arBody.incomplete).toBeUndefined();
+      expect(arBody.classifier).toBe("xrk-heuristic");
+      expect(arBody.classifierKind).toBe("heuristic");
 
       const latest = await fetch(`${base}/latest`);
       expect(latest.status).toBe(200);
@@ -2182,9 +2194,15 @@ describe("dsh-compat adapters", () => {
             : {}),
         });
         expect(res.status, row.path).toBe(200);
-        if (row.expect === "js-stub") {
+        if (row.expect === "js-stub" || row.expect === "js-runtime") {
           expect(res.headers.get("content-type") ?? "").toMatch(/javascript/i);
-          expect(await res.text()).toContain("honest stub");
+          const text = await res.text();
+          if (row.expect === "js-runtime") {
+            expect(text).toContain("export function mount");
+            expect(text).not.toContain("honest stub");
+          } else {
+            expect(text).toContain("honest stub");
+          }
           continue;
         }
         expect(res.headers.get("content-type") ?? "").toMatch(/json/i);
@@ -2245,7 +2263,15 @@ describe("dsh-compat matrix", () => {
     expect(listDshCompatGenericIds().length).toBeGreaterThan(10);
     expect(listDshCompatGenericIds()).toContain("dynamic-cordis-runner");
     expect(listDshCompatGenericIds()).toContain("genui-browser-runtime");
+    expect(listDshCompatGenericIds()).toContain("mnemon-memory-engine");
+    expect(listDshCompatGenericIds()).toContain("auto-review-pluggable-classifier");
+    expect(listDshCompatGenericIds()).toContain("im-vendor-cloud-push");
+    expect(listDshCompatGenericIds()).toContain("tongflow-plugins-install");
     expect(listDshCompatGapIds()).toEqual([]);
+    expect(listDshCompatGapIds()).not.toContain("im-vendor-cloud-push");
+    expect(listDshCompatGapIds()).not.toContain("auto-review-pluggable-classifier");
+    expect(listDshCompatGapIds()).not.toContain("mnemon-memory-engine");
+    expect(listDshCompatGapIds()).not.toContain("genui-browser-runtime");
     expect(listDshCompatGapIds()).not.toContain("cordis-fiber-subprocess");
     expect(
       DSH_COMPAT_GENERIC_CAPABILITIES.some((r) => r.id === "honest-http-catchall"),

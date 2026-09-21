@@ -16,6 +16,8 @@ export type PluginsSettingsLocaleKey =
   | 'agentLoopKeepTokens' | 'agentLoopKeepTokensHint'
   | 'agentLoopBufferTokens' | 'agentLoopBufferTokensHint'
   | 'agentLoopToolResultMaxInline' | 'agentLoopToolResultMaxInlineHint'
+  | 'agentLoopMaxSubagentDepth' | 'agentLoopMaxSubagentDepthHint'
+  | 'agentLoopMaxActiveSubagents' | 'agentLoopMaxActiveSubagentsHint'
   | 'workspaceInjectTitle' | 'workspaceInjectDescription'
   | 'workspaceInjectMaxChars' | 'workspaceInjectMaxCharsHint'
   | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading'
@@ -24,8 +26,9 @@ export type PluginsSettingsLocaleKey =
   | 'mcpServerRow' | 'mcpServerName' | 'mcpServerNameHint' | 'mcpTransport'
   | 'mcpTransportStdio' | 'mcpTransportHttp' | 'mcpTransportHint'
   | 'mcpCommand' | 'mcpCommandHint' | 'mcpUrl' | 'mcpUrlHint'
-  | 'mcpArgs' | 'mcpArgsHint' | 'mcpCwd' | 'mcpCwdHint' | 'mcpRowInvalid' | 'mcpToolsLabel'
+  | 'mcpArgs' | 'mcpArgsHint' | 'mcpCwd' | 'mcpCwdHint' | 'mcpCwdNeedsAck' | 'mcpRowInvalid' | 'mcpToolsLabel'
   | 'mcpAllowConnect' | 'mcpAllowConnectHint'
+  | 'mcpAllowWorkspaceCwd' | 'mcpAllowWorkspaceCwdHint'
   | 'mcpStatusConnected' | 'mcpStatusReconnecting' | 'mcpStatusGaveUp'
   | 'mcpStatusParked' | 'mcpStatusFailed' | 'mcpStatusIdle'
   | 'webSearchTitle' | 'webSearchDescription' | 'webSearchProvider' | 'webSearchProviderHint'
@@ -64,7 +67,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   bashForegroundYieldMs: 'Foreground yield (ms)',
   bashForegroundYieldMsHint: 'How long bash waits before returning a job id while the process keeps running (250–30000, default 30000).',
   agentLoopTitle: 'Agent loop',
-  agentLoopDescription: 'How the agent dispatches tool calls, budgets context, and spills large tool results.',
+  agentLoopDescription: 'How the agent dispatches tool calls, budgets context, spills large tool results, and caps subagent depth/concurrency.',
   agentLoopMaxParallel: 'Parallel tool calls',
   agentLoopMaxParallelHint: 'Upper bound on parallel-safe calls running at once within one step.',
   agentLoopMaxSteps: 'Max steps per turn',
@@ -81,12 +84,16 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopBufferTokensHint: 'Soft ceiling = max request tokens − this buffer. Default 4000.',
   agentLoopToolResultMaxInline: 'Tool result spill ceiling (bytes)',
   agentLoopToolResultMaxInlineHint: 'Plain-text tool bodies over this spill to ~/.xrk/spill/ with a head/tail preview. 0 disables. Default 64000.',
+  agentLoopMaxSubagentDepth: 'Max subagent depth',
+  agentLoopMaxSubagentDepthHint: 'Nesting depth (parent = 0). Default 2 (max 3). Session badges may impose a tighter ceiling (Shallow = 1).',
+  agentLoopMaxActiveSubagents: 'Max active subagents',
+  agentLoopMaxActiveSubagentsHint: 'Concurrent draining direct children under one parent. Default 2.',
   workspaceInjectTitle: 'Workspace inject',
   workspaceInjectDescription: 'How much of the workspace rules and skills catalog may enter the system prompt each turn.',
   workspaceInjectMaxChars: 'Inject character budget',
   workspaceInjectMaxCharsHint: 'Total characters for rules + skills catalog inject. Default 32000 (range 4000–128000).',
   mcpTitle: 'MCP servers',
-  mcpDescription: 'Paste Cursor / Trae style JSON, then save — servers mount on save (no separate env step).',
+  mcpDescription: 'Paste Cursor / Trae style JSON, then save — servers mount on save (no separate env step). Omit cwd to use ~/.xrk/mcp-cwd/<name>.',
   mcpConnectedHeading: 'Connected now',
   mcpServersHeading: 'Servers',
   mcpServersEmpty: 'No servers yet. Paste a JSON block below and add.',
@@ -110,11 +117,14 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   mcpArgs: 'Arguments',
   mcpArgsHint: 'Optional, comma-separated args passed to the command.',
   mcpCwd: 'Working directory',
-  mcpCwdHint: 'Optional. Leave blank to use the Host default.',
+  mcpCwdHint: 'Optional. Leave blank for ~/.xrk/mcp-cwd/<name>. A workspace path needs the checkbox below or cwdAllowWorkspace: true in JSON.',
+  mcpCwdNeedsAck: 'A server sets cwd under the workspace. Confirm the workspace-cwd risk below, or remove cwd.',
   mcpRowInvalid: 'Each server needs a name and a command or URL.',
   mcpToolsLabel: 'tools',
   mcpAllowConnect: 'Allow connect',
   mcpAllowConnectHint: 'Saving a non-empty list connects automatically. Turn off and save to keep the list without mounting tools.',
+  mcpAllowWorkspaceCwd: 'Allow workspace cwd',
+  mcpAllowWorkspaceCwdHint: 'Confirm that stdio MCP may write into the workspace (e.g. .playwright-mcp). Prefer leaving cwd empty.',
   mcpStatusConnected: 'Connected',
   mcpStatusReconnecting: 'Reconnecting',
   mcpStatusGaveUp: 'Gave up',
@@ -168,7 +178,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   bashForegroundYieldMs: '前台 yield（毫秒）',
   bashForegroundYieldMsHint: 'bash 在返回 job id 前最多等待多久，进程继续运行（250–30000，默认 30000）。',
   agentLoopTitle: 'Agent 循环',
-  agentLoopDescription: '工具派发、软上下文预算，以及过大工具结果的 spill。',
+  agentLoopDescription: '工具派发、软上下文预算、过大工具结果 spill，以及子代理深度/并发上限。',
   agentLoopMaxParallel: '并行工具调用数',
   agentLoopMaxParallelHint: '同一步内最多同时运行多少个可并行的调用。',
   agentLoopMaxSteps: '每轮最大步数',
@@ -185,12 +195,16 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopBufferTokensHint: '软上限 = 软请求预算 − 该缓冲。默认 4000。',
   agentLoopToolResultMaxInline: '工具结果 spill 上限（字节）',
   agentLoopToolResultMaxInlineHint: '纯文本工具正文超过此值会落盘到 ~/.xrk/spill/，模型只见 head/tail。0 关闭。默认 64000。',
+  agentLoopMaxSubagentDepth: '子代理最大深度',
+  agentLoopMaxSubagentDepthHint: '嵌套深度（父会话 = 0）。默认 2（上限 3）。会话徽章可再收紧（Shallow = 1）。',
+  agentLoopMaxActiveSubagents: '同时存活子代理数',
+  agentLoopMaxActiveSubagentsHint: '同一父会话下同时 draining 的直接子代理上限。默认 2。',
   workspaceInjectTitle: '工作区注入',
   workspaceInjectDescription: '每轮系统提示里可注入多少工作区 rules / skills 目录字符。',
   workspaceInjectMaxChars: '注入字符预算',
   workspaceInjectMaxCharsHint: 'rules + skills 目录注入的总字符上限。默认 32000（范围 4000–128000）。',
   mcpTitle: 'MCP 服务器',
-  mcpDescription: '粘贴 Trae / Cursor 风格 mcpServers JSON，保存后会挂载（不必再先开环境变量）。',
+  mcpDescription: '粘贴 Trae / Cursor 风格 mcpServers JSON，保存后会挂载（不必再先开环境变量）。不写 cwd 时默认 ~/.xrk/mcp-cwd/<name>。',
   mcpConnectedHeading: '当前已连接',
   mcpServersHeading: '服务器',
   mcpServersEmpty: '还没有服务器。在下方粘贴 JSON 块后点添加。',
@@ -214,11 +228,14 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   mcpArgs: '参数',
   mcpArgsHint: '可选，逗号分隔，传给命令。',
   mcpCwd: '工作目录',
-  mcpCwdHint: '可选。留空使用 Host 默认。',
+  mcpCwdHint: '可选。留空使用 ~/.xrk/mcp-cwd/<name>。指向工作区时需勾选下方确认，或在 JSON 里写 cwdAllowWorkspace: true。',
+  mcpCwdNeedsAck: '有服务器把 cwd 设在工作区。请勾选下方确认风险，或去掉 cwd。',
   mcpRowInvalid: '每条服务器需要名称，以及命令或 URL。',
   mcpToolsLabel: '个工具',
   mcpAllowConnect: '允许连接',
   mcpAllowConnectHint: '列表非空时保存会自动连接。关掉此项再保存可只保留列表、不挂载工具。',
+  mcpAllowWorkspaceCwd: '允许工作区 cwd',
+  mcpAllowWorkspaceCwdHint: '确认 stdio MCP 可能在工作区落盘（例如 .playwright-mcp）。更推荐留空 cwd。',
   mcpStatusConnected: '已连接',
   mcpStatusReconnecting: '重连中',
   mcpStatusGaveUp: '已放弃',

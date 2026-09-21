@@ -12,6 +12,11 @@ export interface PluginManifest {
    * Used for DSH Cordis host packages (no `apply(ctx)` on this Host).
    */
   readonly skipLoad?: boolean;
+  /**
+   * When `true`, load failure aborts Host spawn / reconcile (DSH required
+   * startup entries). Default `false` — optional plugins fail in isolation.
+   */
+  readonly required?: boolean;
 }
 
 export interface DiscoveryHit {
@@ -64,6 +69,7 @@ function parseManifestObject(
     kind: kindTrim,
     entry: entry.trim(),
     ...(kindTrim === "cordis" ? { skipLoad: true as const } : {}),
+    ...(o.required === true ? { required: true as const } : {}),
   };
 }
 
@@ -160,11 +166,8 @@ async function hitFromRoot(root: string): Promise<DiscoveryHit | undefined> {
   const manifest = await readManifestAt(root);
   if (!manifest) return undefined;
   const entry = path.resolve(root, manifest.entry);
-  if (!manifest.skipLoad && !(await exists(entry))) {
-    throw new Error(
-      `plugin ${manifest.id}: entry not found: ${manifest.entry} (resolved ${entry})`,
-    );
-  }
+  // Missing entry is reported at load time so one broken optional plugin
+  // does not abort discovery of siblings (DSH optional startup).
   return { root: path.resolve(root), entry, manifest };
 }
 

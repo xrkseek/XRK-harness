@@ -5,8 +5,9 @@
  *   pnpm dev:desktop              # build:desktop then launch
  *   pnpm start:desktop            # skip build; require existing dist
  *
- * Electron is resolved from `@xrkseek/harness-desktop` when installed; product
- * remains Not done until packaging / Host wiring land (see docs/status.md).
+ * Electron is resolved from `@xrkseek/harness-desktop` when installed.
+ * Default product entry stays `xrkh web`. This script is the development
+ * projection only — it does not build an installer (see package-desktop.mjs).
  */
 import { createRequire } from "node:module";
 import { spawn, spawnSync } from "node:child_process";
@@ -70,8 +71,8 @@ const electronBin = resolveElectronBinary();
 if (electronBin === undefined) {
   process.stderr.write(
     "dev-desktop: electron is not installed under @xrkseek/harness-desktop yet\n" +
-      "  (Desktop product remains Not done — see docs/status.md / ADR-0008).\n" +
-      "  TypeScript + web assemble completed when build ran; launch is deferred.\n",
+      "  Default product entry remains `xrkh web` / CLI (ADR-0008, no skip).\n" +
+      "  This command is the development projection only; the installer is not produced here.\n",
   );
   process.exit(1);
 }

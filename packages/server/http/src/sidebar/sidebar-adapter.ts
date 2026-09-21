@@ -30,9 +30,29 @@ import {
 import { probeBrowserUrl } from "./sidebar-browser.js";
 import { handleSidebarHtml } from "./sidebar-html.js";
 import { mediaTypeForPath } from "./sidebar-media-type.js";
+import {
+  OfficeToPdfError,
+  createSofficeOfficeToPdfProvider,
+  officePreviewExtension,
+  type OfficeToPdfProvider,
+} from "./office-to-pdf.js";
 import { attachmentContentDisposition } from "../content-disposition.js";
 
 import type { SidebarFaceBridge } from "./sidebar-face-bridge.js";
+import type {
+  PolicyEngine,
+  PolicyWireError,
+  PolicyWireDetails,
+} from "@xrkseek/policy";
+import {
+  enforceSidebarPolicy,
+  type SidebarPolicyAskResolver,
+} from "./sidebar-policy.js";
+
+/** Optional Host registries for agent-opens / agent-terminals (Host inject). */
+export interface SidebarAgentRegistries {
+  readonly closeAgentPty?: (uuid: string) => boolean;
+}
 
 export interface SidebarHostOptions {
   /** Resolve session workspace cwd (Face). */
@@ -44,10 +64,26 @@ export interface SidebarHostOptions {
   readonly sidebarFace?: SidebarFaceBridge;
   /** Installed client plugins dir (chunk staging for `/sidebar/bundle`). */
   readonly pluginsDir?: string;
+  /**
+   * Host policy engine (`host.open` · `sidebar.embed` · `sidebar.fs`
+   * · `office.connect`).
+   * When omitted, the product default engine applies (`createDefaultPolicyEngine`
+   * — e.g. `office.connect` deny); cwd sandbox remains the hard fence.
+   */
+  readonly policy?: PolicyEngine;
+  /**
+   * Approval seam for policy `ask` (Face broker / Host UI).
+   * Absent → `ask` returns `policy-ask` (not hard-mapped to deny).
+   */
+  readonly resolvePolicyAsk?: SidebarPolicyAskResolver;
+  /** Agent PTY close for `POST /sidebar/api/agent-pty.close`. */
+  readonly agentRegistries?: SidebarAgentRegistries;
+  /**
+   * Office→PDF for sidebar preview (`/sidebar/file?preview=pdf`).
+   * Omitted → `soffice` when installed; never used by `read_file`.
+   */
+  readonly officeToPdf?: OfficeToPdfProvider;
 }
-
-/** @deprecated Use {@link SidebarHostOptions}. */
-export type SidebarCompatOptions = SidebarHostOptions;
 
 /** NUL / high ratio of non-text bytes → treat as binary for editor routing. */
 function looksBinary(buf: Buffer): boolean {
@@ -66,8 +102,23 @@ function ok(value: unknown): unknown {
   return { ok: true, value };
 }
 
-function fail(code: string, message: string): unknown {
-  return { ok: false, error: { code, message } };
+function fail(
+  code: string,
+  message: string,
+  details?: PolicyWireDetails | Record<string, unknown>,
+): unknown {
+  return {
+    ok: false,
+    error: {
+      code,
+      message,
+      ...(details ? { details } : {}),
+    },
+  };
+}
+
+function policyFail(denied: PolicyWireError): unknown {
+  return fail(denied.code, denied.message, denied.details);
 }
 
 function resolveCwd(
@@ -428,6 +479,73 @@ async function dispatchMethod(
       }
       return ok(await bridge.listSubagentsLive(rootSessionId));
     }
+    case "subagents.preview": {
+      const bridge = options.sidebarFace;
+      const rootSessionId =
+        typeof payload.rootSessionId === "string"
+          ? payload.rootSessionId.trim()
+          : typeof payload.sessionId === "string"
+            ? payload.sessionId.trim()
+            : "";
+      if (!bridge?.listSubagentPreviews || !rootSessionId) {
+        return ok({ previews: [] });
+      }
+      return ok(await bridge.listSubagentPreviews(rootSessionId));
+    }
+    case "subagents.graph": {
+      const bridge = options.sidebarFace;
+      const rootSessionId =
+        typeof payload.rootSessionId === "string"
+          ? payload.rootSessionId.trim()
+          : typeof payload.sessionId === "string"
+            ? payload.sessionId.trim()
+            : "";
+      if (!bridge?.agentTeamGraph || !rootSessionId) {
+        return ok({ nodes: [], edges: [] });
+      }
+      if (payload.op === "link") {
+        const from = typeof payload.from === "string" ? payload.from : "";
+        const to = typeof payload.to === "string" ? payload.to : "";
+        const label = typeof payload.label === "string" ? payload.label : undefined;
+        return ok(
+          await bridge.agentTeamGraph(rootSessionId, {
+            op: "link",
+            from,
+            to,
+            ...(label !== undefined ? { label } : {}),
+          }),
+        );
+      }
+      if (payload.op === "role") {
+        const nodeId =
+          typeof payload.nodeId === "string"
+            ? payload.nodeId
+            : typeof payload.sessionId === "string"
+              ? payload.sessionId
+              : "";
+        const role = typeof payload.role === "string" ? payload.role : undefined;
+        return ok(
+          await bridge.agentTeamGraph(rootSessionId, {
+            op: "role",
+            nodeId,
+            ...(role !== undefined ? { role } : {}),
+          }),
+        );
+      }
+      return ok(await bridge.agentTeamGraph(rootSessionId));
+    }
+    case "plan.preview": {
+      const bridge = options.sidebarFace;
+      const sid =
+        typeof payload.sessionId === "string" ? payload.sessionId.trim() : "";
+      if (!sid) {
+        return fail("bad-request", "sessionId required");
+      }
+      if (!bridge?.getPlanPreview) {
+        return ok({ active: false, pending: false });
+      }
+      return ok(await bridge.getPlanPreview(sid));
+    }
     case "changes.ops": {
       const bridge = options.sidebarFace;
       const sid =
@@ -459,12 +577,40 @@ async function dispatchMethod(
           : typeof payload.href === "string"
             ? payload.href
             : "";
+      let scheme: string | undefined;
+      try {
+        if (rawUrl.trim()) scheme = new URL(rawUrl.trim()).protocol.replace(/:$/, "");
+      } catch {
+        scheme = undefined;
+      }
+      const denied = await enforceSidebarPolicy(
+        options.policy,
+        {
+          kind: "sidebar.embed",
+          url: rawUrl.trim() || rawUrl,
+          ...(scheme ? { scheme } : {}),
+        },
+        {
+          ...(options.resolvePolicyAsk
+            ? { resolveAsk: options.resolvePolicyAsk }
+            : {}),
+          ...(sessionId ? { sessionId } : {}),
+        },
+      );
+      if (denied) return policyFail(denied);
       return ok(await probeBrowserUrl(rawUrl));
     }
     case "pty.close":
-    case "agent-pty.close":
+    case "agent-pty.close": {
+      const uuid =
+        typeof payload.uuid === "string" ? payload.uuid.trim() : "";
+      if (method === "agent-pty.close" && uuid) {
+        const closed = options.agentRegistries?.closeAgentPty?.(uuid) ?? false;
+        return ok({ closed });
+      }
       // PTY lifecycle is WS-driven; explicit close is best-effort ack.
       return ok({ closed: true });
+    }
     case "open.external": {
       const bridge = options.sidebarFace;
       if (!bridge) {
@@ -474,12 +620,39 @@ async function dispatchMethod(
       const pathValue =
         typeof payload.path === "string" ? payload.path : undefined;
       const urlValue = typeof payload.url === "string" ? payload.url : undefined;
-      await bridge.openExternal({
-        action,
-        ...(pathValue ? { path: pathValue } : {}),
-        ...(urlValue ? { url: urlValue } : {}),
-      });
-      return ok({ opened: true });
+      const openAction = action === "url" ? "url" : "path";
+      const denied = await enforceSidebarPolicy(
+        options.policy,
+        {
+          kind: "host.open",
+          action: openAction,
+          ...(openAction === "url" && urlValue
+            ? { target: urlValue }
+            : pathValue
+              ? { target: pathValue }
+              : {}),
+        },
+        {
+          ...(options.resolvePolicyAsk
+            ? { resolveAsk: options.resolvePolicyAsk }
+            : {}),
+          ...(sessionId ? { sessionId } : {}),
+        },
+      );
+      if (denied) return policyFail(denied);
+      try {
+        await bridge.openExternal({
+          action,
+          ...(pathValue !== undefined ? { path: pathValue } : {}),
+          ...(urlValue !== undefined ? { url: urlValue } : {}),
+        });
+        return ok({ opened: true });
+      } catch (err) {
+        return fail(
+          "open-failed",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     }
     default:
       return fail(
@@ -495,7 +668,18 @@ export async function handleSidebarHost(
   pathname: string,
   options: SidebarHostOptions,
 ): Promise<boolean> {
-  if (await handleSidebarHtml(req, res, pathname, options)) {
+  if (
+    await handleSidebarHtml(req, res, pathname, {
+      ...(options.resolveSessionCwd
+        ? { resolveSessionCwd: options.resolveSessionCwd }
+        : {}),
+      ...(options.defaultCwd ? { defaultCwd: options.defaultCwd } : {}),
+      ...(options.policy ? { policy: options.policy } : {}),
+      ...(options.resolvePolicyAsk
+        ? { resolvePolicyAsk: options.resolvePolicyAsk }
+        : {}),
+    })
+  ) {
     return true;
   }
 
@@ -543,6 +727,28 @@ export async function handleSidebarHost(
     const st = statSync(abs);
     if (!st.isFile()) {
       sendJson(res, 400, fail("not-file", "not a file"));
+      return true;
+    }
+    if (
+      url.searchParams.get("preview") === "pdf" &&
+      officePreviewExtension(abs)
+    ) {
+      const provider = options.officeToPdf ?? createSofficeOfficeToPdfProvider();
+      try {
+        const converted = await provider.convert({ path: abs });
+        const body = Buffer.from(converted.pdf);
+        res.writeHead(200, {
+          "content-type": "application/pdf",
+          "content-length": body.byteLength,
+          "cache-control": "no-cache",
+          "x-content-type-options": "nosniff",
+        });
+        res.end(body);
+      } catch (err) {
+        const code = err instanceof OfficeToPdfError ? err.code : "failed";
+        const message = err instanceof Error ? err.message : String(err);
+        sendJson(res, code === "unavailable" ? 501 : 400, fail(code, message));
+      }
       return true;
     }
     res.writeHead(200, {
@@ -627,6 +833,3 @@ export async function handleSidebarHost(
 
   return false;
 }
-
-/** @deprecated Prefer {@link handleSidebarHost}. */
-export const handleSidebarCompat = handleSidebarHost;

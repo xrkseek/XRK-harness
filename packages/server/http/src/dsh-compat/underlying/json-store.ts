@@ -2,34 +2,15 @@
  * Path + JSON file primitives (`XRK_HOME` / `~/.xrk`).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
+import { resolveConfiguredXrkHome } from "@xrkseek/xrk-home-paths";
 
-const HOME_ENVS = ["XRK_HOME", "XRK_DSH_HOME", "DSH_HOME"] as const;
-
-function expandHomePath(value: string): string {
-  if (value === "~") return homedir();
-  if (value.startsWith("~/") || value.startsWith("~\\")) {
-    return path.join(homedir(), value.slice(2));
-  }
-  return value;
-}
-
-/**
- * Product home for dsh-compat stores. Mirrors server-config `resolveXrkHome`
- * without taking that dependency (http stays below Host).
- */
+/** Product home for dsh-compat stores — shared with `@xrkseek/xrk-home-paths`. */
 export function resolveCompatHome(
   xrkHome?: string,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const explicit = xrkHome?.trim();
-  if (explicit) return path.resolve(expandHomePath(explicit));
-  for (const key of HOME_ENVS) {
-    const raw = env[key]?.trim();
-    if (raw) return path.resolve(expandHomePath(raw));
-  }
-  return path.resolve(path.join(homedir(), ".xrk"));
+  return resolveConfiguredXrkHome(xrkHome, env);
 }
 
 export function ensureDir(dir: string): void {

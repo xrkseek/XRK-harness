@@ -133,26 +133,6 @@ export function withAnthropicStopReason(
   return response;
 }
 
-/** @deprecated Prefer {@link withOpenAiFinishReason}. */
-export function mapOpenAiFinishReason(
-  raw: unknown,
-): Exclude<LlmFinishReason, "error"> | undefined {
-  if (raw === "length") return "max-tokens";
-  if (raw === "tool_calls") return "tool-calls";
-  if (raw === "stop") return "stop";
-  return undefined;
-}
-
-/** @deprecated Prefer {@link withAnthropicStopReason}. */
-export function mapAnthropicStopReason(
-  raw: unknown,
-): Exclude<LlmFinishReason, "error"> | undefined {
-  if (raw === "max_tokens") return "max-tokens";
-  if (raw === "tool_use") return "tool-calls";
-  if (raw === "end_turn" || raw === "stop_sequence") return "stop";
-  return undefined;
-}
-
 /**
  * DSH BlockAssembler keep/drop: a `max-tokens` finish drops tool calls that
  * may be truncated.

@@ -50,7 +50,8 @@ HTTP：`createHostManager` + `loadHostConfig` + preset factory — 见 CLI `serv
 ## 非目标
 
 - 不把 MCP 宣传成 Face 设置 UI / 进程 supervisor；DeepSeek 包为 openai-compatible 预设（无独立 body 分叉）  
-- 不替代 CLI；CLI 在 `@xrkseek/harness-cli`  
+- 不替代 CLI；CLI 在 `@xrkseek/harness-cli`
+- Python 客户端在 `sdks/python`，只调 HTTP，见 [docs/http-api.md](../../docs/http-api.md)  
 
 ## 文档
 

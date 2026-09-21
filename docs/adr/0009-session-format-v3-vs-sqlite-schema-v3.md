@@ -37,8 +37,7 @@
 ## 后果
 
 - 文档须区分「SQLite schema v3」与「Session Format V3」。
-- 集成者依赖本仓 `session.md` · `session-log.md`；勿假设可读第三方 Format artifact。
-- status 将跨产品 Format 互通标为 **明确暂缓 · 未做**。
+- 集成者依赖本仓 `session.md` · `session-log.md`。角色 JSONL 可经 `importSessionInterchange` / `exportSessionInterchange` 换成 XRK 事件，**不**写入 `sessions.db`，也**不是** Session Format V3。
 
 ---
 
@@ -75,5 +74,4 @@ System prompts stay **outbound assembly** only — not durable `system/message` 
 ## Consequences
 
 - Docs must distinguish “SQLite schema v3” from “Session Format V3”.
-- Integrators rely on this repo’s session docs; do not assume third-party Format artifacts are readable.
-- status lists cross-product Format interop as **Explicitly deferred · Not done**.
+- Integrators rely on this repo’s session docs. Role JSONL can be translated with `importSessionInterchange` / `exportSessionInterchange` into XRK events. That translation is **not** written into `sessions.db` and is **not** Session Format V3.

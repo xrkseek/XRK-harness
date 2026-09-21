@@ -1,16 +1,39 @@
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import { SUBAGENT_ROUTING_PROMPT_TEXT } from "@xrkseek/core-tools";
 import { readSessionEvents } from "@xrkseek/core-session";
-import type { SessionEvent } from "@xrkseek/protocol";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
-import { DEFAULT_MAX_ACTIVE_CHILDREN } from "./presets-catalog.js";
+import { lastAssistantBodyText } from "./adapt/subagent-notice.js";
+import { DEFAULT_MAX_ACTIVE_CHILDREN, DEFAULT_MAX_DEPTH } from "./presets-catalog.js";
+import { resolveSessionCwd } from "./session-cwd.js";
+import {
+  ExternalAgentError,
+  parseExternalAgentKind,
+  runExternalAgentTurn,
+  type ExternalSpawn,
+} from "./external-agent-runtime.js";
+import {
+  createSubagentWorktree,
+  finalizeSubagentWorktree,
+  formatWorktreeResult,
+  worktreeContextNote,
+  worktreeSkippedForRemote,
+  type SubagentWorktree,
+} from "./subagent-worktree.js";
 
-const DEFAULT_MAX_DEPTH = 3;
 const FOREGROUND_WAIT_MS = 10 * 60 * 1000;
 const POLL_MS = 50;
 
-export { SUBAGENT_ROUTING_PROMPT_TEXT, DEFAULT_MAX_ACTIVE_CHILDREN };
+export { SUBAGENT_ROUTING_PROMPT_TEXT, DEFAULT_MAX_ACTIVE_CHILDREN, DEFAULT_MAX_DEPTH };
+export {
+  parseExternalAgentKind,
+  runExternalAgentTurn,
+  resolveExternalAgentLaunch,
+  ExternalAgentError,
+  type ExternalAgentKind,
+  type ExternalSpawn,
+  type RunExternalAgentOptions,
+} from "./external-agent-runtime.js";
 
 export function subagentDepth(
   runtime: FaceRuntime,
@@ -21,21 +44,11 @@ export function subagentDepth(
   for (;;) {
     const link = runtime.subagents.getByChild(cur);
     if (!link) break;
-    depth += 1;
+    // UI/rewind forks are lineage only — they do not consume tool depth budget.
+    if (link.mode !== "fork") depth += 1;
     cur = link.parentSessionId;
   }
   return depth;
-}
-
-function lastAssistantText(events: readonly SessionEvent[]): string {
-  for (let i = events.length - 1; i >= 0; i -= 1) {
-    const ev = events[i]!;
-    if (ev.type === "assistant/message") {
-      const text = String(ev.content ?? "").trim();
-      if (text) return text;
-    }
-  }
-  return "";
 }
 
 async function waitDrainIdle(
@@ -70,6 +83,10 @@ export interface BindSubagentToolsOptions {
    * Omit → {@link DEFAULT_MAX_ACTIVE_CHILDREN} (4).
    */
   readonly maxActiveChildren?: number;
+  /** Override spawn for external runtimes (tests). */
+  readonly externalSpawn?: ExternalSpawn;
+  /** Override env for external launch resolution (tests). */
+  readonly externalEnv?: NodeJS.ProcessEnv;
 }
 
 function countActiveChildren(
@@ -77,7 +94,7 @@ function countActiveChildren(
   parentSessionId: string,
 ): number {
   let n = 0;
-  for (const link of runtime.subagents.list(parentSessionId)) {
+  for (const link of runtime.subagents.listDelegated(parentSessionId)) {
     if (runtime.drain.isActive(link.childSessionId)) n += 1;
   }
   return n;
@@ -95,8 +112,11 @@ function createSubagentTool(
       "Delegate a self-contained task to a subagent (separate session/context). " +
       "Use for focused independent work — research, a scoped implementation, analysis, or read-only review — " +
       "so it does not consume this conversation's context. " +
-      "Give a complete standalone prompt (the child cannot see this chat). " +
-      "By default waits for the result; set run_in_background true to get a durable child id and continue later via send_message.",
+      "By default the child cannot see this chat — give a complete standalone prompt. " +
+      "Set inherit_context true to seed the child with this session's completed turns only " +
+      "(the current in-flight turn is excluded). " +
+      "By default waits for the result; set run_in_background true to get a durable child id and continue later via send_message. " +
+      "Optional runtime: omit or in-process (default Face child); acp / app-server / claude-code spawn an external one-shot subprocess (no Face child; background not supported).",
     parameters: {
       type: "object",
       properties: {
@@ -107,12 +127,29 @@ function createSubagentTool(
         prompt: {
           type: "string",
           description:
-            "Complete self-contained task for the subagent. Include paths, goals, and constraints; it does not see this conversation.",
+            "Task for the subagent. When inherit_context is false (default), include paths, goals, and constraints — it does not see this conversation. When inherit_context is true, build on the seeded completed turns.",
+        },
+        inherit_context: {
+          type: "boolean",
+          description:
+            "If true, seed the child with this session's completed-turn prefix (open turn excluded). Default false. Ignored for external runtimes.",
         },
         run_in_background: {
           type: "boolean",
           description:
-            "If true, return the child session id immediately (continuable). Default false (wait for the child's final answer).",
+            "If true, return the child session id immediately (continuable). Default false (wait for the child's final answer). Not supported for external runtimes.",
+        },
+        runtime: {
+          type: "string",
+          description:
+            "Delegation runtime: in-process (default), acp (XRK_ACP_AGENT), app-server (XRK_CODEX_APP_SERVER / codex app-server), claude-code (XRK_CLAUDE_CODE / claude -p).",
+        },
+        worktree: {
+          type: "boolean",
+          description:
+            "If true and this session is a local git checkout, run the child in its own git worktree. " +
+            "Skipped when the repo is not git or the terminal is remote. " +
+            "The worktree is removed only when the child made zero commits and left the tree clean; otherwise it stays.",
         },
       },
       required: ["prompt"],
@@ -129,11 +166,54 @@ function createSubagentTool(
       const a = args as {
         description?: string;
         prompt?: string;
+        inherit_context?: boolean;
         run_in_background?: boolean;
+        runtime?: string;
+        worktree?: boolean;
       };
       const prompt = String(a.prompt ?? "").trim();
       if (!prompt) {
         return { content: "subagent: empty prompt", isError: true };
+      }
+      const runtimeKind = parseExternalAgentKind(a.runtime);
+      if (runtimeKind === undefined) {
+        return {
+          content:
+            "subagent: runtime must be in-process | acp | app-server | claude-code",
+          isError: true,
+        };
+      }
+      if (runtimeKind !== "in-process") {
+        if (a.run_in_background === true) {
+          return {
+            content:
+              "subagent: run_in_background is not supported for external runtimes",
+            isError: true,
+          };
+        }
+        try {
+          const result = await runExternalAgentTurn({
+            kind: runtimeKind,
+            cwd: options.runtime.workspaceRoot,
+            prompt,
+            ...(signal ? { signal } : {}),
+            ...(options.externalEnv ? { env: options.externalEnv } : {}),
+            ...(options.externalSpawn
+              ? { spawnImpl: options.externalSpawn }
+              : {}),
+          });
+          return {
+            content: `[external:${result.kind}]\n${result.text}`,
+          };
+        } catch (err) {
+          const msg =
+            err instanceof ExternalAgentError
+              ? err.message
+              : err instanceof Error
+                ? err.message
+                : String(err);
+          return { content: `subagent external: ${msg}`, isError: true };
+        }
       }
       const depth = subagentDepth(
         options.runtime,
@@ -156,28 +236,117 @@ function createSubagentTool(
         };
       }
       const background = a.run_in_background === true;
+      const inherit = a.inherit_context === true;
       const label =
         String(a.description ?? "").trim() ||
         (background ? "subagent" : "subagent-task");
-      const created = await dispatchFaceMethod(
+      const linkMode = background ? "continuable" : "one-shot";
+      const parentCwd = resolveSessionCwd(
         options.runtime,
-        "session.create",
-        `tool-sa-${Date.now()}`,
-        {
-          parentSessionId: options.parentSessionId,
-          label,
-          mode: background ? "continuable" : "one-shot",
-        },
+        options.parentSessionId,
       );
-      if (!created.result.ok) {
-        return {
-          content: `subagent create failed: ${created.result.error.message}`,
-          isError: true,
-        };
+      let isolated: SubagentWorktree | null = null;
+      let worktreeSkip = "";
+      if (a.worktree === true) {
+        if (worktreeSkippedForRemote(options.runtime.remoteExecution)) {
+          worktreeSkip = "worktree skipped: not a local terminal";
+        } else {
+          isolated = createSubagentWorktree(parentCwd);
+          if (!isolated) {
+            worktreeSkip =
+              "worktree skipped: not a git repository or worktree add failed";
+          }
+        }
       }
-      const childId = String(
-        (created.result.value as { sessionId: string }).sessionId,
-      );
+      const childPrompt = isolated
+        ? `${prompt}\n\n${worktreeContextNote(isolated)}`
+        : prompt;
+
+      let childId: string;
+      let seedEventCount = 0;
+      if (inherit) {
+        const forked = await dispatchFaceMethod(
+          options.runtime,
+          "session.fork",
+          `tool-sa-fork-${Date.now()}`,
+          {
+            sessionId: options.parentSessionId,
+            linkMode,
+            label,
+          },
+        );
+        if (!forked.result.ok) {
+          // No completed turn yet — fall back to a fresh child (DSH fork omits seed).
+          if (forked.result.error.code === "fork-unavailable") {
+            const created = await dispatchFaceMethod(
+              options.runtime,
+              "session.create",
+              `tool-sa-${Date.now()}`,
+              {
+                parentSessionId: options.parentSessionId,
+                label,
+                mode: linkMode,
+              },
+            );
+            if (!created.result.ok) {
+              if (isolated) finalizeSubagentWorktree(isolated);
+              return {
+                content: `subagent create failed: ${created.result.error.message}`,
+                isError: true,
+              };
+            }
+            childId = String(
+              (created.result.value as { sessionId: string }).sessionId,
+            );
+          } else {
+            if (isolated) finalizeSubagentWorktree(isolated);
+            return {
+              content: `subagent seed failed: ${forked.result.error.message}`,
+              isError: true,
+            };
+          }
+        } else {
+          childId = String(
+            (forked.result.value as { sessionId: string }).sessionId,
+          );
+          seedEventCount = Number(
+            (forked.result.value as { eventCount?: number }).eventCount ?? 0,
+          );
+        }
+      } else {
+        const created = await dispatchFaceMethod(
+          options.runtime,
+          "session.create",
+          `tool-sa-${Date.now()}`,
+          {
+            parentSessionId: options.parentSessionId,
+            label,
+            mode: linkMode,
+          },
+        );
+        if (!created.result.ok) {
+          if (isolated) finalizeSubagentWorktree(isolated);
+          return {
+            content: `subagent create failed: ${created.result.error.message}`,
+            isError: true,
+          };
+        }
+        childId = String(
+          (created.result.value as { sessionId: string }).sessionId,
+        );
+      }
+      if (isolated) {
+        options.runtime.sessionCwds.set(childId, isolated.path);
+        await options.runtime.invalidateAgent?.(childId);
+      }
+      const worktreeLine = (keep: boolean): string => {
+        if (worktreeSkip) return worktreeSkip;
+        if (!isolated) return "";
+        if (keep) {
+          return `[worktree] ${isolated.path}\nbranch ${isolated.branch}\nleft in place (child still running)`;
+        }
+        return formatWorktreeResult(finalizeSubagentWorktree(isolated));
+      };
       const prompted = await dispatchFaceMethod(
         options.runtime,
         "session.prompt",
@@ -185,12 +354,15 @@ function createSubagentTool(
         {
           sessionId: childId,
           mode: "queue",
-          content: [{ type: "text", text: prompt }],
+          content: [{ type: "text", text: childPrompt }],
         },
       );
       if (!prompted.result.ok) {
+        const extra = worktreeLine(false);
         return {
-          content: `subagent prompt failed: ${prompted.result.error.message}`,
+          content: [`subagent prompt failed: ${prompted.result.error.message}`, extra]
+            .filter(Boolean)
+            .join("\n"),
           isError: true,
         };
       }
@@ -198,9 +370,15 @@ function createSubagentTool(
         return {
           content: [
             `Started background subagent \`${childId}\` (${label}).`,
+            inherit
+              ? "Seeded with this session's completed turns (open turn excluded)."
+              : undefined,
             "Use send_message to continue, interrupt_agent to stop, list_agents to inspect.",
             "Keep working; do not busy-poll.",
-          ].join("\n"),
+            worktreeLine(true) || undefined,
+          ]
+            .filter(Boolean)
+            .join("\n"),
         };
       }
       try {
@@ -213,17 +391,25 @@ function createSubagentTool(
           `tool-sa-c-${childId}`,
           { sessionId: childId },
         ).catch(() => undefined);
-        return { content: `subagent failed: ${message}`, isError: true };
-      }
-      const text = lastAssistantText(
-        readSessionEvents(options.runtime.store, childId),
-      );
-      if (!text) {
+        const extra = worktreeLine(false);
         return {
-          content: `(subagent ${childId} finished with no assistant text)`,
+          content: [`subagent failed: ${message}`, extra].filter(Boolean).join("\n"),
+          isError: true,
         };
       }
-      return { content: text };
+      const all = readSessionEvents(options.runtime.store, childId);
+      // Never return seeded parent assistant text as the child's result.
+      const owned = seedEventCount > 0 ? all.slice(seedEventCount) : all;
+      const text = lastAssistantBodyText(owned);
+      const extra = worktreeLine(false);
+      if (!text) {
+        return {
+          content: [`(subagent ${childId} finished with no assistant text)`, extra]
+            .filter(Boolean)
+            .join("\n"),
+        };
+      }
+      return { content: [text, extra].filter(Boolean).join("\n") };
     },
   };
 }

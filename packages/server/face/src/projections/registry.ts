@@ -13,6 +13,7 @@ import {
 import type { PermissionSelect } from "../permissions.js";
 import type { AutoReviewProjection } from "./units/auto-review.js";
 import type { TurnOutlineEntry } from "./units/turn-outline.js";
+import type { WorkspaceChangesProjected } from "./units/workspace-changes.js";
 
 export type {
   ProjectionChangeListener,
@@ -129,6 +130,12 @@ export interface FaceProjectionMap {
       readonly tools: readonly unknown[];
     }[];
   };
+  /**
+   * Turn-end changed-files card (DSH workspace/changes). One summary per
+   * `turnId` (same-turn replace), each stamped with the announcing Face `seq`
+   * for `changes.fileDiff`.
+   */
+  readonly workspaceChanges: readonly WorkspaceChangesProjected[];
 }
 
 export interface SessionListMetadata {

@@ -63,13 +63,9 @@ describe("isSessionEvent", () => {
     expect(parsePromptDelivery("asap")).toEqual({ ok: false });
   });
 
-  it("exports sessionEventJsonSchema (and stub alias)", async () => {
-    const {
-      sessionEventJsonSchema,
-      sessionEventJsonSchemaStub,
-    } = await import("../src/index.js");
+  it("exports sessionEventJsonSchema", async () => {
+    const { sessionEventJsonSchema } = await import("../src/index.js");
     expect(sessionEventJsonSchema.$id).toContain("session-event");
-    expect(sessionEventJsonSchemaStub).toBe(sessionEventJsonSchema);
     expect(sessionEventJsonSchema.oneOf.length).toBeGreaterThan(10);
   });
 

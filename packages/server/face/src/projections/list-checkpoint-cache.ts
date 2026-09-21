@@ -82,6 +82,11 @@ export function createFaceListProjectionCache(
     }
   }
 
+  /**
+   * Persist dirty rows. I/O failures keep the in-memory column + dirty flag
+   * so eviction can still serve cold `session.list` in-process and a later
+   * flush can retry — never clear live cells without a remember.
+   */
   const flush = (): void => {
     if (!filePath || !dirty) return;
     const payload: CacheFile = {
@@ -93,17 +98,31 @@ export function createFaceListProjectionCache(
         ]),
       ),
     };
-    mkdirSync(path.dirname(filePath), { recursive: true });
-    const tmp = `${filePath}.${process.pid}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(payload)}\n`, "utf8");
-    renameSync(tmp, filePath);
-    dirty = false;
+    try {
+      mkdirSync(path.dirname(filePath), { recursive: true });
+      const tmp = `${filePath}.${process.pid}.tmp`;
+      writeFileSync(tmp, `${JSON.stringify(payload)}\n`, "utf8");
+      renameSync(tmp, filePath);
+      dirty = false;
+    } catch {
+      /* cold column stays in memory until a later successful flush */
+    }
+  };
+
+  /** Drop a corrupt/unusable row so cold list falls back to listHints. */
+  const discard = (sessionId: string): void => {
+    if (!sessions.delete(sessionId)) return;
+    dirty = true;
+    flush();
   };
 
   return {
     remember(sessionId, checkpoint) {
       const picked = pickListCheckpoint(checkpoint);
-      if (Object.keys(picked).length === 0) return;
+      if (Object.keys(picked).length === 0) {
+        discard(sessionId);
+        return;
+      }
       sessions.set(sessionId, {
         asOfSeq: asOfSeqOf(picked),
         checkpoint: structuredClone(picked),
@@ -115,19 +134,35 @@ export function createFaceListProjectionCache(
     cachedSnapshot(sessionId, registry) {
       const row = sessions.get(sessionId);
       if (row === undefined) return undefined;
-      const values = registry.viewCheckpoint(row.checkpoint);
+      let values: Record<string, unknown>;
+      try {
+        values = registry.viewCheckpoint(row.checkpoint);
+      } catch {
+        discard(sessionId);
+        return undefined;
+      }
       const filtered: Record<string, unknown> = {};
       for (const key of SESSION_LIST_PROJECTION_KEYS) {
         if (key in values) filtered[key] = values[key];
       }
-      if (Object.keys(filtered).length === 0) return undefined;
+      // viewCheckpoint omits malformed wired rows ("consumer refolds"). Face
+      // cold list does not refold — any stored list key that failed parse is a
+      // miss (honest listHints), never a silent partial untitled/wrong snap.
+      for (const key of SESSION_LIST_PROJECTION_KEYS) {
+        if (row.checkpoint[key] !== undefined && !(key in filtered)) {
+          discard(sessionId);
+          return undefined;
+        }
+      }
+      if (Object.keys(filtered).length === 0) {
+        discard(sessionId);
+        return undefined;
+      }
       return { asOfSeq: row.asOfSeq, values: filtered };
     },
 
     forget(sessionId) {
-      if (!sessions.delete(sessionId)) return;
-      dirty = true;
-      flush();
+      discard(sessionId);
     },
 
     flush,

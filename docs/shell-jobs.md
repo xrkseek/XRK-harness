@@ -106,7 +106,7 @@ Harness 登记 `tool:fs-routing` · `tool:shell-routing` · `tool:jobs` 系统�
 
 **对话里的前台 bash（30s yield，可配置）：** 非 `background: true` 的 `bash` 默认最多等 **30s**（Codex 上限），超时 tool 结果返回 **job id** 且不杀进程；**turn 可继续**。yield 窗口内会话头与输入区 dock 可对 **foreground** 行点 **后台**；yield 后通常只剩 **停止**。
 
-**时间线里的 steer 完成通知：** job / 后台子代理 settle 用 **`delivery: steer`**，**不进**输入框排队；在 tool-step / turn 边界 promote 为注入式 `user/message`（非用户手打气泡）。Job 示例：`background job bash-1 … finished … Read its output with job_output.`
+**时间线里的 steer 完成通知：** job / 后台子代理 settle 用 **`delivery: steer`**，**不进**输入框排队；在 tool-step / turn 边界 promote 为注入式 `user/message`（非用户手打气泡）。Job 示例：`background job bash-1 … finished … Read its output with job_output.` 后台子代理通知与前台 `subagent` 工具结果**只回传正文**（`assistant/message.content` / text chunk），**不**把子会话 `reasoning` 写入父会话请求。
 
 RPC：`Session.killJob` / `Session.backgroundJob` · Face `job.kill` / `job.background`（见上文 RPC 表）。
 
@@ -228,7 +228,7 @@ Sort: live rows by start time; settled rows newest-first.
 
 **Foreground bash (30s yield, configurable) in chat:** a non-`background` `bash` waits up to **30s** by default (Codex cap), then returns a **job id** without killing the process; the **turn continues**. **Background** is available on **foreground** rows during the yield window; after yield, **Stop** remains.
 
-**Steer completion in the timeline:** job / background-subagent settle notices use **`delivery: steer`** — they **do not** enter the composer queue; they promote at tool-step / turn boundaries as injected `user/message` context (not a user-typed bubble). Example job copy: `background job bash-1 … finished … Read its output with job_output.`
+**Steer completion in the timeline:** job / background-subagent settle notices use **`delivery: steer`** — they **do not** enter the composer queue; they promote at tool-step / turn boundaries as injected `user/message` context (not a user-typed bubble). Example job copy: `background job bash-1 … finished … Read its output with job_output.` Background-subagent notices and foreground `subagent` tool results carry **body text only** (`assistant/message.content` / text chunks) — child `reasoning` never enters the parent session request.
 
 RPC wiring: `Session.killJob` / `Session.backgroundJob` · Face `job.kill` / `job.background` (see tables above).
 

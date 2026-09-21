@@ -76,6 +76,9 @@ export {
   type LlmRequestConfig,
   type LlmRetryEvent,
   type LlmRetryStartedEvent,
+  type ImageOffloadEvent,
+  type ImageOffloadTarget,
+  type WorkspaceChangesEvent,
   type RequestHeaderEvent,
   type RequestHeaderReason,
   type RequestHeaderToolSchema,
@@ -93,6 +96,29 @@ export {
   type WorkspaceBudgetTruncation,
 } from "./session-events.js";
 export { parseTurnEndCancelCause } from "./session-events.js";
+export {
+  WORKSPACE_CHANGES_MAX_FILES,
+  coalesceFileDiffTexts,
+  fileDiffContentLines,
+  normalizeWorkspacePath,
+  summarizeFileDiffs,
+  workspaceFileDiffForListedFile,
+  workspaceFileDiffFromTexts,
+  type FileDiff,
+  type WorkspaceChangedFile,
+  type WorkspaceChangesSummary,
+  type WorkspaceDiffHunk,
+  type WorkspaceFileDiff,
+} from "./workspace-changes.js";
+export {
+  OFFICE_HARNESS_PROTOCOL,
+  SIDEBAR_PREVIEW_RPC,
+  SUBAGENT_PREVIEW_TEXT_MAX,
+  type BrowserEmbedProbe,
+  type OfficePreviewStatus,
+  type PlanPreviewSummary,
+  type SubagentPreviewSummary,
+} from "./sidebar-previews.js";
 export {
   EMPTY_PERMISSION_KNOBS,
   applyPermissionKnobEvent,
@@ -132,7 +158,6 @@ export {
 } from "./token-usage.js";
 export {
   sessionEventJsonSchema,
-  sessionEventJsonSchemaStub,
 } from "./json-schema.js";
 export {
   assertSessionEvent,

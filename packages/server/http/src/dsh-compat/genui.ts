@@ -17,6 +17,8 @@ import { parseJsonBody } from "./underlying/http-kit.js";
 import { createPersistedSettingsDocStore } from "./persisted-settings-store.js";
 import { dshSettingsDefaults } from "./settings-defaults.js";
 
+import { GENUI_BROWSER_RUNTIME_JS } from "./genui-browser-runtime.js";
+
 export interface GenuiOptions {
   readonly xrkHome?: string;
 }
@@ -108,9 +110,7 @@ function promptControlStore(options: GenuiOptions) {
   );
 }
 
-const GENUI_RUNTIME_STUB = `/* xrk-dsh-compat: GenUI Vue/OpenTiny browser runtime not bundled (honest stub). */
-export {};
-`;
+const GENUI_RUNTIME_JS = GENUI_BROWSER_RUNTIME_JS;
 
 export async function handleGenuiHttp(
   req: IncomingMessage,
@@ -141,7 +141,7 @@ export async function handleGenuiHttp(
     return true;
   }
 
-  // Browser Vue/OpenTiny CE bundle — product still deferred; stub so script load is honest JSON-free JS.
+  // Browser GenUI DOM runtime (mount · custom elements · optional Host preview fetch).
   if (pathname === "/dsh-genui/runtime.js") {
     if (method !== "GET" && method !== "HEAD") {
       res.writeHead(405, { Allow: "GET, HEAD" });
@@ -152,7 +152,7 @@ export async function handleGenuiHttp(
       "Content-Type": "text/javascript; charset=utf-8",
       "Cache-Control": "no-store",
     });
-    if (method !== "HEAD") res.end(GENUI_RUNTIME_STUB);
+    if (method !== "HEAD") res.end(GENUI_RUNTIME_JS);
     else res.end();
     return true;
   }

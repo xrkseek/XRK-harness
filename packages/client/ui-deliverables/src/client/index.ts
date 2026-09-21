@@ -1,40 +1,37 @@
 /**
- * Deliverables plugin, browser half: registers the produced-files row into
- * the chat view's turn-tail chain, and provides the `chatFileMentions`
- * service that links inline-code mentions of produced files in the closing
- * prose. All policy lives here — the derivation from the mutation tools'
- * `locations`, the mention matching, the chip cap, and the copy — so
- * composing this plugin out of cordis.yml removes both surfaces entirely;
- * the owning view renders an empty chain and inert prose at zero cost.
+ * Deliverables plugin, browser half: changed-files card + produced-files row
+ * on `conversation.chat.turnTail`, and `chatFileMentions` for closing prose.
  */
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import { resolveWorkspacePath } from '@xrkseek/client-runtime/client'
 import type { ChatFileMentions } from '@xrkseek/client-ui-conversation/client'
 import type {} from '@xrkseek/client-locale/client'
-import { ProducedFiles } from './ProducedFiles.tsx'
+import type {} from '@xrkseek/xrk-api-remotes/client'
+import { DeliverablesTail, type DeliverablesInjected } from './Deliverables.tsx'
 import { en, NS, zh, type DeliverablesKey } from './locales.ts'
 import {
-  deliverablesDefinition, producedFileMentions, selectProducedFiles,
+  deliverablesDefinition, producedFileMentions, selectDeliverables,
 } from './turn-deliverables.ts'
+import './workspace-changes-projection.ts'
 
 declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Produced-files row copy. */
     'deliverables': DeliverablesKey
   }
 }
 
 export { ProducedFiles, type ProducedFilesProps } from './ProducedFiles.tsx'
-export { producedForClosing } from './turn-deliverables.ts'
+export { ChangedFiles } from './ChangedFiles.tsx'
+export { diffHunkFromWorkspaceFileDiff } from './workspace-file-diff-hunk.ts'
+export { DeliverablesTail, selectDeliverables } from './Deliverables.tsx'
+export { producedForClosing, changesForClosing } from './turn-deliverables.ts'
 
-/** Required services for the tail-slot registration and its dictionaries. */
-export const inject = ['slots', 'locale', 'conversationEvents', 'connection', 'sessions']
+export const inject = [
+  'slots', 'locale', 'conversationEvents', 'connection', 'sessions',
+  'remote', 'remote.changes',
+]
 
-/**
- * Client plugin body: register the dictionaries and the turn-tail entry.
- * @param ctx - client root context.
- */
 export function apply(ctx: ClientContext): void {
   const connection = ctx.get('connection') as ConnectionHandle
   ctx.conversationEvents.register(deliverablesDefinition)
@@ -43,9 +40,9 @@ export function apply(ctx: ClientContext): void {
     'conversation.chat.turnTail',
     () => ctx.slots.register({
       name: 'conversation.chat.turnTail',
-      select: selectProducedFiles,
+      select: selectDeliverables,
       locale: NS,
-      inject: () => ({
+      inject: (): DeliverablesInjected => ({
         isLoopback: connection.isLoopback,
         openNativePath: async (path: string, options?: { readonly reveal?: boolean }) => {
           const snap = ctx.sessions.list.getSnapshot()
@@ -61,18 +58,30 @@ export function apply(ctx: ClientContext): void {
           }
         },
         hooks: { hostDescription: connection.hostDescription },
+        loadFileDiff: async (seq, index, signal) => {
+          const sessionId = ctx.sessions.list.getSnapshot().current
+          if (sessionId === undefined) return null
+          const result = await ctx.remote.changes.fileDiff(
+            { sessionId, seq, index },
+            signal,
+          )
+          if (!result.ok) {
+            throw new Error(result.error.message)
+          }
+          return result.value.diff
+        },
       }),
-    }, ProducedFiles),
+    }, DeliverablesTail),
   )
-  // The prose side of the same vocabulary: the chat view reaches this face
-  // via ctx.get, so its absence — this plugin composed out — is the off state.
   const t = ctx.locale.bind(NS)
   const mentions: ChatFileMentions = {
     forClosing(owner) {
-      // Same claim test the turn-tail chain entry runs: no produced files,
-      // no vocabulary — the two surfaces agree by construction.
-      const paths = selectProducedFiles(owner)
-      if (paths === null) return undefined
+      const matched = selectDeliverables(owner)
+      if (matched === null) return undefined
+      const paths = matched.produced.length > 0
+        ? matched.produced
+        : matched.changes?.files.map(f => f.path) ?? []
+      if (paths.length === 0) return undefined
       return producedFileMentions(paths, owner.openFile, path => t('produced.open', { name: path }))
     },
   }

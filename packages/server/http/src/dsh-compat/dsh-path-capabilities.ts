@@ -50,8 +50,6 @@ export const DSH_HTTP_CAPABILITIES: readonly DshHttpCapability[] = [
   { prefix: "/api/upload", provider: "xrk-tongflow" },
   { prefix: "/api/material", provider: "xrk-tongflow" },
   { prefix: "/api/users", provider: "xrk-tongflow" },
-  { prefix: "/plugins/install", provider: "xrk-tongflow" },
-  { prefix: "/plugins", provider: "xrk-tongflow" },
   { prefix: "/health", provider: "xrk-tongflow" },
   { prefix: "/api/usage-stats", provider: "xrk-usage-stats" },
   { prefix: "/turn-rewind", provider: "xrk-turn-rewind" },

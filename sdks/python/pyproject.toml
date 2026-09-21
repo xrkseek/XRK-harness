@@ -1,0 +1,14 @@
+[project]
+name = "xrk-harness"
+version = "0.3.11"
+description = "Python clients for the XRK-Harness TypeScript host (HTTP and xrkh acp stdio)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+
+[project.urls]
+Homepage = "https://github.com/xrkseek/XRK-harness"
+Documentation = "https://github.com/xrkseek/XRK-harness/blob/main/docs/http-api.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]

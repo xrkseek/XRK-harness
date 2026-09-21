@@ -19,13 +19,13 @@ describe("sandboxModeChangeBlockedMessage", () => {
     ).toBeUndefined();
   });
 
-  it("blocks mode changes while PTY activity exists", () => {
+  it("blocks mode changes while Agent PTY activity exists", () => {
     expect(
       sandboxModeChangeBlockedMessage({
         currentMode: "workspace-write",
         nextMode: "read-only",
         hasPtyActivity: true,
       }),
-    ).toMatch(/cannot change sandbox mode/);
+    ).toMatch(/Agent terminal_\*/);
   });
 });

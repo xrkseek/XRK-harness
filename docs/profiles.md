@@ -42,10 +42,12 @@ Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。�
 | **minimal** | Minimal | fs + skill + std | 最小 |
 | **shell** | Shell | + bash + PTY | 本机 shell |
 | **frugal** | Frugal | 完整工具，无子代理 | 省钱 |
-| **shallow** | Shallow | 完整工具，一层子代理 | 浅委派 |
-| **harness** | XRK Harness | 完整工具 + 嵌套子代理 | 默认产品面 |
+| **shallow** | Shallow | 完整工具，一层子代理（徽章 depth=1；并发见 Settings） | 浅委派 |
+| **harness** | XRK Harness | 完整工具 + 嵌套子代理（Settings 默认 depth/active=2） | 默认产品面 |
 
 计划模式：斜杠 **`/plan`** / Plan 芯片 / `exit_plan_mode`（与徽章正交）。旧 id **`plan`** 仅作 Host 兼容别名 → harness。
+
+子代理**同时存活数**与**委派深度**的运行时上限在 **设置 → 插件 → Agent loop**（`agent-loop.maxActiveSubagents` / `maxSubagentDepth`，默认 **2/2**，深度上限 3）。徽章可再收紧（如 Shallow `maxDepth: 1`）；生效值为 `min(Face, 徽章天花板)`。
 
 实现包：`presets/minimal` · `presets/harness`。`presets/server` **不是**第三套工具表，只导出 Host `AgentFactory`（内部调用 harness，并按会话徽章套用 profile）。
 
@@ -59,6 +61,13 @@ Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。�
 | `server` · `plan`（遗留） | 与 harness **同一套工具**；计划模式请用 `/plan` |
 
 `web` / `serve` / `restart` 默认 **harness**。`run` / `dump-config` 默认 **minimal**。Host `--preset` **不会**覆盖已有会话徽章。
+
+CLI 缩写（对标 DSH `dsh <name>`）：**`xrkh <preset>`** ≡ **`xrkh web --preset <preset>`**。`<preset>` 必须是 Host 真源 id（`HOST_RUNTIME_PRESET_IDS` / `XRK_PRESET`）：`minimal` · `shell` · `frugal` · `shallow` · `harness` · `server` · `plan`。
+
+```bash
+xrkh frugal
+xrkh shallow --port 8787
+```
 
 `restart`：停本机先前记下的 **XRK Host**（`~/.xrk/run/host-<port>.pid.json`）再起。  
 `--force`：只停指纹匹配的 XRK Host。
@@ -161,10 +170,12 @@ Legacy wire value **`server`** normalizes to **`harness`** for storage and badge
 | **minimal** | Minimal | fs · skill · std; no bash / web / lsp / PTY / subagents | Smoke tests; no shell |
 | **shell** | Shell | Harness plane: fs + bash + PTY; web / lsp / subagents off | Local shell focus |
 | **frugal** | Frugal | Full coding tools; **subagents off** (lower bill risk) | Avoid nested-agent spend |
-| **shallow** | Shallow | Full tools; subagents **depth ≤1**, concurrency capped | Light helper tasks |
-| **harness** | **XRK Harness** | Full tools + nested subagents (depth ≤3); **default for `web` / `serve`** | Full coding Agent |
+| **shallow** | Shallow | Full tools; subagents **depth ≤1** (badge ceiling; concurrency from Settings) | Light helper tasks |
+| **harness** | **XRK Harness** | Full tools + nested subagents (Settings defaults depth/active **2**); **default for `web` / `serve`** | Full coding Agent |
 
 Plan mode is **`/plan`** / Plan chip / `exit_plan_mode` (orthogonal to badges). Legacy id **`plan`** aliases to harness.
+
+Runtime caps for **concurrent live children** and **delegation depth** live under **Settings → Plugins → Agent loop** (`agent-loop.maxActiveSubagents` / `maxSubagentDepth`, defaults **2/2**, depth max 3). Badges may tighten further (e.g. Shallow `maxDepth: 1`); effective = `min(Face, badge ceiling)`.
 
 Implementation packages: `presets/minimal` · `presets/harness`. `presets/server` is **not** a third tool table; it only exports the Host `AgentFactory` (calls harness and applies the session badge profile).
 
@@ -178,6 +189,13 @@ Implementation packages: `presets/minimal` · `presets/harness`. `presets/server
 | `server` · `plan` (legacy) | **Same tools** as harness; use `/plan` for plan mode |
 
 `web` / `serve` / `restart` default to **harness**. `run` / `dump-config` default to **minimal**. Host `--preset` does **not** override badges on existing sessions.
+
+CLI shortcut (DSH-style `dsh <name>`): **`xrkh <preset>`** ≡ **`xrkh web --preset <preset>`**. `<preset>` must be a Host truth-source id (`HOST_RUNTIME_PRESET_IDS` / `XRK_PRESET`): `minimal` · `shell` · `frugal` · `shallow` · `harness` · `server` · `plan`.
+
+```bash
+xrkh frugal
+xrkh shallow --port 8787
+```
 
 `restart` stops the previously recorded local **XRK Host** (`~/.xrk/run/host-<port>.pid.json`) and starts again.  
 `--force` stops only fingerprint-matched XRK Hosts.

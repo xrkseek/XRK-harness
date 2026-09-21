@@ -17,8 +17,6 @@ See `docs/protocol-events.md`.
 | `isSessionEvent` | Loose (type + ts) |
 | `sessionEventJsonSchema` | Export / OpenAPI (`oneOf`) |
 
-`sessionEventJsonSchemaStub` is a deprecated alias of `sessionEventJsonSchema`.
-
 ## TokenUsage
 
 | Export | Use |

@@ -15,7 +15,8 @@
   ],
   "dependencies": {
     "@xrkseek/core-tools": "workspace:*",
-    "@xrkseek/protocol": "workspace:*"
+    "@xrkseek/protocol": "workspace:*",
+    "@xrkseek/xrk-home-paths": "workspace:*"
   },
   "license": "MIT",
   "repository": {

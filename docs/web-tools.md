@@ -2,7 +2,7 @@
 
 > **读者**：集成者 · 贡献者
 
-`@xrkseek/exec-web`：`web_search` / `web_fetch`。Harness / server preset 默认登记；minimal 不登记。  
+`@xrkseek/exec-web`：`web_search` / `web_fetch` / `browser_open` · `browser_snapshot` · `browser_act`。Harness / server preset 默认登记；minimal 不登记。  
 产品入口 `web` / `serve` 默认 **harness**（见 [profiles.md](./profiles.md)）。
 
 ## 产品配置（优先）
@@ -20,7 +20,7 @@ Host 把上述值合成结构化 `webSearch`（`SearchAccessConfig`）传入 `cr
 |----|------|
 | Definition | `WebSearch` · `WebFetch` |
 | Provider | 匿名 HTTP fetch；有密钥用 Tavily/Brave，否则 **parallel-free → duckduckgo** |
-| Consumer | `createWebTools(access)` — Face 卡走 `presentCall` / `presentResult`（`card: "web"`） |
+| Consumer | `createWebTools(access)` — Face 卡走 `presentCall` / `presentResult`（`card: "web"`）；`createBrowserTools(session)` — 交互式会话 |
 
 ## Headless / CI（可选 env）
 
@@ -40,9 +40,18 @@ Host 把上述值合成结构化 `webSearch`（`SearchAccessConfig`）传入 `cr
 
 URL 仅 `http`/`https`，拒凭据。字面量 loopback / RFC1918 / link-local 直接拒绝。**不**做 DNS 再绑定；解析到内网 IP 的公网名拦不住。
 
-## 浏览器操作（尚未）
+## 浏览器操作（HTTP 会话）
 
-交互式浏览器会话（snapshot、act 等）**未**进本仓。当前可读页用 `web_fetch`；交互式浏览器另开切片。
+Harness 在启用 web 工具时登记 `browser_open` / `browser_snapshot` / `browser_act`：
+
+| 工具 | 作用 |
+|------|------|
+| `browser_open` | 打开 URL，返回带 `@eN` 的元素快照 |
+| `browser_snapshot` | 当前页元素列表（`full=true` 附正文） |
+| `browser_act` | `click`（跟链 / 提交）或 `type`（填文本框） |
+| `browser_vision` | 截当前图形页给 vision（文本 `@eN` 旁加图片）。HTTP 快照没有浏览器时失败，不用元素列表冒充截图 |
+
+实现默认是 **HTTP 快照会话**（复用 `WebFetch` + URL 策略），`@eN` 不变。设了 `XRK_BROWSER_CDP_URL`（或 `BROWSER_CDP_URL`）时，同一套 `browser_open` / `browser_snapshot` / `browser_act` 改走 Chrome DevTools：浏览器级 websocket 会 `Target.createTarget` + `attachToTarget`，元素来自无障碍树，点击/输入走 `DOM.resolveNode`。`browser_vision` 再调 `Page.captureScreenshot`，经附件库把 PNG 放进模型请求；没接附件库时失败，不把无障碍树当截图。未设地址时不连 CDP。这不是桌面 computer-use。SPA 在纯 HTTP 会话下仍受限；一锤子读页继续用 `web_fetch`。
 
 ## 卡回放
 
@@ -54,7 +63,7 @@ URL 仅 `http`/`https`，拒凭据。字面量 loopback / RFC1918 / link-local �
 
 > **Audience**: Integrators · Contributors
 
-`@xrkseek/exec-web` provides `web_search` / `web_fetch`. Harness and server presets register them by default; minimal does not. Product entrypoints `web` / `serve` default to **harness** ([profiles.md](./profiles.md)).
+`@xrkseek/exec-web` provides `web_search` / `web_fetch` / `browser_open` · `browser_snapshot` · `browser_act`. Harness and server presets register them by default; minimal does not. Product entrypoints `web` / `serve` default to **harness** ([profiles.md](./profiles.md)).
 
 ## Product configuration (preferred)
 
@@ -71,7 +80,7 @@ The Host synthesizes a structured `webSearch` (`SearchAccessConfig`) into `creat
 |----|------|
 | Definition | `WebSearch` · `WebFetch` |
 | Provider | Anonymous HTTP fetch; with keys use Tavily/Brave, else **parallel-free → duckduckgo** |
-| Consumer | `createWebTools(access)` — Face cards via `presentCall` / `presentResult` (`card: "web"`) |
+| Consumer | `createWebTools(access)` — Face cards via `presentCall` / `presentResult` (`card: "web"`); `createBrowserTools(session)` — interactive session |
 
 ## Headless / CI (optional env)
 
@@ -91,9 +100,18 @@ Always available (**no key required**). `GET`, follow **same-origin** redirects 
 
 URLs must be `http`/`https` without credentials. Literal loopback / RFC1918 / link-local are rejected. There is **no** DNS rebinding check; public names that resolve to private IPs are not blocked.
 
-## Browser ops (not shipped)
+## Browser ops (HTTP session)
 
-Interactive browser sessions (snapshot, act, and similar) are **not** in this repository. Use `web_fetch` for readable pages; interactive browser work is a separate slice.
+When web tools are enabled, harness registers `browser_open` / `browser_snapshot` / `browser_act`:
+
+| Tool | Role |
+|------|------|
+| `browser_open` | Open a URL; return element snapshot with `@eN` refs |
+| `browser_snapshot` | Current-page element list (`full=true` adds page text) |
+| `browser_act` | `click` (follow links / submit) or `type` (fill a textbox) |
+| `browser_vision` | Screenshot the graphical page for vision (image beside `@eN` text). The HTTP snapshot has no browser and fails; the element list is not a screenshot |
+
+The default is an **HTTP snapshot session** (reuses `WebFetch` + URL policy); `@eN` refs stay. When `XRK_BROWSER_CDP_URL` (or `BROWSER_CDP_URL`) is set, the same `browser_open` / `browser_snapshot` / `browser_act` tools use Chrome DevTools: a browser websocket calls `Target.createTarget` + `attachToTarget`, elements come from the accessibility tree, and click/type go through `DOM.resolveNode`. `browser_vision` then calls `Page.captureScreenshot` and stores the PNG so the model request can inline it. With no attachment store the call fails; the accessibility tree is not treated as a screenshot. With no URL, CDP is not contacted. This is not desktop computer-use. SPA pages stay limited on the plain HTTP session; use `web_fetch` for one-shot reads.
 
 ## Card replay
 

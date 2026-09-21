@@ -6,40 +6,37 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPolicyEngine } from "@xrkseek/policy";
 import { createToolRegistry } from "@xrkseek/core-tools";
 
-const {
-  mockConnect,
-  mockClose,
-  mockListTools,
-  mockCallTool,
-  MockClient,
-  instances,
-} = vi.hoisted(() => {
-  const mockConnect = vi.fn<() => Promise<void>>();
-  const mockClose = vi.fn<() => Promise<void>>();
-  const mockListTools = vi.fn<() => Promise<unknown>>();
-  const mockCallTool = vi.fn<() => Promise<unknown>>();
-  class MockClient {
-    onclose: (() => void) | undefined;
-    connect = mockConnect;
-    close = mockClose;
-    listTools = mockListTools;
-    callTool = mockCallTool;
-    setNotificationHandler = vi.fn();
-    removeNotificationHandler = vi.fn();
-    constructor() {
-      instances.push(this);
+const { mockConnect, mockClose, mockListTools, mockCallTool, MockClient, instances } =
+  vi.hoisted(() => {
+    const mockConnect = vi.fn<() => Promise<void>>();
+    const mockClose = vi.fn<() => Promise<void>>();
+    const mockListTools = vi.fn<() => Promise<unknown>>();
+    const mockCallTool = vi.fn<() => Promise<unknown>>();
+    class MockClient {
+      onclose: (() => void) | undefined;
+      connect = mockConnect;
+      close = mockClose;
+      listTools = mockListTools;
+      callTool = mockCallTool;
+      setNotificationHandler = vi.fn();
+      removeNotificationHandler = vi.fn();
+      // `listTools` / `listResources` short-circuit on missing capabilities
+      // (tools-only mock advertises tools).
+      getServerCapabilities = () => ({ tools: {} });
+      constructor() {
+        instances.push(this);
+      }
     }
-  }
-  const instances: MockClient[] = [];
-  return {
-    mockConnect,
-    mockClose,
-    mockListTools,
-    mockCallTool,
-    MockClient,
-    instances,
-  };
-});
+    const instances: MockClient[] = [];
+    return {
+      mockConnect,
+      mockClose,
+      mockListTools,
+      mockCallTool,
+      MockClient,
+      instances,
+    };
+  });
 
 vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: MockClient,
@@ -63,7 +60,9 @@ function allowPolicy() {
   return createPolicyEngine({ defaults: { "mcp.connect": "allow" } });
 }
 
-function listing(...names: string[]): { tools: { name: string; inputSchema: { type: string } }[] } {
+function listing(...names: string[]): {
+  tools: { name: string; inputSchema: { type: string } }[];
+} {
   return {
     tools: names.map((name) => ({ name, inputSchema: { type: "object" } })),
   };
@@ -77,12 +76,15 @@ function sleep(ms: number): Promise<void> {
 
 describe("resolveReconnectPolicy", () => {
   it("rejects unknown keys and inverted bounds", () => {
-    expect(() => resolveReconnectPolicy({ enabled: true, bogus: 1 } as never, "reconnect"))
-      .toThrow(/not a reconnect option/);
-    expect(() => resolveReconnectPolicy({ initialDelayMs: 40, maxDelayMs: 5 }, "reconnect"))
-      .toThrow(/less than or equal/);
-    expect(() => resolveReconnectPolicy({ maxAttempts: 0 }, "reconnect"))
-      .toThrow(/positive integer/);
+    expect(() =>
+      resolveReconnectPolicy({ enabled: true, bogus: 1 } as never, "reconnect"),
+    ).toThrow(/not a reconnect option/);
+    expect(() =>
+      resolveReconnectPolicy({ initialDelayMs: 40, maxDelayMs: 5 }, "reconnect"),
+    ).toThrow(/less than or equal/);
+    expect(() => resolveReconnectPolicy({ maxAttempts: 0 }, "reconnect")).toThrow(
+      /positive integer/,
+    );
   });
 });
 
@@ -130,7 +132,9 @@ describe("mcp reconnect supervisor", () => {
     });
     const call = await client.callTool("revived", {});
     expect(call.content).toContain("ok");
-    expect(logs.some((line) => line.includes("reconnecting in 5ms (attempt 1/5)"))).toBe(true);
+    expect(
+      logs.some((line) => line.includes("reconnecting in 5ms (attempt 1/5)")),
+    ).toBe(true);
     expect(logs.some((line) => line.includes("reconnected"))).toBe(true);
     expect(states).toContain("reconnecting");
     expect(states.at(-1)).toBe("connected");
@@ -163,7 +167,11 @@ describe("mcp reconnect supervisor", () => {
     instances[0]!.onclose?.();
 
     await vi.waitFor(() => {
-      expect(logs.some((line) => line.includes("giving up after 2 consecutive failed reconnect attempts"))).toBe(true);
+      expect(
+        logs.some((line) =>
+          line.includes("giving up after 2 consecutive failed reconnect attempts"),
+        ),
+      ).toBe(true);
     });
     await vi.waitFor(() => {
       expect(registry.get("mcp__srv__remote")).toBeUndefined();

@@ -12,7 +12,7 @@ Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deri
 |--------|-------------------------------|--------|
 | `turn/start` · `turn/end` | `turnId` | Turn bracket；`turn/end.reason` 见下节「结束原因」。OpenAI `finish_reason: length` / Anthropic `stop_reason: max_tokens` → keep/drop 去截断 toolCalls → `{ kind: "max-tokens" }`（sticky）。`stop` 且无内容/推理/工具 → `EMPTY_RESPONSE`；未知 finish（如 `content_filter`）→ `ProviderFinishError`；非 max-tokens 的残缺 tool JSON → `IncompleteToolCallError`；三者均写 `turn/end` `{ kind: "error" }` 后抛出 |
 | `step/start` · `step/end` | `turnId`, `stepId` | Provider step |
-| `user/message` | `turnId`, `content` | `content`: `string` **或** `ContentBlock[]`（text / image+`ImageAttachmentRef`）；可选 `messageId`（Face 行 id；同 turn 多条 inject/人话必须唯一）；可选 `rpcId`；可选 `source`（`user` · `skill-catalog` · `agent-instructions` · `plugin`；非 `user` = 持久上下文注入，仍进 `deriveMessages`） |
+| `user/message` | `turnId`, `content` | `content`: `string` **或** `ContentBlock[]`（text / image+`ImageAttachmentRef`（可选 `offloaded: true` 投影）/ file+`FileAttachmentRef`）；可选 `messageId`（Face 行 id；同 turn 多条 inject/人话必须唯一）；可选 `rpcId`；可选 `source`（`user` · `skill-catalog` · `agent-instructions` · `plugin`；非 `user` = 持久上下文注入，仍进 `deriveMessages`） |
 | `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta；可选 `kind`：`text`\|`reasoning`\|`usage`\|`tool-call`；`usage` 时带 `usage`；`tool-call` 时带 `toolCallId` · 可选 `toolName` · `argumentsDelta`；可选 `index` |
 | `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls`；可选 `reasoning`（`deriveMessages` 在有文本时回传）；可选 **`interrupted: true`**（流式取消固化前缀，**不是** `turn/end.reason`）；可选 `usage`（`TokenUsage`；Face `sessionStats.decodeTokens` + `tokenUsage`） |
 | `request/header` | `turnId`, `reason`, `header.config` | 非模型可见；`provider`/`model`；可选 `reasoningEffort` · `contextWindow`；可选 `system` · `tools[]`（Face `contextBreakdown` / envelope 重价） |
@@ -35,6 +35,8 @@ Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deri
 | `approval/policy` | `policy`（ask\|never） | **Log-only** — `never` 时审批自动放行 |
 | `plan/mode` | `active` | **Log-only** — Face `plan` 投影 · `/plan`；last-wins，缺省 inactive |
 | `feedback/record` | `text` | **Log-only** — `/feedback`；不进 `deriveMessages`；捕获壳无专用卡（wire `ignorable`） |
+| `workspace/changes` | `turnId` + `summary`（文件列表 / 行增减） | **Log-only** — `runTurn` 从工具 FileDiff 累积 `summarizeFileDiffs` 后、在 `turn/end` 前自动 append；Face `workspaceChanges` 投影（同 turn 后写覆盖）；逐文件 hunk 走 Face unary `changes.fileDiff`（`sessionId`+`seq`+`index` → `WorkspaceFileDiff`，不进日志） |
+| `image/offload` | `targets[]`（`seq` + `imageIndexes`） | **Log-only 选择** — 永久省略输入图出现位置；`seq` = 日志 0-based 下标（`user/message` / `tool/result`）；`imageIndexes` 为内容内深度优先图片下标。源消息事件不变；`deriveMessages` 投影 `ImageBlock.offloaded: true`（含 compaction 窗口：按绝对 `seq` 映射切片）。恢复 / 分叉种子前缀保留选择 |
 
 ## 结束原因：`aborted` vs `interrupted`
 
@@ -75,9 +77,8 @@ Surface / compaction window pricing lives in `@xrkseek/core-session` — see [se
 ## JSON Schema
 
 `sessionEventJsonSchema` — hand-maintained `oneOf` by `type` (`$id`: `https://xrkseek.dev/schemas/session-event.json`).  
+与 `parseSessionEvent` 对称：含 `image/offload`；`MessageContent` 数组支持 text / image（`offloaded`）/ file。  
 For OpenAPI / external validators. Runtime truth is `parseSessionEvent` (no Ajv dependency in-protocol).
-
-`sessionEventJsonSchemaStub` → deprecated alias of the same object.
 
 ## Related
 
@@ -100,7 +101,7 @@ Window compaction: [session-compaction.md](./session-compaction.md).
 |--------|-------------------------------|--------|
 | `turn/start` · `turn/end` | `turnId` | Turn bracket; `turn/end.reason` in “End reasons” below. OpenAI `finish_reason: length` / Anthropic `stop_reason: max_tokens` → keep/drop truncated toolCalls → `{ kind: "max-tokens" }` (sticky). `stop` with no content/reasoning/tools → `EMPTY_RESPONSE`; unknown finish (e.g. `content_filter`) → `ProviderFinishError`; incomplete tool JSON that is not max-tokens → `IncompleteToolCallError`; all three write `turn/end` `{ kind: "error" }` then throw |
 | `step/start` · `step/end` | `turnId`, `stepId` | Provider step |
-| `user/message` | `turnId`, `content` | `content`: `string` **or** `ContentBlock[]` (text / image+`ImageAttachmentRef`); optional `messageId` (Face row id; must be unique across inject/human lines in the same turn); optional `rpcId`; optional `source` (`user` · `skill-catalog` · `agent-instructions` · `plugin`; non-`user` = durable context inject, still in `deriveMessages`) |
+| `user/message` | `turnId`, `content` | `content`: `string` **or** `ContentBlock[]` (text / image+`ImageAttachmentRef` (optional projected `offloaded: true`) / file+`FileAttachmentRef`); optional `messageId` (Face row id; must be unique across inject/human lines in the same turn); optional `rpcId`; optional `source` (`user` · `skill-catalog` · `agent-instructions` · `plugin`; non-`user` = durable context inject, still in `deriveMessages`) |
 | `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta; optional `kind`: `text`\|`reasoning`\|`usage`\|`tool-call`; `usage` carries `usage`; `tool-call` carries `toolCallId` · optional `toolName` · `argumentsDelta`; optional `index` |
 | `assistant/message` | `turnId`, `stepId`, `content` | Optional `toolCalls`; optional `reasoning` (returned by `deriveMessages` when text is present); optional **`interrupted: true`** (stream cancel freezes the prefix — **not** `turn/end.reason`); optional `usage` (`TokenUsage`; Face `sessionStats.decodeTokens` + `tokenUsage`) |
 | `request/header` | `turnId`, `reason`, `header.config` | Not model-visible; `provider`/`model`; optional `reasoningEffort` · `contextWindow`; optional `system` · `tools[]` (Face `contextBreakdown` / envelope reprice) |
@@ -123,6 +124,8 @@ Window compaction: [session-compaction.md](./session-compaction.md).
 | `approval/policy` | `policy` (ask\|never) | **Log-only** — `never` auto-allows approvals |
 | `plan/mode` | `active` | **Log-only** — Face `plan` projection · `/plan`; last-wins, default inactive |
 | `feedback/record` | `text` | **Log-only** — `/feedback`; not in `deriveMessages`; capture shell has no dedicated card (wire `ignorable`) |
+| `workspace/changes` | `turnId` + `summary` (file list / line counts) | **Log-only** — `runTurn` accumulates tool FileDiffs via `summarizeFileDiffs` and appends before `turn/end`; Face `workspaceChanges` projection (same-turn last write wins); per-file hunks via Face unary `changes.fileDiff` (`sessionId`+`seq`+`index` → `WorkspaceFileDiff`, not in the log) |
+| `image/offload` | `targets[]` (`seq` + `imageIndexes`) | **Log-only selection** — permanently omit input-image occurrences; `seq` is the 0-based log index (`user/message` / `tool/result`); `imageIndexes` are depth-first image indexes in that content. Source message events stay unchanged; `deriveMessages` projects `ImageBlock.offloaded: true` (including after a compaction window: absolute `seq` maps into the slice). Restore / fork seed prefixes keep the selection |
 
 ## End reasons: aborted vs interrupted
 
@@ -163,9 +166,8 @@ Surface / compaction window pricing lives in `@xrkseek/core-session` — see [se
 ## JSON Schema
 
 `sessionEventJsonSchema` — hand-maintained `oneOf` by `type` (`$id`: `https://xrkseek.dev/schemas/session-event.json`).  
+Symmetric with `parseSessionEvent`: includes `image/offload`; `MessageContent` arrays cover text / image (`offloaded`) / file.  
 For OpenAPI / external validators. Runtime truth is `parseSessionEvent` (no Ajv dependency in-protocol).
-
-`sessionEventJsonSchemaStub` → deprecated alias of the same object.
 
 ## Related
 

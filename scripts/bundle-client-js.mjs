@@ -14,17 +14,12 @@ import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { PRODUCT_BOOT_OMIT } from "./product-boot-omit.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CLIENT_SRC = path.join(ROOT, "packages", "client");
 const STUBS_SRC = path.join(ROOT, "packages", "stubs");
-// Historical Cordis UI / runner ids (no longer in-tree) plus HMR —
-// still filtered so overlays cannot reintroduce them.
-const OMIT = new Set([
-  "@xrkseek/client-ui-cordis",
-  "@xrkseek/xrk-cordis-client-runner",
-  "@xrkseek/client-hmr",
-]);
+const OMIT = PRODUCT_BOOT_OMIT;
 
 function readPkg(dir) {
   const pj = path.join(dir, "package.json");

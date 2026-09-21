@@ -2,12 +2,12 @@
  * XRK-native plugin inventory + community catalog (底层能力).
  * DSH market adapters map onto these shapes — do not put `/dsh-*` paths here.
  */
-import { homedir } from "node:os";
 import path from "node:path";
 import {
   readDisabledPluginIdsAt,
   readManagedPluginPackagesAt,
 } from "@xrkseek/server-loader";
+import { resolveConfiguredXrkHome } from "@xrkseek/xrk-home-paths";
 import type { Json } from "../http-json.js";
 
 export interface XrkInstalledPackage {
@@ -44,13 +44,7 @@ export function resolvePluginsDir(
   if (options.pluginsDir?.trim()) {
     return path.resolve(options.pluginsDir.trim());
   }
-  const home =
-    options.xrkHome?.trim() ||
-    process.env.XRK_HOME?.trim() ||
-    process.env.XRK_DSH_HOME?.trim() ||
-    process.env.DSH_HOME?.trim();
-  if (home) return path.join(path.resolve(home), "plugins");
-  return path.join(homedir(), ".xrk", "plugins");
+  return path.join(resolveConfiguredXrkHome(options.xrkHome), "plugins");
 }
 
 /** Soft-disabled managed plugin ids (shared loader disk contract). */

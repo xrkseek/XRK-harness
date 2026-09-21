@@ -41,6 +41,8 @@ export function resolveTongflowPythonCommand(
     const probe = spawnSync(bin, ["--version"], {
       encoding: "utf8",
       timeout: 3000,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
     });
     if (probe.status === 0) return bin;
   }
@@ -95,6 +97,7 @@ export function tryPythonTongflowScan(
       encoding: "utf8",
       timeout: 15_000,
       cwd: workspaceRoot,
+      windowsHide: true,
     });
     if (res.status === 0 && res.stdout?.trim()) {
       try {
@@ -118,6 +121,7 @@ export function tryPythonTongflowScan(
     encoding: "utf8",
     timeout: 5000,
     cwd: workspaceRoot,
+    windowsHide: true,
   });
   if (res.status !== 0 || !res.stdout?.trim()) return null;
   try {
@@ -197,6 +201,7 @@ export function executePythonTongflowNode(
     encoding: "utf8",
     timeout: timeoutMs,
     maxBuffer: 1024 * 1024,
+    windowsHide: true,
   });
 
   if (res.error) {

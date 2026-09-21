@@ -68,7 +68,7 @@ This directory is the XRK **first-party** Host-side community adapter (`@xrkseek
 | 形状 / Shape | XRK 落点 / XRK landing |
 |------|----------|
 | `fetch("/api/…")` · `/_dsh/…` | Global capability table |
-| `/api/dsh-genui/prompt` · `/dsh-genui/*` | GenUI prompt toggle + runtime stub (`genui.ts`) |
+| `/api/dsh-genui/prompt` · `/dsh-genui/*` | GenUI prompt toggle + browser runtime (`genui-browser-runtime.ts`) |
 | `POST /{channel}` · `*-settings` | Settings store |
 | `client.js` paths / channels | `dsh-client-scan` inference |
 | `/sidebar/*` (audit) | **Host-native** (`host-sidebar`) — not a dsh-compat gap; see `audit-community-client` |
@@ -100,7 +100,7 @@ The product-shell plugin count in `status` refers to `@xrkseek/client-*` boot en
 
 ## 待补特性 / Planned Work
 
-主路径（IM · Vision · 记忆 · GenUI npm · TongFlow Python/external）已在 [community-plugins.md](../../../../docs/community-plugins.md)「已实现」列。后续仅列 **XRK 产品路线**增量（如 GenUI 浏览器端 bundle），不以「上游未搬」表述。
+主路径（IM · Vision · 记忆 · GenUI npm · GenUI browser runtime · TongFlow Python/external）已在 [community-plugins.md](../../../../docs/community-plugins.md)「已实现」列。后续仅列 **XRK 产品路线**增量，不以「上游未搬」表述。
 
 Main path items are **Working** in [community-plugins.md](../../../../docs/community-plugins.md). Further items are **XRK roadmap** only (e.g. GenUI browser bundle), not an unported-upstream inventory.
 

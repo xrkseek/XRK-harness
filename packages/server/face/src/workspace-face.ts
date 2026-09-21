@@ -134,6 +134,21 @@ export async function workspaceDescribe(
   payload?: unknown,
 ): Promise<FaceRpcResult<unknown>> {
   const root = resolveFaceWorkspaceRoot(runtime, payload);
+  // Under SSH, `.xrk` / `.agents` live on the remote tree — local exists() would lie.
+  if (runtime.remoteExecution) {
+    return {
+      ok: true,
+      value: {
+        root,
+        productDir: resolveProductDir(root),
+        productExists: false,
+        canOpenPath: false,
+        agentsDir: path.join(root, ".agents"),
+        agentsExists: false,
+        remoteExecution: true,
+      },
+    };
+  }
   const productDir = resolveProductDir(root);
   const productExists = await exists(productDir);
   const agentsDir = path.join(root, ".agents");
@@ -158,6 +173,18 @@ export async function workspaceListProduct(
 ): Promise<FaceRpcResult<unknown>> {
   const root = resolveFaceWorkspaceRoot(runtime, payload);
   const productDir = resolveProductDir(root);
+  if (runtime.remoteExecution) {
+    return {
+      ok: true,
+      value: {
+        productDir,
+        exists: false,
+        truncated: false,
+        entries: [],
+        remoteExecution: true,
+      },
+    };
+  }
   try {
     assertUnderRoot(root, productDir);
   } catch (err) {
@@ -194,6 +221,19 @@ export async function workspacePreviewInject(
   const includeText = p.includeText === true;
   const root = resolveFaceWorkspaceRoot(runtime, payload);
   const productDir = resolveProductDir(root);
+  if (runtime.remoteExecution) {
+    return {
+      ok: true,
+      value: {
+        productDir,
+        totalChars: 0,
+        blockCount: 0,
+        blocks: [],
+        events: [],
+        remoteExecution: true,
+      },
+    };
+  }
   try {
     assertUnderRoot(root, productDir);
   } catch (err) {

@@ -77,7 +77,7 @@ pnpm --filter @xrkseek/harness-desktop prepare:package-set [-- <target>]
 
 ## 诚实边界
 
-- Desktop 在 [status.md](../../docs/status.md) 当前为 **未做**；分阶段升格：**未稳** = `dev:desktop` 开发投影可跑 → **能跑** = 第一波 `win-x64`/`mac-arm64` 打包可用（禁止跳级写成已支持）。  
+- Desktop 在 [status.md](../../docs/status.md) 当前为 **未做**；默认产品入口是 `xrkh web` / CLI。`pnpm dev:desktop` 是开发投影；`pnpm package:desktop` 拒绝跳级产出安装包。分阶段：**未稳** = 开发投影可启动 → **能跑** = 第一波打包可用。  
 - 无完整 electron-builder 发版、无真签/公证、无已接更新频道、插件安装未就绪。  
 - Seed：**开发投影优先**；离线 seed / 16 分片 / CAS 公证 **暂缓或未实现**（见 ADR-0008 · `isDesktopOfflineSeedReady()`）。  
 - 禁止把社区 client overlay / dsh-compat 能力表当作 Desktop 插件安装通道（见 [community-plugins.md](../../docs/community-plugins.md)）。
@@ -163,7 +163,7 @@ First-wave targets, host compatibility, draft builder argv, and credential scrub
 
 ## Honesty
 
-- Desktop is **Not done** in [status.md](../../docs/status.md) today; phased graduation: **Unstable** = `dev:desktop` development projection runs → **Working** = first-wave `win-x64`/`mac-arm64` packaging usable (no skip-ahead claims).  
+- Desktop is **Not done** in [status.md](../../docs/status.md). The default product entry is `xrkh web` / CLI. `pnpm dev:desktop` is the development projection; `pnpm package:desktop` refuses to skip ahead and emit an installer. Phases: **Unstable** = the projection launches → **Working** = first-wave packages usable.  
 - No full electron-builder ship, no real signing/notarization, no wired update channel, plugin install not ready.  
 - Seed: **development projection first**; offline seed / 16-shard / CAS notarization **deferred or unimplemented** (ADR-0008 · `isDesktopOfflineSeedReady()`).  
 - Do not treat community client overlay / the dsh-compat capability table as the Desktop plugin install channel (see [community-plugins.md](../../docs/community-plugins.md)).

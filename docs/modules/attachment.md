@@ -17,6 +17,8 @@
 2. `saveImages`：先整批 validate，再写；validate 失败无部分提交。  
 3. Host Face：`inputModalities` 无 `image` → prompt 图在写盘前拒（`unsupported-modality`）。默认 Host 含 `image`；LLM 适配器仍可 text-only。
 
+本地盘仓（`@xrkseek/attachment-local`）：持久原图在 `{XRK_HOME}/attachments/v1`；请求变体缓存在 `{XRK_HOME}/cache/attachments/request-images/`（可删可重建，不碰原图）。
+
 相关：[protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) · [server-face.md](./server-face.md)
 
 ---
@@ -39,5 +41,7 @@
 1. The event log stores refs only — never base64, paths, or URLs.  
 2. `saveImages` validates the whole batch before write; validation failure commits nothing.  
 3. Host Face: if `inputModalities` lacks `image`, prompt images are rejected before disk (`unsupported-modality`). Default Host includes `image`; LLM adapters may still be text-only.
+
+Local disk store (`@xrkseek/attachment-local`): durable originals under `{XRK_HOME}/attachments/v1`; request variants under `{XRK_HOME}/cache/attachments/request-images/` (rebuildable; clearing cache never deletes originals).
 
 See: [protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) · [server-face.md](./server-face.md)

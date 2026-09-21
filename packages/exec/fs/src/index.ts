@@ -14,8 +14,13 @@ import {
   stripCarriageReturn,
   EditAmbiguousError,
 } from "./edit-text.js";
+import { textFromReadBuffer } from "./document-extract.js";
 import { formatReadWindow } from "./read-window.js";
-import { PathEscapeError, resolveWithinRoot } from "./paths.js";
+import {
+  PathEscapeError,
+  resolveUnderHostRoots,
+  resolveWithinRoot,
+} from "./paths.js";
 import {
   globUnderRoot,
   grepUnderRoot,
@@ -36,7 +41,12 @@ import {
   presentWriteResult,
 } from "./present.js";
 
-export { PathEscapeError, resolveWithinRoot } from "./paths.js";
+export {
+  PathEscapeError,
+  isLexicallyInside,
+  resolveUnderHostRoots,
+  resolveWithinRoot,
+} from "./paths.js";
 export {
   applyLiteralEdit,
   detectLineEndings,
@@ -50,6 +60,12 @@ export {
   DEFAULT_READ_LINE_LIMIT,
   formatReadWindow,
 } from "./read-window.js";
+export {
+  DOCUMENT_EXTRACT_MAX_BYTES,
+  extractDocumentText,
+  isDocumentExtractPath,
+  textFromReadBuffer,
+} from "./document-extract.js";
 export {
   FS_ROUTING_PROMPT_TEXT,
   SHELL_ROUTING_PROMPT_TEXT,
@@ -156,8 +172,10 @@ export interface FsLocalOptions {
   readonly root: string;
   readonly defaultMaxBytes?: number;
   /**
-   * Absolute host directories whose files may be read by absolute path
-   * (attachment alias roots). Writes still require the workspace root.
+   * Absolute host directories whose files may be read by absolute path.
+   * Host whitelist: `{XRK_HOME}/attachments/v1` and `{XRK_HOME}/spill` only —
+   * never the whole product home. Containment is lexical + realpath (symlink
+   * escape denied). Writes still require the workspace root.
    */
   readonly hostReadableRoots?: readonly string[];
 }
@@ -173,15 +191,12 @@ function resolveReadablePath(
     if (!(error instanceof PathEscapeError) || !path.isAbsolute(userPath)) {
       throw error;
     }
-    const abs = path.resolve(userPath);
-    for (const hostRoot of hostReadableRoots) {
-      const hostAbs = path.resolve(hostRoot);
-      const rel = path.relative(hostAbs, abs);
-      if (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)) {
-        return abs;
-      }
+    if (hostReadableRoots.length === 0) throw error;
+    try {
+      return resolveUnderHostRoots(hostReadableRoots, userPath);
+    } catch {
+      throw error;
     }
-    throw error;
   }
 }
 
@@ -210,13 +225,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
       emit("fs/read-intent", userPath);
       const abs = resolveReadablePath(root, hostReadableRoots, userPath);
       const buf = await fsReadFile(abs);
-      if (buf.byteLength > maxBytes) {
-        return {
-          content: buf.subarray(0, maxBytes).toString("utf8"),
-          truncated: true,
-        };
-      }
-      return { content: buf.toString("utf8") };
+      return textFromReadBuffer(buf, userPath, maxBytes);
     },
     async readBytes(userPath, maxBytes = defaultMaxBytes) {
       emit("fs/read-intent", userPath);
@@ -298,6 +307,7 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       name: "read_file",
       description:
         "Read a UTF-8 file with 1-based line numbers (`N|line`). Prefer this over shell cat/head. " +
+        "PDF, DOCX, XLSX, and ipynb are converted to text inside this tool. " +
         "Use offset/limit for large files. Path may be workspace-relative or absolute under the workspace root " +
         "(uploaded attachment paths from the conversation are also readable). " +
         "Line endings are normalized to LF in the tool output.",

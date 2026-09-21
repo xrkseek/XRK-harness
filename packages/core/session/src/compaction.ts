@@ -7,13 +7,20 @@
 import type {
   ChatMessage,
   ContextCompactionEvent,
+  MessageContent,
   SessionEvent,
 } from "@xrkseek/protocol";
 import { flattenText } from "@xrkseek/protocol";
 import { estimateText } from "./surface-estimate.js";
+import {
+  foldImageOffloadMarks,
+  projectOffloadedImages,
+} from "./image-offload.js";
 
 export const DEFAULT_COMPACTION_KEEP_TOKENS = 8_000;
 export const DEFAULT_COMPACTION_BUFFER_TOKENS = 2_000;
+/** Soft-budget auto-compact attempts before fail-closed (DSH-style remeasure loop). */
+export const DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS = 2;
 
 /**
  * Budget estimator for `selectHeadRecent` / overflow (`chars/4` via {@link estimateText}).
@@ -28,12 +35,33 @@ function messagePlainText(m: ChatMessage): string {
   return flattenText(m.content);
 }
 
+/**
+ * Blocks that {@link flattenText} skips (images) or under-prices relative to the
+ * outbound wire — soft budget must not miss them (漏压).
+ */
+function estimateOpaqueContentBlocks(content: MessageContent): number {
+  if (typeof content === "string") return 0;
+  let n = 0;
+  for (const block of content) {
+    if (block.type === "text" || block.type === "file") continue;
+    n += estimateTokens(JSON.stringify(block));
+  }
+  return n;
+}
+
 export function estimateMessagesTokens(
   messages: readonly ChatMessage[],
 ): number {
   let n = 0;
   for (const m of messages) {
     n += estimateTokens(messagePlainText(m));
+    if (m.role === "assistant" && m.reasoning?.trim()) {
+      // On the wire as reasoning_content; flattenText never sees it.
+      n += estimateTokens(m.reasoning);
+    }
+    if (m.role === "user" || m.role === "tool") {
+      n += estimateOpaqueContentBlocks(m.content);
+    }
     if (m.role === "assistant" && m.toolCalls) {
       for (const c of m.toolCalls) {
         n += estimateTokens(c.name);
@@ -76,6 +104,21 @@ export function estimateRequestTokens(input: {
   return n;
 }
 
+/**
+ * Inclusive soft-budget allow ceiling: `maxRequestTokens − buffer`.
+ * A buffer ≥ max would yield a non-positive ceiling and fail-closed every
+ * non-empty turn (误杀) — treat that misconfig as buffer 0.
+ */
+export function resolveSoftBudgetCeiling(
+  maxRequestTokens: number,
+  bufferTokens: number,
+): number {
+  const max = Math.max(0, Math.trunc(maxRequestTokens));
+  let buffer = Math.max(0, Math.trunc(bufferTokens));
+  if (buffer >= max) buffer = 0;
+  return max - buffer;
+}
+
 export const COMPACTION_SUMMARY_TEMPLATE = `Output exactly this Markdown structure (keep section order). Do not mention that context was compacted.
 
 ## Objective
@@ -102,6 +145,9 @@ function serializeMessage(m: ChatMessage): string {
   if (m.role === "user") return `[User]: ${flattenText(m.content)}`;
   if (m.role === "assistant") {
     const parts = [`[Assistant]: ${m.content}`];
+    if (m.reasoning?.trim()) {
+      parts.push(`[Reasoning]: ${m.reasoning}`);
+    }
     if (m.toolCalls?.length) {
       for (const c of m.toolCalls) {
         parts.push(
@@ -191,19 +237,44 @@ export function findLatestCompaction(
 
 /**
  * Fold full history ignoring compaction windows (for summarizer input).
+ * @param options.indexOffset Absolute log index of `events[0]` when folding a
+ *   post-compaction slice — `image/offload` targets use durable-log seq.
+ * @param options.markSource Full session log for folding offload marks
+ *   (defaults to `events`).
  */
 export function deriveMessagesUnwindowed(
   events: readonly SessionEvent[],
+  options?: {
+    readonly indexOffset?: number;
+    readonly markSource?: readonly SessionEvent[];
+  },
 ): ChatMessage[] {
-  return foldChat(events);
+  return foldChat(
+    events,
+    options?.markSource ?? events,
+    options?.indexOffset ?? 0,
+  );
 }
 
-function foldChat(events: readonly SessionEvent[]): ChatMessage[] {
+function foldChat(
+  events: readonly SessionEvent[],
+  markSource: readonly SessionEvent[],
+  indexOffset: number,
+): ChatMessage[] {
+  const offloadMarks = foldImageOffloadMarks(markSource);
   const messages: ChatMessage[] = [];
-  for (const ev of events) {
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i]!;
+    const absSeq = i + indexOffset;
     switch (ev.type) {
       case "user/message":
-        messages.push({ role: "user", content: ev.content });
+        messages.push({
+          role: "user",
+          content: projectOffloadedImages(
+            ev.content,
+            offloadMarks.get(absSeq),
+          ),
+        });
         break;
       case "safety/notice":
         messages.push({ role: "user", content: ev.content });
@@ -228,7 +299,10 @@ function foldChat(events: readonly SessionEvent[]): ChatMessage[] {
       case "tool/result": {
         const msg = {
           role: "tool" as const,
-          content: ev.result.content,
+          content: projectOffloadedImages(
+            ev.result.content,
+            offloadMarks.get(absSeq),
+          ),
           toolCallId: ev.result.toolCallId,
           name: ev.result.name,
           ...(ev.result.isError ? { isError: true as const } : {}),

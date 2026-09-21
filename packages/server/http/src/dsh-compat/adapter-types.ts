@@ -14,8 +14,6 @@ import type { HarnessConnectorOptions } from "./harness-connector.js";
 import type { WalletOptions } from "./wallet.js";
 import type { XrkPluginServicesOptions } from "../xrk/plugin-services.js";
 
-/** @deprecated Prefer {@link SidebarHostOptions}. */
-export type SidebarCompatOptions = SidebarHostOptions;
 export interface DshAdapterMeta {
   readonly id: string;
   readonly package?: string;
@@ -65,7 +63,7 @@ export interface PluginHostManifest {
 }
 
 export type DshCompatWireOptions = XrkPluginServicesOptions &
-  SidebarCompatOptions & {
+  SidebarHostOptions & {
     readonly sidebarFace?: SidebarFaceBridge;
   } &
   TokenLedgerOptions &

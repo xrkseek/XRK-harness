@@ -164,4 +164,34 @@ describe("FsService", () => {
     expect((await fs.read(alias)).content).toBe("from-attachment\n");
     await expect(fs.write(alias, "nope")).rejects.toThrow(PathEscapeError);
   });
+
+  it("hostReadableRoots deny sibling home files and symlink escape from spill", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-ws-"));
+    const home = await mkdtemp(path.join(tmpdir(), "xrk-fs-home-"));
+    const spill = path.join(home, "spill");
+    const secret = path.join(home, "host-settings.json");
+    await mkdir(spill, { recursive: true });
+    await writeFile(secret, '{"token":"nope"}\n', "utf8");
+    await writeFile(path.join(spill, "ok.txt"), "spill-ok\n", "utf8");
+
+    const fs = createFsLocalProvider({
+      root,
+      hostReadableRoots: [spill],
+    });
+    expect((await fs.read(path.join(spill, "ok.txt"))).content).toBe("spill-ok\n");
+    await expect(fs.read(secret)).rejects.toThrow(PathEscapeError);
+    await expect(
+      fs.read(path.join(spill, "..", "host-settings.json")),
+    ).rejects.toThrow(PathEscapeError);
+
+    const { symlinkSync } = await import("node:fs");
+    const link = path.join(spill, "escape.txt");
+    try {
+      symlinkSync(secret, link);
+    } catch {
+      // Windows without symlink privilege — lexical denial above still covers.
+      return;
+    }
+    await expect(fs.read(link)).rejects.toThrow(PathEscapeError);
+  });
 });

@@ -27,6 +27,7 @@ import { createCliLogger, resolveLogLevel, type CliLogger } from "../log.js";
 import { clearHostLock, writeHostLock } from "../host-lock.js";
 import { forceFreeXrkPort } from "../port.js";
 import { listPlugins, resolvePluginsDir } from "../plugin/index.js";
+import { reportCliStartupFailure } from "../startup-diagnostics.js";
 
 function openProductUrl(url: string, log: CliLogger): void {
   const platform = process.platform;
@@ -92,6 +93,18 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     resolveLogLevel({ verbose: args.verbose, quiet: args.quiet }),
   );
 
+  try {
+    return await runServeInner(args, log);
+  } catch (err) {
+    await reportCliStartupFailure(err, args.preset);
+    return 1;
+  }
+}
+
+async function runServeInner(
+  args: ParsedArgs,
+  log: CliLogger,
+): Promise<number> {
   // Product establish: seed system data (~/.xrk), never the workspace.
   const home = resolveXrkHome();
   const seeded = await ensureUserHomeSeeds(home);
@@ -119,13 +132,7 @@ export async function runServe(args: ParsedArgs): Promise<number> {
   assertSafeHost(config.runtime.host);
 
   if (args.force && config.runtime.port > 0) {
-    try {
-      await forceFreeXrkPort(config.runtime.port, log);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      log.error(message);
-      return 1;
-    }
+    await forceFreeXrkPort(config.runtime.port, log);
   }
 
   const preset = isHostRuntimePresetId(args.preset)
@@ -136,14 +143,7 @@ export async function runServe(args: ParsedArgs): Promise<number> {
     ? await createPolicyEngineFromFile(config.runtime.policyFile)
     : undefined;
 
-  let webDist: string;
-  try {
-    webDist = await ensureProductWebDist(config.runtime.webDist);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    log.error(message);
-    return 1;
-  }
+  const webDist = await ensureProductWebDist(config.runtime.webDist);
   const sessionsDir = args.persist
     ? (config.runtime.sessionsDir?.trim() || defaultSessionsDir())
     : undefined;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   WEB_FETCH_GUIDANCE,
   WEB_SEARCH_GUIDANCE,
+  formatBrowserGuidance,
   formatWebFetchGuidance,
   formatWebSearchGuidance,
 } from "../src/format.js";
@@ -40,5 +41,17 @@ describe("formatWebFetchGuidance", () => {
 
   it("returns empty when web_fetch is unavailable", () => {
     expect(formatWebFetchGuidance(["web_search"])).toBe("");
+  });
+});
+
+describe("formatBrowserGuidance", () => {
+  it("mentions snapshot/act when browser_open is available", () => {
+    const text = formatBrowserGuidance(["browser_open", "browser_act"]);
+    expect(text).toContain("browser_open");
+    expect(text).toContain("browser_act");
+  });
+
+  it("returns empty when browser tools are unavailable", () => {
+    expect(formatBrowserGuidance(["web_fetch"])).toBe("");
   });
 });

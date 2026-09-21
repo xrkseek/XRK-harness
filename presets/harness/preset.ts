@@ -34,10 +34,43 @@ import type { AttachmentStore } from "@xrkseek/attachment";
 import {
   formatWebFetchGuidance,
   formatWebSearchGuidance,
+  formatBrowserGuidance,
   createDefaultWebAccess,
   createWebTools,
+  createBrowserTools,
+  createBrowserSession,
   type WebAccess,
 } from "@xrkseek/exec-web";
+import {
+  COMPUTER_USE_PROMPT_TEXT,
+  createComputerUseTools,
+  createDefaultComputerUseAccess,
+  type ComputerUseService,
+} from "@xrkseek/exec-computer-use";
+import {
+  VOICE_PROMPT_TEXT,
+  createDefaultVoiceAccess,
+  createVoiceTools,
+  type VoiceService,
+} from "@xrkseek/exec-voice";
+import {
+  IMAGE_GEN_PROMPT_TEXT,
+  createDefaultImageGenAccess,
+  createImageGenTools,
+  type ImageGenService,
+} from "@xrkseek/exec-image-gen";
+import {
+  VIDEO_GEN_PROMPT_TEXT,
+  createDefaultVideoGenAccess,
+  createVideoGenTools,
+  type VideoGenService,
+} from "@xrkseek/exec-video-gen";
+import {
+  createCuratedMemoryStore,
+  createCuratedMemoryTools,
+  writeReusableNotesAfterTurn,
+  type CuratedMemoryStore,
+} from "@xrkseek/exec-memory";
 import {
   LSP_PROMPT_TEXT,
   createDefaultLspAccess,
@@ -51,10 +84,17 @@ import {
   type TerminalSessionService,
 } from "@xrkseek/exec-pty";
 import {
-  createDenyListSandbox,
+  createSandboxStack,
   createSandboxWrapGuard,
-  createWorkspaceSandbox,
+  type SandboxBackendKind,
+  type SandboxService,
+  type WindowsSandboxMode,
 } from "@xrkseek/exec-sandbox";
+import {
+  CRON_PROMPT_TEXT,
+  createCronTools,
+  type CronScheduler,
+} from "@xrkseek/server-cron";
 import {
   createBashTools,
   createLocalShell,
@@ -71,7 +111,7 @@ import type { LlmAdapter } from "@xrkseek/llm";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import {
   createPolicyToolPre,
-  createReadOnlyToolPre,
+  createSessionReadOnlyToolPre,
   type PolicyEngine,
 } from "@xrkseek/policy";
 import {
@@ -79,11 +119,28 @@ import {
   shouldConfineSandbox,
 } from "@xrkseek/protocol";
 import {
+  createLifecycleWebhookNotifier,
   createPolicyEngineFromPlugins,
+  createShellHookPre,
+  defaultLifecycleWebhookPaths,
+  defaultShellHookPaths,
+  loadLifecycleWebhooks,
+  loadShellHookCommands,
+  wireCompositionHooks,
   wireCompositionTools,
   wireCompositionPrompts,
+  type LifecycleWebhookFetch,
+  type LifecycleWebhookNotifier,
+  type LifecycleWebhookTarget,
   type RegisteredPlugin,
+  type ShellHookCommand,
+  type ShellHookRunner,
 } from "@xrkseek/server-loader";
+import {
+  createDefaultSessionTelemetryAccess,
+  wrapStoreForSessionTelemetry,
+  type SessionTelemetrySink,
+} from "@xrkseek/session-telemetry";
 import path from "node:path";
 import {
   createWorkspaceInjector,
@@ -125,6 +182,36 @@ export interface HarnessCompositionOptions {
   readonly sessionStore?: SessionStore;
   readonly sessionId?: string;
   readonly fs?: FsService;
+  /**
+   * When true, skip local `path.resolve` workspace sandbox (SSH / remote cwd).
+   * Deny-list still applies. Host sets this with `@xrkseek/exec-ssh` providers.
+   */
+  readonly remoteExecution?: boolean;
+  /**
+   * Sandbox Provider kind (same `SandboxService` Definition). Default from
+   * `XRK_SANDBOX_BACKEND` or `workspace`. `docker` needs `XRK_SANDBOX_DOCKER_IMAGE`
+   * (or `sandboxDockerImage`). `bwrap` is Linux-only. `windows` needs a
+   * Codex-style helper (`XRK_SANDBOX_WINDOWS_HELPER` or `sandboxWindowsHelper`)
+   * and fails closed without it.
+   */
+  readonly sandboxBackend?: SandboxBackendKind;
+  /** Docker image when `sandboxBackend` / env is `docker`. */
+  readonly sandboxDockerImage?: string;
+  /** Windows helper binary when `sandboxBackend` / env is `windows`. */
+  readonly sandboxWindowsHelper?: string;
+  /** Windows permission posture (default `workspace-write`). */
+  readonly sandboxWindowsMode?: WindowsSandboxMode;
+  /** Windows network egress (default false). */
+  readonly sandboxWindowsNetwork?: boolean;
+  /** Optional override of the whole sandbox stack (tests). */
+  readonly sandbox?: SandboxService;
+  /**
+   * Host cron scheduler — registers `cronjob`. Default: off in composition;
+   * Host passes the live scheduler when `XRK_CRON` is not `0`.
+   */
+  readonly cronScheduler?: CronScheduler;
+  /** Optional `run_code` backend (SSH Node or local worker). */
+  readonly codeRuntime?: import("@xrkseek/code-runtime").CodeRuntime;
   readonly assemble?: boolean;
   /** Default `tools`. `code` adds experimental `run_code` (still keeps fs/shell). */
   readonly presentation?: PresentationMode;
@@ -151,6 +238,41 @@ export interface HarnessCompositionOptions {
    */
   readonly webTools?: boolean | WebAccess;
   /**
+   * Register `computer_use` (desktop AX tree + input). Default: on.
+   * `false` skips. Pass a `ComputerUseService` to inject. Without
+   * `XRK_COMPUTER_USE=1` (Windows UIA) / `memory` / inject → tool still
+   * visible, execute is an honest error. Separate from browser_*.
+   */
+  readonly computerUseTools?: boolean | ComputerUseService;
+  /**
+   * Register voice Host tools (`text_to_speech` · `voice_transcribe` · `voice_session`).
+   * Default: on. `false` skips. Pass a `VoiceService` to inject.
+   * Without `XRK_VOICE=1` (+ API key) / `memory` / inject → tools still
+   * visible, execute is an honest error.
+   */
+  readonly voiceTools?: boolean | VoiceService;
+  /**
+   * Register `image_generate` (text-to-image). Default: on.
+   * `false` skips. Pass an `ImageGenService` to inject.
+   * Without `XRK_IMAGE_GEN=1` (+ API key) / `memory` / inject → tool still
+   * visible, execute is an honest error.
+   */
+  readonly imageGenTools?: boolean | ImageGenService;
+  /**
+   * Register `video_generate` (text-to-video, async job lifecycle). Default: on.
+   * `false` skips. Pass a `VideoGenService` to inject.
+   * Without `XRK_VIDEO_GEN=1` (+ API key) / `memory` / inject → tool still
+   * visible, execute is an honest error.
+   */
+  readonly videoGenTools?: boolean | VideoGenService;
+  /**
+   * Register `memory` (curated MEMORY.md / USER.md). Default: on.
+   * `false` skips. Pass a `CuratedMemoryStore` to inject (tests).
+   * The system-prompt block is frozen when this composition is created.
+   * Tool writes update disk only. Not the Mnemon document library.
+   */
+  readonly curatedMemory?: false | CuratedMemoryStore;
+  /**
    * Register `lsp`. Default: on. `false` skips.
    * Pass an `LspService` to inject in tests. No `XRK_LSP_COMMAND` → tool
    * still visible, execute is an honest error.
@@ -171,6 +293,46 @@ export interface HarnessCompositionOptions {
   readonly shell?: import("@xrkseek/exec-shell").ShellService;
   /** Optional policy engine → `pipeline.onPre(createPolicyToolPre)`. */
   readonly policy?: PolicyEngine;
+  /**
+   * Shell PreToolUse hooks (`hooks.json`). Default: load `~/.xrk/hooks.json`
+   * then `{workspace}/.xrk/hooks.json`. `false` disables. Pass `commands` /
+   * `paths` / `runner` to override (tests).
+   */
+  readonly shellHooks?:
+    | false
+    | {
+        readonly commands?: readonly ShellHookCommand[];
+        readonly paths?: readonly string[];
+        readonly defaultTimeoutMs?: number;
+        readonly runner?: ShellHookRunner;
+      };
+  /**
+   * Outbound lifecycle webhooks (`webhooks.json`). Default: load
+   * `~/.xrk/webhooks.json` then `{workspace}/.xrk/webhooks.json`.
+   * `false` disables. Notify-only (never blocks turns/tools).
+   */
+  readonly lifecycleWebhooks?:
+    | false
+    | {
+        readonly targets?: readonly LifecycleWebhookTarget[];
+        readonly paths?: readonly string[];
+        readonly fetchImpl?: LifecycleWebhookFetch;
+        readonly env?: NodeJS.ProcessEnv;
+      };
+  /**
+   * Session telemetry (OpenTelemetry OTLP/HTTP logs). Default: resolve from
+   * `XRK_TELEMETRY` / OTEL_* env. `false` disables. Pass a `sink` to inject.
+   * Capture is notify-only (never blocks turns).
+   */
+  readonly sessionTelemetry?:
+    | false
+    | SessionTelemetrySink
+    | {
+        readonly sink?: SessionTelemetrySink;
+        readonly env?: NodeJS.ProcessEnv;
+        readonly fetchImpl?: import("@xrkseek/session-telemetry").OtlpFetch;
+        readonly serviceName?: string;
+      };
   /** Host vision: resolve attachment bytes for image user content. */
   readonly resolveImage?: Parameters<typeof createAgent>[0]["resolveImage"];
   /** Host: AttachmentStore.fileHostPath → absolute path for uploaded files. */
@@ -270,6 +432,44 @@ function toInjectOptions(
   };
 }
 
+function wrapStoreForLifecycleWebhooks(
+  store: SessionStore,
+  notifier: LifecycleWebhookNotifier,
+  sessionId: string,
+): SessionStore {
+  return {
+    create: (id) => store.create(id),
+    get: (id) => store.get(id),
+    has: (id) => store.has(id),
+    list: () => store.list(),
+    readEvents: (id, from, to) => store.readEvents(id, from, to),
+    ...(store.listHints
+      ? { listHints: (id: string) => store.listHints!(id) }
+      : {}),
+    ...(store.isLoaded
+      ? { isLoaded: (id: string) => store.isLoaded!(id) }
+      : {}),
+    append(id, event) {
+      const logged = store.append(id, event);
+      if (id === sessionId) {
+        if (event.type === "turn/start") {
+          notifier.fire({
+            hookEventName: "turn/start",
+            turnId: event.turnId,
+          });
+        } else if (event.type === "turn/end") {
+          notifier.fire({
+            hookEventName: "turn/end",
+            turnId: event.turnId,
+            extra: { reason: event.reason },
+          });
+        }
+      }
+      return logged;
+    },
+  };
+}
+
 /** Composition: fs + shell + sandbox guards + workspace inject. */
 export function createHarnessComposition(
   options: HarnessCompositionOptions,
@@ -283,19 +483,112 @@ export function createHarnessComposition(
         : {}),
     });
   const sharedShell = options.shell;
+  const baseStore = options.sessionStore ?? createMemorySessionStore();
+  const sessionId = ensureSession(baseStore, options.sessionId);
+  let telemetrySink: SessionTelemetrySink | undefined;
+  if (options.sessionTelemetry !== false) {
+    if (
+      options.sessionTelemetry &&
+      typeof options.sessionTelemetry === "object" &&
+      "emit" in options.sessionTelemetry
+    ) {
+      telemetrySink = options.sessionTelemetry;
+    } else {
+      const telOpt =
+        typeof options.sessionTelemetry === "object"
+          ? options.sessionTelemetry
+          : undefined;
+      telemetrySink =
+        telOpt?.sink ??
+        createDefaultSessionTelemetryAccess({
+          ...(telOpt?.env !== undefined ? { env: telOpt.env } : {}),
+          ...(telOpt?.fetchImpl !== undefined
+            ? { fetchImpl: telOpt.fetchImpl }
+            : {}),
+          ...(telOpt?.serviceName !== undefined
+            ? { serviceName: telOpt.serviceName }
+            : {}),
+        }).sink;
+    }
+  }
+  let store: SessionStore = telemetrySink
+    ? wrapStoreForSessionTelemetry({
+        store: baseStore,
+        sink: telemetrySink,
+        sessionId,
+      })
+    : baseStore;
+  let lifecycleNotifier: LifecycleWebhookNotifier | undefined;
+  if (options.lifecycleWebhooks !== false) {
+    const webhookOpt =
+      typeof options.lifecycleWebhooks === "object"
+        ? options.lifecycleWebhooks
+        : undefined;
+    const targets =
+      webhookOpt?.targets ??
+      loadLifecycleWebhooks(
+        webhookOpt?.paths ??
+          defaultLifecycleWebhookPaths(
+            options.workspaceRoot,
+            resolveProductHome(),
+          ),
+      );
+    if (targets.length > 0) {
+      lifecycleNotifier = createLifecycleWebhookNotifier({
+        targets,
+        sessionId,
+        workspaceRoot: options.workspaceRoot,
+        ...(webhookOpt?.env !== undefined ? { env: webhookOpt.env } : {}),
+        ...(webhookOpt?.fetchImpl !== undefined
+          ? { fetchImpl: webhookOpt.fetchImpl }
+          : {}),
+      });
+    }
+  }
+  if (lifecycleNotifier) {
+    store = wrapStoreForLifecycleWebhooks(store, lifecycleNotifier, sessionId);
+  }
+  const sandbox =
+    options.sandbox ??
+    createSandboxStack({
+      workspaceRoot: options.workspaceRoot,
+      ...(options.sandboxBackend !== undefined
+        ? { backend: options.sandboxBackend }
+        : {}),
+      ...(options.sandboxDockerImage !== undefined
+        ? { dockerImage: options.sandboxDockerImage }
+        : {}),
+      ...(options.sandboxWindowsHelper !== undefined
+        ? { windowsHelper: options.sandboxWindowsHelper }
+        : {}),
+      ...(options.sandboxWindowsMode !== undefined
+        ? { windowsMode: options.sandboxWindowsMode }
+        : {}),
+      ...(options.sandboxWindowsNetwork !== undefined
+        ? { windowsNetwork: options.sandboxWindowsNetwork }
+        : {}),
+      ...(options.remoteExecution ? { remoteExecution: true } : {}),
+    });
+  const sandboxMode = effectiveSandboxMode(
+    readSessionEvents(store, sessionId),
+    "workspace-write",
+  );
   const rootShell =
     sharedShell ??
     createLocalShell({
       subprocess: createLocalSubprocess(),
       defaultCwd: options.workspaceRoot,
+      ...(shouldConfineSandbox(sandboxMode)
+        ? {
+            prepareArgv: (
+              argv: readonly string[],
+              cwd: string | undefined,
+              signal?: AbortSignal,
+            ) => sandbox.confine(argv, cwd, signal),
+          }
+        : {}),
     });
-  const store = options.sessionStore ?? createMemorySessionStore();
-  const sessionId = ensureSession(store, options.sessionId);
   const shell = createSessionScopedShell(rootShell, sessionId);
-  const sandbox = createWorkspaceSandbox({
-    root: options.workspaceRoot,
-    inner: createDenyListSandbox(),
-  });
   const injectOpts = toInjectOptions(
     options.workspaceRoot,
     options.workspaceInject,
@@ -303,10 +596,6 @@ export function createHarnessComposition(
   );
   const productDir =
     injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
-  const sandboxMode = effectiveSandboxMode(
-    readSessionEvents(store, sessionId),
-    "workspace-write",
-  );
 
   const tools = createToolRegistry();
   for (const tool of createFsTools(fs)) tools.register(tool);
@@ -347,6 +636,77 @@ export function createHarnessComposition(
             options.webSearch ? { search: options.webSearch } : {},
           );
     for (const tool of createWebTools(access)) tools.register(tool);
+    const browser = createBrowserSession({ fetch: access.fetch });
+    for (const tool of createBrowserTools(
+      browser,
+      options.attachments
+        ? {
+            saveScreenshot: (png) =>
+              options.attachments!.saveImage({
+                data: png,
+                mediaType: "image/png",
+                name: "browser-snapshot.png",
+              }),
+          }
+        : {},
+    )) {
+      tools.register(tool);
+    }
+  }
+  if (options.computerUseTools !== false) {
+    const service =
+      typeof options.computerUseTools === "object"
+        ? options.computerUseTools
+        : createDefaultComputerUseAccess().service;
+    for (const tool of createComputerUseTools({
+      ...(service ? { service } : {}),
+    })) {
+      tools.register(tool);
+    }
+  }
+  if (options.voiceTools !== false) {
+    const service =
+      typeof options.voiceTools === "object"
+        ? options.voiceTools
+        : createDefaultVoiceAccess().service;
+    for (const tool of createVoiceTools({
+      ...(service ? { service } : {}),
+    })) {
+      tools.register(tool);
+    }
+  }
+  const curatedMemory =
+    options.curatedMemory === false
+      ? undefined
+      : (options.curatedMemory ?? createCuratedMemoryStore());
+  if (curatedMemory) {
+    for (const tool of createCuratedMemoryTools(curatedMemory)) {
+      tools.register(tool);
+    }
+  }
+  if (options.imageGenTools !== false) {
+    const service =
+      typeof options.imageGenTools === "object"
+        ? options.imageGenTools
+        : createDefaultImageGenAccess().service;
+    for (const tool of createImageGenTools({
+      ...(service ? { service } : {}),
+      ...(options.attachments ? { attachments: options.attachments } : {}),
+    })) {
+      tools.register(tool);
+    }
+  }
+  if (options.videoGenTools !== false) {
+    const service =
+      typeof options.videoGenTools === "object"
+        ? options.videoGenTools
+        : createDefaultVideoGenAccess().service;
+    for (const tool of createVideoGenTools({
+      ...(service ? { service } : {}),
+      ...(options.attachments ? { attachments: options.attachments } : {}),
+    })) {
+      tools.register(tool);
+    }
   }
   if (options.lspTools !== false) {
     const service =
@@ -368,7 +728,11 @@ export function createHarnessComposition(
             workspaceRoot: options.workspaceRoot,
             ...(shouldConfineSandbox(sandboxMode)
               ? {
-                  wrapArgv: (argv, cwd) => sandbox.wrapArgv(argv, cwd),
+                  confine: (
+                    argv: readonly string[],
+                    cwd: string | undefined,
+                    signal?: AbortSignal,
+                  ) => sandbox.confine(argv, cwd, signal),
                 }
               : {}),
           }).service;
@@ -381,8 +745,15 @@ export function createHarnessComposition(
       tools.register(tool);
     }
   }
-  if (options.presentation === "code") {
-    tools.register(createRunCodeTool(createWorkerCodeRuntime()));
+  if (options.cronScheduler) {
+    for (const tool of createCronTools(options.cronScheduler)) {
+      tools.register(tool);
+    }
+  }
+  if (options.presentation === "code" || options.codeRuntime) {
+    tools.register(
+      createRunCodeTool(options.codeRuntime ?? createWorkerCodeRuntime()),
+    );
   }
   wireCompositionTools(tools, {
     ...(options.extraTools ? { extraTools: options.extraTools } : {}),
@@ -391,8 +762,18 @@ export function createHarnessComposition(
 
   const tracker = createReadTracker();
   const toolOutputPersist = createWorkspaceToolOutputPersist();
+  // Same byte ceiling as agent-loop spill (`0` disables both). One full-body write.
+  const inlineCap = options.toolResultMaxInlineBytes;
   const pipeline = createToolPipeline({
-    outputBound: { persist: (full) => toolOutputPersist.persist(full) },
+    outputBound:
+      inlineCap === 0
+        ? false
+        : {
+            persist: (full) => toolOutputPersist.persist(full),
+            ...(typeof inlineCap === "number" && inlineCap > 0
+              ? { maxBytes: Math.floor(inlineCap) }
+              : {}),
+          },
   });
   const policyEngine = createPolicyEngineFromPlugins({
     ...(options.policy !== undefined ? { engine: options.policy } : {}),
@@ -401,8 +782,40 @@ export function createHarnessComposition(
   if (policyEngine) {
     pipeline.onPre(createPolicyToolPre(policyEngine));
   }
-  if (sandboxMode === "read-only") {
-    pipeline.onPre(createReadOnlyToolPre());
+  // Live read-only gate (session knobs), not create-time snapshot.
+  pipeline.onPre(
+    createSessionReadOnlyToolPre(
+      () =>
+        effectiveSandboxMode(readSessionEvents(store, sessionId)) ===
+        "read-only",
+    ),
+  );
+  // Shell PreToolUse (hooks.json) — after policy / read-only; before kind:hooks.
+  if (options.shellHooks !== false) {
+    const shellOpt =
+      typeof options.shellHooks === "object" ? options.shellHooks : undefined;
+    const shellCommands =
+      shellOpt?.commands ??
+      loadShellHookCommands(
+        shellOpt?.paths ??
+          defaultShellHookPaths(options.workspaceRoot, resolveProductHome()),
+      );
+    if (shellCommands.length > 0) {
+      pipeline.onPre(
+        createShellHookPre({
+          commands: shellCommands,
+          cwd: () => options.workspaceRoot,
+          ...(shellOpt?.defaultTimeoutMs !== undefined
+            ? { defaultTimeoutMs: shellOpt.defaultTimeoutMs }
+            : {}),
+          ...(shellOpt?.runner !== undefined ? { runner: shellOpt.runner } : {}),
+        }),
+      );
+    }
+  }
+  // kind:hooks — after policy / read-only / shell; before guards + builtin post.
+  if (options.plugins) {
+    wireCompositionHooks(pipeline, { plugins: options.plugins });
   }
   if (shouldConfineSandbox(sandboxMode)) {
     pipeline.onGuard(createSandboxWrapGuard(sandbox));
@@ -412,6 +825,18 @@ export function createHarnessComposition(
         writeToolNames: ["apply_edit", "write_file"],
       }),
     );
+  }
+  if (lifecycleNotifier) {
+    const notifier = lifecycleNotifier;
+    pipeline.onPost(async (ctx) => {
+      notifier.fireToolPost({
+        toolName: ctx.call.name,
+        toolUseId: ctx.call.id,
+        isError: ctx.result?.isError === true,
+        skippedBody: ctx.skippedBody === true,
+      });
+      return { action: "accept" };
+    });
   }
   pipeline.onPost(async (ctx) => {
     if (
@@ -446,6 +871,14 @@ export function createHarnessComposition(
     order: 0,
     content: () => persona,
   });
+  if (curatedMemory) {
+    const frozenMemory = curatedMemory.frozenSystemBlock();
+    prompts.register({
+      id: "curated-memory",
+      order: 2,
+      content: () => frozenMemory,
+    });
+  }
   if (options.webTools !== false) {
     prompts.register({
       id: "tool:web_search",
@@ -456,6 +889,59 @@ export function createHarnessComposition(
       id: "tool:web_fetch",
       order: 111,
       content: () => formatWebFetchGuidance(availableToolNames()),
+    });
+    prompts.register({
+      id: "tool:browser",
+      order: 115,
+      content: () => formatBrowserGuidance(availableToolNames()),
+    });
+  }
+  if (options.computerUseTools !== false) {
+    prompts.register({
+      id: "tool:computer_use",
+      order: 116,
+      content: () =>
+        availableToolNames().has("computer_use")
+          ? COMPUTER_USE_PROMPT_TEXT
+          : "",
+    });
+  }
+  if (options.voiceTools !== false) {
+    prompts.register({
+      id: "tool:voice",
+      order: 118,
+      content: () =>
+        availableToolNames().has("text_to_speech") ||
+        availableToolNames().has("voice_transcribe") ||
+        availableToolNames().has("voice_session")
+          ? VOICE_PROMPT_TEXT
+          : "",
+    });
+  }
+  if (options.imageGenTools !== false) {
+    prompts.register({
+      id: "tool:image_gen",
+      order: 119,
+      content: () =>
+        availableToolNames().has("image_generate")
+          ? IMAGE_GEN_PROMPT_TEXT
+          : "",
+    });
+  }
+  if (options.videoGenTools !== false) {
+    prompts.register({
+      id: "tool:video_gen",
+      order: 120,
+      content: () =>
+        availableToolNames().has("video_generate") ? VIDEO_GEN_PROMPT_TEXT : "",
+    });
+  }
+  if (options.cronScheduler) {
+    prompts.register({
+      id: "tool:cron",
+      order: 117,
+      content: () =>
+        availableToolNames().has("cronjob") ? CRON_PROMPT_TEXT : "",
     });
   }
   prompts.register({
@@ -526,12 +1012,19 @@ export function createHarnessComposition(
     ...(options.plugins ? { plugins: options.plugins } : {}),
     reservedIds: [
       "base",
+      ...(curatedMemory ? ["curated-memory"] : []),
       "tool:skill",
       "tool:fs-routing",
       "tool:shell-routing",
       "tool:jobs",
       ...(options.subagentRouting !== false ? ["tool:subagent"] : []),
-      ...(options.webTools !== false ? ["tool:web_search", "tool:web_fetch"] : []),
+      ...(options.webTools !== false
+        ? ["tool:web_search", "tool:web_fetch", "tool:browser"]
+        : []),
+      ...(options.computerUseTools !== false ? ["tool:computer_use"] : []),
+      ...(options.voiceTools !== false ? ["tool:voice"] : []),
+      ...(options.imageGenTools !== false ? ["tool:image_gen"] : []),
+      ...(options.cronScheduler ? ["tool:cron"] : []),
       ...(options.lspTools !== false ? ["tool:lsp"] : []),
       ...(options.ptyTools !== false ? ["tool:pty"] : []),
     ],
@@ -546,7 +1039,8 @@ export function createHarnessComposition(
 
   return {
     id: presetId,
-    description: "XRK Harness: fs + shell + sandbox + web + lsp + pty + workspace inject",
+    description:
+      "XRK Harness: fs + shell + sandbox + web + browser + computer_use + voice + image_gen + lsp + pty + workspace inject",
     workspaceRoot: options.workspaceRoot,
     fs,
     workspace,
@@ -595,6 +1089,7 @@ export function createHarnessComposition(
         llm,
         tools,
         pipeline,
+        cwd: options.workspaceRoot,
         jobs: {
           list: () =>
             shell.listJobsNow().map((j) => ({
@@ -629,6 +1124,26 @@ export function createHarnessComposition(
                   ...ctx,
                   injectOptions: injectOpts,
                   injector: workspace,
+                });
+              },
+            }
+          : {}),
+        ...(curatedMemory
+          ? {
+              afterTurn: ({ userText, assistantText, turnId }) => {
+                const memoryToolWrote = readSessionEvents(
+                  store,
+                  sessionId,
+                ).some(
+                  (event) =>
+                    event.type === "tool/call" &&
+                    event.turnId === turnId &&
+                    event.call.name === "memory",
+                );
+                writeReusableNotesAfterTurn(curatedMemory, {
+                  userText: userText ?? "",
+                  assistantText,
+                  memoryToolWrote,
                 });
               },
             }
@@ -692,11 +1207,19 @@ export function createHarnessComposition(
             ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
           }),
         ),
+        sessionTelemetry: Boolean(telemetrySink),
         ...patch,
       };
     },
     async dispose() {
       if (!sharedShell) await rootShell.dispose();
+      if (telemetrySink) {
+        try {
+          await telemetrySink.shutdown();
+        } catch {
+          /* best-effort */
+        }
+      }
     },
   };
 }

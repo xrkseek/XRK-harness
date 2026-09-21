@@ -24,3 +24,25 @@ export function createHostPluginsPublicHandler(
   const handlers = hostPlugins.map((plugin) => plugin.createPublicHandler!(ctx));
   return chainPublicHandlers(...handlers);
 }
+
+/**
+ * Rebuild the host-plugin chain when the live registry changes so unload
+ * pairs with register without `xrkh restart`. `createPublicHandler` runs
+ * again only when the id set changes.
+ */
+export function createLiveHostPluginsPublicHandler(
+  list: () => readonly RegisteredPlugin[],
+  ctx: HostWireContext,
+): PublicRouteHandlerFn {
+  let key = "";
+  let inner: PublicRouteHandlerFn = async () => false;
+  return async (req, res) => {
+    const plugins = listHostPlugins(list());
+    const nextKey = plugins.map((plugin) => plugin.id).join("\n");
+    if (nextKey !== key) {
+      key = nextKey;
+      inner = createHostPluginsPublicHandler(plugins, ctx);
+    }
+    return inner(req, res);
+  };
+}

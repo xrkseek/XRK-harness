@@ -32,6 +32,9 @@ function displayName(value: string | undefined): string | undefined {
   // ordinary character, so path.basename would keep a Windows client's full
   // local path and leak it into the reference and the session log.
   const leaf = value.slice(Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\')) + 1)
+  // Deliberate C0/DEL strip: a malicious leaf name must not smuggle control
+  // codes into the session log or the object-store key.
+  // eslint-disable-next-line no-control-regex
   const clean = leaf.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 255)
   return clean === '' ? undefined : clean
 }

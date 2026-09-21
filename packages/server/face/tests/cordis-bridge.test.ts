@@ -182,4 +182,57 @@ describe("cordis dsh-compat bridge", () => {
     expect(res.result.value).toMatchObject({ ok: true, hostBridge: true });
     expect(runtime.hostPublic?.cordisHostApplied).toEqual(["pkg/apply-me"]);
   });
+
+  it("dynamicCordisRunner/inventory keeps soft-disabled fiberPhase null", async () => {
+    const productDir = mkdtempSync(path.join(tmpdir(), "xrk-cordis-soft-inv-"));
+    temps.push(productDir);
+    const plugins = path.join(productDir, "plugins");
+    stageClient(plugins, "soft-cordis");
+    writeFileSync(
+      path.join(plugins, ".xrk-plugins.json"),
+      JSON.stringify({
+        rev: 1,
+        packages: {
+          "soft-cordis": {
+            name: "soft-cordis",
+            version: "1.0.0",
+            kind: "client",
+          },
+        },
+      }),
+    );
+    writeFileSync(
+      path.join(plugins, ".xrk-plugins-disabled.json"),
+      JSON.stringify({ ids: ["soft-cordis"] }),
+    );
+    const runtime = createBareFaceRuntime({
+      productDir,
+      plugins: [{ id: "soft-cordis", kind: "cordis" }],
+      hostPublic: {
+        host: "127.0.0.1",
+        port: 8787,
+        workspaceRoot: "/tmp",
+        preset: "harness",
+        corsOrigin: "*",
+        rateLimitPerMinute: 60,
+        webDistConfigured: true,
+        pluginsDir: plugins,
+      },
+    });
+    const listed = await dispatchFaceMethod(
+      runtime,
+      "dynamicCordisRunner/inventory",
+      "c-soft",
+      { args: {} },
+    );
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) throw new Error("inventory");
+    const rows = listed.result.value as Array<{
+      pluginId: string;
+      fiberPhase: string | null;
+    }>;
+    expect(rows.find((r) => r.pluginId === "soft-cordis")).toMatchObject({
+      fiberPhase: null,
+    });
+  });
 });

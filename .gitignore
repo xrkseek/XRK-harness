@@ -17,18 +17,19 @@ packages/stubs/**/lib/
 .env.*
 !.env.example
 .DS_Store
+__pycache__/
+*.pyc
+*.egg-info/
 *.tsbuildinfo
 
 # Workspace runtime — created on first serve/web; NEVER commit
 .xrk/.credentials.yaml
 .xrk/settings.yaml
 .xrk/workspaces.json
-# Legacy workspace-relative spill (now ~/.xrk/spill/tool-outputs)
-.xrk/tool-outputs/
 .xrk/sessions/
 .xrk/host-settings.json
 .xrk/mnemon/
-.xrk-harness/
+.xrk/tool-outputs/
 # Accidental cwd dump when harness home resolves to repo root
 /workspaces.json
 

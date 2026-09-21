@@ -905,7 +905,7 @@ describe("DSH shell remotes that must not 404 / NI", () => {
     if (!listed.result.ok) throw new Error("inventory");
     const rows = listed.result.value as Array<{
       pluginId: string;
-      fiberPhase: string;
+      fiberPhase: string | null;
       hostBridge?: string;
     }>;
     expect(rows.some((r) => r.pluginId === "dsh/demo" && r.fiberPhase === "active")).toBe(

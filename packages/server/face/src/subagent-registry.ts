@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { tryWriteJsonSidecar } from "./json-sidecar.js";
 
-export type SubagentMode = "one-shot" | "continuable";
+export type SubagentMode = "one-shot" | "continuable" | "fork";
 
 export interface FaceSubagentLink {
   readonly parentSessionId: string;
@@ -23,7 +23,10 @@ export class FaceSubagentRegistry {
   private readonly byChild = new Map<string, FaceSubagentLink>();
   private readonly persistPath: string | undefined;
 
-  constructor(persistPath?: string) {
+  constructor(
+    persistPath?: string,
+    private readonly hooks?: { onAttach?: (link: FaceSubagentLink) => void },
+  ) {
     this.persistPath = persistPath;
     if (persistPath) this.load();
   }
@@ -45,8 +48,21 @@ export class FaceSubagentRegistry {
     return this.byParent.get(parentSessionId) ?? [];
   }
 
+  entries(): readonly FaceSubagentLink[] {
+    return [...this.byChild.values()];
+  }
+
+  /** Tool-delegated children only (excludes UI/rewind `fork` lineage). */
+  listDelegated(parentSessionId: string): readonly FaceSubagentLink[] {
+    return this.list(parentSessionId).filter((link) => link.mode !== "fork");
+  }
+
   hasChildren(sessionId: string): boolean {
     return (this.byParent.get(sessionId)?.length ?? 0) > 0;
+  }
+
+  hasDelegatedChildren(sessionId: string): boolean {
+    return this.listDelegated(sessionId).length > 0;
   }
 
   attach(link: FaceSubagentLink): FaceSubagentLink {
@@ -70,6 +86,7 @@ export class FaceSubagentRegistry {
     this.byParent.set(link.parentSessionId, bucket);
     this.byChild.set(link.childSessionId, frozen);
     this.save();
+    this.hooks?.onAttach?.(frozen);
     return frozen;
   }
 
@@ -83,8 +100,15 @@ export class FaceSubagentRegistry {
         if (!row || typeof row !== "object") continue;
         const parentSessionId = String(row.parentSessionId ?? "").trim();
         const childSessionId = String(row.childSessionId ?? "").trim();
-        const mode = row.mode === "one-shot" ? "one-shot" : "continuable";
-        const label = String(row.label ?? "").trim() || "subagent";
+        const mode: SubagentMode =
+          row.mode === "one-shot"
+            ? "one-shot"
+            : row.mode === "fork"
+              ? "fork"
+              : "continuable";
+        const label =
+          String(row.label ?? "").trim() ||
+          (mode === "fork" ? "fork" : "subagent");
         if (!parentSessionId || !childSessionId) continue;
         const frozen: FaceSubagentLink = {
           parentSessionId,

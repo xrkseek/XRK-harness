@@ -1,4 +1,4 @@
-﻿# 社区插件与 Host 契约
+# 社区插件与 Host 契约
 
 > **读者**：集成者 · 贡献者（安装社区 client、对照 Host 已实现能力与待补特性）
 
@@ -60,15 +60,15 @@ community client.js
 | 能力 | 已实现 | 待补 |
 |------|--------|------|
 | `host.mjs` RPC | inventory · invoke · runHostHalf | 全量第三方 DI（非产品目标） |
-| IM | connector · OAuth · `message.send/list` · webhook · poll/SSE · sidecar relay · **in-process WS client** | — |
+| IM | connector · OAuth · `message.send/list` · webhook · poll/SSE · sidecar relay · **in-process WS client** · **本地 WS ingress**（`/api/im/gateway/ws`，无需 `XRK_IM_GATEWAY_*`） | — |
 | 任务流 | 持久化 · TS 节点 · scan · `external` 子进程 · **Python bridge**（`XRK_TONGFLOW_PYTHON`） | — |
-| GenUI | CRUD · HTML / React tree 预览 · **npm 组件 registry/resolve** | — |
+| GenUI | CRUD · HTML / React tree 预览 · **npm 组件 registry/resolve** · **浏览器 runtime**（`/dsh-genui/runtime.js` mount · CE） | — |
 | Vision | paste/analyze · 本地 OCR · OpenAI-compatible · **anthropic-messages** · **gemini-generate** | — |
-| 检索与记忆 | 本地 rg · keyword · **`embedding.search` embedded host** · optional `XRK_MEMORY_EMBED_*` sidecar | — |
-| 自动审阅 | 启发式 classify · slash | 可插拔 classifier |
+| 检索与记忆 | 本地 rg · keyword · **`embedding.search` embedded host** · optional `XRK_MEMORY_EMBED_*` sidecar · **Mnemon 文档引擎**（keyword search · mention graph · bodies） | — |
+| 自动审阅 | 启发式 classify（默认）· **可替换 classifier**（`options.classifier` / `XRK_AUTO_REVIEW_CLASSIFIER_URL`）· slash | — |
 | 上下文浏览器 | Face **`contextTimeline`**（requests 分项 · usage 盖章 · events）/ **`contextHeaders`** · **`costUsage`** 计价 | — |
 | 移动访问 | 配对 · LAN/WAN PIN · 隧道 HTTP+WS | — |
-| **侧栏（`xrkh-better-sidebar`）** | Host 原生 `createSidebarPublicHandler`（见下节；非 dsh-compat 能力表）；含 `git.worktrees` · `changes.ops` | 真实 agent-opens 推送（现为空闲 stub） |
+| **侧栏（`xrkh-better-sidebar`）** | Host 原生 `createSidebarPublicHandler`（见下节；非 dsh-compat 能力表）；含 `git.worktrees` · `changes.ops` · agent-opens/terminals 真推送 | prefs 默认关；开 `agentOpenTools` / `agentTerminalTools` 后模型可 `sidebar_open` / `terminal_create` |
 
 本地消息、节点、OCR 与 GenUI 预览线已在适配器内可用。
 
@@ -80,13 +80,15 @@ community client.js
 
 | 表面 | Host 落点 | 插件职责 |
 |------|-----------|----------|
-| `POST /sidebar/api/<method>` | `packages/server/http/src/sidebar/`（FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **changes.ops** · **open.external**） | 调 API；勿在 client 里再实现一份 Host |
+| `POST /sidebar/api/<method>` | `packages/server/http/src/sidebar/`（FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **subagents.graph** · **changes.ops** · **open.external**） | 调 API；勿在 client 里再实现一份 Host |
 | `/sidebar/file` · `upload` · `html` · `bundle` | 同上 + 插件目录 `chunks/` | 发布 `lib/client-*.js` 供 bundle 回落 |
-| `/sidebar/ws/terminal` | Host `sidebar-pty`（真实 node-pty · session+tab 保活） | TerminalView 连同源 WS |
-| `/sidebar/ws/agent-terminals` · `agent-opens` | 空闲 stub（防客户端重连风暴） | 有数据再由 Host 扩展，勿在插件 host 半包假实现 |
+| `/sidebar/ws/terminal` | Host `sidebar-pty`（真实 node-pty · session+tab 保活；系统用户权限，**不**套 Agent sandbox / fence） | TerminalView 连同源 WS |
+| `/sidebar/ws/agent-terminals` · `agent-opens` | Host 真推送（registry + prefs 门控工具）；无 registry 时仍空列表保活 | 勿在插件 host 半包假实现 |
 | Face 注入 `sidebarFace` | Host：`openExternal` · jobs · `listSubagentsLive` · rewind `forkSessionAt` | 子代理 / 后台任务 / 外开路径走此桥 |
 
 `subagents.live` 的 wire 形状为嵌套 `tool`：`{ text?; tool?: { name; args } }`（与插件 `LastActivity` / `SidebarSubagentLiveActivity` 一致）。Host 真源：`packages/server/host/src/sidebar-live-line.ts`。
+
+预览契约（先类型、后 UI）：`@xrkseek/protocol` 的 `BrowserEmbedProbe` · `SubagentPreviewSummary` · `PlanPreviewSummary` · `OfficePreviewStatus`；policy 边界 `host.open` · `sidebar.embed` · `sidebar.fs` · `office.connect`（见 [policy](./policy.md)）。**Office 状态仍走 `/office`**（`office.connect` 已门禁 mutation），不要塞进 `/sidebar`。计划全文读 Face `plan` 投影；侧栏只消费摘要。
 
 **已移除**：Side Chat（beta）及 Host `sidechat.*`。子代理与后台任务请用 Face `subagent.*` + Sidebar `subagents.live` / `jobs.*`。
 
@@ -98,11 +100,9 @@ community client.js
 
 ## 待补特性
 
-当前 Host 能力表「已实现」列已覆盖 IM · Vision · 记忆 · GenUI npm · TongFlow Python bridge。后续社区扩展写入 status 时须代码对齐。
+真源：`dsh-compat-matrix.ts` 的 `DSH_COMPAT_KNOWN_GAPS`（当前为空）。
 
-| 特性 | 说明 |
-|------|------|
-| GenUI 浏览器端 bundle | Host 侧 registry/resolve 已能跑；壳内动态 import 由 community client 负责 |
+TongFlow 装包走 `POST /tongflow/plugins`（`spec` / `package` / `name` / `id`），由 `runPluginMutate` 执行 `xrkh plugin add`。已删除的 `/plugins/install` 假 `accepted` 路由不恢复。成功后需要 `xrkh restart` 才进当前进程。
 
 ## 可选外接 env（不进仓依赖）
 
@@ -116,6 +116,8 @@ community client.js
 | `XRK_MEMORY_EMBED_URL` | 外接向量库 HTTP 基址（如 Qdrant REST）；未接时仍走本地 hash bridge |
 | `XRK_MEMORY_EMBED_TOKEN` | 向量库 API key（可选） |
 | `XRK_MEMORY_EMBED_COLLECTION` | 集合 / index 名（可选） |
+| `XRK_AUTO_REVIEW_CLASSIFIER_URL` | 外接 auto-review classifier（POST；未设则启发式） |
+| `XRK_AUTO_REVIEW_CLASSIFIER_TOKEN` | classifier Bearer（可选） |
 | `XRK_GENUI_NPM_ALLOWLIST` | 逗号分隔 npm 包名，合并进 GenUI component registry |
 | `XRK_TONGFLOW_PYTHON` | 用户 Python 解释器（scan / `kind:python` 节点） |
 | `XRK_TONGFLOW_PYTHON_SCAN` | 自定义 `/tongflow/scan` 脚本路径 |
@@ -133,7 +135,7 @@ node scripts/dsh-community-audit.mjs
 
 ## Face：`dynamicCordisRunner/*`
 
-面板经 Face RPC 驱动适配器。
+面板经 Face RPC 驱动适配器（**不是**产品 SPA `boot.json` 条目；Cordis UI/runner 客户端包已从产品 boot 剥离）。
 
 | 方法 | 行为 |
 |------|------|
@@ -211,15 +213,15 @@ Source of truth: `dsh-compat-matrix.ts`.
 | Capability | Implemented | Planned |
 |------|--------|------|
 | `host.mjs` RPC | inventory · invoke · runHostHalf | Full third-party DI (out of scope) |
-| IM | connector · OAuth · `message.send/list` · webhook · poll/SSE · sidecar relay · **in-process WS client** | — |
+| IM | connector · OAuth · `message.send/list` · webhook · poll/SSE · sidecar relay · **in-process WS client** · **local WS ingress** (`/api/im/gateway/ws`, no `XRK_IM_GATEWAY_*` required) | — |
 | Task flow | Persistence · TS nodes · scan · `external` subprocess · **Python bridge** (`XRK_TONGFLOW_PYTHON`) | — |
-| GenUI | CRUD · HTML / React tree preview · **npm component registry/resolve** | — |
+| GenUI | CRUD · HTML / React tree preview · **npm component registry/resolve** · **browser runtime** (`/dsh-genui/runtime.js` mount · CE) | — |
 | Vision | paste/analyze · local OCR · OpenAI-compatible · **anthropic-messages** · **gemini-generate** | — |
-| Search & memory | Local rg · keyword · **`embedding.search` embedded host** · optional `XRK_MEMORY_EMBED_*` sidecar | — |
-| Auto-review | Heuristic classify · slash | Pluggable classifier |
+| Search & memory | Local rg · keyword · **`embedding.search` embedded host** · optional `XRK_MEMORY_EMBED_*` sidecar · **Mnemon document engine** (keyword search · mention graph · bodies) | — |
+| Auto-review | Heuristic classify (default) · **replaceable classifier** (`options.classifier` / `XRK_AUTO_REVIEW_CLASSIFIER_URL`) · slash | — |
 | Context browser | Face **`contextTimeline`** (per-request items · usage stamps · events) / **`contextHeaders`** · **`costUsage`** pricing | — |
 | Mobile access | Pairing · LAN/WAN PIN · tunnel HTTP+WS | — |
-| **Sidebar (`xrkh-better-sidebar`)** | Host owns `/sidebar/*` (see below); includes `git.worktrees` · `changes.ops` | Real agent-opens push (idle stub today) |
+| **Sidebar (`xrkh-better-sidebar`)** | Host owns `/sidebar/*` (see below); includes `git.worktrees` · `changes.ops` · real agent-opens/terminals push | Prefs default off; enable `agentOpenTools` / `agentTerminalTools` for `sidebar_open` / `terminal_create` |
 
 Local messaging, nodes, OCR, and GenUI preview are available inside the adapter today.
 
@@ -229,13 +231,15 @@ The standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer *
 
 | Surface | Host landing | Plugin role |
 |------|-----------|----------|
-| `POST /sidebar/api/<method>` | `sidebar-adapter` (FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **changes.ops** · **open.external**) | Call the API; do not reimplement Host in the client |
+| `POST /sidebar/api/<method>` | `sidebar-adapter` (FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **subagents.graph** · **changes.ops** · **open.external**) | Call the API; do not reimplement Host in the client |
 | `/sidebar/file` · `upload` · `html` · `bundle` | dsh-compat routes + plugin `chunks/` | Ship `lib/client-*.js` for bundle fallback |
-| `/sidebar/ws/terminal` | Host `sidebar-pty` (real node-pty · session+tab reuse) | TerminalView connects same-origin WS |
-| `/sidebar/ws/agent-terminals` · `agent-opens` | Idle stubs (avoid client reconnect storms) | Extend Host when real data exists; do not fake via plugin host half |
+| `/sidebar/ws/terminal` | Host `sidebar-pty` (real node-pty · session+tab reuse; system-user permissions, **not** Agent sandbox / fence) | TerminalView connects same-origin WS |
+| `/sidebar/ws/agent-terminals` · `agent-opens` | Host real push (registry + prefs-gated tools); empty-list keepalive without registry | Do not fake via plugin host half |
 | Face inject `sidebarFace` | Host: `openExternal` · jobs · `listSubagentsLive` · rewind `forkSessionAt` | Subagents / background jobs / reveal-path use this bridge |
 
 `subagents.live` wire shape uses nested `tool`: `{ text?; tool?: { name; args } }` (matches plugin `LastActivity` / `SidebarSubagentLiveActivity`). Host source: `packages/server/host/src/sidebar-live-line.ts`.
+
+Preview contract (types first, UI later): `@xrkseek/protocol` `BrowserEmbedProbe` · `SubagentPreviewSummary` · `PlanPreviewSummary` · `OfficePreviewStatus`; policy subjects `host.open` · `sidebar.embed` · `sidebar.fs` · `office.connect` (see [policy](./policy.md)). **Office status stays on `/office`** (`office.connect` gates mutations) — do not re-host under `/sidebar`. Plan bodies fold from Face `plan` projection; sidebar consumes summaries only.
 
 **Removed:** Side Chat (beta) and Host `sidechat.*`. Use Face `subagent.*` plus Sidebar `subagents.live` / `jobs.*`.
 
@@ -247,11 +251,9 @@ To add sidebar RPC: extend the capability / adapter / (when Face is needed) `Sid
 
 ## Planned work
 
-Host **Implemented** covers IM · vision · memory · GenUI npm registry · TongFlow Python bridge. Follow-ons (sync to [status.md](./status.md) only when code-aligned):
+Truth source: `DSH_COMPAT_KNOWN_GAPS` in `dsh-compat-matrix.ts` (currently empty).
 
-| Feature | Notes |
-|------|------|
-| GenUI browser bundle | Host registry/resolve works; dynamic import stays in community client |
+TongFlow installs go through `POST /tongflow/plugins` (`spec` / `package` / `name` / `id`). `runPluginMutate` runs `xrkh plugin add`. The deleted `/plugins/install` fake `accepted` route stays gone. A successful install still needs `xrkh restart` before the current process sees it.
 
 ## Optional external env (not in-repo dependencies)
 
@@ -265,6 +267,8 @@ For self-hosted sidecars; Host core does not embed these services.
 | `XRK_MEMORY_EMBED_URL` | External vector DB HTTP base (e.g. Qdrant REST); local hash bridge when unset |
 | `XRK_MEMORY_EMBED_TOKEN` | Vector DB API key (optional) |
 | `XRK_MEMORY_EMBED_COLLECTION` | Collection / index name (optional) |
+| `XRK_AUTO_REVIEW_CLASSIFIER_URL` | External auto-review classifier (POST; heuristic when unset) |
+| `XRK_AUTO_REVIEW_CLASSIFIER_TOKEN` | Classifier Bearer (optional) |
 | `XRK_GENUI_NPM_ALLOWLIST` | Comma-separated npm packages merged into GenUI registry |
 | `XRK_TONGFLOW_PYTHON` | User Python interpreter (scan / `kind:python` nodes) |
 | `XRK_TONGFLOW_PYTHON_SCAN` | Custom `/tongflow/scan` script path |
@@ -282,7 +286,7 @@ Compare scanned client paths with the capability table; unlisted paths still ret
 
 ## Face: `dynamicCordisRunner/*`
 
-The panel drives the adapter via Face RPC.
+The panel drives the adapter via Face RPC (**not** product SPA `boot.json` entries; Cordis UI/runner client packages are stripped from product boot).
 
 | Method | Behavior |
 |------|------|

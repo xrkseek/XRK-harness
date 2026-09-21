@@ -19,6 +19,8 @@ export interface SessionDrainHub {
   wake(sessionId: string): void;
   cancel(sessionId: string): Promise<void>;
   isActive(sessionId: string): boolean;
+  /** Session ids whose latch is currently draining (Host MCP mid-drain skip). */
+  activeIds(): readonly string[];
   /** Drop idle latch entry (optional GC). Active latches are kept. */
   forget(sessionId: string): void;
 }
@@ -51,6 +53,13 @@ export function createSessionDrainHub(options: {
     },
     isActive(sessionId) {
       return latches.get(sessionId)?.isActive() ?? false;
+    },
+    activeIds() {
+      const ids: string[] = [];
+      for (const [id, L] of latches) {
+        if (L.isActive()) ids.push(id);
+      }
+      return ids;
     },
     forget(sessionId) {
       const L = latches.get(sessionId);

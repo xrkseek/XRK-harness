@@ -2,7 +2,7 @@
  * Shared session model selection (Face RPC + `/model` slash).
  */
 
-import { assertPolicyAllow } from "@xrkseek/policy";
+import { assertPolicyAllow, PolicyGateError } from "@xrkseek/policy";
 import {
   contentHasImage,
   type MessageContent,
@@ -68,11 +68,22 @@ export async function selectSessionModel(
         providerId: provider,
       });
     } catch (err) {
+      if (err instanceof PolicyGateError) {
+        return {
+          ok: false,
+          error: {
+            code: err.code,
+            message: err.details.reason,
+            details: { ...err.details },
+          },
+        };
+      }
       return {
         ok: false,
         error: {
           code: "policy-denied",
           message: err instanceof Error ? err.message : String(err),
+          details: { kind: "provider.use", reason: String(err) },
         },
       };
     }

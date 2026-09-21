@@ -62,13 +62,10 @@ export {
   honestReady,
   honestHostActionUnavailable,
   imHostActionUnavailable,
-  modsearchHostUnavailable,
-  genuiHostIncomplete,
   visionHostUnavailable,
-  noemaRunnerUnavailable,
-  pocketHostIncomplete,
-  tongflowStudioUnavailable,
+  mnemonEngineUnavailable,
   autoReviewClassifierUnavailable,
+  adapterEcho,
 } from "./honest-envelope.js";
 
 // —— registry / compose ——
@@ -174,12 +171,22 @@ export type {
 export {
   createSidebarPublicHandler,
   handleSidebarHost,
-  handleSidebarCompat,
 } from "../sidebar/index.js";
 export {
   syncAutoReviewSlashCommand,
   recordAutoReviewDeny,
 } from "./auto-review-http.js";
+export {
+  classifyAutoReview,
+  resolveAutoReviewClassifier,
+  AUTO_REVIEW_CLASSIFIER_URL,
+  AUTO_REVIEW_CLASSIFIER_TOKEN,
+} from "./auto-review-classifier.js";
+export type {
+  AutoReviewClassifier,
+  AutoReviewClassification,
+  AutoReviewClassifierOptions,
+} from "./auto-review-classifier.js";
 
 // —— mobile-access Host contract ——
 export {

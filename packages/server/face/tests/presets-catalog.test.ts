@@ -5,6 +5,7 @@ import {
   resolveAgentPresetProfile,
   resolveToolPreset,
   DEFAULT_MAX_ACTIVE_CHILDREN,
+  DEFAULT_MAX_DEPTH,
 } from "../src/presets-catalog.js";
 
 describe("agentPreset catalog", () => {
@@ -42,7 +43,10 @@ describe("agentPreset catalog", () => {
     expect(shallow.subagents).toEqual({
       mode: "on",
       maxDepth: 1,
-      maxActiveChildren: DEFAULT_MAX_ACTIVE_CHILDREN,
     });
+    const harness = resolveAgentPresetProfile("harness");
+    expect(harness.subagents).toEqual({ mode: "on" });
+    expect(DEFAULT_MAX_DEPTH).toBe(2);
+    expect(DEFAULT_MAX_ACTIVE_CHILDREN).toBe(2);
   });
 });

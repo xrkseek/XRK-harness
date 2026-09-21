@@ -9,6 +9,7 @@
   "references": [
     { "path": "../../core/agent" },
     { "path": "../../core/session" },
-    { "path": "../../protocol" }
+    { "path": "../../protocol" },
+    { "path": "../../util/home-paths" }
   ]
 }

@@ -3151,6 +3151,22 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         case 'goals/resume': return Promise.resolve(goalRemotes.resume(sessionId, args.ref as FxGoalRef))
         case 'goals/complete': return Promise.resolve(goalRemotes.complete(sessionId, args.ref as FxGoalRef))
         case 'goals/clear': return Promise.resolve(goalRemotes.clear(sessionId, args.ref as FxGoalRef))
+        case 'changes/fileDiff': {
+          const bag = payload as {
+            args: {
+              sessionId?: SessionId
+              agentId?: SessionId
+              seq?: number
+              index?: number
+            }
+          }
+          // Fixture: no Host capture — empty diff (card still mounts).
+          void bag
+          return Promise.resolve({
+            ok: true as const,
+            value: { diff: null },
+          })
+        }
         default:
           return Promise.reject(new Error(`fixture connection RPC endpoint ${JSON.stringify(endpoint)} is unavailable`))
       }

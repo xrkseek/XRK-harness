@@ -7,6 +7,7 @@ import { parseMcpServersJson, type McpServerRow } from "./mcp-servers.js";
 export type { SessionStore, SessionEvent };
 export type { McpServerRow };
 export {
+  DEFAULT_XRK_HOME_DISPLAY,
   XRK_HOME_DIR_NAME,
   XRK_HOME_ENVS,
   defaultMcpStdioCwd,
@@ -14,9 +15,16 @@ export {
   defaultSessionsDir,
   defaultSpillDir,
   defaultXrkHome,
+  expandHomePath,
   hostSettingsPath,
+  resolveConfiguredXrkHome,
+  resolveMcpStdioCwd,
   resolveXrkHome,
+  xrkHomeDisplay,
+  xrkHomePath,
+  McpWorkspaceCwdError,
 } from "./home.js";
+export type { ResolveMcpStdioCwdInput } from "./home.js";
 export {
   mcpServersContainEnv,
   mcpServersForbiddenEnvMessage,

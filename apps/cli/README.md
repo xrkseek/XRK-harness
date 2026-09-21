@@ -18,12 +18,18 @@ npx @xrkseek/harness-cli@latest web
 
 | 命令 | 作用 |
 |------|------|
-| `xrkh run` | 单次 agent 回合（参数或 stdin） |
+| `xrkh run` | 单次 agent 回合（参数、`-` / 管道 stdin；`--session-id` 续会话；`--json` 逐行事件） |
 | `xrkh serve` | 启动 HTTP Host + Face API |
 | `xrkh web` | 产品壳（静态 UI + API 代理） |
+| `xrkh <preset>` | 同 `xrkh web --preset <preset>`（Host 徽章种子；id 与 `XRK_PRESET` / `--preset` 一致） |
 | `xrkh plugin` | 工作区插件 install / list / remove / reconcile |
+| `xrkh skill` | 工作区 skills install / list / remove / path（本地目录或 git） |
+| `xrkh mcp` | HTTP MCP server 的 OAuth 设备码登录：login / logout / status / list / path |
+| `xrkh acp` | stdio ACP server（编辑器把本进程当 ACP host） |
 | `xrkh doctor` | 环境与产品目录检查 |
 | `xrkh dump-config` | 输出解析后的 Host 配置（JSON） |
+
+启动失败时：终端打印 **Failed plugins** / **Plugins waiting for services** 摘要，完整 `inspect` 报告写入 **`~/.xrk/logs/startup-*.log`**（写盘失败则整份打到 stderr）。
 
 ```bash
 xrkh --help
@@ -34,11 +40,30 @@ xrkh plugin --help
 
 ```bash
 xrkh run "hello"
+echo "summarize this" | xrkh run --preset minimal
+xrkh run --json --session-id sess_… "continue"
 xrkh serve --port 8787
 xrkh web
+xrkh frugal
 xrkh plugin add ./extensions/example-tools
+xrkh skill add ./skills/office-ping
+xrkh skill add github:acme/skills#pdf-tools --force
+xrkh skill list
+xrkh mcp login linear --client-id xrk-cli --scope mcp:read
+xrkh mcp status
+xrkh mcp logout linear
 xrkh doctor
 ```
+
+### 无头 `run`
+
+| 输入 | 行为 |
+|------|------|
+| 位置参数 / `--prompt` | 作为任务正文 |
+| 管道 stdin（无显式任务）或单独的 `-` | 从 stdin 读任务（空管道失败） |
+| `--session-id <id>` | 续写已持久化会话（默认 `~/.xrk/sessions`；未知 id 失败） |
+| `--json` | stdout 为 NDJSON（`session` → `status`/`text`/`thinking`/`tool_*` → `final`）；用法错误也写 `error` 行 |
+| `--no-persist` | 内存会话（进程内；跨调用无法 `--session-id`） |
 
 ## 产品壳路径
 
@@ -51,4 +76,5 @@ xrkh doctor
 
 - [Getting started](../../docs/getting-started.md)
 - [Plugin loader](../../docs/plugin-loader.md)
+- [Skills and rules layers](../../docs/skills-layers.md)
 - [Host / Face](../../docs/host-face.md)

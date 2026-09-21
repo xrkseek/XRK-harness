@@ -66,7 +66,18 @@ function npmOtpArgs() {
   return ["--otp", otp];
 }
 
-function npmPublishArgs(packed) {
+/**
+ * npm dist-tag for a staged version. Prereleases (`0.4.0-rc.1`) must never
+ * land on `latest`; use their leading prerelease identifier as the tag.
+ */
+function npmDistTagFor(version) {
+  const prerelease = String(version ?? "").split("-")[1];
+  if (!prerelease) return undefined;
+  const ident = prerelease.split(".")[0];
+  return /^[a-z]+$/i.test(ident) ? ident.toLowerCase() : "next";
+}
+
+function npmPublishArgs(packed, distTag) {
   return [
     "--yes",
     "npm@10.9.2",
@@ -76,6 +87,7 @@ function npmPublishArgs(packed) {
     "public",
     "--registry",
     NPMJS,
+    ...(distTag ? ["--tag", distTag] : []),
     ...npmOtpArgs(),
   ];
 }
@@ -91,13 +103,22 @@ function publishStage(stageDir, label) {
   } else {
     writeFileSync(path.join(stageDir, ".npmrc"), `registry=${NPMJS}\n`);
   }
-  console.log(`release: publishing ${label}…`);
+  const stagedVersion = JSON.parse(
+    readFileSync(path.join(stageDir, "package.json"), "utf8").replace(
+      /^\uFEFF/,
+      "",
+    ),
+  ).version;
+  const distTag = npmDistTagFor(stagedVersion);
+  console.log(
+    `release: publishing ${label}…${distTag ? ` (dist-tag ${distTag})` : ""}`,
+  );
   if (!npmOtpArgs().length) {
     console.warn(
       "release: no NPM_CONFIG_OTP / NPM_OTP — publish may fail if account requires 2FA for write actions",
     );
   }
-  const pub = spawnSync("npx", npmPublishArgs(packed), {
+  const pub = spawnSync("npx", npmPublishArgs(packed, distTag), {
     cwd: stageDir,
     stdio: "inherit",
     shell: process.platform === "win32",
@@ -166,6 +187,8 @@ if (!skipGhRelease) {
   } else {
     const notesFile = path.join(ROOT, "docs", "releases", `${tag}.md`);
     const createArgs = ["release", "create", tag, ...assets, "--title", tag];
+    // Keep rc / beta off the repo's "Latest" badge.
+    if (String(ver).includes("-")) createArgs.push("--prerelease");
     if (existsSync(notesFile)) {
       createArgs.push("--notes-file", notesFile);
     } else {

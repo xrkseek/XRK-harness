@@ -29,7 +29,7 @@ import type { LlmAdapter } from "@xrkseek/llm";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import {
   createPolicyToolPre,
-  createReadOnlyToolPre,
+  createSessionReadOnlyToolPre,
   type PolicyEngine,
 } from "@xrkseek/policy";
 import {
@@ -37,6 +37,7 @@ import {
   shouldConfineSandbox,
 } from "@xrkseek/protocol";
 import {
+  wireCompositionHooks,
   wireCompositionTools,
   wireCompositionPrompts,
   createPolicyEngineFromPlugins,
@@ -192,8 +193,15 @@ export function createMinimalComposition(
     readSessionEvents(store, sessionId),
     "workspace-write",
   );
-  if (sandboxMode === "read-only") {
-    pipeline.onPre(createReadOnlyToolPre());
+  pipeline.onPre(
+    createSessionReadOnlyToolPre(
+      () =>
+        effectiveSandboxMode(readSessionEvents(store, sessionId)) ===
+        "read-only",
+    ),
+  );
+  if (options.plugins) {
+    wireCompositionHooks(pipeline, { plugins: options.plugins });
   }
   if (shouldConfineSandbox(sandboxMode)) {
     pipeline.onGuard(
@@ -284,6 +292,7 @@ export function createMinimalComposition(
         llm,
         tools,
         pipeline,
+        cwd: options.workspaceRoot,
         system,
         ...(useAssemble
           ? {

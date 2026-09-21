@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import type { PtyBackendConfig } from "./config.js";
+import { BoundedTextBuffer } from "./bounded-text-buffer.js";
 import { clipUtf8Tail } from "./bytes.js";
 import { withResolvers } from "./defer.js";
 import { CONTROLLED_PROMPT, TerminalSanitizer } from "./sanitize.js";
@@ -20,43 +21,6 @@ import {
   type TerminalSignalResult,
   type TerminalWaitReason,
 } from "./types.js";
-
-class BoundedTextBuffer {
-  private value = ''
-  private dropped = false
-
-  constructor(
-    private readonly maxBytes: number,
-    private readonly maxLines?: number,
-  ) {}
-
-  append(text: string): void {
-    if (text.length === 0) return
-    this.value += text
-    if (this.maxLines !== undefined) {
-      const lines = this.value.split('\n')
-      if (lines.length > this.maxLines) {
-        this.value = lines.slice(lines.length - this.maxLines).join('\n')
-        this.dropped = true
-      }
-    }
-    const tail = clipUtf8Tail(this.value, this.maxBytes)
-    this.value = tail.text
-    this.dropped ||= tail.truncated
-  }
-
-  consume(): TerminalSendRead {
-    const delta = this.value
-    const truncated = this.dropped
-    this.value = ''
-    this.dropped = false
-    return { delta, truncated }
-  }
-
-  snapshot(): { text: string; truncated: boolean } {
-    return { text: this.value, truncated: this.dropped }
-  }
-}
 
 class LocalSendOperation implements TerminalSendOperation {
   private readonly output: BoundedTextBuffer
@@ -430,7 +394,7 @@ export class LocalPtySession implements TerminalBackendSession {
         return
       }
       const elapsed = Date.now() - operation.startedAt
-      const startupHasOutput = !this.initializing || this.scrollback.snapshot().text.length > 0
+      const startupHasOutput = !this.initializing || !this.scrollback.isEmpty
       const acceptsStdinWait = startupHasOutput && foreground !== undefined
         && operation.acceptsStdinWait(foreground.processGroupId, foreground.inputWaiting)
       if (elapsed >= this.config.exactProbeAfterMs && acceptsStdinWait) {
@@ -457,7 +421,7 @@ export class LocalPtySession implements TerminalBackendSession {
   private settleActive(waitReason: TerminalWaitReason, retainOwnership = false): void {
     const operation = this.active
     if (operation === undefined) return
-    const scrollbackTruncated = this.scrollback.snapshot().truncated
+    const scrollbackTruncated = this.scrollback.truncated
     if (retainOwnership) {
       this.stopPolling()
       this.activeAbort?.()

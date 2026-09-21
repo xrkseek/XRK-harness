@@ -18,11 +18,9 @@ export interface FileLocation {
   readonly line?: number;
 }
 
-export interface FileDiff {
-  readonly path: string;
-  readonly oldText: string | null;
-  readonly newText: string;
-}
+/** Re-export protocol FileDiff — single shape for presenters + summarizeFileDiffs. */
+export type { FileDiff } from "@xrkseek/protocol";
+import type { FileDiff } from "@xrkseek/protocol";
 
 export interface TextBlock {
   readonly type: "text";

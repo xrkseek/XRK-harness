@@ -446,6 +446,3 @@ export function createSessionProjectionRegistry(
     },
   };
 }
-
-/** @deprecated Prefer {@link SessionProjectionStateMap} declare-merge from host units. */
-export type HostProjectionStateMap = SessionProjectionStateMap;

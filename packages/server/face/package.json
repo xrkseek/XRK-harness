@@ -16,6 +16,7 @@
   "dependencies": {
     "@xrkseek/attachment": "workspace:*",
     "@xrkseek/core-agent": "workspace:*",
+    "@xrkseek/core-agent-loop": "workspace:*",
     "@xrkseek/core-session": "workspace:*",
     "@xrkseek/core-tools": "workspace:*",
     "@xrkseek/exec-shell": "workspace:*",

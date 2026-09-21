@@ -494,4 +494,39 @@ describe("Face DSH wire-event adapt", () => {
       ignorable: true,
     });
   });
+
+  it("workspace/changes carries numeric turn + summary for the shell card", () => {
+    const summary = {
+      turnId: "turn_1",
+      cwd: "/w",
+      files: [{ path: "a.ts", display: "a.ts", added: 1, deleted: 0 }],
+      total: 1,
+      added: 1,
+      deleted: 0,
+    };
+    const ids = new FaceWireIdMaps();
+    expect(ids.turn("sess", "turn_0")).toBe(1);
+    expect(ids.turn("sess", "turn_1")).toBe(2);
+    const wire = toFaceWireSessionEvent(
+      {
+        type: "workspace/changes",
+        ts: 50,
+        turnId: "turn_1",
+        summary,
+      },
+      11,
+      { sessionId: "sess", ids },
+    );
+    expect(wire).toEqual({
+      type: "workspace/changes",
+      seq: 11,
+      time: 50,
+      data: {
+        turn: 2,
+        turnId: "turn_1",
+        summary,
+      },
+      ignorable: true,
+    });
+  });
 });

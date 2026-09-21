@@ -4,7 +4,10 @@ import {
   createMemorySessionStore,
   deriveMessages,
   deriveMessagesUnwindowed,
+  estimateMessagesTokens,
+  estimateRequestTokens,
   estimateTokens,
+  resolveSoftBudgetCeiling,
   selectHeadRecent,
 } from "../src/index.js";
 
@@ -12,6 +15,69 @@ describe("compaction helpers", () => {
   it("estimates tokens roughly", () => {
     expect(estimateTokens("abcd")).toBe(1);
     expect(estimateTokens("abcdefgh")).toBe(2);
+  });
+
+  it("counts assistant reasoning toward soft-budget message price", () => {
+    const without = estimateMessagesTokens([
+      { role: "assistant", content: "ok" },
+    ]);
+    const withReasoning = estimateMessagesTokens([
+      {
+        role: "assistant",
+        content: "ok",
+        reasoning: "r".repeat(40),
+      },
+    ]);
+    expect(withReasoning).toBeGreaterThan(without);
+    expect(withReasoning - without).toBe(estimateTokens("r".repeat(40)));
+  });
+
+  it("counts image blocks that flattenText skips", () => {
+    const textOnly = estimateMessagesTokens([
+      { role: "user", content: [{ type: "text", text: "hi" }] },
+    ]);
+    const withImage = estimateMessagesTokens([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "hi" },
+          {
+            type: "image",
+            attachment: {
+              attachmentId: "sha256:abcdef0123456789",
+              mediaType: "image/png",
+              bytes: 1200,
+              width: 10,
+              height: 10,
+            },
+          },
+        ],
+      },
+    ]);
+    expect(withImage).toBeGreaterThan(textOnly);
+  });
+
+  it("resolveSoftBudgetCeiling ignores buffer >= max (no false fail-closed)", () => {
+    expect(resolveSoftBudgetCeiling(100, 20)).toBe(80);
+    expect(resolveSoftBudgetCeiling(100, 100)).toBe(100);
+    expect(resolveSoftBudgetCeiling(100, 200)).toBe(100);
+    expect(resolveSoftBudgetCeiling(50, 0)).toBe(50);
+  });
+
+  it("estimateRequestTokens adds standing tool schemas", () => {
+    const messages = [{ role: "user" as const, content: "hi" }];
+    const base = estimateRequestTokens({ messages });
+    const withTools = estimateRequestTokens({
+      messages,
+      tools: [
+        {
+          name: "t",
+          description: "d".repeat(40),
+          parameters: { type: "object" },
+        },
+      ],
+    });
+    expect(withTools).toBeGreaterThan(base);
   });
 
   it("keeps recent from the end within budget", () => {
@@ -38,6 +104,23 @@ describe("compaction helpers", () => {
     );
     expect(selected).toBeDefined();
     expect(selected!.recent).toContain("hello-block");
+  });
+
+  it("selectHeadRecent prices assistant reasoning into the keep window", () => {
+    const selected = selectHeadRecent(
+      [
+        {
+          role: "assistant",
+          content: "short",
+          reasoning: "think-".repeat(80),
+        },
+        { role: "user", content: "tail" },
+      ],
+      30,
+    );
+    expect(selected).toBeDefined();
+    expect(selected!.recent).toContain("tail");
+    expect(selected!.head).toContain("[Reasoning]:");
   });
 
   it("buildCompactionPrompt includes template", () => {

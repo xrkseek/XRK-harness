@@ -30,10 +30,24 @@ import type { FaceApprovalBroker } from "./approvals.js";
 import type { FaceQuestionBroker } from "./questions.js";
 import type { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import type { FaceSubagentRegistry } from "./subagent-registry.js";
+import type { AgentTeamGraph } from "./agent-team-graph.js";
 import type { FaceMessageFeedbackStore } from "./message-feedback.js";
 import type { FaceGoalStore } from "./goal-store.js";
 import type { FaceWireIdMaps } from "./adapt/wire-ids.js";
 import type { FaceInboxWireMaps } from "./adapt/inbox-wire.js";
+import type {
+  DirectoryListingView,
+} from "./host-directory.js";
+import type { FaceRpcResult } from "./types.js";
+
+/**
+ * When Host runs with SSH remote cwd, Web browse RPCs use this backend
+ * instead of the local filesystem (paths are remote POSIX coordinates).
+ */
+export interface FaceDirectoryBackend {
+  list(payload: unknown): Promise<FaceRpcResult<DirectoryListingView>>;
+  create(payload: unknown): Promise<FaceRpcResult<{ path: string }>>;
+}
 
 export interface FaceDrain {
   wake(sessionId: string): void;
@@ -57,6 +71,18 @@ export interface FaceRuntime {
   readonly drain: FaceDrain;
   readonly registry: ProviderRegistry;
   readonly workspaceRoot: string;
+  /**
+   * True when tool cwd / fs / bash ride SSH (`XRK_SSH_*`).
+   * Native openPath · OS folder picker · sidebar PTY stay host-local and are gated off.
+   */
+  readonly remoteExecution?: boolean;
+  /**
+   * Local Host cwd before SSH workspace swap (settings / product home anchor).
+   * Absent when not remote.
+   */
+  readonly localHostRoot?: string;
+  /** SSH-backed `host.listDirectory` / `host.createDirectory` (remote POSIX). */
+  readonly directoryBackend?: FaceDirectoryBackend;
   /** Product inject dir override for tests; Host leaves unset → `{workspace}/.xrk`. Settings/creds use `resolveHarnessHome` (`~/.xrk`). */
   readonly productDir?: string;
   readonly version: string;
@@ -95,6 +121,8 @@ export interface FaceRuntime {
   readonly workspaces: FaceWorkspaceRegistry;
   /** Direct subagent children (fork / create-with-parent). */
   readonly subagents: FaceSubagentRegistry;
+  /** Delegation + peer team graph (persisted next to the subagent sidecar). */
+  readonly agentTeams: AgentTeamGraph;
   /** Per-session assistant-message ratings (process-local CAS). */
   readonly messageFeedback: FaceMessageFeedbackStore;
   /**
@@ -126,6 +154,17 @@ export interface FaceRuntime {
     }[];
     readonly parked?: readonly string[];
   }>;
+  /**
+   * Last `syncMcpServers` overlay (parked / connectFailures). Mutate writes;
+   * describe/get read so Settings UI does not reclassify failures as parked.
+   */
+  mcpSyncOverlay: {
+    connectFailures: readonly {
+      readonly serverName: string;
+      readonly message: string;
+    }[];
+    parked: readonly string[];
+  };
   /** Standing / remembered tool presenters (wire tools get). */
   readonly getTool?: (
     sessionId: string,
@@ -182,8 +221,9 @@ export interface FaceRuntime {
   readonly questions: FaceQuestionBroker;
   /** Drop cached agent when preset changes (host wires). May be async (compose dispose). */
   invalidateAgent?(sessionId: string): void | Promise<void>;
-  /** When true, `/permission` refuses sandbox mode changes while PTY sessions
-   * are open or spawning (CV DSH terminal-bash sandbox fence).
+  /** When true, `/permission` refuses sandbox mode changes while **Agent**
+   * `terminal_*` PTY sessions are open or spawning (CV DSH terminal-bash
+   * sandbox fence). Sidebar user terminals must not be reported here.
    */
   hasPtyActivity?(): boolean;
   /** Host persists `/auto-review` slash to dsh-compat HTTP store (~/.xrk). */
@@ -209,7 +249,9 @@ export interface FaceRuntime {
   ): SessionRecord;
   /**
    * Host drain status hook. Continuable children notify the parent on idle
-   * (same wake budget as job completions).
+   * (same wake budget as job completions). Idle notifies are epoch-scoped:
+   * a later `running:true` drops in-flight stale delivers; transient resolve
+   * failures retry once on the same idle stretch.
    */
   onSessionDrainStatus(sessionId: string, running: boolean): void;
   /** Shared shell registry for session-scoped job kill / background RPC. */

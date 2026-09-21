@@ -173,6 +173,15 @@ const AgentLoopConfig = Schema.object({
    * `0` disables spill (not recommended). Default 64_000.
    */
   toolResultMaxInlineBytes: Schema.number().step(1_000).min(0).default(64_000),
+  /**
+   * Max subagent nesting depth (parent=0). Hermes-style tighter default than
+   * historical 3. Badge ceilings (e.g. Shallow=1) still apply via min().
+   */
+  maxSubagentDepth: Schema.number().step(1).min(1).max(3).default(2),
+  /**
+   * Max concurrently draining direct children under one parent.
+   */
+  maxActiveSubagents: Schema.number().step(1).min(1).max(16).default(2),
 });
 
 const WebSearchConfig = Schema.object({
@@ -303,6 +312,8 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
         keepTokens: 24_000,
         bufferTokens: 4_000,
         toolResultMaxInlineBytes: 64_000,
+        maxSubagentDepth: 2,
+        maxActiveSubagents: 2,
       },
       applies: "live",
     },

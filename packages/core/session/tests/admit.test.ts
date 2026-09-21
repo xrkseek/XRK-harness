@@ -4,6 +4,7 @@ import {
   createMemorySessionStore,
   deriveMessages,
   listPendingAdmits,
+  listSessionsWithPendingAdmits,
   newSession,
   promoteNextAdmit,
   promoteAdmitsForTurn,
@@ -120,5 +121,17 @@ describe("newSession / admit", () => {
       listPendingAdmits(store.get(s.id).events).map((p) => p.content),
     ).toEqual(["q1", "q2"]);
     expect(promotePendingSteers(store, s.id)).toBeUndefined();
+  });
+
+  it("listSessionsWithPendingAdmits skips empty and closed inboxes", () => {
+    const store = createMemorySessionStore();
+    const pending = newSession(store, "has-pending");
+    const empty = newSession(store, "empty");
+    const closed = newSession(store, "closed");
+    admitPrompt(store, pending.id, "wait");
+    const done = admitPrompt(store, closed.id, "gone");
+    withdrawAdmit(store, closed.id, done.admitId);
+    expect(listSessionsWithPendingAdmits(store)).toEqual(["has-pending"]);
+    expect(listPendingAdmits(store.get(empty.id).events)).toHaveLength(0);
   });
 });

@@ -131,6 +131,32 @@ export function AgentLoopCard(props: AgentLoopCardProps) {
         onEdit={(text) => { props.edit('toolResultMaxInlineBytes', text) }}
         onReset={() => { props.resetField('toolResultMaxInlineBytes') }}
       />
+      <ValueField
+        id="plugin-config-agent-loop-max-subagent-depth"
+        label={t('agentLoopMaxSubagentDepth')}
+        hint={t('agentLoopMaxSubagentDepthHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        disabled={!state.writable}
+        {...state.maxSubagentDepth}
+        onEdit={(text) => { props.edit('maxSubagentDepth', text) }}
+        onReset={() => { props.resetField('maxSubagentDepth') }}
+      />
+      <ValueField
+        id="plugin-config-agent-loop-max-active-subagents"
+        label={t('agentLoopMaxActiveSubagents')}
+        hint={t('agentLoopMaxActiveSubagentsHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        disabled={!state.writable}
+        {...state.maxActiveSubagents}
+        onEdit={(text) => { props.edit('maxActiveSubagents', text) }}
+        onReset={() => { props.resetField('maxActiveSubagents') }}
+      />
     </PluginCard>
   )
 }

@@ -76,6 +76,9 @@ const FACE_REMOTES: FaceRemoteSpec = {
   sessionReferenceResolver: {
     candidates: ['agentId', 'query'],
   },
+  changes: {
+    fileDiff: 'args',
+  },
 }
 
 /** Required service: the Face Client Remote contribution mount. */

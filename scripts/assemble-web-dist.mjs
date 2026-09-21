@@ -25,6 +25,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { PRODUCT_BOOT_OMIT } from "./product-boot-omit.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = path.join(ROOT, "apps", "web", "dist");
@@ -34,22 +35,13 @@ const UI_SRC = process.env.XRK_UI_SRC?.trim()
   ? path.resolve(process.env.XRK_UI_SRC.trim())
   : "";
 
-// Historical Cordis UI / runner ids (no longer in-tree) plus HMR and the
-// native picker — still filtered so overlays cannot reintroduce them.
-const OMIT = new Set([
-  "@xrkseek/client-ui-cordis",
-  "@xrkseek/xrk-cordis-client-runner",
-  "@xrkseek/client-hmr",
-  // Web uses in-app browse. Native OS chooser fights the same single slot
-  // and throws at boot ("already has a registration at priority 0").
-  "@xrkseek/client-ui-directory-picker-native",
-]);
+const OMIT = PRODUCT_BOOT_OMIT;
 
 const WELCOME_VERSION_XRK = "2026-08-23.1";
 const WELCOME_BODY_ZH_XRK =
-  "XRK-Harness 是本仓库的 Agent 宿主与产品壳：Session 可重建、工具可走策略，社区 DSH 插件经 dsh-compat 兼容器接入（不嵌入 Cordis Host）。\\n\\n0.1.0 是首个公开发版，CLI 与 serve 主路径可用；真 IM 隧道、Cordis fiber 子进程等缺口见 docs/status。欢迎通过 GitHub 反馈与共建。";
+  "XRK-Harness 是本仓库的 Agent 宿主与产品壳：Session 可重建、工具可走策略，社区 DSH 插件经 dsh-compat 兼容器接入（不嵌入 Cordis Host；产品 boot 不含 Cordis UI/runner）。\\n\\n0.1.0 是首个公开发版，CLI 与 serve 主路径可用；真 IM 隧道等缺口见 docs/status。欢迎通过 GitHub 反馈与共建。";
 const WELCOME_BODY_EN_XRK =
-  "XRK-Harness is this repo’s agent host and product shell: durable sessions, policy-aware tools, and DSH community plugins through the dsh-compat layer (no Cordis Host embed).\\n\\n0.1.0 is the first public release with a usable CLI and serve path; see docs/status for honest gaps (live IM tunnels, Cordis fiber subprocess, etc.). Feedback and contributions welcome on GitHub.";
+  "XRK-Harness is this repo’s agent host and product shell: durable sessions, policy-aware tools, and DSH community plugins through the dsh-compat layer (no Cordis Host embed; product boot omits Cordis UI/runner).\\n\\n0.1.0 is the first public release with a usable CLI and serve path; see docs/status for honest gaps (live IM tunnels, etc.). Feedback and contributions welcome on GitHub.";
 const WELCOME_BODY_ZH_DSH =
   "DeepSeek Harness 目前的 0.1 版本仍处在面向 Harness 开发者进行测试的阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者的反馈建议。预计 DeepSeek Harness 的核心插件以及基础 API 都会在接下来的一段时间内快速迭代、持续演化。\\n\\n我们期待与全球开发者一起，在开源、开放、可复用、可组合的基础设施之上，共同探索智能上限。欢迎全球 Harness 开发者加入 DSH 插件生态。";
 const WELCOME_BODY_EN_DSH =

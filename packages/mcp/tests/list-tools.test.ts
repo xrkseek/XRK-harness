@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createToolRegistry } from "@xrkseek/core-tools";
 import {
   drainToolsListPages,
+  isToolsListUnsupported,
+  MAX_TOOLS_LIST_PAGES,
   registerMcpTools,
   type McpClient,
   type McpToolInfo,
@@ -57,6 +59,28 @@ describe("drainToolsListPages", () => {
       /listed tool "a" more than once/,
     );
   });
+
+  it("rejects non-terminating pagination past the page cap", async () => {
+    let n = 0;
+    const fetchPage = vi.fn(async () => {
+      n += 1;
+      return { tools: [], nextCursor: `c${n}` };
+    });
+    await expect(drainToolsListPages("srv", fetchPage)).rejects.toThrow(
+      new RegExp(`exceeded ${MAX_TOOLS_LIST_PAGES} pages`),
+    );
+    expect(fetchPage).toHaveBeenCalledTimes(MAX_TOOLS_LIST_PAGES);
+  });
+});
+
+describe("isToolsListUnsupported", () => {
+  it("recognizes MethodNotFound and missing-tools capability errors", () => {
+    expect(isToolsListUnsupported({ code: -32601 })).toBe(true);
+    expect(
+      isToolsListUnsupported(new Error("Server does not support tools")),
+    ).toBe(true);
+    expect(isToolsListUnsupported(new Error("network down"))).toBe(false);
+  });
 });
 
 describe("registerMcpTools pagination failure", () => {
@@ -72,6 +96,15 @@ describe("registerMcpTools pagination failure", () => {
         throw new Error(
           "mcp-client(srv): server repeated a tools/list continuation cursor — invalid tool list",
         );
+      },
+      async listResources() {
+        return { items: [] };
+      },
+      async listResourceTemplates() {
+        return { items: [] };
+      },
+      async readResource() {
+        return { contents: [] };
       },
       async callTool(name) {
         return { content: `called:${name}` };

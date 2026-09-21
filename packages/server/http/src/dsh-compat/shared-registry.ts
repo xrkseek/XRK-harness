@@ -11,6 +11,7 @@ import {
   installComposedAdapters,
 } from "./adapter-compose.js";
 import { resetDshCompatUpgrades } from "./dsh-compat-upgrades.js";
+import { configureImGatewayLocalWs } from "./im-gateway-local-ws.js";
 import { resetHostApplyRegistry } from "./host-apply-registry.js";
 import { normalizeDshCompatWireCtx } from "./wire-normalize.js";
 
@@ -42,6 +43,9 @@ export async function ensureDshCompatRegistry(
     resetHostApplyRegistry();
     const registry = createCordisCompatRegistry();
     await installComposedAdapters(registry, normalized);
+    configureImGatewayLocalWs({
+      ...(normalized.xrkHome ? { xrkHome: normalized.xrkHome } : {}),
+    });
     return registry;
   })();
   return bootPromise;

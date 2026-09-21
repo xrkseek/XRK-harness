@@ -9,6 +9,7 @@ import {
   injectBootIntoHtml,
   mergeWebBootManifests,
   resolveStaticPath,
+  XRK_OMIT_CLIENT_PLUGIN_IDS,
   type WebBootManifest,
 } from "../src/index.js";
 import { createMemorySessionStore, newSession } from "@xrkseek/core-session";
@@ -111,7 +112,7 @@ describe("boot inject", () => {
     expect(runtime?.immediately).toBe(true);
   });
 
-  it("product boot policy drops Cordis chrome, HMR, and dsh-pocket", () => {
+  it("product boot policy drops Cordis chrome, HMR, native picker, and dsh-pocket", () => {
     const filtered = applyXrkProductBootPolicy({
       rev: "cap",
       entries: [
@@ -140,6 +141,12 @@ describe("boot inject", () => {
           inject: [],
         },
         {
+          id: "@xrkseek/client-ui-directory-picker-native",
+          url: "/plugins/native-picker.js",
+          rev: "1",
+          inject: [],
+        },
+        {
           id: "dsh-pocket",
           url: "/plugins/dsh-pocket/client.js",
           rev: "1",
@@ -150,6 +157,15 @@ describe("boot inject", () => {
     expect(filtered.entries.map((e) => e.id)).toEqual([
       "@xrkseek/client-runtime",
     ]);
+  });
+
+  it("boot-inject omit list matches scripts/product-boot-omit.mjs", async () => {
+    const { PRODUCT_BOOT_OMIT_IDS } = await import(
+      "../../../../scripts/product-boot-omit.mjs"
+    );
+    expect([...XRK_OMIT_CLIENT_PLUGIN_IDS].sort()).toEqual(
+      [...PRODUCT_BOOT_OMIT_IDS].sort(),
+    );
   });
 });
 

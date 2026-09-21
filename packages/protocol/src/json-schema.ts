@@ -60,7 +60,7 @@ const messageContentSchema = {
                   "height",
                 ],
                 properties: {
-                  attachmentId: { type: "string" },
+                  attachmentId: { type: "string", minLength: 1 },
                   mediaType: {
                     enum: [
                       "image/png",
@@ -69,10 +69,40 @@ const messageContentSchema = {
                       "image/gif",
                     ],
                   },
-                  bytes: { type: "number" },
-                  width: { type: "number" },
-                  height: { type: "number" },
+                  bytes: { type: "number", minimum: 0 },
+                  width: { type: "number", minimum: 0 },
+                  height: { type: "number", minimum: 0 },
                   name: { type: "string" },
+                  originalDimensions: {
+                    type: "object",
+                    required: ["width", "height"],
+                    properties: {
+                      width: { type: "number" },
+                      height: { type: "number" },
+                    },
+                    additionalProperties: false,
+                  },
+                },
+                additionalProperties: false,
+              },
+              // Projected by deriveMessages from `image/offload` (source events stay plain).
+              offloaded: { const: true },
+            },
+            additionalProperties: false,
+          },
+          {
+            type: "object",
+            required: ["type", "attachment"],
+            properties: {
+              type: { const: "file" },
+              attachment: {
+                type: "object",
+                required: ["attachmentId", "name", "bytes"],
+                properties: {
+                  attachmentId: { type: "string", minLength: 1 },
+                  name: { type: "string", minLength: 1 },
+                  bytes: { type: "number", minimum: 0 },
+                  mediaType: { type: "string" },
                 },
                 additionalProperties: false,
               },
@@ -276,61 +306,7 @@ export const sessionEventJsonSchema = {
       properties: baseProps({
         type: { const: "prompt/admitted" },
         admitId: { type: "string" },
-        content: {
-          oneOf: [
-            { type: "string" },
-            {
-              type: "array",
-              items: {
-                oneOf: [
-                  {
-                    type: "object",
-                    required: ["type", "text"],
-                    properties: {
-                      type: { const: "text" },
-                      text: { type: "string" },
-                    },
-                    additionalProperties: false,
-                  },
-                  {
-                    type: "object",
-                    required: ["type", "attachment"],
-                    properties: {
-                      type: { const: "image" },
-                      attachment: {
-                        type: "object",
-                        required: [
-                          "attachmentId",
-                          "mediaType",
-                          "bytes",
-                          "width",
-                          "height",
-                        ],
-                        properties: {
-                          attachmentId: { type: "string" },
-                          mediaType: {
-                            enum: [
-                              "image/png",
-                              "image/jpeg",
-                              "image/webp",
-                              "image/gif",
-                            ],
-                          },
-                          bytes: { type: "number" },
-                          width: { type: "number" },
-                          height: { type: "number" },
-                          name: { type: "string" },
-                        },
-                        additionalProperties: false,
-                      },
-                    },
-                    additionalProperties: false,
-                  },
-                ],
-              },
-            },
-          ],
-        },
+        content: messageContentSchema,
         delivery: { enum: ["steer", "queue"] },
       }),
       additionalProperties: false,
@@ -591,8 +567,76 @@ export const sessionEventJsonSchema = {
       }),
       additionalProperties: false,
     },
+    {
+      type: "object",
+      required: ["type", "ts", "targets"],
+      properties: baseProps({
+        type: { const: "image/offload" },
+        targets: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            required: ["seq", "imageIndexes"],
+            properties: {
+              seq: { type: "integer", minimum: 0 },
+              imageIndexes: {
+                type: "array",
+                minItems: 1,
+                items: { type: "integer", minimum: 0 },
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+      }),
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      required: ["type", "ts", "turnId", "summary"],
+      properties: baseProps({
+        type: { const: "workspace/changes" },
+        turnId: { type: "string" },
+        summary: {
+          type: "object",
+          required: ["turnId", "cwd", "files", "total", "added", "deleted"],
+          properties: {
+            turnId: { type: "string" },
+            cwd: { type: "string" },
+            files: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["path", "display", "added", "deleted"],
+                properties: {
+                  path: { type: "string" },
+                  display: { type: "string" },
+                  added: { type: "number", minimum: 0 },
+                  deleted: { type: "number", minimum: 0 },
+                  binary: { const: true },
+                  oversized: { const: true },
+                },
+                additionalProperties: false,
+              },
+            },
+            total: { type: "number", minimum: 0 },
+            added: { type: "number", minimum: 0 },
+            deleted: { type: "number", minimum: 0 },
+            snapshot: {
+              type: "object",
+              required: ["before", "after"],
+              properties: {
+                before: { type: "string" },
+                after: { type: "string" },
+              },
+              additionalProperties: false,
+            },
+          },
+          additionalProperties: false,
+        },
+      }),
+      additionalProperties: false,
+    },
   ],
 } as const;
-
-/** @deprecated Use `sessionEventJsonSchema`. */
-export const sessionEventJsonSchemaStub = sessionEventJsonSchema;

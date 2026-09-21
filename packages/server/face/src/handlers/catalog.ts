@@ -3,6 +3,8 @@ import { readSessionEvents } from "@xrkseek/core-session";
 import {
   FACE_AGENT_PRESETS,
   FACE_AGENT_PRESET_IDS,
+  DEFAULT_MAX_ACTIVE_CHILDREN,
+  DEFAULT_MAX_DEPTH,
   canonicalAgentPresetId,
   resolveAgentPresetProfile,
 } from "../presets-catalog.js";
@@ -70,7 +72,7 @@ export const agentPresetRead: FaceHandler = async (_runtime, _rpcId, payload) =>
   const subagentLine =
     profile.subagents.mode === "off"
       ? "subagents: off"
-      : `subagents: on (maxDepth ${profile.subagents.maxDepth ?? 3}, maxActiveChildren ${profile.subagents.maxActiveChildren ?? 4})`;
+      : `subagents: on (Face agent-loop caps default ${DEFAULT_MAX_DEPTH}/${DEFAULT_MAX_ACTIVE_CHILDREN}; badge ceiling depth=${profile.subagents.maxDepth ?? "face"}, active=${profile.subagents.maxActiveChildren ?? "face"})`;
   const content = [
     `# ${info.displayName}`,
     "",
