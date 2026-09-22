@@ -17,6 +17,12 @@ import { AppFrame } from '@xrkseek/client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@xrkseek/client-ui-layout/src/client/AppFrame.tsx'
 import { SIDEBAR_COLLAPSED, PHONE_MAX } from '@xrkseek/client-ui-layout/src/client/columns.ts'
 import { createLayoutStore } from '@xrkseek/client-ui-layout/src/client/stores.ts'
+import {
+  applyLayoutInsetsDom,
+  clearLayoutInsetsDom,
+  LAYOUT_INSET_ATTR,
+  LAYOUT_INSET_CSS,
+} from '@xrkseek/client-ui-layout/src/client/layout-insets.ts'
 import type {
   SessionId, SessionListState, WorkspaceListState,
 } from '@xrkseek/client-runtime/client'
@@ -97,6 +103,8 @@ function mountFrame() {
       useConnectionState={((sel: (s: undefined) => unknown) => sel(undefined)) as never}
       SessionProvider={SessionProviderStub}
       t={t}
+      publishLayoutInsets={applyLayoutInsetsDom}
+      clearLayoutInsets={clearLayoutInsetsDom}
     />
   )
   const utils = render(element())
@@ -143,7 +151,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  document.body.removeAttribute('data-xrk-details-open')
+  clearLayoutInsetsDom()
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
@@ -263,13 +271,18 @@ describe('AppFrame', () => {
     expect(frame.hasAttribute('data-details-collapsed')).toBe(true)
   })
 
-  it('stamps data-xrk-details-open on body while the details column is open', () => {
+  it('publishes layout insets CSS contract while the details column is open', () => {
     const { instance } = mountFrame()
-    expect(document.body.hasAttribute('data-xrk-details-open')).toBe(false)
+    const root = document.documentElement
+    expect(root.hasAttribute(LAYOUT_INSET_ATTR.details)).toBe(false)
+    expect(root.style.getPropertyValue(LAYOUT_INSET_CSS.details)).toBe('0px')
     act(() => { instance.actions.openDetails() })
-    expect(document.body.hasAttribute('data-xrk-details-open')).toBe(true)
+    expect(root.hasAttribute(LAYOUT_INSET_ATTR.details)).toBe(true)
+    expect(root.style.getPropertyValue(LAYOUT_INSET_CSS.details)).toMatch(/^\d+px$/)
+    expect(Number.parseInt(root.style.getPropertyValue(LAYOUT_INSET_CSS.details), 10)).toBeGreaterThan(0)
     act(() => { instance.actions.closeDetails() })
-    expect(document.body.hasAttribute('data-xrk-details-open')).toBe(false)
+    expect(root.hasAttribute(LAYOUT_INSET_ATTR.details)).toBe(false)
+    expect(root.style.getPropertyValue(LAYOUT_INSET_CSS.details)).toBe('0px')
   })
 
   it('closed sidebar keeps its compact rail with mounted slot content and collapsed owner props', () => {

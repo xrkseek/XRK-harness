@@ -13,6 +13,7 @@ import type { PanelActions } from './service.ts'
 import { AppFrame } from './AppFrame.tsx'
 import { createLayoutStore } from './stores.ts'
 import { LayoutController } from './service.ts'
+import type { LayoutInsets } from './layout-insets.ts'
 import { ThemePresenter } from './theme-presenter.ts'
 import { NS, en, zh } from './locales.ts'
 
@@ -22,7 +23,15 @@ import { NS, en, zh } from './locales.ts'
 // OwnerShare contracts below are the render-side halves registrants compose
 // against; the frame components and the store factory are package-internal.
 export { LayoutController } from './service.ts'
-export type { ILayout } from './service.ts'
+export type { ILayout, LayoutInsets, LayoutInsetsFace } from './service.ts'
+export {
+  EMPTY_LAYOUT_INSETS,
+  LAYOUT_INSET_ATTR,
+  LAYOUT_INSET_CSS,
+  applyLayoutInsetsDom,
+  clearLayoutInsetsDom,
+  layoutInsetsEqual,
+} from './layout-insets.ts'
 
 declare module '@xrkseek/cordis' {
   interface Context {
@@ -137,7 +146,10 @@ export function apply(ctx: ClientContext): void {
       // conversation business actions belong to their registrants.
       inject: (actions: PanelActions) => {
         layout.attachPanels(actions)
-        return {}
+        return {
+          publishLayoutInsets: (insets: LayoutInsets) => { layout.publishInsets(insets) },
+          clearLayoutInsets: () => { layout.clearInsets() },
+        }
       },
     }, AppFrame)
     return () => {

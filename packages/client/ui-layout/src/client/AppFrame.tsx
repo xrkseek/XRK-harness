@@ -17,13 +17,22 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@xrkseek/client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@xrkseek/client-ui-slots'
 import {
   computeColumns, phoneDrawerWidth, resolveShellTracks,
   SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT,
 } from './columns.ts'
+import type { LayoutInsets } from './layout-insets.ts'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
+
+/** Injected by ui-layout: publish shell insets for floating workbench plugins. */
+export interface AppFrameInjected {
+  /** Push solved insets to `ctx.layout.insets` + the CSS contract. */
+  publishLayoutInsets(insets: LayoutInsets): void
+  /** Clear published insets on unmount. */
+  clearLayoutInsets(): void
+}
 
 /** Full composed props: runtime share + child-slot render share + store share + locale. */
 export type AppFrameProps =
@@ -31,6 +40,7 @@ export type AppFrameProps =
   & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'shell.overlay'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
   & PropsLocale<'layout'>
+  & InjectFace<AppFrameInjected>
 
 /** Center column grid item (session-body building block). */
 function CenterColumn(props: { children?: ReactNode; inert?: boolean }) {
@@ -103,6 +113,8 @@ export function AppFrame({
   actions,
   renderSlot,
   t,
+  publishLayoutInsets,
+  clearLayoutInsets,
 }: AppFrameProps) {
   const panels = useStore(s => s)
   const currentSession = useSessions(s => s.current)
@@ -162,13 +174,17 @@ export function AppFrame({
   const colsRef = useRef(solved)
   colsRef.current = solved
 
-  // Publish details-open on <body> so floating workbench plugins (better-sidebar)
-  // can yield the top-right chrome and avoid covering the overview close control.
+  // Publish shell insets for any floating workbench plugin (CSS + ctx.layout.insets).
+  // Coexistence: #root margin-right push already leaves the details strip;
+  // plugins yield chrome via --xrk-layout-inset-* instead of mutual exclusion.
   useEffect(() => {
-    if (detailsCollapsed) document.body.removeAttribute('data-xrk-details-open')
-    else document.body.setAttribute('data-xrk-details-open', '')
-    return () => { document.body.removeAttribute('data-xrk-details-open') }
-  }, [detailsCollapsed])
+    publishLayoutInsets({
+      details: detailsCollapsed || phone ? 0 : cols.details,
+      sidebar: phone ? 0 : cols.sidebar,
+      phone,
+    })
+    return () => { clearLayoutInsets() }
+  }, [clearLayoutInsets, cols.details, cols.sidebar, detailsCollapsed, phone, publishLayoutInsets])
 
   // Phone: picking a session (or starting a blank) should tuck the drawer away
   // so the conversation is immediately usable — same expectation as native

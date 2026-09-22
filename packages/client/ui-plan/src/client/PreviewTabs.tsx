@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { IconCloseFill14 } from '@xrkseek/client-ui-primitives'
+import { LAYOUT_INSET_ATTR } from '@xrkseek/client-ui-layout/client'
 import { loadPreviewTabs, type PreviewTabLoad } from './preview-load.ts'
 import css from './PreviewTabs.module.css'
 
@@ -163,16 +164,21 @@ export type PreviewOpenProps = InjectFace<PreviewOpenInjected> & PropsLocale<'pl
 
 /**
  * Composer control that opens the session overview (details) column.
- * Reads `data-xrk-details-open` so a second click closes (toggle), matching
- * Codex / Hermes overview chips.
+ * Reads the layout insets stamp (`data-xrk-layout-details`) so a second click
+ * closes (toggle), matching Codex / Hermes overview chips.
  */
 export function PreviewOpenButton({ openPreview, closePreview, t }: PreviewOpenProps) {
-  const [open, setOpen] = useState(() => document.body.hasAttribute('data-xrk-details-open'))
+  const [open, setOpen] = useState(() => document.documentElement.hasAttribute(LAYOUT_INSET_ATTR.details))
   useEffect(() => {
-    const sync = (): void => { setOpen(document.body.hasAttribute('data-xrk-details-open')) }
+    const sync = (): void => {
+      setOpen(document.documentElement.hasAttribute(LAYOUT_INSET_ATTR.details))
+    }
     sync()
     const observer = new MutationObserver(sync)
-    observer.observe(document.body, { attributes: true, attributeFilter: ['data-xrk-details-open'] })
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: [LAYOUT_INSET_ATTR.details],
+    })
     return () => { observer.disconnect() }
   }, [])
   return (
