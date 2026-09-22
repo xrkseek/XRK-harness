@@ -29,7 +29,7 @@ npx @xrkseek/harness-cli web
 
 不要在用户主目录直接跑 `web`（cwd 会变成 workspace，Agent 可写范围过大）。`~/.xrk` 是设置/会话仓，不是项目根。浏览器打开提示地址（默认 `http://127.0.0.1:8787`）。
 
-长任务可用模型工具 `todo_write` 维护站立计划（下一轮用户发言清空条带），必要时壳内 `/compact` 换窗。  
+长任务可用模型工具 `todo_write` 维护站立计划（跨回合保留，直到下一次 `todo_write` 覆盖），必要时壳内 `/compact` 换窗。  
 工作区请打开**具体项目目录**，不要指到 Desktop 根（递归列目录会制造海量工具输出；内核会 spill，但仍应避免）。
 
 | 步骤 | 说明 |
@@ -194,7 +194,7 @@ npx @xrkseek/harness-cli web
 
 Do not run `web` directly in the user home directory (cwd becomes the workspace and the Agent writable scope becomes too large). `~/.xrk` holds settings and sessions; it is not the project root. Open the URL printed in the terminal (default `http://127.0.0.1:8787`).
 
-For long tasks, the model can keep a standing plan with `todo_write` (cleared on the next user turn); use in-shell `/compact` when the context window needs a swap.  
+For long tasks, the model can keep a standing plan with `todo_write` (kept across turns until the next `todo_write`); use in-shell `/compact` when the context window needs a swap.  
 Open a **concrete project folder** as the workspace — not the Desktop root (recursive listings create huge tool output; the kernel spills them, but you should still avoid that).
 
 | Step | Notes |

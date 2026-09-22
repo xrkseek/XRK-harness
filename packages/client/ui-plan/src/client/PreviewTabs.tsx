@@ -56,7 +56,7 @@ export function PreviewTabs({ sessionId, closeDetails, t, useProjection }: Previ
       setReady(true)
     })
     return () => { alive = false }
-  }, [sessionId, tab])
+  }, [sessionId])
 
   const emptyCopy = ready ? t('preview.unavailable') : t('preview.loading')
 

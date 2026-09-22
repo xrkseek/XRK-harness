@@ -124,8 +124,9 @@ describe('TodoDock', () => {
     expect(screen.queryByTestId('todo-panel')).toBeNull()
   })
 
-  it('keeps the strip after a non-null update, then retires on turn/start null', () => {
-    // Mirrors Face: todo/write → list; turn/end keeps list; next turn/start → null.
+  it('keeps the strip after a non-null update, then hides when the projection is null', () => {
+    // Face standing plan: todo/write → list (across turns); null only before first write
+    // or if the host clears the projection. The panel itself owns no data.
     const store = createSnapshotStore<{ value: readonly TodoItem[] | null | undefined }>({
       value: [{ content: 'standing', status: 'in_progress' }],
     })
