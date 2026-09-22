@@ -19,7 +19,8 @@ export const MEMORY_CHAR_LIMIT = 2200;
 export const USER_CHAR_LIMIT = 1375;
 
 const HEADERS = {
-  memory: "MEMORY (your personal notes)",
+  memory:
+    "MEMORY (durable facts across sessions — not a todo list or unfinished-work queue)",
   user: "USER PROFILE (who the user is)",
 } as const;
 

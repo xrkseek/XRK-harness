@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
+import { IconCloseFill14 } from '@xrkseek/client-ui-primitives'
 import { loadPreviewTabs, type PreviewTabLoad } from './preview-load.ts'
 import css from './PreviewTabs.module.css'
 
@@ -61,44 +62,49 @@ export function PreviewTabs({ sessionId, closeDetails, t, useProjection }: Previ
   const emptyCopy = ready ? t('preview.unavailable') : t('preview.loading')
 
   return (
-    <div className={css.root}>
+    <aside className={css.root} aria-label={t('preview.tabs')} data-xrk-overview="">
       <div className={css.header}>
-        <div className={css.tabs} role="tablist" aria-label={t('preview.tabs')}>
-          <button
-            type="button"
-            role="tab"
-            className={css.tab}
-            aria-selected={tab === 'todos'}
-            onClick={() => { setTab('todos') }}
-          >
-            {t('preview.todos')}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            className={css.tab}
-            aria-selected={tab === 'plan'}
-            onClick={() => { setTab('plan') }}
-          >
-            {t('preview.plan')}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            className={css.tab}
-            aria-selected={tab === 'office'}
-            onClick={() => { setTab('office') }}
-          >
-            {t('preview.office')}
-          </button>
+        <div className={css.titleBlock}>
+          <h2 className={css.title}>{t('preview.open')}</h2>
+          <div className={css.tabs} role="tablist" aria-label={t('preview.tabs')}>
+            <button
+              type="button"
+              role="tab"
+              className={css.tab}
+              aria-selected={tab === 'todos'}
+              onClick={() => { setTab('todos') }}
+            >
+              {t('preview.todos')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className={css.tab}
+              aria-selected={tab === 'plan'}
+              onClick={() => { setTab('plan') }}
+            >
+              {t('preview.plan')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className={css.tab}
+              aria-selected={tab === 'office'}
+              onClick={() => { setTab('office') }}
+            >
+              {t('preview.office')}
+            </button>
+          </div>
         </div>
-        <button type="button" className={css.close} aria-label={t('preview.close')} onClick={() => { closeDetails() }}>
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
-            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
+        <button
+          type="button"
+          className={css.close}
+          aria-label={t('preview.close')}
+          onClick={() => { closeDetails() }}
+        >
+          <IconCloseFill14 size={14} />
         </button>
       </div>
-      <p className={css.intro}>{t('preview.intro')}</p>
       <div className={css.body} role="tabpanel">
         {tab === 'todos'
           ? todos === null || todos.length === 0
@@ -143,26 +149,41 @@ export function PreviewTabs({ sessionId, closeDetails, t, useProjection }: Previ
                 </>
               )}
       </div>
-    </div>
+    </aside>
   )
 }
 
-/** Injected by ui-plan: open the layout details column. */
+/** Injected by ui-plan: open / close the layout details column. */
 export interface PreviewOpenInjected {
   openPreview: () => void
+  closePreview: () => void
 }
 
 export type PreviewOpenProps = InjectFace<PreviewOpenInjected> & PropsLocale<'plan'>
 
-/** Composer control that opens the session overview (details) column. */
-export function PreviewOpenButton({ openPreview, t }: PreviewOpenProps) {
+/**
+ * Composer control that opens the session overview (details) column.
+ * Reads `data-xrk-details-open` so a second click closes (toggle), matching
+ * Codex / Hermes overview chips.
+ */
+export function PreviewOpenButton({ openPreview, closePreview, t }: PreviewOpenProps) {
+  const [open, setOpen] = useState(() => document.body.hasAttribute('data-xrk-details-open'))
+  useEffect(() => {
+    const sync = (): void => { setOpen(document.body.hasAttribute('data-xrk-details-open')) }
+    sync()
+    const observer = new MutationObserver(sync)
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-xrk-details-open'] })
+    return () => { observer.disconnect() }
+  }, [])
   return (
     <button
       type="button"
       className={css.open}
-      onClick={() => { openPreview() }}
+      onClick={() => { if (open) closePreview(); else openPreview() }}
       title={t('preview.openHint')}
       aria-label={t('preview.open')}
+      aria-pressed={open}
+      data-open={open || undefined}
     >
       {t('preview.open')}
     </button>

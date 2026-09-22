@@ -66,6 +66,7 @@ import {
   type VideoGenService,
 } from "@xrkseek/exec-video-gen";
 import {
+  CURATED_MEMORY_PROMPT_TEXT,
   createCuratedMemoryStore,
   createCuratedMemoryTools,
   writeReusableNotesAfterTurn,
@@ -872,12 +873,21 @@ export function createHarnessComposition(
     content: () => persona,
   });
   if (curatedMemory) {
-    const frozenMemory = curatedMemory.frozenSystemBlock();
+    // Policy is always present (even with empty files) so a new session does not
+    // treat leftover MEMORY.md WIP as a task queue — Codex-style isolation.
     prompts.register({
-      id: "curated-memory",
-      order: 2,
-      content: () => frozenMemory,
+      id: "curated-memory-policy",
+      order: 1,
+      content: () => CURATED_MEMORY_PROMPT_TEXT,
     });
+    const frozenMemory = curatedMemory.frozenSystemBlock();
+    if (frozenMemory.trim()) {
+      prompts.register({
+        id: "curated-memory",
+        order: 2,
+        content: () => frozenMemory,
+      });
+    }
   }
   if (options.webTools !== false) {
     prompts.register({
@@ -1012,7 +1022,7 @@ export function createHarnessComposition(
     ...(options.plugins ? { plugins: options.plugins } : {}),
     reservedIds: [
       "base",
-      ...(curatedMemory ? ["curated-memory"] : []),
+      ...(curatedMemory ? ["curated-memory-policy", "curated-memory"] : []),
       "tool:skill",
       "tool:fs-routing",
       "tool:shell-routing",

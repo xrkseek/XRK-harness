@@ -1,4 +1,4 @@
-ï»¿<div align="center">
+<div align="center">
 
 <img src="./docs/assets/logo-plate.png" alt="XRK Harness" width="128" />
 
@@ -16,34 +16,34 @@
 
 ---
 
-å‘é˜³è€Œç”Ÿï¼Œé©­å…‰è€Œè¡Œ
+ÏòÑô¶øÉú£¬Ô¦¹â¶øĞĞ
 
-XRK-Harness ä¸ºè‡ªç ” TypeScript Agent Harness + Server Kitã€‚è®¾è®¡å¸æ”¶ Codex ä¸ä¸šç•Œ agent harness åœ¨ä¼šè¯ã€å·¥å…·ä¸å£³äº¤äº’ä¸Šçš„é•¿å¤„ï¼›å¥‘çº¦ä»¥æœ¬ä»“ä¸ºå‡†ã€‚
+XRK-Harness Îª×ÔÑĞ TypeScript Agent Harness + Server Kit¡£Éè¼ÆÎüÊÕ Codex ÓëÒµ½ç agent harness ÔÚ»á»°¡¢¹¤¾ßÓë¿Ç½»»¥ÉÏµÄ³¤´¦£»ÆõÔ¼ÒÔ±¾²ÖÎª×¼¡£
 
-[å…¥é—¨](./docs/getting-started.md) Â· [é…ç½®](./docs/configuration.md) Â· [èƒ½åŠ›çŸ©é˜µ](./docs/status.md) Â· [æ–‡æ¡£ä¸­å¿ƒ](./docs/README.md) Â· [v0.3.11 å‘è¡Œè¯´æ˜](./docs/releases/v0.3.11.md)
+[ÈëÃÅ](./docs/getting-started.md) ¡¤ [ÅäÖÃ](./docs/configuration.md) ¡¤ [ÄÜÁ¦¾ØÕó](./docs/status.md) ¡¤ [ÎÄµµÖĞĞÄ](./docs/README.md) ¡¤ [v0.3.11 ·¢ĞĞËµÃ÷](./docs/releases/v0.3.11.md)
 
-## è¿™æ˜¯ä»€ä¹ˆ
+## ÕâÊÇÊ²Ã´
 
-XRK-Harnessï¼ˆnpm **`@xrkseek/*`**ï¼‰æ˜¯çº¯ **TypeScript / Node â‰¥26** çš„ Agent è¿è¡Œæ—¶ä¸ Server Kitã€‚
+XRK-Harness£¨npm **`@xrkseek/*`**£©ÊÇ´¿ **TypeScript / Node ¡İ26** µÄ Agent ÔËĞĞÊ±Óë Server Kit¡£
 
-| èƒ½åŠ› | è¯´æ˜ |
+| ÄÜÁ¦ | ËµÃ÷ |
 |------|------|
-| **Session ä¸ºçœŸæº** | å¯¹è¯ä¸å·¥å…·å†™åœ¨ append-only äº‹ä»¶æ—¥å¿—é‡Œï¼Œå¯é‡å»ºï¼›turn / loop çŸ­å¯¿ |
-| **å¯ç»„è£…** | preset `minimal` / `harness` / `server` åªæ¥çº¿ã€ä¸å†™ä¸šåŠ¡é€»è¾‘ |
-| **Host + Face** | HTTPã€Unary RPCã€åŒ WebSocketï¼›æµè§ˆå™¨äº§å“å£³éš CLI æä¾›ï¼ˆ**37** boot æ’ä»¶ï¼‰ |
-| **@ å¼•ç”¨** | è¾“å…¥æ¡† `@file` / `@session` è¡¥å…¨ï¼ˆFace å‘ç° remotesï¼›è·¨ä¼šè¯ prepare è§ statusï¼‰ |
-| **é™„ä»¶** | composer é™„ä»¶æ ä¸æ¶ˆæ¯å›¾ç‰‡ï¼›æœ¬åœ°è§„èŒƒåŒ–ä¸è§†è§‰ä¸Šä¼ ç®¡çº¿ |
-| **ç¤¾åŒº client** | `plugin add` è£… npm ç¤¾åŒºåŒ…ï¼›è‡ªç ” Host å…¼å®¹å™¨ï¼ˆè§ [community-plugins](./docs/community-plugins.md)ï¼‰ |
-| **MCP** | stdio / streamable-httpï¼›åœ¨ **è®¾ç½® â†’ æ’ä»¶** é…ç½®å¹¶çƒ­æŒ‚è½½ |
-| **å‹ç¼©ä¸ç”¨é‡** | é•¿ä¼šè¯å¯æ¢çª—å‹ç¼©ï¼›å£³ä¸Šå¯çœ‹ token / ä¸Šä¸‹æ–‡å‹åŠ› |
+| **Session ÎªÕæÔ´** | ¶Ô»°Óë¹¤¾ßĞ´ÔÚ append-only ÊÂ¼şÈÕÖ¾Àï£¬¿ÉÖØ½¨£»turn / loop ¶ÌÊÙ |
+| **¿É×é×°** | preset `minimal` / `harness` / `server` Ö»½ÓÏß¡¢²»Ğ´ÒµÎñÂß¼­ |
+| **Host + Face** | HTTP¡¢Unary RPC¡¢Ë« WebSocket£»ä¯ÀÀÆ÷²úÆ·¿ÇËæ CLI Ìá¹©£¨**37** boot ²å¼ş£© |
+| **@ ÒıÓÃ** | ÊäÈë¿ò `@file` / `@session` ²¹È«£¨Face ·¢ÏÖ remotes£»¿ç»á»° prepare ¼û status£© |
+| **¸½¼ş** | composer ¸½¼şÀ¸ÓëÏûÏ¢Í¼Æ¬£»±¾µØ¹æ·¶»¯ÓëÊÓ¾õÉÏ´«¹ÜÏß |
+| **ÉçÇø client** | `plugin add` ×° npm ÉçÇø°ü£»×ÔÑĞ Host ¼æÈİÆ÷£¨¼û [community-plugins](./docs/community-plugins.md)£© |
+| **MCP** | stdio / streamable-http£»ÔÚ **ÉèÖÃ ¡ú ²å¼ş** ÅäÖÃ²¢ÈÈ¹ÒÔØ |
+| **Ñ¹ËõÓëÓÃÁ¿** | ³¤»á»°¿É»»´°Ñ¹Ëõ£»¿ÇÉÏ¿É¿´ token / ÉÏÏÂÎÄÑ¹Á¦ |
 
-ç”¨æ³•ï¼š**å‘½ä»¤è¡Œ**ï¼ˆ`xrkh run`ï¼Œäº¦å `xrk-harness`ï¼‰æˆ– **ç½‘é¡µ**ï¼ˆ`xrkh web` / `serve`ï¼‰ã€‚èƒ½åŠ›è¾¹ç•Œè§ [docs/status.md](./docs/status.md)ã€‚æ—¥å¸¸è°ƒå‚èµ° **Web è®¾ç½®**ï¼Œä¸å¿…å…ˆé…ç¯å¢ƒå˜é‡ã€‚
+ÓÃ·¨£º**ÃüÁîĞĞ**£¨`xrkh run`£¬ÒàÃû `xrk-harness`£©»ò **ÍøÒ³**£¨`xrkh web` / `serve`£©¡£ÄÜÁ¦±ß½ç¼û [docs/status.md](./docs/status.md)¡£ÈÕ³£µ÷²Î×ß **Web ÉèÖÃ**£¬²»±ØÏÈÅä»·¾³±äÁ¿¡£
 
-## æ€ä¹ˆè·‘
+## ÔõÃ´ÅÜ
 
-éœ€è¦ **Node.js â‰¥26**ã€‚
+ĞèÒª **Node.js ¡İ26**¡£
 
-### ç›´æ¥ç”¨ï¼ˆæ¨èï¼‰
+### Ö±½ÓÓÃ£¨ÍÆ¼ö£©
 
 ```sh
 mkdir my-workspace && cd my-workspace
@@ -51,109 +51,109 @@ npm install -g @xrkseek/harness-cli@0.3.11
 xrkh web
 ```
 
-é¢„è§ˆçº¿ï¼ˆæœ¬ç‰ˆï¼‰ï¼š`npm install -g @xrkseek/harness-cli@0.4.0-rc.2`ã€‚æ­£å¼çº¿ä»æ˜¯ v0.3.11ï¼Œ`@latest` ä¸è¢« rc é¡¶æ›¿ã€‚
+Ô¤ÀÀÏß£¨±¾°æ£©£º`npm install -g @xrkseek/harness-cli@0.4.0-rc.3`¡£ÕıÊ½ÏßÈÔÊÇ v0.3.11£¬`@latest` ²»±» rc ¶¥Ìæ¡£
 
-é»˜è®¤ **harness** presetï¼ˆå« `web_search` / `web_fetch`ï¼‰ã€‚ä»…è¦ fs çƒŸæµ‹æ—¶åŠ  `--preset minimal`ã€‚
+Ä¬ÈÏ **harness** preset£¨º¬ `web_search` / `web_fetch`£©¡£½öÒª fs ÑÌ²âÊ±¼Ó `--preset minimal`¡£
 
-æ— ç•Œé¢ï¼š
+ÎŞ½çÃæ£º
 
 ```sh
 xrkh run --preset minimal --prompt "ping"
 ```
 
-å½“å‰ç›®å½•å³ workspaceã€‚é¦–æ¬¡è¿è¡Œä¼šåœ¨ `~/.xrk/` å†™ä¸‹ç”¨æˆ·è®¾ç½®ä¸ä¼šè¯ï¼ˆå¯ç”¨ `XRK_HOME` æ”¹ï¼‰ï¼›`--workspace` åªé’‰é¡¹ç›®æ ¹ã€‚ç»†èŠ‚ï¼š[docs/getting-started.md](./docs/getting-started.md)ã€‚
+µ±Ç°Ä¿Â¼¼´ workspace¡£Ê×´ÎÔËĞĞ»áÔÚ `~/.xrk/` Ğ´ÏÂÓÃ»§ÉèÖÃÓë»á»°£¨¿ÉÓÃ `XRK_HOME` ¸Ä£©£»`--workspace` Ö»¶¤ÏîÄ¿¸ù¡£Ï¸½Ú£º[docs/getting-started.md](./docs/getting-started.md)¡£
 
-### ä»æœ¬ä»“åº“æºç è·‘
+### ´Ó±¾²Ö¿âÔ´ÂëÅÜ
 
 ```sh
-npm install -g pnpm@11.22.0 # ä¸ package.json â†’ packageManager å¯¹é½
+npm install -g pnpm@11.22.0 # Óë package.json ¡ú packageManager ¶ÔÆë
 pnpm install
 pnpm build
 pnpm web:build && pnpm client:bundle && pnpm web:assemble
 node apps/cli/dist/bin.js web --workspace .
 ```
 
-æ— å¯†é’¥è‡ªæ£€ï¼š
+ÎŞÃÜÔ¿×Ô¼ì£º
 
 ```sh
 node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 ```
 
-æ’ä»¶æ ·ä¾‹ï¼š[extensions/example-tools](./extensions/example-tools)ï¼›å·¥ä½œåŒº Agent å…¥å£ï¼š[.agents/AGENTS.md](./.agents/AGENTS.md)ã€‚
+²å¼şÑùÀı£º[extensions/example-tools](./extensions/example-tools)£»¹¤×÷Çø Agent Èë¿Ú£º[.agents/AGENTS.md](./.agents/AGENTS.md)¡£
 
-### æ¥çœŸæ¨¡å‹
+### ½ÓÕæÄ£ĞÍ
 
-ä¼˜å…ˆï¼šç½‘é¡µå£³ **è®¾ç½® â†’ æ¨¡å‹ / å‡­æ®**ã€‚ 
-å¯é€‰ï¼šå¤åˆ¶ `.xrk/.credentials.yaml.example`ï¼Œæˆ–ç”¨ brand `apiKeyEnv`ï¼ˆå¦‚ `DEEPSEEK_API_KEY`ï¼‰ä½œæ— å¤´/CI æ—è·¯ã€‚è¯´æ˜ï¼š[docs/configuration.md](./docs/configuration.md)ã€‚
+ÓÅÏÈ£ºÍøÒ³¿Ç **ÉèÖÃ ¡ú Ä£ĞÍ / Æ¾¾İ**¡£ 
+¿ÉÑ¡£º¸´ÖÆ `.xrk/.credentials.yaml.example`£¬»òÓÃ brand `apiKeyEnv`£¨Èç `DEEPSEEK_API_KEY`£©×÷ÎŞÍ·/CI ÅÔÂ·¡£ËµÃ÷£º[docs/configuration.md](./docs/configuration.md)¡£
 
-## ç°åœ¨èƒ½ç”¨åˆ°ä»€ä¹ˆç¨‹åº¦
+## ÏÖÔÚÄÜÓÃµ½Ê²Ã´³Ì¶È
 
-| åŸŸ | çŠ¶æ€ |
+| Óò | ×´Ì¬ |
 |----|------|
-| å†…æ ¸ Â· Session Â· Agent Â· å·¥å…· Â· HTTP Â· Host Face Â· MCP | **èƒ½è·‘** |
-| å¤šå‚å•† LLM Registry | **èƒ½è·‘** |
-| ç¤¾åŒº clientï¼ˆè‡ªç ”å…¼å®¹å™¨ï¼‰ | **èƒ½è·‘**ï¼ˆIM WS/sidecar Â· Vision Â· è®°å¿† Â· GenUI npm Â· TongFlowï¼›`xrkh doctor`ï¼‰ |
-| äº§å“ç½‘é¡µä¸æµè§ˆå™¨ E2E | **èƒ½è·‘**ï¼ˆPlaywright **17/17**ï¼›`pnpm test:web` ä¸è¿› `pnpm check`ï¼‰ |
-| å¯¹å¤– CLI åŒ… `@xrkseek/harness-cli` | **èƒ½è·‘**ï¼ˆæ­£å¼ **v0.3.11** Â· é¢„è§ˆ **v0.4.0-rc.2**ï¼›ä¸» bin **`xrkh`**ï¼Œäº¦ **`xrk-harness`**ï¼‰ |
+| ÄÚºË ¡¤ Session ¡¤ Agent ¡¤ ¹¤¾ß ¡¤ HTTP ¡¤ Host Face ¡¤ MCP | **ÄÜÅÜ** |
+| ¶à³§ÉÌ LLM Registry | **ÄÜÅÜ** |
+| ÉçÇø client£¨×ÔÑĞ¼æÈİÆ÷£© | **ÄÜÅÜ**£¨IM WS/sidecar ¡¤ Vision ¡¤ ¼ÇÒä ¡¤ GenUI npm ¡¤ TongFlow£»`xrkh doctor`£© |
+| ²úÆ·ÍøÒ³Óëä¯ÀÀÆ÷ E2E | **ÄÜÅÜ**£¨Playwright **17/17**£»`pnpm test:web` ²»½ø `pnpm check`£© |
+| ¶ÔÍâ CLI °ü `@xrkseek/harness-cli` | **ÄÜÅÜ**£¨ÕıÊ½ **v0.3.11** ¡¤ Ô¤ÀÀ **v0.4.0-rc.3**£»Ö÷ bin **`xrkh`**£¬Òà **`xrk-harness`**£© |
 
-å®Œæ•´è¯´æ˜ï¼š[docs/status.md](./docs/status.md)ã€‚
+ÍêÕûËµÃ÷£º[docs/status.md](./docs/status.md)¡£
 
-## è¿˜æƒ³çœ‹ä»€ä¹ˆ
+## »¹Ïë¿´Ê²Ã´
 
-| ç›®çš„ | æ–‡æ¡£ |
+| Ä¿µÄ | ÎÄµµ |
 |------|------|
-| ä»é›¶å®‰è£… | [getting-started](./docs/getting-started.md) |
-| Settings ä¸ env / è½ç›˜è·¯å¾„ | [configuration](./docs/configuration.md) |
-| æ¥ HTTP / Face Â· `@` å¼•ç”¨ | [http-api](./docs/http-api.md) Â· [host-face](./docs/host-face.md) Â· [references](./docs/modules/references.md) |
-| è£…ç¤¾åŒº client åŒ… | [community-plugins](./docs/community-plugins.md) Â· [plugin-loader](./docs/plugin-loader.md) |
-| Sessionã€å‹ç¼©ã€æŠ•å½±ã€äº‹ä»¶å¥‘çº¦ | [session](./docs/session.md) Â· [session-compaction](./docs/session-compaction.md) Â· [session-projection](./docs/modules/session-projection.md) Â· [protocol-events](./docs/protocol-events.md) |
-| è‡ªå·±å†™å·¥å…· / è¿›ç¨‹æ’ä»¶ | [tool-pipeline](./docs/tool-pipeline.md) Â· [plugin-development](./docs/plugin-development.md) |
-| æ’éšœ | [troubleshooting](./docs/troubleshooting.md) |
-| çŸ­è¦ç‚¹æ€»è§ˆ | [learn](./docs/learn.md) |
-| ç‰ˆæœ¬å‘è¡Œè¯´æ˜ | [releases](./docs/releases/)ï¼ˆæ­£å¼å½“å‰ [v0.3.11](./docs/releases/v0.3.11.md) Â· é¢„è§ˆå½“å‰ [v0.4.0-rc.2](./docs/releases/v0.4.0-rc.2.md) Â· ä¸Šä¸€è½®é¢„è§ˆæœ«å· [v0.2.7](./docs/releases/v0.2.7.md)ï¼‰ |
-| å…¨éƒ¨ä¸“é¢˜ç´¢å¼• | [docs/README.md](./docs/README.md) |
+| ´ÓÁã°²×° | [getting-started](./docs/getting-started.md) |
+| Settings Óë env / ÂäÅÌÂ·¾¶ | [configuration](./docs/configuration.md) |
+| ½Ó HTTP / Face ¡¤ `@` ÒıÓÃ | [http-api](./docs/http-api.md) ¡¤ [host-face](./docs/host-face.md) ¡¤ [references](./docs/modules/references.md) |
+| ×°ÉçÇø client °ü | [community-plugins](./docs/community-plugins.md) ¡¤ [plugin-loader](./docs/plugin-loader.md) |
+| Session¡¢Ñ¹Ëõ¡¢Í¶Ó°¡¢ÊÂ¼şÆõÔ¼ | [session](./docs/session.md) ¡¤ [session-compaction](./docs/session-compaction.md) ¡¤ [session-projection](./docs/modules/session-projection.md) ¡¤ [protocol-events](./docs/protocol-events.md) |
+| ×Ô¼ºĞ´¹¤¾ß / ½ø³Ì²å¼ş | [tool-pipeline](./docs/tool-pipeline.md) ¡¤ [plugin-development](./docs/plugin-development.md) |
+| ÅÅÕÏ | [troubleshooting](./docs/troubleshooting.md) |
+| ¶ÌÒªµã×ÜÀÀ | [learn](./docs/learn.md) |
+| °æ±¾·¢ĞĞËµÃ÷ | [releases](./docs/releases/)£¨ÕıÊ½µ±Ç° [v0.3.11](./docs/releases/v0.3.11.md) ¡¤ Ô¤ÀÀµ±Ç° [v0.4.0-rc.3](./docs/releases/v0.4.0-rc.3.md) ¡¤ ÉÏÒ»ÂÖÔ¤ÀÀÄ©ºÅ [v0.2.7](./docs/releases/v0.2.7.md)£© |
+| È«²¿×¨ÌâË÷Òı | [docs/README.md](./docs/README.md) |
 
-## ä»“åº“é‡Œæœ‰ä»€ä¹ˆ
+## ²Ö¿âÀïÓĞÊ²Ã´
 
 ```text
-apps/cli CLI å…¥å£ï¼ˆ@xrkseek/harness-cliï¼›ä¸» bin xrkhï¼‰
-apps/web äº§å“å£³æºç ï¼ˆç»„è£…è¿› CLI product-webï¼‰
-packages/client æµè§ˆå™¨æ’ä»¶ï¼ˆui-conversation Â· ui-reference Â· â€¦ï¼‰
-packages/context @file / @session å¼•ç”¨å¥‘çº¦ï¼ˆFace å‘ç°è·¯å¾„ï¼‰
-packages/* è¿è¡Œæ—¶åº“ï¼ˆä»“å†…å¤šä¸º privateï¼‰
-presets/* æ¥çº¿ç»„åˆ
-docs/ ç”¨æ³•ä¸å¥‘çº¦æ•™ç§‘ä¹¦
+apps/cli CLI Èë¿Ú£¨@xrkseek/harness-cli£»Ö÷ bin xrkh£©
+apps/web ²úÆ·¿ÇÔ´Âë£¨×é×°½ø CLI product-web£©
+packages/client ä¯ÀÀÆ÷²å¼ş£¨ui-conversation ¡¤ ui-reference ¡¤ ¡­£©
+packages/context @file / @session ÒıÓÃÆõÔ¼£¨Face ·¢ÏÖÂ·¾¶£©
+packages/* ÔËĞĞÊ±¿â£¨²ÖÄÚ¶àÎª private£©
+presets/* ½ÓÏß×éºÏ
+docs/ ÓÃ·¨ÓëÆõÔ¼½Ì¿ÆÊé
 ```
 
-## å¸¸è§é—®é¢˜
+## ³£¼ûÎÊÌâ
 
-**æ‰“å¼€ `web` / `serve` æ²¡æœ‰ç•Œé¢ï¼Ÿ** 
-å‘è¡Œç‰ˆ CLI åº”è‡ªå¸¦äº§å“å£³ã€‚æœ¬ä»“åº“æºç éœ€å…ˆå®Œæˆ `web:build` Â· `client:bundle` Â· `web:assemble`ã€‚
+**´ò¿ª `web` / `serve` Ã»ÓĞ½çÃæ£¿** 
+·¢ĞĞ°æ CLI Ó¦×Ô´ø²úÆ·¿Ç¡£±¾²Ö¿âÔ´ÂëĞèÏÈÍê³É `web:build` ¡¤ `client:bundle` ¡¤ `web:assemble`¡£
 
-**MCP è¿ä¸ä¸Šï¼Ÿ** 
-é»˜è®¤æ‹’ç»è¿æ¥ã€‚åœ¨ **è®¾ç½® â†’ æ’ä»¶ â†’ MCP** é…ç½®å¹¶æ”¾è¡Œï¼›æ— å¤´/CI æ‰ç”¨ `XRK_MCP_ALLOW=1`ã€‚è§ [configuration](./docs/configuration.md) Â· [MCP](./docs/modules/mcp.md)ã€‚
+**MCP Á¬²»ÉÏ£¿** 
+Ä¬ÈÏ¾Ü¾øÁ¬½Ó¡£ÔÚ **ÉèÖÃ ¡ú ²å¼ş ¡ú MCP** ÅäÖÃ²¢·ÅĞĞ£»ÎŞÍ·/CI ²ÅÓÃ `XRK_MCP_ALLOW=1`¡£¼û [configuration](./docs/configuration.md) ¡¤ [MCP](./docs/modules/mcp.md)¡£
 
-**å¯¹è¯å¤ªé•¿ã€ä¸Šä¸‹æ–‡çˆ†äº†ï¼Ÿ** 
-å¯ç”¨å‹ç¼©ï¼ˆSettings â†’ æ’ä»¶ â†’ Agent å¾ªç¯ï¼Œæˆ–å£³å†… `/compact`ï¼‰ã€‚è§ [session-compaction](./docs/session-compaction.md)ã€‚
+**¶Ô»°Ì«³¤¡¢ÉÏÏÂÎÄ±¬ÁË£¿** 
+¿ÉÓÃÑ¹Ëõ£¨Settings ¡ú ²å¼ş ¡ú Agent Ñ­»·£¬»ò¿ÇÄÚ `/compact`£©¡£¼û [session-compaction](./docs/session-compaction.md)¡£
 
-**è£…äº†ç¤¾åŒºæ’ä»¶ä½†é¢æ¿æŠ¥ incompleteï¼Ÿ**
-è£…å®Œåé¡» **`xrkh restart`**ï¼›`xrkh doctor` æŸ¥ staging ä¸å¯é€‰ envã€‚ä¸»è·¯å¾„è§ [community-plugins](./docs/community-plugins.md)ï¼›GenUI æµè§ˆå™¨ runtime ç”± Host æä¾› `/dsh-genui/runtime.js`ï¼ˆcommunity client å¯ dynamic importï¼‰ã€‚
+**×°ÁËÉçÇø²å¼şµ«Ãæ°å±¨ incomplete£¿**
+×°ÍêºóĞë **`xrkh restart`**£»`xrkh doctor` ²é staging Óë¿ÉÑ¡ env¡£Ö÷Â·¾¶¼û [community-plugins](./docs/community-plugins.md)£»GenUI ä¯ÀÀÆ÷ runtime ÓÉ Host Ìá¹© `/dsh-genui/runtime.js`£¨community client ¿É dynamic import£©¡£
 
-æ›´å¤šï¼š[troubleshooting](./docs/troubleshooting.md)ã€‚
+¸ü¶à£º[troubleshooting](./docs/troubleshooting.md)¡£
 
-## è®¸å¯è¯
+## Ğí¿ÉÖ¤
 
-[MIT](./LICENSE) Â© [xrkseek](https://github.com/xrkseek)
+[MIT](./LICENSE) ? [xrkseek](https://github.com/xrkseek)
 
-## å¼€å‘ä¸è´¡çŒ®
+## ¿ª·¢Óë¹±Ï×
 
-| æ–‡æ¡£ | ç”¨é€” |
+| ÎÄµµ | ÓÃÍ¾ |
 |------|------|
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | ç¯å¢ƒã€`pnpm check`ã€å¥‘çº¦åŒæ­¥ |
-| [docs/maintainer.md](./docs/maintainer.md) | æ—¥å¸¸å‘½ä»¤ Â· äº¤æ¥ |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | »·¾³¡¢`pnpm check`¡¢ÆõÔ¼Í¬²½ |
+| [docs/maintainer.md](./docs/maintainer.md) | ÈÕ³£ÃüÁî ¡¤ ½»½Ó |
 | [docs/publishing.md](./docs/publishing.md) | npmjs + GitHub Release |
-| [docs/audiences.md](./docs/audiences.md) | æ–‡æ¡£è¯»è€…åˆ†å±‚ |
-| [AGENTS.md](./AGENTS.md) | æ”¹ç è§’è‰²ä¸çº¢çº¿ |
+| [docs/audiences.md](./docs/audiences.md) | ÎÄµµ¶ÁÕß·Ö²ã |
+| [AGENTS.md](./AGENTS.md) | ¸ÄÂë½ÇÉ«ÓëºìÏß |
 
 ---
 
@@ -161,13 +161,13 @@ docs/ ç”¨æ³•ä¸å¥‘çº¦æ•™ç§‘ä¹¦
 
 Grow toward the sun. Harness the light.
 
-XRK-Harness is an independently developed TypeScript Agent Harness + Server Kit. It absorbs strengths from Codex and peer agent harnesses; this repoâ€™s contracts are authoritative.
+XRK-Harness is an independently developed TypeScript Agent Harness + Server Kit. It absorbs strengths from Codex and peer agent harnesses; this repo¡¯s contracts are authoritative.
 
-[Getting started](./docs/getting-started.md) Â· [Configuration](./docs/configuration.md) Â· [Status](./docs/status.md) Â· [Docs hub](./docs/README.md) Â· [v0.3.11 release notes](./docs/releases/v0.3.11.md)
+[Getting started](./docs/getting-started.md) ¡¤ [Configuration](./docs/configuration.md) ¡¤ [Status](./docs/status.md) ¡¤ [Docs hub](./docs/README.md) ¡¤ [v0.3.11 release notes](./docs/releases/v0.3.11.md)
 
 ## What this is
 
-XRK-Harness (npm **`@xrkseek/*`**) is a pure **TypeScript / Node â‰¥26** Agent runtime and Server Kit.
+XRK-Harness (npm **`@xrkseek/*`**) is a pure **TypeScript / Node ¡İ26** Agent runtime and Server Kit.
 
 | Capability | Description |
 |------------|-------------|
@@ -177,14 +177,14 @@ XRK-Harness (npm **`@xrkseek/*`**) is a pure **TypeScript / Node â‰¥26** Agent r
 | **Mentions** | Composer `@file` / `@session` completion + cross-session prepare (Face `prepare-face`) |
 | **Attachments** | Composer attachment bar and message images; local normalize and vision upload pipeline |
 | **Community clients** | Install npm community packages with `plugin add`; first-party Host adapter ([community-plugins](./docs/community-plugins.md)) |
-| **MCP** | stdio / streamable-http; configure and hot-mount under **Settings â†’ Plugins** |
+| **MCP** | stdio / streamable-http; configure and hot-mount under **Settings ¡ú Plugins** |
 | **Compaction & usage** | Long sessions can compact; the shell shows token / context pressure |
 
-Use the **CLI** (`xrkh run`, also `xrk-harness`) or the **web shell** (`xrkh web` / `serve`). Capability boundaries: [docs/status.md](./docs/status.md). Day-to-day knobs live in **Web Settings** â€” you do not need env vars first.
+Use the **CLI** (`xrkh run`, also `xrk-harness`) or the **web shell** (`xrkh web` / `serve`). Capability boundaries: [docs/status.md](./docs/status.md). Day-to-day knobs live in **Web Settings** ¡ª you do not need env vars first.
 
 ## How to run
 
-Requires **Node.js â‰¥26**.
+Requires **Node.js ¡İ26**.
 
 ### Direct use (recommended)
 
@@ -194,7 +194,7 @@ npm install -g @xrkseek/harness-cli@0.3.11
 xrkh web
 ```
 
-Preview line (this release): `npm install -g @xrkseek/harness-cli@0.4.0-rc.2`. The formal line stays v0.3.11 â€” an rc never moves `@latest`.
+Preview line (this release): `npm install -g @xrkseek/harness-cli@0.4.0-rc.3`. The formal line stays v0.3.11 ¡ª an rc never moves `@latest`.
 
 The default preset is **harness** (includes `web_search` / `web_fetch`). For an fs-only smoke test, add `--preset minimal`.
 
@@ -209,7 +209,7 @@ The current directory is the workspace. First run writes user settings and sessi
 ### Run from this repository
 
 ```sh
-npm install -g pnpm@11.22.0 # match package.json â†’ packageManager
+npm install -g pnpm@11.22.0 # match package.json ¡ú packageManager
 pnpm install
 pnpm build
 pnpm web:build && pnpm client:bundle && pnpm web:assemble
@@ -226,18 +226,18 @@ Plugin sample: [extensions/example-tools](./extensions/example-tools); workspace
 
 ### Connect a real model
 
-Prefer: web shell **Settings â†’ Models / Credentials**. 
+Prefer: web shell **Settings ¡ú Models / Credentials**. 
 Optional: copy `.xrk/.credentials.yaml.example`, or use a brand `apiKeyEnv` (e.g. `DEEPSEEK_API_KEY`) for headless/CI. Details: [docs/configuration.md](./docs/configuration.md).
 
 ## Current maturity
 
 | Domain | Status |
 |--------|--------|
-| Kernel Â· Session Â· Agent Â· tools Â· HTTP Â· Host Face Â· MCP | **Working** |
+| Kernel ¡¤ Session ¡¤ Agent ¡¤ tools ¡¤ HTTP ¡¤ Host Face ¡¤ MCP | **Working** |
 | Multi-provider LLM Registry | **Working** |
-| Community clients (first-party adapter) | **Working** (IM WS/sidecar Â· vision Â· memory Â· GenUI npm Â· TongFlow; `xrkh doctor`) |
+| Community clients (first-party adapter) | **Working** (IM WS/sidecar ¡¤ vision ¡¤ memory ¡¤ GenUI npm ¡¤ TongFlow; `xrkh doctor`) |
 | Product web & browser E2E | **Working** (Playwright **17/17**; `pnpm test:web` not in `pnpm check`) |
-| Public CLI package `@xrkseek/harness-cli` | **Working** (formal **v0.3.11** Â· preview **v0.4.0-rc.2**; primary bin **`xrkh`**, also **`xrk-harness`**) |
+| Public CLI package `@xrkseek/harness-cli` | **Working** (formal **v0.3.11** ¡¤ preview **v0.4.0-rc.3**; primary bin **`xrkh`**, also **`xrk-harness`**) |
 
 Full matrix: [docs/status.md](./docs/status.md).
 
@@ -247,13 +247,13 @@ Full matrix: [docs/status.md](./docs/status.md).
 |------|-----|
 | Install from scratch | [getting-started](./docs/getting-started.md) |
 | Settings vs env / on-disk paths | [configuration](./docs/configuration.md) |
-| HTTP / Face Â· `@` mentions | [http-api](./docs/http-api.md) Â· [host-face](./docs/host-face.md) Â· [references](./docs/modules/references.md) |
-| Install community clients | [community-plugins](./docs/community-plugins.md) Â· [plugin-loader](./docs/plugin-loader.md) |
-| Session, compaction, projection, events | [session](./docs/session.md) Â· [session-compaction](./docs/session-compaction.md) Â· [session-projection](./docs/modules/session-projection.md) Â· [protocol-events](./docs/protocol-events.md) |
-| Author tools / process plugins | [tool-pipeline](./docs/tool-pipeline.md) Â· [plugin-development](./docs/plugin-development.md) |
+| HTTP / Face ¡¤ `@` mentions | [http-api](./docs/http-api.md) ¡¤ [host-face](./docs/host-face.md) ¡¤ [references](./docs/modules/references.md) |
+| Install community clients | [community-plugins](./docs/community-plugins.md) ¡¤ [plugin-loader](./docs/plugin-loader.md) |
+| Session, compaction, projection, events | [session](./docs/session.md) ¡¤ [session-compaction](./docs/session-compaction.md) ¡¤ [session-projection](./docs/modules/session-projection.md) ¡¤ [protocol-events](./docs/protocol-events.md) |
+| Author tools / process plugins | [tool-pipeline](./docs/tool-pipeline.md) ¡¤ [plugin-development](./docs/plugin-development.md) |
 | Troubleshoot | [troubleshooting](./docs/troubleshooting.md) |
 | Short digest | [learn](./docs/learn.md) |
-| Release notes | [releases](./docs/releases/) (formal current [v0.3.11](./docs/releases/v0.3.11.md) Â· preview current [v0.4.0-rc.2](./docs/releases/v0.4.0-rc.2.md) Â· previous preview line end [v0.2.7](./docs/releases/v0.2.7.md)) |
+| Release notes | [releases](./docs/releases/) (formal current [v0.3.11](./docs/releases/v0.3.11.md) ¡¤ preview current [v0.4.0-rc.3](./docs/releases/v0.4.0-rc.3.md) ¡¤ previous preview line end [v0.2.7](./docs/releases/v0.2.7.md)) |
 | Full index | [docs/README.md](./docs/README.md) |
 
 ## Repository layout
@@ -261,7 +261,7 @@ Full matrix: [docs/status.md](./docs/status.md).
 ```text
 apps/cli CLI entry (@xrkseek/harness-cli; primary bin xrkh)
 apps/web Product shell source (assembled into CLI product-web)
-packages/client Browser plugins (ui-conversation Â· ui-reference Â· â€¦)
+packages/client Browser plugins (ui-conversation ¡¤ ui-reference ¡¤ ¡­)
 packages/context @file / @session mention contracts (Face discovery path)
 packages/* Runtime libraries (mostly private in-repo)
 presets/* Wiring compositions
@@ -271,13 +271,13 @@ docs/ Usage and contract docs
 ## FAQ
 
 **No UI after `web` / `serve`?** 
-Released CLI builds ship the product shell. From this repository, run `web:build` Â· `client:bundle` Â· `web:assemble` first.
+Released CLI builds ship the product shell. From this repository, run `web:build` ¡¤ `client:bundle` ¡¤ `web:assemble` first.
 
 **MCP will not connect?** 
-Connections are denied by default. Configure and allow under **Settings â†’ Plugins â†’ MCP**; use `XRK_MCP_ALLOW=1` only for headless/CI. See [configuration](./docs/configuration.md) Â· [MCP](./docs/modules/mcp.md).
+Connections are denied by default. Configure and allow under **Settings ¡ú Plugins ¡ú MCP**; use `XRK_MCP_ALLOW=1` only for headless/CI. See [configuration](./docs/configuration.md) ¡¤ [MCP](./docs/modules/mcp.md).
 
 **Context overflow on long chats?** 
-Use compaction (Settings â†’ Plugins â†’ Agent loop, or in-shell `/compact`). See [session-compaction](./docs/session-compaction.md).
+Use compaction (Settings ¡ú Plugins ¡ú Agent loop, or in-shell `/compact`). See [session-compaction](./docs/session-compaction.md).
 
 **Community plugin panel shows incomplete?**
 Run **`xrkh restart`** after install; use `xrkh doctor` for staging and optional env. Main path: [community-plugins](./docs/community-plugins.md); GenUI browser runtime is Host-served at `/dsh-genui/runtime.js` (community clients may dynamic-import it).
@@ -286,14 +286,14 @@ More: [troubleshooting](./docs/troubleshooting.md).
 
 ## License
 
-[MIT](./LICENSE) Â© [xrkseek](https://github.com/xrkseek)
+[MIT](./LICENSE) ? [xrkseek](https://github.com/xrkseek)
 
 ## Development & contributing
 
 | Doc | Purpose |
 |-----|---------|
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Environment, `pnpm check`, contract sync |
-| [docs/maintainer.md](./docs/maintainer.md) | Day-to-day Â· handoff |
+| [docs/maintainer.md](./docs/maintainer.md) | Day-to-day ¡¤ handoff |
 | [docs/publishing.md](./docs/publishing.md) | npmjs + GitHub Release |
 | [docs/audiences.md](./docs/audiences.md) | Doc audience standard |
 | [AGENTS.md](./AGENTS.md) | Coding roles and red lines |

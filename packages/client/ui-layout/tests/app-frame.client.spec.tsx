@@ -143,6 +143,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  document.body.removeAttribute('data-xrk-details-open')
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
@@ -260,6 +261,15 @@ describe('AppFrame', () => {
     expect(tracks(frame)).toEqual([280, 0])
     expect(getByTestId('details-content')).toBeTruthy()
     expect(frame.hasAttribute('data-details-collapsed')).toBe(true)
+  })
+
+  it('stamps data-xrk-details-open on body while the details column is open', () => {
+    const { instance } = mountFrame()
+    expect(document.body.hasAttribute('data-xrk-details-open')).toBe(false)
+    act(() => { instance.actions.openDetails() })
+    expect(document.body.hasAttribute('data-xrk-details-open')).toBe(true)
+    act(() => { instance.actions.closeDetails() })
+    expect(document.body.hasAttribute('data-xrk-details-open')).toBe(false)
   })
 
   it('closed sidebar keeps its compact rail with mounted slot content and collapsed owner props', () => {

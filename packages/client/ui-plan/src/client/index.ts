@@ -75,6 +75,7 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       openPreview: () => { ctx.layout.openDetails() },
+      closePreview: () => { ctx.layout.closeDetails() },
     }),
   }, PreviewOpenButton))
 

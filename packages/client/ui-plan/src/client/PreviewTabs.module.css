@@ -3,23 +3,43 @@
   flex-direction: column;
   height: 100%;
   min-width: 0;
-  border-left: 1px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-bg-base);
+  position: relative;
+  z-index: 1;
 }
 
 .header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  padding: 14px 12px 12px;
+  /* Extra right pad so the close control clears the workbench toggle cluster
+     if both paint for one frame before mutual exclusion settles. */
+  padding: 12px 12px 10px 14px;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.titleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
 }
 
 .tabs {
   display: flex;
   gap: 4px;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .tab {
@@ -57,6 +77,13 @@
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
+  position: relative;
+  z-index: 2;
+}
+
+.close:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 
 .body {
@@ -82,14 +109,6 @@
 }
 
 .empty {
-  color: var(--dsw-alias-label-secondary);
-}
-
-.intro {
-  margin: 0;
-  padding: 10px 16px 0;
-  font-size: 12px;
-  line-height: 18px;
   color: var(--dsw-alias-label-secondary);
 }
 
@@ -144,6 +163,8 @@
   cursor: pointer;
 }
 
-.open:hover {
+.open:hover,
+.open[data-open] {
   background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }

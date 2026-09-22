@@ -20,7 +20,7 @@ Web：`@xrkseek/exec-web` — Definition `WebSearch`/`WebFetch`；Provider 匿�
 
 桌面 computer-use：`@xrkseek/exec-computer-use` — Definition `ComputerUseService`；Provider memory / Windows UIA（`XRK_COMPUTER_USE=1`）；Consumer `createComputerUseTools`。与 `browser_*` 分开。规格：[computer-use.md](./computer-use.md)。
 
-策展记忆：`@xrkseek/exec-memory` — Definition `CuratedMemoryStore`；Provider `{XRK_HOME}/memories` 的 `MEMORY.md` / `USER.md`；Consumer `createCuratedMemoryTools` → `memory`（add / replace / remove）。系统提示用会话开始时的冻结快照。回合结束后 `writeReusableNotesAfterTurn` 把用户原话里的可复用笔记追加进 `MEMORY.md`，不改当轮前缀。与 Mnemon 文档库分开。规格：[curated-memory.md](./curated-memory.md)。
+策展记忆：`@xrkseek/exec-memory` — Definition `CuratedMemoryStore`；Provider `{XRK_HOME}/memories` 的 `MEMORY.md` / `USER.md`；Consumer `createCuratedMemoryTools` → `memory`（add / replace / remove）。系统提示带策略段（跨会话事实 ≠ 会话内 `todo_write` 站立计划）并用会话开始时的冻结快照。回合结束后 `writeReusableNotesAfterTurn` 把用户原话里的可复用笔记追加进 `MEMORY.md`，不改当轮前缀。与 Mnemon 文档库分开。规格：[curated-memory.md](./curated-memory.md)。
 
 语音 Host：`@xrkseek/exec-voice` — Definition `VoiceService`；Provider memory / OpenAI HTTP（`XRK_VOICE`）；Consumer `createVoiceTools`（TTS · STT · live broker）。mic/WebRTC 在客户端，浏览器传输 `@xrkseek/exec-voice/browser`。规格：[voice.md](./voice.md)。
 
@@ -87,7 +87,7 @@ Web: `@xrkseek/exec-web` — Definition `WebSearch`/`WebFetch`; Provider anonymo
 
 Desktop computer-use: `@xrkseek/exec-computer-use` — Definition `ComputerUseService`; Provider memory / Windows UIA (`XRK_COMPUTER_USE=1`); Consumer `createComputerUseTools`. Separate from `browser_*`. Spec: [computer-use.md](./computer-use.md).
 
-Curated memory: `@xrkseek/exec-memory` — Definition `CuratedMemoryStore`; Provider `MEMORY.md` / `USER.md` under `{XRK_HOME}/memories`; Consumer `createCuratedMemoryTools` → `memory` (add / replace / remove). The system prompt uses the snapshot frozen at session start. After a successful turn, `writeReusableNotesAfterTurn` appends reusable notes from the user's own words to `MEMORY.md` without changing that turn's prefix. Separate from the Mnemon document library. Spec: [curated-memory.md](./curated-memory.md).
+Curated memory: `@xrkseek/exec-memory` — Definition `CuratedMemoryStore`; Provider `MEMORY.md` / `USER.md` under `{XRK_HOME}/memories`; Consumer `createCuratedMemoryTools` → `memory` (add / replace / remove). The system prompt carries a policy section (cross-session facts ≠ in-session `todo_write` standing plan) and the snapshot frozen at session start. After a successful turn, `writeReusableNotesAfterTurn` appends reusable notes from the user's own words to `MEMORY.md` without changing that turn's prefix. Separate from the Mnemon document library. Spec: [curated-memory.md](./curated-memory.md).
 
 Voice Host: `@xrkseek/exec-voice` — Definition `VoiceService`; Provider memory / OpenAI HTTP (`XRK_VOICE`); Consumer `createVoiceTools` (TTS · STT · live broker). Mic/WebRTC on the client, browser transport `@xrkseek/exec-voice/browser`. Spec: [voice.md](./voice.md).
 

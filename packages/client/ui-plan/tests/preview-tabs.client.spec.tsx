@@ -75,6 +75,7 @@ describe('PreviewTabs', () => {
     expect(screen.getByText('ship overview')).toBeTruthy()
     expect(screen.getByText('docs')).toBeTruthy()
     expect(screen.getByText('进行中')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '概况' })).toBeTruthy()
   })
 
   it('falls back to the preview RPC where plan mode is not composed', async () => {
@@ -131,10 +132,25 @@ describe('PreviewTabs', () => {
 describe('PreviewOpenButton', () => {
   it('opens the details column and says what it opens', () => {
     const openPreview = vi.fn()
-    render(<PreviewOpenButton openPreview={openPreview} t={t} />)
+    const closePreview = vi.fn()
+    document.body.removeAttribute('data-xrk-details-open')
+    render(<PreviewOpenButton openPreview={openPreview} closePreview={closePreview} t={t} />)
     const button = screen.getByRole('button', { name: '概况' })
     expect(button.getAttribute('title')).toBe('打开右侧概况栏：站立计划、计划模式与 Office')
+    expect(button.getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(button)
     expect(openPreview).toHaveBeenCalledTimes(1)
+    expect(closePreview).not.toHaveBeenCalled()
+  })
+
+  it('closes the details column when it is already open', () => {
+    document.body.setAttribute('data-xrk-details-open', '')
+    const openPreview = vi.fn()
+    const closePreview = vi.fn()
+    render(<PreviewOpenButton openPreview={openPreview} closePreview={closePreview} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: '概况' }))
+    expect(closePreview).toHaveBeenCalledTimes(1)
+    expect(openPreview).not.toHaveBeenCalled()
+    document.body.removeAttribute('data-xrk-details-open')
   })
 })

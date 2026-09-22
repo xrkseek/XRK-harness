@@ -5,12 +5,24 @@ import type {
   CuratedMemoryTarget,
 } from "./store.js";
 
+/**
+ * Always frozen into the system prompt when curated memory is on (Codex-style):
+ * durable facts only — never a cross-session task queue. Standing work stays in
+ * session-scoped `todo_write` / `todo/write`.
+ */
 export const CURATED_MEMORY_PROMPT_TEXT =
-  "Curated memory is two files frozen into this system prompt at session start: " +
-  "MEMORY.md (agent notes) and USER.md (who the user is). " +
-  "The `memory` tool only add / replace / remove (or one atomic `operations` batch of those). " +
-  "Writes hit disk immediately and do not change this session's system prompt. " +
-  "This is not the Mnemon document library.";
+  "Curated memory is two files under {XRK_HOME}/memories, frozen into this system "
+  + "prompt at session start: MEMORY.md (durable agent notes) and USER.md (who the "
+  + "user is). Use them only for facts that should still be true in every future "
+  + "session (stable preferences, lasting project conventions, who the user is). "
+  + "They are NOT a standing plan, todo list, progress log, or 'continue the previous "
+  + "session' queue — unfinished work belongs in `todo_write` (session-scoped) and "
+  + "does not follow the user into a new session. Do not write session-local WIP, "
+  + "numbered task checklists, or 'we were doing X' handoff notes into memory. Do "
+  + "not volunteer to resume work that appears only in MEMORY unless the user asks. "
+  + "The `memory` tool only add / replace / remove (or one atomic `operations` batch). "
+  + "Writes hit disk immediately and do not change this session's system prompt. "
+  + "This is not the Mnemon document library.";
 
 const ACTIONS = ["add", "replace", "remove"] as const;
 
@@ -43,12 +55,15 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
   }> = {
     name: "memory",
     description:
-      "Save durable facts that should appear in every future session. " +
-      "Actions: add, replace, remove. Prefer one `operations` batch when several entries change. " +
-      "target `memory` is agent notes (MEMORY.md); target `user` is the user profile (USER.md). " +
-      "replace and remove need `old_text` (a unique substring). " +
-      "Writes are saved to disk but do not change the system prompt of the current session. " +
-      "Not Mnemon documents, and not a search tool.",
+      "Save durable facts that should appear in every future session "
+      + "(preferences, lasting conventions, who the user is). "
+      + "Do NOT store session WIP, standing plans, todo checklists, or handoff notes "
+      + "for unfinished work — use `todo_write` for those (they stay in this session only). "
+      + "Actions: add, replace, remove. Prefer one `operations` batch when several entries change. "
+      + "target `memory` is agent notes (MEMORY.md); target `user` is the user profile (USER.md). "
+      + "replace and remove need `old_text` (a unique substring). "
+      + "Writes are saved to disk but do not change the system prompt of the current session. "
+      + "Not Mnemon documents, and not a search tool.",
     parameters: {
       type: "object",
       properties: {

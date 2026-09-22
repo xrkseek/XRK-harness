@@ -162,6 +162,14 @@ export function AppFrame({
   const colsRef = useRef(solved)
   colsRef.current = solved
 
+  // Publish details-open on <body> so floating workbench plugins (better-sidebar)
+  // can yield the top-right chrome and avoid covering the overview close control.
+  useEffect(() => {
+    if (detailsCollapsed) document.body.removeAttribute('data-xrk-details-open')
+    else document.body.setAttribute('data-xrk-details-open', '')
+    return () => { document.body.removeAttribute('data-xrk-details-open') }
+  }, [detailsCollapsed])
+
   // Phone: picking a session (or starting a blank) should tuck the drawer away
   // so the conversation is immediately usable — same expectation as native
   // chat shells. Skip the first paint so a restore into an already-open

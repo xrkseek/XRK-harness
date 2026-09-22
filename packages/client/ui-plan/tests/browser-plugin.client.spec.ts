@@ -23,20 +23,26 @@ async function bench() {
   const slots = ctx.get('slots') as SlotRegistry
   slots.register({
     name: 'root',
-    children: { 'conversation.input.plan': { kind: 'single', scope: 'session' } },
+    children: {
+      'conversation.input.plan': { kind: 'single', scope: 'session' },
+      'conversation.composer.dock': { kind: 'list', scope: 'session' },
+      'details': { kind: 'single', scope: 'session' },
+    },
   } as never, () => null)
   const execute = vi.fn((_sessionId: SessionId, _line: string) =>
     Promise.resolve({ ok: true, value: { commandId: 'c1', result: { kind: 'success' as const } } }))
   const commandsRemote = { execute }
+  const layout = { openDetails: vi.fn(), closeDetails: vi.fn(), toggleSidebar: vi.fn() }
   ctx.provide('remote', { commands: commandsRemote })
   ctx.provide('remote.commands', commandsRemote)
   ctx.provide('locale', new LocaleRuntime(ctx))
-  return { ctx, slots, execute }
+  ctx.provide('layout', layout)
+  return { ctx, slots, execute, layout }
 }
 
 describe('ui-plan browser apply', () => {
   it('declares every service it binds', () => {
-    expect(inject).toEqual(['slots', 'remote', 'remote.commands', 'locale'])
+    expect(inject).toEqual(['slots', 'remote', 'remote.commands', 'locale', 'layout'])
   })
 
   it('node-half apply is an intentional no-op', () => {
@@ -49,6 +55,7 @@ describe('ui-plan browser apply', () => {
     ctx.provide('remote', { commands: {} })
     ctx.provide('remote.commands', {})
     ctx.provide('locale', new LocaleRuntime(ctx))
+    ctx.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn(), toggleSidebar: vi.fn() })
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     expect(ctx.slots.entries('conversation.input.plan')).toHaveLength(0)
@@ -84,5 +91,20 @@ describe('ui-plan browser apply', () => {
 
     await fiber.dispose()
     expect(b.slots.entries('conversation.input.plan')).toHaveLength(0)
+  })
+
+  it('wires overview open/close into the layout details column', async () => {
+    const b = await bench()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    expect(b.slots.entries('details')).toHaveLength(1)
+    const dock = b.slots.entries('conversation.composer.dock').find(e => e.options.id === 'preview')
+    expect(dock).toBeDefined()
+    const face = (dock!.inject as () => { openPreview: () => void; closePreview: () => void })()
+    face.openPreview()
+    expect(b.layout.openDetails).toHaveBeenCalledTimes(1)
+    face.closePreview()
+    expect(b.layout.closeDetails).toHaveBeenCalledTimes(1)
+    await fiber.dispose()
   })
 })

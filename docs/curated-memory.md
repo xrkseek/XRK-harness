@@ -2,7 +2,18 @@
 
 > **读者**：集成者 · 贡献者
 
-`memory` 把跨会话都要用的短事实写进两份文件：`MEMORY.md`（代理笔记）和 `USER.md`（用户是谁）。目录是 `{XRK_HOME}/memories`（默认 `~/.xrk/memories`）。这不是 Mnemon 文档库（`~/.xrk/mnemon`）。
+`memory` 把**跨会话都要用的短事实**写进两份文件：`MEMORY.md`（代理笔记）与 `USER.md`（用户是谁）。目录是 `{XRK_HOME}/memories`（默认 `~/.xrk/memories`）。这不是 Mnemon 文档库（`~/.xrk/mnemon`）。
+
+## 会话隔离（与站立计划分工）
+
+| 能力 | 作用域 | 用途 |
+|------|--------|------|
+| `todo_write` → `todo/write` | **本会话** | 站立计划 / 任务清单；新会话为空 |
+| 策展记忆 `MEMORY.md` / `USER.md` | **全局**（按 `XRK_HOME`） | 稳定偏好、长期约定、用户是谁 |
+
+新会话会冻入磁盘上已有的策展记忆，**不会**带上上一会话的 `todo_write` 列表。不要把进行中的任务清单、进度日志或「接着干」手记写进 `MEMORY.md`——那会让下一会话误当成未完成队列。未完成工作用 `todo_write`。
+
+系统提示在开启策展记忆时**始终**带策略段（即使文件为空），说明上述分工；有条目时再附上冻结正文。
 
 ## 冻结
 
@@ -34,7 +45,18 @@
 
 > **Audience**: Integrators · Contributors
 
-`memory` stores short facts that should survive every session in two files: `MEMORY.md` (agent notes) and `USER.md` (who the user is). They live in `{XRK_HOME}/memories` (default `~/.xrk/memories`). This is not the Mnemon document library (`~/.xrk/mnemon`).
+`memory` stores **short facts that should survive every session** in two files: `MEMORY.md` (agent notes) and `USER.md` (who the user is). They live in `{XRK_HOME}/memories` (default `~/.xrk/memories`). This is not the Mnemon document library (`~/.xrk/mnemon`).
+
+## Session isolation (vs standing plan)
+
+| Capability | Scope | Use for |
+|------------|-------|---------|
+| `todo_write` → `todo/write` | **This session** | Standing plan / checklist; empty in a new session |
+| Curated `MEMORY.md` / `USER.md` | **Global** (per `XRK_HOME`) | Stable preferences, lasting conventions, who the user is |
+
+A new session freezes whatever curated files are already on disk; it does **not** carry the previous session's `todo_write` list. Do not put in-progress task lists, progress logs, or “continue from here” handoffs into `MEMORY.md` — the next session will otherwise treat them as an unfinished queue. Keep unfinished work in `todo_write`.
+
+When curated memory is enabled, the system prompt **always** includes a policy section (even if the files are empty) that states this split; frozen file bodies are added only when entries exist.
 
 ## Freeze
 

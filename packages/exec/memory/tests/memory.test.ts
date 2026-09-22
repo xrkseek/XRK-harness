@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   createCuratedMemoryStore,
   createCuratedMemoryTools,
+  CURATED_MEMORY_PROMPT_TEXT,
   defaultCuratedMemoryDir,
   ENTRY_DELIMITER,
 } from "../src/index.js";
@@ -23,7 +24,7 @@ describe("curated memory store", () => {
     const frozen = store.frozenSystemBlock();
     expect(frozen).toContain("ship on Fridays");
     expect(frozen).toContain("name: Ada");
-    expect(frozen).toContain("MEMORY (your personal notes)");
+    expect(frozen).toContain("MEMORY (durable facts across sessions");
     expect(frozen).toContain("USER PROFILE");
     expect(frozen).not.toContain("mnemon");
 
@@ -98,6 +99,17 @@ describe("curated memory store", () => {
     const store = createCuratedMemoryStore({ dir });
     expect(store.dir).toBe(dir);
     expect(path.basename(path.dirname(dir))).not.toBe("mnemon");
+  });
+});
+
+describe("curated memory isolation policy", () => {
+  it("keeps MEMORY as durable facts, not a cross-session task queue", () => {
+    expect(CURATED_MEMORY_PROMPT_TEXT).toMatch(/todo_write/);
+    expect(CURATED_MEMORY_PROMPT_TEXT).toMatch(/not a standing plan/i);
+    expect(CURATED_MEMORY_PROMPT_TEXT).toMatch(/Do not volunteer to resume/i);
+    const [tool] = createCuratedMemoryTools(createCuratedMemoryStore({ dir: tempDir() }));
+    expect(tool!.description).toMatch(/todo_write/);
+    expect(tool!.description).toMatch(/Do NOT store session WIP/i);
   });
 });
 
