@@ -7,7 +7,9 @@ import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import { zh } from '../src/client/locales.ts'
 import { PreviewOpenButton, PreviewTabs, type PreviewTabsProps } from '../src/client/PreviewTabs.tsx'
 import { parseOfficePreview, parsePlanPreview } from '../src/client/preview-load.ts'
-import { LAYOUT_INSET_ATTR } from '@xrkseek/client-ui-layout/client'
+
+/** Matches ui-layout `LAYOUT_INSET_ATTR.details` (no cross-plugin value import). */
+const DETAILS_INSET_ATTR = 'data-xrk-layout-details'
 
 afterEach(() => {
   cleanup()
@@ -134,7 +136,7 @@ describe('PreviewOpenButton', () => {
   it('opens the details column and says what it opens', () => {
     const openPreview = vi.fn()
     const closePreview = vi.fn()
-    document.documentElement.removeAttribute(LAYOUT_INSET_ATTR.details)
+    document.documentElement.removeAttribute(DETAILS_INSET_ATTR)
     render(<PreviewOpenButton openPreview={openPreview} closePreview={closePreview} t={t} />)
     const button = screen.getByRole('button', { name: '概况' })
     expect(button.getAttribute('title')).toBe('打开右侧概况栏：站立计划、计划模式与 Office')
@@ -145,13 +147,13 @@ describe('PreviewOpenButton', () => {
   })
 
   it('closes the details column when it is already open', () => {
-    document.documentElement.setAttribute(LAYOUT_INSET_ATTR.details, '')
+    document.documentElement.setAttribute(DETAILS_INSET_ATTR, '')
     const openPreview = vi.fn()
     const closePreview = vi.fn()
     render(<PreviewOpenButton openPreview={openPreview} closePreview={closePreview} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: '概况' }))
     expect(closePreview).toHaveBeenCalledTimes(1)
     expect(openPreview).not.toHaveBeenCalled()
-    document.documentElement.removeAttribute(LAYOUT_INSET_ATTR.details)
+    document.documentElement.removeAttribute(DETAILS_INSET_ATTR)
   })
 })
