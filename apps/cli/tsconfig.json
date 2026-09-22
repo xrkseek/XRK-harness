@@ -8,6 +8,7 @@
   "include": ["src/**/*.ts"],
   "references": [
     { "path": "../../packages/core/session" },
+    { "path": "../../packages/exec/ssh" },
     { "path": "../../packages/llm/registry" },
     { "path": "../../packages/mcp" },
     { "path": "../../packages/policy" },

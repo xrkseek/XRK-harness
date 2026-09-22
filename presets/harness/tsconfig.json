@@ -28,6 +28,7 @@
     { "path": "../../packages/llm/llm" },
     { "path": "../../packages/llm/replay" },
     { "path": "../../packages/policy" },
+    { "path": "../../packages/server/cron" },
     { "path": "../../packages/server/loader" },
     { "path": "../../packages/session/session-telemetry" },
     { "path": "../../packages/workspace" },
