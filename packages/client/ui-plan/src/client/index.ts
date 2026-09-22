@@ -1,13 +1,13 @@
 /**
  * Plan control plugin, browser half: occupies the composer's named
  * `conversation.input.plan` seat with an active-state status chip, and the
- * details column with plan / Office preview tabs. Plan mode is entered
- * through the command source; while the projection's effective target is
- * plan mode the chip renders and executes /plan off through
- * `command.execute`, otherwise the seat stays empty. The preview tabs read
- * existing `plan.preview` and `/office` status. Chip reads ride the generic
- * projection pair through the standard-kit `useProjection`; zero client-side
- * plan state.
+ * details column with a session overview (standing todos / plan / Office).
+ * Plan mode is entered through the command source; while the projection's
+ * effective target is plan mode the chip renders and executes /plan off through
+ * `command.execute`, otherwise the seat stays empty. Overview tabs ride live
+ * `plan` / `todos` projections plus `/office` status. Chip reads ride the
+ * generic projection pair through the standard-kit `useProjection`; zero
+ * client-side plan state.
  */
 import type {} from '@xrkseek/xrk-api-remotes/client'
 import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'

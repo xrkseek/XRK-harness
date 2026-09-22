@@ -29,7 +29,7 @@ Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deri
 | `approval/decided` | `approvalId`, `decision` (`allow`\|`deny`), `source` | `user` · `cancel` · `timeout` |
 | `command/run` | `commandId`, `name`, `source` (`user`) | **Log-only** — Face `commands/execute`；可选 `args` |
 | `command/done` | `commandId`, `kind` (`success`\|`error`) | **Log-only** — 可选 `text` · `sourceEventSeq` |
-| `todo/write` | `todos`（`content` + `status`） | **Log-only** — `todo_write` 工具；Face `todos` 投影；`turn/start` 清站立计划 |
+| `todo/write` | `todos`（`content` + `status`） | **Log-only** — `todo_write` 工具；Face `todos` 投影（跨回合保留至下次 `todo/write`） |
 | `permission/preset` | `preset` | **Log-only** — Face `permissions` 投影 · `/permission` |
 | `sandbox/mode` | `mode`（read-only\|workspace-write\|danger-full-access） | **Log-only** — 与 preset 同捆 |
 | `approval/policy` | `policy`（ask\|never） | **Log-only** — `never` 时审批自动放行 |
@@ -118,7 +118,7 @@ Window compaction: [session-compaction.md](./session-compaction.md).
 | `approval/decided` | `approvalId`, `decision` (`allow`\|`deny`), `source` | `user` · `cancel` · `timeout` |
 | `command/run` | `commandId`, `name`, `source` (`user`) | **Log-only** — Face `commands/execute`; optional `args` |
 | `command/done` | `commandId`, `kind` (`success`\|`error`) | **Log-only** — optional `text` · `sourceEventSeq` |
-| `todo/write` | `todos` (`content` + `status`) | **Log-only** — `todo_write` tool; Face `todos` projection; `turn/start` clears standing plan |
+| `todo/write` | `todos` (`content` + `status`) | **Log-only** — `todo_write` tool; Face `todos` projection (persists across turns until the next `todo/write`) |
 | `permission/preset` | `preset` | **Log-only** — Face `permissions` projection · `/permission` |
 | `sandbox/mode` | `mode` (read-only\|workspace-write\|danger-full-access) | **Log-only** — bundled with preset |
 | `approval/policy` | `policy` (ask\|never) | **Log-only** — `never` auto-allows approvals |

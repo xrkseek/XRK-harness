@@ -85,6 +85,54 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+.intro {
+  margin: 0;
+  padding: 10px 16px 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.todoList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.todoItem {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 10px;
+  align-items: start;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.todoStatus {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.todoItem[data-status='in_progress'] .todoStatus {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.todoItem[data-status='completed'] .todoContent {
+  color: var(--dsw-alias-label-secondary);
+  text-decoration: line-through;
+}
+
+.todoContent {
+  min-width: 0;
+  word-break: break-word;
+}
+
 .open {
   border: none;
   border-radius: 999px;

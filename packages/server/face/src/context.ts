@@ -254,6 +254,13 @@ export interface FaceRuntime {
    * failures retry once on the same idle stretch.
    */
   onSessionDrainStatus(sessionId: string, running: boolean): void;
+  /**
+   * Suppress the parent completion steer for a continuable child (interrupt /
+   * cancel). Must be called *before* draining the child to idle so the
+   * cancel→idle race cannot re-admit a "finished a turn" notice.
+   * Cleared when the child drain goes running again (resume via send_message).
+   */
+  suppressOwnedSubagentCompletion(childSessionId: string): void;
   /** Shared shell registry for session-scoped job kill / background RPC. */
   readonly shell?: ShellService;
 }

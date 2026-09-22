@@ -2,8 +2,10 @@ import type { SessionEvent, TodoItem } from "@xrkseek/protocol";
 import type { ProjectionDefinition } from "../registry.js";
 
 /**
- * DSH standing-plan `todos` projection:
- * latest `todo/write` list; cleared on next `turn/start`; null before first write.
+ * Standing-plan `todos` projection: latest `todo/write` list.
+ * Persists across turns until the next `todo/write` (Codex-style checklist);
+ * null only before the first write. Matches core-session `standingPlanMessage`,
+ * which also re-projects the latest write each turn.
  */
 export function createTodosProjectionUnit(): ProjectionDefinition<
   "todos",
@@ -12,11 +14,10 @@ export function createTodosProjectionUnit(): ProjectionDefinition<
 > {
   return {
     key: "todos",
-    stateVersion: 2,
+    stateVersion: 3,
     init: () => null,
     apply(state, event: SessionEvent): TodoItem[] | null {
       if (event.type === "todo/write") return [...event.todos];
-      if (event.type === "turn/start") return null;
       return state;
     },
     wire: {

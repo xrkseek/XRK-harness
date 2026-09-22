@@ -204,6 +204,7 @@ export const subagentInterrupt: FaceHandler = async (runtime, rpcId, payload) =>
       },
     };
   }
+  runtime.suppressOwnedSubagentCompletion(childSessionId);
   await sessionCancel(runtime, rpcId, { sessionId: childSessionId });
   return { ok: true, value: { accepted: true as const } };
 };

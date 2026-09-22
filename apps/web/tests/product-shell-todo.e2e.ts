@@ -1,7 +1,7 @@
 /**
  * Host-serve TodoDock: replay todo_write -> Face todos projection
  * -> [data-testid="todo-panel"] above the composer.
- * Next user turn's turn/start clears the standing plan (DSH lifetime).
+ * Standing plan persists across turns until the next todo_write.
  */
 import { describe, expect, it } from "vitest";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
@@ -16,11 +16,11 @@ import {
 
 const TODO = "dock the plan strip";
 const MARKER = "todo-dock-ok";
-const MARKER2 = "todo-dock-cleared";
+const MARKER2 = "todo-dock-kept";
 
 describe.skipIf(!HAS_SHELL)("product shell todo dock", () => {
   it(
-    "shows the standing todo panel after todo_write, then clears on next turn",
+    "shows the standing todo panel after todo_write and keeps it on the next turn",
     async () => {
       const shell = await spawnRegisteredWorkspace({
         label: "xrk-dock-",
@@ -64,10 +64,11 @@ describe.skipIf(!HAS_SHELL)("product shell todo dock", () => {
         // turn/end keeps the standing plan visible while the user reads.
         await panel.waitFor({ state: "visible", timeout: 5_000 });
 
-        await sendComposerPrompt(page, "next turn clears the plan");
+        await sendComposerPrompt(page, "next turn keeps the plan");
         await page.getByText(MARKER2).waitFor({ timeout: 20_000 });
-        // Next turn/start clears todos projection -> dock retires.
-        await panel.waitFor({ state: "hidden", timeout: 15_000 });
+        // Todos persist across turn/start until overwritten by todo_write.
+        await panel.waitFor({ state: "visible", timeout: 15_000 });
+        await panel.getByText(TODO).waitFor({ timeout: 5_000 });
 
         expect(
           pageErrors,

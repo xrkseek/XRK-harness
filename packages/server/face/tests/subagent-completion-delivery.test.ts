@@ -296,4 +296,67 @@ describe("subagent completion delivery", () => {
     expect(admits).toHaveLength(2);
     expect(admits[1]).toContain("turn-b");
   });
+
+  it("suppresses parent steer when interrupt races cancel→idle", async () => {
+    const store = createMemorySessionStore();
+    const admits: { sessionId: string; content: string }[] = [];
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: idleFaceDrain,
+      resolveAgent: async (sessionId) =>
+        ({
+          admit: (content, opts) => {
+            admits.push({ sessionId, content: String(content) });
+            return admitPrompt(store, sessionId, content, opts);
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => true,
+          abort() {},
+          setApprovalHandler() {},
+        }) as never,
+    });
+
+    const parent = await dispatchFaceMethod(runtime, "session.create", "p", {});
+    if (!parent.result.ok) throw new Error("parent create failed");
+    const parentId = (parent.result.value as { sessionId: string }).sessionId;
+    const child = await dispatchFaceMethod(runtime, "session.create", "c", {
+      parentSessionId: parentId,
+      label: "research",
+    });
+    if (!child.result.ok) throw new Error("child create failed");
+    const childId = (child.result.value as { sessionId: string }).sessionId;
+
+    store.append(childId, {
+      type: "assistant/message",
+      ts: 1,
+      turnId: "t1",
+      stepId: "s1",
+      content: "should not steer after interrupt",
+    });
+
+    // interrupt arms suppress *before* cancel drains the child idle.
+    const stopped = await dispatchFaceMethod(runtime, "subagent.interrupt", "i", {
+      parentSessionId: parentId,
+      childSessionId: childId,
+      mode: "continuable",
+    });
+    expect(stopped.result.ok).toBe(true);
+    runtime.onSessionDrainStatus(childId, false);
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+    expect(admits).toHaveLength(0);
+
+    // Resume clears suppress; a later natural idle may notify again.
+    runtime.onSessionDrainStatus(childId, true);
+    runtime.onSessionDrainStatus(childId, false);
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+    expect(admits).toHaveLength(1);
+    expect(admits[0]!.content).toContain("should not steer after interrupt");
+  });
 });

@@ -52,6 +52,9 @@ function snapshotOf(overrides: Partial<ConversationSnapshot> = {}): Conversation
 }
 
 interface BenchOptions {
+  /** Notices the shell already holds when the bar mounts (a past failure the
+   * store survived; the bar must adopt it instead of re-announcing). */
+  notify?: ReadonlyArray<['info' | 'error', string]>
   planEntry?: React.ReactNode
   /** The `plan` projection value the standard-kit useProjection serves. */
   plan?: { active: boolean; pending: boolean }
@@ -218,6 +221,9 @@ function bench(over?: BenchOptions) {
     ...(over?.leftItems !== undefined ? { leftItems: over.leftItems } : {}),
     ...(over?.rightItems !== undefined ? { rightItems: over.rightItems } : {}),
   }
+  // Held notices land before mount, so the first render already sees them in
+  // the store — exactly the state a returning session presents.
+  for (const [level, text] of over?.notify ?? []) shell.notify(level, text)
   const view = render(<InputBar {...props} />)
   const textarea = view.container.querySelector('textarea')!
   const hasPartial = over?.partial !== null && over?.partial !== undefined
@@ -1604,6 +1610,30 @@ describe('strips and variants', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  // Regression: the shell's notice store survives the bar, so every remount over
+  // a session whose machine still held a past admission failure re-toast that
+  // failure — the "unknown command" pill returned every time the user came back.
+  it('does not re-announce a notice the shell already held at mount', () => {
+    vi.useFakeTimers()
+    try {
+      const { view } = bench({
+        notify: [['error', 'unknown or malformed command: /plan-build']],
+      })
+      expect(view.queryByRole('alert')).toBeNull()
+      act(() => { vi.advanceTimersByTime(4000) })
+      expect(view.queryByRole('alert')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('announces a fresh error notice that lands after a held one was adopted', () => {
+    const { view, shell } = bench({ notify: [['error', '旧的失败']] })
+    act(() => { shell.notify('error', '新的失败') })
+    expect(view.getByRole('alert').textContent).toContain('新的失败')
+    expect(view.getByRole('alert').textContent).not.toContain('旧的失败')
   })
 
   it('renders an information notice from the machine store as a status strip', () => {

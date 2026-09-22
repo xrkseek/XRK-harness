@@ -21,8 +21,10 @@ function childEnv() {
 
   const systemNode = "C:\\Program Files\\nodejs";
   const systemRoot = env.SystemRoot ?? "C:\\Windows";
+  const programFiles = env.ProgramFiles ?? "C:\\Program Files";
   const essentials = [
     systemNode,
+    path.join(programFiles, "Git", "cmd"),
     path.join(systemRoot, "System32"),
     path.join(systemRoot, "System32", "Wbem"),
     systemRoot,

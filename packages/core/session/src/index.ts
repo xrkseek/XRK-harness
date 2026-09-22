@@ -10,10 +10,7 @@ export {
   type DrainFn,
 } from "./latch.js";
 
-export {
-  createSessionDrainHub,
-  type SessionDrainHub,
-} from "./drain-hub.js";
+export { createSessionDrainHub, type SessionDrainHub } from "./drain-hub.js";
 
 export {
   NoPendingAdmitError,
@@ -92,10 +89,7 @@ export {
   estimateToolsTokens,
 } from "./surface-estimate.js";
 
-export {
-  foldSurfaceTokens,
-  priceCurrentSurfaceWindow,
-} from "./surface-fold.js";
+export { foldSurfaceTokens, priceCurrentSurfaceWindow } from "./surface-fold.js";
 
 export {
   TOOL_NOT_STARTED,
@@ -138,11 +132,7 @@ export {
   type RequestHeaderSnapshot,
 } from "./request-header.js";
 
-export type {
-  SessionListHints,
-  SessionRecord,
-  SessionStore,
-} from "./store.js";
+export type { SessionListHints, SessionRecord, SessionStore } from "./store.js";
 export {
   SessionLogOffset,
   SessionSeq,
@@ -161,11 +151,7 @@ export {
   type SessionSeq as SessionSeqType,
   type SessionSeqCursor as SessionSeqCursorType,
 } from "./seq.js";
-export {
-  computeListHints,
-  sessionHintsBlank,
-  sessionListHints,
-} from "./list-hints.js";
+export { computeListHints, sessionHintsBlank, sessionListHints } from "./list-hints.js";
 import type { SessionListHints, SessionRecord, SessionStore } from "./store.js";
 import {
   SessionLogOffset,
@@ -242,11 +228,50 @@ export function createMemorySessionStore(): SessionStore {
   };
 }
 
+/**
+ * The standing plan — latest `todo/write` snapshot, re-projected into
+ * model-visible history.
+ *
+ * `foldChat` has no `todo/write` case, so the list never becomes a message:
+ * the model only ever sees that one call's result summary ("Updated todo
+ * list: 1 pending…"), and once a compaction moves the event before the
+ * window it is gone entirely — even though it stays durable in the log,
+ * which the client proves by recovering it via a full back-scan. The
+ * asymmetry is the bug: the panel keeps the plan, the agent loses it.
+ *
+ * Emitted as a leading user message, never mid-history, so
+ * assistant/tool-call adjacency (and therefore `assertModelVisible` against
+ * the assembled request) is untouched. A fully settled plan projects
+ * nothing: a finished list is noise, not standing state.
+ */
+export function standingPlanMessage(
+  events: readonly SessionEvent[],
+): ChatMessage | undefined {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i]!;
+    if (ev.type !== "todo/write") continue;
+    const settled = new Set(["completed", "cancelled", "done", "removed"]);
+    const open = ev.todos.filter((item) => !settled.has(item.status));
+    if (open.length === 0) return undefined;
+    const lines = ev.todos.map((item) => `- [${item.status}] ${item.content}`);
+    return {
+      role: "user",
+      content:
+        "Current standing plan (re-projected from todo_write each turn; " +
+        "reference state, not a user request):\n" +
+        lines.join("\n"),
+    };
+  }
+  return undefined;
+}
+
 /** Project model-facing history from the append-only log. */
 export function deriveMessages(events: readonly SessionEvent[]): ChatMessage[] {
+  const plan = standingPlanMessage(events);
   const compact = findLatestCompaction(events);
   if (compact) {
     const messages: ChatMessage[] = [
+      ...(plan ? [plan] : []),
       {
         role: "user",
         content: formatCompactionForModel(compact.event),
@@ -262,7 +287,9 @@ export function deriveMessages(events: readonly SessionEvent[]): ChatMessage[] {
       }),
     );
   }
-  return deriveMessagesUnwindowed(events);
+  return plan
+    ? [plan, ...deriveMessagesUnwindowed(events)]
+    : deriveMessagesUnwindowed(events);
 }
 
 export class ModelVisibleInvariantError extends Error {
@@ -278,9 +305,7 @@ export class ModelVisibleInvariantError extends Error {
  * also prepend a system message — durable history must still equal
  * {@link deriveMessages}.
  */
-export function durableModelHistory(
-  messages: readonly ChatMessage[],
-): ChatMessage[] {
+export function durableModelHistory(messages: readonly ChatMessage[]): ChatMessage[] {
   return messages.filter((m) => m.role !== "system");
 }
 
@@ -338,14 +363,8 @@ export {
   type TextChunkRow,
   type ToolCallChunkRow,
 } from "./chunk-pack.js";
-export {
-  repairOpenTurnEvents,
-  sessionHasOpenTurn,
-} from "./repair-open-turn.js";
-export {
-  extractEventSearchText,
-  extractSessionSearchTexts,
-} from "./search-text.js";
+export { repairOpenTurnEvents, sessionHasOpenTurn } from "./repair-open-turn.js";
+export { extractEventSearchText, extractSessionSearchTexts } from "./search-text.js";
 export { writeTextFileAtomicSync } from "./atomic-write.js";
 
 export function forkSession(
@@ -356,9 +375,7 @@ export function forkSession(
 ): SessionRecord {
   const total = sessionEventCount(store, sourceId);
   const end = SessionLogOffset(
-    boundaryIndex === undefined
-      ? total
-      : Math.max(0, Math.min(boundaryIndex, total)),
+    boundaryIndex === undefined ? total : Math.max(0, Math.min(boundaryIndex, total)),
   );
   const prefix = readSessionEvents(store, sourceId, SessionLogOffset(0), end);
   const child = store.create(childId);

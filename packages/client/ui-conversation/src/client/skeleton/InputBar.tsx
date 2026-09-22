@@ -24,7 +24,7 @@ import type { Translate } from '@xrkseek/client-ui-slots'
 import type { ComposerBarProps } from '../contract/slots.ts'
 import { deriveDecorations } from '../input/decorations.ts'
 import type { DraftDecorations } from '../input/decorations.ts'
-import type { EditRange } from '../input/contract.ts'
+
 import { resolveSubmitMode } from '../input/resolve-submit-mode.ts'
 import { attachmentErrorText, imageSizeText } from '../image-labels.ts'
 import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
@@ -157,9 +157,21 @@ export function InputBar({
       ? attachmentErrorText(t, promptError.error.details.reason, imageLimits)
       : `${promptError.error.message} (${promptError.error.code})`)
   }, [promptError, showToast, t, imageLimits])
+  // An error notice is one-shot admission feedback, not pending state (unlike
+  // promptError above, which really is unresolved until the next submit). The
+  // shell's notice store outlives the bar, so a remount over a session whose
+  // machine still holds the last failure, and a switch into such a session,
+  // must adopt the held notice silently instead of re-announcing it.
+  const surfacedNotice = useRef<InputNotice | null>(notice)
+  const surfacedSession = useRef(sessionId)
   useEffect(() => {
-    if (notice?.level === 'error') showToast(notice.text)
-  }, [notice, showToast])
+    const changed = surfacedNotice.current !== notice
+    const switched = surfacedSession.current !== sessionId
+    surfacedNotice.current = notice
+    surfacedSession.current = sessionId
+    if (!changed || switched || notice === null) return
+    if (notice.level === 'error') showToast(notice.text)
+  }, [notice, sessionId, showToast])
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const cardRef = useRef<HTMLDivElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)

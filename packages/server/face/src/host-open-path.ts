@@ -1,5 +1,6 @@
 /**
  * host.openPath / reveal — open or select a filesystem path in the OS shell.
+ * Also opens absolute URLs (http(s), custom schemes) in the registered handler.
  * Win folders: `cmd /c start` (ShellExecute). Win files: explorer /select.
  * macOS: open. Linux: xdg-open.
  */
@@ -51,6 +52,11 @@ export function spawnDetached(
   });
 }
 
+/** True for absolute URLs (`https://…`, `vscode://…`) — not filesystem paths. */
+export function isAbsoluteUrl(target: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(target.trim());
+}
+
 /** Normalize trailing `.` / separator noise from client path joins. */
 export function normalizeOpenPath(target: string): string {
   let p = target.trim();
@@ -79,6 +85,7 @@ export function normalizeOpenPath(target: string): string {
 /**
  * Win32 path for Explorer argv. Forward slashes must become `\`: Explorer
  * treats `/seg` after `/select,` as another switch, so reveal silently no-ops.
+ * Must NOT be used on absolute URLs — that would turn `https://` into `https:\\`.
  */
 export function windowsExplorerPath(target: string): string {
   return normalizeOpenPath(target).replace(/\//g, "\\");
@@ -88,10 +95,26 @@ export async function openNativePath(
   target: string,
   platform: NodeJS.Platform = process.platform,
 ): Promise<void> {
+  const raw = target.trim();
+  // URLs keep forward slashes; Windows path mangling would break the scheme.
+  if (isAbsoluteUrl(raw)) {
+    if (platform === "win32") {
+      await spawnDetached("cmd.exe", ["/c", "start", "", raw], {
+        windowsHide: false,
+      });
+      return;
+    }
+    if (platform === "darwin") {
+      await spawnDetached("open", [raw]);
+      return;
+    }
+    await spawnDetached("xdg-open", [raw]);
+    return;
+  }
   const path =
     platform === "win32"
-      ? windowsExplorerPath(target)
-      : normalizeOpenPath(target);
+      ? windowsExplorerPath(raw)
+      : normalizeOpenPath(raw);
   if (platform === "win32") {
     // ShellExecute via `start`. Direct `explorer.exe <dir>` CreateProcess is a
     // no-op when Explorer is already the desktop shell (child exits 0, no window).

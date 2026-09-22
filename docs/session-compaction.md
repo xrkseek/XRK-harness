@@ -88,7 +88,7 @@ compaction: {
 
 仅 prune 就可能清除溢出，**不必**写入 `context/compaction`。
 
-Standing plan（`todos` 投影）与换窗正交：`/compact` / `context/compaction` **不清** todo 列表；仅下一轮 `turn/start` 清空。
+Standing plan（`todos` 投影）与换窗正交：`/compact` / `context/compaction` **不清** todo 列表；列表跨回合保留，直到下一次 `todo/write`。
 
 ## Soft budget（`maxRequestTokens`）
 
@@ -199,7 +199,7 @@ Overflow recovery is **prune-first, one recovery pass**:
 
 Prune alone may clear overflow with **no** `context/compaction` event.
 
-Standing plan (`todos` projection) is orthogonal to windowing: `/compact` / `context/compaction` do **not** clear the todo list; only the next `turn/start` does.
+Standing plan (`todos` projection) is orthogonal to windowing: `/compact` / `context/compaction` do **not** clear the todo list; the list persists across turns until the next `todo/write`.
 
 ## Soft budget (`maxRequestTokens`)
 

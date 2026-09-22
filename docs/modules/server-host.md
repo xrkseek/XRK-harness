@@ -75,7 +75,7 @@ Preset 须 `wireCompositionTools({ plugins })`（见 minimal/harness）。Host s
 | `apps/web/tests/product-shell-inventory.e2e.ts` | 不进 `pnpm check`。Settings → Plugins：进程插件 `example-tools` + boot `@xrkseek/client-runtime` · `@xrkseek/client-session-log-export` |
 | `apps/web/tests/product-shell-question.e2e.ts` | 不进 `pnpm check`。replay `ask_user` → `[data-question-key]` 选选项 Submit → `/api/respond` |
 | `apps/web/tests/product-shell-thinking.e2e.ts` | 不进 `pnpm check`。replay `reasoning` 流 → `[data-variant="think"]` |
-| `apps/web/tests/product-shell-todo.e2e.ts` | 不进 `pnpm check`。`todo_write` → TodoDock；下一轮 `turn/start` 清空站立计划 |
+| `apps/web/tests/product-shell-todo.e2e.ts` | 不进 `pnpm check`。`todo_write` → TodoDock；下一轮仍保留站立计划 |
 | `apps/web/tests/product-shell-access.e2e.ts` | 不进 `pnpm check`。Access chip → Read Only（`/permission`） |
 | `apps/web/tests/product-shell-plan.e2e.ts` | 不进 `pnpm check`。`/plan` → Plan chip + JSONL `plan/mode` |
 | `apps/web/tests/product-shell-plan-review.e2e.ts` | 不进 `pnpm check`。Host-serve：`exit_plan_mode` → Approve。Cordis scaffold 孪生：`plan-review.e2e.ts`（不进 `test:web`） |

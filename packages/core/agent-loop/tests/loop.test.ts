@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createMemorySessionStore, deriveMessages, admitPrompt, listPendingAdmits } from "@xrkseek/core-session";
+import {
+  createMemorySessionStore,
+  deriveMessages,
+  admitPrompt,
+  listPendingAdmits,
+} from "@xrkseek/core-session";
 import { createStdTools, createToolRegistry } from "@xrkseek/core-tools";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { runTurn } from "../src/index.js";
@@ -162,9 +167,7 @@ describe("runTurn", () => {
     const llm = createReplayAdapter([
       {
         content: "",
-        toolCalls: [
-          { id: "c1", name: "echo", arguments: { text: "hi" } },
-        ],
+        toolCalls: [{ id: "c1", name: "echo", arguments: { text: "hi" } }],
       },
       { content: "done" },
     ]);
@@ -225,9 +228,9 @@ describe("runTurn", () => {
       "assistant",
     ]);
     expect(msgs[3]?.content).toBe("redirect mid-turn");
-    expect(listPendingAdmits(store.get(session.id).events).map((p) => p.content)).toEqual([
-      "queued-later",
-    ]);
+    expect(
+      listPendingAdmits(store.get(session.id).events).map((p) => p.content),
+    ).toEqual(["queued-later"]);
   });
 
   it("passbacks reasoning on every reasoned assistant when calling LLM again (rc.8)", async () => {
@@ -246,9 +249,7 @@ describe("runTurn", () => {
       {
         content: "",
         reasoning: "need echo",
-        toolCalls: [
-          { id: "c1", name: "echo", arguments: { text: "hi" } },
-        ],
+        toolCalls: [{ id: "c1", name: "echo", arguments: { text: "hi" } }],
       },
       { content: "done", reasoning: "plain CoT" },
       { content: "follow" },
@@ -293,7 +294,7 @@ describe("runTurn", () => {
     expect(plain?.reasoning).toBe("plain CoT");
   });
 
-  it("appends todo/write before tool/result; deriveMessages skips it", async () => {
+  it("appends todo/write before tool/result; deriveMessages projects it as the standing plan", async () => {
     const store = createMemorySessionStore();
     const session = store.create();
     const tools = createToolRegistry();
@@ -332,9 +333,38 @@ describe("runTurn", () => {
       type: "todo/write",
       todos: [{ content: "ship", status: "in_progress" }],
     });
-    expect(deriveMessages(store.get(session.id).events).map((m) => m.role)).toEqual(
-      ["user", "assistant", "tool", "assistant"],
-    );
+    const msgs = deriveMessages(store.get(session.id).events);
+    // A `todo/write` becomes no chat turn of its own, but its snapshot must
+    // stay model-visible: the projection prepends one standing-plan message.
+    // Before this, the plan survived only as the tool-result summary of the
+    // round that wrote it, and vanished outright once a compaction moved the
+    // event outside the window — while the client panel kept showing it (it
+    // back-scans the whole log). Same state, two projections, one of them
+    // lying.
+    expect(msgs.map((m) => m.role)).toEqual([
+      "user", // standing plan
+      "user", // "plan"
+      "assistant",
+      "tool",
+      "assistant",
+    ]);
+    expect(msgs[0]!.content).toContain("[in_progress] ship");
+    expect(msgs[0]!.content).toContain("not a user request");
+  });
+
+  it("stands the plan down once every item is settled", () => {
+    const only = (status: string) =>
+      deriveMessages([
+        {
+          type: "todo/write",
+          ts: 1,
+          todos: [{ content: "ship", status }],
+        },
+      ] as unknown as Parameters<typeof deriveMessages>[0]);
+    expect(only("in_progress")).toHaveLength(1);
+    expect(only("pending")).toHaveLength(1);
+    expect(only("completed")).toHaveLength(0);
+    expect(only("cancelled")).toHaveLength(0);
   });
 
   it("commits queued /plan at the next step and injects plan policy", async () => {
@@ -405,10 +435,9 @@ describe("runTurn", () => {
   it("streams reasoning-delta chunks before assistant/message", async () => {
     const store = createMemorySessionStore();
     const session = store.create();
-    const llm = createReplayAdapter(
-      [{ content: "pong", reasoning: "think hard" }],
-      { enableStream: true },
-    );
+    const llm = createReplayAdapter([{ content: "pong", reasoning: "think hard" }], {
+      enableStream: true,
+    });
 
     await runTurn({
       sessionId: session.id,
@@ -468,9 +497,7 @@ describe("runTurn", () => {
     });
     const usageChunk = store
       .get(session.id)
-      .events.find(
-        (e) => e.type === "assistant/chunk" && e.kind === "usage",
-      );
+      .events.find((e) => e.type === "assistant/chunk" && e.kind === "usage");
     expect(usageChunk).toMatchObject({
       type: "assistant/chunk",
       kind: "usage",
@@ -559,7 +586,9 @@ describe("runTurn", () => {
       reason: { kind: "completed" },
     });
     const msgs = deriveMessages(store.get(session.id).events);
-    expect(msgs.some((m) => m.role === "assistant" && m.content === "should-not-run")).toBe(false);
+    expect(
+      msgs.some((m) => m.role === "assistant" && m.content === "should-not-run"),
+    ).toBe(false);
     expect(msgs.some((m) => m.role === "tool" && m.content === "done")).toBe(true);
   });
 

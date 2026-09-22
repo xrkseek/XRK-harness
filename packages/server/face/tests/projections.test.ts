@@ -200,7 +200,7 @@ describe("createFaceRuntime projection wire", () => {
     ).toBe(true);
   });
 
-  it("todos standing plan: todo/write then clear on turn/start", () => {
+  it("todos standing plan: todo/write persists across turn/start", () => {
     const store = createMemorySessionStore();
     const session = newSession(store);
     const registry = createFaceProjectionRegistry({
@@ -213,19 +213,17 @@ describe("createFaceRuntime projection wire", () => {
       changes.push({ key, value });
     });
 
+    const list = [
+      { content: "ship todos projection", status: "in_progress" as const },
+      { content: "docs", status: "pending" as const },
+    ];
     const w = store.append(session.id, {
       type: "todo/write",
       ts: 1,
-      todos: [
-        { content: "ship todos projection", status: "in_progress" },
-        { content: "docs", status: "pending" },
-      ],
+      todos: list,
     });
     registry.drive(session.id, w, 1);
-    expect(registry.snapshot(session.id).values.todos).toEqual([
-      { content: "ship todos projection", status: "in_progress" },
-      { content: "docs", status: "pending" },
-    ]);
+    expect(registry.snapshot(session.id).values.todos).toEqual(list);
     expect(changes.some((c) => c.key === "todos")).toBe(true);
 
     const start = store.append(session.id, {
@@ -234,7 +232,17 @@ describe("createFaceRuntime projection wire", () => {
       turnId: "t2",
     });
     registry.drive(session.id, start, 2);
-    expect(registry.snapshot(session.id).values.todos).toBeNull();
+    expect(registry.snapshot(session.id).values.todos).toEqual(list);
+
+    const next = store.append(session.id, {
+      type: "todo/write",
+      ts: 3,
+      todos: [{ content: "only remaining", status: "pending" }],
+    });
+    registry.drive(session.id, next, 3);
+    expect(registry.snapshot(session.id).values.todos).toEqual([
+      { content: "only remaining", status: "pending" },
+    ]);
   });
 
   it("workspaceChanges: workspace/changes upserts by turnId", () => {
@@ -306,7 +314,7 @@ describe("createFaceRuntime projection wire", () => {
     ]);
   });
 
-  it("Face patched append publishes session/projection todos then clears on turn/start", () => {
+  it("Face patched append publishes session/projection todos and keeps them across turn/start", () => {
     const store = createMemorySessionStore();
     const mux: { type?: string; key?: string; value?: unknown }[] = [];
     const runtime = createFaceRuntime({
@@ -350,15 +358,9 @@ describe("createFaceRuntime projection wire", () => {
       ts: 2,
       turnId: "t1",
     });
-    expect(runtime.projections.snapshot(created.id).values.todos).toBeNull();
-    expect(
-      mux.some(
-        (f) =>
-          f.type === "session/projection" &&
-          f.key === "todos" &&
-          f.value === null,
-      ),
-    ).toBe(true);
+    expect(runtime.projections.snapshot(created.id).values.todos).toEqual([
+      { content: "dock", status: "pending" },
+    ]);
   });
 
   it("Face patched append publishes session/projection turnOutline; draft stays quiet until turn/end", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isAbsoluteUrl,
   normalizeOpenPath,
   windowsExplorerPath,
 } from "../src/host-open-path.js";
@@ -30,5 +31,17 @@ describe("windowsExplorerPath", () => {
       "C:\\Users\\x\\proj",
     );
     expect(windowsExplorerPath("C:/.")).toBe("C:\\");
+  });
+});
+
+describe("isAbsoluteUrl", () => {
+  it("recognizes http(s) and custom schemes without treating paths as URLs", () => {
+    expect(isAbsoluteUrl("https://example.com/a")).toBe(true);
+    expect(isAbsoluteUrl("http://127.0.0.1:3080/sidebar/html/s/a.html")).toBe(
+      true,
+    );
+    expect(isAbsoluteUrl("vscode://file/x")).toBe(true);
+    expect(isAbsoluteUrl("C:\\Users\\x\\a.txt")).toBe(false);
+    expect(isAbsoluteUrl("/home/u/a.txt")).toBe(false);
   });
 });

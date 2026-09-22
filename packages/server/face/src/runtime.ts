@@ -371,6 +371,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   /** Child session ids already notified for the current idle stretch. */
   const reportedSubagentIdle = new Set<string>();
   /**
+   * Children whose next idle must NOT steer the parent (interrupt / cancel).
+   * Cleared when the child drain goes running again so a later natural
+   * completion can still notify.
+   */
+  const suppressSubagentCompletion = new Set<string>();
+  /**
    * Bumped when a child drain goes running. In-flight idle notifies that
    * captured an older epoch are dropped (avoids duplicate steer after a
    * quick re-wake), and failed delivers may retry only on the same epoch.
@@ -390,6 +396,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const deliverOwnedSubagentCompletion = (childSessionId: string): void => {
     const link = subagents.getByChild(childSessionId);
     if (!link || link.mode !== "continuable") return;
+    if (suppressSubagentCompletion.has(childSessionId)) return;
     if (reportedSubagentIdle.has(childSessionId)) return;
     reportedSubagentIdle.add(childSessionId);
     const epoch = subagentIdleEpoch.get(childSessionId) ?? 0;
@@ -398,6 +405,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       .then((parent) => {
         // Child re-entered drain (or this stretch was cleared) — drop stale.
         if ((subagentIdleEpoch.get(childSessionId) ?? 0) !== epoch) return;
+        if (suppressSubagentCompletion.has(childSessionId)) return;
         if (!reportedSubagentIdle.has(childSessionId)) return;
         const idle = !parent.isBusy();
         const spent = spentWakes.get(parentId) ?? 0;
@@ -414,16 +422,29 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       })
       .catch(() => {
         if ((subagentIdleEpoch.get(childSessionId) ?? 0) !== epoch) return;
+        if (suppressSubagentCompletion.has(childSessionId)) return;
         reportedSubagentIdle.delete(childSessionId);
         const fails = subagentIdleFailCount.get(childSessionId) ?? 0;
         if (fails >= 1) return;
         subagentIdleFailCount.set(childSessionId, fails + 1);
         queueMicrotask(() => {
           if ((subagentIdleEpoch.get(childSessionId) ?? 0) !== epoch) return;
+          if (suppressSubagentCompletion.has(childSessionId)) return;
           if (reportedSubagentIdle.has(childSessionId)) return;
           deliverOwnedSubagentCompletion(childSessionId);
         });
       });
+  };
+
+  const suppressOwnedSubagentCompletion = (childSessionId: string): void => {
+    suppressSubagentCompletion.add(childSessionId);
+    // Invalidate any in-flight idle deliver that already captured an epoch.
+    subagentIdleEpoch.set(
+      childSessionId,
+      (subagentIdleEpoch.get(childSessionId) ?? 0) + 1,
+    );
+    reportedSubagentIdle.add(childSessionId);
+    subagentIdleFailCount.delete(childSessionId);
   };
 
   const getTool = (sessionId: string, name: string) => {
@@ -474,6 +495,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         reportedSubagentIdle.delete(sessionId);
         subagentIdleEpoch.delete(sessionId);
         subagentIdleFailCount.delete(sessionId);
+        suppressSubagentCompletion.delete(sessionId);
         await options.invalidateAgent!(sessionId);
       }
     : undefined;
@@ -770,10 +792,13 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         );
         reportedSubagentIdle.delete(sessionId);
         subagentIdleFailCount.delete(sessionId);
+        // A fresh running stretch may complete naturally again.
+        suppressSubagentCompletion.delete(sessionId);
         return;
       }
       deliverOwnedSubagentCompletion(sessionId);
     },
+    suppressOwnedSubagentCompletion,
     ...(options.defaultAgentPreset
       ? { defaultAgentPreset: options.defaultAgentPreset }
       : {}),

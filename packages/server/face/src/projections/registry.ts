@@ -30,7 +30,7 @@ export interface FaceProjectionMap {
   readonly title: string | null;
   /** Sidebar list hint. */
   readonly sessionListMetadata: SessionListMetadata;
-  /** Standing plan (DSH TodoDock); null before write / after turn/start. */
+  /** Standing plan (TodoDock); null before first write; persists across turns. */
   readonly todos: TodoItem[] | null;
   /** Permission select (DSH Access chip); folded from knob events. */
   readonly permissions: PermissionSelect;

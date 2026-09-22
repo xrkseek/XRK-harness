@@ -150,7 +150,7 @@ HTTP/WS (attach-http)
 | `tests/fork-policy.test.ts` | turn-cut `atSeq` · 排除后轮输入/模型 · legacy `beforeSeq` · `fork-unavailable` |
 | `tests/workspace.test.ts` | list/create/rename/archive · delete/insert* |
 | `tests/host-frames.test.ts` | session-added 子会话字段 · workspace-removed / order-changed · fork · `host/remote-event` |
-| `tests/projections.test.ts` | title · list metadata · todos 站立计划（write 后 turn/start 清 null）· **turnOutline** mux（draft 静默 / turn/end 提交） |
+| `tests/projections.test.ts` | title · list metadata · todos 站立计划（write 后跨 turn/start 保留）· **turnOutline** mux（draft 静默 / turn/end 提交） |
 | `tests/turn-outline.test.ts` | turnOutline 折叠：wire 号 · seq · prompt/response · FaceWireIdMaps 对齐 |
 | `tests/session-stats.test.ts` | sessionStats：step/end 计数 · llm/ttft/tool 墙钟 · usage→decode · 取消不计入 llmMs |
 | `tests/token-usage.test.ts` | tokenUsage 同 step 替换；contextPressure surface projected；contextBreakdown；toolCalls；shadowedTokenCount 缩小 |
@@ -317,7 +317,7 @@ Driver registry lives in `@xrkseek/session-projection` (spec: [session-projectio
 | `tests/fork-policy.test.ts` | turn-cut `atSeq` · excludes later input/model · legacy `beforeSeq` · `fork-unavailable` |
 | `tests/workspace.test.ts` | list/create/rename/archive · delete/insert* |
 | `tests/host-frames.test.ts` | session-added child fields · workspace-removed / order-changed · fork · `host/remote-event` |
-| `tests/projections.test.ts` | title · list metadata · todos standing plan (cleared null on turn/start after write) · **turnOutline** mux (quiet draft / commit at turn/end) |
+| `tests/projections.test.ts` | title · list metadata · todos standing plan (persists across turn/start after write) · **turnOutline** mux (quiet draft / commit at turn/end) |
 | `tests/turn-outline.test.ts` | turnOutline fold: wire number · seq · prompt/response · FaceWireIdMaps alignment |
 | `tests/session-stats.test.ts` | sessionStats: step/end counts · llm/ttft/tool wall clock · usage→decode · cancel excluded from llmMs |
 | `tests/token-usage.test.ts` | tokenUsage same-step replace; contextPressure surface projected; contextBreakdown; toolCalls; shadowedTokenCount shrink |
