@@ -77,6 +77,7 @@ export function createServerAgentFactory(
     videoGenProduct,
     videoGenEnv,
     curatedMemory,
+    locale,
   }) => {
     const llm =
       resolveLlm?.(sessionId) ??
@@ -142,6 +143,7 @@ export function createServerAgentFactory(
       ...(videoGenProduct ? { videoGenProduct } : {}),
       ...(videoGenEnv ? { videoGenEnv } : {}),
       ...(curatedMemory === false ? { curatedMemory: false as const } : {}),
+      ...(locale ? { locale } : {}),
     });
     return composition.createAgent();
   };

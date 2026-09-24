@@ -204,6 +204,12 @@ export interface HarnessCompositionOptions {
   readonly workspaceDisplayTitle?: string;
   readonly llm?: LlmAdapter;
   readonly system?: string;
+  /**
+   * Face `locale.preference` (Settings SoT). Drives the `language` prompt
+   * section — reasoning + replies follow it. Omitted = match the user's own
+   * language (still never defaults to English-only reasoning).
+   */
+  readonly locale?: "zh" | "en";
   readonly sessionStore?: SessionStore;
   readonly sessionId?: string;
   readonly fs?: FsService;
@@ -1091,6 +1097,33 @@ export function createHarnessComposition(
     id: "base",
     order: 0,
     content: () => persona,
+  });
+  prompts.register({
+    id: "language",
+    order: 1,
+    content: () =>
+      options.locale === "zh"
+        ? [
+            "# Language",
+            "界面语言为简体中文。",
+            "- 一律使用简体中文进行思考（thinking / reasoning / 规划 / 工具调用前的判断）以及最终回复。不得用英文起笔推理。",
+            "- 保持原样、不要翻译：代码、命令、文件路径、API 与工具名、参数键名、标识符、日志原文、报错文本。",
+            "- 引用工具输出时保留原文，解释部分用中文。",
+            "- 用户主动用英文提问时仍可用英文回复，但界面为中文期间默认中文。",
+          ].join("\n")
+        : options.locale === "en"
+          ? [
+              "# Language",
+              "The UI language is English.",
+              "- Reason (thinking, planning, pre-tool narration) and reply in English.",
+              "- Keep code, commands, file paths, tool and parameter names, identifiers and raw tool output verbatim.",
+            ].join("\n")
+          : [
+              "# Language",
+              "No explicit UI locale was configured.",
+              "- Reason and reply in the same natural language as the user's latest message: if the user writes Chinese, think and answer in Chinese.",
+              "- Keep code, commands, file paths, tool and parameter names, identifiers and raw tool output verbatim.",
+            ].join("\n"),
   });
   if (curatedMemory) {
     // Policy is always present (even with empty files) so a new session does not

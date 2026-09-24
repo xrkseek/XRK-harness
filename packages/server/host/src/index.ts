@@ -377,6 +377,11 @@ export type AgentFactory = (input: {
    * `XRK_CURATED_MEMORY=0` env still force-disables for CI.
    */
   curatedMemory?: false;
+  /**
+   * Face `locale` product (Settings SoT) — drives the harness `language` prompt
+   * section so reasoning follows the UI language.
+   */
+  locale?: "zh" | "en";
 }) => Promise<AgentHandle>;
 
 export type { SessionDrainControl } from "./drain-status.js";
@@ -758,6 +763,8 @@ export function createHostManager(): HostManager {
           videoGenProduct?: import("@xrkseek/exec-video-gen").VideoGenProductConfig;
           videoGenEnv?: NodeJS.ProcessEnv;
           curatedMemory?: false;
+          /** Face `locale.preference` — reasoning/reply language directive. */
+          locale?: "zh" | "en";
         };
       } = {};
       const sessionCwdBox: {
@@ -859,6 +866,9 @@ export function createHostManager(): HostManager {
                     toolResultMaxInlineBytes:
                       pluginSettings.toolResultMaxInlineBytes,
                   }
+                : {}),
+              ...(pluginSettings.locale
+                ? { locale: pluginSettings.locale }
                 : {}),
               ...(pluginSettings.webSearch
                 ? { webSearch: pluginSettings.webSearch }
@@ -1709,6 +1719,22 @@ export function createHostManager(): HostManager {
         const videoGenEnv: NodeJS.ProcessEnv | undefined = videoKey
           ? { ...process.env, XRK_VIDEO_GEN_OPENAI_KEY: videoKey }
           : undefined;
+        const localeNs = faceRuntime.settingsNamespaces.view("locale")
+          .value as Record<string, unknown>;
+        const asLocale = (raw: unknown): "zh" | "en" | undefined =>
+          raw === "zh" || raw === "en" ? raw : undefined;
+        // Explicit Settings choice wins; older desktop builds stored the shell
+        // language in the `ui` namespace (`ui.locale`) and never wrote
+        // `locale.preference`, so honour it instead of dropping to the
+        // language-agnostic prompt fallback (reasoning drifted to English).
+        const localePref =
+          asLocale(localeNs.preference) ??
+          asLocale(
+            (
+              faceRuntime.settingsNamespaces.view("ui")
+                .value as Record<string, unknown>
+            ).locale,
+          );
         const memNs = faceRuntime.settingsNamespaces.view("curated-memory")
           .value as Record<string, unknown>;
         const memFaceOn = memNs.enabled !== false;
@@ -1762,6 +1788,7 @@ export function createHostManager(): HostManager {
           videoGenProduct,
           ...(videoGenEnv ? { videoGenEnv } : {}),
           ...(!curatedMemoryEnabled ? { curatedMemory: false as const } : {}),
+          ...(localePref ? { locale: localePref } : {}),
         };
       };
       {
@@ -1803,7 +1830,8 @@ export function createHostManager(): HostManager {
             ns === "voice" ||
             ns === "image-gen" ||
             ns === "video-gen" ||
-            ns === "curated-memory"
+            ns === "curated-memory" ||
+            ns === "locale"
           ) {
             void invalidateAgents();
           }

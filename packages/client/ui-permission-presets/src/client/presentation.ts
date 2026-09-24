@@ -53,9 +53,11 @@ export function displayPermissionPreset(
   t?: (key: PermissionPresetLabelKey) => string,
 ): string {
   const key = PRESET_LABEL_KEYS.get(value)
-  if (key !== undefined && (name === value || name === DEFAULT_PRESET_LABELS[key])) {
-    return t?.(key) ?? DEFAULT_PRESET_LABELS[key]
-  }
+  // Built-in presets always render under the active locale's product label.
+  // The Host descriptor ships English names ("Read only"), and those must not
+  // leak into a Chinese UI — only custom (host-authored) presets keep their
+  // supplied label.
+  if (key !== undefined) return t?.(key) ?? DEFAULT_PRESET_LABELS[key]
   return displayPresetName(name)
 }
 

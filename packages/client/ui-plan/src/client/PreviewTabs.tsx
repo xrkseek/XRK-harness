@@ -384,11 +384,11 @@ function StatusPanel({
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.compactionCounts')}</span>
           <span>
-            prune {status.compaction.pruneCount}
+            {t('preview.status.countPrune')} {status.compaction.pruneCount}
             {' · '}
-            summary {status.compaction.summaryCount}
+            {t('preview.status.countSummary')} {status.compaction.summaryCount}
             {status.compaction.spillCount > 0
-              ? ` · spill ${status.compaction.spillCount}`
+              ? ` · ${t('preview.status.countSpill')} ${status.compaction.spillCount}`
               : ''}
           </span>
         </div>
@@ -398,7 +398,9 @@ function StatusPanel({
         <h3 className={css.sectionTitle}>
           {t('preview.status.delivery')}
           <span className={css.sectionMeta}>
-            {status.delivery.turnActive ? 'turn' : 'idle'}
+            {status.delivery.turnActive
+              ? t('preview.status.metaTurn')
+              : t('preview.status.metaIdle')}
             {' · '}
             q{status.delivery.queued}/s{status.delivery.steering}
           </span>
@@ -406,15 +408,17 @@ function StatusPanel({
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.deliveryTurn')}</span>
           <span data-live={status.delivery.turnActive || undefined}>
-            {status.delivery.turnActive ? 'active' : 'idle'}
+            {status.delivery.turnActive
+              ? t('preview.status.metaActive')
+              : t('preview.status.metaIdle')}
           </span>
         </div>
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.deliveryQueue')}</span>
           <span>
-            queued {status.delivery.queued}
+            {t('preview.status.metaQueued')} {status.delivery.queued}
             {' · '}
-            steering {status.delivery.steering}
+            {t('preview.status.metaSteering')} {status.delivery.steering}
           </span>
         </div>
         <div className={css.row}>
@@ -434,7 +438,7 @@ function StatusPanel({
         <h3 className={css.sectionTitle}>
           {t('preview.status.timeline')}
           <span className={css.sectionMeta}>
-            Face contextTimeline
+            {t('preview.status.timelineSource')}
           </span>
         </h3>
         <div className={css.row}>
@@ -497,7 +501,7 @@ function StatusPanel({
           ? (
             <div className={css.row}>
               <span className={css.label}>{t('preview.status.timelineSpill')}</span>
-              <span>prune {pruneCount} · spill {spillCount}</span>
+              <span>{t('preview.status.countPrune')} {pruneCount} · {t('preview.status.countSpill')} {spillCount}</span>
             </div>
           )
           : null}
