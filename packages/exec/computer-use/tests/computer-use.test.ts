@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  captureScript,
   COMPUTER_USE_PROMPT_TEXT,
   createComputerUseTools,
   createDefaultComputerUseAccess,
   createMemoryComputerUseProvider,
   createWindowsUiAutomationProvider,
+  escapeSendKeys,
   formatAxSnapshot,
   mapKeysToSendKeys,
 } from "../src/index.js";
@@ -224,11 +226,144 @@ describe("createWindowsUiAutomationProvider", () => {
   });
 });
 
+describe("captureScript", () => {
+  it("guards int overflow and CJK output encoding", () => {
+    const script = captureScript({ app: "QQ", maxElements: 20 });
+    // Chromium/Electron report ±Infinity BoundingRectangles; a bare [int] cast killed the run.
+    expect(script).toContain("XrkSafeInt");
+    expect(script).not.toMatch(/\[int\]\$r\./);
+    // Windows PowerShell writes the OEM codepage, which mangles CJK element names.
+    expect(script).toContain("[Console]::OutputEncoding");
+    expect(script).toContain("$max = 20");
+  });
+
+  it("embeds app filters as single-quoted PowerShell literals", () => {
+    const script = captureScript({ app: "it's $env:X" });
+    expect(script).toContain("$appFilter = 'it''s $env:X'");
+  });
+});
+
+describe("createWindowsUiAutomationProvider hardening", () => {
+  it("reads the wrapped windows list instead of {value,Count}", async () => {
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell() {
+        // What PowerShell 5.1 emits for a bare piped array — must not look like one window.
+        return JSON.stringify({
+          windows: [
+            { title: "QQ", pid: 25324, app: "QQ" },
+            { title: "Clash Verge", pid: 2460, app: "clash-verge" },
+          ],
+        });
+      },
+    });
+    const windows = await svc.listWindows();
+    expect(windows).toHaveLength(2);
+    expect(windows[0]?.title).toBe("QQ");
+    expect(windows[1]?.app).toBe("clash-verge");
+  });
+
+  it("reports open windows when the app filter matches nothing", async () => {
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell() {
+        return JSON.stringify({
+          error: "app-not-found",
+          app: "",
+          windowTitle: "",
+          elements: [],
+          candidates: ["QQ [QQ]", "Edge [msedge]"],
+        });
+      },
+    });
+    await expect(svc.capture({ app: "WeChat" })).rejects.toThrow(
+      /no window matches "WeChat".*QQ \[QQ\]/,
+    );
+  });
+
+  it("retries once with offscreen nodes when the first tree is empty", async () => {
+    const scripts: string[] = [];
+    let first = true;
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell(script) {
+        scripts.push(script);
+        if (scripts.length === 1) {
+          return JSON.stringify({ app: "QQ", windowTitle: "QQ", elements: [] });
+        }
+        return JSON.stringify({
+          app: "QQ",
+          windowTitle: "QQ",
+          elements: [{ index: 1, role: "Edit", name: "输入", x: 1, y: 2, width: 3, height: 4, runtimeId: "7,1" }],
+        });
+      },
+    });
+    const snap = await svc.capture({ app: "QQ" });
+    expect(scripts).toHaveLength(2);
+    expect(scripts[1]).toContain("$keepOffscreen = $true");
+    expect(snap.elements[0]?.name).toBe("输入");
+  });
+
+  it("drops bounds when the element rectangle is offscreen", async () => {
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell() {
+        return JSON.stringify({
+          app: "Edge",
+          windowTitle: "Edge",
+          elements: [
+            { index: 1, role: "Edit", name: "off", x: null, y: null, width: null, height: null, runtimeId: "8,1" },
+          ],
+        });
+      },
+    });
+    const snap = await svc.capture();
+    expect(snap.elements[0]?.bounds).toBeUndefined();
+  });
+
+  it("escapes SendKeys punctuation and quotes on the type fallback", async () => {
+    const scripts: string[] = [];
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell(script) {
+        if (script.includes("ConvertTo-Json") && script.includes("elements")) {
+          return JSON.stringify({
+            app: "QQ",
+            windowTitle: "QQ",
+            elements: [{ index: 1, role: "Edit", name: "chat", runtimeId: "3,1" }],
+          });
+        }
+        scripts.push(script);
+        return "typed-paste";
+      },
+    });
+    await svc.capture();
+    const acted = await svc.act({ action: "type", element: 1, text: "it's 100%(a)" });
+    expect(acted.message).toContain("typed");
+    expect(scripts[0]).toContain("$text = 'it''s 100%(a)'");
+    expect(scripts[0]).toContain("{%}");
+    expect(scripts[0]).toContain("{(}");
+    // clipboard path keeps CJK out of SendKeys entirely
+    expect(scripts[0]).toContain("Set-Clipboard");
+  });
+
+  it("times out a wedged UIA script instead of hanging forever", async () => {
+    const svc = createWindowsUiAutomationProvider({
+      timeoutMs: 1_000,
+    });
+    await expect(
+      svc.capture({ app: "no-such-app-anywhere" }),
+    ).rejects.toThrow(/COMPUTER_USE_BACKEND|timed out|no window matches/);
+  });
+});
+
 describe("mapKeysToSendKeys", () => {
   it("maps common combos", () => {
     expect(mapKeysToSendKeys("return")).toBe("{ENTER}");
     expect(mapKeysToSendKeys("ctrl+shift+s")).toBe("^+s");
     expect(mapKeysToSendKeys("alt+f4")).toBe("%{F4}");
+  });
+});
+
+describe("escapeSendKeys", () => {
+  it("braces every reserved SendKeys character", () => {
+    expect(escapeSendKeys("a+b%c~d(e)f{g}")).toBe("a{+}b{%}c{~}d{(}e{)}f{{}g{}}");
+    expect(escapeSendKeys("中文 hello")).toBe("中文 hello");
   });
 });
 

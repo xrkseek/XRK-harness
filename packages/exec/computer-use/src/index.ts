@@ -29,7 +29,7 @@ export {
   formatAxSnapshot,
   formatWindowsList,
 } from "./format.js";
-export { mapKeysToSendKeys } from "./keys.js";
+export { mapKeysToSendKeys, escapeSendKeys } from "./keys.js";
 export {
   createBackgroundInputProvider,
   backgroundInputInstalled,
@@ -45,6 +45,9 @@ export {
 } from "./memory.js";
 export {
   createWindowsUiAutomationProvider,
+  captureScript,
+  DEFAULT_POWERSHELL_TIMEOUT_MS,
+  type CaptureScriptOptions,
   type PowerShellRunner,
   type WindowsUiAutomationOptions,
 } from "./windows-uia.js";

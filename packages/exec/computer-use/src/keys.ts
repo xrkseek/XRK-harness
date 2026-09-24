@@ -40,6 +40,16 @@ function escapeLiteral(ch: string): string {
 }
 
 /**
+ * Escape free-form text for `SendKeys` (the `type` fallback path). Without this
+ * `100%(cash)` is read as modifier sequences, and raw non-ASCII is dropped.
+ */
+export function escapeSendKeys(text: string): string {
+  let out = "";
+  for (const ch of text) out += escapeLiteral(ch);
+  return out;
+}
+
+/**
  * Convert `ctrl+shift+s` / `return` into a SendKeys string.
  * Throws if the combo is empty or contains an unknown named key.
  */
