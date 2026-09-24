@@ -2,6 +2,7 @@ import { scheduler } from "node:timers/promises";
 import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, promotePendingSteers, pruneOversizedToolResults, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
+  isMetadataOnlyUserMessage,
   type AssembledRequest,
 } from "@xrkseek/core-system-prompt";
 import {
@@ -542,9 +543,12 @@ async function buildModelRequest(input: {
       : {}),
   });
 
-  // Drop zero-width-only skeleton user on follow-up steps
+  // Invariant: a `user` turn with no human content reads to the model as "the
+  // human just spoke", so it never goes on the wire. Assembly already folds the
+  // volatile block into the live user turn; this is the same rule enforced at
+  // the outbound edge.
   const historyMessages = assembled.messages.filter(
-    (m) => !(m.role === "user" && m.content === "\u200b"),
+    (m) => !isMetadataOnlyUserMessage(m),
   );
 
   const placed = placeSystemOnWire({

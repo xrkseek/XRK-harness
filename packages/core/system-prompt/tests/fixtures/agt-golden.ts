@@ -15,7 +15,7 @@ export const fixtures = [
     expect: {
       systemIncludes: ["coding assistant"],
       systemExcludes: ["sess_plain", "volatile"],
-      messageRoles: ["user", "user"],
+      messageRoles: ["user"],
     },
   },
   {
@@ -33,7 +33,7 @@ export const fixtures = [
     expect: {
       systemIncludes: ["coding assistant"],
       systemExcludes: ["sess_hist"],
-      messageRoles: ["user", "assistant", "user", "user", "user"],
+      messageRoles: ["user", "assistant", "user"],
       hasCurrentMarker: true,
     },
   },
@@ -57,7 +57,7 @@ export const fixtures = [
       systemIncludes: ["coding assistant"],
       systemExcludes: ["sess_tools"],
       toolNames: ["read_file"],
-      messageRoles: ["user", "user"],
+      messageRoles: ["user"],
     },
   },
 ] as const;

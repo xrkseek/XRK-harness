@@ -11,21 +11,21 @@ resolve(input) → ProviderBinding → createAdapter(binding, secrets) → LlmAd
 listForUi() / catalog() → Face `llm.providers` · `session.models`
 ```
 
-- Host / CLI / `provider.use` / Face **只**走 Registry  
-- 协议包 ≠ compat 工厂 ≠ 品牌条目  
-- 密钥仅运行时注入；不入库  
+- Host / CLI / `provider.use` / Face **只**走 Registry
+- 协议包 ≠ compat 工厂 ≠ 品牌条目
+- 密钥仅运行时注入；不入库
 
 ## 状态
 
 **R0**：openai-chat brands + env + Face 投影 + `discoverModels` GET `/models`。  
 **R1 已交付**：官方协议包 + Registry 分发：
 
-| ProtocolId | 包 / 工厂 | Brand |
-|------------|-----------|-------|
-| `openai-chat` / `openai-completions` | `@xrkseek/llm-openai-compatible` | R0 brands |
-| `anthropic-messages` | `@xrkseek/llm-anthropic` | `anthropic` |
-| `openai-responses` | `@xrkseek/llm-openai-responses` | `openai-responses` |
-| `gemini-generate` | `@xrkseek/llm-gemini` | `gemini` |
+| ProtocolId                           | 包 / 工厂                        | Brand              |
+| ------------------------------------ | -------------------------------- | ------------------ |
+| `openai-chat` / `openai-completions` | `@xrkseek/llm-openai-compatible` | R0 brands          |
+| `anthropic-messages`                 | `@xrkseek/llm-anthropic`         | `anthropic`        |
+| `openai-responses`                   | `@xrkseek/llm-openai-responses`  | `openai-responses` |
+| `gemini-generate`                    | `@xrkseek/llm-gemini`            | `gemini`           |
 
 Face `llm-pi-ai.providers.*.api` 写入后经 `readProviderRoute` → `resolveProviderBinding` 选工厂；覆盖协议时用目标协议默认 path。
 
@@ -33,13 +33,13 @@ Face `llm-pi-ai.providers.*.api` 写入后经 `readProviderRoute` → `resolvePr
 
 模型可见前缀尽量 **append-only**（已发出的前缀不回改）。
 
-| 做法 | 作用 |
-|------|------|
-| tools **按 name 字典序** | 注册 / MCP 热挂顺序不进入 wire |
+| 做法                                              | 作用                                                                                                                                                                               |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tools **按 name 字典序**                          | 注册 / MCP 热挂顺序不进入 wire                                                                                                                                                     |
 | 可选 `toolOrder: string[]`（恰好一个 `' '` rest） | 固定常用工具位置；错配 fail-loud；缺省 = 纯字典序。Face `agent-loop.toolOrder` → Host → `assemble.toolOrder`（Settings → Plugins 或 settings.yaml）；`@xrkseek/core-system-prompt` |
-| volatile **不进 system** | 时钟与 session id 只在 user 尾缀 |
-| 同 turn 后续 step：关 `[current message]` 与 volatile `time:` | 工具循环不每步挪动对话中段 |
-| Anthropic `cache_control: { type: "ephemeral" }` | system 文本块 + 最后一个 tool 定义打 breakpoint；`chat`/`stream` usage 映射 `cache_read_input_tokens` / `cache_creation_input_tokens` → `cacheReadTokens` / `cacheWriteTokens` |
+| volatile **不进 system**                          | 时钟与 session id 折叠进当前 user 消息的尾缀，**绝不单独成一条 user 消息**                                                                                                         |
+| 无人类内容的后续 step：不追加任何消息             | 工具循环不每步挪动对话中段，也不会把纯标记喂给模型当作用户发言                                                                                                                     |
+| Anthropic `cache_control: { type: "ephemeral" }`  | system 文本块 + 最后一个 tool 定义打 breakpoint；`chat`/`stream` usage 映射 `cache_read_input_tokens` / `cache_creation_input_tokens` → `cacheReadTokens` / `cacheWriteTokens`     |
 
 StatsLine「缓存命中」= `cacheReadTokens / (uncached + cacheRead + cacheWrite)`（`tokenUsage` 投影）。换模型 / 改 system（plan · recipe）仍会整段 miss。
 
@@ -47,22 +47,22 @@ StatsLine「缓存命中」= `cacheReadTokens / (uncached + cacheRead + cacheWri
 
 协议栈上的别名是契约的一部分，**不要**为「去冗余」删掉读侧兼容：
 
-| 别名 | 含义 |
-|------|------|
-| `openai-completions` | 与 `openai-chat` 同工厂 |
-| settings `baseURL` / `baseUrl` | 同一 endpoint；schema 写 `baseURL`，读侧两者都认 |
-| Registry brand `custom` | 预设占位（须自带 baseUrl）；**不等于** Settings 手写路由 id |
+| 别名                           | 含义                                                        |
+| ------------------------------ | ----------------------------------------------------------- |
+| `openai-completions`           | 与 `openai-chat` 同工厂                                     |
+| settings `baseURL` / `baseUrl` | 同一 endpoint；schema 写 `baseURL`，读侧两者都认            |
+| Registry brand `custom`        | 预设占位（须自带 baseUrl）；**不等于** Settings 手写路由 id |
 
 ## Settings 手写路由（Custom provider）
 
 产品 Settings → Models → Custom provider 写入 `llm-pi-ai.providers.<id>`（如 `xyt`）。该 id **不是** Registry brand。
 
-| 面 | 行为 |
-|----|------|
-| `llm.providers` / `llm.models` / `session.models` | 列出声明路由（`declared: true`） |
-| `session.selectModel` · agent LLM | `resolveProviderBinding`：有 brand 走 Registry；否则从 profile **合成** `ProviderBinding` |
-| 凭据 | `apiKeyEnv` → `credentials` 槽 `llm.<id>` |
-| 禁止 | 产品选择路径直接 `registry.resolve(provider)`（会 `unknown provider`） |
+| 面                                                | 行为                                                                                      |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `llm.providers` / `llm.models` / `session.models` | 列出声明路由（`declared: true`）                                                          |
+| `session.selectModel` · agent LLM                 | `resolveProviderBinding`：有 brand 走 Registry；否则从 profile **合成** `ProviderBinding` |
+| 凭据                                              | `apiKeyEnv` → `credentials` 槽 `llm.<id>`                                                 |
+| 禁止                                              | 产品选择路径直接 `registry.resolve(provider)`（会 `unknown provider`）                    |
 
 实现落点：`packages/server/face/src/llm-provider-context.ts` · `llm-resolve.ts` · `model-catalog.ts`。
 
@@ -97,21 +97,21 @@ resolve(input) → ProviderBinding → createAdapter(binding, secrets) → LlmAd
 listForUi() / catalog() → Face `llm.providers` · `session.models`
 ```
 
-- Host / CLI / `provider.use` / Face use **only** the Registry  
-- Protocol package ≠ compat factory ≠ brand entry  
-- Secrets injected at runtime only; never committed  
+- Host / CLI / `provider.use` / Face use **only** the Registry
+- Protocol package ≠ compat factory ≠ brand entry
+- Secrets injected at runtime only; never committed
 
 ## Status
 
 **R0**: openai-chat brands + env + Face projection + `discoverModels` GET `/models`.  
 **R1 delivered**: official protocol packages + Registry dispatch:
 
-| ProtocolId | Package / factory | Brand |
-|------------|-----------|-------|
-| `openai-chat` / `openai-completions` | `@xrkseek/llm-openai-compatible` | R0 brands |
-| `anthropic-messages` | `@xrkseek/llm-anthropic` | `anthropic` |
-| `openai-responses` | `@xrkseek/llm-openai-responses` | `openai-responses` |
-| `gemini-generate` | `@xrkseek/llm-gemini` | `gemini` |
+| ProtocolId                           | Package / factory                | Brand              |
+| ------------------------------------ | -------------------------------- | ------------------ |
+| `openai-chat` / `openai-completions` | `@xrkseek/llm-openai-compatible` | R0 brands          |
+| `anthropic-messages`                 | `@xrkseek/llm-anthropic`         | `anthropic`        |
+| `openai-responses`                   | `@xrkseek/llm-openai-responses`  | `openai-responses` |
+| `gemini-generate`                    | `@xrkseek/llm-gemini`            | `gemini`           |
 
 After Face writes `llm-pi-ai.providers.*.api`, `readProviderRoute` → `resolveProviderBinding` selects the factory; protocol overrides use the target protocol’s default path.
 
@@ -119,13 +119,13 @@ After Face writes `llm-pi-ai.providers.*.api`, `readProviderRoute` → `resolveP
 
 Keep model-visible prefixes **append-only** when possible (do not rewrite already-sent prefixes).
 
-| Practice | Effect |
-|------|------|
-| tools sorted **by name** | Register / MCP hot-mount order does not enter the wire |
+| Practice                                                | Effect                                                                                                                                                                                               |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tools sorted **by name**                                | Register / MCP hot-mount order does not enter the wire                                                                                                                                               |
 | Optional `toolOrder: string[]` (exactly one `' '` rest) | Pins common tools; mismatch fails loud; default = pure lexicographic. Face `agent-loop.toolOrder` → Host → `assemble.toolOrder` (Settings → Plugins or settings.yaml); `@xrkseek/core-system-prompt` |
-| volatile **out of system** | Clock and session id only in the user suffix |
-| Later steps in the same turn: disable `[current message]` and volatile `time:` | Tool loops do not reshuffle mid-dialog each step |
-| Anthropic `cache_control: { type: "ephemeral" }` | Breakpoint on system text block + last tool definition; `chat`/`stream` usage maps `cache_read_input_tokens` / `cache_creation_input_tokens` → `cacheReadTokens` / `cacheWriteTokens` |
+| volatile **out of system**                              | Clock and session id fold into the tail of the live user message, **never a user turn of their own**                                                                                                 |
+| Later steps with no human text: append nothing at all   | Tool loops do not reshuffle mid-dialog, and the model is never handed a bare marker as "user speech"                                                                                                 |
+| Anthropic `cache_control: { type: "ephemeral" }`        | Breakpoint on system text block + last tool definition; `chat`/`stream` usage maps `cache_read_input_tokens` / `cache_creation_input_tokens` → `cacheReadTokens` / `cacheWriteTokens`                |
 
 StatsLine “cache hit” = `cacheReadTokens / (uncached + cacheRead + cacheWrite)` (`tokenUsage` projection). Changing model / system (plan · recipe) still full-misses.
 
@@ -133,22 +133,22 @@ StatsLine “cache hit” = `cacheReadTokens / (uncached + cacheRead + cacheWrit
 
 Aliases on the protocol stack are part of the contract — **do not** remove read-side compatibility for “dedup”:
 
-| Alias | Meaning |
-|------|------|
-| `openai-completions` | Same factory as `openai-chat` |
-| settings `baseURL` / `baseUrl` | Same endpoint; schema writes `baseURL`, readers accept both |
-| Registry brand `custom` | Preset placeholder (must supply baseUrl); **not** a Settings hand-written route id |
+| Alias                          | Meaning                                                                            |
+| ------------------------------ | ---------------------------------------------------------------------------------- |
+| `openai-completions`           | Same factory as `openai-chat`                                                      |
+| settings `baseURL` / `baseUrl` | Same endpoint; schema writes `baseURL`, readers accept both                        |
+| Registry brand `custom`        | Preset placeholder (must supply baseUrl); **not** a Settings hand-written route id |
 
 ## Settings hand-written routes (Custom provider)
 
 Product Settings → Models → Custom provider writes `llm-pi-ai.providers.<id>` (e.g. `xyt`). That id is **not** a Registry brand.
 
-| Surface | Behavior |
-|----|------|
-| `llm.providers` / `llm.models` / `session.models` | List declared routes (`declared: true`) |
-| `session.selectModel` · agent LLM | `resolveProviderBinding`: known brand → Registry; else **synthesize** `ProviderBinding` from profile |
-| Credentials | `apiKeyEnv` → `credentials` slot `llm.<id>` |
-| Forbidden | Product selection calling `registry.resolve(provider)` directly (yields `unknown provider`) |
+| Surface                                           | Behavior                                                                                             |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `llm.providers` / `llm.models` / `session.models` | List declared routes (`declared: true`)                                                              |
+| `session.selectModel` · agent LLM                 | `resolveProviderBinding`: known brand → Registry; else **synthesize** `ProviderBinding` from profile |
+| Credentials                                       | `apiKeyEnv` → `credentials` slot `llm.<id>`                                                          |
+| Forbidden                                         | Product selection calling `registry.resolve(provider)` directly (yields `unknown provider`)          |
 
 Implementation: `packages/server/face/src/llm-provider-context.ts` · `llm-resolve.ts` · `model-catalog.ts`.
 

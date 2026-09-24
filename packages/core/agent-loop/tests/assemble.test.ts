@@ -33,6 +33,16 @@ describe("runTurn assemble", () => {
     const system = msgs.find((m) => m.role === "system");
     expect(system?.content).toContain("PersonaZ");
     expect(system?.content).not.toContain("volatile");
-    expect(msgs.some((m) => m.content.startsWith("[volatile]"))).toBe(true);
+    // Per-turn metadata rides on the tail of a real human turn. A message that
+    // is only the marker reads to the model as "the human spoke" and it answers
+    // that instead of the task -- so it must never reach the wire.
+    expect(msgs.some((m) => m.content.startsWith("[volatile]"))).toBe(false);
+    const carriers = msgs.filter((m) => m.content.includes("[volatile]"));
+    expect(carriers.length).toBe(1);
+    const withoutBlock = carriers[0]!.content.replace(
+      /\[volatile\][\s\S]*?\[\/volatile\]/,
+      "",
+    );
+    expect(withoutBlock.trim().length).toBeGreaterThan(0);
   });
 });

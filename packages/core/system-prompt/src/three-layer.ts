@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@xrkseek/protocol";
+import type { ChatMessage, MessageContent } from "@xrkseek/protocol";
 
 export interface AssembledRequest {
   readonly system: string;
@@ -73,23 +73,108 @@ export function buildSkeletonUser(input: SkeletonUserInput): ChatMessage {
   };
 }
 
-export function buildVolatileUser(
+export const VOLATILE_OPEN = "[volatile]";
+export const VOLATILE_CLOSE = "[/volatile]";
+export const CURRENT_MESSAGE_LABEL = "[current message]";
+
+/** Zero-width / no-break spaces the loop uses as "no human text this step". */
+const INVISIBLE_USER_FILLER = ["\u200b", "\u200c", "\u200d", "\ufeff", "\u00a0"];
+
+/**
+ * True when the live user turn actually carries human content.
+ *
+ * The agent loop sends `"\u200b"` (zero-width space) as a placeholder on
+ * follow-up steps; treating that as a real turn is what made the model reply
+ * to its own per-turn metadata.
+ */
+export function hasHumanUserText(text: string | undefined): boolean {
+  if (text === undefined) return false;
+  let out = text;
+  for (const filler of INVISIBLE_USER_FILLER) out = out.split(filler).join("");
+  return out.trim().length > 0;
+}
+
+/** Remove a volatile block (any position) from user text. */
+export function stripVolatileBlock(content: string): string {
+  const open = content.indexOf(VOLATILE_OPEN);
+  if (open < 0) return content;
+  const close = content.indexOf(VOLATILE_CLOSE, open);
+  const end = close < 0 ? content.length : close + VOLATILE_CLOSE.length;
+  return content.slice(0, open) + content.slice(end);
+}
+
+/** Concatenated text of message content (non-text blocks contribute nothing). */
+export function textOfContent(content: MessageContent): string {
+  if (typeof content === "string") return content;
+  let out = "";
+  for (const block of content) if (block.type === "text") out += block.text;
+  return out;
+}
+
+/**
+ * True when the content carries what a human actually sent: visible text
+ * (ignoring a folded volatile block and invisible filler), or an image / file
+ * block.
+ */
+export function hasHumanMessageContent(
+  content: MessageContent,
+): boolean {
+  if (typeof content !== "string" && content.some((b) => b.type !== "text")) {
+    return true;
+  }
+  return hasHumanUserText(stripVolatileBlock(textOfContent(content)));
+}
+
+/**
+ * A user message with no human content once its volatile block is removed --
+ * i.e. turn machinery disguised as a user turn. Never send these.
+ */
+export function isMetadataOnlyUserMessage(m: ChatMessage): boolean {
+  return m.role === "user" && !hasHumanMessageContent(m.content);
+}
+
+/**
+ * Volatile block as a *string* -- meant to be appended to the tail of the live
+ * user message (docs: volatile never enters `system`, and lives in the user
+ * suffix), not to become its own turn.
+ */
+export function buildVolatileBlock(
   input: VolatileUserInput,
   options: { readonly includeTime?: boolean } = {},
-): ChatMessage {
+): string {
   const includeTime = options.includeTime !== false;
   const lines = [
     ...(includeTime ? [`time: ${input.nowIso}`] : []),
     `session: ${input.sessionId}`,
   ];
   if (input.owner) lines.push(`owner: ${input.owner}`);
+  return `${VOLATILE_OPEN}\n${lines.join("\n")}\n${VOLATILE_CLOSE}`;
+}
+
+/**
+ * @deprecated Emits a standalone `user` message whose content is pure
+ * metadata, which the model reads as "the human just spoke" and answers.
+ * Use `buildVolatileBlock` and append it to the live user turn;
+ * `assembleThreeLayers` no longer calls this.
+ */
+export function buildVolatileUser(
+  input: VolatileUserInput,
+  options: { readonly includeTime?: boolean } = {},
+): ChatMessage {
   return {
     role: "user",
-    content: `[volatile]\n${lines.join("\n")}`,
+    content: buildVolatileBlock(input, options),
   };
 }
 
-/** History transcript; optional current-message marker before the live user turn. */
+/**
+ * History transcript; optionally followed by a standalone `[current message]`
+ * user turn.
+ *
+ * Avoid for assembly: that marker is a synthetic user turn, which reads to the
+ * model as "the human just spoke". The assembler labels the live turn inline
+ * instead (`CURRENT_MESSAGE_LABEL`).
+ */
 export function mergeHistory(
   history: readonly ChatMessage[],
   options: { readonly includeCurrentMarker?: boolean } = {},
@@ -156,7 +241,12 @@ export function orderToolsForWire(
 /**
  * Fixed order:
  * 1. system = skeleton system (+ optional workspace blocks appended)
- * 2. messages = history(+optional marker) + skeleton user + volatile user
+ * 2. messages = history + the live user turn, with the volatile block folded
+ *    into its tail. Volatile never becomes a turn of its own: a `user` message
+ *    that carries only metadata is read as the human speaking, and the model
+ *    answers that instead of doing the work.
+ * 3. follow-up steps (no human text) append nothing at all, so the request ends
+ *    on the real transcript (assistant tool_calls / tool results).
  * Volatile content must never appear in `system`.
  * Tools are sorted by name (or `toolOrder`) for prompt-cache stability (DSH parity).
  */
@@ -168,21 +258,27 @@ export function assembleThreeLayers(
     systemParts.push(...input.workspaceBlocks);
   }
   const system = systemParts.filter((s) => s.trim()).join("\n\n");
+  const hasAttachments = (input.skeletonUser.attachments?.length ?? 0) > 0;
+  const includeTime = input.includeVolatileTime !== false;
+  const volatileBlock = buildVolatileBlock(input.volatile, { includeTime });
   const messages: ChatMessage[] = [
-    ...mergeHistory(
-      input.history,
-      input.includeCurrentMarker === undefined
-        ? {}
-        : { includeCurrentMarker: input.includeCurrentMarker },
-    ),
-    buildSkeletonUser(input.skeletonUser),
-    buildVolatileUser(
-      input.volatile,
-      input.includeVolatileTime === undefined
-        ? {}
-        : { includeTime: input.includeVolatileTime },
-    ),
+    ...input.history,
   ];
+  if (hasHumanUserText(input.skeletonUser.text) || hasAttachments) {
+    messages.push({
+      role: "user",
+      content: [
+        ...(input.includeCurrentMarker !== false
+          ? [CURRENT_MESSAGE_LABEL]
+          : []),
+        buildSkeletonUser(input.skeletonUser).content,
+        volatileBlock,
+      ].join("\n\n"),
+    });
+  } else if (messages.length === 0) {
+    // Cold start with no human text still needs one message on the wire.
+    messages.push({ role: "user", content: volatileBlock });
+  }
   return {
     system,
     messages,

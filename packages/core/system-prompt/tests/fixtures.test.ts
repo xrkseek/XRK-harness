@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assembleThreeLayers } from "../src/index.js";
+import { assembleThreeLayers, textOfContent } from "../src/index.js";
 import { fixtures } from "./fixtures/agt-golden.js";
 
 describe("AGT golden fixtures (contract)", () => {
@@ -27,9 +27,11 @@ describe("AGT golden fixtures (contract)", () => {
         ...fix.expect.messageRoles,
       ]);
       if ("hasCurrentMarker" in fix.expect && fix.expect.hasCurrentMarker) {
-        expect(req.messages.some((m) => m.content === "[current message]")).toBe(
-          true,
-        );
+        expect(
+          req.messages.some((m) =>
+            textOfContent(m.content).startsWith("[current message]"),
+          ),
+        ).toBe(true);
       }
       if ("toolNames" in fix.expect && fix.expect.toolNames) {
         expect(req.tools.map((t) => t.name)).toEqual([...fix.expect.toolNames]);

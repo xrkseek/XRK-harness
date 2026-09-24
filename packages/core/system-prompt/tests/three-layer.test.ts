@@ -4,6 +4,9 @@ import {
   createAssembleStep,
   createOutboundPipeline,
   createToolPairStep,
+  hasHumanUserText,
+  isMetadataOnlyUserMessage,
+  textOfContent,
   slashRecipeStep,
 } from "../src/index.js";
 
@@ -23,11 +26,18 @@ describe("three-layer assemble", () => {
     expect(req.system).not.toContain("volatile");
     expect(req.system).not.toContain("sess_1");
     expect(req.system).not.toContain("2026-08-15");
-    const volatileMsg = req.messages.find((m) =>
-      m.content.startsWith("[volatile]"),
+    // Folded into the tail of the live human turn -- never a turn of its own.
+    expect(
+      req.messages.some((m) => textOfContent(m.content).startsWith("[volatile]")),
+    ).toBe(
+      false,
     );
-    expect(volatileMsg?.role).toBe("user");
-    expect(volatileMsg?.content).toContain("sess_1");
+    const live = req.messages[req.messages.length - 1]!;
+    expect(live.role).toBe("user");
+    const liveText = textOfContent(live.content);
+    expect(liveText).toContain("do it");
+    expect(liveText).toContain("sess_1");
+    expect(liveText).toContain("owner: xrk");
   });
 
   it("layer order snapshot with fixed clock", () => {
@@ -57,19 +67,21 @@ describe("three-layer assemble", () => {
       tools: req.tools.map((t) => t.name),
     }).toEqual({
       system: "You are X.\n\nMCP: tools via schema.",
-      roles: ["user", "assistant", "user", "user", "user"],
+      roles: ["user", "assistant", "user"],
       contents: [
         "a",
         "b",
-        "[current message]",
-        "now",
-        "[volatile]\ntime: 2026-01-01T00:00:00.000Z\nsession: sess_fixed",
+        [
+          "[current message]",
+          "now",
+          "[volatile]\ntime: 2026-01-01T00:00:00.000Z\nsession: sess_fixed\n[/volatile]",
+        ].join("\n\n"),
       ],
       tools: ["read_file", "write_file"],
     });
   });
 
-  it("follow-up steps omit current-marker and volatile clock for cache prefix", () => {
+  it("follow-up steps with no human text append nothing at all", () => {
     const req = assembleThreeLayers({
       skeletonSystem: { persona: "P" },
       history: [
@@ -85,12 +97,43 @@ describe("three-layer assemble", () => {
       includeVolatileTime: false,
       tools: [{ name: "echo", description: "e", parameters: {} }],
     });
-    expect(req.messages.map((m) => m.content)).toEqual([
-      "a",
-      "b",
-      "\u200b",
-      "[volatile]\nsession: sess_fixed",
-    ]);
+    expect(req.messages.map((m) => m.content)).toEqual(["a", "b"]);
+    expect(req.messages.some(isMetadataOnlyUserMessage)).toBe(false);
+  });
+
+  it("cold start with no human text still sends exactly one turn", () => {
+    const req = assembleThreeLayers({
+      skeletonSystem: { persona: "P" },
+      history: [],
+      skeletonUser: { text: "\u200b" },
+      volatile: { nowIso: "2026-01-01T00:00:00.000Z", sessionId: "sess_cold" },
+      includeCurrentMarker: false,
+      includeVolatileTime: false,
+    });
+    expect(req.messages.length).toBe(1);
+    expect(textOfContent(req.messages[0]!.content)).toContain("sess_cold");
+  });
+
+  it("blank / invisible user text is not a human turn", () => {
+    expect(hasHumanUserText("\u200b")).toBe(false);
+    expect(hasHumanUserText("  \n")).toBe(false);
+    expect(hasHumanUserText("go")).toBe(true);
+    expect(
+      isMetadataOnlyUserMessage({
+        role: "user",
+        content: "[volatile]\nsession: s\n[/volatile]",
+      }),
+    ).toBe(true);
+    expect(
+      isMetadataOnlyUserMessage({
+        role: "user",
+        content:
+          "[current message]\n\nhi\n\n[volatile]\nsession: s\n[/volatile]",
+      }),
+    ).toBe(false);
+    expect(
+      isMetadataOnlyUserMessage({ role: "assistant", content: "" }),
+    ).toBe(false);
   });
 });
 
