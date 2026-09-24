@@ -4,10 +4,10 @@
 
 对外发两类产物：
 
-| 包 | 用途 |
-|----|------|
-| **`@xrkseek/harness-cli`** | 含组装好的 `product-web/`；终端用户 `xrkh` |
-| **`@xrkseek/harness`** | 嵌入式 SDK（`createAgent` 等）；XRK-AGT 等集成方 |
+| 包                         | 用途                                             |
+| -------------------------- | ------------------------------------------------ |
+| **`@xrkseek/harness-cli`** | 含组装好的 `product-web/`；终端用户 `xrkh`       |
+| **`@xrkseek/harness`**     | 嵌入式 SDK（`createAgent` 等）；XRK-AGT 等集成方 |
 
 workspace 其余包保持 **`private`**，经 `pnpm deploy` 打进上述两包的 `bundleDependencies`。
 
@@ -15,10 +15,10 @@ workspace 其余包保持 **`private`**，经 `pnpm deploy` 打进上述两包�
 
 ## 双通道
 
-| # | 产物 | 去向 | 用户怎么用 |
-|---|------|------|------------|
-| 1 | npm pack | **npmjs.org** | `npm i -g @xrkseek/harness-cli` · `pnpm add @xrkseek/harness` |
-| 2 | `xrkseek-harness-cli-<ver>.tgz` · `xrkseek-harness-<ver>.tgz` | GitHub **Release** | 下载离线包 / `pnpm add <tarball-url>` |
+| #   | 产物                                                          | 去向               | 用户怎么用                                                    |
+| --- | ------------------------------------------------------------- | ------------------ | ------------------------------------------------------------- |
+| 1   | npm pack                                                      | **npmjs.org**      | `npm i -g @xrkseek/harness-cli` · `pnpm add @xrkseek/harness` |
+| 2   | `xrkseek-harness-cli-<ver>.tgz` · `xrkseek-harness-<ver>.tgz` | GitHub **Release** | 下载离线包 / `pnpm add <tarball-url>`                         |
 
 不发 GitHub Packages。发布页：https://github.com/xrkseek/XRK-harness/releases
 
@@ -63,12 +63,12 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留当前正
 
 **例外**：预览线**收口号**（去掉 `-rc.N` 后缀的那一个）**接管 `@latest`**。`MINOR=4` 线即如此：`rc.1`–`rc.4` 为过程号，**0.4.0** 收口并接管 `@latest`；下一档进 `MINOR=5` 正式线（`0.5.0`）。
 
-| 档 | 版本 | 用途 |
-|------|------|------|
-| **当前（@latest）** | **0.4.0** | `MINOR=4` 预览线收口号；`npm i -g @xrkseek/harness-cli@latest` |
-| **上一正式线** | **0.3.11** | `MINOR=3` 正式线；保留供对照与回退 |
-| **过程号（归档）** | **0.4.0-rc.1…rc.4** | npm dist-tag `rc`；内容已并入 0.4.0，不推荐日常安装 |
-| **上一轮预览末号** | **0.2.7** | `MINOR=2` 预览线结束；对照留档，不推荐日常安装 |
+| 档                  | 版本                | 用途                                                           |
+| ------------------- | ------------------- | -------------------------------------------------------------- |
+| **当前（@latest）** | **0.4.0**           | `MINOR=4` 预览线收口号；`npm i -g @xrkseek/harness-cli@latest` |
+| **上一正式线**      | **0.3.11**          | `MINOR=3` 正式线；保留供对照与回退                             |
+| **过程号（归档）**  | **0.4.0-rc.1…rc.4** | npm dist-tag `rc`；内容已并入 0.4.0，不推荐日常安装            |
+| **上一轮预览末号**  | **0.2.7**           | `MINOR=2` 预览线结束；对照留档，不推荐日常安装                 |
 
 昔日正式 **0.1.31** → **0.3.11**（经 0.3.0/0.3.3/0.3.5/0.3.7/0.3.8/0.3.9/0.3.10）→ 现 **0.4.0**；预览 **0.0.11**（已撤）→ **0.2.7** → **0.4.0-rc.1…rc.4** → **0.4.0**（收口）。上一轮预览基线不再作为推荐入口。
 
@@ -76,8 +76,7 @@ npm **不能**同号重发；改坏包就升修订号。中间号用 `npm-prune-
 
 预发布号（`-rc.N` / `-beta.N`）由 `release.mjs` 自动按版本首段 prerelease 标识附 `--tag`（`0.4.0-rc.4` → `rc`），并给 GitHub Release 加 `--prerelease`；因此过程号既不进 npm `@latest`，也不占仓库 Latest 徽标。**收口号与正式版一样无后缀 ⇒ 不带 `--tag`、不加 `--prerelease`**，直接落 `@latest` 并占 Latest 徽标（0.4.0 即走这条路，无需任何开关）。
 
-GitHub Release 公开页保留 **v0.4.0**（当前）、**v0.3.11**（上一正式线）与 **v0.2.7**（上一轮对照）。
-
+GitHub Release 公开页保留 **v0.4.2**（当前）、**v0.3.11**（上一正式线）与 **v0.2.7**（上一轮对照）。
 
 完整交接：[maintainer](./maintainer.md)。发行说明索引：[releases/](./releases/)。
 
@@ -89,10 +88,10 @@ GitHub Release 公开页保留 **v0.4.0**（当前）、**v0.3.11**（上一正�
 
 Two public packages:
 
-| Package | Role |
-|---------|------|
-| **`@xrkseek/harness-cli`** | Assembled `product-web/`; end-user `xrkh` |
-| **`@xrkseek/harness`** | Embeddable SDK (`createAgent`, …); XRK-AGT and other integrators |
+| Package                    | Role                                                             |
+| -------------------------- | ---------------------------------------------------------------- |
+| **`@xrkseek/harness-cli`** | Assembled `product-web/`; end-user `xrkh`                        |
+| **`@xrkseek/harness`**     | Embeddable SDK (`createAgent`, …); XRK-AGT and other integrators |
 
 Other workspace packages stay **`private`** and ship via `pnpm deploy` `bundleDependencies`.
 
@@ -100,10 +99,10 @@ Version source of truth: `apps/cli/package.json` → `version` (SDK stage syncs 
 
 ## Dual channels
 
-| # | Artifact | Destination | How users consume |
-|---|----------|-------------|-------------------|
-| 1 | npm pack | **npmjs.org** | `npm i -g @xrkseek/harness-cli` · `pnpm add @xrkseek/harness` |
-| 2 | `xrkseek-harness-cli-<ver>.tgz` · `xrkseek-harness-<ver>.tgz` | GitHub **Release** | Offline tarball / `pnpm add <tarball-url>` |
+| #   | Artifact                                                      | Destination        | How users consume                                             |
+| --- | ------------------------------------------------------------- | ------------------ | ------------------------------------------------------------- |
+| 1   | npm pack                                                      | **npmjs.org**      | `npm i -g @xrkseek/harness-cli` · `pnpm add @xrkseek/harness` |
+| 2   | `xrkseek-harness-cli-<ver>.tgz` · `xrkseek-harness-<ver>.tgz` | GitHub **Release** | Offline tarball / `pnpm add <tarball-url>`                    |
 
 Do not publish to GitHub Packages. Releases: https://github.com/xrkseek/XRK-harness/releases
 
@@ -148,12 +147,12 @@ Rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = fo
 
 **Exception**: the **closing number** of a preview line (the one without a `-rc.N` suffix) **takes over `@latest`**. The `MINOR=4` line works exactly that way: `rc.1`–`rc.4` were process numbers, **0.4.0** closes the line and owns `@latest`; the next line moves to the odd `MINOR=5` formal train (`0.5.0`).
 
-| Line | Version | Use |
-|------|---------|-----|
-| **Current (@latest)** | **0.4.0** | Closing number of the `MINOR=4` preview line; `npm i -g @xrkseek/harness-cli@latest` |
-| **Previous formal line** | **0.3.11** | `MINOR=3` formal line; kept for comparison and rollback |
-| **Process numbers (archived)** | **0.4.0-rc.1…rc.4** | npm dist-tag `rc`; merged into 0.4.0, not for daily install |
-| **Previous preview line end** | **0.2.7** | `MINOR=2` preview line ended; archive only |
+| Line                           | Version             | Use                                                                                  |
+| ------------------------------ | ------------------- | ------------------------------------------------------------------------------------ |
+| **Current (@latest)**          | **0.4.0**           | Closing number of the `MINOR=4` preview line; `npm i -g @xrkseek/harness-cli@latest` |
+| **Previous formal line**       | **0.3.11**          | `MINOR=3` formal line; kept for comparison and rollback                              |
+| **Process numbers (archived)** | **0.4.0-rc.1…rc.4** | npm dist-tag `rc`; merged into 0.4.0, not for daily install                          |
+| **Previous preview line end**  | **0.2.7**           | `MINOR=2` preview line ended; archive only                                           |
 
 Formal **0.1.31** → **0.3.11** (via 0.3.0/0.3.3/0.3.5/0.3.7/0.3.8/0.3.9/0.3.10) → now **0.4.0**; preview **0.0.11** (withdrawn) → **0.2.7** → **0.4.0-rc.1…rc.4** → **0.4.0** (close-out). The previous preview baseline is no longer a recommended entry point.
 
@@ -161,7 +160,6 @@ npm **cannot** republish the same version; bump the patch if a bad pack ships. D
 
 Prereleases (`-rc.N` / `-beta.N`) are published by `release.mjs` with an automatic `--tag` derived from the leading prerelease identifier (`0.4.0-rc.4` → `rc`), and the GitHub Release is created with `--prerelease`; a process number therefore never lands on npm `@latest` nor takes the repo's Latest badge. **A closing number, like any plain version, carries no suffix ⇒ no `--tag`, no `--prerelease`**, so it lands on `@latest` and owns the Latest badge (0.4.0 takes exactly this path — no knob needed).
 
-The GitHub Releases page keeps **v0.4.0** (current), **v0.3.11** (previous formal line) and **v0.2.7** (previous-line archive).
-
+The GitHub Releases page keeps **v0.4.2** (current), **v0.3.11** (previous formal line) and **v0.2.7** (previous-line archive).
 
 Full handoff: [maintainer](./maintainer.md). Release notes index: [releases/](./releases/).
