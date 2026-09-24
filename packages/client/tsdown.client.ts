@@ -9,7 +9,7 @@
  * The virtual loader registers each real stylesheet as a watch dependency.
  */
 import { readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { basename, dirname, relative, resolve as resolvePath, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { UserConfig } from 'tsdown'
@@ -48,6 +48,14 @@ const VENDORED_LIBRARY = /^@xrkseek\/(cosmokit|schemastery)(\/|$)/
 
 /** Browser-safe context contracts inlined into client bundles (grammar/types only). */
 const CONTEXT_INLINE = /^@xrkseek\/xrk-(file-reference|session-reference)(\/|$)/
+
+/**
+ * Leaf subpaths of Host packages that are provably dependency-free, so a
+ * browser bundle can inline them without importing the Host runtime. Exact
+ * matches only — `@xrkseek/secrets` ROOT wires the OS keyring store and stays
+ * forbidden; `@xrkseek/secrets/redact` is pure string scrubbing (zero imports).
+ */
+const PURE_UTIL_INLINE = /^@xrkseek\/secrets\/redact$/
 
 /** Generated descriptor/codec contribution with no shared runtime identity. */
 const GENERATED_REMOTE = /^@xrkseek\/xrk-[a-z0-9]+(?:-[a-z0-9]+)*\/remote$/
@@ -113,9 +121,69 @@ function inlineSafeStubSourcePath(source: string): string | null {
   return null
 }
 
-/** Workspace sources for client bundles (context contracts + inline-safe stubs). */
+/**
+ * Resolve dependency-free leaf subpaths of Host packages to their workspace
+ * source, mirroring `inlineSafeStubSourcePath`: a client bundle must not depend
+ * on a Host package having been tsc-emitted yet, and its root (OS keyring) can
+ * never be browser-safe anyway.
+ */
+function pureUtilSourcePath(source: string): string | null {
+  if (!PURE_UTIL_INLINE.test(source)) return null
+  switch (source) {
+    case '@xrkseek/secrets/redact':
+      return resolvePath(REPOSITORY_ROOT, 'packages/util/secrets/src/redact.ts')
+    default:
+      return null
+  }
+}
+
+/** Workspace sources for client bundles (context contracts + inline-safe stubs + pure util leaves). */
 function workspaceClientSourcePath(source: string): string | null {
-  return contextSourcePath(source) ?? inlineSafeStubSourcePath(source)
+  return contextSourcePath(source) ?? inlineSafeStubSourcePath(source) ?? pureUtilSourcePath(source)
+}
+
+/**
+ * Lexical answers a bundler through two conditions that are both shims, not
+ * code: `node` is a top-level-await dev/prod split (unrepresentable in the CJS
+ * client artifact this preset emits) and `default` is a `module.exports =
+ * require(...)` body sitting inside an `.mjs` file. The statically-exporting
+ * ESM sits beside them under the `production` / `development` conditions —
+ * exactly the ones vite already prefers — so pin the browser bundle to the
+ * flavour NODE_ENV selects instead of letting the condition chain land on a
+ * shim. Bare specifiers only: a subpath import names the file itself.
+ */
+const LEXICAL_PACKAGE = /^(?:lexical|@lexical\/[a-z0-9-]+)$/
+
+/** Locate a dependency's package root through the importer's node_modules chain. */
+function packageRootFrom(importer: string, source: string): string | null {
+  let dir = dirname(importer)
+  for (;;) {
+    const manifest = resolvePath(dir, 'node_modules', source, 'package.json')
+    // Realpath, not the link: pnpm only chains the *declared* deps beside the
+    // importer, so resolving from the symlink hides each package's own
+    // dependencies (lexical's are @lexical/clipboard / -selection / ...). From
+    // the store directory they are all next to it, as node would see them.
+    if (existsSync(manifest)) return dirname(realpathSync(manifest))
+    const parent = dirname(dir)
+    if (parent === dir) return null
+    dir = parent
+  }
+}
+
+/** Resolve a Lexical specifier to its static ESM flavour, or null to defer. */
+async function lexicalBrowserFlavour(source: string, importer: string | undefined): Promise<string | null> {
+  if (!LEXICAL_PACKAGE.test(source) || !importer) return null
+  const root = packageRootFrom(importer, source)
+  if (!root) return null
+  const manifest = JSON.parse(
+    (await readFile(resolvePath(root, 'package.json'), 'utf8')).replace(/^\uFEFF/, ''),
+  ) as { exports?: Record<string, { import?: Record<string, string> }> }
+  const conditions = manifest.exports?.['.']?.import
+  if (!conditions) return null
+  const flavour = conditions[process.env.NODE_ENV === 'development' ? 'development' : 'production']
+  if (typeof flavour !== 'string') return null
+  const target = resolvePath(root, flavour)
+  return existsSync(target) ? target : null
 }
 
 /** Rebase a physical lib-relative source onto a browser URL that mirrors the repository directories. */
@@ -275,6 +343,11 @@ function clientConfig(id: string, entry: string): UserConfig {
         return workspaceClientSourcePath(source)
       },
     }, {
+      name: 'xrk-lexical-browser-flavour',
+      async resolveId(source: string, importer: string | undefined) {
+        return lexicalBrowserFlavour(source, importer)
+      },
+    }, {
       name: 'xrk-client-bundle-purity',
       // platform seed entries stay external, inline-safe wire layers inline,
       // and every other @xrkseek value import is a build error — a
@@ -286,6 +359,8 @@ function clientConfig(id: string, entry: string): UserConfig {
         if (CLIENT_EXTERNALS.includes(source)) return null // platform module: external wins
         if (VENDORED_LIBRARY.test(source)) return null // vendored library: inline, no shared identity
         if (INLINE_SAFE.test(source) || GENERATED_REMOTE.test(source) || CONTEXT_INLINE.test(source)) return null // wire / context contract: inline is the point
+        if (PURE_UTIL_INLINE.test(source)) return null // dependency-free leaf subpath of a Host package: inline is exact
+
         throw new Error(
           `client bundle purity: "${source}" is not a platform module (CLIENT_EXTERNALS), an inline-safe wire layer, or a generated /remote contribution — `
           + 'cross-plugin value imports are forbidden; collaborate through cordis services (type-only imports are erased and never reach this gate)',

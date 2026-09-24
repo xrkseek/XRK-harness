@@ -1,4 +1,6 @@
-import { redactSecrets } from '@xrkseek/secrets'
+// Pure string scrubber only: the package ROOT wires the OS keyring store and
+// must never reach a browser bundle (see the `xrk-client-bundle-purity` gate).
+import { redactSecrets } from '@xrkseek/secrets/redact'
 
 /**
  * Convert a durable failure into copy that is safe to expose in the GUI.
