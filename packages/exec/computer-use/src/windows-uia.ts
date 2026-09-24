@@ -4,6 +4,7 @@
  */
 import { spawn } from "node:child_process";
 import { buildCaptureResult, DEFAULT_MAX_ELEMENTS } from "./format.js";
+import { mapKeysToSendKeys } from "./keys.js";
 import {
   ComputerUseError,
   type ComputerUseActRequest,
@@ -183,6 +184,97 @@ $el.SetFocus()
 `.trim();
 }
 
+function keyScript(keysSendWait: string, runtimeId?: string): string {
+  const keysLit = JSON.stringify(keysSendWait);
+  const focusBlock = runtimeId
+    ? `
+$ids = @((${JSON.stringify(runtimeId)}) -split ',' | ForEach-Object { [int]$_ })
+$el = [System.Windows.Automation.AutomationElement]::AutomationElementFromRuntimeId($ids)
+if (-not $el) { throw 'element not found' }
+$el.SetFocus()
+Start-Sleep -Milliseconds 40
+`
+    : "";
+  return `
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName System.Windows.Forms
+$ErrorActionPreference = 'Stop'
+${focusBlock}[System.Windows.Forms.SendKeys]::SendWait(${keysLit})
+'keyed'
+`.trim();
+}
+
+function scrollScript(options: {
+  readonly runtimeId?: string;
+  readonly direction: "up" | "down" | "left" | "right";
+  readonly amount: number;
+}): string {
+  const amount = Math.max(1, Math.min(50, Math.floor(options.amount)));
+  const dir = options.direction;
+  const idLit = options.runtimeId
+    ? JSON.stringify(options.runtimeId)
+    : '""';
+  return `
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$ErrorActionPreference = 'Stop'
+$dir = ${JSON.stringify(dir)}
+$amount = ${amount}
+$runtimeId = ${idLit}
+$el = $null
+if ($runtimeId -ne '') {
+  $ids = @(($runtimeId) -split ',' | ForEach-Object { [int]$_ })
+  $el = [System.Windows.Automation.AutomationElement]::AutomationElementFromRuntimeId($ids)
+  if (-not $el) { throw 'element not found' }
+}
+if ($el) {
+  $scroll = $null
+  if ($el.TryGetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern, [ref]$scroll)) {
+    $horiz = [System.Windows.Automation.ScrollAmount]::NoAmount
+    $vert = [System.Windows.Automation.ScrollAmount]::NoAmount
+    $large = [System.Windows.Automation.ScrollAmount]::LargeIncrement
+    $largeNeg = [System.Windows.Automation.ScrollAmount]::LargeDecrement
+    $small = [System.Windows.Automation.ScrollAmount]::SmallIncrement
+    $smallNeg = [System.Windows.Automation.ScrollAmount]::SmallDecrement
+    for ($i = 0; $i -lt $amount; $i++) {
+      if ($dir -eq 'down') { $vert = $large }
+      elseif ($dir -eq 'up') { $vert = $largeNeg }
+      elseif ($dir -eq 'right') { $horiz = $small }
+      elseif ($dir -eq 'left') { $horiz = $smallNeg }
+      $scroll.Scroll($horiz, $vert)
+    }
+    'scrolled-pattern'
+    return
+  }
+  $el.SetFocus()
+  Start-Sleep -Milliseconds 40
+  $r = $el.Current.BoundingRectangle
+  $x = [int]($r.X + $r.Width / 2)
+  $y = [int]($r.Y + $r.Height / 2)
+  [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point($x, $y)
+}
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class XrkMouseWheel {
+  [DllImport("user32.dll")]
+  public static extern void mouse_event(uint dwFlags, uint dx, uint dy, int dwData, UIntPtr dwExtraInfo);
+  public const uint MOUSEEVENTF_WHEEL = 0x0800;
+  public const uint MOUSEEVENTF_HWHEEL = 0x01000;
+}
+"@
+$delta = 120 * $amount
+if ($dir -eq 'down' -or $dir -eq 'right') { $delta = -$delta }
+$flags = [XrkMouseWheel]::MOUSEEVENTF_WHEEL
+if ($dir -eq 'left' -or $dir -eq 'right') { $flags = [XrkMouseWheel]::MOUSEEVENTF_HWHEEL }
+[XrkMouseWheel]::mouse_event($flags, 0, 0, $delta, [UIntPtr]::Zero)
+'scrolled-wheel'
+`.trim();
+}
+
 function listWindowsScript(): string {
   return `
 Add-Type -AssemblyName UIAutomationClient
@@ -277,11 +369,76 @@ export function createWindowsUiAutomationProvider(
       request: ComputerUseActRequest,
       signal?: AbortSignal,
     ): Promise<ComputerUseActResult> {
-      if (request.action === "scroll" || request.action === "key") {
-        throw new ComputerUseError(
-          `${request.action} via windows-uia is not implemented yet; inject a custom ComputerUseService or use cua-driver later`,
-          "COMPUTER_USE_UNAVAILABLE",
+      if (request.action === "key") {
+        const keysRaw = String(request.keys ?? "").trim();
+        if (!keysRaw) {
+          throw new ComputerUseError("keys is required", "COMPUTER_USE_BAD_ARGS");
+        }
+        let sendKeys: string;
+        try {
+          sendKeys = mapKeysToSendKeys(keysRaw);
+        } catch (err) {
+          throw new ComputerUseError(
+            err instanceof Error ? err.message : String(err),
+            "COMPUTER_USE_BAD_ARGS",
+          );
+        }
+        const runtimeId =
+          request.element !== undefined
+            ? tokens.get(request.element)
+            : undefined;
+        if (request.element !== undefined && !runtimeId) {
+          throw new ComputerUseError(
+            `stale or unknown element [${request.element}] — capture again`,
+            "COMPUTER_USE_STALE_ELEMENT",
+          );
+        }
+        const out = await run(keyScript(sendKeys, runtimeId), signal);
+        return {
+          ok: true,
+          action: "key",
+          message: out || `pressed ${keysRaw}`,
+          delivery: "uia",
+        };
+      }
+      if (request.action === "scroll") {
+        const direction = request.direction ?? "down";
+        if (
+          direction !== "up" &&
+          direction !== "down" &&
+          direction !== "left" &&
+          direction !== "right"
+        ) {
+          throw new ComputerUseError(
+            "direction must be up|down|left|right",
+            "COMPUTER_USE_BAD_ARGS",
+          );
+        }
+        const amount = request.amount ?? 3;
+        const runtimeId =
+          request.element !== undefined
+            ? tokens.get(request.element)
+            : undefined;
+        if (request.element !== undefined && !runtimeId) {
+          throw new ComputerUseError(
+            `stale or unknown element [${request.element}] — capture again`,
+            "COMPUTER_USE_STALE_ELEMENT",
+          );
+        }
+        const out = await run(
+          scrollScript({
+            ...(runtimeId !== undefined ? { runtimeId } : {}),
+            direction,
+            amount,
+          }),
+          signal,
         );
+        return {
+          ok: true,
+          action: "scroll",
+          message: out || `scrolled ${direction}`,
+          delivery: "uia",
+        };
       }
       if (request.element === undefined) {
         throw new ComputerUseError(

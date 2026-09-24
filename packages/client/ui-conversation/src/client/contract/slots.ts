@@ -1,6 +1,6 @@
 /** Conversation slot declarations and their composed component props. */
 import type { ReactNode, RefObject } from 'react'
-import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import type {
   InjectFace, MaybeSnapshotSelectorHook, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
   SlotHookFactory, SnapshotSelectorHook,
@@ -68,17 +68,45 @@ export interface ComposerAttachmentsOwnerProps {
 }
 
 /** Historical image group handed to the optional attachment presentation plugin. */
+export type MessageImageOwner =
+  | {
+    readonly attachment: ImageAttachmentRef
+    readonly label?: string
+  }
+  | {
+    readonly preview: {
+      readonly url: string
+      readonly name?: string
+      readonly width?: number
+      readonly height?: number
+    }
+  }
+
+/** Historical image group handed to the optional attachment presentation plugin. */
 export interface MessageImagesOwnerProps {
-  /** Consecutive image blocks rendered as one gallery. */
-  images: readonly { readonly attachment: ImageAttachmentRef }[]
+  /** Consecutive image blocks rendered as one gallery (durable refs or local echo previews). */
+  images: readonly MessageImageOwner[]
   /** Session-authorized durable image loader. */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
   /** Message-side alignment. */
   align: 'start' | 'end'
+  /** Force every image into the compact message-attachment tile size. */
+  compact?: boolean
 }
 
 /** Slot-backed renderer used by chat nodes without importing an attachment implementation. */
 export type RenderMessageImages = (owner: Omit<MessageImagesOwnerProps, 'loadImage'>) => ReactNode
+
+/** Historical file group handed to the optional attachment presentation plugin. */
+export interface MessageFilesOwnerProps {
+  /** Durable file blocks rendered as one card group. */
+  files: readonly { readonly attachment: FileAttachmentRef }[]
+  /** Message-side alignment. */
+  align: 'start' | 'end'
+}
+
+/** Slot-backed file-card renderer used by chat nodes without importing attachment UI. */
+export type RenderMessageFiles = (owner: MessageFilesOwnerProps) => ReactNode
 
 declare module '@xrkseek/client-ui-slots' {
   interface SlotMap {
@@ -145,6 +173,8 @@ declare module '@xrkseek/client-ui-slots' {
     }
     /** Optional renderer for one consecutive group of durable message images. */
     'conversation.message.images': { kind: 'single'; scope: 'session'; owner: MessageImagesOwnerProps }
+    /** Optional renderer for durable message file cards (non-image attachments). */
+    'conversation.message.files': { kind: 'single'; scope: 'session'; owner: MessageFilesOwnerProps }
     /**
      * The chat view's per-command row hole: keyed dispatch on the command
      * name (`command/run.name`; a run-less cross-window node has none and
@@ -444,10 +474,17 @@ export interface ChatNodeOwnerProps {
   openFile: (path: string) => void
   inspectCall: (callId: CallId) => void
   forkAt: (seq: number) => void
+  /**
+   * Restore workspace files from the nearest checkpoint at or before this
+   * Face seq (`/rollback seq:N`). Distinct from {@link forkAt} (session lineage).
+   */
+  restoreAt: (seq: number) => void
   /** Session-authorized durable image loader (tool image cards + message galleries). */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
   /** Render a historical image group through the attachment slot. */
   renderMessageImages: RenderMessageImages
+  /** Render a historical file-card group through the attachment slot. */
+  renderMessageFiles: RenderMessageFiles
   fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined
 }
 
@@ -733,6 +770,21 @@ export class PendingApproval {
     return this.wait.payload.reason
   }
 
+  /** UX category when the host stamped one (network · escalation · tool). */
+  get category(): 'tool' | 'network' | 'escalation' | undefined {
+    return this.wait.payload.category
+  }
+
+  /** Network host when category is network. */
+  get networkHost(): string | undefined {
+    return this.wait.payload.networkHost
+  }
+
+  /** Network protocol when category is network. */
+  get networkProtocol(): string | undefined {
+    return this.wait.payload.networkProtocol
+  }
+
   /** The paired tool call's id when the ask names one (command-line lookup key), forwarded from the carrier payload. */
   get callId(): string | undefined {
     return this.wait.payload.callId
@@ -811,6 +863,11 @@ export interface ChatViewInjected {
   /** Fork through the completed turn ending at the eligible message `seq`, then open the child. */
   forkAt: (seq: number) => void
   /**
+   * Restore workspace files from the nearest checkpoint at or before `seq`
+   * (Face slash `/rollback seq:N`). Does not fork the session.
+   */
+  restoreAt: (seq: number) => void
+  /**
    * Prose file-mention vocabulary for one closing message, from the optional
    * {@link ChatFileMentions} service (resolved lazily per call, so composing
    * the provider in or out takes effect live). Undefined when the service is
@@ -822,7 +879,7 @@ export interface ChatViewInjected {
 /** Full chat-view component props: runtime & its Tool/command/tail render shares & store & injected & locale seat. */
 export type ChatViewSlotProps =
   PropsRuntime<'conversation.view'>
-  & PropsRenderSlots<'conversation.chat.node' | 'conversation.message.images'>
+  & PropsRenderSlots<'conversation.chat.node' | 'conversation.message.images' | 'conversation.message.files'>
   & PropsStore<ChatStore> & ChatViewInjected & PropsLocale<'conversation'>
 
 /** Full props of the attachment plugin's composer entry. */
@@ -831,6 +888,9 @@ export type ComposerAttachmentsProps =
 
 /** Full props of the attachment plugin's message-gallery entry. */
 export type MessageImagesProps = PropsRuntime<'conversation.message.images'> & PropsLocale<'conversation'>
+
+/** Full props of the attachment plugin's message-file entry. */
+export type MessageFilesProps = PropsRuntime<'conversation.message.files'> & PropsLocale<'conversation'>
 
 /**
  * Injected share of the details slot: the panel is otherwise a pure reader of

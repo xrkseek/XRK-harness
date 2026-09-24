@@ -4,6 +4,7 @@ import { SlotRegistry } from '@xrkseek/client-runtime/client'
 import { apply as applyHost } from '../src/index.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { ComposerAttachments } from '../src/client/ComposerAttachments.tsx'
+import { MessageFiles } from '../src/client/MessageFiles.tsx'
 import { MessageImages } from '../src/client/MessageImages.tsx'
 
 async function bench() {
@@ -14,6 +15,7 @@ async function bench() {
     children: {
       'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
       'conversation.message.images': { kind: 'single', scope: 'session' },
+      'conversation.message.files': { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
   const fiber = ctx.plugin({ inject: [...inject], apply })
@@ -37,10 +39,15 @@ describe('attachment plugin', () => {
       locale: 'conversation',
       component: MessageImages,
     }])
+    expect(ctx.slots.entries('conversation.message.files')).toMatchObject([{
+      locale: 'conversation',
+      component: MessageFiles,
+    }])
 
     await fiber.dispose()
 
     expect(ctx.slots.entries('conversation.input.attachments')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.message.images')).toHaveLength(0)
+    expect(ctx.slots.entries('conversation.message.files')).toHaveLength(0)
   })
 })

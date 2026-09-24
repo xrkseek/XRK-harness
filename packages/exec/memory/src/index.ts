@@ -10,7 +10,23 @@ export {
   type CuratedMemoryStore,
   type CuratedMemoryTarget,
   type CuratedMemoryWriteResult,
+  type MaybeAsync,
 } from "./store.js";
+export type {
+  MemoryProvider,
+  MemoryProviderKind,
+} from "./provider.js";
+export {
+  createHttpMemoryProvider,
+  HttpMemoryProviderError,
+  probeHttpMemoryProvider,
+  type HttpMemoryProviderOptions,
+} from "./http.js";
+export {
+  createFileMemoryProvider,
+  resolveMemoryProvider,
+  type ResolveMemoryProviderOptions,
+} from "./resolve.js";
 export {
   CURATED_MEMORY_PROMPT_TEXT,
   createCuratedMemoryTools,
@@ -18,6 +34,9 @@ export {
 export {
   extractReusableNotes,
   writeReusableNotesAfterTurn,
+  consolidateCuratedMemoryPhase1,
+  noteCoveredByEntries,
   type TurnNoteInput,
   type TurnNoteWriteResult,
+  type SessionEndConsolidateInput,
 } from "./write-path.js";

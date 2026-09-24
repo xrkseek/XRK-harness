@@ -54,7 +54,10 @@ export type {
 } from './contract/settings-scope.ts'
 export type { Session } from './sessions/session.ts'
 export { JUMP_PAGE_MESSAGES } from './sessions/session.ts'
-export type { ISession, ProjectionsFace, SessionFace } from './contract/session.ts'
+export type {
+  BeginSubmissionInput, ISession, PendingSubmissionRetirement, ProjectionsFace, SessionFace,
+  SubmissionHandle,
+} from './contract/session.ts'
 export type { AgentContext, ISessions } from './contract/sessions.ts'
 export type { IWorkspaces } from './contract/workspaces.ts'
 export type {
@@ -77,7 +80,9 @@ export type {
   AssistantTiming, ChatLocationNodeIndex, ChatNodeStore, ChatSnapshot,
   ChatTurnNavigationIndex, CommandNode, CompactionSummaryNode, ComposerPhase,
   ContextMessageNode, ConversationNode, ConversationSnapshot, ModelRetryNode, QueuedMessage,
-  LegacyConversationSlice, PartialAssistant, RunningToolCall,
+  LegacyConversationSlice, PartialAssistant, PendingSubmission, PendingSubmissionAttachment,
+  PendingSubmissionFileAttachment, PendingSubmissionImage, PendingSubmissionImageAttachment,
+  PendingSubmissionPlacement, RunningToolCall, SessionRequestId,
   SteeringMessageNode, TodoItem, ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode,
   TurnNavigationItem, UnknownSurfaceNode, UserMessageNode,
 } from './sessions/conversation.ts'

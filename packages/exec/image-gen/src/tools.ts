@@ -20,18 +20,25 @@ const SIZES: readonly ImageGenSize[] = [
 
 export function imageGenUnavailableMessage(
   env: NodeJS.ProcessEnv = process.env,
+  product?: { readonly mode?: string },
 ): string {
-  const flag = String(env.XRK_IMAGE_GEN ?? "").trim().toLowerCase();
+  const envRaw = String(env.XRK_IMAGE_GEN ?? "").trim();
+  const flag = envRaw !== ""
+    ? envRaw.toLowerCase()
+    : product?.mode === "openai"
+      ? "1"
+      : "";
   if (!flag) {
     return (
-      "Error: image generation is not enabled. Set XRK_IMAGE_GEN=memory (CI/demo) or " +
-      "XRK_IMAGE_GEN=1 with OPENAI_API_KEY / XRK_IMAGE_GEN_OPENAI_KEY. See docs/image-gen.md."
+      "Error: image generation is not enabled. Use Settings → Plugins → Image gen, or set " +
+      "XRK_IMAGE_GEN=memory (CI/demo) / XRK_IMAGE_GEN=1 with OPENAI_API_KEY / XRK_IMAGE_GEN_OPENAI_KEY. " +
+      "See docs/image-gen.md."
     );
   }
-  if (flag === "1") {
+  if (flag === "1" || flag === "openai") {
     return (
-      "Error: XRK_IMAGE_GEN=1 but no API key. Set OPENAI_API_KEY or XRK_IMAGE_GEN_OPENAI_KEY " +
-      "(optional XRK_IMAGE_GEN_BASE_URL / XRK_IMAGE_GEN_MODEL)."
+      "Error: image gen is enabled but no API key. Set Credentials XRK_IMAGE_GEN_OPENAI_KEY " +
+      "(or OPENAI_API_KEY); optional base URL / model via Settings or env."
     );
   }
   return (
@@ -42,6 +49,7 @@ export function imageGenUnavailableMessage(
 export interface CreateImageGenToolsOptions {
   readonly service?: ImageGenService;
   readonly env?: NodeJS.ProcessEnv;
+  readonly product?: { readonly mode?: string };
   /** When set, persist generated images and return attachment ids. */
   readonly attachments?: AttachmentStore;
 }
@@ -71,7 +79,10 @@ function parseSize(raw: unknown): ImageGenSize | undefined {
 export function createImageGenTools(
   options: CreateImageGenToolsOptions = {},
 ): ToolDefinition[] {
-  const missing = imageGenUnavailableMessage(options.env ?? process.env);
+  const missing = imageGenUnavailableMessage(
+    options.env ?? process.env,
+    options.product,
+  );
   const service = options.service;
   const attachments = options.attachments;
 

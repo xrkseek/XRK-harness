@@ -6,7 +6,9 @@
 
 ## 启用
 
-Host spawn 时默认启动 ticker（`~/.xrk/cron/jobs.json`）。`XRK_CRON=0` 关闭。
+**产品路径**：Settings → Plugins → **Cron**（Face ns `cron`：`enabled` 开/关）。保存后 Host 热启停 ticker，并 `invalidateAgents` 以挂/卸 `cronjob` 工具。非空 `XRK_CRON` 为 CI 旁路（`0` 强制关，其它强制开）。
+
+Host spawn 时默认启动 ticker（`~/.xrk/cron/jobs.json`），除非 Settings 关闭或 env 旁路。
 
 模型工具 `cronjob`（action：`create` · `list` · `pause` · `resume` · `run` · `remove`）在 Host 注入 scheduler 时登记。Cron 自己开的 agent 回合**不**再挂 `cronjob`，避免递归调度。
 
@@ -37,8 +39,7 @@ Host spawn 时默认启动 ticker（`~/.xrk/cron/jobs.json`）。`XRK_CRON=0` �
 
 | 变量 | 含义 |
 |------|------|
-| `XRK_CRON` | `0` 关闭 Host ticker |
-| （无） | 默认开启 |
+| `XRK_CRON` | CI 旁路 Settings：`0` 强制关 · 非空其它值强制开 — 产品路径用 Settings → Plugins → Cron |
 
 ---
 
@@ -50,7 +51,9 @@ Host spawn 时默认启动 ticker（`~/.xrk/cron/jobs.json`）。`XRK_CRON=0` �
 
 ## Enable
 
-Host spawn starts the ticker by default (`~/.xrk/cron/jobs.json`). Set `XRK_CRON=0` to disable.
+**Product path**: Settings → Plugins → **Cron** (Face ns `cron`: `enabled` on/off). After save, Host hot-starts/stops the ticker and `invalidateAgents` to mount/unmount the `cronjob` tool. Non-empty `XRK_CRON` is the CI bypass (`0` force off, any other force on).
+
+Host spawn starts the ticker by default (`~/.xrk/cron/jobs.json`) unless Settings disables it or env bypasses.
 
 The model tool `cronjob` (actions: `create` · `list` · `pause` · `resume` · `run` · `remove`) registers when the Host injects the scheduler. Agent turns opened by cron do **not** mount `cronjob`, to avoid recursive scheduling.
 
@@ -81,5 +84,4 @@ The model tool `cronjob` (actions: `create` · `list` · `pause` · `resume` · 
 
 | Variable | Meaning |
 |------|------|
-| `XRK_CRON` | `0` disables the Host ticker |
-| (unset) | Enabled by default |
+| `XRK_CRON` | CI bypass over Settings: `0` force off · any other non-empty force on — product path: Settings → Plugins → Cron |

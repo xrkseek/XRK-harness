@@ -181,24 +181,70 @@ export class ConversationController extends Service implements IConversation {
       throw new Error('conversation.sendSession: one or more draft attachments are no longer available')
     }
     const uploads = this.fileUploads.getSnapshot()
-    const content = await Promise.all(attachments.map(async (attachment) => {
+    const pendingAttachments = attachments.map((attachment) => {
       if (attachment.kind === 'image') {
-        return { type: 'image' as const, ...await this.encodeImage(attachment.file) }
-      }
-      const upload = uploads[attachment.id]
-      if (upload === undefined || upload.status !== 'ready') {
-        throw new Error('conversation.sendSession: one or more files have not finished uploading')
+        return {
+          type: 'image' as const,
+          value: {
+            previewUrl: attachment.previewUrl,
+            ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
+          },
+        }
       }
       return {
         type: 'file' as const,
-        data: upload.data,
-        ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
-        ...(attachment.file.type === '' ? {} : { mediaType: attachment.file.type }),
+        value: {
+          attachmentId: `echo:${attachment.id}`,
+          name: attachment.file.name || 'file',
+          bytes: attachment.file.size,
+          ...(attachment.file.type === '' ? {} : { mediaType: attachment.file.type }),
+        },
       }
-    }))
-    if (signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
-    const parts = [...content, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
-    const result = await session.prompt(parts, mode)
+    })
+    const serializeParts = async (): Promise<Parameters<SessionFace['prompt']>[0]> => {
+      const content = await Promise.all(attachments.map(async (attachment) => {
+        if (attachment.kind === 'image') {
+          return { type: 'image' as const, ...await this.encodeImage(attachment.file) }
+        }
+        const upload = uploads[attachment.id]
+        if (upload === undefined || upload.status !== 'ready') {
+          throw new Error('conversation.sendSession: one or more files have not finished uploading')
+        }
+        return {
+          type: 'file' as const,
+          data: upload.data,
+          ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
+          ...(attachment.file.type === '' ? {} : { mediaType: attachment.file.type }),
+        }
+      }))
+      return [...content, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
+    }
+    if (session.getSnapshot().subagent !== null) {
+      const parts = await serializeParts()
+      if (signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
+      const result = await session.prompt(parts, mode, signal)
+      if (!result.ok) return { kind: 'error' }
+      this.releaseDraftImages(attachments)
+      return { kind: 'success' }
+    }
+    const submission = session.beginSubmission({
+      mode,
+      text,
+      attachments: pendingAttachments,
+    })
+    let parts: Parameters<SessionFace['prompt']>[0]
+    try {
+      await nextPaint()
+      parts = await serializeParts()
+    } catch (error) {
+      submission.abandon()
+      throw error
+    }
+    if (signal?.aborted) {
+      submission.abandon()
+      throw new DOMException('The operation was aborted.', 'AbortError')
+    }
+    const result = await session.prompt(parts, mode, signal, submission.requestId)
     if (!result.ok) return { kind: 'error' }
     this.releaseDraftImages(attachments)
     return { kind: 'success' }
@@ -535,5 +581,13 @@ function readFileAsBase64(
       resolve(bytesToBase64(new Uint8Array(buffer)))
     }
     reader.readAsArrayBuffer(file)
+  })
+}
+
+/** Yield one paint so the submission echo can render before serialization starts. */
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { resolve() })
+    else setTimeout(resolve, 0)
   })
 }

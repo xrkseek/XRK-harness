@@ -14,6 +14,7 @@ import { handleNoemaRpc, handleNoemaRpcAsync } from "../src/dsh-compat/noema.js"
 import {
   embedTextLocal,
   fetchExternalMemorySearch,
+  readExternalMemoryEmbedConfig,
   searchMemoryEmbeddings,
   searchMemoryEmbeddingsAsync,
 } from "../src/dsh-compat/memory-embeddings.js";
@@ -264,6 +265,48 @@ describe("memory-embeddings bridge", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("searchMemoryEmbeddingsAsync prefers product when env URL unset", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        hits: [{ id: "p1", text: "product hit", score: 0.88 }],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const { hits, mode } = await searchMemoryEmbeddingsAsync(
+        [],
+        "needle",
+        8,
+        {},
+        undefined,
+        {
+          url: "http://127.0.0.1:6334",
+          token: "secret",
+          collection: "memories",
+        },
+      );
+      expect(mode).toBe("sidecar");
+      expect(hits[0]?.id).toBe("p1");
+      const [reqUrl, init] = fetchMock.mock.calls[0] ?? [];
+      expect(String(reqUrl)).toContain("127.0.0.1:6334/search");
+      expect((init as RequestInit).headers).toMatchObject({
+        authorization: "Bearer secret",
+      });
+      const body = JSON.parse(String((init as RequestInit).body));
+      expect(body.collection).toBe("memories");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("readExternalMemoryEmbedConfig lets env URL bypass product", () => {
+    const resolved = readExternalMemoryEmbedConfig(
+      { XRK_MEMORY_EMBED_URL: "http://env.test" },
+      { url: "http://product.test", collection: "ignored" },
+    );
+    expect(resolved?.url).toBe("http://env.test");
   });
 
   it("fetchExternalMemorySearch returns null on upstream error", async () => {

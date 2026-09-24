@@ -43,7 +43,11 @@ import {
   type FaceJobsSource,
   type JobView,
 } from "./adapt/job-view.js";
-import { formatSubagentCompletionNotice } from "./adapt/subagent-notice.js";
+import {
+  formatSubagentCompletionNotice,
+  lastAssistantBodyText,
+} from "./adapt/subagent-notice.js";
+import { validateOutputAgainstSchema } from "./agent-team-output.js";
 import { toQueueItems } from "./queue.js";
 import type {
   FaceProcessPlugin,
@@ -57,6 +61,7 @@ import {
   FaceCredentialVault,
   FaceSettingsNamespaces,
   defaultUiSettings,
+  hydrateCredentialsFromSecretStore,
   hydrateFaceHostSettings,
   type FaceHostPublicSettings,
   type FaceCordisHostBridge,
@@ -74,14 +79,33 @@ import {
   questionResolvedFrame,
 } from "./questions.js";
 import { bindSettingsTools } from "./settings-agent-tools.js";
+import { bindSessionQueryTools } from "./session-query-tools.js";
+import { bindGoalTools } from "./goal-tools.js";
+import { bindProposeSkillTool } from "./propose-skill.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import { hydrateWorkspaceRegistry } from "./workspace-store.js";
 import { FaceSubagentRegistry } from "./subagent-registry.js";
+import { ExternalAgentSessionRegistry } from "./external-agent-runtime.js";
 import { AgentTeamGraph, agentTeamGraphPath } from "./agent-team-graph.js";
+import {
+  AgentTeamTaskBoard,
+  agentTeamTasksPath,
+} from "./agent-team-tasks.js";
+import {
+  ManagedWorktreeManager,
+  managedWorktreesPath,
+} from "./managed-worktree.js";
 import { FaceMessageFeedbackStore } from "./message-feedback.js";
 import { FaceGoalStore } from "./goal-store.js";
 import { FaceWireIdMaps } from "./adapt/wire-ids.js";
 import { configureCostMeterHome } from "./cost-meter-store.js";
+import { resolveXrkHome } from "@xrkseek/server-config";
+import {
+  createPermissionRequestGate,
+  createShellLifecycleHooks,
+  defaultShellHookPaths,
+  loadShellHooksConfig,
+} from "@xrkseek/server-loader";
 import {
   applyCostMeterUsageSample,
   usageSampleFromMessage,
@@ -124,12 +148,19 @@ export interface CreateFaceRuntimeOptions {
   /** Product-shell boot entries listed in inventory. */
   readonly webPlugins?: readonly FaceWebPlugin[];
   readonly invalidateAgent?: (sessionId: string) => void | Promise<void>;
+  /**
+   * Host Phase1 / teardown hook when a session leaves the live set
+   * (archive). Optional — Host may also run consolidate on stop.
+   */
+  readonly onSessionFinalize?: (sessionId: string) => void | Promise<void>;
   /** Public host runtime snapshot for settings.get (no secrets). */
   readonly hostPublic?: FaceHostPublicSettings;
   /** Cordis panel `runHostHalf` → dsh-compat `host.mjs` apply. */
   readonly cordisHostBridge?: FaceCordisHostBridge;
   /** Initial Host API key from env (vault may override). */
   readonly bootstrapApiKey?: string;
+  /** Optional SecretStore overlay (OS keyring / memory). */
+  readonly secretStore?: import("@xrkseek/secrets").SecretStore;
   readonly uiSettings?: FaceUiSettings;
   readonly policy?: PolicyEngine;
   /**
@@ -246,10 +277,48 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const agentTeams = new AgentTeamGraph(
     agentTeamGraphPath(options.subagentPersistPath),
   );
+  const agentTeamTasks = new AgentTeamTaskBoard(
+    agentTeamTasksPath(options.subagentPersistPath),
+  );
+  const managedWorktrees = new ManagedWorktreeManager(
+    managedWorktreesPath(options.subagentPersistPath),
+  );
+  const productHome = options.productDir?.trim() || resolveXrkHome();
+  const shellHooksConfig = loadShellHooksConfig(
+    defaultShellHookPaths(options.workspaceRoot, productHome),
+  );
+  const shellLifecycle = createShellLifecycleHooks({
+    config: shellHooksConfig,
+    cwd: () => options.workspaceRoot,
+  });
+  const permissionRequestGate =
+    (shellHooksConfig.PermissionRequest?.length ?? 0) > 0
+      ? createPermissionRequestGate({
+          commands: shellHooksConfig.PermissionRequest ?? [],
+          cwd: () => options.workspaceRoot,
+        })
+      : undefined;
   const subagents = new FaceSubagentRegistry(options.subagentPersistPath, {
-    onAttach: (link) => agentTeams.recordDelegation(link),
+    onAttach: (link) => {
+      agentTeams.recordDelegation(link);
+      shellLifecycle.fire("SubagentStart", {
+        session_id: link.parentSessionId,
+        agent_id: link.childSessionId,
+        agent_type: link.label || "general-purpose",
+        mode: link.mode,
+      });
+    },
+    onStop: (link) => {
+      shellLifecycle.fire("SubagentStop", {
+        session_id: link.parentSessionId,
+        agent_id: link.childSessionId,
+        agent_type: link.label || "general-purpose",
+        mode: link.mode,
+      });
+    },
   });
   agentTeams.rebuildDelegations(subagents.entries());
+  const externalAgents = new ExternalAgentSessionRegistry();
   const messageFeedback = new FaceMessageFeedbackStore();
   const goals = new FaceGoalStore(options.goalPersistPath);
   const wireIds = new FaceWireIdMaps();
@@ -399,6 +468,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     if (suppressSubagentCompletion.has(childSessionId)) return;
     if (reportedSubagentIdle.has(childSessionId)) return;
     reportedSubagentIdle.add(childSessionId);
+    subagents.notifyStop(link);
     const epoch = subagentIdleEpoch.get(childSessionId) ?? 0;
     const parentId = link.parentSessionId;
     void resolveAgent(parentId)
@@ -418,6 +488,23 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         );
         noticeAdmitIds.add(receipt.admitId);
         subagentIdleFailCount.delete(childSessionId);
+        const preview = lastAssistantBodyText(events);
+        const schema = agentTeamTasks.outputSchemaForChild(childSessionId);
+        let schemaValid: boolean | undefined;
+        let schemaErrors: readonly string[] | undefined;
+        if (schema) {
+          const checked = validateOutputAgainstSchema(preview, schema);
+          schemaValid = checked.valid;
+          schemaErrors = checked.errors;
+        }
+        agentTeamTasks.completeByChild(childSessionId, {
+          ok: true,
+          ...(preview ? { preview } : {}),
+          ...(schemaValid !== undefined ? { schemaValid } : {}),
+          ...(schemaErrors && schemaErrors.length > 0
+            ? { schemaErrors }
+            : {}),
+        });
         if (followup || !idle) options.drain.wake(parentId);
       })
       .catch(() => {
@@ -479,6 +566,19 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         questions.ask(sessionId, qs, signal),
       );
       bindSettingsTools(agent.tools, runtimeBox.current!);
+      bindSessionQueryTools(agent.tools, {
+        runtime: runtimeBox.current!,
+        parentSessionId: sessionId,
+      });
+      bindGoalTools(agent.tools, {
+        runtime: runtimeBox.current!,
+        sessionId,
+      });
+      bindProposeSkillTool(agent.tools, {
+        workspaceRoot: options.workspaceRoot,
+        sessionId,
+        ask: (qs, signal) => questions.ask(sessionId, qs, signal),
+      });
     }
     bindAgentJobs(sessionId, agent);
     return agent;
@@ -621,7 +721,13 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       runtimeBox.current?.publishQueue(id);
     }
     if (frozen.type === "turn/end") {
-      runtimeBox.current?.goals.onTurnEnd(id);
+      const reasonKind =
+        frozen.reason &&
+        typeof frozen.reason === "object" &&
+        typeof (frozen.reason as { kind?: unknown }).kind === "string"
+          ? (frozen.reason as { kind: string }).kind
+          : undefined;
+      runtimeBox.current?.goals.onTurnEnd(id, reasonKind);
     }
     return frozen;
   };
@@ -656,6 +762,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       bus.publishMux(approvalResolvedFrame(sessionId, approvalId, outcome));
     },
   });
+  if (permissionRequestGate) {
+    approvals.setPermissionRequestGate(permissionRequestGate);
+  }
 
   const runtime: FaceRuntime = {
     store,
@@ -691,6 +800,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       ? { ...options.uiSettings }
       : defaultUiSettings(),
     credentials: new FaceCredentialVault(),
+    ...(options.secretStore !== undefined
+      ? { secretStore: options.secretStore }
+      : {}),
     settingsNamespaces: new FaceSettingsNamespaces(),
     ...(options.hostPublic !== undefined
       ? { hostPublic: options.hostPublic }
@@ -737,7 +849,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     sessionImageScanned,
     workspaces,
     subagents,
+    externalAgents,
     agentTeams,
+    agentTeamTasks,
+    managedWorktrees,
     messageFeedback,
     ...(options.feedbackSlicesDir !== undefined
       ? { feedbackSlicesDir: options.feedbackSlicesDir }
@@ -803,6 +918,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       ? { defaultAgentPreset: options.defaultAgentPreset }
       : {}),
     ...(invalidateAgent ? { invalidateAgent } : {}),
+    ...(options.onSessionFinalize
+      ? { onSessionFinalize: options.onSessionFinalize }
+      : {}),
     ...(options.hasPtyActivity
       ? { hasPtyActivity: options.hasPtyActivity }
       : {}),
@@ -823,6 +941,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     options.drain.wake(sessionId);
   }
   hydrateFaceSettingsDocument(runtime);
+  void hydrateCredentialsFromSecretStore(runtime);
   hydrateFaceHostSettings(runtime);
   hydrateWorkspaceRegistry(runtime, workspaces);
   return runtime;

@@ -91,6 +91,7 @@ describe("createBrowserTools", () => {
     const missed = await vision.execute({});
     expect(missed.isError).toBe(true);
     expect(String(missed.content)).toContain("no graphical browser");
+    expect(missed.error?.code).toBe("WEB_BROWSER_NO_GRAPHICS");
     expect(String(missed.content)).not.toContain("@e1");
   });
 });

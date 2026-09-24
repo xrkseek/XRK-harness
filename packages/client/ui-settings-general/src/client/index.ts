@@ -25,6 +25,9 @@ import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
 import { GeneralSection } from './GeneralSection.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
+import { SidebarAgentPushRows } from './SidebarAgentPushRows.tsx'
+import type { SidebarAgentPushInjected } from './SidebarAgentPushRows.tsx'
+import { SidebarAgentPushStore } from './sidebar-agent-push-store.ts'
 import { refreshDocumentIfLoaded, SettingsDocumentStore } from './settings-document-store.ts'
 import { en, zh, type SettingsKey } from './locales.ts'
 
@@ -37,6 +40,8 @@ export type {
 export type { SettingsDocumentActionInjected, SettingsDocumentActionProps } from './SettingsDocumentAction.tsx'
 export type { SettingsDocumentState } from './settings-document-store.ts'
 export { SettingsDocumentStore } from './settings-document-store.ts'
+export type { SidebarAgentPushInjected, SidebarAgentPushRowsProps } from './SidebarAgentPushRows.tsx'
+export type { SidebarAgentPushState } from './sidebar-agent-push-store.ts'
 export type { SettingsKey } from './locales.ts'
 
 declare module '@xrkseek/client-ui-slots' {
@@ -78,6 +83,13 @@ export function apply(ctx: ClientContext): void {
       const useSnapshot = bindSnapshotSelector(documentController.store)
       return (): SettingsDocumentActionInjected => ({ controller: documentController, useSnapshot })
     })()
+
+  const sidebarPush = new SidebarAgentPushStore()
+  const sidebarPushInjected = (): SidebarAgentPushInjected => ({
+    hooks: { sidebarAgentPush: sidebarPush.store },
+    load: () => sidebarPush.load(),
+    set: (key, value) => sidebarPush.set(key, value),
+  })
   ctx.effect(() => ctx.on('connection/reset', () => {
     refreshDocumentIfLoaded(documentController)
   }), 'ui-settings-general: metadata invalidations')
@@ -188,4 +200,13 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     children: { 'settings.general.item': { kind: 'list', scope: 'root' } },
   }, GeneralSection))
+
+  // Host sidebar prefs.json gates (not Face settings.yaml).
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'sidebar-agent-push',
+    order: 35,
+    locale: NS,
+    inject: sidebarPushInjected,
+  }, SidebarAgentPushRows))
 }

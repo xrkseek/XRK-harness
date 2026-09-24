@@ -2824,6 +2824,15 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         }
         return ok(request, { archivedSessionIds: [...archivedSessionIds] })
       },
+      unarchiveSession: (request) => {
+        const { sessionId } = request.payload
+        const index = archivedSessionIds.indexOf(sessionId)
+        if (index >= 0) {
+          archivedSessionIds.splice(index, 1)
+          emitHost({ type: 'host/archived-sessions-changed', archivedSessionIds: [...archivedSessionIds] })
+        }
+        return ok(request, { archivedSessionIds: [...archivedSessionIds] })
+      },
     },
     agentPresets: {
       // Both trusts appear, because a surface must present a locally authored
@@ -3073,6 +3082,27 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         return ok(request, {})
       },
     },
+    mcpOauth: {
+      status: request => ok(request, {
+        tokenDir: '/tmp/mcp-tokens',
+        items: (request.payload.servers ?? []).map(server => ({
+          server,
+          tokenFile: `/tmp/mcp-tokens/${server}.json`,
+          loggedIn: false,
+          loginPhase: 'idle' as const,
+        })),
+      }),
+      login: request => ok(request, {
+        server: request.payload.server,
+        status: 'pending' as const,
+        userCode: 'ABCD-EFGH',
+        verificationUri: 'https://example.test/device',
+      }),
+      logout: request => ok(request, {
+        server: request.payload.server,
+        status: 'absent' as const,
+      }),
+    },
     llm: {
       providers: request => ok(request, {
         providers: [
@@ -3255,6 +3285,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.insertBefore': return this.api.workspace.insertBefore(request)
       case 'workspace.insertSessionBefore': return this.api.workspace.insertSessionBefore(request)
       case 'workspace.archiveSession': return this.api.workspace.archiveSession(request)
+      case 'workspace.unarchiveSession': return this.api.workspace.unarchiveSession(request)
       case 'skill.list': return this.api.skills.list(request)
       case 'agentPreset.list': return this.api.agentPresets.list(request)
       case 'agentPreset.select': return this.api.agentPresets.select(request)
@@ -3276,6 +3307,9 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'credentials.describe': return this.api.credentials.describe(request)
       case 'credentials.set': return this.api.credentials.set(request)
       case 'credentials.unset': return this.api.credentials.unset(request)
+      case 'mcp.oauth.status': return this.api.mcpOauth.status(request)
+      case 'mcp.oauth.login': return this.api.mcpOauth.login(request)
+      case 'mcp.oauth.logout': return this.api.mcpOauth.logout(request)
       case 'llm.providers': return this.api.llm.providers(request)
       case 'llm.models': return this.api.llm.models(request)
       case 'llm.discoverModels': return this.api.llm.discoverModels(request, signal)

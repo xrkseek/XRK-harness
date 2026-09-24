@@ -242,8 +242,12 @@ export function toFaceWireSessionEvent(
           // unique per row — never bare turnId alone.
           id: event.messageId ?? `${event.turnId}:${seq}`,
           content: wireContentBlocks(event.content),
-          source: event.source ?? { kind: "user" },
-          ...(event.rpcId ? { rpcId: event.rpcId } : {}),
+          source: {
+            ...(event.source && typeof event.source === "object"
+              ? event.source
+              : { kind: "user" as const }),
+            ...(event.rpcId ? { rpcId: event.rpcId } : {}),
+          },
         },
       };
     case "assistant/chunk":

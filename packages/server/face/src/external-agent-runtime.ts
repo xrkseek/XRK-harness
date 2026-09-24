@@ -1,19 +1,28 @@
 /**
- * One-shot external agent runtimes for the subagent tool.
+ * One-shot and continuable external agent runtimes for the subagent tool.
  * In-process delegation stays the default; these kinds spawn a child process.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
+import type { SessionStore } from "@xrkseek/core-session";
 
 export type ExternalAgentKind = "acp" | "app-server" | "claude-code";
 
 export type ExternalSpawn = typeof spawn;
+
+/** Face `external-agent` product (Settings → Plugins). */
+export interface ExternalAgentProductConfig {
+  readonly acpAgent?: string;
+  readonly codexAppServer?: string;
+  readonly claudeCode?: string;
+}
 
 export interface RunExternalAgentOptions {
   readonly kind: ExternalAgentKind;
   readonly cwd: string;
   readonly prompt: string;
   readonly env?: NodeJS.ProcessEnv;
+  readonly product?: ExternalAgentProductConfig;
   readonly signal?: AbortSignal;
   readonly spawnImpl?: ExternalSpawn;
 }
@@ -44,12 +53,16 @@ export function resolveExternalAgentLaunch(
   kind: ExternalAgentKind,
   env: NodeJS.ProcessEnv,
   prompt: string,
+  product?: ExternalAgentProductConfig,
 ): { command: string; args: string[]; protocol: "acp" | "app-server" | "print" } {
   if (kind === "acp") {
-    const raw = String(env.XRK_ACP_AGENT ?? "").trim();
+    const envRaw = String(env.XRK_ACP_AGENT ?? "").trim();
+    const raw =
+      envRaw ||
+      (typeof product?.acpAgent === "string" ? product.acpAgent.trim() : "");
     if (!raw) {
       throw new ExternalAgentError(
-        "ACP runtime requires XRK_ACP_AGENT (command to spawn, e.g. xrkh acp)",
+        "ACP runtime requires Settings external-agent.acpAgent or XRK_ACP_AGENT (e.g. xrkh acp)",
         "EXTERNAL_AGENT_CONFIG",
       );
     }
@@ -57,16 +70,43 @@ export function resolveExternalAgentLaunch(
     return { ...spec, protocol: "acp" };
   }
   if (kind === "app-server") {
-    const raw = String(env.XRK_CODEX_APP_SERVER ?? "codex app-server").trim();
+    const envRaw = String(env.XRK_CODEX_APP_SERVER ?? "").trim();
+    const productRaw =
+      typeof product?.codexAppServer === "string"
+        ? product.codexAppServer.trim()
+        : "";
+    const raw = envRaw || productRaw || "codex app-server";
     const spec = splitCommand(raw);
     return { ...spec, protocol: "app-server" };
   }
-  const raw = String(env.XRK_CLAUDE_CODE ?? "claude").trim();
+  const envRaw = String(env.XRK_CLAUDE_CODE ?? "").trim();
+  const productRaw =
+    typeof product?.claudeCode === "string" ? product.claudeCode.trim() : "";
+  const raw = envRaw || productRaw || "claude";
   const spec = splitCommand(raw);
   return {
     command: spec.command,
     args: [...spec.args, "-p", prompt],
     protocol: "print",
+  };
+}
+
+/** Normalize Face `external-agent` section into launch product fields. */
+export function parseExternalAgentProduct(
+  raw: unknown,
+): ExternalAgentProductConfig | undefined {
+  if (raw === null || raw === undefined) return undefined;
+  if (typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const acpAgent = typeof o.acpAgent === "string" ? o.acpAgent.trim() : "";
+  const codexAppServer =
+    typeof o.codexAppServer === "string" ? o.codexAppServer.trim() : "";
+  const claudeCode = typeof o.claudeCode === "string" ? o.claudeCode.trim() : "";
+  if (!acpAgent && !codexAppServer && !claudeCode) return undefined;
+  return {
+    ...(acpAgent ? { acpAgent } : {}),
+    ...(codexAppServer ? { codexAppServer } : {}),
+    ...(claudeCode ? { claudeCode } : {}),
   };
 }
 
@@ -85,14 +125,15 @@ function writeLine(
   child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", ...frame })}\n`);
 }
 
-async function speakJsonRpc(
-  child: ChildProcessWithoutNullStreams,
-  run: (io: {
-    request: (method: string, params: unknown) => Promise<unknown>;
-    notify: (method: string, params?: unknown) => void;
-    onNotification: (fn: (msg: RpcLine) => void) => void;
-  }) => Promise<string>,
-): Promise<string> {
+interface JsonRpcIo {
+  readonly request: (method: string, params: unknown) => Promise<unknown>;
+  readonly notify: (method: string, params?: unknown) => void;
+  readonly onNotification: (fn: (msg: RpcLine) => void) => void;
+  readonly close: () => void;
+}
+
+/** Keep stdin open for multi-turn ACP / app-server sessions. */
+function openJsonRpcIo(child: ChildProcessWithoutNullStreams): JsonRpcIo {
   let nextId = 1;
   const pending = new Map<
     number | string,
@@ -100,6 +141,7 @@ async function speakJsonRpc(
   >();
   const notes: Array<(msg: RpcLine) => void> = [];
   const rl = createInterface({ input: child.stdout, crlfDelay: Infinity });
+  let closed = false;
   rl.on("line", (line) => {
     const trimmed = line.trim();
     if (!trimmed) return;
@@ -132,33 +174,55 @@ async function speakJsonRpc(
     for (const fn of notes) fn(msg);
   });
 
-  const request = (method: string, params: unknown): Promise<unknown> => {
-    const id = nextId++;
-    const promise = new Promise<unknown>((resolve, reject) => {
-      pending.set(id, { resolve, reject });
-    });
-    writeLine(child, { id, method, params });
-    return promise;
+  return {
+    request(method, params) {
+      if (closed) {
+        return Promise.reject(new ExternalAgentError("external rpc closed"));
+      }
+      const id = nextId++;
+      const promise = new Promise<unknown>((resolve, reject) => {
+        pending.set(id, { resolve, reject });
+      });
+      writeLine(child, { id, method, params });
+      return promise;
+    },
+    notify(method, params) {
+      if (closed) return;
+      writeLine(child, { method, ...(params !== undefined ? { params } : {}) });
+    },
+    onNotification(fn) {
+      notes.push(fn);
+    },
+    close() {
+      if (closed) return;
+      closed = true;
+      rl.close();
+      for (const waiter of pending.values()) {
+        waiter.reject(new ExternalAgentError("external rpc closed"));
+      }
+      pending.clear();
+      try {
+        child.stdin.end();
+      } catch {
+        /* ignore */
+      }
+    },
   };
-  const notify = (method: string, params?: unknown): void => {
-    writeLine(child, { method, ...(params !== undefined ? { params } : {}) });
-  };
+}
 
+async function speakJsonRpc(
+  child: ChildProcessWithoutNullStreams,
+  run: (io: {
+    request: (method: string, params: unknown) => Promise<unknown>;
+    notify: (method: string, params?: unknown) => void;
+    onNotification: (fn: (msg: RpcLine) => void) => void;
+  }) => Promise<string>,
+): Promise<string> {
+  const io = openJsonRpcIo(child);
   try {
-    return await run({
-      request,
-      notify,
-      onNotification: (fn) => {
-        notes.push(fn);
-      },
-    });
+    return await run(io);
   } finally {
-    rl.close();
-    try {
-      child.stdin.end();
-    } catch {
-      /* ignore */
-    }
+    io.close();
   }
 }
 
@@ -305,6 +369,7 @@ export async function runExternalAgentTurn(
     options.kind,
     env,
     options.prompt,
+    options.product,
   );
   const spawnImpl = options.spawnImpl ?? spawn;
   let child: ChildProcessWithoutNullStreams;
@@ -364,4 +429,492 @@ export function parseExternalAgentKind(
     return s;
   }
   return undefined;
+}
+
+/** ACP / app-server keep a live process; claude-code print is one-shot only. */
+export type ContinuableExternalKind = "acp" | "app-server";
+
+export function supportsExternalContinuable(
+  kind: ExternalAgentKind,
+): kind is ContinuableExternalKind {
+  return kind === "acp" || kind === "app-server";
+}
+
+export interface ExternalAgentLiveSession {
+  readonly kind: ContinuableExternalKind;
+  readonly remoteId: string;
+  isBusy(): boolean;
+  lastText(): string | undefined;
+  prompt(text: string, signal?: AbortSignal): Promise<string>;
+  interrupt(): Promise<void>;
+  dispose(): void;
+}
+
+export interface OpenExternalLiveOptions {
+  readonly kind: ContinuableExternalKind;
+  readonly cwd: string;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly product?: ExternalAgentProductConfig;
+  readonly spawnImpl?: ExternalSpawn;
+}
+
+export async function openExternalAgentLiveSession(
+  options: OpenExternalLiveOptions,
+): Promise<ExternalAgentLiveSession> {
+  const env = options.env ?? process.env;
+  const launch = resolveExternalAgentLaunch(
+    options.kind,
+    env,
+    /* prompt unused for rpc protocols */ "",
+    options.product,
+  );
+  if (launch.protocol === "print") {
+    throw new ExternalAgentError(
+      "claude-code print protocol cannot stay continuable",
+      "EXTERNAL_AGENT_CONFIG",
+    );
+  }
+  const spawnImpl = options.spawnImpl ?? spawn;
+  let child: ChildProcessWithoutNullStreams;
+  try {
+    child = spawnImpl(launch.command, launch.args, {
+      cwd: options.cwd,
+      env: { ...env },
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    });
+  } catch (err) {
+    throw new ExternalAgentError(
+      err instanceof Error ? err.message : String(err),
+      "EXTERNAL_AGENT_SPAWN",
+    );
+  }
+  child.on("error", () => {
+    /* surfaced on close / request fail */
+  });
+
+  const io = openJsonRpcIo(child);
+  let disposed = false;
+  let busy = false;
+  let last = "";
+  let currentTurnId: string | undefined;
+  let interruptResolve: (() => void) | undefined;
+
+  const killChild = (): void => {
+    if (child.exitCode === null && !child.killed) {
+      try {
+        child.kill();
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  const dispose = (): void => {
+    if (disposed) return;
+    disposed = true;
+    interruptResolve?.();
+    interruptResolve = undefined;
+    io.close();
+    killChild();
+  };
+
+  child.on("close", () => {
+    disposed = true;
+    interruptResolve?.();
+    interruptResolve = undefined;
+  });
+
+  if (options.kind === "acp") {
+    const chunks: string[] = [];
+    io.onNotification((msg) => {
+      if (msg.method !== "session/update") return;
+      const params = msg.params as {
+        update?: { content?: { text?: string } };
+      };
+      const text = params?.update?.content?.text;
+      if (text) chunks.push(text);
+    });
+    await io.request("initialize", {
+      protocolVersion: 1,
+      clientInfo: { name: "xrk-harness", version: "0.0.0" },
+    });
+    const created = (await io.request("session/new", { cwd: options.cwd })) as {
+      sessionId?: string;
+    };
+    if (!created?.sessionId) {
+      dispose();
+      throw new ExternalAgentError("ACP session/new missing sessionId");
+    }
+    const remoteId = created.sessionId;
+    return {
+      kind: "acp",
+      remoteId,
+      isBusy: () => busy,
+      lastText: () => (last ? last : undefined),
+      async prompt(text, signal) {
+        if (disposed) {
+          throw new ExternalAgentError("ACP session disposed");
+        }
+        if (busy) {
+          throw new ExternalAgentError("ACP session busy");
+        }
+        busy = true;
+        chunks.length = 0;
+        const onAbort = (): void => {
+          killChild();
+        };
+        signal?.addEventListener("abort", onAbort, { once: true });
+        try {
+          await io.request("session/prompt", {
+            sessionId: remoteId,
+            prompt: [{ type: "text", text }],
+          });
+          const out = chunks.join("").trim();
+          if (!out) {
+            throw new ExternalAgentError("ACP prompt returned no text");
+          }
+          last = out;
+          return out;
+        } finally {
+          signal?.removeEventListener("abort", onAbort);
+          busy = false;
+        }
+      },
+      async interrupt() {
+        // ACP has no portable cancel; tear down the process.
+        dispose();
+      },
+      dispose,
+    };
+  }
+
+  // app-server
+  const messages: string[] = [];
+  let resolveDone: ((v: { status?: string }) => void) | undefined;
+  io.onNotification((msg) => {
+    if (msg.method === "item/completed") {
+      const params = msg.params as {
+        item?: { type?: string; text?: string; phase?: string | null };
+      };
+      const item = params?.item;
+      if (item?.type === "agentMessage" && typeof item.text === "string") {
+        if (item.phase === "final_answer" || item.phase == null) {
+          messages.push(item.text);
+        }
+      }
+    }
+    if (msg.method === "turn/completed") {
+      const params = msg.params as { turn?: { status?: string; id?: string } };
+      const status = params?.turn?.status;
+      resolveDone?.(status !== undefined ? { status } : {});
+      resolveDone = undefined;
+      currentTurnId = undefined;
+    }
+  });
+  await io.request("initialize", {
+    clientInfo: { name: "xrk-harness", version: "0.0.0" },
+    capabilities: { experimentalApi: false },
+  });
+  io.notify("initialized", {});
+  const thread = (await io.request("thread/start", {
+    cwd: options.cwd,
+    ephemeral: false,
+    approvalPolicy: "never",
+    sandbox: "workspace-write",
+  })) as { thread?: { id?: string } };
+  const threadId = thread?.thread?.id;
+  if (!threadId) {
+    dispose();
+    throw new ExternalAgentError("app-server thread/start missing thread.id");
+  }
+  return {
+    kind: "app-server",
+    remoteId: threadId,
+    isBusy: () => busy,
+    lastText: () => (last ? last : undefined),
+    async prompt(text, signal) {
+      if (disposed) {
+        throw new ExternalAgentError("app-server session disposed");
+      }
+      if (busy) {
+        throw new ExternalAgentError("app-server session busy");
+      }
+      busy = true;
+      messages.length = 0;
+      const done = new Promise<{ status?: string }>((resolve) => {
+        resolveDone = resolve;
+      });
+      const onAbort = (): void => {
+        void io
+          .request("turn/interrupt", {
+            threadId,
+            ...(currentTurnId ? { turnId: currentTurnId } : {}),
+          })
+          .catch(() => killChild());
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      try {
+        const started = (await io.request("turn/start", {
+          threadId,
+          input: [{ type: "text", text, text_elements: [] }],
+        })) as { turn?: { id?: string } };
+        currentTurnId = started?.turn?.id;
+        const terminal = await done;
+        if (terminal.status && terminal.status !== "completed") {
+          throw new ExternalAgentError(
+            `app-server turn ended with status ${terminal.status}`,
+          );
+        }
+        const out = messages.join("\n").trim();
+        if (!out) {
+          throw new ExternalAgentError("app-server turn completed without text");
+        }
+        last = out;
+        return out;
+      } finally {
+        signal?.removeEventListener("abort", onAbort);
+        busy = false;
+        currentTurnId = undefined;
+        resolveDone = undefined;
+      }
+    },
+    async interrupt() {
+      if (!busy) return;
+      try {
+        await io.request("turn/interrupt", {
+          threadId,
+          ...(currentTurnId ? { turnId: currentTurnId } : {}),
+        });
+      } catch {
+        killChild();
+      }
+    },
+    dispose,
+  };
+}
+
+/** Face child session id → live ACP / app-server handle. */
+export class ExternalAgentSessionRegistry {
+  private readonly map = new Map<string, ExternalAgentLiveSession>();
+
+  has(faceSessionId: string): boolean {
+    return this.map.has(faceSessionId);
+  }
+
+  get(faceSessionId: string): ExternalAgentLiveSession | undefined {
+    return this.map.get(faceSessionId);
+  }
+
+  isBusy(faceSessionId: string): boolean {
+    return this.map.get(faceSessionId)?.isBusy() === true;
+  }
+
+  kind(faceSessionId: string): ContinuableExternalKind | undefined {
+    return this.map.get(faceSessionId)?.kind;
+  }
+
+  attach(faceSessionId: string, session: ExternalAgentLiveSession): void {
+    const prev = this.map.get(faceSessionId);
+    if (prev && prev !== session) prev.dispose();
+    this.map.set(faceSessionId, session);
+  }
+
+  detach(faceSessionId: string): void {
+    const hit = this.map.get(faceSessionId);
+    if (!hit) return;
+    this.map.delete(faceSessionId);
+    hit.dispose();
+  }
+
+  disposeAll(): void {
+    for (const id of [...this.map.keys()]) this.detach(id);
+  }
+}
+
+/** Narrow host surface for external continuable (avoids FaceRuntime import cycle). */
+export interface ExternalAgentHost {
+  readonly store: SessionStore;
+  readonly drain: { isActive(sessionId: string): boolean };
+  readonly externalAgents: ExternalAgentSessionRegistry;
+  onSessionDrainStatus(sessionId: string, running: boolean): void;
+  suppressOwnedSubagentCompletion(childSessionId: string): void;
+}
+
+/** True when Face drain or an external live session is mid-turn. */
+export function isChildSessionActive(
+  runtime: ExternalAgentHost,
+  sessionId: string,
+): boolean {
+  return (
+    runtime.drain.isActive(sessionId) ||
+    runtime.externalAgents.isBusy(sessionId)
+  );
+}
+
+function recordExternalTurn(
+  store: SessionStore,
+  sessionId: string,
+  userText: string,
+  assistantText: string,
+): void {
+  const ts = Date.now();
+  const turnId = `ext-${ts}`;
+  store.append(sessionId, { type: "turn/start", ts, turnId });
+  store.append(sessionId, {
+    type: "user/message",
+    ts: ts + 1,
+    turnId,
+    content: userText,
+  });
+  store.append(sessionId, {
+    type: "assistant/message",
+    ts: ts + 2,
+    turnId,
+    stepId: "1",
+    content: assistantText,
+  });
+  store.append(sessionId, {
+    type: "turn/end",
+    ts: ts + 3,
+    turnId,
+    reason: { kind: "completed" },
+  });
+}
+
+export interface StartExternalContinuableOptions {
+  readonly runtime: ExternalAgentHost;
+  readonly faceSessionId: string;
+  readonly kind: ContinuableExternalKind;
+  readonly cwd: string;
+  readonly prompt: string;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly product?: ExternalAgentProductConfig;
+  readonly spawnImpl?: ExternalSpawn;
+  readonly signal?: AbortSignal;
+  /** When true, return after spawn + first turn kickoff (do not await answer). */
+  readonly background: boolean;
+}
+
+/**
+ * Open ACP / app-server live session, attach to Face child id, run first prompt.
+ * Background: kicks the turn and returns; completion steers parent via drain hooks.
+ */
+export async function startExternalContinuable(
+  options: StartExternalContinuableOptions,
+): Promise<{ readonly text?: string; readonly kind: ContinuableExternalKind }> {
+  if (!supportsExternalContinuable(options.kind)) {
+    throw new ExternalAgentError(
+      `runtime ${options.kind} does not support continuable sessions`,
+      "EXTERNAL_AGENT_CONFIG",
+    );
+  }
+  const live = await openExternalAgentLiveSession({
+    kind: options.kind,
+    cwd: options.cwd,
+    ...(options.env ? { env: options.env } : {}),
+    ...(options.product ? { product: options.product } : {}),
+    ...(options.spawnImpl ? { spawnImpl: options.spawnImpl } : {}),
+  });
+  options.runtime.externalAgents.attach(options.faceSessionId, live);
+
+  const runTurn = async (): Promise<string> => {
+    options.runtime.onSessionDrainStatus(options.faceSessionId, true);
+    try {
+      const text = await live.prompt(options.prompt, options.signal);
+      recordExternalTurn(
+        options.runtime.store,
+        options.faceSessionId,
+        options.prompt,
+        text,
+      );
+      return text;
+    } finally {
+      options.runtime.onSessionDrainStatus(options.faceSessionId, false);
+    }
+  };
+
+  if (options.background) {
+    void runTurn().catch(() => {
+      /* parent sees failure via empty history / wait_agent; process may still live */
+    });
+    return { kind: options.kind };
+  }
+  const text = await runTurn();
+  return { text, kind: options.kind };
+}
+
+/**
+ * Follow-up prompt on an attached external live session (send_message / followup_task).
+ */
+export async function promptExternalContinuable(
+  runtime: ExternalAgentHost,
+  faceSessionId: string,
+  message: string,
+  opts?: { readonly signal?: AbortSignal; readonly steer?: boolean },
+): Promise<string> {
+  const live = runtime.externalAgents.get(faceSessionId);
+  if (!live) {
+    throw new ExternalAgentError(
+      `no external live session for ${faceSessionId}`,
+      "EXTERNAL_AGENT_MISSING",
+    );
+  }
+  if (live.isBusy()) {
+    if (!opts?.steer) {
+      throw new ExternalAgentError(
+        `${faceSessionId} is busy; use wait_agent or delivery=steer`,
+        "EXTERNAL_AGENT_BUSY",
+      );
+    }
+    // Soft-steer: wait for the in-flight turn (ACP has no portable cancel).
+    // Hard cancel remains interrupt_agent → dispose.
+    const deadline = Date.now() + 5 * 60 * 1000;
+    while (live.isBusy() && Date.now() < deadline) {
+      if (opts.signal?.aborted) {
+        throw new DOMException("aborted", "AbortError");
+      }
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    if (live.isBusy()) {
+      throw new ExternalAgentError(
+        `${faceSessionId} still busy after steer wait`,
+        "EXTERNAL_AGENT_BUSY",
+      );
+    }
+  }
+  runtime.onSessionDrainStatus(faceSessionId, true);
+  try {
+    const text = await live.prompt(message, opts?.signal);
+    recordExternalTurn(runtime.store, faceSessionId, message, text);
+    return text;
+  } finally {
+    runtime.onSessionDrainStatus(faceSessionId, false);
+  }
+}
+
+export async function interruptExternalContinuable(
+  runtime: ExternalAgentHost,
+  faceSessionId: string,
+  opts?: { readonly dispose?: boolean },
+): Promise<void> {
+  const live = runtime.externalAgents.get(faceSessionId);
+  if (!live) return;
+  runtime.suppressOwnedSubagentCompletion(faceSessionId);
+  await live.interrupt();
+  if (opts?.dispose !== false) {
+    runtime.externalAgents.detach(faceSessionId);
+  }
+}
+
+export function contentPartsToText(content: unknown): string {
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return "";
+  const parts: string[] = [];
+  for (const part of content) {
+    if (!part || typeof part !== "object") continue;
+    const p = part as { type?: string; text?: unknown };
+    if (p.type === "text" && typeof p.text === "string") parts.push(p.text);
+  }
+  return parts.join("\n").trim();
 }

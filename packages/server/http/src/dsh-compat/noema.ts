@@ -1,4 +1,4 @@
-﻿/**
+/**
  * dsh-noema — file-backed status, memory index, runner config.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -11,6 +11,7 @@ import {
   searchMemoryEmbeddings,
   searchMemoryEmbeddingsAsync,
   syncEmbeddedVectorRow,
+  type MemoryEmbedProduct,
 } from "./memory-embeddings.js";
 import { searchEmbeddedVectorStore } from "./embedded-vector-store.js";
 import { honestReady } from "./honest-envelope.js";
@@ -19,6 +20,8 @@ import { parseJsonBody } from "./underlying/http-kit.js";
 
 export interface NoemaOptions {
   readonly xrkHome?: string;
+  /** Face `memory-embed` product (+ Credentials token). Env URL still wins. */
+  readonly product?: MemoryEmbedProduct;
 }
 
 interface NoemaState {
@@ -201,7 +204,7 @@ export function handleNoemaRpc(
         query,
         hits: embeddedHits,
         mode: "embedded-host",
-        ...memoryEmbeddingsStatus(options.xrkHome),
+        ...memoryEmbeddingsStatus(options.xrkHome, process.env, options.product),
       };
     }
     const hits = searchMemoryEmbeddings(memories.memories, query, limit);
@@ -210,7 +213,7 @@ export function handleNoemaRpc(
       query,
       hits,
       mode: "local-embedding-bridge",
-      ...memoryEmbeddingsStatus(options.xrkHome),
+      ...memoryEmbeddingsStatus(options.xrkHome, process.env, options.product),
     };
   }
 
@@ -219,7 +222,7 @@ export function handleNoemaRpc(
     endpoint === "embeddings.status" ||
     endpoint === "embedding.describe"
   ) {
-    return memoryEmbeddingsStatus(options.xrkHome);
+    return memoryEmbeddingsStatus(options.xrkHome, process.env, options.product);
   }
 
   if (endpoint === "runner.start" || endpoint === "start") {
@@ -287,13 +290,14 @@ export async function handleNoemaRpcAsync(
       limit,
       process.env,
       options.xrkHome,
+      options.product,
     );
     return {
       ok: true,
       query,
       hits,
       mode,
-      ...memoryEmbeddingsStatus(options.xrkHome),
+      ...memoryEmbeddingsStatus(options.xrkHome, process.env, options.product),
     };
   }
   return handleNoemaRpc(endpoint, payload, options);

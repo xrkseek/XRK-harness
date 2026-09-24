@@ -2,11 +2,33 @@ import { describe, expect, it } from "vitest";
 import {
   boundCodeOutput,
   clampCodeTimeout,
+  createRegistryCodeToolBridge,
   createRunCodeTool,
   createWorkerCodeRuntime,
   DEFAULT_CODE_MAX_TIMEOUT_MS,
   DEFAULT_CODE_TIMEOUT_MS,
+  runCodeWithTools,
 } from "../src/index.js";
+import {
+  createToolRegistry,
+  type ToolDefinition,
+} from "@xrkseek/core-tools";
+
+function echoTool(): ToolDefinition {
+  return {
+    name: "echo_tool",
+    description: "echo",
+    parameters: {
+      type: "object",
+      properties: { text: { type: "string" } },
+      required: ["text"],
+    },
+    async execute(args) {
+      const text = String((args as { text?: string }).text ?? "");
+      return { content: `echo:${text}` };
+    },
+  };
+}
 
 describe("code-runtime", () => {
   it("runs a snippet and captures console.log", async () => {
@@ -99,5 +121,43 @@ describe("code-runtime", () => {
       /maxOutputBytes/,
     );
     expect(() => createWorkerCodeRuntime({ timeoutMs: 0 })).toThrow(/timeoutMs/);
+  });
+
+  it("runCodeWithTools awaits nested tools.name(args)", async () => {
+    const registry = createToolRegistry();
+    registry.register(echoTool());
+    const bridge = createRegistryCodeToolBridge(registry);
+    const out = await runCodeWithTools(
+      `const v = await tools.echo_tool({ text: "ping" });
+       console.log(v);
+       return v;`,
+      bridge,
+      undefined,
+      { defaultTimeoutMs: 3000, maxTimeoutMs: 5000 },
+    );
+    expect(out.error).toBeUndefined();
+    expect(out.stdout).toContain("echo:ping");
+  });
+
+  it("bridged run_code forbids nested run_code and unknown tools", async () => {
+    const registry = createToolRegistry();
+    registry.register(echoTool());
+    const bridge = createRegistryCodeToolBridge(registry);
+    const tool = createRunCodeTool(
+      createWorkerCodeRuntime({ timeoutMs: 3000 }),
+      bridge,
+    );
+    expect(tool.description).toMatch(/await tools/);
+    const nested = await tool.execute({
+      source: `await tools.run_code({ source: "return 1" })`,
+    });
+    expect(nested.isError).toBe(true);
+    expect(String(nested.content)).toMatch(/unknown tool|not allowed|failed/i);
+
+    const unknown = await tool.execute({
+      source: `await tools.no_such_tool({})`,
+    });
+    expect(unknown.isError).toBe(true);
+    expect(String(unknown.content)).toMatch(/unknown tool/);
   });
 });

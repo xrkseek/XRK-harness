@@ -50,7 +50,9 @@ describe('EnterBehaviorRow', () => {
   it('explains the busy-only scope and shows Queue by default', () => {
     mount()
     expect(screen.getByText('Send behavior while busy')).toBeDefined()
-    expect(screen.getByText('What Enter and the Send button do while the agent is running; Cmd/Ctrl+Enter uses the other behavior')).toBeDefined()
+    expect(screen.getByText(
+      'While the agent is running: Queue = answer after this turn; Steer = inject at the next tool/step boundary (not Stop). Enter and Send use the selected behavior; Cmd/Ctrl+Enter uses the other',
+    )).toBeDefined()
     expect(screen.getByRole('button', { name: /Queue/ }).getAttribute('aria-expanded')).toBe('false')
   })
 

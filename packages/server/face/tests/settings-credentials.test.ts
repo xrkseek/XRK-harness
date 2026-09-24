@@ -3,10 +3,15 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
+import {
+  createMemorySecretStore,
+  loadSlotFromSecretStore,
+} from "@xrkseek/secrets";
 import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import {
   effectiveHostApiKey,
+  hydrateCredentialsFromSecretStore,
   listCredentialSlots,
 } from "../src/settings-credentials.js";
 import type { FaceDrain } from "../src/context.js";
@@ -29,6 +34,7 @@ function runtime(opts?: {
   openNativePath?: (target: string) => Promise<void>;
   plugins?: Parameters<typeof createFaceRuntime>[0]["plugins"];
   syncMcpServers?: Parameters<typeof createFaceRuntime>[0]["syncMcpServers"];
+  secretStore?: Parameters<typeof createFaceRuntime>[0]["secretStore"];
 }) {
   const store = createMemorySessionStore();
   const root = opts?.productDir ?? path.join(tmpdir(), `xrk-face-test-${Date.now()}-${Math.random()}`);
@@ -54,6 +60,7 @@ function runtime(opts?: {
       ? { bootstrapApiKey: opts.bootstrapApiKey }
       : {}),
     ...(opts?.plugins !== undefined ? { plugins: opts.plugins } : {}),
+    ...(opts?.secretStore !== undefined ? { secretStore: opts.secretStore } : {}),
     ...(opts?.hostPublic
       ? {
           hostPublic: {
@@ -229,6 +236,129 @@ describe("Face settings U2", () => {
     expect(v.namespaces.some((n) => n.ns === "llm-deepseek")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "agent-presets")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "mcp")).toBe(true);
+    expect(v.namespaces.some((n) => n.ns === "session-telemetry")).toBe(true);
+    const tel = v.namespaces.find((n) => n.ns === "session-telemetry") as {
+      ns: string;
+      value: { mode: string };
+      applies: string;
+    };
+    expect(tel.value.mode).toBe("off");
+    expect(tel.applies).toBe("restart");
+    expect(v.namespaces.some((n) => n.ns === "sandbox")).toBe(true);
+    const sandbox = v.namespaces.find((n) => n.ns === "sandbox") as {
+      ns: string;
+      value: { backend: string; dockerNetwork: string; windowsMode: string };
+      applies: string;
+    };
+    expect(sandbox.value.backend).toBe("workspace");
+    expect(sandbox.value.dockerNetwork).toBe("none");
+    expect(sandbox.value.windowsMode).toBe("workspace-write");
+    expect(sandbox.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "computer-use")).toBe(true);
+    const computerUse = v.namespaces.find((n) => n.ns === "computer-use") as {
+      ns: string;
+      value: { mode: string };
+      applies: string;
+    };
+    expect(computerUse.value.mode).toBe("off");
+    expect(computerUse.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "cron")).toBe(true);
+    const cron = v.namespaces.find((n) => n.ns === "cron") as {
+      ns: string;
+      value: { enabled: boolean };
+      applies: string;
+    };
+    expect(cron.value.enabled).toBe(true);
+    expect(cron.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "browser")).toBe(true);
+    const browser = v.namespaces.find((n) => n.ns === "browser") as {
+      ns: string;
+      value: { mode: string; cdpUrl: string };
+      applies: string;
+    };
+    expect(browser.value.mode).toBe("http");
+    expect(browser.value.cdpUrl).toBe("");
+    expect(browser.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "voice")).toBe(true);
+    const voice = v.namespaces.find((n) => n.ns === "voice") as {
+      ns: string;
+      value: { mode: string };
+      applies: string;
+    };
+    expect(voice.value.mode).toBe("off");
+    expect(voice.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "image-gen")).toBe(true);
+    const imageGen = v.namespaces.find((n) => n.ns === "image-gen") as {
+      ns: string;
+      value: { mode: string };
+      applies: string;
+    };
+    expect(imageGen.value.mode).toBe("off");
+    expect(imageGen.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "video-gen")).toBe(true);
+    const videoGen = v.namespaces.find((n) => n.ns === "video-gen") as {
+      ns: string;
+      value: { mode: string };
+      applies: string;
+    };
+    expect(videoGen.value.mode).toBe("off");
+    expect(videoGen.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "curated-memory")).toBe(true);
+    const curatedMemory = v.namespaces.find((n) => n.ns === "curated-memory") as {
+      ns: string;
+      value: { enabled: boolean };
+      applies: string;
+    };
+    expect(curatedMemory.value.enabled).toBe(true);
+    expect(curatedMemory.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "auto-review")).toBe(true);
+    const autoReview = v.namespaces.find((n) => n.ns === "auto-review") as {
+      ns: string;
+      value: { classifierUrl: string };
+      applies: string;
+    };
+    expect(autoReview.value.classifierUrl).toBe("");
+    expect(autoReview.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "memory-embed")).toBe(true);
+    const memoryEmbed = v.namespaces.find((n) => n.ns === "memory-embed") as {
+      ns: string;
+      value: { url: string; collection: string };
+      applies: string;
+    };
+    expect(memoryEmbed.value).toEqual({ url: "", collection: "" });
+    expect(memoryEmbed.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "external-agent")).toBe(true);
+    const externalAgent = v.namespaces.find((n) => n.ns === "external-agent") as {
+      ns: string;
+      value: { acpAgent: string; codexAppServer: string; claudeCode: string };
+      applies: string;
+    };
+    expect(externalAgent.value).toEqual({
+      acpAgent: "",
+      codexAppServer: "",
+      claudeCode: "",
+    });
+    expect(externalAgent.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "ssh-remote")).toBe(true);
+    const sshRemote = v.namespaces.find((n) => n.ns === "ssh-remote") as {
+      ns: string;
+      value: {
+        host: string;
+        workspace: string;
+        user: string;
+        port: number;
+        keyPath: string;
+      };
+      applies: string;
+    };
+    expect(sshRemote.value).toEqual({
+      host: "",
+      workspace: "",
+      user: "",
+      port: 22,
+      keyPath: "",
+    });
+    expect(sshRemote.applies).toBe("restart");
 
     const permission = v.namespaces.find((n) => n.ns === "permission") as {
       ns: string;
@@ -800,6 +930,24 @@ describe("Face credentials U2", () => {
     const host = listCredentialSlots(rt, {}).find((s) => s.id === "host.apiKey");
     expect(host?.configured).toBe(true);
     expect(host?.source).toBe("env");
+  });
+
+  it("dual-writes credentials.set into SecretStore and hydrates empty vault", async () => {
+    const secretStore = createMemorySecretStore();
+    const rt = runtime({ bootstrapApiKey: "", secretStore });
+    const set = await dispatchFaceMethod(rt, "credentials.set", "ss1", {
+      slotId: "host.apiKey",
+      value: "sk-from-keyring-test",
+    });
+    expect(set.result.ok).toBe(true);
+    expect(await loadSlotFromSecretStore(secretStore, "host.apiKey")).toBe(
+      "sk-from-keyring-test",
+    );
+
+    const empty = runtime({ bootstrapApiKey: "", secretStore });
+    expect(effectiveHostApiKey(empty)).toBe("");
+    await hydrateCredentialsFromSecretStore(empty);
+    expect(effectiveHostApiKey(empty)).toBe("sk-from-keyring-test");
   });
 
   it("DSH credentials.describe + set by ref/env", async () => {

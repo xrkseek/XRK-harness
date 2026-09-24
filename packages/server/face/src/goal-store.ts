@@ -8,6 +8,10 @@ import { admitPrompt, listPendingAdmits, readSessionEvents } from "@xrkseek/core
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import { tryWriteJsonSidecar } from "./json-sidecar.js";
+import {
+  decideGoalTurnEnd,
+  renderGoalStartPrompt,
+} from "./goal-round-driver.js";
 
 export const DEFAULT_MAX_GOAL_ROUNDS = 16;
 export const GOAL_OBJECTIVE_MAX_CHARS = 4000;
@@ -94,27 +98,47 @@ export class FaceGoalStore {
     return row ? { ...row } : undefined;
   }
 
-  onTurnEnd(sessionId: string): void {
+  onTurnEnd(
+    sessionId: string,
+    turnReasonKind?: string,
+  ): void {
     const runtime = this.runtime;
     const goal = this.bySession.get(sessionId);
     if (!runtime || !goal) return;
-    if (goal.phase !== "active" || goal.activation !== "armed") return;
-    if (listPendingAdmits(readSessionEvents(runtime.store, sessionId), sessionId).length > 0) {
+    const decision = decideGoalTurnEnd({
+      goal,
+      hasPendingAdmits:
+        listPendingAdmits(readSessionEvents(runtime.store, sessionId), sessionId)
+          .length > 0,
+      ...(turnReasonKind !== undefined ? { turnReasonKind } : {}),
+    });
+    if (decision.kind === "noop") return;
+    if (decision.kind === "wake-pending") {
       runtime.drain.wake(sessionId);
       return;
     }
-    if (goal.roundsStarted >= goal.maxGoalRounds) {
-      goal.phase = "blocked";
+    if (decision.kind === "disarm") {
       goal.activation = "disarmed";
       goal.blockedReason = {
-        code: "max-rounds",
-        message: `goal reached maxGoalRounds (${goal.maxGoalRounds})`,
+        code: decision.code,
+        message: decision.message,
       };
       goal.updatedAt = Date.now();
       this.publish(sessionId);
       return;
     }
-    this.startRound(sessionId, goal, `Continue the current goal until it is done.\n\nGoal: ${goal.objective}`);
+    if (decision.kind === "block") {
+      goal.phase = "blocked";
+      goal.activation = "disarmed";
+      goal.blockedReason = {
+        code: decision.code,
+        message: decision.message,
+      };
+      goal.updatedAt = Date.now();
+      this.publish(sessionId);
+      return;
+    }
+    this.startRound(sessionId, goal, decision.prompt);
     this.publish(sessionId);
   }
 
@@ -158,7 +182,11 @@ export class FaceGoalStore {
       updatedAt: now,
     };
     this.bySession.set(sessionId, goal);
-    this.startRound(sessionId, goal, trimmed);
+    this.startRound(
+      sessionId,
+      goal,
+      renderGoalStartPrompt(goal, 1, "start"),
+    );
     this.publish(sessionId);
     return { ok: true, value: { ref: { id: goal.id, revision: goal.revision } } };
   }
@@ -211,10 +239,11 @@ export class FaceGoalStore {
       goal.phase = "active";
       goal.activation = "armed";
       delete goal.blockedReason;
+      const nextRound = goal.roundsStarted + 1;
       this.startRound(
         sessionId,
         goal,
-        `Resume the current goal.\n\nGoal: ${goal.objective}`,
+        renderGoalStartPrompt(goal, nextRound, "resume"),
       );
       return undefined;
     });
@@ -224,6 +253,29 @@ export class FaceGoalStore {
     return this.mutate(sessionId, ref, (goal) => {
       goal.phase = "complete";
       goal.activation = "disarmed";
+      delete goal.blockedReason;
+      return undefined;
+    });
+  }
+
+  /** Model / Host: mark blocked and disarm automatic rounds. */
+  block(
+    sessionId: string,
+    ref: GoalRef,
+    reason: { readonly code: string; readonly message: string },
+  ): FaceRpcResult<GoalView> {
+    return this.mutate(sessionId, ref, (goal) => {
+      if (goal.phase === "complete") {
+        return fail("session-conflict", "completed goal cannot be blocked", {
+          sessionId,
+        });
+      }
+      goal.phase = "blocked";
+      goal.activation = "disarmed";
+      goal.blockedReason = {
+        code: reason.code.trim() || "blocked",
+        message: reason.message.trim() || "goal blocked",
+      };
       return undefined;
     });
   }

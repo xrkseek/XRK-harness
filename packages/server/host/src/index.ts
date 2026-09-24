@@ -6,14 +6,22 @@ import {
   createPersistentSessionStore,
   createSessionDrainHub,
   newSession,
+  readSessionEvents,
   SessionsDirInUseError,
   type SessionDrainHub,
   type SessionStore,
 } from "@xrkseek/core-session";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { loadPolicyRulesetFile } from "@xrkseek/policy";
+import { flattenText, isHumanUserMessageSource } from "@xrkseek/protocol";
+import {
+  consolidateCuratedMemoryPhase1,
+  createCuratedMemoryStore,
+} from "@xrkseek/exec-memory";
+import { resolveSecretStore } from "@xrkseek/secrets";
 import { hostSettingsPath, defaultSpillDir, resolveXrkHome, type HostConfig } from "@xrkseek/server-config";
 import { installOutboundHttpProxy } from "./http-proxy.js";
+import { mountInvariantsFailFast } from "./invariants-fail-fast.js";
 import { watchPolicyFile } from "./policy-file-watch.js";
 import {
   applyXrkProductBootPolicy,
@@ -49,9 +57,11 @@ import {
 import {
   attachFaceUpgrades,
   bindSubagentTools,
+  bindSessionQueryTools,
   createFaceRuntime,
   effectiveHostApiKey,
   isLoopbackAddress,
+  peekSettingsYamlSection,
   publishRemoteEvent,
   createSessionRoutingLlm,
   liveRouteAllowsImageInput,
@@ -65,6 +75,7 @@ import {
   readDisabledPluginIdsAt,
   readManagedPackageIndexAt,
   reconcileManagedProcessPlugins,
+  snapshotSessionWorkspace,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
   type FaceRuntime,
@@ -110,10 +121,11 @@ import { createMcpDeferredDispose } from "./mcp-deferred-dispose.js";
 import { createStandingToolRegistry } from "./standing-tools.js";
 import { createDefaultPtyAccess } from "@xrkseek/exec-pty";
 import { createLocalShell } from "@xrkseek/exec-shell";
+import { createBrowserRuntimeRegistry } from "@xrkseek/exec-web";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
 import {
   createSshExecutionWorld,
-  resolveSshConfigFromEnv,
+  resolveSshConfig,
   type SshExecutionWorld,
 } from "@xrkseek/exec-ssh";
 import type { HostLogger, HostSpawnOptions } from "./log.js";
@@ -264,6 +276,12 @@ export type AgentFactory = (input: {
    */
   shellJobs?: import("@xrkseek/exec-shell").ShellService;
   /**
+   * Host-shared browser runtime registry. Survives agent invalidate so open
+   * pages / CDP callers stay across Settings rebuilds; Host stop or session
+   * finalize drops them.
+   */
+  browserRuntime?: import("@xrkseek/exec-web").BrowserRuntimeRegistry;
+  /**
    * Host cron scheduler — registers `cronjob` tool for unattended turns / scripts.
    * Omitted inside nested cron agent runs to prevent recursive scheduling.
    */
@@ -309,6 +327,56 @@ export type AgentFactory = (input: {
   webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
   /** Face `workspace-inject.injectMaxChars` — rules/skills inject budget. */
   workspaceInject?: { readonly maxChars?: number };
+  /**
+   * Face `session-telemetry` product (Settings SoT).
+   * `XRK_TELEMETRY` env still bypasses for CI.
+   */
+  sessionTelemetry?: import("@xrkseek/session-telemetry").SessionTelemetryProductConfig;
+  /**
+   * Face `sandbox` product (Settings SoT).
+   * `XRK_SANDBOX_BACKEND` env still bypasses for CI.
+   */
+  sandbox?: import("@xrkseek/exec-sandbox").SandboxProductConfig;
+  /**
+   * Face `computer-use` product (Settings SoT).
+   * `XRK_COMPUTER_USE` env still bypasses for CI.
+   */
+  computerUseProduct?: import("@xrkseek/exec-computer-use").ComputerUseProductConfig;
+  /**
+   * Env overlay for computer-use (Credentials `XRK_COMPUTER_USE_BACKGROUND`).
+   */
+  computerUseEnv?: NodeJS.ProcessEnv;
+  /**
+   * Face `browser` product (Settings SoT).
+   * `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` env still bypasses for CI.
+   */
+  browserProduct?: import("@xrkseek/exec-web").BrowserProductConfig;
+  /**
+   * Face `voice` product (Settings SoT).
+   * `XRK_VOICE` env still bypasses for CI.
+   */
+  voiceProduct?: import("@xrkseek/exec-voice").VoiceProductConfig;
+  /** Env overlay for voice (Credentials `XRK_VOICE_OPENAI_KEY`). */
+  voiceEnv?: NodeJS.ProcessEnv;
+  /**
+   * Face `image-gen` product (Settings SoT).
+   * `XRK_IMAGE_GEN` env still bypasses for CI.
+   */
+  imageGenProduct?: import("@xrkseek/exec-image-gen").ImageGenProductConfig;
+  /** Env overlay for image-gen (Credentials `XRK_IMAGE_GEN_OPENAI_KEY`). */
+  imageGenEnv?: NodeJS.ProcessEnv;
+  /**
+   * Face `video-gen` product (Settings SoT).
+   * `XRK_VIDEO_GEN` env still bypasses for CI.
+   */
+  videoGenProduct?: import("@xrkseek/exec-video-gen").VideoGenProductConfig;
+  /** Env overlay for video-gen (Credentials `XRK_VIDEO_GEN_OPENAI_KEY`). */
+  videoGenEnv?: NodeJS.ProcessEnv;
+  /**
+   * Face `curated-memory` product: pass `false` to skip MEMORY.md / USER.md.
+   * `XRK_CURATED_MEMORY=0` env still force-disables for CI.
+   */
+  curatedMemory?: false;
 }) => Promise<AgentHandle>;
 
 export type { SessionDrainControl } from "./drain-status.js";
@@ -369,6 +437,15 @@ export function createHostManager(): HostManager {
           throw err;
         }
         throw err;
+      }
+      let invariantsRegistry: ReturnType<typeof mountInvariantsFailFast>["registry"] | undefined;
+      if (config.runtime.invariantsFailFast) {
+        const mounted = mountInvariantsFailFast(store);
+        store = mounted.store;
+        invariantsRegistry = mounted.registry;
+        log?.info(
+          "runtime invariants fail-fast enabled (XRK_INVARIANTS_FAIL_FAST)",
+        );
       }
       const loader = createPluginLoader();
       const registry = createProviderRegistry();
@@ -564,11 +641,14 @@ export function createHostManager(): HostManager {
       const lastDrainResult = new Map<string, AgentRunResult>();
 
       // Local Host + remote cwd: swap fs/shell (Hermes/DSH provider pattern).
+      // Env `XRK_SSH_HOST` CI-bypasses Face; else peek settings.yaml before Face
+      // (SSH world must own workspaceRoot before createFaceRuntime).
       let sshWorld: SshExecutionWorld | undefined;
       /** Local Host cwd before SSH workspace swap (browse/settings anchor). */
       let localHostRoot: string | undefined;
       try {
-        const sshConfig = resolveSshConfigFromEnv(process.env);
+        const sshProduct = peekSettingsYamlSection(resolveXrkHome(), "ssh-remote");
+        const sshConfig = resolveSshConfig(process.env, sshProduct);
         if (sshConfig) {
           localHostRoot = config.runtime.workspaceRoot;
           sshWorld = createSshExecutionWorld({ config: sshConfig });
@@ -600,6 +680,12 @@ export function createHostManager(): HostManager {
             })
           : undefined;
 
+      /** Session-keyed browser pages — survives agent invalidate (Hermes task_id map). */
+      const sharedBrowser =
+        config.runtime.preset === "harness" || config.runtime.preset === "server"
+          ? createBrowserRuntimeRegistry()
+          : undefined;
+
       const ensureSession = (sid?: string) => newSession(store, sid).id;
 
       const faceBox: {
@@ -607,6 +693,34 @@ export function createHostManager(): HostManager {
         questions?: FaceQuestionBroker;
         runtime?: FaceRuntime;
       } = {};
+
+      /** Session-end Phase1: fold leftover human notes into MEMORY.md (disk only). */
+      const consolidateCuratedMemoryForSession = (sessionId: string): void => {
+        try {
+          const rt = faceBox.runtime;
+          const memEnvRaw = String(process.env.XRK_CURATED_MEMORY ?? "").trim();
+          let enabled = memEnvRaw !== "" ? memEnvRaw !== "0" : true;
+          if (memEnvRaw === "" && rt) {
+            const memNs = rt.settingsNamespaces.view("curated-memory")
+              .value as Record<string, unknown>;
+            enabled = memNs.enabled !== false;
+          }
+          if (!enabled) return;
+          const userTexts: string[] = [];
+          for (const event of readSessionEvents(store, sessionId)) {
+            if (event.type !== "user/message") continue;
+            if (!isHumanUserMessageSource(event.source)) continue;
+            const text = flattenText(event.content).trim();
+            if (text) userTexts.push(text);
+          }
+          if (userTexts.length === 0) return;
+          void consolidateCuratedMemoryPhase1(createCuratedMemoryStore(), {
+            userTexts,
+          });
+        } catch {
+          /* best-effort — Host stop / archive must continue */
+        }
+      };
       const llmResolverBox: {
         resolve?: (sessionId: string) => LlmAdapter | undefined;
       } = {};
@@ -632,6 +746,18 @@ export function createHostManager(): HostManager {
           maxActiveSubagents?: number;
           webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
           workspaceInject?: { readonly maxChars?: number };
+          sessionTelemetry?: import("@xrkseek/session-telemetry").SessionTelemetryProductConfig;
+          sandbox?: import("@xrkseek/exec-sandbox").SandboxProductConfig;
+          computerUseProduct?: import("@xrkseek/exec-computer-use").ComputerUseProductConfig;
+          computerUseEnv?: NodeJS.ProcessEnv;
+          browserProduct?: import("@xrkseek/exec-web").BrowserProductConfig;
+          voiceProduct?: import("@xrkseek/exec-voice").VoiceProductConfig;
+          voiceEnv?: NodeJS.ProcessEnv;
+          imageGenProduct?: import("@xrkseek/exec-image-gen").ImageGenProductConfig;
+          imageGenEnv?: NodeJS.ProcessEnv;
+          videoGenProduct?: import("@xrkseek/exec-video-gen").VideoGenProductConfig;
+          videoGenEnv?: NodeJS.ProcessEnv;
+          curatedMemory?: false;
         };
       } = {};
       const sessionCwdBox: {
@@ -693,6 +819,7 @@ export function createHostManager(): HostManager {
               resolveFilePath: (ref) => attachments.fileHostPath?.(ref),
               ...(sharedPty ? { ptyService: sharedPty.service } : {}),
               ...(sharedShell ? { shellJobs: sharedShell } : {}),
+              ...(sharedBrowser ? { browserRuntime: sharedBrowser } : {}),
               ...(cronBox.scheduler && !cronAgentDepth.getStore()
                 ? { cronScheduler: cronBox.scheduler }
                 : {}),
@@ -739,6 +866,42 @@ export function createHostManager(): HostManager {
               ...(pluginSettings.workspaceInject
                 ? { workspaceInject: pluginSettings.workspaceInject }
                 : {}),
+              ...(pluginSettings.sessionTelemetry
+                ? { sessionTelemetry: pluginSettings.sessionTelemetry }
+                : {}),
+              ...(pluginSettings.sandbox
+                ? { sandbox: pluginSettings.sandbox }
+                : {}),
+              ...(pluginSettings.computerUseProduct
+                ? { computerUseProduct: pluginSettings.computerUseProduct }
+                : {}),
+              ...(pluginSettings.computerUseEnv
+                ? { computerUseEnv: pluginSettings.computerUseEnv }
+                : {}),
+              ...(pluginSettings.browserProduct
+                ? { browserProduct: pluginSettings.browserProduct }
+                : {}),
+              ...(pluginSettings.voiceProduct
+                ? { voiceProduct: pluginSettings.voiceProduct }
+                : {}),
+              ...(pluginSettings.voiceEnv
+                ? { voiceEnv: pluginSettings.voiceEnv }
+                : {}),
+              ...(pluginSettings.imageGenProduct
+                ? { imageGenProduct: pluginSettings.imageGenProduct }
+                : {}),
+              ...(pluginSettings.imageGenEnv
+                ? { imageGenEnv: pluginSettings.imageGenEnv }
+                : {}),
+              ...(pluginSettings.videoGenProduct
+                ? { videoGenProduct: pluginSettings.videoGenProduct }
+                : {}),
+              ...(pluginSettings.videoGenEnv
+                ? { videoGenEnv: pluginSettings.videoGenEnv }
+                : {}),
+              ...(pluginSettings.curatedMemory === false
+                ? { curatedMemory: false as const }
+                : {}),
             });
             if (faceBox.approvals) {
               agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
@@ -772,6 +935,10 @@ export function createHostManager(): HostManager {
                   maxActiveChildren,
                 });
               }
+              bindSessionQueryTools(agent.tools, {
+                runtime: faceBox.runtime,
+                parentSessionId: sessionId,
+              });
               const prefs = loadSidebarPrefs(resolveXrkHome()).value;
               if (
                 prefs.agentOpenTools === true ||
@@ -825,6 +992,12 @@ export function createHostManager(): HostManager {
               if (signal.aborted) {
                 throw new DOMException("aborted", "AbortError");
               }
+              // Worktree snapshot before tools mutate files (Hermes-style
+              // checkpoint). Best-effort — never blocks the turn.
+              const face = faceBox.runtime;
+              if (face) {
+                await snapshotSessionWorkspace(face, sessionId);
+              }
               const result = await agent.continueTurn({ signal });
               lastDrainResult.set(sessionId, result);
             }
@@ -859,10 +1032,13 @@ export function createHostManager(): HostManager {
       drainActiveBox.isActive = (sessionId) => drain.isActive(sessionId);
       drainActiveBox.activeIds = () => hub.activeIds();
 
-      cronBox.scheduler = createHostCron({
+      const cronHostOptions = {
         productHome: resolveXrkHome(),
         workspaceRoot: config.runtime.workspaceRoot,
-        runAgent: async (job, signal) => {
+        runAgent: async (
+          job: import("@xrkseek/server-cron").CronJob,
+          signal?: AbortSignal,
+        ) => {
           const run = job.run;
           if (run.kind !== "agent") {
             return {
@@ -885,16 +1061,38 @@ export function createHostManager(): HostManager {
             };
           });
         },
-        onError: (err) => {
+        onError: (err: unknown) => {
           log?.warn(
             `cron: ${err instanceof Error ? err.message : String(err)}`,
           );
         },
-      });
-      cronBox.scheduler?.start();
-      if (cronBox.scheduler) {
+      };
+      /**
+       * Face `cron.enabled` SoT when `XRK_CRON` unset; env non-empty is CI bypass.
+       * Returns whether the scheduler presence changed (tools need invalidate).
+       */
+      const applyCronScheduler = (product?: {
+        readonly enabled: boolean;
+      }): boolean => {
+        const next = createHostCron({
+          ...cronHostOptions,
+          ...(product ? { product } : {}),
+        });
+        if (!next) {
+          if (!cronBox.scheduler) return false;
+          cronBox.scheduler.stop();
+          cronBox.scheduler = undefined;
+          log?.info("cron ticker stopped");
+          return true;
+        }
+        if (cronBox.scheduler) return false;
+        cronBox.scheduler = next;
+        next.start();
         log?.info("cron ticker started (~/.xrk/cron/jobs.json)");
-      }
+        return true;
+      };
+      // Env-only until Face is ready; re-applied below with Settings product.
+      applyCronScheduler();
 
       const webOverlay = await resolveWebPluginOverlay(resolvedPluginsDir);
       const overlayBoot = webOverlay
@@ -972,6 +1170,7 @@ export function createHostManager(): HostManager {
           rpcChannels: [...row.rpcChannels],
         }));
       };
+      const secretStore = await resolveSecretStore(process.env);
       const faceRuntime = createFaceRuntime({
         store,
         resolveAgent,
@@ -985,6 +1184,7 @@ export function createHostManager(): HostManager {
           : {}),
         // Face settings / credentials / workspaces.json / host-settings → harness home.
         productDir: resolveXrkHome(),
+        ...(secretStore ? { secretStore } : {}),
         tools: createStandingToolRegistry({
           workspaceRoot: config.runtime.workspaceRoot,
           preset: config.runtime.preset,
@@ -1126,6 +1326,10 @@ export function createHostManager(): HostManager {
           ? { settingsDocumentPath: path.resolve(config.runtime.policyFile) }
           : {}),
         invalidateAgent: (sessionId) => agentCache.invalidate(sessionId),
+        onSessionFinalize: (sessionId) => {
+          consolidateCuratedMemoryForSession(sessionId);
+          sharedBrowser?.drop(sessionId);
+        },
         ...createAutoReviewBridgeFromHost(resolveXrkHome()),
         ...(sharedPty
           ? {
@@ -1215,6 +1419,8 @@ export function createHostManager(): HostManager {
         const webSearchNs = faceRuntime.settingsNamespaces.view("web-search")
           .value as Record<string, unknown>;
         const injectNs = faceRuntime.settingsNamespaces.view("workspace-inject")
+          .value as Record<string, unknown>;
+        const telemetryNs = faceRuntime.settingsNamespaces.view("session-telemetry")
           .value as Record<string, unknown>;
         const maxParallelToolCalls =
           typeof loop.maxParallelToolCalls === "number" &&
@@ -1335,6 +1541,180 @@ export function createHostManager(): HostManager {
           injectMaxCharsRaw >= 4_000
             ? Math.min(128_000, Math.floor(injectMaxCharsRaw))
             : undefined;
+        const telModeRaw =
+          typeof telemetryNs.mode === "string"
+            ? telemetryNs.mode.trim().toLowerCase()
+            : "off";
+        const telMode =
+          telModeRaw === "memory" || telModeRaw === "otlp" || telModeRaw === "off"
+            ? telModeRaw
+            : "off";
+        const telEndpoint =
+          typeof telemetryNs.endpoint === "string" && telemetryNs.endpoint.trim()
+            ? telemetryNs.endpoint.trim()
+            : undefined;
+        const sessionTelemetry: import("@xrkseek/session-telemetry").SessionTelemetryProductConfig =
+          {
+            mode: telMode,
+            ...(telEndpoint ? { endpoint: telEndpoint } : {}),
+          };
+        const sandboxNs = faceRuntime.settingsNamespaces.view("sandbox")
+          .value as Record<string, unknown>;
+        const sbBackendRaw =
+          typeof sandboxNs.backend === "string"
+            ? sandboxNs.backend.trim().toLowerCase()
+            : "workspace";
+        const sbBackend =
+          sbBackendRaw === "docker" ||
+          sbBackendRaw === "bwrap" ||
+          sbBackendRaw === "windows" ||
+          sbBackendRaw === "workspace"
+            ? sbBackendRaw
+            : "workspace";
+        const sbImage =
+          typeof sandboxNs.dockerImage === "string" && sandboxNs.dockerImage.trim()
+            ? sandboxNs.dockerImage.trim()
+            : undefined;
+        const sbNetRaw =
+          typeof sandboxNs.dockerNetwork === "string"
+            ? sandboxNs.dockerNetwork.trim().toLowerCase()
+            : "";
+        const sbNetwork =
+          sbNetRaw === "bridge" || sbNetRaw === "none" ? sbNetRaw : undefined;
+        const sbModeRaw =
+          typeof sandboxNs.windowsMode === "string"
+            ? sandboxNs.windowsMode.trim()
+            : "";
+        const sbMode =
+          sbModeRaw === "workspace-write" ||
+          sbModeRaw === "read-only" ||
+          sbModeRaw === "danger-full-access"
+            ? sbModeRaw
+            : undefined;
+        const sandbox: import("@xrkseek/exec-sandbox").SandboxProductConfig = {
+          backend: sbBackend,
+          ...(sbImage ? { dockerImage: sbImage } : {}),
+          ...(sbNetwork ? { dockerNetwork: sbNetwork } : {}),
+          ...(sbMode ? { windowsMode: sbMode } : {}),
+        };
+        const computerUseNs = faceRuntime.settingsNamespaces.view("computer-use")
+          .value as Record<string, unknown>;
+        const cuModeRaw =
+          typeof computerUseNs.mode === "string"
+            ? computerUseNs.mode.trim().toLowerCase()
+            : "off";
+        const computerUseProduct: import("@xrkseek/exec-computer-use").ComputerUseProductConfig =
+          {
+            mode:
+              cuModeRaw === "uia" || cuModeRaw === "background"
+                ? cuModeRaw
+                : "off",
+          };
+        const backgroundHelper =
+          faceRuntime.credentials.peek("computer.background")?.trim() ||
+          process.env.XRK_COMPUTER_USE_BACKGROUND?.trim() ||
+          "";
+        const computerUseEnv: NodeJS.ProcessEnv | undefined = backgroundHelper
+          ? {
+              ...process.env,
+              XRK_COMPUTER_USE_BACKGROUND: backgroundHelper,
+            }
+          : undefined;
+        const browserNs = faceRuntime.settingsNamespaces.view("browser")
+          .value as Record<string, unknown>;
+        const brModeRaw =
+          typeof browserNs.mode === "string"
+            ? browserNs.mode.trim().toLowerCase()
+            : "http";
+        const brCdpUrl =
+          typeof browserNs.cdpUrl === "string" && browserNs.cdpUrl.trim()
+            ? browserNs.cdpUrl.trim()
+            : undefined;
+        const browserProduct: import("@xrkseek/exec-web").BrowserProductConfig = {
+          mode: brModeRaw === "cdp" ? "cdp" : "http",
+          ...(brCdpUrl ? { cdpUrl: brCdpUrl } : {}),
+        };
+        const voiceNs = faceRuntime.settingsNamespaces.view("voice")
+          .value as Record<string, unknown>;
+        const voiceModeRaw =
+          typeof voiceNs.mode === "string"
+            ? voiceNs.mode.trim().toLowerCase()
+            : "off";
+        const voiceBase =
+          typeof voiceNs.baseUrl === "string" && voiceNs.baseUrl.trim()
+            ? voiceNs.baseUrl.trim()
+            : undefined;
+        const voiceProduct: import("@xrkseek/exec-voice").VoiceProductConfig = {
+          mode: voiceModeRaw === "openai" ? "openai" : "off",
+          ...(voiceBase ? { baseUrl: voiceBase } : {}),
+        };
+        const voiceKey =
+          faceRuntime.credentials.peek("voice.openai")?.trim() ||
+          process.env.XRK_VOICE_OPENAI_KEY?.trim() ||
+          "";
+        const voiceEnv: NodeJS.ProcessEnv | undefined = voiceKey
+          ? { ...process.env, XRK_VOICE_OPENAI_KEY: voiceKey }
+          : undefined;
+        const imageNs = faceRuntime.settingsNamespaces.view("image-gen")
+          .value as Record<string, unknown>;
+        const imageModeRaw =
+          typeof imageNs.mode === "string"
+            ? imageNs.mode.trim().toLowerCase()
+            : "off";
+        const imageBase =
+          typeof imageNs.baseUrl === "string" && imageNs.baseUrl.trim()
+            ? imageNs.baseUrl.trim()
+            : undefined;
+        const imageModel =
+          typeof imageNs.model === "string" && imageNs.model.trim()
+            ? imageNs.model.trim()
+            : undefined;
+        const imageGenProduct: import("@xrkseek/exec-image-gen").ImageGenProductConfig =
+          {
+            mode: imageModeRaw === "openai" ? "openai" : "off",
+            ...(imageBase ? { baseUrl: imageBase } : {}),
+            ...(imageModel ? { model: imageModel } : {}),
+          };
+        const imageKey =
+          faceRuntime.credentials.peek("image.openai")?.trim() ||
+          process.env.XRK_IMAGE_GEN_OPENAI_KEY?.trim() ||
+          "";
+        const imageGenEnv: NodeJS.ProcessEnv | undefined = imageKey
+          ? { ...process.env, XRK_IMAGE_GEN_OPENAI_KEY: imageKey }
+          : undefined;
+        const videoNs = faceRuntime.settingsNamespaces.view("video-gen")
+          .value as Record<string, unknown>;
+        const videoModeRaw =
+          typeof videoNs.mode === "string"
+            ? videoNs.mode.trim().toLowerCase()
+            : "off";
+        const videoBase =
+          typeof videoNs.baseUrl === "string" && videoNs.baseUrl.trim()
+            ? videoNs.baseUrl.trim()
+            : undefined;
+        const videoModel =
+          typeof videoNs.model === "string" && videoNs.model.trim()
+            ? videoNs.model.trim()
+            : undefined;
+        const videoGenProduct: import("@xrkseek/exec-video-gen").VideoGenProductConfig =
+          {
+            mode: videoModeRaw === "openai" ? "openai" : "off",
+            ...(videoBase ? { baseUrl: videoBase } : {}),
+            ...(videoModel ? { model: videoModel } : {}),
+          };
+        const videoKey =
+          faceRuntime.credentials.peek("video.openai")?.trim() ||
+          process.env.XRK_VIDEO_GEN_OPENAI_KEY?.trim() ||
+          "";
+        const videoGenEnv: NodeJS.ProcessEnv | undefined = videoKey
+          ? { ...process.env, XRK_VIDEO_GEN_OPENAI_KEY: videoKey }
+          : undefined;
+        const memNs = faceRuntime.settingsNamespaces.view("curated-memory")
+          .value as Record<string, unknown>;
+        const memFaceOn = memNs.enabled !== false;
+        const memEnvRaw = String(process.env.XRK_CURATED_MEMORY ?? "").trim();
+        const curatedMemoryEnabled =
+          memEnvRaw !== "" ? memEnvRaw !== "0" : memFaceOn;
         return {
           ...(maxParallelToolCalls !== undefined ? { maxParallelToolCalls } : {}),
           ...(maxSteps !== undefined ? { maxSteps } : {}),
@@ -1370,8 +1750,25 @@ export function createHostManager(): HostManager {
           ...(injectMaxChars !== undefined
             ? { workspaceInject: { maxChars: injectMaxChars } }
             : {}),
+          sessionTelemetry,
+          sandbox,
+          computerUseProduct,
+          ...(computerUseEnv ? { computerUseEnv } : {}),
+          browserProduct,
+          voiceProduct,
+          ...(voiceEnv ? { voiceEnv } : {}),
+          imageGenProduct,
+          ...(imageGenEnv ? { imageGenEnv } : {}),
+          videoGenProduct,
+          ...(videoGenEnv ? { videoGenEnv } : {}),
+          ...(!curatedMemoryEnabled ? { curatedMemory: false as const } : {}),
         };
       };
+      {
+        const cronNs = faceRuntime.settingsNamespaces.view("cron")
+          .value as Record<string, unknown>;
+        applyCronScheduler({ enabled: cronNs.enabled !== false });
+      }
       faceRuntime.bus.subscribeHost((_rpcId, frame) => {
         if (frame.type !== "host/remote-event") return;
         const event = frame.event;
@@ -1384,13 +1781,29 @@ export function createHostManager(): HostManager {
         }
         if (event === "settings/document-updated") {
           const ns = frame.args[0];
+          if (ns === "cron") {
+            const cronNs = faceRuntime.settingsNamespaces.view("cron")
+              .value as Record<string, unknown>;
+            const changed = applyCronScheduler({
+              enabled: cronNs.enabled !== false,
+            });
+            if (changed) void invalidateAgents();
+            return;
+          }
           if (
             ns === "agent-default-model" ||
             ns === "llm-deepseek" ||
             ns === "llm-pi-ai" ||
             ns === "agent-loop" ||
             ns === "bash" ||
-            ns === "web-search"
+            ns === "web-search" ||
+            ns === "sandbox" ||
+            ns === "computer-use" ||
+            ns === "browser" ||
+            ns === "voice" ||
+            ns === "image-gen" ||
+            ns === "video-gen" ||
+            ns === "curated-memory"
           ) {
             void invalidateAgents();
           }
@@ -1438,6 +1851,36 @@ export function createHostManager(): HostManager {
         defaultCwd: faceRuntime.workspaceRoot,
         resolveSessionCwd: (sessionId: string) =>
           resolveSessionCwd(faceRuntime, sessionId),
+        resolveAutoReviewClassifierProduct: () => {
+          const ns = faceRuntime.settingsNamespaces.view("auto-review")
+            .value as Record<string, unknown>;
+          const classifierUrl =
+            typeof ns.classifierUrl === "string" ? ns.classifierUrl.trim() : "";
+          const classifierToken =
+            faceRuntime.credentials.peek("auto-review.classifier")?.trim() ||
+            process.env.XRK_AUTO_REVIEW_CLASSIFIER_TOKEN?.trim() ||
+            "";
+          return {
+            ...(classifierUrl ? { classifierUrl } : {}),
+            ...(classifierToken ? { classifierToken } : {}),
+          };
+        },
+        resolveMemoryEmbedProduct: () => {
+          const ns = faceRuntime.settingsNamespaces.view("memory-embed")
+            .value as Record<string, unknown>;
+          const url = typeof ns.url === "string" ? ns.url.trim() : "";
+          const collection =
+            typeof ns.collection === "string" ? ns.collection.trim() : "";
+          const token =
+            faceRuntime.credentials.peek("memory-embed.token")?.trim() ||
+            process.env.XRK_MEMORY_EMBED_TOKEN?.trim() ||
+            "";
+          return {
+            ...(url ? { url } : {}),
+            ...(token ? { token } : {}),
+            ...(collection ? { collection } : {}),
+          };
+        },
         tokenLedger: {
           ...createCostMeterUsageBridge(faceRuntime),
           ...createUsageStatsBridgeFromFace(faceRuntime),
@@ -1493,6 +1936,14 @@ export function createHostManager(): HostManager {
             },
             policy,
             resolvePolicyAsk: hostWireCtx.resolvePolicyAsk,
+            onPrefsChanged: (_value, patch) => {
+              if (
+                Object.prototype.hasOwnProperty.call(patch, "agentOpenTools") ||
+                Object.prototype.hasOwnProperty.call(patch, "agentTerminalTools")
+              ) {
+                void invalidateAgents();
+              }
+            },
           }),
           createXrkPluginPublicHandler({
             pluginsDir: resolvedPluginsDir,
@@ -1602,6 +2053,10 @@ export function createHostManager(): HostManager {
           stopPromise = (async () => {
             cronBox.scheduler?.stop();
             policyFileWatch?.dispose();
+            // Phase1 consolidate before agents/store go away (Hermes finalize).
+            for (const sessionId of store.list()) {
+              consolidateCuratedMemoryForSession(sessionId);
+            }
             await http.close();
             await agentCache.dispose();
             if (sharedShell) {
@@ -1609,6 +2064,13 @@ export function createHostManager(): HostManager {
                 await sharedShell.dispose();
               } catch {
                 // Host stop must continue even if jobs teardown partially fails.
+              }
+            }
+            if (sharedBrowser) {
+              try {
+                sharedBrowser.dispose();
+              } catch {
+                // Host stop must continue even if browser CDP teardown fails.
               }
             }
             if (sshWorld) {
@@ -1628,6 +2090,7 @@ export function createHostManager(): HostManager {
             if ("close" in store && typeof store.close === "function") {
               store.close();
             }
+            invariantsRegistry?.dispose();
             for (const p of loader.list()) {
               await loader.unregister(p.id);
             }

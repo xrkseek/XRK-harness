@@ -15,9 +15,10 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ConversationTimelineSnapshot } from '@xrkseek/client-runtime/client'
+import type { ChatSnapshot, QueuedMessage } from '@xrkseek/client-runtime/client'
 import { Button, IconChevronDownOutline14, Modal } from '@xrkseek/client-ui-primitives'
-import type { ChatViewSlotProps, RenderMessageImages } from '../contract/slots.ts'
-import { PendingSteeringBubble } from './MessageItem.tsx'
+import type { ChatViewSlotProps, RenderMessageFiles, RenderMessageImages } from '../contract/slots.ts'
+import { PendingSteeringBubble, PendingSubmissionBubble } from './MessageItem.tsx'
 import { shouldShowFlowWaiting } from './flow-waiting.ts'
 import { shouldFollowContentGrowth } from './follow-growth.ts'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
@@ -134,6 +135,32 @@ function openFailureMessage(error: unknown, fallback: string): string {
   return message === '' ? fallback : message
 }
 
+/**
+ * Prompt-RPC identities already rendered by durable material: user/steering
+ * node sources plus queue occurrences. A submission echo whose identity
+ * appears here is hidden in the same render so the echo→durable swap is
+ * atomic.
+ */
+function observedRpcIds(
+  order: readonly string[],
+  nodes: ChatSnapshot['nodes'],
+  queue: readonly QueuedMessage[],
+): ReadonlySet<string> {
+  const observed = new Set<string>()
+  for (const key of order) {
+    const node = nodes.get(key)
+    if (node === undefined || (node.kind !== 'user' && node.kind !== 'steering')) continue
+    const source = (node.data as { readonly source?: unknown }).source as
+      | { readonly kind?: unknown; readonly rpcId?: unknown }
+      | undefined
+    if (source?.kind === 'user' && typeof source.rpcId === 'string') observed.add(source.rpcId)
+  }
+  for (const row of queue) {
+    if (row.rpcId !== undefined) observed.add(row.rpcId)
+  }
+  return observed
+}
+
 /** ProducedFiles opens the session workspace as `.`. */
 function isFolderOpenPath(path: string): boolean {
   return path === '.'
@@ -199,7 +226,7 @@ function TurnStatus({ startTime, t }: {
  * ordered business Node crosses the keyed renderer seat.
  */
 export function ChatView({
-  useSession, useSessions, useStore, useProjection, renderSlot, sessionId, openFile, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt,
+  useSession, useSessions, useStore, useProjection, renderSlot, sessionId, openFile, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, restoreAt,
   fileMentions, t,
 }: ChatViewSlotProps) {
   const order = useSession(s => s.chat.order)
@@ -261,9 +288,23 @@ export function ChatView({
     () => inbox.filter(item => item.placement === 'steering'),
     [inbox],
   )
+  const pendingSubmissions = useSession(s => s.pendingSubmissions)
+  // Submission echoes still awaiting their durable counterpart. `order` is the
+  // recompute trigger: durable user material always arrives as an append.
+  const visibleSubmissions = useMemo(() => {
+    if (pendingSubmissions.length === 0) return pendingSubmissions
+    const observed = observedRpcIds(order, nodeStore, inbox)
+    return pendingSubmissions.filter(submission => (
+      submission.placement !== 'queued' && !observed.has(submission.requestId)
+    ))
+  }, [pendingSubmissions, order, nodeStore, inbox])
   const renderMessageImages = useCallback<RenderMessageImages>(
     owner => renderSlot('conversation.message.images', { ...owner, loadImage }),
     [loadImage, renderSlot],
+  )
+  const renderMessageFiles = useCallback<RenderMessageFiles>(
+    owner => renderSlot('conversation.message.files', owner),
+    [renderSlot],
   )
   const runningTurnStart = useMemo(() => runningTurnStartTime(timeline), [timeline])
 
@@ -308,7 +349,8 @@ export function ChatView({
     tailKind: lastNode?.kind,
   })
   const lastSteeringId = pendingSteering[pendingSteering.length - 1]?.id ?? null
-  const followSig = `${openState}:${firstSeq}:${lastKey}:${order.length}:${running ? 1 : 0}:${lastSteeringId ?? ''}`
+  const lastSubmissionId = visibleSubmissions[visibleSubmissions.length - 1]?.requestId ?? null
+  const followSig = `${openState}:${firstSeq}:${lastKey}:${order.length}:${running ? 1 : 0}:${lastSteeringId ?? ''}:${lastSubmissionId ?? ''}`
 
   const syncActiveTurn = useCallback((): void => {
     const local = listRef.current
@@ -733,8 +775,10 @@ export function ChatView({
               openFile={requestOpenFile}
               inspectCall={inspectCall}
               forkAt={forkAt}
+              restoreAt={restoreAt}
               loadImage={loadImage}
               renderMessageImages={renderMessageImages}
+              renderMessageFiles={renderMessageFiles}
               fileMentions={fileMentions}
               renderSlot={renderSlot}
               t={t}
@@ -747,6 +791,14 @@ export function ChatView({
             <PendingSteeringBubble
               key={item.id}
               content={item.content}
+              renderMessageImages={renderMessageImages}
+              t={t}
+            />
+          ))}
+          {visibleSubmissions.map(submission => (
+            <PendingSubmissionBubble
+              key={submission.requestId}
+              submission={submission}
               renderMessageImages={renderMessageImages}
               t={t}
             />

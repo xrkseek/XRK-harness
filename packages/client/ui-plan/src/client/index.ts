@@ -1,15 +1,16 @@
 /**
  * Plan control plugin, browser half: occupies the composer's named
  * `conversation.input.plan` seat with an active-state status chip, and the
- * details column with a session overview (standing todos / plan / Office).
+ * details column with session Status (subagents · jobs · timeline · cost ·
+ * channels; Face `session.status` ≡ `/status`) plus todos / plan / Office tabs.
  * Plan mode is entered through the command source; while the projection's
  * effective target is plan mode the chip renders and executes /plan off through
- * `command.execute`, otherwise the seat stays empty. Overview tabs ride live
- * `plan` / `todos` projections plus `/office` status. Chip reads ride the
- * generic projection pair through the standard-kit `useProjection`; zero
- * client-side plan state.
+ * `command.execute`, otherwise the seat stays empty. Status loads via Face
+ * unary; plan / todos ride live projections; Office reads `/office` status.
+ * Spill rows in the live timeline open via Host `host.openPath`.
  */
 import type {} from '@xrkseek/xrk-api-remotes/client'
+import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
 // Type-only: pulls the ui-conversation SlotMap merge (the input.plan seat).
 import type {} from '@xrkseek/client-ui-conversation/client'
@@ -44,14 +45,15 @@ export interface PlanChipInjected {
   exitPlanMode: () => Promise<string | null>
 }
 
-/** Required services: slots, commands Remote, locale, and the layout column. */
-export const inject = ['slots', 'remote', 'remote.commands', 'locale', 'layout']
+/** Required services: slots, commands Remote, locale, layout, and Host openPath. */
+export const inject = ['slots', 'remote', 'remote.commands', 'locale', 'layout', 'connection']
 
 /**
  * Client plugin body: register the plan chip over the command channel.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
+  const connection = ctx.get('connection') as ConnectionHandle
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-plan: dictionaries')
 
   ctx.slots.inject('conversation.input.plan', () => ctx.slots.register({
@@ -84,6 +86,12 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       closeDetails: () => { ctx.layout.closeDetails() },
+      openSpillPath: async (path: string) => {
+        const response = await connection.api.host.openPath({ path })
+        if (!response.result.ok) {
+          throw new Error(`spill open failed: ${response.result.error.message}`)
+        }
+      },
     }),
   }, PreviewTabs))
 }

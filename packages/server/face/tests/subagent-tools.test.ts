@@ -93,7 +93,32 @@ describe("subagent tools", () => {
     expect(tools.get("subagent")).toBeTruthy();
     expect(tools.get("list_agents")).toBeTruthy();
     expect(tools.get("send_message")).toBeTruthy();
+    expect(tools.get("followup_task")).toBeTruthy();
+    expect(tools.get("wait_agent")).toBeTruthy();
+    expect(tools.get("analytics")).toBeTruthy();
     expect(tools.get("interrupt_agent")).toBeTruthy();
+    expect(tools.get("ralph")).toBeTruthy();
+
+    const analytics = await tools.get("analytics")!.execute({});
+    expect(analytics.content).toMatch(/depth: 0\//);
+    expect(analytics.content).toMatch(/active: 0\//);
+    expect(analytics.content).toContain(child);
+
+    const listOut = await tools.get("list_agents")!.execute({});
+    expect(listOut.content).toMatch(/quota depth/);
+    expect(listOut.content).toContain(child);
+
+    const waitBad = await tools.get("wait_agent")!.execute({
+      agent_id: "missing",
+    });
+    expect(waitBad.isError).toBe(true);
+
+    const waitOk = await tools.get("wait_agent")!.execute({
+      agent_id: child,
+      timeout_ms: 1000,
+    });
+    expect(waitOk.isError).not.toBe(true);
+    expect(waitOk.content).toMatch(/wait_agent completed/);
 
     const denied = createToolRegistry();
     bindSubagentTools(denied, {

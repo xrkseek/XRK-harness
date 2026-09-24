@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 /**
  * View registration acceptance on the real framework stack: the plugin fiber
  * registers Trajectory into a real SlotRegistry view ring, tabs
@@ -98,6 +98,7 @@ function historySnapshot(
     partial: trajectory.partial,
     runningCalls: trajectory.runningCalls,
     pending: [],
+    pendingSubmissions: [],
     queue: [],
     running: false,
     subagent: null,

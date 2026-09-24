@@ -3,7 +3,7 @@
    viewport bottom inside the centered message column; textarea on top, action
    row below, primary action controls bottom-right. Input width rides the
    column (--dsh-composer-card-max-width = chat content + 32px, 16px per side,
-   is a cap, not a fixed size — layout rule: the box shrinks with the center
+   is a cap, not a fixed size �?layout rule: the box shrinks with the center
    column keeping its clearance). Hero variant = the same card centered in the
    empty state; the transition between the two is a position move of one
    component. */
@@ -61,7 +61,7 @@
   max-width: var(--dsh-composer-card-max-width);
   padding-top: 10px;
   /* Input stroke: black/0.10 light, white/0.06 dark (figma darkmode note says
-     the input border is one notch weaker than buttons) — exactly the
+     the input border is one notch weaker than buttons) �?exactly the
      l2-darkmode-thin pair. Fill: the input surface token (elevated in dark). */
   border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
   border-radius: 22px;
@@ -127,55 +127,23 @@
   height: 0;
 }
 
-/* The draft's scrollport, and the ONLY scrolling box in the composer: the
-   caret is the textarea's and every visible glyph is the backdrop's, so the two
-   layers stay together only by riding one offset the browser applies to both at
-   once. Scrolling one box and assigning the offset to the other cannot hold —
-   a wheel gesture is composited off the main thread, so the assignment lands
-   frames late and the words visibly trail the caret. The 14-line cap lives here
+/* The draft's scrollport, and the ONLY scrolling box in the composer. The
+   contenteditable grows with its content inside; the 14-line cap lives here
    because this is the box the cap describes. */
 .scroll {
   max-height: var(--dsh-composer-text-max-height);
   overflow-y: auto;
+  margin-right: 4px;
 }
 
-/* Mirror-div auto-grow stack: the hidden mirror is in normal flow and sets the FULL draft
-   height (min 2 lines in hero); backdrop and textarea ride it absolutely, so both layers are
-   as tall as the draft and the scrollport above shows a window onto them. Mirror and textarea
-   MUST share font, line-height, padding and wrapping rules or heights diverge. */
+.scroll::-webkit-scrollbar-track {
+  margin-top: 8px;
+}
+
+/* Auto-grow anchor: the contenteditable is in normal flow and sets the
+   draft's height; the placeholder rides it absolutely. */
 .grow {
   position: relative;
-}
-
-/* Decoration backdrop: same metrics as the transparent-text textarea. It owns
-   every visible glyph plus the range colors and ghost hint; the textarea above
-   retains the native selection and caret. */
-.backdrop {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  color: var(--dsw-alias-label-primary);
-  pointer-events: none;
-}
-
-.backdropDisabled,
-.backdropDisabled :is(.hlToken, .hint, .textRef, .chip, .chipInvalid) {
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.hlToken {
-  background-color: transparent;
-  color: var(--dsw-alias-state-warn-label);
-}
-
-.hlSegment {
-  border-radius: 4px;
-  background-color: transparent;
-  color: transparent;
-}
-
-.hint {
-  color: var(--dsw-alias-label-caption);
 }
 
 /* Machine pending dot (adjudicating / submitting). */
@@ -192,71 +160,52 @@
   to { opacity: 1; }
 }
 
+/* The contenteditable draft surface. */
 .input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  resize: none;
-  /* Never a scroller of its own: it is as tall as the draft, so it has no
-     scrollable overflow to hold an offset that could differ from the glyphs'.
-     The browser still reveals the caret — the scroll-into-view walks up to
-     .scroll and moves both layers together. */
-  overflow: hidden;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  /* Neutral caret — must stay readable on the transparent-text layer without
-     matching the business-blue @-reference paint (that made focus look "stuck"). */
-  caret-color: var(--dsw-alias-label-primary);
-}
-
-.input,
-.mirror,
-.backdrop {
-  /* Textareas default to content-box (unlike buttons/inputs): without this the
-     width:100% textarea gains its padding OUTSIDE the card and text runs past
-     the right padding — and wraps 28px later than the mirror/backdrop layers. */
   box-sizing: border-box;
-  /* figma .InputText 34:10434: pl 16 / pr 12 / pt 4. Backdrop MUST share these
-     metrics or the highlight ranges drift off the glyphs. */
-  padding: 4px 12px 0 16px;
+  min-height: 36px;
+  padding: 4px 8px 0 14px;
   font-family: var(--dsw-font-family);
   font-size: inherit;
-  /* Three consumers, not two: the mirror sizes the stack, the layers must break
-     lines identically, and the caret reveal parses this value to step one line
-     down for a caret that sits after a newline. That parse needs a length, so a
-     theme resolving this to `normal` would make the reveal a silent no-op. */
   line-height: inherit;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
-  /* These three MUST wrap at one width: the mirror decides the box height
-     the other two are laid out in, and a glyph layer that breaks lines
-     elsewhere than the textarea puts the words under the wrong caret. They do
-     so by construction now that all three sit INSIDE .scroll — a scrollbar
-     that consumes layout space narrows the scrollport, which is their shared
-     containing block, so it costs all three the same width on every engine.
-     A textarea that scrolls itself would break this, and no property fixes
-     it: WebKit reserves gutter space for an overflow-y:auto textarea and not
-     for the overflow:hidden layers beside it, leaving them 8px apart
-     (768 against 776) — worth 2 to 5 wrapped lines on a long draft. */
+  outline: none;
+  color: var(--dsw-alias-label-primary);
+  caret-color: var(--dsw-alias-state-business-primary);
 }
 
-/* figma 34:10434: #ADB2B8 light / #81858C dark — the caption pair exactly. */
-.input::placeholder {
+.input p {
+  margin: 0;
+}
+
+.input p:last-child::after {
+  content: var(--xrk-composer-hint);
   color: var(--dsw-alias-label-caption);
-  -webkit-text-fill-color: var(--dsw-alias-label-caption);
+}
+
+.input[data-composer-composing] p:last-child::after {
+  content: none;
+}
+
+.input[data-composer-composing] + .placeholder {
+  visibility: hidden;
+}
+
+.placeholder {
+  position: absolute;
+  inset: 4px 8px auto 14px;
+  color: var(--dsw-alias-label-caption);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
   user-select: none;
 }
 
-/* The backdrop owns disabled draft color; the textarea remains caret-only so
-   its marker glyphs cannot cover the reference icons beneath it. */
-.input:disabled {
-  color: transparent;
-  -webkit-text-fill-color: transparent;
+.inputDisabled {
+  color: var(--dsw-alias-label-tertiary);
   cursor: not-allowed;
 }
 
@@ -264,15 +213,16 @@
   cursor: pointer;
 }
 
-.mirror {
-  visibility: hidden;
-  pointer-events: none;
+.hero .input {
+  min-height: 52px;
 }
 
-/* Hero (centered empty-state) keeps the 2-line floor (figma min-h 52 = ~2 × 24
-   line + 4pt); the docked composer collapses to the content height. */
-.hero .mirror {
-  min-height: 52px;
+.hero .placeholder {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 /* Toolbar: attach + Plan + Read-only on the left; model + send on the right
@@ -348,7 +298,7 @@
   cursor: default;
 }
 
-/* Plan / Read-only / model — native <select>, chip-like closed chrome
+/* Plan / Read-only / model �?native <select>, chip-like closed chrome
    (figma ToggleButton: 13/20 medium secondary, 12px chevron). */
 .select {
   max-width: 220px;
@@ -381,7 +331,7 @@
 }
 
 /* Primary send (figma IconButton 34:10465): 34px circle, #3964FE light /
-   #679EFE dark — the info-fill pair (500→400), NOT button-primary (ink);
+   #679EFE dark �?the info-fill pair (500�?00), NOT button-primary (ink);
    white glyph; empty text = 0.4 opacity. */
 .primary {
   display: grid;
@@ -450,7 +400,7 @@
 }
 
 /* Plain-text reference highlight: a pure range mark over the
-   draft's own glyphs — advance untouched, so the two layers cannot drift.
+   draft's own glyphs �?advance untouched, so the two layers cannot drift.
    Chip family colors; clone keeps rounded ends on soft-wrap fragments. */
 .textRef {
   background-color: transparent;

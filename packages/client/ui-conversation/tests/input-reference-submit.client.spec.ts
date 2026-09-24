@@ -53,7 +53,7 @@ describe('reference submission', () => {
       end: 4,
       draftRev: first.snapshot.draftRev,
     })).toBe(true)
-    expect(first.snapshot.draft).toBe('@Research notes ')
+    expect(first.snapshot.draft).toBe(`${spacedMention} `)
     expect(mirror).toHaveBeenLastCalledWith(`${spacedMention} `)
 
     const sink = vi.fn(() => Promise.resolve<SubmitOutcome>({ kind: 'success' }))

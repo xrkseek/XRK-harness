@@ -4,7 +4,15 @@ English | [中文](README.zh.md)
 
 The workflow seam (`ctx.workflowEngine`) executes a model-written orchestration script that can fan out subagents. The seam defines the script, run, result, error, and event contracts; an engine decides how to isolate and execute the script.
 
-`@xrkseek/xrk-workflow-worker-thread` is the current engine and `@xrkseek/xrk-tool-workflow` is the model-facing consumer. A future process or sandbox engine can replace the implementation without changing the tool.
+`@xrkseek/xrk-workflow` ships the abstract {@link WorkflowEngine} seam **and**
+{@link InProcessWorkflowEngine} (AsyncFunction Provider — no worker-thread / PTC
+isolation). Cordis compositions mount `InProcessWorkflowEngine` so
+`ctx.workflowEngine.start` is not an abstract hole. Product Face boot uses the
+Face-native **`ralph`** tool for fresh-agent iteration instead of this Cordis
+seam; a future process/sandbox engine can still replace the Provider without
+changing `tool-workflow`.
+
+`@xrkseek/xrk-tool-workflow` is the model-facing Cordis consumer.
 
 The package root is the Host face. The browser-safe `@xrkseek/xrk-workflow/types` subpath contains run identities, metadata, results, and observe-only lifecycle payloads without importing `Agent`, Cordis services, or Host context declarations; Host-only `WorkflowStartRequest` and `WorkflowRun` live behind the package root.
 

@@ -4,6 +4,8 @@
 
 产品上下文以**持久** `user/message` 事件注入，**不**写入三层 **system** 字符串。System 保留 persona / plugin `promptSections`，以稳定 prompt cache。
 
+回合级 / 可重算的 ephemeral 上下文走 **[context-fragments](./context-fragments.md)**（`additional_context` · recap · …），与本文 inject **分层**，不要混进 skill-catalog / agent-instructions。
+
 ## 两层模型
 
 **用户主目录 = 全局养 AI**，**工作区 = 项目覆盖**。
@@ -74,7 +76,9 @@ Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Traje
 | 目的 | 放哪 |
 |------|------|
 | 跨项目默认偏好（产品种子） | `~/.xrk/AGENTS.md`（`xrkh web` 写入；薄全局说明，对标 Codex；**不**自动种 SOUL/IDENTITY） |
-| 跨项目人格、语气、习惯 | `~/.agents/AGENTS.md` · `~/.agents/rules/` · 自写 `~/.xrk/SOUL.md` · `USER.md` |
+| 跨项目人格 / 语气（可选） | 自写 `~/.xrk/SOUL.md` · `IDENTITY.md` · `TOOLS.md`；或 `~/.agents/AGENTS.md` · `rules/` |
+| 跨项目「用户是谁」事实 | **策展** `{XRK_HOME}/memories/USER.md`（`memory` 工具；**不是**站立 `~/.xrk/USER.md`） |
+| 站立可选 `USER.md` | 仅人格草稿 inject；与策展 `memories/USER.md` 分文件，勿混写 |
 | 跨项目 skill | `~/.agents/skills/<name>/SKILL.md` |
 | 单项目规则（含 Cursor 格式） | `{workspace}/.cursor/rules/*.mdc`（**不是** `~/.cursor/rules`） |
 | 单项目插件开发 / 架构 | 仓库内 `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/` |
@@ -129,6 +133,8 @@ Composition 暴露 `composition.workspace`（`WorkspaceInjector`）供手动 inj
 > **Audience**: Integrators · Contributors
 
 Product context is injected as **durable** `user/message` events, not into the three-layer **system** string. System keeps persona / plugin `promptSections` for prompt-cache stability.
+
+Turn-scoped / recomputable ephemeral context uses **[context-fragments](./context-fragments.md)** (`additional_context` · recap · …), layered **apart** from this inject path — do not fold it into skill-catalog / agent-instructions.
 
 ## Two-layer model
 
@@ -200,7 +206,9 @@ Low → high priority (later rows closer to the turn). Skill **bodies** remain a
 | Goal | Location |
 |------|----------|
 | Cross-project defaults (product seed) | `~/.xrk/AGENTS.md` (`xrkh web`; thin Codex-style globals; **does not** auto-seed SOUL/IDENTITY) |
-| Cross-project persona, tone, habits | `~/.agents/AGENTS.md` · `~/.agents/rules/` · hand-authored `~/.xrk/SOUL.md` · `USER.md` |
+| Cross-project persona / tone (optional) | Hand-authored `~/.xrk/SOUL.md` · `IDENTITY.md` · `TOOLS.md`; or `~/.agents/AGENTS.md` · `rules/` |
+| Cross-project “who the user is” facts | **Curated** `{XRK_HOME}/memories/USER.md` (`memory` tool; **not** standing `~/.xrk/USER.md`) |
+| Standing optional `USER.md` | Persona-draft inject only; separate file from curated `memories/USER.md` |
 | Cross-project skill | `~/.agents/skills/<name>/SKILL.md` |
 | Project rules (including Cursor format) | `{workspace}/.cursor/rules/*.mdc` (**not** `~/.cursor/rules`) |
 | Single-project plugin / architecture | In-repo `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/` |

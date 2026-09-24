@@ -214,6 +214,9 @@ export class FakeApiClient implements IApiClient {
   onWorkspaceArchiveSession: (payload: unknown) => Promise<RpcResponse<{ archivedSessionIds: SessionId[] }>> =
     payload => Promise.resolve(ok({ archivedSessionIds: [(payload as { sessionId: SessionId }).sessionId] }))
 
+  onWorkspaceUnarchiveSession: (payload: unknown) => Promise<RpcResponse<{ archivedSessionIds: SessionId[] }>> =
+    () => Promise.resolve(ok({ archivedSessionIds: [] }))
+
   readonly workspace: IApiClient['workspace'] = {
     list: (payload: unknown) => this.record('workspace.list', payload, this.onWorkspaceList(payload).then(response => (
       response.result.ok
@@ -229,6 +232,8 @@ export class FakeApiClient implements IApiClient {
       this.record('workspace.insertSessionBefore', payload, this.onWorkspaceInsertSessionBefore(payload)),
     archiveSession: (payload: unknown) =>
       this.record('workspace.archiveSession', payload, this.onWorkspaceArchiveSession(payload)),
+    unarchiveSession: (payload: unknown) =>
+      this.record('workspace.unarchiveSession', payload, this.onWorkspaceUnarchiveSession(payload)),
   }
 
   // Payloads stay `unknown` (lint-lane note above); response rows are the real
@@ -279,6 +284,20 @@ export class FakeApiClient implements IApiClient {
     describe: payload => this.record('credentials.describe', payload, Promise.resolve(ok({ credentials: {} }))),
     set: payload => this.record('credentials.set', payload, Promise.resolve(ok({}))),
     unset: payload => this.record('credentials.unset', payload, Promise.resolve(ok({}))),
+  }
+
+  readonly mcpOauth: IApiClient['mcpOauth'] = {
+    status: payload => this.record('mcp.oauth.status', payload, Promise.resolve(ok({ tokenDir: '', items: [] }))),
+    login: payload => this.record('mcp.oauth.login', payload, Promise.resolve(ok({
+      server: payload.server,
+      status: 'pending' as const,
+      userCode: 'ABCD-EFGH',
+      verificationUri: 'https://example.test/device',
+    }))),
+    logout: payload => this.record('mcp.oauth.logout', payload, Promise.resolve(ok({
+      server: payload.server,
+      status: 'absent' as const,
+    }))),
   }
 
   readonly llm: IApiClient['llm'] = {

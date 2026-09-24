@@ -55,18 +55,28 @@ export interface CreateHostCronOptions {
   readonly tickMs?: number;
   readonly fetchImpl?: typeof fetch;
   readonly onError?: (err: unknown) => void;
+  /**
+   * Face `cron` product. Used when `XRK_CRON` is unset
+   * (non-empty env is CI bypass: `0` force off, any other force on).
+   */
+  readonly product?: { readonly enabled: boolean };
 }
 
 /**
  * Host convenience: jobs under `{productHome}/cron/jobs.json`, script runner,
  * webhook/file delivery, optional agent runner for unattended turns.
- * Disabled when `XRK_CRON=0`.
+ *
+ * Precedence: non-empty `XRK_CRON` → `0` off / else on; else Face `product.enabled`
+ * (default on when product omitted).
  */
 export function createHostCron(
   options: CreateHostCronOptions,
 ): CronScheduler | undefined {
   const env = options.env ?? process.env;
-  if (String(env.XRK_CRON ?? "1").trim() === "0") {
+  const envRaw = String(env.XRK_CRON ?? "").trim();
+  if (envRaw !== "") {
+    if (envRaw === "0") return undefined;
+  } else if (options.product && options.product.enabled === false) {
     return undefined;
   }
   const store = createCronJobStore({

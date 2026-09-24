@@ -5,7 +5,7 @@
  */
 
 import type { Branded } from '@xrkseek/xrk-brand'
-import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import type { CallId, ProviderRequestId, ReasoningEffortId } from './brand.ts'
 import type { Message } from './message.ts'
 
@@ -74,6 +74,16 @@ export interface ImageBlock {
   attachment: ImageAttachmentRef
 }
 
+/**
+ * A durable generic-file reference in user content. Bytes live in the
+ * attachment store; the block carries only the opaque ref and display name.
+ */
+export interface FileBlock {
+  type: 'file'
+  /** Immutable bytes and display metadata owned by the attachment service. */
+  attachment: FileAttachmentRef
+}
+
 /** A tool invocation requested by the model. */
 export interface ToolCallBlock {
   type: 'tool-call'
@@ -100,6 +110,7 @@ export interface ContentBlockMap {
   'text': TextBlock
   'reasoning': ReasoningBlock
   'image': ImageBlock
+  'file': FileBlock
   'tool-call': ToolCallBlock
   'tool-result': ToolResultBlock
 }

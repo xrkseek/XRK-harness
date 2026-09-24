@@ -1,7 +1,18 @@
 /** The agent-loop card's staged form over the `agent-loop` settings namespace. */
 
 import type { SettingsScope, SnapshotStore } from '@xrkseek/client-runtime/client'
-import { CardForm, numberField, textField, type CardActions, type CardFieldState, type CardShell } from './card-form.ts'
+import {
+  CardForm,
+  numberField,
+  textField,
+  type CardActions,
+  type CardFieldSpec,
+  type CardFieldState,
+  type CardShell,
+} from './card-form.ts'
+import { formatToolOrder, parseToolOrder } from './tool-order-draft.ts'
+
+export { TOOL_ORDER_REST, formatToolOrder, parseToolOrder } from './tool-order-draft.ts'
 
 /**
  * Namespace of the agent loop's user-owned settings. Spelled here rather than
@@ -9,12 +20,25 @@ import { CardForm, numberField, textField, type CardActions, type CardFieldState
  */
 export const AGENT_LOOP_NS = 'agent-loop'
 
+function toolOrderField(): CardFieldSpec {
+  return {
+    field: 'toolOrder',
+    format: formatToolOrder,
+    parse: parseToolOrder,
+  }
+}
+
 /** The agent-loop fields this card edits. */
 export interface AgentLoopSettings {
   /** Upper bound on parallel-safe tool calls in flight per step. */
   maxParallelToolCalls?: number
   /** Max LLM steps (tool rounds) per user turn. */
   maxSteps?: number
+  /**
+   * DSH tool wire order: tool names with exactly one `' '` rest marker.
+   * Empty / omit → lexicographic.
+   */
+  toolOrder?: readonly string[]
   /** `parallel` (default) or force `serial`. */
   toolSettle?: 'parallel' | 'serial'
   /** Max provider retries per step; `0` disables. */
@@ -39,6 +63,8 @@ export interface AgentLoopCardState extends CardShell {
   maxParallelToolCalls: CardFieldState
   /** Steps-per-turn cap. */
   maxSteps: CardFieldState
+  /** Tool wire order (comma-separated; empty slot = rest). */
+  toolOrder: CardFieldState
   /** Settle mode. */
   toolSettle: CardFieldState
   /** Provider retry cap. */
@@ -75,6 +101,7 @@ export class AgentLoopCardController {
     this.form = new CardForm(scope, [
       numberField('maxParallelToolCalls'),
       numberField('maxSteps'),
+      toolOrderField(),
       textField('toolSettle'),
       numberField('llmRetryMaxRetries'),
       numberField('maxRequestTokens'),
@@ -92,6 +119,7 @@ export class AgentLoopCardController {
       ...this.form.shell(),
       maxParallelToolCalls: this.form.field('maxParallelToolCalls'),
       maxSteps: this.form.field('maxSteps'),
+      toolOrder: this.form.field('toolOrder'),
       toolSettle: this.form.field('toolSettle'),
       llmRetryMaxRetries: this.form.field('llmRetryMaxRetries'),
       maxRequestTokens: this.form.field('maxRequestTokens'),

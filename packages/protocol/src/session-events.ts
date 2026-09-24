@@ -127,6 +127,17 @@ export type UserMessageSource =
       }[];
     }
   | {
+      /**
+       * Pluggable turn-scoped fragment (additional_context / recap / …).
+       * Layered apart from durable workspace inject (skill-catalog / instructions).
+       */
+      readonly kind: "context-fragment";
+      readonly form: "fragment";
+      readonly fragmentId: string;
+      readonly fragmentKind: "additional_context" | "recap" | "generic";
+      readonly budgetTruncations?: readonly WorkspaceBudgetTruncation[];
+    }
+  | {
       readonly kind: "plugin";
       readonly plugin?: string;
       readonly form?: string;
@@ -360,6 +371,14 @@ export interface ApprovalAskedEvent extends SessionEventBase {
   readonly reason: string;
   /** Optional truncated args preview (never secrets-bearing by convention). */
   readonly argsSummary?: string;
+  /**
+   * UX category (Codex-style network vs sandbox escalation vs ordinary tool).
+   * Optional for back-compat with older logs.
+   */
+  readonly category?: "tool" | "network" | "escalation";
+  /** When category=network, optional host/protocol for the approval card. */
+  readonly networkHost?: string;
+  readonly networkProtocol?: string;
   readonly turnId?: string;
   readonly stepId?: string;
 }

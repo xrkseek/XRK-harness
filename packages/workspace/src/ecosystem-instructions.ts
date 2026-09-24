@@ -154,6 +154,8 @@ async function pushMarkdownDir(
 }
 
 const PRODUCT_STANDING_FILES = [
+  // Optional persona / standing drafts (user-authored; product does not seed these).
+  // Standing USER.md ≠ curated `{XRK_HOME}/memories/USER.md` (exec-memory).
   "SOUL.md",
   "USER.md",
   "IDENTITY.md",

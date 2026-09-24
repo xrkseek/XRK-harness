@@ -11,6 +11,7 @@ import {
   listSshDirectory,
   createSshDirectory,
   normalizeRemoteAbs,
+  resolveSshConfig,
   resolveSshConfigFromEnv,
   resolveWithinRemoteRoot,
   shQuote,
@@ -58,6 +59,25 @@ describe("resolveSshConfigFromEnv", () => {
         XRK_SSH_WORKSPACE: "relative",
       }),
     ).toThrow(/absolute/);
+  });
+});
+
+describe("resolveSshConfig", () => {
+  it("lets non-empty XRK_SSH_HOST bypass product", () => {
+    expect(
+      resolveSshConfig(
+        { XRK_SSH_HOST: "env-box", XRK_SSH_WORKSPACE: "/env" },
+        { host: "product", workspace: "/product" },
+      ),
+    ).toEqual({ host: "env-box", workspace: "/env" });
+  });
+
+  it("uses product when env host is unset", () => {
+    expect(
+      resolveSshConfig({}, { host: "dev", workspace: "/repo", user: "me", port: 2222 }),
+    ).toEqual({ host: "dev", workspace: "/repo", user: "me", port: 2222 });
+    expect(resolveSshConfig({}, { host: "", workspace: "" })).toBeUndefined();
+    expect(resolveSshConfig({}, { host: "only" })).toBeUndefined();
   });
 });
 

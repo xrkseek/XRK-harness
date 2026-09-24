@@ -1,51 +1,56 @@
 /**
  * Optional IM long-lived gateway sidecar (ADR-0006 D-2).
  * Host stays TypeScript; vendor WS client runs out-of-process and relays inbound here.
+ * Wire shapes live in `@xrkseek/im-gateway-contract` (not a vendor SDK matrix).
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+import {
+  IM_GATEWAY_ENV_TOKEN,
+  IM_GATEWAY_ENV_URL,
+  IM_GATEWAY_HOST_HEALTH_PATH,
+  IM_GATEWAY_HOST_RELAY_PATH,
+  IM_GATEWAY_SIDECAR_HEALTH_PATH,
+  assertRelayAuthorized,
+  imGatewayStateFromProbe,
+  interpretSidecarHealthBody,
+  parseRelayBody,
+  readImGatewaySidecarConfig,
+  type ImGatewayProbeResult,
+  type ImGatewaySidecarConfig,
+} from "@xrkseek/im-gateway-contract";
 import { ingestImWebhook } from "./im-messaging-bridge.js";
 import { adapterEcho } from "./honest-envelope.js";
 import { IM_GATEWAY_LOCAL_WS_PATH } from "./im-gateway-local-ws.js";
 import { sendJson } from "./underlying/http-json.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
 
-export const IM_GATEWAY_ENV_URL = "XRK_IM_GATEWAY_URL";
-export const IM_GATEWAY_ENV_TOKEN = "XRK_IM_GATEWAY_TOKEN";
-
-export interface ImGatewaySidecarConfig {
-  readonly url: string;
-  readonly token?: string;
-}
-
-export function readImGatewaySidecarConfig(
-  env: NodeJS.ProcessEnv = process.env,
-): ImGatewaySidecarConfig | undefined {
-  const url = env[IM_GATEWAY_ENV_URL]?.trim();
-  if (!url) return undefined;
-  const token = env[IM_GATEWAY_ENV_TOKEN]?.trim();
-  return token ? { url, token } : { url };
-}
+export {
+  IM_GATEWAY_ENV_TOKEN,
+  IM_GATEWAY_ENV_URL,
+  readImGatewaySidecarConfig,
+  type ImGatewaySidecarConfig,
+};
 
 export async function probeImGatewaySidecar(
   config: ImGatewaySidecarConfig,
   timeoutMs = 3000,
-): Promise<{ ok: boolean; status?: string; error?: string }> {
+): Promise<ImGatewayProbeResult> {
   const base = config.url.replace(/\/+$/, "");
   const headers: Record<string, string> = { accept: "application/json" };
   if (config.token) headers.authorization = `Bearer ${config.token}`;
   try {
-    const res = await fetch(`${base}/health`, {
+    const res = await fetch(`${base}${IM_GATEWAY_SIDECAR_HEALTH_PATH}`, {
       headers,
       signal: AbortSignal.timeout(timeoutMs),
     });
+    const body = (await res.json().catch(() => null));
     if (!res.ok) {
-      return { ok: false, error: `upstream ${res.status}` };
+      return {
+        ok: false,
+        error: `upstream ${res.status}`,
+      };
     }
-    const body = (await res.json()) as { status?: string; ok?: boolean };
-    return {
-      ok: body.ok !== false,
-      status: typeof body.status === "string" ? body.status : "ok",
-    };
+    return interpretSidecarHealthBody(body, true);
   } catch (err) {
     return {
       ok: false,
@@ -54,47 +59,30 @@ export async function probeImGatewaySidecar(
   }
 }
 
-function relayAuthorized(
-  req: IncomingMessage,
-  config: ImGatewaySidecarConfig | undefined,
-): boolean {
-  if (!config?.token) {
-    const host = String(req.headers.host ?? "");
-    return /^(127\.0\.0\.1|localhost)(:\d+)?$/i.test(host);
-  }
-  const auth = String(req.headers.authorization ?? "");
-  const headerToken = String(req.headers["x-im-gateway-token"] ?? "");
-  const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  return bearer === config.token || headerToken === config.token;
-}
-
 export function imGatewaySidecarStatusPayload(
   channel: string,
   config: ImGatewaySidecarConfig | undefined,
-  probe?: { ok: boolean; status?: string; error?: string },
+  probe?: ImGatewayProbeResult,
 ): Record<string, unknown> {
+  const state = imGatewayStateFromProbe(config, probe);
   if (!config) {
     return {
       ok: true,
       channel,
-      state: "bridge",
+      state,
       transport: "host-ingress",
       sidecar: null,
       localWsPath: IM_GATEWAY_LOCAL_WS_PATH,
-      relayPath: "/api/im/gateway/relay",
-      healthPath: "/api/im/gateway/health",
+      relayPath: IM_GATEWAY_HOST_RELAY_PATH,
+      healthPath: IM_GATEWAY_HOST_HEALTH_PATH,
       env: [IM_GATEWAY_ENV_URL, IM_GATEWAY_ENV_TOKEN],
-      note: "No external gateway env. Local WS and relay accept push; webhook/poll stay available.",
+      note: "No external gateway env. Local WS and relay accept push; webhook/poll stay available. Vendor SDKs are not bundled.",
       adr: "docs/adr/0006-im-long-lived-gateway.md",
+      contract: "@xrkseek/im-gateway-contract",
       ...adapterEcho(),
     };
   }
   const reachable = probe?.ok === true;
-  const state = reachable
-    ? "sidecar-reachable"
-    : probe
-      ? "sidecar-unreachable"
-      : "sidecar-configured";
   return {
     ok: true,
     channel,
@@ -105,16 +93,20 @@ export function imGatewaySidecarStatusPayload(
       probed: !!probe,
       reachable,
       ...(probe?.status ? { upstreamStatus: probe.status } : {}),
+      ...(probe?.contractVersion
+        ? { contractVersion: probe.contractVersion }
+        : {}),
       ...(probe?.error ? { probeError: probe.error } : {}),
     },
-    relayPath: "/api/im/gateway/relay",
-    healthPath: "/api/im/gateway/health",
+    relayPath: IM_GATEWAY_HOST_RELAY_PATH,
+    healthPath: IM_GATEWAY_HOST_HEALTH_PATH,
     localWsPath: IM_GATEWAY_LOCAL_WS_PATH,
     env: [IM_GATEWAY_ENV_URL, IM_GATEWAY_ENV_TOKEN],
     note: reachable
       ? "Sidecar reachable; push vendor events to relayPath with gateway token."
       : "Sidecar URL configured; start relay and set XRK_IM_GATEWAY_TOKEN for non-local relay.",
     adr: "docs/adr/0006-im-long-lived-gateway.md",
+    contract: "@xrkseek/im-gateway-contract",
     ...adapterEcho(),
   };
 }
@@ -129,16 +121,20 @@ export async function handleImGatewaySidecarHttp(
   const config = readImGatewaySidecarConfig(env);
   const method = (req.method ?? "GET").toUpperCase();
 
-  if (pathname === "/api/im/gateway/health" && (method === "GET" || method === "HEAD")) {
+  if (
+    pathname === IM_GATEWAY_HOST_HEALTH_PATH &&
+    (method === "GET" || method === "HEAD")
+  ) {
     const probe = config ? await probeImGatewaySidecar(config) : undefined;
     sendJson(res, 200, {
       ok: true,
       configured: !!config,
       localWsPath: IM_GATEWAY_LOCAL_WS_PATH,
       probe,
-      relayPath: "/api/im/gateway/relay",
+      relayPath: IM_GATEWAY_HOST_RELAY_PATH,
       env: [IM_GATEWAY_ENV_URL, IM_GATEWAY_ENV_TOKEN],
       adapter: "xrk-dsh-compat",
+      contract: "@xrkseek/im-gateway-contract",
       note: config
         ? "External sidecar configured. Local WS ingress stays available."
         : "Local WS ingress is up without XRK_IM_GATEWAY_*.",
@@ -146,25 +142,45 @@ export async function handleImGatewaySidecarHttp(
     return true;
   }
 
-  if (pathname === "/api/im/gateway/relay" && method === "POST") {
-    if (!relayAuthorized(req, config)) {
+  if (pathname === IM_GATEWAY_HOST_RELAY_PATH && method === "POST") {
+    const auth = assertRelayAuthorized({
+      hostHeader:
+        typeof req.headers.host === "string" ? req.headers.host : undefined,
+      authorization:
+        typeof req.headers.authorization === "string"
+          ? req.headers.authorization
+          : undefined,
+      gatewayTokenHeader:
+        typeof req.headers["x-im-gateway-token"] === "string"
+          ? req.headers["x-im-gateway-token"]
+          : undefined,
+      config,
+    });
+    if (!auth.ok) {
       sendJson(res, 401, {
         ok: false,
-        code: "gateway-relay-unauthorized",
-        message: "Set XRK_IM_GATEWAY_TOKEN or relay from localhost.",
+        code: auth.code,
+        message: auth.message,
       });
       return true;
     }
-    const body = await parseJsonBody(req);
-    const channel =
-      typeof body.channel === "string" ? body.channel.trim() : "";
-    if (!channel) {
-      sendJson(res, 400, { ok: false, code: "channel-required" });
+    const raw = await parseJsonBody(req);
+    const parsed = parseRelayBody(raw);
+    if (!parsed.ok) {
+      sendJson(res, 400, {
+        ok: false,
+        code: parsed.code,
+        message: parsed.message,
+      });
       return true;
     }
-    const botId =
-      typeof body.botId === "string" ? body.botId.trim() : undefined;
-    const row = ingestImWebhook(xrkHome, channel, body, botId);
+    const { channel, botId, ...rest } = parsed.body;
+    const row = ingestImWebhook(
+      xrkHome,
+      channel,
+      { ...rest, channel, ...(botId ? { botId } : {}) },
+      botId,
+    );
     sendJson(res, 200, {
       ok: true,
       received: true,
@@ -172,6 +188,7 @@ export async function handleImGatewaySidecarHttp(
       channel,
       mode: "sidecar-relay",
       adapter: "xrk-dsh-compat",
+      contract: "@xrkseek/im-gateway-contract",
     });
     return true;
   }

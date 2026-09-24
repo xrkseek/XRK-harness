@@ -47,23 +47,34 @@ export interface CuratedMemoryWriteResult {
   readonly drift_backup?: string;
 }
 
+/** File providers return sync; HTTP providers may return Promises. */
+export type MaybeAsync<T> = T | Promise<T>;
+
 export interface CuratedMemoryStore {
   readonly dir: string;
   /** Frozen load-time block. Empty string when that file had no entries. */
   frozenPrompt(target: CuratedMemoryTarget): string;
   /** Both frozen blocks, joined. Does not re-read disk. */
   frozenSystemBlock(): string;
-  add(target: CuratedMemoryTarget, content: string): CuratedMemoryWriteResult;
+  /** Live entries (re-read; for Phase1 consolidate / tooling). */
+  listEntries(target: CuratedMemoryTarget): MaybeAsync<readonly string[]>;
+  add(
+    target: CuratedMemoryTarget,
+    content: string,
+  ): MaybeAsync<CuratedMemoryWriteResult>;
   replace(
     target: CuratedMemoryTarget,
     oldText: string,
     content: string,
-  ): CuratedMemoryWriteResult;
-  remove(target: CuratedMemoryTarget, oldText: string): CuratedMemoryWriteResult;
+  ): MaybeAsync<CuratedMemoryWriteResult>;
+  remove(
+    target: CuratedMemoryTarget,
+    oldText: string,
+  ): MaybeAsync<CuratedMemoryWriteResult>;
   applyBatch(
     target: CuratedMemoryTarget,
     operations: readonly CuratedMemoryOperation[],
-  ): CuratedMemoryWriteResult;
+  ): MaybeAsync<CuratedMemoryWriteResult>;
 }
 
 export interface CreateCuratedMemoryStoreOptions {
@@ -356,6 +367,11 @@ export function createCuratedMemoryStore(
     },
     frozenSystemBlock() {
       return [snapshot.memory, snapshot.user].filter((block) => block.trim()).join("\n\n");
+    },
+    listEntries(target) {
+      const { raw, ok } = readRaw(fileFor(dir, target));
+      if (!ok) return [];
+      return dedupe(parseEntries(raw));
     },
     add(target, content) {
       const text = content.trim();

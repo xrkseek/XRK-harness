@@ -80,6 +80,10 @@ export type MuxFrame =
       readonly toolName: string;
       readonly callId?: string;
       readonly reason?: string;
+      /** tool · network · escalation (Codex-style UX split). */
+      readonly category?: "tool" | "network" | "escalation";
+      readonly networkHost?: string;
+      readonly networkProtocol?: string;
     }
   | {
       readonly type: "approval/resolved";

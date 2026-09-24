@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 // The web render intent on the web side: the pure webCardModel derivation over
 // resultView, and the conversation render sites that consume it — the keyed
 // WebRow (registered under both web_search and web_fetch), the GenericToolCard
@@ -251,7 +251,7 @@ describe('DetailsPanel web Output section', () => {
       sessionId: SID, views: EMPTY_CONVERSATION_VIEWS,
       chat: over.chat ?? toolChatSnapshot(nodes, runningCalls),
       nodes: [], turnTimings: new Map(), turnEnds: new Map(), partial: null, runningCalls: [],
-      pending: [], queue: [], running: false, composerPhase: 'active', removed: false,
+      pending: [], pendingSubmissions: [], queue: [], running: false, composerPhase: 'active', removed: false,
       openState: 'open', openError: null, hasMore: false, loadingOlder: false,
       promptError: null, blank: false, subagent: null, lastAgentError: null, ...over,
     }

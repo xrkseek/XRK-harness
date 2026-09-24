@@ -49,6 +49,7 @@ describe("formatBrowserGuidance", () => {
     const text = formatBrowserGuidance(["browser_open", "browser_act"]);
     expect(text).toContain("browser_open");
     expect(text).toContain("browser_act");
+    expect(text).toContain("computer_use");
   });
 
   it("returns empty when browser tools are unavailable", () => {

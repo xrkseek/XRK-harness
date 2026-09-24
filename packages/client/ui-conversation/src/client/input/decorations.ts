@@ -59,6 +59,11 @@ export interface DraftDecorations {
 /** Token matcher: a trigger char at line start or after whitespace, then a word-ish name (never crosses \n). */
 const TEXT_REF_RE = /(^|\s)([/@])([\w-]+)/g
 /**
+ * What may follow a `/name` token: whitespace or the draft end — so
+ * `/nfs-hg/xxx`, `/plan.md`, and `/plan。` stay prose, never a reference.
+ */
+const SLASH_TOKEN_END_RE = /^(?:\s|$)/
+/**
  * Directory `@path/` — the trailing slash must end the token. A mid-path slash
  * before a filename (`@dir/file.png`) must not paint as a folder prefix.
  */
@@ -122,6 +127,7 @@ export function scanTextRefs(
     while ((m = TEXT_REF_RE.exec(draft)) !== null) {
       const trigger = m[2] as '/' | '@'
       const name = m[3] ?? ''
+      if (trigger === '/' && !SLASH_TOKEN_END_RE.test(draft.slice(m.index + m[0].length))) continue
       if (lexicon.get(trigger)?.includes(name)) {
         const start = m.index + (m[1]?.length ?? 0)
         out.push({ start, end: start + 1 + name.length, trigger })

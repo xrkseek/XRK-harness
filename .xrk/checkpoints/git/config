@@ -1,0 +1,8 @@
+[core]
+	repositoryformatversion = 0
+	filemode = false
+	bare = false
+	logallrefupdates = true
+	worktree = C:/Users/xrkseek/Desktop/主仓库/XRK-harness
+	symlinks = false
+	ignorecase = true

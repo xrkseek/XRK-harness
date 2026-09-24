@@ -185,9 +185,9 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
     variant: 'composer',
   }
   const view = render(<InputBar {...barProps} />)
-  const textarea = view.container.querySelector('textarea')!
+  const textarea = view.container.querySelector('[data-composer-input]')!
   const type = (text: string): void => {
-    fireEvent.change(textarea, { target: { value: text } })
+    act(() => { shell.setDraft(text) })
   }
   return { ctx, inputTriggers, controller, shell, wiring, view, textarea, type, sink, serialize, release }
 }
@@ -214,9 +214,9 @@ describe('scenario A: menu-pick /goal, type args, enter submits', () => {
     act(() => { b.controller.pick('command', 0) })
     expect(b.shell.snapshot.phase).toBe('claimed')
     expect(b.textarea.value).toBe('/goal ')
-    expect(b.view.container.querySelector('[data-decoration="token"]')?.textContent).toBe('/goal ')
+    expect(b.view.container.querySelector('[data-lexical-text][style*="warn-label"]')?.textContent).toBe('/goal ')
     // The zh dictionary owns a hint.goal entry, which overrides the machine's raw hint (production behavior).
-    expect(b.view.container.querySelector('[data-decoration="hint"]')?.textContent).toBe('输入目标，智能体将持续执行')
+    expect(b.view.container.querySelector('[data-composer-input]')?.textContent).toBe('输入目标，智能体将持续执行')
     // Continue typing args; hint drops; claim holds.
     b.type('/goal 发布 v1')
     expect(b.shell.snapshot.phase).toBe('claimed')
@@ -310,7 +310,7 @@ describe('scenario H: backspace breaks the token', () => {
     // Backspace into the token: watch break → plain, visuals gone.
     b.type('/goa ')
     expect(b.shell.snapshot.phase).toBe('plain')
-    expect(b.view.container.querySelector('[data-decoration="token"]')).toBeNull()
+    expect(b.view.container.querySelector('[data-lexical-text][style*="warn-label"]')).toBeNull()
   })
 })
 
@@ -332,13 +332,13 @@ describe('scenario: reference decoration lights up when the lexicon settles', ()
     })
     // Typed before the catalog settled: a plain token, no decoration.
     b.type('/deploy now')
-    expect(b.view.container.querySelector('[data-decoration="text-ref"]')).toBeNull()
+    expect(b.view.container.querySelector('[data-composer-text-ref]')).toBeNull()
     // The catalog settles (ui-skill's settle path fires the same notification).
     act(() => {
       roll = ['deploy']
       notify?.()
     })
-    const mark = b.view.container.querySelector('[data-decoration="text-ref"]')
+    const mark = b.view.container.querySelector('[data-composer-text-ref]')
     expect(mark?.textContent).toBe('/deploy')
   })
 })

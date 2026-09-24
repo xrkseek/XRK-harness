@@ -384,6 +384,51 @@ describe('AgentLoopCardController', () => {
     })
   })
 
+  it('saves toolOrder when edited with a rest slot', async () => {
+    const host = stubSettingsScope<AgentLoopSettings>()
+    acceptWrites(host)
+    const controller = new AgentLoopCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: {},
+      base: {},
+      user: {},
+    })
+    const face = controller.inject()
+
+    face.edit('toolOrder', 'bash, , read_file')
+    face.save()
+    await vi.waitFor(() => {
+      expect(host.set).toHaveBeenCalledWith('toolOrder', ['bash', ' ', 'read_file'])
+    })
+
+    expect(face.hooks.agentLoopCard.getSnapshot()).toMatchObject({
+      dirty: false,
+      toolOrder: { text: 'bash, , read_file', overridden: true, invalid: false },
+    })
+  })
+
+  it('marks toolOrder invalid without exactly one rest slot', () => {
+    const host = stubSettingsScope<AgentLoopSettings>()
+    const controller = new AgentLoopCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: {},
+      base: {},
+      user: {},
+    })
+    const face = controller.inject()
+
+    face.edit('toolOrder', 'bash, read_file')
+    expect(face.hooks.agentLoopCard.getSnapshot()).toMatchObject({
+      dirty: true,
+      invalid: true,
+      toolOrder: { invalid: true },
+    })
+  })
+
   it('saves subagent depth and active caps when edited', async () => {
     const host = stubSettingsScope<AgentLoopSettings>()
     acceptWrites(host)

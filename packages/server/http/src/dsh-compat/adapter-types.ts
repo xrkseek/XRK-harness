@@ -70,6 +70,23 @@ export type DshCompatWireOptions = XrkPluginServicesOptions &
   HarnessConnectorOptions &
   Pick<WalletOptions, "walletPort" | "face" | "xrkHome"> & {
     readonly workspaceRoot?: string;
+    /**
+     * Face `auto-review` product + Credentials token for the HTTP classifier.
+     * Called per classify/status so Settings saves apply without Host restart.
+     */
+    readonly resolveAutoReviewClassifierProduct?: () => {
+      readonly classifierUrl?: string;
+      readonly classifierToken?: string;
+    };
+    /**
+     * Face `memory-embed` product + Credentials token for the vector sidecar.
+     * Called per noema embedding.search/status so Settings saves apply live.
+     */
+    readonly resolveMemoryEmbedProduct?: () => {
+      readonly url?: string;
+      readonly token?: string;
+      readonly collection?: string;
+    };
   };
 
 export type HostProviderPartial = Pick<DshAdapterContribution, "http" | "rpc">;

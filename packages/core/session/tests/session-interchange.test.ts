@@ -57,4 +57,18 @@ describe("session interchange", () => {
     expect(again.filter((event) => event.type === "tool/call")).toHaveLength(1);
     expect(again.filter((event) => event.type === "turn/start")).toHaveLength(2);
   });
+
+  it("refuses third-party Session Format headers (ADR-0009)", () => {
+    const foreign = [
+      JSON.stringify({
+        version: 3,
+        id: "s1",
+        createdAt: 1,
+        isSeeded: false,
+        delegationDepth: 0,
+      }),
+      JSON.stringify({ type: "message", seq: 1, time: 1, data: {} }),
+    ].join("\n");
+    expect(() => importSessionInterchange(foreign)).toThrow(/ADR-0009/);
+  });
 });

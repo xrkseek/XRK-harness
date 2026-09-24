@@ -8,4 +8,4 @@ Host scheduled tasks (Hermes-inspired): unattended agent turns, script-only jobs
 - **Delivery**: `none` · `webhook` POST · `file` append
 - **Tool**: `cronjob` (create / list / pause / resume / run / remove)
 
-Disable with `XRK_CRON=0`. See [docs/cron.md](../../../docs/cron.md).
+Disable via Settings → Plugins → **Cron**, or CI env `XRK_CRON=0`. See [docs/cron.md](../../../docs/cron.md).

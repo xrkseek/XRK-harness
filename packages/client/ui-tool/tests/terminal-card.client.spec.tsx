@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 // The terminal render intent on the web side: the pure terminalCardModel
 // derivation over callView/resultView, and both conversation render sites that
 // consume it — the chat tool row's expanded body (GenericToolCard / BashRow)
@@ -487,7 +487,7 @@ describe('DetailsPanel Output section', () => {
       sessionId: SID, views: EMPTY_CONVERSATION_VIEWS,
       chat: over.chat ?? toolChatSnapshot(nodes, runningCalls),
       nodes: [], turnTimings: new Map(), turnEnds: new Map(), partial: null, runningCalls: [],
-      pending: [], queue: [], running: false, composerPhase: 'active', removed: false,
+      pending: [], pendingSubmissions: [], queue: [], running: false, composerPhase: 'active', removed: false,
       openState: 'open', openError: null, hasMore: false, loadingOlder: false,
       promptError: null, blank: false, subagent: null, lastAgentError: null, ...over,
     }

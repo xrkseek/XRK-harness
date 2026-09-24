@@ -18,6 +18,7 @@ import {
   createWriteIntentGuard,
   extractPathArg,
   SUBAGENT_ROUTING_PROMPT_TEXT,
+  SESSION_QUERY_ROUTING_PROMPT_TEXT,
   type ToolDefinition,
   type ToolPipeline,
   type ToolRegistry,
@@ -70,6 +71,7 @@ import {
   createCuratedMemoryStore,
   createCuratedMemoryTools,
   writeReusableNotesAfterTurn,
+  consolidateCuratedMemoryPhase1,
   type CuratedMemoryStore,
 } from "@xrkseek/exec-memory";
 import {
@@ -87,6 +89,7 @@ import {
 import {
   createSandboxStack,
   createSandboxWrapGuard,
+  createHardlineArgvPre,
   type SandboxBackendKind,
   type SandboxService,
   type WindowsSandboxMode,
@@ -105,28 +108,43 @@ import {
 } from "@xrkseek/exec-shell";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
 import {
+  createRegistryCodeToolBridge,
   createRunCodeTool,
   createWorkerCodeRuntime,
 } from "@xrkseek/code-runtime";
+import {
+  appendContextFragments,
+  createAdditionalContextFragment,
+  createContextFragmentPipeline,
+  fragmentsToPrepareContexts,
+  type ContextFragmentPipeline,
+  type ContextFragmentProvider,
+} from "@xrkseek/context-fragments";
 import type { LlmAdapter } from "@xrkseek/llm";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import {
   createPolicyToolPre,
   createSessionReadOnlyToolPre,
+  createWritePathSecurityPre,
+  createWritePathSecurityPost,
   type PolicyEngine,
 } from "@xrkseek/policy";
 import {
   effectiveSandboxMode,
+  flattenText,
+  isHumanUserMessageSource,
   shouldConfineSandbox,
 } from "@xrkseek/protocol";
 import {
   createLifecycleWebhookNotifier,
   createPolicyEngineFromPlugins,
+  createShellHookPost,
   createShellHookPre,
+  createShellLifecycleHooks,
   defaultLifecycleWebhookPaths,
   defaultShellHookPaths,
   loadLifecycleWebhooks,
-  loadShellHookCommands,
+  loadShellHooksConfig,
   wireCompositionHooks,
   wireCompositionTools,
   wireCompositionPrompts,
@@ -136,6 +154,8 @@ import {
   type RegisteredPlugin,
   type ShellHookCommand,
   type ShellHookRunner,
+  type ShellHooksConfig,
+  type ShellLifecycleHooks,
 } from "@xrkseek/server-loader";
 import {
   createDefaultSessionTelemetryAccess,
@@ -147,11 +167,15 @@ import {
   createWorkspaceInjector,
   createWorkspaceToolOutputPersist,
   createSkillTools,
+  createProposeSkillTool,
   createSlashResolver,
   loadOfficeRecipes,
   mergeRecipesById,
   appendWorkspaceInjectsIfChanged,
   resolveProductHome,
+  noteLearningLoopTurn,
+  consumeLearningLoopNudge,
+  learningLoopNudgeText,
   SKILL_TOOL_GUIDANCE,
   type ResolveWorkspaceInjectOptions,
   type WorkspaceInjector,
@@ -198,12 +222,57 @@ export interface HarnessCompositionOptions {
   readonly sandboxBackend?: SandboxBackendKind;
   /** Docker image when `sandboxBackend` / env is `docker`. */
   readonly sandboxDockerImage?: string;
+  /** Docker `--network` when backend is `docker` (`none` | `bridge`). */
+  readonly sandboxDockerNetwork?: import("@xrkseek/exec-sandbox").DockerNetworkMode;
   /** Windows helper binary when `sandboxBackend` / env is `windows`. */
   readonly sandboxWindowsHelper?: string;
   /** Windows permission posture (default `workspace-write`). */
   readonly sandboxWindowsMode?: WindowsSandboxMode;
   /** Windows network egress (default false). */
   readonly sandboxWindowsNetwork?: boolean;
+  /**
+   * Face `sandbox` product (Settings SoT). Ignored when `XRK_SANDBOX_BACKEND`
+   * is set (CI bypass).
+   */
+  readonly sandboxProduct?: import("@xrkseek/exec-sandbox").SandboxProductConfig;
+  /**
+   * Face `computer-use` product (Settings SoT). Ignored when `XRK_COMPUTER_USE`
+   * is set (CI bypass).
+   */
+  readonly computerUseProduct?: import("@xrkseek/exec-computer-use").ComputerUseProductConfig;
+  /**
+   * Env overlay for computer-use resolve (Host merges Credentials helper path).
+   */
+  readonly computerUseEnv?: NodeJS.ProcessEnv;
+  /**
+   * Face `browser` product (Settings SoT). Ignored when `XRK_BROWSER_CDP_URL`
+   * / `BROWSER_CDP_URL` is set (CI bypass).
+   */
+  readonly browserProduct?: import("@xrkseek/exec-web").BrowserProductConfig;
+  /**
+   * Host-shared browser runtime registry (Hermes task_id → session map).
+   * When set, composition reuses one BrowserSession per `sessionId`
+   * across agent invalidate; Host stop / session finalize owns teardown.
+   */
+  readonly browserRuntime?: import("@xrkseek/exec-web").BrowserRuntimeRegistry;
+  /**
+   * Face `voice` product (Settings SoT). Ignored when `XRK_VOICE` is set.
+   */
+  readonly voiceProduct?: import("@xrkseek/exec-voice").VoiceProductConfig;
+  /** Env overlay for voice (Host merges Credentials key). */
+  readonly voiceEnv?: NodeJS.ProcessEnv;
+  /**
+   * Face `image-gen` product (Settings SoT). Ignored when `XRK_IMAGE_GEN` is set.
+   */
+  readonly imageGenProduct?: import("@xrkseek/exec-image-gen").ImageGenProductConfig;
+  /** Env overlay for image-gen (Host merges Credentials key). */
+  readonly imageGenEnv?: NodeJS.ProcessEnv;
+  /**
+   * Face `video-gen` product (Settings SoT). Ignored when `XRK_VIDEO_GEN` is set.
+   */
+  readonly videoGenProduct?: import("@xrkseek/exec-video-gen").VideoGenProductConfig;
+  /** Env overlay for video-gen (Host merges Credentials key). */
+  readonly videoGenEnv?: NodeJS.ProcessEnv;
   /** Optional override of the whole sandbox stack (tests). */
   readonly sandbox?: SandboxService;
   /**
@@ -219,9 +288,21 @@ export interface HarnessCompositionOptions {
   /**
    * Wire product workspace as durable `user/message` injects (skill catalog +
    * agent-instructions) at turn start. Default: on when assemble is enabled.
-   * See docs/workspace-inject.md.
+   * See docs/workspace-inject.md. Layered **apart** from
+   * {@link contextFragments} (ephemeral / turn-scoped fragments).
    */
   readonly workspaceInject?: WorkspaceInjectOption;
+  /**
+   * Pluggable context-fragment pipeline (Codex-shaped additional_context /
+   * recap / …). Default: empty live pipeline. `false` disables. Pass a
+   * pipeline to reuse; or use `contextFragmentProviders` to register on the
+   * default. See docs/context-fragments.md.
+   */
+  readonly contextFragments?: boolean | ContextFragmentPipeline;
+  /** Providers registered on the composition fragment pipeline (ignored when `contextFragments: false`). */
+  readonly contextFragmentProviders?: readonly ContextFragmentProvider[];
+  /** Char budget per collect phase (default 8000). */
+  readonly contextFragmentBudgetChars?: number;
   /**
    * Load `{productDir}/recipes/*.yaml` for `/id …` expand on turns.
    * Default: on when assemble is enabled. `false` skips recipes only;
@@ -269,7 +350,8 @@ export interface HarnessCompositionOptions {
   /**
    * Register `memory` (curated MEMORY.md / USER.md). Default: on.
    * `false` skips. Pass a `CuratedMemoryStore` to inject (tests).
-   * The system-prompt block is frozen when this composition is created.
+   * Host Settings → Plugins → Curated memory (or `XRK_CURATED_MEMORY=0`)
+   * can disable. The system-prompt block is frozen when this composition is created.
    * Tool writes update disk only. Not the Mnemon document library.
    */
   readonly curatedMemory?: false | CuratedMemoryStore;
@@ -295,14 +377,17 @@ export interface HarnessCompositionOptions {
   /** Optional policy engine → `pipeline.onPre(createPolicyToolPre)`. */
   readonly policy?: PolicyEngine;
   /**
-   * Shell PreToolUse hooks (`hooks.json`). Default: load `~/.xrk/hooks.json`
-   * then `{workspace}/.xrk/hooks.json`. `false` disables. Pass `commands` /
-   * `paths` / `runner` to override (tests).
+   * Shell hooks (`hooks.json`). Default: load `~/.xrk/hooks.json`
+   * then `{workspace}/.xrk/hooks.json`. Supports PreToolUse · PostToolUse ·
+   * UserPromptSubmit · Stop · PreCompact · PostCompact · SubagentStart/Stop
+   * (Claude PascalCase + Codex camelCase). `false` disables.
    */
   readonly shellHooks?:
     | false
     | {
         readonly commands?: readonly ShellHookCommand[];
+        /** Full multi-event config (tests). Overrides path load when set. */
+        readonly config?: ShellHooksConfig;
         readonly paths?: readonly string[];
         readonly defaultTimeoutMs?: number;
         readonly runner?: ShellHookRunner;
@@ -322,7 +407,8 @@ export interface HarnessCompositionOptions {
       };
   /**
    * Session telemetry (OpenTelemetry OTLP/HTTP logs). Default: resolve from
-   * `XRK_TELEMETRY` / OTEL_* env. `false` disables. Pass a `sink` to inject.
+   * Face `session-telemetry` product and/or `XRK_TELEMETRY` / OTEL_* env
+   * (`XRK_TELEMETRY` is the CI bypass). `false` disables. Pass a `sink` to inject.
    * Capture is notify-only (never blocks turns).
    */
   readonly sessionTelemetry?:
@@ -331,6 +417,7 @@ export interface HarnessCompositionOptions {
     | {
         readonly sink?: SessionTelemetrySink;
         readonly env?: NodeJS.ProcessEnv;
+        readonly product?: import("@xrkseek/session-telemetry").SessionTelemetryProductConfig;
         readonly fetchImpl?: import("@xrkseek/session-telemetry").OtlpFetch;
         readonly serviceName?: string;
       };
@@ -399,12 +486,16 @@ export interface HarnessComposition {
   readonly workspaceRoot: string;
   readonly fs: FsService;
   readonly workspace: WorkspaceInjector;
+  /** Live fragment pipeline (undefined when `contextFragments: false`). */
+  readonly contextFragments?: ContextFragmentPipeline;
   readonly tools: ToolRegistry;
   readonly pipeline: ToolPipeline;
   readonly llm: LlmAdapter;
   readonly store: SessionStore;
   readonly sessionId: string;
   readonly prompts: SystemPromptAssembler;
+  /** File-driven shell lifecycle hooks (turn/compact/subagent); undefined when disabled/empty. */
+  readonly shellLifecycle?: ShellLifecycleHooks;
   createAgent(): Promise<AgentHandle>;
   dumpConfig(patch?: Record<string, unknown>): Record<string, unknown>;
   /** Cancel background jobs + await settlement (composition teardown). */
@@ -435,9 +526,11 @@ function toInjectOptions(
 
 function wrapStoreForLifecycleWebhooks(
   store: SessionStore,
-  notifier: LifecycleWebhookNotifier,
+  notifier: LifecycleWebhookNotifier | undefined,
   sessionId: string,
+  shellLifecycle?: ShellLifecycleHooks,
 ): SessionStore {
+  if (!notifier && !shellLifecycle) return store;
   return {
     create: (id) => store.create(id),
     get: (id) => store.get(id),
@@ -451,18 +544,38 @@ function wrapStoreForLifecycleWebhooks(
       ? { isLoaded: (id: string) => store.isLoaded!(id) }
       : {}),
     append(id, event) {
+      if (id === sessionId && event.type === "context/compaction") {
+        shellLifecycle?.fire("PreCompact", {
+          turn_id: event.turnId,
+          reason: event.reason,
+          trigger: event.reason,
+        });
+      }
       const logged = store.append(id, event);
       if (id === sessionId) {
         if (event.type === "turn/start") {
-          notifier.fire({
+          notifier?.fire({
             hookEventName: "turn/start",
             turnId: event.turnId,
           });
+          shellLifecycle?.fire("UserPromptSubmit", {
+            turn_id: event.turnId,
+          });
         } else if (event.type === "turn/end") {
-          notifier.fire({
+          notifier?.fire({
             hookEventName: "turn/end",
             turnId: event.turnId,
             extra: { reason: event.reason },
+          });
+          shellLifecycle?.fire("Stop", {
+            turn_id: event.turnId,
+            reason: event.reason,
+          });
+        } else if (event.type === "context/compaction") {
+          shellLifecycle?.fire("PostCompact", {
+            turn_id: event.turnId,
+            reason: event.reason,
+            trigger: event.reason,
           });
         }
       }
@@ -503,6 +616,7 @@ export function createHarnessComposition(
         telOpt?.sink ??
         createDefaultSessionTelemetryAccess({
           ...(telOpt?.env !== undefined ? { env: telOpt.env } : {}),
+          ...(telOpt?.product !== undefined ? { product: telOpt.product } : {}),
           ...(telOpt?.fetchImpl !== undefined
             ? { fetchImpl: telOpt.fetchImpl }
             : {}),
@@ -546,8 +660,51 @@ export function createHarnessComposition(
       });
     }
   }
-  if (lifecycleNotifier) {
-    store = wrapStoreForLifecycleWebhooks(store, lifecycleNotifier, sessionId);
+
+  let shellLifecycle: ShellLifecycleHooks | undefined;
+  let shellHooksConfig: ShellHooksConfig = {};
+  if (options.shellHooks !== false) {
+    const shellOpt =
+      typeof options.shellHooks === "object" ? options.shellHooks : undefined;
+    shellHooksConfig =
+      shellOpt?.config ??
+      (shellOpt?.commands
+        ? { PreToolUse: shellOpt.commands }
+        : loadShellHooksConfig(
+            shellOpt?.paths ??
+              defaultShellHookPaths(
+                options.workspaceRoot,
+                resolveProductHome(),
+              ),
+          ));
+    const hasLifecycle =
+      (shellHooksConfig.UserPromptSubmit?.length ?? 0) > 0 ||
+      (shellHooksConfig.Stop?.length ?? 0) > 0 ||
+      (shellHooksConfig.PreCompact?.length ?? 0) > 0 ||
+      (shellHooksConfig.PostCompact?.length ?? 0) > 0 ||
+      (shellHooksConfig.SubagentStart?.length ?? 0) > 0 ||
+      (shellHooksConfig.SubagentStop?.length ?? 0) > 0 ||
+      (shellHooksConfig.SessionStart?.length ?? 0) > 0;
+    if (hasLifecycle) {
+      shellLifecycle = createShellLifecycleHooks({
+        config: shellHooksConfig,
+        cwd: () => options.workspaceRoot,
+        sessionId,
+        ...(shellOpt?.defaultTimeoutMs !== undefined
+          ? { defaultTimeoutMs: shellOpt.defaultTimeoutMs }
+          : {}),
+        ...(shellOpt?.runner !== undefined ? { runner: shellOpt.runner } : {}),
+      });
+    }
+  }
+
+  if (lifecycleNotifier || shellLifecycle) {
+    store = wrapStoreForLifecycleWebhooks(
+      store,
+      lifecycleNotifier,
+      sessionId,
+      shellLifecycle,
+    );
   }
   const sandbox =
     options.sandbox ??
@@ -559,6 +716,9 @@ export function createHarnessComposition(
       ...(options.sandboxDockerImage !== undefined
         ? { dockerImage: options.sandboxDockerImage }
         : {}),
+      ...(options.sandboxDockerNetwork !== undefined
+        ? { dockerNetwork: options.sandboxDockerNetwork }
+        : {}),
       ...(options.sandboxWindowsHelper !== undefined
         ? { windowsHelper: options.sandboxWindowsHelper }
         : {}),
@@ -567,6 +727,9 @@ export function createHarnessComposition(
         : {}),
       ...(options.sandboxWindowsNetwork !== undefined
         ? { windowsNetwork: options.sandboxWindowsNetwork }
+        : {}),
+      ...(options.sandboxProduct !== undefined
+        ? { product: options.sandboxProduct }
         : {}),
       ...(options.remoteExecution ? { remoteExecution: true } : {}),
     });
@@ -629,6 +792,11 @@ export function createHarnessComposition(
   })) {
     tools.register(tool);
   }
+  tools.register(
+    createProposeSkillTool({
+      resolveWorkspaceRoot: () => options.workspaceRoot,
+    }),
+  );
   if (options.webTools !== false) {
     const access =
       typeof options.webTools === "object"
@@ -637,7 +805,16 @@ export function createHarnessComposition(
             options.webSearch ? { search: options.webSearch } : {},
           );
     for (const tool of createWebTools(access)) tools.register(tool);
-    const browser = createBrowserSession({ fetch: access.fetch });
+    const makeBrowser = () =>
+      createBrowserSession({
+        fetch: access.fetch,
+        ...(options.browserProduct
+          ? { product: options.browserProduct }
+          : {}),
+      });
+    const browser = options.browserRuntime
+      ? options.browserRuntime.getOrCreate(sessionId, makeBrowser)
+      : makeBrowser();
     for (const tool of createBrowserTools(
       browser,
       options.attachments
@@ -658,9 +835,17 @@ export function createHarnessComposition(
     const service =
       typeof options.computerUseTools === "object"
         ? options.computerUseTools
-        : createDefaultComputerUseAccess().service;
+        : createDefaultComputerUseAccess({
+            ...(options.computerUseEnv
+              ? { env: options.computerUseEnv }
+              : {}),
+            ...(options.computerUseProduct
+              ? { product: options.computerUseProduct }
+              : {}),
+          }).service;
     for (const tool of createComputerUseTools({
       ...(service ? { service } : {}),
+      ...(options.computerUseEnv ? { env: options.computerUseEnv } : {}),
     })) {
       tools.register(tool);
     }
@@ -669,9 +854,18 @@ export function createHarnessComposition(
     const service =
       typeof options.voiceTools === "object"
         ? options.voiceTools
-        : createDefaultVoiceAccess().service;
+        : createDefaultVoiceAccess({
+            ...(options.voiceEnv ? { env: options.voiceEnv } : {}),
+            ...(options.voiceProduct
+              ? { product: options.voiceProduct }
+              : {}),
+          }).service;
     for (const tool of createVoiceTools({
       ...(service ? { service } : {}),
+      ...(options.voiceEnv ? { env: options.voiceEnv } : {}),
+      ...(options.voiceProduct
+        ? { product: options.voiceProduct }
+        : {}),
     })) {
       tools.register(tool);
     }
@@ -689,9 +883,18 @@ export function createHarnessComposition(
     const service =
       typeof options.imageGenTools === "object"
         ? options.imageGenTools
-        : createDefaultImageGenAccess().service;
+        : createDefaultImageGenAccess({
+            ...(options.imageGenEnv ? { env: options.imageGenEnv } : {}),
+            ...(options.imageGenProduct
+              ? { product: options.imageGenProduct }
+              : {}),
+          }).service;
     for (const tool of createImageGenTools({
       ...(service ? { service } : {}),
+      ...(options.imageGenEnv ? { env: options.imageGenEnv } : {}),
+      ...(options.imageGenProduct
+        ? { product: options.imageGenProduct }
+        : {}),
       ...(options.attachments ? { attachments: options.attachments } : {}),
     })) {
       tools.register(tool);
@@ -701,9 +904,18 @@ export function createHarnessComposition(
     const service =
       typeof options.videoGenTools === "object"
         ? options.videoGenTools
-        : createDefaultVideoGenAccess().service;
+        : createDefaultVideoGenAccess({
+            ...(options.videoGenEnv ? { env: options.videoGenEnv } : {}),
+            ...(options.videoGenProduct
+              ? { product: options.videoGenProduct }
+              : {}),
+          }).service;
     for (const tool of createVideoGenTools({
       ...(service ? { service } : {}),
+      ...(options.videoGenEnv ? { env: options.videoGenEnv } : {}),
+      ...(options.videoGenProduct
+        ? { product: options.videoGenProduct }
+        : {}),
       ...(options.attachments ? { attachments: options.attachments } : {}),
     })) {
       tools.register(tool);
@@ -751,11 +963,6 @@ export function createHarnessComposition(
       tools.register(tool);
     }
   }
-  if (options.presentation === "code" || options.codeRuntime) {
-    tools.register(
-      createRunCodeTool(options.codeRuntime ?? createWorkerCodeRuntime()),
-    );
-  }
   wireCompositionTools(tools, {
     ...(options.extraTools ? { extraTools: options.extraTools } : {}),
     ...(options.plugins ? { plugins: options.plugins } : {}),
@@ -776,10 +983,24 @@ export function createHarnessComposition(
               : {}),
           },
   });
+  // Code Mode after the live registry + pipeline exist so nested
+  // `await tools.name(args)` re-enters the same waterfall (policy/settle).
+  if (options.presentation === "code" || options.codeRuntime) {
+    const runtime = options.codeRuntime ?? createWorkerCodeRuntime();
+    tools.register(
+      createRunCodeTool(
+        runtime,
+        createRegistryCodeToolBridge(tools, { pipeline }),
+      ),
+    );
+  }
   const policyEngine = createPolicyEngineFromPlugins({
     ...(options.policy !== undefined ? { engine: options.policy } : {}),
     ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
   });
+  // Fail-closed floors **before** policy (Hermes hardline / security-guidance shape).
+  pipeline.onPre(createHardlineArgvPre());
+  pipeline.onPre(createWritePathSecurityPre());
   if (policyEngine) {
     pipeline.onPre(createPolicyToolPre(policyEngine));
   }
@@ -791,27 +1012,24 @@ export function createHarnessComposition(
         "read-only",
     ),
   );
-  // Shell PreToolUse (hooks.json) — after policy / read-only; before kind:hooks.
+  // Shell hooks.json — PreToolUse + PostToolUse after policy / read-only; before kind:hooks.
   if (options.shellHooks !== false) {
     const shellOpt =
       typeof options.shellHooks === "object" ? options.shellHooks : undefined;
-    const shellCommands =
-      shellOpt?.commands ??
-      loadShellHookCommands(
-        shellOpt?.paths ??
-          defaultShellHookPaths(options.workspaceRoot, resolveProductHome()),
-      );
-    if (shellCommands.length > 0) {
-      pipeline.onPre(
-        createShellHookPre({
-          commands: shellCommands,
-          cwd: () => options.workspaceRoot,
-          ...(shellOpt?.defaultTimeoutMs !== undefined
-            ? { defaultTimeoutMs: shellOpt.defaultTimeoutMs }
-            : {}),
-          ...(shellOpt?.runner !== undefined ? { runner: shellOpt.runner } : {}),
-        }),
-      );
+    const preCommands = shellHooksConfig.PreToolUse ?? [];
+    const postCommands = shellHooksConfig.PostToolUse ?? [];
+    const shared = {
+      cwd: () => options.workspaceRoot,
+      ...(shellOpt?.defaultTimeoutMs !== undefined
+        ? { defaultTimeoutMs: shellOpt.defaultTimeoutMs }
+        : {}),
+      ...(shellOpt?.runner !== undefined ? { runner: shellOpt.runner } : {}),
+    };
+    if (preCommands.length > 0) {
+      pipeline.onPre(createShellHookPre({ commands: preCommands, ...shared }));
+    }
+    if (postCommands.length > 0) {
+      pipeline.onPost(createShellHookPost({ commands: postCommands, ...shared }));
     }
   }
   // kind:hooks — after policy / read-only / shell; before guards + builtin post.
@@ -823,10 +1041,12 @@ export function createHarnessComposition(
     pipeline.onGuard(
       createWriteIntentGuard({
         hasRead: (p) => tracker.hasRead(p),
-        writeToolNames: ["apply_edit", "write_file"],
+        writeToolNames: ["apply_edit", "write_file", "apply_patch"],
       }),
     );
   }
+  // Advisory write-path content patterns (append to tool result; before lifecycle post).
+  pipeline.onPost(createWritePathSecurityPost());
   if (lifecycleNotifier) {
     const notifier = lifecycleNotifier;
     pipeline.onPost(async (ctx) => {
@@ -959,6 +1179,14 @@ export function createHarnessComposition(
     order: 112,
     content: () => SKILL_TOOL_GUIDANCE,
   });
+  prompts.register({
+    id: "tool:propose_skill",
+    order: 112.5,
+    content: () =>
+      availableToolNames().has("propose_skill")
+        ? "After a complex multi-step task that produced a reusable procedure, call `propose_skill` with a class-level SKILL.md draft. The user must approve before anything is written under `.agents/skills`."
+        : "",
+  });
   if (options.lspTools !== false) {
     prompts.register({
       id: "tool:lsp",
@@ -1018,6 +1246,11 @@ export function createHarnessComposition(
       content: () => SUBAGENT_ROUTING_PROMPT_TEXT,
     });
   }
+  prompts.register({
+    id: "tool:session-query",
+    order: 108,
+    content: () => SESSION_QUERY_ROUTING_PROMPT_TEXT,
+  });
   wireCompositionPrompts(prompts, {
     ...(options.plugins ? { plugins: options.plugins } : {}),
     reservedIds: [
@@ -1028,6 +1261,7 @@ export function createHarnessComposition(
       "tool:shell-routing",
       "tool:jobs",
       ...(options.subagentRouting !== false ? ["tool:subagent"] : []),
+      "tool:session-query",
       ...(options.webTools !== false
         ? ["tool:web_search", "tool:web_fetch", "tool:browser"]
         : []),
@@ -1047,23 +1281,62 @@ export function createHarnessComposition(
       : {}),
   });
 
+  // Fragment pipeline is opt-out; empty by default. Layered apart from
+  // durable workspace inject (beforeUserMessage runs inject then fragments).
+  const contextFragments: ContextFragmentPipeline | undefined =
+    options.contextFragments === false
+      ? undefined
+      : typeof options.contextFragments === "object"
+        ? options.contextFragments
+        : createContextFragmentPipeline({
+            ...(options.contextFragmentBudgetChars !== undefined
+              ? { budgetChars: options.contextFragmentBudgetChars }
+              : {}),
+          });
+  if (contextFragments && options.contextFragmentProviders) {
+    for (const provider of options.contextFragmentProviders) {
+      contextFragments.register(provider);
+    }
+  }
+  if (contextFragments) {
+    contextFragments.register({
+      id: "learning-loop-nudge",
+      phases: ["turn-start"],
+      produce({ sessionId: sid }) {
+        if (!consumeLearningLoopNudge(sid)) return [];
+        return [
+          createAdditionalContextFragment({
+            key: "learning_loop",
+            value: learningLoopNudgeText(),
+            phase: "turn-start",
+            priority: -5,
+          }),
+        ];
+      },
+    } satisfies ContextFragmentProvider);
+  }
+
   return {
     id: presetId,
     description:
-      "XRK Harness: fs + shell + sandbox + web + browser + computer_use + voice + image_gen + lsp + pty + workspace inject",
+      "XRK Harness: fs + shell + sandbox + web + browser + computer_use + voice + image_gen + lsp + pty + workspace inject + context fragments",
     workspaceRoot: options.workspaceRoot,
     fs,
     workspace,
+    ...(contextFragments ? { contextFragments } : {}),
     tools,
     pipeline,
     llm,
     store,
     sessionId,
     prompts,
+    ...(shellLifecycle ? { shellLifecycle } : {}),
     async createAgent() {
       const useAssemble = options.assemble !== false;
       const injectOn =
         shouldInject(options.assemble, options.workspaceInject);
+      const wireBeforeUserMessage =
+        injectOn || contextFragments !== undefined;
       const productDir =
         injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
       let recipes: Awaited<ReturnType<typeof loadOfficeRecipes>> = [];
@@ -1127,45 +1400,68 @@ export function createHarnessComposition(
               // Legacy path: freeze once (no per-step tool visibility).
               system: await prompts.assemble(),
             }),
-        ...(injectOn
+        ...(wireBeforeUserMessage
           ? {
               beforeUserMessage: async (ctx) => {
-                await appendWorkspaceInjectsIfChanged({
-                  ...ctx,
-                  injectOptions: injectOpts,
-                  injector: workspace,
-                });
+                if (injectOn) {
+                  await appendWorkspaceInjectsIfChanged({
+                    ...ctx,
+                    injectOptions: injectOpts,
+                    injector: workspace,
+                  });
+                }
+                if (contextFragments) {
+                  await appendContextFragments({
+                    store: ctx.store,
+                    sessionId: ctx.sessionId,
+                    turnId: ctx.turnId,
+                    now: ctx.now,
+                    pipeline: contextFragments,
+                    phase: "turn-start",
+                  });
+                }
               },
             }
           : {}),
-        ...(curatedMemory
-          ? {
-              afterTurn: ({ userText, assistantText, turnId }) => {
-                const memoryToolWrote = readSessionEvents(
-                  store,
-                  sessionId,
-                ).some(
-                  (event) =>
-                    event.type === "tool/call" &&
-                    event.turnId === turnId &&
-                    event.call.name === "memory",
-                );
-                writeReusableNotesAfterTurn(curatedMemory, {
-                  userText: userText ?? "",
-                  assistantText,
-                  memoryToolWrote,
-                });
-              },
-            }
-          : {}),
-        prepareUserContent: ({ content, text, signal }) =>
-          prepareFaceSessionReferences({
+        afterTurn: ({ userText, assistantText, turnId, toolOk, toolFailed }) => {
+          noteLearningLoopTurn(sessionId, toolOk + toolFailed);
+          if (!curatedMemory) return;
+          const memoryToolWrote = readSessionEvents(store, sessionId).some(
+            (event) =>
+              event.type === "tool/call" &&
+              event.turnId === turnId &&
+              event.call.name === "memory",
+          );
+          void writeReusableNotesAfterTurn(curatedMemory, {
+            userText: userText ?? "",
+            assistantText,
+            memoryToolWrote,
+          });
+        },
+        prepareUserContent: async ({ content, text, signal }) => {
+          const prepared = prepareFaceSessionReferences({
             targetSessionId: sessionId,
             content,
             text,
             readEvents: (id) => readSessionEvents(store, id),
+            resolveCwd: () => options.workspaceRoot,
+            maxReferenceBytes: 65_536,
             ...(signal ? { signal } : {}),
-          }),
+          });
+          if (!contextFragments) return prepared;
+          const collected = await contextFragments.collect("user-message", {
+            sessionId,
+            userText: text,
+            ...(signal ? { signal } : {}),
+          });
+          return {
+            ...prepared,
+            contexts: [
+              ...prepared.contexts,
+              ...fragmentsToPrepareContexts(collected),
+            ],
+          };
+        },
         ...(options.resolveImage
           ? { resolveImage: options.resolveImage }
           : {}),
@@ -1209,6 +1505,8 @@ export function createHarnessComposition(
         sessionId,
         presentation: options.presentation ?? "tools",
         workspaceInject: options.workspaceInject !== false,
+        contextFragments: contextFragments !== undefined,
+        contextFragmentProviders: contextFragments?.list().map((p) => p.id) ?? [],
         slashRecipes: options.slashRecipes !== false,
         plugins: (options.plugins ?? []).map((p) => p.id),
         policy: Boolean(
@@ -1222,6 +1520,23 @@ export function createHarnessComposition(
       };
     },
     async dispose() {
+      // Session-end Phase1: fold leftover human notes into MEMORY.md (disk only).
+      if (curatedMemory) {
+        try {
+          const userTexts: string[] = [];
+          for (const event of readSessionEvents(store, sessionId)) {
+            if (event.type !== "user/message") continue;
+            if (!isHumanUserMessageSource(event.source)) continue;
+            const text = flattenText(event.content).trim();
+            if (text) userTexts.push(text);
+          }
+          if (userTexts.length > 0) {
+            void consolidateCuratedMemoryPhase1(curatedMemory, { userTexts });
+          }
+        } catch {
+          /* best-effort — dispose must continue */
+        }
+      }
       if (!sharedShell) await rootShell.dispose();
       if (telemetrySink) {
         try {

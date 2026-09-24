@@ -15,19 +15,25 @@ export { COMPUTER_USE_PROMPT_TEXT };
 
 export function computerUseUnavailableMessage(
   env: NodeJS.ProcessEnv = process.env,
+  product?: { readonly mode?: string },
 ): string {
+  const envFlag = String(env.XRK_COMPUTER_USE ?? "").trim();
+  const productOn =
+    product?.mode === "uia" || product?.mode === "background";
   if (process.platform === "win32") {
-    if (String(env.XRK_COMPUTER_USE ?? "").trim() !== "1") {
+    if (envFlag === "" && !productOn) {
       return (
-        "Error: desktop computer-use is not enabled. Set XRK_COMPUTER_USE=1 to use the Windows UI Automation Provider " +
-        "(accessibility tree + click/type). Separate from browser_* page tools. " +
+        "Error: desktop computer-use is not enabled. Set Settings → Plugins → Computer use " +
+        "(or XRK_COMPUTER_USE=1) for the Windows UI Automation Provider " +
+        "(accessibility tree + click/type/key/scroll). Separate from browser_* page tools. " +
         "Delivery is UIA, not full background SPI (cua-driver)."
       );
     }
   }
   return (
     "Error: no computer-use Provider is configured. Inject a ComputerUseService " +
-    "(or set XRK_COMPUTER_USE=1 on Windows). Prefer browser_* for web pages."
+    "(or enable Settings → Plugins → Computer use / XRK_COMPUTER_USE=1 on Windows). " +
+    "Prefer browser_* for web pages; reserve computer_use for native desktop apps."
   );
 }
 
@@ -75,10 +81,10 @@ export function createComputerUseTools(
   }> = {
     name: "computer_use",
     description:
-      "Operate the host desktop via an accessibility tree + input Provider. " +
+      "Operate native host GUI apps via an accessibility tree + input Provider. " +
       "Actions: capture (AX snapshot with element indices), click, type, key, scroll, list_windows. " +
-      "Prefer capture then click/type by element index. " +
-      "Not for web pages — use browser_open / browser_snapshot / browser_act instead.",
+      "Prefer capture then click/type/key/scroll by element index. " +
+      "Not for web pages — use browser_open / browser_snapshot / browser_act (browser_vision for screenshots).",
     parameters: {
       type: "object",
       properties: {

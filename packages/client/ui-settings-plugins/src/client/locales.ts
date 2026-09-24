@@ -2,7 +2,7 @@
 
 /** Locale keys these surfaces render. */
 export type PluginsSettingsLocaleKey =
-  | 'nav' | 'title' | 'intro' | 'tabs' | 'configurableTab' | 'empty'
+  | 'nav' | 'title' | 'intro' | 'tabs' | 'configurableTab' | 'advancedTab' | 'empty' | 'advancedEmpty'
   | 'overridden' | 'reset' | 'readOnly' | 'expand' | 'collapse'
   | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
   | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
@@ -10,6 +10,7 @@ export type PluginsSettingsLocaleKey =
   | 'bashForegroundYieldMs' | 'bashForegroundYieldMsHint'
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
   | 'agentLoopMaxSteps' | 'agentLoopMaxStepsHint'
+  | 'agentLoopToolOrder' | 'agentLoopToolOrderHint' | 'agentLoopToolOrderInvalid'
   | 'agentLoopToolSettle' | 'agentLoopToolSettleHint'
   | 'agentLoopLlmRetry' | 'agentLoopLlmRetryHint'
   | 'agentLoopMaxRequestTokens' | 'agentLoopMaxRequestTokensHint'
@@ -31,6 +32,9 @@ export type PluginsSettingsLocaleKey =
   | 'mcpAllowWorkspaceCwd' | 'mcpAllowWorkspaceCwdHint'
   | 'mcpStatusConnected' | 'mcpStatusReconnecting' | 'mcpStatusGaveUp'
   | 'mcpStatusParked' | 'mcpStatusFailed' | 'mcpStatusIdle'
+  | 'mcpOauthLogin' | 'mcpOauthLogout' | 'mcpOauthLoggedIn' | 'mcpOauthLoggedOut'
+  | 'mcpOauthPending' | 'mcpOauthPendingCode' | 'mcpOauthExpired' | 'mcpOauthError'
+  | 'mcpOauthErrorDetail' | 'mcpOauthBusy' | 'mcpOauthUnknown' | 'mcpOauthOpenVerify'
   | 'webSearchTitle' | 'webSearchDescription' | 'webSearchProvider' | 'webSearchProviderHint'
   | 'webSearchProviderAuto' | 'webSearchProviderTavily' | 'webSearchProviderBrave'
   | 'webSearchProviderParallel' | 'webSearchProviderDuckduckgo'
@@ -38,15 +42,79 @@ export type PluginsSettingsLocaleKey =
   | 'webSearchTavilyKey' | 'webSearchTavilyKeyHint'
   | 'webSearchBraveKey' | 'webSearchBraveKeyHint'
   | 'webSearchKeySet' | 'webSearchKeyUnset'
+  | 'telemetryTitle' | 'telemetryDescription' | 'telemetryMode' | 'telemetryModeHint'
+  | 'telemetryModeOff' | 'telemetryModeMemory' | 'telemetryModeOtlp'
+  | 'telemetryEndpoint' | 'telemetryEndpointHint' | 'telemetryRestartHint'
+  | 'sandboxTitle' | 'sandboxDescription' | 'sandboxBackend' | 'sandboxBackendHint'
+  | 'sandboxBackendWorkspace' | 'sandboxBackendDocker' | 'sandboxBackendBwrap'
+  | 'sandboxBackendWindows'
+  | 'sandboxDockerImage' | 'sandboxDockerImageHint'
+  | 'sandboxDockerNetwork' | 'sandboxDockerNetworkHint'
+  | 'sandboxDockerNetworkNone' | 'sandboxDockerNetworkBridge'
+  | 'sandboxWindowsMode' | 'sandboxWindowsModeHint'
+  | 'sandboxWindowsModeWorkspaceWrite' | 'sandboxWindowsModeReadOnly'
+  | 'sandboxWindowsModeDanger' | 'sandboxLiveHint'
+  | 'computerUseTitle' | 'computerUseDescription' | 'computerUseMode' | 'computerUseModeHint'
+  | 'computerUseModeOff' | 'computerUseModeUia' | 'computerUseModeBackground'
+  | 'computerUseHelper' | 'computerUseHelperHint'
+  | 'computerUseHelperSet' | 'computerUseHelperUnset' | 'computerUseLiveHint'
+  | 'cronTitle' | 'cronDescription' | 'cronEnabled' | 'cronEnabledHint'
+  | 'cronEnabledOn' | 'cronEnabledOff' | 'cronLiveHint' | 'cronScheduleNote'
+  | 'browserTitle' | 'browserDescription' | 'browserMode' | 'browserModeHint'
+  | 'browserModeHttp' | 'browserModeCdp'
+  | 'browserCdpUrl' | 'browserCdpUrlHint' | 'browserLiveHint'
+  | 'voiceTitle' | 'voiceDescription' | 'voiceMode' | 'voiceModeHint'
+  | 'voiceModeOff' | 'voiceModeOpenai'
+  | 'voiceApiKey' | 'voiceApiKeyHint' | 'voiceApiKeySet' | 'voiceApiKeyUnset'
+  | 'voiceKeyMissing'
+  | 'voiceBaseUrl' | 'voiceBaseUrlHint' | 'voiceLiveHint' | 'voiceWakeDeferred'
+  | 'imageGenTitle' | 'imageGenDescription' | 'imageGenMode' | 'imageGenModeHint'
+  | 'imageGenModeOff' | 'imageGenModeOpenai'
+  | 'imageGenApiKey' | 'imageGenApiKeyHint' | 'imageGenApiKeySet' | 'imageGenApiKeyUnset'
+  | 'imageGenBaseUrl' | 'imageGenBaseUrlHint' | 'imageGenModel' | 'imageGenModelHint'
+  | 'imageGenLiveHint'
+  | 'videoGenTitle' | 'videoGenDescription' | 'videoGenMode' | 'videoGenModeHint'
+  | 'videoGenModeOff' | 'videoGenModeOpenai'
+  | 'videoGenApiKey' | 'videoGenApiKeyHint' | 'videoGenApiKeySet' | 'videoGenApiKeyUnset'
+  | 'videoGenBaseUrl' | 'videoGenBaseUrlHint' | 'videoGenModel' | 'videoGenModelHint'
+  | 'videoGenLiveHint'
+  | 'curatedMemoryTitle' | 'curatedMemoryDescription' | 'curatedMemoryEnabled'
+  | 'curatedMemoryEnabledHint' | 'curatedMemoryEnabledOn' | 'curatedMemoryEnabledOff'
+  | 'curatedMemoryLiveHint'
+  | 'sshRemoteTitle' | 'sshRemoteDescription'
+  | 'sshRemoteHost' | 'sshRemoteHostHint'
+  | 'sshRemoteWorkspace' | 'sshRemoteWorkspaceHint'
+  | 'sshRemoteUser' | 'sshRemoteUserHint'
+  | 'sshRemotePort' | 'sshRemotePortHint'
+  | 'sshRemoteKeyPath' | 'sshRemoteKeyPathHint'
+  | 'sshRemoteRestartHint'
+  | 'autoReviewTitle' | 'autoReviewDescription'
+  | 'autoReviewClassifierUrl' | 'autoReviewClassifierUrlHint'
+  | 'autoReviewClassifierToken' | 'autoReviewClassifierTokenHint'
+  | 'autoReviewClassifierTokenSet' | 'autoReviewClassifierTokenUnset'
+  | 'autoReviewLiveHint'
+  | 'memoryEmbedTitle' | 'memoryEmbedDescription'
+  | 'memoryEmbedUrl' | 'memoryEmbedUrlHint'
+  | 'memoryEmbedCollection' | 'memoryEmbedCollectionHint'
+  | 'memoryEmbedToken' | 'memoryEmbedTokenHint'
+  | 'memoryEmbedTokenSet' | 'memoryEmbedTokenUnset'
+  | 'memoryEmbedLiveHint'
+  | 'externalAgentTitle' | 'externalAgentDescription'
+  | 'externalAgentAcp' | 'externalAgentAcpHint'
+  | 'externalAgentAppServer' | 'externalAgentAppServerHint'
+  | 'externalAgentClaudeCode' | 'externalAgentClaudeCodeHint'
+  | 'externalAgentLiveHint'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
   nav: 'Plugins',
   title: 'Plugins',
-  intro: 'Configure Host plugins: MCP, Shell, agent loop, web search, and workspace inject.',
+  intro: 'Configure Host plugins: MCP, Shell, agent loop, web search, browser, voice, image/video gen, curated memory, external agents, sandbox, computer use, cron, telemetry, and workspace inject. Advanced holds the auto-review classifier and memory-embed vector sidecar.',
   tabs: 'Plugin views',
   configurableTab: 'Plugin configuration',
+  advancedTab: 'Advanced',
   empty: 'This deployment exposes no plugin settings.',
+  advancedEmpty: 'This deployment exposes no advanced plugin settings.',
   overridden: 'Overridden',
   reset: 'Reset to default',
   readOnly: 'This deployment stores settings read-only.',
@@ -72,6 +140,9 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxParallelHint: 'Upper bound on parallel-safe calls running at once within one step.',
   agentLoopMaxSteps: 'Max steps per turn',
   agentLoopMaxStepsHint: 'Upper bound on LLM steps (including tool rounds) within one user turn. Default 32.',
+  agentLoopToolOrder: 'Tool order',
+  agentLoopToolOrderHint: 'Comma-separated tool names with exactly one empty slot for the rest (for example bash, , read_file). Leave blank for lexicographic wire order.',
+  agentLoopToolOrderInvalid: 'List tool names separated by commas, with exactly one empty slot for the rest, and no duplicates.',
   agentLoopToolSettle: 'Tool settle mode',
   agentLoopToolSettleHint: 'parallel (default): overlap only isConcurrencySafe tools. serial: one call at a time.',
   agentLoopLlmRetry: 'LLM retries per step',
@@ -131,6 +202,18 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   mcpStatusParked: 'Parked',
   mcpStatusFailed: 'Failed',
   mcpStatusIdle: 'Not connected',
+  mcpOauthLogin: 'Sign in (OAuth)',
+  mcpOauthLogout: 'Sign out',
+  mcpOauthLoggedIn: 'OAuth: signed in',
+  mcpOauthLoggedOut: 'OAuth: not signed in',
+  mcpOauthPending: 'OAuth: waiting for browser approval…',
+  mcpOauthPendingCode: 'OAuth: enter code {code} in the browser',
+  mcpOauthExpired: 'OAuth: token expired — sign in again',
+  mcpOauthError: 'OAuth: sign-in failed',
+  mcpOauthErrorDetail: 'OAuth: {message}',
+  mcpOauthBusy: 'OAuth: working…',
+  mcpOauthUnknown: 'OAuth: status unknown',
+  mcpOauthOpenVerify: 'Open verification page',
   webSearchTitle: 'Web search',
   webSearchDescription: 'Provider and keys for the web_search tool. Keys save through Credentials, not settings.yaml.',
   webSearchProvider: 'Provider',
@@ -148,16 +231,175 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBraveKeyHint: 'Required when provider is Brave (or Auto with this key set). Leave blank to keep the stored key.',
   webSearchKeySet: 'Configured',
   webSearchKeyUnset: 'Not set',
+  telemetryTitle: 'Session telemetry',
+  telemetryDescription: 'Export session ledger events (OpenTelemetry logs). Changes apply after Host restart. Set XRK_TELEMETRY in CI to bypass this card.',
+  telemetryMode: 'Mode',
+  telemetryModeHint: 'Off disables capture. Memory keeps records in-process. OTLP posts JSON logs to an HTTP collector.',
+  telemetryModeOff: 'Off',
+  telemetryModeMemory: 'Memory',
+  telemetryModeOtlp: 'OTLP / HTTP',
+  telemetryEndpoint: 'OTLP endpoint',
+  telemetryEndpointHint: 'Logs URL (for example http://localhost:4318/v1/logs). Optional when OTEL_EXPORTER_OTLP_* is set.',
+  telemetryRestartHint: 'Applies on Host restart (store wrap is fixed at spawn).',
+  sandboxTitle: 'Sandbox',
+  sandboxDescription: 'How agent shell / PTY commands are confined. Docker image and Windows mode apply with the backend. Helper paths stay env-only. Set XRK_SANDBOX_BACKEND in CI to bypass this card.',
+  sandboxBackend: 'Backend',
+  sandboxBackendHint: 'Workspace is the default cwd jail. Docker / bubblewrap / Windows swap the confine Provider.',
+  sandboxBackendWorkspace: 'Workspace',
+  sandboxBackendDocker: 'Docker',
+  sandboxBackendBwrap: 'bubblewrap (Linux)',
+  sandboxBackendWindows: 'Windows helper',
+  sandboxDockerImage: 'Docker image',
+  sandboxDockerImageHint: 'Required for Docker (for example node:22-bookworm). Helper bin stays XRK_SANDBOX_DOCKER_BIN.',
+  sandboxDockerNetwork: 'Docker network',
+  sandboxDockerNetworkHint: 'none (default) or bridge. Applies on the next agent rebuild.',
+  sandboxDockerNetworkNone: 'None (isolated)',
+  sandboxDockerNetworkBridge: 'Bridge',
+  sandboxWindowsMode: 'Windows mode',
+  sandboxWindowsModeHint: 'Codex-style write posture. Helper binary stays XRK_SANDBOX_WINDOWS_HELPER.',
+  sandboxWindowsModeWorkspaceWrite: 'Workspace write',
+  sandboxWindowsModeReadOnly: 'Read only',
+  sandboxWindowsModeDanger: 'Danger full access',
+  sandboxLiveHint: 'Applies on the next agent rebuild (live; no Host restart). Docker / Windows need their image or helper available or confine fails closed.',
+  computerUseTitle: 'Computer use',
+  computerUseDescription: 'Desktop accessibility / input Provider for the computer_use tool (separate from browser_*). Set XRK_COMPUTER_USE in CI to bypass this card.',
+  computerUseMode: 'Mode',
+  computerUseModeHint: 'Off keeps the tool visible but execute fails honestly. UIA uses Windows UI Automation. Background needs a helper path in Credentials.',
+  computerUseModeOff: 'Off',
+  computerUseModeUia: 'UIA (Windows)',
+  computerUseModeBackground: 'Background helper',
+  computerUseHelper: 'Background helper path',
+  computerUseHelperHint: 'Stored in Credentials as XRK_COMPUTER_USE_BACKGROUND (not settings.yaml). Required when mode is Background.',
+  computerUseHelperSet: 'Configured',
+  computerUseHelperUnset: 'Not set',
+  computerUseLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
+  cronTitle: 'Cron',
+  cronDescription: 'Host in-process ticker for cronjob (unattended agent / script jobs). Set XRK_CRON=0 in CI to force off and bypass this card.',
+  cronEnabled: 'Master switch',
+  cronEnabledHint: 'Off stops the ticker and removes the cronjob tool. On resumes from ~/.xrk/cron/jobs.json.',
+  cronEnabledOn: 'On',
+  cronEnabledOff: 'Off',
+  cronLiveHint: 'Applies live: Host starts or stops the ticker and rebuilds agents (no restart).',
+  cronScheduleNote: 'Job catalog stays with the cronjob tool and ~/.xrk/cron/jobs.json; this card is the master switch only — not a Schedule reminder directory.',
+  browserTitle: 'Browser',
+  browserDescription: 'Page-level browser_open / snapshot / act / vision. Default is an HTTP snapshot; CDP attaches to Chrome DevTools. Separate from desktop computer-use. Set XRK_BROWSER_CDP_URL in CI to bypass this card.',
+  browserMode: 'Session backend',
+  browserModeHint: 'HTTP snapshot needs no browser. CDP drives a Chromium-family instance via DevTools (http://host:9222 or ws://…).',
+  browserModeHttp: 'HTTP snapshot',
+  browserModeCdp: 'Chrome DevTools (CDP)',
+  browserCdpUrl: 'CDP URL',
+  browserCdpUrlHint: 'http://127.0.0.1:9222 or ws://…/devtools/browser/…. Required when mode is CDP; empty falls back to HTTP snapshot.',
+  browserLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
+  voiceTitle: 'Voice',
+  voiceDescription: 'TTS · transcription · realtime session broker (text_to_speech / voice_transcribe / voice_session). API key via Credentials. Set XRK_VOICE in CI to bypass this card.',
+  voiceMode: 'Mode',
+  voiceModeHint: 'Off keeps tools visible but execute fails honestly. OpenAI needs a key in Credentials.',
+  voiceModeOff: 'Off',
+  voiceModeOpenai: 'OpenAI-compatible',
+  voiceApiKey: 'OpenAI API key',
+  voiceApiKeyHint: 'Stored as XRK_VOICE_OPENAI_KEY (not settings.yaml). OPENAI_API_KEY also works at runtime.',
+  voiceApiKeySet: 'Configured',
+  voiceApiKeyUnset: 'Not set',
+  voiceKeyMissing: 'OpenAI mode is on but no API key — voice tools will fail until Credentials XRK_VOICE_OPENAI_KEY is set.',
+  voiceBaseUrl: 'Base URL',
+  voiceBaseUrlHint: 'Optional compatible endpoint (default https://api.openai.com/v1).',
+  voiceLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
+  voiceWakeDeferred: 'On-device wake word is not shipped; use push-to-talk / product mic after Voice is enabled.',
+  imageGenTitle: 'Image gen',
+  imageGenDescription: 'Text-to-image via image_generate. API key via Credentials. Set XRK_IMAGE_GEN in CI to bypass this card.',
+  imageGenMode: 'Mode',
+  imageGenModeHint: 'Off keeps the tool visible but execute fails honestly. OpenAI needs a key in Credentials.',
+  imageGenModeOff: 'Off',
+  imageGenModeOpenai: 'OpenAI-compatible',
+  imageGenApiKey: 'OpenAI API key',
+  imageGenApiKeyHint: 'Stored as XRK_IMAGE_GEN_OPENAI_KEY (not settings.yaml). OPENAI_API_KEY also works at runtime.',
+  imageGenApiKeySet: 'Configured',
+  imageGenApiKeyUnset: 'Not set',
+  imageGenBaseUrl: 'Base URL',
+  imageGenBaseUrlHint: 'Optional compatible Images API endpoint.',
+  imageGenModel: 'Model',
+  imageGenModelHint: 'Optional model id (default dall-e-3).',
+  imageGenLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
+  videoGenTitle: 'Video gen',
+  videoGenDescription: 'Text-to-video via video_generate (async jobs). API key via Credentials. Set XRK_VIDEO_GEN in CI to bypass this card.',
+  videoGenMode: 'Mode',
+  videoGenModeHint: 'Off keeps the tool visible but execute fails honestly. OpenAI needs a key in Credentials.',
+  videoGenModeOff: 'Off',
+  videoGenModeOpenai: 'OpenAI-compatible',
+  videoGenApiKey: 'OpenAI API key',
+  videoGenApiKeyHint: 'Stored as XRK_VIDEO_GEN_OPENAI_KEY (not settings.yaml). OPENAI_API_KEY also works at runtime.',
+  videoGenApiKeySet: 'Configured',
+  videoGenApiKeyUnset: 'Not set',
+  videoGenBaseUrl: 'Base URL',
+  videoGenBaseUrlHint: 'Optional compatible Videos API endpoint.',
+  videoGenModel: 'Model',
+  videoGenModelHint: 'Optional model id (default sora-2).',
+  videoGenLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
+  curatedMemoryTitle: 'Curated memory',
+  curatedMemoryDescription: 'Cross-session MEMORY.md / USER.md under ~/.xrk/memories (not Mnemon). Off skips the memory tool and frozen system prompt. Set XRK_CURATED_MEMORY=0 in CI to force off.',
+  curatedMemoryEnabled: 'Master switch',
+  curatedMemoryEnabledHint: 'On freezes MEMORY.md / USER.md into the system prompt and registers the memory tool. Off removes both on the next agent rebuild.',
+  curatedMemoryEnabledOn: 'On',
+  curatedMemoryEnabledOff: 'Off',
+  curatedMemoryLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
+  sshRemoteTitle: 'Remote',
+  sshRemoteDescription:
+    'Run the agent against a remote workspace over OpenSSH (local Host, remote cwd). Leave host and workspace empty for a local workspace. Non-empty XRK_SSH_HOST still bypasses this card for CI.',
+  sshRemoteHost: 'Host',
+  sshRemoteHostHint: 'OpenSSH host alias or hostname (user@host is fine).',
+  sshRemoteWorkspace: 'Workspace',
+  sshRemoteWorkspaceHint: 'Absolute remote cwd (POSIX path starting with /). Required together with host.',
+  sshRemoteUser: 'User',
+  sshRemoteUserHint: 'Optional SSH user when the host field does not already include user@.',
+  sshRemotePort: 'Port',
+  sshRemotePortHint: 'Optional SSH port (default 22).',
+  sshRemoteKeyPath: 'Identity file',
+  sshRemoteKeyPathHint: 'Optional local path to an OpenSSH private key (not the key material).',
+  sshRemoteRestartHint: 'Requires a Host restart to take effect (SSH world is built at spawn).',
+  autoReviewTitle: 'Auto-review classifier',
+  autoReviewDescription:
+    'Replace the built-in heuristic with an HTTP classifier (POST JSON → verdict/decision). Leave URL empty for heuristic. Non-empty XRK_AUTO_REVIEW_CLASSIFIER_URL still bypasses this card for CI.',
+  autoReviewClassifierUrl: 'Classifier URL',
+  autoReviewClassifierUrlHint: 'http(s) endpoint. Empty keeps the local heuristic.',
+  autoReviewClassifierToken: 'Classifier token',
+  autoReviewClassifierTokenHint: 'Optional Bearer; stored in Credentials as XRK_AUTO_REVIEW_CLASSIFIER_TOKEN (not settings.yaml).',
+  autoReviewClassifierTokenSet: 'Configured',
+  autoReviewClassifierTokenUnset: 'Not set',
+  autoReviewLiveHint: 'Applies on the next classify request (live; no Host restart).',
+  memoryEmbedTitle: 'Memory embed sidecar',
+  memoryEmbedDescription:
+    'Optional external vector HTTP for embedding.search (Qdrant-style /search). Leave URL empty for the embedded host under ~/.xrk/memory-embeddings. Non-empty XRK_MEMORY_EMBED_URL still bypasses this card for CI.',
+  memoryEmbedUrl: 'Sidecar URL',
+  memoryEmbedUrlHint: 'http(s) base (Host POSTs /search and probes /health). Empty keeps embedded host only.',
+  memoryEmbedCollection: 'Collection',
+  memoryEmbedCollectionHint: 'Optional collection / index name sent with /search. Empty omits the field.',
+  memoryEmbedToken: 'Sidecar token',
+  memoryEmbedTokenHint: 'Optional Bearer; stored in Credentials as XRK_MEMORY_EMBED_TOKEN (not settings.yaml).',
+  memoryEmbedTokenSet: 'Configured',
+  memoryEmbedTokenUnset: 'Not set',
+  memoryEmbedLiveHint: 'Applies on the next embedding.search (live; no Host restart).',
+  externalAgentTitle: 'External agents',
+  externalAgentDescription:
+    'Spawn commands for subagent.runtime=acp / app-server / claude-code. Non-empty XRK_ACP_AGENT · XRK_CODEX_APP_SERVER · XRK_CLAUDE_CODE still bypass these fields for CI.',
+  externalAgentAcp: 'ACP agent',
+  externalAgentAcpHint: 'Required for runtime=acp (e.g. xrkh acp). Empty falls back to XRK_ACP_AGENT only.',
+  externalAgentAppServer: 'Codex app-server',
+  externalAgentAppServerHint: 'Command for runtime=app-server. Empty defaults to codex app-server (or XRK_CODEX_APP_SERVER when set).',
+  externalAgentClaudeCode: 'Claude Code',
+  externalAgentClaudeCodeHint: 'Command for runtime=claude-code. Empty defaults to claude (Host adds -p). Or set XRK_CLAUDE_CODE.',
+  externalAgentLiveHint: 'Applies on the next external subagent turn (live; no Host restart).',
 }
 
 /** Simplified Chinese copy. */
 export const zh: Record<PluginsSettingsLocaleKey, string> = {
   nav: '插件',
   title: '插件',
-  intro: '配置 Host 插件：MCP、终端、Agent 循环、联网搜索与工作区 inject。',
+  intro: '配置 Host 插件：MCP、终端、Agent 循环、联网搜索、Browser、Voice、文生图/视频、策展记忆、外部 Agent、沙箱、Computer use、Cron、会话遥测与工作区 inject。「高级」含 Auto-review classifier 与向量记忆 sidecar。',
   tabs: '插件视图',
   configurableTab: '插件配置',
+  advancedTab: '高级',
   empty: '本部署没有开放任何插件设置。',
+  advancedEmpty: '本部署没有开放任何高级插件设置。',
   overridden: '已覆盖',
   reset: '恢复默认',
   readOnly: '本部署的设置为只读。',
@@ -183,6 +425,9 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxParallelHint: '同一步内最多同时运行多少个可并行的调用。',
   agentLoopMaxSteps: '每轮最大步数',
   agentLoopMaxStepsHint: '单次用户 turn 内 LLM 步数上限（含工具回合）。默认 32。',
+  agentLoopToolOrder: '工具线序',
+  agentLoopToolOrderHint: '逗号分隔工具名，恰好一个空位表示 rest（例如 bash, , read_file）。留空则按字典序上线。',
+  agentLoopToolOrderInvalid: '请用逗号分隔工具名，恰好一个空位作 rest，且名称不重复。',
   agentLoopToolSettle: '工具结算模式',
   agentLoopToolSettleHint: 'parallel（默认）：仅 isConcurrencySafe 的工具可重叠。serial：逐步独占。',
   agentLoopLlmRetry: '步内 LLM 重试次数',
@@ -242,6 +487,18 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   mcpStatusParked: '已停放',
   mcpStatusFailed: '失败',
   mcpStatusIdle: '未连接',
+  mcpOauthLogin: 'OAuth 登录',
+  mcpOauthLogout: '退出登录',
+  mcpOauthLoggedIn: 'OAuth：已登录',
+  mcpOauthLoggedOut: 'OAuth：未登录',
+  mcpOauthPending: 'OAuth：等待浏览器确认…',
+  mcpOauthPendingCode: 'OAuth：在浏览器输入 {code}',
+  mcpOauthExpired: 'OAuth：令牌已过期，请重新登录',
+  mcpOauthError: 'OAuth：登录失败',
+  mcpOauthErrorDetail: 'OAuth：{message}',
+  mcpOauthBusy: 'OAuth：处理中…',
+  mcpOauthUnknown: 'OAuth：状态未知',
+  mcpOauthOpenVerify: '打开验证页',
   webSearchTitle: '网页搜索',
   webSearchDescription: 'web_search 工具的提供方与密钥。密钥经「凭据」落盘，不写入 settings.yaml。',
   webSearchProvider: '提供方',
@@ -259,4 +516,161 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBraveKeyHint: '提供方为 Brave（或自动且已配置此密钥）时需要。留空表示保留已存密钥。',
   webSearchKeySet: '已配置',
   webSearchKeyUnset: '未设置',
+  telemetryTitle: '会话遥测',
+  telemetryDescription: '导出会话账本事件（OpenTelemetry logs）。改动需重启 Host 生效。CI 可设 XRK_TELEMETRY 旁路本卡。',
+  telemetryMode: '模式',
+  telemetryModeHint: '关：不采集。内存：进程内保留。OTLP：向 HTTP collector 推送 JSON logs。',
+  telemetryModeOff: '关',
+  telemetryModeMemory: '内存',
+  telemetryModeOtlp: 'OTLP / HTTP',
+  telemetryEndpoint: 'OTLP 端点',
+  telemetryEndpointHint: 'logs URL（例如 http://localhost:4318/v1/logs）。已设 OTEL_EXPORTER_OTLP_* 时可留空。',
+  telemetryRestartHint: '需重启 Host 后生效（store wrap 在启动时固定）。',
+  sandboxTitle: '沙箱',
+  sandboxDescription: '约束 agent 的 shell / PTY 命令如何隔离。Docker 镜像与 Windows mode 随后端一起生效；helper 路径仍仅环境变量。CI 可设 XRK_SANDBOX_BACKEND 旁路本卡。',
+  sandboxBackend: '后端',
+  sandboxBackendHint: 'Workspace 为默认 cwd 狱。Docker / bubblewrap / Windows 切换 confine Provider。',
+  sandboxBackendWorkspace: 'Workspace',
+  sandboxBackendDocker: 'Docker',
+  sandboxBackendBwrap: 'bubblewrap（Linux）',
+  sandboxBackendWindows: 'Windows helper',
+  sandboxDockerImage: 'Docker 镜像',
+  sandboxDockerImageHint: 'Docker 后端必填（如 node:22-bookworm）。二进制仍用 XRK_SANDBOX_DOCKER_BIN。',
+  sandboxDockerNetwork: 'Docker 网络',
+  sandboxDockerNetworkHint: 'none（默认）或 bridge。下次 agent 重建后生效。',
+  sandboxDockerNetworkNone: '无（隔离）',
+  sandboxDockerNetworkBridge: 'Bridge',
+  sandboxWindowsMode: 'Windows 模式',
+  sandboxWindowsModeHint: 'Codex 式写隔离姿态。helper 二进制仍用 XRK_SANDBOX_WINDOWS_HELPER。',
+  sandboxWindowsModeWorkspaceWrite: '工作区可写',
+  sandboxWindowsModeReadOnly: '只读',
+  sandboxWindowsModeDanger: '危险全开',
+  sandboxLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。Docker / Windows 需镜像或 helper 可用，否则 confine 失败关闭。',
+  computerUseTitle: 'Computer use',
+  computerUseDescription: '桌面无障碍 / 键鼠 Provider，供 computer_use 工具（与 browser_* 分开）。CI 可设 XRK_COMPUTER_USE 旁路本卡。',
+  computerUseMode: '模式',
+  computerUseModeHint: '关：工具仍可见，execute 诚实失败。UIA：Windows UI Automation。Background：需在凭据里配置助手路径。',
+  computerUseModeOff: '关',
+  computerUseModeUia: 'UIA（Windows）',
+  computerUseModeBackground: 'Background 助手',
+  computerUseHelper: 'Background 助手路径',
+  computerUseHelperHint: '经凭据落盘为 XRK_COMPUTER_USE_BACKGROUND（不进 settings.yaml）。Background 模式必填。',
+  computerUseHelperSet: '已配置',
+  computerUseHelperUnset: '未设置',
+  computerUseLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
+  cronTitle: 'Cron',
+  cronDescription: 'Host 进程内 ticker，供 cronjob（无人值守 agent / 脚本）。CI 可设 XRK_CRON=0 强制关闭并旁路本卡。',
+  cronEnabled: '总开关',
+  cronEnabledHint: '关：停 ticker 并移除 cronjob 工具。开：从 ~/.xrk/cron/jobs.json 恢复调度。',
+  cronEnabledOn: '开',
+  cronEnabledOff: '关',
+  cronLiveHint: '保存后立即生效：Host 启停 ticker 并重建 agent（无需重启）。',
+  cronScheduleNote: '任务目录仍由 cronjob 工具与 ~/.xrk/cron/jobs.json 管理；本卡仅总开关，不是 Schedule 提醒一览页。',
+  browserTitle: 'Browser',
+  browserDescription: '页面级 browser_open / snapshot / act / vision。默认 HTTP 快照；CDP 经 Chrome DevTools 附着。与桌面 computer-use 分开。CI 可设 XRK_BROWSER_CDP_URL 旁路本卡。',
+  browserMode: '会话后端',
+  browserModeHint: 'HTTP 快照无需浏览器。CDP 经 DevTools 驱动 Chromium 系实例（http://host:9222 或 ws://…）。',
+  browserModeHttp: 'HTTP 快照',
+  browserModeCdp: 'Chrome DevTools（CDP）',
+  browserCdpUrl: 'CDP 地址',
+  browserCdpUrlHint: 'http://127.0.0.1:9222 或 ws://…/devtools/browser/…。CDP 模式必填；留空则回退 HTTP 快照。',
+  browserLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
+  voiceTitle: 'Voice',
+  voiceDescription: 'TTS · 听写 · realtime 会话 broker（text_to_speech / voice_transcribe / voice_session）。密钥经凭据落盘。CI 可设 XRK_VOICE 旁路本卡。',
+  voiceMode: '模式',
+  voiceModeHint: '关：工具仍可见，execute 诚实失败。OpenAI：需在凭据里配置密钥。',
+  voiceModeOff: '关',
+  voiceModeOpenai: 'OpenAI 兼容',
+  voiceApiKey: 'OpenAI API 密钥',
+  voiceApiKeyHint: '经凭据落盘为 XRK_VOICE_OPENAI_KEY（不进 settings.yaml）。运行时也可用 OPENAI_API_KEY。',
+  voiceApiKeySet: '已配置',
+  voiceApiKeyUnset: '未设置',
+  voiceKeyMissing: '已开 OpenAI 模式但尚未配置密钥 — 在凭据写入 XRK_VOICE_OPENAI_KEY 前，语音工具会诚实失败。',
+  voiceBaseUrl: 'Base URL',
+  voiceBaseUrlHint: '可选兼容端点（默认 https://api.openai.com/v1）。',
+  voiceLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
+  voiceWakeDeferred: '本地唤醒词尚未交付；启用 Voice 后请用按住说话 / 产品壳麦克风。',
+  imageGenTitle: '文生图',
+  imageGenDescription: 'image_generate 文生图。密钥经凭据落盘。CI 可设 XRK_IMAGE_GEN 旁路本卡。',
+  imageGenMode: '模式',
+  imageGenModeHint: '关：工具仍可见，execute 诚实失败。OpenAI：需在凭据里配置密钥。',
+  imageGenModeOff: '关',
+  imageGenModeOpenai: 'OpenAI 兼容',
+  imageGenApiKey: 'OpenAI API 密钥',
+  imageGenApiKeyHint: '经凭据落盘为 XRK_IMAGE_GEN_OPENAI_KEY（不进 settings.yaml）。运行时也可用 OPENAI_API_KEY。',
+  imageGenApiKeySet: '已配置',
+  imageGenApiKeyUnset: '未设置',
+  imageGenBaseUrl: 'Base URL',
+  imageGenBaseUrlHint: '可选兼容 Images API 端点。',
+  imageGenModel: '模型',
+  imageGenModelHint: '可选模型 id（默认 dall-e-3）。',
+  imageGenLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
+  videoGenTitle: '文生视频',
+  videoGenDescription: 'video_generate 文生视频（异步任务）。密钥经凭据落盘。CI 可设 XRK_VIDEO_GEN 旁路本卡。',
+  videoGenMode: '模式',
+  videoGenModeHint: '关：工具仍可见，execute 诚实失败。OpenAI：需在凭据里配置密钥。',
+  videoGenModeOff: '关',
+  videoGenModeOpenai: 'OpenAI 兼容',
+  videoGenApiKey: 'OpenAI API 密钥',
+  videoGenApiKeyHint: '经凭据落盘为 XRK_VIDEO_GEN_OPENAI_KEY（不进 settings.yaml）。运行时也可用 OPENAI_API_KEY。',
+  videoGenApiKeySet: '已配置',
+  videoGenApiKeyUnset: '未设置',
+  videoGenBaseUrl: 'Base URL',
+  videoGenBaseUrlHint: '可选兼容 Videos API 端点。',
+  videoGenModel: '模型',
+  videoGenModelHint: '可选模型 id（默认 sora-2）。',
+  videoGenLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
+  curatedMemoryTitle: '策展记忆',
+  curatedMemoryDescription: '跨会话 MEMORY.md / USER.md（~/.xrk/memories，不是 Mnemon）。关则跳过 memory 工具与系统提示冻结段。CI 可设 XRK_CURATED_MEMORY=0 强制关。',
+  curatedMemoryEnabled: '总开关',
+  curatedMemoryEnabledHint: '开：冻结 MEMORY.md / USER.md 进系统提示并登记 memory 工具。关：下次 agent 重建后两者都卸下。',
+  curatedMemoryEnabledOn: '开',
+  curatedMemoryEnabledOff: '关',
+  curatedMemoryLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
+  sshRemoteTitle: '远程',
+  sshRemoteDescription:
+    '本地 Host、远端 cwd：文件 / bash / run_code 走 OpenSSH。host 与 workspace 都留空则用本机工作区。CI 可设非空 XRK_SSH_HOST 旁路本卡。',
+  sshRemoteHost: '主机',
+  sshRemoteHostHint: 'OpenSSH 主机或别名（可写 user@host）。',
+  sshRemoteWorkspace: '工作区',
+  sshRemoteWorkspaceHint: '远端绝对 cwd（须以 / 开头）。须与主机成对填写或成对留空。',
+  sshRemoteUser: '用户',
+  sshRemoteUserHint: '可选；host 已含 user@ 时可省略。',
+  sshRemotePort: '端口',
+  sshRemotePortHint: '可选 SSH 端口（默认 22）。',
+  sshRemoteKeyPath: '私钥路径',
+  sshRemoteKeyPathHint: '可选本机私钥文件路径（不是密钥内容）。',
+  sshRemoteRestartHint: '需重启 Host 后生效（SSH 世界在进程启动时构建）。',
+  autoReviewTitle: 'Auto-review classifier',
+  autoReviewDescription:
+    '用 HTTP classifier 替换内置启发式（POST JSON → verdict/decision）。URL 留空则用启发式。CI 可设非空 XRK_AUTO_REVIEW_CLASSIFIER_URL 旁路本卡。',
+  autoReviewClassifierUrl: 'Classifier URL',
+  autoReviewClassifierUrlHint: 'http(s) 端点。留空则继续用本地启发式。',
+  autoReviewClassifierToken: 'Classifier token',
+  autoReviewClassifierTokenHint: '可选 Bearer；经凭据落盘为 XRK_AUTO_REVIEW_CLASSIFIER_TOKEN（不进 settings.yaml）。',
+  autoReviewClassifierTokenSet: '已配置',
+  autoReviewClassifierTokenUnset: '未设置',
+  autoReviewLiveHint: '下次 classify 请求即生效（热切换，无需重启 Host）。',
+  memoryEmbedTitle: '向量记忆 sidecar',
+  memoryEmbedDescription:
+    '可选外接向量 HTTP，供 embedding.search（类 Qdrant：POST /search）。URL 留空则只用 ~/.xrk/memory-embeddings 内嵌索引。CI 可设非空 XRK_MEMORY_EMBED_URL 旁路本卡。',
+  memoryEmbedUrl: 'Sidecar URL',
+  memoryEmbedUrlHint: 'http(s) 基址（Host POST /search，探测 /health）。留空则仅内嵌 host。',
+  memoryEmbedCollection: '集合名',
+  memoryEmbedCollectionHint: '可选；随 /search 一并发送。留空则不传该字段。',
+  memoryEmbedToken: 'Sidecar token',
+  memoryEmbedTokenHint: '可选 Bearer；经凭据落盘为 XRK_MEMORY_EMBED_TOKEN（不进 settings.yaml）。',
+  memoryEmbedTokenSet: '已配置',
+  memoryEmbedTokenUnset: '未设置',
+  memoryEmbedLiveHint: '下次 embedding.search 即生效（热切换，无需重启 Host）。',
+  externalAgentTitle: '外部 Agent',
+  externalAgentDescription:
+    'subagent.runtime=acp / app-server / claude-code 的 spawn 命令。CI 可设非空 XRK_ACP_AGENT · XRK_CODEX_APP_SERVER · XRK_CLAUDE_CODE 旁路本卡。',
+  externalAgentAcp: 'ACP agent',
+  externalAgentAcpHint: 'runtime=acp 必填（如 xrkh acp）。留空则仅认 XRK_ACP_AGENT。',
+  externalAgentAppServer: 'Codex app-server',
+  externalAgentAppServerHint: 'runtime=app-server 命令。留空默认 codex app-server（或 env XRK_CODEX_APP_SERVER）。',
+  externalAgentClaudeCode: 'Claude Code',
+  externalAgentClaudeCodeHint: 'runtime=claude-code 命令。留空默认 claude（Host 会加 -p）。或设 XRK_CLAUDE_CODE。',
+  externalAgentLiveHint: '下次外部 subagent 回合即生效（热切换，无需重启 Host）。',
 }

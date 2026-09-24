@@ -11,6 +11,7 @@ import {
   createSandboxWrapGuard,
   createWorkspaceSandbox,
   hostPathForDockerMount,
+  parseSandboxProduct,
 } from "../src/index.js";
 
 describe("sandbox", () => {
@@ -137,6 +138,47 @@ describe("createSandboxStack", () => {
     const argv = await s.confine(["true"]);
     expect(argv[0]).toBe("docker");
     expect(argv).toContain("alpine:3.20");
+  });
+
+  it("uses Face product when env backend unset", async () => {
+    const s = createSandboxStack({
+      workspaceRoot: process.cwd(),
+      env: {},
+      product: {
+        backend: "docker",
+        dockerImage: "node:22-bookworm",
+        dockerNetwork: "bridge",
+      },
+    });
+    const argv = await s.confine(["true"]);
+    expect(argv[0]).toBe("docker");
+    expect(argv).toContain("node:22-bookworm");
+    expect(argv).toContain("--network");
+    expect(argv).toContain("bridge");
+  });
+
+  it("env XRK_SANDBOX_BACKEND bypasses product", async () => {
+    const s = createSandboxStack({
+      workspaceRoot: process.cwd(),
+      env: { XRK_SANDBOX_BACKEND: "workspace" },
+      product: {
+        backend: "docker",
+        dockerImage: "should-not-use",
+      },
+    });
+    await expect(s.confine(["echo", "x"])).resolves.toEqual(["echo", "x"]);
+  });
+});
+
+describe("parseSandboxProduct", () => {
+  it("parses backend and optional docker/windows fields", () => {
+    expect(
+      parseSandboxProduct({
+        backend: "Windows",
+        windowsMode: "read-only",
+        dockerImage: "  ",
+      }),
+    ).toEqual({ backend: "windows", windowsMode: "read-only" });
   });
 });
 

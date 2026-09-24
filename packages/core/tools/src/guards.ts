@@ -61,7 +61,8 @@ export function createPolicyToolCallGuard(
 }
 
 /**
- * fs write-intent: deny apply_edit / write_file (or listed tools) unless path was read.
+ * fs write-intent: deny listed write tools unless each touched path was read.
+ * `apply_patch` observes Update/Delete paths from the patch text (Add File skips).
  * Sets denyReason + denyError (`FS_NOT_OBSERVED`: path + code + reason).
  */
 export function createWriteIntentGuard(options: {
@@ -71,18 +72,29 @@ export function createWriteIntentGuard(options: {
   const writes =
     options.writeToolNames instanceof Set
       ? options.writeToolNames
-      : new Set(options.writeToolNames ?? ["apply_edit", "write_file"]);
+      : new Set(
+          options.writeToolNames ?? ["apply_edit", "write_file", "apply_patch"],
+        );
   return (ctx) => {
     if (!writes.has(ctx.call.name)) return "abstain";
-    const path = extractPathArg(ctx.args);
-    if (!path) {
-      ctx.denyReason = `${ctx.call.name} requires a path argument`;
+    const paths = extractWritePaths(ctx.call.name, ctx.args);
+    if (paths === undefined) {
+      ctx.denyReason =
+        ctx.call.name === "apply_patch"
+          ? "apply_patch requires a patch argument"
+          : `${ctx.call.name} requires a path argument`;
       return "deny";
     }
-    if (!options.hasRead(path)) {
-      ctx.denyReason = formatFsNotObservedContent(path);
-      ctx.denyError = fsNotObservedDenyError();
-      return "deny";
+    if (paths.length === 0) {
+      // Add-only patch — no prior read required.
+      return "allow";
+    }
+    for (const path of paths) {
+      if (!options.hasRead(path)) {
+        ctx.denyReason = formatFsNotObservedContent(path);
+        ctx.denyError = fsNotObservedDenyError();
+        return "deny";
+      }
     }
     return "allow";
   };
@@ -92,6 +104,40 @@ export function extractPathArg(args: unknown): string | undefined {
   if (!args || typeof args !== "object") return undefined;
   const p = (args as { path?: unknown }).path;
   return typeof p === "string" ? p : undefined;
+}
+
+/**
+ * Paths that write-intent must have observed.
+ * `undefined` → missing args; empty array → nothing to observe (add-only patch).
+ */
+export function extractWritePaths(
+  toolName: string,
+  args: unknown,
+): string[] | undefined {
+  if (toolName === "apply_patch") {
+    if (!args || typeof args !== "object") return undefined;
+    const patch = (args as { patch?: unknown }).patch;
+    if (typeof patch !== "string" || !patch.trim()) return undefined;
+    return extractPatchObservedPaths(patch);
+  }
+  const path = extractPathArg(args);
+  return path === undefined ? undefined : [path];
+}
+
+/** Update/Delete paths from a Codex patch (Add File does not require a prior read). */
+export function extractPatchObservedPaths(patch: string): string[] {
+  const out: string[] = [];
+  for (const line of patch.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("*** Update File: ")) {
+      const p = trimmed.slice("*** Update File: ".length).trim();
+      if (p) out.push(p);
+    } else if (trimmed.startsWith("*** Delete File: ")) {
+      const p = trimmed.slice("*** Delete File: ".length).trim();
+      if (p) out.push(p);
+    }
+  }
+  return out;
 }
 
 /** In-memory read tracker for write-intent tests / minimal preset. */

@@ -126,7 +126,20 @@ export {
 export {
   createWorkerCodeRuntime,
   createRunCodeTool,
+  createRegistryCodeToolBridge,
+  runCodeWithTools,
 } from "@xrkseek/code-runtime";
+export {
+  createContextFragmentPipeline,
+  createAdditionalContextFragment,
+  createRecapFragment,
+  createStaticAdditionalContextProvider,
+  appendContextFragments,
+  fragmentsToPrepareContexts,
+  truncateMiddle,
+  formatAdditionalContextBody,
+  DEFAULT_FRAGMENT_BUDGET_CHARS,
+} from "@xrkseek/context-fragments";
 export {
   createDefaultWebAccess,
   createWebTools,
@@ -159,6 +172,7 @@ export {
   createSlashResolver,
   loadOfficeRecipes,
   createSkillTools,
+  createProposeSkillTool,
   listSkillsFromWorkspace,
 } from "@xrkseek/workspace";
 export {

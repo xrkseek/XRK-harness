@@ -276,11 +276,12 @@ export function formatBrowserGuidance(available: ToolNameSet): string {
   const names = asSet(available);
   if (!names.has("browser_open")) return "";
   return (
-    "Use browser_open / browser_snapshot / browser_act for interactive page sessions " +
+    "Use browser_open / browser_snapshot / browser_act for interactive web page sessions " +
     "(element refs like @e1). Use browser_vision for a screenshot the vision model can see. " +
     "Prefer web_fetch or web_search for one-shot reads. " +
-    "The default session is an HTTP snapshot. XRK_BROWSER_CDP_URL selects Chrome DevTools. " +
-    "This is not a full desktop computer-use agent."
+    "The default session is an HTTP snapshot. Settings → Plugins → Browser (or XRK_BROWSER_CDP_URL) selects Chrome DevTools. " +
+    "Do not drive the user's GUI browser with computer_use when browser_* can do the job; " +
+    "reserve computer_use for native desktop apps outside the page session."
   );
 }
 

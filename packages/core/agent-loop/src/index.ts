@@ -1310,6 +1310,7 @@ export { maybeAppendRequestHeader } from "./request-header-log.js";
 export {
   boundToolResultContent,
   alreadySavedPath,
+  parseSpillLocator,
   TOOL_RESULT_MAX_INLINE_BYTES,
 } from "./tool-result-bound.js";
 export {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createBrowserSession,
   createCdpBrowserSession,
+  resolveBrowserCdpUrl,
   resolveCdpDebuggerUrl,
   type CdpCaller,
 } from "../src/browser-cdp.js";
@@ -118,5 +119,44 @@ describe("createBrowserSession", () => {
     });
     const snap = await session.open("https://example.test/start");
     expect(snap.text).toContain("@e1");
+  });
+
+  it("uses Face product CDP when env is unset", async () => {
+    const session = createBrowserSession({
+      fetch: {
+        async fetch() {
+          throw new Error("HTTP fetch should not run for CDP product");
+        },
+      },
+      env: {},
+      product: { mode: "cdp", cdpUrl: "ws://127.0.0.1:9/devtools/browser/x" },
+      resolve: async (raw) => raw,
+      connect: async () => {
+        throw new Error("connect deferred");
+      },
+    });
+    // Session is CDP-backed; open will try connect — prove product path picked CDP
+    // by expecting the connect error rather than HTML snapshot.
+    await expect(session.open("https://example.test/")).rejects.toThrow(
+      /connect deferred|CDP/,
+    );
+  });
+
+  it("env CDP url bypasses product http mode", () => {
+    expect(
+      resolveBrowserCdpUrl({
+        env: { XRK_BROWSER_CDP_URL: "http://127.0.0.1:9222" },
+        product: { mode: "http" },
+      }),
+    ).toBe("http://127.0.0.1:9222");
+  });
+
+  it("product http clears CDP when env unset", () => {
+    expect(
+      resolveBrowserCdpUrl({
+        env: {},
+        product: { mode: "http", cdpUrl: "http://127.0.0.1:9222" },
+      }),
+    ).toBe("");
   });
 });

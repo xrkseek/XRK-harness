@@ -28,7 +28,7 @@ createWorkspaceToolOutputPersist() // host disk: `~/.xrk/spill/tool-outputs/`
 
 ## 与 agent-loop spill 的分工
 
-一条策略，不是两套落盘：
+一条策略，不是两套落盘。落盘与 notice 策略在 **`@xrkseek/spill`** 分离：`SpillStore` / `LocalSpillStore` 写盘；`applySpillPolicy` / `formatSpillNotice` / `parseSpillLocator` 管何时溢出与模型可见文案。agent-loop `boundToolResultContent` 只做 MessageContent 适配。概况 Status 的 spill 行经 `host.openPath` 打开 locator。
 
 | | pipeline `boundToolOutput` | agent-loop `boundToolResultContent` |
 |--|------------------------------|--------------------------------------|
@@ -81,7 +81,7 @@ createWorkspaceToolOutputPersist() // host disk: `~/.xrk/spill/tool-outputs/`
 
 ## Split with agent-loop spill
 
-One policy, not two stores:
+One policy, not two stores. Persistence and notice policy live in **`@xrkseek/spill`**: `SpillStore` / `LocalSpillStore` write bytes; `applySpillPolicy` / `formatSpillNotice` / `parseSpillLocator` decide when to spill and what the model sees. agent-loop `boundToolResultContent` is the MessageContent adapter. Status overview opens spill locators via `host.openPath`.
 
 | | pipeline `boundToolOutput` | agent-loop `boundToolResultContent` |
 |--|------------------------------|--------------------------------------|

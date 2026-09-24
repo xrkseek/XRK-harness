@@ -5,8 +5,12 @@
  */
 import type { SessionEvent } from "@xrkseek/protocol";
 import { assertSessionEvent } from "@xrkseek/protocol";
+import {
+  detectSessionArtifact,
+  SESSION_INTERCHANGE_VERSION,
+} from "@xrkseek/session-format";
 
-export const SESSION_INTERCHANGE_VERSION = 1;
+export { SESSION_INTERCHANGE_VERSION };
 
 export type InterchangeRole = "user" | "assistant" | "tool";
 
@@ -168,6 +172,10 @@ export function importSessionInterchange(
   text: string,
   now = Date.now(),
 ): SessionEvent[] {
+  const kind = detectSessionArtifact(text);
+  if (kind.kind === "foreign-session-format") {
+    throw new Error(kind.reason);
+  }
   const turns = splitTurns(readSessionInterchange(text));
   const built: unknown[] = [];
   turns.forEach((messages, turnIndex) => {

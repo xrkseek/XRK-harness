@@ -187,6 +187,35 @@ export function presentEditResult(
   return { card: "diff", title: call.title, diffs: call.diffs };
 }
 
+/** Multi-file Codex patch — call view shows patch size, not full body. */
+export function presentPatchCall(args: unknown): GenericCallView | undefined {
+  const patch = strArg(asArgs(args), "patch");
+  if (!patch) return undefined;
+  const lines = patch.split(/\r?\n/).length;
+  return {
+    card: "generic",
+    title: `Apply patch (${lines} lines)`,
+    kind: "edit",
+  };
+}
+
+/** Success summary from tool text; decline on error. */
+export function presentPatchResult(
+  args: unknown,
+  result: PresentableToolResult,
+): GenericCallView | undefined {
+  if (result.isError) return undefined;
+  const title =
+    typeof result.content === "string" && result.content.trim()
+      ? result.content.trim().split(/\r?\n/)[0]!
+      : "Apply patch";
+  return {
+    card: "generic",
+    title,
+    kind: "edit",
+  };
+}
+
 /** Copied from `@xrkseek/xrk-tool-fs-search` `presentGrepCall` (`glob` ≈ `include`). */
 export function presentGrepCall(args: unknown): GenericCallView | undefined {
   const a = asArgs(args);

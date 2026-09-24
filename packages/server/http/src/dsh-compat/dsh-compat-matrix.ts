@@ -163,7 +163,7 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
     id: "auto-review-pluggable-classifier",
     coverage: "full",
     genericModule: "auto-review-classifier.ts · auto-review-http.ts · host-feature-bridge.ts",
-    note: "Default heuristic; replace with options.classifier or XRK_AUTO_REVIEW_CLASSIFIER_URL (fail closed)",
+    note: "Default heuristic; Settings Plugins→Advanced, options.classifier, or XRK_AUTO_REVIEW_CLASSIFIER_URL (fail closed)",
   },
   {
     id: "im-channels",
@@ -241,7 +241,7 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
     coverage: "full",
     genericModule:
       "memory-embeddings.ts · embedded-vector-store.ts · noema.ts",
-    note: "Embedded vector host + optional XRK_MEMORY_EMBED_* sidecar",
+    note: "Embedded vector host + optional XRK_MEMORY_EMBED_* / Settings memory-embed sidecar",
   },
   {
     id: "taskflow-external-runtime",

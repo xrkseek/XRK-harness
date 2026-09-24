@@ -72,5 +72,18 @@ describe("exec-image-gen", () => {
     expect(access.service).toBeTruthy();
     const gen = await access.service!.generate({ prompt: "dog" });
     expect(gen.provider).toBe("openai");
+
+    expect(
+      createDefaultImageGenAccess({
+        env: { XRK_IMAGE_GEN_OPENAI_KEY: "sk-p" },
+        product: { mode: "openai" },
+      }).service,
+    ).toBeTruthy();
+    expect(
+      createDefaultImageGenAccess({
+        env: {},
+        product: { mode: "off" },
+      }).service,
+    ).toBeUndefined();
   });
 });

@@ -89,11 +89,29 @@ export {
 export {
   FaceGoalStore,
   DEFAULT_MAX_GOAL_ROUNDS,
+  GOAL_OBJECTIVE_MAX_CHARS,
   type GoalActivation,
   type GoalPhase,
+  type GoalProjectionValue,
   type GoalRef,
   type GoalView,
 } from "./goal-store.js";
+export {
+  decideGoalTurnEnd,
+  renderGoalRoundPrompt,
+  renderGoalStartPrompt,
+  type GoalRoundSnapshot,
+  type GoalTurnEndDecision,
+} from "./goal-round-driver.js";
+export { bindGoalTools, type BindGoalToolsOptions } from "./goal-tools.js";
+export {
+  bindProposeSkillTool,
+  proposeSkillQuestions,
+  PROPOSE_SKILL_APPROVE_LABEL,
+  PROPOSE_SKILL_QUESTION_ID,
+  PROPOSE_SKILL_REJECT_LABEL,
+  type BindProposeSkillToolOptions,
+} from "./propose-skill.js";
 export {
   SESSION_EXPORT_PATHS,
   isSessionExportPath,
@@ -220,6 +238,7 @@ export {
   resolveProductDir,
   PathEscapeError,
   workspaceArchiveSessionFace,
+  workspaceUnarchiveSessionFace,
   workspaceCreateFace,
   workspaceDeleteFace,
   workspaceDescribe,
@@ -242,6 +261,18 @@ export {
   type SubagentMode,
 } from "./subagent-registry.js";
 export {
+  bindRalphTool,
+  createRalphTool,
+  RALPH_DEFAULT_MAX_ROUNDS,
+  RALPH_HARD_MAX_ROUNDS,
+  RALPH_MAX_HANDOFF_CHARS,
+  validateRalphReport,
+  type BindRalphToolOptions,
+  type RalphRoundReport,
+  type RalphRoundStatus,
+  type RalphTerminalStatus,
+} from "./ralph-tool.js";
+export {
   AGENT_TEAM_ROLES,
   AgentTeamGraph,
   agentTeamGraphPath,
@@ -251,6 +282,72 @@ export {
   type AgentTeamNode,
   type AgentTeamRole,
 } from "./agent-team-graph.js";
+export {
+  AGENT_TEAM_SPAWN_ROLES,
+  applySpawnRoleReminder,
+  isAgentTeamSpawnRole,
+  listSpawnRoleIds,
+  parseAgentTeamSpawnRole,
+  type AgentTeamSpawnRole,
+} from "./agent-team-roles.js";
+export {
+  AgentTeamTaskBoard,
+  agentTeamTasksPath,
+  type AgentTeamTask,
+  type AgentTeamTaskStatus,
+} from "./agent-team-tasks.js";
+export {
+  ManagedWorktreeManager,
+  MANAGED_WORKTREE_OWNER_FILENAME,
+  MANAGED_WORKTREE_OWNER_VERSION,
+  bindManagedWorktreeOwner,
+  managedWorktreesPath,
+  readManagedWorktreeOwner,
+  type ManagedWorktreeLease,
+  type ManagedWorktreeMergeResult,
+  type ManagedWorktreeMergeStrategy,
+  type ManagedWorktreeOwnerRecord,
+  type ManagedWorktreeStatus,
+} from "./managed-worktree.js";
+export {
+  appendOutputContract,
+  buildOutputSchemaRetryMessage,
+  coerceOutputSchema,
+  extractJsonCandidate,
+  validateOutputAgainstSchema,
+  type OutputSchemaObject,
+  type OutputSchemaValidation,
+} from "./agent-team-output.js";
+export {
+  buildSessionStatusSnapshot,
+  formatSessionStatusText,
+  rankCostModelRows,
+  type SessionStatusBilling,
+  type SessionStatusChannels,
+  type SessionStatusCompaction,
+  type SessionStatusCompactionPipeline,
+  type SessionStatusCompactionStage,
+  type SessionStatusCost,
+  type SessionStatusCostBuckets,
+  type SessionStatusCostModelRow,
+  type SessionStatusDelivery,
+  type SessionStatusGraph,
+  type SessionStatusJobRow,
+  type SessionStatusSnapshot,
+  type SessionStatusSubagentLive,
+  type SessionStatusTeamTask,
+  type SessionStatusTimeline,
+} from "./session-status.js";
+export {
+  buildRolloutTraceState,
+  type BuildRolloutTraceInput,
+  type RolloutTraceEdge,
+  type RolloutTraceEdgeKind,
+  type RolloutTraceLink,
+  type RolloutTraceNode,
+  type RolloutTraceNodeKind,
+  type RolloutTraceState,
+} from "./rollout-trace.js";
 export {
   fullyQualified,
   hostCreateDirectory,
@@ -307,6 +404,7 @@ export {
   credentialsUnset,
   defaultUiSettings,
   effectiveHostApiKey,
+  hydrateCredentialsFromSecretStore,
   hydrateFaceHostSettings,
   listCredentialSlots,
   parseFaceMcpServers,
@@ -328,13 +426,29 @@ export {
   type UiTheme,
 } from "./settings-credentials.js";
 export {
+  peekSettingsYamlSection,
+  resetLastGoodConfigCaches,
+  resolveHarnessHome,
+  settingsYamlPath,
+  validateSettingsNamespace,
+} from "./settings-document.js";
+export {
   FaceApprovalBroker,
   approvalRequestedFrame,
   approvalResolvedFrame,
   type ApprovalOutcomeWire,
   type FaceApprovalHooks,
   type PendingApprovalItem,
+  type PermissionRequestGate,
 } from "./approvals.js";
+export {
+  classifyApproval,
+  extractNetworkContext,
+  type ApprovalCategory,
+  type ApprovalClassification,
+  type NetworkApprovalContext,
+  type NetworkApprovalProtocol,
+} from "./approval-category.js";
 export {
   FaceQuestionBroker,
   FaceQuestionError,
@@ -349,15 +463,37 @@ export {
 } from "./questions.js";
 export { bindSettingsTools } from "./settings-agent-tools.js";
 export {
+  bindSessionQueryTools,
+  createSessionSearchTool,
+  createSessionReadTool,
+  createSessionTraceTool,
+  SESSION_QUERY_ROUTING_PROMPT_TEXT,
+  SESSION_READ_MAX_BYTES,
+  SESSION_TRACE_MAX_NODES,
+  type BindSessionQueryToolsOptions,
+} from "./session-query-tools.js";
+export {
   bindSubagentTools,
   subagentDepth,
+  resolveSubagentQuota,
   SUBAGENT_ROUTING_PROMPT_TEXT,
   parseExternalAgentKind,
+  parseExternalAgentProduct,
   runExternalAgentTurn,
   resolveExternalAgentLaunch,
+  openExternalAgentLiveSession,
+  supportsExternalContinuable,
   ExternalAgentError,
+  ExternalAgentSessionRegistry,
+  isChildSessionActive,
+  startExternalContinuable,
+  promptExternalContinuable,
+  interruptExternalContinuable,
   type BindSubagentToolsOptions,
   type ExternalAgentKind,
+  type ContinuableExternalKind,
+  type ExternalAgentLiveSession,
+  type ExternalAgentProductConfig,
   type ExternalSpawn,
   type RunExternalAgentOptions,
 } from "./subagent-tools.js";
@@ -377,3 +513,12 @@ export {
   bundledCostMeterPriceConfig,
   BUNDLED_MODEL_PRICES,
 } from "./cost-meter-pricing.js";
+export {
+  snapshotSessionWorkspace,
+  workspaceCheckpointStoreFor,
+  workspaceCheckpointStoreForSession,
+  clearWorkspaceCheckpointStores,
+  setWorkspaceCheckpointGitRunner,
+  findCheckpointAtOrBefore,
+  resolveRollbackTarget,
+} from "./workspace-checkpoint.js";

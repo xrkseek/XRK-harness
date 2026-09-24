@@ -49,6 +49,18 @@
   background: var(--dsw-alias-state-warn-primary);
 }
 
+.badge {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--dsw-alias-state-warn-secondary);
+  background: var(--dsw-specific-input-major);
+  color: var(--dsw-alias-state-warn-primary);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+}
+
 /* Scroll region: an agent's justification and its command are unbounded model
    text (a one-line `cd` or a 40-line heredoc), and the seat sits in a
    fixed-height column — uncapped, a long command pushed the action row past

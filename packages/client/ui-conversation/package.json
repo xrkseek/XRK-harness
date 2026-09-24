@@ -46,7 +46,13 @@
   "license": "MIT",
   "dependencies": {
     "clsx": "^2.0.0",
-    "@xrkseek/schemastery": "workspace:^"
+    "@xrkseek/schemastery": "workspace:^",
+    "lexical": "^0.49.0",
+    "@lexical/plain-text": "^0.49.0",
+    "@lexical/history": "^0.49.0",
+    "@lexical/utils": "^0.49.0",
+    "@lexical/text": "^0.49.0",
+    "@lexical/headless": "^0.49.0"
   },
   "peerDependencies": {
     "@xrkseek/cordis": "workspace:^",
@@ -101,7 +107,10 @@
     "@xrkseek/xrk-tool-todo": "workspace:^",
     "@xrkseek/xrk-tools": "workspace:^",
     "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.0",
     "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@testing-library/react": "^16.1.0",
     "@xrkseek/xrk-settings": "workspace:^"
   },
   "files": [

@@ -48,6 +48,7 @@ import {
   createWorkspaceInjector,
   createWorkspaceToolOutputPersist,
   createSkillTools,
+  createProposeSkillTool,
   createSlashResolver,
   loadOfficeRecipes,
   appendWorkspaceInjectsIfChanged,
@@ -170,6 +171,11 @@ export function createMinimalComposition(
   })) {
     tools.register(tool);
   }
+  tools.register(
+    createProposeSkillTool({
+      resolveWorkspaceRoot: () => options.workspaceRoot,
+    }),
+  );
   wireCompositionTools(tools, {
     ...(options.extraTools ? { extraTools: options.extraTools } : {}),
     ...(options.plugins ? { plugins: options.plugins } : {}),
@@ -207,7 +213,7 @@ export function createMinimalComposition(
     pipeline.onGuard(
       createWriteIntentGuard({
         hasRead: (p) => tracker.hasRead(p),
-        writeToolNames: ["apply_edit"],
+        writeToolNames: ["apply_edit", "apply_patch"],
       }),
     );
   }
@@ -323,6 +329,8 @@ export function createMinimalComposition(
             content,
             text,
             readEvents: (id) => readSessionEvents(store, id),
+            resolveCwd: () => options.workspaceRoot,
+            maxReferenceBytes: 65_536,
             ...(signal ? { signal } : {}),
           }),
         ...(options.resolveImage

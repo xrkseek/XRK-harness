@@ -4,6 +4,8 @@
 
 `@xrkseek/exec-sandbox`：进程 argv 隔离缝。工具仍走同一 `SandboxService` Definition（`wrapArgv` / `confine`）；换 Provider 不改 bash / PTY 接线。
 
+**产品路径**：Settings → Plugins → **Sandbox**（Face ns `sandbox`：`backend` · `dockerImage` · `dockerNetwork` · `windowsMode`）。保存后 Host `invalidateAgents`，**下次 agent 重建热切换**（无需重启）。Helper / bins（`XRK_SANDBOX_WINDOWS_HELPER` · `XRK_SANDBOX_DOCKER_BIN` 等）仍仅环境变量。非空 `XRK_SANDBOX_BACKEND` 为 CI 旁路，覆盖 Settings。
+
 ## 内置 Provider
 
 | Kind | 行为 |
@@ -57,7 +59,18 @@ Harness 也可传 `sandboxBackend: "docker"` · `sandboxDockerImage`，或直接
 - cwd 越出工作区根 → `SANDBOX_CWD`
 - 非 Windows 主机 → `SANDBOX_PLATFORM`；**无 helper** → `SANDBOX_UNAVAILABLE`
 
-**没有运行时一律诚实失败**，绝不静默退回裸 argv。可用 `windowsSandboxCapability()` 在不抛错的前提下探测可用性（供状态/诊断文本使用）。
+**没有运行时一律诚实失败**，绝不静默退回裸 argv。可用 `windowsSandboxCapability()` / `probeSandboxEnvironment()` 在不抛错的前提下探测可用性（`xrkh doctor` 报告 `sandbox-backend` · `sandbox-helper`）。
+
+## ExecEnvironment（换执行世界，非 confine）
+
+同世界 argv 隔离是 `SandboxService`；**换整套 fs/subprocess** 是另一条缝（对标 Hermes terminal environments）：
+
+| Provider | 工厂 | 说明 |
+|----------|------|------|
+| `local`（默认） | `createLocalExecEnvironment` | 本机磁盘 + 本机 subprocess |
+| `http` | `createHttpExecEnvironment` | Serverless 样板 sidecar：`GET /health` · `POST /v1/exec` · `POST /v1/fs` |
+
+选择：`resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|http`（HTTP 需 `XRK_EXEC_ENVIRONMENT_URL`）。SSH 仍用 `createSshExecutionWorld`（Host `remoteExecution`），形状同 `ExecWorld`，拨号独立。包：`@xrkseek/exec-environment`。
 
 ## 与 permission preset
 
@@ -70,6 +83,8 @@ Harness 也可传 `sandboxBackend: "docker"` · `sandboxDockerImage`，或直接
 > **Audience**: Integrators · Contributors
 
 `@xrkseek/exec-sandbox` is the process-argv confinement seam. Tools keep the same `SandboxService` Definition (`wrapArgv` / `confine`); swapping Providers does not change bash / PTY wiring.
+
+**Product path**: Settings → Plugins → **Sandbox** (Face ns `sandbox`: `backend` · `dockerImage` · `dockerNetwork` · `windowsMode`). After save, Host `invalidateAgents` and the next agent rebuild **hot-swaps** the confine Provider (no Host restart). Helper / bins (`XRK_SANDBOX_WINDOWS_HELPER`, `XRK_SANDBOX_DOCKER_BIN`, …) stay env-only. Non-empty `XRK_SANDBOX_BACKEND` is the CI bypass over Settings.
 
 ## Built-in Providers
 
@@ -124,7 +139,18 @@ The permission model mirrors Codex `codex-rs/windows-sandbox-rs` (AppContainer +
 - cwd outside the workspace root → `SANDBOX_CWD`
 - non-Windows host → `SANDBOX_PLATFORM`; **no helper** → `SANDBOX_UNAVAILABLE`
 
-**No runtime means honest failure** — never a silent fallback to bare argv. Use `windowsSandboxCapability()` to probe availability without throwing (for status / diagnostics text).
+**No runtime means honest failure** — never a silent fallback to bare argv. Use `windowsSandboxCapability()` / `probeSandboxEnvironment()` to probe availability without throwing (`xrkh doctor` reports `sandbox-backend` · `sandbox-helper`).
+
+## ExecEnvironment (swap the exec world, not confine)
+
+Same-world argv isolation is `SandboxService`; **swapping fs/subprocess** is a separate seam (Hermes terminal environments):
+
+| Provider | Factory | Notes |
+|----------|---------|-------|
+| `local` (default) | `createLocalExecEnvironment` | Host disk + local subprocess |
+| `http` | `createHttpExecEnvironment` | Serverless sample sidecar: `GET /health` · `POST /v1/exec` · `POST /v1/fs` |
+
+Select with `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|http` (HTTP needs `XRK_EXEC_ENVIRONMENT_URL`). SSH still uses `createSshExecutionWorld` (Host `remoteExecution`) — same `ExecWorld` shape, separate dial. Package: `@xrkseek/exec-environment`.
 
 ## vs permission presets
 

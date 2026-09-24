@@ -385,6 +385,36 @@ export async function workspaceArchiveSessionFace(
     };
   }
   const archivedSessionIds = runtime.workspaces.archiveSession(sessionId);
+  try {
+    await runtime.onSessionFinalize?.(sessionId);
+  } catch {
+    /* Host Phase1 is best-effort */
+  }
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
+  runtime.bus.publishHost({
+    type: "host/archived-sessions-changed",
+    archivedSessionIds,
+  });
+  return { ok: true, value: { archivedSessionIds } };
+}
+
+export async function workspaceUnarchiveSessionFace(
+  runtime: FaceRuntime,
+  payload: unknown,
+): Promise<FaceRpcResult<unknown>> {
+  const p =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const sessionId =
+    typeof p.sessionId === "string" ? p.sessionId.trim() : "";
+  if (!sessionId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "sessionId required" },
+    };
+  }
+  const archivedSessionIds = runtime.workspaces.unarchiveSession(sessionId);
   await persistWorkspaceDoc(runtime, runtime.workspaces);
   runtime.bus.publishHost({
     type: "host/archived-sessions-changed",

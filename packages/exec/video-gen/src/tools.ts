@@ -27,20 +27,26 @@ type VideoGenAction = (typeof ACTIONS)[number];
 
 export function videoGenUnavailableMessage(
   env: NodeJS.ProcessEnv = process.env,
+  product?: { readonly mode?: string },
 ): string {
-  const flag = String(env.XRK_VIDEO_GEN ?? "")
-    .trim()
-    .toLowerCase();
+  const envRaw = String(env.XRK_VIDEO_GEN ?? "").trim();
+  const flag =
+    envRaw !== ""
+      ? envRaw.toLowerCase()
+      : product?.mode === "openai"
+        ? "1"
+        : "";
   if (!flag) {
     return (
-      "Error: video generation is not enabled. Set XRK_VIDEO_GEN=memory (CI/demo) or " +
-      "XRK_VIDEO_GEN=1 with OPENAI_API_KEY / XRK_VIDEO_GEN_OPENAI_KEY. See docs/video-gen.md."
+      "Error: video generation is not enabled. Use Settings → Plugins → Video gen, or set " +
+      "XRK_VIDEO_GEN=memory (CI/demo) / XRK_VIDEO_GEN=1 with OPENAI_API_KEY / XRK_VIDEO_GEN_OPENAI_KEY. " +
+      "See docs/video-gen.md."
     );
   }
-  if (flag === "1") {
+  if (flag === "1" || flag === "openai") {
     return (
-      "Error: XRK_VIDEO_GEN=1 but no API key. Set OPENAI_API_KEY or XRK_VIDEO_GEN_OPENAI_KEY " +
-      "(optional XRK_VIDEO_GEN_BASE_URL / XRK_VIDEO_GEN_MODEL)."
+      "Error: video gen is enabled but no API key. Set Credentials XRK_VIDEO_GEN_OPENAI_KEY " +
+      "(or OPENAI_API_KEY); optional base URL / model via Settings or env."
     );
   }
   return "Error: no VideoGenService Provider is configured. Inject a service or set XRK_VIDEO_GEN.";
@@ -49,6 +55,7 @@ export function videoGenUnavailableMessage(
 export interface CreateVideoGenToolsOptions {
   readonly service?: VideoGenService;
   readonly env?: NodeJS.ProcessEnv;
+  readonly product?: { readonly mode?: string };
   /** When set, persist the finished MP4 and return an attachment id. */
   readonly attachments?: AttachmentStore;
   /** Injected sleep for `action=wait`; tests avoid real polling delays. */
@@ -138,7 +145,10 @@ function formatJob(job: VideoGenJob): string {
 export function createVideoGenTools(
   options: CreateVideoGenToolsOptions = {},
 ): ToolDefinition[] {
-  const missing = videoGenUnavailableMessage(options.env ?? process.env);
+  const missing = videoGenUnavailableMessage(
+    options.env ?? process.env,
+    options.product,
+  );
   const service = options.service;
   const attachments = options.attachments;
   const now = options.now ?? (() => Date.now());

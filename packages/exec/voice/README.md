@@ -6,9 +6,9 @@ Voice Host seam: TTS · dictation (STT) · realtime voice session broker.
 - **Provider**: `createMemoryVoiceProvider` · `createOpenAiVoiceProvider` · Host-injected
 - **Consumer**: `createVoiceTools` → `text_to_speech` · `voice_transcribe` · `voice_session`
 
-Mic/speaker and WebRTC stay on the client. Tools stay registered when no Provider is configured; execute fails honestly.
+Mic/speaker and WebRTC stay on the client. Tools stay registered when no Provider is configured; execute fails honestly (`describeVoiceAccess` / `voiceUnavailableMessage` share the same copy with Settings and `xrkh doctor`).
 
-Env: `XRK_VOICE=memory` | `XRK_VOICE=1` + `OPENAI_API_KEY` / `XRK_VOICE_OPENAI_KEY`.
+Product path: Settings → Plugins → Voice (`mode` off/openai + Credentials key). Env: `XRK_VOICE=memory` | `XRK_VOICE=1` + `OPENAI_API_KEY` / `XRK_VOICE_OPENAI_KEY`. Wake word is not shipped.
 
 ## Browser mic transport
 

@@ -43,7 +43,7 @@ async function requireOk(
   return { stdout: r.stdout, stderr: r.stderr };
 }
 
-/** Provider — remote POSIX disk bound to workspace root (Hermes shell file ops). */
+/** Provider 鈥?remote POSIX disk bound to workspace root (Hermes shell file ops). */
 export function createFsSshProvider(options: FsSshOptions): FsService {
   const session = options.session;
   const root = normalizeRemoteAbs(options.root ?? session.config.workspace);
@@ -183,6 +183,27 @@ export function createFsSshProvider(options: FsSshOptions): FsService {
           throw new EditMismatchError(message);
         }
         throw err;
+      }
+    },
+    async remove(userPath) {
+      emit("fs/write-intent", userPath);
+      const abs = resolveWithinRemoteRoot(root, userPath);
+      const q = shQuote(abs);
+      const { stdout } = await requireOk(
+        session,
+        [
+          `if [ ! -e ${q} ]; then echo missing`,
+          `elif [ -d ${q} ]; then echo dir`,
+          `else rm -f ${q} && echo ok; fi`,
+        ].join("; "),
+        "remove",
+      );
+      const outcome = stdout.trim();
+      if (outcome === "missing") {
+        throw new Error(`no such file to delete: ${userPath}`);
+      }
+      if (outcome !== "ok") {
+        throw new Error(`cannot delete directory via apply_patch: ${userPath}`);
       }
     },
     async stat(userPath): Promise<FsStatResult> {

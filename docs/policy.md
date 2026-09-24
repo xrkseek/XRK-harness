@@ -106,6 +106,7 @@ assertPolicyAllow(engine, { kind: "provider.use", providerId: llm.id });
 | Face `session.selectModel` | `assertPolicyAllow({ kind: "provider.use", providerId })`；否 → **`policy-denied`**（`{ code, message, details: { kind, reason, ruleId? } }`；不再折成 `model-unavailable`） |
 | Face ask | `approval/asked|decided` + `session.respondApproval`；Host 挂 `setApprovalHandler`；Host policy `ask` 走同一 broker（`requestHostGate`） |
 | Preset `policy?` | tool `onPre(createPolicyToolPre)` |
+| 写路径安全地板（policy **前**） | harness：`createHardlineArgvPre`（argv hardline deny）+ `createWritePathSecurityPre/Post`（敏感路径 deny；内容 pattern 默认结果后提示；`XRK_SECURITY_GUIDANCE_BLOCK=1` 拒写；`XRK_SECURITY_GUIDANCE_DISABLE=1` 关闭） |
 | 侧栏 `/sidebar` | `browser.probe` → `sidebar.embed`；`open.external` → `host.open`；`/sidebar/html` → `sidebar.fs` `html`（`ask`→审批缝 / 无缝→**`policy-ask`**；与 Face 同形 `details`） |
 | Office `/office` | `configure` / `reconnect` / `test` / `remove` → `office.connect`；`connection.status` 不门禁；拒绝走 cordis `rpcErr` |
 
@@ -227,6 +228,7 @@ assertPolicyAllow(engine, { kind: "provider.use", providerId: llm.id });
 | Face `session.selectModel` | `assertPolicyAllow({ kind: "provider.use", providerId })`; else → **`policy-denied`** (`{ code, message, details: { kind, reason, ruleId? } }`; no longer folded into `model-unavailable`) |
 | Face ask | `approval/asked|decided` + `session.respondApproval`; Host mounts `setApprovalHandler`; Host policy `ask` uses the same broker (`requestHostGate`) |
 | Preset `policy?` | tool `onPre(createPolicyToolPre)` |
+| Write-path security floor (**before** policy) | harness: `createHardlineArgvPre` (argv hardline deny) + `createWritePathSecurityPre/Post` (sensitive-path deny; content patterns append advisory by default; `XRK_SECURITY_GUIDANCE_BLOCK=1` refuses writes; `XRK_SECURITY_GUIDANCE_DISABLE=1` kill switch) |
 | Sidebar `/sidebar` | `browser.probe` → `sidebar.embed`; `open.external` → `host.open`; `/sidebar/html` → `sidebar.fs` `html` (`ask`→approval seam / no seam→**`policy-ask`**; same `details` shape as Face) |
 | Office `/office` | `configure` / `reconnect` / `test` / `remove` → `office.connect`; `connection.status` ungated; deny/ask map to cordis `rpcErr` |
 

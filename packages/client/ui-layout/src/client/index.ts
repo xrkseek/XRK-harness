@@ -73,11 +73,13 @@ declare module '@xrkseek/client-ui-slots' {
      */
     'conversation': { kind: 'single'; scope: 'session-maybe'; owner: ConvOwnerProps }
     /**
-     * The right details column track. Product seats the session overview
-     * (`ui-plan` PreviewTabs: standing todos / plan mode / Office). File
-     * preview and workbench UI use Host `/sidebar/*` + community
-     * `xrkh-better-sidebar` (overlay host). Absent an occupant the column
-     * renders nothing; default preference is closed.
+     * The right details column track. Product seats session Status
+     * (`ui-plan` PreviewTabs: Status ≡ `/status` · todos / plan / Office).
+     * File preview / explorer / terminal / browser use Host `/sidebar/*` +
+     * community `xrkh-better-sidebar`, with first-party fallback
+     * `@xrkseek/client-ui-workbench` (`ctx.workbench`, yields when
+     * `ctx.betterSidebar` is set). See docs/sidebar-workbench.md.
+     * Absent an occupant the column renders nothing; default preference is closed.
      *
      * No owner props: the framework injects the session id and hooks for the
      * `session` scope, and `ctx.layout` owns whether the column is open.

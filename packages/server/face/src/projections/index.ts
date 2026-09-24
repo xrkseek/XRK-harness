@@ -44,6 +44,8 @@ export {
 } from "./units/context-breakdown.js";
 export {
   createContextTimelineProjectionUnit,
+  type ContextTimelineCompactReason,
+  type ContextTimelineEvent,
   type ContextTimelineProjection,
 } from "./units/context-timeline.js";
 export {

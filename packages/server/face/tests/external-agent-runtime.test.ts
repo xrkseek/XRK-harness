@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
@@ -104,7 +104,7 @@ describe("external agent runtime", () => {
   it("resolves launch env honestly", () => {
     expect(() =>
       resolveExternalAgentLaunch("acp", {}, "hi"),
-    ).toThrow(/XRK_ACP_AGENT/);
+    ).toThrow(/XRK_ACP_AGENT|external-agent\.acpAgent/);
     expect(
       resolveExternalAgentLaunch(
         "acp",
@@ -120,6 +120,44 @@ describe("external agent runtime", () => {
       resolveExternalAgentLaunch("claude-code", {}, "do it"),
     ).toEqual({
       command: "claude",
+      args: ["-p", "do it"],
+      protocol: "print",
+    });
+  });
+
+  it("prefers product when env is unset, and env when set", () => {
+    expect(
+      resolveExternalAgentLaunch("acp", {}, "hi", { acpAgent: "xrkh acp" }),
+    ).toEqual({ command: "xrkh", args: ["acp"], protocol: "acp" });
+    expect(
+      resolveExternalAgentLaunch(
+        "acp",
+        { XRK_ACP_AGENT: "env-acp" },
+        "hi",
+        { acpAgent: "xrkh acp" },
+      ),
+    ).toEqual({ command: "env-acp", args: [], protocol: "acp" });
+    expect(
+      resolveExternalAgentLaunch(
+        "app-server",
+        {},
+        "hi",
+        { codexAppServer: "my-codex serve" },
+      ),
+    ).toEqual({
+      command: "my-codex",
+      args: ["serve"],
+      protocol: "app-server",
+    });
+    expect(
+      resolveExternalAgentLaunch(
+        "claude-code",
+        {},
+        "do it",
+        { claudeCode: "/opt/claude" },
+      ),
+    ).toEqual({
+      command: "/opt/claude",
       args: ["-p", "do it"],
       protocol: "print",
     });
@@ -287,7 +325,7 @@ describe("external agent runtime", () => {
     expect(runtime.subagents.listDelegated(parent)).toEqual([]);
   });
 
-  it("rejects background for external runtimes", async () => {
+  it("rejects background for claude-code print protocol", async () => {
     const store = createMemorySessionStore();
     const runtime = createFaceRuntime({
       store,
@@ -304,7 +342,96 @@ describe("external agent runtime", () => {
       run_in_background: true,
     });
     expect(out.isError).toBe(true);
-    expect(out.content).toMatch(/run_in_background/);
+    expect(out.content).toMatch(/claude-code/);
+  });
+
+  it("starts continuable ACP external child on the same list surface", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+    });
+    const parent = runtime.ensureSession("parent");
+    const tools = createToolRegistry();
+    let prompts = 0;
+    bindSubagentTools(tools, {
+      runtime,
+      parentSessionId: parent,
+      externalEnv: { XRK_ACP_AGENT: "fake-acp" },
+      externalSpawn: () =>
+        fakeChild((line, write) => {
+          const msg = JSON.parse(line) as { id?: number; method?: string };
+          if (msg.method === "initialize") {
+            write({ jsonrpc: "2.0", id: msg.id, result: {} });
+            return;
+          }
+          if (msg.method === "session/new") {
+            write({
+              jsonrpc: "2.0",
+              id: msg.id,
+              result: { sessionId: "acp_live" },
+            });
+            return;
+          }
+          if (msg.method === "session/prompt") {
+            prompts += 1;
+            write({
+              jsonrpc: "2.0",
+              method: "session/update",
+              params: {
+                update: {
+                  content: { type: "text", text: `ext-turn-${prompts}` },
+                },
+              },
+            });
+            write({
+              jsonrpc: "2.0",
+              id: msg.id,
+              result: { stopReason: "end_turn" },
+            });
+          }
+        }),
+    });
+    const out = await tools.get("subagent")!.execute({
+      prompt: "first",
+      runtime: "acp",
+      run_in_background: true,
+      description: "ext-worker",
+    });
+    expect(out.isError).toBeFalsy();
+    expect(out.content).toMatch(/background external/);
+    const children = runtime.subagents.listDelegated(parent);
+    expect(children).toHaveLength(1);
+    const childId = children[0]!.childSessionId;
+    expect(runtime.externalAgents.has(childId)).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(prompts).toBeGreaterThanOrEqual(1);
+    });
+
+    const follow = await tools.get("followup_task")!.execute({
+      agent_id: childId,
+      message: "second",
+    });
+    expect(follow.isError).not.toBe(true);
+    await vi.waitFor(() => {
+      expect(prompts).toBeGreaterThanOrEqual(2);
+    });
+
+    const wait = await tools.get("wait_agent")!.execute({
+      agent_id: childId,
+      timeout_ms: 2000,
+    });
+    expect(wait.isError).not.toBe(true);
+    expect(wait.content).toMatch(/ext-turn/);
+
+    const stopped = await tools.get("interrupt_agent")!.execute({
+      agent_id: childId,
+    });
+    expect(stopped.isError).not.toBe(true);
+    expect(runtime.externalAgents.has(childId)).toBe(false);
   });
 
   it("fails honestly when ACP agent env is missing", async () => {

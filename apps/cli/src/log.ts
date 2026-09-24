@@ -5,6 +5,8 @@
  * Lines are `HH:mm:ss.sss <level> <message>` on stdout (info) or stderr (rest).
  */
 
+import { redactSecrets } from "@xrkseek/secrets";
+
 export type LogLevel = "silent" | "error" | "warn" | "info" | "debug";
 
 const RANK: Record<LogLevel, number> = {
@@ -75,7 +77,9 @@ function createScopedLogger(level: LogLevel, scope: string): CliLogger {
     msg: string,
   ) => {
     if (RANK[level] > RANK[min]) return;
-    stream.write(`${stamp()} ${LEVEL_TAG[min]}  ${prefix}${msg}\n`);
+    stream.write(
+      `${stamp()} ${LEVEL_TAG[min]}  ${prefix}${redactSecrets(msg)}\n`,
+    );
   };
   return {
     level,

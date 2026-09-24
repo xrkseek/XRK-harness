@@ -10,6 +10,13 @@ export {
   type DenyListOptions,
 } from "./service.js";
 export {
+  HARDLINE_ARGV_RULES,
+  DEFAULT_HARDLINE_ARGV_PATTERNS,
+  matchHardlineArgv,
+  createHardlineArgvPre,
+  type HardlineArgvRule,
+} from "./hardline.js";
+export {
   createDockerSandbox,
   hostPathForDockerMount,
   SandboxBackendError,
@@ -31,7 +38,14 @@ export {
 } from "./windows.js";
 export {
   createSandboxStack,
+  parseSandboxProduct,
   resolveSandboxBackendKind,
   type ResolveSandboxOptions,
   type SandboxBackendKind,
+  type SandboxProductConfig,
 } from "./resolve.js";
+export {
+  probeSandboxEnvironment,
+  type SandboxProbeCheck,
+  type SandboxProbeResult,
+} from "./doctor.js";

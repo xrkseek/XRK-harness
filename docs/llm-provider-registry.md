@@ -36,7 +36,7 @@ Face `llm-pi-ai.providers.*.api` 写入后经 `readProviderRoute` → `resolvePr
 | 做法 | 作用 |
 |------|------|
 | tools **按 name 字典序** | 注册 / MCP 热挂顺序不进入 wire |
-| 可选 `toolOrder: string[]`（恰好一个 `' '` rest） | 固定常用工具位置；错配 fail-loud；缺省 = 纯字典序。Face `agent-loop.toolOrder` → Host → `assemble.toolOrder`（settings.yaml）；`@xrkseek/core-system-prompt` |
+| 可选 `toolOrder: string[]`（恰好一个 `' '` rest） | 固定常用工具位置；错配 fail-loud；缺省 = 纯字典序。Face `agent-loop.toolOrder` → Host → `assemble.toolOrder`（Settings → Plugins 或 settings.yaml）；`@xrkseek/core-system-prompt` |
 | volatile **不进 system** | 时钟与 session id 只在 user 尾缀 |
 | 同 turn 后续 step：关 `[current message]` 与 volatile `time:` | 工具循环不每步挪动对话中段 |
 | Anthropic `cache_control: { type: "ephemeral" }` | system 文本块 + 最后一个 tool 定义打 breakpoint；`chat`/`stream` usage 映射 `cache_read_input_tokens` / `cache_creation_input_tokens` → `cacheReadTokens` / `cacheWriteTokens` |
@@ -122,7 +122,7 @@ Keep model-visible prefixes **append-only** when possible (do not rewrite alread
 | Practice | Effect |
 |------|------|
 | tools sorted **by name** | Register / MCP hot-mount order does not enter the wire |
-| Optional `toolOrder: string[]` (exactly one `' '` rest) | Pins common tools; mismatch fails loud; default = pure lexicographic. Face `agent-loop.toolOrder` → Host → `assemble.toolOrder` (settings.yaml); `@xrkseek/core-system-prompt` |
+| Optional `toolOrder: string[]` (exactly one `' '` rest) | Pins common tools; mismatch fails loud; default = pure lexicographic. Face `agent-loop.toolOrder` → Host → `assemble.toolOrder` (Settings → Plugins or settings.yaml); `@xrkseek/core-system-prompt` |
 | volatile **out of system** | Clock and session id only in the user suffix |
 | Later steps in the same turn: disable `[current message]` and volatile `time:` | Tool loops do not reshuffle mid-dialog each step |
 | Anthropic `cache_control: { type: "ephemeral" }` | Breakpoint on system text block + last tool definition; `chat`/`stream` usage maps `cache_read_input_tokens` / `cache_creation_input_tokens` → `cacheReadTokens` / `cacheWriteTokens` |

@@ -35,6 +35,7 @@ import {
   settingsYamlPath,
   validateSettingsNamespace,
 } from "./settings-document.js";
+import { loadSlotFromSecretStore, syncSlotToSecretStore } from "@xrkseek/secrets";
 import {
   classifyConfigDoc,
   isEnoent,
@@ -47,6 +48,23 @@ import {
 } from "./settings-schemas.js";
 import { buildFaceChannelDiscover, resolveImGatewayWired } from "./process-channels.js";
 import { listSettingsProviderCredentialRefs } from "./llm-provider-context.js";
+
+/** Fill empty vault slots from the OS keyring / memory SecretStore when available. */
+export async function hydrateCredentialsFromSecretStore(
+  runtime: FaceRuntime,
+): Promise<void> {
+  const store = runtime.secretStore;
+  if (!store?.available) return;
+  for (const slot of listCredentialSlots(runtime)) {
+    if (runtime.credentials.peek(slot.id)) continue;
+    try {
+      const value = await loadSlotFromSecretStore(store, slot.id);
+      if (value) runtime.credentials.setFromFile(slot.id, value);
+    } catch {
+      /* per-slot keyring miss / error — keep going */
+    }
+  }
+}
 
 export type UiTheme = "system" | "light" | "dark";
 
@@ -258,6 +276,36 @@ export function listCredentialSlots(
       id: "web.brave",
       label: "Brave Search API key",
       envVar: "XRK_BRAVE_SEARCH_API_KEY",
+    },
+    {
+      id: "computer.background",
+      label: "Computer-use background helper",
+      envVar: "XRK_COMPUTER_USE_BACKGROUND",
+    },
+    {
+      id: "voice.openai",
+      label: "Voice OpenAI API key",
+      envVar: "XRK_VOICE_OPENAI_KEY",
+    },
+    {
+      id: "image.openai",
+      label: "Image-gen OpenAI API key",
+      envVar: "XRK_IMAGE_GEN_OPENAI_KEY",
+    },
+    {
+      id: "video.openai",
+      label: "Video-gen OpenAI API key",
+      envVar: "XRK_VIDEO_GEN_OPENAI_KEY",
+    },
+    {
+      id: "auto-review.classifier",
+      label: "Auto-review classifier token",
+      envVar: "XRK_AUTO_REVIEW_CLASSIFIER_TOKEN",
+    },
+    {
+      id: "memory-embed.token",
+      label: "Memory embed sidecar token",
+      envVar: "XRK_MEMORY_EMBED_TOKEN",
     },
   ] as const) {
     const v = vault.peek(web.id);
@@ -575,6 +623,11 @@ export async function credentialsSet(
   if (clear) {
     runtime.credentials.set(slotId, null);
     await persistCredentialsFile(runtime);
+    try {
+      await syncSlotToSecretStore(runtime.secretStore, slotId, null);
+    } catch {
+      /* keyring failure must not block Face clear */
+    }
     emitCredentialRemote(runtime, slotId);
     return {
       ok: true,
@@ -609,6 +662,11 @@ export async function credentialsSet(
 
   runtime.credentials.set(slotId, p.value);
   await persistCredentialsFile(runtime);
+  try {
+    await syncSlotToSecretStore(runtime.secretStore, slotId, p.value);
+  } catch {
+    /* keyring failure must not block Face set — yaml already written */
+  }
   const slot = listCredentialSlots(runtime).find((s) => s.id === slotId)!;
   emitCredentialRemote(runtime, slotId);
   return {
@@ -649,6 +707,11 @@ export async function credentialsUnset(
   }
   runtime.credentials.set(slotId, null);
   emitCredentialRemote(runtime, slotId);
+  try {
+    await syncSlotToSecretStore(runtime.secretStore, slotId, null);
+  } catch {
+    /* ignore */
+  }
   return { ok: true, value: {} };
 }
 

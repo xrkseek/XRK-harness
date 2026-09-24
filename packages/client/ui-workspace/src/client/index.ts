@@ -5,7 +5,8 @@
  * (`conversation.hero.workspace` — both hero forms). Both read real Host
  * Workspaces through the global useWorkspaces hook, and each declares its
  * own `single` directory-flow child hole for the composed picker package's
- * client half (see the contract module doc). Export discipline:
+ * client half (see the contract module doc). Also contributes the archived-
+ * session Settings page (unarchive). Export discipline:
  * packages/client/AGENTS.md.
  */
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
@@ -13,10 +14,17 @@ import type { HostObservable } from '@xrkseek/client-ui-slots'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@xrkseek/client-locale/client'
+// Type-only: pulls the settings shell's SlotMap merge (`settings.section`).
+import type {} from '@xrkseek/client-ui-settings/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from './contract/slots.ts'
 import { createWorkspaceViewStore } from './stores.ts'
 import { WorkspaceBrowser } from './WorkspaceBrowser.tsx'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
+import {
+  ArchivedSessionsSection,
+  type ArchivedSessionsSectionInjected,
+} from './ArchivedSessionsSection.tsx'
+import { archivedEn, archivedZh, type ArchivedSessionsLocaleKey } from './archived-locales.ts'
 import { en, zh, type WorkspaceKey } from './locales.ts'
 
 export type {
@@ -25,24 +33,30 @@ export type {
   WorkspacePickerProps,
 } from './contract/slots.ts'
 export type { WorkspaceKey } from './locales.ts'
+export type { ArchivedSessionsSectionInjected, ArchivedSessionsSectionProps } from './ArchivedSessionsSection.tsx'
+export type { ArchivedSessionsLocaleKey } from './archived-locales.ts'
 
 declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
     /** The workspace browsing region and pick/create flow copy. */
     workspace: WorkspaceKey
+    /** Archived-session Settings page copy. */
+    'settings.archivedSessions': ArchivedSessionsLocaleKey
   }
 }
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'workspace'
+/** Archived-session Settings page dictionary namespace. */
+const ARCHIVED_NS = 'settings.archivedSessions' as const
 
 /**
  * Required services (cordis fiber inject). The target slots are declared by
- * the ui-sidebar / ui-conversation applies, whose activation order relative
- * to this one is NOT constrained: xrk.client.inject edges are informational
- * (loading/prefetch metadata, never apply sequencing) and neither owner
- * provides a waitable service. apply therefore depends on each slot
- * declaration through `slots.inject()` instead of assuming order.
+ * the ui-sidebar / ui-conversation / ui-settings applies, whose activation
+ * order relative to this one is NOT constrained: xrk.client.inject edges are
+ * informational (loading/prefetch metadata, never apply sequencing) and
+ * neither owner provides a waitable service. apply therefore depends on each
+ * slot declaration through `slots.inject()` instead of assuming order.
  */
 export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'connection']
 
@@ -54,6 +68,10 @@ export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'connection'
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workspace: dictionaries')
+  ctx.effect(
+    () => ctx.locale.register(ARCHIVED_NS, { zh: archivedZh, en: archivedEn }),
+    'ui-workspace: archived-session dictionaries',
+  )
   const connection = ctx.get('connection') as ConnectionHandle
 
   const searchSessions: WorkspaceBrowserInjected['searchSessions'] = async (query, signal) => {
@@ -111,6 +129,9 @@ export function apply(ctx: ClientContext): void {
     createWorkspace: input => ctx.workspaces.create(input),
     hooks: { directoryFlow: pickerFlowSource },
   })
+  const archivedInjected = (): ArchivedSessionsSectionInjected => ({
+    unarchive: sessionId => ctx.workspaces.unarchiveSession(sessionId),
+  })
   // Each registration declares its directory-flow child in the same call;
   // slot injection follows both the owner and declaration HMR lifetimes.
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register(
@@ -132,4 +153,13 @@ export function apply(ctx: ClientContext): void {
     },
     WorkspacePicker,
   ))
+  const archivedT = ctx.locale.bind(ARCHIVED_NS)
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'archived-sessions',
+    order: 25,
+    label: () => archivedT('nav'),
+    locale: ARCHIVED_NS,
+    inject: archivedInjected,
+  }, ArchivedSessionsSection))
 }

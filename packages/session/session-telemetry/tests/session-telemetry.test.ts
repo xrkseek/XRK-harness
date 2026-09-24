@@ -92,4 +92,35 @@ describe("session-telemetry", () => {
       }).sink,
     ).toBeTruthy();
   });
+
+  it("Face product config when XRK_TELEMETRY unset; env bypass wins", () => {
+    expect(
+      createDefaultSessionTelemetryAccess({
+        env: {},
+        product: { mode: "memory" },
+      }).sink,
+    ).toBeTruthy();
+    expect(
+      createDefaultSessionTelemetryAccess({
+        env: {},
+        product: { mode: "off" },
+      }).sink,
+    ).toBeUndefined();
+    expect(
+      createDefaultSessionTelemetryAccess({
+        env: {},
+        product: {
+          mode: "otlp",
+          endpoint: "http://collector.test/v1/logs",
+        },
+      }).sink,
+    ).toBeTruthy();
+    // CI bypass: XRK_TELEMETRY=0 wins over Face memory.
+    expect(
+      createDefaultSessionTelemetryAccess({
+        env: { XRK_TELEMETRY: "0" },
+        product: { mode: "memory" },
+      }).sink,
+    ).toBeUndefined();
+  });
 });

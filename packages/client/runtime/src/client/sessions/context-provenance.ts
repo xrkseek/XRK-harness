@@ -96,6 +96,11 @@ export function contextProvenance(source: unknown): ContextProvenanceView {
     // a tool summary ("foo, bar") rather than the bare source kind.
     case 'skill-catalog':
       return { role: 'inject', label: joined(collect(record, 'entries', 'name')) ?? kind }
+    case 'context-fragment':
+      return {
+        role: 'inject',
+        label: readString(record, 'fragmentId') ?? kind,
+      }
     case 'plugin':
       return { role: 'inject', label: readString(record, 'plugin') ?? kind }
     // A user-explicit skill invocation names the skill it injected.
@@ -115,7 +120,7 @@ export function contextProvenance(source: unknown): ContextProvenanceView {
  * dropping the row, so a log written by a newer or foreign producer still
  * renders.
  */
-const KNOWN_FORMS = ['instructions', 'catalog', 'snapshot', 'notice', 'relay', 'recall'] as const
+const KNOWN_FORMS = ['instructions', 'catalog', 'snapshot', 'notice', 'relay', 'recall', 'fragment'] as const
 
 /** One durable context form this UI version knows how to present. */
 export type KnownContextForm = typeof KNOWN_FORMS[number]

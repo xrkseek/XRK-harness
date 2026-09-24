@@ -59,9 +59,12 @@ HTTP/WS (attach-http)
 | `queue.ts` | `session/queue` 项形：`{id,placement,message}` | 勿退回扁平 `content` |
 | `approvals.ts` | policy ask · `approvalRequestedFrame` | 稳定 rpcId；`session.respondApproval` 仍可用 |
 | `questions.ts` | 用户提问 · `bindAskUserTool` | `question/requested`；`questions[]` + `question`；respond 先审批后提问 |
-| `slash.ts` | recipe catalog · `commands/execute` | 插件 command 优先；内建 `/compact` · `/export` · `/feedback` · `/goal` · `/permission` · `/plan`；miss → `undefined`（当普通 prompt；skill 斜杠在 loop `resolveSlash`） |
+| `slash.ts` | recipe catalog · `commands/execute` | 插件 command 优先；内建 `/compact` · `/export` · `/feedback` · `/goal` · `/permission` · `/plan` · `/mcp` · `/status` · `/model` · `/theme` · `/skills` · `/auto-review` · `/rollback`；miss → `undefined`（当普通 prompt；skill 斜杠在 loop `resolveSlash`） |
+| `workspace-checkpoint.ts` | 影子 git store 缓存 · Host `snapshotSessionWorkspace` | 工作区文件回退；与 `fork-cut` 分界见 [turn-rewind.md](../turn-rewind.md) |
+| `fork-cut.ts` | `session.fork` 完成轮截断 | 只切会话血缘，不碰工作区文件 |
 | `plugin-inventory.ts` | `pluginInventory/list` 投影 | 进程插件 + boot；cordis = failed |
 | `session-search.ts` | `session.search` | query 1..500 · 禁 NUL · 最多 20 · 最近活动优先 · 含 admit/safety/command/todo/feedback |
+| `session-query-tools.ts` | 模型面 `session_search` / `session_read` / `session_trace` | cwd 权威 · 复用 searchSessions · 字节预算快照 · 子代理谱系；与 `@session` prepare 分路 |
 | `skill-list.ts` | `skill.list` | 扫已存在的 `.xrk|.claude|.cursor|.agents|.codex/skills`（及用户主目录同名）；不强制建目录；模型加载走 `skill` 工具 |
 | `presets-catalog.ts` | agentPreset 列表常量 | `read` 只读；创作面仍 NI |
 | `message-feedback.ts` | `messageFeedback/list/put/delete` | 进程内 CAS；Typert 嵌套 ok；非 transcript |
@@ -226,9 +229,12 @@ HTTP/WS (attach-http)
 | `queue.ts` | `session/queue` item shape `{id,placement,message}` | Do not flatten back to `content` |
 | `approvals.ts` | policy ask · `approvalRequestedFrame` | Stable rpcId; `session.respondApproval` still works |
 | `questions.ts` | User questions · `bindAskUserTool` | `question/requested`; `questions[]` + `question`; respond approvals before questions |
-| `slash.ts` | recipe catalog · `commands/execute` | Plugin commands first; built-ins `/compact` · `/export` · `/feedback` · `/goal` · `/permission` · `/plan`; miss → `undefined` (plain prompt; skill slash in loop `resolveSlash`) |
+| `slash.ts` | recipe catalog · `commands/execute` | Plugin commands first; built-ins `/compact` · `/export` · `/feedback` · `/goal` · `/permission` · `/plan` · `/mcp` · `/status` · `/model` · `/theme` · `/skills` · `/auto-review` · `/rollback`; miss → `undefined` (plain prompt; skill slash in loop `resolveSlash`) |
+| `workspace-checkpoint.ts` | Shadow-git store cache · Host `snapshotSessionWorkspace` | Worktree file restore; vs `fork-cut` — [turn-rewind.md](../turn-rewind.md) |
+| `fork-cut.ts` | `session.fork` completed-turn cut | Session lineage only; does not touch worktree files |
 | `plugin-inventory.ts` | `pluginInventory/list` projection | Process plugins + boot; cordis = failed |
 | `session-search.ts` | `session.search` | query 1..500 · no NUL · max 20 · recent activity first · admits admit/safety/command/todo/feedback |
+| `session-query-tools.ts` | Model tools `session_search` / `session_read` / `session_trace` | cwd authority · reuses searchSessions · byte-budget snapshot · subagent lineage; separate from `@session` prepare |
 | `skill-list.ts` | `skill.list` | Scan existing `.xrk|.claude|.cursor|.agents|.codex/skills` (and home peers); do not create dirs; model load uses `skill` tool |
 | `presets-catalog.ts` | agentPreset list constants | `read` only; authoring surface still NI |
 | `message-feedback.ts` | `messageFeedback/list/put/delete` | In-process CAS; nested Typert ok; not transcript |

@@ -4,6 +4,7 @@ import {
   createMemoryVoiceProvider,
   createOpenAiVoiceProvider,
   createVoiceTools,
+  describeVoiceAccess,
   minimalWavBytes,
 } from "../src/index.js";
 
@@ -34,6 +35,21 @@ describe("exec-voice", () => {
     const out = await tools[0]!.execute({ text: "hi" });
     expect(out.isError).toBe(true);
     expect(out.content).toMatch(/XRK_VOICE/);
+  });
+
+  it("describeVoiceAccess shares facts with tool errors", () => {
+    expect(describeVoiceAccess({}).kind).toBe("off");
+    expect(describeVoiceAccess({}).ready).toBe(false);
+    expect(
+      describeVoiceAccess({}, { mode: "openai" }).kind,
+    ).toBe("openai-missing-key");
+    expect(
+      describeVoiceAccess(
+        { XRK_VOICE_OPENAI_KEY: "sk" },
+        { mode: "openai" },
+      ).kind,
+    ).toBe("openai-ready");
+    expect(describeVoiceAccess({ XRK_VOICE: "memory" }).kind).toBe("memory");
   });
 
   it("tools work with memory Provider", async () => {
@@ -71,10 +87,30 @@ describe("exec-voice", () => {
       }).service,
     ).toBeUndefined();
 
+    expect(
+      createDefaultVoiceAccess({
+        env: {},
+        product: { mode: "openai" },
+      }).service,
+    ).toBeUndefined();
+    expect(
+      createDefaultVoiceAccess({
+        env: { XRK_VOICE_OPENAI_KEY: "sk-product" },
+        product: { mode: "openai" },
+      }).service,
+    ).toBeTruthy();
+    // Env CI bypass wins over product off.
+    expect(
+      createDefaultVoiceAccess({
+        env: { XRK_VOICE: "memory" },
+        product: { mode: "off" },
+      }).service,
+    ).toBeTruthy();
+
     const calls: string[] = [];
     const service = createOpenAiVoiceProvider({
       apiKey: "sk-test",
-      fetchImpl: async (input, init) => {
+      fetchImpl: async (input) => {
         calls.push(String(input));
         const url = String(input);
         if (url.includes("audio/speech")) {

@@ -272,3 +272,58 @@
   opacity: 0.4;
   cursor: default;
 }
+
+.oauthBlock {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.oauthStatus {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.oauthLink {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-brand-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.oauthActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.oauthBtn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
+  border-radius: 14px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.oauthBtn:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-module-platform));
+}
+
+.oauthBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+

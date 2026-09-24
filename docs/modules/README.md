@@ -31,6 +31,10 @@
 | --- | --- | --- |
 | `kernel/` | `@xrkseek/kernel` | [architecture.md](../architecture.md) |
 | `protocol/` | `@xrkseek/protocol` | [protocol-events.md](../protocol-events.md) |
+| `a2a/` | `@xrkseek/a2a` | A2A 出站：context 持久 · history · 环路上限；`extensions/a2a` |
+| `im-gateway-contract/` | `@xrkseek/im-gateway-contract` | IM Host↔sidecar 契约（health/relay/auth）；样板 mock；见 [im-gateway-sidecar](../im-gateway-sidecar.md) |
+| `spill/` | `@xrkseek/spill` | 工具结果 spill：locator · LocalSpillStore · applySpillPolicy（策略≠存储） |
+| `session-format/` | `@xrkseek/session-format` | 相邻迁移链 · 制品探测；sqlite schema 0→1→2→3；**互通≠Format V3**（ADR-0009） |
 | `compose/` | `@xrkseek/compose` | [compose.md](../compose.md) |
 | `session/session-projection/` | `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) |
 | `session/session-telemetry/` | `@xrkseek/session-telemetry` | [session-telemetry.md](../session-telemetry.md) |
@@ -55,6 +59,7 @@
 | `exec/voice/` | `@xrkseek/exec-voice` | [voice.md](../voice.md) · [seams.md](../seams.md) |
 | `exec/image-gen/` | `@xrkseek/exec-image-gen` | [image-gen.md](../image-gen.md) · [seams.md](../seams.md) |
 | `exec/memory/` | `@xrkseek/exec-memory` | [curated-memory.md](../curated-memory.md) · [seams.md](../seams.md) |
+| `exec/environment/` | `@xrkseek/exec-environment` | [sandbox.md](../sandbox.md) · [seams.md](../seams.md) |
 | `exec/lsp/` | `@xrkseek/exec-lsp` | [lsp-tools.md](../lsp-tools.md) · [seams.md](../seams.md) |
 | `exec/pty/` | `@xrkseek/exec-pty` | [pty-tools.md](../pty-tools.md) · [seams.md](../seams.md) |
 | `exec/subprocess/` | `@xrkseek/exec-subprocess` | [seams.md](../seams.md) |
@@ -64,6 +69,8 @@
 | `workspace/` | `@xrkseek/workspace` | [workspace-inject.md](../workspace-inject.md) · [slash-recipes.md](../slash-recipes.md) |
 | `policy/` | `@xrkseek/policy` | [policy.md](../policy.md) |
 | `code-runtime/` | `@xrkseek/code-runtime` | [code-mode.md](../code-mode.md) |
+| `runtime-diagnostics/invariants/` | `@xrkseek/runtime-invariants` | Face/Host 包自有不变量；`XRK_INVARIANTS_FAIL_FAST` |
+| `context/context-fragments/` | `@xrkseek/context-fragments` | [context-fragments.md](../context-fragments.md) |
 | `web-runtime/` | `@xrkseek/web-runtime` | 验证台算法（非产品壳） |
 | `server/http/` | `@xrkseek/server-http` | [http-api.md](../http-api.md) |
 | `server/loader/` | `@xrkseek/server-loader` | [server-loader.md](./server-loader.md) |
@@ -124,6 +131,10 @@ Paths relative to `packages/`. Packages without a dedicated note use README + `s
 | --- | --- | --- |
 | `kernel/` | `@xrkseek/kernel` | [architecture.md](../architecture.md) |
 | `protocol/` | `@xrkseek/protocol` | [protocol-events.md](../protocol-events.md) |
+| `a2a/` | `@xrkseek/a2a` | A2A outbound: context persistence · history · anti-loop; `extensions/a2a` |
+| `im-gateway-contract/` | `@xrkseek/im-gateway-contract` | IM Host↔sidecar contract (health/relay/auth); mock sample; see [im-gateway-sidecar](../im-gateway-sidecar.md) |
+| `spill/` | `@xrkseek/spill` | Tool-result spill: locator · LocalSpillStore · applySpillPolicy (policy ≠ storage) |
+| `session-format/` | `@xrkseek/session-format` | Adjacent migration chain · artifact detect; sqlite schema 0→1→2→3; **interop≠Format V3** (ADR-0009) |
 | `compose/` | `@xrkseek/compose` | [compose.md](../compose.md) |
 | `session/session-projection/` | `@xrkseek/session-projection` | [session-projection.md](./session-projection.md) |
 | `session/session-telemetry/` | `@xrkseek/session-telemetry` | [session-telemetry.md](../session-telemetry.md) |
@@ -148,6 +159,7 @@ Paths relative to `packages/`. Packages without a dedicated note use README + `s
 | `exec/voice/` | `@xrkseek/exec-voice` | [voice.md](../voice.md) · [seams.md](../seams.md) |
 | `exec/image-gen/` | `@xrkseek/exec-image-gen` | [image-gen.md](../image-gen.md) · [seams.md](../seams.md) |
 | `exec/memory/` | `@xrkseek/exec-memory` | [curated-memory.md](../curated-memory.md) · [seams.md](../seams.md) |
+| `exec/environment/` | `@xrkseek/exec-environment` | [sandbox.md](../sandbox.md) · [seams.md](../seams.md) |
 | `exec/lsp/` | `@xrkseek/exec-lsp` | [lsp-tools.md](../lsp-tools.md) · [seams.md](../seams.md) |
 | `exec/pty/` | `@xrkseek/exec-pty` | [pty-tools.md](../pty-tools.md) · [seams.md](../seams.md) |
 | `exec/subprocess/` | `@xrkseek/exec-subprocess` | [seams.md](../seams.md) |
@@ -157,6 +169,8 @@ Paths relative to `packages/`. Packages without a dedicated note use README + `s
 | `workspace/` | `@xrkseek/workspace` | [workspace-inject.md](../workspace-inject.md) · [slash-recipes.md](../slash-recipes.md) |
 | `policy/` | `@xrkseek/policy` | [policy.md](../policy.md) |
 | `code-runtime/` | `@xrkseek/code-runtime` | [code-mode.md](../code-mode.md) |
+| `runtime-diagnostics/invariants/` | `@xrkseek/runtime-invariants` | Face/Host package-owned invariants; `XRK_INVARIANTS_FAIL_FAST` |
+| `context/context-fragments/` | `@xrkseek/context-fragments` | [context-fragments.md](../context-fragments.md) |
 | `web-runtime/` | `@xrkseek/web-runtime` | Console algorithms (not product shell) |
 | `server/http/` | `@xrkseek/server-http` | [http-api.md](../http-api.md) |
 | `server/loader/` | `@xrkseek/server-loader` | [server-loader.md](./server-loader.md) |

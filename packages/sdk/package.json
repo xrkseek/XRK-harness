@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/harness",
-  "version": "0.4.0-rc.4",
+  "version": "0.4.0",
   "type": "module",
   "exports": {
     ".": {
@@ -15,6 +15,7 @@
   ],
   "dependencies": {
     "@xrkseek/code-runtime": "workspace:*",
+    "@xrkseek/context-fragments": "workspace:*",
     "@xrkseek/core-agent": "workspace:*",
     "@xrkseek/core-agent-loop": "workspace:*",
     "@xrkseek/core-session": "workspace:*",

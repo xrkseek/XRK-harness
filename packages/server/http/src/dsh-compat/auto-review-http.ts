@@ -1,4 +1,4 @@
-﻿/**
+/**
  * dsh-auto-review — settings + stats persist under ~/.xrk.
  * Classify uses the heuristic by default, or a plugged classifier
  * (`options.classifier` / `XRK_AUTO_REVIEW_CLASSIFIER_URL`).
@@ -94,7 +94,7 @@ function statusPayload(options: AutoReviewOptions): Record<string, unknown> {
     recentDenies: stats.recentDenies,
     note:
       classifier.kind === "heuristic"
-        ? "Default heuristic classifier. Replace with options.classifier or XRK_AUTO_REVIEW_CLASSIFIER_URL."
+        ? "Default heuristic classifier. Replace via Settings → Plugins → Advanced, options.classifier, or XRK_AUTO_REVIEW_CLASSIFIER_URL."
         : `Classifier seam active (${classifier.kind}).`,
   };
 }

@@ -28,7 +28,8 @@
 
 - **取消流式**：abort 时把已落库 `assistant/chunk` 固化为 `assistant/message`（**字段** `interrupted: true`），`turn/end.reason` 仍是 **`aborted`**（带 `AgentCancelCause`）。进程崩溃留下的开洞 turn 由 `repairOpenTurnEvents` 闭合为 **`interrupted`**（无 cancel cause）。对照表见 [protocol-events.md](./protocol-events.md#结束原因aborted-vs-interrupted--end-reasons-aborted-vs-interrupted)。
 
-- **会话归档**：侧栏会话行 `⋯` →「归档会话」（`workspace.archiveSession`）；从列表隐藏、**不删** SQLite 日志（无硬删除按钮）。
+- **会话归档**：侧栏会话行 `⋯` →「归档会话」（`workspace.archiveSession`）；从列表隐藏、**不删** SQLite 日志（无硬删除按钮）。归档保留工作区 membership，解档后回到原位。
+- **解档**：Settings →「已归档会话」（`workspace.unarchiveSession`）。
 
 - **组合叶**：`@xrkseek/compose` C0·C1·C2（`interceptInject` / `openSubagentRealm`）能跑；presets 只接线。
 
@@ -124,7 +125,8 @@ Short digest of shipped capabilities; details live in topic docs and [modules/](
 
 - **Cancel streaming**: On abort, persisted `assistant/chunk` solidifies into `assistant/message` (`interrupted: true`); `turn/end.reason` remains **`aborted`** (with `AgentCancelCause`). Crash-open turns are closed by `repairOpenTurnEvents` as **`interrupted`** (no cancel cause). See the table in [protocol-events.md](./protocol-events.md#结束原因aborted-vs-interrupted--end-reasons-aborted-vs-interrupted).
 
-- **Session archive**: Sidebar session row `⋯` → “Archive session” (`workspace.archiveSession`); hides from the list and **does not delete** the SQLite log (no hard-delete button).
+- **Session archive**: Sidebar session row `⋯` → “Archive session” (`workspace.archiveSession`); hides from the list and **does not delete** the SQLite log (no hard-delete button). Archive keeps workspace membership so unarchive restores the same slot.
+- **Unarchive**: Settings → “Archived sessions” (`workspace.unarchiveSession`).
 
 - **Compose leaf**: `@xrkseek/compose` C0·C1·C2 (`interceptInject` / `openSubagentRealm`) work; presets only wire.
 

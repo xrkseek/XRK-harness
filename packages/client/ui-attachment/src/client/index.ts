@@ -3,6 +3,7 @@ import type { ClientContext } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import type {} from '@xrkseek/client-ui-tool/client'
 import { ComposerAttachments } from './ComposerAttachments.tsx'
+import { MessageFiles } from './MessageFiles.tsx'
 import { MessageImages } from './MessageImages.tsx'
 
 /** Slot registry required by this presentation plugin. */
@@ -18,6 +19,10 @@ export function apply(ctx: ClientContext): void {
     name: 'conversation.message.images',
     locale: 'conversation',
   }, MessageImages))
+  ctx.slots.inject('conversation.message.files', () => ctx.slots.register({
+    name: 'conversation.message.files',
+    locale: 'conversation',
+  }, MessageFiles))
   // Tool image gallery reuses the message gallery renderer (same owner shape).
   ctx.slots.inject('tool.call.images', () => ctx.slots.register({
     name: 'tool.call.images',

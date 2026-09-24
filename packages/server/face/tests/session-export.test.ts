@@ -71,6 +71,10 @@ describe("session.export", () => {
     expect(asText).toContain(`sessions/${child.id}.jsonl.zst`);
     expect(asText).toContain("export-root-token");
     expect(asText).toContain("sessionCompressedSidecar");
+    expect(asText).toContain("costSidecar");
+    expect(asText).toContain("cost.json");
+    expect(asText).toContain("rolloutTraceSidecar");
+    expect(asText).toContain("trace/state.json");
     expect(asText).toContain("manifest.json");
 
     const missing = await fetch(

@@ -11,7 +11,7 @@ OpenTelemetry **会话遥测**缝：`@xrkseek/session-telemetry`。对会话 app
 | Definition | `SessionTelemetrySink`：`emit`（非阻塞入队）· 可选 `flush` · `shutdown` |
 | Record | `channel: ledger \| ops` · severity · attributes · body |
 | Provider | memory（CI）· OTLP/HTTP logs |
-| Consumer | `wrapStoreForSessionTelemetry`（Harness 默认按 env 挂） |
+| Consumer | `wrapStoreForSessionTelemetry`（Harness 按 Face Settings 与/或 env 挂） |
 
 Capture **永不阻断**回合；导出失败丢弃该批。
 
@@ -19,13 +19,12 @@ Capture **永不阻断**回合；导出失败丢弃该批。
 
 | 条件 | 行为 |
 |------|------|
-| （默认） | 未设 env → 不挂 sink |
-| `XRK_TELEMETRY=0` | 显式关闭 |
-| `XRK_TELEMETRY=memory` | 内存 sink |
-| `XRK_TELEMETRY=1` + endpoint | OTLP/HTTP logs |
-| 仅设 `OTEL_EXPORTER_OTLP_ENDPOINT` / `…_LOGS_ENDPOINT` | 同样启用 OTLP（endpoint 即 opt-in） |
+| Settings → Plugins → **Session telemetry**（`session-telemetry`） | 产品真源：`mode=off\|memory\|otlp` + 可选 `endpoint`（落 `~/.xrk/settings.yaml`）；需重启 Host |
+| （默认） | Face `mode=off` 且未设 env → 不挂 sink |
+| `XRK_TELEMETRY` 非空 | **CI 旁路**：盖过 Settings（`0` 关 · `memory` · `1`/`otlp`） |
+| 仅设 `OTEL_EXPORTER_OTLP_ENDPOINT` / `…_LOGS_ENDPOINT`（且未设 Face product / `XRK_TELEMETRY`） | 同样启用 OTLP（endpoint 即 opt-in；CLI/无 Face 路径） |
 
-Endpoint 优先：`XRK_TELEMETRY_OTLP_ENDPOINT` → `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` → `OTEL_EXPORTER_OTLP_ENDPOINT` + `/v1/logs`。可选 `OTEL_EXPORTER_OTLP_HEADERS`（`k=v,k2=v2`）。
+Endpoint 优先：Settings `endpoint` → `XRK_TELEMETRY_OTLP_ENDPOINT` → `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` → `OTEL_EXPORTER_OTLP_ENDPOINT` + `/v1/logs`。可选 `OTEL_EXPORTER_OTLP_HEADERS`（`k=v,k2=v2`）。
 
 与出站 lifecycle webhook（`webhooks.json`）并列：webhook 是业务通知；本缝是 OTel 可观测导出。
 
@@ -44,7 +43,7 @@ OpenTelemetry **session-telemetry** seam: `@xrkseek/session-telemetry`. Live-cap
 | Definition | `SessionTelemetrySink`: non-blocking `emit` · optional `flush` · `shutdown` |
 | Record | `channel: ledger \| ops` · severity · attributes · body |
 | Provider | memory (CI) · OTLP/HTTP logs |
-| Consumer | `wrapStoreForSessionTelemetry` (Harness mounts from env by default) |
+| Consumer | `wrapStoreForSessionTelemetry` (Harness mounts from Face Settings and/or env) |
 
 Capture **never blocks** turns; failed export batches are dropped.
 
@@ -52,12 +51,11 @@ Capture **never blocks** turns; failed export batches are dropped.
 
 | Condition | Behavior |
 |-----------|----------|
-| (default) | No env → no sink |
-| `XRK_TELEMETRY=0` | Explicitly off |
-| `XRK_TELEMETRY=memory` | Memory sink |
-| `XRK_TELEMETRY=1` + endpoint | OTLP/HTTP logs |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` / `…_LOGS_ENDPOINT` alone | Also enables OTLP (endpoint is opt-in) |
+| Settings → Plugins → **Session telemetry** (`session-telemetry`) | Product SoT: `mode=off\|memory\|otlp` + optional `endpoint` (in `~/.xrk/settings.yaml`); Host restart required |
+| (default) | Face `mode=off` and no env → no sink |
+| Non-empty `XRK_TELEMETRY` | **CI bypass** over Settings (`0` off · `memory` · `1`/`otlp`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` / `…_LOGS_ENDPOINT` alone (no Face product / no `XRK_TELEMETRY`) | Also enables OTLP (endpoint is opt-in; CLI / no-Face paths) |
 
-Endpoint precedence: `XRK_TELEMETRY_OTLP_ENDPOINT` → `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` → `OTEL_EXPORTER_OTLP_ENDPOINT` + `/v1/logs`. Optional `OTEL_EXPORTER_OTLP_HEADERS` (`k=v,k2=v2`).
+Endpoint precedence: Settings `endpoint` → `XRK_TELEMETRY_OTLP_ENDPOINT` → `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` → `OTEL_EXPORTER_OTLP_ENDPOINT` + `/v1/logs`. Optional `OTEL_EXPORTER_OTLP_HEADERS` (`k=v,k2=v2`).
 
 Alongside outbound lifecycle webhooks (`webhooks.json`): webhooks are product notify; this seam is OTel observability export.

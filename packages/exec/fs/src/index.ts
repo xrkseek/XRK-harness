@@ -1,6 +1,7 @@
 import {
   mkdir,
   readFile as fsReadFile,
+  rm,
   stat as fsStat,
   writeFile,
 } from "node:fs/promises";
@@ -35,11 +36,16 @@ import {
   presentGlobResult,
   presentGrepCall,
   presentGrepResult,
+  presentPatchCall,
+  presentPatchResult,
   presentReadCall,
   presentReadResult,
   presentWriteCall,
   presentWriteResult,
 } from "./present.js";
+import { applyPatchToFs } from "./apply-patch.js";
+import { PatchParseError } from "./apply-patch-parser.js";
+import { ApplyPatchError } from "./apply-patch-apply.js";
 
 export {
   PathEscapeError,
@@ -96,11 +102,32 @@ export {
   presentGlobResult,
   presentGrepCall,
   presentGrepResult,
+  presentPatchCall,
+  presentPatchResult,
   presentReadCall,
   presentReadResult,
   presentWriteCall,
   presentWriteResult,
 } from "./present.js";
+export {
+  parsePatch,
+  patchPathsRequiringRead,
+  patchTouchedPaths,
+  PatchParseError,
+  type PatchHunk,
+  type ParsedPatch,
+  type UpdateFileChunk,
+} from "./apply-patch-parser.js";
+export {
+  applyPatchToFs,
+  type ApplyPatchResult,
+} from "./apply-patch.js";
+export {
+  ApplyPatchError,
+  deriveUpdatedContents,
+  planPatchApplication,
+  seekSequence,
+} from "./apply-patch-apply.js";
 
 export class EditWithoutOldError extends Error {
   constructor(message: string) {
@@ -156,6 +183,8 @@ export interface FsService {
     newContent: string,
     options?: FsEditOptions,
   ): Promise<void>;
+  /** Remove a file (not a directory). Used by `apply_patch` Delete/Move. */
+  remove(userPath: string): Promise<void>;
   stat(userPath: string): Promise<FsStatResult>;
   mkdir(userPath: string): Promise<void>;
   /** List relative paths matching a glob (`*`, `**`). */
@@ -270,6 +299,15 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
         }
         throw err;
       }
+    },
+    async remove(userPath) {
+      emit("fs/write-intent", userPath);
+      const abs = resolveWithinRoot(root, userPath);
+      const st = await fsStat(abs);
+      if (st.isDirectory()) {
+        throw new Error(`cannot delete directory via apply_patch: ${userPath}`);
+      }
+      await rm(abs);
     },
     async stat(userPath) {
       const abs = resolveReadablePath(root, hostReadableRoots, userPath);
@@ -418,6 +456,66 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       },
       presentCall: presentEditCall,
       presentResult: presentEditResult,
+    },
+    {
+      name: "apply_patch",
+      description:
+        "Apply a multi-file Codex-format patch (`*** Begin Patch` … `*** End Patch` with " +
+        "`*** Add File` / `*** Update File` / `*** Delete File` hunks). Prefer this for large or " +
+        "multi-file edits; use `apply_edit` for a single unique snippet. " +
+        "Update/Delete paths must be read in this turn first (write-intent). " +
+        "Paths are workspace-relative (or absolute under the workspace root). " +
+        "Works in the session cwd — including managed subagent worktrees.",
+      parameters: {
+        type: "object",
+        properties: {
+          patch: {
+            type: "string",
+            description:
+              "Full patch text beginning with *** Begin Patch and ending with *** End Patch.",
+          },
+        },
+        required: ["patch"],
+      },
+      async execute(args) {
+        const patch = String(
+          (args as { patch?: string })?.patch ?? "",
+        ).trim();
+        if (!patch) {
+          return {
+            content: "Error: patch must be a non-empty string",
+            isError: true,
+          };
+        }
+        try {
+          const result = await applyPatchToFs(fs, patch);
+          const summary = result.ops
+            .map((op) =>
+              op.action === "move"
+                ? `move ${op.fromPath} → ${op.path}`
+                : `${op.action} ${op.path}`,
+            )
+            .join("\n");
+          return {
+            content: `applied ${result.hunkCount} hunk(s)\n${summary}`,
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          const code =
+            err instanceof PatchParseError
+              ? "APPLY_PATCH_PARSE"
+              : err instanceof ApplyPatchError
+                ? "APPLY_PATCH_APPLY"
+                : "APPLY_PATCH";
+          return {
+            content: `Error: ${message}`,
+            isError: true,
+            error: { name: "ApplyPatchError", code },
+          };
+        }
+      },
+      presentCall: presentPatchCall,
+      presentResult: presentPatchResult,
     },
     {
       name: "glob",

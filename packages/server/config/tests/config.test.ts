@@ -42,6 +42,16 @@ describe("loadHostConfig", () => {
     expect(cfg.runtime.sessionsDir).toBe("./.xrk/sessions");
   });
 
+  it("reads XRK_INVARIANTS_FAIL_FAST", () => {
+    expect(
+      loadHostConfig({ env: { XRK_INVARIANTS_FAIL_FAST: "1" } }).runtime
+        .invariantsFailFast,
+    ).toBe(true);
+    expect(
+      loadHostConfig({ env: {} }).runtime.invariantsFailFast,
+    ).toBeUndefined();
+  });
+
   it("parses Cursor mcpServers object JSON", () => {
     const cfg = loadHostConfig({
       env: {

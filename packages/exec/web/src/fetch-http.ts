@@ -8,6 +8,8 @@ import type {
 } from "./types.js";
 import { WebError } from "./types.js";
 import { assertHttpUrl, isSameOrigin } from "./url-policy.js";
+import type { OutboundAllowlist } from "./outbound-allowlist.js";
+import { outboundAllowlistFromEnv } from "./outbound-allowlist.js";
 
 export interface HttpFetchLimits {
   readonly maxUrlLength: number;
@@ -142,10 +144,18 @@ export function createHttpFetchProvider(
   options: {
     readonly limits?: Partial<HttpFetchLimits>;
     readonly fetch?: FetchFn;
+    /**
+     * Outbound host allowlist + audit. Default: from `XRK_WEB_FETCH_ALLOWLIST`
+     * (empty = open, private hosts still denied).
+     */
+    readonly allowlist?: OutboundAllowlist;
+    readonly env?: NodeJS.ProcessEnv;
   } = {},
 ): WebFetch {
   const limits = { ...DEFAULT_HTTP_FETCH_LIMITS, ...options.limits };
   const fetchFn = options.fetch ?? globalThis.fetch;
+  const allowlist =
+    options.allowlist ?? outboundAllowlistFromEnv(options.env ?? process.env);
   return {
     async fetch(
       request: WebFetchRequest,
@@ -154,7 +164,9 @@ export function createHttpFetchProvider(
       if (signal?.aborted) {
         throw new WebError("web fetch aborted", "WEB_ABORTED");
       }
-      let current = assertHttpUrl(request.url, limits.maxUrlLength);
+      let current = assertHttpUrl(request.url, limits.maxUrlLength, {
+        allowlist,
+      });
       const timed = AbortSignal.timeout(limits.timeoutMs);
       const combined = signal ? AbortSignal.any([signal, timed]) : timed;
       let hops = 0;
@@ -209,7 +221,9 @@ export function createHttpFetchProvider(
               "WEB_INVALID_URL",
             );
           }
-          const validated = assertHttpUrl(next.href, limits.maxUrlLength);
+          const validated = assertHttpUrl(next.href, limits.maxUrlLength, {
+            allowlist,
+          });
           if (!isSameOrigin(current, validated)) {
             throw new WebError(
               `cross-origin redirect is not followed; call web_fetch on Location: ${validated.href}`,

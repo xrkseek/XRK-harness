@@ -1,4 +1,6 @@
 export {
+  parseSshRemoteProduct,
+  resolveSshConfig,
   resolveSshConfigFromEnv,
   type SshEnv,
   type SshTargetConfig,

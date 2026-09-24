@@ -8,7 +8,8 @@
 import type { CommandId } from '@xrkseek/xrk-commands/brand'
 import type { MessageId } from '@xrkseek/xrk-llm/brand'
 import type { ContentBlock } from '@xrkseek/xrk-llm/types'
-import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+import type { RpcId } from '@xrkseek/xrk-api-remotes/client'
 import type { LlmRetryEventData } from '@xrkseek/xrk-llm-retry/types'
 import type { TodoItem } from '@xrkseek/xrk-session/types'
 import type {
@@ -321,6 +322,54 @@ export interface QueuedMessage {
   readonly preview: string
   /** Complete editable text; null when the message contains non-text blocks. */
   readonly text: string | null
+  /** Prompt RPC identity echoed on the Host queue message source, when present. */
+  readonly rpcId?: RpcId
+}
+
+/** Prompt-RPC identity shared by a local submission echo and its durable admission. */
+export type SessionRequestId = RpcId
+
+/** One image displayed by a local submission echo before durable admission. */
+export interface PendingSubmissionImage {
+  /** Browser-owned preview URL; lifecycle belongs to the submitter. */
+  readonly previewUrl: string
+  readonly name?: string
+  readonly width?: number
+  readonly height?: number
+}
+
+/** Image branch of a local submission echo attachment. */
+export interface PendingSubmissionImageAttachment {
+  readonly type: 'image'
+  readonly value: PendingSubmissionImage
+}
+
+/** File branch of a local submission echo attachment. */
+export interface PendingSubmissionFileAttachment {
+  readonly type: 'file'
+  readonly value: FileAttachmentRef
+}
+
+/** One attachment displayed by a local submission echo, in prompt order. */
+export type PendingSubmissionAttachment =
+  | PendingSubmissionImageAttachment
+  | PendingSubmissionFileAttachment
+
+/** Client surface selected when a local submission begins. */
+export type PendingSubmissionPlacement = 'transcript' | 'queued' | 'steering'
+
+/**
+ * One local prompt-submission echo: inserted synchronously when a submission
+ * begins so the conversation can show the message before serialization and
+ * durable admission complete. Client-memory only.
+ */
+export interface PendingSubmission {
+  readonly requestId: SessionRequestId
+  readonly placement: PendingSubmissionPlacement
+  /** Client wall-clock ms when the submission began. */
+  readonly time: number
+  readonly text: string
+  readonly attachments: readonly PendingSubmissionAttachment[]
 }
 
 /** In-progress assistant output (chunk accumulator product). */
@@ -471,6 +520,8 @@ export interface ConversationSnapshot {
   partial: PartialAssistant | null
   runningCalls: readonly RunningToolCall[]
   pending: readonly PendingInteraction[]
+  /** Local prompt-submission echoes not yet observed as durable events or queue rows. */
+  pendingSubmissions: readonly PendingSubmission[]
   /** Authoritative transient inbox snapshot, including queued and steering placements. */
   queue: readonly QueuedMessage[]
   running: boolean

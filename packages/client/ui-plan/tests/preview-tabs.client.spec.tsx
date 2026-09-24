@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-/** Session overview tabs: live plan/todos projections + office RPC. */
+/** Session Status tabs: Face session.status + live plan/todos + office RPC. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import { zh } from '../src/client/locales.ts'
 import { PreviewOpenButton, PreviewTabs, type PreviewTabsProps } from '../src/client/PreviewTabs.tsx'
-import { parseOfficePreview, parsePlanPreview } from '../src/client/preview-load.ts'
+import { parseOfficePreview, parsePlanPreview, parseSessionStatus } from '../src/client/preview-load.ts'
 
 /** Matches ui-layout `LAYOUT_INSET_ATTR.details` (no cross-plugin value import). */
 const DETAILS_INSET_ATTR = 'data-xrk-layout-details'
@@ -25,18 +25,137 @@ function jsonResponse(body: unknown): Response {
   })
 }
 
-/** A `useProjection` stand-in with flipable plan / todos values. */
+const sampleStatus = {
+  sessionId: 's1',
+  badge: '(default)',
+  permission: 'default',
+  plan: 'off' as const,
+  theme: 'system',
+  model: { provider: 'deepseek', model: 'deepseek-chat' },
+  cwd: '/tmp',
+  events: 3,
+  jobs: [] as { id: string; status: string }[],
+  subagents: {
+    live: [] as {
+      id: string
+      activity: 'running' | 'inactive'
+      mode: string
+    }[],
+    graph: { nodes: [] as { id: string; label: string }[], edges: [] as { from: string; to: string; kind: string }[] },
+    quota: {
+      depth: 0,
+      maxDepth: 2,
+      active: 0,
+      maxActive: 2,
+      delegated: 0,
+      slotsFree: 2,
+    },
+  },
+  teamTasks: [] as {
+    id: string
+    title: string
+    status: string
+    revision: number
+  }[],
+  cost: {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    reasoning: 0,
+    cost: 0,
+    byModel: {},
+    byProviderModel: {},
+  },
+  billing: {
+    todayCost: 0,
+    monthCost: 0,
+    totalCost: 0,
+    todayTokens: 0,
+    monthTokens: 0,
+    byModel: [],
+    byProviderModel: [],
+  },
+  timeline: {
+    total: 0,
+    system: 0,
+    tools: 0,
+    user: 0,
+    inject: 0,
+    assistant: 0,
+    tool: 0,
+    requestCount: 0,
+    eventCount: 0,
+    injectSources: [] as string[],
+    spillCount: 0,
+    pruneCount: 0,
+  },
+  compaction: {
+    pipeline: 'none' as const,
+    stages: [] as ('prune' | 'summary')[],
+    pruneCount: 0,
+    summaryCount: 0,
+    spillCount: 0,
+    phase: 'idle' as const,
+  },
+  delivery: {
+    turnActive: false,
+    queued: 0,
+    steering: 0,
+    compactBlockedByTurn: false,
+    queueAcceptedWhileBusy: true as const,
+    steerRequiresActiveTurn: true as const,
+    note: 'idle · queue accepts · compact available when agent idle',
+  },
+  channels: {
+    process: [] as { pluginId: string; channelId: string }[],
+    im: [{ channelId: 'telegram', displayName: 'Telegram', wired: 'bridge' }],
+    note: '',
+  },
+}
+
+/** A `useProjection` stand-in with flipable plan / todos / contextTimeline values. */
 function fakeProjections(initial: {
   plan?: { active: boolean; pending: boolean }
   todos?: { content: string; status: string }[] | null
+  contextTimeline?: {
+    current: {
+      system: number
+      tools: number
+      user: number
+      inject: number
+      assistant: number
+      tool: number
+      total: number
+    }
+    events: readonly {
+      kind: string
+      seq: number
+      form?: string
+      source?: string
+      name?: string
+      reason?: 'auto' | 'overflow' | 'manual'
+      count?: number
+      shadowedTokenCount?: number
+      spill?: boolean
+      spillPath?: string
+      tool?: string
+      prevTokens?: number
+    }[]
+    requests?: readonly unknown[]
+  } | null
 }) {
   const state = {
     plan: initial.plan,
     todos: initial.todos === undefined ? null : initial.todos,
+    contextTimeline: initial.contextTimeline === undefined
+      ? null
+      : initial.contextTimeline,
   }
   const useProjection = vi.fn((key: string) => {
     if (key === 'plan') return state.plan
     if (key === 'todos') return state.todos
+    if (key === 'contextTimeline') return state.contextTimeline
     return undefined
   })
   return { state, useProjection: useProjection as unknown as PreviewTabsProps['useProjection'] }
@@ -54,11 +173,21 @@ describe('preview envelopes', () => {
     })).toEqual({ configured: true, connected: false })
     expect(parseOfficePreview({ result: { ok: true, value: { state: 'idle' } } })).toBeNull()
   })
+
+  it('parses Face session.status', () => {
+    expect(parseSessionStatus({ result: { ok: true, value: sampleStatus } })).toEqual(sampleStatus)
+  })
 })
 
 describe('PreviewTabs', () => {
-  it('shows standing todos from the live projection', () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ ok: false })))
+  it('defaults to Status and shows standing todos after switching tabs', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('session.status')) {
+        return jsonResponse({ result: { ok: true, value: sampleStatus } })
+      }
+      return jsonResponse({ ok: false })
+    }))
     const { useProjection } = fakeProjections({
       todos: [
         { content: 'ship overview', status: 'in_progress' },
@@ -75,10 +204,14 @@ describe('PreviewTabs', () => {
         } as PreviewTabsProps)}
       />,
     )
+    expect(screen.getByRole('heading', { name: 'Status' })).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('会话')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('tab', { name: '任务' }))
     expect(screen.getByText('ship overview')).toBeTruthy()
     expect(screen.getByText('docs')).toBeTruthy()
     expect(screen.getByText('进行中')).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '概况' })).toBeTruthy()
   })
 
   it('falls back to the preview RPC where plan mode is not composed', async () => {
@@ -86,6 +219,9 @@ describe('PreviewTabs', () => {
       const url = String(input)
       if (url.includes('plan.preview')) {
         return jsonResponse({ ok: true, value: { active: true, pending: false } })
+      }
+      if (url.includes('session.status')) {
+        return jsonResponse({ result: { ok: true, value: sampleStatus } })
       }
       return jsonResponse({
         result: { ok: true, value: { configured: false, connected: false } },
@@ -103,6 +239,10 @@ describe('PreviewTabs', () => {
         } as PreviewTabsProps)}
       />,
     )
+    await waitFor(() => {
+      expect(screen.getByText('会话')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('tab', { name: '任务' }))
     expect(screen.getByText(/尚无站立计划/)).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: '计划' }))
     await waitFor(() => {
@@ -112,7 +252,7 @@ describe('PreviewTabs', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Office' }))
     expect(screen.getByText('已配置')).toBeTruthy()
     expect(screen.getAllByText('否').length).toBeGreaterThan(0)
-    fireEvent.click(screen.getByRole('button', { name: '关闭概况栏' }))
+    fireEvent.click(screen.getByRole('button', { name: '关闭 Status 栏' }))
     expect(closeDetails).toHaveBeenCalledTimes(1)
   })
 
@@ -130,6 +270,121 @@ describe('PreviewTabs', () => {
     view.rerender(<PreviewTabs {...props} />)
     expect(screen.getByText('是')).toBeTruthy()
   })
+
+  it('binds live contextTimeline inject / compact / spill rows', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('session.status')) {
+        return jsonResponse({ result: { ok: true, value: sampleStatus } })
+      }
+      return jsonResponse({ ok: false })
+    }))
+    const { useProjection } = fakeProjections({
+      contextTimeline: {
+        current: {
+          system: 10,
+          tools: 5,
+          user: 20,
+          inject: 8,
+          assistant: 40,
+          tool: 12,
+          total: 95,
+        },
+        requests: [{}],
+        events: [
+          {
+            kind: 'inject',
+            seq: 2,
+            source: 'skill-catalog',
+            form: 'catalog',
+            name: 'catalog',
+          },
+          {
+            kind: 'compaction',
+            seq: 9,
+            reason: 'overflow',
+            count: 4,
+            shadowedTokenCount: 1200,
+          },
+          {
+            kind: 'prune',
+            seq: 11,
+            tool: 'bash',
+            spill: true,
+            spillPath: '/tmp/spill/tool-outputs/s_tc1.txt',
+            prevTokens: 900,
+          },
+        ],
+      },
+    })
+    render(
+      <PreviewTabs
+        {...({
+          sessionId: 's1',
+          closeDetails: vi.fn(),
+          t,
+          useProjection,
+        } as PreviewTabsProps)}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('95')).toBeTruthy()
+    })
+    expect(screen.getByText(/skill-catalog:catalog/)).toBeTruthy()
+    expect(screen.getByText(/overflow/)).toBeTruthy()
+    expect(screen.getByText(/shadowed tokens 1200/)).toBeTruthy()
+    expect(screen.getByText(/prune 1 · spill 1/)).toBeTruthy()
+    expect(screen.getByText('prune · spill')).toBeTruthy()
+    expect(screen.getByText('compact · overflow')).toBeTruthy()
+    expect(screen.getByLabelText('压缩分阶')).toBeTruthy()
+    expect(screen.getByLabelText('队列 / turn')).toBeTruthy()
+  })
+
+  it('opens spill paths from Status timeline rows via openSpillPath', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('session.status')) {
+        return jsonResponse({ result: { ok: true, value: sampleStatus } })
+      }
+      return jsonResponse({ ok: false })
+    }))
+    const openSpillPath = vi.fn()
+    const { useProjection } = fakeProjections({
+      contextTimeline: {
+        current: {
+          system: 1, tools: 1, user: 1, inject: 0, assistant: 1, tool: 1, total: 5,
+        },
+        requests: [],
+        events: [
+          {
+            kind: 'prune',
+            seq: 3,
+            tool: 'bash',
+            spill: true,
+            spillPath: '/home/u/.xrk/spill/tool-outputs/s_c.txt',
+          },
+        ],
+      },
+    })
+    render(
+      <PreviewTabs
+        {...({
+          sessionId: 's1',
+          closeDetails: vi.fn(),
+          openSpillPath,
+          t,
+          useProjection,
+        } as PreviewTabsProps)}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('prune · spill')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '打开 spill' }))
+    expect(openSpillPath).toHaveBeenCalledWith(
+      '/home/u/.xrk/spill/tool-outputs/s_c.txt',
+    )
+  })
 })
 
 describe('PreviewOpenButton', () => {
@@ -138,8 +393,8 @@ describe('PreviewOpenButton', () => {
     const closePreview = vi.fn()
     document.documentElement.removeAttribute(DETAILS_INSET_ATTR)
     render(<PreviewOpenButton openPreview={openPreview} closePreview={closePreview} t={t} />)
-    const button = screen.getByRole('button', { name: '概况' })
-    expect(button.getAttribute('title')).toBe('打开右侧概况栏：站立计划、计划模式与 Office')
+    const button = screen.getByRole('button', { name: 'Status' })
+    expect(button.getAttribute('title')).toContain('/status')
     expect(button.getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(button)
     expect(openPreview).toHaveBeenCalledTimes(1)
@@ -151,7 +406,7 @@ describe('PreviewOpenButton', () => {
     const openPreview = vi.fn()
     const closePreview = vi.fn()
     render(<PreviewOpenButton openPreview={openPreview} closePreview={closePreview} t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: '概况' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Status' }))
     expect(closePreview).toHaveBeenCalledTimes(1)
     expect(openPreview).not.toHaveBeenCalled()
     document.documentElement.removeAttribute(DETAILS_INSET_ATTR)

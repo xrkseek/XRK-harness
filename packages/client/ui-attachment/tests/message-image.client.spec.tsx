@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
@@ -31,7 +31,7 @@ const attachment = {
 describe('MessageImage', () => {
   it('loads a session-authorized URL, bounds the thumbnail, and clicks into the original', async () => {
     const load = vi.fn().mockResolvedValue('blob:history')
-    const view = render(<MessageImage attachment={attachment} load={load} variant="single" labels={labels} />)
+    const view = render(<MessageImage image={{ attachment }} load={load} variant="single" labels={labels} />)
     const frame = view.getByRole('button', { name: 'history.png，点击查看原图' })
     expect(frame.getAttribute('style')).toContain('width: 240px')
     expect(frame.getAttribute('style')).toContain('height: 120px')
@@ -46,7 +46,7 @@ describe('MessageImage', () => {
 
   it('ignores a click while the thumbnail is still loading', () => {
     const load = vi.fn(() => new Promise<string>(() => {}))
-    const view = render(<MessageImage attachment={attachment} load={load} variant="single" labels={labels} />)
+    const view = render(<MessageImage image={{ attachment }} load={load} variant="single" labels={labels} />)
     const frame = view.getByRole('button', { name: 'history.png，点击查看原图' })
     expect(view.getByText('图片加载中…')).toBeTruthy()
     fireEvent.click(frame)
@@ -56,7 +56,7 @@ describe('MessageImage', () => {
   it('falls back to the image label for an unnamed attachment', async () => {
     const { name: _named, ...unnamed } = attachment
     const load = vi.fn().mockResolvedValue('blob:unnamed')
-    const view = render(<MessageImage attachment={unnamed} load={load} variant="single" labels={labels} />)
+    const view = render(<MessageImage image={{ attachment: unnamed }} load={load} variant="single" labels={labels} />)
     await waitFor(() => { expect(view.getByAltText('图片')).toBeTruthy() })
     expect(view.getByRole('button', { name: '图片，点击查看原图' })).toBeTruthy()
   })
@@ -66,7 +66,7 @@ describe('MessageImage', () => {
       .mockRejectedValueOnce(new Error('offline'))
       .mockRejectedValueOnce(new Error('still offline'))
       .mockResolvedValueOnce('blob:retry')
-    const view = render(<MessageImage attachment={attachment} load={load} variant="single" labels={labels} />)
+    const view = render(<MessageImage image={{ attachment }} load={load} variant="single" labels={labels} />)
     const retry = await view.findByRole('button', { name: '图片加载失败，点击重试' })
     fireEvent.click(retry)
     const retryAgain = await view.findByRole('button', { name: '图片加载失败，点击重试' })
@@ -78,7 +78,7 @@ describe('MessageImage', () => {
   it('clamps extreme aspect ratios and anchors the crop toward the informative edge', async () => {
     const load = vi.fn().mockResolvedValue('blob:ratio')
     const tall = render(
-      <MessageImage attachment={{ ...attachment, width: 100, height: 2000 }} load={load} variant="single" labels={labels} />,
+      <MessageImage image={{ attachment: { ...attachment, width: 100, height: 2000 } }} load={load} variant="single" labels={labels} />,
     )
     const tallFrame = tall.getByRole('button', { name: 'history.png，点击查看原图' })
     expect(tallFrame.getAttribute('style')).toContain('width: 60px')
@@ -87,7 +87,7 @@ describe('MessageImage', () => {
     expect(tall.getByAltText('history.png').style.objectPosition).toBe('center top')
     tall.unmount()
     const wide = render(
-      <MessageImage attachment={{ ...attachment, width: 4000, height: 100 }} load={load} variant="single" labels={labels} />,
+      <MessageImage image={{ attachment: { ...attachment, width: 4000, height: 100 } }} load={load} variant="single" labels={labels} />,
     )
     const wideFrame = wide.getByRole('button', { name: 'history.png，点击查看原图' })
     expect(wideFrame.getAttribute('style')).toContain('width: 240px')
@@ -96,7 +96,7 @@ describe('MessageImage', () => {
     expect(wide.getByAltText('history.png').style.objectPosition).toBe('left center')
     wide.unmount()
     const small = render(
-      <MessageImage attachment={{ ...attachment, width: 100, height: 100 }} load={load} variant="single" labels={labels} />,
+      <MessageImage image={{ attachment: { ...attachment, width: 100, height: 100 } }} load={load} variant="single" labels={labels} />,
     )
     const smallFrame = small.getByRole('button', { name: 'history.png，点击查看原图' })
     expect(smallFrame.getAttribute('style')).toContain('width: 100px')
@@ -105,7 +105,7 @@ describe('MessageImage', () => {
 
   it('renders a tile at the fixed square without inline sizing', () => {
     const load = vi.fn(() => new Promise<string>(() => {}))
-    const view = render(<MessageImage attachment={attachment} load={load} variant="tile" labels={labels} />)
+    const view = render(<MessageImage image={{ attachment }} load={load} variant="tile" labels={labels} />)
     const frame = view.getByRole('button', { name: 'history.png，点击查看原图' })
     expect(frame.getAttribute('data-variant')).toBe('tile')
     expect(frame.getAttribute('style')).toBeNull()
@@ -113,7 +113,7 @@ describe('MessageImage', () => {
 
   it('keeps the tile variant on the failed-load retry control', async () => {
     const load = vi.fn().mockRejectedValue(new Error('offline'))
-    const view = render(<MessageImage attachment={attachment} load={load} variant="tile" labels={labels} />)
+    const view = render(<MessageImage image={{ attachment }} load={load} variant="tile" labels={labels} />)
     const retry = await view.findByRole('button', { name: '图片加载失败，点击重试' })
     expect(retry.getAttribute('data-variant')).toBe('tile')
   })
@@ -121,13 +121,13 @@ describe('MessageImage', () => {
   it('ignores a load settling after unmount', async () => {
     let resolve: ((url: string) => void) | undefined
     const load = vi.fn(() => new Promise<string>((r) => { resolve = r }))
-    const view = render(<MessageImage attachment={attachment} load={load} variant="single" labels={labels} />)
+    const view = render(<MessageImage image={{ attachment }} load={load} variant="single" labels={labels} />)
     view.unmount()
     resolve?.('blob:late')
     await Promise.resolve()
     let reject: ((error: Error) => void) | undefined
     const failing = vi.fn(() => new Promise<string>((_r, rej) => { reject = rej }))
-    const second = render(<MessageImage attachment={attachment} load={failing} variant="single" labels={labels} />)
+    const second = render(<MessageImage image={{ attachment }} load={failing} variant="single" labels={labels} />)
     second.unmount()
     reject?.(new Error('late failure'))
     await Promise.resolve()

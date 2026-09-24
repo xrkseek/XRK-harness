@@ -13,6 +13,7 @@ Tool-result events invalidate the addressed agent's reusable index so later comp
 | `maxResults` | `20` | Maximum ranked candidates returned for one query. |
 | `maxEntries` | `10000` | Maximum files and directories indexed per agent workspace. |
 | `excludedDirectories` | `[".git", "node_modules"]` | Directory basenames omitted from traversal and candidates. |
+| `respectGitignore` | `true` | When the workspace is a git tree, honor `.gitignore` and `.git/info/exclude` (Codex-style `require_git`). |
 
 Every numeric value must be a positive safe integer. Excluded names must be non-empty basenames without `/` or `\`.
 
@@ -42,4 +43,4 @@ The stable sentence joins the system-prompt prefix. Mounting or removing this pr
 
 - **Host-local namespace** — the provider scans the Harness host filesystem, so remote or virtual `read` implementations require a provider whose namespace matches the tool.
 - **Bounded advisory index** — very large workspaces may omit paths after `maxEntries`, and excluded or unreadable directories do not appear.
-- **No ignore-file semantics** — `.gitignore` and other project ignore files do not influence discovery; only configured directory basenames are excluded.
+- **Gitignore scoped to git trees** — outside a `.git` working tree, only `excludedDirectories` apply; nested `.gitignore` / exclude rules are not read.

@@ -256,6 +256,34 @@ function parseUserMessageSource(
     };
   }
 
+  if (kind === "context-fragment") {
+    if (raw.form !== undefined && raw.form !== "fragment") {
+      throw new SessionEventParseError(
+        'context-fragment form must be "fragment"',
+        path,
+      );
+    }
+    const fragmentId = reqString(raw, "fragmentId", path);
+    const fragmentKind = raw.fragmentKind;
+    if (
+      fragmentKind !== "additional_context" &&
+      fragmentKind !== "recap" &&
+      fragmentKind !== "generic"
+    ) {
+      throw new SessionEventParseError(
+        'fragmentKind must be "additional_context" | "recap" | "generic"',
+        path,
+      );
+    }
+    return {
+      kind: "context-fragment",
+      form: "fragment",
+      fragmentId,
+      fragmentKind,
+      ...(budgetTruncations !== undefined ? { budgetTruncations } : {}),
+    };
+  }
+
   // plugin + forward-compat opaque kinds: keep as plugin bag when kind is plugin,
   // otherwise wrap unknown kinds as plugin with the durable kind string preserved
   // via a `plugin` label when absent.
@@ -718,6 +746,15 @@ export function parseSessionEvent(value: unknown): SessionEvent {
       const argsSummary = optString(value, "argsSummary");
       const turnId = optString(value, "turnId");
       const stepId = optString(value, "stepId");
+      const categoryRaw = optString(value, "category");
+      const category =
+        categoryRaw === "tool" ||
+        categoryRaw === "network" ||
+        categoryRaw === "escalation"
+          ? categoryRaw
+          : undefined;
+      const networkHost = optString(value, "networkHost");
+      const networkProtocol = optString(value, "networkProtocol");
       return {
         type,
         ts,
@@ -726,6 +763,9 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         toolName: reqString(value, "toolName", type),
         reason: reqString(value, "reason", type),
         ...(argsSummary !== undefined ? { argsSummary } : {}),
+        ...(category !== undefined ? { category } : {}),
+        ...(networkHost !== undefined ? { networkHost } : {}),
+        ...(networkProtocol !== undefined ? { networkProtocol } : {}),
         ...(turnId !== undefined ? { turnId } : {}),
         ...(stepId !== undefined ? { stepId } : {}),
       };

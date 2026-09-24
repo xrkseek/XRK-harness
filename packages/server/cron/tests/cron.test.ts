@@ -8,6 +8,7 @@ import {
   createCronScheduler,
   createCronTools,
   createDefaultScriptRunner,
+  createHostCron,
   isDue,
   nextRunAt,
 } from "../src/index.js";
@@ -135,5 +136,47 @@ describe("createCronTools", () => {
     expect(created.isError).toBeFalsy();
     const listed = await tool!.execute({ action: "list" });
     expect(String(listed.content)).toContain("run=script");
+  });
+});
+
+describe("createHostCron", () => {
+  it("env XRK_CRON=0 forces off", () => {
+    const dir = tmpDir();
+    expect(
+      createHostCron({
+        productHome: dir,
+        env: { XRK_CRON: "0" },
+        product: { enabled: true },
+      }),
+    ).toBeUndefined();
+  });
+
+  it("env non-empty non-0 forces on over product off", () => {
+    const dir = tmpDir();
+    const s = createHostCron({
+      productHome: dir,
+      env: { XRK_CRON: "1" },
+      product: { enabled: false },
+    });
+    expect(s).toBeDefined();
+    s!.stop();
+  });
+
+  it("product.enabled false disables when env unset", () => {
+    const dir = tmpDir();
+    expect(
+      createHostCron({
+        productHome: dir,
+        env: {},
+        product: { enabled: false },
+      }),
+    ).toBeUndefined();
+  });
+
+  it("defaults on when env unset and product omitted", () => {
+    const dir = tmpDir();
+    const s = createHostCron({ productHome: dir, env: {} });
+    expect(s).toBeDefined();
+    s!.stop();
   });
 });

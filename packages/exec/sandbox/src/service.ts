@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { MonotonicGuard } from "@xrkseek/core-tools";
+import { DEFAULT_HARDLINE_ARGV_PATTERNS } from "./hardline.js";
 
 export interface SandboxService {
   /** Sync wrap (guards / cheap checks). Prefer {@link confine} on spawn paths. */
@@ -78,11 +79,7 @@ export interface DenyListOptions {
   readonly inner?: SandboxService;
 }
 
-const DEFAULT_DENY = [
-  /\brm\s+(-[^\s]*\s+)*-rf\s+\/\b/i,
-  /\brm\s+(-[^\s]*\s+)*-rf\s+\/\s*$/i,
-  /\bdel\s+\/s\s+\/q\s+[a-z]:\\\b/i,
-];
+const DEFAULT_DENY = DEFAULT_HARDLINE_ARGV_PATTERNS;
 
 export class SandboxDenyError extends Error {
   constructor(message: string) {

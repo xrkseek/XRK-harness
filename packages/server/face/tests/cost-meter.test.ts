@@ -8,6 +8,7 @@ import {
   costMeterAggregateUsage,
   costMeterGetState,
   costMeterResetHistory,
+  emptyDay,
   loadLedger,
   saveLedger,
 } from "../src/cost-meter-store.js";
@@ -203,5 +204,48 @@ describe("cost-meter ledger", () => {
     expect(costMeterGetState().balance.status).toBe("error");
     expect(costMeterGetState().balance.message).toBe("Balance HTTP 401");
     void runtime;
+  });
+
+  it("folds month byModel / byProviderModel across history days", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-cost-month-"));
+    configureCostMeterHome(home);
+    costMeterResetHistory();
+    const month = new Date().toISOString().slice(0, 7);
+    const buckets = (input: number, cost: number) => ({
+      input,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      reasoning: 0,
+      cost,
+    });
+    const dayA = emptyDay(`${month}-01`);
+    dayA.input = 10;
+    dayA.cost = 0.01;
+    dayA.calls = 1;
+    dayA.byModel = { chat: buckets(10, 0.01) };
+    dayA.byProviderModel = { "deepseek:chat": buckets(10, 0.01) };
+    const dayB = emptyDay(`${month}-02`);
+    dayB.input = 5;
+    dayB.cost = 0.02;
+    dayB.calls = 1;
+    dayB.byModel = {
+      chat: buckets(5, 0.01),
+      other: buckets(0, 0.01),
+    };
+    dayB.byProviderModel = {
+      "deepseek:chat": buckets(5, 0.01),
+      "openai:other": buckets(0, 0.01),
+    };
+    const ledger = loadLedger();
+    ledger.history = [dayA, dayB];
+    saveLedger(ledger);
+
+    const state = costMeterGetState();
+    expect(state.month.input).toBe(15);
+    expect(state.month.byModel.chat?.input).toBe(15);
+    expect(state.month.byModel.other?.input).toBe(0);
+    expect(state.month.byProviderModel["deepseek:chat"]?.input).toBe(15);
+    expect(state.month.byProviderModel["openai:other"]?.input).toBe(0);
   });
 });

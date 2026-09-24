@@ -24,12 +24,12 @@
 | `host` | `createPublicHandler(ctx)` | HTTP `tryHandlePublic` 链（SPA 前同源路由；`webServer.register` 形注册，无 Cordis `apply()`） |
 | `policy` | `policyRules[]` | `wireCompositionPolicy` → preset `createPolicyEngineFromPlugins`（无显式 engine 时合并） |
 | `hooks` | `hooks.onPre[]` · `hooks.onPost[]` | `wireCompositionHooks` → 现有 ToolPipeline（policy / read-only 之后；不另写瀑布） |
-| （文件）shell PreToolUse | `~/.xrk/hooks.json` · `{workspace}/.xrk/hooks.json` | `createShellHookPre` → `onPre`（exit 2 / JSON `decision:block` / `permissionDecision:deny` 阻断；非 0/2 fail-open） |
+| （文件）shell hooks | `~/.xrk/hooks.json` · `{workspace}/.xrk/hooks.json` | Claude/Codex 兼容事件：`PreToolUse` → `onPre`；`PostToolUse` → `onPost`；`PermissionRequest`（审批前 allow/deny，先于人机 UI）；`UserPromptSubmit`/`Stop`（turn）；`PreCompact`/`PostCompact`；`SubagentStart`/`SubagentStop`。exit 2 / JSON `decision:block` 可阻断 tool pre/post；生命周期 notify-first fail-open。Codex camelCase 别名已归一 |
 | （文件）出站 webhook | `~/.xrk/webhooks.json` · `{workspace}/.xrk/webhooks.json` | `createLifecycleWebhookNotifier` → notify-only POST（`turn/start`·`turn/end`·`tool/post`；HMAC `secretEnv`；永不阻断回合） |
 | `channel` | `channels[]` | `collectChannelPlugins` · `wireCompositionChannels` · Face `processChannels/list` |
 | `llm` | `llmBrands[]` | `wireCompositionLlm` → Host `ProviderRegistry`（显式 brand id 优先；`refreshFacePlugins` 时重入） |
 
-**未做（外置）**：各厂商 IM WS 客户端 · 云端 vision inference · 向量库 embedded host（bridge/sidecar 已能跑，见 [status.md](./status.md)）。
+**未做（外置）**：各厂商 IM 原生长连接 SDK（契约与 mock 样板见 [im-gateway-sidecar](./im-gateway-sidecar.md)）· 云端 vision inference · 向量库 embedded host（bridge/sidecar 已能跑，见 [status.md](./status.md)）。
 
 `cordis`：社区 Cordis 宿主包；经 `extensions/dsh-compat` 的 `host.mjs` + 可选 **`cordis-fiber-runner` 子进程**，Face `dynamicCordisRunner/*` 由 `cordis-stub` 转发（见 [community-plugins.md](./community-plugins.md)）。
 
@@ -263,12 +263,12 @@ On XRK-Harness, prefer shipping extensions as plugins, then wire them through pr
 | `host` | `createPublicHandler(ctx)` | HTTP `tryHandlePublic` chain (same-origin routes before SPA; `webServer.register`-shaped registration, no Cordis `apply()`) |
 | `policy` | `policyRules[]` | `wireCompositionPolicy` → preset `createPolicyEngineFromPlugins` (merged when no explicit engine) |
 | `hooks` | `hooks.onPre[]` · `hooks.onPost[]` | `wireCompositionHooks` → existing ToolPipeline (after policy / read-only; no second waterfall) |
-| (file) shell PreToolUse | `~/.xrk/hooks.json` · `{workspace}/.xrk/hooks.json` | `createShellHookPre` → `onPre` (exit 2 / JSON `decision:block` / `permissionDecision:deny` blocks; other exits fail-open) |
+| (file) shell hooks | `~/.xrk/hooks.json` · `{workspace}/.xrk/hooks.json` | Claude/Codex-compatible events: `PreToolUse` → `onPre`; `PostToolUse` → `onPost`; `PermissionRequest` (allow/deny before human UI); `UserPromptSubmit`/`Stop` (turn); `PreCompact`/`PostCompact`; `SubagentStart`/`SubagentStop`. Exit 2 / JSON `decision:block` can block tool pre/post; lifecycle events are notify-first fail-open. Codex camelCase aliases normalized |
 | (file) outbound webhook | `~/.xrk/webhooks.json` · `{workspace}/.xrk/webhooks.json` | `createLifecycleWebhookNotifier` → notify-only POST (`turn/start` · `turn/end` · `tool/post`; HMAC via `secretEnv`; never blocks turns) |
 | `channel` | `channels[]` | `collectChannelPlugins` · `wireCompositionChannels` · Face `processChannels/list` |
 | `llm` | `llmBrands[]` | `wireCompositionLlm` → Host `ProviderRegistry` (explicit brand id wins; re-entrant on `refreshFacePlugins`) |
 
-**Not done (external)**: per-vendor IM WS clients · cloud vision inference · embedded vector host (bridge/sidecar works today — [status.md](./status.md)).
+**Not done (external)**: per-vendor IM native long-lived SDKs (contract + mock sample: [im-gateway-sidecar](./im-gateway-sidecar.md)) · cloud vision inference · embedded vector host (bridge/sidecar works today — [status.md](./status.md)).
 
 `cordis`: community Cordis host packages; wired via `extensions/dsh-compat` `host.mjs` plus optional **`cordis-fiber-runner` subprocess**; Face `dynamicCordisRunner/*` is forwarded by `cordis-stub` (see [community-plugins.md](./community-plugins.md)).
 

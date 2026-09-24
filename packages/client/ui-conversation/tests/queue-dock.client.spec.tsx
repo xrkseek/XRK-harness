@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 /**
  * QueueDock rendering and operations: authoritative rows, inline editing,
  * collapse state, removal, strict steering, failure notices, and live retirement.
@@ -37,7 +37,7 @@ function snapshotWith(queue: QueuedMessage[]): ConversationSnapshot {
   return {
     sessionId: SID, views: EMPTY_CONVERSATION_VIEWS, chat: EMPTY_CHAT_SNAPSHOT,
     nodes: [], turnTimings: new Map(), turnEnds: new Map(), partial: null, runningCalls: [],
-    pending: [], queue, running: true, composerPhase: 'active', removed: false, openState: 'open', openError: null,
+    pending: [], pendingSubmissions: [], queue, running: true, composerPhase: 'active', removed: false, openState: 'open', openError: null,
     hasMore: false, loadingOlder: false, promptError: null, blank: false, subagent: null, lastAgentError: null,
   }
 }
@@ -83,6 +83,7 @@ function kitFor(snapshot: ConversationSnapshot, injected: Partial<QueueDockInjec
     input: INPUT_STATE,
     updateQueue: vi.fn(() => Promise.resolve('ok' as const)),
     notify: vi.fn(),
+    loadImage: vi.fn(() => Promise.resolve('blob:queue-thumb')),
     ...injected,
   }
 }
@@ -212,7 +213,7 @@ describe('QueueDock', () => {
     expect(container.querySelectorAll('button')).toHaveLength(7)
     expect(container.querySelectorAll('[aria-label="编辑排队消息"]')).toHaveLength(2)
     expect(container.querySelectorAll('[aria-label="删除排队消息"]')).toHaveLength(2)
-    expect(container.querySelectorAll('[aria-label="插话发送"]')).toHaveLength(2)
+    expect(container.querySelectorAll('[aria-label="立即插队"]')).toHaveLength(2)
     expect((container.querySelectorAll('[aria-label="编辑排队消息"]')[0] as HTMLButtonElement).disabled).toBe(false)
     expect((container.querySelectorAll('[aria-label="编辑排队消息"]')[1] as HTMLButtonElement).disabled).toBe(true)
     expect(container.querySelectorAll('[aria-label="编辑排队消息"]')[1]?.getAttribute('title'))
@@ -303,7 +304,7 @@ describe('QueueDock', () => {
       <QueueDock {...kitFor(running, { updateQueue })} useSession={source.useSession} />,
     )
 
-    const button = rendered.getByLabelText('插话发送')
+    const button = rendered.getByLabelText('立即插队')
     expect(button).toHaveProperty('disabled', false)
     fireEvent.click(button)
     await waitFor(() => {
@@ -311,8 +312,8 @@ describe('QueueDock', () => {
     })
 
     act(() => { source.push({ ...running, running: false }) })
-    expect(rendered.getByLabelText('插话发送')).toHaveProperty('disabled', true)
-    expect(rendered.getByLabelText('插话发送').getAttribute('title')).toBe('仅运行中可插话发送')
+    expect(rendered.getByLabelText('立即插队')).toHaveProperty('disabled', true)
+    expect(rendered.getByLabelText('立即插队').getAttribute('title')).toBe('仅运行中可插队')
   })
 
   it('steers a focused queue row on Enter', async () => {
@@ -323,9 +324,9 @@ describe('QueueDock', () => {
       <QueueDock {...kitFor(snap, { updateQueue })} useSession={source.useSession} />,
     )
 
-    const row = getByText('steer via keyboard').closest('li')!
-    row.focus()
-    fireEvent.keyDown(row, { key: 'Enter' })
+    const rowEl = getByText('steer via keyboard').closest('li')!
+    rowEl.focus()
+    fireEvent.keyDown(rowEl, { key: 'Enter' })
     await waitFor(() => {
       expect(updateQueue).toHaveBeenCalledWith(iid('i-enter'), { kind: 'steer' })
     })
@@ -351,7 +352,7 @@ describe('QueueDock', () => {
     expect(view.getByText('pending child follow-up')).toBeTruthy()
     expect(view.getByLabelText('编辑排队消息')).toBeTruthy()
     expect(view.getByLabelText('删除排队消息')).toBeTruthy()
-    expect(view.getByLabelText('插话发送')).toBeTruthy()
+    expect(view.getByLabelText('立即插队')).toBeTruthy()
   })
 
   it('keeps a one-shot child Queue read-only', () => {
@@ -374,7 +375,7 @@ describe('QueueDock', () => {
     expect(view.getByText('pending child follow-up')).toBeTruthy()
     expect(view.queryByLabelText('编辑排队消息')).toBeNull()
     expect(view.queryByLabelText('删除排队消息')).toBeNull()
-    expect(view.queryByLabelText('插话发送')).toBeNull()
+    expect(view.queryByLabelText('立即插队')).toBeNull()
   })
 
   it('keeps the row and reports a genuine steer failure', async () => {
@@ -386,11 +387,11 @@ describe('QueueDock', () => {
       <QueueDock {...kitFor(snap, { updateQueue, notify })} useSession={source.useSession} />,
     )
 
-    fireEvent.click(getByLabelText('插话发送'))
+    fireEvent.click(getByLabelText('立即插队'))
     await waitFor(() => {
       expect(notify).toHaveBeenCalledWith(
         'error',
-        '插话发送失败，请重试。',
+        '插队失败，请重试。',
       )
     })
     expect(getByText('pending steer')).toBeTruthy()

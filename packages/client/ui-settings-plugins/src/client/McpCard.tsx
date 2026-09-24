@@ -100,6 +100,8 @@ export function McpCard(props: McpCardProps) {
                   row={row}
                   disabled={disabled}
                   onRemove={() => { props.removeRow(index) }}
+                  loginOauth={props.loginOauth}
+                  logoutOauth={props.logoutOauth}
                 />
               ))}
             </ul>
@@ -137,6 +139,8 @@ interface ServerSummaryProps {
   row: McpServerRow
   disabled: boolean
   onRemove: () => void
+  loginOauth: (serverName: string) => void
+  logoutOauth: (serverName: string) => void
 }
 
 function statusCopy(t: McpCardProps['t'], status: McpRowStatus): string {
@@ -167,7 +171,7 @@ function statusBadge(status: McpRowStatus): string {
   return `${css.badge} ${statusTone(status)}`
 }
 
-function ServerSummary({ t, row, disabled, onRemove }: ServerSummaryProps) {
+function ServerSummary({ t, row, disabled, onRemove, loginOauth, logoutOauth }: ServerSummaryProps) {
   const summary = row.transport === 'http'
     ? row.url
     : [row.command, row.args].filter(part => part.trim()).join(' ')
@@ -197,6 +201,17 @@ function ServerSummary({ t, row, disabled, onRemove }: ServerSummaryProps) {
           {row.failureMessage
             ? <p className={css.invalid} role="status">{row.failureMessage}</p>
             : null}
+          {row.transport === 'http'
+            ? (
+              <OauthRow
+                t={t}
+                row={row}
+                disabled={disabled}
+                onLogin={() => { loginOauth(row.serverName) }}
+                onLogout={() => { logoutOauth(row.serverName) }}
+              />
+            )
+            : null}
         </div>
         <button
           type="button"
@@ -210,5 +225,79 @@ function ServerSummary({ t, row, disabled, onRemove }: ServerSummaryProps) {
         </button>
       </div>
     </li>
+  )
+}
+
+interface OauthRowProps {
+  t: McpCardProps['t']
+  row: McpServerRow
+  disabled: boolean
+  onLogin: () => void
+  onLogout: () => void
+}
+
+function oauthStatusCopy(t: McpCardProps['t'], row: McpServerRow): string {
+  const oauth = row.oauth
+  if (!oauth) return t('mcpOauthUnknown')
+  if (oauth.busy) return t('mcpOauthBusy')
+  if (oauth.phase === 'pending' && oauth.userCode) {
+    return t('mcpOauthPendingCode').replace('{code}', oauth.userCode)
+  }
+  if (oauth.phase === 'pending') return t('mcpOauthPending')
+  if (oauth.phase === 'error') {
+    return oauth.error
+      ? t('mcpOauthErrorDetail').replace('{message}', oauth.error)
+      : t('mcpOauthError')
+  }
+  if (oauth.loggedIn && oauth.expired) return t('mcpOauthExpired')
+  if (oauth.loggedIn || oauth.phase === 'logged-in') return t('mcpOauthLoggedIn')
+  return t('mcpOauthLoggedOut')
+}
+
+function OauthRow({ t, row, disabled, onLogin, onLogout }: OauthRowProps) {
+  const oauth = row.oauth
+  const busy = oauth?.busy === true
+  const loggedIn = oauth?.loggedIn === true || oauth?.phase === 'logged-in'
+  const pending = oauth?.phase === 'pending'
+  const verifyUri = oauth?.verificationUriComplete || oauth?.verificationUri
+  return (
+    <div className={css.oauthBlock}>
+      <p className={css.oauthStatus} role="status">{oauthStatusCopy(t, row)}</p>
+      {pending && verifyUri
+        ? (
+          <a
+            className={css.oauthLink}
+            href={verifyUri}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {t('mcpOauthOpenVerify')}
+          </a>
+        )
+        : null}
+      <div className={css.oauthActions}>
+        {loggedIn
+          ? (
+            <button
+              type="button"
+              className={css.oauthBtn}
+              disabled={disabled || busy}
+              onClick={onLogout}
+            >
+              {t('mcpOauthLogout')}
+            </button>
+          )
+          : (
+            <button
+              type="button"
+              className={css.oauthBtn}
+              disabled={disabled || busy || pending}
+              onClick={onLogin}
+            >
+              {t('mcpOauthLogin')}
+            </button>
+          )}
+      </div>
+    </div>
   )
 }

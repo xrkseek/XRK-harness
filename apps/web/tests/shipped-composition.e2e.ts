@@ -44,7 +44,6 @@ const EXPECTED_TOOLS = [
   'job_list',
   'job_output',
   'list_agents',
-  'ralph',
   'read',
   'read_image',
   'send_message',
@@ -54,7 +53,6 @@ const EXPECTED_TOOLS = [
   'todo_write',
   'update_goal',
   'web_search',
-  'workflow',
   'write',
 ]
 

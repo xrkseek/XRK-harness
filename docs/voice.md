@@ -14,13 +14,17 @@ Host 语音缝：`@xrkseek/exec-voice`。麦克风 / 扬声器 / WebRTC **留在
 
 ## 启用
 
-| `XRK_VOICE` | 行为                                                                     |
+**产品路径**：Settings → Plugins → **Voice**（Face ns `voice`：`mode` = 关 / openai · 可选 `baseUrl`）。API 密钥经 Credentials `XRK_VOICE_OPENAI_KEY`（不进 settings.yaml）。保存后 Host `invalidateAgents` 热切换。非空 `XRK_VOICE` 为 CI 旁路。
+
+| `XRK_VOICE` / Settings | 行为 |
 | ----------- | ------------------------------------------------------------------------ |
-| （未设）    | 工具仍登记；execute **诚实失败**                                         |
-| `memory`    | 内存 Provider（CI / 演示）                                               |
-| `1`         | 需 `OPENAI_API_KEY` 或 `XRK_VOICE_OPENAI_KEY`；可选 `XRK_VOICE_BASE_URL` |
+| （未设 / 关） | 工具仍登记；execute **诚实失败** |
+| `memory`（仅 env） | 内存 Provider（CI / 演示） |
+| `1` / openai | 需 `OPENAI_API_KEY` 或 Credentials `XRK_VOICE_OPENAI_KEY`；可选 Settings / `XRK_VOICE_BASE_URL` |
 
 不覆盖本地 faster-whisper / Piper / 原生 voice-host 子进程（Codex 式）；那是后续 Provider。
+
+**唤醒词**：未交付。对标 Hermes `wake_word` / on-device hotword 的产品化放在 Voice Settings 开关与缺钥诚实失败稳定之后；当前请用按住说话（browser transport）或产品壳麦克风。
 
 ## 客户端麦克风传输（`@xrkseek/exec-voice/browser`）
 
@@ -54,13 +58,17 @@ Host voice seam: `@xrkseek/exec-voice`. Mic / speaker / WebRTC stay **on the cli
 
 ## Enable
 
-| `XRK_VOICE` | Behavior                                                                        |
+**Product path**: Settings → Plugins → **Voice** (Face ns `voice`: `mode` = off / openai · optional `baseUrl`). API key via Credentials `XRK_VOICE_OPENAI_KEY` (not settings.yaml). After save, Host `invalidateAgents` hot-swaps. Non-empty `XRK_VOICE` is the CI bypass.
+
+| `XRK_VOICE` / Settings | Behavior |
 | ----------- | ------------------------------------------------------------------------------- |
-| (unset)     | Tools still register; execute **fails honestly**                                |
-| `memory`    | In-memory Provider (CI / demos)                                                 |
-| `1`         | Needs `OPENAI_API_KEY` or `XRK_VOICE_OPENAI_KEY`; optional `XRK_VOICE_BASE_URL` |
+| (unset / off) | Tools still register; execute **fails honestly** |
+| `memory` (env only) | In-memory Provider (CI / demos) |
+| `1` / openai | Needs `OPENAI_API_KEY` or Credentials `XRK_VOICE_OPENAI_KEY`; optional Settings / `XRK_VOICE_BASE_URL` |
 
 Local faster-whisper / Piper / native voice-host subprocess (Codex-style) are out of MVP — add as later Providers.
+
+**Wake word**: not shipped. Hermes-style on-device hotword comes after Settings Voice switches and missing-key honesty are stable; use push-to-talk (browser transport) or the product-shell mic for now.
 
 ## Browser mic transport (`@xrkseek/exec-voice/browser`)
 

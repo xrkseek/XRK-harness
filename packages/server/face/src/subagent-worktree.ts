@@ -76,7 +76,7 @@ export function resolveRepoRoot(
   return root || null;
 }
 
-function ensureGitignore(repoRoot: string): void {
+function ensureGitignore(repoRoot: string, git: GitRunner): void {
   const file = path.join(repoRoot, ".gitignore");
   try {
     const existing = existsSync(file)
@@ -85,6 +85,10 @@ function ensureGitignore(repoRoot: string): void {
     if (existing.split(/\r?\n/).includes(".worktrees/")) return;
     const sep = existing && !existing.endsWith("\n") ? "\n" : "";
     appendFileSync(file, `${sep}.worktrees/\n`, "utf8");
+    // Commit so allocate leaves the parent clean for later ff-only merge-back.
+    const staged = git(["add", "--", ".gitignore"], repoRoot);
+    if (staged.code !== 0) return;
+    git(["commit", "-m", "chore: ignore .worktrees/"], repoRoot);
   } catch {
     /* isolation still works if gitignore cannot be updated */
   }
@@ -106,7 +110,7 @@ export function createSubagentWorktree(
   const wtPath = path.join(repoRoot, ".worktrees", wtName);
   try {
     mkdirSync(path.dirname(wtPath), { recursive: true });
-    ensureGitignore(repoRoot);
+    ensureGitignore(repoRoot, git);
     const base = git(["rev-parse", "HEAD"], repoRoot);
     if (base.code !== 0 || !base.stdout.trim()) return null;
     const added = git(

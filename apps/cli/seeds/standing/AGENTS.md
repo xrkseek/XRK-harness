@@ -11,3 +11,4 @@ Cross-workspace defaults (`~/.xrk/AGENTS.md`). Seeded by `xrkh web` / `serve` fr
 - Large changes: plan first with **`/plan`**, then `exit_plan_mode` before implementing.
 - Load a home skill with the `skill` tool when useful (`xrk-capability-attach`, `xrk-models-settings`, `xrk-plan-build`, `xrk-code-review`, `xrk-delegate`, `xrk-create-skill`, `xrk-adapt-workspace`).
 - Do not create `.xrk` / `.agents` in a workspace unless the user asks.
+- Persona tone (optional): user-authored `~/.xrk/SOUL.md` / `IDENTITY.md`. Factual “who the user is” → curated `{XRK_HOME}/memories/USER.md` via the `memory` tool — not standing `USER.md`.

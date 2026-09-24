@@ -55,6 +55,19 @@ export {
 } from "./permission-pre.js";
 
 export {
+  SENSITIVE_WRITE_PATH_RULES,
+  WRITE_CONTENT_SECURITY_RULES,
+  createWritePathSecurityPre,
+  createWritePathSecurityPost,
+  matchSensitiveWritePath,
+  scanWritePathSecurity,
+  type ContentSecurityRule,
+  type SecurityFinding,
+  type SensitiveWritePathRule,
+  type WritePathSecurityOptions,
+} from "./security-guidance.js";
+
+export {
   POLICY_RULESET_VERSION,
   PolicyRulesetParseError,
   createPolicyEngineFromRuleset,

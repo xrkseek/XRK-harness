@@ -26,6 +26,7 @@ pnpm exec tsc -b && pnpm test
 ```bash
 pnpm build                # tsc -b (required before CLI / Node runs dist)
 pnpm test                 # vitest run
+pnpm test:evals           # topic golden tracks (compact · fan-out · steer · spill · session.search)
 pnpm test:web             # Host-serve product-shell hard refresh (needs dist + Chromium)
 pnpm test:kernel-coverage
 pnpm lint
@@ -37,8 +38,11 @@ pnpm format:check
 ```text
 packages/<area>/tests/**/*.test.ts
 apps/**/tests/**/*.test.ts          # in pnpm check
+evals/golden/*.track.test.ts        # topic eval golden tracks
 apps/web/tests/product-shell-*.e2e.ts        # only pnpm test:web
 ```
+
+专题黄金轨（对标 Hermes `evals/`）：`pnpm test:evals` 或随 `pnpm test` 一起跑。见 [evals/README.md](../evals/README.md)。
 
 Vitest 别名把 `@xrkseek/*` 指到各包 **src**（见根 `vitest.config.ts`），测试直接打源码。
 
@@ -98,6 +102,7 @@ Individual commands:
 ```bash
 pnpm build                # tsc -b (required before CLI / Node runs dist)
 pnpm test                 # vitest run
+pnpm test:evals           # topic golden tracks (compact · fan-out · steer · spill · session.search)
 pnpm test:web             # Host-serve product-shell hard refresh (needs dist + Chromium)
 pnpm test:kernel-coverage
 pnpm lint
@@ -109,8 +114,11 @@ pnpm format:check
 ```text
 packages/<area>/tests/**/*.test.ts
 apps/**/tests/**/*.test.ts          # in pnpm check
+evals/golden/*.track.test.ts        # topic eval golden tracks
 apps/web/tests/product-shell-*.e2e.ts        # only pnpm test:web
 ```
+
+Topic golden tracks (Hermes-style `evals/`): `pnpm test:evals` or with `pnpm test`. See [evals/README.md](../evals/README.md).
 
 Vitest aliases map `@xrkseek/*` to each package **src** (see root `vitest.config.ts`); tests hit source directly.
 

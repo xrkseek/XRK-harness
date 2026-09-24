@@ -60,7 +60,7 @@ community client.js
 | 能力 | 已实现 | 待补 |
 |------|--------|------|
 | `host.mjs` RPC | inventory · invoke · runHostHalf | 全量第三方 DI（非产品目标） |
-| IM | connector · OAuth · `message.send/list` · webhook · poll/SSE · sidecar relay · **in-process WS client** · **本地 WS ingress**（`/api/im/gateway/ws`，无需 `XRK_IM_GATEWAY_*`） | — |
+| IM | connector · OAuth · `message.send/list` · webhook · poll/SSE · sidecar relay · **in-process WS client** · **本地 WS ingress**（`/api/im/gateway/ws`，无需 `XRK_IM_GATEWAY_*`）；契约包 `@xrkseek/im-gateway-contract`（**非**九路 SDK） | 厂商原生长连接 SDK |
 | 任务流 | 持久化 · TS 节点 · scan · `external` 子进程 · **Python bridge**（`XRK_TONGFLOW_PYTHON`） | — |
 | GenUI | CRUD · HTML / React tree 预览 · **npm 组件 registry/resolve** · **浏览器 runtime**（`/dsh-genui/runtime.js` mount · CE） | — |
 | Vision | paste/analyze · 本地 OCR · OpenAI-compatible · **anthropic-messages** · **gemini-generate** | — |
@@ -68,7 +68,7 @@ community client.js
 | 自动审阅 | 启发式 classify（默认）· **可替换 classifier**（`options.classifier` / `XRK_AUTO_REVIEW_CLASSIFIER_URL`）· slash | — |
 | 上下文浏览器 | Face **`contextTimeline`**（requests 分项 · usage 盖章 · events）/ **`contextHeaders`** · **`costUsage`** 计价 | — |
 | 移动访问 | 配对 · LAN/WAN PIN · 隧道 HTTP+WS | — |
-| **侧栏（`xrkh-better-sidebar`）** | Host 原生 `createSidebarPublicHandler`（见下节；非 dsh-compat 能力表）；含 `git.worktrees` · `changes.ops` · agent-opens/terminals 真推送 | prefs 默认关；开 `agentOpenTools` / `agentTerminalTools` 后模型可 `sidebar_open` / `terminal_create` |
+| **侧栏（`xrkh-better-sidebar`）** | Host 原生 `createSidebarPublicHandler`（见下节；非 dsh-compat 能力表）；含 `git.worktrees` · `changes.ops` · agent-opens/terminals 真推送 | prefs 默认关；**设置 → 通用** 可开 `agentOpenTools` / `agentTerminalTools`（写 `~/.xrk/sidebar/prefs.json`），开后模型可 `sidebar_open` / `terminal_create` |
 
 本地消息、节点、OCR 与 GenUI 预览线已在适配器内可用。
 
@@ -76,7 +76,7 @@ community client.js
 
 标准侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.18.7**）只向壳注入 `lib/client.js`。**不要**指望插件 Cordis host 半包在 XRK 上挂 `/sidebar/*`。源码工作区优先克隆到本仓 `extensions/xrkh-better-sidebar`（gitignore，独立 git 仓），勿另开第二份桌面副本。
 
-概况栏（`details`）与侧栏工作台**可同时打开**：壳经 `@xrkseek/client-ui-layout` 发布 `LayoutInsets`（`document.documentElement` 上的 `--xrk-layout-inset-*` / `data-xrk-layout-*`，以及 `ctx.layout.insets`）。浮动工作台用 CSS 变量让位右上角控件，不要再互斥收起对方。
+概况栏（`details`）默认 **Status** 页（子代理图 · jobs · **live `contextTimeline`**（inject 来源 · compact reason/`shadowedTokenCount` · prune/spill）· cost · channels），与斜杠 `/status` / Face `session.status` **同源**（snapshot 摘要 + 概况栏绑投影事件行）；另有任务 / 计划 / Office 页签。概况栏与侧栏工作台**可同时打开**：壳经 `@xrkseek/client-ui-layout` 发布 `LayoutInsets`（`document.documentElement` 上的 `--xrk-layout-inset-*` / `data-xrk-layout-*`，以及 `ctx.layout.insets`）。浮动工作台用 CSS 变量让位右上角控件，不要再互斥收起对方。产品切分与首方薄壳见 [sidebar-workbench](./sidebar-workbench.md)。
 
 产品 Host 通过 **`createSidebarPublicHandler`**（`@xrkseek/server-http/sidebar`）挂载同源 `/sidebar/*`，再经 `attachSidebarPtyUpgrades` 挂终端 WS。这是 **Host 原生表面**，与 `dsh-compat` 能力表无关；目录名 `dsh-compat` 是历史兼容器，**不**表示侧栏走「社区插件旁路」。社区客户端若也调用 `/sidebar/*`，共用同一 Host 契约。
 
@@ -85,7 +85,7 @@ community client.js
 | `POST /sidebar/api/<method>` | `packages/server/http/src/sidebar/`（FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **subagents.graph** · **changes.ops** · **open.external**） | 调 API；勿在 client 里再实现一份 Host |
 | `/sidebar/file` · `upload` · `html` · `bundle` | 同上 + 插件目录 `chunks/` | 发布 `lib/client-*.js` 供 bundle 回落 |
 | `/sidebar/ws/terminal` | Host `sidebar-pty`（真实 node-pty · session+tab 保活；系统用户权限，**不**套 Agent sandbox / fence） | TerminalView 连同源 WS |
-| `/sidebar/ws/agent-terminals` · `agent-opens` | Host 真推送（registry + prefs 门控工具）；无 registry 时仍空列表保活 | 勿在插件 host 半包假实现 |
+| `/sidebar/ws/agent-terminals` · `agent-opens` | Host 真推送（registry + prefs 门控工具；Settings → 通用开关）；无 registry 时仍空列表保活 | 勿在插件 host 半包假实现 |
 | Face 注入 `sidebarFace` | Host：`openExternal` · jobs · `listSubagentsLive` · rewind `forkSessionAt` | 子代理 / 后台任务 / 外开路径走此桥 |
 
 `subagents.live` 的 wire 形状为嵌套 `tool`：`{ text?; tool?: { name; args } }`（与插件 `LastActivity` / `SidebarSubagentLiveActivity` 一致）。Host 真源：`packages/server/host/src/sidebar-live-line.ts`。
@@ -115,17 +115,17 @@ TongFlow 装包走 `POST /tongflow/plugins`（`spec` / `package` / `name` / `id`
 | `XRK_IM_GATEWAY_URL` | 外接 IM relay 基址（HTTP health + WS `/ws` 推导） |
 | `XRK_IM_GATEWAY_WS_URL` | 显式 IM WebSocket 网关地址（优先于 URL 推导） |
 | `XRK_IM_GATEWAY_TOKEN` | relay / WS 鉴权 Bearer |
-| `XRK_MEMORY_EMBED_URL` | 外接向量库 HTTP 基址（如 Qdrant REST）；未接时仍走本地 hash bridge |
-| `XRK_MEMORY_EMBED_TOKEN` | 向量库 API key（可选） |
-| `XRK_MEMORY_EMBED_COLLECTION` | 集合 / index 名（可选） |
-| `XRK_AUTO_REVIEW_CLASSIFIER_URL` | 外接 auto-review classifier（POST；未设则启发式） |
-| `XRK_AUTO_REVIEW_CLASSIFIER_TOKEN` | classifier Bearer（可选） |
+| `XRK_MEMORY_EMBED_URL` | 外接向量库 HTTP 基址（如 Qdrant REST）；未接时仍走本地 hash bridge；亦可 Settings → Plugins → 高级 |
+| `XRK_MEMORY_EMBED_TOKEN` | 向量库 API key（可选；Credentials / 高级卡） |
+| `XRK_MEMORY_EMBED_COLLECTION` | 集合 / index 名（可选；亦可 Settings `memory-embed.collection`） |
+| `XRK_AUTO_REVIEW_CLASSIFIER_URL` | 外接 auto-review classifier（POST；未设则启发式；亦可 Settings → Plugins → 高级） |
+| `XRK_AUTO_REVIEW_CLASSIFIER_TOKEN` | classifier Bearer（可选；Credentials / 高级卡） |
 | `XRK_GENUI_NPM_ALLOWLIST` | 逗号分隔 npm 包名，合并进 GenUI component registry |
 | `XRK_TONGFLOW_PYTHON` | 用户 Python 解释器（scan / `kind:python` 节点） |
 | `XRK_TONGFLOW_PYTHON_SCAN` | 自定义 `/tongflow/scan` 脚本路径 |
 | `XRK_TONGFLOW_PYTHON_RUNNER` | 自定义 Python 节点 runner 脚本 |
 
-Sidecar 契约：`im-gateway-sidecar.ts` · `memory-embeddings.ts` · [ADR-0006](./adr/0006-im-long-lived-gateway.md)。
+Sidecar 契约：`@xrkseek/im-gateway-contract` · `im-gateway-sidecar.ts` · [im-gateway-sidecar.md](./im-gateway-sidecar.md) · `memory-embeddings.ts` · [ADR-0006](./adr/0006-im-long-lived-gateway.md)。
 
 ## 本地审计
 
@@ -215,7 +215,7 @@ Source of truth: `dsh-compat-matrix.ts`.
 | Capability | Implemented | Planned |
 |------|--------|------|
 | `host.mjs` RPC | inventory · invoke · runHostHalf | Full third-party DI (out of scope) |
-| IM | connector · OAuth · `message.send/list` · webhook · poll/SSE · sidecar relay · **in-process WS client** · **local WS ingress** (`/api/im/gateway/ws`, no `XRK_IM_GATEWAY_*` required) | — |
+| IM | connector · OAuth · `message.send/list` · webhook · poll/SSE · sidecar relay · **in-process WS client** · **local WS ingress** (`/api/im/gateway/ws`, no `XRK_IM_GATEWAY_*` required); contract package `@xrkseek/im-gateway-contract` (**not** a nine-vendor SDK) | Vendor-native long-lived SDKs |
 | Task flow | Persistence · TS nodes · scan · `external` subprocess · **Python bridge** (`XRK_TONGFLOW_PYTHON`) | — |
 | GenUI | CRUD · HTML / React tree preview · **npm component registry/resolve** · **browser runtime** (`/dsh-genui/runtime.js` mount · CE) | — |
 | Vision | paste/analyze · local OCR · OpenAI-compatible · **anthropic-messages** · **gemini-generate** | — |
@@ -223,7 +223,7 @@ Source of truth: `dsh-compat-matrix.ts`.
 | Auto-review | Heuristic classify (default) · **replaceable classifier** (`options.classifier` / `XRK_AUTO_REVIEW_CLASSIFIER_URL`) · slash | — |
 | Context browser | Face **`contextTimeline`** (per-request items · usage stamps · events) / **`contextHeaders`** · **`costUsage`** pricing | — |
 | Mobile access | Pairing · LAN/WAN PIN · tunnel HTTP+WS | — |
-| **Sidebar (`xrkh-better-sidebar`)** | Host owns `/sidebar/*` (see below); includes `git.worktrees` · `changes.ops` · real agent-opens/terminals push | Prefs default off; enable `agentOpenTools` / `agentTerminalTools` for `sidebar_open` / `terminal_create` |
+| **Sidebar (`xrkh-better-sidebar`)** | Host owns `/sidebar/*` (see below); includes `git.worktrees` · `changes.ops` · real agent-opens/terminals push | Prefs default off; **Settings → General** toggles `agentOpenTools` / `agentTerminalTools` (`~/.xrk/sidebar/prefs.json`); then model may `sidebar_open` / `terminal_create` |
 
 Local messaging, nodes, OCR, and GenUI preview are available inside the adapter today.
 
@@ -231,14 +231,14 @@ Local messaging, nodes, OCR, and GenUI preview are available inside the adapter 
 
 The standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.18.7**) injects `lib/client.js` into the shell only. **Do not** expect the plugin Cordis host half to serve `/sidebar/*` on XRK — the product Host already provides that prefix via dsh-compat (**historical folder name**, not a community-plugin host path) + `attachSidebarPtyUpgrades`. Prefer cloning the plugin into this repo's `extensions/xrkh-better-sidebar` (gitignored, its own git remote) instead of a second Desktop checkout.
 
-The session overview (`details`) and the sidebar workbench **may stay open together**: the shell publishes `LayoutInsets` from `@xrkseek/client-ui-layout` (`--xrk-layout-inset-*` / `data-xrk-layout-*` on `document.documentElement`, plus `ctx.layout.insets`). Floating workbenches offset chrome with those CSS variables instead of mutually collapsing the overview.
+The session **Status** column (`details`, default tab) shows the subagent graph · jobs · **live `contextTimeline`** (inject sources · compact reason/`shadowedTokenCount` · prune/spill) · cost · channels from Face `session.status` (same snapshot as slash `/status`; overview also binds live projection event rows); todos / plan / Office remain secondary tabs. Status and the sidebar workbench **may stay open together**: the shell publishes `LayoutInsets` from `@xrkseek/client-ui-layout` (`--xrk-layout-inset-*` / `data-xrk-layout-*` on `document.documentElement`, plus `ctx.layout.insets`). Floating workbenches offset chrome with those CSS variables instead of mutually collapsing the overview. Product cut and first-party thin shell: [sidebar-workbench](./sidebar-workbench.md).
 
 | Surface | Host landing | Plugin role |
 |------|-----------|----------|
 | `POST /sidebar/api/<method>` | `sidebar-adapter` (FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **subagents.graph** · **changes.ops** · **open.external**) | Call the API; do not reimplement Host in the client |
 | `/sidebar/file` · `upload` · `html` · `bundle` | dsh-compat routes + plugin `chunks/` | Ship `lib/client-*.js` for bundle fallback |
 | `/sidebar/ws/terminal` | Host `sidebar-pty` (real node-pty · session+tab reuse; system-user permissions, **not** Agent sandbox / fence) | TerminalView connects same-origin WS |
-| `/sidebar/ws/agent-terminals` · `agent-opens` | Host real push (registry + prefs-gated tools); empty-list keepalive without registry | Do not fake via plugin host half |
+| `/sidebar/ws/agent-terminals` · `agent-opens` | Host real push (registry + prefs-gated tools; Settings → General toggles); empty-list keepalive without registry | Do not fake via plugin host half |
 | Face inject `sidebarFace` | Host: `openExternal` · jobs · `listSubagentsLive` · rewind `forkSessionAt` | Subagents / background jobs / reveal-path use this bridge |
 
 `subagents.live` wire shape uses nested `tool`: `{ text?; tool?: { name; args } }` (matches plugin `LastActivity` / `SidebarSubagentLiveActivity`). Host source: `packages/server/host/src/sidebar-live-line.ts`.
@@ -268,17 +268,17 @@ For self-hosted sidecars; Host core does not embed these services.
 | `XRK_IM_GATEWAY_URL` | External IM relay base (HTTP health; WS `/ws` inferred) |
 | `XRK_IM_GATEWAY_WS_URL` | Explicit IM WebSocket gateway URL (overrides inference) |
 | `XRK_IM_GATEWAY_TOKEN` | Bearer for relay / WS auth |
-| `XRK_MEMORY_EMBED_URL` | External vector DB HTTP base (e.g. Qdrant REST); local hash bridge when unset |
-| `XRK_MEMORY_EMBED_TOKEN` | Vector DB API key (optional) |
-| `XRK_MEMORY_EMBED_COLLECTION` | Collection / index name (optional) |
-| `XRK_AUTO_REVIEW_CLASSIFIER_URL` | External auto-review classifier (POST; heuristic when unset) |
-| `XRK_AUTO_REVIEW_CLASSIFIER_TOKEN` | Classifier Bearer (optional) |
+| `XRK_MEMORY_EMBED_URL` | External vector DB HTTP base (e.g. Qdrant REST); local hash bridge when unset; also Settings → Plugins → Advanced |
+| `XRK_MEMORY_EMBED_TOKEN` | Vector DB API key (optional; Credentials / Advanced card) |
+| `XRK_MEMORY_EMBED_COLLECTION` | Collection / index name (optional; also Settings `memory-embed.collection`) |
+| `XRK_AUTO_REVIEW_CLASSIFIER_URL` | External auto-review classifier (POST; heuristic when unset; also Settings → Plugins → Advanced) |
+| `XRK_AUTO_REVIEW_CLASSIFIER_TOKEN` | Classifier Bearer (optional; Credentials / Advanced card) |
 | `XRK_GENUI_NPM_ALLOWLIST` | Comma-separated npm packages merged into GenUI registry |
 | `XRK_TONGFLOW_PYTHON` | User Python interpreter (scan / `kind:python` nodes) |
 | `XRK_TONGFLOW_PYTHON_SCAN` | Custom `/tongflow/scan` script path |
 | `XRK_TONGFLOW_PYTHON_RUNNER` | Custom Python node runner script |
 
-Sidecar contracts: `im-gateway-sidecar.ts` · `memory-embeddings.ts` · [ADR-0006](./adr/0006-im-long-lived-gateway.md).
+Sidecar contracts: `@xrkseek/im-gateway-contract` · `im-gateway-sidecar.ts` · [im-gateway-sidecar.md](./im-gateway-sidecar.md) · `memory-embeddings.ts` · [ADR-0006](./adr/0006-im-long-lived-gateway.md).
 
 ## Local audit
 

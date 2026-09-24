@@ -88,6 +88,17 @@ compaction: {
 
 仅 prune 就可能清除溢出，**不必**写入 `context/compaction`。
 
+### Status 可观测（概况 · `/status`）
+
+`session.status` / 斜杠 `/status` / Overview Status 栏同源暴露：
+
+| 字段 | 含义 |
+|------|------|
+| `compaction.pipeline` | 最近一回合内的分阶：`none` · `prune` · `summary` · `prune→summary`（由已有 prune / compaction 时间线条目折算，**不**另写协议事件） |
+| `compaction.stages` | 同上有序阶段列表 |
+| `compaction.phase` | `idle` / `busy`（agent latch：turn 与 `/compact` 互斥） |
+| `delivery.*` | `turnActive` · 队列/steer 计数 · `compactBlockedByTurn`；忙时队列仍可 FIFO 入队，steer 需活跃 turn |
+
 Standing plan（`todos` 投影）与换窗正交：`/compact` / `context/compaction` **不清** todo 列表；列表跨回合保留，直到下一次 `todo/write`。
 
 ## Soft budget（`maxRequestTokens`）
@@ -198,6 +209,17 @@ Overflow recovery is **prune-first, one recovery pass**:
 5. Overflow again → rethrow as-is (no second recovery)
 
 Prune alone may clear overflow with **no** `context/compaction` event.
+
+### Status observability (Overview · `/status`)
+
+`session.status`, slash `/status`, and the Overview Status column share:
+
+| Field | Meaning |
+|------|------|
+| `compaction.pipeline` | Last-turn stage chain: `none` · `prune` · `summary` · `prune→summary` (folded from existing prune / compaction timeline rows — **no** extra protocol events) |
+| `compaction.stages` | Ordered stages for that pipeline |
+| `compaction.phase` | `idle` / `busy` (agent latch: turn and `/compact` are exclusive) |
+| `delivery.*` | `turnActive` · queue/steer counts · `compactBlockedByTurn`; queue still FIFO-accepts while busy; steer needs an active turn |
 
 Standing plan (`todos` projection) is orthogonal to windowing: `/compact` / `context/compaction` do **not** clear the todo list; the list persists across turns until the next `todo/write`.
 

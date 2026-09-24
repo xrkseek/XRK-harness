@@ -90,7 +90,7 @@ function bench(over?: {
   const shell = new SessionInputShell({ actx: SCTX, defaultSink: sink, commandImages: { serialize, release, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported` } })
   const wiring = shell
   const view = mountBar(shell, over)
-  const textarea = view.container.querySelector('textarea')!
+  const textarea = view.container.querySelector('[data-composer-input]')!
   const claim = (token = '/goal ', hint = '目标', images?: true) => {
     act(() => {
       shell.setDraft(token)
@@ -110,7 +110,7 @@ function bench(over?: {
 describe('matrix row: plain', () => {
   it('enter falls to the default sink; no claim on the currency; edits free', async () => {
     const { textarea, shell, sink } = bench()
-    fireEvent.change(textarea, { target: { value: '普通消息' } })
+    act(() => { shell.setDraft('普通消息') })
     expect(shell.snapshot.claim).toBeUndefined()
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(sink).toHaveBeenCalledWith('普通消息', [], 'queue', expect.any(AbortSignal))
@@ -125,21 +125,21 @@ describe('matrix row: claimed', () => {
     const { view, textarea, shell, claim } = bench()
     claim()
     expect(shell.snapshot.claim).toEqual({ token: '/goal ', hint: '目标' })
-    expect(view.container.querySelector('[data-decoration="token"]')?.textContent).toBe('/goal ')
+    expect(view.container.querySelector('[data-lexical-text][style*="warn-label"]')?.textContent).toBe('/goal ')
     // The zh dictionary owns a hint.goal entry, which overrides the raw claim hint (production behavior).
-    expect(view.container.querySelector('[data-decoration="hint"]')?.textContent).toBe('输入目标，智能体将持续执行')
+    expect(view.container.querySelector('[data-composer-input]')?.textContent).toBe('输入目标，智能体将持续执行')
     expect((textarea).readOnly).toBe(false)
     // Free editing beyond the token: hint drops, claim holds.
-    fireEvent.change(textarea, { target: { value: '/goal 发布版本' } })
+    act(() => { shell.setDraft('/goal 发布版本') })
     expect(shell.snapshot.phase).toBe('claimed')
-    expect(view.container.querySelector('[data-decoration="hint"]')).toBeNull()
+    expect(view.container.querySelector('[data-composer-input]')).toBeNull()
   })
 
   it('enter routes to claim.submit (command lane, never the queue sink)', async () => {
     const submit = vi.fn(() => Promise.resolve({ kind: 'success' as const, text: '完成', source: 'command', name: 'goal' }))
     const { view, textarea, sink, claim } = bench({ submit })
     claim()
-    fireEvent.change(textarea, { target: { value: '/goal 发布' } })
+    act(() => { shell.setDraft('/goal 发布') })
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(sink).not.toHaveBeenCalled()
     await vi.waitFor(() => { expect(submit).toHaveBeenCalledWith('发布', SCTX, []) })
@@ -151,10 +151,10 @@ describe('matrix row: claimed', () => {
   it('backspacing the token auto-releases to plain and the visuals vanish (scenario H)', () => {
     const { view, textarea, shell, claim } = bench()
     claim()
-    fireEvent.change(textarea, { target: { value: '/goa 发布' } }) // token broken
+    act(() => { shell.setDraft('/goa 发布') }) // token broken
     expect(shell.snapshot.phase).toBe('plain')
     expect(shell.snapshot.claim).toBeUndefined()
-    expect(view.container.querySelector('[data-decoration="token"]')).toBeNull()
+    expect(view.container.querySelector('[data-lexical-text][style*="warn-label"]')).toBeNull()
   })
 })
 
@@ -303,7 +303,7 @@ describe('matrix row: locked (session disabled)', () => {
   it('running does NOT lock: typing and enter-queue stay live', () => {
     const { textarea, sink } = bench({ running: true })
     expect((textarea).disabled).toBe(false)
-    fireEvent.change(textarea, { target: { value: '排队' } })
+    act(() => { shell.setDraft('排队') })
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(sink).toHaveBeenCalledWith('排队', [], 'queue', expect.any(AbortSignal))
   })

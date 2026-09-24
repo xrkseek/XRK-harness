@@ -14,20 +14,21 @@
 | Session busy | TurnLatch / drain join | 同 session 单 in-flight；忙可 409 或 join |
 | Tool denylist / policy engine | `@xrkseek/policy` | 见 [policy.md](./policy.md) |
 | Write-intent | `createWriteIntentGuard` | 默认 `apply_edit` 须先 `read_file` |
-| Sandbox argv | `exec-sandbox` + guard | Workspace / Docker / bwrap via `createSandboxStack` |
+| Sandbox argv | `exec-sandbox` + guard | Workspace / Docker / bwrap / windows via `createSandboxStack`；`xrkh doctor` 探测 helper |
+| Hardline argv / 写路径提示 | `createHardlineArgvPre` + `createWritePathSecurityPre/Post` | harness 在 **policy 前** fail-closed deny（根擦除 / 敏感路径）；内容 pattern 默认结果后提示 |
 | Path jail | `exec-fs` `resolveWithinRoot` · `resolveUnderHostRoots` | 相对路径与 workspace 内绝对路径均可；`hostReadableRoots` 仅白名单子树（attachments · spill），realpath 拒符号链接逃出到 home 其它文件 |
-| Web URL 卫生 | `exec-web` `assertHttpUrl` | 仅 http(s)、拒凭据；字面量私网；**无** DNS 再绑定 |
+| Web URL 卫生 | `exec-web` `assertHttpUrl` + allowlist | 仅 http(s)、拒凭据；字面量私网；可选 `XRK_WEB_FETCH_ALLOWLIST` + 审计环；**无** DNS 再绑定 |
 | LSP 路径 | `exec-lsp` `resolveWithinRoot` | 查询文件必须落在 `workspaceRoot` 内 |
 | PTY cwd | `exec-pty` `resolvePtyCwd` | cwd 必须落在 `workspaceRoot` 内；拒绝对 shell `SIGKILL` |
 | PTY native | `node-pty@1.2.0-beta.15` | NAPI prebuild；Win inspector 为 no-op |
 | Tool output bound | pipeline `bound` + persist | 大结果外溢到 `~/.xrk/spill/tool-outputs/` |
-| Code worker | `code-runtime` | `run_code` 进 worker（实验）；超时 / 输出 / 堆硬顶 |
+| Code worker | `code-runtime` | `run_code`：无 bridge 进 worker；有 bridge 则 AsyncFunction + 嵌套工具走 pipeline；超时 / 输出硬顶 |
 | Safety loop/mistake | `core-session` safety | soft/hard notice；可 abort turn |
 | 密钥不入库 | `.gitignore` + 示例模板 | 仓内仅 `*.example` |
 | IM webhook  ingress | `dsh-compat` `im-messaging-bridge` | `/api/im/{channel}/webhook` 无 vendor secret 校验（开发联调）；生产应置于反向代理后并限流 |
 | IM gateway relay | `im-gateway-sidecar` | `/api/im/gateway/relay`：本机 localhost 或 `XRK_IM_GATEWAY_TOKEN`；生产必须设 token |
 | IM vendor WS | `im-vendor-ws-client` | `XRK_IM_GATEWAY_WS_URL` / 自 `XRK_IM_GATEWAY_URL` 推导；`XRK_IM_GATEWAY_TOKEN` 鉴权；勿暴露到浏览器 |
-| Memory embed sidecar | `memory-embeddings` | `XRK_MEMORY_EMBED_URL` 外接向量 HTTP；token 勿入库；未接时走 embedded `~/.xrk/memory-embeddings` |
+| Memory embed sidecar | `memory-embeddings` | `XRK_MEMORY_EMBED_URL` / Settings → Plugins → 高级 `memory-embed`；token 勿入库（Credentials）；未接时走 embedded `~/.xrk/memory-embeddings` |
 | GenUI npm allowlist | `genui-npm-bridge` | `XRK_GENUI_NPM_ALLOWLIST` 仅允许列出的包名；resolve 在 Host 侧，勿把 token 放进 schema |
 | TongFlow Python | `tongflow-python-bridge` | `XRK_TONGFLOW_PYTHON*` 执行用户脚本；仅信任自运维路径；`~/.xrk/tongflow/python.json` 勿提交 |
 
@@ -71,20 +72,21 @@ Lists only controls **already implemented in this repository**; unfinished items
 | Session busy | TurnLatch / drain join | One in-flight per session; busy may 409 or join |
 | Tool denylist / policy engine | `@xrkseek/policy` | See [policy.md](./policy.md) |
 | Write-intent | `createWriteIntentGuard` | Default: `apply_edit` requires prior `read_file` |
-| Sandbox argv | `exec-sandbox` + guard | Workspace / Docker / bwrap via `createSandboxStack` |
+| Sandbox argv | `exec-sandbox` + guard | Workspace / Docker / bwrap / windows via `createSandboxStack`; `xrkh doctor` probes helpers |
+| Hardline argv / write-path guidance | `createHardlineArgvPre` + `createWritePathSecurityPre/Post` | harness registers **before** policy — fail-closed deny (root wipe / sensitive paths); content patterns append advisory by default |
 | Path jail | `exec-fs` `resolveWithinRoot` · `resolveUnderHostRoots` | Relative and workspace-absolute paths OK; `hostReadableRoots` is a subtree whitelist (attachments · spill) with realpath denial of symlink escape into other home files |
-| Web URL hygiene | `exec-web` `assertHttpUrl` | http(s) only, no credentials; literal private hosts; **no** DNS rebinding check |
+| Web URL hygiene | `exec-web` `assertHttpUrl` + allowlist | http(s) only, no credentials; literal private hosts; optional `XRK_WEB_FETCH_ALLOWLIST` + audit ring; **no** DNS rebinding check |
 | LSP paths | `exec-lsp` `resolveWithinRoot` | Query files must stay under `workspaceRoot` |
 | PTY cwd | `exec-pty` `resolvePtyCwd` | cwd must stay under `workspaceRoot`; rejects `SIGKILL` on the shell itself |
 | PTY native | `node-pty@1.2.0-beta.15` | NAPI prebuild; Win inspector is a no-op |
 | Tool output bound | pipeline `bound` + persist | Large results spill to `~/.xrk/spill/tool-outputs/` |
-| Code worker | `code-runtime` | `run_code` in a worker (experimental); timeout / output / heap caps |
+| Code worker | `code-runtime` | `run_code`: worker when unbridged; with bridge, AsyncFunction + nested tools via pipeline; timeout / output caps |
 | Safety loop/mistake | `core-session` safety | soft/hard notice; may abort turn |
 | Secrets not in repo | `.gitignore` + example templates | Only `*.example` in-tree |
 | IM webhook ingress | `dsh-compat` `im-messaging-bridge` | `/api/im/{channel}/webhook` has no vendor secret check (dev integration); production should sit behind a reverse proxy with rate limits |
 | IM gateway relay | `im-gateway-sidecar` | `/api/im/gateway/relay`: localhost only or `XRK_IM_GATEWAY_TOKEN`; set token in production |
 | IM vendor WS | `im-vendor-ws-client` | `XRK_IM_GATEWAY_WS_URL` / inferred from `XRK_IM_GATEWAY_URL`; `XRK_IM_GATEWAY_TOKEN` auth; do not expose to browser |
-| Memory embed sidecar | `memory-embeddings` | `XRK_MEMORY_EMBED_URL` external vector HTTP; do not commit tokens; falls back to embedded `~/.xrk/memory-embeddings` |
+| Memory embed sidecar | `memory-embeddings` | `XRK_MEMORY_EMBED_URL` / Settings → Plugins → Advanced `memory-embed`; do not commit tokens (Credentials); falls back to embedded `~/.xrk/memory-embeddings` |
 | GenUI npm allowlist | `genui-npm-bridge` | `XRK_GENUI_NPM_ALLOWLIST` limits package names; resolve runs on Host; do not put tokens in schema |
 | TongFlow Python | `tongflow-python-bridge` | `XRK_TONGFLOW_PYTHON*` runs user scripts; trust only self-operated paths; do not commit `~/.xrk/tongflow/python.json` |
 

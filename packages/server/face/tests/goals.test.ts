@@ -163,6 +163,146 @@ describe("goals remotes", () => {
     expect(goal?.blockedReason?.code).toBe("max-rounds");
   });
 
+  it("auto-admits the next <goal_round> while armed under the cap", async () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const wakes: string[] = [];
+    const runtime = createBareFaceRuntime({
+      store,
+      drain: {
+        wake(id) {
+          wakes.push(id);
+        },
+        async cancel() {},
+        isActive() {
+          return false;
+        },
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "goals/create", "g1", {
+      args: {
+        agentId: session.id,
+        request: { objective: "keep going", maxGoalRounds: 3 },
+      },
+    });
+    expect(created.result.ok).toBe(true);
+    const pending = listPendingAdmits(store.get(session.id).events, session.id);
+    store.append(session.id, {
+      type: "prompt/promoted",
+      ts: 9,
+      admitId: pending[0]!.admitId,
+    });
+    const admitsBefore = listPendingAdmits(
+      store.get(session.id).events,
+      session.id,
+    ).length;
+    store.append(session.id, {
+      type: "turn/start",
+      ts: 10,
+      turnId: "t1",
+    });
+    store.append(session.id, {
+      type: "turn/end",
+      ts: 11,
+      turnId: "t1",
+      reason: { kind: "completed" },
+    });
+    const goal = runtime.goals.get(session.id);
+    expect(goal?.phase).toBe("active");
+    expect(goal?.activation).toBe("armed");
+    expect(goal?.roundsStarted).toBe(2);
+    const pendingAfter = listPendingAdmits(
+      store.get(session.id).events,
+      session.id,
+    );
+    expect(pendingAfter.length).toBeGreaterThan(admitsBefore);
+    const lastAdmit = pendingAfter[pendingAfter.length - 1]!;
+    expect(lastAdmit.content).toContain("<goal_round>");
+    expect(lastAdmit.content).toContain("Round: 2/3");
+    expect(wakes).toContain(session.id);
+  });
+
+  it("stops auto-rounds after update_goal complete", async () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const runtime = bareRuntime(store);
+    const created = await dispatchFaceMethod(runtime, "goals/create", "g1", {
+      args: {
+        agentId: session.id,
+        request: { objective: "done soon", maxGoalRounds: 5 },
+      },
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const ref = (created.result.value as { ref: { id: string; revision: number } })
+      .ref;
+    const done = await dispatchFaceMethod(runtime, "goals/complete", "g2", {
+      args: { agentId: session.id, ref },
+    });
+    expect(done.result.ok).toBe(true);
+    const pending = listPendingAdmits(store.get(session.id).events, session.id);
+    if (pending[0]) {
+      store.append(session.id, {
+        type: "prompt/promoted",
+        ts: 9,
+        admitId: pending[0].admitId,
+      });
+    }
+    const admitsBefore = listPendingAdmits(
+      store.get(session.id).events,
+      session.id,
+    ).length;
+    store.append(session.id, {
+      type: "turn/start",
+      ts: 10,
+      turnId: "t-done",
+    });
+    store.append(session.id, {
+      type: "turn/end",
+      ts: 11,
+      turnId: "t-done",
+      reason: { kind: "completed" },
+    });
+    expect(runtime.goals.get(session.id)?.phase).toBe("complete");
+    expect(
+      listPendingAdmits(store.get(session.id).events, session.id).length,
+    ).toBe(admitsBefore);
+  });
+
+  it("disarms on max-tokens turn/end without consuming another round", async () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const runtime = bareRuntime(store);
+    await dispatchFaceMethod(runtime, "goals/create", "g1", {
+      args: {
+        agentId: session.id,
+        request: { objective: "token heavy", maxGoalRounds: 5 },
+      },
+    });
+    const pending = listPendingAdmits(store.get(session.id).events, session.id);
+    store.append(session.id, {
+      type: "prompt/promoted",
+      ts: 9,
+      admitId: pending[0]!.admitId,
+    });
+    store.append(session.id, {
+      type: "turn/start",
+      ts: 10,
+      turnId: "t-mt",
+    });
+    store.append(session.id, {
+      type: "turn/end",
+      ts: 11,
+      turnId: "t-mt",
+      reason: { kind: "max-tokens" },
+    });
+    const goal = runtime.goals.get(session.id);
+    expect(goal?.phase).toBe("active");
+    expect(goal?.activation).toBe("disarmed");
+    expect(goal?.roundsStarted).toBe(1);
+    expect(goal?.blockedReason?.code).toBe("max-tokens");
+  });
+
   it("rehydrates from goals.json without starting another round", async () => {
     const persist = path.join(mkdtempSync(path.join(tmpdir(), "xrk-goals-")), "goals.json");
     const store = createMemorySessionStore();

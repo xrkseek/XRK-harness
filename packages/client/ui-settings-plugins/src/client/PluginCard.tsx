@@ -51,7 +51,7 @@ export function PluginCard(props: PluginCardProps) {
   const title = props.t(props.titleKey)
   const blocked = !state.dirty || state.invalid || state.saving
   return (
-    <li className={clsx(css.card, open && css.cardOpen)}>
+    <div className={clsx(css.card, open && css.cardOpen)}>
       <button
         type="button"
         className={css.header}
@@ -93,6 +93,6 @@ export function PluginCard(props: PluginCardProps) {
           </div>
         )
         : null}
-    </li>
+    </div>
   )
 }

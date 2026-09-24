@@ -54,6 +54,9 @@ import {
   sessionHistoryTailProjectionKeys,
   snapshotWireBlock,
 } from "../projections/snapshot-keys.js";
+import { buildSessionStatusSnapshot } from "../session-status.js";
+import { buildRolloutTraceState } from "../rollout-trace.js";
+import type { FaceRuntime } from "../context.js";
 
 export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   const p = asRecord(payload);
@@ -451,13 +454,15 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   runtime.watchSession(sessionId);
   const agent = await runtime.resolveAgent(sessionId);
   const admitId = `admit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const echoRpc =
+    typeof p.requestId === "string" && p.requestId.length > 0 ? p.requestId : rpcId;
   runtime.rpcAdmitMap.set(rpcId, admitId);
-  runtime.admitRpcMap.set(admitId, rpcId);
+  runtime.admitRpcMap.set(admitId, echoRpc);
   agent.admit(admitContent, {
     delivery: mode === "steer" ? "steer" : "queue",
     admitId,
   });
-  runtime.pendingUserRpc.set(sessionId, rpcId);
+  runtime.pendingUserRpc.set(sessionId, echoRpc);
   runtime.publishQueue(sessionId);
   runtime.drain.wake(sessionId);
 
@@ -847,3 +852,95 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
   runtime.publishQueue(sessionId);
   return { ok: true, value: { accepted: true } };
 };
+
+/** Shared Status snapshot (`/status` · Overview Status tab). */
+export const sessionStatus: FaceHandler = async (runtime, _rpcId, payload) => {
+  const p = asRecord(payload);
+  const sessionId = String(p.sessionId ?? "").trim();
+  if (!sessionId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "sessionId required" },
+    };
+  }
+  if (!runtime.store.has(sessionId)) {
+    return {
+      ok: false,
+      error: { code: "session-not-found", message: sessionId },
+    };
+  }
+  return {
+    ok: true,
+    value: buildSessionStatusSnapshot(runtime, sessionId),
+  };
+};
+
+/**
+ * Local offline rollout-trace graph (spawn / message / tool edges).
+ * Debug-only — not OTLP, not upload. Same reducer as export `trace/state.json`.
+ */
+export const sessionRolloutTrace: FaceHandler = async (
+  runtime,
+  _rpcId,
+  payload,
+) => {
+  const p = asRecord(payload);
+  const sessionId = String(p.sessionId ?? "").trim();
+  if (!sessionId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "sessionId required" },
+    };
+  }
+  if (!runtime.store.has(sessionId)) {
+    return {
+      ok: false,
+      error: { code: "session-not-found", message: sessionId },
+    };
+  }
+  const includeDescendants = p.includeDescendants !== false;
+  const ids = includeDescendants
+    ? [sessionId, ...collectRolloutDescendants(runtime, sessionId)]
+    : [sessionId];
+  const eventsBySession: Record<string, ReturnType<typeof readSessionEvents>> =
+    {};
+  for (const id of ids) {
+    if (!runtime.store.has(id)) continue;
+    eventsBySession[id] = readSessionEvents(runtime.store, id);
+  }
+  const links = includeDescendants
+    ? ids.flatMap((id) => [...runtime.subagents.list(id)])
+    : [...runtime.subagents.list(sessionId)];
+  return {
+    ok: true,
+    value: buildRolloutTraceState({
+      rootSessionId: sessionId,
+      eventsBySession,
+      links: links.map((link) => ({
+        parentSessionId: link.parentSessionId,
+        childSessionId: link.childSessionId,
+        mode: link.mode,
+        label: link.label,
+      })),
+    }),
+  };
+};
+
+function collectRolloutDescendants(
+  runtime: FaceRuntime,
+  rootId: string,
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>([rootId]);
+  const queue = [rootId];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    for (const link of runtime.subagents.list(id)) {
+      if (seen.has(link.childSessionId)) continue;
+      seen.add(link.childSessionId);
+      out.push(link.childSessionId);
+      queue.push(link.childSessionId);
+    }
+  }
+  return out;
+}

@@ -17,22 +17,51 @@ export const MEMORY_EMBED_ENV_URL = "XRK_MEMORY_EMBED_URL";
 export const MEMORY_EMBED_ENV_TOKEN = "XRK_MEMORY_EMBED_TOKEN";
 export const MEMORY_EMBED_ENV_COLLECTION = "XRK_MEMORY_EMBED_COLLECTION";
 
+/** Face `memory-embed` product (Settings → Plugins → Advanced). */
+export type MemoryEmbedProduct = {
+  readonly url?: string;
+  readonly token?: string;
+  readonly collection?: string;
+};
+
+/**
+ * Resolve external vector sidecar.
+ * Non-empty `XRK_MEMORY_EMBED_URL` wins (CI bypass); else Face product URL.
+ */
 export function readExternalMemoryEmbedConfig(
   env: NodeJS.ProcessEnv = process.env,
+  product?: MemoryEmbedProduct,
 ): { url: string; token?: string; collection?: string } | undefined {
-  const url = env[MEMORY_EMBED_ENV_URL]?.trim();
-  if (!url) return undefined;
-  const token = env[MEMORY_EMBED_ENV_TOKEN]?.trim();
-  const collection = env[MEMORY_EMBED_ENV_COLLECTION]?.trim();
+  const envUrl = env[MEMORY_EMBED_ENV_URL]?.trim();
+  if (envUrl) {
+    const token = env[MEMORY_EMBED_ENV_TOKEN]?.trim();
+    const collection = env[MEMORY_EMBED_ENV_COLLECTION]?.trim();
+    return {
+      url: envUrl,
+      ...(token ? { token } : {}),
+      ...(collection ? { collection } : {}),
+    };
+  }
+  const productUrl = product?.url?.trim();
+  if (!productUrl) return undefined;
+  const token =
+    product?.token?.trim() || env[MEMORY_EMBED_ENV_TOKEN]?.trim() || undefined;
+  const collection =
+    product?.collection?.trim() ||
+    env[MEMORY_EMBED_ENV_COLLECTION]?.trim() ||
+    undefined;
   return {
-    url,
+    url: productUrl,
     ...(token ? { token } : {}),
     ...(collection ? { collection } : {}),
   };
 }
 
-export function externalMemoryEmbedStatus(): Record<string, unknown> {
-  const external = readExternalMemoryEmbedConfig();
+export function externalMemoryEmbedStatus(
+  env: NodeJS.ProcessEnv = process.env,
+  product?: MemoryEmbedProduct,
+): Record<string, unknown> {
+  const external = readExternalMemoryEmbedConfig(env, product);
   if (!external) {
     return {
       external: null,
@@ -225,11 +254,12 @@ export async function searchMemoryEmbeddingsAsync(
   limit = 16,
   env: NodeJS.ProcessEnv = process.env,
   xrkHome?: string,
+  product?: MemoryEmbedProduct,
 ): Promise<{
   hits: Array<{ id: string; text: string; score: number }>;
   mode: "sidecar" | "embedded-host" | "local-embedding-bridge";
 }> {
-  const external = readExternalMemoryEmbedConfig(env);
+  const external = readExternalMemoryEmbedConfig(env, product);
   if (external) {
     const sidecarHits = await fetchExternalMemorySearch(external, query, limit);
     if (sidecarHits && sidecarHits.length > 0) {
@@ -278,8 +308,12 @@ export function dropEmbeddedVectorRow(
   removeEmbeddedVectorRow(xrkHome, id);
 }
 
-export function memoryEmbeddingsStatus(xrkHome?: string): Record<string, unknown> {
-  const external = readExternalMemoryEmbedConfig();
+export function memoryEmbeddingsStatus(
+  xrkHome?: string,
+  env: NodeJS.ProcessEnv = process.env,
+  product?: MemoryEmbedProduct,
+): Record<string, unknown> {
+  const external = readExternalMemoryEmbedConfig(env, product);
   const embedded = embeddedVectorStoreStatus(xrkHome);
   return {
     ok: true,
@@ -289,10 +323,10 @@ export function memoryEmbeddingsStatus(xrkHome?: string): Record<string, unknown
     engines: external
       ? ["keyword", "local-hash", "embedded-host", "sidecar-http"]
       : ["keyword", "local-hash", "embedded-host"],
-    ...externalMemoryEmbedStatus(),
+    ...externalMemoryEmbedStatus(env, product),
     store: embedded,
     note: external
-      ? "Embedded vector host + optional XRK_MEMORY_EMBED_* sidecar upgrade."
+      ? "Embedded vector host + optional XRK_MEMORY_EMBED_* / Settings memory-embed sidecar upgrade."
       : "Embedded vector host under ~/.xrk/memory-embeddings/; local hash fallback.",
     ...adapterEcho(),
   };

@@ -26,14 +26,17 @@
 
 | 文件 | 含义 |
 |------|------|
-| `AGENTS.md` | 工作区角色与边界 |
-| `SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` | 人格与偏好 |
+| `AGENTS.md` | 工作区角色与边界（产品只种子薄 `~/.xrk/AGENTS.md`；**不**自动种 SOUL/IDENTITY） |
+| `SOUL.md` · `IDENTITY.md` · `TOOLS.md` | **可选**人格 / 语气 / 工具表（用户手写；存在才注入） |
+| `USER.md`（站立） | **可选**人格草稿；**不是**策展 `{XRK_HOME}/memories/USER.md` |
 | `assistant.md` | 站立说明 |
 | `rules.md` | 项目规则 |
 | `context/*` | 附加上下文 |
 | `subagents.md` | 子代理说明 |
 | `recipes/*.yaml` | `/id` 斜杠配方 |
 | `skills/*/SKILL.md` | Skill 目录 |
+
+**Identity 产品决策（保持薄）**：默认只种薄 `AGENTS.md`。人设语气用可选 `SOUL.md` / `IDENTITY.md`；「用户是谁」的事实真源是策展 `memories/USER.md`（见 [curated-memory.md](./curated-memory.md)）。不自动种 Honcho 式用户建模，也不自动种匿名用户 id 文件。
 
 ## Skills（运行时）
 
@@ -62,6 +65,10 @@
 Spec 形态：`./path` · `file:` / `link:` 本地目录；`github:owner/repo` · `git:https://…` · `git+https://…` · `https://…` · `ssh://…` · `git@…` git 远端；`<spec>#subdir` 在含多个 skill 的仓库里选一个。
 
 安装**失败关闭**：缺 `SKILL.md`、frontmatter 布尔非法、名字越界（含路径分隔符）一律拒绝，且写入**永不出** skills 根。多 skill 仓库必须用 `#subdir` 指明，否则报 `SKILL_AMBIGUOUS`。这与上文「产品 vs 用户」边界一致：安装是**用户主动**动作，只在工作区落盘，不自动 `mkdir`。
+
+## 学习环（`propose_skill`）
+
+复杂任务后，模型可调用 **`propose_skill`** 提交一份 class-level `SKILL.md` 草案（When to Use / Procedure / Pitfalls，不是聊天日志）。Face 弹出确认（`Write skill` / `Reject`，详情展示全文）；**只有用户批准后**才校验并写入工作区 `.agents/skills/<name>/`（复用 `installSkillFromLocalDir` 失败关闭路径）。复杂多工具回合结束后，下一回合 turn-start 可能注入一条 `context-fragment` 提示调用该工具（对标 Hermes write_approval；本切片**不做** background review fork / curator）。
 
 ## 能力挂载（与人格分工）
 
@@ -127,14 +134,17 @@ Optional directories; **never auto-created**. Common files:
 
 | File | Meaning |
 |------|------|
-| `AGENTS.md` | Workspace role and boundaries |
-| `SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` | Persona and preferences |
+| `AGENTS.md` | Workspace role and boundaries (product seeds only a thin `~/.xrk/AGENTS.md`; **does not** auto-seed SOUL/IDENTITY) |
+| `SOUL.md` · `IDENTITY.md` · `TOOLS.md` | **Optional** persona / tone / tool notes (user-authored; injected when present) |
+| `USER.md` (standing) | **Optional** persona draft; **not** curated `{XRK_HOME}/memories/USER.md` |
 | `assistant.md` | Standing instructions |
 | `rules.md` | Project rules |
 | `context/*` | Extra context |
 | `subagents.md` | Subagent notes |
 | `recipes/*.yaml` | `/id` slash recipes |
 | `skills/*/SKILL.md` | Skill trees |
+
+**Identity product decision (stay thin)**: seed only the thin `AGENTS.md`. Optional `SOUL.md` / `IDENTITY.md` for tone/persona; factual “who the user is” lives in curated `memories/USER.md` ([curated-memory.md](./curated-memory.md)). No automatic Honcho-style user modeling and no auto-seeded anonymous-user-id file.
 
 ## Skills (runtime)
 
@@ -163,6 +173,10 @@ Beyond hand-written `SKILL.md` files, skills install into the workspace skills r
 Spec shapes: `./path` · `file:` / `link:` for local directories; `github:owner/repo` · `git:https://…` · `git+https://…` · `https://…` · `ssh://…` · `git@…` for git remotes; `<spec>#subdir` selects one skill inside a multi-skill repository.
 
 Installs **fail closed**: a missing `SKILL.md`, illegal boolean frontmatter, or an out-of-bounds name (one containing a path separator) is rejected, and writes **never** escape the skills root. A repository holding several skills must name one with `#subdir`, else it reports `SKILL_AMBIGUOUS`. This matches the “product vs user” boundary above: installing is a **deliberate user** action that writes only inside the workspace and never auto-`mkdir`s.
+
+## Learning loop (`propose_skill`)
+
+After a complex task, the model may call **`propose_skill`** with a class-level `SKILL.md` draft (When to Use / Procedure / Pitfalls — not a chat log). Face asks for confirmation (`Write skill` / `Reject`, detail shows the full markdown); **only after approval** does the Host validate and write under workspace `.agents/skills/<name>/` (same fail-closed path as `installSkillFromLocalDir`). After enough complex multi-tool turns, the next turn-start may inject a `context-fragment` nudge to call the tool (Hermes-style write_approval; this slice has **no** background review fork / curator).
 
 ## Capability attach (vs persona)
 

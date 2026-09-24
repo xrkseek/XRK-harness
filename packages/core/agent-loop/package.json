@@ -7,6 +7,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./invariant": {
+      "types": "./dist/invariant.d.ts",
+      "import": "./dist/invariant.js",
+      "default": "./dist/invariant.js"
     }
   },
   "files": [
@@ -19,6 +24,8 @@
     "@xrkseek/core-tools": "workspace:*",
     "@xrkseek/llm": "workspace:*",
     "@xrkseek/protocol": "workspace:*",
+    "@xrkseek/runtime-invariants": "workspace:*",
+    "@xrkseek/spill": "workspace:*",
     "@xrkseek/xrk-home-paths": "workspace:*"
   },
   "devDependencies": {

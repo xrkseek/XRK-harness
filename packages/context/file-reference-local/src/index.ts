@@ -39,6 +39,8 @@ export interface Config {
   maxEntries?: number
   /** Directory basenames never traversed or offered. */
   excludedDirectories?: string[]
+  /** Honor `.gitignore` inside a git working tree (default true). */
+  respectGitignore?: boolean
 }
 
 /** Local-filesystem owner of the file-reference discovery service. */
@@ -48,6 +50,7 @@ export class LocalFileReferenceService extends FileReferenceService {
     maxResults: z.number().step(1).min(1).default(DEFAULT_FILE_SEARCH_MAX_RESULTS),
     maxEntries: z.number().step(1).min(1).default(DEFAULT_FILE_SEARCH_MAX_ENTRIES),
     excludedDirectories: z.array(z.string()).default([...DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES]),
+    respectGitignore: z.boolean().default(true),
   })
 
   private readonly config: FileSearchConfig
@@ -61,6 +64,7 @@ export class LocalFileReferenceService extends FileReferenceService {
       maxResults: config.maxResults ?? DEFAULT_FILE_SEARCH_MAX_RESULTS,
       maxEntries: config.maxEntries ?? DEFAULT_FILE_SEARCH_MAX_ENTRIES,
       excludedDirectories: config.excludedDirectories ?? DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES,
+      respectGitignore: config.respectGitignore !== false,
     }
     validateConfig(this.config)
 

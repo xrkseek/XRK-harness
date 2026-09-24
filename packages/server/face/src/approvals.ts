@@ -2,6 +2,8 @@
  * Face human-approval broker — session events are the durable truth;
  * mux pushes DSH `approval/requested` (stable rpcId) settled by POST /api/respond
  * or `session.respondApproval`.
+ *
+ * Precedence (Codex-aligned): PermissionRequest hooks → human UI.
  */
 
 import { readSessionEvents, type SessionStore } from "@xrkseek/core-session";
@@ -12,6 +14,12 @@ import type {
 } from "@xrkseek/core-tools";
 import type { ApprovalDecisionSource } from "@xrkseek/protocol";
 import { effectiveApprovalPolicy } from "@xrkseek/protocol";
+import type { PermissionRequestDecision } from "@xrkseek/server-loader";
+import {
+  classifyApproval,
+  type ApprovalCategory,
+  type NetworkApprovalContext,
+} from "./approval-category.js";
 import type { FaceRpcReceipt, MuxFrame } from "./types.js";
 
 const ARGS_SUMMARY_MAX = 480;
@@ -32,6 +40,9 @@ export interface PendingApprovalItem {
   readonly reason: string;
   readonly askedAt: number;
   readonly argsSummary?: string;
+  /** UX category: ordinary tool · network · sandbox escalation. */
+  readonly category: ApprovalCategory;
+  readonly network?: NetworkApprovalContext;
 }
 
 export interface FaceApprovalHooks {
@@ -42,6 +53,14 @@ export interface FaceApprovalHooks {
     outcome: ApprovalOutcomeWire,
   ): void;
 }
+
+export type PermissionRequestGate = (args: {
+  readonly toolName: string;
+  readonly toolInput?: unknown;
+  readonly toolUseId?: string;
+  readonly category?: string;
+  readonly signal?: AbortSignal;
+}) => Promise<PermissionRequestDecision | undefined>;
 
 type Waiter = {
   readonly sessionId: string;
@@ -69,11 +88,17 @@ function mintRpcId(): string {
 export class FaceApprovalBroker {
   private readonly waiters = new Map<string, Waiter>();
   private readonly byRpcId = new Map<string, string>();
+  private permissionGate: PermissionRequestGate | undefined;
 
   constructor(
     private readonly store: SessionStore,
     private readonly hooks: FaceApprovalHooks,
   ) {}
+
+  /** Optional Claude/Codex PermissionRequest hooks (run before the human UI). */
+  setPermissionRequestGate(gate: PermissionRequestGate | undefined): void {
+    this.permissionGate = gate;
+  }
 
   listPending(sessionId?: string): readonly PendingApprovalItem[] {
     const out: PendingApprovalItem[] = [];
@@ -133,6 +158,30 @@ export class FaceApprovalBroker {
     if (effectiveApprovalPolicy(readSessionEvents(this.store, sessionId)) === "never") {
       return true;
     }
+
+    const classified = classifyApproval({
+      toolName: ctx.call.name,
+      args: ctx.args,
+      reason,
+    });
+
+    // Codex precedence: PermissionRequest hooks before the human reviewer.
+    if (this.permissionGate) {
+      try {
+        const hooked = await this.permissionGate({
+          toolName: ctx.call.name,
+          toolInput: ctx.args,
+          toolUseId: ctx.call.id,
+          category: classified.category,
+          ...(ctx.signal ? { signal: ctx.signal } : {}),
+        });
+        if (hooked?.action === "allow") return true;
+        if (hooked?.action === "deny") return false;
+      } catch {
+        // fail-open to human UI
+      }
+    }
+
     const approvalId = `apr_${randomUUID()}`;
     const rpcId = mintRpcId();
     const argsSummary = summarizeArgs(ctx.args);
@@ -145,6 +194,10 @@ export class FaceApprovalBroker {
       toolName: ctx.call.name,
       reason,
       askedAt,
+      category: classified.category,
+      ...(classified.network !== undefined
+        ? { network: classified.network }
+        : {}),
       ...(argsSummary !== undefined ? { argsSummary } : {}),
     };
 
@@ -155,6 +208,13 @@ export class FaceApprovalBroker {
       toolCallId: ctx.call.id,
       toolName: ctx.call.name,
       reason,
+      category: classified.category,
+      ...(classified.network
+        ? {
+            networkHost: classified.network.host,
+            networkProtocol: classified.network.protocol,
+          }
+        : {}),
       ...(argsSummary !== undefined ? { argsSummary } : {}),
     });
 
@@ -303,6 +363,13 @@ export function approvalRequestedFrame(
     toolName: item.toolName,
     callId: item.toolCallId,
     reason: item.reason,
+    category: item.category,
+    ...(item.network
+      ? {
+          networkHost: item.network.host,
+          networkProtocol: item.network.protocol,
+        }
+      : {}),
   };
 }
 

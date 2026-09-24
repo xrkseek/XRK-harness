@@ -412,20 +412,24 @@ export function apply(ctx: Context): void {
     children: {
       'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: CHAT_NODE_INJECT },
       'conversation.message.images': { kind: 'single', scope: 'session' },
+      'conversation.message.files': { kind: 'single', scope: 'session' },
     },
     store: chatStore,
     inject: (sessionId: SessionId, actions: BoundActions<typeof chatStore>): ChatViewInjected => {
       const conversation = concreteConversation(ctx)
       const scoped = scopedConversation(sessions, sessionId)
       return {
-        // Demoted: product no longer opens the right Detail column. File
-        // preview is Host `/sidebar/*` + community `xrkh-better-sidebar`
-        // wrapping `workspaces.openPath` (see docs/community-plugins.md).
+        // Demoted Detail column: Status lives in `details` via ui-plan.
+        // File preview: first-party `ctx.workbench` (Host `/sidebar/*` panel)
+        // or community `xrkh-better-sidebar` wrapping `workspaces.openPath`.
         openDetails: (_target) => {},
         fileMentions: owner => ctx.get('chatFileMentions')?.forClosing(owner),
         openFile: (path) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
-          return workspaces.openPath(resolveWorkspacePath(cwd, path))
+          const resolved = resolveWorkspacePath(cwd, path)
+          const workbench = ctx.get('workbench') as { openPath?(p: string): boolean } | undefined
+          if (workbench?.openPath?.(resolved) === true) return Promise.resolve()
+          return workspaces.openPath(resolved)
         },
         loadOlder: () => { void scoped.loadOlder() },
         loadThrough: (seq) => scoped.loadThrough(seq),
@@ -449,6 +453,14 @@ export function apply(ctx: Context): void {
             .catch(() => {
               // Fork or child-rename failure keeps the source view untouched.
             })
+        },
+        restoreAt: (seq) => {
+          const session = sessions.binding(sessionId)?.session
+          if (session === undefined) return
+          // Same slash path as InputBar command — Face executes /rollback (files only).
+          void session.command(`/rollback seq:${seq}`).catch(() => {
+            // Missing checkpoint / git → slash error text in the transcript.
+          })
         },
       }
     },

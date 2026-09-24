@@ -9,8 +9,21 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { FileReferenceCandidate } from '@xrkseek/xrk-file-reference/types'
+import {
+  isGitIgnored,
+  loadRootGitIgnoreLayers,
+  pushDirectoryGitIgnore,
+  workspaceHasGit,
+  type GitIgnoreLayer,
+} from './gitignore.js'
 
 export { activeAtToken, formatFileMention } from '@xrkseek/xrk-file-reference/grammar'
+export {
+  isGitIgnored,
+  loadRootGitIgnoreLayers,
+  pushDirectoryGitIgnore,
+  workspaceHasGit,
+} from './gitignore.js'
 
 /** Default maximum file and directory candidates rendered for one query. */
 export const DEFAULT_FILE_SEARCH_MAX_RESULTS = 20
@@ -27,6 +40,11 @@ export interface FileSearchConfig {
   maxEntries: number
   /** Directory basenames never traversed or offered. */
   excludedDirectories: readonly string[]
+  /**
+   * When true (default), honor `.gitignore` / `.git/info/exclude` inside a
+   * git working tree (Codex `respect_gitignore` + `require_git`).
+   */
+  respectGitignore?: boolean
 }
 
 interface IndexedPath extends FileReferenceCandidate {}
@@ -48,6 +66,7 @@ interface IndexGeneration {
  */
 export class WorkspaceFileSearch {
   private readonly excludedDirectories: ReadonlySet<string>
+  private readonly respectGitignore: boolean
   private generation: IndexGeneration | undefined
   private disposed = false
 
@@ -65,6 +84,7 @@ export class WorkspaceFileSearch {
       throw new Error('file search excludedDirectories entries must be non-empty directory basenames')
     }
     this.excludedDirectories = new Set(config.excludedDirectories)
+    this.respectGitignore = config.respectGitignore !== false
   }
 
   /**
@@ -122,7 +142,18 @@ export class WorkspaceFileSearch {
 
   private async scanWorkspace(signal: AbortSignal): Promise<IndexedPath[]> {
     const indexed: IndexedPath[] = []
-    const directories: { absolute: string; relative: string }[] = [{ absolute: this.root, relative: '' }]
+    const useGitIgnore =
+      this.respectGitignore && (await workspaceHasGit(this.root))
+    signal.throwIfAborted()
+    const rootLayers = useGitIgnore
+      ? await loadRootGitIgnoreLayers(this.root)
+      : []
+    signal.throwIfAborted()
+    const directories: {
+      absolute: string
+      relative: string
+      layers: readonly GitIgnoreLayer[]
+    }[] = [{ absolute: this.root, relative: '', layers: rootLayers }]
     for (let cursor = 0; cursor < directories.length && indexed.length < this.config.maxEntries; cursor += 1) {
       signal.throwIfAborted()
       const directory = directories[cursor]
@@ -130,15 +161,25 @@ export class WorkspaceFileSearch {
       if (directory === undefined) {
         throw new Error('file search selected a missing directory')
       }
+      const layers = useGitIgnore
+        ? await pushDirectoryGitIgnore(
+          directory.absolute,
+          directory.relative,
+          directory.layers,
+        )
+        : directory.layers
+      signal.throwIfAborted()
       const entries = await readDirectory(directory.absolute, signal)
       for (const entry of entries) {
         signal.throwIfAborted()
         const path = directory.relative === '' ? entry.name : `${directory.relative}/${entry.name}`
         if (entry.isDirectory()) {
           if (this.excludedDirectories.has(entry.name)) continue
+          if (useGitIgnore && isGitIgnored(path, true, layers)) continue
           indexed.push({ path, kind: 'directory' })
-          directories.push({ absolute: join(directory.absolute, entry.name), relative: path })
+          directories.push({ absolute: join(directory.absolute, entry.name), relative: path, layers })
         } else if (entry.isFile()) {
+          if (useGitIgnore && isGitIgnored(path, false, layers)) continue
           indexed.push({ path, kind: 'file' })
         }
         if (indexed.length >= this.config.maxEntries) break
@@ -155,15 +196,37 @@ export class WorkspaceFileSearch {
     if (displayDirectory.split('/').some(segment => this.excludedDirectories.has(segment))) return []
     const absolute = await resolveDisplayDirectory(this.root, displayDirectory, signal)
     if (absolute === undefined) return []
+    const useGitIgnore =
+      this.respectGitignore && (await workspaceHasGit(this.root))
+    signal.throwIfAborted()
+    let layers: readonly GitIgnoreLayer[] = []
+    if (useGitIgnore) {
+      layers = await loadRootGitIgnoreLayers(this.root)
+      const segments = displayDirectory.split('/').filter(Boolean)
+      let abs = this.root
+      let rel = ''
+      for (const segment of segments) {
+        abs = join(abs, segment)
+        rel = rel === '' ? segment : `${rel}/${segment}`
+        layers = await pushDirectoryGitIgnore(abs, rel, layers)
+        signal.throwIfAborted()
+      }
+      const dirRel = displayDirectory.replace(/\/$/, '')
+      if (dirRel.length > 0 && isGitIgnored(dirRel, true, layers)) return []
+    }
     const entries = await readDirectory(absolute, signal)
     const candidates: FileReferenceCandidate[] = []
     for (const entry of entries) {
       if (entry.name.startsWith('.') && !fragment.startsWith('.')) continue
       if (entry.isDirectory()) {
         if (this.excludedDirectories.has(entry.name)) continue
-        candidates.push({ path: `${displayDirectory}${entry.name}`, kind: 'directory' })
+        const path = `${displayDirectory}${entry.name}`
+        if (useGitIgnore && isGitIgnored(path, true, layers)) continue
+        candidates.push({ path, kind: 'directory' })
       } else if (entry.isFile()) {
-        candidates.push({ path: `${displayDirectory}${entry.name}`, kind: 'file' })
+        const path = `${displayDirectory}${entry.name}`
+        if (useGitIgnore && isGitIgnored(path, false, layers)) continue
+        candidates.push({ path, kind: 'file' })
       }
     }
     return rankCandidates(candidates, fragment, this.config.maxResults)

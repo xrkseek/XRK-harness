@@ -8,6 +8,7 @@
   "include": ["src/**/*.ts"],
   "references": [
     { "path": "../../attachment" },
+    { "path": "../../checkpoint" },
     { "path": "../../core/agent" },
     { "path": "../../core/session" },
     { "path": "../../core/tools" },
@@ -22,6 +23,7 @@
     { "path": "../../context/file-reference" },
     { "path": "../../context/file-reference-local" },
     { "path": "../../session/face-session-query" },
-    { "path": "../../context/session-reference" }
+    { "path": "../../context/session-reference" },
+    { "path": "../../util/secrets" }
   ]
 }

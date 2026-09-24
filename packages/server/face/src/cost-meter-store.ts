@@ -477,6 +477,30 @@ export function saveLedger(ledger: LedgerFile): void {
   writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
 }
 
+function mergeBucketMaps(
+  target: Record<string, CostMeterBuckets>,
+  source: Record<string, CostMeterBuckets>,
+): void {
+  for (const [key, buckets] of Object.entries(source)) {
+    const cur = target[key] ?? {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      reasoning: 0,
+      cost: 0,
+    };
+    target[key] = {
+      input: cur.input + buckets.input,
+      output: cur.output + buckets.output,
+      cacheRead: cur.cacheRead + buckets.cacheRead,
+      cacheWrite: cur.cacheWrite + buckets.cacheWrite,
+      reasoning: cur.reasoning + buckets.reasoning,
+      cost: cur.cost + buckets.cost,
+    };
+  }
+}
+
 function aggregateDays(days: CostMeterDay[]): CostMeterDay {
   const out = emptyDay("");
   for (const day of days) {
@@ -487,6 +511,8 @@ function aggregateDays(days: CostMeterDay[]): CostMeterDay {
     out.reasoning += day.reasoning;
     out.calls += day.calls;
     out.cost += day.cost;
+    mergeBucketMaps(out.byModel, day.byModel);
+    mergeBucketMaps(out.byProviderModel, day.byProviderModel);
   }
   return out;
 }

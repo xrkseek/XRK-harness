@@ -33,6 +33,7 @@
         "@xrkseek/client-locale",
         "@xrkseek/client-runtime",
         "@xrkseek/client-ui-conversation",
+        "@xrkseek/client-ui-settings",
         "@xrkseek/client-ui-sidebar"
       ],
       "platform": "web"
@@ -51,6 +52,7 @@
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
+    "@xrkseek/client-ui-settings": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/cordis": "workspace:^",
@@ -63,6 +65,7 @@
     "@xrkseek/client-test-runtime": "workspace:^",
     "@xrkseek/client-ui-conversation": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
+    "@xrkseek/client-ui-settings": "workspace:^",
     "@xrkseek/client-ui-sidebar": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",

@@ -3,6 +3,11 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { resolveXrkHome } from "@xrkseek/server-config";
+import { probeSandboxEnvironment } from "@xrkseek/exec-sandbox";
+import {
+  parseOutboundAllowlistHosts,
+} from "@xrkseek/exec-web";
+import { describeVoiceAccess } from "@xrkseek/exec-voice";
 import {
   PRODUCT_SHELL_BUILD_HINT,
   harnessAppsRoot,
@@ -156,6 +161,35 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
     detail: communityEnvSummary(),
   });
 
+  const sandboxProbe = probeSandboxEnvironment({ workspaceRoot: workspace });
+  for (const row of sandboxProbe.checks) {
+    checks.push({
+      name: row.name,
+      ok: row.ok,
+      detail: row.detail,
+    });
+  }
+
+  const allowHosts = parseOutboundAllowlistHosts(
+    process.env.XRK_WEB_FETCH_ALLOWLIST,
+  );
+  checks.push({
+    name: "web-fetch-allowlist",
+    ok: true,
+    detail:
+      allowHosts.length === 0
+        ? "open (XRK_WEB_FETCH_ALLOWLIST unset; private hosts still blocked; denials audited when fetch runs)"
+        : `allowlist (${allowHosts.length}): ${allowHosts.slice(0, 12).join(", ")}${allowHosts.length > 12 ? ", …" : ""}`,
+  });
+
+  const voice = describeVoiceAccess(process.env);
+  checks.push({
+    name: "voice",
+    // Missing key with openai/env enabled is a real misconfig; off is fine.
+    ok: voice.kind !== "openai-missing-key",
+    detail: voice.summary,
+  });
+
   const llm = Boolean(process.env.XRK_LLM_PRESET?.trim());
   checks.push({
     name: "llm-preset",
@@ -176,7 +210,11 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
           c.name !== "user-home-seeds" &&
           c.name !== "community-plugins" &&
           c.name !== "community-env" &&
-          c.name !== "dsh-compat-host",
+          c.name !== "dsh-compat-host" &&
+          c.name !== "web-fetch-allowlist" &&
+          c.name !== "voice" &&
+          // sandbox-backend is always ok; sandbox-helper fails closed when backend needs a helper
+          c.name !== "sandbox-backend",
       )
       .every((c) => c.ok),
     checks,

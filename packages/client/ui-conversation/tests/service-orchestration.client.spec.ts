@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 // ConversationController scope addressing over the runtime's real scope tag:
 // TestSessions mints tagged scopes through the production createScope, so the
 // service's scopeOf/binding path runs against production resolution (no local
@@ -183,7 +183,7 @@ describe('InputHub queue steering (empty-draft accelerated Enter)', () => {
     b.shell.steerQueue()
     await vi.waitFor(() => { expect(b.updateQueue).toHaveBeenCalledTimes(1) })
     expect(b.shell.notices.getSnapshot()).toEqual(
-      expect.objectContaining({ level: 'info', text: '插话窗口已关闭，消息保留在排队中' }),
+      expect.objectContaining({ level: 'info', text: '插队窗口已关闭，消息保留在排队中' }),
     )
     await b.runtime.dispose()
   })
@@ -217,7 +217,7 @@ describe('InputHub queue steering (empty-draft accelerated Enter)', () => {
     b.shell.steerQueue()
     await vi.waitFor(() => {
       expect(b.shell.notices.getSnapshot()).toEqual(
-        expect.objectContaining({ level: 'error', text: '插话发送失败，请重试。' }),
+        expect.objectContaining({ level: 'error', text: '插队失败，请重试。' }),
       )
     })
     expect(b.updateQueue).toHaveBeenCalledTimes(1)

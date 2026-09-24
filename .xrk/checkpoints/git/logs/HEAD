@@ -1,0 +1,5 @@
+0000000000000000000000000000000000000000 a6d0004e4b30ecdf37ea375641d59d60948c9aee XRK Checkpoint <checkpoint@xrk.invalid> 1790217561 +0800	commit (initial): xrk checkpoint session=sess_muexb7c8_ajuiuu seq=1 label=pre-turn
+a6d0004e4b30ecdf37ea375641d59d60948c9aee 91a8f8353a459228d7ed04c868fe18d60b584b62 XRK Checkpoint <checkpoint@xrk.invalid> 1790217614 +0800	commit: xrk checkpoint session=sess_muexcfmv_codkvv seq=1 label=pre-turn
+91a8f8353a459228d7ed04c868fe18d60b584b62 c37febf113248a6adf68207e571d2529e6321ce9 XRK Checkpoint <checkpoint@xrk.invalid> 1790217769 +0800	commit: xrk checkpoint session=sess_muexfr4r_r3onkl seq=1 label=pre-turn
+c37febf113248a6adf68207e571d2529e6321ce9 d82514019dca8d7b8ce0db6456049abbed0a1968 XRK Checkpoint <checkpoint@xrk.invalid> 1790217775 +0800	commit: xrk checkpoint session=sess_muexfvfn_oy4n79 seq=1 label=pre-turn
+d82514019dca8d7b8ce0db6456049abbed0a1968 a6b5dac3d64c98d3f9336c7f4cffa292b684bfe6 XRK Checkpoint <checkpoint@xrk.invalid> 1790220572 +0800	commit: xrk checkpoint session=sess_muez3tza_3exl5n seq=1 label=pre-turn

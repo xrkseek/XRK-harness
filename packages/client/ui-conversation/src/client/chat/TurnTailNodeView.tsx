@@ -16,7 +16,7 @@ type TurnTailNodeViewProps = ChatNodeViewProps<'turn-tail'>
  * (stricter than DSH, matches product: actions appear when the run finishes).
  */
 export const TurnTailNodeView = memo(function TurnTailNodeView({
-  node, openFile, forkAt, renderSlot, renderSlotChain, t, useSession,
+  node, openFile, forkAt, restoreAt, renderSlot, renderSlotChain, t, useSession,
 }: TurnTailNodeViewProps) {
   const data = node.data
   const hasLaterChatNode = useSession(snapshot =>
@@ -40,6 +40,7 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   const assistantActions = !showMessageActions || messageId === undefined
     ? null
     : renderSlot('conversation.chat.assistant-actions', { messageId })
+  const actionsUnavailable = data.branchUnavailable || hasLaterChatNode
   return (
     <div className={css.root} data-turn-tail={data.turn} data-time-hover-root>
       {tail}
@@ -49,7 +50,8 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
           time={closing.time}
           clock="end"
           onBranch={() => { forkAt(closing.finalNode.seq) }}
-          branchUnavailable={data.branchUnavailable || hasLaterChatNode}
+          onRestore={() => { restoreAt(closing.finalNode.seq) }}
+          branchUnavailable={actionsUnavailable}
           className={css.actions}
           extraActions={assistantActions}
           usageAction={data.tokenUsage === undefined && runMs === undefined

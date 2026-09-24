@@ -289,10 +289,84 @@ describe("contextTimeline projection", () => {
       recent: "",
     });
     const view = unit.wire!.view(state);
-    expect(view.events.some((e) => e.kind === "compaction")).toBe(true);
+    const compaction = view.events.find((e) => e.kind === "compaction");
+    expect(compaction).toMatchObject({
+      kind: "compaction",
+      reason: "manual",
+      count: 1,
+    });
+    expect(
+      (compaction as { shadowedTokenCount?: number } | undefined)
+        ?.shadowedTokenCount,
+    ).toBeUndefined();
     expect(view.nodes).toHaveLength(1);
     expect(view.nodes[0]!.form).toBe("snapshot");
     expect(view.archive.length).toBeGreaterThan(0);
+  });
+
+  it("records inject source · shadowed tokens · spill on prune", () => {
+    const unit = createContextTimelineProjectionUnit();
+    let state = unit.init();
+    state = unit.apply(state, {
+      type: "turn/start",
+      ts: 1,
+      turnId: "t1",
+    });
+    state = unit.apply(state, {
+      type: "user/message",
+      ts: 2,
+      turnId: "t1",
+      content: "skill catalog body",
+      source: {
+        kind: "skill-catalog",
+        form: "catalog",
+        entries: [{ name: "demo", description: "d" }],
+      },
+    });
+    state = unit.apply(state, {
+      type: "tool/result",
+      ts: 3,
+      turnId: "t1",
+      stepId: "s1",
+      result: {
+        toolCallId: "tc1",
+        name: "bash",
+        content:
+          "Full formatted result stored at: /home/u/.xrk/spill/tool-outputs/s_tc1.txt. Retrieve with read_file or grep on that path.\n\nhead…",
+        meta: { xrkPrunePreviousSurfaceTokens: 640 },
+      },
+    });
+    state = unit.apply(state, {
+      type: "context/compaction",
+      ts: 4,
+      reason: "overflow",
+      summary: "## Summary\nok",
+      recent: "",
+      shadowedTokenCount: 400,
+    });
+    const view = unit.wire!.view(state);
+    expect(view.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "inject",
+          source: "skill-catalog",
+          form: "catalog",
+          name: "catalog",
+        }),
+        expect.objectContaining({
+          kind: "prune",
+          tool: "bash",
+          prevTokens: 640,
+          spill: true,
+          spillPath: "/home/u/.xrk/spill/tool-outputs/s_tc1.txt",
+        }),
+        expect.objectContaining({
+          kind: "compaction",
+          reason: "overflow",
+          shadowedTokenCount: 400,
+        }),
+      ]),
+    );
   });
 });
 

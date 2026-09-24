@@ -231,6 +231,63 @@ describe("Face workspace U2", () => {
           .archivedSessionIds,
       ).toContain(sessionId);
     }
+
+    // Archive keeps membership: unarchive restores the workspace slot.
+    const listedAfterArchive = await dispatchFaceMethod(
+      runtime,
+      "workspace.list",
+      "wl-arch",
+      {},
+    );
+    expect(listedAfterArchive.result.ok).toBe(true);
+    if (listedAfterArchive.result.ok) {
+      const items = (
+        listedAfterArchive.result.value as {
+          items: { sessionIds: string[] }[];
+          archivedSessionIds: string[];
+        }
+      );
+      expect(items.archivedSessionIds).toContain(sessionId);
+      expect(items.items.some((w) => w.sessionIds.includes(sessionId))).toBe(
+        false,
+      );
+    }
+
+    const unarchived = await dispatchFaceMethod(
+      runtime,
+      "workspace.unarchiveSession",
+      "wu1",
+      { sessionId },
+    );
+    expect(unarchived.result.ok).toBe(true);
+    if (unarchived.result.ok) {
+      expect(
+        (unarchived.result.value as { archivedSessionIds: string[] })
+          .archivedSessionIds,
+      ).not.toContain(sessionId);
+    }
+
+    const listedAfterUnarchive = await dispatchFaceMethod(
+      runtime,
+      "workspace.list",
+      "wl-unar",
+      {},
+    );
+    expect(listedAfterUnarchive.result.ok).toBe(true);
+    if (listedAfterUnarchive.result.ok) {
+      const items = (
+        listedAfterUnarchive.result.value as {
+          items: { sessionIds: string[]; workspaceId: string }[];
+        }
+      );
+      expect(
+        items.items.some(
+          (w) =>
+            w.workspaceId === ws.workspaceId &&
+            w.sessionIds.includes(sessionId),
+        ),
+      ).toBe(true);
+    }
   });
 
   it("workspace.delete · insertBefore · insertSessionBefore", async () => {

@@ -16,6 +16,11 @@ describe("cli doctor", () => {
     expect(names["xrk-home"]).toBeDefined();
     expect(names["user-home-seeds"]).toBeDefined();
     expect(names["community-plugins"]).toBeDefined();
+    expect(names["sandbox-backend"]).toBeDefined();
+    expect(names["sandbox-helper"]).toBeDefined();
+    expect(names["web-fetch-allowlist"]).toBeDefined();
+    expect(names.voice).toBeDefined();
+    expect(names.voice?.detail).toMatch(/off|memory|openai/i);
     expect(result.ok).toBe(true);
   });
 
@@ -34,5 +39,12 @@ describe("cli doctor", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it("includes a voice readiness row", async () => {
+    const result = await runDoctor(process.cwd());
+    const voice = result.checks.find((c) => c.name === "voice");
+    expect(voice).toBeDefined();
+    expect(voice?.detail).toMatch(/off|memory|openai/i);
   });
 });

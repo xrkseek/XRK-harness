@@ -26,6 +26,16 @@ export {
   type McpDeviceTokenSet,
 } from "./oauth-device.js";
 export {
+  logoutMcpOAuthToken,
+  mcpOAuthTokenDir,
+  mcpOAuthTokenFile,
+  persistMcpOAuthTokens,
+  readMcpOAuthTokenStatus,
+  restrictMcpOAuthTokenFile,
+  summarizeMcpOAuthTokens,
+  type McpOAuthTokenStatus,
+} from "./oauth-product.js";
+export {
   McpOAuthDiscoveryError,
   authorizationServerMetadataUrls,
   discoverAuthorizationServerMetadata,

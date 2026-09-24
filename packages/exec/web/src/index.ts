@@ -27,6 +27,20 @@ export {
   isSameOrigin,
   mergeTimeout,
 } from "./url-policy.js";
+export {
+  createOutboundAllowlist,
+  outboundAllowlistFromEnv,
+  parseOutboundAllowlistHosts,
+  getOutboundAllowlistAuditLog,
+  clearOutboundAllowlistAuditLog,
+  setOutboundAllowlistAuditObserver,
+  type OutboundAllowlist,
+  type OutboundAllowlistAuditEvent,
+  type OutboundAllowlistAuditObserver,
+  type OutboundAllowlistConfig,
+  type OutboundAllowlistDecision,
+  type OutboundAllowlistSource,
+} from "./outbound-allowlist.js";
 export { capText, htmlToText } from "./html-text.js";
 export {
   DEFAULT_HTTP_FETCH_LIMITS,
@@ -103,10 +117,20 @@ export {
   connectCdpWebSocket,
   createBrowserSession,
   createCdpBrowserSession,
+  resolveBrowserCdpUrl,
   resolveCdpDebuggerUrl,
+  type BrowserProductConfig,
+  type BrowserProductMode,
   type CdpCaller,
 } from "./browser-cdp.js";
-export { createBrowserTools } from "./browser-tools.js";
+export {
+  BROWSER_ERROR,
+  createBrowserTools,
+} from "./browser-tools.js";
+export {
+  createBrowserRuntimeRegistry,
+  type BrowserRuntimeRegistry,
+} from "./browser-runtime-registry.js";
 export {
   extractBrowserElements,
   formatBrowserSnapshot,
@@ -131,9 +155,10 @@ export function createDefaultWebAccess(
 ): DefaultWebAccess {
   const searchConfig =
     options.search ?? searchConfigFromEnv(options.env ?? process.env);
-  const fetchImpl = createHttpFetchProvider(
-    options.fetch ? { fetch: options.fetch } : {},
-  );
+  const fetchImpl = createHttpFetchProvider({
+    ...(options.fetch ? { fetch: options.fetch } : {}),
+    env: options.env ?? process.env,
+  });
   const search = createSearchFromConfig({
     config: searchConfig,
     ...(options.fetch ? { fetch: options.fetch } : {}),

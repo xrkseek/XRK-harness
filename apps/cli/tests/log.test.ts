@@ -39,6 +39,17 @@ describe("cli log", () => {
     expect(err.some((l) => /warn\s+careful/.test(l))).toBe(true);
   });
 
+  it("redacts secret-shaped tokens in log lines", () => {
+    const err: string[] = [];
+    vi.spyOn(process.stderr, "write").mockImplementation(((chunk: string | Uint8Array) => {
+      err.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write);
+    createCliLogger("warn").warn("provider rejected sk-abcdefghijklmnopqrst");
+    expect(err.join("")).toMatch(/REDACTED_SECRET/);
+    expect(err.join("")).not.toContain("sk-abcdefghijklmnopqrst");
+  });
+
   it("respects silent level", () => {
     const spy = vi.spyOn(process.stdout, "write");
     createCliLogger("silent").info("nope");

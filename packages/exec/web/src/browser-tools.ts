@@ -1,6 +1,6 @@
 import type { ToolDefinition, ToolResultContent } from "@xrkseek/core-tools";
 import type { BrowserSession } from "./browser-session.js";
-import { isWebError } from "./types.js";
+import { WebError, isWebError } from "./types.js";
 
 /** Enough of an image ref for the vision tool result. Store fills the rest. */
 export interface BrowserScreenshotRef {
@@ -19,11 +19,39 @@ export interface BrowserToolsOptions {
   ) => Promise<BrowserScreenshotRef>;
 }
 
+/** Stable machine-readable failure classes for browser_* tool results. */
+export const BROWSER_ERROR = {
+  NO_PAGE: "WEB_BROWSER_NO_PAGE",
+  NO_GRAPHICS: "WEB_BROWSER_NO_GRAPHICS",
+  NO_ATTACHMENTS: "WEB_BROWSER_NO_ATTACHMENTS",
+  BAD_REF: "WEB_BROWSER_BAD_REF",
+  CDP: "WEB_BROWSER_CDP",
+  INVALID_ARGS: "WEB_BROWSER_INVALID_ARGS",
+} as const;
+
 function fail(err: unknown): ToolResultContent {
-  const message = isWebError(err)
-    ? `Error: ${err.message}`
-    : `Error: ${err instanceof Error ? err.message : String(err)}`;
-  return { content: message, isError: true };
+  if (isWebError(err)) {
+    return {
+      content: `Error: ${err.message}`,
+      isError: true,
+      error: { name: "WebError", code: err.code },
+    };
+  }
+  const message =
+    err instanceof Error ? err.message : String(err);
+  return {
+    content: `Error: ${message}`,
+    isError: true,
+    error: { name: "WebError", code: BROWSER_ERROR.CDP },
+  };
+}
+
+function failArgs(message: string): ToolResultContent {
+  return {
+    content: `Error: ${message}`,
+    isError: true,
+    error: { name: "WebError", code: BROWSER_ERROR.INVALID_ARGS },
+  };
 }
 
 /**
@@ -50,7 +78,7 @@ export function createBrowserTools(
     async execute(args, signal) {
       const url = String(args?.url ?? "").trim();
       if (!url) {
-        return { content: "Error: url must be a non-empty string", isError: true };
+        return failArgs("url must be a non-empty string");
       }
       try {
         const snap = await session.open(url, signal);
@@ -121,13 +149,10 @@ export function createBrowserTools(
       const ref = String(args?.ref ?? "").trim();
       const action = String(args?.action ?? "").trim().toLowerCase();
       if (!ref) {
-        return { content: "Error: ref is required", isError: true };
+        return failArgs("ref is required");
       }
       if (action !== "click" && action !== "type") {
-        return {
-          content: "Error: action must be click or type",
-          isError: true,
-        };
+        return failArgs("action must be click or type");
       }
       try {
         const result = await session.act(
@@ -172,11 +197,12 @@ export function createBrowserTools(
       }
       const save = options.saveScreenshot;
       if (!save) {
-        return {
-          content:
-            "Error: screenshot captured but no attachment store is wired, so vision cannot see it.",
-          isError: true,
-        };
+        return fail(
+          new WebError(
+            "screenshot captured but no attachment store is wired, so vision cannot see it.",
+            BROWSER_ERROR.NO_ATTACHMENTS,
+          ),
+        );
       }
       try {
         const ref = await save(png);

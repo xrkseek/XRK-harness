@@ -1,0 +1,27 @@
+{
+  "name": "@xrkseek/spill",
+  "version": "0.1.0",
+  "description": "Spill locator contract, local store, and tool-result spill policy (storage ≠ policy)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "dependencies": {
+    "@xrkseek/xrk-home-paths": "workspace:*"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/spill"
+  },
+  "private": true
+}

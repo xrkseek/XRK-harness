@@ -9,6 +9,7 @@
   "references": [
     { "path": "../../packages/attachment" },
     { "path": "../../packages/code-runtime" },
+    { "path": "../../packages/context/context-fragments" },
     { "path": "../../packages/core/agent" },
     { "path": "../../packages/core/session" },
     { "path": "../../packages/core/system-prompt" },

@@ -29,6 +29,7 @@ export {
   formatAxSnapshot,
   formatWindowsList,
 } from "./format.js";
+export { mapKeysToSendKeys } from "./keys.js";
 export {
   createBackgroundInputProvider,
   backgroundInputInstalled,
@@ -53,8 +54,21 @@ export {
   type CreateComputerUseToolsOptions,
 } from "./tools.js";
 
+/** Face `computer-use` product modes (Settings SoT). */
+export type ComputerUseProductMode = "off" | "uia" | "background";
+
+/** Face `computer-use` product shape. */
+export interface ComputerUseProductConfig {
+  readonly mode: ComputerUseProductMode;
+}
+
 export interface DefaultComputerUseAccessOptions {
   readonly env?: NodeJS.ProcessEnv;
+  /**
+   * Face Settings product. Used when `XRK_COMPUTER_USE` is unset
+   * (env remains the CI bypass).
+   */
+  readonly product?: ComputerUseProductConfig;
   /** Force a Provider (tests / Host inject). */
   readonly service?: ComputerUseService;
 }
@@ -65,19 +79,26 @@ export interface DefaultComputerUseAccess {
   readonly unavailableMessage: string;
 }
 
+function modeFromEnvFlag(flag: string): ComputerUseProductMode | "memory" {
+  const raw = flag.trim().toLowerCase();
+  if (raw === "memory") return "memory";
+  if (raw === "background") return "background";
+  if (raw === "1" || raw === "uia") return "uia";
+  return "off";
+}
+
 /**
  * Resolve a desktop computer-use Provider.
  * - Injected `service` wins (name `memory` unless the service id is uia/background).
- * - `XRK_COMPUTER_USE=memory` → in-memory Provider.
- * - `XRK_COMPUTER_USE=1` on Windows → UI Automation Provider.
- * - `XRK_COMPUTER_USE=background` → background input. Missing helper → unavailable.
+ * - Non-empty `XRK_COMPUTER_USE` is CI bypass over Face `product`.
+ * - Product / env: `off` · `uia` (`1`) · `background` · `memory` (env-only).
  * - Else no service; tools stay registered and fail honestly.
  */
 export function createDefaultComputerUseAccess(
   options: DefaultComputerUseAccessOptions = {},
 ): DefaultComputerUseAccess {
   const env = options.env ?? process.env;
-  const unavailableMessage = computerUseUnavailableMessage(env);
+  const unavailableMessage = computerUseUnavailableMessage(env, options.product);
   const registry = createComputerUseProviderRegistry();
   if (options.service) {
     const id = options.service.providerId;
@@ -86,8 +107,14 @@ export function createDefaultComputerUseAccess(
     registry.register(name);
     return { service: options.service, providerName: name, unavailableMessage };
   }
-  const flag = String(env.XRK_COMPUTER_USE ?? "").trim().toLowerCase();
-  if (flag === "memory") {
+
+  const envRaw = String(env.XRK_COMPUTER_USE ?? "").trim();
+  const envBypass = envRaw !== "";
+  const resolved = envBypass
+    ? modeFromEnvFlag(envRaw)
+    : (options.product?.mode ?? "off");
+
+  if (resolved === "memory") {
     registry.register("memory");
     return {
       service: createMemoryComputerUseProvider(),
@@ -95,7 +122,7 @@ export function createDefaultComputerUseAccess(
       unavailableMessage,
     };
   }
-  if (flag === "background") {
+  if (resolved === "background") {
     registry.register("background");
     const command = env.XRK_COMPUTER_USE_BACKGROUND?.trim();
     const installed = backgroundInputInstalled(env);
@@ -109,7 +136,7 @@ export function createDefaultComputerUseAccess(
         : "Error: background input backend unavailable (not installed).",
     };
   }
-  if (flag === "1" && process.platform === "win32") {
+  if (resolved === "uia" && process.platform === "win32") {
     registry.register("uia");
     return {
       service: createWindowsUiAutomationProvider(),

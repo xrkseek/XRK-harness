@@ -62,15 +62,40 @@ function ApprovalFlow({ pending, command, t }: {
     setAnswered(true)
     void pending.answer(outcome).catch(() => { setAnswered(false) })
   }
+  const category = pending.category
+  const headline = pending.reason
+    ?? (category === 'network'
+      ? t('approval.network', {
+        host: pending.networkHost ?? pending.toolName,
+        protocol: pending.networkProtocol ?? 'https',
+      })
+      : category === 'escalation'
+        ? t('approval.escalationDetail', { toolName: pending.toolName })
+        : t('approval.escalation', { toolName: pending.toolName }))
+  const badge =
+    category === 'network'
+      ? t('approval.badge.network')
+      : category === 'escalation'
+        ? t('approval.badge.escalation')
+        : t('approval.badge.tool')
   return (
-    <div className={css.root} data-approval-key={pending.key}>
+    <div className={css.root} data-approval-key={pending.key} data-approval-category={category ?? 'tool'}>
       <div className={css.card}>
-        <div className={css.strip}><span className={css.dot} />{t('approval.waiting')}</div>
+        <div className={css.strip}>
+          <span className={css.dot} />
+          {t('approval.waiting')}
+          <span className={css.badge}>{badge}</span>
+        </div>
         {/* Tab stop: the region scrolls once the command passes the cap and
             holds nothing focusable of its own, so without one a keyboard-only
             user cannot reach the command's tail before answering. */}
         <div className={css.body} data-approval-scroll="" tabIndex={0} role="group" aria-label={t('approval.detail.aria')}>
-          <div className={css.headline}>{pending.reason ?? t('approval.escalation', { toolName: pending.toolName })}</div>
+          <div className={css.headline}>{headline}</div>
+          {category === 'network' && pending.networkHost !== undefined && (
+            <div className={css.command}>
+              {pending.networkProtocol ?? 'https'}://{pending.networkHost}
+            </div>
+          )}
           {command !== undefined && <div className={css.command}>{command}</div>}
         </div>
         <div className={css.actionRow}>

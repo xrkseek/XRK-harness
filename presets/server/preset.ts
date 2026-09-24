@@ -47,6 +47,7 @@ export function createServerAgentFactory(
     resolveImage,
     ptyService,
     shellJobs,
+    browserRuntime,
     cronScheduler,
     resolveLlm,
     attachments,
@@ -64,6 +65,18 @@ export function createServerAgentFactory(
     fs,
     remoteExecution,
     codeRuntime,
+    sessionTelemetry,
+    sandbox,
+    computerUseProduct,
+    computerUseEnv,
+    browserProduct,
+    voiceProduct,
+    voiceEnv,
+    imageGenProduct,
+    imageGenEnv,
+    videoGenProduct,
+    videoGenEnv,
+    curatedMemory,
   }) => {
     const llm =
       resolveLlm?.(sessionId) ??
@@ -99,6 +112,7 @@ export function createServerAgentFactory(
       ...(attachments ? { attachments } : {}),
       ...(routeAllowsImage ? { routeAllowsImage } : {}),
       ...(shellJobs ? { shell: shellJobs } : {}),
+      ...(browserRuntime ? { browserRuntime } : {}),
       ...(cronScheduler ? { cronScheduler } : {}),
       ...(maxParallelToolCalls !== undefined ? { maxParallelToolCalls } : {}),
       ...(maxSteps !== undefined ? { maxSteps } : {}),
@@ -112,6 +126,22 @@ export function createServerAgentFactory(
         : {}),
       ...(webSearch ? { webSearch } : {}),
       ...(workspaceInject !== undefined ? { workspaceInject } : {}),
+      ...(sessionTelemetry
+        ? { sessionTelemetry: { product: sessionTelemetry } }
+        : {}),
+      ...(sandbox ? { sandboxProduct: sandbox } : {}),
+      ...(computerUseProduct
+        ? { computerUseProduct }
+        : {}),
+      ...(computerUseEnv ? { computerUseEnv } : {}),
+      ...(browserProduct ? { browserProduct } : {}),
+      ...(voiceProduct ? { voiceProduct } : {}),
+      ...(voiceEnv ? { voiceEnv } : {}),
+      ...(imageGenProduct ? { imageGenProduct } : {}),
+      ...(imageGenEnv ? { imageGenEnv } : {}),
+      ...(videoGenProduct ? { videoGenProduct } : {}),
+      ...(videoGenEnv ? { videoGenEnv } : {}),
+      ...(curatedMemory === false ? { curatedMemory: false as const } : {}),
     });
     return composition.createAgent();
   };

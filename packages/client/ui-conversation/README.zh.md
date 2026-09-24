@@ -56,12 +56,13 @@ Host 带 placement 的 `session/queue` 快照也会携带待处理 steering。Qu
 
 ## 已知限制与暂缓事项
 
+- **不拆独立 `ui-chat` 包**：聊天节点渲染、会话骨架与 composer 仍合在本包（`chat/` · `skeleton/` · `input/`）。DSH 式分包属架构差、非用户可见缺口；仅当维护成本过高再做机械拆分。
 - **统计行的回退折算只覆盖窗口内消息流**：未组合 `sessionStats` 投影单元的装配中，所有数字由快照的 assistant `timing` 与工具 call/result 配对折算，落在已加载事件窗口之外的节点（更早的历史）不计入，数字随加载页数增长。
-- **右列 Detail 面板已降级** — `ChatViewInjected.openDetails` 为空操作；不再注册 `DetailsPanel` / `conversation.details.tool`。文件预览走 Host `/sidebar/*` + 社区 **`xrkh-better-sidebar`** 拦截 `workspaces.openPath`。布局仍保留默认关闭的 `details` 轨道；工具 inspect 仍走 trajectory 视图。
-- **assistant 逐消息分页是预留 slot**：设计中已有图稿，尚未实现。已定稿的内容 IconActions 行（复制／时钟／分支）只挂在每个已结束轮次中最后一条带 text 内容的 assistant 下；轮次中间的叙述、纯 Think 节点，以及仍在产出步骤的轮次里的所有节点都不带 chrome。除非该消息同时也是已完成轮次的最后一个 transcript 节点，否则分支保持禁用；启用后，它会 fork 到该轮次末尾，在 client 端递增继承标题并打开子会话。fork 或改名失败时源会话保持选中（[决策](../../../.agents/notes/implemented/bug-fix/2026-08-02-message-fork-actions-require-completed-turn-tail.zh.md)）。
+- **右列 Detail 面板已降级** — `ChatViewInjected.openDetails` 为空操作；不再注册 `DetailsPanel` / `conversation.details.tool`。文件预览：首方 `ctx.workbench`（`@xrkseek/client-ui-workbench`）或社区 **`xrkh-better-sidebar`** 拦截 `workspaces.openPath`。布局仍保留默认关闭的 `details` 轨道（Status）；工具 inspect 仍走 trajectory 视图。
+- **assistant 逐消息分页是预留 slot**：设计中已有图稿，尚未实现。会话历史分页（`loadOlder` / `loadThrough` + ChatView「加载更早」）已能跑。已定稿的内容 IconActions 行（复制／时钟／分支）只挂在每个已结束轮次中最后一条带 text 内容的 assistant 下；轮次中间的叙述、纯 Think 节点，以及仍在产出步骤的轮次里的所有节点都不带 chrome。除非该消息同时也是已完成轮次的最后一个 transcript 节点，否则分支保持禁用；启用后，它会 fork 到该轮次末尾，在 client 端递增继承标题并打开子会话。fork 或改名失败时源会话保持选中（[决策](../../../.agents/notes/implemented/bug-fix/2026-08-02-message-fork-actions-require-completed-turn-tail.zh.md)）。
 - **已发送的 user 消息无法编辑**：user 气泡保留时钟和复制；分支只存在于 assistant 回答之下（[决策](../../../.agents/notes/implemented/simplification/2026-08-06-user-bubbles-drop-the-branch-action.zh.md)）。编辑功能要与其背后的能力一起回归：既需要针对已定稿 user 消息的 client 变更，也需要 host 侧对已经消费过它的轮次给出行为（[决策](../../../.agents/notes/implemented/simplification/2026-07-31-drop-user-message-edit-stub.zh.md)）。
 - **others 工具行的闪光图标是手绘近似版本**：无法在本地导出设计字形的矢量几何；等到存在精确导出后再将其提升到 ui-primitives。
-- **审批面板的「始终允许此类」暂缓**：持久授权需要授权存储设计；今天只能回答允许一次／拒绝。
+- **审批面板的「始终允许此类」暂缓**：Face 结果仅允许一次／拒绝；按种类持久授权需 grant-key 存储 + 协议扩展后再开 UI（Hermes/Codex 有 ACL/remember；DSH 同样暂缓）。
 - **TodoPanel 将过长条目截成单行省略号**：figma 条没有换行或展开入口，完整文本无法在行内读完。
 - **Queue 编辑仅支持文本**：包含非文本块的行仍显示扁平化预览，但由于内联编辑器无法保留这些块，其编辑控件会被禁用。文本行进入编辑模式后，删除和严格 steering 操作会被保存和取消取代；Enter 保存，Escape 取消。
 - **Queue 严格 steering 会保留完整消息**：agent 运行期间，steering 操作会以原子方式把所寻址的 Queue 单次入队项转移到当前 next-step 窗口。包含混合内容的行仍可使用此操作，因为它会转发不可变消息，而非文本投影。带 placement 的 Host 快照会在会话流末尾渲染待处理 steering，直到已消费的 `user/message` 折叠进持久 transcript（文本记录），因此立即展示、重连和回放共享同一个线性权威。

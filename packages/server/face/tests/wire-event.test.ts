@@ -43,8 +43,7 @@ describe("Face DSH wire-event adapt", () => {
       data: {
         id: "t1:3",
         content: [{ type: "text", text: "hello" }],
-        source: { kind: "user" },
-        rpcId: "rpc-1",
+        source: { kind: "user", rpcId: "rpc-1" },
       },
     });
   });

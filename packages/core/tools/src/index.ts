@@ -55,12 +55,15 @@ export {
   createReadTracker,
   createWriteIntentGuard,
   extractPathArg,
+  extractWritePaths,
+  extractPatchObservedPaths,
   foldGuardVerdicts,
   formatFsNotObservedContent,
   fsNotObservedDenyError,
   runGuards,
 } from "./guards.js";
 export { SUBAGENT_ROUTING_PROMPT_TEXT } from "./subagent-prompt.js";
+export { SESSION_QUERY_ROUTING_PROMPT_TEXT } from "./session-query-prompt.js";
 export {
   materializeTools,
   type MaterializeToolsOptions,

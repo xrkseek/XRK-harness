@@ -7,6 +7,7 @@ import { runAcp } from "./commands/acp.js";
 import { runCommand } from "./commands/run.js";
 import { runRestart } from "./commands/restart.js";
 import { runServe } from "./commands/serve.js";
+import { runTui } from "./commands/tui.js";
 import { helpText, parseArgs } from "./parse-args.js";
 import { jsonFlagRequested, writeJsonError } from "./json-stream.js";
 import { readCliVersion } from "./product-paths.js";
@@ -64,6 +65,8 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
         return await runMcp(args.mcpArgv);
       case "acp":
         return await runAcp(args);
+      case "tui":
+        return await runTui(args);
       default:
         process.stdout.write(helpText());
         return 0;

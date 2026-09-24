@@ -1,7 +1,7 @@
 import { createMemoryVoiceProvider } from "./memory.js";
 import { createOpenAiVoiceProvider } from "./openai-http.js";
 import type { VoiceService } from "./types.js";
-import { voiceUnavailableMessage } from "./tools.js";
+import { voiceUnavailableMessage } from "./readiness.js";
 
 export {
   VoiceError,
@@ -29,12 +29,30 @@ export {
 } from "./openai-http.js";
 export {
   createVoiceTools,
+  describeVoiceAccess,
   voiceUnavailableMessage,
   type CreateVoiceToolsOptions,
+  type VoiceAccessDescription,
+  type VoiceAccessKind,
 } from "./tools.js";
+
+/** Face `voice` product modes (Settings SoT). `memory` stays env-only. */
+export type VoiceProductMode = "off" | "openai";
+
+/** Face `voice` product shape. */
+export interface VoiceProductConfig {
+  readonly mode: VoiceProductMode;
+  /** Optional OpenAI-compatible base URL. */
+  readonly baseUrl?: string;
+}
 
 export interface DefaultVoiceAccessOptions {
   readonly env?: NodeJS.ProcessEnv;
+  /**
+   * Face Settings product. Used when `XRK_VOICE` is unset
+   * (env remains the CI bypass).
+   */
+  readonly product?: VoiceProductConfig;
   readonly service?: VoiceService;
   readonly fetchImpl?: typeof fetch;
 }
@@ -54,31 +72,39 @@ function resolveApiKey(env: NodeJS.ProcessEnv): string | undefined {
 /**
  * Resolve a voice Provider.
  * - Injected `service` wins.
- * - `XRK_VOICE=memory` → in-memory Provider.
- * - `XRK_VOICE=1` + API key → OpenAI-compatible TTS/STT/realtime.
+ * - Non-empty `XRK_VOICE` is CI bypass over Face `product`.
+ * - Product / env: `off` · `openai` (`1`) · `memory` (env-only).
  * - Else no service; tools stay registered and fail honestly.
  */
 export function createDefaultVoiceAccess(
   options: DefaultVoiceAccessOptions = {},
 ): DefaultVoiceAccess {
   const env = options.env ?? process.env;
-  const unavailableMessage = voiceUnavailableMessage(env);
+  const unavailableMessage = voiceUnavailableMessage(env, options.product);
   if (options.service) {
     return { service: options.service, unavailableMessage };
   }
-  const flag = String(env.XRK_VOICE ?? "").trim().toLowerCase();
+  const envRaw = String(env.XRK_VOICE ?? "").trim();
+  const flag =
+    envRaw !== ""
+      ? envRaw.toLowerCase()
+      : options.product?.mode === "openai"
+        ? "1"
+        : "";
   if (flag === "memory") {
     return {
       service: createMemoryVoiceProvider(),
       unavailableMessage,
     };
   }
-  if (flag === "1") {
+  if (flag === "1" || flag === "openai") {
     const apiKey = resolveApiKey(env);
     if (!apiKey) {
       return { unavailableMessage };
     }
-    const baseUrl = String(env.XRK_VOICE_BASE_URL ?? "").trim();
+    const baseUrl =
+      options.product?.baseUrl?.trim() ||
+      String(env.XRK_VOICE_BASE_URL ?? "").trim();
     return {
       service: createOpenAiVoiceProvider({
         apiKey,

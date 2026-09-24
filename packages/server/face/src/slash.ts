@@ -28,13 +28,23 @@ import {
 } from "./plan-mode.js";
 import { narrateAutoReviewCommand } from "./projections/units/auto-review.js";
 import { formatMcpInventoryText, settingsMutateFace } from "./settings-credentials.js";
-import { resolveSessionCwd } from "./session-cwd.js";
 import { resolveSessionModelSelection } from "./model-catalog.js";
 import { selectSessionModel } from "./select-session-model.js";
 import {
   FEEDBACK_TEXT_MAX_CHARS,
   recordSessionFeedback,
 } from "./session-feedback.js";
+import {
+  buildSessionStatusSnapshot,
+  formatSessionStatusText,
+} from "./session-status.js";
+import {
+  formatCheckpointList,
+  formatRestorePlan,
+  formatRestoreResult,
+  resolveRollbackTarget,
+  workspaceCheckpointStoreForSession,
+} from "./workspace-checkpoint.js";
 
 export type SlashRecipesLoader = () => Promise<readonly Recipe[]> | readonly Recipe[];
 
@@ -209,6 +219,16 @@ export async function listFaceCommandDescriptors(
             input: { hint: "on|off|approve <n>" },
           },
         ]),
+    ...(used.has("rollback")
+      ? []
+      : [
+          {
+            name: "rollback",
+            description:
+              "List or restore workspace file checkpoints (shadow git; not session.fork)",
+            input: { hint: "[n|id|seq:N] [--prune] | plan <n|id>" },
+          },
+        ]),
   ];
   used.add("goal");
   used.add("permission");
@@ -219,6 +239,7 @@ export async function listFaceCommandDescriptors(
   used.add("theme");
   used.add("skills");
   used.add("auto-review");
+  used.add("rollback");
   used.add("compact");
   used.add("export");
   used.add("feedback");
@@ -327,22 +348,9 @@ export async function executeFaceCommand(
         text: "Usage: /status",
       });
     }
-    const events = readSessionEvents(runtime.store, sessionId);
-    const badge =
-      runtime.sessionAgentPresets.get(sessionId) ?? "(default)";
-    const permission = permissionSelectFromEvents(events).currentValue;
-    const plan = foldPlanMode(events) ? "on" : "off";
-    const model = resolveSessionModelSelection(runtime, sessionId);
-    const cwd = resolveSessionCwd(runtime, sessionId);
-    const text = [
-      `badge: ${badge}`,
-      `permission: ${permission}`,
-      `plan: ${plan} (toggle with /plan · /plan off)`,
-      `theme: ${runtime.uiSettings.theme} (/theme light|dark|system)`,
-      `model: ${model.provider}/${model.model}`,
-      `cwd: ${cwd}`,
-      `events: ${sessionEventCount(runtime.store, sessionId)}`,
-    ].join("\n");
+    const text = formatSessionStatusText(
+      buildSessionStatusSnapshot(runtime, sessionId),
+    );
     return appendCommandPair(runtime, sessionId, parsed, {
       kind: "success",
       text,
@@ -607,6 +615,66 @@ export async function executeFaceCommand(
         undefined,
         out.summarySeq,
       );
+    } catch (err) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  if (parsed.name === "rollback") {
+    const tokens = parsed.rawInput.trim().split(/\s+/u).filter(Boolean);
+    const prune = tokens.includes("--prune");
+    const args = tokens.filter((t) => t !== "--prune");
+    try {
+      const store = workspaceCheckpointStoreForSession(runtime, sessionId);
+      const sessionRows = store
+        .list()
+        .filter((r) => r.sessionId === sessionId);
+
+      if (args.length === 0) {
+        return appendCommandPair(runtime, sessionId, parsed, {
+          kind: "success",
+          text: formatCheckpointList(sessionRows),
+        });
+      }
+
+      if (args[0] === "plan") {
+        const token = args.slice(1).join(" ").trim();
+        if (!token) {
+          return appendCommandPair(runtime, sessionId, parsed, {
+            kind: "error",
+            text: "Usage: /rollback plan <n|id|seq:N>",
+          });
+        }
+        const target = resolveRollbackTarget(store, sessionId, token);
+        if (!target) {
+          return appendCommandPair(runtime, sessionId, parsed, {
+            kind: "error",
+            text: `Unknown checkpoint ${token}`,
+          });
+        }
+        const plan = await store.planRestore(target.id);
+        return appendCommandPair(runtime, sessionId, parsed, {
+          kind: "success",
+          text: formatRestorePlan(plan),
+        });
+      }
+
+      const token = args.join(" ").trim();
+      const target = resolveRollbackTarget(store, sessionId, token);
+      if (!target) {
+        return appendCommandPair(runtime, sessionId, parsed, {
+          kind: "error",
+          text: `Unknown checkpoint ${token}. Try /rollback to list.`,
+        });
+      }
+      const result = await store.restore(target.id, { prune });
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "success",
+        text: formatRestoreResult(result),
+      });
     } catch (err) {
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "error",

@@ -1,9 +1,12 @@
-/** Shell PreToolUse hooks: exit 2 / JSON deny block; matcher + fail-open. */
+/** Shell hooks: Pre/PostToolUse + multi-event hooks.json parse; matcher + fail-open. */
 import { describe, expect, it, vi } from "vitest";
 import {
+  createShellHookPost,
   createShellHookPre,
-  loadShellHookCommands,
+  createShellLifecycleHooks,
+  loadShellHooksConfig,
   parsePreToolUseHooks,
+  parseShellHooksConfig,
   toolNameMatches,
 } from "../src/shell-hooks.js";
 import { createToolPipeline, createToolRegistry } from "@xrkseek/core-tools";
@@ -11,8 +14,61 @@ import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-describe("parsePreToolUseHooks", () => {
-  it("reads Claude-style PreToolUse command groups only", () => {
+describe("parseShellHooksConfig", () => {
+  it("reads Claude Pre/Post + turn/compact/subagent; ignores prompt-type hooks", () => {
+    const config = parseShellHooksConfig({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "bash|write_file",
+            hooks: [
+              { type: "command", command: "node gate.js", timeout: 5 },
+              { type: "prompt", command: "ignored" },
+            ],
+          },
+        ],
+        PostToolUse: [
+          { matcher: "*", hooks: [{ type: "command", command: "echo post" }] },
+        ],
+        UserPromptSubmit: [
+          { hooks: [{ type: "command", command: "echo prompt" }] },
+        ],
+        Stop: [{ hooks: [{ command: "echo stop" }] }],
+        PreCompact: [{ hooks: [{ command: "echo pre-c" }] }],
+        PostCompact: [{ hooks: [{ command: "echo post-c" }] }],
+        SubagentStart: [
+          {
+            matcher: "general-purpose",
+            hooks: [{ command: "echo sa-start" }],
+          },
+        ],
+        SubagentStop: [{ hooks: [{ command: "echo sa-stop" }] }],
+      },
+    });
+    expect(config.PreToolUse).toEqual([
+      { command: "node gate.js", matcher: "bash|write_file", timeoutMs: 5000 },
+    ]);
+    expect(config.PostToolUse).toEqual([{ command: "echo post", matcher: "*" }]);
+    expect(config.UserPromptSubmit).toEqual([{ command: "echo prompt" }]);
+    expect(config.Stop).toEqual([{ command: "echo stop" }]);
+    expect(config.PreCompact?.[0]?.command).toBe("echo pre-c");
+    expect(config.SubagentStart?.[0]?.matcher).toBe("general-purpose");
+  });
+
+  it("normalizes Codex camelCase event names", () => {
+    const config = parseShellHooksConfig({
+      hooks: {
+        preToolUse: [{ hooks: [{ command: "pre.sh" }] }],
+        postToolUse: [{ hooks: [{ command: "post.sh" }] }],
+        preCompact: [{ hooks: [{ command: "pc.sh" }] }],
+      },
+    });
+    expect(config.PreToolUse).toEqual([{ command: "pre.sh" }]);
+    expect(config.PostToolUse).toEqual([{ command: "post.sh" }]);
+    expect(config.PreCompact).toEqual([{ command: "pc.sh" }]);
+  });
+
+  it("parsePreToolUseHooks stays PreToolUse-only (back-compat)", () => {
     const commands = parsePreToolUseHooks({
       hooks: {
         PreToolUse: [
@@ -37,9 +93,7 @@ describe("parsePreToolUseHooks", () => {
   it("accepts a bare event map", () => {
     expect(
       parsePreToolUseHooks({
-        PreToolUse: [
-          { hooks: [{ command: "deny.sh" }] },
-        ],
+        PreToolUse: [{ hooks: [{ command: "deny.sh" }] }],
       }),
     ).toEqual([{ command: "deny.sh" }]);
   });
@@ -56,7 +110,7 @@ describe("toolNameMatches", () => {
   });
 });
 
-describe("loadShellHookCommands", () => {
+describe("loadShellHooksConfig", () => {
   it("skips missing files and loads a valid hooks.json", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "xrk-hooks-"));
     const file = path.join(dir, "hooks.json");
@@ -65,12 +119,13 @@ describe("loadShellHookCommands", () => {
       JSON.stringify({
         hooks: {
           PreToolUse: [{ hooks: [{ command: "echo ok" }] }],
+          PostToolUse: [{ hooks: [{ command: "echo post" }] }],
         },
       }),
     );
-    expect(loadShellHookCommands([path.join(dir, "missing.json"), file])).toEqual([
-      { command: "echo ok" },
-    ]);
+    const config = loadShellHooksConfig([path.join(dir, "missing.json"), file]);
+    expect(config.PreToolUse).toEqual([{ command: "echo ok" }]);
+    expect(config.PostToolUse).toEqual([{ command: "echo post" }]);
   });
 });
 
@@ -168,5 +223,135 @@ describe("createShellHookPre", () => {
     expect(outcome.skippedBody).toBe(false);
     expect(runner).toHaveBeenCalledTimes(1);
     expect(runner.mock.calls[0]?.[0].command).toBe("fail-open.sh");
+  });
+});
+
+describe("createShellHookPost", () => {
+  it("blocks on exit 2 and folds additionalContext", async () => {
+    const runner = vi.fn(async () => ({
+      exitCode: 0,
+      stdout: JSON.stringify({
+        additionalContext: "note from hook",
+        decision: "block",
+        reason: "post block",
+      }),
+      stderr: "",
+    }));
+    const pipeline = createToolPipeline();
+    pipeline.onPost(
+      createShellHookPost({
+        commands: [{ command: "post.sh" }],
+        cwd: "/ws",
+        runner,
+      }),
+    );
+    const registry = createToolRegistry();
+    registry.register({
+      name: "bash",
+      description: "bash",
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        return { content: "ok" };
+      },
+    });
+    const outcome = await pipeline.run(
+      registry.get("bash"),
+      { id: "c2", name: "bash", arguments: {} },
+      undefined,
+      {},
+    );
+    expect(outcome.skippedBody).toBe(false);
+    expect(String(outcome.result.content)).toContain("post block");
+    expect(outcome.additionalContexts).toContain("note from hook");
+    expect(JSON.parse(runner.mock.calls[0]![0].stdin)).toMatchObject({
+      hook_event_name: "PostToolUse",
+      tool_name: "bash",
+    });
+  });
+});
+
+describe("createShellLifecycleHooks", () => {
+  it("fires UserPromptSubmit / PreCompact payloads", async () => {
+    const runner = vi.fn(async () => ({
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+    }));
+    const life = createShellLifecycleHooks({
+      config: {
+        UserPromptSubmit: [{ command: "prompt.sh" }],
+        PreCompact: [{ command: "compact.sh" }],
+      },
+      cwd: "/ws",
+      sessionId: "s1",
+      runner,
+    });
+    expect(life.has("UserPromptSubmit")).toBe(true);
+    expect(life.has("Stop")).toBe(false);
+    await life.run("UserPromptSubmit", { turn_id: "t1" });
+    await life.run("PreCompact", { reason: "manual" });
+    expect(runner).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(runner.mock.calls[0]![0].stdin)).toMatchObject({
+      hook_event_name: "UserPromptSubmit",
+      session_id: "s1",
+      turn_id: "t1",
+    });
+    expect(JSON.parse(runner.mock.calls[1]![0].stdin)).toMatchObject({
+      hook_event_name: "PreCompact",
+      reason: "manual",
+    });
+  });
+});
+
+describe("createPermissionRequestGate", () => {
+  it("allows / denies from JSON before human UI", async () => {
+    const { createPermissionRequestGate } = await import("../src/shell-hooks.js");
+    const allow = createPermissionRequestGate({
+      commands: [{ command: "perm.sh" }],
+      cwd: "/ws",
+      runner: async () => ({
+        exitCode: 0,
+        stdout: JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PermissionRequest",
+            decision: "allow",
+          },
+        }),
+        stderr: "",
+      }),
+    });
+    await expect(
+      allow({ toolName: "bash", toolInput: { command: "ls" } }),
+    ).resolves.toEqual({ action: "allow" });
+
+    const deny = createPermissionRequestGate({
+      commands: [{ command: "perm.sh", matcher: "web_fetch" }],
+      cwd: "/ws",
+      runner: async () => ({
+        exitCode: 0,
+        stdout: JSON.stringify({ decision: "deny", reason: "blocked net" }),
+        stderr: "",
+      }),
+    });
+    await expect(
+      deny({ toolName: "web_fetch", toolInput: { url: "https://x.test" } }),
+    ).resolves.toEqual({ action: "deny", reason: "blocked net" });
+  });
+
+  it("parses PermissionRequest in hooks.json", () => {
+    const config = parseShellHooksConfig({
+      hooks: {
+        PermissionRequest: [
+          { matcher: "bash|web_fetch", hooks: [{ command: "perm.sh" }] },
+        ],
+        permissionRequest: [
+          { hooks: [{ command: "codex-alias.sh" }] },
+        ],
+      },
+    });
+    expect(config.PermissionRequest?.map((c) => c.command)).toEqual([
+      "perm.sh",
+      "codex-alias.sh",
+    ]);
   });
 });

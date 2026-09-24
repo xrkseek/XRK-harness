@@ -72,8 +72,10 @@ export function buildCaptureResult(options: {
 }
 
 export const COMPUTER_USE_PROMPT_TEXT =
-  "Use the computer_use tool for the host desktop (accessibility tree + input). " +
-  "Prefer action=capture (mode=ax) then click/type by element index. " +
-  "This is separate from browser_open / browser_snapshot / browser_act (HTTP page sessions). " +
-  "Prefer browser_* for web pages. Desktop delivery may be UIA (not full background SPI); " +
-  "enable with XRK_COMPUTER_USE=1 on Windows, or inject a ComputerUseService.";
+  "Use computer_use only for native host GUI apps (Notepad, Explorer, IDE chrome, OS dialogs) " +
+  "via an accessibility tree + input Provider. Prefer action=capture (mode=ax) then " +
+  "click/type/key/scroll by element index (key/scroll may omit element to target the focused window). " +
+  "Do NOT use computer_use for web pages — use browser_open / browser_snapshot / browser_act " +
+  "(and browser_vision when a page screenshot is needed). " +
+  "Windows delivery is UIA (Invoke/ValuePattern/SendKeys/ScrollPattern), not full background SPI; " +
+  "enable with Settings → Plugins → Computer use or XRK_COMPUTER_USE=1.";

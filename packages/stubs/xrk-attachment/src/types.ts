@@ -23,6 +23,18 @@ export interface ImageAttachmentRef {
   name?: string
 }
 
+/** Durable, serializable metadata for one immutable generic file object. */
+export interface FileAttachmentRef {
+  /** Opaque storage identifier; never a filesystem path or bearer URL. */
+  attachmentId: AttachmentId
+  /** Sanitized display name (leaf only; never a path). */
+  name: string
+  /** Exact encoded byte length. */
+  bytes: number
+  /** Browser/provider MIME when known; optional. */
+  mediaType?: string
+}
+
 /** Deployment-resolved limits used by upload admission and request buffering. */
 export interface ImageAttachmentLimits {
   maxImageBytes: number

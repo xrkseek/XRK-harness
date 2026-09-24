@@ -1,0 +1,24 @@
+{
+  "name": "@xrkseek/session-format",
+  "version": "0.1.0",
+  "description": "Adjacent session-format migration chain + artifact detect (interop ≠ Session Format V3 / ADR-0009)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/session-format"
+  },
+  "private": true
+}

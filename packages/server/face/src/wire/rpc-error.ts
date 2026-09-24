@@ -83,6 +83,18 @@ export function mapFaceRpcError(
         details: { issues: hint?.issues ?? [] },
       };
 
+    case "checkpoint-failed":
+      return {
+        code: "internal",
+        message,
+        details: {
+          reason: "checkpoint-failed",
+          ...(typeof hint?.checkpointCode === "string"
+            ? { checkpointCode: hint.checkpointCode }
+            : {}),
+        },
+      };
+
     case "not-found":
       return {
         code: "session-not-found",

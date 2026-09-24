@@ -79,6 +79,14 @@ export interface SidebarHostOptions {
   /** Agent PTY close for `POST /sidebar/api/agent-pty.close`. */
   readonly agentRegistries?: SidebarAgentRegistries;
   /**
+   * Fired after a successful `settings.update` that mutates the prefs doc.
+   * Host uses this to rebuild agents when agent-open / agent-terminal gates flip.
+   */
+  readonly onPrefsChanged?: (
+    value: Record<string, unknown>,
+    patch: Record<string, unknown>,
+  ) => void;
+  /**
    * Office→PDF for sidebar preview (`/sidebar/file?preview=pdf`).
    * Omitted → `soffice` when installed; never used by `read_file`.
    */
@@ -349,6 +357,7 @@ async function dispatchMethod(
       const value = { ...row.value, ...patch };
       const revision = row.revision + 1;
       saveSidebarPrefs(options.xrkHome, value, revision);
+      options.onPrefsChanged?.(value, patch);
       return ok({ value, revision });
     }
     case "shell.get":

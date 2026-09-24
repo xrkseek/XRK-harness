@@ -5,6 +5,6 @@
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src/search.ts"],
+  "include": ["src/search.ts", "src/gitignore.ts"],
   "references": [{ "path": "../file-reference" }]
 }

@@ -2882,6 +2882,12 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
         return ok(request, { archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds] })
       },
+
+      async unarchiveSession(request) {
+        const { sessionId } = request.payload
+        await ctx.workspaceRegistry.unarchiveSession(sessionId)
+        return ok(request, { archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds] })
+      },
     },
 
     host: {
@@ -3350,6 +3356,27 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
         return ok(request, {})
+      },
+    },
+
+    // Cordis hosts without Face leave OAuth to the Face HTTP surface
+    // (`tryHandleFaceHttp` → `mcp.oauth.*`). This stub keeps ApiProxy typed.
+    mcpOauth: {
+      async status(request) {
+        return ok(request, { tokenDir: '', items: [] })
+      },
+      async login(request) {
+        return err(request, {
+          code: 'internal',
+          message: 'mcp.oauth.login requires the Face Host surface',
+          details: {},
+        })
+      },
+      async logout(request) {
+        return ok(request, {
+          server: request.payload.server,
+          status: 'absent',
+        })
       },
     },
 

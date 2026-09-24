@@ -425,15 +425,18 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
   }),
 
   "xrk-noema": (ctx, route) => {
-    const noemaOpts = {
+    const buildOpts = () => ({
       ...(ctx.xrkHome ? { xrkHome: ctx.xrkHome } : {}),
-    };
+      ...(ctx.resolveMemoryEmbedProduct
+        ? { product: ctx.resolveMemoryEmbedProduct() }
+        : {}),
+    });
     if ("channel" in route) {
       const r = route;
       return {
         rpc: {
           [r.channel]: (endpoint, payload) =>
-            handleNoemaRpc(endpoint, payload, noemaOpts),
+            handleNoemaRpc(endpoint, payload, buildOpts()),
         },
       };
     }
@@ -442,7 +445,7 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
         {
           match: prefixMatcher((route).prefix),
           handle: (req, res, pathname) =>
-            handleNoemaHttp(req, res, pathname, noemaOpts),
+            handleNoemaHttp(req, res, pathname, buildOpts()),
         },
       ],
     };
@@ -533,6 +536,9 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
         handle: (req, res, pathname) =>
           handleAutoReviewHttp(req, res, pathname, {
             ...(ctx.xrkHome ? { xrkHome: ctx.xrkHome } : {}),
+            ...(ctx.resolveAutoReviewClassifierProduct
+              ? { product: ctx.resolveAutoReviewClassifierProduct() }
+              : {}),
           }),
       },
     ],

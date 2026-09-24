@@ -64,10 +64,24 @@ const result = await store.restore(record.id, { prune: false });
 `git` 不在 PATH 时 runner 解析为 `{ code: -1 }`，store 抛 `git-unavailable`
 而不是崩溃。
 
+## Face / Host 暴露
+
+库本身无 RPC。产品面在 `@xrkseek/server-face`：
+
+| 入口 | 作用 |
+| ---- | ---- |
+| `session.checkpoint.list` · `planRestore` · `restore` · `snapshot` | Face unary |
+| `/rollback` | 斜杠列表 / 回退 / `plan` 预演 |
+| 消息 **Restore** | `/rollback seq:N`（与 **Branch** / `session.fork` 并列，语义不同） |
+| Host `snapshotSessionWorkspace` | 每轮 `continueTurn` 前自动打点（`XRK_CHECKPOINTS=0` 关闭） |
+
+**fork-cut ≠ restore**：`session.fork` 只切会话血缘；本包只回退工作区文件。详见 [docs/turn-rewind.md](../../docs/turn-rewind.md)。
+
 ## 测试
 
 ```bash
 npx vitest run packages/checkpoint
+npx vitest run packages/server/face/tests/checkpoint.test.ts
 ```
 
 `tests/store.test.ts` 用假 runner 断言 git argv 序列；`tests/shadow-git.integration.test.ts`

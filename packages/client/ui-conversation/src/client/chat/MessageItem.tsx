@@ -3,13 +3,16 @@
 // assistant answers), pending steering (copy only), context injection,
 // compaction marker, retry disclosure, and unknown-surface JSON rows.
 
-import { memo, useEffect, useMemo, useState } from 'react'
+import { Fragment, memo, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type {
-  ModelRetryNode, TurnErrorNode, UserMessageNode,
+  ModelRetryNode, PendingSubmission, TurnErrorNode, UserMessageNode,
 } from '@xrkseek/client-runtime/client'
-import { JsonBlock, MessageText, StateDot } from '@xrkseek/client-ui-primitives'
-import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
+import type { FileAttachmentRef } from '@xrkseek/xrk-attachment'
+import {
+  fileExtension, FileTypeIcon, fileSizeText, JsonBlock, MessageText, StateDot,
+} from '@xrkseek/client-ui-primitives'
+import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, MessageImageOwner } from '../contract/slots.ts'
 import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
@@ -17,24 +20,43 @@ import { MessageIconActions } from './MessageIconActions.tsx'
 import css from './MessageItem.module.css'
 
 type UserImage = Extract<UserMessageNode['content'][number], { type: 'image' }>
+type PresentedAttachment =
+  | { readonly type: 'image'; readonly image: MessageImageOwner }
+  | { readonly type: 'file'; readonly file: FileAttachmentRef }
+
+function isFileAttachment(value: unknown): value is FileAttachmentRef {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  const o = value as Record<string, unknown>
+  return typeof o.attachmentId === 'string'
+    && o.attachmentId.length > 0
+    && typeof o.name === 'string'
+    && o.name.length > 0
+    && typeof o.bytes === 'number'
+    && Number.isFinite(o.bytes)
+    && o.bytes >= 0
+    && (o.mediaType === undefined || typeof o.mediaType === 'string')
+}
 
 function contentParts(content: readonly unknown[]): {
   text: string
-  images: { attachment: UserImage['attachment'] }[]
+  attachments: PresentedAttachment[]
   rest: unknown[]
 } {
   const texts: string[] = []
-  const images: { attachment: UserImage['attachment'] }[] = []
+  const attachments: PresentedAttachment[] = []
   const rest: unknown[] = []
   for (const block of content) {
     const b = block as { type?: string; text?: string; attachment?: unknown }
     if (b.type === 'text' && typeof b.text === 'string') texts.push(b.text)
     else if (b.type === 'image' && b.attachment !== undefined) {
-      images.push({ attachment: (b as UserImage).attachment })
+      attachments.push({ type: 'image', image: { attachment: (b as UserImage).attachment } })
+    }
+    else if (b.type === 'file' && isFileAttachment(b.attachment)) {
+      attachments.push({ type: 'file', file: b.attachment })
     }
     else rest.push(block)
   }
-  return { text: texts.join(''), images, rest }
+  return { text: texts.join(''), attachments, rest }
 }
 
 function retrySeconds(milliseconds: number): number {
@@ -214,7 +236,8 @@ function projectUserText(text: string, sessionLabels: readonly string[]): ReactN
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, renderMessageImages, actions, pending = false, referenceLabels = [], t,
+  content, renderMessageImages, actions, pending = false, echo = false, referenceLabels = [],
+  previewAttachments, t,
 }: {
   content: readonly unknown[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
@@ -222,17 +245,58 @@ function UserStyleBubble({
   actions?: (text: string) => ReactNode
   /** Whether this is the Host-authoritative pre-admission steering projection. */
   pending?: boolean
+  /** Whether this is a local submission echo (invisible marker; paints like its durable replacement). */
+  echo?: boolean
   /** Exact session mention labels associated by the adjacent recall node. */
   referenceLabels?: readonly string[]
+  /** Local submission-echo attachments replacing the content-derived attachment sequence. */
+  previewAttachments?: readonly PresentedAttachment[]
   t: ChatViewSlotProps['t']
 }): ReactNode {
-  const { text, images, rest } = contentParts(content)
+  const { text, attachments: contentAttachments, rest } = contentParts(content)
+  const attachments = previewAttachments ?? contentAttachments
+  const compactImages = attachments.length > 1
   const truncated = (total: number): string => t('json.truncated', { total })
   const showBubble = text !== '' || rest.length > 0
   return (
-    <div className={css.userRow} data-pending-steering={pending || undefined} data-time-hover-root>
+    <div
+      className={css.userRow}
+      data-pending-steering={pending || undefined}
+      data-submission-echo={echo || undefined}
+      data-time-hover-root
+    >
       <div className={css.userStack}>
-        {renderMessageImages({ images, align: 'end' })}
+        {pending && !echo && (
+          <span className={css.pendingSteerBadge} role="status">
+            {t('message.pendingSteer')}
+          </span>
+        )}
+        {attachments.length > 0 && (
+          <div className={css.attachmentRow} data-message-attachments>
+            {attachments.map((attachment, index) => attachment.type === 'image'
+              ? (
+                <Fragment key={`image:${index}`}>
+                  {renderMessageImages({
+                    images: [attachment.image],
+                    align: 'end',
+                    compact: compactImages,
+                  })}
+                </Fragment>
+              )
+              : (
+                <span key={`file:${index}`} className={css.fileCard} title={attachment.file.name}>
+                  <FileTypeIcon path={attachment.file.name} className={css.fileIcon} />
+                  <span className={css.fileContent}>
+                    <span className={css.fileName}>{attachment.file.name}</span>
+                    <span className={css.fileMeta}>
+                      {[fileExtension(attachment.file.name).toUpperCase().slice(0, 8), fileSizeText(attachment.file.bytes)]
+                        .filter(Boolean).join(' ')}
+                    </span>
+                  </span>
+                </span>
+              ))}
+          </div>
+        )}
         {showBubble && <div className={css.bubble}>
           {projectUserText(text, referenceLabels)}
           {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
@@ -268,6 +332,60 @@ export function PendingSteeringBubble({ content, renderMessageImages, t }: {
       actions={text => (
         <MessageIconActions
           text={text}
+          clock="start"
+          className={css.actions}
+          t={t}
+        />
+      )}
+    />
+  )
+}
+
+/**
+ * Render one local transcript or steering submission echo with the same
+ * visual language as the Host occurrence that replaces it: draft text plus
+ * object-URL previews, visible from the submit click until the durable
+ * `user/message` or steering occurrence renders.
+ * @param props - the session snapshot's pending submission and render seats.
+ * @returns the echoed user bubble.
+ */
+export function PendingSubmissionBubble({ submission, renderMessageImages, t }: {
+  submission: PendingSubmission
+  renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
+  t: ChatViewSlotProps['t']
+}): ReactNode {
+  const content = useMemo(
+    () => (submission.text === '' ? [] : [{ type: 'text', text: submission.text }]),
+    [submission.text],
+  )
+  const previewAttachments = useMemo<readonly PresentedAttachment[]>(
+    () => submission.attachments.map(attachment => attachment.type === 'image'
+      ? {
+        type: 'image',
+        image: {
+          preview: {
+            url: attachment.value.previewUrl,
+            ...(attachment.value.name === undefined ? {} : { name: attachment.value.name }),
+            ...(attachment.value.width === undefined ? {} : { width: attachment.value.width }),
+            ...(attachment.value.height === undefined ? {} : { height: attachment.value.height }),
+          },
+        },
+      }
+      : { type: 'file', file: attachment.value }),
+    [submission.attachments],
+  )
+  return (
+    <UserStyleBubble
+      content={content}
+      previewAttachments={previewAttachments}
+      renderMessageImages={renderMessageImages}
+      pending={submission.placement === 'steering'}
+      echo
+      t={t}
+      actions={text => (
+        <MessageIconActions
+          text={text}
+          time={submission.time}
           clock="start"
           className={css.actions}
           t={t}

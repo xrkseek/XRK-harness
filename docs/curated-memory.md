@@ -4,6 +4,17 @@
 
 `memory` 把**跨会话都要用的短事实**写进两份文件：`MEMORY.md`（代理笔记）与 `USER.md`（用户是谁）。目录是 `{XRK_HOME}/memories`（默认 `~/.xrk/memories`）。这不是 Mnemon 文档库（`~/.xrk/mnemon`）。
 
+### 勿与站立文件混淆
+
+| | 站立（可选 inject） | 策展（本页） |
+|--|-------------------|-------------|
+| `USER.md` | `~/.xrk/USER.md` · `{ws}/.xrk/USER.md` · `~/.agents/…` | `{XRK_HOME}/memories/USER.md` |
+| `SOUL.md` / `IDENTITY.md` | 用户手写人格 / 语气（**产品不自动种**） | — |
+| 谁写 | 用户手写 | `memory` 工具 / 回合后笔记 / Phase1 |
+| 进模型 | durable `agent-instructions` inject | **system** 冻结快照 |
+
+产品 Identity 决策：**保持薄**——只种子 `~/.xrk/AGENTS.md`；SOUL/IDENTITY 可选；用户事实走策展 `memories/USER.md`（见 [skills-layers.md](./skills-layers.md) · [workspace-inject.md](./workspace-inject.md)）。
+
 ## 会话隔离（与站立计划分工）
 
 | 能力 | 作用域 | 用途 |
@@ -33,11 +44,26 @@
 
 没有搜索、列表或读文件动作。磁盘上无法按 `§` 往返的内容会被拒绝写入，并留下 `.bak` 副本。
 
-关闭：组合选项 `curatedMemory: false`。
+关闭：**产品路径** Settings → Plugins → **策展记忆**（Face ns `curated-memory`：`enabled`）。保存后下次 agent 重建卸下 `memory` 工具与系统提示冻结段。非空 `XRK_CURATED_MEMORY` 为 CI 旁路（`0` 强制关，其它强制开）。组合选项 `curatedMemory: false` 仍可用。
+
+## 可插拔 Provider（MemoryProvider）
+
+对标 Hermes `MemoryProvider`：**默认仍是文件策展**；可选外接一个 HTTP sidecar（同时只选一个外部后端）。
+
+| Provider | 工厂 | 说明 |
+|----------|------|------|
+| `file`（默认） | `createFileMemoryProvider` / `createCuratedMemoryStore` | `{XRK_HOME}/memories` |
+| `http` | `createHttpMemoryProvider` | 集成方自建 REST：`GET /health` · `GET /v1/curated/{memory\|user}` · `POST /v1/curated/{memory\|user}/ops` |
+
+选择：`resolveMemoryProvider({ kind })` 或 env `XRK_MEMORY_PROVIDER=file|http`；HTTP 需 `XRK_MEMORY_HTTP_URL`（可选 `XRK_MEMORY_HTTP_TOKEN`）。组合选项仍可直接注入任意实现了 `CuratedMemoryStore` 的对象。这不是 Mnemon，也不是 memory-embed 的 `/search`。
 
 ## 回合结束写入
 
 成功的回合结束之后，若用户原话里有可复用笔记（`remember:` / `memory:`，或稳定偏好如 “I prefer” / “我习惯”），写入 `MEMORY.md`。助手自己的发挥不写入。本回合已经调用过 `memory` 工具则不再写第二份。密钥会被替换成 `[REDACTED_SECRET]`。这次写入不刷新本会话已经冻进系统提示的快照，也不读写 Mnemon 文档。
+
+## 会话结束 Phase1 巩固
+
+会话离开活跃集时（组合 `dispose`、工作区 `workspace.archiveSession`、Host `stop`）再扫一遍该会话的人类用户原话：已在磁盘上覆盖的跳过，漏掉的追加进 `MEMORY.md`。字数顶满时会先软删最旧条目（最多三次）再试写入（不刷新本会话冻结快照）。这不是 Codex 的 LLM stage-1 抽取，也不是向量库；与 Mnemon 文档 keyword 检索分开。
 
 ---
 
@@ -46,6 +72,17 @@
 > **Audience**: Integrators · Contributors
 
 `memory` stores **short facts that should survive every session** in two files: `MEMORY.md` (agent notes) and `USER.md` (who the user is). They live in `{XRK_HOME}/memories` (default `~/.xrk/memories`). This is not the Mnemon document library (`~/.xrk/mnemon`).
+
+### Do not confuse with standing files
+
+| | Standing (optional inject) | Curated (this page) |
+|--|----------------------------|---------------------|
+| `USER.md` | `~/.xrk/USER.md` · `{ws}/.xrk/USER.md` · `~/.agents/…` | `{XRK_HOME}/memories/USER.md` |
+| `SOUL.md` / `IDENTITY.md` | User-authored persona / tone (**product does not auto-seed**) | — |
+| Who writes | User | `memory` tool / after-turn notes / Phase1 |
+| Into the model | Durable `agent-instructions` inject | **System** frozen snapshot |
+
+Identity product decision: **stay thin** — seed only `~/.xrk/AGENTS.md`; optional SOUL/IDENTITY; factual “who the user is” stays in curated `memories/USER.md` ([skills-layers.md](./skills-layers.md) · [workspace-inject.md](./workspace-inject.md)).
 
 ## Session isolation (vs standing plan)
 
@@ -76,8 +113,23 @@ Entries are separated by `§` with a newline on each side. `MEMORY.md` is capped
 
 There is no search, list, or read action. Content on disk that would not round-trip through the `§` delimiter is refused, and a `.bak` copy is kept.
 
-Disable with composition option `curatedMemory: false`.
+Disable via **product path** Settings → Plugins → **Curated memory** (Face ns `curated-memory`: `enabled`). After save, the next agent rebuild drops the `memory` tool and frozen system-prompt block. Non-empty `XRK_CURATED_MEMORY` is the CI bypass (`0` force off, any other force on). Composition option `curatedMemory: false` still works.
+
+## Pluggable providers (`MemoryProvider`)
+
+Hermes-style `MemoryProvider` seam: **file curated remains the default**; optionally attach one HTTP sidecar (one external backend at a time).
+
+| Provider | Factory | Notes |
+|----------|---------|-------|
+| `file` (default) | `createFileMemoryProvider` / `createCuratedMemoryStore` | `{XRK_HOME}/memories` |
+| `http` | `createHttpMemoryProvider` | Integrator-owned REST: `GET /health` · `GET /v1/curated/{memory\|user}` · `POST /v1/curated/{memory\|user}/ops` |
+
+Select with `resolveMemoryProvider({ kind })` or env `XRK_MEMORY_PROVIDER=file|http`; HTTP needs `XRK_MEMORY_HTTP_URL` (optional `XRK_MEMORY_HTTP_TOKEN`). Compositions may still inject any `CuratedMemoryStore` implementation. This is not Mnemon and not memory-embed `/search`.
 
 ## Write after the turn
 
 After a successful turn, reusable notes in the user's own words (`remember:` / `memory:`, or a stable preference such as "I prefer" / "我习惯") are appended to `MEMORY.md`. Assistant prose is not promoted. A turn that already called the `memory` tool is not written a second time. Secrets are replaced with `[REDACTED_SECRET]`. The write does not refresh the snapshot already frozen into this session's system prompt, and it does not read or write Mnemon documents.
+
+## Session-end Phase1 consolidate
+
+When a session leaves the live set (composition `dispose`, `workspace.archiveSession`, Host `stop`), human user turns are scanned again: notes already covered on disk are skipped; leftovers are appended to `MEMORY.md`. If the character cap blocks a new note, the oldest entries are soft-removed (up to three times) and the add is retried (the frozen session prompt is still unchanged). This is not Codex's LLM stage-1 extractor and not a vector store; it stays separate from Mnemon's document keyword search.

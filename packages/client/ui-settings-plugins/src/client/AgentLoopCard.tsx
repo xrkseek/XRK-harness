@@ -56,6 +56,18 @@ export function AgentLoopCard(props: AgentLoopCardProps) {
         onReset={() => { props.resetField('maxSteps') }}
       />
       <ValueField
+        id="plugin-config-agent-loop-tool-order"
+        label={t('agentLoopToolOrder')}
+        hint={t('agentLoopToolOrderHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('agentLoopToolOrderInvalid')}
+        disabled={!state.writable}
+        {...state.toolOrder}
+        onEdit={(text) => { props.edit('toolOrder', text) }}
+        onReset={() => { props.resetField('toolOrder') }}
+      />
+      <ValueField
         id="plugin-config-agent-loop-tool-settle"
         label={t('agentLoopToolSettle')}
         hint={t('agentLoopToolSettleHint')}

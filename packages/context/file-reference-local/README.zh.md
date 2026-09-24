@@ -13,6 +13,7 @@
 | `maxResults` | `20` | 单次查询返回的候选项最大数量。 |
 | `maxEntries` | `10000` | 每个 agent 工作区建立索引的文件和目录最大数量。 |
 | `excludedDirectories` | `[".git", "node_modules"]` | 遍历和候选项中排除的目录基名。 |
+| `respectGitignore` | `true` | 工作区是 git 树时，尊重 `.gitignore` 与 `.git/info/exclude`（对标 Codex `require_git`）。 |
 
 所有数值都必须是正的安全整数。排除名称必须是非空基名，且不能包含 `/` 或 `\`。
 
@@ -42,4 +43,4 @@ Paths prefixed with @ are files explicitly referenced by the user. Use the read 
 
 - **宿主本地命名空间**：提供方扫描 Harness 宿主的文件系统，因此远程或虚拟 `read` 实现需要使用命名空间与该工具一致的提供方。
 - **有界的提示性索引**：超大型工作区可能省略 `maxEntries` 之后的路径；被排除或无法读取的目录不会出现。
-- **没有忽略文件语义**：`.gitignore` 和其他项目忽略文件不会影响发现；系统只排除已配置的目录基名。
+- **gitignore 仅在 git 树生效**：无 `.git` 时只应用 `excludedDirectories`；嵌套 `.gitignore` / exclude 不会被读取。

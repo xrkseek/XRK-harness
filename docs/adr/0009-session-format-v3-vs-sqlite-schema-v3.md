@@ -38,6 +38,7 @@
 
 - 文档须区分「SQLite schema v3」与「Session Format V3」。
 - 集成者依赖本仓 `session.md` · `session-log.md`。角色 JSONL 可经 `importSessionInterchange` / `exportSessionInterchange` 换成 XRK 事件，**不**写入 `sessions.db`，也**不是** Session Format V3。
+- `@xrkseek/session-format` 提供相邻迁移链（sqlite schema 0→1→2→3）与制品探测；探测到第三方 Format 头则拒绝（`refused`），保持 **互通 ≠ V3**。
 
 ---
 
@@ -75,3 +76,4 @@ System prompts stay **outbound assembly** only — not durable `system/message` 
 
 - Docs must distinguish “SQLite schema v3” from “Session Format V3”.
 - Integrators rely on this repo’s session docs. Role JSONL can be translated with `importSessionInterchange` / `exportSessionInterchange` into XRK events. That translation is **not** written into `sessions.db` and is **not** Session Format V3.
+- `@xrkseek/session-format` owns the adjacent migration chain (sqlite schema 0→1→2→3) and artifact detect; foreign Format headers are refused — **interop ≠ V3**.

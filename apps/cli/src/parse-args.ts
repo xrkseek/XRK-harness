@@ -10,6 +10,7 @@ export type CliCommand =
   | "skill"
   | "mcp"
   | "acp"
+  | "tui"
   | "help";
 
 export interface ParsedArgs {
@@ -130,6 +131,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     first === "skill" ||
     first === "mcp" ||
     first === "acp" ||
+    first === "tui" ||
     first === "help"
   ) {
     command = first;
@@ -160,10 +162,12 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     return emptyArgs({ command: "mcp", mcpArgv: args });
   }
 
-  /** Product Host (`web`/`serve`/`restart`) defaults to harness tools; `run` stays minimal for smoke. */
+  /** Product Host (`web`/`serve`/`restart`/`tui`) defaults to harness; `run` stays minimal for smoke. */
   let preset =
     shorthandPreset ??
-    (command === "serve" || command === "restart" ? "harness" : "minimal");
+    (command === "serve" || command === "restart" || command === "tui"
+      ? "harness"
+      : "minimal");
   let promptFromFlag: string | undefined;
   const promptParts: string[] = [];
   let workspace = process.cwd();
@@ -363,6 +367,7 @@ Commands:
   run           One turn (default: minimal + replay; XRK_LLM_PRESET if set)
   serve         HTTP host + product UI (apps/web/dist)
   web           Alias for serve
+  tui           Thin Face TUI (stream + tool rail + /status; attaches to Host)
   restart       Stop the previous XRK Host on this port (pid lock), then serve
   plugin        Install / remove / list user plugins (~/.xrk/plugins)
   skill         Install / remove / list workspace skills (.agents/skills)
@@ -387,7 +392,9 @@ Options:
   --json              NDJSON session events on stdout (run); final text omitted
   --workspace <path>  User workspace (default: cwd)
   --host <addr>       Bind host (default: 127.0.0.1; not 0.0.0.0)
+                        · tui: Host to attach (default 127.0.0.1)
   --port <n>          Bind port (default: 8787; 0 = OS pick)
+                        · tui: Host port to attach (default 8787)
   --open              Open the product UI in the system browser
   --force             Stop a verified XRK Host on --port before bind
                         (refuses to kill non-XRK listeners)
@@ -421,5 +428,7 @@ Examples:
   xrkh run --preset minimal "ping"
   echo "summarize" | xrkh run --preset minimal
   xrkh run --json --session-id sess_… "continue"
+  xrkh tui --port 8787
+  xrkh tui --session-id sess_… --workspace .
 `;
 }

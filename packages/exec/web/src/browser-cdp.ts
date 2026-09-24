@@ -359,6 +359,19 @@ export function createCdpBrowserSession(options: {
       await capture(cdp);
       return { ...paint(false), note: `clicked @${ref}` };
     },
+    dispose() {
+      try {
+        caller?.close();
+      } catch {
+        /* best-effort teardown */
+      }
+      caller = undefined;
+      sessionId = undefined;
+      nodes = [];
+      url = "";
+      title = "";
+      fieldValues.clear();
+    },
   };
 }
 
@@ -366,10 +379,18 @@ export function createCdpBrowserSession(options: {
 export function createBrowserSession(options: {
   readonly fetch: WebFetch;
   readonly env?: NodeJS.ProcessEnv;
+  /**
+   * Face `browser` product. Used when CDP env is unset
+   * (non-empty `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` is CI bypass).
+   */
+  readonly product?: BrowserProductConfig;
   readonly resolve?: (raw: string) => Promise<string>;
   readonly connect?: (wsUrl: string) => Promise<CdpCaller>;
 }): BrowserSession {
-  const raw = browserCdpUrlFromEnv(options.env ?? process.env);
+  const raw = resolveBrowserCdpUrl({
+    env: options.env ?? process.env,
+    ...(options.product ? { product: options.product } : {}),
+  });
   if (!raw) {
     return createHttpBrowserSession({ fetch: options.fetch });
   }
@@ -378,4 +399,31 @@ export function createBrowserSession(options: {
     ...(options.resolve ? { resolve: options.resolve } : {}),
     ...(options.connect ? { connect: options.connect } : {}),
   });
+}
+
+/** Face `browser` product modes (Settings SoT). */
+export type BrowserProductMode = "http" | "cdp";
+
+/** Face `browser` product shape. */
+export interface BrowserProductConfig {
+  readonly mode: BrowserProductMode;
+  /** Chrome DevTools URL when `mode` is `cdp` (http://host:9222 or ws://…). */
+  readonly cdpUrl?: string;
+}
+
+/**
+ * Resolve the CDP endpoint for `browser_*`.
+ * Precedence: non-empty env (`XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL`) → force CDP;
+ * else Face product `cdp` + `cdpUrl`; else empty (HTTP snapshot).
+ */
+export function resolveBrowserCdpUrl(options: {
+  readonly env?: NodeJS.ProcessEnv;
+  readonly product?: BrowserProductConfig;
+} = {}): string {
+  const envUrl = browserCdpUrlFromEnv(options.env ?? process.env);
+  if (envUrl) return envUrl;
+  if (options.product?.mode === "cdp") {
+    return options.product.cdpUrl?.trim() ?? "";
+  }
+  return "";
 }

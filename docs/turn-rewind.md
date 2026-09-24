@@ -1,5 +1,7 @@
 # 回合回退 · 工作区文件快照
 
+> **读者**：集成者 · 贡献者 · 维护者
+
 Turn rewind 的**可恢复侧**：把工作区文件按回合存成可回退的点。
 
 ## 问题
@@ -92,13 +94,30 @@ const result = await store.restore(point.id, { prune: false });
 
 ## 与既有能力的关系
 
-| 能力                           | 回退的是       |
-| ------------------------------ | -------------- |
-| 子代理 fork（`fork-cut`）      | 会话血缘       |
-| `SessionProjection` checkpoint | 投影缓存状态   |
-| **本文档**                     | **工作区文件** |
+| 能力 | 回退的是 | 产品入口 |
+| ---- | -------- | -------- |
+| `session.fork`（`fork-cut` / `resolveForkCut`） | **会话血缘**：按已完成 `turn/end` 截断日志，开子会话 | 消息旁 **Branch**；工具子代理 `inherit_context` |
+| `SessionProjection` checkpoint | 投影缓存状态（list 冷列） | Host 内部 |
+| **本文档**（`WorkspaceCheckpointStore`） | **工作区文件**（影子 git） | Face `session.checkpoint.*` · 斜杠 `/rollback` · 消息旁 **Restore** |
 
-三者互不替代：只有日志回退而工作区不回退，重跑会建立在已被污染的文件上。
+三者互不替代：
+
+- **Branch / fork-cut** 只复制会话前缀，**不**改工作区文件；
+- **Restore / `/rollback`** 只回退文件，**不**改会话日志（也不会 fork）；
+- 只有日志回退而工作区不回退，重跑会建立在已被污染的文件上。
+
+### Face 暴露
+
+| 方法 / 入口 | 作用 |
+| ----------- | ---- |
+| `session.checkpoint.list` | 列出本 session（或 `allSessions`）快照 |
+| `session.checkpoint.planRestore` | 预演（`id` 或 `atSeq`） |
+| `session.checkpoint.restore` | 回退（可选 `prune`；`id` 或 `atSeq`） |
+| `session.checkpoint.snapshot` | 手动打点（Host 在每轮 `continueTurn` 前也会自动打点） |
+| `/rollback` | 列表；`/rollback <n\|id\|seq:N>` 回退；`plan …` 预演；`--prune` 删 extras |
+| 消息 **Restore** | 对该轮 Face seq 发 `/rollback seq:N`（与 Branch 并列，语义不同） |
+
+Host 默认在 drain 每轮 `continueTurn` 前调用 `snapshotSessionWorkspace`（`XRK_CHECKPOINTS=0` 关闭）。需本机 `git`。
 
 ## 注意
 
@@ -122,9 +141,11 @@ npx vitest run packages/checkpoint
   被删文件找回、`prune` 才删新建文件、影子目录不被 `clean` 删掉、操作者仓库的
   HEAD 与 index **未变**。
 
----- en ----
+---
 
 # Turn rewind · workspace file snapshots
+
+> **Audience**: Integrators · Contributors · Maintainers
 
 The **recoverable half** of turn rewind: worktree files captured as restore
 points, per turn.
@@ -195,9 +216,30 @@ touched) · `git-unavailable` · `init-failed` · `snapshot-failed` ·
 
 ## Relationship to existing pieces
 
-Subagent fork (`fork-cut`) rewinds session lineage; `SessionProjection`
-checkpoints hold projection cache state; **this** rewinds worktree files. Rewind
-the log without rewinding files and a re-run builds on already-mutated input.
+| Capability | What it rewinds | Product entry |
+| ---------- | --------------- | ------------- |
+| `session.fork` (`fork-cut` / `resolveForkCut`) | **Session lineage**: cut the log at a completed `turn/end`, open a child | Message **Branch**; tool subagents with `inherit_context` |
+| `SessionProjection` checkpoint | Projection cache (cold list column) | Host-internal |
+| **This doc** (`WorkspaceCheckpointStore`) | **Worktree files** (shadow git) | Face `session.checkpoint.*` · slash `/rollback` · message **Restore** |
+
+They do not substitute for each other:
+
+- **Branch / fork-cut** copies a session prefix only — it does **not** change files;
+- **Restore / `/rollback`** reverts files only — it does **not** rewrite the chat log (and does not fork);
+- Rewind the log without rewinding files and a re-run builds on already-mutated input.
+
+### Face surface
+
+| Method / entry | Role |
+| -------------- | ---- |
+| `session.checkpoint.list` | List checkpoints for this session (or `allSessions`) |
+| `session.checkpoint.planRestore` | Preview (`id` or `atSeq`) |
+| `session.checkpoint.restore` | Restore (optional `prune`; `id` or `atSeq`) |
+| `session.checkpoint.snapshot` | Manual snapshot (Host also snapshots before each `continueTurn`) |
+| `/rollback` | List; `/rollback <n\|id\|seq:N>` restore; `plan …` preview; `--prune` drop extras |
+| Message **Restore** | Issues `/rollback seq:N` for that turn’s Face seq (beside Branch; different meaning) |
+
+Host calls `snapshotSessionWorkspace` before each drain `continueTurn` by default (`XRK_CHECKPOINTS=0` disables). Requires `git` on PATH.
 
 ## Caveats
 

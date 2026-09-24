@@ -51,6 +51,7 @@
     "@xrkseek/xrk-session-projection": "workspace:^",
     "@xrkseek/xrk-session-title": "workspace:^",
     "@xrkseek/xrk-tools": "workspace:^",
+    "@xrkseek/secrets": "workspace:*",
     "immer": "^10.1.1",
     "react": "^18.2.0",
     "zustand": "~4.4.7"

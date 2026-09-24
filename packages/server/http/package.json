@@ -26,6 +26,7 @@
   "dependencies": {
     "@xrkseek/core-agent": "workspace:*",
     "@xrkseek/core-session": "workspace:*",
+    "@xrkseek/im-gateway-contract": "workspace:*",
     "@xrkseek/policy": "workspace:*",
     "@xrkseek/protocol": "workspace:*",
     "@xrkseek/server-loader": "workspace:*",

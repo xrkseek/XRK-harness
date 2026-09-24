@@ -1,7 +1,7 @@
 // Sessions remain resident after creation so they continue consuming mux frames off-screen.
 
 import type { Context } from '@xrkseek/cordis'
-import type { AttachmentIdType, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+import type { AttachmentIdType, FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import type { SessionEvent } from '@xrkseek/xrk-session/types'
 import type {
   HistoryEntry, IApiClient, MessageId, MuxFrame, PromptContentPart, QueueAction, RpcError,
@@ -9,13 +9,16 @@ import type {
 } from '@xrkseek/xrk-api-remotes/client'
 // Value import from the inline-safe wire layer (not the connection plugin):
 // plugin-to-plugin value imports are a bundle purity error.
-import { transportError } from '@xrkseek/xrk-host-apiproxy/api'
-import type { SessionFace } from '../contract/session.ts'
+import { RpcId as brandRpcId, randomUuid, transportError } from '@xrkseek/xrk-host-apiproxy/api'
+import type {
+  BeginSubmissionInput, PendingSubmissionRetirement, SessionFace, SubmissionHandle,
+} from '../contract/session.ts'
 import { ConversationNodeAssembler } from './conversation-assembler.ts'
 import type { ConversationRuntime } from './conversation-assembler.ts'
 import type { ConversationEventInput, ConversationPublication } from '../contract/conversation.ts'
 import type {
-  ChatSnapshot, ComposerPhase, ConversationSnapshot, OpenState, PromptError,
+  ChatSnapshot, ComposerPhase, ConversationSnapshot, OpenState, PendingSubmission,
+  PromptError, SessionRequestId,
 } from './conversation.ts'
 import { EMPTY_CHAT_SNAPSHOT } from './conversation.ts'
 import type { PendingInteraction } from './pending.ts'
@@ -94,6 +97,12 @@ export class Session implements SessionFace {
   private pendingCache: { rev: number; value: PendingInteraction[] } | null = null
   /** Authoritative stream-only inbox snapshot; pending work never hits history. */
   private readonly queueMirror = new SessionQueueMirror()
+  /** Local submission echoes, insertion-ordered (see ConversationSnapshot.pendingSubmissions). */
+  private pendingSubmissions: readonly PendingSubmission[] = []
+  private readonly submissionSettlements = new Map<SessionRequestId, {
+    readonly onRetire?: ((retirement: PendingSubmissionRetirement) => void) | undefined
+    retiring: boolean
+  }>()
   /** Session-owned business Context engine over the contiguous raw window. */
   private readonly conversation: ConversationNodeAssembler
   private running = false
@@ -193,12 +202,41 @@ export class Session implements SessionFace {
   // ---- Operations ----
 
   /**
+   * Register one local submission echo synchronously before prompt serialization.
+   * @param input - echo content and optional settlement callback.
+   * @returns minted request identity and abandon handle.
+   */
+  beginSubmission(input: BeginSubmissionInput): SubmissionHandle {
+    const requestId = brandRpcId(randomUuid()) as SessionRequestId
+    this.pendingSubmissions = [...this.pendingSubmissions, {
+      requestId,
+      placement: this.running
+        ? input.mode === 'steer' ? 'steering' : 'queued'
+        : 'transcript',
+      time: Date.now(),
+      text: input.text,
+      attachments: input.attachments,
+    }]
+    this.submissionSettlements.set(requestId, { onRetire: input.onRetire, retiring: false })
+    this.promptAttempted = true
+    this.notifier.markDirty()
+    return { requestId, abandon: () => { this.retireFailedSubmission(requestId) } }
+  }
+
+  /**
    * Send (queue/steer passed through 1:1); failures land in the snapshot's promptError.
    * @param content - text plus browser-owned temporary image uploads.
    * @param mode - queue appends after the current turn; steer interrupts it.
+   * @param signal - optional caller cancellation for the complete admission round-trip.
+   * @param requestId - identity from {@link beginSubmission}; a failed identified prompt retires its echo.
    * @returns the prompt result (also mirrored into promptError on failure).
    */
-  async prompt(content: PromptContentPart[], mode: 'queue' | 'steer'): Promise<RpcResult<{ accepted: true }>> {
+  async prompt(
+    content: PromptContentPart[],
+    mode: 'queue' | 'steer',
+    signal?: AbortSignal,
+    requestId?: SessionRequestId,
+  ): Promise<RpcResult<{ accepted: true }>> {
     this.promptError = null
     this.lastAgentError = null
     // Synchronous, before the first await: the blank → engaging edge must be
@@ -209,13 +247,15 @@ export class Session implements SessionFace {
     this.notifier.markDirty()
     let result: RpcResult<{ accepted: true }>
     try {
+      if (signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
       if (this.address === undefined) {
         result = (await this.api.sessions.prompt({
           sessionId: this.sessionId,
           mode,
           content,
           clientTimeZone: resolvedClientTimeZone(),
-        })).result
+          ...(requestId === undefined ? {} : { requestId }),
+        }, signal)).result
       } else if (this.address.mode === 'one-shot') {
         result = {
           ok: false,
@@ -226,13 +266,13 @@ export class Session implements SessionFace {
           },
         }
       } else {
-        if (content.some(part => part.type === 'image')) {
+        if (content.some(part => part.type === 'image' || part.type === 'file')) {
           result = {
             ok: false,
             error: {
               code: 'attachment-error',
-              message: 'Image input is unavailable for subagent continuations.',
-              details: { reason: 'SUBAGENT_IMAGE_UNSUPPORTED' },
+              message: 'Attachment input is unavailable for subagent continuations.',
+              details: { reason: 'SUBAGENT_ATTACHMENT_UNSUPPORTED' },
             },
           }
         } else {
@@ -243,7 +283,7 @@ export class Session implements SessionFace {
               : []),
             delivery: mode,
             clientTimeZone: resolvedClientTimeZone(),
-          })).result
+          }, signal)).result
           result = routed.ok ? { ok: true, value: { accepted: true } } : routed
         }
       }
@@ -251,6 +291,7 @@ export class Session implements SessionFace {
       result = transportError(error)
     }
     if (!result.ok) {
+      if (requestId !== undefined) this.retireFailedSubmission(requestId)
       this.promptError = { op: 'send', error: result.error }
       this.notifier.markDirty()
       return result
@@ -555,6 +596,7 @@ export class Session implements SessionFace {
       }
       case 'session/queue': {
         this.queueMirror.replace(frame.items)
+        this.observeSubmissionQueue()
         this.notifier.markDirty()
         return
       }
@@ -679,8 +721,12 @@ export class Session implements SessionFace {
     this.notifier.markDirty()
   }
 
-  /** No-op because session instances remain resident. */
-  dispose(): void {}
+  /** Retire unsettled echoes so owners can restore or release browser resources. */
+  dispose(): void {
+    for (const requestId of [...this.submissionSettlements.keys()]) {
+      this.retireFailedSubmission(requestId)
+    }
+  }
 
   /** Rebuild the current window after a low-frequency Definition or view registration change. */
   rebuildConversationRegistry(): void {
@@ -771,6 +817,9 @@ export class Session implements SessionFace {
     if (event.type === 'command/run' || event.type === 'turn/start') this.engageFromContent()
     const queueChanged = this.queueMirror.acceptDurable(event)
     const publication = this.conversation.append({ event, view })
+    // After the feed append: schedule echo retirement one frame later so the
+    // durable node is renderable in the same paint the echo leaves.
+    this.observeSubmissionEvent(event)
     return queueChanged ? 'immediate' : publication
   }
 
@@ -842,6 +891,7 @@ export class Session implements SessionFace {
       partial: legacy.partial,
       runningCalls: legacy.runningCalls,
       pending: this.pendingCache.value,
+      pendingSubmissions: this.pendingSubmissions,
       queue: this.queueMirror.snapshot(),
       running: this.running,
       subagent: this.address === undefined
@@ -865,6 +915,61 @@ export class Session implements SessionFace {
     }
   }
 
+  /** Observe durable acceptance of a local submission echo. */
+  private observeSubmissionEvent(event: SessionEvent): void {
+    if (this.submissionSettlements.size === 0) return
+    if (event.type !== 'user/message') return
+    const data = event.data as { readonly source?: unknown; readonly content?: unknown; readonly rpcId?: unknown } | undefined
+    const source = data?.source as { readonly kind?: unknown; readonly rpcId?: unknown } | undefined
+    const rpcId = (source?.kind === 'user' && typeof source.rpcId === 'string')
+      ? source.rpcId
+      : (typeof data?.rpcId === 'string' ? data.rpcId : undefined)
+    if (rpcId === undefined) return
+    this.scheduleObservedRetirement(rpcId as SessionRequestId, attachmentRefsIn(data?.content))
+  }
+
+  /** Retire local echoes when their accepted messages appear in the Host queue snapshot. */
+  private observeSubmissionQueue(): void {
+    if (this.submissionSettlements.size === 0) return
+    for (const row of this.queueMirror.snapshot()) {
+      if (row.rpcId === undefined) continue
+      this.scheduleObservedRetirement(row.rpcId as SessionRequestId, attachmentRefsIn(row.content))
+    }
+  }
+
+  /**
+   * Latch one observed settlement and remove the echo an animation frame later
+   * so the durable node is paint-ready before the echo leaves the snapshot.
+   */
+  private scheduleObservedRetirement(
+    requestId: SessionRequestId,
+    attachments: readonly (ImageAttachmentRef | FileAttachmentRef)[],
+  ): void {
+    const settlement = this.submissionSettlements.get(requestId)
+    if (settlement === undefined || settlement.retiring) return
+    settlement.retiring = true
+    scheduleFrame(() => { this.finishSubmission(requestId, { reason: 'observed', attachments }) })
+  }
+
+  /** Remove one unsettled echo immediately (prompt rejection, abort, or disposal). */
+  private retireFailedSubmission(requestId: SessionRequestId): void {
+    const settlement = this.submissionSettlements.get(requestId)
+    if (settlement === undefined || settlement.retiring) return
+    settlement.retiring = true
+    this.finishSubmission(requestId, { reason: 'failed' })
+  }
+
+  /** Single removal point: drop the echo, publish, then notify the owner. */
+  private finishSubmission(requestId: SessionRequestId, retirement: PendingSubmissionRetirement): void {
+    const settlement = this.submissionSettlements.get(requestId)
+    /* v8 ignore next -- retiring latches before every schedule, so one settlement never finishes twice. */
+    if (settlement === undefined) return
+    this.submissionSettlements.delete(requestId)
+    this.pendingSubmissions = this.pendingSubmissions.filter(echo => echo.requestId !== requestId)
+    this.notifier.markDirty()
+    settlement.onRetire?.(retirement)
+  }
+
   /** Select ordinary or addressed history transport from the stored browser fact. */
   private history(payload: { beforeSeq?: number; maxMessages?: number }): Promise<RpcResponse<{
     events: HistoryEntry[]
@@ -885,6 +990,28 @@ function conversationInput(entry: HistoryEntry): ConversationEventInput {
 /** Any durable Chat Node (including slash-command cards) activates the conversation. */
 function hasVisibleConversationContent(chat: ChatSnapshot): boolean {
   return chat.order.length > 0
+}
+
+/** Run one callback on the next animation frame, or a macrotask where no frame clock exists. */
+function scheduleFrame(fn: () => void): void {
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { fn() })
+  else setTimeout(fn, 0)
+}
+
+/** Attachment references in one structurally-read content block list, in block order. */
+function attachmentRefsIn(content: unknown): readonly (ImageAttachmentRef | FileAttachmentRef)[] {
+  if (!Array.isArray(content)) return []
+  const refs: Array<ImageAttachmentRef | FileAttachmentRef> = []
+  for (const block of content) {
+    if (typeof block !== 'object' || block === null) continue
+    const candidate = block as { readonly type?: unknown; readonly attachment?: unknown }
+    if ((candidate.type === 'image' || candidate.type === 'file')
+      && typeof candidate.attachment === 'object'
+      && candidate.attachment !== null) {
+      refs.push(candidate.attachment as ImageAttachmentRef | FileAttachmentRef)
+    }
+  }
+  return refs
 }
 
 /**

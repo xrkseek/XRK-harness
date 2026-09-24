@@ -370,6 +370,12 @@ export interface SessionsApi {
     mode: 'queue' | 'steer'
     content: PromptContentPart[]
     clientTimeZone?: string
+    /**
+     * Optional client-minted submission identity. When present, Face stamps it
+     * onto the admitted `user/message` source so local submission echoes can
+     * retire against the durable occurrence.
+     */
+    requestId?: RpcId
   }>):
   Promise<RpcResponse<{ accepted: true; command?: { kind: 'success'; text?: string } }>>
 

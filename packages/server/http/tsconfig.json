@@ -10,6 +10,7 @@
     { "path": "../../core/agent" },
     { "path": "../../core/session" },
     { "path": "../../protocol" },
-    { "path": "../../util/home-paths" }
+    { "path": "../../util/home-paths" },
+    { "path": "../../im-gateway-contract" }
   ]
 }

@@ -59,6 +59,7 @@ describe("FsService", () => {
       readBytes: vi.fn(async () => new Uint8Array()),
       write: vi.fn(async () => {}),
       edit: vi.fn(async () => {}),
+      remove: vi.fn(async () => {}),
       stat: vi.fn(async () => ({
         size: 0,
         isFile: true,
@@ -84,6 +85,7 @@ describe("FsService", () => {
       readBytes: vi.fn(async () => new Uint8Array()),
       write: vi.fn(async () => {}),
       edit: vi.fn(async () => {}),
+      remove: vi.fn(async () => {}),
       stat: vi.fn(async () => ({
         size: 0,
         isFile: true,
@@ -100,7 +102,7 @@ describe("FsService", () => {
     expect(out.content).toBe("2|b\n3|c\n\n[… 2 more lines; use offset=4]");
   });
 
-  it("registers read_file write_file apply_edit glob grep", async () => {
+  it("registers read_file write_file apply_edit apply_patch glob grep", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-"));
     await writeFile(path.join(root, "a.txt"), "hi", "utf8");
     const tools = createFsTools(createFsLocalProvider({ root }));
@@ -108,6 +110,7 @@ describe("FsService", () => {
       "read_file",
       "write_file",
       "apply_edit",
+      "apply_patch",
       "glob",
       "grep",
     ]);

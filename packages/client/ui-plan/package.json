@@ -32,7 +32,8 @@
         "@xrkseek/xrk-api-remotes",
         "@xrkseek/client-locale",
         "@xrkseek/client-ui-conversation",
-        "@xrkseek/client-ui-layout"
+        "@xrkseek/client-ui-layout",
+        "@xrkseek/client-connection"
       ],
       "platform": "web"
     }
@@ -44,6 +45,7 @@
   "license": "MIT",
   "peerDependencies": {
     "@xrkseek/xrk-api-remotes": "workspace:^",
+    "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-ui-conversation": "workspace:^",
@@ -58,6 +60,7 @@
   },
   "devDependencies": {
     "@xrkseek/xrk-api-remotes": "workspace:^",
+    "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-test-runtime": "workspace:^",

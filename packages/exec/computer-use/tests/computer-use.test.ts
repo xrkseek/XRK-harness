@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  COMPUTER_USE_PROMPT_TEXT,
   createComputerUseTools,
   createDefaultComputerUseAccess,
   createMemoryComputerUseProvider,
   createWindowsUiAutomationProvider,
   formatAxSnapshot,
+  mapKeysToSendKeys,
 } from "../src/index.js";
 
 describe("formatAxSnapshot", () => {
@@ -112,6 +114,30 @@ describe("createDefaultComputerUseAccess", () => {
     const access = createDefaultComputerUseAccess({ env: {} });
     expect(access.service).toBeUndefined();
   });
+
+  it("uses Face product when env unset", () => {
+    const access = createDefaultComputerUseAccess({
+      env: {},
+      product: { mode: "background" },
+    });
+    expect(access.providerName).toBe("background");
+  });
+
+  it("env XRK_COMPUTER_USE bypasses product", () => {
+    const access = createDefaultComputerUseAccess({
+      env: { XRK_COMPUTER_USE: "memory" },
+      product: { mode: "uia" },
+    });
+    expect(access.service?.providerId).toBe("memory");
+  });
+
+  it("product off leaves no service", () => {
+    const access = createDefaultComputerUseAccess({
+      env: {},
+      product: { mode: "off" },
+    });
+    expect(access.service).toBeUndefined();
+  });
 });
 
 describe("createWindowsUiAutomationProvider", () => {
@@ -141,5 +167,75 @@ describe("createWindowsUiAutomationProvider", () => {
     expect(snap.elements[0]?.index).toBe(1);
     const acted = await svc.act({ action: "click", element: 1 });
     expect(acted.delivery).toBe("uia");
+  });
+
+  it("sends key via SendKeys mapping without element", async () => {
+    const scripts: string[] = [];
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell(script) {
+        scripts.push(script);
+        return "keyed";
+      },
+    });
+    const acted = await svc.act({ action: "key", keys: "ctrl+s" });
+    expect(acted.ok).toBe(true);
+    expect(acted.delivery).toBe("uia");
+    expect(scripts[0]).toContain("SendWait");
+    expect(scripts[0]).toContain("^s");
+  });
+
+  it("scrolls with ScrollPattern script and optional element", async () => {
+    const scripts: string[] = [];
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell(script) {
+        if (script.includes("ConvertTo-Json") && script.includes("elements")) {
+          return JSON.stringify({
+            app: "List",
+            windowTitle: "List",
+            elements: [{ index: 1, role: "List", name: "Items", runtimeId: "9,1" }],
+          });
+        }
+        scripts.push(script);
+        return "scrolled-pattern";
+      },
+    });
+    await svc.capture();
+    const acted = await svc.act({
+      action: "scroll",
+      element: 1,
+      direction: "down",
+      amount: 2,
+    });
+    expect(acted.ok).toBe(true);
+    expect(acted.message).toContain("scrolled");
+    expect(scripts[0]).toContain("ScrollPattern");
+    expect(scripts[0]).toContain("9,1");
+  });
+
+  it("rejects unknown key tokens", async () => {
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell() {
+        return "";
+      },
+    });
+    await expect(svc.act({ action: "key", keys: "win+r" })).rejects.toThrow(
+      /win\/meta|not supported/,
+    );
+  });
+});
+
+describe("mapKeysToSendKeys", () => {
+  it("maps common combos", () => {
+    expect(mapKeysToSendKeys("return")).toBe("{ENTER}");
+    expect(mapKeysToSendKeys("ctrl+shift+s")).toBe("^+s");
+    expect(mapKeysToSendKeys("alt+f4")).toBe("%{F4}");
+  });
+});
+
+describe("COMPUTER_USE_PROMPT_TEXT", () => {
+  it("splits native GUI from browser_*", () => {
+    expect(COMPUTER_USE_PROMPT_TEXT).toContain("browser_open");
+    expect(COMPUTER_USE_PROMPT_TEXT).toContain("native");
+    expect(COMPUTER_USE_PROMPT_TEXT).toMatch(/key\/scroll|click\/type\/key\/scroll/);
   });
 });

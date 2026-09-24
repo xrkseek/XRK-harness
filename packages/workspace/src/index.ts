@@ -220,6 +220,23 @@ export {
 export { createSkillTools, presentSkillCall } from "./skill-tools.js";
 
 export {
+  buildProposedSkillMarkdown,
+  clearLearningLoopNudge,
+  consumeLearningLoopNudge,
+  createProposeSkillTool,
+  LEARNING_LOOP_COMPLEX_TOOL_THRESHOLD,
+  learningLoopNudgeText,
+  noteLearningLoopTurn,
+  presentProposeSkillCall,
+  PROPOSE_SKILL_TOOL,
+  resetLearningLoopNudgeStateForTests,
+  writeProposedSkill,
+  type ProposeSkillConfirmResult,
+  type ProposeSkillDraft,
+  type WriteProposedSkillOptions,
+} from "./skill-propose.js";
+
+export {
   installSkill,
   installSkillFromGit,
   installSkillFromLocalDir,

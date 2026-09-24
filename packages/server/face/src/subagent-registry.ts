@@ -25,7 +25,11 @@ export class FaceSubagentRegistry {
 
   constructor(
     persistPath?: string,
-    private readonly hooks?: { onAttach?: (link: FaceSubagentLink) => void },
+    private readonly hooks?: {
+      onAttach?: (link: FaceSubagentLink) => void;
+      /** Observe-only: child stretch idle / one-shot settle (shell SubagentStop). */
+      onStop?: (link: FaceSubagentLink) => void;
+    },
   ) {
     this.persistPath = persistPath;
     if (persistPath) this.load();
@@ -88,6 +92,11 @@ export class FaceSubagentRegistry {
     this.save();
     this.hooks?.onAttach?.(frozen);
     return frozen;
+  }
+
+  /** Fire SubagentStop observers (idempotent callers should gate themselves). */
+  notifyStop(link: FaceSubagentLink): void {
+    this.hooks?.onStop?.(link);
   }
 
   private load(): void {

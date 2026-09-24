@@ -1,7 +1,8 @@
 /**
  * Auto-review classifier seam.
- * Default is the local heuristic. Replace it with `options.classifier`
- * or POST `XRK_AUTO_REVIEW_CLASSIFIER_URL` (verdict JSON). Not a Cordis host.
+ * Default is the local heuristic. Replace it with `options.classifier`,
+ * Face Settings `auto-review.classifierUrl` (+ Credentials token), or
+ * POST `XRK_AUTO_REVIEW_CLASSIFIER_URL` (CI bypass). Not a Cordis host.
  */
 import { classifyAutoReviewHeuristic } from "./host-feature-bridge.js";
 
@@ -26,6 +27,14 @@ export interface AutoReviewClassifierOptions {
   readonly classifierId?: string;
   readonly env?: NodeJS.ProcessEnv;
   readonly fetchImpl?: typeof fetch;
+  /**
+   * Face product (`auto-review` ns + Credentials token). Ignored when
+   * `XRK_AUTO_REVIEW_CLASSIFIER_URL` is set (CI bypass).
+   */
+  readonly product?: {
+    readonly classifierUrl?: string;
+    readonly classifierToken?: string;
+  };
 }
 
 export interface ResolvedAutoReviewClassifier {
@@ -106,14 +115,29 @@ export function resolveAutoReviewClassifier(
     };
   }
   const env = options.env ?? process.env;
-  const url = env[AUTO_REVIEW_CLASSIFIER_URL]?.trim();
-  if (url) {
+  const envUrl = env[AUTO_REVIEW_CLASSIFIER_URL]?.trim();
+  if (envUrl) {
     const token = env[AUTO_REVIEW_CLASSIFIER_TOKEN]?.trim();
     return {
       id: "http",
       kind: "http",
       run: createHttpAutoReviewClassifier({
-        url,
+        url: envUrl,
+        ...(token ? { token } : {}),
+        ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+      }),
+    };
+  }
+  const productUrl = options.product?.classifierUrl?.trim();
+  if (productUrl) {
+    const token =
+      options.product?.classifierToken?.trim() ||
+      env[AUTO_REVIEW_CLASSIFIER_TOKEN]?.trim();
+    return {
+      id: "http",
+      kind: "http",
+      run: createHttpAutoReviewClassifier({
+        url: productUrl,
         ...(token ? { token } : {}),
         ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
       }),

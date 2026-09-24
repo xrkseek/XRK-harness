@@ -33,11 +33,16 @@
   }
 }
 
-.close {
+.actions {
   position: fixed;
   top: max(20px, env(safe-area-inset-top, 0px));
   right: max(20px, env(safe-area-inset-right, 0px));
   z-index: 1;
+  display: flex;
+  gap: 8px;
+}
+
+.action {
   display: grid;
   place-items: center;
   width: 40px;
@@ -50,12 +55,17 @@
   touch-action: manipulation;
 }
 
+.action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 @media (max-width: 767px) {
   .backdrop {
     padding: 16px;
   }
 
-  .close {
+  .action {
     width: 44px;
     height: 44px;
   }

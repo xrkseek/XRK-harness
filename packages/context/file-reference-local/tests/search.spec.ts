@@ -38,6 +38,7 @@ function search(root: string, overrides: Partial<ConstructorParameters<typeof Wo
     maxResults: overrides.maxResults ?? 20,
     maxEntries: overrides.maxEntries ?? 10_000,
     excludedDirectories: overrides.excludedDirectories ?? ['.git', 'node_modules'],
+    respectGitignore: overrides.respectGitignore ?? false,
   })
   searches.push(instance)
   return instance
@@ -169,6 +170,37 @@ describe('WorkspaceFileSearch', () => {
     files.dispose()
     expect(await files.list('fresh-file', signal)).toEqual([])
     files.dispose()
+  })
+
+  it('honors .gitignore inside a git working tree (composer @file index)', async () => {
+    const root = await workspace()
+    await mkdir(join(root, '.git'), { recursive: true })
+    await writeFile(join(root, '.gitignore'), 'dist/\n*.log\n!keep.log\n')
+    await mkdir(join(root, 'dist'), { recursive: true })
+    await writeFile(join(root, 'dist', 'bundle.js'), 'ignored')
+    await writeFile(join(root, 'noise.log'), 'ignored')
+    await writeFile(join(root, 'keep.log'), 'kept')
+    await mkdir(join(root, 'src', 'nested'), { recursive: true })
+    await writeFile(join(root, 'src', 'nested', '.gitignore'), 'secret.ts\n')
+    await writeFile(join(root, 'src', 'nested', 'secret.ts'), 'secret')
+    await writeFile(join(root, 'src', 'nested', 'visible.ts'), 'ok')
+
+    const files = search(root, { respectGitignore: true })
+    const signal = new AbortController().signal
+
+    expect(await files.list('bundle', signal)).toEqual([])
+    expect(await files.list('noise', signal)).toEqual([])
+    expect(await files.list('keep', signal)).toEqual([
+      { path: 'keep.log', kind: 'file' },
+    ])
+    expect(await files.list('secret', signal)).toEqual([])
+    expect(await files.list('visible', signal)).toEqual([
+      { path: 'src/nested/visible.ts', kind: 'file' },
+    ])
+    expect(await files.list('dist/', signal)).toEqual([])
+    expect(await files.list('src/nested/', signal)).toEqual([
+      { path: 'src/nested/visible.ts', kind: 'file' },
+    ])
   })
 
   it('cancels individual callers, skips missing directories, and validates limits', async () => {

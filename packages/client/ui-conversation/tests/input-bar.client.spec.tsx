@@ -225,7 +225,7 @@ function bench(over?: BenchOptions) {
   // the store — exactly the state a returning session presents.
   for (const [level, text] of over?.notify ?? []) shell.notify(level, text)
   const view = render(<InputBar {...props} />)
-  const textarea = view.container.querySelector('textarea')!
+  const textarea = view.container.querySelector('[data-composer-input]')!
   const hasPartial = over?.partial !== null && over?.partial !== undefined
     && over.partial.blocks.some(block =>
       (block.kind === 'text' || block.kind === 'reasoning') && block.text.trim() !== '')
@@ -456,29 +456,29 @@ describe('image draft rail', () => {
 describe('Enter semantics', () => {
   it('advertises the empty-draft whole-queue steering gesture when it is available', () => {
     const { textarea } = bench({ running: true, queue: [row('q-1')], steerQueue: vi.fn() })
-    expect(textarea.placeholder).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
+    expect(textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
     // Preference does not move whole-queue flush onto plain Enter.
     expect(bench({
       running: true,
       queue: [row('q-1')],
       busyEnter: 'steer',
       steerQueue: vi.fn(),
-    }).textarea.placeholder).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
+    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
   })
 
   it('advertises queue vs steer chords while the agent is running with a draftable composer', () => {
-    expect(bench({ running: true, draft: 'typing' }).textarea.placeholder)
+    expect(bench({ running: true, draft: 'typing' }).textarea.getAttribute('data-placeholder'))
       .toBe('Enter 排队发送 · Cmd/Ctrl+Enter 插话发送')
-    expect(bench({ running: true, busyEnter: 'steer', draft: 'typing' }).textarea.placeholder)
+    expect(bench({ running: true, busyEnter: 'steer', draft: 'typing' }).textarea.getAttribute('data-placeholder'))
       .toBe('Enter 插话发送 · Cmd/Ctrl+Enter 排队发送')
   })
 
   it('keeps the owning placeholder or ordinary guidance when whole-queue steering is unavailable', () => {
     // Empty + running with nothing to send: do not lie that Enter queues.
-    expect(bench({ running: true }).textarea.placeholder).toBe('给智能体发消息')
-    expect(bench({ queue: [row('q-1')] }).textarea.placeholder).toBe('给智能体发消息')
+    expect(bench({ running: true }).textarea.getAttribute('data-placeholder')).toBe('给智能体发消息')
+    expect(bench({ queue: [row('q-1')] }).textarea.getAttribute('data-placeholder')).toBe('给智能体发消息')
     // Non-empty draft while running advertises the busy Enter / chord pair.
-    expect(bench({ running: true, queue: [row('q-1')], draft: '消息' }).textarea.placeholder)
+    expect(bench({ running: true, queue: [row('q-1')], draft: '消息' }).textarea.getAttribute('data-placeholder'))
       .toBe('Enter 排队发送 · Cmd/Ctrl+Enter 插话发送')
     expect(bench({
       running: true,
@@ -487,33 +487,33 @@ describe('Enter semantics', () => {
         address: { parentSessionId: 'parent' as SessionId, childSessionId: SID, mode: 'continuable' },
         parentAvailable: true,
       },
-    }).textarea.placeholder).toBe('给智能体发消息')
+    }).textarea.getAttribute('data-placeholder')).toBe('给智能体发消息')
     expect(bench({
       running: true,
       queue: [row('q-1')],
       placeholder: '上层指定提示',
-    }).textarea.placeholder).toBe('上层指定提示')
+    }).textarea.getAttribute('data-placeholder')).toBe('上层指定提示')
     // The command menu owns Enter while open: neither the hint nor the
     // gesture may claim the chord.
     expect(bench({
       running: true,
       queue: [row('q-1')],
       commandMenuOpen: true,
-    }).textarea.placeholder).toBe('给智能体发消息')
+    }).textarea.getAttribute('data-placeholder')).toBe('给智能体发消息')
     // Drain latch (partial after running clears): Stop stays, steer chords do not.
     expect(bench({
       running: false,
       partial: { turn: 1, step: 0, blocks: [{ kind: 'text', text: 'tail' }] },
       queue: [row('q-1')],
       steerQueue: vi.fn(),
-    }).textarea.placeholder).toBe('给智能体发消息')
+    }).textarea.getAttribute('data-placeholder')).toBe('给智能体发消息')
     // The steer hint intentionally outranks the plan placeholder: while it
     // shows, the whole-queue gesture is genuinely available in plan mode.
     expect(bench({
       running: true,
       queue: [row('q-1')],
       plan: { active: true, pending: false },
-    }).textarea.placeholder).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
+    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
   })
 
   it('an open command menu withholds the whole-queue steering gesture', () => {
@@ -656,8 +656,8 @@ describe('Enter semantics', () => {
 
   it('platform undo/redo chords route to the machine, never the browser stack', () => {
     const { textarea, shell } = bench({ draft: '' })
-    fireEvent.change(textarea, { target: { value: 'first' } })
-    fireEvent.change(textarea, { target: { value: 'first second' } })
+    act(() => { shell.setDraft('first') })
+    act(() => { shell.setDraft('first second') })
     fireEvent.keyDown(textarea, { key: 'z', ctrlKey: true })
     expect(shell.snapshot.draft).not.toBe('first second')
     fireEvent.keyDown(textarea, { key: 'z', ctrlKey: true, shiftKey: true })
@@ -689,7 +689,7 @@ describe('Enter semantics', () => {
 describe('running and lock semantics', () => {
   it('running switches the primary between Stop and Queue Send with the draft', () => {
     const { textarea, button, stop, sink, shell } = bench({ running: true })
-    expect(textarea.disabled).toBe(false)
+    expect(textarea.getAttribute('aria-disabled')).not.toBe('true')
     expect(button.getAttribute('aria-label')).toBe('停止生成')
     fireEvent.click(button)
     expect(stop).toHaveBeenCalledTimes(1)
@@ -735,8 +735,8 @@ describe('running and lock semantics', () => {
       connectionState: 'reconnecting',
       draft: '不能发',
     })
-    expect(textarea.disabled).toBe(true)
-    expect(textarea.placeholder).toBe('连接已断开，正在重连…')
+    expect(textarea.getAttribute('aria-disabled')).toBe('true')
+    expect(textarea.getAttribute('data-placeholder')).toBe('连接已断开，正在重连…')
     expect(button.disabled).toBe(true)
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(sink).not.toHaveBeenCalled()
@@ -758,7 +758,7 @@ describe('running and lock semantics', () => {
     const file = new File([Uint8Array.of(1)], 'a.png', { type: 'image/png' })
     const data = new DataTransfer()
     data.items.add(file)
-    const textarea = view.container.querySelector('textarea')!
+    const textarea = view.container.querySelector('[data-composer-input]')!
     fireEvent.paste(textarea, { clipboardData: data })
     expect(addImages).not.toHaveBeenCalled()
     expect(view.getByText('子智能体会话暂不支持图片')).toBeTruthy()
@@ -795,7 +795,7 @@ describe('running and lock semantics', () => {
     })
     expect(button.getAttribute('aria-label')).toBe('排队发送')
     expect(interruptButton).not.toBeNull()
-    expect(textarea.disabled).toBe(false)
+    expect(textarea.getAttribute('aria-disabled')).not.toBe('true')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('后续消息', [], 'queue', expect.any(AbortSignal))
     fireEvent.click(interruptButton!)
@@ -815,8 +815,8 @@ describe('running and lock semantics', () => {
         parentAvailable: false,
       },
     })
-    expect(textarea.disabled).toBe(true)
-    expect(textarea.placeholder).toBe('父会话已离线，无法继续发送；仍可停止当前运行')
+    expect(textarea.getAttribute('aria-disabled')).toBe('true')
+    expect(textarea.getAttribute('data-placeholder')).toBe('父会话已离线，无法继续发送；仍可停止当前运行')
     expect((view.getByLabelText('命令') as HTMLButtonElement).disabled).toBe(true)
     expect(button.getAttribute('aria-label')).toBe('发送消息')
     expect(button.disabled).toBe(true)
@@ -881,8 +881,8 @@ describe('running and lock semantics', () => {
 
   it('disabled (session removed) locks the textarea and chrome', () => {
     const { textarea, view } = bench({ disabled: true })
-    expect(textarea.disabled).toBe(true)
-    expect(textarea.placeholder).toBe('会话不可用')
+    expect(textarea.getAttribute('aria-disabled')).toBe('true')
+    expect(textarea.getAttribute('data-placeholder')).toBe('会话不可用')
     expect((view.getByLabelText('命令') as HTMLButtonElement).disabled).toBe(true)
   })
 
@@ -897,7 +897,7 @@ describe('running and lock semantics', () => {
   it('unlock refocuses the textarea; mousedown on the button keeps focus', () => {
     const first = bench({ disabled: true, draft: 'x' })
     act(() => { first.session.set(snapshotOf({ removed: false })) })
-    const textarea = first.view.container.querySelector('textarea')!
+    const textarea = first.view.container.querySelector('[data-composer-input]')!
     expect(document.activeElement).toBe(textarea)
     textarea.blur()
     fireEvent.mouseDown(first.view.container.querySelector('button[aria-label="发送消息"]')!)
@@ -906,7 +906,7 @@ describe('running and lock semantics', () => {
 
   it('typing forwards through the machine (draft state echoes back)', () => {
     const { textarea, wiring } = bench()
-    fireEvent.change(textarea, { target: { value: 'typed' } })
+    act(() => { shell.setDraft('typed') })
     expect(wiring.state.getSnapshot().draft).toBe('typed')
     expect((textarea).value).toBe('typed')
   })
@@ -965,7 +965,7 @@ describe('running and lock semantics', () => {
   it('the caret layer and the glyph layer ride one scrollport', () => {
     const { view, textarea } = bench({ draft: 'line\n'.repeat(40) })
     const scroll = view.container.querySelector<HTMLElement>('[data-input-scroll]')!
-    const backdrop = view.container.querySelector<HTMLElement>('[data-input-backdrop]')!
+    const backdrop = view.container.querySelector<HTMLElement>('[data-composer-input]')!
     // The caret is the textarea's and every visible glyph is the backdrop's, so
     // one box has to carry both or an offset can exist in one and not the other.
     // jsdom has no layout and loads no stylesheet — which box scrolls is the
@@ -1027,7 +1027,7 @@ describe('running and lock semantics', () => {
     })
     textarea.setSelectionRange(5, 5)
 
-    fireEvent.change(textarea, { target: { value: 'one line' } })
+    act(() => { shell.setDraft('one line') })
 
     expect(inputLayouts).toEqual(['29px', ''])
     expect(scrollportLayouts).toEqual(['53px', ''])
@@ -1059,7 +1059,7 @@ describe('running and lock semantics', () => {
       get: () => { throw new Error('non-Safari browser must not force scrollport layout') },
     })
 
-    fireEvent.change(textarea, { target: { value: 'one line' } })
+    act(() => { shell.setDraft('one line') })
 
     expect(scrollport.style.height).toBe('')
   })
@@ -1083,7 +1083,7 @@ describe('running and lock semantics', () => {
       get: () => { throw new Error('growing Safari input must not read layout') },
     })
 
-    fireEvent.change(textarea, { target: { value: 'one line grows' } })
+    act(() => { shell.setDraft('one line grows') })
 
     expect(shell.snapshot.draft).toBe('one line grows')
   })
@@ -1095,7 +1095,7 @@ describe('running and lock semantics', () => {
     // directions, and nothing at all for a caret already inside the box.
     const { view, textarea } = bench({ draft: 'line\n'.repeat(40) })
     const scroll = view.container.querySelector<HTMLElement>('[data-input-scroll]')!
-    const mirror = view.container.querySelector<HTMLElement>('[data-input-mirror]')!
+    const mirror = view.container.querySelector<HTMLElement>('[data-composer-placeholder]')!
     expect(mirror.firstChild).toBeInstanceOf(Text)
     scroll.getBoundingClientRect = () => ({ top: 100, bottom: 436 }) as DOMRect
     // jsdom reports scrollHeight === clientHeight for every element, which is
@@ -1161,7 +1161,7 @@ describe('running and lock semantics', () => {
     // conversation scrollport, which leaves the reveal to the effect itself.
     const { view, textarea, props } = bench({ draft: 'line\n'.repeat(40) })
     const scroll = view.container.querySelector<HTMLElement>('[data-input-scroll]')!
-    const mirror = view.container.querySelector<HTMLElement>('[data-input-mirror]')!
+    const mirror = view.container.querySelector<HTMLElement>('[data-composer-placeholder]')!
     onTestFinished(() => { Range.prototype.getBoundingClientRect = ZERO_RECT })
     scroll.getBoundingClientRect = () => ({ top: 100, bottom: 436 }) as DOMRect
     Object.defineProperty(scroll, 'clientHeight', { value: 336, configurable: true })
@@ -1197,7 +1197,7 @@ describe('running and lock semantics', () => {
     // so the draft's arrival has to run it again without reclaiming focus.
     const { view, textarea, shell } = bench()
     const scroll = view.container.querySelector<HTMLElement>('[data-input-scroll]')!
-    const mirror = view.container.querySelector<HTMLElement>('[data-input-mirror]')!
+    const mirror = view.container.querySelector<HTMLElement>('[data-composer-placeholder]')!
     // The restored draft ends in a newline, so the reveal takes the
     // after-newline path and needs a resolvable line-height (jsdom says `normal`).
     mirror.style.lineHeight = '24px'
@@ -1221,11 +1221,11 @@ describe('running and lock semantics', () => {
 
   it('disabled state shows the unavailable placeholder; custom placeholder wins', () => {
     const { textarea } = bench({ disabled: true })
-    expect(textarea.placeholder).toBe('会话不可用')
+    expect(textarea.getAttribute('data-placeholder')).toBe('会话不可用')
     const live = bench()
-    expect(live.textarea.placeholder).toBe('给智能体发消息')
+    expect(live.textarea.getAttribute('data-placeholder')).toBe('给智能体发消息')
     const custom = bench({ placeholder: 'Custom placeholder' })
-    expect(custom.textarea.placeholder).toBe('Custom placeholder')
+    expect(custom.textarea.getAttribute('data-placeholder')).toBe('Custom placeholder')
   })
 
   it('the inert textarea opens the Workspace picker by pointer or keyboard', () => {
@@ -1236,8 +1236,8 @@ describe('running and lock semantics', () => {
       onRequestWorkspace,
       placeholder: '选择一个工作区开始',
     })
-    expect(textarea.disabled).toBe(false)
-    expect(textarea.readOnly).toBe(true)
+    expect(textarea.getAttribute('aria-disabled')).not.toBe('true')
+    expect(textarea.getAttribute('contenteditable')).toBe('false')
     expect(textarea.getAttribute('aria-haspopup')).toBe('menu')
     expect(textarea.getAttribute('aria-expanded')).toBe('false')
     expect((view.getByLabelText('命令') as HTMLButtonElement).disabled).toBe(true)
@@ -1264,16 +1264,16 @@ describe('running and lock semantics', () => {
 
   it('the plan projection swaps the placeholder while its effective target is plan mode', () => {
     const active = bench({ plan: { active: true, pending: false } })
-    expect(active.textarea.placeholder).toBe('描述你的任务以生成计划')
+    expect(active.textarea.getAttribute('data-placeholder')).toBe('描述你的任务以生成计划')
     // /plan just ran: pending entry already reads as the plan target.
     const entering = bench({ plan: { active: false, pending: true } })
-    expect(entering.textarea.placeholder).toBe('描述你的任务以生成计划')
+    expect(entering.textarea.getAttribute('data-placeholder')).toBe('描述你的任务以生成计划')
     // Pending exit: target is default again.
     const leaving = bench({ plan: { active: true, pending: true } })
-    expect(leaving.textarea.placeholder).toBe('给智能体发消息')
+    expect(leaving.textarea.getAttribute('data-placeholder')).toBe('给智能体发消息')
     // Owner placeholder outranks the plan swap.
     const custom = bench({ plan: { active: true, pending: false }, placeholder: 'Custom placeholder' })
-    expect(custom.textarea.placeholder).toBe('Custom placeholder')
+    expect(custom.textarea.getAttribute('data-placeholder')).toBe('Custom placeholder')
   })
 })
 
@@ -1293,8 +1293,8 @@ describe('machine pending lock', () => {
       shell.submit()
     })
     expect(shell.snapshot.phase).toBe('submitting')
-    const textarea = view.container.querySelector('textarea')!
-    expect(textarea.readOnly).toBe(true)
+    const textarea = view.container.querySelector('[data-composer-input]')!
+    expect(textarea.getAttribute('contenteditable')).toBe('false')
     expect(view.container.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')!.disabled).toBe(true)
   })
 })
@@ -1310,13 +1310,13 @@ describe('decorations', () => {
         { start: 0, end: 6, draftRev: shell.snapshot.draftRev },
       )
     })
-    const token = view.container.querySelector('[data-decoration="token"]')
+    const token = view.container.querySelector('[data-lexical-text][style*="warn-label"]')
     expect(token?.textContent).toBe('/goal ')
-    expect(view.container.querySelector('[data-decoration="hint"]')?.textContent).toBe('目标内容')
+    expect(view.container.querySelector('[data-composer-input]')?.textContent).toBe('目标内容')
     // Args typed: the hint disappears, the token highlight stays.
     act(() => { shell.setDraft('/goal 发布') })
-    expect(view.container.querySelector('[data-decoration="hint"]')).toBeNull()
-    expect(view.container.querySelector('[data-decoration="token"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-composer-input]')).toBeNull()
+    expect(view.container.querySelector('[data-lexical-text][style*="warn-label"]')).not.toBeNull()
   })
 
   it('a locale entry for the claimed command overrides the raw claim hint (trailing-space token)', () => {
@@ -1328,7 +1328,7 @@ describe('decorations', () => {
         { start: 0, end: 6, draftRev: shell.snapshot.draftRev },
       )
     })
-    expect(view.container.querySelector('[data-decoration="hint"]')?.textContent).toBe('输入目标，智能体将持续执行')
+    expect(view.container.querySelector('[data-composer-input]')?.textContent).toBe('输入目标，智能体将持续执行')
   })
 
   it('an inserted reference decorates its complete inline display range', () => {
@@ -1343,7 +1343,7 @@ describe('decorations', () => {
         { start: 3, end: 6, draftRev: shell.snapshot.draftRev },
       )
     })
-    const chip = view.container.querySelector('[data-decoration="chip"]')
+    const chip = view.container.querySelector('[data-composer-chip]')
     expect(chip?.textContent).toBe('@会话一')
     expect(chip?.getAttribute('data-reference-appearance')).toBe('session')
     expect(chip?.querySelector('svg')).not.toBeNull()
@@ -1361,10 +1361,10 @@ describe('decorations', () => {
       }, { start: 0, end: 3, draftRev: shell.snapshot.draftRev })
       session.set(snapshotOf({ removed: true }))
     })
-    const backdrop = view.container.querySelector('[data-input-backdrop]')
-    expect(textarea.disabled).toBe(true)
+    const backdrop = view.container.querySelector('[data-composer-input]')
+    expect(textarea.getAttribute('aria-disabled')).toBe('true')
     expect(backdrop?.getAttribute('data-disabled')).toBe('true')
-    expect(backdrop?.querySelector('[data-decoration="chip"] svg')).not.toBeNull()
+    expect(backdrop?.querySelector('[data-composer-chip] svg')).not.toBeNull()
   })
 
   it('Backspace and Delete remove a reference as one range at its boundaries', () => {
@@ -1410,7 +1410,7 @@ describe('decorations', () => {
     textarea.setSelectionRange(0, 0)
     act(() => {
       beforeInput(textarea)
-      fireEvent.change(textarea, { target: { value: '@@会话一 ' } })
+      act(() => { shell.setDraft('@@会话一 ') })
     })
     expect(shell.snapshot.draft).toBe('@@会话一 ')
     expect(shell.snapshot.occurrences).toHaveLength(1)
@@ -1429,7 +1429,7 @@ describe('decorations', () => {
     textarea.setSelectionRange(0, 1)
     act(() => {
       beforeInput(textarea, 'deleteContentBackward')
-      fireEvent.change(textarea, { target: { value: '@会话一 ' } })
+      act(() => { shell.setDraft('@会话一 ') })
     })
     expect(shell.snapshot.draft).toBe('@会话一 ')
     expect(shell.snapshot.occurrences).toHaveLength(1)
@@ -1449,7 +1449,7 @@ describe('decorations', () => {
     textarea.setSelectionRange(1, 1)
     act(() => {
       beforeInput(textarea, 'deleteContentBackward')
-      fireEvent.change(textarea, { target: { value: '@会话一 ' } })
+      act(() => { shell.setDraft('@会话一 ') })
     })
     expect(shell.snapshot.draft).toBe('@会话一 ')
     expect(shell.snapshot.occurrences).toHaveLength(1)
@@ -1467,7 +1467,7 @@ describe('decorations', () => {
     textarea.setSelectionRange(0, 0)
     act(() => {
       beforeInput(textarea, 'deleteContentForward')
-      fireEvent.change(textarea, { target: { value: '@会话一 ' } })
+      act(() => { shell.setDraft('@会话一 ') })
     })
     expect(shell.snapshot.draft).toBe('@会话一 ')
     expect(shell.snapshot.occurrences).toHaveLength(1)
@@ -1488,7 +1488,7 @@ describe('decorations', () => {
     textarea.setSelectionRange(5, 5)
     act(() => {
       beforeInput(textarea, 'deleteWordBackward')
-      fireEvent.change(textarea, { target: { value: '@会话一 ' } })
+      act(() => { shell.setDraft('@会话一 ') })
     })
     expect(shell.snapshot.draft).toBe('@会话一 ')
     expect(shell.snapshot.occurrences).toHaveLength(1)
@@ -1519,17 +1519,17 @@ describe('decorations', () => {
     const lexicon = new Map<'/' | '@', readonly string[]>([['/', ['fixture-demo']]])
     const { view, shell } = bench({ lexicon })
     act(() => { shell.setDraft('use /fixture-demo now') })
-    const mark = view.container.querySelector('[data-decoration="text-ref"]')
+    const mark = view.container.querySelector('[data-composer-text-ref]')
     expect(mark?.textContent).toBe('/fixture-demo')
     // Editing the token out of match shape drops the decoration.
     act(() => { shell.setDraft('use /fixture-dem now') })
-    expect(view.container.querySelector('[data-decoration="text-ref"]')).toBeNull()
+    expect(view.container.querySelector('[data-composer-text-ref]')).toBeNull()
   })
 
   it('a directory completion renders a folder glyph without changing its plain text', () => {
     const { view, shell } = bench()
     act(() => { shell.setDraft('see @src/components/') })
-    const mark = view.container.querySelector('[data-decoration="text-ref"]')
+    const mark = view.container.querySelector('[data-composer-text-ref]')
     expect(mark?.textContent).toBe('@src/components/')
     expect(mark?.querySelector('svg')).not.toBeNull()
     expect(shell.snapshot.draft).toBe('see @src/components/')
@@ -1539,7 +1539,7 @@ describe('decorations', () => {
     const { view, shell } = bench()
     const draft = 'see @downloads/原文/2027-目录调整表-预通知1732.png'
     act(() => { shell.setDraft(draft) })
-    const mark = view.container.querySelector('[data-decoration="text-ref"]')
+    const mark = view.container.querySelector('[data-composer-text-ref]')
     expect(mark?.textContent).toBe('@downloads/原文/2027-目录调整表-预通知1732.png')
     expect(mark?.querySelector('svg')).not.toBeNull()
     expect(shell.snapshot.draft).toBe(draft)
@@ -1548,18 +1548,18 @@ describe('decorations', () => {
   it('a plain-text reference keeps its nodes while earlier text shifts its offset', () => {
     const { view, textarea, shell } = bench()
     act(() => { shell.setDraft('see @src/components/ here') })
-    const backdrop = view.container.querySelector('[data-input-backdrop]')!
-    const mark = backdrop.querySelector('[data-decoration="text-ref"]')!
+    const backdrop = view.container.querySelector('[data-composer-input]')!
+    const mark = backdrop.querySelector('[data-composer-text-ref]')!
     const icon = mark.querySelector('svg')!
-    act(() => { fireEvent.change(textarea, { target: { value: 'X see @src/components/ here' } }) })
+    act(() => { act(() => { shell.setDraft('X see @src/components/ here') }) })
     // Node identity, not text: an offset-derived key remounts the mark and its
     // icon on every keystroke landing ahead of the range.
-    expect(backdrop.querySelector('[data-decoration="text-ref"]')).toBe(mark)
+    expect(backdrop.querySelector('[data-composer-text-ref]')).toBe(mark)
     expect(icon.isConnected).toBe(true)
     expect(mark.textContent).toBe('@src/components/')
     // A token edited out of match shape still loses its decoration.
-    act(() => { fireEvent.change(textarea, { target: { value: 'X see X@src/components/ here' } }) })
-    expect(backdrop.querySelector('[data-decoration="text-ref"]')).toBeNull()
+    act(() => { act(() => { shell.setDraft('X see X@src/components/ here') }) })
+    expect(backdrop.querySelector('[data-composer-text-ref]')).toBeNull()
     expect(shell.snapshot.draft).toBe('X see X@src/components/ here')
   })
 })

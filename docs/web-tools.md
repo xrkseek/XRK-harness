@@ -10,9 +10,10 @@
 | 入口 | 字段 |
 |------|------|
 | Settings → Plugins → **Web search** | `provider` · `region` · Tavily / Brave 密钥（经 Credentials 落盘） |
+| Settings → Plugins → **Browser** | `mode`（`http` 快照 / `cdp`）· `cdpUrl`（Chrome DevTools 地址） |
 | Settings → Credentials | 同槽也可改 Tavily / Brave |
 
-Host 把上述值合成结构化 `webSearch`（`SearchAccessConfig`）传入 `createDefaultWebAccess({ search })`；agent 重建后生效。
+Host 把 Web search 合成结构化 `webSearch`（`SearchAccessConfig`）传入 `createDefaultWebAccess({ search })`；Browser 合成 `browserProduct` 传入 `createBrowserSession({ product })`。均在 agent 重建后生效。非空 `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` 为 CI 旁路。
 
 ## 缝
 
@@ -31,6 +32,7 @@ Host 把上述值合成结构化 `webSearch`（`SearchAccessConfig`）传入 `cr
 | `XRK_PARALLEL_FREE_MCP_URL` | 可选 Parallel URL |
 | `XRK_WEB_SEARCH_PROVIDER` | 钉死提供方（覆盖 Settings） |
 | `XRK_WEB_SEARCH_REGION` | DuckDuckGo `kl` |
+| `XRK_WEB_FETCH_ALLOWLIST` | 可选：逗号分隔主机名（支持 `*.example.com`）。非空时 `web_fetch` 仅允许列出主机；空则开放（仍拦私网）。决策写入进程内审计环（`getOutboundAllowlistAuditLog`）；**非** MITM/SOCKS，Starlark execpolicy 后置 |
 
 默认无密钥也能搜（Parallel 免费 MCP；不行再 DDG HTML）。默认最多 **8** 条源。
 
@@ -51,7 +53,9 @@ Harness 在启用 web 工具时登记 `browser_open` / `browser_snapshot` / `bro
 | `browser_act` | `click`（跟链 / 提交）或 `type`（填文本框） |
 | `browser_vision` | 截当前图形页给 vision（文本 `@eN` 旁加图片）。HTTP 快照没有浏览器时失败，不用元素列表冒充截图 |
 
-实现默认是 **HTTP 快照会话**（复用 `WebFetch` + URL 策略），`@eN` 不变。设了 `XRK_BROWSER_CDP_URL`（或 `BROWSER_CDP_URL`）时，同一套 `browser_open` / `browser_snapshot` / `browser_act` 改走 Chrome DevTools：浏览器级 websocket 会 `Target.createTarget` + `attachToTarget`，元素来自无障碍树，点击/输入走 `DOM.resolveNode`。`browser_vision` 再调 `Page.captureScreenshot`，经附件库把 PNG 放进模型请求；没接附件库时失败，不把无障碍树当截图。未设地址时不连 CDP。这不是桌面 computer-use。SPA 在纯 HTTP 会话下仍受限；一锤子读页继续用 `web_fetch`。
+实现默认是 **HTTP 快照会话**（复用 `WebFetch` + URL 策略），`@eN` 不变。Settings → Plugins → **Browser** 选 CDP 并填 `cdpUrl`（或设 `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL`）时，同一套 `browser_open` / `browser_snapshot` / `browser_act` 改走 Chrome DevTools：浏览器级 websocket 会 `Target.createTarget` + `attachToTarget`，元素来自无障碍树，点击/输入走 `DOM.resolveNode`。`browser_vision` 再调 `Page.captureScreenshot`，经附件库把 PNG 放进模型请求；没接附件库时失败，不把无障碍树当截图。未设地址时不连 CDP。这不是桌面 computer-use。SPA 在纯 HTTP 会话下仍受限；一锤子读页继续用 `web_fetch`。
+
+Host（harness/server）经 `createBrowserRuntimeRegistry` 按 **会话 id** 共享同一 `BrowserSession`：Agent invalidate / Settings 热重建后仍保留已打开页面与 CDP 连接；会话 finalize 或 Host stop 时 `drop`/`dispose`。工具失败经 `tool/result.error.code` 归类（如 `WEB_BROWSER_NO_PAGE` · `WEB_BROWSER_NO_GRAPHICS` · `WEB_BROWSER_NO_ATTACHMENTS` · `WEB_BROWSER_BAD_REF` · `WEB_BROWSER_CDP`）。
 
 ## 卡回放
 
@@ -70,9 +74,10 @@ Harness 在启用 web 工具时登记 `browser_open` / `browser_snapshot` / `bro
 | Entry | Fields |
 |------|------|
 | Settings → Plugins → **Web search** | `provider` · `region` · Tavily / Brave secrets (persisted via Credentials) |
+| Settings → Plugins → **Browser** | `mode` (`http` snapshot / `cdp`) · `cdpUrl` (Chrome DevTools URL) |
 | Settings → Credentials | Same slots may edit Tavily / Brave |
 
-The Host synthesizes a structured `webSearch` (`SearchAccessConfig`) into `createDefaultWebAccess({ search })`; it takes effect after agent rebuild.
+The Host synthesizes Web search into `webSearch` (`SearchAccessConfig`) for `createDefaultWebAccess({ search })`, and Browser into `browserProduct` for `createBrowserSession({ product })`. Both take effect after agent rebuild. Non-empty `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` is the CI bypass.
 
 ## Seams
 
@@ -91,6 +96,7 @@ The Host synthesizes a structured `webSearch` (`SearchAccessConfig`) into `creat
 | `XRK_PARALLEL_FREE_MCP_URL` | Optional Parallel URL |
 | `XRK_WEB_SEARCH_PROVIDER` | Pin provider (overrides Settings) |
 | `XRK_WEB_SEARCH_REGION` | DuckDuckGo `kl` |
+| `XRK_WEB_FETCH_ALLOWLIST` | Optional comma-separated hostnames (`*.example.com` ok). When set, `web_fetch` only allows listed hosts; empty stays open (private hosts still blocked). Decisions go to an in-process audit ring (`getOutboundAllowlistAuditLog`); **not** MITM/SOCKS — Starlark execpolicy deferred |
 
 Search works without keys by default (Parallel free MCP, then DDG HTML). Default max sources: **8**.
 
@@ -111,7 +117,9 @@ When web tools are enabled, harness registers `browser_open` / `browser_snapshot
 | `browser_act` | `click` (follow links / submit) or `type` (fill a textbox) |
 | `browser_vision` | Screenshot the graphical page for vision (image beside `@eN` text). The HTTP snapshot has no browser and fails; the element list is not a screenshot |
 
-The default is an **HTTP snapshot session** (reuses `WebFetch` + URL policy); `@eN` refs stay. When `XRK_BROWSER_CDP_URL` (or `BROWSER_CDP_URL`) is set, the same `browser_open` / `browser_snapshot` / `browser_act` tools use Chrome DevTools: a browser websocket calls `Target.createTarget` + `attachToTarget`, elements come from the accessibility tree, and click/type go through `DOM.resolveNode`. `browser_vision` then calls `Page.captureScreenshot` and stores the PNG so the model request can inline it. With no attachment store the call fails; the accessibility tree is not treated as a screenshot. With no URL, CDP is not contacted. This is not desktop computer-use. SPA pages stay limited on the plain HTTP session; use `web_fetch` for one-shot reads.
+The default is an **HTTP snapshot session** (reuses `WebFetch` + URL policy); `@eN` refs stay. When Settings → Plugins → **Browser** selects CDP with a `cdpUrl` (or `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` is set), the same `browser_open` / `browser_snapshot` / `browser_act` tools use Chrome DevTools: a browser websocket calls `Target.createTarget` + `attachToTarget`, elements come from the accessibility tree, and click/type go through `DOM.resolveNode`. `browser_vision` then calls `Page.captureScreenshot` and stores the PNG so the model request can inline it. With no attachment store the call fails; the accessibility tree is not treated as a screenshot. With no URL, CDP is not contacted. This is not desktop computer-use. SPA pages stay limited on the plain HTTP session; use `web_fetch` for one-shot reads.
+
+The Host (harness/server) shares one `BrowserSession` per conversation session via `createBrowserRuntimeRegistry`, so open pages and CDP callers survive agent invalidate / Settings rebuilds; session finalize or Host stop calls `drop`/`dispose`. Tool failures carry `tool/result.error.code` (`WEB_BROWSER_NO_PAGE` · `WEB_BROWSER_NO_GRAPHICS` · `WEB_BROWSER_NO_ATTACHMENTS` · `WEB_BROWSER_BAD_REF` · `WEB_BROWSER_CDP`).
 
 ## Card replay
 

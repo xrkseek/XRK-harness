@@ -6,6 +6,8 @@
 
 Harness 默认登记模型工具 `computer_use`；无 Provider 时工具仍可见，execute 诚实失败（同 LSP）。
 
+**产品路径**：Settings → Plugins → **Computer use**（Face ns `computer-use`：`mode` = 关 / uia / background）。Background 助手路径经 Credentials `XRK_COMPUTER_USE_BACKGROUND`（不进 settings.yaml）。保存后 Host `invalidateAgents` 热切换。非空 `XRK_COMPUTER_USE` 为 CI 旁路。
+
 ## 缝
 
 | 层 | 内容 |
@@ -24,14 +26,16 @@ Harness 默认登记模型工具 `computer_use`；无 Provider 时工具仍可�
 | `computerUseTools: service` | 注入自定义 Provider |
 | `computerUseTools: false` | 不登记工具 |
 
-Windows UIA 仍走 Invoke/ValuePattern。后台输入是旁边的 `background` Provider，不是把 UIA 改成 SPI，也不并进 `browser_*`。`key` / `scroll` 在 UIA Provider 上暂未实现。截图 SOM 叠加尚未提供；`mode=ax` 为默认。
+Windows UIA 走 Invoke / ValuePattern / SendKeys（`key`）/ ScrollPattern 或滚轮回退（`scroll`）。后台输入是旁边的 `background` Provider，不是把 UIA 改成 SPI，也不并进 `browser_*`。截图 SOM 叠加尚未提供；`mode=ax` 为默认。
 
 ## 与 browser_* 分工
 
 | 场景 | 工具 |
 |------|------|
-| HTTP 页面读写 / 点链填表 | `browser_open` · `browser_snapshot` · `browser_act` |
-| 本机 GUI 应用（无障碍树） | `computer_use` |
+| HTTP 页面读写 / 点链填表 / 页面截图 | `browser_open` · `browser_snapshot` · `browser_act` · `browser_vision` |
+| 本机原生 GUI（无障碍树 + 键鼠） | `computer_use` |
+
+系统提示：`COMPUTER_USE_PROMPT_TEXT` 与 `formatBrowserGuidance` 互相指明边界——网页走 `browser_*`，原生桌面应用才用 `computer_use`。
 
 ---
 
@@ -42,6 +46,8 @@ Windows UIA 仍走 Invoke/ValuePattern。后台输入是旁边的 `background` P
 `@xrkseek/exec-computer-use` provides a desktop accessibility-tree + input Provider, separate from page-level `browser_*` (`@xrkseek/exec-web`).
 
 Harness registers the model tool `computer_use` by default; without a Provider the tool stays visible and execute fails honestly (same pattern as LSP).
+
+**Product path**: Settings → Plugins → **Computer use** (Face ns `computer-use`: `mode` = off / uia / background). Background helper path via Credentials `XRK_COMPUTER_USE_BACKGROUND` (not settings.yaml). After save, Host `invalidateAgents` hot-swaps. Non-empty `XRK_COMPUTER_USE` is the CI bypass.
 
 ## Seams
 
@@ -61,11 +67,13 @@ Harness registers the model tool `computer_use` by default; without a Provider t
 | `computerUseTools: service` | Inject a custom Provider |
 | `computerUseTools: false` | Do not register the tool |
 
-Windows UIA still uses Invoke/ValuePattern. Background input is the separate `background` provider; it does not turn UIA into an SPI and it is not part of `browser_*`. `key` / `scroll` are not implemented on the UIA Provider yet. Screenshot SOM overlays are not shipped; default `mode=ax`.
+Windows UIA uses Invoke / ValuePattern / SendKeys (`key`) / ScrollPattern or mouse-wheel fallback (`scroll`). Background input is the separate `background` provider; it does not turn UIA into an SPI and it is not part of `browser_*`. Screenshot SOM overlays are not shipped; default `mode=ax`.
 
 ## vs browser_*
 
 | Scenario | Tools |
 |----------|-------|
-| HTTP page read / link / form | `browser_open` · `browser_snapshot` · `browser_act` |
-| Host GUI apps (accessibility tree) | `computer_use` |
+| HTTP page read / link / form / page screenshot | `browser_open` · `browser_snapshot` · `browser_act` · `browser_vision` |
+| Native host GUI (accessibility tree + input) | `computer_use` |
+
+System prompts: `COMPUTER_USE_PROMPT_TEXT` and `formatBrowserGuidance` cross-reference the boundary — web pages use `browser_*`; native desktop apps use `computer_use`.

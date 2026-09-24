@@ -17,11 +17,13 @@ MP4 **不内联进工具文本**；Host 配了 `AttachmentStore` 时经 `saveFil
 
 ## 启用
 
-| `XRK_VIDEO_GEN` | 行为                                                                                                                      |
+**产品路径**：Settings → Plugins → **Video gen**（Face ns `video-gen`：`mode` = 关 / openai · 可选 `baseUrl` · `model`）。API 密钥经 Credentials `XRK_VIDEO_GEN_OPENAI_KEY`。保存后热切换。非空 `XRK_VIDEO_GEN` 为 CI 旁路。
+
+| `XRK_VIDEO_GEN` / Settings | 行为 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| （未设）        | 工具仍登记；execute **诚实失败**                                                                                          |
-| `memory`        | 内存 Provider（确定性作业生命周期 + 24 字节 `ftyp` MP4，CI / 演示）                                                       |
-| `1`             | 需 `OPENAI_API_KEY` 或 `XRK_VIDEO_GEN_OPENAI_KEY`；可选 `XRK_VIDEO_GEN_BASE_URL` · `XRK_VIDEO_GEN_MODEL`（默认 `sora-2`） |
+| （未设 / 关） | 工具仍登记；execute **诚实失败** |
+| `memory`（仅 env） | 内存 Provider（确定性作业生命周期 + 24 字节 `ftyp` MP4，CI / 演示） |
+| `1` / openai | 需 `OPENAI_API_KEY` 或 Credentials `XRK_VIDEO_GEN_OPENAI_KEY`；可选 Settings / `XRK_VIDEO_GEN_BASE_URL` · `XRK_VIDEO_GEN_MODEL`（默认 `sora-2`） |
 
 其它后端（Runway / Kling / FAL 等）可后续作 Provider 注入；本 MVP 对齐 OpenAI Videos API + memory。
 
@@ -50,10 +52,12 @@ only `status=failed` is an `isError`.
 
 ## Enable
 
-| `XRK_VIDEO_GEN` | Behavior                                                                                                                           |
+**Product path**: Settings → Plugins → **Video gen** (Face ns `video-gen`: `mode` = off / openai · optional `baseUrl` · `model`). API key via Credentials `XRK_VIDEO_GEN_OPENAI_KEY`. Live after save. Non-empty `XRK_VIDEO_GEN` is the CI bypass.
+
+| `XRK_VIDEO_GEN` / Settings | Behavior |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| (unset)         | Tool still registers; execute **fails honestly**                                                                                   |
-| `memory`        | In-memory Provider (deterministic job lifecycle + a 24-byte `ftyp` MP4, CI / demos)                                                |
-| `1`             | Needs `OPENAI_API_KEY` or `XRK_VIDEO_GEN_OPENAI_KEY`; optional `XRK_VIDEO_GEN_BASE_URL` · `XRK_VIDEO_GEN_MODEL` (default `sora-2`) |
+| (unset / off) | Tool still registers; execute **fails honestly** |
+| `memory` (env only) | In-memory Provider (deterministic job lifecycle + a 24-byte `ftyp` MP4, CI / demos) |
+| `1` / openai | Needs `OPENAI_API_KEY` or Credentials `XRK_VIDEO_GEN_OPENAI_KEY`; optional Settings / `XRK_VIDEO_GEN_BASE_URL` · `XRK_VIDEO_GEN_MODEL` (default `sora-2`) |
 
 Runway / Kling / FAL and other backends can be injected later as Providers; this MVP covers OpenAI Videos API + memory.

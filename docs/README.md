@@ -59,7 +59,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 跑测 / 提 PR | [testing](./testing.md) · [CONTRIBUTING](../CONTRIBUTING.md) |
 | 交接本仓 | [maintainer](./maintainer.md) · [audiences](./audiences.md) |
 | 发版 | [publishing](./publishing.md)（维护者） |
-| 版本说明 | [releases/](./releases/)（当前 [v0.3.2](./releases/v0.3.2.md) · 预览末号 [v0.2.7](./releases/v0.2.7.md)） |
+| 版本说明 | [releases/](./releases/)（当前 [v0.4.0](./releases/v0.4.0.md) = `@latest` · 上一正式线 [v0.3.11](./releases/v0.3.11.md) · 上一轮预览末号 [v0.2.7](./releases/v0.2.7.md)） |
 | 改码笔记 | [AGENTS](../AGENTS.md) · `.cursor/skills` |
 
 ## 规格索引
@@ -96,6 +96,8 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [plugin-development.md](./plugin-development.md) | 进程插件 |
 | [plugin-loader.md](./plugin-loader.md) | 插件 discover / load |
 | [community-plugins.md](./community-plugins.md) | 社区插件 Host 契约 |
+| [sidebar-workbench.md](./sidebar-workbench.md) | 右侧工作台：Status · Host `/sidebar/*` · 首方薄壳 / 社区侧栏 |
+| [im-gateway-sidecar.md](./im-gateway-sidecar.md) | IM Host↔sidecar 契约 · mock 样板（非厂商矩阵） |
 
 ### LLM
 
@@ -131,6 +133,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [shell-jobs.md](./shell-jobs.md) | shell 后台 job |
 | [code-mode.md](./code-mode.md) | `run_code` 实验面 |
 | [workspace-inject.md](./workspace-inject.md) | 持久注入 |
+| [context-fragments.md](./context-fragments.md) | 可插拔 fragments（与 inject 分层） |
 | [skills-layers.md](./skills-layers.md) | rules / skills 分层 |
 | [slash-recipes.md](./slash-recipes.md) | `/recipe-id` · `/skill-name` |
 | [policy.md](./policy.md) | tool / provider / mcp 门禁 |
@@ -147,7 +150,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [learn.md](./learn.md) | 要义摘录 |
 | [modules/](./modules/README.md) | 包文件地图 |
 | [adr/](./adr/README.md) | 架构决策 |
-| [releases/](./releases/) | 发行说明（当前 [v0.3.2](./releases/v0.3.2.md) · 预览末号 [v0.2.7](./releases/v0.2.7.md)） |
+| [releases/](./releases/) | 发行说明（当前 [v0.4.0](./releases/v0.4.0.md) = `@latest` · 上一正式线 [v0.3.11](./releases/v0.3.11.md) · 上一轮预览末号 [v0.2.7](./releases/v0.2.7.md)） |
 
 ---
 
@@ -212,7 +215,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | Test / PR | [testing](./testing.md) · [CONTRIBUTING](../CONTRIBUTING.md) |
 | Handoff | [maintainer](./maintainer.md) · [audiences](./audiences.md) |
 | Release | [publishing](./publishing.md) (maintainers) |
-| Release notes | [releases/](./releases/) (current [v0.3.2](./releases/v0.3.2.md) · last preview [v0.2.7](./releases/v0.2.7.md)) |
+| Release notes | [releases/](./releases/) (current [v0.4.0](./releases/v0.4.0.md) = `@latest` · previous formal line [v0.3.11](./releases/v0.3.11.md) · previous preview line end [v0.2.7](./releases/v0.2.7.md)) |
 | Coding notes | [AGENTS](../AGENTS.md) · `.cursor/skills` |
 
 ## Spec index
@@ -249,6 +252,8 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [plugin-development.md](./plugin-development.md) | Process plugins |
 | [plugin-loader.md](./plugin-loader.md) | Discover / load |
 | [community-plugins.md](./community-plugins.md) | Community Host contracts |
+| [sidebar-workbench.md](./sidebar-workbench.md) | Right workbench: Status · Host `/sidebar/*` · first-party shell / community sidebar |
+| [im-gateway-sidecar.md](./im-gateway-sidecar.md) | IM Host↔sidecar contract · mock sample (not a vendor matrix) |
 
 ### LLM
 
@@ -282,6 +287,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [shell-jobs.md](./shell-jobs.md) | Background shell jobs |
 | [code-mode.md](./code-mode.md) | `run_code` experimental surface |
 | [workspace-inject.md](./workspace-inject.md) | Persistent inject |
+| [context-fragments.md](./context-fragments.md) | Pluggable fragments (layered apart from inject) |
 | [skills-layers.md](./skills-layers.md) | Rules / skills layering |
 | [slash-recipes.md](./slash-recipes.md) | `/recipe-id` · `/skill-name` |
 | [policy.md](./policy.md) | tool / provider / mcp gates |
@@ -298,4 +304,4 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [learn.md](./learn.md) | Short digest |
 | [modules/](./modules/README.md) | Package file map |
 | [adr/](./adr/README.md) | Architecture decisions |
-| [releases/](./releases/) | Release notes (current [v0.3.2](./releases/v0.3.2.md) · last preview [v0.2.7](./releases/v0.2.7.md)) |
+| [releases/](./releases/) | Release notes (current [v0.4.0](./releases/v0.4.0.md) = `@latest` · previous formal line [v0.3.11](./releases/v0.3.11.md) · previous preview line end [v0.2.7](./releases/v0.2.7.md)) |

@@ -118,6 +118,38 @@ describe('ui-settings-plugins apply', () => {
     }
   })
 
+  it('registers SSH remote on General settings.general.item', async () => {
+    const { ctx, slots } = await bench()
+    declareRoot(slots)
+    slots.register({
+      name: 'settings.section',
+      id: 'general',
+      order: 0,
+      children: { 'settings.general.item': { kind: 'list', scope: 'root' } },
+    } as never, () => null)
+
+    await ctx.plugin({ inject: [...inject], apply }).await()
+
+    await vi.waitFor(() => {
+      expect(slots.entries('settings.general.item').map(e => e.options.id)).toEqual([
+        'ssh-remote',
+      ])
+    })
+  })
+
+  it('registers an Advanced tab with the auto-review card', async () => {
+    const { ctx, slots } = await bench(['auto-review'])
+    declareRoot(slots)
+    await ctx.plugin({ inject: [...inject], apply }).await()
+
+    const tabIds = slots.entries('settings.plugins.tab').map(e => e.options.id)
+    expect(tabIds).toContain('advanced')
+    await vi.waitFor(() => {
+      expect(slots.entries('settings.plugin.advanced.item').map(e => e.options.key))
+        .toEqual(['auto-review'])
+    })
+  })
+
   it('keys each card it ships on the settings namespace that card edits', async () => {
     const { ctx, slots } = await bench()
     declareRoot(slots)

@@ -15,6 +15,7 @@
   ],
   "dependencies": {
     "@xrkseek/core-tools": "workspace:*",
+    "@xrkseek/secrets": "workspace:*",
     "@xrkseek/xrk-home-paths": "workspace:*"
   },
   "license": "MIT",

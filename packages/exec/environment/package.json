@@ -1,0 +1,28 @@
+{
+  "name": "@xrkseek/exec-environment",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "dependencies": {
+    "@xrkseek/exec-fs": "workspace:*",
+    "@xrkseek/exec-subprocess": "workspace:*"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/exec/environment"
+  },
+  "private": true,
+  "description": "Pluggable ExecEnvironment providers (local · HTTP serverless sample). Not sandbox confine."
+}

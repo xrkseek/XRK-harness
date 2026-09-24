@@ -36,6 +36,7 @@ function fileSearchFor(
     maxResults: DEFAULT_FILE_SEARCH_MAX_RESULTS,
     maxEntries: DEFAULT_FILE_SEARCH_MAX_ENTRIES,
     excludedDirectories: [...DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES],
+    respectGitignore: true,
   });
   fileSearches.set(sessionId, { cwd, search });
   return search;

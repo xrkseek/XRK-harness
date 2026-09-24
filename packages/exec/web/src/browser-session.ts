@@ -45,6 +45,8 @@ export interface BrowserSession {
     request: BrowserActRequest,
     signal?: AbortSignal,
   ): Promise<BrowserActResult>;
+  /** Optional teardown (CDP WS / clear page). Registry calls this on drop. */
+  dispose?(): void;
 }
 
 interface PageState {
@@ -181,6 +183,9 @@ export function createHttpBrowserSession(options: {
         ...snap,
         note: `clicked @${ref} (no navigation — static HTTP session)`,
       };
+    },
+    dispose() {
+      page = undefined;
     },
   };
 }

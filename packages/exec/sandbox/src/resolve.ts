@@ -20,6 +20,14 @@ import {
 
 export type SandboxBackendKind = "workspace" | "docker" | "bwrap" | "windows";
 
+/** Face `sandbox` product shape (Settings SoT). */
+export interface SandboxProductConfig {
+  readonly backend: SandboxBackendKind;
+  readonly dockerImage?: string;
+  readonly dockerNetwork?: DockerNetworkMode;
+  readonly windowsMode?: WindowsSandboxMode;
+}
+
 export interface ResolveSandboxOptions {
   readonly workspaceRoot: string;
   /**
@@ -30,6 +38,11 @@ export interface ResolveSandboxOptions {
    */
   readonly backend?: SandboxBackendKind;
   readonly env?: NodeJS.ProcessEnv;
+  /**
+   * Face Settings product. Used when `XRK_SANDBOX_BACKEND` is unset
+   * (env remains the CI bypass).
+   */
+  readonly product?: SandboxProductConfig;
   /** When true, skip WorkspaceSandbox path.resolve (SSH remote cwd). */
   readonly remoteExecution?: boolean;
   readonly dockerImage?: string;
@@ -45,6 +58,40 @@ export interface ResolveSandboxOptions {
   /** Windows network egress (default false). */
   readonly windowsNetwork?: boolean;
   readonly windowsExtraArgs?: readonly string[];
+}
+
+/** Parse a Face `sandbox` namespace value. */
+export function parseSandboxProduct(raw: unknown): SandboxProductConfig | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const row = raw as Record<string, unknown>;
+  const backendRaw =
+    typeof row.backend === "string" ? row.backend.trim().toLowerCase() : "";
+  const backend: SandboxBackendKind =
+    backendRaw === "docker" ||
+    backendRaw === "bwrap" ||
+    backendRaw === "windows" ||
+    backendRaw === "workspace"
+      ? backendRaw
+      : "workspace";
+  const dockerImage =
+    typeof row.dockerImage === "string" && row.dockerImage.trim()
+      ? row.dockerImage.trim()
+      : undefined;
+  const netRaw =
+    typeof row.dockerNetwork === "string"
+      ? row.dockerNetwork.trim().toLowerCase()
+      : "";
+  const dockerNetwork: DockerNetworkMode | undefined =
+    netRaw === "bridge" || netRaw === "none" ? netRaw : undefined;
+  const modeRaw =
+    typeof row.windowsMode === "string" ? row.windowsMode.trim() : undefined;
+  const windowsMode = isWindowsSandboxMode(modeRaw) ? modeRaw : undefined;
+  return {
+    backend,
+    ...(dockerImage ? { dockerImage } : {}),
+    ...(dockerNetwork ? { dockerNetwork } : {}),
+    ...(windowsMode ? { windowsMode } : {}),
+  };
 }
 
 function backendFromEnv(env: NodeJS.ProcessEnv): SandboxBackendKind {
@@ -63,10 +110,18 @@ function backendFromEnv(env: NodeJS.ProcessEnv): SandboxBackendKind {
  * - docker: DenyList → Docker (mount workspace); WorkspaceSandbox when not remote
  * - bwrap: DenyList → bubblewrap (Linux)
  * - windows: DenyList → Codex-style helper (write isolation); fails closed
+ *
+ * Precedence: explicit option fields → else when `XRK_SANDBOX_BACKEND` unset,
+ * Face `product` → else env defaults. Non-empty `XRK_SANDBOX_BACKEND` is CI bypass.
  */
 export function createSandboxStack(options: ResolveSandboxOptions): SandboxService {
   const env = options.env ?? process.env;
-  const backend = options.backend ?? backendFromEnv(env);
+  const envBypass = String(env.XRK_SANDBOX_BACKEND ?? "").trim() !== "";
+  const product = !envBypass ? options.product : undefined;
+  const backend =
+    options.backend ??
+    (product ? product.backend : undefined) ??
+    backendFromEnv(env);
   const deny = createDenyListSandbox({
     inner: createPermissiveSandbox(),
   });
@@ -75,15 +130,20 @@ export function createSandboxStack(options: ResolveSandboxOptions): SandboxServi
 
   if (backend === "docker") {
     const image =
-      options.dockerImage?.trim() || String(env.XRK_SANDBOX_DOCKER_IMAGE ?? "").trim();
+      options.dockerImage?.trim() ||
+      product?.dockerImage?.trim() ||
+      String(env.XRK_SANDBOX_DOCKER_IMAGE ?? "").trim();
     if (!image) {
       throw new SandboxBackendError(
-        "docker sandbox requires XRK_SANDBOX_DOCKER_IMAGE or dockerImage",
+        "docker sandbox requires XRK_SANDBOX_DOCKER_IMAGE or dockerImage / Settings sandbox.dockerImage",
         "SANDBOX_CONFIG",
       );
     }
     const networkRaw = String(
-      options.dockerNetwork ?? env.XRK_SANDBOX_DOCKER_NETWORK ?? "none",
+      options.dockerNetwork ??
+        product?.dockerNetwork ??
+        env.XRK_SANDBOX_DOCKER_NETWORK ??
+        "none",
     )
       .trim()
       .toLowerCase();
@@ -124,7 +184,10 @@ export function createSandboxStack(options: ResolveSandboxOptions): SandboxServi
         "SANDBOX_UNAVAILABLE",
       );
     }
-    const modeRaw = options.windowsMode ?? env.XRK_SANDBOX_WINDOWS_MODE;
+    const modeRaw =
+      options.windowsMode ??
+      product?.windowsMode ??
+      env.XRK_SANDBOX_WINDOWS_MODE;
     if (modeRaw !== undefined && !isWindowsSandboxMode(modeRaw)) {
       throw new SandboxBackendError(
         `unknown windows sandbox mode: ${String(modeRaw)}`,

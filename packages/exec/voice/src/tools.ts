@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolResultContent } from "@xrkseek/core-tools";
 import { VOICE_PROMPT_TEXT } from "./format.js";
+import { voiceUnavailableMessage } from "./readiness.js";
 import {
   VoiceError,
   isVoiceError,
@@ -7,32 +8,17 @@ import {
 } from "./types.js";
 
 export { VOICE_PROMPT_TEXT };
-
-export function voiceUnavailableMessage(
-  env: NodeJS.ProcessEnv = process.env,
-): string {
-  const flag = String(env.XRK_VOICE ?? "").trim().toLowerCase();
-  if (!flag) {
-    return (
-      "Error: voice Host is not enabled. Set XRK_VOICE=memory (CI/demo) or " +
-      "XRK_VOICE=1 with OPENAI_API_KEY / XRK_VOICE_OPENAI_KEY for OpenAI TTS · Whisper · realtime sessions. " +
-      "See docs/voice.md."
-    );
-  }
-  if (flag === "1") {
-    return (
-      "Error: XRK_VOICE=1 but no API key. Set OPENAI_API_KEY or XRK_VOICE_OPENAI_KEY " +
-      "(optional XRK_VOICE_BASE_URL for compatible endpoints)."
-    );
-  }
-  return (
-    "Error: no VoiceService Provider is configured. Inject a service or set XRK_VOICE."
-  );
-}
+export {
+  describeVoiceAccess,
+  voiceUnavailableMessage,
+  type VoiceAccessDescription,
+  type VoiceAccessKind,
+} from "./readiness.js";
 
 export interface CreateVoiceToolsOptions {
   readonly service?: VoiceService;
   readonly env?: NodeJS.ProcessEnv;
+  readonly product?: { readonly mode?: string };
 }
 
 function fail(err: unknown): ToolResultContent {
@@ -65,7 +51,10 @@ function bytesToBase64(bytes: Uint8Array): string {
 export function createVoiceTools(
   options: CreateVoiceToolsOptions = {},
 ): ToolDefinition[] {
-  const missing = voiceUnavailableMessage(options.env ?? process.env);
+  const missing = voiceUnavailableMessage(
+    options.env ?? process.env,
+    options.product,
+  );
   const service = options.service;
 
   const tts: ToolDefinition<{

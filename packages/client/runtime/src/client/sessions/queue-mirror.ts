@@ -1,5 +1,5 @@
 import type { ContentBlock } from '@xrkseek/xrk-llm/types'
-import type { MuxFrame } from '@xrkseek/xrk-api-remotes/client'
+import type { MuxFrame, RpcId } from '@xrkseek/xrk-api-remotes/client'
 import type { SessionEvent } from '@xrkseek/xrk-session/types'
 import type { QueuedMessage } from './conversation.ts'
 
@@ -47,14 +47,21 @@ export class SessionQueueMirror {
    * @param items - complete host queue snapshot.
    */
   replace(items: QueueItems): void {
-    this.current = items.map(item => ({
-      id: item.id,
-      messageId: item.message.id,
-      placement: item.placement,
-      content: item.message.content,
-      preview: previewOf(item.message.content),
-      text: textOf(item.message.content),
-    }))
+    this.current = items.map(item => {
+      const source = item.message.source as { readonly kind?: unknown; readonly rpcId?: unknown } | undefined
+      const rpcId = source?.kind === 'user' && typeof source.rpcId === 'string'
+        ? source.rpcId as RpcId
+        : undefined
+      return {
+        id: item.id,
+        messageId: item.message.id,
+        placement: item.placement,
+        content: item.message.content,
+        preview: previewOf(item.message.content),
+        text: textOf(item.message.content),
+        ...(rpcId === undefined ? {} : { rpcId }),
+      }
+    })
   }
 
   /**

@@ -3,6 +3,7 @@ import type { PreHandler } from "@xrkseek/core-tools";
 /** Tools that mutate the workspace / run arbitrary code. */
 export const READ_ONLY_DENIED_TOOLS = new Set([
   "apply_edit",
+  "apply_patch",
   "write_file",
   "bash",
   "job_kill",

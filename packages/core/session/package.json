@@ -7,6 +7,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./invariant": {
+      "types": "./dist/invariant.d.ts",
+      "import": "./dist/invariant.js",
+      "default": "./dist/invariant.js"
     }
   },
   "files": [
@@ -14,7 +19,9 @@
     "README.md"
   ],
   "dependencies": {
-    "@xrkseek/protocol": "workspace:*"
+    "@xrkseek/protocol": "workspace:*",
+    "@xrkseek/runtime-invariants": "workspace:*",
+    "@xrkseek/session-format": "workspace:*"
   },
   "license": "MIT",
   "repository": {

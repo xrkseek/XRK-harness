@@ -24,6 +24,7 @@ import {
 } from "@xrkseek/core-session";
 import type { ProjectionDefinition } from "../registry.js";
 import { asNonNegInt, asOptPositiveInt } from "../parse-int.js";
+import { parseSpillLocator } from "@xrkseek/core-agent-loop";
 
 /** Wire shape consumed by dsh-context `timelineOf`. */
 export interface ContextTimelineProjection {
@@ -97,7 +98,10 @@ export interface ContextTimelineNode {
   readonly gone?: number;
 }
 
-/** Boundary / inject markers for the dsh-context events list. */
+/** Compaction trigger mirrored from `context/compaction.reason`. */
+export type ContextTimelineCompactReason = "auto" | "overflow" | "manual";
+
+/** Boundary / inject markers for the dsh-context events list (+ Status overview). */
 export type ContextTimelineEvent =
   | {
       readonly kind: "inject";
@@ -108,6 +112,8 @@ export type ContextTimelineEvent =
       readonly form?: string;
       readonly sub?: "skill";
       readonly name?: string;
+      /** `user/message.source.kind` when present (skill-catalog · plugin · …). */
+      readonly source?: string;
     }
   | {
       readonly kind: "compaction";
@@ -116,6 +122,9 @@ export type ContextTimelineEvent =
       readonly step: number;
       readonly time: number;
       readonly count: number;
+      readonly reason: ContextTimelineCompactReason;
+      /** Pre-compact surface price when logged (meter shrink input). */
+      readonly shadowedTokenCount?: number;
     }
   | {
       readonly kind: "prune";
@@ -123,6 +132,13 @@ export type ContextTimelineEvent =
       readonly turn: number;
       readonly step: number;
       readonly time: number;
+      readonly tool?: string;
+      readonly callId?: string;
+      /** Prior surface tokens (`xrkPrunePreviousSurfaceTokens` meta). */
+      readonly prevTokens?: number;
+      /** True when the result body cites a tool-output spill file. */
+      readonly spill?: boolean;
+      readonly spillPath?: string;
     }
   | {
       readonly kind: "model";
@@ -141,6 +157,12 @@ export type ContextTimelineEvent =
       readonly time: number;
       readonly name: "plan.on" | "plan.off";
     };
+
+/** Detect agent-loop spill notice path in a tool-result preview. */
+function spillPathFromPreview(text: string | undefined): string | undefined {
+  if (!text) return undefined;
+  return parseSpillLocator(text);
+}
 
 interface ContextTimelineState {
   readonly applied: number;
@@ -275,7 +297,7 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
 > {
   return {
     key: "contextTimeline",
-    stateVersion: 3,
+    stateVersion: 4,
     init: () => ({
       applied: 0,
       system: 0,
@@ -396,6 +418,10 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
             event.source && "form" in event.source
               ? String(event.source.form ?? "context")
               : "context";
+          const sourceKind =
+            event.source && typeof event.source.kind === "string"
+              ? event.source.kind
+              : undefined;
           const isCatalog = event.source?.kind === "skill-catalog";
           const pluginName =
             event.source?.kind === "plugin" &&
@@ -411,6 +437,7 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
               step: next.stepOrdinal,
               time: event.ts,
               form,
+              ...(sourceKind ? { source: sourceKind } : {}),
               ...(isCatalog
                 ? { sub: "skill" as const, name: "catalog" }
                 : pluginName
@@ -469,7 +496,10 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
         const withoutPrior = next.nodes.filter((n) => n.callId !== callId);
         let events = next.events;
         const prevTok = event.result.meta?.[TOOL_RESULT_PRUNE_META_PREV_TOKENS];
-        if (typeof prevTok === "number" && Number.isFinite(prevTok)) {
+        const spillPath = spillPathFromPreview(text);
+        const hasPrev =
+          typeof prevTok === "number" && Number.isFinite(prevTok);
+        if (hasPrev || spillPath) {
           events = [
             ...events,
             {
@@ -478,6 +508,12 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
               turn: next.turnOrdinal,
               step: next.stepOrdinal,
               time: event.ts,
+              ...(event.result.name ? { tool: event.result.name } : {}),
+              ...(callId ? { callId } : {}),
+              ...(hasPrev ? { prevTokens: prevTok } : {}),
+              ...(spillPath
+                ? { spill: true as const, spillPath }
+                : {}),
             },
           ];
         }
@@ -503,6 +539,7 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
           form: "snapshot",
           ...(text ? { text } : {}),
         };
+        const shadowed = event.shadowedTokenCount;
         return withApplied(next, seq, {
           archive,
           nodes: [node],
@@ -515,6 +552,10 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
               step: next.stepOrdinal,
               time: event.ts,
               count: next.nodes.length,
+              reason: event.reason,
+              ...(typeof shadowed === "number" && Number.isFinite(shadowed)
+                ? { shadowedTokenCount: shadowed }
+                : {}),
             },
           ],
         });

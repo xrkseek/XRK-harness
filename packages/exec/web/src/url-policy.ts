@@ -1,8 +1,17 @@
 import { WebError } from "./types.js";
+import type { OutboundAllowlist } from "./outbound-allowlist.js";
 
 const MAX_NODE_TIMER_DELAY_MS = 2_147_483_647;
 
-export function assertHttpUrl(raw: string, maxUrlLength: number): URL {
+export function assertHttpUrl(
+  raw: string,
+  maxUrlLength: number,
+  options?: {
+    /** Default true. Set false when an {@link OutboundAllowlist} already gates private hosts. */
+    readonly checkPrivate?: boolean;
+    readonly allowlist?: OutboundAllowlist;
+  },
+): URL {
   const trimmed = raw.trim();
   if (!trimmed) {
     throw new WebError("url must be a non-empty string", "WEB_INVALID_URL");
@@ -25,7 +34,9 @@ export function assertHttpUrl(raw: string, maxUrlLength: number): URL {
   if (parsed.username !== "" || parsed.password !== "") {
     throw new WebError("url must not include credentials", "WEB_INVALID_URL");
   }
-  if (isBlockedHost(parsed.hostname)) {
+  if (options?.allowlist) {
+    options.allowlist.assertAllowed(parsed);
+  } else if (options?.checkPrivate !== false && isBlockedHost(parsed.hostname)) {
     throw new WebError(
       "url targets a loopback or private-network host",
       "WEB_BLOCKED_HOST",

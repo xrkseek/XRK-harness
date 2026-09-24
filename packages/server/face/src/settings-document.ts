@@ -198,6 +198,12 @@ function resolveCredentialSlotForRef(
   if (ref === "XRK_API_KEY") return "host.apiKey";
   if (ref === "XRK_TAVILY_API_KEY") return "web.tavily";
   if (ref === "XRK_BRAVE_SEARCH_API_KEY") return "web.brave";
+  if (ref === "XRK_COMPUTER_USE_BACKGROUND") return "computer.background";
+  if (ref === "XRK_VOICE_OPENAI_KEY") return "voice.openai";
+  if (ref === "XRK_IMAGE_GEN_OPENAI_KEY") return "image.openai";
+  if (ref === "XRK_VIDEO_GEN_OPENAI_KEY") return "video.openai";
+  if (ref === "XRK_AUTO_REVIEW_CLASSIFIER_TOKEN") return "auto-review.classifier";
+  if (ref === "XRK_MEMORY_EMBED_TOKEN") return "memory-embed.token";
   for (const brand of runtime.registry.listBrands()) {
     if (brand.apiKeyEnv === ref) return `llm.${brand.id}`;
   }
@@ -216,6 +222,12 @@ function credentialRefForSlot(
   if (slotId === "host.apiKey") return "XRK_API_KEY";
   if (slotId === "web.tavily") return "XRK_TAVILY_API_KEY";
   if (slotId === "web.brave") return "XRK_BRAVE_SEARCH_API_KEY";
+  if (slotId === "computer.background") return "XRK_COMPUTER_USE_BACKGROUND";
+  if (slotId === "voice.openai") return "XRK_VOICE_OPENAI_KEY";
+  if (slotId === "image.openai") return "XRK_IMAGE_GEN_OPENAI_KEY";
+  if (slotId === "video.openai") return "XRK_VIDEO_GEN_OPENAI_KEY";
+  if (slotId === "auto-review.classifier") return "XRK_AUTO_REVIEW_CLASSIFIER_TOKEN";
+  if (slotId === "memory-embed.token") return "XRK_MEMORY_EMBED_TOKEN";
   const brandId = slotId.startsWith("llm.") ? slotId.slice("llm.".length) : "";
   if (!brandId) return undefined;
   const brand = runtime.registry.listBrands().find((b) => b.id === brandId);
@@ -325,5 +337,56 @@ export function validateSettingsNamespace(
     const fontErr = validateFaceFontSize(fontSize);
     if (fontErr) return fontErr;
   }
+  if (ns === "ssh-remote") {
+    const host = String(merged.host ?? "").trim();
+    const workspace = String(merged.workspace ?? "").trim();
+    if ((host && !workspace) || (!host && workspace)) {
+      return "ssh-remote requires both host and workspace, or neither";
+    }
+    if (workspace && !workspace.startsWith("/")) {
+      return "ssh-remote.workspace must be an absolute remote path (POSIX, starting with /)";
+    }
+    const port = merged.port;
+    if (port !== undefined && port !== null && port !== "") {
+      const n = typeof port === "number" ? port : Number(port);
+      if (!Number.isFinite(n) || n < 1 || n > 65535) {
+        return `ssh-remote.port must be 1–65535, got ${String(port)}`;
+      }
+    }
+  }
+  if (ns === "auto-review") {
+    const url = String(merged.classifierUrl ?? "").trim();
+    if (url && !/^https?:\/\//i.test(url)) {
+      return "auto-review.classifierUrl must be an http(s) URL, or empty for heuristic";
+    }
+  }
+  if (ns === "memory-embed") {
+    const url = String(merged.url ?? "").trim();
+    if (url && !/^https?:\/\//i.test(url)) {
+      return "memory-embed.url must be an http(s) URL, or empty for embedded host";
+    }
+  }
   return undefined;
+}
+
+/**
+ * Sync peek of one namespace's user layer from `{harnessHome}/settings.yaml`.
+ * Used by Host before Face exists (SSH world must bind workspaceRoot at spawn).
+ */
+export function peekSettingsYamlSection(
+  harnessHome: string,
+  ns: string,
+): Record<string, unknown> | undefined {
+  const file = path.join(path.resolve(harnessHome), "settings.yaml");
+  const doc = loadYamlFile(file, "settings");
+  const section = doc[ns];
+  if (
+    section === null ||
+    section === undefined ||
+    typeof section !== "object" ||
+    Array.isArray(section)
+  ) {
+    return undefined;
+  }
+  return section as Record<string, unknown>;
 }

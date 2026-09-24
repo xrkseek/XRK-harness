@@ -5,12 +5,15 @@
  */
 
 import { Context, Service } from '@xrkseek/cordis'
-import { HarnessError } from '@xrkseek/xrk-llm'
-import type {
-  WorkflowAgentEndInfo,
-  WorkflowAgentInfo,
-  WorkflowResultInfo,
-  WorkflowRunInfo,
+import { HarnessError } from '@xrkseek/xrk-llm/src/error.ts'
+import { SessionId } from '@xrkseek/xrk-session/types'
+import {
+  WorkflowRunId,
+  type WorkflowAgentEndInfo,
+  type WorkflowAgentInfo,
+  type WorkflowResult,
+  type WorkflowResultInfo,
+  type WorkflowRunInfo,
 } from './types.ts'
 import type { WorkflowRun, WorkflowStartRequest } from './runtime-types.ts'
 
@@ -197,6 +200,178 @@ function renderListenerError(error: unknown): string {
   } catch {
     // String coercion itself may throw.
     return '[unrenderable thrown value]'
+  }
+}
+
+/**
+ * In-process Provider: AsyncFunction body with `phase` / `log` / `agent`.
+ * `agent()` returns `null` unless `createAgent` is supplied (Cordis compositions
+ * that wire subagents). Product Face boot uses the Face-native `ralph` tool;
+ * this Provider fills the abstract `ctx.workflowEngine` hole for Cordis mounts.
+ */
+export class InProcessWorkflowEngine extends WorkflowEngine {
+  private readonly createAgent?: (
+    request: WorkflowStartRequest,
+    call: { label: string; prompt: string; phase?: string },
+  ) => Promise<unknown>
+
+  constructor(
+    ctx: Context,
+    options?: {
+      readonly createAgent?: InProcessWorkflowEngine['createAgent']
+    },
+  ) {
+    super(ctx)
+    this.createAgent = options?.createAgent
+  }
+
+  start(request: WorkflowStartRequest): WorkflowRun {
+    const meta = request.meta
+    if (!meta || typeof meta !== 'object') {
+      throw new WorkflowError('workflow meta must be an object', 'META_INVALID')
+    }
+    if (typeof meta.name !== 'string' || !meta.name.trim()) {
+      throw new WorkflowError('workflow meta.name is required', 'META_INVALID')
+    }
+    if (typeof meta.description !== 'string' || !meta.description.trim()) {
+      throw new WorkflowError('workflow meta.description is required', 'META_INVALID')
+    }
+    if (typeof request.script !== 'string' || !request.script.trim()) {
+      throw new WorkflowError('workflow script must be a non-empty string', 'SCRIPT_PARSE')
+    }
+    const id = WorkflowRunId(`wf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`)
+    let cancelled = false
+    let cancelReason = 'cancelled'
+    let agentsStarted = 0
+    let currentPhase: string | undefined
+    const ac = new AbortController()
+    const onAbort = () => {
+      cancelled = true
+      cancelReason = 'parent signal aborted'
+      ac.abort()
+    }
+    if (request.signal) {
+      if (request.signal.aborted) onAbort()
+      else request.signal.addEventListener('abort', onAbort, { once: true })
+    }
+
+    const info = { id, meta: request.meta }
+    this.emitWorkflowEvent('workflow/start', info)
+
+    const result = (async (): Promise<WorkflowResult> => {
+      try {
+        if (cancelled) {
+          return { value: null, stopReason: 'cancelled', error: cancelReason, agentsStarted }
+        }
+        const phase = (title: string) => {
+          currentPhase = String(title ?? '')
+          this.emitWorkflowEvent('workflow/phase', info, currentPhase)
+        }
+        const log = (message: string) => {
+          this.emitWorkflowEvent('workflow/log', info, String(message ?? ''))
+        }
+        const agent = async (opts: {
+          label?: string
+          prompt?: string
+          phase?: string
+        } = {}) => {
+          if (cancelled || ac.signal.aborted) {
+            throw new WorkflowError(cancelReason, 'CANCELLED')
+          }
+          const cap = request.maxTotalAgents
+          if (typeof cap === 'number' && agentsStarted >= cap) {
+            throw new WorkflowError(`workflow maxTotalAgents ${cap} reached`, 'AGENT_CAP')
+          }
+          agentsStarted += 1
+          const seq = agentsStarted
+          const label = String(opts.label ?? opts.prompt ?? `agent-${seq}`).slice(0, 120)
+          const phaseTitle = opts.phase ?? currentPhase
+          const childId = SessionId(`wf-child-${String(id)}-${seq}`)
+          this.emitWorkflowEvent('workflow/agent-start', info, {
+            seq,
+            label,
+            ...(phaseTitle ? { phase: phaseTitle } : {}),
+            childId,
+          })
+          let outcome: 'completed' | 'failed' | 'cancelled' = 'failed'
+          let value: unknown = null
+          try {
+            if (this.createAgent) {
+              value = await this.createAgent(request, {
+                label,
+                prompt: String(opts.prompt ?? ''),
+                ...(phaseTitle ? { phase: phaseTitle } : {}),
+              })
+              outcome = cancelled ? 'cancelled' : 'completed'
+            }
+          } catch {
+            outcome = cancelled ? 'cancelled' : 'failed'
+            value = null
+          }
+          this.emitWorkflowEvent('workflow/agent-end', info, {
+            seq,
+            label,
+            ...(phaseTitle ? { phase: phaseTitle } : {}),
+            childId,
+            outcome,
+          })
+          return value
+        }
+
+        const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (
+          ...args: string[]
+        ) => (...args: unknown[]) => Promise<unknown>
+        const fn = new AsyncFunction(
+          'args',
+          'phase',
+          'log',
+          'agent',
+          `"use strict";\n${request.script}`,
+        )
+        const value = await fn(request.args, phase, log, agent)
+        if (cancelled || ac.signal.aborted) {
+          return { value: null, stopReason: 'cancelled', error: cancelReason, agentsStarted }
+        }
+        return {
+          value: value === undefined ? null : value,
+          stopReason: 'completed',
+          agentsStarted,
+        }
+      } catch (err) {
+        if (cancelled || ac.signal.aborted) {
+          return { value: null, stopReason: 'cancelled', error: cancelReason, agentsStarted }
+        }
+        return {
+          value: null,
+          stopReason: 'error',
+          error: err instanceof Error ? err.message : String(err),
+          agentsStarted,
+        }
+      }
+    })().then((settled) => {
+      this.emitWorkflowEvent('workflow/end', info, {
+        stopReason: settled.stopReason,
+        agentsStarted: settled.agentsStarted,
+        ...(settled.error ? { error: settled.error } : {}),
+      })
+      return settled
+    })
+
+    return {
+      id,
+      meta: request.meta,
+      result,
+      cancel(reason?: string) {
+        cancelled = true
+        cancelReason = reason?.trim() || 'cancelled'
+        ac.abort()
+      },
+      async dispose() {
+        cancelled = true
+        ac.abort()
+        await result.catch(() => undefined)
+      },
+    }
   }
 }
 

@@ -26,6 +26,7 @@ npx @xrkseek/harness-cli@latest web
 | `xrkh skill` | 工作区 skills install / list / remove / path（本地目录或 git） |
 | `xrkh mcp` | HTTP MCP server 的 OAuth 设备码登录：login / logout / status / list / path |
 | `xrkh acp` | stdio ACP server（编辑器把本进程当 ACP host） |
+| `xrkh tui` | 薄产品 TUI：挂到本机 Host（Face HTTP + mux），流式输出 + 工具轨 + `/status` |
 | `xrkh doctor` | 环境与产品目录检查 |
 | `xrkh dump-config` | 输出解析后的 Host 配置（JSON） |
 
@@ -53,6 +54,7 @@ xrkh mcp login linear --client-id xrk-cli --scope mcp:read
 xrkh mcp status
 xrkh mcp logout linear
 xrkh doctor
+xrkh tui --port 8787
 ```
 
 ### 无头 `run`
@@ -64,6 +66,17 @@ xrkh doctor
 | `--session-id <id>` | 续写已持久化会话（默认 `~/.xrk/sessions`；未知 id 失败） |
 | `--json` | stdout 为 NDJSON（`session` → `status`/`text`/`thinking`/`tool_*` → `final`）；用法错误也写 `error` 行 |
 | `--no-persist` | 内存会话（进程内；跨调用无法 `--session-id`） |
+
+### 薄 TUI（`xrkh tui`）
+
+挂到已运行的 Host（默认 `http://127.0.0.1:8787`），复用 Face unary + `/api/events.mux`：助手流式文本、工具轨一行、本地 `/status`（与 Overview / Face slash 同源 `session.status`）。不是第二套 agent 运行时；先 `xrkh web` 再另开终端跑 `xrkh tui`。
+
+| 输入 | 行为 |
+|------|------|
+| 普通行 | `session.prompt`（`mode=queue`） |
+| `/status` | Face `session.status` → 同 slash 文本 |
+| `/cancel` | `session.cancel` |
+| `/quit` · Ctrl+D | 退出；回合中 Ctrl+C 先 cancel |
 
 ## 产品壳路径
 

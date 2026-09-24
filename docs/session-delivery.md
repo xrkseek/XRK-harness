@@ -10,7 +10,7 @@
 | 档 | 用户意图 | 相对正在跑的 drain |
 |----|----------|-------------------|
 | **queue** | 「下一题，等这轮做完再答」 | 不插话；continuation 未结束时 **不 promote** |
-| **steer** | 「插话纠正 / 改方向」 | 可在 **安全的 turn 边界** promote |
+| **steer** | 「插队纠正 / 改方向」（壳文案「插队」） | 可在 **安全的 turn 边界** promote |
 
 与「单通道 continue」不同：两档是一等公民产品语义，不是 UI 文案差异。
 
@@ -54,7 +54,7 @@
 
 **Host 重启恢复（已落地）**：pending queue/steer 随 `createPersistentSessionStore` 落盘；mux 重连补发 `session/queue`；Face 启动对有 pending 的 session `publishQueue` + `drain.wake`（刚被 `goals.bind` disarm 的 active goal 不 wake，须用户 resume）。冷 session 的 `session.updateQueue` 不依赖进程内 Agent。
 
-产品「插话」= Face/HTTP `delivery: "steer"`（turn / next-step 边界优先于 queue）。「排队」= `delivery: "queue"`（默认）。任务「暂停」今日走 `session.cancel` / 子代理 `interrupt_agent`，不是 inbox soft-pause。
+产品壳文案：**排队** = `delivery: "queue"`（默认，本轮后再答）；**插队** = `delivery: "steer"`（工具/步边界切入当前轮，≠ 停止）。Face/HTTP 字段名仍是 `steer`/`queue`。任务「暂停」今日走 `session.cancel` / 子代理 `interrupt_agent`（`takeover: true` 时任务板标 paused + 人工接管，`send_message` 恢复）；不是 inbox soft-pause。
 
 ## 5. 落地顺序
 
@@ -88,7 +88,7 @@ Source of truth remains `prompt/admitted` / `prompt/promoted` events (no separat
 | Mode | User intent | Vs running drain |
 |----|----------|-------------------|
 | **queue** | “Next question — answer after this turn finishes” | No interrupt; **do not promote** while continuation is still needed |
-| **steer** | “Interrupt to correct / redirect” | May promote at a **safe turn boundary** |
+| **steer** | “Steer / redirect” (shell copy: Steer into this turn) | May promote at a **safe turn boundary** |
 
 These are first-class product semantics, not a UI copy difference from a single continue channel.
 
@@ -132,7 +132,7 @@ Default `delivery` is **queue**.
 
 **Host restart recovery (shipped):** pending queue/steer survive via `createPersistentSessionStore`; mux reconnect replays `session/queue`; Face boot `publishQueue` + `drain.wake` for sessions with pending work (skips active goals that `goals.bind` just disarmed — user must resume). Cold `session.updateQueue` does not require a live Agent.
 
-Product “interrupt” = Face/HTTP `delivery: "steer"` (turn / next-step boundary wins over queue). “Queue” = `delivery: "queue"` (default). Task “pause” today is `session.cancel` / subagent `interrupt_agent`, not inbox soft-pause.
+Product shell copy: **Queue** = `delivery: "queue"` (default; after this turn); **Steer** = `delivery: "steer"` (inject at the tool/step boundary into the running turn — not Stop). Face/HTTP field names remain `steer`/`queue`. Task “pause” today is `session.cancel` / subagent `interrupt_agent` (`takeover: true` marks the task board paused + human-owned; `send_message` resumes) — not inbox soft-pause.
 
 ## 5. Landing order
 

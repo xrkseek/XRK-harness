@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Dynamic attachment presentation plugin for the conversation UI. It waits for the conversation package's `conversation.input.attachments` and `conversation.message.images` declarations through `ctx.slots.inject`, then registers the composer draft-image rail, document drop target, chat-history image gallery, and original-image lightbox. The conversation slot owner supplies attachment data, image loading, callbacks, and its namespace translator; presentation components remain pure props and are not exported from the package entry.
+Dynamic attachment presentation plugin for the conversation UI. It waits for the conversation package's `conversation.input.attachments`, `conversation.message.images`, and `conversation.message.files` declarations through `ctx.slots.inject`, then registers the composer draft-attachment rail, document drop target, chat-history image gallery, durable file cards, and original-image lightbox. The conversation slot owner supplies attachment data, image loading, callbacks, and its namespace translator; presentation components remain pure props and are not exported from the package entry.
 
 ## Attachment rail
 
@@ -11,6 +11,10 @@ Dynamic attachment presentation plugin for the conversation UI. It waits for the
 ## Message images and the lightbox
 
 `MessageImage` renders one durable history image, loading a session-authorized URL through the owner's `ImageLoader`; a failed load renders an explicit retry control, and a settled load answers a single click by opening `ImageLightbox` (clicks during loading are ignored). Sizing follows DeepSeek Chat: a message's lone image (`variant="single"`) renders at 240px on its longer edge with the displayed aspect ratio clamped to [0.25, 4] — the overflow is cropped by `object-fit: cover`, anchored to the top of very tall images and the left of very wide ones — and never upscales past its natural size; an image among several (`variant="tile"`) is a fixed 64px square. `ImageGallery` wraps a message's images in one aligned wrapping flex group (`end` for user messages, `start` for assistant messages), picks the variant from the image count, and renders nothing for an empty list. `ImageLightbox` is a document-level modal preview over the shared dialog mask (`--dsw-alias-bg-mask-1` + `--dsw-mask-blur`, painted on its own layer so the blur never touches the previewed image) that closes on Escape, a mask press, or its close control, and restores focus to its opener on unmount.
+
+## Message file cards
+
+`MessageFileCard` / user-bubble file chrome follow DeepSeek Chat: `FileTypeIcon` glyph, basename, and `EXT size` meta on a 240px card. User bubbles keep **block order** in one `attachmentRow` (images + files interleaved); multi-attachment images render as compact tiles. Composer `FileCard` uses the same glyph + spinner while encoding.
 
 ## Drop overlay
 
@@ -26,6 +30,6 @@ None; this package neither assembles nor sends a provider request.
 
 ## Known Limitations and Deferred Work
 
-- **Images only** — non-image files have no rail card or history renderer yet; DeepSeek Chat-style file cards and upload-progress states wait until the composer accepts non-image attachments.
+- **No download or preview on history file cards** — transcript file cards show name and size only; opening or downloading the stored bytes waits on a product decision.
 - **No zoom or download in the lightbox** — the preview renders the original at fit-to-viewport size only.
 - **The lightbox does not trap focus** — it sets `aria-modal` and restores focus on close, but Tab can reach the page behind it.

@@ -70,4 +70,38 @@ describe("auto-review classifier seam", () => {
     expect(closed.classification.verdict).toBe("ask");
     expect(closed.classification.reason).toBe("classifier-error");
   });
+
+  it("uses Face product URL when env host is unset", async () => {
+    const result = await classifyAutoReview(
+      { toolName: "read_file" },
+      {
+        env: {},
+        product: {
+          classifierUrl: "http://product.test/review",
+          classifierToken: "product-tok",
+        },
+        fetchImpl: async (input, init) => {
+          expect(String(input)).toBe("http://product.test/review");
+          const headers = init?.headers as Record<string, string>;
+          expect(headers.authorization).toBe("Bearer product-tok");
+          return new Response(
+            JSON.stringify({ verdict: "allow", reason: "product" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        },
+      },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.classifier).toBe("http");
+    expect(result.classification.verdict).toBe("allow");
+  });
+
+  it("lets env URL bypass product", async () => {
+    const resolved = resolveAutoReviewClassifier({
+      env: { XRK_AUTO_REVIEW_CLASSIFIER_URL: "http://env.test/review" },
+      product: { classifierUrl: "http://product.test/review" },
+    });
+    expect(resolved.kind).toBe("http");
+    expect(resolved.id).toBe("http");
+  });
 });

@@ -69,10 +69,14 @@ describe("Face approval ask/respond", () => {
 
     await new Promise((r) => setTimeout(r, 20));
     expect(runtime.approvals.listPending(sessionId)).toHaveLength(1);
-    const approvalId = runtime.approvals.listPending(sessionId)[0]!.approvalId;
-    expect(
-      store.get(sessionId).events.some((e) => e.type === "approval/asked"),
-    ).toBe(true);
+    const pending = runtime.approvals.listPending(sessionId)[0]!;
+    const approvalId = pending.approvalId;
+    expect(pending.category).toBe("tool");
+    const asked = store.get(sessionId).events.find((e) => e.type === "approval/asked");
+    expect(asked?.type).toBe("approval/asked");
+    if (asked?.type === "approval/asked") {
+      expect(asked.category).toBe("tool");
+    }
     expect(
       mux.some(
         (f) =>
@@ -201,5 +205,43 @@ describe("Face approval ask/respond", () => {
           (f as { type?: string }).type === "approval/resolved",
       ),
     ).toBe(true);
+  });
+
+  it("PermissionRequest hook can allow without human UI", async () => {
+    const store = createMemorySessionStore();
+    const runtime = await isolatedRuntime(store);
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "minimal",
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    runtime.approvals.setPermissionRequestGate(async () => ({ action: "allow" }));
+
+    const pipeline = createToolPipeline();
+    pipeline.setApprovalHandler(runtime.approvals.handlerFor(sessionId));
+    const reg = createToolRegistry();
+    const body = vi.fn(async () => ({ content: "ok" }));
+    reg.register({
+      name: "web_fetch",
+      description: "fetch",
+      parameters: {},
+      execute: body,
+    });
+    pipeline.onPre(async () => ({ action: "ask", reason: "need net" }));
+
+    const out = await runToolDetailed({
+      registry: reg,
+      call: {
+        id: "call_net",
+        name: "web_fetch",
+        arguments: { url: "https://example.com" },
+      },
+      pipeline,
+    });
+    expect(body).toHaveBeenCalled();
+    expect(out.result.content).toBe("ok");
+    expect(runtime.approvals.listPending(sessionId)).toHaveLength(0);
   });
 });

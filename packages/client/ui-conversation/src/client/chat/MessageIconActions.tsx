@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
-  IconBranchOutline16, IconCheckOutline16, IconCopyOutline16, Tooltip, writeClipboard,
+  IconBranchOutline16, IconCheckOutline16, IconCopyOutline16, IconRefreshOutline16, Tooltip, writeClipboard,
 } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { formatMessageClock } from './message-chrome.ts'
@@ -19,6 +19,11 @@ export interface MessageIconActionsProps {
   clock: 'start' | 'end'
   /** Fork the session at this message; omission hides the branch action. */
   onBranch?: (() => void) | undefined
+  /**
+   * Restore workspace files from the nearest checkpoint at this message seq;
+   * omission hides the restore action. Pair with {@link onBranch} on turn tails.
+   */
+  onRestore?: (() => void) | undefined
   /** The message is not a completed transcript tail, so branch stays visible but unavailable. */
   branchUnavailable?: boolean | undefined
   /** Parent layout class composed onto the actions row. */
@@ -38,12 +43,12 @@ export interface MessageIconActionsProps {
 }
 
 /**
- * Copy / branch (/ clock) IconActions row shared by user and assistant chrome.
+ * Copy / branch / restore (/ clock) IconActions row shared by user and assistant chrome.
  * @param props - Copy text, event time, clock side, branch callback, className.
  * @returns The actions row element.
  */
 export function MessageIconActions({
-  text, time, clock, onBranch, branchUnavailable = false, className,
+  text, time, clock, onBranch, onRestore, branchUnavailable = false, className,
   extraActions, usageAction, t,
 }: MessageIconActionsProps) {
   const day = useCalendarDay()
@@ -88,6 +93,20 @@ export function MessageIconActions({
         </button>
       </Tooltip>
       {extraActions}
+      {onRestore !== undefined && (
+        <Tooltip label={branchUnavailable ? t('message.restoreUnavailable') : t('message.restore')} side="bottom">
+          <button
+            type="button"
+            className={css.action}
+            aria-label={t('message.restore')}
+            aria-disabled={branchUnavailable || undefined}
+            data-unavailable={branchUnavailable || undefined}
+            onClick={branchUnavailable ? undefined : onRestore}
+          >
+            <IconRefreshOutline16 />
+          </button>
+        </Tooltip>
+      )}
       {onBranch !== undefined && (
         <Tooltip label={branchUnavailable ? t('message.branchUnavailable') : t('message.branch')} side="bottom">
           {/* Native disabled buttons do not deliver the hover/focus events Tooltip needs. */}

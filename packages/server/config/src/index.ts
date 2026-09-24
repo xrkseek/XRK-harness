@@ -101,6 +101,12 @@ export interface HostRuntimeConfig {
    * (Desktop pipe transport). Env: `XRK_LISTEN=0`. Default `true`.
    */
   readonly listen?: boolean;
+  /**
+   * When `true`, wrap SessionStore with package-owned runtime invariants and
+   * fail-fast on relational log violations. Env: `XRK_INVARIANTS_FAIL_FAST=1`.
+   * Default off (observability opt-in; does not change product defaults).
+   */
+  readonly invariantsFailFast?: boolean;
 }
 
 export interface HostConfig {
@@ -184,6 +190,11 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
     defaults.listen === false
       ? { listen: false as const }
       : {}),
+    ...(env.XRK_INVARIANTS_FAIL_FAST === "1" ||
+    env.XRK_INVARIANTS_FAIL_FAST === "true" ||
+    defaults.invariantsFailFast === true
+      ? { invariantsFailFast: true as const }
+      : {}),
   } as HostRuntimeConfig;
 
   const patch = { ...(input.patch ?? {}) };
@@ -227,6 +238,11 @@ export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
     else delete mutable.sessionsDir;
   }
   if (typeof patch.listen === "boolean") mutable.listen = patch.listen;
+  if (typeof patch.invariantsFailFast === "boolean") {
+    const m = mutable as { invariantsFailFast?: boolean };
+    if (patch.invariantsFailFast) m.invariantsFailFast = true;
+    else delete m.invariantsFailFast;
+  }
 
   return {
     credentials: {

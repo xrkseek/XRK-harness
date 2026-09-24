@@ -140,11 +140,23 @@ export class FaceWorkspaceRegistry {
     return this.view(workspaceId);
   }
 
+  /**
+   * Archive one session into the registry-global set. Membership and sidebar
+   * order stay so a later unarchive restores the same workspace slot (dsh
+   * parity). Already-archived ids are idempotent.
+   */
   archiveSession(sessionId: string): string[] {
     this.archived.add(sessionId);
-    const ws = this.membership.get(sessionId);
-    if (ws) this.removeFromOrder(ws, sessionId);
-    this.membership.delete(sessionId);
+    return [...this.archived];
+  }
+
+  /**
+   * Drop one session from the archive set. Accounting was never cleared on
+   * archive, so the session reappears in its recorded workspace order. An id
+   * that is not archived resolves without writing.
+   */
+  unarchiveSession(sessionId: string): string[] {
+    this.archived.delete(sessionId);
     return [...this.archived];
   }
 

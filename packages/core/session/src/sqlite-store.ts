@@ -24,6 +24,10 @@ import {
   acquireSessionsDirLock,
   type SessionsDirLock,
 } from "./store-lock.js";
+import {
+  migrateSqliteSchema,
+  SQLITE_SCHEMA_CURRENT,
+} from "@xrkseek/session-format";
 
 export {
   acquireSessionsDirLock,
@@ -80,8 +84,8 @@ export interface PersistentSessionStoreOptions {
 }
 
 const ID_RE = /^[A-Za-z0-9._-]+$/;
-/** v3: durable rows may be packed `text-chunks` / `tool-call-chunks` (expanded on load). */
-const SCHEMA_VERSION = 3;
+/** Physical schema v3: durable rows may be packed chunk rows (expanded on load). */
+const SCHEMA_VERSION = SQLITE_SCHEMA_CURRENT;
 const DB_NAME = "sessions.db";
 const DEFAULT_MAX_RESIDENT_SESSIONS = 8;
 
@@ -177,29 +181,44 @@ function initSchema(db: DatabaseSync): void {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
-    CREATE TABLE IF NOT EXISTS sessions (
-      id TEXT PRIMARY KEY
-    );
-    CREATE TABLE IF NOT EXISTS events (
-      session_id TEXT NOT NULL,
-      seq INTEGER NOT NULL,
-      ts INTEGER NOT NULL,
-      payload TEXT NOT NULL,
-      PRIMARY KEY (session_id, seq),
-      FOREIGN KEY (session_id) REFERENCES sessions(id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_events_session_seq
-      ON events (session_id, seq);
   `);
-  ensureFts(db);
 
-  const current = schemaVersion(db);
-  if (current === 0) {
-    setSchemaVersion(db, SCHEMA_VERSION);
-  } else if (current < SCHEMA_VERSION) {
-    rebuildFts(db);
-    setSchemaVersion(db, SCHEMA_VERSION);
+  const hooks = {
+    ensureTables: () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id TEXT PRIMARY KEY
+        );
+        CREATE TABLE IF NOT EXISTS events (
+          session_id TEXT NOT NULL,
+          seq INTEGER NOT NULL,
+          ts INTEGER NOT NULL,
+          payload TEXT NOT NULL,
+          PRIMARY KEY (session_id, seq),
+          FOREIGN KEY (session_id) REFERENCES sessions(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_events_session_seq
+          ON events (session_id, seq);
+      `);
+    },
+    ensureFts: () => {
+      ensureFts(db);
+    },
+    rebuildFts: () => {
+      ensureFts(db);
+      rebuildFts(db);
+    },
+  };
+
+  const stored = schemaVersion(db);
+  if (stored >= SCHEMA_VERSION) {
+    // Idempotent open on current schema — still ensure tables/FTS exist.
+    hooks.ensureTables();
+    hooks.ensureFts();
+    return;
   }
+  const next = migrateSqliteSchema(stored, hooks);
+  setSchemaVersion(db, next);
 }
 
 function parseStoragePayload(payload: string): SessionEvent[] {

@@ -146,7 +146,7 @@ const AgentLoopConfig = Schema.object({
   maxSteps: Schema.number().step(1).min(1).default(32),
   /**
    * DSH toolOrder: tool name list with exactly one `' '` rest marker.
-   * Empty / omit → lexicographic wire order. Edited via settings.yaml for now.
+   * Empty / omit → lexicographic wire order. Editable via Settings → Plugins.
    */
   toolOrder: Schema.array(Schema.string()),
   /**
@@ -193,6 +193,142 @@ const WebSearchConfig = Schema.object({
     "duckduckgo",
   ]),
   region: Schema.string(),
+});
+
+/** Session telemetry: Settings SoT; `XRK_TELEMETRY` remains CI bypass. */
+const SessionTelemetryConfig = Schema.object({
+  mode: Schema.union(["off", "memory", "otlp"]).default("off"),
+  /** OTLP/HTTP logs endpoint when mode is `otlp`. */
+  endpoint: Schema.string(),
+});
+
+/**
+ * Exec sandbox backend (Plugins card). Env `XRK_SANDBOX_*` remains CI bypass.
+ * Helper path / bins stay env-only (machine-local).
+ */
+const SandboxConfig = Schema.object({
+  backend: Schema.union(["workspace", "docker", "bwrap", "windows"]).default(
+    "workspace",
+  ),
+  dockerImage: Schema.string(),
+  dockerNetwork: Schema.union(["none", "bridge"]).default("none"),
+  windowsMode: Schema.union([
+    "workspace-write",
+    "read-only",
+    "danger-full-access",
+  ]).default("workspace-write"),
+});
+
+/**
+ * Desktop computer-use (Plugins card). Env `XRK_COMPUTER_USE` remains CI bypass.
+ * Background helper path uses Credentials `XRK_COMPUTER_USE_BACKGROUND`.
+ */
+const ComputerUseConfig = Schema.object({
+  mode: Schema.union(["off", "uia", "background"]).default("off"),
+});
+
+/**
+ * Page-level browser_* (Plugins card): HTTP snapshot or Chrome DevTools.
+ * Non-empty `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` remains CI bypass.
+ */
+const BrowserConfig = Schema.object({
+  mode: Schema.union(["http", "cdp"]).default("http"),
+  cdpUrl: Schema.string().default(""),
+});
+
+/**
+ * Host cron ticker master switch (Plugins card).
+ * Env `XRK_CRON=0` remains CI bypass (force off).
+ */
+const CronConfig = Schema.object({
+  enabled: Schema.boolean().default(true),
+});
+
+/**
+ * Voice Host (Plugins card). Env `XRK_VOICE` remains CI bypass.
+ * API key via Credentials `XRK_VOICE_OPENAI_KEY`.
+ */
+const VoiceConfig = Schema.object({
+  mode: Schema.union(["off", "openai"]).default("off"),
+  baseUrl: Schema.string().default(""),
+});
+
+/**
+ * Image generation (Plugins card). Env `XRK_IMAGE_GEN` remains CI bypass.
+ * API key via Credentials `XRK_IMAGE_GEN_OPENAI_KEY`.
+ */
+const ImageGenConfig = Schema.object({
+  mode: Schema.union(["off", "openai"]).default("off"),
+  baseUrl: Schema.string().default(""),
+  model: Schema.string().default(""),
+});
+
+/**
+ * Video generation (Plugins card). Env `XRK_VIDEO_GEN` remains CI bypass.
+ * API key via Credentials `XRK_VIDEO_GEN_OPENAI_KEY`.
+ */
+const VideoGenConfig = Schema.object({
+  mode: Schema.union(["off", "openai"]).default("off"),
+  baseUrl: Schema.string().default(""),
+  model: Schema.string().default(""),
+});
+
+/**
+ * Curated MEMORY.md / USER.md (Plugins card).
+ * Env `XRK_CURATED_MEMORY=0` remains CI bypass (force off).
+ */
+const CuratedMemoryConfig = Schema.object({
+  enabled: Schema.boolean().default(true),
+});
+
+/**
+ * Auto-review HTTP classifier (Plugins → Advanced).
+ * Token via Credentials `XRK_AUTO_REVIEW_CLASSIFIER_TOKEN`.
+ * Non-empty `XRK_AUTO_REVIEW_CLASSIFIER_URL` remains CI bypass.
+ */
+const AutoReviewConfig = Schema.object({
+  /** POST endpoint for verdict JSON; empty = heuristic. */
+  classifierUrl: Schema.string().default(""),
+});
+
+/**
+ * External vector memory sidecar (Plugins → Advanced).
+ * Token via Credentials `XRK_MEMORY_EMBED_TOKEN`.
+ * Non-empty `XRK_MEMORY_EMBED_URL` remains CI bypass.
+ */
+const MemoryEmbedConfig = Schema.object({
+  /** HTTP base for sidecar /search · /health; empty = embedded host only. */
+  url: Schema.string().default(""),
+  /** Optional collection / index name passed to sidecar /search. */
+  collection: Schema.string().default(""),
+});
+
+/**
+ * External subagent runtimes (Plugins card): ACP / Codex app-server / Claude Code.
+ * Non-empty `XRK_ACP_AGENT` / `XRK_CODEX_APP_SERVER` / `XRK_CLAUDE_CODE` remain CI bypass.
+ */
+const ExternalAgentConfig = Schema.object({
+  /** Spawn command for `runtime=acp` (e.g. `xrkh acp`). Empty = require env. */
+  acpAgent: Schema.string().default(""),
+  /** Spawn command for `runtime=app-server` (default `codex app-server` when empty). */
+  codexAppServer: Schema.string().default(""),
+  /** Spawn command for `runtime=claude-code` (default `claude` when empty; Host adds `-p`). */
+  claudeCode: Schema.string().default(""),
+});
+
+/**
+ * SSH remote workspace (General 「远程」). Empty host+workspace = local.
+ * Non-empty `XRK_SSH_HOST` remains CI bypass (env wins over product).
+ * Host builds the SSH world at spawn — restart required.
+ */
+const SshRemoteConfig = Schema.object({
+  host: Schema.string().default(""),
+  /** Absolute remote cwd (POSIX `/…`). */
+  workspace: Schema.string().default(""),
+  user: Schema.string().default(""),
+  port: Schema.number().step(1).min(1).max(65535).default(22),
+  /** Local path to OpenSSH identity file (not the key material). */
+  keyPath: Schema.string().default(""),
 });
 
 export const DEFAULT_WORKSPACE_INJECT_MAX_CHARS = 32_000;
@@ -322,6 +458,104 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       schema: schemasteryJson(WebSearchConfig) as FaceSchemaEnvelope,
       base: { provider: "auto" },
       applies: "live",
+    },
+    {
+      ns: "session-telemetry",
+      schema: schemasteryJson(SessionTelemetryConfig) as FaceSchemaEnvelope,
+      base: { mode: "off" },
+      // Sink wraps the store at composition create; Host restart picks up changes.
+      applies: "restart",
+    },
+    {
+      ns: "sandbox",
+      schema: schemasteryJson(SandboxConfig) as FaceSchemaEnvelope,
+      base: {
+        backend: "workspace",
+        dockerNetwork: "none",
+        windowsMode: "workspace-write",
+      },
+      // createSandboxStack + wrap-guard rebuild on agent invalidate.
+      applies: "live",
+    },
+    {
+      ns: "computer-use",
+      schema: schemasteryJson(ComputerUseConfig) as FaceSchemaEnvelope,
+      base: { mode: "off" },
+      // Provider rebuilds with tools on agent invalidate.
+      applies: "live",
+    },
+    {
+      ns: "browser",
+      schema: schemasteryJson(BrowserConfig) as FaceSchemaEnvelope,
+      base: { mode: "http", cdpUrl: "" },
+      // createBrowserSession rebuilds on agent invalidate.
+      applies: "live",
+    },
+    {
+      ns: "cron",
+      schema: schemasteryJson(CronConfig) as FaceSchemaEnvelope,
+      base: { enabled: true },
+      // Host start/stop ticker + invalidateAgents for cronjob tool.
+      applies: "live",
+    },
+    {
+      ns: "voice",
+      schema: schemasteryJson(VoiceConfig) as FaceSchemaEnvelope,
+      base: { mode: "off", baseUrl: "" },
+      applies: "live",
+    },
+    {
+      ns: "image-gen",
+      schema: schemasteryJson(ImageGenConfig) as FaceSchemaEnvelope,
+      base: { mode: "off", baseUrl: "", model: "" },
+      applies: "live",
+    },
+    {
+      ns: "video-gen",
+      schema: schemasteryJson(VideoGenConfig) as FaceSchemaEnvelope,
+      base: { mode: "off", baseUrl: "", model: "" },
+      applies: "live",
+    },
+    {
+      ns: "curated-memory",
+      schema: schemasteryJson(CuratedMemoryConfig) as FaceSchemaEnvelope,
+      base: { enabled: true },
+      // memory tool + frozen system block rebuild on agent invalidate.
+      applies: "live",
+    },
+    {
+      ns: "auto-review",
+      schema: schemasteryJson(AutoReviewConfig) as FaceSchemaEnvelope,
+      base: { classifierUrl: "" },
+      // Classifier resolves per /auto-review/classify (Host injects product).
+      applies: "live",
+    },
+    {
+      ns: "memory-embed",
+      schema: schemasteryJson(MemoryEmbedConfig) as FaceSchemaEnvelope,
+      base: { url: "", collection: "" },
+      // Sidecar resolves per embedding.search / status (Host injects product).
+      applies: "live",
+    },
+    {
+      ns: "external-agent",
+      schema: schemasteryJson(ExternalAgentConfig) as FaceSchemaEnvelope,
+      base: { acpAgent: "", codexAppServer: "", claudeCode: "" },
+      // Launch command resolves per subagent external turn.
+      applies: "live",
+    },
+    {
+      ns: "ssh-remote",
+      schema: schemasteryJson(SshRemoteConfig) as FaceSchemaEnvelope,
+      base: {
+        host: "",
+        workspace: "",
+        user: "",
+        port: 22,
+        keyPath: "",
+      },
+      // SSH execution world is fixed at Host spawn (before Face).
+      applies: "restart",
     },
     {
       ns: "workspace-inject",

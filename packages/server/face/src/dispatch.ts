@@ -3,6 +3,7 @@ import { errResponse, okResponse } from "./wire/envelope.js";
 import type { FaceRpcResponse } from "./types.js";
 import {
   workspaceArchiveSessionFace,
+  workspaceUnarchiveSessionFace,
   workspaceCreateFace,
   workspaceDeleteFace,
   workspaceDescribe,
@@ -26,6 +27,11 @@ import {
   settingsSet,
   settingsUpdateFace,
 } from "./settings-credentials.js";
+import {
+  mcpOauthLogin,
+  mcpOauthLogout,
+  mcpOauthStatus,
+} from "./mcp-oauth.js";
 import { skillList } from "./skill-list.js";
 import { resolveSessionCwd } from "./session-cwd.js";
 import {
@@ -55,8 +61,16 @@ import {
   sessionRespondApproval,
   sessionSearch,
   sessionSelectModel,
+  sessionStatus,
+  sessionRolloutTrace,
   sessionUpdateQueue,
 } from "./handlers/session.js";
+import {
+  sessionCheckpointList,
+  sessionCheckpointPlanRestore,
+  sessionCheckpointRestore,
+  sessionCheckpointSnapshot,
+} from "./handlers/checkpoint.js";
 import {
   agentPresetList,
   agentPresetRead,
@@ -135,8 +149,14 @@ const HANDLERS: Record<string, FaceHandler> = {
   "session.rename": sessionRename,
   "session.updateQueue": sessionUpdateQueue,
   "session.fork": sessionFork,
+  "session.checkpoint.list": sessionCheckpointList,
+  "session.checkpoint.planRestore": sessionCheckpointPlanRestore,
+  "session.checkpoint.restore": sessionCheckpointRestore,
+  "session.checkpoint.snapshot": sessionCheckpointSnapshot,
   "session.respondApproval": sessionRespondApproval,
   "session.attachment": sessionAttachment,
+  "session.status": sessionStatus,
+  "session.rolloutTrace": sessionRolloutTrace,
   "agentPreset.list": agentPresetList,
   "agentPreset.select": agentPresetSelect,
   "agentPreset.read": agentPresetRead,
@@ -152,6 +172,7 @@ const HANDLERS: Record<string, FaceHandler> = {
   "workspace.create": bindPayload(workspaceCreateFace),
   "workspace.rename": bindPayload(workspaceRenameFace),
   "workspace.archiveSession": bindPayload(workspaceArchiveSessionFace),
+  "workspace.unarchiveSession": bindPayload(workspaceUnarchiveSessionFace),
   "workspace.delete": bindPayload(workspaceDeleteFace),
   "workspace.insertBefore": bindPayload(workspaceInsertBeforeFace),
   "workspace.insertSessionBefore": bindPayload(workspaceInsertSessionBeforeFace),
@@ -167,6 +188,9 @@ const HANDLERS: Record<string, FaceHandler> = {
   "credentials.describe": bindPayload(credentialsDescribe),
   "credentials.set": bindPayload(credentialsSet),
   "credentials.unset": bindPayload(credentialsUnset),
+  "mcp.oauth.status": bindPayload(mcpOauthStatus),
+  "mcp.oauth.login": bindPayload(mcpOauthLogin),
+  "mcp.oauth.logout": bindPayload(mcpOauthLogout),
   "skill.list": bindPayload((runtime, payload) => {
     const sessionId = String(
       (payload as Record<string, unknown> | null)?.sessionId ?? "",

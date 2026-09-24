@@ -14,6 +14,7 @@ describe("formatFsRoutingPrompt", () => {
         "grep",
         "read_file",
         "apply_edit",
+        "apply_patch",
         "write_file",
       ]),
     ).toBe(FS_ROUTING_PROMPT_TEXT);

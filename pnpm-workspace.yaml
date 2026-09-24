@@ -8,17 +8,21 @@ packages:
   - "packages/core/*"
   - "packages/util/*"
   - "packages/session/*"
+  - "packages/runtime-diagnostics/*"
   - "packages/llm/*"
   - "packages/exec/*"
   - "packages/server/*"
   - "presets/*"
   - "extensions/example-tools"
   - "extensions/example-channel"
+  - "extensions/example-im-mock-sidecar"
   - "extensions/dsh-compat"
+  - "extensions/a2a"
 # pnpm ≥10：仅允许下列包跑 lifecycle
 allowBuilds:
   "@xrkseek/exec-pty": true
   "@xrkseek/exec-pty@file:packages/exec/pty": true
   esbuild: true
+  keytar: false
   node-pty: true
   sharp: true

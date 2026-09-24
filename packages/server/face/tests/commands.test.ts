@@ -104,6 +104,12 @@ describe("commands/execute + list", () => {
           input: { hint: "[off|message]" },
         },
         {
+          name: "rollback",
+          description:
+            "List or restore workspace file checkpoints (shadow git; not session.fork)",
+          input: { hint: "[n|id|seq:N] [--prune] | plan <n|id>" },
+        },
+        {
           name: "skills",
           description: "List workspace skills",
         },
@@ -330,6 +336,12 @@ describe("commands/execute + list", () => {
           description:
             "Enter or leave plan mode (session collaboration; not a tool badge)",
           input: { hint: "[off|message]" },
+        },
+        {
+          name: "rollback",
+          description:
+            "List or restore workspace file checkpoints (shadow git; not session.fork)",
+          input: { hint: "[n|id|seq:N] [--prune] | plan <n|id>" },
         },
         {
           name: "skills",

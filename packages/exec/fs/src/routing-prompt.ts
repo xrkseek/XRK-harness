@@ -24,17 +24,19 @@ export function formatFsRoutingPrompt(available: ToolNameSet): string {
       "- Inspect: prefer `read_file` (use offset/limit on large files) over cat/head/sed.",
     );
   }
-  if (names.has("apply_edit") || names.has("write_file")) {
+  if (names.has("apply_edit") || names.has("write_file") || names.has("apply_patch")) {
     lines.push(
-      "- Edit: prefer `apply_edit` with a unique snippet; use `write_file` only to create or fully replace.",
+      "- Edit: prefer `apply_edit` for a unique snippet; `apply_patch` for multi-file / structured hunks; `write_file` only to create or fully replace.",
     );
   }
   if (
     names.has("read_file") &&
-    (names.has("apply_edit") || names.has("write_file"))
+    (names.has("apply_edit") ||
+      names.has("write_file") ||
+      names.has("apply_patch"))
   ) {
     lines.push(
-      "- Read a path in this turn before `apply_edit` / `write_file` (write-intent).",
+      "- Read a path in this turn before `apply_edit` / `write_file` / `apply_patch` Update|Delete (write-intent).",
     );
   }
   if (
@@ -42,7 +44,8 @@ export function formatFsRoutingPrompt(available: ToolNameSet): string {
     names.has("grep") ||
     names.has("read_file") ||
     names.has("apply_edit") ||
-    names.has("write_file")
+    names.has("write_file") ||
+    names.has("apply_patch")
   ) {
     lines.push(
       "- Paths may be workspace-relative or absolute under the workspace root.",
@@ -52,7 +55,7 @@ export function formatFsRoutingPrompt(available: ToolNameSet): string {
   return ["File tools:", ...lines].join("\n");
 }
 
-/** Shell / PTY / jobs routing; empty when none of those tools are available. */
+/** Shell / terminal / jobs routing; empty when none of those tools are available. */
 export function formatShellRoutingPrompt(available: ToolNameSet): string {
   const names = asSet(available);
   const lines: string[] = [];
@@ -96,6 +99,7 @@ export const FS_ROUTING_PROMPT_TEXT = formatFsRoutingPrompt([
   "grep",
   "read_file",
   "apply_edit",
+  "apply_patch",
   "write_file",
 ]);
 

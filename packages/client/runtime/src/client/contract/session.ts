@@ -7,13 +7,42 @@
  * must stub); runtime-internal entry points (history staging, wire-frame
  * dispatch) stay on the class, invisible out here.
  */
-import type { AttachmentIdType, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+import type { AttachmentIdType, FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import type {
   MessageId, PromptContentPart, QueueAction, RpcResult, SessionId,
 } from '@xrkseek/xrk-api-remotes/client'
 import type { RemoteResult } from '@xrkseek/xrk-typert-protocol'
-import type { ConversationSnapshot } from '../sessions/conversation.ts'
+import type {
+  ConversationSnapshot, PendingSubmissionAttachment, SessionRequestId,
+} from '../sessions/conversation.ts'
 import type { ObservableSnapshot } from './store.ts'
+
+/**
+ * Why a local submission echo left the snapshot: `observed` when its durable
+ * `user/message` or Host queue occurrence arrived, `failed` when the prompt
+ * was rejected, threw, or was abandoned before acceptance.
+ */
+export type PendingSubmissionRetirement =
+  | {
+    readonly reason: 'observed'
+    readonly attachments: readonly (ImageAttachmentRef | FileAttachmentRef)[]
+  }
+  | { readonly reason: 'failed' }
+
+/** Input registering one local submission echo ahead of its prompt call. */
+export interface BeginSubmissionInput {
+  readonly mode: 'queue' | 'steer'
+  readonly text: string
+  readonly attachments: readonly PendingSubmissionAttachment[]
+  readonly onRetire?: (retirement: PendingSubmissionRetirement) => void
+}
+
+/** One registered submission echo: identity for {@link ISession.prompt} plus abandon. */
+export interface SubmissionHandle {
+  readonly requestId: SessionRequestId
+  /** Retire the echo as failed when the caller cannot reach prompt(); no-op after settlement. */
+  abandon(): void
+}
 
 /** Key-addressed projection read face (the useProjection resolution path; see ProjectionValueStore). */
 export interface ProjectionsFace {
@@ -33,12 +62,26 @@ export interface ISession {
   /** Host-computed projection values by key (the useProjection seat). */
   readonly projections: ProjectionsFace
   /**
+   * Register one local submission echo in `snapshot.pendingSubmissions`
+   * synchronously, before the caller serializes and sends the prompt.
+   * @param input - echo content and the optional settlement callback.
+   * @returns the minted identity for {@link prompt} plus the pre-prompt abandon path.
+   */
+  beginSubmission(input: BeginSubmissionInput): SubmissionHandle
+  /**
    * Send a prompt into the session.
    * @param content - text plus browser-owned temporary image uploads.
    * @param mode - 'queue' appends a turn; 'steer' interrupts the running one.
+   * @param signal - optional caller cancellation for the complete admission round-trip.
+   * @param requestId - identity from {@link beginSubmission}; a failed identified prompt retires its echo.
    * @returns acceptance, or the business error (also mirrored into snapshot.promptError).
    */
-  prompt(content: PromptContentPart[], mode: 'queue' | 'steer'): Promise<RpcResult<{ accepted: true }>>
+  prompt(
+    content: PromptContentPart[],
+    mode: 'queue' | 'steer',
+    signal?: AbortSignal,
+    requestId?: SessionRequestId,
+  ): Promise<RpcResult<{ accepted: true }>>
   /**
    * Resolve one durable image referenced by this session.
    * @param attachmentId - opaque id found in the folded session log.

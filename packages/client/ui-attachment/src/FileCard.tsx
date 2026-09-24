@@ -1,7 +1,7 @@
-/** Draft generic-file card for the composer attachment rail (DSH-shaped audit). */
+/** Draft generic-file card for the composer attachment rail (DSH-shaped). */
 
 import clsx from 'clsx'
-import { IconCloseFill14 } from '@xrkseek/client-ui-primitives'
+import { fileExtension, FileTypeIcon, fileSizeText, IconCloseFill14 } from '@xrkseek/client-ui-primitives'
 import type { DraftFileUpload } from '@xrkseek/client-ui-conversation/client'
 import css from './FileCard.module.css'
 
@@ -19,28 +19,8 @@ export interface FileCardLabels {
   pending: string
 }
 
-/** Uppercase extension badge text (no dedicated file-type icon). */
-function extensionLabel(name: string): string {
-  const dot = name.lastIndexOf('.')
-  if (dot <= 0 || dot === name.length - 1) return 'FILE'
-  return name.slice(dot + 1, dot + 5).toUpperCase()
-}
-
-/** Compact byte count for the card subtitle. */
-function formatFileSize(bytes: number): string {
-  if (bytes >= 1024 * 1024) {
-    const mb = bytes / (1024 * 1024)
-    return `${Number.isInteger(mb) ? String(mb) : mb.toFixed(1)}MB`
-  }
-  if (bytes >= 1024) {
-    const kb = bytes / 1024
-    return `${Number.isInteger(kb) ? String(kb) : kb.toFixed(1)}KB`
-  }
-  return `${bytes}B`
-}
-
 /**
- * One generic-file draft card: extension badge, name, size/status, remove,
+ * One generic-file draft card: type glyph, name, size/status, remove,
  * optional retry, and an upload progress bar.
  */
 export function FileCard({ file, upload, labels, onRemove, onRetry }: {
@@ -55,16 +35,21 @@ export function FileCard({ file, upload, labels, onRemove, onRetry }: {
   const uploading = upload?.status === 'uploading'
   const progress = uploading && upload.total !== undefined && upload.total > 0
     ? Math.min(100, Math.round((upload.loaded / upload.total) * 100))
-    : uploading ? null : null
+    : null
   const status = failed
     ? upload.message || labels.failed
     : uploading
       ? labels.uploading
-      : formatFileSize(file.size)
+      : [fileExtension(name).toUpperCase().slice(0, 8), fileSizeText(file.size)]
+        .filter(Boolean).join(' ')
 
   return (
     <div className={clsx(css.card, failed && css.cardFailed)}>
-      <div className={css.icon} aria-hidden="true">{extensionLabel(name)}</div>
+      <div className={css.icon} aria-hidden="true">
+        {uploading
+          ? <span className={css.spinner} />
+          : <FileTypeIcon path={name} />}
+      </div>
       <div className={css.body}>
         <div className={css.name} title={name}>{name}</div>
         <div className={css.status}>{status}</div>

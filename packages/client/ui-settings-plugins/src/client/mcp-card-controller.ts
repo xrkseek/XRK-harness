@@ -1,5 +1,6 @@
 /** The MCP card's staged form over the `mcp` settings namespace. */
 
+import type { IApiClient } from '@xrkseek/client-connection/client'
 import type { SettingsScope, SettingsScopeSnapshot, SnapshotStore } from '@xrkseek/client-runtime/client'
 import { createSnapshotStore } from '@xrkseek/client-runtime/client'
 import type { CardActions, CardShell } from './card-form.ts'
@@ -47,6 +48,21 @@ export interface McpServerDraft {
 /** Transport kind the card edits for one row. */
 export type McpTransport = 'stdio' | 'http'
 
+/** OAuth login phase for an HTTP MCP server (device-code). */
+export type McpOauthPhase = 'idle' | 'pending' | 'logged-in' | 'error' | 'cancelled' | 'unknown'
+
+/** Per-server OAuth overlay (no secrets). */
+export interface McpOauthRowState {
+  readonly phase: McpOauthPhase
+  readonly loggedIn: boolean
+  readonly expired?: boolean
+  readonly userCode?: string
+  readonly verificationUri?: string
+  readonly verificationUriComplete?: string
+  readonly error?: string
+  readonly busy?: boolean
+}
+
 /** One editable row in the card UI. */
 export interface McpServerRow {
   readonly serverName: string
@@ -64,6 +80,8 @@ export interface McpServerRow {
   readonly toolCount: number
   /** Failure message when status is failed. */
   readonly failureMessage?: string
+  /** OAuth overlay for HTTP rows (absent for stdio). */
+  readonly oauth?: McpOauthRowState
 }
 
 /** What the MCP card renders. */
@@ -108,6 +126,10 @@ export interface McpCardFace extends CardActions {
    * `cwdAllowWorkspace`.
    */
   setAllowWorkspaceCwd: (allow: boolean) => void
+  /** Start device-code OAuth for an HTTP server row (same path as `xrkh mcp login`). */
+  loginOauth: (serverName: string) => void
+  /** Clear the on-disk OAuth token for a server. */
+  logoutOauth: (serverName: string) => void
 }
 
 /** Bridges the `mcp` scope onto the card's staged server list. */
@@ -127,9 +149,18 @@ export class McpCardController {
   private saving = false
   private failed = false
   private showErrors = false
+  private oauthByServer = new Map<string, McpOauthRowState>()
+  private oauthPollTimer: ReturnType<typeof setInterval> | undefined
+  private oauthBusy = new Set<string>()
 
-  /** @param scope - the bound settings scope for the `mcp` namespace. */
-  constructor(private readonly scope: SettingsScope<McpSettings>) {
+  /**
+   * @param scope - the bound settings scope for the `mcp` namespace.
+   * @param api - wire face for mcp.oauth.* (optional in unit tests).
+   */
+  constructor(
+    private readonly scope: SettingsScope<McpSettings>,
+    private readonly api?: Pick<IApiClient, 'mcpOauth'>,
+  ) {
     this.store = createSnapshotStore(this.projection())
     scope.subscribe(() => { this.syncFromScope() })
     this.syncFromScope(true)
@@ -146,7 +177,7 @@ export class McpCardController {
     // Do not use dirty() here: agent/UI mutate updates the scope and would
     // look "dirty" against a stale empty seed, then skip reseed forever.
     if (!this.seeded || force || !this.userStaged) {
-      this.rows = serversOf(snapshot).map(draft => rowToUi(draft, snapshot))
+      this.rows = serversOf(snapshot).map(draft => rowToUi(draft, snapshot, this.oauthByServer))
       this.allowConnect = allowOf(snapshot)
       this.allowTouched = false
       this.userStaged = false
@@ -155,9 +186,10 @@ export class McpCardController {
       this.showErrors = false
     } else {
       // Refresh live status overlays without clobbering staged edits.
-      this.rows = this.rows.map(row => enrichRowStatus(row, snapshot))
+      this.rows = this.rows.map(row => enrichRowStatus(row, snapshot, this.oauthByServer))
     }
     this.publish()
+    void this.refreshOauthStatus()
   }
 
   private projection(): McpCardState {
@@ -176,7 +208,7 @@ export class McpCardController {
       showErrors: this.showErrors && (invalid || cwdNeedsAck),
       saving: this.saving,
       failed: this.failed,
-      rows: this.rows,
+      rows: this.rows.map(row => enrichRowOauth(row, this.oauthByServer, this.oauthBusy)),
       allowConnect: this.allowConnect,
       note: noteOf(snapshot),
     }
@@ -212,11 +244,146 @@ export class McpCardController {
       removeRow: (index) => { this.removeRow(index) },
       setAllowConnect: (allow) => { this.setAllowConnect(allow) },
       setAllowWorkspaceCwd: (allow) => { this.setAllowWorkspaceCwd(allow) },
+      loginOauth: (serverName) => { void this.loginOauth(serverName) },
+      logoutOauth: (serverName) => { void this.logoutOauth(serverName) },
       edit: () => { /* rows use paste merge */ },
       resetField: () => { /* n/a for MCP list */ },
       save: () => { void this.save() },
       discard: () => { this.discard() },
     }
+  }
+
+  private httpServerNames(): string[] {
+    const names = new Set<string>()
+    for (const row of this.rows) {
+      if (row.transport === 'http' && row.serverName.trim()) names.add(row.serverName.trim())
+    }
+    const snapshot = this.scope.getSnapshot()
+    for (const draft of serversOf(snapshot)) {
+      if (draft.url && draft.serverName.trim()) names.add(draft.serverName.trim())
+    }
+    return [...names]
+  }
+
+  private async refreshOauthStatus(): Promise<void> {
+    if (!this.api) return
+    const servers = this.httpServerNames()
+    if (servers.length === 0) {
+      this.stopOauthPoll()
+      if (this.oauthByServer.size > 0) {
+        this.oauthByServer.clear()
+        this.publish()
+      }
+      return
+    }
+    let response: Awaited<ReturnType<IApiClient['mcpOauth']['status']>>
+    try {
+      response = await this.api.mcpOauth.status({ servers })
+    } catch {
+      return
+    }
+    if (!response.result.ok) return
+    const next = new Map<string, McpOauthRowState>()
+    let pending = false
+    for (const item of response.result.value.items) {
+      const phase = item.loginPhase
+      if (phase === 'pending') pending = true
+      next.set(item.server, {
+        phase,
+        loggedIn: item.loggedIn,
+        ...(item.expired !== undefined ? { expired: item.expired } : {}),
+        ...(item.userCode ? { userCode: item.userCode } : {}),
+        ...(item.verificationUri ? { verificationUri: item.verificationUri } : {}),
+        ...(item.verificationUriComplete
+          ? { verificationUriComplete: item.verificationUriComplete }
+          : {}),
+        ...(item.loginError ? { error: item.loginError } : {}),
+      })
+    }
+    this.oauthByServer = next
+    if (pending) this.startOauthPoll()
+    else this.stopOauthPoll()
+    this.publish()
+  }
+
+  private startOauthPoll(): void {
+    if (this.oauthPollTimer !== undefined || !this.api) return
+    this.oauthPollTimer = setInterval(() => { void this.refreshOauthStatus() }, 2000)
+  }
+
+  private stopOauthPoll(): void {
+    if (this.oauthPollTimer === undefined) return
+    clearInterval(this.oauthPollTimer)
+    this.oauthPollTimer = undefined
+  }
+
+  private async loginOauth(serverName: string): Promise<void> {
+    if (!this.api) return
+    const name = serverName.trim()
+    if (!name || this.oauthBusy.has(name)) return
+    const row = this.rows.find(r => r.serverName === name && r.transport === 'http')
+    this.oauthBusy.add(name)
+    this.publish()
+    let response: Awaited<ReturnType<IApiClient['mcpOauth']['login']>>
+    try {
+      response = await this.api.mcpOauth.login({
+        server: name,
+        ...(row?.url.trim() ? { url: row.url.trim() } : {}),
+      })
+    } catch (err) {
+      this.oauthByServer.set(name, {
+        phase: 'error',
+        loggedIn: false,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      this.oauthBusy.delete(name)
+      this.publish()
+      return
+    }
+    this.oauthBusy.delete(name)
+    if (!response.result.ok) {
+      this.oauthByServer.set(name, {
+        phase: 'error',
+        loggedIn: false,
+        error: response.result.error.message,
+      })
+      this.publish()
+      return
+    }
+    const value = response.result.value
+    if (value.status === 'logged-in') {
+      this.oauthByServer.set(name, { phase: 'logged-in', loggedIn: true })
+    } else {
+      this.oauthByServer.set(name, {
+        phase: 'pending',
+        loggedIn: false,
+        ...(value.userCode ? { userCode: value.userCode } : {}),
+        ...(value.verificationUri ? { verificationUri: value.verificationUri } : {}),
+        ...(value.verificationUriComplete
+          ? { verificationUriComplete: value.verificationUriComplete }
+          : {}),
+      })
+      this.startOauthPoll()
+    }
+    this.publish()
+    void this.refreshOauthStatus()
+  }
+
+  private async logoutOauth(serverName: string): Promise<void> {
+    if (!this.api) return
+    const name = serverName.trim()
+    if (!name || this.oauthBusy.has(name)) return
+    this.oauthBusy.add(name)
+    this.publish()
+    try {
+      await this.api.mcpOauth.logout({ server: name })
+    } catch {
+      /* status refresh surfaces the outcome */
+    }
+    this.oauthBusy.delete(name)
+    this.oauthByServer.set(name, { phase: 'idle', loggedIn: false })
+    this.publish()
+    void this.refreshOauthStatus()
   }
 
   private setAllowConnect(allow: boolean): void {
@@ -263,12 +430,14 @@ export class McpCardController {
     const imported = rowsFromMcpPaste(raw)
     if (imported.length === 0) return 'invalid'
     const snapshot = this.scope.getSnapshot()
-    this.rows = mergeRowsByName(this.rows, imported).map(row => enrichRowStatus(row, snapshot))
+    this.rows = mergeRowsByName(this.rows, imported).map(row =>
+      enrichRowStatus(row, snapshot, this.oauthByServer))
     // Paste implies connect (DSH: configured servers come up live).
     this.allowConnect = true
     this.touchLocal()
     this.failed = false
     this.publish()
+    void this.refreshOauthStatus()
     return 'ok'
   }
 
@@ -288,7 +457,7 @@ export class McpCardController {
   private discard(): void {
     const snapshot = this.scope.getSnapshot()
     if (snapshot.status !== 'ready') return
-    this.rows = serversOf(snapshot).map(draft => rowToUi(draft, snapshot))
+    this.rows = serversOf(snapshot).map(draft => rowToUi(draft, snapshot, this.oauthByServer))
     this.allowConnect = allowOf(snapshot)
     this.allowTouched = false
     this.userStaged = false
@@ -336,10 +505,11 @@ export class McpCardController {
       this.seeded = true
       this.allowTouched = false
       this.userStaged = false
-      this.rows = serversOf(after).map(draft => rowToUi(draft, after))
+      this.rows = serversOf(after).map(draft => rowToUi(draft, after, this.oauthByServer))
       this.allowConnect = allowOf(after)
     }
     this.publish()
+    void this.refreshOauthStatus()
   }
 }
 function serversOf(snapshot: SettingsScopeSnapshot<McpSettings>): McpServerDraft[] {
@@ -407,12 +577,32 @@ function resolveRowStatus(
   return { status: 'idle', toolCount: 0 }
 }
 
+function enrichRowOauth(
+  row: McpServerRow,
+  oauthByServer: Map<string, McpOauthRowState>,
+  oauthBusy: Set<string>,
+): McpServerRow {
+  if (row.transport !== 'http') return { ...row, oauth: undefined }
+  const oauth = oauthByServer.get(row.serverName)
+  const busy = oauthBusy.has(row.serverName)
+  if (!oauth && !busy) return { ...row, oauth: { phase: 'unknown', loggedIn: false } }
+  return {
+    ...row,
+    oauth: {
+      ...(oauth ?? { phase: 'idle' as const, loggedIn: false }),
+      ...(busy ? { busy: true } : {}),
+    },
+  }
+}
+
 function enrichRowStatus(
   row: McpServerRow,
   snapshot: SettingsScopeSnapshot<McpSettings>,
+  oauthByServer: Map<string, McpOauthRowState>,
 ): McpServerRow {
   const resolved = resolveRowStatus(row.serverName, snapshot)
-  return { ...row, ...resolved }
+  const withStatus = { ...row, ...resolved }
+  return enrichRowOauth(withStatus, oauthByServer, new Set())
 }
 
 function isConnectedEntry(value: unknown): value is McpConnectedEntry {
@@ -442,10 +632,14 @@ function normalizeStoredRow(raw: McpServerDraft): McpServerDraft {
   }
 }
 
-function rowToUi(draft: McpServerDraft, snapshot: SettingsScopeSnapshot<McpSettings>): McpServerRow {
+function rowToUi(
+  draft: McpServerDraft,
+  snapshot: SettingsScopeSnapshot<McpSettings>,
+  oauthByServer: Map<string, McpOauthRowState>,
+): McpServerRow {
   const transport: McpTransport = draft.url ? 'http' : 'stdio'
   const resolved = resolveRowStatus(draft.serverName, snapshot)
-  return {
+  const base: McpServerRow = {
     serverName: draft.serverName,
     transport,
     command: draft.command ?? '',
@@ -455,6 +649,7 @@ function rowToUi(draft: McpServerDraft, snapshot: SettingsScopeSnapshot<McpSetti
     cwdAllowWorkspace: draft.cwdAllowWorkspace === true,
     ...resolved,
   }
+  return enrichRowOauth(base, oauthByServer, new Set())
 }
 
 function rowFromUi(row: McpServerRow): McpServerDraft {

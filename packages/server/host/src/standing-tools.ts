@@ -16,7 +16,7 @@ import { createDefaultWebAccess, createWebTools } from "@xrkseek/exec-web";
 import { createLspTools } from "@xrkseek/exec-lsp";
 import { createPtyTools } from "@xrkseek/exec-pty";
 import { resolveToolPreset } from "@xrkseek/server-face";
-import { createSkillTools } from "@xrkseek/workspace";
+import { createSkillTools, createProposeSkillTool } from "@xrkseek/workspace";
 
 export function createStandingToolRegistry(options: {
   readonly workspaceRoot: string;
@@ -31,6 +31,11 @@ export function createStandingToolRegistry(options: {
   })) {
     tools.register(tool);
   }
+  tools.register(
+    createProposeSkillTool({
+      resolveWorkspaceRoot: () => options.workspaceRoot,
+    }),
+  );
   // Display-only presenters for cold history. When Host composition is harness
   // (any of shell/frugal/plan/shallow/harness/server), register the full tool
   // surface so a session badge with more tools than the Host default still

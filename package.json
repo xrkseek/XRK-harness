@@ -12,6 +12,7 @@
     "verify:client-ui-i18n:desktop": "node --experimental-strip-types ./scripts/verify-client-ui-i18n.ts --desktop-only",
     "build": "node ./scripts/build.mjs",
     "test": "vitest run",
+    "test:evals": "vitest run evals/golden",
     "test:web": "vitest run --config vitest.web.config.ts",
     "test:kernel-coverage": "vitest run --config vitest.kernel.config.ts --coverage",
     "lint": "eslint .",

@@ -12,6 +12,8 @@
     { "path": "../tools" },
     { "path": "../../llm/llm" },
     { "path": "../../protocol" },
+    { "path": "../../runtime-diagnostics/invariants" },
+    { "path": "../../spill" },
     { "path": "../../util/home-paths" }
   ]
 }

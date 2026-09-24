@@ -30,7 +30,10 @@ import type { FaceApprovalBroker } from "./approvals.js";
 import type { FaceQuestionBroker } from "./questions.js";
 import type { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import type { FaceSubagentRegistry } from "./subagent-registry.js";
+import type { ExternalAgentSessionRegistry } from "./external-agent-runtime.js";
 import type { AgentTeamGraph } from "./agent-team-graph.js";
+import type { AgentTeamTaskBoard } from "./agent-team-tasks.js";
+import type { ManagedWorktreeManager } from "./managed-worktree.js";
 import type { FaceMessageFeedbackStore } from "./message-feedback.js";
 import type { FaceGoalStore } from "./goal-store.js";
 import type { FaceWireIdMaps } from "./adapt/wire-ids.js";
@@ -121,8 +124,17 @@ export interface FaceRuntime {
   readonly workspaces: FaceWorkspaceRegistry;
   /** Direct subagent children (fork / create-with-parent). */
   readonly subagents: FaceSubagentRegistry;
+  /**
+   * Live ACP / app-server subprocesses keyed by Face child session id.
+   * Same list / send / interrupt / wait surface as in-process continuable.
+   */
+  readonly externalAgents: ExternalAgentSessionRegistry;
   /** Delegation + peer team graph (persisted next to the subagent sidecar). */
   readonly agentTeams: AgentTeamGraph;
+  /** Thin task board (delivery · result · pause/takeover) beside the graph. */
+  readonly agentTeamTasks: AgentTeamTaskBoard;
+  /** Managed git worktree leases (allocate / reclaim / Teams bind). */
+  readonly managedWorktrees: ManagedWorktreeManager;
   /** Per-session assistant-message ratings (process-local CAS). */
   readonly messageFeedback: FaceMessageFeedbackStore;
   /**
@@ -180,6 +192,11 @@ export interface FaceRuntime {
   readonly cordisHostBridge?: FaceCordisHostBridge;
   /** In-memory credential overrides — never session-logged. */
   readonly credentials: FaceCredentialVault;
+  /**
+   * Optional OS keyring / memory SecretStore overlay (`XRK_SECRETS_BACKEND`).
+   * Face `.credentials.yaml` remains the default durable SoT.
+   */
+  readonly secretStore?: import("@xrkseek/secrets").SecretStore;
   /** Face settings namespaces (welcome notice, etc.). */
   readonly settingsNamespaces: FaceSettingsNamespaces;
   /** Bootstrap Host API key from env/config (before vault override). */
@@ -221,6 +238,11 @@ export interface FaceRuntime {
   readonly questions: FaceQuestionBroker;
   /** Drop cached agent when preset changes (host wires). May be async (compose dispose). */
   invalidateAgent?(sessionId: string): void | Promise<void>;
+  /**
+   * Session leaving the live set (archive / Host stop). Host may run curated-memory
+   * Phase1 consolidate. Best-effort; failures must not block Face.
+   */
+  onSessionFinalize?(sessionId: string): void | Promise<void>;
   /** When true, `/permission` refuses sandbox mode changes while **Agent**
    * `terminal_*` PTY sessions are open or spawning (CV DSH terminal-bash
    * sandbox fence). Sidebar user terminals must not be reported here.

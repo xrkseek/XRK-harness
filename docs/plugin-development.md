@@ -83,7 +83,7 @@ xrkh restart
 
 | 类别 | 落点 | 是否进主仓 git / pnpm workspace |
 |------|------|--------------------------------|
-| **金样 / 内置适配** | `extensions/example-tools` · `example-channel` · `dsh-compat` | **是**（`.gitignore` / `pnpm-workspace` 白名单） |
+| **金样 / 内置适配** | `extensions/example-tools` · `example-channel` · `a2a` · `dsh-compat` | **是**（`.gitignore` / `pnpm-workspace` 白名单） |
 | **第三方 / 本地工作树** | `extensions/<plugin-id>/`（对标 AGT 本地 Core） | **默认忽略**；可联调，勿提交进主仓 |
 | **用户全局安装** | `~/.xrk/plugins`（`xrkh plugin add`） | 不在源码仓内 |
 
@@ -237,7 +237,7 @@ Reload with **`restart`** (pid lock stops this Host). `--force` only stops recog
 
 | Kind | Location | In main-repo git / pnpm workspace? |
 |------|----------|-------------------------------------|
-| **Samples / built-in adapter** | `extensions/example-tools` · `example-channel` · `dsh-compat` | **Yes** (`.gitignore` / `pnpm-workspace` whitelist) |
+| **Samples / built-in adapter** | `extensions/example-tools` · `example-channel` · `a2a` · `dsh-compat` | **Yes** (`.gitignore` / `pnpm-workspace` whitelist) |
 | **Third-party / local working tree** | `extensions/<plugin-id>/` (AGT-style local Core) | **Ignored by default**; OK for local smoke tests, do not commit into the main repo |
 | **User global install** | `~/.xrk/plugins` (`xrkh plugin add`) | Outside the monorepo |
 

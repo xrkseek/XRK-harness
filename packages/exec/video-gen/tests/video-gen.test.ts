@@ -439,6 +439,18 @@ describe("default access + messages", () => {
         env: { XRK_VIDEO_GEN: "1", OPENAI_API_KEY: "sk" },
       }).service,
     ).toBeTruthy();
+    expect(
+      createDefaultVideoGenAccess({
+        env: { XRK_VIDEO_GEN_OPENAI_KEY: "sk" },
+        product: { mode: "openai" },
+      }).service,
+    ).toBeTruthy();
+    expect(
+      createDefaultVideoGenAccess({
+        env: {},
+        product: { mode: "off" },
+      }).service,
+    ).toBeUndefined();
   });
 
   it("forwards base url / model / fetch into the OpenAI provider", async () => {

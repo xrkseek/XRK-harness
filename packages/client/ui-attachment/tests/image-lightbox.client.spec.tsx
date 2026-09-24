@@ -6,7 +6,7 @@ import { ImageLightbox } from '../src/ImageLightbox.tsx'
 
 afterEach(cleanup)
 
-const labels = { dialog: '原图预览', close: '关闭原图预览' }
+const labels = { dialog: '原图预览', close: '关闭原图预览', download: '下载原图' }
 
 describe('ImageLightbox', () => {
   it('focuses its close control, closes by button and Escape, and restores focus', () => {
@@ -25,6 +25,25 @@ describe('ImageLightbox', () => {
     view.unmount()
     expect(document.activeElement).toBe(opener)
     opener.remove()
+  })
+
+  it('traps Tab between download and close controls', () => {
+    const view = render(<ImageLightbox src="blob:original" alt="原图" labels={labels} onClose={vi.fn()} />)
+    const download = view.getByRole('button', { name: '下载原图' })
+    const close = view.getByRole('button', { name: '关闭原图预览' })
+    expect(document.activeElement).toBe(close)
+    fireEvent.keyDown(window, { key: 'Tab' })
+    expect(document.activeElement).toBe(download)
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(close)
+  })
+
+  it('offers a download control that triggers an anchor click', () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const view = render(<ImageLightbox src="blob:original" alt="shot" labels={labels} onClose={vi.fn()} />)
+    fireEvent.click(view.getByRole('button', { name: '下载原图' }))
+    expect(click).toHaveBeenCalled()
+    click.mockRestore()
   })
 
   it('tolerates a focus owner it cannot restore (no active element at mount)', () => {

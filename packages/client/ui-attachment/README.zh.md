@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-对话 UI 的动态附件呈现插件。它通过 `ctx.slots.inject` 等待 conversation 包声明 `conversation.input.attachments` 与 `conversation.message.images`，随后注册输入框草稿图片栏、文档拖放目标、聊天历史图片画廊和原图灯箱。conversation slot 持有方提供附件数据、图片加载、回调及其命名空间翻译器；呈现组件保持纯 props，且不从包入口导出。
+对话 UI 的动态附件呈现插件。它通过 `ctx.slots.inject` 等待 conversation 包声明 `conversation.input.attachments`、`conversation.message.images` 与 `conversation.message.files`，随后注册输入框草稿附件栏、文档拖放目标、聊天历史图片画廊、持久化文件卡片和原图灯箱。conversation slot 持有方提供附件数据、图片加载、回调及其命名空间翻译器；呈现组件保持纯 props，且不从包入口导出。
 
 ## 附件栏
 
@@ -11,6 +11,10 @@
 ## 消息图片与灯箱
 
 `MessageImage` 渲染一张持久化历史图片，经持有方的 `ImageLoader` 加载会话授权 URL；加载失败渲染显式重试按钮，加载完成后单击打开 `ImageLightbox`（加载中的点击被忽略）。尺寸规则对齐 DeepSeek Chat：一条消息仅有的一张图（`variant="single"`）长边 240px、展示宽高比钳制在 [0.25, 4] 之间——超出部分由 `object-fit: cover` 裁切，特别高的图锚定顶部、特别宽的图锚定左侧——且从不放大超过原始尺寸；多图中的一张（`variant="tile"`）为固定 64px 方块。`ImageGallery` 将一条消息的图片包为一个对齐的可换行弹性分组（用户消息 `end`，助手消息 `start`），按图片数量选择 variant，空列表不渲染。`ImageLightbox` 是文档级模态预览，铺在共享的对话框遮罩上（`--dsw-alias-bg-mask-1` 加 `--dsw-mask-blur`，画在独立图层上，模糊不会波及预览图本身），按 Escape、按下遮罩或点关闭按钮均可关闭，卸载时将焦点还给打开者。
+
+## 消息文件卡片
+
+用户气泡按 DeepSeek Chat：`FileTypeIcon` 图标、文件名、`扩展名 体积` 元信息（240px 卡），并在同一 `attachmentRow` 里按内容块顺序混排图片与文件；多附件时图片用紧凑瓦片。输入栏 `FileCard` 同样用类型图标，编码中显示转圈。
 
 ## 拖放遮罩
 
@@ -26,6 +30,6 @@
 
 ## 已知限制与暂缓事项
 
-- **仅支持图片** — 非图片文件尚无附件栏卡片与历史渲染；DeepSeek Chat 风格的文件卡片和上传进度状态等输入框接受非图片附件后再做。
+- **历史文件卡片无下载或预览** — 会话文件卡片目前只展示名称与体积；打开或下载存储字节待产品决策。
 - **灯箱无缩放与下载** — 预览仅以适配视口的尺寸渲染原图。
 - **灯箱不锁定焦点** — 它设置 `aria-modal` 并在关闭时归还焦点，但 Tab 仍可移动到背后的页面。

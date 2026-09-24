@@ -43,6 +43,7 @@ afterEach(() => {
 // Mirrors the real lookup chain (conversation namespace, then common).
 const t: ChatNodeViewProps['t'] = makeTranslate(zh, commonZh)
 const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
+const renderMessageFiles = (): null => null
 const RETRY_ID = 'retry-fixture' as Extract<ConversationNode, { kind: 'model-retry' }>['retryId']
 
 interface MessageItemProps {
@@ -68,7 +69,7 @@ function MessageItem({ node, t: translate, referenceLabels }: MessageItemProps) 
         ? { ...node, referenceLabels }
         : node,
   }
-  const props = { node: viewNode, t: translate, renderMessageImages } as ChatNodeViewProps
+  const props = { node: viewNode, t: translate, renderMessageImages, renderMessageFiles } as ChatNodeViewProps
   switch (node.kind) {
     case 'user':
     case 'steering':
@@ -87,6 +88,54 @@ function MessageItem({ node, t: translate, referenceLabels }: MessageItemProps) 
 }
 
 describe('MessageItem arms', () => {
+  it('renders durable file blocks as file cards instead of JSON extras', () => {
+    const fileA = {
+      attachmentId: 'sha256:' + 'a'.repeat(64),
+      name: 'a.pdf',
+      bytes: 1024,
+      mediaType: 'application/pdf',
+    }
+    const fileB = {
+      attachmentId: 'sha256:' + 'b'.repeat(64),
+      name: 'b.txt',
+      bytes: 8,
+    }
+    const view = render(
+      <UserMessageNodeView
+        {...({
+          node: {
+            key: 'u1',
+            kind: 'user',
+            id: '1',
+            target: 'chat',
+            anchorSeq: 1,
+            location: { kind: 'session' },
+            visibility: 'visible',
+            data: {
+              kind: 'user',
+              seq: 1,
+              time: 1_000,
+              content: [
+                { type: 'file', attachment: fileA },
+                { type: 'file', attachment: fileB },
+                { type: 'text', text: 'please review' },
+              ],
+              source: null,
+            },
+          },
+          t,
+          renderMessageImages: () => null,
+          renderMessageFiles: () => null,
+        } as ChatNodeViewProps<'user'>)}
+      />,
+    )
+    expect(view.container.querySelector('[data-message-attachments]')).toBeTruthy()
+    expect(view.getByText('a.pdf')).toBeTruthy()
+    expect(view.getByText('b.txt')).toBeTruthy()
+    expect(view.getByText('please review')).toBeTruthy()
+    expect(view.queryByText('附加内容块')).toBeNull()
+  })
+
   it('renders an adjacent session mention as a chip even without trailing whitespace', () => {
     const view = render(
       <MessageItem
