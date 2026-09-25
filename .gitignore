@@ -30,6 +30,8 @@ __pycache__/
 .xrk/host-settings.json
 .xrk/mnemon/
 .xrk/tool-outputs/
+# Runtime shadow-git checkpoints (auto-snapshot per turn); never commit
+.xrk/checkpoints/
 # Accidental cwd dump when harness home resolves to repo root
 /workspaces.json
 
