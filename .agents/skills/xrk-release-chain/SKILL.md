@@ -22,7 +22,7 @@ description: >-
 
 - 包文档 `time[<版本>]` 出现且 `modified` 今天；
 - 拿到 `+ @scope/pkg@version` 即认定发布成功收尾。
-- **绝不轮询 `npm view`**；确认交给用户一条命令或一次性后台任务。
+- 收尾动作交给用户一条命令或一次性后台任务，**不轮询 `npm view`**。
 
 ### 2. 先装根依赖再跑 stage（副作用 1）
 
@@ -38,9 +38,7 @@ CI=true pnpm install --frozen-lockfile
 
 ### 3. 大 tarball 上传用 bash 后台任务（副作用 2）
 
-CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。**不要**用
-`Start-Process` 分离进程——它会在对话轮次边界被回收（日志与退出码文件同时
-冻结、无报错）。用 `bash` 后台任务并在**同一轮** `job_output(wait:true)` 等到底。
+CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `bash` 后台任务并在**同一轮** `job_output(wait:true)` 等到底（`Start-Process` 分离进程会在对话轮次边界被回收——日志与退出码文件同时冻结、无报错）。
 
 ### 4. E409 / E403 处理
 
@@ -58,8 +56,8 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。**不�
 ## Pitfalls
 
 - 发布产物不一致：GitHub asset 前缀 `<dir>/` vs npm tarball `package/`——字节与
-  清单都不同，别拿一边的清单去核对另一边。
-- `npm_config_fetch_timeout` 默认 300s，**绝不要调低**（曾设 60s 把大包上传
-  掐死，日志 `verbose type request-timeout` / `FETCH_ERROR`）；`fetch_retries` 别下调。
+  清单都不同，各自用对应清单核对。
+- `npm_config_fetch_timeout` 保持默认 300s（曾设 60s 把大包上传掐死，日志
+  `verbose type request-timeout` / `FETCH_ERROR`）；`fetch_retries` 保持默认。
 - 面板里看不到大上传属正常，用 `Get-NetAdapterStatistics` 的 SentBytes 差值判断
   是否真在传（见 `xrk-github-npm-net`）。

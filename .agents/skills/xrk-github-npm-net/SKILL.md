@@ -8,7 +8,7 @@ description: >-
 
 # GitHub / npm 网络探测
 
-这台 Windows 机（Clash Verge 内核 verge-mihomo，系统代理 `127.0.0.1:7897`，**node/npm 不读系统代理**）上，GitHub API 的连通性**会反转**，别固定一条。
+这台 Windows 机（Clash Verge 内核 verge-mihomo，系统代理 `127.0.0.1:7897`，**node/npm 不读系统代理**）上，GitHub API 的连通性**会反转**，每次调 API 先探一次。
 
 ## When to Use
 
@@ -44,6 +44,6 @@ Get-NetAdapterStatistics
 
 ## Pitfalls
 
-- 别凭上一次会话的记忆固定「必须代理」或「必须直连」——**每次调 GitHub API 前探一次**，两个方向都试。
+- 每次调 GitHub API 前探一次，两个方向都试（直连 / `HTTPS_PROXY=http://127.0.0.1:7897`）——连通性会反转，凭记忆固定某一条会踩空。
 - `gh api` 的 EOF 和 `error checking for existing release: ... EOF` 都是网络层报错，不是仓库/权限问题。
-- `npm_config_fetch_timeout` 默认 300s；**绝不要调低**（曾设 60s 直接把大包上传掐死，日志表现为 `verbose type request-timeout` / `FETCH_ERROR`）。`fetch_retries` 也别往下调。
+- `npm_config_fetch_timeout` 保持默认 300s（曾设 60s 直接把大包上传掐死，日志表现为 `verbose type request-timeout` / `FETCH_ERROR`）；`fetch_retries` 保持默认。

@@ -19,24 +19,24 @@ description: >-
 
 ## Procedure
 
-### 1. 一行语法错 = 整段死
+### 1. 长脚本写文件，用 `-File` 执行
 
-PowerShell 一行里任何语法错误 → **整段解析期失败**，一步都不执行（exit 1 + ParserError）。长脚本写 `.ps1` 文件用 `-File` 执行，别拼一行。
+PowerShell 整段是解析期编译的：一行语法错 → 整段失败（exit 1 + ParserError），一步都不执行。长脚本写 `.ps1` 文件再 `-File` 执行，报错时能精确定位到行。
 
-### 2. 改文件永远用编辑工具，别用 shell 管道
+### 2. 改文件用编辑工具
 
-`(Get-Content -Raw) -replace ... | Set-Content` 会：把 LF 压成一行、加 BOM、把 UTF-8 中文按 GBK 解码再编码（**乱码**）。改脚本/文档用 `apply_edit` / `write_file` / `apply_patch` 工具，写完用 node（不是 Get-Content）验证编码。
+`apply_edit` / `write_file` / `apply_patch` 按 UTF-8 写回。shell 管道 `(Get-Content -Raw) -replace ... | Set-Content` 会把 LF 压成一行、加 BOM、把 UTF-8 中文按 GBK 解码再编码（乱码）。
 
-### 3. GBK 显示 ≠ 文件坏
+### 3. 验证文件完好用 node，不用 Get-Content
 
-`Get-Content` 默认按系统 ANSI 码页（GBK）解码 UTF-8 文件，中文会显示成乱码——**不代表文件真坏了**。验证文件完好用：
+`Get-Content` 默认按系统 ANSI 码页（GBK）解码 UTF-8 文件，中文会显示成乱码——**不代表文件真坏了**。验证用：
 `node -e "const t=require('fs').readFileSync(p,'utf8'); console.log(t.charCodeAt(0)===0xFEFF, t.slice(0,60))"`
 
-### 4. 无 BOM UTF-8 `.ps1` 里中文路径会被码页毁掉
+### 4. `.ps1` 脚本内放 ASCII 字面量
 
-`.ps1` 脚本内**不放非 ASCII 字面量**（中文绝对路径 → Set-Location 失败）。路径用 ASCII，或从环境变量取。
+无 BOM UTF-8 `.ps1` 里中文绝对路径会被码页毁掉（Set-Location 失败）。路径用 ASCII，或从环境变量取。
 
-### 5. vitest filter 放根工作区
+### 5. vitest 从根工作区跑
 
 `pnpm --filter <pkg> exec vitest run <file>` 会把 `<file>` 当 include 过滤器（匹配不到 → "No test files found"）且包内 spawn 可能 `ENOENT`。稳的是：
 `pnpm exec vitest run packages/<pkg>/tests/<file>.test.ts`（根工作区跑，能正确匹配 include 模式）
