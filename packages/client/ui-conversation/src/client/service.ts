@@ -15,7 +15,7 @@ import type { Context } from '@xrkseek/cordis'
 import type { ISessions, SessionFace, SessionId } from '@xrkseek/client-runtime/client'
 import { createSnapshotStore } from '@xrkseek/client-runtime/client'
 import type { SubmitImageAttachment, SubmitOutcome } from '@xrkseek/client-ui-input-trigger/client'
-import type { ImageAttachmentRef, ImageMediaType } from '@xrkseek/xrk-attachment'
+import type { AttachmentId, ImageAttachmentRef, ImageMediaType } from '@xrkseek/xrk-attachment'
 import type {
   ComposerAttachment, ComposerFileAttachment, ComposerImageAttachment,
   DraftFileUpload, DraftFileUploads,
@@ -68,6 +68,13 @@ export interface IConversation {
    * @param seq - Face event seq the window must reach.
    */
   loadThrough(seq: number): Promise<void>
+  /**
+   * Resolve and cache one session-authorized historical image URL.
+   * @param sessionId - owning session authorization scope.
+   * @param attachment - durable image reference.
+   * @returns browser URL valid until its rendered session is released.
+   */
+  resolveImage(sessionId: SessionId, attachment: ImageAttachmentRef): Promise<string>
 }
 
 /** Create one browser-only image draft; only its id enters input state. */
@@ -194,7 +201,7 @@ export class ConversationController extends Service implements IConversation {
       return {
         type: 'file' as const,
         value: {
-          attachmentId: `echo:${attachment.id}`,
+          attachmentId: `echo:${attachment.id}` as AttachmentId,
           name: attachment.file.name || 'file',
           bytes: attachment.file.size,
           ...(attachment.file.type === '' ? {} : { mediaType: attachment.file.type }),
@@ -510,22 +517,25 @@ export class ConversationController extends Service implements IConversation {
 }
 
 function isAcceptedImageMediaType(value: string): boolean {
-  return value === 'image/png'
-    || value === 'image/jpeg'
-    || value === 'image/webp'
-    || value === 'image/gif'
+  return SUPPORTED_IMAGE_MEDIA_TYPES.has(value)
 }
 
+/** The image MIME types this client can encode, as a single value-level source. */
+const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set<ImageMediaType>([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+])
+
 function imageMediaType(value: string): ImageMediaType {
-  switch (value) {
-    case 'image/png':
-    case 'image/jpeg':
-    case 'image/webp':
-    case 'image/gif':
-      return value
-    default:
-      throw new UnsupportedImageMediaTypeError(value)
+  // Single-source lookup: the guard and the encode share SUPPORTED_IMAGE_MEDIA_TYPES,
+  // so the enumerated set can never drift between them. The throw stays as the
+  // (now genuinely unreachable) defense for a caller that skipped the guard.
+  if (SUPPORTED_IMAGE_MEDIA_TYPES.has(value)) {
+    return value as ImageMediaType
   }
+  throw new UnsupportedImageMediaTypeError(value)
 }
 
 function bytesToBase64(data: Uint8Array): string {

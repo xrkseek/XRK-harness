@@ -29,6 +29,7 @@
   "peerDependencies": {
     "@xrkseek/cordis": "workspace:^",
     "@xrkseek/client-connection": "workspace:^",
+    "@xrkseek/xrk-api-remotes": "workspace:^",
     "@xrkseek/xrk-typert-protocol": "workspace:^",
     "@xrkseek/xrk-typert-registry": "workspace:^"
   }

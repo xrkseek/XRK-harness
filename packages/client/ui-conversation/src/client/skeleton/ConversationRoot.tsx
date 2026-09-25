@@ -23,10 +23,18 @@ const CONTENT_MIN = 640
 const CONTENT_EDGE_BUDGET = 176
 
 /** Reads the persisted width preference; durable-storage boundary, so a
- * missing or corrupt value resolves to "no preference".
- * @returns the stored width in px, or null when unset or invalid. */
+ * missing or corrupt value resolves to "no preference". Storage can be
+ * disabled by the environment (private mode, sandboxed iframe, policy) —
+ * the read must degrade to "no preference" instead of throwing during
+ * mount/layout.
+ * @returns the stored width in px, or null when unset, invalid, or unavailable. */
 function readWidthPreference(): number | null {
-  const raw = localStorage.getItem(WIDTH_PREF_KEY)
+  let raw: string | null
+  try {
+    raw = localStorage.getItem(WIDTH_PREF_KEY)
+  } catch {
+    return null
+  }
   if (raw === null) return null
   const value = Number(raw)
   return Number.isFinite(value) && value > 0 ? value : null
@@ -234,7 +242,14 @@ export function ConversationRoot({
     const root = rootEl.current
     /* v8 ignore next -- handles render inside the root, so the ref is always attached. */
     if (root === null) return
-    localStorage.setItem(WIDTH_PREF_KEY, `${resolveContentWidth(root.offsetWidth, width)}`)
+    // Storage can be disabled by the environment (private mode, sandboxed
+    // iframe, policy): a failed persist must not break the drag gesture.
+    try {
+      localStorage.setItem(WIDTH_PREF_KEY, `${resolveContentWidth(root.offsetWidth, width)}`)
+    } catch {
+      // Preference stays in-memory for this session; next mount falls back
+      // to the adaptive clamp.
+    }
   }, [])
   const onHandleEnd = useCallback((): void => {
     const root = rootEl.current

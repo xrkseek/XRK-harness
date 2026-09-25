@@ -16,6 +16,17 @@
 
 mux / host 升级后的套接字由 Host 发 **Ping** 控制帧（默认间隔 **2s**）。连续 **2** 次未收到 Pong 则 `terminate` 该对端，避免半开连接占住扇出。实现：`ws-heartbeat.ts`，经 `attachFaceUpgrades` 挂载；测例可注入更短 `heartbeatIntervalMs`。写出走 `ws-send-queue.ts`：同一套接字上的 JSON 帧串行、等 `send` 回调再发下一帧，Think / 工具突发不会把 TCP 缓冲和 Ping 定时器挤死。Agent loop 在流式 `assistant/chunk` 期间按约 **16ms** 让出事件循环；同一 text / reasoning / tool-call run 的**首片立即落库**，后续片段合并到下一次让出，mux seq 仍连续（壳把 seq 空洞当断线补洞，禁止跳号）。
 
+### 背压边界（等价物，非 DSH 双向流释放窗口）
+
+`ws-send-queue.ts` 的 `createWsSendQueue` 是 Face 侧**唯一发送背压**：帧经 Promise 链串行，等上一帧 `ws.send` 回调（数据已交内核发送缓冲）才发下一帧；写错误且套接字仍 `OPEN` 时 `terminate` 对端，客户端只能重连重置游标。**它不是** TCP 窗口级背压，也不代表客户端已消费——只约束「Host → socket」的写节奏，防止 Think / 工具突发把 TCP 缓冲与 Ping 定时器挤在同一事件循环。与之配套的**对端节奏**是 Agent loop 约 **16ms** 一次的事件循环让出（见上），两者合起来构成「发送节奏 + 让出节奏」的双重保护，等价于 DSH 双向流的释放窗口，但**没有** DSH 式逐字节/逐帧窗口计数语义。
+
+**seq 游标**：每帧 `session/event` 携带该会话独立的 `FaceMuxSeq`（1-based，`last` 未 `next` 时为 `0`）。壳以 **seq 空洞 = 断线补洞** 为唯一检测信号（禁止跳号）。水位推进路径：
+- 实时推送：`runtime` append 时 `seq.next(id)` 逐帧递增（`toMuxSessionEvent` 每帧带 seq）。
+- 回放：`session.history` 返回页内最大 `event.seq` 后 `seq.ensureAtLeast(sessionId, maxWireSeq)` 一次跳齐，避免按 `next` 空转 O(maxSeq)；`session.history` / `turnOutline.seq` / `fork atSeq` / checkpoint `atSeq` 全部对齐此 mux 时钟（不是日志下标，见 [session-log.md](./session-log.md) 位置类型）。
+- 重连：`session/subscribed` 带 `lastSeq` 基线；壳从 `lastSeq+1` 起用 `session.history` 补洞，Host 侧 `ensureAtLeast` 保证水位单调。
+
+边界结论：**释放窗口 = 帧级 send 回调 + 16ms 让出**，**断线信号 = seq 空洞**；二者都是 Face mux 自有的等价物，不继承 DSH 的双向流窗口计数。
+
 ## Face mux 序号
 
 每会话 mux 帧序号由 `FaceSeqClock` / `FaceMuxSeq` 发出（1-based；`last` 在尚未 `next` 时为 `0`）。**独立于** Session 日志的 `SessionSeq` / `SessionLogOffset`（见 [session-log.md](./session-log.md)）。history / `turnOutline.seq` 对齐的是 Face mux 时钟，不是日志下标的另一套命名。
@@ -134,6 +145,17 @@ mode: queue | steer → admit（slash → recipe / skill 写入 user）→ wake 
 ## WebSocket heartbeats
 
 After mux / host upgrade, the Host sends **Ping** control frames (default interval **2s**). After **2** consecutive missed Pongs the peer is `terminate`d so half-open sockets do not retain fan-out. Implementation: `ws-heartbeat.ts`, wired through `attachFaceUpgrades`; tests may inject a shorter `heartbeatIntervalMs`. Writes go through `ws-send-queue.ts`: JSON frames on one socket are serialized and wait for the `send` callback before the next frame, so Think / tool bursts do not starve the TCP buffer or Ping timer. The agent loop yields about every **16ms** while streaming `assistant/chunk`; the first fragment of a text / reasoning / tool-call run is durable immediately and later fragments coalesce until the next yield. Mux seq stays contiguous (the shell treats a seq hole as a reconnect gap).
+
+### Backpressure boundary (equivalents, not a DSH bidirectional-stream release window)
+
+`createWsSendQueue` in `ws-send-queue.ts` is the **only send-side backpressure** on the Face side: frames are serialized on a Promise chain — the next frame waits for the previous `ws.send` callback (data handed to the kernel send buffer). On a write error while the socket is still `OPEN`, the peer is `terminate`d and the client can only reconnect to reset its cursor. It is **not** TCP-window-level backpressure and does not mean the client consumed anything — it only paces “Host → socket” writes so Think / tool bursts cannot starve the TCP buffer and Ping timer on one event loop. The matching peer-side pacing is the agent loop’s ~**16ms** event-loop yield (above). Together they form “send pacing + yield pacing”, the equivalent of a DSH bidirectional-stream release window, but **without** DSH-style per-byte/per-frame window counting.
+
+**Seq cursor**: every `session/event` frame carries a per-session `FaceMuxSeq` (1-based; `last` is `0` before any `next`). The shell treats a **seq hole as the reconnect signal** (gaps are forbidden). Watermark advancement:
+- Live push: `runtime` append calls `seq.next(id)` per frame (`toMuxSessionEvent` stamps every frame).
+- Replay: `session.history` computes the page-max `event.seq`, then `seq.ensureAtLeast(sessionId, maxWireSeq)` jumps the watermark in one step instead of walking `next` O(maxSeq); `session.history` / `turnOutline.seq` / `fork atSeq` / checkpoint `atSeq` all align to this mux clock (not log indices — see position types in [session-log.md](./session-log.md)).
+- Reconnect: `session/subscribed` carries a `lastSeq` baseline; the shell backfills from `lastSeq+1` via `session.history`, and Host-side `ensureAtLeast` keeps the watermark monotonic.
+
+Boundary conclusion: **release window = per-frame send callback + 16ms yield**; **disconnect signal = seq hole**. Both are Face-mux-native equivalents — they do not inherit DSH’s bidirectional-stream window accounting.
 
 ## Face mux sequence
 

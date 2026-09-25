@@ -2,7 +2,7 @@
 
 > **读者**：集成者 · 贡献者
 
-在 XRK-Harness 上扩展能力，优先做成 **进程插件**（`tools` / `prompt` / `commands`），再由 Host discover → preset 接线。客户端壳叠加见文末「Client 叠加」。
+在 XRK-Harness 上扩展能力，优先采用 **进程插件**（`tools` / `prompt` / `commands`），再由 Host discover → preset 接线。客户端壳叠加见文末「Client 叠加」。
 
 契约 API 细节：[plugin-loader.md](./plugin-loader.md)。选型：[profiles.md](./profiles.md)。
 
@@ -89,9 +89,9 @@ xrkh restart
 
 边界：
 
-- **产品 Agent / 插件作者**：只写 `extensions/<id>/`；勿改 `packages/` · `apps/` · `presets/`（除非明确维护内核）。
+- **产品 Agent / 插件作者**：只写 `extensions/<id>/`；`packages/` · `apps/` · `presets/` 由内核维护者修改。
 - **Client 叠加包**（`xrk.client`）：装到 `plugins/web/`，不参与进程 `kind` discover；Host 面契约见 [community-plugins.md](./community-plugins.md)。
-- **标准侧栏**（`xrkh-better-sidebar`）：**Host 拥有** `/sidebar/*`；插件只挂 client；勿在插件 host 半包抢同一前缀。
+- **标准侧栏**（`xrkh-better-sidebar`）：**Host 拥有** `/sidebar/*`；插件只挂 client，插件 host 半包不提供 `/sidebar/*` 前缀。
 - 无热重载：改完 **`xrkh restart`**（或重启 `web`）。
 
 ### 接线发生在哪
@@ -141,12 +141,12 @@ xrkh restart
 
 详见 [community-plugins.md](./community-plugins.md) 与 [`packages/server/http/src/dsh-compat/README.md`](../packages/server/http/src/dsh-compat/README.md)。
 
-## 明确不做
+## 边界
 
-- 热重载 / watch
-- 未声明入口的任意执行
-- 插件覆盖同名 builtin
-- 在本仓实现全部外部云端满血能力（见 community-plugins「待补」）
+- 热重载 / watch：不支持  
+- 未声明入口的任意执行：不支持  
+- 插件覆盖同名 builtin：不支持  
+- 外部云端满血能力不在本仓实现（见 community-plugins「待补」）
 
 相关：[plugin-loader.md](./plugin-loader.md) · [community-plugins.md](./community-plugins.md) · [host-preset.md](./host-preset.md) · [modules/server-loader.md](./modules/server-loader.md)
 
@@ -243,9 +243,9 @@ Reload with **`restart`** (pid lock stops this Host). `--force` only stops recog
 
 Boundaries:
 
-- **Product Agent / plugin authors**: write only under `extensions/<id>/`; do not change `packages/` · `apps/` · `presets/` unless explicitly maintaining the kernel.
+- **Product Agent / plugin authors**: write only under `extensions/<id>/`; `packages/` · `apps/` · `presets/` are changed by kernel maintainers.
 - **Client overlay packages** (`xrk.client`): install under `plugins/web/`; not process `kind` discover; Host contracts in [community-plugins.md](./community-plugins.md).
-- **Standard sidebar** (`xrkh-better-sidebar`): **Host owns** `/sidebar/*`; the package injects client UI only — do not claim the same prefix from a plugin host half.
+- **Standard sidebar** (`xrkh-better-sidebar`): **Host owns** `/sidebar/*`; the package injects client UI only — a plugin host half provides no `/sidebar/*` prefix.
 - No hot reload: **`xrkh restart`** (or restart `web`) after changes.
 
 ### Where wiring happens
@@ -295,11 +295,11 @@ xrkh restart
 
 See [community-plugins.md](./community-plugins.md) and [`packages/server/http/src/dsh-compat/README.md`](../packages/server/http/src/dsh-compat/README.md).
 
-## Explicit non-goals
+## Boundaries
 
-- Hot reload / watch
-- Arbitrary execution without a declared entry
-- Plugins overriding same-name builtins
-- Full external cloud parity in-tree (see community-plugins Planned)
+- Hot reload / watch: not supported
+- Arbitrary execution without a declared entry: not supported
+- Plugins overriding same-name builtins: not supported
+- Full external cloud parity is not implemented in-tree (see community-plugins Planned)
 
 Related: [plugin-loader.md](./plugin-loader.md) · [community-plugins.md](./community-plugins.md) · [host-preset.md](./host-preset.md) · [modules/server-loader.md](./modules/server-loader.md)

@@ -106,7 +106,7 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
     // consuming the draft.
     editor.registerCommand(
       KEY_TAB_COMMAND,
-      event => arrow(event.shiftKey ? 'tabBack' : 'tab')(event),
+      event => arrow(event.shiftKey ? 'escape' : 'tab')(event),
       COMMAND_PRIORITY_CRITICAL,
     ),
     editor.registerCommand(KEY_ESCAPE_COMMAND, (event) => {

@@ -68,6 +68,24 @@ export type DrainFn = (input: {
   readonly signal: AbortSignal;
 }) => Promise<void>;
 
+/** Knobs for {@link SessionDrainLatch.cancel}. */
+export interface SessionDrainCancelOptions {
+  /**
+   * Delivered as `AbortSignal.reason` on the drain body's signal, so callers
+   * can tell a user stop from an internal teardown.
+   */
+  readonly cause?: unknown;
+  /**
+   * Bounded join. A drain body that ignores its signal (stuck tool, hung
+   * workspace snapshot) must not pin the cancel RPC forever; after this
+   * budget `cancel` resolves anyway. The entry is intentionally kept so a
+   * later `wake` re-arms a follow-up drain once the stuck chain settles.
+   */
+  readonly timeoutMs?: number;
+  /** Fired synchronously once the abort signal has been published. */
+  readonly onAbort?: () => void;
+}
+
 /**
  * Per-session drain latch: run (join) / wake (coalesce) / cancel.
  * Host holds one instance per sessionId (Map).
@@ -81,11 +99,16 @@ export interface SessionDrainLatch {
   run(): Promise<void>;
   /**
    * Idle → start drain(force=false). Busy → coalesce at most one follow-up
-   * drain after the current owner settles.
+   * drain after the current owner settles. A stopping (cancelled) owner still
+   * accumulates the wake: a message admitted during teardown must be drained
+   * by the follow-up instead of sitting in the queue forever.
    */
   wake(): void;
-  /** Abort active drain, clear coalesced wake, await cleanup. */
-  cancel(): Promise<void>;
+  /**
+   * Abort active drain, clear coalesced wake, await cleanup (optionally
+   * bounded — see {@link SessionDrainCancelOptions}).
+   */
+  cancel(options?: SessionDrainCancelOptions): Promise<void>;
 }
 
 type Entry = {
@@ -133,14 +156,17 @@ export function createSessionDrainLatch(drain: DrainFn): SessionDrainLatch {
   const settle = (e: Entry, err: unknown) => {
     if (entry !== e) return;
 
-    if (err === undefined && !e.stopping && e.pendingWake) {
+    if (err === undefined && e.pendingWake) {
       e.pendingWake = false;
       e.controller = new AbortController();
       start(e, false);
       return;
     }
 
-    const followUp = e.pendingWake && !e.stopping;
+    // `stopping` must not veto the follow-up: cancel() aborts the current
+    // chain, so any wake that landed after it is a *new* admit and still owes
+    // a drain. Swallowing it here is what used to strand post-cancel messages.
+    const followUp = e.pendingWake;
     if (followUp) {
       const next = makeEntry();
       entry = next;
@@ -173,7 +199,7 @@ export function createSessionDrainLatch(drain: DrainFn): SessionDrainLatch {
 
     wake() {
       if (entry !== undefined) {
-        if (!entry.stopping) entry.pendingWake = true;
+        entry.pendingWake = true;
         return;
       }
       const next = makeEntry();
@@ -181,17 +207,36 @@ export function createSessionDrainLatch(drain: DrainFn): SessionDrainLatch {
       start(next, false);
     },
 
-    async cancel() {
+    async cancel(options) {
       const e = entry;
-      if (!e) return;
+      if (!e) {
+        options?.onAbort?.();
+        return;
+      }
       e.stopping = true;
       e.pendingWake = false;
-      e.controller.abort();
-      try {
-        await e.done;
-      } catch {
-        // drain may reject on abort; latch is clear either way
+      e.controller.abort(options?.cause);
+      options?.onAbort?.();
+      const timeoutMs = options?.timeoutMs;
+      if (timeoutMs === undefined || !(timeoutMs > 0)) {
+        try {
+          await e.done;
+        } catch {
+          // drain may reject on abort; latch is clear either way
+        }
+        return;
       }
+      // Bounded join. The entry stays installed on timeout, so `isActive()`
+      // still tells the truth and the post-settle follow-up can pick up any
+      // wake that arrived meanwhile.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        e.done.catch(() => undefined),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, timeoutMs);
+        }),
+      ]);
+      if (timer !== undefined) clearTimeout(timer);
     },
   };
 }

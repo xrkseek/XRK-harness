@@ -1,63 +1,65 @@
-{
-  "name": "@xrkseek/xrk-host-apiproxy",
-  "description": "API gateway: the ApiProxy contract (api/), the fetch carrier pair (fetch/), and the host-side gateway plugin providing ctx.apiProxy",
-  "version": "0.1.0-rc.8",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/xrkseek/XRK-harness.git",
-    "directory": "packages/host/apiproxy"
-  },
-  "type": "module",
-  "main": "lib/index.js",
-  "types": "lib/types/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
-    },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
-    "./src/*": "./src/*",
-    "./package.json": "./package.json",
-    "./api": {
-      "types": "./src/api/index.ts",
-      "default": "./src/api/index.ts"
-    },
-    "./api/*": "./src/api/*",
-    "./client": {
-      "types": "./src/fetch/client.ts",
-      "default": "./src/fetch/client.ts"
-    }
-  },
-  "files": [
-    "lib/index.js",
-    "lib/invariant.js",
-    "lib/types/**/*.js",
-    "lib/types/**/*.d.ts"
-  ],
-  "license": "MIT",
-  "dependencies": {
-    "@xrkseek/xrk-brand": "workspace:^",
-    "@xrkseek/xrk-llm": "workspace:^",
-    "@xrkseek/xrk-session": "workspace:^",
-    "@xrkseek/xrk-tools": "workspace:^",
-    "@xrkseek/xrk-user-approval": "workspace:^",
-    "@xrkseek/xrk-user-questions": "workspace:^",
-    "@xrkseek/schemastery": "workspace:^",
-    "fflate": "^0.8.2",
-    "zod": "^4.4.3"
-  },
-  "peerDependencies": {
-    "@xrkseek/cordis": "workspace:^",
-    "@xrkseek/xrk-invariants": "workspace:^"
-  },
-  "devDependencies": {
-    "@xrkseek/cordis": "workspace:^",
-    "@xrkseek/xrk-invariants": "workspace:^",
-    "@xrkseek/xrk-user-approval": "workspace:^",
-    "@xrkseek/xrk-user-questions": "workspace:^"
-  },
-  "private": true
+﻿{
+    "name":  "@xrkseek/xrk-host-apiproxy",
+    "description":  "API gateway: the ApiProxy contract (api/), the fetch carrier pair (fetch/), and the host-side gateway plugin providing ctx.apiProxy",
+    "version":  "0.1.0-rc.8",
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/xrkseek/XRK-harness.git",
+                       "directory":  "packages/host/apiproxy"
+                   },
+    "type":  "module",
+    "main":  "lib/index.js",
+    "types":  "lib/types/index.d.ts",
+    "exports":  {
+                    ".":  {
+                              "types":  "./lib/types/index.d.ts",
+                              "default":  "./lib/index.js"
+                          },
+                    "./invariant":  {
+                                        "types":  "./lib/types/invariant.d.ts",
+                                        "default":  "./lib/invariant.js"
+                                    },
+                    "./src/*":  "./src/*",
+                    "./package.json":  "./package.json",
+                    "./api":  {
+                                  "types":  "./src/api/index.ts",
+                                  "default":  "./src/api/index.ts"
+                              },
+                    "./api/*":  "./src/api/*.ts",
+                    "./client":  {
+                                     "types":  "./src/fetch/client.ts",
+                                     "default":  "./src/fetch/client.ts"
+                                 }
+                },
+    "files":  [
+                  "lib/index.js",
+                  "lib/invariant.js",
+                  "lib/types/**/*.js",
+                  "lib/types/**/*.d.ts"
+              ],
+    "license":  "MIT",
+    "dependencies":  {
+                         "@xrkseek/xrk-attachment":  "workspace:^",
+                         "@xrkseek/xrk-brand":  "workspace:^",
+                         "@xrkseek/xrk-llm":  "workspace:^",
+                         "@xrkseek/xrk-session":  "workspace:^",
+                         "@xrkseek/xrk-session-projection":  "workspace:^",
+                         "@xrkseek/xrk-tools":  "workspace:^",
+                         "@xrkseek/xrk-user-approval":  "workspace:^",
+                         "@xrkseek/xrk-user-questions":  "workspace:^",
+                         "@xrkseek/schemastery":  "workspace:^",
+                         "fflate":  "^0.8.2",
+                         "zod":  "^4.4.3"
+                     },
+    "peerDependencies":  {
+                             "@xrkseek/cordis":  "workspace:^",
+                             "@xrkseek/xrk-invariants":  "workspace:^"
+                         },
+    "devDependencies":  {
+                            "@xrkseek/cordis":  "workspace:^",
+                            "@xrkseek/xrk-invariants":  "workspace:^",
+                            "@xrkseek/xrk-user-approval":  "workspace:^",
+                            "@xrkseek/xrk-user-questions":  "workspace:^"
+                        },
+    "private":  true
 }

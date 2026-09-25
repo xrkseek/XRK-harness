@@ -4,9 +4,17 @@
  * per push.
  */
 
-import type { JobId } from '@xrkseek/xrk-jobs/brand'
+import type { Branded } from '@xrkseek/xrk-brand'
 import type { SessionId } from '@xrkseek/xrk-session/types'
 import type { RpcRequest, RpcResponse } from './rpc.ts'
+
+/**
+ * Registry-issued `<kind>-N` background-job identity, stable for the task's
+ * whole life. Branded here (the owning package) like `WorkspaceId`/`GoalId`:
+ * the wire carries it as a plain string, and no runtime factory crosses
+ * boundaries, so the brand lives with this package's contract.
+ */
+export type JobId = Branded<'JobId'>
 
 /**
  * One background job as the client sees it.

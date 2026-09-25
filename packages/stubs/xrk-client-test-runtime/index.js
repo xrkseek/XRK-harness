@@ -1,7 +1,10 @@
-﻿/**
+/**
  * Minimal browser-test helpers. Ports the dsh `makeTranslate` double so client
  * specs can stub the locale `t` seat without a full test-runtime assembly.
+ * The observable->hook bridge re-exports web-react's real binding so test
+ * seats see exactly the production selector semantics (uSES + equality).
  */
+export { bindSnapshotSelector } from '../../client/web-react/src/bind.ts'
 
 /**
  * Build a translate stub resolving through `dicts` in order (namespace first,

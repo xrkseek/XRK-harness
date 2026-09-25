@@ -2,7 +2,7 @@
 
 > **读者**：集成者 · 贡献者
 
-产品壳把「右侧」拆成两条轨道，**不要**把 dsh 的 `ui-dockkit` / `ui-sidebar-right` 族整树迁进首方：
+产品壳把「右侧」拆成两条轨道，不迁移 dsh 的 `ui-dockkit` / `ui-sidebar-right` 族整树：
 
 | 轨道 | 用途 | 落点 |
 |------|------|------|
@@ -17,10 +17,10 @@
 - 聊天 `openFile`：先 `ctx.workbench.openPath`；返回 false 再 `workspaces.openPath`（社区侧栏通常 wrap 后者）。
 - 社区插件若占用工作台，应提供 `ctx.betterSidebar`，首方面板让位。
 
-## 不做（本仓首方）
+## 边界（首方）
 
 - 不迁 `ui-dockkit` 分栏引擎作产品默认右栏。
-- 不把 `details` 改回工具 Detail / 文件预览列（已 demoted）。
+- `details` 不作为工具 Detail / 文件预览列（职责已由 Status / 工作台承担）。
 
 安装社区侧栏：
 
@@ -34,7 +34,7 @@ xrkh plugin add xrkh-better-sidebar@0.18.7
 
 > **Audience**: Integrators · Contributors
 
-The product shell splits the right side into two tracks. Do **not** treat a full dsh `ui-dockkit` / `ui-sidebar-right` port as the default first-party rightbar:
+The product shell splits the right side into two tracks; it does not port the full dsh `ui-dockkit` / `ui-sidebar-right` tree:
 
 | Track | Role | Owner |
 |-------|------|--------|
@@ -49,10 +49,10 @@ The product shell splits the right side into two tracks. Do **not** treat a full
 - Chat `openFile`: try `ctx.workbench.openPath` first; on false, `workspaces.openPath` (community sidebars usually wrap the latter).
 - Community workbenches should provide `ctx.betterSidebar` so the builtin panel yields.
 
-## Out of scope (first-party)
+## Boundaries (first-party)
 
 - No product-default `ui-dockkit` docking engine.
-- Do not restore the demoted Detail / file-preview `details` column.
+- `details` is not a tool Detail / file-preview column (that role belongs to Status / workbench).
 
 Install the community sidebar:
 

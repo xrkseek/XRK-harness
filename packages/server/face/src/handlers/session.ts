@@ -58,6 +58,13 @@ import { buildSessionStatusSnapshot } from "../session-status.js";
 import { buildRolloutTraceState } from "../rollout-trace.js";
 import type { FaceRuntime } from "../context.js";
 
+/**
+ * Bounded join for sessionCancel's drain teardown. The drain latch keeps its
+ * entry past this budget and re-arms on the next wake, so this is purely a
+ * UI/RPC responsiveness limit — never a "drop the queue" deadline.
+ */
+const SESSION_CANCEL_JOIN_MS = 3_000;
+
 export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   const p = asRecord(payload);
   const agentPreset =
@@ -477,6 +484,15 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
       error: { code: "invalid-payload", message: "sessionId required" },
     };
   }
+  // 1) Optimistic running:false — published *before* the drain join so a
+  //    stuck tool (git snapshot, hung LLM call) can never pin the UI to
+  //    "running" forever. publishDrainIdle re-publishes false after the
+  //    body finally settles, and any later wake re-arms running:true.
+  runtime.bus.publishHost({
+    type: "host/session-status",
+    sessionId,
+    running: false,
+  });
   // Abort the agent turn latch first so in-flight LLM/tool work sees the
   // cancellation immediately; then join the drain body (which shares the
   // same abort signal path via continueTurn).
@@ -486,11 +502,26 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
   } catch {
     /* ignore */
   }
-  await runtime.drain.cancel(sessionId);
-  runtime.bus.publishHost({
-    type: "host/session-status",
-    sessionId,
-    running: false,
+  // 2) Cascade to delegated children (fire-and-forget). A stopped parent
+  //    must not leave orphaned subagents draining: each child cancel is
+  //    itself a sessionCancel — optimistic running:false + bounded join —
+  //    and the tree walk is depth-bounded by the subagent registry.
+  const cascade = asRecord(payload).cascade !== false;
+  if (cascade) {
+    for (const link of runtime.subagents.listDelegated(sessionId)) {
+      void sessionCancel(
+        runtime,
+        `tool-sa-c-${link.childSessionId}`,
+        { sessionId: link.childSessionId, cascade: true },
+      ).catch(() => undefined);
+    }
+  }
+  // 3) Bounded drain join: the latch keeps its entry on timeout, so a
+  //    message admitted during teardown still drains once the stuck chain
+  //    settles (wake accumulates on the stopping entry).
+  await runtime.drain.cancel(sessionId, {
+    cause: { kind: "user" },
+    timeoutMs: SESSION_CANCEL_JOIN_MS,
   });
   return { ok: true, value: { accepted: true } };
 };

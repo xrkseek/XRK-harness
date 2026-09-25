@@ -15,7 +15,7 @@ description: >-
 - [ ] 2. 写完整 standalone `prompt`（路径、验收、约束）；短 `description`
 - [ ] 3. 默认同步等待；仅长任务 / 要续聊用 `run_in_background: true`
 - [ ] 4. 背景子：`list_agents` · `send_message` · `interrupt_agent`；勿轮询
-- [ ] 5. 并发宜少（默认封顶约 4 个活跃子）；宁要几个独立子，不要深链
+- [ ] 5. 并发宜少：默认同时存活 ≤2、深度 ≤2（深度上限 3），见设置 → 插件 → Agent loop
 ```
 
 ## 何时委派
@@ -28,4 +28,4 @@ description: >-
 
 撞 depth / active 上限 → 先收尾或 `interrupt_agent`，再开新的。
 
-系统提示 `tool:subagent` 与工具描述为准。
+系统提示 `tool:subagent` 与工具描述为准；徽章可再收紧（如 Shallow depth=1），生效值 = min(会话面, 徽章天花板)。

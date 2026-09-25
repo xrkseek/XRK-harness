@@ -126,7 +126,7 @@ export function installDraftKeymap(
         return
       }
       if (g.uploadsPending) {
-        g.showToast(g.t('file.stillUploading'))
+        g.showToast(g.t('file.uploading'))
         return
       }
       keyboard.submit(resolveSubmitMode(

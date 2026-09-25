@@ -36,7 +36,7 @@ Host（harness/server）共享一份 PTY registry：跨 agent invalidate 仍保�
 
 ## Env scrub
 
-`scrubbedParentEnv` / `childEnv`：丢掉凭据形名（`KEY|PASSWORD|SECRET|TOKEN`）与 ambient `XRK_*`；显式 overrides（`XRK_SHELL` · `XRK_PTY_SESSION_ID` · 可选 `XRK_SESSION_ID`）在 scrub 之后合并。Host `exit` 时对 live handle 调 `terminateForHostExit`（同步尽力杀树）。
+`scrubbedParentEnv` / `childEnv`：移除凭据形名（`KEY|PASSWORD|SECRET|TOKEN`）与 ambient `XRK_*`；显式 overrides（`XRK_SHELL` · `XRK_PTY_SESSION_ID` · 可选 `XRK_SESSION_ID`）在 scrub 之后合并。Host `exit` 时对 live handle 调 `terminateForHostExit`（同步终止进程树，尽力而为）。
 
 ## 就绪与 inspector
 

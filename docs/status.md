@@ -2,7 +2,7 @@
 
 > **读者**：全员（对外说话以本页为准）
 
-三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.4.0**（`MINOR=4` 预览线收口号，接管 `@latest`；上一正式线 **v0.3.11**；上一轮预览末号 **v0.2.7**；旧正式文稿 **v0.1.31**）。**本页主路径表当前均为能跑**；扩展能力节另列已补 / 暂缓（标 **未做** 不得当作已支持）。
+三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.4.3**（`0.4.x` 补丁线，接管 `@latest`；上一补丁 **v0.4.2**；上一正式线 **v0.3.11**；上一轮预览末号 **v0.2.7**；旧正式文稿 **v0.1.31**）。**本页主路径表当前均为能跑**；扩展能力节另列已补 / 暂缓（标 **未做** 不得当作已支持）。
 
 XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在会话、工具管道、子代理与壳交互上的长处；落点以本仓契约与代码为准。
 
@@ -47,14 +47,14 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | SSH 远端工作区（Settings 通用「远程」`ssh-remote`；`XRK_SSH_HOST` CI 旁路；fs / bash / `run_code`；本地 Host） | **能跑**（改完重启；Web 目录浏览走 SSH；交互式 PTY / `openPath` 关闭；见 [seams](./seams.md) · [configuration](./configuration.md)） |
 | Workspace hover POSIX `~` 缩写（`hostDescription.home`；复制仍绝对路径） | **能跑** |
 | `@` 目录 Tab / 行 chevron drill + 面包屑（Enter 插入 folder chip） | **能跑** |
-| 任意类型文件上传 · 侧栏预览 · 可继续子代理排队/Steer/Stop · Open in · feedback | **能跑**（见主路径表与 [v0.4.0](./releases/v0.4.0.md)；`pnpm test:web` **21/21**） |
+| 任意类型文件上传 · 侧栏预览 · 可继续子代理排队/Steer/Stop · Open in · feedback | **能跑**（见主路径表与 [v0.4.3](./releases/v0.4.3.md)；`pnpm test:web` **21/21**） |
 | 右侧工作台（文件树 / 预览 / 终端 / 浏览器） | **能跑**：流内 `details`=Status；浮动工作台=Host `/sidebar/*` + 社区 `xrkh-better-sidebar`；首方薄壳 `@xrkseek/client-ui-workbench`（无社区侧栏时树+预览；有 `ctx.betterSidebar` 时让位）。**不**迁 dsh dockkit 为默认右栏（见 [sidebar-workbench](./sidebar-workbench.md)） |
 | 侧栏 Office/URL/子代理/计划预览 **契约**（protocol 载荷 · policy `host.open`/`sidebar.*`/`office.connect` · Face bridge 可选缝） | **能跑**（见 [policy](./policy.md) · `@xrkseek/protocol` `sidebar-previews`） |
 | 侧栏 Host policy 闸门（`/sidebar` · `host.open`/`sidebar.embed`/`sidebar.fs`） | **能跑**（`ask`→Face 审批缝 / 无缝→`policy-ask`；见 [policy](./policy.md)） |
 | `/office` `office.connect` 闸门 | **能跑**（configure/reconnect/test/remove；status 不门禁；见 [policy](./policy.md)） |
 | Office/计划完整预览 UI 页签 | **能跑**（详情栏计划 / Office 页签读已有 `plan.preview` 与 `/office` status；不新增协议字段） |
 | `subagents.preview` / `plan.preview` Host RPC | **能跑**（`SidebarFaceBridge` + `/sidebar/api/*`；复用 Face 投影 / 子代理链路，不复制 history） |
-| Desktop 整包 | **未做**（明确暂缓；见 ADR-0008，`build:desktop` 已过、安装包未做） |
+| Desktop 整包 | **未做**（暂缓；见 ADR-0008 — `build:desktop` 输出脚本存在，安装包未提供） |
 
 #### 底层能力差距
 
@@ -107,8 +107,8 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | A2A 出站平台插件 | `@xrkseek/a2a` + `extensions/a2a`：`a2a_discover/call/list/history`；`context_id` JSONL 持久 · 环路上限；入站 HTTP 未做 | **能跑**（可选装） |
 | 外部 Agent 运行时委托 | `subagent.runtime`：`in-process`（默认）· `acp` · `app-server` · `claude-code`；Settings Plugins `external-agent` 或 env；`acp`/`app-server` 支持 `run_in_background` + follow-up/interrupt（与进程内同一 list 面）；`claude-code` 仍 one-shot print | **能跑**（见 [external-agent.md](./external-agent.md)） |
 | 语音 Host | `text_to_speech` · `voice_transcribe` · `voice_session`；Provider：memory / OpenAI HTTP；Settings → Voice（缺钥 UI 告警 · `describeVoiceAccess` / doctor 同源文案）；mic/WebRTC 在客户端；**唤醒词未做** | **能跑**（见 [voice.md](./voice.md)；`XRK_VOICE` CI 旁路；唤醒后置） |
-| 图像生成 | `image_generate`；Provider：memory / OpenAI Images；可选写入 AttachmentStore | **能跑**（见 [image-gen.md](./image-gen.md)；Settings → Plugins → Image gen；`XRK_IMAGE_GEN` CI 旁路） |
-| 视频生成 | `video_generate`；异步作业（start → status/wait → content）；Provider：memory / OpenAI Videos | **能跑**（见 [video-gen.md](./video-gen.md)；Settings → Plugins → Video gen；`XRK_VIDEO_GEN` CI 旁路） |
+| 图像生成 | `image_generate`；Provider：memory / OpenAI Images；可选写入 AttachmentStore；**仅文生图**（参数限 `prompt`/`size`/`n`/`model`，无 `reference_images`/`image_url` 编辑入口——Hermes `image_gen` 单工具覆盖文生图+图生图编辑，DSH 亦带参考图） | **能跑**（文生图；见 [image-gen.md](./image-gen.md)；Settings → Plugins → Image gen；`XRK_IMAGE_GEN` CI 旁路） |
+| 视频生成 | `video_generate`；异步作业（start → status/wait → content）；Provider：memory / OpenAI Videos；**仅文生视频**（无首帧/参考图入口——Hermes xai/fal `image_url` 即 i2v 与 extend，DSH 同） | **能跑**（文生视频；见 [video-gen.md](./video-gen.md)；Settings → Plugins → Video gen；`XRK_VIDEO_GEN` CI 旁路） |
 | 回合回退 · 工作区快照 | `WorkspaceCheckpointStore`：影子 git；Host 每轮前自动 snapshot；Face `session.checkpoint.*` · `/rollback` · 消息 Restore；与 `session.fork` / fork-cut（仅血缘）分界见 [turn-rewind.md](./turn-rewind.md) | **能跑**（需 `git`；`XRK_CHECKPOINTS=0` 关闭自动快照） |
 | MCP HTTP · OAuth 设备码 | `loginWithDeviceCode` + `McpDeviceTokenStore`（RFC 8628：`authorization_pending` / `slow_down` 续等，`access_denied` / `expired_token` 立即失败；原子落盘 `~/.xrk/mcp-tokens/<server>.json` · best-effort 0600 · 到期前 refresh）；端点缺失时按 RFC 9728 / RFC 8414 发现；`auth` 只挂在 HTTP transport；CLI `xrkh mcp login/status/logout/list/path`；Settings MCP 卡经 Face `mcp.oauth.login|status|logout` 同路径（pending 后 Host 后台轮询） | **能跑**（见 [modules/mcp.md](./modules/mcp.md)、[configuration.md](./configuration.md)；需 IdP 支持设备码） |
 | 文档抽取 | `read_file` 在 `FsService.read` 内把 PDF / DOCX / XLSX / ipynb 转成文本（扫描版 PDF 无文本层时说明，不另开工具名） | **能跑** |
@@ -118,12 +118,37 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | 运行时 invariants | `@xrkseek/runtime-invariants` + `core-session`/`core-agent-loop` `./invariant` 伴侣；Host `XRK_INVARIANTS_FAIL_FAST=1` 包装 SessionStore fail-fast | **能跑**（默认关） |
 | 密钥 / OS keyring | `@xrkseek/secrets`：`SecretStore` + memory / OS keyring（可选 `keytar`）· `redactSecrets` 统一日志脱敏；Face 默认 `.credentials.yaml`；`XRK_SECRETS_BACKEND=keyring` 双写 | **能跑**（keyring 需安装 `keytar`；见 [configuration.md](./configuration.md) · [seams.md](./seams.md)） |
 | 写路径危险 pattern | harness：`createHardlineArgvPre`（policy **前** fail-closed）+ `createWritePathSecurityPre/Post`（敏感路径 deny；内容 pattern 默认结果提示） | **能跑**（见 [policy.md](./policy.md) · [security-checklist.md](./security-checklist.md)） |
+| 图生图 / 图生视频 · 参考图编辑 | `image_generate` 无 `reference_images`/`image_url`，`video_generate` 无首帧/参考图；Hermes `image_gen`/`video_gen` 单工具已覆盖文生+图生+编辑（xai/fal/deepinfra 等 provider 插件），DSH 参考图进生成入口 | **未做**（P1：多模态生成缺口；方案见下） |
+| 图片 token 估算 / 请求图缩放 | compaction 的 `estimateOpaqueContentBlocks` 仅字符级 JSON 近似，无像素/编码感知估算；无按模型（DeepSeek V4.1）缩放与降质后置处理（DSH rc.1 专门调图片尺寸与 token 估算）；请求级 offload 有 20MB base64 上限（`request-image-bound`） | **未做**（P2：大图多轮对话成本失真） |
+| 会话级模型选择持久化 | `FaceRuntime.sessionModels` 为内存 `Map`（`context.ts`），`/model` 与徽章选择重启回落全局默认；无 workspace/profile 隔离；Settings 全局 `~/.xrk` | **未做**（P2：会话模型记不住） |
+| 模型模态声明编辑面 | llm-registry 品牌级硬编码 `inputModalities` 为权威；`FaceModelEntry` 不带、ui-settings-models 编辑器不可编辑、adapter 组装不传——Custom text-only 网关拦不住图片输入 | **未做**（P2：模态与实现割裂） |
+| diff 审阅体量 | `ui-deliverables` 改动卡为行内 hunk（`DiffBlock`），无 DSH rc.1 的左右分栏 / 同步滚动 / hover 预览 / 文件名导航 | **未做**（P2：大 diff 审阅体验） |
+| 轨迹展示分级 | `ui-trajectory` 工具栏仅全部折叠/展开（turn / tool call 两把），无 DSH rc.1 的 Compact / Standard / Detailed / 全展开四档 | **未做**（P2：工作过程体量不可调） |
+| 快捷键查看 / 搜索 / 自定义 / 恢复 | 本仓仅编辑器局部 keydown（`ui-commands` PopupSelectView）；无全局快捷键面板（DSH rc.2 有查看/搜索/自定义/恢复 + 侧栏显示） | **未做**（P2：DSH rc.2 增量） |
+| 定时任务运行记录 | Host cron 有 `lastRunAt`/`lastStatus`/`lastError` 单次摘要（`server/cron` store）；DSH rc.2 有完整运行记录列表 + 重启保留 + 最短每分钟 | **部分**（P2：仅有末次摘要，无历史列表） |
+| 时间上下文注入 | 无「每 N 分钟向 Agent 更新当前时间」特性（DSH rc.2 默认十分钟）；时间仅在部分 prompt 侧出现 | **未做**（P2：长会话时间感缺失） |
+| 归档筛选 / 置顶 | `ArchivedSessionsSection` 为搜索 + 逐条 Unarchive；DSH rc.2 有隐藏已归档 / 全部 / 仅归档三态 + 置顶 | **部分**（P3：有归档页，无筛选/置顶） |
+| 模型切换等待提示 | 切换模型无「准备中 · 减少等待」提示（DSH rc.2 有等待提示）；Focus 样式与语义高亮一致性未齐 | **未做**（P3：体感细节） |
+
+### 缺口分阶段方案（对 DSH 0.1.7-rc.1/rc.2 · Hermes · Codex 参考）
+
+- **P1 · 多模态生成打通**（对齐 Hermes `image_gen`/`video_gen` 单工具、DSH 参考图）：
+  1. `image_generate` 增 `reference_images`/`image_url` + `edit` 语义（OpenAI Images edit / gpt-image 风格），Hermes 同款参数归一；
+  2. `video_generate` 增 `first_frame`/`reference_images`（i2v：xai grok-imagine-video-1.5 / fal 首帧），沿用现有 start→status/wait→content 四态；
+  3. 参考图走现有 AttachmentStore（`attachments.saveFile` 已有），工具面与 `read_image`/拖拽共用 intake。
+- **P2 · 成本与模态**：图片 token 按像素/编码估算 + DeepSeek V4.1 尺寸缩放（对齐 DSH rc.1）；`FaceModelEntry` 携带 `inputModalities` 并接 ui-settings-models 编辑器，Custom provider 模态真实拦截；会话级 `/model` 持久化到会话元数据（对齐 DSH 会话级选择）。
+- **P2 · UI 体量**：diff 左右分栏 + 同步滚动 + hover 预览；轨迹 Compact/Standard/Detailed 四档；快捷键查看/自定义/恢复面板；定时任务运行记录列表；时间上下文（默认十分钟注入）。
+- **P3 · 打磨**：归档筛选三态 + 置顶；模型切换等待提示；Focus/语义高亮一致性巡检。
+- **P4 · 社区插件兼容面**（真源 `DSH_COMPAT_KNOWN_GAPS`，已诚实化）：
+  1. `web-panel-global-registry`：DSH 0.1.5+ 全局面板 `sidebar.panellist` / `main` seat 落点（需产品壳 slot 扩展，非 dsh-compat 本体；当前审计面已把 panellist 标记为 `missing-seat`，社区 client 的 `slots.register` 形状会被扫描诚实暴露，不会静默假装支持）；
+  2. `cordis-dual-half-inspect`：官方 `cordis_inspect_list`/`cordis_inspect_query` + mount/dispose 生命周期，按"不嵌入第三方 Host 内核"边界保持 honest-stub；
+  3. `third-party-di`：全量第三方 DI 非产品目标，未知 service 引用返回诚实 envelope。
 
 ## 正式使用
 
 | 层级 | 能做什么 | 前置 |
 | --- | --- | --- |
-| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.4.0** 当前 `@latest`（上一正式线 **v0.3.11**；上一轮预览末号 **v0.2.7**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
+| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.4.3** 当前 `@latest`（上一补丁 **v0.4.2**；上一正式线 **v0.3.11**；上一轮预览末号 **v0.2.7**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
 | **B — 浏览器硬刷** | `pnpm test:web`（不进 `pnpm check`） | Chromium；完整 `apps/web/dist` |
 | **C — 上架** | npmjs + GitHub Release（`@xrkseek/harness-cli`） | `pnpm release`；见 [publishing.md](./publishing.md) |
 
@@ -147,7 +172,7 @@ core* / 能力叶 → kernel | protocol | compose
 
 > **Audience**: Everyone (this page is the public capability truth)
 
-Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.4.0** (closing number of the `MINOR=4` preview line, now owning `@latest`; previous formal line **v0.3.11**; previous preview line end **v0.2.7**; legacy formal notes **v0.1.31**). **Main-path rows on this page are Working today**; the extended-capabilities section lists filled / deferred items (**Not done** must not be treated as supported).
+Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.4.3** (`0.4.x` patch line, owning `@latest`; previous patch **v0.4.2**; previous formal line **v0.3.11**; previous preview line end **v0.2.7**; legacy formal notes **v0.1.31**). **Main-path rows on this page are Working today**; the extended-capabilities section lists filled / deferred items (**Not done** must not be treated as supported).
 
 XRK-Harness is an independently developed stack. It absorbs strengths from Codex and peer agent harnesses in session, tool pipeline, subagent, and shell UX; contracts and code in this repo are authoritative.
 
@@ -192,7 +217,7 @@ Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CL
 | SSH remote workspace (Settings General → Remote `ssh-remote`; `XRK_SSH_HOST` CI bypass; fs / bash / `run_code`; local Host) | **Working** (restart after change; Web directory browse rides SSH; interactive PTY / `openPath` off; see [seams](./seams.md) · [configuration](./configuration.md)) |
 | Workspace hover POSIX `~` abbreviation (`hostDescription.home`; copy stays absolute) | **Working** |
 | `@` directory Tab / row-chevron drill + breadcrumb (Enter inserts folder chip) | **Working** |
-| Arbitrary file upload · sidebar preview · continuable subagent queue/Steer/Stop · Open in · feedback | **Working** (see main-path table and [v0.4.0](./releases/v0.4.0.md); `pnpm test:web` **21/21**) |
+| Arbitrary file upload · sidebar preview · continuable subagent queue/Steer/Stop · Open in · feedback | **Working** (see main-path table and [v0.4.3](./releases/v0.4.3.md); `pnpm test:web` **21/21**) |
 | Right workbench (tree / preview / terminal / browser) | **Working**: in-flow `details`=Status; floating workbench=Host `/sidebar/*` + community `xrkh-better-sidebar`; first-party thin shell `@xrkseek/client-ui-workbench` (tree+preview without community sidebar; yields when `ctx.betterSidebar` is set). **No** dsh dockkit as the default rightbar (see [sidebar-workbench](./sidebar-workbench.md)) |
 | Sidebar Office/URL/subagent/plan preview **contract** (protocol payloads · policy `host.open`/`sidebar.*`/`office.connect` · optional Face bridge seams) | **Working** (see [policy](./policy.md) · `@xrkseek/protocol` `sidebar-previews`) |
 | Sidebar Host policy gates (`/sidebar` · `host.open`/`sidebar.embed`/`sidebar.fs`) | **Working** (`ask`→Face approval seam / no seam→`policy-ask`; see [policy](./policy.md)) |
@@ -252,8 +277,8 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | A2A outbound platform plugin | `@xrkseek/a2a` + `extensions/a2a`: `a2a_discover/call/list/history`; `context_id` JSONL persistence · anti-loop; inbound HTTP not shipped | **Working** (optional install) |
 | External agent-runtime delegation | `subagent.runtime`: `in-process` (default) · `acp` · `app-server` · `claude-code`; Settings Plugins `external-agent` or env; `acp`/`app-server` support `run_in_background` + follow-up/interrupt (same list surface as in-process); `claude-code` remains one-shot print | **Working** (see [external-agent.md](./external-agent.md)) |
 | Voice host | `text_to_speech` · `voice_transcribe` · `voice_session`; Providers: memory / OpenAI HTTP; Settings → Voice (missing-key UI warning · shared `describeVoiceAccess` / doctor copy); mic/WebRTC on client; **wake word not shipped** | **Working** (see [voice.md](./voice.md); `XRK_VOICE` CI bypass; wake deferred) |
-| Image generation | `image_generate`; Providers: memory / OpenAI Images; optional AttachmentStore persist | **Working** (see [image-gen.md](./image-gen.md); Settings → Plugins → Image gen; `XRK_IMAGE_GEN` CI bypass) |
-| Video generation | `video_generate`; async job lifecycle (start → status/wait → content); Providers: memory / OpenAI Videos | **Working** (see [video-gen.md](./video-gen.md); Settings → Plugins → Video gen; `XRK_VIDEO_GEN` CI bypass) |
+| Image generation | `image_generate`; Providers: memory / OpenAI Images; optional AttachmentStore persist; **text-to-image only** (args limited to `prompt`/`size`/`n`/`model`, no `reference_images`/`image_url` edit entry — Hermes `image_gen` covers text-to-image + image editing in one tool, DSH carries reference images too) | **Working** (text-to-image; see [image-gen.md](./image-gen.md); Settings → Plugins → Image gen; `XRK_IMAGE_GEN` CI bypass) |
+| Video generation | `video_generate`; async job lifecycle (start → status/wait → content); Providers: memory / OpenAI Videos; **text-to-video only** (no first-frame / reference-image entry — Hermes xai/fal `image_url` routes to i2v and extend, DSH likewise) | **Working** (text-to-video; see [video-gen.md](./video-gen.md); Settings → Plugins → Video gen; `XRK_VIDEO_GEN` CI bypass) |
 | Turn rewind · workspace snapshots | `WorkspaceCheckpointStore`: shadow git; Host auto-snapshots before each turn; Face `session.checkpoint.*` · `/rollback` · message Restore; distinct from `session.fork` / fork-cut (lineage only) — see [turn-rewind.md](./turn-rewind.md) | **Working** (needs `git`; `XRK_CHECKPOINTS=0` disables auto-snapshot) |
 | MCP HTTP · OAuth device code | `loginWithDeviceCode` + `McpDeviceTokenStore` (RFC 8628: keeps waiting on `authorization_pending` / `slow_down`, fails immediately on `access_denied` / `expired_token`; atomic write to `~/.xrk/mcp-tokens/<server>.json` · best-effort 0600 · refresh before expiry); endpoints discovered per RFC 9728 / RFC 8414 when unknown; `auth` attaches to the HTTP transport only; CLI `xrkh mcp login/status/logout/list/path`; Settings MCP card uses Face `mcp.oauth.login|status|logout` on the same path (Host keeps polling after pending) | **Working** (see [modules/mcp.md](./modules/mcp.md) · [configuration.md](./configuration.md); needs an IdP with device-code support) |
 | Document extraction | `read_file` converts PDF / DOCX / XLSX / ipynb to text inside `FsService.read` (scanned PDFs with no text layer say so; no extra tool name) | **Working** |
@@ -263,12 +288,37 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | Runtime invariants | `@xrkseek/runtime-invariants` + `core-session`/`core-agent-loop` `./invariant` companions; Host `XRK_INVARIANTS_FAIL_FAST=1` wraps SessionStore fail-fast | **Working** (off by default) |
 | Secrets / OS keyring | `@xrkseek/secrets`: `SecretStore` + memory / OS keyring (optional `keytar`) · unified `redactSecrets` for logs; Face default `.credentials.yaml`; `XRK_SECRETS_BACKEND=keyring` dual-writes | **Working** (keyring needs `keytar`; see [configuration.md](./configuration.md) · [seams.md](./seams.md)) |
 | Write-path dangerous patterns | harness: `createHardlineArgvPre` (**before** policy, fail-closed) + `createWritePathSecurityPre/Post` (sensitive-path deny; content patterns advisory by default) | **Working** (see [policy.md](./policy.md) · [security-checklist.md](./security-checklist.md)) |
+| Image-to-image / image-to-video · reference-image editing | `image_generate` has no `reference_images`/`image_url`, `video_generate` has no first-frame/reference input; Hermes `image_gen`/`video_gen` already cover text+image+edit in one tool (xai/fal/deepinfra provider plugins), DSH routes reference images into the generation entry | **Not done** (P1: multimodal generation gap; plan below) |
+| Image token estimation / request-image resizing | compaction `estimateOpaqueContentBlocks` is a char-level JSON approximation only — no pixel/encoding-aware estimation; no per-model (DeepSeek V4.1) resize + quality-downscale pass (DSH rc.1 tunes image size and token estimate); request-level offload has a 20 MB base64 safety net (`request-image-bound`) | **Not done** (P2: cost drifts on large multi-turn images) |
+| Session-level model selection persistence | `FaceRuntime.sessionModels` is an in-memory `Map` (`context.ts`); `/model` and badge choices revert to the global default on restart; no workspace/profile isolation; Settings global `~/.xrk` | **Not done** (P2: session model does not stick) |
+| Model modality declaration editing surface | llm-registry brand-level hardcoded `inputModalities` is authoritative; `FaceModelEntry` does not carry it, ui-settings-models editor cannot edit it, adapters are assembled without it — a custom text-only gateway cannot block image input | **Not done** (P2: modality/implementation split) |
+| Diff review surface | `ui-deliverables` changed-files card is inline hunks (`DiffBlock`); no DSH rc.1 side-by-side / synchronized scroll / hover preview / file-name navigation | **Not done** (P2: large-diff review experience) |
+| Trajectory display levels | `ui-trajectory` toolbar only folds/expands everything (two toggles: turns, tool calls); no DSH rc.1 Compact / Standard / Detailed / fully-expanded levels | **Not done** (P2: work-process density not adjustable) |
+| Keyboard-shortcut view / search / customize / reset | only local editor keydown here (`ui-commands` PopupSelectView); no global shortcut panel (DSH rc.2 has view/search/customize/reset + sidebar display) | **Not done** (P2: DSH rc.2 delta) |
+| Scheduled-task run history | Host cron keeps a single `lastRunAt`/`lastStatus`/`lastError` summary (`server/cron` store); DSH rc.2 has a full run-history list + restart retention + one-minute minimum | **Partial** (P2: last-run summary only, no history list) |
+| Time-context injection | no "refresh current time to the Agent every N minutes" feature (DSH rc.2 defaults to ten); time appears only in some prompt sides | **Not done** (P2: long-session time sense missing) |
+| Archive filter / pin | `ArchivedSessionsSection` is search + per-row Unarchive; DSH rc.2 has hidden-archived / all / archived-only tri-state + pin | **Partial** (P3: archive page exists, no filter/pin) |
+| Model-switch waiting hint | no "preparing · reduced wait" hint when switching models (DSH rc.2 shows one); focus style and semantic-highlight consistency unfinished | **Not done** (P3: feel-level details) |
+
+### Gap roadmap (vs DSH 0.1.7-rc.1/rc.2 · Hermes · Codex references)
+
+- **P1 · Multimodal generation wiring** (aligns Hermes `image_gen`/`video_gen` one-tool, DSH reference images):
+  1. add `reference_images`/`image_url` + `edit` semantics to `image_generate` (OpenAI Images edit / gpt-image style), normalized to Hermes' same-named args;
+  2. add `first_frame`/`reference_images` to `video_generate` (i2v: xai grok-imagine-video-1.5 / fal first frame), reusing the existing start→status/wait→content lifecycle;
+  3. reference images ride the existing AttachmentStore (`attachments.saveFile` already exists); tool surface shares intake with `read_image`/drag-drop.
+- **P2 · Cost & modality**: pixel/encoding-aware image token estimation + DeepSeek V4.1 size scaling (aligns DSH rc.1); `FaceModelEntry` carries `inputModalities` and hooks the ui-settings-models editor so custom-provider modality is truly enforced; session-level `/model` persists to session metadata (aligns DSH session-level selection).
+- **P2 · UI density**: side-by-side diff + synchronized scroll + hover preview; trajectory Compact/Standard/Detailed levels; keyboard-shortcut view/customize/reset panel; scheduled-task run-history list; time-context injection (default ten-minute).
+- **P3 · Polish**: archive filter tri-state + pin; model-switch waiting hint; focus / semantic-highlight consistency pass.
+- **P4 · Community-plugin compatibility surface** (truth source `DSH_COMPAT_KNOWN_GAPS`, now honest):
+  1. `web-panel-global-registry`: DSH 0.1.5+ global panels `sidebar.panellist` / `main` need a product-shell seat (a shell slot extension, not dsh-compat itself); the audit surface already marks panellist `missing-seat`, so community `slots.register` shapes are surfaced honestly instead of silently claimed;
+  2. `cordis-dual-half-inspect`: official `cordis_inspect_list` / `cordis_inspect_query` + mount/dispose lifecycle stays honest-stub under the "no third-party Host kernel embedding" boundary;
+  3. `third-party-di`: full third-party DI is not a product goal; unknown service references get an honest envelope.
 
 ## Formal use levels
 
 | Level | What you can do | Prerequisites |
 | --- | --- | --- |
-| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.4.0** is the current `@latest` (previous formal line **v0.3.11**; previous preview line end **v0.2.7**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
+| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.4.3** is the current `@latest` (previous patch **v0.4.2**; previous formal line **v0.3.11**; previous preview line end **v0.2.7**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
 | **B — Browser soak** | `pnpm test:web` (not part of `pnpm check`) | Chromium; full `apps/web/dist` |
 | **C — Publish** | npmjs + GitHub Release (`@xrkseek/harness-cli`) | `pnpm release`; see [publishing.md](./publishing.md) |
 

@@ -27,6 +27,9 @@ export {
 export {
   NO_SPILL_TOOLS,
   DEFAULT_SPILL_INLINE_BYTES,
+  DEFAULT_SPILL_INLINE_TOKENS,
+  estimateSpillTokens,
+  resolveInlineBudget,
   utf8Bytes,
   utf8Prefix,
   utf8Suffix,

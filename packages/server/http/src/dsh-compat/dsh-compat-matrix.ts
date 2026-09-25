@@ -268,8 +268,33 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
 /**
  * Product gaps / honest stubs that must not be treated as Working.
  * Synced with docs/status.md · docs/community-plugins.md「待补」.
+ *
+ * coverage semantics:
+ * - "missing": DSH ecosystem shape with no landing seat in this repo (real gap).
+ * - "honest-stub": deliberately NOT implemented (out of product scope by the
+ *   "no third-party Host kernel embedding" boundary); the Host answers with an
+ *   honest envelope instead of faking the shape.
  */
-export const DSH_COMPAT_KNOWN_GAPS: readonly DshCompatCapabilityRow[] = [] as const;
+export const DSH_COMPAT_KNOWN_GAPS: readonly DshCompatCapabilityRow[] = [
+  {
+    id: "web-panel-global-registry",
+    coverage: "missing",
+    genericModule: "client ui-layout seat map (src/client/index.ts SlotMap)",
+    note: "DSH 0.1.5-alpha.2+ clients register global panels via `sidebar.panellist` and `main` (`main.conversation`); XRK shell only declares sidebar/conversation/details/shell.overlay seats — panellist registrations have no seat to land in.",
+  },
+  {
+    id: "cordis-dual-half-inspect",
+    coverage: "honest-stub",
+    genericModule: "cordis-registry · cordis-fiber-runner",
+    note: "Official @deepseek-ai/dsh-cordis-host-runner 0.1.6-alpha.2 model-mounted dual-half registry (cordis_inspect_list / cordis_inspect_query + mount/dispose lifecycle) is out of scope: XRK does not embed a third-party Host kernel; fiber fallback stays apply-driven.",
+  },
+  {
+    id: "third-party-di",
+    coverage: "honest-stub",
+    genericModule: "cordis-registry",
+    note: "Full third-party DI for arbitrary cordis services is not a product goal (Host-native /first-party injections only); unknown service references get an honest envelope, never a fake provider.",
+  },
+] as const;
 
 export function listDshCompatGenericIds(): readonly string[] {
   return DSH_COMPAT_GENERIC_CAPABILITIES.map((r) => r.id);

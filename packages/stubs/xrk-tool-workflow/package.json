@@ -43,7 +43,8 @@
     "@xrkseek/cordis": "workspace:^"
   },
   "dependencies": {
-    "@xrkseek/schemastery": "workspace:^"
+    "@xrkseek/schemastery": "workspace:^",
+    "@xrkseek/xrk-system-prompt": "workspace:^"
   },
   "devDependencies": {
     "@xrkseek/xrk-agent": "workspace:^",

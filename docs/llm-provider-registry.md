@@ -38,7 +38,7 @@ Face `llm-pi-ai.providers.*.api` 写入后经 `readProviderRoute` → `resolvePr
 | tools **按 name 字典序**                          | 注册 / MCP 热挂顺序不进入 wire                                                                                                                                                     |
 | 可选 `toolOrder: string[]`（恰好一个 `' '` rest） | 固定常用工具位置；错配 fail-loud；缺省 = 纯字典序。Face `agent-loop.toolOrder` → Host → `assemble.toolOrder`（Settings → Plugins 或 settings.yaml）；`@xrkseek/core-system-prompt` |
 | volatile **不进 system**                          | 时钟与 session id 折叠进当前 user 消息的尾缀，**绝不单独成一条 user 消息**                                                                                                         |
-| 无人类内容的后续 step：不追加任何消息             | 工具循环不每步挪动对话中段，也不会把纯标记喂给模型当作用户发言                                                                                                                     |
+| 无人类内容的后续 step：不追加任何消息             | 工具循环不每步挪动对话中段，也不会把纯标记追加为模型可见的用户发言                                                                                                                     |
 | Anthropic `cache_control: { type: "ephemeral" }`  | system 文本块 + 最后一个 tool 定义打 breakpoint；`chat`/`stream` usage 映射 `cache_read_input_tokens` / `cache_creation_input_tokens` → `cacheReadTokens` / `cacheWriteTokens`     |
 
 StatsLine「缓存命中」= `cacheReadTokens / (uncached + cacheRead + cacheWrite)`（`tokenUsage` 投影）。换模型 / 改 system（plan · recipe）仍会整段 miss。

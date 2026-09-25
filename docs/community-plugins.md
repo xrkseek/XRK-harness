@@ -74,35 +74,41 @@ community client.js
 
 ## 侧栏插件契约（Host 原生，client 只挂 UI）
 
-标准侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.18.7**）只向壳注入 `lib/client.js`。**不要**指望插件 Cordis host 半包在 XRK 上挂 `/sidebar/*`。源码工作区优先克隆到本仓 `extensions/xrkh-better-sidebar`（gitignore，独立 git 仓），勿另开第二份桌面副本。
+标准侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.18.7**）只向壳注入 `lib/client.js`。`/sidebar/*` 只由 Host 原生 `createSidebarPublicHandler` 挂载（见下节）；插件 Cordis host 半包不提供 `/sidebar/*` 路由。源码工作区克隆到本仓 `extensions/xrkh-better-sidebar`（gitignore，独立 git 仓）。
 
-概况栏（`details`）默认 **Status** 页（子代理图 · jobs · **live `contextTimeline`**（inject 来源 · compact reason/`shadowedTokenCount` · prune/spill）· cost · channels），与斜杠 `/status` / Face `session.status` **同源**（snapshot 摘要 + 概况栏绑投影事件行）；另有任务 / 计划 / Office 页签。概况栏与侧栏工作台**可同时打开**：壳经 `@xrkseek/client-ui-layout` 发布 `LayoutInsets`（`document.documentElement` 上的 `--xrk-layout-inset-*` / `data-xrk-layout-*`，以及 `ctx.layout.insets`）。浮动工作台用 CSS 变量让位右上角控件，不要再互斥收起对方。产品切分与首方薄壳见 [sidebar-workbench](./sidebar-workbench.md)。
+概况栏（`details`）默认 **Status** 页（子代理图 · jobs · **live `contextTimeline`**（inject 来源 · compact reason/`shadowedTokenCount` · prune/spill）· cost · channels），与斜杠 `/status` / Face `session.status` **同源**（snapshot 摘要 + 概况栏绑投影事件行）；另有任务 / 计划 / Office 页签。概况栏与侧栏工作台**可同时打开**：壳经 `@xrkseek/client-ui-layout` 发布 `LayoutInsets`（`document.documentElement` 上的 `--xrk-layout-inset-*` / `data-xrk-layout-*`，以及 `ctx.layout.insets`）。浮动工作台按这些 CSS 变量让位右上角控件。产品切分与首方薄壳见 [sidebar-workbench](./sidebar-workbench.md)。
 
-产品 Host 通过 **`createSidebarPublicHandler`**（`@xrkseek/server-http/sidebar`）挂载同源 `/sidebar/*`，再经 `attachSidebarPtyUpgrades` 挂终端 WS。这是 **Host 原生表面**，与 `dsh-compat` 能力表无关；目录名 `dsh-compat` 是历史兼容器，**不**表示侧栏走「社区插件旁路」。社区客户端若也调用 `/sidebar/*`，共用同一 Host 契约。
+产品 Host 通过 **`createSidebarPublicHandler`**（`@xrkseek/server-http/sidebar`）挂载同源 `/sidebar/*`，再经 `attachSidebarPtyUpgrades` 挂终端 WS。这是 **Host 原生表面**，独立于 `dsh-compat` 能力表（目录名 `dsh-compat` 是历史兼容器，不参与侧栏路由）。社区客户端若也调用 `/sidebar/*`，共用同一 Host 契约。
 
 | 表面 | Host 落点 | 插件职责 |
 |------|-----------|----------|
 | `POST /sidebar/api/<method>` | `packages/server/http/src/sidebar/`（FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **subagents.graph** · **changes.ops** · **open.external**） | 调 API；勿在 client 里再实现一份 Host |
 | `/sidebar/file` · `upload` · `html` · `bundle` | 同上 + 插件目录 `chunks/` | 发布 `lib/client-*.js` 供 bundle 回落 |
 | `/sidebar/ws/terminal` | Host `sidebar-pty`（真实 node-pty · session+tab 保活；系统用户权限，**不**套 Agent sandbox / fence） | TerminalView 连同源 WS |
-| `/sidebar/ws/agent-terminals` · `agent-opens` | Host 真推送（registry + prefs 门控工具；Settings → 通用开关）；无 registry 时仍空列表保活 | 勿在插件 host 半包假实现 |
+| `/sidebar/ws/agent-terminals` · `agent-opens` | Host 真推送（registry + prefs 门控工具；Settings → 通用开关）；无 registry 时仍空列表保活 | 推送由 Host 提供；插件 host 半包不实现 |
 | Face 注入 `sidebarFace` | Host：`openExternal` · jobs · `listSubagentsLive` · rewind `forkSessionAt` | 子代理 / 后台任务 / 外开路径走此桥 |
 
 `subagents.live` 的 wire 形状为嵌套 `tool`：`{ text?; tool?: { name; args } }`（与插件 `LastActivity` / `SidebarSubagentLiveActivity` 一致）。Host 真源：`packages/server/host/src/sidebar-live-line.ts`。
 
-预览契约（先类型、后 UI）：`@xrkseek/protocol` 的 `BrowserEmbedProbe` · `SubagentPreviewSummary` · `PlanPreviewSummary` · `OfficePreviewStatus`；policy 边界 `host.open` · `sidebar.embed` · `sidebar.fs` · `office.connect`（见 [policy](./policy.md)）。**Office 状态仍走 `/office`**（`office.connect` 已门禁 mutation），不要塞进 `/sidebar`。计划全文读 Face `plan` 投影；侧栏只消费摘要。
+预览契约（先类型、后 UI）：`@xrkseek/protocol` 的 `BrowserEmbedProbe` · `SubagentPreviewSummary` · `PlanPreviewSummary` · `OfficePreviewStatus`；policy 边界 `host.open` · `sidebar.embed` · `sidebar.fs` · `office.connect`（见 [policy](./policy.md)）。**Office 状态仍走 `/office`**（`office.connect` 已门禁 mutation），不挂到 `/sidebar`。计划全文读 Face `plan` 投影；侧栏只消费摘要。
 
 **已移除**：Side Chat（beta）及 Host `sidechat.*`。子代理与后台任务请用 Face `subagent.*` + Sidebar `subagents.live` / `jobs.*`。
 
-扩展新 sidebar RPC：扩 `sidebar-adapter` /（需要 Face 时）`SidebarFaceBridge`，**不要**为单个插件在 Host 堆旁路逻辑，也不要把 `/sidebar/*` 重新塞进 dsh-compat 能力表，更不要在 XRK 上启用插件 `host.mjs` 抢同一路径。
+扩展新 sidebar RPC：扩 `sidebar-adapter` /（需要 Face 时）`SidebarFaceBridge`，**不要**为单个插件在 Host 堆旁路逻辑，也不要把 `/sidebar/*` 重新并入 dsh-compat 能力表，更不要在 XRK 上启用插件 `host.mjs` 占用同一路径。
 
 ## 回归 fixture
 
-`packages/server/http/tests/fixtures/compat-host-suite.json` 为测例清单，**不是**唯一可装列表。产品行为以本页「已实现」为准。
+`packages/server/http/tests/fixtures/compat-host-suite.json` 是测例清单；可安装列表以本页「已实现」为准。
 
 ## 待补特性
 
-真源：`dsh-compat-matrix.ts` 的 `DSH_COMPAT_KNOWN_GAPS`（当前为空）。
+真源：`dsh-compat-matrix.ts` 的 `DSH_COMPAT_KNOWN_GAPS`。当前三条已核实缺口：
+
+| id | 覆盖 | 形状 |
+| --- | --- | --- |
+| `web-panel-global-registry` | missing | DSH 0.1.5-alpha.2+ 插件经 `sidebar.panellist` / `main`（`main.conversation`）注册全局面板；XRK shell 只声明 sidebar/conversation/details/shell.overlay 四 seat，panellist 注册无落点（SlotCore 对未知 seat 直接抛错） |
+| `cordis-dual-half-inspect` | honest-stub | 官方 `dsh-cordis-host-runner` 的 model-mounted dual-half registry（`cordis_inspect_list`/`cordis_inspect_query` + mount/dispose）按"不嵌入第三方 Host 内核"边界不实现；fiber fallback 保持 apply 驱动 |
+| `third-party-di` | honest-stub | 全量第三方 DI 非产品目标；未知 service 引用返回诚实 envelope，绝不伪造 provider |
 
 TongFlow 装包走 `POST /tongflow/plugins`（`spec` / `package` / `name` / `id`），由 `runPluginMutate` 执行 `xrkh plugin add`。已删除的 `/plugins/install` 假 `accepted` 路由不恢复。成功后需要 `xrkh restart` 才进当前进程。
 
@@ -229,16 +235,16 @@ Local messaging, nodes, OCR, and GenUI preview are available inside the adapter 
 
 ## Sidebar plugin contract (Host owns; client UI only)
 
-The standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.18.7**) injects `lib/client.js` into the shell only. **Do not** expect the plugin Cordis host half to serve `/sidebar/*` on XRK — the product Host already provides that prefix via dsh-compat (**historical folder name**, not a community-plugin host path) + `attachSidebarPtyUpgrades`. Prefer cloning the plugin into this repo's `extensions/xrkh-better-sidebar` (gitignored, its own git remote) instead of a second Desktop checkout.
+The standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.18.7**) injects `lib/client.js` into the shell only. `/sidebar/*` is mounted solely by the Host's native `createSidebarPublicHandler` (next section); a plugin Cordis host half provides no `/sidebar/*` routes. Clone the plugin into this repo's `extensions/xrkh-better-sidebar` (gitignored, its own git remote).
 
-The session **Status** column (`details`, default tab) shows the subagent graph · jobs · **live `contextTimeline`** (inject sources · compact reason/`shadowedTokenCount` · prune/spill) · cost · channels from Face `session.status` (same snapshot as slash `/status`; overview also binds live projection event rows); todos / plan / Office remain secondary tabs. Status and the sidebar workbench **may stay open together**: the shell publishes `LayoutInsets` from `@xrkseek/client-ui-layout` (`--xrk-layout-inset-*` / `data-xrk-layout-*` on `document.documentElement`, plus `ctx.layout.insets`). Floating workbenches offset chrome with those CSS variables instead of mutually collapsing the overview. Product cut and first-party thin shell: [sidebar-workbench](./sidebar-workbench.md).
+The session **Status** column (`details`, default tab) shows the subagent graph · jobs · **live `contextTimeline`** (inject sources · compact reason/`shadowedTokenCount` · prune/spill) · cost · channels from Face `session.status` (same snapshot as slash `/status`; overview also binds live projection event rows); todos / plan / Office remain secondary tabs. Status and the sidebar workbench **may stay open together**: the shell publishes `LayoutInsets` from `@xrkseek/client-ui-layout` (`--xrk-layout-inset-*` / `data-xrk-layout-*` on `document.documentElement`, plus `ctx.layout.insets`). Floating workbenches offset chrome with those CSS variables. Product cut and first-party thin shell: [sidebar-workbench](./sidebar-workbench.md).
 
 | Surface | Host landing | Plugin role |
 |------|-----------|----------|
 | `POST /sidebar/api/<method>` | `sidebar-adapter` (FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **subagents.graph** · **changes.ops** · **open.external**) | Call the API; do not reimplement Host in the client |
 | `/sidebar/file` · `upload` · `html` · `bundle` | dsh-compat routes + plugin `chunks/` | Ship `lib/client-*.js` for bundle fallback |
 | `/sidebar/ws/terminal` | Host `sidebar-pty` (real node-pty · session+tab reuse; system-user permissions, **not** Agent sandbox / fence) | TerminalView connects same-origin WS |
-| `/sidebar/ws/agent-terminals` · `agent-opens` | Host real push (registry + prefs-gated tools; Settings → General toggles); empty-list keepalive without registry | Do not fake via plugin host half |
+| `/sidebar/ws/agent-terminals` · `agent-opens` | Host real push (registry + prefs-gated tools; Settings → General toggles); empty-list keepalive without registry | Push is provided by Host; a plugin host half does not implement it |
 | Face inject `sidebarFace` | Host: `openExternal` · jobs · `listSubagentsLive` · rewind `forkSessionAt` | Subagents / background jobs / reveal-path use this bridge |
 
 `subagents.live` wire shape uses nested `tool`: `{ text?; tool?: { name; args } }` (matches plugin `LastActivity` / `SidebarSubagentLiveActivity`). Host source: `packages/server/host/src/sidebar-live-line.ts`.
@@ -247,7 +253,7 @@ Preview contract (types first, UI later): `@xrkseek/protocol` `BrowserEmbedProbe
 
 **Removed:** Side Chat (beta) and Host `sidechat.*`. Use Face `subagent.*` plus Sidebar `subagents.live` / `jobs.*`.
 
-To add sidebar RPC: extend the capability / adapter / (when Face is needed) `SidebarFaceBridge` — do not paper over one plugin inside Host, and do not let plugin `host.mjs` claim the same paths on XRK.
+To add sidebar RPC: extend the capability / adapter / (when Face is needed) `SidebarFaceBridge` — per-plugin Host bypass logic is not layered in, `/sidebar/*` is not merged back into the dsh-compat capability table, and plugin `host.mjs` does not occupy the same paths on XRK.
 
 ## Regression fixtures
 
@@ -255,7 +261,13 @@ To add sidebar RPC: extend the capability / adapter / (when Face is needed) `Sid
 
 ## Planned work
 
-Truth source: `DSH_COMPAT_KNOWN_GAPS` in `dsh-compat-matrix.ts` (currently empty).
+Truth source: `DSH_COMPAT_KNOWN_GAPS` in `dsh-compat-matrix.ts`. Three verified gaps today:
+
+| id | coverage | shape |
+| --- | --- | --- |
+| `web-panel-global-registry` | missing | DSH 0.1.5-alpha.2+ plugins register global panels via `sidebar.panellist` / `main` (`main.conversation`); the XRK shell only declares sidebar/conversation/details/shell.overlay seats, so panellist registrations have no landing seat (SlotCore throws on unknown seats) |
+| `cordis-dual-half-inspect` | honest-stub | The official `dsh-cordis-host-runner` model-mounted dual-half registry (`cordis_inspect_list` / `cordis_inspect_query` + mount/dispose) is out of scope under the "no third-party Host kernel embedding" boundary; fiber fallback stays apply-driven |
+| `third-party-di` | honest-stub | Full third-party DI is not a product goal; unknown service references get an honest envelope, never a fake provider |
 
 TongFlow installs go through `POST /tongflow/plugins` (`spec` / `package` / `name` / `id`). `runPluginMutate` runs `xrkh plugin add`. The deleted `/plugins/install` fake `accepted` route stays gone. A successful install still needs `xrkh restart` before the current process sees it.
 

@@ -4,8 +4,7 @@
  */
 
 import { z } from 'zod'
-import type { JobId } from '@xrkseek/xrk-jobs/brand'
-import type { JobView } from './jobs.ts'
+import type { JobId, JobView } from './jobs.ts'
 import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
 import { sessionIdSchema } from './sessions.schema.ts'

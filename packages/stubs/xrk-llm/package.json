@@ -47,7 +47,9 @@
     "@xrkseek/cordis": "workspace:^"
   },
   "dependencies": {
-    "@xrkseek/schemastery": "workspace:^"
+    "@xrkseek/schemastery": "workspace:^",
+    "@xrkseek/xrk-attachment": "workspace:^",
+    "@xrkseek/xrk-timeout": "workspace:^"
   },
   "devDependencies": {
     "@xrkseek/xrk-brand": "workspace:^",

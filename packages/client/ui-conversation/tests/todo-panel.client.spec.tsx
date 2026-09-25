@@ -102,6 +102,18 @@ describe('TodoPanel', () => {
     expect(screen.getByText('1 已完成')).toBeTruthy()
     expect(screen.queryByText(/进行中|待处理/)).toBeNull()
   })
+
+  it('renders a status outside the current enum instead of crashing the dock cell', () => {
+    // Durable-log replay can hand the panel a status a newer writer produced.
+    // The row must still render (pending glyph) so the composer dock stays alive.
+    const forged = [{ content: '未来任务', status: 'blocked' }] as unknown as TodoItem[]
+    render(<TodoPanel todos={forged} t={t} />)
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    const items = screen.getAllByRole('listitem')
+    expect(items).toHaveLength(1)
+    expect(items[0]?.getAttribute('data-status')).toBe('blocked')
+    expect(items[0]?.querySelector('svg')).not.toBeNull()
+  })
 })
 
 /** Dock props stub: the adapter reads the 'todos' projection only; the rest of the owner share is unused. */

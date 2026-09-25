@@ -173,7 +173,12 @@ async function waitDrainIdle(
 ): Promise<void> {
   const run = runtime.drain.run?.bind(runtime.drain);
   if (run) {
-    await run(sessionId);
+    // hub.run is a join on a Promise that no longer observes cancellation,
+    // so it must race the caller signal: a parent turn aborted while waiting
+    // for its child would otherwise hang the tool batch forever. The join
+    // stays attached in the background — the caller cancels the child right
+    // after this rejects, which is what actually drains it.
+    await abortable(run(sessionId), signal);
     return;
   }
   const deadline = Date.now() + timeoutMs;
@@ -186,6 +191,38 @@ async function waitDrainIdle(
     }
     await new Promise((r) => setTimeout(r, POLL_MS));
   }
+}
+
+/** Reject as soon as `signal` aborts; the wrapped promise keeps running. */
+function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    return Promise.reject(abortError(signal.reason));
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      reject(abortError(signal.reason));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (err: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      },
+    );
+  });
+}
+
+function abortError(reason?: unknown): Error {
+  const err = new Error(
+    reason === undefined ? "aborted" : String(reason),
+  );
+  err.name = "AbortError";
+  return err;
 }
 
 export interface BindSubagentToolsOptions {

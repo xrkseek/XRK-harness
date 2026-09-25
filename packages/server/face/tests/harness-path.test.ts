@@ -209,6 +209,53 @@ describe("Face harness path polish", () => {
     ).toBe(true);
   });
 
+  it("session.cancel cascades to delegated children and idles them", async () => {
+    const host: { type: string; sessionId?: string; running?: boolean }[] = [];
+    const { runtime, hub } = await buildFace({
+      llm: createReplayAdapter([{ content: "should-not-finish" }]),
+      slowMs: 2000,
+    });
+    runtime.bus.subscribeHost((_id, frame) => {
+      host.push(frame as { type: string; sessionId?: string; running?: boolean });
+    });
+
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const parent = (created.result.value as { sessionId: string }).sessionId;
+    const childCreated = await dispatchFaceMethod(runtime, "session.create", "c2", {});
+    if (!childCreated.result.ok) throw new Error("create child");
+    const child = (childCreated.result.value as { sessionId: string }).sessionId;
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: child,
+      mode: "one-shot",
+      label: "cascade-me",
+    });
+
+    // Wake the child's drain so it is genuinely in-flight when the parent
+    // cancel lands.
+    await dispatchFaceMethod(runtime, "session.prompt", "pc", {
+      sessionId: child,
+      mode: "queue",
+      content: [{ type: "text", text: "slow child" }],
+    });
+    await viWaitUntil(() => hub.isActive(child));
+
+    const cancel = await dispatchFaceMethod(runtime, "session.cancel", "x", {
+      sessionId: parent,
+    });
+    expect(cancel.result).toEqual({ ok: true, value: { accepted: true } });
+    await viWaitUntil(() => !hub.isActive(child));
+    expect(
+      host.some(
+        (f) =>
+          f.type === "host/session-status" &&
+          f.sessionId === child &&
+          f.running === false,
+      ),
+    ).toBe(true);
+  });
+
   it("policy ask waits for session.respondApproval then runs tool", async () => {
     const { runtime, store } = await buildFace({
       llm: createReplayAdapter([

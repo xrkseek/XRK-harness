@@ -179,6 +179,98 @@ describe("createSessionDrainLatch", () => {
     expect(forces).toEqual([true]);
     expect(latch.isActive()).toBe(false);
   });
+
+  it("cancel forwards cause to drain signal.reason", async () => {
+    let seen: unknown;
+    const latch = createSessionDrainLatch(async ({ signal }) => {
+      await new Promise<void>((resolve, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => {
+            seen = signal.reason;
+            reject(new DOMException("Aborted", "AbortError"));
+          },
+          { once: true },
+        );
+      });
+    });
+    const runP = latch.run();
+    await latch.cancel({ cause: { kind: "disposed" } });
+    expect(seen).toEqual({ kind: "disposed" });
+    await expect(runP).rejects.toMatchObject({ name: "AbortError" });
+    expect(latch.isActive()).toBe(false);
+  });
+
+  it("cancel honors timeoutMs when the drain ignores its signal", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    let onAbortCalls = 0;
+    const latch = createSessionDrainLatch(async () => {
+      await gate; // never observes the abort signal
+    });
+
+    const runP = latch.run();
+    const started = Date.now();
+    await latch.cancel({
+      timeoutMs: 30,
+      onAbort: () => {
+        onAbortCalls += 1;
+      },
+    });
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(onAbortCalls).toBe(1);
+    // The stuck entry is kept: the latch still tells the truth about
+    // activity, and a later wake re-arms once the chain finally settles.
+    expect(latch.isActive()).toBe(true);
+    release();
+    await runP;
+    expect(latch.isActive()).toBe(false);
+  });
+
+  it("wake during cancel is not swallowed and re-drains after settle", async () => {
+    const forces: boolean[] = [];
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((r) => {
+      releaseFirst = r;
+    });
+    let releaseSecond!: () => void;
+    const secondGate = new Promise<void>((r) => {
+      releaseSecond = r;
+    });
+
+    const latch = createSessionDrainLatch(async ({ force, signal }) => {
+      forces.push(force);
+      if (forces.length === 1) {
+        await Promise.race([
+          firstGate,
+          new Promise<never>((_, reject) => {
+            signal.addEventListener(
+              "abort",
+              () => reject(new DOMException("Aborted", "AbortError")),
+              { once: true },
+            );
+          }),
+        ]);
+        return;
+      }
+      await secondGate;
+    });
+
+    const runP = latch.run();
+    const cancelP = latch.cancel();
+    // A message lands while teardown is in flight: it must drain afterwards,
+    // never sit in the queue (the historical "post-cancel message stuck" bug).
+    latch.wake();
+    releaseFirst();
+    await cancelP;
+    await vi.waitFor(() => expect(forces.length).toBe(2));
+    releaseSecond();
+    await runP.catch(() => undefined); // first chain was aborted by cancel
+    expect(forces).toEqual([true, false]);
+    expect(latch.isActive()).toBe(false);
+  });
 });
 
 describe("SessionBusyError", () => {

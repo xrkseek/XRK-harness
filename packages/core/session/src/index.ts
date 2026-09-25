@@ -7,6 +7,7 @@ export {
   createSessionDrainLatch,
   type TurnLatch,
   type SessionDrainLatch,
+  type SessionDrainCancelOptions,
   type DrainFn,
 } from "./latch.js";
 

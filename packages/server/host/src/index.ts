@@ -15,6 +15,10 @@ import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { loadPolicyRulesetFile } from "@xrkseek/policy";
 import { flattenText, isHumanUserMessageSource } from "@xrkseek/protocol";
 import {
+  effectiveSandboxMode,
+  shouldConfineSandbox,
+} from "@xrkseek/protocol";
+import {
   consolidateCuratedMemoryPhase1,
   createCuratedMemoryStore,
 } from "@xrkseek/exec-memory";
@@ -121,6 +125,11 @@ import { createMcpDeferredDispose } from "./mcp-deferred-dispose.js";
 import { createStandingToolRegistry } from "./standing-tools.js";
 import { createDefaultPtyAccess } from "@xrkseek/exec-pty";
 import { createLocalShell } from "@xrkseek/exec-shell";
+import {
+  createSandboxStack,
+  parseSandboxProduct,
+  type SandboxService,
+} from "@xrkseek/exec-sandbox";
 import { createBrowserRuntimeRegistry } from "@xrkseek/exec-web";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
 import {
@@ -152,6 +161,17 @@ export {
   type McpServerSpec,
   type ReconcileMcpResult,
 } from "./mcp-wire.js";
+
+/**
+ * AbortError with a readable reason. Used by the session drain snapshot race
+ * so a cancellation that interrupts a stuck git/fs call surfaces as a normal
+ * AbortError instead of a bare string or DOMException mismatch.
+ */
+function hostAbortError(reason?: unknown): Error {
+  const err = new Error(reason === undefined ? "aborted" : String(reason));
+  err.name = "AbortError";
+  return err;
+}
 
 function logMcpReconcile(
   log: HostLogger | undefined,
@@ -223,6 +243,46 @@ function resolveMcpAllowConnect(
   if (faceAllow === true) return true;
   if (faceAllow === false) return false;
   return readMcpAllowFromHostSettings(hostSettingsPath());
+}
+
+/**
+ * `prepareArgv` for the Host-wide shared shell. Resolves the sandbox stack
+ * lazily at spawn time so Face settings (arriving after shell creation) and
+ * per-session `sandboxMode` are honored — `danger-full-access` unlocks, every
+ * other mode confines. This is the production confine path: the harness
+ * preset's own `sharedShell ?? createLocalShell(prepareArgv)` branch would
+ * otherwise run bash completely unsandboxed.
+ */
+export function createHostShellPrepareArgv(options: {
+  readonly workspaceRoot: string;
+  readonly readSandboxSettings: () => Record<string, unknown> | undefined;
+  readonly readSandboxMode: (sessionId: string | undefined) => import("@xrkseek/protocol").SandboxMode;
+  readonly remoteExecution: boolean;
+  readonly env: NodeJS.ProcessEnv;
+}): NonNullable<
+  Parameters<typeof createLocalShell>[0]["prepareArgv"]
+> {
+  let cachedStack: SandboxService | undefined;
+  let cachedProductKey = "";
+  return async (argv, cwd, signal, ctx) => {
+    const settings = options.readSandboxSettings();
+    const product = parseSandboxProduct(settings);
+    const productKey = JSON.stringify(product ?? null);
+    if (!cachedStack || cachedProductKey !== productKey) {
+      cachedStack = createSandboxStack({
+        workspaceRoot: options.workspaceRoot,
+        ...(product ? { product } : {}),
+        env: options.env,
+        ...(options.remoteExecution ? { remoteExecution: true } : {}),
+      });
+      cachedProductKey = productKey;
+    }
+    // Per-session unlock: `danger-full-access` runs bash untouched.
+    const mode = options.readSandboxMode(ctx?.ownerSessionId);
+    if (!shouldConfineSandbox(mode)) return argv;
+    const confined = await cachedStack.confine(argv, cwd, signal);
+    return confined;
+  };
 }
 
 export type AgentImageResolver = (
@@ -682,6 +742,30 @@ export function createHostManager(): HostManager {
                 ? sshWorld.subprocess
                 : createLocalSubprocess(),
               defaultCwd: config.runtime.workspaceRoot,
+              // Host-wide shared registry — sandbox confine resolves lazily so
+              // Face settings + per-session sandboxMode are read at spawn time,
+              // not at shell creation (faceBox.runtime arrives later). This is
+              // the production path the harness preset's `sharedShell ??`
+              // branch would otherwise bypass entirely.
+              prepareArgv: createHostShellPrepareArgv({
+                workspaceRoot: config.runtime.workspaceRoot,
+                readSandboxSettings: () => {
+                  const rt = faceBox.runtime;
+                  if (!rt) return undefined;
+                  return rt.settingsNamespaces.view("sandbox").value as Record<
+                    string,
+                    unknown
+                  >;
+                },
+                readSandboxMode: (sessionId) =>
+                  effectiveSandboxMode(
+                    sessionId
+                      ? readSessionEvents(store, sessionId)
+                      : [],
+                  ),
+                remoteExecution: sshWorld !== undefined,
+                env: process.env,
+              }),
             })
           : undefined;
 
@@ -993,6 +1077,33 @@ export function createHostManager(): HostManager {
 
       const hub: SessionDrainHub = createSessionDrainHub({
         createDrain: (sessionId) => async ({ signal }) => {
+          // An abort racing the workspace snapshot must not be swallowed:
+          // the snapshot is best-effort, so race it against the signal and
+          // let a stuck git/fs call yield to cancellation immediately.
+          const snapshot = (): Promise<void> => {
+            const face = faceBox.runtime;
+            if (!face) return Promise.resolve();
+            return new Promise<void>((resolve, reject) => {
+              if (signal.aborted) {
+                reject(hostAbortError(signal.reason));
+                return;
+              }
+              const onAbort = () => {
+                reject(hostAbortError(signal.reason));
+              };
+              signal.addEventListener("abort", onAbort, { once: true });
+              snapshotSessionWorkspace(face, sessionId).then(
+                () => {
+                  signal.removeEventListener("abort", onAbort);
+                  resolve();
+                },
+                (err: unknown) => {
+                  signal.removeEventListener("abort", onAbort);
+                  reject(err instanceof Error ? err : new Error(String(err)));
+                },
+              );
+            });
+          };
           try {
             const agent = await resolveAgent(sessionId);
             // Delivery queue rule (docs/session-delivery.md §3):
@@ -1000,14 +1111,11 @@ export function createHostManager(): HostManager {
             // without promoting further inbox items. Loop until inbox empty.
             while (agent.pendingAdmits().length > 0) {
               if (signal.aborted) {
-                throw new DOMException("aborted", "AbortError");
+                throw hostAbortError(signal.reason);
               }
               // Worktree snapshot before tools mutate files (Hermes-style
               // checkpoint). Best-effort — never blocks the turn.
-              const face = faceBox.runtime;
-              if (face) {
-                await snapshotSessionWorkspace(face, sessionId);
-              }
+              await snapshot();
               const result = await agent.continueTurn({ signal });
               lastDrainResult.set(sessionId, result);
             }
@@ -1349,7 +1457,7 @@ export function createHostManager(): HostManager {
           : {}),
         drain: {
           wake: (sessionId) => drain.wake(sessionId),
-          cancel: (sessionId) => drain.cancel(sessionId),
+          cancel: (sessionId, opts) => drain.cancel(sessionId, opts),
           isActive: (sessionId) => drain.isActive(sessionId),
           run: (sessionId) => hub.run(sessionId),
         },

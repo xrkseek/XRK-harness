@@ -1,6 +1,10 @@
 import type { AttachmentStore } from "@xrkseek/attachment";
 import type { AgentHandle } from "@xrkseek/core-agent";
-import type { SessionRecord, SessionStore } from "@xrkseek/core-session";
+import type {
+  SessionDrainCancelOptions,
+  SessionRecord,
+  SessionStore,
+} from "@xrkseek/core-session";
 import type { ToolDefinition } from "@xrkseek/core-tools";
 import type { JobView } from "./adapt/job-view.js";
 import type { ProviderRegistry } from "@xrkseek/llm-registry";
@@ -54,7 +58,7 @@ export interface FaceDirectoryBackend {
 
 export interface FaceDrain {
   wake(sessionId: string): void;
-  cancel(sessionId: string): Promise<void>;
+  cancel(sessionId: string, options?: SessionDrainCancelOptions): Promise<void>;
   isActive(sessionId: string): boolean;
   /** Wait until the session drain settles (Host hub.run). */
   run?(sessionId: string): Promise<void>;

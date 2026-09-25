@@ -16,11 +16,12 @@ import type {
   AssistantMessage,
   ContentBlock,
   MessageSource,
+  TextBlock,
   TokenUsage,
   ToolResultMessage,
   UserMessage,
 } from '@xrkseek/xrk-llm'
-import type { AttachmentIdType, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+import type { AttachmentIdType, FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import type {
   SessionEvent,
   SessionId,
@@ -46,7 +47,7 @@ function rpcRequest<P>(payload: P): RpcRequest<P> {
   return { rpcId: RpcId(randomUuid()), payload }
 }
 
-function text(t: string): ContentBlock[] {
+function text(t: string): TextBlock[] {
   return [{ type: 'text', text: t }]
 }
 
@@ -2538,6 +2539,22 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         const userText = content.map(b => (b.type === 'text' ? b.text : '')).join('')
         const durable: ContentBlock[] = content.map((block) => {
           if (block.type === 'text') return block
+          if (block.type === 'file') {
+            // The wire contract has no file-attachment read endpoint: the
+            // durable file block carries its ref, and the bytes are retained
+            // only for the fixture's internal log round-trip checks.
+            const attachment: FileAttachmentRef = {
+              attachmentId: `fixture:${randomUuid()}` as AttachmentIdType,
+              name: block.name ?? 'fixture.bin',
+              bytes: Math.max(
+                1,
+                Math.floor(block.data.length * 3 / 4)
+                - (block.data.endsWith('==') ? 2 : block.data.endsWith('=') ? 1 : 0),
+              ),
+              ...block.mediaType === undefined ? {} : { mediaType: block.mediaType },
+            }
+            return { type: 'file', attachment }
+          }
           const attachment: ImageAttachmentRef = {
             attachmentId: `fixture:${randomUuid()}` as AttachmentIdType,
             mediaType: block.mediaType,

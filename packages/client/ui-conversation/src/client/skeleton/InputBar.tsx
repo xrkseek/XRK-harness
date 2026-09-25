@@ -370,10 +370,13 @@ export const InputBar = memo(function InputBar({
   // claimed command nor a `/` line headed for adjudication — so it never
   // describes a delivery the click cannot or does not perform; every other
   // state keeps plain Send. `agentActive` covers the post-cancel window where
-  // `running` cleared but the streaming tail has not settled yet. A continuable
-  // child keeps Send primary and exposes Stop independently.
+  // `running` cleared but the streaming tail has not settled yet. Any
+  // addressed child keeps Send primary and exposes Stop independently —
+  // including a one-shot child, which otherwise offers no way out while it
+  // hangs in a tool (it cannot accept messages, but it can be cancelled, and
+  // the host cascades that cancel to the child's own children).
   const primaryStops = agentActive && subagent === null && (empty || blocked !== undefined)
-  const interruptible = agentActive && continuable
+  const interruptible = agentActive && subagent !== null
   const primarySubmitMode = resolveSubmitMode(busyEnter, running, 'enter', steeringAvailable)
   const plainMessageDraft = !empty && input?.phase === 'plain' && !draft.trimStart().startsWith('/')
   const primaryLabel = primaryStops

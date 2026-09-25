@@ -102,7 +102,11 @@ The product-shell plugin count in `status` refers to `@xrkseek/client-*` boot en
 
 主路径（IM · Vision · 记忆 · GenUI npm · GenUI browser runtime · TongFlow Python/external）已在 [community-plugins.md](../../../../docs/community-plugins.md)「已实现」列。后续仅列 **XRK 产品路线**增量，不以「上游未搬」表述。
 
+真源 `DSH_COMPAT_KNOWN_GAPS` 已诚实化：`web-panel-global-registry`（DSH 0.1.5+ `sidebar.panellist`/`main` 全局面板缺 seat，missing）、`cordis-dual-half-inspect` 与 `third-party-di`（honest-stub，按"不嵌入第三方 Host 内核"边界不实现）。社区 `client.js` 的 `slots.register` 形状经 `auditCommunityClientSurface` 扫描并分类（`shell-seat` / `missing-seat`），panellist 类注册被诚实暴露而非假装支持。
+
 Main path items are **Working** in [community-plugins.md](../../../../docs/community-plugins.md). Further items are **XRK roadmap** only (e.g. GenUI browser bundle), not an unported-upstream inventory.
+
+`DSH_COMPAT_KNOWN_GAPS` is now honest: `web-panel-global-registry` (DSH 0.1.5+ `sidebar.panellist` / `main` global panels have no shell seat, missing), `cordis-dual-half-inspect` and `third-party-di` (honest-stub, out of scope under the "no third-party Host kernel embedding" boundary). Community `client.js` `slots.register` shapes are scanned and classified by `auditCommunityClientSurface` (`shell-seat` / `missing-seat`), so panellist-style registrations are surfaced honestly instead of silently claimed.
 
 ## 扩展入口 / Extension Entry
 

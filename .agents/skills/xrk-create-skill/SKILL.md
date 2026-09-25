@@ -18,7 +18,7 @@ description: >-
 | 仅本仓库 | `{workspace}/.agents/skills/` 或 `.xrk/skills/`（**须用户同意**再建目录） |
 | 随 CLI 发布模板 | `apps/cli/seeds/skills/<name>/`（维护者双写） |
 
-`xrkh web` 仅**缺才装** bundled seeds，不覆盖已有 `SKILL.md`。
+`xrkh web`/`serve` 启动时按 `.seed-manifest.json` 指纹同步种子：缺才装；种子内容更新且 home 副本未被改过 → 自动刷新；**用户改过的永不覆盖**。
 
 ## Frontmatter
 

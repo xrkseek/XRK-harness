@@ -40,6 +40,17 @@
 - 集成者依赖本仓 `session.md` · `session-log.md`。角色 JSONL 可经 `importSessionInterchange` / `exportSessionInterchange` 换成 XRK 事件，**不**写入 `sessions.db`，也**不是** Session Format V3。
 - `@xrkseek/session-format` 提供相邻迁移链（sqlite schema 0→1→2→3）与制品探测；探测到第三方 Format 头则拒绝（`refused`），保持 **互通 ≠ V3**。
 
+## 旧档等价处理（schema 0/1/2）
+
+自研物理 schema 的世代升级是**就地、打开时**的相邻迁移（`migrateSqliteSchema`，`@xrkseek/session-format` 的 `sqlite-schema.ts`；边 `0→1` 建表 · `1→2` 建 FTS · `2→3` 重建 FTS）。等价处理规则：
+
+- **写者打开**（`createPersistentSessionStore` 未 `shared`）：`initSchema` 读 `meta.schema_version`，`stored ≥ current` 时幂等 `ensureTables + ensureFts` 直接可用；否则沿相邻链就地升到 current 并写回版本戳。`stored > current`（新于本构建）由链的 `plan` 抛 `SessionFormatUnsupportedMigrationError`，**不静默降级**。
+- **读取级兼容**：升级不重写历史 `events` 行；旧行在 load 时经 `parseStoragePayload`（打包行展开 / 事件断言）逐行解释，坏行**截断**该会话（`loadSessionEvents` 遇错 `break`），不整库拒绝。turn-end 后旧档的等价物就是**同一批事件行在 v3 表里的现状读取**。
+- **`{ shared: true }` 只读打开不迁移**：跳过写租约、`node:sqlite` 只读打开、`initSchema` 不执行（见 `session.md` 目录级写锁一节）。旁路读者看到的 schema 即磁盘现状。
+- **第三方 Format V3 仍拒绝**：探测到逻辑世代头（`foreign-session-format`）→ `refused`，不迁移、不抄写；跨产品角色 JSONL 只能经 `importSessionInterchange`。
+
+
+
 ---
 
 # ADR-0009: Third-party Session Format V3 ≠ XRK SQLite schema v3
@@ -77,3 +88,12 @@ System prompts stay **outbound assembly** only — not durable `system/message` 
 - Docs must distinguish “SQLite schema v3” from “Session Format V3”.
 - Integrators rely on this repo’s session docs. Role JSONL can be translated with `importSessionInterchange` / `exportSessionInterchange` into XRK events. That translation is **not** written into `sessions.db` and is **not** Session Format V3.
 - `@xrkseek/session-format` owns the adjacent migration chain (sqlite schema 0→1→2→3) and artifact detect; foreign Format headers are refused — **interop ≠ V3**.
+
+## Legacy-file handling (schema 0/1/2)
+
+Own-schema generation bumps are **in-place, open-time, adjacent** migrations (`migrateSqliteSchema`, `@xrkseek/session-format` `sqlite-schema.ts`; edges `0→1` create tables · `1→2` create FTS · `2→3` rebuild FTS). Equivalent handling rules:
+
+- **Writer open** (`createPersistentSessionStore` without `shared`): `initSchema` reads `meta.schema_version`; `stored ≥ current` → idempotent `ensureTables + ensureFts` and open normally; otherwise migrate in place along the adjacent chain to current and write the version stamp back. `stored > current` (newer than this build) throws `SessionFormatUnsupportedMigrationError` from the chain `plan` — **no silent downgrade**.
+- **Read-level compatibility:** upgrade does not rewrite historical `events` rows; old rows are interpreted row-by-row at load via `parseStoragePayload` (packed-row expand / event assertion), and a bad row **truncates** that session (`loadSessionEvents` `break`s on error) rather than rejecting the whole DB. After turn-end, the post-upgrade equivalent of an old file is simply the same event rows read as-is under v3.
+- **`{ shared: true }` read-only open does not migrate:** skips the write lease, opens `node:sqlite` read-only, and skips `initSchema` (see the directory-level write-lock section in `session.md`). A sidecar reader sees whatever schema is on disk.
+- **Third-party Format V3 is still refused:** a detected logical-generation header (`foreign-session-format`) is `refused`, not migrated or transcribed; cross-product role JSONL only enters via `importSessionInterchange`.

@@ -1,42 +1,50 @@
 import type { JobView } from '@xrkseek/client-runtime/client'
 import type { StateDotState } from '@xrkseek/client-ui-primitives'
-import type { TranslateNS } from '@xrkseek/client-ui-slots'
+import type { LocaleKeysOf, TranslateNS } from '@xrkseek/client-ui-slots'
 
 /** A job the registry still holds open, and whose duration therefore ticks. */
 export function isLiveJob(job: JobView): boolean {
   return job.status === 'running' || job.status === 'stopping'
 }
 
-/** Closed-union exhaustiveness fence for the wire status set. */
-/* v8 ignore next 3 -- closed-union backstop; only reached if a status is forged */
-function assertNever(value: never): never {
-  throw new Error(`unhandled job status: ${JSON.stringify(value)}`)
+/**
+ * Status marker semantics. The status set crosses RPC from a host this build
+ * may not match, so the table is the compile-time fence AND the runtime guard:
+ * a status added by a newer host renders the amber dot instead of crashing
+ * the row. `warning` is the "something unusual, treat as live attention"
+ * state — deliberately not `done` (which would claim success) and not `error`
+ * (which claims failure).
+ */
+const DOT_BY_STATUS: { [Key in JobView['status']]: StateDotState } = {
+  running: 'ongoing',
+  stopping: 'warning',
+  completed: 'done',
+  killed: 'warning',
+  failed: 'error',
 }
 
-/** Status marker semantics. */
+/** Unknown wire statuses (host added one this build has not seen) render amber. */
+const UNKNOWN_JOB_DOT: StateDotState = 'warning'
+
 export function jobDotState(status: JobView['status']): StateDotState {
-  switch (status) {
-    case 'running': return 'ongoing'
-    case 'stopping': return 'warning'
-    case 'completed': return 'done'
-    case 'killed': return 'warning'
-    case 'failed': return 'error'
-    /* v8 ignore next -- closed wire status union */
-    default: return assertNever(status)
-  }
+  return DOT_BY_STATUS[status] ?? UNKNOWN_JOB_DOT
 }
 
-/** Human status word for the row and its accessible name. */
+/**
+ * Human status word for the row and its accessible name.
+ * Unknown wire statuses keep their raw word rather than crashing the row.
+ */
+const STATUS_WORD_KEY = {
+  running: 'status.running',
+  stopping: 'status.stopping',
+  completed: 'status.completed',
+  killed: 'status.killed',
+  failed: 'status.failed',
+} as const satisfies Record<JobView['status'], LocaleKeysOf<'job'>>
+
 export function jobStatusLabel(status: JobView['status'], t: TranslateNS<'job'>): string {
-  switch (status) {
-    case 'running': return t('status.running')
-    case 'stopping': return t('status.stopping')
-    case 'completed': return t('status.completed')
-    case 'killed': return t('status.killed')
-    case 'failed': return t('status.failed')
-    /* v8 ignore next -- closed wire status union */
-    default: return assertNever(status)
-  }
+  const key = STATUS_WORD_KEY[status]
+  return key === undefined ? status : t(key)
 }
 
 /**

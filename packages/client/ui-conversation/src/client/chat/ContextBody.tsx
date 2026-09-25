@@ -5,7 +5,7 @@
 // even when this UI version has never seen its producer.
 
 import type { ReactNode } from 'react'
-import type { ContextMessageNode, KnownContextForm } from '@xrkseek/client-runtime/client'
+import type { ContextMessageNode } from '@xrkseek/client-runtime/client'
 import { JsonBlock } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import css from './ContextBody.module.css'
@@ -535,57 +535,161 @@ function noticeSummary(source: unknown): string | null {
   return typeof summary === 'string' && summary !== '' ? summary : null
 }
 
+/** Read a non-empty string field off a record, or null. */
+function readField(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key]
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+/** One context-fragment's durable identity, as the source records it. */
+interface FragmentIdentity {
+  fragmentId: string
+  fragmentKind: string
+}
+
+/** The fragment's identity fields, or null when the record does not name them. */
+function fragmentIdentity(source: unknown): FragmentIdentity | null {
+  const record = asRecord(source)
+  const fragmentId = record === null ? null : readField(record, 'fragmentId')
+  const fragmentKind = record === null ? null : readField(record, 'fragmentKind')
+  return fragmentId === null && fragmentKind === null ? null : { fragmentId: fragmentId ?? '', fragmentKind: fragmentKind ?? '' }
+}
+
+/**
+ * `fragment` form: the turn-scoped context-fragment pipeline contribution.
+ *
+ * The pipeline is recomputable per turn / user message, so the identity a
+ * reader needs is which provider emitted it and under what id — the durable
+ * `fragmentId`/`fragmentKind` — rather than a reprint of the model-facing text,
+ * which is already shown beneath. The caption rides the collapsed row, so a
+ * fragment is usually readable without expanding.
+ * @param props - Durable content, its source, and the locale seat.
+ * @returns The fragment context body, or the opaque body when unreadable.
+ */
+export function FragmentBody({ content, source, t }: {
+  content: ContextMessageNode['content']
+  source: unknown
+  t: Translate
+}): ReactNode {
+  const identity = fragmentIdentity(source)
+  if (identity === null) return <OpaqueBody content={content} source={source} t={t} />
+  return (
+    <>
+      <p className={css.catalogNotice} data-context-fragment-identity>
+        {identity.fragmentId !== '' && identity.fragmentKind !== ''
+          ? t('message.context.fragment.identity', { fragmentId: identity.fragmentId, fragmentKind: identity.fragmentKind })
+          : t('message.context.fragment.kind', { fragmentKind: identity.fragmentKind || identity.fragmentId })}
+      </p>
+      <ModelFacingContent content={content} t={t} />
+    </>
+  )
+}
+
+/** The one-line account a `fragment` puts on its collapsed row, when it records one. */
+function fragmentSummary(source: unknown): string | null {
+  const identity = fragmentIdentity(source)
+  if (identity === null) return null
+  return identity.fragmentKind !== '' ? identity.fragmentKind : identity.fragmentId
+}
+
+/** Props every context body consumes: the durable content, its source, and the locale seat. */
+type ContextBodyProps = { content: ContextMessageNode['content']; source: unknown; t: Translate }
+
+/**
+ * The context-form vocabulary this presentation layer knows, aligned with the
+ * runtime whitelist (`KNOWN_FORMS` in `client-runtime`'s context-provenance).
+ * It is deliberately declared here rather than imported: the published
+ * `KnownContextForm` type snapshot can lag the runtime JS whitelist, and this
+ * module must stay exhaustive either way. `contextBody` accepts the raw
+ * producer-declared string, so a vocabulary the runtime lets through but this
+ * table has no row for degrades to opaque instead of crashing the row.
+ */
+type ContextFormKey = 'instructions' | 'catalog' | 'snapshot' | 'notice' | 'relay' | 'recall' | 'fragment'
+
+/** One durable form's rendering: how to validate its source, and what to draw. */
+interface FormBody {
+  readonly rendered: ContextFormKey
+  readonly validate: (source: unknown) => boolean
+  readonly summary: (source: unknown) => string | null
+  readonly body: (props: ContextBodyProps) => ReactNode
+}
+
 /**
  * Choose the body for one context node.
  *
  * Returns the form the body actually rendered as, which is not always the
  * declared one: a declared form whose fields are unreadable falls back to
  * opaque, and the caller labels the row with what it really shows.
- * `summary` is the collapsed row's one-line account, which only a `notice`
- * records: its whole point is being readable without expanding.
+ * `summary` is the collapsed row's one-line account, which only `notice` and
+ * `fragment` record: their whole point is being readable without expanding.
+ *
+ * This is a table, not a switch, because every known form must map to exactly
+ * one body: the table is annotated with the mapped type
+ * `{ [Key in ContextFormKey]: FormBody }`, so a form added to the runtime
+ * whitelist without a row here fails the build instead of silently degrading
+ * to the opaque body.
  * @param form - the producer-declared form projected onto the node.
  * @param props - durable content, its source, and the locale seat.
  * @returns the rendered form (null for opaque), its collapsed summary, and its body.
  */
 export function contextBody(
   form: ContextMessageNode['form'],
-  props: { content: ContextMessageNode['content']; source: unknown; t: Translate },
-): { rendered: KnownContextForm | null; summary: string | null; body: ReactNode } {
+  props: ContextBodyProps,
+): { rendered: ContextFormKey | null; summary: string | null; body: ReactNode } {
   const opaque = { rendered: null, summary: null, body: <OpaqueBody {...props} /> }
-  switch (form) {
-    case 'instructions':
-      return instructionChanges(props.source) === null
-        ? opaque
-        : { rendered: 'instructions', summary: null, body: <InstructionsBody {...props} /> }
-    case 'catalog':
-      return catalogEntries(props.source) === null
-        ? opaque
-        : { rendered: 'catalog', summary: null, body: <CatalogBody {...props} /> }
-    case 'snapshot':
-      return snapshotSections(props.source) === null
-        ? opaque
-        : { rendered: 'snapshot', summary: null, body: <SnapshotBody {...props} /> }
-    case 'notice': {
-      const summary = noticeSummary(props.source)
-      return summary === null
-        ? opaque
-        : { rendered: 'notice', summary, body: <NoticeBody {...props} /> }
-    }
-    case 'relay':
-      return relaySender(props.source) === null
-        ? opaque
-        : { rendered: 'relay', summary: null, body: <RelayBody {...props} /> }
-    case 'recall':
-      return recalledSessions(props.source) === null
-        ? opaque
-        : { rendered: 'recall', summary: null, body: <RecallBody {...props} /> }
-    case null:
-      return opaque
-    /* v8 ignore next 4 -- closed-union backstop; the compiler rejects a new
-    KnownContextForm here rather than letting it degrade to opaque silently. */
-    default: {
-      const unreachable: never = form
-      throw new Error(`unreachable context form: ${String(unreachable)}`)
-    }
-  }
+  if (form === null) return opaque
+  const entry = FORM_BODIES[form]
+  // A form this UI version does not know renders opaque rather than crashing:
+  // the merge-extensible durable vocabulary may already be wider than this
+  // build, and a crashed row would take the whole cell down with it.
+  if (entry === undefined) return opaque
+  if (!entry.validate(props.source)) return opaque
+  const summary = entry.summary(props.source)
+  return { rendered: entry.rendered, summary, body: entry.body(props) }
+}
+
+/** One table row per context form; every body reads the shared props. */
+const FORM_BODIES: { [Key in ContextFormKey]: FormBody } = {
+  instructions: {
+    rendered: 'instructions',
+    validate: (source: unknown) => instructionChanges(source) !== null,
+    summary: () => null,
+    body: (props: ContextBodyProps) => <InstructionsBody {...props} />,
+  },
+  catalog: {
+    rendered: 'catalog',
+    validate: (source: unknown) => catalogEntries(source) !== null,
+    summary: () => null,
+    body: (props: ContextBodyProps) => <CatalogBody {...props} />,
+  },
+  snapshot: {
+    rendered: 'snapshot',
+    validate: (source: unknown) => snapshotSections(source) !== null,
+    summary: () => null,
+    body: (props: ContextBodyProps) => <SnapshotBody {...props} />,
+  },
+  notice: {
+    rendered: 'notice',
+    validate: (source: unknown) => noticeSummary(source) !== null,
+    summary: (source: unknown) => noticeSummary(source),
+    body: (props: ContextBodyProps) => <NoticeBody {...props} />,
+  },
+  relay: {
+    rendered: 'relay',
+    validate: (source: unknown) => relaySender(source) !== null,
+    summary: () => null,
+    body: (props: ContextBodyProps) => <RelayBody {...props} />,
+  },
+  recall: {
+    rendered: 'recall',
+    validate: (source: unknown) => recalledSessions(source) !== null,
+    summary: () => null,
+    body: (props: ContextBodyProps) => <RecallBody {...props} />,
+  },
+  fragment: {
+    rendered: 'fragment',
+    validate: (source: unknown) => fragmentIdentity(source) !== null,
+    summary: (source: unknown) => fragmentSummary(source),
+    body: (props: ContextBodyProps) => <FragmentBody {...props} />,
+  },
 }

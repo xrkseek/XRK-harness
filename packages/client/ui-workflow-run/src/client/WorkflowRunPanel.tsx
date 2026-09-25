@@ -30,16 +30,17 @@ const STATUS_KEYS = {
   interrupted: 'status.interrupted',
 } as const satisfies Record<WorkflowRunStatus, WorkflowRunKey>
 
+/** Status dot semantics; unknown durable-log statuses render amber rather than crashing the node. */
+const DOT_BY_STATUS = {
+  running: 'ongoing',
+  completed: 'done',
+  failed: 'error',
+  cancelled: 'warning',
+  interrupted: 'warning',
+} as const satisfies Record<WorkflowRunStatus, StateDotState>
+
 function dotState(status: WorkflowRunStatus): StateDotState {
-  switch (status) {
-    case 'running': return 'ongoing'
-    case 'completed': return 'done'
-    case 'failed': return 'error'
-    case 'cancelled':
-    case 'interrupted': return 'warning'
-    /* v8 ignore next -- WorkflowRunStatus is closed and every variant is handled above. */
-    default: return status satisfies never
-  }
+  return DOT_BY_STATUS[status] ?? 'warning'
 }
 
 function readablePhase(phase: string | null, t: WorkflowRunPanelProps['t']): string {

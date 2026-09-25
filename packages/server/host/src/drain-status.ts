@@ -4,13 +4,16 @@
  */
 
 import type { AgentRunResult } from "@xrkseek/core-agent";
-import type { SessionDrainHub } from "@xrkseek/core-session";
+import type {
+  SessionDrainCancelOptions,
+  SessionDrainHub,
+} from "@xrkseek/core-session";
 
 /** Host-side drain control (admit wake / resume join). */
 export interface SessionDrainControl {
   run(sessionId: string): Promise<AgentRunResult | undefined>;
   wake(sessionId: string): void;
-  cancel(sessionId: string): Promise<void>;
+  cancel(sessionId: string, options?: SessionDrainCancelOptions): Promise<void>;
   isActive(sessionId: string): boolean;
 }
 
@@ -29,8 +32,8 @@ export function wireDrainStatus(
       hub.wake(sessionId);
       if (!was && hub.isActive(sessionId)) publish(sessionId, true);
     },
-    cancel(sessionId) {
-      return hub.cancel(sessionId);
+    cancel(sessionId, options) {
+      return hub.cancel(sessionId, options);
     },
     isActive(sessionId) {
       return hub.isActive(sessionId);

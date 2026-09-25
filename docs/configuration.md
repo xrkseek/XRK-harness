@@ -11,7 +11,7 @@
 | 目标 | 壳内路径 |
 |------|----------|
 | 模型 | **设置 → 模型** |
-| API 密钥 | **设置 → 凭据**（不要为日常使用先 export env） |
+| API 密钥 | **设置 → 凭据**（日常使用经设置页配置；无需先 export env） |
 | 默认权限档 | **设置 → 权限**；会话 Access 芯片 / `/permission` |
 | MCP · 网页搜索 · 终端 · Agent 循环 · 工作区注入 | **设置 → 插件 → 插件配置** |
 | 打开 yaml | 设置页「打开配置文件」→ `{XRK_HOME}/settings.yaml`（常用 `~/.xrk/settings.yaml`） |
@@ -52,7 +52,7 @@ Agent 循环卡：软请求预算 · keep/buffer · 工具结果 spill。终端�
 | `~/.xrk/host-settings.json` | Face MCP desired；文件真源时可热挂载 | 否 |
 | `~/.xrk/mcp-tokens/<server>.json` | `xrkh mcp login` / Settings MCP 卡 OAuth 的设备码令牌（access/refresh/到期）；尽量 0600 | 否（明文，仅本机权限保护） |
 | `{workspace}/.xrk/skills/` · `recipes/` | 可选项目 inject；skills 也从 `.claude` / `.cursor` 等导入 | 否 |
-| `XRK_POLICY_FILE` | 显式 policy（`.json` / `.yaml` / `.yml` / `.toml` 同构 v1）；优先于默认路径 | 否（勿提交含密钥的 policy） |
+| `XRK_POLICY_FILE` | 显式 policy（`.json` / `.yaml` / `.yml` / `.toml` 同构 v1）；优先于默认路径 | 否（含密钥的 policy 不入库） |
 
 旁路文件（与 sessions 同目录时常有）：`subagents.json` · `goals.json`。
 
@@ -194,7 +194,7 @@ Preset 选型：[profiles.md](./profiles.md)。
 
 ## Plugins 设置（端到端）
 
-壳内路径：**设置 → 插件 → 插件配置**（不要停在「会话导入」）。展开 **MCP 服务器** · **网页搜索** · **Browser**（`browser`）· **Voice** · **文生图**（`image-gen`）· **文生视频**（`video-gen`）· **策展记忆**（`curated-memory`）· **外部 Agent**（`external-agent`）· **终端**（`bash`）· **Agent 循环**（`agent-loop`）· **工作区注入**（`workspace-inject`）· **沙箱**（`sandbox`）· **Computer use**（`computer-use`）· **Cron**（`cron`）· **会话遥测**（`session-telemetry`）。「高级」含 Auto-review classifier。亦可点「打开配置文件」编辑 `~/.xrk/settings.yaml`。
+壳内路径：**设置 → 插件 → 插件配置**（不是「会话导入」）。展开 **MCP 服务器** · **网页搜索** · **Browser**（`browser`）· **Voice** · **文生图**（`image-gen`）· **文生视频**（`video-gen`）· **策展记忆**（`curated-memory`）· **外部 Agent**（`external-agent`）· **终端**（`bash`）· **Agent 循环**（`agent-loop`）· **工作区注入**（`workspace-inject`）· **沙箱**（`sandbox`）· **Computer use**（`computer-use`）· **Cron**（`cron`）· **会话遥测**（`session-telemetry`）。「高级」含 Auto-review classifier。亦可点「打开配置文件」编辑 `~/.xrk/settings.yaml`。
 
 Settings → Plugins 里会动到运行时的命名空间：
 

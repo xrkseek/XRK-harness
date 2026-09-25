@@ -148,7 +148,7 @@ export function apply(ctx: Context): void {
     api,
     isLoopback: isPrivilegedClientSurface({
       ownsHost: transport?.ownsHost === true,
-      pageLocation,
+      ...(pageLocation === undefined ? {} : { pageLocation }),
     }),
     hostDescription: {
       getSnapshot: () => description,

@@ -62,4 +62,33 @@ describe("audit-community-client", () => {
     expect(audit.coverage["/api/dsh-genui/prompt"]).toBe("capability");
     expect(audit.coverage["/dsh-genui/runtime.js"]).toBe("capability");
   });
+
+  it("surfaces DSH 0.1.5+ global-panel seats as honest missing-seat gaps", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-audit-seats-"));
+    temps.push(root);
+    writeFileSync(
+      path.join(root, "client.js"),
+      `
+      ctx.slots.register({ name: "sidebar.panellist", id: "wallet-panel" }, WalletPanel);
+      ctx.slots.register({ name: "main.conversation", id: "conv-embed" }, ConvEmbed);
+      ctx.slots.register({ name: "shell.overlay", id: "toast" }, Toast);
+      slots.register({ name: "sidebar" }, Sidebar);
+    `,
+    );
+    const audit = auditCommunityClientSurface(root);
+    expect(audit.slotSeats).toEqual([
+      "main.conversation",
+      "shell.overlay",
+      "sidebar",
+      "sidebar.panellist",
+    ]);
+    expect(audit.seatCoverage["sidebar.panellist"]).toBe("missing-seat");
+    expect(audit.seatCoverage["main.conversation"]).toBe("missing-seat");
+    expect(audit.seatCoverage["shell.overlay"]).toBe("shell-seat");
+    expect(audit.seatCoverage["sidebar"]).toBe("shell-seat");
+    expect(audit.missingSeats).toEqual([
+      "main.conversation",
+      "sidebar.panellist",
+    ]);
+  });
 });

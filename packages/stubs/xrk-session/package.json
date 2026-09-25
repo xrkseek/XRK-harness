@@ -20,8 +20,8 @@
       "default": "./lib/invariant.js"
     },
     "./types": {
-      "types": "./src/types.ts",
-      "default": "./src/types.ts"
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.d.ts"
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
@@ -37,6 +37,9 @@
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
+  "dependencies": {
+    "@xrkseek/xrk-typert-protocol": "workspace:^"
+  },
   "peerDependencies": {
     "@xrkseek/xrk-brand": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",

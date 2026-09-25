@@ -122,8 +122,8 @@ Host 默认在 drain 每轮 `continueTurn` 前调用 `snapshotSessionWorkspace`�
 ## 注意
 
 - 工作区里会出现 `.xrk/`（本产品惯例的 per-workspace 目录）。它会在操作者
-  自己的 `git status` 里显示为 untracked；建议把 `.xrk/` 加进操作者仓库的
-  `.gitignore`。我们**不会**替操作者改他们的 `.gitignore`。
+  自己的 `git status` 里显示为 untracked；操作者需自行把 `.xrk/` 加进自己仓库的
+  `.gitignore`。
 - 影子仓库会随快照增长。`prune(keep)` 只裁索引；需要回收磁盘请对影子仓库
   执行 `git gc`（或直接删除 `<workspace>/.xrk/checkpoints`）。
 - `restore` 是**破坏性**的：它会覆盖工作区里同名文件。调用方（Face / 工具）
@@ -244,8 +244,8 @@ Host calls `snapshotSessionWorkspace` before each drain `continueTurn` by defaul
 ## Caveats
 
 - A `.xrk/` dir appears in the workspace (this product's per-workspace dot dir).
-  It shows as untracked in the operator's own `git status`; add `.xrk/` to _their_
-  `.gitignore` if desired — we never edit it for them.
+  It shows as untracked in the operator's own `git status`; operators add `.xrk/`
+  to their own `.gitignore`.
 - The shadow repo grows with snapshots. `prune(keep)` trims the index only; run
   `git gc` on the shadow repo (or delete `<workspace>/.xrk/checkpoints`) to
   reclaim disk.

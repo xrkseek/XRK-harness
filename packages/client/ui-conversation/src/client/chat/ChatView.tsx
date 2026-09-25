@@ -29,7 +29,12 @@ import css from './ChatView.module.css'
 
 const FOLLOW_THRESHOLD = 24
 /** Idle waiting copy pool (`turnStatus.0` …); one pick stays for the whole turn. */
-const TURN_STATUS_PHRASE_COUNT = 16
+const TURN_STATUS_PHRASES = [
+  'turnStatus.0', 'turnStatus.1', 'turnStatus.2', 'turnStatus.3',
+  'turnStatus.4', 'turnStatus.5', 'turnStatus.6', 'turnStatus.7',
+  'turnStatus.8', 'turnStatus.9', 'turnStatus.10', 'turnStatus.11',
+  'turnStatus.12', 'turnStatus.13', 'turnStatus.14', 'turnStatus.15',
+] as const
 
 /** Active column host when present; otherwise the view-local scroller. */
 function scrollerOf(from: HTMLElement): HTMLElement {
@@ -179,8 +184,8 @@ function turnStatusPhrase(
   t: ChatViewSlotProps['t'],
 ): string {
   const seed = startTime ?? 0
-  const index = ((seed % TURN_STATUS_PHRASE_COUNT) + TURN_STATUS_PHRASE_COUNT) % TURN_STATUS_PHRASE_COUNT
-  return t(`turnStatus.${index}`)
+  const index = ((seed % TURN_STATUS_PHRASES.length) + TURN_STATUS_PHRASES.length) % TURN_STATUS_PHRASES.length
+  return t(TURN_STATUS_PHRASES[index]!)
 }
 
 /**

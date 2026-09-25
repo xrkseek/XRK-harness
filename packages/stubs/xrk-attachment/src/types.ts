@@ -41,6 +41,8 @@ export interface ImageAttachmentLimits {
   maxImagesPerMessage: number
   maxMessageImageBytes: number
   maxImagePixels: number
+  /** Longest intrinsic image edge in pixels, when host-declared. */
+  maxImageDimension?: number
   mediaTypes: readonly ImageMediaType[]
 }
 

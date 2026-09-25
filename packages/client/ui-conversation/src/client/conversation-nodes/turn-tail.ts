@@ -4,7 +4,6 @@ import type {
 } from '@xrkseek/client-runtime/client'
 import { isAppendSurfaceEvent, toAssistantBlocks } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/xrk-llm-retry/types'
-import type { SessionEvent } from '@xrkseek/xrk-session/types'
 import { deriveTurnTokenUsage } from '@xrkseek/xrk-token-meter/client'
 import type {
   AssistantChatData, FinalAssistantChatData, TurnTailChatData,
@@ -34,12 +33,6 @@ interface TurnTailState {
 interface StepEvidence {
   readonly streamedText: boolean
   readonly finalized: boolean
-}
-
-function isSessionEvent(event: ConversationMatch['event']): event is SessionEvent {
-  return event.type !== 'chunkrow/text-chunks'
-    && event.type !== 'chunkrow/reasoning-chunks'
-    && event.type !== 'chunkrow/tool-call-chunks'
 }
 
 function hasTextAssistant(event: Parameters<ConversationNodeDefinition['match']>[0]): boolean {
@@ -149,7 +142,7 @@ function tailData(context: ConversationNodeContext<TurnTailState>): TurnTailChat
   }
   const metrics = deriveTurnMetrics(finalized.map(candidate => candidate.finalNode)).get(end.event.data.turn)
   const tokenUsage = context.start?.event.type === 'turn/start'
-    ? deriveTurnTokenUsage(context.matches.map(match => match.event).filter(isSessionEvent))
+    ? deriveTurnTokenUsage(context.matches.map(match => match.event))
     : undefined
   return {
     turn: end.event.data.turn,

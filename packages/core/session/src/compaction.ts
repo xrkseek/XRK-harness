@@ -17,8 +17,15 @@ import {
   projectOffloadedImages,
 } from "./image-offload.js";
 
-export const DEFAULT_COMPACTION_KEEP_TOKENS = 8_000;
-export const DEFAULT_COMPACTION_BUFFER_TOKENS = 2_000;
+/**
+ * Default keep/buffer for auto-compact when a caller does not pass explicit
+ * tokens. Aligned with the Face product defaults (`settings-schemas.ts`
+ * `keepTokens: 24_000`, `bufferTokens: 4_000`) — two independent "default
+ * numbers" (8k/2k here vs 24k/4k in Face) silently desync'd runtime behavior
+ * from the Settings UI. Keep them in sync whenever the schema default moves.
+ */
+export const DEFAULT_COMPACTION_KEEP_TOKENS = 24_000;
+export const DEFAULT_COMPACTION_BUFFER_TOKENS = 4_000;
 /** Soft-budget auto-compact attempts before fail-closed (DSH-style remeasure loop). */
 export const DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS = 2;
 

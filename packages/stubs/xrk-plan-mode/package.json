@@ -53,6 +53,8 @@
     }
   },
   "dependencies": {
+    "@xrkseek/xrk-system-prompt": "workspace:^",
+    "@xrkseek/xrk-user-questions": "workspace:^",
     "zod": "^4.4.3"
   },
   "devDependencies": {

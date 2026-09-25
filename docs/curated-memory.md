@@ -2,7 +2,7 @@
 
 > **读者**：集成者 · 贡献者
 
-`memory` 把**跨会话都要用的短事实**写进两份文件：`MEMORY.md`（代理笔记）与 `USER.md`（用户是谁）。目录是 `{XRK_HOME}/memories`（默认 `~/.xrk/memories`）。这不是 Mnemon 文档库（`~/.xrk/mnemon`）。
+`memory` 把**跨会话都要用的短事实**写进两份文件：`MEMORY.md`（代理笔记）与 `USER.md`（用户是谁）。目录是 `{XRK_HOME}/memories`（默认 `~/.xrk/memories`）。文档库另走 `~/.xrk/mnemon`。
 
 ### 勿与站立文件混淆
 
@@ -55,15 +55,15 @@
 | `file`（默认） | `createFileMemoryProvider` / `createCuratedMemoryStore` | `{XRK_HOME}/memories` |
 | `http` | `createHttpMemoryProvider` | 集成方自建 REST：`GET /health` · `GET /v1/curated/{memory\|user}` · `POST /v1/curated/{memory\|user}/ops` |
 
-选择：`resolveMemoryProvider({ kind })` 或 env `XRK_MEMORY_PROVIDER=file|http`；HTTP 需 `XRK_MEMORY_HTTP_URL`（可选 `XRK_MEMORY_HTTP_TOKEN`）。组合选项仍可直接注入任意实现了 `CuratedMemoryStore` 的对象。这不是 Mnemon，也不是 memory-embed 的 `/search`。
+选择：`resolveMemoryProvider({ kind })` 或 env `XRK_MEMORY_PROVIDER=file|http`；HTTP 需 `XRK_MEMORY_HTTP_URL`（可选 `XRK_MEMORY_HTTP_TOKEN`）。组合选项仍可直接注入任意实现了 `CuratedMemoryStore` 的对象。provider 只负责策展记忆读写，不接 Mnemon 文档库 / memory-embed 的 `/search`。
 
 ## 回合结束写入
 
-成功的回合结束之后，若用户原话里有可复用笔记（`remember:` / `memory:`，或稳定偏好如 “I prefer” / “我习惯”），写入 `MEMORY.md`。助手自己的发挥不写入。本回合已经调用过 `memory` 工具则不再写第二份。密钥会被替换成 `[REDACTED_SECRET]`。这次写入不刷新本会话已经冻进系统提示的快照，也不读写 Mnemon 文档。
+成功的回合结束之后，若用户原话里有可复用笔记（`remember:` / `memory:`，或稳定偏好如 “I prefer” / “我习惯”），写入 `MEMORY.md`。助手自己的发挥不写入。本回合已经调用过 `memory` 工具则不再写第二份。密钥会被替换成 `[REDACTED_SECRET]`。这次写入不刷新本会话已经冻进系统提示的快照。
 
 ## 会话结束 Phase1 巩固
 
-会话离开活跃集时（组合 `dispose`、工作区 `workspace.archiveSession`、Host `stop`）再扫一遍该会话的人类用户原话：已在磁盘上覆盖的跳过，漏掉的追加进 `MEMORY.md`。字数顶满时会先软删最旧条目（最多三次）再试写入（不刷新本会话冻结快照）。这不是 Codex 的 LLM stage-1 抽取，也不是向量库；与 Mnemon 文档 keyword 检索分开。
+会话离开活跃集时（组合 `dispose`、工作区 `workspace.archiveSession`、Host `stop`）再扫一遍该会话的人类用户原话：已在磁盘上覆盖的跳过，漏掉的追加进 `MEMORY.md`。字数顶满时会先软删最旧条目（最多三次）再试写入（不刷新本会话冻结快照）。该扫描只做磁盘覆盖去重后的追加写入，不做 LLM 抽取，也不做向量 / 文档 keyword 检索。
 
 ---
 
@@ -124,12 +124,12 @@ Hermes-style `MemoryProvider` seam: **file curated remains the default**; option
 | `file` (default) | `createFileMemoryProvider` / `createCuratedMemoryStore` | `{XRK_HOME}/memories` |
 | `http` | `createHttpMemoryProvider` | Integrator-owned REST: `GET /health` · `GET /v1/curated/{memory\|user}` · `POST /v1/curated/{memory\|user}/ops` |
 
-Select with `resolveMemoryProvider({ kind })` or env `XRK_MEMORY_PROVIDER=file|http`; HTTP needs `XRK_MEMORY_HTTP_URL` (optional `XRK_MEMORY_HTTP_TOKEN`). Compositions may still inject any `CuratedMemoryStore` implementation. This is not Mnemon and not memory-embed `/search`.
+Select with `resolveMemoryProvider({ kind })` or env `XRK_MEMORY_PROVIDER=file|http`; HTTP needs `XRK_MEMORY_HTTP_URL` (optional `XRK_MEMORY_HTTP_TOKEN`). Compositions may still inject any `CuratedMemoryStore` implementation. The provider handles curated memory read/write only; it does not reach Mnemon documents or memory-embed `/search`.
 
 ## Write after the turn
 
-After a successful turn, reusable notes in the user's own words (`remember:` / `memory:`, or a stable preference such as "I prefer" / "我习惯") are appended to `MEMORY.md`. Assistant prose is not promoted. A turn that already called the `memory` tool is not written a second time. Secrets are replaced with `[REDACTED_SECRET]`. The write does not refresh the snapshot already frozen into this session's system prompt, and it does not read or write Mnemon documents.
+After a successful turn, reusable notes in the user's own words (`remember:` / `memory:`, or a stable preference such as "I prefer" / "我习惯") are appended to `MEMORY.md`. Assistant prose is not promoted. A turn that already called the `memory` tool is not written a second time. Secrets are replaced with `[REDACTED_SECRET]`. The write does not refresh the snapshot already frozen into this session's system prompt.
 
 ## Session-end Phase1 consolidate
 
-When a session leaves the live set (composition `dispose`, `workspace.archiveSession`, Host `stop`), human user turns are scanned again: notes already covered on disk are skipped; leftovers are appended to `MEMORY.md`. If the character cap blocks a new note, the oldest entries are soft-removed (up to three times) and the add is retried (the frozen session prompt is still unchanged). This is not Codex's LLM stage-1 extractor and not a vector store; it stays separate from Mnemon's document keyword search.
+When a session leaves the live set (composition `dispose`, `workspace.archiveSession`, Host `stop`), human user turns are scanned again: notes already covered on disk are skipped; leftovers are appended to `MEMORY.md`. If the character cap blocks a new note, the oldest entries are soft-removed (up to three times) and the add is retried (the frozen session prompt is still unchanged). The scan only appends after disk-coverage dedup; it performs no LLM extraction and no vector / document keyword search.

@@ -68,6 +68,44 @@ describe("applySpillPolicy", () => {
     expect(out.content).toBe("tiny");
   });
 
+  it("spills at a token budget with a token-denominated notice", () => {
+    const store = new LocalSpillStore({ env: process.env });
+    // 40k ASCII chars ≈ 10k tokens at chars/4; budget 2k tokens → spill.
+    const fat = "T".repeat(40_000);
+    const out = applySpillPolicy({
+      sessionId: "s-tok",
+      callId: "call_tok",
+      toolName: "bash",
+      plainText: fat,
+      maxInlineTokens: 2_000,
+      store,
+    });
+    expect(out.spilled).toBe(true);
+    expect(out.ref).toBeDefined();
+    expect(out.content).toContain("Full formatted result stored at:");
+    expect(out.content).toContain("(omitted ~8000 tokens");
+    // Token budget 2000 × 4 chars/token = 8000-char byte budget; the inline
+    // preview (notice + head/tail) must stay within that budget.
+    expect(Buffer.byteLength(out.content, "utf8")).toBeLessThanOrEqual(
+      2_000 * 4 + 64, // small slack for UTF-8 headroom never exceeding budget
+    );
+  });
+
+  it("treats a zero token budget like zero bytes (no spill)", () => {
+    const store = new LocalSpillStore({ env: process.env });
+    const fat = "Z".repeat(10_000);
+    const out = applySpillPolicy({
+      sessionId: "s",
+      callId: "c",
+      toolName: "bash",
+      plainText: fat,
+      maxInlineTokens: 0,
+      store,
+    });
+    expect(out.spilled).toBe(false);
+    expect(out.content).toBe(fat);
+  });
+
   it("spills oversized bash output with notice + head/tail", () => {
     const store = new LocalSpillStore({ env: process.env });
     const fat = "A".repeat(DEFAULT_SPILL_INLINE_BYTES + 40_000);

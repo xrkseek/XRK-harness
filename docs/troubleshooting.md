@@ -9,7 +9,7 @@
 | 症状 | 处理 |
 |------|------|
 | `engines` / `Unsupported environment`，Node 过旧 | 换系统 Node **≥26**；勿让 IDE 自带 Node 抢 PATH（Windows：`where node`） |
-| 本机没有 pnpm / 版本不对 | `npm install -g pnpm@11.22.0`（与根 `packageManager` 对齐）；**不要用 Corepack** |
+| 本机没有 pnpm / 版本不对 | `npm install -g pnpm@11.22.0`（与根 `packageManager` 对齐）；用 pnpm，不经 Corepack |
 | 误装 yarn / 用 npm 装本仓依赖 | 删掉误装的 `node_modules`，改用上面同版 pnpm 再 `pnpm install` |
 | `ERR_PNPM_IGNORED_BUILDS`（esbuild / node-pty 等） | 根 `pnpm-workspace.yaml` → `allowBuilds` 已放行；缺项就补 `true` 后重装 |
 | `pnpm check` 第一步 `tsc` 失败 | 先 `pnpm install`；看项目引用断裂包 |
@@ -41,7 +41,7 @@
 | `test:web` 失败且提到 Chromium | `pnpm --filter @xrkseek/web-frontend exec playwright install chromium` |
 | 浏览器打不开本机 Host / 请求走代理 | 清掉 `HTTP_PROXY` · `HTTPS_PROXY` · `ALL_PROXY`（或设 `NO_PROXY=localhost,127.0.0.1`）后再测 |
 | Vite 直接 `serve`/`dev` 被拒 | 产品入口是 `xrkh web`（亦 `xrk-harness web`）/ Host serve，不是裸 Vite |
-| `EADDRINUSE` / 端口占用 | 先 `xrkh restart`（只停本机 XRK Host）。若是其它程序占端口：自行结束该进程，或换 `--port`。`--force` 同样**拒绝**杀掉非 XRK 进程 |
+| `EADDRINUSE` / 端口占用 | 先 `xrkh restart`（只停本机 XRK Host）。若是其它程序占端口：自行结束该进程，或换 `--port`。 |
 | serve 终端几乎没输出 | 默认只打启动横幅；加 `--verbose` 或 `XRK_LOG=debug` 看 `/api` 与 MCP 挂载 |
 
 ## MCP

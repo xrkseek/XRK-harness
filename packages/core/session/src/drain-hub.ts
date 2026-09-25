@@ -7,6 +7,7 @@
 import {
   createSessionDrainLatch,
   type DrainFn,
+  type SessionDrainCancelOptions,
   type SessionDrainLatch,
 } from "./latch.js";
 
@@ -17,7 +18,7 @@ export interface SessionDrainHub {
   run(sessionId: string): Promise<void>;
   /** Idle → non-force drain; busy → coalesce at most one follow-up. */
   wake(sessionId: string): void;
-  cancel(sessionId: string): Promise<void>;
+  cancel(sessionId: string, options?: SessionDrainCancelOptions): Promise<void>;
   isActive(sessionId: string): boolean;
   /** Session ids whose latch is currently draining (Host MCP mid-drain skip). */
   activeIds(): readonly string[];
@@ -48,8 +49,8 @@ export function createSessionDrainHub(options: {
     wake(sessionId) {
       latch(sessionId).wake();
     },
-    cancel(sessionId) {
-      return latch(sessionId).cancel();
+    cancel(sessionId, options) {
+      return latch(sessionId).cancel(options);
     },
     isActive(sessionId) {
       return latches.get(sessionId)?.isActive() ?? false;

@@ -16,6 +16,17 @@ const FETCH_PATH =
 const RPC_LITERAL =
   /(?:registerRpc|rpc|postRpc)\s*\(\s*["'`](\/[^"'`]+)["'`]/gi;
 
+/**
+ * Cordis slot registrations in community client.js, e.g.
+ * `ctx.slots.register({ name: "sidebar.panellist", ... })` or
+ * `slots.register({ name: "main" ... })`. Seat names are dot paths
+ * (`sidebar.panellist`, `main.conversation`) — audited against the XRK shell
+ * seat map so DSH 0.1.5+ global-panel shapes surface as honest gaps instead
+ * of dying silently inside SlotCore's "not declared" throw.
+ */
+const SLOT_REGISTER =
+  /(?:ctx\.)?slots\.register\s*\(\s*\{\s*name\s*:\s*["'`]([a-zA-Z][a-zA-Z0-9._-]*)["'`]/g;
+
 const RPC_CHANNEL =
   /["'`](\/(?:dsh-)?[a-zA-Z][a-zA-Z0-9_-]*(?:\/[a-zA-Z0-9_$./-]+)?)["'`]/g;
 
@@ -37,22 +48,29 @@ function normalizeRpcChannel(raw: string): string {
 export interface ClientHostSurface {
   readonly httpPaths: readonly string[];
   readonly rpcChannels: readonly string[];
+  readonly slotSeats: readonly string[];
 }
 
 export function scanClientHostSurface(pkgRoot: string): ClientHostSurface {
   const clientPath = path.join(pkgRoot, "client.js");
   if (!existsSync(clientPath)) {
-    return { httpPaths: [], rpcChannels: [] };
+    return { httpPaths: [], rpcChannels: [], slotSeats: [] };
   }
   let text: string;
   try {
     text = readFileSync(clientPath, "utf8");
   } catch {
-    return { httpPaths: [], rpcChannels: [] };
+    return { httpPaths: [], rpcChannels: [], slotSeats: [] };
   }
 
   const http = new Set<string>();
   const rpc = new Set<string>();
+  const seats = new Set<string>();
+
+  for (const match of text.matchAll(SLOT_REGISTER)) {
+    const seat = match[1]!.trim();
+    if (seat.length > 0) seats.add(seat);
+  }
 
   for (const match of text.matchAll(QUOTED_PATH)) {
     const p = normalizeHttpPath(match[1]!);
@@ -102,5 +120,6 @@ export function scanClientHostSurface(pkgRoot: string): ClientHostSurface {
   return {
     httpPaths: [...http].sort(),
     rpcChannels: [...rpc].sort(),
+    slotSeats: [...seats].sort(),
   };
 }

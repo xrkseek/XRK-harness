@@ -33,6 +33,9 @@
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
+  "dependencies": {
+    "@xrkseek/xrk-system-prompt": "workspace:^"
+  },
   "peerDependencies": {
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/xrk-llm": "workspace:^",

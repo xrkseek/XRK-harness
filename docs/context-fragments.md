@@ -11,7 +11,7 @@
 | Session 召回 | `@xrkseek/xrk-session-reference` | `@session` prepare | `session-reference` |
 | 工具 mid-step | `deferContext` | 工具结果后 | 无 typed source（纯文本） |
 
-不要把 AGENTS.md / skills catalog 改成 fragment；也不要把 ephemeral env / recap 塞进 inject。
+不要把 AGENTS.md / skills catalog 改成 fragment；也不要把 ephemeral env / recap 放进 inject。
 
 ## 阶段
 
@@ -37,9 +37,9 @@ appendContextFragments({ store, sessionId, turnId, now, pipeline, phase })
 
 Harness：`createHarnessComposition({ contextFragmentProviders, contextFragmentBudgetChars })`；`contextFragments: false` 关闭。
 
-## 与 Codex
+## 范围
 
-吸收 Codex `context-fragments`（marked additional_context · recap）与 `guardian-context` 的 **可插拔 section + budget** 思路；本仓不做完整 Guardian 审阅引擎（见 status）。
+本仓实现可插拔 **section + budget** 的收集管线（marked additional_context · recap）；完整 Guardian 审阅引擎不在范围内（见 status）。
 
 相关：[workspace-inject.md](./workspace-inject.md) · [status.md](./status.md)
 
@@ -58,7 +58,7 @@ Harness：`createHarnessComposition({ contextFragmentProviders, contextFragmentB
 | Session recall | `@xrkseek/xrk-session-reference` | `@session` prepare | `session-reference` |
 | Mid-tool | `deferContext` | After tool results | plain text (no typed source) |
 
-Do not move AGENTS.md / skill catalogs into fragments; do not stuff ephemeral env / recap into inject.
+Do not move AGENTS.md / skill catalogs into fragments; do not put ephemeral env / recap into inject.
 
 ## Phases
 
@@ -84,8 +84,8 @@ Budget: per-phase char ceiling (default **8000**); higher `priority` wins; bodie
 
 Harness: `createHarnessComposition({ contextFragmentProviders, contextFragmentBudgetChars })`; `contextFragments: false` disables.
 
-## Vs Codex
+## Scope
 
-Takes Codex `context-fragments` (marked additional_context · recap) and the **pluggable section + budget** idea from `guardian-context`; this repo does **not** ship a full Guardian review engine (see status).
+This repo ships the pluggable **section + budget** collection pipeline (marked additional_context · recap); a full Guardian review engine is out of scope (see status).
 
 Related: [workspace-inject.md](./workspace-inject.md) · [status.md](./status.md)

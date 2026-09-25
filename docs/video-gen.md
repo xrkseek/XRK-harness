@@ -4,7 +4,7 @@
 
 文生视频缝：`@xrkseek/exec-video-gen`。模型工具 `video_generate`；Provider 可换。
 
-视频渲染是**异步**的（真实后端都要排队数分钟），所以缝直接暴露作业生命周期，而不是把一次渲染藏在单个阻塞调用里：`create` 返回 `jobId`，`get` 轮询状态，`content` 在 `completed` 后下载 MP4。对齐 OpenAI Videos API（`POST /videos` → `GET /videos/{id}` → `GET /videos/{id}/content`）。
+视频渲染是**异步**的（真实后端都要排队数分钟），所以缝直接暴露作业生命周期，而不是把一次渲染放在单个阻塞调用里：`create` 返回 `jobId`，`get` 轮询状态，`content` 在 `completed` 后下载 MP4。形状同 OpenAI Videos API（`POST /videos` → `GET /videos/{id}` → `GET /videos/{id}/content`）。
 
 ## 工具
 
@@ -37,7 +37,7 @@ Text-to-video seam: `@xrkseek/exec-video-gen`. Model tool `video_generate`; Prov
 
 Video renders are **asynchronous** — every real backend queues for minutes — so the seam exposes the job
 lifecycle directly instead of hiding a render behind one blocking call: `create` returns a `jobId`, `get`
-polls status, and `content` downloads the MP4 once `completed`. This mirrors the OpenAI Videos API
+polls status, and `content` downloads the MP4 once `completed`. The shape follows the OpenAI Videos API
 (`POST /videos` → `GET /videos/{id}` → `GET /videos/{id}/content`).
 
 ## Tools

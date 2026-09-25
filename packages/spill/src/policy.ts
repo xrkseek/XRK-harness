@@ -12,6 +12,25 @@ export const NO_SPILL_TOOLS = new Set(["read_file", "read", "read_image"]);
 /** Default inline ceiling (UTF-8 bytes); Face may override. */
 export const DEFAULT_SPILL_INLINE_BYTES = 64_000;
 
+/**
+ * Default inline ceiling in tokens (DSH `maxInlineTokens` semantics).
+ * 16_000 tokens ≈ 64_000 UTF-8 bytes of ASCII (~4 bytes/token); multi-byte
+ * languages (CJK ~3+ bytes/token) would otherwise be truncated earlier than
+ * English at the same byte budget — the token meter makes the ceiling
+ * language-neutral. `0` disables spill, same as bytes.
+ */
+export const DEFAULT_SPILL_INLINE_TOKENS = 16_000;
+
+/**
+ * Fixed-density heuristic token meter (chars/4) — same rule as
+ * `@xrkseek/core-session` `surface-estimate.ts`, duplicated locally so
+ * `@xrkseek/spill` stays leaf (no core-session dependency).
+ */
+export function estimateSpillTokens(text: string): number {
+  if (!text) return 0;
+  return Math.ceil(text.length / 4);
+}
+
 export function utf8Bytes(text: string): number {
   return Buffer.byteLength(text, "utf8");
 }
@@ -65,14 +84,20 @@ export function formatSpillNotice(args: {
    * “(omitted ~N bytes…)” prefix so markers stay short.
    */
   readonly alreadyPersisted?: boolean;
+  /** Include a token-denominated omitted hint when the budget was token-based. */
+  readonly omittedTokens?: number;
 }): string {
   const loc = String(args.ref.locator);
   const hint = args.ref.retrievalHint.trim() || "Retrieve with read_file or grep on that path.";
   if (args.alreadyPersisted) {
     return `Full formatted result stored at: ${loc}. ${hint}\n\n`;
   }
+  const omitted =
+    args.omittedTokens !== undefined
+      ? `~${args.omittedTokens} tokens`
+      : `~${args.omittedBytes} bytes`;
   return (
-    `(omitted ~${args.omittedBytes} bytes. Full formatted result stored at: ${loc}. ` +
+    `(omitted ${omitted}. Full formatted result stored at: ${loc}. ` +
     `${hint})\n\n`
   );
 }
@@ -113,6 +138,14 @@ export interface ApplySpillPolicyInput {
   readonly plainText: string;
   /** UTF-8 inline ceiling; omit → {@link DEFAULT_SPILL_INLINE_BYTES}; `0` → no spill. */
   readonly maxInlineBytes?: number;
+  /**
+   * Token inline ceiling (DSH `maxInlineTokens` semantics). When set, the
+   * ceiling is measured on {@link estimateSpillTokens} and the byte budget is
+   * derived (`tokens × 4`, plus headroom) before the existing byte-based
+   * prefix/suffix cutting — tokens are the budget language, bytes stay the
+   * cutting implementation so UTF-8 sequences are never split. Omit → bytes.
+   */
+  readonly maxInlineTokens?: number;
   /** Authoritative full-body path from pipeline `outputPaths`. */
   readonly savedPath?: string;
   readonly store: SpillStore;
@@ -125,6 +158,27 @@ export interface ApplySpillPolicyResult {
 }
 
 /**
+ * Resolve the effective byte budget for {@link applySpillPolicy}.
+ * `maxInlineTokens` wins when set (DSH semantics: token meter decides whether
+ * to spill, byte cutting stays exact); otherwise `maxInlineBytes`; otherwise
+ * the byte default. A token budget is widened ×4 (the meter's chars/token)
+ * so the byte cutter never has to make the spill decision itself.
+ */
+export function resolveInlineBudget(input: {
+  readonly maxInlineBytes?: number;
+  readonly maxInlineTokens?: number;
+}): number {
+  const tokens = input.maxInlineTokens;
+  if (tokens !== undefined) {
+    const t = Math.max(0, Math.floor(tokens));
+    return t === 0 ? 0 : t * 4;
+  }
+  return input.maxInlineBytes === undefined
+    ? DEFAULT_SPILL_INLINE_BYTES
+    : Math.max(0, Math.floor(input.maxInlineBytes));
+}
+
+/**
  * Apply spill policy against a {@link SpillStore}.
  * Sync when `store.saveTextSync` exists; otherwise throws (agent-loop needs sync).
  */
@@ -134,10 +188,7 @@ export function applySpillPolicy(
   if (NO_SPILL_TOOLS.has(input.toolName)) {
     return { content: input.plainText, spilled: false };
   }
-  const maxInline =
-    input.maxInlineBytes === undefined
-      ? DEFAULT_SPILL_INLINE_BYTES
-      : Math.max(0, Math.floor(input.maxInlineBytes));
+  const maxInline = resolveInlineBudget(input);
   if (maxInline === 0) {
     return { content: input.plainText, spilled: false };
   }
@@ -179,6 +230,14 @@ export function applySpillPolicy(
 
   const notice = formatSpillNotice({
     omittedBytes: total - maxInline,
+    ...(input.maxInlineTokens !== undefined
+      ? {
+          omittedTokens: Math.max(
+            0,
+            estimateSpillTokens(input.plainText) - input.maxInlineTokens,
+          ),
+        }
+      : {}),
     ref,
     alreadyPersisted,
   });

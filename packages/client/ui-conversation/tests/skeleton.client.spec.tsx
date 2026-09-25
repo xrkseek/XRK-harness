@@ -615,4 +615,29 @@ describe('ConversationRoot resident composer', () => {
     const b = mount(conversationSnapshot({ composerPhase: 'blank', blank: true }))
     expect(b.view.container.querySelector('[data-width-handle]')).toBeNull()
   })
+
+  it('mounts without crashing when storage is disabled (private mode / sandboxed iframe)', () => {
+    // Durable storage can throw SecurityError under storage policies; the
+    // skeleton must degrade to the adaptive clamp instead of dying at mount.
+    const throwingStorage = {
+      getItem: () => { throw new DOMException('Access is denied for this document.', 'SecurityError') },
+      setItem: () => { throw new DOMException('Access is denied for this document.', 'SecurityError') },
+      removeItem: () => { throw new DOMException('Access is denied for this document.', 'SecurityError') },
+      clear: () => { throw new DOMException('Access is denied for this document.', 'SecurityError') },
+      get length() { return 0 },
+      key: () => null,
+    }
+    const previous = globalThis.localStorage
+    vi.stubGlobal('localStorage', throwingStorage)
+    try {
+      const b = mount(conversationSnapshot())
+      const root = b.view.container.querySelector('[data-phase]') as HTMLElement
+      Object.defineProperty(root, 'offsetWidth', { value: 1600, configurable: true })
+      act(() => { fireResize(root) })
+      // Degraded to the adaptive clamp: no persisted preference to honor.
+      expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('')
+    } finally {
+      vi.stubGlobal('localStorage', previous)
+    }
+  })
 })

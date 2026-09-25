@@ -2,7 +2,8 @@
  * Bound oversized tool results before they enter the session log.
  * Byte ceiling is {@link TOOL_RESULT_MAX_INLINE_BYTES} (same number as
  * pipeline `boundToolOutput`). Face `agent-loop.toolResultMaxInlineBytes`
- * may raise/lower (`0` disables spill).
+ * may raise/lower (`0` disables spill). `toolResultMaxInlineTokens` wins
+ * over the byte ceiling when set (DSH `maxInlineBytes → maxInlineTokens`).
  *
  * Policy + storage live in `@xrkseek/spill` (separate seams). This module is
  * the agent-loop adapter: MessageContent ↔ plain text ↔ applySpillPolicy.
@@ -39,8 +40,8 @@ function plainText(content: MessageContent): string | undefined {
 
 /**
  * Spill plain-text tool output over `maxInlineBytes` (default
- * {@link TOOL_RESULT_MAX_INLINE_BYTES}). `0` disables spill.
- * Mixed content and read tools pass through unchanged.
+ * {@link TOOL_RESULT_MAX_INLINE_BYTES}) or `maxInlineTokens` (wins).
+ * `0` disables spill. Mixed content and read tools pass through unchanged.
  */
 export function boundToolResultContent(input: {
   readonly sessionId: string;
@@ -49,6 +50,11 @@ export function boundToolResultContent(input: {
   readonly content: MessageContent;
   /** UTF-8 inline ceiling; omit → 64_000; `0` → no spill. */
   readonly maxInlineBytes?: number;
+  /**
+   * Token inline ceiling (DSH `maxInlineTokens` semantics). When set it
+   * wins over `maxInlineBytes`.
+   */
+  readonly maxInlineTokens?: number;
   /**
    * Authoritative full-body path from pipeline `outputPaths` (preferred over
    * parsing the inline marker).
@@ -68,6 +74,9 @@ export function boundToolResultContent(input: {
     plainText: plain,
     ...(input.maxInlineBytes !== undefined
       ? { maxInlineBytes: input.maxInlineBytes }
+      : {}),
+    ...(input.maxInlineTokens !== undefined
+      ? { maxInlineTokens: input.maxInlineTokens }
       : {}),
     ...(input.savedPath !== undefined ? { savedPath: input.savedPath } : {}),
     store: input.store ?? defaultLocalSpillStore(),

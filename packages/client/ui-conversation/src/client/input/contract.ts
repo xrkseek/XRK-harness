@@ -12,6 +12,8 @@ import type {
   ArbitrateKey, ArbitrateOutcome, CommandClaim, ConsumeTokenRequest, PickOutcome,
   ReferenceInsert, SubmitOutcome, TokenSpan,
 } from '@xrkseek/client-ui-input-trigger/client'
+/** Re-exported claim shape: the machine's frozen in-flight slot holds one. */
+export type { CommandClaim } from '@xrkseek/client-ui-input-trigger/client'
 import type { QueueRow } from '../contract/queue.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 

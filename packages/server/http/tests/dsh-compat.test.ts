@@ -2267,7 +2267,11 @@ describe("dsh-compat matrix", () => {
     expect(listDshCompatGenericIds()).toContain("auto-review-pluggable-classifier");
     expect(listDshCompatGenericIds()).toContain("im-vendor-cloud-push");
     expect(listDshCompatGenericIds()).toContain("tongflow-plugins-install");
-    expect(listDshCompatGapIds()).toEqual([]);
+    expect(listDshCompatGapIds()).toEqual([
+      "web-panel-global-registry",
+      "cordis-dual-half-inspect",
+      "third-party-di",
+    ]);
     expect(listDshCompatGapIds()).not.toContain("im-vendor-cloud-push");
     expect(listDshCompatGapIds()).not.toContain("auto-review-pluggable-classifier");
     expect(listDshCompatGapIds()).not.toContain("mnemon-memory-engine");

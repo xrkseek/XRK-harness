@@ -18,7 +18,13 @@ Promise 门闩（无代数效应运行时）。决策见 [ADR-0003](./adr/0003-s
 |-----|------|
 | `run(sessionId)` | idle → `drain(force=true)`；busy → **join** |
 | `wake(sessionId)` | idle → `drain(force=false)`；busy → **至多一个** follow-up |
-| `cancel(sessionId)` | abort、清 wake、等待清理 |
+| `cancel(sessionId[, opts])` | 中止 signal、清 cancel 前 wake、有界等待清理；**超时后 entry 保留**，`isActive()` 仍如实反映状态 |
+
+**取消语义**（core-session `latch.ts`）：
+
+- **cancel 期间的 wake 不丢**：teardown 尚在 flight 时到达的消息，会在 drain settle 后用**全新 entry 续跑**（`force=false`），不会滞留在队列里。
+- `cancel(opts?)` 支持 `cause`（作为 drain `AbortSignal.reason`）、`timeoutMs`（有界 join；超时只让 RPC 先返回，不丢队列）、`onAbort`（abort 已发出回调）。
+- **级联**：`session.cancel` 先乐观发布 `running:false`（即使工具卡死，UI 也不会停留在运行态），abort agent turn，再把 delegated 子代理逐个 fire-and-forget 取消，最后有界 join drain。
 
 **Host**（`createHostManager`）持有 hub；drain body = 循环 `continueTurn()` 直到无 pending admit。实现为纯 Promise Map。
 
@@ -59,7 +65,13 @@ One `AgentHandle` allows **at most one** concurrent `continueTurn`:
 |-----|----------|
 | `run(sessionId)` | idle → `drain(force=true)`; busy → **join** |
 | `wake(sessionId)` | idle → `drain(force=false)`; busy → **at most one** follow-up |
-| `cancel(sessionId)` | abort, clear wake, wait for cleanup |
+| `cancel(sessionId[, opts])` | aborts the signal, clears pre-cancel wake, bounded-join; **entry stays installed past the budget** so `isActive()` reports accurately |
+
+**Cancellation semantics** (core-session `latch.ts`):
+
+- **A `wake` during cancel is not swallowed**: a message arriving while teardown is still in flight re-drains **on a fresh entry** (`force=false`) once the drain settles — never stranded in the queue.
+- `cancel(opts?)` accepts `cause` (surfaced as the drain `AbortSignal.reason`), `timeoutMs` (bounded join; a timeout only lets the RPC return early, it does not drop the queue), and `onAbort` (fired once the abort signal is raised).
+- **Cascade**: `session.cancel` first publishes an optimistic `running:false` (even a stuck tool cannot hold the UI in the running state), aborts the agent turn, fire-and-forget cancels each delegated child, then does a bounded drain join.
 
 **Host** (`createHostManager`) owns the hub; drain body = loop `continueTurn()` until no pending admit. Implementation is a pure Promise Map.
 

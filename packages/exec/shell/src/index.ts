@@ -174,11 +174,17 @@ export interface ShellLocalOptions {
   /**
    * Async argv preparation before spawn (DSH sandbox confine). Shares the
    * startJob deadline with process lifetime — prep time counts toward timeout.
+   *
+   * `ctx.ownerSessionId` is present when the job is session-scoped (e.g. via
+   * createSessionScopedShell). Host-wide shared shells use it to resolve
+   * per-session confinement (danger-full-access unlocks) instead of applying
+   * one policy to every session.
    */
   readonly prepareArgv?: (
     argv: readonly string[],
     cwd: string | undefined,
     signal: AbortSignal | undefined,
+    ctx?: { readonly ownerSessionId?: string },
   ) => Promise<readonly string[]>;
 }
 
@@ -453,7 +459,9 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
       deadline?.throwIfAborted();
       let argv: readonly string[] = argvFor(backend, command, pwshPath);
       if (options.prepareArgv) {
-        argv = await options.prepareArgv(argv, spawnCwd, deadline);
+        argv = await options.prepareArgv(argv, spawnCwd, deadline, {
+          ...(ownerSessionId !== undefined ? { ownerSessionId } : {}),
+        });
         deadline?.throwIfAborted();
       }
       if (!argv.length) {

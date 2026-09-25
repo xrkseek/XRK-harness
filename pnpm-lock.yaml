@@ -720,6 +720,9 @@ importers:
       '@xrkseek/xrk-goal':
         specifier: workspace:^
         version: link:../../stubs/xrk-goal
+      '@xrkseek/xrk-host-apiproxy':
+        specifier: workspace:^
+        version: link:../../stubs/xrk-host-apiproxy
       '@xrkseek/xrk-invariants':
         specifier: workspace:^
         version: link:../../stubs/xrk-invariants
@@ -732,6 +735,9 @@ importers:
       '@xrkseek/xrk-plan-mode':
         specifier: workspace:^
         version: link:../../stubs/xrk-plan-mode
+      '@xrkseek/xrk-session':
+        specifier: workspace:^
+        version: link:../../stubs/xrk-session
       '@xrkseek/xrk-session-projection':
         specifier: workspace:^
         version: link:../../stubs/xrk-session-projection
@@ -3009,6 +3015,10 @@ importers:
         version: link:../util/home-paths
 
   packages/stubs/xrk-agent:
+    dependencies:
+      '@xrkseek/xrk-system-prompt':
+        specifier: workspace:^
+        version: link:../xrk-system-prompt
     devDependencies:
       '@xrkseek/cordis':
         specifier: workspace:^
@@ -3034,6 +3044,9 @@ importers:
       '@xrkseek/cordis':
         specifier: workspace:^
         version: link:../../cordis
+      '@xrkseek/xrk-api-remotes':
+        specifier: workspace:^
+        version: link:../xrk-api-remotes
       '@xrkseek/xrk-typert-protocol':
         specifier: workspace:^
         version: link:../xrk-typert-protocol
@@ -3110,6 +3123,12 @@ importers:
 
   packages/stubs/xrk-commands:
     dependencies:
+      '@xrkseek/xrk-agent':
+        specifier: workspace:^
+        version: link:../xrk-agent
+      '@xrkseek/xrk-typert-protocol':
+        specifier: workspace:^
+        version: link:../xrk-typert-protocol
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -3187,6 +3206,9 @@ importers:
       '@xrkseek/schemastery':
         specifier: workspace:^
         version: link:../../schemastery
+      '@xrkseek/xrk-attachment':
+        specifier: workspace:^
+        version: link:../xrk-attachment
       '@xrkseek/xrk-brand':
         specifier: workspace:^
         version: link:../xrk-brand
@@ -3196,6 +3218,9 @@ importers:
       '@xrkseek/xrk-session':
         specifier: workspace:^
         version: link:../xrk-session
+      '@xrkseek/xrk-session-projection':
+        specifier: workspace:^
+        version: link:../xrk-session-projection
       '@xrkseek/xrk-tools':
         specifier: workspace:^
         version: link:../xrk-tools
@@ -3243,6 +3268,12 @@ importers:
       '@xrkseek/schemastery':
         specifier: workspace:^
         version: link:../../schemastery
+      '@xrkseek/xrk-attachment':
+        specifier: workspace:^
+        version: link:../xrk-attachment
+      '@xrkseek/xrk-timeout':
+        specifier: workspace:^
+        version: link:../xrk-timeout
     devDependencies:
       '@xrkseek/cordis':
         specifier: workspace:^
@@ -3259,6 +3290,9 @@ importers:
       '@xrkseek/schemastery':
         specifier: workspace:^
         version: link:../../schemastery
+      '@xrkseek/xrk-timeout':
+        specifier: workspace:^
+        version: link:../xrk-timeout
     devDependencies:
       '@xrkseek/cordis':
         specifier: workspace:^
@@ -3352,6 +3386,12 @@ importers:
 
   packages/stubs/xrk-plan-mode:
     dependencies:
+      '@xrkseek/xrk-system-prompt':
+        specifier: workspace:^
+        version: link:../xrk-system-prompt
+      '@xrkseek/xrk-user-questions':
+        specifier: workspace:^
+        version: link:../xrk-user-questions
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -3384,6 +3424,10 @@ importers:
   packages/stubs/xrk-pwsh-local: {}
 
   packages/stubs/xrk-session:
+    dependencies:
+      '@xrkseek/xrk-typert-protocol':
+        specifier: workspace:^
+        version: link:../xrk-typert-protocol
     devDependencies:
       '@xrkseek/cordis':
         specifier: workspace:^
@@ -3587,6 +3631,9 @@ importers:
       '@xrkseek/schemastery':
         specifier: workspace:^
         version: link:../../schemastery
+      '@xrkseek/xrk-system-prompt':
+        specifier: workspace:^
+        version: link:../xrk-system-prompt
     devDependencies:
       '@xrkseek/cordis':
         specifier: workspace:^

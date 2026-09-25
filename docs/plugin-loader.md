@@ -223,15 +223,15 @@ Host 在 `XRK_PLUGINS_DIR` 未设且该目录已存在时自动用作 `pluginsDi
 XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js serve
 ```
 
-## 明确不做
+## 边界
 
-- 任意目录 watch / 未声明入口的热重载  
-- 浏览器 client 半部热装卸（停用后仍须刷新页面）  
-- 未声明入口的任意执行  
-- 插件覆盖同名 builtin / 保留 prompt id  
-- 保留 kind 的自动接线（先登记，后补 apply*）  
-- **不嵌入 Cordis、不执行社区 `apply(ctx)` Host 插件**（设置页列为 `fiberPhase: failed`）。工具/命令请包成 `tools` / `commands` kind。  
-- 不把 `plugin` 做成任意 pnpm 透传（`node_modules` 不会被 discover）  
+- 任意目录 watch / 未声明入口的热重载：不支持  
+- 浏览器 client 半部热装卸：不支持（停用后仍须刷新页面）  
+- 未声明入口的任意执行：不支持  
+- 插件覆盖同名 builtin / 保留 prompt id：不支持  
+- 保留 kind 的自动接线：未接线，登记需配 `apply*` 才会生效  
+- 不嵌入 Cordis：社区 `apply(ctx)` Host 插件不执行（设置页列为 `fiberPhase: failed`）；工具/命令请包成 `tools` / `commands` kind  
+- `plugin` 不是任意 pnpm 透传：`node_modules` 不会被 discover
 
 相关：[compose.md](./compose.md) · [learn.md](./learn.md) · [status.md](./status.md) · **[modules/server-loader.md](./modules/server-loader.md)**
 
@@ -462,14 +462,14 @@ When `XRK_PLUGINS_DIR` is unset and that directory exists, the Host uses it as `
 XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js serve
 ```
 
-## Explicit non-goals
+## Boundaries
 
-- Arbitrary directory watch / undeclared-entry hot reload  
-- Hot unload/reload of the browser client half (page refresh still required after disable)  
-- Arbitrary execution without a declared entry  
-- Plugins overriding same-name builtins or reserved prompt ids  
-- Auto-wiring reserved kinds (register first; apply* later)  
-- **No embedded Cordis; community `apply(ctx)` Host plugins are not executed** (settings UI shows `fiberPhase: failed`). Ship tools/commands as `tools` / `commands` kinds.  
-- `plugin` is not an arbitrary pnpm passthrough (`node_modules` is not discovered)  
+- Arbitrary directory watch / undeclared-entry hot reload: not supported  
+- Hot unload/reload of the browser client half: not supported (page refresh still required after disable)  
+- Arbitrary execution without a declared entry: not supported  
+- Plugins overriding same-name builtins or reserved prompt ids: not supported  
+- Auto-wiring reserved kinds: not wired; registration takes effect only with an `apply*`  
+- Cordis is not embedded: community `apply(ctx)` Host plugins are not executed (settings UI shows `fiberPhase: failed`); ship tools/commands as `tools` / `commands` kinds  
+- `plugin` is not an arbitrary pnpm passthrough: `node_modules` is not discovered
 
 Related: [compose.md](./compose.md) · [learn.md](./learn.md) · [status.md](./status.md) · **[modules/server-loader.md](./modules/server-loader.md)**

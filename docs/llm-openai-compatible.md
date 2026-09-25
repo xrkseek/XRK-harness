@@ -8,7 +8,7 @@
 
 - `baseUrl` + `/chat/completions`
 - `bearer` / `api-key` / 自定义 header
-- tools → `function` schema；缺 id 时兜底
+- tools → `function` schema；缺 id 时由适配器生成
 - 上下文溢出 → `ContextOverflowError`（供 compaction）
 - 默认 `stream()`：SSE `delta.reasoning_content` → `reasoning-delta`（index 0），`delta.content` → `text-delta`（index 1）；`chat()` 仍非流 JSON
 - `inputModalities` 含 `"image"` 时 user 块走 `image_url` data URL（须 `resolveImage`）。默认 text-only
