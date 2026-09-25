@@ -1,22 +1,7 @@
-import { EventEmitter } from "node:events";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("node:child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:child_process")>();
-  return {
-    ...actual,
-    spawn: vi.fn(() => {
-      const child = new EventEmitter() as EventEmitter & { unref: () => void };
-      child.unref = () => undefined;
-      queueMicrotask(() => child.emit("spawn"));
-      return child;
-    }),
-  };
-});
-
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   hostListOpenInApps,
   hostOpenInApp,
@@ -26,10 +11,22 @@ import {
   resetOpenInAppCache,
   resolveOpenInAppArgv,
 } from "../src/host-open-in-app.js";
+import { installSpawnDetachedForTests } from "../src/host-open-path.js";
 
 describe("host open-in-app", () => {
+  const spawnCalls: { command: string; args: readonly string[] }[] = [];
+
   beforeEach(() => {
     resetOpenInAppCache();
+    spawnCalls.length = 0;
+    // Never ShellExecute in unit tests — Win races `cmd /c start` vs temp rm.
+    installSpawnDetachedForTests(async (command, args) => {
+      spawnCalls.push({ command, args });
+    });
+  });
+
+  afterEach(() => {
+    installSpawnDetachedForTests(undefined);
   });
 
   it("SSH launch env hides the catalog", () => {
@@ -49,7 +46,11 @@ describe("host open-in-app", () => {
     expect(listed.ok).toBe(true);
     if (!listed.ok) return;
     // At least the platform file manager when canOpenNativePath is true.
-    if (process.platform === "win32" || process.platform === "darwin" || process.platform === "linux") {
+    if (
+      process.platform === "win32" ||
+      process.platform === "darwin" ||
+      process.platform === "linux"
+    ) {
       expect(listed.value.apps.length).toBeGreaterThan(0);
       const fm =
         process.platform === "darwin"
@@ -66,17 +67,24 @@ describe("host open-in-app", () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.error.code).toBe("invalid-payload");
+    expect(spawnCalls).toHaveLength(0);
   });
 
   it("openInApp rejects missing directories", async () => {
     const missing = path.join(tmpdir(), `xrk-open-in-missing-${Date.now()}`);
     const res = await hostOpenInApp({
-      app: process.platform === "darwin" ? "finder" : process.platform === "win32" ? "explorer" : "filemanager",
+      app:
+        process.platform === "darwin"
+          ? "finder"
+          : process.platform === "win32"
+            ? "explorer"
+            : "filemanager",
       path: missing,
     });
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.error.code).toBe("not-found");
+    expect(spawnCalls).toHaveLength(0);
   });
 
   it("openInApp rejects a file path (workspace must be a directory)", async () => {
@@ -94,6 +102,7 @@ describe("host open-in-app", () => {
       expect(res.ok).toBe(false);
       if (res.ok) return;
       expect(res.error.code).toBe("invalid-payload");
+      expect(spawnCalls).toHaveLength(0);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -111,8 +120,19 @@ describe("host open-in-app", () => {
       const res = await hostOpenInApp({ app, path: root });
       if (res.ok) {
         expect(res.value.opened).toBe(true);
+        expect(spawnCalls.length).toBeGreaterThan(0);
+        if (process.platform === "win32") {
+          expect(spawnCalls[0]?.command).toBe("cmd.exe");
+          expect(spawnCalls[0]?.args.slice(0, 3)).toEqual([
+            "/c",
+            "start",
+            "",
+          ]);
+          expect(spawnCalls[0]?.args[3]).toBe(root);
+        }
       } else {
         expect(res.error.code).toBe("not-implemented");
+        expect(spawnCalls).toHaveLength(0);
       }
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -132,6 +152,7 @@ describe("host open-in-app", () => {
       const res = await hostOpenInApp({ app, path: noisy });
       if (res.ok) {
         expect(res.value.opened).toBe(true);
+        expect(spawnCalls.length).toBeGreaterThan(0);
       } else {
         expect(res.error.code).toBe("not-implemented");
       }
@@ -159,9 +180,10 @@ describe("host open-in-app", () => {
     const resolved = resolveOpenInAppArgv("windowsterminal", workspace, "win32");
     expect(resolved).toBeDefined();
     expect(isWindowsAppsAliasPath(resolved!.command)).toBe(false);
-    expect(resolved!.command === "wt" || resolved!.command.toLowerCase().endsWith("wt.exe")).toBe(
-      true,
-    );
+    expect(
+      resolved!.command === "wt" ||
+        resolved!.command.toLowerCase().endsWith("wt.exe"),
+    ).toBe(true);
     expect(resolved!.args).toEqual(["-d", workspace]);
     expect(resolved!.args).not.toContain("-w");
     expect(resolved!.windowsHide).toBe(false);

@@ -85,7 +85,7 @@ import { bindProposeSkillTool } from "./propose-skill.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import { hydrateWorkspaceRegistry } from "./workspace-store.js";
 import { FaceSubagentRegistry } from "./subagent-registry.js";
-import { ExternalAgentSessionRegistry } from "./external-agent-runtime.js";
+import { ExternalAgentSessionRegistry, externalAgentHandlesPath } from "./external-agent-runtime.js";
 import { AgentTeamGraph, agentTeamGraphPath } from "./agent-team-graph.js";
 import {
   AgentTeamTaskBoard,
@@ -100,6 +100,10 @@ import { FaceGoalStore } from "./goal-store.js";
 import { FaceWireIdMaps } from "./adapt/wire-ids.js";
 import { configureCostMeterHome } from "./cost-meter-store.js";
 import { resolveXrkHome } from "@xrkseek/server-config";
+import {
+  loadSessionModelSelections,
+  sessionModelsPath,
+} from "./session-model-store.js";
 import {
   createPermissionRequestGate,
   createShellLifecycleHooks,
@@ -284,6 +288,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     managedWorktreesPath(options.subagentPersistPath),
   );
   const productHome = options.productDir?.trim() || resolveXrkHome();
+  {
+    const persisted = loadSessionModelSelections(sessionModelsPath(productHome));
+    for (const [id, sel] of persisted) sessionModels.set(id, sel);
+  }
   const shellHooksConfig = loadShellHooksConfig(
     defaultShellHookPaths(options.workspaceRoot, productHome),
   );
@@ -318,11 +326,17 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     },
   });
   agentTeams.rebuildDelegations(subagents.entries());
-  const externalAgents = new ExternalAgentSessionRegistry();
+  const externalAgents = new ExternalAgentSessionRegistry(
+    externalAgentHandlesPath(options.subagentPersistPath),
+  );
   const messageFeedback = new FaceMessageFeedbackStore();
   const goals = new FaceGoalStore(options.goalPersistPath);
   const wireIds = new FaceWireIdMaps();
   const toolArgMaps = new FaceToolArgMaps();
+  /** Filled after `invalidateAgent` is defined — drop cached AgentHandle on LRU. */
+  const onResidentEvict: {
+    fn?: (sessionId: string) => void | Promise<void>;
+  } = {};
   if (
     typeof (store as PersistentSessionStore).bindSessionEviction === "function"
   ) {
@@ -336,6 +350,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       }
       projections.evictSession(sessionId);
       toolArgMaps.forSession(sessionId).clear();
+      void onResidentEvict.fn?.(sessionId);
     });
   }
   const inboxWire = new FaceInboxWireMaps(admitRpcMap);
@@ -599,6 +614,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         await options.invalidateAgent!(sessionId);
       }
     : undefined;
+  if (invalidateAgent) {
+    onResidentEvict.fn = (sessionId) => invalidateAgent(sessionId);
+  }
 
   if (options.jobs) {
     options.jobs.onJobsChanged(() => {

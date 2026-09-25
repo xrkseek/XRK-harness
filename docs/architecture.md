@@ -59,7 +59,7 @@ XRK-harness/
 │   ├── server/{http,loader,host,config,face}/
 │   ├── sdk/ · testkit/
 │   └── …
-├── presets/{minimal,harness,server}/
+├── presets/{minimal,harness,server}/   # 只组合，无业务；server = Host 工厂名
 ├── extensions/              # 进程插件样例（tools / channels）
 ├── .agents/                 # 工作区 Agent 层（inject + skills）
 ├── docs/                    # 规格真源

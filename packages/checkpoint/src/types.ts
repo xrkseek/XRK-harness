@@ -12,6 +12,19 @@ export interface GitResult {
   readonly code: number;
   readonly stdout: string;
   readonly stderr: string;
+  /**
+   * Present only when the caller armed `timeoutMs`: `true` when the child
+   * was killed on the deadline (code is `-1`), `false` when it finished in
+   * time. Lets the store report `timed-out` instead of `git-unavailable`.
+   */
+  readonly timedOut?: boolean;
+}
+
+/** Per-invocation options for a git run. */
+export interface GitRunnerOptions {
+  readonly cwd?: string;
+  /** Hard deadline in ms; the child is killed and resolves timed-out. */
+  readonly timeoutMs?: number;
 }
 
 /**
@@ -20,7 +33,7 @@ export interface GitResult {
  */
 export type GitRunner = (
   args: readonly string[],
-  opts?: { readonly cwd?: string },
+  opts?: GitRunnerOptions,
 ) => Promise<GitResult>;
 
 /** One recoverable point, keyed by the shadow commit sha. */
@@ -68,6 +81,7 @@ export interface RestoreResult extends RestorePlan {
 export type WorkspaceCheckpointErrorCode =
   | "bad-argument"
   | "git-unavailable"
+  | "timed-out"
   | "init-failed"
   | "snapshot-failed"
   | "restore-failed"

@@ -77,14 +77,21 @@ export interface IConversation {
   resolveImage(sessionId: SessionId, attachment: ImageAttachmentRef): Promise<string>
 }
 
-/** Create one browser-only image draft; only its id enters input state. */
+/**
+ * Create one browser-only image draft; only its id enters input state.
+ * The intrinsic size probe runs detached (never blocks the rail paint) and
+ * writes back into the draft descriptor so the submission echo can size its
+ * preview without a full-raster flash frame.
+ */
 function browserDraftImage(file: File): ComposerImageAttachment {
-  return {
+  const draft: ComposerImageAttachment = {
     kind: 'image',
     id: randomUuid() as DraftAttachmentId,
     previewUrl: URL.createObjectURL(file),
     file,
   }
+  void probeImageDimensions(draft)
+  return draft
 }
 
 /** Create one browser-only file draft (bytes encode in the background). */
@@ -195,6 +202,8 @@ export class ConversationController extends Service implements IConversation {
           value: {
             previewUrl: attachment.previewUrl,
             ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
+            ...(attachment.width === undefined ? {} : { width: attachment.width }),
+            ...(attachment.height === undefined ? {} : { height: attachment.height }),
           },
         }
       }
@@ -549,6 +558,41 @@ function bytesToBase64(data: Uint8Array): string {
 
 function revokePreview(url: string): void {
   if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+}
+
+/**
+ * Read one image draft's intrinsic dimensions off its object URL without
+ * retaining large decoded rasters. `createImageBitmap` is the cheap probe
+ * route; a legacy fallback spins a detached HTMLImageElement (closed over a
+ * blob: URL, so no network) for browsers without it. The object URL is owned
+ * by the draft descriptor — never revoked here.
+ */
+function probeImageDimensions(draft: ComposerImageAttachment): Promise<void> {
+  const probe = typeof createImageBitmap === 'function'
+    ? createImageBitmap(draft.file).then((bitmap) => {
+      const width = bitmap.width
+      const height = bitmap.height
+      bitmap.close()
+      return { width, height }
+    })
+    : new Promise<{ width: number; height: number } | null>((resolve) => {
+      const image = new Image()
+      image.onload = () => {
+        const width = image.naturalWidth
+        const height = image.naturalHeight
+        resolve(width > 0 && height > 0 ? { width, height } : null)
+      }
+      image.onerror = () => resolve(null)
+      image.src = draft.previewUrl
+    })
+  return probe.then((dimensions) => {
+    if (dimensions !== null && draft.width === undefined && draft.height === undefined) {
+      draft.width = dimensions.width
+      draft.height = dimensions.height
+    }
+  }).catch(() => {
+    // Intake is best-effort; the preview fallback keeps a probe-less echo bounded.
+  })
 }
 
 /** Progressive FileReader encode with AbortSignal. */

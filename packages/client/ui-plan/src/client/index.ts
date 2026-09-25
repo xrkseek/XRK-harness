@@ -45,8 +45,8 @@ export interface PlanChipInjected {
   exitPlanMode: () => Promise<string | null>
 }
 
-/** Required services: slots, commands Remote, locale, layout, and Host openPath. */
-export const inject = ['slots', 'remote', 'remote.commands', 'locale', 'layout', 'connection']
+/** Required services: slots, commands Remote, locale, layout, Host openPath, sessions. */
+export const inject = ['slots', 'remote', 'remote.commands', 'locale', 'layout', 'connection', 'sessions']
 
 /**
  * Client plugin body: register the plan chip over the command channel.
@@ -90,6 +90,51 @@ export function apply(ctx: ClientContext): void {
         const response = await connection.api.host.openPath({ path })
         if (!response.result.ok) {
           throw new Error(`spill open failed: ${response.result.error.message}`)
+        }
+      },
+      openTeamChild: async (input: {
+        readonly parentSessionId: string
+        readonly childSessionId: string
+        readonly mode?: 'continuable' | 'one-shot'
+      }) => {
+        const parentSessionId = input.parentSessionId as SessionId
+        const childSessionId = input.childSessionId as SessionId
+        const mode = input.mode === 'one-shot' ? 'one-shot' as const : 'continuable' as const
+        await ctx.sessions.refreshSubagents(parentSessionId)
+        try {
+          ctx.sessions.openSubagent({ parentSessionId, childSessionId, mode })
+        } catch {
+          // Catalog may not have listed the child yet — open by id when known.
+          ctx.sessions.open(childSessionId)
+        }
+      },
+      pauseTeamChild: async (input: {
+        readonly parentSessionId: string
+        readonly childSessionId: string
+      }) => {
+        const response = await connection.api.subagents.interrupt({
+          parentSessionId: input.parentSessionId as SessionId,
+          childSessionId: input.childSessionId as SessionId,
+          mode: 'continuable',
+          takeover: true,
+        })
+        if (!response.result.ok) {
+          throw new Error(`team pause failed: ${response.result.error.message}`)
+        }
+      },
+      resumeTeamChild: async (input: {
+        readonly parentSessionId: string
+        readonly childSessionId: string
+      }) => {
+        const response = await connection.api.subagents.prompt({
+          parentSessionId: input.parentSessionId as SessionId,
+          childSessionId: input.childSessionId as SessionId,
+          mode: 'continuable',
+          delivery: 'queue',
+          content: [{ type: 'text', text: 'Resume after human takeover.' }],
+        })
+        if (!response.result.ok) {
+          throw new Error(`team resume failed: ${response.result.error.message}`)
         }
       },
     }),

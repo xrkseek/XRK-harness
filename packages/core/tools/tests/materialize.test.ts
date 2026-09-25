@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createToolRegistry,
   materializeTools,
+  applyToolDynamicSchema,
   type ToolDefinition,
 } from "../src/index.js";
 
@@ -58,5 +59,74 @@ describe("materializeTools", () => {
     const table = materializeTools(reg, { omitNames: ["b"] });
     expect(table.list().map((t) => t.name)).toEqual(["a"]);
     expect(table.resolve("b").ok).toBe(false);
+  });
+
+  it("applies dynamicSchema to catalog without flipping settle to stale", async () => {
+    let gate = false;
+    const reg = createToolRegistry();
+    const tool: ToolDefinition = {
+      name: "gated",
+      description: "static",
+      parameters: { type: "object", properties: { a: { type: "string" } } },
+      dynamicSchema: () =>
+        gate
+          ? {
+              description: "live-open",
+              parameters: {
+                type: "object",
+                properties: {
+                  a: { type: "string" },
+                  b: { type: "number" },
+                },
+              },
+            }
+          : {
+              description: "live-closed",
+              parameters: { type: "object", properties: { a: { type: "string" } } },
+            },
+      async execute() {
+        return { content: "ok" };
+      },
+    };
+    reg.register(tool);
+
+    const closed = materializeTools(reg);
+    expect(closed.list()[0]!.description).toBe("live-closed");
+    expect(
+      (closed.list()[0]!.parameters.properties as Record<string, unknown>).b,
+    ).toBeUndefined();
+
+    gate = true;
+    const open = materializeTools(reg);
+    expect(open.list()[0]!.description).toBe("live-open");
+    expect(
+      (open.list()[0]!.parameters.properties as Record<string, unknown>).b,
+    ).toBeTruthy();
+
+    // Catalog copy ≠ live identity, but settle still uses live registry tool.
+    const out = await open.settle({
+      call: { id: "1", name: "gated", arguments: {} },
+    });
+    expect(out.result.content).toBe("ok");
+    expect(out.result.isError).toBeUndefined();
+  });
+
+  it("dynamicSchema soft-fails to static fields", () => {
+    const tool: ToolDefinition = {
+      name: "boom",
+      description: "keep-me",
+      parameters: { type: "object", properties: {} },
+      dynamicSchema: () => {
+        throw new Error("caps unavailable");
+      },
+      async execute() {
+        return { content: "x" };
+      },
+    };
+    const reg = createToolRegistry();
+    reg.register(tool);
+    const table = materializeTools(reg);
+    expect(table.list()[0]!.description).toBe("keep-me");
+    expect(applyToolDynamicSchema(tool)).toBe(tool);
   });
 });

@@ -43,6 +43,13 @@
   object-fit: cover;
 }
 
+/* Pre-intake preview arm: the frame is pinned to the 240px single box and
+   the raster is contain-fit, so a dimension-less echo can never inflate to
+   the full-resolution raster before its intrinsic size is known. */
+.frame .previewFallback {
+  object-fit: contain;
+}
+
 .loading,
 .error {
   color: var(--dsw-alias-label-tertiary);

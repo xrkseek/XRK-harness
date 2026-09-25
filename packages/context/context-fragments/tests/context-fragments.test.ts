@@ -3,6 +3,7 @@ import {
   appendContextFragments,
   createAdditionalContextFragment,
   createContextFragmentPipeline,
+  createGuardianReviewProvider,
   createRecapFragment,
   createStaticAdditionalContextProvider,
   formatAdditionalContextBody,
@@ -105,5 +106,23 @@ describe("context-fragments", () => {
     expect(frag.kind).toBe("recap");
     expect(frag.text).toMatch(/Catch-up context/);
     expect(frag.text).toContain("did stuff");
+  });
+
+  it("createGuardianReviewProvider emits turn-start advisory fragment", async () => {
+    const pipeline = createContextFragmentPipeline({ budgetChars: 4000 });
+    pipeline.register(createGuardianReviewProvider());
+    const out = await pipeline.collect("turn-start", {
+      sessionId: "s1",
+      turnId: "t1",
+    });
+    expect(out.fragments).toHaveLength(1);
+    expect(out.fragments[0]?.id).toBe("additional_context.guardian_review");
+    expect(out.fragments[0]?.text).toMatch(/Guardian review/);
+    expect(out.fragments[0]?.text).toMatch(/untrusted/);
+    const post = await pipeline.collect("post-tool", {
+      sessionId: "s1",
+      turnId: "t1",
+    });
+    expect(post.fragments).toHaveLength(0);
   });
 });

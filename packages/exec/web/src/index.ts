@@ -128,6 +128,11 @@ export {
   createBrowserTools,
 } from "./browser-tools.js";
 export {
+  createBrowserVaultTools,
+  type BrowserVaultAccess,
+  type BrowserVaultHandle,
+} from "./browser-vault-tools.js";
+export {
   createBrowserRuntimeRegistry,
   type BrowserRuntimeRegistry,
 } from "./browser-runtime-registry.js";

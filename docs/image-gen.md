@@ -2,13 +2,25 @@
 
 > **读者**：集成者 · Agent 作者
 
-文生图缝：`@xrkseek/exec-image-gen`。模型工具 `image_generate`；Provider 可换。
+文生图 / 图生图缝：`@xrkseek/exec-image-gen`。模型工具 `image_generate`（Hermes 单工具风格：有参考图即 edit）；Provider 可换；工具 schema 按 `capabilities()` 动态重建。
 
 ## 工具
 
 | 工具 | 作用 |
 |------|------|
-| `image_generate` | 文生图；返回 PNG base64（工具文本截断）；若 Host 有 `AttachmentStore` 则另给 `attachmentId` |
+| `image_generate` | 文生图；若 Provider 支持 edit，可传 `image_url` / `reference_image_urls` / `reference_attachment_ids` 做图生图编辑。返回 PNG base64（工具文本截断）；有 `AttachmentStore` 时另给 `attachmentId` |
+
+### 参数
+
+| 参数 | 说明 |
+|------|------|
+| `prompt` | 必填；文生描述或编辑指令 |
+| `size` / `n` / `model` | 可选 |
+| `image_url` | 主参考图：`https` · `data:image/…;base64,…` · `attachment:<id>`（仅当 capabilities 含 image） |
+| `reference_image_urls` | 额外参考 URL（同上） |
+| `reference_attachment_ids` | Host 附件 id（优先） |
+
+无参考图 → `POST /images/generations`；有参考图 → `POST /images/edits`（OpenAI；memory 记 `modality=image`）。
 
 ## 启用
 
@@ -17,10 +29,10 @@
 | `XRK_IMAGE_GEN` / Settings | 行为 |
 |-----------------|------|
 | （未设 / 关） | 工具仍登记；execute **诚实失败** |
-| `memory`（仅 env） | 内存 Provider（1×1 PNG，CI / 演示） |
-| `1` / openai | 需 `OPENAI_API_KEY` 或 Credentials `XRK_IMAGE_GEN_OPENAI_KEY`；可选 Settings / `XRK_IMAGE_GEN_BASE_URL` · `XRK_IMAGE_GEN_MODEL`（默认 `dall-e-3`） |
+| `memory`（仅 env） | 内存 Provider（1×1 PNG；支持 edit 路径测例） |
+| `1` / openai | 需 `OPENAI_API_KEY` 或 Credentials；默认 capabilities：text+image、最多 16 张参考图 |
 
-FAL / xAI 等其它后端可后续作 Provider 注入；本 MVP 对齐 OpenAI Images API + memory。
+其它后端（FAL / xAI）可注入自定义 `ImageGenService`（实现 `capabilities()` + `generate`）。
 
 ---
 
@@ -28,22 +40,16 @@ FAL / xAI 等其它后端可后续作 Provider 注入；本 MVP 对齐 OpenAI Im
 
 > **Audience**: Integrators · Agent authors
 
-Text-to-image seam: `@xrkseek/exec-image-gen`. Model tool `image_generate`; Providers are swappable.
+Text-to-image / image-to-image seam: `@xrkseek/exec-image-gen`. Model tool `image_generate` (Hermes one-tool style: refs select edit). Schema rebuilds from Provider `capabilities()`.
 
 ## Tools
 
 | Tool | Role |
 |------|------|
-| `image_generate` | Text-to-image; returns PNG base64 (truncated in tool text); also `attachmentId` when Host has an `AttachmentStore` |
+| `image_generate` | Text-to-image; with edit-capable Provider also accepts `image_url` / `reference_image_urls` / `reference_attachment_ids`. Returns PNG base64 (truncated) and optional `attachmentId`. |
+
+No refs → OpenAI `images/generations`; with refs → `images/edits`.
 
 ## Enable
 
-**Product path**: Settings → Plugins → **Image gen** (Face ns `image-gen`: `mode` = off / openai · optional `baseUrl` · `model`). API key via Credentials `XRK_IMAGE_GEN_OPENAI_KEY`. Live after save. Non-empty `XRK_IMAGE_GEN` is the CI bypass.
-
-| `XRK_IMAGE_GEN` / Settings | Behavior |
-|-----------------|----------|
-| (unset / off) | Tool still registers; execute **fails honestly** |
-| `memory` (env only) | In-memory Provider (1×1 PNG, CI / demos) |
-| `1` / openai | Needs `OPENAI_API_KEY` or Credentials `XRK_IMAGE_GEN_OPENAI_KEY`; optional Settings / `XRK_IMAGE_GEN_BASE_URL` · `XRK_IMAGE_GEN_MODEL` (default `dall-e-3`) |
-
-FAL / xAI and other backends can be injected later as Providers; this MVP covers OpenAI Images API + memory.
+**Product path**: Settings → Plugins → **Image gen**. Non-empty `XRK_IMAGE_GEN` is the CI bypass (`memory` / `1`+key). Custom Providers inject via `ImageGenService`.

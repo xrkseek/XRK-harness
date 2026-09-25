@@ -47,6 +47,11 @@ describe("session status snapshot", () => {
     expect(snap.cost.byProviderModel).toEqual({});
     expect(snap.billing.todayCost).toBeTypeOf("number");
     expect(Array.isArray(snap.billing.byModel)).toBe(true);
+    expect(Array.isArray(snap.billing.dailyTrend)).toBe(true);
+    expect(snap.fleet.health).toMatch(/^(ok|warn|critical)$/);
+    expect(Array.isArray(snap.fleet.alerts)).toBe(true);
+    expect(Array.isArray(snap.channels.alerts)).toBe(true);
+    expect(text).toContain("fleet:");
     expect(text).toContain("channels:");
     expect(snap.timeline.injectSources).toEqual([]);
     expect(snap.timeline.spillCount).toBe(0);

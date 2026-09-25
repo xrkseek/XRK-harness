@@ -21,7 +21,7 @@ export const DESKTOP_PROFILE_NAME = "desktop" as const;
 /** Custom protocol scheme (locked): `xrk-app://`. */
 export const DESKTOP_PROTOCOL_SCHEME = "xrk-app" as const;
 
-/** Shell pieces exist; installer is not the product entry (ADR-0008, no skip). */
+/** Shell pieces + first-wave packaging pipeline ready (ADR-0008). Installer is not the default entry. */
 export function isDesktopProductReady(): boolean {
   return resolveDesktopProductEntry().productReady;
 }

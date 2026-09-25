@@ -3,6 +3,7 @@ import {
   errorToolResult,
   freezeToolResult,
   type ToolDefinition,
+  type ToolDynamicSchema,
   type ToolRegistry,
 } from "./definition.js";
 import { runToolPipeline } from "./pipeline.js";
@@ -11,7 +12,7 @@ import type { RunToolOutcome, ToolPipeline } from "./types.js";
 export type ToolResolveError = "unknown" | "stale";
 
 export interface ToolMaterialization {
-  /** Snapshot used for LLM catalog (and settle). */
+  /** Snapshot used for LLM catalog (and settle). May include dynamicSchema merges. */
   readonly definitions: readonly ToolDefinition[];
   list(): readonly ToolDefinition[];
   /**
@@ -42,9 +43,39 @@ export interface MaterializeToolsOptions {
 }
 
 /**
+ * Apply Hermes-style `dynamicSchema()` onto a catalog view.
+ * Soft-fail keeps the static description/parameters. Returns `tool` unchanged
+ * when there is no override (preserves object identity for settle).
+ */
+export function applyToolDynamicSchema(tool: ToolDefinition): ToolDefinition {
+  if (typeof tool.dynamicSchema !== "function") return tool;
+  let overrides: ToolDynamicSchema | undefined;
+  try {
+    overrides = tool.dynamicSchema();
+  } catch {
+    return tool;
+  }
+  if (
+    !overrides ||
+    (overrides.description === undefined && overrides.parameters === undefined)
+  ) {
+    return tool;
+  }
+  return {
+    ...tool,
+    ...(overrides.description !== undefined
+      ? { description: overrides.description }
+      : {}),
+    ...(overrides.parameters !== undefined
+      ? { parameters: overrides.parameters }
+      : {}),
+  };
+}
+
+/**
  * Freeze the tool table for one provider step / turn slice.
- * Settle uses the captured definition; if the live registry replaced the
- * instance, returns a stale error instead of running the new body.
+ * Catalog rows may merge {@link ToolDefinition.dynamicSchema}; settle uses the
+ * live registry instance (identity) so overrides never flip settle to stale.
  */
 export function materializeTools(
   registry: ToolRegistry,
@@ -57,11 +88,11 @@ export function materializeTools(
         ? options.omitNames
         : new Set(options.omitNames);
 
-  const definitions = registry
-    .list()
-    .filter((t) => !omit?.has(t.name));
-
-  const snap = new Map(definitions.map((t) => [t.name, t] as const));
+  const live = registry.list().filter((t) => !omit?.has(t.name));
+  /** Live identity for settle / stale checks. */
+  const snap = new Map(live.map((t) => [t.name, t] as const));
+  /** Catalog view (may be a shallow copy after dynamicSchema). */
+  const definitions = live.map(applyToolDynamicSchema);
 
   const resolve = (
     name: string,
@@ -72,8 +103,8 @@ export function materializeTools(
     if (!captured) {
       return { ok: false, error: "unknown" };
     }
-    const live = registry.get(name);
-    if (live !== captured) {
+    const current = registry.get(name);
+    if (current !== captured) {
       return { ok: false, error: "stale" };
     }
     return { ok: true, tool: captured };

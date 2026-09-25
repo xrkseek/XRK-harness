@@ -18,7 +18,7 @@ node apps/cli/dist/bin.js run --preset harness --presentation code --prompt "pin
 - 源码是 **async 函数体**（可用顶层 `await` / `return`）
 - 绑定 `tools` / `console`；调用形态：`const out = await tools.read_file({ path: "…" })`
 - 嵌套调用经 `createRegistryCodeToolBridge` 走 live registry + composition `pipeline`（policy / settle 与 agent 同路）
-- **禁止**嵌套 `run_code`（防递归）
+- **不嵌套** `run_code`（防递归）
 - 有 bridge 时走 **进程内 AsyncFunction**（Worker / SSH snippet runner 不用于该次执行；工具 IO 仍走 composition 的 fs/shell，含 SSH 远端世界）
 
 ```js
@@ -35,9 +35,9 @@ return "ok";
 - 输出硬顶：合并 stdout/stderr/返回值 UTF-8 默认 **64MiB**（`maxOutputBytes`）
 - Worker 堆硬顶（无 bridge）：`resourceLimits.maxOldGenerationSizeMb` 默认 **512**
 - 默认无网络（Worker 路径）
-- 生成的 `tools:sdk`（及同类工具文档段）须 `interpolate: false`：schema / 说明中的字面 `{{…}}` 不得被提示词变量替换
+- 生成的 `tools:sdk`（及同类工具文档段）须 `interpolate: false`：schema / 说明中的字面 `{{…}}` 不被提示词变量替换
 
-默认 presets **不**登记 `run_code`（须 `--presentation code` 或显式 `codeRuntime`）。
+默认 presets **不**登记 `run_code`（用 `--presentation code` 或显式 `codeRuntime`）。
 
 ---
 

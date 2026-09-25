@@ -20,6 +20,21 @@ import { resolveSessionCwd } from "./session-cwd.js";
 
 const stores = new Map<string, WorkspaceCheckpointStore>();
 
+/**
+ * Upper bound for one `snapshotSessionWorkspace` call. The store's per-command
+ * timeout should win first; this races the whole call so a runner that never
+ * settles (or a hung fs call) still degrades to "no checkpoint" instead of
+ * blocking the drain queue. Skips the turn's point, never the turn.
+ */
+export const SNAPSHOT_TIMEOUT_MS = 20_000;
+
+function timeoutAfter(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref?.();
+  });
+}
+
 /** Injected git for tests; production uses {@link createProcessGitRunner}. */
 let defaultRunner: GitRunner | undefined;
 
@@ -38,7 +53,8 @@ export function clearWorkspaceCheckpointStores(): void {
 
 /**
  * Resolve (and cache) the checkpoint store for a workspace directory.
- * Shadow git lives under `<cwd>/.xrk/checkpoints`.
+ * Shadow git lives under `{XRK_HOME}/checkpoints/<workspace-id>` — product
+ * data is gathered in the XRK home, never inside the workspace.
  */
 export function workspaceCheckpointStoreFor(
   workspaceDir: string,
@@ -74,7 +90,9 @@ export function checkpointFail(
     const code =
       err.code === "bad-argument" || err.code === "unknown-checkpoint"
         ? "invalid-payload"
-        : "checkpoint-failed";
+        : err.code === "timed-out"
+          ? "checkpoint-timeout"
+          : "checkpoint-failed";
     return {
       ok: false,
       error: {
@@ -97,6 +115,12 @@ export function checkpointFail(
  * Host / Face: snapshot worktree before a turn mutates files.
  * Best-effort — git missing or snapshot failure must not block the turn.
  * Disabled when `XRK_CHECKPOINTS=0`.
+ *
+ * Hard deadline: the store already bounds every git command with a timeout,
+ * but a runner without timeout support (injected fakes) or an fs call that
+ * never settles would otherwise hang the caller forever. Race the snapshot
+ * against {@link SNAPSHOT_TIMEOUT_MS} so a stuck call degrades to "no
+ * checkpoint" instead of blocking the drain queue.
  */
 export async function snapshotSessionWorkspace(
   runtime: FaceRuntime,
@@ -110,11 +134,20 @@ export async function snapshotSessionWorkspace(
     readSessionEvents(runtime.store, sessionId).length;
   const store = workspaceCheckpointStoreForSession(runtime, sessionId);
   try {
-    return await store.snapshot({
-      sessionId,
-      seq,
-      ...(opts?.label ? { label: opts.label } : { label: "pre-turn" }),
-    });
+    const record = await Promise.race([
+      store.snapshot({
+        sessionId,
+        seq,
+        ...(opts?.label ? { label: opts.label } : { label: "pre-turn" }),
+      }),
+      timeoutAfter(SNAPSHOT_TIMEOUT_MS).then(() => {
+        throw new WorkspaceCheckpointError(
+          "timed-out",
+          `workspace snapshot exceeded ${SNAPSHOT_TIMEOUT_MS}ms; skipped`,
+        );
+      }),
+    ]);
+    return record;
   } catch {
     return undefined;
   }

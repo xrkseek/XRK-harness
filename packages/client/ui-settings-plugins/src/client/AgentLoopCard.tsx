@@ -1,7 +1,7 @@
 /** The agent loop's card: how many tool calls one step may run at once. */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { ValueField } from './fields.tsx'
+import { ChoiceField, ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
 import type { AgentLoopCardFace } from './agent-loop-card-controller.ts'
 import type {} from './slot-contract.ts'
@@ -54,6 +54,37 @@ export function AgentLoopCard(props: AgentLoopCardProps) {
         {...state.maxSteps}
         onEdit={(text) => { props.edit('maxSteps', text) }}
         onReset={() => { props.resetField('maxSteps') }}
+      />
+      <ChoiceField
+        id="plugin-config-agent-loop-auto-continue"
+        label={t('agentLoopAutoContinue')}
+        hint={t('agentLoopAutoContinueHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        value={state.autoContinueOnMaxTokens.text}
+        overridden={state.autoContinueOnMaxTokens.overridden}
+        invalid={state.autoContinueOnMaxTokens.invalid}
+        disabled={!state.writable}
+        options={[
+          { value: 'true', label: t('agentLoopAutoContinueOn') },
+          { value: 'false', label: t('agentLoopAutoContinueOff') },
+        ]}
+        onChange={(text) => { props.edit('autoContinueOnMaxTokens', text) }}
+        onReset={() => { props.resetField('autoContinueOnMaxTokens') }}
+      />
+      <ValueField
+        id="plugin-config-agent-loop-auto-continue-rounds"
+        label={t('agentLoopAutoContinueMaxRounds')}
+        hint={t('agentLoopAutoContinueMaxRoundsHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        disabled={!state.writable}
+        {...state.autoContinueMaxRounds}
+        onEdit={(text) => { props.edit('autoContinueMaxRounds', text) }}
+        onReset={() => { props.resetField('autoContinueMaxRounds') }}
       />
       <ValueField
         id="plugin-config-agent-loop-tool-order"
@@ -129,6 +160,26 @@ export function AgentLoopCard(props: AgentLoopCardProps) {
         {...state.bufferTokens}
         onEdit={(text) => { props.edit('bufferTokens', text) }}
         onReset={() => { props.resetField('bufferTokens') }}
+      />
+      <ChoiceField
+        id="plugin-config-agent-loop-compaction-strategy"
+        label={t('agentLoopCompactionStrategy')}
+        hint={t('agentLoopCompactionStrategyHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('agentLoopCompactionStrategyInvalid')}
+        value={state.compactionStrategy.text}
+        overridden={state.compactionStrategy.overridden}
+        invalid={state.compactionStrategy.invalid}
+        disabled={!state.writable}
+        options={[
+          { value: 'prune-summary', label: t('agentLoopCompactionPruneSummary') },
+          { value: 'prune-only', label: t('agentLoopCompactionPruneOnly') },
+          { value: 'summary-only', label: t('agentLoopCompactionSummaryOnly') },
+          { value: 'off', label: t('agentLoopCompactionOff') },
+        ]}
+        onChange={(text) => { props.edit('compactionStrategy', text) }}
+        onReset={() => { props.resetField('compactionStrategy') }}
       />
       <ValueField
         id="plugin-config-agent-loop-tool-result-inline"

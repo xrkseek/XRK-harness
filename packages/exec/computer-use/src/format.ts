@@ -13,17 +13,21 @@ export function formatAxSnapshot(options: {
   readonly elements: readonly ComputerUseElement[];
   readonly note?: string;
   readonly maxChars?: number;
+  /** Capture mode advertised to the model (ax · som · vision). */
+  readonly mode?: ComputerUseCaptureResult["mode"];
 }): string {
   const lines: string[] = [
     `app: ${options.app || "(unknown)"}`,
     `window: ${options.windowTitle || "(untitled)"}`,
+    ...(options.mode ? [`mode: ${options.mode}`] : []),
     "elements:",
   ];
   for (const el of options.elements) {
     const bounds = el.bounds
       ? ` @(${el.bounds.x},${el.bounds.y},${el.bounds.width}x${el.bounds.height})`
       : "";
-    lines.push(`  [${el.index}] [${el.role}] ${el.name}${bounds}`);
+    const token = el.elementToken ? ` token=${el.elementToken}` : "";
+    lines.push(`  [${el.index}] [${el.role}] ${el.name}${bounds}${token}`);
   }
   if (options.note) {
     lines.push(`note: ${options.note}`);
@@ -65,6 +69,7 @@ export function buildCaptureResult(options: {
       app: options.app,
       windowTitle: options.windowTitle,
       elements: options.elements,
+      mode: options.mode,
       ...(options.note !== undefined ? { note: options.note } : {}),
     }),
     ...(options.note !== undefined ? { note: options.note } : {}),

@@ -5,6 +5,9 @@ import { IconSearchOutline16 } from '@xrkseek/client-ui-primitives'
 import type { NS } from './locales.ts'
 import css from './TrajectoryToolbar.module.css'
 
+/** Codex/Hermes-style density: compact collapses chrome; detailed keeps full rows. */
+export type TrajectoryDensity = 'compact' | 'detailed'
+
 export interface TrajectoryToolbarProps {
   /** Whether timeline blocks use recorded durations instead of equal widths. */
   actualDuration: boolean
@@ -26,6 +29,10 @@ export interface TrajectoryToolbarProps {
   searchQuery: string
   /** Update the live ledger search query. */
   onSearchQueryChange: (query: string) => void
+  /** Compact vs detailed ledger density. */
+  density: TrajectoryDensity
+  /** Switch density (owner also folds turns/calls when entering compact). */
+  onDensityChange: (density: TrajectoryDensity) => void
   /** Translate a toolbar dictionary key. */
   t: TranslateNS<typeof NS>
 }
@@ -46,12 +53,26 @@ export function TrajectoryToolbar({
   onToggleAllAssistants,
   searchQuery,
   onSearchQueryChange,
+  density,
+  onDensityChange,
   t,
 }: TrajectoryToolbarProps) {
   return (
     <div className={css.root} role="toolbar" aria-label={t('toolbar.aria')}>
       <div className={css.inner}>
         <div className={css.actions}>
+          <button
+            type="button"
+            className={css.toggle}
+            aria-label={t('toolbar.density')}
+            aria-pressed={density === 'compact'}
+            title={density === 'compact' ? t('toolbar.densityDetailed') : t('toolbar.densityCompact')}
+            onClick={() => {
+              onDensityChange(density === 'compact' ? 'detailed' : 'compact')
+            }}
+          >
+            {density === 'compact' ? t('toolbar.densityCompact') : t('toolbar.densityDetailed')}
+          </button>
           <button
             type="button"
             className={css.toggle}

@@ -474,4 +474,96 @@ describe("runTurn compaction / overflow", () => {
     ).toBe(true);
     expect(result.assistantText).toBe("ok-after-reasoning-compact");
   });
+
+  it("strategy off skips soft-budget auto path", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    for (let i = 0; i < 8; i++) {
+      store.append(session.id, {
+        type: "user/message",
+        ts: i * 2,
+        turnId: `old${i}`,
+        content: `msg-${i}-` + "y".repeat(80),
+      });
+      store.append(session.id, {
+        type: "assistant/message",
+        ts: i * 2 + 1,
+        turnId: `old${i}`,
+        stepId: `s${i}`,
+        content: `ans-${i}-` + "z".repeat(40),
+      });
+    }
+    let chatCalls = 0;
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "continue",
+      store,
+      llm: {
+        id: "strategy-off",
+        async chat() {
+          chatCalls += 1;
+          return { content: "ok-no-soft-compact" };
+        },
+      },
+      tools: createToolRegistry(),
+      compaction: {
+        maxRequestTokens: 50,
+        keepTokens: 20,
+        bufferTokens: 0,
+        strategy: "off",
+      },
+    });
+    expect(result.assistantText).toBe("ok-no-soft-compact");
+    expect(chatCalls).toBe(1);
+    expect(
+      store
+        .get(session.id)
+        .events.some((e) => e.type === "context/compaction"),
+    ).toBe(false);
+  });
+
+  it("strategy prune-only fails closed without LLM summary", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    for (let i = 0; i < 8; i++) {
+      store.append(session.id, {
+        type: "user/message",
+        ts: i * 2,
+        turnId: `old${i}`,
+        content: `msg-${i}-` + "y".repeat(80),
+      });
+      store.append(session.id, {
+        type: "assistant/message",
+        ts: i * 2 + 1,
+        turnId: `old${i}`,
+        stepId: `s${i}`,
+        content: `ans-${i}-` + "z".repeat(40),
+      });
+    }
+    await expect(
+      runTurn({
+        sessionId: session.id,
+        userText: "continue",
+        store,
+        llm: {
+          id: "prune-only",
+          async chat() {
+            throw new Error("LLM must not run under prune-only soft-budget");
+          },
+        },
+        tools: createToolRegistry(),
+        compaction: {
+          maxRequestTokens: 50,
+          keepTokens: 20,
+          bufferTokens: 0,
+          strategy: "prune-only",
+        },
+      }),
+    ).rejects.toBeInstanceOf(ContextOverflowError);
+    expect(
+      store
+        .get(session.id)
+        .events.some((e) => e.type === "context/compaction"),
+    ).toBe(false);
+  });
 });

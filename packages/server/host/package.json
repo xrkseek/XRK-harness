@@ -30,6 +30,7 @@
     "@xrkseek/exec-computer-use": "workspace:*",
     "@xrkseek/exec-subprocess": "workspace:*",
     "@xrkseek/exec-ssh": "workspace:*",
+    "@xrkseek/exec-environment": "workspace:*",
     "@xrkseek/exec-web": "workspace:*",
     "@xrkseek/exec-memory": "workspace:*",
     "@xrkseek/exec-voice": "workspace:*",
@@ -48,6 +49,7 @@
     "@xrkseek/server-http": "workspace:*",
     "@xrkseek/server-loader": "workspace:*",
     "@xrkseek/session-telemetry": "workspace:*",
+    "@xrkseek/a2a": "workspace:*",
     "@xrkseek/workspace": "workspace:*",
     "undici": "^7.29.1",
     "ws": "^8.18.0"

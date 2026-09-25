@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { isDue, nextRunAt } from "./schedule.js";
 import { formatCronOutput } from "./runner.js";
 import {
@@ -12,6 +13,8 @@ import type { CronJobStore } from "./store.js";
 
 export interface CronScheduler {
   readonly store: CronJobStore;
+  /** Hermes-style run history when a ledger was wired. */
+  readonly executions?: import("./executions.js").CronExecutionLedger;
   start(): void;
   stop(): void;
   /** Run one tick (due jobs). Returns number of jobs started. */
@@ -29,6 +32,8 @@ export interface CreateCronSchedulerOptions {
   readonly now?: () => Date;
   readonly maxParallel?: number;
   readonly onError?: (err: unknown, job?: CronJob) => void;
+  /** Optional Hermes-style run history ledger. */
+  readonly executions?: import("./executions.js").CronExecutionLedger;
 }
 
 /**
@@ -67,6 +72,7 @@ export function createCronScheduler(
     job: CronJob,
     result: CronRunResult,
     signal?: AbortSignal,
+    startedAt?: string,
   ): Promise<void> => {
     const stamp = now().toISOString();
     const scheduleNext =
@@ -81,6 +87,21 @@ export function createCronScheduler(
       nextRunAt: scheduleNext,
       ...(job.schedule.kind === "at" ? { enabled: false } : {}),
     });
+    try {
+      options.executions?.append({
+        id: `exec_${randomUUID().replace(/-/g, "").slice(0, 12)}`,
+        jobId: job.id,
+        ...(job.name ? { jobName: job.name } : {}),
+        startedAt: startedAt ?? stamp,
+        finishedAt: stamp,
+        status: result.ok ? "ok" : "error",
+        ...(result.error ? { error: result.error } : {}),
+        outputChars: result.output.length,
+        ...(result.sessionId ? { sessionId: result.sessionId } : {}),
+      });
+    } catch (err) {
+      options.onError?.(err, job);
+    }
     if (options.deliver && job.delivery.kind !== "none") {
       try {
         await options.deliver(job, result, signal);
@@ -103,8 +124,9 @@ export function createCronScheduler(
     }
     running.add(id);
     try {
+      const startedAt = now().toISOString();
       const result = await execute(job, signal);
-      await finish(job, result, signal);
+      await finish(job, result, signal, startedAt);
       return result;
     } finally {
       running.delete(id);
@@ -137,31 +159,25 @@ export function createCronScheduler(
             } else {
               options.store.update(job.id, { nextRunAt: null, enabled: false });
             }
+            const startedAt = now().toISOString();
             const result = await execute(job);
-            const stamp = now().toISOString();
-            options.store.update(job.id, {
-              lastRunAt: stamp,
-              lastStatus: result.ok ? "ok" : "error",
-              ...(result.error
-                ? { lastError: result.error }
-                : { lastError: "" }),
-              lastOutputChars: result.output.length,
-            });
-            if (options.deliver && job.delivery.kind !== "none") {
-              try {
-                await options.deliver(job, result);
-              } catch (err) {
-                options.onError?.(err, job);
-              }
-            }
+            await finish(job, result, undefined, startedAt);
           } catch (err) {
             options.onError?.(err, job);
-            options.store.update(job.id, {
-              lastRunAt: now().toISOString(),
-              lastStatus: "error",
-              lastError:
-                err instanceof Error ? err.message : String(err),
-            });
+            try {
+              await finish(
+                job,
+                {
+                  ok: false,
+                  output: "",
+                  error: err instanceof Error ? err.message : String(err),
+                },
+                undefined,
+                now().toISOString(),
+              );
+            } catch {
+              /* already reported */
+            }
           } finally {
             running.delete(job.id);
           }
@@ -175,6 +191,7 @@ export function createCronScheduler(
 
   return {
     store: options.store,
+    ...(options.executions ? { executions: options.executions } : {}),
     start() {
       if (timer) return;
       timer = setInterval(() => {

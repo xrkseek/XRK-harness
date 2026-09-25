@@ -18,6 +18,8 @@ export interface FaceModelEntry {
   readonly name: string;
   readonly description?: string;
   readonly contextWindow?: number;
+  /** Declared intake modalities (Settings-editable; adapter may still gate). */
+  readonly inputModalities?: readonly ("text" | "image")[];
 }
 
 export interface FaceModelProviderGroup {
@@ -55,6 +57,12 @@ function asModelRows(raw: unknown): FaceModelEntry[] {
       typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : id;
     const descRaw = (row as { description?: unknown }).description;
     const cwRaw = (row as { contextWindow?: unknown }).contextWindow;
+    const modsRaw = (row as { inputModalities?: unknown }).inputModalities;
+    const inputModalities = Array.isArray(modsRaw)
+      ? modsRaw
+          .map((m) => String(m).trim())
+          .filter((m): m is "text" | "image" => m === "text" || m === "image")
+      : undefined;
     out.push({
       id,
       name,
@@ -65,6 +73,9 @@ function asModelRows(raw: unknown): FaceModelEntry[] {
       Number.isInteger(cwRaw) &&
       cwRaw > 0
         ? { contextWindow: cwRaw }
+        : {}),
+      ...(inputModalities && inputModalities.length > 0
+        ? { inputModalities: [...new Set(inputModalities)] }
         : {}),
     });
   }
@@ -80,6 +91,7 @@ function deepseekModels(runtime: FaceRuntime): FaceModelEntry[] {
     name: m.name,
     ...(m.description ? { description: m.description } : {}),
     ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
+    ...(m.inputModalities ? { inputModalities: m.inputModalities } : {}),
   }));
 }
 
@@ -141,6 +153,10 @@ export function buildFaceModelCatalog(
       models: declared.models.map((m) => ({
         id: m.id,
         name: m.name ?? m.id,
+        ...(m.inputModalities ? { inputModalities: m.inputModalities } : {}),
+        ...(m.contextWindow !== undefined
+          ? { contextWindow: m.contextWindow }
+          : {}),
       })),
     });
   }
@@ -152,20 +168,33 @@ export function lookupModelContextWindow(
   runtime: FaceRuntime,
   selection: FaceModelSelection,
 ): number | undefined {
+  return findCatalogModel(runtime, selection)?.contextWindow;
+}
+
+/** Catalog-declared intake modalities for a selection (adapter create extras). */
+export function lookupModelInputModalities(
+  runtime: FaceRuntime,
+  selection: FaceModelSelection,
+): readonly ("text" | "image")[] | undefined {
+  return findCatalogModel(runtime, selection)?.inputModalities;
+}
+
+function findCatalogModel(
+  runtime: FaceRuntime,
+  selection: FaceModelSelection,
+): FaceModelEntry | undefined {
   const brand = runtime.registry
     .listBrands()
     .find((b) => b.id === selection.provider);
   if (!brand) {
     if (selection.provider === "deepseek") {
-      return deepseekModels(runtime).find((m) => m.id === selection.model)
-        ?.contextWindow;
+      return deepseekModels(runtime).find((m) => m.id === selection.model);
     }
     return piAiProviderModels(runtime, selection.provider).find(
       (m) => m.id === selection.model,
-    )?.contextWindow;
+    );
   }
-  return modelsForBrand(runtime, brand).find((m) => m.id === selection.model)
-    ?.contextWindow;
+  return modelsForBrand(runtime, brand).find((m) => m.id === selection.model);
 }
 
 /** Shared default from `agent-default-model` settings namespace. */

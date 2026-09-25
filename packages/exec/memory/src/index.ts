@@ -28,6 +28,11 @@ export {
   type ResolveMemoryProviderOptions,
 } from "./resolve.js";
 export {
+  createSqliteMemoryProvider,
+  type SqliteMemoryProvider,
+  type SqliteMemoryProviderOptions,
+} from "./sqlite.js";
+export {
   CURATED_MEMORY_PROMPT_TEXT,
   createCuratedMemoryTools,
 } from "./tools.js";
@@ -35,8 +40,13 @@ export {
   extractReusableNotes,
   writeReusableNotesAfterTurn,
   consolidateCuratedMemoryPhase1,
+  consolidateCuratedMemoryPhase2,
+  buildPhase2ExtractPrompt,
+  parsePhase2Notes,
   noteCoveredByEntries,
   type TurnNoteInput,
   type TurnNoteWriteResult,
   type SessionEndConsolidateInput,
+  type SessionEndPhase2Input,
+  type Phase2CompleteFn,
 } from "./write-path.js";

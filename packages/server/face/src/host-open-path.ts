@@ -31,7 +31,13 @@ export function canOpenNativePath(
  * that own the visible window (e.g. `wt`); GUI subsystem apps like
  * `explorer.exe` / `Cursor.exe` stay visible either way.
  */
-export function spawnDetached(
+export type SpawnDetachedFn = (
+  command: string,
+  args: readonly string[],
+  options?: { readonly windowsHide?: boolean },
+) => Promise<void>;
+
+async function spawnDetachedDefault(
   command: string,
   args: readonly string[],
   options: { readonly windowsHide?: boolean } = {},
@@ -50,6 +56,27 @@ export function spawnDetached(
       resolve();
     });
   });
+}
+
+let spawnDetachedImpl: SpawnDetachedFn = spawnDetachedDefault;
+
+export function spawnDetached(
+  command: string,
+  args: readonly string[],
+  options: { readonly windowsHide?: boolean } = {},
+): Promise<void> {
+  return spawnDetachedImpl(command, args, options);
+}
+
+/**
+ * Test-only: replace detached spawn so unit tests never ShellExecute / open
+ * Explorer (Win: deleting the temp dir after `cmd /c start` races and pops
+ * "Windows cannot find the file"). Pass `undefined` to restore the default.
+ */
+export function installSpawnDetachedForTests(
+  fn: SpawnDetachedFn | undefined,
+): void {
+  spawnDetachedImpl = fn ?? spawnDetachedDefault;
 }
 
 /** True for absolute URLs (`https://…`, `vscode://…`) — not filesystem paths. */

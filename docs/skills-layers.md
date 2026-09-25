@@ -43,7 +43,7 @@
 | 机制 | 行为 |
 |------|------|
 | 多根导入 | 已存在的目录自动扫；缺则跳过（不 mkdir） |
-| **CLI 用户种子** | **`xrkh web` / `serve` 启动时**写入 **`~/.xrk`**：`skills/*`、薄 `AGENTS.md`（对标 Codex 全局说明）、`recipes/*`。缺才装、指纹未改则刷新；用户改过的永不覆盖。**绝不**在工作区 mkdir `.xrk` |
+| **CLI 用户种子** | **`xrkh web` / `serve` 启动时**写入 **`~/.xrk`**：`skills/*`、薄 `AGENTS.md`（对标 Codex 全局说明）、`recipes/*`。缺才装、指纹未改则刷新；用户改过的副本原样保留。工作区不自动 mkdir `.xrk` |
 | `disable-model-invocation: true` | 不进 catalog、`skill` 工具拒绝 |
 | `user-invocable: false` | `/skill-name` 不展开 |
 | 非法布尔 frontmatter | **整 skill 丢弃**（fail-closed） |
@@ -68,7 +68,9 @@ Spec 形态：`./path` · `file:` / `link:` 本地目录；`github:owner/repo` �
 
 ## 学习环（`propose_skill`）
 
-复杂任务后，模型可调用 **`propose_skill`** 提交一份 class-level `SKILL.md` 草案（When to Use / Procedure / Pitfalls，不是聊天日志）。Face 弹出确认（`Write skill` / `Reject`，详情展示全文）；**只有用户批准后**才校验并写入工作区 `.agents/skills/<name>/`（复用 `installSkillFromLocalDir` 失败关闭路径）。复杂多工具回合结束后，下一回合 turn-start 可能注入一条 `context-fragment` 提示调用该工具（对标 Hermes write_approval；本切片**不做** background review fork / curator）。
+复杂任务后，模型可调用 **`propose_skill`** 提交一份 class-level `SKILL.md` 草案（When to Use / Procedure / Pitfalls，不是聊天日志）。Face 弹出确认（`Write skill` / `Reject`，详情展示全文）；**只有用户批准后**才校验并写入工作区 `.agents/skills/<name>/`（复用 `installSkillFromLocalDir` 失败关闭路径）。复杂多工具回合结束后，下一回合 turn-start 可能注入一条 `context-fragment` 提示调用该工具（对标 Hermes write_approval；本切片**不做** background review fork）。
+
+**Skill curator**（确定性）：`runSkillCurator` 按 `SKILL.md` mtime 把过期工作区 skill 移到 `.agents/skills/.archive/`（可 pin、dry-run；**不删除**、无 aux LLM）。
 
 ## 能力挂载（与人格分工）
 
@@ -176,7 +178,9 @@ Installs **fail closed**: a missing `SKILL.md`, illegal boolean frontmatter, or 
 
 ## Learning loop (`propose_skill`)
 
-After a complex task, the model may call **`propose_skill`** with a class-level `SKILL.md` draft (When to Use / Procedure / Pitfalls — not a chat log). Face asks for confirmation (`Write skill` / `Reject`, detail shows the full markdown); **only after approval** does the Host validate and write under workspace `.agents/skills/<name>/` (same fail-closed path as `installSkillFromLocalDir`). After enough complex multi-tool turns, the next turn-start may inject a `context-fragment` nudge to call the tool (Hermes-style write_approval; this slice has **no** background review fork / curator).
+After a complex task, the model may call **`propose_skill`** with a class-level `SKILL.md` draft (When to Use / Procedure / Pitfalls — not a chat log). Face asks for confirmation (`Write skill` / `Reject`, detail shows the full markdown); **only after approval** does the Host validate and write under workspace `.agents/skills/<name>/` (same fail-closed path as `installSkillFromLocalDir`). After enough complex multi-tool turns, the next turn-start may inject a `context-fragment` nudge to call the tool (Hermes-style write_approval; this slice has **no** background review fork).
+
+**Skill curator** (deterministic): `runSkillCurator` archives stale workspace skills by `SKILL.md` mtime into `.agents/skills/.archive/` (pin + dry-run; **never deletes**; no aux LLM).
 
 ## Capability attach (vs persona)
 

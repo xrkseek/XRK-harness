@@ -45,6 +45,13 @@ export interface SessionStatusSubagentLive {
   readonly queued?: number;
   /** Child inbox admits waiting as steer. */
   readonly steering?: number;
+  /** External runtime kind when this child is ACP / app-server backed. */
+  readonly externalKind?: "acp" | "app-server";
+  /**
+   * `live` = process handle attached; `cold` = sidecar handle only (Host
+   * restart / dispose) — follow-up may attempt reopen via thread/resume.
+   */
+  readonly externalResume?: "live" | "cold";
 }
 
 /** Depth / concurrency caps for Status + model `analytics`. */
@@ -108,6 +115,53 @@ export interface SessionStatusBilling {
   readonly byModel: readonly SessionStatusCostModelRow[];
   /** Month window `provider:model`, ranked (max 8). */
   readonly byProviderModel: readonly SessionStatusCostModelRow[];
+  /** Recent daily points from ledger history (Hermes insights / dsh-wallet). */
+  readonly dailyTrend: readonly SessionStatusBillingDay[];
+}
+
+/** One day on the billing trend sparkline. */
+export interface SessionStatusBillingDay {
+  readonly date: string;
+  readonly cost: number;
+  readonly tokens: number;
+}
+
+/**
+ * Fleet health for Status (subagents · jobs · channels) — Hermes StatusPage
+ * style operator glance, not a separate monitoring product.
+ */
+export type SessionStatusFleetHealth = "ok" | "warn" | "critical";
+
+export interface SessionStatusFleetAlert {
+  readonly id: string;
+  readonly severity: "info" | "warn" | "critical";
+  readonly message: string;
+}
+
+export interface SessionStatusFleet {
+  readonly health: SessionStatusFleetHealth;
+  readonly runningJobs: number;
+  readonly runningSubagents: number;
+  readonly slotsFree: number;
+  readonly queuedInbox: number;
+  readonly channelAlerts: number;
+  readonly alerts: readonly SessionStatusFleetAlert[];
+}
+
+export interface SessionStatusChannels {
+  readonly process: readonly {
+    readonly pluginId: string;
+    readonly channelId: string;
+    readonly displayName?: string;
+  }[];
+  readonly im: readonly {
+    readonly channelId: string;
+    readonly displayName: string;
+    readonly wired: string;
+  }[];
+  readonly note: string;
+  /** Discover stubs / bridge-only IM that need operator attention. */
+  readonly alerts: readonly SessionStatusFleetAlert[];
 }
 
 export interface SessionStatusTimeline {
@@ -153,17 +207,30 @@ export interface SessionStatusCompaction {
   readonly pipeline: SessionStatusCompactionPipeline;
   /** Ordered stages for that last pipeline (empty when `none`). */
   readonly stages: readonly SessionStatusCompactionStage[];
+  /**
+   * Configured soft-budget strategy (Face `agent-loop.compactionStrategy`).
+   * Distinct from last-turn `pipeline` (what actually ran).
+   */
+  readonly strategy?:
+    | "prune-summary"
+    | "prune-only"
+    | "summary-only"
+    | "off";
   readonly lastReason?: ContextTimelineCompactReason;
   readonly lastShadowedTokens?: number;
   readonly pruneCount: number;
   /** Count of `context/compaction` (summary) timeline rows. */
   readonly summaryCount: number;
   readonly spillCount: number;
+  /** Recent unique spill absolute paths (newest last; capped). */
+  readonly spillPaths?: readonly string[];
   /**
    * Live latch: turn or manual `/compact` holds the agent busy bit
    * (compact and turn are mutually exclusive on the same latch).
    */
   readonly phase: "idle" | "busy";
+  /** Thin Guardian fragment registered (Settings `guardianFragments`). */
+  readonly guardian?: boolean;
 }
 
 /**
@@ -184,20 +251,6 @@ export interface SessionStatusDelivery {
   readonly note: string;
 }
 
-export interface SessionStatusChannels {
-  readonly process: readonly {
-    readonly pluginId: string;
-    readonly channelId: string;
-    readonly displayName?: string;
-  }[];
-  readonly im: readonly {
-    readonly channelId: string;
-    readonly displayName: string;
-    readonly wired: string;
-  }[];
-  readonly note: string;
-}
-
 export interface SessionStatusTeamTask {
   readonly id: string;
   readonly title: string;
@@ -210,6 +263,10 @@ export interface SessionStatusTeamTask {
   readonly worktreePath?: string;
   readonly worktreeBranch?: string;
   readonly worktreeId?: string;
+  /** Managed lease status (`active` · `retained` · `reclaimed`) when known. */
+  readonly worktreeLeaseStatus?: string;
+  /** Truncated completion / failure preview from the task board. */
+  readonly resultPreview?: string;
 }
 
 /** Structured Status facts shared by slash `/status` and Overview. */
@@ -234,6 +291,8 @@ export interface SessionStatusSnapshot {
   readonly cost: SessionStatusCost;
   /** Host-wide ledger fold (cross-session · cross-model). */
   readonly billing: SessionStatusBilling;
+  /** Subagent / job / channel health glance. */
+  readonly fleet: SessionStatusFleet;
   readonly timeline: SessionStatusTimeline;
   /** Prune → summary stage fold + live busy phase. */
   readonly compaction: SessionStatusCompaction;
@@ -250,7 +309,14 @@ function jobRow(view: JobView): SessionStatusJobRow {
   };
 }
 
-function teamTaskRow(task: AgentTeamTask): SessionStatusTeamTask {
+function teamTaskRow(
+  task: AgentTeamTask,
+  runtime: FaceRuntime,
+): SessionStatusTeamTask {
+  const lease =
+    task.worktreeId !== undefined
+      ? runtime.managedWorktrees.get(task.worktreeId)
+      : undefined;
   return {
     id: task.id,
     title: task.title,
@@ -265,6 +331,8 @@ function teamTaskRow(task: AgentTeamTask): SessionStatusTeamTask {
     ...(task.worktreePath ? { worktreePath: task.worktreePath } : {}),
     ...(task.worktreeBranch ? { worktreeBranch: task.worktreeBranch } : {}),
     ...(task.worktreeId ? { worktreeId: task.worktreeId } : {}),
+    ...(lease?.status ? { worktreeLeaseStatus: lease.status } : {}),
+    ...(task.resultPreview ? { resultPreview: task.resultPreview } : {}),
   };
 }
 
@@ -362,6 +430,14 @@ function billingFromLedger(): SessionStatusBilling {
   try {
     const state = costMeterGetState();
     const month = state.month;
+    const history = [...(state.history ?? [])].sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+    const dailyTrend: SessionStatusBillingDay[] = history.slice(-14).map((day) => ({
+      date: day.date,
+      cost: day.cost,
+      tokens: dayTokens(day),
+    }));
     return {
       todayCost: state.today.cost,
       monthCost: month.cost,
@@ -370,6 +446,7 @@ function billingFromLedger(): SessionStatusBilling {
       monthTokens: dayTokens(month),
       byModel: rankCostModelRows(asBucketMap(month.byModel)),
       byProviderModel: rankCostModelRows(asBucketMap(month.byProviderModel)),
+      dailyTrend,
     };
   } catch {
     return {
@@ -380,8 +457,93 @@ function billingFromLedger(): SessionStatusBilling {
       monthTokens: 0,
       byModel: [],
       byProviderModel: [],
+      dailyTrend: [],
     };
   }
+}
+
+function channelAlertsFromDiscover(channels: {
+  readonly process: readonly { readonly channelId: string; readonly displayName?: string }[];
+  readonly im: readonly {
+    readonly channelId: string;
+    readonly displayName: string;
+    readonly wired: string;
+  }[];
+  readonly note: string;
+}): SessionStatusFleetAlert[] {
+  const alerts: SessionStatusFleetAlert[] = [];
+  for (const im of channels.im) {
+    if (im.wired === "bridge" || im.wired === "stub" || im.wired === "discover") {
+      alerts.push({
+        id: `im:${im.channelId}`,
+        severity: "info",
+        message: `IM ${im.displayName || im.channelId} is ${im.wired} (not long-lived)`,
+      });
+    }
+  }
+  if (channels.process.length === 0 && channels.im.every((c) => c.wired === "bridge")) {
+    alerts.push({
+      id: "channels:empty",
+      severity: "info",
+      message: "No process channels; IM entries are bridge stubs only",
+    });
+  }
+  if (channels.note.trim()) {
+    alerts.push({
+      id: "channels:note",
+      severity: "info",
+      message: channels.note.trim().slice(0, 160),
+    });
+  }
+  return alerts.slice(0, 8);
+}
+
+function buildFleet(input: {
+  readonly jobs: readonly SessionStatusJobRow[];
+  readonly live: readonly SessionStatusSubagentLive[];
+  readonly quota: SessionStatusSubagentQuota;
+  readonly channelAlerts: readonly SessionStatusFleetAlert[];
+}): SessionStatusFleet {
+  const runningJobs = input.jobs.filter((j) => j.status === "running").length;
+  const runningSubagents = input.live.filter((s) => s.activity === "running").length;
+  const queuedInbox = input.live.reduce(
+    (n, s) => n + (s.queued ?? 0) + (s.steering ?? 0),
+    0,
+  );
+  const alerts: SessionStatusFleetAlert[] = [...input.channelAlerts];
+  if (input.quota.slotsFree <= 0 && input.quota.maxActive > 0) {
+    alerts.unshift({
+      id: "fleet:slots",
+      severity: "warn",
+      message: `Subagent slots full (${input.quota.active}/${input.quota.maxActive})`,
+    });
+  }
+  if (queuedInbox > 0) {
+    alerts.unshift({
+      id: "fleet:inbox",
+      severity: "warn",
+      message: `${queuedInbox} child inbox admit(s) waiting (queue/steer)`,
+    });
+  }
+  if (input.quota.depth >= input.quota.maxDepth && input.quota.maxDepth > 0) {
+    alerts.unshift({
+      id: "fleet:depth",
+      severity: "critical",
+      message: `Delegation depth at cap (${input.quota.depth}/${input.quota.maxDepth})`,
+    });
+  }
+  let health: SessionStatusFleetHealth = "ok";
+  if (alerts.some((a) => a.severity === "critical")) health = "critical";
+  else if (alerts.some((a) => a.severity === "warn")) health = "warn";
+  return {
+    health,
+    runningJobs,
+    runningSubagents,
+    slotsFree: input.quota.slotsFree,
+    queuedInbox,
+    channelAlerts: input.channelAlerts.length,
+    alerts: alerts.slice(0, 12),
+  };
 }
 
 function injectSourceLabel(ev: Extract<ContextTimelineEvent, { kind: "inject" }>): string {
@@ -404,6 +566,7 @@ function summarizeTimelineEvents(
   readonly summaryCount: number;
   readonly pipeline: SessionStatusCompactionPipeline;
   readonly stages: readonly SessionStatusCompactionStage[];
+  readonly spillPaths: readonly string[];
 } {
   const injectSources: string[] = [];
   const seen = new Set<string>();
@@ -412,6 +575,8 @@ function summarizeTimelineEvents(
   let spillCount = 0;
   let pruneCount = 0;
   let summaryCount = 0;
+  const spillPathList: string[] = [];
+  const spillPathSeen = new Set<string>();
   // Per-turn markers for prune-first → summary pairing (DSH soft-budget order).
   const turnPrune = new Set<number>();
   const turnSummary = new Map<number, ContextTimelineCompactReason>();
@@ -438,6 +603,14 @@ function summarizeTimelineEvents(
     if (ev.kind === "prune") {
       pruneCount += 1;
       if (ev.spill) spillCount += 1;
+      const path =
+        typeof (ev as { spillPath?: unknown }).spillPath === "string"
+          ? String((ev as { spillPath: string }).spillPath).trim()
+          : "";
+      if (path && !spillPathSeen.has(path)) {
+        spillPathSeen.add(path);
+        spillPathList.push(path);
+      }
       turnPrune.add(ev.turn);
       if (ev.turn >= lastStageTurn) lastStageTurn = ev.turn;
     }
@@ -469,6 +642,7 @@ function summarizeTimelineEvents(
     summaryCount,
     pipeline,
     stages,
+    spillPaths: spillPathList.slice(-12),
   };
 }
 
@@ -570,6 +744,8 @@ export function buildSessionStatusSnapshot(
       if (admit.delivery === "steer") steering += 1;
       else queued += 1;
     }
+    const externalKind = runtime.externalAgents.kind(link.childSessionId);
+    const externalResume = runtime.externalAgents.resumeState(link.childSessionId);
     live.push({
       id: link.childSessionId,
       activity,
@@ -579,6 +755,8 @@ export function buildSessionStatusSnapshot(
       ...(line.tool ? { liveTool: line.tool } : {}),
       ...(queued > 0 ? { queued } : {}),
       ...(steering > 0 ? { steering } : {}),
+      ...(externalKind ? { externalKind } : {}),
+      ...(externalResume ? { externalResume } : {}),
     });
   }
 
@@ -601,7 +779,7 @@ export function buildSessionStatusSnapshot(
   const teamTasks = runtime.agentTeamTasks
     .list(sessionId)
     .slice(0, 24)
-    .map(teamTaskRow);
+    .map((t) => teamTaskRow(t, runtime));
 
   const snap = runtime.projections.snapshot(sessionId);
   const costRaw = snap.values.costUsage as CostUsageProjection | undefined;
@@ -647,9 +825,24 @@ export function buildSessionStatusSnapshot(
     if (admit.delivery === "steer") steering += 1;
     else queued += 1;
   }
+  const loopValue = runtime.settingsNamespaces.view("agent-loop").value as Record<
+    string,
+    unknown
+  >;
+  const strategyRaw = String(loopValue.compactionStrategy ?? "").trim();
+  const strategy =
+    strategyRaw === "prune-summary" ||
+    strategyRaw === "prune-only" ||
+    strategyRaw === "summary-only" ||
+    strategyRaw === "off"
+      ? strategyRaw
+      : "prune-summary";
+  const guardian = loopValue.guardianFragments !== false;
   const compaction: SessionStatusCompaction = {
     pipeline: eventSummary.pipeline,
     stages: eventSummary.stages,
+    strategy,
+    guardian,
     ...(eventSummary.lastCompactReason
       ? { lastReason: eventSummary.lastCompactReason }
       : {}),
@@ -659,6 +852,9 @@ export function buildSessionStatusSnapshot(
     pruneCount: eventSummary.pruneCount,
     summaryCount: eventSummary.summaryCount,
     spillCount: eventSummary.spillCount,
+    ...(eventSummary.spillPaths.length > 0
+      ? { spillPaths: eventSummary.spillPaths }
+      : {}),
     phase: turnActive ? "busy" : "idle",
   };
   const delivery: SessionStatusDelivery = {
@@ -674,6 +870,11 @@ export function buildSessionStatusSnapshot(
   const discover = buildFaceChannelDiscover(runtime.plugins, {
     imGatewayWired: resolveImGatewayWired(),
   });
+  const channelAlertRows = channelAlertsFromDiscover({
+    process: discover.process,
+    im: discover.im,
+    note: discover.note,
+  });
   const channels: SessionStatusChannels = {
     process: discover.process.map((p) => ({
       pluginId: p.pluginId,
@@ -686,7 +887,14 @@ export function buildSessionStatusSnapshot(
       wired: c.wired,
     })),
     note: discover.note,
+    alerts: channelAlertRows,
   };
+  const fleet = buildFleet({
+    jobs,
+    live,
+    quota,
+    channelAlerts: channelAlertRows,
+  });
 
   return {
     sessionId,
@@ -702,6 +910,7 @@ export function buildSessionStatusSnapshot(
     teamTasks,
     cost,
     billing,
+    fleet,
     timeline,
     compaction,
     delivery,
@@ -758,13 +967,27 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
       (sub.queued ?? 0) > 0 || (sub.steering ?? 0) > 0
         ? ` q=${sub.queued ?? 0}/steer=${sub.steering ?? 0}`
         : "";
-    lines.push(`  - ${sub.label ?? sub.id} [${tip}]${inbox}`);
+    const ext =
+      sub.externalKind
+        ? ` · ext:${sub.externalKind}${sub.externalResume ? `/${sub.externalResume}` : ""}`
+        : "";
+    lines.push(`  - ${sub.label ?? sub.id} [${tip}]${inbox}${ext}`);
   }
   for (const sub of snap.subagents.live
-    .filter((s) => s.activity !== "running" && ((s.queued ?? 0) > 0 || (s.steering ?? 0) > 0))
+    .filter(
+      (s) =>
+        s.activity !== "running" &&
+        (s.externalResume === "cold" ||
+          (s.queued ?? 0) > 0 ||
+          (s.steering ?? 0) > 0),
+    )
     .slice(0, 4)) {
+    const ext =
+      sub.externalKind
+        ? ` · ext:${sub.externalKind}${sub.externalResume ? `/${sub.externalResume}` : ""}`
+        : "";
     lines.push(
-      `  - ${sub.label ?? sub.id} [idle · q=${sub.queued ?? 0}/steer=${sub.steering ?? 0}]`,
+      `  - ${sub.label ?? sub.id} [idle · q=${sub.queued ?? 0}/steer=${sub.steering ?? 0}]${ext}`,
     );
   }
 
@@ -783,6 +1006,7 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
       task.status,
       task.role ? `role:${task.role}` : null,
       task.humanOwned ? "human" : null,
+      task.childSessionId ? `child:${task.childSessionId}` : null,
       task.worktreeBranch ? `wt:${task.worktreeBranch}` : null,
       task.schemaValid === false
         ? "schema!"
@@ -791,6 +1015,20 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
           : null,
     ].filter(Boolean);
     lines.push(`  - ${task.title} [${bits.join(" · ")}] (${task.id})`);
+    if (task.resultPreview) {
+      lines.push(`      result: ${task.resultPreview}`);
+    }
+    if (task.worktreePath) {
+      lines.push(`      worktree: ${task.worktreePath}`);
+    }
+    if (task.worktreeLeaseStatus) {
+      lines.push(
+        `      worktree_lease: ${task.worktreeLeaseStatus}` +
+          (task.worktreeLeaseStatus === "retained"
+            ? " (ff-only merge blocked — lease kept; Face worktree.merge when ready)"
+            : ""),
+      );
+    }
   }
 
   lines.push(
@@ -814,6 +1052,12 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
       ` · total $${snap.billing.totalCost.toFixed(4)}` +
       ` (cross-session ledger)`,
   );
+  if (snap.billing.dailyTrend.length > 0) {
+    const recent = snap.billing.dailyTrend.slice(-7);
+    lines.push(
+      `  daily: ${recent.map((d) => `${d.date.slice(5)}=$${d.cost.toFixed(2)}`).join(" · ")}`,
+    );
+  }
   if (snap.billing.byProviderModel.length > 0) {
     lines.push("  by model (month ledger):");
     for (const row of snap.billing.byProviderModel.slice(0, 6)) {
@@ -821,6 +1065,20 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
         `    - ${row.key}: $${row.cost.toFixed(4)} (in ${row.input} · out ${row.output})`,
       );
     }
+  }
+
+  lines.push(
+    `fleet: ${snap.fleet.health}` +
+      ` · jobs ${snap.fleet.runningJobs} running` +
+      ` · subs ${snap.fleet.runningSubagents} live` +
+      ` · slots_free ${snap.fleet.slotsFree}` +
+      (snap.fleet.queuedInbox > 0 ? ` · inbox ${snap.fleet.queuedInbox}` : "") +
+      (snap.fleet.channelAlerts > 0
+        ? ` · channel_alerts ${snap.fleet.channelAlerts}`
+        : ""),
+  );
+  for (const alert of snap.fleet.alerts.slice(0, 6)) {
+    lines.push(`  - [${alert.severity}] ${alert.message}`);
   }
 
   lines.push(
@@ -859,6 +1117,10 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
   lines.push(
     `compaction: ${snap.compaction.phase}` +
       ` · pipeline ${stageLabel}` +
+      (snap.compaction.strategy
+        ? ` · strategy ${snap.compaction.strategy}`
+        : "") +
+      (snap.compaction.guardian ? " · guardian on" : "") +
       (snap.compaction.lastReason
         ? ` · last ${snap.compaction.lastReason}`
         : "") +
@@ -871,6 +1133,11 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
         ? ` · spill ${snap.compaction.spillCount}`
         : ""),
   );
+  if (snap.compaction.spillPaths && snap.compaction.spillPaths.length > 0) {
+    for (const p of snap.compaction.spillPaths.slice(-6)) {
+      lines.push(`  spill: ${p}`);
+    }
+  }
   lines.push(
     `delivery: ${snap.delivery.note}` +
       ` · queued ${snap.delivery.queued}` +

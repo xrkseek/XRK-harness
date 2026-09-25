@@ -1,7 +1,7 @@
 /**
- * Desktop electron-builder packaging targets (ADR-0008 draft).
+ * Desktop electron-builder packaging targets (ADR-0008 · first-wave).
  * First wave: win-x64 + mac-arm64. Linux (and mac-x64) deferred — do not ship.
- * Real code signing / notarize stay deferred (status); helpers only scrub secrets.
+ * Signing: env-gated (see desktop-signing-environment). Unsigned Windows via XRK_DESKTOP_UNSIGNED=1.
  */
 
 /** First-wave release target ids (scripts / CI may select only these). */
@@ -21,7 +21,7 @@ export interface DesktopPackageTarget {
   readonly arch: "arm64" | "x64";
   readonly builderPlatform: "--mac" | "--win";
   readonly builderArch: "--arm64" | "--x64";
-  /** Planned electron-builder `target` list for this OS row. */
+  /** electron-builder `target` list for this OS row. */
   readonly builderTargets: readonly string[];
 }
 
@@ -51,7 +51,7 @@ const DEFERRED = new Set<string>([
   "win-arm64",
 ]);
 
-/** Env prefix for future Windows signing secrets (never pass into prep subprocesses). */
+/** Env prefix for Windows signing secrets (scrubbed from prep subprocesses). */
 export const DESKTOP_WINDOWS_SIGNING_ENV_PREFIX = "XRK_DESKTOP_WINDOWS_" as const;
 
 /** Upload credential env names scrubbed from packaging subprocesses (phase-2 upload). */
@@ -62,8 +62,9 @@ export const DESKTOP_UPLOAD_CREDENTIAL_ENV_NAMES = [
   "XRK_DESKTOP_UPLOAD_TEST_SECRET_KEY",
 ] as const;
 
-/** Planned product name / artifact pattern for a future electron-builder config. */
-export const DESKTOP_BUILDER_DRAFT = {
+/** electron-builder product identity (apps/desktop/electron-builder.config.mjs). */
+export const DESKTOP_BUILDER_CONFIG = {
+  appId: "com.xrkseek.harness",
   productName: "XRK Harness",
   artifactName: "xrk-harness-${version}-${os}-${arch}.${ext}",
   configFile: "electron-builder.config.mjs",
@@ -71,12 +72,16 @@ export const DESKTOP_BUILDER_DRAFT = {
   nsis: {
     oneClick: false,
     allowToChangeInstallationDirectory: true,
+    differentialPackage: true,
   },
   mac: {
     category: "public.app-category.developer-tools",
     hardenedRuntime: true,
   },
 } as const;
+
+/** @deprecated Use {@link DESKTOP_BUILDER_CONFIG}. */
+export const DESKTOP_BUILDER_DRAFT = DESKTOP_BUILDER_CONFIG;
 
 /** Ordered first-wave targets. */
 export function listDesktopPackageTargets(): readonly DesktopPackageTarget[] {
@@ -141,10 +146,10 @@ export function assertDesktopPackageHostCompatible(
 }
 
 /**
- * Draft electron-builder argv for one first-wave target.
- * Always disables publish here; upload pipeline is phase 2.
+ * electron-builder argv for one first-wave target.
+ * Always disables publish here; upload pipeline is phase 2 (separate validated step).
  */
-export function desktopElectronBuilderDraftArguments(
+export function desktopElectronBuilderArguments(
   target: DesktopPackageTarget,
   options: { readonly directory?: boolean } = {},
 ): readonly string[] {
@@ -152,7 +157,7 @@ export function desktopElectronBuilderDraftArguments(
     "exec",
     "electron-builder",
     "--config",
-    DESKTOP_BUILDER_DRAFT.configFile,
+    DESKTOP_BUILDER_CONFIG.configFile,
     target.builderPlatform,
     target.builderArch,
     "--publish",
@@ -160,6 +165,14 @@ export function desktopElectronBuilderDraftArguments(
   ];
   if (options.directory === true) args.push("--dir");
   return args;
+}
+
+/** @deprecated Use {@link desktopElectronBuilderArguments}. */
+export function desktopElectronBuilderDraftArguments(
+  target: DesktopPackageTarget,
+  options: { readonly directory?: boolean } = {},
+): readonly string[] {
+  return desktopElectronBuilderArguments(target, options);
 }
 
 /** Strip Windows signing env from package-prep subprocess environments. */

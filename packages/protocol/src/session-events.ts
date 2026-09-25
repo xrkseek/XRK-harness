@@ -142,6 +142,16 @@ export type UserMessageSource =
       readonly plugin?: string;
       readonly form?: string;
       readonly [key: string]: unknown;
+    }
+  | {
+      /**
+       * Loop-injected continuation prompt after a max-tokens truncation
+       * (Face `agent-loop.autoContinueOnMaxTokens`). Rendered as a grey
+       * "已自动继续" strip, not as a real human message.
+       */
+      readonly kind: "auto-continue";
+      /** Which consecutive auto-continue this is (1-based). */
+      readonly round: number;
     };
 
 /** Budget clip recorded on durable workspace injects (was inject-result-only). */

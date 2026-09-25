@@ -5,8 +5,10 @@ import { stat } from "node:fs/promises";
 import { resolveXrkHome } from "@xrkseek/server-config";
 import { probeSandboxEnvironment } from "@xrkseek/exec-sandbox";
 import {
+  getOutboundAllowlistAuditLog,
   parseOutboundAllowlistHosts,
 } from "@xrkseek/exec-web";
+import { probeHttpExecEnvironment } from "@xrkseek/exec-environment";
 import { describeVoiceAccess } from "@xrkseek/exec-voice";
 import {
   PRODUCT_SHELL_BUILD_HINT,
@@ -173,14 +175,51 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
   const allowHosts = parseOutboundAllowlistHosts(
     process.env.XRK_WEB_FETCH_ALLOWLIST,
   );
+  const auditTail = getOutboundAllowlistAuditLog().slice(-5);
+  const auditDetail =
+    auditTail.length === 0
+      ? "audit ring empty"
+      : `recent ${auditTail.length}: ${auditTail
+          .map((e) => `${e.decision}:${e.host}`)
+          .join(", ")}`;
   checks.push({
     name: "web-fetch-allowlist",
     ok: true,
     detail:
       allowHosts.length === 0
-        ? "open (XRK_WEB_FETCH_ALLOWLIST unset; private hosts still blocked; denials audited when fetch runs)"
-        : `allowlist (${allowHosts.length}): ${allowHosts.slice(0, 12).join(", ")}${allowHosts.length > 12 ? ", …" : ""}`,
+        ? `open (XRK_WEB_FETCH_ALLOWLIST unset; private hosts still blocked; ${auditDetail})`
+        : `allowlist (${allowHosts.length}): ${allowHosts.slice(0, 12).join(", ")}${allowHosts.length > 12 ? ", …" : ""}; ${auditDetail}`,
   });
+
+  const execKind = String(process.env.XRK_EXEC_ENVIRONMENT ?? "local")
+    .trim()
+    .toLowerCase();
+  if (execKind === "http") {
+    const url = String(process.env.XRK_EXEC_ENVIRONMENT_URL ?? "").trim();
+    let httpOk = false;
+    let httpDetail = url
+      ? `XRK_EXEC_ENVIRONMENT=http url=${url}`
+      : "XRK_EXEC_ENVIRONMENT=http but XRK_EXEC_ENVIRONMENT_URL unset";
+    if (url) {
+      try {
+        httpOk = await probeHttpExecEnvironment({ baseUrl: url });
+        httpDetail += httpOk ? " · /health ok" : " · /health failed";
+      } catch (err) {
+        httpDetail += ` · probe error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+    checks.push({
+      name: "exec-environment-http",
+      ok: Boolean(url) && httpOk,
+      detail: httpDetail,
+    });
+  } else {
+    checks.push({
+      name: "exec-environment",
+      ok: true,
+      detail: `local (XRK_EXEC_ENVIRONMENT=${execKind || "local"})`,
+    });
+  }
 
   const voice = describeVoiceAccess(process.env);
   checks.push({
@@ -213,6 +252,7 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
           c.name !== "dsh-compat-host" &&
           c.name !== "web-fetch-allowlist" &&
           c.name !== "voice" &&
+          c.name !== "exec-environment" &&
           // sandbox-backend is always ok; sandbox-helper fails closed when backend needs a helper
           c.name !== "sandbox-backend",
       )

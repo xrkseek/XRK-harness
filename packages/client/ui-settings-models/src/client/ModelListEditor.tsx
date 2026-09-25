@@ -429,6 +429,47 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
                   />
                 </label>
+                <fieldset className={styles['modelField']}>
+                  <legend className={styles['modelFieldLabel']}>{t('inputModalities')}</legend>
+                  <label className={styles['modalityCheck']}>
+                    <input
+                      type="checkbox"
+                      checked={Array.isArray(model['inputModalities'])
+                        ? (model['inputModalities'] as unknown[]).includes('text')
+                        : true}
+                      disabled={disabled}
+                      onChange={(event) => {
+                        const cur = Array.isArray(model['inputModalities'])
+                          ? [...(model['inputModalities'] as ("text" | "image")[])]
+                          : (['text'] as ("text" | "image")[])
+                        const next = event.target.checked
+                          ? (cur.includes('text') ? cur : [...cur, 'text' as const])
+                          : cur.filter(m => m !== 'text')
+                        patch(index, { inputModalities: next.length > 0 ? next : ['text'] })
+                      }}
+                    />
+                    {t('modalityText')}
+                  </label>
+                  <label className={styles['modalityCheck']}>
+                    <input
+                      type="checkbox"
+                      checked={Array.isArray(model['inputModalities'])
+                        ? (model['inputModalities'] as unknown[]).includes('image')
+                        : false}
+                      disabled={disabled}
+                      onChange={(event) => {
+                        const cur = Array.isArray(model['inputModalities'])
+                          ? [...(model['inputModalities'] as ("text" | "image")[])]
+                          : (['text'] as ("text" | "image")[])
+                        const next = event.target.checked
+                          ? (cur.includes('image') ? cur : [...cur, 'image' as const])
+                          : cur.filter(m => m !== 'image')
+                        patch(index, { inputModalities: next.length > 0 ? next : ['text'] })
+                      }}
+                    />
+                    {t('modalityImage')}
+                  </label>
+                </fieldset>
               </div>
             )
             : null}

@@ -1,6 +1,6 @@
 # presets/minimal
 
-Composition only: fs tools (`read_file` · `write_file` · `apply_edit` · glob/grep) · skill · write-intent · workspace inject · replay LLM. **No** bash / PTY.
+Composition only: fs tools (`read_file` · `write_file` · `apply_edit` · glob/grep) · skill · std · write-intent · workspace inject · replay LLM. **No** bash / PTY / web / lsp / subagents.
 
 SDK / CLI `run` defaults here. For local shell, use the **shell** session badge (harness plane), not a shell-only redefinition of this preset — see `docs/profiles.md`.
 

@@ -27,6 +27,10 @@ export interface DesktopTargetBuildPaths {
   readonly downloads: string;
   readonly packageSet: string;
   readonly seed: string;
+  /** electron-builder output (signed or unsigned). */
+  readonly artifacts: string;
+  /** Unsigned-only artifact root when XRK_DESKTOP_UNSIGNED=1. */
+  readonly unsignedArtifacts: string;
 }
 
 /**
@@ -75,6 +79,8 @@ export function desktopTargetBuildPaths(
     downloads: path.join(buildRoot, "downloads"),
     packageSet: path.join(root, "package-set"),
     seed: path.join(root, "seed"),
+    artifacts: path.join(root, "artifacts"),
+    unsignedArtifacts: path.join(root, "unsigned-artifacts"),
   };
 }
 

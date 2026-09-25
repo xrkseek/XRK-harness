@@ -65,8 +65,12 @@ export {
   formatCompactionForModel,
   prepareCompactionPayload,
   resolveSoftBudgetCeiling,
+  parseCompactionStrategy,
+  resolveCompactionStrategy,
+  COMPACTION_STRATEGIES,
   selectHeadRecent,
   type CompactionOptions,
+  type CompactionStrategy,
 } from "./compaction.js";
 
 export {

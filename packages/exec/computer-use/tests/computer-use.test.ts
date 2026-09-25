@@ -21,6 +21,26 @@ describe("formatAxSnapshot", () => {
     expect(text).toContain("[1] [button] OK");
     expect(text).toContain("app: Demo");
   });
+
+  it("includes mode and elementToken for SOM honesty", () => {
+    const text = formatAxSnapshot({
+      app: "Demo",
+      windowTitle: "Win",
+      mode: "som",
+      elements: [
+        {
+          index: 1,
+          role: "button",
+          name: "OK",
+          elementToken: "mem-1-1",
+        },
+      ],
+      note: "memory provider has no screenshot; AX elements only",
+    });
+    expect(text).toContain("mode: som");
+    expect(text).toContain("token=mem-1-1");
+    expect(text).toContain("no screenshot");
+  });
 });
 
 describe("createMemoryComputerUseProvider", () => {
@@ -39,6 +59,15 @@ describe("createMemoryComputerUseProvider", () => {
     await svc.act({ action: "type", element: 2, text: "hello" });
     const snap = await svc.capture();
     expect(snap.text).toContain("hello");
+  });
+
+  it("mode=som keeps AX tokens and honesty note", async () => {
+    const svc = createMemoryComputerUseProvider();
+    const snap = await svc.capture({ mode: "som" });
+    expect(snap.mode).toBe("som");
+    expect(snap.text).toContain("mode: som");
+    expect(snap.text).toContain("token=mem-");
+    expect(snap.note ?? snap.text).toMatch(/no screenshot/i);
   });
 });
 

@@ -8,7 +8,7 @@
 
 | 症状 | 处理 |
 |------|------|
-| `engines` / `Unsupported environment`，Node 过旧 | 换系统 Node **≥26**；勿让 IDE 自带 Node 抢 PATH（Windows：`where node`） |
+| `engines` / `Unsupported environment`，Node 过旧 | 换系统 Node **≥26**；让系统 Node 优先（IDE 自带 Node 会让 `where node` 指错）（Windows：`where node`） |
 | 本机没有 pnpm / 版本不对 | `npm install -g pnpm@11.22.0`（与根 `packageManager` 对齐）；用 pnpm，不经 Corepack |
 | 误装 yarn / 用 npm 装本仓依赖 | 删掉误装的 `node_modules`，改用上面同版 pnpm 再 `pnpm install` |
 | `ERR_PNPM_IGNORED_BUILDS`（esbuild / node-pty 等） | 根 `pnpm-workspace.yaml` → `allowBuilds` 已放行；缺项就补 `true` 后重装 |
@@ -49,7 +49,8 @@
 | 症状 | 处理 |
 |------|------|
 | 启动打 `mcp parked …`（info） | 正常：未开「允许连接」。**Settings → Plugins → MCP** 打开 Allow connect 并保存 |
-| connect 被拒 / `connectFailures` | 已 allow 仍失败 → 在 Settings MCP 卡核对 `command` / PATH / `args` / `cwd` |
+| MCP connect 被拒 / `connectFailures` | 已 allow 仍失败 → 在 Settings MCP 卡核对 `command` / PATH / `args` / `cwd` |
+| `host-settings.json` 报 parse failed / Unexpected token `﻿` | 文件带 UTF-8 BOM（PowerShell `Set-Content` 常见）。本版 Host 会剥 BOM；也可用无 BOM UTF-8 重存该文件后 `xrkh restart` |
 | mutate 后不热挂载 | 若设了 `XRK_MCP_SERVERS`（Host/CI 旁路），env 赢过文件 → `applies: restart`，需重启 Host；日常改服务器列表用 Settings 即可热挂载 |
 | 工具消失 / gave-up | 进程重连帽满或 `reconnect.enabled: false`；看 Face `connectFailures` / `connected[].status` |
 | stdio 命令找不到 | 在 Settings → Plugins → MCP 检查 PATH 与 `command`/`args`/`cwd` |
@@ -74,12 +75,12 @@
 
 | 症状 | 处理 |
 |------|------|
-| `plugin add` 后壳无变化 | 须 **`xrkh restart`**（或停再起 `web`）；`xrkh plugin list` 确认包在 `~/.xrk/plugins` |
+| `plugin add` 后壳无变化 | 用 **`xrkh restart`**（或停再起 `web`）；`xrkh plugin list` 确认包在 `~/.xrk/plugins` |
 | 点插件设置项内容报错 / 像「消失」 | 对话框应仍打开；内容区若见 `[data-slot-error]` 是插件渲染崩溃（短错误文案 + `window.__XRK_DIAG__.recent`；`?xrkLog=debug` 打栈）。壳保留导航项。`dsh-cost-meter` / `dsh-mnemon` 依赖的 Face / mnemon RPC（单层 `getState`、`provider-services` 返回 catalog） |
 | 浏览器诊断偏少 | 控制台看 `HH:mm:ss.sss level  ns  msg`；或 `window.__XRK_DIAG__.recent`。级别：`?xrkLog=debug` / `localStorage.XRK_LOG=debug` / `window.__XRK_LOG__` |
 | 面板 `incomplete` / `*-host` | 对照 [community-plugins.md](./community-plugins.md)；多数 wire 已由 Host 适配层桥接，少数大规模外部发行版见「**待补 / Planned**」 |
 | IM OAuth 后仍无厂商推送 | 本地 `message.send` / webhook 已可用；云端长连接网关见 status「**未做 / Not done**」与 [community-plugins.md](./community-plugins.md)「待补」 |
-| TongFlow 任务立刻完成 | 内置 **TS** 节点（echo 等）会立刻完成；`kind: external` 须配置 `config.command`，否则返回 honest gap（[ADR-0007](./adr/0007-taskflow-external-runtime.md)） |
+| TongFlow 任务立刻完成 | 内置 **TS** 节点（echo 等）会立刻完成；`kind: external` 配置 `config.command`，否则返回 honest gap（[ADR-0007](./adr/0007-taskflow-external-runtime.md)） |
 | Cordis 面板 `fiber-unavailable` | 包需 `host.mjs` 或 staged `client.js`；见 `dynamicCordisRunner/runHostHalf` 与 [community-plugins.md](./community-plugins.md) |
 
 本机审计：`node scripts/dsh-community-audit.mjs`。安装步骤：[getting-started.md](./getting-started.md#社区-client-插件可选--community-client-plugins-optional)。
@@ -89,7 +90,7 @@
 | 症状 | 处理 |
 |------|------|
 | 重启丢会话 | Host 未设 `XRK_SESSIONS_DIR` 且非 CLI serve 默认路径 → 内存仓 |
-| 会话库损坏 / 打不开 | 看 `~/.xrk/sessions/sessions.db`（或 `XRK_SESSIONS_DIR`）；Host 须 `stop`/`close` 后再删文件（Windows） |
+| 会话库损坏 / 打不开 | 看 `~/.xrk/sessions/sessions.db`（或 `XRK_SESSIONS_DIR`）；Host 先 `stop`/`close` 再删文件（Windows） |
 
 见：[session.md](./session.md)。
 
@@ -162,6 +163,7 @@ Diagnose by symptom. If it still fails, check whether [status.md](./status.md) m
 |------|------|
 | Startup logs `mcp parked …` (info) | Expected when Allow connect is off. Enable Allow connect under **Settings → Plugins → MCP** and save |
 | Connect rejected / `connectFailures` | If already allowed, check `command` / PATH / `args` / `cwd` in the Settings MCP card |
+| `host-settings.json` parse failed / Unexpected token `﻿` | File has a UTF-8 BOM (common after PowerShell `Set-Content`). This release strips BOM on read; you can also re-save as BOM-free UTF-8 and `xrkh restart` |
 | No hot-mount after mutate | If `XRK_MCP_SERVERS` is set (Host/CI bypass), env wins over file → `applies: restart`; restart Host. Day-to-day server edits via Settings hot-mount |
 | Tools disappear / gave-up | Process reconnect cap exhausted or `reconnect.enabled: false`; inspect Face `connectFailures` / `connected[].status` |
 | stdio command not found | Check PATH and `command`/`args`/`cwd` under Settings → Plugins → MCP |

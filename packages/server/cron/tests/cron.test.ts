@@ -177,6 +177,34 @@ describe("createHostCron", () => {
     const dir = tmpDir();
     const s = createHostCron({ productHome: dir, env: {} });
     expect(s).toBeDefined();
+    expect(s!.executions).toBeDefined();
     s!.stop();
+  });
+});
+
+describe("cron execution ledger", () => {
+  it("runNow appends and runs action lists history", async () => {
+    const dir = tmpDir();
+    const scheduler = createHostCron({ productHome: dir, env: {} })!;
+    const job = scheduler.store.create({
+      name: "echo",
+      schedule: { kind: "every", everySeconds: 3600 },
+      run: {
+        kind: "script",
+        command:
+          process.platform === "win32" ? "echo ledger" : "echo ledger",
+      },
+      delivery: { kind: "none" },
+    });
+    const result = await scheduler.runNow(job.id);
+    expect(result.ok).toBe(true);
+    const rows = scheduler.executions!.list({ jobId: job.id, limit: 5 });
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.status).toBe("ok");
+    const tools = createCronTools(scheduler);
+    const out = await tools[0]!.execute({ action: "runs", id: job.id });
+    expect(out.content).toMatch(/ok/);
+    expect(out.content).toMatch(job.id);
+    scheduler.stop();
   });
 });

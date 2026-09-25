@@ -180,3 +180,16 @@ describe('DiffBlock copy', () => {
     expect(writeText).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('DiffBlock split layout', () => {
+  it('toggles into side-by-side columns with synced panes', () => {
+    const diffs: DiffHunk[] = [{ path: 'a.ts', oldText: 'old\nline', newText: 'new\nline' }]
+    const { container } = render(<DiffBlock diffs={diffs} />)
+    fireEvent.click(screen.getByRole('button', { name: '切换为分栏视图' }))
+    expect(container.querySelector('[data-diff-layout="split"]')).toBeTruthy()
+    expect(container.querySelectorAll('[data-side="old"]').length).toBe(1)
+    expect(container.querySelectorAll('[data-side="new"]').length).toBe(1)
+    fireEvent.click(screen.getByRole('button', { name: '切换为统一视图' }))
+    expect(container.querySelector('[data-diff-layout="unified"]')).toBeTruthy()
+  })
+})

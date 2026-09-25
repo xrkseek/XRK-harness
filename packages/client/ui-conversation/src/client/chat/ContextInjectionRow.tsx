@@ -35,6 +35,13 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
   // the opaque body, and the marker must say what the row actually shows.
   const { rendered, summary, body } = contextBody(form, { content, source, t })
 
+  // The auto-continue provenance label is a stable identifier, not a product
+  // sentence: translating here keeps runtime dictionaries (and the merged log
+  // they were written from) free of UI copy, and the English UI from Chinese.
+  const sourceLabel = provenance.label === 'auto-continue'
+    ? t('message.context.autoContinue')
+    : provenance.label
+
   return (
     <DisclosureRow
       className={css.root}
@@ -49,7 +56,7 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
            name shape. A source that names no producer drops the dot with it. */
         <>
           <span className={css.sep} aria-hidden />
-          <span className={css.source} data-context-source>{provenance.label}</span>
+          <span className={css.source} data-context-source>{sourceLabel}</span>
           {summary !== null && (
             <>
               <span className={css.sep} aria-hidden />

@@ -65,7 +65,7 @@ createMcpClient({
 });
 ```
 
-Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目可 `command` 或 `url`；空 env 时读 `~/.xrk/host-settings.json` 的 `mcp.servers`）。Face `settings.mutate` 写 desired `servers`（`env` 仅允许代理键 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`）；文件真源时 Host `reconcileMcpToolPlugins` 热挂载（`applies: live`）；`XRK_MCP_SERVERS` / config 非空则仍赢过文件且 mutate 为 `applies: restart`。stdio 未写 `cwd` 时默认 `~/.xrk/mcp-cwd/<serverName>`（避免 `@playwright/mcp` 等在工作区落 `.playwright-mcp`）。Settings 显式 `cwd` 优先生效；若解析后落在 Host 工作区内，须设 `cwdAllowWorkspace: true`（设置卡勾选「允许工作区 cwd」），否则连接失败并提示风险。
+Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目可 `command` 或 `url`；空 env 时读 `~/.xrk/host-settings.json` 的 `mcp.servers`）。Face `settings.mutate` 写 desired `servers`（`env` 仅允许代理键 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`）；文件真源时 Host `reconcileMcpToolPlugins` 热挂载（`applies: live`）；`XRK_MCP_SERVERS` / config 非空则仍赢过文件且 mutate 为 `applies: restart`。stdio 未写 `cwd` 时默认 `~/.xrk/mcp-cwd/<serverName>`（避免 `@playwright/mcp` 等在工作区落 `.playwright-mcp`）。Settings 显式 `cwd` 优先生效；若解析后落在 Host 工作区内，设 `cwdAllowWorkspace: true`（设置卡勾选「允许工作区 cwd」），否则连接失败并提示风险。
 
 ## 终端用户如何挂能力
 
@@ -73,12 +73,12 @@ Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目�
 
 ## 不变量（防 bug）
 
-1. **永不跳过 policy**：即使测试注入 transport，也要走 `assertPolicyAllow`。  
+1. **始终走 policy**：测试注入 transport 时同样调用 `assertPolicyAllow`。  
 2. **工具名稳定**：模型可见名只来自 `publicToolName`；改命名规则 = 破坏会话可重放。  
-3. **dispose 成对**：Host `loader.unregister` / plugin `dispose` 必须关子进程 / HTTP session。回合进行中的 `settings_mutate` 热挂载走 **soft-detach**（`loader.detach` + 回合结束后再 dispose），避免 mid-drain 工具被掐断。  
+3. **dispose 成对**：Host `loader.unregister` / plugin `dispose` 成对关闭子进程 / HTTP session。回合进行中的 `settings_mutate` 热挂载走 **soft-detach**（`loader.detach` + 回合结束后再 dispose），避免 mid-drain 工具被掐断。  
 4. **显式优先**：registry 已有同名 → skip（与 loader tools 纪律一致）。  
 5. **代际不交错**：每次重连新 `Client`；`isCurrent` 让旧代 `onclose` inert。失败帽耗尽才卸工具。  
-6. **富结果**：非 text 块不 `JSON.stringify`；image 须 `imageAdmission` 才进模型可见 ContentBlock；否则固定 diagnostic 文案（raw bytes 不进 session log）。  
+6. **富结果**：非 text 块按结构化块传递（不经 `JSON.stringify`）；image 经 `imageAdmission` 进模型可见 ContentBlock；否则固定 diagnostic 文案（raw bytes 不进 session log）。  
 7. **park / connectFailures**：policy deny 或 Allow connect 关闭 → `parked`；spawn/握手失败 → `connectFailures`。Face 缓存最近一次 Host sync overlay，避免 `settings.describe` 把失败行误标成 parked。  
 8. **auth 只加头，不改门禁**：`auth.headers()` 在 `openTransport` 里 await，抛错即连接失败——**不**降级成匿名重试；`auth` 也不绕过 `mcp.connect` policy。合并头大小写不敏感，同名以 auth 为准，调用方原有 header 保留。
 

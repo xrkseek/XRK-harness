@@ -66,4 +66,48 @@ describe("projection LRU eviction (Codex tier)", () => {
       }
     }
   });
+
+  it("store eviction invalidates the cached agent for that session", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "xrk-face-agent-evict-"));
+    try {
+      const store = createPersistentSessionStore(dir, {
+        maxResidentSessions: 1,
+      });
+      const invalidated: string[] = [];
+      createBareFaceRuntime({
+        store,
+        resolveAgent: unusedAgentResolve(),
+        invalidateAgent: (sessionId) => {
+          invalidated.push(sessionId);
+        },
+      });
+
+      const evicted = newSession(store);
+      store.append(evicted.id, {
+        type: "turn/start",
+        ts: 1,
+        turnId: "t1",
+      });
+      store.append(evicted.id, {
+        type: "turn/end",
+        ts: 2,
+        turnId: "t1",
+        reason: { kind: "completed" },
+      });
+
+      const keeper = newSession(store);
+      store.get(keeper.id);
+      expect(store.isLoaded?.(evicted.id)).toBe(false);
+
+      await Promise.resolve();
+      expect(invalidated).toEqual([evicted.id]);
+      store.close();
+    } finally {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* Windows may keep WAL handles briefly after close */
+      }
+    }
+  });
 });

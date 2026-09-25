@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  DESKTOP_BUILDER_CONFIG,
   DESKTOP_BUILDER_DRAFT,
   DESKTOP_UPLOAD_CREDENTIAL_ENV_NAMES,
   DESKTOP_WINDOWS_SIGNING_ENV_PREFIX,
   assertDesktopPackageHostCompatible,
+  desktopElectronBuilderArguments,
   desktopElectronBuilderDraftArguments,
   isDesktopFirstWavePackageTarget,
   listDesktopPackageTargets,
@@ -12,7 +14,7 @@ import {
   withoutDesktopWindowsSigningEnvironment,
 } from "../src/package-targets.js";
 
-describe("desktop package targets (draft matrix)", () => {
+describe("desktop package targets (first-wave matrix)", () => {
   it("lists first-wave win-x64 and mac-arm64 with matching builder selectors", () => {
     expect(listDesktopPackageTargets().map((t) => t.name)).toEqual([
       "win-x64",
@@ -63,13 +65,13 @@ describe("desktop package targets (draft matrix)", () => {
     ).toThrow(/macOS/u);
   });
 
-  it("keeps electron-builder draft argv publish-disabled", () => {
+  it("keeps electron-builder argv publish-disabled (upload is separate)", () => {
     const target = resolveDesktopPackageTarget("mac-arm64");
-    expect(desktopElectronBuilderDraftArguments(target)).toEqual([
+    expect(desktopElectronBuilderArguments(target)).toEqual([
       "exec",
       "electron-builder",
       "--config",
-      DESKTOP_BUILDER_DRAFT.configFile,
+      DESKTOP_BUILDER_CONFIG.configFile,
       "--mac",
       "--arm64",
       "--publish",
@@ -80,7 +82,7 @@ describe("desktop package targets (draft matrix)", () => {
     ).toContain("--dir");
   });
 
-  it("scrubs Windows signing env from prep subprocesses (no real signing)", () => {
+  it("scrubs Windows signing env from prep subprocesses", () => {
     expect(DESKTOP_WINDOWS_SIGNING_ENV_PREFIX).toBe("XRK_DESKTOP_WINDOWS_");
     expect(
       withoutDesktopWindowsSigningEnvironment({
@@ -107,8 +109,10 @@ describe("desktop package targets (draft matrix)", () => {
     });
   });
 
-  it("carries draft electron-builder product identity (not shipping)", () => {
-    expect(DESKTOP_BUILDER_DRAFT.productName).toBe("XRK Harness");
-    expect(DESKTOP_BUILDER_DRAFT.nsis.oneClick).toBe(false);
+  it("carries electron-builder product identity", () => {
+    expect(DESKTOP_BUILDER_CONFIG.productName).toBe("XRK Harness");
+    expect(DESKTOP_BUILDER_CONFIG.appId).toBe("com.xrkseek.harness");
+    expect(DESKTOP_BUILDER_CONFIG.nsis.oneClick).toBe(false);
+    expect(DESKTOP_BUILDER_DRAFT).toBe(DESKTOP_BUILDER_CONFIG);
   });
 });

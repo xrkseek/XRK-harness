@@ -15,9 +15,10 @@
  * drawer overlay (always wide) and details a full-screen sheet. Narrow tablet
  * viewports (PHONE_MAX..SIDEBAR_AUTO_COLLAPSE) keep the compact rail.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@xrkseek/client-ui-slots'
+import { ShortcutsPanel, type ShortcutEntry } from '@xrkseek/client-ui-primitives'
 import {
   computeColumns, phoneDrawerWidth, resolveShellTracks,
   SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT,
@@ -124,6 +125,61 @@ export function AppFrame({
   })
   const frameRef = useRef<HTMLDivElement | null>(null)
   const [viewport, setViewport] = useState(() => window.innerWidth)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [shortcutsFilter, setShortcutsFilter] = useState('')
+
+  const shortcutEntries = useMemo<readonly ShortcutEntry[]>(() => {
+    const mod = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform)
+      ? '⌘'
+      : 'Ctrl'
+    return [
+      {
+        id: 'keybinds.openPanel',
+        keys: `${mod}+/`,
+        label: t('shortcuts.openPanel'),
+        category: t('shortcuts.cat.general'),
+      },
+      {
+        id: 'composer.submit',
+        keys: `${mod}+Enter`,
+        label: t('shortcuts.submit'),
+        category: t('shortcuts.cat.composer'),
+      },
+      {
+        id: 'composer.newline',
+        keys: 'Shift+Enter',
+        label: t('shortcuts.newLine'),
+        category: t('shortcuts.cat.composer'),
+      },
+      {
+        id: 'layout.toggleSidebar',
+        keys: `${mod}+B`,
+        label: t('shortcuts.toggleSidebar'),
+        category: t('shortcuts.cat.panels'),
+      },
+      {
+        id: 'layout.toggleDetails',
+        keys: `${mod}+J`,
+        label: t('shortcuts.toggleDetails'),
+        category: t('shortcuts.cat.panels'),
+      },
+    ]
+  }, [t])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
+      const target = e.target as HTMLElement | null
+      if (target?.closest?.('input, textarea, [contenteditable="true"]')) {
+        // Still allow Ctrl+/ inside composer — Hermes/Codex open the panel from anywhere.
+      }
+      e.preventDefault()
+      setShortcutsOpen(true)
+      setShortcutsFilter('')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey) }
+  }, [])
 
   const lastSession = useRef(detailsSession)
   useLayoutEffect(() => {
@@ -358,6 +414,18 @@ export function AppFrame({
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}
       </div>
+      <ShortcutsPanel
+        open={shortcutsOpen}
+        onClose={() => { setShortcutsOpen(false) }}
+        title={t('shortcuts.title')}
+        closeLabel={t('shortcuts.close')}
+        description={t('shortcuts.description')}
+        searchPlaceholder={t('shortcuts.search')}
+        emptyLabel={t('shortcuts.empty')}
+        entries={shortcutEntries}
+        filter={shortcutsFilter}
+        onFilterChange={setShortcutsFilter}
+      />
       {phone && sidebarCollapsed && detailsCollapsed && (
         <button
           ref={menuRef}

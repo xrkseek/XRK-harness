@@ -22,6 +22,8 @@ packages:
 allowBuilds:
   "@xrkseek/exec-pty": true
   "@xrkseek/exec-pty@file:packages/exec/pty": true
+  electron: set this to true or false
+  electron-winstaller: set this to true or false
   esbuild: true
   keytar: false
   node-pty: true

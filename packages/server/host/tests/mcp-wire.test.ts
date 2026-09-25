@@ -116,6 +116,23 @@ describe("host mcp-wire", () => {
     ]);
   });
 
+  it("tolerates UTF-8 BOM in host-settings.json (PowerShell Set-Content)", async () => {
+    resetLastGoodHostMcpWireCaches();
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-mcp-bom-"));
+    const file = path.join(dir, "host-settings.json");
+    const body = JSON.stringify({
+      mcp: {
+        servers: [{ serverName: "bom", command: "npx" }],
+        allowConnect: true,
+      },
+    });
+    await writeFile(file, `\uFEFF${body}\n`, "utf8");
+    expect(readMcpServersFromHostSettings(file)).toEqual([
+      { serverName: "bom", command: "npx" },
+    ]);
+    expect(readMcpAllowFromHostSettings(file)).toBe(true);
+  });
+
   it("keeps last-good servers when mcp.servers is omitted (truncated write)", async () => {
     resetLastGoodHostMcpWireCaches();
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-mcp-trunc-"));

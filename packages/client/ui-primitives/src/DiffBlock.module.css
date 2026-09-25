@@ -15,15 +15,19 @@
   border-radius: var(--dsl-diff-radius);
 }
 
-/* The copy control floats in the top-right corner over the body, so the card
-   has no empty banner row above its first diff line (the TUI diff card has no
-   banner either — only the footer). The block is position: relative, so this
-   anchors to the card. */
-.copyButton {
+/* Toolbar: layout toggle + copy, top-right over the body (no empty banner). */
+.toolbar {
   position: absolute;
   top: 8px;
   right: 12px;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.layoutButton,
+.copyButton {
   background-color: transparent;
   border: none;
   padding: 0;
@@ -31,6 +35,15 @@
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   font: var(--dsw-font-xs-13);
+}
+
+.layoutButton[aria-pressed='true'] {
+  color: var(--dsw-alias-label-primary);
+}
+
+.layoutButton:hover,
+.copyButton:hover {
+  color: var(--dsw-alias-label-primary);
 }
 
 .body {
@@ -46,14 +59,53 @@
   white-space: pre;
 }
 
-/* A file header: the path in the primary tone, set apart by weight. The copy
-   button floats over this first row's top-right corner, so reserve space at the
-   line's end for it — a long path scrolls under the button otherwise, and the
-   button's hit area would eat clicks on the path's tail. */
+/* A file header: the path in the primary tone, set apart by weight. The toolbar
+   floats over this first row's top-right corner, so reserve space at the
+   line's end for it — a long path scrolls under the controls otherwise. */
 .path {
   color: var(--dsw-alias-label-primary);
   font-weight: 600;
-  padding-right: 56px;
+  padding-right: 96px;
+}
+
+/* Side-by-side columns (DSH ReviewTab split subset). */
+.splitBody {
+  padding: 12px 14px;
+  font: var(--dsw-font-markdown-code-block);
+}
+
+.splitSection + .splitSection {
+  margin-top: 8px;
+}
+
+.splitColumns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  overflow: hidden;
+  max-height: calc(var(--dsl-diff-line-height) * 24);
+}
+
+.splitPane {
+  overflow: auto;
+  padding: 4px 8px;
+  min-width: 0;
+}
+
+.splitPane[data-side='old'] {
+  border-right: 1px solid var(--dsw-alias-border-l2);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 6%, transparent);
+}
+
+.splitPane[data-side='new'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 6%, transparent);
+}
+
+.splitEmpty {
+  color: transparent;
+  user-select: none;
 }
 
 /* A same-file second hunk's separator (a scattered edit), in the dim tone. */

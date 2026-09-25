@@ -80,7 +80,7 @@ function parseDelivery(args: Record<string, unknown>): CronDelivery | undefined 
 export const CRON_PROMPT_TEXT =
   "Use the cronjob tool to schedule Host tasks: unattended agent turns (run_kind=agent) " +
   "or script-only jobs (run_kind=script). Deliver results with delivery_kind=webhook|file. " +
-  "Actions: create, list, pause, resume, run, remove. Cron runs on the Host ticker (not OS crontab).";
+  "Actions: create, list, pause, resume, run, remove, runs. Cron runs on the Host ticker (not OS crontab).";
 
 /**
  * Model-facing `cronjob` tool (Hermes-style action discriminator).
@@ -89,17 +89,25 @@ export function createCronTools(scheduler: CronScheduler): ToolDefinition[] {
   const tool: ToolDefinition<Record<string, unknown>> = {
     name: "cronjob",
     description:
-      "Manage Host scheduled tasks. action=create|list|pause|resume|run|remove. " +
+      "Manage Host scheduled tasks. action=create|list|pause|resume|run|remove|runs. " +
       "create needs schedule_kind (every|at|cron) and run_kind (agent|script). " +
+      "action=runs lists recent execution ledger rows (optional id + limit). " +
       "Results can POST to a webhook or append to a file.",
     parameters: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["create", "list", "pause", "resume", "run", "remove"],
+          enum: ["create", "list", "pause", "resume", "run", "remove", "runs"],
         },
-        id: { type: "string", description: "Job id for pause/resume/run/remove." },
+        id: {
+          type: "string",
+          description: "Job id for pause/resume/run/remove/runs.",
+        },
+        limit: {
+          type: "number",
+          description: "Max rows for action=runs (default 20).",
+        },
         name: { type: "string" },
         schedule_kind: {
           type: "string",
@@ -142,6 +150,36 @@ export function createCronTools(scheduler: CronScheduler): ToolDefinition[] {
                         (j.name ? ` name=${j.name}` : ""),
                     )
                     .join("\n"),
+          };
+        }
+        if (action === "runs") {
+          const ledger = scheduler.executions;
+          if (!ledger) {
+            return {
+              content: "Error: execution ledger is not configured on this Host",
+              isError: true,
+            };
+          }
+          const jobId = String(args?.id ?? "").trim();
+          const limitRaw = Number(args?.limit ?? 20);
+          const rows = ledger.list({
+            ...(jobId ? { jobId } : {}),
+            limit: Number.isFinite(limitRaw) ? limitRaw : 20,
+          });
+          if (rows.length === 0) {
+            return { content: jobId ? `No runs for ${jobId}.` : "No cron runs." };
+          }
+          return {
+            content: rows
+              .map(
+                (r) =>
+                  `${r.finishedAt} ${r.status} job=${r.jobId}` +
+                  (r.jobName ? ` name=${r.jobName}` : "") +
+                  ` chars=${r.outputChars}` +
+                  (r.error ? ` err=${r.error}` : "") +
+                  (r.sessionId ? ` session=${r.sessionId}` : ""),
+              )
+              .join("\n"),
           };
         }
         if (action === "create") {
@@ -194,14 +232,17 @@ export function createCronTools(scheduler: CronScheduler): ToolDefinition[] {
           };
         }
         return {
-          content: "Error: action must be create|list|pause|resume|run|remove",
+          content: "Error: action must be create|list|pause|resume|run|remove|runs",
           isError: true,
         };
       } catch (err) {
         return fail(err);
       }
     },
-    isConcurrencySafe: (args) => String(args?.action ?? "") === "list",
+    isConcurrencySafe: (args) => {
+      const a = String(args?.action ?? "");
+      return a === "list" || a === "runs";
+    },
   };
   return [tool];
 }

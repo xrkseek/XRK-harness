@@ -103,6 +103,31 @@ describe('MessageImage', () => {
     expect(smallFrame.getAttribute('style')).toContain('height: 100px')
   })
 
+  it('pins a dimension-less preview to the bounded fallback box and promotes on load', async () => {
+    // The submission echo's first frame carries no intrinsic size; without a
+    // fixed box the raster would render at its natural resolution. The frame
+    // must stay pinned at the 240px square until onLoad exposes the size.
+    const view = render(
+      <MessageImage image={{ preview: { url: 'blob:echo', name: 'echo.png' } }} load={vi.fn()} variant="single" labels={labels} />,
+    )
+    const frame = view.getByRole('button', { name: 'echo.png，点击查看原图' })
+    expect(frame.getAttribute('style')).toContain('width: 240px')
+    expect(frame.getAttribute('style')).toContain('height: 240px')
+    const fallback = view.getByAltText('echo.png') as HTMLImageElement
+    expect(fallback.className).toContain('previewFallback')
+    // jsdom exposes naturalWidth/Height as read-only zero getters; define
+    // them before dispatching load so the onLoad promotion sees real values.
+    Object.defineProperty(fallback, 'naturalWidth', { value: 640, configurable: true })
+    Object.defineProperty(fallback, 'naturalHeight', { value: 320, configurable: true })
+    fireEvent.load(fallback)
+    await waitFor(() => {
+      expect(frame.getAttribute('style')).toContain('width: 240px')
+      expect(frame.getAttribute('style')).toContain('height: 120px')
+    })
+    // After promotion the ordinary cover-fit image renders, not the fallback.
+    expect(view.getByAltText('echo.png').className).not.toContain('previewFallback')
+  })
+
   it('renders a tile at the fixed square without inline sizing', () => {
     const load = vi.fn(() => new Promise<string>(() => {}))
     const view = render(<MessageImage image={{ attachment }} load={load} variant="tile" labels={labels} />)

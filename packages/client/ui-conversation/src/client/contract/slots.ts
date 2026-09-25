@@ -28,6 +28,9 @@ export interface ComposerImageAttachment {
   id: DraftAttachmentId
   file: File
   previewUrl: string
+  /** Intrinsic image size when the intake probe resolved; keeps local previews from inflating to the full raster. */
+  width?: number
+  height?: number
 }
 
 /** Browser-owned draft file awaiting base64 encoding for the prompt wire. */

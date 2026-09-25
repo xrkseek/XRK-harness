@@ -6,10 +6,12 @@ import {
   defaultSessionsDir,
   defaultSpillDir,
   loadHostConfig,
+  parseJsonText,
   parseMcpServersJson,
   parseMcpServersValue,
   resolveMcpStdioCwd,
   resolveXrkHome,
+  stripUtf8Bom,
 } from "../src/index.js";
 
 describe("loadHostConfig", () => {
@@ -151,5 +153,13 @@ describe("parseMcpServersValue", () => {
         }),
       ),
     ).toEqual([{ serverName: "demo", command: "node", args: ["s.js"] }]);
+  });
+});
+
+describe("parseJsonText", () => {
+  it("strips a leading UTF-8 BOM before JSON.parse", () => {
+    expect(stripUtf8Bom("\uFEFF{}")).toBe("{}");
+    expect(parseJsonText("\uFEFF{\"a\":1}")).toEqual({ a: 1 });
+    expect(parseJsonText("{\"a\":1}")).toEqual({ a: 1 });
   });
 });

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import { ImageLightbox } from './ImageLightbox.tsx'
 import type { ImageLightboxLabels } from './ImageLightbox.tsx'
@@ -69,6 +70,36 @@ function dimensionsOf(image: MessageImageSpec): { readonly width: number; readon
 }
 
 /**
+ * Bounded rendering of a preview whose intrinsic size is not (yet) known —
+ * the submission echo's first frame, before the detached intake probe
+ * resolves. Without a fixed box a `width:100%` image inside an auto-sized
+ * grid frame falls back to the raster's natural size and flashes a
+ * full-resolution frame. This component pins the frame to the 240px
+ * single-image long-edge box with `object-fit: contain` (never upscaled
+ * past the natural size), then promotes to the exact `singleFit` geometry
+ * once `onLoad` exposes `naturalWidth`/`naturalHeight`.
+ */
+function PreviewFallback({ src, alt, onPromote }: {
+  src: string
+  alt: string
+  onPromote: (width: number, height: number) => void
+}): ReactNode {
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={css.previewFallback}
+      onLoad={(event) => {
+        const image = event.currentTarget
+        const width = image.naturalWidth
+        const height = image.naturalHeight
+        if (width > 0 && height > 0) onPromote(width, height)
+      }}
+    />
+  )
+}
+
+/**
  * Compact history renderer with retryable loading and click-to-open original
  * preview. A lone image renders at its `singleFit` size; an image among
  * several renders as a fixed 64px square tile. The preview arm displays its
@@ -93,12 +124,19 @@ export function MessageImage({ image, load, variant, labels }: {
   const [error, setError] = useState(false)
   const [open, setOpen] = useState(false)
   const [attempt, setAttempt] = useState(0)
+  /** Local echo arm: intrinsic size discovered from the loaded raster (intake probe miss fallback). */
+  const [natural, setNatural] = useState<{ readonly width: number; readonly height: number } | null>(null)
   const request = useCallback(() => { setAttempt(a => a + 1) }, [])
   const close = useCallback(() => { setOpen(false) }, [])
   const dimensions = useMemo(() => dimensionsOf(image), [image])
+  // Promote the probe-resolved raster size into the single-image fit as soon
+  // as it is known (preview arm; the durable arm carries exact dimensions).
+  // `?? undefined` pins the null initial state to the undefined sentinel so
+  // the fit stays unset until a real size arrives.
+  const fitSource = dimensions ?? natural ?? undefined
   const fit = useMemo(
-    () => (variant === 'single' && dimensions !== undefined ? singleFit(dimensions) : undefined),
-    [dimensions, variant],
+    () => variant === 'single' && fitSource !== undefined ? singleFit(fitSource) : undefined,
+    [fitSource, variant],
   )
 
   useEffect(() => {
@@ -113,6 +151,20 @@ export function MessageImage({ image, load, variant, labels }: {
   const src = preview?.url ?? loaded
   const label = ('label' in image ? image.label : undefined)
     ?? preview?.name ?? attachment?.name ?? labels.image
+  // The frame style is the single place that must never let the raster's
+  // natural size leak: exact geometry when known, otherwise the bounded
+  // fallback box (preview arm only — the durable arm waits on its loader
+  // and is never dimension-less here).
+  const previewUnknown = src !== null && preview !== undefined && fit === undefined
+    && variant === 'single'
+  const frameStyle = fit !== undefined
+    ? { width: fit.width, height: fit.height }
+    : previewUnknown
+      ? { width: 240, height: 240 }
+      : undefined
+  const promote = useCallback((width: number, height: number) => {
+    setNatural(current => (current?.width === width && current?.height === height ? current : { width, height }))
+  }, [])
   if (error) return <button type="button" className={css.error} data-variant={variant} onClick={request}>{labels.loadFailed}</button>
   return (
     <>
@@ -120,14 +172,20 @@ export function MessageImage({ image, load, variant, labels }: {
         type="button"
         className={css.frame}
         data-variant={variant}
-        style={fit === undefined ? undefined : { width: fit.width, height: fit.height }}
+        style={frameStyle}
         title={labels.open}
         aria-label={labels.openNamed(label)}
         onClick={() => { if (src !== null) setOpen(true) }}
       >
         {src === null
           ? <span className={css.loading}>{labels.loading}</span>
-          : <img src={src} alt={label} style={fit === undefined ? undefined : { objectPosition: fit.objectPosition }} />}
+          : previewUnknown
+            ? <PreviewFallback
+              src={src}
+              alt={label}
+              onPromote={promote}
+            />
+            : <img src={src} alt={label} style={fit === undefined ? undefined : { objectPosition: fit.objectPosition }} />}
       </button>
       {open && src !== null && <ImageLightbox src={src} alt={label} labels={labels.lightbox} onClose={close} />}
     </>

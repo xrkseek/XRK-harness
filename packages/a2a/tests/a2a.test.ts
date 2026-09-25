@@ -6,6 +6,7 @@ import {
   TurnTracker,
   createA2aClient,
   createA2aTools,
+  createA2aInboundHandler,
   listPersistedContexts,
   loadConversation,
   maxPingpongTurns,
@@ -105,5 +106,81 @@ describe("a2a protocol persistence + anti-loop", () => {
     const out = await history.execute({ context_id: "ctx_h" });
     expect(out.content).toMatch(/\[user\] q/);
     expect(out.content).toMatch(/\[agent\] a/);
+  });
+});
+
+describe("a2a inbound Agent Card + message/send", () => {
+  it("serves card and completes message/send with persistence", async () => {
+    const root = tempRoot();
+    const handler = createA2aInboundHandler({
+      url: "http://127.0.0.1:9/a2a",
+      conversationsRoot: root,
+      env: {},
+    });
+    const cardReq = {
+      method: "GET",
+      url: "/.well-known/agent-card.json",
+      headers: {},
+      socket: { remoteAddress: "127.0.0.1" },
+    } as unknown as import("node:http").IncomingMessage;
+    let cardStatus = 0;
+    let cardBody = "";
+    const cardRes = {
+      writeHead(status: number) {
+        cardStatus = status;
+      },
+      end(raw: string) {
+        cardBody = raw;
+      },
+    } as unknown as import("node:http").ServerResponse;
+    expect(await handler(cardReq, cardRes)).toBe(true);
+    expect(cardStatus).toBe(200);
+    const card = JSON.parse(cardBody) as { name: string; supportedInterfaces: unknown[] };
+    expect(card.name).toContain("XRK");
+    expect(card.supportedInterfaces.length).toBe(1);
+
+    const sendReq = {
+      method: "POST",
+      url: "/a2a",
+      headers: {},
+      socket: { remoteAddress: "127.0.0.1" },
+      on(ev: string, cb: (x?: Buffer) => void) {
+        if (ev === "data") {
+          cb(Buffer.from(JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "message/send",
+            params: {
+              message: {
+                role: "ROLE_USER",
+                parts: [{ text: "ping inbound" }],
+                contextId: "ctx_in",
+              },
+            },
+          })));
+        }
+        if (ev === "end") cb();
+        return sendReq;
+      },
+    } as unknown as import("node:http").IncomingMessage;
+    let sendStatus = 0;
+    let sendBody = "";
+    const sendRes = {
+      writeHead(status: number) {
+        sendStatus = status;
+      },
+      end(raw: string) {
+        sendBody = raw;
+      },
+    } as unknown as import("node:http").ServerResponse;
+    expect(await handler(sendReq, sendRes)).toBe(true);
+    expect(sendStatus).toBe(200);
+    const rpc = JSON.parse(sendBody) as {
+      result: { task: { contextId: string; status: { state: string } } };
+    };
+    expect(rpc.result.task.contextId).toBe("ctx_in");
+    expect(rpc.result.task.status.state).toBe("TASK_STATE_COMPLETED");
+    const msgs = loadConversation("ctx_in", 10, { root });
+    expect(msgs.some((m) => m.text.includes("ping inbound"))).toBe(true);
   });
 });

@@ -60,6 +60,7 @@ export function createServerAgentFactory(
     bashLimits,
     compaction,
     toolResultMaxInlineBytes,
+    guardianFragments,
     webSearch,
     workspaceInject,
     fs,
@@ -125,6 +126,7 @@ export function createServerAgentFactory(
       ...(toolResultMaxInlineBytes !== undefined
         ? { toolResultMaxInlineBytes }
         : {}),
+      ...(guardianFragments !== undefined ? { guardianFragments } : {}),
       ...(webSearch ? { webSearch } : {}),
       ...(workspaceInject !== undefined ? { workspaceInject } : {}),
       ...(sessionTelemetry
@@ -169,7 +171,7 @@ export function createServerComposition(options: ServerCompositionOptions) {
 
 export const preset = {
   id: presetId,
-  description: "HTTP host composition (harness tools + factory)",
+  description: "HTTP host composition: harness tools + agent factory (no business logic)",
   create: createServerComposition,
   createAgentFactory: createServerAgentFactory,
 };

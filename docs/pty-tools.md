@@ -14,7 +14,7 @@
 
 一 composition 一 registry（没有 Cordis Agent owner；`hasActivity` = 已发布会话 ∪ 未发布 spawn）。Enablement ≠ provider：工具始终可见。无 `node-pty` 时 `terminal_open` 回 `isError` 明文。
 
-Host（harness/server）共享一份 PTY registry：跨 agent invalidate 仍保留会话，供 `/permission` 沙箱 fence 使用。PTY id 形如 `pty-1`；勿把 volatile 里的聊天 `sess_…` 当成 terminal sessionId（会 `NO_SESSION` 并提示）。
+Host（harness/server）共享一份 PTY registry：跨 agent invalidate 仍保留会话，供 `/permission` 沙箱 fence 使用。PTY id 形如 `pty-1`；volatile 里的聊天 `sess_…` 不是 terminal sessionId（当它用会 `NO_SESSION` 并提示）。
 
 `bash` 仍是一次性管道 job（[shell-jobs.md](./shell-jobs.md)）。持久会话走本包。`terminal_send.run_in_background` 经 composition `ShellService.startManagedJob` 登记 `pty-send`，用 `job_output` / `job_kill` 收集或取消。
 
@@ -32,7 +32,7 @@ Host（harness/server）共享一份 PTY registry：跨 agent invalidate 仍保�
 
 本仓 `optionalDependencies` 钉 `node-pty@1.2.0-beta.15`（含 `prebuilds/`）；`postinstall` 跑 `scripts/ensure-spawn-helper.mjs` 恢复 Linux/mac `spawn-helper` 可执行位。
 
-网络受限时在**本机**配置 npm/Git 代理；勿把固定端口或路径写进仓库文档或测试。
+网络受限时在**本机**配置 npm/Git 代理；固定端口或路径留在本机配置、不进仓库文档或测试。
 
 ## Env scrub
 
@@ -65,7 +65,7 @@ terminate：descendant SIGTERM→grace→SIGKILL，再杀 shell；拒绝对 shel
 
 ## 路径 / 沙箱
 
-`cwd` 必须落在 `workspaceRoot` 内。harness 在 `workspace-write` 下把 spawn argv 交给 `SandboxService.confine`（可取消）。`read-only` 拒绝 `terminal_open/send/signal/close`（list/read 仍可）。
+`cwd` 落在 `workspaceRoot` 内。harness 在 `workspace-write` 下把 spawn argv 交给 `SandboxService.confine`（可取消）。`read-only` 拒绝 `terminal_open/send/signal/close`（list/read 仍可）。
 
 有 open / pending **Agent** `terminal_*` PTY 时，`/permission` 拒绝改 `sandbox/mode`（与终端 bash fence 同文案）。侧栏用户终端（`/sidebar/ws/terminal`）走系统用户权限、**不**套 Agent sandbox，也**不**参与该 fence。
 

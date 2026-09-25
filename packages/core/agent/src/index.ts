@@ -143,6 +143,13 @@ export interface CreateAgentOptions {
   readonly assemble?: AssembleOptions;
   readonly maxSteps?: number;
   /**
+   * Auto-continue on max-tokens truncation within a turn
+   * (Face `agent-loop.autoContinueOnMaxTokens`). Default off.
+   */
+  readonly autoContinueOnMaxTokens?: boolean;
+  /** Cap on consecutive auto-continues per turn (default 2). */
+  readonly autoContinueMaxRounds?: number;
+  /**
    * Session-side mistake/loop trackers. Default enabled.
    * Pass `false` to disable.
    */
@@ -339,6 +346,12 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
             ...(options.assemble ? { assemble: options.assemble } : {}),
             ...(options.maxSteps !== undefined
               ? { maxSteps: options.maxSteps }
+              : {}),
+            ...(options.autoContinueOnMaxTokens !== undefined
+              ? { autoContinueOnMaxTokens: options.autoContinueOnMaxTokens }
+              : {}),
+            ...(options.autoContinueMaxRounds !== undefined
+              ? { autoContinueMaxRounds: options.autoContinueMaxRounds }
               : {}),
             ...(options.toolSettle !== undefined
               ? { toolSettle: options.toolSettle }

@@ -4,7 +4,7 @@
 
 `memory` 把**跨会话都要用的短事实**写进两份文件：`MEMORY.md`（代理笔记）与 `USER.md`（用户是谁）。目录是 `{XRK_HOME}/memories`（默认 `~/.xrk/memories`）。文档库另走 `~/.xrk/mnemon`。
 
-### 勿与站立文件混淆
+### 与站立文件的分界
 
 | | 站立（可选 inject） | 策展（本页） |
 |--|-------------------|-------------|
@@ -22,7 +22,7 @@
 | `todo_write` → `todo/write` | **本会话** | 站立计划 / 任务清单；新会话为空 |
 | 策展记忆 `MEMORY.md` / `USER.md` | **全局**（按 `XRK_HOME`） | 稳定偏好、长期约定、用户是谁 |
 
-新会话会冻入磁盘上已有的策展记忆，**不会**带上上一会话的 `todo_write` 列表。不要把进行中的任务清单、进度日志或「接着干」手记写进 `MEMORY.md`——那会让下一会话误当成未完成队列。未完成工作用 `todo_write`。
+新会话会冻入磁盘上已有的策展记忆，**不会**带上上一会话的 `todo_write` 列表。进行中的任务清单、进度日志或「接着干」手记留在 `todo_write`（本会话内）；`MEMORY.md` 只放跨会话仍然成立的持久事实——把前者写进去会让下一会话误当成未完成队列。
 
 系统提示在开启策展记忆时**始终**带策略段（即使文件为空），说明上述分工；有条目时再附上冻结正文。
 
@@ -44,26 +44,32 @@
 
 没有搜索、列表或读文件动作。磁盘上无法按 `§` 往返的内容会被拒绝写入，并留下 `.bak` 副本。
 
-关闭：**产品路径** Settings → Plugins → **策展记忆**（Face ns `curated-memory`：`enabled`）。保存后下次 agent 重建卸下 `memory` 工具与系统提示冻结段。非空 `XRK_CURATED_MEMORY` 为 CI 旁路（`0` 强制关，其它强制开）。组合选项 `curatedMemory: false` 仍可用。
-
-## 可插拔 Provider（MemoryProvider）
-
-对标 Hermes `MemoryProvider`：**默认仍是文件策展**；可选外接一个 HTTP sidecar（同时只选一个外部后端）。
-
-| Provider | 工厂 | 说明 |
-|----------|------|------|
-| `file`（默认） | `createFileMemoryProvider` / `createCuratedMemoryStore` | `{XRK_HOME}/memories` |
-| `http` | `createHttpMemoryProvider` | 集成方自建 REST：`GET /health` · `GET /v1/curated/{memory\|user}` · `POST /v1/curated/{memory\|user}/ops` |
-
-选择：`resolveMemoryProvider({ kind })` 或 env `XRK_MEMORY_PROVIDER=file|http`；HTTP 需 `XRK_MEMORY_HTTP_URL`（可选 `XRK_MEMORY_HTTP_TOKEN`）。组合选项仍可直接注入任意实现了 `CuratedMemoryStore` 的对象。provider 只负责策展记忆读写，不接 Mnemon 文档库 / memory-embed 的 `/search`。
+关闭：**产品路径** Settings → Plugins → **策展记忆**（Face ns `curated-memory`：`enabled` · `phase2Llm`）。保存后下次 agent 重建卸下 `memory` 工具与系统提示冻结段。非空 `XRK_CURATED_MEMORY` 为 CI 旁路（`0` 强制关，其它强制开）。组合选项 `curatedMemory: false` 仍可用。
 
 ## 回合结束写入
 
 成功的回合结束之后，若用户原话里有可复用笔记（`remember:` / `memory:`，或稳定偏好如 “I prefer” / “我习惯”），写入 `MEMORY.md`。助手自己的发挥不写入。本回合已经调用过 `memory` 工具则不再写第二份。密钥会被替换成 `[REDACTED_SECRET]`。这次写入不刷新本会话已经冻进系统提示的快照。
 
-## 会话结束 Phase1 巩固
+## 会话结束 Phase1 / Phase2 巩固
 
-会话离开活跃集时（组合 `dispose`、工作区 `workspace.archiveSession`、Host `stop`）再扫一遍该会话的人类用户原话：已在磁盘上覆盖的跳过，漏掉的追加进 `MEMORY.md`。字数顶满时会先软删最旧条目（最多三次）再试写入（不刷新本会话冻结快照）。该扫描只做磁盘覆盖去重后的追加写入，不做 LLM 抽取，也不做向量 / 文档 keyword 检索。
+会话离开活跃集时（组合 `dispose`、工作区 `workspace.archiveSession`、Host `stop`）再扫一遍该会话的人类用户原话：已在磁盘上覆盖的跳过，漏掉的追加进 `MEMORY.md`。字数顶满时会先软删最旧条目（最多三次）再试写入（不刷新本会话冻结快照）。
+
+| 阶段 | 行为 |
+|------|------|
+| **Phase1**（默认） | 启发式抽取（`remember:` / 稳定偏好句）；无 LLM |
+| **Phase2**（可选） | 注入会话 LLM 抽短事实（JSON 数组）；失败则空写，Phase1 仍会跑。Settings `curated-memory.phase2Llm` 或 `XRK_CURATED_MEMORY_PHASE2=1` |
+
+## 可插拔 Provider（MemoryProvider）
+
+对标 Hermes `MemoryProvider`：**默认仍是文件策展**；同时只选一个外部后端。
+
+| Provider | 工厂 | 说明 |
+|----------|------|------|
+| `file`（默认） | `createFileMemoryProvider` / `createCuratedMemoryStore` | `{XRK_HOME}/memories` 的 `MEMORY.md` / `USER.md` |
+| `http` | `createHttpMemoryProvider` | 集成方自建 REST：`GET /health` · `GET /v1/curated/{memory\|user}` · `POST /v1/curated/{memory\|user}/ops` |
+| `sqlite` | `createSqliteMemoryProvider` | `{XRK_HOME}/memories/curated-memory.sqlite`（`node:sqlite`） |
+
+选择：`resolveMemoryProvider({ kind })` 或 env `XRK_MEMORY_PROVIDER=file|http|sqlite`；HTTP 需 `XRK_MEMORY_HTTP_URL`（可选 `XRK_MEMORY_HTTP_TOKEN`）。组合选项仍可直接注入任意实现了 `CuratedMemoryStore` 的对象。provider 只负责策展记忆读写，不接 Mnemon 文档库 / memory-embed 的 `/search`。
 
 ---
 
@@ -79,7 +85,7 @@
 |--|----------------------------|---------------------|
 | `USER.md` | `~/.xrk/USER.md` · `{ws}/.xrk/USER.md` · `~/.agents/…` | `{XRK_HOME}/memories/USER.md` |
 | `SOUL.md` / `IDENTITY.md` | User-authored persona / tone (**product does not auto-seed**) | — |
-| Who writes | User | `memory` tool / after-turn notes / Phase1 |
+| Who writes | User | `memory` tool / after-turn notes / Phase1 · Phase2 |
 | Into the model | Durable `agent-instructions` inject | **System** frozen snapshot |
 
 Identity product decision: **stay thin** — seed only `~/.xrk/AGENTS.md`; optional SOUL/IDENTITY; factual “who the user is” stays in curated `memories/USER.md` ([skills-layers.md](./skills-layers.md) · [workspace-inject.md](./workspace-inject.md)).
@@ -113,23 +119,29 @@ Entries are separated by `§` with a newline on each side. `MEMORY.md` is capped
 
 There is no search, list, or read action. Content on disk that would not round-trip through the `§` delimiter is refused, and a `.bak` copy is kept.
 
-Disable via **product path** Settings → Plugins → **Curated memory** (Face ns `curated-memory`: `enabled`). After save, the next agent rebuild drops the `memory` tool and frozen system-prompt block. Non-empty `XRK_CURATED_MEMORY` is the CI bypass (`0` force off, any other force on). Composition option `curatedMemory: false` still works.
+Disable via **product path** Settings → Plugins → **Curated memory** (Face ns `curated-memory`: `enabled` · `phase2Llm`). After save, the next agent rebuild drops the `memory` tool and frozen system-prompt block. Non-empty `XRK_CURATED_MEMORY` is the CI bypass (`0` force off, any other force on). Composition option `curatedMemory: false` still works.
 
 ## Pluggable providers (`MemoryProvider`)
 
-Hermes-style `MemoryProvider` seam: **file curated remains the default**; optionally attach one HTTP sidecar (one external backend at a time).
+Hermes-style `MemoryProvider` seam: **file curated remains the default**; one backend at a time.
 
 | Provider | Factory | Notes |
 |----------|---------|-------|
-| `file` (default) | `createFileMemoryProvider` / `createCuratedMemoryStore` | `{XRK_HOME}/memories` |
+| `file` (default) | `createFileMemoryProvider` / `createCuratedMemoryStore` | `{XRK_HOME}/memories` `MEMORY.md` / `USER.md` |
 | `http` | `createHttpMemoryProvider` | Integrator-owned REST: `GET /health` · `GET /v1/curated/{memory\|user}` · `POST /v1/curated/{memory\|user}/ops` |
+| `sqlite` | `createSqliteMemoryProvider` | `{XRK_HOME}/memories/curated-memory.sqlite` (`node:sqlite`) |
 
-Select with `resolveMemoryProvider({ kind })` or env `XRK_MEMORY_PROVIDER=file|http`; HTTP needs `XRK_MEMORY_HTTP_URL` (optional `XRK_MEMORY_HTTP_TOKEN`). Compositions may still inject any `CuratedMemoryStore` implementation. The provider handles curated memory read/write only; it does not reach Mnemon documents or memory-embed `/search`.
+Select with `resolveMemoryProvider({ kind })` or env `XRK_MEMORY_PROVIDER=file|http|sqlite`; HTTP needs `XRK_MEMORY_HTTP_URL` (optional `XRK_MEMORY_HTTP_TOKEN`). Compositions may still inject any `CuratedMemoryStore` implementation. The provider handles curated memory read/write only; it does not reach Mnemon documents or memory-embed `/search`.
 
 ## Write after the turn
 
 After a successful turn, reusable notes in the user's own words (`remember:` / `memory:`, or a stable preference such as "I prefer" / "我习惯") are appended to `MEMORY.md`. Assistant prose is not promoted. A turn that already called the `memory` tool is not written a second time. Secrets are replaced with `[REDACTED_SECRET]`. The write does not refresh the snapshot already frozen into this session's system prompt.
 
-## Session-end Phase1 consolidate
+## Session-end Phase1 / Phase2 consolidate
 
-When a session leaves the live set (composition `dispose`, `workspace.archiveSession`, Host `stop`), human user turns are scanned again: notes already covered on disk are skipped; leftovers are appended to `MEMORY.md`. If the character cap blocks a new note, the oldest entries are soft-removed (up to three times) and the add is retried (the frozen session prompt is still unchanged). The scan only appends after disk-coverage dedup; it performs no LLM extraction and no vector / document keyword search.
+When a session leaves the live set (composition `dispose`, `workspace.archiveSession`, Host `stop`), human user turns are scanned again: notes already covered on disk are skipped; leftovers are appended to `MEMORY.md`. If the character cap blocks a new note, the oldest entries are soft-removed (up to three times) and the add is retried (the frozen session prompt is still unchanged).
+
+| Stage | Behavior |
+|-------|----------|
+| **Phase1** (default) | Heuristic extract (`remember:` / stable preference sentences); no LLM |
+| **Phase2** (optional) | Injected session LLM extracts short facts (JSON array); on failure writes nothing — Phase1 still runs. Settings `curated-memory.phase2Llm` or `XRK_CURATED_MEMORY_PHASE2=1` |

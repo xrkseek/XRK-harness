@@ -237,6 +237,17 @@ export {
 } from "./skill-propose.js";
 
 export {
+  DEFAULT_SKILL_STALE_AFTER_DAYS,
+  SKILL_ARCHIVE_REL,
+  listArchivedSkillDirs,
+  readSkillCuratorStamp,
+  runSkillCurator,
+  type SkillCuratorCandidate,
+  type SkillCuratorOptions,
+  type SkillCuratorResult,
+} from "./skill-curator.js";
+
+export {
   installSkill,
   installSkillFromGit,
   installSkillFromLocalDir,

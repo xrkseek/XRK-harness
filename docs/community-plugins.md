@@ -14,7 +14,7 @@ xrkh plugin add <包名>
 xrkh restart
 ```
 
-示例包名：`dsh-wallet` · `@liustack/modsearch` 等（以 npm 实际包为准）。装完须 **`xrkh restart`** 重载 Host。
+示例包名：`dsh-wallet` · `@liustack/modsearch` 等（以 npm 实际包为准）。装完用 **`xrkh restart`** 重载 Host。
 
 3. 日常开关与配置优先 **设置 → Plugins**（及各插件自有面板）；Host/CI 无头场景再用 env / 落盘文件。
 4. 免补 `xrk.host.json`：loader 用能力表 + `client.js` 扫描 + 约定 infer（见 [plugin-loader.md](./plugin-loader.md)）。作者也可声明 `xrk.host.json` 或提供 `host.mjs`。
@@ -82,7 +82,7 @@ community client.js
 
 | 表面 | Host 落点 | 插件职责 |
 |------|-----------|----------|
-| `POST /sidebar/api/<method>` | `packages/server/http/src/sidebar/`（FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **subagents.graph** · **changes.ops** · **open.external**） | 调 API；勿在 client 里再实现一份 Host |
+| `POST /sidebar/api/<method>` | `packages/server/http/src/sidebar/`（FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **subagents.graph** · **changes.ops** · **open.external**） | 调 API；client 里不重复实现 Host |
 | `/sidebar/file` · `upload` · `html` · `bundle` | 同上 + 插件目录 `chunks/` | 发布 `lib/client-*.js` 供 bundle 回落 |
 | `/sidebar/ws/terminal` | Host `sidebar-pty`（真实 node-pty · session+tab 保活；系统用户权限，**不**套 Agent sandbox / fence） | TerminalView 连同源 WS |
 | `/sidebar/ws/agent-terminals` · `agent-opens` | Host 真推送（registry + prefs 门控工具；Settings → 通用开关）；无 registry 时仍空列表保活 | 推送由 Host 提供；插件 host 半包不实现 |
@@ -94,7 +94,7 @@ community client.js
 
 **已移除**：Side Chat（beta）及 Host `sidechat.*`。子代理与后台任务请用 Face `subagent.*` + Sidebar `subagents.live` / `jobs.*`。
 
-扩展新 sidebar RPC：扩 `sidebar-adapter` /（需要 Face 时）`SidebarFaceBridge`，**不要**为单个插件在 Host 堆旁路逻辑，也不要把 `/sidebar/*` 重新并入 dsh-compat 能力表，更不要在 XRK 上启用插件 `host.mjs` 占用同一路径。
+扩展新 sidebar RPC：扩 `sidebar-adapter` /（需要 Face 时）`SidebarFaceBridge`，**扩 `sidebar-adapter` / `SidebarFaceBridge`**：不为单个插件在 Host 堆旁路逻辑；`/sidebar/*` 不重新并入 dsh-compat 能力表；不在 XRK 上启用插件 `host.mjs` 占用同一路径。
 
 ## 回归 fixture
 
@@ -108,7 +108,7 @@ community client.js
 | --- | --- | --- |
 | `web-panel-global-registry` | missing | DSH 0.1.5-alpha.2+ 插件经 `sidebar.panellist` / `main`（`main.conversation`）注册全局面板；XRK shell 只声明 sidebar/conversation/details/shell.overlay 四 seat，panellist 注册无落点（SlotCore 对未知 seat 直接抛错） |
 | `cordis-dual-half-inspect` | honest-stub | 官方 `dsh-cordis-host-runner` 的 model-mounted dual-half registry（`cordis_inspect_list`/`cordis_inspect_query` + mount/dispose）按"不嵌入第三方 Host 内核"边界不实现；fiber fallback 保持 apply 驱动 |
-| `third-party-di` | honest-stub | 全量第三方 DI 非产品目标；未知 service 引用返回诚实 envelope，绝不伪造 provider |
+| `third-party-di` | honest-stub | 全量第三方 DI 非产品目标；未知 service 引用返回诚实 envelope，不伪造 provider |
 
 TongFlow 装包走 `POST /tongflow/plugins`（`spec` / `package` / `name` / `id`），由 `runPluginMutate` 执行 `xrkh plugin add`。已删除的 `/plugins/install` 假 `accepted` 路由不恢复。成功后需要 `xrkh restart` 才进当前进程。
 

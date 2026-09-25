@@ -12,7 +12,7 @@ import {
   type TrajectoryRequestNumber,
   type TrajectoryUsage,
 } from './TrajectoryTable.tsx'
-import { TrajectoryToolbar } from './TrajectoryToolbar.tsx'
+import { TrajectoryToolbar, type TrajectoryDensity } from './TrajectoryToolbar.tsx'
 import { TrajectoryTimeline } from './TrajectoryTimeline.tsx'
 import {
   appendTrajectoryPartialLayout, deriveTrajectoryLayout,
@@ -128,6 +128,7 @@ export function TrajectoryView({
   const actualDuration = useDuration(value => value)
   const [actualTime, setActualTime] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [density, setDensity] = useState<TrajectoryDensity>('detailed')
   const [searchIndex] = useState(() => new TrajectorySearchIndex())
   const [searchIndexRevision, setSearchIndexRevision] = useState(0)
   const searchIndexTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -443,8 +444,20 @@ export function TrajectoryView({
     return loadOlder()
   }, [loadOlder])
 
+  const onDensityChange = useCallback((next: TrajectoryDensity) => {
+    setDensity(next)
+    if (next === 'compact') {
+      setCollapsedTurns(new Set(collapsibleTurnIds))
+      setCollapsedAssistants(new Set(collapsibleAssistantIds))
+    }
+  }, [collapsibleAssistantIds, collapsibleTurnIds])
+
   return (
-    <div className={css.root} data-conversation-composer-overlay="">
+    <div
+      className={css.root}
+      data-conversation-composer-overlay=""
+      data-trajectory-density={density}
+    >
       <TrajectoryToolbar
         actualDuration={actualDuration}
         onActualDurationChange={(nextActualDuration) => {
@@ -462,6 +475,8 @@ export function TrajectoryView({
         onToggleAllAssistants={toggleAllAssistants}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
+        density={density}
+        onDensityChange={onDensityChange}
         t={t}
       />
       <TrajectoryTimeline

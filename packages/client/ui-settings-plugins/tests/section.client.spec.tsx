@@ -316,12 +316,18 @@ describe('AgentLoopCard', () => {
       dirty: true,
       maxParallelToolCalls: field('10'),
       maxSteps: field('32'),
+      autoContinueOnMaxTokens: field('false'),
+      autoContinueMaxRounds: field('2'),
+      toolOrder: field(''),
       toolSettle: field('parallel'),
       llmRetryMaxRetries: field('5'),
       maxRequestTokens: field('100000'),
       keepTokens: field('24000'),
       bufferTokens: field('4000'),
+      compactionStrategy: field('prune-summary'),
       toolResultMaxInlineBytes: field('64000'),
+      maxSubagentDepth: field('2'),
+      maxActiveSubagents: field('2'),
     })
     const actions = cardActions()
     const props = {
@@ -344,12 +350,18 @@ describe('AgentLoopCard', () => {
       ...settled,
       maxParallelToolCalls: field('2', { overridden: true }),
       maxSteps: field('32'),
+      autoContinueOnMaxTokens: field('false'),
+      autoContinueMaxRounds: field('2'),
+      toolOrder: field(''),
       toolSettle: field('parallel'),
       llmRetryMaxRetries: field('5'),
       maxRequestTokens: field('100000'),
       keepTokens: field('24000'),
       bufferTokens: field('4000'),
+      compactionStrategy: field('prune-summary'),
       toolResultMaxInlineBytes: field('64000'),
+      maxSubagentDepth: field('2'),
+      maxActiveSubagents: field('2'),
     })
     const actions = cardActions()
     const props = {

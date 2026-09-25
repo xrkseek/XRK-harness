@@ -7,6 +7,7 @@
 | Track | File | Contract |
 |-------|------|----------|
 | compact | `golden/compact.track.test.ts` | Overflow → one `context/compaction` → window resumes |
+| soft-budget | `golden/soft-budget.track.test.ts` | Soft `maxRequestTokens` → auto compaction → window resumes |
 | fan-out | `golden/fan-out.track.test.ts` | Parallel children honor `maxActiveChildren` |
 | steer | `golden/steer.track.test.ts` | Steer admits promote ahead of queue; steers coalesce |
 | spill | `golden/spill.track.test.ts` | Oversized tool results land under `spill/tool-outputs` |

@@ -1,4 +1,10 @@
 export {
+  createCronExecutionLedger,
+  defaultCronExecutionsPath,
+  type CronExecutionLedger,
+  type CronExecutionRecord,
+} from "./executions.js";
+export {
   CronError,
   isCronError,
   MIN_EVERY_SECONDS,
@@ -44,6 +50,10 @@ import { createCronDeliverer } from "./deliver.js";
 import { createDefaultScriptRunner } from "./runner.js";
 import { createCronScheduler, type CronScheduler } from "./scheduler.js";
 import { createCronJobStore, defaultCronJobsPath } from "./store.js";
+import {
+  createCronExecutionLedger,
+  defaultCronExecutionsPath,
+} from "./executions.js";
 import type { CronAgentRunner } from "./types.js";
 import { DEFAULT_TICK_MS } from "./types.js";
 
@@ -82,8 +92,12 @@ export function createHostCron(
   const store = createCronJobStore({
     filePath: defaultCronJobsPath(options.productHome),
   });
+  const executions = createCronExecutionLedger({
+    filePath: defaultCronExecutionsPath(options.productHome),
+  });
   return createCronScheduler({
     store,
+    executions,
     runScript: createDefaultScriptRunner({
       defaultCwd: options.workspaceRoot ?? options.productHome,
     }),

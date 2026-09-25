@@ -149,6 +149,53 @@ export function ValueField(props: FieldProps & {
 }
 
 /**
+ * A staged choice field with the same override/reset chrome as ValueField.
+ * @param props - the field's copy, its staged text, the options, and the edit actions.
+ * @returns the labelled control.
+ */
+export function ChoiceField(props: FieldProps & {
+  options: readonly { readonly value: string; readonly label: string }[]
+}) {
+  return (
+    <div className={css.field}>
+      <div className={css.head}>
+        <label className={css.label} htmlFor={props.id}>{props.label}</label>
+        {props.overridden
+          ? (
+            <span className={css.badges}>
+              <span className={css.badge}>{props.overriddenLabel}</span>
+              <button
+                type="button"
+                className={css.reset}
+                disabled={props.disabled}
+                onClick={props.onReset}
+              >
+                {props.resetLabel}
+              </button>
+            </span>
+          )
+          : null}
+      </div>
+      <select
+        id={props.id}
+        className={`${css.input} ${css.select}`}
+        value={props.text}
+        disabled={props.disabled}
+        {...props.invalid ? { 'aria-invalid': true } : {}}
+        onChange={(event) => { props.onEdit(event.target.value) }}
+      >
+        {props.options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+      <p className={props.invalid ? css.invalid : css.hint}>
+        {props.invalid ? props.invalidLabel : props.hint}
+      </p>
+    </div>
+  )
+}
+
+/**
  * A write-only credential control. The value never rides a response, so the
  * control reports only whether one is configured and starts blank; a blank
  * draft writes nothing, which keeps the stored key rather than clearing it.

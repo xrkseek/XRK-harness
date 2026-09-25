@@ -212,7 +212,7 @@ export function createDeepSeekAdapter(
               mediaType,
             );
             if (ref && readImageRequest) {
-              const policy = resolveDeepSeekRequestImagePolicy(model);
+              const policy = resolveDeepSeekRequestImagePolicy(model, ref);
               const req = await readImageRequest(ref, policy, ctx.signal);
               data = req.data;
               mediaType = req.mediaType;
@@ -259,4 +259,10 @@ export {
   resolveDeepSeekRequestImagePolicy,
   type DeepSeekReadImageRequest,
 } from "./request-policy.js";
+export {
+  MAX_IMAGE_TOKENS,
+  REQUEST_IMAGE_MAX_DIMENSION,
+  estimateImageTokens as deepSeekImageTokens,
+  requestImageTokenDimensions as deepSeekRequestImageDimensions,
+} from "@xrkseek/attachment";
 export { DeepSeekFilesClient } from "./files-api.js";

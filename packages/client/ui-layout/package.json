@@ -42,6 +42,7 @@
   "license": "MIT",
   "peerDependencies": {
     "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/client-ui-theme": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
@@ -51,6 +52,7 @@
   "devDependencies": {
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/client-ui-theme": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",

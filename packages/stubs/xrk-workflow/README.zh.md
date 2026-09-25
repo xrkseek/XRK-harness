@@ -5,8 +5,10 @@
 工作流 seam（扩展点，`ctx.workflowEngine`）执行由模型编写、可扇出 subagent 的编排脚本。该 seam 定义脚本、运行、结果、错误和事件契约；引擎负责决定如何隔离并执行脚本。
 
 `@xrkseek/xrk-workflow` 提供抽象 {@link WorkflowEngine} seam **以及**
-{@link InProcessWorkflowEngine}（AsyncFunction Provider，无 worker-thread / PTC 隔离）。
-Cordis 组合挂载 `InProcessWorkflowEngine` 后，`ctx.workflowEngine.start` 不再是抽象空洞。
+{@link InProcessWorkflowEngine}（AsyncFunction Provider）与
+{@link IsolatingWorkflowEngine}（worker_threads 脚本体隔离；worker 内 `agent()`
+恒为 null——PTC 形第一步，非完整 DSH PTC SDK）。Cordis 组合挂载任一 Provider 后，
+`ctx.workflowEngine.start` 不再是抽象空洞。
 产品 Face boot 用 Face 原生 **`ralph`** 工具做新鲜子代理迭代，而不是这条 Cordis seam；
 未来进程/沙箱引擎仍可替换 Provider，而无需改 `tool-workflow`。
 

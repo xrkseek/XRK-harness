@@ -3,8 +3,10 @@
  * In-process delegation stays the default; these kinds spawn a child process.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import type { SessionStore } from "@xrkseek/core-session";
+import { tryWriteJsonSidecar } from "./json-sidecar.js";
 
 export type ExternalAgentKind = "acp" | "app-server" | "claude-code";
 
@@ -456,6 +458,11 @@ export interface OpenExternalLiveOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly product?: ExternalAgentProductConfig;
   readonly spawnImpl?: ExternalSpawn;
+  /**
+   * Cold-resume remote id (ACP sessionId / app-server thread id). When set,
+   * prefer resume/load over a fresh session/thread.
+   */
+  readonly resumeRemoteId?: string;
 }
 
 export async function openExternalAgentLiveSession(
@@ -539,14 +546,38 @@ export async function openExternalAgentLiveSession(
       protocolVersion: 1,
       clientInfo: { name: "xrk-harness", version: "0.0.0" },
     });
-    const created = (await io.request("session/new", { cwd: options.cwd })) as {
-      sessionId?: string;
-    };
-    if (!created?.sessionId) {
-      dispose();
-      throw new ExternalAgentError("ACP session/new missing sessionId");
+    let remoteId = options.resumeRemoteId?.trim() || "";
+    if (remoteId) {
+      // Prefer session/load (ACP cold resume); fall back to session/new if absent.
+      try {
+        const loaded = (await io.request("session/load", {
+          sessionId: remoteId,
+          cwd: options.cwd,
+        })) as { sessionId?: string };
+        remoteId = loaded?.sessionId?.trim() || remoteId;
+      } catch {
+        const created = (await io.request("session/new", {
+          cwd: options.cwd,
+        })) as { sessionId?: string };
+        if (!created?.sessionId) {
+          dispose();
+          throw new ExternalAgentError(
+            "ACP cold resume failed (session/load) and session/new missing sessionId",
+            "EXTERNAL_AGENT_COLD_RESUME",
+          );
+        }
+        remoteId = created.sessionId;
+      }
+    } else {
+      const created = (await io.request("session/new", {
+        cwd: options.cwd,
+      })) as { sessionId?: string };
+      if (!created?.sessionId) {
+        dispose();
+        throw new ExternalAgentError("ACP session/new missing sessionId");
+      }
+      remoteId = created.sessionId;
     }
-    const remoteId = created.sessionId;
     return {
       kind: "acp",
       remoteId,
@@ -617,16 +648,35 @@ export async function openExternalAgentLiveSession(
     capabilities: { experimentalApi: false },
   });
   io.notify("initialized", {});
-  const thread = (await io.request("thread/start", {
-    cwd: options.cwd,
-    ephemeral: false,
-    approvalPolicy: "never",
-    sandbox: "workspace-write",
-  })) as { thread?: { id?: string } };
-  const threadId = thread?.thread?.id;
-  if (!threadId) {
-    dispose();
-    throw new ExternalAgentError("app-server thread/start missing thread.id");
+  let threadId = options.resumeRemoteId?.trim() || "";
+  if (threadId) {
+    try {
+      const resumed = (await io.request("thread/resume", {
+        threadId,
+        cwd: options.cwd,
+      })) as { thread?: { id?: string } };
+      threadId = resumed?.thread?.id?.trim() || threadId;
+    } catch (err) {
+      dispose();
+      throw new ExternalAgentError(
+        `app-server thread/resume failed for ${threadId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        "EXTERNAL_AGENT_COLD_RESUME",
+      );
+    }
+  } else {
+    const thread = (await io.request("thread/start", {
+      cwd: options.cwd,
+      ephemeral: false,
+      approvalPolicy: "never",
+      sandbox: "workspace-write",
+    })) as { thread?: { id?: string } };
+    threadId = thread?.thread?.id ?? "";
+    if (!threadId) {
+      dispose();
+      throw new ExternalAgentError("app-server thread/start missing thread.id");
+    }
   }
   return {
     kind: "app-server",
@@ -694,9 +744,36 @@ export async function openExternalAgentLiveSession(
   };
 }
 
-/** Face child session id → live ACP / app-server handle. */
+/** Durable handle for cold resume after Host restart / process dispose. */
+export interface ExternalAgentHandleRecord {
+  readonly faceSessionId: string;
+  readonly kind: ContinuableExternalKind;
+  readonly remoteId: string;
+  readonly cwd: string;
+  readonly updatedAt: number;
+}
+
+type HandlePersistShape = {
+  readonly handles: ExternalAgentHandleRecord[];
+};
+
+export function externalAgentHandlesPath(
+  subagentPersistPath?: string,
+): string | undefined {
+  if (!subagentPersistPath?.trim()) return undefined;
+  return subagentPersistPath.replace(/[^/\\]+$/, "external-agent-handles.json");
+}
+
+/** Face child session id → live ACP / app-server handle (+ optional cold sidecar). */
 export class ExternalAgentSessionRegistry {
   private readonly map = new Map<string, ExternalAgentLiveSession>();
+  private readonly handles = new Map<string, ExternalAgentHandleRecord>();
+  private readonly persistPath: string | undefined;
+
+  constructor(persistPath?: string) {
+    this.persistPath = persistPath;
+    if (persistPath) this.loadHandles();
+  }
 
   has(faceSessionId: string): boolean {
     return this.map.has(faceSessionId);
@@ -711,24 +788,118 @@ export class ExternalAgentSessionRegistry {
   }
 
   kind(faceSessionId: string): ContinuableExternalKind | undefined {
-    return this.map.get(faceSessionId)?.kind;
+    return (
+      this.map.get(faceSessionId)?.kind ??
+      this.handles.get(faceSessionId.trim())?.kind
+    );
   }
 
-  attach(faceSessionId: string, session: ExternalAgentLiveSession): void {
-    const prev = this.map.get(faceSessionId);
+  /** Sidecar handle when process is gone but remote id is still known. */
+  getHandle(faceSessionId: string): ExternalAgentHandleRecord | undefined {
+    return this.handles.get(faceSessionId.trim());
+  }
+
+  /**
+   * Status badge: `live` while process attached; `cold` when only the sidecar
+   * remains (Host restart / dispose) so UI / follow-up can attempt reopen.
+   */
+  resumeState(
+    faceSessionId: string,
+  ): "live" | "cold" | undefined {
+    const id = faceSessionId.trim();
+    if (this.map.has(id)) return "live";
+    if (this.handles.has(id)) return "cold";
+    return undefined;
+  }
+
+  attach(
+    faceSessionId: string,
+    session: ExternalAgentLiveSession,
+    meta?: { readonly cwd?: string },
+  ): void {
+    const id = faceSessionId.trim();
+    const prev = this.map.get(id);
     if (prev && prev !== session) prev.dispose();
-    this.map.set(faceSessionId, session);
+    this.map.set(id, session);
+    const cwd =
+      meta?.cwd?.trim() ||
+      this.handles.get(id)?.cwd ||
+      process.cwd();
+    this.handles.set(id, {
+      faceSessionId: id,
+      kind: session.kind,
+      remoteId: session.remoteId,
+      cwd,
+      updatedAt: Date.now(),
+    });
+    this.saveHandles();
   }
 
   detach(faceSessionId: string): void {
-    const hit = this.map.get(faceSessionId);
+    const id = faceSessionId.trim();
+    const hit = this.map.get(id);
     if (!hit) return;
-    this.map.delete(faceSessionId);
+    this.map.delete(id);
     hit.dispose();
+    // Keep sidecar for cold resume unless explicitly cleared.
+    this.saveHandles();
+  }
+
+  /** Drop live + cold handle (interrupt dispose path that should not resume). */
+  clearHandle(faceSessionId: string): void {
+    const id = faceSessionId.trim();
+    const hit = this.map.get(id);
+    if (hit) {
+      this.map.delete(id);
+      hit.dispose();
+    }
+    if (this.handles.delete(id)) this.saveHandles();
   }
 
   disposeAll(): void {
-    for (const id of [...this.map.keys()]) this.detach(id);
+    for (const id of [...this.map.keys()]) {
+      const hit = this.map.get(id);
+      this.map.delete(id);
+      hit?.dispose();
+    }
+  }
+
+  private loadHandles(): void {
+    const file = this.persistPath;
+    if (!file) return;
+    try {
+      const raw = JSON.parse(readFileSync(file, "utf8")) as HandlePersistShape;
+      if (!Array.isArray(raw.handles)) return;
+      for (const row of raw.handles) {
+        if (!row || typeof row !== "object") continue;
+        const faceSessionId = String(row.faceSessionId ?? "").trim();
+        const remoteId = String(row.remoteId ?? "").trim();
+        const cwd = String(row.cwd ?? "").trim() || process.cwd();
+        const kind =
+          row.kind === "acp" || row.kind === "app-server"
+            ? row.kind
+            : undefined;
+        if (!faceSessionId || !remoteId || !kind) continue;
+        this.handles.set(faceSessionId, {
+          faceSessionId,
+          kind,
+          remoteId,
+          cwd,
+          updatedAt:
+            typeof row.updatedAt === "number" && Number.isFinite(row.updatedAt)
+              ? row.updatedAt
+              : Date.now(),
+        });
+      }
+    } catch {
+      /* missing / corrupt → empty */
+    }
+  }
+
+  private saveHandles(): void {
+    const file = this.persistPath;
+    if (!file) return;
+    tryWriteJsonSidecar(file, { handles: [...this.handles.values()] });
   }
 }
 
@@ -816,7 +987,9 @@ export async function startExternalContinuable(
     ...(options.product ? { product: options.product } : {}),
     ...(options.spawnImpl ? { spawnImpl: options.spawnImpl } : {}),
   });
-  options.runtime.externalAgents.attach(options.faceSessionId, live);
+  options.runtime.externalAgents.attach(options.faceSessionId, live, {
+    cwd: options.cwd,
+  });
 
   const runTurn = async (): Promise<string> => {
     options.runtime.onSessionDrainStatus(options.faceSessionId, true);
@@ -846,19 +1019,39 @@ export async function startExternalContinuable(
 
 /**
  * Follow-up prompt on an attached external live session (send_message / followup_task).
+ * When the live process is gone but a cold sidecar handle remains, reopen via
+ * ACP session/load or app-server thread/resume before prompting.
  */
 export async function promptExternalContinuable(
   runtime: ExternalAgentHost,
   faceSessionId: string,
   message: string,
-  opts?: { readonly signal?: AbortSignal; readonly steer?: boolean },
+  opts?: {
+    readonly signal?: AbortSignal;
+    readonly steer?: boolean;
+    readonly env?: NodeJS.ProcessEnv;
+    readonly product?: ExternalAgentProductConfig;
+    readonly spawnImpl?: ExternalSpawn;
+  },
 ): Promise<string> {
-  const live = runtime.externalAgents.get(faceSessionId);
+  let live = runtime.externalAgents.get(faceSessionId);
   if (!live) {
-    throw new ExternalAgentError(
-      `no external live session for ${faceSessionId}`,
-      "EXTERNAL_AGENT_MISSING",
-    );
+    const handle = runtime.externalAgents.getHandle(faceSessionId);
+    if (!handle) {
+      throw new ExternalAgentError(
+        `no external live session for ${faceSessionId}`,
+        "EXTERNAL_AGENT_MISSING",
+      );
+    }
+    live = await openExternalAgentLiveSession({
+      kind: handle.kind,
+      cwd: handle.cwd,
+      resumeRemoteId: handle.remoteId,
+      ...(opts?.env ? { env: opts.env } : {}),
+      ...(opts?.product ? { product: opts.product } : {}),
+      ...(opts?.spawnImpl ? { spawnImpl: opts.spawnImpl } : {}),
+    });
+    runtime.externalAgents.attach(faceSessionId, live, { cwd: handle.cwd });
   }
   if (live.isBusy()) {
     if (!opts?.steer) {
@@ -901,8 +1094,13 @@ export async function interruptExternalContinuable(
   const live = runtime.externalAgents.get(faceSessionId);
   if (!live) return;
   runtime.suppressOwnedSubagentCompletion(faceSessionId);
-  await live.interrupt();
+  try {
+    await live.interrupt();
+  } catch {
+    /* process may already be gone */
+  }
   if (opts?.dispose !== false) {
+    // Drop live process; keep sidecar so Status shows cold + follow-up can resume.
     runtime.externalAgents.detach(faceSessionId);
   }
 }

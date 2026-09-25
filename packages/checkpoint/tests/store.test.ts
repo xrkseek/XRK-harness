@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   WorkspaceCheckpointError,
   WorkspaceCheckpointStore,
@@ -16,7 +16,18 @@ import {
 
 const temps: string[] = [];
 
+let testHome: string;
+
+beforeEach(() => {
+  testHome = mkdtempSync(path.join(tmpdir(), "xrk-ckpt-home-"));
+  temps.push(testHome);
+  // Never touch the operator's real ~/.xrk: resolve an isolated home for the
+  // whole test file so `workspaceCheckpointDir` defaults are sandboxed.
+  vi.stubEnv("XRK_HOME", testHome);
+});
+
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const dir of temps.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -42,7 +53,7 @@ function fakeGit(
   handler: (args: readonly string[], call: number) => Partial<GitResult> | undefined,
 ): { run: GitRunner; calls: string[][] } {
   const calls: string[][] = [];
-  const run: GitRunner = async (args) => {
+    const run: GitRunner = async (args) => {
     const captured = [...args];
     calls.push(captured);
     const out = handler(captured, calls.length) ?? {};
@@ -50,6 +61,7 @@ function fakeGit(
       code: out.code ?? 0,
       stdout: out.stdout ?? "",
       stderr: out.stderr ?? "",
+      ...(out.timedOut !== undefined ? { timedOut: out.timedOut } : {}),
     };
   };
   return { run, calls };
@@ -110,6 +122,10 @@ describe("WorkspaceCheckpointStore.snapshot", () => {
     );
     expect(calls[0]?.[1]).toBe(`--work-tree=${resolved}`);
     expect(calls[0]).toContain("core.autocrlf=false");
+    // Shadow repo must never spawn background auto-maintenance (repack/gc):
+    // those balloon the pack files and hold the locks that a concurrent
+    // snapshot `add`/`commit` blocks on.
+    expect(calls[0]).toContain("maintenance.auto=false");
     // Shadow commits must not depend on the operator's git identity/config.
     expect(calls[0]).toContain("commit.gpgsign=false");
     expect(calls[0]).toContain("user.email=checkpoint@xrk.invalid");
@@ -178,6 +194,41 @@ describe("WorkspaceCheckpointStore.snapshot", () => {
       /unable to write object/,
     );
     expect(store.list()).toEqual([]);
+  });
+
+  it("maps a runner timeout to a timed-out error instead of hanging", async () => {
+    const { run } = fakeGit((args) =>
+      subcommandOf(args) === "add" ? { code: -1, timedOut: true } : {},
+    );
+    const store = new WorkspaceCheckpointStore({
+      workspaceDir: workspace(),
+      runGit: run,
+    });
+    await expect(store.snapshot({ sessionId: "s", seq: 0 })).rejects.toMatchObject({
+      code: "timed-out",
+    });
+    expect(store.list()).toEqual([]);
+  });
+
+  it("passes the timeout budget to the git runner on every command", async () => {
+    const ws = workspace();
+    const seen: (number | undefined)[] = [];
+    const run: GitRunner = async (args, opts) => {
+      seen.push(opts?.timeoutMs);
+      if (subcommandOf(args) === "rev-parse") return { code: 0, stdout: "sha\n", stderr: "" };
+      if (subcommandOf(args) === "ls-files") return { code: 0, stdout: "a\n", stderr: "" };
+      return { code: 0, stdout: "", stderr: "" };
+    };
+    const store = new WorkspaceCheckpointStore({ workspaceDir: ws, runGit: run, timeoutMs: 777 });
+    await store.snapshot({ sessionId: "s", seq: 0 });
+    expect(seen.length).toBeGreaterThan(0);
+    // The whole-operation budget is decremented per command, so values are
+    // ≤ the configured budget (and the first command gets the full amount).
+    expect(seen[0]).toBe(777);
+    for (const budget of seen) {
+      expect(budget).toBeGreaterThanOrEqual(1);
+      expect(budget).toBeLessThanOrEqual(777);
+    }
   });
 });
 

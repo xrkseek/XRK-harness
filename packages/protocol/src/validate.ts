@@ -284,6 +284,21 @@ function parseUserMessageSource(
     };
   }
 
+  if (kind === "auto-continue") {
+    const round = raw.round;
+    if (
+      typeof round !== "number" ||
+      !Number.isSafeInteger(round) ||
+      round < 1
+    ) {
+      throw new SessionEventParseError(
+        "auto-continue round must be a positive integer",
+        path,
+      );
+    }
+    return { kind: "auto-continue", round };
+  }
+
   // plugin + forward-compat opaque kinds: keep as plugin bag when kind is plugin,
   // otherwise wrap unknown kinds as plugin with the durable kind string preserved
   // via a `plugin` label when absent.

@@ -11,7 +11,7 @@
 | Session 召回 | `@xrkseek/xrk-session-reference` | `@session` prepare | `session-reference` |
 | 工具 mid-step | `deferContext` | 工具结果后 | 无 typed source（纯文本） |
 
-不要把 AGENTS.md / skills catalog 改成 fragment；也不要把 ephemeral env / recap 放进 inject。
+AGENTS.md / skills catalog 保持 fragment 之外的角色；ephemeral env / recap 不进 inject。
 
 ## 阶段
 
@@ -30,16 +30,17 @@ pipeline.collect(phase, ctx, { budgetChars? })
 createAdditionalContextFragment({ key, value, phase })
 createRecapFragment({ history })
 createStaticAdditionalContextProvider({ id, phase, entries })
+createGuardianReviewProvider({ id? }) // turn-start 提醒；非完整 LLM Guardian
 appendContextFragments({ store, sessionId, turnId, now, pipeline, phase })
 ```
 
 预算：相位总字符上限（默认 **8000**）；超出按 `priority` 高者优先，正文可 `truncateMiddle`。
 
-Harness：`createHarnessComposition({ contextFragmentProviders, contextFragmentBudgetChars })`；`contextFragments: false` 关闭。
+Harness：`createHarnessComposition({ contextFragmentProviders, contextFragmentBudgetChars, guardianFragments? })`；`contextFragments: false` 关闭。默认注册 **Guardian review** 片段（`guardianFragments !== false`）：turn-start 注入不信任工具输出 / 破坏性操作提醒——**不是**完整 Guardian LLM 审阅引擎。
 
 ## 范围
 
-本仓实现可插拔 **section + budget** 的收集管线（marked additional_context · recap）；完整 Guardian 审阅引擎不在范围内（见 status）。
+本仓实现可插拔 **section + budget** 的收集管线（marked additional_context · recap · thin Guardian nudge）；完整 Guardian 审阅引擎不在范围内（见 status）。
 
 相关：[workspace-inject.md](./workspace-inject.md) · [status.md](./status.md)
 
@@ -77,15 +78,16 @@ pipeline.collect(phase, ctx, { budgetChars? })
 createAdditionalContextFragment({ key, value, phase })
 createRecapFragment({ history })
 createStaticAdditionalContextProvider({ id, phase, entries })
+createGuardianReviewProvider({ id? }) // turn-start nudge; not a full LLM Guardian
 appendContextFragments({ store, sessionId, turnId, now, pipeline, phase })
 ```
 
 Budget: per-phase char ceiling (default **8000**); higher `priority` wins; bodies may `truncateMiddle`.
 
-Harness: `createHarnessComposition({ contextFragmentProviders, contextFragmentBudgetChars })`; `contextFragments: false` disables.
+Harness: `createHarnessComposition({ contextFragmentProviders, contextFragmentBudgetChars, guardianFragments? })`; `contextFragments: false` disables. Default registers **Guardian review** when `guardianFragments !== false` (Settings `agent-loop.guardianFragments`).
 
 ## Scope
 
-This repo ships the pluggable **section + budget** collection pipeline (marked additional_context · recap); a full Guardian review engine is out of scope (see status).
+This repo ships the pluggable **section + budget** collection pipeline (marked additional_context · recap) plus a thin Guardian nudge fragment; a full Guardian LLM review engine is out of scope (see status).
 
 Related: [workspace-inject.md](./workspace-inject.md) · [status.md](./status.md)

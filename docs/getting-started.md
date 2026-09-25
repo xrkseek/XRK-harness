@@ -8,7 +8,7 @@
 
 | 项 | 要求 |
 |----|------|
-| Node.js | **≥ 26**（`node -v`；勿被 IDE 自带 Node 抢 PATH） |
+| Node.js | **≥ 26**（`node -v`；让系统 Node 优先于 IDE 自带 Node 进入 PATH） |
 | pnpm | **仅路径 B**：`npm install -g pnpm@11.22.0`（与根 `packageManager` 同版） |
 
 用法：**CLI**（`xrkh run`）或 **Web**（`xrkh web` / `serve`）。全局安装后主命令为 **`xrkh`**；完整 bin 名 **`xrk-harness`** 等价。
@@ -27,10 +27,10 @@ npx @xrkseek/harness-cli web
 # 或全局安装后：xrkh web
 ```
 
-不要在用户主目录直接跑 `web`（cwd 会变成 workspace，Agent 可写范围过大）。`~/.xrk` 是设置/会话仓，不是项目根。浏览器打开提示地址（默认 `http://127.0.0.1:8787`）。
+在项目目录里跑 `web`（直接在用户主目录跑会让 cwd 变成 workspace、Agent 可写范围过大）。`~/.xrk` 是设置/会话仓，不是项目根。浏览器打开提示地址（默认 `http://127.0.0.1:8787`）。
 
 长任务可用模型工具 `todo_write` 维护站立计划（跨回合保留，直到下一次 `todo_write` 覆盖），必要时壳内 `/compact` 换窗。  
-工作区请打开**具体项目目录**，不要指到 Desktop 根（递归列目录会制造海量工具输出；内核会 spill，但仍应避免）。
+工作区请打开**具体项目目录**（指到 Desktop 根会递归列目录、制造海量工具输出；内核会 spill，仍建议避开）。
 
 | 步骤 | 说明 |
 |------|------|
@@ -63,7 +63,7 @@ node apps/cli/dist/bin.js web --workspace .
 
 `serve`/`web` 缺 `apps/web/dist` 时会自动跑上述三步组装；打发行版：`pnpm release:stage` / `pnpm release`。
 
-**本仓开发注意**：仓库根下的 `.xrk/` 是**你的本地 workspace 数据**，已在 `.gitignore` 中忽略。示例模板见 `.xrk/*.example` 与根 `.env.example` — **勿把真实密钥提交进 git**（见 [security-checklist.md](./security-checklist.md)）。
+**本仓开发注意**：仓库根下的 `.xrk/` 是**你的本地 workspace 数据**，已在 `.gitignore` 中忽略。示例模板见 `.xrk/*.example` 与根 `.env.example` — **真实密钥留在本地、不入 git**（见 [security-checklist.md](./security-checklist.md)）。
 
 无密钥 smoke：
 
@@ -93,7 +93,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 
 | 维度 | 开发（本地） | 生产（对外 Host） |
 |------|----------------|-------------------|
-| Host 鉴权 | `XRK_API_KEY` **留空** → `/api/*` 免鉴权 | **必须**设非空 `XRK_API_KEY` |
+| Host 鉴权 | `XRK_API_KEY` **留空** → `/api/*` 免鉴权 | 设非空 `XRK_API_KEY` |
 | CORS | 默认 `*` 可接受 | 设 `XRK_CORS_ORIGIN` 为实际前端源 |
 | 绑定 | `127.0.0.1:8787` | 反向代理 + TLS；CLI 拒绝 `0.0.0.0` |
 | LLM 密钥 | **设置 → 凭据**（或 `.xrk/.credentials.yaml`）；env 仅旁路 | 同上，密钥**仅运行时**；不入库 |
@@ -122,7 +122,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 默认权限档 | **设置 → 权限**（live：仍停在旧默认的会话会跟推）；会话内 Access 芯片或 `/permission` |
 | 软预算 · spill · bash 输出上限 | 插件配置 → **Agent 循环** / **终端** |
 
-环境变量留给 Host 监听、鉴权、CI；日常调参不要靠 env。细节：[configuration.md](./configuration.md)。
+环境变量留给 Host 监听、鉴权、CI；日常调参走 Web 设置即可。细节：[configuration.md](./configuration.md)。
 
 ## MCP（可选）
 

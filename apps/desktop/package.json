@@ -30,7 +30,9 @@
     "dev": "node ../../scripts/dev-desktop.mjs",
     "start": "node ../../scripts/dev-desktop.mjs --skip-build",
     "prepare:runtime": "node ./scripts/prepare-runtime.mjs",
-    "prepare:package-set": "node ./scripts/prepare-package-set.mjs"
+    "prepare:package-set": "node ./scripts/prepare-package-set.mjs",
+    "package": "node ../../scripts/package-desktop.mjs",
+    "package:check": "node ../../scripts/package-desktop.mjs --check"
   },
   "dependencies": {
     "@xrkseek/server-config": "workspace:*"

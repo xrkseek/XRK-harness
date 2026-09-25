@@ -199,12 +199,33 @@ export function presentPatchCall(args: unknown): GenericCallView | undefined {
   };
 }
 
-/** Success summary from tool text; decline on error. */
+/**
+ * Success summary from tool text; on error surface parse/apply code (via
+ * `meta.code` or content) so the shell can show a failed-patch card.
+ */
 export function presentPatchResult(
-  args: unknown,
+  _args: unknown,
   result: PresentableToolResult,
 ): GenericCallView | undefined {
-  if (result.isError) return undefined;
+  if (result.isError) {
+    const metaCode =
+      result.meta && typeof result.meta.code === "string"
+        ? result.meta.code
+        : "";
+    const detail =
+      typeof result.content === "string" && result.content.trim()
+        ? result.content.trim().split(/\r?\n/)[0]!
+        : "Apply patch failed";
+    const title = metaCode
+      ? `Apply patch failed (${metaCode})`
+      : "Apply patch failed";
+    return {
+      card: "generic",
+      title,
+      kind: "edit",
+      rawInput: detail,
+    };
+  }
   const title =
     typeof result.content === "string" && result.content.trim()
       ? result.content.trim().split(/\r?\n/)[0]!

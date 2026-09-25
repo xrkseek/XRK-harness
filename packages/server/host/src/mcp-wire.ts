@@ -9,6 +9,7 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
+  parseJsonText,
   parseMcpServersJson,
   parseMcpServersValue,
   pickMcpAllowedEnv,
@@ -138,7 +139,7 @@ export function readMcpServersFromHostSettings(
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = parseJsonText(raw);
   } catch (err) {
     console.warn(
       `[host] ${file}: parse failed; keeping last good MCP specs (${
@@ -220,7 +221,7 @@ export function readMcpAllowFromHostSettings(file: string): boolean {
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = parseJsonText(raw);
   } catch (err) {
     console.warn(
       `[host] ${file}: parse failed; keeping last good mcp.allowConnect (${

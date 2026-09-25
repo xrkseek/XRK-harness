@@ -43,6 +43,8 @@ export interface SubagentPromptReceipt {
 /** Uniform acknowledgement that one interrupt request was admitted. */
 export interface SubagentInterruptReceipt {
   accepted: true
+  /** Present when Face marked the Teams task paused for human ownership. */
+  takeover?: true
 }
 
 /** Durable parent/child address that selects subagent transport in the client. */
@@ -118,6 +120,11 @@ export interface SubagentsApi {
    * `accepted`.
    */
   interrupt(
-    request: RpcRequest<Extract<SubagentAddress, { mode: 'continuable' }>>,
+    request: RpcRequest<
+      Extract<SubagentAddress, { mode: 'continuable' }> & {
+        /** Soft-pause / human takeover on the Agent Teams task board. */
+        takeover?: boolean
+      }
+    >,
   ): Promise<RpcResponse<SubagentInterruptReceipt>>
 }

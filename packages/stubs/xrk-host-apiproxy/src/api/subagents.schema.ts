@@ -76,11 +76,14 @@ export const subagentInterruptRequestSchema = z.object({
   parentSessionId: sessionIdSchema,
   childSessionId: sessionIdSchema,
   mode: z.literal('continuable'),
+  /** Soft-pause / human takeover on the Agent Teams task board. */
+  takeover: z.boolean().optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'subagent.interrupt'>>>
 
 /** subagent.interrupt response value. */
 export const subagentInterruptValueSchema = z.object({
   accepted: z.literal(true),
+  takeover: z.literal(true).optional(),
 }) satisfies z.ZodType<Wire<ResponseValue<'subagent.interrupt'>>>
 
 const messageIdSchema = z.string() as unknown as z.ZodType<MessageId>

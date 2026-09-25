@@ -14,6 +14,11 @@ import {
   saveAgentDefaultModel,
   type FaceModelSelection,
 } from "./model-catalog.js";
+import {
+  saveSessionModelSelection,
+  sessionModelsPath,
+} from "./session-model-store.js";
+import { resolveXrkHome } from "@xrkseek/server-config";
 import { resolveLlmForSelection } from "./llm-resolve.js";
 import { publishRemoteEvent } from "./remote-event.js";
 
@@ -130,6 +135,17 @@ export async function selectSessionModel(
     };
   }
   runtime.sessionModels.set(sessionId, selected);
+  try {
+    saveSessionModelSelection(
+      sessionModelsPath(
+        runtime.productDir?.trim() || resolveXrkHome(),
+      ),
+      sessionId,
+      selected,
+    );
+  } catch {
+    /* disk persist best-effort */
+  }
   try {
     await saveAgentDefaultModel(runtime, selected);
     publishRemoteEvent(runtime.bus, "settings/document-updated", [

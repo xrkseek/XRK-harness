@@ -10,7 +10,7 @@
 
 Host spawn 时默认启动 ticker（`~/.xrk/cron/jobs.json`），除非 Settings 关闭或 env 旁路。
 
-模型工具 `cronjob`（action：`create` · `list` · `pause` · `resume` · `run` · `remove`）在 Host 注入 scheduler 时登记。Cron 自己开的 agent 回合**不**再挂 `cronjob`，避免递归调度。
+模型工具 `cronjob`（action：`create` · `list` · `pause` · `resume` · `run` · `remove` · `runs`）在 Host 注入 scheduler 时登记。`runs` 读有界执行账本（`~/.xrk/cron/executions.jsonl`，≤1000，Hermes ledger 子集）。Cron 自己开的 agent 回合**不**再挂 `cronjob`，避免递归调度。
 
 ## 调度
 
@@ -24,7 +24,7 @@ Host spawn 时默认启动 ticker（`~/.xrk/cron/jobs.json`），除非 Settings
 
 | `run_kind` | 行为 |
 |------------|------|
-| `agent` | 新建 session，`continueTurn` 注入 prompt，结果文本可回投 |
+| `agent` | 新建 session，`continueTurn` 注入 prompt，结果文本可回投。回合结束后释放该 session 的 Agent 组合缓存（不常驻堆） |
 | `script` | Host shell 执行 `command`（捕获 stdout/stderr） |
 
 ## 回投
@@ -40,6 +40,7 @@ Host spawn 时默认启动 ticker（`~/.xrk/cron/jobs.json`），除非 Settings
 | 变量 | 含义 |
 |------|------|
 | `XRK_CRON` | CI 旁路 Settings：`0` 强制关 · 非空其它值强制开 — 产品路径用 Settings → Plugins → Cron |
+| `XRK_TIME_CONTEXT_REFRESH_MS` | Follow-up 时间注入间隔（毫秒）。未设默认 `60000`；`0`=每步；`off`/负数=关闭 |
 
 ---
 
@@ -55,7 +56,7 @@ Host spawn 时默认启动 ticker（`~/.xrk/cron/jobs.json`），除非 Settings
 
 Host spawn starts the ticker by default (`~/.xrk/cron/jobs.json`) unless Settings disables it or env bypasses.
 
-The model tool `cronjob` (actions: `create` · `list` · `pause` · `resume` · `run` · `remove`) registers when the Host injects the scheduler. Agent turns opened by cron do **not** mount `cronjob`, to avoid recursive scheduling.
+The model tool `cronjob` (actions: `create` · `list` · `pause` · `resume` · `run` · `remove` · `runs`) registers when the Host injects the scheduler. `runs` reads the bounded execution ledger (`~/.xrk/cron/executions.jsonl`, ≤1000 — Hermes ledger subset). Agent turns opened by cron do **not** mount `cronjob`, to avoid recursive scheduling.
 
 ## Schedule
 
@@ -69,7 +70,7 @@ The model tool `cronjob` (actions: `create` · `list` · `pause` · `resume` · 
 
 | `run_kind` | Behavior |
 |------------|------|
-| `agent` | New session, `continueTurn` with prompt; text may be delivered |
+| `agent` | New session, `continueTurn` with prompt; text may be delivered. Agent composition for that session is released after the turn (not retained on the heap) |
 | `script` | Host shell runs `command` (captures stdout/stderr) |
 
 ## Delivery
@@ -85,3 +86,4 @@ The model tool `cronjob` (actions: `create` · `list` · `pause` · `resume` · 
 | Variable | Meaning |
 |------|------|
 | `XRK_CRON` | CI bypass over Settings: `0` force off · any other non-empty force on — product path: Settings → Plugins → Cron |
+| `XRK_TIME_CONTEXT_REFRESH_MS` | Follow-up time injection interval (ms). Unset defaults to `60000`; `0` = every step; `off` / negative = off |

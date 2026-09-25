@@ -41,10 +41,12 @@ export {
   type DesktopProductPhase,
 } from "./product-entry.js";
 export {
+  DESKTOP_BUILDER_CONFIG,
   DESKTOP_BUILDER_DRAFT,
   DESKTOP_UPLOAD_CREDENTIAL_ENV_NAMES,
   DESKTOP_WINDOWS_SIGNING_ENV_PREFIX,
   assertDesktopPackageHostCompatible,
+  desktopElectronBuilderArguments,
   desktopElectronBuilderDraftArguments,
   isDesktopFirstWavePackageTarget,
   listDesktopPackageTargets,
@@ -55,6 +57,32 @@ export {
   type DesktopPackageTarget,
   type DesktopPackageTargetName,
 } from "./package-targets.js";
+export {
+  DESKTOP_UNSIGNED_ENV,
+  DESKTOP_MACOS_SIGNING_ENV,
+  DESKTOP_WINDOWS_SIGNING_ENV,
+  isDesktopMacOSNotarizationReady,
+  isDesktopUnsignedRequested,
+  resolveDesktopMacOSSigningEnvironment,
+  resolveDesktopWindowsSigningEnvironment,
+  type DesktopMacOSSigningEnvironment,
+  type DesktopWindowsSigningEnvironment,
+} from "./desktop-signing-environment.js";
+export {
+  DESKTOP_AUTO_UPDATE_ENV,
+  desktopElectronBuilderPublish,
+  renderDesktopAppUpdateYml,
+  resolveDesktopAutoUpdateChannel,
+  resolveDesktopAutoUpdateConfig,
+  type DesktopAutoUpdateChannel,
+  type DesktopAutoUpdateConfig,
+} from "./desktop-auto-update-environment.js";
+export {
+  DESKTOP_APP_UPDATE_YML,
+  desktopAppUpdateYmlPath,
+  isDesktopUpdateFeedEnabled,
+  writeDesktopAppUpdateConfig,
+} from "./app-update-config.js";
 export {
   desktopTargetBuildPaths,
   resolveDesktopAppRoot,

@@ -1,3 +1,8 @@
+/* PreviewTabs — session Status (details) column.
+ * Card-per-section layout with collapsible headers, a hero summary strip,
+ * segmented tab bar, and token-only styling (--dsw-alias-*) so light and
+ * dark themes resolve automatically. */
+
 .root {
   display: flex;
   flex-direction: column;
@@ -35,33 +40,46 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* Segmented tab bar: a soft track with a raised active segment. */
 .tabs {
   display: flex;
-  gap: 4px;
-  min-width: 0;
   flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  background: var(--dsw-alias-bg-skeleton);
+  border-radius: 9px;
 }
 
 .tab {
   border: none;
-  border-radius: 999px;
-  padding: 2px 10px;
+  border-radius: 7px;
+  padding: 3px 10px;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.tab:hover {
+  color: var(--dsw-alias-label-primary);
 }
 
 .tab[aria-selected='true'] {
-  background: var(--dsw-alias-interactive-bg-hover);
+  background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
-  font-weight: 500;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .tab:focus-visible,
 .close:focus-visible,
-.open:focus-visible {
+.open:focus-visible,
+.sectionHeader:focus-visible,
+.spillOpen:focus-visible,
+.summaryToggle:focus-visible,
+.linkBtn:focus-visible {
   outline: 2px solid var(--dsw-alias-text-primary);
   outline-offset: 2px;
 }
@@ -79,6 +97,7 @@
   cursor: pointer;
   position: relative;
   z-index: 2;
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .close:hover {
@@ -90,26 +109,35 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 12px 16px;
+  padding: 12px 14px;
   font-size: 13px;
   line-height: 20px;
   color: var(--dsw-alias-label-primary);
 }
 
+/* Key / value line used inside cards and on the plan / office tabs.
+ * No bottom borders — spacing carries the hierarchy inside a card. */
 .row {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 5px 0;
 }
 
 .label {
   color: var(--dsw-alias-label-secondary);
 }
 
+/* Shared empty state: a soft dashed well instead of a bare line. */
 .empty {
-  color: var(--dsw-alias-label-secondary);
+  padding: 8px 10px;
+  border: 1px dashed var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .todoList {
@@ -118,7 +146,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .todoItem {
@@ -126,8 +154,13 @@
   grid-template-columns: auto 1fr;
   gap: 8px 10px;
   align-items: start;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  padding: 7px 8px;
+  border-radius: 8px;
+  transition: background 120ms ease;
+}
+
+.todoItem:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .todoStatus {
@@ -155,36 +188,156 @@
 .statusRoot {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
 
-.section {
+/* ---- hero summary strip ---- */
+
+.summary {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+.summaryMain {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summaryHealth {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.summaryStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-left: auto;
+}
+
+.summaryStat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.summaryStat b {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryActions {
+  display: inline-flex;
+  align-items: center;
+}
+
+.summaryToggle {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  padding: 2px 10px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.summaryToggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ---- collapsible section cards ---- */
+
+.section {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-skeleton);
+  overflow: hidden;
   min-width: 0;
 }
 
-.sectionTitle {
+.sectionHeader {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   gap: 8px;
-  margin: 0 0 4px;
-  font-size: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.sectionHeader:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.sectionChevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+  transition: transform 160ms ease;
+}
+
+.sectionHeader[aria-expanded='true'] .sectionChevron {
+  transform: rotate(180deg);
+}
+
+.sectionTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 16px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--dsw-alias-label-secondary);
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sectionMeta {
+  flex: none;
+  max-width: 55%;
   font-size: 11px;
   font-weight: 400;
-  letter-spacing: 0;
-  text-transform: none;
+  line-height: 16px;
   color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sectionBody {
+  padding: 2px 12px 10px;
+}
+
+.sectionBody:not([hidden]) {
+  animation: section-open 160ms ease;
+}
+
+@keyframes section-open {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
 }
 
 .mono {
@@ -200,7 +353,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .itemRow,
@@ -208,11 +361,28 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px 10px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  gap: 4px 10px;
+  padding: 4px 6px;
+  border-radius: 6px;
   font-size: 12px;
   line-height: 18px;
+  transition: background 120ms ease;
+}
+
+.itemRow:hover,
+.graphEdge:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Live rows (running jobs / subagents / tasks) get a small state dot. */
+.itemRow[data-live]::before {
+  content: '';
+  align-self: center;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-business-primary);
 }
 
 .itemTitle {
@@ -233,23 +403,43 @@
 
 .spillOpen {
   margin-left: auto;
-  border: none;
-  border-radius: 4px;
-  padding: 1px 8px;
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  padding: 1px 10px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   line-height: 18px;
   cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .spillOpen:hover {
-  background: var(--dsw-alias-interactive-bg-pressed, var(--dsw-alias-interactive-bg-hover));
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 
-.spillOpen:focus-visible {
-  outline: 2px solid var(--dsw-alias-text-primary);
-  outline-offset: 2px;
+.teamTaskBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.teamTaskPreview {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  word-break: break-word;
+}
+
+.teamTaskActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+  align-self: flex-start;
 }
 
 .graphKind {
@@ -285,6 +475,41 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+.trend {
+  margin-top: 8px;
+}
+
+.trendBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 44px;
+  margin: 6px 0 4px;
+}
+
+.trendBar {
+  flex: 1;
+  min-width: 4px;
+  border-radius: 2px 2px 0 0;
+  background: var(--dsw-alias-label-secondary);
+  opacity: 0.75;
+  transition: opacity 120ms ease;
+}
+
+.trendBar:hover {
+  opacity: 1;
+}
+
+.linkBtn {
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-text-primary);
+  font-size: 11px;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .open {
   border: none;
   border-radius: 999px;
@@ -294,10 +519,32 @@
   font-size: 13px;
   line-height: 20px;
   cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .open:hover,
 .open[data-open] {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab,
+  .close,
+  .summaryToggle,
+  .spillOpen,
+  .itemRow,
+  .graphEdge,
+  .trendBar,
+  .open {
+    transition: none;
+  }
+
+  .sectionChevron {
+    transition: none;
+  }
+
+  .sectionBody:not([hidden]) {
+    animation: none;
+  }
 }

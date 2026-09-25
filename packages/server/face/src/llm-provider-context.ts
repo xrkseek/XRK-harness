@@ -39,7 +39,12 @@ export type DeclaredPiAiProvider = {
   readonly displayName: string;
   readonly baseUrl?: string;
   readonly api?: string;
-  readonly models: readonly { readonly id: string; readonly name?: string }[];
+  readonly models: readonly {
+    readonly id: string;
+    readonly name?: string;
+    readonly inputModalities?: readonly ("text" | "image")[];
+    readonly contextWindow?: number;
+  }[];
 };
 
 function mergedNamespace(
@@ -94,19 +99,42 @@ export function piAiProviderProfile(
 
 function profileModels(
   profile: Record<string, unknown>,
-): { id: string; name?: string }[] {
+): {
+  id: string;
+  name?: string;
+  inputModalities?: readonly ("text" | "image")[];
+  contextWindow?: number;
+}[] {
   const modelsRaw = profile.models;
   if (!Array.isArray(modelsRaw)) return [];
-  const models: { id: string; name?: string }[] = [];
+  const models: {
+    id: string;
+    name?: string;
+    inputModalities?: readonly ("text" | "image")[];
+    contextWindow?: number;
+  }[] = [];
   for (const row of modelsRaw) {
     if (!row || typeof row !== "object" || Array.isArray(row)) continue;
     const mid = (row as { id?: unknown }).id;
     if (typeof mid !== "string" || !mid.trim()) continue;
     const name = (row as { name?: unknown }).name;
+    const modsRaw = (row as { inputModalities?: unknown }).inputModalities;
+    const inputModalities = Array.isArray(modsRaw)
+      ? modsRaw
+          .map((m) => String(m).trim())
+          .filter((m): m is "text" | "image" => m === "text" || m === "image")
+      : undefined;
+    const cwRaw = (row as { contextWindow?: unknown }).contextWindow;
     models.push({
       id: mid.trim(),
       ...(typeof name === "string" && name.trim()
         ? { name: name.trim() }
+        : {}),
+      ...(inputModalities && inputModalities.length > 0
+        ? { inputModalities: [...new Set(inputModalities)] }
+        : {}),
+      ...(typeof cwRaw === "number" && Number.isInteger(cwRaw) && cwRaw > 0
+        ? { contextWindow: cwRaw }
         : {}),
     });
   }

@@ -101,6 +101,11 @@ export function contextProvenance(source: unknown): ContextProvenanceView {
         role: 'inject',
         label: readString(record, 'fragmentId') ?? kind,
       }
+    // Automatic continuation after max-tokens: explicitly an automated step,
+    // never presented as a human-authored message. The label is a stable
+    // identifier; the UI translates it (a product label, not a producer name).
+    case 'auto-continue':
+      return { role: 'inject', label: 'auto-continue' }
     case 'plugin':
       return { role: 'inject', label: readString(record, 'plugin') ?? kind }
     // A user-explicit skill invocation names the skill it injected.

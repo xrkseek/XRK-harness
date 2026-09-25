@@ -49,6 +49,12 @@ export {
 } from "./three-layer.js";
 
 export {
+  shouldRefreshTimeContext,
+  clearTimeContextRefreshState,
+  parseTimeContextRefreshMs,
+} from "./time-context.js";
+
+export {
   compactionStep,
   createAssembleStep,
   createContextWindowStep,

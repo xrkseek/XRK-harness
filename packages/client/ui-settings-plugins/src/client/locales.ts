@@ -10,12 +10,19 @@ export type PluginsSettingsLocaleKey =
   | 'bashForegroundYieldMs' | 'bashForegroundYieldMsHint'
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
   | 'agentLoopMaxSteps' | 'agentLoopMaxStepsHint'
+  | 'agentLoopAutoContinue' | 'agentLoopAutoContinueHint'
+  | 'agentLoopAutoContinueOn' | 'agentLoopAutoContinueOff'
+  | 'agentLoopAutoContinueMaxRounds' | 'agentLoopAutoContinueMaxRoundsHint'
   | 'agentLoopToolOrder' | 'agentLoopToolOrderHint' | 'agentLoopToolOrderInvalid'
   | 'agentLoopToolSettle' | 'agentLoopToolSettleHint'
   | 'agentLoopLlmRetry' | 'agentLoopLlmRetryHint'
   | 'agentLoopMaxRequestTokens' | 'agentLoopMaxRequestTokensHint'
   | 'agentLoopKeepTokens' | 'agentLoopKeepTokensHint'
   | 'agentLoopBufferTokens' | 'agentLoopBufferTokensHint'
+  | 'agentLoopCompactionStrategy' | 'agentLoopCompactionStrategyHint'
+  | 'agentLoopCompactionStrategyInvalid'
+  | 'agentLoopCompactionPruneSummary' | 'agentLoopCompactionPruneOnly'
+  | 'agentLoopCompactionSummaryOnly' | 'agentLoopCompactionOff'
   | 'agentLoopToolResultMaxInline' | 'agentLoopToolResultMaxInlineHint'
   | 'agentLoopMaxSubagentDepth' | 'agentLoopMaxSubagentDepthHint'
   | 'agentLoopMaxActiveSubagents' | 'agentLoopMaxActiveSubagentsHint'
@@ -140,6 +147,12 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxParallelHint: 'Upper bound on parallel-safe calls running at once within one step.',
   agentLoopMaxSteps: 'Max steps per turn',
   agentLoopMaxStepsHint: 'Upper bound on LLM steps (including tool rounds) within one user turn. Default 32.',
+  agentLoopAutoContinue: 'Auto-continue on max tokens',
+  agentLoopAutoContinueHint: 'When a model stops at its output token cap mid-turn, resume it automatically instead of ending the turn truncated. Off by default.',
+  agentLoopAutoContinueOn: 'On',
+  agentLoopAutoContinueOff: 'Off',
+  agentLoopAutoContinueMaxRounds: 'Auto-continue cap',
+  agentLoopAutoContinueMaxRoundsHint: 'Maximum automatic continuations within one turn (1–10). Guards against endless resumption when the provider keeps truncating. Default 2.',
   agentLoopToolOrder: 'Tool order',
   agentLoopToolOrderHint: 'Comma-separated tool names with exactly one empty slot for the rest (for example bash, , read_file). Leave blank for lexicographic wire order.',
   agentLoopToolOrderInvalid: 'List tool names separated by commas, with exactly one empty slot for the rest, and no duplicates.',
@@ -148,11 +161,18 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopLlmRetry: 'LLM retries per step',
   agentLoopLlmRetryHint: 'Retry empty / rate-limit / server / timeout failures within one step. 0 disables. Default 5.',
   agentLoopMaxRequestTokens: 'Soft request budget (tokens)',
-  agentLoopMaxRequestTokensHint: 'Messages + standing tool schemas. Over budget → prune → compact → fail-closed. Default 100000.',
+  agentLoopMaxRequestTokensHint: 'Messages + standing tool schemas. Over budget follows the compaction strategy below (default prune → summary → fail-closed). Default 100000.',
   agentLoopKeepTokens: 'Keep tokens after compact',
   agentLoopKeepTokensHint: 'Recent tail kept when auto-compacting. Default 24000.',
   agentLoopBufferTokens: 'Soft-budget buffer (tokens)',
   agentLoopBufferTokensHint: 'Soft ceiling = max request tokens − this buffer. Default 4000.',
+  agentLoopCompactionStrategy: 'Compaction strategy',
+  agentLoopCompactionStrategyHint: 'What happens when the soft request budget is exceeded. Default prune-summary.',
+  agentLoopCompactionStrategyInvalid: 'Pick prune-summary, prune-only, summary-only, or off.',
+  agentLoopCompactionPruneSummary: 'Prune then summary (default)',
+  agentLoopCompactionPruneOnly: 'Prune only',
+  agentLoopCompactionSummaryOnly: 'Summary only',
+  agentLoopCompactionOff: 'Off (fail-closed immediately)',
   agentLoopToolResultMaxInline: 'Tool result spill ceiling (bytes)',
   agentLoopToolResultMaxInlineHint: 'Plain-text tool bodies over this spill to ~/.xrk/spill/ with a head/tail preview. 0 disables. Default 64000.',
   agentLoopMaxSubagentDepth: 'Max subagent depth',
@@ -280,7 +300,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   cronEnabledOn: 'On',
   cronEnabledOff: 'Off',
   cronLiveHint: 'Applies live: Host starts or stops the ticker and rebuilds agents (no restart).',
-  cronScheduleNote: 'Job catalog stays with the cronjob tool and ~/.xrk/cron/jobs.json; this card is the master switch only — not a Schedule reminder directory.',
+  cronScheduleNote: 'Job catalog stays with the cronjob tool and ~/.xrk/cron/jobs.json; run history is cronjob action=runs → ~/.xrk/cron/executions.jsonl (≤1000). This card is the master switch only.',
   browserTitle: 'Browser',
   browserDescription: 'Page-level browser_open / snapshot / act / vision. Default is an HTTP snapshot; CDP attaches to Chrome DevTools. Separate from desktop computer-use. Set XRK_BROWSER_CDP_URL in CI to bypass this card.',
   browserMode: 'Session backend',
@@ -306,7 +326,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   voiceLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
   voiceWakeDeferred: 'On-device wake word is not shipped; use push-to-talk / product mic after Voice is enabled.',
   imageGenTitle: 'Image gen',
-  imageGenDescription: 'Text-to-image via image_generate. API key via Credentials. Set XRK_IMAGE_GEN in CI to bypass this card.',
+  imageGenDescription: 'image_generate text-to-image and reference edit (URLs / attachment ids). API key via Credentials. Set XRK_IMAGE_GEN in CI to bypass this card.',
   imageGenMode: 'Mode',
   imageGenModeHint: 'Off keeps the tool visible but execute fails honestly. OpenAI needs a key in Credentials.',
   imageGenModeOff: 'Off',
@@ -321,7 +341,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   imageGenModelHint: 'Optional model id (default dall-e-3).',
   imageGenLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
   videoGenTitle: 'Video gen',
-  videoGenDescription: 'Text-to-video via video_generate (async jobs). API key via Credentials. Set XRK_VIDEO_GEN in CI to bypass this card.',
+  videoGenDescription: 'video_generate text-to-video, image-to-video / first frame, edit/extend, and family catalog. API key via Credentials. Set XRK_VIDEO_GEN in CI to bypass this card.',
   videoGenMode: 'Mode',
   videoGenModeHint: 'Off keeps the tool visible but execute fails honestly. OpenAI needs a key in Credentials.',
   videoGenModeOff: 'Off',
@@ -425,6 +445,12 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxParallelHint: '同一步内最多同时运行多少个可并行的调用。',
   agentLoopMaxSteps: '每轮最大步数',
   agentLoopMaxStepsHint: '单次用户 turn 内 LLM 步数上限（含工具回合）。默认 32。',
+  agentLoopAutoContinue: '达输出上限时自动续写',
+  agentLoopAutoContinueHint: '模型在 turn 中途撞上输出 token 上限时，自动以「继续」续写而不是截断收尾。默认关闭。',
+  agentLoopAutoContinueOn: '开',
+  agentLoopAutoContinueOff: '关',
+  agentLoopAutoContinueMaxRounds: '自动续写上限',
+  agentLoopAutoContinueMaxRoundsHint: '单个 turn 内最多自动续写几次（1–10），防止提供方持续截断时无限续写。默认 2。',
   agentLoopToolOrder: '工具线序',
   agentLoopToolOrderHint: '逗号分隔工具名，恰好一个空位表示 rest（例如 bash, , read_file）。留空则按字典序上线。',
   agentLoopToolOrderInvalid: '请用逗号分隔工具名，恰好一个空位作 rest，且名称不重复。',
@@ -433,11 +459,18 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopLlmRetry: '步内 LLM 重试次数',
   agentLoopLlmRetryHint: '对空响应 / 限流 / 服务端 / 超时在同一步内重试。0 关闭。默认 5。',
   agentLoopMaxRequestTokens: '软请求预算（token）',
-  agentLoopMaxRequestTokensHint: '消息面 + 站立 tool schemas。超限 → prune → compact → fail-closed。默认 100000。',
+  agentLoopMaxRequestTokensHint: '消息面 + 站立 tool schemas。超限按下方压缩策略处理（默认 prune → summary → fail-closed）。默认 100000。',
   agentLoopKeepTokens: '压缩后保留 token',
   agentLoopKeepTokensHint: '自动压缩时保留的近期尾部。默认 24000。',
   agentLoopBufferTokens: '软预算缓冲（token）',
   agentLoopBufferTokensHint: '软上限 = 软请求预算 − 该缓冲。默认 4000。',
+  agentLoopCompactionStrategy: '压缩策略',
+  agentLoopCompactionStrategyHint: '软请求预算超限时怎么做。默认 prune-summary。',
+  agentLoopCompactionStrategyInvalid: '请选 prune-summary、prune-only、summary-only 或 off。',
+  agentLoopCompactionPruneSummary: '先 prune 再 summary（默认）',
+  agentLoopCompactionPruneOnly: '仅 prune',
+  agentLoopCompactionSummaryOnly: '仅 summary',
+  agentLoopCompactionOff: '关闭（立即 fail-closed）',
   agentLoopToolResultMaxInline: '工具结果 spill 上限（字节）',
   agentLoopToolResultMaxInlineHint: '纯文本工具正文超过此值会落盘到 ~/.xrk/spill/，模型只见 head/tail。0 关闭。默认 64000。',
   agentLoopMaxSubagentDepth: '子代理最大深度',
@@ -565,7 +598,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   cronEnabledOn: '开',
   cronEnabledOff: '关',
   cronLiveHint: '保存后立即生效：Host 启停 ticker 并重建 agent（无需重启）。',
-  cronScheduleNote: '任务目录仍由 cronjob 工具与 ~/.xrk/cron/jobs.json 管理；本卡仅总开关，不是 Schedule 提醒一览页。',
+  cronScheduleNote: '任务目录由 cronjob 工具与 ~/.xrk/cron/jobs.json 管理；跑史见 cronjob action=runs → ~/.xrk/cron/executions.jsonl（≤1000）。本卡仅总开关。',
   browserTitle: 'Browser',
   browserDescription: '页面级 browser_open / snapshot / act / vision。默认 HTTP 快照；CDP 经 Chrome DevTools 附着。与桌面 computer-use 分开。CI 可设 XRK_BROWSER_CDP_URL 旁路本卡。',
   browserMode: '会话后端',
@@ -591,7 +624,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   voiceLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
   voiceWakeDeferred: '本地唤醒词尚未交付；启用 Voice 后请用按住说话 / 产品壳麦克风。',
   imageGenTitle: '文生图',
-  imageGenDescription: 'image_generate 文生图。密钥经凭据落盘。CI 可设 XRK_IMAGE_GEN 旁路本卡。',
+  imageGenDescription: 'image_generate 文生图与参考编辑（URL / 附件 id）。密钥经凭据落盘。CI 可设 XRK_IMAGE_GEN 旁路本卡。',
   imageGenMode: '模式',
   imageGenModeHint: '关：工具仍可见，execute 诚实失败。OpenAI：需在凭据里配置密钥。',
   imageGenModeOff: '关',
@@ -606,7 +639,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   imageGenModelHint: '可选模型 id（默认 dall-e-3）。',
   imageGenLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
   videoGenTitle: '文生视频',
-  videoGenDescription: 'video_generate 文生视频（异步任务）。密钥经凭据落盘。CI 可设 XRK_VIDEO_GEN 旁路本卡。',
+  videoGenDescription: 'video_generate 文生视频、图生视频/首帧、edit/extend 与 family catalog。密钥经凭据落盘。CI 可设 XRK_VIDEO_GEN 旁路本卡。',
   videoGenMode: '模式',
   videoGenModeHint: '关：工具仍可见，execute 诚实失败。OpenAI：需在凭据里配置密钥。',
   videoGenModeOff: '关',

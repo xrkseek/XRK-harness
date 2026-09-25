@@ -5,7 +5,11 @@ import { imageGenUnavailableMessage } from "./tools.js";
 
 export {
   ImageGenError,
+  IMAGE_GEN_CAPABILITIES_TEXT_ONLY,
+  imageGenSupportsEdit,
   isImageGenError,
+  resolveImageGenCapabilities,
+  type ImageGenCapabilities,
   type ImageGenDelivery,
   type ImageGenErrorCode,
   type ImageGenImage,
@@ -13,6 +17,7 @@ export {
   type ImageGenResult,
   type ImageGenService,
   type ImageGenSize,
+  type ImageGenSourceImage,
 } from "./types.js";
 export { IMAGE_GEN_PROMPT_TEXT } from "./format.js";
 export {
@@ -29,6 +34,12 @@ export {
   imageGenUnavailableMessage,
   type CreateImageGenToolsOptions,
 } from "./tools.js";
+export {
+  buildImageGenToolDescription,
+  buildImageGenToolParameters,
+  IMAGE_GEN_SIZES,
+} from "./schema.js";
+export { resolveImageGenReferenceImages } from "./references.js";
 
 /** Face `image-gen` product modes (Settings SoT). `memory` stays env-only. */
 export type ImageGenProductMode = "off" | "openai";
@@ -64,7 +75,7 @@ function resolveApiKey(env: NodeJS.ProcessEnv): string | undefined {
 }
 
 /**
- * Resolve a text-to-image Provider.
+ * Resolve an image Provider (t2i + edit when capabilities allow).
  * - Injected `service` wins.
  * - Non-empty `XRK_IMAGE_GEN` is CI bypass over Face `product`.
  * - Product / env: `off` · `openai` (`1`) · `memory` (env-only).

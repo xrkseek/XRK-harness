@@ -22,10 +22,25 @@ export interface ToolExecuteExtras {
   deferContext(text: string): void;
 }
 
+/**
+ * Hermes `dynamic_schema_overrides` payload — applied when materializing the
+ * LLM catalog from Provider `capabilities()` (or similar live gates).
+ */
+export interface ToolDynamicSchema {
+  readonly description?: string;
+  readonly parameters?: Record<string, unknown>;
+}
+
 export interface ToolDefinition<TArgs = unknown> {
   readonly name: string;
   readonly description: string;
   readonly parameters: Record<string, unknown>;
+  /**
+   * Hermes `dynamic_schema_overrides`: invoked by {@link materializeTools} for
+   * the catalog snapshot. Soft-fail (throw / non-object) keeps static fields.
+   * Does not change the live registry instance used for settle identity.
+   */
+  dynamicSchema?(): ToolDynamicSchema | undefined;
   execute(
     args: TArgs,
     signal?: AbortSignal,

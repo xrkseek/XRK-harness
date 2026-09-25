@@ -11,6 +11,7 @@ import type {
   SessionEvent,
 } from "@xrkseek/protocol";
 import { flattenText } from "@xrkseek/protocol";
+import { estimateImageTokens } from "@xrkseek/attachment";
 import { estimateText } from "./surface-estimate.js";
 import {
   foldImageOffloadMarks,
@@ -45,12 +46,30 @@ function messagePlainText(m: ChatMessage): string {
 /**
  * Blocks that {@link flattenText} skips (images) or under-prices relative to the
  * outbound wire — soft budget must not miss them (漏压).
+ * Image blocks use DeepSeek V41-aligned vision tokens from attachment dims
+ * (provider usage remains authoritative after the turn).
  */
 function estimateOpaqueContentBlocks(content: MessageContent): number {
   if (typeof content === "string") return 0;
   let n = 0;
   for (const block of content) {
-    if (block.type === "text" || block.type === "file") continue;
+    if (block.type === "text") continue;
+    if (block.type === "image") {
+      if (block.offloaded === true) continue;
+      const { width, height } = block.attachment;
+      if (
+        Number.isSafeInteger(width) &&
+        Number.isSafeInteger(height) &&
+        width > 0 &&
+        height > 0
+      ) {
+        n += estimateImageTokens(width, height);
+      } else {
+        n += estimateTokens(JSON.stringify(block.attachment));
+      }
+      continue;
+    }
+    if (block.type === "file") continue;
     n += estimateTokens(JSON.stringify(block));
   }
   return n;
@@ -339,7 +358,48 @@ export interface CompactionOptions {
   readonly bufferTokens?: number;
   /** Default true when options object is provided. */
   readonly auto?: boolean;
+  /**
+   * Soft-budget strategy family (DSH prune→summary posture, selectable):
+   * - `prune-summary` (default): prune oversized tools, then LLM summary
+   * - `prune-only`: model-free prune only; still fail-closed if over budget
+   * - `summary-only`: skip prune pass; LLM summary only
+   * - `off`: disable soft-budget auto path (manual `/compact` still works)
+   */
+  readonly strategy?: CompactionStrategy;
 }
+
+/** Soft-budget compaction strategy ids (Face `agent-loop.compactionStrategy`). */
+export type CompactionStrategy =
+  | "prune-summary"
+  | "prune-only"
+  | "summary-only"
+  | "off";
+
+export const COMPACTION_STRATEGIES: readonly CompactionStrategy[] = [
+  "prune-summary",
+  "prune-only",
+  "summary-only",
+  "off",
+] as const;
+
+export function parseCompactionStrategy(
+  raw: unknown,
+): CompactionStrategy | undefined {
+  if (typeof raw !== "string") return undefined;
+  const v = raw.trim() as CompactionStrategy;
+  return (COMPACTION_STRATEGIES as readonly string[]).includes(v)
+    ? v
+    : undefined;
+}
+
+/** Resolve strategy with default `prune-summary` when auto soft-budget is on. */
+export function resolveCompactionStrategy(
+  options: CompactionOptions | undefined,
+): CompactionStrategy {
+  if (!options || options.auto === false) return "off";
+  return options.strategy ?? "prune-summary";
+}
+
 
 export function prepareCompactionPayload(
   events: readonly SessionEvent[],

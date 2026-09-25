@@ -16,25 +16,28 @@ const ROOT = path.resolve(
 );
 
 describe("desktop product entry (ADR-0008)", () => {
-  it("keeps CLI/Web as the default and does not ship the installer", () => {
+  it("keeps CLI/Web as default while opening first-wave packaging pipeline", () => {
     const entry = assertDesktopInstallerNotDefaultEntry();
     expect(entry).toEqual(resolveDesktopProductEntry());
     expect(entry.defaultEntry).toBe("cli-web");
-    expect(entry.phase).toBe("development-projection");
-    expect(entry.desktopCommand).toBe("dev:desktop");
+    expect(entry.phase).toBe("first-wave-package");
+    expect(entry.desktopCommand).toBe("package:desktop");
+    expect(entry.developmentCommand).toBe("dev:desktop");
+    expect(entry.packagingPipelineReady).toBe(true);
     expect(entry.installerShipped).toBe(false);
-    expect(isDesktopProductReady()).toBe(false);
+    expect(entry.productReady).toBe(true);
+    expect(isDesktopProductReady()).toBe(true);
   });
 
-  it("package:desktop refuses to skip to an installer", () => {
+  it("package:desktop validates the pipeline without inventing a public installer", () => {
     const result = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "package-desktop.mjs")],
-      { encoding: "utf8" },
+      [path.join(ROOT, "scripts", "package-desktop.mjs"), "--check"],
+      { encoding: "utf8", env: { ...process.env } },
     );
-    expect(result.status).toBe(2);
-    expect(result.stderr).toMatch(
-      /refusing to skip ADR-0008|not a first-wave packaging host/,
-    );
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/first-wave pipeline ready/);
+    expect(result.stdout).toMatch(/packagingPipelineReady=true/);
+    expect(result.stdout).toMatch(/defaultEntry=cli-web/);
   });
 });

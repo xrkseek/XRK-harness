@@ -39,7 +39,9 @@ import {
   createDefaultWebAccess,
   createWebTools,
   createBrowserTools,
+  createBrowserVaultTools,
   createBrowserSession,
+  type BrowserVaultAccess,
   type WebAccess,
 } from "@xrkseek/exec-web";
 import {
@@ -116,6 +118,7 @@ import {
   appendContextFragments,
   createAdditionalContextFragment,
   createContextFragmentPipeline,
+  createGuardianReviewProvider,
   fragmentsToPrepareContexts,
   type ContextFragmentPipeline,
   type ContextFragmentProvider,
@@ -262,6 +265,11 @@ export interface HarnessCompositionOptions {
    */
   readonly browserRuntime?: import("@xrkseek/exec-web").BrowserRuntimeRegistry;
   /**
+   * Opaque browser vault (Hermes browser_vault_*). Host wires Face credentials;
+   * secrets never appear in tool results.
+   */
+  readonly browserVault?: BrowserVaultAccess;
+  /**
    * Face `voice` product (Settings SoT). Ignored when `XRK_VOICE` is set.
    */
   readonly voiceProduct?: import("@xrkseek/exec-voice").VoiceProductConfig;
@@ -309,6 +317,11 @@ export interface HarnessCompositionOptions {
   readonly contextFragmentProviders?: readonly ContextFragmentProvider[];
   /** Char budget per collect phase (default 8000). */
   readonly contextFragmentBudgetChars?: number;
+  /**
+   * Register the thin Guardian review fragment (default on when fragments are
+   * enabled). `false` skips it. Not a full Guardian LLM approval engine.
+   */
+  readonly guardianFragments?: boolean;
   /**
    * Load `{productDir}/recipes/*.yaml` for `/id …` expand on turns.
    * Default: on when assemble is enabled. `false` skips recipes only;
@@ -836,6 +849,11 @@ export function createHarnessComposition(
     )) {
       tools.register(tool);
     }
+    if (options.browserVault) {
+      for (const tool of createBrowserVaultTools(browser, options.browserVault)) {
+        tools.register(tool);
+      }
+    }
   }
   if (options.computerUseTools !== false) {
     const service =
@@ -1331,6 +1349,9 @@ export function createHarnessComposition(
       contextFragments.register(provider);
     }
   }
+  if (contextFragments && options.guardianFragments !== false) {
+    contextFragments.register(createGuardianReviewProvider());
+  }
   if (contextFragments) {
     contextFragments.register({
       id: "learning-loop-nudge",
@@ -1584,6 +1605,6 @@ export function createHarnessComposition(
 
 export const preset = {
   id: presetId,
-  description: "XRK Harness composition: fs + shell + sandbox + web + lsp + pty",
+  description: "XRK Harness composition: fs + shell + sandbox + web + lsp + pty + nested subagents",
   create: createHarnessComposition,
 };

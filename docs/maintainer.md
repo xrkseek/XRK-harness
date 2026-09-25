@@ -21,7 +21,7 @@
 | 项 | 事实 |
 |----|------|
 | 对外发包 | 主要是 **`@xrkseek/harness-cli`**（npmjs + GitHub Release；含 `product-web/`） |
-| 其余 `@xrkseek/*` | 多数 **private**（workspace）；勿当已 npm 公开 SDK 对外承诺 |
+| 其余 `@xrkseek/*` | 多数 **private**（workspace）；对外承诺以已 npm 公开 SDK 为准 |
 | 产品壳 | `apps/web` + `packages/client` → 组装进 CLI |
 | 会话 / 设置 | 用户机 `~/.xrk/` 或 workspace `.xrk/`（gitignore）；仓内只有 `*.example` |
 | 能力三态 | **能跑 / 未稳 / 未做** — 只以 [status](./status.md) 对外说话 |
@@ -49,18 +49,18 @@ pnpm test:web              # 产品壳硬刷；不进 check
 | SessionEvent / HTTP | `session*.md` · `http-api.md` · protocol |
 | 工具管道 / settle | `tool-*.md` |
 | Preset | `profiles.md` · preset README |
-| 能否依赖 | **必须** `status.md` |
+| 能否依赖 | 以 `status.md` 为准 |
 | Meter / compaction | `session-compaction.md` · `protocol-events.md` · 笔记 skill `xrk-meter-session` |
 
-未实现：只改 status「未做」，禁止写假 API。
+未实现：只改 status「未做」，不写假 API。
 
 ## 密钥与安全
 
-- 永不提交：`.credentials.yaml` · `settings.yaml` · `.env` 真值  
+- 不入 git：`.credentials.yaml` · `settings.yaml` · `.env` 真值  
 - 模板：`.xrk/*.example` · `.env.example`  
 - 清单：[security-checklist](./security-checklist.md) · [policy](./policy.md)
 
-## 文档与笔记（勿混）
+## 文档与笔记（分开放）
 
 | 放哪儿 | 内容 |
 |--------|------|
@@ -69,7 +69,7 @@ pnpm test:web              # 产品壳硬刷；不进 check
 | `AGENTS.md` · `.cursor/rules` · `.cursor/skills` | 改码红线、Agent 流程 |
 | Canvas | 本机路径、临时对照 — **不入库** |
 
-标准：[audiences](./audiences.md)。教科书用整篇中英对半；禁止日记腔与自证对照。
+标准：[audiences](./audiences.md)。教科书用整篇中英对半；避免日记腔与自证对照。
 
 ## 域地图（找人 / 找码）
 

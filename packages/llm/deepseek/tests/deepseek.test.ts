@@ -9,9 +9,12 @@ import {
   DEEPSEEK_VISION_EXP_MODEL,
   createDeepSeekAdapter,
   DeepSeekFileStore,
+  deepSeekImageTokens,
+  deepSeekRequestImageDimensions,
   isDeepSeekVisionModel,
   isOfficialDeepSeekBaseUrl,
   resolveDeepSeekInputModalities,
+  resolveDeepSeekRequestImagePolicy,
   resolveDeepSeekSystemPromptUpdate,
 } from "../src/index.js";
 import { DeepSeekUploadIndex } from "../src/upload-index.js";
@@ -334,5 +337,24 @@ describe("deepseek adapter", () => {
         },
       ],
     });
+  });
+});
+
+describe("DeepSeek request-image policy", () => {
+  it("falls back to the legacy pixel budget without source dims", () => {
+    const policy = resolveDeepSeekRequestImagePolicy("deepseek-flash");
+    expect(policy.maxPixels).toBe(640_000);
+    expect(policy.maxBytes).toBe(1024 * 1024);
+  });
+
+  it("projects large sources onto the V41 token grid pixel product", () => {
+    const sent = deepSeekRequestImageDimensions(2048, 2048);
+    expect(sent).toEqual({ width: 1302, height: 1302 });
+    const policy = resolveDeepSeekRequestImagePolicy("deepseek-flash", {
+      width: 2048,
+      height: 2048,
+    });
+    expect(policy.maxPixels).toBe(1302 * 1302);
+    expect(deepSeekImageTokens(2048, 2048)).toBe(994);
   });
 });

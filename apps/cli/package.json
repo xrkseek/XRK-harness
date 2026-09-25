@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/harness-cli",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "private": true,
   "description": "XRK Harness CLI - primary bin xrkh (also xrk-harness). run / serve / web / plugin.",
   "type": "module",
@@ -28,6 +28,7 @@
     "@xrkseek/exec-ssh": "workspace:*",
     "@xrkseek/exec-voice": "workspace:*",
     "@xrkseek/exec-web": "workspace:*",
+    "@xrkseek/exec-environment": "workspace:*",
     "@xrkseek/llm-registry": "workspace:*",
     "@xrkseek/mcp": "workspace:*",
     "@xrkseek/policy": "workspace:*",

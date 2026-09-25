@@ -120,6 +120,7 @@ export type WorkflowErrorCode =
   | 'AGENT_RESULT'
   | 'RESULT_UNSERIALIZABLE'
   | 'CANCELLED'
+  | 'WORKER_EXIT'
 
 /**
  * Typed error for workflow-seam failures. Extends {@link HarnessError}, so the
@@ -373,6 +374,306 @@ export class InProcessWorkflowEngine extends WorkflowEngine {
       },
     }
   }
+}
+
+/**
+ * Worker-thread Provider: script body runs in an isolated `worker_threads`
+ * Worker (eval), mirroring Code Mode's snippet runner. `agent()` returns
+ * `null` inside the worker — no Cordis/Face bridge crosses the isolate
+ * (first PTC-shaped step; full DSH PTC SDK not ported). Prefer
+ * {@link InProcessWorkflowEngine} when `createAgent` is required.
+ */
+export class IsolatingWorkflowEngine extends WorkflowEngine {
+  start(request: WorkflowStartRequest): WorkflowRun {
+    const meta = request.meta
+    if (!meta || typeof meta !== 'object') {
+      throw new WorkflowError('workflow meta must be an object', 'META_INVALID')
+    }
+    if (typeof meta.name !== 'string' || !meta.name.trim()) {
+      throw new WorkflowError('workflow meta.name is required', 'META_INVALID')
+    }
+    if (typeof meta.description !== 'string' || !meta.description.trim()) {
+      throw new WorkflowError('workflow meta.description is required', 'META_INVALID')
+    }
+    if (typeof request.script !== 'string' || !request.script.trim()) {
+      throw new WorkflowError('workflow script must be a non-empty string', 'SCRIPT_PARSE')
+    }
+    const id = WorkflowRunId(`wf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`)
+    let cancelled = false
+    let cancelReason = 'cancelled'
+    let agentsStarted = 0
+    const ac = new AbortController()
+    const onAbort = () => {
+      cancelled = true
+      cancelReason = 'parent signal aborted'
+      ac.abort()
+    }
+    if (request.signal) {
+      if (request.signal.aborted) onAbort()
+      else request.signal.addEventListener('abort', onAbort, { once: true })
+    }
+
+    const info = { id, meta: request.meta }
+    this.emitWorkflowEvent('workflow/start', info)
+
+    const result = (async (): Promise<WorkflowResult> => {
+      if (cancelled) {
+        return { value: null, stopReason: 'cancelled', error: cancelReason, agentsStarted }
+      }
+      try {
+        const settled = await runIsolatingWorkerScript({
+          script: request.script,
+          args: request.args,
+          signal: ac.signal,
+          onPhase: (title) => {
+            this.emitWorkflowEvent('workflow/phase', info, title)
+          },
+          onLog: (message) => {
+            this.emitWorkflowEvent('workflow/log', info, message)
+          },
+          onAgentStart: (agent) => {
+            agentsStarted += 1
+            this.emitWorkflowEvent('workflow/agent-start', info, agent)
+          },
+          onAgentEnd: (agent) => {
+            this.emitWorkflowEvent('workflow/agent-end', info, agent)
+          },
+          runId: String(id),
+          maxTotalAgents: request.maxTotalAgents,
+        })
+        if (cancelled || ac.signal.aborted) {
+          return { value: null, stopReason: 'cancelled', error: cancelReason, agentsStarted }
+        }
+        agentsStarted = Math.max(agentsStarted, settled.agentsStarted)
+        return settled
+      } catch (err) {
+        if (cancelled || ac.signal.aborted) {
+          return { value: null, stopReason: 'cancelled', error: cancelReason, agentsStarted }
+        }
+        return {
+          value: null,
+          stopReason: 'error',
+          error: err instanceof Error ? err.message : String(err),
+          agentsStarted,
+        }
+      }
+    })().then((settled) => {
+      this.emitWorkflowEvent('workflow/end', info, {
+        stopReason: settled.stopReason,
+        agentsStarted: settled.agentsStarted,
+        ...(settled.error ? { error: settled.error } : {}),
+      })
+      return settled
+    })
+
+    return {
+      id,
+      meta: request.meta,
+      result,
+      cancel(reason?: string) {
+        cancelled = true
+        cancelReason = reason?.trim() || 'cancelled'
+        ac.abort()
+      },
+      async dispose() {
+        cancelled = true
+        ac.abort()
+        await result.catch(() => undefined)
+      },
+    }
+  }
+}
+
+async function runIsolatingWorkerScript(input: {
+  readonly script: string
+  readonly args: unknown
+  readonly signal?: AbortSignal
+  readonly onPhase: (title: string) => void
+  readonly onLog: (message: string) => void
+  readonly onAgentStart: (agent: WorkflowAgentInfo) => void
+  readonly onAgentEnd: (agent: WorkflowAgentEndInfo) => void
+  readonly runId: string
+  readonly maxTotalAgents?: number
+}): Promise<WorkflowResult> {
+  const { Worker } = await import('node:worker_threads')
+  const workerSource = `
+    const { parentPort, workerData } = require('node:worker_threads');
+    let agentsStarted = 0;
+    const phase = (title) => {
+      parentPort.postMessage({ type: 'phase', title: String(title ?? '') });
+    };
+    const log = (message) => {
+      parentPort.postMessage({ type: 'log', message: String(message ?? '') });
+    };
+    const agent = async (opts = {}) => {
+      const cap = workerData.maxTotalAgents;
+      if (typeof cap === 'number' && agentsStarted >= cap) {
+        throw new Error('workflow maxTotalAgents ' + cap + ' reached');
+      }
+      agentsStarted += 1;
+      const seq = agentsStarted;
+      const label = String(opts.label ?? opts.prompt ?? ('agent-' + seq)).slice(0, 120);
+      const phaseTitle = opts.phase;
+      const childId = 'wf-child-' + workerData.runId + '-' + seq;
+      parentPort.postMessage({
+        type: 'agent-start',
+        seq, label, phase: phaseTitle || undefined, childId,
+      });
+      // Isolation: no host bridge — agent() settles null (PTC-lite).
+      parentPort.postMessage({
+        type: 'agent-end',
+        seq, label, phase: phaseTitle || undefined, childId, outcome: 'completed',
+      });
+      return null;
+    };
+    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    try {
+      const fn = new AsyncFunction('args', 'phase', 'log', 'agent',
+        '"use strict";\\n' + workerData.script);
+      Promise.resolve(fn(workerData.args, phase, log, agent)).then((value) => {
+        parentPort.postMessage({
+          type: 'done',
+          ok: true,
+          value: value === undefined ? null : value,
+          agentsStarted,
+        });
+      }).catch((err) => {
+        parentPort.postMessage({
+          type: 'done',
+          ok: false,
+          error: String(err && err.message ? err.message : err),
+          agentsStarted,
+        });
+      });
+    } catch (err) {
+      parentPort.postMessage({
+        type: 'done',
+        ok: false,
+        error: String(err && err.message ? err.message : err),
+        agentsStarted: 0,
+      });
+    }
+  `
+
+  return new Promise<WorkflowResult>((resolve, reject) => {
+    const worker = new Worker(workerSource, {
+      eval: true,
+      workerData: {
+        script: input.script,
+        args: input.args ?? null,
+        runId: input.runId,
+        ...(typeof input.maxTotalAgents === 'number'
+          ? { maxTotalAgents: input.maxTotalAgents }
+          : {}),
+      },
+      resourceLimits: { maxOldGenerationSizeMb: 128 },
+    })
+    let settled = false
+    const finish = (result: WorkflowResult) => {
+      if (settled) return
+      settled = true
+      input.signal?.removeEventListener('abort', onAbort)
+      void worker.terminate().catch(() => undefined)
+      resolve(result)
+    }
+    const onAbort = () => {
+      void worker.terminate().catch(() => undefined)
+      finish({
+        value: null,
+        stopReason: 'cancelled',
+        error: 'parent signal aborted',
+        agentsStarted: 0,
+      })
+    }
+    if (input.signal) {
+      if (input.signal.aborted) {
+        onAbort()
+        return
+      }
+      input.signal.addEventListener('abort', onAbort, { once: true })
+    }
+    worker.on('message', (msg: {
+      type?: string
+      title?: string
+      message?: string
+      seq?: number
+      label?: string
+      phase?: string
+      childId?: string
+      outcome?: 'completed' | 'failed' | 'cancelled'
+      ok?: boolean
+      value?: unknown
+      error?: string
+      agentsStarted?: number
+    }) => {
+      if (!msg || typeof msg !== 'object') return
+      if (msg.type === 'phase' && typeof msg.title === 'string') {
+        input.onPhase(msg.title)
+        return
+      }
+      if (msg.type === 'log' && typeof msg.message === 'string') {
+        input.onLog(msg.message)
+        return
+      }
+      if (msg.type === 'agent-start' && typeof msg.seq === 'number') {
+        input.onAgentStart({
+          seq: msg.seq,
+          label: String(msg.label ?? ''),
+          ...(msg.phase ? { phase: msg.phase } : {}),
+          childId: SessionId(String(msg.childId ?? `wf-child-${msg.seq}`)),
+        })
+        return
+      }
+      if (msg.type === 'agent-end' && typeof msg.seq === 'number') {
+        input.onAgentEnd({
+          seq: msg.seq,
+          label: String(msg.label ?? ''),
+          ...(msg.phase ? { phase: msg.phase } : {}),
+          childId: SessionId(String(msg.childId ?? `wf-child-${msg.seq}`)),
+          outcome: msg.outcome ?? 'completed',
+        })
+        return
+      }
+      if (msg.type === 'done') {
+        const agentsStarted =
+          typeof msg.agentsStarted === 'number' ? msg.agentsStarted : 0
+        if (msg.ok) {
+          finish({
+            value: msg.value ?? null,
+            stopReason: 'completed',
+            agentsStarted,
+          })
+        } else {
+          finish({
+            value: null,
+            stopReason: 'error',
+            error: msg.error || 'worker failed',
+            agentsStarted,
+          })
+        }
+      }
+    })
+    worker.on('error', (err) => {
+      finish({
+        value: null,
+        stopReason: 'error',
+        error: err instanceof Error ? err.message : String(err),
+        agentsStarted: 0,
+      })
+    })
+    worker.on('exit', (code) => {
+      if (settled) return
+      if (code === 0) {
+        finish({
+          value: null,
+          stopReason: 'completed',
+          agentsStarted: 0,
+        })
+      } else {
+        reject(new WorkflowError(`isolating worker exited ${code}`, 'WORKER_EXIT'))
+      }
+    })
+  })
 }
 
 export default WorkflowEngine

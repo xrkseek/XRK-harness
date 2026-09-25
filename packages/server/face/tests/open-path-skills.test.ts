@@ -1,11 +1,14 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { dispatchFaceMethod } from "../src/dispatch.js";
-import { canOpenNativePath } from "../src/host-open-path.js";
+import {
+  canOpenNativePath,
+  installSpawnDetachedForTests,
+} from "../src/host-open-path.js";
 import { listSkillsFromWorkspace } from "../src/skill-list.js";
 import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
 
@@ -18,6 +21,13 @@ function bareRuntime(workspaceRoot: string) {
 }
 
 describe("host.openPath + skill.list", () => {
+  beforeEach(() => {
+    installSpawnDetachedForTests(async () => undefined);
+  });
+  afterEach(() => {
+    installSpawnDetachedForTests(undefined);
+  });
+
   it("treats Win / macOS / Linux as desktop openers", () => {
     expect(canOpenNativePath("win32")).toBe(true);
     expect(canOpenNativePath("darwin")).toBe(true);

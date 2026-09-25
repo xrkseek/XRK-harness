@@ -1,14 +1,9 @@
 // DiffBlock: the inline-diff surface for a file mutation (write/edit) — a copy
-// control over one or more per-file hunks, each a bold path header followed by
-// the removed block (`-`, error color) and the added block (`+`, success
-// color), with a dim `└ +A -R · N file(s)` footer. Unlike the TUI's exact
-// changed-row comparison, this block renders the old and new sides in full.
-// Both front ends share the line-terminator rule and distinct-path file count.
-// Output never soft-wraps — an aligned source line keeps its indentation and
-// scrolls horizontally instead of folding. Colors resolve through --dsw-*
-// tokens; geometry mirrors CodeBlock.
+// control over one or more per-file hunks. Unified mode stacks removed then
+// added lines (legacy). Split mode (DSH ReviewTab / Codex side-by-side subset)
+// pairs deletions with additions in two columns with synchronized scroll.
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { writeClipboard } from './clipboard.ts'
 import css from './DiffBlock.module.css'
@@ -34,6 +29,9 @@ export interface DiffHunk {
   newText: string
 }
 
+/** Unified (stacked) vs side-by-side columns. */
+export type DiffLayout = 'unified' | 'split'
+
 export interface DiffBlockProps {
   /** One entry per applied hunk, in file order; empty renders nothing. */
   diffs: DiffHunk[]
@@ -41,12 +39,23 @@ export interface DiffBlockProps {
   maxLines?: number | undefined
   /** Extra class merged onto the wrapper (callers position; this component draws). */
   className?: string | undefined
+  /**
+   * Initial layout. User can toggle; omit for unified (back-compat).
+   * Split pairs old/new columns with synced vertical scroll.
+   */
+  layout?: DiffLayout | undefined
 }
 
 /** A single rendered body line and its role, so the height cap slices a flat list. */
 interface DiffRow {
   kind: 'path' | 'del' | 'add' | 'gap'
   text: string
+}
+
+/** One paired side-by-side row (DSH ReviewTab `splitRows` subset without line nos). */
+interface SplitPair {
+  left?: { text: string; kind: 'del' }
+  right?: { text: string; kind: 'add' }
 }
 
 /** Local exhaustiveness helper — this package does not depend on `dsh-llm`. */
@@ -99,6 +108,41 @@ function buildRows(diffs: DiffHunk[]): { rows: DiffRow[]; added: number; removed
 }
 
 /**
+ * Pair old/new lines for side-by-side: deletions align with following additions
+ * row-by-row (DSH ReviewTab `splitRows` flush semantics on whole-file sides).
+ */
+function buildSplit(diffs: DiffHunk[]): {
+  sections: { path: string; pairs: SplitPair[] }[]
+  added: number
+  removed: number
+  files: number
+} {
+  const sections: { path: string; pairs: SplitPair[] }[] = []
+  const paths = new Set<string>()
+  let added = 0
+  let removed = 0
+  for (const diff of diffs) {
+    paths.add(diff.path)
+    const dels = diff.oldText !== null ? contentLines(diff.oldText) : []
+    const adds = contentLines(diff.newText)
+    removed += dels.length
+    added += adds.length
+    const pairs: SplitPair[] = []
+    const n = Math.max(dels.length, adds.length)
+    for (let i = 0; i < n; i++) {
+      const left = dels[i]
+      const right = adds[i]
+      pairs.push({
+        ...(left !== undefined ? { left: { text: left, kind: 'del' as const } } : {}),
+        ...(right !== undefined ? { right: { text: right, kind: 'add' as const } } : {}),
+      })
+    }
+    sections.push({ path: diff.path, pairs })
+  }
+  return { sections, added, removed, files: paths.size }
+}
+
+/**
  * Split a side's text into its content lines. Empty text is zero lines (a full
  * deletion's `newText` or a create's absent `oldText` side draws nothing), and a
  * single trailing newline is a line terminator rather than an extra empty line —
@@ -138,10 +182,20 @@ function copyText(rows: DiffRow[]): string {
  * @param props - see {@link DiffBlockProps}.
  * @returns the diff block element.
  */
-export function DiffBlock({ diffs, maxLines = DEFAULT_DIFF_MAX_LINES, className }: DiffBlockProps) {
+export function DiffBlock({
+  diffs,
+  maxLines = DEFAULT_DIFF_MAX_LINES,
+  className,
+  layout: layoutProp = 'unified',
+}: DiffBlockProps) {
   const { rows, added, removed, files } = useMemo(() => buildRows(diffs), [diffs])
+  const split = useMemo(() => buildSplit(diffs), [diffs])
+  const [layout, setLayout] = useState<DiffLayout>(layoutProp)
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
+  const leftRef = useRef<HTMLDivElement | null>(null)
+  const rightRef = useRef<HTMLDivElement | null>(null)
+  const syncing = useRef(false)
 
   const onCopy = useCallback(() => {
     if (copied) return
@@ -153,6 +207,20 @@ export function DiffBlock({ diffs, maxLines = DEFAULT_DIFF_MAX_LINES, className 
   }, [copied, rows])
 
   const onToggle = useCallback(() => { setExpanded(value => !value) }, [])
+  const onToggleLayout = useCallback(() => {
+    setLayout(value => (value === 'unified' ? 'split' : 'unified'))
+  }, [])
+
+  const syncScroll = useCallback((source: 'left' | 'right') => {
+    if (syncing.current) return
+    const from = source === 'left' ? leftRef.current : rightRef.current
+    const to = source === 'left' ? rightRef.current : leftRef.current
+    if (!from || !to) return
+    syncing.current = true
+    to.scrollTop = from.scrollTop
+    to.scrollLeft = from.scrollLeft
+    requestAnimationFrame(() => { syncing.current = false })
+  }, [])
 
   if (rows.length === 0) return null
 
@@ -166,29 +234,87 @@ export function DiffBlock({ diffs, maxLines = DEFAULT_DIFF_MAX_LINES, className 
   const tail = capped ? rows.slice(rows.length - tailLines) : []
 
   return (
-    <div className={clsx(css.block, className)} data-diff="">
-      <button type="button" className={css.copyButton} onClick={onCopy}>
-        {copied ? '复制成功' : '复制'}
-      </button>
-      <div className={css.body}>
-        {head.map((row, index) => (
-          <div key={index} className={clsx(css.line, ROW_CLASS[row.kind])}>{row.text}</div>
-        ))}
-        {hidden > 0 && (
-          <button
-            type="button"
-            className={css.expand}
-            aria-expanded={expanded}
-            aria-label={expanded ? '收起差异' : `展开其余 ${hidden} 行差异`}
-            onClick={onToggle}
-          >
-            {expanded ? '收起' : `… 其余 ${hidden} 行`}
-          </button>
-        )}
-        {tail.map((row, index) => (
-          <div key={index} className={clsx(css.line, ROW_CLASS[row.kind])}>{row.text}</div>
-        ))}
+    <div
+      className={clsx(css.block, className)}
+      data-diff=""
+      data-diff-layout={layout}
+    >
+      <div className={css.toolbar}>
+        <button
+          type="button"
+          className={css.layoutButton}
+          aria-pressed={layout === 'split'}
+          aria-label={layout === 'split' ? '切换为统一视图' : '切换为分栏视图'}
+          title={layout === 'split' ? '统一视图' : '分栏视图'}
+          onClick={onToggleLayout}
+        >
+          {layout === 'split' ? '统一' : '分栏'}
+        </button>
+        <button type="button" className={css.copyButton} onClick={onCopy}>
+          {copied ? '复制成功' : '复制'}
+        </button>
       </div>
+      {layout === 'split' ? (
+        <div className={css.splitBody}>
+          {split.sections.map((section, sIndex) => (
+            <div key={sIndex} className={css.splitSection}>
+              <div className={clsx(css.line, css.path)}>{section.path}</div>
+              <div className={css.splitColumns}>
+                <div
+                  ref={sIndex === 0 ? leftRef : undefined}
+                  className={css.splitPane}
+                  data-side="old"
+                  onScroll={sIndex === 0 ? () => { syncScroll('left') } : undefined}
+                >
+                  {section.pairs.map((pair, i) => (
+                    <div
+                      key={i}
+                      className={clsx(css.line, pair.left ? css.del : css.splitEmpty)}
+                    >
+                      {pair.left?.text ?? '\u00a0'}
+                    </div>
+                  ))}
+                </div>
+                <div
+                  ref={sIndex === 0 ? rightRef : undefined}
+                  className={css.splitPane}
+                  data-side="new"
+                  onScroll={sIndex === 0 ? () => { syncScroll('right') } : undefined}
+                >
+                  {section.pairs.map((pair, i) => (
+                    <div
+                      key={i}
+                      className={clsx(css.line, pair.right ? css.add : css.splitEmpty)}
+                    >
+                      {pair.right?.text ?? '\u00a0'}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className={css.body}>
+          {head.map((row, index) => (
+            <div key={index} className={clsx(css.line, ROW_CLASS[row.kind])}>{row.text}</div>
+          ))}
+          {hidden > 0 && (
+            <button
+              type="button"
+              className={css.expand}
+              aria-expanded={expanded}
+              aria-label={expanded ? '收起差异' : `展开其余 ${hidden} 行差异`}
+              onClick={onToggle}
+            >
+              {expanded ? '收起' : `… 其余 ${hidden} 行`}
+            </button>
+          )}
+          {tail.map((row, index) => (
+            <div key={index} className={clsx(css.line, ROW_CLASS[row.kind])}>{row.text}</div>
+          ))}
+        </div>
+      )}
       <div className={css.footer}>└ +{added} -{removed} · {files} file{files === 1 ? '' : 's'}</div>
     </div>
   )

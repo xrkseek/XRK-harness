@@ -16,11 +16,11 @@
 | MCP · 网页搜索 · 终端 · Agent 循环 · 工作区注入 | **设置 → 插件 → 插件配置** |
 | 打开 yaml | 设置页「打开配置文件」→ `{XRK_HOME}/settings.yaml`（常用 `~/.xrk/settings.yaml`） |
 
-Agent 循环卡：软请求预算 · keep/buffer · 工具结果 spill。终端卡：超时 · 单流输出上限。工作区注入卡：rules/skills 字符预算。
+Agent 循环卡：软请求预算 · keep/buffer · **压缩策略** · 自动续写 · 工具结果 spill。终端卡：超时 · 单流输出上限。工作区注入卡：rules/skills 字符预算。
 
 ## 密钥与凭据
 
-**永不入库**：`.env`、`.xrk/.credentials.yaml`、`.xrk/settings.yaml`、`.xrk/workspaces.json` 均在 `.gitignore`。仓库只提供 `.env.example` 与 `.xrk/*.example` 模板。
+**gitignore 兜底**：`.env`、`.xrk/.credentials.yaml`、`.xrk/settings.yaml`、`.xrk/workspaces.json` 均在 `.gitignore`。仓库只提供 `.env.example` 与 `.xrk/*.example` 模板。
 
 | 来源 | 用途 | 优先级（高 → 低） |
 |------|------|-------------------|
@@ -30,7 +30,7 @@ Agent 循环卡：软请求预算 · keep/buffer · 工具结果 spill。终端�
 | **Settings UI** | 同上，经 Face RPC 写文件 | **推荐终端用户路径** |
 
 **开发**：`XRK_API_KEY` 留空 → HTTP/Face **免鉴权**（仅本机调试）。  
-**生产**：必须非空 `XRK_API_KEY`，并收紧 `XRK_CORS_ORIGIN`（[security-checklist.md](./security-checklist.md)）。
+**生产**：设非空 `XRK_API_KEY`，并收紧 `XRK_CORS_ORIGIN`（[security-checklist.md](./security-checklist.md)）。
 
 从零安装步骤：[getting-started.md](./getting-started.md)。
 
@@ -49,14 +49,17 @@ Agent 循环卡：软请求预算 · keep/buffer · 工具结果 spill。终端�
 | `~/.xrk/settings.yaml` | Face 设置真源（模型 / 预设 / 插件 / 权限等） | **否**（仓内有 `.example`） |
 | `~/.xrk/.credentials.yaml` | API 密钥（write-only；`credentials.set` 落盘） | **否** |
 | `~/.xrk/workspaces.json` | 侧栏工作区列表 | 否 |
-| `~/.xrk/host-settings.json` | Face MCP desired；文件真源时可热挂载 | 否 |
+| `~/.xrk/host-settings.json` | Face MCP desired；文件真源时可热挂载（须无 BOM UTF-8 JSON） | 否 |
+| `~/.xrk/session-models.json` | 会话级 `/model` 选择；Host 重启回灌 | 否 |
+| `~/.xrk/cron/jobs.json` | Cron 任务目录（Settings → Plugins → Cron 总开关） | 否 |
+| `~/.xrk/cron/executions.jsonl` | Cron 跑史账本（≤1000；`cronjob` action=`runs`） | 否 |
 | `~/.xrk/mcp-tokens/<server>.json` | `xrkh mcp login` / Settings MCP 卡 OAuth 的设备码令牌（access/refresh/到期）；尽量 0600 | 否（明文，仅本机权限保护） |
 | `{workspace}/.xrk/skills/` · `recipes/` | 可选项目 inject；skills 也从 `.claude` / `.cursor` 等导入 | 否 |
 | `XRK_POLICY_FILE` | 显式 policy（`.json` / `.yaml` / `.yml` / `.toml` 同构 v1）；优先于默认路径 | 否（含密钥的 policy 不入库） |
 
 旁路文件（与 sessions 同目录时常有）：`subagents.json` · `goals.json`。
 
-热更新契约（DSH settings-file）：`settings.yaml` / `host-settings.json` **解析失败时保留上一份有效配置**（warn，不静默清空）；落盘合并若磁盘已损坏则 **拒绝覆盖** 并回滚内存 mutate（`settings-persist-failed`），禁止半生效后静默继续。
+热更新契约（DSH settings-file）：`settings.yaml` / `host-settings.json` **解析失败时保留上一份有效配置**（warn，不静默清空）；落盘合并若磁盘已损坏则 **拒绝覆盖** 并回滚内存 mutate（`settings-persist-failed`），禁止半生效后静默继续。读盘会剥 UTF-8 BOM（PowerShell `Set-Content` 常见）；手改请仍用无 BOM UTF-8。
 
 ### Agent 写哪里
 
@@ -85,12 +88,15 @@ Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-c
 |------|------|
 | `XRK_PRESET` | Host 入口默认徽章：`minimal` \| `shell` \| `frugal` \| `plan` \| `shallow` \| `harness` \| `server`（`server` = harness 工具 + Host factory；会话徽章见 [profiles.md](./profiles.md)） |
 | `XRK_WORKSPACE` | workspace 根 |
-| `XRK_WEB_DIST` | 产品壳静态根。默认：CLI 包内 `product-web/`，或 monorepo `apps/web/dist`。设了则必须已存在 |
+| `XRK_WEB_DIST` | 产品壳静态根。默认：CLI 包内 `product-web/`，或 monorepo `apps/web/dist`。设了则需已存在 |
 | `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db` · WAL · 独占 `sessions.write.lock`）；第二 Host 拒绝抢写 | Host 省略 = 内存（CLI serve 另有默认） |
 | `XRK_INVARIANTS_FAIL_FAST` | `1` / `true`：包装 SessionStore，挂 core-session / core-agent-loop 包自有 invariant 伴侣；关系违规抛 `InvariantError` 并阻止 append | 默认关（可选诊断） |
 | `XRK_A2A_AGENTS` | A2A 对等体 JSON：`{ "name": { "url", "auth?", "timeout?", "capabilities?" } }`；亦可 `{XRK_HOME}/a2a_agents.json` | 出站 `extensions/a2a` |
+| `XRK_A2A_INBOUND` | `1` / `true`：启用入站 Agent Card + `POST /a2a` `message/send` stub | 默认关 |
 | `XRK_A2A_MAX_PINGPONG_TURNS` | 每 `context_id` 环路上限（默认 5，硬顶 20） | 防乒乓 |
 | `XRK_A2A_CONVERSATIONS_DIR` | A2A 对话 JSONL 根；默认 `{XRK_HOME}/a2a_conversations` | 持久 / `a2a_history` |
+| `XRK_MEMORY_PROVIDER` | 策展记忆后端：`file`（默认）· `http` · `sqlite` | 见 [curated-memory.md](./curated-memory.md) |
+| `XRK_TIME_CONTEXT_REFRESH_MS` | Follow-up 时间注入间隔（毫秒）。未设默认 `60000`；`0`=每步；`off`/负数=关闭 | 见 [cron.md](./cron.md) |
 | `XRK_PLUGINS_DIR` | 进程插件根；`web/` 子目录为客户端叠加。未设时：若 `{XRK_HOME}/plugins` 已存在（`xrkh plugin add` 会创建）则用该目录 |
 | `XRK_SKILLS_DIR` | 工作区 skills 根（`xrkh skill` add/list/remove/path 落点）。未设 = `{workspace}/.agents/skills`；相对路径按工作区解析 — 见 [skills-layers.md](./skills-layers.md) |
 | `XRK_DUMP_SESSION` | 非空时 CLI `run` 向 stderr dump session JSONL（与 `--json` 互斥：已开 `--json` 时不再二次 dump） |
@@ -102,7 +108,7 @@ Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-c
 | 变量 | 含义 |
 |------|------|
 | `XRK_SSH_HOST` | OpenSSH 主机或 `user@host` 别名（非空即旁路 Settings） |
-| `XRK_SSH_WORKSPACE` | 远端绝对 cwd（须 `/` 开头） |
+| `XRK_SSH_WORKSPACE` | 远端绝对 cwd（以 `/` 开头） |
 | `XRK_SSH_USER` | 可选用户（host 已含 `user@` 时可省略） |
 | `XRK_SSH_PORT` | 可选端口 |
 | `XRK_SSH_KEY` | 可选私钥路径 |
@@ -194,7 +200,7 @@ Preset 选型：[profiles.md](./profiles.md)。
 
 ## Plugins 设置（端到端）
 
-壳内路径：**设置 → 插件 → 插件配置**（不是「会话导入」）。展开 **MCP 服务器** · **网页搜索** · **Browser**（`browser`）· **Voice** · **文生图**（`image-gen`）· **文生视频**（`video-gen`）· **策展记忆**（`curated-memory`）· **外部 Agent**（`external-agent`）· **终端**（`bash`）· **Agent 循环**（`agent-loop`）· **工作区注入**（`workspace-inject`）· **沙箱**（`sandbox`）· **Computer use**（`computer-use`）· **Cron**（`cron`）· **会话遥测**（`session-telemetry`）。「高级」含 Auto-review classifier。亦可点「打开配置文件」编辑 `~/.xrk/settings.yaml`。
+壳内路径：**设置 → 插件 → 插件配置**（不是「会话导入」）。展开 **MCP 服务器** · **网页搜索** · **Browser**（`browser`）· **Voice** · **图像生成**（`image-gen`，文生图 + 参考编辑）· **视频生成**（`video-gen`，文生/图生/catalog）· **策展记忆**（`curated-memory`）· **外部 Agent**（`external-agent`）· **终端**（`bash`）· **Agent 循环**（`agent-loop`）· **工作区注入**（`workspace-inject`）· **沙箱**（`sandbox`）· **Computer use**（`computer-use`）· **Cron**（`cron`）· **会话遥测**（`session-telemetry`）。「高级」含 Auto-review classifier。亦可点「打开配置文件」编辑 `~/.xrk/settings.yaml`。
 
 Settings → Plugins 里会动到运行时的命名空间：
 
@@ -205,11 +211,14 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `bash` | `timeoutMs` · `maxOutputBytes`（默认 **64_000**） | 下次 agent 重建后作用于 `bash` 捕获上限 |
 | `agent-loop` | `maxParallelToolCalls` | 下次 agent 重建后限制同一步并行 settle 池上限 |
 | `agent-loop` | `maxSteps` | 单次用户 turn 的 LLM 步数上限（默认 32） |
+| `agent-loop` | `autoContinueOnMaxTokens` · `autoContinueMaxRounds` | 达输出 token 上限时是否自动续写（默认关）及每 turn 续写上限（默认 2） |
 | `agent-loop` | `toolSettle` | `parallel`（默认，按 `isConcurrencySafe`）或 `serial` |
 | `agent-loop` | `llmRetryMaxRetries` | 步内 provider 重试上限（默认 5；`0` 关闭） |
 | `agent-loop` | `toolOrder` | 工具线序（Plugins 卡；恰好一个 `' '` rest）；留空 = 字典序 |
-| `agent-loop` | `maxRequestTokens` · `keepTokens` · `bufferTokens` | 软上下文预算（默认 100k / 24k / 4k）；超限 prune → compact → fail-closed |
+| `agent-loop` | `maxRequestTokens` · `keepTokens` · `bufferTokens` | 软上下文预算（默认 100k / 24k / 4k） |
+| `agent-loop` | `compactionStrategy` | 超限策略：`prune-summary`（默认）· `prune-only` · `summary-only` · `off` |
 | `agent-loop` | `toolResultMaxInlineBytes` | 工具正文 spill 上限（默认 **64_000**；`0` 同时关闭 pipeline bound 与 loop spill；全文只写 `~/.xrk/spill/tool-outputs/`） |
+| `agent-loop` | `maxSubagentDepth` · `maxActiveSubagents` | 子代理嵌套深度（默认 2）与同父并发上限（默认 2） |
 | `workspace-inject` | `injectMaxChars` | 下次 agent 重建后作用于 rules/skills 注入预算（默认 **32_000**） |
 | `session-telemetry` | `mode` · `endpoint` | **重启 Host** 后挂 sink（关 / memory / OTLP）；`XRK_TELEMETRY` 可 CI 旁路 |
 | `sandbox` | `backend` · `dockerImage` · `dockerNetwork` · `windowsMode` | **下次 agent 重建**后热切换 confine Provider；helper / bins 仍仅 env；`XRK_SANDBOX_BACKEND` 可 CI 旁路 |
@@ -283,7 +292,7 @@ After `xrkh web`:
 | MCP · web search · browser · voice · image-gen · video-gen · curated-memory · external-agent · shell · agent loop · workspace inject · sandbox · computer use · cron · session telemetry · auto-review · memory-embed (Advanced) | **Settings → Plugins** |
 | Open yaml | Settings “Open configuration file” → `{XRK_HOME}/settings.yaml` (usually `~/.xrk/settings.yaml`) |
 
-Agent loop card: soft request budget · keep/buffer · tool-result spill. Shell card: timeout · per-stream output cap. Workspace inject card: rules/skills character budget.
+Agent loop card: soft request budget · keep/buffer · **compaction strategy** · auto-continue · tool-result spill. Shell card: timeout · per-stream output cap. Workspace inject card: rules/skills character budget.
 
 ## Secrets and credentials
 
@@ -316,14 +325,17 @@ From-scratch install: [getting-started.md](./getting-started.md).
 | `~/.xrk/settings.yaml` | Face settings source of truth (models / presets / plugins / permissions, etc.) | **No** (`.example` in repo) |
 | `~/.xrk/.credentials.yaml` | API keys (write-only; persisted by `credentials.set`) | **No** |
 | `~/.xrk/workspaces.json` | Sidebar workspace list | No |
-| `~/.xrk/host-settings.json` | Face MCP desired; hot-mount when file-backed | No |
+| `~/.xrk/host-settings.json` | Face MCP desired; hot-mount when file-backed (UTF-8 JSON without BOM) | No |
+| `~/.xrk/session-models.json` | Per-session `/model` selection; rehydrated on Host restart | No |
+| `~/.xrk/cron/jobs.json` | Cron job catalog (Settings → Plugins → Cron master switch) | No |
+| `~/.xrk/cron/executions.jsonl` | Cron run ledger (≤1000; `cronjob` action=`runs`) | No |
 | `~/.xrk/mcp-tokens/<server>.json` | Device-code token written by `xrkh mcp login` or Settings MCP OAuth (access/refresh/expiry); best-effort 0600 | No (plaintext; protected by file permissions only) |
 | `{workspace}/.xrk/skills/` · `recipes/` | Optional project inject; skills also import from `.claude` / `.cursor` peers | No |
 | `XRK_POLICY_FILE` | Explicit policy (`.json` / `.yaml` / `.yml` / `.toml` isomorphic v1); wins over default paths | No (do not commit policies that contain secrets) |
 
 Sidecar files often beside sessions: `subagents.json` · `goals.json`.
 
-Hot-reload contract (DSH settings-file): on `settings.yaml` / `host-settings.json` **parse failure, keep the last good document** (warn; never silently empty). Persist merge **refuses to overwrite** a corrupt on-disk file and rolls back in-memory mutate (`settings-persist-failed` → `settings-rejected`); no half-apply then silent continue.
+Hot-reload contract (DSH settings-file): on `settings.yaml` / `host-settings.json` **parse failure, keep the last good document** (warn; never silently empty). Persist merge **refuses to overwrite** a corrupt on-disk file and rolls back in-memory mutate (`settings-persist-failed` → `settings-rejected`); no half-apply then silent continue. Readers strip a leading UTF-8 BOM (common after PowerShell `Set-Content`); prefer BOM-free UTF-8 when editing by hand.
 
 ### Where the Agent may write
 
@@ -356,8 +368,11 @@ Path jail: `exec-fs` `resolveWithinRoot` ([security-checklist.md](./security-che
 | `XRK_SESSIONS_DIR` | Session persistence directory (`sessions.db` · WAL · exclusive `sessions.write.lock`); a second Host refuses to steal the write lease | Host omit = in-memory (CLI serve has its own default) |
 | `XRK_INVARIANTS_FAIL_FAST` | `1` / `true`: wrap SessionStore with core-session / core-agent-loop package-owned invariant companions; relational violations throw `InvariantError` and block append | Off by default (opt-in diagnostics) |
 | `XRK_A2A_AGENTS` | A2A peers JSON: `{ "name": { "url", "auth?", "timeout?", "capabilities?" } }`; or `{XRK_HOME}/a2a_agents.json` | Outbound `extensions/a2a` |
+| `XRK_A2A_INBOUND` | `1` / `true`: enable inbound Agent Card + `POST /a2a` `message/send` stub | Off by default |
 | `XRK_A2A_MAX_PINGPONG_TURNS` | Per-`context_id` anti-loop turn cap (default 5, hard max 20) | Ping-pong guard |
 | `XRK_A2A_CONVERSATIONS_DIR` | A2A conversation JSONL root; default `{XRK_HOME}/a2a_conversations` | Persistence / `a2a_history` |
+| `XRK_MEMORY_PROVIDER` | Curated-memory backend: `file` (default) · `http` · `sqlite` | See [curated-memory.md](./curated-memory.md) |
+| `XRK_TIME_CONTEXT_REFRESH_MS` | Follow-up time injection interval (ms). Unset defaults to `60000`; `0` = every step; `off` / negative = off | See [cron.md](./cron.md) |
 | `XRK_PLUGINS_DIR` | Process plugin root; `web/` subdirectory is client overlay. When unset: use `{XRK_HOME}/plugins` if it already exists (`xrkh plugin add` creates it) |
 | `XRK_SKILLS_DIR` | Workspace skills root for `xrkh skill` add/list/remove/path. Unset = `{workspace}/.agents/skills`; a relative value resolves against the workspace — see [skills-layers.md](./skills-layers.md) |
 | `XRK_DUMP_SESSION` | When non-empty, CLI `run` dumps session JSONL to stderr (skipped when `--json` already streams the turn) |
@@ -469,7 +484,7 @@ Without Tavily/Brave keys: `web_search` defaults to **parallel-free**, then fall
 
 ## Plugins settings (end-to-end)
 
-In the shell: **Settings → Plugins → Plugin configuration** (not the Session Import tab). Expand **MCP servers**, **Web search**, **Browser** (`browser`), **Voice**, **Image gen** (`image-gen`), **Video gen** (`video-gen`), **Curated memory** (`curated-memory`), **External agents** (`external-agent`), **Shell** (`bash`), **Agent loop** (`agent-loop`), **Workspace inject** (`workspace-inject`), **Sandbox** (`sandbox`), **Computer use** (`computer-use`), **Cron** (`cron`), and **Session telemetry** (`session-telemetry`). **Advanced** holds the auto-review classifier and memory-embed vector sidecar. Or use **Open configuration file** for `~/.xrk/settings.yaml`.
+In the shell: **Settings → Plugins → Plugin configuration** (not the Session Import tab). Expand **MCP servers**, **Web search**, **Browser** (`browser`), **Voice**, **Image gen** (`image-gen`; text-to-image + reference edit), **Video gen** (`video-gen`; text/image-to-video + catalog), **Curated memory** (`curated-memory`), **External agents** (`external-agent`), **Shell** (`bash`), **Agent loop** (`agent-loop`), **Workspace inject** (`workspace-inject`), **Sandbox** (`sandbox`), **Computer use** (`computer-use`), **Cron** (`cron`), and **Session telemetry** (`session-telemetry`). **Advanced** holds the auto-review classifier and memory-embed vector sidecar. Or use **Open configuration file** for `~/.xrk/settings.yaml`.
 
 Settings → Plugins mutates these runtime namespaces:
 
@@ -480,11 +495,14 @@ Settings → Plugins mutates these runtime namespaces:
 | `bash` | `timeoutMs` · `maxOutputBytes` (default **64_000**) | Applies to bash capture cap after the next agent rebuild |
 | `agent-loop` | `maxParallelToolCalls` | Caps the parallel settle pool for one step after the next agent rebuild |
 | `agent-loop` | `maxSteps` | Max LLM steps per user turn (default 32) |
+| `agent-loop` | `autoContinueOnMaxTokens` · `autoContinueMaxRounds` | Auto-resume when the model hits its output token cap (default off) and per-turn continuation cap (default 2) |
 | `agent-loop` | `toolSettle` | `parallel` (default, by `isConcurrencySafe`) or `serial` |
 | `agent-loop` | `llmRetryMaxRetries` | In-step provider retry cap (default 5; `0` disables) |
 | `agent-loop` | `toolOrder` | Tool line order (Plugins card; exactly one `' '` rest); blank = lexicographic |
-| `agent-loop` | `maxRequestTokens` · `keepTokens` · `bufferTokens` | Soft context budget (defaults 100k / 24k / 4k); over → prune → compact → fail-closed |
+| `agent-loop` | `maxRequestTokens` · `keepTokens` · `bufferTokens` | Soft context budget (defaults 100k / 24k / 4k) |
+| `agent-loop` | `compactionStrategy` | Over-budget strategy: `prune-summary` (default) · `prune-only` · `summary-only` · `off` |
 | `agent-loop` | `toolResultMaxInlineBytes` | Tool-result spill ceiling (default **64_000**; `0` disables both pipeline bound and loop spill; one full body under `~/.xrk/spill/tool-outputs/`) |
+| `agent-loop` | `maxSubagentDepth` · `maxActiveSubagents` | Subagent nesting depth (default 2) and concurrent children under one parent (default 2) |
 | `workspace-inject` | `injectMaxChars` | Rules/skills inject budget after the next agent rebuild (default **32_000**) |
 | `session-telemetry` | `mode` · `endpoint` | **Host restart** mounts the sink (off / memory / OTLP); `XRK_TELEMETRY` may CI-bypass |
 | `sandbox` | `backend` · `dockerImage` · `dockerNetwork` · `windowsMode` | **Live** on next agent rebuild (confine Provider); helper / bins stay env-only; `XRK_SANDBOX_BACKEND` may CI-bypass |

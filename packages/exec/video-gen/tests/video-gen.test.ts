@@ -1,17 +1,34 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMemoryAttachmentStore } from "@xrkseek/attachment";
 import {
+  VIDEO_GEN_CAPABILITIES_TEXT_ONLY,
   VIDEO_GEN_PROMPT_TEXT,
   VideoGenError,
+  buildVideoGenToolParameters,
   createDefaultVideoGenAccess,
   createMemoryVideoGenProvider,
   createOpenAiVideoGenProvider,
   createVideoGenTools,
+  formatVideoGenCatalog,
   isTerminalStatus,
   isVideoGenError,
   minimalMp4Bytes,
+  OPENAI_VIDEO_GEN_FAMILIES,
+  resolveVideoGenCapabilities,
+  resolveVideoGenReferenceImages,
+  videoGenSupportsI2v,
   videoGenUnavailableMessage,
 } from "../src/index.js";
+
+function tinyPng(): Uint8Array {
+  // Minimal 1×1 PNG
+  return Uint8Array.from(
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  );
+}
 
 /** Faux test service that is always already completed. */
 function completedService() {
@@ -476,5 +493,207 @@ describe("default access + messages", () => {
     expect(videoGenUnavailableMessage({ XRK_VIDEO_GEN: "other" })).toMatch(
       /no VideoGenService Provider/,
     );
+  });
+});
+
+describe("i2v / capabilities / catalog / edit-extend", () => {
+  it("memory i2v records modality=image", async () => {
+    const svc = createMemoryVideoGenProvider();
+    expect(videoGenSupportsI2v(svc.capabilities!())).toBe(true);
+    const job = await svc.create({
+      prompt: "animate gently",
+      firstFrame: { bytes: tinyPng(), mimeType: "image/png", label: "still" },
+    });
+    expect(job.modality).toBe("image");
+    expect(job.kind).toBe("generate");
+    expect(job.note).toMatch(/image/);
+  });
+
+  it("dynamic schema omits i2v/edit for text-only Provider", () => {
+    const textOnly = createMemoryVideoGenProvider({
+      capabilities: VIDEO_GEN_CAPABILITIES_TEXT_ONLY,
+    });
+    const [tool] = createVideoGenTools({ service: textOnly });
+    const props = tool!.parameters.properties as Record<string, unknown>;
+    expect(props.first_frame).toBeUndefined();
+    expect(props.image_url).toBeUndefined();
+    const action = props.action as { enum: string[] };
+    expect(action.enum).not.toContain("edit");
+    expect(action.enum).not.toContain("extend");
+    expect(action.enum).toContain("catalog");
+    expect(tool!.description).toMatch(/text-to-video only/);
+  });
+
+  it("dynamic schema includes i2v + edit + extend when caps allow", () => {
+    const [tool] = createVideoGenTools({
+      service: createMemoryVideoGenProvider(),
+    });
+    const props = tool!.parameters.properties as Record<string, unknown>;
+    expect(props.first_frame).toBeTruthy();
+    expect(props.image_url).toBeTruthy();
+    expect(props.reference_attachment_ids).toBeTruthy();
+    const action = props.action as { enum: string[] };
+    expect(action.enum).toEqual(
+      expect.arrayContaining(["start", "edit", "extend", "catalog"]),
+    );
+    expect(buildVideoGenToolParameters(resolveVideoGenCapabilities(undefined)).properties
+      .first_frame).toBeUndefined();
+  });
+
+  it("tools start i2v via first_frame data URL", async () => {
+    const pngB64 = Buffer.from(tinyPng()).toString("base64");
+    const [tool] = createVideoGenTools({
+      service: createMemoryVideoGenProvider(),
+      env: { XRK_VIDEO_GEN: "memory" },
+    });
+    const out = await tool!.execute({
+      action: "start",
+      prompt: "pan right",
+      first_frame: `data:image/png;base64,${pngB64}`,
+    });
+    expect(out.isError).toBeFalsy();
+    expect(out.content).toMatch(/modality=image/);
+    expect(out.content).toMatch(/kind=generate/);
+  });
+
+  it("tools start i2v via reference_attachment_ids", async () => {
+    const attachments = createMemoryAttachmentStore();
+    const saved = await attachments.saveImage({
+      data: tinyPng(),
+      mediaType: "image/png",
+      name: "frame.png",
+    });
+    const [tool] = createVideoGenTools({
+      service: createMemoryVideoGenProvider(),
+      env: { XRK_VIDEO_GEN: "memory" },
+      attachments,
+    });
+    const out = await tool!.execute({
+      prompt: "zoom in",
+      reference_attachment_ids: [saved.attachmentId],
+    });
+    expect(out.isError).toBeFalsy();
+    expect(out.content).toMatch(/modality=image/);
+  });
+
+  it("tools reject i2v args on text-only Provider", async () => {
+    const [tool] = createVideoGenTools({
+      service: createMemoryVideoGenProvider({
+        capabilities: VIDEO_GEN_CAPABILITIES_TEXT_ONLY,
+      }),
+      env: { XRK_VIDEO_GEN: "memory" },
+    });
+    const out = await tool!.execute({
+      prompt: "x",
+      image_url: "https://example.com/a.png",
+    });
+    expect(out.isError).toBe(true);
+    expect(out.content).toMatch(/does not support first-frame/);
+  });
+
+  it("action=catalog lists OpenAI-shaped families", async () => {
+    const [tool] = createVideoGenTools({
+      service: createMemoryVideoGenProvider(),
+      env: { XRK_VIDEO_GEN: "memory" },
+    });
+    const out = await tool!.execute({ action: "catalog" });
+    expect(out.isError).toBeFalsy();
+    expect(out.content).toMatch(/id=sora-2/);
+    expect(formatVideoGenCatalog(OPENAI_VIDEO_GEN_FAMILIES)).toMatch(/sora-2-pro/);
+  });
+
+  it("action=edit and action=extend chain from a prior job", async () => {
+    const svc = createMemoryVideoGenProvider();
+    const [tool] = createVideoGenTools({
+      service: svc,
+      env: { XRK_VIDEO_GEN: "memory" },
+    });
+    const started = await tool!.execute({ prompt: "base clip" });
+    const jobId = /jobId=(\S+)/.exec(started.content)![1]!;
+
+    const edited = await tool!.execute({
+      action: "edit",
+      job_id: jobId,
+      prompt: "shift palette to teal",
+    });
+    expect(edited.isError).toBeFalsy();
+    expect(edited.content).toMatch(/kind=edit/);
+
+    const extended = await tool!.execute({
+      action: "extend",
+      job_id: jobId,
+      prompt: "continue rising over rooftops",
+      seconds: 8,
+    });
+    expect(extended.isError).toBeFalsy();
+    expect(extended.content).toMatch(/kind=extend/);
+  });
+
+  it("OpenAI provider posts input_reference for i2v and JSON for edit/extend", async () => {
+    const calls: { url: string; method?: string; formKeys?: string[] }[] = [];
+    const svc = createOpenAiVideoGenProvider({
+      apiKey: "sk-test",
+      fetchImpl: async (input, init) => {
+        const url = String(input);
+        const method = init?.method;
+        let formKeys: string[] | undefined;
+        if (init?.body instanceof FormData) {
+          formKeys = [...init.body.keys()];
+        }
+        calls.push({ url, method, formKeys });
+        return Response.json({
+          id: "video_new",
+          status: "queued",
+          progress: 0,
+          model: "sora-2",
+        });
+      },
+    });
+
+    await svc.create({
+      prompt: "animate",
+      firstFrame: { bytes: tinyPng(), mimeType: "image/png" },
+    });
+    expect(calls[0]!.url).toMatch(/\/videos$/);
+    expect(calls[0]!.formKeys).toContain("input_reference");
+
+    await svc.create({
+      prompt: "teal palette",
+      kind: "edit",
+      sourceVideoId: "video_abc",
+    });
+    expect(calls[1]!.url).toMatch(/\/videos\/edits$/);
+
+    await svc.create({
+      prompt: "continue",
+      kind: "extend",
+      sourceVideoId: "video_abc",
+      seconds: 8,
+    });
+    expect(calls[2]!.url).toMatch(/\/videos\/extensions$/);
+  });
+
+  it("resolves data: and attachment: reference URLs", async () => {
+    const attachments = createMemoryAttachmentStore();
+    const saved = await attachments.saveImage({
+      data: tinyPng(),
+      mediaType: "image/png",
+      name: "a.png",
+    });
+    const pngB64 = Buffer.from(tinyPng()).toString("base64");
+    const stills = await resolveVideoGenReferenceImages({
+      firstFrame: `data:image/png;base64,${pngB64}`,
+      referenceImageUrls: [`attachment:${saved.attachmentId}`],
+      attachments,
+      maxReferenceImages: 2,
+    });
+    // maxReferenceImages=2 but OpenAI path uses 1; resolver fills up to max
+    expect(stills.length).toBeGreaterThanOrEqual(1);
+    expect(stills[0]!.mimeType).toBe("image/png");
+  });
+
+  it("prompt text mentions i2v and catalog", () => {
+    expect(VIDEO_GEN_PROMPT_TEXT).toMatch(/first_frame|image_url/);
+    expect(VIDEO_GEN_PROMPT_TEXT).toMatch(/catalog|edit|extend/i);
   });
 });

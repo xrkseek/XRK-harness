@@ -511,6 +511,7 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
             content: `Error: ${message}`,
             isError: true,
             error: { name: "ApplyPatchError", code },
+            meta: { code },
           };
         }
       },

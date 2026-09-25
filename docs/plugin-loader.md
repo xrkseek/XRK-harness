@@ -97,7 +97,7 @@ Host `stop` 会对已登记插件逐个 `unregister`（含 `dispose`；dispose �
 | `default` | 同上 factory |
 | `plugin` | `RegisteredPlugin` 常量 |
 
-`id` / `kind` 必须与 manifest 一致（`skipLoad` stub 除外）。
+`id` / `kind` 与 manifest 一致（`skipLoad` stub 除外）。
 
 ```ts
 export interface RegisteredPlugin {
@@ -194,7 +194,7 @@ xrkh plugin path
   <id>/   # 进程插件（discover 跳过 web/）
 ```
 
-装完后：**进程半部**经 Settings 停用/启用可即时 reconcile；**client 半部**（或新装后首次进壳）仍须刷新页面 / 重启 `web`·`serve`（`needsRestart`）。`add` / `remove` 会自动 reconcile boot；手删目录或 inventory 不同步时跑 `plugin reconcile`。Host 经 Settings 调 mutate 时按序尝试：`XRK_HARNESS_BIN` → 仓内 `apps/cli/dist/bin.js` → `xrkh` → 旧名 `xrk-harness`（仅在命令不存在时回退）。全程 **不用** `shell: true`：`node` + `.js` 直接 argv（兼容 `Program Files` / 含空格或非 ASCII 路径）；Windows 裸 `.cmd` 经 `ComSpec /d /s /c` 正规转义。
+装完后：**进程半部**经 Settings 停用/启用可即时 reconcile；**client 半部**（或新装后首次进壳）刷新页面 / 重启 `web`·`serve`（`needsRestart`）。`add` / `remove` 会自动 reconcile boot；手删目录或 inventory 不同步时跑 `plugin reconcile`。Host 经 Settings 调 mutate 时按序尝试：`XRK_HARNESS_BIN` → 仓内 `apps/cli/dist/bin.js` → `xrkh` → 旧名 `xrk-harness`（仅在命令不存在时回退）。全程 **不用** `shell: true`：`node` + `.js` 直接 argv（兼容 `Program Files` / 含空格或非 ASCII 路径）；Windows 裸 `.cmd` 经 `ComSpec /d /s /c` 正规转义。
 
 **Inventory 与磁盘**：`.xrk-plugins.json` 是 managed 包真源。`web/plugins/<id>/` 仅应存在 inventory 里 `kind: client|both` 的包；孤儿目录会导致 overlay `boot.json` 引用已删 `client.js`，浏览器 boot 失败或 slot 崩溃。`reconcile` 按 inventory 清理 staging 并重写 boot。
 
@@ -226,7 +226,7 @@ XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js serve
 ## 边界
 
 - 任意目录 watch / 未声明入口的热重载：不支持  
-- 浏览器 client 半部热装卸：不支持（停用后仍须刷新页面）  
+- 浏览器 client 半部热装卸：不支持（停用后刷新页面即可）  
 - 未声明入口的任意执行：不支持  
 - 插件覆盖同名 builtin / 保留 prompt id：不支持  
 - 保留 kind 的自动接线：未接线，登记需配 `apply*` 才会生效  

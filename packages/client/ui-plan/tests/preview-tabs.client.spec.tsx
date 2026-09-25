@@ -75,6 +75,23 @@ const sampleStatus = {
     monthTokens: 0,
     byModel: [],
     byProviderModel: [],
+    dailyTrend: [
+      { date: '2026-09-24', cost: 0.01, tokens: 100 },
+      { date: '2026-09-25', cost: 0.02, tokens: 200 },
+    ],
+  },
+  fleet: {
+    health: 'ok' as const,
+    runningJobs: 0,
+    runningSubagents: 0,
+    slotsFree: 2,
+    queuedInbox: 0,
+    channelAlerts: 0,
+    alerts: [] as {
+      id: string
+      severity: 'info' | 'warn' | 'critical'
+      message: string
+    }[],
   },
   timeline: {
     total: 0,
@@ -111,6 +128,11 @@ const sampleStatus = {
     process: [] as { pluginId: string; channelId: string }[],
     im: [{ channelId: 'telegram', displayName: 'Telegram', wired: 'bridge' }],
     note: '',
+    alerts: [] as {
+      id: string
+      severity: 'info' | 'warn' | 'critical'
+      message: string
+    }[],
   },
 }
 
@@ -204,7 +226,7 @@ describe('PreviewTabs', () => {
         } as PreviewTabsProps)}
       />,
     )
-    expect(screen.getByRole('heading', { name: 'Status' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '概况' })).toBeTruthy()
     await waitFor(() => {
       expect(screen.getByText('会话')).toBeTruthy()
     })
@@ -252,7 +274,7 @@ describe('PreviewTabs', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Office' }))
     expect(screen.getByText('已配置')).toBeTruthy()
     expect(screen.getAllByText('否').length).toBeGreaterThan(0)
-    fireEvent.click(screen.getByRole('button', { name: '关闭 Status 栏' }))
+    fireEvent.click(screen.getByRole('button', { name: '关闭概况栏' }))
     expect(closeDetails).toHaveBeenCalledTimes(1)
   })
 
@@ -328,16 +350,17 @@ describe('PreviewTabs', () => {
       />,
     )
     await waitFor(() => {
-      expect(screen.getByText('95')).toBeTruthy()
+      expect(screen.getAllByText('95').length).toBeGreaterThan(0)
     })
-    expect(screen.getByText(/skill-catalog:catalog/)).toBeTruthy()
-    expect(screen.getByText(/overflow/)).toBeTruthy()
-    expect(screen.getByText(/shadowed tokens 1200/)).toBeTruthy()
-    expect(screen.getByText(/prune 1 · spill 1/)).toBeTruthy()
+    expect(screen.getAllByText(/skill-catalog:catalog/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/overflow/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/tokens 1200/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/修剪 1/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/落盘 1/).length).toBeGreaterThan(0)
     expect(screen.getByText('prune · spill')).toBeTruthy()
     expect(screen.getByText('compact · overflow')).toBeTruthy()
     expect(screen.getByLabelText('压缩分阶')).toBeTruthy()
-    expect(screen.getByLabelText('队列 / turn')).toBeTruthy()
+    expect(screen.getByLabelText('队列 / 回合')).toBeTruthy()
   })
 
   it('opens spill paths from Status timeline rows via openSpillPath', async () => {
@@ -380,7 +403,7 @@ describe('PreviewTabs', () => {
     await waitFor(() => {
       expect(screen.getByText('prune · spill')).toBeTruthy()
     })
-    fireEvent.click(screen.getByRole('button', { name: '打开 spill' }))
+    fireEvent.click(screen.getByRole('button', { name: '查看落盘文件' }))
     expect(openSpillPath).toHaveBeenCalledWith(
       '/home/u/.xrk/spill/tool-outputs/s_c.txt',
     )
@@ -393,7 +416,7 @@ describe('PreviewOpenButton', () => {
     const closePreview = vi.fn()
     document.documentElement.removeAttribute(DETAILS_INSET_ATTR)
     render(<PreviewOpenButton openPreview={openPreview} closePreview={closePreview} t={t} />)
-    const button = screen.getByRole('button', { name: 'Status' })
+    const button = screen.getByRole('button', { name: '概况' })
     expect(button.getAttribute('title')).toContain('/status')
     expect(button.getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(button)
@@ -406,7 +429,7 @@ describe('PreviewOpenButton', () => {
     const openPreview = vi.fn()
     const closePreview = vi.fn()
     render(<PreviewOpenButton openPreview={openPreview} closePreview={closePreview} t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Status' }))
+    fireEvent.click(screen.getByRole('button', { name: '概况' }))
     expect(closePreview).toHaveBeenCalledTimes(1)
     expect(openPreview).not.toHaveBeenCalled()
     document.documentElement.removeAttribute(DETAILS_INSET_ATTR)

@@ -15,6 +15,15 @@
 
 后台外部子代理完成后，与进程内一样向父 inbox **steer** 完成通知；`interrupt_agent` 结束保活进程。
 
+### 外部 resume（冷句柄）
+
+`acp` / `app-server` 的 live 句柄会写入 `{XRK_HOME}/…/external-agent-handles.json` sidecar（与 subagent 图同目录）。Host 重启或进程 detach 后 Status 显示 `ext:…/cold`；随后的 `send_message` / `followup_task` 会尝试：
+
+- **app-server**：`thread/resume`（Codex）
+- **acp**：`session/load`（失败则诚实失败 / 回落 `session/new`）
+
+硬 interrupt 仍会拆掉 live 进程；sidecar 保留以便 Status 诚实标 cold。
+
 ---
 
 # External agent-runtime delegation
@@ -33,3 +42,12 @@
 Constraints: missing binary / command fails the tool **honestly** (no silent fall-back to in-process). Product path: **Settings → Plugins → External agents**. This process as ACP **server**: [acp.md](./acp.md). This page is the reverse (this process as client).
 
 Background external children steer a completion notice to the parent inbox like in-process; `interrupt_agent` tears down the live process.
+
+### External resume (cold handles)
+
+Live `acp` / `app-server` handles are written to `{XRK_HOME}/…/external-agent-handles.json` (sidecar beside the subagent graph). After Host restart or process detach, Status shows `ext:…/cold`; a later `send_message` / `followup_task` attempts:
+
+- **app-server**: `thread/resume` (Codex)
+- **acp**: `session/load` (fails honestly / falls back to `session/new`)
+
+Hard interrupt still tears down the live process; the sidecar remains so Status can honestly mark cold.

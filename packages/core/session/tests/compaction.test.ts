@@ -7,6 +7,8 @@ import {
   estimateMessagesTokens,
   estimateRequestTokens,
   estimateTokens,
+  parseCompactionStrategy,
+  resolveCompactionStrategy,
   resolveSoftBudgetCeiling,
   selectHeadRecent,
 } from "../src/index.js";
@@ -32,7 +34,7 @@ describe("compaction helpers", () => {
     expect(withReasoning - without).toBe(estimateTokens("r".repeat(40)));
   });
 
-  it("counts image blocks that flattenText skips", () => {
+  it("counts image blocks with DeepSeek V41 vision tokens", () => {
     const textOnly = estimateMessagesTokens([
       { role: "user", content: [{ type: "text", text: "hi" }] },
     ]);
@@ -54,7 +56,8 @@ describe("compaction helpers", () => {
         ],
       },
     ]);
-    expect(withImage).toBeGreaterThan(textOnly);
+    // Tiny images scale up to the 544×544 floor → 184 vision tokens.
+    expect(withImage - textOnly).toBe(184);
   });
 
   it("resolveSoftBudgetCeiling ignores buffer >= max (no false fail-closed)", () => {
@@ -62,6 +65,28 @@ describe("compaction helpers", () => {
     expect(resolveSoftBudgetCeiling(100, 100)).toBe(100);
     expect(resolveSoftBudgetCeiling(100, 200)).toBe(100);
     expect(resolveSoftBudgetCeiling(50, 0)).toBe(50);
+  });
+
+  it("parseCompactionStrategy accepts strategy family ids", () => {
+    expect(parseCompactionStrategy("prune-summary")).toBe("prune-summary");
+    expect(parseCompactionStrategy("prune-only")).toBe("prune-only");
+    expect(parseCompactionStrategy("summary-only")).toBe("summary-only");
+    expect(parseCompactionStrategy("off")).toBe("off");
+    expect(parseCompactionStrategy("  prune-only  ")).toBe("prune-only");
+    expect(parseCompactionStrategy("unknown")).toBeUndefined();
+    expect(parseCompactionStrategy(1)).toBeUndefined();
+  });
+
+  it("resolveCompactionStrategy defaults and respects auto:false", () => {
+    expect(resolveCompactionStrategy(undefined)).toBe("off");
+    expect(resolveCompactionStrategy({})).toBe("prune-summary");
+    expect(resolveCompactionStrategy({ strategy: "summary-only" })).toBe(
+      "summary-only",
+    );
+    expect(resolveCompactionStrategy({ auto: false })).toBe("off");
+    expect(
+      resolveCompactionStrategy({ auto: false, strategy: "prune-only" }),
+    ).toBe("off");
   });
 
   it("estimateRequestTokens adds standing tool schemas", () => {

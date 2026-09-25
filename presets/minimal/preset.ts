@@ -365,6 +365,6 @@ export function createMinimalComposition(
 
 export const preset = {
   id: presetId,
-  description: "Minimal harness: fs tools + replay LLM",
+  description: "Minimal composition: fs + skill + std tools (no bash / PTY)",
   create: createMinimalComposition,
 };

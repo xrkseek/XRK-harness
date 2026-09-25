@@ -3,6 +3,7 @@
 import type { SettingsScope, SnapshotStore } from '@xrkseek/client-runtime/client'
 import {
   CardForm,
+  booleanField,
   numberField,
   textField,
   type CardActions,
@@ -28,12 +29,38 @@ function toolOrderField(): CardFieldSpec {
   }
 }
 
+const COMPACTION_STRATEGIES = new Set([
+  'prune-summary',
+  'prune-only',
+  'summary-only',
+  'off',
+])
+
+function compactionStrategyField(): CardFieldSpec {
+  return {
+    field: 'compactionStrategy',
+    format: (value) =>
+      typeof value === 'string' && COMPACTION_STRATEGIES.has(value) ? value : '',
+    parse: (text) => {
+      const trimmed = text.trim()
+      if (trimmed === '') return { kind: 'clear' }
+      return COMPACTION_STRATEGIES.has(trimmed)
+        ? { kind: 'set', value: trimmed }
+        : undefined
+    },
+  }
+}
+
 /** The agent-loop fields this card edits. */
 export interface AgentLoopSettings {
   /** Upper bound on parallel-safe tool calls in flight per step. */
   maxParallelToolCalls?: number
   /** Max LLM steps (tool rounds) per user turn. */
   maxSteps?: number
+  /** Resume automatically when a model stops at its output token cap. */
+  autoContinueOnMaxTokens?: boolean
+  /** Maximum automatic continuations per turn (independent of maxSteps). */
+  autoContinueMaxRounds?: number
   /**
    * DSH tool wire order: tool names with exactly one `' '` rest marker.
    * Empty / omit → lexicographic.
@@ -49,6 +76,11 @@ export interface AgentLoopSettings {
   keepTokens?: number
   /** Soft ceiling = maxRequestTokens − bufferTokens. */
   bufferTokens?: number
+  /**
+   * Soft-budget strategy: `prune-summary` (default) · `prune-only` ·
+   * `summary-only` · `off`.
+   */
+  compactionStrategy?: 'prune-summary' | 'prune-only' | 'summary-only' | 'off'
   /** Spill plain-text tool results over this UTF-8 ceiling; `0` disables. */
   toolResultMaxInlineBytes?: number
   /** Max subagent nesting depth (parent = 0). */
@@ -63,6 +95,10 @@ export interface AgentLoopCardState extends CardShell {
   maxParallelToolCalls: CardFieldState
   /** Steps-per-turn cap. */
   maxSteps: CardFieldState
+  /** Auto-resume on max-tokens. */
+  autoContinueOnMaxTokens: CardFieldState
+  /** Automatic continuation cap per turn. */
+  autoContinueMaxRounds: CardFieldState
   /** Tool wire order (comma-separated; empty slot = rest). */
   toolOrder: CardFieldState
   /** Settle mode. */
@@ -75,6 +111,8 @@ export interface AgentLoopCardState extends CardShell {
   keepTokens: CardFieldState
   /** Soft-budget buffer. */
   bufferTokens: CardFieldState
+  /** Soft-budget strategy family. */
+  compactionStrategy: CardFieldState
   /** Tool-result spill ceiling. */
   toolResultMaxInlineBytes: CardFieldState
   /** Subagent nesting depth cap. */
@@ -101,12 +139,15 @@ export class AgentLoopCardController {
     this.form = new CardForm(scope, [
       numberField('maxParallelToolCalls'),
       numberField('maxSteps'),
+      booleanField('autoContinueOnMaxTokens'),
+      numberField('autoContinueMaxRounds'),
       toolOrderField(),
       textField('toolSettle'),
       numberField('llmRetryMaxRetries'),
       numberField('maxRequestTokens'),
       numberField('keepTokens'),
       numberField('bufferTokens'),
+      compactionStrategyField(),
       numberField('toolResultMaxInlineBytes'),
       numberField('maxSubagentDepth'),
       numberField('maxActiveSubagents'),
@@ -119,12 +160,15 @@ export class AgentLoopCardController {
       ...this.form.shell(),
       maxParallelToolCalls: this.form.field('maxParallelToolCalls'),
       maxSteps: this.form.field('maxSteps'),
+      autoContinueOnMaxTokens: this.form.field('autoContinueOnMaxTokens'),
+      autoContinueMaxRounds: this.form.field('autoContinueMaxRounds'),
       toolOrder: this.form.field('toolOrder'),
       toolSettle: this.form.field('toolSettle'),
       llmRetryMaxRetries: this.form.field('llmRetryMaxRetries'),
       maxRequestTokens: this.form.field('maxRequestTokens'),
       keepTokens: this.form.field('keepTokens'),
       bufferTokens: this.form.field('bufferTokens'),
+      compactionStrategy: this.form.field('compactionStrategy'),
       toolResultMaxInlineBytes: this.form.field('toolResultMaxInlineBytes'),
       maxSubagentDepth: this.form.field('maxSubagentDepth'),
       maxActiveSubagents: this.form.field('maxActiveSubagents'),

@@ -2,8 +2,8 @@
  * Electron process entry ([ADR-0008](../../../docs/adr/0008-desktop-shell-private-host.md)).
  *
  * Wires: single-instance · window lifecycle · `xrk-app://` · narrow preload (locale / updates).
- * Host Fetch carrier is not fully started; update coordinator skeleton exists
- * but packaged feed wiring remains Not done — see docs/status.md.
+ * Host Fetch carrier is not fully started in every path; update coordinator is
+ * wired for packaged feeds via `app-update.yml` (see desktop-auto-update-environment).
  */
 
 import path from "node:path";

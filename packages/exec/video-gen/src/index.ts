@@ -5,18 +5,42 @@ import { videoGenUnavailableMessage } from "./tools.js";
 
 export {
   VideoGenError,
+  VIDEO_GEN_CAPABILITIES_TEXT_ONLY,
   isTerminalStatus,
   isVideoGenError,
+  resolveVideoGenCapabilities,
+  videoGenSupportsI2v,
+  type VideoGenCapabilities,
   type VideoGenContent,
+  type VideoGenCreateKind,
   type VideoGenDelivery,
   type VideoGenErrorCode,
+  type VideoGenFamilyEntry,
   type VideoGenJob,
   type VideoGenRequest,
   type VideoGenSeconds,
   type VideoGenService,
   type VideoGenSize,
+  type VideoGenSourceImage,
   type VideoGenStatus,
 } from "./types.js";
+export {
+  MEMORY_VIDEO_GEN_CAPABILITIES,
+  OPENAI_VIDEO_GEN_CAPABILITIES,
+  OPENAI_VIDEO_GEN_FAMILIES,
+  VIDEO_GEN_SECONDS,
+  VIDEO_GEN_SIZES,
+  formatVideoGenCatalog,
+} from "./catalog.js";
+export {
+  buildVideoGenToolDescription,
+  buildVideoGenToolParameters,
+  videoGenActionsForCapabilities,
+} from "./schema.js";
+export {
+  resolveVideoGenReferenceImages,
+  type ResolveVideoGenReferencesOptions,
+} from "./references.js";
 export { VIDEO_GEN_PROMPT_TEXT } from "./format.js";
 export {
   createMemoryVideoGenProvider,
@@ -67,7 +91,7 @@ function resolveApiKey(env: NodeJS.ProcessEnv): string | undefined {
 }
 
 /**
- * Resolve a text-to-video Provider.
+ * Resolve a text-to-video / i2v Provider.
  * - Injected `service` wins.
  * - Non-empty `XRK_VIDEO_GEN` is CI bypass over Face `product`.
  * - Product / env: `off` · `openai` (`1`) · `memory` (env-only).

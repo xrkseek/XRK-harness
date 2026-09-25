@@ -79,7 +79,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "minimal",
     displayName: "Minimal",
     description:
-      "Filesystem + skill + std only (no bash / web / lsp / PTY / subagents)",
+      "Filesystem, skill, and std tools only — no bash, web, lsp, PTY, or subagents",
     profile: {
       id: "minimal",
       composition: "minimal",
@@ -93,7 +93,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "shell",
     displayName: "Shell",
     description:
-      "Filesystem + bash + terminal (PTY); no web / lsp / subagents — DSH-style local shell focus",
+      "Filesystem, bash, and terminal (PTY) — no web, lsp, or subagents",
     profile: {
       id: "shell",
       composition: "harness",
@@ -107,7 +107,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "frugal",
     displayName: "Frugal",
     description:
-      "Full coding tools without subagents — lower bill risk (省钱)",
+      "Full coding tools without subagents — lower bill risk",
     profile: {
       id: "frugal",
       composition: "harness",
@@ -121,7 +121,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "shallow",
     displayName: "Shallow",
     description:
-      "Full coding tools with one-level subagents only (maxDepth 1, Face concurrency cap)",
+      "Full coding tools with one-level subagents only (maxDepth 1, concurrency capped by Face)",
     profile: {
       id: "shallow",
       composition: "harness",
@@ -138,7 +138,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "harness",
     displayName: "XRK Harness",
     description:
-      "Full coding agent: fs + bash + web + lsp + PTY + nested subagents (Face depth/active caps)",
+      "Full coding agent: fs + bash + web + lsp + PTY + nested subagents (capped by Face depth/active limits)",
     profile: {
       id: "harness",
       composition: "harness",

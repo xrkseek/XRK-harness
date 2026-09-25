@@ -67,10 +67,19 @@ compaction: {
   maxRequestTokens: 100_000,
   keepTokens: 24_000,
   bufferTokens: 4_000,
+  strategy: "prune-summary", // Face agent-loop.compactionStrategy
 }
 ```
 
-`minimal` 仍 `{}`（仅 overflow，无主动软压）。软压触发时：先 **model-free prune**，重测后仍超预算才摘要。Provider overflow：先 prune 再重试一次，仍溢出才 `runCompaction`。阈值用 Unicode **码点**（`thresholdChars=8192` · `head=4096` · `tail=1024`）；日志保留原文，`deriveMessages` 按 callId 取最新表面。
+| `strategy` | 软压超预算时 |
+|------------|--------------|
+| `prune-summary`（默认） | 先 model-free prune，再 LLM 摘要（可重试） |
+| `prune-only` | 只 prune；仍超则 fail-closed |
+| `summary-only` | 跳过 prune，直接 LLM 摘要 |
+| `off` | 关闭软压自动路径（`/compact` 仍可用） |
+
+`minimal` 仍 `{}`（仅 overflow，无主动软压）。软压触发时默认先 **model-free prune**，重测后仍超预算才摘要。Provider overflow：先 prune 再重试一次，仍溢出才 `runCompaction`。剪枝用 Unicode **码点**（`thresholdChars=8192` · `head=4096` · `tail=1024`）；日志保留原文，`deriveMessages` 按 callId 取最新表面。
+
 
 ### Face `/compact`
 

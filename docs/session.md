@@ -32,7 +32,7 @@ JSONL 导出：`toJSONL` / `fromJSONL` / `parseJSONL`；ZIP 导出用 `toPackedJ
 
 **同步 flush 代价（2026 实机压测）**：非 `assistant/chunk` 事件（`tool/call` · `tool/result` · `user/message` 等）走 `persistEvent` **逐条同步落库**——`BEGIN IMMEDIATE` + 插入 + `COMMIT` 全部同步发生在调用线程。本机基准（5000 次 `tool/call` append）：单次 **P50≈1.2ms · P99≈2.0ms · max≈9.2ms**；**连续 300 次不让出的事件循环冻结 ≈ 384ms**。`assistant/chunk` 例外：只进批，**不**逐条 flush（5000 次 append P50≈0.003ms），到 `flush()` 一次落库（5000 条 ≈ 24ms）。因此**热路径契约**：工具/消息类事件以每几十毫秒数条的节奏安全；若一次事件循环内同步 append 数百条，事件循环（Face mux 推送 · Ping · 流式让出）会被同量级冻结，这是设计内行为（drain 边界 flush），不是泄漏。
 
-**目录级写锁（多实例防误用）**：`createPersistentSessionStore(dir)` 默认对 `dir` 取**独占写租约**（`sessions.write.lock` PID 锁文件，见 `store-lock.ts`）：同进程二次独占、或另一存活 Host/CLI 持锁时抛 `SessionsDirInUseError`（`code = "sessions-dir-in-use"`），**fail-closed 而非静默共享 `sessions.db`**。崩溃持有者的过期锁在 PID 校验失败后才会被接管（空/不可读锁前 4 次视为争用重试，不立即接管——避免 create 窗口双写）。**正确用法**：Host/CLI 等**写者必须省略 `shared`**；`{ shared: true }` 仅用于**多进程只读旁路**（如测试在 Host 持锁时读库断言）——跳过写租约、`node:sqlite` 只读打开、任何写 API 抛 `"read-only when opened with { shared: true }"`。不要在 `shared` 模式下试图写会话。
+**目录级写锁（多实例防误用）**：`createPersistentSessionStore(dir)` 默认对 `dir` 取**独占写租约**（`sessions.write.lock` PID 锁文件，见 `store-lock.ts`）：同进程二次独占、或另一存活 Host/CLI 持锁时抛 `SessionsDirInUseError`（`code = "sessions-dir-in-use"`），**fail-closed 而非静默共享 `sessions.db`**。崩溃持有者的过期锁在 PID 校验失败后才会被接管（空/不可读锁前 4 次视为争用重试，不立即接管——避免 create 窗口双写）。**正确用法**：Host/CLI 等**写者必须省略 `shared`**；`{ shared: true }` 仅用于**多进程只读旁路**（如测试在 Host 持锁时读库断言）——跳过写租约、`node:sqlite` 只读打开、任何写 API 抛 `"read-only when opened with { shared: true }"`。`shared` 模式是只读旁路，写会话会抛错。
 
 索引：[docs/README.md](./README.md)。
 

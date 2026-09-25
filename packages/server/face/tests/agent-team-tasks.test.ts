@@ -80,6 +80,13 @@ describe("agent team task board", () => {
     expect(resumed?.status).toBe("in_progress");
     expect(resumed?.humanOwned).toBe(false);
 
+    board.bindWorktree(task.id, {
+      path: "/tmp/wt-demo",
+      branch: "agent/task_demo",
+      id: "wt1",
+    });
+    expect(board.get(task.id)?.worktreeBranch).toBe("agent/task_demo");
+
     const done = board.complete(task.id, {
       ok: true,
       preview: '{"ok":true}',
@@ -87,6 +94,7 @@ describe("agent team task board", () => {
     });
     expect(done?.status).toBe("completed");
     expect(done?.schemaValid).toBe(true);
+    expect(done?.resultPreview).toContain('"ok":true');
     expect(done?.revision).toBeGreaterThan(task.revision);
   });
 });

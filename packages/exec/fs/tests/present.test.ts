@@ -5,6 +5,8 @@ import {
   presentGlobResult,
   presentGrepCall,
   presentGrepResult,
+  presentPatchCall,
+  presentPatchResult,
   presentReadCall,
   presentReadResult,
   presentWriteCall,
@@ -116,6 +118,39 @@ describe("fs presenters (DSH tool-fs / tool-fs-search)", () => {
       paths: ["a.ts", "b.ts"],
       truncated: false,
       total: 2,
+    });
+  });
+
+  it("apply_patch success titles from summary; errors keep a conflict card", () => {
+    expect(presentPatchCall({ patch: "*** Begin Patch\n*** End Patch\n" })).toEqual({
+      card: "generic",
+      title: "Apply patch (3 lines)",
+      kind: "edit",
+    });
+    expect(
+      presentPatchResult(
+        { patch: "x" },
+        { content: "applied 1 hunk(s)\nupdate a.ts" },
+      ),
+    ).toEqual({
+      card: "generic",
+      title: "applied 1 hunk(s)",
+      kind: "edit",
+    });
+    expect(
+      presentPatchResult(
+        { patch: "x" },
+        {
+          content: "Error: could not find context",
+          isError: true,
+          meta: { code: "APPLY_PATCH_APPLY" },
+        },
+      ),
+    ).toEqual({
+      card: "generic",
+      title: "Apply patch failed (APPLY_PATCH_APPLY)",
+      kind: "edit",
+      rawInput: "Error: could not find context",
     });
   });
 });

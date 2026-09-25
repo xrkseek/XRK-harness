@@ -70,5 +70,6 @@ export function resolveCompactionOptions(
     ...(value.bufferTokens !== undefined
       ? { bufferTokens: value.bufferTokens }
       : {}),
+    ...(value.strategy !== undefined ? { strategy: value.strategy } : {}),
   };
 }

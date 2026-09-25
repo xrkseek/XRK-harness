@@ -16,23 +16,13 @@
 import type { SettingsScope, SettingsScopeSnapshot } from '@xrkseek/client-runtime/client'
 import { createSnapshotStore, type SnapshotStore } from '@xrkseek/client-runtime/client'
 
-/** The write one field's staged text performs when the card is saved. */
-export type FieldWrite =
-  | { kind: 'set'; value: unknown }
-  | { kind: 'clear' }
-
-/** How one section field converts between its stored value and its draft text. */
-export interface CardFieldSpec {
-  /** Field name inside the namespace section. */
-  field: string
-  /** Render a stored value as draft text; the empty string when the section carries none. */
-  format: (value: unknown) => string
-  /**
-   * The write this draft text stages, or undefined when the text is not a
-   * value this field accepts — which blocks the save rather than discarding it.
-   */
-  parse: (text: string) => FieldWrite | undefined
-}
+export {
+  booleanField,
+  numberField,
+  textField,
+  type CardFieldSpec,
+  type FieldWrite,
+} from './field-codecs.ts'
 
 /**
  * A control whose value is written outside the settings section. A credential
@@ -105,44 +95,6 @@ interface PlannedWrite {
    * afterwards; undefined when the draft is not a value the field accepts.
    */
   run: (() => Promise<boolean>) | undefined
-}
-
-/**
- * A whole-number field. An empty draft clears the field; any other draft that
- * is not a finite number blocks the save.
- * @param field - field name inside the namespace section.
- * @returns the field's conversion spec.
- */
-export function numberField(field: string): CardFieldSpec {
-  return {
-    field,
-    // A section that carries no number for this field renders empty rather
-    // than as a value nobody chose.
-    format: value => typeof value === 'number' ? String(value) : '',
-    parse: (text) => {
-      const trimmed = text.trim()
-      if (trimmed === '') return { kind: 'clear' }
-      const parsed = Number(trimmed)
-      return Number.isFinite(parsed) ? { kind: 'set', value: parsed } : undefined
-    },
-  }
-}
-
-/**
- * A free-text field. An empty draft clears the field, so emptying the control
- * and saving is the same gesture as resetting it.
- * @param field - field name inside the namespace section.
- * @returns the field's conversion spec.
- */
-export function textField(field: string): CardFieldSpec {
-  return {
-    field,
-    format: value => typeof value === 'string' ? value : '',
-    parse: (text) => {
-      const trimmed = text.trim()
-      return trimmed === '' ? { kind: 'clear' } : { kind: 'set', value: trimmed }
-    },
-  }
 }
 
 /**

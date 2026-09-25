@@ -20,6 +20,7 @@ import {
 } from "@xrkseek/protocol";
 import {
   consolidateCuratedMemoryPhase1,
+  consolidateCuratedMemoryPhase2,
   createCuratedMemoryStore,
 } from "@xrkseek/exec-memory";
 import { resolveSecretStore } from "@xrkseek/secrets";
@@ -27,6 +28,7 @@ import { hostSettingsPath, defaultSpillDir, resolveXrkHome, type HostConfig } fr
 import { installOutboundHttpProxy } from "./http-proxy.js";
 import { mountInvariantsFailFast } from "./invariants-fail-fast.js";
 import { watchPolicyFile } from "./policy-file-watch.js";
+import { createA2aInboundPublicHandler } from "./a2a-inbound-public.js";
 import {
   applyXrkProductBootPolicy,
   chainPublicHandlers,
@@ -65,6 +67,7 @@ import {
   createFaceRuntime,
   effectiveHostApiKey,
   isLoopbackAddress,
+  listCredentialSlots,
   peekSettingsYamlSection,
   publishRemoteEvent,
   createSessionRoutingLlm,
@@ -130,8 +133,12 @@ import {
   parseSandboxProduct,
   type SandboxService,
 } from "@xrkseek/exec-sandbox";
-import { createBrowserRuntimeRegistry } from "@xrkseek/exec-web";
+import { createBrowserRuntimeRegistry, setOutboundAllowlistAuditObserver } from "@xrkseek/exec-web";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
+import {
+  resolveExecEnvironment,
+  type ExecWorld,
+} from "@xrkseek/exec-environment";
 import {
   createSshExecutionWorld,
   resolveSshConfig,
@@ -380,9 +387,16 @@ export type AgentFactory = (input: {
     maxRequestTokens?: number;
     keepTokens?: number;
     bufferTokens?: number;
+    strategy?:
+      | "prune-summary"
+      | "prune-only"
+      | "summary-only"
+      | "off";
   };
   /** Face `agent-loop.toolResultMaxInlineBytes` — spill ceiling (`0` disables). */
   toolResultMaxInlineBytes?: number;
+  /** Face `agent-loop.guardianFragments` — thin Guardian turn-start nudge. */
+  guardianFragments?: boolean;
   /** Merged Face web-search + vault keys for `createDefaultWebAccess({ search })`. */
   webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
   /** Face `workspace-inject.injectMaxChars` — rules/skills inject budget. */
@@ -708,23 +722,49 @@ export function createHostManager(): HostManager {
       // Local Host + remote cwd: swap fs/shell (Hermes/DSH provider pattern).
       // Env `XRK_SSH_HOST` CI-bypasses Face; else peek settings.yaml before Face
       // (SSH world must own workspaceRoot before createFaceRuntime).
+      // Optional HTTP ExecEnvironment (Modal/e2b-style sidecar) when SSH is off.
       let sshWorld: SshExecutionWorld | undefined;
+      let httpWorld: ExecWorld | undefined;
       /** Local Host cwd before SSH workspace swap (browse/settings anchor). */
       let localHostRoot: string | undefined;
+      let execWorldKind: "ssh" | "http" | undefined;
       try {
         const sshProduct = peekSettingsYamlSection(resolveXrkHome(), "ssh-remote");
         const sshConfig = resolveSshConfig(process.env, sshProduct);
         if (sshConfig) {
+          execWorldKind = "ssh";
           localHostRoot = config.runtime.workspaceRoot;
           sshWorld = createSshExecutionWorld({ config: sshConfig });
           // Tool coordinates are the remote workspace; Face session cwd follows.
           (config.runtime as { workspaceRoot: string }).workspaceRoot =
             sshWorld.workspaceRoot;
+        } else if (
+          String(process.env.XRK_EXEC_ENVIRONMENT ?? "")
+            .trim()
+            .toLowerCase() === "http"
+        ) {
+          execWorldKind = "http";
+          const provider = resolveExecEnvironment({ env: process.env });
+          httpWorld = await provider.createWorld({
+            workspaceRoot: config.runtime.workspaceRoot,
+          });
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        throw new Error(`SSH remote workspace: ${message}`, { cause: err });
+        throw new Error(
+          execWorldKind === "http"
+            ? `HTTP exec environment: ${message}`
+            : `SSH remote workspace: ${message}`,
+          { cause: err },
+        );
       }
+
+      // Codex-shaped outbound allowlist audit → Host logger (not MITM).
+      setOutboundAllowlistAuditObserver((ev) => {
+        log?.debug(
+          `web-fetch-allowlist ${ev.decision} ${ev.host} (${ev.source}: ${ev.reason})`,
+        );
+      });
 
       const sharedPty =
         !sshWorld &&
@@ -740,7 +780,9 @@ export function createHostManager(): HostManager {
           ? createLocalShell({
               subprocess: sshWorld
                 ? sshWorld.subprocess
-                : createLocalSubprocess(),
+                : httpWorld
+                  ? httpWorld.subprocess
+                  : createLocalSubprocess(),
               defaultCwd: config.runtime.workspaceRoot,
               // Host-wide shared registry — sandbox confine resolves lazily so
               // Face settings + per-session sandboxMode are read at spawn time,
@@ -783,29 +825,58 @@ export function createHostManager(): HostManager {
         runtime?: FaceRuntime;
       } = {};
 
-      /** Session-end Phase1: fold leftover human notes into MEMORY.md (disk only). */
+      /** Session-end Phase1 (+ optional Phase2 LLM): fold leftover notes into MEMORY.md. */
       const consolidateCuratedMemoryForSession = (sessionId: string): void => {
         try {
           const rt = faceBox.runtime;
           const memEnvRaw = String(process.env.XRK_CURATED_MEMORY ?? "").trim();
           let enabled = memEnvRaw !== "" ? memEnvRaw !== "0" : true;
+          let phase2Llm = false;
           if (memEnvRaw === "" && rt) {
             const memNs = rt.settingsNamespaces.view("curated-memory")
               .value as Record<string, unknown>;
             enabled = memNs.enabled !== false;
+            phase2Llm = memNs.phase2Llm === true;
+          }
+          const phase2Env = String(
+            process.env.XRK_CURATED_MEMORY_PHASE2 ?? "",
+          ).trim();
+          if (phase2Env === "1" || phase2Env.toLowerCase() === "true") {
+            phase2Llm = true;
           }
           if (!enabled) return;
           const userTexts: string[] = [];
+          const assistantTexts: string[] = [];
           for (const event of readSessionEvents(store, sessionId)) {
-            if (event.type !== "user/message") continue;
-            if (!isHumanUserMessageSource(event.source)) continue;
-            const text = flattenText(event.content).trim();
-            if (text) userTexts.push(text);
+            if (event.type === "user/message") {
+              if (!isHumanUserMessageSource(event.source)) continue;
+              const text = flattenText(event.content).trim();
+              if (text) userTexts.push(text);
+              continue;
+            }
+            if (event.type === "assistant/message") {
+              const text = flattenText(event.content ?? "").trim();
+              if (text) assistantTexts.push(text);
+            }
           }
           if (userTexts.length === 0) return;
-          void consolidateCuratedMemoryPhase1(createCuratedMemoryStore(), {
-            userTexts,
-          });
+          const memStore = createCuratedMemoryStore();
+          void (async () => {
+            await consolidateCuratedMemoryPhase1(memStore, { userTexts });
+            if (!phase2Llm) return;
+            const llm = llmResolverBox.resolve?.(sessionId);
+            if (!llm?.chat) return;
+            await consolidateCuratedMemoryPhase2(memStore, {
+              userTexts,
+              assistantTexts,
+              complete: async (prompt) => {
+                const out = await llm.chat({
+                  messages: [{ role: "user", content: prompt }],
+                });
+                return String(out.content ?? "");
+              },
+            });
+          })();
         } catch {
           /* best-effort — Host stop / archive must continue */
         }
@@ -817,6 +888,8 @@ export function createHostManager(): HostManager {
         read?: () => {
           maxParallelToolCalls?: number;
           maxSteps?: number;
+          autoContinueOnMaxTokens?: boolean;
+          autoContinueMaxRounds?: number;
           toolOrder?: readonly string[];
           toolSettle?: "serial" | "parallel";
           llmRetryMaxRetries?: number;
@@ -829,8 +902,14 @@ export function createHostManager(): HostManager {
             maxRequestTokens?: number;
             keepTokens?: number;
             bufferTokens?: number;
+            strategy?:
+              | "prune-summary"
+              | "prune-only"
+              | "summary-only"
+              | "off";
           };
           toolResultMaxInlineBytes?: number;
+          guardianFragments?: boolean;
           maxSubagentDepth?: number;
           maxActiveSubagents?: number;
           webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
@@ -920,6 +999,26 @@ export function createHostManager(): HostManager {
                     remoteExecution: true as const,
                     codeRuntime: sshWorld.codeRuntime,
                   }
+                : httpWorld
+                  ? { fs: httpWorld.fs }
+                  : {}),
+              ...(faceBox.runtime
+                ? {
+                    browserVault: {
+                      list() {
+                        return listCredentialSlots(faceBox.runtime!)
+                          .filter((s) => s.configured)
+                          .map((s) => ({
+                            handle: s.id,
+                            label: s.label,
+                            kind: "credential",
+                          }));
+                      },
+                      peek(handle: string) {
+                        return faceBox.runtime?.credentials.peek(handle);
+                      },
+                    },
+                  }
                 : {}),
               ...(llmResolverBox.resolve
                 ? { resolveLlm: llmResolverBox.resolve }
@@ -929,6 +1028,17 @@ export function createHostManager(): HostManager {
                 : {}),
               ...(pluginSettings.maxSteps !== undefined
                 ? { maxSteps: pluginSettings.maxSteps }
+                : {}),
+              ...(pluginSettings.autoContinueOnMaxTokens !== undefined
+                ? {
+                    autoContinueOnMaxTokens:
+                      pluginSettings.autoContinueOnMaxTokens,
+                  }
+                : {}),
+              ...(pluginSettings.autoContinueMaxRounds !== undefined
+                ? {
+                    autoContinueMaxRounds: pluginSettings.autoContinueMaxRounds,
+                  }
                 : {}),
               ...(pluginSettings.toolOrder !== undefined
                 ? { toolOrder: pluginSettings.toolOrder }
@@ -950,6 +1060,9 @@ export function createHostManager(): HostManager {
                     toolResultMaxInlineBytes:
                       pluginSettings.toolResultMaxInlineBytes,
                   }
+                : {}),
+              ...(pluginSettings.guardianFragments !== undefined
+                ? { guardianFragments: pluginSettings.guardianFragments }
                 : {}),
               ...(pluginSettings.locale
                 ? { locale: pluginSettings.locale }
@@ -1077,32 +1190,15 @@ export function createHostManager(): HostManager {
 
       const hub: SessionDrainHub = createSessionDrainHub({
         createDrain: (sessionId) => async ({ signal }) => {
-          // An abort racing the workspace snapshot must not be swallowed:
-          // the snapshot is best-effort, so race it against the signal and
-          // let a stuck git/fs call yield to cancellation immediately.
           const snapshot = (): Promise<void> => {
             const face = faceBox.runtime;
-            if (!face) return Promise.resolve();
-            return new Promise<void>((resolve, reject) => {
-              if (signal.aborted) {
-                reject(hostAbortError(signal.reason));
-                return;
-              }
-              const onAbort = () => {
-                reject(hostAbortError(signal.reason));
-              };
-              signal.addEventListener("abort", onAbort, { once: true });
-              snapshotSessionWorkspace(face, sessionId).then(
-                () => {
-                  signal.removeEventListener("abort", onAbort);
-                  resolve();
-                },
-                (err: unknown) => {
-                  signal.removeEventListener("abort", onAbort);
-                  reject(err instanceof Error ? err : new Error(String(err)));
-                },
-              );
-            });
+            // Best-effort and self-bounded: snapshotSessionWorkspace races its
+            // own deadline (SNAPSHOT_TIMEOUT_MS), so a hung git/fs call
+            // degrades to "no checkpoint" instead of blocking the turn. The
+            // drain loop's abort check covers cancellation; no shared state
+            // here, so no signal listener bookkeeping is needed.
+            if (!face || signal.aborted) return Promise.resolve();
+            return snapshotSessionWorkspace(face, sessionId).then(() => undefined);
           };
           try {
             const agent = await resolveAgent(sessionId);
@@ -1167,16 +1263,33 @@ export function createHostManager(): HostManager {
           }
           return cronAgentDepth.run(true, async () => {
             const session = store.create();
-            const agent = await resolveAgent(session.id);
-            const result = await agent.continueTurn({
-              text: `[cron ${job.id}${job.name ? ` ${job.name}` : ""}]\n${run.prompt}`,
-              ...(signal ? { signal } : {}),
-            });
-            return {
-              ok: true,
-              output: result.text,
-              sessionId: session.id,
-            };
+            try {
+              const agent = await resolveAgent(session.id);
+              const result = await agent.continueTurn({
+                text: `[cron ${job.id}${job.name ? ` ${job.name}` : ""}]\n${run.prompt}`,
+                ...(signal ? { signal } : {}),
+              });
+              return {
+                ok: true,
+                output: result.text,
+                sessionId: session.id,
+              };
+            } finally {
+              // Ephemeral cron sessions must not retain AgentHandle in agentCache
+              // (each composition is heavy; ticker would OOM over hours).
+              lastDrainResult.delete(session.id);
+              hub.forget(session.id);
+              try {
+                faceBox.runtime?.onSessionFinalize?.(session.id);
+              } catch {
+                // best-effort memory/browser cleanup
+              }
+              if (faceBox.runtime?.invalidateAgent) {
+                await faceBox.runtime.invalidateAgent(session.id);
+              } else {
+                await agentCache.invalidate(session.id);
+              }
+            }
           });
         },
         onError: (err: unknown) => {
@@ -1552,6 +1665,15 @@ export function createHostManager(): HostManager {
           loop.maxSteps > 0
             ? Math.floor(loop.maxSteps)
             : undefined;
+        const autoContinueOnMaxTokens = loop.autoContinueOnMaxTokens === true;
+        const autoContinueMaxRoundsRaw = loop.autoContinueMaxRounds;
+        const autoContinueMaxRounds =
+          typeof autoContinueMaxRoundsRaw === "number" &&
+          Number.isFinite(autoContinueMaxRoundsRaw) &&
+          autoContinueMaxRoundsRaw >= 1 &&
+          autoContinueMaxRoundsRaw <= 10
+            ? Math.floor(autoContinueMaxRoundsRaw)
+            : undefined;
         const toolOrderRaw = loop.toolOrder;
         const toolOrder =
           Array.isArray(toolOrderRaw) &&
@@ -1588,6 +1710,20 @@ export function createHostManager(): HostManager {
           Number.isFinite(loop.bufferTokens) &&
           loop.bufferTokens >= 0
             ? Math.floor(loop.bufferTokens)
+            : undefined;
+        const compactionStrategyRaw = String(
+          loop.compactionStrategy ?? "",
+        ).trim();
+        const compactionStrategy =
+          compactionStrategyRaw === "prune-summary" ||
+          compactionStrategyRaw === "prune-only" ||
+          compactionStrategyRaw === "summary-only" ||
+          compactionStrategyRaw === "off"
+            ? compactionStrategyRaw
+            : undefined;
+        const guardianFragments =
+          typeof loop.guardianFragments === "boolean"
+            ? loop.guardianFragments
             : undefined;
         const toolResultMaxInlineBytes =
           typeof loop.toolResultMaxInlineBytes === "number" &&
@@ -1852,12 +1988,19 @@ export function createHostManager(): HostManager {
         return {
           ...(maxParallelToolCalls !== undefined ? { maxParallelToolCalls } : {}),
           ...(maxSteps !== undefined ? { maxSteps } : {}),
+          ...(autoContinueOnMaxTokens
+            ? { autoContinueOnMaxTokens: true }
+            : {}),
+          ...(autoContinueMaxRounds !== undefined
+            ? { autoContinueMaxRounds }
+            : {}),
           ...(toolOrder !== undefined ? { toolOrder } : {}),
           ...(toolSettle !== undefined ? { toolSettle } : {}),
           ...(llmRetryMaxRetries !== undefined ? { llmRetryMaxRetries } : {}),
           ...(maxRequestTokens !== undefined ||
           keepTokens !== undefined ||
-          bufferTokens !== undefined
+          bufferTokens !== undefined ||
+          compactionStrategy !== undefined
             ? {
                 compaction: {
                   ...(maxRequestTokens !== undefined
@@ -1865,12 +2008,16 @@ export function createHostManager(): HostManager {
                     : {}),
                   ...(keepTokens !== undefined ? { keepTokens } : {}),
                   ...(bufferTokens !== undefined ? { bufferTokens } : {}),
+                  ...(compactionStrategy !== undefined
+                    ? { strategy: compactionStrategy }
+                    : {}),
                 },
               }
             : {}),
           ...(toolResultMaxInlineBytes !== undefined
             ? { toolResultMaxInlineBytes }
             : {}),
+          ...(guardianFragments !== undefined ? { guardianFragments } : {}),
           ...(maxSubagentDepth !== undefined ? { maxSubagentDepth } : {}),
           ...(maxActiveSubagents !== undefined ? { maxActiveSubagents } : {}),
           bashLimits: {
@@ -2015,6 +2162,13 @@ export function createHostManager(): HostManager {
             ...(url ? { url } : {}),
             ...(token ? { token } : {}),
             ...(collection ? { collection } : {}),
+            ...(typeof ns.embeddingsUrl === "string" && ns.embeddingsUrl.trim()
+              ? { embeddingsUrl: ns.embeddingsUrl.trim() }
+              : {}),
+            ...(typeof ns.embeddingsModel === "string" &&
+            ns.embeddingsModel.trim()
+              ? { embeddingsModel: ns.embeddingsModel.trim() }
+              : {}),
           };
         },
         tokenLedger: {
@@ -2059,6 +2213,10 @@ export function createHostManager(): HostManager {
         resolveAgent,
         drain,
         tryHandlePublic: chainPublicHandlers(
+          createA2aInboundPublicHandler({
+            host: config.runtime.host,
+            port: config.runtime.port,
+          }),
           createMobileAccessGateHandler({ xrkHome: resolveXrkHome() }),
           createSidebarPublicHandler({
             xrkHome: resolveXrkHome(),

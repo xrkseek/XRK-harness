@@ -6,9 +6,11 @@ import {
   ENTRY_DELIMITER,
   MEMORY_CHAR_LIMIT,
   consolidateCuratedMemoryPhase1,
+  consolidateCuratedMemoryPhase2,
   createCuratedMemoryStore,
   extractReusableNotes,
   noteCoveredByEntries,
+  parsePhase2Notes,
   writeReusableNotesAfterTurn,
 } from "../src/index.js";
 
@@ -47,6 +49,54 @@ describe("extractReusableNotes", () => {
         memoryToolWrote: true,
       }),
     ).toEqual([]);
+  });
+});
+
+describe("Phase2 LLM consolidate", () => {
+  it("parsePhase2Notes accepts JSON arrays and bullet lines", () => {
+    expect(parsePhase2Notes('["I prefer tabs in this repo."]')).toEqual([
+      "I prefer tabs in this repo.",
+    ]);
+    expect(
+      parsePhase2Notes("```json\n[\"always use pnpm for installs\"]\n```"),
+    ).toEqual(["always use pnpm for installs"]);
+    expect(parsePhase2Notes("- remember durable facts live here")).toEqual([
+      "remember durable facts live here",
+    ]);
+  });
+
+  it("consolidateCuratedMemoryPhase2 writes uncovered LLM notes", async () => {
+    const dir = tempDir();
+    const store = createCuratedMemoryStore({ dir });
+    const result = await consolidateCuratedMemoryPhase2(store, {
+      userTexts: ["We talked about shipping cadence and tool preferences."],
+      complete: async () =>
+        JSON.stringify([
+          "Ship agent builds on Fridays only",
+          "I prefer tabs in this repo.",
+        ]),
+    });
+    expect(result.written).toEqual([
+      "Ship agent builds on Fridays only",
+      "I prefer tabs in this repo.",
+    ]);
+    expect(store.listEntries("memory")).toEqual(result.written);
+  });
+
+  it("Phase2 returns empty when complete fails (Phase1 still usable)", async () => {
+    const dir = tempDir();
+    const store = createCuratedMemoryStore({ dir });
+    const phase2 = await consolidateCuratedMemoryPhase2(store, {
+      userTexts: ["remember: keep the fallback path"],
+      complete: async () => {
+        throw new Error("llm down");
+      },
+    });
+    expect(phase2.written).toEqual([]);
+    const phase1 = await consolidateCuratedMemoryPhase1(store, {
+      userTexts: ["remember: keep the fallback path"],
+    });
+    expect(phase1.written).toEqual(["keep the fallback path"]);
   });
 });
 

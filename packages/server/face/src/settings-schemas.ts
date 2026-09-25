@@ -144,6 +144,10 @@ const AgentLoopConfig = Schema.object({
   maxParallelToolCalls: Schema.number().step(1).min(1),
   /** Max LLM steps per user turn (tool rounds). Harness/server default 32. */
   maxSteps: Schema.number().step(1).min(1).default(32),
+  /** Resume automatically when a model stops at its output token cap. */
+  autoContinueOnMaxTokens: Schema.boolean().default(false),
+  /** Maximum automatic continuations per turn (independent of maxSteps). */
+  autoContinueMaxRounds: Schema.number().step(1).min(1).max(10).default(2),
   /**
    * DSH toolOrder: tool name list with exactly one `' '` rest marker.
    * Empty / omit → lexicographic wire order. Editable via Settings → Plugins.
@@ -160,14 +164,29 @@ const AgentLoopConfig = Schema.object({
    */
   llmRetryMaxRetries: Schema.number().step(1).min(0).default(5),
   /**
-   * Soft context budget (messages + tool schemas). Exceed → prune → compact →
-   * fail-closed. DSH-style soft pressure; harness default 100_000.
+   * Soft context budget (messages + tool schemas). Exceed → strategy
+   * (`compactionStrategy`) → fail-closed. Default 100_000.
    */
   maxRequestTokens: Schema.number().step(1_000).min(8_000).default(100_000),
   /** Tokens kept as recent tail after auto-compact. */
   keepTokens: Schema.number().step(1_000).min(2_000).default(24_000),
   /** Soft ceiling = maxRequestTokens − bufferTokens. */
   bufferTokens: Schema.number().step(500).min(0).default(4_000),
+  /**
+   * Soft-budget strategy family (DSH prune→summary posture).
+   * `prune-summary` (default) · `prune-only` · `summary-only` · `off`.
+   */
+  compactionStrategy: Schema.union([
+    "prune-summary",
+    "prune-only",
+    "summary-only",
+    "off",
+  ]).default("prune-summary"),
+  /**
+   * Thin Guardian review fragment at turn-start (advisory; not an LLM approval
+   * gate). Default on with harness context-fragments.
+   */
+  guardianFragments: Schema.boolean().default(true),
   /**
    * Spill plain-text tool results over this UTF-8 byte ceiling (DSH spill-policy).
    * `0` disables spill (not recommended). Default 64_000.
@@ -279,6 +298,11 @@ const VideoGenConfig = Schema.object({
  */
 const CuratedMemoryConfig = Schema.object({
   enabled: Schema.boolean().default(true),
+  /**
+   * Session-end Phase2 LLM extract into MEMORY.md (needs a resolvable session LLM).
+   * Env `XRK_CURATED_MEMORY_PHASE2=1` also enables.
+   */
+  phase2Llm: Schema.boolean().default(false),
 });
 
 /**
@@ -301,6 +325,10 @@ const MemoryEmbedConfig = Schema.object({
   url: Schema.string().default(""),
   /** Optional collection / index name passed to sidecar /search. */
   collection: Schema.string().default(""),
+  /** OpenAI-compatible embeddings base (…/v1 or …/v1/embeddings). */
+  embeddingsUrl: Schema.string().default(""),
+  /** Embeddings model id (default text-embedding-3-small when URL set via env). */
+  embeddingsModel: Schema.string().default(""),
 });
 
 /**
@@ -442,11 +470,15 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       schema: schemasteryJson(AgentLoopConfig) as FaceSchemaEnvelope,
       base: {
         maxSteps: 32,
+        autoContinueOnMaxTokens: false,
+        autoContinueMaxRounds: 2,
         toolSettle: "parallel",
         llmRetryMaxRetries: 5,
         maxRequestTokens: 100_000,
         keepTokens: 24_000,
         bufferTokens: 4_000,
+        compactionStrategy: "prune-summary",
+        guardianFragments: true,
         toolResultMaxInlineBytes: 64_000,
         maxSubagentDepth: 2,
         maxActiveSubagents: 2,
@@ -519,7 +551,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "curated-memory",
       schema: schemasteryJson(CuratedMemoryConfig) as FaceSchemaEnvelope,
-      base: { enabled: true },
+      base: { enabled: true, phase2Llm: false },
       // memory tool + frozen system block rebuild on agent invalidate.
       applies: "live",
     },
@@ -533,7 +565,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "memory-embed",
       schema: schemasteryJson(MemoryEmbedConfig) as FaceSchemaEnvelope,
-      base: { url: "", collection: "" },
+      base: { url: "", collection: "", embeddingsUrl: "", embeddingsModel: "" },
       // Sidecar resolves per embedding.search / status (Host injects product).
       applies: "live",
     },

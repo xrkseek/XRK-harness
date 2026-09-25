@@ -109,6 +109,79 @@ describe("runTurn", () => {
     ]);
   });
 
+  it("auto-continues on max-tokens when enabled and finishes completed", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    const llm = createReplayAdapter([
+      { content: "first-half", finishReason: "max-tokens" },
+      { content: "second-half" },
+    ]);
+
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "hi",
+      store,
+      llm,
+      tools,
+      autoContinueOnMaxTokens: true,
+    });
+
+    expect(result.assistantText).toBe("second-half");
+    const events = store.get(session.id).events;
+    const end = events.find((e) => e.type === "turn/end");
+    expect(end).toMatchObject({ type: "turn/end", reason: { kind: "completed" } });
+    const auto = events.filter(
+      (e) =>
+        e.type === "user/message" &&
+        (e as { source?: { kind?: string } }).source?.kind === "auto-continue",
+    );
+    expect(auto).toHaveLength(1);
+    expect(auto[0]).toMatchObject({
+      content: "继续",
+      source: { kind: "auto-continue", round: 1 },
+    });
+    expect(deriveMessages(events)).toEqual([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "first-half" },
+      { role: "user", content: "继续" },
+      { role: "assistant", content: "second-half" },
+    ]);
+  });
+
+  it("respects autoContinueMaxRounds and ends max-tokens at the cap", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    const llm = createReplayAdapter([
+      { content: "a", finishReason: "max-tokens" },
+      { content: "b", finishReason: "max-tokens" },
+      { content: "c", finishReason: "max-tokens" },
+    ]);
+
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "hi",
+      store,
+      llm,
+      tools,
+      autoContinueOnMaxTokens: true,
+      autoContinueMaxRounds: 2,
+    });
+
+    expect(result.assistantText).toBe("c");
+    const events = store.get(session.id).events;
+    const end = events.find((e) => e.type === "turn/end");
+    expect(end).toMatchObject({ type: "turn/end", reason: { kind: "max-tokens" } });
+    const auto = events.filter(
+      (e) =>
+        e.type === "user/message" &&
+        (e as { source?: { kind?: string } }).source?.kind === "auto-continue",
+    );
+    expect(auto).toHaveLength(2);
+    expect(auto.map((e) => (e as { source: { round: number } }).source.round)).toEqual([1, 2]);
+  });
+
   it("forwards assemble.toolOrder onto the LLM tools list", async () => {
     const store = createMemorySessionStore();
     const session = store.create();

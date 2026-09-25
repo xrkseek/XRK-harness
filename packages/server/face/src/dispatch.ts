@@ -87,6 +87,7 @@ import {
   subagentList,
   subagentPrompt,
 } from "./handlers/subagent.js";
+import { worktreeMerge } from "./handlers/worktree.js";
 import { jobBackground, jobKill } from "./handlers/job.js";
 import {
   commandsExecute,
@@ -204,6 +205,7 @@ const HANDLERS: Record<string, FaceHandler> = {
   "subagent.history": subagentHistory,
   "subagent.prompt": subagentPrompt,
   "subagent.interrupt": subagentInterrupt,
+  "worktree.merge": worktreeMerge,
   "job.kill": jobKill,
   "job.background": jobBackground,
   "commands/list": commandsList,

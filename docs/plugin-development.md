@@ -15,7 +15,7 @@
 | 斜杠 / 命令面 | `commands` | Face `commands/list` + `commands/execute` |
 | 改产品壳 UI | `xrk.client`（client 包） | `~/.xrk/plugins/web/` 叠加，**不是**进程 kind |
 
-不要在本仓写 **`kind: cordis` 进程包**（只 discover、不自动 `apply`）。装 **社区 client / `host.mjs` 包**见 [community-plugins.md](./community-plugins.md) · [plugin-loader.md](./plugin-loader.md)。
+本仓只 discover **`kind: cordis` 进程包**、不自动 `apply`（写它请放 extensions/）。装 **社区 client / `host.mjs` 包**见 [community-plugins.md](./community-plugins.md) · [plugin-loader.md](./plugin-loader.md)。
 
 ## 最小进程插件（推荐路径）
 
@@ -70,7 +70,7 @@ export function createPlugin() {
 # 源码仓
 XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js web --workspace .
 
-# 或装到用户插件根（装完须 xrkh restart 重载 Host）
+# 或装到用户插件根（装完用 xrkh restart 重载 Host）
 xrkh plugin add ./extensions/example-tools
 xrkh restart
 ```
@@ -84,7 +84,7 @@ xrkh restart
 | 类别 | 落点 | 是否进主仓 git / pnpm workspace |
 |------|------|--------------------------------|
 | **金样 / 内置适配** | `extensions/example-tools` · `example-channel` · `a2a` · `dsh-compat` | **是**（`.gitignore` / `pnpm-workspace` 白名单） |
-| **第三方 / 本地工作树** | `extensions/<plugin-id>/`（对标 AGT 本地 Core） | **默认忽略**；可联调，勿提交进主仓 |
+| **第三方 / 本地工作树** | `extensions/<plugin-id>/`（对标 AGT 本地 Core） | **默认忽略**；联调产物不提交进主仓 |
 | **用户全局安装** | `~/.xrk/plugins`（`xrkh plugin add`） | 不在源码仓内 |
 
 边界：

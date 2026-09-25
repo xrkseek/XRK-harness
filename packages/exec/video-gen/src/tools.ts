@@ -1,10 +1,20 @@
 import type { AttachmentStore } from "@xrkseek/attachment";
 import type { ToolDefinition, ToolResultContent } from "@xrkseek/core-tools";
+import { formatVideoGenCatalog, VIDEO_GEN_SECONDS, VIDEO_GEN_SIZES } from "./catalog.js";
 import { VIDEO_GEN_PROMPT_TEXT } from "./format.js";
+import { resolveVideoGenReferenceImages } from "./references.js";
+import {
+  buildVideoGenToolDescription,
+  buildVideoGenToolParameters,
+  videoGenActionsForCapabilities,
+} from "./schema.js";
 import {
   VideoGenError,
   isTerminalStatus,
   isVideoGenError,
+  resolveVideoGenCapabilities,
+  videoGenSupportsI2v,
+  type VideoGenCreateKind,
   type VideoGenJob,
   type VideoGenSeconds,
   type VideoGenService,
@@ -12,18 +22,6 @@ import {
 } from "./types.js";
 
 export { VIDEO_GEN_PROMPT_TEXT };
-
-const SIZES: readonly VideoGenSize[] = [
-  "720x1280",
-  "1280x720",
-  "1024x1792",
-  "1792x1024",
-];
-
-const SECONDS: readonly VideoGenSeconds[] = [4, 8, 12];
-
-const ACTIONS = ["start", "status", "content", "wait"] as const;
-type VideoGenAction = (typeof ACTIONS)[number];
 
 export function videoGenUnavailableMessage(
   env: NodeJS.ProcessEnv = process.env,
@@ -61,6 +59,7 @@ export interface CreateVideoGenToolsOptions {
   /** Injected sleep for `action=wait`; tests avoid real polling delays. */
   readonly sleep?: (ms: number) => Promise<void>;
   readonly now?: () => number;
+  readonly fetchImpl?: typeof fetch;
 }
 
 interface VideoGenToolArgs {
@@ -72,6 +71,10 @@ interface VideoGenToolArgs {
   size?: string;
   timeout_ms?: number;
   poll_interval_ms?: number;
+  first_frame?: string;
+  image_url?: string;
+  reference_image_urls?: string[];
+  reference_attachment_ids?: string[];
 }
 
 function fail(err: unknown): ToolResultContent {
@@ -85,24 +88,12 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-function parseAction(raw: unknown): VideoGenAction {
-  if (raw === undefined || raw === null || raw === "") return "start";
-  const a = String(raw).trim().toLowerCase() as VideoGenAction;
-  if (!(ACTIONS as readonly string[]).includes(a)) {
-    throw new VideoGenError(
-      `action must be one of ${ACTIONS.join(", ")}`,
-      "VIDEO_GEN_BAD_ARGS",
-    );
-  }
-  return a;
-}
-
 function parseSize(raw: unknown): VideoGenSize | undefined {
   if (raw === undefined || raw === null || raw === "") return undefined;
   const s = String(raw).trim() as VideoGenSize;
-  if (!(SIZES as readonly string[]).includes(s)) {
+  if (!(VIDEO_GEN_SIZES as readonly string[]).includes(s)) {
     throw new VideoGenError(
-      `size must be one of ${SIZES.join(", ")}`,
+      `size must be one of ${VIDEO_GEN_SIZES.join(", ")}`,
       "VIDEO_GEN_BAD_ARGS",
     );
   }
@@ -112,9 +103,9 @@ function parseSize(raw: unknown): VideoGenSize | undefined {
 function parseSeconds(raw: unknown): VideoGenSeconds | undefined {
   if (raw === undefined || raw === null || raw === "") return undefined;
   const n = Number(raw);
-  if (!(SECONDS as readonly number[]).includes(n)) {
+  if (!(VIDEO_GEN_SECONDS as readonly number[]).includes(n)) {
     throw new VideoGenError(
-      `seconds must be one of ${SECONDS.join(", ")}`,
+      `seconds must be one of ${VIDEO_GEN_SECONDS.join(", ")}`,
       "VIDEO_GEN_BAD_ARGS",
     );
   }
@@ -130,6 +121,8 @@ function formatJob(job: VideoGenJob): string {
     job.model ? `model=${job.model}` : "",
     job.seconds !== undefined ? `seconds=${job.seconds}` : "",
     job.size ? `size=${job.size}` : "",
+    job.kind ? `kind=${job.kind}` : "",
+    job.modality ? `modality=${job.modality}` : "",
     job.note ? `note=${job.note}` : "",
   ]
     .filter(Boolean)
@@ -139,8 +132,9 @@ function formatJob(job: VideoGenJob): string {
 /**
  * Model-facing `video_generate` tool.
  *
- * Video renders are asynchronous, so the tool exposes the job lifecycle rather
- * than blocking a turn for minutes: `start` → `status` / `wait` → `content`.
+ * Static fields are an initial bake; `dynamicSchema` rebuilds from live
+ * Provider `capabilities()` on each materialize (Hermes get_definitions).
+ * Video renders are asynchronous: `start` → `status` / `wait` → `content`.
  */
 export function createVideoGenTools(
   options: CreateVideoGenToolsOptions = {},
@@ -155,55 +149,36 @@ export function createVideoGenTools(
   const sleep =
     options.sleep ??
     ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const caps = resolveVideoGenCapabilities(service);
+
+  const parseAction = (raw: unknown, allowed: readonly string[]): string => {
+    if (raw === undefined || raw === null || raw === "") return "start";
+    const a = String(raw).trim().toLowerCase();
+    if (!allowed.includes(a)) {
+      throw new VideoGenError(
+        `action must be one of ${allowed.join(", ")}`,
+        "VIDEO_GEN_BAD_ARGS",
+      );
+    }
+    return a;
+  };
 
   const tool: ToolDefinition<VideoGenToolArgs> = {
     name: "video_generate",
-    description:
-      "Generate a video from a text prompt via the Host text-to-video Provider. Renders are asynchronous: " +
-      "action=start (default) returns a jobId, poll with action=status (or action=wait to block), then " +
-      "action=content downloads the MP4. The MP4 is saved to the Host attachment store when one is wired; " +
-      "video bytes are never inlined into tool text.",
-    parameters: {
-      type: "object",
-      properties: {
-        action: {
-          type: "string",
-          enum: [...ACTIONS],
-          description:
-            "start (default) | status | content | wait. start needs `prompt`; the others need `job_id`.",
-        },
-        prompt: {
-          type: "string",
-          description:
-            "Complete visual prompt for action=start (subject, motion, camera, lighting).",
-        },
-        job_id: {
-          type: "string",
-          description: "Job id returned by action=start.",
-        },
-        model: {
-          type: "string",
-          description: "Optional model override (e.g. sora-2, sora-2-pro).",
-        },
-        seconds: {
-          type: "number",
-          enum: [...SECONDS],
-          description: "Clip duration in seconds (default 4).",
-        },
-        size: {
-          type: "string",
-          enum: [...SIZES],
-          description: "Output size (provider-dependent; default 1280x720).",
-        },
-        timeout_ms: {
-          type: "number",
-          description: "action=wait: give up after this long (default 120000).",
-        },
-        poll_interval_ms: {
-          type: "number",
-          description: "action=wait: poll spacing (default 10000).",
-        },
-      },
+    description: buildVideoGenToolDescription(caps),
+    parameters: buildVideoGenToolParameters(caps) as unknown as Record<
+      string,
+      unknown
+    >,
+    dynamicSchema: () => {
+      const live = resolveVideoGenCapabilities(service);
+      return {
+        description: buildVideoGenToolDescription(live),
+        parameters: buildVideoGenToolParameters(live) as unknown as Record<
+          string,
+          unknown
+        >,
+      };
     },
     presentCall: (args) => ({
       card: "generic",
@@ -214,23 +189,100 @@ export function createVideoGenTools(
     async execute(args) {
       if (!service) return { content: missing, isError: true };
       try {
-        const action = parseAction(args.action);
+        const liveCaps = resolveVideoGenCapabilities(service);
+        const allowedActions = videoGenActionsForCapabilities(liveCaps);
+        const action = parseAction(args.action, allowedActions);
 
-        if (action === "start") {
+        if (action === "catalog") {
+          const families = liveCaps.families ?? [];
+          return { content: formatVideoGenCatalog(families) };
+        }
+
+        if (action === "start" || action === "edit" || action === "extend") {
           const prompt = String(args.prompt ?? "").trim();
           if (!prompt) {
             throw new VideoGenError(
-              "prompt is required for action=start",
+              `prompt is required for action=${action}`,
               "VIDEO_GEN_BAD_ARGS",
             );
           }
           const seconds = parseSeconds(args.seconds);
           const size = parseSize(args.size);
+          const kind: VideoGenCreateKind =
+            action === "edit"
+              ? "edit"
+              : action === "extend"
+                ? "extend"
+                : "generate";
+
+          if (kind === "edit" || kind === "extend") {
+            const sourceVideoId = String(args.job_id ?? "").trim();
+            if (!sourceVideoId) {
+              throw new VideoGenError(
+                `job_id (source video) is required for action=${action}`,
+                "VIDEO_GEN_BAD_ARGS",
+              );
+            }
+            const job = await service.create({
+              prompt,
+              kind,
+              sourceVideoId,
+              ...(seconds !== undefined ? { seconds } : {}),
+              ...(args.model ? { model: String(args.model) } : {}),
+            });
+            return {
+              content: [
+                `provider=${job.provider} delivery=${job.delivery}`,
+                formatJob(job),
+                "Next: action=status with job_id until status=completed, then action=content.",
+              ].join("\n"),
+            };
+          }
+
+          // start — t2v / i2v
+          let firstFrame;
+          let referenceImages;
+          if (videoGenSupportsI2v(liveCaps)) {
+            const stills = await resolveVideoGenReferenceImages({
+              ...(args.first_frame ? { firstFrame: args.first_frame } : {}),
+              ...(args.image_url ? { imageUrl: args.image_url } : {}),
+              ...(args.reference_image_urls
+                ? { referenceImageUrls: args.reference_image_urls }
+                : {}),
+              ...(args.reference_attachment_ids
+                ? { referenceAttachmentIds: args.reference_attachment_ids }
+                : {}),
+              ...(attachments ? { attachments } : {}),
+              maxReferenceImages: liveCaps.maxReferenceImages,
+              ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+            });
+            if (stills.length > 0) {
+              firstFrame = stills[0];
+              if (stills.length > 1) {
+                referenceImages = stills.slice(1);
+              }
+            }
+          } else if (
+            args.first_frame ||
+            args.image_url ||
+            (args.reference_image_urls && args.reference_image_urls.length > 0) ||
+            (args.reference_attachment_ids &&
+              args.reference_attachment_ids.length > 0)
+          ) {
+            throw new VideoGenError(
+              "This video Provider does not support first-frame / reference images (i2v).",
+              "VIDEO_GEN_BAD_ARGS",
+            );
+          }
+
           const job = await service.create({
             prompt,
+            kind: "generate",
             ...(seconds !== undefined ? { seconds } : {}),
             ...(size ? { size } : {}),
             ...(args.model ? { model: String(args.model) } : {}),
+            ...(firstFrame ? { firstFrame } : {}),
+            ...(referenceImages ? { referenceImages } : {}),
           });
           return {
             content: [

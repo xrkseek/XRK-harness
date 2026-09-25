@@ -8,6 +8,7 @@ import path from "node:path";
 import yaml from "js-yaml";
 import {
   mcpServersForbiddenEnvMessage,
+  parseJsonText,
   parseMcpServersValue,
   pickMcpAllowedEnv,
 } from "@xrkseek/server-config";
@@ -1095,7 +1096,6 @@ export async function settingsDescribeFace(
   runtime: FaceRuntime,
 ): Promise<FaceRpcResult<unknown>> {
   const namespaces: FaceSettingsNamespaceView[] = [
-    runtime.settingsNamespaces.view("ui-onboarding", {}, FACE_ONBOARDING_SCHEMA),
     runtime.settingsNamespaces.view(
       "ui",
       {
@@ -1585,7 +1585,7 @@ export function hydrateFaceHostSettings(runtime: FaceRuntime): void {
     return;
   }
   try {
-    const parsed = JSON.parse(raw) as unknown;
+    const parsed = parseJsonText(raw) as unknown;
     const classified = classifyConfigDoc(parsed, undefined);
     if (classified.status === "invalid") {
       throw new Error(classified.error);
@@ -1662,7 +1662,7 @@ async function persistHostSettings(runtime: FaceRuntime): Promise<void> {
       );
     }
     try {
-      const classified = classifyConfigDoc(JSON.parse(raw), undefined);
+      const classified = classifyConfigDoc(parseJsonText(raw), undefined);
       if (classified.status === "invalid") {
         throw new ConfigParseError(
           dump,

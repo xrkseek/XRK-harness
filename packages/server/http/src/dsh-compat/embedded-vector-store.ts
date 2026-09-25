@@ -52,6 +52,7 @@ function embedText(text: string, dims = EMBEDDED_VECTOR_DIMS): number[] {
 }
 
 function cosine(a: readonly number[], b: readonly number[]): number {
+  if (a.length !== b.length || a.length === 0) return 0;
   let dot = 0;
   for (let i = 0; i < a.length; i++) {
     dot += (a[i] ?? 0) * (b[i] ?? 0);
@@ -62,10 +63,13 @@ function cosine(a: readonly number[], b: readonly number[]): number {
 export function upsertEmbeddedVectorRow(
   xrkHome: string | undefined,
   row: EmbeddedVectorInput,
+  vectorOverride?: readonly number[],
 ): void {
   const text = row.text.trim();
   if (!text) return;
-  const vector = embedText(`${text} ${(row.tags ?? []).join(" ")}`);
+  const vector = vectorOverride?.length
+    ? [...vectorOverride]
+    : embedText(`${text} ${(row.tags ?? []).join(" ")}`);
   STORE.patch(xrkHome, (current) => {
     const without = current.rows.filter((r) => r.id !== row.id);
     const next: EmbeddedVectorRow = {
@@ -92,13 +96,15 @@ export function searchEmbeddedVectorStore(
   xrkHome: string | undefined,
   query: string,
   limit = 16,
+  queryVector?: readonly number[],
 ): Array<{ id: string; text: string; score: number }> {
   const trimmed = query.trim();
   if (!trimmed) return [];
   const doc = STORE.read(xrkHome).data;
   if (doc.rows.length === 0) return [];
-  const qVec = embedText(trimmed);
+  const qVec = queryVector?.length ? queryVector : embedText(trimmed);
   return doc.rows
+    .filter((row) => row.vector.length === qVec.length)
     .map((row) => ({
       id: row.id,
       text: row.text,

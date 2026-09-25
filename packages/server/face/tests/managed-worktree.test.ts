@@ -149,4 +149,25 @@ describe("managed worktree allocate / reclaim / Teams bind", () => {
     expect(existsSync(path.join(root, "feat.txt"))).toBe(true);
     expect(manager.get(lease!.id)?.status).toBe("reclaimed");
   });
+
+  it("mergeIntoParent retains lease when parent is dirty (conflict UI signal)", () => {
+    const root = repo();
+    const manager = new ManagedWorktreeManager();
+    const lease = manager.allocate({
+      parentCwd: root,
+      parentSessionId: "p",
+      subagentId: "dirty-parent",
+    });
+    expect(lease).not.toBeNull();
+    writeFileSync(path.join(lease!.path, "feat.txt"), "from-child\n", "utf8");
+    git(lease!.path, ["add", "feat.txt"]);
+    git(lease!.path, ["commit", "-m", "child change"]);
+    writeFileSync(path.join(root, "dirty.txt"), "parent-dirty\n", "utf8");
+
+    const merged = manager.mergeIntoParent(lease!.id);
+    expect(merged?.ok).toBe(false);
+    expect(merged?.merged).toBe(false);
+    expect(merged?.reason).toMatch(/dirty/i);
+    expect(manager.get(lease!.id)?.status).toBe("active");
+  });
 });

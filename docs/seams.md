@@ -14,19 +14,21 @@
 const tools = createFsTools(stubFs); // Swap Provider; tool schema stays unchanged
 ```
 
+例外（对齐 Hermes `dynamic_schema_overrides`）：生成类 Consumer（`image_generate` · `video_generate`）可按 Provider `capabilities()` 门控参数面。工具登记 `ToolDefinition.dynamicSchema`；`materializeTools` 在每步 LLM catalog 快照时合并覆盖（抛错则保留静态字段）。Host 在 Settings / Credentials 变更时 `invalidateAgents` 重建 composition；同一 Agent 生命周期内 live `capabilities()` 变化也会在下一次 materialize 反映到 schema。
+
 内置搜索（无 shell `rg`）：`fs.glob` / `fs.grep` → 工具名 `glob` / `grep`。`read_file` 对 `.pdf` / `.docx` / `.xlsx` / `.ipynb` 在 `read` 内转成文本（扫描版 PDF 无文本层时明确说明），不另开工具名。Office→PDF 是侧栏预览的独立 Provider（`/sidebar/file?preview=pdf`），不走 `read`。
 
 Web：`@xrkseek/exec-web` — Definition `WebSearch`/`WebFetch`；Provider 匿名 HTTP + Tavily/Brave（有密钥）或 **parallel-free → duckduckgo**；Consumer `createWebTools` + `createBrowserTools`。规格：[web-tools.md](./web-tools.md)。
 
 桌面 computer-use：`@xrkseek/exec-computer-use` — Definition `ComputerUseService`；Provider memory / Windows UIA（`XRK_COMPUTER_USE=1`）；Consumer `createComputerUseTools`。与 `browser_*` 分开。规格：[computer-use.md](./computer-use.md)。
 
-策展记忆：`@xrkseek/exec-memory` — Definition `CuratedMemoryStore`（别名缝 `MemoryProvider`）；默认 Provider 为 `{XRK_HOME}/memories` 的 `MEMORY.md` / `USER.md`；可选 HTTP 样板 `createHttpMemoryProvider`（`GET/POST /v1/curated/{memory|user}`）；Consumer `createCuratedMemoryTools` → `memory`（add / replace / remove）。系统提示带策略段（跨会话事实 ≠ 会话内 `todo_write` 站立计划）并用会话开始时的冻结快照。回合结束后 `writeReusableNotesAfterTurn` 把用户原话里的可复用笔记追加进 `MEMORY.md`，不改当轮前缀。与 Mnemon 文档库 / memory-embed 向量 sidecar 分开。规格：[curated-memory.md](./curated-memory.md)。
+策展记忆：`@xrkseek/exec-memory` — Definition `CuratedMemoryStore`（别名缝 `MemoryProvider`）；默认 `file`，可选 `http` / `sqlite` 样板；Consumer `createCuratedMemoryTools` → `memory`。系统提示带策略段与会话开始冻结快照。回合后启发式写入；会话结束 Phase1 巩固 + 可选 Phase2 LLM（`phase2Llm`）。与 Mnemon / memory-embed 分开。规格：[curated-memory.md](./curated-memory.md)。
 
 语音 Host：`@xrkseek/exec-voice` — Definition `VoiceService`；Provider memory / OpenAI HTTP（`XRK_VOICE`）；Consumer `createVoiceTools`（TTS · STT · live broker）。mic/WebRTC 在客户端，浏览器传输 `@xrkseek/exec-voice/browser`。规格：[voice.md](./voice.md)。
 
-图像生成：`@xrkseek/exec-image-gen` — Definition `ImageGenService`；Provider memory / OpenAI Images（`XRK_IMAGE_GEN`）；Consumer `createImageGenTools` → `image_generate`。规格：[image-gen.md](./image-gen.md)。
+图像生成：`@xrkseek/exec-image-gen` — Definition `ImageGenService`（含可选 `capabilities()`）；Provider memory / OpenAI Images（`XRK_IMAGE_GEN`）；Consumer `createImageGenTools` → `image_generate`（`dynamicSchema` ← caps）。规格：[image-gen.md](./image-gen.md)。
 
-视频生成：`@xrkseek/exec-video-gen` — Definition `VideoGenService`（`create` · `get` · `content` 异步作业）；Provider memory / OpenAI Videos（`XRK_VIDEO_GEN`）；Consumer `createVideoGenTools` → `video_generate`。规格：[video-gen.md](./video-gen.md)。
+视频生成：`@xrkseek/exec-video-gen` — Definition `VideoGenService`（`create` · `get` · `content` 异步作业 + 可选 `capabilities()`）；Provider memory / OpenAI Videos（`XRK_VIDEO_GEN`）；Consumer `createVideoGenTools` → `video_generate`（`dynamicSchema` ← caps）。规格：[video-gen.md](./video-gen.md)。
 
 会话遥测：`@xrkseek/session-telemetry` — Definition `SessionTelemetrySink`；Provider memory / OTLP HTTP logs；Consumer `wrapStoreForSessionTelemetry`。规格：[session-telemetry.md](./session-telemetry.md)。
 
@@ -62,7 +64,7 @@ exec-sandbox         → createSandboxWrapGuard → pipeline guards
 `wrapArgv(argv) → argv'`（同步）；spawn 路径用可取消的 `confine(argv, cwd?, signal?)`。  
 `createSandboxStack`：`workspace`（默认 DenyList+cwd 狱）· `docker` · `bwrap` — 同一 `SandboxService` Definition。规格：[sandbox.md](./sandbox.md)。
 
-ExecEnvironment（换整套 fs/subprocess，对标 Hermes terminal environments / MemoryProvider 缝）：`@xrkseek/exec-environment` — `local` 默认；HTTP serverless 样板 `createHttpExecEnvironment`（`GET /health` · `POST /v1/exec` · `POST /v1/fs`）；`resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT`。**不是** `createSandboxStack` 后端，也不替代 SSH（仍 `createSshExecutionWorld`）。
+ExecEnvironment（换整套 fs/subprocess，对标 Hermes terminal environments / MemoryProvider 缝）：`@xrkseek/exec-environment` — `local` 默认；HTTP serverless 样板 `createHttpExecEnvironment`（`GET /health` · `POST /v1/exec` · `POST /v1/fs`）；`resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT`。**Host 已接线**：SSH 优先，否则 `XRK_EXEC_ENVIRONMENT=http` 时用 HTTP world 的 `fs`+`subprocess`（`xrkh doctor` 探测 `/health`）。**不是** `createSandboxStack` 后端，也不替代 SSH（仍 `createSshExecutionWorld`）。
 Shell `startJob` 在 prepare（confine）之前武装超时，准备时间计入同一 deadline（DSH）。  
 后台：`startJob` / `listJobs` / `killJob` — [shell-jobs.md](./shell-jobs.md)。
 
@@ -86,19 +88,21 @@ Shell `startJob` 在 prepare（confine）之前武装超时，准备时间计入
 const tools = createFsTools(stubFs); // Swap Provider; tool schema stays unchanged
 ```
 
+Exception (Hermes `dynamic_schema_overrides`): generation Consumers (`image_generate` · `video_generate`) may gate parameters from Provider `capabilities()`. Tools register `ToolDefinition.dynamicSchema`; `materializeTools` merges overrides into each LLM catalog snapshot (throws → keep static fields). Host `invalidateAgents` on Settings / Credentials rebuilds composition; live `capabilities()` changes also surface on the next materialize within the same Agent lifetime.
+
 Built-in search (no shell `rg`): `fs.glob` / `fs.grep` → tool names `glob` / `grep`. `read_file` converts `.pdf` / `.docx` / `.xlsx` / `.ipynb` to text inside `read` (scanned PDFs with no text layer say so); no extra tool name. Office→PDF is a separate sidebar preview Provider (`/sidebar/file?preview=pdf`), not `read`.
 
-Web: `@xrkseek/exec-web` — Definition `WebSearch`/`WebFetch`; Provider anonymous HTTP + Tavily/Brave (when keyed) or **parallel-free → duckduckgo**; Consumer `createWebTools` + `createBrowserTools`. Spec: [web-tools.md](./web-tools.md).
+Web: `@xrkseek/exec-web` — Definition `WebSearch`/`WebFetch`; Provider anonymous HTTP + Tavily/Brave (when keyed) or **parallel-free → duckduckgo**; Consumer `createWebTools` + `createBrowserTools` + optional `createBrowserVaultTools` (opaque Face credential handles). Spec: [web-tools.md](./web-tools.md).
 
-Desktop computer-use: `@xrkseek/exec-computer-use` — Definition `ComputerUseService`; Provider memory / Windows UIA (`XRK_COMPUTER_USE=1`); Consumer `createComputerUseTools`. Separate from `browser_*`. Spec: [computer-use.md](./computer-use.md).
+Desktop computer-use: `@xrkseek/exec-computer-use` — Definition `ComputerUseService`; Provider memory / Windows UIA (`XRK_COMPUTER_USE=1`); Consumer `createComputerUseTools`. Capture text includes `mode:` + `elementToken=` (SOM honesty without screenshot overlay yet). Separate from `browser_*`. Spec: [computer-use.md](./computer-use.md).
 
-Curated memory: `@xrkseek/exec-memory` — Definition `CuratedMemoryStore` (seam alias `MemoryProvider`); default Provider `MEMORY.md` / `USER.md` under `{XRK_HOME}/memories`; optional HTTP sample `createHttpMemoryProvider` (`GET/POST /v1/curated/{memory|user}`); Consumer `createCuratedMemoryTools` → `memory` (add / replace / remove). The system prompt carries a policy section (cross-session facts ≠ in-session `todo_write` standing plan) and the snapshot frozen at session start. After a successful turn, `writeReusableNotesAfterTurn` appends reusable notes from the user's own words to `MEMORY.md` without changing that turn's prefix. Separate from the Mnemon document library and the memory-embed vector sidecar. Spec: [curated-memory.md](./curated-memory.md).
+Curated memory: `@xrkseek/exec-memory` — Definition `CuratedMemoryStore` (seam alias `MemoryProvider`); default `file`, optional `http` / `sqlite` samples; Consumer `createCuratedMemoryTools` → `memory`. System prompt carries policy + session-start freeze. After-turn heuristics; session-end Phase1 + optional Phase2 LLM (`phase2Llm`). Separate from Mnemon / memory-embed. Spec: [curated-memory.md](./curated-memory.md).
 
 Voice Host: `@xrkseek/exec-voice` — Definition `VoiceService`; Provider memory / OpenAI HTTP (`XRK_VOICE`); Consumer `createVoiceTools` (TTS · STT · live broker). Mic/WebRTC on the client, browser transport `@xrkseek/exec-voice/browser`. Spec: [voice.md](./voice.md).
 
-Image generation: `@xrkseek/exec-image-gen` — Definition `ImageGenService`; Provider memory / OpenAI Images (`XRK_IMAGE_GEN`); Consumer `createImageGenTools` → `image_generate`. Spec: [image-gen.md](./image-gen.md).
+Image generation: `@xrkseek/exec-image-gen` — Definition `ImageGenService` (optional `capabilities()`); Provider memory / OpenAI Images (`XRK_IMAGE_GEN`); Consumer `createImageGenTools` → `image_generate` (`dynamicSchema` ← caps). Spec: [image-gen.md](./image-gen.md).
 
-Video generation: `@xrkseek/exec-video-gen` — Definition `VideoGenService` (`create` · `get` · `content` async job); Provider memory / OpenAI Videos (`XRK_VIDEO_GEN`); Consumer `createVideoGenTools` → `video_generate`. Spec: [video-gen.md](./video-gen.md).
+Video generation: `@xrkseek/exec-video-gen` — Definition `VideoGenService` (`create` · `get` · `content` async job + optional `capabilities()`); Provider memory / OpenAI Videos (`XRK_VIDEO_GEN`); Consumer `createVideoGenTools` → `video_generate` (`dynamicSchema` ← caps). Spec: [video-gen.md](./video-gen.md).
 
 Session telemetry: `@xrkseek/session-telemetry` — Definition `SessionTelemetrySink`; Provider memory / OTLP HTTP logs; Consumer `wrapStoreForSessionTelemetry`. Spec: [session-telemetry.md](./session-telemetry.md).
 
@@ -134,7 +138,7 @@ exec-sandbox         → createSandboxWrapGuard → pipeline guards
 `wrapArgv(argv) → argv'` (sync); spawn paths use cancellable `confine(argv, cwd?, signal?)`.  
 `createSandboxStack`: `workspace` (default DenyList+cwd jail) · `docker` · `bwrap` — same `SandboxService` Definition. Spec: [sandbox.md](./sandbox.md).
 
-ExecEnvironment (swap fs/subprocess world; Hermes terminal environments / MemoryProvider-style seam): `@xrkseek/exec-environment` — `local` default; HTTP serverless sample `createHttpExecEnvironment` (`GET /health` · `POST /v1/exec` · `POST /v1/fs`); `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT`. **Not** a `createSandboxStack` backend and **not** a replacement for SSH (`createSshExecutionWorld`).
+ExecEnvironment (swap fs/subprocess world; Hermes terminal environments / MemoryProvider-style seam): `@xrkseek/exec-environment` — `local` default; HTTP serverless sample `createHttpExecEnvironment` (`GET /health` · `POST /v1/exec` · `POST /v1/fs`); `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT`. **Host-wired**: SSH first, else `XRK_EXEC_ENVIRONMENT=http` swaps world fs/subprocess (`xrkh doctor` probes `/health`). **Not** a `createSandboxStack` backend and **not** a replacement for SSH (`createSshExecutionWorld`).
 Shell `startJob` arms timeout before prepare (confine); preparation counts toward the same deadline (DSH).  
 Background: `startJob` / `listJobs` / `killJob` — [shell-jobs.md](./shell-jobs.md).
 

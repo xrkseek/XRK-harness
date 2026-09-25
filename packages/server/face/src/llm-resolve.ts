@@ -10,6 +10,7 @@ import type { ProviderBinding } from "@xrkseek/llm-registry";
 import type { FaceRuntime } from "./context.js";
 import {
   lookupModelContextWindow,
+  lookupModelInputModalities,
   resolveAgentDefaultModel,
   resolveSessionModelSelection,
   type FaceModelSelection,
@@ -58,12 +59,14 @@ export function resolveLlmForSelection(
     provider: selection.provider,
     model: selection.model,
   });
+  const catalogModalities = lookupModelInputModalities(runtime, selection);
   const adapter = runtime.registry.createAdapter(
     binding,
     apiKey ? { apiKey } : {},
     {
       id: `${binding.provider}:${binding.model}`,
       model: selection.model,
+      ...(catalogModalities ? { inputModalities: catalogModalities } : {}),
       ...(runtime.attachments?.readImageRequest
         ? {
             readImageRequest: (

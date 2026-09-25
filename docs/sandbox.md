@@ -70,7 +70,7 @@ Harness 也可传 `sandboxBackend: "docker"` · `sandboxDockerImage`，或直接
 | `local`（默认） | `createLocalExecEnvironment` | 本机磁盘 + 本机 subprocess |
 | `http` | `createHttpExecEnvironment` | Serverless 样板 sidecar：`GET /health` · `POST /v1/exec` · `POST /v1/fs` |
 
-选择：`resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|http`（HTTP 需 `XRK_EXEC_ENVIRONMENT_URL`）。SSH 仍用 `createSshExecutionWorld`（Host `remoteExecution`），形状同 `ExecWorld`，拨号独立。包：`@xrkseek/exec-environment`。
+选择：`resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|http`（HTTP 需 `XRK_EXEC_ENVIRONMENT_URL`）。**Host spawn 已接线**（SSH 优先，否则 HTTP world 换 fs/subprocess；`xrkh doctor` 探测 `/health`）。SSH 仍用 `createSshExecutionWorld`（Host `remoteExecution`），形状同 `ExecWorld`，拨号独立。包：`@xrkseek/exec-environment`。
 
 ## 与 permission preset
 
@@ -150,7 +150,7 @@ Same-world argv isolation is `SandboxService`; **swapping fs/subprocess** is a s
 | `local` (default) | `createLocalExecEnvironment` | Host disk + local subprocess |
 | `http` | `createHttpExecEnvironment` | Serverless sample sidecar: `GET /health` · `POST /v1/exec` · `POST /v1/fs` |
 
-Select with `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|http` (HTTP needs `XRK_EXEC_ENVIRONMENT_URL`). SSH still uses `createSshExecutionWorld` (Host `remoteExecution`) — same `ExecWorld` shape, separate dial. Package: `@xrkseek/exec-environment`.
+Select with `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|http` (HTTP needs `XRK_EXEC_ENVIRONMENT_URL`). **Host spawn is wired** (SSH first, else HTTP world swaps fs/subprocess; `xrkh doctor` probes `/health`). SSH still uses `createSshExecutionWorld` (Host `remoteExecution`) — same `ExecWorld` shape, separate dial. Package: `@xrkseek/exec-environment`.
 
 ## vs permission presets
 

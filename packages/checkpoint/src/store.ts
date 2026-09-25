@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { resolveXrkHome } from "@xrkseek/xrk-home-paths";
 import { readJsonFile, writeJsonFileAtomic } from "./json-file.js";
 import {
   WorkspaceCheckpointError,
@@ -18,6 +19,16 @@ const INDEX_VERSION = 1;
 const ID_LENGTH = 12;
 
 /**
+ * Hard deadline for a single snapshot git command. A hung git process (a
+ * shadow-repo auto-repack holding object locks, antivirus scan, network fs
+ * stall) must degrade the snapshot instead of blocking the turn queue. The
+ * snapshot is best-effort, so a short budget just means "skip this point".
+ * 15 s still covers a cold shadow repo (`git init` + full `add -A` on a
+ * large tree); override with `XRK_CHECKPOINT_GIT_TIMEOUT_MS`.
+ */
+export const DEFAULT_GIT_TIMEOUT_MS = 15_000;
+
+/**
  * Synthetic commit identity for shadow commits. The store must not depend on
  * (or write to) the operator's git config.
  */
@@ -32,9 +43,21 @@ export function workspaceCheckpointId(workspaceDir: string): string {
     .slice(0, ID_LENGTH);
 }
 
-/** `<workspace>/.xrk/checkpoints` — shadow repo + index live here. */
-export function workspaceCheckpointDir(workspaceDir: string): string {
-  return path.join(path.resolve(workspaceDir), ".xrk", "checkpoints");
+/**
+ * Checkpoint root for a workspace: `<xrkHome>/checkpoints/<workspaceId>`.
+ * Product data never lives inside the workspace (no `<workspace>/.xrk`);
+ * everything is gathered under the XRK home, one subdirectory per workspace.
+ * `XRK_HOME` / `XRK_DSH_HOME` / `DSH_HOME` envs override the default `~/.xrk`.
+ */
+export function workspaceCheckpointDir(
+  workspaceDir: string,
+  xrkHome?: string,
+): string {
+  return path.join(
+    xrkHome ?? resolveXrkHome(),
+    "checkpoints",
+    workspaceCheckpointId(workspaceDir),
+  );
 }
 
 /** Shadow git dir inside the checkpoint dir. */
@@ -57,8 +80,16 @@ export interface WorkspaceCheckpointStoreOptions {
   readonly runGit: GitRunner;
   /** Defaults to {@link workspaceCheckpointDir}. */
   readonly shadowDir?: string;
+  /** Override the product home root (defaults to `XRK_HOME`/`~/.xrk`). */
+  readonly xrkHome?: string;
   /** Defaults to `index.json` inside the shadow dir. */
   readonly indexFile?: string;
+  /**
+   * Hard deadline per git command (default {@link DEFAULT_GIT_TIMEOUT_MS}).
+   * A timed-out snapshot resolves as `timed-out` so Best-effort callers can
+   * skip the point instead of blocking the turn.
+   */
+  readonly timeoutMs?: number;
   readonly now?: () => number;
 }
 
@@ -72,6 +103,16 @@ function splitLines(text: string): string[] {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
+}
+
+/** Per-store git timeout: env override, else {@link DEFAULT_GIT_TIMEOUT_MS}. */
+function readTimeoutMs(): number {
+  const raw = process.env.XRK_CHECKPOINT_GIT_TIMEOUT_MS;
+  if (raw === undefined || raw.trim() === "") return DEFAULT_GIT_TIMEOUT_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0
+    ? Math.floor(parsed)
+    : DEFAULT_GIT_TIMEOUT_MS;
 }
 
 /** Parse `git clean` output lines carrying a known prefix. */
@@ -123,6 +164,7 @@ export class WorkspaceCheckpointStore {
   private readonly gitDir: string;
   private readonly indexFile: string;
   private readonly runGit: GitRunner;
+  private readonly timeoutMs: number;
   private readonly now: () => number;
   /** Work-tree-relative shadow path, when the shadow lives in the workspace. */
   private readonly shadowRelPath: string | undefined;
@@ -133,7 +175,10 @@ export class WorkspaceCheckpointStore {
     const workspace = path.resolve(options.workspaceDir);
     this.workspaceDir = workspace;
     this.id = workspaceCheckpointId(workspace);
-    const shadow = path.resolve(options.shadowDir ?? workspaceCheckpointDir(workspace));
+    const shadow = path.resolve(
+      options.shadowDir ??
+        workspaceCheckpointDir(workspace, options.xrkHome),
+    );
     this.shadowDir = shadow;
     this.gitDir = shadowGitDir(shadow);
     this.excludesFile = checkpointExcludePath(shadow);
@@ -144,6 +189,7 @@ export class WorkspaceCheckpointStore {
         ? rel.split(path.sep).join("/")
         : undefined;
     this.runGit = options.runGit;
+    this.timeoutMs = options.timeoutMs ?? readTimeoutMs();
     this.now = options.now ?? (() => Date.now());
     this.records = this.loadIndex();
   }
@@ -156,6 +202,11 @@ export class WorkspaceCheckpointStore {
    * - A synthetic commit identity + `commit.gpgsign=false` make shadow commits
    *   independent of the operator's git config, so snapshotting works on a
    *   machine with no `user.name` / `user.email` and never tries to sign.
+   * - `maintenance.auto=false` stops git from spawning background
+   *   `maintenance run --auto` (repack/gc) on the shadow repo. Those runs
+   *   balloon the pack files and hold the object/index locks that a
+   *   concurrent snapshot `add`/`commit` blocks on; the shadow repo only
+   *   grows by `add -A` commits and is intentionally pruned by `prune()`.
    */
   private get baseArgs(): readonly string[] {
     return [
@@ -163,6 +214,8 @@ export class WorkspaceCheckpointStore {
       `--work-tree=${this.workspaceDir}`,
       "-c",
       `core.excludesFile=${this.excludesFile}`,
+      "-c",
+      "maintenance.auto=false",
       "-c",
       "core.autocrlf=false",
       "-c",
@@ -178,16 +231,26 @@ export class WorkspaceCheckpointStore {
     ];
   }
 
-  private async exec(args: readonly string[]): Promise<GitResult> {
-    return this.runGit([...this.baseArgs, ...args]);
+  private async exec(
+    args: readonly string[],
+    budgetMs: number = this.timeoutMs,
+  ): Promise<GitResult> {
+    return this.runGit([...this.baseArgs, ...args], { timeoutMs: budgetMs });
   }
 
   private async execOk(
     args: readonly string[],
     errorCode: WorkspaceCheckpointErrorCode,
     what: string,
+    budgetMs: number = this.timeoutMs,
   ): Promise<GitResult> {
-    const result = await this.exec(args);
+    const result = await this.exec(args, budgetMs);
+    if (result.timedOut) {
+      throw new WorkspaceCheckpointError(
+        "timed-out",
+        `git ${what} exceeded its ${budgetMs}ms budget; snapshot skipped (workspace unchanged)`,
+      );
+    }
     if (result.code === -1) {
       throw new WorkspaceCheckpointError(
         "git-unavailable",
@@ -228,11 +291,16 @@ export class WorkspaceCheckpointStore {
   }
 
   /** Create the shadow repo on first use; idempotent afterwards. */
-  private async ensureRepo(): Promise<void> {
+  private async ensureRepo(budgetMs: number = this.timeoutMs): Promise<void> {
     if (this.repoReady) return;
     this.ensureExcludesFile();
     if (!existsSync(path.join(this.gitDir, "HEAD"))) {
-      await this.execOk(["init", "--quiet"], "init-failed", "init (shadow repo)");
+      await this.execOk(
+        ["init", "--quiet"],
+        "init-failed",
+        "init (shadow repo)",
+        budgetMs,
+      );
     }
     this.repoReady = true;
   }
@@ -265,8 +333,14 @@ export class WorkspaceCheckpointStore {
         "snapshot: seq must be a finite number",
       );
     }
-    await this.ensureRepo();
-    await this.execOk(["add", "-A"], "snapshot-failed", "add -A");
+    // Whole-operation budget: each git command gets the remaining time, so a
+    // slow start cannot leak into an unbounded tail (5 commands × full
+    // per-command timeout would otherwise stall the turn queue for minutes).
+    const deadline = this.now() + this.timeoutMs;
+    const remaining = (): number =>
+      Math.max(1, deadline - this.now());
+    await this.ensureRepo(remaining());
+    await this.execOk(["add", "-A"], "snapshot-failed", "add -A", remaining());
     const label = input.label?.trim();
     const message = [
       `xrk checkpoint session=${sessionId} seq=${input.seq}`,
@@ -276,11 +350,13 @@ export class WorkspaceCheckpointStore {
       ["commit", "--quiet", "--allow-empty", "-m", message],
       "snapshot-failed",
       "commit",
+      remaining(),
     );
     const rev = await this.execOk(
       ["rev-parse", "HEAD"],
       "snapshot-failed",
       "rev-parse HEAD",
+      remaining(),
     );
     const id = rev.stdout.trim();
     if (!id) {
@@ -289,7 +365,12 @@ export class WorkspaceCheckpointStore {
         "git rev-parse HEAD returned no commit id",
       );
     }
-    const files = await this.execOk(["ls-files"], "snapshot-failed", "ls-files");
+    const files = await this.execOk(
+      ["ls-files"],
+      "snapshot-failed",
+      "ls-files",
+      remaining(),
+    );
     const record: WorkspaceCheckpointRecord = {
       id,
       sessionId,

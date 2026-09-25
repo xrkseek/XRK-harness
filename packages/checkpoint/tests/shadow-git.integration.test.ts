@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   WorkspaceCheckpointStore,
   createProcessGitRunner,
@@ -23,7 +23,18 @@ const maybe = gitAvailable ? describe : describe.skip;
 
 const temps: string[] = [];
 
+let testHome: string;
+
+beforeEach(() => {
+  testHome = mkdtempSync(path.join(tmpdir(), "xrk-ckpt-home-"));
+  temps.push(testHome);
+  // Sandbox the default checkpoint root (real git runs inherit XRK_HOME too,
+  // which the store resolves for the shadow dir — harmless for `git`).
+  vi.stubEnv("XRK_HOME", testHome);
+});
+
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const dir of temps.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -86,8 +97,8 @@ maybe("workspace snapshots against real git", () => {
     const after = (await runGit(["rev-parse", "HEAD"], { cwd: ws })).stdout.trim();
     expect(after).toBe(before);
     // Nothing is staged in the operator's index: the shadow commit lands in
-    // the shadow repo only. (`.xrk/` showing up untracked in their worktree is
-    // expected — it is this product's per-workspace dot dir, not shadow state.)
+    // the shadow repo only (which now lives under the isolated XRK home,
+    // never inside the workspace).
     const staged = await runGit(["diff", "--cached", "--name-only"], { cwd: ws });
     expect(staged.stdout.trim()).toBe("");
   });
@@ -137,4 +148,5 @@ maybe("workspace snapshots against real git", () => {
     await store.restore(record.id);
     expect(readFileSync(path.join(ws, "keep.txt"), "utf8")).toBe("hi\n");
   });
+
 });

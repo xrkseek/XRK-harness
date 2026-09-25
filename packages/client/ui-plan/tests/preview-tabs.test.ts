@@ -88,6 +88,25 @@ const sampleStatus = {
         cost: 0.05,
       },
     ],
+    dailyTrend: [
+      { date: "2026-09-24", cost: 0.01, tokens: 40 },
+      { date: "2026-09-25", cost: 0.04, tokens: 60 },
+    ],
+  },
+  fleet: {
+    health: "ok" as const,
+    runningJobs: 1,
+    runningSubagents: 1,
+    slotsFree: 1,
+    queuedInbox: 0,
+    channelAlerts: 1,
+    alerts: [
+      {
+        id: "im:telegram",
+        severity: "info" as const,
+        message: "IM Telegram is bridge (not long-lived)",
+      },
+    ],
   },
   timeline: {
     total: 100,
@@ -130,6 +149,13 @@ const sampleStatus = {
     process: [],
     im: [{ channelId: "telegram", displayName: "Telegram", wired: "bridge" }],
     note: "",
+    alerts: [
+      {
+        id: "im:telegram",
+        severity: "info" as const,
+        message: "IM Telegram is bridge (not long-lived)",
+      },
+    ],
   },
 };
 
@@ -157,6 +183,12 @@ describe("preview tab envelopes", () => {
     expect(
       parseSessionStatus({ result: { ok: true, value: { sessionId: "x" } } }),
     ).toBeNull();
+    const parsed = parseSessionStatus({
+      result: { ok: true, value: sampleStatus },
+    });
+    expect(parsed?.fleet.health).toBe("ok");
+    expect(parsed?.billing.dailyTrend).toHaveLength(2);
+    expect(parsed?.channels.alerts[0]?.id).toBe("im:telegram");
   });
 
   it("loads plan · office · status and keeps tabs when one request fails", async () => {

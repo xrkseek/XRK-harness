@@ -40,6 +40,8 @@ export interface SessionStatusView {
       readonly liveTool?: string
       readonly queued?: number
       readonly steering?: number
+      readonly externalKind?: 'acp' | 'app-server'
+      readonly externalResume?: 'live' | 'cold'
     }[]
     readonly graph: {
       readonly nodes: readonly {
@@ -72,6 +74,11 @@ export interface SessionStatusView {
     readonly role?: string
     readonly humanOwned?: boolean
     readonly schemaValid?: boolean
+    readonly worktreePath?: string
+    readonly worktreeBranch?: string
+    readonly worktreeId?: string
+    readonly worktreeLeaseStatus?: string
+    readonly resultPreview?: string
   }[]
   readonly cost: {
     readonly input: number
@@ -116,6 +123,25 @@ export interface SessionStatusView {
       readonly output: number
       readonly cost: number
     }[]
+    readonly dailyTrend: readonly {
+      readonly date: string
+      readonly cost: number
+      readonly tokens: number
+    }[]
+  }
+  /** Subagent / job / channel health glance. */
+  readonly fleet: {
+    readonly health: 'ok' | 'warn' | 'critical'
+    readonly runningJobs: number
+    readonly runningSubagents: number
+    readonly slotsFree: number
+    readonly queuedInbox: number
+    readonly channelAlerts: number
+    readonly alerts: readonly {
+      readonly id: string
+      readonly severity: 'info' | 'warn' | 'critical'
+      readonly message: string
+    }[]
   }
   readonly timeline: {
     readonly total: number
@@ -139,11 +165,14 @@ export interface SessionStatusView {
   readonly compaction: {
     readonly pipeline: 'none' | 'prune' | 'summary' | 'prune→summary'
     readonly stages: readonly ('prune' | 'summary')[]
+    readonly strategy?: 'prune-summary' | 'prune-only' | 'summary-only' | 'off'
+    readonly guardian?: boolean
     readonly lastReason?: 'auto' | 'overflow' | 'manual'
     readonly lastShadowedTokens?: number
     readonly pruneCount: number
     readonly summaryCount: number
     readonly spillCount: number
+    readonly spillPaths?: readonly string[]
     readonly phase: 'idle' | 'busy'
   }
   readonly delivery: {
@@ -167,6 +196,11 @@ export interface SessionStatusView {
       readonly wired: string
     }[]
     readonly note: string
+    readonly alerts: readonly {
+      readonly id: string
+      readonly severity: 'info' | 'warn' | 'critical'
+      readonly message: string
+    }[]
   }
 }
 
@@ -265,6 +299,16 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     const liveTool = str((row as { liveTool?: unknown }).liveTool)
     const queued = num((row as { queued?: unknown }).queued)
     const steering = num((row as { steering?: unknown }).steering)
+    const externalKindRaw = str((row as { externalKind?: unknown }).externalKind)
+    const externalKind =
+      externalKindRaw === 'acp' || externalKindRaw === 'app-server'
+        ? externalKindRaw
+        : undefined
+    const externalResumeRaw = str((row as { externalResume?: unknown }).externalResume)
+    const externalResume =
+      externalResumeRaw === 'live' || externalResumeRaw === 'cold'
+        ? externalResumeRaw
+        : undefined
     return [{
       id,
       activity,
@@ -274,6 +318,8 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       ...(liveTool ? { liveTool } : {}),
       ...(queued !== undefined && queued > 0 ? { queued } : {}),
       ...(steering !== undefined && steering > 0 ? { steering } : {}),
+      ...(externalKind ? { externalKind } : {}),
+      ...(externalResume ? { externalResume } : {}),
     }]
   })
   const nodesRaw = (graphRaw as { nodes?: unknown }).nodes
@@ -364,6 +410,18 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       monthTokens: num((billingRaw as { monthTokens?: unknown }).monthTokens) ?? 0,
       byModel: parseModelRows((billingRaw as { byModel?: unknown }).byModel),
       byProviderModel: parseModelRows((billingRaw as { byProviderModel?: unknown }).byProviderModel),
+      dailyTrend: Array.isArray((billingRaw as { dailyTrend?: unknown }).dailyTrend)
+        ? (billingRaw as { dailyTrend: unknown[] }).dailyTrend.flatMap((row) => {
+          if (!row || typeof row !== 'object') return []
+          const date = str((row as { date?: unknown }).date)
+          if (!date) return []
+          return [{
+            date,
+            cost: num((row as { cost?: unknown }).cost) ?? 0,
+            tokens: num((row as { tokens?: unknown }).tokens) ?? 0,
+          }]
+        })
+        : [],
     }
     : {
       todayCost: 0,
@@ -373,6 +431,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       monthTokens: 0,
       byModel: [],
       byProviderModel: [],
+      dailyTrend: [],
     }
 
   const tlRaw = v.timeline
@@ -453,6 +512,30 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     compactionRaw && typeof compactionRaw === 'object'
       ? str((compactionRaw as { phase?: unknown }).phase)
       : undefined
+  const strategyRaw =
+    compactionRaw && typeof compactionRaw === 'object'
+      ? str((compactionRaw as { strategy?: unknown }).strategy)
+      : undefined
+  const strategy =
+    strategyRaw === 'prune-summary'
+    || strategyRaw === 'prune-only'
+    || strategyRaw === 'summary-only'
+    || strategyRaw === 'off'
+      ? strategyRaw
+      : undefined
+  const guardian =
+    compactionRaw && typeof compactionRaw === 'object'
+      ? bool((compactionRaw as { guardian?: unknown }).guardian)
+      : undefined
+  const spillPathsRaw =
+    compactionRaw && typeof compactionRaw === 'object'
+    && Array.isArray((compactionRaw as { spillPaths?: unknown }).spillPaths)
+      ? (compactionRaw as { spillPaths: unknown[] }).spillPaths
+      : []
+  const spillPaths = spillPathsRaw.flatMap((row) => {
+    const p = str(row)
+    return p ? [p] : []
+  })
   const compaction: SessionStatusView['compaction'] = {
     pipeline: compactionPipeline,
     stages: compactionStages.length > 0
@@ -464,6 +547,8 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
           : compactionPipeline === 'summary'
             ? ['summary']
             : [],
+    ...(strategy ? { strategy } : {}),
+    ...(guardian !== undefined ? { guardian } : {}),
     ...(compactionLastReason ? { lastReason: compactionLastReason } : {}),
     ...(compactionShadowed !== undefined
       ? { lastShadowedTokens: compactionShadowed }
@@ -480,6 +565,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       (compactionRaw && typeof compactionRaw === 'object'
         ? num((compactionRaw as { spillCount?: unknown }).spillCount)
         : undefined) ?? timeline.spillCount,
+    ...(spillPaths.length > 0 ? { spillPaths } : {}),
     phase: compactionPhaseRaw === 'busy' ? 'busy' : 'idle',
   }
 
@@ -533,6 +619,46 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     if (!channelId || !displayName || !wired) return []
     return [{ channelId, displayName, wired }]
   })
+  const parseAlerts = (raw: unknown) => {
+    if (!Array.isArray(raw)) return [] as SessionStatusView['fleet']['alerts']
+    return raw.flatMap((row) => {
+      if (!row || typeof row !== 'object') return []
+      const id = str((row as { id?: unknown }).id)
+      const message = str((row as { message?: unknown }).message)
+      const severity = str((row as { severity?: unknown }).severity)
+      if (!id || !message) return []
+      if (severity !== 'info' && severity !== 'warn' && severity !== 'critical') return []
+      return [{ id, severity, message }]
+    })
+  }
+  const channelAlerts = parseAlerts((chRaw as { alerts?: unknown }).alerts)
+
+  const fleetRaw = v.fleet
+  const fleetHealthRaw = fleetRaw && typeof fleetRaw === 'object'
+    ? str((fleetRaw as { health?: unknown }).health)
+    : undefined
+  const fleet: SessionStatusView['fleet'] = fleetRaw && typeof fleetRaw === 'object'
+    ? {
+      health:
+        fleetHealthRaw === 'warn' || fleetHealthRaw === 'critical'
+          ? fleetHealthRaw
+          : 'ok',
+      runningJobs: num((fleetRaw as { runningJobs?: unknown }).runningJobs) ?? 0,
+      runningSubagents: num((fleetRaw as { runningSubagents?: unknown }).runningSubagents) ?? 0,
+      slotsFree: num((fleetRaw as { slotsFree?: unknown }).slotsFree) ?? 0,
+      queuedInbox: num((fleetRaw as { queuedInbox?: unknown }).queuedInbox) ?? 0,
+      channelAlerts: num((fleetRaw as { channelAlerts?: unknown }).channelAlerts) ?? channelAlerts.length,
+      alerts: parseAlerts((fleetRaw as { alerts?: unknown }).alerts),
+    }
+    : {
+      health: 'ok',
+      runningJobs: 0,
+      runningSubagents: 0,
+      slotsFree: 0,
+      queuedInbox: 0,
+      channelAlerts: channelAlerts.length,
+      alerts: channelAlerts,
+    }
 
   const teamTasksRaw = v.teamTasks
   const teamTasks = Array.isArray(teamTasksRaw)
@@ -547,6 +673,11 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       const role = str((row as { role?: unknown }).role)
       const humanOwned = bool((row as { humanOwned?: unknown }).humanOwned)
       const schemaValid = bool((row as { schemaValid?: unknown }).schemaValid)
+      const worktreePath = str((row as { worktreePath?: unknown }).worktreePath)
+      const worktreeBranch = str((row as { worktreeBranch?: unknown }).worktreeBranch)
+      const worktreeId = str((row as { worktreeId?: unknown }).worktreeId)
+      const worktreeLeaseStatus = str((row as { worktreeLeaseStatus?: unknown }).worktreeLeaseStatus)
+      const resultPreview = str((row as { resultPreview?: unknown }).resultPreview)
       return [{
         id,
         title,
@@ -556,6 +687,11 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
         ...(role ? { role } : {}),
         ...(humanOwned ? { humanOwned: true } : {}),
         ...(schemaValid !== undefined ? { schemaValid } : {}),
+        ...(worktreePath ? { worktreePath } : {}),
+        ...(worktreeBranch ? { worktreeBranch } : {}),
+        ...(worktreeId ? { worktreeId } : {}),
+        ...(worktreeLeaseStatus ? { worktreeLeaseStatus } : {}),
+        ...(resultPreview ? { resultPreview } : {}),
       }]
     })
     : []
@@ -574,10 +710,11 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     teamTasks,
     cost,
     billing,
+    fleet,
     timeline,
     compaction,
     delivery,
-    channels: { process, im, note },
+    channels: { process, im, note, alerts: channelAlerts },
   }
 }
 

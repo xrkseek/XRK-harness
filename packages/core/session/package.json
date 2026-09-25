@@ -19,6 +19,7 @@
     "README.md"
   ],
   "dependencies": {
+    "@xrkseek/attachment": "workspace:*",
     "@xrkseek/protocol": "workspace:*",
     "@xrkseek/runtime-invariants": "workspace:*",
     "@xrkseek/session-format": "workspace:*"

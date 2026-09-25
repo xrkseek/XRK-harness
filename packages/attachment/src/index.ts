@@ -40,3 +40,14 @@ export {
   REQUEST_IMAGE_OFFLOAD_PLACEHOLDER,
   offloadRequestImages,
 } from "./request-image-bound.js";
+export {
+  longEdgeDimensions,
+  requestImageDimensions,
+  type ProjectedDimensions,
+} from "./request-projection.js";
+export {
+  MAX_IMAGE_TOKENS,
+  REQUEST_IMAGE_MAX_DIMENSION,
+  estimateImageTokens,
+  requestImageTokenDimensions,
+} from "./image-tokens.js";

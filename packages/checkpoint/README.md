@@ -7,11 +7,13 @@ rewind.
 
 ## 为什么是影子 git
 
-快照提交落在**独立**的 `--git-dir`（`<workspace>/.xrk/checkpoints/git`），
-`--work-tree` 指向工作区。因此：
+快照提交落在**独立**的 `--git-dir`（`{XRK_HOME}/checkpoints/<workspace-id>/git`，
+默认 `~/.xrk/checkpoints/<workspace-id>/git`），`--work-tree` 指向工作区。因此：
 
 - 工作区本身不是 git 仓库也能快照；
 - 永不读/写用户自己的 `.git`，不会改写操作者历史；
+- **不在工作区里生成任何目录**——快照数据全部归置到 XRK home，
+  `XRK_HOME` / `XRK_DSH_HOME` / `DSH_HOME` 可覆盖默认 `~/.xrk`；
 - 每条命令都带 `core.autocrlf=false`，Windows 上 restore 不会重写行尾。
 
 `snapshot()` 用 `commit --allow-empty`，所以「这一回合没改文件」也仍是一个

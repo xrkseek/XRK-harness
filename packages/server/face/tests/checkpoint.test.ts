@@ -4,7 +4,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import type { GitResult } from "@xrkseek/checkpoint";
 import { dispatchFaceMethod } from "../src/dispatch.js";
@@ -57,7 +57,17 @@ function scriptedGit(calls: string[][]): (args: readonly string[]) => Promise<Gi
 describe("session.checkpoint + /rollback", () => {
   const dirs: string[] = [];
 
+  beforeEach(() => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-ckpt-face-home-"));
+    dirs.push(home);
+    // Sandbox the checkpoint root so store construction never touches the
+    // operator's real ~/.xrk (excludes-file mkdir happens even with a fake
+    // git runner).
+    vi.stubEnv("XRK_HOME", home);
+  });
+
   afterEach(() => {
+    vi.unstubAllEnvs();
     setWorkspaceCheckpointGitRunner(undefined);
     clearWorkspaceCheckpointStores();
     for (const d of dirs.splice(0)) {

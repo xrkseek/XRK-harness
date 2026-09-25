@@ -1,5 +1,3 @@
-/** `trajectory` namespace dictionaries (view tab label + toolbar strings). */
-
 /** Dictionary namespace owned by this plugin. */
 export const NS = 'trajectory'
 
@@ -19,6 +17,9 @@ export type TrajectoryKey =
   | 'toolbar.collapseCalls'
   | 'toolbar.search'
   | 'toolbar.searchPlaceholder'
+  | 'toolbar.density'
+  | 'toolbar.densityCompact'
+  | 'toolbar.densityDetailed'
 
 declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -43,6 +44,9 @@ export const zh: Record<TrajectoryKey, string> = {
   'toolbar.collapseCalls': 'Collapse calls',
   'toolbar.search': '搜索轨迹',
   'toolbar.searchPlaceholder': '搜索',
+  'toolbar.density': '密度',
+  'toolbar.densityCompact': '紧凑',
+  'toolbar.densityDetailed': '详细',
 }
 
 /** English dictionary. */
@@ -61,4 +65,7 @@ export const en: Record<TrajectoryKey, string> = {
   'toolbar.collapseCalls': 'Collapse calls',
   'toolbar.search': 'Search trajectory',
   'toolbar.searchPlaceholder': 'Search',
+  'toolbar.density': 'Density',
+  'toolbar.densityCompact': 'Compact',
+  'toolbar.densityDetailed': 'Detailed',
 }

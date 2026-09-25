@@ -4,6 +4,12 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   dropEmbeddedVectorRow,
+  embedTextLocal,
+  embedTextRemote,
+  fetchExternalMemorySearch,
+  readExternalMemoryEmbedConfig,
+  searchMemoryEmbeddings,
+  searchMemoryEmbeddingsAsync,
   syncEmbeddedVectorRow,
 } from "../src/dsh-compat/memory-embeddings.js";
 import {
@@ -11,13 +17,6 @@ import {
   upsertEmbeddedVectorRow,
 } from "../src/dsh-compat/embedded-vector-store.js";
 import { handleNoemaRpc, handleNoemaRpcAsync } from "../src/dsh-compat/noema.js";
-import {
-  embedTextLocal,
-  fetchExternalMemorySearch,
-  readExternalMemoryEmbedConfig,
-  searchMemoryEmbeddings,
-  searchMemoryEmbeddingsAsync,
-} from "../src/dsh-compat/memory-embeddings.js";
 import {
   analyzeWithCloudVisionRoute,
   analyzeWithCloudVisionRouteAsync,
@@ -198,6 +197,34 @@ describe("cloud-vision-routing", () => {
 });
 
 describe("memory-embeddings bridge", () => {
+  it("embedTextRemote normalizes OpenAI-shaped vectors", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          data: [{ embedding: [3, 4] }],
+        }),
+        { status: 200 },
+      ),
+    );
+    const prev = globalThis.fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      const vec = await embedTextRemote("hello", {
+        url: "https://api.example/v1",
+        model: "text-embedding-3-small",
+        token: "sk-test",
+      });
+      expect(vec).toEqual([0.6, 0.8]);
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(String(fetchMock.mock.calls[0]![0])).toContain("/embeddings");
+      expect(fetchMock.mock.calls[0]![1]).toMatchObject({
+        method: "POST",
+      });
+    } finally {
+      globalThis.fetch = prev;
+    }
+  });
+
   it("returns stable local vectors", () => {
     const a = embedTextLocal("hello world");
     const b = embedTextLocal("hello world");

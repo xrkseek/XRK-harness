@@ -1,8 +1,10 @@
 import { scheduler } from "node:timers/promises";
-import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, promotePendingSteers, pruneOversizedToolResults, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, promotePendingSteers, pruneOversizedToolResults, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   isMetadataOnlyUserMessage,
+  parseTimeContextRefreshMs,
+  shouldRefreshTimeContext,
   type AssembledRequest,
 } from "@xrkseek/core-system-prompt";
 import {
@@ -160,6 +162,18 @@ export interface RunTurnInput {
   readonly pipeline?: ToolPipeline;
   readonly signal?: AbortSignal;
   readonly maxSteps?: number;
+  /**
+   * Auto-continue on max-tokens truncation: when the model hits its output
+   * token cap mid-turn, inject a synthetic `user/message` ("继续") instead of
+   * ending the turn with `max-tokens`. Default off. Face
+   * `agent-loop.autoContinueOnMaxTokens`.
+   */
+  readonly autoContinueOnMaxTokens?: boolean;
+  /**
+   * Cap on consecutive auto-continues within one turn (default 2). Guards
+   * against infinite loop when the provider keeps truncating at its cap.
+   */
+  readonly autoContinueMaxRounds?: number;
   readonly now?: () => number;
   /**
    * How to settle multiple tool calls in one step.
@@ -514,6 +528,20 @@ async function buildModelRequest(input: {
       : typeof input.assemble?.persona === "string"
         ? input.assemble.persona
         : input.system;
+  const nowMs = Date.parse(input.nowIso) || Date.now();
+  const timeRefreshMs = parseTimeContextRefreshMs(
+    process.env.XRK_TIME_CONTEXT_REFRESH_MS,
+  );
+  // Opening step always stamps time in the volatile user suffix. Follow-ups
+  // refresh via a system workspace block when the interval elapses (DSH
+  // time-context refreshIntervalMs; default 60s) so long tool loops still see
+  // a clock without rewriting the cached user prefix every step.
+  const refreshFollowUpTime =
+    !input.firstStep &&
+    shouldRefreshTimeContext(input.sessionId, nowMs, timeRefreshMs);
+  const timeBlock = refreshFollowUpTime
+    ? `time: ${input.nowIso}`
+    : undefined;
   const assembled = assembleThreeLayers({
     skeletonSystem: {
       ...(personaText !== undefined ? { persona: personaText } : {}),
@@ -529,14 +557,15 @@ async function buildModelRequest(input: {
       ...(input.assemble?.owner ? { owner: input.assemble.owner } : {}),
     },
     // Follow-ups: keep conversation prefix byte-stable for provider cache
-    // (DSH append-only). Marker + changing clock only on the opening step.
+    // (DSH append-only). Marker + opening clock only on the first step.
     includeCurrentMarker: input.firstStep === true,
     includeVolatileTime: input.firstStep === true,
     tools: toolDefs,
     ...(input.assemble?.toolOrder ? { toolOrder: input.assemble.toolOrder } : {}),
     ...(input.assemble?.workspaceBlocks ||
     input.slashSystemExtra ||
-    planActive
+    planActive ||
+    timeBlock
       ? {
           workspaceBlocks: [
             ...(input.assemble?.workspaceBlocks ?? []),
@@ -544,6 +573,7 @@ async function buildModelRequest(input: {
               ? [`## Recipe\n${input.slashSystemExtra.trim()}`]
               : []),
             ...(planActive ? [DEFAULT_PLAN_POLICY_SECTION] : []),
+            ...(timeBlock ? [timeBlock] : []),
           ],
         }
       : {}),
@@ -692,6 +722,10 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   let activeStepId: string | undefined;
   /** Sticky: once any step hits max-tokens, the turn ends that way (DSH). */
   let turnEndReason: TurnEndReason = { kind: "completed" };
+  /** Consecutive auto-continues injected this turn (0 when disabled). */
+  let autoContinueRounds = 0;
+  const autoContinueMaxRounds =
+    input.autoContinueMaxRounds ?? 2;
 
   try {
   while (steps < maxSteps) {
@@ -806,67 +840,74 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     let req = await buildReq();
 
     // Soft budget: count messages + tool schemas (tools alone can dwarf history).
-    // Prune under pressure, remeasure, summarize (retry + remeasure); fail closed
-    // if still over — do not ship a multi-hundred-k request that OOMs the Host
-    // before the API.
+    // Strategy family (Face `compactionStrategy`): prune→summary by default;
+    // prune-only / summary-only / off select which stages run before fail-closed.
     if (
       compaction?.auto !== false &&
       compaction?.maxRequestTokens !== undefined
     ) {
-      const buffer =
-        compaction.bufferTokens ?? DEFAULT_COMPACTION_BUFFER_TOKENS;
-      const softCeiling = resolveSoftBudgetCeiling(
-        compaction.maxRequestTokens,
-        buffer,
-      );
-      const measure = () => {
-        // Align with toLlmRequest: file handles may grow after path projection.
-        const messages = projectFilesToText(
-          req.messages,
-          (ref) => input.resolveFilePath?.(ref),
+      const strategy = resolveCompactionStrategy(compaction);
+      if (strategy !== "off") {
+        const buffer =
+          compaction.bufferTokens ?? DEFAULT_COMPACTION_BUFFER_TOKENS;
+        const softCeiling = resolveSoftBudgetCeiling(
+          compaction.maxRequestTokens,
+          buffer,
         );
-        return estimateRequestTokens({
-          messages,
-          tools: req.tools,
-          ...(req.system !== undefined ? { system: req.system } : {}),
-        });
-      };
-      let used = measure();
-      if (used > softCeiling) {
-        pruneOversizedToolResults(input.store, input.sessionId, {
-          now,
-          turnId,
-          stepId,
-        });
-        // Always remeasure after the prune pass (DSH posture), even if pruned===0.
-        req = await buildReq();
-        used = measure();
-        let compactAttempts = 0;
-        while (
-          used > softCeiling &&
-          compactAttempts < DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS
-        ) {
-          const did = await runCompaction({
-            store: input.store,
-            sessionId: input.sessionId,
-            llm: input.llm,
-            reason: "auto",
-            keepTokens: compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
-            turnId,
-            ...(input.signal ? { signal: input.signal } : {}),
-            now,
-          });
-          if (!did.compacted) break;
-          compactAttempts += 1;
-          // Compaction breaks the cached prefix → re-baseline system at head.
-          seriesBaselineSystem = undefined;
-          req = await buildReq();
-          used = measure();
-        }
-        if (used > softCeiling) {
-          throw new ContextOverflowError(
-            `request ~${used} tokens exceeds soft budget ${softCeiling} after prune/compact`,
+        const measure = () => {
+          // Align with toLlmRequest: file handles may grow after path projection.
+          const messages = projectFilesToText(
+            req.messages,
+            (ref) => input.resolveFilePath?.(ref),
           );
+          return estimateRequestTokens({
+            messages,
+            tools: req.tools,
+            ...(req.system !== undefined ? { system: req.system } : {}),
+          });
+        };
+        let used = measure();
+        if (used > softCeiling) {
+          if (strategy === "prune-summary" || strategy === "prune-only") {
+            pruneOversizedToolResults(input.store, input.sessionId, {
+              now,
+              turnId,
+              stepId,
+            });
+            // Always remeasure after the prune pass (DSH posture), even if pruned===0.
+            req = await buildReq();
+            used = measure();
+          }
+          if (strategy === "prune-summary" || strategy === "summary-only") {
+            let compactAttempts = 0;
+            while (
+              used > softCeiling &&
+              compactAttempts < DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS
+            ) {
+              const did = await runCompaction({
+                store: input.store,
+                sessionId: input.sessionId,
+                llm: input.llm,
+                reason: "auto",
+                keepTokens:
+                  compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
+                turnId,
+                ...(input.signal ? { signal: input.signal } : {}),
+                now,
+              });
+              if (!did.compacted) break;
+              compactAttempts += 1;
+              // Compaction breaks the cached prefix → re-baseline system at head.
+              seriesBaselineSystem = undefined;
+              req = await buildReq();
+              used = measure();
+            }
+          }
+          if (used > softCeiling) {
+            throw new ContextOverflowError(
+              `request ~${used} tokens exceeds soft budget ${softCeiling} after ${strategy}`,
+            );
+          }
         }
       }
     }
@@ -1061,7 +1102,12 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
 
     assistantText = response.content;
     // max-tokens is sticky for the turn; keep/drop already stripped tools.
-    if (response.finishReason === "max-tokens") {
+    const hitMaxTokens = response.finishReason === "max-tokens";
+    const shouldAutoContinue =
+      hitMaxTokens &&
+      input.autoContinueOnMaxTokens === true &&
+      autoContinueRounds < autoContinueMaxRounds;
+    if (hitMaxTokens && !shouldAutoContinue) {
       turnEndReason = { kind: "max-tokens" };
     }
     append(input.store, input.sessionId, {
@@ -1083,6 +1129,22 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         turnId,
         stepId,
       });
+      activeStepId = undefined;
+      if (shouldAutoContinue) {
+        // A synthetic user message resumes the model mid-turn: it is
+        // model-visible, tagged for Face rendering, and bounded by
+        // `autoContinueMaxRounds`.
+        autoContinueRounds += 1;
+        append(input.store, input.sessionId, {
+          type: "user/message",
+          ts: now(),
+          turnId,
+          messageId: newUserMessageId(),
+          content: "继续",
+          source: { kind: "auto-continue", round: autoContinueRounds },
+        });
+        continue;
+      }
       break;
     }
 

@@ -19,5 +19,8 @@
     "url": "git+https://github.com/xrkseek/XRK-harness.git",
     "directory": "packages/checkpoint"
   },
-  "private": true
+  "private": true,
+  "dependencies": {
+    "@xrkseek/xrk-home-paths": "workspace:*"
+  }
 }

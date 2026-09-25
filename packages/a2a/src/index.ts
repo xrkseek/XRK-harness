@@ -35,3 +35,10 @@ export {
 } from "./client.js";
 
 export { createA2aTools, type CreateA2aToolsOptions } from "./tools.js";
+
+export {
+  buildA2aAgentCard,
+  createA2aInboundHandler,
+  parsePeerTokens,
+  type A2aInboundOptions,
+} from "./inbound.js";

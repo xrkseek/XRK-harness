@@ -1,22 +1,21 @@
 import type { AttachmentStore } from "@xrkseek/attachment";
 import type { ToolDefinition, ToolResultContent } from "@xrkseek/core-tools";
 import { IMAGE_GEN_PROMPT_TEXT } from "./format.js";
+import { resolveImageGenReferenceImages } from "./references.js";
+import {
+  buildImageGenToolDescription,
+  buildImageGenToolParameters,
+  IMAGE_GEN_SIZES,
+} from "./schema.js";
 import {
   ImageGenError,
   isImageGenError,
+  resolveImageGenCapabilities,
   type ImageGenService,
   type ImageGenSize,
 } from "./types.js";
 
 export { IMAGE_GEN_PROMPT_TEXT };
-
-const SIZES: readonly ImageGenSize[] = [
-  "256x256",
-  "512x512",
-  "1024x1024",
-  "1792x1024",
-  "1024x1792",
-];
 
 export function imageGenUnavailableMessage(
   env: NodeJS.ProcessEnv = process.env,
@@ -50,8 +49,9 @@ export interface CreateImageGenToolsOptions {
   readonly service?: ImageGenService;
   readonly env?: NodeJS.ProcessEnv;
   readonly product?: { readonly mode?: string };
-  /** When set, persist generated images and return attachment ids. */
+  /** When set, persist generated images and resolve reference_attachment_ids. */
   readonly attachments?: AttachmentStore;
+  readonly fetchImpl?: typeof fetch;
 }
 
 function fail(err: unknown): ToolResultContent {
@@ -64,17 +64,30 @@ function fail(err: unknown): ToolResultContent {
 function parseSize(raw: unknown): ImageGenSize | undefined {
   if (raw === undefined || raw === null || raw === "") return undefined;
   const s = String(raw).trim() as ImageGenSize;
-  if (!(SIZES as readonly string[]).includes(s)) {
+  if (!(IMAGE_GEN_SIZES as readonly string[]).includes(s)) {
     throw new ImageGenError(
-      `size must be one of ${SIZES.join(", ")}`,
+      `size must be one of ${IMAGE_GEN_SIZES.join(", ")}`,
       "IMAGE_GEN_BAD_ARGS",
     );
   }
   return s;
 }
 
+function asStringList(raw: unknown): string[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new ImageGenError(
+      "reference lists must be arrays of strings",
+      "IMAGE_GEN_BAD_ARGS",
+    );
+  }
+  return raw.map((item) => String(item));
+}
+
 /**
- * Model-facing `image_generate` tool (Hermes-style text-to-image).
+ * Model-facing `image_generate` tool (Hermes-style t2i + edit in one tool).
+ * Static fields are an initial bake; `dynamicSchema` rebuilds from live
+ * Provider `capabilities()` on each materialize (Hermes get_definitions).
  */
 export function createImageGenTools(
   options: CreateImageGenToolsOptions = {},
@@ -85,39 +98,32 @@ export function createImageGenTools(
   );
   const service = options.service;
   const attachments = options.attachments;
+  const caps = resolveImageGenCapabilities(service);
 
   const tool: ToolDefinition<{
     prompt?: string;
     size?: string;
     n?: number;
     model?: string;
+    image_url?: string;
+    reference_image_urls?: string[];
+    reference_attachment_ids?: string[];
   }> = {
     name: "image_generate",
-    description:
-      "Generate an image from a text prompt via the Host text-to-image Provider. " +
-      "Returns PNG as base64 (truncated in tool text) and optional attachment id when the Host attachment store is wired.",
-    parameters: {
-      type: "object",
-      properties: {
-        prompt: {
-          type: "string",
-          description: "Full visual description (subject, style, composition).",
-        },
-        size: {
-          type: "string",
-          enum: [...SIZES],
-          description: "Output size (provider-dependent; default 1024x1024).",
-        },
-        n: {
-          type: "number",
-          description: "Number of images (1–4; dall-e-3 forces 1).",
-        },
-        model: {
-          type: "string",
-          description: "Optional model override (e.g. dall-e-3, gpt-image-1).",
-        },
-      },
-      required: ["prompt"],
+    description: buildImageGenToolDescription(caps),
+    parameters: buildImageGenToolParameters(caps) as unknown as Record<
+      string,
+      unknown
+    >,
+    dynamicSchema: () => {
+      const live = resolveImageGenCapabilities(service);
+      return {
+        description: buildImageGenToolDescription(live),
+        parameters: buildImageGenToolParameters(live) as unknown as Record<
+          string,
+          unknown
+        >,
+      };
     },
     presentCall: (args) => ({
       card: "generic",
@@ -128,20 +134,32 @@ export function createImageGenTools(
     async execute(args) {
       if (!service) return { content: missing, isError: true };
       try {
+        const liveCaps = resolveImageGenCapabilities(service);
         const prompt = String(args.prompt ?? "").trim();
         const size = parseSize(args.size);
         const n =
           typeof args.n === "number" && Number.isFinite(args.n)
             ? Math.trunc(args.n)
             : undefined;
+        const refUrls = asStringList(args.reference_image_urls);
+        const refAttach = asStringList(args.reference_attachment_ids);
+        const referenceImages = await resolveImageGenReferenceImages({
+          maxReferenceImages: liveCaps.maxReferenceImages,
+          ...(args.image_url ? { imageUrl: String(args.image_url) } : {}),
+          ...(refUrls ? { referenceImageUrls: refUrls } : {}),
+          ...(refAttach ? { referenceAttachmentIds: refAttach } : {}),
+          ...(attachments ? { attachments } : {}),
+          ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+        });
         const result = await service.generate({
           prompt,
           ...(size ? { size } : {}),
           ...(n !== undefined ? { n } : {}),
           ...(args.model ? { model: String(args.model) } : {}),
+          ...(referenceImages.length > 0 ? { referenceImages } : {}),
         });
         const lines: string[] = [
-          `provider=${result.provider} delivery=${result.delivery} images=${result.images.length}`,
+          `provider=${result.provider} delivery=${result.delivery} modality=${result.modality ?? "text"} images=${result.images.length}`,
         ];
         if (result.note) lines.push(`note=${result.note}`);
 

@@ -76,7 +76,7 @@ npm **不能**同号重发；改坏包就升修订号。中间号用 `npm-prune-
 
 预发布号（`-rc.N` / `-beta.N`）由 `release.mjs` 自动按版本首段 prerelease 标识附 `--tag`（`0.4.0-rc.4` → `rc`），并给 GitHub Release 加 `--prerelease`；因此过程号既不进 npm `@latest`，也不占仓库 Latest 徽标。**收口号与正式版一样无后缀 ⇒ 不带 `--tag`、不加 `--prerelease`**，直接落 `@latest` 并占 Latest 徽标（0.4.0 即走这条路，无需任何开关）。
 
-GitHub Release 公开页保留 **v0.4.3**（当前）、**v0.3.11**（上一正式线）与 **v0.2.7**（上一轮对照）。
+GitHub Release 公开页保留 **v0.4.4**（当前）、**v0.3.11**（上一正式线）与 **v0.2.7**（上一轮对照）。
 
 完整交接：[maintainer](./maintainer.md)。发行说明索引：[releases/](./releases/)。
 
@@ -160,6 +160,6 @@ npm **cannot** republish the same version; bump the patch if a bad pack ships. D
 
 Prereleases (`-rc.N` / `-beta.N`) are published by `release.mjs` with an automatic `--tag` derived from the leading prerelease identifier (`0.4.0-rc.4` → `rc`), and the GitHub Release is created with `--prerelease`; a process number therefore never lands on npm `@latest` nor takes the repo's Latest badge. **A closing number, like any plain version, carries no suffix ⇒ no `--tag`, no `--prerelease`**, so it lands on `@latest` and owns the Latest badge (0.4.0 takes exactly this path — no knob needed).
 
-The GitHub Releases page keeps **v0.4.3** (current), **v0.3.11** (previous formal line) and **v0.2.7** (previous-line archive).
+The GitHub Releases page keeps **v0.4.4** (current), **v0.3.11** (previous formal line) and **v0.2.7** (previous-line archive).
 
 Full handoff: [maintainer](./maintainer.md). Release notes index: [releases/](./releases/).

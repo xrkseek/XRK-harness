@@ -222,6 +222,12 @@ describe("Face settings U2", () => {
     expect(v.namespaces.some((n) => n.ns === "ui-onboarding")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "locale")).toBe(true);
     expect(v.namespaces.some((n) => n.ns === "ui-theme")).toBe(true);
+    // product namespaces are emitted exactly once (no duplicate rows)
+    const seen = new Set<string>();
+    for (const n of v.namespaces) {
+      expect(seen.has(n.ns)).toBe(false);
+      seen.add(n.ns);
+    }
     const themeNs = v.namespaces.find((n) => n.ns === "ui-theme") as {
       ns: string;
       value: { preference: string; fontSize: number };

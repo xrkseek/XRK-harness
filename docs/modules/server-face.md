@@ -82,7 +82,7 @@ HTTP/WS (attach-http)
 | `host-open-in-app.ts` | `host.listOpenInApps` · `host.openInApp` | 白名单探测；Win 编辑器优先真 `.exe`；`wt` 不用 Apps 别名路径 |
 | `remote-event.ts` | `host/remote-event` 白名单转发 | 无 Cordis inspect/run |
 | `host-pick-directory.ts` | `host.pickDirectory` | 系统选目录；取消 `null`；缺 picker 用 `directory-picker-unavailable` |
-| `workspace-face.ts` | workspace.* Face | 路径不得逃出 root |
+| `workspace-face.ts` | workspace.* Face | 路径限定在 root 内 |
 | `workspace-registry.ts` | 工作区注册表（壳侧栏形） | `workspaceIdOf`；delete 发 removed；insertBefore 发 order |
 | `settings-credentials.ts` | settings.* · credentials.* | 密钥不入库；openDocument 忽略客户端 path；`mcp.servers` 落盘（禁 env）；`connected` overlay |
 | `face-schema.ts` | settings namespace schemastery 信封 | `{ uid, refs }`；JSON Schema 壳读不了 |
@@ -95,7 +95,7 @@ HTTP/WS (attach-http)
 
 | 文件 | 作用 | 关键契约 |
 | --- | --- | --- |
-| `adapt/inbox-wire.ts` | `prompt/*` → `agent/inbox/spliced` | 坐标按 pending **重放**，禁止瞎编 start |
+| `adapt/inbox-wire.ts` | `prompt/*` → `agent/inbox/spliced` | 坐标按 pending **重放**，start 用真实值 |
 | `adapt/wire-event.ts` | session 事件 → 壳 wire | |
 | `adapt/wire-ids.ts` | 稳定数字 id 映射 | |
 | `adapt/tool-view.ts` | 工具卡 lookup | `presentCall` / `presentResult` 在工具上；Face `viewFor` 软失败 |
@@ -119,7 +119,7 @@ HTTP/WS (attach-http)
 ## RPC 登记纪律（防 bug）
 
 1. **新方法**：在 `dispatch.ts` `HANDLERS` 增加一项（实现放 `handlers/`）；能跑 / 软降级 / NI 三选一写进 `host-face.md`。
-2. **注释**：对象字面量里的块注释**禁止**写含 `*/` 的 glob（如 `skills/*/x`），会截断注释导致语法炸。用行注释或写 `<id>`。
+2. **注释**：对象字面量里的块注释写含 `*/` 的 glob（如 `skills/*/x`）会截断注释导致语法炸。用行注释或写 `<id>`。
 3. **payload**：先校验再动 store；失败用稳定 `error.code`。
 4. **副作用**：prompt admit 前钉 `rpcId`↔`admitId`（inbox / queue 依赖）。
 

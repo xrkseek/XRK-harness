@@ -8,6 +8,7 @@ export {
   freezeToolResult,
   normalizeToolResult,
   type ToolDefinition,
+  type ToolDynamicSchema,
   type ToolExecuteExtras,
   type ToolRegistry,
   type ToolResultContent,
@@ -65,6 +66,7 @@ export {
 export { SUBAGENT_ROUTING_PROMPT_TEXT } from "./subagent-prompt.js";
 export { SESSION_QUERY_ROUTING_PROMPT_TEXT } from "./session-query-prompt.js";
 export {
+  applyToolDynamicSchema,
   materializeTools,
   type MaterializeToolsOptions,
   type ToolMaterialization,

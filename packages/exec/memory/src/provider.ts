@@ -18,4 +18,4 @@ export interface MemoryProvider extends CuratedMemoryStore {
   isAvailable(): boolean | Promise<boolean>;
 }
 
-export type MemoryProviderKind = "file" | "http";
+export type MemoryProviderKind = "file" | "http" | "sqlite";
