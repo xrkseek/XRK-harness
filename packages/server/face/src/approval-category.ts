@@ -25,6 +25,7 @@ const NETWORK_TOOLS = new Set([
   "browser_snapshot",
   "browser_vision",
   "browser_scroll",
+  "video_analyze",
 ]);
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
@@ -46,7 +47,7 @@ export function extractNetworkContext(
   const obj = asObject(args);
   const candidates: string[] = [];
   if (obj) {
-    for (const key of ["url", "href", "uri", "endpoint", "host", "cdpUrl"]) {
+    for (const key of ["url", "href", "uri", "endpoint", "host", "cdpUrl", "video_url"]) {
       const v = obj[key];
       if (typeof v === "string" && v.trim()) candidates.push(v.trim());
     }

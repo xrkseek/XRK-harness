@@ -1,8 +1,8 @@
 /**
  * Menu reduction pure core. One group per source;
- * generation-gated settlement; empty ready groups auto-close. Zero React /
- * DOM / cordis. Stale or no-op events return the same state reference so
- * store subscribers skip re-renders.
+ * generation-gated settlement; empty ready groups stay open for the empty UI.
+ * Zero React / DOM / cordis. Stale or no-op events return the same state
+ * reference so store subscribers skip re-renders.
  *
  * Roster protocol: the frozen `hit` event carries no source roster, so the
  * reducer cannot invent groups. Opening from a closed state, the shell seeds
@@ -10,8 +10,7 @@
  * while open (query refinement) resets the existing groups to pending under
  * a new generation while keeping their items on screen until the new fetch
  * settles (stale-while-revalidate — the render layer shows skeletons only
- * for a pending group with no items). Auto-close and explicit close drop
- * the groups.
+ * for a pending group with no items). Explicit close drops the groups.
  */
 import type { InputTriggerCandidate, InputTriggerSource } from '../types.ts'
 import type { ExactMatch, MenuReduce, MenuState } from './contract.ts'
@@ -74,17 +73,17 @@ function positions(groups: MenuState['groups']): { source: string; index: number
   return out
 }
 
-/** True when every group is ready with zero items (the auto-close condition). */
+/** True when every group is ready with zero items (empty-menu UI condition). */
 const allReadyEmpty = (groups: MenuState['groups']): boolean =>
   groups.every(g => g.status === 'ready' && g.items.length === 0)
 
 /**
  * Pure menu reducer. `hit` opens a new generation over the seeded roster
  * (null hit closes); `source-settled` outside the current generation, the
- * open menu, or the roster is dropped; a settlement or failure leaving every
- * group ready-and-empty (or no groups) auto-closes; `source-failed` silently
- * removes the group (the shell logs); `move` cycles the highlight across
- * ready items.
+ * open menu, or the roster is dropped; a settlement leaving every group
+ * ready-and-empty keeps the menu open with a null highlight; `source-failed`
+ * silently removes the group (the shell logs) and closes only when no groups
+ * remain; `move` / `highlight` drive the keyboard and pointer highlight.
  *
  * @param state - Current menu state.
  * @param ev - Menu event.
@@ -114,7 +113,9 @@ export const menuReduce: MenuReduce = (state, ev) => {
       const items: readonly InputTriggerCandidate[] = ev.items ?? []
       const groups = state.groups.map((g, i) =>
         i === idx ? { ...g, status: 'ready' as const, items } : g)
-      if (allReadyEmpty(groups)) return closed(state)
+      if (allReadyEmpty(groups)) {
+        return { ...state, groups, highlight: null }
+      }
       const highlight = validHighlight(state.highlight, groups) ?? firstHighlight(groups)
       return { ...state, groups, highlight }
     }
@@ -122,7 +123,10 @@ export const menuReduce: MenuReduce = (state, ev) => {
       if (!state.open || ev.generation !== state.generation) return state
       if (!state.groups.some(g => g.source === ev.source)) return state
       const groups = state.groups.filter(g => g.source !== ev.source)
-      if (groups.length === 0 || allReadyEmpty(groups)) return closed(state)
+      if (groups.length === 0) return closed(state)
+      if (allReadyEmpty(groups)) {
+        return { ...state, groups, highlight: null }
+      }
       const highlight = validHighlight(state.highlight, groups) ?? firstHighlight(groups)
       return { ...state, groups, highlight }
     }
@@ -138,6 +142,14 @@ export const menuReduce: MenuReduce = (state, ev) => {
       if (next === undefined) return state
       if (hl && next.source === hl.source && next.index === hl.index) return state
       return { ...state, highlight: next }
+    }
+    case 'highlight': {
+      if (!state.open) return state
+      const g = state.groups.find(x => x.source === ev.source)
+      if (!g || g.status !== 'ready' || ev.index < 0 || ev.index >= g.items.length) return state
+      const hl = state.highlight
+      if (hl && hl.source === ev.source && hl.index === ev.index) return state
+      return { ...state, highlight: { source: ev.source, index: ev.index } }
     }
     case 'close':
       return closed(state)

@@ -33,7 +33,7 @@ function optionId(source: string, index: number): string {
  * @param props - injected face (the menu store and the pick route); `t` rides the standard locale seat.
  * @returns the dropdown while open; null while closed.
  */
-export function MenuView({ menu, headers, onPick, onCrumb, onDismiss, t }: MenuViewProps) {
+export function MenuView({ menu, headers, onPick, onHighlight, onCrumb, onDismiss, t }: MenuViewProps) {
   const state = useSyncExternalStore(
     fn => menu.subscribe(fn),
     () => menu.getSnapshot(),
@@ -104,9 +104,9 @@ export function MenuView({ menu, headers, onPick, onCrumb, onDismiss, t }: MenuV
         aria-label={t('suggestions.aria')}
         aria-activedescendant={highlight !== null ? optionId(highlight.source, highlight.index) : undefined}
       >
-        {state.groups.map(group => (group.status === 'ready' && group.items.length === 0)
-          ? null
-          : (
+        {state.groups.every(g => g.status === 'ready' && g.items.length === 0)
+          ? <div className={css.empty} role="option" aria-disabled="true">{t('empty')}</div>
+          : state.groups.map(group => (
             <Fragment key={group.source}>
               {/* Source names key the dictionary open-endedly: the lookup chain
                   returns an unknown key verbatim, so an unregistered source
@@ -116,7 +116,9 @@ export function MenuView({ menu, headers, onPick, onCrumb, onDismiss, t }: MenuV
                 : <div className={css.groupTitle} role="presentation" data-source={group.source}>{t(group.source as MenuKey)}</div>}
               {group.status === 'pending' && group.items.length === 0
                 ? <div className={css.loading} data-source={group.source}>{t('loading')}</div>
-                : group.items.map((item, index) => {
+                : group.status === 'ready' && group.items.length === 0
+                  ? null
+                  : group.items.map((item, index) => {
                   const active = highlight !== null && highlight.source === group.source && highlight.index === index
                   return (
                     <Fragment key={optionId(group.source, index)}>
@@ -129,6 +131,7 @@ export function MenuView({ menu, headers, onPick, onCrumb, onDismiss, t }: MenuV
                         role="option"
                         aria-selected={active}
                         className={clsx(css.item, active && css.active)}
+                        onMouseEnter={() => { onHighlight(group.source, index) }}
                         // mousedown, not click: the textarea keeps focus (combobox
                         // pattern) — preventing default stops the focus steal, and the
                         // pick runs before any blur-driven teardown.

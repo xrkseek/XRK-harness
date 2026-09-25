@@ -293,6 +293,16 @@ const VideoGenConfig = Schema.object({
 });
 
 /**
+ * Video analysis / understanding (Plugins card). Env `XRK_VIDEO_ANALYZE` remains CI bypass.
+ * API key via Credentials `XRK_VIDEO_ANALYZE_OPENAI_KEY`. Distinct from browser_vision.
+ */
+const VideoAnalyzeConfig = Schema.object({
+  mode: Schema.union(["off", "openai"]).default("off"),
+  baseUrl: Schema.string().default(""),
+  model: Schema.string().default(""),
+});
+
+/**
  * Curated MEMORY.md / USER.md (Plugins card).
  * Env `XRK_CURATED_MEMORY=0` remains CI bypass (force off).
  */
@@ -559,6 +569,12 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "video-gen",
       schema: schemasteryJson(VideoGenConfig) as FaceSchemaEnvelope,
+      base: { mode: "off", baseUrl: "", model: "" },
+      applies: "live",
+    },
+    {
+      ns: "video-analyze",
+      schema: schemasteryJson(VideoAnalyzeConfig) as FaceSchemaEnvelope,
       base: { mode: "off", baseUrl: "", model: "" },
       applies: "live",
     },

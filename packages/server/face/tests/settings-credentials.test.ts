@@ -309,6 +309,14 @@ describe("Face settings U2", () => {
     };
     expect(videoGen.value.mode).toBe("off");
     expect(videoGen.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "video-analyze")).toBe(true);
+    const videoAnalyze = v.namespaces.find((n) => n.ns === "video-analyze") as {
+      ns: string;
+      value: { mode: string };
+      applies: string;
+    };
+    expect(videoAnalyze.value.mode).toBe("off");
+    expect(videoAnalyze.applies).toBe("live");
     expect(v.namespaces.some((n) => n.ns === "curated-memory")).toBe(true);
     const curatedMemory = v.namespaces.find((n) => n.ns === "curated-memory") as {
       ns: string;

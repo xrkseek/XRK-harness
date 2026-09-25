@@ -2445,6 +2445,12 @@ importers:
 
   packages/exec/subprocess: {}
 
+  packages/exec/video-analyze:
+    dependencies:
+      '@xrkseek/core-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
+
   packages/exec/video-gen:
     dependencies:
       '@xrkseek/attachment':
@@ -2893,6 +2899,9 @@ importers:
       '@xrkseek/exec-subprocess':
         specifier: workspace:*
         version: link:../../exec/subprocess
+      '@xrkseek/exec-video-analyze':
+        specifier: workspace:*
+        version: link:../../exec/video-analyze
       '@xrkseek/exec-video-gen':
         specifier: workspace:*
         version: link:../../exec/video-gen
@@ -3846,6 +3855,9 @@ importers:
       '@xrkseek/exec-subprocess':
         specifier: workspace:*
         version: link:../../packages/exec/subprocess
+      '@xrkseek/exec-video-analyze':
+        specifier: workspace:*
+        version: link:../../packages/exec/video-analyze
       '@xrkseek/exec-video-gen':
         specifier: workspace:*
         version: link:../../packages/exec/video-gen

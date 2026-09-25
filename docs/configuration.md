@@ -187,6 +187,7 @@ Preset 选型：[profiles.md](./profiles.md)。
 | `XRK_COMPUTER_USE` | CI 旁路 Settings：`1`/`uia`（Windows UIA）· `memory` · `background` — 产品路径用 Settings → Plugins → Computer use；见 [computer-use.md](./computer-use.md) |
 | `XRK_COMPUTER_USE_BACKGROUND` | Background 助手路径（也可用 Credentials 槽；`mode=background` 时需要） |
 | `XRK_CURATED_MEMORY` | CI 旁路 Settings：`0` 强制关 · 非空其它强制开 — 产品路径用 Settings → Plugins → 策展记忆；见 [curated-memory.md](./curated-memory.md) |
+| `XRK_CURATED_MEMORY_PHASE2` | CI 旁路：`1` / `true` 强制开 Phase2 LLM 巩固（产品路径用 Settings `curated-memory.phase2Llm`） |
 | `XRK_CRON` | CI 旁路 Settings：`0` 强制关 · 非空其它强制开 — 产品路径用 Settings → Plugins → Cron；见 [cron.md](./cron.md) |
 | `XRK_ACP_AGENT` | CI 旁路 Settings：`subagent.runtime=acp` spawn 命令（如 `xrkh acp`）— 产品路径用 Settings → Plugins → 外部 Agent；见 [external-agent.md](./external-agent.md) |
 | `XRK_CODEX_APP_SERVER` | CI 旁路 Settings：`runtime=app-server` 命令；默认 `codex app-server` |
@@ -202,6 +203,10 @@ Preset 选型：[profiles.md](./profiles.md)。
 | `XRK_VIDEO_GEN_OPENAI_KEY` / `OPENAI_API_KEY` | Video-gen openai 模式密钥（也可用 Credentials 槽） |
 | `XRK_VIDEO_GEN_BASE_URL` | 可选兼容端点（也可用 Settings） |
 | `XRK_VIDEO_GEN_MODEL` | 可选模型（也可用 Settings；默认 `sora-2`） |
+| `XRK_VIDEO_ANALYZE` | CI 旁路 Settings：`memory` 或 `1`（+ OpenAI key）— 产品路径用 Settings → Plugins → Video analyze；见 [video-analyze.md](./video-analyze.md) |
+| `XRK_VIDEO_ANALYZE_OPENAI_KEY` / `OPENAI_API_KEY` | Video-analyze openai 模式密钥（也可用 Credentials 槽） |
+| `XRK_VIDEO_ANALYZE_BASE_URL` | 可选兼容 chat 端点（须接受 `video_url`；也可用 Settings） |
+| `XRK_VIDEO_ANALYZE_MODEL` | 可选视频能力模型（也可用 Settings；默认 `gemini-2.0-flash`） |
 | `XRK_TELEMETRY` | CI 旁路 Settings：`0` 关闭 · `memory` · `1`/`otlp`（需 endpoint）— 产品路径用 Settings → Plugins → Session telemetry；见 [session-telemetry.md](./session-telemetry.md) |
 | `XRK_TELEMETRY_OTLP_ENDPOINT` | OTLP logs URL（优先于标准 OTEL_*） |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | 标准 OTel 端点；可单独作 opt-in |
@@ -215,7 +220,9 @@ Preset 选型：[profiles.md](./profiles.md)。
 
 ## Plugins 设置（端到端）
 
-壳内路径：**设置 → 插件 → 插件配置**（不是「会话导入」）。展开 **MCP 服务器** · **网页搜索** · **Browser**（`browser`）· **Voice** · **图像生成**（`image-gen`，文生图 + 参考编辑）· **视频生成**（`video-gen`，文生/图生/catalog）· **策展记忆**（`curated-memory`）· **外部 Agent**（`external-agent`）· **终端**（`bash`）· **Agent 循环**（`agent-loop`）· **工作区注入**（`workspace-inject`）· **沙箱**（`sandbox`）· **Computer use**（`computer-use`）· **Cron**（`cron`）· **会话遥测**（`session-telemetry`）。「高级」含 Auto-review classifier。亦可点「打开配置文件」编辑 `~/.xrk/settings.yaml`。
+壳内路径：**设置 → 插件 → 插件配置**（不是「会话导入」）。展开 **MCP 服务器** · **网页搜索** · **Browser**（`browser`）· **Voice** · **图像生成**（`image-gen`，文生 + 图生/参考编辑）· **视频生成**（`video-gen`，文生/图生/catalog）· **视频理解**（`video-analyze`，整段多模态；与 `browser_vision` 分界）· **策展记忆**（`curated-memory`）· **外部 Agent**（`external-agent`）· **终端**（`bash`）· **Agent 循环**（`agent-loop`）· **工作区注入**（`workspace-inject`）· **沙箱**（`sandbox`）· **Computer use**（`computer-use`）· **Cron**（`cron`）· **会话遥测**（`session-telemetry`）。「高级」含 Auto-review classifier。亦可点「打开配置文件」编辑 `~/.xrk/settings.yaml`。
+
+用户主目录种子（skills / standing / recipes → `~/.xrk`）见 [skills-layers.md](./skills-layers.md)；与 Settings Face `base` 默认值无关——多模态默认仍关（`image-gen` / `video-gen` / `video-analyze` mode=off），由 Settings 或 env 旁路打开。
 
 Settings → Plugins 里会动到运行时的命名空间：
 
@@ -243,7 +250,8 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `voice` | `mode`（关 / openai）· `baseUrl` | **下次 agent 重建**后热切换；密钥走 Credentials `XRK_VOICE_OPENAI_KEY`；`XRK_VOICE` 可 CI 旁路 |
 | `image-gen` | `mode`（关 / openai）· `baseUrl` · `model` | **下次 agent 重建**后热切换；密钥走 Credentials `XRK_IMAGE_GEN_OPENAI_KEY`；`XRK_IMAGE_GEN` 可 CI 旁路 |
 | `video-gen` | `mode`（关 / openai）· `baseUrl` · `model` | **下次 agent 重建**后热切换；密钥走 Credentials `XRK_VIDEO_GEN_OPENAI_KEY`；`XRK_VIDEO_GEN` 可 CI 旁路 |
-| `curated-memory` | `enabled` | **下次 agent 重建**后挂/卸 `memory` 工具与系统提示冻结段；`XRK_CURATED_MEMORY` 可 CI 旁路 |
+| `video-analyze` | `mode`（关 / openai）· `baseUrl` · `model` | **下次 agent 重建**后热切换；密钥走 Credentials `XRK_VIDEO_ANALYZE_OPENAI_KEY`；`XRK_VIDEO_ANALYZE` 可 CI 旁路；见 [video-analyze.md](./video-analyze.md) |
+| `curated-memory` | `enabled` · `phase2Llm` | **下次 agent 重建**后挂/卸 `memory` 工具与系统提示冻结段；`phase2Llm` 开 Phase2 LLM 巩固；`XRK_CURATED_MEMORY` / `XRK_CURATED_MEMORY_PHASE2` 可 CI 旁路 |
 | `external-agent` | `acpAgent` · `codexAppServer` · `claudeCode` | **下次外部 subagent 回合**解析 spawn；对应 env 非空可 CI 旁路 |
 | `auto-review` | `classifierUrl`（token 走 Credentials） | **下次 classify**；`XRK_AUTO_REVIEW_CLASSIFIER_URL` 可 CI 旁路（Plugins → 高级） |
 | `memory-embed` | `url` · `collection`（token 走 Credentials） | **下次 embedding.search**；`XRK_MEMORY_EMBED_URL` 可 CI 旁路（Plugins → 高级） |
@@ -304,7 +312,7 @@ After `xrkh web`:
 | Model | **Settings → Models** |
 | API keys | **Settings → Credentials** (do not `export` env for routine use) |
 | Default permission preset | **Settings → Permissions**; session Access chip / `/permission` |
-| MCP · web search · browser · voice · image-gen · video-gen · curated-memory · external-agent · shell · agent loop · workspace inject · sandbox · computer use · cron · session telemetry · auto-review · memory-embed (Advanced) | **Settings → Plugins** |
+| MCP · web search · browser · voice · image-gen · video-gen · video-analyze · curated-memory · external-agent · shell · agent loop · workspace inject · sandbox · computer use · cron · session telemetry · auto-review · memory-embed (Advanced) | **Settings → Plugins** |
 | Open yaml | Settings “Open configuration file” → `{XRK_HOME}/settings.yaml` (usually `~/.xrk/settings.yaml`) |
 
 Agent loop card: soft request budget · keep/buffer · **compaction strategy** · auto-continue · tool-result spill. Shell card: timeout · per-stream output cap. Workspace inject card: rules/skills character budget.
@@ -478,6 +486,7 @@ Behavior notes:
 | `XRK_COMPUTER_USE` | CI bypass over Settings: `1`/`uia` (Windows UIA) · `memory` · `background` — product path: Settings → Plugins → Computer use; see [computer-use.md](./computer-use.md) |
 | `XRK_COMPUTER_USE_BACKGROUND` | Background helper path (also via Credentials; required when `mode=background`) |
 | `XRK_CURATED_MEMORY` | CI bypass over Settings: `0` force off · any other non-empty force on — product path: Settings → Plugins → Curated memory; see [curated-memory.md](./curated-memory.md) |
+| `XRK_CURATED_MEMORY_PHASE2` | CI bypass: `1` / `true` force Phase2 LLM consolidation (product path: Settings `curated-memory.phase2Llm`) |
 | `XRK_CRON` | CI bypass over Settings: `0` force off · any other non-empty force on — product path: Settings → Plugins → Cron; see [cron.md](./cron.md) |
 | `XRK_ACP_AGENT` | CI bypass over Settings: spawn command when `subagent.runtime=acp` (e.g. `xrkh acp`) — product path: Settings → Plugins → External agents; see [external-agent.md](./external-agent.md) |
 | `XRK_CODEX_APP_SERVER` | CI bypass over Settings: command for `runtime=app-server`; default `codex app-server` |
@@ -485,22 +494,18 @@ Behavior notes:
 | `XRK_VOICE` | CI bypass over Settings: `memory` or `1` (+ OpenAI key) — product path: Settings → Plugins → Voice; see [voice.md](./voice.md) |
 | `XRK_VOICE_OPENAI_KEY` / `OPENAI_API_KEY` | Voice openai-mode key (also via Credentials) |
 | `XRK_VOICE_BASE_URL` | Optional compatible endpoint (also Settings `baseUrl`; default `https://api.openai.com/v1`) |
-| `XRK_IMAGE_GEN` | CI bypass over Settings: `memory` or `1` (+ OpenAI key) — product path: Settings → Plugins → Image gen; see [image-gen.md](./image-gen.md) |
+| `XRK_IMAGE_GEN` | CI bypass over Settings: `memory` or `1` (+ OpenAI key) — product path: Settings → Plugins → Image generation; see [image-gen.md](./image-gen.md) |
 | `XRK_IMAGE_GEN_OPENAI_KEY` / `OPENAI_API_KEY` | Image-gen openai-mode key (also via Credentials) |
 | `XRK_IMAGE_GEN_BASE_URL` | Optional compatible endpoint (also Settings) |
 | `XRK_IMAGE_GEN_MODEL` | Optional model (also Settings; default `dall-e-3`) |
-| `XRK_VIDEO_GEN` | CI bypass over Settings: `memory` or `1` (+ OpenAI key) — product path: Settings → Plugins → Video gen; see [video-gen.md](./video-gen.md) |
+| `XRK_VIDEO_GEN` | CI bypass over Settings: `memory` or `1` (+ OpenAI key) — product path: Settings → Plugins → Video generation; see [video-gen.md](./video-gen.md) |
 | `XRK_VIDEO_GEN_OPENAI_KEY` / `OPENAI_API_KEY` | Video-gen openai-mode key (also via Credentials) |
 | `XRK_VIDEO_GEN_BASE_URL` | Optional compatible endpoint (also Settings) |
 | `XRK_VIDEO_GEN_MODEL` | Optional model (also Settings; default `sora-2`) |
-| `XRK_IMAGE_GEN` | CI bypass over Settings: `memory` or `1` (+ OpenAI key) — product path: Settings → Plugins → Image gen; see [image-gen.md](./image-gen.md) |
-| `XRK_IMAGE_GEN_OPENAI_KEY` / `OPENAI_API_KEY` | Image-gen openai-mode key (also via Credentials) |
-| `XRK_IMAGE_GEN_BASE_URL` | Optional compatible endpoint (also Settings) |
-| `XRK_IMAGE_GEN_MODEL` | Optional model (also Settings; default `dall-e-3`) |
-| `XRK_VIDEO_GEN` | CI bypass over Settings: `memory` or `1` (+ OpenAI key) — product path: Settings → Plugins → Video gen; see [video-gen.md](./video-gen.md) |
-| `XRK_VIDEO_GEN_OPENAI_KEY` / `OPENAI_API_KEY` | Video-gen openai-mode key (also via Credentials) |
-| `XRK_VIDEO_GEN_BASE_URL` | Optional compatible endpoint (also Settings) |
-| `XRK_VIDEO_GEN_MODEL` | Optional model (also Settings; default `sora-2`) |
+| `XRK_VIDEO_ANALYZE` | CI bypass over Settings: `memory` or `1` (+ OpenAI key) — product path: Settings → Plugins → Video analyze; see [video-analyze.md](./video-analyze.md) |
+| `XRK_VIDEO_ANALYZE_OPENAI_KEY` / `OPENAI_API_KEY` | Video-analyze openai-mode key (also via Credentials) |
+| `XRK_VIDEO_ANALYZE_BASE_URL` | Optional compatible chat endpoint that accepts `video_url` (also Settings) |
+| `XRK_VIDEO_ANALYZE_MODEL` | Optional video-capable model (also Settings; default `gemini-2.0-flash`) |
 | `XRK_TELEMETRY` | CI bypass over Settings: `0` off · `memory` · `1`/`otlp` (needs endpoint) — product path: Settings → Plugins → Session telemetry; see [session-telemetry.md](./session-telemetry.md) |
 | `XRK_TELEMETRY_OTLP_ENDPOINT` | OTLP logs URL (preferred over standard OTEL_*) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | Standard OTel endpoints; either alone is opt-in |
@@ -514,7 +519,9 @@ Without Tavily/Brave keys: `web_search` defaults to **parallel-free**, then fall
 
 ## Plugins settings (end-to-end)
 
-In the shell: **Settings → Plugins → Plugin configuration** (not the Session Import tab). Expand **MCP servers**, **Web search**, **Browser** (`browser`), **Voice**, **Image gen** (`image-gen`; text-to-image + reference edit), **Video gen** (`video-gen`; text/image-to-video + catalog), **Curated memory** (`curated-memory`), **External agents** (`external-agent`), **Shell** (`bash`), **Agent loop** (`agent-loop`), **Workspace inject** (`workspace-inject`), **Sandbox** (`sandbox`), **Computer use** (`computer-use`), **Cron** (`cron`), and **Session telemetry** (`session-telemetry`). **Advanced** holds the auto-review classifier and memory-embed vector sidecar. Or use **Open configuration file** for `~/.xrk/settings.yaml`.
+In the shell: **Settings → Plugins → Plugin configuration** (not the Session Import tab). Expand **MCP servers**, **Web search**, **Browser** (`browser`), **Voice**, **Image generation** (`image-gen`; text-to-image + image-to-image / reference edit), **Video generation** (`video-gen`; text/image-to-video + catalog), **Video analyze** (`video-analyze`; whole-clip multimodal; distinct from `browser_vision`), **Curated memory** (`curated-memory`), **External agents** (`external-agent`), **Shell** (`bash`), **Agent loop** (`agent-loop`), **Workspace inject** (`workspace-inject`), **Sandbox** (`sandbox`), **Computer use** (`computer-use`), **Cron** (`cron`), and **Session telemetry** (`session-telemetry`). **Advanced** holds the auto-review classifier and memory-embed vector sidecar. Or use **Open configuration file** for `~/.xrk/settings.yaml`.
+
+User-home seeds (skills / standing / recipes → `~/.xrk`) are documented in [skills-layers.md](./skills-layers.md). They are unrelated to Face `base` defaults — multimodal stays off (`image-gen` / `video-gen` / `video-analyze` mode=off) until Settings or an env bypass enables them.
 
 Settings → Plugins mutates these runtime namespaces:
 
@@ -542,7 +549,8 @@ Settings → Plugins mutates these runtime namespaces:
 | `voice` | `mode` (off / openai) · `baseUrl` | **Live** on next agent rebuild; key via Credentials `XRK_VOICE_OPENAI_KEY`; `XRK_VOICE` may CI-bypass |
 | `image-gen` | `mode` (off / openai) · `baseUrl` · `model` | **Live** on next agent rebuild; key via Credentials `XRK_IMAGE_GEN_OPENAI_KEY`; `XRK_IMAGE_GEN` may CI-bypass |
 | `video-gen` | `mode` (off / openai) · `baseUrl` · `model` | **Live** on next agent rebuild; key via Credentials `XRK_VIDEO_GEN_OPENAI_KEY`; `XRK_VIDEO_GEN` may CI-bypass |
-| `curated-memory` | `enabled` | **Live** on next agent rebuild (mount/unmount `memory` tool + frozen system prompt); `XRK_CURATED_MEMORY` may CI-bypass |
+| `video-analyze` | `mode` (off / openai) · `baseUrl` · `model` | **Live** on next agent rebuild; key via Credentials `XRK_VIDEO_ANALYZE_OPENAI_KEY`; `XRK_VIDEO_ANALYZE` may CI-bypass; see [video-analyze.md](./video-analyze.md) |
+| `curated-memory` | `enabled` · `phase2Llm` | **Live** on next agent rebuild (mount/unmount `memory` tool + frozen system prompt); `phase2Llm` enables Phase2 LLM consolidation; `XRK_CURATED_MEMORY` / `XRK_CURATED_MEMORY_PHASE2` may CI-bypass |
 | `external-agent` | `acpAgent` · `codexAppServer` · `claudeCode` | **Live** on next external subagent turn; matching env non-empty may CI-bypass |
 | `auto-review` | `classifierUrl` (token via Credentials) | **Live** on next classify; `XRK_AUTO_REVIEW_CLASSIFIER_URL` may CI-bypass (Plugins → Advanced) |
 | `memory-embed` | `url` · `collection` (token via Credentials) | **Live** on next embedding.search; `XRK_MEMORY_EMBED_URL` may CI-bypass (Plugins → Advanced) |

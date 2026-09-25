@@ -24,10 +24,18 @@
 
 ## 启用
 
-**产品路径**：Settings → Plugins → **Image gen**（Face ns `image-gen`：`mode` = 关 / openai · 可选 `baseUrl` · `model`）。API 密钥经 Credentials `XRK_IMAGE_GEN_OPENAI_KEY`。保存后热切换。非空 `XRK_IMAGE_GEN` 为 CI 旁路。
+优先序：**Settings（产品真源）** → **Credentials（密钥）** → **env（仅 CI / 无头旁路）**。
 
-| `XRK_IMAGE_GEN` / Settings | 行为 |
-|-----------------|------|
+| 通道 | 内容 |
+|------|------|
+| **Settings** | Face ns `image-gen`：`mode` = 关 / openai · 可选 `baseUrl` · `model`（Settings → Plugins → **图像生成**） |
+| **Credentials** | `XRK_IMAGE_GEN_OPENAI_KEY`（槽 `image.openai`）；运行时也可回落 `OPENAI_API_KEY` |
+| **仅 env** | `XRK_IMAGE_GEN=memory`（演示 Provider）· `=1` / `openai`（旁路 Settings 开 openai）· 可选 `XRK_IMAGE_GEN_BASE_URL` / `XRK_IMAGE_GEN_MODEL` |
+
+保存 Settings 后热切换（下次 agent 重建）。非空 `XRK_IMAGE_GEN` 为 CI 旁路。
+
+| Settings / env | 行为 |
+|----------------|------|
 | （未设 / 关） | 工具仍登记；execute **诚实失败** |
 | `memory`（仅 env） | 内存 Provider（1×1 PNG；支持 edit 路径测例） |
 | `1` / openai | 需 `OPENAI_API_KEY` 或 Credentials；默认 capabilities：text+image、最多 16 张参考图 |
@@ -52,4 +60,12 @@ No refs → OpenAI `images/generations`; with refs → `images/edits`.
 
 ## Enable
 
-**Product path**: Settings → Plugins → **Image gen**. Non-empty `XRK_IMAGE_GEN` is the CI bypass (`memory` / `1`+key). Custom Providers inject via `ImageGenService`.
+Precedence: **Settings (product SoT)** → **Credentials (secrets)** → **env (CI / headless bypass only)**.
+
+| Channel | Fields |
+|---------|--------|
+| **Settings** | Face ns `image-gen`: `mode` off/openai · optional `baseUrl` · `model` (Settings → Plugins → **Image generation**) |
+| **Credentials** | `XRK_IMAGE_GEN_OPENAI_KEY` (slot `image.openai`); runtime may also fall back to `OPENAI_API_KEY` |
+| **Env-only** | `XRK_IMAGE_GEN=memory` · `=1` / `openai` (bypass Settings) · optional `XRK_IMAGE_GEN_BASE_URL` / `XRK_IMAGE_GEN_MODEL` |
+
+Live after the next agent rebuild. Non-empty `XRK_IMAGE_GEN` is the CI bypass. Custom Providers inject via `ImageGenService`.

@@ -70,6 +70,8 @@ const TOOL_TITLES: Record<string, string> = {
   cordis_undefine: 'Remove Cordis Plugin',
   pwsh: 'Pwsh',
   read_image: 'Read image',
+  image_generate: 'Image generation',
+  video_generate: 'Video generation',
 }
 
 /**

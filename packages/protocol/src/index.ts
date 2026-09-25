@@ -94,6 +94,9 @@ export {
   type UserMessageEvent,
   type UserMessageSource,
   type WorkspaceBudgetTruncation,
+  type PresentedFile,
+  type DeliverablesPresentedEvent,
+  TOOL_EMITTABLE_EVENT_TYPES,
 } from "./session-events.js";
 export { parseTurnEndCancelCause } from "./session-events.js";
 export {

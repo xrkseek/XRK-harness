@@ -102,7 +102,7 @@ describe("FsService", () => {
     expect(out.content).toBe("2|b\n3|c\n\n[… 2 more lines; use offset=4]");
   });
 
-  it("registers read_file write_file apply_edit apply_patch glob grep", async () => {
+  it("registers read_file write_file apply_edit apply_patch glob grep present", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-"));
     await writeFile(path.join(root, "a.txt"), "hi", "utf8");
     const tools = createFsTools(createFsLocalProvider({ root }));
@@ -113,6 +113,7 @@ describe("FsService", () => {
       "apply_patch",
       "glob",
       "grep",
+      "present",
     ]);
   });
 

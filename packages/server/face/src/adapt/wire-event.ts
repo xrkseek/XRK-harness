@@ -51,6 +51,7 @@ export const EVENT_ISOMORPHISM = {
   "llm/retry-started": "llm.retry-started",
   "image/offload": "image/offload",
   "workspace/changes": "workspace/changes",
+  "deliverables/presented": "deliverables/presented",
 } as const satisfies Record<SessionEvent["type"], string>;
 
 /** SessionEvent envelope on the Face wire. */
@@ -447,6 +448,20 @@ export function toFaceWireSessionEvent(
           turn: turnNum(ctx, event.turnId),
           turnId: event.turnId,
           summary: event.summary,
+        },
+        ignorable: true,
+      };
+    case "deliverables/presented":
+      // Numeric `turn` for conversation turn-tail fold into produced paths.
+      return {
+        type: event.type,
+        seq,
+        time,
+        data: {
+          turn: turnNum(ctx, event.turnId),
+          turnId: event.turnId,
+          callId: event.callId,
+          files: event.files,
         },
         ignorable: true,
       };

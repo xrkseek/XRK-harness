@@ -40,6 +40,12 @@ export interface MenuViewInjected {
    */
   onPick: (source: string, index: number, action?: PickAction) => void
   /**
+   * Pointer hover syncs the keyboard highlight (combobox pattern).
+   * @param source - source (group) name.
+   * @param index - candidate index within the group.
+   */
+  onHighlight: (source: string, index: number) => void
+  /**
    * Pointer pick on one header crumb, routed back through the source's drill path.
    * @param source - source (group) name.
    * @param index - crumb index within that source's published header.

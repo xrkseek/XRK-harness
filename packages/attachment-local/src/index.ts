@@ -19,6 +19,7 @@ import {
   type StoredImageAttachment,
 } from "@xrkseek/attachment";
 import { CompressionLimiter } from "./compression-limiter.js";
+import { cropImageRegion } from "./crop-region.js";
 import type { NormalizationPolicy } from "./normalization.js";
 import {
   commitFileAttachment,
@@ -34,6 +35,7 @@ import { readRequestImageFile, requestImageVariantId } from "./request-image.js"
 
 export { canPassThroughNormalization, normalizeImage } from "./normalization.js";
 export type { NormalizedImage, NormalizationPolicy } from "./normalization.js";
+export { cropImageRegion } from "./crop-region.js";
 export {
   commitPreparedImageFile,
   prepareImageFile,
@@ -296,6 +298,7 @@ export function createLocalAttachmentStore(
       );
       return commitPreparedImageFile(root, prepared);
     },
+    cropImageRegion,
     readImage: readImageById,
     async readImageRequest(
       ref: ImageAttachmentRef,

@@ -1345,6 +1345,50 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         },
       };
     }
+    case "deliverables/presented": {
+      const turnId = reqString(value, "turnId", type);
+      const callId = reqString(value, "callId", type);
+      const filesRaw = value.files;
+      if (!Array.isArray(filesRaw)) {
+        throw new SessionEventParseError("files must be array", type);
+      }
+      if (filesRaw.length === 0) {
+        throw new SessionEventParseError(
+          "files must not be empty",
+          type,
+        );
+      }
+      const files: import("./session-events.js").PresentedFile[] = [];
+      for (let i = 0; i < filesRaw.length; i++) {
+        const row = filesRaw[i];
+        if (row === null || typeof row !== "object" || Array.isArray(row)) {
+          throw new SessionEventParseError(
+            "invalid presented file",
+            `${type}.files[${i}]`,
+          );
+        }
+        const path = Reflect.get(row, "path");
+        const description = Reflect.get(row, "description");
+        if (typeof path !== "string" || !path.trim()) {
+          throw new SessionEventParseError(
+            "file.path must be non-empty string",
+            `${type}.files[${i}]`,
+          );
+        }
+        let desc: string | undefined;
+        if (description !== undefined) {
+          if (typeof description !== "string" || !description.trim()) {
+            throw new SessionEventParseError(
+              "file.description must be non-empty string when set",
+              `${type}.files[${i}]`,
+            );
+          }
+          desc = description.trim();
+        }
+        files.push({ path, ...(desc !== undefined ? { description: desc } : {}) });
+      }
+      return { type, ts, turnId, callId, files };
+    }
     default:
       throw new SessionEventParseError(`unknown event type "${type}"`);
   }

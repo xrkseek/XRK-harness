@@ -28,6 +28,13 @@ export {
   isImageAdmissionError,
   type AttachmentErrorCode,
 } from "./error.js";
+export {
+  clampImageRegion,
+  parseImageRegion,
+  type ClampedImageRegion,
+  type CroppedImageRegion,
+  type ImageRegion,
+} from "./image-region.js";
 export type { AttachmentStore } from "./store.js";
 export {
   createMemoryAttachmentStore,

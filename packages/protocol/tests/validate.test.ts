@@ -651,6 +651,7 @@ describe("sessionEventJsonSchema", () => {
       "llm/retry-started",
       "image/offload",
       "workspace/changes",
+      "deliverables/presented",
     ];
     expect(types.sort()).toEqual([...expected].sort());
     expect(sessionEventJsonSchema.$id).toContain("session-event");

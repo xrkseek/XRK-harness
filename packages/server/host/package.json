@@ -36,6 +36,7 @@
     "@xrkseek/exec-voice": "workspace:*",
     "@xrkseek/exec-image-gen": "workspace:*",
     "@xrkseek/exec-video-gen": "workspace:*",
+    "@xrkseek/exec-video-analyze": "workspace:*",
     "@xrkseek/llm": "workspace:*",
     "@xrkseek/llm-registry": "workspace:*",
     "@xrkseek/mcp": "workspace:*",

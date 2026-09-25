@@ -51,7 +51,7 @@ Harness 在启用 web 工具时登记 `browser_open` / `browser_snapshot` / `bro
 | `browser_open` | 打开 URL，返回带 `@eN` 的元素快照 |
 | `browser_snapshot` | 当前页元素列表（`full=true` 附正文） |
 | `browser_act` | `click`（跟链 / 提交）或 `type`（填文本框） |
-| `browser_vision` | 截当前图形页给 vision（文本 `@eN` 旁加图片）。HTTP 快照没有浏览器时失败，不用元素列表冒充截图 |
+| `browser_vision` | 截当前图形页给 vision（文本 `@eN` 旁加图片）。HTTP 快照没有浏览器时失败，不用元素列表冒充截图。**不是**视频理解（视频文件用 `video_analyze`） |
 | `browser_vault_list` | 列出不透明凭证句柄（label / origin；**永不返回密钥**） |
 | `browser_vault_fill` | 用句柄向当前页 `@eN` 字段填密（服务端 type；结果仅 success/handle/origin） |
 
@@ -117,7 +117,7 @@ When web tools are enabled, harness registers `browser_open` / `browser_snapshot
 | `browser_open` | Open a URL; return element snapshot with `@eN` refs |
 | `browser_snapshot` | Current-page element list (`full=true` adds page text) |
 | `browser_act` | `click` (follow links / submit) or `type` (fill a textbox) |
-| `browser_vision` | Screenshot the graphical page for vision (image beside `@eN` text). The HTTP snapshot has no browser and fails; the element list is not a screenshot |
+| `browser_vision` | Screenshot the graphical page for vision (image beside `@eN` text). The HTTP snapshot has no browser and fails; the element list is not a screenshot. **Not** video understanding (use `video_analyze` for video files) |
 | `browser_vault_list` | List opaque credential handles (label / origin; **never returns secrets**) |
 | `browser_vault_fill` | Fill a snapshot `@eN` field from a handle (server-side type; result is success/handle/origin only) |
 

@@ -24,6 +24,7 @@
     { "path": "../../exec/voice" },
     { "path": "../../exec/image-gen" },
     { "path": "../../exec/video-gen" },
+    { "path": "../../exec/video-analyze" },
     { "path": "../../exec/memory" },
     { "path": "../../util/secrets" },
     { "path": "../../llm/registry" },

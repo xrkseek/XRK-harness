@@ -456,6 +456,13 @@ export type AgentFactory = (input: {
   /** Env overlay for video-gen (Credentials `XRK_VIDEO_GEN_OPENAI_KEY`). */
   videoGenEnv?: NodeJS.ProcessEnv;
   /**
+   * Face `video-analyze` product (Settings SoT).
+   * `XRK_VIDEO_ANALYZE` env still bypasses for CI.
+   */
+  videoAnalyzeProduct?: import("@xrkseek/exec-video-analyze").VideoAnalyzeProductConfig;
+  /** Env overlay for video-analyze (Credentials `XRK_VIDEO_ANALYZE_OPENAI_KEY`). */
+  videoAnalyzeEnv?: NodeJS.ProcessEnv;
+  /**
    * Face `curated-memory` product: pass `false` to skip MEMORY.md / USER.md;
    * pass a provider to share Host Phase1 consolidation store with Agent tools.
    * `XRK_CURATED_MEMORY=0` env still force-disables for CI.
@@ -951,6 +958,8 @@ export function createHostManager(): HostManager {
           imageGenEnv?: NodeJS.ProcessEnv;
           videoGenProduct?: import("@xrkseek/exec-video-gen").VideoGenProductConfig;
           videoGenEnv?: NodeJS.ProcessEnv;
+          videoAnalyzeProduct?: import("@xrkseek/exec-video-analyze").VideoAnalyzeProductConfig;
+          videoAnalyzeEnv?: NodeJS.ProcessEnv;
           curatedMemory?: false | MemoryProvider;
           /** Face `locale.preference` — reasoning/reply language directive. */
           locale?: "zh" | "en";
@@ -1131,6 +1140,12 @@ export function createHostManager(): HostManager {
                 : {}),
               ...(pluginSettings.videoGenEnv
                 ? { videoGenEnv: pluginSettings.videoGenEnv }
+                : {}),
+              ...(pluginSettings.videoAnalyzeProduct
+                ? { videoAnalyzeProduct: pluginSettings.videoAnalyzeProduct }
+                : {}),
+              ...(pluginSettings.videoAnalyzeEnv
+                ? { videoAnalyzeEnv: pluginSettings.videoAnalyzeEnv }
                 : {}),
               ...(pluginSettings.curatedMemory === false
                 ? { curatedMemory: false as const }
@@ -1993,6 +2008,36 @@ export function createHostManager(): HostManager {
         const videoGenEnv: NodeJS.ProcessEnv | undefined = videoKey
           ? { ...process.env, XRK_VIDEO_GEN_OPENAI_KEY: videoKey }
           : undefined;
+        const videoAnalyzeNs = faceRuntime.settingsNamespaces.view(
+          "video-analyze",
+        ).value as Record<string, unknown>;
+        const videoAnalyzeModeRaw =
+          typeof videoAnalyzeNs.mode === "string"
+            ? videoAnalyzeNs.mode.trim().toLowerCase()
+            : "off";
+        const videoAnalyzeBase =
+          typeof videoAnalyzeNs.baseUrl === "string" &&
+          videoAnalyzeNs.baseUrl.trim()
+            ? videoAnalyzeNs.baseUrl.trim()
+            : undefined;
+        const videoAnalyzeModel =
+          typeof videoAnalyzeNs.model === "string" &&
+          videoAnalyzeNs.model.trim()
+            ? videoAnalyzeNs.model.trim()
+            : undefined;
+        const videoAnalyzeProduct: import("@xrkseek/exec-video-analyze").VideoAnalyzeProductConfig =
+          {
+            mode: videoAnalyzeModeRaw === "openai" ? "openai" : "off",
+            ...(videoAnalyzeBase ? { baseUrl: videoAnalyzeBase } : {}),
+            ...(videoAnalyzeModel ? { model: videoAnalyzeModel } : {}),
+          };
+        const videoAnalyzeKey =
+          faceRuntime.credentials.peek("video-analyze.openai")?.trim() ||
+          process.env.XRK_VIDEO_ANALYZE_OPENAI_KEY?.trim() ||
+          "";
+        const videoAnalyzeEnv: NodeJS.ProcessEnv | undefined = videoAnalyzeKey
+          ? { ...process.env, XRK_VIDEO_ANALYZE_OPENAI_KEY: videoAnalyzeKey }
+          : undefined;
         const localeNs = faceRuntime.settingsNamespaces.view("locale")
           .value as Record<string, unknown>;
         const asLocale = (raw: unknown): "zh" | "en" | undefined =>
@@ -2072,6 +2117,8 @@ export function createHostManager(): HostManager {
           ...(imageGenEnv ? { imageGenEnv } : {}),
           videoGenProduct,
           ...(videoGenEnv ? { videoGenEnv } : {}),
+          videoAnalyzeProduct,
+          ...(videoAnalyzeEnv ? { videoAnalyzeEnv } : {}),
           ...(!curatedMemoryEnabled ? { curatedMemory: false as const } : {}),
           ...(localePref ? { locale: localePref } : {}),
         };

@@ -20,6 +20,7 @@
     { "path": "../../packages/exec/voice" },
     { "path": "../../packages/exec/image-gen" },
     { "path": "../../packages/exec/video-gen" },
+    { "path": "../../packages/exec/video-analyze" },
     { "path": "../../packages/exec/memory" },
     { "path": "../../packages/exec/lsp" },
     { "path": "../../packages/exec/pty" },

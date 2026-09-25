@@ -42,7 +42,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | --- | --- |
 | 出站 `HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY` → undici 全局 dispatcher | **能跑**（Host `spawn` 安装；依赖 `undici`） |
 | Skill `/` 菜单模糊子序列（对齐 commands） | **能跑** |
-| `read_image` 结果 content=`[text,image]` + Face `meta` + Web 工具卡 | **能跑** |
+| `read_image` 结果 content=`[text,image]` + Face `meta` + Web 工具卡；可选 Hermes 式 `region` `[x1,y1,x2,y2]`（裁剪在 normalize 前） | **能跑** |
 | Host `home` + 工具行 POSIX `~` 缩写（read / read_image / Generic） | **能跑** |
 | SSH 远端工作区（Settings 通用「远程」`ssh-remote`；`XRK_SSH_HOST` CI 旁路；fs / bash / `run_code`；本地 Host） | **能跑**（改完重启；Web 目录浏览走 SSH；交互式 PTY / `openPath` 关闭；见 [seams](./seams.md) · [configuration](./configuration.md)） |
 | Workspace hover POSIX `~` 缩写（`hostDescription.home`；复制仍绝对路径） | **能跑** |
@@ -112,6 +112,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | 语音 Host | `text_to_speech` · `voice_transcribe` · `voice_session`；Provider：memory / OpenAI HTTP；Settings → Voice（缺钥 UI 告警 · `describeVoiceAccess` / doctor 同源文案）；mic/WebRTC 在客户端；**唤醒词未做** | **能跑**（见 [voice.md](./voice.md)；`XRK_VOICE` CI 旁路；唤醒后置） |
 | 图像生成 | `image_generate`；Provider：memory / OpenAI Images；可选写入 AttachmentStore；**文生图 + 图生图/编辑**（`image_url` / `reference_image_urls` / `reference_attachment_ids`；schema 按 `capabilities()` 动态重建；OpenAI → generations/edits） | **能跑**（见 [image-gen.md](./image-gen.md)；Settings → Plugins → Image gen；`XRK_IMAGE_GEN` CI 旁路） |
 | 视频生成 | `video_generate`；异步作业（start → status/wait → content）；Provider：memory / OpenAI Videos；**文生视频 + 图生视频/首帧**（`first_frame` / `image_url` / `reference_*`；schema 按 `capabilities()` 动态重建；OpenAI → `input_reference`）；**edit/extend** + `action=catalog`（family） | **能跑**（见 [video-gen.md](./video-gen.md)；Settings → Plugins → Video gen；`XRK_VIDEO_GEN` CI 旁路） |
+| 视频理解 | `video_analyze`；整段视频 URL/工作区路径 → 多模态 LLM 文本分析（Hermes；**不抽帧**）；与 `browser_vision` / `video_generate` / `read_image` 分界；Provider：memory / OpenAI-compatible `video_url` | **能跑**（见 [video-analyze.md](./video-analyze.md)；Settings → Plugins → Video analyze；`XRK_VIDEO_ANALYZE` CI 旁路） |
 | 回合回退 · 工作区快照 | `WorkspaceCheckpointStore`：影子 git；Host 每轮前自动 snapshot；Face `session.checkpoint.*` · `/rollback` · 消息 Restore；与 `session.fork` / fork-cut（仅血缘）分界见 [turn-rewind.md](./turn-rewind.md) | **能跑**（需 `git`；`XRK_CHECKPOINTS=0` 关闭自动快照） |
 | MCP HTTP · OAuth 设备码 | `loginWithDeviceCode` + `McpDeviceTokenStore`（RFC 8628：`authorization_pending` / `slow_down` 续等，`access_denied` / `expired_token` 立即失败；原子落盘 `~/.xrk/mcp-tokens/<server>.json` · best-effort 0600 · 到期前 refresh）；端点缺失时按 RFC 9728 / RFC 8414 发现；`auth` 只挂在 HTTP transport；CLI `xrkh mcp login/status/logout/list/path`；Settings MCP 卡经 Face `mcp.oauth.login|status|logout` 同路径（pending 后 Host 后台轮询） | **能跑**（见 [modules/mcp.md](./modules/mcp.md)、[configuration.md](./configuration.md)；需 IdP 支持设备码） |
 | 文档抽取 | `read_file` 在 `FsService.read` 内把 PDF / DOCX / XLSX / ipynb 转成文本（扫描版 PDF 无文本层时说明，不另开工具名） | **能跑** |
@@ -123,6 +124,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | 写路径危险 pattern | harness：`createHardlineArgvPre`（policy **前** fail-closed）+ `createWritePathSecurityPre/Post`（敏感路径 deny；内容 pattern 默认结果提示） | **能跑**（见 [policy.md](./policy.md) · [security-checklist.md](./security-checklist.md)） |
 | 图生图 / 图生视频 · 参考图编辑 | `image_generate` 参考图编辑 + `video_generate` 首帧 i2v / edit / extend / family catalog；**平台缝** `ToolDefinition.dynamicSchema` ← Provider `capabilities()`（`materializeTools` 每步重建 catalog） | **能跑**（P0 多模态生成 + 动态 schema 缝完成；fal/xai 插件矩阵仍后置） |
 | 图片 token 估算 / 请求图缩放 | `@xrkseek/attachment`：`estimateImageTokens` / `requestImageTokenDimensions`（DeepSeek V41 发布算法）+ `requestImageDimensions` / `longEdgeDimensions`；soft-budget 按附件宽高计 vision token；DeepSeek 路由 `resolveDeepSeekRequestImagePolicy(model, source)` 按 token 网格投影 `maxPixels` 再经 local request-image 降质；`request-image-bound` 仍有 20MB base64 上限 | **能跑** |
+| Vision region crop | `read_image.region` + `AttachmentStore.cropImageRegion`（Hermes `[x1,y1,x2,y2]`，裁剪在 admission normalize 前；本地仓 sharp；输出披露 crop offset） | **能跑** |
 
 | 会话级模型选择持久化 | `~/.xrk/session-models.json` sidecar；`/model` 写入并 Host 重启回灌 | **能跑** |
 | 模型模态声明编辑面 | `FaceModelEntry.inputModalities` + Settings 勾选；`createAdapter` 透传 catalog；Custom text-only 可拦图 | **能跑** |
@@ -216,7 +218,7 @@ Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CL
 | --- | --- |
 | Outbound `HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY` → undici global dispatcher | **Working** (Host `spawn` install; `undici` dep) |
 | Skill `/` menu fuzzy subsequence (aligned with commands) | **Working** |
-| `read_image` content=`[text,image]` + Face `meta` + Web tool card | **Working** |
+| `read_image` content=`[text,image]` + Face `meta` + Web tool card; optional Hermes-style `region` `[x1,y1,x2,y2]` (crop before normalize) | **Working** |
 | Host `home` + tool-row POSIX `~` abbreviation (read / read_image / Generic) | **Working** |
 | SSH remote workspace (Settings General → Remote `ssh-remote`; `XRK_SSH_HOST` CI bypass; fs / bash / `run_code`; local Host) | **Working** (restart after change; Web directory browse rides SSH; interactive PTY / `openPath` off; see [seams](./seams.md) · [configuration](./configuration.md)) |
 | Workspace hover POSIX `~` abbreviation (`hostDescription.home`; copy stays absolute) | **Working** |
@@ -286,6 +288,7 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | Voice host | `text_to_speech` · `voice_transcribe` · `voice_session`; Providers: memory / OpenAI HTTP; Settings → Voice (missing-key UI warning · shared `describeVoiceAccess` / doctor copy); mic/WebRTC on client; **wake word not shipped** | **Working** (see [voice.md](./voice.md); `XRK_VOICE` CI bypass; wake deferred) |
 | Image generation | `image_generate`; Providers: memory / OpenAI Images; optional AttachmentStore; **text-to-image + image edit** (`image_url` / `reference_image_urls` / `reference_attachment_ids`; schema from `capabilities()`; OpenAI generations/edits) | **Working** (see [image-gen.md](./image-gen.md); Settings → Plugins → Image gen; `XRK_IMAGE_GEN` CI bypass) |
 | Video generation | `video_generate`; async job lifecycle (start → status/wait → content); Providers: memory / OpenAI Videos; **text-to-video + image-to-video / first frame** (`first_frame` / `image_url` / `reference_*`; schema from `capabilities()`; OpenAI `input_reference`); **edit/extend** + `action=catalog` (family) | **Working** (see [video-gen.md](./video-gen.md); Settings → Plugins → Video gen; `XRK_VIDEO_GEN` CI bypass) |
+| Video analysis | `video_analyze`; whole-clip URL/workspace path → multimodal LLM text (Hermes; **no frame extract**); distinct from `browser_vision` / `video_generate` / `read_image`; Providers: memory / OpenAI-compatible `video_url` | **Working** (see [video-analyze.md](./video-analyze.md); Settings → Plugins → Video analyze; `XRK_VIDEO_ANALYZE` CI bypass) |
 | Turn rewind · workspace snapshots | `WorkspaceCheckpointStore`: shadow git; Host auto-snapshots before each turn; Face `session.checkpoint.*` · `/rollback` · message Restore; distinct from `session.fork` / fork-cut (lineage only) — see [turn-rewind.md](./turn-rewind.md) | **Working** (needs `git`; `XRK_CHECKPOINTS=0` disables auto-snapshot) |
 | MCP HTTP · OAuth device code | `loginWithDeviceCode` + `McpDeviceTokenStore` (RFC 8628: keeps waiting on `authorization_pending` / `slow_down`, fails immediately on `access_denied` / `expired_token`; atomic write to `~/.xrk/mcp-tokens/<server>.json` · best-effort 0600 · refresh before expiry); endpoints discovered per RFC 9728 / RFC 8414 when unknown; `auth` attaches to the HTTP transport only; CLI `xrkh mcp login/status/logout/list/path`; Settings MCP card uses Face `mcp.oauth.login|status|logout` on the same path (Host keeps polling after pending) | **Working** (see [modules/mcp.md](./modules/mcp.md) · [configuration.md](./configuration.md); needs an IdP with device-code support) |
 | Document extraction | `read_file` converts PDF / DOCX / XLSX / ipynb to text inside `FsService.read` (scanned PDFs with no text layer say so; no extra tool name) | **Working** |
@@ -297,6 +300,7 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | Write-path dangerous patterns | harness: `createHardlineArgvPre` (**before** policy, fail-closed) + `createWritePathSecurityPre/Post` (sensitive-path deny; content patterns advisory by default) | **Working** (see [policy.md](./policy.md) · [security-checklist.md](./security-checklist.md)) |
 | Image-to-image / image-to-video · reference-image editing | `image_generate` reference edit + `video_generate` first-frame i2v / edit / extend / family catalog; **platform seam** `ToolDefinition.dynamicSchema` ← Provider `capabilities()` (`materializeTools` rebuilds catalog each step) | **Working** (P0 multimodal generation + dynamic-schema seam done; fal/xai plugin matrix still deferred) |
 | Image token estimation / request-image resizing | `@xrkseek/attachment`: `estimateImageTokens` / `requestImageTokenDimensions` (DeepSeek V41 published calculator) + `requestImageDimensions` / `longEdgeDimensions`; soft-budget prices vision tokens from attachment dims; DeepSeek route `resolveDeepSeekRequestImagePolicy(model, source)` projects `maxPixels` from the token grid then local request-image downscales; `request-image-bound` keeps the 20 MB base64 safety net | **Working** |
+| Vision region crop | `read_image.region` + `AttachmentStore.cropImageRegion` (Hermes `[x1,y1,x2,y2]`, crop before admission normalize; local store via sharp; tool text discloses crop offset) | **Working** |
 
 | Session-level model selection persistence | `~/.xrk/session-models.json` sidecar; `/model` writes and Host restart rehydrates | **Working** |
 | Model modality declaration editing surface | `FaceModelEntry.inputModalities` + Settings checkboxes; `createAdapter` passes catalog through; custom text-only can block images | **Working** |

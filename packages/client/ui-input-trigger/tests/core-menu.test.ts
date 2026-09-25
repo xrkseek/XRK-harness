@@ -1,4 +1,4 @@
-// menuReduce generation gating, auto-close, silent group removal, cyclic
+// menuReduce generation gating, empty-menu keep-open, silent group removal, cyclic
 // highlight movement, stale/no-op reference identity; exactMatch lookup.
 import { describe, expect, it } from 'vitest'
 import type { MenuState, TriggerHit } from '../src/core/contract.ts'
@@ -94,12 +94,16 @@ describe('menuReduce source-settled', () => {
     expect(s.open).toBe(true) // skill still pending
   })
 
-  it('auto-closes when every group settles ready and empty', () => {
+  it('keeps the menu open when every group settles ready and empty', () => {
     let s = open(['command', 'skill'])
     s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'command', items: [] })
     s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'skill', items: [] })
-    expect(s.open).toBe(false)
-    expect(s.groups).toEqual([])
+    expect(s.open).toBe(true)
+    expect(s.groups).toEqual([
+      { source: 'command', status: 'ready', items: [] },
+      { source: 'skill', status: 'ready', items: [] },
+    ])
+    expect(s.highlight).toBeNull()
   })
 
   it('stays open when one group is empty but another has items', () => {
@@ -126,11 +130,13 @@ describe('menuReduce source-failed', () => {
     expect(s.open).toBe(false)
   })
 
-  it('closes when the surviving groups are all ready and empty', () => {
+  it('keeps the menu open when the surviving groups are all ready and empty', () => {
     let s = open(['command', 'skill'])
     s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'skill', items: [] })
     s = menuReduce(s, { type: 'source-failed', generation: 1, source: 'command' })
-    expect(s.open).toBe(false)
+    expect(s.open).toBe(true)
+    expect(s.groups).toEqual([{ source: 'skill', status: 'ready', items: [] }])
+    expect(s.highlight).toBeNull()
   })
 
   it('moves the highlight off the failed group', () => {
@@ -195,6 +201,23 @@ describe('menuReduce move', () => {
     let single = open(['command'])
     single = menuReduce(single, { type: 'source-settled', generation: 1, source: 'command', items: [item('goal')] })
     expect(menuReduce(single, { type: 'move', dir: 1 })).toBe(single)
+  })
+})
+
+describe('menuReduce highlight', () => {
+  it('sets the highlight from a pointer hover', () => {
+    let s = open(['command'])
+    s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'command', items: [item('goal'), item('model')] })
+    expect(s.highlight).toEqual({ source: 'command', index: 0 })
+    s = menuReduce(s, { type: 'highlight', source: 'command', index: 1 })
+    expect(s.highlight).toEqual({ source: 'command', index: 1 })
+  })
+
+  it('is a no-op for out-of-range or identical highlight', () => {
+    let s = open(['command'])
+    s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'command', items: [item('goal')] })
+    expect(menuReduce(s, { type: 'highlight', source: 'command', index: 0 })).toBe(s)
+    expect(menuReduce(s, { type: 'highlight', source: 'command', index: 3 })).toBe(s)
   })
 })
 

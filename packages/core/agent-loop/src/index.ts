@@ -48,6 +48,7 @@ import {
   parseTurnEndCancelCause,
   projectFilesToText,
   DEFAULT_PLAN_POLICY_SECTION,
+  TOOL_EMITTABLE_EVENT_TYPES,
   foldPlanMode,
   pendingPlanTarget,
 } from "@xrkseek/protocol";
@@ -1230,14 +1231,23 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     for (let i = 0; i < calls.length; i++) {
       const outcome = outcomes[i]!;
       for (const te of outcome.toolEvents) {
-        if (te.type !== "todo/write" && te.type !== "plan/mode") continue;
+        if (!TOOL_EMITTABLE_EVENT_TYPES.includes(te.type as SessionEvent["type"])) continue;
+        // Turn/call identity is Host-owned; tool payloads carry only data.
+        const payload =
+          te.type === "deliverables/presented"
+            ? {
+                ...(te.payload && typeof te.payload === "object"
+                  ? te.payload
+                  : {}),
+                turnId,
+                callId: outcome.result.toolCallId,
+              }
+            : te.payload;
         try {
           const ev = parseSessionEvent({
             type: te.type,
             ts: now(),
-            ...(te.payload && typeof te.payload === "object"
-              ? te.payload
-              : {}),
+            ...(payload && typeof payload === "object" ? payload : {}),
           });
           append(input.store, input.sessionId, ev);
         } catch {

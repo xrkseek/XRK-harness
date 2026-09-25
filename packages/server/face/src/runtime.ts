@@ -333,6 +333,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const goals = new FaceGoalStore(options.goalPersistPath);
   const wireIds = new FaceWireIdMaps();
   const toolArgMaps = new FaceToolArgMaps();
+  const inboxWire = new FaceInboxWireMaps(admitRpcMap);
   /** Filled after `invalidateAgent` is defined — drop cached AgentHandle on LRU. */
   const onResidentEvict: {
     fn?: (sessionId: string) => void | Promise<void>;
@@ -349,11 +350,15 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         return;
       }
       projections.evictSession(sessionId);
-      toolArgMaps.forSession(sessionId).clear();
+      // Drop every session-scoped accumulator for the evicted session.
+      // Missing any of these leaks per-session buckets into the long-running
+      // host process and grows its heap without bound.
+      toolArgMaps.clear(sessionId);
+      wireIds.clear(sessionId);
+      inboxWire.clear(sessionId);
       void onResidentEvict.fn?.(sessionId);
     });
   }
-  const inboxWire = new FaceInboxWireMaps(admitRpcMap);
   const rememberedTools = new Map<string, ToolRegistry>();
   const rememberedJobs = new Map<string, NonNullable<AgentHandle["jobs"]>>();
   const jobUnsubs = new Map<string, () => void>();

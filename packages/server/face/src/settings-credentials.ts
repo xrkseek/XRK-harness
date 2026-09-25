@@ -298,6 +298,11 @@ export function listCredentialSlots(
       envVar: "XRK_VIDEO_GEN_OPENAI_KEY",
     },
     {
+      id: "video-analyze.openai",
+      label: "Video-analyze OpenAI API key",
+      envVar: "XRK_VIDEO_ANALYZE_OPENAI_KEY",
+    },
+    {
       id: "auto-review.classifier",
       label: "Auto-review classifier token",
       envVar: "XRK_AUTO_REVIEW_CLASSIFIER_TOKEN",

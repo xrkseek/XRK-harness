@@ -528,4 +528,37 @@ describe("Face DSH wire-event adapt", () => {
       ignorable: true,
     });
   });
+
+  it("deliverables/presented carries numeric turn + files for the produced card", () => {
+    const files = [
+      { path: "out/report.md", description: "final report" },
+      { path: "out/chart.png" },
+    ];
+    const ids = new FaceWireIdMaps();
+    expect(ids.turn("sess", "turn_0")).toBe(1);
+    expect(ids.turn("sess", "turn_1")).toBe(2);
+    const wire = toFaceWireSessionEvent(
+      {
+        type: "deliverables/presented",
+        ts: 60,
+        turnId: "turn_1",
+        callId: "call_present_1",
+        files,
+      },
+      12,
+      { sessionId: "sess", ids },
+    );
+    expect(wire).toEqual({
+      type: "deliverables/presented",
+      seq: 12,
+      time: 60,
+      data: {
+        turn: 2,
+        turnId: "turn_1",
+        callId: "call_present_1",
+        files,
+      },
+      ignorable: true,
+    });
+  });
 });

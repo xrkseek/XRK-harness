@@ -6,7 +6,7 @@
  * declares `settings.plugin.item` and renders whatever cards were registered
  * into it. Shipped cards: MCP, shell (`bash`), agent-loop, workspace-inject, web-search,
  * session-telemetry, sandbox, computer-use, browser, voice, image-gen, video-gen,
- * curated-memory, a2a-inbound, external-agent, cron. Advanced tab: auto-review classifier · memory-embed.
+ * video-analyze, curated-memory, a2a-inbound, external-agent, cron. Advanced tab: auto-review classifier · memory-embed.
  * General 「远程」: ssh-remote (restart).
  */
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
@@ -38,6 +38,7 @@ import { SandboxCard } from './SandboxCard.tsx'
 import { SshRemoteCard } from './SshRemoteCard.tsx'
 import { TelemetryCard } from './TelemetryCard.tsx'
 import { VideoGenCard } from './VideoGenCard.tsx'
+import { VideoAnalyzeCard } from './VideoAnalyzeCard.tsx'
 import { VoiceCard } from './VoiceCard.tsx'
 import { WebSearchCard } from './WebSearchCard.tsx'
 import { WorkspaceInjectCard } from './WorkspaceInjectCard.tsx'
@@ -67,6 +68,7 @@ import { SESSION_TELEMETRY_NS, TelemetryCardController } from './telemetry-card-
 import { SSH_REMOTE_NS, SshRemoteCardController } from './ssh-remote-card-controller.ts'
 import { MCP_NS, McpCardController } from './mcp-card-controller.ts'
 import { VIDEO_GEN_NS, VideoGenCardController, VIDEO_GEN_OPENAI_REF } from './video-gen-card-controller.ts'
+import { VIDEO_ANALYZE_NS, VideoAnalyzeCardController, VIDEO_ANALYZE_OPENAI_REF } from './video-analyze-card-controller.ts'
 import { VOICE_NS, VoiceCardController, VOICE_OPENAI_REF } from './voice-card-controller.ts'
 import { WEB_SEARCH_NS, WebSearchCardController, WEB_SEARCH_BRAVE_REF, WEB_SEARCH_TAVILY_REF } from './web-search-card-controller.ts'
 import { WORKSPACE_INJECT_NS, WorkspaceInjectCardController } from './workspace-inject-card-controller.ts'
@@ -104,6 +106,7 @@ export type { AdvancedPluginsTabFace, AdvancedPluginsTabState } from './advanced
 export type { SettingsPluginAdvancedItemOwnerProps } from './advanced-slot-contract.ts'
 export type { McpCardFace, McpCardState, McpServerDraft, McpConnectedEntry } from './mcp-card-controller.ts'
 export type { VideoGenCardFace, VideoGenCardState } from './video-gen-card-controller.ts'
+export type { VideoAnalyzeCardFace, VideoAnalyzeCardState } from './video-analyze-card-controller.ts'
 export type { VoiceCardFace, VoiceCardState } from './voice-card-controller.ts'
 export type { WebSearchCardFace, WebSearchCardState } from './web-search-card-controller.ts'
 export type {
@@ -125,6 +128,7 @@ export { A2A_INBOUND_NS } from './a2a-inbound-card-controller.ts'
 export { VOICE_NS, VOICE_OPENAI_REF } from './voice-card-controller.ts'
 export { IMAGE_GEN_NS, IMAGE_GEN_OPENAI_REF } from './image-gen-card-controller.ts'
 export { VIDEO_GEN_NS, VIDEO_GEN_OPENAI_REF } from './video-gen-card-controller.ts'
+export { VIDEO_ANALYZE_NS, VIDEO_ANALYZE_OPENAI_REF } from './video-analyze-card-controller.ts'
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'settings.plugins'
@@ -188,6 +192,10 @@ export function apply(ctx: ClientContext): void {
     ctx.settingsScope.bind({ namespace: VIDEO_GEN_NS }),
     api,
   )
+  const videoAnalyze = new VideoAnalyzeCardController(
+    ctx.settingsScope.bind({ namespace: VIDEO_ANALYZE_NS }),
+    api,
+  )
   const autoReview = new AutoReviewCardController(
     ctx.settingsScope.bind({ namespace: AUTO_REVIEW_NS }),
     api,
@@ -234,6 +242,7 @@ export function apply(ctx: ClientContext): void {
       if (ref === VOICE_OPENAI_REF) voice.refreshCredential(ref)
       if (ref === IMAGE_GEN_OPENAI_REF) imageGen.refreshCredential(ref)
       if (ref === VIDEO_GEN_OPENAI_REF) videoGen.refreshCredential(ref)
+      if (ref === VIDEO_ANALYZE_OPENAI_REF) videoAnalyze.refreshCredential(ref)
       if (ref === AUTO_REVIEW_CLASSIFIER_TOKEN_REF) autoReview.refreshCredential(ref)
       if (ref === MEMORY_EMBED_TOKEN_REF) memoryEmbed.refreshCredential(ref)
     }),
@@ -419,6 +428,12 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: () => videoGen.inject(),
     }, VideoGenCard)
+    yield ctx.slots.register({
+      name: 'settings.plugin.item',
+      key: VIDEO_ANALYZE_NS,
+      locale: NS,
+      inject: () => videoAnalyze.inject(),
+    }, VideoAnalyzeCard)
     yield ctx.slots.register({
       name: 'settings.plugin.item',
       key: CURATED_MEMORY_NS,

@@ -578,6 +578,24 @@ export interface WorkspaceChangesEvent extends SessionEventBase {
   readonly summary: WorkspaceChangesSummary;
 }
 
+/**
+ * Model-declared final deliverables (DSH `deliverables/presented`).
+ * Emitted by the `present` tool; log-only — Face `deliverables` rendering
+ * folds the paths into the turn-tail produced list. Files must already exist
+ * and be accessible through the Session filesystem.
+ */
+export interface PresentedFile {
+  readonly path: string;
+  readonly description?: string;
+}
+
+export interface DeliverablesPresentedEvent extends SessionEventBase {
+  readonly type: "deliverables/presented";
+  readonly turnId: string;
+  readonly callId: string;
+  readonly files: readonly PresentedFile[];
+}
+
 export type SessionEvent =
   | TurnStartEvent
   | TurnEndEvent
@@ -608,7 +626,8 @@ export type SessionEvent =
   | LlmRetryEvent
   | LlmRetryStartedEvent
   | ImageOffloadEvent
-  | WorkspaceChangesEvent;
+  | WorkspaceChangesEvent
+  | DeliverablesPresentedEvent;
 
 
 const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
@@ -642,7 +661,20 @@ const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "llm/retry-started",
   "image/offload",
   "workspace/changes",
+  "deliverables/presented",
 ]);
+
+/**
+ * Event types a tool may emit through `emitToolEvent` (agent-loop side
+ * events). Control-plane events (turn/start, user/message, …) are Host-owned
+ * and never tool-emitted. Agent-loop hard-gates on this set — adding a
+ * tool-emittable event here is the only place to extend it.
+ */
+export const TOOL_EMITTABLE_EVENT_TYPES: readonly SessionEvent["type"][] = [
+  "todo/write",
+  "plan/mode",
+  "deliverables/presented",
+] as const;
 
 /**
  * Loose type gate (known `type` + numeric `ts`).

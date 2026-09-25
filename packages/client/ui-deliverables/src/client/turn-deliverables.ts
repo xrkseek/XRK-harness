@@ -89,6 +89,20 @@ function isChangesWireData(data: unknown): data is {
     && typeof s.deleted === 'number'
 }
 
+function isPresentedWireData(data: unknown): data is {
+  readonly turn: number
+  readonly turnId: string
+  readonly callId: string
+  readonly files: readonly { readonly path: string; readonly description?: string }[]
+} {
+  if (!data || typeof data !== 'object') return false
+  const row = data as Record<string, unknown>
+  if (typeof row.turn !== 'number' || !Number.isSafeInteger(row.turn)) return false
+  if (typeof row.turnId !== 'string') return false
+  if (typeof row.callId !== 'string') return false
+  return Array.isArray(row.files)
+}
+
 /** Files produced by one Turn data value (paths before the closing seq). */
 export function producedForClosing(
   data: Readonly<DeliverablesTurnData> | undefined,
@@ -148,6 +162,9 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
     if (event.type === 'workspace/changes' && isChangesWireData(event.data)) {
       return { id: String(event.data.turn), role: 'update' }
     }
+    if (event.type === 'deliverables/presented' && isPresentedWireData(event.data)) {
+      return { id: String(event.data.turn), role: 'update' }
+    }
     if (event.type === 'tool/result' && isAppendSurfaceEvent(event)) {
       return { id: String(event.data.turn), role: 'update' }
     }
@@ -172,6 +189,17 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
           deleted: summary.deleted,
         },
       }
+    }
+    if (match.event.type === 'deliverables/presented' && isPresentedWireData(match.event.data)) {
+      const next = [...context.state.produced]
+      const seen = new Set(next.map((row) => row.path))
+      for (const file of match.event.data.files) {
+        const path = typeof file.path === 'string' ? file.path.trim() : ''
+        if (!path || seen.has(path)) continue
+        seen.add(path)
+        next.push({ seq: match.event.seq, path })
+      }
+      return { ...context.state, produced: next }
     }
     if (match.event.type === 'tool/call') {
       const calls = new Map(context.state.calls)

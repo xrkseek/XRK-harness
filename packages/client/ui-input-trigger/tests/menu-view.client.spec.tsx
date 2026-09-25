@@ -61,12 +61,21 @@ function mount(state: MenuState) {
   const menu = createSnapshotStore<MenuState>(state)
   const headers = createSnapshotStore<ReadonlyMap<string, readonly { label: string; value: string; current?: boolean }[]>>(new Map())
   const onPick = vi.fn()
+  const onHighlight = vi.fn()
   const onCrumb = vi.fn()
   const onDismiss = vi.fn()
   const view = render(
-    <MenuView menu={menu} headers={headers} onPick={onPick} onCrumb={onCrumb} onDismiss={onDismiss} t={t} />,
+    <MenuView
+      menu={menu}
+      headers={headers}
+      onPick={onPick}
+      onHighlight={onHighlight}
+      onCrumb={onCrumb}
+      onDismiss={onDismiss}
+      t={t}
+    />,
   )
-  return { menu, headers, onPick, onCrumb, onDismiss, view }
+  return { menu, headers, onPick, onHighlight, onCrumb, onDismiss, view }
 }
 
 /** The non-interactive group title rows (role=presentation), in document order. */
@@ -208,6 +217,7 @@ describe('MenuView', () => {
           menu={menu}
           headers={headers}
           onPick={vi.fn()}
+          onHighlight={vi.fn()}
           onCrumb={vi.fn()}
           onDismiss={onDismiss}
           t={t}
@@ -264,5 +274,23 @@ describe('MenuView', () => {
     // fireEvent returns false when preventDefault was called.
     expect(notPrevented).toBe(false)
     expect(onPick).toHaveBeenCalledWith('command', 1)
+  })
+
+  it('keeps the menu open with a single empty row when every group is ready and empty', () => {
+    mount(openState({
+      groups: [
+        { source: 'command', status: 'ready', items: [] },
+        { source: 'skill', status: 'ready', items: [] },
+      ],
+      highlight: null,
+    }))
+    expect(screen.getByText('无匹配项')).toBeTruthy()
+    expect(screen.getAllByRole('option')).toHaveLength(1)
+  })
+
+  it('pointer enter syncs the keyboard highlight', () => {
+    const { onHighlight } = mount(openState())
+    fireEvent.mouseEnter(screen.getAllByRole('option')[1]!)
+    expect(onHighlight).toHaveBeenCalledWith('command', 1)
   })
 })

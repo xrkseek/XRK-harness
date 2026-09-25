@@ -641,5 +641,28 @@ export const sessionEventJsonSchema = {
       }),
       additionalProperties: false,
     },
+    {
+      type: "object",
+      required: ["type", "ts", "turnId", "callId", "files"],
+      properties: baseProps({
+        type: { const: "deliverables/presented" },
+        turnId: { type: "string" },
+        callId: { type: "string" },
+        files: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            required: ["path"],
+            properties: {
+              path: { type: "string" },
+              description: { type: "string" },
+            },
+            additionalProperties: false,
+          },
+        },
+      }),
+      additionalProperties: false,
+    },
   ],
 } as const;

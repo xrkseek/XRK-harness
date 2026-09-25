@@ -46,6 +46,7 @@ import {
 import { applyPatchToFs } from "./apply-patch.js";
 import { PatchParseError } from "./apply-patch-parser.js";
 import { ApplyPatchError } from "./apply-patch-apply.js";
+import { createPresentTool } from "./present-deliverable.js";
 
 export {
   PathEscapeError,
@@ -128,6 +129,12 @@ export {
   planPatchApplication,
   seekSequence,
 } from "./apply-patch-apply.js";
+export {
+  createPresentTool,
+  PRESENT_MAX_FILES,
+  type PresentFileArg,
+  type PresentToolOptions,
+} from "./present-deliverable.js";
 
 export class EditWithoutOldError extends Error {
   constructor(message: string) {
@@ -613,6 +620,7 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       presentResult: presentGrepResult,
       isConcurrencySafe: () => true,
     },
+    createPresentTool(fs),
   ];
 }
 

@@ -176,6 +176,16 @@ export class InputTriggerController {
   }
 
   /**
+   * Pointer hover from MenuView: sync the keyboard highlight to the hovered row.
+   * @param source - source (group) name.
+   * @param index - candidate index within the group.
+   */
+  highlight(source: string, index: number): void {
+    if (this.disposed) return
+    this.reduce({ type: 'highlight', source, index })
+  }
+
+  /**
    * Pointer pick on one crumb of a source's menu header: route it through the
    * same drill path a folder row takes, so returning to a step and descending
    * into one share one outcome.

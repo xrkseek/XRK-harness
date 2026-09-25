@@ -38,4 +38,20 @@ export class FaceWireIdMaps {
     byStep.set(key, n);
     return n;
   }
+
+  /**
+   * Drop every session-scoped bucket for one session. Called on session
+   * eviction so long-running hosts do not retain turn/step counters for
+   * evicted sessions (per-session entries would otherwise accumulate forever).
+   */
+  clear(sessionId: string): void {
+    this.turns.delete(sessionId);
+    this.steps.delete(sessionId);
+    this.turnCount.delete(sessionId);
+    // stepCount keys are `${sessionId}\0${turnId}`; sweep all belonging to the session.
+    const prefix = `${sessionId}\0`;
+    for (const key of this.stepCount.keys()) {
+      if (key.startsWith(prefix)) this.stepCount.delete(key);
+    }
+  }
 }

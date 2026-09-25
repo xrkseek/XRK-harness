@@ -39,9 +39,17 @@ MP4 **不内联进工具文本**；Host 配了 `AttachmentStore` 时经 `saveFil
 
 ## 启用
 
-**产品路径**：Settings → Plugins → **Video gen**（Face ns `video-gen`：`mode` = 关 / openai · 可选 `baseUrl` · `model`）。API 密钥经 Credentials `XRK_VIDEO_GEN_OPENAI_KEY`。保存后热切换。非空 `XRK_VIDEO_GEN` 为 CI 旁路。
+优先序：**Settings（产品真源）** → **Credentials（密钥）** → **env（仅 CI / 无头旁路）**。
 
-| `XRK_VIDEO_GEN` / Settings | 行为 |
+| 通道 | 内容 |
+|------|------|
+| **Settings** | Face ns `video-gen`：`mode` = 关 / openai · 可选 `baseUrl` · `model`（Settings → Plugins → **视频生成**） |
+| **Credentials** | `XRK_VIDEO_GEN_OPENAI_KEY`（槽 `video.openai`）；运行时也可回落 `OPENAI_API_KEY` |
+| **仅 env** | `XRK_VIDEO_GEN=memory` · `=1` / `openai`（旁路 Settings）· 可选 `XRK_VIDEO_GEN_BASE_URL` / `XRK_VIDEO_GEN_MODEL` |
+
+保存 Settings 后热切换。非空 `XRK_VIDEO_GEN` 为 CI 旁路。
+
+| Settings / env | 行为 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | （未设 / 关） | 工具仍登记；execute **诚实失败** |
 | `memory`（仅 env） | 内存 Provider（确定性作业生命周期 + 24 字节 `ftyp` MP4；含 i2v / edit / extend，CI / 演示） |
@@ -98,7 +106,15 @@ only `status=failed` is an `isError`.
 
 ## Enable
 
-**Product path**: Settings → Plugins → **Video gen** (Face ns `video-gen`: `mode` = off / openai · optional `baseUrl` · `model`). API key via Credentials `XRK_VIDEO_GEN_OPENAI_KEY`. Live after save. Non-empty `XRK_VIDEO_GEN` is the CI bypass.
+Precedence: **Settings (product SoT)** → **Credentials (secrets)** → **env (CI / headless bypass only)**.
+
+| Channel | Fields |
+|---------|--------|
+| **Settings** | Face ns `video-gen`: `mode` off/openai · optional `baseUrl` · `model` (Settings → Plugins → **Video generation**) |
+| **Credentials** | `XRK_VIDEO_GEN_OPENAI_KEY` (slot `video.openai`); runtime may also fall back to `OPENAI_API_KEY` |
+| **Env-only** | `XRK_VIDEO_GEN=memory` · `=1` / `openai` (bypass Settings) · optional `XRK_VIDEO_GEN_BASE_URL` / `XRK_VIDEO_GEN_MODEL` |
+
+Live after the next agent rebuild. Non-empty `XRK_VIDEO_GEN` is the CI bypass.
 
 | `XRK_VIDEO_GEN` / Settings | Behavior |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |

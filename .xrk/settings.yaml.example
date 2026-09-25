@@ -1,6 +1,38 @@
 # Face settings for this workspace (gitignored copy: settings.yaml).
 # First run of serve/web creates settings.yaml automatically if missing.
 # Copy this file only when you want explicit defaults before first launch.
+#
+# Prefer Settings UI for day-to-day knobs. Env is for Host/CI bypass only.
+# Multimodal Face namespaces (defaults stay off until you change them):
+#
+# image-gen:
+#   mode: openai          # off | openai
+#   # baseUrl: https://api.openai.com/v1
+#   # model: dall-e-3
+#
+# video-gen:
+#   mode: openai
+#   # baseUrl: https://api.openai.com/v1
+#   # model: sora-2
+#
+# video-analyze:
+#   mode: openai
+#   # baseUrl: https://generativelanguage.googleapis.com/v1beta/openai
+#   # model: gemini-2.0-flash
+#
+# voice:
+#   mode: openai
+#   # baseUrl: https://api.openai.com/v1
+#
+# browser:
+#   mode: http            # http | cdp
+#   # cdpUrl: http://127.0.0.1:9222
+#
+# curated-memory:
+#   enabled: true
+#   phase2Llm: false
+#
+# User-home seeds (skills / standing / recipes) are separate — see docs/skills-layers.md.
 
 agent-presets:
   default: harness

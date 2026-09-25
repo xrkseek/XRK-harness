@@ -170,6 +170,17 @@
   color: var(--dsw-alias-label-dimmed);
 }
 
+/* Ready-but-empty group: keep the menu open with a no-match line. */
+.empty {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-dimmed);
+}
+
 /* Breadcrumb header of a drilled source: pinned outside .viewport. */
 .crumbs {
   flex: none;
@@ -219,7 +230,8 @@
 
 @media (max-width: 767px) {
   .item,
-  .loading {
+  .loading,
+  .empty {
     min-height: 44px;
     touch-action: manipulation;
   }

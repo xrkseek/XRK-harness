@@ -1,4 +1,8 @@
 import type {
+  CroppedImageRegion,
+  ImageRegion,
+} from "./image-region.js";
+import type {
   FileAttachmentLimits,
   FileAttachmentRef,
   ImageAttachmentLimits,
@@ -35,6 +39,15 @@ export interface AttachmentStore {
     policy: ImageRequestPolicy,
     signal?: AbortSignal,
   ): Promise<RequestImageAttachment>;
+  /**
+   * Crop to `[x1,y1,x2,y2]` in oriented original pixels **before** admission
+   * normalize / downscale (Hermes vision region). Local store implements via sharp;
+   * memory store omits — tools refuse `region` when missing.
+   */
+  cropImageRegion?(
+    data: Uint8Array,
+    region: ImageRegion,
+  ): Promise<CroppedImageRegion>;
 
   validateFile(input: SaveFileAttachment): Promise<void>;
   saveFiles(

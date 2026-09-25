@@ -202,6 +202,7 @@ function resolveCredentialSlotForRef(
   if (ref === "XRK_VOICE_OPENAI_KEY") return "voice.openai";
   if (ref === "XRK_IMAGE_GEN_OPENAI_KEY") return "image.openai";
   if (ref === "XRK_VIDEO_GEN_OPENAI_KEY") return "video.openai";
+  if (ref === "XRK_VIDEO_ANALYZE_OPENAI_KEY") return "video-analyze.openai";
   if (ref === "XRK_AUTO_REVIEW_CLASSIFIER_TOKEN") return "auto-review.classifier";
   if (ref === "XRK_MEMORY_EMBED_TOKEN") return "memory-embed.token";
   for (const brand of runtime.registry.listBrands()) {
@@ -226,6 +227,7 @@ function credentialRefForSlot(
   if (slotId === "voice.openai") return "XRK_VOICE_OPENAI_KEY";
   if (slotId === "image.openai") return "XRK_IMAGE_GEN_OPENAI_KEY";
   if (slotId === "video.openai") return "XRK_VIDEO_GEN_OPENAI_KEY";
+  if (slotId === "video-analyze.openai") return "XRK_VIDEO_ANALYZE_OPENAI_KEY";
   if (slotId === "auto-review.classifier") return "XRK_AUTO_REVIEW_CLASSIFIER_TOKEN";
   if (slotId === "memory-embed.token") return "XRK_MEMORY_EMBED_TOKEN";
   const brandId = slotId.startsWith("llm.") ? slotId.slice("llm.".length) : "";

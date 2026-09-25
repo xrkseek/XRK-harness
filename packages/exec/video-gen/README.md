@@ -2,6 +2,8 @@
 
 Text-to-video / image-to-video Provider seam for the model tool surface.
 
+**Product path**: Settings → Plugins → Video generation (Face ns `video-gen`). Credentials hold `XRK_VIDEO_GEN_OPENAI_KEY`. Env (`XRK_VIDEO_GEN=memory` / `=1`) is CI / headless bypass only — see [docs/video-gen.md](../../../docs/video-gen.md).
+
 - **Definition**: `VideoGenService` — `create` · `get` · `content` (+ optional `capabilities`)
 - **Provider**: `createMemoryVideoGenProvider` · `createOpenAiVideoGenProvider` · Host-injected
 - **Consumer**: `createVideoGenTools` → `video_generate` (schema rebuilt from `capabilities()`)
@@ -18,10 +20,7 @@ Renders are asynchronous, so the seam exposes job semantics instead of one-shot 
 
 **Family catalog**: `capabilities().families` (Hermes fal-style; OpenAI lists sora-2 / sora-2-pro).
 
-Env: `XRK_VIDEO_GEN=memory` | `XRK_VIDEO_GEN=1` + `OPENAI_API_KEY` / `XRK_VIDEO_GEN_OPENAI_KEY`
-(optional `XRK_VIDEO_GEN_BASE_URL` · `XRK_VIDEO_GEN_MODEL`).
-
 Video bytes are never inlined into tool text; with an `AttachmentStore` the finished MP4 is
 persisted via `saveFile` and returned as an attachment id.
 
-See [docs/video-gen.md](../../../docs/video-gen.md) · [docs/seams.md](../../../docs/seams.md).
+See also [docs/seams.md](../../../docs/seams.md).

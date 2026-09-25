@@ -28,7 +28,7 @@ export interface TriggerHit {
  */
 export type DetectTrigger = (draft: string, caret: number, guard: TriggerGuard) => TriggerHit | null
 
-/** Menu state: one group per source; empty ready groups auto-close the menu. */
+/** Menu state: one group per source; empty ready groups stay open with an empty UI. */
 export interface MenuState {
   readonly open: boolean
   readonly hit: TriggerHit | null
@@ -50,6 +50,7 @@ export type MenuEvent =
   | { readonly type: 'source-settled'; readonly generation: number; readonly source: string; readonly items?: readonly InputTriggerCandidate[] }
   | { readonly type: 'source-failed'; readonly generation: number; readonly source: string }
   | { readonly type: 'move'; readonly dir: 1 | -1 }
+  | { readonly type: 'highlight'; readonly source: string; readonly index: number }
   | { readonly type: 'close' }
 
 /** Pure menu reducer; returns the same reference when the event is stale or a no-op. */

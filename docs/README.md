@@ -126,6 +126,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [voice.md](./voice.md) | 语音 Host：TTS · 听写 · realtime session |
 | [image-gen.md](./image-gen.md) | 图像生成 `image_generate`（文生图 + 参考编辑） |
 | [video-gen.md](./video-gen.md) | 视频生成 `video_generate`（文生 / 图生 / catalog） |
+| [video-analyze.md](./video-analyze.md) | 视频理解 `video_analyze`（整段多模态；与 browser_vision 分界） |
 | [turn-rewind.md](./turn-rewind.md) | 回合回退：工作区文件快照（影子 git） |
 | [session-telemetry.md](./session-telemetry.md) | OpenTelemetry 会话遥测 / OTLP logs |
 | [lsp-tools.md](./lsp-tools.md) | `lsp` 四操作 |
@@ -279,6 +280,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [voice.md](./voice.md) | Voice Host: TTS · dictation · realtime session |
 | [image-gen.md](./image-gen.md) | Image generation `image_generate` (text-to-image + reference edit) |
 | [video-gen.md](./video-gen.md) | Video generation `video_generate` (text/image-to-video + catalog) |
+| [video-analyze.md](./video-analyze.md) | Video analysis `video_analyze` (whole-clip multimodal; vs browser_vision) |
 | [turn-rewind.md](./turn-rewind.md) | Turn rewind: workspace file snapshots (shadow git) |
 | [curated-memory.md](./curated-memory.md) | Curated memory `memory` (MEMORY.md / USER.md) |
 | [session-telemetry.md](./session-telemetry.md) | OpenTelemetry session telemetry / OTLP logs |

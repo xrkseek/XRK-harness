@@ -30,6 +30,8 @@ Web：`@xrkseek/exec-web` — Definition `WebSearch`/`WebFetch`；Provider 匿�
 
 视频生成：`@xrkseek/exec-video-gen` — Definition `VideoGenService`（`create` · `get` · `content` 异步作业 + 可选 `capabilities()`）；Provider memory / OpenAI Videos（`XRK_VIDEO_GEN`）；Consumer `createVideoGenTools` → `video_generate`（`dynamicSchema` ← caps）。规格：[video-gen.md](./video-gen.md)。
 
+视频理解：`@xrkseek/exec-video-analyze` — Definition `VideoAnalyzeService`（整段 `video_url` → 文本）；Provider memory / OpenAI-compatible chat（`XRK_VIDEO_ANALYZE`）；Consumer `createVideoAnalyzeTools` → `video_analyze`。与 `browser_vision`（页截图）分界。规格：[video-analyze.md](./video-analyze.md)。
+
 会话遥测：`@xrkseek/session-telemetry` — Definition `SessionTelemetrySink`；Provider memory / OTLP HTTP logs；Consumer `wrapStoreForSessionTelemetry`。规格：[session-telemetry.md](./session-telemetry.md)。
 
 密钥 / OS keyring：`@xrkseek/secrets` — Definition `SecretStore`；Provider memory / OS keyring（可选 `keytar`）；`redactSecrets` / `wrapLoggerForSecrets` 统一日志脱敏。Face 默认仍写 `~/.xrk/.credentials.yaml`；`XRK_SECRETS_BACKEND=keyring` 时双写并启动时补水。规格见本页依赖图与 [configuration.md](./configuration.md)。
@@ -50,6 +52,7 @@ exec-memory (independent; MEMORY.md / USER.md under XRK_HOME/memories)
 exec-voice (independent; XRK_VOICE memory|1)
 exec-image-gen (independent; XRK_IMAGE_GEN memory|1)
 exec-video-gen (independent; XRK_VIDEO_GEN memory|1)
+exec-video-analyze (independent; XRK_VIDEO_ANALYZE memory|1)
 exec-lsp (independent)
 exec-pty (optional node-pty@1.2.0-beta.15 prebuild)
 exec-subprocess
@@ -104,6 +107,8 @@ Image generation: `@xrkseek/exec-image-gen` — Definition `ImageGenService` (op
 
 Video generation: `@xrkseek/exec-video-gen` — Definition `VideoGenService` (`create` · `get` · `content` async job + optional `capabilities()`); Provider memory / OpenAI Videos (`XRK_VIDEO_GEN`); Consumer `createVideoGenTools` → `video_generate` (`dynamicSchema` ← caps). Spec: [video-gen.md](./video-gen.md).
 
+Video analysis: `@xrkseek/exec-video-analyze` — Definition `VideoAnalyzeService` (whole-clip `video_url` → text); Provider memory / OpenAI-compatible chat (`XRK_VIDEO_ANALYZE`); Consumer `createVideoAnalyzeTools` → `video_analyze`. Distinct from `browser_vision` (page screenshot). Spec: [video-analyze.md](./video-analyze.md).
+
 Session telemetry: `@xrkseek/session-telemetry` — Definition `SessionTelemetrySink`; Provider memory / OTLP HTTP logs; Consumer `wrapStoreForSessionTelemetry`. Spec: [session-telemetry.md](./session-telemetry.md).
 
 Secrets / OS keyring: `@xrkseek/secrets` — Definition `SecretStore`; Provider memory / OS keyring (optional `keytar`); `redactSecrets` / `wrapLoggerForSecrets` for unified log redaction. Face still defaults to `~/.xrk/.credentials.yaml`; `XRK_SECRETS_BACKEND=keyring` dual-writes and hydrates on boot. See [configuration.md](./configuration.md).
@@ -124,6 +129,7 @@ exec-memory (independent; MEMORY.md / USER.md under XRK_HOME/memories)
 exec-voice (independent; XRK_VOICE memory|1)
 exec-image-gen (independent; XRK_IMAGE_GEN memory|1)
 exec-video-gen (independent; XRK_VIDEO_GEN memory|1)
+exec-video-analyze (independent; XRK_VIDEO_ANALYZE memory|1)
 exec-lsp (independent)
 exec-pty (optional node-pty@1.2.0-beta.15 prebuild)
 exec-subprocess

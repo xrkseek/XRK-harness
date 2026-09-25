@@ -69,6 +69,12 @@ import {
   type VideoGenService,
 } from "@xrkseek/exec-video-gen";
 import {
+  VIDEO_ANALYZE_PROMPT_TEXT,
+  createDefaultVideoAnalyzeAccess,
+  createVideoAnalyzeTools,
+  type VideoAnalyzeService,
+} from "@xrkseek/exec-video-analyze";
+import {
   CURATED_MEMORY_PROMPT_TEXT,
   createCuratedMemoryTools,
   resolveMemoryProvider,
@@ -287,6 +293,12 @@ export interface HarnessCompositionOptions {
   readonly videoGenProduct?: import("@xrkseek/exec-video-gen").VideoGenProductConfig;
   /** Env overlay for video-gen (Host merges Credentials key). */
   readonly videoGenEnv?: NodeJS.ProcessEnv;
+  /**
+   * Face `video-analyze` product (Settings SoT). Ignored when `XRK_VIDEO_ANALYZE` is set.
+   */
+  readonly videoAnalyzeProduct?: import("@xrkseek/exec-video-analyze").VideoAnalyzeProductConfig;
+  /** Env overlay for video-analyze (Host merges Credentials key). */
+  readonly videoAnalyzeEnv?: NodeJS.ProcessEnv;
   /** Optional override of the whole sandbox stack (tests). */
   readonly sandbox?: SandboxService;
   /**
@@ -366,6 +378,13 @@ export interface HarnessCompositionOptions {
    * visible, execute is an honest error.
    */
   readonly videoGenTools?: boolean | VideoGenService;
+  /**
+   * Register `video_analyze` (video understanding; Hermes-style). Default: on.
+   * `false` skips. Pass a `VideoAnalyzeService` to inject.
+   * Without `XRK_VIDEO_ANALYZE=1` (+ API key) / `memory` / inject → tool still
+   * visible, execute is an honest error. Not browser_vision / not video_generate.
+   */
+  readonly videoAnalyzeTools?: boolean | VideoAnalyzeService;
   /**
    * Register `memory` (curated MEMORY.md / USER.md). Default: on.
    * `false` skips. Pass a `CuratedMemoryStore` to inject (tests).
@@ -945,6 +964,31 @@ export function createHarnessComposition(
       tools.register(tool);
     }
   }
+  if (options.videoAnalyzeTools !== false) {
+    const service =
+      typeof options.videoAnalyzeTools === "object"
+        ? options.videoAnalyzeTools
+        : createDefaultVideoAnalyzeAccess({
+            ...(options.videoAnalyzeEnv
+              ? { env: options.videoAnalyzeEnv }
+              : {}),
+            ...(options.videoAnalyzeProduct
+              ? { product: options.videoAnalyzeProduct }
+              : {}),
+          }).service;
+    for (const tool of createVideoAnalyzeTools({
+      ...(service ? { service } : {}),
+      ...(options.videoAnalyzeEnv
+        ? { env: options.videoAnalyzeEnv }
+        : {}),
+      ...(options.videoAnalyzeProduct
+        ? { product: options.videoAnalyzeProduct }
+        : {}),
+      fs,
+    })) {
+      tools.register(tool);
+    }
+  }
   if (options.lspTools !== false) {
     const service =
       typeof options.lspTools === "object"
@@ -1217,6 +1261,16 @@ export function createHarnessComposition(
         availableToolNames().has("video_generate") ? VIDEO_GEN_PROMPT_TEXT : "",
     });
   }
+  if (options.videoAnalyzeTools !== false) {
+    prompts.register({
+      id: "tool:video_analyze",
+      order: 121,
+      content: () =>
+        availableToolNames().has("video_analyze")
+          ? VIDEO_ANALYZE_PROMPT_TEXT
+          : "",
+    });
+  }
   if (options.cronScheduler) {
     prompts.register({
       id: "tool:cron",
@@ -1319,6 +1373,8 @@ export function createHarnessComposition(
       ...(options.computerUseTools !== false ? ["tool:computer_use"] : []),
       ...(options.voiceTools !== false ? ["tool:voice"] : []),
       ...(options.imageGenTools !== false ? ["tool:image_gen"] : []),
+      ...(options.videoGenTools !== false ? ["tool:video_gen"] : []),
+      ...(options.videoAnalyzeTools !== false ? ["tool:video_analyze"] : []),
       ...(options.cronScheduler ? ["tool:cron"] : []),
       ...(options.lspTools !== false ? ["tool:lsp"] : []),
       ...(options.ptyTools !== false ? ["tool:pty"] : []),

@@ -74,6 +74,7 @@ export function apply(ctx: ClientContext): void {
           menu: controller.menu,
           headers: controller.headers,
           onPick: (source, index, action) => { controller.pick(source, index, action) },
+          onHighlight: (source, index) => { controller.highlight(source, index) },
           onCrumb: (source, index) => { controller.pickCrumb(source, index) },
           onDismiss: () => { controller.dismiss() },
         }

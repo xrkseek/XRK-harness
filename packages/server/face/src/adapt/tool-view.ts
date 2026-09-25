@@ -49,6 +49,15 @@ export class FaceToolArgMaps {
     }
     return map;
   }
+
+  /**
+   * Drop a session's arg-pairing map entirely (outer entry included). Called
+   * on session eviction; clearing only the inner map would leave the outer
+   * `sessions` entry behind and grow without bound across evictions.
+   */
+  clear(sessionId: string): void {
+    this.sessions.delete(sessionId);
+  }
 }
 
 export function collectToolCallArgs(

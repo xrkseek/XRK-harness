@@ -12,3 +12,5 @@ Cross-workspace defaults (`~/.xrk/AGENTS.md`). Seeded by `xrkh web` / `serve` fr
 - Load a home skill with the `skill` tool when useful (`xrk-capability-attach`, `xrk-models-settings`, `xrk-plan-build`, `xrk-code-review`, `xrk-delegate`, `xrk-create-skill`, `xrk-adapt-workspace`).
 - Do not create `.xrk` / `.agents` in a workspace unless the user asks.
 - Persona tone (optional): user-authored `~/.xrk/SOUL.md` / `IDENTITY.md`. Factual “who the user is” → curated `{XRK_HOME}/memories/USER.md` via the `memory` tool — not standing `USER.md`.
+
+- **境外网络访问**：本机 Clash Verge 代理 `http://127.0.0.1:7897`。访问国外站点（GitHub 等）超时 / EOF / 10060 时走代理：PowerShell `-Proxy http://127.0.0.1:7897`、`$env:HTTPS_PROXY='http://127.0.0.1:7897'`、git `-c http.proxy=http://127.0.0.1:7897`。注意 `api.github.com` 直连与代理哪条通会变，先各探一次别固定；`registry.npmjs.org` 一直直连可达。

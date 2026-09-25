@@ -58,6 +58,8 @@
 | `exec/computer-use/` | `@xrkseek/exec-computer-use` | [computer-use.md](../computer-use.md) · [seams.md](../seams.md) |
 | `exec/voice/` | `@xrkseek/exec-voice` | [voice.md](../voice.md) · [seams.md](../seams.md) |
 | `exec/image-gen/` | `@xrkseek/exec-image-gen` | [image-gen.md](../image-gen.md) · [seams.md](../seams.md) |
+| `exec/video-gen/` | `@xrkseek/exec-video-gen` | [video-gen.md](../video-gen.md) · [seams.md](../seams.md) |
+| `exec/video-analyze/` | `@xrkseek/exec-video-analyze` | [video-analyze.md](../video-analyze.md) · [seams.md](../seams.md) |
 | `exec/memory/` | `@xrkseek/exec-memory` | [curated-memory.md](../curated-memory.md) · [seams.md](../seams.md) |
 | `exec/environment/` | `@xrkseek/exec-environment` | [sandbox.md](../sandbox.md) · [seams.md](../seams.md) |
 | `exec/lsp/` | `@xrkseek/exec-lsp` | [lsp-tools.md](../lsp-tools.md) · [seams.md](../seams.md) |
@@ -158,6 +160,8 @@ Paths relative to `packages/`. Packages without a dedicated note use README + `s
 | `exec/computer-use/` | `@xrkseek/exec-computer-use` | [computer-use.md](../computer-use.md) · [seams.md](../seams.md) |
 | `exec/voice/` | `@xrkseek/exec-voice` | [voice.md](../voice.md) · [seams.md](../seams.md) |
 | `exec/image-gen/` | `@xrkseek/exec-image-gen` | [image-gen.md](../image-gen.md) · [seams.md](../seams.md) |
+| `exec/video-gen/` | `@xrkseek/exec-video-gen` | [video-gen.md](../video-gen.md) · [seams.md](../seams.md) |
+| `exec/video-analyze/` | `@xrkseek/exec-video-analyze` | [video-analyze.md](../video-analyze.md) · [seams.md](../seams.md) |
 | `exec/memory/` | `@xrkseek/exec-memory` | [curated-memory.md](../curated-memory.md) · [seams.md](../seams.md) |
 | `exec/environment/` | `@xrkseek/exec-environment` | [sandbox.md](../sandbox.md) · [seams.md](../seams.md) |
 | `exec/lsp/` | `@xrkseek/exec-lsp` | [lsp-tools.md](../lsp-tools.md) · [seams.md](../seams.md) |

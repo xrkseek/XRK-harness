@@ -19,6 +19,7 @@ export const zh = {
   'status.loading': '正在加载选项…',
   'status.applying': '正在应用…',
   'status.empty': '无选项',
+  'retry': '重试',
   'overlay.aria': '/{command} 选项',
   'listbox.aria': '/{command} 匹配项',
 } satisfies Record<string, string>
@@ -53,6 +54,7 @@ export const en = {
   'status.loading': 'Loading options…',
   'status.applying': 'Applying…',
   'status.empty': 'No options',
+  'retry': 'Retry',
   'overlay.aria': '/{command} options',
   'listbox.aria': '/{command} matches',
 } satisfies Record<CommandKey, string>
