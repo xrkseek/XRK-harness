@@ -371,14 +371,17 @@ describe("createWindowsUiAutomationProvider hardening", () => {
     expect(scripts[0]).toContain("Set-Clipboard");
   });
 
-  it("times out a wedged UIA script instead of hanging forever", async () => {
-    const svc = createWindowsUiAutomationProvider({
-      timeoutMs: 1_000,
-    });
-    await expect(
-      svc.capture({ app: "no-such-app-anywhere" }),
-    ).rejects.toThrow(/COMPUTER_USE_BACKEND|timed out|no window matches/);
-  });
+  it.skipIf(process.platform !== "win32")(
+    "times out a wedged UIA script instead of hanging forever",
+    async () => {
+      const svc = createWindowsUiAutomationProvider({
+        timeoutMs: 1_000,
+      });
+      await expect(
+        svc.capture({ app: "no-such-app-anywhere" }),
+      ).rejects.toThrow(/COMPUTER_USE_BACKEND|timed out|no window matches/);
+    },
+  );
 });
 
 describe("mapKeysToSendKeys", () => {

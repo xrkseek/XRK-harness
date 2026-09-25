@@ -72,18 +72,34 @@ const {
 const buildPaths = requireFromDesktop("./dist/build-paths.js");
 const productEntry = requireFromDesktop("./dist/product-entry.js");
 
-const targetName =
-  positionals[0]?.trim() ||
-  buildPaths.resolveDesktopBuildTarget(
-    process.env,
-    process.platform,
-    process.arch,
-  );
+const produce = process.env.XRK_DESKTOP_PACKAGE === "1";
+const checkOnly = values.check || !produce;
 
 let target;
 try {
-  target = resolveDesktopPackageTarget(targetName);
-  assertDesktopPackageHostCompatible(target, process.platform, process.arch);
+  const explicit =
+    positionals[0]?.trim() || process.env.XRK_DESKTOP_TARGET?.trim();
+  if (explicit) {
+    target = resolveDesktopPackageTarget(explicit);
+  } else {
+    try {
+      target = resolveDesktopPackageTarget(
+        buildPaths.resolveDesktopBuildTarget(
+          process.env,
+          process.platform,
+          process.arch,
+        ),
+      );
+    } catch (hostError) {
+      // Linux CI / deferred hosts: --check still validates first-wave plan shape.
+      if (!checkOnly) throw hostError;
+      target = resolveDesktopPackageTarget("win-x64");
+    }
+  }
+  // Host OS gate only when actually producing an installer.
+  if (!checkOnly) {
+    assertDesktopPackageHostCompatible(target, process.platform, process.arch);
+  }
 } catch (error) {
   process.stderr.write(
     `package-desktop: ${error instanceof Error ? error.message : String(error)}\n`,
@@ -126,8 +142,7 @@ writeFileSync(
   "utf8",
 );
 
-const produce = process.env.XRK_DESKTOP_PACKAGE === "1";
-if (!produce || values.check) {
+if (checkOnly) {
   process.stdout.write(
     `package-desktop: first-wave pipeline ready for ${target.name}\n` +
       `  phase=${entry.phase} packagingPipelineReady=${entry.packagingPipelineReady}\n` +
@@ -139,7 +154,7 @@ if (!produce || values.check) {
       `  unsigned Windows: XRK_DESKTOP_UNSIGNED=1\n` +
       `  optional deps: electron · electron-builder · electron-updater\n`,
   );
-  if (!produce) process.exit(0);
+  process.exit(0);
 }
 
 try {
