@@ -5,6 +5,8 @@ import path from "node:path";
 /**
  * Point Host at an empty temp `{XRK_HOME}` so spawn does not pick up the
  * developer's `~/.xrk/host-settings.json` MCP servers (can hang tests).
+ * Also disable workspace checkpoints: drain snapshots race git against the
+ * monorepo workspace and can exceed vitest's default 5s timeout.
  */
 export async function withIsolatedXrkHome<T>(
   run: (xrkHome: string) => Promise<T>,
@@ -13,7 +15,9 @@ export async function withIsolatedXrkHome<T>(
   const prevHome = process.env.XRK_HOME;
   const prevMcp = process.env.XRK_MCP_SERVERS;
   const prevAllow = process.env.XRK_MCP_ALLOW;
+  const prevCheckpoints = process.env.XRK_CHECKPOINTS;
   process.env.XRK_HOME = xrkHome;
+  process.env.XRK_CHECKPOINTS = "0";
   delete process.env.XRK_MCP_SERVERS;
   delete process.env.XRK_MCP_ALLOW;
   try {
@@ -25,6 +29,8 @@ export async function withIsolatedXrkHome<T>(
     else process.env.XRK_MCP_SERVERS = prevMcp;
     if (prevAllow === undefined) delete process.env.XRK_MCP_ALLOW;
     else process.env.XRK_MCP_ALLOW = prevAllow;
+    if (prevCheckpoints === undefined) delete process.env.XRK_CHECKPOINTS;
+    else process.env.XRK_CHECKPOINTS = prevCheckpoints;
   }
 }
 
@@ -37,6 +43,7 @@ export function isolatedHostEnv(
     XRK_HOST: "127.0.0.1",
     XRK_PORT: "0",
     XRK_HOME: xrkHome,
+    XRK_CHECKPOINTS: "0",
     ...extra,
   };
 }

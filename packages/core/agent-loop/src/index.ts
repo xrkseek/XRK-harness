@@ -3,6 +3,7 @@ import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdja
 import {
   assembleThreeLayers,
   isMetadataOnlyUserMessage,
+  noteTimeContextInjected,
   parseTimeContextRefreshMs,
   shouldRefreshTimeContext,
   type AssembledRequest,
@@ -536,6 +537,9 @@ async function buildModelRequest(input: {
   // refresh via a system workspace block when the interval elapses (DSH
   // time-context refreshIntervalMs; default 60s) so long tool loops still see
   // a clock without rewriting the cached user prefix every step.
+  if (input.firstStep && timeRefreshMs >= 0) {
+    noteTimeContextInjected(input.sessionId, nowMs);
+  }
   const refreshFollowUpTime =
     !input.firstStep &&
     shouldRefreshTimeContext(input.sessionId, nowMs, timeRefreshMs);

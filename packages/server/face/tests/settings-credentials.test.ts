@@ -328,10 +328,20 @@ describe("Face settings U2", () => {
     expect(v.namespaces.some((n) => n.ns === "memory-embed")).toBe(true);
     const memoryEmbed = v.namespaces.find((n) => n.ns === "memory-embed") as {
       ns: string;
-      value: { url: string; collection: string };
+      value: {
+        url: string;
+        collection: string;
+        embeddingsUrl: string;
+        embeddingsModel: string;
+      };
       applies: string;
     };
-    expect(memoryEmbed.value).toEqual({ url: "", collection: "" });
+    expect(memoryEmbed.value).toEqual({
+      url: "",
+      collection: "",
+      embeddingsUrl: "",
+      embeddingsModel: "",
+    });
     expect(memoryEmbed.applies).toBe("live");
     expect(v.namespaces.some((n) => n.ns === "external-agent")).toBe(true);
     const externalAgent = v.namespaces.find((n) => n.ns === "external-agent") as {

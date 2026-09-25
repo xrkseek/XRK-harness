@@ -51,6 +51,7 @@ export {
 export {
   shouldRefreshTimeContext,
   clearTimeContextRefreshState,
+  noteTimeContextInjected,
   parseTimeContextRefreshMs,
 } from "./time-context.js";
 

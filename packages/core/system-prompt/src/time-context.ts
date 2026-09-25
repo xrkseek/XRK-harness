@@ -32,6 +32,14 @@ export function clearTimeContextRefreshState(): void {
   lastInjectMs.clear();
 }
 
+/** Record that time was injected (opening step volatile stamp). */
+export function noteTimeContextInjected(
+  sessionId: string,
+  nowMs: number,
+): void {
+  lastInjectMs.set(sessionId.trim() || "_", nowMs);
+}
+
 /**
  * Parse `XRK_TIME_CONTEXT_REFRESH_MS` — unset defaults to 60_000 (one minute).
  * `0` = every eligible step; negative / `off` disables follow-up refresh.
