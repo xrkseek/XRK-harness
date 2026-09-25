@@ -46,7 +46,11 @@ function fail(err: unknown): ToolResultContent {
   };
 }
 
-function failArgs(message: string, code = BROWSER_ERROR.INVALID_ARGS): ToolResultContent {
+function failArgs(
+  message: string,
+  code:
+    | (typeof BROWSER_ERROR)[keyof typeof BROWSER_ERROR] = BROWSER_ERROR.INVALID_ARGS,
+): ToolResultContent {
   return {
     content: `Error: ${message}`,
     isError: true,
@@ -130,7 +134,7 @@ export function createBrowserVaultTools(
       const rows = await vault.list();
       const meta = rows.find((r) => r.handle === handle);
       if (!meta) {
-        return failArgs(`unknown vault handle: ${handle}`, "WEB_BROWSER_VAULT_UNKNOWN");
+        return failArgs(`unknown vault handle: ${handle}`, BROWSER_ERROR.VAULT_UNKNOWN);
       }
 
       let secret: string | undefined;
@@ -142,7 +146,7 @@ export function createBrowserVaultTools(
       if (!secret) {
         return failArgs(
           `vault handle ${handle} has no secret configured`,
-          "WEB_BROWSER_VAULT_EMPTY",
+          BROWSER_ERROR.VAULT_EMPTY,
         );
       }
 
@@ -152,7 +156,7 @@ export function createBrowserVaultTools(
         if (meta.origin && origin && meta.origin !== origin) {
           return failArgs(
             `vault origin mismatch: handle bound to ${meta.origin}, page is ${origin}`,
-            "WEB_BROWSER_VAULT_ORIGIN",
+            BROWSER_ERROR.VAULT_ORIGIN,
           );
         }
 
