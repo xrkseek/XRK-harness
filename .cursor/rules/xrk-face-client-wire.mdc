@@ -1,0 +1,40 @@
+---
+description: Face wire ↔ client apiproxy Zod 必须同批扩展；列表基线不可因单行挂掉整表
+globs: packages/server/face/**/*,packages/stubs/xrk-host-apiproxy/**/*,packages/client/runtime/src/client/sessions/**/*
+alwaysApply: false
+xrk-inject: false
+---
+
+# 笔记 · Face / client wire 同步
+
+## 事故摘要（v0.4.0-rc.1 → v0.4.4）
+
+Face 在 **v0.4.0-rc.1**（`8230565d`，2026-09-21）起对 UI fork 发出 `origin: "fork"`，
+而 `packages/stubs/xrk-host-apiproxy` 的 `sessionSummarySchema` 仍只认 `"subagent"`。
+客户端 unary 对 `session.list` 整表 `.parse()`：**一行失败 → 整表抛错 → 侧栏空**，
+磁盘 `sessions.db` 未丢。**v0.4.5** 补枚举；之后列表改为 **按行 soft-parse**。
+
+## 改 Face 字段时的同批清单
+
+扩展 `session.list` / `host/session-added` / 其它 Host→client 枚举或必填字段时，**同一变更**改齐：
+
+| 层 | 落点 |
+|----|------|
+| Face 发射 | `packages/server/face`（handlers · types） |
+| Wire 类型 | `packages/stubs/xrk-host-apiproxy/src/api/*.ts` |
+| Zod | `packages/stubs/xrk-host-apiproxy/src/api/*.schema.ts` |
+| Client 消费 | `packages/client/runtime`（若依赖该字段做过滤/导航） |
+| 测 | Face 测 + apiproxy schema 测（至少覆盖新枚举值） |
+
+禁止：只改 Face 发射、把 Zod「留给下次」。
+
+## 列表基线硬规则
+
+- `session.list`（及同类 **items[] 基线**）不得因单行 Zod 失败清空整表；坏行 drop + `console.warn`，与 SSE「坏帧跳过」同姿态。
+- 新增可选枚举优先：`known | string → coerce unknown to undefined`（见 `sessionOriginSchema`），避免未知值炸行。
+- unary `.parse()` 仍用于**整包形状**；行级容错放在 Value schema 的 `transform` / `safeParse` 环。
+
+## 验证
+
+- 有 fork 会话时：浏览器侧栏非空；`session.list` RPC 200 且 client 不抛。
+- `pnpm exec vitest run packages/stubs/xrk-host-apiproxy/tests/session-list-schema.test.ts`

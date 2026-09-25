@@ -48,6 +48,7 @@
 | 写 / 改文档 | [docs/audiences.md](./docs/audiences.md) · 笔记 skill `xrk-docs-audience` |
 | 工具 | [docs/tool-pipeline.md](./docs/tool-pipeline.md) · [seams](./docs/seams.md) |
 | Host / Face | [docs/host-face.md](./docs/host-face.md) · [http-api](./docs/http-api.md) |
+| Face → client wire / Zod | 笔记 rule **`xrk-face-client-wire`**（扩展枚举须同批改 apiproxy） |
 | MCP | [docs/modules/mcp.md](./docs/modules/mcp.md) · [policy](./docs/policy.md) |
 | **进程插件 / extensions** | [docs/plugin-development.md](./docs/plugin-development.md) · 笔记 **`xrk-plugin-dev`** · **`xrk-extensions`** |
 | **社区 Host / client** | [docs/community-plugins.md](./docs/community-plugins.md) · 笔记 **`xrk-community-plugins`** |

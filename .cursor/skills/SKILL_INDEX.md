@@ -22,6 +22,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **改 loader / discover / inventory** | `xrk-plugin-dev` · [docs/plugin-loader.md](../../docs/plugin-loader.md) |
 | **改 preset 接线** | `xrk-plugin-dev` · [docs/profiles.md](../../docs/profiles.md) |
 | **Settings / 模型 / MCP 设置 UI** | rule `xrk-client-face-ui` |
+| **Face wire ↔ client Zod / session.list** | rule `xrk-face-client-wire` |
 | Session / meter / compaction | `xrk-meter-session` |
 | 写 / 改文档 | `xrk-docs-audience` |
 | 发行说明 | `xrk-release-notes` |
@@ -38,6 +39,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **`xrk-community-plugins`** | 社区 client · `xrk.host.json` · dsh-compat 层级 |
 | **`xrk-workspace-skills`** | 产品 skill 写法 · frontmatter |
 | `xrk-meter-session` | Meter / compaction / TokenUsage |
+| rule `xrk-face-client-wire` | Face 发射字段与 apiproxy Zod 同批扩展；list 按行容错 |
 | `xrk-docs-audience` | 教科书身份与双语 |
 | `xrk-release-notes` | `docs/releases/**` 文体 |
 

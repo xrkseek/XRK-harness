@@ -48,6 +48,15 @@ export const sessionEventSchema = z.object({
   ignorable: z.literal(true).optional(),
 }) as unknown as z.ZodType<SessionEvent>
 
+/** Coarse durable origin on list / host frames (Face `subagent` | `fork`). */
+export const sessionOriginSchema = z
+  .enum(["subagent", "fork"])
+  .or(z.string())
+  .optional()
+  .transform((value): "subagent" | "fork" | undefined =>
+    value === "subagent" || value === "fork" ? value : undefined,
+  );
+
 /** SessionSummary row of session.list (`projections` reuses the history block's shape and schema). */
 export const sessionSummarySchema = z.object({
   sessionId: sessionIdSchema,
@@ -55,11 +64,39 @@ export const sessionSummarySchema = z.object({
   running: z.boolean(),
   blank: z.boolean(),
   parentSessionId: sessionIdSchema.optional(),
-  origin: z.enum(['subagent', 'fork']).optional(),
+  origin: sessionOriginSchema,
   cwd: z.string().optional(),
   agentPreset: z.string().optional(),
   projections: z.lazy(() => sessionProjectionsBlockSchema).optional(),
 }) as unknown as z.ZodType<Wire<SessionSummary>>
+
+/**
+ * Parse list rows independently: one invalid summary must not empty the
+ * sidebar (v0.4.0-rc.1…v0.4.4: `origin: "fork"` failed the whole array).
+ */
+function parseSessionListItems(rows: unknown[]): Wire<SessionSummary>[] {
+  const items: Wire<SessionSummary>[] = [];
+  for (const row of rows) {
+    const parsed = sessionSummarySchema.safeParse(row);
+    if (parsed.success) {
+      items.push(parsed.data);
+      continue;
+    }
+    const sessionId =
+      row !== null &&
+      typeof row === "object" &&
+      "sessionId" in row &&
+      typeof (row as { sessionId: unknown }).sessionId === "string"
+        ? (row as { sessionId: string }).sessionId
+        : "?";
+    const issue = parsed.error.issues[0];
+    console.warn(
+      `[apiproxy] session.list: dropped row ${sessionId}` +
+        (issue ? `: ${issue.path.join(".")} ${issue.message}` : ""),
+    );
+  }
+  return items;
+}
 
 /** session.list request payload (cursor is a reserved seat, unimplemented in v1). */
 export const sessionListRequestSchema = z.object({
@@ -68,8 +105,8 @@ export const sessionListRequestSchema = z.object({
 
 /** session.list response value. */
 export const sessionListValueSchema: z.ZodType<Wire<ResponseValue<'session.list'>>> = z.object({
-  items: z.array(sessionSummarySchema),
-})
+  items: z.array(z.unknown()).transform(parseSessionListItems),
+}) as unknown as z.ZodType<Wire<ResponseValue<'session.list'>>>
 
 /** Fixed wire bound for one interactive sidebar query. */
 const SESSION_SEARCH_QUERY_MAX_CHARS = 500
