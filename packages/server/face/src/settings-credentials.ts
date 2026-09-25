@@ -20,7 +20,6 @@ import { publishRemoteEvent } from "./remote-event.js";
 import {
   FACE_EMPTY_OBJECT_SCHEMA,
   FACE_MCP_SCHEMA,
-  FACE_ONBOARDING_SCHEMA,
   FACE_LOCALE_SCHEMA,
   FACE_THEME_SCHEMA,
   isFacePermissionPreset,
@@ -1585,7 +1584,7 @@ export function hydrateFaceHostSettings(runtime: FaceRuntime): void {
     return;
   }
   try {
-    const parsed = parseJsonText(raw) as unknown;
+    const parsed = parseJsonText(raw);
     const classified = classifyConfigDoc(parsed, undefined);
     if (classified.status === "invalid") {
       throw new Error(classified.error);

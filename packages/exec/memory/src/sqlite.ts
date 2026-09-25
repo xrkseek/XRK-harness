@@ -26,9 +26,7 @@ export interface SqliteMemoryProviderOptions {
 }
 
 function openDb(dbPath: string): DatabaseSync {
-  const { DatabaseSync: Db } = process.getBuiltinModule(
-    "node:sqlite",
-  ) as typeof import("node:sqlite");
+  const { DatabaseSync: Db } = process.getBuiltinModule("node:sqlite");
   const db = new Db(dbPath);
   db.exec(`
     CREATE TABLE IF NOT EXISTS curated_entries (

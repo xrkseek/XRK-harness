@@ -1280,7 +1280,7 @@ export function createHostManager(): HostManager {
               lastDrainResult.delete(session.id);
               hub.forget(session.id);
               try {
-                faceBox.runtime?.onSessionFinalize?.(session.id);
+                await faceBox.runtime?.onSessionFinalize?.(session.id);
               } catch {
                 // best-effort memory/browser cleanup
               }

@@ -258,7 +258,7 @@ export function parsePhase2Notes(raw: string): string[] {
   }
   const lines: string[] = [];
   for (const line of body.split(/\n+/)) {
-    const cleaned = line.replace(/^[-*•\d.\)\s]+/, "").trim();
+    const cleaned = line.replace(/^[-*•\d.)\s]+/, "").trim();
     const note = usable(cleaned);
     if (note) lines.push(note);
     if (lines.length >= MAX_NOTES_PHASE2) break;
