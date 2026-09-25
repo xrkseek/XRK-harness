@@ -52,7 +52,9 @@ export async function probeSshTarget(
       detail:
         stderr ||
         `ssh ${session.target} exited ${result.exitCode ?? "?"} (BatchMode)`,
-      ...(result.exitCode !== undefined ? { exitCode: result.exitCode } : {}),
+      ...(typeof result.exitCode === "number"
+        ? { exitCode: result.exitCode }
+        : {}),
       ...(stderr ? { stderr } : {}),
     };
   } catch (err) {

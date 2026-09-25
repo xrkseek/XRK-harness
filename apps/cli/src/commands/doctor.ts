@@ -409,7 +409,7 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
 
   try {
     const curator = await runSkillCurator({
-      workspaceRoot,
+      workspaceRoot: workspace,
       dryRun: true,
     });
     checks.push({

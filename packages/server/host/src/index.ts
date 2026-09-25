@@ -456,10 +456,11 @@ export type AgentFactory = (input: {
   /** Env overlay for video-gen (Credentials `XRK_VIDEO_GEN_OPENAI_KEY`). */
   videoGenEnv?: NodeJS.ProcessEnv;
   /**
-   * Face `curated-memory` product: pass `false` to skip MEMORY.md / USER.md.
+   * Face `curated-memory` product: pass `false` to skip MEMORY.md / USER.md;
+   * pass a provider to share Host Phase1 consolidation store with Agent tools.
    * `XRK_CURATED_MEMORY=0` env still force-disables for CI.
    */
-  curatedMemory?: false;
+  curatedMemory?: false | MemoryProvider;
   /**
    * Face `locale` product (Settings SoT) — drives the harness `language` prompt
    * section so reasoning follows the UI language.
@@ -950,7 +951,7 @@ export function createHostManager(): HostManager {
           imageGenEnv?: NodeJS.ProcessEnv;
           videoGenProduct?: import("@xrkseek/exec-video-gen").VideoGenProductConfig;
           videoGenEnv?: NodeJS.ProcessEnv;
-          curatedMemory?: false;
+          curatedMemory?: false | MemoryProvider;
           /** Face `locale.preference` — reasoning/reply language directive. */
           locale?: "zh" | "en";
         };
