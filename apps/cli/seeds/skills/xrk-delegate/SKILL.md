@@ -14,7 +14,7 @@ description: >-
 - [ ] 1. 看会话徽章：Frugal = 无子代理；Shallow = depth≤1；Harness = 可嵌套
 - [ ] 2. 写完整 standalone `prompt`（路径、验收、约束）；短 `description`
 - [ ] 3. 默认同步等待；仅长任务 / 要续聊用 `run_in_background: true`
-- [ ] 4. 背景子：`list_agents` · `send_message` · `interrupt_agent`；勿轮询
+- [ ] 4. 背景子：`list_agents` · `send_message` · `interrupt_agent`；等结果用 `wait_agent`
 - [ ] 5. 并发宜少：默认同时存活 ≤2、深度 ≤2（深度上限 3），见设置 → 插件 → Agent loop
 ```
 

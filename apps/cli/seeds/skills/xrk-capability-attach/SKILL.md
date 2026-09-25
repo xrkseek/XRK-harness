@@ -8,7 +8,7 @@ description: >-
 
 # Host Settings + MCP
 
-**真源**：本 skill 随 `xrkh web`/`serve` **指纹种子**装到 **`~/.xrk/skills/`**（未改过的家目录副本可随 CLI 刷新；用户改过的永不覆盖）。配置也在 **`~/.xrk`**，与当前工作区无关。
+**真源**：本 skill 随 `xrkh web`/`serve` **指纹种子**装到 **`~/.xrk/skills/`**（未改过的家目录副本随 CLI 自动刷新；改过的副本原样保留）。配置也在 **`~/.xrk`**，与当前工作区无关。
 
 - `settings_get` — 列 ns / 读当前值  
 - `settings_mutate` — 与 Settings UI Save 同路径；多数 ns **live**（含 `ui-theme`）；`ns=mcp` 等 remount/connect  

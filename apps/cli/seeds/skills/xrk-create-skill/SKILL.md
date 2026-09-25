@@ -8,16 +8,16 @@ description: >-
 # Create skill（对标 Cursor create-skill）
 
 **结构同 Cursor**：`skill-name/SKILL.md` + YAML frontmatter + 步骤/checklist。  
-**落点不同** — 下表；勿写 `~/.cursor/skills-cursor/`。
+**落点**见下表（与 Cursor 不同）。
 
 ## 放哪
 
 | 范围 | 路径 |
 |------|------|
 | 跨项目习惯（默认） | `~/.xrk/skills/<name>/SKILL.md` |
-| 仅本仓库 | `{workspace}/.agents/skills/` 或 `.xrk/skills/`（**须用户同意**再建目录） |
+| 仅本仓库 | `{workspace}/.agents/skills/` 或 `.xrk/skills/`（用户点头再建目录） |
 
-`xrkh web` 缺才装 bundled seeds；seed 内容更新且本地副本未被改过时按 `.seed-manifest.json` 指纹自动刷新；用户改过的永不覆盖。
+`xrkh web` 缺才装 bundled seeds；seed 内容更新且本地副本未改过时按 `.seed-manifest.json` 指纹自动刷新；用户改过的副本原样保留。
 
 ## Frontmatter
 
