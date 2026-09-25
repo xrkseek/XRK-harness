@@ -19,6 +19,6 @@ description: >-
 
 见 `docs/plugin-development.md` 最小 `createPlugin` 示例。
 
-## 禁止
+## 边界
 
-热重载假象；杀非 XRK 进程；密钥入库。
+改动经 `restart` 生效（无热重载）；只停已识别 XRK Host；密钥走 Credentials，不进插件代码。

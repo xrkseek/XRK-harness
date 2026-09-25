@@ -7,7 +7,7 @@ description: >-
 
 # kind 选型
 
-**默认**：给模型新外部工具 → **设置 → 插件 → MCP**（skill **`xrk-capability-attach`**），不要一上来脚手架进程插件。
+**默认**：给模型新外部工具 → **设置 → 插件 → MCP**（skill **`xrk-capability-attach`**）——先走 MCP，脚手架进程插件留到确实需要时。
 
 | 用户要什么 | 选 |
 |------------|-----|
@@ -17,7 +17,7 @@ description: >-
 | 斜杠命令 | **`kind: commands`** 或 `.agents/recipes` |
 | 改壳 UI | **`xrk.client`** 叠加 |
 
-单函数且已是 MCP 包 → **挂 MCP**，不要再包一层 tools 插件。  
+单函数且已是 MCP 包 → **挂 MCP** 即可（省去 tools 插件这一层）。  
 仅当逻辑必须落在本仓 `extensions/`、且不值得起 MCP 进程时 → tools 插件。
 
 装完 MCP：看 Settings 行状态。装完进程插件：**`xrk-plugin-verify`**（须 restart）。

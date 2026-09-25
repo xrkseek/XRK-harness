@@ -12,4 +12,4 @@ description: >-
 3. `xrkh plugin list` · 徽章 **harness** · 必要时新 session
 4. **git pull 后**：仅 lock/package.json 变才 `pnpm install`；插件 JS 改动只需 restart
 
-无热重载。`--force` 只停已识别 XRK Host。
+改动经 `restart` 生效；`--force` 停已识别 XRK Host。
