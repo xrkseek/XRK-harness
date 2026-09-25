@@ -8,7 +8,7 @@ description: >-
 
 # Adapt workspace
 
-**不要**在空白工作区 auto-mkdir `.xrk` / `.agents`。会话在 `~/.xrk`。
+空白工作区保持只读探测，`~/.xrk` 之外的目录结构由用户决定。
 
 ```
 - [ ] 1. 只读探测（package.json、README…）
