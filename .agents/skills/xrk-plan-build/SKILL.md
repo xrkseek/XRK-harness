@@ -15,7 +15,7 @@ XRK **没有**单独的 Build 徽章。选 **Plan** 徽章新建会话会默认�
 - [ ] 1. 确认是否已在计划模式（Plan 徽章 / `/plan` / 投影 plan.active）
 - [ ] 2. 只读探索：读相关文件，不写业务改动
 - [ ] 3. 写出以 `#` 标题开头的完整 markdown 计划
-- [ ] 4. 调用 `exit_plan_mode`（须 `#` 标题）；等用户 Approve / Keep planning
+- [ ] 4. 调用 `exit_plan_mode`（`plan` 以 `#` 起头）；等用户 Approve / Keep planning
 - [ ] 5. 批准后按计划实现；Keep planning → 修订计划再提审
 ```
 
