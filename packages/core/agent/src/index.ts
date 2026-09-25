@@ -48,6 +48,11 @@ export interface AgentRunInput {
    */
   readonly text?: string;
   readonly signal?: AbortSignal;
+  /**
+   * Awaited before the first tool settle (Host workspace snapshot barrier).
+   * Overlaps the LLM when the Host starts the work earlier.
+   */
+  readonly beforeTools?: () => void | Promise<void>;
 }
 
 export interface AgentRunResult {
@@ -382,6 +387,7 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
             ...(options.prepareUserContent
               ? { prepareUserContent: options.prepareUserContent }
               : {}),
+            ...(input.beforeTools ? { beforeTools: input.beforeTools } : {}),
             ...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
           });
         } catch (err) {

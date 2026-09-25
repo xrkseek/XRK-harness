@@ -521,6 +521,8 @@ export {
 } from "./cost-meter-pricing.js";
 export {
   snapshotSessionWorkspace,
+  SNAPSHOT_DRAIN_BUDGET_MS,
+  SNAPSHOT_TIMEOUT_MS,
   workspaceCheckpointStoreFor,
   workspaceCheckpointStoreForSession,
   clearWorkspaceCheckpointStores,

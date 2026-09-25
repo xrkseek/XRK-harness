@@ -28,6 +28,14 @@ const stores = new Map<string, WorkspaceCheckpointStore>();
  */
 export const SNAPSHOT_TIMEOUT_MS = 20_000;
 
+/**
+ * Soft budget for Host drain pre-turn snapshots when the tool barrier must
+ * wait (LLM returned tools before git finished). Overlaps the model call via
+ * `beforeTools`; prefer skip over stalling Queue/Steer. Manual
+ * `session.checkpoint.snapshot` still uses {@link SNAPSHOT_TIMEOUT_MS}.
+ */
+export const SNAPSHOT_DRAIN_BUDGET_MS = 5_000;
+
 function timeoutAfter(ms: number): Promise<void> {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, ms);
@@ -116,16 +124,19 @@ export function checkpointFail(
  * Best-effort — git missing or snapshot failure must not block the turn.
  * Disabled when `XRK_CHECKPOINTS=0`.
  *
- * Hard deadline: the store already bounds every git command with a timeout,
- * but a runner without timeout support (injected fakes) or an fs call that
- * never settles would otherwise hang the caller forever. Race the snapshot
- * against {@link SNAPSHOT_TIMEOUT_MS} so a stuck call degrades to "no
- * checkpoint" instead of blocking the drain queue.
+ * Hard deadline: race the snapshot against `opts.budgetMs` (default
+ * {@link SNAPSHOT_TIMEOUT_MS}). Host drain should pass
+ * {@link SNAPSHOT_DRAIN_BUDGET_MS} so large worktrees cannot pin Queue/Steer.
  */
 export async function snapshotSessionWorkspace(
   runtime: FaceRuntime,
   sessionId: string,
-  opts?: { readonly label?: string; readonly seq?: number },
+  opts?: {
+    readonly label?: string;
+    readonly seq?: number;
+    /** Whole-call race budget; default {@link SNAPSHOT_TIMEOUT_MS}. */
+    readonly budgetMs?: number;
+  },
 ): Promise<WorkspaceCheckpointRecord | undefined> {
   if (process.env.XRK_CHECKPOINTS === "0") return undefined;
   if (!runtime.store.has(sessionId)) return undefined;
@@ -133,6 +144,10 @@ export async function snapshotSessionWorkspace(
     opts?.seq ??
     readSessionEvents(runtime.store, sessionId).length;
   const store = workspaceCheckpointStoreForSession(runtime, sessionId);
+  const budgetMs =
+    opts?.budgetMs !== undefined && opts.budgetMs > 0
+      ? opts.budgetMs
+      : SNAPSHOT_TIMEOUT_MS;
   try {
     const record = await Promise.race([
       store.snapshot({
@@ -140,10 +155,10 @@ export async function snapshotSessionWorkspace(
         seq,
         ...(opts?.label ? { label: opts.label } : { label: "pre-turn" }),
       }),
-      timeoutAfter(SNAPSHOT_TIMEOUT_MS).then(() => {
+      timeoutAfter(budgetMs).then(() => {
         throw new WorkspaceCheckpointError(
           "timed-out",
-          `workspace snapshot exceeded ${SNAPSHOT_TIMEOUT_MS}ms; skipped`,
+          `workspace snapshot exceeded ${budgetMs}ms; skipped`,
         );
       }),
     ]);

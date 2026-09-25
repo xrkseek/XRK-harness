@@ -83,6 +83,7 @@ import {
   readManagedPackageIndexAt,
   reconcileManagedProcessPlugins,
   snapshotSessionWorkspace,
+  SNAPSHOT_DRAIN_BUDGET_MS,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
   type FaceRuntime,
@@ -1192,13 +1193,11 @@ export function createHostManager(): HostManager {
         createDrain: (sessionId) => async ({ signal }) => {
           const snapshot = (): Promise<void> => {
             const face = faceBox.runtime;
-            // Best-effort and self-bounded: snapshotSessionWorkspace races its
-            // own deadline (SNAPSHOT_TIMEOUT_MS), so a hung git/fs call
-            // degrades to "no checkpoint" instead of blocking the turn. The
-            // drain loop's abort check covers cancellation; no shared state
-            // here, so no signal listener bookkeeping is needed.
+            // Soft-bounded; overlaps LLM via continueTurn.beforeTools.
             if (!face || signal.aborted) return Promise.resolve();
-            return snapshotSessionWorkspace(face, sessionId).then(() => undefined);
+            return snapshotSessionWorkspace(face, sessionId, {
+              budgetMs: SNAPSHOT_DRAIN_BUDGET_MS,
+            }).then(() => undefined);
           };
           try {
             const agent = await resolveAgent(sessionId);
@@ -1209,10 +1208,16 @@ export function createHostManager(): HostManager {
               if (signal.aborted) {
                 throw hostAbortError(signal.reason);
               }
-              // Worktree snapshot before tools mutate files (Hermes-style
-              // checkpoint). Best-effort — never blocks the turn.
-              await snapshot();
-              const result = await agent.continueTurn({ signal });
+              // Hermes-style: snapshot worktree before tools mutate files.
+              // Start immediately and pass as beforeTools so it overlaps the
+              // LLM; do not await serially before continueTurn (that pinned
+              // Queue/Steer chrome on large monorepos).
+              const snapP = snapshot();
+              const result = await agent.continueTurn({
+                signal,
+                beforeTools: () => snapP,
+              });
+              await snapP;
               lastDrainResult.set(sessionId, result);
             }
           } finally {

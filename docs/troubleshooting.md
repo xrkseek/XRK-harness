@@ -92,6 +92,7 @@
 | 重启丢会话 | Host 未设 `XRK_SESSIONS_DIR` 且非 CLI serve 默认路径 → 内存仓 |
 | 会话库损坏 / 打不开 | 看 `~/.xrk/sessions/sessions.db`（或 `XRK_SESSIONS_DIR`）；Host 先 `stop`/`close` 再删文件（Windows） |
 | 侧栏工作区在、会话一行都没有 | 多半是 client 校验挂了整表 `session.list`（库未丢）。升级到 **≥0.4.5**；仍空则打开 DevTools 看是否有 `[apiproxy] session.list: dropped row` |
+| 发送后长时间「排队 / 插队」、输入起不来 | Host 每轮前工作区影子 git 快照过慢会占住 drain。可临时 `XRK_CHECKPOINTS=0`；新版快照与模型调用并行，工具执行前再汇合（软预算约 5s） |
 
 见：[session.md](./session.md)。
 
@@ -206,6 +207,7 @@ Local audit: `node scripts/dsh-community-audit.mjs`. Install steps: [getting-sta
 | Sessions lost on restart | Host has no `XRK_SESSIONS_DIR` and is not on the CLI serve default path → in-memory store |
 | Session DB corrupt / will not open | Inspect `~/.xrk/sessions/sessions.db` (or `XRK_SESSIONS_DIR`); on Windows, `stop`/`close` Host before deleting the file |
 | Workspaces show but no session rows | Often a client-side whole-table `session.list` Zod failure (DB intact). Upgrade to **≥0.4.5**; if still empty, check DevTools for `[apiproxy] session.list: dropped row` |
+| Long Queue/Steer after send; input stays busy | Pre-turn workspace shadow-git snapshot can hold the drain. Temporary: `XRK_CHECKPOINTS=0`. Newer builds overlap snapshot with the LLM and join before tools (~5s soft budget) |
 
 See: [session.md](./session.md).
 

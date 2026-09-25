@@ -117,7 +117,7 @@ const result = await store.restore(point.id, { prune: false });
 | `/rollback` | 列表；`/rollback <n\|id\|seq:N>` 回退；`plan …` 预演；`--prune` 删 extras |
 | 消息 **Restore** | 对该轮 Face seq 发 `/rollback seq:N`（与 Branch 并列，语义不同） |
 
-Host 默认在 drain 每轮 `continueTurn` 前调用 `snapshotSessionWorkspace`（`XRK_CHECKPOINTS=0` 关闭）。需本机 `git`。
+Host 默认在 drain 每轮启动 `snapshotSessionWorkspace` 并与模型调用并行，在工具 settle 前汇合（`XRK_CHECKPOINTS=0` 关闭；软预算超时则跳过该点）。需本机 `git`。
 
 ## 注意
 
@@ -239,7 +239,7 @@ They do not substitute for each other:
 | `/rollback` | List; `/rollback <n\|id\|seq:N>` restore; `plan …` preview; `--prune` drop extras |
 | Message **Restore** | Issues `/rollback seq:N` for that turn’s Face seq (beside Branch; different meaning) |
 
-Host calls `snapshotSessionWorkspace` before each drain `continueTurn` by default (`XRK_CHECKPOINTS=0` disables). Requires `git` on PATH.
+Host starts `snapshotSessionWorkspace` in parallel with the model call each drain turn and joins before tool settle (`XRK_CHECKPOINTS=0` disables; soft-budget timeout skips the point). Requires `git` on PATH.
 
 ## Caveats
 

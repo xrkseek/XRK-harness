@@ -114,7 +114,7 @@ mode: queue | steer → admit（slash → recipe / skill 写入 user）→ wake 
 
 ## `session.checkpoint.*`
 
-工作区影子 git 快照（`@xrkseek/checkpoint`）。`list` · `planRestore` · `restore` · `snapshot`；`restore` / `planRestore` 可用 `id` 或 `atSeq`（≤ 该 Face seq 的最近本 session 点）。Host 在每轮 `continueTurn` 前自动 `snapshot`（`XRK_CHECKPOINTS=0` 关闭）。斜杠 `/rollback` 与消息旁 Restore 走同一 store。详见 [turn-rewind.md](./turn-rewind.md)。
+工作区影子 git 快照（`@xrkseek/checkpoint`）。`list` · `planRestore` · `restore` · `snapshot`；`restore` / `planRestore` 可用 `id` 或 `atSeq`（≤ 该 Face seq 的最近本 session 点）。Host 在每轮前自动 `snapshot`：与模型调用**并行**，在工具执行前汇合（`XRK_CHECKPOINTS=0` 关闭；drain 软预算约 5s，超时跳过该点）。斜杠 `/rollback` 与消息旁 Restore 走同一 store。详见 [turn-rewind.md](./turn-rewind.md)。
 
 ## Boot
 
@@ -244,7 +244,7 @@ Completed-turn cut: optional `atSeq` (same **1-based** Face seq as `session.hist
 
 ## `session.checkpoint.*`
 
-Workspace shadow-git snapshots (`@xrkseek/checkpoint`). `list` · `planRestore` · `restore` · `snapshot`; `restore` / `planRestore` accept `id` or `atSeq` (nearest this-session point at or before that Face seq). Host auto-`snapshot`s before each `continueTurn` (`XRK_CHECKPOINTS=0` disables). Slash `/rollback` and the message Restore control share the same store. See [turn-rewind.md](./turn-rewind.md).
+Workspace shadow-git snapshots (`@xrkseek/checkpoint`). `list` · `planRestore` · `restore` · `snapshot`; `restore` / `planRestore` accept `id` or `atSeq` (nearest this-session point at or before that Face seq). Host auto-`snapshot`s each turn **in parallel with the LLM**, joining before tools run (`XRK_CHECKPOINTS=0` disables; drain soft budget ~5s skips the point on timeout). Slash `/rollback` and the message Restore control share the same store. See [turn-rewind.md](./turn-rewind.md).
 
 ## Boot
 

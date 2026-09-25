@@ -162,6 +162,13 @@ export interface RunTurnInput {
   readonly tools: ToolRegistry;
   readonly pipeline?: ToolPipeline;
   readonly signal?: AbortSignal;
+  /**
+   * Barrier before the first tool settle of this turn (Host workspace
+   * snapshot). Runs in parallel with the LLM call when started earlier;
+   * awaited only when tools are about to mutate the worktree. No-op when
+   * the turn ends without tool calls.
+   */
+  readonly beforeTools?: () => void | Promise<void>;
   readonly maxSteps?: number;
   /**
    * Auto-continue on max-tokens truncation: when the model hits its output
@@ -1199,6 +1206,12 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         stepId,
         call,
       });
+    }
+
+    // Barrier 0: Host pre-turn snapshot (etc.) before any tool body runs.
+    // Started earlier so it overlaps the LLM; only blocks at the tool edge.
+    if (input.beforeTools) {
+      await input.beforeTools();
     }
 
     const { outcomes, aborted: settleAborted } = await settleToolBatch({

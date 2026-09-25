@@ -277,9 +277,22 @@ export class WorkspaceCheckpointStore {
    */
   private ensureExcludesFile(): void {
     mkdirSync(this.shadowDir, { recursive: true });
-    const patterns: string[] = [];
+    // Keep heavy / regenerable trees out of `add -A` — monorepo node_modules
+    // and dist dominate snapshot latency on product workspaces. Worktree
+    // `.gitignore` still applies; this file is an extra excludesFile.
+    const patterns: string[] = [
+      "node_modules/",
+      "**/node_modules/",
+      "dist/",
+      "**/dist/",
+      ".git/",
+      "**/.git/",
+      ".release/",
+      "coverage/",
+      "**/*.tsbuildinfo",
+    ];
     if (this.shadowRelPath) patterns.push(`${this.shadowRelPath}/`);
-    const content = patterns.length > 0 ? `${patterns.join("\n")}\n` : "";
+    const content = `${patterns.join("\n")}\n`;
     try {
       if (existsSync(this.excludesFile)) {
         if (readFileSync(this.excludesFile, "utf8") === content) return;
