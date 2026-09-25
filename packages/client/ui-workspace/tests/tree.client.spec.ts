@@ -194,6 +194,36 @@ describe('deriveGroups', () => {
     expect(groups[0]!.sessionCount).toBe(1)
   })
 
+  it('archiveMode=all reattaches archived by cwd when Face stripped sessionIds', () => {
+    const kept = summary('kept', 1, '/projects/first')
+    const gone = summary('gone', 2, '/projects/first')
+    // Face list omits archived from workspace.sessionIds but keeps byId.
+    const sessions = list(kept, gone)
+    const groups = deriveGroups(
+      sessions,
+      [workspace('first', ['kept'])],
+      archived('gone'),
+      view(['first']),
+      'all',
+    )
+    expect(groups[0]!.sessions.map(node => node.id)).toEqual([kept.id, gone.id])
+  })
+
+  it('archiveMode=archived-only shows only archived rows', () => {
+    const kept = summary('kept', 1, '/projects/first')
+    const gone = summary('gone', 2, '/projects/first')
+    const sessions = list(kept, gone)
+    const groups = deriveGroups(
+      sessions,
+      [workspace('first', ['kept'])],
+      archived('gone'),
+      view(['first']),
+      'archived-only',
+    )
+    expect(groups[0]!.sessions.map(node => node.id)).toEqual([gone.id])
+    expect(deriveFlat(sessions, archived('gone'), 'archived-only').map(r => r.id)).toEqual([gone.id])
+  })
+
   it('marks selected Workspace and Ungrouped sessions without relying on an Intent', () => {
     const owned = summary('owned', 1)
     const loose = summary('loose', 2)
@@ -252,7 +282,7 @@ describe('deriveFlat', () => {
 })
 
 describe('deriveSearchResults archive filtering', () => {
-  it('archived sessions never match — not by title and not via a backend content hit', () => {
+  it('archived sessions never match under default hide — not by title and not via a backend content hit', () => {
     const hit = summary('hit', 2)
     hit.displayTitle = 'Needle row'
     const gone = summary('gone', 1)
@@ -396,14 +426,17 @@ describe('createWorkspaceViewStore', () => {
     const store = createWorkspaceViewStore().create()
     expect(store.getSnapshot().groupBy).toBe('workspace')
     expect(store.getSnapshot().orderBy).toBe('updated')
+    expect(store.getSnapshot().archiveMode).toBe('hidden')
     store.actions.setGroupBy('flat')
     store.actions.setOrderBy('updated')
+    store.actions.setArchiveMode('all')
     store.actions.setGroupExpanded('alpha', true)
     store.actions.syncSessionOrderAccount('alpha', ['two', 'one'], { one: 1, two: 2 })
     store.actions.setSessionOrder('alpha', ['one', 'two'])
     expect(store.getSnapshot().groupBy).toBe('flat')
     expect(store.getSnapshot()).toMatchObject({
       orderBy: 'updated',
+      archiveMode: 'all',
       groupExpansion: { alpha: true },
       sessionOrderByAccount: { alpha: ['one', 'two'] },
       sessionUpdatedAtByAccount: { alpha: { one: 1, two: 2 } },

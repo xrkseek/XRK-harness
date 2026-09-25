@@ -50,6 +50,9 @@ importers:
       '@xrkseek/exec-environment':
         specifier: workspace:*
         version: link:../../packages/exec/environment
+      '@xrkseek/exec-memory':
+        specifier: workspace:*
+        version: link:../../packages/exec/memory
       '@xrkseek/exec-sandbox':
         specifier: workspace:*
         version: link:../../packages/exec/sandbox
@@ -65,6 +68,9 @@ importers:
       '@xrkseek/exec-web':
         specifier: workspace:*
         version: link:../../packages/exec/web
+      '@xrkseek/im-gateway-contract':
+        specifier: workspace:*
+        version: link:../../packages/im-gateway-contract
       '@xrkseek/llm-registry':
         specifier: workspace:*
         version: link:../../packages/llm/registry
@@ -98,6 +104,9 @@ importers:
       '@xrkseek/server-host':
         specifier: workspace:*
         version: link:../../packages/server/host
+      '@xrkseek/server-http':
+        specifier: workspace:*
+        version: link:../../packages/server/http
       '@xrkseek/server-loader':
         specifier: workspace:*
         version: link:../../packages/server/loader

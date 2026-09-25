@@ -8,6 +8,8 @@
  * `command.execute`, otherwise the seat stays empty. Status loads via Face
  * unary; plan / todos ride live projections; Office reads `/office` status.
  * Spill rows in the live timeline open via Host `host.openPath`.
+ * Teams Status rows: open/pause/resume (subagents.*) · cold resume ·
+ * merge-to-parent via Face `worktree.merge`.
  */
 import type {} from '@xrkseek/xrk-api-remotes/client'
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
@@ -135,6 +137,42 @@ export function apply(ctx: ClientContext): void {
         })
         if (!response.result.ok) {
           throw new Error(`team resume failed: ${response.result.error.message}`)
+        }
+      },
+      mergeTeamWorktree: async (input: {
+        readonly leaseId: string
+        readonly pruneAfter?: boolean
+      }) => {
+        const response = await fetch('/api/worktree.merge', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            type: 'client-request',
+            rpcId: `team-merge-${Date.now()}`,
+            payload: {
+              leaseId: input.leaseId,
+              ...(input.pruneAfter === false ? {} : { pruneAfter: true }),
+            },
+          }),
+        })
+        const body = await response.json() as {
+          result?: {
+            ok?: boolean
+            error?: { message?: string }
+            value?: { merged?: boolean; reason?: string }
+          }
+        }
+        if (!body.result?.ok) {
+          throw new Error(
+            body.result?.error?.message
+              ?? `team worktree merge failed for ${input.leaseId}`,
+          )
+        }
+        if (body.result.value && body.result.value.merged === false) {
+          throw new Error(
+            body.result.value.reason
+              ?? `worktree merge retained lease ${input.leaseId}`,
+          )
         }
       },
     }),

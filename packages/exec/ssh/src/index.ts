@@ -25,6 +25,7 @@ export {
 } from "./paths.js";
 export {
   createSshExecutionWorld,
+  createSshExecutionWorldReady,
   type CreateSshExecutionWorldOptions,
   type SshExecutionWorld,
 } from "./providers.js";
@@ -35,4 +36,9 @@ export {
   type SshExecOptions,
   type SshSession,
 } from "./session.js";
+export {
+  probeSshTarget,
+  type ProbeSshTargetOptions,
+  type SshProbeResult,
+} from "./probe.js";
 export { createSshSubprocess } from "./subprocess.js";

@@ -6,9 +6,10 @@
 
 `@xrkseek/xrk-workflow` 提供抽象 {@link WorkflowEngine} seam **以及**
 {@link InProcessWorkflowEngine}（AsyncFunction Provider）与
-{@link IsolatingWorkflowEngine}（worker_threads 脚本体隔离；worker 内 `agent()`
-恒为 null——PTC 形第一步，非完整 DSH PTC SDK）。Cordis 组合挂载任一 Provider 后，
-`ctx.workflowEngine.start` 不再是抽象空洞。
+{@link IsolatingWorkflowEngine}（worker_threads 脚本体隔离；可选
+`createAgent` 经 parentPort RPC 回桥，返回值须可 structuredClone；无桥时
+`agent()` 仍为 null）。完整 DSH PTC SDK（`tools.*` / 沙箱 Node）**未移植**。
+Cordis 组合挂载任一 Provider 后，`ctx.workflowEngine.start` 不再是抽象空洞。
 产品 Face boot 用 Face 原生 **`ralph`** 工具做新鲜子代理迭代，而不是这条 Cordis seam；
 未来进程/沙箱引擎仍可替换 Provider，而无需改 `tool-workflow`。
 

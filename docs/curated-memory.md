@@ -44,7 +44,7 @@
 
 没有搜索、列表或读文件动作。磁盘上无法按 `§` 往返的内容会被拒绝写入，并留下 `.bak` 副本。
 
-关闭：**产品路径** Settings → Plugins → **策展记忆**（Face ns `curated-memory`：`enabled` · `phase2Llm`）。保存后下次 agent 重建卸下 `memory` 工具与系统提示冻结段。非空 `XRK_CURATED_MEMORY` 为 CI 旁路（`0` 强制关，其它强制开）。组合选项 `curatedMemory: false` 仍可用。
+关闭：**产品路径** Settings → Plugins → **策展记忆**（Face ns `curated-memory`：`enabled` · `phase2Llm`）。保存后下次 agent 重建卸下 `memory` 工具与系统提示冻结段。`phase2Llm` 开时会话结束在 Phase1 后再用当前会话模型做 Phase2 巩固（亦可用 `XRK_CURATED_MEMORY_PHASE2=1`）。非空 `XRK_CURATED_MEMORY` 为 CI 旁路（`0` 强制关，其它强制开）。组合选项 `curatedMemory: false` 仍可用。Host / harness 默认经 `resolveMemoryProvider`（`XRK_MEMORY_PROVIDER=file|http|sqlite`）选后端，工具与 Phase1/2 共用同一 store。
 
 ## 回合结束写入
 
@@ -66,7 +66,7 @@
 | Provider | 工厂 | 说明 |
 |----------|------|------|
 | `file`（默认） | `createFileMemoryProvider` / `createCuratedMemoryStore` | `{XRK_HOME}/memories` 的 `MEMORY.md` / `USER.md` |
-| `http` | `createHttpMemoryProvider` | 集成方自建 REST：`GET /health` · `GET /v1/curated/{memory\|user}` · `POST /v1/curated/{memory\|user}/ops` |
+| `http` | `createHttpMemoryProvider` | 集成方自建 REST：`GET /health` · `GET /v1/curated/{memory\|user}` · `POST /v1/curated/{memory\|user}/ops`；同步构造（冻结段为空，读写作 HTTP） |
 | `sqlite` | `createSqliteMemoryProvider` | `{XRK_HOME}/memories/curated-memory.sqlite`（`node:sqlite`） |
 
 选择：`resolveMemoryProvider({ kind })` 或 env `XRK_MEMORY_PROVIDER=file|http|sqlite`；HTTP 需 `XRK_MEMORY_HTTP_URL`（可选 `XRK_MEMORY_HTTP_TOKEN`）。组合选项仍可直接注入任意实现了 `CuratedMemoryStore` 的对象。provider 只负责策展记忆读写，不接 Mnemon 文档库 / memory-embed 的 `/search`。
@@ -119,7 +119,7 @@ Entries are separated by `§` with a newline on each side. `MEMORY.md` is capped
 
 There is no search, list, or read action. Content on disk that would not round-trip through the `§` delimiter is refused, and a `.bak` copy is kept.
 
-Disable via **product path** Settings → Plugins → **Curated memory** (Face ns `curated-memory`: `enabled` · `phase2Llm`). After save, the next agent rebuild drops the `memory` tool and frozen system-prompt block. Non-empty `XRK_CURATED_MEMORY` is the CI bypass (`0` force off, any other force on). Composition option `curatedMemory: false` still works.
+Disable via **product path** Settings → Plugins → **Curated memory** (Face ns `curated-memory`: `enabled` · `phase2Llm`). After save, the next agent rebuild drops the `memory` tool and frozen system-prompt block. When `phase2Llm` is on, session end runs Phase2 consolidation after Phase1 with the current session model (also `XRK_CURATED_MEMORY_PHASE2=1`). Non-empty `XRK_CURATED_MEMORY` is the CI bypass (`0` force off, any other force on). Composition option `curatedMemory: false` still works. Host / harness default through `resolveMemoryProvider` (`XRK_MEMORY_PROVIDER=file|http|sqlite`); tools and Phase1/2 share that store.
 
 ## Pluggable providers (`MemoryProvider`)
 
@@ -128,7 +128,7 @@ Hermes-style `MemoryProvider` seam: **file curated remains the default**; one ba
 | Provider | Factory | Notes |
 |----------|---------|-------|
 | `file` (default) | `createFileMemoryProvider` / `createCuratedMemoryStore` | `{XRK_HOME}/memories` `MEMORY.md` / `USER.md` |
-| `http` | `createHttpMemoryProvider` | Integrator-owned REST: `GET /health` · `GET /v1/curated/{memory\|user}` · `POST /v1/curated/{memory\|user}/ops` |
+| `http` | `createHttpMemoryProvider` | Integrator-owned REST: `GET /health` · `GET /v1/curated/{memory\|user}` · `POST /v1/curated/{memory\|user}/ops`; sync construct (empty freeze; live I/O over HTTP) |
 | `sqlite` | `createSqliteMemoryProvider` | `{XRK_HOME}/memories/curated-memory.sqlite` (`node:sqlite`) |
 
 Select with `resolveMemoryProvider({ kind })` or env `XRK_MEMORY_PROVIDER=file|http|sqlite`; HTTP needs `XRK_MEMORY_HTTP_URL` (optional `XRK_MEMORY_HTTP_TOKEN`). Compositions may still inject any `CuratedMemoryStore` implementation. The provider handles curated memory read/write only; it does not reach Mnemon documents or memory-embed `/search`.

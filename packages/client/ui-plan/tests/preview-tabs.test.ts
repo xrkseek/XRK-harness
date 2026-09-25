@@ -50,16 +50,7 @@ const sampleStatus = {
     cacheWrite: 0,
     reasoning: 0,
     cost: 0.001,
-    byModel: {
-      "deepseek-chat": {
-        input: 10,
-        output: 2,
-        cacheRead: 0,
-        cacheWrite: 0,
-        reasoning: 0,
-        cost: 0.001,
-      },
-    },
+    byModel: {},
     byProviderModel: {
       "deepseek:deepseek-chat": {
         input: 10,
@@ -77,9 +68,7 @@ const sampleStatus = {
     totalCost: 0.1,
     todayTokens: 12,
     monthTokens: 100,
-    byModel: [
-      { key: "deepseek-chat", input: 80, output: 20, cost: 0.05 },
-    ],
+    byModel: [],
     byProviderModel: [
       {
         key: "deepseek:deepseek-chat",
@@ -189,6 +178,66 @@ describe("preview tab envelopes", () => {
     expect(parsed?.fleet.health).toBe("ok");
     expect(parsed?.billing.dailyTrend).toHaveLength(2);
     expect(parsed?.channels.alerts[0]?.id).toBe("im:telegram");
+  });
+
+  it("parses teamTasks externalResume · worktreeId for Status actions", () => {
+    const withTeam = {
+      ...sampleStatus,
+      teamTasks: [
+        {
+          id: "t1",
+          title: "ship",
+          status: "paused",
+          revision: 2,
+          childSessionId: "c-ext",
+          worktreeId: "lease-1",
+          worktreeLeaseStatus: "retained",
+          externalResume: "cold" as const,
+        },
+      ],
+    };
+    const parsed = parseSessionStatus({
+      result: { ok: true, value: withTeam },
+    });
+    expect(parsed?.teamTasks[0]).toMatchObject({
+      id: "t1",
+      externalResume: "cold",
+      worktreeId: "lease-1",
+      worktreeLeaseStatus: "retained",
+    });
+  });
+
+  it("parses compaction.spillPaths entries (object or legacy string)", () => {
+    const withSpill = {
+      ...sampleStatus,
+      compaction: {
+        ...sampleStatus.compaction,
+        spillCount: 2,
+        spillPaths: [
+          {
+            path: "/tmp/spill/a.txt",
+            name: "a.txt",
+            bytes: 12,
+            preview: "hello",
+            tool: "bash",
+          },
+          "/tmp/spill/legacy.txt",
+        ],
+      },
+    };
+    const parsed = parseSessionStatus({
+      result: { ok: true, value: withSpill },
+    });
+    expect(parsed?.compaction.spillPaths).toEqual([
+      {
+        path: "/tmp/spill/a.txt",
+        name: "a.txt",
+        bytes: 12,
+        preview: "hello",
+        tool: "bash",
+      },
+      { path: "/tmp/spill/legacy.txt", name: "legacy.txt" },
+    ]);
   });
 
   it("loads plan · office · status and keeps tabs when one request fails", async () => {

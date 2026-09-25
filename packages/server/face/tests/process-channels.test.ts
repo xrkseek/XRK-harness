@@ -23,23 +23,27 @@ describe("processChannels discover (C-2)", () => {
     ]);
     expect(payload.im.length).toBe(FACE_IM_CHANNEL_STUBS.length);
     expect(payload.im.some((row) => row.channelId === "slack")).toBe(true);
-    expect(payload.im[0]?.wired).toBe("bridge");
+    expect(payload.im[0]?.wired).toBe("discover");
+    expect(payload.imGatewayWired).toBe("bridge");
   });
 
-  it("marks IM vendors sidecar when gateway env is configured", () => {
+  it("exposes Host gateway=sidecar without claiming per-vendor native wire", () => {
     const payload = buildFaceChannelDiscover([], { imSidecarConfigured: true });
-    expect(payload.im[0]?.wired).toBe("sidecar");
+    expect(payload.imGatewayWired).toBe("sidecar");
+    expect(payload.im[0]?.wired).toBe("discover");
     expect(payload.im[0]?.gatewayRelayPath).toBe("/api/im/gateway/relay");
     expect(payload.note).toContain("XRK_IM_GATEWAY_URL");
+    expect(payload.note).toContain("discover stubs");
   });
 
-  it("marks IM vendors ws-client when XRK_IM_GATEWAY_WS_URL is set", () => {
+  it("exposes Host gateway=ws-client when XRK_IM_GATEWAY_WS_URL is set", () => {
     const prev = process.env.XRK_IM_GATEWAY_WS_URL;
     process.env.XRK_IM_GATEWAY_WS_URL = "ws://127.0.0.1:8788/ws";
     try {
       expect(resolveImGatewayWired()).toBe("ws-client");
       const payload = buildFaceChannelDiscover([]);
-      expect(payload.im[0]?.wired).toBe("ws-client");
+      expect(payload.imGatewayWired).toBe("ws-client");
+      expect(payload.im[0]?.wired).toBe("discover");
       expect(payload.note).toContain("XRK_IM_GATEWAY_WS_URL");
     } finally {
       if (prev === undefined) delete process.env.XRK_IM_GATEWAY_WS_URL;

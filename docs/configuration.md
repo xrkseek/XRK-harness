@@ -92,7 +92,9 @@ Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-c
 | `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db` · WAL · 独占 `sessions.write.lock`）；第二 Host 拒绝抢写 | Host 省略 = 内存（CLI serve 另有默认） |
 | `XRK_INVARIANTS_FAIL_FAST` | `1` / `true`：包装 SessionStore，挂 core-session / core-agent-loop 包自有 invariant 伴侣；关系违规抛 `InvariantError` 并阻止 append | 默认关（可选诊断） |
 | `XRK_A2A_AGENTS` | A2A 对等体 JSON：`{ "name": { "url", "auth?", "timeout?", "capabilities?" } }`；亦可 `{XRK_HOME}/a2a_agents.json` | 出站 `extensions/a2a` |
-| `XRK_A2A_INBOUND` | `1` / `true`：启用入站 Agent Card + `POST /a2a` `message/send` stub | 默认关 |
+| `XRK_A2A_INBOUND` | `1` / `true`：启用入站 Agent Card + `POST /a2a` `message/send`（Face 会话注入）。非空为 CI 旁路（`0` 强制关）。产品路径：Settings → Plugins → **A2A 入站**（`a2a-inbound`） | 默认关 |
+| `XRK_A2A_INBOUND_SESSION` | 入站钉死到该 Face `sessionId`；未设则读 Settings `a2a-inbound.sessionId`，再否则 `a2a-<contextId>` | 可选 |
+| `XRK_A2A_INBOUND_TIMEOUT_MS` | 等待助手正文上限（默认 120000，最小 1000，硬顶 600000）；Settings `a2a-inbound.timeoutMs`（`0`=默认） | 可选 |
 | `XRK_A2A_MAX_PINGPONG_TURNS` | 每 `context_id` 环路上限（默认 5，硬顶 20） | 防乒乓 |
 | `XRK_A2A_CONVERSATIONS_DIR` | A2A 对话 JSONL 根；默认 `{XRK_HOME}/a2a_conversations` | 持久 / `a2a_history` |
 | `XRK_MEMORY_PROVIDER` | 策展记忆后端：`file`（默认）· `http` · `sqlite` | 见 [curated-memory.md](./curated-memory.md) |
@@ -113,6 +115,19 @@ Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-c
 | `XRK_SSH_PORT` | 可选端口 |
 | `XRK_SSH_KEY` | 可选私钥路径 |
 | `XRK_SSH_NODE` | 远端 `run_code` 用的 Node（默认 `node`；仅 env） |
+| `XRK_SSH_SKIP_PROBE` | `1` 时跳过 Host 启动 BatchMode 连通预检（CI mock） |
+
+Host 启用 SSH 时会先跑 `true` 预检（失败则拒绝启动）；`xrkh doctor` 有 `ssh-remote` 行。云任务 / Codex Noise `exec-server` **未做**（见 [status](./status.md)）。
+
+### 可插拔 ExecEnvironment（HTTP sidecar）
+
+与 SSH 互斥：配置了 SSH 时 Host **优先 SSH**，忽略 `XRK_EXEC_ENVIRONMENT=http`。
+
+| 变量 | 含义 |
+|------|------|
+| `XRK_EXEC_ENVIRONMENT` | `local`（默认）或 `http` |
+| `XRK_EXEC_ENVIRONMENT_URL` | HTTP sidecar base URL（`/health` · 文件/进程 RPC） |
+| `XRK_EXEC_ENVIRONMENT_TOKEN` | 可选 Bearer |
 
 用户插件 CLI：`xrkh plugin add|remove|list|path|reconcile`（亦 `xrk-harness plugin …`；见 [plugin-loader.md](./plugin-loader.md)）。
 
@@ -368,7 +383,9 @@ Path jail: `exec-fs` `resolveWithinRoot` ([security-checklist.md](./security-che
 | `XRK_SESSIONS_DIR` | Session persistence directory (`sessions.db` · WAL · exclusive `sessions.write.lock`); a second Host refuses to steal the write lease | Host omit = in-memory (CLI serve has its own default) |
 | `XRK_INVARIANTS_FAIL_FAST` | `1` / `true`: wrap SessionStore with core-session / core-agent-loop package-owned invariant companions; relational violations throw `InvariantError` and block append | Off by default (opt-in diagnostics) |
 | `XRK_A2A_AGENTS` | A2A peers JSON: `{ "name": { "url", "auth?", "timeout?", "capabilities?" } }`; or `{XRK_HOME}/a2a_agents.json` | Outbound `extensions/a2a` |
-| `XRK_A2A_INBOUND` | `1` / `true`: enable inbound Agent Card + `POST /a2a` `message/send` stub | Off by default |
+| `XRK_A2A_INBOUND` | `1` / `true`: enable inbound Agent Card + `POST /a2a` `message/send` (Face session inject). Non-empty is CI bypass (`0` force off). Product path: Settings → Plugins → **A2A inbound** (`a2a-inbound`) | Off by default |
+| `XRK_A2A_INBOUND_SESSION` | Pin inbound to this Face `sessionId`; else Settings `a2a-inbound.sessionId`; else `a2a-<contextId>` | Optional |
+| `XRK_A2A_INBOUND_TIMEOUT_MS` | Wait for assistant body (default 120000, min 1000, hard max 600000); Settings `a2a-inbound.timeoutMs` (`0` = default) | Optional |
 | `XRK_A2A_MAX_PINGPONG_TURNS` | Per-`context_id` anti-loop turn cap (default 5, hard max 20) | Ping-pong guard |
 | `XRK_A2A_CONVERSATIONS_DIR` | A2A conversation JSONL root; default `{XRK_HOME}/a2a_conversations` | Persistence / `a2a_history` |
 | `XRK_MEMORY_PROVIDER` | Curated-memory backend: `file` (default) · `http` · `sqlite` | See [curated-memory.md](./curated-memory.md) |
@@ -389,6 +406,19 @@ Local Host, remote cwd: file / bash / `run_code` ride OpenSSH; no model-facing `
 | `XRK_SSH_PORT` | Optional port |
 | `XRK_SSH_KEY` | Optional identity file |
 | `XRK_SSH_NODE` | Remote Node for `run_code` (default `node`; env only) |
+| `XRK_SSH_SKIP_PROBE` | `1` skips Host BatchMode connect probe (CI mocks) |
+
+When SSH is enabled, Host probes with remote `true` before serving (fail-closed); `xrkh doctor` reports an `ssh-remote` row. Cloud tasks / Codex Noise `exec-server` are **not done** (see [status](./status.md)).
+
+### Pluggable ExecEnvironment (HTTP sidecar)
+
+Mutually exclusive with SSH: when SSH is configured, Host **prefers SSH** and ignores `XRK_EXEC_ENVIRONMENT=http`.
+
+| Variable | Meaning |
+|------|------|
+| `XRK_EXEC_ENVIRONMENT` | `local` (default) or `http` |
+| `XRK_EXEC_ENVIRONMENT_URL` | HTTP sidecar base URL (`/health` · file/process RPC) |
+| `XRK_EXEC_ENVIRONMENT_TOKEN` | Optional Bearer |
 
 User plugin CLI: `xrkh plugin add|remove|list|path|reconcile` (also `xrk-harness plugin …`; see [plugin-loader.md](./plugin-loader.md)).
 

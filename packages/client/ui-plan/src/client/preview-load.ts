@@ -79,6 +79,7 @@ export interface SessionStatusView {
     readonly worktreeId?: string
     readonly worktreeLeaseStatus?: string
     readonly resultPreview?: string
+    readonly externalResume?: 'live' | 'cold'
   }[]
   readonly cost: {
     readonly input: number
@@ -172,7 +173,13 @@ export interface SessionStatusView {
     readonly pruneCount: number
     readonly summaryCount: number
     readonly spillCount: number
-    readonly spillPaths?: readonly string[]
+    readonly spillPaths?: readonly {
+      readonly path: string
+      readonly name: string
+      readonly bytes?: number
+      readonly preview?: string
+      readonly tool?: string
+    }[]
     readonly phase: 'idle' | 'busy'
   }
   readonly delivery: {
@@ -382,13 +389,14 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
   }
   const cost = {
     ...parseBuckets(costRaw),
-    byModel: parseBucketMap((costRaw as { byModel?: unknown }).byModel),
+    // Overview renders byProviderModel only; keep an empty byModel seat for the view type.
+    byModel: {},
     byProviderModel: parseBucketMap((costRaw as { byProviderModel?: unknown }).byProviderModel),
   }
 
   const billingRaw = v.billing
   const parseModelRows = (raw: unknown) => {
-    if (!Array.isArray(raw)) return [] as SessionStatusView['billing']['byModel']
+    if (!Array.isArray(raw)) return [] as SessionStatusView['billing']['byProviderModel']
     return raw.flatMap((row) => {
       if (!row || typeof row !== 'object') return []
       const key = str((row as { key?: unknown }).key)
@@ -408,7 +416,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       totalCost: num((billingRaw as { totalCost?: unknown }).totalCost) ?? 0,
       todayTokens: num((billingRaw as { todayTokens?: unknown }).todayTokens) ?? 0,
       monthTokens: num((billingRaw as { monthTokens?: unknown }).monthTokens) ?? 0,
-      byModel: parseModelRows((billingRaw as { byModel?: unknown }).byModel),
+      byModel: [],
       byProviderModel: parseModelRows((billingRaw as { byProviderModel?: unknown }).byProviderModel),
       dailyTrend: Array.isArray((billingRaw as { dailyTrend?: unknown }).dailyTrend)
         ? (billingRaw as { dailyTrend: unknown[] }).dailyTrend.flatMap((row) => {
@@ -533,8 +541,27 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       ? (compactionRaw as { spillPaths: unknown[] }).spillPaths
       : []
   const spillPaths = spillPathsRaw.flatMap((row) => {
-    const p = str(row)
-    return p ? [p] : []
+    if (typeof row === 'string') {
+      const p = str(row)
+      if (!p) return []
+      const slash = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
+      const name = slash >= 0 ? p.slice(slash + 1) : p
+      return [{ path: p, name: name || p }]
+    }
+    if (!row || typeof row !== 'object') return []
+    const path = str((row as { path?: unknown }).path)
+    if (!path) return []
+    const name = str((row as { name?: unknown }).name) || path
+    const bytes = num((row as { bytes?: unknown }).bytes)
+    const preview = str((row as { preview?: unknown }).preview)
+    const tool = str((row as { tool?: unknown }).tool)
+    return [{
+      path,
+      name,
+      ...(bytes !== undefined ? { bytes } : {}),
+      ...(preview ? { preview } : {}),
+      ...(tool ? { tool } : {}),
+    }]
   })
   const compaction: SessionStatusView['compaction'] = {
     pipeline: compactionPipeline,
@@ -678,6 +705,11 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       const worktreeId = str((row as { worktreeId?: unknown }).worktreeId)
       const worktreeLeaseStatus = str((row as { worktreeLeaseStatus?: unknown }).worktreeLeaseStatus)
       const resultPreview = str((row as { resultPreview?: unknown }).resultPreview)
+      const externalResumeRaw = str((row as { externalResume?: unknown }).externalResume)
+      const externalResume =
+        externalResumeRaw === 'live' || externalResumeRaw === 'cold'
+          ? externalResumeRaw
+          : undefined
       return [{
         id,
         title,
@@ -692,6 +724,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
         ...(worktreeId ? { worktreeId } : {}),
         ...(worktreeLeaseStatus ? { worktreeLeaseStatus } : {}),
         ...(resultPreview ? { resultPreview } : {}),
+        ...(externalResume ? { externalResume } : {}),
       }]
     })
     : []

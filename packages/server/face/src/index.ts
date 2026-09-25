@@ -321,6 +321,7 @@ export {
 export {
   buildSessionStatusSnapshot,
   formatSessionStatusText,
+  peekSpillEntry,
   rankCostModelRows,
   type SessionStatusBilling,
   type SessionStatusBillingDay,
@@ -328,6 +329,7 @@ export {
   type SessionStatusCompaction,
   type SessionStatusCompactionPipeline,
   type SessionStatusCompactionStage,
+  type SessionStatusSpillEntry,
   type SessionStatusCost,
   type SessionStatusCostBuckets,
   type SessionStatusCostModelRow,
@@ -507,6 +509,7 @@ export {
   costMeterAggregateUsage,
   costMeterDisplayExchangeRate,
   costMeterGetState,
+  costMeterLedgerPath,
   costMeterRefreshBalance,
   costMeterSessionTotals,
   costMeterWalletUsage,

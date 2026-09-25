@@ -46,13 +46,13 @@ describe("sqlite MemoryProvider", () => {
     expect(provider.listEntries("memory")).toEqual([]);
   });
 
-  it("resolveMemoryProvider accepts sqlite kind", async () => {
+  it("resolveMemoryProvider accepts sqlite kind", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "xrk-mem-sqlite-r-"));
     temps.push(dir);
-    const provider = (await resolveMemoryProvider({
+    const provider = resolveMemoryProvider({
       kind: "sqlite",
       sqlite: { dir },
-    })) as SqliteMemoryProvider;
+    }) as SqliteMemoryProvider;
     openProviders.push(provider);
     expect(provider.providerName).toBe("sqlite");
   });

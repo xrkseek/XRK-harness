@@ -317,6 +317,16 @@ describe("Face settings U2", () => {
     };
     expect(curatedMemory.value.enabled).toBe(true);
     expect(curatedMemory.applies).toBe("live");
+    expect(v.namespaces.some((n) => n.ns === "a2a-inbound")).toBe(true);
+    const a2aInbound = v.namespaces.find((n) => n.ns === "a2a-inbound") as {
+      ns: string;
+      value: { enabled: boolean; sessionId: string; timeoutMs: number };
+      applies: string;
+    };
+    expect(a2aInbound.value.enabled).toBe(false);
+    expect(a2aInbound.value.sessionId).toBe("");
+    expect(a2aInbound.value.timeoutMs).toBe(0);
+    expect(a2aInbound.applies).toBe("live");
     expect(v.namespaces.some((n) => n.ns === "auto-review")).toBe(true);
     const autoReview = v.namespaces.find((n) => n.ns === "auto-review") as {
       ns: string;

@@ -184,6 +184,9 @@ export function imGatewayStateFromProbe(
   return probe.ok ? "sidecar-reachable" : "sidecar-unreachable";
 }
 
+/** Host-local push path (no external sidecar required). */
+export const IM_GATEWAY_HOST_LOCAL_WS_PATH = "/api/im/gateway/ws";
+
 /** Build the canonical sidecar `/health` response body. */
 export function sidecarHealthResponse(status = "ok"): ImGatewayHealthBody {
   return {
@@ -191,4 +194,33 @@ export function sidecarHealthResponse(status = "ok"): ImGatewayHealthBody {
     status,
     contractVersion: IM_GATEWAY_CONTRACT_VERSION,
   };
+}
+
+/**
+ * GET `{url}/health` on an external sidecar (doctor / Host boot).
+ * Does not embed vendor SDKs — only the ADR-0006 health probe.
+ */
+export async function probeImGatewaySidecar(
+  config: ImGatewaySidecarConfig,
+  timeoutMs = 3000,
+): Promise<ImGatewayProbeResult> {
+  const base = config.url.replace(/\/+$/, "");
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (config.token) headers.authorization = `Bearer ${config.token}`;
+  try {
+    const res = await fetch(`${base}${IM_GATEWAY_SIDECAR_HEALTH_PATH}`, {
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      return { ok: false, error: `upstream ${res.status}` };
+    }
+    return interpretSidecarHealthBody(body, true);
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }

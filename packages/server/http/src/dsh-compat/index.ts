@@ -178,11 +178,15 @@ export {
 } from "./auto-review-http.js";
 export {
   classifyAutoReview,
+  describeAutoReviewAccess,
+  probeAutoReviewClassifier,
   resolveAutoReviewClassifier,
   AUTO_REVIEW_CLASSIFIER_URL,
   AUTO_REVIEW_CLASSIFIER_TOKEN,
 } from "./auto-review-classifier.js";
 export type {
+  AutoReviewAccessDescription,
+  AutoReviewAccessKind,
   AutoReviewClassifier,
   AutoReviewClassification,
   AutoReviewClassifierOptions,

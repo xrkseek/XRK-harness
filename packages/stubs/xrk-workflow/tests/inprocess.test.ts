@@ -73,4 +73,60 @@ describe('IsolatingWorkflowEngine', () => {
     expect(result.value).toEqual({ a: null, ok: true, n: 2 })
     await run.dispose()
   })
+
+  it('bridges createAgent across the worker boundary', async () => {
+    const ctx = new Context()
+    ;(ctx as { logger?: { warn: (m: string) => void } }).logger = {
+      warn: vi.fn(),
+    }
+    const engine = new IsolatingWorkflowEngine(ctx, {
+      createAgent: async (_req, call) => ({
+        echoed: call.prompt,
+        label: call.label,
+      }),
+    })
+    const run = engine.start({
+      script: `
+        const a = await agent({ label: 'bridged', prompt: 'hello-iso' });
+        return { a };
+      `,
+      meta: { name: 'iso-bridge', description: 'createAgent bridge' },
+      parent: fakeParent(),
+    })
+    const result = await run.result
+    expect(result.stopReason).toBe('completed')
+    expect(result.agentsStarted).toBe(1)
+    expect(result.value).toEqual({
+      a: { echoed: 'hello-iso', label: 'bridged' },
+    })
+    await run.dispose()
+  })
+
+  it('surfaces createAgent failures into the script', async () => {
+    const ctx = new Context()
+    ;(ctx as { logger?: { warn: (m: string) => void } }).logger = {
+      warn: vi.fn(),
+    }
+    const engine = new IsolatingWorkflowEngine(ctx, {
+      createAgent: async () => {
+        throw new Error('bridge boom')
+      },
+    })
+    const run = engine.start({
+      script: `
+        try {
+          await agent({ label: 'x', prompt: 'y' });
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, msg: String(e && e.message ? e.message : e) };
+        }
+      `,
+      meta: { name: 'iso-fail', description: 'createAgent fail' },
+      parent: fakeParent(),
+    })
+    const result = await run.result
+    expect(result.stopReason).toBe('completed')
+    expect(result.value).toEqual({ ok: false, msg: 'bridge boom' })
+    await run.dispose()
+  })
 })

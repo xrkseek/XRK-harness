@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyAutoReview,
+  describeAutoReviewAccess,
+  probeAutoReviewClassifier,
   resolveAutoReviewClassifier,
 } from "../src/dsh-compat/auto-review-classifier.js";
 
@@ -15,6 +17,28 @@ describe("auto-review classifier seam", () => {
     expect(denied.ok).toBe(true);
     expect(denied.classifier).toBe("xrk-heuristic");
     expect(denied.classification.verdict).toBe("deny");
+  });
+
+  it("describeAutoReviewAccess reports source honestly", () => {
+    expect(describeAutoReviewAccess({}).source).toBe("default");
+    expect(describeAutoReviewAccess({}).kind).toBe("heuristic");
+    expect(
+      describeAutoReviewAccess(
+        {},
+        { classifierUrl: "https://classifier.example/review" },
+      ).source,
+    ).toBe("product");
+    expect(
+      describeAutoReviewAccess({
+        XRK_AUTO_REVIEW_CLASSIFIER_URL: "https://env.example/review",
+      }).source,
+    ).toBe("env");
+  });
+
+  it("probeAutoReviewClassifier succeeds on heuristic sample", async () => {
+    const probe = await probeAutoReviewClassifier({ env: {} });
+    expect(probe.ok).toBe(true);
+    expect(probe.detail).toMatch(/heuristic probe ok/);
   });
 
   it("prefers an injected classifier over the heuristic", async () => {

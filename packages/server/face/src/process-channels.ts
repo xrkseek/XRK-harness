@@ -24,7 +24,14 @@ export const FACE_IM_CHANNEL_STUBS = [
 
 export type FaceImChannelStubId = (typeof FACE_IM_CHANNEL_STUBS)[number];
 
+/** Host-level gateway mode (ADR-0006) — not a per-vendor native SDK claim. */
 export type ImGatewayWired = "bridge" | "sidecar" | "ws-client";
+
+/**
+ * Per Face IM id wiring. Nine vendor ids are always **discover** stubs;
+ * Host gateway mode lives on {@link FaceChannelDiscoverPayload.imGatewayWired}.
+ */
+export type FaceImChannelWired = "discover";
 
 export interface FaceProcessChannelEntry {
   readonly pluginId: string;
@@ -38,8 +45,8 @@ export interface FaceImChannelEntry {
   readonly channelId: FaceImChannelStubId;
   readonly displayName: string;
   readonly source: "dsh-im";
-  /** `bridge` = webhook/poll/SSE; `sidecar` / `ws-client` when gateway env set. */
-  readonly wired: ImGatewayWired;
+  /** Always discover stub — Discord/Telegram/… native SDKs are not in-host. */
+  readonly wired: FaceImChannelWired;
   readonly gatewayRelayPath?: string;
   readonly gatewayHealthPath?: string;
 }
@@ -47,6 +54,8 @@ export interface FaceImChannelEntry {
 export interface FaceChannelDiscoverPayload {
   readonly process: readonly FaceProcessChannelEntry[];
   readonly im: readonly FaceImChannelEntry[];
+  /** Host-level IM gateway mode (shared across Face stub ids). */
+  readonly imGatewayWired: ImGatewayWired;
   readonly note: string;
 }
 
@@ -96,13 +105,13 @@ function processEntries(
     }));
 }
 
-function imEntries(wired: ImGatewayWired): FaceImChannelEntry[] {
+function imEntries(gateway: ImGatewayWired): FaceImChannelEntry[] {
   return FACE_IM_CHANNEL_STUBS.map((channelId) => ({
     channelId,
     displayName: IM_LABELS[channelId],
     source: "dsh-im" as const,
-    wired,
-    ...(wired !== "bridge"
+    wired: "discover" as const,
+    ...(gateway !== "bridge"
       ? {
           gatewayRelayPath: "/api/im/gateway/relay",
           gatewayHealthPath: "/api/im/gateway/health",
@@ -112,13 +121,24 @@ function imEntries(wired: ImGatewayWired): FaceImChannelEntry[] {
 }
 
 function gatewayDiscoverNote(wired: ImGatewayWired): string {
+  const stub =
+    " Face IM ids (telegram/discord/…) are discover stubs — not native vendor SDKs.";
   if (wired === "ws-client") {
-    return " IM in-process WS client (XRK_IM_GATEWAY_WS_URL); relay at /api/im/gateway/relay when sidecar URL also set.";
+    return (
+      stub +
+      " Host gateway=ws-client (XRK_IM_GATEWAY_WS_URL); relay at /api/im/gateway/relay when sidecar URL also set."
+    );
   }
   if (wired === "sidecar") {
-    return " IM sidecar env set (XRK_IM_GATEWAY_URL); relay at /api/im/gateway/relay.";
+    return (
+      stub +
+      " Host gateway=sidecar (XRK_IM_GATEWAY_URL); relay at /api/im/gateway/relay."
+    );
   }
-  return "";
+  return (
+    stub +
+    " Host gateway=bridge (webhook/poll/SSE + local /api/im/gateway/ws)."
+  );
 }
 
 /** Face `processChannels/list` + settings discover payload. */
@@ -130,14 +150,15 @@ export function buildFaceChannelDiscover(
     imSidecarConfigured?: boolean;
   } = {},
 ): FaceChannelDiscoverPayload {
-  const wired =
+  const imGatewayWired =
     options.imGatewayWired ??
     (options.imSidecarConfigured ? "sidecar" : resolveImGatewayWired());
   return {
     process: processEntries(plugins),
-    im: imEntries(wired),
+    im: imEntries(imGatewayWired),
+    imGatewayWired,
     note:
       "Process channel plugins register connectors; IM vendors use dsh-compat RPC (webhook/poll/SSE bridge)." +
-      gatewayDiscoverNote(wired),
+      gatewayDiscoverNote(imGatewayWired),
   };
 }

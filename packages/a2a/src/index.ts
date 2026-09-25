@@ -42,3 +42,8 @@ export {
   parsePeerTokens,
   type A2aInboundOptions,
 } from "./inbound.js";
+
+export {
+  filterA2aInboundText,
+  wrapA2aInboundText,
+} from "./inbound-frame.js";

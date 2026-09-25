@@ -293,7 +293,7 @@ describe('PreviewTabs', () => {
     expect(screen.getByText('是')).toBeTruthy()
   })
 
-  it('binds live contextTimeline inject / compact / spill rows', async () => {
+  it('binds live contextTimeline summary on Status; event rows live on Context', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url.includes('session.status')) {
@@ -352,18 +352,26 @@ describe('PreviewTabs', () => {
     await waitFor(() => {
       expect(screen.getAllByText('95').length).toBeGreaterThan(0)
     })
+    // Status keeps the slim summary (counts + inject sources), not event rows.
     expect(screen.getAllByText(/skill-catalog:catalog/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/overflow/).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/tokens 1200/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/被遮蔽 tokens 1200/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/修剪 1/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/落盘 1/).length).toBeGreaterThan(0)
-    expect(screen.getByText('prune · spill')).toBeTruthy()
-    expect(screen.getByText('compact · overflow')).toBeTruthy()
+    expect(screen.queryByText('prune · spill')).toBeNull()
+    expect(screen.queryByText('compact · overflow')).toBeNull()
+    expect(screen.getByText(/完整事件与 spill 预览见/)).toBeTruthy()
     expect(screen.getByLabelText('压缩分阶')).toBeTruthy()
     expect(screen.getByLabelText('队列 / 回合')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('tab', { name: '上下文' }))
+    await waitFor(() => {
+      expect(screen.getByText('prune · spill')).toBeTruthy()
+    })
+    expect(screen.getByText('compact · overflow')).toBeTruthy()
   })
 
-  it('opens spill paths from Status timeline rows via openSpillPath', async () => {
+  it('opens spill paths from Context event rows via openSpillPath', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url.includes('session.status')) {
@@ -401,12 +409,69 @@ describe('PreviewTabs', () => {
       />,
     )
     await waitFor(() => {
+      expect(screen.getByRole('tab', { name: '上下文' })).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('tab', { name: '上下文' }))
+    await waitFor(() => {
       expect(screen.getByText('prune · spill')).toBeTruthy()
     })
     fireEvent.click(screen.getByRole('button', { name: '查看落盘文件' }))
     expect(openSpillPath).toHaveBeenCalledWith(
       '/home/u/.xrk/spill/tool-outputs/s_c.txt',
     )
+  })
+
+  it('exposes cold resume and merge actions on Teams task rows', async () => {
+    const statusWithTask = {
+      ...sampleStatus,
+      teamTasks: [
+        {
+          id: 't1',
+          title: 'ship feature',
+          status: 'paused',
+          revision: 1,
+          childSessionId: 'child-1',
+          worktreeId: 'lease-9',
+          worktreeLeaseStatus: 'retained',
+          externalResume: 'cold' as const,
+        },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('session.status')) {
+        return jsonResponse({ result: { ok: true, value: statusWithTask } })
+      }
+      return jsonResponse({ ok: false })
+    }))
+    const resumeTeamChild = vi.fn(async () => undefined)
+    const mergeTeamWorktree = vi.fn(async () => undefined)
+    const { useProjection } = fakeProjections({})
+    render(
+      <PreviewTabs
+        {...({
+          sessionId: 's1',
+          closeDetails: vi.fn(),
+          resumeTeamChild,
+          mergeTeamWorktree,
+          t,
+          useProjection,
+        } as PreviewTabsProps)}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('ship feature')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '冷恢复' }))
+    expect(resumeTeamChild).toHaveBeenCalledWith({
+      parentSessionId: 's1',
+      childSessionId: 'child-1',
+    })
+    fireEvent.click(screen.getByRole('button', { name: '合回主仓' }))
+    expect(mergeTeamWorktree).toHaveBeenCalledWith({
+      leaseId: 'lease-9',
+      pruneAfter: true,
+    })
   })
 })
 

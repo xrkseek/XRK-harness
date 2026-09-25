@@ -128,6 +128,19 @@ export async function buildSessionExportZip(
   let ledger: Record<string, unknown> | null;
   try {
     const state = costMeterGetState();
+    const history = [...(state.history ?? [])].sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+    const dailyTrend = history.slice(-14).map((day) => ({
+      date: day.date,
+      cost: day.cost,
+      tokens:
+        day.input +
+        day.output +
+        day.cacheRead +
+        day.cacheWrite +
+        day.reasoning,
+    }));
     ledger = {
       today: {
         date: state.today.date,
@@ -152,6 +165,8 @@ export async function buildSessionExportZip(
         byModel: state.total.byModel,
         byProviderModel: state.total.byProviderModel,
       },
+      /** Same 14-day window Status/`/status` billing.dailyTrend uses. */
+      dailyTrend,
     };
   } catch {
     ledger = null;

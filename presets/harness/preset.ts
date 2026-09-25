@@ -70,8 +70,8 @@ import {
 } from "@xrkseek/exec-video-gen";
 import {
   CURATED_MEMORY_PROMPT_TEXT,
-  createCuratedMemoryStore,
   createCuratedMemoryTools,
+  resolveMemoryProvider,
   writeReusableNotesAfterTurn,
   consolidateCuratedMemoryPhase1,
   type CuratedMemoryStore,
@@ -897,7 +897,7 @@ export function createHarnessComposition(
   const curatedMemory =
     options.curatedMemory === false
       ? undefined
-      : (options.curatedMemory ?? createCuratedMemoryStore());
+      : (options.curatedMemory ?? resolveMemoryProvider());
   if (curatedMemory) {
     for (const tool of createCuratedMemoryTools(curatedMemory)) {
       tools.register(tool);

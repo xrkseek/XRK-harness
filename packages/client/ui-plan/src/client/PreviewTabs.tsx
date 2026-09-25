@@ -43,6 +43,14 @@ export interface PreviewTabsInjected {
     readonly parentSessionId: string
     readonly childSessionId: string
   }) => void | Promise<void>
+  /**
+   * Fold a managed worktree lease into the parent checkout (Face
+   * `worktree.merge`, ff-only). Shown on Status task rows with a lease.
+   */
+  mergeTeamWorktree?: (input: {
+    readonly leaseId: string
+    readonly pruneAfter?: boolean
+  }) => void | Promise<void>
 }
 
 export type PreviewTabsProps =
@@ -55,6 +63,18 @@ function healthDotState(health: string): StateDotState {
   if (health === 'ok') return 'done'
   if (health === 'warn') return 'warning'
   return 'error'
+}
+
+/** Status column order for the Teams task board (open work first). */
+function teamTaskStatusRank(status: string): number {
+  switch (status) {
+    case 'in_progress': return 0
+    case 'paused': return 1
+    case 'pending': return 2
+    case 'completed': return 3
+    case 'failed': return 4
+    default: return 5
+  }
 }
 
 /**
@@ -81,10 +101,17 @@ function SectionCard({
   t: PreviewTabsProps['t']
 }) {
   const [open, setOpen] = useState(defaultOpen)
-  const lastSignal = useRef({ version: -1 })
+  const lastSignalVersion = useRef<number | null>(null)
   useEffect(() => {
-    if (!signal || signal.version === lastSignal.current.version) return
-    lastSignal.current.version = signal.version
+    if (!signal) return
+    // Skip the mount-time signal so per-card defaultOpen wins; only
+    // expand/collapse-all (version bumps) override local state.
+    if (lastSignalVersion.current === null) {
+      lastSignalVersion.current = signal.version
+      return
+    }
+    if (signal.version === lastSignalVersion.current) return
+    lastSignalVersion.current = signal.version
     setOpen(signal.open)
   }, [signal])
   const bodyId = `preview-section-${label.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
@@ -159,8 +186,53 @@ type LiveContextTimeline = {
   readonly requests?: readonly unknown[]
 }
 
-const TIMELINE_EVENT_LIMIT = 12
 const CONTEXT_BROWSER_LIMIT = 48
+
+type SpillEntry = NonNullable<SessionStatusView['compaction']['spillPaths']>[number]
+
+/** Shared spill peek rows for Compaction (Status) and Context browser. */
+function SpillEntries({
+  entries,
+  t,
+  openSpillPath,
+}: {
+  entries: readonly SpillEntry[]
+  t: PreviewTabsProps['t']
+  openSpillPath?: PreviewTabsInjected['openSpillPath']
+}) {
+  return (
+    <ul className={css.itemList} aria-label={t('preview.status.spillList')}>
+      {entries.map((entry) => (
+        <li key={entry.path} className={css.itemRow}>
+          <div className={css.teamTaskBody}>
+            <span className={css.itemTitle} title={entry.path}>{entry.name}</span>
+            <span className={css.itemMeta}>
+              {entry.tool ? `${entry.tool} · ` : ''}
+              {entry.bytes !== undefined
+                ? `${entry.bytes} B`
+                : t('preview.status.spillMissing')}
+            </span>
+            {entry.preview
+              ? <pre className={css.spillPreview}>{entry.preview}</pre>
+              : null}
+          </div>
+          {openSpillPath
+            ? (
+              <button
+                type="button"
+                className={css.spillOpen}
+                onClick={() => { void openSpillPath(entry.path) }}
+                title={entry.path}
+              >
+                {t('preview.status.spillOpen')}
+              </button>
+            )
+            : null}
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 function todoStatusLabel(
   status: string,
@@ -227,6 +299,7 @@ function StatusPanel({
   openTeamChild,
   pauseTeamChild,
   resumeTeamChild,
+  mergeTeamWorktree,
   onTeamActionDone,
 }: {
   status: SessionStatusView
@@ -236,6 +309,7 @@ function StatusPanel({
   openTeamChild?: PreviewTabsInjected['openTeamChild']
   pauseTeamChild?: PreviewTabsInjected['pauseTeamChild']
   resumeTeamChild?: PreviewTabsInjected['resumeTeamChild']
+  mergeTeamWorktree?: PreviewTabsInjected['mergeTeamWorktree']
   onTeamActionDone?: () => void
 }) {
   const runningJobs = status.jobs.filter((j) => j.status === 'running')
@@ -287,14 +361,28 @@ function StatusPanel({
       }
     }
   }
-  const interesting = liveEvents
-    .map(timelineEventMeta)
-    .filter((row): row is TimelineRow => row !== null)
-  const recent = interesting.slice(-TIMELINE_EVENT_LIMIT).reverse()
-  const folded = Math.max(0, interesting.length - recent.length)
-  const [allOpen, setAllOpen] = useState(true)
+  // Mixed defaults: most cards start collapsed — toggle shows Expand all first.
+  const [allOpen, setAllOpen] = useState(false)
   const [collapseVersion, setCollapseVersion] = useState(0)
   const collapseSignal = { open: allOpen, version: collapseVersion }
+  const [teamActionError, setTeamActionError] = useState<Record<string, string>>({})
+  const runTeamAction = async (taskId: string, action: () => void | Promise<void>): Promise<void> => {
+    setTeamActionError((prev) => {
+      if (!(taskId in prev)) return prev
+      const next = { ...prev }
+      delete next[taskId]
+      return next
+    })
+    try {
+      await action()
+      onTeamActionDone?.()
+    } catch (err) {
+      const message = err instanceof Error && err.message.trim()
+        ? err.message.trim()
+        : t('preview.status.teamTasksActionFailed')
+      setTeamActionError((prev) => ({ ...prev, [taskId]: message }))
+    }
+  }
   const costUsd = status.cost.cost.toFixed(4)
   return (
     <div className={css.statusRoot}>
@@ -348,6 +436,7 @@ function StatusPanel({
         label={t('preview.status.fleet')}
         title={t('preview.status.fleet')}
         signal={collapseSignal}
+        defaultOpen
         meta={t(`preview.status.fleetHealth.${status.fleet.health}`)}
       >
         <div className={css.row}>
@@ -361,20 +450,11 @@ function StatusPanel({
             {status.fleet.queuedInbox > 0
               ? ` · ${t('preview.inbox')} ${status.fleet.queuedInbox}`
               : ''}
+            {status.fleet.channelAlerts > 0
+              ? ` · ${t('preview.status.channels')} ${status.fleet.channelAlerts}`
+              : ''}
           </span>
         </div>
-        {status.fleet.alerts.length === 0
-          ? <div className={css.empty}>{t('preview.status.fleetEmpty')}</div>
-          : (
-            <ul className={css.itemList}>
-              {status.fleet.alerts.slice(0, 8).map((alert) => (
-                <li key={alert.id} className={css.itemRow}>
-                  <span className={css.itemTitle}>[{alert.severity}]</span>
-                  <span className={css.itemMeta}>{alert.message}</span>
-                </li>
-              ))}
-            </ul>
-          )}
       </SectionCard>
 
       <SectionCard
@@ -382,6 +462,7 @@ function StatusPanel({
         label={t('preview.status.session')}
         title={t('preview.status.session')}
         signal={collapseSignal}
+        defaultOpen={false}
       >
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.badge')}</span>
@@ -418,6 +499,7 @@ function StatusPanel({
         label={t('preview.status.subagents')}
         title={t('preview.status.subagents')}
         signal={collapseSignal}
+        defaultOpen={false}
         meta={(
           <>
             {liveSubs.length}/{status.subagents.live.length} live ·{' '}
@@ -488,6 +570,7 @@ function StatusPanel({
         label={t('preview.status.teamTasks')}
         title={t('preview.status.teamTasks')}
         signal={collapseSignal}
+        defaultOpen
         meta={(
           <>
             {status.teamTasks.filter((row) => row.status === 'in_progress' || row.status === 'paused').length}
@@ -500,7 +583,9 @@ function StatusPanel({
           ? <div className={css.empty}>{t('preview.status.teamTasksEmpty')}</div>
           : (
             <ul className={css.itemList}>
-              {status.teamTasks.map((task) => (
+              {[...status.teamTasks]
+                .sort((a, b) => teamTaskStatusRank(a.status) - teamTaskStatusRank(b.status))
+                .map((task) => (
                 <li
                   key={task.id}
                   className={css.itemRow}
@@ -512,27 +597,46 @@ function StatusPanel({
                       {task.status}
                       {task.role ? ` · ${task.role}` : ''}
                       {task.humanOwned ? ` · ${t('preview.status.teamTasksHuman')}` : ''}
-                      {task.childSessionId ? ` · ${task.childSessionId}` : ''}
+                      {task.externalResume
+                        ? ` · ${t('preview.status.subagentExternal')}:${
+                          task.externalResume === 'cold'
+                            ? t('preview.status.subagentExternalCold')
+                            : t('preview.status.subagentExternalLive')
+                        }`
+                        : ''}
                       {task.schemaValid === false
                         ? ` · ${t('preview.status.teamTasksSchemaBad')}`
                         : task.schemaValid === true
                           ? ` · ${t('preview.status.teamTasksSchemaOk')}`
                           : ''}
                     </span>
+                    {task.childSessionId
+                      ? (
+                        <span className={css.itemMeta} title={task.childSessionId}>
+                          {task.childSessionId.length > 24
+                            ? `${task.childSessionId.slice(0, 12)}…${task.childSessionId.slice(-8)}`
+                            : task.childSessionId}
+                        </span>
+                      )
+                      : null}
                     {task.worktreeBranch || task.worktreePath
                       ? (
-                        <span className={css.itemMeta}>
+                        <span
+                          className={css.itemMeta}
+                          title={[
+                            task.worktreeBranch,
+                            task.worktreePath,
+                            task.worktreeLeaseStatus,
+                          ].filter(Boolean).join(' · ')}
+                        >
                           {t('preview.status.teamTasksWorktree')}
                           {': '}
                           {task.worktreeBranch ?? ''}
-                          {task.worktreePath
-                            ? `${task.worktreeBranch ? ' · ' : ''}${task.worktreePath}`
-                            : ''}
-                          {task.worktreeLeaseStatus
-                            ? ` · ${task.worktreeLeaseStatus === 'retained'
-                              ? t('preview.status.teamTasksWorktreeRetained')
-                              : task.worktreeLeaseStatus}`
-                            : ''}
+                          {task.worktreeLeaseStatus === 'retained'
+                            ? ` · ${t('preview.status.teamTasksWorktreeRetained')}`
+                            : task.worktreeLeaseStatus
+                              ? ` · ${task.worktreeLeaseStatus}`
+                              : ''}
                         </span>
                       )
                       : null}
@@ -543,21 +647,28 @@ function StatusPanel({
                         </span>
                       )
                       : null}
+                    {teamActionError[task.id]
+                      ? (
+                        <span className={css.teamActionError} role="alert">
+                          {teamActionError[task.id]}
+                        </span>
+                      )
+                      : null}
                   </div>
-                  {task.childSessionId
+                  {task.childSessionId || task.worktreeId
                     ? (
                       <div className={css.teamTaskActions}>
-                        {openTeamChild
+                        {openTeamChild && task.childSessionId
                           ? (
                             <button
                               type="button"
-                              className={css.spillOpen}
+                              className={css.teamAction}
                               onClick={() => {
-                                void Promise.resolve(openTeamChild({
+                                void runTeamAction(task.id, () => openTeamChild({
                                   parentSessionId: status.sessionId,
                                   childSessionId: task.childSessionId!,
                                   mode: 'continuable',
-                                })).then(() => onTeamActionDone?.())
+                                }))
                               }}
                             >
                               {t('preview.status.teamTasksOpen')}
@@ -565,16 +676,17 @@ function StatusPanel({
                           )
                           : null}
                         {pauseTeamChild
+                          && task.childSessionId
                           && (task.status === 'in_progress' || task.status === 'pending')
                           ? (
                             <button
                               type="button"
-                              className={css.spillOpen}
+                              className={css.teamAction}
                               onClick={() => {
-                                void Promise.resolve(pauseTeamChild({
+                                void runTeamAction(task.id, () => pauseTeamChild({
                                   parentSessionId: status.sessionId,
                                   childSessionId: task.childSessionId!,
-                                })).then(() => onTeamActionDone?.())
+                                }))
                               }}
                             >
                               {t('preview.status.teamTasksPause')}
@@ -582,19 +694,44 @@ function StatusPanel({
                           )
                           : null}
                         {resumeTeamChild
-                          && (task.status === 'paused' || task.humanOwned)
+                          && task.childSessionId
+                          && (
+                            task.status === 'paused'
+                            || task.humanOwned
+                            || task.externalResume === 'cold'
+                          )
                           ? (
                             <button
                               type="button"
-                              className={css.spillOpen}
+                              className={css.teamAction}
                               onClick={() => {
-                                void Promise.resolve(resumeTeamChild({
+                                void runTeamAction(task.id, () => resumeTeamChild({
                                   parentSessionId: status.sessionId,
                                   childSessionId: task.childSessionId!,
-                                })).then(() => onTeamActionDone?.())
+                                }))
                               }}
                             >
-                              {t('preview.status.teamTasksResume')}
+                              {task.externalResume === 'cold'
+                                ? t('preview.status.teamTasksColdResume')
+                                : t('preview.status.teamTasksResume')}
+                            </button>
+                          )
+                          : null}
+                        {mergeTeamWorktree
+                          && task.worktreeId
+                          && task.worktreeLeaseStatus !== 'reclaimed'
+                          ? (
+                            <button
+                              type="button"
+                              className={css.teamAction}
+                              onClick={() => {
+                                void runTeamAction(task.id, () => mergeTeamWorktree({
+                                  leaseId: task.worktreeId!,
+                                  pruneAfter: true,
+                                }))
+                              }}
+                            >
+                              {t('preview.status.teamTasksMerge')}
                             </button>
                           )
                           : null}
@@ -612,6 +749,7 @@ function StatusPanel({
         label={t('preview.status.jobs')}
         title={t('preview.status.jobs')}
         signal={collapseSignal}
+        defaultOpen
         meta={`${runningJobs.length}/${status.jobs.length} running`}
       >
         {status.jobs.length === 0
@@ -633,6 +771,7 @@ function StatusPanel({
         label={t('preview.status.compaction')}
         title={t('preview.status.compaction')}
         signal={collapseSignal}
+        defaultOpen={false}
         meta={(
           <>
             {status.compaction.phase}
@@ -689,25 +828,11 @@ function StatusPanel({
         </div>
         {(status.compaction.spillPaths?.length ?? 0) > 0
           ? (
-            <ul className={css.itemList} aria-label={t('preview.status.spillList')}>
-              {status.compaction.spillPaths!.map((path) => (
-                <li key={path} className={css.itemRow}>
-                  <span className={css.itemMeta} title={path}>{path}</span>
-                  {openSpillPath
-                    ? (
-                      <button
-                        type="button"
-                        className={css.spillOpen}
-                        onClick={() => { void openSpillPath(path) }}
-                        title={path}
-                      >
-                        {t('preview.status.spillOpen')}
-                      </button>
-                    )
-                    : null}
-                </li>
-              ))}
-            </ul>
+            <SpillEntries
+              entries={status.compaction.spillPaths!}
+              t={t}
+              openSpillPath={openSpillPath}
+            />
           )
           : null}
       </SectionCard>
@@ -717,6 +842,7 @@ function StatusPanel({
         label={t('preview.status.delivery')}
         title={t('preview.status.delivery')}
         signal={collapseSignal}
+        defaultOpen
         meta={(
           <>
             {status.delivery.turnActive
@@ -761,6 +887,7 @@ function StatusPanel({
         label={t('preview.status.timeline')}
         title={t('preview.status.timeline')}
         signal={collapseSignal}
+        defaultOpen
         meta={t('preview.status.timelineSource')}
       >
         <div className={css.row}>
@@ -827,42 +954,7 @@ function StatusPanel({
             </div>
           )
           : null}
-        <h4 className={css.sectionTitle}>{t('preview.status.timelineLive')}</h4>
-        {recent.length === 0
-          ? <div className={css.empty}>{t('preview.status.timelineLiveEmpty')}</div>
-          : (
-            <ul className={css.itemList}>
-              {recent.map((row, index) => (
-                <li
-                  key={`${index}:${row.title}:${row.meta}`}
-                  className={css.itemRow}
-                  {...(row.spillPath ? { 'data-spill-path': row.spillPath } : {})}
-                >
-                  <span className={css.itemTitle}>{row.title}</span>
-                  <span className={css.itemMeta}>{row.meta}</span>
-                  {row.spillPath && openSpillPath
-                    ? (
-                      <button
-                        type="button"
-                        className={css.spillOpen}
-                        onClick={() => { void openSpillPath(row.spillPath!) }}
-                        title={row.spillPath}
-                      >
-                        {t('preview.status.spillOpen')}
-                      </button>
-                    )
-                    : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        {folded > 0
-          ? (
-            <p className={css.note} role="note">
-              {t('preview.status.timelineLiveMore')} ({folded})
-            </p>
-          )
-          : null}
+        <p className={css.note} role="note">{t('preview.status.timelineBrowseHint')}</p>
       </SectionCard>
 
       <SectionCard
@@ -870,7 +962,9 @@ function StatusPanel({
         label={t('preview.status.cost')}
         title={t('preview.status.cost')}
         signal={collapseSignal}
+        defaultOpen={false}
       >
+        <p className={css.note} role="note">{t('preview.status.costSourceNote')}</p>
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.costUsd')}</span>
           <span>${status.cost.cost.toFixed(4)}</span>
@@ -918,6 +1012,7 @@ function StatusPanel({
         label={t('preview.status.billing')}
         title={t('preview.status.billing')}
         signal={collapseSignal}
+        defaultOpen={false}
         meta={t('preview.status.billingScope')}
       >
         <div className={css.row}>
@@ -987,6 +1082,7 @@ function StatusPanel({
         label={t('preview.status.channels')}
         title={t('preview.status.channels')}
         signal={collapseSignal}
+        defaultOpen={false}
         meta={(
           <>
             {status.channels.process.length} process · {status.channels.im.length} im
@@ -1099,8 +1195,9 @@ function ContextBrowserPanel({
                     ? (
                       <button
                         type="button"
-                        className={css.linkBtn}
+                        className={css.spillOpen}
                         onClick={() => { void openSpillPath(row.spillPath!) }}
+                        title={row.spillPath}
                       >
                         {t('preview.status.spillOpen')}
                       </button>
@@ -1114,6 +1211,23 @@ function ContextBrowserPanel({
           ? <p className={css.note}>{t('preview.status.timelineLiveMore')} ({folded})</p>
           : null}
       </SectionCard>
+
+      {(status.compaction.spillPaths?.length ?? 0) > 0
+        ? (
+          <SectionCard
+            t={t}
+            label={t('preview.status.spillList')}
+            title={t('preview.status.spillList')}
+            meta={`${status.compaction.spillPaths!.length} · ${t('preview.status.countSpill')} ${status.compaction.spillCount}`}
+          >
+            <SpillEntries
+              entries={status.compaction.spillPaths!}
+              t={t}
+              openSpillPath={openSpillPath}
+            />
+          </SectionCard>
+        )
+        : null}
     </div>
   )
 }
@@ -1256,6 +1370,7 @@ export function PreviewTabs({
   openTeamChild,
   pauseTeamChild,
   resumeTeamChild,
+  mergeTeamWorktree,
   t,
   useProjection,
 }: PreviewTabsProps) {
@@ -1373,6 +1488,7 @@ export function PreviewTabs({
                 {...(openTeamChild ? { openTeamChild } : {})}
                 {...(pauseTeamChild ? { pauseTeamChild } : {})}
                 {...(resumeTeamChild ? { resumeTeamChild } : {})}
+                {...(mergeTeamWorktree ? { mergeTeamWorktree } : {})}
                 onTeamActionDone={refreshStatus}
               />
             )

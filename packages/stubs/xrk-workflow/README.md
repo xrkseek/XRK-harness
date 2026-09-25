@@ -7,8 +7,9 @@ The workflow seam (`ctx.workflowEngine`) executes a model-written orchestration 
 `@xrkseek/xrk-workflow` ships the abstract {@link WorkflowEngine} seam **and**
 {@link InProcessWorkflowEngine} (AsyncFunction Provider) plus
 {@link IsolatingWorkflowEngine} (worker_threads script-body isolation;
-`agent()` returns null inside the worker — first PTC-shaped step, not a full
-DSH PTC SDK port). Cordis compositions mount either Provider so
+optional `createAgent` bridge via parentPort RPC — cloneable return values;
+without a bridge `agent()` is still `null`). Full DSH PTC SDK (`tools.*` /
+sandboxed Node) is **not** ported. Cordis compositions mount either Provider so
 `ctx.workflowEngine.start` is no longer an abstract hole.
 Product Face boot uses the Face-native **`ralph`** tool for fresh-agent
 iteration instead of this Cordis seam; a future process/sandbox engine can

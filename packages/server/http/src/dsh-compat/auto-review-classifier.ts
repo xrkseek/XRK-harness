@@ -178,3 +178,74 @@ export async function classifyAutoReview(
     };
   }
 }
+
+export type AutoReviewAccessKind = "heuristic" | "http" | "plugin";
+
+export interface AutoReviewAccessDescription {
+  readonly kind: AutoReviewAccessKind;
+  readonly classifierId: string;
+  /** Settings / env / default — where the active classifier came from. */
+  readonly source: "plugin" | "env" | "product" | "default";
+  readonly summary: string;
+}
+
+/**
+ * Doctor / Settings readiness for the auto-review classifier seam
+ * (same resolve path as `/auto-review/classify`).
+ */
+export function describeAutoReviewAccess(
+  env: NodeJS.ProcessEnv = process.env,
+  product?: {
+    readonly classifierUrl?: string;
+    readonly classifierToken?: string;
+  },
+): AutoReviewAccessDescription {
+  if (env[AUTO_REVIEW_CLASSIFIER_URL]?.trim()) {
+    return {
+      kind: "http",
+      classifierId: "http",
+      source: "env",
+      summary: `http · ${AUTO_REVIEW_CLASSIFIER_URL} (CI bypass) · fail→ask`,
+    };
+  }
+  const productUrl = product?.classifierUrl?.trim();
+  if (productUrl) {
+    return {
+      kind: "http",
+      classifierId: "http",
+      source: "product",
+      summary: `http · Settings auto-review.classifierUrl · fail→ask`,
+    };
+  }
+  return {
+    kind: "heuristic",
+    classifierId: "xrk-heuristic",
+    source: "default",
+    summary:
+      "heuristic · Settings Plugins → Advanced auto-review empty · not an LLM Guardian",
+  };
+}
+
+/** Sample classify used by `xrkh doctor` (fail-closed for HTTP). */
+export async function probeAutoReviewClassifier(
+  options: AutoReviewClassifierOptions = {},
+): Promise<{
+  readonly ok: boolean;
+  readonly detail: string;
+}> {
+  const desc = describeAutoReviewAccess(options.env, options.product);
+  const result = await classifyAutoReview(
+    { toolName: "read_file", args: { path: "README.md" } },
+    options,
+  );
+  if (!result.ok) {
+    return {
+      ok: false,
+      detail: `${desc.kind} probe failed: ${result.error ?? "classifier-error"}`,
+    };
+  }
+  return {
+    ok: true,
+    detail: `${desc.kind} probe ok · verdict=${result.classification.verdict} · id=${result.classifier}`,
+  };
+}

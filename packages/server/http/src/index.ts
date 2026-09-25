@@ -29,6 +29,10 @@ export {
   invokeDshCompatRpc,
   attachDshCompatUpgrades,
   syncAutoReviewSlashCommand,
+  classifyAutoReview,
+  describeAutoReviewAccess,
+  probeAutoReviewClassifier,
+  resolveAutoReviewClassifier,
   createXrkWalletPort,
   createMobileAccessGateChecker,
   createMobileAccessGateHandler,
@@ -36,6 +40,8 @@ export {
   mapSessionCostToDsh,
   type WalletFaceBridge,
   type XrkWalletPort,
+  type AutoReviewAccessDescription,
+  type AutoReviewAccessKind,
 } from "./dsh-compat/index.js";
 export {
   createSidebarPublicHandler,

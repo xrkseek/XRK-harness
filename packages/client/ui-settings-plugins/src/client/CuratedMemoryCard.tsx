@@ -1,4 +1,4 @@
-/** Curated MEMORY.md / USER.md master switch (Face `curated-memory.enabled`). */
+/** Curated MEMORY.md / USER.md switches (Face `curated-memory`). */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { SelectField } from './fields.tsx'
@@ -14,7 +14,7 @@ export type CuratedMemoryCardProps =
   & InjectFace<CuratedMemoryCardFace>
 
 /**
- * Render the curated-memory master-switch card.
+ * Render the curated-memory card (master switch + optional Phase2 LLM).
  * @param props - locale copy, the card snapshot, and its form actions.
  * @returns the card.
  */
@@ -23,6 +23,7 @@ export function CuratedMemoryCard(props: CuratedMemoryCardProps) {
   const state = props.useCuratedMemoryCard(snapshot => snapshot)
   const disabled = !state.writable
   const enabled = state.enabled.text === 'false' ? 'false' : 'true'
+  const phase2Llm = state.phase2Llm.text === 'true' ? 'true' : 'false'
   return (
     <PluginCard
       t={t}
@@ -43,6 +44,18 @@ export function CuratedMemoryCard(props: CuratedMemoryCardProps) {
           { value: 'false', label: t('curatedMemoryEnabledOff') },
         ]}
         onChange={(value) => { props.edit('enabled', value) }}
+      />
+      <SelectField
+        id="plugin-config-curated-memory-phase2"
+        label={t('curatedMemoryPhase2')}
+        hint={t('curatedMemoryPhase2Hint')}
+        disabled={disabled || enabled === 'false'}
+        value={phase2Llm}
+        options={[
+          { value: 'false', label: t('curatedMemoryPhase2Off') },
+          { value: 'true', label: t('curatedMemoryPhase2On') },
+        ]}
+        onChange={(value) => { props.edit('phase2Llm', value) }}
       />
       <p className={css.note} role="note">{t('curatedMemoryLiveHint')}</p>
     </PluginCard>

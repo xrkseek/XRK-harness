@@ -11,6 +11,7 @@ import {
   listSshDirectory,
   createSshDirectory,
   normalizeRemoteAbs,
+  probeSshTarget,
   resolveSshConfig,
   resolveSshConfigFromEnv,
   resolveWithinRemoteRoot,
@@ -228,6 +229,35 @@ describe("listSshDirectory / createSshDirectory", () => {
     );
     expect(created.path).toBe("/work/src/new-box");
     expect(seen.some((c) => c.includes("os.mkdir"))).toBe(true);
+  });
+});
+
+describe("probeSshTarget", () => {
+  it("reports ok when remote true exits 0", async () => {
+    const probe = await probeSshTarget({
+      config: { host: "box", workspace: "/work" },
+      local: mockLocal(async () => ok()),
+      platform: "linux",
+      timeoutMs: 2_000,
+    });
+    expect(probe.ok).toBe(true);
+    expect(probe.target).toBe("box");
+    expect(probe.detail).toMatch(/BatchMode ok/);
+  });
+
+  it("reports failure when ssh exits non-zero", async () => {
+    const probe = await probeSshTarget({
+      config: { host: "box", workspace: "/work", user: "me" },
+      local: mockLocal(async () => ({
+        ...ok(),
+        exitCode: 255,
+        stderr: "Permission denied",
+      })),
+      platform: "linux",
+    });
+    expect(probe.ok).toBe(false);
+    expect(probe.target).toBe("me@box");
+    expect(probe.detail).toMatch(/Permission denied/);
   });
 });
 

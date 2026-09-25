@@ -83,4 +83,31 @@ describe("im-gateway-contract", () => {
       imGatewayStateFromProbe({ url: "http://x" }, { ok: false, error: "down" }),
     ).toBe("sidecar-unreachable");
   });
+
+  it("probeImGatewaySidecar hits /health", async () => {
+    const { createServer } = await import("node:http");
+    const server = createServer((req, res) => {
+      if (req.url === "/health") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(sidecarHealthResponse()));
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as { port: number };
+    try {
+      const { probeImGatewaySidecar } = await import("../src/index.js");
+      const probe = await probeImGatewaySidecar({
+        url: `http://127.0.0.1:${port}`,
+      });
+      expect(probe.ok).toBe(true);
+      expect(probe.contractVersion).toBe(IM_GATEWAY_CONTRACT_VERSION);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((err) => (err ? reject(err) : resolve())),
+      );
+    }
+  });
 });

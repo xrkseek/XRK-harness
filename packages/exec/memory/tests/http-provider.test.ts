@@ -69,26 +69,28 @@ function mockSidecar() {
 }
 
 describe("MemoryProvider HTTP sample", () => {
-  it("freezes remote entries and writes through /ops", async () => {
+  it("writes through /ops; freeze stays empty (sync construct)", async () => {
     const { store, fetchImpl } = mockSidecar();
-    const provider = await createHttpMemoryProvider({
+    const provider = createHttpMemoryProvider({
       baseUrl: "http://memory.test",
       fetchImpl,
       token: "secret",
     });
     expect(provider.providerName).toBe("http");
     expect(await provider.isAvailable()).toBe(true);
-    expect(provider.frozenPrompt("memory")).toContain("prefers tabs");
-    expect(provider.frozenSystemBlock()).toContain("prefers tabs");
+    expect(provider.frozenPrompt("memory")).toBe("");
+    expect(provider.frozenSystemBlock()).toBe("");
+    expect(await Promise.resolve(provider.listEntries("memory"))).toEqual([
+      "prefers tabs",
+    ]);
 
     const added = await Promise.resolve(
       provider.add("memory", "ship on Fridays"),
     );
     expect(added.success).toBe(true);
     expect(store.memory).toContain("ship on Fridays");
-    // Frozen snapshot unchanged (same as file provider).
-    expect(provider.frozenPrompt("memory")).toContain("prefers tabs");
-    expect(provider.frozenPrompt("memory")).not.toContain("ship on Fridays");
+    // Frozen snapshot stays empty (HTTP has no sync seed at construct).
+    expect(provider.frozenPrompt("memory")).toBe("");
     expect(await Promise.resolve(provider.listEntries("memory"))).toEqual([
       "prefers tabs",
       "ship on Fridays",
@@ -111,20 +113,20 @@ describe("MemoryProvider HTTP sample", () => {
     expect(hits).toBe(1);
   });
 
-  it("resolveMemoryProvider defaults to file; http needs URL", async () => {
-    const file = await resolveMemoryProvider({ kind: "file" });
+  it("resolveMemoryProvider defaults to file; http needs URL", () => {
+    const file = resolveMemoryProvider({ kind: "file" });
     expect(file.providerName).toBe("file");
     expect(createFileMemoryProvider().providerName).toBe("file");
 
-    await expect(
+    expect(() =>
       resolveMemoryProvider({
         kind: "http",
         env: {},
       }),
-    ).rejects.toThrow(/XRK_MEMORY_HTTP_URL/);
+    ).toThrow(/XRK_MEMORY_HTTP_URL/);
 
     const { fetchImpl } = mockSidecar();
-    const http = await resolveMemoryProvider({
+    const http = resolveMemoryProvider({
       kind: "http",
       http: { baseUrl: "http://memory.test", fetchImpl },
     });

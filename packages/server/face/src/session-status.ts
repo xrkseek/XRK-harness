@@ -8,6 +8,8 @@ import {
   sessionEventCount,
 } from "@xrkseek/core-session";
 import { foldPlanMode } from "@xrkseek/protocol";
+import { readFileSync, statSync } from "node:fs";
+import path from "node:path";
 import type { FaceRuntime } from "./context.js";
 import { permissionSelectFromEvents } from "./permissions.js";
 import { resolveSessionModelSelection } from "./model-catalog.js";
@@ -222,8 +224,11 @@ export interface SessionStatusCompaction {
   /** Count of `context/compaction` (summary) timeline rows. */
   readonly summaryCount: number;
   readonly spillCount: number;
-  /** Recent unique spill absolute paths (newest last; capped). */
-  readonly spillPaths?: readonly string[];
+  /**
+   * Recent unique spill files (newest last; capped). Each row may include
+   * basename · bytes · head/tail preview when the file is still on disk.
+   */
+  readonly spillPaths?: readonly SessionStatusSpillEntry[];
   /**
    * Live latch: turn or manual `/compact` holds the agent busy bit
    * (compact and turn are mutually exclusive on the same latch).
@@ -231,6 +236,19 @@ export interface SessionStatusCompaction {
   readonly phase: "idle" | "busy";
   /** Thin Guardian fragment registered (Settings `guardianFragments`). */
   readonly guardian?: boolean;
+}
+
+/** One tool-result spill file surfaced on Status / Context browse. */
+export interface SessionStatusSpillEntry {
+  readonly path: string;
+  /** Basename for the overview list. */
+  readonly name: string;
+  /** On-disk UTF-8 byte length when the file is readable. */
+  readonly bytes?: number;
+  /** Head/tail peek (capped); absent when the file is missing. */
+  readonly preview?: string;
+  /** Tool name from the prune/spill timeline row when known. */
+  readonly tool?: string;
 }
 
 /**
@@ -267,6 +285,11 @@ export interface SessionStatusTeamTask {
   readonly worktreeLeaseStatus?: string;
   /** Truncated completion / failure preview from the task board. */
   readonly resultPreview?: string;
+  /**
+   * External-agent resume surface for the bound child (`live` process vs
+   * `cold` sidecar-only). Same values as `subagents.live[].externalResume`.
+   */
+  readonly externalResume?: "live" | "cold";
 }
 
 /** Structured Status facts shared by slash `/status` and Overview. */
@@ -317,6 +340,9 @@ function teamTaskRow(
     task.worktreeId !== undefined
       ? runtime.managedWorktrees.get(task.worktreeId)
       : undefined;
+  const externalResume = task.childSessionId
+    ? runtime.externalAgents.resumeState(task.childSessionId)
+    : undefined;
   return {
     id: task.id,
     title: task.title,
@@ -333,6 +359,7 @@ function teamTaskRow(
     ...(task.worktreeId ? { worktreeId: task.worktreeId } : {}),
     ...(lease?.status ? { worktreeLeaseStatus: lease.status } : {}),
     ...(task.resultPreview ? { resultPreview: task.resultPreview } : {}),
+    ...(externalResume ? { externalResume } : {}),
   };
 }
 
@@ -470,22 +497,28 @@ function channelAlertsFromDiscover(channels: {
     readonly wired: string;
   }[];
   readonly note: string;
+  readonly imGatewayWired?: string;
 }): SessionStatusFleetAlert[] {
   const alerts: SessionStatusFleetAlert[] = [];
-  for (const im of channels.im) {
-    if (im.wired === "bridge" || im.wired === "stub" || im.wired === "discover") {
-      alerts.push({
-        id: `im:${im.channelId}`,
-        severity: "info",
-        message: `IM ${im.displayName || im.channelId} is ${im.wired} (not long-lived)`,
-      });
-    }
+  const stubIm = channels.im.filter(
+    (im) =>
+      im.wired === "bridge" ||
+      im.wired === "stub" ||
+      im.wired === "discover",
+  );
+  if (stubIm.length > 0) {
+    const gateway = channels.imGatewayWired?.trim() || "bridge";
+    alerts.push({
+      id: "im:discover-stubs",
+      severity: "info",
+      message: `${stubIm.length} IM Face ids are discover stubs (Host gateway=${gateway}; not native vendor SDKs)`,
+    });
   }
-  if (channels.process.length === 0 && channels.im.every((c) => c.wired === "bridge")) {
+  if (channels.process.length === 0 && stubIm.length === channels.im.length) {
     alerts.push({
       id: "channels:empty",
       severity: "info",
-      message: "No process channels; IM entries are bridge stubs only",
+      message: "No process channels; IM entries are discover stubs only",
     });
   }
   if (channels.note.trim()) {
@@ -553,6 +586,46 @@ function injectSourceLabel(ev: Extract<ContextTimelineEvent, { kind: "inject" }>
   return "inject";
 }
 
+const SPILL_PREVIEW_BUDGET = 480;
+
+/**
+ * Peek a spill file for Status/Context browse (basename · bytes · head/tail).
+ * Missing files still return a path+name row so the operator can see the locator.
+ */
+export function peekSpillEntry(
+  filePath: string,
+  options?: { readonly tool?: string; readonly previewBudget?: number },
+): SessionStatusSpillEntry {
+  const name = path.basename(filePath) || filePath;
+  const tool = options?.tool?.trim();
+  const budget = Math.max(80, options?.previewBudget ?? SPILL_PREVIEW_BUDGET);
+  try {
+    const bytes = statSync(filePath).size;
+    const text = readFileSync(filePath, "utf8");
+    let preview = text;
+    if (Buffer.byteLength(preview, "utf8") > budget) {
+      const head = text.slice(0, Math.floor(budget / 3));
+      const tail = text.slice(-Math.floor(budget / 3));
+      preview = `${head}\n…\n${tail}`;
+    }
+    preview = preview.trim();
+    if (preview.length > 600) preview = `${preview.slice(0, 600)}…`;
+    return {
+      path: filePath,
+      name,
+      bytes,
+      ...(preview ? { preview } : {}),
+      ...(tool ? { tool } : {}),
+    };
+  } catch {
+    return {
+      path: filePath,
+      name,
+      ...(tool ? { tool } : {}),
+    };
+  }
+}
+
 function summarizeTimelineEvents(
   events: readonly ContextTimelineEvent[] | undefined,
 ): Pick<
@@ -566,7 +639,7 @@ function summarizeTimelineEvents(
   readonly summaryCount: number;
   readonly pipeline: SessionStatusCompactionPipeline;
   readonly stages: readonly SessionStatusCompactionStage[];
-  readonly spillPaths: readonly string[];
+  readonly spillPaths: readonly SessionStatusSpillEntry[];
 } {
   const injectSources: string[] = [];
   const seen = new Set<string>();
@@ -575,7 +648,7 @@ function summarizeTimelineEvents(
   let spillCount = 0;
   let pruneCount = 0;
   let summaryCount = 0;
-  const spillPathList: string[] = [];
+  const spillPathList: SessionStatusSpillEntry[] = [];
   const spillPathSeen = new Set<string>();
   // Per-turn markers for prune-first → summary pairing (DSH soft-budget order).
   const turnPrune = new Set<number>();
@@ -603,13 +676,15 @@ function summarizeTimelineEvents(
     if (ev.kind === "prune") {
       pruneCount += 1;
       if (ev.spill) spillCount += 1;
-      const path =
-        typeof (ev as { spillPath?: unknown }).spillPath === "string"
-          ? String((ev as { spillPath: string }).spillPath).trim()
-          : "";
-      if (path && !spillPathSeen.has(path)) {
-        spillPathSeen.add(path);
-        spillPathList.push(path);
+      const filePath =
+        typeof ev.spillPath === "string" ? ev.spillPath.trim() : "";
+      if (filePath && !spillPathSeen.has(filePath)) {
+        spillPathSeen.add(filePath);
+        spillPathList.push(
+          peekSpillEntry(filePath, {
+            ...(ev.tool ? { tool: ev.tool } : {}),
+          }),
+        );
       }
       turnPrune.add(ev.turn);
       if (ev.turn >= lastStageTurn) lastStageTurn = ev.turn;
@@ -874,6 +949,7 @@ export function buildSessionStatusSnapshot(
     process: discover.process,
     im: discover.im,
     note: discover.note,
+    imGatewayWired: discover.imGatewayWired,
   });
   const channels: SessionStatusChannels = {
     process: discover.process.map((p) => ({
@@ -1006,6 +1082,7 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
       task.status,
       task.role ? `role:${task.role}` : null,
       task.humanOwned ? "human" : null,
+      task.externalResume ? `ext/${task.externalResume}` : null,
       task.childSessionId ? `child:${task.childSessionId}` : null,
       task.worktreeBranch ? `wt:${task.worktreeBranch}` : null,
       task.schemaValid === false
@@ -1025,8 +1102,10 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
       lines.push(
         `      worktree_lease: ${task.worktreeLeaseStatus}` +
           (task.worktreeLeaseStatus === "retained"
-            ? " (ff-only merge blocked — lease kept; Face worktree.merge when ready)"
-            : ""),
+            ? " (ff-only merge blocked — lease kept; Status「合回」或 Face worktree.merge)"
+            : task.worktreeLeaseStatus === "active"
+              ? " (Status「合回」→ Face worktree.merge)"
+              : ""),
       );
     }
   }
@@ -1134,8 +1213,17 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
         : ""),
   );
   if (snap.compaction.spillPaths && snap.compaction.spillPaths.length > 0) {
-    for (const p of snap.compaction.spillPaths.slice(-6)) {
-      lines.push(`  spill: ${p}`);
+    for (const entry of snap.compaction.spillPaths.slice(-6)) {
+      const bits = [
+        entry.name,
+        entry.tool ? `tool:${entry.tool}` : null,
+        entry.bytes !== undefined ? `${entry.bytes}B` : null,
+      ].filter(Boolean);
+      lines.push(`  spill: ${bits.join(" · ")} · ${entry.path}`);
+      if (entry.preview) {
+        const oneLine = entry.preview.replace(/\s+/g, " ").slice(0, 120);
+        lines.push(`      preview: ${oneLine}`);
+      }
     }
   }
   lines.push(
@@ -1145,13 +1233,13 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
       (snap.delivery.compactBlockedByTurn ? " · compact↔turn exclusive" : ""),
   );
 
-  const wiredIm = snap.channels.im.filter((c) => c.wired !== "bridge");
+  const wiredIm = snap.channels.im.filter((c) => c.wired !== "bridge" && c.wired !== "discover");
   lines.push(
     `channels: ${snap.channels.process.length} process` +
-      ` · ${snap.channels.im.length} im` +
+      ` · ${snap.channels.im.length} im discover` +
       (wiredIm.length > 0
-        ? ` (gateway: ${wiredIm.map((c) => `${c.channelId}=${c.wired}`).join(", ")})`
-        : " (im bridge)"),
+        ? ` (native-wired: ${wiredIm.map((c) => `${c.channelId}=${c.wired}`).join(", ")})`
+        : " (stubs · Host gateway via env)"),
   );
   if (snap.channels.note.trim()) {
     lines.push(`  note:${snap.channels.note.trim()}`);

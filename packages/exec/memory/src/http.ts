@@ -7,8 +7,8 @@
  * - `POST /v1/curated/{memory|user}/ops` → write-result JSON
  *   body: `{ operations: CuratedMemoryOperation[] }` (same shape as the `memory` tool)
  *
- * Snapshot is frozen at construction (same semantics as the file store).
- * Writes are async (`Promise`); consumers use `await Promise.resolve(store.add(…))`.
+ * Frozen prompt starts empty (no sync network I/O — keeps `resolveMemoryProvider` sync).
+ * Live reads/writes hit the sidecar; writes are async (`Promise`).
  */
 
 import type {
@@ -89,11 +89,11 @@ export class HttpMemoryProviderError extends Error {
 
 /**
  * Build a {@link MemoryProvider} over an HTTP curated-memory sidecar.
- * Throws when the initial snapshot fetch fails (fail closed at composition).
+ * Sync construct (empty freeze); probe with {@link probeHttpMemoryProvider} if needed.
  */
-export async function createHttpMemoryProvider(
+export function createHttpMemoryProvider(
   options: HttpMemoryProviderOptions,
-): Promise<MemoryProvider> {
+): MemoryProvider {
   const baseUrl = options.baseUrl.trim().replace(/\/+$/, "");
   if (!baseUrl) {
     throw new HttpMemoryProviderError(
@@ -156,14 +156,12 @@ export async function createHttpMemoryProvider(
     return asEntries(json?.entries);
   }
 
-  const [memoryFrozen, userFrozen] = await Promise.all([
-    loadEntries("memory"),
-    loadEntries("user"),
-  ]);
-
+  /** Empty at construct — no sync network; live ops refresh `liveCache`. */
+  const memoryFrozen: readonly string[] = [];
+  const userFrozen: readonly string[] = [];
   const liveCache: Record<CuratedMemoryTarget, string[]> = {
-    memory: [...memoryFrozen],
-    user: [...userFrozen],
+    memory: [],
+    user: [],
   };
 
   const dir = options.dir?.trim() || `${baseUrl}/curated`;

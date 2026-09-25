@@ -1,7 +1,7 @@
 /**
  * Thin A2A inbound HTTP surface (Hermes `plugins/platforms/a2a` Agent Card +
- * message/send subset). Opt-in via Host `XRK_A2A_INBOUND=1` — no Face session
- * injection yet; persists peer turns and returns a completed task echo.
+ * message/send subset). Opt-in via Host `XRK_A2A_INBOUND=1`. With Face wired,
+ * admits framed peer text into a session; otherwise persists + echoes.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";

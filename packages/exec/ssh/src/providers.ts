@@ -40,3 +40,37 @@ export function createSshExecutionWorld(
     },
   };
 }
+
+/**
+ * Create the SSH world and fail fast if BatchMode cannot run `true`
+ * (Hermes establish-before-use). Set `XRK_SSH_SKIP_PROBE=1` to skip (CI mocks).
+ */
+export async function createSshExecutionWorldReady(
+  options: CreateSshExecutionWorldOptions & {
+    readonly probeTimeoutMs?: number;
+    readonly skipProbe?: boolean;
+  },
+): Promise<SshExecutionWorld> {
+  const world = createSshExecutionWorld(options);
+  const skip =
+    options.skipProbe === true ||
+    String(process.env.XRK_SSH_SKIP_PROBE ?? "").trim() === "1";
+  if (skip) return world;
+  const timeoutMs = Math.max(1_000, options.probeTimeoutMs ?? 15_000);
+  try {
+    const result = await world.session.exec("true", { timeoutMs });
+    if (result.exitCode === 0) return world;
+    const stderr = (result.stderr ?? "").trim();
+    throw new Error(
+      stderr ||
+        `ssh ${world.session.target} exited ${result.exitCode ?? "?"} (BatchMode probe)`,
+    );
+  } catch (err) {
+    world.dispose();
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `SSH probe failed for ${world.session.target}: ${message}`,
+      { cause: err },
+    );
+  }
+}

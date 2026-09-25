@@ -127,6 +127,11 @@ function ledgerFile(): string {
   );
 }
 
+/** Absolute path of the Host cost-meter ledger (doctor / integrators). */
+export function costMeterLedgerPath(): string {
+  return ledgerFile();
+}
+
 function dayKey(now = new Date()): string {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");

@@ -306,6 +306,20 @@ const CuratedMemoryConfig = Schema.object({
 });
 
 /**
+ * A2A inbound public routes (Plugins card).
+ * Non-empty `XRK_A2A_INBOUND` remains CI bypass (`0` force off).
+ * No SSE / tasks CRUD — Agent Card + message/send → Face inject only.
+ */
+const A2aInboundConfig = Schema.object({
+  /** Enable Agent Card + POST /a2a message/send (Face session inject). */
+  enabled: Schema.boolean().default(false),
+  /** Pin Face session id; empty → a2a-<contextId>. */
+  sessionId: Schema.string().default(""),
+  /** Wait for assistant body (ms); 0 = default 120000. */
+  timeoutMs: Schema.number().step(1000).min(0).max(600_000).default(0),
+});
+
+/**
  * Auto-review HTTP classifier (Plugins → Advanced).
  * Token via Credentials `XRK_AUTO_REVIEW_CLASSIFIER_TOKEN`.
  * Non-empty `XRK_AUTO_REVIEW_CLASSIFIER_URL` remains CI bypass.
@@ -553,6 +567,13 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       schema: schemasteryJson(CuratedMemoryConfig) as FaceSchemaEnvelope,
       base: { enabled: true, phase2Llm: false },
       // memory tool + frozen system block rebuild on agent invalidate.
+      applies: "live",
+    },
+    {
+      ns: "a2a-inbound",
+      schema: schemasteryJson(A2aInboundConfig) as FaceSchemaEnvelope,
+      base: { enabled: false, sessionId: "", timeoutMs: 0 },
+      // Public routes re-read product each request (no Host restart).
       applies: "live",
     },
     {

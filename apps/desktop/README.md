@@ -6,6 +6,8 @@
 
 桌面壳包裹已组装的 XRK Web UI；**不开**产品 Web 监听端口。私有 Host（`@xrkseek/harness-desktop-host`）在上游 Node 子进程中组合本仓 Host / Face；`xrk-app://` 提供静态资源与 Fetch 入口；分帧管道承载请求/响应；Node IPC **仅**生命周期。
 
+**一体体验（相对 Codex / Hermes / dsh 的组合优势）**：一个安装身份 = 壳 + Desktop Host + Web dist + **同源 Face**——Session 事件 SSOT、Status（本会话 costUsage + 跨会话 cost-meter）、Settings 诚实卡族、`session.export` 的 `cost.json`（含 `dailyTrend`）、`xrkh doctor` 的 `cost-ledger` 探针，共享 `~/.xrk`，**不是**平行账本或 Cordis 嵌入 Host。日常入口仍以 CLI / Web 为准，直到 status 升「能跑」。
+
 ## 关键决策
 
 | 决策 | 含义 | 直接结果 |
@@ -93,6 +95,8 @@ pnpm --filter @xrkseek/harness-desktop prepare:package-set [-- <target>]
 Private Electron desktop shell (workspace `apps/desktop`). Package **`@xrkseek/harness-desktop`**, **`private: true`**. Status in [status.md](../../docs/status.md) is **Unstable** (first-wave packaging pipeline open; public ship / update channel credential-gated). Architecture: [ADR-0008](../../docs/adr/0008-desktop-shell-private-host.md).
 
 The shell wraps the assembled XRK Web UI and opens **no** product Web listen port. The private Host (`@xrkseek/harness-desktop-host`) composes this repo’s Host / Face under an upstream-Node child; `xrk-app://` serves static assets and Fetch; framed pipes carry request/response bodies; Node IPC is **lifecycle-only**. Same-origin Host = same Face/session semantics as `xrkh web`.
+
+**Integrated experience (vs Codex / Hermes / dsh combo)**: one install identity = shell + Desktop Host + Web dist + **same-origin Face** — Session-event SSOT, Status (session `costUsage` + cross-session cost-meter), honest Settings cards, `session.export` `cost.json` (with `dailyTrend`), and `xrkh doctor` `cost-ledger` probe, sharing `~/.xrk` — **not** a parallel ledger or Cordis-embedded Host. Day-to-day entry stays CLI / Web until status promotes to **Working**.
 
 ## Key decisions
 

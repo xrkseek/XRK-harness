@@ -21,8 +21,10 @@ import {
 import {
   consolidateCuratedMemoryPhase1,
   consolidateCuratedMemoryPhase2,
-  createCuratedMemoryStore,
+  resolveMemoryProvider,
+  type MemoryProvider,
 } from "@xrkseek/exec-memory";
+import { runSkillCurator } from "@xrkseek/workspace";
 import { resolveSecretStore } from "@xrkseek/secrets";
 import { hostSettingsPath, defaultSpillDir, resolveXrkHome, type HostConfig } from "@xrkseek/server-config";
 import { installOutboundHttpProxy } from "./http-proxy.js";
@@ -141,7 +143,7 @@ import {
   type ExecWorld,
 } from "@xrkseek/exec-environment";
 import {
-  createSshExecutionWorld,
+  createSshExecutionWorldReady,
   resolveSshConfig,
   type SshExecutionWorld,
 } from "@xrkseek/exec-ssh";
@@ -155,6 +157,12 @@ export type { InvalidateAllOpts } from "./agent-cache.js";
 export { createStandingToolRegistry } from "./standing-tools.js";
 export type { AgentResolveOpts, HostAgentCache } from "./agent-cache.js";
 export type { HostLogger, HostSpawnOptions } from "./log.js";
+export {
+  a2aInboundSessionId,
+  createA2aInboundPublicHandler,
+  resolveA2aInboundEnabled,
+  type A2aInboundProductSettings,
+} from "./a2a-inbound-public.js";
 export {
   loadMcpToolPlugins,
   mcpDraftsToSpecs,
@@ -735,7 +743,7 @@ export function createHostManager(): HostManager {
         if (sshConfig) {
           execWorldKind = "ssh";
           localHostRoot = config.runtime.workspaceRoot;
-          sshWorld = createSshExecutionWorld({ config: sshConfig });
+          sshWorld = await createSshExecutionWorldReady({ config: sshConfig });
           // Tool coordinates are the remote workspace; Face session cwd follows.
           (config.runtime as { workspaceRoot: string }).workspaceRoot =
             sshWorld.workspaceRoot;
@@ -827,6 +835,13 @@ export function createHostManager(): HostManager {
       } = {};
 
       /** Session-end Phase1 (+ optional Phase2 LLM): fold leftover notes into MEMORY.md. */
+      let curatedMemProvider: MemoryProvider | undefined;
+      const getCuratedMemProvider = (): MemoryProvider => {
+        if (!curatedMemProvider) {
+          curatedMemProvider = resolveMemoryProvider();
+        }
+        return curatedMemProvider;
+      };
       const consolidateCuratedMemoryForSession = (sessionId: string): void => {
         try {
           const rt = faceBox.runtime;
@@ -861,7 +876,7 @@ export function createHostManager(): HostManager {
             }
           }
           if (userTexts.length === 0) return;
-          const memStore = createCuratedMemoryStore();
+          const memStore = getCuratedMemProvider();
           void (async () => {
             await consolidateCuratedMemoryPhase1(memStore, { userTexts });
             if (!phase2Llm) return;
@@ -880,6 +895,15 @@ export function createHostManager(): HostManager {
           })();
         } catch {
           /* best-effort — Host stop / archive must continue */
+        }
+      };
+      const runWorkspaceSkillCurator = (): void => {
+        try {
+          void runSkillCurator({
+            workspaceRoot: config.runtime.workspaceRoot,
+          });
+        } catch {
+          /* best-effort — Host stop must continue */
         }
       };
       const llmResolverBox: {
@@ -1109,7 +1133,7 @@ export function createHostManager(): HostManager {
                 : {}),
               ...(pluginSettings.curatedMemory === false
                 ? { curatedMemory: false as const }
-                : {}),
+                : { curatedMemory: getCuratedMemProvider() }),
             });
             if (faceBox.approvals) {
               agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
@@ -2221,6 +2245,24 @@ export function createHostManager(): HostManager {
           createA2aInboundPublicHandler({
             host: config.runtime.host,
             port: config.runtime.port,
+            face: faceRuntime,
+            resolveProduct: () => {
+              try {
+                const ns = faceRuntime.settingsNamespaces.view("a2a-inbound")
+                  .value as Record<string, unknown>;
+                return {
+                  enabled: ns.enabled === true,
+                  ...(typeof ns.sessionId === "string"
+                    ? { sessionId: ns.sessionId }
+                    : {}),
+                  ...(typeof ns.timeoutMs === "number"
+                    ? { timeoutMs: ns.timeoutMs }
+                    : {}),
+                };
+              } catch {
+                return undefined;
+              }
+            },
           }),
           createMobileAccessGateHandler({ xrkHome: resolveXrkHome() }),
           createSidebarPublicHandler({
@@ -2356,6 +2398,7 @@ export function createHostManager(): HostManager {
             for (const sessionId of store.list()) {
               consolidateCuratedMemoryForSession(sessionId);
             }
+            runWorkspaceSkillCurator();
             await http.close();
             await agentCache.dispose();
             if (sharedShell) {

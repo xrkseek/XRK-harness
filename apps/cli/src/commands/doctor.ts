@@ -3,13 +3,34 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { resolveXrkHome } from "@xrkseek/server-config";
+import {
+  configureCostMeterHome,
+  costMeterGetState,
+  costMeterLedgerPath,
+  peekSettingsYamlSection,
+} from "@xrkseek/server-face";
 import { probeSandboxEnvironment } from "@xrkseek/exec-sandbox";
 import {
   getOutboundAllowlistAuditLog,
   parseOutboundAllowlistHosts,
 } from "@xrkseek/exec-web";
 import { probeHttpExecEnvironment } from "@xrkseek/exec-environment";
+import { probeSshTarget, resolveSshConfig } from "@xrkseek/exec-ssh";
 import { describeVoiceAccess } from "@xrkseek/exec-voice";
+import { resolveMemoryProvider } from "@xrkseek/exec-memory";
+import { runSkillCurator } from "@xrkseek/workspace";
+import {
+  IM_GATEWAY_CONTRACT_VERSION,
+  IM_GATEWAY_HOST_LOCAL_WS_PATH,
+  IM_GATEWAY_HOST_RELAY_PATH,
+  probeImGatewaySidecar,
+  readImGatewaySidecarConfig,
+} from "@xrkseek/im-gateway-contract";
+import { resolveA2aInboundEnabled } from "@xrkseek/server-host";
+import {
+  describeAutoReviewAccess,
+  probeAutoReviewClassifier,
+} from "@xrkseek/server-http";
 import {
   PRODUCT_SHELL_BUILD_HINT,
   harnessAppsRoot,
@@ -114,6 +135,26 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
       : `${xrkHome} (created on first serve/web)`,
   });
 
+  configureCostMeterHome(xrkHome);
+  const ledgerPath = costMeterLedgerPath();
+  try {
+    const state = costMeterGetState();
+    const trendDays = [...(state.history ?? [])].length;
+    checks.push({
+      name: "cost-ledger",
+      ok: true,
+      detail: existsSync(ledgerPath)
+        ? `${ledgerPath} · today $${state.today.cost.toFixed(4)} · total $${state.total.cost.toFixed(4)} · history ${trendDays}d (same Host ledger as Status billing + export cost.json)`
+        : `${ledgerPath} (empty until first billed turn; Session events → Face costUsage → Host ledger)`,
+    });
+  } catch (err) {
+    checks.push({
+      name: "cost-ledger",
+      ok: false,
+      detail: `${ledgerPath}: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+
   const seeded = await ensureUserHomeSeeds(xrkHome);
   const parts = [
     ...seeded.skills.installed.map((n) => `skill:${n}`),
@@ -163,6 +204,66 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
     detail: communityEnvSummary(),
   });
 
+  {
+    const wsUrl = process.env.XRK_IM_GATEWAY_WS_URL?.trim();
+    const sidecar = readImGatewaySidecarConfig();
+    const mockPlugin = path.join(
+      workspace,
+      "extensions",
+      "example-im-mock-sidecar",
+      "xrk.plugin.json",
+    );
+    const sampleHint = existsSync(mockPlugin)
+      ? " · extensions/example-im-mock-sidecar"
+      : " · packages/im-gateway-contract/examples/mock-sidecar.mjs";
+    if (wsUrl) {
+      checks.push({
+        name: "im-gateway",
+        ok: true,
+        detail: `ws-client ${wsUrl} · contract v${IM_GATEWAY_CONTRACT_VERSION} · local ${IM_GATEWAY_HOST_LOCAL_WS_PATH} · relay ${IM_GATEWAY_HOST_RELAY_PATH}${sampleHint}`,
+      });
+    } else if (sidecar) {
+      const probe = await probeImGatewaySidecar(sidecar, 3000);
+      checks.push({
+        name: "im-gateway",
+        ok: probe.ok,
+        detail: probe.ok
+          ? `sidecar reachable ${sidecar.url}` +
+            (probe.contractVersion
+              ? ` · contract ${probe.contractVersion}`
+              : ` · contract v${IM_GATEWAY_CONTRACT_VERSION}`) +
+            ` · relay ${IM_GATEWAY_HOST_RELAY_PATH}${sampleHint}`
+          : `sidecar unreachable ${sidecar.url}: ${probe.error ?? "probe failed"} · contract v${IM_GATEWAY_CONTRACT_VERSION}${sampleHint}`,
+      });
+    } else {
+      checks.push({
+        name: "im-gateway",
+        ok: true,
+        detail: `bridge · local ${IM_GATEWAY_HOST_LOCAL_WS_PATH} + relay ${IM_GATEWAY_HOST_RELAY_PATH} · contract v${IM_GATEWAY_CONTRACT_VERSION} · Face telegram/discord=discover stubs (no vendor SDK)${sampleHint}`,
+      });
+    }
+  }
+
+  {
+    const a2aProduct = peekSettingsYamlSection(xrkHome, "a2a-inbound");
+    const a2aOn = resolveA2aInboundEnabled(process.env, {
+      enabled: a2aProduct?.enabled === true,
+      ...(typeof a2aProduct?.sessionId === "string"
+        ? { sessionId: a2aProduct.sessionId }
+        : {}),
+      ...(typeof a2aProduct?.timeoutMs === "number"
+        ? { timeoutMs: a2aProduct.timeoutMs }
+        : {}),
+    });
+    checks.push({
+      name: "a2a-inbound",
+      ok: true,
+      detail: a2aOn
+        ? "on · Agent Card + POST /a2a → Face inject · GET /a2a/health (no SSE/tasks CRUD)"
+        : "off (Settings Plugins → A2A inbound or XRK_A2A_INBOUND=1)",
+    });
+  }
+
   const sandboxProbe = probeSandboxEnvironment({ workspaceRoot: workspace });
   for (const row of sandboxProbe.checks) {
     checks.push({
@@ -194,12 +295,50 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
   const execKind = String(process.env.XRK_EXEC_ENVIRONMENT ?? "local")
     .trim()
     .toLowerCase();
+  let sshConfigured = false;
+  try {
+    const sshProduct = peekSettingsYamlSection(xrkHome, "ssh-remote");
+    const sshConfig = resolveSshConfig(process.env, sshProduct);
+    if (sshConfig) {
+      sshConfigured = true;
+      const probe = await probeSshTarget({
+        config: sshConfig,
+        timeoutMs: 12_000,
+      });
+      checks.push({
+        name: "ssh-remote",
+        ok: probe.ok,
+        detail: probe.ok
+          ? `${probe.detail} (SSH takes precedence over XRK_EXEC_ENVIRONMENT=http)`
+          : `SSH probe failed: ${probe.detail}`,
+      });
+    } else {
+      checks.push({
+        name: "ssh-remote",
+        ok: true,
+        detail:
+          "off (Settings General → Remote or XRK_SSH_HOST+XRK_SSH_WORKSPACE)",
+      });
+    }
+  } catch (err) {
+    checks.push({
+      name: "ssh-remote",
+      ok: false,
+      detail: `SSH config: ${err instanceof Error ? err.message : String(err)}`,
+    });
+    sshConfigured = true;
+  }
+
   if (execKind === "http") {
     const url = String(process.env.XRK_EXEC_ENVIRONMENT_URL ?? "").trim();
     let httpOk = false;
     let httpDetail = url
       ? `XRK_EXEC_ENVIRONMENT=http url=${url}`
       : "XRK_EXEC_ENVIRONMENT=http but XRK_EXEC_ENVIRONMENT_URL unset";
+    if (sshConfigured) {
+      httpDetail +=
+        " · note: SSH remote is configured — Host will prefer SSH over HTTP";
+    }
     if (url) {
       try {
         httpOk = await probeHttpExecEnvironment({ baseUrl: url });
@@ -210,14 +349,16 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
     }
     checks.push({
       name: "exec-environment-http",
-      ok: Boolean(url) && httpOk,
+      ok: sshConfigured ? true : Boolean(url) && httpOk,
       detail: httpDetail,
     });
   } else {
     checks.push({
       name: "exec-environment",
       ok: true,
-      detail: `local (XRK_EXEC_ENVIRONMENT=${execKind || "local"})`,
+      detail: sshConfigured
+        ? `ssh-remote (XRK_EXEC_ENVIRONMENT=${execKind || "local"} ignored while SSH is on)`
+        : `local (XRK_EXEC_ENVIRONMENT=${execKind || "local"})`,
     });
   }
 
@@ -228,6 +369,64 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
     ok: voice.kind !== "openai-missing-key",
     detail: voice.summary,
   });
+
+  {
+    const arProduct = peekSettingsYamlSection(xrkHome, "auto-review");
+    const product = {
+      ...(typeof arProduct?.classifierUrl === "string"
+        ? { classifierUrl: arProduct.classifierUrl }
+        : {}),
+    };
+    const desc = describeAutoReviewAccess(process.env, product);
+    const probe = await probeAutoReviewClassifier({
+      env: process.env,
+      product,
+    });
+    checks.push({
+      name: "auto-review",
+      ok: probe.ok,
+      detail: `${desc.summary} · ${probe.detail}`,
+    });
+  }
+
+  try {
+    const mem = resolveMemoryProvider();
+    const kind = String(process.env.XRK_MEMORY_PROVIDER ?? "file")
+      .trim()
+      .toLowerCase() || "file";
+    checks.push({
+      name: "memory-provider",
+      ok: mem.isAvailable() !== false,
+      detail: `XRK_MEMORY_PROVIDER=${kind} → ${mem.providerName}`,
+    });
+  } catch (err) {
+    checks.push({
+      name: "memory-provider",
+      ok: false,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  try {
+    const curator = await runSkillCurator({
+      workspaceRoot,
+      dryRun: true,
+    });
+    checks.push({
+      name: "skill-curator",
+      ok: true,
+      detail:
+        curator.candidates.length === 0
+          ? `dry-run ok · no stale skills under ${curator.skillsRoot}`
+          : `dry-run ok · ${curator.candidates.length} stale candidate(s) (≥${90}d) under ${curator.skillsRoot}`,
+    });
+  } catch (err) {
+    checks.push({
+      name: "skill-curator",
+      ok: true,
+      detail: `skip: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
 
   const llm = Boolean(process.env.XRK_LLM_PRESET?.trim());
   checks.push({
@@ -253,6 +452,7 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
           c.name !== "web-fetch-allowlist" &&
           c.name !== "voice" &&
           c.name !== "exec-environment" &&
+          c.name !== "cost-ledger" &&
           // sandbox-backend is always ok; sandbox-helper fails closed when backend needs a helper
           c.name !== "sandbox-backend",
       )

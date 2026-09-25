@@ -37,7 +37,9 @@
 | 项 | 状态 |
 |----|------|
 | MCP 统一 handleToolCall 门禁 | Client M0 + Host `XRK_MCP_*` 已有；**默认仍 deny** |
-| 完整 policy 文件 schema | **v1 JSON 已有**；无热加载 / YAML |
+| 完整 policy 文件 schema | **JSON / YAML / TOML v1 已有**；热重载共用（见 [policy.md](./policy.md) · [status](./status.md)）；**无**策略仿真 dry-run UI / Starlark |
+| Auto-review classifier | 启发式默认 + Settings/HTTP 可插拔；`xrkh doctor` `auto-review` 探活；**非** LLM Guardian |
+| 密钥轮换 API / age vault | **未做**（Face set/clear；轮换=覆盖写入；revoke 在提供方） |
 | Ask / 审批 UI | `ask` → pipeline `onApproval`；无完整人工审批 UI 流 |
 | TLS 终止 | 由反向代理负责 |
 | Web DNS 再绑定 | 只拦字面量私网 host |
@@ -95,7 +97,9 @@ Lists only controls **already implemented in this repository**; unfinished items
 | Item | Status |
 |----|------|
 | Unified MCP handleToolCall gate | Client M0 + Host `XRK_MCP_*` exist; **still deny by default** |
-| Full policy file schema | **v1 JSON exists**; no hot-reload / YAML |
+| Full policy file schema | **JSON / YAML / TOML v1 exist**; shared hot reload (see [policy.md](./policy.md) · [status](./status.md)); **no** policy-simulate dry-run UI / Starlark |
+| Auto-review classifier | Heuristic default + Settings/HTTP plug-in; `xrkh doctor` `auto-review` probe; **not** an LLM Guardian |
+| Secret rotation API / age vault | **Not done** (Face set/clear; rotate = overwrite; revoke at provider) |
 | Ask / approval UI | `ask` → pipeline `onApproval`; no full human-approval UI flow |
 | TLS termination | Reverse proxy responsibility |
 | Web DNS rebinding | Only literal private hosts blocked |

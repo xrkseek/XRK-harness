@@ -3,6 +3,7 @@
 import type { SettingsScope, SnapshotStore } from '@xrkseek/client-runtime/client'
 import {
   CardForm,
+  booleanField,
   type CardActions,
   type CardFieldState,
   type CardFieldSpec,
@@ -16,11 +17,13 @@ export const CURATED_MEMORY_NS = 'curated-memory'
 /** Host-served curated-memory section. */
 export interface CuratedMemorySettings {
   readonly enabled?: boolean
+  readonly phase2Llm?: boolean
 }
 
 /** What the curated-memory card renders. */
 export interface CuratedMemoryCardState extends CardShell {
   readonly enabled: CardFieldState
+  readonly phase2Llm: CardFieldState
 }
 
 /** The registration-side face the curated-memory card's slot entry injects. */
@@ -50,7 +53,10 @@ export class CuratedMemoryCardController {
 
   /** @param scope - the bound settings scope for the `curated-memory` namespace. */
   constructor(scope: SettingsScope<CuratedMemorySettings>) {
-    this.form = new CardForm(scope, [enabledField()])
+    this.form = new CardForm(scope, [
+      enabledField(),
+      booleanField('phase2Llm'),
+    ])
     this.store = this.form.bind(() => this.projection())
   }
 
@@ -58,6 +64,7 @@ export class CuratedMemoryCardController {
     return {
       ...this.form.shell(),
       enabled: this.form.field('enabled'),
+      phase2Llm: this.form.field('phase2Llm'),
     }
   }
 

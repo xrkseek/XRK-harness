@@ -10,15 +10,15 @@ GitHub Release 公开页保留正式当前 + 上一正式线：
 
 | 档                  | 版本                                                                                                      | 说明                                                                                           |
 | ------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **当前（@latest）** | [v0.4.6](./v0.4.6.md)                                                                                     | `0.4.x` 线补丁：快照与模型并行、会话列表按行容错、Linux CI desktop check |
-| **上一补丁**        | [v0.4.5](./v0.4.5.md)                                                                                     | 修复 fork 会话导致侧栏会话列表整表空白（Zod `origin`） |
-| **上上一补丁**      | [v0.4.4](./v0.4.4.md)                                                                                     | 图/视频参考生成 · browser vault · memory sqlite · cron 跑史与长跑 OOM · host-settings BOM · Agent 循环压缩策略 · 会话模型持久化 |
-| **上一收口号**      | [v0.4.0](./v0.4.0.md)                                                                                     | `MINOR=4` 预览线**收口号**；内容仍有效，补丁见 v0.4.1–v0.4.6                                   |
+| **当前（@latest）** | [v0.4.7](./v0.4.7.md)                                                                                     | `0.4.x` 线补丁：概况 Status 精简 · 归档筛选三态 · Teams 合回失败可见 |
+| **上一补丁**        | [v0.4.6](./v0.4.6.md)                                                                                     | 快照与模型并行、会话列表按行容错、Linux CI desktop check |
+| **上上一补丁**      | [v0.4.5](./v0.4.5.md)                                                                                     | 修复 fork 会话导致侧栏会话列表整表空白（Zod `origin`） |
+| **上一收口号**      | [v0.4.0](./v0.4.0.md)                                                                                     | `MINOR=4` 预览线**收口号**；内容仍有效，补丁见 v0.4.1–v0.4.7                                   |
 | **上一正式线**      | [v0.3.11](./v0.3.11.md)                                                                                   | `MINOR=3` 正式线；保留供对照与回退（`@0.3.11`）                                                |
 | **过程号（归档）**  | [rc.1](./v0.4.0-rc.1.md) · [rc.2](./v0.4.0-rc.2.md) · [rc.3](./v0.4.0-rc.3.md) · [rc.4](./v0.4.0-rc.4.md) | `0.4.x` 线内的预发布号，npm dist-tag `rc`；内容已并入 v0.4.0，不推荐日常安装                   |
 | **上一轮预览末号**  | [v0.2.7](./v0.2.7.md)                                                                                     | `MINOR=2` 预览线结束；对照留档                                                                 |
 
-对照：昔日正式 [v0.1.31](./v0.1.31.md) → [v0.3.10](./v0.3.10.md) → [v0.3.11](./v0.3.11.md) → 现 **v0.4.6**（`0.4.x` 补丁线，`@latest`）；预览线 **0.0.11**（已撤）→ 上一轮末号 **v0.2.7** → 本轮 **v0.4.0-rc.1…rc.4** → **v0.4.0**（收口并接管 `@latest`）。仓库内其余 `docs/releases/v*` 仍可查阅；npm 旧号以 deprecate 为准。
+对照：昔日正式 [v0.1.31](./v0.1.31.md) → [v0.3.10](./v0.3.10.md) → [v0.3.11](./v0.3.11.md) → 现 **v0.4.7**（`0.4.x` 补丁线，`@latest`）；预览线 **0.0.11**（已撤）→ 上一轮末号 **v0.2.7** → 本轮 **v0.4.0-rc.1…rc.4** → **v0.4.0**（收口并接管 `@latest`）。仓库内其余 `docs/releases/v*` 仍可查阅；npm 旧号以 deprecate 为准。
 
 安装与发包见 [publishing.md](../publishing.md)。
 
@@ -26,8 +26,8 @@ GitHub Release 公开页保留正式当前 + 上一正式线：
 
 | 用途                   | 命令                                                                |
 | ---------------------- | ------------------------------------------------------------------- |
-| 当前（推荐）           | `npm i -g @xrkseek/harness-cli@latest`（= v0.4.6）后 `xrkh web`     |
-| 精确锁版本             | `npm i -g @xrkseek/harness-cli@0.4.6` 后 `xrkh web`                 |
+| 当前（推荐）           | `npm i -g @xrkseek/harness-cli@latest`（= v0.4.7）后 `xrkh web`     |
+| 精确锁版本             | `npm i -g @xrkseek/harness-cli@0.4.7` 后 `xrkh web`                 |
 | 回退上一正式线         | `npm i -g @xrkseek/harness-cli@0.3.11` 后 `xrkh web`                |
 | 过程号（对照）         | `npm i -g @xrkseek/harness-cli@0.4.0-rc.4`，或 `@rc`；已并入 v0.4.0 |
 | 上一轮预览末号（对照） | `npm i -g @xrkseek/harness-cli@0.2.7` 后 `xrkh web`                 |
@@ -48,15 +48,15 @@ The GitHub Releases page keeps the current release plus the previous formal line
 
 | Line                           | Version                                                                                                   | Notes                                                                                                                                                                                                                                     |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Current (@latest)**          | [v0.4.6](./v0.4.6.md)                                                                                     | **Patch on the `0.4.x` line**: snapshot overlaps LLM · session.list soft-parse · Linux CI desktop check. `npm i -g @xrkseek/harness-cli@latest` resolves here |
-| **Previous patch**             | [v0.4.5](./v0.4.5.md)                                                                                     | Restore sidebar session list when any forked session is present (`origin: "fork"` Zod) |
-| **Patch before that**          | [v0.4.4](./v0.4.4.md)                                                                                     | Image/video reference gen · browser vault · memory sqlite · cron run history + long-run OOM · host-settings BOM · Agent-loop compaction strategy · session model persistence |
-| **Closing number**             | [v0.4.0](./v0.4.0.md)                                                                                     | `MINOR=4` preview line closing number; superseded by patches v0.4.1–v0.4.6                                                                                                                                                                                     |
+| **Current (@latest)**          | [v0.4.7](./v0.4.7.md)                                                                                     | **Patch on the `0.4.x` line**: slim Status Overview · archive filter tri-state · Teams merge failure feedback. `npm i -g @xrkseek/harness-cli@latest` resolves here |
+| **Previous patch**             | [v0.4.6](./v0.4.6.md)                                                                                     | Snapshot overlaps LLM · session.list soft-parse · Linux CI desktop check |
+| **Patch before that**          | [v0.4.5](./v0.4.5.md)                                                                                     | Restore sidebar session list when any forked session is present (`origin: "fork"` Zod) |
+| **Closing number**             | [v0.4.0](./v0.4.0.md)                                                                                     | `MINOR=4` preview line closing number; superseded by patches v0.4.1–v0.4.7                                                                                                                                                                                     |
 | **Previous formal line**       | [v0.3.11](./v0.3.11.md)                                                                                   | `MINOR=3` formal line; kept for comparison and rollback (`@0.3.11`)                                                                                                                                                                       |
 | **Process numbers (archived)** | [rc.1](./v0.4.0-rc.1.md) · [rc.2](./v0.4.0-rc.2.md) · [rc.3](./v0.4.0-rc.3.md) · [rc.4](./v0.4.0-rc.4.md) | Pre-releases inside the `0.4.x` line, npm dist-tag `rc`; merged into v0.4.0 — not for daily install                                                                                                                                       |
 | **Previous preview line end**  | [v0.2.7](./v0.2.7.md)                                                                                     | `MINOR=2` preview line ended; archive only                                                                                                                                                                                                |
 
-Succession: formal [v0.1.31](./v0.1.31.md) → [v0.3.10](./v0.3.10.md) → [v0.3.11](./v0.3.11.md) → now **v0.4.6** (`0.4.x` patch line, owns `@latest`); preview **0.0.11** (withdrawn) → **v0.2.7** → **v0.4.0-rc.1…rc.4** → **v0.4.0** (closes the line and takes `@latest`). Other `docs/releases/v*` remain for reference; npm older numbers follow deprecate notices.
+Succession: formal [v0.1.31](./v0.1.31.md) → [v0.3.10](./v0.3.10.md) → [v0.3.11](./v0.3.11.md) → now **v0.4.7** (`0.4.x` patch line, owns `@latest`); preview **0.0.11** (withdrawn) → **v0.2.7** → **v0.4.0-rc.1…rc.4** → **v0.4.0** (closes the line and takes `@latest`). Other `docs/releases/v*` remain for reference; npm older numbers follow deprecate notices.
 
 Install and publish: [publishing.md](../publishing.md).
 
@@ -64,8 +64,8 @@ Install and publish: [publishing.md](../publishing.md).
 
 | Use                               | Command                                                                  |
 | --------------------------------- | ------------------------------------------------------------------------ |
-| Current (recommended)             | `npm i -g @xrkseek/harness-cli@latest` (= v0.4.6) then `xrkh web`        |
-| Pin exactly                       | `npm i -g @xrkseek/harness-cli@0.4.6` then `xrkh web`                    |
+| Current (recommended)             | `npm i -g @xrkseek/harness-cli@latest` (= v0.4.7) then `xrkh web`        |
+| Pin exactly                       | `npm i -g @xrkseek/harness-cli@0.4.7` then `xrkh web`                    |
 | Roll back to previous formal line | `npm i -g @xrkseek/harness-cli@0.3.11` then `xrkh web`                   |
 | Process numbers (archive)         | `npm i -g @xrkseek/harness-cli@0.4.0-rc.4`, or `@rc`; merged into v0.4.0 |
 | Previous preview line end         | `npm i -g @xrkseek/harness-cli@0.2.7` then `xrkh web`                    |

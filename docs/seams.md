@@ -38,7 +38,7 @@ LSP：`@xrkseek/exec-lsp` — Definition `LspService`；Provider stdio JSON-RPC�
 
 PTY：`@xrkseek/exec-pty` — Definition `TerminalSessionService`；Provider `node-pty@1.2.0-beta.15`（NAPI prebuild）+ bash + process-inspector；Consumer `createPtyTools`（六件套）。规格：[pty-tools.md](./pty-tools.md)。
 
-SSH（本地 Host、远端 cwd）：`@xrkseek/exec-ssh` — Settings 通用「远程」或 `XRK_SSH_HOST` + `XRK_SSH_WORKSPACE`（env 旁路）时换接 `FsService` / `SubprocessService`（及可选 `run_code`）；无模型侧 `ssh_*` 工具。Hermes 式 `ssh … bash -lc`；路径为远端 POSIX 坐标。Web `host.listDirectory` / `host.createDirectory` 走同一 SSH 会话；Agent / 侧栏交互式 PTY、`host.openPath` / OS 选目录在远端模式下关闭（`host.describe.remoteExecution` · `canPty: false` · `canOpenPath: false`）。改 Settings 后需重启 Host。
+SSH（本地 Host、远端 cwd）：`@xrkseek/exec-ssh` — Settings 通用「远程」或 `XRK_SSH_HOST` + `XRK_SSH_WORKSPACE`（env 旁路）时换接 `FsService` / `SubprocessService`（及可选 `run_code`）；无模型侧 `ssh_*` 工具。Hermes 式 `ssh … bash -lc`；路径为远端 POSIX 坐标。启用时 Host 走 `createSshExecutionWorldReady`（BatchMode `true` 预检，失败拒启；`XRK_SSH_SKIP_PROBE=1` 可跳过）；`xrkh doctor` 有 `ssh-remote`。Web `host.listDirectory` / `host.createDirectory` 走同一 SSH 会话；Agent / 侧栏交互式 PTY、`host.openPath` / OS 选目录在远端模式下关闭（`host.describe.remoteExecution` · `canPty: false` · `canOpenPath: false`）。改 Settings 后需重启 Host。云任务 / Codex Noise `exec-server` **未做**。
 
 ### 依赖图
 
@@ -64,7 +64,7 @@ exec-sandbox         → createSandboxWrapGuard → pipeline guards
 `wrapArgv(argv) → argv'`（同步）；spawn 路径用可取消的 `confine(argv, cwd?, signal?)`。  
 `createSandboxStack`：`workspace`（默认 DenyList+cwd 狱）· `docker` · `bwrap` — 同一 `SandboxService` Definition。规格：[sandbox.md](./sandbox.md)。
 
-ExecEnvironment（换整套 fs/subprocess，对标 Hermes terminal environments / MemoryProvider 缝）：`@xrkseek/exec-environment` — `local` 默认；HTTP serverless 样板 `createHttpExecEnvironment`（`GET /health` · `POST /v1/exec` · `POST /v1/fs`）；`resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT`。**Host 已接线**：SSH 优先，否则 `XRK_EXEC_ENVIRONMENT=http` 时用 HTTP world 的 `fs`+`subprocess`（`xrkh doctor` 探测 `/health`）。**不是** `createSandboxStack` 后端，也不替代 SSH（仍 `createSshExecutionWorld`）。
+ExecEnvironment（换整套 fs/subprocess，对标 Hermes terminal environments / MemoryProvider 缝）：`@xrkseek/exec-environment` — `local` 默认；HTTP serverless 样板 `createHttpExecEnvironment`（`GET /health` · `POST /v1/exec` · `POST /v1/fs`）；`resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT`。**Host 已接线**：SSH 优先（`createSshExecutionWorldReady`），否则 `XRK_EXEC_ENVIRONMENT=http` 时用 HTTP world 的 `fs`+`subprocess`（`xrkh doctor` 探测 `/health`）。**不是** `createSandboxStack` 后端，也不替代 SSH。
 Shell `startJob` 在 prepare（confine）之前武装超时，准备时间计入同一 deadline（DSH）。  
 后台：`startJob` / `listJobs` / `killJob` — [shell-jobs.md](./shell-jobs.md)。
 
@@ -112,7 +112,7 @@ LSP: `@xrkseek/exec-lsp` — Definition `LspService`; Provider stdio JSON-RPC; C
 
 PTY: `@xrkseek/exec-pty` — Definition `TerminalSessionService`; Provider `node-pty@1.2.0-beta.15` (NAPI prebuild) + bash + process-inspector; Consumer `createPtyTools` (six-tool set). Spec: [pty-tools.md](./pty-tools.md).
 
-SSH (local Host, remote cwd): `@xrkseek/exec-ssh` — when Settings General → Remote or `XRK_SSH_HOST` + `XRK_SSH_WORKSPACE` (env bypass) are set, swaps `FsService` / `SubprocessService` (and optional `run_code`); no model-facing `ssh_*` tools. Hermes-style `ssh … bash -lc`; paths are remote POSIX coordinates. Web `host.listDirectory` / `host.createDirectory` ride the same SSH session; Agent / sidebar interactive PTY and `host.openPath` / OS folder picker are off in remote mode (`host.describe.remoteExecution` · `canPty: false` · `canOpenPath: false`). Host restart required after Settings changes.
+SSH (local Host, remote cwd): `@xrkseek/exec-ssh` — when Settings General → Remote or `XRK_SSH_HOST` + `XRK_SSH_WORKSPACE` (env bypass) are set, swaps `FsService` / `SubprocessService` (and optional `run_code`); no model-facing `ssh_*` tools. Hermes-style `ssh … bash -lc`; paths are remote POSIX coordinates. When enabled, Host uses `createSshExecutionWorldReady` (BatchMode `true` probe, fail-closed; `XRK_SSH_SKIP_PROBE=1` skips); `xrkh doctor` reports `ssh-remote`. Web `host.listDirectory` / `host.createDirectory` ride the same SSH session; Agent / sidebar interactive PTY and `host.openPath` / OS folder picker are off in remote mode (`host.describe.remoteExecution` · `canPty: false` · `canOpenPath: false`). Host restart required after Settings changes. Cloud tasks / Codex Noise `exec-server` are **not done**.
 
 ### Dependency graph
 
@@ -138,7 +138,7 @@ exec-sandbox         → createSandboxWrapGuard → pipeline guards
 `wrapArgv(argv) → argv'` (sync); spawn paths use cancellable `confine(argv, cwd?, signal?)`.  
 `createSandboxStack`: `workspace` (default DenyList+cwd jail) · `docker` · `bwrap` — same `SandboxService` Definition. Spec: [sandbox.md](./sandbox.md).
 
-ExecEnvironment (swap fs/subprocess world; Hermes terminal environments / MemoryProvider-style seam): `@xrkseek/exec-environment` — `local` default; HTTP serverless sample `createHttpExecEnvironment` (`GET /health` · `POST /v1/exec` · `POST /v1/fs`); `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT`. **Host-wired**: SSH first, else `XRK_EXEC_ENVIRONMENT=http` swaps world fs/subprocess (`xrkh doctor` probes `/health`). **Not** a `createSandboxStack` backend and **not** a replacement for SSH (`createSshExecutionWorld`).
+ExecEnvironment (swap fs/subprocess world; Hermes terminal environments / MemoryProvider-style seam): `@xrkseek/exec-environment` — `local` default; HTTP serverless sample `createHttpExecEnvironment` (`GET /health` · `POST /v1/exec` · `POST /v1/fs`); `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT`. **Host-wired**: SSH first (`createSshExecutionWorldReady`), else `XRK_EXEC_ENVIRONMENT=http` swaps world fs/subprocess (`xrkh doctor` probes `/health`). **Not** a `createSandboxStack` backend and **not** a replacement for SSH.
 Shell `startJob` arms timeout before prepare (confine); preparation counts toward the same deadline (DSH).  
 Background: `startJob` / `listJobs` / `killJob` — [shell-jobs.md](./shell-jobs.md).
 

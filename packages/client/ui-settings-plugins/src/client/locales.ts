@@ -87,7 +87,14 @@ export type PluginsSettingsLocaleKey =
   | 'videoGenLiveHint'
   | 'curatedMemoryTitle' | 'curatedMemoryDescription' | 'curatedMemoryEnabled'
   | 'curatedMemoryEnabledHint' | 'curatedMemoryEnabledOn' | 'curatedMemoryEnabledOff'
+  | 'curatedMemoryPhase2' | 'curatedMemoryPhase2Hint'
+  | 'curatedMemoryPhase2On' | 'curatedMemoryPhase2Off'
   | 'curatedMemoryLiveHint'
+  | 'a2aInboundTitle' | 'a2aInboundDescription' | 'a2aInboundEnabled'
+  | 'a2aInboundEnabledHint' | 'a2aInboundEnabledOn' | 'a2aInboundEnabledOff'
+  | 'a2aInboundSession' | 'a2aInboundSessionHint'
+  | 'a2aInboundTimeout' | 'a2aInboundTimeoutHint'
+  | 'a2aInboundLiveHint'
   | 'sshRemoteTitle' | 'sshRemoteDescription'
   | 'sshRemoteHost' | 'sshRemoteHostHint'
   | 'sshRemoteWorkspace' | 'sshRemoteWorkspaceHint'
@@ -252,7 +259,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   webSearchKeySet: 'Configured',
   webSearchKeyUnset: 'Not set',
   telemetryTitle: 'Session telemetry',
-  telemetryDescription: 'Export session ledger events (OpenTelemetry logs). Changes apply after Host restart. Set XRK_TELEMETRY in CI to bypass this card.',
+  telemetryDescription: 'Export session append events as OpenTelemetry logs (not the Host cost-meter ledger). Changes apply after Host restart. Set XRK_TELEMETRY in CI to bypass this card.',
   telemetryMode: 'Mode',
   telemetryModeHint: 'Off disables capture. Memory keeps records in-process. OTLP posts JSON logs to an HTTP collector.',
   telemetryModeOff: 'Off',
@@ -361,7 +368,23 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   curatedMemoryEnabledHint: 'On freezes MEMORY.md / USER.md into the system prompt and registers the memory tool. Off removes both on the next agent rebuild.',
   curatedMemoryEnabledOn: 'On',
   curatedMemoryEnabledOff: 'Off',
-  curatedMemoryLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
+  curatedMemoryPhase2: 'Phase2 LLM consolidate',
+  curatedMemoryPhase2Hint: 'After Phase1, ask the session model to fold notes into MEMORY.md. Needs a live LLM route. CI: XRK_CURATED_MEMORY_PHASE2=1.',
+  curatedMemoryPhase2On: 'On',
+  curatedMemoryPhase2Off: 'Off',
+  curatedMemoryLiveHint: 'Applies on the next agent rebuild (live; no Host restart). Provider backend: XRK_MEMORY_PROVIDER=file|http|sqlite.',
+  a2aInboundTitle: 'A2A inbound',
+  a2aInboundDescription:
+    'Opt-in Agent Card + POST /a2a message/send into a Face session (framed peer text). No SSE / tasks CRUD. CI: XRK_A2A_INBOUND=1 forces on; =0 forces off.',
+  a2aInboundEnabled: 'Enable inbound',
+  a2aInboundEnabledHint: 'Serves /.well-known/agent-card.json and POST /a2a. Off ignores those paths.',
+  a2aInboundEnabledOn: 'On',
+  a2aInboundEnabledOff: 'Off',
+  a2aInboundSession: 'Pin session id',
+  a2aInboundSessionHint: 'Optional Face sessionId for all inbound contexts. Empty → a2a-<contextId>. Or set XRK_A2A_INBOUND_SESSION.',
+  a2aInboundTimeout: 'Reply timeout (ms)',
+  a2aInboundTimeoutHint: 'Wait for assistant body after message/send. 0 = default 120000. Cap 600000. Or XRK_A2A_INBOUND_TIMEOUT_MS.',
+  a2aInboundLiveHint: 'Applies on the next inbound request (live; no Host restart). Sessions are labeled a2a:<peer>.',
   sshRemoteTitle: 'Remote',
   sshRemoteDescription:
     'Run the agent against a remote workspace over OpenSSH (local Host, remote cwd). Leave host and workspace empty for a local workspace. Non-empty XRK_SSH_HOST still bypasses this card for CI.',
@@ -385,7 +408,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   autoReviewClassifierTokenHint: 'Optional Bearer; stored in Credentials as XRK_AUTO_REVIEW_CLASSIFIER_TOKEN (not settings.yaml).',
   autoReviewClassifierTokenSet: 'Configured',
   autoReviewClassifierTokenUnset: 'Not set',
-  autoReviewLiveHint: 'Applies on the next classify request (live; no Host restart).',
+  autoReviewLiveHint: 'Applies on the next classify request (live; no Host restart). xrkh doctor probes with a sample read_file payload.',
   memoryEmbedTitle: 'Memory embed sidecar',
   memoryEmbedDescription:
     'Optional external vector HTTP for embedding.search (Qdrant-style /search). Leave URL empty for the embedded host under ~/.xrk/memory-embeddings. Non-empty XRK_MEMORY_EMBED_URL still bypasses this card for CI.',
@@ -550,7 +573,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   webSearchKeySet: '已配置',
   webSearchKeyUnset: '未设置',
   telemetryTitle: '会话遥测',
-  telemetryDescription: '导出会话账本事件（OpenTelemetry logs）。改动需重启 Host 生效。CI 可设 XRK_TELEMETRY 旁路本卡。',
+  telemetryDescription: '将会话追加事件导出为 OpenTelemetry logs（不是 Host 成本账本 cost-meter）。改动需重启 Host 生效。CI 可设 XRK_TELEMETRY 旁路本卡。',
   telemetryMode: '模式',
   telemetryModeHint: '关：不采集。内存：进程内保留。OTLP：向 HTTP collector 推送 JSON logs。',
   telemetryModeOff: '关',
@@ -659,7 +682,23 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   curatedMemoryEnabledHint: '开：冻结 MEMORY.md / USER.md 进系统提示并登记 memory 工具。关：下次 agent 重建后两者都卸下。',
   curatedMemoryEnabledOn: '开',
   curatedMemoryEnabledOff: '关',
-  curatedMemoryLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
+  curatedMemoryPhase2: 'Phase2 LLM 巩固',
+  curatedMemoryPhase2Hint: 'Phase1 之后用当前会话模型把笔记折进 MEMORY.md。需要可用 LLM 路由。CI：XRK_CURATED_MEMORY_PHASE2=1。',
+  curatedMemoryPhase2On: '开',
+  curatedMemoryPhase2Off: '关',
+  curatedMemoryLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。后端：XRK_MEMORY_PROVIDER=file|http|sqlite。',
+  a2aInboundTitle: 'A2A 入站',
+  a2aInboundDescription:
+    '可选 Agent Card + POST /a2a message/send 注入 Face 会话（对端正文加帧）。无 SSE / tasks CRUD。CI：XRK_A2A_INBOUND=1 强制开、=0 强制关。',
+  a2aInboundEnabled: '启用入站',
+  a2aInboundEnabledHint: '提供 /.well-known/agent-card.json 与 POST /a2a。关则这些路径不响应。',
+  a2aInboundEnabledOn: '开',
+  a2aInboundEnabledOff: '关',
+  a2aInboundSession: '钉死会话 id',
+  a2aInboundSessionHint: '可选：所有入站共用该 Face sessionId。留空 → a2a-<contextId>。或设 XRK_A2A_INBOUND_SESSION。',
+  a2aInboundTimeout: '等待回复（毫秒）',
+  a2aInboundTimeoutHint: 'message/send 后等待助手正文。0 = 默认 120000，顶 600000。或 XRK_A2A_INBOUND_TIMEOUT_MS。',
+  a2aInboundLiveHint: '下次入站请求即生效（热切换，无需重启 Host）。会话标签为 a2a:<peer>。',
   sshRemoteTitle: '远程',
   sshRemoteDescription:
     '本地 Host、远端 cwd：文件 / bash / run_code 走 OpenSSH。host 与 workspace 都留空则用本机工作区。CI 可设非空 XRK_SSH_HOST 旁路本卡。',
@@ -683,7 +722,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   autoReviewClassifierTokenHint: '可选 Bearer；经凭据落盘为 XRK_AUTO_REVIEW_CLASSIFIER_TOKEN（不进 settings.yaml）。',
   autoReviewClassifierTokenSet: '已配置',
   autoReviewClassifierTokenUnset: '未设置',
-  autoReviewLiveHint: '下次 classify 请求即生效（热切换，无需重启 Host）。',
+  autoReviewLiveHint: '下次 classify 请求即生效（热切换，无需重启 Host）。xrkh doctor 用样例 read_file 探活。',
   memoryEmbedTitle: '向量记忆 sidecar',
   memoryEmbedDescription:
     '可选外接向量 HTTP，供 embedding.search（类 Qdrant：POST /search）。URL 留空则只用 ~/.xrk/memory-embeddings 内嵌索引。CI 可设非空 XRK_MEMORY_EMBED_URL 旁路本卡。',

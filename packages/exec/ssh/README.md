@@ -12,5 +12,8 @@ When Settings General → Remote (`ssh-remote`) or `XRK_SSH_HOST` + `XRK_SSH_WOR
 | `XRK_SSH_PORT` | Optional port (default OpenSSH) |
 | `XRK_SSH_KEY` | Optional identity file |
 | `XRK_SSH_NODE` | Remote Node for `run_code` (default `node`) |
+| `XRK_SSH_SKIP_PROBE` | `1` skips Host BatchMode connect probe (CI mocks) |
+
+Host probes with remote `true` before serving when SSH is on (`createSshExecutionWorldReady`). `xrkh doctor` reports `ssh-remote`. Cloud tasks / Codex Noise exec-server are **not** in this package.
 
 See `docs/seams.md` · `docs/configuration.md`.

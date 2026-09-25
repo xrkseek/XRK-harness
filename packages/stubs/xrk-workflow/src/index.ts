@@ -378,12 +378,28 @@ export class InProcessWorkflowEngine extends WorkflowEngine {
 
 /**
  * Worker-thread Provider: script body runs in an isolated `worker_threads`
- * Worker (eval), mirroring Code Mode's snippet runner. `agent()` returns
- * `null` inside the worker — no Cordis/Face bridge crosses the isolate
- * (first PTC-shaped step; full DSH PTC SDK not ported). Prefer
- * {@link InProcessWorkflowEngine} when `createAgent` is required.
+ * Worker (eval). `agent()` posts an RPC to the parent thread, which may run
+ * an optional {@link IsolatingWorkflowEngine} `createAgent` bridge (same
+ * contract as {@link InProcessWorkflowEngine}) and return a structured-cloneable
+ * value. Without `createAgent`, `agent()` still settles `null` (PTC-lite).
+ * Full DSH PTC SDK (tools.* bindings / sandboxed Node) is not ported.
  */
 export class IsolatingWorkflowEngine extends WorkflowEngine {
+  private readonly createAgent?: (
+    request: WorkflowStartRequest,
+    call: { label: string; prompt: string; phase?: string },
+  ) => Promise<unknown>
+
+  constructor(
+    ctx: Context,
+    options?: {
+      readonly createAgent?: IsolatingWorkflowEngine['createAgent']
+    },
+  ) {
+    super(ctx)
+    this.createAgent = options?.createAgent
+  }
+
   start(request: WorkflowStartRequest): WorkflowRun {
     const meta = request.meta
     if (!meta || typeof meta !== 'object') {
@@ -440,6 +456,14 @@ export class IsolatingWorkflowEngine extends WorkflowEngine {
           },
           runId: String(id),
           maxTotalAgents: request.maxTotalAgents,
+          createAgent: this.createAgent
+            ? async (call) => {
+                if (cancelled || ac.signal.aborted) {
+                  throw new WorkflowError(cancelReason, 'CANCELLED')
+                }
+                return this.createAgent!(request, call)
+              }
+            : undefined,
         })
         if (cancelled || ac.signal.aborted) {
           return { value: null, stopReason: 'cancelled', error: cancelReason, agentsStarted }
@@ -484,6 +508,20 @@ export class IsolatingWorkflowEngine extends WorkflowEngine {
   }
 }
 
+/** Best-effort clone so worker_threads can postMessage the agent result. */
+function cloneForWorker(value: unknown): unknown {
+  if (value === undefined) return null
+  try {
+    return structuredClone(value)
+  } catch {
+    try {
+      return JSON.parse(JSON.stringify(value)) as unknown
+    } catch {
+      return null
+    }
+  }
+}
+
 async function runIsolatingWorkerScript(input: {
   readonly script: string
   readonly args: unknown
@@ -494,11 +532,26 @@ async function runIsolatingWorkerScript(input: {
   readonly onAgentEnd: (agent: WorkflowAgentEndInfo) => void
   readonly runId: string
   readonly maxTotalAgents?: number
+  readonly createAgent?: (call: {
+    label: string
+    prompt: string
+    phase?: string
+  }) => Promise<unknown>
 }): Promise<WorkflowResult> {
   const { Worker } = await import('node:worker_threads')
   const workerSource = `
     const { parentPort, workerData } = require('node:worker_threads');
     let agentsStarted = 0;
+    let callSeq = 0;
+    const pending = new Map();
+    parentPort.on('message', (msg) => {
+      if (!msg || msg.type !== 'agent-result') return;
+      const wait = pending.get(msg.callId);
+      if (!wait) return;
+      pending.delete(msg.callId);
+      if (msg.ok) wait.resolve(msg.value === undefined ? null : msg.value);
+      else wait.reject(new Error(String(msg.error || 'agent bridge failed')));
+    });
     const phase = (title) => {
       parentPort.postMessage({ type: 'phase', title: String(title ?? '') });
     };
@@ -515,16 +568,37 @@ async function runIsolatingWorkerScript(input: {
       const label = String(opts.label ?? opts.prompt ?? ('agent-' + seq)).slice(0, 120);
       const phaseTitle = opts.phase;
       const childId = 'wf-child-' + workerData.runId + '-' + seq;
+      const callId = 'c' + (++callSeq);
       parentPort.postMessage({
         type: 'agent-start',
         seq, label, phase: phaseTitle || undefined, childId,
       });
-      // Isolation: no host bridge — agent() settles null (PTC-lite).
+      parentPort.postMessage({
+        type: 'agent-call',
+        callId, seq, label,
+        prompt: String(opts.prompt ?? ''),
+        phase: phaseTitle || undefined,
+        childId,
+      });
+      let value = null;
+      let outcome = 'completed';
+      try {
+        value = await new Promise((resolve, reject) => {
+          pending.set(callId, { resolve, reject });
+        });
+      } catch (err) {
+        outcome = 'failed';
+        parentPort.postMessage({
+          type: 'agent-end',
+          seq, label, phase: phaseTitle || undefined, childId, outcome,
+        });
+        throw err;
+      }
       parentPort.postMessage({
         type: 'agent-end',
-        seq, label, phase: phaseTitle || undefined, childId, outcome: 'completed',
+        seq, label, phase: phaseTitle || undefined, childId, outcome,
       });
-      return null;
+      return value;
     };
     const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
     try {
@@ -569,6 +643,7 @@ async function runIsolatingWorkerScript(input: {
       resourceLimits: { maxOldGenerationSizeMb: 128 },
     })
     let settled = false
+    let agentsStartedSeen = 0
     const finish = (result: WorkflowResult) => {
       if (settled) return
       settled = true
@@ -582,7 +657,7 @@ async function runIsolatingWorkerScript(input: {
         value: null,
         stopReason: 'cancelled',
         error: 'parent signal aborted',
-        agentsStarted: 0,
+        agentsStarted: agentsStartedSeen,
       })
     }
     if (input.signal) {
@@ -600,6 +675,8 @@ async function runIsolatingWorkerScript(input: {
       label?: string
       phase?: string
       childId?: string
+      callId?: string
+      prompt?: string
       outcome?: 'completed' | 'failed' | 'cancelled'
       ok?: boolean
       value?: unknown
@@ -616,12 +693,45 @@ async function runIsolatingWorkerScript(input: {
         return
       }
       if (msg.type === 'agent-start' && typeof msg.seq === 'number') {
+        agentsStartedSeen = Math.max(agentsStartedSeen, msg.seq)
         input.onAgentStart({
           seq: msg.seq,
           label: String(msg.label ?? ''),
           ...(msg.phase ? { phase: msg.phase } : {}),
           childId: SessionId(String(msg.childId ?? `wf-child-${msg.seq}`)),
         })
+        return
+      }
+      if (msg.type === 'agent-call' && typeof msg.callId === 'string') {
+        const callId = msg.callId
+        const label = String(msg.label ?? '')
+        const prompt = String(msg.prompt ?? '')
+        const phaseTitle = msg.phase
+        void (async () => {
+          try {
+            let value: unknown = null
+            if (input.createAgent) {
+              value = await input.createAgent({
+                label,
+                prompt,
+                ...(phaseTitle ? { phase: String(phaseTitle) } : {}),
+              })
+            }
+            worker.postMessage({
+              type: 'agent-result',
+              callId,
+              ok: true,
+              value: cloneForWorker(value),
+            })
+          } catch (err) {
+            worker.postMessage({
+              type: 'agent-result',
+              callId,
+              ok: false,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+        })()
         return
       }
       if (msg.type === 'agent-end' && typeof msg.seq === 'number') {
@@ -636,7 +746,7 @@ async function runIsolatingWorkerScript(input: {
       }
       if (msg.type === 'done') {
         const agentsStarted =
-          typeof msg.agentsStarted === 'number' ? msg.agentsStarted : 0
+          typeof msg.agentsStarted === 'number' ? msg.agentsStarted : agentsStartedSeen
         if (msg.ok) {
           finish({
             value: msg.value ?? null,
@@ -658,7 +768,7 @@ async function runIsolatingWorkerScript(input: {
         value: null,
         stopReason: 'error',
         error: err instanceof Error ? err.message : String(err),
-        agentsStarted: 0,
+        agentsStarted: agentsStartedSeen,
       })
     })
     worker.on('exit', (code) => {
@@ -667,7 +777,7 @@ async function runIsolatingWorkerScript(input: {
         finish({
           value: null,
           stopReason: 'completed',
-          agentsStarted: 0,
+          agentsStarted: agentsStartedSeen,
         })
       } else {
         reject(new WorkflowError(`isolating worker exited ${code}`, 'WORKER_EXIT'))

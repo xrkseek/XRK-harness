@@ -9,11 +9,10 @@ import {
   IM_GATEWAY_ENV_URL,
   IM_GATEWAY_HOST_HEALTH_PATH,
   IM_GATEWAY_HOST_RELAY_PATH,
-  IM_GATEWAY_SIDECAR_HEALTH_PATH,
   assertRelayAuthorized,
   imGatewayStateFromProbe,
-  interpretSidecarHealthBody,
   parseRelayBody,
+  probeImGatewaySidecar,
   readImGatewaySidecarConfig,
   type ImGatewayProbeResult,
   type ImGatewaySidecarConfig,
@@ -27,37 +26,10 @@ import { parseJsonBody } from "./underlying/http-kit.js";
 export {
   IM_GATEWAY_ENV_TOKEN,
   IM_GATEWAY_ENV_URL,
+  probeImGatewaySidecar,
   readImGatewaySidecarConfig,
   type ImGatewaySidecarConfig,
 };
-
-export async function probeImGatewaySidecar(
-  config: ImGatewaySidecarConfig,
-  timeoutMs = 3000,
-): Promise<ImGatewayProbeResult> {
-  const base = config.url.replace(/\/+$/, "");
-  const headers: Record<string, string> = { accept: "application/json" };
-  if (config.token) headers.authorization = `Bearer ${config.token}`;
-  try {
-    const res = await fetch(`${base}${IM_GATEWAY_SIDECAR_HEALTH_PATH}`, {
-      headers,
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    const body = (await res.json().catch(() => null));
-    if (!res.ok) {
-      return {
-        ok: false,
-        error: `upstream ${res.status}`,
-      };
-    }
-    return interpretSidecarHealthBody(body, true);
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
-}
 
 export function imGatewaySidecarStatusPayload(
   channel: string,

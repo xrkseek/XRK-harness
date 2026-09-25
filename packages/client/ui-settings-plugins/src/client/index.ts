@@ -6,7 +6,7 @@
  * declares `settings.plugin.item` and renders whatever cards were registered
  * into it. Shipped cards: MCP, shell (`bash`), agent-loop, workspace-inject, web-search,
  * session-telemetry, sandbox, computer-use, browser, voice, image-gen, video-gen,
- * curated-memory, external-agent, cron. Advanced tab: auto-review classifier · memory-embed.
+ * curated-memory, a2a-inbound, external-agent, cron. Advanced tab: auto-review classifier · memory-embed.
  * General 「远程」: ssh-remote (restart).
  */
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
@@ -29,6 +29,7 @@ import { ConfigurablePluginsTab } from './ConfigurablePluginsTab.tsx'
 import { ComputerUseCard } from './ComputerUseCard.tsx'
 import { CronCard } from './CronCard.tsx'
 import { CuratedMemoryCard } from './CuratedMemoryCard.tsx'
+import { A2aInboundCard } from './A2aInboundCard.tsx'
 import { ExternalAgentCard } from './ExternalAgentCard.tsx'
 import { ImageGenCard } from './ImageGenCard.tsx'
 import { McpCard } from './McpCard.tsx'
@@ -53,6 +54,7 @@ import { BROWSER_NS, BrowserCardController } from './browser-card-controller.ts'
 import { COMPUTER_USE_NS, ComputerUseCardController, COMPUTER_USE_BACKGROUND_REF } from './computer-use-card-controller.ts'
 import { CRON_NS, CronCardController } from './cron-card-controller.ts'
 import { CURATED_MEMORY_NS, CuratedMemoryCardController } from './curated-memory-card-controller.ts'
+import { A2A_INBOUND_NS, A2aInboundCardController } from './a2a-inbound-card-controller.ts'
 import { EXTERNAL_AGENT_NS, ExternalAgentCardController } from './external-agent-card-controller.ts'
 import { IMAGE_GEN_NS, ImageGenCardController, IMAGE_GEN_OPENAI_REF } from './image-gen-card-controller.ts'
 import {
@@ -90,6 +92,7 @@ export type { BrowserCardFace, BrowserCardState } from './browser-card-controlle
 export type { ComputerUseCardFace, ComputerUseCardState } from './computer-use-card-controller.ts'
 export type { CronCardFace, CronCardState } from './cron-card-controller.ts'
 export type { CuratedMemoryCardFace, CuratedMemoryCardState } from './curated-memory-card-controller.ts'
+export type { A2aInboundCardFace, A2aInboundCardState } from './a2a-inbound-card-controller.ts'
 export type { ExternalAgentCardFace, ExternalAgentCardState } from './external-agent-card-controller.ts'
 export type { ImageGenCardFace, ImageGenCardState } from './image-gen-card-controller.ts'
 export type { SandboxCardFace, SandboxCardState } from './sandbox-card-controller.ts'
@@ -118,6 +121,7 @@ export { BROWSER_NS } from './browser-card-controller.ts'
 export { COMPUTER_USE_NS, COMPUTER_USE_BACKGROUND_REF } from './computer-use-card-controller.ts'
 export { CRON_NS } from './cron-card-controller.ts'
 export { CURATED_MEMORY_NS } from './curated-memory-card-controller.ts'
+export { A2A_INBOUND_NS } from './a2a-inbound-card-controller.ts'
 export { VOICE_NS, VOICE_OPENAI_REF } from './voice-card-controller.ts'
 export { IMAGE_GEN_NS, IMAGE_GEN_OPENAI_REF } from './image-gen-card-controller.ts'
 export { VIDEO_GEN_NS, VIDEO_GEN_OPENAI_REF } from './video-gen-card-controller.ts'
@@ -162,6 +166,9 @@ export function apply(ctx: ClientContext): void {
   )
   const curatedMemory = new CuratedMemoryCardController(
     ctx.settingsScope.bind({ namespace: CURATED_MEMORY_NS }),
+  )
+  const a2aInbound = new A2aInboundCardController(
+    ctx.settingsScope.bind({ namespace: A2A_INBOUND_NS }),
   )
   const externalAgent = new ExternalAgentCardController(
     ctx.settingsScope.bind({ namespace: EXTERNAL_AGENT_NS }),
@@ -418,6 +425,12 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: () => curatedMemory.inject(),
     }, CuratedMemoryCard)
+    yield ctx.slots.register({
+      name: 'settings.plugin.item',
+      key: A2A_INBOUND_NS,
+      locale: NS,
+      inject: () => a2aInbound.inject(),
+    }, A2aInboundCard)
     yield ctx.slots.register({
       name: 'settings.plugin.item',
       key: EXTERNAL_AGENT_NS,
