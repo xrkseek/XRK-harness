@@ -1,11 +1,8 @@
 /**
  * Serialized WebSocket text writes with send-callback backpressure.
- * Think / tool bursts must not fill the socket faster than TCP, or Ping
- * timers starve on the same event loop.
- *
- * Pending frames are capped by count and UTF-8 bytes. Over budget terminates
- * the peer so the client reconnects with an empty queue — unbounded promise
- * chains of JSON strings were a Host OOM path under reconnect storms.
+ * Caps pending frames / bytes; over budget drops the new frame (peer stays
+ * up). Write failure closes the queue. Mirrors DSH “release window” pacing
+ * without per-byte window counters — see docs/host-face.md.
  */
 
 /** Soft ceiling on queued frames per socket (not yet acked by `send` cb). */
@@ -18,7 +15,6 @@ export interface WsQueuedSocket {
   readonly readyState: number;
   readonly OPEN: number;
   send(data: string, cb?: (err?: Error) => void): void;
-  terminate(): void;
 }
 
 export interface WsSendQueueOptions {
@@ -28,8 +24,7 @@ export interface WsSendQueueOptions {
 
 /**
  * Queue JSON frames onto one socket. Later frames wait until `send`'s
- * callback fires. A write error or queue-budget overflow terminates the peer
- * so the client reconnects.
+ * callback fires. Over-budget frames are dropped; write errors stop enqueue.
  */
 export function createWsSendQueue(
   socket: WsQueuedSocket,
@@ -43,16 +38,7 @@ export function createWsSendQueue(
   let pendingFrames = 0;
   let pendingBytes = 0;
   let closed = false;
-
-  const trip = (): void => {
-    if (closed) return;
-    closed = true;
-    try {
-      if (socket.readyState === socket.OPEN) socket.terminate();
-    } catch {
-      /* ignore */
-    }
-  };
+  let dropWarned = false;
 
   return {
     sendJson(payload) {
@@ -64,8 +50,13 @@ export function createWsSendQueue(
         return;
       }
       const bytes = Buffer.byteLength(text, "utf8");
-      if (pendingFrames + 1 > maxFrames || pendingBytes + bytes > maxBytes) {
-        trip();
+      if (bytes > maxBytes || pendingFrames + 1 > maxFrames || pendingBytes + bytes > maxBytes) {
+        if (!dropWarned) {
+          dropWarned = true;
+          console.warn(
+            "[face] mux/host send queue over budget — dropping frame(s); peer stays up",
+          );
+        }
         return;
       }
       pendingFrames += 1;
@@ -84,7 +75,7 @@ export function createWsSendQueue(
                 return;
               }
               socket.send(text, (error) => {
-                if (error && socket.readyState === socket.OPEN) trip();
+                if (error) closed = true;
                 release();
               });
             }),

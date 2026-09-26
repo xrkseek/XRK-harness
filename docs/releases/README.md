@@ -2,35 +2,30 @@
 
 > **读者**：终端用户 · 维护者
 
-版本约定：`MAJOR.MINOR.PATCH` 里 **MINOR（第二位）奇偶**——**奇数正式**（如 `0.3.x`）、**偶数预览**（如 `0.2.x`）。**不是** PATCH（第三位）；正式线上补丁按 `0.3.9` → `0.3.10` → `0.3.11` 顺序递增。
+版本约定：`MAJOR.MINOR.PATCH` 里 **MINOR（第二位）奇偶**——**奇数正式**（如 `0.3.x`）、**偶数预览**（如 `0.2.x` · `0.4.x`）。**不是** PATCH（第三位）。
 
-**例外（本版起）**：`MINOR=4` 预览线以 **v0.4.0** 收口——去掉 `-rc` 后缀的收口号**接管 `@latest`**，过程号 `rc.1`–`rc.4` 转为归档。下一档按约定进 **`MINOR=5` 正式线（`0.5.0`）**。
+**本版**：`MINOR=4` 预览线以 **v0.4.12** 为 npm `@latest` 终态；下一档进 **`MINOR=5` 正式线（`0.5.0`）**。npmjs **仅保留 0.4.12 与 0.3.11**；GitHub Release 文稿可保留历史号。
 
-GitHub Release 公开页保留正式当前 + 上一正式线：
+| 档                  | 版本                                    | 说明                                                                 |
+| ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
+| **当前（@latest）** | [v0.4.12](./v0.4.12.md)                 | `0.4.x` 终态：Mux 超顶丢帧不掐线 · 心跳 5 miss · npm 只留本号+0.3.11 |
+| **上一补丁**        | [v0.4.11](./v0.4.11.md)                 | Mux 队列软顶（曾超顶 terminate）· 冷会话跳过 hydrate                 |
+| **上一正式线**      | [v0.3.11](./v0.3.11.md)                 | `MINOR=3`；npm 回退钉（`@0.3.11`）                                   |
+| **收口号（文稿）**  | [v0.4.0](./v0.4.0.md)                   | 预览线收口；npm 已撤，见 GitHub Release                              |
+| **过程号（文稿）**  | [rc.1](./v0.4.0-rc.1.md)…[rc.4](./v0.4.0-rc.4.md) | 已并入；npm 已撤                                           |
+| **上一轮预览（文稿）** | [v0.2.7](./v0.2.7.md)                | npm 已撤；GitHub 对照留档                                            |
 
-| 档                  | 版本                                                                                                      | 说明                                                                                           |
-| ------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **当前（@latest）** | [v0.4.11](./v0.4.11.md)                                                                                     | `0.4.x` 热修：Mux 帧扇出队列软顶 · 冷会话重连不再全量 hydrate · 驱逐补清会话小桶 |
-| **上一补丁**        | [v0.4.10](./v0.4.10.md)                                                                                     | 全局 `xrkh web` xrk-workflow `.ts` 入口启动失败 |
-| **上上一补丁**      | [v0.4.9](./v0.4.9.md)                                                                                     | 多厂商图/视频生成 · 策展记忆 consolidate · 压缩策略族 · team_graph · Isolating WorkflowEngine · 工作台入口 |
-| **上一收口号**      | [v0.4.0](./v0.4.0.md)                                                                                     | `MINOR=4` 预览线**收口号**；内容仍有效，补丁见 v0.4.1–v0.4.11                                   |
-| **上一正式线**      | [v0.3.11](./v0.3.11.md)                                                                                   | `MINOR=3` 正式线；保留供对照与回退（`@0.3.11`）                                                |
-| **过程号（归档）**  | [rc.1](./v0.4.0-rc.1.md) · [rc.2](./v0.4.0-rc.2.md) · [rc.3](./v0.4.0-rc.3.md) · [rc.4](./v0.4.0-rc.4.md) | `0.4.x` 线内的预发布号，npm dist-tag `rc`；内容已并入 v0.4.0，不推荐日常安装                   |
-| **上一轮预览末号**  | [v0.2.7](./v0.2.7.md)                                                                                     | `MINOR=2` 预览线结束；对照留档                                                                 |
-
-对照：昔日正式 [v0.1.31](./v0.1.31.md) → [v0.3.10](./v0.3.10.md) → [v0.3.11](./v0.3.11.md) → 现 **v0.4.11**（`0.4.x` 补丁线，`@latest`）；预览线 **0.0.11**（已撤）→ 上一轮末号 **v0.2.7** → 本轮 **v0.4.0-rc.1…rc.4** → **v0.4.0**（收口并接管 `@latest`）。仓库内其余 `docs/releases/v*` 仍可查阅；npm 旧号以 deprecate 为准。
+对照：正式 [v0.3.11](./v0.3.11.md) → 现 **v0.4.12**（`@latest`）；下一档 **0.5.x**。仓库 `docs/releases/v*` 仍可查阅。
 
 安装与发包见 [publishing.md](../publishing.md)。
 
 ## npm 安装速查
 
-| 用途                   | 命令                                                                |
-| ---------------------- | ------------------------------------------------------------------- |
-| 当前（推荐）           | `npm i -g @xrkseek/harness-cli@latest`（= v0.4.11）后 `xrkh web`     |
-| 精确锁版本             | `npm i -g @xrkseek/harness-cli@0.4.11` 后 `xrkh web`                 |
-| 回退上一正式线         | `npm i -g @xrkseek/harness-cli@0.3.11` 后 `xrkh web`                |
-| 过程号（对照）         | `npm i -g @xrkseek/harness-cli@0.4.0-rc.4`，或 `@rc`；已并入 v0.4.0 |
-| 上一轮预览末号（对照） | `npm i -g @xrkseek/harness-cli@0.2.7` 后 `xrkh web`                 |
+| 用途           | 命令                                                            |
+| -------------- | --------------------------------------------------------------- |
+| 当前（推荐）   | `npm i -g @xrkseek/harness-cli@latest`（= v0.4.12）后 `xrkh web` |
+| 精确锁版本     | `npm i -g @xrkseek/harness-cli@0.4.12` 后 `xrkh web`             |
+| 回退上一正式线 | `npm i -g @xrkseek/harness-cli@0.3.11` 后 `xrkh web`             |
 
 规格索引：[docs/README.md](../README.md)。
 
@@ -40,34 +35,27 @@ GitHub Release 公开页保留正式当前 + 上一正式线：
 
 > **Audience**: End users · Maintainers
 
-Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = formal** (e.g. `0.3.x`), **even = preview** (e.g. `0.2.x`). **Not** the PATCH digit; on a formal line, patches increment sequentially (`0.3.9` → `0.3.10` → `0.3.11`).
+Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = formal** (e.g. `0.3.x`), **even = preview** (e.g. `0.2.x` · `0.4.x`). **Not** the PATCH digit.
 
-**Exception (from this release)**: the `MINOR=4` preview line closes at **v0.4.0** — the suffix-free closing number **takes over `@latest`**, and the process numbers `rc.1`–`rc.4` become archives. The next line moves to the odd **`MINOR=5` formal train (`0.5.0`)**.
+**This release**: the `MINOR=4` preview line closes on npm `@latest` at **v0.4.12**; the next train is **`MINOR=5` formal (`0.5.0`)**. npmjs **keeps only 0.4.12 and 0.3.11**; GitHub Release notes may retain historical tags.
 
-The GitHub Releases page keeps the current release plus the previous formal line:
+| Line                      | Version                                   | Notes                                                                                          |
+| ------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Current (@latest)**     | [v0.4.12](./v0.4.12.md)                   | `0.4.x` close-out: Mux drop-not-terminate · 5-miss heartbeat · npm keeps this + 0.3.11 only   |
+| **Previous patch**        | [v0.4.11](./v0.4.11.md)                   | Mux queue soft caps (over-budget terminate) · cold hydrate skip                                |
+| **Previous formal line**  | [v0.3.11](./v0.3.11.md)                   | `MINOR=3`; npm rollback pin (`@0.3.11`)                                                        |
+| **Closing number (docs)** | [v0.4.0](./v0.4.0.md)                     | Preview-line close; withdrawn from npm; see GitHub Release                                     |
+| **Process numbers (docs)**| [rc.1](./v0.4.0-rc.1.md)…[rc.4](./v0.4.0-rc.4.md) | Folded in; withdrawn from npm                                                        |
+| **Prior preview (docs)**  | [v0.2.7](./v0.2.7.md)                     | Withdrawn from npm; GitHub archive only                                                        |
 
-| Line                           | Version                                                                                                   | Notes                                                                                                                                                                                                                                     |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Current (@latest)**          | [v0.4.11](./v0.4.11.md)                                                                                     | **Hotfix on the `0.4.x` line**: Mux send-queue soft caps · cold sessions skip full hydrate on reconnect · eviction clears remaining session buckets. `npm i -g @xrkseek/harness-cli@latest` resolves here |
-| **Previous patch**             | [v0.4.10](./v0.4.10.md)                                                                                     | Global `xrkh web` crash on xrk-workflow `.ts` entry |
-| **Patch before that**          | [v0.4.9](./v0.4.9.md)                                                                                     | Multi-provider image/video gen · curated-memory consolidate · compaction strategies · `team_graph` · Isolating WorkflowEngine · workbench entry |
-| **Closing number**             | [v0.4.0](./v0.4.0.md)                                                                                     | `MINOR=4` preview line closing number; superseded by patches v0.4.1–v0.4.11                                                                                                                                                                                     |
-| **Previous formal line**       | [v0.3.11](./v0.3.11.md)                                                                                   | `MINOR=3` formal line; kept for comparison and rollback (`@0.3.11`)                                                                                                                                                                       |
-| **Process numbers (archived)** | [rc.1](./v0.4.0-rc.1.md) · [rc.2](./v0.4.0-rc.2.md) · [rc.3](./v0.4.0-rc.3.md) · [rc.4](./v0.4.0-rc.4.md) | Pre-releases inside the `0.4.x` line, npm dist-tag `rc`; merged into v0.4.0 — not for daily install                                                                                                                                       |
-| **Previous preview line end**  | [v0.2.7](./v0.2.7.md)                                                                                     | `MINOR=2` preview line ended; archive only                                                                                                                                                                                                |
-
-Succession: formal [v0.1.31](./v0.1.31.md) → [v0.3.10](./v0.3.10.md) → [v0.3.11](./v0.3.11.md) → now **v0.4.11** (`0.4.x` patch line, owns `@latest`); preview **0.0.11** (withdrawn) → **v0.2.7** → **v0.4.0-rc.1…rc.4** → **v0.4.0** (closes the line and takes `@latest`). Other `docs/releases/v*` remain for reference; npm older numbers follow deprecate notices.
-
-Install and publish: [publishing.md](../publishing.md).
+Succession: formal [v0.3.11](./v0.3.11.md) → now **v0.4.12** (`@latest`); next **0.5.x**. Other `docs/releases/v*` remain for reference.
 
 ## npm install cheat sheet
 
-| Use                               | Command                                                                  |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| Current (recommended)             | `npm i -g @xrkseek/harness-cli@latest` (= v0.4.11) then `xrkh web`        |
-| Pin exactly                       | `npm i -g @xrkseek/harness-cli@0.4.11` then `xrkh web`                    |
-| Roll back to previous formal line | `npm i -g @xrkseek/harness-cli@0.3.11` then `xrkh web`                   |
-| Process numbers (archive)         | `npm i -g @xrkseek/harness-cli@0.4.0-rc.4`, or `@rc`; merged into v0.4.0 |
-| Previous preview line end         | `npm i -g @xrkseek/harness-cli@0.2.7` then `xrkh web`                    |
+| Use                           | Command                                                              |
+| ----------------------------- | -------------------------------------------------------------------- |
+| Current (recommended)         | `npm i -g @xrkseek/harness-cli@latest` (= v0.4.12) then `xrkh web`   |
+| Pin exactly                   | `npm i -g @xrkseek/harness-cli@0.4.12` then `xrkh web`               |
+| Roll back previous formal     | `npm i -g @xrkseek/harness-cli@0.3.11` then `xrkh web`               |
 
 Spec index: [docs/README.md](../README.md).

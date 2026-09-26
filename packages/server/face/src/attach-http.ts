@@ -230,10 +230,8 @@ export function attachFaceUpgrades(
           lastSeq: runtime.seq.last(sessionId),
         }),
       );
-      // Cold sessions: do not hydrate full event logs on every mux reconnect
-      // (was an OOM path when store.list() is large). Face-memory pending
-      // approvals/questions/jobs still ship; queue + projection wait until
-      // the session is resident / opened.
+      // Cold sessions: skip event/projection hydrate (reconnect OOM path).
+      // Pending approvals / questions / jobs still ship.
       const loaded = runtime.store.isLoaded?.(sessionId) ?? true;
       if (loaded) {
         const pendingAdmits = listPendingAdmits(

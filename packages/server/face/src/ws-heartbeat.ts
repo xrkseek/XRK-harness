@@ -1,15 +1,19 @@
 /**
- * Face mux/host WebSocket Ping cadence (aligned with DSH gateway heartbeats).
- * Idle intermediaries see protocol traffic without Face RPC frames; a socket
- * that misses consecutive Pongs is terminated.
+ * Face mux/host WebSocket Ping cadence (DSH gateway-style control frames).
+ * Idle intermediaries see traffic without Face RPC; consecutive missed Pongs
+ * terminate the peer so half-open sockets do not retain fan-out.
  */
 import WebSocket, { type WebSocketServer } from "ws";
 
 /** Default interval between Ping control frames (ms). */
 export const FACE_WS_HEARTBEAT_INTERVAL_MS = 2_000;
 
-/** Missed Ping answers before the Host terminates the peer. */
-const MAX_MISSED_HEARTBEATS = 2;
+/**
+ * Missed Ping answers before terminate. DSH gateway uses 2; Face mux shares
+ * the Host event loop with tool / projection work (no per-stream uplink byte
+ * window), so 5 ≈ 10s at the default interval avoids mid-turn false kills.
+ */
+export const FACE_WS_HEARTBEAT_MAX_MISSED = 5;
 
 export interface WsHeartbeat {
   /** Arm Ping tracking for one accepted socket; starts the shared timer. */
@@ -37,9 +41,9 @@ export function startWsHeartbeat(
         for (const socket of wss.clients) {
           if (socket.readyState !== WebSocket.OPEN) continue;
           const missed = missedHeartbeats.get(socket) ?? 0;
-          if (missed >= MAX_MISSED_HEARTBEATS) {
+          if (missed >= FACE_WS_HEARTBEAT_MAX_MISSED) {
             setImmediate(() => {
-              if ((missedHeartbeats.get(socket) ?? 0) >= MAX_MISSED_HEARTBEATS) {
+              if ((missedHeartbeats.get(socket) ?? 0) >= FACE_WS_HEARTBEAT_MAX_MISSED) {
                 socket.terminate();
               }
             });

@@ -171,6 +171,7 @@ export {
 } from "./attach-http.js";
 export {
   FACE_WS_HEARTBEAT_INTERVAL_MS,
+  FACE_WS_HEARTBEAT_MAX_MISSED,
   startWsHeartbeat,
   type WsHeartbeat,
 } from "./ws-heartbeat.js";

@@ -1,8 +1,8 @@
-# Status（能力矩阵）
+﻿# Status（能力矩阵）
 
 > **读者**：全员（对外说话以本页为准）
 
-三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.4.11**（`0.4.x` 补丁线，接管 `@latest`；上一补丁 **v0.4.10**；上一正式线 **v0.3.11**；上一轮预览末号 **v0.2.7**；旧正式文稿 **v0.1.31**）。**本页主路径表当前均为能跑**；扩展能力节另列已补 / 暂缓（标 **未做** 不得当作已支持）。
+三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.4.12**（`0.4.x` 补丁线，接管 `@latest`；上一补丁 **v0.4.11**；上一正式线 **v0.3.11**；上一轮预览末号 **v0.2.7**；旧正式文稿 **v0.1.31**）。**本页主路径表当前均为能跑**；扩展能力节另列已补 / 暂缓（标 **未做** 不得当作已支持）。
 
 XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在会话、工具管道、子代理与壳交互上的长处；落点以本仓契约与代码为准。
 
@@ -156,7 +156,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 
 | 层级 | 能做什么 | 前置 |
 | --- | --- | --- |
-| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.4.11** 当前 `@latest`（上一补丁 **v0.4.10**；上一正式线 **v0.3.11**；上一轮预览末号 **v0.2.7**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
+| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.4.12** 当前 `@latest`（上一补丁 **v0.4.11**；上一正式线 **v0.3.11**；上一轮预览末号 **v0.2.7**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
 | **B — 浏览器硬刷** | `pnpm test:web`（不进 `pnpm check`） | Chromium；完整 `apps/web/dist` |
 | **C — 上架** | npmjs + GitHub Release（`@xrkseek/harness-cli`） | `pnpm release`；见 [publishing.md](./publishing.md) |
 
@@ -180,7 +180,7 @@ core* / 能力叶 → kernel | protocol | compose
 
 > **Audience**: Everyone (this page is the public capability truth)
 
-Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.4.11** (`0.4.x` patch line, owning `@latest`; previous patch **v0.4.10**; previous formal line **v0.3.11**; previous preview line end **v0.2.7**; legacy formal notes **v0.1.31**). **Main-path rows on this page are Working today**; the extended-capabilities section lists filled / deferred items (**Not done** must not be treated as supported).
+Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.4.12** (`0.4.x` patch line, owning `@latest`; previous patch **v0.4.11**; previous formal line **v0.3.11**; previous preview line end **v0.2.7**; legacy formal notes **v0.1.31**). **Main-path rows on this page are Working today**; the extended-capabilities section lists filled / deferred items (**Not done** must not be treated as supported).
 
 XRK-Harness is an independently developed stack. It absorbs strengths from Codex and peer agent harnesses in session, tool pipeline, subagent, and shell UX; contracts and code in this repo are authoritative.
 
@@ -334,7 +334,7 @@ Gaps in **this repo's** underlying surface after review against local reference 
 
 | Level | What you can do | Prerequisites |
 | --- | --- | --- |
-| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.4.11** is the current `@latest` (previous patch **v0.4.10**; previous formal line **v0.3.11**; previous preview line end **v0.2.7**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
+| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.4.12** is the current `@latest` (previous patch **v0.4.11**; previous formal line **v0.3.11**; previous preview line end **v0.2.7**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
 | **B — Browser soak** | `pnpm test:web` (not part of `pnpm check`) | Chromium; full `apps/web/dist` |
 | **C — Publish** | npmjs + GitHub Release (`@xrkseek/harness-cli`) | `pnpm release`; see [publishing.md](./publishing.md) |
 

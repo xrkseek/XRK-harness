@@ -64,16 +64,18 @@ describe("Face WebSocket heartbeat", () => {
     client.close();
   });
 
-  it("requires two missed heartbeats before terminating an unresponsive socket", async () => {
+  it("requires five missed heartbeats before terminating an unresponsive socket", async () => {
     const { url, wss, heartbeat } = await listen(20);
     const client = new WebSocket(url, { autoPong: false });
     await once(client, "open");
     const serverSocket = [...wss.clients][0]!;
     serverSocket.removeAllListeners("pong");
     const terminated = vi.spyOn(serverSocket, "terminate");
-    await once(client, "ping");
-    await once(client, "ping");
+    for (let i = 0; i < 4; i += 1) {
+      await once(client, "ping");
+    }
     expect(terminated).not.toHaveBeenCalled();
+    await once(client, "ping");
     await vi.waitFor(() => {
       expect(terminated).toHaveBeenCalledOnce();
     });
@@ -94,8 +96,9 @@ describe("Face WebSocket heartbeat", () => {
     });
 
     try {
-      await once(client, "ping");
-      await once(client, "ping");
+      for (let i = 0; i < 5; i += 1) {
+        await once(client, "ping");
+      }
       await vi.waitFor(() => {
         expect(finalCheck).toBeDefined();
       });
