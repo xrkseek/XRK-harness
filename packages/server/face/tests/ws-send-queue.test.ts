@@ -62,4 +62,27 @@ describe("createWsSendQueue", () => {
       expect(socket.terminateCount).toBe(1);
     });
   });
+
+  it("terminates when pending frame count exceeds the budget", async () => {
+    const socket = new FakeSocket();
+    const queue = createWsSendQueue(socket, { maxPendingFrames: 2, maxPendingBytes: 1_000_000 });
+    queue.sendJson({ n: 1 });
+    queue.sendJson({ n: 2 });
+    expect(socket.terminateCount).toBe(0);
+    queue.sendJson({ n: 3 });
+    expect(socket.terminateCount).toBe(1);
+    expect(socket.readyState).not.toBe(socket.OPEN);
+  });
+
+  it("terminates when pending UTF-8 bytes exceed the budget", () => {
+    const socket = new FakeSocket();
+    const queue = createWsSendQueue(socket, {
+      maxPendingFrames: 100,
+      maxPendingBytes: 40,
+    });
+    queue.sendJson({ pad: "xxxxxxxxxxxxxxxxxxxx" });
+    expect(socket.terminateCount).toBe(0);
+    queue.sendJson({ pad: "yyyyyyyyyyyyyyyyyyyy" });
+    expect(socket.terminateCount).toBe(1);
+  });
 });

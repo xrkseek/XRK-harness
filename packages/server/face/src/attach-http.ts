@@ -32,7 +32,7 @@ import {
   FACE_WS_HEARTBEAT_INTERVAL_MS,
   startWsHeartbeat,
 } from "./ws-heartbeat.js";
-import { createFaceSocketSendQueue } from "./ws-send-queue.js";
+import { createWsSendQueue } from "./ws-send-queue.js";
 
 export interface AttachFaceOptions {
   readonly apiKey: string;
@@ -221,7 +221,7 @@ export function attachFaceUpgrades(
   server.on("upgrade", onUpgrade);
 
   muxWss.on("connection", (ws: WebSocket) => {
-    const queue = createFaceSocketSendQueue(ws);
+    const queue = createWsSendQueue(ws);
     for (const sessionId of runtime.store.list()) {
       queue.sendJson(
         serverRequestFrame(newRpcId(), {
@@ -230,18 +230,37 @@ export function attachFaceUpgrades(
           lastSeq: runtime.seq.last(sessionId),
         }),
       );
-      const pendingAdmits = listPendingAdmits(
-        readSessionEvents(runtime.store, sessionId),
-        sessionId,
-      );
-      if (pendingAdmits.length > 0) {
-        queue.sendJson(
-          serverRequestFrame(newRpcId(), {
-            type: "session/queue",
-            sessionId,
-            items: toQueueItems(pendingAdmits, runtime.admitRpcMap),
-          }),
+      // Cold sessions: do not hydrate full event logs on every mux reconnect
+      // (was an OOM path when store.list() is large). Face-memory pending
+      // approvals/questions/jobs still ship; queue + projection wait until
+      // the session is resident / opened.
+      const loaded = runtime.store.isLoaded?.(sessionId) ?? true;
+      if (loaded) {
+        const pendingAdmits = listPendingAdmits(
+          readSessionEvents(runtime.store, sessionId),
+          sessionId,
         );
+        if (pendingAdmits.length > 0) {
+          queue.sendJson(
+            serverRequestFrame(newRpcId(), {
+              type: "session/queue",
+              sessionId,
+              items: toQueueItems(pendingAdmits, runtime.admitRpcMap),
+            }),
+          );
+        }
+        const snap = runtime.projections.snapshot(sessionId);
+        for (const [key, value] of Object.entries(snap.values)) {
+          queue.sendJson(
+            serverRequestFrame(newRpcId(), {
+              type: "session/projection",
+              sessionId,
+              key,
+              value,
+              seq: snap.asOfSeq < 0 ? 0 : snap.asOfSeq,
+            }),
+          );
+        }
       }
       for (const item of runtime.approvals.listPending(sessionId)) {
         queue.sendJson(
@@ -263,18 +282,6 @@ export function attachFaceUpgrades(
           }),
         );
       }
-      const snap = runtime.projections.snapshot(sessionId);
-      for (const [key, value] of Object.entries(snap.values)) {
-        queue.sendJson(
-          serverRequestFrame(newRpcId(), {
-            type: "session/projection",
-            sessionId,
-            key,
-            value,
-            seq: snap.asOfSeq < 0 ? 0 : snap.asOfSeq,
-          }),
-        );
-      }
     }
     const off = runtime.bus.subscribeMux((rpcId, frame) => {
       queue.sendJson(serverRequestFrame(rpcId, frame));
@@ -283,7 +290,7 @@ export function attachFaceUpgrades(
   });
 
   hostWss.on("connection", (ws: WebSocket) => {
-    const queue = createFaceSocketSendQueue(ws);
+    const queue = createWsSendQueue(ws);
     const off = runtime.bus.subscribeHost((rpcId, frame) => {
       queue.sendJson(serverRequestFrame(rpcId, frame));
     });

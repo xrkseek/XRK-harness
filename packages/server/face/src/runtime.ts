@@ -356,6 +356,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       toolArgMaps.clear(sessionId);
       wireIds.clear(sessionId);
       inboxWire.clear(sessionId);
+      costMeterRoutes.delete(sessionId);
+      sessionAgentPresets.delete(sessionId);
+      sessionCwds.delete(sessionId);
+      sessionHasImage.delete(sessionId);
+      sessionImageScanned.delete(sessionId);
       void onResidentEvict.fn?.(sessionId);
     });
   }
