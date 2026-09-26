@@ -93,6 +93,7 @@ describe("subagent tools", () => {
     expect(tools.get("subagent")).toBeTruthy();
     expect(tools.get("list_agents")).toBeTruthy();
     expect(tools.get("send_message")).toBeTruthy();
+    expect(tools.get("team_graph")).toBeTruthy();
     expect(tools.get("followup_task")).toBeTruthy();
     expect(tools.get("wait_agent")).toBeTruthy();
     expect(tools.get("analytics")).toBeTruthy();
@@ -107,6 +108,24 @@ describe("subagent tools", () => {
     const listOut = await tools.get("list_agents")!.execute({});
     expect(listOut.content).toMatch(/quota depth/);
     expect(listOut.content).toContain(child);
+
+    const linked = await tools.get("team_graph")!.execute({
+      action: "link",
+      from: parent,
+      to: child,
+      label: "pair",
+    });
+    expect(linked.isError).not.toBe(true);
+    const viewed = await tools.get("team_graph")!.execute({ action: "view" });
+    expect(viewed.content).toMatch(/team graph/);
+    expect(viewed.content).toContain(child);
+    expect(viewed.content).toMatch(/d=1/);
+    const neighbors = await tools.get("team_graph")!.execute({
+      action: "neighbors",
+      node_id: parent,
+      kind: "peer",
+    });
+    expect(neighbors.content).toContain(child);
 
     const waitBad = await tools.get("wait_agent")!.execute({
       agent_id: "missing",

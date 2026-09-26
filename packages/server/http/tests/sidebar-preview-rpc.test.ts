@@ -262,4 +262,45 @@ describe("sidebar subagents.preview / plan.preview", () => {
       expect(body.ok).toBe(true);
     });
   });
+
+  it("forwards unlink and remove ops to the bridge", async () => {
+    const seen: unknown[] = [];
+    const bridge: SidebarFaceBridge = {
+      async openExternal() {
+        return { ok: true };
+      },
+      async agentTeamGraph(rootSessionId, action) {
+        expect(rootSessionId).toBe("root");
+        seen.push(action);
+        return { nodes: [], edges: [] };
+      },
+    };
+    await withHandler(bridge, async (base) => {
+      const unlink = await fetch(`${base}/sidebar/api/subagents.graph`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          rootSessionId: "root",
+          op: "unlink",
+          from: "a",
+          to: "b",
+        }),
+      });
+      expect(((await unlink.json()) as { ok: boolean }).ok).toBe(true);
+      const remove = await fetch(`${base}/sidebar/api/subagents.graph`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          rootSessionId: "root",
+          op: "remove",
+          nodeId: "watcher",
+        }),
+      });
+      expect(((await remove.json()) as { ok: boolean }).ok).toBe(true);
+    });
+    expect(seen).toEqual([
+      { op: "unlink", from: "a", to: "b" },
+      { op: "remove", nodeId: "watcher" },
+    ]);
+  });
 });

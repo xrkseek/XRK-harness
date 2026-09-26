@@ -7,13 +7,15 @@
  *   XRK_DESKTOP_PACKAGE=1 pnpm package:desktop [-- --dir]
  *
  * Default product entry remains `xrkh web` / CLI.
+ * Signing: copy apps/desktop/.env.windows.example → .env.windows (or .env.macos)
+ *           and fill XRK_DESKTOP_WINDOWS_* / XRK_DESKTOP_MACOS_*
  * Unsigned Windows: XRK_DESKTOP_UNSIGNED=1
- * Signing: XRK_DESKTOP_WINDOWS_* / XRK_DESKTOP_MACOS_*
- * Auto-update feed origin: XRK_DESKTOP_UPDATE_*_ORIGIN (app-update.yml; upload phase 2)
+ * Auto-update feed origin: XRK_DESKTOP_UPDATE_*_ORIGIN (app-update.yml)
+ * After produce: writes package-complete-*.json; upload via `pnpm upload:desktop`
  */
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -36,11 +38,12 @@ const { values, positionals } = parseArgs({
 
 if (values.help) {
   process.stdout.write(
-    "package-desktop: first-wave win-x64 | mac-arm64\n" +
+    "package-desktop: win-x64 | mac-arm64 | mac-x64\n" +
       "  --check                 validate pipeline (default)\n" +
       "  --dir                   electron-builder directory output\n" +
       "  XRK_DESKTOP_PACKAGE=1   run electron-builder\n" +
-      "  XRK_DESKTOP_UNSIGNED=1  unsigned Windows NSIS\n",
+      "  XRK_DESKTOP_UNSIGNED=1  unsigned Windows NSIS\n" +
+      "  signing env file:       apps/desktop/.env.windows | .env.macos\n",
   );
   process.exit(0);
 }
@@ -67,6 +70,7 @@ const requireFromDesktop = createRequire(path.join(APP_ROOT, "package.json"));
 const {
   assertDesktopPackageHostCompatible,
   desktopElectronBuilderArguments,
+  desktopElectronBuilderEnvironment,
   resolveDesktopPackageTarget,
 } = requireFromDesktop("./dist/package-targets.js");
 const buildPaths = requireFromDesktop("./dist/build-paths.js");
@@ -91,7 +95,7 @@ try {
         ),
       );
     } catch (hostError) {
-      // Linux CI / deferred hosts: --check still validates first-wave plan shape.
+      // Linux CI / deferred hosts: --check still validates release-plan shape.
       if (!checkOnly) throw hostError;
       target = resolveDesktopPackageTarget("win-x64");
     }
@@ -112,8 +116,60 @@ const paths = buildPaths.desktopTargetBuildPaths(target.name, APP_ROOT);
 mkdirSync(paths.artifacts, { recursive: true });
 mkdirSync(paths.unsignedArtifacts, { recursive: true });
 
+const packageEnvMod = requireFromDesktop(
+  "./dist/desktop-package-environment.js",
+);
+/** @type {NodeJS.ProcessEnv} */
+let packageEnvironment = { ...process.env };
+try {
+  const loaded = packageEnvMod.tryLoadDesktopPackageEnvironment(
+    target.platform === "darwin" ? "darwin" : "win32",
+    process.env,
+    APP_ROOT,
+  );
+  if (loaded !== undefined) {
+    packageEnvironment = loaded;
+    packageEnvMod.assertDesktopPackageSigningFiles(packageEnvironment);
+  }
+} catch (error) {
+  process.stderr.write(
+    `package-desktop: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  process.exit(2);
+}
+
+const signing = requireFromDesktop("./dist/desktop-signing-environment.js");
+let signingPlan;
+try {
+  signingPlan = signing.describeDesktopSigningPlan(
+    { ...packageEnvironment, XRK_DESKTOP_TARGET: target.name },
+    process.platform,
+  );
+} catch (error) {
+  process.stderr.write(
+    `package-desktop: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  process.exit(2);
+}
+
+// Produce requires an explicit signing posture (unsigned OR full token/identity).
+// mode=none would drop a release-named installer into artifacts/ without Authenticode.
+if (
+  produce &&
+  signingPlan.mode === "none" &&
+  (target.name.startsWith("win-") || target.name.startsWith("mac-"))
+) {
+  process.stderr.write(
+    `package-desktop: refusing to produce ${target.name} with signing mode=none\n` +
+      `  Windows: set XRK_DESKTOP_UNSIGNED=1, or fill CER_FILE + SIGNTOOL + TOKEN_PIN + KEY_CONTAINER\n` +
+      `  macOS: set XRK_DESKTOP_MACOS_IDENTITY (+ Apple-id trio for notarize)\n` +
+      `  env file: apps/desktop/.env.${target.platform === "darwin" ? "macos" : "windows"}\n`,
+  );
+  process.exit(2);
+}
+
 const builderConfig = createElectronBuilderConfig(
-  { ...process.env, XRK_DESKTOP_TARGET: target.name },
+  { ...packageEnvironment, XRK_DESKTOP_TARGET: target.name },
   process.platform,
   process.arch,
 );
@@ -131,7 +187,8 @@ writeFileSync(
       packagingPipelineReady: entry.packagingPipelineReady,
       installerShipped: entry.installerShipped,
       defaultEntry: entry.defaultEntry,
-      unsigned: process.env.XRK_DESKTOP_UNSIGNED === "1",
+      unsigned: packageEnvironment.XRK_DESKTOP_UNSIGNED === "1",
+      signing: signingPlan,
       directories: builderConfig.directories,
       publish: builderConfig.publish,
       builderArgs,
@@ -144,7 +201,7 @@ writeFileSync(
 
 if (checkOnly) {
   process.stdout.write(
-    `package-desktop: first-wave pipeline ready for ${target.name}\n` +
+    `package-desktop: packaging pipeline ready for ${target.name}\n` +
       `  phase=${entry.phase} packagingPipelineReady=${entry.packagingPipelineReady}\n` +
       `  defaultEntry=${entry.defaultEntry} (installer is not the day-1 entry)\n` +
       `  plan=${path.relative(ROOT, planPath)}\n` +
@@ -152,6 +209,23 @@ if (checkOnly) {
       (values.dir ? " -- --dir" : "") +
       `\n` +
       `  unsigned Windows: XRK_DESKTOP_UNSIGNED=1\n` +
+      `  Windows token sign: XRK_DESKTOP_WINDOWS_CER_FILE + SIGNTOOL + TOKEN_PIN + KEY_CONTAINER\n` +
+      `  macOS: XRK_DESKTOP_MACOS_IDENTITY (+ APPLE_ID / PASSWORD / TEAM_ID for notarize)\n` +
+      `  signing mode: ${signingPlan.mode}` +
+      (signingPlan.notarize ? " (notarize)" : "") +
+      `\n` +
+      `  env file: apps/desktop/.env.${target.platform === "darwin" ? "macos" : "windows"}` +
+      (existsSync(
+        path.join(
+          APP_ROOT,
+          target.platform === "darwin" ? ".env.macos" : ".env.windows",
+        ),
+      )
+        ? " (loaded)"
+        : " (missing — copy *.example)") +
+      `\n` +
+      `  installerShipped=${entry.installerShipped} (default entry remains ${entry.defaultEntry})\n` +
+      `  upload: pnpm upload:desktop -- --check ${target.name}\n` +
       `  optional deps: electron · electron-builder · electron-updater\n`,
   );
   process.exit(0);
@@ -185,13 +259,76 @@ for (const file of required) {
 process.stdout.write(
   `package-desktop: running pnpm ${builderArgs.join(" ")} (cwd=apps/desktop)\n`,
 );
+const unsigned = packageEnvironment.XRK_DESKTOP_UNSIGNED === "1";
 const result = spawnSync("pnpm", builderArgs, {
   cwd: APP_ROOT,
   stdio: "inherit",
   shell: true,
-  env: {
-    ...process.env,
-    XRK_DESKTOP_TARGET: target.name,
-  },
+  env: desktopElectronBuilderEnvironment(
+    {
+      ...packageEnvironment,
+      XRK_DESKTOP_TARGET: target.name,
+    },
+    unsigned,
+  ),
 });
-process.exit(result.status ?? 1);
+if ((result.status ?? 1) !== 0) {
+  process.exit(result.status ?? 1);
+}
+
+const autoUpdate = requireFromDesktop("./dist/desktop-auto-update-environment.js");
+const platform = target.name.startsWith("mac-") ? "darwin" : "win32";
+const arch = target.name.endsWith("arm64") ? "arm64" : "x64";
+let update;
+try {
+  // Unsigned builds never embed a feed; skip package-complete for release upload.
+  update = unsigned
+    ? undefined
+    : autoUpdate.resolveDesktopAutoUpdateConfig(
+        packageEnvironment,
+        platform,
+        arch,
+      );
+} catch {
+  update = undefined;
+}
+const desktopPkg = JSON.parse(
+  readFileSync(path.join(APP_ROOT, "package.json"), "utf8"),
+);
+const version =
+  typeof desktopPkg.version === "string" && desktopPkg.version.length > 0
+    ? desktopPkg.version
+    : "0.0.0";
+const artifactsDir = unsigned ? paths.unsignedArtifacts : paths.artifacts;
+if (update !== undefined) {
+  const completeName = autoUpdate.desktopPackageCompleteFilename(target.name);
+  writeFileSync(
+    path.join(artifactsDir, completeName),
+    JSON.stringify(
+      {
+        schemaVersion: 1,
+        target: target.name,
+        version,
+        environment: update.channel,
+        publicUrl: update.publicUrl,
+        signed: true,
+        completedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+  process.stdout.write(
+    `package-desktop: wrote ${path.relative(ROOT, path.join(artifactsDir, completeName))}\n` +
+      `  next: pnpm upload:desktop -- --check ${target.name}\n`,
+  );
+} else {
+  process.stdout.write(
+    unsigned
+      ? `package-desktop: unsigned build — no update feed / package-complete (dsh parity)\n`
+      : `package-desktop: no update origin configured; skip package-complete ` +
+          `(set XRK_DESKTOP_UPDATE_TEST_ORIGIN or XRK_DESKTOP_UPDATE_ORIGIN for upload)\n`,
+  );
+}
+process.exit(0);

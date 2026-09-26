@@ -95,6 +95,15 @@ export interface FaceHostPublicSettings {
     readonly channelId: string;
     readonly displayName?: string;
   }[];
+  /**
+   * Cordis WorkflowEngine Host default (Isolating + Face createAgent + tools.*).
+   * Full sandboxed Node PTC process confinement is not claimed.
+   */
+  readonly workflowEngine?: {
+    readonly provider: "isolating";
+    readonly createAgentBridged: true;
+    readonly toolsBridged: boolean;
+  };
 }
 
 export interface FaceCordisHostBridge {
@@ -293,9 +302,59 @@ export function listCredentialSlots(
       envVar: "XRK_IMAGE_GEN_OPENAI_KEY",
     },
     {
+      id: "image.fal",
+      label: "Image-gen FAL API key",
+      envVar: "XRK_IMAGE_GEN_FAL_KEY",
+    },
+    {
+      id: "image.xai",
+      label: "Image-gen xAI API key",
+      envVar: "XRK_IMAGE_GEN_XAI_KEY",
+    },
+    {
+      id: "image.openrouter",
+      label: "Image-gen OpenRouter API key",
+      envVar: "XRK_IMAGE_GEN_OPENROUTER_KEY",
+    },
+    {
+      id: "image.deepinfra",
+      label: "Image-gen DeepInfra API key",
+      envVar: "XRK_IMAGE_GEN_DEEPINFRA_KEY",
+    },
+    {
+      id: "image.krea",
+      label: "Image-gen Krea API key",
+      envVar: "XRK_IMAGE_GEN_KREA_KEY",
+    },
+    {
+      id: "image.meta-ai",
+      label: "Image-gen Meta Model API key",
+      envVar: "XRK_IMAGE_GEN_META_KEY",
+    },
+    {
       id: "video.openai",
       label: "Video-gen OpenAI API key",
       envVar: "XRK_VIDEO_GEN_OPENAI_KEY",
+    },
+    {
+      id: "video.fal",
+      label: "Video-gen FAL API key",
+      envVar: "XRK_VIDEO_GEN_FAL_KEY",
+    },
+    {
+      id: "video.xai",
+      label: "Video-gen xAI API key",
+      envVar: "XRK_VIDEO_GEN_XAI_KEY",
+    },
+    {
+      id: "video.openrouter",
+      label: "Video-gen OpenRouter API key",
+      envVar: "XRK_VIDEO_GEN_OPENROUTER_KEY",
+    },
+    {
+      id: "video.deepinfra",
+      label: "Video-gen DeepInfra API key",
+      envVar: "XRK_VIDEO_GEN_DEEPINFRA_KEY",
     },
     {
       id: "video-analyze.openai",

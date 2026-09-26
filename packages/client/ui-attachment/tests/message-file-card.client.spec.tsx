@@ -52,4 +52,12 @@ describe('MessageFileGallery', () => {
     expect(view.getByText('notes.pdf')).toBeTruthy()
     expect(view.getByText('readme')).toBeTruthy()
   })
+
+  it('skips the gallery wrapper for a single file (inline attachment-row tile)', () => {
+    const view = render(
+      <MessageFileGallery files={[{ attachment: pdf }]} align="end" />,
+    )
+    expect(view.container.querySelector('[data-align="end"]')).toBeNull()
+    expect(view.getByText('notes.pdf')).toBeTruthy()
+  })
 })

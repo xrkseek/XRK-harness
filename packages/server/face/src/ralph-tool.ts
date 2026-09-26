@@ -23,6 +23,8 @@ const POLL_MS = 50;
 export const RALPH_DEFAULT_MAX_ROUNDS = 8;
 export const RALPH_HARD_MAX_ROUNDS = 32;
 export const RALPH_MAX_HANDOFF_CHARS = 16_384;
+/** Parent-facing terminal text ceiling (DSH tool-ralph default). */
+export const RALPH_MAX_RESULT_CHARS = 16_384;
 
 function subagentDepth(runtime: FaceRuntime, sessionId: string): number {
   let depth = 0;
@@ -204,11 +206,17 @@ function formatTerminal(input: {
   readonly roundsStarted: number;
   readonly report?: RalphRoundReport;
   readonly error?: string;
+  readonly maxResultChars?: number;
 }): string {
   const head = `ralph: ${input.status} after ${input.roundsStarted} round(s)`;
-  if (input.error) return `${head}\n${input.error}`;
-  if (!input.report) return head;
-  return `${head}\n${JSON.stringify(input.report, null, 2)}`;
+  const body = input.error
+    ? `${head}\n${input.error}`
+    : input.report
+      ? `${head}\n${JSON.stringify(input.report, null, 2)}`
+      : head;
+  const max = input.maxResultChars ?? RALPH_MAX_RESULT_CHARS;
+  if (body.length <= max) return body;
+  return `${body.slice(0, max)}\n… [truncated: ${body.length - max} more characters]`;
 }
 
 export interface BindRalphToolOptions {

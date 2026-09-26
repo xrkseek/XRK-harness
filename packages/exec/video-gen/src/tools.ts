@@ -28,23 +28,51 @@ export function videoGenUnavailableMessage(
   product?: { readonly mode?: string },
 ): string {
   const envRaw = String(env.XRK_VIDEO_GEN ?? "").trim();
+  const productMode = String(product?.mode ?? "").trim().toLowerCase();
+  const known = new Set(["openai", "fal", "xai", "openrouter", "deepinfra"]);
   const flag =
     envRaw !== ""
       ? envRaw.toLowerCase()
-      : product?.mode === "openai"
-        ? "1"
+      : known.has(productMode)
+        ? productMode === "openai"
+          ? "1"
+          : productMode
         : "";
   if (!flag) {
     return (
-      "Error: video generation is not enabled. Use Settings → Plugins → Video gen, or set " +
-      "XRK_VIDEO_GEN=memory (CI/demo) / XRK_VIDEO_GEN=1 with OPENAI_API_KEY / XRK_VIDEO_GEN_OPENAI_KEY. " +
-      "See docs/video-gen.md."
+      "Error: video generation is not enabled. Use Settings → Plugins → Video gen " +
+      "(openai / fal / xai / openrouter / deepinfra), or set XRK_VIDEO_GEN=memory (CI/demo) " +
+      "/=1|openai|fal|xai|openrouter|deepinfra with the matching key. See docs/video-gen.md."
     );
   }
   if (flag === "1" || flag === "openai") {
     return (
-      "Error: video gen is enabled but no API key. Set Credentials XRK_VIDEO_GEN_OPENAI_KEY " +
+      "Error: video gen (openai) is enabled but no API key. Set Credentials XRK_VIDEO_GEN_OPENAI_KEY " +
       "(or OPENAI_API_KEY); optional base URL / model via Settings or env."
+    );
+  }
+  if (flag === "fal") {
+    return (
+      "Error: video gen (fal) is enabled but no API key. Set Credentials XRK_VIDEO_GEN_FAL_KEY " +
+      "(or FAL_KEY); optional family / model via Settings or env."
+    );
+  }
+  if (flag === "xai") {
+    return (
+      "Error: video gen (xai) is enabled but no API key. Set Credentials XRK_VIDEO_GEN_XAI_KEY " +
+      "(or XAI_API_KEY); optional base URL / model via Settings or env."
+    );
+  }
+  if (flag === "openrouter") {
+    return (
+      "Error: video gen (openrouter) is enabled but no API key. Set Credentials XRK_VIDEO_GEN_OPENROUTER_KEY " +
+      "(or OPENROUTER_API_KEY)."
+    );
+  }
+  if (flag === "deepinfra") {
+    return (
+      "Error: video gen (deepinfra) is enabled but no API key. Set Credentials XRK_VIDEO_GEN_DEEPINFRA_KEY " +
+      "(or DEEPINFRA_API_KEY)."
     );
   }
   return "Error: no VideoGenService Provider is configured. Inject a service or set XRK_VIDEO_GEN.";

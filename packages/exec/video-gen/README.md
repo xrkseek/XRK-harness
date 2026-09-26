@@ -2,7 +2,7 @@
 
 Text-to-video / image-to-video Provider seam for the model tool surface.
 
-**Product path**: Settings → Plugins → Video generation (Face ns `video-gen`). Credentials hold `XRK_VIDEO_GEN_OPENAI_KEY`. Env (`XRK_VIDEO_GEN=memory` / `=1`) is CI / headless bypass only — see [docs/video-gen.md](../../../docs/video-gen.md).
+**Product path**: Settings → Plugins → Video generation (Face ns `video-gen`). Modes: `off` · `openai` · `fal` · `xai`. Credentials hold `XRK_VIDEO_GEN_OPENAI_KEY` / `XRK_VIDEO_GEN_FAL_KEY` / `XRK_VIDEO_GEN_XAI_KEY` (runtime also accepts `OPENAI_API_KEY` · `FAL_KEY` · `XAI_API_KEY`). Env (`XRK_VIDEO_GEN=memory` / `=1` / `fal` / `xai`) is CI / headless bypass only — see [docs/video-gen.md](../../../docs/video-gen.md).
 
 - **Definition**: `VideoGenService` — `create` · `get` · `content` (+ optional `capabilities`)
 - **Provider**: `createMemoryVideoGenProvider` · `createOpenAiVideoGenProvider` · Host-injected

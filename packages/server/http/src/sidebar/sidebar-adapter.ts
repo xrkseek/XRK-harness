@@ -525,6 +525,17 @@ async function dispatchMethod(
           }),
         );
       }
+      if (payload.op === "unlink") {
+        const from = typeof payload.from === "string" ? payload.from : "";
+        const to = typeof payload.to === "string" ? payload.to : "";
+        return ok(
+          await bridge.agentTeamGraph(rootSessionId, {
+            op: "unlink",
+            from,
+            to,
+          }),
+        );
+      }
       if (payload.op === "role") {
         const nodeId =
           typeof payload.nodeId === "string"
@@ -538,6 +549,20 @@ async function dispatchMethod(
             op: "role",
             nodeId,
             ...(role !== undefined ? { role } : {}),
+          }),
+        );
+      }
+      if (payload.op === "remove") {
+        const nodeId =
+          typeof payload.nodeId === "string"
+            ? payload.nodeId
+            : typeof payload.sessionId === "string"
+              ? payload.sessionId
+              : "";
+        return ok(
+          await bridge.agentTeamGraph(rootSessionId, {
+            op: "remove",
+            nodeId,
           }),
         );
       }

@@ -23,6 +23,7 @@ declare module "electron" {
   export class BrowserWindow {
     constructor(options?: BrowserWindowConstructorOptions);
     static getAllWindows(): BrowserWindow[];
+    static getFocusedWindow(): BrowserWindow | null;
     isDestroyed(): boolean;
     isMinimized(): boolean;
     restore(): void;
@@ -47,6 +48,8 @@ declare module "electron" {
     exit(code?: number): void;
     whenReady(): Promise<void>;
     getLocale(): string;
+    getVersion(): string;
+    readonly isPackaged: boolean;
     on(event: "second-instance", listener: () => void): this;
     on(event: "activate", listener: () => void): this;
     on(event: "window-all-closed", listener: () => void): this;
@@ -100,5 +103,31 @@ declare module "electron" {
     ): void;
   };
 
+  export const dialog: {
+    showMessageBox(
+      window: unknown | undefined,
+      options: {
+        type?: string;
+        title?: string;
+        message: string;
+        detail?: string;
+        buttons: string[];
+        defaultId?: number;
+        cancelId?: number;
+      },
+    ): Promise<{ response: number }>;
+  };
+
+  export const Menu: {
+    setApplicationMenu(menu: unknown): void;
+    buildFromTemplate(template: unknown[]): unknown;
+  };
+
   export const app: App;
+}
+
+declare namespace NodeJS {
+  interface Process {
+    readonly resourcesPath: string;
+  }
 }

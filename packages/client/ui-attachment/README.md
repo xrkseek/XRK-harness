@@ -14,7 +14,7 @@ Dynamic attachment presentation plugin for the conversation UI. It waits for the
 
 ## Message file cards
 
-`MessageFileCard` / user-bubble file chrome follow DeepSeek Chat: `FileTypeIcon` glyph, basename, and `EXT size` meta on a 240px card. User bubbles keep **block order** in one `attachmentRow` (images + files interleaved); multi-attachment images render as compact tiles. Composer `FileCard` uses the same glyph + spinner while encoding.
+`MessageFileCard` / user-bubble file chrome follow DeepSeek Chat: `FileTypeIcon` glyph, basename, and `EXT size` meta on a 240px card. Chat history renders through the `conversation.message.files` slot (`MessageFiles` → `MessageFileGallery`); a single file skips the gallery wrapper so `MessageItem` can interleave image+file tiles in one `attachmentRow`. When the slot is empty the bubble keeps an inline twin card. Multi-attachment images still render as compact tiles. Composer `FileCard` uses the same glyph + spinner while encoding.
 
 ## Drop overlay
 

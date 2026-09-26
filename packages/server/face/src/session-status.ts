@@ -71,6 +71,10 @@ export interface SessionStatusGraph {
     readonly id: string;
     readonly label: string;
     readonly role?: string;
+    /** Delegation depth from the status session root (0 = root). */
+    readonly depth?: number;
+    /** Joined from `subagents.live` when the node is a registered child. */
+    readonly activity?: "running" | "inactive";
   }[];
   readonly edges: readonly {
     readonly from: string;
@@ -322,6 +326,19 @@ export interface SessionStatusSnapshot {
   /** Queue / steer / turn latch mutual exclusion. */
   readonly delivery: SessionStatusDelivery;
   readonly channels: SessionStatusChannels;
+  /** Last curated-memory consolidate (Host pipeline; optional). */
+  readonly curatedMemory?: SessionStatusCuratedMemory;
+}
+
+/** Host curated-memory consolidate glance (Hermes memory_status-style). */
+export interface SessionStatusCuratedMemory {
+  readonly sessionId: string;
+  readonly at: number;
+  readonly phase1Written: number;
+  readonly phase2: string;
+  readonly phase2Written: number;
+  readonly skipped?: string;
+  readonly providerKind?: string;
 }
 
 function jobRow(view: JobView): SessionStatusJobRow {
@@ -838,12 +855,18 @@ export function buildSessionStatusSnapshot(
   const quota = resolveSubagentQuota(runtime, sessionId);
 
   const team = runtime.agentTeams.view(sessionId);
+  const liveById = new Map(live.map((row) => [row.id, row]));
   const graph: SessionStatusGraph = {
-    nodes: team.nodes.map((n) => ({
-      id: n.id,
-      label: n.label,
-      ...(n.role ? { role: n.role } : {}),
-    })),
+    nodes: team.nodes.map((n) => {
+      const liveRow = liveById.get(n.id);
+      return {
+        id: n.id,
+        label: n.label,
+        ...(n.role ? { role: n.role } : {}),
+        ...(n.depth !== undefined ? { depth: n.depth } : {}),
+        ...(liveRow ? { activity: liveRow.activity } : {}),
+      };
+    }),
     edges: team.edges.map((e) => ({
       from: e.from,
       to: e.to,
@@ -972,6 +995,19 @@ export function buildSessionStatusSnapshot(
     channelAlerts: channelAlertRows,
   });
 
+  const mem = runtime.curatedMemoryConsolidate;
+  const curatedMemory: SessionStatusCuratedMemory | undefined = mem
+    ? {
+        sessionId: mem.sessionId,
+        at: mem.at,
+        phase1Written: mem.phase1Written,
+        phase2: mem.phase2,
+        phase2Written: mem.phase2Written,
+        ...(mem.skipped ? { skipped: mem.skipped } : {}),
+        ...(mem.providerKind ? { providerKind: mem.providerKind } : {}),
+      }
+    : undefined;
+
   return {
     sessionId,
     badge,
@@ -991,6 +1027,7 @@ export function buildSessionStatusSnapshot(
     compaction,
     delivery,
     channels,
+    ...(curatedMemory ? { curatedMemory } : {}),
   };
 }
 
@@ -1033,6 +1070,17 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
       (queuedSubs > 0 ? ` · child_inbox ${queuedSubs}` : "") +
       `; graph ${snap.subagents.graph.nodes.length} nodes / ${snap.subagents.graph.edges.length} edges`,
   );
+  for (const node of snap.subagents.graph.nodes.slice(0, 12)) {
+    if (node.id === snap.sessionId && snap.subagents.graph.nodes.length > 1) {
+      continue;
+    }
+    const bits = [
+      node.role ?? "node",
+      node.depth !== undefined ? `d=${node.depth}` : undefined,
+      node.activity,
+    ].filter(Boolean);
+    lines.push(`  · ${node.label}${bits.length ? ` [${bits.join(" · ")}]` : ""}`);
+  }
   for (const sub of runningSubs.slice(0, 8)) {
     const tip = sub.liveTool
       ? `tool:${sub.liveTool}`
@@ -1232,6 +1280,18 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
       ` · steering ${snap.delivery.steering}` +
       (snap.delivery.compactBlockedByTurn ? " · compact↔turn exclusive" : ""),
   );
+
+  if (snap.curatedMemory) {
+    const m = snap.curatedMemory;
+    lines.push(
+      `curated-memory: phase1 +${m.phase1Written}` +
+        ` · phase2 ${m.phase2}` +
+        (m.phase2Written > 0 ? ` +${m.phase2Written}` : "") +
+        (m.skipped ? ` · skipped ${m.skipped}` : "") +
+        (m.providerKind ? ` · provider ${m.providerKind}` : "") +
+        ` · at ${new Date(m.at).toISOString()}`,
+    );
+  }
 
   const wiredIm = snap.channels.im.filter((c) => c.wired !== "bridge" && c.wired !== "discover");
   lines.push(

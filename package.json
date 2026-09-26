@@ -29,6 +29,8 @@
     "dev:desktop": "node ./scripts/dev-desktop.mjs",
     "start:desktop": "node ./scripts/dev-desktop.mjs --skip-build",
     "package:desktop": "node ./scripts/package-desktop.mjs",
+    "upload:desktop": "node ./scripts/upload-desktop.mjs",
+    "clean:desktop": "node ./scripts/clean-desktop-build.mjs",
     "xrk": "node ./apps/cli/dist/bin.js",
     "serve": "node ./apps/cli/dist/bin.js serve",
     "release:stage": "node ./scripts/stage-cli-release.mjs",

@@ -41,4 +41,30 @@ describe('WorkbenchController', () => {
     expect(face.open).toBe(true)
     expect(face.focusPath).toBe('/a.ts')
   })
+
+  it('show is a no-op when yielded; hide/show drive the bound panel otherwise', () => {
+    const yielded = new WorkbenchController(() => true)
+    const show = vi.fn()
+    const hide = vi.fn()
+    yielded.bindPanel({
+      show, hide, isOpen: () => false, focusPath: () => null,
+    })
+    yielded.show('/x')
+    expect(show).not.toHaveBeenCalled()
+
+    const face = new WorkbenchController(() => false)
+    let open = false
+    face.bindPanel({
+      show: (path) => { open = true; show(path) },
+      hide: () => { open = false; hide() },
+      isOpen: () => open,
+      focusPath: () => null,
+    })
+    face.show()
+    expect(show).toHaveBeenCalledWith(undefined)
+    expect(face.open).toBe(true)
+    face.hide()
+    expect(hide).toHaveBeenCalled()
+    expect(face.open).toBe(false)
+  })
 })

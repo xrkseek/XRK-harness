@@ -31,6 +31,7 @@
       "inject": [
         "@xrkseek/client-locale",
         "@xrkseek/client-ui-layout",
+        "@xrkseek/client-ui-conversation",
         "@xrkseek/client-runtime",
         "@xrkseek/client-connection"
       ],
@@ -47,6 +48,7 @@
     "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-ui-conversation": "workspace:^",
     "@xrkseek/client-ui-layout": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
@@ -58,6 +60,7 @@
     "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-ui-conversation": "workspace:^",
     "@xrkseek/client-ui-layout": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",

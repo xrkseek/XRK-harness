@@ -18,7 +18,7 @@ export function resolveDesktopAppRoot(
   return path.resolve(path.dirname(fileURLToPath(fromUrl)), "..");
 }
 
-/** Mutable prep dirs for one first-wave target + shared download cache. */
+/** Mutable prep dirs for one supported target + shared download cache. */
 export interface DesktopTargetBuildPaths {
   readonly target: DesktopPackageTargetName;
   readonly root: string;
@@ -34,8 +34,8 @@ export interface DesktopTargetBuildPaths {
 }
 
 /**
- * Map host / env to a first-wave target id.
- * Prefers `XRK_DESKTOP_TARGET=win-x64|mac-arm64`; else platform+arch.
+ * Map host / env to a supported target id.
+ * Prefers `XRK_DESKTOP_TARGET=win-x64|mac-arm64|mac-x64`; else platform+arch.
  */
 export function resolveDesktopBuildTarget(
   env: NodeJS.ProcessEnv = process.env,
@@ -84,7 +84,7 @@ export function desktopTargetBuildPaths(
   };
 }
 
-/** Resolve paths for the env-selected first-wave target. */
+/** Resolve paths for the env-selected supported target. */
 export function resolveDesktopTargetBuildPaths(
   env: NodeJS.ProcessEnv = process.env,
   appRoot: string = resolveDesktopAppRoot(),

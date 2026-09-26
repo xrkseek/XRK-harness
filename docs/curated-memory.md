@@ -37,12 +37,12 @@
 | 字段 | 含义 |
 |------|------|
 | `target` | `memory` 或 `user` |
-| `action` | `add` · `replace` · `remove` |
+| `action` | `add` · `replace` · `remove` · `list` |
 | `content` | `add` / `replace` 的正文（`new_text` 同义） |
 | `old_text` | `replace` / `remove` 用来定位的唯一子串 |
-| `operations` | 上述动作的原子列表 |
+| `operations` | 上述写动作的原子列表（不含 `list`） |
 
-没有搜索、列表或读文件动作。磁盘上无法按 `§` 往返的内容会被拒绝写入，并留下 `.bak` 副本。
+`list` 返回目标文件当前磁盘条目（便于 replace/remove 前对齐原文）。没有搜索；磁盘上无法按 `§` 往返的内容会被拒绝写入，并留下 `.bak` 副本。
 
 关闭：**产品路径** Settings → Plugins → **策展记忆**（Face ns `curated-memory`：`enabled` · `phase2Llm`）。保存后下次 agent 重建卸下 `memory` 工具与系统提示冻结段。`phase2Llm` 开时会话结束在 Phase1 后再用当前会话模型做 Phase2 巩固（亦可用 `XRK_CURATED_MEMORY_PHASE2=1`）。非空 `XRK_CURATED_MEMORY` 为 CI 旁路（`0` 强制关，其它强制开）。组合选项 `curatedMemory: false` 仍可用。Host / harness 默认经 `resolveMemoryProvider`（`XRK_MEMORY_PROVIDER=file|http|sqlite`）选后端，工具与 Phase1/2 共用同一 store。
 
@@ -52,7 +52,7 @@
 
 ## 会话结束 Phase1 / Phase2 巩固
 
-会话离开活跃集时（组合 `dispose`、工作区 `workspace.archiveSession`、Host `stop`）再扫一遍该会话的人类用户原话：已在磁盘上覆盖的跳过，漏掉的追加进 `MEMORY.md`。字数顶满时会先软删最旧条目（最多三次）再试写入（不刷新本会话冻结快照）。
+会话离开活跃集时（组合 `dispose`、工作区 `workspace.archiveSession`、Host `stop`）走 **leased 流水线**（`runCuratedMemoryConsolidate`）：同会话 archive/stop/dispose **单飞**，避免 Phase1 双写。已在磁盘上覆盖的跳过，漏掉的追加进 `MEMORY.md`。字数顶满时会先软删最旧条目（最多三次）再试写入（不刷新本会话冻结快照）。结果写旁路 `.last-consolidate.json`，并进 Status / `/status` 的 `curatedMemory`（phase1Written · phase2 · provider）。
 
 | 阶段 | 行为 |
 |------|------|
@@ -112,12 +112,12 @@ Entries are separated by `§` with a newline on each side. `MEMORY.md` is capped
 | Field | Meaning |
 |------|---------|
 | `target` | `memory` or `user` |
-| `action` | `add` · `replace` · `remove` |
+| `action` | `add` · `replace` · `remove` · `list` |
 | `content` | Body for `add` / `replace` (`new_text` is an alias) |
 | `old_text` | Unique substring locating the entry for `replace` / `remove` |
-| `operations` | Atomic list of those actions |
+| `operations` | Atomic list of write actions (no `list`) |
 
-There is no search, list, or read action. Content on disk that would not round-trip through the `§` delimiter is refused, and a `.bak` copy is kept.
+`list` returns live on-disk entries for the target (use before replace/remove). There is no search. Content on disk that would not round-trip through the `§` delimiter is refused, and a `.bak` copy is kept.
 
 Disable via **product path** Settings → Plugins → **Curated memory** (Face ns `curated-memory`: `enabled` · `phase2Llm`). After save, the next agent rebuild drops the `memory` tool and frozen system-prompt block. When `phase2Llm` is on, session end runs Phase2 consolidation after Phase1 with the current session model (also `XRK_CURATED_MEMORY_PHASE2=1`). Non-empty `XRK_CURATED_MEMORY` is the CI bypass (`0` force off, any other force on). Composition option `curatedMemory: false` still works. Host / harness default through `resolveMemoryProvider` (`XRK_MEMORY_PROVIDER=file|http|sqlite`); tools and Phase1/2 share that store.
 
@@ -139,7 +139,7 @@ After a successful turn, reusable notes in the user's own words (`remember:` / `
 
 ## Session-end Phase1 / Phase2 consolidate
 
-When a session leaves the live set (composition `dispose`, `workspace.archiveSession`, Host `stop`), human user turns are scanned again: notes already covered on disk are skipped; leftovers are appended to `MEMORY.md`. If the character cap blocks a new note, the oldest entries are soft-removed (up to three times) and the add is retried (the frozen session prompt is still unchanged).
+When a session leaves the live set (composition `dispose`, `workspace.archiveSession`, Host `stop`), a **leased pipeline** (`runCuratedMemoryConsolidate`) runs: archive/stop/dispose for the same session are **single-flight** so Phase1 cannot double-write. Notes already covered on disk are skipped; leftovers are appended to `MEMORY.md`. If the character cap blocks a new note, the oldest entries are soft-removed (up to three times) and the add is retried (the frozen session prompt is still unchanged). The result is written to `.last-consolidate.json` and surfaces on Status / `/status` as `curatedMemory` (phase1Written · phase2 · provider).
 
 | Stage | Behavior |
 |-------|----------|

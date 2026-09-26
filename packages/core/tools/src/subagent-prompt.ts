@@ -6,7 +6,8 @@
 export const SUBAGENT_ROUTING_PROMPT_TEXT = [
   "Subagents:",
   "- Use `subagent` for a self-contained task that should not consume this conversation's context. The child cannot see this transcript — put paths, goals, and constraints in `prompt`.",
-  "- Default waits for the result. `run_in_background: true` returns a durable child id; continue with `followup_task` (wake a turn) / `send_message` (queue without forcing a turn) / `wait_agent` / `interrupt_agent` / `list_agents` / `analytics` (do not busy-poll).",
+  "- Default waits for the result. `run_in_background: true` returns a durable child id; continue with `followup_task` (wake a turn) / `send_message` (queue without forcing a turn) / `wait_agent` / `interrupt_agent` / `list_agents` / `analytics` / `team_graph` (do not busy-poll).",
+  "- `team_graph` reads/edits the collaboration graph (delegates + peer): view · neighbors · link/unlink · role · announce to peers.",
   "- `followup_task` = new task + trigger turn (Codex TriggerTurn). `send_message` defaults to queue; set delivery=steer only when you need a mid-turn nudge.",
   "- `wait_agent` blocks until listed children are idle (or timeout) and returns their last answer — prefer longer timeouts over tight loops.",
   "- `analytics` shows depth/active quota and per-child queue/steer backlog before spawning more work.",

@@ -8,10 +8,12 @@
 {@link InProcessWorkflowEngine}（AsyncFunction Provider）与
 {@link IsolatingWorkflowEngine}（worker_threads 脚本体隔离；可选
 `createAgent` 经 parentPort RPC 回桥，返回值须可 structuredClone；无桥时
-`agent()` 仍为 null）。完整 DSH PTC SDK（`tools.*` / 沙箱 Node）**未移植**。
-Cordis 组合挂载任一 Provider 后，`ctx.workflowEngine.start` 不再是抽象空洞。
-产品 Face boot 用 Face 原生 **`ralph`** 工具做新鲜子代理迭代，而不是这条 Cordis seam；
-未来进程/沙箱引擎仍可替换 Provider，而无需改 `tool-workflow`。
+`agent()` 仍为 null；可选 {@link WorkflowToolBridge} 提供
+`await tools.name(args)`，与 Code Mode 同形）。完整沙箱 Node PTC 进程隔离
+**未声称**。产品 Host 默认挂载 Isolating（`hostPublic.workflowEngine`，Face
+`session.create` / `prompt` / drain 作 createAgent 回桥，站立工具表作
+tools.*）。Cordis 组合另挂 `tool-workflow` 后，模型面 `workflow` 工具才可见。
+产品 Face boot 用 Face 原生 **`ralph`** 工具做新鲜子代理迭代。
 
 `@xrkseek/xrk-tool-workflow` 是面向模型的 Cordis 消费方。
 

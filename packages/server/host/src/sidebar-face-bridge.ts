@@ -170,9 +170,13 @@ export function createSidebarFaceBridgeFromFace(
         } else {
           face.agentTeams.linkPeers(action.from, action.to);
         }
+      } else if (action?.op === "unlink") {
+        face.agentTeams.unlinkPeers(action.from, action.to);
       } else if (action?.op === "role") {
         const role = isAgentTeamRole(action.role) ? action.role : undefined;
         face.agentTeams.setRole(action.nodeId, role);
+      } else if (action?.op === "remove") {
+        face.agentTeams.removeNode(action.nodeId);
       }
       return face.agentTeams.view(rootSessionId);
     },

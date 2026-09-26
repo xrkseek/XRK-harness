@@ -38,6 +38,7 @@ import { ConversationSession, ConversationSessionHeader } from './skeleton/Conve
 import { en, NS, zh, type ConversationKey } from './locales.ts'
 import { registerConversationNodes } from './conversation-nodes/register.ts'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
+import { routeChatOpenFile } from './open-file-route.ts'
 // Side-effect: merge Face `imageLimits` into SessionProjectionMap for InputBar.
 import './image-limits-projection.ts'
 import './file-limits-projection.ts'
@@ -428,8 +429,7 @@ export function apply(ctx: Context): void {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
           const resolved = resolveWorkspacePath(cwd, path)
           const workbench = ctx.get('workbench') as { openPath?(p: string): boolean } | undefined
-          if (workbench?.openPath?.(resolved) === true) return Promise.resolve()
-          return workspaces.openPath(resolved)
+          return routeChatOpenFile(resolved, workbench, (p) => workspaces.openPath(p))
         },
         loadOlder: () => { void scoped.loadOlder() },
         loadThrough: (seq) => scoped.loadThrough(seq),

@@ -1,7 +1,7 @@
 /**
- * Desktop update coordinator skeleton (ADR-0008).
+ * Desktop update coordinator (ADR-0008).
  * Wraps an electron-updater-shaped port; update unit = shell + runtime + seed (same release).
- * Does not vendor Cordis; full signing / channel publish stay deferred in status.
+ * Pattern from dsh: manual download/install, channel=nightly, no auto-download.
  */
 
 import type { DesktopUpdateState } from "./ipc.js";
@@ -37,6 +37,8 @@ export interface DesktopUpdateCoordinatorOptions {
    * (typically packaged + `app-update.yml` present).
    */
   readonly enabled?: () => boolean;
+  /** Installed application version (Electron `app.getVersion()`). */
+  readonly currentVersion?: () => string;
   /**
    * Optional gate: reject install unless shell/runtime/seed match one release.
    * Skeleton callers may omit until packaged resources exist.
@@ -44,31 +46,73 @@ export interface DesktopUpdateCoordinatorOptions {
   readonly resolveUpdateUnit?: (availableVersion: string) => DesktopRelease;
 }
 
+/** Compare dotted versions; true when candidate is strictly newer than current. */
+export function desktopVersionIsNewer(
+  candidate: string,
+  current: string,
+): boolean {
+  const parse = (value: string): number[] => {
+    const core = value.trim().replace(/^v/iu, "").split(/[-+]/u)[0] ?? "";
+    return core.split(".").map((part) => {
+      const n = Number(part);
+      return Number.isFinite(n) ? n : 0;
+    });
+  };
+  const left = parse(candidate);
+  const right = parse(current);
+  const length = Math.max(left.length, right.length);
+  for (let i = 0; i < length; i += 1) {
+    const a = left[i] ?? 0;
+    const b = right[i] ?? 0;
+    if (a > b) return true;
+    if (a < b) return false;
+  }
+  return false;
+}
+
 /** Checks, downloads, and installs one complete Desktop release. */
 export class DesktopUpdateCoordinator {
   private availableVersion: string | undefined;
+  private current: DesktopUpdateState = { phase: "idle" };
   private checkOperation: Promise<DesktopUpdateState> | undefined;
   private installOperation: Promise<DesktopUpdateState> | undefined;
-  private readonly publish: (state: DesktopUpdateState) => DesktopUpdateState;
+  private readonly publishState: (
+    state: DesktopUpdateState,
+  ) => DesktopUpdateState;
   private readonly beforeRestart: () => Promise<void>;
   private readonly updater: DesktopAppUpdater;
   private readonly enabled: () => boolean;
+  private readonly currentVersion: () => string;
   private readonly resolveUpdateUnit:
     | ((availableVersion: string) => DesktopRelease)
     | undefined;
 
   constructor(options: DesktopUpdateCoordinatorOptions) {
-    this.publish = options.publish;
+    this.publishState = options.publish;
     this.beforeRestart = options.beforeRestart ?? (async () => undefined);
     this.updater = options.updater;
     this.enabled = options.enabled ?? (() => false);
+    this.currentVersion = options.currentVersion ?? (() => "0.0.0");
     this.resolveUpdateUnit = options.resolveUpdateUnit;
     this.updater.autoDownload = false;
     this.updater.autoInstallOnAppQuit = false;
   }
 
-  /** Check the configured Desktop release stream and retain an available version. */
-  async check(): Promise<DesktopUpdateState> {
+  /** Latest observable state for schedule / UI. */
+  get state(): DesktopUpdateState {
+    return this.current;
+  }
+
+  private publish(state: DesktopUpdateState): DesktopUpdateState {
+    this.current = state;
+    return this.publishState(state);
+  }
+
+  /**
+   * Check the configured Desktop release stream and retain an available version.
+   * @param _manual - Reserved for UI visibility (dsh parity); check logic is identical.
+   */
+  async check(_manual = false): Promise<DesktopUpdateState> {
     if (this.installOperation !== undefined) return this.installOperation;
     if (this.checkOperation !== undefined) return this.checkOperation;
     this.checkOperation = this.doCheck().finally(() => {
@@ -97,12 +141,22 @@ export class DesktopUpdateCoordinator {
         return this.publish({ phase: "idle" });
       }
       const result = await this.updater.checkForUpdates();
-      const version =
-        result?.isUpdateAvailable === true
-          ? result.updateInfo?.version
-          : undefined;
-      this.availableVersion =
-        typeof version === "string" && version.length > 0 ? version : undefined;
+      if (result === null) {
+        this.availableVersion = undefined;
+        return this.publish({ phase: "idle" });
+      }
+      const version = result.updateInfo?.version?.trim();
+      if (version === undefined || version.length === 0) {
+        this.availableVersion = undefined;
+        return this.publish({ phase: "idle" });
+      }
+      const newer =
+        result.isUpdateAvailable === true
+          ? true
+          : result.isUpdateAvailable === false
+            ? false
+            : desktopVersionIsNewer(version, this.currentVersion());
+      this.availableVersion = newer ? version : undefined;
       return this.availableVersion === undefined
         ? this.publish({ phase: "idle" })
         : this.publish({ phase: "available", version: this.availableVersion });

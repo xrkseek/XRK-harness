@@ -236,11 +236,13 @@ function projectUserText(text: string, sessionLabels: readonly string[]): ReactN
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, renderMessageImages, actions, pending = false, echo = false, referenceLabels = [],
-  previewAttachments, t,
+  content, renderMessageImages, renderMessageFiles, actions, pending = false, echo = false,
+  referenceLabels = [], previewAttachments, t,
 }: {
   content: readonly unknown[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
+  /** Slot-backed file cards; falls back to an inline twin when the slot is empty. */
+  renderMessageFiles?: ChatNodeOwnerProps['renderMessageFiles']
   /** Optional IconActions (or similar) below the bubble; receives the joined text. */
   actions?: (text: string) => ReactNode
   /** Whether this is the Host-authoritative pre-admission steering projection. */
@@ -284,16 +286,23 @@ function UserStyleBubble({
                 </Fragment>
               )
               : (
-                <span key={`file:${index}`} className={css.fileCard} title={attachment.file.name}>
-                  <FileTypeIcon path={attachment.file.name} className={css.fileIcon} />
-                  <span className={css.fileContent}>
-                    <span className={css.fileName}>{attachment.file.name}</span>
-                    <span className={css.fileMeta}>
-                      {[fileExtension(attachment.file.name).toUpperCase().slice(0, 8), fileSizeText(attachment.file.bytes)]
-                        .filter(Boolean).join(' ')}
+                <Fragment key={`file:${index}`}>
+                  {renderMessageFiles?.({
+                    files: [{ attachment: attachment.file }],
+                    align: 'end',
+                  }) ?? (
+                    <span className={css.fileCard} title={attachment.file.name}>
+                      <FileTypeIcon path={attachment.file.name} className={css.fileIcon} />
+                      <span className={css.fileContent}>
+                        <span className={css.fileName}>{attachment.file.name}</span>
+                        <span className={css.fileMeta}>
+                          {[fileExtension(attachment.file.name).toUpperCase().slice(0, 8), fileSizeText(attachment.file.bytes)]
+                            .filter(Boolean).join(' ')}
+                        </span>
+                      </span>
                     </span>
-                  </span>
-                </span>
+                  )}
+                </Fragment>
               ))}
           </div>
         )}
@@ -318,15 +327,17 @@ function UserStyleBubble({
  * @param props - Pending message content and conversation translator.
  * @returns the pending steering bubble.
  */
-export function PendingSteeringBubble({ content, renderMessageImages, t }: {
+export function PendingSteeringBubble({ content, renderMessageImages, renderMessageFiles, t }: {
   content: readonly unknown[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
+  renderMessageFiles?: ChatNodeOwnerProps['renderMessageFiles']
   t: ChatViewSlotProps['t']
 }): ReactNode {
   return (
     <UserStyleBubble
       content={content}
       renderMessageImages={renderMessageImages}
+      {...(renderMessageFiles === undefined ? {} : { renderMessageFiles })}
       pending
       t={t}
       actions={text => (
@@ -349,9 +360,10 @@ export function PendingSteeringBubble({ content, renderMessageImages, t }: {
  * @param props - the session snapshot's pending submission and render seats.
  * @returns the echoed user bubble.
  */
-export function PendingSubmissionBubble({ submission, renderMessageImages, t }: {
+export function PendingSubmissionBubble({ submission, renderMessageImages, renderMessageFiles, t }: {
   submission: PendingSubmission
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
+  renderMessageFiles?: ChatNodeOwnerProps['renderMessageFiles']
   t: ChatViewSlotProps['t']
 }): ReactNode {
   const content = useMemo(
@@ -379,6 +391,7 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, t }: 
       content={content}
       previewAttachments={previewAttachments}
       renderMessageImages={renderMessageImages}
+      {...(renderMessageFiles === undefined ? {} : { renderMessageFiles })}
       pending={submission.placement === 'steering'}
       echo
       t={t}
@@ -397,13 +410,14 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, t }: 
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderMessageImages, t,
+  node, renderMessageImages, renderMessageFiles, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
   return (
     <UserStyleBubble
       content={data.content}
       renderMessageImages={renderMessageImages}
+      renderMessageFiles={renderMessageFiles}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
       t={t}
       actions={text => (

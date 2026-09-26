@@ -851,8 +851,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
 
     let req = await buildReq();
 
-    // Soft budget: count messages + tool schemas (tools alone can dwarf history).
-    // Strategy family (Face `compactionStrategy`): prune→summary by default;
+    // Soft budget + overflow share `compactionStrategy`: prune→summary by default;
     // prune-only / summary-only / off select which stages run before fail-closed.
     if (
       compaction?.auto !== false &&
@@ -946,7 +945,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       ...(req.tools.length ? { tools: req.tools } : {}),
     });
 
-    let response;
+    let response!: LlmChatResponse;
     const onChunk = (chunk: {
       kind: "text" | "reasoning" | "usage" | "tool-call";
       index: number;
@@ -1013,15 +1012,18 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         isContextOverflowError(err) &&
         !overflowRecovered
       ) {
+        // Same strategy family as soft-budget: prune / summary / both / off.
+        const strategy = resolveCompactionStrategy(compaction);
+        if (strategy === "off") {
+          throw err;
+        }
         overflowRecovered = true;
-        // Overflow: prune first, retry once; only summarize if still overflowing
-        // (DSH compaction-basic: model-free prune before head reduction).
-        const pruned = pruneOversizedToolResults(input.store, input.sessionId, {
-          now,
-          turnId,
-          stepId,
-        });
-        if (pruned.pruned > 0) {
+        const allowPrune =
+          strategy === "prune-summary" || strategy === "prune-only";
+        const allowSummary =
+          strategy === "prune-summary" || strategy === "summary-only";
+
+        const retryAfterWindowChange = async (): Promise<LlmChatResponse> => {
           req = await buildReq();
           assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
           maybeAppendRequestHeader({
@@ -1034,46 +1036,13 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
             ...(req.system?.trim() ? { system: req.system } : {}),
             ...(req.tools.length ? { tools: req.tools } : {}),
           });
-          try {
-            response = await invokeLlm(input, req, onChunk);
-          } catch (retryErr) {
-            if (!isContextOverflowError(retryErr)) throw retryErr;
-            // Still overflowing after durable prune → optional head summary.
-            // Summarizer failure must not mask the original overflow.
-            let did: Awaited<ReturnType<typeof runCompaction>>;
-            try {
-              did = await runCompaction({
-                store: input.store,
-                sessionId: input.sessionId,
-                llm: input.llm,
-                reason: "overflow",
-                keepTokens:
-                  compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
-                turnId,
-                ...(input.signal ? { signal: input.signal } : {}),
-                now,
-              });
-            } catch (compactErr) {
-              if (input.signal?.aborted) throw compactErr;
-              throw retryErr;
-            }
-            if (!did.compacted) throw retryErr;
-            seriesBaselineSystem = undefined;
-            req = await buildReq();
-            assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
-            maybeAppendRequestHeader({
-              store: input.store,
-              sessionId: input.sessionId,
-              turnId,
-              llm: input.llm,
-              now,
-              reason: "change",
-              ...(req.system?.trim() ? { system: req.system } : {}),
-              ...(req.tools.length ? { tools: req.tools } : {}),
-            });
-            response = await invokeLlm(input, req, onChunk);
-          }
-        } else {
+          return invokeLlm(input, req, onChunk);
+        };
+
+        const summarizeOverflow = async (
+          original: unknown,
+        ): Promise<LlmChatResponse> => {
+          // Summarizer failure must not mask the original overflow.
           let did: Awaited<ReturnType<typeof runCompaction>>;
           try {
             did = await runCompaction({
@@ -1089,23 +1058,36 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
             });
           } catch (compactErr) {
             if (input.signal?.aborted) throw compactErr;
-            throw err;
+            throw original;
           }
-          if (!did.compacted) throw err;
+          if (!did.compacted) throw original;
           seriesBaselineSystem = undefined;
-          req = await buildReq();
-          assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
-          maybeAppendRequestHeader({
-            store: input.store,
-            sessionId: input.sessionId,
-            turnId,
-            llm: input.llm,
+          return retryAfterWindowChange();
+        };
+
+        let pending: unknown = err;
+        let cleared = false;
+
+        if (allowPrune) {
+          const pruned = pruneOversizedToolResults(input.store, input.sessionId, {
             now,
-            reason: "change",
-            ...(req.system?.trim() ? { system: req.system } : {}),
-            ...(req.tools.length ? { tools: req.tools } : {}),
+            turnId,
+            stepId,
           });
-          response = await invokeLlm(input, req, onChunk);
+          if (pruned.pruned > 0) {
+            try {
+              response = await retryAfterWindowChange();
+              cleared = true;
+            } catch (retryErr) {
+              if (!isContextOverflowError(retryErr)) throw retryErr;
+              pending = retryErr;
+            }
+          }
+        }
+
+        if (!cleared) {
+          if (!allowSummary) throw pending;
+          response = await summarizeOverflow(pending);
         }
       } else {
         throw err;

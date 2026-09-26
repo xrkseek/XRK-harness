@@ -11,10 +11,11 @@ function fixtureAppRoot(): string {
 }
 
 describe("desktop build paths (target matrix)", () => {
-  it("isolates mutable prep directories by first-wave target", () => {
+  it("isolates mutable prep directories by supported target", () => {
     const appRoot = fixtureAppRoot();
     const win = desktopTargetBuildPaths("win-x64", appRoot);
     const mac = desktopTargetBuildPaths("mac-arm64", appRoot);
+    const macX64 = desktopTargetBuildPaths("mac-x64", appRoot);
     const mutableKeys = [
       "root",
       "runtime",
@@ -24,13 +25,14 @@ describe("desktop build paths (target matrix)", () => {
     ] as const;
 
     for (const key of mutableKeys) {
-      expect(new Set([win[key], mac[key]]).size).toBe(2);
+      expect(new Set([win[key], mac[key], macX64[key]]).size).toBe(3);
     }
     expect(win.runtime).toContain(join("targets", "win-x64", "runtime"));
     expect(mac.seed).toContain(join("targets", "mac-arm64", "seed"));
     expect(mac.packageSet).toContain(
       join("targets", "mac-arm64", "package-set"),
     );
+    expect(macX64.root).toContain(join("targets", "mac-x64"));
     expect(win.root).toContain(join("targets", "win-x64"));
   });
 
@@ -38,7 +40,9 @@ describe("desktop build paths (target matrix)", () => {
     const appRoot = fixtureAppRoot();
     const win = desktopTargetBuildPaths("win-x64", appRoot);
     const mac = desktopTargetBuildPaths("mac-arm64", appRoot);
+    const macX64 = desktopTargetBuildPaths("mac-x64", appRoot);
     expect(win.downloads).toBe(mac.downloads);
+    expect(mac.downloads).toBe(macX64.downloads);
     expect(win.downloads).toContain(join(".desktop-build", "downloads"));
     expect(win.downloads).not.toContain(`${sep}targets${sep}`);
   });
@@ -53,6 +57,13 @@ describe("desktop build paths (target matrix)", () => {
     ).toBe("mac-arm64");
     expect(
       resolveDesktopBuildTarget(
+        { XRK_DESKTOP_TARGET: "mac-x64" },
+        "darwin",
+        "arm64",
+      ),
+    ).toBe("mac-x64");
+    expect(
+      resolveDesktopBuildTarget(
         {
           XRK_DESKTOP_TARGET_PLATFORM: "darwin",
           XRK_DESKTOP_TARGET_ARCH: "arm64",
@@ -63,11 +74,12 @@ describe("desktop build paths (target matrix)", () => {
     ).toBe("mac-arm64");
     expect(resolveDesktopBuildTarget({}, "win32", "x64")).toBe("win-x64");
     expect(resolveDesktopBuildTarget({}, "darwin", "arm64")).toBe("mac-arm64");
+    expect(resolveDesktopBuildTarget({}, "darwin", "x64")).toBe("mac-x64");
     expect(() => resolveDesktopBuildTarget({}, "linux", "x64")).toThrow(
       /deferred|unknown/u,
     );
     expect(() => desktopTargetBuildPaths("linux-x64")).toThrow(/deferred/u);
-    expect(() => desktopTargetBuildPaths("mac-x64")).toThrow(/deferred/u);
+    expect(() => desktopTargetBuildPaths("win-arm64")).toThrow(/deferred/u);
   });
 
   it("resolveDesktopTargetBuildPaths follows the selected target", () => {

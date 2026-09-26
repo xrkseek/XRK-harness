@@ -79,7 +79,7 @@ import {
   createCuratedMemoryTools,
   resolveMemoryProvider,
   writeReusableNotesAfterTurn,
-  consolidateCuratedMemoryPhase1,
+  runCuratedMemoryConsolidate,
   type CuratedMemoryStore,
 } from "@xrkseek/exec-memory";
 import {
@@ -1630,7 +1630,7 @@ export function createHarnessComposition(
       };
     },
     async dispose() {
-      // Session-end Phase1: fold leftover human notes into MEMORY.md (disk only).
+      // Session-end Phase1 via leased pipeline (shares claim with Host finalize).
       if (curatedMemory) {
         try {
           const userTexts: string[] = [];
@@ -1641,7 +1641,17 @@ export function createHarnessComposition(
             if (text) userTexts.push(text);
           }
           if (userTexts.length > 0) {
-            void consolidateCuratedMemoryPhase1(curatedMemory, { userTexts });
+            void runCuratedMemoryConsolidate({
+              store: curatedMemory,
+              sessionId,
+              userTexts,
+              providerKind:
+                "providerName" in curatedMemory &&
+                typeof (curatedMemory as { providerName?: unknown }).providerName ===
+                  "string"
+                  ? (curatedMemory as { providerName: string }).providerName
+                  : "file",
+            });
           }
         } catch {
           /* best-effort — dispose must continue */

@@ -18,7 +18,7 @@ MCP **client**（stdio + streamable-http）。规格门禁：[policy.md](../poli
 | initialize 协商协议版本 · 空 client capabilities | 无 `tools` 能力 → 空表（不调 `tools/list`）；MethodNotFound 同空表 |
 | `listTools` 分页排空 | 重复 cursor / 超 `MAX_TOOLS_LIST_PAGES` 拒绝 |
 | stdio / HTTP `Client.onclose` 有界退避重连 | 首次 `connect()` 失败 fail-closed；disabled / 帽满 → `gave-up` |
-| HTTP 设备码 OAuth（RFC 8628）：登录 · 落盘 · 到期 refresh | 不在包内开 UI；CLI 入口在 `apps/cli`（`xrkh mcp`）。stdio 无 `auth`；未登录则匿名连接，不猜端点 |
+| HTTP 设备码 OAuth（RFC 8628）：登录 · 落盘 · 到期 refresh | 不在包内开 UI；CLI 入口在 `apps/cli`（`xrkh mcp`）。Settings MCP 卡经 Face `mcp.oauth.*` 同路径（pending：取消 / 复制码 / 自动打开验证页；已登录：到期与 refresh 徽标；IdP 无 `device_authorization_endpoint` → 诚实错误，**不**冒充 auth-code+PKCE）。stdio 无 `auth`；未登录则匿名连接，不猜端点 |
 | 端点缺失时按 RFC 9728 / RFC 8414 发现（`oauth-discovery.ts`） | 显式 flag / env 永远赢过发现；发现失败抛 `McpOAuthDiscoveryError`（不静默回退） |
 
 `McpHttpOptions.reconnectionOptions` 原样传给 SDK（SSE 流恢复）。Host HTTP MCP 默认 `maxRetries: 2`。stdio/HTTP 默认 `reconnect.enabled: true`（`initialDelayMs` 500 · `maxDelayMs` 30s · `maxAttempts` 10）；稳定窗口 = `maxDelayMs`。Host `loadMcpToolPlugins` 在 list_changed / health 后就地更新 `plugin.tools` 并 `invalidateAll`；文件真源下 Face mutate → `reconcileMcpToolPlugins` 热挂载（`gave-up` 同 fingerprint 也会 replace）；health 变推 `settings/document-updated` 刷新 overlay 徽标。
@@ -95,6 +95,7 @@ Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目�
 | `packages/server/host/tests/mcp-wire.test.ts` | env / host-settings · fingerprint · reconcile keep/remove/gave-up replace/fail · mcp-resources 插件 |
 | `packages/server/host/tests/mcp-deferred-dispose.test.ts` | mid-drain soft-detach · 空闲后再 dispose |
 | Face `settings-credentials` | mutate 落盘 · `applies: live` · `connectFailures` · describe overlay |
+| Face `mcp-oauth.test.ts` | `mcp.oauth.status/login/logout` · 无 URL 失败 · IdP 无设备码诚实映射 · 非法 server 名 |
 
 本模块本切片能力已接；更长尾缺口见 [status.md](../status.md)。
 
@@ -120,7 +121,7 @@ MCP **client** (stdio + streamable-http). Spec gates: [policy.md](../policy.md).
 | Initialize negotiates protocol version · empty client capabilities | No `tools` capability → empty list (skip `tools/list`); MethodNotFound same |
 | `listTools` drains pagination | Reject repeated cursor / over `MAX_TOOLS_LIST_PAGES` |
 | Bounded backoff reconnect on stdio / HTTP `Client.onclose` | First `connect()` failure is fail-closed; disabled / cap exhausted → `gave-up` |
-| Device-code OAuth for HTTP servers (RFC 8628): login · persisted token · refresh before expiry | No UI in this package; the CLI entry is `xrkh mcp` in `apps/cli`. stdio ignores `auth`; no token → anonymous connect, never endpoint guessing |
+| Device-code OAuth for HTTP servers (RFC 8628): login · persisted token · refresh before expiry | No UI in this package; the CLI entry is `xrkh mcp` in `apps/cli`. Settings MCP card uses Face `mcp.oauth.*` on the same path (pending: cancel / copy code / auto-open verify URI; signed-in: expiry + refresh badge; IdP missing `device_authorization_endpoint` → honest error, **does not** pretend auth-code+PKCE works). stdio ignores `auth`; no token → anonymous connect, never endpoint guessing |
 | Discover missing endpoints per RFC 9728 / RFC 8414 (`oauth-discovery.ts`) | Explicit flags / env always win over discovery; discovery failures throw `McpOAuthDiscoveryError` (no silent fallback) |
 
 `McpHttpOptions.reconnectionOptions` pass through to the SDK (SSE stream recovery). Host HTTP MCP defaults `maxRetries: 2`. stdio/HTTP default `reconnect.enabled: true` (`initialDelayMs` 500 · `maxDelayMs` 30s · `maxAttempts` 10); stability window = `maxDelayMs`. Host `loadMcpToolPlugins` updates `plugin.tools` in place after list_changed / health and `invalidateAll`; under file source of truth, Face mutate → `reconcileMcpToolPlugins` hot-mounts (`gave-up` same fingerprint also replaces); health changes push `settings/document-updated` to refresh overlay badges.
@@ -197,5 +198,6 @@ The product Agent may call **`settings_get` / `settings_mutate`** (same path as 
 | `packages/server/host/tests/mcp-deferred-dispose.test.ts` | mid-drain soft-detach · flush after idle |
 | `apps/cli/tests/mcp-command.test.ts` | `xrkh mcp` end to end: explicit endpoints · discovery fallback · config URL resolution · 0600 persist · status/logout/list/path · `--json` · safe failure with no token written |
 | Face `settings-credentials` | mutate persistence · `applies: live` · `connectFailures` · describe overlay |
+| Face `mcp-oauth.test.ts` | `mcp.oauth.status/login/logout` · missing URL fails closed · honest no-device IdP mapping · invalid server names |
 
 This slice is wired; longer-tail gaps: [status.md](../status.md).

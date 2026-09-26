@@ -9,6 +9,7 @@ import {
   createMemoryVideoGenProvider,
   createOpenAiVideoGenProvider,
   createVideoGenTools,
+  FAL_VIDEO_GEN_FAMILIES,
   formatVideoGenCatalog,
   isTerminalStatus,
   isVideoGenError,
@@ -458,6 +459,23 @@ describe("default access + messages", () => {
     ).toBeTruthy();
     expect(
       createDefaultVideoGenAccess({
+        env: { XRK_VIDEO_GEN: "fal", FAL_KEY: "fk" },
+      }).service,
+    ).toBeTruthy();
+    expect(
+      createDefaultVideoGenAccess({
+        env: { XAI_API_KEY: "xk" },
+        product: { mode: "xai" },
+      }).service,
+    ).toBeTruthy();
+    expect(
+      createDefaultVideoGenAccess({
+        env: {},
+        product: { mode: "fal" },
+      }).service,
+    ).toBeUndefined();
+    expect(
+      createDefaultVideoGenAccess({
         env: { XRK_VIDEO_GEN_OPENAI_KEY: "sk" },
         product: { mode: "openai" },
       }).service,
@@ -468,6 +486,19 @@ describe("default access + messages", () => {
         product: { mode: "off" },
       }).service,
     ).toBeUndefined();
+    expect(
+      createDefaultVideoGenAccess({
+        env: { OPENROUTER_API_KEY: "or" },
+        product: { mode: "openrouter" },
+      }).service,
+    ).toBeTruthy();
+    expect(
+      createDefaultVideoGenAccess({
+        env: { DEEPINFRA_API_KEY: "di" },
+        product: { mode: "deepinfra" },
+      }).service,
+    ).toBeTruthy();
+    expect(FAL_VIDEO_GEN_FAMILIES.length).toBeGreaterThanOrEqual(18);
   });
 
   it("forwards base url / model / fetch into the OpenAI provider", async () => {
@@ -695,5 +726,79 @@ describe("i2v / capabilities / catalog / edit-extend", () => {
   it("prompt text mentions i2v and catalog", () => {
     expect(VIDEO_GEN_PROMPT_TEXT).toMatch(/first_frame|image_url/);
     expect(VIDEO_GEN_PROMPT_TEXT).toMatch(/catalog|edit|extend/i);
+  });
+});
+
+describe("fal + xai video Providers", () => {
+  it("fal Provider: submit → poll → content", async () => {
+    const { createFalVideoGenProvider } = await import("../src/fal-http.js");
+    const mp4 = new Uint8Array([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70]);
+    const svc = createFalVideoGenProvider({
+      apiKey: "fal-test",
+      fetchImpl: async (input, init) => {
+        const url = String(input);
+        if (url.includes("queue.fal.run") && init?.method === "POST") {
+          return Response.json({
+            request_id: "v1",
+            status_url: "https://queue.fal.run/status/v1",
+            response_url: "https://queue.fal.run/result/v1",
+          });
+        }
+        if (url.includes("/status/")) {
+          return Response.json({
+            status: "COMPLETED",
+            response_url: "https://queue.fal.run/result/v1",
+          });
+        }
+        if (url.includes("/result/")) {
+          return Response.json({ video: { url: "https://cdn.example/v.mp4" } });
+        }
+        if (url.includes("cdn.example")) {
+          return new Response(mp4, { headers: { "content-type": "video/mp4" } });
+        }
+        return new Response("no", { status: 500 });
+      },
+    });
+    const job = await svc.create({ prompt: "waves" });
+    expect(job.delivery).toBe("fal");
+    expect(job.jobId).toBe("v1");
+    const done = await svc.get("v1");
+    expect(done.status).toBe("completed");
+    const content = await svc.content("v1");
+    expect(content.mimeType).toBe("video/mp4");
+    expect(content.bytes.byteLength).toBe(mp4.byteLength);
+  });
+
+  it("xai Provider: generations poll + download", async () => {
+    const { createXaiVideoGenProvider } = await import("../src/xai-http.js");
+    const mp4 = new Uint8Array([1, 2, 3, 4]);
+    let polled = false;
+    const svc = createXaiVideoGenProvider({
+      apiKey: "xai-test",
+      fetchImpl: async (input, init) => {
+        const url = String(input);
+        if (url.includes("/videos/generations") && init?.method === "POST") {
+          return Response.json({ request_id: "xr1" });
+        }
+        if (url.includes("/videos/xr1")) {
+          polled = true;
+          return Response.json({
+            status: "done",
+            video: { url: "https://cdn.x.ai/out.mp4", duration: 8 },
+          });
+        }
+        if (url.includes("cdn.x.ai")) {
+          return new Response(mp4);
+        }
+        return new Response("no", { status: 500 });
+      },
+    });
+    const job = await svc.create({ prompt: "city" });
+    expect(job.delivery).toBe("xai");
+    const done = await svc.get("xr1");
+    expect(polled).toBe(true);
+    expect(done.status).toBe("completed");
+    const content = await svc.content("xr1");
+    expect(content.bytes).toEqual(mp4);
   });
 });

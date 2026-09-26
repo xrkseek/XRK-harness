@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   validateRalphReport,
   RALPH_MAX_HANDOFF_CHARS,
+  RALPH_MAX_RESULT_CHARS,
 } from "../src/ralph-tool.js";
 
 describe("ralph report validation", () => {
@@ -58,5 +59,6 @@ describe("ralph report validation", () => {
       ),
     ).toThrow(/maxHandoffChars/);
     expect(RALPH_MAX_HANDOFF_CHARS).toBeGreaterThan(1000);
+    expect(RALPH_MAX_RESULT_CHARS).toBe(16_384);
   });
 });

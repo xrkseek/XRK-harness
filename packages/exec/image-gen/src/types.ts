@@ -3,7 +3,16 @@
  * Aligns Hermes `image_gen` (single tool; refs select edit) + Codex ImageGen/Edit.
  */
 
-export type ImageGenDelivery = "memory" | "openai" | "unavailable";
+export type ImageGenDelivery =
+  | "memory"
+  | "openai"
+  | "fal"
+  | "xai"
+  | "openrouter"
+  | "deepinfra"
+  | "krea"
+  | "meta-ai"
+  | "unavailable";
 
 export type ImageGenErrorCode =
   | "IMAGE_GEN_UNAVAILABLE"

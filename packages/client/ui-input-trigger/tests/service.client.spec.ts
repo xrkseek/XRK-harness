@@ -745,9 +745,15 @@ describe('arbitrate', () => {
     expect(controller.menu.getSnapshot().open).toBe(false)
   })
 
+  it('tabBack closes like escape without settling', async () => {
+    const { controller } = await menuBench()
+    expect(controller.arbitrate('tabBack', false)).toBe('consumed')
+    expect(controller.menu.getSnapshot().open).toBe(false)
+  })
+
   it('IME composition passes every key untouched', async () => {
     const { controller } = await menuBench()
-    for (const key of ['up', 'down', 'enter', 'escape', 'tab'] as const) {
+    for (const key of ['up', 'down', 'enter', 'escape', 'tab', 'tabBack'] as const) {
       expect(controller.arbitrate(key, true)).toBe('pass')
     }
     expect(controller.menu.getSnapshot().open).toBe(true)

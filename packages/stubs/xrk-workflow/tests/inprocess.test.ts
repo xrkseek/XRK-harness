@@ -129,4 +129,91 @@ describe('IsolatingWorkflowEngine', () => {
     expect(result.value).toEqual({ ok: false, msg: 'bridge boom' })
     await run.dispose()
   })
+
+  it('awaits tools.name(args) across the worker boundary', async () => {
+    const ctx = new Context()
+    ;(ctx as { logger?: { warn: (m: string) => void } }).logger = {
+      warn: vi.fn(),
+    }
+    const engine = new IsolatingWorkflowEngine(ctx, {
+      toolBridge: {
+        listNames: () => ['echo_tool'],
+        call: async (name, args) => {
+          const text = (args as { text?: string } | null)?.text ?? ''
+          return { content: `echo:${name}:${text}` }
+        },
+      },
+    })
+    const run = engine.start({
+      script: `
+        const v = await tools.echo_tool({ text: 'ping' });
+        return { v };
+      `,
+      meta: { name: 'iso-tools', description: 'tools.* bridge' },
+      parent: fakeParent(),
+    })
+    const result = await run.result
+    expect(result.stopReason).toBe('completed')
+    expect(result.value).toEqual({ v: 'echo:echo_tool:ping' })
+    await run.dispose()
+  })
+
+  it('rejects unknown tools.name from the worker', async () => {
+    const ctx = new Context()
+    ;(ctx as { logger?: { warn: (m: string) => void } }).logger = {
+      warn: vi.fn(),
+    }
+    const engine = new IsolatingWorkflowEngine(ctx, {
+      toolBridge: {
+        listNames: () => ['echo_tool'],
+        call: async () => ({ content: 'nope' }),
+      },
+    })
+    const run = engine.start({
+      script: `
+        try {
+          await tools.missing({});
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, msg: String(e && e.message ? e.message : e) };
+        }
+      `,
+      meta: { name: 'iso-tools-miss', description: 'unknown tool' },
+      parent: fakeParent(),
+    })
+    const result = await run.result
+    expect(result.stopReason).toBe('completed')
+    expect(result.value).toMatchObject({ ok: false })
+    expect(String((result.value as { msg: string }).msg)).toMatch(/unknown tool/)
+    await run.dispose()
+  })
+})
+
+describe('InProcessWorkflowEngine tools.*', () => {
+  it('awaits tools.name(args) in-process', async () => {
+    const ctx = new Context()
+    ;(ctx as { logger?: { warn: (m: string) => void } }).logger = {
+      warn: vi.fn(),
+    }
+    const engine = new InProcessWorkflowEngine(ctx, {
+      toolBridge: {
+        listNames: () => ['echo_tool'],
+        call: async (_name, args) => ({
+          content: `echo:${(args as { text?: string }).text ?? ''}`,
+        }),
+      },
+    })
+    const run = engine.start({
+      script: `
+        const v = await tools.echo_tool({ text: 'hi' });
+        return { v };
+      `,
+      meta: { name: 'inproc-tools', description: 'tools.*' },
+      parent: fakeParent(),
+    })
+    const result = await run.result
+    expect(result.stopReason).toBe('completed')
+    expect(result.value).toEqual({ v: 'echo:hi' })
+    await run.dispose()
+  })
 })

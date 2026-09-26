@@ -43,19 +43,23 @@ MP4 **不内联进工具文本**；Host 配了 `AttachmentStore` 时经 `saveFil
 
 | 通道 | 内容 |
 |------|------|
-| **Settings** | Face ns `video-gen`：`mode` = 关 / openai · 可选 `baseUrl` · `model`（Settings → Plugins → **视频生成**） |
-| **Credentials** | `XRK_VIDEO_GEN_OPENAI_KEY`（槽 `video.openai`）；运行时也可回落 `OPENAI_API_KEY` |
-| **仅 env** | `XRK_VIDEO_GEN=memory` · `=1` / `openai`（旁路 Settings）· 可选 `XRK_VIDEO_GEN_BASE_URL` / `XRK_VIDEO_GEN_MODEL` |
+| **Settings** | Face ns `video-gen`：`mode` = 关 / openai / fal / xai / openrouter / deepinfra · 可选 `baseUrl` · `model` |
+| **Credentials** | openai · fal · xai · openrouter · deepinfra 槽（各有公开 env 回落） |
+| **仅 env** | `XRK_VIDEO_GEN=memory` · `=1` / `openai` / `fal` / `xai` / `openrouter` / `deepinfra` |
 
 保存 Settings 后热切换。非空 `XRK_VIDEO_GEN` 为 CI 旁路。
 
 | Settings / env | 行为 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | （未设 / 关） | 工具仍登记；execute **诚实失败** |
-| `memory`（仅 env） | 内存 Provider（确定性作业生命周期 + 24 字节 `ftyp` MP4；含 i2v / edit / extend，CI / 演示） |
-| `1` / openai | 需 `OPENAI_API_KEY` 或 Credentials `XRK_VIDEO_GEN_OPENAI_KEY`；可选 Settings / `XRK_VIDEO_GEN_BASE_URL` · `XRK_VIDEO_GEN_MODEL`（默认 `sora-2`） |
+| `memory`（仅 env） | 内存 Provider（确定性作业生命周期 + 24 字节 `ftyp` MP4） |
+| `1` / openai | OpenAI Videos；默认 `sora-2` |
+| `fal` | FAL queue（Hermes 满编 family：pixverse · veo · kling · wan · seedance · minimax · …） |
+| `xai` | xAI Grok Imagine video |
+| `openrouter` | OpenRouter Videos API（默认 `minimax/hailuo-3-max`） |
+| `deepinfra` | DeepInfra OpenAI 兼容 Videos |
 
-其它后端（Runway / Kling / FAL 等）可后续作 Provider 注入；本缝已对齐 OpenAI Videos（含 i2v/edit/extend）+ memory，family catalog 可扩展。
+也可注入自定义 `VideoGenService`。
 
 ---
 
@@ -110,17 +114,20 @@ Precedence: **Settings (product SoT)** → **Credentials (secrets)** → **env (
 
 | Channel | Fields |
 |---------|--------|
-| **Settings** | Face ns `video-gen`: `mode` off/openai · optional `baseUrl` · `model` (Settings → Plugins → **Video generation**) |
-| **Credentials** | `XRK_VIDEO_GEN_OPENAI_KEY` (slot `video.openai`); runtime may also fall back to `OPENAI_API_KEY` |
-| **Env-only** | `XRK_VIDEO_GEN=memory` · `=1` / `openai` (bypass Settings) · optional `XRK_VIDEO_GEN_BASE_URL` / `XRK_VIDEO_GEN_MODEL` |
+| **Settings** | Face ns `video-gen`: `mode` off/openai/fal/xai/openrouter/deepinfra · optional `baseUrl` · `model` |
+| **Credentials** | openai · fal · xai · openrouter · deepinfra slots (with public env fallbacks) |
+| **Env-only** | `XRK_VIDEO_GEN=memory` · `=1` / `openai` / `fal` / `xai` / `openrouter` / `deepinfra` |
 
 Live after the next agent rebuild. Non-empty `XRK_VIDEO_GEN` is the CI bypass.
 
 | `XRK_VIDEO_GEN` / Settings | Behavior |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | (unset / off) | Tool still registers; execute **fails honestly** |
-| `memory` (env only) | In-memory Provider (deterministic job lifecycle + a 24-byte `ftyp` MP4; includes i2v / edit / extend, CI / demos) |
-| `1` / openai | Needs `OPENAI_API_KEY` or Credentials `XRK_VIDEO_GEN_OPENAI_KEY`; optional Settings / `XRK_VIDEO_GEN_BASE_URL` · `XRK_VIDEO_GEN_MODEL` (default `sora-2`) |
+| `memory` (env only) | In-memory Provider |
+| `1` / openai | OpenAI Videos; default `sora-2` |
+| `fal` | FAL queue (Hermes-scale families: pixverse · veo · kling · wan · seedance · minimax · …) |
+| `xai` | xAI Grok Imagine video |
+| `openrouter` | OpenRouter Videos API (default `minimax/hailuo-3-max`) |
+| `deepinfra` | DeepInfra OpenAI-compatible Videos |
 
-Runway / Kling / FAL and other backends can be injected later as Providers; this seam covers OpenAI Videos
-(with i2v / edit / extend) + memory, and the family catalog is extensible.
+Custom `VideoGenService` injection remains supported.

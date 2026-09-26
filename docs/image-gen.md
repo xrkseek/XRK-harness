@@ -28,9 +28,9 @@
 
 | 通道 | 内容 |
 |------|------|
-| **Settings** | Face ns `image-gen`：`mode` = 关 / openai · 可选 `baseUrl` · `model`（Settings → Plugins → **图像生成**） |
-| **Credentials** | `XRK_IMAGE_GEN_OPENAI_KEY`（槽 `image.openai`）；运行时也可回落 `OPENAI_API_KEY` |
-| **仅 env** | `XRK_IMAGE_GEN=memory`（演示 Provider）· `=1` / `openai`（旁路 Settings 开 openai）· 可选 `XRK_IMAGE_GEN_BASE_URL` / `XRK_IMAGE_GEN_MODEL` |
+| **Settings** | Face ns `image-gen`：`mode` = 关 / openai / fal / xai / openrouter / deepinfra / krea / meta-ai · 可选 `baseUrl` · `model`（Settings → Plugins → **图像生成**） |
+| **Credentials** | openai：`XRK_IMAGE_GEN_OPENAI_KEY` · fal：`XRK_IMAGE_GEN_FAL_KEY` · xai：`XRK_IMAGE_GEN_XAI_KEY` · openrouter：`XRK_IMAGE_GEN_OPENROUTER_KEY` · deepinfra：`XRK_IMAGE_GEN_DEEPINFRA_KEY` · krea：`XRK_IMAGE_GEN_KREA_KEY` · meta-ai：`XRK_IMAGE_GEN_META_KEY`（各有公开 env 回落） |
+| **仅 env** | `XRK_IMAGE_GEN=memory` · `=1` / `openai` / `fal` / `xai` / `openrouter` / `deepinfra` / `krea` / `meta-ai`（旁路 Settings）· 可选 `XRK_IMAGE_GEN_BASE_URL` / `XRK_IMAGE_GEN_MODEL` |
 
 保存 Settings 后热切换（下次 agent 重建）。非空 `XRK_IMAGE_GEN` 为 CI 旁路。
 
@@ -38,9 +38,15 @@
 |----------------|------|
 | （未设 / 关） | 工具仍登记；execute **诚实失败** |
 | `memory`（仅 env） | 内存 Provider（1×1 PNG；支持 edit 路径测例） |
-| `1` / openai | 需 `OPENAI_API_KEY` 或 Credentials；默认 capabilities：text+image、最多 16 张参考图 |
+| `1` / openai | OpenAI Images；需钥；默认最多 16 张参考图 |
+| `fal` | FAL queue（Hermes 满编 catalog；默认 `fal-ai/flux-2/klein/9b`） |
+| `xai` | xAI Grok Imagine |
+| `openrouter` | OpenRouter Dedicated Image API（默认 Gemini Flash Image） |
+| `deepinfra` | DeepInfra OpenAI 兼容（**仅文生图**；诚实拒参考图） |
+| `krea` | Krea 2 异步作业（medium / large / turbo） |
+| `meta-ai` | Meta Muse（**仅文生图**） |
 
-其它后端（FAL / xAI）可注入自定义 `ImageGenService`（实现 `capabilities()` + `generate`）。
+也可注入自定义 `ImageGenService`（实现 `capabilities()` + `generate`）。
 
 ---
 
@@ -56,7 +62,7 @@ Text-to-image / image-to-image seam: `@xrkseek/exec-image-gen`. Model tool `imag
 |------|------|
 | `image_generate` | Text-to-image; with edit-capable Provider also accepts `image_url` / `reference_image_urls` / `reference_attachment_ids`. Returns PNG base64 (truncated) and optional `attachmentId`. |
 
-No refs → OpenAI `images/generations`; with refs → `images/edits`.
+No refs → OpenAI `images/generations`; with refs → `images/edits`. FAL/xAI follow the same tool surface via their Providers.
 
 ## Enable
 
@@ -64,8 +70,8 @@ Precedence: **Settings (product SoT)** → **Credentials (secrets)** → **env (
 
 | Channel | Fields |
 |---------|--------|
-| **Settings** | Face ns `image-gen`: `mode` off/openai · optional `baseUrl` · `model` (Settings → Plugins → **Image generation**) |
-| **Credentials** | `XRK_IMAGE_GEN_OPENAI_KEY` (slot `image.openai`); runtime may also fall back to `OPENAI_API_KEY` |
-| **Env-only** | `XRK_IMAGE_GEN=memory` · `=1` / `openai` (bypass Settings) · optional `XRK_IMAGE_GEN_BASE_URL` / `XRK_IMAGE_GEN_MODEL` |
+| **Settings** | Face ns `image-gen`: `mode` off/openai/fal/xai/openrouter/deepinfra/krea/meta-ai · optional `baseUrl` · `model` |
+| **Credentials** | openai · fal · xai · openrouter · deepinfra · krea · meta-ai slots (with public env fallbacks) |
+| **Env-only** | `XRK_IMAGE_GEN=memory` · `=1` / `openai` / `fal` / `xai` / `openrouter` / `deepinfra` / `krea` / `meta-ai` |
 
-Live after the next agent rebuild. Non-empty `XRK_IMAGE_GEN` is the CI bypass. Custom Providers inject via `ImageGenService`.
+Live after the next agent rebuild. Non-empty `XRK_IMAGE_GEN` is the CI bypass. Custom Providers inject via `ImageGenService`. Hermes-scale matrix: OpenAI · FAL (full catalog) · xAI · OpenRouter · DeepInfra (t2i-only) · Krea · Meta Muse (t2i-only).

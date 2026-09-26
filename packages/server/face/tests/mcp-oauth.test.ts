@@ -127,6 +127,51 @@ describe("Face mcp.oauth", () => {
     expect(res.result.error.message).toMatch(/no URL for MCP server/i);
   });
 
+  it("login maps IdP without device-code to honest error", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-mcp-oauth-"));
+    const rt = runtime(dir);
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("oauth-protected-resource")) {
+        return new Response(
+          JSON.stringify({
+            resource: "https://mcp.example.com",
+            authorization_servers: ["https://idp.example.com"],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.includes(".well-known")) {
+        return new Response(
+          JSON.stringify({
+            issuer: "https://idp.example.com",
+            token_endpoint: "https://idp.example.com/token",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+    try {
+      const res = await dispatchFaceMethod(rt, "mcp.oauth.login", "s6", {
+        server: "linear",
+        url: "https://mcp.example.com",
+      });
+      expect(res.result.ok).toBe(false);
+      if (res.result.ok) return;
+      expect(res.result.error.code).toBe("bad-request");
+      expect(res.result.error.message).toMatch(
+        /mcp-oauth-no-device|device-code/i,
+      );
+      expect(res.result.error.details).toMatchObject({
+        reason: "mcp-oauth-no-device",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("rejects invalid server names", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-mcp-oauth-"));
     const rt = runtime(dir);

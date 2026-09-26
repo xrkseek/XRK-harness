@@ -5,7 +5,7 @@ import type {
   SessionRecord,
   SessionStore,
 } from "@xrkseek/core-session";
-import type { ToolDefinition } from "@xrkseek/core-tools";
+import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import type { JobView } from "./adapt/job-view.js";
 import type { ProviderRegistry } from "@xrkseek/llm-registry";
 import type { PolicyEngine } from "@xrkseek/policy";
@@ -236,6 +236,11 @@ export interface FaceRuntime {
    * Client half still needs a browser reload (`needsRestart`).
    */
   syncManagedProcessPlugins?(): Promise<void>;
+  /**
+   * Standing tool registry (preset layer) when no live agent is remembered.
+   * Host wires Isolating WorkflowEngine `tools.*` from this.
+   */
+  readonly tools?: ToolRegistry;
   /** Human approval waiters (tool policy `ask`). */
   readonly approvals: FaceApprovalBroker;
   /** DSH user-questions (`question/requested` + `/api/respond`). */
@@ -247,6 +252,19 @@ export interface FaceRuntime {
    * Phase1 consolidate. Best-effort; failures must not block Face.
    */
   onSessionFinalize?(sessionId: string): void | Promise<void>;
+  /**
+   * Last curated-memory consolidate report (Host updates after Phase1/2).
+   * Optional — Status / `/status` surface when present.
+   */
+  curatedMemoryConsolidate?: {
+    sessionId: string;
+    at: number;
+    phase1Written: number;
+    phase2: string;
+    phase2Written: number;
+    skipped?: string;
+    providerKind?: string;
+  };
   /** When true, `/permission` refuses sandbox mode changes while **Agent**
    * `terminal_*` PTY sessions are open or spawning (CV DSH terminal-bash
    * sandbox fence). Sidebar user terminals must not be reported here.

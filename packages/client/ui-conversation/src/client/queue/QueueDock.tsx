@@ -94,10 +94,16 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
   const inbox = useSession(s => s.queue)
   const queue = useMemo(() => inbox.filter(row => row.placement === 'queued'), [inbox])
   const pendingSubmissions = useSession(s => s.pendingSubmissions)
-  const pendingQueued = useMemo(
-    () => pendingSubmissions.filter(submission => submission.placement === 'queued'),
-    [pendingSubmissions],
-  )
+  // Same-render handoff: once the Host queue row carries the prompt rpcId,
+  // drop the local echo so durable + echo never paint as two rows.
+  const pendingQueued = useMemo(() => {
+    const admitted = new Set(
+      queue.flatMap(row => (row.rpcId !== undefined ? [row.rpcId] : [])),
+    )
+    return pendingSubmissions.filter(submission => (
+      submission.placement === 'queued' && !admitted.has(submission.requestId)
+    ))
+  }, [pendingSubmissions, queue])
   const running = useSession(s => s.running)
   // Continuable children share the Host session queue (edit / remove / steer);
   // one-shot stays a read-only projection of any residual inbox rows.
@@ -160,6 +166,9 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
           >
             <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>
             <span className={css.count}>{t('queue.count', { n: rowCount })}</span>
+            {!listVisible && pendingQueued.length > 0 && (
+              <span className={css.status} role="status">{t('queue.sending')}</span>
+            )}
             <span className={css.chevron} aria-hidden>
               {expanded ? <IconChevronDownOutline14 /> : <IconChevronUpOutline14 />}
             </span>

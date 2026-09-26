@@ -248,6 +248,152 @@ describe("exec-image-gen", () => {
     ).toBeTruthy();
     expect(tool!.dynamicSchema).toBeTypeOf("function");
   });
+
+  it("fal Provider: t2i + edit via queue submit/poll", async () => {
+    const pngB64 = Buffer.from(minimalPngBytes()).toString("base64");
+    const calls: string[] = [];
+    const { createFalImageGenProvider } = await import("../src/fal-http.js");
+    const svc = createFalImageGenProvider({
+      apiKey: "fal-test",
+      pollIntervalMs: 1,
+      timeoutMs: 5_000,
+      fetchImpl: async (input, init) => {
+        const url = String(input);
+        calls.push(`${init?.method ?? "GET"} ${url}`);
+        if (url.includes("queue.fal.run") && init?.method === "POST") {
+          return Response.json({
+            request_id: "req-1",
+            status_url: "https://queue.fal.run/status/req-1",
+            response_url: "https://queue.fal.run/result/req-1",
+          });
+        }
+        if (url.includes("/status/")) {
+          return Response.json({
+            status: "COMPLETED",
+            response_url: "https://queue.fal.run/result/req-1",
+          });
+        }
+        if (url.includes("/result/")) {
+          return Response.json({
+            images: [{ url: "https://cdn.example/out.png" }],
+          });
+        }
+        if (url.includes("cdn.example")) {
+          return new Response(Buffer.from(minimalPngBytes()), {
+            headers: { "content-type": "image/png" },
+          });
+        }
+        return new Response("unexpected", { status: 500 });
+      },
+    });
+    const out = await svc.generate({ prompt: "cat" });
+    expect(out.delivery).toBe("fal");
+    expect(out.modality).toBe("text");
+    expect(out.images[0]!.bytes.byteLength).toBeGreaterThan(0);
+
+    const edited = await svc.generate({
+      prompt: "edit",
+      referenceImages: [{ bytes: minimalPngBytes(), mimeType: "image/png" }],
+    });
+    expect(edited.modality).toBe("image");
+    expect(calls.some((c) => c.includes("/edit"))).toBe(true);
+    void pngB64;
+
+    expect(
+      createDefaultImageGenAccess({
+        env: { XRK_IMAGE_GEN: "fal", FAL_KEY: "fk" },
+        fetchImpl: async () => new Response("no", { status: 500 }),
+      }).service,
+    ).toBeTruthy();
+    expect(
+      createDefaultImageGenAccess({
+        env: {},
+        product: { mode: "xai" },
+      }).service,
+    ).toBeUndefined();
+    expect(
+      createDefaultImageGenAccess({
+        env: { XAI_API_KEY: "xk" },
+        product: { mode: "xai" },
+      }).service,
+    ).toBeTruthy();
+  });
+
+  it("xai Provider: generations + edits JSON", async () => {
+    const { createXaiImageGenProvider } = await import("../src/xai-http.js");
+    const paths: string[] = [];
+    const svc = createXaiImageGenProvider({
+      apiKey: "xai-test",
+      fetchImpl: async (input) => {
+        const url = String(input);
+        paths.push(url);
+        return Response.json({
+          data: [
+            {
+              b64_json: Buffer.from(minimalPngBytes()).toString("base64"),
+            },
+          ],
+        });
+      },
+    });
+    const t2i = await svc.generate({ prompt: "sky" });
+    expect(t2i.delivery).toBe("xai");
+    expect(paths.some((p) => p.includes("/images/generations"))).toBe(true);
+    const edit = await svc.generate({
+      prompt: "blue",
+      referenceImages: [{ bytes: minimalPngBytes(), mimeType: "image/png" }],
+    });
+    expect(edit.modality).toBe("image");
+    expect(paths.some((p) => p.includes("/images/edits"))).toBe(true);
+  });
+
+  it("Hermes-scale access: openrouter / deepinfra / krea / meta-ai", async () => {
+    expect(
+      createDefaultImageGenAccess({
+        env: { OPENROUTER_API_KEY: "or" },
+        product: { mode: "openrouter" },
+      }).service,
+    ).toBeTruthy();
+    expect(
+      createDefaultImageGenAccess({
+        env: { DEEPINFRA_API_KEY: "di" },
+        product: { mode: "deepinfra" },
+      }).service,
+    ).toBeTruthy();
+    expect(
+      createDefaultImageGenAccess({
+        env: { KREA_API_KEY: "kr" },
+        product: { mode: "krea" },
+      }).service,
+    ).toBeTruthy();
+    expect(
+      createDefaultImageGenAccess({
+        env: { META_MODEL_API_KEY: "meta" },
+        product: { mode: "meta-ai" },
+      }).service,
+    ).toBeTruthy();
+
+    const { createDeepInfraImageGenProvider } = await import(
+      "../src/deepinfra-http.js"
+    );
+    const di = createDeepInfraImageGenProvider({
+      apiKey: "di",
+      fetchImpl: async () =>
+        Response.json({
+          data: [{ b64_json: Buffer.from(minimalPngBytes()).toString("base64") }],
+        }),
+    });
+    expect(di.capabilities().maxReferenceImages).toBe(0);
+    await expect(
+      di.generate({
+        prompt: "x",
+        referenceImages: [{ bytes: minimalPngBytes(), mimeType: "image/png" }],
+      }),
+    ).rejects.toThrow(/text-to-image only/);
+
+    const { FAL_IMAGE_MODELS } = await import("../src/catalog.js");
+    expect(FAL_IMAGE_MODELS.length).toBeGreaterThanOrEqual(20);
+  });
 });
 
 function textCaps() {

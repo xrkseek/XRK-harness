@@ -24,20 +24,22 @@ describe("desktop product entry (ADR-0008)", () => {
     expect(entry.desktopCommand).toBe("package:desktop");
     expect(entry.developmentCommand).toBe("dev:desktop");
     expect(entry.packagingPipelineReady).toBe(true);
-    expect(entry.installerShipped).toBe(false);
+    expect(entry.installerShipped).toBe(true);
     expect(entry.productReady).toBe(true);
     expect(isDesktopProductReady()).toBe(true);
   });
 
-  it("package:desktop validates the pipeline without inventing a public installer", () => {
+  it("package:desktop validates the pipeline without inventing a public installer as day-1 entry", () => {
     const result = spawnSync(
       process.execPath,
       [path.join(ROOT, "scripts", "package-desktop.mjs"), "--check"],
       { encoding: "utf8", env: { ...process.env } },
     );
     expect(result.status).toBe(0);
-    expect(result.stdout).toMatch(/first-wave pipeline ready/);
+    expect(result.stdout).toMatch(/packaging pipeline ready/);
     expect(result.stdout).toMatch(/packagingPipelineReady=true/);
     expect(result.stdout).toMatch(/defaultEntry=cli-web/);
+    expect(result.stdout).toMatch(/installerShipped=true/);
+    expect(result.stdout).toMatch(/upload:desktop/);
   });
 });

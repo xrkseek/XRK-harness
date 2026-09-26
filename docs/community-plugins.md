@@ -82,7 +82,7 @@ community client.js
 
 | 表面 | Host 落点 | 插件职责 |
 |------|-----------|----------|
-| `POST /sidebar/api/<method>` | `packages/server/http/src/sidebar/`（FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **subagents.graph** · **changes.ops** · **open.external**） | 调 API；client 里不重复实现 Host |
+| `POST /sidebar/api/<method>` | `packages/server/http/src/sidebar/`（FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **subagents.graph**（view / link / unlink / role / remove）· **changes.ops** · **open.external**） | 调 API；client 里不重复实现 Host |
 | `/sidebar/file` · `upload` · `html` · `bundle` | 同上 + 插件目录 `chunks/` | 发布 `lib/client-*.js` 供 bundle 回落 |
 | `/sidebar/ws/terminal` | Host `sidebar-pty`（真实 node-pty · session+tab 保活；系统用户权限，**不**套 Agent sandbox / fence） | TerminalView 连同源 WS |
 | `/sidebar/ws/agent-terminals` · `agent-opens` | Host 真推送（registry + prefs 门控工具；Settings → 通用开关）；无 registry 时仍空列表保活 | 推送由 Host 提供；插件 host 半包不实现 |
@@ -241,7 +241,7 @@ The session **Status** column (`details`, default tab) shows the subagent graph 
 
 | Surface | Host landing | Plugin role |
 |------|-----------|----------|
-| `POST /sidebar/api/<method>` | `sidebar-adapter` (FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **subagents.graph** · **changes.ops** · **open.external**) | Call the API; do not reimplement Host in the client |
+| `POST /sidebar/api/<method>` | `sidebar-adapter` (FS · git · prefs · shell · browser · **jobs** · **subagents.live** · **subagents.graph** (view / link / unlink / role / remove) · **changes.ops** · **open.external**) | Call the API; do not reimplement Host in the client |
 | `/sidebar/file` · `upload` · `html` · `bundle` | dsh-compat routes + plugin `chunks/` | Ship `lib/client-*.js` for bundle fallback |
 | `/sidebar/ws/terminal` | Host `sidebar-pty` (real node-pty · session+tab reuse; system-user permissions, **not** Agent sandbox / fence) | TerminalView connects same-origin WS |
 | `/sidebar/ws/agent-terminals` · `agent-opens` | Host real push (registry + prefs-gated tools; Settings → General toggles); empty-list keepalive without registry | Push is provided by Host; a plugin host half does not implement it |

@@ -31,6 +31,60 @@ export type {
 } from './types.ts'
 export type { WorkflowRun, WorkflowStartRequest } from './runtime-types.ts'
 
+/**
+ * Nested `await tools.name(args)` bridge (Code Mode shape). Host mounts a
+ * registry-backed bridge; Isolating posts RPC across the worker boundary.
+ */
+export interface WorkflowToolCallResult {
+  readonly content: string
+  readonly isError?: boolean
+}
+
+export interface WorkflowToolBridge {
+  /** Names exposed on the `tools` Proxy (exclude recursive orchestrators). */
+  readonly listNames: () => readonly string[]
+  readonly call: (
+    name: string,
+    args: unknown,
+    signal?: AbortSignal,
+  ) => Promise<WorkflowToolCallResult>
+}
+
+/** Build the script-facing `tools` Proxy (same contract as Code Mode). */
+export function buildWorkflowToolsProxy(
+  bridge: WorkflowToolBridge | undefined,
+  signal?: AbortSignal,
+): Record<string, (args?: unknown) => Promise<string>> {
+  const listNames = (): readonly string[] => bridge?.listNames() ?? []
+  const callTool = (name: string) => async (args?: unknown): Promise<string> => {
+    if (!bridge) throw new Error('tools bridge not mounted')
+    if (!listNames().includes(name)) throw new Error(`unknown tool: ${name}`)
+    const out = await bridge.call(name, args ?? {}, signal)
+    if (out.isError) throw new Error(`tools.${name} failed: ${out.content}`)
+    return out.content
+  }
+  return new Proxy({}, {
+    get(_target, prop) {
+      if (typeof prop !== 'string' || prop === 'then') return undefined
+      return callTool(prop)
+    },
+    ownKeys() {
+      return [...listNames()]
+    },
+    getOwnPropertyDescriptor(_target, prop) {
+      if (typeof prop === 'string' && listNames().includes(prop)) {
+        return {
+          enumerable: true,
+          configurable: true,
+          writable: false,
+          value: callTool(prop),
+        }
+      }
+      return undefined
+    },
+  })
+}
+
 declare module '@xrkseek/cordis' {
   interface Context {
     workflowEngine: WorkflowEngine
@@ -211,19 +265,24 @@ function renderListenerError(error: unknown): string {
  * this Provider fills the abstract `ctx.workflowEngine` hole for Cordis mounts.
  */
 export class InProcessWorkflowEngine extends WorkflowEngine {
-  private readonly createAgent?: (
-    request: WorkflowStartRequest,
-    call: { label: string; prompt: string; phase?: string },
-  ) => Promise<unknown>
+  private readonly createAgent:
+    | ((
+        request: WorkflowStartRequest,
+        call: { label: string; prompt: string; phase?: string },
+      ) => Promise<unknown>)
+    | undefined
+  private readonly toolBridge: WorkflowToolBridge | undefined
 
   constructor(
     ctx: Context,
     options?: {
       readonly createAgent?: InProcessWorkflowEngine['createAgent']
+      readonly toolBridge?: WorkflowToolBridge
     },
   ) {
     super(ctx)
     this.createAgent = options?.createAgent
+    this.toolBridge = options?.toolBridge
   }
 
   start(request: WorkflowStartRequest): WorkflowRun {
@@ -322,14 +381,16 @@ export class InProcessWorkflowEngine extends WorkflowEngine {
         const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (
           ...args: string[]
         ) => (...args: unknown[]) => Promise<unknown>
+        const tools = buildWorkflowToolsProxy(this.toolBridge, ac.signal)
         const fn = new AsyncFunction(
           'args',
           'phase',
           'log',
           'agent',
+          'tools',
           `"use strict";\n${request.script}`,
         )
-        const value = await fn(request.args, phase, log, agent)
+        const value = await fn(request.args, phase, log, agent, tools)
         if (cancelled || ac.signal.aborted) {
           return { value: null, stopReason: 'cancelled', error: cancelReason, agentsStarted }
         }
@@ -381,23 +442,30 @@ export class InProcessWorkflowEngine extends WorkflowEngine {
  * Worker (eval). `agent()` posts an RPC to the parent thread, which may run
  * an optional {@link IsolatingWorkflowEngine} `createAgent` bridge (same
  * contract as {@link InProcessWorkflowEngine}) and return a structured-cloneable
- * value. Without `createAgent`, `agent()` still settles `null` (PTC-lite).
- * Full DSH PTC SDK (tools.* bindings / sandboxed Node) is not ported.
+ * value. Without `createAgent`, `agent()` still settles `null`.
+ * `await tools.name(args)` uses an optional {@link WorkflowToolBridge}
+ * (Code Mode subset — nested Host tools via parentPort RPC). Full sandboxed
+ * Node PTC process confinement is not claimed.
  */
 export class IsolatingWorkflowEngine extends WorkflowEngine {
-  private readonly createAgent?: (
-    request: WorkflowStartRequest,
-    call: { label: string; prompt: string; phase?: string },
-  ) => Promise<unknown>
+  private readonly createAgent:
+    | ((
+        request: WorkflowStartRequest,
+        call: { label: string; prompt: string; phase?: string },
+      ) => Promise<unknown>)
+    | undefined
+  private readonly toolBridge: WorkflowToolBridge | undefined
 
   constructor(
     ctx: Context,
     options?: {
       readonly createAgent?: IsolatingWorkflowEngine['createAgent']
+      readonly toolBridge?: WorkflowToolBridge
     },
   ) {
     super(ctx)
     this.createAgent = options?.createAgent
+    this.toolBridge = options?.toolBridge
   }
 
   start(request: WorkflowStartRequest): WorkflowRun {
@@ -455,15 +523,25 @@ export class IsolatingWorkflowEngine extends WorkflowEngine {
             this.emitWorkflowEvent('workflow/agent-end', info, agent)
           },
           runId: String(id),
-          maxTotalAgents: request.maxTotalAgents,
-          createAgent: this.createAgent
-            ? async (call) => {
-                if (cancelled || ac.signal.aborted) {
-                  throw new WorkflowError(cancelReason, 'CANCELLED')
-                }
-                return this.createAgent!(request, call)
+          toolNames: this.toolBridge?.listNames() ?? [],
+          ...(typeof request.maxTotalAgents === 'number'
+            ? { maxTotalAgents: request.maxTotalAgents }
+            : {}),
+          ...(this.createAgent
+            ? {
+                createAgent: async (call: {
+                  label: string
+                  prompt: string
+                  phase?: string
+                }) => {
+                  if (cancelled || ac.signal.aborted) {
+                    throw new WorkflowError(cancelReason, 'CANCELLED')
+                  }
+                  return this.createAgent!(request, call)
+                },
               }
-            : undefined,
+            : {}),
+          ...(this.toolBridge ? { toolBridge: this.toolBridge } : {}),
         })
         if (cancelled || ac.signal.aborted) {
           return { value: null, stopReason: 'cancelled', error: cancelReason, agentsStarted }
@@ -532,11 +610,13 @@ async function runIsolatingWorkerScript(input: {
   readonly onAgentEnd: (agent: WorkflowAgentEndInfo) => void
   readonly runId: string
   readonly maxTotalAgents?: number
+  readonly toolNames?: readonly string[]
   readonly createAgent?: (call: {
     label: string
     prompt: string
     phase?: string
   }) => Promise<unknown>
+  readonly toolBridge?: WorkflowToolBridge
 }): Promise<WorkflowResult> {
   const { Worker } = await import('node:worker_threads')
   const workerSource = `
@@ -545,12 +625,12 @@ async function runIsolatingWorkerScript(input: {
     let callSeq = 0;
     const pending = new Map();
     parentPort.on('message', (msg) => {
-      if (!msg || msg.type !== 'agent-result') return;
+      if (!msg || (msg.type !== 'agent-result' && msg.type !== 'tool-result')) return;
       const wait = pending.get(msg.callId);
       if (!wait) return;
       pending.delete(msg.callId);
       if (msg.ok) wait.resolve(msg.value === undefined ? null : msg.value);
-      else wait.reject(new Error(String(msg.error || 'agent bridge failed')));
+      else wait.reject(new Error(String(msg.error || 'bridge failed')));
     });
     const phase = (title) => {
       parentPort.postMessage({ type: 'phase', title: String(title ?? '') });
@@ -600,11 +680,41 @@ async function runIsolatingWorkerScript(input: {
       });
       return value;
     };
+    const toolNames = Array.isArray(workerData.toolNames) ? workerData.toolNames : [];
+    const callTool = (name) => async (args) => {
+      const callId = 't' + (++callSeq);
+      parentPort.postMessage({
+        type: 'tool-call',
+        callId,
+        name: String(name),
+        args: args === undefined ? {} : args,
+      });
+      const out = await new Promise((resolve, reject) => {
+        pending.set(callId, { resolve, reject });
+      });
+      if (out && out.isError) {
+        throw new Error('tools.' + name + ' failed: ' + String(out.content || ''));
+      }
+      return out && typeof out.content === 'string' ? out.content : String(out && out.content != null ? out.content : '');
+    };
+    const tools = new Proxy({}, {
+      get(_target, prop) {
+        if (typeof prop !== 'string' || prop === 'then') return undefined;
+        return callTool(prop);
+      },
+      ownKeys() { return toolNames.slice(); },
+      getOwnPropertyDescriptor(_target, prop) {
+        if (typeof prop === 'string' && toolNames.includes(prop)) {
+          return { enumerable: true, configurable: true, writable: false, value: callTool(prop) };
+        }
+        return undefined;
+      },
+    });
     const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
     try {
-      const fn = new AsyncFunction('args', 'phase', 'log', 'agent',
+      const fn = new AsyncFunction('args', 'phase', 'log', 'agent', 'tools',
         '"use strict";\\n' + workerData.script);
-      Promise.resolve(fn(workerData.args, phase, log, agent)).then((value) => {
+      Promise.resolve(fn(workerData.args, phase, log, agent, tools)).then((value) => {
         parentPort.postMessage({
           type: 'done',
           ok: true,
@@ -636,6 +746,7 @@ async function runIsolatingWorkerScript(input: {
         script: input.script,
         args: input.args ?? null,
         runId: input.runId,
+        toolNames: [...(input.toolNames ?? [])],
         ...(typeof input.maxTotalAgents === 'number'
           ? { maxTotalAgents: input.maxTotalAgents }
           : {}),
@@ -677,6 +788,8 @@ async function runIsolatingWorkerScript(input: {
       childId?: string
       callId?: string
       prompt?: string
+      name?: string
+      args?: unknown
       outcome?: 'completed' | 'failed' | 'cancelled'
       ok?: boolean
       value?: unknown
@@ -726,6 +839,51 @@ async function runIsolatingWorkerScript(input: {
           } catch (err) {
             worker.postMessage({
               type: 'agent-result',
+              callId,
+              ok: false,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+        })()
+        return
+      }
+      if (msg.type === 'tool-call' && typeof msg.callId === 'string' && typeof msg.name === 'string') {
+        const callId = msg.callId
+        const name = msg.name
+        void (async () => {
+          try {
+            if (!input.toolBridge) {
+              worker.postMessage({
+                type: 'tool-result',
+                callId,
+                ok: false,
+                error: 'tools bridge not mounted',
+              })
+              return
+            }
+            const names = input.toolBridge.listNames()
+            if (!names.includes(name)) {
+              worker.postMessage({
+                type: 'tool-result',
+                callId,
+                ok: false,
+                error: `unknown tool: ${name}`,
+              })
+              return
+            }
+            const out = await input.toolBridge.call(name, msg.args ?? {}, input.signal)
+            worker.postMessage({
+              type: 'tool-result',
+              callId,
+              ok: true,
+              value: cloneForWorker({
+                content: out.content,
+                ...(out.isError ? { isError: true } : {}),
+              }),
+            })
+          } catch (err) {
+            worker.postMessage({
+              type: 'tool-result',
               callId,
               ok: false,
               error: err instanceof Error ? err.message : String(err),

@@ -15,7 +15,7 @@ import { bindSnapshotSelector } from '@xrkseek/client-test-runtime'
 import {
   createSnapshotStore, EMPTY_CONVERSATION_VIEWS, PendingWait,
 } from '@xrkseek/client-runtime/client'
-import { RpcId } from '@xrkseek/client-connection/client'
+import { RpcId } from '@xrkseek/xrk-host-apiproxy/api'
 import type {
   ChatNode, ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, SelectionTarget, UseChatNodeTurnData,
 } from '@xrkseek/client-ui-conversation/client'
@@ -556,6 +556,49 @@ describe('ChatView', () => {
 
     expect(view.getAllByText('same steering')).toHaveLength(2)
     expect(view.container.querySelectorAll('[data-pending-steering]')).toHaveLength(1)
+  })
+
+  it('renders a transcript submission echo and hands off by rpcId in the same render', () => {
+    const requestId = 'req-local-transcript' as RpcId
+    const pending = {
+      requestId,
+      placement: 'transcript' as const,
+      time: 1,
+      text: '本地回显',
+      attachments: [] as const,
+    }
+    const h = makeHarness({ pendingSubmissions: [pending], running: true })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByText('本地回显').closest('[data-submission-echo]')).not.toBeNull()
+
+    act(() => {
+      h.set({
+        pendingSubmissions: [pending],
+        nodes: [{
+          kind: 'user', seq: 1, time: 1_000,
+          content: [{ type: 'text', text: '本地回显' }] as never,
+          source: { kind: 'user', rpcId: requestId },
+        }],
+      })
+    })
+    expect(view.getAllByText('本地回显')).toHaveLength(1)
+    expect(view.container.querySelector('[data-submission-echo]')).toBeNull()
+  })
+
+  it('keeps queued submission echoes out of the conversation flow', () => {
+    const h = makeHarness({
+      pendingSubmissions: [{
+        requestId: 'req-queued-only' as RpcId,
+        placement: 'queued',
+        time: 1,
+        text: '只在 Dock',
+        attachments: [],
+      }],
+      running: true,
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.queryByText('只在 Dock')).toBeNull()
+    expect(view.container.querySelector('[data-submission-echo]')).toBeNull()
   })
 
   it('animates only the latest unresolved model retry', () => {

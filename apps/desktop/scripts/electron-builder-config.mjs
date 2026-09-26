@@ -1,13 +1,15 @@
 /**
- * electron-builder configuration factory (ADR-0008 · first-wave).
+ * electron-builder configuration factory (ADR-0008).
  * Pattern learned from deepseek-harness apps/desktop/scripts/electron-builder-config.mjs:
- * unsigned Windows via env · signing when credentials present · publish never at build · feed URL separate.
+ * unsigned Windows via env · token signing when credentials present · publish never at build · feed URL separate.
  */
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdirSync, writeFileSync } from "node:fs";
 
 const APP_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const requireFromApp = createRequire(join(APP_ROOT, "package.json"));
 
 /**
  * @param {NodeJS.ProcessEnv} env
@@ -19,6 +21,17 @@ export function createElectronBuilderConfig(
   hostPlatform = process.platform,
   hostArch = process.arch,
 ) {
+  const {
+    isDesktopUnsignedRequested,
+    resolveDesktopMacOSSigningEnvironment,
+    resolveDesktopWindowsSigningEnvironment,
+  } = requireFromApp("./dist/desktop-signing-environment.js");
+  const {
+    assertDesktopWindowsSigningReady,
+    createDesktopWindowsTokenSigner,
+    resolveDesktopWindowsUpdatePublisher,
+  } = requireFromApp("./dist/windows-sign.js");
+
   const targetPlatform = env.XRK_DESKTOP_TARGET_PLATFORM ?? hostPlatform;
   const targetArch = env.XRK_DESKTOP_TARGET_ARCH ?? hostArch;
   const explicit = env.XRK_DESKTOP_TARGET?.trim();
@@ -30,20 +43,42 @@ export function createElectronBuilderConfig(
         ? `mac-${targetArch}`
         : `${targetPlatform}-${targetArch}`);
 
-  if (targetName !== "win-x64" && targetName !== "mac-arm64") {
+  if (
+    targetName !== "win-x64" &&
+    targetName !== "mac-arm64" &&
+    targetName !== "mac-x64"
+  ) {
     throw new Error(
-      `xrk desktop: electron-builder first wave is win-x64 | mac-arm64 (got ${targetName})`,
+      `xrk desktop: electron-builder release targets are win-x64 | mac-arm64 | mac-x64 (got ${targetName})`,
     );
   }
 
-  const unsignedRaw = env.XRK_DESKTOP_UNSIGNED?.trim();
-  if (unsignedRaw !== undefined && unsignedRaw !== "" && unsignedRaw !== "0" && unsignedRaw !== "1") {
-    throw new Error("xrk desktop: XRK_DESKTOP_UNSIGNED must be 0 or 1");
-  }
-  const unsigned = unsignedRaw === "1";
+  const unsigned = isDesktopUnsignedRequested(env);
   if (unsigned && targetName !== "win-x64") {
     throw new Error("xrk desktop: unsigned packaging is Windows-only");
   }
+
+  const packagesWindows = targetName.startsWith("win-");
+  const packagesMacOS = targetName.startsWith("mac-");
+
+  const windowsSigning = packagesWindows && !unsigned
+    ? resolveDesktopWindowsSigningEnvironment(env)
+    : undefined;
+  /** @type {((configuration: { path: string, hash: string, isNest: boolean }) => Promise<void>) | undefined} */
+  let windowsSigner;
+  /** @type {string | undefined} */
+  let windowsPublisher;
+  if (windowsSigning !== undefined) {
+    assertDesktopWindowsSigningReady(windowsSigning);
+    windowsSigner = createDesktopWindowsTokenSigner(windowsSigning);
+    windowsPublisher = resolveDesktopWindowsUpdatePublisher(
+      windowsSigning.certificateFile,
+    );
+  }
+
+  const macOSSigning = packagesMacOS
+    ? resolveDesktopMacOSSigningEnvironment(env)
+    : undefined;
 
   const buildRoot = join(APP_ROOT, ".desktop-build", "targets", targetName);
   const artifacts = unsigned
@@ -51,18 +86,15 @@ export function createElectronBuilderConfig(
     : join(buildRoot, "artifacts");
   mkdirSync(artifacts, { recursive: true });
 
-  const winCer = env.XRK_DESKTOP_WINDOWS_CER_FILE?.trim();
-  const forceWinSign = !unsigned && Boolean(winCer);
-  const macIdentity = env.XRK_DESKTOP_MACOS_IDENTITY?.trim();
-
   const updateOrigin =
     (env.XRK_DESKTOP_AUTO_UPDATE_ENV?.trim() || "test") === "production"
       ? env.XRK_DESKTOP_UPDATE_ORIGIN?.trim()
       : env.XRK_DESKTOP_UPDATE_TEST_ORIGIN?.trim();
+  // Unsigned Windows builds must not embed a feed (matches dsh: update disabled when UNSIGNED=1).
   const updateUrl =
-    updateOrigin && updateOrigin.length > 0
-      ? `${updateOrigin.replace(/\/+$/u, "")}/desktop/${targetName}`
-      : undefined;
+    unsigned || !updateOrigin || updateOrigin.length === 0
+      ? undefined
+      : `${updateOrigin.replace(/\/+$/u, "")}/desktop/${targetName}`;
 
   const webRoot =
     env.XRK_DESKTOP_WEB_ROOT?.trim() ||
@@ -72,7 +104,8 @@ export function createElectronBuilderConfig(
   return {
     appId: "com.xrkseek.harness",
     productName: "XRK Harness",
-    artifactName: "xrk-harness-${version}-${os}-${arch}.${ext}",
+    // Unsigned builds carry a suffix so a shared file can never pass for a release artifact.
+    artifactName: `xrk-harness-\${version}-\${os}-\${arch}${unsigned ? "-unsigned" : ""}.\${ext}`,
     directories: { output: artifacts },
     asar: true,
     files: [
@@ -111,23 +144,26 @@ export function createElectronBuilderConfig(
     mac: {
       category: "public.app-category.developer-tools",
       hardenedRuntime: true,
-      identity: macIdentity || null,
-      forceCodeSigning: Boolean(macIdentity),
+      identity: macOSSigning?.signingIdentity ?? null,
+      forceCodeSigning: Boolean(macOSSigning?.signingIdentity),
       notarize: Boolean(
-        macIdentity &&
-          env.XRK_DESKTOP_MACOS_APPLE_ID?.trim() &&
-          env.XRK_DESKTOP_MACOS_APPLE_ID_PASSWORD?.trim() &&
-          env.XRK_DESKTOP_MACOS_TEAM_ID?.trim(),
+        macOSSigning &&
+          macOSSigning.appleId &&
+          macOSSigning.appleIdPassword &&
+          macOSSigning.teamId,
       ),
       target: ["dmg", "zip"],
     },
     win: {
-      forceCodeSigning: forceWinSign,
+      forceCodeSigning: windowsSigner !== undefined,
+      // Unsigned: skip Authenticode entirely (electron-builder otherwise still invokes signtool).
+      signAndEditExecutable: windowsSigner !== undefined,
       target: ["nsis"],
-      ...(forceWinSign
+      ...(windowsSigner !== undefined
         ? {
             signtoolOptions: {
-              certificateFile: winCer,
+              sign: windowsSigner,
+              publisherName: windowsPublisher,
               signingHashAlgorithms: ["sha256"],
             },
           }

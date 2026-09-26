@@ -17,3 +17,27 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build desktop package
+        run: pnpm --filter @xrkseek/harness-desktop build
+      - name: Package pipeline check (win-x64)
+        env:
+          XRK_DESKTOP_TARGET: win-x64
+        run: node ./scripts/package-desktop.mjs --check
+      - name: Upload plan / product-entry tests
+        run: >
+          pnpm exec vitest run
+          apps/desktop/tests/desktop-upload.test.ts
+          apps/desktop/tests/product-entry.test.ts
+          apps/desktop/tests/root-scripts.test.ts
+          apps/desktop/tests/update-coordinator.test.ts

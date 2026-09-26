@@ -893,6 +893,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       ? { autoReviewSlashPersist: options.autoReviewSlashPersist }
       : {}),
     getTool,
+    ...(options.tools !== undefined ? { tools: options.tools } : {}),
     ...(options.webPlugins !== undefined
       ? { webPlugins: options.webPlugins }
       : {}),

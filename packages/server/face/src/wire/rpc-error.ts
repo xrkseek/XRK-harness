@@ -177,6 +177,15 @@ export function mapFaceRpcError(
         details: { issues: [] },
       };
 
+    case "mcp-oauth-no-device":
+    case "mcp-oauth-failed":
+    case "mcp-oauth-discovery":
+      return {
+        code: "bad-request",
+        message: `${code}: ${message}`,
+        details: { reason: code, issues: [] },
+      };
+
     case "settings-scope-not-found":
     case "settings-readonly":
     case "settings-invalid":

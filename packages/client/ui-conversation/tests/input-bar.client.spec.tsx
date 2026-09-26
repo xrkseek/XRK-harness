@@ -273,6 +273,71 @@ function attachmentOwner(slotCalls: readonly { key: string; owner: unknown }[]):
   throw new Error('attachment slot was not rendered')
 }
 
+/** Write the draft through the shell inside act (the seed path; caret lands at the end). */
+function writeDraft(shell: SessionInputShell, text: string): void {
+  act(() => { shell.setDraft(text) })
+}
+
+describe('composer focus handoff', () => {
+  it('focus() returns the keyboard to the editor through Lexical, not a bare DOM focus', () => {
+    const { shell, textarea } = bench()
+    writeDraft(shell, 'draft text')
+    textarea.blur()
+    expect(document.activeElement).not.toBe(textarea)
+
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+    act(() => { shell.focus() })
+    expect(document.activeElement).toBe(textarea)
+    // Lexical's own focus restores its stored selection; a bare DOM focus would
+    // land the caret at the start of the draft. jsdom carries no caret, so the
+    // selection itself is asserted in the browser lane.
+    expect(lexicalFocus).toHaveBeenCalled()
+  })
+})
+
+describe('composer placeholder visibility', () => {
+  it.each([' ', '   ', '\t', '\n'])('hides for whitespace %j and returns after deletion', async (draft) => {
+    const { view, shell, textarea, button, sink, props } = bench()
+    const placeholder = () => view.container.querySelector('[data-composer-placeholder]')
+    expect(placeholder()).not.toBeNull()
+    writeDraft(shell, draft)
+    expect(placeholder()).toBeNull()
+    expect(button.disabled).toBe(true)
+    fireEvent.keyDown(textarea, { key: 'Enter', keyCode: 13 })
+    await act(async () => {})
+    expect(sink).not.toHaveBeenCalled()
+    fireEvent.blur(textarea)
+    view.rerender(<InputBar {...props} />)
+    fireEvent.focus(textarea)
+    expect(placeholder()).toBeNull()
+    writeDraft(shell, '')
+    expect(placeholder()).not.toBeNull()
+  })
+
+  it('hides for pasted spaces and restores after clearing', async () => {
+    const { view, shell, textarea } = bench()
+    fireEvent.paste(textarea, {
+      clipboardData: { items: [], getData: () => '   ' },
+    })
+    await vi.waitFor(() => { expect(shell.snapshot.draft).toBe('   ') })
+    expect(view.container.querySelector('[data-composer-placeholder]')).toBeNull()
+    writeDraft(shell, '')
+    expect(view.container.querySelector('[data-composer-placeholder]')).not.toBeNull()
+  })
+
+  it('keeps whitespace hidden through composition and rerender', () => {
+    const { view, shell, textarea, props } = bench()
+    fireEvent.compositionStart(textarea)
+    writeDraft(shell, ' ')
+    expect(view.container.querySelector('[data-composer-placeholder]')).toBeNull()
+    view.rerender(<InputBar {...props} />)
+    fireEvent.compositionEnd(textarea, { data: ' ' })
+    expect(view.container.querySelector('[data-composer-placeholder]')).toBeNull()
+    writeDraft(shell, '')
+    expect(view.container.querySelector('[data-composer-placeholder]')).not.toBeNull()
+  })
+})
+
 describe('image draft rail', () => {
   it('collects clipboard files while preserving text from a mixed paste', () => {
     const addImages = vi.fn(() => null)
@@ -683,6 +748,37 @@ describe('Enter semantics', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('suppresses placeholders throughout native composition, including a temporarily empty draft', async () => {
+    const { shell, textarea, view } = bench()
+    expect(view.container.querySelector('[data-composer-placeholder]')).not.toBeNull()
+    fireEvent.compositionStart(textarea)
+    expect(textarea.hasAttribute('data-composer-composing')).toBe(true)
+    act(() => { shell.setDraft('z') })
+    act(() => { shell.setDraft('') })
+    expect(textarea.hasAttribute('data-composer-composing')).toBe(true)
+    fireEvent.compositionEnd(textarea, { data: '' })
+    expect(textarea.hasAttribute('data-composer-composing')).toBe(true)
+    await act(async () => {})
+    expect(textarea.hasAttribute('data-composer-composing')).toBe(false)
+
+    act(() => {
+      shell.setDraft('/目标 ')
+      shell.beginCommand(
+        { name: 'goal', token: '/目标 ', hint: '目标内容', submit: () => Promise.resolve({ kind: 'success' as const }) },
+        { start: 0, end: 4, draftRev: shell.snapshot.draftRev },
+      )
+    })
+    fireEvent.compositionStart(textarea)
+    act(() => { shell.setDraft('/目标 z') })
+    act(() => { shell.setDraft('/目标 ') })
+    expect(textarea.hasAttribute('data-composer-composing')).toBe(true)
+    fireEvent.compositionEnd(textarea, { data: '这' })
+    act(() => { shell.setDraft('/目标 这') })
+    await act(async () => {})
+    expect(textarea.hasAttribute('data-composer-composing')).toBe(false)
+    expect(textarea.style.getPropertyValue('--xrk-composer-hint')).toBe('')
   })
 })
 

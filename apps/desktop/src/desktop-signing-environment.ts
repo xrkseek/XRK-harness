@@ -113,3 +113,73 @@ export function isDesktopMacOSNotarizationReady(
     signing.teamId !== undefined
   );
 }
+
+/** Signing mode recorded in `package-plan.json` (no secrets). */
+export type DesktopSigningPlanMode =
+  | "unsigned"
+  | "windows-token"
+  | "macos-identity"
+  | "none";
+
+export interface DesktopSigningPlan {
+  readonly mode: DesktopSigningPlanMode;
+  /** macOS notarize when Apple-id trio is present. */
+  readonly notarize: boolean;
+  /** True when forceCodeSigning will be set on the target platform. */
+  readonly forceCodeSigning: boolean;
+}
+
+/**
+ * Summarize signing intent for package-plan / CI without echoing secrets.
+ * Windows release signing requires the full token identity (CER + SignTool + PIN + container).
+ */
+export function describeDesktopSigningPlan(
+  env: NodeJS.ProcessEnv = process.env,
+  hostPlatform: NodeJS.Platform = process.platform,
+): DesktopSigningPlan {
+  if (isDesktopUnsignedRequested(env)) {
+    return { mode: "unsigned", notarize: false, forceCodeSigning: false };
+  }
+  const targetPlatform = String(env.XRK_DESKTOP_TARGET_PLATFORM ?? hostPlatform)
+    .trim()
+    .toLowerCase();
+  const explicit = env.XRK_DESKTOP_TARGET?.trim().toLowerCase();
+  const isWin =
+    explicit?.startsWith("win-") === true ||
+    targetPlatform === "win32" ||
+    targetPlatform === "win";
+  const isMac =
+    explicit?.startsWith("mac-") === true ||
+    targetPlatform === "darwin" ||
+    targetPlatform === "mac";
+
+  if (isWin) {
+    const win = resolveDesktopWindowsSigningEnvironment(env);
+    if (win === undefined) {
+      return { mode: "none", notarize: false, forceCodeSigning: false };
+    }
+    const tokenReady =
+      Boolean(win.signTool?.trim()) &&
+      Boolean(win.tokenPin) &&
+      Boolean(win.keyContainer?.trim());
+    if (!tokenReady) {
+      throw new Error(
+        "xrk desktop: Windows signing requires SignTool + token PIN + key container " +
+          "(or set XRK_DESKTOP_UNSIGNED=1)",
+      );
+    }
+    return { mode: "windows-token", notarize: false, forceCodeSigning: true };
+  }
+  if (isMac) {
+    const mac = resolveDesktopMacOSSigningEnvironment(env);
+    if (mac === undefined) {
+      return { mode: "none", notarize: false, forceCodeSigning: false };
+    }
+    return {
+      mode: "macos-identity",
+      notarize: isDesktopMacOSNotarizationReady(mac),
+      forceCodeSigning: true,
+    };
+  }
+  return { mode: "none", notarize: false, forceCodeSigning: false };
+}

@@ -225,7 +225,10 @@ export class InputTriggerController {
         this.reduce({ type: 'move', dir: 1 })
         return 'consumed'
       }
-      case 'escape': {
+      case 'escape':
+      case 'tabBack': {
+        // Escape leaves, and Shift+Tab leaves with it: the exit gesture never
+        // settles a candidate, so it cannot consume or rewrite the draft.
         this.stopFetch()
         this.reduce({ type: 'close' })
         return 'consumed'

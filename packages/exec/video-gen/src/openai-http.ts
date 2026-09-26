@@ -9,6 +9,7 @@ import type {
   VideoGenCapabilities,
   VideoGenContent,
   VideoGenCreateKind,
+  VideoGenDelivery,
   VideoGenJob,
   VideoGenRequest,
   VideoGenSeconds,
@@ -28,6 +29,9 @@ export interface OpenAiVideoGenOptions {
   readonly defaultSize?: VideoGenSize;
   /** Override caps (tests); default = OpenAI family catalog. */
   readonly capabilities?: VideoGenCapabilities;
+  /** Result label (DeepInfra / OpenRouter-compatible reuse). */
+  readonly delivery?: VideoGenDelivery;
+  readonly providerName?: string;
 }
 
 const STATUSES: readonly VideoGenStatus[] = [
@@ -62,6 +66,8 @@ function parseJob(
   extras?: {
     readonly kind?: VideoGenCreateKind;
     readonly modality?: "text" | "image";
+    readonly delivery?: VideoGenDelivery;
+    readonly providerName?: string;
   },
 ): VideoGenJob {
   const row = (json ?? {}) as RawVideoRow;
@@ -85,6 +91,8 @@ function parseJob(
     row.error && typeof row.error === "object"
       ? String(row.error.message ?? "").trim()
       : "";
+  const delivery = extras?.delivery ?? "openai";
+  const providerName = extras?.providerName ?? "openai";
   return {
     jobId,
     status,
@@ -93,9 +101,9 @@ function parseJob(
     ...(seconds !== undefined && Number.isFinite(seconds) ? { seconds } : {}),
     ...(row.size ? { size: String(row.size) } : {}),
     ...(message ? { error: message } : {}),
-    provider: "openai",
-    delivery: "openai",
-    note: `openai-videos status=${status}`,
+    provider: providerName,
+    delivery,
+    note: `${providerName}-videos status=${status}`,
     ...(extras?.kind ? { kind: extras.kind } : {}),
     ...(extras?.modality ? { modality: extras.modality } : {}),
   };
@@ -110,7 +118,10 @@ export function createOpenAiVideoGenProvider(
   const defaultSeconds = options.defaultSeconds ?? 4;
   const defaultSize = options.defaultSize ?? "1280x720";
   const caps = options.capabilities ?? OPENAI_VIDEO_GEN_CAPABILITIES;
+  const delivery = options.delivery ?? "openai";
+  const providerName = options.providerName ?? "openai";
   const auth = { Authorization: `Bearer ${options.apiKey}` };
+  const jobExtras = { delivery, providerName };
 
   const requireId = (jobId: unknown): string => {
     const id = String(jobId ?? "").trim();
@@ -128,11 +139,11 @@ export function createOpenAiVideoGenProvider(
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       throw new VideoGenError(
-        `OpenAI video status HTTP ${res.status}: ${body.slice(0, 200)}`,
+        `${providerName} video status HTTP ${res.status}: ${body.slice(0, 200)}`,
         "VIDEO_GEN_BACKEND",
       );
     }
-    return parseJob(await res.json());
+    return parseJob(await res.json(), jobExtras);
   };
 
   const postJson = async (
@@ -151,11 +162,11 @@ export function createOpenAiVideoGenProvider(
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new VideoGenError(
-        `OpenAI ${path} HTTP ${res.status}: ${text.slice(0, 200)}`,
+        `${providerName} ${path} HTTP ${res.status}: ${text.slice(0, 200)}`,
         "VIDEO_GEN_BACKEND",
       );
     }
-    return parseJob(await res.json(), { kind, modality: "text" });
+    return parseJob(await res.json(), { kind, modality: "text", ...jobExtras });
   };
 
   return {
@@ -173,7 +184,7 @@ export function createOpenAiVideoGenProvider(
       if (kind === "edit") {
         if (!caps.supportsEdit) {
           throw new VideoGenError(
-            "OpenAI Provider configured without edit capability",
+            `${providerName} Provider configured without edit capability`,
             "VIDEO_GEN_BAD_ARGS",
           );
         }
@@ -194,7 +205,7 @@ export function createOpenAiVideoGenProvider(
       if (kind === "extend") {
         if (!caps.supportsExtend) {
           throw new VideoGenError(
-            "OpenAI Provider configured without extend capability",
+            `${providerName} Provider configured without extend capability`,
             "VIDEO_GEN_BAD_ARGS",
           );
         }
@@ -219,13 +230,13 @@ export function createOpenAiVideoGenProvider(
       const stills = first ? [first, ...extras] : [...extras];
       if (stills.length > 0 && caps.maxReferenceImages <= 0) {
         throw new VideoGenError(
-          "OpenAI Provider configured without i2v capability",
+          `${providerName} Provider configured without i2v capability`,
           "VIDEO_GEN_BAD_ARGS",
         );
       }
       if (stills.length > caps.maxReferenceImages) {
         throw new VideoGenError(
-          `at most ${caps.maxReferenceImages} reference image(s) for OpenAI i2v`,
+          `at most ${caps.maxReferenceImages} reference image(s) for ${providerName} i2v`,
           "VIDEO_GEN_BAD_ARGS",
         );
       }
@@ -252,13 +263,14 @@ export function createOpenAiVideoGenProvider(
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         throw new VideoGenError(
-          `OpenAI videos HTTP ${res.status}: ${body.slice(0, 200)}`,
+          `${providerName} videos HTTP ${res.status}: ${body.slice(0, 200)}`,
           "VIDEO_GEN_BACKEND",
         );
       }
       return parseJob(await res.json(), {
         kind: "generate",
         modality: stills.length > 0 ? "image" : "text",
+        ...jobExtras,
       });
     },
 
@@ -283,7 +295,7 @@ export function createOpenAiVideoGenProvider(
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         throw new VideoGenError(
-          `OpenAI video content HTTP ${res.status}: ${body.slice(0, 200)}`,
+          `${providerName} video content HTTP ${res.status}: ${body.slice(0, 200)}`,
           "VIDEO_GEN_BACKEND",
         );
       }
@@ -291,8 +303,8 @@ export function createOpenAiVideoGenProvider(
       return {
         bytes: new Uint8Array(ab),
         mimeType: "video/mp4",
-        provider: "openai",
-        note: `openai-videos bytes=${ab.byteLength}`,
+        provider: providerName,
+        note: `${providerName}-videos bytes=${ab.byteLength}`,
       };
     },
   };

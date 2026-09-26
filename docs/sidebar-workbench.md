@@ -21,6 +21,8 @@
 
 - 不迁 `ui-dockkit` 分栏引擎作产品默认右栏。
 - `details` 不作为工具 Detail / 文件预览列（职责已由 Status / 工作台承担）。
+- 首方薄壳**不含**：终端 · 浏览器 · git UI · 多级展开树 · MD/代码高亮 / Office 预览（这些由社区 `xrkh-better-sidebar` 或 Host API 承载）。
+- 打开入口：会话头 **文件** 按钮 → `ctx.workbench.show()`；聊天路径 → `openPath`；有 `ctx.betterSidebar` 时按钮与面板均让位。
 
 安装社区侧栏：
 
@@ -53,6 +55,8 @@ The product shell splits the right side into two tracks; it does not port the fu
 
 - No product-default `ui-dockkit` docking engine.
 - `details` is not a tool Detail / file-preview column (that role belongs to Status / workbench).
+- The thin shell **does not** ship: terminal · browser · git UI · deep expandable tree · MD/code highlight / Office preview (those stay on community `xrkh-better-sidebar` or Host APIs).
+- Open entry: session-header **Files** → `ctx.workbench.show()`; chat paths → `openPath`; both the toggle and panel yield when `ctx.betterSidebar` is present.
 
 Install the community sidebar:
 

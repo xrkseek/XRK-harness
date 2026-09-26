@@ -22,22 +22,72 @@ export function imageGenUnavailableMessage(
   product?: { readonly mode?: string },
 ): string {
   const envRaw = String(env.XRK_IMAGE_GEN ?? "").trim();
-  const flag = envRaw !== ""
-    ? envRaw.toLowerCase()
-    : product?.mode === "openai"
-      ? "1"
-      : "";
+  const productMode = String(product?.mode ?? "").trim().toLowerCase();
+  const known = new Set([
+    "openai",
+    "fal",
+    "xai",
+    "openrouter",
+    "deepinfra",
+    "krea",
+    "meta-ai",
+    "meta",
+  ]);
+  const flag =
+    envRaw !== ""
+      ? envRaw.toLowerCase()
+      : known.has(productMode)
+        ? productMode === "openai"
+          ? "1"
+          : productMode
+        : "";
   if (!flag) {
     return (
-      "Error: image generation is not enabled. Use Settings → Plugins → Image gen, or set " +
-      "XRK_IMAGE_GEN=memory (CI/demo) / XRK_IMAGE_GEN=1 with OPENAI_API_KEY / XRK_IMAGE_GEN_OPENAI_KEY. " +
-      "See docs/image-gen.md."
+      "Error: image generation is not enabled. Use Settings → Plugins → Image gen " +
+      "(openai / fal / xai / openrouter / deepinfra / krea / meta-ai), or set XRK_IMAGE_GEN=memory (CI/demo) " +
+      "/=1|openai|fal|xai|openrouter|deepinfra|krea|meta-ai with the matching key. See docs/image-gen.md."
     );
   }
   if (flag === "1" || flag === "openai") {
     return (
-      "Error: image gen is enabled but no API key. Set Credentials XRK_IMAGE_GEN_OPENAI_KEY " +
+      "Error: image gen (openai) is enabled but no API key. Set Credentials XRK_IMAGE_GEN_OPENAI_KEY " +
       "(or OPENAI_API_KEY); optional base URL / model via Settings or env."
+    );
+  }
+  if (flag === "fal") {
+    return (
+      "Error: image gen (fal) is enabled but no API key. Set Credentials XRK_IMAGE_GEN_FAL_KEY " +
+      "(or FAL_KEY); optional endpoint / model via Settings or env."
+    );
+  }
+  if (flag === "xai") {
+    return (
+      "Error: image gen (xai) is enabled but no API key. Set Credentials XRK_IMAGE_GEN_XAI_KEY " +
+      "(or XAI_API_KEY); optional base URL / model via Settings or env."
+    );
+  }
+  if (flag === "openrouter") {
+    return (
+      "Error: image gen (openrouter) is enabled but no API key. Set Credentials XRK_IMAGE_GEN_OPENROUTER_KEY " +
+      "(or OPENROUTER_API_KEY)."
+    );
+  }
+  if (flag === "deepinfra") {
+    return (
+      "Error: image gen (deepinfra) is enabled but no API key. Set Credentials XRK_IMAGE_GEN_DEEPINFRA_KEY " +
+      "(or DEEPINFRA_API_KEY)."
+    );
+  }
+  if (flag === "krea") {
+    return (
+      "Error: image gen (krea) is enabled but no API key. Set Credentials XRK_IMAGE_GEN_KREA_KEY " +
+      "(or KREA_API_KEY)."
+    );
+  }
+  if (flag === "meta-ai" || flag === "meta") {
+    return (
+      "Error: image gen (meta-ai) is enabled but no API key. Set Credentials XRK_IMAGE_GEN_META_KEY " +
+      "(or META_MODEL_API_KEY)."
     );
   }
   return (

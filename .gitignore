@@ -16,6 +16,7 @@ packages/stubs/**/lib/
 .env
 .env.*
 !.env.example
+!.env.*.example
 .DS_Store
 __pycache__/
 *.pyc
@@ -37,6 +38,8 @@ __pycache__/
 
 # Desktop unpackaged build / isolated development home (ADR-0008)
 apps/desktop/.desktop-build/
+apps/desktop/.env.windows
+apps/desktop/.env.macos
 
 # Release staging (fat CLI)
 .release/

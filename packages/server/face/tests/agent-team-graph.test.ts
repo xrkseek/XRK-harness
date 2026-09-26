@@ -124,4 +124,49 @@ describe("agent team graph", () => {
     };
     expect(raw.roles).toEqual({ root: "delegator", watcher: "observer" });
   });
+
+  it("unlinks peers, removes observer nodes, and reports neighbors/depth", () => {
+    const graph = new AgentTeamGraph();
+    const registry = new FaceSubagentRegistry(undefined, {
+      onAttach: (link) => graph.recordDelegation(link),
+    });
+    registry.attach({
+      parentSessionId: "root",
+      childSessionId: "worker-1",
+      mode: "one-shot",
+      label: "worker",
+    });
+    registry.attach({
+      parentSessionId: "worker-1",
+      childSessionId: "worker-2",
+      mode: "one-shot",
+      label: "nested",
+    });
+    graph.linkPeers("root", "watcher", "observe");
+    graph.linkPeers("worker-1", "watcher", "review");
+
+    expect(graph.depthFrom("root", "root")).toBe(0);
+    expect(graph.depthFrom("root", "worker-1")).toBe(1);
+    expect(graph.depthFrom("root", "worker-2")).toBe(2);
+    expect(graph.depthFrom("root", "watcher")).toBeUndefined();
+
+    const peers = graph.neighbors("root", "peer");
+    expect(peers.map((p) => p.id)).toEqual(["watcher"]);
+    expect(graph.neighbors("worker-1", "delegates").some((n) => n.id === "worker-2")).toBe(
+      true,
+    );
+
+    expect(graph.unlinkPeers("worker-1", "watcher")).toBe(true);
+    expect(graph.neighbors("worker-1", "peer")).toEqual([]);
+
+    expect(graph.removeNode("watcher")).toBe(true);
+    const view = graph.view("root");
+    expect(view.nodes.map((n) => n.id).sort()).toEqual([
+      "root",
+      "worker-1",
+      "worker-2",
+    ]);
+    expect(view.nodes.find((n) => n.id === "worker-2")?.depth).toBe(2);
+    expect(graph.unlinkPeers("root", "missing")).toBe(false);
+  });
 });

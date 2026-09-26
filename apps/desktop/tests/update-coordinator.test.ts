@@ -44,7 +44,7 @@ describe("desktop release / update unit", () => {
       "blockmap-differential-reuse",
     );
     expect(DESKTOP_UPDATE_PHASE2_DEFERRED).toContain(
-      "artifact-upload-pipeline",
+      "cos-https-put-transport",
     );
     expect(isDesktopUpdatePhase2Deferred("blockmap-differential-reuse")).toBe(
       true,
@@ -180,5 +180,24 @@ describe("DesktopUpdateCoordinator", () => {
     });
     await expect(coordinator.check()).resolves.toEqual({ phase: "idle" });
     expect(updater.checkForUpdates).not.toHaveBeenCalled();
+  });
+
+  it("treats equal feed version as idle via currentVersion", async () => {
+    const updater = {
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      checkForUpdates: vi.fn(async () => ({
+        updateInfo: { version: "1.0.0" },
+      })),
+      downloadUpdate: vi.fn(),
+      quitAndInstall: vi.fn(),
+    } satisfies DesktopAppUpdater;
+    const coordinator = new DesktopUpdateCoordinator({
+      publish: (state) => state,
+      updater,
+      enabled: () => true,
+      currentVersion: () => "1.0.0",
+    });
+    await expect(coordinator.check()).resolves.toEqual({ phase: "idle" });
   });
 });

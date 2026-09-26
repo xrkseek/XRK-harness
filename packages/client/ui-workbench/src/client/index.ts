@@ -9,14 +9,18 @@
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-locale/client'
 import type {} from '@xrkseek/client-ui-layout/client'
+import type {} from '@xrkseek/client-ui-conversation/client'
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import { WorkbenchController } from './controller.ts'
 import { WorkbenchPanel } from './WorkbenchPanel.tsx'
+import { WorkbenchToggle } from './WorkbenchToggle.tsx'
 import { en, zh, type WorkbenchKey } from './locales.ts'
 
 export type { WorkbenchKey } from './locales.ts'
 export type { WorkbenchFace, WorkbenchFsEntry } from './fs-api.ts'
+export type { WorkbenchToggleInjected, WorkbenchToggleProps } from './WorkbenchToggle.tsx'
 export { WorkbenchController } from './controller.ts'
+export { WorkbenchToggle } from './WorkbenchToggle.tsx'
 export {
   isImagePath, isPdfPath, listFsTree, readFsFile, sidebarApi, sidebarFileUrl,
 } from './fs-api.ts'
@@ -80,4 +84,20 @@ export function apply(ctx: ClientContext): void {
       }
     },
   }, WorkbenchPanel), 'ui-workbench: overlay')
+
+  ctx.slots.inject(
+    'conversation.session.header.actions',
+    () => ctx.slots.register({
+      name: 'conversation.session.header.actions',
+      id: 'workbench-toggle',
+      // After jobs (20): Files is a workspace utility, not process work.
+      order: 25,
+      locale: NS,
+      inject: () => ({
+        workbench: controller,
+        yielded: isYielded,
+      }),
+    }, WorkbenchToggle),
+    'ui-workbench: header toggle',
+  )
 }

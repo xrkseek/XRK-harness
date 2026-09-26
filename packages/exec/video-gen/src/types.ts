@@ -11,7 +11,14 @@
  * `image_url` → i2v) and OpenAI Videos (input_reference / edits / extensions).
  */
 
-export type VideoGenDelivery = "memory" | "openai" | "unavailable";
+export type VideoGenDelivery =
+  | "memory"
+  | "openai"
+  | "fal"
+  | "xai"
+  | "openrouter"
+  | "deepinfra"
+  | "unavailable";
 
 export type VideoGenErrorCode =
   | "VIDEO_GEN_UNAVAILABLE"

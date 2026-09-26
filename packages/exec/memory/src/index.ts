@@ -37,6 +37,17 @@ export {
   createCuratedMemoryTools,
 } from "./tools.js";
 export {
+  CONSOLIDATE_LEASE_FILE,
+  CONSOLIDATE_REPORT_FILE,
+  tryClaimConsolidateLease,
+  readConsolidateReport,
+  writeConsolidateReport,
+  runCuratedMemoryConsolidate,
+  type CuratedMemoryConsolidateReport,
+  type CuratedMemoryPhase2Status,
+  type RunCuratedMemoryConsolidateInput,
+} from "./consolidate-pipeline.js";
+export {
   extractReusableNotes,
   writeReusableNotesAfterTurn,
   consolidateCuratedMemoryPhase1,

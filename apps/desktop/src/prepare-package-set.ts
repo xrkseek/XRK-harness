@@ -38,6 +38,7 @@ import {
   writeDesktopSeedIntegrity,
   type DesktopSeedIntegrity,
 } from "./seed-integrity.js";
+import { scrubDesktopSigningEnvironment } from "./windows-sign.js";
 
 const FIRST_PARTY_PREFIX = "@xrkseek/";
 const REQUIRED_DEPENDENCY_SECTIONS = [
@@ -398,7 +399,12 @@ export function packDesktopFirstPartyPackages(options: {
       const result = spawnSync(
         "pnpm",
         ["pack", `--pack-destination=${destDir}`],
-        { cwd: packageDir, encoding: "utf8", shell: true },
+        {
+          cwd: packageDir,
+          encoding: "utf8",
+          shell: true,
+          env: scrubDesktopSigningEnvironment(process.env),
+        },
       );
       if (result.error !== undefined || result.status !== 0) {
         throw new Error(

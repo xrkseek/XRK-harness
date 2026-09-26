@@ -19,8 +19,7 @@ import {
   shouldConfineSandbox,
 } from "@xrkseek/protocol";
 import {
-  consolidateCuratedMemoryPhase1,
-  consolidateCuratedMemoryPhase2,
+  runCuratedMemoryConsolidate,
   resolveMemoryProvider,
   type MemoryProvider,
 } from "@xrkseek/exec-memory";
@@ -31,6 +30,7 @@ import { installOutboundHttpProxy } from "./http-proxy.js";
 import { mountInvariantsFailFast } from "./invariants-fail-fast.js";
 import { watchPolicyFile } from "./policy-file-watch.js";
 import { createA2aInboundPublicHandler } from "./a2a-inbound-public.js";
+import { mountHostIsolatingWorkflowEngine } from "./workflow-engine-mount.js";
 import {
   applyXrkProductBootPolicy,
   chainPublicHandlers,
@@ -886,20 +886,42 @@ export function createHostManager(): HostManager {
           if (userTexts.length === 0) return;
           const memStore = getCuratedMemProvider();
           void (async () => {
-            await consolidateCuratedMemoryPhase1(memStore, { userTexts });
-            if (!phase2Llm) return;
-            const llm = llmResolverBox.resolve?.(sessionId);
-            if (!llm?.chat) return;
-            await consolidateCuratedMemoryPhase2(memStore, {
+            let phase2Complete:
+              | ((prompt: string) => Promise<string>)
+              | undefined;
+            if (phase2Llm) {
+              const llm = llmResolverBox.resolve?.(sessionId);
+              if (llm?.chat) {
+                phase2Complete = async (prompt) => {
+                  const out = await llm.chat({
+                    messages: [{ role: "user", content: prompt }],
+                  });
+                  return String(out.content ?? "");
+                };
+              }
+            }
+            const report = await runCuratedMemoryConsolidate({
+              store: memStore,
+              sessionId,
               userTexts,
               assistantTexts,
-              complete: async (prompt) => {
-                const out = await llm.chat({
-                  messages: [{ role: "user", content: prompt }],
-                });
-                return String(out.content ?? "");
-              },
+              ...(phase2Complete ? { phase2Complete } : {}),
+              ...(phase2Llm ? { phase2Requested: true } : {}),
+              providerKind: memStore.providerName,
             });
+            if (rt) {
+              rt.curatedMemoryConsolidate = {
+                sessionId: report.sessionId,
+                at: report.at,
+                phase1Written: report.phase1Written,
+                phase2: report.phase2,
+                phase2Written: report.phase2Written,
+                ...(report.skipped ? { skipped: report.skipped } : {}),
+                ...(report.providerKind
+                  ? { providerKind: report.providerKind }
+                  : {}),
+              };
+            }
           })();
         } catch {
           /* best-effort — Host stop / archive must continue */
@@ -1634,6 +1656,14 @@ export function createHostManager(): HostManager {
       faceBox.approvals = faceRuntime.approvals;
       faceBox.questions = faceRuntime.questions;
       faceBox.runtime = faceRuntime;
+      const workflowMount = mountHostIsolatingWorkflowEngine(faceRuntime);
+      Object.assign(hostPublic, {
+        workflowEngine: {
+          provider: workflowMount.provider,
+          createAgentBridged: true as const,
+          toolsBridged: workflowMount.toolsBridged,
+        },
+      });
       // Face hydrate may migrate legacy settings.yaml mcp → host-settings after
       // boot reconcile already ran with []. Remount once when file-sourced.
       if (mcpFileSourced && mcpSpecs.length === 0) {
@@ -1970,17 +2000,65 @@ export function createHostManager(): HostManager {
             : undefined;
         const imageGenProduct: import("@xrkseek/exec-image-gen").ImageGenProductConfig =
           {
-            mode: imageModeRaw === "openai" ? "openai" : "off",
+            mode:
+              imageModeRaw === "openai" ||
+              imageModeRaw === "fal" ||
+              imageModeRaw === "xai" ||
+              imageModeRaw === "openrouter" ||
+              imageModeRaw === "deepinfra" ||
+              imageModeRaw === "krea" ||
+              imageModeRaw === "meta-ai"
+                ? imageModeRaw
+                : "off",
             ...(imageBase ? { baseUrl: imageBase } : {}),
             ...(imageModel ? { model: imageModel } : {}),
           };
-        const imageKey =
+        const imageOpenAiKey =
           faceRuntime.credentials.peek("image.openai")?.trim() ||
           process.env.XRK_IMAGE_GEN_OPENAI_KEY?.trim() ||
           "";
-        const imageGenEnv: NodeJS.ProcessEnv | undefined = imageKey
-          ? { ...process.env, XRK_IMAGE_GEN_OPENAI_KEY: imageKey }
-          : undefined;
+        const imageFalKey =
+          faceRuntime.credentials.peek("image.fal")?.trim() ||
+          process.env.XRK_IMAGE_GEN_FAL_KEY?.trim() ||
+          process.env.FAL_KEY?.trim() ||
+          "";
+        const imageXaiKey =
+          faceRuntime.credentials.peek("image.xai")?.trim() ||
+          process.env.XRK_IMAGE_GEN_XAI_KEY?.trim() ||
+          process.env.XAI_API_KEY?.trim() ||
+          "";
+        const imageOpenRouterKey =
+          faceRuntime.credentials.peek("image.openrouter")?.trim() ||
+          process.env.XRK_IMAGE_GEN_OPENROUTER_KEY?.trim() ||
+          process.env.OPENROUTER_API_KEY?.trim() ||
+          "";
+        const imageDeepInfraKey =
+          faceRuntime.credentials.peek("image.deepinfra")?.trim() ||
+          process.env.XRK_IMAGE_GEN_DEEPINFRA_KEY?.trim() ||
+          process.env.DEEPINFRA_API_KEY?.trim() ||
+          "";
+        const imageKreaKey =
+          faceRuntime.credentials.peek("image.krea")?.trim() ||
+          process.env.XRK_IMAGE_GEN_KREA_KEY?.trim() ||
+          process.env.KREA_API_KEY?.trim() ||
+          "";
+        const imageMetaKey =
+          faceRuntime.credentials.peek("image.meta-ai")?.trim() ||
+          process.env.XRK_IMAGE_GEN_META_KEY?.trim() ||
+          process.env.META_MODEL_API_KEY?.trim() ||
+          "";
+        const imageGenEnv: NodeJS.ProcessEnv = { ...process.env };
+        if (imageOpenAiKey) imageGenEnv.XRK_IMAGE_GEN_OPENAI_KEY = imageOpenAiKey;
+        if (imageFalKey) imageGenEnv.XRK_IMAGE_GEN_FAL_KEY = imageFalKey;
+        if (imageXaiKey) imageGenEnv.XRK_IMAGE_GEN_XAI_KEY = imageXaiKey;
+        if (imageOpenRouterKey) {
+          imageGenEnv.XRK_IMAGE_GEN_OPENROUTER_KEY = imageOpenRouterKey;
+        }
+        if (imageDeepInfraKey) {
+          imageGenEnv.XRK_IMAGE_GEN_DEEPINFRA_KEY = imageDeepInfraKey;
+        }
+        if (imageKreaKey) imageGenEnv.XRK_IMAGE_GEN_KREA_KEY = imageKreaKey;
+        if (imageMetaKey) imageGenEnv.XRK_IMAGE_GEN_META_KEY = imageMetaKey;
         const videoNs = faceRuntime.settingsNamespaces.view("video-gen")
           .value as Record<string, unknown>;
         const videoModeRaw =
@@ -1997,17 +2075,51 @@ export function createHostManager(): HostManager {
             : undefined;
         const videoGenProduct: import("@xrkseek/exec-video-gen").VideoGenProductConfig =
           {
-            mode: videoModeRaw === "openai" ? "openai" : "off",
+            mode:
+              videoModeRaw === "openai" ||
+              videoModeRaw === "fal" ||
+              videoModeRaw === "xai" ||
+              videoModeRaw === "openrouter" ||
+              videoModeRaw === "deepinfra"
+                ? videoModeRaw
+                : "off",
             ...(videoBase ? { baseUrl: videoBase } : {}),
             ...(videoModel ? { model: videoModel } : {}),
           };
-        const videoKey =
+        const videoOpenAiKey =
           faceRuntime.credentials.peek("video.openai")?.trim() ||
           process.env.XRK_VIDEO_GEN_OPENAI_KEY?.trim() ||
           "";
-        const videoGenEnv: NodeJS.ProcessEnv | undefined = videoKey
-          ? { ...process.env, XRK_VIDEO_GEN_OPENAI_KEY: videoKey }
-          : undefined;
+        const videoFalKey =
+          faceRuntime.credentials.peek("video.fal")?.trim() ||
+          process.env.XRK_VIDEO_GEN_FAL_KEY?.trim() ||
+          process.env.FAL_KEY?.trim() ||
+          "";
+        const videoXaiKey =
+          faceRuntime.credentials.peek("video.xai")?.trim() ||
+          process.env.XRK_VIDEO_GEN_XAI_KEY?.trim() ||
+          process.env.XAI_API_KEY?.trim() ||
+          "";
+        const videoOpenRouterKey =
+          faceRuntime.credentials.peek("video.openrouter")?.trim() ||
+          process.env.XRK_VIDEO_GEN_OPENROUTER_KEY?.trim() ||
+          process.env.OPENROUTER_API_KEY?.trim() ||
+          "";
+        const videoDeepInfraKey =
+          faceRuntime.credentials.peek("video.deepinfra")?.trim() ||
+          process.env.XRK_VIDEO_GEN_DEEPINFRA_KEY?.trim() ||
+          process.env.DEEPINFRA_API_KEY?.trim() ||
+          "";
+        const videoGenEnv: NodeJS.ProcessEnv = { ...process.env };
+        if (videoOpenAiKey) videoGenEnv.XRK_VIDEO_GEN_OPENAI_KEY = videoOpenAiKey;
+        if (videoFalKey) videoGenEnv.XRK_VIDEO_GEN_FAL_KEY = videoFalKey;
+        if (videoXaiKey) videoGenEnv.XRK_VIDEO_GEN_XAI_KEY = videoXaiKey;
+        if (videoOpenRouterKey) {
+          videoGenEnv.XRK_VIDEO_GEN_OPENROUTER_KEY = videoOpenRouterKey;
+        }
+        if (videoDeepInfraKey) {
+          videoGenEnv.XRK_VIDEO_GEN_DEEPINFRA_KEY = videoDeepInfraKey;
+        }
         const videoAnalyzeNs = faceRuntime.settingsNamespaces.view(
           "video-analyze",
         ).value as Record<string, unknown>;
@@ -2449,6 +2561,11 @@ export function createHostManager(): HostManager {
             runWorkspaceSkillCurator();
             await http.close();
             await agentCache.dispose();
+            try {
+              await workflowMount.dispose();
+            } catch {
+              // Host stop must continue even if workflow engine teardown fails.
+            }
             if (sharedShell) {
               try {
                 await sharedShell.dispose();

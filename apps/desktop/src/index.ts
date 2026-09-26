@@ -42,12 +42,11 @@ export {
 } from "./product-entry.js";
 export {
   DESKTOP_BUILDER_CONFIG,
-  DESKTOP_BUILDER_DRAFT,
   DESKTOP_UPLOAD_CREDENTIAL_ENV_NAMES,
   DESKTOP_WINDOWS_SIGNING_ENV_PREFIX,
   assertDesktopPackageHostCompatible,
   desktopElectronBuilderArguments,
-  desktopElectronBuilderDraftArguments,
+  desktopElectronBuilderEnvironment,
   isDesktopFirstWavePackageTarget,
   listDesktopPackageTargets,
   resolveDesktopPackageTarget,
@@ -61,22 +60,62 @@ export {
   DESKTOP_UNSIGNED_ENV,
   DESKTOP_MACOS_SIGNING_ENV,
   DESKTOP_WINDOWS_SIGNING_ENV,
+  describeDesktopSigningPlan,
   isDesktopMacOSNotarizationReady,
   isDesktopUnsignedRequested,
   resolveDesktopMacOSSigningEnvironment,
   resolveDesktopWindowsSigningEnvironment,
   type DesktopMacOSSigningEnvironment,
+  type DesktopSigningPlan,
+  type DesktopSigningPlanMode,
   type DesktopWindowsSigningEnvironment,
 } from "./desktop-signing-environment.js";
 export {
+  assertDesktopPackageSigningFiles,
+  desktopPackageEnvironmentPath,
+  loadDesktopPackageEnvironment,
+  tryLoadDesktopPackageEnvironment,
+  type DesktopPackageEnvPlatform,
+} from "./desktop-package-environment.js";
+export {
+  assertDesktopWindowsSigningReady,
+  buildDesktopWindowsSigningEnvironment,
+  createDesktopWindowsTokenSigner,
+  createRedactedWindowsSigningError,
+  isDesktopWindowsTokenSigningReady,
+  resolveDesktopWindowsCertificateFile,
+  resolveDesktopWindowsUpdatePublisher,
+  scrubDesktopSigningEnvironment,
+  type CreateDesktopWindowsTokenSignerOptions,
+  type DesktopWindowsResolvedCertificate,
+  type DesktopWindowsSignHook,
+} from "./windows-sign.js";
+export {
   DESKTOP_AUTO_UPDATE_ENV,
   desktopElectronBuilderPublish,
+  desktopPackageCompleteFilename,
+  desktopUpdateMetadataFilename,
   renderDesktopAppUpdateYml,
   resolveDesktopAutoUpdateChannel,
   resolveDesktopAutoUpdateConfig,
+  resolveDesktopUploadConfig,
   type DesktopAutoUpdateChannel,
   type DesktopAutoUpdateConfig,
+  type DesktopUploadConfig,
 } from "./desktop-auto-update-environment.js";
+export {
+  createDesktopUploadPlan,
+  parseDesktopUpdateMetadataYaml,
+  type DesktopUploadArtifact,
+  type DesktopUploadPlan,
+  type DesktopUploadPlanOptions,
+} from "./desktop-upload-plan.js";
+export {
+  createDesktopFilesystemUploadTransport,
+  uploadDesktopRelease,
+  type DesktopUploadPutObject,
+  type DesktopUploadTransport,
+} from "./desktop-upload-run.js";
 export {
   DESKTOP_APP_UPDATE_YML,
   desktopAppUpdateYmlPath,
@@ -167,9 +206,26 @@ export {
 } from "./release.js";
 export {
   DesktopUpdateCoordinator,
+  desktopVersionIsNewer,
   type DesktopAppUpdater,
   type DesktopUpdateCoordinatorOptions,
 } from "./update-coordinator.js";
+export {
+  DesktopUpdateSchedule,
+  resolveDesktopUpdateScheduleConfig,
+  type DesktopUpdateScheduleConfig,
+} from "./update-schedule.js";
+export {
+  configureDesktopElectronUpdater,
+  tryCreateDesktopElectronUpdater,
+  type DesktopElectronUpdaterOptions,
+} from "./desktop-electron-updater.js";
+export {
+  installDesktopApplicationMenu,
+  presentDesktopUpdateCheckDialog,
+  publishDesktopUpdateState,
+  runDesktopManualUpdateCheck,
+} from "./desktop-update-shell.js";
 export {
   DESKTOP_SEED_DEFERRED,
   DESKTOP_SEED_LAYOUT,

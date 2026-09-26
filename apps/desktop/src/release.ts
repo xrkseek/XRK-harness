@@ -33,7 +33,8 @@ export type DesktopUpdateUnitPart = (typeof DESKTOP_UPDATE_UNIT_PARTS)[number];
 /**
  * MVP update delivery: download/install one whole Desktop artifact
  * (shell + runtime + seed bound by {@link DesktopRelease.version}).
- * Blockmap differential reuse and COS/upload pipelines are phase 2.
+ * Upload plan + filesystem mirror are first-wave; blockmap differential
+ * reuse and live COS HTTPS PUT remain phase 2.
  */
 export const DESKTOP_UPDATE_MVP_MODE = "full-package" as const;
 
@@ -42,7 +43,7 @@ export type DesktopUpdateMvpMode = typeof DESKTOP_UPDATE_MVP_MODE;
 /** Explicitly deferred relative to MVP full-package updates. */
 export const DESKTOP_UPDATE_PHASE2_DEFERRED = [
   "blockmap-differential-reuse",
-  "artifact-upload-pipeline",
+  "cos-https-put-transport",
 ] as const;
 
 export type DesktopUpdatePhase2Deferred =

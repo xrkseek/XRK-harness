@@ -25,6 +25,9 @@ describe("desktop root scripts", () => {
     expect(pkg.scripts?.["package:desktop"]).toBe(
       "node ./scripts/package-desktop.mjs",
     );
+    expect(pkg.scripts?.["upload:desktop"]).toBe(
+      "node ./scripts/upload-desktop.mjs",
+    );
   });
 
   it("desktop package wires filter-friendly dev / start / prepare scripts", () => {

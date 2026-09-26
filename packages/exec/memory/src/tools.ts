@@ -21,11 +21,12 @@ export const CURATED_MEMORY_PROMPT_TEXT =
   + "and does not follow the user into a new session. Do not write session-local WIP, "
   + "numbered task checklists, or 'we were doing X' handoff notes into memory. Do "
   + "not volunteer to resume work that appears only in MEMORY unless the user asks. "
-  + "The `memory` tool only add / replace / remove (or one atomic `operations` batch). "
+  + "The `memory` tool supports add / replace / remove / list (or one atomic "
+  + "`operations` batch). list returns live disk entries for the chosen target. "
   + "Writes hit disk immediately and do not change this session's system prompt. "
   + "This is not the Mnemon document library.";
 
-const ACTIONS = ["add", "replace", "remove"] as const;
+const ACTIONS = ["add", "replace", "remove", "list"] as const;
 
 function asTarget(raw: unknown): CuratedMemoryTarget | undefined {
   const target = String(raw ?? "memory");
@@ -60,7 +61,8 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
       + "(preferences, lasting conventions, who the user is). "
       + "Do NOT store session WIP, standing plans, todo checklists, or handoff notes "
       + "for unfinished work — use `todo_write` for those (they stay in this session only). "
-      + "Actions: add, replace, remove. Prefer one `operations` batch when several entries change. "
+      + "Actions: add, replace, remove, list. Prefer one `operations` batch when several entries change. "
+      + "Use list before replace/remove when you need the exact on-disk wording. "
       + "target `memory` is agent notes (MEMORY.md under {XRK_HOME}/memories); "
       + "target `user` is the curated user profile (memories/USER.md — not standing "
       + "~/.xrk/USER.md or IDENTITY.md). "
@@ -73,7 +75,7 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
         action: {
           type: "string",
           enum: [...ACTIONS],
-          description: "Single change. Omit when using operations.",
+          description: "Single change or list. Omit when using operations.",
         },
         target: {
           type: "string",
@@ -99,7 +101,7 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
           items: {
             type: "object",
             properties: {
-              action: { type: "string", enum: [...ACTIONS] },
+              action: { type: "string", enum: ["add", "replace", "remove"] },
               content: { type: "string" },
               new_text: { type: "string" },
               old_text: { type: "string" },
@@ -124,6 +126,18 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
           }),
         };
       }
+      const action = String(args.action ?? "");
+      if (action === "list") {
+        const entries = await Promise.resolve(store.listEntries(target));
+        return {
+          content: JSON.stringify({
+            success: true,
+            target,
+            entry_count: entries.length,
+            current_entries: entries,
+          }),
+        };
+      }
       const ops = asOps(args.operations);
       if (Array.isArray(args.operations) && args.operations.length > 0 && ops && ops.length > 0) {
         const result = await Promise.resolve(store.applyBatch(target, ops));
@@ -138,7 +152,6 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
           }),
         };
       }
-      const action = String(args.action ?? "");
       const content = String(args.content ?? args.new_text ?? "");
       const oldText = String(args.old_text ?? "");
       if (!ACTIONS.includes(action as (typeof ACTIONS)[number])) {
@@ -146,7 +159,7 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
           isError: true,
           content: JSON.stringify({
             success: false,
-            error: `Unknown action '${action}'. Use: add, replace, remove`,
+            error: `Unknown action '${action}'. Use: add, replace, remove, list`,
           }),
         };
       }

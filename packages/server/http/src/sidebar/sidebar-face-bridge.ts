@@ -63,19 +63,22 @@ export interface SidebarFaceBridge {
   }>;
   /**
    * Team graph for `POST /sidebar/api/subagents.graph`.
-   * Delegation edges come from the subagent registry; `link` adds a peer edge,
-   * `role` overrides one node's role (`delegator` / `worker` / `observer`).
+   * Delegation edges come from the subagent registry; `link` / `unlink` peer
+   * edges; `role` overrides; `remove` drops peer edges + role for a node.
    */
   readonly agentTeamGraph?: (
     rootSessionId: string,
     action?:
       | { op: "link"; from: string; to: string; label?: string }
-      | { op: "role"; nodeId: string; role?: string },
+      | { op: "unlink"; from: string; to: string }
+      | { op: "role"; nodeId: string; role?: string }
+      | { op: "remove"; nodeId: string },
   ) => Promise<{
     readonly nodes: readonly {
       id: string;
       label: string;
       role?: "delegator" | "worker" | "observer";
+      depth?: number;
     }[];
     readonly edges: readonly {
       from: string;

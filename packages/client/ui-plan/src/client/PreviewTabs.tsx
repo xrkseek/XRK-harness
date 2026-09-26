@@ -516,6 +516,24 @@ function StatusPanel({
           ? <div className={css.empty}>{t('preview.status.subagentsEmpty')}</div>
           : (
             <>
+              {status.subagents.graph.nodes.length > 0
+                ? (
+                  <ul className={css.graphList}>
+                    {status.subagents.graph.nodes.map((n) => (
+                      <li key={`node:${n.id}`} className={css.graphEdge}>
+                        <span>{n.label}</span>
+                        {n.role ? <span className={css.graphKind}>{n.role}</span> : null}
+                        {n.depth !== undefined
+                          ? <span className={css.graphLabel}>d={n.depth}</span>
+                          : null}
+                        {n.activity
+                          ? <span className={css.graphLabel}>{n.activity}</span>
+                          : null}
+                      </li>
+                    ))}
+                  </ul>
+                )
+                : null}
               {status.subagents.graph.edges.length > 0
                 ? (
                   <ul className={css.graphList}>

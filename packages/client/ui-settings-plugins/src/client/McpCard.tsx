@@ -102,6 +102,7 @@ export function McpCard(props: McpCardProps) {
                   onRemove={() => { props.removeRow(index) }}
                   loginOauth={props.loginOauth}
                   logoutOauth={props.logoutOauth}
+                  cancelOauth={props.cancelOauth}
                 />
               ))}
             </ul>
@@ -141,6 +142,7 @@ interface ServerSummaryProps {
   onRemove: () => void
   loginOauth: (serverName: string) => void
   logoutOauth: (serverName: string) => void
+  cancelOauth: (serverName: string) => void
 }
 
 function statusCopy(t: McpCardProps['t'], status: McpRowStatus): string {
@@ -171,7 +173,7 @@ function statusBadge(status: McpRowStatus): string {
   return `${css.badge} ${statusTone(status)}`
 }
 
-function ServerSummary({ t, row, disabled, onRemove, loginOauth, logoutOauth }: ServerSummaryProps) {
+function ServerSummary({ t, row, disabled, onRemove, loginOauth, logoutOauth, cancelOauth }: ServerSummaryProps) {
   const summary = row.transport === 'http'
     ? row.url
     : [row.command, row.args].filter(part => part.trim()).join(' ')
@@ -209,6 +211,7 @@ function ServerSummary({ t, row, disabled, onRemove, loginOauth, logoutOauth }: 
                 disabled={disabled}
                 onLogin={() => { loginOauth(row.serverName) }}
                 onLogout={() => { logoutOauth(row.serverName) }}
+                onCancel={() => { cancelOauth(row.serverName) }}
               />
             )
             : null}
@@ -234,6 +237,21 @@ interface OauthRowProps {
   disabled: boolean
   onLogin: () => void
   onLogout: () => void
+  onCancel: () => void
+}
+
+function formatExpiresAt(ms: number): string {
+  try {
+    return new Date(ms).toLocaleString()
+  } catch {
+    return String(ms)
+  }
+}
+
+/** IdP has no RFC 8628 device endpoint (wire may fold code into bad-request). */
+function isNoDeviceOauthError(oauth: NonNullable<McpServerRow['oauth']>): boolean {
+  if (oauth.errorCode === 'mcp-oauth-no-device') return true
+  return /mcp-oauth-no-device|does not advertise device-code/i.test(oauth.error ?? '')
 }
 
 function oauthStatusCopy(t: McpCardProps['t'], row: McpServerRow): string {
@@ -245,21 +263,44 @@ function oauthStatusCopy(t: McpCardProps['t'], row: McpServerRow): string {
   }
   if (oauth.phase === 'pending') return t('mcpOauthPending')
   if (oauth.phase === 'error') {
+    if (isNoDeviceOauthError(oauth)) {
+      return oauth.error
+        ? t('mcpOauthNoDeviceDetail').replace('{message}', oauth.error)
+        : t('mcpOauthNoDevice')
+    }
     return oauth.error
       ? t('mcpOauthErrorDetail').replace('{message}', oauth.error)
       : t('mcpOauthError')
   }
   if (oauth.loggedIn && oauth.expired) return t('mcpOauthExpired')
-  if (oauth.loggedIn || oauth.phase === 'logged-in') return t('mcpOauthLoggedIn')
+  if (oauth.loggedIn || oauth.phase === 'logged-in') {
+    const bits = [t('mcpOauthLoggedIn')]
+    if (oauth.expiresAt !== undefined) {
+      bits.push(t('mcpOauthExpiresAt').replace('{when}', formatExpiresAt(oauth.expiresAt)))
+    }
+    if (oauth.hasRefreshToken) bits.push(t('mcpOauthHasRefresh'))
+    return bits.join(' · ')
+  }
   return t('mcpOauthLoggedOut')
 }
 
-function OauthRow({ t, row, disabled, onLogin, onLogout }: OauthRowProps) {
+function OauthRow({ t, row, disabled, onLogin, onLogout, onCancel }: OauthRowProps) {
   const oauth = row.oauth
   const busy = oauth?.busy === true
   const loggedIn = oauth?.loggedIn === true || oauth?.phase === 'logged-in'
   const pending = oauth?.phase === 'pending'
   const verifyUri = oauth?.verificationUriComplete || oauth?.verificationUri
+  const userCode = oauth?.userCode
+
+  const copyCode = async () => {
+    if (!userCode) return
+    try {
+      await navigator.clipboard.writeText(userCode)
+    } catch {
+      /* clipboard may be denied */
+    }
+  }
+
   return (
     <div className={css.oauthBlock}>
       <p className={css.oauthStatus} role="status">{oauthStatusCopy(t, row)}</p>
@@ -276,27 +317,52 @@ function OauthRow({ t, row, disabled, onLogin, onLogout }: OauthRowProps) {
         )
         : null}
       <div className={css.oauthActions}>
-        {loggedIn
+        {pending
           ? (
-            <button
-              type="button"
-              className={css.oauthBtn}
-              disabled={disabled || busy}
-              onClick={onLogout}
-            >
-              {t('mcpOauthLogout')}
-            </button>
+            <>
+              {userCode
+                ? (
+                  <button
+                    type="button"
+                    className={css.oauthBtn}
+                    disabled={disabled || busy}
+                    onClick={() => { void copyCode() }}
+                  >
+                    {t('mcpOauthCopyCode')}
+                  </button>
+                )
+                : null}
+              <button
+                type="button"
+                className={css.oauthBtn}
+                disabled={disabled || busy}
+                onClick={onCancel}
+              >
+                {t('mcpOauthCancel')}
+              </button>
+            </>
           )
-          : (
-            <button
-              type="button"
-              className={css.oauthBtn}
-              disabled={disabled || busy || pending}
-              onClick={onLogin}
-            >
-              {t('mcpOauthLogin')}
-            </button>
-          )}
+          : loggedIn
+            ? (
+              <button
+                type="button"
+                className={css.oauthBtn}
+                disabled={disabled || busy}
+                onClick={onLogout}
+              >
+                {t('mcpOauthLogout')}
+              </button>
+            )
+            : (
+              <button
+                type="button"
+                className={css.oauthBtn}
+                disabled={disabled || busy}
+                onClick={onLogin}
+              >
+                {t('mcpOauthLogin')}
+              </button>
+            )}
       </div>
     </div>
   )

@@ -31,6 +31,7 @@ import {
   desktopTargetBuildPaths,
   type DesktopTargetBuildPaths,
 } from "./build-paths.js";
+import { scrubDesktopSigningEnvironment } from "./windows-sign.js";
 
 /** Bundled Host Node (must satisfy workspace engines.node >=26). */
 export const DESKTOP_BUNDLED_NODE_VERSION = "26.8.1" as const;
@@ -136,7 +137,7 @@ async function defaultExtractArchive(
   const result = spawnSync(
     "tar",
     ["-xf", archivePath, "-C", destDir],
-    { encoding: "utf8" },
+    { encoding: "utf8", env: scrubDesktopSigningEnvironment(process.env) },
   );
   if (result.error !== undefined || result.status !== 0) {
     const fromProcess =
@@ -156,26 +157,42 @@ function defaultResolvePnpmPackage(expectedVersion: string): {
   const require = createRequire(
     path.join(resolveDesktopAppRoot(), "package.json"),
   );
-  let manifestPath: string;
+  let resolved: string;
   try {
-    manifestPath = require.resolve("pnpm/package.json");
+    // pnpm's package "exports" block `pnpm/package.json`; resolve the package entry then walk up.
+    resolved = require.resolve("pnpm");
   } catch {
     throw new Error(
       `xrk desktop runtime: pnpm@${expectedVersion} is not installed under @xrkseek/harness-desktop (add as devDependency)`,
     );
   }
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
-    version?: unknown;
-  };
-  if (typeof manifest.version !== "string") {
-    throw new Error("xrk desktop runtime: pnpm manifest has no version");
+  let directory = path.dirname(resolved);
+  for (let i = 0; i < 8; i++) {
+    const manifestPath = path.join(directory, "package.json");
+    if (existsSync(manifestPath)) {
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+        name?: unknown;
+        version?: unknown;
+      };
+      if (manifest.name === "pnpm") {
+        if (typeof manifest.version !== "string") {
+          throw new Error("xrk desktop runtime: pnpm manifest has no version");
+        }
+        if (manifest.version !== expectedVersion) {
+          throw new Error(
+            `xrk desktop runtime: expected pnpm@${expectedVersion}, found ${manifest.version}`,
+          );
+        }
+        return { directory, version: manifest.version };
+      }
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
   }
-  if (manifest.version !== expectedVersion) {
-    throw new Error(
-      `xrk desktop runtime: expected pnpm@${expectedVersion}, found ${manifest.version}`,
-    );
-  }
-  return { directory: path.dirname(manifestPath), version: manifest.version };
+  throw new Error(
+    `xrk desktop runtime: could not locate pnpm@${expectedVersion} package root from ${resolved}`,
+  );
 }
 
 function hostCanExecuteTarget(

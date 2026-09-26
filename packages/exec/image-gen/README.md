@@ -2,7 +2,7 @@
 
 Text-to-image / image-to-image Provider seam for the model tool surface.
 
-**Product path**: Settings → Plugins → Image generation (Face ns `image-gen`). Credentials hold `XRK_IMAGE_GEN_OPENAI_KEY`. Env (`XRK_IMAGE_GEN=memory` / `=1`) is CI / headless bypass only — see [docs/image-gen.md](../../../docs/image-gen.md).
+**Product path**: Settings → Plugins → Image generation (Face ns `image-gen`). Modes: `off` · `openai` · `fal` · `xai`. Credentials hold `XRK_IMAGE_GEN_OPENAI_KEY` / `XRK_IMAGE_GEN_FAL_KEY` / `XRK_IMAGE_GEN_XAI_KEY` (runtime also accepts `OPENAI_API_KEY` · `FAL_KEY` · `XAI_API_KEY`). Env (`XRK_IMAGE_GEN=memory` / `=1` / `fal` / `xai`) is CI / headless bypass only — see [docs/image-gen.md](../../../docs/image-gen.md).
 
 - **Definition**: `ImageGenService.generate` + optional `capabilities()`
 - **Provider**: `createMemoryImageGenProvider` · `createOpenAiImageGenProvider` (generations + edits)

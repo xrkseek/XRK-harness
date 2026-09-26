@@ -195,14 +195,18 @@ Preset 选型：[profiles.md](./profiles.md)。
 | `XRK_VOICE` | CI 旁路 Settings：`memory` 或 `1`（+ OpenAI key）— 产品路径用 Settings → Plugins → Voice；见 [voice.md](./voice.md) |
 | `XRK_VOICE_OPENAI_KEY` / `OPENAI_API_KEY` | Voice openai 模式密钥（也可用 Credentials 槽） |
 | `XRK_VOICE_BASE_URL` | 可选兼容端点（也可用 Settings `baseUrl`；默认 `https://api.openai.com/v1`） |
-| `XRK_IMAGE_GEN` | CI 旁路 Settings：`memory` 或 `1`（+ OpenAI key）— 产品路径用 Settings → Plugins → Image gen；见 [image-gen.md](./image-gen.md) |
+| `XRK_IMAGE_GEN` | CI 旁路 Settings：`memory` 或 `1`/`openai`/`fal`/`xai`（+ 对应密钥）— 产品路径用 Settings → Plugins → Image gen；见 [image-gen.md](./image-gen.md) |
 | `XRK_IMAGE_GEN_OPENAI_KEY` / `OPENAI_API_KEY` | Image-gen openai 模式密钥（也可用 Credentials 槽） |
+| `XRK_IMAGE_GEN_FAL_KEY` / `FAL_KEY` | Image-gen fal 模式密钥 |
+| `XRK_IMAGE_GEN_XAI_KEY` / `XAI_API_KEY` | Image-gen xai 模式密钥 |
 | `XRK_IMAGE_GEN_BASE_URL` | 可选兼容端点（也可用 Settings） |
-| `XRK_IMAGE_GEN_MODEL` | 可选模型（也可用 Settings；默认 `dall-e-3`） |
-| `XRK_VIDEO_GEN` | CI 旁路 Settings：`memory` 或 `1`（+ OpenAI key）— 产品路径用 Settings → Plugins → Video gen；见 [video-gen.md](./video-gen.md) |
+| `XRK_IMAGE_GEN_MODEL` | 可选模型（也可用 Settings；默认按模式：`dall-e-3` / FAL endpoint / `grok-imagine-image`） |
+| `XRK_VIDEO_GEN` | CI 旁路 Settings：`memory` 或 `1`/`openai`/`fal`/`xai`（+ 对应密钥）— 产品路径用 Settings → Plugins → Video gen；见 [video-gen.md](./video-gen.md) |
 | `XRK_VIDEO_GEN_OPENAI_KEY` / `OPENAI_API_KEY` | Video-gen openai 模式密钥（也可用 Credentials 槽） |
+| `XRK_VIDEO_GEN_FAL_KEY` / `FAL_KEY` | Video-gen fal 模式密钥 |
+| `XRK_VIDEO_GEN_XAI_KEY` / `XAI_API_KEY` | Video-gen xai 模式密钥 |
 | `XRK_VIDEO_GEN_BASE_URL` | 可选兼容端点（也可用 Settings） |
-| `XRK_VIDEO_GEN_MODEL` | 可选模型（也可用 Settings；默认 `sora-2`） |
+| `XRK_VIDEO_GEN_MODEL` | 可选模型 / FAL family（也可用 Settings；默认 `sora-2` / `pixverse-v6` / `grok-imagine-video`） |
 | `XRK_VIDEO_ANALYZE` | CI 旁路 Settings：`memory` 或 `1`（+ OpenAI key）— 产品路径用 Settings → Plugins → Video analyze；见 [video-analyze.md](./video-analyze.md) |
 | `XRK_VIDEO_ANALYZE_OPENAI_KEY` / `OPENAI_API_KEY` | Video-analyze openai 模式密钥（也可用 Credentials 槽） |
 | `XRK_VIDEO_ANALYZE_BASE_URL` | 可选兼容 chat 端点（须接受 `video_url`；也可用 Settings） |
@@ -238,7 +242,7 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `agent-loop` | `llmRetryMaxRetries` | 步内 provider 重试上限（默认 5；`0` 关闭） |
 | `agent-loop` | `toolOrder` | 工具线序（Plugins 卡；恰好一个 `' '` rest）；留空 = 字典序 |
 | `agent-loop` | `maxRequestTokens` · `keepTokens` · `bufferTokens` | 软上下文预算（默认 100k / 24k / 4k） |
-| `agent-loop` | `compactionStrategy` | 超限策略：`prune-summary`（默认）· `prune-only` · `summary-only` · `off` |
+| `agent-loop` | `compactionStrategy` | 超限策略（软压 **与** overflow）：`prune-summary`（默认）· `prune-only` · `summary-only` · `off` |
 | `agent-loop` | `toolResultMaxInlineBytes` | 工具正文 spill 上限（默认 **64_000**；`0` 同时关闭 pipeline bound 与 loop spill；全文只写 `~/.xrk/spill/tool-outputs/`） |
 | `agent-loop` | `maxSubagentDepth` · `maxActiveSubagents` | 子代理嵌套深度（默认 2）与同父并发上限（默认 2） |
 | `workspace-inject` | `injectMaxChars` | 下次 agent 重建后作用于 rules/skills 注入预算（默认 **32_000**） |
@@ -248,8 +252,8 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `cron` | `enabled` | **热启停** Host ticker 并重建 agent（挂/卸 `cronjob`）；`XRK_CRON` 可 CI 旁路 |
 | `browser` | `mode`（http / cdp）· `cdpUrl` | **下次 agent 重建**后热切换 HTTP 快照或 CDP；`XRK_BROWSER_CDP_URL` 可 CI 旁路 |
 | `voice` | `mode`（关 / openai）· `baseUrl` | **下次 agent 重建**后热切换；密钥走 Credentials `XRK_VOICE_OPENAI_KEY`；`XRK_VOICE` 可 CI 旁路 |
-| `image-gen` | `mode`（关 / openai）· `baseUrl` · `model` | **下次 agent 重建**后热切换；密钥走 Credentials `XRK_IMAGE_GEN_OPENAI_KEY`；`XRK_IMAGE_GEN` 可 CI 旁路 |
-| `video-gen` | `mode`（关 / openai）· `baseUrl` · `model` | **下次 agent 重建**后热切换；密钥走 Credentials `XRK_VIDEO_GEN_OPENAI_KEY`；`XRK_VIDEO_GEN` 可 CI 旁路 |
+| `image-gen` | `mode`（关 / openai / fal / xai）· `baseUrl` · `model` | **下次 agent 重建**后热切换；密钥走 Credentials（`XRK_IMAGE_GEN_OPENAI_KEY` / `XRK_IMAGE_GEN_FAL_KEY` / `XRK_IMAGE_GEN_XAI_KEY`）；`XRK_IMAGE_GEN` 可 CI 旁路 |
+| `video-gen` | `mode`（关 / openai / fal / xai）· `baseUrl` · `model` | **下次 agent 重建**后热切换；密钥走 Credentials（`XRK_VIDEO_GEN_OPENAI_KEY` / `XRK_VIDEO_GEN_FAL_KEY` / `XRK_VIDEO_GEN_XAI_KEY`）；`XRK_VIDEO_GEN` 可 CI 旁路 |
 | `video-analyze` | `mode`（关 / openai）· `baseUrl` · `model` | **下次 agent 重建**后热切换；密钥走 Credentials `XRK_VIDEO_ANALYZE_OPENAI_KEY`；`XRK_VIDEO_ANALYZE` 可 CI 旁路；见 [video-analyze.md](./video-analyze.md) |
 | `curated-memory` | `enabled` · `phase2Llm` | **下次 agent 重建**后挂/卸 `memory` 工具与系统提示冻结段；`phase2Llm` 开 Phase2 LLM 巩固；`XRK_CURATED_MEMORY` / `XRK_CURATED_MEMORY_PHASE2` 可 CI 旁路 |
 | `external-agent` | `acpAgent` · `codexAppServer` · `claudeCode` | **下次外部 subagent 回合**解析 spawn；对应 env 非空可 CI 旁路 |
@@ -494,14 +498,18 @@ Behavior notes:
 | `XRK_VOICE` | CI bypass over Settings: `memory` or `1` (+ OpenAI key) — product path: Settings → Plugins → Voice; see [voice.md](./voice.md) |
 | `XRK_VOICE_OPENAI_KEY` / `OPENAI_API_KEY` | Voice openai-mode key (also via Credentials) |
 | `XRK_VOICE_BASE_URL` | Optional compatible endpoint (also Settings `baseUrl`; default `https://api.openai.com/v1`) |
-| `XRK_IMAGE_GEN` | CI bypass over Settings: `memory` or `1` (+ OpenAI key) — product path: Settings → Plugins → Image generation; see [image-gen.md](./image-gen.md) |
+| `XRK_IMAGE_GEN` | CI bypass over Settings: `memory` or `1`/`openai`/`fal`/`xai` (+ matching key) — product path: Settings → Plugins → Image generation; see [image-gen.md](./image-gen.md) |
 | `XRK_IMAGE_GEN_OPENAI_KEY` / `OPENAI_API_KEY` | Image-gen openai-mode key (also via Credentials) |
+| `XRK_IMAGE_GEN_FAL_KEY` / `FAL_KEY` | Image-gen fal-mode key |
+| `XRK_IMAGE_GEN_XAI_KEY` / `XAI_API_KEY` | Image-gen xai-mode key |
 | `XRK_IMAGE_GEN_BASE_URL` | Optional compatible endpoint (also Settings) |
-| `XRK_IMAGE_GEN_MODEL` | Optional model (also Settings; default `dall-e-3`) |
-| `XRK_VIDEO_GEN` | CI bypass over Settings: `memory` or `1` (+ OpenAI key) — product path: Settings → Plugins → Video generation; see [video-gen.md](./video-gen.md) |
+| `XRK_IMAGE_GEN_MODEL` | Optional model (also Settings; defaults by mode) |
+| `XRK_VIDEO_GEN` | CI bypass over Settings: `memory` or `1`/`openai`/`fal`/`xai` (+ matching key) — product path: Settings → Plugins → Video generation; see [video-gen.md](./video-gen.md) |
 | `XRK_VIDEO_GEN_OPENAI_KEY` / `OPENAI_API_KEY` | Video-gen openai-mode key (also via Credentials) |
+| `XRK_VIDEO_GEN_FAL_KEY` / `FAL_KEY` | Video-gen fal-mode key |
+| `XRK_VIDEO_GEN_XAI_KEY` / `XAI_API_KEY` | Video-gen xai-mode key |
 | `XRK_VIDEO_GEN_BASE_URL` | Optional compatible endpoint (also Settings) |
-| `XRK_VIDEO_GEN_MODEL` | Optional model (also Settings; default `sora-2`) |
+| `XRK_VIDEO_GEN_MODEL` | Optional model / FAL family (also Settings) |
 | `XRK_VIDEO_ANALYZE` | CI bypass over Settings: `memory` or `1` (+ OpenAI key) — product path: Settings → Plugins → Video analyze; see [video-analyze.md](./video-analyze.md) |
 | `XRK_VIDEO_ANALYZE_OPENAI_KEY` / `OPENAI_API_KEY` | Video-analyze openai-mode key (also via Credentials) |
 | `XRK_VIDEO_ANALYZE_BASE_URL` | Optional compatible chat endpoint that accepts `video_url` (also Settings) |
@@ -537,7 +545,7 @@ Settings → Plugins mutates these runtime namespaces:
 | `agent-loop` | `llmRetryMaxRetries` | In-step provider retry cap (default 5; `0` disables) |
 | `agent-loop` | `toolOrder` | Tool line order (Plugins card; exactly one `' '` rest); blank = lexicographic |
 | `agent-loop` | `maxRequestTokens` · `keepTokens` · `bufferTokens` | Soft context budget (defaults 100k / 24k / 4k) |
-| `agent-loop` | `compactionStrategy` | Over-budget strategy: `prune-summary` (default) · `prune-only` · `summary-only` · `off` |
+| `agent-loop` | `compactionStrategy` | Over-budget strategy (soft budget **and** overflow): `prune-summary` (default) · `prune-only` · `summary-only` · `off` |
 | `agent-loop` | `toolResultMaxInlineBytes` | Tool-result spill ceiling (default **64_000**; `0` disables both pipeline bound and loop spill; one full body under `~/.xrk/spill/tool-outputs/`) |
 | `agent-loop` | `maxSubagentDepth` · `maxActiveSubagents` | Subagent nesting depth (default 2) and concurrent children under one parent (default 2) |
 | `workspace-inject` | `injectMaxChars` | Rules/skills inject budget after the next agent rebuild (default **32_000**) |
@@ -547,8 +555,8 @@ Settings → Plugins mutates these runtime namespaces:
 | `cron` | `enabled` | **Live** Host ticker start/stop + agent rebuild (mount/unmount `cronjob`); `XRK_CRON` may CI-bypass |
 | `browser` | `mode` (http / cdp) · `cdpUrl` | **Live** on next agent rebuild (HTTP snapshot or CDP); `XRK_BROWSER_CDP_URL` may CI-bypass |
 | `voice` | `mode` (off / openai) · `baseUrl` | **Live** on next agent rebuild; key via Credentials `XRK_VOICE_OPENAI_KEY`; `XRK_VOICE` may CI-bypass |
-| `image-gen` | `mode` (off / openai) · `baseUrl` · `model` | **Live** on next agent rebuild; key via Credentials `XRK_IMAGE_GEN_OPENAI_KEY`; `XRK_IMAGE_GEN` may CI-bypass |
-| `video-gen` | `mode` (off / openai) · `baseUrl` · `model` | **Live** on next agent rebuild; key via Credentials `XRK_VIDEO_GEN_OPENAI_KEY`; `XRK_VIDEO_GEN` may CI-bypass |
+| `image-gen` | `mode` (off / openai / fal / xai) · `baseUrl` · `model` | **Live** on next agent rebuild; keys via Credentials (`XRK_IMAGE_GEN_OPENAI_KEY` / `XRK_IMAGE_GEN_FAL_KEY` / `XRK_IMAGE_GEN_XAI_KEY`); `XRK_IMAGE_GEN` may CI-bypass |
+| `video-gen` | `mode` (off / openai / fal / xai) · `baseUrl` · `model` | **Live** on next agent rebuild; keys via Credentials (`XRK_VIDEO_GEN_OPENAI_KEY` / `XRK_VIDEO_GEN_FAL_KEY` / `XRK_VIDEO_GEN_XAI_KEY`); `XRK_VIDEO_GEN` may CI-bypass |
 | `video-analyze` | `mode` (off / openai) · `baseUrl` · `model` | **Live** on next agent rebuild; key via Credentials `XRK_VIDEO_ANALYZE_OPENAI_KEY`; `XRK_VIDEO_ANALYZE` may CI-bypass; see [video-analyze.md](./video-analyze.md) |
 | `curated-memory` | `enabled` · `phase2Llm` | **Live** on next agent rebuild (mount/unmount `memory` tool + frozen system prompt); `phase2Llm` enables Phase2 LLM consolidation; `XRK_CURATED_MEMORY` / `XRK_CURATED_MEMORY_PHASE2` may CI-bypass |
 | `external-agent` | `acpAgent` · `codexAppServer` · `claudeCode` | **Live** on next external subagent turn; matching env non-empty may CI-bypass |

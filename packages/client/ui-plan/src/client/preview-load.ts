@@ -48,6 +48,8 @@ export interface SessionStatusView {
         readonly id: string
         readonly label: string
         readonly role?: string
+        readonly depth?: number
+        readonly activity?: 'running' | 'inactive'
       }[]
       readonly edges: readonly {
         readonly from: string
@@ -190,6 +192,16 @@ export interface SessionStatusView {
     readonly queueAcceptedWhileBusy: true
     readonly steerRequiresActiveTurn: true
     readonly note: string
+  }
+  /** Last curated-memory consolidate (Host pipeline; optional). */
+  readonly curatedMemory?: {
+    readonly sessionId: string
+    readonly at: number
+    readonly phase1Written: number
+    readonly phase2: string
+    readonly phase2Written: number
+    readonly skipped?: string
+    readonly providerKind?: string
   }
   readonly channels: {
     readonly process: readonly {
@@ -729,6 +741,29 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     })
     : []
 
+  const curatedRaw = v.curatedMemory
+  let curatedMemory: SessionStatusView['curatedMemory']
+  if (curatedRaw && typeof curatedRaw === 'object') {
+    const sessionIdMem = str((curatedRaw as { sessionId?: unknown }).sessionId)
+    const at = num((curatedRaw as { at?: unknown }).at)
+    const phase1Written = num((curatedRaw as { phase1Written?: unknown }).phase1Written)
+    const phase2 = str((curatedRaw as { phase2?: unknown }).phase2)
+    const phase2Written = num((curatedRaw as { phase2Written?: unknown }).phase2Written)
+    if (sessionIdMem && at !== undefined && phase1Written !== undefined && phase2 && phase2Written !== undefined) {
+      const skipped = str((curatedRaw as { skipped?: unknown }).skipped)
+      const providerKind = str((curatedRaw as { providerKind?: unknown }).providerKind)
+      curatedMemory = {
+        sessionId: sessionIdMem,
+        at,
+        phase1Written,
+        phase2,
+        phase2Written,
+        ...(skipped ? { skipped } : {}),
+        ...(providerKind ? { providerKind } : {}),
+      }
+    }
+  }
+
   return {
     sessionId,
     badge,
@@ -747,6 +782,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     timeline,
     compaction,
     delivery,
+    ...(curatedMemory ? { curatedMemory } : {}),
     channels: { process, im, note, alerts: channelAlerts },
   }
 }

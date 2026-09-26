@@ -274,20 +274,36 @@ const VoiceConfig = Schema.object({
 
 /**
  * Image generation (Plugins card). Env `XRK_IMAGE_GEN` remains CI bypass.
- * API key via Credentials `XRK_IMAGE_GEN_OPENAI_KEY`.
+ * Keys via Credentials: openai · fal · xai · openrouter · deepinfra · krea · meta-ai.
  */
 const ImageGenConfig = Schema.object({
-  mode: Schema.union(["off", "openai"]).default("off"),
+  mode: Schema.union([
+    "off",
+    "openai",
+    "fal",
+    "xai",
+    "openrouter",
+    "deepinfra",
+    "krea",
+    "meta-ai",
+  ]).default("off"),
   baseUrl: Schema.string().default(""),
   model: Schema.string().default(""),
 });
 
 /**
  * Video generation (Plugins card). Env `XRK_VIDEO_GEN` remains CI bypass.
- * API key via Credentials `XRK_VIDEO_GEN_OPENAI_KEY`.
+ * Keys via Credentials: openai · fal · xai · openrouter · deepinfra.
  */
 const VideoGenConfig = Schema.object({
-  mode: Schema.union(["off", "openai"]).default("off"),
+  mode: Schema.union([
+    "off",
+    "openai",
+    "fal",
+    "xai",
+    "openrouter",
+    "deepinfra",
+  ]).default("off"),
   baseUrl: Schema.string().default(""),
   model: Schema.string().default(""),
 });

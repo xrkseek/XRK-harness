@@ -14,7 +14,7 @@
 
 ## 消息文件卡片
 
-用户气泡按 DeepSeek Chat：`FileTypeIcon` 图标、文件名、`扩展名 体积` 元信息（240px 卡），并在同一 `attachmentRow` 里按内容块顺序混排图片与文件；多附件时图片用紧凑瓦片。输入栏 `FileCard` 同样用类型图标，编码中显示转圈。
+用户气泡按 DeepSeek Chat：`FileTypeIcon` 图标、文件名、`扩展名 体积` 元信息（240px 卡）。历史消息经 `conversation.message.files` 槽（`MessageFiles` → `MessageFileGallery`）渲染；单文件不套 gallery 外壳，以便 `MessageItem` 在同一 `attachmentRow` 里按块序混排图+文件。槽空时气泡保留内联回退卡。多附件时图片仍用紧凑瓦片。输入栏 `FileCard` 同样用类型图标，编码中显示转圈。
 
 ## 拖放遮罩
 

@@ -359,11 +359,12 @@ export interface CompactionOptions {
   /** Default true when options object is provided. */
   readonly auto?: boolean;
   /**
-   * Soft-budget strategy family (DSH prune→summary posture, selectable):
+   * Soft-budget + overflow strategy family (DSH prune→summary posture, selectable):
    * - `prune-summary` (default): prune oversized tools, then LLM summary
-   * - `prune-only`: model-free prune only; still fail-closed if over budget
+   * - `prune-only`: model-free prune only; still fail-closed if over budget / overflow
    * - `summary-only`: skip prune pass; LLM summary only
-   * - `off`: disable soft-budget auto path (manual `/compact` still works)
+   * - `off`: disable soft-budget auto path and provider-overflow recovery
+   *   (manual `/compact` still works)
    */
   readonly strategy?: CompactionStrategy;
 }

@@ -151,14 +151,40 @@ async function resolveEndpoints(
   return discovered.endpoints;
 }
 
+function isNoDeviceDiscovery(err: McpOAuthDiscoveryError): boolean {
+  return (
+    (err.code === "unsupported" &&
+      /device_authorization_endpoint/i.test(err.message)) ||
+    /does not advertise device_authorization_endpoint/i.test(err.message)
+  );
+}
+
 function oauthErrorMessage(err: unknown): string {
   if (err instanceof McpDeviceCodeError) {
     return `${err.message} [${err.code}${err.oauthError ? `:${err.oauthError}` : ""}]`;
   }
   if (err instanceof McpOAuthDiscoveryError) {
+    if (isNoDeviceDiscovery(err)) {
+      return (
+        "This MCP server's IdP does not advertise device-code login (RFC 8628). " +
+        "Hosted MCPs often need browser authorization-code + PKCE (not yet in Settings). " +
+        "Override with XRK_MCP_OAUTH_DEVICE_AUTHORIZATION_URL + XRK_MCP_OAUTH_TOKEN_URL when the IdP supports device code. " +
+        `[${err.code}]`
+      );
+    }
     return `${err.message} [${err.code}]`;
   }
   return err instanceof Error ? err.message : String(err);
+}
+
+function oauthErrorCode(err: unknown): string {
+  if (err instanceof McpOAuthDiscoveryError && isNoDeviceDiscovery(err)) {
+    return "mcp-oauth-no-device";
+  }
+  if (err instanceof McpDeviceCodeError) return "mcp-oauth-failed";
+  if (err instanceof McpOAuthDiscoveryError) return "mcp-oauth-discovery";
+  // Missing URL / incomplete endpoint overrides — client validation.
+  return "invalid-payload";
 }
 
 function parseServerName(payload: unknown): FaceRpcResult<string> {
@@ -346,7 +372,7 @@ export async function mcpOauthLogin(
     return {
       ok: false,
       error: {
-        code: "invalid-payload",
+        code: oauthErrorCode(err),
         message: oauthErrorMessage(err),
       },
     };
@@ -420,7 +446,7 @@ export async function mcpOauthLogin(
       return {
         ok: false,
         error: {
-          code: "mcp-oauth-failed",
+          code: oauthErrorCode(start.err),
           message: oauthErrorMessage(start.err),
         },
       };
@@ -444,7 +470,7 @@ export async function mcpOauthLogin(
     return {
       ok: false,
       error: {
-        code: "mcp-oauth-failed",
+        code: oauthErrorCode(err),
         message: oauthErrorMessage(err),
       },
     };

@@ -56,10 +56,13 @@ export interface McpOauthRowState {
   readonly phase: McpOauthPhase
   readonly loggedIn: boolean
   readonly expired?: boolean
+  readonly expiresAt?: number
+  readonly hasRefreshToken?: boolean
   readonly userCode?: string
   readonly verificationUri?: string
   readonly verificationUriComplete?: string
   readonly error?: string
+  readonly errorCode?: string
   readonly busy?: boolean
 }
 
@@ -128,8 +131,10 @@ export interface McpCardFace extends CardActions {
   setAllowWorkspaceCwd: (allow: boolean) => void
   /** Start device-code OAuth for an HTTP server row (same path as `xrkh mcp login`). */
   loginOauth: (serverName: string) => void
-  /** Clear the on-disk OAuth token for a server. */
+  /** Clear the on-disk OAuth token for a server (also cancels an in-flight pending login). */
   logoutOauth: (serverName: string) => void
+  /** Cancel a pending device-code login (alias of logout while pending). */
+  cancelOauth: (serverName: string) => void
 }
 
 /** Bridges the `mcp` scope onto the card's staged server list. */
@@ -152,6 +157,8 @@ export class McpCardController {
   private oauthByServer = new Map<string, McpOauthRowState>()
   private oauthPollTimer: ReturnType<typeof setInterval> | undefined
   private oauthBusy = new Set<string>()
+  /** Auto-open verify URI once per pending userCode (Hermes/Codex open-browser). */
+  private oauthOpenedVerify = new Set<string>()
 
   /**
    * @param scope - the bound settings scope for the `mcp` namespace.
@@ -246,6 +253,7 @@ export class McpCardController {
       setAllowWorkspaceCwd: (allow) => { this.setAllowWorkspaceCwd(allow) },
       loginOauth: (serverName) => { void this.loginOauth(serverName) },
       logoutOauth: (serverName) => { void this.logoutOauth(serverName) },
+      cancelOauth: (serverName) => { void this.logoutOauth(serverName) },
       edit: () => { /* rows use paste merge */ },
       resetField: () => { /* n/a for MCP list */ },
       save: () => { void this.save() },
@@ -292,6 +300,10 @@ export class McpCardController {
         phase,
         loggedIn: item.loggedIn,
         ...(item.expired !== undefined ? { expired: item.expired } : {}),
+        ...(item.expiresAt !== undefined ? { expiresAt: item.expiresAt } : {}),
+        ...(item.hasRefreshToken !== undefined
+          ? { hasRefreshToken: item.hasRefreshToken }
+          : {}),
         ...(item.userCode ? { userCode: item.userCode } : {}),
         ...(item.verificationUri ? { verificationUri: item.verificationUri } : {}),
         ...(item.verificationUriComplete
@@ -299,6 +311,21 @@ export class McpCardController {
           : {}),
         ...(item.loginError ? { error: item.loginError } : {}),
       })
+      if (phase === 'pending') {
+        const uri = item.verificationUriComplete || item.verificationUri
+        const code = item.userCode ?? ''
+        const key = `${item.server}:${code}`
+        if (uri && !this.oauthOpenedVerify.has(key)) {
+          this.oauthOpenedVerify.add(key)
+          try {
+            if (typeof globalThis.open === 'function') {
+              globalThis.open(uri, '_blank', 'noopener,noreferrer')
+            }
+          } catch {
+            /* popup blocked — user still has the link */
+          }
+        }
+      }
     }
     this.oauthByServer = next
     if (pending) this.startOauthPoll()
@@ -342,10 +369,17 @@ export class McpCardController {
     }
     this.oauthBusy.delete(name)
     if (!response.result.ok) {
+      const err = response.result.error
+      const details = err.details as { reason?: unknown } | undefined
+      const reason =
+        typeof details?.reason === 'string' && details.reason
+          ? details.reason
+          : err.code
       this.oauthByServer.set(name, {
         phase: 'error',
         loggedIn: false,
-        error: response.result.error.message,
+        error: err.message,
+        ...(reason ? { errorCode: reason } : {}),
       })
       this.publish()
       return
@@ -363,6 +397,18 @@ export class McpCardController {
           ? { verificationUriComplete: value.verificationUriComplete }
           : {}),
       })
+      const uri = value.verificationUriComplete || value.verificationUri
+      const key = `${name}:${value.userCode ?? ''}`
+      if (uri && !this.oauthOpenedVerify.has(key)) {
+        this.oauthOpenedVerify.add(key)
+        try {
+          if (typeof globalThis.open === 'function') {
+            globalThis.open(uri, '_blank', 'noopener,noreferrer')
+          }
+        } catch {
+          /* popup blocked */
+        }
+      }
       this.startOauthPoll()
     }
     this.publish()

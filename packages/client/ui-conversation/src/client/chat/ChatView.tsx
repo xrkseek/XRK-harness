@@ -797,6 +797,7 @@ export function ChatView({
               key={item.id}
               content={item.content}
               renderMessageImages={renderMessageImages}
+              renderMessageFiles={renderMessageFiles}
               t={t}
             />
           ))}
@@ -805,6 +806,7 @@ export function ChatView({
               key={submission.requestId}
               submission={submission}
               renderMessageImages={renderMessageImages}
+              renderMessageFiles={renderMessageFiles}
               t={t}
             />
           ))}

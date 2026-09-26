@@ -4,6 +4,7 @@
  */
 import type {
   ImageGenCapabilities,
+  ImageGenDelivery,
   ImageGenRequest,
   ImageGenResult,
   ImageGenService,
@@ -20,6 +21,9 @@ export interface OpenAiImageGenOptions {
   readonly defaultSize?: ImageGenSize;
   /** Override capabilities (default: text+image, max 16 refs). */
   readonly capabilities?: ImageGenCapabilities;
+  /** Result label (DeepInfra / Meta reuse this OpenAI-shaped client). */
+  readonly delivery?: ImageGenDelivery;
+  readonly providerName?: string;
 }
 
 function joinUrl(base: string, path: string): string {
@@ -82,6 +86,8 @@ export function createOpenAiImageGenProvider(
   const model = options.model ?? "dall-e-3";
   const defaultSize = options.defaultSize ?? "1024x1024";
   const caps = options.capabilities ?? DEFAULT_CAPS;
+  const delivery = options.delivery ?? "openai";
+  const providerName = options.providerName ?? "openai";
 
   return {
     capabilities() {
@@ -96,7 +102,7 @@ export function createOpenAiImageGenProvider(
       const isEdit = refs.length > 0;
       if (isEdit && caps.maxReferenceImages <= 0) {
         throw new ImageGenError(
-          "OpenAI Provider configured without edit capability",
+          `${providerName} Provider is text-to-image only; omit reference images`,
           "IMAGE_GEN_BAD_ARGS",
         );
       }
@@ -157,7 +163,7 @@ export function createOpenAiImageGenProvider(
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         throw new ImageGenError(
-          `OpenAI images ${isEdit ? "edit" : "generations"} HTTP ${res.status}: ${body.slice(0, 200)}`,
+          `${providerName} images ${isEdit ? "edit" : "generations"} HTTP ${res.status}: ${body.slice(0, 200)}`,
           "IMAGE_GEN_BACKEND",
         );
       }
@@ -167,10 +173,10 @@ export function createOpenAiImageGenProvider(
       const images = parseOpenAiImageRows(json);
       return {
         images,
-        provider: "openai",
-        delivery: "openai",
+        provider: providerName,
+        delivery,
         modality: isEdit ? "image" : "text",
-        note: `openai-images ${isEdit ? "edit" : "generate"} model=${resolvedModel} n=${images.length} refs=${refs.length}`,
+        note: `${providerName}-images ${isEdit ? "edit" : "generate"} model=${resolvedModel} n=${images.length} refs=${refs.length}`,
       };
     },
   };

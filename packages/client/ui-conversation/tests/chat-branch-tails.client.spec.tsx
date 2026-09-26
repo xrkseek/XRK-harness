@@ -125,15 +125,60 @@ describe('MessageItem arms', () => {
           },
           t,
           renderMessageImages: () => null,
-          renderMessageFiles: () => null,
+          // Prefer the attachment-plugin card; null still hits the inline fallback.
+          renderMessageFiles: ({ files }: { files: readonly { attachment: { name: string } }[] }) => (
+            <>
+              {files.map((file, index) => (
+                <span key={`${file.attachment.name}:${index}`} data-test-file-card>
+                  {file.attachment.name}
+                </span>
+              ))}
+            </>
+          ),
         } as ChatNodeViewProps<'user'>)}
       />,
     )
     expect(view.container.querySelector('[data-message-attachments]')).toBeTruthy()
+    expect(view.container.querySelectorAll('[data-test-file-card]')).toHaveLength(2)
     expect(view.getByText('a.pdf')).toBeTruthy()
     expect(view.getByText('b.txt')).toBeTruthy()
     expect(view.getByText('please review')).toBeTruthy()
     expect(view.queryByText('附加内容块')).toBeNull()
+  })
+
+  it('falls back to an inline file card when renderMessageFiles returns null', () => {
+    const file = {
+      attachmentId: 'sha256:' + 'c'.repeat(64),
+      name: 'solo.md',
+      bytes: 32,
+    }
+    const view = render(
+      <UserMessageNodeView
+        {...({
+          node: {
+            key: 'u2',
+            kind: 'user',
+            id: '2',
+            target: 'chat',
+            anchorSeq: 2,
+            location: { kind: 'session' },
+            visibility: 'visible',
+            data: {
+              kind: 'user',
+              seq: 2,
+              time: 2_000,
+              content: [{ type: 'file', attachment: file }],
+              source: null,
+            },
+          },
+          t,
+          renderMessageImages: () => null,
+          renderMessageFiles: () => null,
+        } as ChatNodeViewProps<'user'>)}
+      />,
+    )
+    expect(view.container.querySelector('[data-message-attachments] [title="solo.md"]')).toBeTruthy()
+    expect(view.getByText('solo.md')).toBeTruthy()
   })
 
   it('renders an adjacent session mention as a chip even without trailing whitespace', () => {

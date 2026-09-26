@@ -3,6 +3,9 @@
 /** Simplified Chinese dictionary (key-set source of truth). */
 export const zh = {
   'title': '工作台',
+  'toggle': '文件',
+  'toggleOpen': '打开工作台',
+  'toggleClose': '关闭工作台',
   'close': '关闭工作台',
   'empty': '选择左侧文件以预览。聊天里点开文件路径也会落在这里（未安装社区侧栏时）。',
   'loading': '加载中…',
@@ -18,6 +21,9 @@ export const zh = {
 /** English dictionary (mirrors zh keys). */
 export const en: { [K in keyof typeof zh]: string } = {
   'title': 'Workbench',
+  'toggle': 'Files',
+  'toggleOpen': 'Open workbench',
+  'toggleClose': 'Close workbench',
   'close': 'Close workbench',
   'empty': 'Select a file on the left to preview. Chat file opens land here when no community sidebar is installed.',
   'loading': 'Loading…',

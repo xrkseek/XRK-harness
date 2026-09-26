@@ -566,4 +566,210 @@ describe("runTurn compaction / overflow", () => {
         .events.some((e) => e.type === "context/compaction"),
     ).toBe(false);
   });
+
+  it("strategy summary-only soft-budget summarizes without prune", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    for (let i = 0; i < 8; i++) {
+      store.append(session.id, {
+        type: "user/message",
+        ts: i * 2,
+        turnId: `old${i}`,
+        content: `msg-${i}-` + "y".repeat(80),
+      });
+      store.append(session.id, {
+        type: "assistant/message",
+        ts: i * 2 + 1,
+        turnId: `old${i}`,
+        stepId: `s${i}`,
+        content: `ans-${i}-` + "z".repeat(40),
+      });
+    }
+    let summaryCalls = 0;
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "continue",
+      store,
+      llm: {
+        id: "summary-only-soft",
+        async chat(req: LlmChatRequest) {
+          const text = req.messages.map((m) => m.content).join("\n");
+          const isSummarizer =
+            req.messages.length === 1 &&
+            req.messages[0]?.role === "user" &&
+            text.includes("Create a new anchored summary");
+          if (isSummarizer) {
+            summaryCalls += 1;
+            return { content: "## Objective\n- soft\n## Next\n1. go" };
+          }
+          expect(summaryCalls).toBeGreaterThan(0);
+          return { content: "ok-summary-only" };
+        },
+      },
+      tools: createToolRegistry(),
+      compaction: {
+        maxRequestTokens: 50,
+        keepTokens: 20,
+        bufferTokens: 0,
+        strategy: "summary-only",
+      },
+    });
+    expect(result.assistantText).toBe("ok-summary-only");
+    expect(summaryCalls).toBeGreaterThan(0);
+    expect(
+      store
+        .get(session.id)
+        .events.some(
+          (e) => e.type === "context/compaction" && e.reason === "auto",
+        ),
+    ).toBe(true);
+  });
+
+  it("strategy off skips overflow recovery", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "old",
+      content: "seed",
+    });
+    await expect(
+      runTurn({
+        sessionId: session.id,
+        userText: "continue",
+        store,
+        llm: {
+          id: "overflow-off",
+          async chat() {
+            throw new ContextOverflowError("too long");
+          },
+        },
+        tools: createToolRegistry(),
+        compaction: { keepTokens: 40, strategy: "off" },
+      }),
+    ).rejects.toBeInstanceOf(ContextOverflowError);
+    expect(
+      store
+        .get(session.id)
+        .events.some((e) => e.type === "context/compaction"),
+    ).toBe(false);
+  });
+
+  it("strategy prune-only overflow does not summarize", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "old",
+      content: "seed-" + "x".repeat(200),
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 2,
+      turnId: "old",
+      stepId: "s0",
+      content: "a",
+    });
+    await expect(
+      runTurn({
+        sessionId: session.id,
+        userText: "continue",
+        store,
+        llm: {
+          id: "overflow-prune-only",
+          async chat(req: LlmChatRequest) {
+            const text = req.messages.map((m) => m.content).join("\n");
+            const isSummarizer =
+              req.messages.length === 1 &&
+              req.messages[0]?.role === "user" &&
+              text.includes("Create a new anchored summary");
+            if (isSummarizer) {
+              throw new Error("summarizer must not run under prune-only overflow");
+            }
+            throw new ContextOverflowError("still too long");
+          },
+        },
+        tools: createToolRegistry(),
+        compaction: { keepTokens: 40, strategy: "prune-only" },
+      }),
+    ).rejects.toBeInstanceOf(ContextOverflowError);
+    expect(
+      store
+        .get(session.id)
+        .events.some((e) => e.type === "context/compaction"),
+    ).toBe(false);
+  });
+
+  it("strategy summary-only overflow skips prune and summarizes", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const big = "Z".repeat(9000);
+    store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "old",
+      content: "seed",
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 2,
+      turnId: "old",
+      stepId: "s0",
+      content: "",
+      toolCalls: [{ id: "c1", name: "read", arguments: {} }],
+    });
+    store.append(session.id, {
+      type: "tool/result",
+      ts: 3,
+      turnId: "old",
+      stepId: "s0",
+      result: { toolCallId: "c1", name: "read", content: big },
+    });
+
+    let sawOverflow = false;
+    let summarizerCalls = 0;
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "continue",
+      store,
+      llm: {
+        id: "overflow-summary-only",
+        async chat(req: LlmChatRequest) {
+          const text = req.messages.map((m) => m.content).join("\n");
+          const isSummarizer =
+            req.messages.length === 1 &&
+            req.messages[0]?.role === "user" &&
+            text.includes("Create a new anchored summary");
+          if (isSummarizer) {
+            summarizerCalls += 1;
+            return { content: "## Objective\n- ov\n## Next\n1. go" };
+          }
+          if (!sawOverflow) {
+            sawOverflow = true;
+            throw new ContextOverflowError("too long");
+          }
+          return { content: "ok-summary-only-overflow" };
+        },
+      },
+      tools: createToolRegistry(),
+      compaction: { keepTokens: 40, strategy: "summary-only" },
+    });
+    expect(result.assistantText).toBe("ok-summary-only-overflow");
+    expect(summarizerCalls).toBeGreaterThan(0);
+    expect(
+      store
+        .get(session.id)
+        .events.some(
+          (e) => e.type === "context/compaction" && e.reason === "overflow",
+        ),
+    ).toBe(true);
+    // summary-only must not append a pruned tool/result surface.
+    const toolResults = store
+      .get(session.id)
+      .events.filter((e) => e.type === "tool/result");
+    expect(toolResults).toHaveLength(1);
+    expect(String(toolResults[0]!.result.content).length).toBe(big.length);
+  });
 });

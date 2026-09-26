@@ -44,6 +44,10 @@ import {
   parseAgentTeamSpawnRole,
   type AgentTeamSpawnRole,
 } from "./agent-team-roles.js";
+import {
+  isAgentTeamRole,
+  type AgentTeamEdgeKind,
+} from "./agent-team-graph.js";
 import { bindRalphTool } from "./ralph-tool.js";
 
 const FOREGROUND_WAIT_MS = 10 * 60 * 1000;
@@ -986,6 +990,239 @@ function createSendMessageTool(
   };
 }
 
+function createTeamGraphTool(
+  options: BindSubagentToolsOptions,
+): ToolDefinition {
+  return {
+    name: "team_graph",
+    description:
+      "Inspect or edit the Agent Teams collaboration graph for this session " +
+      "(delegates from subagent spawn + peer links). " +
+      "action=view (default) returns the connected component with roles and depth; " +
+      "neighbors lists adjacency; link/unlink peer edges; role sets delegator|worker|observer; " +
+      "remove drops peer edges + role override for a node; " +
+      "announce fans a message to peer neighbors via send_message (delivery queue|steer).",
+    parameters: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          description:
+            "view | neighbors | link | unlink | role | remove | announce (default view).",
+        },
+        from: { type: "string", description: "Edge source session id (link/unlink)." },
+        to: { type: "string", description: "Edge target session id (link/unlink)." },
+        node_id: {
+          type: "string",
+          description: "Node session id (neighbors / role / remove).",
+        },
+        label: { type: "string", description: "Optional peer edge label (link)." },
+        role: {
+          type: "string",
+          description: "delegator | worker | observer; omit to clear override.",
+        },
+        kind: {
+          type: "string",
+          description: "neighbors filter: delegates | peer (default any).",
+        },
+        message: {
+          type: "string",
+          description: "Announce body (announce).",
+        },
+        delivery: {
+          type: "string",
+          description: "announce delivery: queue (default) or steer.",
+        },
+      },
+    },
+    isConcurrencySafe: () => true,
+    async execute(args) {
+      const a = args as {
+        action?: string;
+        from?: string;
+        to?: string;
+        node_id?: string;
+        label?: string;
+        role?: string;
+        kind?: string;
+        message?: string;
+        delivery?: string;
+      };
+      const action = String(a.action ?? "view").trim().toLowerCase() || "view";
+      const graph = options.runtime.agentTeams;
+      const root = options.parentSessionId;
+
+      if (action === "link") {
+        const from = String(a.from ?? "").trim();
+        const to = String(a.to ?? "").trim();
+        if (!from || !to) {
+          return { content: "team_graph link requires from and to", isError: true };
+        }
+        const edge = graph.linkPeers(from, to, a.label);
+        if (!edge) {
+          return { content: "team_graph link failed (empty or self)", isError: true };
+        }
+        return {
+          content: `linked peer ${edge.from} ↔ ${edge.to}${
+            edge.label ? ` (${edge.label})` : ""
+          }`,
+        };
+      }
+
+      if (action === "unlink") {
+        const from = String(a.from ?? "").trim();
+        const to = String(a.to ?? "").trim();
+        if (!from || !to) {
+          return {
+            content: "team_graph unlink requires from and to",
+            isError: true,
+          };
+        }
+        const ok = graph.unlinkPeers(from, to);
+        return {
+          content: ok
+            ? `unlinked peer ${from} ↔ ${to}`
+            : `no peer edge between ${from} and ${to}`,
+          ...(ok ? {} : { isError: true }),
+        };
+      }
+
+      if (action === "role") {
+        const nodeId = String(a.node_id ?? "").trim();
+        if (!nodeId) {
+          return { content: "team_graph role requires node_id", isError: true };
+        }
+        const raw = a.role === undefined || a.role === null ? undefined : String(a.role).trim();
+        const role =
+          raw === undefined || raw === ""
+            ? undefined
+            : isAgentTeamRole(raw)
+              ? raw
+              : undefined;
+        if (raw && !role) {
+          return {
+            content: "role must be delegator | worker | observer (or omit to clear)",
+            isError: true,
+          };
+        }
+        const effective = graph.setRole(nodeId, role);
+        return {
+          content: `role ${nodeId} → ${effective ?? "?"}${
+            role === undefined ? " (derived)" : " (override)"
+          }`,
+        };
+      }
+
+      if (action === "remove") {
+        const nodeId = String(a.node_id ?? "").trim();
+        if (!nodeId) {
+          return { content: "team_graph remove requires node_id", isError: true };
+        }
+        const ok = graph.removeNode(nodeId);
+        return {
+          content: ok
+            ? `removed peer links / role for ${nodeId}`
+            : `nothing to remove for ${nodeId}`,
+          ...(ok ? {} : { isError: true }),
+        };
+      }
+
+      if (action === "neighbors") {
+        const nodeId = String(a.node_id ?? root).trim();
+        const kindRaw = String(a.kind ?? "").trim().toLowerCase();
+        const kind: AgentTeamEdgeKind | undefined =
+          kindRaw === "delegates" || kindRaw === "peer" ? kindRaw : undefined;
+        const hops = graph.neighbors(nodeId, kind);
+        if (!hops.length) {
+          return {
+            content: `${nodeId}\t(no neighbors${kind ? ` kind=${kind}` : ""})`,
+          };
+        }
+        const lines = hops.map(
+          (h) =>
+            `${h.id}\t${h.kind}\t${h.direction}${h.label ? `\t${h.label}` : ""}`,
+        );
+        return { content: [`${nodeId} neighbors:`, ...lines].join("\n") };
+      }
+
+      if (action === "announce") {
+        const message = String(a.message ?? "").trim();
+        if (!message) {
+          return {
+            content: "team_graph announce requires message",
+            isError: true,
+          };
+        }
+        const delivery =
+          a.delivery === "steer" || a.delivery === "queue"
+            ? a.delivery
+            : "queue";
+        const peers = graph.neighbors(root, "peer");
+        if (!peers.length) {
+          return { content: "no peer neighbors to announce to", isError: true };
+        }
+        const results: string[] = [];
+        for (const peer of peers) {
+          const prompted = await dispatchFaceMethod(
+            options.runtime,
+            "subagent.prompt",
+            `tool-sa-ann-${peer.id}`,
+            {
+              parentSessionId: root,
+              childSessionId: peer.id,
+              mode: "continuable",
+              delivery,
+              content: [{ type: "text", text: message }],
+            },
+          );
+          if (!prompted.result.ok) {
+            results.push(`${peer.id}\tfail\t${prompted.result.error.message}`);
+            continue;
+          }
+          options.runtime.agentTeamTasks.markResumed(peer.id);
+          results.push(`${peer.id}\tok\t${delivery}`);
+        }
+        return {
+          content: [`announce → ${peers.length} peer(s):`, ...results].join(
+            "\n",
+          ),
+        };
+      }
+
+      if (action !== "view") {
+        return {
+          content:
+            "action must be view | neighbors | link | unlink | role | remove | announce",
+          isError: true,
+        };
+      }
+
+      const view = graph.view(root);
+      if (!view.nodes.length) {
+        return { content: "(empty team graph)" };
+      }
+      const nodeLines = view.nodes.map((n) => {
+        const bits = [
+          n.role ?? "?",
+          n.depth !== undefined ? `d=${n.depth}` : undefined,
+        ].filter(Boolean);
+        return `N\t${n.id}\t${n.label}\t${bits.join(" · ")}`;
+      });
+      const edgeLines = view.edges.map(
+        (e) =>
+          `E\t${e.kind}\t${e.from}\t${e.to}${e.label ? `\t${e.label}` : ""}`,
+      );
+      return {
+        content: [
+          `team graph ${view.nodes.length}n/${view.edges.length}e`,
+          ...nodeLines,
+          ...edgeLines,
+        ].join("\n"),
+      };
+    },
+  };
+}
+
 function createFollowupTaskTool(
   options: BindSubagentToolsOptions,
 ): ToolDefinition {
@@ -1333,6 +1570,7 @@ export function bindSubagentTools(
     createSubagentTool(options),
     createListAgentsTool(options),
     createSendMessageTool(options),
+    createTeamGraphTool(options),
     createFollowupTaskTool(options),
     createWaitAgentTool(options),
     createAnalyticsTool(options),

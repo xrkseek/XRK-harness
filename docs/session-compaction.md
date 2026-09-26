@@ -71,14 +71,14 @@ compaction: {
 }
 ```
 
-| `strategy` | 软压超预算时 |
-|------------|--------------|
+| `strategy` | 软压超预算 **与** Provider overflow 恢复 |
+|------------|------------------------------------------|
 | `prune-summary`（默认） | 先 model-free prune，再 LLM 摘要（可重试） |
-| `prune-only` | 只 prune；仍超则 fail-closed |
+| `prune-only` | 只 prune；仍超 / 仍溢出则 fail-closed（不调摘要） |
 | `summary-only` | 跳过 prune，直接 LLM 摘要 |
-| `off` | 关闭软压自动路径（`/compact` 仍可用） |
+| `off` | 关闭软压自动路径 **与** overflow 自动恢复（`/compact` 仍可用） |
 
-`minimal` 仍 `{}`（仅 overflow，无主动软压）。软压触发时默认先 **model-free prune**，重测后仍超预算才摘要。Provider overflow：先 prune 再重试一次，仍溢出才 `runCompaction`。剪枝用 Unicode **码点**（`thresholdChars=8192` · `head=4096` · `tail=1024`）；日志保留原文，`deriveMessages` 按 callId 取最新表面。
+`minimal` 仍 `{}`（仅 overflow，无主动软压；默认 `prune-summary`）。软压触发时按上表选阶段。Provider overflow：同一策略族，一轮恢复；剪枝用 Unicode **码点**（`thresholdChars=8192` · `head=4096` · `tail=1024`）；日志保留原文，`deriveMessages` 按 callId 取最新表面。
 
 
 ### Face `/compact`
@@ -87,13 +87,15 @@ compaction: {
 
 ## Overflow 一次恢复
 
-溢出恢复采用 **prune-first、一轮恢复**：
+溢出恢复与软压共用 **`compactionStrategy`**，**一轮**恢复：
 
 1. Provider 抛 `ContextOverflowError`
-2. **Model-free prune** 超大 `tool/result`（若有）→ 重建请求再 chat
-3. 仍溢出 → `runCompaction({ reason: "overflow" })` 摘要换窗 → 再 chat **恰好一次**
-4. 摘要失败或空结果 → **保留原始** `ContextOverflowError`（不掩盖成摘要错误）
-5. 再次溢出 → 原样抛出（不再二次恢复）
+2. `off` → 原样抛出（不做自动恢复）
+3. 允许 prune 时：对超大 `tool/result` 做 model-free prune → 重建请求再 chat（仅当确有剪枝）
+4. 仍溢出且允许 summary → `runCompaction({ reason: "overflow" })` 摘要换窗 → 再 chat **恰好一次**
+5. `prune-only` 且仍溢出 / 无可剪 → **保留原始** `ContextOverflowError`
+6. 摘要失败或空结果 → **保留原始** `ContextOverflowError`（不掩盖成摘要错误）
+7. 再次溢出 → 原样抛出（不再二次恢复）
 
 仅 prune 就可能清除溢出，**不必**写入 `context/compaction`。
 
@@ -113,7 +115,7 @@ Standing plan（`todos` 投影）与换窗正交：`/compact` / `context/compact
 ## Soft budget（`maxRequestTokens`）
 
 Harness 默认（`presets/harness`）：`maxRequestTokens: 100_000` · `keepTokens: 24_000` · `bufferTokens: 4_000`。  
-估价 = **消息面 + 站立 tool schemas**（`estimateRequestTokens`；含 assistant `reasoning` 与非文本块，并按出站前 `projectFilesToText` 计价）。超 `maxRequestTokens − buffer`（`resolveSoftBudgetCeiling`：buffer ≥ max 时忽略 buffer，避免非正 ceiling 误杀）时：先 prune 并重测，仍超则最多 **2** 次 `runCompaction({ reason: "auto" })` + 重测；**仍超则 fail-closed**（抛 `ContextOverflowError`，不再出站）。  
+估价 = **消息面 + 站立 tool schemas**（`estimateRequestTokens`；含 assistant `reasoning` 与非文本块，并按出站前 `projectFilesToText` 计价）。超 `maxRequestTokens − buffer`（`resolveSoftBudgetCeiling`：buffer ≥ max 时忽略 buffer，避免非正 ceiling 误杀）时：按 `compactionStrategy` 选阶段（`prune-summary` 先 prune 再最多 **2** 次 `runCompaction({ reason: "auto" })`；`prune-only` / `summary-only` / `off` 见上表）；**仍超则 fail-closed**（抛 `ContextOverflowError`，不再出站）。  
 工具正文在进日志前按 spill 策略截断：超 **64KiB**（Face `agent-loop.toolResultMaxInlineBytes` 可调；`0` 关闭）全文只写一份到 `~/.xrk/spill/tool-outputs/`，模型只见 head/tail + 路径；`bash.maxOutputBytes` 默认同为 64KiB。上述预算与 spill 均可在 **Settings → Plugins** 调整。`minimal` 预设默认仅 overflow（无主动软压）。
 
 ## Token 估算
@@ -198,10 +200,18 @@ compaction: {
   maxRequestTokens: 100_000,
   keepTokens: 24_000,
   bufferTokens: 4_000,
+  strategy: "prune-summary", // Face agent-loop.compactionStrategy
 }
 ```
 
-`minimal` stays `{}` (overflow only; no proactive soft pressure). On soft pressure: **model-free prune** first, then summarize if still over budget. On provider overflow: prune, retry once, then `runCompaction`. Thresholds use Unicode **code points** (`thresholdChars=8192` · `head=4096` · `tail=1024`); the log keeps originals; `deriveMessages` takes the latest surface per callId.
+| `strategy` | Soft budget **and** provider overflow recovery |
+|------------|------------------------------------------------|
+| `prune-summary` (default) | Model-free prune, then LLM summary (retryable) |
+| `prune-only` | Prune only; still over / still overflowing → fail-closed (no summary) |
+| `summary-only` | Skip prune; LLM summary only |
+| `off` | Disable soft-budget auto path **and** overflow auto-recovery (`/compact` still works) |
+
+`minimal` stays `{}` (overflow only; no proactive soft pressure; default `prune-summary`). Soft pressure and provider overflow share the table above (one recovery pass). Thresholds use Unicode **code points** (`thresholdChars=8192` · `head=4096` · `tail=1024`); the log keeps originals; `deriveMessages` takes the latest surface per callId.
 
 ### Face `/compact`
 
@@ -209,13 +219,15 @@ No arguments. Busy / summarize failure → error; nothing compactable → succes
 
 ## One-shot overflow recovery
 
-Overflow recovery is **prune-first, one recovery pass**:
+Overflow recovery shares **`compactionStrategy`** with soft budget — **one** recovery pass:
 
 1. Provider throws `ContextOverflowError`
-2. **Model-free prune** oversized `tool/result` (if any) → rebuild the request and chat again
-3. Still overflowing → `runCompaction({ reason: "overflow" })` to summarize/window → chat **exactly once** more
-4. Summarize failure or empty result → **keep the original** `ContextOverflowError` (do not mask it as a summarize error)
-5. Overflow again → rethrow as-is (no second recovery)
+2. `off` → rethrow as-is (no auto recovery)
+3. When prune is allowed: model-free prune oversized `tool/result` → rebuild request and chat again (only when something was pruned)
+4. Still overflowing and summary allowed → `runCompaction({ reason: "overflow" })` to summarize/window → chat **exactly once** more
+5. `prune-only` still overflowing / nothing to prune → **keep the original** `ContextOverflowError`
+6. Summarize failure or empty result → **keep the original** `ContextOverflowError` (do not mask it as a summarize error)
+7. Overflow again → rethrow as-is (no second recovery)
 
 Prune alone may clear overflow with **no** `context/compaction` event.
 
@@ -235,7 +247,7 @@ Standing plan (`todos` projection) is orthogonal to windowing: `/compact` / `con
 ## Soft budget (`maxRequestTokens`)
 
 Harness defaults (`presets/harness`): `maxRequestTokens: 100_000` · `keepTokens: 24_000` · `bufferTokens: 4_000`.  
-Price = **messages + standing tool schemas** (`estimateRequestTokens`; includes assistant `reasoning` and non-text blocks, priced after outbound `projectFilesToText`). Over `maxRequestTokens − buffer` (`resolveSoftBudgetCeiling`: buffer ≥ max is ignored so a non-positive ceiling cannot fail-closed every turn): prune then remeasure, then up to **2** `runCompaction({ reason: "auto" })` + remeasure; **still over → fail-closed** (`ContextOverflowError`, no outbound call).  
+Price = **messages + standing tool schemas** (`estimateRequestTokens`; includes assistant `reasoning` and non-text blocks, priced after outbound `projectFilesToText`). Over `maxRequestTokens − buffer` (`resolveSoftBudgetCeiling`: buffer ≥ max is ignored so a non-positive ceiling cannot fail-closed every turn): stages follow `compactionStrategy` (`prune-summary` prunes then up to **2** `runCompaction({ reason: "auto" })`; `prune-only` / `summary-only` / `off` per the table above); **still over → fail-closed** (`ContextOverflowError`, no outbound call).  
 Tool bodies are bounded **before** they enter the log (one spill policy): over **64KiB** (Face `agent-loop.toolResultMaxInlineBytes`; `0` disables) writes the full body once under `~/.xrk/spill/tool-outputs/` with a head/tail preview + path; `bash.maxOutputBytes` defaults to 64KiB too. Soft budget and spill are adjustable under **Settings → Plugins**. The `minimal` preset stays overflow-only.
 
 ## Token estimates

@@ -57,7 +57,7 @@ import { CRON_NS, CronCardController } from './cron-card-controller.ts'
 import { CURATED_MEMORY_NS, CuratedMemoryCardController } from './curated-memory-card-controller.ts'
 import { A2A_INBOUND_NS, A2aInboundCardController } from './a2a-inbound-card-controller.ts'
 import { EXTERNAL_AGENT_NS, ExternalAgentCardController } from './external-agent-card-controller.ts'
-import { IMAGE_GEN_NS, ImageGenCardController, IMAGE_GEN_OPENAI_REF } from './image-gen-card-controller.ts'
+import { IMAGE_GEN_NS, ImageGenCardController, IMAGE_GEN_OPENAI_REF, IMAGE_GEN_FAL_REF, IMAGE_GEN_XAI_REF } from './image-gen-card-controller.ts'
 import {
   MEMORY_EMBED_NS,
   MEMORY_EMBED_TOKEN_REF,
@@ -67,7 +67,7 @@ import { SANDBOX_NS, SandboxCardController } from './sandbox-card-controller.ts'
 import { SESSION_TELEMETRY_NS, TelemetryCardController } from './telemetry-card-controller.ts'
 import { SSH_REMOTE_NS, SshRemoteCardController } from './ssh-remote-card-controller.ts'
 import { MCP_NS, McpCardController } from './mcp-card-controller.ts'
-import { VIDEO_GEN_NS, VideoGenCardController, VIDEO_GEN_OPENAI_REF } from './video-gen-card-controller.ts'
+import { VIDEO_GEN_NS, VideoGenCardController, VIDEO_GEN_OPENAI_REF, VIDEO_GEN_FAL_REF, VIDEO_GEN_XAI_REF } from './video-gen-card-controller.ts'
 import { VIDEO_ANALYZE_NS, VideoAnalyzeCardController, VIDEO_ANALYZE_OPENAI_REF } from './video-analyze-card-controller.ts'
 import { VOICE_NS, VoiceCardController, VOICE_OPENAI_REF } from './voice-card-controller.ts'
 import { WEB_SEARCH_NS, WebSearchCardController, WEB_SEARCH_BRAVE_REF, WEB_SEARCH_TAVILY_REF } from './web-search-card-controller.ts'
@@ -126,8 +126,8 @@ export { CRON_NS } from './cron-card-controller.ts'
 export { CURATED_MEMORY_NS } from './curated-memory-card-controller.ts'
 export { A2A_INBOUND_NS } from './a2a-inbound-card-controller.ts'
 export { VOICE_NS, VOICE_OPENAI_REF } from './voice-card-controller.ts'
-export { IMAGE_GEN_NS, IMAGE_GEN_OPENAI_REF } from './image-gen-card-controller.ts'
-export { VIDEO_GEN_NS, VIDEO_GEN_OPENAI_REF } from './video-gen-card-controller.ts'
+export { IMAGE_GEN_NS, IMAGE_GEN_OPENAI_REF, IMAGE_GEN_FAL_REF, IMAGE_GEN_XAI_REF } from './image-gen-card-controller.ts'
+export { VIDEO_GEN_NS, VIDEO_GEN_OPENAI_REF, VIDEO_GEN_FAL_REF, VIDEO_GEN_XAI_REF } from './video-gen-card-controller.ts'
 export { VIDEO_ANALYZE_NS, VIDEO_ANALYZE_OPENAI_REF } from './video-analyze-card-controller.ts'
 
 /** Dictionary namespace owned by this plugin. */
@@ -240,8 +240,12 @@ export function apply(ctx: ClientContext): void {
         computerUse.refreshCredential(ref)
       }
       if (ref === VOICE_OPENAI_REF) voice.refreshCredential(ref)
-      if (ref === IMAGE_GEN_OPENAI_REF) imageGen.refreshCredential(ref)
-      if (ref === VIDEO_GEN_OPENAI_REF) videoGen.refreshCredential(ref)
+      if (ref === IMAGE_GEN_OPENAI_REF || ref === IMAGE_GEN_FAL_REF || ref === IMAGE_GEN_XAI_REF) {
+        imageGen.refreshCredential(ref)
+      }
+      if (ref === VIDEO_GEN_OPENAI_REF || ref === VIDEO_GEN_FAL_REF || ref === VIDEO_GEN_XAI_REF) {
+        videoGen.refreshCredential(ref)
+      }
       if (ref === VIDEO_ANALYZE_OPENAI_REF) videoAnalyze.refreshCredential(ref)
       if (ref === AUTO_REVIEW_CLASSIFIER_TOKEN_REF) autoReview.refreshCredential(ref)
       if (ref === MEMORY_EMBED_TOKEN_REF) memoryEmbed.refreshCredential(ref)

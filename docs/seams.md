@@ -26,9 +26,9 @@ Web：`@xrkseek/exec-web` — Definition `WebSearch`/`WebFetch`；Provider 匿�
 
 语音 Host：`@xrkseek/exec-voice` — Definition `VoiceService`；Provider memory / OpenAI HTTP（`XRK_VOICE`）；Consumer `createVoiceTools`（TTS · STT · live broker）。mic/WebRTC 在客户端，浏览器传输 `@xrkseek/exec-voice/browser`。规格：[voice.md](./voice.md)。
 
-图像生成：`@xrkseek/exec-image-gen` — Definition `ImageGenService`（含可选 `capabilities()`）；Provider memory / OpenAI Images（`XRK_IMAGE_GEN`）；Consumer `createImageGenTools` → `image_generate`（`dynamicSchema` ← caps）。规格：[image-gen.md](./image-gen.md)。
+图像生成：`@xrkseek/exec-image-gen` — Definition `ImageGenService`（含可选 `capabilities()`）；Provider memory / OpenAI Images / FAL / xAI（`XRK_IMAGE_GEN`）；Consumer `createImageGenTools` → `image_generate`（`dynamicSchema` ← caps）。规格：[image-gen.md](./image-gen.md)。
 
-视频生成：`@xrkseek/exec-video-gen` — Definition `VideoGenService`（`create` · `get` · `content` 异步作业 + 可选 `capabilities()`）；Provider memory / OpenAI Videos（`XRK_VIDEO_GEN`）；Consumer `createVideoGenTools` → `video_generate`（`dynamicSchema` ← caps）。规格：[video-gen.md](./video-gen.md)。
+视频生成：`@xrkseek/exec-video-gen` — Definition `VideoGenService`（`create` · `get` · `content` 异步作业 + 可选 `capabilities()`）；Provider memory / OpenAI Videos / FAL / xAI（`XRK_VIDEO_GEN`）；Consumer `createVideoGenTools` → `video_generate`（`dynamicSchema` ← caps）。规格：[video-gen.md](./video-gen.md)。
 
 视频理解：`@xrkseek/exec-video-analyze` — Definition `VideoAnalyzeService`（整段 `video_url` → 文本）；Provider memory / OpenAI-compatible chat（`XRK_VIDEO_ANALYZE`）；Consumer `createVideoAnalyzeTools` → `video_analyze`。与 `browser_vision`（页截图）分界。规格：[video-analyze.md](./video-analyze.md)。
 
@@ -103,9 +103,9 @@ Curated memory: `@xrkseek/exec-memory` — Definition `CuratedMemoryStore` (seam
 
 Voice Host: `@xrkseek/exec-voice` — Definition `VoiceService`; Provider memory / OpenAI HTTP (`XRK_VOICE`); Consumer `createVoiceTools` (TTS · STT · live broker). Mic/WebRTC on the client, browser transport `@xrkseek/exec-voice/browser`. Spec: [voice.md](./voice.md).
 
-Image generation: `@xrkseek/exec-image-gen` — Definition `ImageGenService` (optional `capabilities()`); Provider memory / OpenAI Images (`XRK_IMAGE_GEN`); Consumer `createImageGenTools` → `image_generate` (`dynamicSchema` ← caps). Spec: [image-gen.md](./image-gen.md).
+Image generation: `@xrkseek/exec-image-gen` — Definition `ImageGenService` (optional `capabilities()`); Provider memory / OpenAI Images / FAL / xAI (`XRK_IMAGE_GEN`); Consumer `createImageGenTools` → `image_generate` (`dynamicSchema` ← caps). Spec: [image-gen.md](./image-gen.md).
 
-Video generation: `@xrkseek/exec-video-gen` — Definition `VideoGenService` (`create` · `get` · `content` async job + optional `capabilities()`); Provider memory / OpenAI Videos (`XRK_VIDEO_GEN`); Consumer `createVideoGenTools` → `video_generate` (`dynamicSchema` ← caps). Spec: [video-gen.md](./video-gen.md).
+Video generation: `@xrkseek/exec-video-gen` — Definition `VideoGenService` (`create` · `get` · `content` async job + optional `capabilities()`); Provider memory / OpenAI Videos / FAL / xAI (`XRK_VIDEO_GEN`); Consumer `createVideoGenTools` → `video_generate` (`dynamicSchema` ← caps). Spec: [video-gen.md](./video-gen.md).
 
 Video analysis: `@xrkseek/exec-video-analyze` — Definition `VideoAnalyzeService` (whole-clip `video_url` → text); Provider memory / OpenAI-compatible chat (`XRK_VIDEO_ANALYZE`); Consumer `createVideoAnalyzeTools` → `video_analyze`. Distinct from `browser_vision` (page screenshot). Spec: [video-analyze.md](./video-analyze.md).
 
