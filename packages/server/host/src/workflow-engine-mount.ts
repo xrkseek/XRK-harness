@@ -1,17 +1,20 @@
 /**
  * Product Host default WorkflowEngine mount: Isolating Provider + Face
  * createAgent bridge + Code Mode–shaped `await tools.*` subset.
+ *
+ * Loads `@xrkseek/xrk-workflow` via dynamic import so CLI / npm installs that
+ * lack Cordis stub peers (or still resolve a `.ts` entry) soft-skip instead of
+ * crashing Host boot (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`).
  */
 import { createRegistryCodeToolBridge } from "@xrkseek/code-runtime";
 import { Context } from "@xrkseek/cordis";
 import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "@xrkseek/server-face";
 import { dispatchFaceMethod, lastAssistantBodyText } from "@xrkseek/server-face";
-import {
-  IsolatingWorkflowEngine,
-  type WorkflowEngine,
-  type WorkflowStartRequest,
-  type WorkflowToolBridge,
+import type {
+  WorkflowEngine,
+  WorkflowStartRequest,
+  WorkflowToolBridge,
 } from "@xrkseek/xrk-workflow";
 
 const FOREGROUND_WAIT_MS = 10 * 60 * 1000;
@@ -141,12 +144,31 @@ export function createFaceWorkflowToolBridge(
 }
 
 /**
- * Mount IsolatingWorkflowEngine on a dedicated Cordis Context (Host default).
- * @param runtime - live Face runtime used by createAgent / tools.*.
+ * Mount IsolatingWorkflowEngine on a dedicated Cordis Context.
+ * Returns `undefined` when the Cordis workflow stub cannot load under Node
+ * (missing peers / type-stripping ban under node_modules).
+ *
+ * @param deps - optional test override for {@link IsolatingWorkflowEngine}
+ *   so Vitest can inject the TypeScript source without mocking package exports.
  */
-export function mountHostIsolatingWorkflowEngine(
+export async function tryMountHostIsolatingWorkflowEngine(
   runtime: FaceRuntime,
-): HostWorkflowEngineMount {
+  deps?: {
+    readonly IsolatingWorkflowEngine?: typeof import("@xrkseek/xrk-workflow").IsolatingWorkflowEngine;
+  },
+): Promise<HostWorkflowEngineMount | undefined> {
+  let IsolatingWorkflowEngine = deps?.IsolatingWorkflowEngine;
+  if (IsolatingWorkflowEngine === undefined) {
+    try {
+      ({ IsolatingWorkflowEngine } = await import("@xrkseek/xrk-workflow"));
+    } catch {
+      // Missing Cordis peers or Node refusing .ts under node_modules — Host still boots.
+      return undefined;
+    }
+  }
+  if (typeof IsolatingWorkflowEngine !== "function") {
+    return undefined;
+  }
   const ctx = new Context();
   (ctx as { logger?: { warn: (m: string) => void } }).logger = {
     warn: (m) => {
@@ -175,4 +197,17 @@ export function mountHostIsolatingWorkflowEngine(
       }
     },
   };
+}
+
+/** @deprecated Prefer {@link tryMountHostIsolatingWorkflowEngine} (async soft-fail). */
+export async function mountHostIsolatingWorkflowEngine(
+  runtime: FaceRuntime,
+): Promise<HostWorkflowEngineMount> {
+  const mount = await tryMountHostIsolatingWorkflowEngine(runtime);
+  if (mount === undefined) {
+    throw new Error(
+      "xrk host: Isolating WorkflowEngine unavailable (Cordis @xrkseek/xrk-workflow failed to load)",
+    );
+  }
+  return mount;
 }

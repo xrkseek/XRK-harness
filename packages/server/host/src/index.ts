@@ -30,7 +30,7 @@ import { installOutboundHttpProxy } from "./http-proxy.js";
 import { mountInvariantsFailFast } from "./invariants-fail-fast.js";
 import { watchPolicyFile } from "./policy-file-watch.js";
 import { createA2aInboundPublicHandler } from "./a2a-inbound-public.js";
-import { mountHostIsolatingWorkflowEngine } from "./workflow-engine-mount.js";
+import { tryMountHostIsolatingWorkflowEngine } from "./workflow-engine-mount.js";
 import {
   applyXrkProductBootPolicy,
   chainPublicHandlers,
@@ -1656,14 +1656,20 @@ export function createHostManager(): HostManager {
       faceBox.approvals = faceRuntime.approvals;
       faceBox.questions = faceRuntime.questions;
       faceBox.runtime = faceRuntime;
-      const workflowMount = mountHostIsolatingWorkflowEngine(faceRuntime);
-      Object.assign(hostPublic, {
-        workflowEngine: {
-          provider: workflowMount.provider,
-          createAgentBridged: true as const,
-          toolsBridged: workflowMount.toolsBridged,
-        },
-      });
+      const workflowMount = await tryMountHostIsolatingWorkflowEngine(faceRuntime);
+      if (workflowMount !== undefined) {
+        Object.assign(hostPublic, {
+          workflowEngine: {
+            provider: workflowMount.provider,
+            createAgentBridged: true as const,
+            toolsBridged: workflowMount.toolsBridged,
+          },
+        });
+      } else {
+        log?.warn(
+          "Isolating WorkflowEngine not mounted (Cordis stub unavailable under this install)",
+        );
+      }
       // Face hydrate may migrate legacy settings.yaml mcp → host-settings after
       // boot reconcile already ran with []. Remount once when file-sourced.
       if (mcpFileSourced && mcpSpecs.length === 0) {
@@ -2562,7 +2568,7 @@ export function createHostManager(): HostManager {
             await http.close();
             await agentCache.dispose();
             try {
-              await workflowMount.dispose();
+              await workflowMount?.dispose();
             } catch {
               // Host stop must continue even if workflow engine teardown fails.
             }

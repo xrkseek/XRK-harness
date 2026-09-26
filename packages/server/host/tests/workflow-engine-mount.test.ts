@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FaceRuntime } from "@xrkseek/server-face";
+import { IsolatingWorkflowEngine } from "@xrkseek/xrk-workflow";
 import {
   createFaceWorkflowCreateAgent,
-  mountHostIsolatingWorkflowEngine,
+  tryMountHostIsolatingWorkflowEngine,
 } from "../src/workflow-engine-mount.js";
 
 describe("Host Isolating workflow mount", () => {
@@ -11,13 +12,17 @@ describe("Host Isolating workflow mount", () => {
       store: {},
       drain: { isActive: () => false },
     } as unknown as FaceRuntime;
-    const mount = mountHostIsolatingWorkflowEngine(runtime);
-    expect(mount.provider).toBe("isolating");
-    expect(mount.createAgentBridged).toBe(true);
-    expect(typeof mount.toolsBridged).toBe("boolean");
-    expect(mount.engine).toBeTruthy();
+    // Inject via Vitest alias (src); package entry is lib/types for Node publish.
+    const mount = await tryMountHostIsolatingWorkflowEngine(runtime, {
+      IsolatingWorkflowEngine,
+    });
+    expect(mount).toBeTruthy();
+    expect(mount!.provider).toBe("isolating");
+    expect(mount!.createAgentBridged).toBe(true);
+    expect(typeof mount!.toolsBridged).toBe("boolean");
+    expect(mount!.engine).toBeTruthy();
 
-    const run = mount.engine.start({
+    const run = mount!.engine.start({
       script: `
         try {
           const a = await agent({ label: 'bridged', prompt: 'ping' });
@@ -35,7 +40,7 @@ describe("Host Isolating workflow mount", () => {
     // Stub FaceRuntime has no session handlers — bridge error is visible to the script.
     expect(result.value).toMatchObject({ ok: false });
     await run.dispose();
-    await mount.dispose();
+    await mount!.dispose();
   });
 
   it("createFaceWorkflowCreateAgent requires parent.session.id", async () => {
@@ -50,5 +55,20 @@ describe("Host Isolating workflow mount", () => {
         { label: "l", prompt: "p" },
       ),
     ).rejects.toThrow(/parent\.session\.id/);
+  });
+
+  it("soft-skips when xrk-workflow import fails", async () => {
+    vi.resetModules();
+    vi.doMock("@xrkseek/xrk-workflow", () => {
+      throw new Error("simulated missing Cordis stub");
+    });
+    const { tryMountHostIsolatingWorkflowEngine: tryMount } = await import(
+      "../src/workflow-engine-mount.js"
+    );
+    const runtime = {
+      store: {},
+      drain: { isActive: () => false },
+    } as unknown as FaceRuntime;
+    await expect(tryMount(runtime)).resolves.toBeUndefined();
   });
 });

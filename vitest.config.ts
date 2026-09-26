@@ -74,6 +74,10 @@ export default defineConfig({
       ["@xrkseek/xrk-host-apiproxy/api", path.join(root, "packages/stubs/xrk-host-apiproxy/src/api/index.ts")],
       ["@xrkseek/xrk-host-apiproxy/client", path.join(root, "packages/stubs/xrk-host-apiproxy/src/fetch/client.ts")],
       ["@xrkseek/xrk-host-apiproxy", path.join(root, "packages/stubs/xrk-host-apiproxy/src/index.ts")],
+      ["@xrkseek/xrk-workflow", path.join(root, "packages/stubs/xrk-workflow/src/index.ts")],
+      // Longer subpath must appear before the package-root alias (object alias is prefix-matched).
+      ["@xrkseek/xrk-llm/src/error.ts", path.join(root, "packages/stubs/xrk-llm/src/error.ts")],
+      ["@xrkseek/xrk-llm", path.join(root, "packages/stubs/xrk-llm/src/index.ts")],
     ]),
   },
   test: {

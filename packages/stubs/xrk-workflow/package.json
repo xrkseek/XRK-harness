@@ -8,12 +8,12 @@
     "directory": "packages/workflow/workflow"
   },
   "type": "module",
-  "main": "src/index.ts",
+  "main": "lib/types/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
     ".": {
       "types": "./lib/types/index.d.ts",
-      "default": "./src/index.ts"
+      "default": "./lib/types/index.js"
     },
     "./invariant": {
       "types": "./lib/types/invariant.d.ts",
@@ -23,14 +23,12 @@
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
     },
-    "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.js.map"
   ],
   "license": "MIT",
   "peerDependencies": {

@@ -5,7 +5,7 @@
  */
 
 import { Context, Service } from '@xrkseek/cordis'
-import { HarnessError } from '@xrkseek/xrk-llm/src/error.ts'
+import { HarnessError } from '@xrkseek/xrk-llm'
 import { SessionId } from '@xrkseek/xrk-session/types'
 import {
   WorkflowRunId,
