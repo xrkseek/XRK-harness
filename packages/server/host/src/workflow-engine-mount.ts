@@ -5,23 +5,64 @@
  * Loads `@xrkseek/xrk-workflow` via dynamic import so CLI / npm installs that
  * lack Cordis stub peers (or still resolve a `.ts` entry) soft-skip instead of
  * crashing Host boot (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`).
+ *
+ * Types are structural (not imported from the stub): stub `lib/` is gitignored
+ * and CI `tsc` must not depend on a pre-emitted `lib/types`.
  */
 import { createRegistryCodeToolBridge } from "@xrkseek/code-runtime";
 import { Context } from "@xrkseek/cordis";
 import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "@xrkseek/server-face";
 import { dispatchFaceMethod, lastAssistantBodyText } from "@xrkseek/server-face";
-import type {
-  WorkflowEngine,
-  WorkflowStartRequest,
-  WorkflowToolBridge,
-} from "@xrkseek/xrk-workflow";
 
 const FOREGROUND_WAIT_MS = 10 * 60 * 1000;
 const POLL_MS = 50;
 
 /** Nested orchestrators that must not re-enter from workflow scripts. */
 const WORKFLOW_TOOL_BLOCKLIST = new Set(["run_code", "workflow", "ralph"]);
+
+/** Non-literal so `tsc` does not resolve stub package types (lib/ is gitignored). */
+const XRK_WORKFLOW_SPEC = "@xrkseek/xrk-workflow";
+
+interface WorkflowStartRequest {
+  readonly script: string;
+  readonly parent: unknown;
+  readonly signal?: AbortSignal;
+  readonly args?: unknown;
+  readonly maxTotalAgents?: number;
+  readonly meta: { readonly name: string; readonly description: string };
+}
+
+interface WorkflowToolBridge {
+  listNames(): string[];
+  call(
+    name: string,
+    args: Record<string, unknown> | undefined,
+    signal?: AbortSignal,
+  ): Promise<{ content: string; isError?: boolean }>;
+}
+
+interface WorkflowEngine {
+  start(request: WorkflowStartRequest): {
+    readonly result: Promise<{
+      readonly stopReason: string;
+      readonly agentsStarted: number;
+      readonly value: unknown;
+    }>;
+    dispose(): void | Promise<void>;
+  };
+}
+
+type IsolatingWorkflowEngineCtor = new (
+  ctx: Context,
+  options?: {
+    readonly createAgent?: (
+      request: WorkflowStartRequest,
+      call: { label: string; prompt: string; phase?: string },
+    ) => Promise<unknown>;
+    readonly toolBridge?: WorkflowToolBridge;
+  },
+) => WorkflowEngine;
 
 export interface HostWorkflowEngineMount {
   readonly provider: "isolating";
@@ -148,19 +189,22 @@ export function createFaceWorkflowToolBridge(
  * Returns `undefined` when the Cordis workflow stub cannot load under Node
  * (missing peers / type-stripping ban under node_modules).
  *
- * @param deps - optional test override for {@link IsolatingWorkflowEngine}
- *   so Vitest can inject the TypeScript source without mocking package exports.
+ * @param deps - optional test override for IsolatingWorkflowEngine so Vitest
+ *   can inject the TypeScript source without resolving stub `lib/types`.
  */
 export async function tryMountHostIsolatingWorkflowEngine(
   runtime: FaceRuntime,
   deps?: {
-    readonly IsolatingWorkflowEngine?: typeof import("@xrkseek/xrk-workflow").IsolatingWorkflowEngine;
+    readonly IsolatingWorkflowEngine?: IsolatingWorkflowEngineCtor;
   },
 ): Promise<HostWorkflowEngineMount | undefined> {
   let IsolatingWorkflowEngine = deps?.IsolatingWorkflowEngine;
   if (IsolatingWorkflowEngine === undefined) {
     try {
-      ({ IsolatingWorkflowEngine } = await import("@xrkseek/xrk-workflow"));
+      const mod = (await import(XRK_WORKFLOW_SPEC)) as {
+        IsolatingWorkflowEngine: IsolatingWorkflowEngineCtor;
+      };
+      IsolatingWorkflowEngine = mod.IsolatingWorkflowEngine;
     } catch {
       // Missing Cordis peers or Node refusing .ts under node_modules — Host still boots.
       return undefined;
