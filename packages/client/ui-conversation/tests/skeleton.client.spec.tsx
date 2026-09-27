@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { bindSnapshotSelector } from '@xrkseek/client-test-runtime'
+import { bindComposerHost, bindSnapshotSelector } from '@xrkseek/client-test-runtime'
 import {
   createSnapshotStore, EMPTY_CHAT_SNAPSHOT, EMPTY_CONVERSATION_VIEWS,
 } from '@xrkseek/client-runtime/client'
@@ -99,7 +99,7 @@ function workspace(id = 'w1'): WorkspaceView {
 }
 
 const workspaceState = (items: readonly WorkspaceView[]): WorkspaceListState => ({
-  items, archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+  items, archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
   baselinesReady: true, recentWorkspaceId: undefined,
 })
 
@@ -305,18 +305,17 @@ function mount(
   }
   const view = render(<ConversationRoot {...props} />)
   return {
-    view, chat, sink, retargetWorkspace, session, slotCalls, lineageOwners, seatOwners, open,
+    view, chat, sink, wiring, retargetWorkspace, session, slotCalls, lineageOwners, seatOwners, open,
     pickerOwner: () => pickerOwner,
     rerender: () => { view.rerender(<ConversationRoot {...props} />) },
   }
 }
 
 describe('Hero chrome', () => {
-  it('renders the English preview badge through the hero locale seat', () => {
+  it('renders the English headline through the hero locale seat', () => {
     const renderSlot = vi.fn<HeroShellProps['renderSlot']>(() => null)
     const view = render(<HeroShell t={makeTranslate(en, commonEn)} renderSlot={renderSlot} />)
     expect(view.getByText('Grow toward the sun. Harness the light.')).toBeTruthy()
-    expect(view.getByText('Preview')).toBeTruthy()
     expect(renderSlot).toHaveBeenCalledOnce()
     expect(renderSlot.mock.calls[0]?.[0]).toBe('conversation.hero.brand.mark')
     const brandMarkOwner = renderSlot.mock.calls[0]?.[1]
@@ -334,8 +333,8 @@ describe('ConversationRoot resident composer', () => {
     const b = mount(conversationSnapshot(), undefined, undefined, {
       composerBlock: { reason: 'select a model first' },
     })
-    const box = b.view.getByRole('textbox') as HTMLTextAreaElement
-    // One disabled textarea with the blocker's placeholder, never a second
+    const box = bindComposerHost(b.view.getByRole('textbox'), b.wiring)
+    // One disabled Lexical host with the blocker's placeholder, never a second
     // tree: the DOM survives the block being raised and cleared.
     expect(box.disabled).toBe(true)
     expect(box.placeholder).toBe('select a model first')
@@ -357,7 +356,7 @@ describe('ConversationRoot resident composer', () => {
       summaryBlank: true,
       composerBlock: { reason: 'select a model first' },
     })
-    const box = b.view.getByRole('textbox') as HTMLTextAreaElement
+    const box = bindComposerHost(b.view.getByRole('textbox'), b.wiring)
     expect(box.disabled).toBe(false)
     expect(box.readOnly).toBe(true)
     expect(box.getAttribute('aria-haspopup')).toBe('menu')
@@ -368,9 +367,11 @@ describe('ConversationRoot resident composer', () => {
 
   it('keeps composer text in the machine, mirrors to the chat store, and submits through the sink', () => {
     const b = mount(conversationSnapshot())
-    const box = b.view.getByRole('textbox')
-    expect((box as HTMLTextAreaElement).value).toBe('ordinary draft')
-    fireEvent.change(box, { target: { value: 'ordinary revised' } })
+    const box = bindComposerHost(b.view.getByRole('textbox'), b.wiring)
+    expect(box.value).toBe('ordinary draft')
+    // Lexical host has no textarea change event — drive the machine the way
+    // production typing does (shell.setDraft), then assert the draft mirror.
+    act(() => { box.value = 'ordinary revised' })
     expect(b.chat.store.getSnapshot().draft).toBe('ordinary revised')
     fireEvent.keyDown(box, { key: 'Enter' })
     expect(b.sink).toHaveBeenCalledWith('ordinary revised', [], 'queue', expect.any(AbortSignal))
@@ -407,14 +408,14 @@ describe('ConversationRoot resident composer', () => {
     const host = b.view.container.querySelector('[data-conversation-scroll]')
     const seat = b.view.container.querySelector('[data-composer-seat]')
     const header = b.view.container.querySelector('header')
-    const textarea = b.view.container.querySelector('textarea')
+    const composer = b.view.container.querySelector('[data-composer-input]')
     expect(host).not.toBeNull()
     expect(seat).not.toBeNull()
     expect(header).not.toBeNull()
     // Header is column chrome above the scrollport; the seat sticks inside it.
     expect(host?.contains(header)).toBe(false)
     expect(host?.contains(seat)).toBe(true)
-    expect(seat?.contains(textarea)).toBe(true)
+    expect(seat?.contains(composer)).toBe(true)
     expect(b.slotCalls).toContain('conversation.session.header.lineage')
     expect(b.slotCalls).toContain('conversation.session.header.actions')
     expect(b.slotCalls).toContain('conversation.session.header.utilities')
@@ -448,9 +449,9 @@ describe('ConversationRoot resident composer', () => {
     // The same machine-backed textarea is live in the hero, and the
     // persistence mirror stays bound (ConversationSession mounts chrome-hidden
     // for blank sessions): hero typing reaches the chat store.
-    const box = b.view.getByRole('textbox')
+    const box = bindComposerHost(b.view.getByRole('textbox'), b.wiring)
     expect(host?.contains(box)).toBe(true)
-    fireEvent.change(box, { target: { value: 'draft in hero' } })
+    act(() => { box.value = 'draft in hero' })
     expect(b.chat.store.getSnapshot().draft).toBe('draft in hero')
     // Picker: open through the chip; a pick switches to the other
     // workspace's blank session (draft carry is apply-layer wiring).
@@ -472,8 +473,9 @@ describe('ConversationRoot resident composer', () => {
   })
 
   it('settling phase: a session the list has no row for settles conservatively', () => {
+    // liveBlank must stay false — provenBlank (summary ∨ live) skips settling.
     const b = mount(
-      conversationSnapshot({ composerPhase: 'blank', blank: true, openState: 'loading' }),
+      conversationSnapshot({ composerPhase: 'blank', blank: false, openState: 'loading' }),
       undefined,
       undefined,
       { omitSummaryRow: true },
@@ -499,14 +501,14 @@ describe('ConversationRoot resident composer', () => {
 
   it('same textarea DOM node survives the hero → active flip into the sticky scrollport', () => {
     const b = mount(conversationSnapshot({ composerPhase: 'blank', blank: true }))
-    const before = b.view.getByRole('textbox')
-    fireEvent.change(before, { target: { value: 'kept across flip' } })
+    const before = bindComposerHost(b.view.getByRole('textbox'), b.wiring)
+    act(() => { before.value = 'kept across flip' })
     // First message landed: content exists, phase leaves blank. Composer
-    // already sat in the resident scrollport during hero, so the textarea
+    // already sat in the resident scrollport during hero, so the host
     // node and InputHub draft both survive.
     b.session.set(conversationSnapshot({ composerPhase: 'active', blank: false }))
     b.rerender()
-    const after = b.view.getByRole('textbox') as HTMLTextAreaElement
+    const after = bindComposerHost(b.view.getByRole('textbox'), b.wiring)
     expect(after).toBe(before)
     expect(after.value).toBe('kept across flip')
     expect(b.chat.store.getSnapshot().draft).toBe('kept across flip')

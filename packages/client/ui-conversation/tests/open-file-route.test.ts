@@ -20,4 +20,12 @@ describe('routeChatOpenFile', () => {
     await routeChatOpenFile('/a.ts', undefined, openWorkspace)
     expect(openWorkspace).toHaveBeenCalledWith('/a.ts')
   })
+
+  it('wakes community before workspaces when workbench refuses', async () => {
+    const openWorkspace = vi.fn(async () => {})
+    const wake = vi.fn()
+    await routeChatOpenFile('/a.ts', { openPath: () => false }, openWorkspace, wake)
+    expect(wake).toHaveBeenCalledWith('/a.ts')
+    expect(openWorkspace).toHaveBeenCalledWith('/a.ts')
+  })
 })

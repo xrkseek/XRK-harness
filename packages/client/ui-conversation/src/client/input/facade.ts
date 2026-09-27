@@ -359,8 +359,10 @@ export class SessionInputShell implements SessionInput {
    * subscribers never fire.
    */
   readonly lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>> = {
-    getSnapshot: () => this.deps.inputTriggers?.()?.lexicon.getSnapshot() ?? EMPTY_LEXICON,
-    subscribe: fn => this.deps.inputTriggers?.()?.lexicon.subscribe(fn) ?? (() => {}),
+    // Optional lexicon: a partial InputTriggerController double (tests) or a
+    // pipeline that has not published one yet must not throw on decoration scan.
+    getSnapshot: () => this.deps.inputTriggers?.()?.lexicon?.getSnapshot() ?? EMPTY_LEXICON,
+    subscribe: fn => this.deps.inputTriggers?.()?.lexicon?.subscribe(fn) ?? (() => {}),
   }
 
   // ---- scoped-event application verbs ----

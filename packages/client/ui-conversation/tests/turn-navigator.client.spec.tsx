@@ -87,9 +87,10 @@ describe('TurnNavigator', () => {
       <TurnNavigator items={items} activeTurn={2} busyTurn={null} onNavigate={vi.fn()} t={t} />,
       { container: scroll },
     )
-    expect(scroll.querySelector('[role="navigation"]')).toBeNull()
-    expect(host.querySelector('[role="navigation"]')).not.toBeNull()
-    expect(host.querySelectorAll('[role="navigation"]')).toHaveLength(1)
+    // Implicit <nav> has no role attribute — query the element, not [role=…].
+    expect(scroll.querySelector('nav')).toBeNull()
+    expect(host.querySelector('nav')).not.toBeNull()
+    expect(host.querySelectorAll('nav')).toHaveLength(1)
     view.unmount()
     column.remove()
   })

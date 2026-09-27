@@ -163,6 +163,9 @@ function finalNode(
         firstTokenTime: state.firstTokenTime ?? null,
         completedTime: event.time,
       },
+      // Host may finalize a cancelled stream as assistant/message with the
+      // interrupted bit set (prefix kept); surface that as status interrupted.
+      ...(event.data.interrupted === true ? { interrupted: true as const } : {}),
     }
   }
   const location = context.start?.location ?? context.matches.at(-1)?.location

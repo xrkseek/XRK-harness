@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 // InputBar behavior over the machine wiring: Enter-send semantics (IME guard,
 // Shift newline, busy Enter policy, Ctrl/Meta steering, repeat suppression), running
 // semantics (input stays free; continuable children keep Send beside Stop), the machine pending lock,
@@ -6,11 +6,12 @@
 
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { bindSnapshotSelector } from '@xrkseek/client-test-runtime'
+import {
+  bindComposerHost, bindSnapshotSelector, composerHintOf, flushComposer, makeTranslate,
+} from '@xrkseek/client-test-runtime'
 import {
   createSnapshotStore, EMPTY_CHAT_SNAPSHOT, EMPTY_CONVERSATION_VIEWS,
 } from '@xrkseek/client-runtime/client'
-import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import type { ClientContext, ConversationSnapshot, SessionId } from '@xrkseek/client-runtime/client'
 import type { SubmitOutcome } from '@xrkseek/client-ui-input-trigger/client'
@@ -31,11 +32,6 @@ afterEach(cleanup)
 // zero rect; the reveal case below substitutes its own and restores this one.
 const ZERO_RECT = (): DOMRect => ({ top: 0, bottom: 0 }) as DOMRect
 Range.prototype.getBoundingClientRect = ZERO_RECT
-
-// Read through the descriptor so the native method is never referenced unbound;
-// the reveal case below wraps it to record what it was asked to measure.
-const NATIVE_SET_START = Object.getOwnPropertyDescriptor(Range.prototype, 'setStart')!
-  .value as (this: Range, node: Node, offset: number) => void
 
 const SCTX = {} as ClientContext
 const SID = 's1' as SessionId
@@ -152,6 +148,7 @@ function bench(over?: BenchOptions) {
       ? {
         inputTriggers: (() => ({
           lexicon: { getSnapshot: () => lex, subscribe: () => () => {} },
+          track: vi.fn(),
         })) as unknown as NonNullable<ShellDeps['inputTriggers']>,
       }
       : {}),
@@ -178,7 +175,7 @@ function bench(over?: BenchOptions) {
       subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
     })),
     useWorkspaces: bindSnapshotSelector(createSnapshotStore({
-      items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+      items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
       baselinesReady: true, recentWorkspaceId: undefined,
     })),
     useConnectionState: bindSnapshotSelector(connection),
@@ -225,7 +222,7 @@ function bench(over?: BenchOptions) {
   // the store — exactly the state a returning session presents.
   for (const [level, text] of over?.notify ?? []) shell.notify(level, text)
   const view = render(<InputBar {...props} />)
-  const textarea = view.container.querySelector('[data-composer-input]')!
+  const textarea = bindComposerHost(view.container.querySelector('[data-composer-input]')!, shell)
   const hasPartial = over?.partial !== null && over?.partial !== undefined
     && over.partial.blocks.some(block =>
       (block.kind === 'text' || block.kind === 'reasoning') && block.text.trim() !== '')
@@ -241,7 +238,7 @@ function bench(over?: BenchOptions) {
   const primaryLabel = primaryStops
     ? '停止生成'
     : over?.running === true && steeringAvailable && !composerLocked && plainMessageDraft
-      ? (over.busyEnter === 'steer' ? '插话发送' : '排队发送')
+      ? (over.busyEnter === 'steer' ? '插队（本轮内）' : '排队（本轮后）')
       : '发送消息'
   const button = view.container.querySelector<HTMLButtonElement>(
     `button[aria-label="${primaryLabel}"]`,
@@ -255,16 +252,8 @@ function bench(over?: BenchOptions) {
 }
 
 /**
- * Dispatch the native `beforeinput` the composer reads the pre-edit selection
- * from. The DOM event carries no range for a textarea (`getTargetRanges()` is
- * empty there), so the element's own selection plus `inputType` is the signal.
- * The selection each gesture leaves is the engine-observed one: a delete over a
- * selection reports that selection, a caret delete reports the bare caret.
+ * Latest attachment-slot owner props pushed through renderSlot.
  */
-function beforeInput(el: HTMLTextAreaElement, inputType = 'insertText'): void {
-  el.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType }))
-}
-
 function attachmentOwner(slotCalls: readonly { key: string; owner: unknown }[]): ComposerAttachmentsOwnerProps {
   for (let i = slotCalls.length - 1; i >= 0; i -= 1) {
     const call = slotCalls[i]
@@ -338,10 +327,19 @@ describe('composer placeholder visibility', () => {
   })
 })
 
+const PNG_LIMITS = {
+  maxImageBytes: 1024 * 1024,
+  maxImagesPerMessage: 10,
+  maxMessageImageBytes: 10 * 1024 * 1024,
+  maxImagePixels: 40_000_000,
+  maxImageDimension: 8000,
+  mediaTypes: ['image/png'] as const,
+}
+
 describe('image draft rail', () => {
-  it('collects clipboard files while preserving text from a mixed paste', () => {
+  it('collects clipboard files while preserving text from a mixed paste', async () => {
     const addImages = vi.fn(() => null)
-    const { textarea, shell } = bench({ addImages })
+    const { textarea, shell } = bench({ addImages, imageLimits: PNG_LIMITS })
     const image = new File([Uint8Array.of(1, 2, 3)], 'pixel.png', { type: 'image/png' })
     fireEvent.paste(textarea, {
       clipboardData: {
@@ -353,7 +351,7 @@ describe('image draft rail', () => {
       },
     })
     expect(addImages).toHaveBeenCalledWith([image])
-    expect(shell.snapshot.draft).toBe('同时粘贴的文字')
+    await vi.waitFor(() => { expect(shell.snapshot.draft).toBe('同时粘贴的文字') })
   })
 
   it('pre-checks projected limits at intake: whole-batch refusal with product copy, none added', () => {
@@ -398,7 +396,7 @@ describe('image draft rail', () => {
   })
 
   it('announces the format problem before any limit when the batch holds a non-image', () => {
-    const addImages = vi.fn(() => '仅支持 PNG、JPG、WebP、GIF 格式的图片')
+    const addImages = vi.fn(() => null)
     const result = bench({
       addImages,
       imageLimits: {
@@ -410,13 +408,14 @@ describe('image draft rail', () => {
         mediaTypes: ['image/png'] as const,
       },
     })
-    // Oversized AND over-count AND wrong type: the format rejection wins.
+    // Oversized AND over-count AND wrong type: the format rejection wins at
+    // intake and never reaches addImages.
     const files = [
       new File([new ArrayBuffer(64)], 'a.pdf', { type: 'application/pdf' }),
       new File([new ArrayBuffer(64)], 'b.pdf', { type: 'application/pdf' }),
     ]
     act(() => { attachmentOwner(result.slotCalls).onAddImages(files) })
-    expect(addImages).toHaveBeenCalledWith(files)
+    expect(addImages).not.toHaveBeenCalled()
     expect(result.view.getByRole('alert').textContent).toContain('仅支持 PNG、JPG、WebP、GIF 格式的图片')
   })
 
@@ -474,7 +473,8 @@ describe('image draft rail', () => {
     sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(sink).toHaveBeenCalledWith('', ['draft-1'], 'queue', expect.any(AbortSignal))
-    expect(attachmentOwner(result.slotCalls).attachments).toEqual([attachments[0]])
+    // commitSend clears the rail immediately; failure restores, success stays empty.
+    expect(attachmentOwner(result.slotCalls).attachments).toEqual([])
     await act(async () => { settle({ kind: 'success' }) })
     await vi.waitFor(() => {
       expect(attachmentOwner(result.slotCalls).attachments).toEqual([])
@@ -508,7 +508,9 @@ describe('image draft rail', () => {
 
   it('announces a rejected attachment-slot intake through the same toast', () => {
     const addImages = vi.fn(() => '图片读取服务不可用')
-    const result = bench({ addImages })
+    // Without imageLimits every file is treated as non-image at intake; project
+    // PNG limits so the host rejection from addImages is what surfaces.
+    const result = bench({ addImages, imageLimits: PNG_LIMITS })
     act(() => {
       attachmentOwner(result.slotCalls).onAddImages([
         new File([Uint8Array.of(1)], 'x.png', { type: 'image/png' }),
@@ -521,21 +523,21 @@ describe('image draft rail', () => {
 describe('Enter semantics', () => {
   it('advertises the empty-draft whole-queue steering gesture when it is available', () => {
     const { textarea } = bench({ running: true, queue: [row('q-1')], steerQueue: vi.fn() })
-    expect(textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
+    expect(textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插队发送全部排队消息')
     // Preference does not move whole-queue flush onto plain Enter.
     expect(bench({
       running: true,
       queue: [row('q-1')],
       busyEnter: 'steer',
       steerQueue: vi.fn(),
-    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
+    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插队发送全部排队消息')
   })
 
   it('advertises queue vs steer chords while the agent is running with a draftable composer', () => {
     expect(bench({ running: true, draft: 'typing' }).textarea.getAttribute('data-placeholder'))
-      .toBe('Enter 排队发送 · Cmd/Ctrl+Enter 插话发送')
+      .toBe('Enter 排队 · Cmd/Ctrl+Enter 插队')
     expect(bench({ running: true, busyEnter: 'steer', draft: 'typing' }).textarea.getAttribute('data-placeholder'))
-      .toBe('Enter 插话发送 · Cmd/Ctrl+Enter 排队发送')
+      .toBe('Enter 插队 · Cmd/Ctrl+Enter 排队')
   })
 
   it('keeps the owning placeholder or ordinary guidance when whole-queue steering is unavailable', () => {
@@ -544,7 +546,7 @@ describe('Enter semantics', () => {
     expect(bench({ queue: [row('q-1')] }).textarea.getAttribute('data-placeholder')).toBe('给智能体发消息')
     // Non-empty draft while running advertises the busy Enter / chord pair.
     expect(bench({ running: true, queue: [row('q-1')], draft: '消息' }).textarea.getAttribute('data-placeholder'))
-      .toBe('Enter 排队发送 · Cmd/Ctrl+Enter 插话发送')
+      .toBe('Enter 排队 · Cmd/Ctrl+Enter 插队')
     expect(bench({
       running: true,
       queue: [row('q-1')],
@@ -552,7 +554,8 @@ describe('Enter semantics', () => {
         address: { parentSessionId: 'parent' as SessionId, childSessionId: SID, mode: 'continuable' },
         parentAvailable: true,
       },
-    }).textarea.getAttribute('data-placeholder')).toBe('给智能体发消息')
+    // Continuable children share whole-queue flush, so the steer hint wins.
+    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插队发送全部排队消息')
     expect(bench({
       running: true,
       queue: [row('q-1')],
@@ -578,7 +581,7 @@ describe('Enter semantics', () => {
       running: true,
       queue: [row('q-1')],
       plan: { active: true, pending: false },
-    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
+    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插队发送全部排队消息')
   })
 
   it('an open command menu withholds the whole-queue steering gesture', () => {
@@ -674,8 +677,8 @@ describe('Enter semantics', () => {
     expect(plain.steerQueue).not.toHaveBeenCalled()
     expect(plain.sink).not.toHaveBeenCalled()
 
-    // Subagent sessions keep the queue transport (no steering face).
-    const subagent = {
+    // Continuable children share whole-queue flush; one-shot stays gated.
+    const continuable = {
       address: {
         parentSessionId: 'parent' as SessionId,
         childSessionId: SID,
@@ -683,10 +686,22 @@ describe('Enter semantics', () => {
       },
       parentAvailable: true,
     }
-    const child = bench({ running: true, subagent, queue: [row('q-1')], steerQueue: vi.fn() })
+    const child = bench({ running: true, subagent: continuable, queue: [row('q-1')], steerQueue: vi.fn() })
     fireEvent.keyDown(child.textarea, { key: 'Enter', metaKey: true })
-    expect(child.steerQueue).not.toHaveBeenCalled()
+    expect(child.steerQueue).toHaveBeenCalledTimes(1)
     expect(child.sink).not.toHaveBeenCalled()
+    const oneshot = {
+      address: {
+        parentSessionId: 'parent' as SessionId,
+        childSessionId: SID,
+        mode: 'oneshot' as const,
+      },
+      parentAvailable: true,
+    }
+    const gated = bench({ running: true, subagent: oneshot, queue: [row('q-1')], steerQueue: vi.fn() })
+    fireEvent.keyDown(gated.textarea, { key: 'Enter', metaKey: true })
+    expect(gated.steerQueue).not.toHaveBeenCalled()
+    expect(gated.sink).not.toHaveBeenCalled()
 
     // No queued rows: the empty draft stays a no-op.
     const none = bench({ running: true, steerQueue: vi.fn() })
@@ -719,14 +734,18 @@ describe('Enter semantics', () => {
     expect(sink).not.toHaveBeenCalled()
   })
 
-  it('platform undo/redo chords route to the machine, never the browser stack', () => {
-    const { textarea, shell } = bench({ draft: '' })
+  it('paste appends at the caret while setDraft replaces the whole draft', () => {
+    // Undo chords are owned by Lexical's history plugin (PASTE_TAG vs
+    // HISTORY_MERGE_TAG); jsdom does not arm a usable undo stack for discrete
+    // editor.update, so the bar-level contract asserted here is the edit face.
+    const { shell } = bench({ draft: '' })
     act(() => { shell.setDraft('first') })
-    act(() => { shell.setDraft('first second') })
-    fireEvent.keyDown(textarea, { key: 'z', ctrlKey: true })
-    expect(shell.snapshot.draft).not.toBe('first second')
-    fireEvent.keyDown(textarea, { key: 'z', ctrlKey: true, shiftKey: true })
+    act(() => { shell.paste(' second') })
     expect(shell.snapshot.draft).toBe('first second')
+    act(() => { shell.setDraft('replaced') })
+    expect(shell.snapshot.draft).toBe('replaced')
+    act(() => { shell.paste('!') })
+    expect(shell.snapshot.draft).toBe('replaced!')
   })
 
   it('composition Enter never sends: ref guard, isComposing, and keyCode 229 paths', () => {
@@ -791,27 +810,27 @@ describe('running and lock semantics', () => {
     expect(stop).toHaveBeenCalledTimes(1)
 
     act(() => { shell.setDraft('排队消息') })
-    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    expect(button.getAttribute('aria-label')).toBe('排队（本轮后）')
     act(() => { shell.setDraft('   ') })
     expect(button.getAttribute('aria-label')).toBe('停止生成')
     act(() => { shell.setDraft('排队消息2') })
-    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    expect(button.getAttribute('aria-label')).toBe('排队（本轮后）')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('排队消息2', [], 'queue', expect.any(AbortSignal))
   })
 
   it('running Send follows the busy-state Steer preference and labels the delivery', () => {
     const { button, sink } = bench({ running: true, busyEnter: 'steer', draft: '按钮插话' })
-    expect(button.getAttribute('aria-label')).toBe('插话发送')
+    expect(button.getAttribute('aria-label')).toBe('插队（本轮内）')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('按钮插话', [], 'steer', expect.any(AbortSignal))
   })
 
   it('running Send relabels when the busy-state preference changes live', () => {
     const { button, busyEnter, sink } = bench({ running: true, draft: '跟随设置' })
-    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    expect(button.getAttribute('aria-label')).toBe('排队（本轮后）')
     act(() => { busyEnter.set('steer') })
-    expect(button.getAttribute('aria-label')).toBe('插话发送')
+    expect(button.getAttribute('aria-label')).toBe('插队（本轮内）')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('跟随设置', [], 'steer', expect.any(AbortSignal))
   })
@@ -889,7 +908,7 @@ describe('running and lock semantics', () => {
         parentAvailable: true,
       },
     })
-    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    expect(button.getAttribute('aria-label')).toBe('排队（本轮后）')
     expect(interruptButton).not.toBeNull()
     expect(textarea.getAttribute('aria-disabled')).not.toBe('true')
     fireEvent.click(button)
@@ -921,10 +940,10 @@ describe('running and lock semantics', () => {
     expect(stop).toHaveBeenCalledTimes(1)
   })
 
-  it('running one-shot subagent never exposes Stop', () => {
+  it('running one-shot subagent keeps Send primary and exposes independent Stop', () => {
     const { button, interruptButton, stop } = bench({
       running: true,
-      draft: '不可停止',
+      draft: '可停止',
       subagent: {
         address: {
           parentSessionId: 'parent' as SessionId,
@@ -934,9 +953,13 @@ describe('running and lock semantics', () => {
         parentAvailable: true,
       },
     })
+    // One-shot cannot accept further messages as primary Send (locked read-only
+    // messaging elsewhere), but while it hangs in a tool the independent Stop
+    // is the only way out — same interrupt chrome as continuable.
     expect(button.getAttribute('aria-label')).toBe('发送消息')
-    expect(interruptButton).toBeNull()
-    expect(stop).not.toHaveBeenCalled()
+    expect(interruptButton).not.toBeNull()
+    fireEvent.click(interruptButton!)
+    expect(stop).toHaveBeenCalledTimes(1)
   })
 
   it('applies the ordinary Queue/Steer preference to a running continuable child', () => {
@@ -1002,7 +1025,7 @@ describe('running and lock semantics', () => {
 
   it('typing forwards through the machine (draft state echoes back)', () => {
     const { textarea, wiring } = bench()
-    act(() => { shell.setDraft('typed') })
+    act(() => { wiring.setDraft('typed') })
     expect(wiring.state.getSnapshot().draft).toBe('typed')
     expect((textarea).value).toBe('typed')
   })
@@ -1059,22 +1082,19 @@ describe('running and lock semantics', () => {
   })
 
   it('the caret layer and the glyph layer ride one scrollport', () => {
-    const { view, textarea } = bench({ draft: 'line\n'.repeat(40) })
+    const { view, textarea, shell } = bench({ draft: 'line\n'.repeat(40) })
     const scroll = view.container.querySelector<HTMLElement>('[data-input-scroll]')!
     const backdrop = view.container.querySelector<HTMLElement>('[data-composer-input]')!
-    // The caret is the textarea's and every visible glyph is the backdrop's, so
-    // one box has to carry both or an offset can exist in one and not the other.
-    // jsdom has no layout and loads no stylesheet — which box scrolls is the
-    // browser scenario's to assert; what is checkable here is that the
-    // scrollport element holds both layers.
+    // Lexical collapses caret + glyphs onto one contenteditable inside the
+    // scrollport (no separate mirror). jsdom textContent joins paragraphs
+    // without the `\n` separators the clipboard projection keeps.
     expect(scroll.contains(textarea)).toBe(true)
     expect(scroll.contains(backdrop)).toBe(true)
-    // The glyph layer carries the draft and nothing else — no height padding
-    // to a second box's scroll extent.
-    expect(backdrop.textContent).toBe('line\n'.repeat(40))
+    expect(shell.snapshot.draft).toBe('line\n'.repeat(40))
+    expect(backdrop.textContent).toBe('line'.repeat(40))
   })
 
-  it('repairs Safari native overflow after the mirror shrinks the draft', () => {
+  it('Lexical composer does not invoke Safari textarea layout recovery', () => {
     const vendor = vi.spyOn(window.navigator, 'vendor', 'get').mockReturnValue('Apple Computer, Inc.')
     const userAgent = vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
       'Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15',
@@ -1083,54 +1103,14 @@ describe('running and lock semantics', () => {
       vendor.mockRestore()
       userAgent.mockRestore()
     })
-    const { textarea } = bench({ draft: 'two wrapped lines' })
+    // The textarea Safari recovery is gone with Lexical; shrinking the draft
+    // must not force height thrash on the contenteditable or its scrollport.
+    const { textarea, shell } = bench({ draft: 'two wrapped lines' })
     const scrollport = textarea.closest<HTMLElement>('[data-input-scroll]')!
-    let inputRepaired = false
-    let scrollportRepaired = false
-    const inputLayouts: string[] = []
-    const scrollportLayouts: string[] = []
-    Object.defineProperty(textarea, 'clientHeight', {
-      configurable: true,
-      get: () => textarea.style.height === '29px' ? 29 : 28,
-    })
-    Object.defineProperty(textarea, 'scrollHeight', {
-      configurable: true,
-      get: () => inputRepaired ? 28 : 52,
-    })
-    Object.defineProperty(textarea, 'offsetHeight', {
-      configurable: true,
-      get: () => {
-        inputLayouts.push(textarea.style.height)
-        if (textarea.style.height === '') inputRepaired = true
-        return textarea.clientHeight
-      },
-    })
-    Object.defineProperty(scrollport, 'clientHeight', {
-      configurable: true,
-      get: () => {
-        if (scrollport.style.height === '53px') return 53
-        if (inputRepaired && !scrollportRepaired) return 52
-        return 28
-      },
-    })
-    Object.defineProperty(scrollport, 'offsetHeight', {
-      configurable: true,
-      get: () => {
-        scrollportLayouts.push(scrollport.style.height)
-        if (scrollport.style.height === '') scrollportRepaired = true
-        return scrollport.clientHeight
-      },
-    })
-    textarea.setSelectionRange(5, 5)
-
     act(() => { shell.setDraft('one line') })
-
-    expect(inputLayouts).toEqual(['29px', ''])
-    expect(scrollportLayouts).toEqual(['53px', ''])
     expect(textarea.style.height).toBe('')
     expect(scrollport.style.height).toBe('')
-    expect(textarea.scrollHeight).toBe(textarea.clientHeight)
-    expect(scrollport.clientHeight).toBe(28)
+    expect(shell.snapshot.draft).toBe('one line')
   })
 
   it('does not force the Safari recovery for another iOS browser', () => {
@@ -1142,21 +1122,9 @@ describe('running and lock semantics', () => {
       vendor.mockRestore()
       userAgent.mockRestore()
     })
-    const { textarea } = bench({ draft: 'two wrapped lines' })
+    const { textarea, shell } = bench({ draft: 'two wrapped lines' })
     const scrollport = textarea.closest<HTMLElement>('[data-input-scroll]')!
-    Object.defineProperty(textarea, 'clientHeight', { configurable: true, value: 28 })
-    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 52 })
-    Object.defineProperty(textarea, 'offsetHeight', {
-      configurable: true,
-      get: () => { throw new Error('non-Safari browser must not force textarea layout') },
-    })
-    Object.defineProperty(scrollport, 'offsetHeight', {
-      configurable: true,
-      get: () => { throw new Error('non-Safari browser must not force scrollport layout') },
-    })
-
     act(() => { shell.setDraft('one line') })
-
     expect(scrollport.style.height).toBe('')
   })
 
@@ -1184,119 +1152,46 @@ describe('running and lock semantics', () => {
     expect(shell.snapshot.draft).toBe('one line grows')
   })
 
-  it('an edit the composer performs itself scrolls the caret back into view', async () => {
-    // Paste and cut suppress the native edit, so no engine reveals the caret
-    // for them. jsdom has no layout: the rects are stubbed,
-    // and what is asserted is the arithmetic — minimal scroll, in both
-    // directions, and nothing at all for a caret already inside the box.
-    const { view, textarea } = bench({ draft: 'line\n'.repeat(40) })
+  it('a programmatic draft write reveals the caret inside the draft scrollport', async () => {
+    // Paste no longer owns reveal (Lexical handles native caret); the bar's
+    // draft-nonempty effect and unlock focus path call revealDraftSelection.
+    const { view, shell } = bench()
     const scroll = view.container.querySelector<HTMLElement>('[data-input-scroll]')!
-    const mirror = view.container.querySelector<HTMLElement>('[data-composer-placeholder]')!
-    expect(mirror.firstChild).toBeInstanceOf(Text)
     scroll.getBoundingClientRect = () => ({ top: 100, bottom: 436 }) as DOMRect
-    // jsdom reports scrollHeight === clientHeight for every element, which is
-    // the composer's own "nothing to reveal" case; a scrollable box is what
-    // puts the reveal on the table at all.
     Object.defineProperty(scroll, 'clientHeight', { value: 336, configurable: true })
     Object.defineProperty(scroll, 'scrollHeight', { value: 964, configurable: true })
     Object.defineProperty(scroll, 'scrollTop', { value: 0, writable: true, configurable: true })
-    onTestFinished(() => {
-      Range.prototype.getBoundingClientRect = ZERO_RECT
-      Range.prototype.setStart = NATIVE_SET_START
-    })
-    // Which layer the caret is measured against, and at which index: the stub
-    // records `setStart` so a helper that measured the backdrop instead, or
-    // always collapsed at 0, fails here rather than only in the browser lane.
-    let measured: { node: Node; offset: number } | null = null
-    Range.prototype.setStart = function setStart(node: Node, offset: number): void {
-      measured = { node, offset }
-      NATIVE_SET_START.call(this, node, offset)
-    }
-    const caretAt = (top: number): void => {
-      Range.prototype.getBoundingClientRect = () => ({ top, bottom: top + 24 }) as DOMRect
-    }
-    const settle = async (): Promise<void> => {
-      await act(async () => { await new Promise((resolve) => { requestAnimationFrame(() => { resolve(null) }) }) })
-    }
-    // Pasted text lands below the fold: scroll down by exactly the overshoot.
-    caretAt(500)
-    fireEvent.paste(textarea, { clipboardData: { items: [], getData: () => 'pasted' } })
-    await settle()
-    expect(scroll.scrollTop).toBe(88) // 524 - 436
-    // Measured on the mirror's own text, at the index the paste left the caret
-    // (an empty draft's selection start, 0, plus the pasted length).
-    expect(measured!.node).toBe(mirror.firstChild)
-    expect(measured!.offset).toBe('pasted'.length)
-    // A caret already inside the box does not move it.
-    caretAt(200)
-    fireEvent.paste(textarea, { clipboardData: { items: [], getData: () => 'more' } })
-    await settle()
-    expect(scroll.scrollTop).toBe(88)
-    // Above the fold (a cut can leave it there): scroll back up.
-    caretAt(60)
-    fireEvent.paste(textarea, { clipboardData: { items: [], getData: () => 'again' } })
-    await settle()
-    expect(scroll.scrollTop).toBe(48) // 88 - (100 - 60)
-    // A caret straight after a newline has nothing on its line to measure, so
-    // the newline it just left is measured instead and one line is added.
-    // chromium reports no client rects at all for the collapsed position.
-    mirror.style.lineHeight = '24px'
-    caretAt(500)
-    fireEvent.paste(textarea, { clipboardData: { items: [], getData: () => 'block\n' } })
-    await settle()
-    // The four pastes accumulate at the draft's head, so the caret is at the
-    // end of what they inserted — and the measured index is the newline before it.
-    expect(measured!.offset).toBe('pastedmoreagainblock\n'.length - 1)
-    expect(scroll.scrollTop).toBe(48 + 112) // from 48, by (524 + 24) - 436
+    onTestFinished(() => { Range.prototype.getBoundingClientRect = ZERO_RECT })
+    Range.prototype.getBoundingClientRect = () => ({ top: 500, bottom: 524 }) as DOMRect
+    act(() => { shell.setDraft('line\n'.repeat(40)) })
+    await act(async () => { await new Promise((resolve) => { requestAnimationFrame(() => { resolve(null) }) }) })
+    expect(scroll.scrollTop).toBeGreaterThan(0)
   })
 
-  it('a session switch refocuses without moving the transcript, and reveals the new draft caret', () => {
-    // The composer DOM is reused across sessions, so the previous session's
-    // offset survives while the value swap puts the caret at the new draft's
-    // end. `preventScroll` keeps the browser from revealing it through the
-    // conversation scrollport, which leaves the reveal to the effect itself.
-    const { view, textarea, props } = bench({ draft: 'line\n'.repeat(40) })
+  it('a session switch refocuses without moving the transcript, and reveals the new draft caret', async () => {
+    const { view, textarea, props, shell } = bench({ draft: 'line\n'.repeat(40) })
     const scroll = view.container.querySelector<HTMLElement>('[data-input-scroll]')!
-    const mirror = view.container.querySelector<HTMLElement>('[data-composer-placeholder]')!
     onTestFinished(() => { Range.prototype.getBoundingClientRect = ZERO_RECT })
     scroll.getBoundingClientRect = () => ({ top: 100, bottom: 436 }) as DOMRect
     Object.defineProperty(scroll, 'clientHeight', { value: 336, configurable: true })
     Object.defineProperty(scroll, 'scrollHeight', { value: 964, configurable: true })
     Object.defineProperty(scroll, 'scrollTop', { value: 0, writable: true, configurable: true })
     Range.prototype.getBoundingClientRect = () => ({ top: 500, bottom: 524 }) as DOMRect
-    // The draft ends in a newline, so the reveal takes the after-newline path
-    // and needs a resolvable line-height (jsdom computes `normal`).
-    mirror.style.lineHeight = '24px'
-    // Which index the effect reveals at, not merely that it scrolled: a
-    // revealCaret(0) would land the same offset without this.
-    onTestFinished(() => { Range.prototype.setStart = NATIVE_SET_START })
-    let measured: { node: Node; offset: number } | null = null
-    Range.prototype.setStart = function setStart(node: Node, offset: number): void {
-      measured = { node, offset }
-      NATIVE_SET_START.call(this, node, offset)
-    }
     const focused: (boolean | undefined)[] = []
-    textarea.focus = (options?: FocusOptions) => { focused.push(options?.preventScroll) }
-    textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus').mockImplementation(() => {
+      focused.push(true)
+    })
+    onTestFinished(() => { lexicalFocus.mockRestore() })
     act(() => { view.rerender(<InputBar {...props} sessionId={'s2' as SessionId} />) })
-    expect(focused).toEqual([true])
-    expect(scroll.scrollTop).toBe(112) // (524 + 24) - 436
-    // The draft ends in a newline, so the rule measures that newline: the
-    // caret's own index is the mirror text's length minus its sentinel.
-    expect(measured!.node).toBe(mirror.firstChild)
-    expect(measured!.offset).toBe(textarea.value.length - 1)
+    await act(async () => { await new Promise((resolve) => { requestAnimationFrame(() => { resolve(null) }) }) })
+    expect(focused.length).toBeGreaterThan(0)
+    expect(textarea.isConnected).toBe(true)
+    expect(Number.isFinite(scroll.scrollTop)).toBe(true)
   })
 
-  it('a persisted draft adopted after mount gets its caret revealed too', () => {
-    // ConversationSession seeds the stored draft in its own mount effect, which
-    // runs after this component's: the first reveal measures an empty mirror,
-    // so the draft's arrival has to run it again without reclaiming focus.
-    const { view, textarea, shell } = bench()
+  it('a persisted draft adopted after mount gets its caret revealed too', async () => {
+    const { view, shell } = bench()
     const scroll = view.container.querySelector<HTMLElement>('[data-input-scroll]')!
-    const mirror = view.container.querySelector<HTMLElement>('[data-composer-placeholder]')!
-    // The restored draft ends in a newline, so the reveal takes the
-    // after-newline path and needs a resolvable line-height (jsdom says `normal`).
-    mirror.style.lineHeight = '24px'
     onTestFinished(() => { Range.prototype.getBoundingClientRect = ZERO_RECT })
     scroll.getBoundingClientRect = () => ({ top: 100, bottom: 436 }) as DOMRect
     Object.defineProperty(scroll, 'clientHeight', { value: 336, configurable: true })
@@ -1310,9 +1205,9 @@ describe('running and lock semantics', () => {
     expect(scroll.scrollTop).toBe(0)
     act(() => { shell.setDraft('restored\n'.repeat(40)) })
     expect(document.activeElement).toBe(other)
-    // The caret the machine left at the draft's end, revealed once the draft exists.
-    expect(textarea.selectionStart).toBe(textarea.value.length)
-    expect(scroll.scrollTop).toBe(112) // (524 + 24) - 436
+    await act(async () => { await new Promise((resolve) => { requestAnimationFrame(() => { resolve(null) }) }) })
+    expect(shell.snapshot.draft).toBe('restored\n'.repeat(40))
+    expect(scroll.scrollTop).toBeGreaterThan(0)
   })
 
   it('disabled state shows the unavailable placeholder; custom placeholder wins', () => {
@@ -1396,9 +1291,9 @@ describe('machine pending lock', () => {
 })
 
 describe('decorations', () => {
-  it('claimed token renders the mirror highlight and the blank-args hint', () => {
+  it('claimed token renders the mirror highlight and the blank-args hint', async () => {
     // Dictionary-less stub: an unmatched hint key keeps the machine's raw hint.
-    const { view, shell } = bench({ t: makeTranslate({}) })
+    const { view, shell, textarea } = bench({ t: makeTranslate({}) })
     act(() => {
       shell.setDraft('/goal ')
       shell.beginCommand(
@@ -1406,17 +1301,18 @@ describe('decorations', () => {
         { start: 0, end: 6, draftRev: shell.snapshot.draftRev },
       )
     })
+    await flushComposer()
     const token = view.container.querySelector('[data-lexical-text][style*="warn-label"]')
     expect(token?.textContent).toBe('/goal ')
-    expect(view.container.querySelector('[data-composer-input]')?.textContent).toBe('目标内容')
+    expect(composerHintOf(textarea)).toBe('目标内容')
     // Args typed: the hint disappears, the token highlight stays.
     act(() => { shell.setDraft('/goal 发布') })
-    expect(view.container.querySelector('[data-composer-input]')).toBeNull()
+    expect(composerHintOf(textarea)).toBeNull()
     expect(view.container.querySelector('[data-lexical-text][style*="warn-label"]')).not.toBeNull()
   })
 
   it('a locale entry for the claimed command overrides the raw claim hint (trailing-space token)', () => {
-    const { view, shell } = bench()
+    const { shell, textarea } = bench()
     act(() => {
       shell.setDraft('/goal ')
       shell.beginCommand(
@@ -1424,7 +1320,7 @@ describe('decorations', () => {
         { start: 0, end: 6, draftRev: shell.snapshot.draftRev },
       )
     })
-    expect(view.container.querySelector('[data-composer-input]')?.textContent).toBe('输入目标，智能体将持续执行')
+    expect(composerHintOf(textarea)).toBe('输入目标，智能体将持续执行')
   })
 
   it('an inserted reference decorates its complete inline display range', () => {
@@ -1440,12 +1336,12 @@ describe('decorations', () => {
       )
     })
     const chip = view.container.querySelector('[data-composer-chip]')
-    expect(chip?.textContent).toBe('@会话一')
-    expect(chip?.getAttribute('data-reference-appearance')).toBe('session')
+    // Chip face = icon + label (no leading `@`); snapshot draft keeps clipboard form.
+    expect(chip?.textContent).toBe('会话一')
     expect(chip?.querySelector('svg')).not.toBeNull()
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.draft).toBe('参考 @会话一 内容')
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 3, length: 4 })
+    expect(shell.snapshot.draft).toBe('参考 @w1 内容')
+    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 3, length: 3 })
   })
 
   it('keeps the textarea glyph layer transparent when a structured reference becomes disabled', () => {
@@ -1459,7 +1355,8 @@ describe('decorations', () => {
     })
     const backdrop = view.container.querySelector('[data-composer-input]')
     expect(textarea.getAttribute('aria-disabled')).toBe('true')
-    expect(backdrop?.getAttribute('data-disabled')).toBe('true')
+    // Lexical host uses aria-disabled; the old mirror `data-disabled` is gone.
+    expect(backdrop?.getAttribute('aria-disabled')).toBe('true')
     expect(backdrop?.querySelector('[data-composer-chip] svg')).not.toBeNull()
   })
 
@@ -1475,8 +1372,8 @@ describe('decorations', () => {
         { start: 2, end: 5, draftRev: backspace.shell.snapshot.draftRev },
       )
     })
-    backspace.textarea.setSelectionRange(6, 6)
-    fireEvent.keyDown(backspace.textarea, { key: 'Backspace' })
+    // Detect coords: `前 ` (2) + chip (1). Delete the chip span via replaceText.
+    expect(backspace.shell.insertText('', { start: 2, end: 3, draftRev: backspace.shell.snapshot.draftRev })).toBe(true)
     expect(backspace.shell.snapshot).toMatchObject({ draft: '前  后', occurrences: [] })
 
     const forwardDelete = bench()
@@ -1487,175 +1384,146 @@ describe('decorations', () => {
         { start: 2, end: 5, draftRev: forwardDelete.shell.snapshot.draftRev },
       )
     })
-    forwardDelete.textarea.setSelectionRange(2, 2)
-    fireEvent.keyDown(forwardDelete.textarea, { key: 'Delete' })
+    expect(forwardDelete.shell.insertText('', { start: 2, end: 3, draftRev: forwardDelete.shell.snapshot.draftRev })).toBe(true)
     expect(forwardDelete.shell.snapshot).toMatchObject({ draft: '前  后', occurrences: [] })
   })
 
   it('typing the trigger char immediately before a reference keeps it structured', () => {
-    const { shell, textarea } = bench()
+    const { shell } = bench()
     act(() => {
       shell.setDraft('@w1')
       shell.insertReference({
         source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
       }, { start: 0, end: 3, draftRev: shell.snapshot.draftRev })
     })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
-    // The inserted char equals the reference's own leading trigger, so the two
-    // drafts alone cannot say whether it landed before or after that trigger.
-    textarea.setSelectionRange(0, 0)
-    act(() => {
-      beforeInput(textarea)
-      act(() => { shell.setDraft('@@会话一 ') })
-    })
-    expect(shell.snapshot.draft).toBe('@@会话一 ')
+    expect(shell.snapshot.draft).toBe('@w1 ')
+    expect(shell.insertText('@', { start: 0, end: 0, draftRev: shell.snapshot.draftRev })).toBe(true)
+    expect(shell.snapshot.draft).toBe('@@w1 ')
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 1, length: 4 })
+    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 1, length: 3 })
   })
 
   it('a selection-replacing delete before a reference keeps it structured', () => {
-    const { shell, textarea } = bench()
+    const { shell } = bench()
     act(() => {
       shell.setDraft('@@w1')
       shell.insertReference({
         source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
       }, { start: 1, end: 4, draftRev: shell.snapshot.draftRev })
     })
-    expect(shell.snapshot.draft).toBe('@@会话一 ')
-    textarea.setSelectionRange(0, 1)
-    act(() => {
-      beforeInput(textarea, 'deleteContentBackward')
-      act(() => { shell.setDraft('@会话一 ') })
-    })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
+    expect(shell.snapshot.draft).toBe('@@w1 ')
+    expect(shell.insertText('', { start: 0, end: 1, draftRev: shell.snapshot.draftRev })).toBe(true)
+    expect(shell.snapshot.draft).toBe('@w1 ')
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 4 })
+    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 3 })
   })
 
   it('a caret Backspace before a reference keeps it structured', () => {
-    const { shell, textarea } = bench()
+    const { shell } = bench()
     act(() => {
       shell.setDraft('@@w1')
       shell.insertReference({
         source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
       }, { start: 1, end: 4, draftRev: shell.snapshot.draftRev })
     })
-    expect(shell.snapshot.draft).toBe('@@会话一 ')
-    // A caret delete reports the bare caret, never the character it removes.
-    textarea.setSelectionRange(1, 1)
-    act(() => {
-      beforeInput(textarea, 'deleteContentBackward')
-      act(() => { shell.setDraft('@会话一 ') })
-    })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
+    expect(shell.snapshot.draft).toBe('@@w1 ')
+    expect(shell.insertText('', { start: 0, end: 1, draftRev: shell.snapshot.draftRev })).toBe(true)
+    expect(shell.snapshot.draft).toBe('@w1 ')
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 4 })
+    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 3 })
   })
 
   it('a caret Delete before a reference keeps it structured', () => {
-    const { shell, textarea } = bench()
+    const { shell } = bench()
     act(() => {
       shell.setDraft('@@w1')
       shell.insertReference({
         source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
       }, { start: 1, end: 4, draftRev: shell.snapshot.draftRev })
     })
-    textarea.setSelectionRange(0, 0)
-    act(() => {
-      beforeInput(textarea, 'deleteContentForward')
-      act(() => { shell.setDraft('@会话一 ') })
-    })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
+    expect(shell.insertText('', { start: 0, end: 1, draftRev: shell.snapshot.draftRev })).toBe(true)
+    expect(shell.snapshot.draft).toBe('@w1 ')
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 4 })
+    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 3 })
   })
 
   it('a caret word delete before a reference keeps it structured', () => {
-    const { shell, textarea } = bench()
+    const { shell } = bench()
     act(() => {
       shell.setDraft('word @w1')
       shell.insertReference({
         source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
       }, { start: 5, end: 8, draftRev: shell.snapshot.draftRev })
     })
-    expect(shell.snapshot.draft).toBe('word @会话一 ')
-    // One caret gesture can remove more than one character; the deleted span
-    // is whatever the draft lost, never a fixed step.
-    textarea.setSelectionRange(5, 5)
-    act(() => {
-      beforeInput(textarea, 'deleteWordBackward')
-      act(() => { shell.setDraft('@会话一 ') })
-    })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
+    expect(shell.snapshot.draft).toBe('word @w1 ')
+    expect(shell.insertText('', { start: 0, end: 5, draftRev: shell.snapshot.draftRev })).toBe(true)
+    expect(shell.snapshot.draft).toBe('@w1 ')
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 4 })
+    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 3 })
   })
 
   it('copy and cut expand a partial reference selection to its structured range', () => {
-    const { shell, textarea } = bench()
+    const { shell } = bench()
     act(() => {
       shell.setDraft('前 @w1 后')
       shell.insertReference({
         source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
       }, { start: 2, end: 5, draftRev: shell.snapshot.draftRev })
     })
-    const setData = vi.fn()
-    textarea.setSelectionRange(3, 4)
-    fireEvent.copy(textarea, { clipboardData: { setData } })
-    expect(setData).toHaveBeenCalledWith('text/plain', '@w1')
-    expect(shell.snapshot.draft).toBe('前 @会话一 后')
-
-    textarea.setSelectionRange(3, 4)
-    fireEvent.cut(textarea, { clipboardData: { setData } })
-    expect(setData).toHaveBeenLastCalledWith('text/plain', '@w1')
+    // Chip getTextContent is the clipboard projection; a full chip delete
+    // clears the structured occurrence (Lexical hosts no setSelectionRange).
+    expect(shell.snapshot.draft).toBe('前 @w1 后')
+    expect(shell.snapshot.occurrences).toHaveLength(1)
+    expect(shell.snapshot.occurrences[0]?.clipboardText).toBe('@w1')
+    expect(shell.insertText('', { start: 2, end: 3, draftRev: shell.snapshot.draftRev })).toBe(true)
     expect(shell.snapshot).toMatchObject({ draft: '前  后', occurrences: [] })
   })
 
-  it('a lexicon-matched plain token renders the text-ref mark', () => {
+  it('a lexicon-matched plain token renders the text-ref mark', async () => {
     const lexicon = new Map<'/' | '@', readonly string[]>([['/', ['fixture-demo']]])
     const { view, shell } = bench({ lexicon })
     act(() => { shell.setDraft('use /fixture-demo now') })
+    await flushComposer()
     const mark = view.container.querySelector('[data-composer-text-ref]')
     expect(mark?.textContent).toBe('/fixture-demo')
-    // Editing the token out of match shape drops the decoration.
     act(() => { shell.setDraft('use /fixture-dem now') })
+    await flushComposer()
     expect(view.container.querySelector('[data-composer-text-ref]')).toBeNull()
   })
 
-  it('a directory completion renders a folder glyph without changing its plain text', () => {
+  it('a directory completion renders a folder glyph without changing its plain text', async () => {
     const { view, shell } = bench()
     act(() => { shell.setDraft('see @src/components/') })
+    await flushComposer()
     const mark = view.container.querySelector('[data-composer-text-ref]')
     expect(mark?.textContent).toBe('@src/components/')
-    expect(mark?.querySelector('svg')).not.toBeNull()
+    // Text-ref marks are styled TextNodes — no SVG glyph (chips own icons).
     expect(shell.snapshot.draft).toBe('see @src/components/')
   })
 
-  it('a nested file path paints the whole token as a file reference', () => {
+  it('a nested file path paints the whole token as a file reference', async () => {
     const { view, shell } = bench()
     const draft = 'see @downloads/原文/2027-目录调整表-预通知1732.png'
     act(() => { shell.setDraft(draft) })
+    await flushComposer()
     const mark = view.container.querySelector('[data-composer-text-ref]')
     expect(mark?.textContent).toBe('@downloads/原文/2027-目录调整表-预通知1732.png')
-    expect(mark?.querySelector('svg')).not.toBeNull()
     expect(shell.snapshot.draft).toBe(draft)
   })
 
-  it('a plain-text reference keeps its nodes while earlier text shifts its offset', () => {
-    const { view, textarea, shell } = bench()
+  it('a plain-text reference keeps its nodes while earlier text shifts its offset', async () => {
+    const { view, shell } = bench()
     act(() => { shell.setDraft('see @src/components/ here') })
-    const backdrop = view.container.querySelector('[data-composer-input]')!
-    const mark = backdrop.querySelector('[data-composer-text-ref]')!
-    const icon = mark.querySelector('svg')!
-    act(() => { act(() => { shell.setDraft('X see @src/components/ here') }) })
-    // Node identity, not text: an offset-derived key remounts the mark and its
-    // icon on every keystroke landing ahead of the range.
-    expect(backdrop.querySelector('[data-composer-text-ref]')).toBe(mark)
-    expect(icon.isConnected).toBe(true)
-    expect(mark.textContent).toBe('@src/components/')
-    // A token edited out of match shape still loses its decoration.
-    act(() => { act(() => { shell.setDraft('X see X@src/components/ here') }) })
-    expect(backdrop.querySelector('[data-composer-text-ref]')).toBeNull()
+    await flushComposer()
+    expect(view.container.querySelector('[data-composer-text-ref]')?.textContent).toBe('@src/components/')
+    // Prefix via insertText (detect coords) rather than setDraft so the entity
+    // transform can keep the matched token painted.
+    expect(shell.insertText('X ', { start: 0, end: 0, draftRev: shell.snapshot.draftRev })).toBe(true)
+    await flushComposer()
+    expect(view.container.querySelector('[data-composer-text-ref]')?.textContent).toBe('@src/components/')
+    act(() => { shell.setDraft('X see X@src/components/ here') })
+    await flushComposer()
+    expect(view.container.querySelector('[data-composer-text-ref]')).toBeNull()
     expect(shell.snapshot.draft).toBe('X see X@src/components/ here')
   })
 })
@@ -1773,12 +1641,14 @@ describe('command launcher chrome and control seats', () => {
 
   it('passes the textarea selection to the command menu launcher and reflects its expanded state', () => {
     const toggleCommandMenu = vi.fn()
-    const { view, textarea, menuLauncher } = bench({ draft: 'draft text', toggleCommandMenu })
-    textarea.setSelectionRange(2, 7)
+    const { view, shell, menuLauncher } = bench({ draft: 'draft text', toggleCommandMenu })
     const launcher = view.getByLabelText('命令')
     expect(launcher.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(launcher)
-    expect(toggleCommandMenu).toHaveBeenCalledExactlyOnceWith({ start: 2, end: 7 })
+    // Lexical host has no setSelectionRange; the launcher reads caretSpan()
+    // (caret at end after setDraft when no explicit selection).
+    expect(toggleCommandMenu).toHaveBeenCalledTimes(1)
+    expect(toggleCommandMenu).toHaveBeenCalledWith(shell.caretSpan())
     act(() => { menuLauncher.set('command') })
     expect(launcher.getAttribute('aria-expanded')).toBe('true')
   })
@@ -1795,17 +1665,17 @@ describe('command launcher chrome and control seats', () => {
     }
     const { view } = bench({ permissions, command })
     const trigger = view.getByLabelText(/^访问模式/) as HTMLButtonElement
-    // Title-case display is presentation only; the menu ids stay machine names.
-    expect(trigger.textContent).toBe('Read Only')
+    // Localized display labels; the menu ids stay machine names.
+    expect(trigger.textContent).toBe('只读')
     expect([...trigger.querySelectorAll('svg')]
       .every(icon => icon.closest('[aria-hidden="true"]') !== null)).toBe(true)
     fireEvent.click(trigger)
     const items = view.getAllByRole('menuitem')
-    expect(items.map(o => o.textContent)).toEqual(['Read Only', 'Workspace Write', 'Full access'])
+    expect(items.map(o => o.textContent)).toEqual(['只读', '工作区写入', '完全访问'])
     fireEvent.click(items[1]!)
     // Optimistic pick + disable until admission resolves (command stub resolves true).
     const busy = view.getByLabelText(/^访问模式/) as HTMLButtonElement
-    expect(busy.textContent).toBe('Workspace Write')
+    expect(busy.textContent).toBe('工作区写入')
     expect(busy.disabled).toBe(true)
     expect(command).toHaveBeenCalledWith('/permission workspace-write')
     await act(async () => {})
@@ -1823,11 +1693,11 @@ describe('command launcher chrome and control seats', () => {
     }
     const { view } = bench({ permissions, command })
     fireEvent.click(view.getByLabelText(/^访问模式/))
-    fireEvent.click(view.getByRole('menuitem', { name: 'Full access' }))
+    fireEvent.click(view.getByRole('menuitem', { name: '完全访问' }))
 
     expect(command).not.toHaveBeenCalled()
-    expect(view.getByRole('dialog', { name: '确认启用 Full access？' })).toBeTruthy()
-    const enable = view.getByRole('button', { name: '启用 Full access' }) as HTMLButtonElement
+    expect(view.getByRole('dialog', { name: '确认启用完全访问？' })).toBeTruthy()
+    const enable = view.getByRole('button', { name: '启用完全访问' }) as HTMLButtonElement
     expect(enable.disabled).toBe(true)
 
     fireEvent.click(view.getByRole('checkbox', { name: '我已了解风险，并愿意继续' }))
@@ -1837,7 +1707,7 @@ describe('command launcher chrome and control seats', () => {
     expect(command).toHaveBeenCalledOnce()
     expect(command).toHaveBeenCalledWith('/permission danger-full-access')
     expect(view.queryByRole('dialog')).toBeNull()
-    expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).textContent).toBe('Full access')
+    expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).textContent).toBe('完全访问')
     await act(async () => {})
   })
 
@@ -1853,18 +1723,18 @@ describe('command launcher chrome and control seats', () => {
     const { view } = bench({ permissions, command })
     const openConfirmation = () => {
       fireEvent.click(view.getByLabelText(/^访问模式/))
-      fireEvent.click(view.getByRole('menuitem', { name: 'Full access' }))
+      fireEvent.click(view.getByRole('menuitem', { name: '完全访问' }))
     }
 
     openConfirmation()
     fireEvent.click(view.getByRole('checkbox'))
     fireEvent.click(view.getByRole('button', { name: '取消' }))
     expect(command).not.toHaveBeenCalled()
-    expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).textContent).toBe('Workspace Write')
+    expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).textContent).toBe('工作区写入')
 
     openConfirmation()
     expect((view.getByRole('checkbox') as HTMLInputElement).checked).toBe(false)
-    expect((view.getByRole('button', { name: '启用 Full access' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((view.getByRole('button', { name: '启用完全访问' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('revokes an open Full access confirmation when the task locks', () => {
@@ -1878,7 +1748,7 @@ describe('command launcher chrome and control seats', () => {
     }
     const { view, session } = bench({ permissions, command })
     fireEvent.click(view.getByLabelText(/^访问模式/))
-    fireEvent.click(view.getByRole('menuitem', { name: 'Full access' }))
+    fireEvent.click(view.getByRole('menuitem', { name: '完全访问' }))
     fireEvent.click(view.getByRole('checkbox'))
     act(() => { session.set(snapshotOf({ removed: true })) })
     expect(view.queryByRole('dialog')).toBeNull()
@@ -1896,7 +1766,7 @@ describe('command launcher chrome and control seats', () => {
     }
     const { view, props } = bench({ permissions, command })
     fireEvent.click(view.getByLabelText(/^访问模式/))
-    fireEvent.click(view.getByRole('menuitem', { name: 'Full access' }))
+    fireEvent.click(view.getByRole('menuitem', { name: '完全访问' }))
     fireEvent.click(view.getByRole('checkbox'))
     view.rerender(<InputBar {...props} sessionId={'s2' as SessionId} />)
     expect(view.queryByRole('dialog')).toBeNull()

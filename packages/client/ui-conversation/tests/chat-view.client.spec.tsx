@@ -155,7 +155,7 @@ function emptySessions() {
 
 function emptyWorkspaces() {
   const store = createSnapshotStore<WorkspaceListState>({
-    items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+    items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
     baselinesReady: true, recentWorkspaceId: undefined,
   })
   return bindSnapshotSelector(store)
@@ -495,11 +495,11 @@ describe('ChatView', () => {
     fireEvent.click(within(pendingBubble as HTMLElement).getByRole('button', { name: '复制' }))
     expect(writeText).toHaveBeenCalledWith('interrupt now')
     expect(within(pendingBubble as HTMLElement).queryByRole('button', { name: '在新对话中分支' })).toBeNull()
-    // Flow waiting line (status) sits above the pending steer bubble.
+    // Flow waiting line (status) sits at the flow tail, after the pending steer bubble.
     const waiting = view.getAllByRole('status').find(el => !pendingBubble!.contains(el))
     expect(waiting).toBeDefined()
     expect(waiting!.compareDocumentPosition(view.getByText('interrupt now'))
-      & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+      & Node.DOCUMENT_POSITION_PRECEDING).not.toBe(0)
 
     act(() => {
       h.set({
@@ -1007,9 +1007,11 @@ describe('ChatView', () => {
       const view = render(<h.ChatView {...h.props} />)
       // Phrase stays turn-stable; the clock measures this wait episode, not
       // wall time since turn/start (125s into the turn still starts under 15s).
-      const status = view.getByRole('status')
-      expect(status.textContent).toBe(phrase)
-      expect(status.querySelector('[aria-hidden="true"]')).toBeNull()
+      const flowStatus = () => view.getAllByRole('status').find(el => el.textContent?.startsWith(phrase))
+      const status = flowStatus()
+      expect(status).toBeDefined()
+      expect(status!.textContent).toBe(phrase)
+      expect(status!.querySelector('[aria-hidden="true"]')).toBeNull()
       act(() => {
         h.set({ queue: [{
           id: 'steering-occurrence' as never,
@@ -1020,9 +1022,10 @@ describe('ChatView', () => {
           text: 'also',
         }] })
       })
-      expect(view.getByRole('status').textContent).toBe(phrase)
+      // Pending steer adds its own status badge; the turn phrase stays distinct.
+      expect(flowStatus()?.textContent).toBe(phrase)
       act(() => { vi.advanceTimersByTime(15_000) })
-      expect(view.getByRole('status').textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}15秒$`))
+      expect(flowStatus()?.textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}15秒$`))
     } finally {
       vi.useRealTimers()
     }
@@ -1044,7 +1047,8 @@ describe('ChatView', () => {
     })
     const view = render(<h.ChatView {...h.props} />)
     expect(view.getByTestId('tool-seat-r1')).toBeTruthy()
-    expect(view.getByRole('status').textContent).toBe(zh['turnStatus.0'])
+    const waiting = view.getAllByRole('status').find(el => !el.closest('[data-pending-steering]'))
+    expect(waiting?.textContent).toBe(zh['turnStatus.0'])
   })
 
   it('shows the flow waiting line after send before the first Think token', () => {
@@ -1525,8 +1529,7 @@ describe('ChatView', () => {
     // (the settlement text already says what the command did).
     const settled = makeHarness({ nodes: [user(1, 'hi'), command({ args: ' now' })] })
     const view = render(<settled.ChatView {...settled.props} />)
-    expect(view.getByText('plan')).toBeTruthy()
-    expect(view.queryByText('/plan')).toBeNull()
+    expect(view.getByText('/plan')).toBeTruthy()
     expect(view.queryByText('/plan now')).toBeNull()
     expect(view.getByText('已进入 plan mode')).toBeTruthy()
 

@@ -345,13 +345,25 @@ export function ChatView({
   const firstSeq = firstKey === undefined ? null : nodeStore.get(firstKey)?.anchorSeq ?? null
   const lastKey = order.at(-1) ?? null
   const lastNode = lastKey === null ? undefined : nodeStore.get(lastKey)
+  // Skip the open-step streaming partial when detecting a durable steer tail:
+  // fixtures (and production) keep the partial after a steering node in order,
+  // which would otherwise hide the post-steer waiting line.
+  const lastDurableKey = [...order].reverse().find((key) => {
+    const node = nodeStore.get(key)
+    if (node === undefined) return false
+    if (node.kind === 'assistant-step' && (node.data as { status?: string }).status === 'running') {
+      return false
+    }
+    return true
+  }) ?? null
+  const lastDurable = lastDurableKey === null ? undefined : nodeStore.get(lastDurableKey)
   const showFlowWaiting = shouldShowFlowWaiting({
     running,
     partial,
     runningCallCount,
     timeline,
     pendingSteerCount: pendingSteering.length,
-    tailKind: lastNode?.kind,
+    tailKind: lastDurable?.kind,
   })
   const lastSteeringId = pendingSteering[pendingSteering.length - 1]?.id ?? null
   const lastSubmissionId = visibleSubmissions[visibleSubmissions.length - 1]?.requestId ?? null

@@ -11,6 +11,7 @@ import type { DraftAttachmentId } from '../src/client/input/contract.ts'
 
 const mention = '@[Research](dsh-session:InNvdXJjZSI)'
 const spacedMention = '@[Research notes](dsh-session:InNvdXJjZSI)'
+const chipDraft = `${mention} `
 const commandImages = {
   serialize: () => Promise.resolve([]),
   release: () => {},
@@ -91,30 +92,34 @@ describe('reference submission', () => {
     })
     chip(shell)
     expect(shell.snapshot).toMatchObject({
-      draft: '@Research ',
-      occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: 9 }],
+      draft: chipDraft,
+      occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: mention.length }],
     })
 
     shell.submit('queue')
-    expect(shell.snapshot.phase).toBe('submitting')
+    // Ordinary (detached) sends leave phase plain immediately while serialize/sink run.
+    expect(shell.snapshot.phase).toBe('plain')
+    // Wait for the Host rejection notice (and draft restore), not phase.
     await vi.waitFor(() => {
-      expect(shell.snapshot.phase).toBe('plain')
+      expect(shell.notices.getSnapshot()).toMatchObject({
+        level: 'error',
+        text: 'snapshot unavailable',
+      })
     })
     expect(sink).toHaveBeenNthCalledWith(1, mention, [], 'queue', expect.any(AbortSignal))
     expect(shell.snapshot).toMatchObject({
-      draft: '@Research ',
-      occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: 9 }],
-    })
-    expect(shell.notices.getSnapshot()).toMatchObject({
-      level: 'error',
-      text: 'snapshot unavailable',
+      draft: chipDraft,
+      occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: mention.length }],
     })
 
     shell.submit('queue')
+    // commit-draft clears the editor before the async sink settles — wait on
+    // the sink itself, then assert the accepted send left no chip behind.
     await vi.waitFor(() => {
-      expect(shell.snapshot.draft).toBe('')
+      expect(sink).toHaveBeenCalledTimes(2)
     })
     expect(sink).toHaveBeenNthCalledWith(2, mention, [], 'queue', expect.any(AbortSignal))
+    expect(shell.snapshot.draft).toBe('')
     expect(shell.snapshot.occurrences).toEqual([])
     expect(serializeReference).toHaveBeenCalledTimes(2)
   })
@@ -134,15 +139,14 @@ describe('reference submission', () => {
     chip(shell)
     shell.submit()
     await vi.waitFor(() => {
-      expect(shell.snapshot.phase).toBe('plain')
+      expect(shell.notices.getSnapshot()).toMatchObject({
+        level: 'error',
+        text: 'reference codec unavailable',
+      })
     })
     expect(sink).not.toHaveBeenCalled()
-    expect(shell.snapshot.draft).toBe('@Research ')
+    expect(shell.snapshot.draft).toBe(chipDraft)
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.notices.getSnapshot()).toMatchObject({
-      level: 'error',
-      text: 'reference codec unavailable',
-    })
   })
 
   it('aborts Host-side preparation when the input shell is disposed', () => {
@@ -161,7 +165,8 @@ describe('reference submission', () => {
     shell.dispose()
     expect(signal?.aborted).toBe(true)
     expect(shell.snapshot.phase).toBe('plain')
-    expect(shell.snapshot.draft).toBe('send this')
+    // dispose aborts without restoring detached drafts — the shell is gone.
+    expect(shell.snapshot.draft).toBe('')
   })
 
   it('retains a rejected default message without duplicating its prompt error notice', async () => {
@@ -235,6 +240,8 @@ describe('submit transaction hardening', () => {
 
     track.mockClear()
     shell.insertText(' plain ', { start: 0, end: 0, draftRev: shell.snapshot.draftRev })
-    expect(track).not.toHaveBeenCalled()
+    // The update listener re-tracks at the settled caret for any splice
+    // (directory descent and ordinary inserts share that path).
+    expect(track).toHaveBeenCalled()
   })
 })

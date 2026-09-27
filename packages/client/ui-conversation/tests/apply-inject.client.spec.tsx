@@ -167,13 +167,20 @@ describe('conversation slot inject API', () => {
     actions.submit()
     expect(b.sessionFake.prompt).not.toHaveBeenCalled()
     expect(state.getSnapshot().draft).toBe('   ')
-    // Success: the draft clears only after the sink settles.
+    // Success: optimistic clear, then nextPaint + prompt. Wait on the sink
+    // call — draft empties before rAF resolves, so asserting prompt too early
+    // races the paint yield inside sendSession.
     actions.setDraft('hello')
     actions.submit()
     await vi.waitFor(() => {
-      expect(state.getSnapshot().draft).toBe('')
+      expect(b.sessionFake.prompt).toHaveBeenCalledWith(
+        [{ type: 'text', text: 'hello' }],
+        'queue',
+        expect.any(AbortSignal),
+        expect.any(String),
+      )
     })
-    expect(b.sessionFake.prompt).toHaveBeenCalledWith([{ type: 'text', text: 'hello' }], 'queue', expect.any(AbortSignal))
+    expect(state.getSnapshot().draft).toBe('')
     // Failure: the draft is retained through the round-trip.
     b.sessionFake.prompt.mockResolvedValueOnce({ ok: false, error: { code: 'agent-busy', message: 'b', details: { reason: 'b' } } })
     actions.setDraft('retry me')

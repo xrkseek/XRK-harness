@@ -10,7 +10,7 @@ import { makeTranslate, SlotTestRuntime } from '@xrkseek/client-test-runtime'
 import type { QueuedMessage, SessionFace } from '@xrkseek/client-runtime/client'
 import { ComposerBlockRegistry } from '../src/client/input/blocks.ts'
 import { InputHub } from '../src/client/input/hub.ts'
-import { ConversationController, UnsupportedImageMediaTypeError } from '../src/client/service.ts'
+import { ConversationController } from '../src/client/service.ts'
 import { zh } from '../src/client/locales.ts'
 
 async function bench(readAttachment?: SessionFace['readAttachment']) {
@@ -104,14 +104,15 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
-  it('validates every MIME type before allocating previews', async () => {
+  it('routes non-image MIME types to file drafts; only images allocate previews', async () => {
     const b = await bench()
     const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview')
-    expect(() => b.root.createDraftImages([
+    const drafts = b.root.createDraftImages([
       new File([Uint8Array.of(1)], 'valid.png', { type: 'image/png' }),
-      new File([Uint8Array.of(2)], 'invalid.svg', { type: 'image/svg+xml' }),
-    ])).toThrow(UnsupportedImageMediaTypeError)
-    expect(created).not.toHaveBeenCalled()
+      new File([Uint8Array.of(2)], 'note.svg', { type: 'image/svg+xml' }),
+    ])
+    expect(drafts.map(d => d.kind)).toEqual(['image', 'file'])
+    expect(created).toHaveBeenCalledTimes(1)
     created.mockRestore()
     await b.runtime.dispose()
   })

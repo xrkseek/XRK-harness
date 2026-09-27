@@ -429,7 +429,19 @@ export function apply(ctx: Context): void {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
           const resolved = resolveWorkspacePath(cwd, path)
           const workbench = ctx.get('workbench') as { openPath?(p: string): boolean } | undefined
-          return routeChatOpenFile(resolved, workbench, (p) => workspaces.openPath(p))
+          return routeChatOpenFile(
+            resolved,
+            workbench,
+            (p) => workspaces.openPath(p),
+            (p) => {
+              // When the builtin panel has yielded, also seed the community
+              // editor tab (wrap of workspaces.openPath may still run).
+              const face = ctx.get('betterSidebar') as {
+                openTab?(seed: { type: string; path?: string }): void
+              } | undefined
+              face?.openTab?.({ type: 'editor', path: p })
+            },
+          )
         },
         loadOlder: () => { void scoped.loadOlder() },
         loadThrough: (seq) => scoped.loadThrough(seq),

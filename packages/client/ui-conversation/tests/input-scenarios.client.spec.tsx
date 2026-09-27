@@ -19,14 +19,15 @@ import type {
   ClientSessionContext, CommandClaim, PickOutcome, SubmitEnvelope, SubmitImageAttachment, SubmitOutcome,
 } from '@xrkseek/client-ui-input-trigger/client'
 import { FakeApiClient, fakeRemote, ok } from '../../runtime/tests/fake-api.client.ts'
-import { makeTranslate } from '@xrkseek/client-test-runtime'
+import {
+  bindComposerHost, bindSnapshotSelector, composerHintOf, flushComposer, makeTranslate,
+} from '@xrkseek/client-test-runtime'
 import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import type { DraftAttachmentId } from '../src/client/input/contract.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
 import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import { zh } from '../src/client/locales.ts'
-import { bindSnapshotSelector } from '@xrkseek/client-test-runtime'
 import { createSnapshotStore } from '@xrkseek/client-runtime/client'
 import type { ConversationSnapshot } from '@xrkseek/client-runtime/client'
 
@@ -144,7 +145,7 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
       subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
     })),
     useWorkspaces: bindSnapshotSelector(createSnapshotStore({
-      items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+      items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
       baselinesReady: true, recentWorkspaceId: undefined,
     })),
     useConnectionState: bindSnapshotSelector(createSnapshotStore(undefined)),
@@ -185,7 +186,7 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
     variant: 'composer',
   }
   const view = render(<InputBar {...barProps} />)
-  const textarea = view.container.querySelector('[data-composer-input]')!
+  const textarea = bindComposerHost(view.container.querySelector('[data-composer-input]')!, shell)
   const type = (text: string): void => {
     act(() => { shell.setDraft(text) })
   }
@@ -214,9 +215,10 @@ describe('scenario A: menu-pick /goal, type args, enter submits', () => {
     act(() => { b.controller.pick('command', 0) })
     expect(b.shell.snapshot.phase).toBe('claimed')
     expect(b.textarea.value).toBe('/goal ')
+    await flushComposer()
     expect(b.view.container.querySelector('[data-lexical-text][style*="warn-label"]')?.textContent).toBe('/goal ')
     // The zh dictionary owns a hint.goal entry, which overrides the machine's raw hint (production behavior).
-    expect(b.view.container.querySelector('[data-composer-input]')?.textContent).toBe('输入目标，智能体将持续执行')
+    expect(composerHintOf(b.textarea)).toBe('输入目标，智能体将持续执行')
     // Continue typing args; hint drops; claim holds.
     b.type('/goal 发布 v1')
     expect(b.shell.snapshot.phase).toBe('claimed')
@@ -338,6 +340,7 @@ describe('scenario: reference decoration lights up when the lexicon settles', ()
       roll = ['deploy']
       notify?.()
     })
+    await flushComposer()
     const mark = b.view.container.querySelector('[data-composer-text-ref]')
     expect(mark?.textContent).toBe('/deploy')
   })

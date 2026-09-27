@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 /** Conversation assembly acceptance independent of Tool presentation. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import { LocaleRuntime } from '@xrkseek/client-locale/client'
 import type { ISession, SessionId } from '@xrkseek/client-runtime/client'
 import type { PropsRenderSlots } from '@xrkseek/client-ui-slots'
 import { SlotTestRuntime, usePinnedBrowserLanguages, stubSettingsScope } from '@xrkseek/client-test-runtime'
 import { apply, inject, type EmptyWorkspaceOwnerProps } from '@xrkseek/client-ui-conversation/client'
+import { ConversationController } from '../src/client/service.ts'
+import type { InputHub } from '../src/client/input/hub.ts'
 
 usePinnedBrowserLanguages('zh-CN')
 
@@ -26,6 +28,8 @@ afterEach(() => {
 })
 beforeEach(() => {
   localStorage.clear()
+  // afterEach clears navigator; re-pin so LocaleRuntime keeps zh-CN.
+  usePinnedBrowserLanguages('zh-CN')
   vi.stubGlobal('ResizeObserver', ResizeObserverStub)
 })
 
@@ -48,7 +52,17 @@ function WorkspaceProbe({ open }: EmptyWorkspaceOwnerProps) {
   )
 }
 
-async function bench(opts?: { blank?: boolean }) {
+function composerHost(view: { container: HTMLElement }): HTMLElement {
+  const host = view.container.querySelector('[data-composer-input]')
+  if (host === null) throw new Error('composer host missing')
+  return host as HTMLElement
+}
+
+async function bench(opts?: {
+  blank?: boolean
+  /** Active session (header + docked composer); default is the stub blank/hero seed. */
+  active?: boolean
+}) {
   const runtime = await SlotTestRuntime.create()
   runtime.provide('connection', { api: { settings: {} }, isLoopback: false })
   // The plugin injects both; these specs exercise no settings path.
@@ -58,12 +72,20 @@ async function bench(opts?: { blank?: boolean }) {
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.provide('locale', locale)
   runtime.slots.installLocale(locale)
+  const active = opts?.active === true
   await runtime.sessions.add({
     id: SID,
-    summary: { title: 'S', displayTitle: 'S', cwd: '/proj' },
+    summary: {
+      title: 'S', displayTitle: 'S', cwd: '/proj',
+      ...(active ? { blank: false } : {}),
+    },
     snapshot: {
       nodes: [],
-      ...(opts?.blank === true ? { blank: true, composerPhase: 'blank' as const } : {}),
+      ...(opts?.blank === true
+        ? { blank: true, composerPhase: 'blank' as const }
+        : active
+          ? { blank: false, composerPhase: 'active' as const, openState: 'open' as const }
+          : {}),
     },
     session: {
       loadOlder: vi.fn<ISession['loadOlder']>(),
@@ -91,17 +113,17 @@ describe('resident composer', () => {
     await runtime.mount({ inject: [...inject], apply })
     runtime.slots.register({ name: 'conversation.hero.workspace' }, WorkspaceProbe)
     const view = runtime.renderRoot()
-    const textarea = view.container.querySelector('textarea')
-    expect(textarea).not.toBeNull()
-    expect(textarea!.disabled).toBe(false)
-    expect(textarea!.readOnly).toBe(true)
-    expect(textarea!.getAttribute('aria-haspopup')).toBe('menu')
+    const host = composerHost(view)
+    // Workspace trigger: read-only Lexical host, not aria-disabled (stays clickable).
+    expect(host.getAttribute('contenteditable')).toBe('false')
+    expect(host.getAttribute('aria-disabled')).toBeNull()
+    expect(host.getAttribute('aria-haspopup')).toBe('menu')
     expect(view.getByTestId('workspace-probe').textContent).toBe('false:0')
-    fireEvent.click(textarea!)
+    fireEvent.click(host)
     expect(view.getByTestId('workspace-probe').textContent).toBe('true:0')
-    expect(textarea!.getAttribute('aria-expanded')).toBe('true')
+    expect(host.getAttribute('aria-expanded')).toBe('true')
     fireEvent.click(view.getByRole('button', { name: '选择工作区' }))
-    fireEvent.keyDown(textarea!, { key: 'Enter' })
+    fireEvent.keyDown(host, { key: 'Enter' })
     expect(view.getByTestId('workspace-probe').textContent).toBe('true:0')
     expect(view.getByRole('button', { name: '选择工作区' })).toBeTruthy()
     await runtime.dispose()
@@ -128,11 +150,11 @@ describe('resident composer', () => {
     const root = view.container.querySelector('[data-phase="hero"]')!
     const scrollBody = view.container.querySelector('[data-conversation-scroll]')!
     const composerSeat = view.container.querySelector('[data-composer-seat]')!
-    const textarea = view.container.querySelector('textarea')!
+    const host = composerHost(view)
     const workspaceChip = view.getByRole('button', { name: '选择工作区' })
     const workspaceProbe = view.getByTestId('workspace-probe')
-    expect(textarea.disabled).toBe(false)
-    expect(textarea.readOnly).toBe(true)
+    expect(host.getAttribute('contenteditable')).toBe('false')
+    expect(host.getAttribute('aria-disabled')).toBeNull()
 
     fireEvent.click(workspaceChip)
     fireEvent.click(workspaceProbe)
@@ -147,12 +169,12 @@ describe('resident composer', () => {
     expect(view.container.querySelector('[data-phase="hero"]')).toBe(root)
     expect(view.container.querySelector('[data-conversation-scroll]')).toBe(scrollBody)
     expect(view.container.querySelector('[data-composer-seat]')).toBe(composerSeat)
-    expect(view.container.querySelector('textarea')).toBe(textarea)
+    expect(composerHost(view)).toBe(host)
     expect(view.getByRole('button', { name: '选择工作区' })).toBe(workspaceChip)
     expect(view.getByTestId('workspace-probe')).toBe(workspaceProbe)
     expect(workspaceProbe.textContent).toBe('true:1')
-    expect(textarea.disabled).toBe(false)
-    expect(textarea.readOnly).toBe(false)
+    expect(host.getAttribute('aria-disabled')).toBeNull()
+    expect(host.getAttribute('contenteditable')).toBe('true')
     await runtime.dispose()
   })
 
@@ -162,15 +184,14 @@ describe('resident composer', () => {
       draft.items = [{ workspaceId: 'w1', title: 'Proj', path: '/proj', sessionIds: [SID] }] as never
     })
     const view = runtime.renderRoot()
-    const hero = view.container.querySelector('textarea')
-    expect(hero).not.toBeNull()
-    expect(hero!.disabled).toBe(false)
+    const hero = composerHost(view)
+    expect(hero.getAttribute('aria-disabled')).toBeNull()
 
     await runtime.sessions.updateSnapshot(SID, (draft) => {
       draft.blank = false
       draft.composerPhase = 'active'
     })
-    expect(view.container.querySelector('textarea')).toBe(hero)
+    expect(composerHost(view)).toBe(hero)
     await runtime.dispose()
   })
 
@@ -190,11 +211,13 @@ describe('resident composer', () => {
     await runtime.dispose()
   })
 
-  it('settling keeps hero chrome while the composer seat stays hidden', async () => {
-    const runtime = await bench()
+  it('settling keeps hero chrome while the composer seat stays visible', async () => {
+    // summary + live blank must both be false or provenBlank skips settling.
+    const runtime = await bench({ active: true })
     await runtime.workspaces.update((draft) => {
       draft.items = [{ workspaceId: 'w1', title: 'Proj', path: '/proj', sessionIds: [SID] }] as never
     })
+    await runtime.sessions.updateSummary(SID, (draft) => { draft.blank = false })
     await runtime.sessions.updateSnapshot(SID, (draft) => {
       draft.openState = 'loading'
       draft.composerPhase = 'blank'
@@ -205,7 +228,9 @@ describe('resident composer', () => {
     expect(view.getByText('向阳而生，驭光而行')).toBeTruthy()
     const seat = view.container.querySelector('[data-composer-seat]') as HTMLElement
     expect(seat).not.toBeNull()
-    expect(getComputedStyle(seat).visibility).toBe('hidden')
+    // Settling keeps the resident seat painted (same as skeleton); only the
+    // docked-vs-hero choice is deferred until history proves blank/active.
+    expect(getComputedStyle(seat).visibility).toBe('visible')
     await runtime.dispose()
   })
 })
@@ -226,16 +251,22 @@ describe('prompt rejection through the assembled composer', () => {
     }))
     await runtime.sessions.add({
       id: SID,
-      summary: { title: 'S', displayTitle: 'S', cwd: '/proj' },
+      summary: { title: 'S', displayTitle: 'S', cwd: '/proj', blank: false },
+      snapshot: { blank: false, composerPhase: 'active', openState: 'open' },
       session: { prompt, loadOlder: vi.fn<ISession['loadOlder']>(), loadThrough: vi.fn<ISession['loadThrough']>() },
+    })
+    await runtime.workspaces.update((draft) => {
+      draft.items = [{ workspaceId: 'w1', title: 'Proj', path: '/proj', sessionIds: [SID] }] as never
     })
     await runtime.root.declare(LAYOUT_CHILDREN, AppRoot)
     await runtime.mount({ inject: [...inject], apply })
     const view = runtime.renderRoot()
+    const hub = (runtime.ctx.get('conversation') as ConversationController).input as InputHub
+    const shell = hub.shell(SID)
+    const host = composerHost(view)
 
-    const composer = view.container.querySelector('textarea')!
-    fireEvent.change(composer, { target: { value: 'do not lose this' } })
-    fireEvent.keyDown(composer, { key: 'Enter' })
+    act(() => { shell.setDraft('do not lose this') })
+    fireEvent.keyDown(host, { key: 'Enter' })
     await waitFor(() => { expect(prompt).toHaveBeenCalledOnce() })
 
     await runtime.sessions.updateSnapshot(SID, (draft) => {
@@ -247,7 +278,7 @@ describe('prompt rejection through the assembled composer', () => {
     const alert = await view.findByRole('alert')
     expect(alert.textContent).toContain('prompt rejected before acceptance (agent-busy)')
     await waitFor(() => {
-      expect((view.container.querySelector('textarea'))!.value).toBe('do not lose this')
+      expect(shell.snapshot.draft).toBe('do not lose this')
     })
     await runtime.dispose()
   })
@@ -255,12 +286,18 @@ describe('prompt rejection through the assembled composer', () => {
 
 describe('title projection across assembled surfaces', () => {
   it('one summary update re-labels the current-session crumb', async () => {
-    const runtime = await bench()
+    const runtime = await bench({ active: true })
+    await runtime.workspaces.update((draft) => {
+      draft.items = [{ workspaceId: 'w1', title: 'Proj', path: '/proj', sessionIds: [SID] }] as never
+    })
     const view = runtime.renderRoot()
     const hierarchy = view.getByRole('navigation', { name: '会话层级' })
     expect(within(hierarchy).getByRole('button', { name: 'S' }).hasAttribute('disabled')).toBe(true)
 
-    await runtime.sessions.updateSummary(SID, { displayTitle: '修订标题', title: '修订标题' })
+    await runtime.sessions.updateSummary(SID, (draft) => {
+      draft.displayTitle = '修订标题'
+      draft.title = '修订标题'
+    })
     await waitFor(() => {
       expect(within(hierarchy).getByRole('button', { name: '修订标题' }).hasAttribute('disabled')).toBe(true)
     })

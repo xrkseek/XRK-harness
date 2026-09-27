@@ -7,13 +7,14 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { bindSnapshotSelector } from '@xrkseek/client-test-runtime'
+import {
+  bindComposerHost, bindSnapshotSelector, composerHintOf, flushComposer, makeTranslate,
+} from '@xrkseek/client-test-runtime'
 import {
   createSnapshotStore, EMPTY_CHAT_SNAPSHOT, EMPTY_CONVERSATION_VIEWS,
 } from '@xrkseek/client-runtime/client'
 import type { ClientContext, ConversationSnapshot, SessionId } from '@xrkseek/client-runtime/client'
 import type { SubmitImageAttachment, SubmitOutcome } from '@xrkseek/client-ui-input-trigger/client'
-import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import type { DraftAttachmentId } from '../src/client/input/contract.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
@@ -44,7 +45,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
       subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
     })),
     useWorkspaces: bindSnapshotSelector(createSnapshotStore({
-      items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+      items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
       baselinesReady: true, recentWorkspaceId: undefined,
     })),
     useConnectionState: bindSnapshotSelector(createSnapshotStore(undefined)),
@@ -90,7 +91,7 @@ function bench(over?: {
   const shell = new SessionInputShell({ actx: SCTX, defaultSink: sink, commandImages: { serialize, release, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported` } })
   const wiring = shell
   const view = mountBar(shell, over)
-  const textarea = view.container.querySelector('[data-composer-input]')!
+  const textarea = bindComposerHost(view.container.querySelector('[data-composer-input]')!, shell)
   const claim = (token = '/goal ', hint = '目标', images?: true) => {
     act(() => {
       shell.setDraft(token)
@@ -114,37 +115,40 @@ describe('matrix row: plain', () => {
     expect(shell.snapshot.claim).toBeUndefined()
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(sink).toHaveBeenCalledWith('普通消息', [], 'queue', expect.any(AbortSignal))
-    expect(shell.snapshot.phase).toBe('submitting')
+    // Sink resolves in the same turn under this fixture, so the submitting
+    // phase may already have settled by the next line — wait for plain.
     await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
     expect(shell.snapshot.claim).toBeUndefined()
   })
 })
 
 describe('matrix row: claimed', () => {
-  it('publishes the claim currency, colors the token, hints while args are blank, and edits stay free', () => {
+  it('publishes the claim currency, colors the token, hints while args are blank, and edits stay free', async () => {
     const { view, textarea, shell, claim } = bench()
     claim()
     expect(shell.snapshot.claim).toEqual({ token: '/goal ', hint: '目标' })
+    // Claim decoration is a non-discrete Lexical update — flush one macrotask.
+    await flushComposer()
     expect(view.container.querySelector('[data-lexical-text][style*="warn-label"]')?.textContent).toBe('/goal ')
     // The zh dictionary owns a hint.goal entry, which overrides the raw claim hint (production behavior).
-    expect(view.container.querySelector('[data-composer-input]')?.textContent).toBe('输入目标，智能体将持续执行')
-    expect((textarea).readOnly).toBe(false)
+    expect(composerHintOf(textarea)).toBe('输入目标，智能体将持续执行')
+    expect(textarea.readOnly).toBe(false)
     // Free editing beyond the token: hint drops, claim holds.
     act(() => { shell.setDraft('/goal 发布版本') })
     expect(shell.snapshot.phase).toBe('claimed')
-    expect(view.container.querySelector('[data-composer-input]')).toBeNull()
+    expect(textarea.value).toBe('/goal 发布版本')
   })
 
   it('enter routes to claim.submit (command lane, never the queue sink)', async () => {
     const submit = vi.fn(() => Promise.resolve({ kind: 'success' as const, text: '完成', source: 'command', name: 'goal' }))
-    const { view, textarea, sink, claim } = bench({ submit })
+    const { view, textarea, shell, sink, claim } = bench({ submit })
     claim()
     act(() => { shell.setDraft('/goal 发布') })
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(sink).not.toHaveBeenCalled()
     await vi.waitFor(() => { expect(submit).toHaveBeenCalledWith('发布', SCTX, []) })
     // Commit: draft cleared, notice surfaced, back to plain.
-    await vi.waitFor(() => { expect((textarea).value).toBe('') })
+    await vi.waitFor(() => { expect(textarea.value).toBe('') })
     expect(view.getByText('完成')).toBeTruthy()
   })
 
@@ -301,8 +305,8 @@ describe('matrix row: locked (session disabled)', () => {
   })
 
   it('running does NOT lock: typing and enter-queue stay live', () => {
-    const { textarea, sink } = bench({ running: true })
-    expect((textarea).disabled).toBe(false)
+    const { textarea, shell, sink } = bench({ running: true })
+    expect(textarea.disabled).toBe(false)
     act(() => { shell.setDraft('排队') })
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(sink).toHaveBeenCalledWith('排队', [], 'queue', expect.any(AbortSignal))
