@@ -13,12 +13,16 @@ import { describe, expect, it } from 'vitest'
 import { createScope } from '@xrkseek/client-runtime/client'
 import type { SessionId } from '@xrkseek/client-runtime/client'
 import { LocaleRuntime } from '@xrkseek/client-locale/client'
-import { TestRemote } from '@xrkseek/client-test-runtime'
+import { TestRemote, usePinnedBrowserLanguages } from '@xrkseek/client-test-runtime'
 import type { ModelSelection } from '@xrkseek/xrk-api-remotes/client'
 import type { CommandDecoration, SelectOption } from '@xrkseek/client-ui-commands/client'
 import type { ModelSelectInjected } from '../src/client/slots.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { zh } from '../src/client/locales.ts'
+
+// The specs assert the shipped Chinese copy (`zh[...]`), so they state the
+// browser they assume: the locale service reads its default from `navigator`.
+usePinnedBrowserLanguages('zh-CN')
 
 const sid = (k: string): SessionId => k as SessionId
 

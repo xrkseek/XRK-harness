@@ -45,6 +45,8 @@ function props(
     forkAt: vi.fn(),
     restoreAt: vi.fn(),
     fileMentions: vi.fn(),
+    // No Host connection in this account; home-path abbreviation is not under test.
+    useHostDescription: selector => selector(undefined),
     t,
   } as unknown as ToolTreeProps
 }

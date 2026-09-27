@@ -33,9 +33,11 @@
     "@xrkseek/cordis": "workspace:^"
   },
   "devDependencies": {
-    "@xrkseek/xrk-invariants": "workspace:^",
+    "@testing-library/react": "^16.1.0",
     "@types/react": "~18.3.1",
-    "@xrkseek/cordis": "workspace:^"
+    "@xrkseek/cordis": "workspace:^",
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "react-dom": "^18.2.0"
   },
   "files": [
     "lib/index.js",

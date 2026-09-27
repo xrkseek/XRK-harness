@@ -56,15 +56,17 @@
     "@xrkseek/xrk-invariants": "workspace:^"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "~18.3.1",
+    "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/cordis": "workspace:^",
     "@xrkseek/xrk-agent": "workspace:^",
     "@xrkseek/xrk-api-remotes": "workspace:^",
-    "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/xrk-system-prompt": "workspace:^",
     "@xrkseek/xrk-tools": "workspace:^",
     "@xrkseek/xrk-user-questions": "workspace:^",
-    "@types/react": "~18.3.1"
+    "react-dom": "^18.2.0"
   },
   "files": [
     "lib/index.js",

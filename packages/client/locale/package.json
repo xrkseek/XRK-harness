@@ -51,15 +51,18 @@
     "react": "^18.2.0"
   },
   "devDependencies": {
-    "@xrkseek/cordis": "workspace:^",
-    "@xrkseek/xrk-api-remotes": "workspace:^",
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "~18.3.1",
     "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-test-runtime": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-settings": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/cordis": "workspace:^",
+    "@xrkseek/xrk-api-remotes": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
-    "@types/react": "~18.3.1",
-    "react": "^18.2.0"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "dependencies": {
     "@xrkseek/xrk-settings": "workspace:^",

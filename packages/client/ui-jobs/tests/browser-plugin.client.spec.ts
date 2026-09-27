@@ -8,12 +8,16 @@ import { Context } from '@xrkseek/cordis'
 import { describe, expect, it } from 'vitest'
 import InvariantRegistry from '@xrkseek/xrk-invariants'
 import { SlotRegistry } from '@xrkseek/client-runtime/client'
-import { stubSettingsScope } from '@xrkseek/client-test-runtime'
+import { stubSettingsScope, usePinnedBrowserLanguages } from '@xrkseek/client-test-runtime'
 import { apply as applyLocale, inject as localeInject } from '@xrkseek/client-locale/client'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as applyNode } from '../src/index.ts'
 import * as JobInvariant from '../src/invariant.ts'
 import { en, NS, zh } from '../src/client/locales.ts'
+
+// The specs assert the shipped Chinese copy (`zh[...]`), so they state the
+// browser they assume: the locale service reads its default from `navigator`.
+usePinnedBrowserLanguages('zh-CN')
 
 /** Slot ledger reader: entry ids currently registered in the header list. */
 function headerEntryIds(ctx: Context): (string | undefined)[] {

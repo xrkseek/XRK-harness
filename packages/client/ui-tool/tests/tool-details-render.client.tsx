@@ -4,6 +4,7 @@ import type {
 } from '@xrkseek/client-runtime/client'
 import type { SessionProviderComponent, TranslateNS } from '@xrkseek/client-ui-slots'
 import type { DetailsSlotProps, DetailsToolOwnerProps } from '@xrkseek/client-ui-conversation/src/client/contract/slots.ts'
+import type { ToolDetailsProps } from '../src/client/contract/slots.ts'
 import { ToolDetails } from '../src/client/tool/ToolDetails.tsx'
 
 /** Framework session-area seat used by direct DetailsPanel tests. */
@@ -58,6 +59,9 @@ export function renderToolDetails(t: TranslateNS<'conversation'>): DetailsSlotPr
     // PropsRenderSlots keeps its key generic even for this one-key share;
     // recover the concrete owner selected by the adapter's fixed slot.
     const details = owner as unknown as DetailsToolOwnerProps
-    return <ToolDetails block={details.block} cwd={details.cwd} t={t} />
+    // Production injects this hook from the Host connection; a direct mount has
+    // no Host, so it answers `undefined` (no `~`-abbreviation under test here).
+    const useHostDescription: ToolDetailsProps['useHostDescription'] = selector => selector(undefined)
+    return <ToolDetails block={details.block} cwd={details.cwd} useHostDescription={useHostDescription} t={t} />
   }
 }

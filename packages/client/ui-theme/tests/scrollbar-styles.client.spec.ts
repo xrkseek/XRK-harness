@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Scrollbar stylesheet contract, asserted against the CSS text on disk: every
  * --dsw-alias-scrollbar-* token design-platform.css defines has a consumer,

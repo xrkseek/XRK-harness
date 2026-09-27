@@ -63,18 +63,20 @@
     "@xrkseek/cordis": "workspace:^"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "~18.3.1",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-test-runtime": "workspace:^",
     "@xrkseek/client-ui-conversation": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/cordis": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/xrk-session": "workspace:^",
     "@xrkseek/xrk-tool-workflow": "workspace:^",
     "@xrkseek/xrk-workflow": "workspace:^",
-    "@types/react": "~18.3.1",
-    "@xrkseek/cordis": "workspace:^"
+    "react-dom": "^18.2.0"
   },
   "private": true
 }
