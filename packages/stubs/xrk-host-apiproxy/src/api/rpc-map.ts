@@ -57,6 +57,8 @@ export interface RpcMethodMap {
   'workspace.insertSessionBefore': WorkspaceApi['insertSessionBefore']
   'workspace.archiveSession': WorkspaceApi['archiveSession']
   'workspace.unarchiveSession': WorkspaceApi['unarchiveSession']
+  'workspace.pinSession': WorkspaceApi['pinSession']
+  'workspace.unpinSession': WorkspaceApi['unpinSession']
   'skill.list': SkillsApi['list']
   'agentPreset.list': AgentPresetsApi['list']
   'agentPreset.select': AgentPresetsApi['select']

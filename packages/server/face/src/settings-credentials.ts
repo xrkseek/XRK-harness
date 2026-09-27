@@ -1068,7 +1068,7 @@ const MCP_SETTINGS_NOTE_RESTART =
   "Servers and Allow connect save to ~/.xrk/host-settings.json and apply on the next Host spawn.";
 
 const MCP_SETTINGS_NOTE_LIVE =
-  "Save remounts MCP in this process. Turn on Allow connect to mount tools; each server row shows status.";
+  "Save with Allow connect mounts servers one-by-one (row status shows Connecting). Host start does not auto-spawn the Settings list — turn Allow off to keep the list only.";
 
 function mcpApplies(runtime: FaceRuntime): "live" | "restart" {
   return typeof runtime.syncMcpServers === "function" ? "live" : "restart";
@@ -1120,24 +1120,17 @@ function mcpDescribeBase(
   const overlay = runtime.mcpSyncOverlay;
   const failures = connectFailures ?? overlay.connectFailures;
   const connected = mcpConnected(runtime);
-  const connectedNames = new Set(connected.map((c) => c.serverName));
-  const failedNames = new Set(failures.map((f) => f.serverName));
-  const useOverlay =
-    parkedExplicit !== undefined ||
-    overlay.parked.length > 0 ||
-    overlay.connectFailures.length > 0;
-  const parked =
-    parkedExplicit ??
-    (useOverlay
-      ? overlay.parked
-      : mcpServersFromRuntime(runtime)
-          .map((s) => s.serverName)
-          .filter((n) => !connectedNames.has(n) && !failedNames.has(n)));
+  // Only Host overlay / explicit mutate results define `parked`. Never treat
+  // "not mounted yet" as parked — that made Settings show 已停放 while boot
+  // was still connecting (or when file-sourced spawn is deferred).
+  const parked = parkedExplicit ?? overlay.parked;
+  const connecting = overlay.connecting ?? [];
   return {
     servers: [],
     allowConnect: mcpAllowFromRuntime(runtime),
     connected,
     parked: [...parked],
+    connecting: [...connecting],
     note: mcpSettingsNote(runtime),
     ...(failures.length > 0 ? { connectFailures: failures } : {}),
   };
@@ -1354,6 +1347,7 @@ export async function settingsMutateFace(
       runtime.mcpSyncOverlay = {
         connectFailures,
         parked,
+        connecting: [],
       };
     }
     publishRemoteEvent(runtime.bus, "settings/document-updated", [

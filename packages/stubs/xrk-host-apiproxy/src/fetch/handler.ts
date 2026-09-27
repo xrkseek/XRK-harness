@@ -38,6 +38,8 @@ import {
 import {
   workspaceArchiveSessionRequestSchema,
   workspaceUnarchiveSessionRequestSchema,
+  workspacePinSessionRequestSchema,
+  workspaceUnpinSessionRequestSchema,
   workspaceCreateRequestSchema,
   workspaceDeleteRequestSchema,
   workspaceInsertBeforeRequestSchema,
@@ -130,6 +132,8 @@ const UNARY_ROUTES: UnaryRoutes = {
   'workspace.insertSessionBefore': { schema: workspaceInsertSessionBeforeRequestSchema, invoke: (api, r) => api.workspace.insertSessionBefore(r) },
   'workspace.archiveSession': { schema: workspaceArchiveSessionRequestSchema, invoke: (api, r) => api.workspace.archiveSession(r) },
   'workspace.unarchiveSession': { schema: workspaceUnarchiveSessionRequestSchema, invoke: (api, r) => api.workspace.unarchiveSession(r) },
+  'workspace.pinSession': { schema: workspacePinSessionRequestSchema, invoke: (api, r) => api.workspace.pinSession(r) },
+  'workspace.unpinSession': { schema: workspaceUnpinSessionRequestSchema, invoke: (api, r) => api.workspace.unpinSession(r) },
   'skill.list': { schema: skillListRequestSchema, invoke: (api, r) => api.skills.list(r) },
   'agentPreset.list': { schema: agentPresetListRequestSchema, invoke: (api, r) => api.agentPresets.list(r) },
   'agentPreset.select': { schema: agentPresetSelectRequestSchema, invoke: (api, r) => api.agentPresets.select(r) },

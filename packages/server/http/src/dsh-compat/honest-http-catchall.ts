@@ -9,6 +9,9 @@ import { DSH_COMPAT_ADAPTER, tag } from "./meta.js";
 
 const SKIP_PREFIXES = [
   "/api/harness/",
+  // Host cron read API (`createCronApiHandler` in tryHandleExtraApi) — must
+  // not be claimed here or Settings → Plugins → Tasks gets a stub body.
+  "/api/cron/",
   "/xrk/",
   "/console",
   "/assets/",

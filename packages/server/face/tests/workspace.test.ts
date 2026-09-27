@@ -527,4 +527,85 @@ describe("Face workspace U2", () => {
     const v = listed.result.value as { archivedSessionIds: string[] };
     expect(v.archivedSessionIds).toEqual([sessionId]);
   });
+
+  it("persists pinnedSessionIds across Face rebuild", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-pin-"));
+    const productDir = path.join(root, ".xrk");
+    const store = createMemorySessionStore();
+    const first = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const sess = await dispatchFaceMethod(first, "session.create", "p1", {});
+    expect(sess.result.ok).toBe(true);
+    if (!sess.result.ok) return;
+    const sessionId = (sess.result.value as { sessionId: string }).sessionId;
+
+    const pinned = await dispatchFaceMethod(
+      first,
+      "workspace.pinSession",
+      "p2",
+      { sessionId },
+    );
+    expect(pinned.result.ok).toBe(true);
+    if (!pinned.result.ok) return;
+    expect(
+      (pinned.result.value as { pinnedSessionIds: string[] }).pinnedSessionIds,
+    ).toEqual([sessionId]);
+
+    // Pin drops archive membership when both would otherwise collide.
+    const archived = await dispatchFaceMethod(
+      first,
+      "workspace.archiveSession",
+      "p3",
+      { sessionId },
+    );
+    expect(archived.result.ok).toBe(true);
+    if (!archived.result.ok) return;
+    const afterArchive = archived.result.value as {
+      archivedSessionIds: string[];
+      pinnedSessionIds: string[];
+    };
+    expect(afterArchive.archivedSessionIds).toEqual([sessionId]);
+    expect(afterArchive.pinnedSessionIds).toEqual([]);
+
+    const repinned = await dispatchFaceMethod(
+      first,
+      "workspace.pinSession",
+      "p4",
+      { sessionId },
+    );
+    expect(repinned.result.ok).toBe(true);
+    if (!repinned.result.ok) return;
+    const afterPin = repinned.result.value as {
+      archivedSessionIds: string[];
+      pinnedSessionIds: string[];
+    };
+    expect(afterPin.archivedSessionIds).toEqual([]);
+    expect(afterPin.pinnedSessionIds).toEqual([sessionId]);
+
+    const second = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const listed = await dispatchFaceMethod(second, "workspace.list", "p5", {});
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) return;
+    const v = listed.result.value as {
+      archivedSessionIds: string[];
+      pinnedSessionIds: string[];
+    };
+    expect(v.archivedSessionIds).toEqual([]);
+    expect(v.pinnedSessionIds).toEqual([sessionId]);
+  });
 });

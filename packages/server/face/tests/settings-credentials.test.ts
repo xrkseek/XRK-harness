@@ -765,7 +765,7 @@ describe("Face settings U2", () => {
       }
     ).namespaces.find((n) => n.ns === "mcp");
     expect(mcp?.applies).toBe("live");
-    expect(mcp?.value.note).toContain("remounts");
+    expect(mcp?.value.note).toContain("Allow connect");
     expect(mcp?.value).toMatchObject({ allowConnect: false });
 
     const draft = [
@@ -845,6 +845,71 @@ describe("Face settings U2", () => {
     expect(mcp?.value.connectFailures).toEqual([
       { serverName: "gone", message: "spawn failed" },
     ]);
+    expect(mcp?.value.parked).toEqual([]);
+  });
+
+  it("mcp describe does not synthesize parked for unmounted servers", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-mcp-idle-"));
+    const rt = runtime({
+      productDir: dir,
+      plugins: [],
+      syncMcpServers: async () => ({ failures: [], parked: [] }),
+    });
+    // Seed desired servers + allow without Host overlay (deferred boot / mid-connect).
+    rt.settingsNamespaces.ensure("mcp").user = {
+      servers: [{ serverName: "deferred", command: "npx" }],
+      allowConnect: true,
+    };
+    rt.mcpSyncOverlay = { connectFailures: [], parked: [], connecting: [] };
+
+    const desc = await dispatchFaceMethod(rt, "settings.describe", "md-idle", {});
+    expect(desc.result.ok).toBe(true);
+    if (!desc.result.ok) return;
+    const mcp = (
+      desc.result.value as {
+        namespaces: {
+          ns: string;
+          value: {
+            allowConnect: boolean;
+            parked: string[];
+            connecting: string[];
+            connected: unknown[];
+          };
+        }[];
+      }
+    ).namespaces.find((n) => n.ns === "mcp");
+    expect(mcp?.value.allowConnect).toBe(true);
+    expect(mcp?.value.parked).toEqual([]);
+    expect(mcp?.value.connecting).toEqual([]);
+    expect(mcp?.value.connected).toEqual([]);
+  });
+
+  it("mcp describe surfaces Host connecting overlay", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-mcp-conn-"));
+    const rt = runtime({
+      productDir: dir,
+      plugins: [],
+      syncMcpServers: async () => ({ failures: [], parked: [] }),
+    });
+    rt.settingsNamespaces.ensure("mcp").user = {
+      servers: [{ serverName: "boot", command: "npx" }],
+      allowConnect: true,
+    };
+    rt.mcpSyncOverlay = {
+      connectFailures: [],
+      parked: [],
+      connecting: ["boot"],
+    };
+
+    const desc = await dispatchFaceMethod(rt, "settings.describe", "md-conn", {});
+    expect(desc.result.ok).toBe(true);
+    if (!desc.result.ok) return;
+    const mcp = (
+      desc.result.value as {
+        namespaces: { ns: string; value: { connecting: string[]; parked: string[] } }[];
+      }
+    ).namespaces.find((n) => n.ns === "mcp");
+    expect(mcp?.value.connecting).toEqual(["boot"]);
     expect(mcp?.value.parked).toEqual([]);
   });
 

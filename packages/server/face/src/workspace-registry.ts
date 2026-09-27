@@ -23,6 +23,8 @@ export class FaceWorkspaceRegistry {
   /** workspaceId → session ids in sidebar order. */
   private readonly sessionOrder = new Map<string, string[]>();
   private readonly archived = new Set<string>();
+  /** Registry-global pin order (newest pin first). Mutually exclusive with archive. */
+  private pinned: string[] = [];
   private seq = 0;
 
   constructor(root: string) {
@@ -143,11 +145,13 @@ export class FaceWorkspaceRegistry {
   /**
    * Archive one session into the registry-global set. Membership and sidebar
    * order stay so a later unarchive restores the same workspace slot (dsh
-   * parity). Already-archived ids are idempotent.
+   * parity). Already-archived ids are idempotent. Pin and archive are
+   * mutually exclusive — archive drops any pin (DSH parity).
    */
-  archiveSession(sessionId: string): string[] {
+  archiveSession(sessionId: string): { archivedSessionIds: string[]; pinnedSessionIds: string[] } {
     this.archived.add(sessionId);
-    return [...this.archived];
+    this.pinned = this.pinned.filter((id) => id !== sessionId);
+    return { archivedSessionIds: [...this.archived], pinnedSessionIds: [...this.pinned] };
   }
 
   /**
@@ -158,6 +162,24 @@ export class FaceWorkspaceRegistry {
   unarchiveSession(sessionId: string): string[] {
     this.archived.delete(sessionId);
     return [...this.archived];
+  }
+
+  /**
+   * Pin one session to the front of the registry-global pin order (newest
+   * first). Unarchives first when needed so pin and archive stay exclusive.
+   */
+  pinSession(sessionId: string): { archivedSessionIds: string[]; pinnedSessionIds: string[] } {
+    this.archived.delete(sessionId);
+    this.pinned = [sessionId, ...this.pinned.filter((id) => id !== sessionId)];
+    return { archivedSessionIds: [...this.archived], pinnedSessionIds: [...this.pinned] };
+  }
+
+  /**
+   * Drop one session from the pin order. Unknown ids resolve without writing.
+   */
+  unpinSession(sessionId: string): string[] {
+    this.pinned = this.pinned.filter((id) => id !== sessionId);
+    return [...this.pinned];
   }
 
   /**
@@ -235,6 +257,7 @@ export class FaceWorkspaceRegistry {
   list(allSessionIds: readonly string[]): {
     items: FaceWorkspaceView[];
     archivedSessionIds: string[];
+    pinnedSessionIds: string[];
   } {
     const assigned = new Set<string>();
     const byWs = new Map<string, string[]>();
@@ -253,6 +276,7 @@ export class FaceWorkspaceRegistry {
     return {
       items,
       archivedSessionIds: [...this.archived],
+      pinnedSessionIds: this.pinned.filter((sid) => allSessionIds.includes(sid) || this.membership.has(sid)),
     };
   }
 
@@ -294,6 +318,7 @@ export class FaceWorkspaceRegistry {
     membership: Record<string, string>;
     sessionOrder: Record<string, string[]>;
     archivedSessionIds: string[];
+    pinnedSessionIds: string[];
   } {
     const entries: Record<
       string,
@@ -322,6 +347,7 @@ export class FaceWorkspaceRegistry {
       membership,
       sessionOrder,
       archivedSessionIds: [...this.archived],
+      pinnedSessionIds: [...this.pinned],
     };
   }
 
@@ -343,6 +369,7 @@ export class FaceWorkspaceRegistry {
       membership?: Readonly<Record<string, string>>;
       sessionOrder?: Readonly<Record<string, readonly string[]>>;
       archivedSessionIds?: readonly string[];
+      pinnedSessionIds?: readonly string[];
     },
     fallbackRoot: string,
   ): void {
@@ -351,6 +378,7 @@ export class FaceWorkspaceRegistry {
     this.sessionOrder.clear();
     this.membership.clear();
     this.archived.clear();
+    this.pinned = [];
     this.seq = Math.max(0, doc.seq);
 
     const root = path.resolve(fallbackRoot);
@@ -433,6 +461,16 @@ export class FaceWorkspaceRegistry {
         for (const wsId of this.order) {
           this.removeFromOrder(wsId, sid);
         }
+      }
+    }
+    if (doc.pinnedSessionIds) {
+      const seen = new Set<string>();
+      this.pinned = [];
+      for (const sid of doc.pinnedSessionIds) {
+        if (typeof sid !== "string" || sid.length === 0) continue;
+        if (seen.has(sid) || this.archived.has(sid)) continue;
+        seen.add(sid);
+        this.pinned.push(sid);
       }
     }
   }

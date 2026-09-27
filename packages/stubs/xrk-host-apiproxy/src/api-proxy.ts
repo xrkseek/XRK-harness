@@ -2768,6 +2768,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         return Promise.resolve(ok(request, {
           items: ctx.workspaceRegistry.list().map(workspaceView),
           archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds],
+          pinnedSessionIds: [] as SessionId[],
         }))
       },
 
@@ -2880,13 +2881,27 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             details: { sessionId },
           })
         }
-        return ok(request, { archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds] })
+        return ok(request, {
+          archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds],
+          pinnedSessionIds: [] as SessionId[],
+        })
       },
 
       async unarchiveSession(request) {
         const { sessionId } = request.payload
         await ctx.workspaceRegistry.unarchiveSession(sessionId)
         return ok(request, { archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds] })
+      },
+
+      async pinSession(request) {
+        return ok(request, {
+          archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds],
+          pinnedSessionIds: [request.payload.sessionId],
+        })
+      },
+
+      async unpinSession(request) {
+        return ok(request, { pinnedSessionIds: [] as SessionId[] })
       },
     },
 

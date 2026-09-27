@@ -893,7 +893,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     ...(options.syncMcpServers !== undefined
       ? { syncMcpServers: options.syncMcpServers }
       : {}),
-    mcpSyncOverlay: { connectFailures: [], parked: [] },
+    mcpSyncOverlay: { connectFailures: [], parked: [], connecting: [] },
     ...(options.autoReviewSlashPersist !== undefined
       ? { autoReviewSlashPersist: options.autoReviewSlashPersist }
       : {}),

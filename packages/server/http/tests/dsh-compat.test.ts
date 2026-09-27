@@ -360,12 +360,20 @@ describe("dsh-compat adapters", () => {
       });
       const treeBody = (await treeRes.json()) as {
         ok: boolean;
-        value: { entries: Array<{ name: string }> };
+        value: {
+          entries: Array<{ name: string; size?: number; mtimeMs?: number }>;
+        };
       };
       expect(treeBody.ok).toBe(true);
       expect(treeBody.value.entries.some((e) => e.name === "hello.txt")).toBe(
         true,
       );
+
+      // Size / mtime ride the same statSync so the first-party workbench can
+      // show a size column and a preview header without a second round trip.
+      const hello = treeBody.value.entries.find((e) => e.name === "hello.txt");
+      expect(hello?.size).toBe(2);
+      expect(typeof hello?.mtimeMs).toBe("number");
 
       const readRes = await fetch(`${base}/sidebar/api/fs.read`, {
         method: "POST",

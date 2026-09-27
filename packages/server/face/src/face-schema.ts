@@ -155,6 +155,7 @@ export const FACE_MCP_SCHEMA: FaceSchemaEnvelope = {
         allowConnect: 14,
         connected: 7,
         parked: 2,
+        connecting: 2,
         note: 8,
         connectFailures: 11,
       },

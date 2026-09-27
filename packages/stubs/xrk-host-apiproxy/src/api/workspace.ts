@@ -43,7 +43,11 @@ export interface WorkspaceApi {
    * `host/archived-sessions-changed`). Archived sessions stay in their
    * workspace's `sessionIds` account; grouping surfaces hide them.
    */
-  list(request: RpcRequest<{}>): Promise<RpcResponse<{ items: WorkspaceView[]; archivedSessionIds: SessionId[] }>>
+  list(request: RpcRequest<{}>): Promise<RpcResponse<{
+    items: WorkspaceView[]
+    archivedSessionIds: SessionId[]
+    pinnedSessionIds: SessionId[]
+  }>>
 
   /**
    * Creates (or idempotently resolves) a workspace over an EXISTING directory
@@ -100,12 +104,11 @@ export interface WorkspaceApi {
    * Adds one session to the registry-global archive set: the session
    * disappears from every grouping surface but keeps its session log and its
    * workspace accounting slot (a future unarchive restores its position).
-   * Idempotent for an already archived id. A session neither live nor in
-   * session persistence fails with `session-not-found`. Returns the full
-   * updated set (same snapshot the changed frame carries).
+   * Idempotent for an already archived id. Pin and archive are mutually
+   * exclusive — archive drops any pin. Returns both full updated sets.
    */
   archiveSession(request: RpcRequest<{ sessionId: SessionId }>):
-  Promise<RpcResponse<{ archivedSessionIds: SessionId[] }>>
+  Promise<RpcResponse<{ archivedSessionIds: SessionId[]; pinnedSessionIds: SessionId[] }>>
 
   /**
    * Removes one session from the registry-global archive set so it reappears
@@ -114,4 +117,19 @@ export interface WorkspaceApi {
    */
   unarchiveSession(request: RpcRequest<{ sessionId: SessionId }>):
   Promise<RpcResponse<{ archivedSessionIds: SessionId[] }>>
+
+  /**
+   * Pins one session to the front of the registry-global pin order (newest
+   * first). Unarchives when needed so pin and archive stay exclusive.
+   * Returns both full updated sets.
+   */
+  pinSession(request: RpcRequest<{ sessionId: SessionId }>):
+  Promise<RpcResponse<{ archivedSessionIds: SessionId[]; pinnedSessionIds: SessionId[] }>>
+
+  /**
+   * Drops one session from the pin order. Idempotent for an id that is not
+   * pinned. Returns the full updated pin set.
+   */
+  unpinSession(request: RpcRequest<{ sessionId: SessionId }>):
+  Promise<RpcResponse<{ pinnedSessionIds: SessionId[] }>>
 }

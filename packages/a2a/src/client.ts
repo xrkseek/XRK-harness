@@ -214,33 +214,18 @@ export class A2aClient {
       card = null;
     }
 
-    const rpcBody: Record<string, unknown> = {
-      jsonrpc: "2.0",
-      id: taskId,
-      method: "SendMessage",
-      params: {
-        message: textMessage(ROLE_USER, message, ctx),
-      },
+    const rpcEndpoint = rpcUrl(peer.url, card);
+    const sendParams: Record<string, unknown> = {
+      message: textMessage(ROLE_USER, message, ctx),
     };
-    if (peer.tenant) {
-      (rpcBody.params as Record<string, unknown>).tenant = peer.tenant;
-    }
+    if (peer.tenant) sendParams.tenant = peer.tenant;
 
     try {
-      const resp = (await fetchJson(
-        rpcUrl(peer.url, card),
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            ...authHeaders(peer),
-          },
-          body: JSON.stringify(rpcBody),
-          signal: AbortSignal.timeout(timeoutMs),
-        },
-        this.fetchImpl,
-      )) as Record<string, unknown>;
+      let resp = await this.postRpc(rpcEndpoint, peer, "SendMessage", sendParams, taskId, timeoutMs);
+      // Slash-only peers (older XRK inbound) reject PascalCase — retry once.
+      if (isMethodNotFound(resp)) {
+        resp = await this.postRpc(rpcEndpoint, peer, "message/send", sendParams, taskId, timeoutMs);
+      }
 
       if (resp.error && typeof resp.error === "object") {
         const msg = String(
@@ -306,6 +291,43 @@ export class A2aClient {
   resetLoop(contextId: string): void {
     this.turns.reset(contextId);
   }
+
+  private async postRpc(
+    endpoint: string,
+    peer: A2aPeer,
+    method: string,
+    params: Record<string, unknown>,
+    id: string,
+    timeoutMs: number,
+  ): Promise<Record<string, unknown>> {
+    return (await fetchJson(
+      endpoint,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...authHeaders(peer),
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          method,
+          params,
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      },
+      this.fetchImpl,
+    )) as Record<string, unknown>;
+  }
+}
+
+function isMethodNotFound(resp: Record<string, unknown>): boolean {
+  const err = resp.error;
+  if (err === null || typeof err !== "object") return false;
+  const rec = err as { code?: unknown; message?: unknown };
+  if (rec.code === -32601) return true;
+  return String(rec.message ?? "").toLowerCase().includes("method not found");
 }
 
 export function createA2aClient(options?: A2aClientOptions): A2aClient {

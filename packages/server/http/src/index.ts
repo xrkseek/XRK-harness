@@ -678,4 +678,5 @@ export {
   tryServeWebStatic,
   type WebStaticOptions,
 } from "./static.js";
+export { dispatchHttpServerFetch } from "./fetch-dispatch.js";
 export { attachmentContentDisposition } from "./content-disposition.js";

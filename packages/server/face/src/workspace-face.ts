@@ -384,7 +384,7 @@ export async function workspaceArchiveSessionFace(
       error: { code: "invalid-payload", message: "sessionId required" },
     };
   }
-  const archivedSessionIds = runtime.workspaces.archiveSession(sessionId);
+  const result = runtime.workspaces.archiveSession(sessionId);
   try {
     await runtime.onSessionFinalize?.(sessionId);
   } catch {
@@ -393,9 +393,19 @@ export async function workspaceArchiveSessionFace(
   await persistWorkspaceDoc(runtime, runtime.workspaces);
   runtime.bus.publishHost({
     type: "host/archived-sessions-changed",
-    archivedSessionIds,
+    archivedSessionIds: result.archivedSessionIds,
   });
-  return { ok: true, value: { archivedSessionIds } };
+  runtime.bus.publishHost({
+    type: "host/pinned-sessions-changed",
+    pinnedSessionIds: result.pinnedSessionIds,
+  });
+  return {
+    ok: true,
+    value: {
+      archivedSessionIds: result.archivedSessionIds,
+      pinnedSessionIds: result.pinnedSessionIds,
+    },
+  };
 }
 
 export async function workspaceUnarchiveSessionFace(
@@ -421,6 +431,66 @@ export async function workspaceUnarchiveSessionFace(
     archivedSessionIds,
   });
   return { ok: true, value: { archivedSessionIds } };
+}
+
+export async function workspacePinSessionFace(
+  runtime: FaceRuntime,
+  payload: unknown,
+): Promise<FaceRpcResult<unknown>> {
+  const p =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const sessionId =
+    typeof p.sessionId === "string" ? p.sessionId.trim() : "";
+  if (!sessionId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "sessionId required" },
+    };
+  }
+  const result = runtime.workspaces.pinSession(sessionId);
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
+  runtime.bus.publishHost({
+    type: "host/archived-sessions-changed",
+    archivedSessionIds: result.archivedSessionIds,
+  });
+  runtime.bus.publishHost({
+    type: "host/pinned-sessions-changed",
+    pinnedSessionIds: result.pinnedSessionIds,
+  });
+  return {
+    ok: true,
+    value: {
+      archivedSessionIds: result.archivedSessionIds,
+      pinnedSessionIds: result.pinnedSessionIds,
+    },
+  };
+}
+
+export async function workspaceUnpinSessionFace(
+  runtime: FaceRuntime,
+  payload: unknown,
+): Promise<FaceRpcResult<unknown>> {
+  const p =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const sessionId =
+    typeof p.sessionId === "string" ? p.sessionId.trim() : "";
+  if (!sessionId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "sessionId required" },
+    };
+  }
+  const pinnedSessionIds = runtime.workspaces.unpinSession(sessionId);
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
+  runtime.bus.publishHost({
+    type: "host/pinned-sessions-changed",
+    pinnedSessionIds,
+  });
+  return { ok: true, value: { pinnedSessionIds } };
 }
 
 export async function workspaceDeleteFace(

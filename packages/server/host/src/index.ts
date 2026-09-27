@@ -30,6 +30,7 @@ import { installOutboundHttpProxy } from "./http-proxy.js";
 import { mountInvariantsFailFast } from "./invariants-fail-fast.js";
 import { watchPolicyFile } from "./policy-file-watch.js";
 import { createA2aInboundPublicHandler } from "./a2a-inbound-public.js";
+import { createCronApiHandler } from "./cron-http.js";
 import { tryMountHostIsolatingWorkflowEngine } from "./workflow-engine-mount.js";
 import {
   applyXrkProductBootPolicy,
@@ -632,7 +633,7 @@ export function createHostManager(): HostManager {
       let mcpAllowConnect = resolveMcpAllowConnect(config);
       if (mcpSpecs.length > 0) {
         log?.info(
-          `mcp desired ${mcpSpecs.length} (source=${mcpFileSourced ? "host-settings" : "env/config"}; allow=${mcpAllowConnect ? "on" : "off"})`,
+          `mcp desired ${mcpSpecs.length} (source=${mcpFileSourced ? "host-settings" : "env/config"}; allow=${mcpAllowConnect ? "on" : "off"}; connect after HTTP ready)`,
         );
       }
       let invalidateAgents: () => Promise<void> = async () => {};
@@ -696,26 +697,87 @@ export function createHostManager(): HostManager {
           notifyMcpOverlay();
         },
       };
-      if (mcpSpecs.length > 0) {
-        const boot = await reconcileMcpToolPlugins({
-          desired: mcpSpecs,
-          list: () => loader.list(),
-          register: (plugin) => {
-            loader.register(plugin);
-            if (!loadedPluginIds.includes(plugin.id)) {
-              loadedPluginIds = [...loadedPluginIds, plugin.id];
-            }
-          },
-          unregister: mcpUnregister,
-          retained: () => mcpDeferred.retained(),
-          policy,
-          allowConnect: mcpAllowConnect,
-          workspaceRoot: config.runtime.workspaceRoot,
-          imageAdmission: mcpImageAdmission,
-          ...mcpHooks,
+      const registerMcpPlugin = (plugin: RegisteredPlugin) => {
+        loader.register(plugin);
+        if (!loadedPluginIds.includes(plugin.id)) {
+          loadedPluginIds = [...loadedPluginIds, plugin.id];
+        }
+      };
+      const mcpReconcileOptions = (
+        desired: readonly McpServerSpec[],
+        allowConnect: boolean,
+      ) => ({
+        desired,
+        list: () => loader.list(),
+        register: registerMcpPlugin,
+        unregister: mcpUnregister,
+        retained: () => mcpDeferred.retained(),
+        policy,
+        allowConnect,
+        workspaceRoot: config.runtime.workspaceRoot,
+        imageAdmission: mcpImageAdmission,
+        ...mcpHooks,
+      });
+      let mcpClosed = false;
+      let mcpSyncTail: Promise<unknown> = Promise.resolve();
+      /** Last reconcile overlay — applied when `notifyMcpOverlay` is wired to Face. */
+      let lastMcpReconcileOverlay:
+        | {
+            readonly connectFailures: readonly {
+              readonly serverName: string;
+              readonly message: string;
+            }[];
+            readonly parked: readonly string[];
+            readonly connecting: readonly string[];
+          }
+        | undefined;
+      const enqueueMcpReconcile = (
+        label: string,
+        desired: readonly McpServerSpec[],
+        allowConnect: boolean,
+      ) => {
+        const run = mcpSyncTail.then(async () => {
+          if (mcpClosed) {
+            return { failures: [], parked: [], added: [], removed: [], kept: [] };
+          }
+          const result = await reconcileMcpToolPlugins({
+            ...mcpReconcileOptions(desired, allowConnect),
+            onConnectProgress: async ({ phase, serverName }) => {
+              if (mcpClosed) return;
+              const prev = lastMcpReconcileOverlay;
+              lastMcpReconcileOverlay = {
+                connectFailures: prev?.connectFailures ?? [],
+                parked: prev?.parked ?? [],
+                connecting: phase === "connecting" ? [serverName] : [],
+              };
+              // Live row badges: refresh connected plugins + push overlay mid-serial.
+              notifyMcpOverlay();
+              if (phase === "connecting") {
+                log?.info(`mcp ${label}: connecting ${serverName}`);
+              }
+            },
+          });
+          if (mcpClosed) return result;
+          logMcpReconcile(log, label, result);
+          lastMcpReconcileOverlay = {
+            connectFailures: result.failures,
+            parked: result.parked,
+            connecting: [],
+          };
+          // Boot/reconcile used to refresh plugins only — Settings MCP card kept
+          // stale `parked` until a manual save. Push the same overlay event as
+          // health changes so connected/parked badges update live.
+          notifyMcpOverlay();
+          await invalidateAgents();
+          return result;
         });
-        logMcpReconcile(log, "boot", boot);
-      }
+        mcpSyncTail = run.then(
+          () => undefined,
+          () => undefined,
+        );
+        return run;
+      };
+      // Face/HTTP first (Codex-style): MCP stdio/HTTP handshake must not block spawn.
       refreshFacePlugins();
 
       const agentCache = createHostAgentCache(loader.list(), { hostId: id });
@@ -733,18 +795,17 @@ export function createHostManager(): HostManager {
         });
         await mcpDeferred.flush();
       };
-      let mcpSyncTail: Promise<unknown> = Promise.resolve();
       const lastDrainResult = new Map<string, AgentRunResult>();
 
       // Local Host + remote cwd: swap fs/shell (Hermes/DSH provider pattern).
       // Env `XRK_SSH_HOST` CI-bypasses Face; else peek settings.yaml before Face
       // (SSH world must own workspaceRoot before createFaceRuntime).
-      // Optional HTTP ExecEnvironment (Modal/e2b-style sidecar) when SSH is off.
+      // Optional pluggable ExecEnvironment (HTTP sidecar · memory CI world) when SSH is off.
       let sshWorld: SshExecutionWorld | undefined;
-      let httpWorld: ExecWorld | undefined;
+      let envWorld: ExecWorld | undefined;
       /** Local Host cwd before SSH workspace swap (browse/settings anchor). */
       let localHostRoot: string | undefined;
-      let execWorldKind: "ssh" | "http" | undefined;
+      let execWorldKind: "ssh" | "http" | "memory" | undefined;
       try {
         const sshProduct = peekSettingsYamlSection(resolveXrkHome(), "ssh-remote");
         const sshConfig = resolveSshConfig(process.env, sshProduct);
@@ -755,23 +816,26 @@ export function createHostManager(): HostManager {
           // Tool coordinates are the remote workspace; Face session cwd follows.
           (config.runtime as { workspaceRoot: string }).workspaceRoot =
             sshWorld.workspaceRoot;
-        } else if (
-          String(process.env.XRK_EXEC_ENVIRONMENT ?? "")
+        } else {
+          const envKind = String(process.env.XRK_EXEC_ENVIRONMENT ?? "")
             .trim()
-            .toLowerCase() === "http"
-        ) {
-          execWorldKind = "http";
-          const provider = resolveExecEnvironment({ env: process.env });
-          httpWorld = await provider.createWorld({
-            workspaceRoot: config.runtime.workspaceRoot,
-          });
+            .toLowerCase();
+          if (envKind === "http" || envKind === "memory") {
+            execWorldKind = envKind;
+            const provider = resolveExecEnvironment({ env: process.env });
+            envWorld = await provider.createWorld({
+              workspaceRoot: config.runtime.workspaceRoot,
+            });
+          }
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         throw new Error(
           execWorldKind === "http"
             ? `HTTP exec environment: ${message}`
-            : `SSH remote workspace: ${message}`,
+            : execWorldKind === "memory"
+              ? `Memory exec environment: ${message}`
+              : `SSH remote workspace: ${message}`,
           { cause: err },
         );
       }
@@ -797,8 +861,8 @@ export function createHostManager(): HostManager {
           ? createLocalShell({
               subprocess: sshWorld
                 ? sshWorld.subprocess
-                : httpWorld
-                  ? httpWorld.subprocess
+                : envWorld
+                  ? envWorld.subprocess
                   : createLocalSubprocess(),
               defaultCwd: config.runtime.workspaceRoot,
               // Host-wide shared registry — sandbox confine resolves lazily so
@@ -1056,8 +1120,8 @@ export function createHostManager(): HostManager {
                     remoteExecution: true as const,
                     codeRuntime: sshWorld.codeRuntime,
                   }
-                : httpWorld
-                  ? { fs: httpWorld.fs }
+                : envWorld
+                  ? { fs: envWorld.fs }
                   : {}),
               ...(faceBox.runtime
                 ? {
@@ -1549,42 +1613,19 @@ export function createHostManager(): HostManager {
                 servers: readonly McpServerDraft[],
                 options?: { readonly allowConnect?: boolean },
               ) => {
-                const run = mcpSyncTail.then(async () => {
-                  mcpAllowConnect = resolveMcpAllowConnect(
-                    config,
-                    options?.allowConnect,
-                  );
-                  const result = await reconcileMcpToolPlugins({
-                    desired: mcpDraftsToSpecs(servers),
-                    list: () => loader.list(),
-                    register: (plugin) => {
-                      loader.register(plugin);
-                      if (!loadedPluginIds.includes(plugin.id)) {
-                        loadedPluginIds = [...loadedPluginIds, plugin.id];
-                      }
-                    },
-                    unregister: mcpUnregister,
-                    retained: () => mcpDeferred.retained(),
-                    policy,
-                    allowConnect: mcpAllowConnect,
-                    workspaceRoot: config.runtime.workspaceRoot,
-                    imageAdmission: mcpImageAdmission,
-                    ...mcpHooks,
-                  });
-                  logMcpReconcile(log, "reconcile", result);
-                  refreshFacePlugins();
-                  await invalidateAgents();
-                  return {
-                    failures: result.failures,
-                    parked: result.parked,
-                  };
-                });
-                // Keep the chain alive even if one reconcile rejects.
-                mcpSyncTail = run.then(
-                  () => undefined,
-                  () => undefined,
+                mcpAllowConnect = resolveMcpAllowConnect(
+                  config,
+                  options?.allowConnect,
                 );
-                return run;
+                const result = await enqueueMcpReconcile(
+                  "reconcile",
+                  mcpDraftsToSpecs(servers),
+                  mcpAllowConnect,
+                );
+                return {
+                  failures: result.failures,
+                  parked: result.parked,
+                };
               },
             }
           : {}),
@@ -1669,41 +1710,6 @@ export function createHostManager(): HostManager {
         log?.warn(
           "Isolating WorkflowEngine not mounted (Cordis stub unavailable under this install)",
         );
-      }
-      // Face hydrate may migrate legacy settings.yaml mcp → host-settings after
-      // boot reconcile already ran with []. Remount once when file-sourced.
-      if (mcpFileSourced && mcpSpecs.length === 0) {
-        const mcpUser = faceRuntime.settingsNamespaces.ensure("mcp").user;
-        const drafts = Array.isArray(mcpUser.servers)
-          ? (mcpUser.servers as McpServerDraft[])
-          : [];
-        const desired = mcpDraftsToSpecs(drafts);
-        if (desired.length > 0) {
-          mcpAllowConnect = resolveMcpAllowConnect(
-            config,
-            mcpUser.allowConnect === true,
-          );
-          const migrated = await reconcileMcpToolPlugins({
-            desired,
-            list: () => loader.list(),
-            register: (plugin) => {
-              loader.register(plugin);
-              if (!loadedPluginIds.includes(plugin.id)) {
-                loadedPluginIds = [...loadedPluginIds, plugin.id];
-              }
-            },
-            unregister: mcpUnregister,
-            retained: () => mcpDeferred.retained(),
-            policy,
-            allowConnect: mcpAllowConnect,
-            workspaceRoot: config.runtime.workspaceRoot,
-            imageAdmission: mcpImageAdmission,
-            ...mcpHooks,
-          });
-          logMcpReconcile(log, "yaml-migrate", migrated);
-          refreshFacePlugins();
-          await invalidateAgents();
-        }
       }
       sessionCwdBox.get = (sessionId) =>
         resolveSessionCwd(faceRuntime, sessionId);
@@ -2291,6 +2297,13 @@ export function createHostManager(): HostManager {
         faceRuntime.subagents.getByChild(sessionId)?.parentSessionId;
       notifyMcpOverlay = () => {
         refreshFacePlugins();
+        if (lastMcpReconcileOverlay) {
+          faceRuntime.mcpSyncOverlay = {
+            connectFailures: lastMcpReconcileOverlay.connectFailures,
+            parked: lastMcpReconcileOverlay.parked,
+            connecting: lastMcpReconcileOverlay.connecting,
+          };
+        }
         const slot = faceRuntime.settingsNamespaces.ensure("mcp");
         publishRemoteEvent(faceRuntime.bus, "settings/document-updated", [
           "mcp",
@@ -2482,11 +2495,18 @@ export function createHostManager(): HostManager {
               },
             }
           : {}),
-        tryHandleExtraApi: (req, res) =>
-          tryHandleFaceHttp(req, res, faceRuntime, {
+        tryHandleExtraApi: (req, res) => {
+          // Host cron read API first (`/api/cron/*`), then Face extras.
+          const cronApi = createCronApiHandler({
+            resolveScheduler: () => cronBox.scheduler,
+            checkAuth: faceCheckAuth,
+          });
+          if (cronApi(req, res)) return true;
+          return tryHandleFaceHttp(req, res, faceRuntime, {
             apiKey: effectiveHostApiKey(faceRuntime),
             checkAuth: faceCheckAuth,
-          }),
+          });
+        },
         attachExtras: (server) => {
           const face = attachFaceUpgrades(server, faceRuntime, {
             apiKey: effectiveHostApiKey(faceRuntime),
@@ -2527,6 +2547,36 @@ export function createHostManager(): HostManager {
       } else {
         log?.info("http stack ready (listen disabled — pipe / fetch transport)");
       }
+      {
+        // Env/config specs still auto-connect after HTTP (CI/headless).
+        // File-sourced Settings lists stay parked until the user saves with
+        // Allow connect — matches "don't spawn every MCP on every Host start".
+        if (mcpFileSourced) {
+          const mcpUser = faceRuntime.settingsNamespaces.ensure("mcp").user;
+          const drafts = Array.isArray(mcpUser.servers)
+            ? (mcpUser.servers as McpServerDraft[])
+            : [];
+          const fileDesired = mcpDraftsToSpecs(drafts);
+          mcpAllowConnect = resolveMcpAllowConnect(
+            config,
+            mcpUser.allowConnect === true,
+          );
+          if (fileDesired.length > 0) {
+            log?.info(
+              `mcp file-sourced ${fileDesired.length} deferred until Settings save (allow=${mcpAllowConnect ? "on" : "off"})`,
+            );
+          }
+        } else if (mcpSpecs.length > 0) {
+          void enqueueMcpReconcile(
+            "boot",
+            mcpSpecs,
+            mcpAllowConnect,
+          ).catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            log?.warn(`mcp background connect failed: ${message}`);
+          });
+        }
+      }
       let status: HostInstance["status"] = "running";
       let stopPromise: Promise<void> | undefined;
 
@@ -2558,6 +2608,7 @@ export function createHostManager(): HostManager {
           if (stopPromise) return stopPromise;
           status = "stopped";
           stopPromise = (async () => {
+            mcpClosed = true;
             cronBox.scheduler?.stop();
             policyFileWatch?.dispose();
             // Phase1 consolidate before agents/store go away (Hermes finalize).
@@ -2591,6 +2642,13 @@ export function createHostManager(): HostManager {
                 sshWorld.dispose();
               } catch {
                 // Host stop must continue even if SSH ControlMaster exit fails.
+              }
+            }
+            if (envWorld) {
+              try {
+                envWorld.dispose();
+              } catch {
+                // Host stop must continue even if pluggable exec world teardown fails.
               }
             }
             if (sharedPty) {

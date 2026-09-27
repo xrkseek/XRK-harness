@@ -240,6 +240,8 @@ export {
   PathEscapeError,
   workspaceArchiveSessionFace,
   workspaceUnarchiveSessionFace,
+  workspacePinSessionFace,
+  workspaceUnpinSessionFace,
   workspaceCreateFace,
   workspaceDeleteFace,
   workspaceDescribe,

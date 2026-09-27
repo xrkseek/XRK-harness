@@ -36,6 +36,8 @@ import {
 import {
   workspaceArchiveSessionValueSchema,
   workspaceUnarchiveSessionValueSchema,
+  workspacePinSessionValueSchema,
+  workspaceUnpinSessionValueSchema,
   workspaceCreateValueSchema,
   workspaceDeleteValueSchema,
   workspaceInsertBeforeValueSchema,
@@ -137,6 +139,8 @@ export interface IApiClient {
     insertSessionBefore(payload: RequestPayload<'workspace.insertSessionBefore'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.insertSessionBefore'>>>
     archiveSession(payload: RequestPayload<'workspace.archiveSession'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.archiveSession'>>>
     unarchiveSession(payload: RequestPayload<'workspace.unarchiveSession'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.unarchiveSession'>>>
+    pinSession(payload: RequestPayload<'workspace.pinSession'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.pinSession'>>>
+    unpinSession(payload: RequestPayload<'workspace.unpinSession'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.unpinSession'>>>
   }
   skills: {
     list(payload: RequestPayload<'skill.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'skill.list'>>>
@@ -225,6 +229,8 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'workspace.insertSessionBefore': workspaceInsertSessionBeforeValueSchema,
   'workspace.archiveSession': workspaceArchiveSessionValueSchema,
   'workspace.unarchiveSession': workspaceUnarchiveSessionValueSchema,
+  'workspace.pinSession': workspacePinSessionValueSchema,
+  'workspace.unpinSession': workspaceUnpinSessionValueSchema,
   'skill.list': skillListValueSchema,
   'agentPreset.list': agentPresetListValueSchema,
   'agentPreset.select': agentPresetSelectValueSchema,
@@ -319,10 +325,24 @@ export abstract class AbstractApiClient implements IApiClient {
     })
   }
 
-  /** Browser = same-origin (a fake authority would fail DNS on real requests); no-location env (Node) = fake authority. */
+  /** Browser = optional transport apiBase override or same-origin; no-location env = fake authority. */
   protected resolveBase(): string {
+    const transport = (globalThis as {
+      __XRK_TRANSPORT__?: { apiBase?: string }
+    }).__XRK_TRANSPORT__
+    const apiBase = transport?.apiBase?.trim()
+    if (apiBase) return apiBase.replace(/\/$/u, '')
     const loc = (globalThis as { location?: { origin?: string } }).location
     return loc?.origin !== undefined && loc.origin !== 'null' ? loc.origin : INTERNAL_BASE
+  }
+
+  /**
+   * Base URL for long-lived SSE downlinks. Defaults to {@link resolveBase}.
+   * Desktop overrides this to a sibling `xrk-app://` hostname so Chromium does
+   * not share one custom-protocol connection slot between SSE and unary RPC.
+   */
+  protected resolveStreamBase(): string {
+    return this.resolveBase()
   }
 
   protected mintRpcId(): RpcId {
@@ -401,7 +421,7 @@ export abstract class AbstractApiClient implements IApiClient {
     frameSchema: z.ZodType<F>,
     onOpen?: () => void,
   ): AsyncGenerator<RpcRequest<F>> {
-    const response = await this.doFetch(new URL(path, this.resolveBase()), { signal })
+    const response = await this.doFetch(new URL(path, this.resolveStreamBase()), { signal })
     if (!response.ok || response.body === null) throw new Error(`transport failure for ${path}: HTTP ${response.status}`)
     onOpen?.()
     const reader = response.body.getReader()
@@ -488,6 +508,8 @@ export abstract class AbstractApiClient implements IApiClient {
     insertSessionBefore: (payload, signal) => this.callUnary('workspace.insertSessionBefore', payload, signal),
     archiveSession: (payload, signal) => this.callUnary('workspace.archiveSession', payload, signal),
     unarchiveSession: (payload, signal) => this.callUnary('workspace.unarchiveSession', payload, signal),
+    pinSession: (payload, signal) => this.callUnary('workspace.pinSession', payload, signal),
+    unpinSession: (payload, signal) => this.callUnary('workspace.unpinSession', payload, signal),
   }
 
   readonly skills: IApiClient['skills'] = {

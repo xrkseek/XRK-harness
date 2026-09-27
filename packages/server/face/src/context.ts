@@ -180,6 +180,8 @@ export interface FaceRuntime {
       readonly message: string;
     }[];
     parked: readonly string[];
+    /** Desired names currently connecting (serial boot/reconcile progress). */
+    connecting?: readonly string[];
   };
   /** Standing / remembered tool presenters (wire tools get). */
   readonly getTool?: (

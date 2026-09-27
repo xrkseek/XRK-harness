@@ -1,24 +1,33 @@
 /**
  * Thin A2A inbound HTTP surface (Hermes `plugins/platforms/a2a` Agent Card +
- * message/send subset). Opt-in via Host `XRK_A2A_INBOUND=1`. With Face wired,
- * admits framed peer text into a session; otherwise persists + echoes.
+ * message/send + tasks get/list/cancel subset). Opt-in via Host
+ * `XRK_A2A_INBOUND=1`. With Face wired, admits framed peer text into a
+ * session; otherwise persists + echoes.
+ *
+ * Method aliases match Hermes `_METHOD_TABLE`: PascalCase (v1.0 SDK) and
+ * slash forms both resolve so XRK↔XRK and Hermes→XRK interop.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import {
   A2A_PROTOCOL_VERSION,
+  ERR_TASK_NOT_CANCELABLE,
+  ERR_TASK_NOT_FOUND,
   ROLE_AGENT,
   ROLE_USER,
+  STATE_CANCELED,
   STATE_COMPLETED,
   STATE_REJECTED,
+  STATE_WORKING,
+  TERMINAL_STATES,
   TurnTracker,
   extractText,
   maxPingpongTurns,
   newContextId,
   newTaskId,
   persistMessage,
-  textMessage,
 } from "./protocol.js";
+import { TaskStore } from "./task-store.js";
 
 export interface A2aInboundOptions {
   /** Public base URL advertised on the Agent Card (e.g. http://127.0.0.1:8787/a2a). */
@@ -29,6 +38,8 @@ export interface A2aInboundOptions {
   /** Conversations root override (tests). */
   readonly conversationsRoot?: string;
   readonly turnTracker?: TurnTracker;
+  /** In-memory task registry (tests / shared Host instance). */
+  readonly taskStore?: TaskStore;
   /**
    * Optional Face admit hook. When absent, message/send persists + echoes.
    * Return agent reply text; throw to fail the task.
@@ -40,6 +51,18 @@ export interface A2aInboundOptions {
     readonly peer: string;
   }) => Promise<string> | string;
 }
+
+/** Hermes-shaped method aliases → canonical handler key. */
+const METHOD_ALIASES: ReadonlyMap<string, string> = new Map([
+  ["SendMessage", "message/send"],
+  ["message/send", "message/send"],
+  ["GetTask", "tasks/get"],
+  ["tasks/get", "tasks/get"],
+  ["ListTasks", "tasks/list"],
+  ["tasks/list", "tasks/list"],
+  ["CancelTask", "tasks/cancel"],
+  ["tasks/cancel", "tasks/cancel"],
+]);
 
 function sendJson(
   res: ServerResponse,
@@ -72,6 +95,18 @@ function safeEqualToken(a: string, b: string): boolean {
   } catch {
     return false;
   }
+}
+
+function rpcOk(id: unknown, result: unknown): Record<string, unknown> {
+  return { jsonrpc: "2.0", id, result };
+}
+
+function rpcErr(
+  id: unknown,
+  code: number,
+  message: string,
+): Record<string, unknown> {
+  return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
 /** Parse `A2A_PEER_TOKENS=alice:tok1,bob:tok2` → name → token. */
@@ -120,7 +155,8 @@ export function buildA2aAgentCard(options: {
       {
         id: "chat",
         name: "chat",
-        description: "Send a text task to this XRK Host (message/send).",
+        description:
+          "Send a text task to this XRK Host (message/send · SendMessage).",
         tags: ["chat"],
       },
     ],
@@ -182,6 +218,7 @@ async function handleMessageSend(
   peer: string,
   options: A2aInboundOptions,
   tracker: TurnTracker,
+  store: TaskStore,
 ): Promise<Record<string, unknown>> {
   const message = (params.message ?? params) as Record<string, unknown>;
   const text = extractText(message).trim();
@@ -193,22 +230,15 @@ async function handleMessageSend(
   const env = options.env ?? process.env;
   const turns = tracker.track(contextId);
   const cap = maxPingpongTurns(env);
+  store.create(taskId, contextId, peer);
   if (turns > cap) {
+    const reason = `rejected: pingpong turn cap ${cap} reached for context`;
+    store.complete(taskId, STATE_REJECTED, reason);
     return {
-      task: {
-        id: taskId,
-        contextId,
-        status: {
-          state: STATE_REJECTED,
-          message: textMessage(
-            ROLE_AGENT,
-            `rejected: pingpong turn cap ${cap} reached for context`,
-            contextId,
-          ),
-        },
-      },
+      task: TaskStore.toTask(store.get(taskId)!),
     };
   }
+  store.setState(taskId, STATE_WORKING);
   const persistOpts = options.conversationsRoot
     ? { root: options.conversationsRoot }
     : undefined;
@@ -227,16 +257,66 @@ async function handleMessageSend(
         : `A2A inbound accepted from ${peer} (empty message)`;
   }
   persistMessage(contextId, ROLE_AGENT, reply, taskId, persistOpts);
-  return {
-    task: {
-      id: taskId,
-      contextId,
-      status: {
-        state: STATE_COMPLETED,
-        message: textMessage(ROLE_AGENT, reply, contextId),
-      },
-    },
-  };
+  store.complete(taskId, STATE_COMPLETED, reply);
+  return { task: TaskStore.toTask(store.get(taskId)!) };
+}
+
+function handleTasksGet(
+  id: unknown,
+  params: Record<string, unknown>,
+  store: TaskStore,
+): Record<string, unknown> {
+  const taskId = String(params.taskId ?? params.id ?? "").trim();
+  const rec = store.get(taskId);
+  if (!rec) {
+    return rpcErr(id, ERR_TASK_NOT_FOUND, `task not found: ${taskId}`);
+  }
+  return rpcOk(id, TaskStore.toTask(rec));
+}
+
+function handleTasksList(
+  id: unknown,
+  params: Record<string, unknown>,
+  store: TaskStore,
+): Record<string, unknown> {
+  const offset = Math.max(0, Number(params.pageToken ?? 0) || 0);
+  const pageSize = Number(params.pageSize ?? 50) || 50;
+  const includeArtifacts = Boolean(params.includeArtifacts);
+  const { records, nextOffset, total } = store.list({
+    contextId: String(params.contextId ?? ""),
+    state: String(params.status ?? params.state ?? ""),
+    pageSize,
+    offset,
+  });
+  return rpcOk(id, {
+    tasks: records.map((r) => TaskStore.toTask(r, includeArtifacts)),
+    nextPageToken: nextOffset ? String(nextOffset) : "",
+    pageSize: Math.max(1, Math.min(pageSize, 100)),
+    totalSize: total,
+  });
+}
+
+function handleTasksCancel(
+  id: unknown,
+  params: Record<string, unknown>,
+  store: TaskStore,
+  tracker: TurnTracker,
+): Record<string, unknown> {
+  const taskId = String(params.taskId ?? params.id ?? "").trim();
+  const rec = store.get(taskId);
+  if (!rec) {
+    return rpcErr(id, ERR_TASK_NOT_FOUND, `task not found: ${taskId}`);
+  }
+  if (TERMINAL_STATES.has(rec.state)) {
+    return rpcErr(
+      id,
+      ERR_TASK_NOT_CANCELABLE,
+      `task ${taskId} already ${rec.state}`,
+    );
+  }
+  store.complete(taskId, STATE_CANCELED, "");
+  tracker.reset(rec.contextId);
+  return rpcOk(id, TaskStore.toTask(store.get(taskId)!));
 }
 
 /**
@@ -252,10 +332,11 @@ export function createA2aInboundHandler(
 ) => boolean | Promise<boolean> {
   const env = options.env ?? process.env;
   const tracker = options.turnTracker ?? new TurnTracker();
+  const store = options.taskStore ?? new TaskStore();
   const name = options.name?.trim() || "XRK Harness";
   const description =
     options.description?.trim() ||
-    "XRK Host A2A inbound (Agent Card + message/send). Face session injection optional.";
+    "XRK Host A2A inbound (Agent Card + message/send · SendMessage + tasks get/list/cancel). Face session injection optional.";
   const authRequired = Boolean(
     env.XRK_A2A_BEARER_TOKEN?.trim() ||
       env.A2A_BEARER_TOKEN?.trim() ||
@@ -288,6 +369,7 @@ export function createA2aInboundHandler(
         ok: true,
         protocol: A2A_PROTOCOL_VERSION,
         authRequired,
+        methods: [...new Set(METHOD_ALIASES.values())],
       });
       return true;
     }
@@ -314,15 +396,13 @@ export function createA2aInboundHandler(
       }
       const id = body.id ?? null;
       const rpcMethod = String(body.method ?? "");
-      if (rpcMethod !== "message/send") {
-        sendJson(res, 200, {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: -32601,
-            message: `method not found: ${rpcMethod || "(missing)"}`,
-          },
-        });
+      const canonical = METHOD_ALIASES.get(rpcMethod);
+      if (!canonical) {
+        sendJson(
+          res,
+          200,
+          rpcErr(id, -32601, `method not found: ${rpcMethod || "(missing)"}`),
+        );
         return true;
       }
       const params =
@@ -330,22 +410,32 @@ export function createA2aInboundHandler(
           ? (body.params as Record<string, unknown>)
           : {};
       try {
-        const result = await handleMessageSend(
-          params,
-          auth.peer,
-          options,
-          tracker,
-        );
-        sendJson(res, 200, { jsonrpc: "2.0", id, result });
+        if (canonical === "message/send") {
+          const result = await handleMessageSend(
+            params,
+            auth.peer,
+            options,
+            tracker,
+            store,
+          );
+          sendJson(res, 200, rpcOk(id, result));
+        } else if (canonical === "tasks/get") {
+          sendJson(res, 200, handleTasksGet(id, params, store));
+        } else if (canonical === "tasks/list") {
+          sendJson(res, 200, handleTasksList(id, params, store));
+        } else {
+          sendJson(res, 200, handleTasksCancel(id, params, store, tracker));
+        }
       } catch (err) {
-        sendJson(res, 200, {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: -32000,
-            message: err instanceof Error ? err.message : String(err),
-          },
-        });
+        sendJson(
+          res,
+          200,
+          rpcErr(
+            id,
+            -32000,
+            err instanceof Error ? err.message : String(err),
+          ),
+        );
       }
       return true;
     }

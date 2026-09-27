@@ -16,6 +16,22 @@ export const ROLE_AGENT = "ROLE_AGENT";
 export const STATE_COMPLETED = "TASK_STATE_COMPLETED";
 export const STATE_INPUT_REQUIRED = "TASK_STATE_INPUT_REQUIRED";
 export const STATE_REJECTED = "TASK_STATE_REJECTED";
+export const STATE_SUBMITTED = "TASK_STATE_SUBMITTED";
+export const STATE_WORKING = "TASK_STATE_WORKING";
+export const STATE_FAILED = "TASK_STATE_FAILED";
+export const STATE_CANCELED = "TASK_STATE_CANCELED";
+
+/** Terminal A2A task states (Hermes `TERMINAL_STATES`). */
+export const TERMINAL_STATES: ReadonlySet<string> = new Set([
+  STATE_COMPLETED,
+  STATE_FAILED,
+  STATE_CANCELED,
+  STATE_REJECTED,
+]);
+
+/** A2A TaskNotFoundError / TaskNotCancelableError. */
+export const ERR_TASK_NOT_FOUND = -32001;
+export const ERR_TASK_NOT_CANCELABLE = -32002;
 
 const DEFAULT_MAX_PINGPONG = 5;
 const HARD_MAX_PINGPONG = 20;
@@ -62,6 +78,15 @@ export function extractText(node: unknown): string {
   if (typeof node !== "object") return String(node);
   const rec = node as Record<string, unknown>;
   if (typeof rec.text === "string") return rec.text;
+  // Hermes / A2A Part shapes: `{ kind|type: "data"|"file", data }`.
+  const kind = typeof rec.kind === "string" ? rec.kind : typeof rec.type === "string" ? rec.type : "";
+  if (kind === "data" || kind === "file") {
+    if (typeof rec.data === "string") return rec.data;
+    if (rec.data !== null && typeof rec.data === "object") {
+      const data = rec.data as Record<string, unknown>;
+      if (typeof data.text === "string") return data.text;
+    }
+  }
   if (Array.isArray(rec.parts)) {
     return rec.parts
       .map((p) => extractText(p))

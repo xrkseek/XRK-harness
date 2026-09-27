@@ -113,6 +113,9 @@ declare module '@xrkseek/xrk-typert-protocol' {
       update: (
         entryId: PluginEntryId,
       ) => Promise<RemoteResult<{ entryId: PluginEntryId; updated: true }>>
+      install: (
+        spec: string,
+      ) => Promise<RemoteResult<{ spec: string; installed: true }>>
       open: (
         entryId: PluginEntryId,
       ) => Promise<RemoteResult<{ entryId: PluginEntryId; opened: true }>>

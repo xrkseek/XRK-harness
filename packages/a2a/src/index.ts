@@ -5,6 +5,13 @@ export {
   STATE_COMPLETED,
   STATE_INPUT_REQUIRED,
   STATE_REJECTED,
+  STATE_SUBMITTED,
+  STATE_WORKING,
+  STATE_FAILED,
+  STATE_CANCELED,
+  TERMINAL_STATES,
+  ERR_TASK_NOT_FOUND,
+  ERR_TASK_NOT_CANCELABLE,
   TurnTracker,
   a2aConversationsDir,
   extractText,
@@ -18,6 +25,12 @@ export {
   unwrapSendMessageResponse,
   type PersistedA2aMessage,
 } from "./protocol.js";
+
+export {
+  TaskStore,
+  buildTask,
+  type A2aTaskRecord,
+} from "./task-store.js";
 
 export {
   loadA2aPeers,

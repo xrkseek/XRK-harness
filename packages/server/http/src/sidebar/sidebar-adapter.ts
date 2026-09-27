@@ -182,10 +182,18 @@ async function listTree(
     let isDir = dent.isDirectory();
     let isSymlink = dent.isSymbolicLink();
     let broken = false;
+    // Size / mtime ride the same statSync the sort already needs — the first-party
+    // workbench shows them, and extra fields stay backward compatible for DSH clients.
+    let size: number | undefined;
+    let mtimeMs: number | undefined;
     try {
       const st = statSync(full);
       isDir = st.isDirectory();
       isSymlink = st.isSymbolicLink();
+      if (st.isFile()) {
+        size = st.size;
+        mtimeMs = st.mtimeMs;
+      }
     } catch {
       broken = true;
     }
@@ -196,6 +204,8 @@ async function listTree(
       ...(isSymlink ? { isSymlink: true } : {}),
       ...(dent.name.startsWith(".") ? { hidden: true } : {}),
       ...(broken ? { broken: true } : {}),
+      ...(size !== undefined ? { size } : {}),
+      ...(mtimeMs !== undefined ? { mtimeMs } : {}),
     });
   }
   entries.sort((a, b) => {

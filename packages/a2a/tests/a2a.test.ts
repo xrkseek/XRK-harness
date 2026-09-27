@@ -239,6 +239,167 @@ describe("a2a inbound Agent Card + message/send", () => {
     const reply = rpc.result.task.status.message.parts.map((p) => p.text).join("");
     expect(reply).toContain("face-reply:inject me");
   });
+
+  it("accepts SendMessage alias and serves tasks/get|list|cancel", async () => {
+    const root = tempRoot();
+    const handler = createA2aInboundHandler({
+      url: "http://127.0.0.1:9/a2a",
+      conversationsRoot: root,
+      env: {},
+    });
+
+    async function rpc(
+      method: string,
+      params: Record<string, unknown>,
+      id: number,
+    ): Promise<Record<string, unknown>> {
+      const sendReq = {
+        method: "POST",
+        url: "/a2a",
+        headers: {},
+        socket: { remoteAddress: "127.0.0.1" },
+        on(ev: string, cb: (x?: Buffer) => void) {
+          if (ev === "data") {
+            cb(Buffer.from(JSON.stringify({ jsonrpc: "2.0", id, method, params })));
+          }
+          if (ev === "end") cb();
+          return sendReq;
+        },
+      } as unknown as import("node:http").IncomingMessage;
+      let body = "";
+      const sendRes = {
+        writeHead() {},
+        end(raw: string) {
+          body = raw;
+        },
+      } as unknown as import("node:http").ServerResponse;
+      expect(await handler(sendReq, sendRes)).toBe(true);
+      return JSON.parse(body) as Record<string, unknown>;
+    }
+
+    const sent = await rpc(
+      "SendMessage",
+      {
+        message: {
+          role: "ROLE_USER",
+          parts: [{ text: "via pascal" }],
+          contextId: "ctx_tasks",
+        },
+      },
+      10,
+    );
+    const task = (sent.result as { task: { id: string; status: { state: string } } }).task;
+    expect(task.status.state).toBe("TASK_STATE_COMPLETED");
+    expect(task.id).toMatch(/^task_/);
+
+    const got = await rpc("GetTask", { taskId: task.id }, 11);
+    expect((got.result as { id: string }).id).toBe(task.id);
+
+    const listed = await rpc("tasks/list", { contextId: "ctx_tasks" }, 12);
+    const list = listed.result as { tasks: { id: string }[]; totalSize: number };
+    expect(list.totalSize).toBeGreaterThanOrEqual(1);
+    expect(list.tasks.some((t) => t.id === task.id)).toBe(true);
+
+    // Cancel requires a non-terminal task — create one then cancel mid-flight via store is hard;
+    // send a second message and cancel an already-completed task should 32002.
+    const cancelDone = await rpc("CancelTask", { taskId: task.id }, 13);
+    expect((cancelDone.error as { code: number }).code).toBe(-32002);
+
+    // Working cancel: inject a store with an open task via a custom handler.
+    const { TaskStore } = await import("../src/task-store.js");
+    const store = new TaskStore();
+    store.create("task_open", "ctx_open", "peer");
+    const cancelHandler = createA2aInboundHandler({
+      url: "http://127.0.0.1:9/a2a",
+      conversationsRoot: root,
+      env: {},
+      taskStore: store,
+    });
+    const cancelReq = {
+      method: "POST",
+      url: "/a2a",
+      headers: {},
+      socket: { remoteAddress: "127.0.0.1" },
+      on(ev: string, cb: (x?: Buffer) => void) {
+        if (ev === "data") {
+          cb(Buffer.from(JSON.stringify({
+            jsonrpc: "2.0",
+            id: 14,
+            method: "tasks/cancel",
+            params: { taskId: "task_open" },
+          })));
+        }
+        if (ev === "end") cb();
+        return cancelReq;
+      },
+    } as unknown as import("node:http").IncomingMessage;
+    let cancelBody = "";
+    const cancelRes = {
+      writeHead() {},
+      end(raw: string) {
+        cancelBody = raw;
+      },
+    } as unknown as import("node:http").ServerResponse;
+    expect(await cancelHandler(cancelReq, cancelRes)).toBe(true);
+    const canceled = JSON.parse(cancelBody) as {
+      result: { status: { state: string } };
+    };
+    expect(canceled.result.status.state).toBe("TASK_STATE_CANCELED");
+  });
+});
+
+describe("a2a outbound SendMessage → message/send fallback", () => {
+  it("retries with message/send when peer rejects PascalCase", async () => {
+    const root = tempRoot();
+    let calls = 0;
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      const url = String(_url);
+      if (url.includes("agent-card")) {
+        return new Response(JSON.stringify({ name: "peer", url: "http://peer.test/a2a" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      calls += 1;
+      const body = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
+      if (body.method === "SendMessage") {
+        return new Response(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: "1",
+            error: { code: -32601, message: "method not found: SendMessage" },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "1",
+          result: {
+            task: {
+              id: "task",
+              contextId: "ctx_fb",
+              status: {
+                state: "TASK_STATE_COMPLETED",
+                message: { role: "ROLE_AGENT", parts: [{ text: "slash-ok" }] },
+              },
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    });
+    const client = createA2aClient({
+      conversationsRoot: root,
+      peers: { bot: { url: "http://peer.test" } },
+      fetch: fetchImpl as unknown as typeof fetch,
+    });
+    const result = await client.call("bot", "hi", "ctx_fb");
+    expect(result.ok).toBe(true);
+    expect(result.content).toMatch(/slash-ok/);
+    expect(calls).toBe(2);
+  });
 });
 
 describe("a2a inbound framing", () => {

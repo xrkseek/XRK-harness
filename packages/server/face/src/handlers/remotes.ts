@@ -180,6 +180,40 @@ export const pluginInventoryUpdate: FaceHandler = async (runtime, _rpcId, payloa
   return { ok: true, value: { entryId, updated: true as const } };
 };
 
+/**
+ * Install a plugin by CLI-compatible spec (registry name, `name@version`,
+ * `github:…`, path). Same Host path as Settings update / `xrkh plugin add`.
+ */
+export const pluginInventoryInstall: FaceHandler = async (runtime, _rpcId, payload) => {
+  const args = remoteArgs(payload);
+  const spec = String(args.spec ?? "").trim();
+  if (!spec) {
+    return { ok: false, error: { code: "invalid-payload", message: "spec required" } };
+  }
+  if (!runtime.updateUserPlugin) {
+    return {
+      ok: false,
+      error: {
+        code: "unavailable",
+        message: `Use: xrkh plugin add ${spec}`,
+      },
+    };
+  }
+  const result = await runtime.updateUserPlugin(spec);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: {
+        code: "failed",
+        message: result.error ?? `plugin install failed for ${spec}`,
+      },
+    };
+  }
+  reconcileManagedClientBoot(runtime);
+  await runtime.syncManagedProcessPlugins?.();
+  return { ok: true, value: { spec, installed: true as const } };
+};
+
 /** Open the on-disk install folder for a managed plugin (Settings “edit”). */
 export const pluginInventoryOpen: FaceHandler = async (runtime, _rpcId, payload) => {
   const args = remoteArgs(payload);

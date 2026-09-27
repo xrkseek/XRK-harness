@@ -25,6 +25,8 @@ export interface WorkspacePersistDoc {
   readonly sessionOrder?: Readonly<Record<string, readonly string[]>>;
   /** Registry-global archive set (hidden from grouping surfaces). */
   readonly archivedSessionIds?: readonly string[];
+  /** Registry-global pin order (newest first; mutually exclusive with archive). */
+  readonly pinnedSessionIds?: readonly string[];
 }
 
 export function workspacesJsonPath(runtime: FaceRuntime): string {
@@ -85,6 +87,9 @@ export function loadWorkspaceDoc(runtime: FaceRuntime): WorkspacePersistDoc | nu
     const archivedSessionIds = Array.isArray(doc.archivedSessionIds)
       ? doc.archivedSessionIds.filter((id): id is string => typeof id === "string" && id.length > 0)
       : [];
+    const pinnedSessionIds = Array.isArray(doc.pinnedSessionIds)
+      ? doc.pinnedSessionIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+      : [];
     return {
       order,
       entries,
@@ -92,6 +97,7 @@ export function loadWorkspaceDoc(runtime: FaceRuntime): WorkspacePersistDoc | nu
       ...(Object.keys(membership).length ? { membership } : {}),
       ...(Object.keys(sessionOrder).length ? { sessionOrder } : {}),
       ...(archivedSessionIds.length ? { archivedSessionIds } : {}),
+      ...(pinnedSessionIds.length ? { pinnedSessionIds } : {}),
     };
   } catch {
     return null;

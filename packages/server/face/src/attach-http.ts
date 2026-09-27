@@ -1,5 +1,9 @@
 /**
- * Face HTTP unary + mux/host WebSocket 挂载。
+ * Face HTTP unary + mux/host WebSocket / SSE 挂载。
+ *
+ * Downlinks: `xrkh web` uses WebSocket upgrades; Desktop `xrk-app://` cannot
+ * upgrade, so GET on the same paths serves SSE (same frames) over Host fetch/pipe
+ * (ADR-0008).
  */
 
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
@@ -46,8 +50,133 @@ export interface AttachFaceOptions {
 
 export { FACE_WS_PATHS, faceMethodFromPath, isFaceWsPath };
 
+type FaceDownlinkFrame = ReturnType<typeof serverRequestFrame>;
+
+/** Initial mux snapshot (sessions · queue · projections · pending UI). */
+function writeMuxBaseline(
+  runtime: FaceRuntime,
+  send: (frame: FaceDownlinkFrame) => void,
+): void {
+  for (const sessionId of runtime.store.list()) {
+    send(
+      serverRequestFrame(newRpcId(), {
+        type: "session/subscribed",
+        sessionId,
+        lastSeq: runtime.seq.last(sessionId),
+      }),
+    );
+    // Cold sessions: skip event/projection hydrate (reconnect OOM path).
+    const loaded = runtime.store.isLoaded?.(sessionId) ?? true;
+    if (loaded) {
+      const pendingAdmits = listPendingAdmits(
+        readSessionEvents(runtime.store, sessionId),
+        sessionId,
+      );
+      if (pendingAdmits.length > 0) {
+        send(
+          serverRequestFrame(newRpcId(), {
+            type: "session/queue",
+            sessionId,
+            items: toQueueItems(pendingAdmits, runtime.admitRpcMap),
+          }),
+        );
+      }
+      const snap = runtime.projections.snapshot(sessionId);
+      for (const [key, value] of Object.entries(snap.values)) {
+        send(
+          serverRequestFrame(newRpcId(), {
+            type: "session/projection",
+            sessionId,
+            key,
+            value,
+            seq: snap.asOfSeq < 0 ? 0 : snap.asOfSeq,
+          }),
+        );
+      }
+    }
+    for (const item of runtime.approvals.listPending(sessionId)) {
+      send(serverRequestFrame(item.rpcId, approvalRequestedFrame(item)));
+    }
+    for (const item of runtime.questions.listPending(sessionId)) {
+      send(serverRequestFrame(item.rpcId, questionRequestedFrame(item)));
+    }
+    const jobViews = runtime.jobViewsFor(sessionId);
+    if (jobViews && jobViews.length > 0) {
+      send(
+        serverRequestFrame(newRpcId(), {
+          type: "session/jobs",
+          sessionId,
+          jobs: jobViews,
+        }),
+      );
+    }
+  }
+}
+
 /**
- * 若路径是 Face unary 或 `/api/respond`，接管响应并返回 true。
+ * SSE downlink for Desktop pipe / non-upgrade GET on Face event paths.
+ * Frame body matches the WebSocket handlers.
+ */
+function tryHandleFaceEventSse(
+  req: IncomingMessage,
+  res: ServerResponse,
+  runtime: FaceRuntime,
+  options: AttachFaceOptions,
+): boolean {
+  const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  if (!isFaceWsPath(url.pathname)) return false;
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    sendJson(res, 405, { error: "method not allowed" });
+    return true;
+  }
+  if (!options.checkAuth(req)) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return true;
+  }
+
+  const headers = {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+  } as const;
+  if (req.method === "HEAD") {
+    res.writeHead(200, { ...headers });
+    res.end();
+    return true;
+  }
+
+  res.writeHead(200, { ...headers });
+  // Comment so idle host streams still open the carrier (apiproxy sseResponse).
+  res.write(": connected\n\n");
+
+  const send = (frame: FaceDownlinkFrame): void => {
+    if (res.writableEnded || res.destroyed) return;
+    res.write(`data: ${JSON.stringify(frame)}\n\n`);
+  };
+
+  const isMux = url.pathname.endsWith("mux");
+  if (isMux) writeMuxBaseline(runtime, send);
+  const off = isMux
+    ? runtime.bus.subscribeMux((rpcId, frame) => {
+        send(serverRequestFrame(rpcId, frame));
+      })
+    : runtime.bus.subscribeHost((rpcId, frame) => {
+        send(serverRequestFrame(rpcId, frame));
+      });
+
+  let cleaned = false;
+  const cleanup = (): void => {
+    if (cleaned) return;
+    cleaned = true;
+    off();
+  };
+  req.on("close", cleanup);
+  res.on("close", cleanup);
+  return true;
+}
+
+/**
+ * 若路径是 Face unary、事件 SSE 或 `/api/respond`，接管响应并返回 true。
  */
 export function tryHandleFaceHttp(
   req: IncomingMessage,
@@ -55,6 +184,8 @@ export function tryHandleFaceHttp(
   runtime: FaceRuntime,
   options: AttachFaceOptions,
 ): boolean {
+  if (tryHandleFaceEventSse(req, res, runtime, options)) return true;
+
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
   if (isFaceRespondPath(url.pathname)) {
     return handleFaceRespond(req, res, runtime, options);
@@ -222,65 +353,9 @@ export function attachFaceUpgrades(
 
   muxWss.on("connection", (ws: WebSocket) => {
     const queue = createWsSendQueue(ws);
-    for (const sessionId of runtime.store.list()) {
-      queue.sendJson(
-        serverRequestFrame(newRpcId(), {
-          type: "session/subscribed",
-          sessionId,
-          lastSeq: runtime.seq.last(sessionId),
-        }),
-      );
-      // Cold sessions: skip event/projection hydrate (reconnect OOM path).
-      // Pending approvals / questions / jobs still ship.
-      const loaded = runtime.store.isLoaded?.(sessionId) ?? true;
-      if (loaded) {
-        const pendingAdmits = listPendingAdmits(
-          readSessionEvents(runtime.store, sessionId),
-          sessionId,
-        );
-        if (pendingAdmits.length > 0) {
-          queue.sendJson(
-            serverRequestFrame(newRpcId(), {
-              type: "session/queue",
-              sessionId,
-              items: toQueueItems(pendingAdmits, runtime.admitRpcMap),
-            }),
-          );
-        }
-        const snap = runtime.projections.snapshot(sessionId);
-        for (const [key, value] of Object.entries(snap.values)) {
-          queue.sendJson(
-            serverRequestFrame(newRpcId(), {
-              type: "session/projection",
-              sessionId,
-              key,
-              value,
-              seq: snap.asOfSeq < 0 ? 0 : snap.asOfSeq,
-            }),
-          );
-        }
-      }
-      for (const item of runtime.approvals.listPending(sessionId)) {
-        queue.sendJson(
-          serverRequestFrame(item.rpcId, approvalRequestedFrame(item)),
-        );
-      }
-      for (const item of runtime.questions.listPending(sessionId)) {
-        queue.sendJson(
-          serverRequestFrame(item.rpcId, questionRequestedFrame(item)),
-        );
-      }
-      const jobViews = runtime.jobViewsFor(sessionId);
-      if (jobViews && jobViews.length > 0) {
-        queue.sendJson(
-          serverRequestFrame(newRpcId(), {
-            type: "session/jobs",
-            sessionId,
-            jobs: jobViews,
-          }),
-        );
-      }
-    }
+    writeMuxBaseline(runtime, (frame) => {
+      queue.sendJson(frame);
+    });
     const off = runtime.bus.subscribeMux((rpcId, frame) => {
       queue.sendJson(serverRequestFrame(rpcId, frame));
     });

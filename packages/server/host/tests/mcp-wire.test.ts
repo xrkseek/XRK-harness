@@ -357,4 +357,39 @@ describe("host mcp-wire", () => {
     expect(result.parked).toEqual(["playwright"]);
     expect(plugins).toEqual([]);
   });
+
+  it("reconcile reports serial connect progress", async () => {
+    const plugins: RegisteredPlugin[] = [];
+    const phases: string[] = [];
+    const result = await reconcileMcpToolPlugins({
+      desired: [
+        {
+          serverName: "ok",
+          command: process.execPath,
+          args: ["-e", "process.exit(0)"],
+        },
+        { serverName: "nope", command: "xrk-mcp-missing-binary-xyz" },
+      ],
+      list: () => plugins,
+      register: (plugin) => {
+        plugins.push(plugin);
+      },
+      unregister: async () => {},
+      allowConnect: true,
+      onConnectProgress: ({ phase, serverName }) => {
+        phases.push(`${phase}:${serverName}`);
+      },
+    });
+    expect(phases).toEqual([
+      "connecting:ok",
+      "failed:ok",
+      "connecting:nope",
+      "failed:nope",
+    ]);
+    expect(result.added).toEqual([]);
+    expect(result.failures.map((f) => f.serverName).sort()).toEqual([
+      "nope",
+      "ok",
+    ]);
+  });
 });

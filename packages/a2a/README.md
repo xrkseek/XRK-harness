@@ -26,10 +26,6 @@ set XRK_A2A_MAX_PINGPONG_TURNS=5
 
 或写 `{XRK_HOME}/a2a_agents.json`。
 
-## 未做（本切片）
-
-SSE `message/stream`、tasks CRUD / subscribe、push notifications、orchestrate — 见 Hermes DESIGN。
-
 ## 入站（opt-in）
 
 `XRK_A2A_INBOUND=1` 时 Host 挂载：
@@ -37,7 +33,13 @@ SSE `message/stream`、tasks CRUD / subscribe、push notifications、orchestrate
 | 路径 | 行为 |
 |------|------|
 | `GET /.well-known/agent-card.json`（兼 `agent.json`） | A2A v1.0 Agent Card |
-| `POST /a2a` | JSON-RPC `message/send`：持久化 + **Face 会话注入**（`wrapA2aInboundText` → `session.prompt`；等助手正文；超时见 `XRK_A2A_INBOUND_TIMEOUT_MS`） |
-| `GET /a2a/health` | 健康检查 |
+| `POST /a2a` | JSON-RPC：`message/send` **与** `SendMessage`（持久化 + TaskStore + **Face 会话注入**）；`tasks/get`·`GetTask` / `tasks/list`·`ListTasks` / `tasks/cancel`·`CancelTask` |
+| `GET /a2a/health` | 健康检查（含已支持 methods） |
+
+出站 `a2a_call` 默认发 `SendMessage`；若对端回 method-not-found，再试 `message/send`。
 
 会话映射：默认 `a2a-<contextId>`；`XRK_A2A_INBOUND_SESSION` 可钉死单一会话。无 bearer / peer token 时仅环回语义可用（仍建议本机）；设 `XRK_A2A_BEARER_TOKEN` 或 `XRK_A2A_PEER_TOKENS` 启用鉴权。`XRK_A2A_PUBLIC_URL` 覆盖 Card 上的 url。
+
+## 未做（本切片之后）
+
+SSE `message/stream`、tasks/subscribe、push notifications、orchestrate、trusted-peers / rate-limit — 见 Hermes DESIGN。

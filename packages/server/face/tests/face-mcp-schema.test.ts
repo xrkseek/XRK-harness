@@ -26,7 +26,21 @@ describe("FACE_MCP_SCHEMA", () => {
           },
         ],
         parked: [],
+        connecting: [],
         note: "Save remounts MCP",
+      }),
+    ).not.toThrow();
+  });
+
+  it("accepts connecting overlay names", () => {
+    expect(() =>
+      schema({
+        servers: [{ serverName: "a", command: "npx" }],
+        allowConnect: true,
+        connected: [],
+        parked: [],
+        connecting: ["a"],
+        note: "",
       }),
     ).not.toThrow();
   });

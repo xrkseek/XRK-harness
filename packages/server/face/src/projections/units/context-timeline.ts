@@ -481,6 +481,7 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
 
       if (event.type === "tool/result") {
         const tokens = estimateMessageContent(event.result.content);
+        const fullText = flattenText(event.result.content);
         const text = previewText(event.result.content);
         const callId = event.result.toolCallId;
         const node: ContextTimelineNode = {
@@ -496,7 +497,8 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
         const withoutPrior = next.nodes.filter((n) => n.callId !== callId);
         let events = next.events;
         const prevTok = event.result.meta?.[TOOL_RESULT_PRUNE_META_PREV_TOKENS];
-        const spillPath = spillPathFromPreview(text);
+        // Parse locator from the full body — PREVIEW_MAX (120) can cut the path.
+        const spillPath = spillPathFromPreview(fullText);
         const hasPrev =
           typeof prevTok === "number" && Number.isFinite(prevTok);
         if (hasPrev || spillPath) {

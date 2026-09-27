@@ -555,6 +555,14 @@ export async function reconcileMcpToolPlugins(options: {
     serverName: string,
     status: McpConnectionStatus,
   ) => void | Promise<void>;
+  /**
+   * Fired around each serial connect attempt so Settings can show progress
+   * (connecting → connected/failed) without waiting for the full reconcile.
+   */
+  readonly onConnectProgress?: (event: {
+    readonly phase: "connecting" | "connected" | "failed";
+    readonly serverName: string;
+  }) => void | Promise<void>;
   readonly imageAdmission?: import("@xrkseek/mcp").McpImageAdmission;
 }): Promise<ReconcileMcpResult> {
   const allow = Boolean(options.allowConnect);
@@ -623,6 +631,10 @@ export async function reconcileMcpToolPlugins(options: {
       parked.push(spec.serverName);
       continue;
     }
+    await options.onConnectProgress?.({
+      phase: "connecting",
+      serverName: spec.serverName,
+    });
     try {
       const plugin = await connectOneMcpPlugin(
         spec,
@@ -633,10 +645,18 @@ export async function reconcileMcpToolPlugins(options: {
       );
       options.register(plugin);
       added.push(plugin.id);
+      await options.onConnectProgress?.({
+        phase: "connected",
+        serverName: spec.serverName,
+      });
     } catch (err) {
       failures.push({
         serverName: spec.serverName,
         message: err instanceof Error ? err.message : String(err),
+      });
+      await options.onConnectProgress?.({
+        phase: "failed",
+        serverName: spec.serverName,
       });
     }
   }

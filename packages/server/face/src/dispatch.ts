@@ -4,6 +4,8 @@ import type { FaceRpcResponse } from "./types.js";
 import {
   workspaceArchiveSessionFace,
   workspaceUnarchiveSessionFace,
+  workspacePinSessionFace,
+  workspaceUnpinSessionFace,
   workspaceCreateFace,
   workspaceDeleteFace,
   workspaceDescribe,
@@ -100,6 +102,7 @@ import {
   pluginInventoryRemove,
   pluginInventorySetEnabled,
   pluginInventoryUpdate,
+  pluginInventoryInstall,
   processChannelsList,
   sessionFeedbackRecordHandler,
 } from "./handlers/remotes.js";
@@ -174,6 +177,8 @@ const HANDLERS: Record<string, FaceHandler> = {
   "workspace.rename": bindPayload(workspaceRenameFace),
   "workspace.archiveSession": bindPayload(workspaceArchiveSessionFace),
   "workspace.unarchiveSession": bindPayload(workspaceUnarchiveSessionFace),
+  "workspace.pinSession": bindPayload(workspacePinSessionFace),
+  "workspace.unpinSession": bindPayload(workspaceUnpinSessionFace),
   "workspace.delete": bindPayload(workspaceDeleteFace),
   "workspace.insertBefore": bindPayload(workspaceInsertBeforeFace),
   "workspace.insertSessionBefore": bindPayload(workspaceInsertSessionBeforeFace),
@@ -214,6 +219,7 @@ const HANDLERS: Record<string, FaceHandler> = {
   "pluginInventory/setEnabled": pluginInventorySetEnabled,
   "pluginInventory/remove": pluginInventoryRemove,
   "pluginInventory/update": pluginInventoryUpdate,
+  "pluginInventory/install": pluginInventoryInstall,
   "pluginInventory/open": pluginInventoryOpen,
   "processChannels/list": processChannelsList,
   "messageFeedback/list": messageFeedbackList,

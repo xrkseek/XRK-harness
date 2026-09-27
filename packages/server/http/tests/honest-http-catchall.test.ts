@@ -8,6 +8,8 @@ import { createServer } from "node:http";
 describe("honest-http-catchall", () => {
   it("skips product and harness paths", () => {
     expect(shouldHonestHttpCatchall("/api/harness/connector/jobs")).toBe(false);
+    expect(shouldHonestHttpCatchall("/api/cron/jobs")).toBe(false);
+    expect(shouldHonestHttpCatchall("/api/cron/jobs/x/logs")).toBe(false);
     expect(shouldHonestHttpCatchall("/xrk/plugins/inventory")).toBe(false);
     expect(shouldHonestHttpCatchall("/plugins/foo/client.js")).toBe(false);
     expect(shouldHonestHttpCatchall("/boot.json")).toBe(false);

@@ -177,6 +177,10 @@ export type HostFrame =
       readonly archivedSessionIds: readonly string[];
     }
   | {
+      readonly type: "host/pinned-sessions-changed";
+      readonly pinnedSessionIds: readonly string[];
+    }
+  | {
       /** DSH `host/remote-event` — allowlisted Host events for `ctx.remote.$dispatch`. */
       readonly type: "host/remote-event";
       readonly event: string;

@@ -1,11 +1,15 @@
 {
     "version":  "0.0.0-stub",
     "name":  "@xrkseek/xrk-system-prompt",
-    "description":  "XRK stub ¡ª replace with real package or remap",
+    "description":  "XRK stub - system-prompt registry service (ctx.systemPrompt)",
     "exports":  {
                     ".":  "./index.js",
+                    "./src/*":  "./src/*",
                     "./package.json":  "./package.json"
                 },
     "type":  "module",
-    "private":  true
+    "private":  true,
+    "devDependencies":  {
+                             "@xrkseek/cordis":  "workspace:^"
+                         }
 }
