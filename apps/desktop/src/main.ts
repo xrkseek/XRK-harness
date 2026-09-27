@@ -62,7 +62,10 @@ const DESKTOP_APP_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const PRODUCT_WINDOW_TITLE = "XRK Harness";
+/** Product window / dialog title — owned by `locale.ts` dictionaries. */
+function desktopWindowTitle(): string {
+  return resolveDesktopLocale(app.getLocale()).messages.windowTitle;
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -75,14 +78,14 @@ function createMainBrowserWindow(): BrowserWindow {
   const icon = resolveDesktopWindowIconPath({ platform: process.platform });
   const window = new BrowserWindow({
     ...DESKTOP_WINDOW_DEFAULTS,
-    title: PRODUCT_WINDOW_TITLE,
+    title: desktopWindowTitle(),
     ...(icon !== undefined ? { icon } : {}),
     webPreferences: {
       ...DESKTOP_WEB_PREFERENCES,
       preload: PRELOAD_APP,
     },
   });
-  window.setTitle(PRODUCT_WINDOW_TITLE);
+  window.setTitle(desktopWindowTitle());
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   attachDesktopNavigationGuard(window.webContents, DESKTOP_PROTOCOL_SCHEME);
   return window;
@@ -132,7 +135,7 @@ async function startDesktopHostCarrier(
   } catch (error) {
     console.error(error);
     dialog.showErrorBox(
-      PRODUCT_WINDOW_TITLE,
+      desktopWindowTitle(),
       error instanceof Error
         ? `Desktop Host failed to start:\n${error.message}`
         : String(error),
@@ -159,7 +162,7 @@ const ownsDesktopInstance = startDesktopMain(app, {
     } catch (error) {
       console.error(error);
       dialog.showErrorBox(
-        PRODUCT_WINDOW_TITLE,
+        desktopWindowTitle(),
         error instanceof Error ? error.message : String(error),
       );
       app.quit();

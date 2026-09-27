@@ -3,6 +3,7 @@
 /** English is the key-set source of truth; non-zh locales fall back here. */
 export const en = {
   application: "Application",
+  windowTitle: "XRK Harness",
   startupFailed: "XRK Harness Desktop could not start",
   checkUpdatesMenu: "Check for Updates…",
   updateCheckFailedTitle: "Update Check Failed",
@@ -23,6 +24,7 @@ export type DesktopMessages = { readonly [Key in keyof typeof en]: string };
 
 export const zh = {
   application: "应用",
+  windowTitle: "XRK Harness",
   startupFailed: "XRK Harness 桌面端无法启动",
   checkUpdatesMenu: "检查更新…",
   updateCheckFailedTitle: "更新检查失败",
