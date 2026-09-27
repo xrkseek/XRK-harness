@@ -1,9 +1,13 @@
 /** Sidebar shell style contracts shared with its slot-owned controls. */
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const css = readFileSync(fileURLToPath(new URL('../src/client/SidebarRoot.module.css', import.meta.url)), 'utf8')
+// import.meta.dirname: under this lane `import.meta.url` is not always file:.
+const css = readFileSync(
+  path.join(import.meta.dirname, '../src/client/SidebarRoot.module.css'),
+  'utf8',
+)
 
 /**
  * Declarations of one exact selector, keyed by property.

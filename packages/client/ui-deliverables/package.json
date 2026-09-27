@@ -59,6 +59,8 @@
     "@xrkseek/cordis": "workspace:^"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "~18.3.1",
     "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
@@ -66,11 +68,11 @@
     "@xrkseek/client-ui-conversation": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/cordis": "workspace:^",
     "@xrkseek/xrk-api-remotes": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/xrk-system-prompt": "workspace:^",
-    "@types/react": "~18.3.1",
-    "@xrkseek/cordis": "workspace:^"
+    "react-dom": "^18.2.0"
   },
   "files": [
     "lib/index.js",

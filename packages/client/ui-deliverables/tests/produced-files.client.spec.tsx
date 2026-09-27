@@ -416,7 +416,14 @@ describe('ProducedFiles row', () => {
     expect(within(row).getByText('+ 6 个文件')).toBeTruthy()
 
     // A missing/unsupported computed gap falls back to zero rather than NaN.
-    vi.stubGlobal('getComputedStyle', () => ({ columnGap: '', gap: '' } as CSSStyleDeclaration))
+    // A computed style the row reads for its gap. It must still answer
+    // `getPropertyValue`, which `dom-accessibility-api` calls while resolving
+    // accessible names for the role queries below.
+    vi.stubGlobal('getComputedStyle', () => ({
+      columnGap: '',
+      gap: '',
+      getPropertyValue: () => '',
+    }) as unknown as CSSStyleDeclaration)
     available = 165
     act(() => { resize?.([], {} as ResizeObserver) })
     expect(within(row).getAllByRole('button', { name: /预览/ })).toHaveLength(2)

@@ -5,10 +5,14 @@
  * sheet states which half.
  */
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const css = readFileSync(fileURLToPath(new URL('../src/client/SidebarRoot.module.css', import.meta.url)), 'utf8')
+// import.meta.dirname: under this lane `import.meta.url` is not always file:.
+const css = readFileSync(
+  path.join(import.meta.dirname, '../src/client/SidebarRoot.module.css'),
+  'utf8',
+)
 /** Declarations only: the sheet's prose names the properties it explains. */
 const declarationText = css.replace(/\/\*[\s\S]*?\*\//g, ' ')
 

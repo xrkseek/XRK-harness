@@ -104,6 +104,10 @@
   outline: none;
   box-shadow: inset 0 0 0 2px var(--dsw-alias-border-l3);
 }
+.row[data-selected='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
 .path {
   min-width: 0;
   overflow: hidden;
@@ -121,7 +125,89 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 0 12px 12px;
+  padding: 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+.reviewBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.selector {
+  min-width: 0;
+  flex: 1;
+}
+.selectorButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--changes-fill);
+  color: inherit;
+  cursor: pointer;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+}
+.selectorButton:hover,
+.selectorButton:focus-visible {
+  background: var(--changes-hover);
+}
+.selectorButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-brand-primary);
+}
+.selectorPath {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.selectorButton svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  opacity: 0.7;
+}
+.reviewCounts {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+.menuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+.menuPath {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-family-code);
+}
+.menuCounts {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
 }
 .reviewStatus {
   font-size: 12px;

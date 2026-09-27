@@ -26,6 +26,7 @@ export const zh = {
   'changes.loading': '加载对比…',
   'changes.unavailable': '无法加载此文件的对比',
   'changes.previewFile': '预览 {name}',
+  'changes.selectFile': '选择要审阅的文件',
 }
 
 export const en: Record<DeliverablesKey, string> = {
@@ -52,6 +53,7 @@ export const en: Record<DeliverablesKey, string> = {
   'changes.loading': 'Loading comparison…',
   'changes.unavailable': 'Comparison unavailable for this file',
   'changes.previewFile': 'Preview {name}',
+  'changes.selectFile': 'Select a file to review',
 }
 
 export type DeliverablesKey = keyof typeof zh
