@@ -86,6 +86,57 @@ describe("createComputerUseTools", () => {
     expect(result.isError).toBeFalsy();
     expect(String(result.content)).toContain("elements:");
   });
+
+  it("mode=vision returns multimodal content when saveScreenshot is wired", async () => {
+    const png = Uint8Array.from(
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    );
+    const svc = createMemoryComputerUseProvider({ screenshotPng: png });
+    const [tool] = createComputerUseTools({
+      service: svc,
+      saveScreenshot: async (bytes) => ({
+        attachmentId: "sha256:cu-shot",
+        mediaType: "image/png",
+        bytes: bytes.byteLength,
+        width: 1,
+        height: 1,
+        name: "computer-use-snapshot.png",
+      }),
+    });
+    const result = await tool!.execute({ action: "capture", mode: "vision" });
+    expect(result.isError).toBeFalsy();
+    const blocks = result.content as {
+      type: string;
+      text?: string;
+      attachment?: { attachmentId: string };
+    }[];
+    expect(Array.isArray(blocks)).toBe(true);
+    expect(blocks.some((b) => b.type === "text" && b.text?.includes("mode: vision"))).toBe(
+      true,
+    );
+    expect(
+      blocks.some(
+        (b) => b.type === "image" && b.attachment?.attachmentId === "sha256:cu-shot",
+      ),
+    ).toBe(true);
+  });
+
+  it("mode=vision fails honestly without attachment store", async () => {
+    const png = Uint8Array.from(
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    );
+    const svc = createMemoryComputerUseProvider({ screenshotPng: png });
+    const [tool] = createComputerUseTools({ service: svc });
+    const result = await tool!.execute({ action: "capture", mode: "vision" });
+    expect(result.isError).toBe(true);
+    expect(String(result.content)).toMatch(/attachment store/i);
+  });
 });
 
 describe("computer-use provider registry", () => {
@@ -270,6 +321,19 @@ describe("captureScript", () => {
     const script = captureScript({ app: "it's $env:X" });
     expect(script).toContain("$appFilter = 'it''s $env:X'");
   });
+
+  it("embeds screenshot + SOM annotation flags for mode=vision|som", () => {
+    const ax = captureScript({ maxElements: 10 });
+    expect(ax).toContain("$includeScreenshot = $false");
+    expect(ax).toContain("$annotateSom = $false");
+    const vision = captureScript({ includeScreenshot: true });
+    expect(vision).toContain("$includeScreenshot = $true");
+    expect(vision).toContain("CopyFromScreen");
+    expect(vision).toContain("$annotateSom = $false");
+    const som = captureScript({ includeScreenshot: true, annotateSom: true });
+    expect(som).toContain("$annotateSom = $true");
+    expect(som).toContain("DrawString");
+  });
 });
 
 describe("createWindowsUiAutomationProvider hardening", () => {
@@ -344,6 +408,102 @@ describe("createWindowsUiAutomationProvider hardening", () => {
     });
     const snap = await svc.capture();
     expect(snap.elements[0]?.bounds).toBeUndefined();
+  });
+
+  it("decodes mode=vision screenshotBase64 into screenshotPng", async () => {
+    const b64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let seenScript = "";
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell(script) {
+        seenScript = script;
+        return JSON.stringify({
+          app: "Notepad",
+          windowTitle: "Untitled",
+          elements: [
+            {
+              index: 1,
+              role: "Edit",
+              name: "body",
+              x: 10,
+              y: 20,
+              width: 100,
+              height: 40,
+              runtimeId: "1,2",
+            },
+          ],
+          screenshotBase64: b64,
+        });
+      },
+    });
+    const snap = await svc.capture({ mode: "vision" });
+    expect(seenScript).toContain("$includeScreenshot = $true");
+    expect(seenScript).toContain("$annotateSom = $false");
+    expect(snap.mode).toBe("vision");
+    expect(snap.screenshotPng?.byteLength).toBeGreaterThan(0);
+    expect(snap.note ?? "").toMatch(/screenshot=png \(vision\)/);
+  });
+
+  it("mode=som requests annotateSom and notes SOM labels", async () => {
+    const b64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let seenScript = "";
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell(script) {
+        seenScript = script;
+        return JSON.stringify({
+          app: "Notepad",
+          windowTitle: "Untitled",
+          elements: [
+            {
+              index: 1,
+              role: "Button",
+              name: "OK",
+              x: 1,
+              y: 2,
+              width: 3,
+              height: 4,
+              runtimeId: "9,1",
+            },
+          ],
+          screenshotBase64: b64,
+        });
+      },
+    });
+    const snap = await svc.capture({ mode: "som" });
+    expect(seenScript).toContain("$annotateSom = $true");
+    expect(snap.mode).toBe("som");
+    expect(snap.screenshotPng?.byteLength).toBeGreaterThan(0);
+    expect(snap.note ?? "").toMatch(/SOM index labels/);
+  });
+
+  it("mode=vision notes screenshot failure without dropping AX", async () => {
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell() {
+        return JSON.stringify({
+          app: "Notepad",
+          windowTitle: "Untitled",
+          elements: [
+            {
+              index: 1,
+              role: "Edit",
+              name: "body",
+              x: 1,
+              y: 2,
+              width: 3,
+              height: 4,
+              runtimeId: "1,1",
+            },
+          ],
+          screenshotBase64: "",
+          screenshotError: "window has no on-screen bounds for screenshot",
+        });
+      },
+    });
+    const snap = await svc.capture({ mode: "vision" });
+    expect(snap.screenshotPng).toBeUndefined();
+    expect(snap.elements).toHaveLength(1);
+    expect(snap.note ?? "").toMatch(/screenshot unavailable/);
   });
 
   it("escapes SendKeys punctuation and quotes on the type fallback", async () => {

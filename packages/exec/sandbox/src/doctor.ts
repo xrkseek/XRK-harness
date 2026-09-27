@@ -144,7 +144,7 @@ export function probeSandboxEnvironment(
         name: "sandbox-helper",
         ok: probe.ok,
         detail: probe.ok
-          ? `${bwrapBin} available`
+          ? `${bwrapBin} available (RO root + workspace bind profile)`
           : probe.detail,
       });
     }

@@ -889,6 +889,16 @@ export function createHarnessComposition(
     for (const tool of createComputerUseTools({
       ...(service ? { service } : {}),
       ...(options.computerUseEnv ? { env: options.computerUseEnv } : {}),
+      ...(options.attachments
+        ? {
+            saveScreenshot: (png) =>
+              options.attachments!.saveImage({
+                data: png,
+                mediaType: "image/png",
+                name: "computer-use-snapshot.png",
+              }),
+          }
+        : {}),
     })) {
       tools.register(tool);
     }
@@ -1530,6 +1540,20 @@ export function createHarnessComposition(
                     phase: "turn-start",
                   });
                 }
+              },
+            }
+          : {}),
+        ...(contextFragments
+          ? {
+              afterToolResults: async (ctx) => {
+                await appendContextFragments({
+                  store: ctx.store,
+                  sessionId: ctx.sessionId,
+                  turnId: ctx.turnId,
+                  now: ctx.now,
+                  pipeline: contextFragments,
+                  phase: "post-tool",
+                });
               },
             }
           : {}),

@@ -277,7 +277,8 @@ export function formatBrowserGuidance(available: ToolNameSet): string {
   if (!names.has("browser_open")) return "";
   return (
     "Use browser_open / browser_snapshot / browser_act for interactive web page sessions " +
-    "(element refs like @e1). Use browser_vision for a screenshot the vision model can see. " +
+    "(element refs like @e1; browser_act also supports scroll/press/back — scroll/press need CDP). " +
+    "Use browser_vision for a screenshot the vision model can see. " +
     "Prefer web_fetch or web_search for one-shot reads. " +
     "The default session is an HTTP snapshot. Settings → Plugins → Browser (or XRK_BROWSER_CDP_URL) selects Chrome DevTools. " +
     "Do not drive the user's GUI browser with computer_use when browser_* can do the job; " +

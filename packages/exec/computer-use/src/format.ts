@@ -59,6 +59,7 @@ export function buildCaptureResult(options: {
   readonly windowTitle: string;
   readonly elements: readonly ComputerUseElement[];
   readonly note?: string;
+  readonly screenshotPng?: Uint8Array;
 }): ComputerUseCaptureResult {
   return {
     mode: options.mode,
@@ -73,13 +74,18 @@ export function buildCaptureResult(options: {
       ...(options.note !== undefined ? { note: options.note } : {}),
     }),
     ...(options.note !== undefined ? { note: options.note } : {}),
+    ...(options.screenshotPng !== undefined
+      ? { screenshotPng: options.screenshotPng }
+      : {}),
   };
 }
 
 export const COMPUTER_USE_PROMPT_TEXT =
   "Use computer_use only for native host GUI apps (Notepad, Explorer, IDE chrome, OS dialogs) " +
-  "via an accessibility tree + input Provider. Prefer action=capture (mode=ax) then " +
-  "click/type/key/scroll by element index (key/scroll may omit element to target the focused window). " +
+  "via an accessibility tree + input Provider. Prefer action=capture (mode=ax for tree-only; " +
+  "mode=vision or mode=som for a desktop screenshot the vision model can see, with AX indices — " +
+  "som also annotates index labels on the image) then click/type/key/scroll by element index " +
+  "(key/scroll may omit element to target the focused window). " +
   "Do NOT use computer_use for web pages — use browser_open / browser_snapshot / browser_act " +
   "(and browser_vision when a page screenshot is needed). " +
   "Windows delivery is UIA (Invoke/ValuePattern/SendKeys/ScrollPattern), not full background SPI; " +

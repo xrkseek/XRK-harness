@@ -189,6 +189,13 @@ export interface CreateAgentOptions {
     typeof runTurn
   >[0]["beforeUserMessage"];
   /**
+   * After tool/result rows for a step, before `step/end`.
+   * Forwarded to `runTurn.afterToolResults` (Harness post-tool fragments).
+   */
+  readonly afterToolResults?: Parameters<
+    typeof runTurn
+  >[0]["afterToolResults"];
+  /**
    * Cross-session `@session` prepare (Face / Host). Forwarded to `runTurn`.
    * Presets wire `@xrkseek/xrk-session-reference/prepare-face`.
    */
@@ -383,6 +390,9 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
               : {}),
             ...(options.beforeUserMessage
               ? { beforeUserMessage: options.beforeUserMessage }
+              : {}),
+            ...(options.afterToolResults
+              ? { afterToolResults: options.afterToolResults }
               : {}),
             ...(options.prepareUserContent
               ? { prepareUserContent: options.prepareUserContent }

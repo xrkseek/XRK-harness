@@ -97,6 +97,26 @@ describe("createCdpBrowserSession", () => {
     expect(blocks.some((block) => block.type === "image" && block.attachment?.attachmentId === "sha256:shot")).toBe(true);
     expect(scripted.methods).toContain("Page.captureScreenshot");
   });
+
+  it("scroll / press / back over CDP without requiring a ref", async () => {
+    const scripted = scriptedCdp();
+    const session = createCdpBrowserSession({
+      rawUrl: "http://127.0.0.1:9222",
+      resolve: async () => "ws://127.0.0.1:9222/devtools/browser/abc",
+      connect: async () => scripted.caller,
+    });
+    await session.open("https://example.test/");
+    const scrolled = await session.act({ action: "scroll", direction: "down" });
+    expect(scrolled.note).toBe("scrolled down");
+    expect(scripted.methods.some((m) => m === "Runtime.evaluate")).toBe(true);
+
+    const pressed = await session.act({ action: "press", key: "Enter" });
+    expect(pressed.note).toBe("pressed Enter");
+    expect(scripted.methods.filter((m) => m === "Input.dispatchKeyEvent").length).toBeGreaterThanOrEqual(2);
+
+    const backed = await session.act({ action: "back" });
+    expect(backed.note).toBe("navigated back");
+  });
 });
 
 describe("createBrowserSession", () => {

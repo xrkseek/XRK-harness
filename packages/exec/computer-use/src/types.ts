@@ -58,6 +58,11 @@ export interface ComputerUseCaptureResult {
   readonly elements: readonly ComputerUseElement[];
   readonly text: string;
   readonly note?: string;
+  /**
+   * Optional PNG bytes for mode=vision|som (Windows UIA CopyFromScreen).
+   * Tool layer stores via AttachmentStore so the model can see the desktop.
+   */
+  readonly screenshotPng?: Uint8Array;
 }
 
 export interface ComputerUseActRequest {

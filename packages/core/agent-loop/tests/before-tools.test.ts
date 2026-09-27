@@ -55,4 +55,46 @@ describe("runTurn beforeTools", () => {
     expect(order[0]).toBe("beforeTools");
     expect(order).toContain("execute");
   });
+
+  it("runs afterToolResults after tool/result and before step/end", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    const order: string[] = [];
+    tools.register({
+      name: "echo",
+      description: "echo",
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        order.push("execute");
+        return { content: "ok" };
+      },
+    });
+    await runTurn({
+      sessionId: session.id,
+      userText: "go",
+      store,
+      llm: createReplayAdapter([
+        {
+          content: "",
+          toolCalls: [{ id: "c1", name: "echo", arguments: {} }],
+        },
+        { content: "done" },
+      ]),
+      tools,
+      afterToolResults: async () => {
+        order.push("afterToolResults");
+        const types = store
+          .get(session.id)
+          .events.map((e) => e.type);
+        expect(types).toContain("tool/result");
+        expect(types).not.toContain("step/end");
+      },
+    });
+    expect(order).toEqual(["execute", "afterToolResults"]);
+    const types = store.get(session.id).events.map((e) => e.type);
+    const afterIdx = types.lastIndexOf("tool/result");
+    const stepEndIdx = types.indexOf("step/end", afterIdx);
+    expect(stepEndIdx).toBeGreaterThan(afterIdx);
+  });
 });

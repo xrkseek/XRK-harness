@@ -24,5 +24,5 @@
     "directory": "packages/exec/environment"
   },
   "private": true,
-  "description": "Pluggable ExecEnvironment providers (local · HTTP serverless sample). Not sandbox confine."
+  "description": "Pluggable ExecEnvironment providers (local · memory · HTTP serverless sample). Not sandbox confine."
 }

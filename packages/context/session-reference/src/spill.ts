@@ -1,14 +1,16 @@
 /**
  * Full projected transcripts for bounded `@session` previews.
- * When retention truncates, the complete capture is written under
- * `~/.xrk/spill/<ownerSessionId>/` so the model can `read_file` it
+ * When retention truncates, the complete capture is written via
+ * {@link defaultLocalSpillStore} under `~/.xrk/spill/<ownerSessionId>/`
+ * (`source.kind: "session-reference"`) so the model can `read_file` it
  * (Host `hostReadableRoots` includes `~/.xrk/spill`). Tool-result bodies
- * use `spill/tool-outputs/` — this directory is transcripts only.
+ * use `spill/tool-outputs/` — same store, different source kind.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import { resolveXrkHome, capSpillText, pruneSpillTree } from "@xrkseek/xrk-home-paths";
+import {
+  defaultLocalSpillStore,
+  defaultSpillRoot,
+} from "@xrkseek/spill";
 import type {
   ReferencedSessionData,
   ReferenceRetentionStats,
@@ -21,7 +23,7 @@ import type {
 export function resolveSessionReferenceSpillRoot(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  return path.join(resolveXrkHome(env), "spill");
+  return defaultSpillRoot(env);
 }
 
 /** Warning shared by inline previews and retrievable full transcripts. */
@@ -40,6 +42,7 @@ type FullSnapshot =
 
 /**
  * Save the full captured projection only when its preview omits text.
+ * Persists through {@link defaultLocalSpillStore} (same TTL/cap/prune as tool spills).
  * @param ownerSessionId - target session receiving the context (spill owner).
  * @param source - full projection and preview omission facts from the same capture.
  * @param inputIndex - reference position used to distinguish transcript filenames.
@@ -65,25 +68,21 @@ export function prepareReferenceOmission(
   const content = renderTranscript(source.fullData);
   let fullSnapshot: FullSnapshot;
   try {
-    const sessionDir = path.join(
-      resolveSessionReferenceSpillRoot(),
-      ownerSessionId.replace(/[^\w.-]+/g, "_"),
-    );
-    pruneSpillTree(resolveSessionReferenceSpillRoot());
-    mkdirSync(sessionDir, { recursive: true });
-    const locator = path.join(
-      sessionDir,
-      `session-reference-${inputIndex + 1}.txt`,
-    );
-    const body = capSpillText(content);
-    writeFileSync(locator, body, "utf8");
-    const bytes = Buffer.byteLength(body, "utf8");
+    const ref = defaultLocalSpillStore().saveTextSync({
+      owner: { sessionId: ownerSessionId },
+      source: {
+        kind: "session-reference",
+        sessionId: source.fullData.sessionId,
+        label: `session-reference-${inputIndex + 1}`,
+      },
+      suggestedName: `session-reference-${inputIndex + 1}.txt`,
+      content,
+    });
     fullSnapshot = {
       status: "saved",
-      locator,
-      bytes,
-      retrievalHint:
-        "Retrieve with read_file (offset/limit) or grep on that path.",
+      locator: String(ref.locator),
+      bytes: ref.bytes,
+      retrievalHint: ref.retrievalHint,
     };
   } catch {
     fullSnapshot = { status: "unavailable", reason: "save-failed" };

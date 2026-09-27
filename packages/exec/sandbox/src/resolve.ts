@@ -9,7 +9,10 @@ import {
   type SandboxService,
 } from "./service.js";
 import { createDockerSandbox, type DockerNetworkMode } from "./docker.js";
-import { createBubblewrapSandbox } from "./bwrap.js";
+import {
+  createBubblewrapSandbox,
+  type BubblewrapFsMode,
+} from "./bwrap.js";
 import { SandboxBackendError } from "./docker.js";
 import {
   createWindowsSandbox,
@@ -51,6 +54,13 @@ export interface ResolveSandboxOptions {
   readonly dockerExtraRunArgs?: readonly string[];
   readonly bwrapBin?: string;
   readonly bwrapExtraArgs?: readonly string[];
+  /**
+   * bwrap file-effect mode (default `workspace-write`).
+   * `read-only` keeps the workspace under the RO root bind.
+   */
+  readonly bwrapMode?: BubblewrapFsMode;
+  /** bwrap network egress (default false → `--unshare-net`). */
+  readonly bwrapNetwork?: boolean;
   /** Windows helper binary (default `XRK_SANDBOX_WINDOWS_HELPER`). */
   readonly windowsHelper?: string;
   /** Windows permission posture (default `workspace-write`). */
@@ -164,8 +174,22 @@ export function createSandboxStack(options: ResolveSandboxOptions): SandboxServi
       inner: deny,
     });
   } else if (backend === "bwrap") {
+    const netRaw = String(
+      options.bwrapNetwork ?? env.XRK_SANDBOX_BWRAP_NETWORK ?? "none",
+    )
+      .trim()
+      .toLowerCase();
+    const modeRaw = String(
+      options.bwrapMode ?? env.XRK_SANDBOX_BWRAP_MODE ?? "workspace-write",
+    )
+      .trim()
+      .toLowerCase();
+    const bwrapMode =
+      modeRaw === "read-only" ? ("read-only" as const) : ("workspace-write" as const);
     core = createBubblewrapSandbox({
       workspaceRoot: options.workspaceRoot,
+      mode: bwrapMode,
+      networkAccess: netRaw === "bridge" || netRaw === "on",
       ...(options.bwrapBin || env.XRK_SANDBOX_BWRAP_BIN
         ? {
             bwrapBin:
@@ -212,9 +236,9 @@ export function createSandboxStack(options: ResolveSandboxOptions): SandboxServi
   if (options.remoteExecution) {
     return core;
   }
-  // Docker / windows already jail cwd inside the Provider; bwrap binds the
-  // host root. Still wrap with WorkspaceSandbox for host-path callers that
-  // only go through wrapArgv without provider path math.
+  // Docker / windows already jail cwd inside the Provider. bwrap uses a
+  // DSH-style RO root + workspace bind; WorkspaceSandbox still validates
+  // host-path callers that only go through wrapArgv.
   if (backend === "docker" || backend === "windows") {
     return core;
   }

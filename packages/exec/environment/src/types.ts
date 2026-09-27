@@ -33,4 +33,4 @@ export interface ExecEnvironmentProvider {
   }): ExecWorld | Promise<ExecWorld>;
 }
 
-export type ExecEnvironmentKind = "local" | "http";
+export type ExecEnvironmentKind = "local" | "http" | "memory";

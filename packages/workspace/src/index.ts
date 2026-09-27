@@ -16,10 +16,22 @@ import {
   type WorkspaceInjectAppend,
 } from "./durable-inject.js";
 import { createInjectBudget } from "./inject-budget.js";
-import { formatWorkspaceRootAnchor } from "./workspace-anchor.js";
+import {
+  formatWorkspaceRootAnchor,
+  resolveRuntimeSurface,
+  type RuntimeSurface,
+} from "./workspace-anchor.js";
 import { computeInjectFingerprint } from "./inject-fingerprint.js";
 
 export type { WorkspaceBudgetEvent } from "./durable-inject.js";
+
+export type { RuntimeSurface } from "./workspace-anchor.js";
+export {
+  formatRuntimeSurfaceAnchor,
+  normalizeRuntimeSurface,
+  RUNTIME_SURFACE_ENV,
+} from "./workspace-anchor.js";
+export { formatWorkspaceRootAnchor, resolveRuntimeSurface };
 
 export type WorkspaceInjectResult = WorkspaceDurableInject;
 
@@ -297,6 +309,11 @@ export interface ResolveWorkspaceInjectOptions {
   readonly maxChars?: number;
   /** Sidebar workspace title — injected as display-only (not a path). */
   readonly displayTitle?: string;
+  /**
+   * Shell surface hosting this runtime (`desktop` / `web` / `tui` / `acp` / `cli`).
+   * Defaults to `XRK_SURFACE`; omitted = no `## Runtime surface` paragraph.
+   */
+  readonly surface?: RuntimeSurface;
 }
 
 export interface ResolvedWorkspaceInject {
@@ -328,7 +345,11 @@ export async function resolveWorkspaceInject(
     options.maxChars !== undefined ? { maxChars: options.maxChars } : {},
   );
 
-  const anchor = formatWorkspaceRootAnchor(options.root, options.displayTitle);
+  const anchor = formatWorkspaceRootAnchor(
+    options.root,
+    options.displayTitle,
+    options.surface ?? resolveRuntimeSurface(),
+  );
   const instructionBlocks = anchor
     ? [anchor, ...out.instructionBlocks]
     : out.instructionBlocks;

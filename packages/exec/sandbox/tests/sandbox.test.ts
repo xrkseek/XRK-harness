@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   SandboxBackendError,
   SandboxDenyError,
+  bwrapProfileArgs,
   createBubblewrapSandbox,
   createDenyListSandbox,
   createDockerSandbox,
@@ -187,5 +188,83 @@ describe("createBubblewrapSandbox", () => {
     if (process.platform === "linux") return;
     const s = createBubblewrapSandbox({ workspaceRoot: process.cwd() });
     expect(() => s.wrapArgv(["true"])).toThrow(/Linux/);
+  });
+
+  it("wraps with DSH-style RO root profile on Linux", () => {
+    if (process.platform !== "linux") return;
+    const root = "/tmp/xrk-bwrap-ws";
+    const s = createBubblewrapSandbox({
+      workspaceRoot: root,
+      bwrapBin: "bwrap",
+    });
+    const argv = s.wrapArgv(["echo", "hi"], root);
+    expect(argv[0]).toBe("bwrap");
+    expect(argv).toContain("--ro-bind");
+    expect(argv).toContain("--unshare-net");
+    expect(argv).toContain("--bind");
+    expect(argv).toContain(root);
+    expect(argv.slice(-3)).toEqual(["--", "echo", "hi"]);
+  });
+});
+
+describe("bwrapProfileArgs", () => {
+  it("builds DSH-aligned workspace-write profile with net unshare", () => {
+    const root = path.resolve("/tmp/ws");
+    const args = bwrapProfileArgs({ workspaceRoot: root });
+    expect(args).toEqual([
+      "--ro-bind",
+      "/",
+      "/",
+      "--dev",
+      "/dev",
+      "--unshare-pid",
+      "--proc",
+      "/proc",
+      "--die-with-parent",
+      "--tmpfs",
+      "/tmp",
+      "--bind",
+      root,
+      root,
+      "--unshare-net",
+    ]);
+  });
+
+  it("omits writable mounts for read-only mode", () => {
+    const args = bwrapProfileArgs({
+      workspaceRoot: "/tmp/ws",
+      mode: "read-only",
+    });
+    expect(args).not.toContain("--tmpfs");
+    expect(args).not.toContain("--bind");
+    expect(args).toContain("--unshare-net");
+  });
+
+  it("keeps host network when networkAccess is true", () => {
+    const args = bwrapProfileArgs({
+      workspaceRoot: "/tmp/ws",
+      networkAccess: true,
+    });
+    expect(args).not.toContain("--unshare-net");
+    expect(args).toContain("--bind");
+  });
+});
+
+describe("createSandboxStack bwrap", () => {
+  it("honors XRK_SANDBOX_BWRAP_NETWORK and BWRAP_MODE", () => {
+    if (process.platform !== "linux") return;
+    const root = "/tmp/xrk-bwrap-stack";
+    const s = createSandboxStack({
+      workspaceRoot: root,
+      backend: "bwrap",
+      env: {
+        XRK_SANDBOX_BWRAP_NETWORK: "bridge",
+        XRK_SANDBOX_BWRAP_MODE: "read-only",
+      },
+    });
+    const argv = s.wrapArgv(["true"], root);
+    expect(argv).not.toContain("--unshare-net");
+    expect(argv).not.toContain("--bind");
+    expect(argv).toContain("--ro-bind");
   });
 });

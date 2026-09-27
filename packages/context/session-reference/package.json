@@ -49,7 +49,7 @@
   "license": "MIT",
   "dependencies": {
     "@xrkseek/protocol": "workspace:*",
-    "@xrkseek/xrk-home-paths": "workspace:*",
+    "@xrkseek/spill": "workspace:*",
     "@xrkseek/xrk-output-retention": "workspace:*"
   },
   "private": true

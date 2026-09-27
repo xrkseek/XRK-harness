@@ -14,6 +14,11 @@ export {
   type HttpExecEnvironmentOptions,
 } from "./http.js";
 export {
+  createMemoryExecEnvironment,
+  type MemoryExecEnvironmentOptions,
+  type MemorySpawnHandler,
+} from "./memory.js";
+export {
   resolveExecEnvironment,
   type ResolveExecEnvironmentOptions,
 } from "./resolve.js";

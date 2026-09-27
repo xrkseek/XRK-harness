@@ -170,6 +170,17 @@ export interface RunTurnInput {
    * the turn ends without tool calls.
    */
   readonly beforeTools?: () => void | Promise<void>;
+  /**
+   * After tool/result (+ deferContext) are appended, before `step/end`.
+   * Harness uses this to append `post-tool` context fragments (Guardian).
+   */
+  readonly afterToolResults?: (ctx: {
+    readonly store: SessionStore;
+    readonly sessionId: string;
+    readonly turnId: string;
+    readonly stepId: string;
+    readonly now: () => number;
+  }) => void | Promise<void>;
   readonly maxSteps?: number;
   /**
    * Auto-continue on max-tokens truncation: when the model hits its output
@@ -1300,6 +1311,16 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         turnId,
         messageId: newUserMessageId(),
         content,
+      });
+    }
+
+    if (input.afterToolResults) {
+      await input.afterToolResults({
+        store: input.store,
+        sessionId: input.sessionId,
+        turnId,
+        stepId,
+        now,
       });
     }
 

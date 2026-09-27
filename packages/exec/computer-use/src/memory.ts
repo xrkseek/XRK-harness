@@ -14,6 +14,8 @@ export interface MemoryComputerUseOptions {
   readonly windowTitle?: string;
   readonly elements?: readonly ComputerUseElement[];
   readonly windows?: readonly ComputerUseWindow[];
+  /** Optional PNG for mode=vision|som tests / fixtures. */
+  readonly screenshotPng?: Uint8Array;
 }
 
 /**
@@ -65,14 +67,21 @@ export function createMemoryComputerUseProvider(
       elements = slice;
       const note =
         mode === "vision" || mode === "som"
-          ? "memory provider has no screenshot; AX elements only"
+          ? options.screenshotPng
+            ? mode === "som"
+              ? "memory provider screenshot with SOM labels (test fixture)"
+              : "memory provider screenshot (test fixture)"
+            : "memory provider has no screenshot; AX elements only"
           : undefined;
       return buildCaptureResult({
-        mode: mode === "vision" ? "ax" : mode,
+        mode,
         app,
         windowTitle,
         elements: slice,
         ...(note !== undefined ? { note } : {}),
+        ...(options.screenshotPng !== undefined
+          ? { screenshotPng: options.screenshotPng }
+          : {}),
       });
     },
     async act(request: ComputerUseActRequest): Promise<ComputerUseActResult> {

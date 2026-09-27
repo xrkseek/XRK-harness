@@ -109,6 +109,7 @@ export {
   createHttpBrowserSession,
   type BrowserActRequest,
   type BrowserActResult,
+  type BrowserActAction,
   type BrowserSession,
   type BrowserSnapshotResult,
 } from "./browser-session.js";

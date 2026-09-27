@@ -4,9 +4,11 @@ Pluggable context-fragment pipeline (Codex-shaped). Layered **apart** from durab
 
 | Phase | When | Wire |
 | --- | --- | --- |
-| `turn-start` | After workspace inject, before human `user/message` | `appendContextFragments` |
+| `turn-start` | After workspace inject, before human `user/message` | Harness `appendContextFragments` |
 | `user-message` | With each user / steer prepare | `prepareUserContent` contexts |
-| `post-tool` | Host may collect after tool settle | optional |
+| `post-tool` | After tool settle, before `step/end` | Harness `afterToolResults` → `appendContextFragments` |
+
+Default `createGuardianReviewProvider()` registers turn-start + post-tool (thin advisory; not an LLM Guardian).
 
 ```ts
 import {

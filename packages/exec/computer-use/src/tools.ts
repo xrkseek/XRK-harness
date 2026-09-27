@@ -13,6 +13,16 @@ import {
 
 export { COMPUTER_USE_PROMPT_TEXT };
 
+/** Enough of an image ref for multimodal capture results (mirrors browser_vision). */
+export interface ComputerUseScreenshotRef {
+  readonly attachmentId: string;
+  readonly mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+  readonly bytes: number;
+  readonly width: number;
+  readonly height: number;
+  readonly name?: string;
+}
+
 export function computerUseUnavailableMessage(
   env: NodeJS.ProcessEnv = process.env,
   product?: { readonly mode?: string },
@@ -40,6 +50,10 @@ export function computerUseUnavailableMessage(
 export interface CreateComputerUseToolsOptions {
   readonly service?: ComputerUseService;
   readonly env?: NodeJS.ProcessEnv;
+  /** Persist capture PNG so the model request can inline it (mode=vision|som). */
+  readonly saveScreenshot?: (
+    png: Uint8Array,
+  ) => Promise<ComputerUseScreenshotRef>;
 }
 
 function fail(err: unknown): ToolResultContent {
@@ -82,9 +96,9 @@ export function createComputerUseTools(
     name: "computer_use",
     description:
       "Operate native host GUI apps via an accessibility tree + input Provider. " +
-      "Actions: capture (AX snapshot with element indices), click, type, key, scroll, list_windows. " +
-      "Prefer capture then click/type/key/scroll by element index. " +
-      "Not for web pages — use browser_open / browser_snapshot / browser_act (browser_vision for screenshots).",
+      "Actions: capture (AX snapshot; mode=vision|som adds a desktop screenshot), " +
+      "click, type, key, scroll, list_windows. Prefer capture then click/type/key/scroll by element index. " +
+      "Not for web pages — use browser_open / browser_snapshot / browser_act (browser_vision for page screenshots).",
     parameters: {
       type: "object",
       properties: {
@@ -97,7 +111,8 @@ export function createComputerUseTools(
         mode: {
           type: "string",
           enum: ["ax", "som", "vision"],
-          description: "capture mode; ax is the default (tree only).",
+          description:
+            "capture mode; ax=tree only (default); vision=PNG+AX; som=PNG with index labels+AX.",
         },
         app: {
           type: "string",
@@ -145,6 +160,28 @@ export function createComputerUseTools(
             },
             signal,
           );
+          const png = snap.screenshotPng;
+          if (png && png.byteLength > 0) {
+            const save = options.saveScreenshot;
+            if (!save) {
+              return {
+                content:
+                  "Error: desktop screenshot captured but no attachment store is wired, so vision cannot see it.",
+                isError: true,
+                error: {
+                  name: "ComputerUseError",
+                  code: "COMPUTER_USE_BACKEND",
+                },
+              };
+            }
+            const ref = await save(png);
+            return {
+              content: [
+                { type: "text" as const, text: snap.text },
+                { type: "image" as const, attachment: ref },
+              ],
+            };
+          }
           return { content: snap.text };
         }
         if (action === "list_windows") {

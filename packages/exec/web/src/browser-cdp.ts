@@ -315,7 +315,46 @@ export function createCdpBrowserSession(options: {
     },
     async act(request): Promise<BrowserActResult> {
       const cdp = requireCaller();
-      const ref = request.ref.replace(/^@/, "").trim();
+      if (request.action === "scroll") {
+        const direction = (request.direction ?? "down").toLowerCase();
+        if (direction !== "up" && direction !== "down") {
+          throw new WebError(
+            "scroll direction must be up or down",
+            "WEB_BROWSER_INVALID_ARGS",
+          );
+        }
+        const delta = direction === "down" ? 500 : -500;
+        await pageEval(cdp, `window.scrollBy(0, ${delta})`);
+        await capture(cdp);
+        return { ...paint(false), note: `scrolled ${direction}` };
+      }
+      if (request.action === "press") {
+        const key = (request.key ?? request.text ?? "").trim();
+        if (!key) {
+          throw new WebError(
+            "press requires key (e.g. Enter, Tab)",
+            "WEB_BROWSER_INVALID_ARGS",
+          );
+        }
+        await cdp.call(
+          "Input.dispatchKeyEvent",
+          { type: "keyDown", key },
+          sessionId,
+        );
+        await cdp.call(
+          "Input.dispatchKeyEvent",
+          { type: "keyUp", key },
+          sessionId,
+        );
+        await capture(cdp);
+        return { ...paint(false), note: `pressed ${key}` };
+      }
+      if (request.action === "back") {
+        await pageEval(cdp, "history.back()");
+        await capture(cdp);
+        return { ...paint(false), note: "navigated back" };
+      }
+      const ref = (request.ref ?? "").replace(/^@/, "").trim();
       const node = nodes.find((item) => item.ref === ref);
       if (!node) {
         throw new WebError(`unknown ref @${ref}`, "WEB_BROWSER_BAD_REF");

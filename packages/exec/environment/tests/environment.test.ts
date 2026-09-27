@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createHttpExecEnvironment,
   createLocalExecEnvironment,
+  createMemoryExecEnvironment,
   probeHttpExecEnvironment,
   resolveExecEnvironment,
 } from "../src/index.js";
@@ -146,5 +147,40 @@ describe("ExecEnvironment", () => {
         fetchImpl,
       }),
     ).toBe(true);
+  });
+
+  it("memory provider serves in-process fs + scripted subprocess", async () => {
+    const provider = createMemoryExecEnvironment({
+      files: { "README.md": "# mem\n" },
+    });
+    expect(provider.providerName).toBe("memory");
+    expect(await provider.isAvailable()).toBe(true);
+    const world = await provider.createWorld({ workspaceRoot: "/workspace" });
+    expect(world.workspaceRoot).toBe("/workspace");
+    const read = await world.fs.read("README.md");
+    expect(read.content).toContain("# mem");
+    await world.fs.write("out.txt", "ok");
+    expect((await world.fs.read("/workspace/out.txt")).content).toBe("ok");
+    const echo = await world.subprocess.spawn(["echo", "hi"]);
+    expect(echo.exitCode).toBe(0);
+    expect(echo.stdout).toContain("hi");
+    const cat = await world.subprocess.spawn(["cat", "README.md"]);
+    expect(cat.stdout).toContain("# mem");
+    const unknown = await world.subprocess.spawn(["nosuch"]);
+    expect(unknown.exitCode).toBe(127);
+    world.dispose();
+  });
+
+  it("resolveExecEnvironment accepts memory without URL", () => {
+    expect(
+      resolveExecEnvironment({
+        kind: "memory",
+        memory: { files: { a: "1" } },
+      }).providerName,
+    ).toBe("memory");
+    expect(
+      resolveExecEnvironment({ env: { XRK_EXEC_ENVIRONMENT: "memory" } })
+        .providerName,
+    ).toBe("memory");
   });
 });

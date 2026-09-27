@@ -25,6 +25,9 @@ export {
 } from "./docker.js";
 export {
   createBubblewrapSandbox,
+  bwrapProfileArgs,
+  type BubblewrapFsMode,
+  type BubblewrapProfileOptions,
   type BubblewrapSandboxOptions,
 } from "./bwrap.js";
 export {

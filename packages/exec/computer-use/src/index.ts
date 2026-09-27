@@ -54,6 +54,7 @@ export {
 export {
   createComputerUseTools,
   computerUseUnavailableMessage,
+  type ComputerUseScreenshotRef,
   type CreateComputerUseToolsOptions,
 } from "./tools.js";
 

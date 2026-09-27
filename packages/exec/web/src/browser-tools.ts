@@ -121,48 +121,79 @@ export function createBrowserTools(
   };
 
   const actTool: ToolDefinition<{
-    ref: string;
+    ref?: string;
     action: string;
     text?: string;
+    direction?: string;
+    key?: string;
   }> = {
     name: "browser_act",
     description:
-      "Act on a snapshot ref: action=click (follow links / submit) or action=type (fill a textbox; pass text). " +
-      "Refs look like e1 or @e1 from browser_snapshot / browser_open.",
+      "Act on the browser session. click/type need a snapshot ref (@eN). " +
+      "scroll (up|down), press (key e.g. Enter/Tab), and back need CDP for scroll/press; " +
+      "back also works on the HTTP history stack. Prefer web_fetch for one-shot reads.",
     parameters: {
       type: "object",
       properties: {
         ref: {
           type: "string",
-          description: "Element ref from the snapshot (e1 or @e1).",
+          description: "Element ref from the snapshot (e1 or @e1). Required for click/type.",
         },
         action: {
           type: "string",
-          description: "click or type.",
-          enum: ["click", "type"],
+          description: "click, type, scroll, press, or back.",
+          enum: ["click", "type", "scroll", "press", "back"],
         },
         text: {
           type: "string",
-          description: "Text to type when action=type.",
+          description: "Text to type when action=type (also accepted as key for press).",
+        },
+        direction: {
+          type: "string",
+          description: "Scroll direction when action=scroll.",
+          enum: ["up", "down"],
+        },
+        key: {
+          type: "string",
+          description: "Key name when action=press (e.g. Enter, Tab, Escape).",
         },
       },
-      required: ["ref", "action"],
+      required: ["action"],
     },
     async execute(args, signal) {
-      const ref = String(args?.ref ?? "").trim();
       const action = String(args?.action ?? "").trim().toLowerCase();
-      if (!ref) {
-        return failArgs("ref is required");
+      const allowed = new Set(["click", "type", "scroll", "press", "back"]);
+      if (!allowed.has(action)) {
+        return failArgs("action must be click, type, scroll, press, or back");
       }
-      if (action !== "click" && action !== "type") {
-        return failArgs("action must be click or type");
+      if (action === "click" || action === "type") {
+        const ref = String(args?.ref ?? "").trim();
+        if (!ref) {
+          return failArgs("ref is required for click/type");
+        }
+      }
+      if (action === "scroll") {
+        const direction = String(args?.direction ?? "down").trim().toLowerCase();
+        if (direction !== "up" && direction !== "down") {
+          return failArgs("direction must be up or down");
+        }
+      }
+      if (action === "press") {
+        const key = String(args?.key ?? args?.text ?? "").trim();
+        if (!key) {
+          return failArgs("key is required for press (e.g. Enter)");
+        }
       }
       try {
         const result = await session.act(
           {
-            ref,
-            action,
+            action: action as "click" | "type" | "scroll" | "press" | "back",
+            ...(args?.ref !== undefined ? { ref: String(args.ref) } : {}),
             ...(args?.text !== undefined ? { text: String(args.text) } : {}),
+            ...(args?.direction !== undefined
+              ? { direction: String(args.direction).toLowerCase() as "up" | "down" }
+              : {}),
+            ...(args?.key !== undefined ? { key: String(args.key) } : {}),
           },
           signal,
         );

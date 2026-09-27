@@ -1,6 +1,7 @@
 /**
- * HTTP browser session: one active page, snapshot refs, act (click/type).
+ * HTTP browser session: one active page, snapshot refs, act (click/type/back).
  * Reuses WebFetch + URL policy — not CDP/Playwright (desktop computer-use is separate).
+ * scroll/press need a graphical browser (CDP); HTTP throws WEB_BROWSER_NO_GRAPHICS.
  */
 import { htmlToText } from "./html-text.js";
 import {
@@ -18,10 +19,19 @@ export interface BrowserSnapshotResult {
   readonly text: string;
 }
 
+/** Hermes-aligned browser_act actions (scroll/press/back deepen the CDP path). */
+export type BrowserActAction = "click" | "type" | "scroll" | "press" | "back";
+
 export interface BrowserActRequest {
-  readonly ref: string;
-  readonly action: "click" | "type";
+  readonly action: BrowserActAction;
+  /** Required for click/type. Ignored for scroll/press/back. */
+  readonly ref?: string;
+  /** Text for type; optional key fallback for press. */
   readonly text?: string;
+  /** Scroll direction (Hermes browser_scroll). */
+  readonly direction?: "up" | "down";
+  /** Key name for press (e.g. Enter, Tab). */
+  readonly key?: string;
 }
 
 export interface BrowserActResult {
@@ -69,6 +79,8 @@ export function createHttpBrowserSession(options: {
   readonly fetch: WebFetch;
 }): BrowserSession {
   let page: PageState | undefined;
+  /** Prior URLs for browser_act action=back (Hermes browser_back). */
+  const history: string[] = [];
 
   const load = async (
     url: string,
@@ -120,8 +132,19 @@ export function createHttpBrowserSession(options: {
     };
   };
 
+  const navigate = async (
+    nextUrl: string,
+    signal: AbortSignal | undefined,
+    pushHistory: boolean,
+  ): Promise<PageState> => {
+    if (pushHistory && page) history.push(page.url);
+    page = await load(nextUrl, signal);
+    return page;
+  };
+
   return {
     async open(url, signal) {
+      history.length = 0;
       page = await load(url, signal);
       return snapshotOf(page, false);
     },
@@ -135,8 +158,26 @@ export function createHttpBrowserSession(options: {
       );
     },
     async act(request, signal) {
+      if (request.action === "scroll" || request.action === "press") {
+        throw new WebError(
+          `action=${request.action} needs a graphical browser (CDP). Set XRK_BROWSER_CDP_URL or Settings → Plugins → Browser.`,
+          "WEB_BROWSER_NO_GRAPHICS",
+        );
+      }
+      if (request.action === "back") {
+        const prev = history.pop();
+        if (!prev) {
+          throw new WebError(
+            "no prior page in history — nothing to go back to",
+            "WEB_BROWSER_NO_PAGE",
+          );
+        }
+        page = await load(prev, signal);
+        const snap = snapshotOf(page, false);
+        return { ...snap, note: "navigated back" };
+      }
       const state = requirePage();
-      const ref = request.ref.replace(/^@/, "").trim();
+      const ref = (request.ref ?? "").replace(/^@/, "").trim();
       const el = state.elements.find((e) => e.ref === ref);
       if (!el) {
         throw new WebError(`unknown ref @${ref}`, "WEB_BROWSER_BAD_REF");
@@ -159,7 +200,7 @@ export function createHttpBrowserSession(options: {
       // click
       if (el.href) {
         const next = resolveHref(state.url, el.href);
-        page = await load(next, signal);
+        page = await navigate(next, signal, true);
         const snap = snapshotOf(page, false);
         return { ...snap, note: `navigated via @${ref}` };
       }
@@ -174,7 +215,7 @@ export function createHttpBrowserSession(options: {
           const key = field?.name || r;
           target.searchParams.set(key, value);
         }
-        page = await load(target.href, signal);
+        page = await navigate(target.href, signal, true);
         const snap = snapshotOf(page, false);
         return { ...snap, note: `submitted via @${ref}` };
       }
@@ -186,6 +227,7 @@ export function createHttpBrowserSession(options: {
     },
     dispose() {
       page = undefined;
+      history.length = 0;
     },
   };
 }

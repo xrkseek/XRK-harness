@@ -176,6 +176,10 @@ export interface CaptureScriptOptions {
   readonly maxElements?: number;
   /** Keep elements whose BoundingRectangle is empty (offscreen / unrendered). */
   readonly includeOffscreen?: boolean;
+  /** Capture a PNG of the target window (Hermes mode=vision|som). */
+  readonly includeScreenshot?: boolean;
+  /** Draw 1-based element indices onto the screenshot (mode=som). */
+  readonly annotateSom?: boolean;
 }
 
 /**
@@ -186,10 +190,14 @@ export function captureScript(options: CaptureScriptOptions = {}): string {
   const appLit = psStr(options.app?.trim() ?? "");
   const max = Math.max(1, Math.floor(options.maxElements ?? DEFAULT_MAX_ELEMENTS));
   const keepOffscreen = options.includeOffscreen ? "$true" : "$false";
+  const includeShot = options.includeScreenshot ? "$true" : "$false";
+  const annotateSom = options.annotateSom ? "$true" : "$false";
   return `${PS_PRELUDE}
 $appFilter = ${appLit}
 $max = ${max}
 $keepOffscreen = ${keepOffscreen}
+$includeScreenshot = ${includeShot}
+$annotateSom = ${annotateSom}
 $maxDepth = 60
 # Cross-process UIA calls are expensive; bound the walk so a giant browser tree
 # cannot outrun the PowerShell timeout.
@@ -313,7 +321,72 @@ while ($queue.Count -gt 0 -and $idx -lt $max -and $visited -lt $visitCap) {
   } catch { $dropped++ }
 }
 if ($queue.Count -gt 0 -and $visited -ge $visitCap) { $exhausted = $false }
-@{ app = $appLabel; windowTitle = $title; elements = $elements; visited = $visited; dropped = $dropped; exhausted = $exhausted } | ConvertTo-Json -Depth 6 -Compress
+
+$screenshotBase64 = ''
+$screenshotError = ''
+if ($includeScreenshot) {
+  try {
+    Add-Type -AssemblyName System.Drawing
+    $br = $win.Current.BoundingRectangle
+    $sx = XrkSafeInt $br.X
+    $sy = XrkSafeInt $br.Y
+    $sw = XrkSafeInt $br.Width
+    $sh = XrkSafeInt $br.Height
+    if ($null -eq $sx -or $null -eq $sy -or $null -eq $sw -or $null -eq $sh -or $sw -le 0 -or $sh -le 0) {
+      $screenshotError = 'window has no on-screen bounds for screenshot'
+    } else {
+      $maxW = 1280; $maxH = 720
+      $scale = [Math]::Min(1.0, [Math]::Min(($maxW / [double]$sw), ($maxH / [double]$sh)))
+      $dw = [Math]::Max(1, [int][Math]::Round($sw * $scale))
+      $dh = [Math]::Max(1, [int][Math]::Round($sh * $scale))
+      $src = New-Object System.Drawing.Bitmap $sw, $sh
+      $gs = [System.Drawing.Graphics]::FromImage($src)
+      $gs.CopyFromScreen($sx, $sy, 0, 0, (New-Object System.Drawing.Size($sw, $sh)))
+      $gs.Dispose()
+      $bmp = $src
+      if ($scale -lt 1.0) {
+        $bmp = New-Object System.Drawing.Bitmap $dw, $dh
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $g.DrawImage($src, 0, 0, $dw, $dh)
+        $g.Dispose()
+        $src.Dispose()
+      }
+      if ($annotateSom) {
+        $g2 = [System.Drawing.Graphics]::FromImage($bmp)
+        $font = New-Object System.Drawing.Font 'Consolas', 10, ([System.Drawing.FontStyle]::Bold)
+        $fill = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(220, 255, 220, 0))
+        $ink = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::Black)
+        foreach ($e in $elements) {
+          if ($null -eq $e.x -or $null -eq $e.y) { continue }
+          $lx = [int][Math]::Round(($e.x - $sx) * $scale)
+          $ly = [int][Math]::Round(($e.y - $sy) * $scale)
+          if ($lx -lt 0 -or $ly -lt 0 -or $lx -gt $dw -or $ly -gt $dh) { continue }
+          $label = [string]$e.index
+          $g2.FillRectangle($fill, $lx, $ly, 18, 14)
+          $g2.DrawString($label, $font, $ink, $lx, $ly)
+        }
+        $g2.Dispose(); $font.Dispose(); $fill.Dispose(); $ink.Dispose()
+      }
+      $ms = New-Object System.IO.MemoryStream
+      $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+      $screenshotBase64 = [Convert]::ToBase64String($ms.ToArray())
+      $ms.Dispose(); $bmp.Dispose()
+    }
+  } catch {
+    $screenshotError = $_.Exception.Message
+  }
+}
+
+@{
+  app = $appLabel
+  windowTitle = $title
+  elements = $elements
+  visited = $visited
+  dropped = $dropped
+  exhausted = $exhausted
+  screenshotBase64 = $screenshotBase64
+  screenshotError = $screenshotError
+} | ConvertTo-Json -Depth 6 -Compress
 `.trim();
 }
 
@@ -553,6 +626,8 @@ interface CapturePayload {
   readonly dropped?: number;
   /** False when the visit budget ended with nodes still queued. */
   readonly exhausted?: boolean;
+  readonly screenshotBase64?: string;
+  readonly screenshotError?: string;
 }
 
 interface ListWindowsPayload {
@@ -586,11 +661,15 @@ export function createWindowsUiAutomationProvider(
     includeOffscreen: boolean,
   ): Promise<CapturePayload> {
     const max = request?.maxElements ?? DEFAULT_MAX_ELEMENTS;
+    const mode = request?.mode ?? "ax";
+    const wantShot = mode === "vision" || mode === "som";
     const raw = await run(
       captureScript({
         ...(request?.app !== undefined ? { app: request.app } : {}),
         maxElements: max,
         includeOffscreen,
+        includeScreenshot: wantShot,
+        annotateSom: mode === "som",
       }),
       signal,
     );
@@ -643,11 +722,35 @@ export function createWindowsUiAutomationProvider(
         };
       });
       const mode = request?.mode ?? "ax";
+      const wantShot = mode === "vision" || mode === "som";
+      let screenshotPng: Uint8Array | undefined;
+      const shotB64 = String(payload.screenshotBase64 ?? "").trim();
+      if (wantShot && shotB64) {
+        try {
+          screenshotPng = Uint8Array.from(Buffer.from(shotB64, "base64"));
+        } catch {
+          screenshotPng = undefined;
+        }
+      }
       const notes: string[] = [
-        mode === "vision" || mode === "som"
-          ? "windows-uia has no screenshot overlay yet; AX elements only (delivery=uia, not background SPI)"
-          : "delivery=uia (UI Automation; not cua-driver background SPI)",
+        "delivery=uia (UI Automation; not cua-driver background SPI)",
       ];
+      if (wantShot) {
+        if (screenshotPng && screenshotPng.byteLength > 0) {
+          notes.push(
+            mode === "som"
+              ? "screenshot=png with SOM index labels"
+              : "screenshot=png (vision)",
+          );
+        } else {
+          const detail = String(payload.screenshotError ?? "").trim();
+          notes.push(
+            detail
+              ? `screenshot unavailable: ${detail}`
+              : "screenshot unavailable; AX elements only",
+          );
+        }
+      }
       if (elements.length === 0) {
         notes.push(
           payload.exhausted === false
@@ -658,11 +761,14 @@ export function createWindowsUiAutomationProvider(
         notes.push(`tree truncated at ${elements.length} of more nodes; raise maxElements for more`);
       }
       return buildCaptureResult({
-        mode: mode === "vision" ? "ax" : mode,
+        mode,
         app: payload.app ?? "",
         windowTitle: payload.windowTitle ?? "",
         elements,
         note: notes.join(" | "),
+        ...(screenshotPng && screenshotPng.byteLength > 0
+          ? { screenshotPng }
+          : {}),
       });
     },
     async act(

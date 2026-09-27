@@ -58,13 +58,29 @@ describe("createHttpBrowserSession", () => {
       }),
     });
     await session.open("https://example.com/");
-    const typed = await session.act({
-      ref: "@e1",
-      action: "type",
-      text: "hello",
-    });
+    const typed = await session.act({ ref: "e1", action: "type", text: "hello" });
     expect(typed.note).toContain("typed");
-    expect(typed.text).toContain('"hello"');
+    expect(typed.text).toContain("hello");
+  });
+
+  it("back restores prior HTTP page; scroll/press need CDP", async () => {
+    const session = createHttpBrowserSession({
+      fetch: htmlFetch({
+        "https://example.com/": `<html><title>Home</title><a href="/next">Next</a></html>`,
+        "https://example.com/next": `<html><title>Next</title></html>`,
+      }),
+    });
+    await session.open("https://example.com/");
+    await session.act({ ref: "e1", action: "click" });
+    const backed = await session.act({ action: "back" });
+    expect(backed.url).toBe("https://example.com/");
+    expect(backed.note).toBe("navigated back");
+    await expect(session.act({ action: "scroll", direction: "down" })).rejects.toMatchObject({
+      code: "WEB_BROWSER_NO_GRAPHICS",
+    });
+    await expect(session.act({ action: "press", key: "Enter" })).rejects.toMatchObject({
+      code: "WEB_BROWSER_NO_GRAPHICS",
+    });
   });
 });
 

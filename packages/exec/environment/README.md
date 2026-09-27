@@ -3,10 +3,10 @@
 Pluggable **execution world** providers (Hermes-style terminal environments).
 
 - **Definition**: `ExecEnvironmentProvider` → `ExecWorld` (`fs` + `subprocess`)
-- **Providers**: `local` (default) · `http` (serverless sample sidecar)
+- **Providers**: `local` (default) · `memory` (in-process CI / tests) · `http` (serverless sample sidecar)
 - **Not**: `SandboxService.confine` / `createSandboxStack` docker·bwrap·windows
 
-Select via `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|http` (+ `XRK_EXEC_ENVIRONMENT_URL`).
+Select via `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|memory|http` (+ `XRK_EXEC_ENVIRONMENT_URL` for http).
 
 SSH stays `createSshExecutionWorld` on Host `remoteExecution` — same *shape*, separate dial.
 
