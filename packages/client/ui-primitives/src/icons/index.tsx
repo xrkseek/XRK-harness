@@ -537,6 +537,16 @@ export const IconPaperclipOutline16 = ({ size = 16, className }: IconProps) => (
   </svg>
 )
 
+/** Pushpin outline 16 — session pin affordance (Hermes/DSH parity). */
+export const IconPinOutline16 = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M10.85 1.2L14.8 5.15L13.39 6.56L12.33 5.5L9.4 8.43L10.11 11.27L8.7 12.68L6.57 9.29L3.32 12.54L2.26 11.48L5.51 8.23L2.12 6.1L3.53 4.69L6.37 5.4L9.3 2.47L8.24 1.41L10.85 1.2Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
 /** ic_ds_loading_outline_16 */
 export const IconLoadingOutline16 = ({ size = 16, className }: IconProps) => (
   <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">

@@ -78,3 +78,96 @@
   font: var(--dsw-font-xxs-12);
   font-family: var(--ds-font-family-code, ui-monospace, monospace);
 }
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.keysButton {
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xxs-12);
+  font-family: var(--ds-font-family-code, ui-monospace, monospace);
+  cursor: pointer;
+}
+
+.keysButton:hover {
+  border-color: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-label-primary);
+}
+
+.keysCapturing {
+  flex: none;
+  padding: 2px 6px;
+  border: 1px dashed var(--dsw-alias-state-business-primary);
+  border-radius: 4px;
+  color: var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xxs-12);
+  font-family: var(--ds-font-family-code, ui-monospace, monospace);
+  cursor: pointer;
+}
+
+.conflict {
+  margin: 0 0 8px;
+  color: var(--dsw-alias-state-warning, #b45309);
+  font: var(--dsw-font-xxs-12);
+}
+
+.resetOne {
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  font: var(--dsw-font-xs-13);
+  line-height: 1;
+}
+
+.resetOne:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.resetSpacer {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
+.resetAll {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  cursor: pointer;
+}
+
+.resetAll:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.resetAll:not(:disabled):hover {
+  border-color: var(--dsw-alias-state-business-primary);
+}

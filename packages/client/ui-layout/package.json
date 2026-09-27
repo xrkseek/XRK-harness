@@ -50,15 +50,18 @@
     "react": "^18.2.0"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "~18.3.1",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-test-runtime": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/client-ui-theme": "workspace:^",
-    "@xrkseek/xrk-invariants": "workspace:^",
-    "@types/react": "~18.3.1",
     "@xrkseek/cordis": "workspace:^",
-    "react": "^18.2.0"
+    "@xrkseek/xrk-invariants": "workspace:^",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "files": [
     "lib/index.js",

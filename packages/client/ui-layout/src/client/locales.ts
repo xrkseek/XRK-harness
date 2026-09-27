@@ -9,7 +9,7 @@ export const zh = {
   'sidebar.dialog': '侧边栏',
   'shortcuts.title': '键盘快捷键',
   'shortcuts.close': '关闭',
-  'shortcuts.description': '查看与搜索壳层快捷键。自定义与恢复默认将在后续版本开放。',
+  'shortcuts.description': '点击组合键可自定义；Esc 取消录制。发送 / 换行不可改。',
   'shortcuts.search': '搜索快捷键',
   'shortcuts.empty': '无匹配快捷键',
   'shortcuts.cat.general': '通用',
@@ -20,6 +20,11 @@ export const zh = {
   'shortcuts.newLine': '换行',
   'shortcuts.toggleSidebar': '切换侧边栏',
   'shortcuts.toggleDetails': '切换详情栏',
+  'shortcuts.rebind': '点击以改键',
+  'shortcuts.pressKey': '请按键…',
+  'shortcuts.reset': '恢复默认',
+  'shortcuts.resetAll': '全部恢复默认',
+  'shortcuts.conflict': '已与「{name}」冲突',
 } as const
 
 /** The layout namespace key union. */
@@ -39,7 +44,7 @@ export const en = {
   'sidebar.dialog': 'Sidebar',
   'shortcuts.title': 'Keyboard shortcuts',
   'shortcuts.close': 'Close',
-  'shortcuts.description': 'View and search shell shortcuts. Customize / reset land in a later pass.',
+  'shortcuts.description': 'Click a chord to rebind; Esc cancels. Send / newline stay fixed.',
   'shortcuts.search': 'Search shortcuts',
   'shortcuts.empty': 'No matching shortcuts',
   'shortcuts.cat.general': 'General',
@@ -50,4 +55,9 @@ export const en = {
   'shortcuts.newLine': 'New line',
   'shortcuts.toggleSidebar': 'Toggle sidebar',
   'shortcuts.toggleDetails': 'Toggle details',
+  'shortcuts.rebind': 'Click to rebind',
+  'shortcuts.pressKey': 'Press a key…',
+  'shortcuts.reset': 'Restore default',
+  'shortcuts.resetAll': 'Restore all defaults',
+  'shortcuts.conflict': 'Conflicts with “{name}”',
 } as const satisfies Record<LayoutKey, string>

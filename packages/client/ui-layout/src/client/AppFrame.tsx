@@ -24,6 +24,21 @@ import {
   SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT,
 } from './columns.ts'
 import type { LayoutInsets } from './layout-insets.ts'
+import {
+  SHELL_SHORTCUT_DEFS,
+  comboFromEvent,
+  conflictsFor,
+  effectiveCombo,
+  formatCombo,
+  isCustomized,
+  loadShortcutOverrides,
+  matchShortcutEvent,
+  resetShortcutOverride,
+  saveShortcutOverrides,
+  setShortcutOverride,
+  type ShellShortcutId,
+  type ShellShortcutOverrides,
+} from './shell-shortcuts.ts'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
@@ -127,59 +142,95 @@ export function AppFrame({
   const [viewport, setViewport] = useState(() => window.innerWidth)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [shortcutsFilter, setShortcutsFilter] = useState('')
+  const [shortcutOverrides, setShortcutOverrides] = useState<ShellShortcutOverrides>(() => loadShortcutOverrides())
+  const [capturingId, setCapturingId] = useState<ShellShortcutId | null>(null)
+  const [conflictHint, setConflictHint] = useState<string | null>(null)
+  const shortcutOverridesRef = useRef(shortcutOverrides)
+  shortcutOverridesRef.current = shortcutOverrides
+  const capturingIdRef = useRef(capturingId)
+  capturingIdRef.current = capturingId
+  // Details open/closed for toggleDetails dispatch (updated after column solve).
+  const detailsCollapsedRef = useRef(true)
 
   const shortcutEntries = useMemo<readonly ShortcutEntry[]>(() => {
-    const mod = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform)
-      ? '⌘'
-      : 'Ctrl'
-    return [
-      {
-        id: 'keybinds.openPanel',
-        keys: `${mod}+/`,
-        label: t('shortcuts.openPanel'),
-        category: t('shortcuts.cat.general'),
-      },
-      {
-        id: 'composer.submit',
-        keys: `${mod}+Enter`,
-        label: t('shortcuts.submit'),
-        category: t('shortcuts.cat.composer'),
-      },
-      {
-        id: 'composer.newline',
-        keys: 'Shift+Enter',
-        label: t('shortcuts.newLine'),
-        category: t('shortcuts.cat.composer'),
-      },
-      {
-        id: 'layout.toggleSidebar',
-        keys: `${mod}+B`,
-        label: t('shortcuts.toggleSidebar'),
-        category: t('shortcuts.cat.panels'),
-      },
-      {
-        id: 'layout.toggleDetails',
-        keys: `${mod}+J`,
-        label: t('shortcuts.toggleDetails'),
-        category: t('shortcuts.cat.panels'),
-      },
-    ]
-  }, [t])
+    return SHELL_SHORTCUT_DEFS.map((def) => ({
+      id: def.id,
+      keys: formatCombo(effectiveCombo(def.id, shortcutOverrides)),
+      label: t(def.labelKey),
+      category: t(def.categoryKey),
+      fixed: def.fixed,
+      customized: isCustomized(def.id, shortcutOverrides),
+    }))
+  }, [shortcutOverrides, t])
+
+  const applyOverrides = useCallback((next: ShellShortcutOverrides) => {
+    setShortcutOverrides(next)
+    saveShortcutOverrides(next)
+  }, [])
+
+  const runShellAction = useCallback((id: ShellShortcutId) => {
+    if (id === 'keybinds.openPanel') {
+      setShortcutsOpen(true)
+      setShortcutsFilter('')
+      setCapturingId(null)
+      setConflictHint(null)
+      return
+    }
+    if (id === 'layout.toggleSidebar') {
+      actions.toggleSidebar()
+      return
+    }
+    if (id === 'layout.toggleDetails') {
+      if (detailsCollapsedRef.current) actions.openDetails()
+      else actions.closeDetails()
+    }
+  }, [actions])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== '/' || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
-      const target = e.target as HTMLElement | null
-      if (target?.closest?.('input, textarea, [contenteditable="true"]')) {
-        // Still allow Ctrl+/ inside composer — Hermes/Codex open the panel from anywhere.
+      const capturing = capturingIdRef.current
+      if (capturing !== null) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          e.stopPropagation()
+          setCapturingId(null)
+          setConflictHint(null)
+          return
+        }
+        const combo = comboFromEvent(e)
+        if (combo === null) return
+        e.preventDefault()
+        e.stopPropagation()
+        if (combo === 'escape') {
+          setCapturingId(null)
+          setConflictHint(null)
+          return
+        }
+        const conflicts = conflictsFor(capturing, combo, shortcutOverridesRef.current)
+        if (conflicts.length > 0) {
+          const other = SHELL_SHORTCUT_DEFS.find((d) => d.id === conflicts[0])
+          setConflictHint(t('shortcuts.conflict', {
+            name: other !== undefined ? t(other.labelKey) : conflicts[0],
+          }))
+          return
+        }
+        applyOverrides(setShortcutOverride(shortcutOverridesRef.current, capturing, combo))
+        setCapturingId(null)
+        setConflictHint(null)
+        return
       }
+
+      const id = matchShortcutEvent(e, shortcutOverridesRef.current)
+      if (id === null) return
+      // Composer Enter/newline stay with the editor; shell only lists them.
+      if (id === 'composer.submit' || id === 'composer.newline') return
       e.preventDefault()
-      setShortcutsOpen(true)
-      setShortcutsFilter('')
+      runShellAction(id)
     }
-    window.addEventListener('keydown', onKey)
-    return () => { window.removeEventListener('keydown', onKey) }
-  }, [])
+    // Capture phase so rebind Escape beats Modal's bubble Escape → close.
+    window.addEventListener('keydown', onKey, true)
+    return () => { window.removeEventListener('keydown', onKey, true) }
+  }, [applyOverrides, runShellAction, t])
 
   const lastSession = useRef(detailsSession)
   useLayoutEffect(() => {
@@ -227,6 +278,7 @@ export function AppFrame({
   const { tracks: cols, phone } = resolveShellTracks(viewport, solved)
   const drawerWidth = phoneDrawerWidth(viewport)
   const detailsCollapsed = phone ? detailsPreference === 0 : cols.details === 0
+  detailsCollapsedRef.current = detailsCollapsed
   const colsRef = useRef(solved)
   colsRef.current = solved
 
@@ -416,7 +468,11 @@ export function AppFrame({
       </div>
       <ShortcutsPanel
         open={shortcutsOpen}
-        onClose={() => { setShortcutsOpen(false) }}
+        onClose={() => {
+          setShortcutsOpen(false)
+          setCapturingId(null)
+          setConflictHint(null)
+        }}
         title={t('shortcuts.title')}
         closeLabel={t('shortcuts.close')}
         description={t('shortcuts.description')}
@@ -425,6 +481,31 @@ export function AppFrame({
         entries={shortcutEntries}
         filter={shortcutsFilter}
         onFilterChange={setShortcutsFilter}
+        editable
+        capturingId={capturingId}
+        onStartCapture={(id: string) => {
+          setCapturingId(id as ShellShortcutId)
+          setConflictHint(null)
+        }}
+        onCancelCapture={() => {
+          setCapturingId(null)
+          setConflictHint(null)
+        }}
+        onReset={(id: string) => {
+          applyOverrides(resetShortcutOverride(shortcutOverrides, id as ShellShortcutId))
+          setCapturingId(null)
+          setConflictHint(null)
+        }}
+        onResetAll={() => {
+          applyOverrides({})
+          setCapturingId(null)
+          setConflictHint(null)
+        }}
+        resetLabel={t('shortcuts.reset')}
+        resetAllLabel={t('shortcuts.resetAll')}
+        pressKeyLabel={t('shortcuts.pressKey')}
+        rebindLabel={t('shortcuts.rebind')}
+        conflictHint={conflictHint}
       />
       {phone && sidebarCollapsed && detailsCollapsed && (
         <button
