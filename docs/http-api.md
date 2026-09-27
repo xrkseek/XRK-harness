@@ -136,6 +136,7 @@ index.html 由 host 注入 `__XRK_BOOT__`（`boot.json` merge `{XRK_PLUGINS_DIR}
 | `XRK_HOST` | 绑定主机 |
 | `XRK_PORT` | 绑定端口 |
 | `XRK_WORKSPACE` | 工作区根 |
+| `XRK_SURFACE` | 运行壳形态（`desktop` \| `web` \| `tui` \| `acp` \| `cli`），由 CLI / Desktop Host 声明，注入模型 `## Runtime surface` 段 |
 | `XRK_PRESET` | `minimal` \| `shell` \| `frugal` \| `plan` \| `shallow` \| `harness` \| `server` |
 | `XRK_CORS_ORIGIN` | CORS origin（默认 `*`） |
 | `XRK_RATE_LIMIT` | 每 IP 每分钟请求数 |
@@ -308,6 +309,7 @@ Full ops set: [configuration.md](./configuration.md). This table summarizes comm
 | `XRK_HOST` | Bind host |
 | `XRK_PORT` | Bind port |
 | `XRK_WORKSPACE` | Workspace root |
+| `XRK_SURFACE` | Hosting shell surface (`desktop` \| `web` \| `tui` \| `acp` \| `cli`), declared by the CLI / Desktop Host and fed to the model's `## Runtime surface` inject |
 | `XRK_PRESET` | `minimal` \| `shell` \| `frugal` \| `plan` \| `shallow` \| `harness` \| `server` |
 | `XRK_CORS_ORIGIN` | CORS origin (`*` default) |
 | `XRK_RATE_LIMIT` | Requests / IP / minute |

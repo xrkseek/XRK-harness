@@ -22,13 +22,13 @@
 ```text
 1. createMemorySessionStore 或 createPersistentSessionStore(XRK_SESSIONS_DIR) + PluginLoader
 2. reconcileManagedProcessPlugins(resolvedPluginsDir) 当目录存在（跳过 soft-disable；Settings 变更后再跑；与 hostPublic.pluginsDir 同路径）
-3. loadMcpToolPlugins(mcpServers) 若有 spec（env/config 或 host-settings.json）且 policy/XRK_MCP_ALLOW 允许
-4. createHostAgentCache(loader.list())
-5. createFaceRuntime（policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`；文件真源 MCP 时 `syncMcpServers`；`resolveAgent` 内 bind `ask_user` / `exit_plan_mode`；`syncManagedProcessPlugins`）
-6. createHttpServer + attachFace
+3. createHostAgentCache(loader.list()) — 此时尚不 await MCP connect
+4. createFaceRuntime（policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`；文件真源 MCP 时 `syncMcpServers`；`resolveAgent` 内 bind `ask_user` / `exit_plan_mode`；`syncManagedProcessPlugins`）
+5. createHttpServer + attachFace（listen 或 listen:false 的 pipe/fetch）
+6. 后台 enqueue `reconcileMcpToolPlugins`（env/config 或 Face hydrate 后的 desired；不阻塞 spawn 返回）
 ```
 
-停机：`agentCache.dispose` → `shellJobs.dispose`（若有）→ PTY `dispose` → 关 HTTP → `loader.unregister` 逐个（含 MCP `dispose`）。
+停机：置 `mcpClosed` → `agentCache.dispose` → `shellJobs.dispose`（若有）→ PTY `dispose` → 关 HTTP → `loader.unregister` 逐个（含 MCP `dispose`）。
 
 ## Env 契约（标准化）
 
@@ -66,6 +66,7 @@ Preset 须 `wireCompositionTools({ plugins })`（见 minimal/harness）。Host s
 | 测 | 覆盖 |
 |----|------|
 | `tests/mcp-wire.test.ts` | JSON 解析 · 默认 deny · host-settings.json · fingerprint · reconcile |
+| `tests/mcp-boot-defer.test.ts` | spawn 在挂起的 MCP stdio 握手前先返回 HTTP |
 | `tests/http-chat.test.ts` | spawn · pluginsDir 接线 |
 | `tests/product-shell.test.ts` | 有完整 `apps/web/dist` 才跑：GET `/` · `__XRK_BOOT__` · 无 cordis UI / HMR · `/plugins/@xrkseek/client-runtime/client.js` 200 · Face 立即层 `xrk-typert-registry` · 首屏 RPC · manifest 名 · 欢迎文案 |
 | `apps/web/tests/product-shell-chrome.e2e.ts` | 不进 `pnpm check`。`pnpm test:web`：欢迎窗 / 侧栏「新建会话」/ wordmark |
@@ -87,9 +88,10 @@ Preset 须 `wireCompositionTools({ plugins })`（见 minimal/harness）。Host s
 
 ## 常见坑
 
-1. 配了 `XRK_MCP_SERVERS` 但未 `XRK_MCP_ALLOW` 且无 policy allow → spawn 抛 policy deny。  
+1. 配了 `XRK_MCP_SERVERS` 但未 `XRK_MCP_ALLOW` 且无 policy allow → 后台 reconcile **park**（不阻塞 spawn；UI 先连上 Host）。  
 2. MCP 插件 id 冲突：已存在同 id 则 skip register。  
-3. Face 与 REST 共用 store；改 session 别绕过 Face 投影假设。
+3. Face 与 REST 共用 store；改 session 别绕过 Face 投影假设。  
+4. 慢 MCP stdio/HTTP 不得拖住 Desktop/Web「连接中」——MCP 在 HTTP ready 后后台挂载。
 
 ---
 
@@ -117,13 +119,13 @@ Config lives in `@xrkseek/server-config` (`loadHostConfig`).
 ```text
 1. createMemorySessionStore or createPersistentSessionStore(XRK_SESSIONS_DIR) + PluginLoader
 2. reconcileManagedProcessPlugins(resolvedPluginsDir) when the directory exists (skips soft-disabled; re-run after Settings mutations; same path as hostPublic.pluginsDir)
-3. loadMcpToolPlugins(mcpServers) when specs exist (env/config or host-settings.json) and policy/XRK_MCP_ALLOW allows
-4. createHostAgentCache(loader.list())
-5. createFaceRuntime (policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`; file-sourced MCP gets `syncMcpServers`; `resolveAgent` binds `ask_user` / `exit_plan_mode`; `syncManagedProcessPlugins`)
-6. createHttpServer + attachFace
+3. createHostAgentCache(loader.list()) — do not await MCP connect yet
+4. createFaceRuntime (policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`; file-sourced MCP gets `syncMcpServers`; `resolveAgent` binds `ask_user` / `exit_plan_mode`; `syncManagedProcessPlugins`)
+5. createHttpServer + attachFace (listen or listen:false pipe/fetch)
+6. Background enqueue `reconcileMcpToolPlugins` only for env/config specs; file-sourced Settings lists defer until Allow connect + save (must not block spawn return)
 ```
 
-Shutdown: `agentCache.dispose` → `shellJobs.dispose` (if any) → PTY `dispose` → close HTTP → `loader.unregister` each (including MCP `dispose`).
+Shutdown: set `mcpClosed` → `agentCache.dispose` → `shellJobs.dispose` (if any) → PTY `dispose` → close HTTP → `loader.unregister` each (including MCP `dispose`).
 
 ## Env contract
 
@@ -161,6 +163,7 @@ Presets must call `wireCompositionTools({ plugins })` (see minimal/harness). Hos
 | Test | Coverage |
 |------|----------|
 | `tests/mcp-wire.test.ts` | JSON parse · default deny · host-settings.json · fingerprint · reconcile |
+| `tests/mcp-boot-defer.test.ts` | spawn returns HTTP before hanging MCP stdio |
 | `tests/http-chat.test.ts` | spawn · pluginsDir wiring |
 | `tests/product-shell.test.ts` | Requires full `apps/web/dist`: GET `/` · `__XRK_BOOT__` · no cordis UI / HMR · `/plugins/@xrkseek/client-runtime/client.js` 200 · Face immediate `xrk-typert-registry` · first-paint RPC · manifest name · welcome copy |
 | `apps/web/tests/product-shell-*.e2e.ts` | Not in `pnpm check`. Run via `pnpm test:web` (chrome / stream / tool / approval / inventory / question / thinking / todo / access / plan / plan-review / export / cancel / error) |
@@ -169,6 +172,7 @@ Presets must call `wireCompositionTools({ plugins })` (see minimal/harness). Hos
 
 ## Common pitfalls
 
-1. `XRK_MCP_SERVERS` set without `XRK_MCP_ALLOW` and without policy allow → spawn throws policy deny.  
+1. `XRK_MCP_SERVERS` set without `XRK_MCP_ALLOW` and without policy allow → background reconcile **parks** (spawn still returns; UI connects to Host first).  
 2. MCP plugin id clash: existing id skips register.  
-3. Face and REST share the store; do not bypass Face projection assumptions when mutating sessions.
+3. Face and REST share the store; do not bypass Face projection assumptions when mutating sessions.  
+4. Slow MCP stdio/HTTP must not freeze Desktop/Web on 「连接中」— MCP mounts after HTTP ready in the background.

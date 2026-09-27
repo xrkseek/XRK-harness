@@ -21,7 +21,7 @@ MCP **client**（stdio + streamable-http）。规格门禁：[policy.md](../poli
 | HTTP 设备码 OAuth（RFC 8628）：登录 · 落盘 · 到期 refresh | 不在包内开 UI；CLI 入口在 `apps/cli`（`xrkh mcp`）。Settings MCP 卡经 Face `mcp.oauth.*` 同路径（pending：取消 / 复制码 / 自动打开验证页；已登录：到期与 refresh 徽标；IdP 无 `device_authorization_endpoint` → 诚实错误，**不**冒充 auth-code+PKCE）。stdio 无 `auth`；未登录则匿名连接，不猜端点 |
 | 端点缺失时按 RFC 9728 / RFC 8414 发现（`oauth-discovery.ts`） | 显式 flag / env 永远赢过发现；发现失败抛 `McpOAuthDiscoveryError`（不静默回退） |
 
-`McpHttpOptions.reconnectionOptions` 原样传给 SDK（SSE 流恢复）。Host HTTP MCP 默认 `maxRetries: 2`。stdio/HTTP 默认 `reconnect.enabled: true`（`initialDelayMs` 500 · `maxDelayMs` 30s · `maxAttempts` 10）；稳定窗口 = `maxDelayMs`。Host `loadMcpToolPlugins` 在 list_changed / health 后就地更新 `plugin.tools` 并 `invalidateAll`；文件真源下 Face mutate → `reconcileMcpToolPlugins` 热挂载（`gave-up` 同 fingerprint 也会 replace）；health 变推 `settings/document-updated` 刷新 overlay 徽标。
+`McpHttpOptions.reconnectionOptions` 原样传给 SDK（SSE 流恢复）。Host HTTP MCP 默认 `maxRetries: 2`。stdio/HTTP 默认 `reconnect.enabled: true`（`initialDelayMs` 500 · `maxDelayMs` 30s · `maxAttempts` 10）；稳定窗口 = `maxDelayMs`。Host `loadMcpToolPlugins` 在 list_changed / health 后就地更新 `plugin.tools` 并 `invalidateAll`；文件真源下 Face mutate → `reconcileMcpToolPlugins` 热挂载（`gave-up` 同 fingerprint 也会 replace）；health / 串行 `onConnectProgress` 推 `settings/document-updated`（行上 `connecting` → connected/failed）。**Spawn 不 await MCP**：HTTP/Face 先就绪；**env/config** 规格再后台 `reconcileMcpToolPlugins`；**文件真源（Settings 列表）启动不自动拉起**，需打开 Allow connect 并保存。
 
 ## 文件地图
 
@@ -79,7 +79,7 @@ Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目�
 4. **显式优先**：registry 已有同名 → skip（与 loader tools 纪律一致）。  
 5. **代际不交错**：每次重连新 `Client`；`isCurrent` 让旧代 `onclose` inert。失败帽耗尽才卸工具。  
 6. **富结果**：非 text 块按结构化块传递（不经 `JSON.stringify`）；image 经 `imageAdmission` 进模型可见 ContentBlock；否则固定 diagnostic 文案（raw bytes 不进 session log）。  
-7. **park / connectFailures**：policy deny 或 Allow connect 关闭 → `parked`；spawn/握手失败 → `connectFailures`。Face 缓存最近一次 Host sync overlay，避免 `settings.describe` 把失败行误标成 parked。  
+7. **park / connectFailures**：policy deny 或 Allow connect 关闭 → `parked`；spawn/握手失败 → `connectFailures`。Face 只读 Host overlay 的 `parked`（**不**把「尚未挂载」合成 parked）。串行连接中推 `connecting`。  
 8. **auth 只加头，不改门禁**：`auth.headers()` 在 `openTransport` 里 await，抛错即连接失败——**不**降级成匿名重试；`auth` 也不绕过 `mcp.connect` policy。合并头大小写不敏感，同名以 auth 为准，调用方原有 header 保留。
 
 ## 测试
@@ -124,7 +124,7 @@ MCP **client** (stdio + streamable-http). Spec gates: [policy.md](../policy.md).
 | Device-code OAuth for HTTP servers (RFC 8628): login · persisted token · refresh before expiry | No UI in this package; the CLI entry is `xrkh mcp` in `apps/cli`. Settings MCP card uses Face `mcp.oauth.*` on the same path (pending: cancel / copy code / auto-open verify URI; signed-in: expiry + refresh badge; IdP missing `device_authorization_endpoint` → honest error, **does not** pretend auth-code+PKCE works). stdio ignores `auth`; no token → anonymous connect, never endpoint guessing |
 | Discover missing endpoints per RFC 9728 / RFC 8414 (`oauth-discovery.ts`) | Explicit flags / env always win over discovery; discovery failures throw `McpOAuthDiscoveryError` (no silent fallback) |
 
-`McpHttpOptions.reconnectionOptions` pass through to the SDK (SSE stream recovery). Host HTTP MCP defaults `maxRetries: 2`. stdio/HTTP default `reconnect.enabled: true` (`initialDelayMs` 500 · `maxDelayMs` 30s · `maxAttempts` 10); stability window = `maxDelayMs`. Host `loadMcpToolPlugins` updates `plugin.tools` in place after list_changed / health and `invalidateAll`; under file source of truth, Face mutate → `reconcileMcpToolPlugins` hot-mounts (`gave-up` same fingerprint also replaces); health changes push `settings/document-updated` to refresh overlay badges.
+`McpHttpOptions.reconnectionOptions` pass through to the SDK (SSE stream recovery). Host HTTP MCP defaults `maxRetries: 2`. stdio/HTTP default `reconnect.enabled: true` (`initialDelayMs` 500 · `maxDelayMs` 30s · `maxAttempts` 10); stability window = `maxDelayMs`. Host `loadMcpToolPlugins` updates `plugin.tools` in place after list_changed / health and `invalidateAll`; under file source of truth, Face mutate → `reconcileMcpToolPlugins` hot-mounts (`gave-up` same fingerprint also replaces); health changes push `settings/document-updated` to refresh overlay badges. **Spawn does not await MCP**: HTTP/Face come up first, then background `reconcileMcpToolPlugins` (Desktop/Web handshake is not blocked by slow MCP).
 
 ## File map
 
@@ -172,7 +172,7 @@ Host batch wiring: [server-host.md](./server-host.md) (`XRK_MCP_*`; entries may 
 
 ## How end users attach capabilities
 
-The product Agent may call **`settings_get` / `settings_mutate`** (same path as Settings UI Save; for `ns=mcp`, remount/connect in-process and surface connect failures in the tool result). Or use **Settings → Plugins → Plugin config**: paste Trae / Cursor-style `{"mcpServers":{…}}`, enable **Allow connect**, then Save. Slash **`/mcp`** lists desired / mount status. Row status shows connected / park / failure; on policy deny the desired list is kept and nothing is spawned. Keep secrets out of `mcp.servers.env`; use Credentials. Layers and routing: [skills-layers.md](../skills-layers.md) (capability attach; global seeds `apps/cli/seeds` → `~/.xrk`). In-repo JS tools still use `extensions/` plugins (restart required).
+The product Agent may call **`settings_get` / `settings_mutate`** (same path as Settings UI Save; for `ns=mcp`, remount/connect in-process and surface connect failures in the tool result). Or use **Settings → Plugins → Plugin config**: paste Trae / Cursor-style `{"mcpServers":{…}}`, enable **Allow connect**, then Save (Host start does **not** auto-spawn the Settings list; rows show Connecting while serial mount runs). Slash **`/mcp`** lists desired / mount status. Row status shows connected / connecting / park / failure; on policy deny the desired list is kept and nothing is spawned. Keep secrets out of `mcp.servers.env`; use Credentials. Layers and routing: [skills-layers.md](../skills-layers.md) (capability attach; global seeds `apps/cli/seeds` → `~/.xrk`). In-repo JS tools still use `extensions/` plugins (restart required).
 
 ## Invariants (bug prevention)
 
@@ -182,7 +182,7 @@ The product Agent may call **`settings_get` / `settings_mutate`** (same path as 
 4. **Explicit wins**: existing registry name → skip (same discipline as loader tools).  
 5. **No generation interleave**: each reconnect gets a new `Client`; `isCurrent` makes prior-generation `onclose` inert. Unload tools only after the failure cap.  
 6. **Rich results**: do not `JSON.stringify` non-text blocks; images need `imageAdmission` to enter model-visible ContentBlocks; otherwise fixed diagnostic copy (raw bytes stay out of the session log).  
-7. **park / connectFailures**: policy deny or Allow connect off → `parked`; spawn/handshake failure → `connectFailures`. Face keeps the last Host sync overlay so `settings.describe` does not relabel failures as parked.  
+7. **park / connectFailures**: policy deny or Allow connect off → `parked`; spawn/handshake failure → `connectFailures`. Face reads Host overlay `parked` only (does **not** synthesize parked for not-yet-mounted). Serial connect pushes `connecting`.  
 8. **Auth only adds headers; it never relaxes gates**: `auth.headers()` is awaited inside `openTransport` and a throw fails the connection — it does **not** fall back to an anonymous retry, and `auth` never bypasses the `mcp.connect` policy. Header merge is case-insensitive: auth wins on collision, caller headers are preserved.
 
 ## Tests

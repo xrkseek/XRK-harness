@@ -71,6 +71,18 @@ Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Traje
 5. 工作区根 `CLAUDE.md`（仅 `@AGENTS.md` 单行时跳过）
 6. Skills → 独立 catalog inject（仅工作区根，除非 `includeUserHomeSkills: true`）
 
+## 运行形态（Runtime surface）
+
+工作区根锚点（`## Workspace root`）同一节内还会追加 `## Runtime surface` 段 —— **仅当**入口声明了形态，让模型知道人在看哪种壳：
+
+| `XRK_SURFACE` | 壳 |
+|---------------|----|
+| `desktop` | Electron 桌面端（原生选文件/目录 · `host.openPath` · framed pipes，无浏览器标签） |
+| `web` | 浏览器标签（`xrkh web` / `serve`） |
+| `tui` · `acp` · `cli` | 终端 TUI · ACP 会话 · 无头 `run` |
+
+由各入口自动声明（CLI `serve`/`web` → `web`、`run` → `cli`、`acp` → `acp`；Desktop Host `boot.ts` → `desktop`），**不覆盖**已存在的值；未知则不注入该段。真源 `packages/workspace/src/workspace-anchor.ts`（`resolveRuntimeSurface` / `formatRuntimeSurfaceAnchor`）。`tui` **不**声明：它 attach 到已运行的 Host，形态跟随 Host。
+
 ## 养 AI 放哪
 
 | 目的 | 放哪 |
@@ -98,6 +110,7 @@ import {
 
 const { blocks, durable, events } = await resolveWorkspaceInject({
   root: workspaceRoot,
+  surface: "web", // 可省略 → 读 XRK_SURFACE；仍无则不注入该段
 });
 
 await appendWorkspaceInjectsIfChanged({

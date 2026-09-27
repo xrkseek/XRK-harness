@@ -50,12 +50,12 @@ Harness 在启用 web 工具时登记 `browser_open` / `browser_snapshot` / `bro
 |------|------|
 | `browser_open` | 打开 URL，返回带 `@eN` 的元素快照 |
 | `browser_snapshot` | 当前页元素列表（`full=true` 附正文） |
-| `browser_act` | `click`（跟链 / 提交）或 `type`（填文本框） |
+| `browser_act` | `click` / `type`（需 `@eN`）；**`scroll`**（up/down）· **`press`**（Enter/Tab…）· **`back`**（Hermes 对齐；scroll/press 需 CDP，HTTP 回 `WEB_BROWSER_NO_GRAPHICS`；HTTP 会话也维护 history 供 back） |
 | `browser_vision` | 截当前图形页给 vision（文本 `@eN` 旁加图片）。HTTP 快照没有浏览器时失败，不用元素列表冒充截图。**不是**视频理解（视频文件用 `video_analyze`） |
 | `browser_vault_list` | 列出不透明凭证句柄（label / origin；**永不返回密钥**） |
 | `browser_vault_fill` | 用句柄向当前页 `@eN` 字段填密（服务端 type；结果仅 success/handle/origin） |
 
-实现默认是 **HTTP 快照会话**（复用 `WebFetch` + URL 策略），`@eN` 不变。Settings → Plugins → **Browser** 选 CDP 并填 `cdpUrl`（或设 `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL`）时，同一套 `browser_open` / `browser_snapshot` / `browser_act` 改走 Chrome DevTools：浏览器级 websocket 会 `Target.createTarget` + `attachToTarget`，元素来自无障碍树，点击/输入走 `DOM.resolveNode`。`browser_vision` 再调 `Page.captureScreenshot`，经附件库把 PNG 放进模型请求；没接附件库时失败，不把无障碍树当截图。未设地址时不连 CDP。这不是桌面 computer-use。SPA 在纯 HTTP 会话下仍受限；一锤子读页继续用 `web_fetch`。
+实现默认是 **HTTP 快照会话**（复用 `WebFetch` + URL 策略），`@eN` 不变。Settings → Plugins → **Browser** 选 CDP 并填 `cdpUrl`（或设 `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL`）时，同一套 `browser_open` / `browser_snapshot` / `browser_act` 改走 Chrome DevTools：浏览器级 websocket 会 `Target.createTarget` + `attachToTarget`，元素来自无障碍树，点击/输入走 `DOM.resolveNode`，`scroll`/`press`/`back` 分别走 `window.scrollBy` · `Input.dispatchKeyEvent` · `history.back()`。`browser_vision` 再调 `Page.captureScreenshot`，经附件库把 PNG 放进模型请求；没接附件库时失败，不把无障碍树当截图。未设地址时不连 CDP。这不是桌面 computer-use。SPA 在纯 HTTP 会话下仍受限；一锤子读页继续用 `web_fetch`。
 
 Host（harness/server）经 `createBrowserRuntimeRegistry` 按 **会话 id** 共享同一 `BrowserSession`：Agent invalidate / Settings 热重建后仍保留已打开页面与 CDP 连接；会话 finalize 或 Host stop 时 `drop`/`dispose`。工具失败经 `tool/result.error.code` 归类（如 `WEB_BROWSER_NO_PAGE` · `WEB_BROWSER_NO_GRAPHICS` · `WEB_BROWSER_NO_ATTACHMENTS` · `WEB_BROWSER_BAD_REF` · `WEB_BROWSER_CDP`）。`browser_vault_*` 由 Host 把 Face `listCredentialSlots` / `credentials.peek` 注入 `createBrowserVaultTools`（Hermes opaque-handle 子集；有 origin 时校验页面 origin）。
 
@@ -116,12 +116,12 @@ When web tools are enabled, harness registers `browser_open` / `browser_snapshot
 |------|------|
 | `browser_open` | Open a URL; return element snapshot with `@eN` refs |
 | `browser_snapshot` | Current-page element list (`full=true` adds page text) |
-| `browser_act` | `click` (follow links / submit) or `type` (fill a textbox) |
+| `browser_act` | `click` / `type` (need `@eN`); **`scroll`** (up/down) · **`press`** (Enter/Tab…) · **`back`** (Hermes-aligned; scroll/press need CDP — HTTP returns `WEB_BROWSER_NO_GRAPHICS`; HTTP sessions keep a history stack for back) |
 | `browser_vision` | Screenshot the graphical page for vision (image beside `@eN` text). The HTTP snapshot has no browser and fails; the element list is not a screenshot. **Not** video understanding (use `video_analyze` for video files) |
 | `browser_vault_list` | List opaque credential handles (label / origin; **never returns secrets**) |
 | `browser_vault_fill` | Fill a snapshot `@eN` field from a handle (server-side type; result is success/handle/origin only) |
 
-The default is an **HTTP snapshot session** (reuses `WebFetch` + URL policy); `@eN` refs stay. When Settings → Plugins → **Browser** selects CDP with a `cdpUrl` (or `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` is set), the same `browser_open` / `browser_snapshot` / `browser_act` tools use Chrome DevTools: a browser websocket calls `Target.createTarget` + `attachToTarget`, elements come from the accessibility tree, and click/type go through `DOM.resolveNode`. `browser_vision` then calls `Page.captureScreenshot` and stores the PNG so the model request can inline it. With no attachment store the call fails; the accessibility tree is not treated as a screenshot. With no URL, CDP is not contacted. This is not desktop computer-use. SPA pages stay limited on the plain HTTP session; use `web_fetch` for one-shot reads.
+The default is an **HTTP snapshot session** (reuses `WebFetch` + URL policy); `@eN` refs stay. When Settings → Plugins → **Browser** selects CDP with a `cdpUrl` (or `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` is set), the same `browser_open` / `browser_snapshot` / `browser_act` tools use Chrome DevTools: a browser websocket calls `Target.createTarget` + `attachToTarget`, elements come from the accessibility tree, click/type go through `DOM.resolveNode`, and `scroll`/`press`/`back` use `window.scrollBy` · `Input.dispatchKeyEvent` · `history.back()`. `browser_vision` then calls `Page.captureScreenshot` and stores the PNG so the model request can inline it. With no attachment store the call fails; the accessibility tree is not treated as a screenshot. With no URL, CDP is not contacted. This is not desktop computer-use. SPA pages stay limited on the plain HTTP session; use `web_fetch` for one-shot reads.
 
 The Host (harness/server) shares one `BrowserSession` per conversation session via `createBrowserRuntimeRegistry`, so open pages and CDP callers survive agent invalidate / Settings rebuilds; session finalize or Host stop calls `drop`/`dispose`. Tool failures carry `tool/result.error.code` (`WEB_BROWSER_NO_PAGE` · `WEB_BROWSER_NO_GRAPHICS` · `WEB_BROWSER_NO_ATTACHMENTS` · `WEB_BROWSER_BAD_REF` · `WEB_BROWSER_CDP`). `browser_vault_*` is wired by Host injecting Face `listCredentialSlots` / `credentials.peek` into `createBrowserVaultTools` (Hermes opaque-handle subset; origin must match when bound).
 

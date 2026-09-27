@@ -7,16 +7,16 @@
 ## 怎么安装与使用
 
 1. 装 CLI 后打开工作区：`npx @xrkseek/harness-cli web`（或源码 `xrkh web`）。
-2. 安装社区 client 包（落到用户插件目录）：
+2. 安装社区 client 包（落到用户插件目录）— CLI 或 **设置 → 插件 → 插件列表** 顶部安装框（`pluginInventory/install`，与 `xrkh plugin add` 同路径）：
 
 ```bash
 xrkh plugin add <包名>
 xrkh restart
 ```
 
-示例包名：`dsh-wallet` · `@liustack/modsearch` 等（以 npm 实际包为准）。装完用 **`xrkh restart`** 重载 Host。
+示例包名：`dsh-wallet` · `@liustack/modsearch` · `xrkh-better-sidebar` 等（以 npm 实际包为准）。CLI 装完用 **`xrkh restart`**；Settings 装完进程半部会热 reconcile，client 半部按列表 `needsRestart` 硬刷新。
 
-3. 日常开关与配置优先 **设置 → Plugins**（及各插件自有面板）；Host/CI 无头场景再用 env / 落盘文件。
+3. 日常开关、更新、删除与配置优先 **设置 → Plugins**（插件列表 + 各插件配置卡）；Host/CI 无头场景再用 env / 落盘文件。
 4. 免补 `xrk.host.json`：loader 用能力表 + `client.js` 扫描 + 约定 infer（见 [plugin-loader.md](./plugin-loader.md)）。作者也可声明 `xrk.host.json` 或提供 `host.mjs`。
 5. 能用什么、待补什么以本页「Host 能力」与 [status.md](./status.md) 为准。
 
@@ -74,7 +74,7 @@ community client.js
 
 ## 侧栏插件契约（Host 原生，client 只挂 UI）
 
-标准侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.18.7**）只向壳注入 `lib/client.js`。`/sidebar/*` 只由 Host 原生 `createSidebarPublicHandler` 挂载（见下节）；插件 Cordis host 半包不提供 `/sidebar/*` 路由。源码工作区克隆到本仓 `extensions/xrkh-better-sidebar`（gitignore，独立 git 仓）。
+标准侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.18.9**）只向壳注入 `lib/client.js`。`/sidebar/*` 只由 Host 原生 `createSidebarPublicHandler` 挂载（见下节）；插件 Cordis host 半包不提供 `/sidebar/*` 路由。源码工作区克隆到本仓 `extensions/xrkh-better-sidebar`（gitignore，独立 git 仓）。
 
 概况栏（`details`）默认 **Status** 页（子代理图 · jobs · **live `contextTimeline`**（inject 来源 · compact reason/`shadowedTokenCount` · prune/spill）· cost · channels），与斜杠 `/status` / Face `session.status` **同源**（snapshot 摘要 + 概况栏绑投影事件行）；另有任务 / 计划 / Office 页签。概况栏与侧栏工作台**可同时打开**：壳经 `@xrkseek/client-ui-layout` 发布 `LayoutInsets`（`document.documentElement` 上的 `--xrk-layout-inset-*` / `data-xrk-layout-*`，以及 `ctx.layout.insets`）。浮动工作台按这些 CSS 变量让位右上角控件。产品切分与首方薄壳见 [sidebar-workbench](./sidebar-workbench.md)。
 
@@ -168,16 +168,16 @@ The product shell may load community `client.js`. The Host side is wired by the 
 ## Install and use
 
 1. Start with a workspace: `npx @xrkseek/harness-cli web` (or source `xrkh web`).
-2. Install a community client package into the user plugin directory:
+2. Install a community client package into the user plugin directory — CLI or **Settings → Plugins → Plugin list** install field (`pluginInventory/install`, same path as `xrkh plugin add`):
 
 ```bash
 xrkh plugin add <package-name>
 xrkh restart
 ```
 
-Example package names: `dsh-wallet` · `@liustack/modsearch` (use the real npm names). Always **`xrkh restart`** after install so Host reloads.
+Example package names: `dsh-wallet` · `@liustack/modsearch` · `xrkh-better-sidebar` (use the real npm names). After CLI install use **`xrkh restart`**; Settings install live-reconciles the process half — hard-refresh the client half when the list shows `needsRestart`.
 
-3. Prefer **Settings → Plugins** (and each plugin’s own panel) for day-to-day toggles; use env / on-disk files for Host/CI headless runs.
+3. Prefer **Settings → Plugins** (plugin list + each plugin’s config card) for install / update / disable / delete and day-to-day toggles; use env / on-disk files for Host/CI headless runs.
 4. `xrk.host.json` is optional: the loader uses the capability table + `client.js` scan + convention infer ([plugin-loader.md](./plugin-loader.md)). Authors may still declare `xrk.host.json` or ship `host.mjs`.
 5. What works vs what is planned follows **Host capabilities** below and [status.md](./status.md).
 
@@ -235,7 +235,7 @@ Local messaging, nodes, OCR, and GenUI preview are available inside the adapter 
 
 ## Sidebar plugin contract (Host owns; client UI only)
 
-The standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.18.7**) injects `lib/client.js` into the shell only. `/sidebar/*` is mounted solely by the Host's native `createSidebarPublicHandler` (next section); a plugin Cordis host half provides no `/sidebar/*` routes. Clone the plugin into this repo's `extensions/xrkh-better-sidebar` (gitignored, its own git remote).
+The standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.18.9**) injects `lib/client.js` into the shell only. `/sidebar/*` is mounted solely by the Host's native `createSidebarPublicHandler` (next section); a plugin Cordis host half provides no `/sidebar/*` routes. Clone the plugin into this repo's `extensions/xrkh-better-sidebar` (gitignored, its own git remote).
 
 The session **Status** column (`details`, default tab) shows the subagent graph · jobs · **live `contextTimeline`** (inject sources · compact reason/`shadowedTokenCount` · prune/spill) · cost · channels from Face `session.status` (same snapshot as slash `/status`; overview also binds live projection event rows); todos / plan / Office remain secondary tabs. Status and the sidebar workbench **may stay open together**: the shell publishes `LayoutInsets` from `@xrkseek/client-ui-layout` (`--xrk-layout-inset-*` / `data-xrk-layout-*` on `document.documentElement`, plus `ctx.layout.insets`). Floating workbenches offset chrome with those CSS variables. Product cut and first-party thin shell: [sidebar-workbench](./sidebar-workbench.md).
 

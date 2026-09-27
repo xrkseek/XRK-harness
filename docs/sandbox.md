@@ -12,7 +12,7 @@
 |------|------|
 | `workspace`（默认） | `WorkspaceSandbox(DenyList(Permissive))` — cwd 狱 + 危险 argv deny |
 | `docker` | DenyList → `docker run --rm -i -v <root>:/workspace`（默认 `--network none`） |
-| `bwrap` | DenyList → Linux `bwrap --bind` 工作区（非 Linux 失败关闭） |
+| `bwrap` | DenyList → Linux `bwrap`：`--ro-bind / /` + 工作区 RW bind（`workspace-write`）或全只读；默认 `--unshare-net`（非 Linux 失败关闭） |
 | `windows` | DenyList → Codex 式 helper 二进制（写隔离）；缺 helper 失败关闭 |
 
 ## 启用 Docker
@@ -34,8 +34,25 @@ Harness 也可传 `sandboxBackend: "docker"` · `sandboxDockerImage`，或直接
 |----|-----|
 | `XRK_SANDBOX_BACKEND` | `bwrap` |
 | `XRK_SANDBOX_BWRAP_BIN` | 可选，默认 `bwrap` |
+| `XRK_SANDBOX_BWRAP_MODE` | `workspace-write`（默认）· `read-only` |
+| `XRK_SANDBOX_BWRAP_NETWORK` | `none`（默认，`--unshare-net`）或 `bridge` / `on` |
 
 仅 Linux；缺二进制时 spawn 失败（fail closed，不退回裸 argv）。
+
+档案对齐 DSH `bwrapProfileArgs`（非仅 bind 工作区）：
+
+```
+bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent
+      [--tmpfs /tmp --bind <workspace> <workspace>]   # workspace-write
+      [--unshare-net]                                  # 默认
+      --new-session --chdir <cwd> -- <argv…>
+```
+
+- `workspace-write` → 根只读 + `/tmp` tmpfs + 工作区可写
+- `read-only` → 无可写挂载（工作区也落在只读根下）
+- 默认禁网；`XRK_SANDBOX_BWRAP_NETWORK=bridge|on` 保留主机网络
+- 需要用户命名空间；本机无 bwrap / userns 时 spawn 失败关闭（不静默降级）
+- landlock / macOS seatbelt / Starlark execpolicy **未做**
 
 ## 启用 Windows 写隔离
 
@@ -68,9 +85,10 @@ Harness 也可传 `sandboxBackend: "docker"` · `sandboxDockerImage`，或直接
 | Provider | 工厂 | 说明 |
 |----------|------|------|
 | `local`（默认） | `createLocalExecEnvironment` | 本机磁盘 + 本机 subprocess |
+| `memory` | `createMemoryExecEnvironment` | 内存 fs + 脚本化 subprocess（CI / 测例；无 sidecar） |
 | `http` | `createHttpExecEnvironment` | Serverless 样板 sidecar：`GET /health` · `POST /v1/exec` · `POST /v1/fs` |
 
-选择：`resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|http`（HTTP 需 `XRK_EXEC_ENVIRONMENT_URL`）。**Host spawn 已接线**（SSH 优先，否则 HTTP world 换 fs/subprocess；`xrkh doctor` 探测 `/health`）。SSH 仍用 `createSshExecutionWorld`（Host `remoteExecution`），形状同 `ExecWorld`，拨号独立。包：`@xrkseek/exec-environment`。
+选择：`resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|memory|http`（HTTP 需 `XRK_EXEC_ENVIRONMENT_URL`）。**Host 已接线**（SSH 优先，否则 `http` / `memory` 换整套 fs/subprocess；`xrkh doctor` 探测 `/health` 或报告 memory）。SSH 仍用 `createSshExecutionWorld`（Host `remoteExecution`），形状同 `ExecWorld`，拨号独立。包：`@xrkseek/exec-environment`。Docker/Modal 等持久 terminal world、Face 产品 picker **未做**。
 
 ## 与 permission preset
 
@@ -92,7 +110,7 @@ Harness 也可传 `sandboxBackend: "docker"` · `sandboxDockerImage`，或直接
 |------|----------|
 | `workspace` (default) | `WorkspaceSandbox(DenyList(Permissive))` — cwd jail + dangerous argv deny |
 | `docker` | DenyList → `docker run --rm -i -v <root>:/workspace` (default `--network none`) |
-| `bwrap` | DenyList → Linux `bwrap --bind` of the workspace (fail closed off Linux) |
+| `bwrap` | DenyList → Linux `bwrap`: `--ro-bind / /` + workspace RW bind (`workspace-write`) or fully RO; `--unshare-net` by default (fail closed off Linux) |
 | `windows` | DenyList → Codex-style helper binary (write isolation); fail closed without it |
 
 ## Enable Docker
@@ -114,8 +132,25 @@ A working Docker CLI is required; confine only rewrites argv and does not `docke
 |------|-------|
 | `XRK_SANDBOX_BACKEND` | `bwrap` |
 | `XRK_SANDBOX_BWRAP_BIN` | optional, default `bwrap` |
+| `XRK_SANDBOX_BWRAP_MODE` | `workspace-write` (default) · `read-only` |
+| `XRK_SANDBOX_BWRAP_NETWORK` | `none` (default, `--unshare-net`) or `bridge` / `on` |
 
 Linux only; missing binary fails at spawn (fail closed — no bare argv fallback).
+
+Profile aligns with DSH `bwrapProfileArgs` (not a bare workspace bind):
+
+```
+bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent
+      [--tmpfs /tmp --bind <workspace> <workspace>]   # workspace-write
+      [--unshare-net]                                  # default
+      --new-session --chdir <cwd> -- <argv…>
+```
+
+- `workspace-write` → RO root + `/tmp` tmpfs + workspace RW
+- `read-only` → no writable mounts (workspace stays under the RO root)
+- Network off by default; `XRK_SANDBOX_BWRAP_NETWORK=bridge|on` keeps host network
+- Needs user namespaces; missing bwrap / userns fails closed at spawn (no silent downgrade)
+- landlock / macOS seatbelt / Starlark execpolicy are **not** shipped
 
 ## Enable Windows write isolation
 
@@ -148,9 +183,10 @@ Same-world argv isolation is `SandboxService`; **swapping fs/subprocess** is a s
 | Provider | Factory | Notes |
 |----------|---------|-------|
 | `local` (default) | `createLocalExecEnvironment` | Host disk + local subprocess |
+| `memory` | `createMemoryExecEnvironment` | In-process fs + scripted subprocess (CI / tests; no sidecar) |
 | `http` | `createHttpExecEnvironment` | Serverless sample sidecar: `GET /health` · `POST /v1/exec` · `POST /v1/fs` |
 
-Select with `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|http` (HTTP needs `XRK_EXEC_ENVIRONMENT_URL`). **Host spawn is wired** (SSH first, else HTTP world swaps fs/subprocess; `xrkh doctor` probes `/health`). SSH still uses `createSshExecutionWorld` (Host `remoteExecution`) — same `ExecWorld` shape, separate dial. Package: `@xrkseek/exec-environment`.
+Select with `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|memory|http` (HTTP needs `XRK_EXEC_ENVIRONMENT_URL`). **Host spawn is wired** (SSH first, else `http` / `memory` swaps fs/subprocess; `xrkh doctor` probes `/health` or reports memory). SSH still uses `createSshExecutionWorld` (Host `remoteExecution`) — same `ExecWorld` shape, separate dial. Package: `@xrkseek/exec-environment`. Persistent Docker/Modal terminal worlds and a Face product picker are **not** shipped.
 
 ## vs permission presets
 

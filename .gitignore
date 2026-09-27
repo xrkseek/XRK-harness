@@ -40,6 +40,11 @@ __pycache__/
 apps/desktop/.desktop-build/
 apps/desktop/.env.windows
 apps/desktop/.env.macos
+# Generated brand icons (rebuilt by scripts/prepare-brand-icons.mjs)
+apps/desktop/build/
+# One-off CDP / DSH probes (debug only; never commit)
+apps/desktop/scripts/_dsh-*.mjs
+apps/desktop/scripts/cdp-*-probe.mjs
 
 # Release staging (fat CLI)
 .release/

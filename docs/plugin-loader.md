@@ -194,7 +194,7 @@ xrkh plugin path
   <id>/   # 进程插件（discover 跳过 web/）
 ```
 
-装完后：**进程半部**经 Settings 停用/启用可即时 reconcile；**client 半部**（或新装后首次进壳）刷新页面 / 重启 `web`·`serve`（`needsRestart`）。`add` / `remove` 会自动 reconcile boot；手删目录或 inventory 不同步时跑 `plugin reconcile`。Host 经 Settings 调 mutate 时按序尝试：`XRK_HARNESS_BIN` → 仓内 `apps/cli/dist/bin.js` → `xrkh` → 旧名 `xrk-harness`（仅在命令不存在时回退）。全程 **不用** `shell: true`：`node` + `.js` 直接 argv（兼容 `Program Files` / 含空格或非 ASCII 路径）；Windows 裸 `.cmd` 经 `ComSpec /d /s /c` 正规转义。
+装完后：**进程半部**经 Settings 停用/启用可即时 reconcile；**client 半部**（或新装后首次进壳）刷新页面 / 重启 `web`·`serve`（`needsRestart`）。`add` / `remove` 会自动 reconcile boot；手删目录或 inventory 不同步时跑 `plugin reconcile`。Settings **插件列表**可调 `pluginInventory/install|update|remove|setEnabled`（底层同 `runPluginMutate`）。Host 经 Settings 调 mutate 时按序尝试：`XRK_HARNESS_BIN` → 仓内 `apps/cli/dist/bin.js` → `xrkh` → 旧名 `xrk-harness`（仅在命令不存在时回退）。Desktop 启动时若解析到内置 CLI 会写入 `XRK_HARNESS_BIN`。全程 **不用** `shell: true`：`node` + `.js` 直接 argv（兼容 `Program Files` / 含空格或非 ASCII 路径）；Windows 裸 `.cmd` 经 `ComSpec /d /s /c` 正规转义。
 
 **Inventory 与磁盘**：`.xrk-plugins.json` 是 managed 包真源。`web/plugins/<id>/` 仅应存在 inventory 里 `kind: client|both` 的包；孤儿目录会导致 overlay `boot.json` 引用已删 `client.js`，浏览器 boot 失败或 slot 崩溃。`reconcile` 按 inventory 清理 staging 并重写 boot。
 
@@ -215,7 +215,7 @@ Host 在 `XRK_PLUGINS_DIR` 未设且该目录已存在时自动用作 `pluginsDi
 
 ## Host / preset
 
-`XRK_PLUGINS_DIR`（或存在的 `~/.xrk/plugins`）→ `reconcileManagedProcessPlugins`（discover + load 未停用项）→ factory 收到 `plugins` → minimal / harness 调用 `wireCompositionTools` + `wireCompositionPrompts`；Face 读同一列表做 `pluginInventory/list` 与 slash。Settings 停用/删除/更新后 Host 再跑同一 reconcile，并刷新 Face `plugins`。
+`XRK_PLUGINS_DIR`（或存在的 `~/.xrk/plugins`）→ `reconcileManagedProcessPlugins`（discover + load 未停用项）→ factory 收到 `plugins` → minimal / harness 调用 `wireCompositionTools` + `wireCompositionPrompts`；Face 读同一列表做 `pluginInventory/list` 与 slash。Settings 安装/停用/删除/更新后 Host 再跑同一 reconcile，并刷新 Face `plugins`。
 
 `{pluginsDir}/web/`：客户端叠加（可选 `boot.json` + 静态文件）。Host 把它 merge 进产品壳 boot，再 `applyXrkProductBootPolicy`（Cordis 客户端 id 与 HMR 仍会被去掉），并作为 `extraRoots` 提供 `/plugins/…`。不作为进程插件扫描。
 
@@ -433,7 +433,7 @@ Layout:
   <id>/   # process plugins (discover skips web/)
 ```
 
-After install: the **process half** can live-reconcile on Settings enable/disable; the **client half** (or first shell load after install) still needs a page refresh / restart of `web`·`serve` (`needsRestart`). `add` / `remove` auto-reconcile boot; run `plugin reconcile` when directories were deleted by hand or inventory drifts. Host Settings mutate tries, in order: `XRK_HARNESS_BIN` → repo `apps/cli/dist/bin.js` → `xrkh` → legacy `xrk-harness` (fallback only when the binary is missing). Never uses `shell: true`: `node` + `.js` is a direct argv (safe for `Program Files` / spaces / non-ASCII paths); bare Windows `.cmd` shims go through `ComSpec /d /s /c` with proper quoting.
+After install: the **process half** can live-reconcile on Settings enable/disable; the **client half** (or first shell load after install) still needs a page refresh / restart of `web`·`serve` (`needsRestart`). `add` / `remove` auto-reconcile boot; run `plugin reconcile` when directories were deleted by hand or inventory drifts. Settings **Plugin list** calls `pluginInventory/install|update|remove|setEnabled` (same `runPluginMutate` path). Host Settings mutate tries, in order: `XRK_HARNESS_BIN` → repo `apps/cli/dist/bin.js` → `xrkh` → legacy `xrk-harness` (fallback only when the binary is missing). Desktop sets `XRK_HARNESS_BIN` when a bundled CLI is resolved. Never uses `shell: true`: `node` + `.js` is a direct argv (safe for `Program Files` / spaces / non-ASCII paths); bare Windows `.cmd` shims go through `ComSpec /d /s /c` with proper quoting.
 
 **Inventory vs disk**: `.xrk-plugins.json` is the source of truth for managed packages. `web/plugins/<id>/` must only hold packages listed as `kind: client|both`; orphans make overlay `boot.json` point at deleted `client.js` and break boot or slots. `reconcile` cleans staging from inventory and rewrites boot.
 
@@ -454,7 +454,7 @@ When `XRK_PLUGINS_DIR` is unset and that directory exists, the Host uses it as `
 
 ## Host / preset
 
-`XRK_PLUGINS_DIR` (or existing `~/.xrk/plugins`) → `reconcileManagedProcessPlugins` (discover + load non-disabled) → factory receives `plugins` → minimal / harness call `wireCompositionTools` + `wireCompositionPrompts`; Face uses the same list for `pluginInventory/list` and slash commands. After Settings disable/remove/update, the Host runs the same reconcile and refreshes Face `plugins`.
+`XRK_PLUGINS_DIR` (or existing `~/.xrk/plugins`) → `reconcileManagedProcessPlugins` (discover + load non-disabled) → factory receives `plugins` → minimal / harness call `wireCompositionTools` + `wireCompositionPrompts`; Face uses the same list for `pluginInventory/list` and slash commands. After Settings install/disable/remove/update, the Host runs the same reconcile and refreshes Face `plugins`.
 
 `{pluginsDir}/web/`: client overlay (optional `boot.json` + static files). The Host merges it into the product-shell boot, then `applyXrkProductBootPolicy` (Cordis client ids and HMR are still stripped), and serves `/plugins/…` via `extraRoots`. Not scanned as process plugins.
 

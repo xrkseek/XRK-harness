@@ -10,8 +10,10 @@
 | --- | -------------------------------------------------------- | -------------------- | --------------------------------------------------------- |
 | 1   | `tsc -b --pretty false`                                  | ~2s                  | 类型 / 项目引用断裂 |
 | 2   | `eslint <kernel paths>`                                  | ~30s 冷 / ~5s 缓存   | 风格与不安全模式（**不含** 产品壳 `packages/client`、打包 `product-web`） |
-| 3   | `vitest run`                                             | ~10s                 | 行为回归 |
+| 3   | `vitest run`                                             | ~10s                 | 行为回归（仅 `*.test.ts`；**不含** client `.client.spec.*`） |
 | 4   | `vitest run --config vitest.kernel.config.ts --coverage` | ~15s                 | `@xrkseek/kernel` 行/分支/函数/语句 **≥ 90%** |
+
+Client 浏览器半部（`packages/client/**/*.client.spec.ts(x)`）已由 `vitest.client.config.ts` + `pnpm test:client` 接线；**有意未进** `pnpm check`（分期变绿）。对话相关子集：`pnpm test:ui-conversation`。产品壳硬刷：`pnpm test:web`。
 
 在本仓根目录跑 `eslint .` 会：会把 `apps/cli/product-web/` 里整包 Vite 产物和 `packages/client` fixture 丢进 TypeScript project service，Windows 上 CPU 拉满、IDE 卡死。
 
@@ -25,7 +27,9 @@ pnpm exec tsc -b && pnpm test
 
 ```bash
 pnpm build                # tsc -b (required before CLI / Node runs dist)
-pnpm test                 # vitest run
+pnpm test                 # vitest run (*.test.ts unit lane)
+pnpm test:client          # packages/client *.client.spec.* (jsdom; not in check yet)
+pnpm test:ui-conversation # conversation / attachment / deliverables subset
 pnpm test:evals           # topic golden tracks (compact · fan-out · steer · spill · session.search)
 pnpm test:web             # Host-serve product-shell hard refresh (needs dist + Chromium)
 pnpm test:kernel-coverage
@@ -86,8 +90,10 @@ Root script `pnpm check` → `scripts/check.mjs`:
 | --- | -------------------------------------------------------- | -------------------- | --------------------------------------------------------- |
 | 1   | `tsc -b --pretty false`                                  | ~2s                  | Types or project refs broken |
 | 2   | `eslint <kernel paths>`                                  | ~30s cold / ~5s cached | Style and unsafe patterns (**excludes** product shell `packages/client` and bundled `product-web`) |
-| 3   | `vitest run`                                             | ~10s                 | Behavior regressions |
+| 3   | `vitest run`                                             | ~10s                 | Behavior regressions (`*.test.ts` only; **excludes** client `.client.spec.*`) |
 | 4   | `vitest run --config vitest.kernel.config.ts --coverage` | ~15s                 | `@xrkseek/kernel` lines/branches/functions/statements **≥ 90%** |
+
+Client browser half (`packages/client/**/*.client.spec.ts(x)`) is wired via `vitest.client.config.ts` + `pnpm test:client`; **intentionally not** in `pnpm check` yet (green by package). Conversation subset: `pnpm test:ui-conversation`. Product-shell hard refresh: `pnpm test:web`.
 
 **Do not** run `eslint .` at the repo root: it pulls the full Vite product-web bundle and large client fixtures into the TypeScript project service and can peg CPU / freeze the IDE on Windows.
 
@@ -101,7 +107,9 @@ Individual commands:
 
 ```bash
 pnpm build                # tsc -b (required before CLI / Node runs dist)
-pnpm test                 # vitest run
+pnpm test                 # vitest run (*.test.ts unit lane)
+pnpm test:client          # packages/client *.client.spec.* (jsdom; not in check yet)
+pnpm test:ui-conversation # conversation / attachment / deliverables subset
 pnpm test:evals           # topic golden tracks (compact · fan-out · steer · spill · session.search)
 pnpm test:web             # Host-serve product-shell hard refresh (needs dist + Chromium)
 pnpm test:kernel-coverage

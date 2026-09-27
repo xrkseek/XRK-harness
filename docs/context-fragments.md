@@ -19,7 +19,7 @@ AGENTS.md / skills catalog 保持 fragment 之外的角色；ephemeral env / rec
 |-------|----------------|
 | `turn-start` | `beforeUserMessage`：先 `appendWorkspaceInjectsIfChanged`，再 `appendContextFragments` |
 | `user-message` | `prepareUserContent`：session refs 之后追加 `fragmentsToPrepareContexts` |
-| `post-tool` | 管线已支持；Host 可在工具 settle 后自行 `collect` |
+| `post-tool` | Harness：工具 settle 后、`step/end` 前 `appendContextFragments`（薄 Guardian 默认注册此相位） |
 
 ## API（摘要）
 
@@ -30,13 +30,13 @@ pipeline.collect(phase, ctx, { budgetChars? })
 createAdditionalContextFragment({ key, value, phase })
 createRecapFragment({ history })
 createStaticAdditionalContextProvider({ id, phase, entries })
-createGuardianReviewProvider({ id? }) // turn-start 提醒；非完整 LLM Guardian
+createGuardianReviewProvider({ id? }) // 默认 turn-start + post-tool；非完整 LLM Guardian
 appendContextFragments({ store, sessionId, turnId, now, pipeline, phase })
 ```
 
 预算：相位总字符上限（默认 **8000**）；超出按 `priority` 高者优先，正文可 `truncateMiddle`。
 
-Harness：`createHarnessComposition({ contextFragmentProviders, contextFragmentBudgetChars, guardianFragments? })`；`contextFragments: false` 关闭。默认注册 **Guardian review** 片段（`guardianFragments !== false`）：turn-start 注入不信任工具输出 / 破坏性操作提醒——**不是**完整 Guardian LLM 审阅引擎。
+Harness：`createHarnessComposition({ contextFragmentProviders, contextFragmentBudgetChars, guardianFragments? })`；`contextFragments: false` 关闭。默认注册 **Guardian review** 片段（`guardianFragments !== false`）：turn-start 注入完整提醒，工具 settle 后再注入较短 post-tool 提醒——**不是**完整 Guardian LLM 审阅引擎。
 
 ## 范围
 
@@ -67,7 +67,7 @@ Do not move AGENTS.md / skill catalogs into fragments; do not put ephemeral env 
 |-------|----------------|
 | `turn-start` | `beforeUserMessage`: `appendWorkspaceInjectsIfChanged` then `appendContextFragments` |
 | `user-message` | `prepareUserContent`: session refs then `fragmentsToPrepareContexts` |
-| `post-tool` | Pipeline supports it; Host may `collect` after tool settle |
+| `post-tool` | Harness: after tool settle, before `step/end`, `appendContextFragments` (thin Guardian registers this phase by default) |
 
 ## API (summary)
 
@@ -78,13 +78,13 @@ pipeline.collect(phase, ctx, { budgetChars? })
 createAdditionalContextFragment({ key, value, phase })
 createRecapFragment({ history })
 createStaticAdditionalContextProvider({ id, phase, entries })
-createGuardianReviewProvider({ id? }) // turn-start nudge; not a full LLM Guardian
+createGuardianReviewProvider({ id? }) // default turn-start + post-tool; not a full LLM Guardian
 appendContextFragments({ store, sessionId, turnId, now, pipeline, phase })
 ```
 
 Budget: per-phase char ceiling (default **8000**); higher `priority` wins; bodies may `truncateMiddle`.
 
-Harness: `createHarnessComposition({ contextFragmentProviders, contextFragmentBudgetChars, guardianFragments? })`; `contextFragments: false` disables. Default registers **Guardian review** when `guardianFragments !== false` (Settings `agent-loop.guardianFragments`).
+Harness: `createHarnessComposition({ contextFragmentProviders, contextFragmentBudgetChars, guardianFragments? })`; `contextFragments: false` disables. Default registers **Guardian review** when `guardianFragments !== false` (Settings `agent-loop.guardianFragments`): full nudge at turn-start, shorter post-tool nudge after tool settle — **not** a full Guardian LLM review engine.
 
 ## Scope
 

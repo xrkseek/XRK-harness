@@ -37,7 +37,7 @@ createWorkspaceToolOutputPersist() // host disk: `~/.xrk/spill/tool-outputs/`
 | 全文 | `persist` 写到 `~/.xrk/spill/tool-outputs/` | 优先用 pipeline `outputPaths`；否则解析正文里的 `full content saved to`。命中则**不再写第二份**，只压内联预览并保留原路径 |
 | 未挂 persist | 只截断、不落盘 | 仍超上限时，**同一目录**写一份（`spill/tool-outputs/<session>_<call>.txt`） |
 
-`@session` 引用全文在 `~/.xrk/spill/<session>/`，不是工具结果，不与上表混用。
+`@session` 引用全文经 **`@xrkseek/spill` `LocalSpillStore`**（`source.kind: "session-reference"`）落到 `~/.xrk/spill/<session>/`，与工具结果同店不同 kind；不是第二套裸写盘。
 
 ## 边界
 
@@ -90,7 +90,7 @@ One policy, not two stores. Persistence and notice policy live in **`@xrkseek/sp
 | Full body | `persist` writes `~/.xrk/spill/tool-outputs/` | Prefers pipeline `outputPaths`; else parses `full content saved to` in the text. On hit **no second file** — shrink the inline preview and keep that path |
 | No persist mounted | Truncate only | If still over the ceiling, write **once in that same directory** (`spill/tool-outputs/<session>_<call>.txt`) |
 
-`@session` reference transcripts live under `~/.xrk/spill/<session>/`. They are not tool results and are not part of this table.
+`@session` reference transcripts persist through **`@xrkseek/spill` `LocalSpillStore`** (`source.kind: "session-reference"`) under `~/.xrk/spill/<session>/` — same store, different kind; not a second bare write path.
 
 ## Boundaries
 

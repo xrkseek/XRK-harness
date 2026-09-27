@@ -67,7 +67,7 @@ exec-sandbox         → createSandboxWrapGuard → pipeline guards
 `wrapArgv(argv) → argv'`（同步）；spawn 路径用可取消的 `confine(argv, cwd?, signal?)`。  
 `createSandboxStack`：`workspace`（默认 DenyList+cwd 狱）· `docker` · `bwrap` — 同一 `SandboxService` Definition。规格：[sandbox.md](./sandbox.md)。
 
-ExecEnvironment（换整套 fs/subprocess，对标 Hermes terminal environments / MemoryProvider 缝）：`@xrkseek/exec-environment` — `local` 默认；HTTP serverless 样板 `createHttpExecEnvironment`（`GET /health` · `POST /v1/exec` · `POST /v1/fs`）；`resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT`。**Host 已接线**：SSH 优先（`createSshExecutionWorldReady`），否则 `XRK_EXEC_ENVIRONMENT=http` 时用 HTTP world 的 `fs`+`subprocess`（`xrkh doctor` 探测 `/health`）。**不是** `createSandboxStack` 后端，也不替代 SSH。
+ExecEnvironment（换整套 fs/subprocess，对标 Hermes terminal environments / MemoryProvider 缝）：`@xrkseek/exec-environment` — `local` 默认；`memory`（内存 fs+subprocess，CI/测例）；HTTP serverless 样板 `createHttpExecEnvironment`（`GET /health` · `POST /v1/exec` · `POST /v1/fs`）；`resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|memory|http`。**Host 已接线**：SSH 优先（`createSshExecutionWorldReady`），否则 `http` / `memory` 换 world 的 `fs`+`subprocess`（`xrkh doctor` 探测 `/health` 或报告 memory）。**不是** `createSandboxStack` 后端，也不替代 SSH。Docker/Modal 持久 world · Face picker **未做**。
 Shell `startJob` 在 prepare（confine）之前武装超时，准备时间计入同一 deadline（DSH）。  
 后台：`startJob` / `listJobs` / `killJob` — [shell-jobs.md](./shell-jobs.md)。
 
@@ -144,7 +144,7 @@ exec-sandbox         → createSandboxWrapGuard → pipeline guards
 `wrapArgv(argv) → argv'` (sync); spawn paths use cancellable `confine(argv, cwd?, signal?)`.  
 `createSandboxStack`: `workspace` (default DenyList+cwd jail) · `docker` · `bwrap` — same `SandboxService` Definition. Spec: [sandbox.md](./sandbox.md).
 
-ExecEnvironment (swap fs/subprocess world; Hermes terminal environments / MemoryProvider-style seam): `@xrkseek/exec-environment` — `local` default; HTTP serverless sample `createHttpExecEnvironment` (`GET /health` · `POST /v1/exec` · `POST /v1/fs`); `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT`. **Host-wired**: SSH first (`createSshExecutionWorldReady`), else `XRK_EXEC_ENVIRONMENT=http` swaps world fs/subprocess (`xrkh doctor` probes `/health`). **Not** a `createSandboxStack` backend and **not** a replacement for SSH.
+ExecEnvironment (swap fs/subprocess world; Hermes terminal environments / MemoryProvider-style seam): `@xrkseek/exec-environment` — `local` default; `memory` (in-process fs+subprocess for CI/tests); HTTP serverless sample `createHttpExecEnvironment` (`GET /health` · `POST /v1/exec` · `POST /v1/fs`); `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|memory|http`. **Host-wired**: SSH first (`createSshExecutionWorldReady`), else `http` / `memory` swaps world fs/subprocess (`xrkh doctor` probes `/health` or reports memory). **Not** a `createSandboxStack` backend and **not** a replacement for SSH. Persistent Docker/Modal worlds · Face picker **not** shipped.
 Shell `startJob` arms timeout before prepare (confine); preparation counts toward the same deadline (DSH).  
 Background: `startJob` / `listJobs` / `killJob` — [shell-jobs.md](./shell-jobs.md).
 

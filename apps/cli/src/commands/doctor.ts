@@ -352,6 +352,14 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
       ok: sshConfigured ? true : Boolean(url) && httpOk,
       detail: httpDetail,
     });
+  } else if (execKind === "memory") {
+    checks.push({
+      name: "exec-environment",
+      ok: true,
+      detail: sshConfigured
+        ? "ssh-remote (XRK_EXEC_ENVIRONMENT=memory ignored while SSH is on)"
+        : "memory (in-process fs+subprocess; CI / tests)",
+    });
   } else {
     checks.push({
       name: "exec-environment",

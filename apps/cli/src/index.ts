@@ -14,6 +14,29 @@ import { readCliVersion } from "./product-paths.js";
 
 export { helpText, parseArgs, readCliVersion };
 
+/**
+ * Commands that host an agent runtime → the surface the model should assume.
+ * `tui` is absent on purpose: it attaches to an existing Host, so the surface
+ * stays whatever the Host declared.
+ */
+const COMMAND_SURFACE: Partial<Record<string, string>> = {
+  serve: "web",
+  run: "cli",
+  acp: "acp",
+};
+
+/**
+ * Declare `XRK_SURFACE` for Host-hosting commands (feeds the model's
+ * `## Runtime surface` inject). Never overrides an inherited value — the
+ * Desktop Host declares `desktop` before any CLI command could run.
+ * @param command - parsed CLI command.
+ */
+export function declareRuntimeSurface(command: string): void {
+  const surface = COMMAND_SURFACE[command];
+  if (surface === undefined) return;
+  if (process.env.XRK_SURFACE === undefined) process.env.XRK_SURFACE = surface;
+}
+
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   let args;
   try {
@@ -38,6 +61,8 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     process.stdout.write(helpText());
     return 0;
   }
+
+  declareRuntimeSurface(args.command);
 
   try {
     switch (args.command) {

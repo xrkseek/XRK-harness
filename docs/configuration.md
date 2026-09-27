@@ -88,6 +88,7 @@ Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-c
 |------|------|
 | `XRK_PRESET` | Host 入口默认徽章：`minimal` \| `shell` \| `frugal` \| `plan` \| `shallow` \| `harness` \| `server`（`server` = harness 工具 + Host factory；会话徽章见 [profiles.md](./profiles.md)） |
 | `XRK_WORKSPACE` | workspace 根 |
+| `XRK_SURFACE` | 运行壳形态：`desktop`（Electron 桌面端）\| `web`（浏览器，`xrkh web` / `serve`）\| `tui` \| `acp` \| `cli`；决定模型看到的 `## Runtime surface` 段。CLI / Desktop Host 自动声明，一般不用手设 |
 | `XRK_WEB_DIST` | 产品壳静态根。默认：CLI 包内 `product-web/`，或 monorepo `apps/web/dist`。设了则需已存在 |
 | `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db` · WAL · 独占 `sessions.write.lock`）；第二 Host 拒绝抢写 | Host 省略 = 内存（CLI serve 另有默认） |
 | `XRK_INVARIANTS_FAIL_FAST` | `1` / `true`：包装 SessionStore，挂 core-session / core-agent-loop 包自有 invariant 伴侣；关系违规抛 `InvariantError` 并阻止 append | 默认关（可选诊断） |
@@ -121,11 +122,11 @@ Host 启用 SSH 时会先跑 `true` 预检（失败则拒绝启动）；`xrkh do
 
 ### 可插拔 ExecEnvironment（HTTP sidecar）
 
-与 SSH 互斥：配置了 SSH 时 Host **优先 SSH**，忽略 `XRK_EXEC_ENVIRONMENT=http`。
+与 SSH 互斥：配置了 SSH 时 Host **优先 SSH**，忽略 `XRK_EXEC_ENVIRONMENT=http|memory`。
 
 | 变量 | 含义 |
 |------|------|
-| `XRK_EXEC_ENVIRONMENT` | `local`（默认）或 `http` |
+| `XRK_EXEC_ENVIRONMENT` | `local`（默认）· `memory` · `http` |
 | `XRK_EXEC_ENVIRONMENT_URL` | HTTP sidecar base URL（`/health` · 文件/进程 RPC） |
 | `XRK_EXEC_ENVIRONMENT_TOKEN` | 可选 Bearer |
 
@@ -178,6 +179,9 @@ Preset 选型：[profiles.md](./profiles.md)。
 | `XRK_WEB_SEARCH_REGION` | 可选 DuckDuckGo `kl`；产品路径用 Web search → region |
 | `XRK_LSP_COMMAND` / `XRK_LSP_ARGS` | `lsp` stdio 语言服务器 |
 | `XRK_SANDBOX_BACKEND` | CI 旁路 Settings：`workspace`（默认）· `docker` · `bwrap` · `windows` — 产品路径用 Settings → Plugins → Sandbox；见 [sandbox.md](./sandbox.md) |
+| `XRK_SANDBOX_BWRAP_BIN` | bubblewrap 二进制（默认 `bwrap`） |
+| `XRK_SANDBOX_BWRAP_MODE` | `workspace-write`（默认）· `read-only` |
+| `XRK_SANDBOX_BWRAP_NETWORK` | `none`（默认，禁网）· `bridge` / `on` |
 | `XRK_SANDBOX_DOCKER_IMAGE` | Docker 后端镜像（`backend=docker` 时必填） |
 | `XRK_SANDBOX_DOCKER_NETWORK` | `none`（默认）或 `bridge` |
 | `XRK_SANDBOX_WINDOWS_HELPER` | Windows 后端 helper 二进制（`backend=windows` 时必填，缺则失败关闭）；`xrkh doctor` 探测 |
@@ -391,6 +395,7 @@ Path jail: `exec-fs` `resolveWithinRoot` ([security-checklist.md](./security-che
 |------|------|
 | `XRK_PRESET` | Host entry default badge: `minimal` \| `shell` \| `frugal` \| `plan` \| `shallow` \| `harness` \| `server` (`server` = harness tools + Host factory; session badge: [profiles.md](./profiles.md)) |
 | `XRK_WORKSPACE` | Workspace root |
+| `XRK_SURFACE` | Hosting shell surface: `desktop` (Electron) \| `web` (browser, `xrkh web` / `serve`) \| `tui` \| `acp` \| `cli`; drives the model's `## Runtime surface` inject. Declared by the CLI / Desktop Host — not user config |
 | `XRK_WEB_DIST` | Product-shell static root. Default: `product-web/` inside the CLI package, or monorepo `apps/web/dist`. If set, the path must already exist |
 | `XRK_SESSIONS_DIR` | Session persistence directory (`sessions.db` · WAL · exclusive `sessions.write.lock`); a second Host refuses to steal the write lease | Host omit = in-memory (CLI serve has its own default) |
 | `XRK_INVARIANTS_FAIL_FAST` | `1` / `true`: wrap SessionStore with core-session / core-agent-loop package-owned invariant companions; relational violations throw `InvariantError` and block append | Off by default (opt-in diagnostics) |
@@ -424,11 +429,11 @@ When SSH is enabled, Host probes with remote `true` before serving (fail-closed)
 
 ### Pluggable ExecEnvironment (HTTP sidecar)
 
-Mutually exclusive with SSH: when SSH is configured, Host **prefers SSH** and ignores `XRK_EXEC_ENVIRONMENT=http`.
+Mutually exclusive with SSH: when SSH is configured, Host **prefers SSH** and ignores `XRK_EXEC_ENVIRONMENT=http|memory`.
 
 | Variable | Meaning |
 |------|------|
-| `XRK_EXEC_ENVIRONMENT` | `local` (default) or `http` |
+| `XRK_EXEC_ENVIRONMENT` | `local` (default) · `memory` · `http` |
 | `XRK_EXEC_ENVIRONMENT_URL` | HTTP sidecar base URL (`/health` · file/process RPC) |
 | `XRK_EXEC_ENVIRONMENT_TOKEN` | Optional Bearer |
 
@@ -481,6 +486,9 @@ Behavior notes:
 | `XRK_WEB_SEARCH_REGION` | Optional DuckDuckGo `kl`; product path: Web search → region |
 | `XRK_LSP_COMMAND` / `XRK_LSP_ARGS` | `lsp` stdio language server |
 | `XRK_SANDBOX_BACKEND` | CI bypass over Settings: `workspace` (default) · `docker` · `bwrap` · `windows` — product path: Settings → Plugins → Sandbox; see [sandbox.md](./sandbox.md) |
+| `XRK_SANDBOX_BWRAP_BIN` | bubblewrap binary (default `bwrap`) |
+| `XRK_SANDBOX_BWRAP_MODE` | `workspace-write` (default) · `read-only` |
+| `XRK_SANDBOX_BWRAP_NETWORK` | `none` (default, no net) · `bridge` / `on` |
 | `XRK_SANDBOX_DOCKER_IMAGE` | Docker backend image (required when `backend=docker`) |
 | `XRK_SANDBOX_DOCKER_NETWORK` | `none` (default) or `bridge` |
 | `XRK_SANDBOX_WINDOWS_HELPER` | Windows backend helper binary (required when `backend=windows`; fail closed without it); probed by `xrkh doctor` |

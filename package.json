@@ -14,6 +14,8 @@
     "test": "vitest run",
     "test:evals": "vitest run evals/golden",
     "test:web": "vitest run --config vitest.web.config.ts",
+    "test:client": "vitest run --config vitest.client.config.ts",
+    "test:ui-conversation": "vitest run --config vitest.ui-conversation.config.ts",
     "test:kernel-coverage": "vitest run --config vitest.kernel.config.ts --coverage",
     "lint": "eslint .",
     "format": "prettier --write .",
