@@ -1,4 +1,4 @@
-/** Browser API carrier: HTTP upstream plus one WebSocket per downstream event stream. */
+/** Browser API carrier: HTTP upstream plus WebSocket (or SSE on `xrk-app://`) downlinks. */
 
 import type { ApiProxy, HostFrame, MuxFrame, RpcRequest, ServerRequest } from './api.ts'
 import { AbstractApiClient } from './api.ts'
@@ -9,10 +9,31 @@ import { HOST_EVENTS_PATH, MUX_EVENTS_PATH } from '../api-path.ts'
 type SocketItem<F> = { kind: 'frame'; envelope: RpcRequest<F> } | { kind: 'end' }
 type Parser<F> = { parse(value: unknown): F }
 
-/** Browser platform subclass: unary/respond use fetch; mux/host use downlink-only WebSockets. */
+/**
+ * Browser platform subclass: unary/respond use fetch; mux/host use WebSocket
+ * on http(s), or SSE on Desktop `xrk-app://` (no WS upgrade over custom protocol).
+ */
 export class WebApiClient extends AbstractApiClient {
   protected doFetch(input: URL, init?: RequestInit): Promise<Response> {
     return globalThis.fetch(input, init)
+  }
+
+  /** Desktop custom protocol cannot open `ws:` — reuse AbstractApiClient SSE. */
+  private usesSseDownlink(): boolean {
+    try {
+      return new URL(this.resolveBase()).protocol === 'xrk-app:'
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Sibling hostname so long-lived mux SSE does not share Chromium's
+   * custom-protocol connection pool with unary `xrk-app://app` RPCs.
+   */
+  protected override resolveStreamBase(): string {
+    if (!this.usesSseDownlink()) return this.resolveBase()
+    return 'xrk-app://stream'
   }
 
   protected override openMux(
@@ -20,6 +41,9 @@ export class WebApiClient extends AbstractApiClient {
     signal: AbortSignal,
     onOpen?: () => void,
   ): AsyncIterable<RpcRequest<MuxFrame>> {
+    if (this.usesSseDownlink()) {
+      return this.readSse(MUX_EVENTS_PATH, signal, muxFrameSchema, onOpen)
+    }
     return this.readWebSocket(MUX_EVENTS_PATH, signal, muxFrameSchema, onOpen)
   }
 
@@ -28,7 +52,30 @@ export class WebApiClient extends AbstractApiClient {
     signal: AbortSignal,
     onOpen?: () => void,
   ): AsyncIterable<RpcRequest<HostFrame>> {
+    if (this.usesSseDownlink()) {
+      // Electron custom-protocol origins allow very few concurrent fetches.
+      // Two long-lived SSE streams (mux+host) starve unary `host.describe`
+      // and freeze the UI on 「连接中」. Mux alone carries session traffic;
+      // host-bus frames (`host/session-status`, …) are unavailable here —
+      // Session arms/clears `running` from turn/start|end + prompt optimism.
+      return this.openPlaceholderDownlink(signal, onOpen)
+    }
     return this.readWebSocket(HOST_EVENTS_PATH, signal, hostFrameSchema, onOpen)
+  }
+
+  /**
+   * Satisfies the connection handshake's host-stream onOpen without a second
+   * long-lived custom-protocol fetch (see {@link openHost}).
+   */
+  private async *openPlaceholderDownlink(
+    signal: AbortSignal,
+    onOpen?: () => void,
+  ): AsyncGenerator<RpcRequest<HostFrame>> {
+    onOpen?.()
+    if (signal.aborted) return
+    await new Promise<void>((resolve) => {
+      signal.addEventListener('abort', () => resolve(), { once: true })
+    })
   }
 
   private async *readWebSocket<F extends MuxFrame | HostFrame>(

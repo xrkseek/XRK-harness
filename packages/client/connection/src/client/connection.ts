@@ -14,6 +14,12 @@ export interface ConnectionConfig {
    *  fires onOpen (misbehaving proxy) must not wedge the connection forever — on timeout the
    *  generation proceeds as connected and the live-gap repair path covers stragglers. */
   streamOpenTimeoutMs?: number
+  /**
+   * Complete `host.describe` before opening mux/host streams.
+   * Desktop `xrk-app://` allows few concurrent custom-protocol fetches; opening SSE
+   * first starves unary and freezes the UI on 「连接中」.
+   */
+  describeBeforeStreams?: boolean
 }
 
 const CONNECTION_DEFAULTS: Required<ConnectionConfig> = {
@@ -21,6 +27,7 @@ const CONNECTION_DEFAULTS: Required<ConnectionConfig> = {
   backoffFactor: 2,
   backoffMaxMs: 10_000,
   streamOpenTimeoutMs: 3_000,
+  describeBeforeStreams: false,
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -133,14 +140,21 @@ export class ConnectionController {
         new Promise<void>((resolve) => { hostOpened = resolve }),
       ])
 
+      let pumpsStarted = false
+      /* v8 ignore next -- replaced synchronously by the Promise executor. */
+      let settleFailed = (): void => {}
       const failed = new Promise<void>((resolve) => {
-        const settle = (): void => {
+        settleFailed = (): void => {
           if (gen === this.generation && !ac.signal.aborted) ac.abort()
           resolve()
         }
-        void this.pumpStream(this.api.events.mux({}, ac.signal, muxOpened), this.sinks.onMuxEnvelope, settle)
-        void this.pumpStream(this.api.events.host({}, ac.signal, hostOpened), this.sinks.onHostEnvelope, settle)
       })
+      const startPumps = (): void => {
+        if (pumpsStarted) return
+        pumpsStarted = true
+        void this.pumpStream(this.api.events.mux({}, ac.signal, muxOpened), this.sinks.onMuxEnvelope, settleFailed)
+        void this.pumpStream(this.api.events.host({}, ac.signal, hostOpened), this.sinks.onHostEnvelope, settleFailed)
+      }
 
       try {
         // Strict readiness handshake: describe proves unary reachability, onOpen
@@ -149,10 +163,19 @@ export class ConnectionController {
         // subscribed baseline. The timeout guards against a carrier that never fires onOpen
         // (see ConnectionConfig.streamOpenTimeoutMs).
         const timeout = new AbortController()
-        const [description] = await Promise.all([
-          this.api.host.describe({}),
-          Promise.race([streamsOpen, sleep(this.config.streamOpenTimeoutMs, timeout.signal)]),
-        ])
+        let description: Awaited<ReturnType<IApiClient['host']['describe']>>
+        if (this.config.describeBeforeStreams) {
+          // Unary first — avoid custom-protocol SSE occupying the only fetch slot.
+          description = await this.api.host.describe({})
+          startPumps()
+          await Promise.race([streamsOpen, sleep(this.config.streamOpenTimeoutMs, timeout.signal)])
+        } else {
+          startPumps()
+          ;[description] = await Promise.all([
+            this.api.host.describe({}),
+            Promise.race([streamsOpen, sleep(this.config.streamOpenTimeoutMs, timeout.signal)]),
+          ])
+        }
         timeout.abort()
         const descriptionResult = description.result
         if (!descriptionResult.ok) {
@@ -169,6 +192,7 @@ export class ConnectionController {
       } catch {
         // Transport failure: treat as generation failure, fall through to the shared backoff.
         if (!ac.signal.aborted) ac.abort()
+        if (!pumpsStarted) settleFailed()
       }
 
       await failed

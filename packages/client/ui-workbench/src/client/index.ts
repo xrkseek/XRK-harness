@@ -4,13 +4,18 @@
  * browser stay on community `xrkh-better-sidebar`. This plugin provides
  * `ctx.workbench` and mounts an overlay that yields when `ctx.betterSidebar`
  * is present so chat file opens fall through to the community wrap of
- * `workspaces.openPath`.
+ * `workspaces.openPath`. The session-header「文件」button stays visible and
+ * wakes the community side card.
  */
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-locale/client'
 import type {} from '@xrkseek/client-ui-layout/client'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
+import {
+  openCommunitySidebar,
+  type BetterSidebarFace,
+} from './community-open.ts'
 import { WorkbenchController } from './controller.ts'
 import { WorkbenchPanel } from './WorkbenchPanel.tsx'
 import { WorkbenchToggle } from './WorkbenchToggle.tsx'
@@ -24,6 +29,8 @@ export { WorkbenchToggle } from './WorkbenchToggle.tsx'
 export {
   isImagePath, isPdfPath, listFsTree, readFsFile, sidebarApi, sidebarFileUrl,
 } from './fs-api.ts'
+export { openCommunitySidebar } from './community-open.ts'
+export type { BetterSidebarFace } from './community-open.ts'
 
 declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -38,9 +45,9 @@ declare module '@xrkseek/cordis' {
     workbench: import('./fs-api.ts').WorkbenchFace
     /**
      * Present when community `xrkh-better-sidebar` (or equivalent) owns the
-     * floating workbench — builtin panel yields.
+     * floating workbench — builtin panel yields; header「文件」still opens it.
      */
-    betterSidebar?: unknown
+    betterSidebar?: BetterSidebarFace
   }
 }
 
@@ -93,10 +100,22 @@ export function apply(ctx: ClientContext): void {
       // After jobs (20): Files is a workspace utility, not process work.
       order: 25,
       locale: NS,
-      inject: () => ({
-        workbench: controller,
-        yielded: isYielded,
-      }),
+      inject: () => {
+        const face = (): BetterSidebarFace | undefined => ctx.get('betterSidebar')
+        return {
+          workbench: controller,
+          yielded: isYielded,
+          openCommunity: {
+            open: () => { openCommunitySidebar(face()) },
+            isOpen: () => face()?.getSnapshot?.()?.state?.panelOpen === true,
+            subscribe: (listener) => {
+              const sidebar = face()
+              if (sidebar?.subscribeState === undefined) return () => {}
+              return sidebar.subscribeState(listener)
+            },
+          },
+        }
+      },
     }, WorkbenchToggle),
     'ui-workbench: header toggle',
   )

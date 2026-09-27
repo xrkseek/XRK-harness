@@ -29,6 +29,8 @@ export interface SessionNode {
   runningSubagentCount: number
   /** Finished running while not selected and not yet opened (the green "done" reminder dot). */
   completed: boolean
+  /** In the registry-global pin set (leads its section). */
+  pinned: boolean
   updatedAt: number
 }
 
@@ -38,7 +40,7 @@ export type SessionOrderBy = 'manual' | 'updated'
 /**
  * Sidebar archive filter (client-local). Face still strips archived ids from
  * `workspace.sessionIds`; `all` / `archived-only` reattach via cwd→path.
- * Pin/star is out of scope.
+ * Pin order is Face-persisted (`pinnedSessionIds`).
  */
 export type ArchiveViewMode = 'hidden' | 'all' | 'archived-only'
 
@@ -270,9 +272,40 @@ function groupByWorkspace(
   return groups
 }
 
+/**
+ * Keep the visible New Session placeholder first, then pin-ordered rows,
+ * then the remaining members (DSH sectionMembers parity).
+ */
+function sectionMembers(
+  members: readonly SessionSummary[],
+  pinnedOrder: readonly SessionId[],
+  archived: ReadonlySet<SessionId>,
+): SessionSummary[] {
+  const pinned = new Set(pinnedOrder)
+  const byId = new Map(members.map(session => [session.id, session]))
+  const placeholders: SessionSummary[] = []
+  for (const member of members) {
+    if (member.blank) placeholders.push(member)
+  }
+  const leading: SessionSummary[] = []
+  for (const id of pinnedOrder) {
+    const member = byId.get(id)
+    if (member === undefined || member.blank || archived.has(id)) continue
+    leading.push(member)
+  }
+  const rest: SessionSummary[] = []
+  for (const member of members) {
+    if (member.blank || pinned.has(member.id)) continue
+    rest.push(member)
+  }
+  return [...placeholders, ...leading, ...rest]
+}
+
 function sessionNode(
   s: SessionSummary,
   descendants: ReadonlyMap<SessionId, SubagentDescendantSummary>,
+  pinned: ReadonlySet<SessionId>,
+  archived: ReadonlySet<SessionId>,
 ): SessionNode {
   return {
     id: s.id,
@@ -281,6 +314,7 @@ function sessionNode(
     running: s.running,
     runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,
     completed: s.completed === true,
+    pinned: !archived.has(s.id) && pinned.has(s.id),
     updatedAt: s.updatedAt,
     ...(s.pendingInteraction === undefined ? {} : { pendingInteraction: s.pendingInteraction }),
   }
@@ -299,6 +333,7 @@ function sessionNode(
  * @param archivedSessionIds - registry-global archive set.
  * @param view - local expansion arrays.
  * @param archiveMode - sidebar archive filter (default `hidden`).
+ * @param pinnedSessionIds - registry-global pin order (newest first).
  * @returns group sections in render order.
  */
 export function deriveGroups(
@@ -307,8 +342,10 @@ export function deriveGroups(
   archivedSessionIds: readonly SessionId[],
   view: TreeView,
   archiveMode: ArchiveViewMode = 'hidden',
+  pinnedSessionIds: readonly SessionId[] = [],
 ): GroupNode[] {
   const archived = new Set(archivedSessionIds)
+  const pinned = new Set(pinnedSessionIds)
   const expandedGroups = new Set(view.expandedGroups)
   const descendants = indexSubagentDescendants(list.byId)
   const currentGroup = list.current === undefined
@@ -318,6 +355,7 @@ export function deriveGroups(
   const groups: GroupNode[] = []
   for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder, archiveMode)) {
     const expanded = expandedGroups.has(g.key)
+    const ordered = sectionMembers(g.sessions, pinnedSessionIds, archived)
     groups.push({
       key: g.key,
       workspaceId: g.workspaceId,
@@ -327,7 +365,9 @@ export function deriveGroups(
       sessionCount: g.sessions.length,
       expanded,
       containsCurrent: g.key === currentGroup,
-      sessions: expanded ? g.sessions.map(session => sessionNode(session, descendants)) : [],
+      sessions: expanded
+        ? ordered.map(session => sessionNode(session, descendants, pinned, archived))
+        : [],
     })
   }
   return groups
@@ -341,14 +381,17 @@ export function deriveGroups(
  * @param list - sessions list snapshot.
  * @param archivedSessionIds - registry-global archive set.
  * @param archiveMode - sidebar archive filter (default `hidden`).
+ * @param pinnedSessionIds - registry-global pin order (newest first).
  * @returns flat rows in render order.
  */
 export function deriveFlat(
   list: SessionListState,
   archivedSessionIds: readonly SessionId[],
   archiveMode: ArchiveViewMode = 'hidden',
+  pinnedSessionIds: readonly SessionId[] = [],
 ): SessionNode[] {
   const archived = new Set(archivedSessionIds)
+  const pinned = new Set(pinnedSessionIds)
   const descendants = indexSubagentDescendants(list.byId)
   const seen = new Set<SessionId>()
   const rows: SessionSummary[] = []
@@ -367,7 +410,8 @@ export function deriveFlat(
     }
   }
   rows.sort(byRecency)
-  return rows.map(session => sessionNode(session, descendants))
+  return sectionMembers(rows, pinnedSessionIds, archived)
+    .map(session => sessionNode(session, descendants, pinned, archived))
 }
 
 /** Relative-time bucket of a session row's trailing label. */

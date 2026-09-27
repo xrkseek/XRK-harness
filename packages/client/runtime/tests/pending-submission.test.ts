@@ -7,6 +7,7 @@ import type { IApiClient, SessionId } from '@xrkseek/xrk-api-remotes/client'
 import { RpcId } from '@xrkseek/xrk-host-apiproxy/api'
 import { Session } from '../src/client/sessions/session.ts'
 import type { SessionRemotes } from '../src/client/sessions/remotes.ts'
+import { ev } from './event-script.client.ts'
 
 const SID = 'fk-echo-1' as SessionId
 
@@ -107,6 +108,29 @@ describe('beginSubmission', () => {
     const result = await session.prompt([{ type: 'text', text: '失败' }], 'queue', undefined, handle.requestId)
     expect(result.ok).toBe(false)
     expect(session.getSnapshot().pendingSubmissions).toEqual([])
+    expect(session.getSnapshot().running).toBe(false)
+  })
+
+  it('accepted prompt arms running so Stop works without host/session-status', async () => {
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    expect(session.getSnapshot().running).toBe(false)
+    await session.prompt([{ type: 'text', text: 'hi' }], 'queue')
+    expect(session.getSnapshot().running).toBe(true)
+  })
+
+  it('turn/end on mux clears running without host/session-status', async () => {
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    await session.open()
+    await session.prompt([{ type: 'text', text: 'hi' }], 'queue')
+    expect(session.getSnapshot().running).toBe(true)
+    session.handleMuxEnvelope('r1' as never, {
+      type: 'session/event',
+      sessionId: SID,
+      event: ev.turnEnd(1, 1),
+    })
+    expect(session.getSnapshot().running).toBe(false)
   })
 
   it('passes requestId through to session.prompt', async () => {

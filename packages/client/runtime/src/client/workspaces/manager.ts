@@ -21,6 +21,11 @@ export interface WorkspaceListSnapshot {
    * lookups build their own transient Set where they need one.
    */
   archivedSessionIds: readonly SessionId[]
+  /**
+   * Registry-global pin order (newest first). Mutually exclusive with
+   * archive; pinned rows lead their section in the sidebar.
+   */
+  pinnedSessionIds: readonly SessionId[]
   state: 'idle' | 'loading' | 'error'
   phase: WorkspaceListPhase
   error: RpcError | null
@@ -39,6 +44,7 @@ export class WorkspaceManager {
   // Full-snapshot state (list response / unary response / changed frame all
   // carry the complete set), so deltas never merge — installs replace.
   private archivedSessionIds: readonly SessionId[] = []
+  private pinnedSessionIds: readonly SessionId[] = []
   private state: WorkspaceListSnapshot['state'] = 'idle'
   private phase: WorkspaceListPhase = 'pending'
   private error: RpcError | null = null
@@ -51,6 +57,8 @@ export class WorkspaceManager {
    * mirror of replaying refreshFrames over the item baseline.
    */
   private archivedSupersedesRefresh = false
+  /** Mirror of archivedSupersedesRefresh for the pin set. */
+  private pinnedSupersedesRefresh = false
   /** Latest local reorder request; only its unary echo may install order. */
   private orderRequestGeneration = 0
   /** Increments on order frames so a later remote commit outranks an older unary echo. */
@@ -99,6 +107,7 @@ export class WorkspaceManager {
           for (const delta of frames) items = applyWorkspaceDelta(items, delta)
           this.installViews(items)
           if (!this.archivedSupersedesRefresh) this.installArchived(result.value.archivedSessionIds)
+          if (!this.pinnedSupersedesRefresh) this.installPinned(result.value.pinnedSessionIds)
           this.state = 'idle'
           this.phase = 'ready'
         } else {
@@ -113,6 +122,7 @@ export class WorkspaceManager {
       } finally {
         this.refreshFrames = null
         this.archivedSupersedesRefresh = false
+        this.pinnedSupersedesRefresh = false
         this.inflight = null
         this.notifier.markDirty()
       }
@@ -225,9 +235,15 @@ export class WorkspaceManager {
    * @param sessionId - session to archive.
    * @returns the wire result.
    */
-  async archiveSession(sessionId: SessionId): Promise<RpcResult<{ archivedSessionIds: SessionId[] }>> {
+  async archiveSession(sessionId: SessionId): Promise<RpcResult<{
+    archivedSessionIds: SessionId[]
+    pinnedSessionIds: SessionId[]
+  }>> {
     const { result } = await this.api.workspace.archiveSession({ sessionId })
-    if (result.ok) this.installArchived(result.value.archivedSessionIds)
+    if (result.ok) {
+      this.installArchived(result.value.archivedSessionIds)
+      this.installPinned(result.value.pinnedSessionIds)
+    }
     return result
   }
 
@@ -238,6 +254,32 @@ export class WorkspaceManager {
   async unarchiveSession(sessionId: SessionId): Promise<RpcResult<{ archivedSessionIds: SessionId[] }>> {
     const { result } = await this.api.workspace.unarchiveSession({ sessionId })
     if (result.ok) this.installArchived(result.value.archivedSessionIds)
+    return result
+  }
+
+  /**
+   * Pin one session (newest-first); may clear archive.
+   * @param sessionId - session to pin.
+   */
+  async pinSession(sessionId: SessionId): Promise<RpcResult<{
+    archivedSessionIds: SessionId[]
+    pinnedSessionIds: SessionId[]
+  }>> {
+    const { result } = await this.api.workspace.pinSession({ sessionId })
+    if (result.ok) {
+      this.installArchived(result.value.archivedSessionIds)
+      this.installPinned(result.value.pinnedSessionIds)
+    }
+    return result
+  }
+
+  /**
+   * Unpin one session.
+   * @param sessionId - session to unpin.
+   */
+  async unpinSession(sessionId: SessionId): Promise<RpcResult<{ pinnedSessionIds: SessionId[] }>> {
+    const { result } = await this.api.workspace.unpinSession({ sessionId })
+    if (result.ok) this.installPinned(result.value.pinnedSessionIds)
     return result
   }
 
@@ -255,6 +297,9 @@ export class WorkspaceManager {
     }
     else if (envelope.payload.type === 'host/archived-sessions-changed') {
       this.installArchived(envelope.payload.archivedSessionIds)
+    }
+    else if (envelope.payload.type === 'host/pinned-sessions-changed') {
+      this.installPinned(envelope.payload.pinnedSessionIds)
     }
   }
 
@@ -285,6 +330,7 @@ export class WorkspaceManager {
     return {
       items: this.itemViews(),
       archivedSessionIds: this.archivedSessionIds,
+      pinnedSessionIds: this.pinnedSessionIds,
       state: this.state,
       phase: this.phase,
       error: this.error,
@@ -301,6 +347,15 @@ export class WorkspaceManager {
     if (archivedSessionIds.length === this.archivedSessionIds.length
       && archivedSessionIds.every((id, index) => id === this.archivedSessionIds[index])) return
     this.archivedSessionIds = [...archivedSessionIds]
+    this.notifier.markDirty()
+  }
+
+  /** Replace the pin order when membership actually changed. */
+  private installPinned(pinnedSessionIds: readonly SessionId[]): void {
+    if (this.refreshFrames !== null) this.pinnedSupersedesRefresh = true
+    if (pinnedSessionIds.length === this.pinnedSessionIds.length
+      && pinnedSessionIds.every((id, index) => id === this.pinnedSessionIds[index])) return
+    this.pinnedSessionIds = [...pinnedSessionIds]
     this.notifier.markDirty()
   }
 

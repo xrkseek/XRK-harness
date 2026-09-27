@@ -1,5 +1,6 @@
 /** Unit tests for workbench Host helpers and openPath yield. */
 import { describe, expect, it, vi } from 'vitest'
+import { openCommunitySidebar } from '../src/client/community-open.ts'
 import { WorkbenchController } from '../src/client/controller.ts'
 import { isImagePath, isPdfPath, sidebarFileUrl } from '../src/client/fs-api.ts'
 
@@ -66,5 +67,31 @@ describe('WorkbenchController', () => {
     face.hide()
     expect(hide).toHaveBeenCalled()
     expect(face.open).toBe(false)
+  })
+})
+
+describe('openCommunitySidebar', () => {
+  it('opens the preferred enabled tab (editor first)', () => {
+    const openTab = vi.fn()
+    openCommunitySidebar({
+      openTab,
+      getTabs: () => [{ id: 'terminal' }, { id: 'editor' }],
+      isTabEnabled: () => true,
+    })
+    expect(openTab).toHaveBeenCalledWith({ type: 'editor' })
+  })
+
+  it('passes path into openTab when provided', () => {
+    const openTab = vi.fn()
+    openCommunitySidebar(
+      { openTab },
+      { path: '/ws/README.md' },
+    )
+    expect(openTab).toHaveBeenCalledWith({ type: 'editor', path: '/ws/README.md' })
+  })
+
+  it('no-ops without openTab', () => {
+    expect(() => openCommunitySidebar(undefined)).not.toThrow()
+    expect(() => openCommunitySidebar({})).not.toThrow()
   })
 })

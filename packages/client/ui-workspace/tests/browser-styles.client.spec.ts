@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * WorkspaceBrowser spacing contract, asserted against the CSS text on disk:
  * row fills share the shell's trailing inset, the stable scrollbar counts

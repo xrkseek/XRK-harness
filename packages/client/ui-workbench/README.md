@@ -10,6 +10,6 @@ First-party floating workspace workbench: Host `/sidebar/*` file tree + text/ima
 | Rich explorer / terminal / browser / git | Community **`xrkh-better-sidebar`** |
 | Builtin fallback panel | This package (`ctx.workbench` + `shell.overlay`) |
 
-When `ctx.betterSidebar` is present, the builtin panel yields and `workbench.openPath` returns false so chat `openFile` falls through to `workspaces.openPath` (community wrap).
+When `ctx.betterSidebar` is present, the builtin panel yields and `workbench.openPath` returns false so chat `openFile` falls through to `workspaces.openPath` (community wrap). The session-header「文件」button stays visible and calls `betterSidebar.openTab` to wake the community side card.
 
 See [docs/sidebar-workbench.md](../../../docs/sidebar-workbench.md).

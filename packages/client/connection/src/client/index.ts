@@ -48,6 +48,11 @@ export type { ClientConnectionRpc } from '../rpc.ts'
 export interface XrkClientTransportHooks {
   /** When true, `isLoopback` is true regardless of page hostname (desktop owns Host). */
   readonly ownsHost?: boolean
+  /**
+   * Optional Face HTTP origin override for non-page carriers. When unset,
+   * unary uses `location.origin` (Desktop: `xrk-app://app`).
+   */
+  readonly apiBase?: string
 }
 
 interface XrkClientTransportGlobal {
@@ -171,6 +176,8 @@ export function apply(ctx: Context): void {
     start(sinks, config) {
       if (started) throw new Error('connection: the stream loop is already owned by another consumer')
       started = true
+      const describeBeforeStreams =
+        config?.describeBeforeStreams ?? pageLocation?.protocol === 'xrk-app:'
       controller = new ConnectionController(api, {
         ...sinks,
         onConnected: (next) => {
@@ -187,7 +194,7 @@ export function apply(ctx: Context): void {
           publishState(state)
           sinks.onStateChange?.(state)
         },
-      }, config ?? {})
+      }, { ...(config ?? {}), describeBeforeStreams })
       controller.start()
       return {
         stop: () => {

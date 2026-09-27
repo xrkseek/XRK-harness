@@ -463,7 +463,10 @@ describe('WorkspaceRuntime', () => {
     expect(sessions.list.getSnapshot().current).toBe('s-open')
 
     // Archiving the current session clears it into the New Session view state.
-    api.onWorkspaceArchiveSession = () => Promise.resolve(ok({ archivedSessionIds: [sid('s-idle'), sid('s-open')] }))
+    api.onWorkspaceArchiveSession = () => Promise.resolve(ok({
+      archivedSessionIds: [sid('s-idle'), sid('s-open')],
+      pinnedSessionIds: [] as SessionId[],
+    }))
     await workspaces.archiveSession(sid('s-open'))
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-idle', 's-open'])
     expect(sessions.list.getSnapshot().current).toBeUndefined()
@@ -483,7 +486,9 @@ describe('WorkspaceRuntime', () => {
     // Frame installs ride the notifier's microtask batch before projecting.
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-idle'])
-    api.onWorkspaceList = () => Promise.resolve(ok({ items: [], archivedSessionIds: [sid('s-open')] }) as never)
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [], archivedSessionIds: [sid('s-open')], pinnedSessionIds: [],
+    }) as never)
     await workspaces.refresh()
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-open'])
   })
@@ -511,13 +516,59 @@ describe('WorkspaceRuntime', () => {
     } as never)
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(sessions.list.getSnapshot().current).toBeUndefined()
-    gate.resolve(ok({ items: [], archivedSessionIds: [] }))
+    gate.resolve(ok({ items: [], archivedSessionIds: [], pinnedSessionIds: [] }))
     await hydration
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-open'])
     // The next (fresh) baseline is authoritative again.
-    api.onWorkspaceList = () => Promise.resolve(ok({ items: [], archivedSessionIds: [] }) as never)
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [], archivedSessionIds: [], pinnedSessionIds: [],
+    }) as never)
     await workspaces.refresh()
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual([])
+  })
+
+  it('pins newest-first, drops archive, and follows host/pinned-sessions-changed', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onList = () => Promise.resolve(ok({
+      items: [
+        { sessionId: sid('s-a'), updatedAt: 2, running: false, blank: false },
+        { sessionId: sid('s-b'), updatedAt: 1, running: false, blank: false },
+      ],
+    }) as never)
+    await sessions.refresh()
+
+    await expect(workspaces.pinSession(sid('s-a'))).resolves.toBeUndefined()
+    expect(api.callsOf('workspace.pinSession')).toEqual([{ sessionId: 's-a' }])
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual(['s-a'])
+
+    api.onWorkspacePinSession = () => Promise.resolve(ok({
+      archivedSessionIds: [] as SessionId[],
+      pinnedSessionIds: [sid('s-b'), sid('s-a')],
+    }))
+    await workspaces.pinSession(sid('s-b'))
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual(['s-b', 's-a'])
+
+    // Archive of a pinned id clears the pin via the dual unary echo.
+    api.onWorkspaceArchiveSession = () => Promise.resolve(ok({
+      archivedSessionIds: [sid('s-b')],
+      pinnedSessionIds: [sid('s-a')],
+    }))
+    await workspaces.archiveSession(sid('s-b'))
+    expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-b'])
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual(['s-a'])
+
+    await workspaces.unpinSession(sid('s-a'))
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual([])
+
+    workspaces.handleHostEnvelope({
+      rpcId: 'frame' as never,
+      payload: { type: 'host/pinned-sessions-changed', pinnedSessionIds: [sid('s-a')] },
+    } as never)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual(['s-a'])
   })
 })
 

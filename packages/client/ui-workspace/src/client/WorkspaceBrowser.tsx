@@ -255,6 +255,8 @@ type SessionTreeProps = Pick<
   setSessionOrder: (accountKey: string, order: string[]) => void
   /** Registry-global archive set (hidden rows unless archiveMode shows them). */
   archivedSessionIds: readonly SessionNode['id'][]
+  /** Registry-global pin order (newest first). */
+  pinnedSessionIds: readonly SessionNode['id'][]
   /** Client-local archive filter. */
   archiveMode: ArchiveViewMode
   /** Open the browser-owned rename dialog for a real Workspace group. */
@@ -265,6 +267,8 @@ type SessionTreeProps = Pick<
   onSessionRename: (sessionId: SessionNode['id'], currentTitle: string) => void
   /** Archive a session (row menu action; the row disappears on the state echo). */
   onSessionArchive: (sessionId: SessionNode['id']) => void
+  /** Pin or unpin a session (row menu action). */
+  onSessionPinToggle: (sessionId: SessionNode['id'], pinned: boolean) => void
   /** Session order behavior: fixed after edits, or additionally promoted by user activity. */
   orderBy: SessionOrderBy
   /** Host account home; POSIX Workspace hover paths may display as `~`. */
@@ -273,8 +277,8 @@ type SessionTreeProps = Pick<
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
 function SessionTree({
-  useSessions, startSession, open, forkSession, workspaces, archivedSessionIds, archiveMode,
-  onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive,
+  useSessions, startSession, open, forkSession, workspaces, archivedSessionIds, pinnedSessionIds, archiveMode,
+  onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive, onSessionPinToggle,
   insertWorkspaceBefore, insertSessionBefore, orderBy,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
@@ -351,8 +355,8 @@ function SessionTree({
       ...(sessionOrderByAccount[UNGROUPED_KEY] === undefined
         ? {}
         : { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }),
-    }, archiveMode),
-    [list, orderedWorkspaces, archivedSessionIds, archiveMode, expandedGroups, sessionOrderByAccount],
+    }, archiveMode, pinnedSessionIds),
+    [list, orderedWorkspaces, archivedSessionIds, archiveMode, pinnedSessionIds, expandedGroups, sessionOrderByAccount],
   )
   const now = Date.now()
   const commitSessionDrag = (activeDrag: DragState, over: NonNullable<DragState['over']>): void => {
@@ -544,6 +548,7 @@ function SessionTree({
                     onRename={onSessionRename}
                     onFork={forkSession}
                     onArchive={onSessionArchive}
+                    onPinToggle={onSessionPinToggle}
                     drag={dragProps}
                     t={t}
                   />
@@ -572,7 +577,8 @@ function SessionTree({
 
 /** The flat "In one list" body: every session is one draggable top-level row. */
 function FlatList({
-  useSessions, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds, archiveMode,
+  useSessions, open, forkSession, onSessionRename, onSessionArchive, onSessionPinToggle,
+  archivedSessionIds, pinnedSessionIds, archiveMode,
   orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t,
 }: Pick<
   SessionTreeProps,
@@ -581,7 +587,9 @@ function FlatList({
   | 'forkSession'
   | 'onSessionRename'
   | 'onSessionArchive'
+  | 'onSessionPinToggle'
   | 'archivedSessionIds'
+  | 'pinnedSessionIds'
   | 'archiveMode'
   | 'orderBy'
   | 'sessionOrderByAccount'
@@ -592,8 +600,8 @@ function FlatList({
 >) {
   const list = useSessions(s => s)
   const baseRows = useMemo(
-    () => deriveFlat(list, archivedSessionIds, archiveMode),
-    [list, archivedSessionIds, archiveMode],
+    () => deriveFlat(list, archivedSessionIds, archiveMode, pinnedSessionIds),
+    [list, archivedSessionIds, archiveMode, pinnedSessionIds],
   )
   const sessionIds = useMemo(() => baseRows.map(row => row.id), [baseRows])
   const previousOrderBy = useRef(orderBy)
@@ -661,6 +669,7 @@ function FlatList({
               onRename={onSessionRename}
               onFork={forkSession}
               onArchive={onSessionArchive}
+              onPinToggle={onSessionPinToggle}
               flat
               drag={{
                 start: () => {
@@ -786,6 +795,8 @@ export function WorkspaceBrowser({
   deleteWorkspace,
   insertWorkspaceBefore,
   archiveSession,
+  pinSession,
+  unpinSession,
   insertSessionBefore,
   createWorkspace,
   searchSessions,
@@ -798,6 +809,7 @@ export function WorkspaceBrowser({
   const workspaces = useWorkspaces(state => state.items)
   const workspacePhase = useWorkspaces(state => state.phase)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
+  const pinnedSessionIds = useWorkspaces(state => state.pinnedSessionIds)
   // Live occupancy of this surface's directory-flow hole (the same source the
   // flow reads): a composition without a picking affordance can add nothing.
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
@@ -970,6 +982,11 @@ export function WorkspaceBrowser({
   const onSessionArchive = (sessionId: SessionNode['id']) => {
     archiveSession(sessionId).catch((reason: unknown) => {
       console.warn('session archive rejected:', reason)
+    })
+  }
+  const onSessionPinToggle = (sessionId: SessionNode['id'], pinned: boolean) => {
+    ;(pinned ? unpinSession : pinSession)(sessionId).catch((reason: unknown) => {
+      console.warn('session pin rejected:', reason)
     })
   }
 
@@ -1163,7 +1180,9 @@ export function WorkspaceBrowser({
               <FlatList
                 useSessions={useSessions} open={open} forkSession={forkSession}
                 onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
+                onSessionPinToggle={onSessionPinToggle}
                 archivedSessionIds={archivedSessionIds}
+                pinnedSessionIds={pinnedSessionIds}
                 archiveMode={archiveMode}
                 orderBy={orderBy}
                 sessionOrderByAccount={sessionOrderByAccount}
@@ -1178,6 +1197,7 @@ export function WorkspaceBrowser({
                 useSessions={useSessions}
                 onSessionRename={onSessionRename}
                 onSessionArchive={onSessionArchive}
+                onSessionPinToggle={onSessionPinToggle}
                 forkSession={forkSession}
                 workspaces={workspaces}
                 groupExpansion={groupExpansion}
@@ -1187,6 +1207,7 @@ export function WorkspaceBrowser({
                 syncSessionOrderAccount={actions.syncSessionOrderAccount}
                 setSessionOrder={actions.setSessionOrder}
                 archivedSessionIds={archivedSessionIds}
+                pinnedSessionIds={pinnedSessionIds}
                 archiveMode={archiveMode}
                 startSession={startSession}
                 open={open}

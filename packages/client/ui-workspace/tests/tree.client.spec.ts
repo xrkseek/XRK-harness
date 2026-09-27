@@ -79,7 +79,7 @@ describe('deriveGroups', () => {
     const groups = deriveGroups(
       sessions, [workspace('first', ['shown', 'current-blank', 'stale-blank'])], noArchive, view(['first']),
     )
-    expect(groups[0]!.sessions.map(session => session.id)).toEqual([real.id, currentBlank.id])
+    expect(groups[0]!.sessions.map(session => session.id)).toEqual([currentBlank.id, real.id])
     const blankNode = groups[0]!.sessions.find(session => session.id === currentBlank.id)!
     // The stored placeholder title stays canonical; the renderer swaps in
     // the localized New Session label via the blank flag.
@@ -278,6 +278,28 @@ describe('deriveFlat', () => {
     const kept = summary('kept', 1)
     const gone = summary('gone', 2)
     expect(deriveFlat(list(kept, gone), archived('gone')).map(row => row.id)).toEqual([kept.id])
+  })
+
+  it('leads pinned sessions in Face pin order (newest first)', () => {
+    const older = summary('older', 30)
+    const newer = summary('newer', 20)
+    const unpinned = summary('unpinned', 40)
+    const pinned = [sid('newer'), sid('older')]
+    const rows = deriveFlat(list(older, newer, unpinned), noArchive, 'hidden', pinned)
+    expect(rows.map(row => row.id)).toEqual([sid('newer'), sid('older'), sid('unpinned')])
+    expect(rows.map(row => row.pinned)).toEqual([true, true, false])
+
+    const groups = deriveGroups(
+      list(older, newer, unpinned),
+      [workspace('project', ['older', 'newer', 'unpinned'])],
+      noArchive,
+      view(['project']),
+      'hidden',
+      pinned,
+    )
+    expect(groups[0]!.sessions.map(session => session.id)).toEqual([
+      sid('newer'), sid('older'), sid('unpinned'),
+    ])
   })
 })
 

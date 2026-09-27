@@ -225,6 +225,32 @@ describe('connection lifecycle', () => {
     }
   })
 
+  it('completes describe before opening streams when describeBeforeStreams is set', async () => {
+    const api = new FakeApiClient()
+    const gate = deferred<ReturnType<typeof ok>>()
+    let describeCalls = 0
+    api.onDescribe = () => {
+      describeCalls++
+      return gate.promise
+    }
+    let connected = 0
+    const controller = new ConnectionController(
+      api,
+      { onConnected: () => { connected++ } },
+      { ...FAST, describeBeforeStreams: true },
+    )
+    controller.start()
+    try {
+      await vi.waitFor(() => { expect(describeCalls).toBe(1) })
+      expect(api.openMuxCount).toBe(0)
+      gate.resolve(ok({ version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true }))
+      await vi.waitFor(() => { expect(connected).toBe(1) })
+      expect(api.openMuxCount).toBe(1)
+    } finally {
+      controller.stop()
+    }
+  })
+
   it('emits deduplicated connected/reconnecting state transitions', async () => {
     const api = new FakeApiClient()
     const states: ConnectionState[] = []

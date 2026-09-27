@@ -49,6 +49,11 @@ export function createWebConnectionRpc(): ClientConnectionRpc {
 }
 
 function resolveBase(): string {
+  const transport = (globalThis as {
+    __XRK_TRANSPORT__?: { apiBase?: string }
+  }).__XRK_TRANSPORT__
+  const apiBase = transport?.apiBase?.trim()
+  if (apiBase) return apiBase.replace(/\/$/u, '')
   const location = (globalThis as { location?: { origin?: string } }).location
   return location?.origin !== undefined && location.origin !== 'null' ? location.origin : INTERNAL_BASE
 }

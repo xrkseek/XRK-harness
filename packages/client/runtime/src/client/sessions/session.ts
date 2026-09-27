@@ -307,6 +307,10 @@ export class Session implements SessionFace {
     if (this.blankBit) {
       this.engageFromContent()
     }
+    // Desktop `xrk-app://` cannot open a second host SSE (Chromium custom-protocol
+    // pool); `host/session-status` is absent there. Optimistic running mirrors
+    // cancel's optimistic idle so Stop / thinking chrome arm before turn/start.
+    this.handleRunning(true)
     return result
   }
 
@@ -815,6 +819,10 @@ export class Session implements SessionFace {
     this.views.push(view)
     if (event.type === 'turn/start') this.firstPromptPendingTurn = false
     if (event.type === 'command/run' || event.type === 'turn/start') this.engageFromContent()
+    // Mux-only carriers (Desktop SSE) never see host/session-status; arm/clear
+    // running from the durable turn envelope so Stop and queue placement work.
+    if (event.type === 'turn/start') this.handleRunning(true)
+    if (event.type === 'turn/end') this.handleRunning(false)
     const queueChanged = this.queueMirror.acceptDurable(event)
     const publication = this.conversation.append({ event, view })
     // After the feed append: schedule echo retirement one frame later so the

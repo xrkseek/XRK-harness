@@ -2,15 +2,15 @@
  * Workspace browser tree row components (figma Cell set 14:3080): pure presentational —
  * all data and callbacks arrive via props. Hover swaps (folder->chevron,
  * time->ellipsis, action buttons) are CSS-only. Row ... menus are visual-only
- * except workspace Rename/Delete and session Rename/Fork/Archive; the session
+ * except workspace Rename/Delete and session Rename/Fork/Pin/Archive; the session
  * and workspace hover cards are suppressed while a menu is open.
  */
 import { useState } from 'react'
 import clsx from 'clsx'
 import {
   HoverCard, IconArchiveOutline20, IconBranchOutline16, IconEditOutline16,
-  IconEllipsisOutline16, IconFolderClose16, IconFolderOpen16, IconPlusOutline16,
-  IconTrashOutline16, IconTriangleRightFill14, Menu, StateDot,
+  IconEllipsisOutline16, IconFolderClose16, IconFolderOpen16, IconPinOutline16,
+  IconPlusOutline16, IconTrashOutline16, IconTriangleRightFill14, Menu, StateDot,
   abbreviateHomePath,
 } from '@xrkseek/client-ui-primitives'
 import type { StateDotState } from '@xrkseek/client-ui-primitives'
@@ -359,7 +359,7 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
  * @param props.t - the browser root's locale seat.
  * @returns the session row.
  */
-export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, drag, flat = false, t }: {
+export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, onPinToggle, drag, flat = false, t }: {
   node: SessionNode
   currentId: string | undefined
   now: number
@@ -370,6 +370,8 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   onFork: (id: SessionNode['id']) => void
   /** Archive this session (row menu action; commits without a dialog). */
   onArchive: (id: SessionNode['id']) => void
+  /** Pin or unpin this session (row menu action). */
+  onPinToggle: (id: SessionNode['id'], pinned: boolean) => void
   /** Present only on draggable rows (workspace-group sessions outside search). */
   drag?: RowDragProps | undefined
   /** The row is rendered without a parent Workspace header. */
@@ -385,10 +387,15 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   const [menuOpen, setMenuOpen] = useState(false)
   // Archive hides the row through the registry-global archive set and never
   // touches the session log, so it is not styled as destructive and needs no
-  // confirmation dialog.
+  // confirmation dialog. Pin leads the section; archive drops any pin.
   const sessionMenuItems = [
     { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
     { id: 'fork', label: t('menu.fork'), icon: <IconBranchOutline16 /> },
+    {
+      id: 'pin',
+      label: t(row.pinned ? 'menu.unpinSession' : 'menu.pinSession'),
+      icon: <IconPinOutline16 />,
+    },
     // 20-native glyph in the menu's 16px icon slot (Menu.module.css .itemIcon).
     { id: 'archive', label: t('menu.archiveSession'), icon: <IconArchiveOutline20 size={16} /> },
   ]
@@ -452,6 +459,7 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
               setMenuOpen(false)
               if (id === 'rename') onRename(node.id, row.title)
               if (id === 'fork') onFork(node.id)
+              if (id === 'pin') onPinToggle(node.id, row.pinned)
               if (id === 'archive') onArchive(node.id)
             }}
             portal

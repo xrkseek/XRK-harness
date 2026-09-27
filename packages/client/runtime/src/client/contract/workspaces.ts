@@ -99,4 +99,15 @@ export interface IWorkspaces {
    * @param sessionId - session to unarchive.
    */
   unarchiveSession(sessionId: SessionId): Promise<void>
+  /**
+   * Pin a session to the front of the registry-global pin order (newest
+   * first). Unarchives when needed so pin and archive stay exclusive.
+   * @param sessionId - session to pin.
+   */
+  pinSession(sessionId: SessionId): Promise<void>
+  /**
+   * Drop a session from the registry-global pin order.
+   * @param sessionId - session to unpin.
+   */
+  unpinSession(sessionId: SessionId): Promise<void>
 }
