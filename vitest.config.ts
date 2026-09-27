@@ -71,6 +71,15 @@ export default defineConfig({
       ["@xrkseek/xrk-session-reference/types", path.join(root, "packages/context/session-reference/src/types.ts")],
       ["@xrkseek/xrk-session/types", path.join(root, "packages/stubs/xrk-session/src/types.ts")],
       // stubs lib/ is gitignored — keep Vitest on TypeScript sources
+      // Longer subpaths before package-root / `/api` (Vite alias is prefix-matched).
+      [
+        "@xrkseek/xrk-host-apiproxy/api/events.schema",
+        path.join(root, "packages/stubs/xrk-host-apiproxy/src/api/events.schema.ts"),
+      ],
+      [
+        "@xrkseek/xrk-host-apiproxy/api/rpc.schema",
+        path.join(root, "packages/stubs/xrk-host-apiproxy/src/api/rpc.schema.ts"),
+      ],
       ["@xrkseek/xrk-host-apiproxy/api", path.join(root, "packages/stubs/xrk-host-apiproxy/src/api/index.ts")],
       ["@xrkseek/xrk-host-apiproxy/client", path.join(root, "packages/stubs/xrk-host-apiproxy/src/fetch/client.ts")],
       ["@xrkseek/xrk-host-apiproxy", path.join(root, "packages/stubs/xrk-host-apiproxy/src/index.ts")],

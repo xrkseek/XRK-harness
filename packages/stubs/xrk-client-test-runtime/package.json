@@ -1,11 +1,25 @@
 {
-    "version":  "0.0.0-stub",
-    "name":  "@xrkseek/client-test-runtime",
-    "description":  "XRK stub ¡ª replace with real package or remap",
-    "exports":  {
-                    ".":  "./index.js",
-                    "./package.json":  "./package.json"
-                },
-    "type":  "module",
-    "private":  true
+  "version": "0.0.0-stub",
+  "name": "@xrkseek/client-test-runtime",
+  "description": "XRK stub - client browser-test bench (SlotTestRuntime / fixture doubles)",
+  "exports": {
+    ".": "./src/index.ts",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.0",
+    "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/client-web-react": "workspace:^",
+    "@xrkseek/cordis": "workspace:^",
+    "@xrkseek/xrk-api-remotes": "workspace:^",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "vitest": "^2.1.8"
+  }
 }
