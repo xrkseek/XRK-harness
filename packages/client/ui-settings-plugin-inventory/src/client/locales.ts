@@ -37,7 +37,10 @@ export const zh = {
   removeConfirm: '确认删除',
   actionBusy: '处理中…',
   actionFailed: '操作失败',
-  restartHint: '启停 / 删除 / 更新写入磁盘后，需重启 Host 才会装卸运行中的半部。',
+  restartHint: '启停 / 删除 / 更新 / 安装写入磁盘后，client 半部可能需刷新或重启 Host 才完全生效。',
+  install: '安装',
+  installPlaceholder: '包名，如 xrkh-better-sidebar 或 name@version',
+  installHint: '与 xrkh plugin add 相同：装入 ~/.xrk/plugins。已装插件可在下方更新 / 停用 / 删除。',
 } satisfies Record<string, string>
 
 /** Plugin inventory locale key union. */
@@ -80,5 +83,8 @@ export const en = {
   removeConfirm: 'Confirm delete',
   actionBusy: 'Working…',
   actionFailed: 'Action failed',
-  restartHint: 'Enable / disable / delete / update write disk state; restart Host to load or unload live halves.',
+  restartHint: 'Enable / disable / delete / update / install write disk state; refresh or restart Host for live client halves.',
+  install: 'Install',
+  installPlaceholder: 'Package, e.g. xrkh-better-sidebar or name@version',
+  installHint: 'Same as xrkh plugin add — installs into ~/.xrk/plugins. Update / disable / delete managed rows below.',
 } satisfies Record<PluginInventoryLocaleKey, string>

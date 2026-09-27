@@ -26,6 +26,8 @@ export type PluginsSettingsLocaleKey =
   | 'agentLoopToolResultMaxInline' | 'agentLoopToolResultMaxInlineHint'
   | 'agentLoopMaxSubagentDepth' | 'agentLoopMaxSubagentDepthHint'
   | 'agentLoopMaxActiveSubagents' | 'agentLoopMaxActiveSubagentsHint'
+  | 'agentLoopGuardianFragments' | 'agentLoopGuardianFragmentsHint'
+  | 'agentLoopGuardianFragmentsOn' | 'agentLoopGuardianFragmentsOff'
   | 'workspaceInjectTitle' | 'workspaceInjectDescription'
   | 'workspaceInjectMaxChars' | 'workspaceInjectMaxCharsHint'
   | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading'
@@ -38,7 +40,7 @@ export type PluginsSettingsLocaleKey =
   | 'mcpAllowConnect' | 'mcpAllowConnectHint'
   | 'mcpAllowWorkspaceCwd' | 'mcpAllowWorkspaceCwdHint'
   | 'mcpStatusConnected' | 'mcpStatusReconnecting' | 'mcpStatusGaveUp'
-  | 'mcpStatusParked' | 'mcpStatusFailed' | 'mcpStatusIdle'
+  | 'mcpStatusConnecting' | 'mcpStatusParked' | 'mcpStatusFailed' | 'mcpStatusIdle'
   | 'mcpOauthLogin' | 'mcpOauthLogout' | 'mcpOauthLoggedIn' | 'mcpOauthLoggedOut'
   | 'mcpOauthPending' | 'mcpOauthPendingCode' | 'mcpOauthExpired' | 'mcpOauthError'
   | 'mcpOauthErrorDetail' | 'mcpOauthBusy' | 'mcpOauthUnknown' | 'mcpOauthOpenVerify'
@@ -207,6 +209,10 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxSubagentDepthHint: 'Nesting depth (parent = 0). Default 2 (max 3). Session badges may impose a tighter ceiling (Shallow = 1).',
   agentLoopMaxActiveSubagents: 'Max active subagents',
   agentLoopMaxActiveSubagentsHint: 'Concurrent draining direct children under one parent. Default 2.',
+  agentLoopGuardianFragments: 'Guardian fragments',
+  agentLoopGuardianFragmentsHint: 'Thin advisory Guardian review fragment at turn-start (not an LLM approval gate). Default on.',
+  agentLoopGuardianFragmentsOn: 'On',
+  agentLoopGuardianFragmentsOff: 'Off',
   workspaceInjectTitle: 'Workspace inject',
   workspaceInjectDescription: 'How much of the workspace rules and skills catalog may enter the system prompt each turn.',
   workspaceInjectMaxChars: 'Inject character budget',
@@ -241,12 +247,13 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   mcpRowInvalid: 'Each server needs a name and a command or URL.',
   mcpToolsLabel: 'tools',
   mcpAllowConnect: 'Allow connect',
-  mcpAllowConnectHint: 'Saving a non-empty list connects automatically. Turn off and save to keep the list without mounting tools.',
+  mcpAllowConnectHint: 'Save with this on mounts servers one-by-one (rows show Connecting). Host start does not auto-spawn the Settings list. Turn off and save to keep the list without tools.',
   mcpAllowWorkspaceCwd: 'Allow workspace cwd',
   mcpAllowWorkspaceCwdHint: 'Confirm that stdio MCP may write into the workspace (e.g. .playwright-mcp). Prefer leaving cwd empty.',
   mcpStatusConnected: 'Connected',
   mcpStatusReconnecting: 'Reconnecting',
   mcpStatusGaveUp: 'Gave up',
+  mcpStatusConnecting: 'Connecting',
   mcpStatusParked: 'Parked',
   mcpStatusFailed: 'Failed',
   mcpStatusIdle: 'Not connected',
@@ -573,6 +580,10 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxSubagentDepthHint: '嵌套深度（父会话 = 0）。默认 2（上限 3）。会话徽章可再收紧（Shallow = 1）。',
   agentLoopMaxActiveSubagents: '同时存活子代理数',
   agentLoopMaxActiveSubagentsHint: '同一父会话下同时 draining 的直接子代理上限。默认 2。',
+  agentLoopGuardianFragments: 'Guardian 片段',
+  agentLoopGuardianFragmentsHint: '回合开始时注入轻量 Guardian 审阅片段（建议性，不是 LLM 审批闸）。默认开。',
+  agentLoopGuardianFragmentsOn: '开',
+  agentLoopGuardianFragmentsOff: '关',
   workspaceInjectTitle: '工作区注入',
   workspaceInjectDescription: '每轮系统提示里可注入多少工作区 rules / skills 目录字符。',
   workspaceInjectMaxChars: '注入字符预算',
@@ -607,12 +618,13 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   mcpRowInvalid: '每条服务器需要名称，以及命令或 URL。',
   mcpToolsLabel: '个工具',
   mcpAllowConnect: '允许连接',
-  mcpAllowConnectHint: '列表非空时保存会自动连接。关掉此项再保存可只保留列表、不挂载工具。',
+  mcpAllowConnectHint: '打开并保存后会逐个挂载（行上显示「连接中」）。Host 启动不会自动拉起设置里的列表。关掉再保存可只保留列表、不挂载工具。',
   mcpAllowWorkspaceCwd: '允许工作区 cwd',
   mcpAllowWorkspaceCwdHint: '确认 stdio MCP 可能在工作区落盘（例如 .playwright-mcp）。更推荐留空 cwd。',
   mcpStatusConnected: '已连接',
   mcpStatusReconnecting: '重连中',
   mcpStatusGaveUp: '已放弃',
+  mcpStatusConnecting: '连接中',
   mcpStatusParked: '已停放',
   mcpStatusFailed: '失败',
   mcpStatusIdle: '未连接',

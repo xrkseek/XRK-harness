@@ -800,4 +800,43 @@ describe('McpCardController', () => {
     expect(snap.dirty).toBe(true)
     expect(snap.rows.map(r => r.serverName)).toEqual(['local'])
   })
+
+  it('shows connecting overlay on rows while Host reconcile runs', () => {
+    const host = stubSettingsScope<McpSettings>()
+    const controller = new McpCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: {
+        servers: [{ serverName: 'context7', command: 'npx' }],
+        allowConnect: true,
+        connected: [],
+        parked: [],
+        connecting: ['context7'],
+      },
+      base: {},
+      user: { servers: [{ serverName: 'context7', command: 'npx' }], allowConnect: true },
+    })
+    const face = controller.inject()
+    expect(face.hooks.mcpCard.getSnapshot().rows).toMatchObject([
+      { serverName: 'context7', status: 'connecting', toolCount: 0 },
+    ])
+
+    // Allow on + empty overlay → idle (deferred boot), not fake parked.
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: {
+        servers: [{ serverName: 'context7', command: 'npx' }],
+        allowConnect: true,
+        connected: [],
+        parked: [],
+        connecting: [],
+      },
+      user: { servers: [{ serverName: 'context7', command: 'npx' }], allowConnect: true },
+    })
+    expect(face.hooks.mcpCard.getSnapshot().rows).toMatchObject([
+      { serverName: 'context7', status: 'idle', toolCount: 0 },
+    ])
+  })
 })

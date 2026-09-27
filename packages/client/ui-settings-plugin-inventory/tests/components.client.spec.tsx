@@ -24,6 +24,7 @@ function props(
     remove: overrides.remove ?? vi.fn(async () => {}),
     update: overrides.update ?? vi.fn(async () => {}),
     open: overrides.open ?? vi.fn(async () => {}),
+    install: overrides.install ?? vi.fn(async () => {}),
   } as PluginInventorySettingsTabProps
 }
 

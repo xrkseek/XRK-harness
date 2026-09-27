@@ -43,6 +43,69 @@
   gap: 12px;
 }
 
+.installRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.installField {
+  flex: 1;
+  min-width: 0;
+}
+
+.installField input {
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 0 12px;
+  outline: none;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.installField input::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.installField input:focus-visible {
+  border-color: var(--dsw-alias-state-business-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent);
+}
+
+.installButton {
+  flex-shrink: 0;
+  height: 36px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 0 14px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.installButton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.installButton:not(:disabled):hover {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.installHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .search {
   position: relative;
   display: flex;

@@ -20,6 +20,8 @@ export interface PluginInventorySettingsTabInjected {
   update: (entryId: PluginEntryId) => Promise<void>
   /** Open the managed plugin install folder in the OS. */
   open: (entryId: PluginEntryId) => Promise<void>
+  /** Install by CLI-compatible spec (`name`, `name@version`, path, `github:…`). */
+  install: (spec: string) => Promise<void>
 }
 
 type PluginInventoryEntry = PluginInventorySnapshot['entries'][number]
@@ -86,6 +88,7 @@ export function PluginInventorySettingsTab({
   remove,
   update,
   open: openFolder,
+  install,
   t,
 }: PluginInventorySettingsTabProps): ReactNode {
   const catalogId = useId()
@@ -97,6 +100,8 @@ export function PluginInventorySettingsTab({
   const [busyId, setBusyId] = useState<PluginInventoryEntry['entryId'] | null>(null)
   const [confirmRemoveId, setConfirmRemoveId] = useState<PluginInventoryEntry['entryId'] | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [installSpec, setInstallSpec] = useState('')
+  const [installBusy, setInstallBusy] = useState(false)
 
   useEffect(() => {
     let current = true
@@ -150,6 +155,23 @@ export function PluginInventorySettingsTab({
     }
   }
 
+  const runInstall = async (): Promise<void> => {
+    const spec = installSpec.trim()
+    if (!spec || installBusy) return
+    setInstallBusy(true)
+    setActionError(null)
+    try {
+      await install(spec)
+      setInstallSpec('')
+      setState({ status: 'loading' })
+      setRequest(value => value + 1)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : t('actionFailed'))
+    } finally {
+      setInstallBusy(false)
+    }
+  }
+
   const filters: { readonly id: CatalogFilter; readonly label: string }[] = [
     { id: 'all', label: t('filterAll') },
     { id: 'custom', label: t('filterCustom') },
@@ -167,6 +189,35 @@ export function PluginInventorySettingsTab({
       ) : null}
       {state.status === 'ready' ? (
         <div className={css.catalog}>
+          <form
+            className={css.installRow}
+            onSubmit={(event) => {
+              event.preventDefault()
+              void runInstall()
+            }}
+          >
+            <label className={css.installField}>
+              <span className={css.visuallyHidden}>{t('installPlaceholder')}</span>
+              <input
+                type="text"
+                value={installSpec}
+                placeholder={t('installPlaceholder')}
+                aria-label={t('installPlaceholder')}
+                disabled={installBusy}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(event) => { setInstallSpec(event.currentTarget.value) }}
+              />
+            </label>
+            <button
+              type="submit"
+              className={css.installButton}
+              disabled={installBusy || installSpec.trim().length === 0}
+            >
+              {installBusy ? t('actionBusy') : t('install')}
+            </button>
+          </form>
+          <p className={css.installHint}>{t('installHint')}</p>
           <label className={css.search}>
             <IconSearchOutline16 aria-hidden="true" />
             <span className={css.visuallyHidden}>{t('search')}</span>

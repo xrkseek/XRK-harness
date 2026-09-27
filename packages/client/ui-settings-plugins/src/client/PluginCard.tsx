@@ -12,6 +12,11 @@
  * A card renders nothing while its namespace is unavailable: a deployment that
  * does not compose the owning plugin should show no trace of it, rather than a
  * disabled card the user cannot act on.
+ *
+ * A read-only card (`host`, `process-channels`) is the same disclosure over a
+ * section nobody writes: it keeps the header and the body and drops the
+ * save/discard footer, which would otherwise offer writes the namespace
+ * refuses.
  */
 
 import { useState, type ReactNode } from 'react'
@@ -31,12 +36,14 @@ export interface PluginCardProps {
   descriptionKey: PluginsSettingsLocaleKey
   /** The card's form state: availability, writability, and what a save would do. */
   state: CardShell
-  /** Write every staged edit. */
-  onSave: () => void
-  /** Drop every staged edit. */
-  onDiscard: () => void
+  /** Write every staged edit. Omitted by a read-only card. */
+  onSave?: () => void
+  /** Drop every staged edit. Omitted by a read-only card. */
+  onDiscard?: () => void
   /** The plugin's controls. */
   children: ReactNode
+  /** Show the section as information: the footer has nothing to write. */
+  readOnly?: boolean
 }
 
 /**
@@ -71,25 +78,29 @@ export function PluginCard(props: PluginCardProps) {
           <div className={css.body}>
             {!state.writable ? <p className={css.readOnly} role="status">{props.t('readOnly')}</p> : null}
             {props.children}
-            <div className={css.footer}>
-              {state.failed ? <p className={css.failed} role="status">{props.t('saveFailed')}</p> : null}
-              <button
-                type="button"
-                className={css.discard}
-                disabled={!state.dirty || state.saving}
-                onClick={props.onDiscard}
-              >
-                {props.t('discard')}
-              </button>
-              <button
-                type="button"
-                className={css.save}
-                disabled={blocked}
-                onClick={props.onSave}
-              >
-                {props.t(state.saving ? 'saving' : 'save')}
-              </button>
-            </div>
+            {props.readOnly === true
+              ? null
+              : (
+                <div className={css.footer}>
+                  {state.failed ? <p className={css.failed} role="status">{props.t('saveFailed')}</p> : null}
+                  <button
+                    type="button"
+                    className={css.discard}
+                    disabled={!state.dirty || state.saving}
+                    onClick={() => { props.onDiscard?.() }}
+                  >
+                    {props.t('discard')}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.save}
+                    disabled={blocked}
+                    onClick={() => { props.onSave?.() }}
+                  >
+                    {props.t(state.saving ? 'saving' : 'save')}
+                  </button>
+                </div>
+              )}
           </div>
         )
         : null}

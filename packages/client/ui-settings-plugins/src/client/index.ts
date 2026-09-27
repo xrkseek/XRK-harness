@@ -6,7 +6,9 @@
  * declares `settings.plugin.item` and renders whatever cards were registered
  * into it. Shipped cards: MCP, shell (`bash`), agent-loop, workspace-inject, web-search,
  * session-telemetry, sandbox, computer-use, browser, voice, image-gen, video-gen,
- * video-analyze, curated-memory, a2a-inbound, external-agent, cron. Advanced tab: auto-review classifier · memory-embed.
+ * video-analyze, curated-memory, a2a-inbound, external-agent, cron.
+ * Advanced tab: auto-review classifier · memory-embed · Host runtime · process
+ * & IM channels (the last two read-only mirrors of what the Host serves).
  * General 「远程」: ssh-remote (restart).
  */
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
@@ -32,8 +34,10 @@ import { CuratedMemoryCard } from './CuratedMemoryCard.tsx'
 import { A2aInboundCard } from './A2aInboundCard.tsx'
 import { ExternalAgentCard } from './ExternalAgentCard.tsx'
 import { ImageGenCard } from './ImageGenCard.tsx'
+import { HostInfoCard } from './HostInfoCard.tsx'
 import { McpCard } from './McpCard.tsx'
 import { MemoryEmbedCard } from './MemoryEmbedCard.tsx'
+import { ProcessChannelsCard } from './ProcessChannelsCard.tsx'
 import { SandboxCard } from './SandboxCard.tsx'
 import { SshRemoteCard } from './SshRemoteCard.tsx'
 import { TelemetryCard } from './TelemetryCard.tsx'
@@ -58,11 +62,17 @@ import { CURATED_MEMORY_NS, CuratedMemoryCardController } from './curated-memory
 import { A2A_INBOUND_NS, A2aInboundCardController } from './a2a-inbound-card-controller.ts'
 import { EXTERNAL_AGENT_NS, ExternalAgentCardController } from './external-agent-card-controller.ts'
 import { IMAGE_GEN_NS, ImageGenCardController, IMAGE_GEN_OPENAI_REF, IMAGE_GEN_FAL_REF, IMAGE_GEN_XAI_REF } from './image-gen-card-controller.ts'
+import { HOST_NS, HostInfoCardController, decodeHostInfo } from './host-info-card-controller.ts'
 import {
   MEMORY_EMBED_NS,
   MEMORY_EMBED_TOKEN_REF,
   MemoryEmbedCardController,
 } from './memory-embed-card-controller.ts'
+import {
+  PROCESS_CHANNELS_NS,
+  ProcessChannelsCardController,
+  decodeProcessChannels,
+} from './process-channels-card-controller.ts'
 import { SANDBOX_NS, SandboxCardController } from './sandbox-card-controller.ts'
 import { SESSION_TELEMETRY_NS, TelemetryCardController } from './telemetry-card-controller.ts'
 import { SSH_REMOTE_NS, SshRemoteCardController } from './ssh-remote-card-controller.ts'
@@ -97,6 +107,9 @@ export type { CuratedMemoryCardFace, CuratedMemoryCardState } from './curated-me
 export type { A2aInboundCardFace, A2aInboundCardState } from './a2a-inbound-card-controller.ts'
 export type { ExternalAgentCardFace, ExternalAgentCardState } from './external-agent-card-controller.ts'
 export type { ImageGenCardFace, ImageGenCardState } from './image-gen-card-controller.ts'
+export type { HostInfoCardFace, HostInfoCardState } from './host-info-card-controller.ts'
+export type { ProcessChannelsCardFace, ProcessChannelsCardState } from './process-channels-card-controller.ts'
+export type { InfoRow } from './info-card-model.ts'
 export type { SandboxCardFace, SandboxCardState } from './sandbox-card-controller.ts'
 export type { TelemetryCardFace, TelemetryCardState } from './telemetry-card-controller.ts'
 export type { SshRemoteCardFace, SshRemoteCardState } from './ssh-remote-card-controller.ts'
@@ -127,6 +140,8 @@ export { CURATED_MEMORY_NS } from './curated-memory-card-controller.ts'
 export { A2A_INBOUND_NS } from './a2a-inbound-card-controller.ts'
 export { VOICE_NS, VOICE_OPENAI_REF } from './voice-card-controller.ts'
 export { IMAGE_GEN_NS, IMAGE_GEN_OPENAI_REF, IMAGE_GEN_FAL_REF, IMAGE_GEN_XAI_REF } from './image-gen-card-controller.ts'
+export { HOST_NS } from './host-info-card-controller.ts'
+export { PROCESS_CHANNELS_NS } from './process-channels-card-controller.ts'
 export { VIDEO_GEN_NS, VIDEO_GEN_OPENAI_REF, VIDEO_GEN_FAL_REF, VIDEO_GEN_XAI_REF } from './video-gen-card-controller.ts'
 export { VIDEO_ANALYZE_NS, VIDEO_ANALYZE_OPENAI_REF } from './video-analyze-card-controller.ts'
 
@@ -203,6 +218,15 @@ export function apply(ctx: ClientContext): void {
   const memoryEmbed = new MemoryEmbedCardController(
     ctx.settingsScope.bind({ namespace: MEMORY_EMBED_NS }),
     api,
+  )
+  // The two read-only mirrors: Face describes them with an empty-object schema
+  // (nothing in them is writable), so the scope decodes the section itself
+  // instead of round-tripping it through schema validation.
+  const hostInfo = new HostInfoCardController(
+    ctx.settingsScope.bind({ namespace: HOST_NS, decode: decodeHostInfo }),
+  )
+  const processChannels = new ProcessChannelsCardController(
+    ctx.settingsScope.bind({ namespace: PROCESS_CHANNELS_NS, decode: decodeProcessChannels }),
   )
 
   // Which namespaces the Host serves is a registration fact the wire does not
@@ -347,6 +371,19 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: () => memoryEmbed.inject(),
     }, MemoryEmbedCard)
+    // Read-only: what this Host is, and what it is wired to talk to.
+    yield ctx.slots.register({
+      name: 'settings.plugin.advanced.item',
+      key: HOST_NS,
+      locale: NS,
+      inject: () => hostInfo.inject(),
+    }, HostInfoCard)
+    yield ctx.slots.register({
+      name: 'settings.plugin.advanced.item',
+      key: PROCESS_CHANNELS_NS,
+      locale: NS,
+      inject: () => processChannels.inject(),
+    }, ProcessChannelsCard)
   })
 
   // SSH remote on General 「远程」 — world is fixed at Host spawn (restart).

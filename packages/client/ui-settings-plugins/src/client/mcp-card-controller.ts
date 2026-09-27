@@ -12,7 +12,7 @@ export const MCP_NS = 'mcp'
 export type McpLiveStatus = 'connected' | 'reconnecting' | 'gave-up'
 
 /** Row status shown next to each desired server. */
-export type McpRowStatus = McpLiveStatus | 'parked' | 'failed' | 'idle'
+export type McpRowStatus = McpLiveStatus | 'connecting' | 'parked' | 'failed' | 'idle'
 
 /** One live MCP plugin the Host reports in the connected overlay. */
 export interface McpConnectedEntry {
@@ -30,6 +30,8 @@ export interface McpSettings {
   readonly allowConnect?: boolean
   readonly connected?: readonly McpConnectedEntry[]
   readonly parked?: readonly string[]
+  /** Desired names currently connecting (serial Host reconcile). */
+  readonly connecting?: readonly string[]
   readonly connectFailures?: readonly { readonly serverName: string; readonly message: string }[]
   readonly note?: string
 }
@@ -602,6 +604,11 @@ function parkedSet(snapshot: SettingsScopeSnapshot<McpSettings>): Set<string> {
   return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [])
 }
 
+function connectingSet(snapshot: SettingsScopeSnapshot<McpSettings>): Set<string> {
+  const raw = snapshot.value?.connecting
+  return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [])
+}
+
 function resolveRowStatus(
   serverName: string,
   snapshot: SettingsScopeSnapshot<McpSettings>,
@@ -616,6 +623,9 @@ function resolveRowStatus(
   const failure = failureMap(snapshot).get(serverName)
   if (failure !== undefined) {
     return { status: 'failed', toolCount: 0, failureMessage: failure }
+  }
+  if (allowOf(snapshot) && connectingSet(snapshot).has(serverName)) {
+    return { status: 'connecting', toolCount: 0 }
   }
   if (!allowOf(snapshot) || parkedSet(snapshot).has(serverName)) {
     return { status: 'parked', toolCount: 0 }

@@ -1,7 +1,8 @@
 /**
  * Advanced Host plugins contributed to Plugins → Advanced.
  * Same dispatch model as ConfigurablePluginsTab, over `settings.plugin.advanced.item`.
- * Shipped cards: auto-review · memory-embed.
+ * Shipped cards: auto-review · memory-embed (writable) · host · process-channels
+ * (read-only mirrors of what this Host is and what it is wired to).
  */
 
 import { Fragment } from 'react'

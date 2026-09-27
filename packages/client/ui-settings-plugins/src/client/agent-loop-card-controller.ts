@@ -87,6 +87,8 @@ export interface AgentLoopSettings {
   maxSubagentDepth?: number
   /** Max concurrently draining direct children under one parent. */
   maxActiveSubagents?: number
+  /** Thin Guardian review fragment at turn-start (advisory). */
+  guardianFragments?: boolean
 }
 
 /** What the agent-loop card renders. */
@@ -119,6 +121,8 @@ export interface AgentLoopCardState extends CardShell {
   maxSubagentDepth: CardFieldState
   /** Concurrent active subagent cap. */
   maxActiveSubagents: CardFieldState
+  /** Thin Guardian review fragment at turn-start. */
+  guardianFragments: CardFieldState
 }
 
 /** The registration-side face the agent-loop card's slot entry injects. */
@@ -151,6 +155,7 @@ export class AgentLoopCardController {
       numberField('toolResultMaxInlineBytes'),
       numberField('maxSubagentDepth'),
       numberField('maxActiveSubagents'),
+      booleanField('guardianFragments'),
     ])
     this.store = this.form.bind(() => this.projection())
   }
@@ -172,6 +177,7 @@ export class AgentLoopCardController {
       toolResultMaxInlineBytes: this.form.field('toolResultMaxInlineBytes'),
       maxSubagentDepth: this.form.field('maxSubagentDepth'),
       maxActiveSubagents: this.form.field('maxActiveSubagents'),
+      guardianFragments: this.form.field('guardianFragments'),
     }
   }
 

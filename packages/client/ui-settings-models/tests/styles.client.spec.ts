@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Models section stylesheet contract, asserted against the CSS text on disk.
  *

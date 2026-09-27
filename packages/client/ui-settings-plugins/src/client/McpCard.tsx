@@ -153,6 +153,8 @@ function statusCopy(t: McpCardProps['t'], status: McpRowStatus): string {
       return t('mcpStatusReconnecting')
     case 'gave-up':
       return t('mcpStatusGaveUp')
+    case 'connecting':
+      return t('mcpStatusConnecting')
     case 'parked':
       return t('mcpStatusParked')
     case 'failed':
@@ -166,6 +168,7 @@ function statusTone(status: McpRowStatus): string {
   if (status === 'connected') return css.badgeOk
   if (status === 'failed' || status === 'gave-up') return css.badgeError
   if (status === 'parked') return css.badgeWarn
+  if (status === 'connecting' || status === 'reconnecting') return css.badgeWarn
   return css.badgeMuted
 }
 

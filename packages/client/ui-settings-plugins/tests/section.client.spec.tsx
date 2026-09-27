@@ -440,26 +440,32 @@ describe('McpCard', () => {
     expect(screen.queryByText(en.mcpTitle)).toBeNull()
   })
 
-  it('shows connected overlay and server rows only once expanded', () => {
+  it('keeps the body folded until expanded, then shows the note and the rows', () => {
     renderMcp({
-      connected: [{
-        id: 'mcp:demo',
+      rows: [{
         serverName: 'demo',
-        kind: 'tools',
-        toolCount: 3,
+        transport: 'stdio',
+        command: 'npx',
+        url: '',
+        args: '-y, demo',
+        cwd: '',
+        // The controller folds the Host's live overlay into the row it renders;
+        // the card reads `rows[].status`, never a separate connected list.
         status: 'reconnecting',
+        toolCount: 3,
       }],
       note: 'restart note',
     })
     expect(screen.getByText(en.mcpTitle)).toBeTruthy()
-    expect(screen.queryByText(en.mcpConnectedHeading)).toBeNull()
+    // Folded: PluginCard renders no body at all, so neither the note nor a row.
+    expect(screen.queryByText('restart note')).toBeNull()
+    expect(screen.queryByText('demo')).toBeNull()
 
     fireEvent.click(screen.getByText(en.mcpTitle))
 
-    expect(screen.getByText(en.mcpConnectedHeading)).toBeTruthy()
+    expect(screen.getByText('restart note')).toBeTruthy()
     expect(screen.getByText('demo')).toBeTruthy()
     expect(screen.getByText(en.mcpStatusReconnecting)).toBeTruthy()
-    expect(screen.getByText('restart note')).toBeTruthy()
     expect(screen.getByRole('button', { name: en.mcpAddServer })).toBeTruthy()
   })
 

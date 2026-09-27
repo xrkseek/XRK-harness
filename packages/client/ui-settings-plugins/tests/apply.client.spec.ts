@@ -5,16 +5,33 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveSlotLabel } from '@xrkseek/client-ui-slots'
 import { SlotRegistry } from '@xrkseek/client-runtime/client'
 import { LocaleRuntime } from '@xrkseek/client-locale/client'
-import { TestRemote, usePinnedBrowserLanguages } from '@xrkseek/client-test-runtime'
 import { SettingsScopeBinder } from '@xrkseek/client-ui-settings/client'
 import { apply, inject } from '@xrkseek/client-ui-settings-plugins/client'
 import type {
   ConfigurablePluginsTabFace, PluginsSettingsSectionInjected,
 } from '@xrkseek/client-ui-settings-plugins/client'
 
-// The service reads its initial locale from the browser; these specs assert
-// the shipped Chinese copy, so they state the browser they assume.
-usePinnedBrowserLanguages('zh-CN')
+/**
+ * The `remote` seat this plugin injects, reduced to the one call the plugin
+ * makes on it. The stub test-runtime package in this repository ships no
+ * remote double, so the spec states only what it needs.
+ * @param ctx - context to provide the service on.
+ */
+function stubRemote(ctx: Context): void {
+  const handlers = new Map<string, Set<(...args: unknown[]) => void>>()
+  ctx.provide('remote', {
+    $on: (key: string, handler: (...args: unknown[]) => void) => {
+      const set = handlers.get(key) ?? new Set<(...args: unknown[]) => void>()
+      set.add(handler)
+      handlers.set(key, set)
+      return () => { set.delete(handler) }
+    },
+    // Same shape the connection sink forwards with: a key and its argument list.
+    $dispatch: (key: string, args: unknown[]) => {
+      for (const handler of [...(handlers.get(key) ?? [])]) handler(...args)
+    },
+  } as never)
+}
 
 /**
  * @param served - namespaces the Host describes; omitted answers a failed read,
@@ -25,6 +42,10 @@ async function bench(served?: string[]) {
   await ctx.plugin(SlotRegistry).await()
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
+  // These specs assert the shipped Chinese copy, so they pin the locale rather
+  // than the browser jsdom reports (the stub test-runtime package does not ship
+  // the browser-language helper this file used to call).
+  locale.setLocale('zh')
   const describeCredentials = vi.fn(() => Promise.resolve({ rpcId: 'c', result: { ok: false, error: {} } }))
   const describeSettings = vi.fn(() => Promise.resolve(served === undefined
     ? { rpcId: 's', result: { ok: false, error: {} } }
@@ -44,7 +65,7 @@ async function bench(served?: string[]) {
   // The section binds its scopes through the Settings surface's service, and
   // forwarded Host events reach it through the same `$dispatch` handoff the
   // connection sink makes.
-  new TestRemote(ctx)
+  stubRemote(ctx)
   ctx.provide('connection', {
     isLoopback: true,
     api: {
@@ -96,6 +117,7 @@ describe('ui-settings-plugins apply', () => {
     const initialTabs = sectionFace.hooks.tabs.getSnapshot()
     expect(initialTabs).toEqual([
       { id: 'configurable', order: 0, label: '插件配置' },
+      { id: 'advanced', order: 10, label: '高级' },
     ])
     expect(sectionFace.hooks.tabs.getSnapshot()).toBe(initialTabs)
 
@@ -105,6 +127,7 @@ describe('ui-settings-plugins apply', () => {
     expect(sectionFace.hooks.tabs.getSnapshot()).toEqual([
       { id: 'configurable', order: 0, label: '插件配置' },
       { id: 'plain', order: 0, label: '' },
+      { id: 'advanced', order: 10, label: '高级' },
     ])
     unsubscribe()
 
@@ -137,7 +160,7 @@ describe('ui-settings-plugins apply', () => {
     })
   })
 
-  it('registers an Advanced tab with the auto-review card', async () => {
+  it('registers an Advanced tab with the cards it ships there', async () => {
     const { ctx, slots } = await bench(['auto-review'])
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
@@ -146,7 +169,7 @@ describe('ui-settings-plugins apply', () => {
     expect(tabIds).toContain('advanced')
     await vi.waitFor(() => {
       expect(slots.entries('settings.plugin.advanced.item').map(e => e.options.key))
-        .toEqual(['auto-review'])
+        .toEqual(['auto-review', 'memory-embed', 'host', 'process-channels'])
     })
   })
 
@@ -157,7 +180,12 @@ describe('ui-settings-plugins apply', () => {
     await ctx.plugin({ inject: [...inject], apply }).await()
 
     expect(slots.entries('settings.plugin.item').map(entry => entry.options.key))
-      .toEqual(['mcp', 'web-search', 'bash', 'agent-loop'])
+      .toEqual([
+        'mcp', 'web-search', 'bash', 'agent-loop', 'workspace-inject',
+        'session-telemetry', 'sandbox', 'computer-use', 'browser', 'voice',
+        'image-gen', 'video-gen', 'video-analyze', 'curated-memory',
+        'a2a-inbound', 'external-agent', 'cron',
+      ])
   })
 
   it('dispatches the served namespaces its cards claim, and no others', async () => {
@@ -243,12 +271,13 @@ describe('ui-settings-plugins apply', () => {
     declareRoot(slots)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(slots.entries('settings.plugin.item')).toHaveLength(4)
+    expect(slots.entries('settings.plugin.item')).toHaveLength(17)
 
     await fiber.dispose()
 
     expect(slots.entries('settings.section')).toHaveLength(0)
     expect(slots.spec('settings.plugins.tab')).toBeUndefined()
     expect(slots.spec('settings.plugin.item')).toBeUndefined()
+    expect(slots.spec('settings.plugin.advanced.item')).toBeUndefined()
   })
 })
