@@ -5,6 +5,7 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { maybeInjectDesktopBootHtml } from "./boot-inject.js";
 import { DESKTOP_PROTOCOL_SCHEME } from "./desktop-bootstrap.js";
 
 export { DESKTOP_PROTOCOL_SCHEME };
@@ -16,7 +17,8 @@ export const DESKTOP_PROTOCOL_PRIVILEGES = {
     standard: true,
     secure: true,
     supportFetchAPI: true,
-    corsEnabled: false,
+    // SSE may use a sibling hostname (`xrk-app://stream`); allow cross-host fetch.
+    corsEnabled: true,
     stream: true,
     codeCache: true,
   },
@@ -29,7 +31,9 @@ const MIME: Readonly<Record<string, string>> = {
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".woff": "font/woff",
   ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
   ".map": "application/json; charset=utf-8",
 };
 
@@ -78,7 +82,17 @@ export async function serveDesktopStaticAsset(
   const target = resolveDesktopAssetPath(root, url.pathname);
   if (target === undefined) return new Response(null, { status: 403 });
   try {
-    const body = request.method === "HEAD" ? null : await readFile(target);
+    if (request.method === "HEAD") {
+      return new Response(null, {
+        headers: {
+          "content-type":
+            MIME[path.extname(target)] ?? "application/octet-stream",
+        },
+      });
+    }
+    const fileBody = await readFile(target);
+    // Static MVP: Host Fetch is unset — still inject __XRK_BOOT__ like server-http.
+    const body = maybeInjectDesktopBootHtml(root, target, fileBody);
     return new Response(body, {
       headers: {
         "content-type": MIME[path.extname(target)] ?? "application/octet-stream",
@@ -126,7 +140,21 @@ export function desktopAppIndexUrl(
 }
 
 /**
- * Route one `xrk-app://` request: `shell` → shellRoot, `app` → Host Fetch or webRoot.
+ * Paths that must hit the Desktop Host Fetch carrier (not static webRoot).
+ * `/api/*` = Face RPC; `/sidebar/*` = workbench / plan preview / better-sidebar;
+ * product entry + boot = Host-merged first-party + ~/.xrk community clients.
+ */
+export function isDesktopHostForwardPath(pathname: string): boolean {
+  if (pathname === "/api" || pathname.startsWith("/api/")) return true;
+  if (pathname === "/sidebar" || pathname.startsWith("/sidebar/")) return true;
+  if (pathname === "/" || pathname === "/index.html") return true;
+  if (pathname === "/boot.json") return true;
+  return false;
+}
+
+/**
+ * Route one `xrk-app://` request: `shell` → shellRoot, Host routes → Fetch,
+ * else static `webRoot` (with `/plugins/*` Host fallthrough for community clients).
  */
 export async function handleDesktopProtocolRequest(
   request: Request,
@@ -148,10 +176,37 @@ export async function handleDesktopProtocolRequest(
     }
     return serveDesktopStaticAsset(options.shellRoot, request);
   }
+  // Face/API / sidebar / product entry must hit the Host carrier. Accept any
+  // app-owned hostname so the renderer can put long-lived SSE on
+  // `xrk-app://stream` (separate Chromium connection pool from unary
+  // `xrk-app://app`).
+  if (isDesktopHostForwardPath(url.pathname)) {
+    if (options.fetchApp === undefined) {
+      // Static MVP / tests: only product entry can fall through to webRoot.
+      if (
+        url.pathname === "/" ||
+        url.pathname === "/index.html" ||
+        url.pathname === "/boot.json"
+      ) {
+        if (url.hostname !== "app") {
+          return new Response(null, { status: 404 });
+        }
+        return serveDesktopStaticAsset(options.webRoot, request);
+      }
+      return new Response(null, { status: 503 });
+    }
+    return options.fetchApp(request);
+  }
   if (url.hostname !== "app") {
     return new Response(null, { status: 404 });
   }
-  if (options.fetchApp !== undefined) {
+  // Packaged first-party plugins first; community clients live in Host overlay.
+  if (
+    options.fetchApp !== undefined &&
+    url.pathname.startsWith("/plugins/")
+  ) {
+    const fromDisk = await serveDesktopStaticAsset(options.webRoot, request);
+    if (fromDisk.status !== 404) return fromDisk;
     return options.fetchApp(request);
   }
   return serveDesktopStaticAsset(options.webRoot, request);

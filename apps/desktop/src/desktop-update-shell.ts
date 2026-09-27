@@ -32,7 +32,7 @@ export interface DesktopUpdateDialogBox {
 }
 
 export interface DesktopUpdateMenuApi {
-  setApplicationMenu(menu: unknown): void;
+  setApplicationMenu(menu: unknown | null): void;
   buildFromTemplate(template: unknown[]): unknown;
 }
 
@@ -98,13 +98,21 @@ export async function presentDesktopUpdateCheckDialog(options: {
   return "dismissed";
 }
 
-/** Build and install the Application menu with Check for Updates. */
+/**
+ * Install the Application menu with Check for Updates (macOS only).
+ * On Windows/Linux the product shell owns chrome — a lone Application bar looks wrong.
+ * Manual update check stays available via Desktop IPC (`updates.check`).
+ */
 export function installDesktopApplicationMenu(options: {
   readonly menu: DesktopUpdateMenuApi;
   readonly getLocale: () => string;
   readonly onCheckUpdates: () => void;
   readonly platform?: NodeJS.Platform;
 }): void {
+  if (options.platform !== "darwin") {
+    options.menu.setApplicationMenu(null);
+    return;
+  }
   const locale = resolveDesktopLocale(options.getLocale());
   const checkItem = {
     label: locale.messages.checkUpdatesMenu,
@@ -112,20 +120,14 @@ export function installDesktopApplicationMenu(options: {
       options.onCheckUpdates();
     },
   };
-  const appMenu = {
-    label: locale.messages.application,
-    submenu: [checkItem],
-  };
-  const template =
-    options.platform === "darwin"
-      ? [appMenu]
-      : [
-          {
-            label: locale.messages.application,
-            submenu: [checkItem],
-          },
-        ];
-  options.menu.setApplicationMenu(options.menu.buildFromTemplate(template));
+  options.menu.setApplicationMenu(
+    options.menu.buildFromTemplate([
+      {
+        label: locale.messages.application,
+        submenu: [checkItem],
+      },
+    ]),
+  );
 }
 
 /**

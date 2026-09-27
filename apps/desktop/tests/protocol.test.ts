@@ -35,12 +35,14 @@ describe("desktop custom protocol", () => {
     expect(DESKTOP_PROTOCOL_SCHEME).toBe("xrk-app");
     expect(DESKTOP_PROTOCOL_PRIVILEGES.scheme).toBe("xrk-app");
     expect(DESKTOP_PROTOCOL_PRIVILEGES.privileges.supportFetchAPI).toBe(true);
+    expect(DESKTOP_PROTOCOL_PRIVILEGES.privileges.corsEnabled).toBe(true);
     expect(desktopAppIndexUrl()).toBe("xrk-app://app/index.html");
   });
 
   it("serves version-matched static assets and refuses traversal", async () => {
     const webRoot = tempRoot({
-      "index.html": "<html>ok</html>",
+      "index.html": "<html><head></head><body>ok</body></html>",
+      "boot.json": JSON.stringify({ rev: "t", entries: [] }),
       "assets/app.js": "console.log(1)",
     });
     const ok = await serveDesktopStaticAsset(
@@ -49,7 +51,10 @@ describe("desktop custom protocol", () => {
     );
     expect(ok.status).toBe(200);
     expect(ok.headers.get("content-type")).toMatch(/text\/html/u);
-    await expect(ok.text()).resolves.toBe("<html>ok</html>");
+    const html = await ok.text();
+    expect(html).toContain("window.__XRK_BOOT__=");
+    expect(html).toContain('"rev":"t"');
+    expect(html).toContain("ok");
 
     const js = await serveDesktopStaticAsset(
       webRoot,
@@ -89,6 +94,52 @@ describe("desktop custom protocol", () => {
       { webRoot, fetchApp },
     );
     expect(viaHost.status).toBe(201);
+    expect(fetchApp).toHaveBeenCalledOnce();
+
+    fetchApp.mockClear();
+    const streamSse = await handleDesktopProtocolRequest(
+      new Request("xrk-app://stream/api/events.mux"),
+      { webRoot, fetchApp },
+    );
+    expect(streamSse.status).toBe(201);
+    expect(fetchApp).toHaveBeenCalledOnce();
+
+    fetchApp.mockClear();
+    const sidebarTree = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/sidebar/api/fs.tree", {
+        method: "POST",
+        body: "{}",
+      }),
+      { webRoot, fetchApp },
+    );
+    expect(sidebarTree.status).toBe(201);
+    expect(fetchApp).toHaveBeenCalledOnce();
+
+    fetchApp.mockClear();
+    const indexViaHost = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/index.html"),
+      { webRoot, fetchApp },
+    );
+    expect(indexViaHost.status).toBe(201);
+    expect(fetchApp).toHaveBeenCalledOnce();
+
+    fetchApp.mockClear();
+    const staticCss = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/assets/app.css"),
+      {
+        webRoot: tempRoot({ "assets/app.css": "body{}" }),
+        fetchApp,
+      },
+    );
+    expect(await staticCss.text()).toBe("body{}");
+    expect(fetchApp).not.toHaveBeenCalled();
+
+    fetchApp.mockClear();
+    const missingPlugin = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/plugins/@community/foo/client.js"),
+      { webRoot, fetchApp },
+    );
+    expect(missingPlugin.status).toBe(201);
     expect(fetchApp).toHaveBeenCalledOnce();
 
     const staticApp = await handleDesktopProtocolRequest(

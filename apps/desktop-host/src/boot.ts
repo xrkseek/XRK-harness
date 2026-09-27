@@ -1,12 +1,17 @@
 /**
  * Boot XRK Host via createHostManager (compose / Face / serve stack) with listen disabled.
+ * Renderer reaches Face through `xrk-app://` + framed pipes (ADR-0008 / DSH posture):
+ * no product or loopback Web listen.
  */
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHostManager, type HostInstance } from "@xrkseek/server-host";
-import { loadHostConfig } from "@xrkseek/server-config";
+import {
+  defaultSessionsDir,
+  loadHostConfig,
+} from "@xrkseek/server-config";
 import { createServerAgentFactory } from "@xrkseek/preset-server";
 
 export const DESKTOP_HOST_PACKAGE_NAME =
@@ -46,9 +51,20 @@ export function declareDesktopNativeOpenCapabilities(
 }
 
 /**
+ * Declare `XRK_SURFACE=desktop` so Workspace inject emits `## Runtime surface`
+ * and the model can tell the Electron shell from `xrkh web` / browser.
+ * Does not overwrite an explicit env value (CI / nested Host).
+ */
+export function declareDesktopRuntimeSurface(
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  if (env.XRK_SURFACE === undefined) env.XRK_SURFACE = "desktop";
+}
+
+/**
  * Spawn the standard Host composition without binding a TCP listen socket.
- * Declares native path capabilities (`XRK_NATIVE_OPEN`) so Face reuses
- * `host.openPath` / `host.pickDirectory` with `canOpenPath: true`.
+ * Declares native path capabilities (`XRK_NATIVE_OPEN`) and runtime surface
+ * (`XRK_SURFACE=desktop`) so Face / inject match the Electron shell.
  */
 export async function bootXrkDesktopHost(options: {
   readonly projectDir: string;
@@ -56,6 +72,7 @@ export async function bootXrkDesktopHost(options: {
   readonly workspaceRoot?: string;
 }): Promise<BootedDesktopHost> {
   declareDesktopNativeOpenCapabilities();
+  declareDesktopRuntimeSurface();
 
   const webDist =
     options.webDist?.trim() ||
@@ -63,33 +80,52 @@ export async function bootXrkDesktopHost(options: {
     process.env.XRK_WEB_DIST?.trim() ||
     path.resolve(options.projectDir, "web-dist");
 
+  const workspaceRoot =
+    options.workspaceRoot?.trim() ||
+    process.env.XRK_WORKSPACE_ROOT?.trim() ||
+    undefined;
+
   const config = loadHostConfig({
     patch: {
-      workspaceRoot: options.workspaceRoot ?? options.projectDir,
+      ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
       webDist,
       listen: false,
       preset: "harness",
     },
   });
 
+  // Same as `xrkh serve --persist`: share ~/.xrk/sessions with CLI/web.
+  const sessionsDir =
+    config.runtime.sessionsDir?.trim() || defaultSessionsDir();
+
   const manager = createHostManager();
   const factory = createServerAgentFactory({
     workspaceRoot: config.runtime.workspaceRoot,
   });
-  const instance = await manager.spawn(config, factory, {
-    logger: {
-      info: (msg) => {
-        process.stderr.write(`${DESKTOP_HOST_PACKAGE_NAME}: ${msg}\n`);
-      },
-      debug: () => undefined,
-      warn: (msg) => {
-        process.stderr.write(`${DESKTOP_HOST_PACKAGE_NAME} warn: ${msg}\n`);
-      },
-      error: (msg) => {
-        process.stderr.write(`${DESKTOP_HOST_PACKAGE_NAME} error: ${msg}\n`);
+  const instance = await manager.spawn(
+    {
+      ...config,
+      runtime: {
+        ...config.runtime,
+        sessionsDir,
       },
     },
-  });
+    factory,
+    {
+      logger: {
+        info: (msg) => {
+          process.stderr.write(`${DESKTOP_HOST_PACKAGE_NAME}: ${msg}\n`);
+        },
+        debug: () => undefined,
+        warn: (msg) => {
+          process.stderr.write(`${DESKTOP_HOST_PACKAGE_NAME} warn: ${msg}\n`);
+        },
+        error: (msg) => {
+          process.stderr.write(`${DESKTOP_HOST_PACKAGE_NAME} error: ${msg}\n`);
+        },
+      },
+    },
+  );
 
   return {
     instance,

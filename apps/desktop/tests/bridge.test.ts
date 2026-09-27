@@ -1,12 +1,49 @@
 import { describe, expect, it, vi } from "vitest";
 import { createXrkDesktopBridgeApi } from "../src/bridge.js";
 import { registerDesktopIpcHandlers } from "../src/desktop-ipc.js";
+import { installDesktopApplicationMenu } from "../src/desktop-update-shell.js";
 import {
   DESKTOP_BRIDGE_PROTOCOL_VERSION,
   DESKTOP_IPC,
   type DesktopUpdateState,
 } from "../src/ipc.js";
 import { formatDesktopMessage, resolveDesktopLocale, en, zh } from "../src/locale.js";
+
+describe("desktop application menu", () => {
+  it("hides the menu bar on Windows/Linux", () => {
+    const setApplicationMenu = vi.fn();
+    installDesktopApplicationMenu({
+      menu: {
+        setApplicationMenu,
+        buildFromTemplate: vi.fn(() => ({ kind: "menu" })),
+      },
+      getLocale: () => "zh-CN",
+      onCheckUpdates: () => undefined,
+      platform: "win32",
+    });
+    expect(setApplicationMenu).toHaveBeenCalledWith(null);
+  });
+
+  it("installs Check for Updates on macOS", () => {
+    const built = { kind: "menu" };
+    const setApplicationMenu = vi.fn();
+    const buildFromTemplate = vi.fn(() => built);
+    installDesktopApplicationMenu({
+      menu: { setApplicationMenu, buildFromTemplate },
+      getLocale: () => "zh-CN",
+      onCheckUpdates: () => undefined,
+      platform: "darwin",
+    });
+    expect(buildFromTemplate).toHaveBeenCalledOnce();
+    const template = buildFromTemplate.mock.calls[0]?.[0] as Array<{
+      label: string;
+      submenu: Array<{ label: string }>;
+    }>;
+    expect(template[0]?.label).toBe(zh.application);
+    expect(template[0]?.submenu[0]?.label).toBe(zh.checkUpdatesMenu);
+    expect(setApplicationMenu).toHaveBeenCalledWith(built);
+  });
+});
 
 describe("desktop locale", () => {
   it("ships matching English and Chinese key sets with English fallback", () => {
@@ -17,7 +54,7 @@ describe("desktop locale", () => {
     });
     expect(resolveDesktopLocale("en-US")).toEqual({ id: "en", messages: en });
     expect(resolveDesktopLocale("fr-FR")).toEqual({ id: "en", messages: en });
-    expect(en.pluginsMenu.length).toBeGreaterThan(0);
+    expect(en.checkUpdatesMenu.length).toBeGreaterThan(0);
     expect(zh.checkUpdatesMenu).toContain("检查");
   });
 

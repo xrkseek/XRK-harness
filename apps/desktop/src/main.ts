@@ -1,8 +1,8 @@
 /**
  * Electron process entry ([ADR-0008](../../../docs/adr/0008-desktop-shell-private-host.md)).
  *
- * Wires: single-instance · window lifecycle · `xrk-app://` · narrow preload (locale / updates)
- * · DesktopUpdateCoordinator + schedule when packaged feed (`app-update.yml`) is present.
+ * Wires: single-instance · window lifecycle · `xrk-app://` · private Host over
+ * framed pipes (same Face as `xrkh web`) · narrow preload · update coordinator.
  */
 
 import path from "node:path";
@@ -24,6 +24,7 @@ import {
   DESKTOP_PROTOCOL_SCHEME,
   handleDesktopProtocolRequest,
 } from "./protocol.js";
+import { fetchDesktopHostFromProtocol } from "./protocol-host-fetch.js";
 import {
   DESKTOP_WEB_PREFERENCES,
   DESKTOP_WINDOW_DEFAULTS,
@@ -42,16 +43,26 @@ import {
   DesktopUpdateSchedule,
   resolveDesktopUpdateScheduleConfig,
 } from "./update-schedule.js";
+import {
+  resolveDesktopWebRoot,
+  resolveDesktopWindowIconPath,
+} from "./web-root.js";
+import { DesktopHostProcess } from "./host-process.js";
+import {
+  resolvePackagedDesktopHostRuntime,
+  resolveUnpackagedDesktopHostRuntime,
+} from "./host-runtime.js";
+import { resolveDesktopHarnessHome } from "./paths.js";
 
-const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PRELOAD_APP = fileURLToPath(new URL("./preload-app.js", import.meta.url));
-
-/** Packaged / monorepo-assembled Web dist (release-matched when packaging lands). */
-function resolveWebRoot(): string {
-  const fromEnv = process.env.XRK_DESKTOP_WEB_ROOT?.trim();
-  if (fromEnv) return path.resolve(fromEnv);
-  return path.resolve(APP_ROOT, "..", "web", "dist");
-}
+/** Sandboxed preload must be CommonJS (`emit-preload.mjs` → `preload-app.cjs`). */
+const PRELOAD_APP = fileURLToPath(
+  new URL("./preload-app.cjs", import.meta.url),
+);
+const DESKTOP_APP_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+const PRODUCT_WINDOW_TITLE = "XRK Harness";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -61,13 +72,17 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 function createMainBrowserWindow(): BrowserWindow {
+  const icon = resolveDesktopWindowIconPath({ platform: process.platform });
   const window = new BrowserWindow({
     ...DESKTOP_WINDOW_DEFAULTS,
+    title: PRODUCT_WINDOW_TITLE,
+    ...(icon !== undefined ? { icon } : {}),
     webPreferences: {
       ...DESKTOP_WEB_PREFERENCES,
       preload: PRELOAD_APP,
     },
   });
+  window.setTitle(PRODUCT_WINDOW_TITLE);
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   attachDesktopNavigationGuard(window.webContents, DESKTOP_PROTOCOL_SCHEME);
   return window;
@@ -85,19 +100,108 @@ function broadcastUpdate(state: DesktopUpdateState): DesktopUpdateState {
   return publishDesktopUpdateState(BrowserWindow.getAllWindows(), state);
 }
 
+let desktopHost: DesktopHostProcess | undefined;
+
+async function startDesktopHostCarrier(
+  webRoot: string,
+): Promise<DesktopHostProcess | undefined> {
+  try {
+    const runtime = app.isPackaged
+      ? resolvePackagedDesktopHostRuntime(process.resourcesPath)
+      : resolveUnpackagedDesktopHostRuntime({
+          desktopAppRoot: DESKTOP_APP_ROOT,
+          webDist: webRoot,
+        });
+    const xrkHome = resolveDesktopHarnessHome({
+      isPackaged: app.isPackaged,
+      desktopAppRoot: DESKTOP_APP_ROOT,
+    });
+    const host = new DesktopHostProcess(runtime.nodeExecutable, runtime.projectDir, {
+      entry: runtime.entry,
+      env: {
+        XRK_HOME: xrkHome,
+        XRK_WEB_DIST: runtime.webDist,
+        ...(runtime.harnessCliBin
+          ? { XRK_HARNESS_BIN: runtime.harnessCliBin }
+          : {}),
+      },
+    });
+    await host.start();
+    desktopHost = host;
+    return host;
+  } catch (error) {
+    console.error(error);
+    dialog.showErrorBox(
+      PRODUCT_WINDOW_TITLE,
+      error instanceof Error
+        ? `Desktop Host failed to start:\n${error.message}`
+        : String(error),
+    );
+    return undefined;
+  }
+}
+
 const ownsDesktopInstance = startDesktopMain(app, {
   createWindow: () => createMainBrowserWindow(),
   loadPrimary: (window) => {
     void (window as BrowserWindow).loadURL(desktopAppIndexUrl());
   },
   getWindowCount: () => BrowserWindow.getAllWindows().length,
-  onReady: () => {
-    void bootstrapDesktopUpdates();
-    const webRoot = resolveWebRoot();
+  onReady: async () => {
+    await bootstrapDesktopUpdates();
+    let webRoot: string;
+    try {
+      webRoot = resolveDesktopWebRoot({
+        isPackaged: app.isPackaged,
+        appPath: app.getAppPath(),
+        resourcesPath: process.resourcesPath,
+      });
+    } catch (error) {
+      console.error(error);
+      dialog.showErrorBox(
+        PRODUCT_WINDOW_TITLE,
+        error instanceof Error ? error.message : String(error),
+      );
+      app.quit();
+      return;
+    }
+
+    // Register `xrk-app://` before Host finishes so Chromium never falls through
+    // to the OS “get an app for this link” dialog. Static webRoot serves until
+    // fetchApp is wired; Face/API then go through the private Host carrier.
+    let fetchApp: ((request: Request) => Promise<Response>) | undefined;
     protocol.handle(DESKTOP_PROTOCOL_SCHEME, (request) =>
-      handleDesktopProtocolRequest(request, { webRoot }),
+      handleDesktopProtocolRequest(request, {
+        webRoot,
+        ...(fetchApp !== undefined ? { fetchApp } : {}),
+      }),
     );
+
+    const host = await startDesktopHostCarrier(webRoot);
+    if (host !== undefined) {
+      // Defer into a timer so Chromium's protocol.handle wait does not nest
+      // Host pipe I/O on the same turn (Electron custom-scheme deadlock).
+      fetchApp = (request) =>
+        new Promise((resolve, reject) => {
+          setTimeout(() => {
+            void fetchDesktopHostFromProtocol(host, request).then(
+              resolve,
+              reject,
+            );
+          }, 0);
+        });
+    }
   },
+});
+
+app.on("will-quit", () => {
+  const host = desktopHost;
+  desktopHost = undefined;
+  if (host !== undefined) {
+    void host.stop().catch((error: unknown) => {
+      console.error(error);
+    });
+  }
 });
 
 async function bootstrapDesktopUpdates(): Promise<void> {
@@ -119,7 +223,9 @@ async function bootstrapDesktopUpdates(): Promise<void> {
       enabled: feedEnabled,
       currentVersion: () => app.getVersion(),
       beforeRestart: async () => {
-        // Host / framed-pipe shutdown is wired when the private Host is always started.
+        const host = desktopHost;
+        desktopHost = undefined;
+        if (host !== undefined) await host.stop();
       },
     });
     if (feedEnabled()) {

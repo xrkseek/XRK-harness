@@ -27,11 +27,15 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && node ./scripts/emit-preload.mjs",
+    "test:face-transport": "node ./scripts/test-face-transport.mjs",
+    "smoke:packaged-host": "node ./scripts/smoke-packaged-host.mjs",
     "dev": "node ../../scripts/dev-desktop.mjs",
     "start": "node ../../scripts/dev-desktop.mjs --skip-build",
     "prepare:runtime": "node ./scripts/prepare-runtime.mjs",
     "prepare:package-set": "node ./scripts/prepare-package-set.mjs",
+    "prepare:host-bundle": "node ./scripts/prepare-host-bundle.mjs",
+    "prepare:icons": "node ./scripts/prepare-brand-icons.mjs",
     "package": "node ../../scripts/package-desktop.mjs",
     "package:check": "node ../../scripts/package-desktop.mjs --check",
     "clean:build": "node ../../scripts/clean-desktop-build.mjs"

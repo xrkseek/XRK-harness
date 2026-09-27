@@ -244,6 +244,7 @@ try {
 
 const required = [
   path.join(APP_ROOT, "dist", "main.js"),
+  path.join(APP_ROOT, "dist", "preload-app.cjs"),
   path.join(ROOT, "apps", "desktop-host", "dist", "index.js"),
   path.join(ROOT, "apps", "web", "dist", "index.html"),
 ];
@@ -255,6 +256,57 @@ for (const file of required) {
     process.exit(1);
   }
 }
+
+function ensureProduceArtifacts() {
+  const runtimeNode = path.join(
+    paths.runtime,
+    "node",
+    process.platform === "win32" ? "node.exe" : "node",
+  );
+  if (!existsSync(runtimeNode)) {
+    process.stdout.write("package-desktop: prepare:runtime…\n");
+    const prep = spawnSync(
+      "pnpm",
+      ["--filter", "@xrkseek/harness-desktop", "prepare:runtime", "--", target.name],
+      { cwd: ROOT, stdio: "inherit", shell: true },
+    );
+    if ((prep.status ?? 1) !== 0) process.exit(prep.status ?? 1);
+  }
+  // Always refresh host-bundle so workspace Face/pipe fixes are not skipped by a
+  // stale deploy tree from an earlier package run.
+  process.stdout.write("package-desktop: prepare-host-bundle…\n");
+  const prepHost = spawnSync(
+    process.execPath,
+    [
+      path.join(APP_ROOT, "scripts", "prepare-host-bundle.mjs"),
+      target.name,
+    ],
+    { cwd: ROOT, stdio: "inherit" },
+  );
+  if ((prepHost.status ?? 1) !== 0) process.exit(prepHost.status ?? 1);
+
+  process.stdout.write("package-desktop: smoke packaged Host Face pipe…\n");
+  const smokeHome = path.join(paths.root, "smoke-host-home");
+  const nodeExe = path.join(
+    paths.runtime,
+    "node",
+    process.platform === "win32" ? "node.exe" : "node",
+  );
+  const smoke = spawnSync(
+    process.execPath,
+    [
+      path.join(APP_ROOT, "scripts", "smoke-packaged-host.mjs"),
+      path.join(paths.root, "host-bundle"),
+      smokeHome,
+      nodeExe,
+      path.join(ROOT, "apps", "web", "dist"),
+    ],
+    { cwd: ROOT, stdio: "inherit" },
+  );
+  if ((smoke.status ?? 1) !== 0) process.exit(smoke.status ?? 1);
+}
+
+ensureProduceArtifacts();
 
 process.stdout.write(
   `package-desktop: running pnpm ${builderArgs.join(" ")} (cwd=apps/desktop)\n`,
@@ -274,6 +326,21 @@ const result = spawnSync("pnpm", builderArgs, {
 });
 if ((result.status ?? 1) !== 0) {
   process.exit(result.status ?? 1);
+}
+
+// electron-builder / pnpm filter may prune the workspace root; restore so
+// subsequent test/dev commands keep vitest and other root tools.
+process.stdout.write("package-desktop: restore workspace node_modules…\n");
+const restore = spawnSync("pnpm", ["install"], {
+  cwd: ROOT,
+  stdio: "inherit",
+  shell: true,
+  env: { ...process.env, CI: "true" },
+});
+if ((restore.status ?? 1) !== 0) {
+  process.stderr.write(
+    "package-desktop: warning: pnpm install restore failed; run pnpm install manually\n",
+  );
 }
 
 const autoUpdate = requireFromDesktop("./dist/desktop-auto-update-environment.js");

@@ -28,6 +28,7 @@ export { DESKTOP_HOST_PACKAGE_NAME } from "./boot.js";
 export {
   bootXrkDesktopHost,
   declareDesktopNativeOpenCapabilities,
+  declareDesktopRuntimeSurface,
   type BootedDesktopHost,
 } from "./boot.js";
 export {

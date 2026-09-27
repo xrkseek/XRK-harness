@@ -17,6 +17,10 @@ const api = createXrkDesktopBridgeApi({
 });
 
 contextBridge.exposeInMainWorld("xrkDesktop", api);
+
 // Desktop owns the private Host — client treats this as the privileged surface
 // (canOpenPath / pickDirectory UI gates on isLoopback ∧ host.canOpenPath).
-contextBridge.exposeInMainWorld("__XRK_TRANSPORT__", { ownsHost: true });
+// Face reaches Host via same-origin `xrk-app://` + framed pipes (no loopback listen).
+contextBridge.exposeInMainWorld("__XRK_TRANSPORT__", {
+  ownsHost: true,
+});

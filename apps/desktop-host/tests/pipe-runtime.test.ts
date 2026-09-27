@@ -117,4 +117,76 @@ describe("desktop-host pipe runtime", () => {
     expect(seenBody).toBe("hello-pipe");
     await runtime.dispose();
   });
+
+  it("serves a unary response while an SSE body is still open", async () => {
+    const request = new PassThrough();
+    const response = new PassThrough();
+    const decoder = new DesktopHostResponseDecoder();
+    const starts: number[] = [];
+    const ended = new Set<number>();
+    response.on("data", (chunk: Buffer) => {
+      for (const frame of decoder.push(chunk)) {
+        if (frame.type === "start") starts.push(frame.streamId);
+        if (frame.type === "end") ended.add(frame.streamId);
+      }
+    });
+
+    const runtime = startDesktopHostPipeRuntime(
+      async (req) => {
+        const path = new URL(req.url).pathname;
+        if (path === "/api/events.mux") {
+          const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(":ok\n\n"));
+              // Leave open — mirrors Face SSE.
+            },
+          });
+          return new Response(stream, {
+            status: 200,
+            headers: { "content-type": "text/event-stream" },
+          });
+        }
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+      { request, response },
+    );
+
+    await writeDesktopPipeFrame(
+      request,
+      encodeDesktopRequestStart(1, {
+        url: "xrk-app://stream/api/events.mux",
+        method: "GET",
+        headers: [],
+        hasBody: false,
+      }),
+    );
+    await writeDesktopPipeFrame(
+      request,
+      encodeDesktopRequestStart(2, {
+        url: "xrk-app://app/api/host.describe",
+        method: "POST",
+        headers: [["content-type", "application/json"]],
+        hasBody: true,
+      }),
+    );
+    await writeDesktopPipeFrame(
+      request,
+      encodeDesktopRequestData(2, Buffer.from("{}")),
+    );
+    await writeDesktopPipeFrame(request, encodeDesktopRequestEnd(2));
+
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline && !ended.has(2)) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(starts).toContain(1);
+    expect(starts).toContain(2);
+    expect(ended.has(2)).toBe(true);
+    expect(ended.has(1)).toBe(false);
+
+    await runtime.dispose();
+  });
 });

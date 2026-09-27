@@ -17,6 +17,8 @@ declare module "electron" {
     minWidth?: number;
     minHeight?: number;
     show?: boolean;
+    title?: string;
+    icon?: string;
     webPreferences?: WebPreferences;
   }
 
@@ -29,6 +31,7 @@ declare module "electron" {
     restore(): void;
     show(): void;
     focus(): void;
+    setTitle(title: string): void;
     once(event: "ready-to-show", listener: () => void): this;
     on(event: "closed", listener: () => void): this;
     loadURL(url: string): Promise<void>;
@@ -49,10 +52,12 @@ declare module "electron" {
     whenReady(): Promise<void>;
     getLocale(): string;
     getVersion(): string;
+    getAppPath(): string;
     readonly isPackaged: boolean;
     on(event: "second-instance", listener: () => void): this;
     on(event: "activate", listener: () => void): this;
     on(event: "window-all-closed", listener: () => void): this;
+    on(event: "will-quit", listener: () => void): this;
   }
 
   export interface ProtocolPrivileges {
@@ -104,6 +109,7 @@ declare module "electron" {
   };
 
   export const dialog: {
+    showErrorBox(title: string, content: string): void;
     showMessageBox(
       window: unknown | undefined,
       options: {

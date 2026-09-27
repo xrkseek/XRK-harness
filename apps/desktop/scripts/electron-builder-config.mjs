@@ -6,7 +6,7 @@
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 
 const APP_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const requireFromApp = createRequire(join(APP_ROOT, "package.json"));
@@ -99,21 +99,43 @@ export function createElectronBuilderConfig(
   const webRoot =
     env.XRK_DESKTOP_WEB_ROOT?.trim() ||
     join(APP_ROOT, "..", "web", "dist");
-  const hostDist = join(APP_ROOT, "..", "desktop-host", "dist");
+  const hostBundle = join(buildRoot, "host-bundle");
+
+  // Brand plate: apps/web/public/logo-plate.png → apps/desktop/build/icon.{png,ico}
+  const buildResources = join(APP_ROOT, "build");
+  const iconPng = join(buildResources, "icon.png");
+  const iconIco = join(buildResources, "icon.ico");
+
+  // Prefer a local Electron dist when GitHub release downloads are unreachable.
+  const localElectronDist = join(APP_ROOT, "node_modules", "electron", "dist");
+  const localElectronMarker = join(
+    localElectronDist,
+    hostPlatform === "win32" ? "electron.exe" : "Electron",
+  );
+  const electronDist =
+    env.XRK_DESKTOP_ELECTRON_DIST?.trim() ||
+    (existsSync(localElectronMarker) ? localElectronDist : undefined);
 
   return {
     appId: "com.xrkseek.harness",
     productName: "XRK Harness",
     // Unsigned builds carry a suffix so a shared file can never pass for a release artifact.
     artifactName: `xrk-harness-\${version}-\${os}-\${arch}${unsigned ? "-unsigned" : ""}.\${ext}`,
-    directories: { output: artifacts },
+    directories: { output: artifacts, buildResources },
+    ...(electronDist ? { electronDist } : {}),
+    // Prefer .ico on Windows (rcedit); PNG is the shared brand source / mac fallback.
+    icon: packagesWindows ? iconIco : iconPng,
     asar: true,
     files: [
       "dist/**/*",
       "package.json",
+      "build/icon.png",
+      "build/icon.ico",
+    ],
+    extraResources: [
       {
-        from: hostDist,
-        to: "desktop-host",
+        from: join(buildRoot, "runtime"),
+        to: "runtime",
         filter: ["**/*"],
       },
       {
@@ -122,16 +144,33 @@ export function createElectronBuilderConfig(
         filter: ["**/*"],
       },
     ],
-    extraResources: [
-      {
-        from: join(buildRoot, "runtime"),
-        to: "runtime",
-        filter: ["**/*"],
-      },
-    ],
     afterPack: async (context) => {
-      if (!updateUrl) return;
       const resourcesDir = context.packager.getResourcesDir(context.appOutDir);
+      // Host must live outside asar (Host Node cannot read asar). electron-builder's
+      // FileSet always excludes `node_modules` from extraResources, so copy here.
+      // prepare-host-bundle uses hoisted linker (real dirs, no SYMLINKD).
+      if (!existsSync(join(hostBundle, "dist", "index.js"))) {
+        throw new Error(
+          `xrk desktop afterPack: missing host-bundle at ${hostBundle} ` +
+            `(run pnpm --filter @xrkseek/harness-desktop prepare:host-bundle)`,
+        );
+      }
+      const hostDest = join(resourcesDir, "host");
+      rmSync(hostDest, { recursive: true, force: true });
+      cpSync(hostBundle, hostDest, { recursive: true });
+      const hostMarker = join(
+        hostDest,
+        "node_modules",
+        "@xrkseek",
+        "server-host",
+        "package.json",
+      );
+      if (!existsSync(hostMarker)) {
+        throw new Error(
+          `xrk desktop afterPack: Host deps missing after copy (${hostMarker})`,
+        );
+      }
+      if (!updateUrl) return;
       const yml = [
         "provider: generic",
         `url: ${updateUrl}`,
@@ -143,6 +182,7 @@ export function createElectronBuilderConfig(
     },
     mac: {
       category: "public.app-category.developer-tools",
+      icon: iconPng,
       hardenedRuntime: true,
       identity: macOSSigning?.signingIdentity ?? null,
       forceCodeSigning: Boolean(macOSSigning?.signingIdentity),
@@ -155,9 +195,11 @@ export function createElectronBuilderConfig(
       target: ["dmg", "zip"],
     },
     win: {
+      icon: iconIco,
       forceCodeSigning: windowsSigner !== undefined,
-      // Unsigned: skip Authenticode entirely (electron-builder otherwise still invokes signtool).
-      signAndEditExecutable: windowsSigner !== undefined,
+      // Keep rcedit (icon + version metadata). Unsigned skips Authenticode only.
+      signAndEditExecutable: true,
+      signExecutable: windowsSigner !== undefined,
       target: ["nsis"],
       ...(windowsSigner !== undefined
         ? {
@@ -174,6 +216,9 @@ export function createElectronBuilderConfig(
       allowToChangeInstallationDirectory: true,
       differentialPackage: true,
       installerLanguages: ["en_US", "zh_CN"],
+      installerIcon: iconIco,
+      uninstallerIcon: iconIco,
+      installerHeaderIcon: iconIco,
     },
     detectUpdateChannel: false,
     publish: updateUrl

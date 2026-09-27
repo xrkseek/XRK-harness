@@ -28,7 +28,9 @@ export interface DesktopUpdateState {
 
 /**
  * Narrow bridge through contextIsolation.
- * Plugin install surface is designed (`plugin-install-surface.ts`) but
+ * Plugin install surface (`plugin-install-surface.ts`) is a deferred Desktop
+ * *profile* pnpm design — product Settings install uses Face
+ * `pluginInventory/install` → `xrkh plugin add` instead.
  * preload wiring stays phase 2 until `isDesktopPluginInstallReady()`.
  */
 export interface XrkDesktopApi {

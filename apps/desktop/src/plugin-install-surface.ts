@@ -1,12 +1,10 @@
 /**
- * Desktop plugin install surface (ADR-0008) — design contract.
+ * Desktop *profile* plugin install surface (ADR-0008) — design contract only.
  *
- * Structured operations only: list / add / remove / update.
- * Package mutations map to fixed bundled-pnpm argv; callers never pass
- * arbitrary CLI flags or free-form argv.
- *
- * Ready gate stays false until a profile pnpm executor is wired
- * (`isDesktopPluginInstallReady()`). Preload exposure remains phase 2.
+ * This is **not** the product Settings path. Community / process plugins install
+ * via Face `pluginInventory/install` → Host `runPluginMutate` → `xrkh plugin add`
+ * into `~/.xrk/plugins`. Ready gate stays false until a separate profile-pnpm
+ * executor is wired (`isDesktopPluginInstallReady()`). Preload stays phase 2.
  */
 
 /** Installed desktop plugin row derived from the desktop profile. */

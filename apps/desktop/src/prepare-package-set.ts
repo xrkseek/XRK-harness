@@ -457,7 +457,9 @@ export async function main(argv: readonly string[] = process.argv): Promise<void
   packDesktopFirstPartyPackages({
     repositoryRoot: repoRoot,
     destinationDir: packedDir,
-    includeCli: false,
+    // Settings plugin install/update spawns xrkh via XRK_HARNESS_BIN; ship CLI
+    // next to the Host deploy so packaged Desktop can mutate ~/.xrk/plugins.
+    includeCli: true,
   });
 
   const packageSet = prepareDesktopPackageSet({

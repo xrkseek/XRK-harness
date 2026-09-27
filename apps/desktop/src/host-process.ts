@@ -39,6 +39,11 @@ export interface DesktopHostProcessOptions {
    * Default: `{projectDir}/node_modules/@xrkseek/harness-desktop-host/dist/index.js`
    */
   readonly entry?: string;
+  /**
+   * Extra env merged into the child after scrubbing packaging secrets.
+   * Use for product knobs Host reads (`XRK_HOME`, `XRK_WEB_DIST`, …).
+   */
+  readonly env?: NodeJS.ProcessEnv;
 }
 
 /** Ready facts reported by one Desktop Host child. */
@@ -69,6 +74,16 @@ function errorOf(reason: unknown, fallback: string): Error {
   return reason instanceof Error ? reason : new Error(fallback);
 }
 
+/** IPC channel closed between `connected` check and `child.send` (EPIPE race). */
+function isIpcClosedError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === "EPIPE"
+  );
+}
+
 async function exitsWithin(
   exit: Promise<void>,
   milliseconds: number,
@@ -87,8 +102,8 @@ async function exitsWithin(
   }
 }
 
-function childEnv(): NodeJS.ProcessEnv {
-  return Object.fromEntries(
+function childEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const base = Object.fromEntries(
     Object.entries(process.env).filter(
       ([name]) =>
         name !== "NODE_OPTIONS" &&
@@ -96,6 +111,8 @@ function childEnv(): NodeJS.ProcessEnv {
         !/^(?:npm|pnpm|corepack)_/iu.test(name),
     ),
   );
+  if (extra === undefined) return base;
+  return { ...base, ...extra };
 }
 
 function defaultHostEntry(projectDir: string): string {
@@ -118,7 +135,6 @@ export class DesktopHostProcess {
   private requestWriteTail: Promise<void> = Promise.resolve();
   private nextStreamId = 1;
   private readonly pending = new Map<number, PendingResponse>();
-  private readonly blockedResponses = new Set<number>();
   private readyResolve!: (ready: DesktopHostReady) => void;
   private readyReject!: (error: Error) => void;
   private readonly readyPromise = new Promise<DesktopHostReady>(
@@ -131,6 +147,7 @@ export class DesktopHostProcess {
   private stderr = "";
   private readonly inspectPort: number | undefined;
   private readonly entry: string;
+  private readonly childEnvironment: NodeJS.ProcessEnv | undefined;
 
   constructor(
     private readonly node: string,
@@ -139,6 +156,7 @@ export class DesktopHostProcess {
   ) {
     this.inspectPort = options.inspectPort;
     this.entry = options.entry ?? defaultHostEntry(projectDir);
+    this.childEnvironment = options.env;
   }
 
   /** Start the child once; resolve after IPC `ready`. */
@@ -155,7 +173,7 @@ export class DesktopHostProcess {
       ],
       {
         cwd: this.projectDir,
-        env: childEnv(),
+        env: childEnv(this.childEnvironment),
         stdio: ["ignore", "pipe", "pipe", "pipe", "pipe", "ipc"],
       },
     );
@@ -203,8 +221,9 @@ export class DesktopHostProcess {
       }
       this.handleMessage(message);
     });
-    child.once("error", (error) => {
-      this.fail(error);
+    child.on("error", (error) => {
+      // Shutdown races commonly surface as EPIPE after the channel is gone.
+      if (!isIpcClosedError(error)) this.fail(error);
     });
     this.exitPromise = new Promise<void>((resolve) => {
       child.once("exit", (code) => {
@@ -284,10 +303,17 @@ export class DesktopHostProcess {
   async stop(): Promise<void> {
     const child = this.child;
     if (child === undefined) return;
-    this.blockedResponses.clear();
     this.responsePipe?.resume();
-    if (child.connected) this.send({ type: "shutdown" });
-    this.requestPipe?.destroy();
+    try {
+      if (child.connected) this.send({ type: "shutdown" });
+    } catch {
+      // already gone
+    }
+    try {
+      this.requestPipe?.destroy();
+    } catch {
+      // already gone
+    }
     const exited = this.exitPromise ?? Promise.resolve();
     if (!(await exitsWithin(exited, 10_000))) child.kill("SIGTERM");
     if (!(await exitsWithin(exited, 5_000))) {
@@ -373,7 +399,18 @@ export class DesktopHostProcess {
     if (child === undefined || !child.connected) {
       throw new Error("xrk desktop host IPC is unavailable");
     }
-    child.send(message);
+    // Callback form: Channel-closed EPIPE must not become an unhandled 'error'
+    // event (Node emits that when send has no callback).
+    try {
+      child.send(message, (error) => {
+        if (error !== null && !isIpcClosedError(error)) {
+          this.fail(errorOf(error, "xrk desktop host IPC send failed"));
+        }
+      });
+    } catch (error) {
+      if (isIpcClosedError(error)) return;
+      throw error;
+    }
   }
 
   private acceptResponseBytes(chunk: Buffer): void {
@@ -411,10 +448,6 @@ export class DesktopHostProcess {
             start: (controller) => {
               pending.controller = controller;
             },
-            pull: () => {
-              this.blockedResponses.delete(frame.streamId);
-              this.resumeResponsePipe();
-            },
             cancel: (reason) => {
               this.cancelResponse(frame.streamId, reason);
             },
@@ -435,24 +468,39 @@ export class DesktopHostProcess {
       case "data": {
         const controller = pending.controller;
         if (!pending.responseStarted || controller === undefined) {
-          throw new Error(
-            `xrk desktop host sent body data before a body start for stream ${String(frame.streamId)}`,
+          this.failPending(
+            frame.streamId,
+            new Error(
+              `xrk desktop host sent body data before a body start for stream ${String(frame.streamId)}`,
+            ),
           );
+          return;
         }
-        controller.enqueue(frame.data);
-        if ((controller.desiredSize ?? 0) <= 0) {
-          this.blockedResponses.add(frame.streamId);
-          this.responsePipe?.pause();
+        // Never pause the shared response pipe for one slow consumer. If the
+        // renderer already cancelled this body, drop the stream — do not throw
+        // through acceptResponseBytes (that kills the whole Host child).
+        try {
+          controller.enqueue(frame.data);
+        } catch {
+          this.cancelResponse(frame.streamId, new Error("response consumer closed"));
         }
         return;
       }
       case "end":
         if (!pending.responseStarted) {
-          throw new Error(
-            `xrk desktop host ended stream ${String(frame.streamId)} before its response start`,
+          this.failPending(
+            frame.streamId,
+            new Error(
+              `xrk desktop host ended stream ${String(frame.streamId)} before its response start`,
+            ),
           );
+          return;
         }
-        pending.controller?.close();
+        try {
+          pending.controller?.close();
+        } catch {
+          /* consumer already cancelled */
+        }
         this.finishPending(frame.streamId, true);
         return;
       case "error":
@@ -482,7 +530,13 @@ export class DesktopHostProcess {
     pending.uploadOpen = false;
     void pending.requestReader?.cancel(error).catch(() => undefined);
     if (pending.controller === undefined) pending.reject(error);
-    else pending.controller.error(error);
+    else {
+      try {
+        pending.controller.error(error);
+      } catch {
+        pending.reject(error);
+      }
+    }
     this.enqueueRequestFrame(encodeDesktopRequestCancel(streamId)).catch(
       (pipeError: unknown) => {
         this.fail(errorOf(pipeError, "xrk desktop request pipe failed"));
@@ -505,12 +559,6 @@ export class DesktopHostProcess {
     }
     pending.removeAbort?.();
     this.pending.delete(streamId);
-    this.blockedResponses.delete(streamId);
-    this.resumeResponsePipe();
-  }
-
-  private resumeResponsePipe(): void {
-    if (this.blockedResponses.size === 0) this.responsePipe?.resume();
   }
 
   private handleMessage(message: DesktopHostEvent): void {
@@ -531,11 +579,16 @@ export class DesktopHostProcess {
     for (const pending of this.pending.values()) {
       void pending.requestReader?.cancel(error).catch(() => undefined);
       if (pending.controller === undefined) pending.reject(error);
-      else pending.controller.error(error);
+      else {
+        try {
+          pending.controller.error(error);
+        } catch {
+          pending.reject(error);
+        }
+      }
       pending.removeAbort?.();
     }
     this.pending.clear();
-    this.blockedResponses.clear();
     this.responsePipe?.resume();
   }
 }

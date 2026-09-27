@@ -184,6 +184,13 @@ export {
   type DesktopPaths,
 } from "./paths.js";
 export {
+  DESKTOP_WEB_ROOT_ENV,
+  resolveDesktopBuildResourcesDir,
+  resolveDesktopWebRoot,
+  resolveDesktopWindowIconPath,
+  type ResolveDesktopWebRootOptions,
+} from "./web-root.js";
+export {
   DesktopProfileTransactionManager,
   defaultDesktopProfileHealthCheck,
   type DesktopPendingProfileTransaction,
@@ -268,6 +275,16 @@ export {
   type DesktopHostResponseFrame,
 } from "./host-protocol.js";
 export {
+  DESKTOP_HOST_NODE_ENV,
+  resolveDesktopHostNodeExecutable,
+  resolveDesktopPackagedHostEntry,
+} from "./host-node.js";
+export {
+  resolvePackagedDesktopHostRuntime,
+  resolveUnpackagedDesktopHostRuntime,
+  type DesktopHostRuntimePaths,
+} from "./host-runtime.js";
+export {
   DesktopHostProcess,
   type DesktopHostProcessOptions,
   type DesktopHostReady,
@@ -282,6 +299,12 @@ export {
   serveDesktopStaticAsset,
   type DesktopProtocolHandlerOptions,
 } from "./protocol.js";
+export {
+  injectDesktopBootIntoHtml,
+  loadDesktopBootManifest,
+  maybeInjectDesktopBootHtml,
+  type DesktopWebBootManifest,
+} from "./boot-inject.js";
 export {
   DESKTOP_BRIDGE_PROTOCOL_VERSION,
   DESKTOP_IPC,

@@ -190,4 +190,54 @@ function onRequestFrame(frame) {
       await host.stop().catch(() => undefined);
     }
   });
+
+  it("keeps unary Fetch alive while an unread SSE response streams", async () => {
+    const { project, entry } = projectWithHost(`
+process.send({ type: 'ready', protocolVersion: ${String(DESKTOP_HOST_PROTOCOL_VERSION)}, hostVersion: 'sse-unary' })
+const open = new Map()
+function onRequestFrame(frame) {
+  if (frame.type === 1) {
+    const request = JSON.parse(frame.payload)
+    open.set(frame.streamId, request.url)
+    if (request.url.includes('events.mux')) {
+      responseStart(frame.streamId, { headers: [['content-type', 'text/event-stream']] })
+      responseData(frame.streamId, ': connected\\n\\n')
+      // Keep streaming forever (no end) — must not block sibling unary.
+      return
+    }
+    if (!request.hasBody) {
+      responseStart(frame.streamId, { headers: [['content-type', 'application/json']] })
+      responseData(frame.streamId, '{"ok":true}')
+      responseEnd(frame.streamId)
+    }
+  } else if (frame.type === 3) {
+    responseStart(frame.streamId, { headers: [['content-type', 'application/json']] })
+    responseData(frame.streamId, '{"ok":true}')
+    responseEnd(frame.streamId)
+  }
+}
+`);
+    const host = new DesktopHostProcess(process.execPath, project, { entry });
+    try {
+      const mux = await host.fetch(new Request("xrk-app://stream/api/events.mux"));
+      expect(mux.headers.get("content-type")).toContain("text/event-stream");
+      // Do not read mux body — reproduces Chromium holding an unread SSE slot.
+      const describe = await Promise.race([
+        host.fetch(
+          new Request("xrk-app://app/api/host.describe", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: "{}",
+          }),
+        ),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("unary starved behind unread SSE")), 3_000);
+        }),
+      ]);
+      expect(describe.status).toBe(200);
+      await expect(describe.text()).resolves.toBe('{"ok":true}');
+    } finally {
+      await host.stop().catch(() => undefined);
+    }
+  });
 });

@@ -87,6 +87,8 @@ const child = spawn(electronBin, [APP_ROOT], {
     XRK_DESKTOP_WEB_ROOT:
       process.env.XRK_DESKTOP_WEB_ROOT?.trim() ||
       path.join(ROOT, "apps", "web", "dist"),
+    XRK_DESKTOP_HOST_NODE:
+      process.env.XRK_DESKTOP_HOST_NODE?.trim() || process.execPath,
     ELECTRON_USER_DATA_DIR: process.env.ELECTRON_USER_DATA_DIR ?? userData,
   },
 });

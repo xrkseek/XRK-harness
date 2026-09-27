@@ -36,10 +36,11 @@ export interface DesktopHostPipeRuntime {
   dispose(): Promise<void>;
 }
 
+/** Map `xrk-app://<any-host>/…` onto the in-process Face HTTP authority. */
 function toHttpUrl(raw: string): string {
   try {
     const url = new URL(raw);
-    if (url.protocol === "xrk-app:" && url.hostname === "app") {
+    if (url.protocol === "xrk-app:") {
       return `http://desktop.local${url.pathname}${url.search}`;
     }
     return raw;
@@ -48,31 +49,46 @@ function toHttpUrl(raw: string): string {
   }
 }
 
+/**
+ * Write one response. `enqueueWrite` serializes frames on the shared pipe so
+ * concurrent streams (unary + long-lived SSE) can interleave without one
+ * infinite body parking the whole dispatcher.
+ */
 async function writeResponse(
   pipe: Writable,
   streamId: number,
   response: Response,
+  enqueueWrite: (task: () => Promise<void>) => Promise<void>,
+  signal: AbortSignal,
 ): Promise<void> {
   const headers: [string, string][] = [];
   response.headers.forEach((value, key) => {
     headers.push([key, value]);
   });
   const hasBody = response.body !== null;
-  await writeDesktopPipeFrame(
-    pipe,
-    encodeDesktopResponseStart(streamId, {
-      status: response.status,
-      headers,
-      hasBody,
-    }),
+  await enqueueWrite(() =>
+    writeDesktopPipeFrame(
+      pipe,
+      encodeDesktopResponseStart(streamId, {
+        status: response.status,
+        headers,
+        hasBody,
+      }),
+    ),
   );
   if (!hasBody || response.body === null) {
-    await writeDesktopPipeFrame(pipe, encodeDesktopResponseEnd(streamId));
+    await enqueueWrite(() =>
+      writeDesktopPipeFrame(pipe, encodeDesktopResponseEnd(streamId)),
+    );
     return;
   }
   const reader = response.body.getReader();
   try {
     for (;;) {
+      if (signal.aborted) {
+        await reader.cancel(signal.reason).catch(() => undefined);
+        return;
+      }
       const next = await reader.read();
       if (next.done) break;
       for (
@@ -80,16 +96,23 @@ async function writeResponse(
         offset < next.value.byteLength;
         offset += DESKTOP_PIPE_CHUNK_BYTES
       ) {
-        await writeDesktopPipeFrame(
-          pipe,
-          encodeDesktopResponseData(
-            streamId,
-            next.value.subarray(offset, offset + DESKTOP_PIPE_CHUNK_BYTES),
+        const chunk = next.value.subarray(
+          offset,
+          offset + DESKTOP_PIPE_CHUNK_BYTES,
+        );
+        await enqueueWrite(() =>
+          writeDesktopPipeFrame(
+            pipe,
+            encodeDesktopResponseData(streamId, chunk),
           ),
         );
       }
     }
-    await writeDesktopPipeFrame(pipe, encodeDesktopResponseEnd(streamId));
+    if (!signal.aborted) {
+      await enqueueWrite(() =>
+        writeDesktopPipeFrame(pipe, encodeDesktopResponseEnd(streamId)),
+      );
+    }
   } finally {
     reader.releaseLock();
   }
@@ -126,7 +149,7 @@ export function startDesktopHostPipeRuntime(
   let writeTail: Promise<void> = Promise.resolve();
   let disposed = false;
 
-  const enqueue = (task: () => Promise<void>): Promise<void> => {
+  const enqueueWrite = (task: () => Promise<void>): Promise<void> => {
     const next = writeTail.then(task, task);
     writeTail = next.catch(() => undefined);
     return next;
@@ -168,24 +191,34 @@ export function startDesktopHostPipeRuntime(
           }
         : {}),
     };
-    void enqueue(async () => {
+    // Fetch + body pump run concurrently per stream. Only pipe *writes* are
+    // serialized — otherwise one SSE body parks every later unary forever.
+    void (async () => {
       try {
         const response = await fetch(
           new Request(toHttpUrl(stream.url), init),
         );
         if (abort.signal.aborted) return;
-        await writeResponse(responsePipe, streamId, response);
+        await writeResponse(
+          responsePipe,
+          streamId,
+          response,
+          enqueueWrite,
+          abort.signal,
+        );
       } catch (error) {
         if (abort.signal.aborted) return;
         const message = error instanceof Error ? error.message : String(error);
-        await writeDesktopPipeFrame(
-          responsePipe,
-          encodeDesktopResponseError(streamId, message),
+        await enqueueWrite(() =>
+          writeDesktopPipeFrame(
+            responsePipe,
+            encodeDesktopResponseError(streamId, message),
+          ),
         );
       } finally {
         inFlight.delete(streamId);
       }
-    });
+    })();
   };
 
   const onFrame = (frame: DesktopHostRequestFrame): void => {
