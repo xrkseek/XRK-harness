@@ -62,7 +62,11 @@ export type AppFrameProps =
 /** Center column grid item (session-body building block). */
 function CenterColumn(props: { children?: ReactNode; inert?: boolean }) {
   return (
-    <div className={css.centerCol} inert={props.inert || undefined}>
+    <div
+      className={css.centerCol}
+      data-pane="conversation"
+      inert={props.inert || undefined}
+    >
       {props.children}
     </div>
   )
@@ -411,10 +415,26 @@ export function AppFrame({
 
   const desktopChrome = hasDesktopChrome()
 
+  // Publish chrome height on <html> so floating workbenches (better-sidebar)
+  // can align without reading frame-scoped CSS variables.
+  useEffect(() => {
+    if (!desktopChrome) return
+    const root = document.documentElement
+    root.style.setProperty('--xrk-desktop-chrome-height', '36px')
+    root.setAttribute('data-xrk-desktop-chrome', '')
+    return () => {
+      root.style.removeProperty('--xrk-desktop-chrome-height')
+      root.removeAttribute('data-xrk-desktop-chrome')
+    }
+  }, [desktopChrome])
+
   return (
     <div
       ref={frameRef}
       className={css.frame}
+      // Stable anchors for community layout.css (`[data-dsh-frame]` /
+      // `[data-pane="conversation"]`) — same geometry as DSH shells.
+      data-dsh-frame=""
       style={{
         // Phone: one in-flow track only. Absolute sidebar/details leave the
         // grid formatting context; with `0 1fr 0` the lone center item

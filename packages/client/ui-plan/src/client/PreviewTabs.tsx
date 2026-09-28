@@ -1746,9 +1746,7 @@ export function PreviewTabs({
   return (
     <aside className={css.root} aria-label={t('preview.tabs')} data-xrk-overview="" data-xrk-status="">
       <div className={css.header}>
-        <div className={css.titleBlock}>
-          <h2 className={css.title}>{t('preview.open')}</h2>
-          <div className={css.tabs} role="tablist" aria-label={t('preview.tabs')}>
+        <div className={css.tabs} role="tablist" aria-label={t('preview.tabs')}>
             <button
               type="button"
               role="tab"
@@ -1799,7 +1797,6 @@ export function PreviewTabs({
               <IconChecklistOutline14 size={12} className={css.tabIcon} />
               {t('preview.todos')}
             </button>
-          </div>
         </div>
         <button
           type="button"
@@ -1880,12 +1877,15 @@ export interface PreviewOpenInjected {
   closePreview: () => void
 }
 
-export type PreviewOpenProps = InjectFace<PreviewOpenInjected> & PropsLocale<'plan'>
+export type PreviewOpenProps =
+  PropsRuntime<'conversation.session.header.actions'>
+  & InjectFace<PreviewOpenInjected>
+  & PropsLocale<'plan'>
 
 /**
- * Composer control that opens the session Status (details) column.
- * Reads the layout insets stamp (`data-xrk-layout-details`) so a second click
- * closes (toggle).
+ * Session-header toggle for the Status (details) column.
+ * Same cluster as Files / Jobs — not under the composer. Reads the layout
+ * insets stamp (`data-xrk-layout-details`) so a second click closes.
  */
 export function PreviewOpenButton({ openPreview, closePreview, t }: PreviewOpenProps) {
   const [open, setOpen] = useState(() => document.documentElement.hasAttribute(DETAILS_INSET_ATTR))
@@ -1904,14 +1904,15 @@ export function PreviewOpenButton({ openPreview, closePreview, t }: PreviewOpenP
   return (
     <button
       type="button"
-      className={css.open}
+      className={css.trigger}
       onClick={() => { if (open) closePreview(); else openPreview() }}
       title={t('preview.openHint')}
-      aria-label={t('preview.open')}
+      aria-label={open ? t('preview.close') : t('preview.open')}
       aria-pressed={open}
-      data-open={open || undefined}
+      data-xrk-status-toggle=""
     >
-      {t('preview.open')}
+      <IconGaugeOutline16 size={16} />
+      <span className={css.triggerLabel}>{t('preview.open')}</span>
     </button>
   )
 }

@@ -53,6 +53,8 @@ export interface XrkDesktopWindowApi {
 
 export interface XrkDesktopApi {
   readonly protocolVersion: typeof DESKTOP_BRIDGE_PROTOCOL_VERSION;
+  /** Host OS for chrome layout (`darwin` → native traffic lights). */
+  readonly platform: NodeJS.Platform;
   locale(): Promise<DesktopLocale>;
   readonly updates: {
     check(): Promise<DesktopUpdateState>;

@@ -164,10 +164,18 @@ function tryHandleFaceEventSse(
         send(serverRequestFrame(rpcId, frame));
       });
 
+  // Desktop custom-protocol / proxy idle cuts close quiet SSE; comment
+  // keepalives keep the mux downlink alive between session frames.
+  const keepalive = setInterval(() => {
+    if (res.writableEnded || res.destroyed) return;
+    res.write(": keepalive\n\n");
+  }, 15_000);
+
   let cleaned = false;
   const cleanup = (): void => {
     if (cleaned) return;
     cleaned = true;
+    clearInterval(keepalive);
     off();
   };
   req.on("close", cleanup);

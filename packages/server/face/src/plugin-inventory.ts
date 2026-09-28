@@ -127,8 +127,11 @@ function pluginsDirOf(
 }
 
 /**
- * Reinstall/update spec: keep registry / github sources; local path installs
- * are cwd-sensitive after Host restart → fall back to `name@latest`.
+ * Reinstall/update spec for Settings 「更新」.
+ * - Local / file / link / relative paths are cwd-sensitive → `name@latest`.
+ * - Registry pins (`name@1.2.3`) must bump → `name@latest` (reinstalling the
+ *   same pin is not an update).
+ * - github: / other schemes keep the recorded source.
  */
 export function resolveManagedPluginUpdateSpec(
   entryId: string,
@@ -148,6 +151,14 @@ export function resolveManagedPluginUpdateSpec(
     /[/\\]/.test(s)
   ) {
     return `${id}@latest`;
+  }
+  // Registry pin `name@1.2.3` / `@scope/name@1.2.3` → bump to @latest.
+  // Leave github:/git+/http(s): recorded sources alone.
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(s)) {
+    const pinned = /^((?:@[^/\s]+\/)?[^@\s]+)@([^@\s]+)$/.exec(s);
+    if (pinned?.[1] !== undefined && pinned[2] !== undefined && /^\d/.test(pinned[2])) {
+      return `${pinned[1]}@latest`;
+    }
   }
   return s;
 }

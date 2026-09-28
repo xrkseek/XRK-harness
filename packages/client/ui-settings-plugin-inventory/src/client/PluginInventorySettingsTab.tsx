@@ -296,6 +296,7 @@ export function PluginInventorySettingsTab({
   const [installGuideOpen, setInstallGuideOpen] = useState(false)
   const [installError, setInstallError] = useState<string | null>(null)
   const [installSuccess, setInstallSuccess] = useState(false)
+  const [clientRefreshHint, setClientRefreshHint] = useState(false)
   const [installLog, setInstallLog] = useState<PluginInstallLog | null>(null)
   const storedRegistry = useMemo(() => readStoredRegistry(), [])
   const [registryChoice, setRegistryChoice] = useState<InstallRegistryChoice>(storedRegistry.choice)
@@ -357,6 +358,13 @@ export function PluginInventorySettingsTab({
     }
   }, [expanded, filteredEntries])
 
+  useEffect(() => {
+    if (state.status !== 'ready') return
+    if (state.snapshot.entries.some(entry => entry.needsRestart === true)) {
+      setClientRefreshHint(true)
+    }
+  }, [state])
+
   const retry = (): void => {
     setState({ status: 'loading' })
     setActionError(null)
@@ -371,7 +379,7 @@ export function PluginInventorySettingsTab({
   const runManaged = async (
     entryId: PluginInventoryEntry['entryId'],
     action: () => Promise<void>,
-    options: { refresh?: boolean; notice?: string } = {},
+    options: { refresh?: boolean; notice?: string; clientRefresh?: boolean } = {},
   ): Promise<void> => {
     setBusyId(entryId)
     setActionError(null)
@@ -380,6 +388,7 @@ export function PluginInventorySettingsTab({
       setRemoveTarget(null)
       setMenuEntryId(null)
       if (options.notice !== undefined) showToast(options.notice)
+      if (options.clientRefresh === true) setClientRefreshHint(true)
       if (options.refresh !== false) {
         setState({ status: 'loading' })
         setRequest(value => value + 1)
@@ -441,6 +450,7 @@ export function PluginInventorySettingsTab({
       setInstallLog(log)
       setInstallSpec('')
       setInstallSuccess(true)
+      setClientRefreshHint(true)
       showToast(t('toastInstalled', { name: spec }))
       setState({ status: 'loading' })
       setRequest(value => value + 1)
@@ -604,10 +614,12 @@ export function PluginInventorySettingsTab({
               </div>
             )
             : null}
-          {installSuccess
+          {installSuccess || clientRefreshHint
             ? (
-              <div className={css.installSuccessRow} role="status">
-                <p className={css.installSuccess}>{t('installSuccessHint')}</p>
+              <div className={css.installSuccessRow} role="status" data-client-refresh-hint>
+                <p className={css.installSuccess}>
+                  {installSuccess ? t('installSuccessHint') : t('clientRefreshHint')}
+                </p>
                 <button type="button" className={css.refreshPage} onClick={refreshClientHalf}>
                   {t('refreshPage')}
                 </button>
@@ -753,10 +765,12 @@ export function PluginInventorySettingsTab({
                                 <IconEnhanceOutline16 size={16} />
                               </span>
                               <span className={css.cardTitleBlock}>
-                                <strong className={css.cardTitle}>{title}</strong>
-                                {row.condition !== undefined
-                                  ? <span className={css.versionTag}>{row.condition}</span>
-                                  : null}
+                                <span className={css.cardTitleRow}>
+                                  <strong className={css.cardTitle}>{title}</strong>
+                                  {row.condition !== undefined
+                                    ? <span className={css.versionTag}>{row.condition}</span>
+                                    : null}
+                                </span>
                               </span>
                               <span className={css.cardTrailing}>
                                 <StateDot
@@ -863,54 +877,142 @@ export function PluginInventorySettingsTab({
                     data-open={open ? 'true' : undefined}
                     data-kind={entry.kind ?? 'unknown'}
                   >
-                    <button
-                      className={css.cardContent}
-                      type="button"
-                      aria-expanded={open}
-                      aria-controls={detailId}
-                      aria-label={ariaBits}
-                      onClick={() => {
-                        setRemoveTarget(null)
-                        setMenuEntryId(null)
-                        setExpanded(current => current === entry.entryId ? null : entry.entryId)
-                      }}
-                    >
-                      <span
-                        className={css.artwork}
-                        data-kind={entry.kind ?? 'unknown'}
-                        aria-hidden
-                        title={t(art.labelKey)}
+                    <div className={css.cardHead}>
+                      <button
+                        className={css.cardContent}
+                        type="button"
+                        aria-expanded={open}
+                        aria-controls={detailId}
+                        aria-label={ariaBits}
+                        onClick={() => {
+                          setRemoveTarget(null)
+                          setMenuEntryId(null)
+                          setExpanded(current => current === entry.entryId ? null : entry.entryId)
+                        }}
                       >
-                        <ArtworkIcon size={18} />
-                      </span>
-                      <span className={css.cardTitleBlock}>
-                        <strong className={css.cardTitle} title={entry.moduleName}>{title}</strong>
-                        {entry.version ? (
-                          <span className={css.versionTag} title={t('version')}>{entry.version}</span>
-                        ) : null}
-                      </span>
-                      <span className={css.cardTrailing}>
-                        {managed ? (
-                          <span className={css.managedTag}>{t('managedTag')}</span>
-                        ) : null}
-                        {needsRestart ? (
-                          <span className={css.restartTag}>{t('needsRestartTag')}</span>
-                        ) : null}
-                        {entry.enabled ? (
-                          <span
-                            className={css.statusDot}
-                            data-phase={entry.fiberPhase ?? 'unobserved'}
-                            role="img"
-                            aria-label={status}
-                            title={status}
-                          />
-                        ) : null}
-                        <span className={css.configTag} data-enabled={entry.enabled ? 'true' : 'false'}>
-                          {configuration}
+                        <span
+                          className={css.artwork}
+                          data-kind={entry.kind ?? 'unknown'}
+                          aria-hidden
+                          title={t(art.labelKey)}
+                        >
+                          <ArtworkIcon size={18} />
                         </span>
-                        <IconChevronDownOutline14 className={css.chevron} size={12} aria-hidden="true" />
-                      </span>
-                    </button>
+                        <span className={css.cardTitleBlock}>
+                          <span className={css.cardTitleRow}>
+                            <strong className={css.cardTitle} title={entry.moduleName}>{title}</strong>
+                            {entry.version ? (
+                              <span className={css.versionTag} title={t('version')}>{entry.version}</span>
+                            ) : null}
+                          </span>
+                          {managed || needsRestart ? (
+                            <span className={css.cardMetaRow}>
+                              {managed ? (
+                                <span className={css.managedTag}>{t('managedTag')}</span>
+                              ) : null}
+                              {needsRestart ? (
+                                <span className={css.restartTag}>{t('needsRestartTag')}</span>
+                              ) : null}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className={css.cardTrailing}>
+                          {entry.enabled ? (
+                            <span
+                              className={css.statusDot}
+                              data-phase={entry.fiberPhase ?? 'unobserved'}
+                              role="img"
+                              aria-label={status}
+                              title={status}
+                            />
+                          ) : null}
+                          <span className={css.configTag} data-enabled={entry.enabled ? 'true' : 'false'}>
+                            {configuration}
+                          </span>
+                          <IconChevronDownOutline14 className={css.chevron} size={12} aria-hidden="true" />
+                        </span>
+                      </button>
+                      {managed ? (
+                        <div className={css.moreSlot}>
+                          <Menu
+                            open={menuEntryId === entry.entryId}
+                            portal
+                            dense
+                            compact
+                            align="end"
+                            onClose={() => { setMenuEntryId(null) }}
+                            anchor={(
+                              <button
+                                type="button"
+                                className={css.moreTrigger}
+                                aria-haspopup="menu"
+                                aria-expanded={menuEntryId === entry.entryId}
+                                aria-label={t('moreActions', { name: title })}
+                                disabled={busy}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  setRemoveTarget(null)
+                                  setMenuEntryId(current => (
+                                    current === entry.entryId ? null : entry.entryId
+                                  ))
+                                }}
+                              >
+                                <IconEllipsisOutline16 size={14} />
+                              </button>
+                            )}
+                            items={[
+                              { id: 'edit', label: t('edit'), disabled: busy },
+                              { id: 'reload', label: t('reload'), disabled: busy },
+                              { id: 'update', label: t('update'), disabled: busy },
+                              {
+                                id: 'toggle',
+                                label: entry.enabled ? t('disable') : t('enable'),
+                                disabled: busy,
+                              },
+                              { type: 'separator', id: 'remove-sep' },
+                              { id: 'remove', label: t('remove'), danger: true, disabled: busy },
+                            ]}
+                            onSelect={(id) => {
+                              setMenuEntryId(null)
+                              const name = title
+                              if (id === 'edit') {
+                                void runManaged(entry.entryId, () => openFolder(entry.entryId), { refresh: false })
+                                return
+                              }
+                            if (id === 'reload') {
+                              void runManaged(
+                                entry.entryId,
+                                () => reload(entry.entryId),
+                                { notice: t('toastReloaded', { name }), clientRefresh: true },
+                              )
+                              return
+                            }
+                            if (id === 'update') {
+                              void runManaged(
+                                entry.entryId,
+                                () => update(entry.entryId),
+                                { notice: t('toastUpdated', { name }), clientRefresh: true },
+                              )
+                              return
+                            }
+                            if (id === 'toggle') {
+                              const next = !entry.enabled
+                              void runManaged(
+                                entry.entryId,
+                                () => setEnabled(entry.entryId, next),
+                                {
+                                  notice: t(next ? 'toastEnabled' : 'toastDisabled', { name }),
+                                  clientRefresh: true,
+                                },
+                              )
+                              return
+                            }
+                              if (id === 'remove') setRemoveTarget(entry)
+                            }}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
                     {open ? (
                       <div className={css.cardDetails} id={detailId}>
                         <code className={css.entryValue} data-loader-entry>{entry.entryId}</code>
@@ -960,87 +1062,7 @@ export function PluginInventorySettingsTab({
                             </div>
                           ) : null}
                         </dl>
-                        {managed ? (
-                          <div className={css.actions}>
-                            {/* Restart copy lives in the details dl when needsRestart;
-                                do not repeat it under every managed card. */}
-                            <div className={css.actionRow}>
-                              <Menu
-                                className={css.actionMenu}
-                                open={menuEntryId === entry.entryId}
-                                dense
-                                align="end"
-                                onClose={() => { setMenuEntryId(null) }}
-                                anchor={(
-                                  <button
-                                    type="button"
-                                    className={css.action}
-                                    aria-haspopup="menu"
-                                    aria-expanded={menuEntryId === entry.entryId}
-                                    aria-label={t('moreActions', { name: title })}
-                                    disabled={busy}
-                                    onClick={() => {
-                                      setMenuEntryId(current => (
-                                        current === entry.entryId ? null : entry.entryId
-                                      ))
-                                    }}
-                                  >
-                                    <IconEllipsisOutline16 size={14} />
-                                    <span>{busy ? t('actionBusy') : t('moreActionsShort')}</span>
-                                  </button>
-                                )}
-                                items={[
-                                  { id: 'edit', label: t('edit'), disabled: busy },
-                                  { id: 'reload', label: t('reload'), disabled: busy },
-                                  { id: 'update', label: t('update'), disabled: busy },
-                                  {
-                                    id: 'toggle',
-                                    label: entry.enabled ? t('disable') : t('enable'),
-                                    disabled: busy,
-                                  },
-                                  { type: 'separator', id: 'remove-sep' },
-                                  { id: 'remove', label: t('remove'), danger: true, disabled: busy },
-                                ]}
-                                onSelect={(id) => {
-                                  setMenuEntryId(null)
-                                  const name = title
-                                  if (id === 'edit') {
-                                    void runManaged(entry.entryId, () => openFolder(entry.entryId), { refresh: false })
-                                    return
-                                  }
-                                  if (id === 'reload') {
-                                    void runManaged(
-                                      entry.entryId,
-                                      () => reload(entry.entryId),
-                                      { notice: t('toastReloaded', { name }) },
-                                    )
-                                    return
-                                  }
-                                  if (id === 'update') {
-                                    void runManaged(
-                                      entry.entryId,
-                                      () => update(entry.entryId),
-                                      { notice: t('toastUpdated', { name }) },
-                                    )
-                                    return
-                                  }
-                                  if (id === 'toggle') {
-                                    const next = !entry.enabled
-                                    void runManaged(
-                                      entry.entryId,
-                                      () => setEnabled(entry.entryId, next),
-                                      {
-                                        notice: t(next ? 'toastEnabled' : 'toastDisabled', { name }),
-                                      },
-                                    )
-                                    return
-                                  }
-                                  if (id === 'remove') setRemoveTarget(entry)
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ) : (
+                        {managed ? null : (
                           <p className={css.builtinHint}>{t('builtinHint')}</p>
                         )}
                       </div>

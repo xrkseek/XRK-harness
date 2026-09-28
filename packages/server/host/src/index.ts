@@ -103,7 +103,7 @@ import {
 } from "@xrkseek/server-loader";
 import { existsSync } from "node:fs";
 import { access } from "node:fs/promises";
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { createHostAgentCache } from "./agent-cache.js";
 import { createHostCron, type CronScheduler } from "@xrkseek/server-cron";
@@ -1069,6 +1069,10 @@ export function createHostManager(): HostManager {
       // Sidebar agent-opens / agent-terminals — Host registries (not plugin host.mjs).
       const agentOpenRegistry = new AgentOpenRegistry();
       const agentPtyRegistry = new AgentPtyRegistry();
+      // Filled in attachExtras — Desktop HTTP PTY (no WS upgrade when listen:false).
+      const sidebarPtyHttp: {
+        handle?: (req: IncomingMessage, res: ServerResponse) => boolean;
+      } = {};
       const cronBox: { scheduler?: CronScheduler | undefined } = {};
 
       const resolveAgent = async (sessionId: string) => {
@@ -2514,6 +2518,7 @@ export function createHostManager(): HostManager {
             }
           : {}),
         tryHandleExtraApi: (req, res) => {
+          if (sidebarPtyHttp.handle?.(req, res) === true) return true;
           // Host cron read API first (`/api/cron/*`), then Face extras.
           const cronApi = createCronApiHandler({
             resolveScheduler: () => cronBox.scheduler,
@@ -2536,15 +2541,23 @@ export function createHostManager(): HostManager {
           // Sidebar interactive PTY is Host-local node-pty — not SSH. Skip when
           // remote so defaultCwd is never a remote POSIX path on the Host disk.
           const sidebarPty = sshWorld
-            ? { close() {} }
+            ? {
+                close() {},
+                tryHandleHttp() {
+                  return false;
+                },
+              }
             : attachSidebarPtyUpgrades(server, {
                 defaultCwd: faceRuntime.workspaceRoot,
                 checkAuth: faceCheckAuth,
                 agentPty: agentPtyRegistry,
                 agentOpens: agentOpenRegistry,
               });
+          sidebarPtyHttp.handle = (req, res) =>
+            sidebarPty.tryHandleHttp(req, res);
           return {
             close() {
+              delete sidebarPtyHttp.handle;
               sidebarPty.close();
               agentPtyRegistry.disposeAll();
               agentOpenRegistry.dispose();

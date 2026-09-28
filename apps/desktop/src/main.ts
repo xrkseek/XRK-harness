@@ -14,6 +14,7 @@ import {
   ipcMain,
   Menu,
   protocol,
+  shell,
 } from "electron";
 import { registerDesktopIpcHandlers } from "./desktop-ipc.js";
 import { startDesktopMain } from "./desktop-bootstrap.js";
@@ -28,6 +29,7 @@ import { fetchDesktopHostFromProtocol } from "./protocol-host-fetch.js";
 import {
   DESKTOP_WEB_PREFERENCES,
   DESKTOP_WINDOW_DEFAULTS,
+  desktopWindowPlatformOptions,
 } from "./window-lifecycle.js";
 import { isDesktopUpdateFeedEnabled } from "./app-update-config.js";
 import { tryCreateDesktopElectronUpdater } from "./desktop-electron-updater.js";
@@ -78,6 +80,7 @@ function createMainBrowserWindow(): BrowserWindow {
   const icon = resolveDesktopWindowIconPath({ platform: process.platform });
   const window = new BrowserWindow({
     ...DESKTOP_WINDOW_DEFAULTS,
+    ...desktopWindowPlatformOptions(process.platform),
     title: desktopWindowTitle(),
     ...(icon !== undefined ? { icon } : {}),
     webPreferences: {
@@ -86,7 +89,13 @@ function createMainBrowserWindow(): BrowserWindow {
     },
   });
   window.setTitle(desktopWindowTitle());
-  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  // Deny in-app popups; open https OAuth / verify URLs in the system browser.
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("https:") || url.startsWith("http:")) {
+      void shell.openExternal(url);
+    }
+    return { action: "deny" };
+  });
   attachDesktopNavigationGuard(window.webContents, DESKTOP_PROTOCOL_SCHEME);
   return window;
 }
@@ -147,7 +156,9 @@ async function startDesktopHostCarrier(
 const ownsDesktopInstance = startDesktopMain(app, {
   createWindow: () => createMainBrowserWindow(),
   loadPrimary: (window) => {
-    void (window as BrowserWindow).loadURL(desktopAppIndexUrl());
+    void (window as BrowserWindow).loadURL(
+      desktopAppIndexUrl(DESKTOP_PROTOCOL_SCHEME, { platform: process.platform }),
+    );
   },
   getWindowCount: () => BrowserWindow.getAllWindows().length,
   onReady: async () => {

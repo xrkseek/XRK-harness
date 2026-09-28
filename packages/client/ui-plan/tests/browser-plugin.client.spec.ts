@@ -25,7 +25,7 @@ async function bench() {
     name: 'root',
     children: {
       'conversation.input.plan': { kind: 'single', scope: 'session' },
-      'conversation.composer.dock': { kind: 'list', scope: 'session' },
+      'conversation.session.header.actions': { kind: 'list', scope: 'session' },
       'details': { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
@@ -33,16 +33,30 @@ async function bench() {
     Promise.resolve({ ok: true, value: { commandId: 'c1', result: { kind: 'success' as const } } }))
   const commandsRemote = { execute }
   const layout = { openDetails: vi.fn(), closeDetails: vi.fn(), toggleSidebar: vi.fn() }
-  ctx.provide('remote', { commands: commandsRemote })
+  const connection = { api: { host: { openPath: vi.fn() } } }
+  const sessions = {
+    binding: vi.fn(),
+    refreshSubagents: vi.fn(),
+    openSubagent: vi.fn(),
+    open: vi.fn(),
+    list: { getSnapshot: () => ({ byId: {} }) },
+  }
+  ctx.provide('remote', { commands: commandsRemote, changes: { fileDiff: vi.fn() } })
   ctx.provide('remote.commands', commandsRemote)
+  ctx.provide('remote.changes', { fileDiff: vi.fn() })
   ctx.provide('locale', new LocaleRuntime(ctx))
   ctx.provide('layout', layout)
+  ctx.provide('connection', connection)
+  ctx.provide('sessions', sessions)
   return { ctx, slots, execute, layout }
 }
 
 describe('ui-plan browser apply', () => {
   it('declares every service it binds', () => {
-    expect(inject).toEqual(['slots', 'remote', 'remote.commands', 'locale', 'layout'])
+    expect(inject).toEqual([
+      'slots', 'remote', 'remote.commands', 'remote.changes', 'locale', 'layout',
+      'connection', 'sessions',
+    ])
   })
 
   it('node-half apply is an intentional no-op', () => {
@@ -52,10 +66,19 @@ describe('ui-plan browser apply', () => {
   it('waits until conversation declares the plan seat', async () => {
     const ctx = new Context()
     await ctx.plugin(SlotRegistry).await()
-    ctx.provide('remote', { commands: {} })
+    ctx.provide('remote', { commands: {}, changes: {} })
     ctx.provide('remote.commands', {})
+    ctx.provide('remote.changes', {})
     ctx.provide('locale', new LocaleRuntime(ctx))
     ctx.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn(), toggleSidebar: vi.fn() })
+    ctx.provide('connection', { api: { host: { openPath: vi.fn() } } })
+    ctx.provide('sessions', {
+      binding: vi.fn(),
+      refreshSubagents: vi.fn(),
+      openSubagent: vi.fn(),
+      open: vi.fn(),
+      list: { getSnapshot: () => ({ byId: {} }) },
+    })
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     expect(ctx.slots.entries('conversation.input.plan')).toHaveLength(0)
@@ -98,9 +121,10 @@ describe('ui-plan browser apply', () => {
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     expect(b.slots.entries('details')).toHaveLength(1)
-    const dock = b.slots.entries('conversation.composer.dock').find(e => e.options.id === 'preview')
-    expect(dock).toBeDefined()
-    const face = (dock!.inject as () => { openPreview: () => void; closePreview: () => void })()
+    const header = b.slots.entries('conversation.session.header.actions')
+      .find(e => e.options.id === 'preview')
+    expect(header).toBeDefined()
+    const face = (header!.inject as () => { openPreview: () => void; closePreview: () => void })()
     face.openPreview()
     expect(b.layout.openDetails).toHaveBeenCalledTimes(1)
     face.closePreview()

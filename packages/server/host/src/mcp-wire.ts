@@ -30,6 +30,34 @@ import {
 } from "@xrkseek/policy";
 import type { RegisteredPlugin } from "@xrkseek/server-loader";
 
+/** First-handshake budget so serial Settings rows cannot stick on 「连接中」. */
+const MCP_CONNECT_TIMEOUT_MS = 90_000;
+
+async function connectWithTimeout(
+  client: McpClient,
+  serverName: string,
+  timeoutMs = MCP_CONNECT_TIMEOUT_MS,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      client.connect(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            new Error(
+              `mcp connect timed out after ${Math.round(timeoutMs / 1000)}s: ${serverName}`,
+            ),
+          );
+        }, timeoutMs);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export type McpServerSpec =
   | {
       readonly serverName: string;
@@ -405,7 +433,7 @@ async function connectOneMcpPlugin(
           ...(imageAdmission ? { imageAdmission } : {}),
         });
   try {
-    await client.connect();
+    await connectWithTimeout(client, spec.serverName);
     const tools = await toolsFromClient(client);
     let refresh = Promise.resolve();
     const unsub = client.onToolsListChanged(() => {

@@ -1,12 +1,21 @@
+/* Full-bleed thin titlebar above the shell — window controls sit on the right. */
 .chrome {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 40;
+  z-index: 30;
   display: flex;
   align-items: stretch;
   height: var(--xrk-desktop-chrome-height, 36px);
+  pointer-events: none;
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 92%, transparent);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.trafficPad {
+  flex: none;
+  width: 78px;
   pointer-events: none;
 }
 
@@ -21,7 +30,9 @@
 .actions {
   display: flex;
   flex: none;
-  align-items: stretch;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px 0 4px;
   -webkit-app-region: no-drag;
   app-region: no-drag;
   pointer-events: auto;
@@ -31,25 +42,25 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 46px;
-  height: 100%;
+  width: 28px;
+  height: 28px;
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 0;
-  color: var(--dsw-alias-label-secondary);
+  border-radius: 6px;
+  color: var(--dsw-alias-label-tertiary);
   background: transparent;
   cursor: pointer;
 }
 
 .action:hover {
-  color: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-label-secondary);
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .action:focus-visible {
   outline: 2px solid var(--dsw-alias-border-focus, var(--dsw-alias-border-l2));
-  outline-offset: -2px;
+  outline-offset: 0;
 }
 
 .close:hover {

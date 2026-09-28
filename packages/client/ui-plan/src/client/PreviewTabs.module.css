@@ -15,29 +15,11 @@
 
 .header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
-  /* Extra right pad so the close control clears the workbench toggle cluster
-     if both paint for one frame before mutual exclusion settles. */
-  padding: 12px 12px 10px 14px;
+  padding: 8px 10px 8px 12px;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
-}
-
-.titleBlock {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-
-.title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-  color: var(--dsw-alias-label-primary);
 }
 
 /* Segmented tab bar: single row, scroll if the column is very narrow. */
@@ -46,6 +28,8 @@
   flex-wrap: nowrap;
   gap: 2px;
   padding: 2px;
+  min-width: 0;
+  flex: 1;
   max-width: 100%;
   overflow-x: auto;
   background: var(--dsw-alias-bg-skeleton);
@@ -92,7 +76,7 @@
 
 .tab:focus-visible,
 .close:focus-visible,
-.open:focus-visible,
+.trigger:focus-visible,
 .sectionHeader:focus-visible,
 .spillOpen:focus-visible,
 .teamAction:focus-visible,
@@ -797,22 +781,30 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.open {
-  border: none;
-  border-radius: 999px;
-  padding: 2px 8px;
+/* Session-header Status toggle — matches Files / Jobs header action density. */
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
-  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
 }
 
-.open:hover,
-.open[data-open] {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+.trigger:hover,
+.trigger:focus-visible,
+.trigger[aria-pressed='true'] {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.triggerLabel {
+  margin: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -823,7 +815,7 @@
   .teamAction,
   .itemRow,
   .graphEdge,
-  .open {
+  .trigger {
     transition: none;
   }
 

@@ -44,11 +44,11 @@ export interface RegisterDesktopIpcOptions {
 
 const idleUpdate: DesktopUpdateState = { phase: "idle" };
 
-const maximizedWired = new WeakSet<object>();
+const maximizedWired = new WeakSet<DesktopIpcWindow>();
 
 function wireMaximizedPush(win: DesktopIpcWindow): void {
-  if (maximizedWired.has(win as object)) return;
-  maximizedWired.add(win as object);
+  if (maximizedWired.has(win)) return;
+  maximizedWired.add(win);
   const push = (): void => {
     if (win.isDestroyed()) return;
     win.webContents.send(DESKTOP_IPC.windowMaximized, win.isMaximized());

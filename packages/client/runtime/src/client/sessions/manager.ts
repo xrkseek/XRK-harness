@@ -534,7 +534,7 @@ export class SessionManager {
    * @returns the create result.
    */
   async create(
-    opts: { workspaceId?: WorkspaceId; cwd?: string; sessionId?: SessionId } = {},
+    opts: { workspaceId?: WorkspaceId; cwd?: string; sessionId?: SessionId; localCwd?: string } = {},
   ): Promise<RpcResult<{ sessionId: SessionId }>> {
     try {
       const shared = opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }
@@ -543,9 +543,10 @@ export class SessionManager {
         : { ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }), ...shared }
       const { result } = await this.api.sessions.create(payload)
       if (result.ok) {
+        const cwd = opts.cwd ?? opts.localCwd
         this.recordMutation({ kind: 'upsert', summary: {
           sessionId: result.value.sessionId, updatedAt: Date.now(), running: false, blank: true,
-          ...(opts.cwd !== undefined ? { cwd: opts.cwd } : {}),
+          ...(cwd !== undefined ? { cwd } : {}),
           ...(result.value.agentPreset !== undefined ? { agentPreset: result.value.agentPreset } : {}),
         } })
       } else {

@@ -226,7 +226,8 @@ describe('PreviewTabs', () => {
         } as PreviewTabsProps)}
       />,
     )
-    expect(screen.getByRole('heading', { name: '概况' })).toBeTruthy()
+    expect(screen.getByRole('tablist', { name: '会话概况' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: '概况' })).toBeTruthy()
     await waitFor(() => {
       expect(screen.getByText('会话')).toBeTruthy()
     })
@@ -573,7 +574,7 @@ describe('PreviewOpenButton', () => {
     const openPreview = vi.fn()
     const closePreview = vi.fn()
     render(<PreviewOpenButton openPreview={openPreview} closePreview={closePreview} t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: '概况' }))
+    fireEvent.click(screen.getByRole('button', { name: '关闭概况栏' }))
     expect(closePreview).toHaveBeenCalledTimes(1)
     expect(openPreview).not.toHaveBeenCalled()
     document.documentElement.removeAttribute(DETAILS_INSET_ATTR)

@@ -114,7 +114,13 @@ export class WorkspaceRuntime implements IWorkspaces {
         && workspace.sessionIds.includes(summary.id)
         && !archived.includes(summary.id)) return summary.id
     }
-    const attempt = this.sessions.create({ workspaceId })
+    const attempt = this.sessions.create({ workspaceId, localCwd: workspace.path })
+      .then((sessionId) => {
+        // Create RPC and host/workspace-changed are unordered: pin membership
+        // locally so the new blank does not land in Ungrouped until the frame.
+        this.manager.noteSessionAttached(workspaceId, sessionId)
+        return sessionId
+      })
       .finally(() => { this.connecting.delete(workspaceId) })
     this.connecting.set(workspaceId, attempt)
     return attempt

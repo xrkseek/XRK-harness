@@ -303,6 +303,25 @@ export class WorkspaceManager {
     }
   }
 
+  /**
+   * Optimistically account a freshly created session under its Workspace so
+   * the sidebar does not flash the Ungrouped bucket while the matching
+   * `host/workspace-changed` frame is still in flight (create response and
+   * that frame travel on separate carriers with no ordering).
+   * @param workspaceId - Workspace that just minted the session.
+   * @param sessionId - Session id returned by `session.create`.
+   */
+  noteSessionAttached(workspaceId: WorkspaceId, sessionId: SessionId): void {
+    const index = this.items.findIndex(item => item.getSnapshot().view?.workspaceId === workspaceId)
+    const view = index === -1 ? undefined : this.items[index]?.getSnapshot().view
+    if (view === undefined || view.sessionIds.includes(sessionId)) return
+    this.upsert({
+      ...view,
+      sessionIds: [sessionId, ...view.sessionIds],
+      updatedAt: new Date().toISOString(),
+    })
+  }
+
   /** Re-pull the baseline after each connection generation. */
   handleConnected(): void {
     void this.refresh()

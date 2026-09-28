@@ -33,10 +33,11 @@ export interface SessionsPort {
   readonly list: ObservableSnapshot<SessionsPortList>
   /**
    * Create a session on the host.
-   * @param opts - target workspace.
+   * @param opts - target workspace; `localCwd` seeds the optimistic list
+   *   summary (never sent on the wire — Host rejects workspaceId+cwd).
    * @returns the new session id.
    */
-  create(opts: { workspaceId: WorkspaceId }): Promise<SessionId>
+  create(opts: { workspaceId: WorkspaceId; localCwd?: string }): Promise<SessionId>
   /**
    * Select a session as current.
    * @param id - session id (must exist in the list store).

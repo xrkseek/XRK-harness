@@ -9,9 +9,28 @@ export const DESKTOP_WINDOW_DEFAULTS = {
   minWidth: 880,
   minHeight: 600,
   show: false,
-  // Product chrome draws min/max/close (+ drag region) in the renderer.
+  // Product chrome draws drag + (on Windows) min/max/close in the renderer.
+  // Darwin uses hiddenInset traffic lights instead of custom caption buttons.
   frame: false,
+  // Keep edge resize hit-testing on frameless Windows (thickFrame default
+  // is true; spell it so a future default flip cannot wedge the shell).
+  resizable: true,
+  thickFrame: true,
 } as const;
+
+/** Extra BrowserWindow options for the host platform. */
+export function desktopWindowPlatformOptions(
+  platform: NodeJS.Platform,
+): {
+  readonly titleBarStyle?: "hiddenInset";
+  readonly trafficLightPosition?: { readonly x: number; readonly y: number };
+} {
+  if (platform !== "darwin") return {};
+  return {
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 14, y: 12 },
+  };
+}
 
 /** webPreferences locked by ADR-0008 renderer security. */
 export const DESKTOP_WEB_PREFERENCES = {

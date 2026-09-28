@@ -626,6 +626,56 @@
   box-shadow: var(--dsw-shadow-lv1);
 }
 
+.cardHead {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Head row shares width with the ⋯ menu — never force 100% on the expand
+ * button or it paints under the trigger (overlap on managed cards). */
+.cardHead > .cardContent {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+.moreSlot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: 0 8px 0 0;
+}
+
+.moreTrigger {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.moreTrigger:hover:not(:disabled),
+.moreTrigger[aria-expanded='true'] {
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.moreTrigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .artwork {
   flex: none;
   display: inline-flex;
@@ -658,6 +708,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  /* Full width only when this is the sole card child (preset / builtin).
+   * Managed cards nest under .cardHead — see width:auto override there. */
   width: 100%;
   min-height: 52px;
   border: 0;
@@ -670,7 +722,7 @@
 }
 
 .cardContent:hover,
-.card[data-open='true'] > .cardContent {
+.card[data-open='true'] > .cardHead > .cardContent {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
@@ -690,11 +742,25 @@
 }
 
 .cardTitleBlock {
-  display: inline-flex;
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.cardTitleRow {
+  display: flex;
   min-width: 0;
   align-items: baseline;
   gap: 8px;
+}
+
+.cardMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 
 .versionTag {
@@ -728,7 +794,7 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -844,53 +910,6 @@
   font-size: 11px;
   line-height: 16px;
   color: var(--dsw-alias-label-tertiary);
-}
-
-.actions {
-  margin-top: 10px;
-}
-
-.actionRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.actionMenu {
-  min-width: 160px;
-}
-
-.action,
-.actionDanger {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
-  padding: 4px 10px;
-  background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-size: 12px;
-  line-height: 18px;
-  cursor: pointer;
-}
-
-.action:hover:not(:disabled),
-.actionDanger:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.action:disabled,
-.actionDanger:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.actionDanger {
-  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 40%, var(--dsw-alias-border-l2));
-  color: var(--dsw-alias-state-error-primary);
 }
 
 .actionError {

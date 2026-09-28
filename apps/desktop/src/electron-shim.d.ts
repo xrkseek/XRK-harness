@@ -20,7 +20,10 @@ declare module "electron" {
     title?: string;
     icon?: string;
     frame?: boolean;
+    resizable?: boolean;
+    thickFrame?: boolean;
     titleBarStyle?: "default" | "hidden" | "hiddenInset";
+    trafficLightPosition?: { readonly x: number; readonly y: number };
     webPreferences?: WebPreferences;
   }
 

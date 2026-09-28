@@ -12,10 +12,11 @@
   transition: grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
-/* Frameless Desktop: reserve the custom titlebar strip. */
+/* Frameless Desktop: thin titlebar above the whole shell (all columns). */
 .frame[data-desktop-chrome] {
   --xrk-desktop-chrome-height: 36px;
   padding-top: var(--xrk-desktop-chrome-height);
+  box-sizing: border-box;
 }
 
 /* Dragging writes widths at pointer cadence; easing them would detach the

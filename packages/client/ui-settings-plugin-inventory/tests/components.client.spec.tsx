@@ -105,11 +105,7 @@ describe('PluginInventorySettingsTab', () => {
     expect(screen.getAllByText(en.disabledTag).length).toBeGreaterThanOrEqual(1)
 
     const managed = screen.getByRole('button', { name: 'better-sidebar, Custom, Enabled, 0.18.2' })
-    fireEvent.click(managed)
-    expect(screen.getByText(en.kind)).toBeTruthy()
-    expect(screen.getByText('client')).toBeTruthy()
-    expect(screen.getByText(en.source)).toBeTruthy()
-
+    // Managed actions live on the card head — no expand required to open the menu.
     const openManagedMenu = async (): Promise<void> => {
       fireEvent.click(await screen.findByRole('button', {
         name: en.moreActions.replace('{name}', 'better-sidebar'),
@@ -127,8 +123,6 @@ describe('PluginInventorySettingsTab', () => {
       expect(screen.getByRole('alert').textContent).toBe(en.toastUpdated.replace('{name}', 'better-sidebar'))
     })
 
-    // Refresh collapses the card; re-open for disable + remove.
-    fireEvent.click(await screen.findByRole('button', { name: 'better-sidebar, Custom, Enabled, 0.18.2' }))
     await openManagedMenu()
     fireEvent.click(screen.getByRole('menuitem', { name: en.disable }))
     await waitFor(() => { expect(setEnabled).toHaveBeenCalledWith('xrkh-better-sidebar', false) })
@@ -136,7 +130,13 @@ describe('PluginInventorySettingsTab', () => {
       expect(screen.getByRole('alert').textContent).toBe(en.toastDisabled.replace('{name}', 'better-sidebar'))
     })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'better-sidebar, Custom, Enabled, 0.18.2' }))
+    // Details expand still works after head-menu actions (before remove).
+    fireEvent.click(screen.getByRole('button', { name: 'better-sidebar, Custom, Enabled, 0.18.2' }))
+    expect(screen.getByText(en.kind)).toBeTruthy()
+    expect(screen.getByText('client')).toBeTruthy()
+    expect(screen.getByText(en.source)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'better-sidebar, Custom, Enabled, 0.18.2' }))
+
     await openManagedMenu()
     fireEvent.click(screen.getByRole('menuitem', { name: en.remove }))
     expect(remove).not.toHaveBeenCalled()
@@ -155,10 +155,6 @@ describe('PluginInventorySettingsTab', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toBe(en.toastRemoved.replace('{name}', 'better-sidebar'))
     })
-
-    // Collapse managed details before filter chips (avoid leftover action buttons).
-    const managedAgain = screen.queryByRole('button', { name: 'better-sidebar, Custom, Enabled, 0.18.2' })
-    if (managedAgain !== null) fireEvent.click(managedAgain)
 
     const globalEntries = (): number =>
       view.container.querySelectorAll('[data-plugin-scope="global"] [data-plugin-entry]').length
@@ -243,12 +239,15 @@ describe('PluginInventorySettingsTab', () => {
     try {
       render(<PluginInventorySettingsTab {...props(async () => SNAPSHOT)} />)
       await screen.findByText(en.globalTitle)
-      const banner = screen.getByRole('status')
-      expect(banner.getAttribute('data-client-sync')).toBe('failed')
-      expect(banner.textContent).toContain(en.clientSyncFailed.replace('{names}', 'failed-name'))
-      expect(banner.textContent).toContain('failed-name')
+      const banner = document.querySelector('[data-client-sync="failed"]')
+      expect(banner).toBeTruthy()
+      expect(banner!.textContent).toContain(en.clientSyncFailed.replace('{names}', 'failed-name'))
+      expect(banner!.textContent).toContain('failed-name')
       expect(screen.getByRole('button', { name: en.clientSyncRetry })).toBeTruthy()
-      fireEvent.click(screen.getByRole('button', { name: en.refreshPage }))
+      // Refresh affordance: failure banner + needsRestart hint both expose it.
+      const refreshButtons = screen.getAllByRole('button', { name: en.refreshPage })
+      expect(refreshButtons.length).toBeGreaterThanOrEqual(1)
+      fireEvent.click(refreshButtons[0]!)
       expect(reload).toHaveBeenCalledTimes(1)
     } finally {
       Object.defineProperty(globalThis, 'location', { configurable: true, value: previous })

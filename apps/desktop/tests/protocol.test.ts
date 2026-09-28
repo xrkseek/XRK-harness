@@ -36,7 +36,13 @@ describe("desktop custom protocol", () => {
     expect(DESKTOP_PROTOCOL_PRIVILEGES.scheme).toBe("xrk-app");
     expect(DESKTOP_PROTOCOL_PRIVILEGES.privileges.supportFetchAPI).toBe(true);
     expect(DESKTOP_PROTOCOL_PRIVILEGES.privileges.corsEnabled).toBe(true);
-    expect(desktopAppIndexUrl()).toBe("xrk-app://app/index.html");
+    expect(desktopAppIndexUrl()).toMatch(
+      /^xrk-app:\/\/app\/index\.html\?.*dsh-desktop-mode=advanced/,
+    );
+    expect(desktopAppIndexUrl()).toContain("dsh-desktop-titlebar-inset=36");
+    expect(
+      desktopAppIndexUrl(DESKTOP_PROTOCOL_SCHEME, { platform: "win32" }),
+    ).toContain("dsh-desktop-platform=win32");
   });
 
   it("serves version-matched static assets and refuses traversal", async () => {

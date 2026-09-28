@@ -24,11 +24,18 @@ const DESKTOP_IPC = {
   updatesCheck: "xrk-desktop:updates-check",
   updatesInstall: "xrk-desktop:updates-install",
   updatesState: "xrk-desktop:updates-state",
+  windowMinimize: "xrk-desktop:window-minimize",
+  windowMaximizeToggle: "xrk-desktop:window-maximize-toggle",
+  windowClose: "xrk-desktop:window-close",
+  windowIsMaximized: "xrk-desktop:window-is-maximized",
+  windowMaximized: "xrk-desktop:window-maximized",
+  windowReload: "xrk-desktop:window-reload",
 };
 const DESKTOP_BRIDGE_PROTOCOL_VERSION = 1;
 
 const api = {
   protocolVersion: DESKTOP_BRIDGE_PROTOCOL_VERSION,
+  platform: process.platform,
   locale: () => ipcRenderer.invoke(DESKTOP_IPC.localeGet),
   updates: {
     check: () => ipcRenderer.invoke(DESKTOP_IPC.updatesCheck),
@@ -43,6 +50,30 @@ const api = {
       return () => {
         ipcRenderer.off(DESKTOP_IPC.updatesState, handle);
       };
+    },
+  },
+  window: {
+    minimize: async () => {
+      await ipcRenderer.invoke(DESKTOP_IPC.windowMinimize);
+    },
+    toggleMaximize: async () => {
+      await ipcRenderer.invoke(DESKTOP_IPC.windowMaximizeToggle);
+    },
+    close: async () => {
+      await ipcRenderer.invoke(DESKTOP_IPC.windowClose);
+    },
+    isMaximized: () => ipcRenderer.invoke(DESKTOP_IPC.windowIsMaximized),
+    subscribeMaximized: (listener) => {
+      const handle = (_event, maximized) => {
+        listener(maximized === true);
+      };
+      ipcRenderer.on(DESKTOP_IPC.windowMaximized, handle);
+      return () => {
+        ipcRenderer.off(DESKTOP_IPC.windowMaximized, handle);
+      };
+    },
+    reload: async () => {
+      await ipcRenderer.invoke(DESKTOP_IPC.windowReload);
     },
   },
 };

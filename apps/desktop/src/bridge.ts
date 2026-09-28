@@ -26,9 +26,11 @@ export interface DesktopBridgeIpc {
 /** Create the contextBridge payload for the main product renderer. */
 export function createXrkDesktopBridgeApi(
   ipc: DesktopBridgeIpc,
+  platform: NodeJS.Platform = process.platform,
 ): XrkDesktopApi {
   return {
     protocolVersion: DESKTOP_BRIDGE_PROTOCOL_VERSION,
+    platform,
     locale: () => ipc.invoke(DESKTOP_IPC.localeGet) as Promise<DesktopLocale>,
     updates: {
       check: () =>

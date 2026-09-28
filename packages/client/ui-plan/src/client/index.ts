@@ -1,6 +1,7 @@
 /**
  * Plan control plugin, browser half: occupies the composer's named
- * `conversation.input.plan` seat with an active-state status chip, and the
+ * `conversation.input.plan` seat with an active-state status chip, a session
+ * header Status toggle (`conversation.session.header.actions`), and the
  * details column with session Status (subagents · jobs · timeline · cost ·
  * channels; Face `session.status` ≡ `/status`) plus todos / plan / Office tabs.
  * Plan mode is entered through the command source; while the projection's
@@ -77,16 +78,23 @@ export function apply(ctx: ClientContext): void {
     }),
   }, PlanChip))
 
-  ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
-    name: 'conversation.composer.dock',
-    id: 'preview',
-    order: 10,
-    locale: NS,
-    inject: () => ({
-      openPreview: () => { ctx.layout.openDetails() },
-      closePreview: () => { ctx.layout.closeDetails() },
-    }),
-  }, PreviewOpenButton))
+  // Header action (not composer.dock): Status sits with Files / Jobs so the
+  // composer foot stays for live stats only — less bottom chrome, clearer IA.
+  ctx.slots.inject(
+    'conversation.session.header.actions',
+    () => ctx.slots.register({
+      name: 'conversation.session.header.actions',
+      id: 'preview',
+      // After workbench (25): Status is session inspect, Files is workspace.
+      order: 30,
+      locale: NS,
+      inject: () => ({
+        openPreview: () => { ctx.layout.openDetails() },
+        closePreview: () => { ctx.layout.closeDetails() },
+      }),
+    }, PreviewOpenButton),
+    'ui-plan: status header toggle',
+  )
 
   ctx.slots.inject('details', () => ctx.slots.register({
     name: 'details',

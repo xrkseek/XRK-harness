@@ -382,7 +382,10 @@ describe("managed plugin inventory paths", () => {
 
   it("resolveManagedPluginUpdateSpec drops cwd-sensitive local sources", () => {
     expect(resolveManagedPluginUpdateSpec("side", "side@1.2.3")).toBe(
-      "side@1.2.3",
+      "side@latest",
+    );
+    expect(resolveManagedPluginUpdateSpec("side", "@acme/side@1.2.3")).toBe(
+      "@acme/side@latest",
     );
     expect(resolveManagedPluginUpdateSpec("side", "github:acme/side")).toBe(
       "github:acme/side",

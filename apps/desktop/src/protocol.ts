@@ -132,11 +132,29 @@ export function attachDesktopNavigationGuard(
   });
 }
 
-/** Primary product URL for the main window. */
+/** Frameless Desktop titlebar strip (px) — matches AppFrame chrome height. */
+export const DESKTOP_TITLEBAR_INSET_PX = 36
+
+/**
+ * Primary product URL for the main window.
+ * Stamps `dsh-desktop-*` query params so community workbenches
+ * (`xrkh-better-sidebar`) yield the custom titlebar via their public contract.
+ */
 export function desktopAppIndexUrl(
   scheme: string = DESKTOP_PROTOCOL_SCHEME,
+  options?: {
+    readonly platform?: NodeJS.Platform
+    readonly titlebarInset?: number
+  },
 ): string {
-  return `${scheme}://app/index.html`;
+  const platform = options?.platform ?? process.platform
+  const inset = options?.titlebarInset ?? DESKTOP_TITLEBAR_INSET_PX
+  const params = new URLSearchParams({
+    "dsh-desktop-mode": "advanced",
+    "dsh-desktop-platform": platform,
+    "dsh-desktop-titlebar-inset": String(inset),
+  })
+  return `${scheme}://app/index.html?${params.toString()}`
 }
 
 /**

@@ -258,6 +258,12 @@ describe('WorkspaceRuntime', () => {
     expect(api.callsOf('session.create')).toEqual([{ workspaceId: 'beta' }])
     // Same guarantee on the create arm (draft hand-off writes the machine pre-open).
     expect(sessions.binding(sid('s-fresh'))).toBeDefined()
+    // Optimistic membership: blank is under beta before host/workspace-changed.
+    expect(
+      workspaces.list.getSnapshot().items
+        .find(item => item.workspaceId === wid('beta'))
+        ?.sessionIds,
+    ).toContain(sid('s-fresh'))
 
     // Miss: the stray blank matches gamma's path but is not a gamma member →
     // never reused, a fresh accounted session is created instead.
