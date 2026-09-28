@@ -16,6 +16,10 @@ export interface SpawnOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
+  /** Live stdout chunks (UTF-8); used by shell jobs to surface mid-run output. */
+  readonly onStdout?: (chunk: string) => void;
+  /** Live stderr chunks (UTF-8). */
+  readonly onStderr?: (chunk: string) => void;
 }
 
 export interface SubprocessResult {
@@ -174,9 +178,11 @@ function startLocal(
   child.stderr.setEncoding("utf8");
   child.stdout.on("data", (chunk: string) => {
     stdout += chunk;
+    opts.onStdout?.(chunk);
   });
   child.stderr.on("data", (chunk: string) => {
     stderr += chunk;
+    opts.onStderr?.(chunk);
   });
   child.on("error", (err) => {
     if (settled) return;

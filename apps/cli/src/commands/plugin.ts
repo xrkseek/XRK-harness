@@ -15,7 +15,7 @@ export function pluginHelpText(): string {
   return `xrkh plugin — manage user plugins (bin also: xrk-harness)
 
 Usage:
-  xrkh plugin add <spec…>
+  xrkh plugin add [--registry <url>] <spec…>
   xrkh plugin remove <name…>
   xrkh plugin list
   xrkh plugin path
@@ -27,6 +27,9 @@ Specs (npm pack):
   github:user/repo            git (npm-compatible)
   ./path  file:./path         local checkout (anchored to cwd)
   link:./path                 same as file: for local dirs
+
+Options:
+  --registry / -r <url>       npm registry for pack (e.g. https://registry.npmmirror.com)
 
 Kinds:
   client   xrk.client / dsh.client + lib/client.js → web/boot overlay
@@ -64,11 +67,25 @@ export async function runPlugin(argv: readonly string[]): Promise<number> {
   try {
     switch (sub) {
       case "add": {
-        if (args.length === 0) {
+        let registry: string | undefined;
+        const specs: string[] = [];
+        for (let i = 0; i < args.length; i++) {
+          const token = args[i]!;
+          if (token === "--registry" || token === "-r") {
+            const next = args[++i];
+            if (!next?.trim()) {
+              throw new Error("plugin add --registry needs a URL");
+            }
+            registry = next.trim();
+            continue;
+          }
+          specs.push(token);
+        }
+        if (specs.length === 0) {
           throw new Error("plugin add needs at least one <spec>");
         }
-        for (const spec of args) {
-          addPlugin(spec);
+        for (const spec of specs) {
+          addPlugin(spec, registry !== undefined ? { registry } : {});
         }
         process.stdout.write(
           "xrkh: run `restart` to load new plugins (stops the previous XRK Host only)\n",

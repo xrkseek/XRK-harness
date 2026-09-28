@@ -53,10 +53,12 @@ function extractTarball(tgz: string, extractDir: string): void {
 /**
  * Prefer a local directory when the spec already points at an unpacked
  * package (file:/link:/relative path with package.json). Otherwise npm pack.
+ * Optional `registry` becomes `npm pack --registry …` (Settings mirror pick).
  */
 export function fetchPackage(
   spec: string,
   cwd: string = process.cwd(),
+  options: { readonly registry?: string } = {},
 ): UnpackedPackage {
   const anchored = anchorPathSpec(spec.trim(), cwd);
   const bare =
@@ -91,9 +93,12 @@ export function fetchPackage(
   };
 
   try {
+    const npmArgs = ["pack", anchored, "--pack-destination", stage];
+    const registry = options.registry?.trim();
+    if (registry) npmArgs.push("--registry", registry);
     const result = spawnSync(
       "npm",
-      ["pack", anchored, "--pack-destination", stage],
+      npmArgs,
       {
         cwd,
         encoding: "utf8",

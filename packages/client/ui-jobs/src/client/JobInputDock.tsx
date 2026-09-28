@@ -27,6 +27,7 @@ export function JobInputDock({ sessionId, useSessions, killJob, backgroundJob, t
   const jobs = useSessions(state => state.jobsBySession[sessionId]) ?? NO_TASKS
   const liveJobs = useMemo(() => jobs.filter(isLiveJob), [jobs])
   const [collapsed, setCollapsed] = useState(true)
+  const [expandedId, setExpandedId] = useState<string | undefined>(undefined)
   const now = useJobClock(liveJobs.length > 0)
 
   if (liveJobs.length === 0) return null
@@ -86,6 +87,10 @@ export function JobInputDock({ sessionId, useSessions, killJob, backgroundJob, t
                 t={t}
                 css={headerCss}
                 {...actions}
+                expandedId={expandedId}
+                onToggleExpand={(jobId) => {
+                  setExpandedId((current) => (current === jobId ? undefined : jobId))
+                }}
               />
             </ul>
           )

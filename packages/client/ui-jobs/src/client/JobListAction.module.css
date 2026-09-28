@@ -46,12 +46,12 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  width: 336px;
-  max-width: min(400px, calc(100vw - 32px));
-  max-height: min(420px, calc(100vh - 140px));
+  gap: 4px;
+  width: 420px;
+  max-width: min(480px, calc(100vw - 32px));
+  max-height: min(520px, calc(100vh - 140px));
   margin: 0;
-  padding: 4px;
+  padding: 6px;
   overflow: auto;
   list-style: none;
   border: 1px solid var(--dsw-alias-border-l2);
@@ -62,18 +62,66 @@
   box-shadow: var(--dsw-shadow-lv3);
 }
 
+.section {
+  margin: 0;
+  padding: 4px 8px 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+}
+
+.rowLine {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.rowLineLive {
+  padding: 4px 8px 4px 2px;
+  border-radius: 8px;
+  background: var(--dsw-alias-fill-l2);
+}
+
+.rowLineLive:hover {
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 9%, transparent);
+}
+
+.rowLineLive .kind {
+  background: var(--dsw-specific-menu);
+}
+
+.rowLine .row {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowLineLive .row:hover {
+  background: transparent;
+}
+
 .row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   box-sizing: border-box;
   width: 100%;
   min-height: 32px;
-  padding: 6px 8px;
+  padding: 4px 7px;
+  border: 0;
   border-radius: 8px;
+  background: transparent;
   color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  line-height: 18px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 17px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rowStatic {
+  cursor: default;
 }
 
 .rowSettled {
@@ -82,6 +130,22 @@
 
 .rowDot {
   flex: none;
+}
+
+.chevronBox {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  background: var(--dsw-specific-menu);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
 }
 
 .kind {
@@ -94,8 +158,23 @@
   line-height: 18px;
 }
 
-.label {
+.primary {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 2px;
+  min-width: 0;
+}
+
+.label {
   min-width: 0;
   overflow: hidden;
   font-family: var(--dsw-font-mono);
@@ -108,13 +187,11 @@
   flex: none;
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
-  line-height: 18px;
+  line-height: 16px;
 }
 
-/* A failed job's detail is the producer's raw error text, so it has no bound;
-   without this it widens the row past the menu instead of eliding like .label. */
 .status {
-  max-width: 55%;
+  max-width: 70%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -130,8 +207,52 @@
   color: var(--dsw-alias-label-quaternary, var(--dsw-alias-label-tertiary));
 }
 
+.stop {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 5px;
+  background: var(--dsw-specific-menu);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.stop:hover,
+.stop:focus-visible {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.stopArmed,
+.stopArmed:hover,
+.stopArmed:focus-visible {
+  gap: 4px;
+  width: auto;
+  padding: 0 7px;
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.stopLabel {
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.stopFailed {
+  color: var(--dsw-alias-state-error-primary);
+}
+
 .action {
   flex: none;
+  align-self: center;
   min-height: 22px;
   padding: 0 6px;
   border: 0;
@@ -146,4 +267,24 @@
 .action:hover,
 .action:focus-visible {
   color: var(--dsw-alias-label-primary);
+}
+
+.panel {
+  margin: 2px 0 6px;
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-base);
+  max-height: 220px;
+  overflow: auto;
+}
+
+.notice {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.noticeError {
+  color: var(--dsw-alias-state-error-primary);
 }

@@ -17,6 +17,7 @@ export type ApiRemoteForwardedEvent =
   | 'cordis/inspect-query'
   | 'cordis/inspect-query-resolved'
   | 'llm/adapters-updated'
+  | 'plugin-inventory/install-log'
   | 'settings/document-updated'
 
 declare module '@xrkseek/xrk-typert-protocol' {
@@ -28,5 +29,11 @@ declare module '@xrkseek/cordis' {
   interface Events {
     'credentials/updated'(ref: Branded<'CredentialRef'>): void
     'agent-preset/selected'(sessionId: SessionId, agentPreset: string): void
+    /** Live `xrkh plugin add` stdout/stderr chunks (Settings Manager TerminalBlock). */
+    'plugin-inventory/install-log'(
+      requestId: string,
+      stream: 'stdout' | 'stderr',
+      text: string,
+    ): void
   }
 }

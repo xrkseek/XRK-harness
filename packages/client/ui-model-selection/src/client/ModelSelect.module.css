@@ -226,7 +226,8 @@
 }
 
 .option:hover:not(:disabled),
-.option:focus-visible {
+.option:focus-visible,
+.optionActive {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
@@ -234,6 +235,10 @@
  * primitive's selected treatment. */
 .selected {
   background: transparent;
+}
+
+.optionActive.selected {
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .option:disabled {
@@ -256,6 +261,13 @@
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mark {
+  padding: 0;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 18%, transparent);
+  color: inherit;
+  border-radius: 2px;
 }
 
 .description {
@@ -294,7 +306,8 @@
   text-align: left;
 }
 
-.cell:hover {
+.cell:hover,
+.cell:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 

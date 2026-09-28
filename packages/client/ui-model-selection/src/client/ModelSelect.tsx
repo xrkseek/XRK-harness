@@ -13,7 +13,7 @@
  */
 import {
   useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
-  type KeyboardEvent, type FocusEvent,
+  type KeyboardEvent, type FocusEvent, type ReactNode,
 } from 'react'
 import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@xrkseek/xrk-api-remotes/client'
@@ -45,6 +45,30 @@ function matchesModelQuery(
   return haystack.includes(needle)
 }
 
+/**
+ * Wrap the first case-insensitive hit of `query` in `<mark>` (PopupSelect-style
+ * semantic cue while the search input keeps focus).
+ */
+function markQuery(text: string, query: string): ReactNode {
+  const needle = query.trim()
+  if (needle.length === 0) return text
+  const at = text.toLowerCase().indexOf(needle.toLowerCase())
+  if (at < 0) return text
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark className={css.mark}>{text.slice(at, at + needle.length)}</mark>
+      {text.slice(at + needle.length)}
+    </>
+  )
+}
+
+/** Flat filtered model row used for virtual search highlight. */
+interface FlatModel {
+  groupId: string
+  model: { id: string; name: string; description?: string }
+}
+
 /** One dynamic effort row; undefined means preserve the provider default. */
 interface EffortChoice {
   key: string
@@ -70,6 +94,8 @@ export function ModelSelect(
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
   const [search, setSearch] = useState('')
+  // Virtual row while the search input keeps focus (PopupSelectView pattern).
+  const [highlight, setHighlight] = useState(0)
   const searchRef = useRef<HTMLInputElement | null>(null)
   // The in-menu error strip serves catalog loads (its Retry re-runs the
   // load); a rejected SELECTION announces through the transient toast
@@ -81,6 +107,10 @@ export function ModelSelect(
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
+  // Pane switches unmount the focused row and drop focus onto document.body,
+  // outside the card — keyboard stops reaching the menu. Name the landing
+  // target before each switch (DSH paneFocus).
+  const paneFocus = useRef<'drill' | 'model' | 'effort' | null>(null)
   const id = useId()
 
   const choices = useMemo(() => state.groups.flatMap(group =>
@@ -102,6 +132,9 @@ export function ModelSelect(
       models: group.models.filter(model => matchesModelQuery(search, group.name, model)),
     }))
     .filter(group => group.models.length > 0), [search, state.groups])
+  const flatModels = useMemo<readonly FlatModel[]>(() => filteredGroups.flatMap(group =>
+    group.models.map(model => ({ groupId: group.id, model })),
+  ), [filteredGroups])
   const selectedIndex = state.current === null
     ? -1
     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
@@ -142,21 +175,55 @@ export function ModelSelect(
   }, [available, load])
 
   useEffect(() => {
-    if (open && pane === 'model') searchRef.current?.focus()
-  }, [open, pane])
+    // Reset the virtual highlight when the filtered set or pane changes.
+    setHighlight(0)
+  }, [search, pane, open])
+
+  useEffect(() => {
+    if (!open || pane !== 'model') return
+    const row = rootRef.current?.querySelector('[data-model-highlight="true"]')
+    if (row !== null && row !== undefined && typeof row.scrollIntoView === 'function') {
+      row.scrollIntoView({ block: 'nearest' })
+    }
+  }, [highlight, open, pane, flatModels])
 
   useEffect(() => {
     if (!open) return
     const closeOutside = (event: MouseEvent): void => {
+      if (directory.getSnapshot().status === 'selecting') return
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', closeOutside)
     return () => { document.removeEventListener('mousedown', closeOutside) }
-  }, [open])
+  }, [open, directory])
+
+  useEffect(() => {
+    const intent = paneFocus.current
+    paneFocus.current = null
+    if (!open || intent === null) return
+    if (intent === 'drill') {
+      // Large catalogs mount a search field: keep the keyboard there so ↑↓
+      // can drive the virtual highlight (PopupSelectView). Small catalogs
+      // land on the checked row instead.
+      if (pane === 'model' && searchRef.current !== null) {
+        searchRef.current.focus()
+        return
+      }
+      const checked = rootRef.current?.querySelector<HTMLElement>(
+        '[role="menuitemradio"][aria-checked="true"]:not([disabled])',
+      )
+      const target = checked ?? itemRefs.current.find(item => item !== null && !item.disabled)
+      ;(target ?? triggerRef.current)?.focus()
+      return
+    }
+    const cell = itemRefs.current[intent === 'effort' ? 1 : 0]
+    ;(cell !== null && cell !== undefined && !cell.disabled ? cell : triggerRef.current)?.focus()
+  }, [open, pane])
 
   if (!available) return null
 
   const show = (): void => {
+    triggerRef.current?.focus()
     setPane('root')
     setSearch('')
     setOpen(true)
@@ -164,17 +231,44 @@ export function ModelSelect(
   }
 
   const close = (restoreFocus = false): void => {
+    // Keep the menu open while selectModel is in flight so the waiting strip
+    // stays visible (DSH rc.2 "preparing · reduced wait"). Read the store
+    // (not the render-time `busy` flag) so settleSelection can close after
+    // the Host accepts — the promise resolves before React re-renders.
+    if (directory.getSnapshot().status === 'selecting') return
     setOpen(false)
     setPane('root')
     setSearch('')
     if (restoreFocus) queueMicrotask(() => { triggerRef.current?.focus() })
   }
 
+  const drill = (next: Exclude<Pane, 'root'>): void => {
+    paneFocus.current = 'drill'
+    setPane(next)
+  }
+
+  /** Leave a drilled pane for the root; hand the keyboard back to its cell. */
+  const back = (from: Exclude<Pane, 'root'>): void => {
+    paneFocus.current = from
+    setPane('root')
+    setSearch('')
+  }
+
   const moveFocus = (offset: number): void => {
-    const items = itemRefs.current.filter(item => item !== null)
+    // Read live rows from the open card (not the render-time itemRefs bag): a
+    // keydown can race a commit that has cleared the ref array mid-render.
+    const items = [
+      ...(rootRef.current?.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitem"]:not([disabled]), [role="menuitemradio"]:not([disabled])',
+      ) ?? []),
+    ]
     if (items.length === 0) return
     const active = items.findIndex(item => item === document.activeElement)
-    const next = (Math.max(active, 0) + offset + items.length) % items.length
+    // Focus outside the rows (trigger still holds it while the menu opens)
+    // enters at the end the step comes from: first forward, last backward.
+    const next = active === -1
+      ? (offset > 0 ? 0 : items.length - 1)
+      : (active + offset + items.length) % items.length
     items[next]?.focus()
   }
 
@@ -182,17 +276,28 @@ export function ModelSelect(
     if (event.key === 'Escape' && open) {
       event.preventDefault()
       // Escape backs out of a drilled pane first, then closes.
-      if (pane !== 'root') {
-        setPane('root')
-        setSearch('')
-      } else close(true)
+      if (pane !== 'root') back(pane)
+      else close(true)
       return
     }
     if (!open) return
+    // Search keeps focus; arrows drive a virtual highlight (PopupSelectView).
     if (pane === 'model' && event.target === searchRef.current) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
-        moveFocus(event.key === 'ArrowDown' ? 1 : -1)
+        const len = flatModels.length
+        if (len === 0) return
+        const step = event.key === 'ArrowDown' ? 1 : -1
+        setHighlight(index => (index + step + len) % len)
+        return
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        const pick = flatModels[highlight]
+        if (pick !== undefined && !busy) {
+          choose({ provider: pick.groupId, model: pick.model.id })
+        }
+        return
       }
       return
     }
@@ -204,7 +309,12 @@ export function ModelSelect(
 
   const onBlur = (event: FocusEvent<HTMLDivElement>): void => {
     if (event.relatedTarget instanceof Node && rootRef.current?.contains(event.relatedTarget)) return
-    close()
+    // jsdom often omits relatedTarget on programmatic focus moves inside the
+    // card; defer and keep the menu open when focus stayed in the subtree.
+    queueMicrotask(() => {
+      if (rootRef.current?.contains(document.activeElement)) return
+      close()
+    })
   }
 
   const settleSelection = (accepted: boolean): void => {
@@ -267,7 +377,8 @@ export function ModelSelect(
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? `${id}-menu` : undefined}
-        title={triggerLabel}
+        aria-busy={busy || undefined}
+        title={busy ? t('status.selecting') : triggerLabel}
         disabled={locked}
         onClick={() => {
           if (open) {
@@ -290,15 +401,36 @@ export function ModelSelect(
           aria-label={t('menu.aria')}
           aria-busy={state.status === 'loading' || busy}
         >
+          {busy
+            ? (
+              <div className={css.status} role="status" data-model-status="selecting">
+                {t('status.selecting')}
+              </div>
+            )
+            : null}
           {pane === 'root' && (
             <>
-              <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { setSearch(''); setPane('model') }}>
+              <button
+                ref={itemRef()}
+                type="button"
+                role="menuitem"
+                className={css.cell}
+                onClick={() => { setSearch(''); drill('model') }}
+                disabled={busy}
+              >
                 <span className={css.cellLabel}>{t('menu.model')}</span>
                 <span className={css.cellValue}>{modelLabel}</span>
                 <IconChevronRightOutline14 className={css.cellChevron} />
               </button>
               {reasoning !== undefined && (
-                <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { setPane('effort') }}>
+                <button
+                  ref={itemRef()}
+                  type="button"
+                  role="menuitem"
+                  className={css.cell}
+                  onClick={() => { drill('effort') }}
+                  disabled={busy}
+                >
                   <span className={css.cellLabel}>{t('menu.effort')}</span>
                   <span className={css.cellValue}>{effortLabel}</span>
                   <IconChevronRightOutline14 className={css.cellChevron} />
@@ -333,9 +465,6 @@ export function ModelSelect(
                   placeholder={t('search.placeholder')}
                   aria-label={t('search.aria')}
                   onChange={(event) => { setSearch(event.target.value) }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') event.preventDefault()
-                  }}
                 />
               )}
               {filteredGroups.length > 0
@@ -348,20 +477,29 @@ export function ModelSelect(
                           <div className={css.groupTitle} id={headingId}>{group.name}</div>
                           {group.models.map((model) => {
                             const selected = state.current?.provider === group.id && state.current.model === model.id
+                            const flatIndex = flatModels.findIndex(
+                              row => row.groupId === group.id && row.model.id === model.id,
+                            )
+                            // Virtual highlight only while the search field is mounted
+                            // (catalog large enough); otherwise focus-visible carries the cue.
+                            const active = modelCount > 5 && flatIndex === highlight
                             return (
                               <button
                                 ref={itemRef()}
                                 type="button"
                                 role="menuitemradio"
                                 aria-checked={selected}
-                                className={clsx(css.option, selected && css.selected)}
+                                aria-selected={active}
+                                data-model-highlight={active || undefined}
+                                className={clsx(css.option, selected && css.selected, active && css.optionActive)}
                                 key={model.id}
                                 title={model.name}
                                 disabled={busy}
+                                onMouseEnter={() => { if (flatIndex >= 0) setHighlight(flatIndex) }}
                                 onClick={() => { choose({ provider: group.id, model: model.id }) }}
                               >
                                 <span className={css.optionCopy}>
-                                  <span className={css.modelName}>{model.name}</span>
+                                  <span className={css.modelName}>{markQuery(model.name, search)}</span>
                                   {model.description !== undefined && (
                                     <span className={css.description}>{model.description}</span>
                                   )}

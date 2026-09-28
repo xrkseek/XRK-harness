@@ -8,7 +8,8 @@ import type { WorkspaceFileDiff } from "@xrkseek/xrk-api-remotes/client";
 export interface DiffHunkTexts {
   readonly path: string;
   readonly oldText: string | null;
-  readonly newText: string | null;
+  /** Empty string for whole-file delete (`after: false`); never null. */
+  readonly newText: string;
 }
 
 export function diffHunkFromWorkspaceFileDiff(
@@ -33,6 +34,9 @@ export function diffHunkFromWorkspaceFileDiff(
     oldText: diff.before
       ? `${oldLines.join("\n")}${oldLines.length > 0 ? "\n" : ""}`
       : null,
-    newText: `${newLines.join("\n")}${newLines.length > 0 ? "\n" : ""}`,
+    // Mirror Face `after`: deleted files feed DiffBlock an empty added side.
+    newText: diff.after
+      ? `${newLines.join("\n")}${newLines.length > 0 ? "\n" : ""}`
+      : "",
   };
 }

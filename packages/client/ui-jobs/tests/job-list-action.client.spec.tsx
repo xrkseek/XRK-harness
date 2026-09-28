@@ -16,6 +16,7 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 const SESSION = 'session' as SessionId
@@ -59,16 +60,16 @@ function props(
 }
 
 /**
- * Rows in render order as `[kind, label, status, duration]`. Adjacent spans
- * carry no whitespace between them, so the cells are read one element at a
- * time rather than split out of a flattened string.
+ * Rows in render order as `[kind, label, status, duration]`.
  */
 function rowCells(): string[][] {
   return within(screen.getByRole('list', { name: zh['list.aria'] }))
     .getAllByRole('listitem')
-    .map(row => [...row.children]
-      .map(cell => cell.textContent ?? '')
-      .filter(text => text !== ''))
+    .map((row) => {
+      const pick = (name: string) =>
+        row.querySelector(`[data-job-cell="${name}"]`)?.textContent ?? ''
+      return [pick('kind'), pick('label'), pick('status'), pick('duration')]
+    })
 }
 
 describe('JobListAction visibility', () => {
@@ -201,29 +202,29 @@ describe('JobListAction duration', () => {
 describe('JobListAction dismissal', () => {
   it('closes on Escape and returns focus to the trigger', () => {
     render(<JobListAction {...props([job()])} />)
-    const trigger = screen.getByRole('button')
+    const trigger = screen.getByRole('button', { name: '1 个后台任务运行中' })
     fireEvent.click(trigger)
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
 
-    fireEvent.keyDown(trigger, { key: 'Escape' })
+    fireEvent.keyDown(trigger.parentElement!, { key: 'Escape' })
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
     expect(document.activeElement).toBe(trigger)
   })
 
   it('ignores other keys and a closed-list Escape', () => {
     render(<JobListAction {...props([job()])} />)
-    const trigger = screen.getByRole('button')
-    fireEvent.keyDown(trigger, { key: 'Escape' })
+    const trigger = screen.getByRole('button', { name: '1 个后台任务运行中' })
+    fireEvent.keyDown(trigger.parentElement!, { key: 'Escape' })
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
 
     fireEvent.click(trigger)
-    fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+    fireEvent.keyDown(trigger.parentElement!, { key: 'ArrowDown' })
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
   })
 
   it('closes on an outside pointer press but not on one inside', () => {
     render(<JobListAction {...props([job()])} />)
-    const trigger = screen.getByRole('button')
+    const trigger = screen.getByRole('button', { name: '1 个后台任务运行中' })
     fireEvent.click(trigger)
 
     fireEvent.pointerDown(screen.getByRole('list', { name: zh['list.aria'] }))
@@ -235,14 +236,33 @@ describe('JobListAction dismissal', () => {
 })
 
 describe('JobListAction actions', () => {
-  it('offers stop for live jobs and routes clicks to killJob', () => {
+  it('offers stop for live jobs and routes clicks to killJob after confirm', () => {
     const killJob = vi.fn()
     render(<JobListAction {...props([job()], { killJob })} />)
     fireEvent.click(screen.getByRole('button', { name: '1 个后台任务运行中' }))
     const stop = within(screen.getByRole('list', { name: zh['list.aria'] }))
       .getByRole('button', { name: '停止任务 pnpm run build' })
     fireEvent.click(stop)
+    expect(killJob).not.toHaveBeenCalled()
+    fireEvent.click(within(screen.getByRole('list', { name: zh['list.aria'] }))
+      .getByRole('button', { name: '再按一次确认停止' }))
     expect(killJob).toHaveBeenCalledWith('bash-1')
+  })
+
+  it('expands a row and polls jobs.output into TerminalBlock', async () => {
+    vi.useRealTimers()
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true, value: { text: 'hello from bash\n', truncated: false } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    vi.stubGlobal('fetch', fetchImpl)
+    render(<JobListAction {...props([job()])} />)
+    fireEvent.click(screen.getByRole('button', { name: '1 个后台任务运行中' }))
+    fireEvent.click(screen.getByRole('button', { name: '展开 pnpm run build 的输出' }))
+    expect(await screen.findByText('hello from bash')).toBeTruthy()
+    expect(fetchImpl).toHaveBeenCalled()
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('/sidebar/api/jobs.output')
   })
 
   it('offers background only for foreground running jobs', () => {

@@ -1,19 +1,28 @@
 /**
  * Deliverables plugin, browser half: changed-files card + produced-files row
  * on `conversation.chat.turnTail`, and `chatFileMentions` for closing prose.
+ * Also provides `ctx.changesReview` so Status can host a persistent Changes tab.
  */
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import { resolveWorkspacePath } from '@xrkseek/client-runtime/client'
 import type { ChatFileMentions } from '@xrkseek/client-ui-conversation/client'
 import type {} from '@xrkseek/client-locale/client'
+import type {} from '@xrkseek/client-ui-layout/client'
 import type {} from '@xrkseek/xrk-api-remotes/client'
 import { DeliverablesTail, type DeliverablesInjected } from './Deliverables.tsx'
+import { ChangesReviewController } from './changes-review-controller.ts'
 import { en, NS, zh, type DeliverablesKey } from './locales.ts'
 import {
   deliverablesDefinition, producedFileMentions, selectDeliverables,
 } from './turn-deliverables.ts'
 import './workspace-changes-projection.ts'
+
+declare module '@xrkseek/cordis' {
+  interface Context {
+    changesReview: ChangesReviewController
+  }
+}
 
 declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -23,17 +32,21 @@ declare module '@xrkseek/client-ui-slots' {
 
 export { ProducedFiles, type ProducedFilesProps } from './ProducedFiles.tsx'
 export { ChangedFiles } from './ChangedFiles.tsx'
+export { ChangesReviewView } from './ChangesReviewView.tsx'
+export { ChangesReviewController } from './changes-review-controller.ts'
 export { diffHunkFromWorkspaceFileDiff } from './workspace-file-diff-hunk.ts'
 export { DeliverablesTail, selectDeliverables } from './Deliverables.tsx'
 export { producedForClosing, changesForClosing } from './turn-deliverables.ts'
 
 export const inject = [
   'slots', 'locale', 'conversationEvents', 'connection', 'sessions',
-  'remote', 'remote.changes',
+  'remote', 'remote.changes', 'layout',
 ]
 
 export function apply(ctx: ClientContext): void {
   const connection = ctx.get('connection') as ConnectionHandle
+  const changesReview = new ChangesReviewController()
+  ctx.provide('changesReview', changesReview)
   ctx.conversationEvents.register(deliverablesDefinition)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-deliverables: dictionaries')
   ctx.slots.inject(
@@ -42,7 +55,7 @@ export function apply(ctx: ClientContext): void {
       name: 'conversation.chat.turnTail',
       select: selectDeliverables,
       locale: NS,
-      inject: (): DeliverablesInjected => ({
+      inject: (sessionId): DeliverablesInjected => ({
         isLoopback: connection.isLoopback,
         openNativePath: async (path: string, options?: { readonly reveal?: boolean }) => {
           const snap = ctx.sessions.list.getSnapshot()
@@ -59,8 +72,6 @@ export function apply(ctx: ClientContext): void {
         },
         hooks: { hostDescription: connection.hostDescription },
         loadFileDiff: async (seq, index, signal) => {
-          const sessionId = ctx.sessions.list.getSnapshot().current
-          if (sessionId === undefined) return null
           const result = await ctx.remote.changes.fileDiff(
             { sessionId, seq, index },
             signal,
@@ -69,6 +80,10 @@ export function apply(ctx: ClientContext): void {
             throw new Error(result.error.message)
           }
           return result.value.diff
+        },
+        openOverviewReview: (index, seq) => {
+          changesReview.open({ sessionId, seq, index })
+          ctx.layout.openDetails()
         },
       }),
     }, DeliverablesTail),

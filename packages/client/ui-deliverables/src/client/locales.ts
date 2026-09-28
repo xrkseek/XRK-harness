@@ -17,7 +17,7 @@ export const zh = {
   'changes.deleted': '-{count}',
   'changes.binary': '二进制',
   'changes.oversized': '过大',
-  'changes.openReview': '打开改动审阅',
+  'changes.openReview': '在概况栏审阅本轮改动',
   'changes.viewDiff': '查看 {name} 的 diff',
   'changes.all': '全部 {count} 个文件',
   'changes.collapse': '收起',
@@ -27,6 +27,9 @@ export const zh = {
   'changes.unavailable': '无法加载此文件的对比',
   'changes.previewFile': '预览 {name}',
   'changes.selectFile': '选择要审阅的文件',
+  'diff.created': '本轮新建的文件',
+  'diff.deleted': '本轮删除的文件',
+  'diff.unchanged': '内容未变（仅元数据或空对比）',
 }
 
 export const en: Record<DeliverablesKey, string> = {
@@ -44,7 +47,7 @@ export const en: Record<DeliverablesKey, string> = {
   'changes.deleted': '-{count}',
   'changes.binary': 'binary',
   'changes.oversized': 'too large',
-  'changes.openReview': 'Open changes review',
+  'changes.openReview': 'Review this turn’s changes in Status',
   'changes.viewDiff': 'View diff for {name}',
   'changes.all': 'All {count} files',
   'changes.collapse': 'Collapse',
@@ -54,6 +57,9 @@ export const en: Record<DeliverablesKey, string> = {
   'changes.unavailable': 'Comparison unavailable for this file',
   'changes.previewFile': 'Preview {name}',
   'changes.selectFile': 'Select a file to review',
+  'diff.created': 'Created in this turn',
+  'diff.deleted': 'Deleted in this turn',
+  'diff.unchanged': 'Unchanged content (metadata-only or empty comparison)',
 }
 
 export type DeliverablesKey = keyof typeof zh

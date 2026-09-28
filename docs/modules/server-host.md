@@ -122,7 +122,7 @@ Config lives in `@xrkseek/server-config` (`loadHostConfig`).
 3. createHostAgentCache(loader.list()) — do not await MCP connect yet
 4. createFaceRuntime (policy · drain · seeds · plugins · webPlugins · standing tools · questions · `subagents.json` · `goals.json`; file-sourced MCP gets `syncMcpServers`; `resolveAgent` binds `ask_user` / `exit_plan_mode`; `syncManagedProcessPlugins`)
 5. createHttpServer + attachFace (listen or listen:false pipe/fetch)
-6. Background enqueue `reconcileMcpToolPlugins` only for env/config specs; file-sourced Settings lists defer until Allow connect + save (must not block spawn return)
+6. Background enqueue `reconcileMcpToolPlugins` for env/config specs, and for file-sourced Settings when `allowConnect` is already persisted; otherwise file lists defer until Allow connect + save (must not block spawn return)
 ```
 
 Shutdown: set `mcpClosed` → `agentCache.dispose` → `shellJobs.dispose` (if any) → PTY `dispose` → close HTTP → `loader.unregister` each (including MCP `dispose`).

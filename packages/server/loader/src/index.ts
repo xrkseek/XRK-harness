@@ -151,6 +151,7 @@ export {
   type ManagedPackageIndex,
   type ManagedPluginPackageMeta,
   type PluginLoadFailure,
+  type ReconcileManagedProcessPluginsOptions,
   type ReconcileProcessPluginsResult,
   type SoftDisableReconcileLoader,
 } from "./managed-state.js";

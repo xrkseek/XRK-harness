@@ -1,13 +1,28 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { IconChevronDownOutline14, IconCloseFill14, StateDot } from '@xrkseek/client-ui-primitives'
+import {
+  IconAgentPresetOutline16,
+  IconBranchOutline16,
+  IconChecklistOutline14,
+  IconChevronDownOutline14,
+  IconChevronRightOutline14,
+  IconCloseFill14,
+  IconCodeOutline16,
+  IconDataOutline16,
+  IconGaugeOutline16,
+  IconStopFill16,
+  StateDot,
+  TerminalBlock,
+} from '@xrkseek/client-ui-primitives'
+import { OverviewChangesPanel, type OverviewChangesTurn } from './OverviewChangesPanel.tsx'
 import type { StateDotState } from '@xrkseek/client-ui-primitives'
 import {
   loadPreviewTabs,
   type PreviewTabLoad,
   type SessionStatusView,
 } from './preview-load.ts'
+import { peekJobOutput as defaultPeekJobOutput } from './job-output-peek.ts'
 import css from './PreviewTabs.module.css'
 
 /**
@@ -17,7 +32,7 @@ import css from './PreviewTabs.module.css'
  */
 const DETAILS_INSET_ATTR = 'data-xrk-layout-details'
 
-export type PreviewTabId = 'status' | 'context' | 'rollout' | 'todos' | 'plan' | 'office'
+export type PreviewTabId = 'status' | 'context' | 'rollout' | 'todos' | 'changes'
 
 /** Injected by ui-plan: close the layout details column; open spill paths; Teams actions. */
 export interface PreviewTabsInjected {
@@ -51,6 +66,34 @@ export interface PreviewTabsInjected {
     readonly leaseId: string
     readonly pruneAfter?: boolean
   }) => void | Promise<void>
+  /**
+   * Peek Host `jobs.output` for a Status job row (same bridge as header Jobs).
+   * Optional in tests that only assert labels.
+   */
+  peekJobOutput?: (jobId: string) => Promise<{ readonly text: string; readonly truncated: boolean }>
+  /** Interrupt a running background job (two-press confirm in the Status list). */
+  killJob?: (jobId: string) => void
+  /** Face `changes.fileDiff` for the Status Changes tab. */
+  loadFileDiff?: (
+    seq: number,
+    index: number,
+    signal: AbortSignal,
+  ) => Promise<import('@xrkseek/xrk-api-remotes/client').WorkspaceFileDiff | null>
+  /** Open a changed file path (Host openPath / workbench). */
+  openChangedFile?: (path: string) => void
+  /**
+   * Optional `ctx.changesReview` face — turn-tail cards open this tab via
+   * soft get (no hard dependency on ui-deliverables).
+   */
+  changesReview?: {
+    getSnapshot: () => {
+      readonly sessionId: string
+      readonly seq: number
+      readonly index: number
+      readonly revision: number
+    } | null
+    subscribe: (listener: () => void) => () => void
+  }
 }
 
 export type PreviewTabsProps =
@@ -291,25 +334,233 @@ function timelineEventMeta(ev: LiveTimelineEvent): TimelineRow | null {
   return null
 }
 
+type StatusJob = SessionStatusView['jobs'][number]
+
+const KILL_ARM_MS = 3_000
+const OUTPUT_POLL_MS = 400
+
+/** Expandable Status job row: peeks Host output + optional two-press kill. */
+function StatusJobsList({
+  jobs,
+  t,
+  peekJobOutput,
+  killJob,
+}: {
+  jobs: readonly StatusJob[]
+  t: PreviewTabsProps['t']
+  peekJobOutput?: PreviewTabsInjected['peekJobOutput']
+  killJob?: PreviewTabsInjected['killJob']
+}) {
+  const [expandedId, setExpandedId] = useState<string | undefined>(undefined)
+  const peek = peekJobOutput ?? defaultPeekJobOutput
+
+  useEffect(() => {
+    if (expandedId !== undefined && !jobs.some((job) => job.id === expandedId)) {
+      setExpandedId(undefined)
+    }
+  }, [jobs, expandedId])
+
+  if (jobs.length === 0) {
+    return <div className={css.empty}>{t('preview.status.jobsEmpty')}</div>
+  }
+
+  return (
+    <ul className={css.itemList}>
+      {jobs.map((job) => {
+        const live = job.status === 'running' || job.status === 'stopping'
+        const expanded = expandedId === job.id
+        const label = job.label ?? job.id
+        return (
+          <li key={job.id} className={css.jobItem} data-live={live || undefined}>
+            <div className={css.jobLine}>
+              <button
+                type="button"
+                className={css.jobTrigger}
+                aria-expanded={expanded}
+                aria-label={t(
+                  expanded ? 'preview.status.jobsCollapseAria' : 'preview.status.jobsExpandAria',
+                  { label },
+                )}
+                onClick={() => {
+                  setExpandedId((current) => (current === job.id ? undefined : job.id))
+                }}
+              >
+                <StateDot state={live ? 'ongoing' : 'success'} size={8} />
+                <IconChevronDownOutline14
+                  size={10}
+                  className={expanded ? css.jobChevronOpen : css.jobChevron}
+                />
+                <span className={css.itemTitle}>{label}</span>
+                <span className={css.itemMeta}>{job.status}</span>
+              </button>
+              {live && killJob !== undefined
+                ? (
+                  <StatusKillButton
+                    jobId={job.id}
+                    label={label}
+                    status={job.status}
+                    killJob={killJob}
+                    t={t}
+                  />
+                )
+                : null}
+            </div>
+            {expanded
+              ? (
+                <StatusJobOutput
+                  jobId={job.id}
+                  label={label}
+                  live={live}
+                  peek={peek}
+                  t={t}
+                />
+              )
+              : null}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function StatusKillButton({
+  jobId,
+  label,
+  status,
+  killJob,
+  t,
+}: {
+  jobId: string
+  label: string
+  status: string
+  killJob: (id: string) => void
+  t: PreviewTabsProps['t']
+}) {
+  const [armed, setArmed] = useState(false)
+  const armTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  useEffect(() => () => {
+    if (armTimer.current !== undefined) clearTimeout(armTimer.current)
+  }, [])
+
+  useEffect(() => {
+    if (status === 'running' || status === 'stopping') return
+    setArmed(false)
+  }, [status])
+
+  const title = armed
+    ? t('preview.status.jobsKillConfirm')
+    : t('preview.status.jobsKillAria', { label })
+
+  return (
+    <button
+      type="button"
+      className={armed ? `${css.jobKill} ${css.jobKillArmed}` : css.jobKill}
+      data-kill-state={armed ? 'armed' : 'idle'}
+      aria-label={title}
+      title={title}
+      onClick={(event) => {
+        event.stopPropagation()
+        if (!armed) {
+          setArmed(true)
+          if (armTimer.current !== undefined) clearTimeout(armTimer.current)
+          armTimer.current = setTimeout(() => { setArmed(false) }, KILL_ARM_MS)
+          return
+        }
+        if (armTimer.current !== undefined) clearTimeout(armTimer.current)
+        setArmed(false)
+        killJob(jobId)
+      }}
+    >
+      <IconStopFill16 size={10} />
+      {armed ? <span className={css.jobKillLabel}>{t('preview.status.jobsKillConfirm')}</span> : null}
+    </button>
+  )
+}
+
+function StatusJobOutput({
+  jobId,
+  label,
+  live,
+  peek,
+  t,
+}: {
+  jobId: string
+  label: string
+  live: boolean
+  peek: NonNullable<PreviewTabsInjected['peekJobOutput']>
+  t: PreviewTabsProps['t']
+}) {
+  const [text, setText] = useState('')
+  const [truncated, setTruncated] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+
+  useEffect(() => {
+    let alive = true
+    const load = async (): Promise<void> => {
+      try {
+        const next = await peek(jobId)
+        if (!alive) return
+        setText(next.text)
+        setTruncated(next.truncated)
+        setError(undefined)
+      } catch (err) {
+        if (!alive) return
+        setError(err instanceof Error ? err.message : String(err))
+      }
+    }
+    void load()
+    if (!live) return () => { alive = false }
+    const timer = setInterval(() => { void load() }, OUTPUT_POLL_MS)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [jobId, live, peek])
+
+  return (
+    <div className={css.jobPanel}>
+      {truncated ? <div className={css.jobNotice}>{t('preview.status.jobsTruncated')}</div> : null}
+      {error !== undefined
+        ? <div className={`${css.jobNotice} ${css.jobNoticeError}`}>{t('preview.status.jobsOutputError', { error })}</div>
+        : null}
+      <TerminalBlock
+        command={label}
+        output={text}
+        running={live}
+        maxLines={Number.POSITIVE_INFINITY}
+      />
+    </div>
+  )
+}
+
 function StatusPanel({
   status,
   t,
   useProjection,
+  plan,
+  office,
   openSpillPath,
   openTeamChild,
   pauseTeamChild,
   resumeTeamChild,
   mergeTeamWorktree,
+  peekJobOutput,
+  killJob,
   onTeamActionDone,
 }: {
   status: SessionStatusView
   t: PreviewTabsProps['t']
   useProjection: PreviewTabsProps['useProjection']
+  plan: PreviewTabLoad['plan']
+  office: PreviewTabLoad['office']
   openSpillPath?: PreviewTabsInjected['openSpillPath']
   openTeamChild?: PreviewTabsInjected['openTeamChild']
   pauseTeamChild?: PreviewTabsInjected['pauseTeamChild']
   resumeTeamChild?: PreviewTabsInjected['resumeTeamChild']
   mergeTeamWorktree?: PreviewTabsInjected['mergeTeamWorktree']
+  peekJobOutput?: PreviewTabsInjected['peekJobOutput']
+  killJob?: PreviewTabsInjected['killJob']
   onTeamActionDone?: () => void
 }) {
   const runningJobs = status.jobs.filter((j) => j.status === 'running')
@@ -472,10 +723,39 @@ function StatusPanel({
           <span className={css.label}>{t('preview.status.permission')}</span>
           <span>{status.permission}</span>
         </div>
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.plan')}</span>
-          <span>{status.plan}</span>
-        </div>
+        {plan !== null
+          ? (
+            <>
+              <div className={css.row}>
+                <span className={css.label}>{t('preview.plan.active')}</span>
+                <Flag on={plan.active} yes={t('preview.yes')} no={t('preview.no')} />
+              </div>
+              <div className={css.row}>
+                <span className={css.label}>{t('preview.plan.pending')}</span>
+                <Flag on={plan.pending} yes={t('preview.yes')} no={t('preview.no')} />
+              </div>
+            </>
+          )
+          : (
+            <div className={css.row}>
+              <span className={css.label}>{t('preview.status.plan')}</span>
+              <span>{status.plan}</span>
+            </div>
+          )}
+        {office !== null
+          ? (
+            <>
+              <div className={css.row}>
+                <span className={css.label}>{t('preview.office.configured')}</span>
+                <Flag on={office.configured} yes={t('preview.yes')} no={t('preview.no')} />
+              </div>
+              <div className={css.row}>
+                <span className={css.label}>{t('preview.office.connected')}</span>
+                <Flag on={office.connected} yes={t('preview.yes')} no={t('preview.no')} />
+              </div>
+            </>
+          )
+          : null}
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.theme')}</span>
           <span>{status.theme}</span>
@@ -518,20 +798,30 @@ function StatusPanel({
             <>
               {status.subagents.graph.nodes.length > 0
                 ? (
-                  <ul className={css.graphList}>
-                    {status.subagents.graph.nodes.map((n) => (
-                      <li key={`node:${n.id}`} className={css.graphEdge}>
-                        <span>{n.label}</span>
-                        {n.role ? <span className={css.graphKind}>{n.role}</span> : null}
-                        {n.depth !== undefined
-                          ? <span className={css.graphLabel}>d={n.depth}</span>
-                          : null}
-                        {n.activity
-                          ? <span className={css.graphLabel}>{n.activity}</span>
-                          : null}
-                      </li>
-                    ))}
-                  </ul>
+                  <>
+                    <h4 className={css.sectionTitle}>{t('preview.status.subagentGraph')}</h4>
+                    <ul className={css.graphList}>
+                      {status.subagents.graph.nodes.map((n) => (
+                        <li key={`node:${n.id}`} className={css.graphNode}>
+                          <StateDot
+                            state={n.activity === 'running' ? 'ongoing' : 'success'}
+                            size={8}
+                          />
+                          <IconAgentPresetOutline16 size={14} className={css.tabIcon} />
+                          <div className={css.graphNodeMain}>
+                            <span className={css.graphNodeTitle}>{n.label}</span>
+                            <span className={css.graphNodeMeta}>
+                              {n.depth !== undefined ? `d=${n.depth}` : null}
+                              {n.activity
+                                ? `${n.depth !== undefined ? ' · ' : ''}${n.activity}`
+                                : null}
+                            </span>
+                          </div>
+                          {n.role ? <span className={css.graphRole}>{n.role}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
                 )
                 : null}
               {status.subagents.graph.edges.length > 0
@@ -542,10 +832,11 @@ function StatusPanel({
                       const to = status.subagents.graph.nodes.find((n) => n.id === e.to)
                       return (
                         <li key={`${e.kind}:${e.from}:${e.to}`} className={css.graphEdge}>
-                          <span>{from?.label ?? e.from}</span>
-                          <span className={css.graphKind}>{e.kind}</span>
-                          <span>{to?.label ?? e.to}</span>
-                          {e.label ? <span className={css.graphLabel}>{e.label}</span> : null}
+                          <span className={css.kindChip} data-kind={e.kind}>{e.kind}</span>
+                          <span className={css.itemTitle}>{from?.label ?? e.from}</span>
+                          <IconChevronRightOutline14 size={12} className={css.graphArrow} />
+                          <span className={css.itemTitle}>{to?.label ?? e.to}</span>
+                          {e.label ? <span className={css.itemMeta}>{e.label}</span> : null}
                         </li>
                       )
                     })}
@@ -554,29 +845,36 @@ function StatusPanel({
                 : null}
               {status.subagents.live.length > 0
                 ? (
-                  <ul className={css.itemList}>
-                    {status.subagents.live.map((s) => (
-                      <li key={s.id} className={css.itemRow} data-live={s.activity === 'running' || undefined}>
-                        <span className={css.itemTitle}>{s.label ?? s.id}</span>
-                        <span className={css.itemMeta}>
-                          {s.activity}
-                          {s.liveTool ? ` · tool:${s.liveTool}` : s.liveText ? ` · ${s.liveText}` : ` · ${s.mode}`}
-                          {(s.queued ?? 0) > 0 || (s.steering ?? 0) > 0
-                            ? ` · ${t('preview.status.subagentQueue')} q=${s.queued ?? 0}/steer=${s.steering ?? 0}`
-                            : ''}
-                          {s.externalKind
-                            ? ` · ${t('preview.status.subagentExternal')}:${s.externalKind}${
-                              s.externalResume
-                                ? `/${s.externalResume === 'cold'
-                                  ? t('preview.status.subagentExternalCold')
-                                  : t('preview.status.subagentExternalLive')}`
-                                : ''
-                            }`
-                            : ''}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <>
+                    <h4 className={css.sectionTitle}>{t('preview.status.subagentLive')}</h4>
+                    <ul className={css.itemList}>
+                      {status.subagents.live.map((s) => (
+                        <li key={s.id} className={css.itemRow} data-live={s.activity === 'running' || undefined}>
+                          <StateDot
+                            state={s.activity === 'running' ? 'ongoing' : 'success'}
+                            size={8}
+                          />
+                          <span className={css.itemTitle}>{s.label ?? s.id}</span>
+                          <span className={css.itemMeta}>
+                            {s.activity}
+                            {s.liveTool ? ` · tool:${s.liveTool}` : s.liveText ? ` · ${s.liveText}` : ` · ${s.mode}`}
+                            {(s.queued ?? 0) > 0 || (s.steering ?? 0) > 0
+                              ? ` · ${t('preview.status.subagentQueue')} q=${s.queued ?? 0}/steer=${s.steering ?? 0}`
+                              : ''}
+                            {s.externalKind
+                              ? ` · ${t('preview.status.subagentExternal')}:${s.externalKind}${
+                                s.externalResume
+                                  ? `/${s.externalResume === 'cold'
+                                    ? t('preview.status.subagentExternalCold')
+                                    : t('preview.status.subagentExternalLive')}`
+                                  : ''
+                              }`
+                              : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
                 )
                 : null}
             </>
@@ -770,18 +1068,12 @@ function StatusPanel({
         defaultOpen
         meta={`${runningJobs.length}/${status.jobs.length} running`}
       >
-        {status.jobs.length === 0
-          ? <div className={css.empty}>{t('preview.status.jobsEmpty')}</div>
-          : (
-            <ul className={css.itemList}>
-              {status.jobs.map((j) => (
-                <li key={j.id} className={css.itemRow} data-live={j.status === 'running' || undefined}>
-                  <span className={css.itemTitle}>{j.label ?? j.id}</span>
-                  <span className={css.itemMeta}>{j.status}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+        <StatusJobsList
+          jobs={status.jobs}
+          t={t}
+          {...(peekJobOutput ? { peekJobOutput } : {})}
+          {...(killJob ? { killJob } : {})}
+        />
       </SectionCard>
 
       <SectionCard
@@ -910,8 +1202,28 @@ function StatusPanel({
       >
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.timelineTotal')}</span>
-          <span>{current.total}</span>
+          <span>{current.total.toLocaleString()}</span>
         </div>
+        {(() => {
+          const window = status.timeline.contextWindow
+          if (window === undefined || window <= 0) return null
+          const pct = Math.min(100, Math.round((current.total / window) * 1000) / 10)
+          return (
+            <>
+              <div className={css.row}>
+                <span className={css.label}>{t('preview.status.timelineWindow')}</span>
+                <span>
+                  {current.total.toLocaleString()} / {window.toLocaleString()}
+                  {' · '}
+                  {pct}%
+                </span>
+              </div>
+              <div className={css.windowTrack} aria-hidden>
+                <div className={css.windowFill} style={{ width: `${Math.max(2, pct)}%` }} />
+              </div>
+            </>
+          )
+        })()}
         <div className={css.barTrack} aria-hidden>
           {([
             ['system', current.system],
@@ -936,6 +1248,26 @@ function StatusPanel({
             )
           })}
         </div>
+        <div className={css.barLegend} aria-hidden>
+          {([
+            'system',
+            'tools',
+            'user',
+            'inject',
+            'assistant',
+            'tool',
+          ] as const).map((key) => {
+            const value = current[key]
+            if (value <= 0) return null
+            return (
+              <span key={key} className={css.barLegendItem}>
+                <span className={css.barLegendSwatch} data-cat={key} />
+                {t(`preview.status.timelineLegend.${key}`)} {value.toLocaleString()}
+              </span>
+            )
+          })}
+        </div>
+        <p className={css.note} role="note">{t('preview.status.timelineWindowHint')}</p>
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.timelineRequests')}</span>
           <span>
@@ -953,15 +1285,18 @@ function StatusPanel({
         </div>
         {lastCompactReason
           ? (
-            <div className={css.row}>
-              <span className={css.label}>{t('preview.status.timelineCompact')}</span>
-              <span>
-                {lastCompactReason}
-                {lastShadowedTokens !== undefined
-                  ? ` · ${t('preview.status.timelineShadowed')} ${lastShadowedTokens}`
-                  : ''}
-              </span>
-            </div>
+            <>
+              <div className={css.row}>
+                <span className={css.label}>{t('preview.status.timelineCompact')}</span>
+                <span>
+                  {lastCompactReason}
+                  {lastShadowedTokens !== undefined
+                    ? ` · ${t('preview.status.timelineShadowed')} ${lastShadowedTokens.toLocaleString()}`
+                    : ''}
+                </span>
+              </div>
+              <p className={css.note} role="note">{t('preview.status.timelineCompactHint')}</p>
+            </>
           )
           : null}
         {(pruneCount > 0 || spillCount > 0)
@@ -975,125 +1310,83 @@ function StatusPanel({
         <p className={css.note} role="note">{t('preview.status.timelineBrowseHint')}</p>
       </SectionCard>
 
-      <SectionCard
-        t={t}
-        label={t('preview.status.cost')}
-        title={t('preview.status.cost')}
-        signal={collapseSignal}
-        defaultOpen={false}
-      >
-        <p className={css.note} role="note">{t('preview.status.costSourceNote')}</p>
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.costUsd')}</span>
-          <span>${status.cost.cost.toFixed(4)}</span>
-        </div>
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.costTokens')}</span>
-          <span>
-            in {status.cost.input} · out {status.cost.output}
-            {status.cost.cacheRead ? ` · cacheR ${status.cost.cacheRead}` : ''}
-            {status.cost.reasoning ? ` · reason ${status.cost.reasoning}` : ''}
-          </span>
-        </div>
-        {(() => {
-          const rows = Object.entries(status.cost.byProviderModel)
-            .map(([key, b]) => ({
-              key,
-              input: b.input,
-              output: b.output,
-              cost: b.cost,
-              tokens: b.input + b.output + b.cacheRead + b.cacheWrite + b.reasoning,
-            }))
-            .sort((a, b) => b.cost - a.cost || b.tokens - a.tokens)
-            .slice(0, 6)
-          if (rows.length === 0) return null
-          return (
-            <>
-              <h4 className={css.sectionTitle}>{t('preview.status.costByModel')}</h4>
-              <ul className={css.itemList}>
-                {rows.map((row) => (
-                  <li key={row.key} className={css.itemRow}>
-                    <span className={css.itemTitle}>{row.key}</span>
-                    <span className={css.itemMeta}>
-                      ${row.cost.toFixed(4)} · in {row.input} · out {row.output}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )
-        })()}
-      </SectionCard>
-
-      <SectionCard
-        t={t}
-        label={t('preview.status.billing')}
-        title={t('preview.status.billing')}
-        signal={collapseSignal}
-        defaultOpen={false}
-        meta={t('preview.status.billingScope')}
-      >
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.billingToday')}</span>
-          <span>
-            ${status.billing.todayCost.toFixed(4)}
-            {status.billing.todayTokens
-              ? ` · ${status.billing.todayTokens} tok`
-              : ''}
-          </span>
-        </div>
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.billingMonth')}</span>
-          <span>
-            ${status.billing.monthCost.toFixed(4)}
-            {status.billing.monthTokens
-              ? ` · ${status.billing.monthTokens} tok`
-              : ''}
-          </span>
-        </div>
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.billingTotal')}</span>
-          <span>${status.billing.totalCost.toFixed(4)}</span>
-        </div>
-        {status.billing.dailyTrend.length > 0
-          ? (
-            <div className={css.trend} aria-label={t('preview.status.billingTrend')}>
-              <h4 className={css.sectionTitle}>{t('preview.status.billingTrend')}</h4>
-              <div className={css.trendBars}>
-                {(() => {
-                  const days = status.billing.dailyTrend.slice(-14)
-                  const max = Math.max(0.0001, ...days.map((d) => d.cost))
-                  return days.map((day) => (
-                    <div
-                      key={day.date}
-                      className={css.trendBar}
-                      title={`${day.date}: $${day.cost.toFixed(4)} · ${day.tokens} tok`}
-                      style={{ height: `${Math.max(8, Math.round((day.cost / max) * 40))}px` }}
-                    />
-                  ))
-                })()}
-              </div>
-              <div className={css.itemMeta}>
-                {status.billing.dailyTrend.slice(-7).map((d) => d.date.slice(5)).join(' · ')}
-              </div>
+      {(() => {
+        const tokenTotal = status.cost.input + status.cost.output
+          + status.cost.cacheRead + status.cost.cacheWrite + status.cost.reasoning
+        const byProvider = Object.entries(status.cost.byProviderModel)
+        const byModelFallback = Object.entries(status.cost.byModel).map(([key, b]) => [key, b] as const)
+        const source = byProvider.length > 0 ? byProvider : byModelFallback
+        const modelRows = source
+          .map(([key, b]) => ({
+            key,
+            input: b.input,
+            output: b.output,
+            cost: b.cost,
+            tokens: b.input + b.output + b.cacheRead + b.cacheWrite + b.reasoning,
+          }))
+          .sort((a, b) => b.tokens - a.tokens || b.cost - a.cost)
+          .slice(0, 8)
+        const maxTokens = Math.max(1, ...modelRows.map((row) => row.tokens))
+        return (
+          <SectionCard
+            t={t}
+            label={t('preview.status.cost')}
+            title={t('preview.status.cost')}
+            signal={collapseSignal}
+            defaultOpen={modelRows.length > 0}
+            meta={tokenTotal > 0
+              ? `${tokenTotal.toLocaleString()} tok`
+              : `$${status.cost.cost.toFixed(4)}`}
+          >
+            <p className={css.note} role="note">{t('preview.status.costSourceNote')}</p>
+            <div className={css.row}>
+              <span className={css.label}>{t('preview.status.costTokens')}</span>
+              <span>
+                in {status.cost.input.toLocaleString()} · out {status.cost.output.toLocaleString()}
+                {status.cost.cacheRead ? ` · cacheR ${status.cost.cacheRead.toLocaleString()}` : ''}
+                {status.cost.reasoning ? ` · reason ${status.cost.reasoning.toLocaleString()}` : ''}
+              </span>
             </div>
-          )
-          : null}
-        {status.billing.byProviderModel.length === 0
-          ? <div className={css.empty}>{t('preview.status.billingEmpty')}</div>
-          : (
-            <ul className={css.itemList}>
-              {status.billing.byProviderModel.slice(0, 6).map((row) => (
-                <li key={row.key} className={css.itemRow}>
-                  <span className={css.itemTitle}>{row.key}</span>
-                  <span className={css.itemMeta}>
-                    ${row.cost.toFixed(4)} · in {row.input} · out {row.output}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-      </SectionCard>
+            <div className={css.row}>
+              <span className={css.label}>{t('preview.status.costTokensTotal')}</span>
+              <span>
+                {tokenTotal.toLocaleString()}
+                {status.cost.cost > 0 ? ` · $${status.cost.cost.toFixed(4)}` : ''}
+              </span>
+            </div>
+            {modelRows.length > 0
+              ? (
+                <>
+                  <h4 className={css.sectionTitle}>{t('preview.status.costByModel')}</h4>
+                  <ul className={css.itemList}>
+                    {modelRows.map((row, index) => (
+                      <li key={row.key} className={css.modelRow}>
+                        <div className={css.modelRowHead}>
+                          <span className={css.itemTitle}>{row.key}</span>
+                          <span className={css.itemMeta}>
+                            {row.tokens.toLocaleString()} tok
+                            {row.cost > 0 ? ` · $${row.cost.toFixed(4)}` : ''}
+                          </span>
+                        </div>
+                        <div className={css.modelBar} aria-hidden>
+                          <div
+                            className={css.modelBarFill}
+                            data-tone={String(index % 6)}
+                            style={{ width: `${Math.max(4, Math.round((row.tokens / maxTokens) * 100))}%` }}
+                          />
+                        </div>
+                        <span className={css.itemMeta}>
+                          in {row.input.toLocaleString()} · out {row.output.toLocaleString()}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )
+              : <div className={css.empty}>{t('preview.status.costEmpty')}</div>}
+          </SectionCard>
+        )
+      })()}
 
       <SectionCard
         t={t}
@@ -1345,9 +1638,14 @@ function RolloutViewerPanel({
       >
         <div className={css.row}>
           <span className={css.label}>{t('preview.rolloutCounts')}</span>
-          <span>
-            nodes {state.counts.nodes} · edges {state.counts.edges}
-            {' '}(spawn {state.counts.spawn} · msg {state.counts.message} · tool {state.counts.tool})
+          <span className={css.itemMeta}>
+            <span className={css.kindChip} data-kind="spawn">spawn {state.counts.spawn}</span>
+            {' '}
+            <span className={css.kindChip} data-kind="message">msg {state.counts.message}</span>
+            {' '}
+            <span className={css.kindChip} data-kind="tool">tool {state.counts.tool}</span>
+            {' · '}
+            {state.counts.nodes}n/{state.counts.edges}e
           </span>
         </div>
         <div className={css.row}>
@@ -1357,14 +1655,14 @@ function RolloutViewerPanel({
         {state.edges.length === 0
           ? <div className={css.empty}>{t('preview.rolloutEmpty')}</div>
           : (
-            <ul className={css.itemList}>
+            <ul className={css.graphList}>
               {state.edges.slice(0, 24).map((edge, i) => (
-                <li key={`${edge.kind}-${edge.from}-${edge.to}-${i}`} className={css.itemRow}>
-                  <span className={css.itemTitle}>{edge.kind}</span>
-                  <span className={css.itemMeta}>
-                    {edge.from} → {edge.to}
-                    {edge.label ? ` · ${edge.label}` : ''}
-                  </span>
+                <li key={`${edge.kind}-${edge.from}-${edge.to}-${i}`} className={css.graphEdge}>
+                  <span className={css.kindChip} data-kind={edge.kind}>{edge.kind}</span>
+                  <span className={css.itemTitle}>{edge.from}</span>
+                  <IconChevronRightOutline14 size={12} className={css.graphArrow} />
+                  <span className={css.itemTitle}>{edge.to}</span>
+                  {edge.label ? <span className={css.itemMeta}>{edge.label}</span> : null}
                 </li>
               ))}
             </ul>
@@ -1376,10 +1674,11 @@ function RolloutViewerPanel({
 
 /**
  * Session Status / overview for the layout details column.
- * Default tab is Status (fleet · subagents · jobs · live contextTimeline · cost · channels),
- * fed by Face `session.status` — the same snapshot as slash `/status` — with
- * inject / compact / spill rows from the live `contextTimeline` projection.
- * Context / rollout / todos / plan / Office remain as secondary tabs.
+ * Default tab is Status (fleet · session · jobs · live contextTimeline ·
+ * session cost detail · channels), fed by Face `session.status` — the same
+ * snapshot as slash `/status`. Plan / Office flags fold into the session card;
+ * Context / rollout / todos remain secondary tabs. Host-wide billing stays out
+ * of this column (doctor / export cost.json).
  */
 export function PreviewTabs({
   sessionId,
@@ -1389,6 +1688,11 @@ export function PreviewTabs({
   pauseTeamChild,
   resumeTeamChild,
   mergeTeamWorktree,
+  peekJobOutput,
+  killJob,
+  loadFileDiff,
+  openChangedFile,
+  changesReview,
   t,
   useProjection,
 }: PreviewTabsProps) {
@@ -1404,8 +1708,24 @@ export function PreviewTabs({
   // Face `todos` standing plan — keyed through host projections; cast keeps
   // this package free of a hard dependency on the todo stub types package.
   const todos = (useProjection as (key: string) => unknown)('todos') as TodoRow[] | null
+  const workspaceChanges = (useProjection as (key: string) => unknown)(
+    'workspaceChanges',
+  ) as OverviewChangesTurn[] | null | undefined
   const office = loaded.office
   const status = loaded.status
+
+  const reviewFocus = useSyncExternalStore(
+    (onStoreChange) => changesReview?.subscribe(onStoreChange) ?? (() => {}),
+    () => {
+      const next = changesReview?.getSnapshot() ?? null
+      return next !== null && next.sessionId === sessionId ? next : null
+    },
+    () => null,
+  )
+
+  useEffect(() => {
+    if (reviewFocus !== null) setTab('changes')
+  }, [reviewFocus?.revision])
 
   useEffect(() => {
     let alive = true
@@ -1421,6 +1741,7 @@ export function PreviewTabs({
   const refreshStatus = () => { setStatusTick((n) => n + 1) }
 
   const emptyCopy = ready ? t('preview.unavailable') : t('preview.loading')
+  const changeTurns = Array.isArray(workspaceChanges) ? workspaceChanges : []
 
   return (
     <aside className={css.root} aria-label={t('preview.tabs')} data-xrk-overview="" data-xrk-status="">
@@ -1435,7 +1756,18 @@ export function PreviewTabs({
               aria-selected={tab === 'status'}
               onClick={() => { setTab('status') }}
             >
+              <IconGaugeOutline16 size={12} className={css.tabIcon} />
               {t('preview.status')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className={css.tab}
+              aria-selected={tab === 'changes'}
+              onClick={() => { setTab('changes') }}
+            >
+              <IconCodeOutline16 size={12} className={css.tabIcon} />
+              {t('preview.changes')}
             </button>
             <button
               type="button"
@@ -1444,6 +1776,7 @@ export function PreviewTabs({
               aria-selected={tab === 'context'}
               onClick={() => { setTab('context') }}
             >
+              <IconDataOutline16 size={12} className={css.tabIcon} />
               {t('preview.context')}
             </button>
             <button
@@ -1453,6 +1786,7 @@ export function PreviewTabs({
               aria-selected={tab === 'rollout'}
               onClick={() => { setTab('rollout') }}
             >
+              <IconBranchOutline16 size={12} className={css.tabIcon} />
               {t('preview.rollout')}
             </button>
             <button
@@ -1462,25 +1796,8 @@ export function PreviewTabs({
               aria-selected={tab === 'todos'}
               onClick={() => { setTab('todos') }}
             >
+              <IconChecklistOutline14 size={12} className={css.tabIcon} />
               {t('preview.todos')}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              className={css.tab}
-              aria-selected={tab === 'plan'}
-              onClick={() => { setTab('plan') }}
-            >
-              {t('preview.plan')}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              className={css.tab}
-              aria-selected={tab === 'office'}
-              onClick={() => { setTab('office') }}
-            >
-              {t('preview.office')}
             </button>
           </div>
         </div>
@@ -1502,14 +1819,31 @@ export function PreviewTabs({
                 status={status}
                 t={t}
                 useProjection={useProjection}
+                plan={plan}
+                office={office}
                 {...(openSpillPath ? { openSpillPath } : {})}
                 {...(openTeamChild ? { openTeamChild } : {})}
                 {...(pauseTeamChild ? { pauseTeamChild } : {})}
                 {...(resumeTeamChild ? { resumeTeamChild } : {})}
                 {...(mergeTeamWorktree ? { mergeTeamWorktree } : {})}
+                {...(peekJobOutput ? { peekJobOutput } : {})}
+                {...(killJob ? { killJob } : {})}
                 onTeamActionDone={refreshStatus}
               />
             )
+          : tab === 'changes'
+            ? loadFileDiff === undefined || openChangedFile === undefined
+              ? <div className={css.empty}>{t('preview.changes.empty')}</div>
+              : (
+                <OverviewChangesPanel
+                  sessionId={sessionId}
+                  turns={changeTurns}
+                  {...(changesReview ? { focusFace: changesReview } : {})}
+                  loadFileDiff={loadFileDiff}
+                  openFile={openChangedFile}
+                  t={t}
+                />
+              )
           : tab === 'context'
             ? status === null
               ? <div className={css.empty}>{emptyCopy}</div>
@@ -1523,47 +1857,17 @@ export function PreviewTabs({
               )
             : tab === 'rollout'
               ? <RolloutViewerPanel sessionId={sessionId} t={t} />
-              : tab === 'todos'
-            ? todos === null || todos.length === 0
-              ? <div className={css.empty}>{t('preview.todos.empty')}</div>
-              : (
-                <ul className={css.todoList}>
-                  {todos.map((item, index) => (
-                    <li key={`${index}:${item.content}`} className={css.todoItem} data-status={item.status}>
-                      <span className={css.todoStatus}>{todoStatusLabel(item.status, t)}</span>
-                      <span className={css.todoContent}>{item.content}</span>
-                    </li>
-                  ))}
-                </ul>
-              )
-            : tab === 'plan'
-              ? plan === null
-                ? <div className={css.empty}>{emptyCopy}</div>
+              : todos === null || todos.length === 0
+                ? <div className={css.empty}>{t('preview.todos.empty')}</div>
                 : (
-                  <>
-                    <div className={css.row}>
-                      <span className={css.label}>{t('preview.plan.active')}</span>
-                      <Flag on={plan.active} yes={t('preview.yes')} no={t('preview.no')} />
-                    </div>
-                    <div className={css.row}>
-                      <span className={css.label}>{t('preview.plan.pending')}</span>
-                      <Flag on={plan.pending} yes={t('preview.yes')} no={t('preview.no')} />
-                    </div>
-                  </>
-                )
-              : office === null
-                ? <div className={css.empty}>{emptyCopy}</div>
-                : (
-                  <>
-                    <div className={css.row}>
-                      <span className={css.label}>{t('preview.office.configured')}</span>
-                      <Flag on={office.configured} yes={t('preview.yes')} no={t('preview.no')} />
-                    </div>
-                    <div className={css.row}>
-                      <span className={css.label}>{t('preview.office.connected')}</span>
-                      <Flag on={office.connected} yes={t('preview.yes')} no={t('preview.no')} />
-                    </div>
-                  </>
+                  <ul className={css.todoList}>
+                    {todos.map((item, index) => (
+                      <li key={`${index}:${item.content}`} className={css.todoItem} data-status={item.status}>
+                        <span className={css.todoStatus}>{todoStatusLabel(item.status, t)}</span>
+                        <span className={css.todoContent}>{item.content}</span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
       </div>
     </aside>

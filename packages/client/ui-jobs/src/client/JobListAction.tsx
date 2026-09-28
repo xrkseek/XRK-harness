@@ -26,26 +26,32 @@ const NO_TASKS: readonly JobView[] = []
  * Session-header entry point for this session's background jobs. It renders
  * nothing at all until the session has at least one job, so an ordinary
  * conversation never grows a control for a capability it is not using.
- * @param props - runtime slot currency plus the namespace translator.
- * @returns the trigger and its popover list, or null when there is nothing to show.
+ * Expand a row to stream Host `jobs.output` into a TerminalBlock.
  */
 export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, t }: JobListActionProps) {
   const jobs = useSessions(state => state.jobsBySession[sessionId]) ?? NO_TASKS
   const [open, setOpen] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | undefined>(undefined)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
 
   const rows = useMemo(() => orderedJobs(jobs), [jobs])
-  const liveCount = useMemo(() => jobs.filter(isLiveJob).length, [jobs])
+  const liveRows = useMemo(() => rows.filter(isLiveJob), [rows])
+  const settledRows = useMemo(() => rows.filter((job) => !isLiveJob(job)), [rows])
+  const liveCount = liveRows.length
   const now = useJobClock(open && liveCount > 0)
 
   useDismissOnOutsidePointer(rootRef, open, setOpen)
 
-  // The last job disappearing removes this control; close first so focus does
-  // not vanish from an unmounting node.
   useEffect(() => {
     if (jobs.length === 0 && open) setOpen(false)
   }, [jobs.length, open])
+
+  useEffect(() => {
+    if (expandedId !== undefined && !jobs.some((job) => job.id === expandedId)) {
+      setExpandedId(undefined)
+    }
+  }, [jobs, expandedId])
 
   if (jobs.length === 0) return null
 
@@ -57,8 +63,26 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'Escape' || !open) return
     event.preventDefault()
+    if (expandedId !== undefined) {
+      setExpandedId(undefined)
+      return
+    }
     setOpen(false)
     triggerRef.current?.focus()
+  }
+
+  const onToggleExpand = (jobId: string): void => {
+    setExpandedId((current) => (current === jobId ? undefined : jobId))
+  }
+
+  const rowProps = {
+    now,
+    t: t as TranslateNS<typeof NS>,
+    css,
+    killJob,
+    backgroundJob,
+    expandedId,
+    onToggleExpand,
   }
 
   return (
@@ -70,7 +94,7 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
         aria-expanded={open}
         aria-label={countLabel}
         onClick={() => {
-          setOpen(current => !current)
+          setOpen((current) => !current)
         }}
       >
         {liveCount > 0 ? <StateDot state="ongoing" className={css.triggerDot} /> : null}
@@ -80,14 +104,18 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
       {open
         ? (
           <ul className={css.menu} aria-label={t('list.aria')}>
-            <JobRows
-              rows={rows}
-              now={now}
-              t={t as TranslateNS<typeof NS>}
-              css={css}
-              killJob={killJob}
-              backgroundJob={backgroundJob}
-            />
+            {liveRows.length > 0 && settledRows.length > 0
+              ? <li className={css.section} role="presentation">{t('section.live')}</li>
+              : null}
+            {liveRows.length > 0
+              ? <JobRows rows={liveRows} {...rowProps} />
+              : null}
+            {liveRows.length > 0 && settledRows.length > 0
+              ? <li className={css.section} role="presentation">{t('section.settled')}</li>
+              : null}
+            {settledRows.length > 0
+              ? <JobRows rows={settledRows} {...rowProps} />
+              : null}
           </ul>
         )
         : null}

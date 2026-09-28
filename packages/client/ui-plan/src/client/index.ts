@@ -14,6 +14,7 @@
 import type {} from '@xrkseek/xrk-api-remotes/client'
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
+import { resolveWorkspacePath } from '@xrkseek/client-runtime/client'
 // Type-only: pulls the ui-conversation SlotMap merge (the input.plan seat).
 import type {} from '@xrkseek/client-ui-conversation/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -23,7 +24,8 @@ import type {} from '@xrkseek/client-ui-layout/client'
 // Type-only: pulls the `plan` SessionProjectionMap merge for useProjection.
 import type {} from '@xrkseek/xrk-plan-mode/client'
 import { PlanChip } from './PlanModeControl.tsx'
-import { PreviewOpenButton, PreviewTabs } from './PreviewTabs.tsx'
+import { PreviewOpenButton, PreviewTabs, type PreviewTabsInjected } from './PreviewTabs.tsx'
+import { peekJobOutput as defaultPeekJobOutput } from './job-output-peek.ts'
 import { en, zh, type PlanKey } from './locales.ts'
 
 export type { PlanKey } from './locales.ts'
@@ -48,7 +50,10 @@ export interface PlanChipInjected {
 }
 
 /** Required services: slots, commands Remote, locale, layout, Host openPath, sessions. */
-export const inject = ['slots', 'remote', 'remote.commands', 'locale', 'layout', 'connection', 'sessions']
+export const inject = [
+  'slots', 'remote', 'remote.commands', 'remote.changes', 'locale', 'layout',
+  'connection', 'sessions',
+]
 
 /**
  * Client plugin body: register the plan chip over the command channel.
@@ -86,13 +91,44 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('details', () => ctx.slots.register({
     name: 'details',
     locale: NS,
-    inject: () => ({
+    inject: (sessionId: SessionId) => ({
       closeDetails: () => { ctx.layout.closeDetails() },
       openSpillPath: async (path: string) => {
         const response = await connection.api.host.openPath({ path })
         if (!response.result.ok) {
           throw new Error(`spill open failed: ${response.result.error.message}`)
         }
+      },
+      peekJobOutput: (jobId: string) => defaultPeekJobOutput(jobId),
+      killJob: (jobId: string) => {
+        void ctx.sessions.binding(sessionId)?.session.killJob(jobId)
+      },
+      loadFileDiff: async (seq: number, index: number, signal: AbortSignal) => {
+        const result = await ctx.remote.changes.fileDiff(
+          { sessionId, seq, index },
+          signal,
+        )
+        if (!result.ok) {
+          throw new Error(result.error.message)
+        }
+        return result.value.diff
+      },
+      openChangedFile: (path: string) => {
+        const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+        void connection.api.host.openPath({
+          path: resolveWorkspacePath(cwd, path),
+        })
+      },
+      // Soft face: deliverables may load after plan; resolve live on each call.
+      changesReview: {
+        getSnapshot: () => {
+          const face = ctx.get('changesReview') as PreviewTabsInjected['changesReview'] | undefined
+          return face?.getSnapshot() ?? null
+        },
+        subscribe: (listener) => {
+          const face = ctx.get('changesReview') as PreviewTabsInjected['changesReview'] | undefined
+          return face?.subscribe(listener) ?? (() => {})
+        },
       },
       openTeamChild: async (input: {
         readonly parentSessionId: string

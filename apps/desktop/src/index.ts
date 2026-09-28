@@ -310,6 +310,7 @@ export {
   DESKTOP_IPC,
   type DesktopUpdateState,
   type XrkDesktopApi,
+  type XrkDesktopWindowApi,
 } from "./ipc.js";
 export {
   DESKTOP_PLUGIN_INSTALL_BOUNDARY,

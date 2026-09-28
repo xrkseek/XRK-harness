@@ -124,10 +124,11 @@ export interface ShellService {
   killJob(id: string, reason?: string): Promise<KillJobResult>;
   /**
    * Read output for a background job. Managed jobs use the consuming
-   * `readOutput` cursor; bash jobs return retained stdout/stderr when settled.
-   * A terminal read marks the job `reported` (suppresses Face completion notice).
+   * `readOutput` cursor; bash jobs return retained stdout/stderr (including
+   * mid-run buffers). A terminal read marks the job `reported` unless
+   * `{ report: false }` (human UI peek — keeps Face completion notices).
    */
-  readJobOutput(id: string): string;
+  readJobOutput(id: string, opts?: { readonly report?: boolean }): string;
   /**
    * Block until the job reaches a terminal status or `timeoutMs` elapses (DSH `jobs.wait`).
    * Timeout resolves without error — caller may still see `running` / `stopping`.
@@ -393,14 +394,36 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
     notifyChanged();
   }
 
+  /** Throttle Face `session/jobs` churn while stdout/stderr streams. */
+  let outputNotifyTimer: ReturnType<typeof setTimeout> | undefined;
+  function scheduleOutputNotify(): void {
+    if (outputNotifyTimer !== undefined) return;
+    outputNotifyTimer = setTimeout(() => {
+      outputNotifyTimer = undefined;
+      notifyChanged();
+    }, 120);
+  }
+
+  function appendLiveOutput(
+    id: string,
+    channel: "stdout" | "stderr",
+    chunk: string,
+  ): void {
+    if (!chunk) return;
+    const job = jobs.get(id);
+    if (!job || isTerminalStatus(job.info.status)) return;
+    const prev = job.info[channel] ?? "";
+    job.info = { ...job.info, [channel]: prev + chunk };
+    scheduleOutputNotify();
+  }
+
   function track(
     command: string,
     handle: SubprocessHandle,
     ownerSessionId: string | undefined,
+    id: string,
   ): ShellStartJobResult {
     assertOpen();
-    assertAdmission(ownerSessionId);
-    const id = nextKindJobId(kindSeq, "bash");
     const { settled, markSettled } = makeSettled();
     const info: ShellJobInfo = {
       id,
@@ -467,12 +490,20 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
       if (!argv.length) {
         throw new Error("shell: prepareArgv returned empty argv");
       }
+      // Reserve the id before spawn so live chunks can land on the registry.
+      const id = nextKindJobId(kindSeq, "bash");
       const handle = options.subprocess.start(argv, {
         ...(spawnCwd ? { cwd: spawnCwd } : {}),
         // Remaining budget lives on `deadline` — do not restart timeoutMs.
         ...(deadline ? { signal: deadline } : {}),
+        onStdout: (chunk) => {
+          appendLiveOutput(id, "stdout", chunk);
+        },
+        onStderr: (chunk) => {
+          appendLiveOutput(id, "stderr", chunk);
+        },
       });
-      return track(command, handle, ownerSessionId);
+      return track(command, handle, ownerSessionId, id);
     },
 
     startManagedJob(spec) {
@@ -575,15 +606,18 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
       return "requested";
     },
 
-    readJobOutput(id) {
+    readJobOutput(id, opts) {
       const job = jobs.get(id);
       if (!job) throw new Error(`shell job not found: ${id}`);
-      if (isTerminalStatus(job.info.status)) markReported(job);
-      if (job.managed?.readOutput) {
+      const report = opts?.report !== false;
+      if (report && isTerminalStatus(job.info.status)) markReported(job);
+      // Human peek must not advance the consuming model cursor on managed jobs.
+      if (job.managed?.readOutput && report) {
         return job.managed.readOutput();
       }
       if (job.managed) {
-        return isTerminalStatus(job.info.status) ? (job.finalOutput ?? "") : "";
+        if (isTerminalStatus(job.info.status)) return job.finalOutput ?? "";
+        return job.info.stdout ?? "";
       }
       const out = job.info.stdout ?? "";
       const err = job.info.stderr ?? "";
@@ -769,9 +803,9 @@ export function createSessionScopedShell(
       expectVisible(id);
       return shell.killJob(id, reason);
     },
-    readJobOutput: (id) => {
+    readJobOutput: (id, opts) => {
       expectVisible(id);
-      return shell.readJobOutput(id);
+      return shell.readJobOutput(id, opts);
     },
     waitJob: (id, timeoutMs, signal) => {
       expectVisible(id);

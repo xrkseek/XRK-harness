@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 **Plugin list** tab for Web / Desktop Settings. Registers one localized `settings.plugins.tab` contribution with id `all`. Activation does not call Remotes; mounting the tab lazily uses `ctx.remote.pluginInventory.*` through [`api-remotes`](../../api/remotes/README.md).
 
-The tab can **install** (CLI-compatible package spec → `pluginInventory/install`), and for managed rows **update / disable / enable / remove / open folder**. Search and filters stay local. Registration uses `ctx.slots.inject()`, so it follows late tab declaration, redeclaration, locale changes, and teardown without importing the section owner.
+This package is the product **Plugin Manager** surface (Settings → Plugins → Plugin list): install with npm registry pick + settled `TerminalBlock`, kind artwork on cards, and for managed rows **update / reload / disable / enable / remove / open folder**. Search and filters stay local. Registration uses `ctx.slots.inject()`, so it follows late tab declaration, redeclaration, locale changes, and teardown without importing the section owner.
 
 ## Model Experience
 

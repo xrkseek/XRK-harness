@@ -57,6 +57,12 @@ export {
   type FaceWebPlugin,
 } from "./plugin-inventory.js";
 export {
+  compositionRowsForProfile,
+  listFaceAgentPresetGroups,
+  type FaceAgentPresetPluginGroup,
+  type FaceAgentPresetPluginRow,
+} from "./plugin-agent-presets.js";
+export {
   DISABLED_PLUGINS_FILE,
   readManagedPackageIndexAt,
   readManagedPluginPackagesAt,
@@ -420,6 +426,7 @@ export {
   hydrateFaceHostSettings,
   listCredentialSlots,
   parseFaceMcpServers,
+  ensureMcpLiveIfIdle,
   formatMcpInventoryText,
   resetLastGoodHostMcpCache,
   settingsDescribeFace,

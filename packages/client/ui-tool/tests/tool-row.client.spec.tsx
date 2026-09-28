@@ -9,6 +9,7 @@ import { resolveWorkspacePath } from '@xrkseek/client-runtime/client'
 import { classifyTool, resultText, toolRowModel } from '../src/client/tool/models/tool-call-model.ts'
 import { ToolRow } from '../src/client/tool/components/ToolRow.tsx'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
+import { PresentRow } from '../src/client/tool/toolviews/present-row.tsx'
 import { zh } from '@xrkseek/client-ui-conversation/src/client/locales.ts'
 
 afterEach(() => {
@@ -41,6 +42,7 @@ describe('tool-call-model', () => {
     expect(classifyTool('grep')).toBe('search')
     expect(classifyTool('write')).toBe('write')
     expect(classifyTool('edit')).toBe('edit')
+    expect(classifyTool('present')).toBe('write')
     expect(classifyTool('cordis_runtime_inspect')).toBe('read')
     // The v3 run-control verbs: `others` is the decided intent, not an
     // unclassified default (there is no program to show and no file to open).
@@ -83,6 +85,41 @@ describe('tool-call-model', () => {
     const m = toolRowModel('pwsh', running())
     expect(m.variant).toBe('bash')
     expect(m.title).toBe('Pwsh')
+  })
+
+  it('names present and surfaces deliverable paths while running', () => {
+    expect(classifyTool('present')).toBe('write')
+    const one = toolRowModel('present', running({
+      name: 'present',
+      argsRaw: '{"files":[{"path":"out/report.md","description":"summary"}]}',
+    }))
+    expect(one.title).toBe('Present')
+    expect(one.state).toBe('running')
+    expect(one.summary).toBe('out/report.md')
+    expect(one.filePath).toBe('out/report.md')
+    expect(one.body).toBeNull()
+
+    const many = toolRowModel('present', running({
+      name: 'present',
+      argsRaw: '{"files":[{"path":"a.ts"},{"path":"b.ts"},{"path":"c.ts"}]}',
+    }))
+    expect(many.summary).toBe('a.ts +2')
+    expect(many.filePath).toBe('a.ts')
+    expect(many.body).toBe('a.ts\nb.ts\nc.ts')
+
+    // Truncated args: fall back to Host presentCall locations on callView.
+    const fromView = toolRowModel('present', running({
+      name: 'present',
+      argsRaw: '{"files":[',
+      callView: {
+        card: 'generic',
+        title: 'Present delivered files',
+        kind: 'edit',
+        locations: [{ path: 'via-view.md' }],
+      },
+    }))
+    expect(fromView.summary).toBe('via-view.md')
+    expect(fromView.filePath).toBe('via-view.md')
   })
 
   it('derives state across running/ok/error/interrupted', () => {
@@ -440,5 +477,50 @@ describe('GenericToolCard', () => {
     const bashView = render(<GenericToolCard {...bash} />)
     fireEvent.click(bashView.getByText('List files'))
     expect(bash.openFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('PresentRow', () => {
+  const presentProps = (block: RunningToolCall | ToolResultNode, inspect?: () => void) => ({
+    callId: 'p',
+    toolName: 'present',
+    block,
+    openFile: vi.fn(),
+    inspect,
+    t,
+  })
+
+  it('shows Delivering while running and Delivered when settled', () => {
+    const view = render(<PresentRow {...presentProps(running({
+      name: 'present',
+      argsRaw: '{"files":[{"path":"report.txt"}]}',
+    }))} />)
+    expect(view.getByText('Present')).toBeTruthy()
+    expect(view.getByText('report.txt')).toBeTruthy()
+    expect(view.getByText(zh['present.delivering'])).toBeTruthy()
+
+    view.rerender(<PresentRow {...presentProps(result({
+      call: { name: 'present', argsRaw: '{"files":[{"path":"report.txt"}]}' },
+      content: [{ type: 'text', text: 'Presented report.txt' }],
+    }))} />)
+    expect(view.getByText(zh['present.delivered'])).toBeTruthy()
+    expect(view.queryByText(zh['present.delivering'])).toBeNull()
+  })
+
+  it('keeps shared failure/stopped labels instead of claiming delivery', () => {
+    const failed = render(<PresentRow {...presentProps(result({
+      call: { name: 'present', argsRaw: '{"files":[{"path":"a.txt"}]}' },
+      content: [{ type: 'text', text: 'boom' }],
+      isError: true,
+    }))} />)
+    expect(failed.getByText(zh['row.failed'])).toBeTruthy()
+    expect(failed.queryByText(zh['present.delivered'])).toBeNull()
+
+    const stopped = render(<PresentRow {...presentProps(result({
+      call: { name: 'present', argsRaw: '{"files":[{"path":"a.txt"}]}' },
+      isError: true,
+      error: { name: 'Interrupted', code: 'interrupted' },
+    }))} />)
+    expect(stopped.getByText(zh['row.stopped'])).toBeTruthy()
   })
 })

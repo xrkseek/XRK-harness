@@ -33,7 +33,8 @@ const FACE_REMOTES: FaceRemoteSpec = {
     setEnabled: ['entryId', 'enabled'],
     remove: ['entryId'],
     update: ['entryId'],
-    install: ['spec'],
+    reload: ['entryId'],
+    install: ['spec', 'registry', 'requestId'],
     open: ['entryId'],
   },
   messageFeedback: {

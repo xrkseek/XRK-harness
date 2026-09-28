@@ -78,6 +78,8 @@ export function addPlugin(
     readonly cwd?: string;
     readonly env?: NodeJS.ProcessEnv;
     readonly io?: PluginIo;
+    /** npm registry URL for registry specs (`npm pack --registry`). */
+    readonly registry?: string;
   } = {},
 ): InventoryEntry {
   const io = options.io ?? defaultIo;
@@ -86,7 +88,9 @@ export function addPlugin(
   const cwd = options.cwd ?? process.cwd();
   mkdirSync(pluginsDir, { recursive: true });
 
-  const unpacked = fetchPackage(spec, cwd);
+  const unpacked = fetchPackage(spec, cwd, {
+    ...(options.registry !== undefined ? { registry: options.registry } : {}),
+  });
   try {
     const classified = classifyPackage(unpacked.root, unpacked.pkg);
     const { inject, dropped } = remapInjectList(classified.clientInject);

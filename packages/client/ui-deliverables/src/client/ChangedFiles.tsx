@@ -1,15 +1,15 @@
 /**
- * Changed-files card: file list + one dedicated review pane with a file
- * selector (DSH ReviewTab navigation shape; no right-sidebar tab — see
- * docs/sidebar-workbench.md).
+ * Changed-files card: file list + inline review pane; header opens the
+ * Status-column Changes tab when `openOverviewReview` is wired (D-01).
+ * Rows also hover-preview via HoverCard + fileDiff.
  */
 import { useCallback, useEffect, useState } from 'react'
 import {
   DiffBlock,
+  HoverCard,
   IconChevronDownOutline14,
   IconChevronUpOutline14,
   IconCodeOutline16,
-  Menu,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { WorkspaceFileDiff } from '@xrkseek/xrk-api-remotes/client'
@@ -18,12 +18,16 @@ import type { NS } from './locales.ts'
 import {
   diffHunkFromWorkspaceFileDiff,
 } from './workspace-file-diff-hunk.ts'
+import { ChangesReviewView } from './ChangesReviewView.tsx'
+import type { LoadFileDiff } from './load-file-diff.ts'
 import css from './ChangedFiles.module.css'
 
 export { diffHunkFromWorkspaceFileDiff } from './workspace-file-diff-hunk.ts'
+export type { LoadFileDiff } from './load-file-diff.ts'
 
 const COLLAPSED_ROWS = 3
 const GROUPED = new Intl.NumberFormat('en-US')
+const HOVER_PREVIEW_DELAY_MS = 500
 
 function Counts({
   added, deleted, t,
@@ -34,45 +38,27 @@ function Counts({
   </>
 }
 
-export type LoadFileDiff = (
-  seq: number,
-  index: number,
-  signal: AbortSignal,
-) => Promise<WorkspaceFileDiff | null>
-
-/**
- * Render one turn's changed files. Opening review shows a single pane with a
- * file selector Menu (thick file navigation); DiffBlock keeps unified/split.
- */
-export function ChangedFiles({
-  changes, loadFileDiff, openFile, t,
+/** Mounted only while its HoverCard is open — avoids loading every row on pass. */
+function ChangedFilePreview({
+  seq,
+  index,
+  display,
+  loadFileDiff,
+  t,
 }: {
-  changes: ChangesTurnData
+  seq: number
+  index: number
+  display: string
   loadFileDiff: LoadFileDiff
-  openFile: (path: string) => void
 } & PropsLocale<typeof NS>) {
-  const [expanded, setExpanded] = useState(false)
-  const [reviewIndex, setReviewIndex] = useState<number | null>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [diff, setDiff] = useState<WorkspaceFileDiff | null | undefined>(undefined)
   const [error, setError] = useState<string | undefined>(undefined)
 
-  const reviewing = reviewIndex !== null
-  const safeIndex =
-    reviewing && changes.files[reviewIndex] !== undefined ? reviewIndex : 0
-  const activeFile = reviewing ? changes.files[safeIndex] : undefined
-
   useEffect(() => {
-    if (!reviewing) {
-      setDiff(undefined)
-      setError(undefined)
-      setMenuOpen(false)
-      return
-    }
     const ac = new AbortController()
     setDiff(undefined)
     setError(undefined)
-    void loadFileDiff(changes.seq, safeIndex, ac.signal).then(
+    void loadFileDiff(seq, index, ac.signal).then(
       (value) => {
         if (!ac.signal.aborted) setDiff(value)
       },
@@ -84,24 +70,81 @@ export function ChangedFiles({
       },
     )
     return () => { ac.abort() }
-  }, [reviewing, safeIndex, changes.seq, loadFileDiff])
+  }, [seq, index, loadFileDiff])
+
+  const hunk = diff !== undefined && diff !== null ? diffHunkFromWorkspaceFileDiff(diff) : null
+  const textNote = diff?.kind === 'text'
+    ? (!diff.before
+      ? 'diff.created' as const
+      : !diff.after
+        ? 'diff.deleted' as const
+        : diff.hunks.length === 0
+          ? 'diff.unchanged' as const
+          : undefined)
+    : undefined
+  // Note-only for empty/unchanged; skip path-only DiffBlock stub (D-05).
+  const showDiff = hunk !== null && diff?.kind === 'text' && diff.hunks.length > 0
+
+  return (
+    <div className={css.preview} data-changes-hover-preview>
+      <div className={css.previewPath} data-changes-preview-path>{display}</div>
+      {diff === undefined && <span className={css.previewStatus}>{t('changes.loading')}</span>}
+      {error !== undefined && <span className={css.previewStatus} data-error="true">{error}</span>}
+      {diff === null && error === undefined && (
+        <span className={css.previewStatus}>{t('changes.unavailable')}</span>
+      )}
+      {diff?.kind === 'binary' && <span className={css.previewStatus}>{t('changes.binary')}</span>}
+      {diff?.kind === 'oversized' && <span className={css.previewStatus}>{t('changes.oversized')}</span>}
+      {textNote !== undefined
+        ? <p className={css.diffNote} role="note">{t(textNote)}</p>
+        : null}
+      {showDiff && hunk !== null
+        ? <DiffBlock diffs={[hunk]} className={css.previewDiff} layout="unified" maxLines={12} />
+        : null}
+    </div>
+  )
+}
+
+/**
+ * Render one turn's changed files. Opening review shows a single pane with a
+ * file selector Menu (thick file navigation); DiffBlock keeps unified/split.
+ * Hover (500ms) peeks a compact unified diff without opening the pane.
+ */
+export function ChangedFiles({
+  changes, loadFileDiff, openFile, openOverviewReview, t,
+}: {
+  changes: ChangesTurnData
+  loadFileDiff: LoadFileDiff
+  openFile: (path: string) => void
+  /** Open Status-column Changes tab (persistent). Header prefers this when set. */
+  openOverviewReview?: (index: number) => void
+} & PropsLocale<typeof NS>) {
+  const [expanded, setExpanded] = useState(false)
+  const [reviewIndex, setReviewIndex] = useState<number | null>(null)
+
+  const reviewing = reviewIndex !== null
+  const safeIndex =
+    reviewing && changes.files[reviewIndex] !== undefined ? reviewIndex : 0
 
   const openReview = useCallback((index: number) => {
     setReviewIndex(index)
   }, [])
 
-  const toggleReview = useCallback(() => {
+  const onHeaderClick = useCallback(() => {
+    if (openOverviewReview !== undefined) {
+      openOverviewReview(0)
+      return
+    }
     setReviewIndex((prev) => (prev === null ? 0 : null))
-  }, [])
+  }, [openOverviewReview])
 
   const foldable = changes.files.length > COLLAPSED_ROWS
   const rows = foldable && !expanded ? changes.files.slice(0, COLLAPSED_ROWS) : changes.files
-  const hunk = diff !== undefined && diff !== null ? diffHunkFromWorkspaceFileDiff(diff) : null
 
   return <div className={css.card} data-changed-files data-review-open={reviewing ? 'true' : undefined}>
     <button type="button" className={css.header} aria-label={t('changes.openReview')}
-      aria-expanded={reviewing}
-      onClick={toggleReview}>
+      aria-expanded={openOverviewReview !== undefined ? undefined : reviewing}
+      onClick={onHeaderClick}>
       <span className={css.tile}><IconCodeOutline16 size={18} /></span>
       <span className={css.titles}>
         <span className={css.title}>{t('changes.title', { count: String(changes.total) })}</span>
@@ -109,8 +152,8 @@ export function ChangedFiles({
       </span>
     </button>
     <ul className={css.list}>
-      {rows.map((file, index) => (
-        <li key={`${file.display}:${index}`}>
+      {rows.map((file, index) => {
+        const rowButton = (
           <button type="button"
             className={css.row}
             data-selected={reviewing && safeIndex === index ? 'true' : undefined}
@@ -125,8 +168,31 @@ export function ChangedFiles({
                   : <Counts t={t} added={file.added} deleted={file.deleted} />}
             </span>
           </button>
-        </li>
-      ))}
+        )
+        const hoverable = file.binary !== true && file.oversized !== true
+        return (
+          <li key={`${file.display}:${index}`}>
+            {hoverable
+              ? (
+                <HoverCard
+                  openDelayMs={HOVER_PREVIEW_DELAY_MS}
+                  disabled={reviewing}
+                  anchor={rowButton}
+                  content={(
+                    <ChangedFilePreview
+                      seq={changes.seq}
+                      index={index}
+                      display={file.path}
+                      loadFileDiff={loadFileDiff}
+                      t={t}
+                    />
+                  )}
+                />
+              )
+              : rowButton}
+          </li>
+        )
+      })}
     </ul>
     {foldable && <button type="button" className={css.toggle}
       aria-expanded={expanded}
@@ -135,70 +201,17 @@ export function ChangedFiles({
       <span>{t(expanded ? 'changes.collapse' : 'changes.all', { count: String(changes.files.length) })}</span>
       {expanded ? <IconChevronUpOutline14 /> : <IconChevronDownOutline14 />}
     </button>}
-    {reviewing && activeFile !== undefined && (
-      <div className={css.review} data-changes-review>
-        <div className={css.reviewBar}>
-          <Menu
-            className={css.selector}
-            open={menuOpen}
-            dense
-            align="start"
-            onClose={() => { setMenuOpen(false) }}
-            selectedId={String(safeIndex)}
-            onSelect={(id) => {
-              openReview(Number(id))
-              setMenuOpen(false)
-            }}
-            items={changes.files.map((entry, at) => ({
-              id: String(at),
-              label: (
-                <span className={css.menuItem}>
-                  <span className={css.menuPath}>{entry.display}</span>
-                  <span className={css.menuCounts}>
-                    {entry.binary === true ? t('changes.binary')
-                      : entry.oversized === true ? t('changes.oversized')
-                        : <Counts t={t} added={entry.added} deleted={entry.deleted} />}
-                  </span>
-                </span>
-              ),
-            }))}
-            anchor={
-              <button
-                type="button"
-                className={css.selectorButton}
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                aria-label={t('changes.selectFile')}
-                title={activeFile.display}
-                data-review-file={activeFile.path}
-                onClick={() => { setMenuOpen((value) => !value) }}
-              >
-                <span className={css.selectorPath}>{activeFile.display}</span>
-                <IconChevronDownOutline14 />
-              </button>
-            }
-          />
-          <span className={css.reviewCounts}>
-            {activeFile.binary === true ? t('changes.binary')
-              : activeFile.oversized === true ? t('changes.oversized')
-                : <Counts t={t} added={activeFile.added} deleted={activeFile.deleted} />}
-          </span>
-        </div>
-        {diff === undefined && <span className={css.reviewStatus}>{t('changes.loading')}</span>}
-        {error !== undefined && <span className={css.reviewStatus} data-error="true">{error}</span>}
-        {diff === null && error === undefined && (
-          <span className={css.reviewStatus}>{t('changes.unavailable')}</span>
-        )}
-        {diff?.kind === 'binary' && <span className={css.reviewStatus}>{t('changes.binary')}</span>}
-        {diff?.kind === 'oversized' && <span className={css.reviewStatus}>{t('changes.oversized')}</span>}
-        {hunk !== null && <>
-          <DiffBlock diffs={[hunk]} className={css.diff} layout="split" />
-          <button type="button" className={css.openFile}
-            onClick={() => { openFile(activeFile.path) }}>
-            {t('changes.previewFile', { name: activeFile.display })}
-          </button>
-        </>}
-      </div>
-    )}
+    {reviewing
+      ? (
+        <ChangesReviewView
+          changes={changes}
+          fileIndex={safeIndex}
+          onFileIndex={openReview}
+          loadFileDiff={loadFileDiff}
+          openFile={openFile}
+          t={t}
+        />
+      )
+      : null}
   </div>
 }

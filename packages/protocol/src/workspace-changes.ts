@@ -224,7 +224,9 @@ export function workspaceFileDiffFromTexts(input: {
     path,
     display,
     before: before !== null,
-    after: after !== null,
+    // Empty after with a prior before is a whole-file delete (tool capture
+    // uses `newText: ""`, not null). Creates keep `after: true` via before===null.
+    after: before === null || (after !== null && after !== ""),
     hunks,
     coarse: true,
   };

@@ -133,4 +133,59 @@ describe("desktop preload bridge", () => {
     unsubscribe();
     expect(listeners.get(DESKTOP_IPC.updatesState)?.size ?? 0).toBe(0);
   });
+
+  it("exposes frameless window chrome + reload", async () => {
+    const handlers = new Map<
+      string,
+      (event: unknown, ...args: unknown[]) => unknown | Promise<unknown>
+    >();
+    let maximized = false;
+    const reload = vi.fn();
+    const win = {
+      minimize: vi.fn(),
+      maximize: vi.fn(() => {
+        maximized = true;
+      }),
+      unmaximize: vi.fn(() => {
+        maximized = false;
+      }),
+      close: vi.fn(),
+      isMaximized: () => maximized,
+      isDestroyed: () => false,
+      webContents: { reload, send: vi.fn() },
+      on: vi.fn(),
+    };
+    registerDesktopIpcHandlers(
+      {
+        handle: (channel, listener) => {
+          handlers.set(channel, listener);
+        },
+      },
+      {
+        getLocale: () => "en",
+        windowFromEvent: () => win,
+      },
+    );
+    const api = createXrkDesktopBridgeApi({
+      invoke: async (channel, ...args) => {
+        const handler = handlers.get(channel);
+        if (!handler) throw new Error(`missing ${channel}`);
+        return handler({ sender: {} }, ...args);
+      },
+      on: () => undefined,
+      off: () => undefined,
+    });
+
+    await api.window.minimize();
+    expect(win.minimize).toHaveBeenCalledOnce();
+    await api.window.toggleMaximize();
+    expect(win.maximize).toHaveBeenCalledOnce();
+    expect(await api.window.isMaximized()).toBe(true);
+    await api.window.toggleMaximize();
+    expect(win.unmaximize).toHaveBeenCalledOnce();
+    await api.window.reload();
+    expect(reload).toHaveBeenCalledOnce();
+    await api.window.close();
+    expect(win.close).toHaveBeenCalledOnce();
+  });
 });

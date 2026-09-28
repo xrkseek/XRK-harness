@@ -122,6 +122,12 @@ if (typeof window !== "undefined") {
     URL.revokeObjectURL = () => {};
   }
 
+  // jsdom's Element.scrollIntoView is often missing or non-callable; Menu /
+  // ModelSelect virtual-highlight effects call it after arrow navigation.
+  if (typeof Element !== "undefined" && typeof Element.prototype.scrollIntoView !== "function") {
+    Element.prototype.scrollIntoView = function scrollIntoView() {};
+  }
+
   // jsdom omits DataTransfer; paste/drop benches that construct one need a
   // minimal items bag (kind/type/getAsFile) matching the ClipboardItem shape
   // the composer paste handler reads.

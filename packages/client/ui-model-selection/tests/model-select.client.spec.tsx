@@ -135,6 +135,50 @@ describe('ModelSelect reasoning effort', () => {
     expect(screen.getByRole('menuitemradio', { name: 'DeepSeek Chat' })).toBeTruthy()
   })
 
+  it('shows a preparing strip while selectModel is in flight and keeps the menu open', async () => {
+    const groups = [{
+      id: 'deepseek-official',
+      name: 'DeepSeek',
+      models: [
+        { id: 'deepseek-v4-flash', name: 'DeepSeek Chat', reasoning },
+        { id: 'deepseek-v4-pro', name: 'DeepSeek Reasoner' },
+      ],
+    }]
+    const directory = createSnapshotStore<ModelDirectoryState>(state({ groups }))
+    let resolveSelect!: (accepted: boolean) => void
+    const select = vi.fn(() => new Promise<boolean>((resolve) => {
+      directory.set(state({ groups, status: 'selecting' }))
+      resolveSelect = resolve
+    }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={select}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /DeepSeek Reasoner/ }))
+    expect((await screen.findByRole('status')).textContent).toBe(zh['status.selecting'])
+    expect(screen.getByRole('menu').getAttribute('aria-busy')).toBe('true')
+    // Outside click must not dismiss while selecting.
+    fireEvent.mouseDown(document.body)
+    expect(screen.getByRole('menu')).toBeTruthy()
+
+    directory.set(state({
+      groups,
+      current: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
+      status: 'ready',
+    }))
+    resolveSelect(true)
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).toBeNull()
+    })
+  })
+
   it('announces a rejected selection as a transient toast and keeps the in-menu strip for loads', async () => {
     const groups = [{
       id: 'deepseek-official',
@@ -202,6 +246,90 @@ describe('ModelSelect reasoning effort', () => {
     expect(screen.queryByRole('menuitemradio', { name: /^GPT-4o$/ })).toBeNull()
     fireEvent.change(search, { target: { value: 'zzz' } })
     expect(screen.getByText('没有匹配的模型。')).toBeTruthy()
+  })
+
+  it('keeps search focus while ↑↓ move a virtual highlight and Enter selects it', async () => {
+    const select = vi.fn().mockResolvedValue(true)
+    const directory = createSnapshotStore(state({
+      groups: [{
+        id: 'openai',
+        name: 'OpenAI',
+        models: [
+          { id: 'gpt-4o', name: 'GPT-4o' },
+          { id: 'gpt-4o-mini', name: 'GPT-4o mini' },
+          { id: 'o3', name: 'o3' },
+          { id: 'o4-mini', name: 'o4 mini' },
+          { id: 'gpt-4.1', name: 'GPT-4.1' },
+          { id: 'gpt-4.1-mini', name: 'GPT-4.1 mini' },
+        ],
+      }],
+      current: { provider: 'openai', model: 'gpt-4o' },
+    }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={select}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    const search = screen.getByRole('searchbox', { name: '筛选模型' })
+    expect(document.activeElement).toBe(search)
+    fireEvent.change(search, { target: { value: 'mini' } })
+    expect(search.parentElement?.querySelector('mark')?.textContent).toBe('mini')
+    expect(document.activeElement).toBe(search)
+    // First filtered row is active; ArrowDown advances while search keeps focus.
+    expect(screen.getByRole('menuitemradio', { name: /GPT-4o mini/ }).getAttribute('aria-selected')).toBe('true')
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(search)
+    expect(screen.getByRole('menuitemradio', { name: /o4 mini/ }).getAttribute('aria-selected')).toBe('true')
+    fireEvent.keyDown(search, { key: 'Enter' })
+    await waitFor(() => {
+      expect(select).toHaveBeenCalledWith({ provider: 'openai', model: 'o4-mini' })
+    })
+  })
+
+  it('↑↓ walk the root cells, entering from outside at the end the step comes from', () => {
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={createSnapshotStore(state())}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+    const trigger = screen.getByRole('button', { name: /选择模型/ })
+    fireEvent.click(trigger)
+    const [modelRow, effortRow] = screen.getAllByRole('menuitem')
+    expect(document.activeElement).toBe(trigger)
+    // Trigger still holds focus while the menu opens: ArrowDown enters at the first cell.
+    expect(fireEvent.keyDown(trigger, { key: 'ArrowDown' })).toBe(false)
+    expect(document.activeElement).toBe(modelRow)
+    expect(fireEvent.keyDown(modelRow!, { key: 'ArrowUp' })).toBe(false)
+    expect(document.activeElement).toBe(effortRow)
+  })
+
+  it('hands a drilled pane the checked row, and Escape restores the drilled cell', () => {
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={createSnapshotStore(state())}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
+    const rows = screen.getAllByRole('menuitemradio')
+    expect(rows[1]!.getAttribute('aria-checked')).toBe('true')
+    expect(document.activeElement).toBe(rows[1])
+    fireEvent.keyDown(rows[1]!, { key: 'Escape' })
+    const cells = screen.getAllByRole('menuitem')
+    expect(document.activeElement).toBe(cells[1])
+    expect(screen.getByRole('menu')).toBeTruthy()
   })
 
   it('renders no Agent-bound control for an addressed subagent session', () => {

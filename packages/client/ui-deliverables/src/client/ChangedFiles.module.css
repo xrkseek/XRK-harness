@@ -218,6 +218,13 @@
   color: var(--dsw-alias-state-error-primary);
 }
 .diff { margin: 0; }
+.diffNote {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
 .openFile {
   align-self: flex-start;
   margin: 0;
@@ -257,4 +264,43 @@
 }
 @media (pointer: coarse) {
   .row, .toggle { min-height: 44px; }
+}
+
+/* HoverCard peek — compact unified diff (DSH ChangedFilePreview shape). */
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  min-width: 240px;
+  max-width: min(420px, 80vw);
+  max-height: 280px;
+  overflow: hidden;
+}
+
+.previewPath {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewStatus {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.previewStatus[data-error='true'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.previewDiff {
+  min-width: 0;
+  max-height: 220px;
+  overflow: auto;
 }

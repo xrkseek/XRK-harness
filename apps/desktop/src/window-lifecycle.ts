@@ -9,6 +9,8 @@ export const DESKTOP_WINDOW_DEFAULTS = {
   minWidth: 880,
   minHeight: 600,
   show: false,
+  // Product chrome draws min/max/close (+ drag region) in the renderer.
+  frame: false,
 } as const;
 
 /** webPreferences locked by ADR-0008 renderer security. */

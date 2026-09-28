@@ -79,6 +79,23 @@ describe("workspaceFileDiffFromTexts", () => {
       }),
     ).toEqual({ kind: "binary", path: "b.bin", display: "b.bin" });
   });
+
+  it("marks whole-file delete when after is empty string", () => {
+    const diff = workspaceFileDiffFromTexts({
+      path: "gone.ts",
+      display: "gone.ts",
+      oldText: "gone\n",
+      newText: "",
+    });
+    expect(diff).toMatchObject({
+      kind: "text",
+      before: true,
+      after: false,
+      coarse: true,
+    });
+    if (diff.kind !== "text") return;
+    expect(diff.hunks[0]?.lines).toEqual(["-gone"]);
+  });
 });
 
 describe("workspaceFileDiffForListedFile", () => {

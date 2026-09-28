@@ -222,22 +222,40 @@ export interface FaceRuntime {
    * Remove a user-installed plugin (`xrkh plugin remove`). Host wires
    * CLI mutate; absent → inventory remove returns a CLI hint.
    */
-  removeUserPlugin?(
-    spec: string,
-  ): Promise<{ readonly ok: boolean; readonly error?: string }>;
+  removeUserPlugin?(spec: string): Promise<{
+    readonly ok: boolean;
+    readonly error?: string;
+    readonly stdout?: string;
+    readonly stderr?: string;
+  }>;
   /**
    * Reinstall / bump a user plugin (`xrkh plugin add <spec>`). Spec is the
    * inventory `source` when known, else `name@latest`.
    */
   updateUserPlugin?(
     spec: string,
-  ): Promise<{ readonly ok: boolean; readonly error?: string }>;
+    options?: {
+      readonly registry?: string;
+      readonly onChunk?: (chunk: {
+        readonly stream: "stdout" | "stderr";
+        readonly text: string;
+      }) => void;
+    },
+  ): Promise<{
+    readonly ok: boolean;
+    readonly error?: string;
+    readonly stdout?: string;
+    readonly stderr?: string;
+  }>;
   /**
    * After soft-disable / remove / update mutates disk: Host reconciles the
    * in-process plugin loader (unload disabled / missing, load newly enabled).
-   * Client half still needs a browser reload (`needsRestart`).
+   * Pass `reloadIds` after install/update so already-live process plugins
+   * remount from disk. Client half still needs a browser reload (`needsRestart`).
    */
-  syncManagedProcessPlugins?(): Promise<void>;
+  syncManagedProcessPlugins?(options?: {
+    readonly reloadIds?: readonly string[];
+  }): Promise<void>;
   /**
    * Standing tool registry (preset layer) when no live agent is remembered.
    * Host wires Isolating WorkflowEngine `tools.*` from this.

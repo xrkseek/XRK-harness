@@ -258,29 +258,33 @@ export function TerminalBlock({
           </button>
         )}
       </div>
-      {!running && (empty
-        ? <div className={css.empty}>{copy.noOutput}</div>
-        : (
-          <div className={css.output}>
-            {(capped ? lines.slice(0, headLines) : lines).map((line, index) => (
-              <div key={index} className={css.line}>{renderLine(line)}</div>
-            ))}
-            {hidden > 0 && (
-              <button
-                type="button"
-                className={css.expand}
-                aria-expanded={expanded}
-                aria-label={expanded ? copy.collapseAria : copy.expandAria(hidden)}
-                onClick={onToggle}
-              >
-                {expanded ? copy.collapse : copy.expand(hidden)}
-              </button>
-            )}
-            {capped && lines.slice(lines.length - tailLines).map((line, index) => (
-              <div key={index} className={css.line}>{renderLine(line)}</div>
-            ))}
-          </div>
-        ))}
+      {/* Live jobs stream mid-run chunks into `output`; show them while running.
+          An empty running card still keeps only the prompt (no "no output" placeholder). */}
+      {running && empty
+        ? null
+        : (empty
+          ? <div className={css.empty}>{copy.noOutput}</div>
+          : (
+            <div className={css.output}>
+              {(capped ? lines.slice(0, headLines) : lines).map((line, index) => (
+                <div key={index} className={css.line}>{renderLine(line)}</div>
+              ))}
+              {hidden > 0 && (
+                <button
+                  type="button"
+                  className={css.expand}
+                  aria-expanded={expanded}
+                  aria-label={expanded ? copy.collapseAria : copy.expandAria(hidden)}
+                  onClick={onToggle}
+                >
+                  {expanded ? copy.collapse : copy.expand(hidden)}
+                </button>
+              )}
+              {capped && lines.slice(lines.length - tailLines).map((line, index) => (
+                <div key={index} className={css.line}>{renderLine(line)}</div>
+              ))}
+            </div>
+          ))}
     </div>
   )
 }

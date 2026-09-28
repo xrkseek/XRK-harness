@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import {
   createMemorySecretStore,
@@ -848,14 +848,15 @@ describe("Face settings U2", () => {
     expect(mcp?.value.parked).toEqual([]);
   });
 
-  it("mcp describe does not synthesize parked for unmounted servers", async () => {
+  it("mcp describe kicks idle remount and does not synthesize parked", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-mcp-idle-"));
+    const syncMcpServers = vi.fn(async () => ({ failures: [], parked: [] }));
     const rt = runtime({
       productDir: dir,
       plugins: [],
-      syncMcpServers: async () => ({ failures: [], parked: [] }),
+      syncMcpServers,
     });
-    // Seed desired servers + allow without Host overlay (deferred boot / mid-connect).
+    // Seed desired servers + allow without Host overlay (deferred / mid-connect).
     rt.settingsNamespaces.ensure("mcp").user = {
       servers: [{ serverName: "deferred", command: "npx" }],
       allowConnect: true,
@@ -880,8 +881,10 @@ describe("Face settings U2", () => {
     ).namespaces.find((n) => n.ns === "mcp");
     expect(mcp?.value.allowConnect).toBe(true);
     expect(mcp?.value.parked).toEqual([]);
-    expect(mcp?.value.connecting).toEqual([]);
+    // Face marks connecting before awaiting Host reconcile (no re-save needed).
+    expect(mcp?.value.connecting).toEqual(["deferred"]);
     expect(mcp?.value.connected).toEqual([]);
+    expect(syncMcpServers).toHaveBeenCalledOnce();
   });
 
   it("mcp describe surfaces Host connecting overlay", async () => {

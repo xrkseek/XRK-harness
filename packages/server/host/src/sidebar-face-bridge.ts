@@ -74,7 +74,8 @@ export function createSidebarFaceBridgeFromFace(
 
     readJobOutput(jobId) {
       if (!shell) return { text: "", truncated: false };
-      const text = shell.readJobOutput(jobId);
+      // Human UI peek — do not mark `reported` (keeps Face completion notices).
+      const text = shell.readJobOutput(jobId, { report: false });
       if (text.length > JOB_OUTPUT_LIMIT) {
         return { text: text.slice(0, JOB_OUTPUT_LIMIT), truncated: true };
       }

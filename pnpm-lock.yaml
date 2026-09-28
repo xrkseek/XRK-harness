@@ -837,6 +837,9 @@ importers:
       '@xrkseek/client-ui-conversation':
         specifier: workspace:^
         version: link:../ui-conversation
+      '@xrkseek/client-ui-layout':
+        specifier: workspace:^
+        version: link:../ui-layout
       '@xrkseek/client-ui-primitives':
         specifier: workspace:^
         version: link:../ui-primitives

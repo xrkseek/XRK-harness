@@ -69,6 +69,7 @@ import {
   bindSessionQueryTools,
   createFaceRuntime,
   effectiveHostApiKey,
+  ensureMcpLiveIfIdle,
   isLoopbackAddress,
   listCredentialSlots,
   peekSettingsYamlSection,
@@ -1577,25 +1578,42 @@ export function createHostManager(): HostManager {
             spec,
             pluginsDir: resolvedPluginsDir,
           });
-          return result.ok
-            ? { ok: true as const }
-            : { ok: false as const, error: result.error ?? result.stderr };
+          return {
+            ok: result.ok,
+            ...(result.error || result.stderr
+              ? { error: result.error ?? result.stderr }
+              : {}),
+            stdout: result.stdout,
+            stderr: result.stderr,
+          };
         },
-        updateUserPlugin: async (spec) => {
+        updateUserPlugin: async (spec, options) => {
           const result = await runPluginMutate({
             action: "add",
             spec,
             pluginsDir: resolvedPluginsDir,
+            ...(options?.registry?.trim()
+              ? { registry: options.registry.trim() }
+              : {}),
+            ...(options?.onChunk !== undefined
+              ? { onChunk: options.onChunk }
+              : {}),
           });
-          return result.ok
-            ? { ok: true as const }
-            : { ok: false as const, error: result.error ?? result.stderr };
+          return {
+            ok: result.ok,
+            ...(result.error || (!result.ok && result.stderr)
+              ? { error: result.error ?? result.stderr }
+              : {}),
+            stdout: result.stdout,
+            stderr: result.stderr,
+          };
         },
-        syncManagedProcessPlugins: async () => {
+        syncManagedProcessPlugins: async (options) => {
           if (!managedPluginsRootReady()) return;
           const synced = await reconcileManagedProcessPlugins(
             loader,
             resolvedPluginsDir,
+            options,
           );
           loadedPluginIds = [...synced.ids];
           for (const failure of synced.failures) {
@@ -2548,24 +2566,26 @@ export function createHostManager(): HostManager {
         log?.info("http stack ready (listen disabled — pipe / fetch transport)");
       }
       {
-        // Env/config specs still auto-connect after HTTP (CI/headless).
-        // File-sourced Settings lists stay parked until the user saves with
-        // Allow connect — matches "don't spawn every MCP on every Host start".
+        // Env/config specs auto-connect after HTTP (CI/headless).
+        // File-sourced Settings share Face `ensureMcpLiveIfIdle` with
+        // settings.describe — Allow on remounts without Desktop restart.
         if (mcpFileSourced) {
           const mcpUser = faceRuntime.settingsNamespaces.ensure("mcp").user;
-          const drafts = Array.isArray(mcpUser.servers)
-            ? (mcpUser.servers as McpServerDraft[])
-            : [];
-          const fileDesired = mcpDraftsToSpecs(drafts);
+          const n = Array.isArray(mcpUser.servers) ? mcpUser.servers.length : 0;
           mcpAllowConnect = resolveMcpAllowConnect(
             config,
             mcpUser.allowConnect === true,
           );
-          if (fileDesired.length > 0) {
+          if (n > 0 && !mcpAllowConnect) {
             log?.info(
-              `mcp file-sourced ${fileDesired.length} deferred until Settings save (allow=${mcpAllowConnect ? "on" : "off"})`,
+              `mcp file-sourced ${n} deferred until Settings save (allow=off)`,
+            );
+          } else if (n > 0) {
+            log?.info(
+              `mcp file-sourced ${n} connecting (allow already on)`,
             );
           }
+          ensureMcpLiveIfIdle(faceRuntime);
         } else if (mcpSpecs.length > 0) {
           void enqueueMcpReconcile(
             "boot",

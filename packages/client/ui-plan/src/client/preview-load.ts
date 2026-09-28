@@ -401,8 +401,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
   }
   const cost = {
     ...parseBuckets(costRaw),
-    // Overview renders byProviderModel only; keep an empty byModel seat for the view type.
-    byModel: {},
+    byModel: parseBucketMap((costRaw as { byModel?: unknown }).byModel),
     byProviderModel: parseBucketMap((costRaw as { byProviderModel?: unknown }).byProviderModel),
   }
 

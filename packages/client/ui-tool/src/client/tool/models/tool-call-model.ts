@@ -49,6 +49,9 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
   glob: 'search',
   write: 'write',
   edit: 'edit',
+  // Deliverable declaration: write-family chrome (edit glyph) while the title
+  // below names the act; paths come from args.files / callView.locations.
+  present: 'write',
   run_code: 'code',
   cordis_package_inspect: 'read',
   cordis_runtime_inspect: 'read',
@@ -72,6 +75,7 @@ const TOOL_TITLES: Record<string, string> = {
   read_image: 'Read image',
   image_generate: 'Image generation',
   video_generate: 'Video generation',
+  present: 'Present',
 }
 
 /**
@@ -194,6 +198,44 @@ function deriveFilePath(variant: ToolRowVariant, argsRaw: string): string | unde
   return picked === undefined ? undefined : firstLine(picked)
 }
 
+/** Paths from `present` args.files (model-declared deliverables). */
+function presentArgsPaths(argsRaw: string): string[] {
+  const parsed = parseArgs(argsRaw)
+  if (typeof parsed !== 'object' || parsed === null) return []
+  const files = (parsed as { files?: unknown }).files
+  if (!Array.isArray(files)) return []
+  const paths: string[] = []
+  for (const file of files) {
+    if (typeof file !== 'object' || file === null) continue
+    const path = (file as { path?: unknown }).path
+    if (typeof path === 'string' && path.trim() !== '') paths.push(path.trim())
+  }
+  return paths
+}
+
+/**
+ * Fallback paths from the Host callView (presentCall locations) when args are
+ * still streaming or truncated mid-JSON.
+ */
+function callViewPaths(block: ToolCallBlock): string[] {
+  const view = block.callView
+  if (view === null || !('locations' in view) || !Array.isArray(view.locations)) return []
+  const paths: string[] = []
+  for (const loc of view.locations) {
+    if (typeof loc !== 'object' || loc === null) continue
+    const path = (loc as { path?: unknown }).path
+    if (typeof path === 'string' && path.trim() !== '') paths.push(path.trim())
+  }
+  return paths
+}
+
+/** One path, or first path plus a remainder count (PresentRow-style). */
+function formatPresentSummary(paths: readonly string[]): string | undefined {
+  if (paths.length === 0) return undefined
+  if (paths.length === 1) return paths[0]
+  return `${paths[0]} +${String(paths.length - 1)}`
+}
+
 function deriveBody(variant: ToolRowVariant, argsRaw: string): string | null {
   if (argsRaw === '') return null
   const parsed = parseArgs(argsRaw)
@@ -222,14 +264,38 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   const state: ToolRowState = !done ? 'running'
     : block.error?.code === 'interrupted' ? 'stopped'
       : block.isError ? 'error' : 'ok'
-  const base = argsRaw === ''
-    ? block.callId
-    : abbreviateHomePath(relativizeToCwd(deriveSummary(variant, argsRaw), cwd), home)
   const toolTitle = TOOL_TITLES[toolName]
   // Others keeps the static "Tool call" title (figma literal); the real tool
   // name rides the mutable summary slot unless the tool owns a specific title.
   // Tool-owned titles (incl. read_image) replace the variant literal.
   const title = toolTitle ?? VARIANT_TITLES[variant]
+
+  // present: show deliverable paths while running (args.files, else callView).
+  if (toolName === 'present') {
+    const paths = presentArgsPaths(argsRaw)
+    const resolved = paths.length > 0 ? paths : callViewPaths(block)
+    const displayPaths = resolved.map(path => abbreviateHomePath(relativizeToCwd(path, cwd), home))
+    const presentSummary = formatPresentSummary(displayPaths)
+    const base = presentSummary
+      ?? (argsRaw === '' ? block.callId : abbreviateHomePath(relativizeToCwd(firstLine(argsRaw), cwd), home))
+    const output = done ? (resultText(block) || null) : null
+    const errorSummary = state === 'error' && output !== null ? firstLine(output) : null
+    return {
+      variant,
+      title,
+      summary: base,
+      filePath: resolved[0],
+      // Multi-file: path list as the expand body; single-file uses the path link.
+      body: displayPaths.length > 1 ? displayPaths.join('\n') : null,
+      output,
+      errorSummary,
+      state,
+    }
+  }
+
+  const base = argsRaw === ''
+    ? block.callId
+    : abbreviateHomePath(relativizeToCwd(deriveSummary(variant, argsRaw), cwd), home)
   const summary = variant === 'others' && toolName !== '' && toolTitle === undefined
     ? `${toolName} · ${base}`
     : base

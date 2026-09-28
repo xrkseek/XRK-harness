@@ -4,6 +4,7 @@ import type {} from '@xrkseek/client-locale/client'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-ui-settings/client'
 import type { PluginEntryId } from '@xrkseek/xrk-api-remotes/client'
+import type {} from '@xrkseek/xrk-api-remotes/types'
 import { PluginInventorySettingsTab, type PluginInventorySettingsTabInjected } from './PluginInventorySettingsTab.tsx'
 import { en, zh, type PluginInventoryLocaleKey } from './locales.ts'
 
@@ -49,10 +50,55 @@ export function apply(ctx: ClientContext): void {
     const result = await ctx.remote.pluginInventory.update(entryId as PluginEntryId)
     if (!result.ok) throwRemote('pluginInventory.update', result)
   }
-  const install: PluginInventorySettingsTabInjected['install'] = async (spec) => {
-    const result = await ctx.remote.pluginInventory.install(spec)
-    if (!result.ok) throwRemote('pluginInventory.install', result)
+  const reload: PluginInventorySettingsTabInjected['reload'] = async (entryId) => {
+    const result = await ctx.remote.pluginInventory.reload(entryId as PluginEntryId)
+    if (!result.ok) throwRemote('pluginInventory.reload', result)
   }
+  const install: PluginInventorySettingsTabInjected['install'] = async (spec, registry, requestId) => {
+    const reg = registry !== undefined && registry.trim().length > 0 ? registry.trim() : undefined
+    const result = await ctx.remote.pluginInventory.install(spec, reg, requestId)
+    if (!result.ok) {
+      const details = result.error.details as {
+        command?: unknown
+        output?: unknown
+        exitCode?: unknown
+      } | undefined
+      const log =
+        details !== undefined &&
+        typeof details.command === 'string' &&
+        typeof details.output === 'string' &&
+        typeof details.exitCode === 'number'
+          ? {
+            command: details.command,
+            output: details.output,
+            exitCode: details.exitCode,
+          }
+          : {
+            command: reg
+              ? `xrkh plugin add --registry ${reg} ${spec}`
+              : `xrkh plugin add ${spec}`,
+            output: result.error.message,
+            exitCode: 1,
+          }
+      const error = new Error(`${result.error.code}: ${result.error.message}`) as Error & {
+        installLog: typeof log
+      }
+      error.installLog = log
+      throw error
+    }
+    return {
+      command: result.value.command,
+      output: result.value.output,
+      exitCode: result.value.exitCode,
+    }
+  }
+  const subscribeInstallLog: PluginInventorySettingsTabInjected['subscribeInstallLog'] = (
+    requestId,
+    onText,
+  ) => ctx.remote.$on('plugin-inventory/install-log', (id, _stream, text) => {
+    if (id !== requestId) return
+    onText(text)
+  })
   const open: PluginInventorySettingsTabInjected['open'] = async (entryId) => {
     const result = await ctx.remote.pluginInventory.open(entryId as PluginEntryId)
     if (!result.ok) throwRemote('pluginInventory.open', result)
@@ -62,7 +108,9 @@ export function apply(ctx: ClientContext): void {
     setEnabled,
     remove,
     update,
+    reload,
     install,
+    subscribeInstallLog,
     open,
   })
 

@@ -49,6 +49,7 @@
 | 症状 | 处理 |
 |------|------|
 | 启动打 `mcp parked …`（info） | 正常：未开「允许连接」。**Settings → Plugins → MCP** 打开 Allow connect 并保存 |
+| Settings 已勾「允许连接」但行全「未连接」 | Face `ensureMcpLiveIfIdle`：Allow 已开时 Host 就绪或打开 Settings / `/mcp` 即热重挂，无需重启桌面。仍 idle 则核对 `command`/PATH 或看 `connectFailures` |
 | MCP connect 被拒 / `connectFailures` | 已 allow 仍失败 → 在 Settings MCP 卡核对 `command` / PATH / `args` / `cwd` |
 | `host-settings.json` 报 parse failed / Unexpected token `﻿` | 文件带 UTF-8 BOM（PowerShell `Set-Content` 常见）。本版 Host 会剥 BOM；也可用无 BOM UTF-8 重存该文件后 `xrkh restart` |
 | mutate 后不热挂载 | 若设了 `XRK_MCP_SERVERS`（Host/CI 旁路），env 赢过文件 → `applies: restart`，需重启 Host；日常改服务器列表用 Settings 即可热挂载 |
@@ -164,6 +165,7 @@ Diagnose by symptom. If it still fails, check whether [status.md](./status.md) m
 | Symptom | Remedy |
 |------|------|
 | Startup logs `mcp parked …` (info) | Expected when Allow connect is off. Enable Allow connect under **Settings → Plugins → MCP** and save |
+| Allow connect checked but every row "Not connected" | Older Hosts deferred file lists until re-save; current Host reconnects when Allow was already persisted. Opening the MCP Settings card also nudges a one-shot remount |
 | Connect rejected / `connectFailures` | If already allowed, check `command` / PATH / `args` / `cwd` in the Settings MCP card |
 | `host-settings.json` parse failed / Unexpected token `﻿` | File has a UTF-8 BOM (common after PowerShell `Set-Content`). This release strips BOM on read; you can also re-save as BOM-free UTF-8 and `xrkh restart` |
 | No hot-mount after mutate | If `XRK_MCP_SERVERS` is set (Host/CI bypass), env wins over file → `applies: restart`; restart Host. Day-to-day server edits via Settings hot-mount |

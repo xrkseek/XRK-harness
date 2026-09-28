@@ -53,10 +53,53 @@
   overflow-y: hidden;
 }
 
-/* No wrapping, no word-break: a diff is read by its indentation. */
+/* Default: no wrapping — a diff is read by its indentation. */
 .line {
+  display: flex;
+  align-items: flex-start;
   min-height: var(--dsl-diff-line-height);
   white-space: pre;
+}
+
+.gutter {
+  display: inline-grid;
+  flex: 0 0 auto;
+  grid-template-columns: 2.25rem 2.25rem;
+  gap: 4px;
+  margin-right: 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  user-select: none;
+}
+
+.gutterOld,
+.gutterNew {
+  min-width: 0;
+}
+
+.lineText {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Soft wrap (toolbar toggle / ReviewTab wrap). */
+.block[data-diff-wrap='true'] .line {
+  white-space: normal;
+}
+
+.block[data-diff-wrap='true'] .lineText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.block[data-diff-wrap='true'] .body {
+  overflow-x: hidden;
+}
+
+.block[data-diff-wrap='true'] .splitPane {
+  overflow-x: hidden;
 }
 
 /* A file header: the path in the primary tone, set apart by weight. The toolbar
@@ -65,7 +108,8 @@
 .path {
   color: var(--dsw-alias-label-primary);
   font-weight: 600;
-  padding-right: 96px;
+  /* Room for layout + wrap + copy toolbar over the first path row. */
+  padding-right: 148px;
 }
 
 /* Side-by-side columns (DSH ReviewTab split subset). */

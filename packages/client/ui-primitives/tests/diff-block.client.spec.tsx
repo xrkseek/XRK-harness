@@ -19,12 +19,18 @@ beforeEach(() => {
 
 /** The rendered body rows, one string per visible line (CSS-module class prefix). */
 function bodyRows(container: HTMLElement): string[] {
-  return [...container.querySelectorAll('[class*="_line_"]')].map(row => row.textContent ?? '')
+  return [...container.querySelectorAll('[class*="_line_"]')].map((row) => {
+    const text = row.querySelector('[class*="_lineText_"]')
+    return text?.textContent ?? row.textContent ?? ''
+  })
 }
 
 /** Only the changed rows (add/del), excluding the path header and gap chrome. */
 function changeRows(container: HTMLElement): string[] {
-  return [...container.querySelectorAll('[class*="_del_"], [class*="_add_"]')].map(row => row.textContent ?? '')
+  return [...container.querySelectorAll('[class*="_del_"], [class*="_add_"]')].map((row) => {
+    const text = row.querySelector('[class*="_lineText_"]')
+    return text?.textContent ?? row.textContent ?? ''
+  })
 }
 
 /** `count` numbered added lines as one hunk's newText. */
@@ -49,6 +55,17 @@ describe('DiffBlock structure', () => {
     expect(container.querySelectorAll('[class*="_del_"]').length).toBe(1)
     expect(container.querySelectorAll('[class*="_add_"]').length).toBe(1)
     expect(changeRows(container)).toEqual(['old', 'new'])
+  })
+
+  it('marks highlighted line bodies for known languages (shiki / D-06)', () => {
+    const diffs: DiffHunk[] = [{
+      path: 'src/a.ts',
+      oldText: 'const a = 1',
+      newText: 'const a = 2',
+    }]
+    const { container } = render(<DiffBlock diffs={diffs} />)
+    expect(container.querySelectorAll('[data-diff-highlight="true"]').length).toBeGreaterThanOrEqual(1)
+    expect(changeRows(container)).toEqual(['const a = 1', 'const a = 2'])
   })
 
   it('opens a same-file second hunk with a gap instead of repeating the path', () => {
@@ -95,6 +112,26 @@ describe('DiffBlock structure', () => {
   it('keeps a genuine interior blank line', () => {
     const { container } = render(<DiffBlock diffs={[{ path: 'a.ts', oldText: null, newText: 'x\n\ny' }]} />)
     expect(container.querySelectorAll('[class*="_add_"]').length).toBe(3)
+  })
+})
+
+describe('DiffBlock wrap', () => {
+  it('toggles soft-wrap via the toolbar', () => {
+    const diffs: DiffHunk[] = [{ path: 'a.ts', oldText: null, newText: 'hello' }]
+    const { container } = render(<DiffBlock diffs={diffs} />)
+    const root = container.querySelector('[data-diff]') as HTMLElement
+    expect(root.getAttribute('data-diff-wrap')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '开启自动换行' }))
+    expect(root.getAttribute('data-diff-wrap')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: '关闭自动换行' }))
+    expect(root.getAttribute('data-diff-wrap')).toBeNull()
+  })
+
+  it('shows 1-based line numbers in the gutter for del/add rows', () => {
+    const diffs: DiffHunk[] = [{ path: 'a.ts', oldText: 'one\ntwo', newText: 'one\nthree' }]
+    const { container } = render(<DiffBlock diffs={diffs} />)
+    const gutters = [...container.querySelectorAll('[data-diff-gutter]')]
+    expect(gutters.map(node => node.textContent)).toEqual(['1', '2', '1', '2'])
   })
 })
 

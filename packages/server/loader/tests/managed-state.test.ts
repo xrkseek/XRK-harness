@@ -253,6 +253,47 @@ describe("managed-state soft-disable", () => {
     );
   });
 
+  it("reloadIds force-remounts an already-live plugin after on-disk edit", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-loader-reload-"));
+    temps.push(root);
+    const dir = path.join(root, "bump-tools");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      path.join(dir, "xrk.plugin.json"),
+      JSON.stringify({ id: "bump-tools", kind: "tools", entry: "./plugin.mjs" }),
+    );
+    const entry = path.join(dir, "plugin.mjs");
+    const writeEntry = (tag: string) => {
+      writeFileSync(
+        entry,
+        `export function createPlugin() {
+  return {
+    id: "bump-tools",
+    kind: "tools",
+    promptSections: [{ id: "tag", content: ${JSON.stringify(tag)} }],
+  };
+}
+`,
+      );
+    };
+    writeEntry("v1");
+    const loader = createPluginLoader();
+    await reconcileManagedProcessPlugins(loader, root);
+    expect(loader.list()[0]?.promptSections?.[0]?.content).toBe("v1");
+
+    // Ensure mtime advances so ESM cache-bust query changes.
+    await new Promise((r) => setTimeout(r, 20));
+    writeEntry("v2");
+    // Without reloadIds, live id is kept as-is.
+    await reconcileManagedProcessPlugins(loader, root);
+    expect(loader.list()[0]?.promptSections?.[0]?.content).toBe("v1");
+
+    await reconcileManagedProcessPlugins(loader, root, {
+      reloadIds: ["bump-tools"],
+    });
+    expect(loader.list()[0]?.promptSections?.[0]?.content).toBe("v2");
+  });
+
   it("soft-disable unload pairs dispose", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-loader-dispose-"));
     temps.push(root);

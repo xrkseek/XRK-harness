@@ -379,10 +379,21 @@ export interface SoftDisableReconcileLoader {
   load(hit: DiscoveryHit): Promise<unknown>;
 }
 
+/** Optional force-remount for Settings update / install / reload. */
+export type ReconcileManagedProcessPluginsOptions = {
+  /**
+   * Plugin ids (or managed inventory aliases) to unload then load again even
+   * when still discoverable and enabled — so on-disk updates take effect
+   * without a Host restart.
+   */
+  readonly reloadIds?: readonly string[];
+};
+
 /**
  * Live reconcile process plugins with managed inventory + soft-disable:
  * - unregister soft-disabled ids (never `mcp:*`) — paired `dispose` via loader
  * - unregister ids no longer discoverable under `pluginsDir` (CLI remove)
+ * - unregister `reloadIds` (hot update / remount) even when still on disk
  * - load discoverable ids that are enabled but missing from the loader
  *
  * Optional load failures are collected and do not abort siblings. A
@@ -395,12 +406,19 @@ export interface SoftDisableReconcileLoader {
 export async function reconcileManagedProcessPlugins(
   loader: SoftDisableReconcileLoader,
   pluginsDir: string,
+  options: ReconcileManagedProcessPluginsOptions = {},
 ): Promise<ReconcileProcessPluginsResult> {
   const root = path.resolve(pluginsDir);
   const disabled = readDisabledPluginIdsAt(root);
   const index = readManagedPackageIndexAt(root);
   const hits = await loader.discover(root);
   const discoveredIds = new Set(hits.map((h) => h.manifest.id));
+  const reloadCanonical = new Set<string>();
+  for (const raw of options.reloadIds ?? []) {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed.startsWith("mcp:")) continue;
+    reloadCanonical.add(index.resolve(trimmed) ?? trimmed);
+  }
 
   for (const plugin of [...loader.list()]) {
     if (plugin.id.startsWith("mcp:")) continue;
@@ -410,7 +428,10 @@ export async function reconcileManagedProcessPlugins(
       index,
     );
     const missingOnDisk = !discoveredIds.has(plugin.id);
-    if (!softDisabled && !missingOnDisk) continue;
+    const forceReload = reloadCanonical.has(
+      index.resolve(plugin.id) ?? plugin.id,
+    );
+    if (!softDisabled && !missingOnDisk && !forceReload) continue;
     await loader.unregister(plugin.id);
   }
 

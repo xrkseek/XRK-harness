@@ -85,9 +85,33 @@ export interface PluginInventoryEntry {
   readonly needsRestart?: boolean
 }
 
+/**
+ * One composition capability under a session agent preset.
+ * XRK badges select a tool surface (not a Cordis plugin tree); `moduleName`
+ * uses the `composition:*` namespace for those rows.
+ */
+export interface AgentPresetPluginRow {
+  readonly entryId: string | null
+  readonly moduleName: string
+  readonly enabled: boolean | 'conditional'
+  readonly condition?: string
+  readonly fiberPhase: PluginFiberPhase
+}
+
+/** One session badge's composition inventory group. */
+export interface AgentPresetPluginGroup {
+  readonly id: string
+  readonly name?: string
+  readonly isDefault: boolean
+  readonly broken?: string
+  readonly rows: readonly AgentPresetPluginRow[]
+}
+
 /** Point-in-time inventory returned by the plugin inventory Remote. */
 export interface PluginInventorySnapshot {
   readonly entries: readonly PluginInventoryEntry[]
+  /** Session badge compositions; omitted only when Face has no catalog. */
+  readonly agentPresets?: readonly AgentPresetPluginGroup[]
 }
 
 declare module '@xrkseek/xrk-typert-protocol' {
@@ -112,10 +136,31 @@ declare module '@xrkseek/xrk-typert-protocol' {
       ) => Promise<RemoteResult<{ entryId: PluginEntryId; removed: true }>>
       update: (
         entryId: PluginEntryId,
-      ) => Promise<RemoteResult<{ entryId: PluginEntryId; updated: true }>>
+      ) => Promise<RemoteResult<{
+        entryId: PluginEntryId
+        updated: true
+        /** Settled CLI mutate log (`xrkh plugin add …`). */
+        command?: string
+        output?: string
+        exitCode?: number
+      }>>
+      reload: (
+        entryId: PluginEntryId,
+      ) => Promise<RemoteResult<{ entryId: PluginEntryId; reloaded: true }>>
       install: (
         spec: string,
-      ) => Promise<RemoteResult<{ spec: string; installed: true }>>
+        /** Optional npm registry URL (`npm pack --registry`). */
+        registry?: string,
+        /** Correlates live `plugin-inventory/install-log` chunks. */
+        requestId?: string,
+      ) => Promise<RemoteResult<{
+        spec: string
+        installed: true
+        /** Settled CLI mutate log (`xrkh plugin add …`). */
+        command: string
+        output: string
+        exitCode: number
+      }>>
       open: (
         entryId: PluginEntryId,
       ) => Promise<RemoteResult<{ entryId: PluginEntryId; opened: true }>>

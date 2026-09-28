@@ -94,10 +94,19 @@ describe('TerminalBlock prompt label', () => {
 })
 
 describe('TerminalBlock states', () => {
-  it('running shows the command line only: no output, no placeholder, no copy', () => {
+  it('running with output streams the body (jobs / Cursor-style live tail)', () => {
     const view = render(<TerminalBlock command="sleep 5" running output="partial" />)
     expect(view.getByText('sleep 5')).toBeTruthy()
-    expect(view.queryByText('partial')).toBeNull()
+    expect(view.getByText('partial')).toBeTruthy()
+    expect(view.queryByText('无输出')).toBeNull()
+    // Copy stays settled-only so a mid-run copy does not fight the live tail.
+    expect(view.queryByRole('button')).toBeNull()
+    expect(view.container.firstElementChild?.getAttribute('data-running')).toBe('')
+  })
+
+  it('running with empty output keeps the prompt only', () => {
+    const view = render(<TerminalBlock command="sleep 5" running />)
+    expect(view.getByText('sleep 5')).toBeTruthy()
     expect(view.queryByText('无输出')).toBeNull()
     expect(view.queryByRole('button')).toBeNull()
     expect(view.container.firstElementChild?.getAttribute('data-running')).toBe('')

@@ -2,10 +2,19 @@
 // control over one or more per-file hunks. Unified mode stacks removed then
 // added lines (legacy). Split mode (DSH ReviewTab / Codex side-by-side subset)
 // pairs deletions with additions in two columns with synchronized scroll.
+// Syntax highlighting reuses CodeBlock/ReadBlock shiki (`highlightLines`) per
+// side, keyed off the hunk path's file extension.
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { writeClipboard } from './clipboard.ts'
+import { fileExtension } from './FileTypeIcon.tsx'
+import {
+  grammarLoadCount,
+  highlightLines,
+  subscribeGrammarLoaded,
+  type HighlightSpan,
+} from './markdown/highlight.ts'
 import css from './DiffBlock.module.css'
 
 /**
@@ -44,18 +53,46 @@ export interface DiffBlockProps {
    * Split pairs old/new columns with synced vertical scroll.
    */
   layout?: DiffLayout | undefined
+  /**
+   * Soft-wrap long lines (DSH ReviewTab wrap). Default false keeps `white-space: pre`
+   * so indentation stays readable; the toolbar can toggle at runtime.
+   */
+  wrap?: boolean | undefined
 }
 
 /** A single rendered body line and its role, so the height cap slices a flat list. */
 interface DiffRow {
   kind: 'path' | 'del' | 'add' | 'gap'
   text: string
+  /** 1-based old-side line number (del rows). */
+  oldNo?: number
+  /** 1-based new-side line number (add rows). */
+  newNo?: number
+  /** Optional shiki runs for the line body (absent = plain monospace). */
+  spans?: readonly HighlightSpan[]
 }
 
-/** One paired side-by-side row (DSH ReviewTab `splitRows` subset without line nos). */
+/** One paired side-by-side row (DSH ReviewTab `splitRows` subset). */
 interface SplitPair {
-  left?: { text: string; kind: 'del' }
-  right?: { text: string; kind: 'add' }
+  left?: { text: string; kind: 'del'; oldNo: number; spans?: readonly HighlightSpan[] }
+  right?: { text: string; kind: 'add'; newNo: number; spans?: readonly HighlightSpan[] }
+}
+
+/** Map a hunk path to a highlighter language id (file extension). */
+function langFromDiffPath(path: string): string | undefined {
+  const ext = fileExtension(path).toLowerCase()
+  return ext.length > 0 ? ext : undefined
+}
+
+function renderSpans(spans: readonly HighlightSpan[]): ReactNode {
+  return spans.map((span, index) => (
+    <span key={index} style={span.style as CSSProperties}>{span.text}</span>
+  ))
+}
+
+function renderLineBody(text: string, spans: readonly HighlightSpan[] | undefined): ReactNode {
+  if (spans === undefined || spans.length === 0) return text
+  return renderSpans(spans)
 }
 
 /** Local exhaustiveness helper — this package does not depend on `dsh-llm`. */
@@ -88,19 +125,45 @@ function buildRows(diffs: DiffHunk[]): { rows: DiffRow[]; added: number; removed
   let added = 0
   let removed = 0
   let prevPath: string | undefined
+  let oldNo = 0
+  let newNo = 0
   for (const diff of diffs) {
     paths.add(diff.path)
-    if (diff.path !== prevPath) rows.push({ kind: 'path', text: diff.path })
-    else rows.push({ kind: 'gap', text: '⋯' })
+    if (diff.path !== prevPath) {
+      rows.push({ kind: 'path', text: diff.path })
+      oldNo = 0
+      newNo = 0
+    } else {
+      rows.push({ kind: 'gap', text: '⋯' })
+    }
     prevPath = diff.path
+    const lang = langFromDiffPath(diff.path)
+    const oldHl = diff.oldText !== null ? highlightLines(diff.oldText, lang) : undefined
+    const newHl = highlightLines(diff.newText, lang)
+    let oldIdx = 0
+    let newIdx = 0
     if (diff.oldText !== null) {
       for (const line of contentLines(diff.oldText)) {
-        rows.push({ kind: 'del', text: line })
+        oldNo += 1
+        const spans = oldHl?.[oldIdx++]
+        rows.push({
+          kind: 'del',
+          text: line,
+          oldNo,
+          ...(spans !== undefined ? { spans } : {}),
+        })
         removed++
       }
     }
     for (const line of contentLines(diff.newText)) {
-      rows.push({ kind: 'add', text: line })
+      newNo += 1
+      const spans = newHl?.[newIdx++]
+      rows.push({
+        kind: 'add',
+        text: line,
+        newNo,
+        ...(spans !== undefined ? { spans } : {}),
+      })
       added++
     }
   }
@@ -125,6 +188,9 @@ function buildSplit(diffs: DiffHunk[]): {
     paths.add(diff.path)
     const dels = diff.oldText !== null ? contentLines(diff.oldText) : []
     const adds = contentLines(diff.newText)
+    const lang = langFromDiffPath(diff.path)
+    const oldHl = diff.oldText !== null ? highlightLines(diff.oldText, lang) : undefined
+    const newHl = highlightLines(diff.newText, lang)
     removed += dels.length
     added += adds.length
     const pairs: SplitPair[] = []
@@ -132,9 +198,29 @@ function buildSplit(diffs: DiffHunk[]): {
     for (let i = 0; i < n; i++) {
       const left = dels[i]
       const right = adds[i]
+      const leftSpans = oldHl?.[i]
+      const rightSpans = newHl?.[i]
       pairs.push({
-        ...(left !== undefined ? { left: { text: left, kind: 'del' as const } } : {}),
-        ...(right !== undefined ? { right: { text: right, kind: 'add' as const } } : {}),
+        ...(left !== undefined
+          ? {
+            left: {
+              text: left,
+              kind: 'del' as const,
+              oldNo: i + 1,
+              ...(leftSpans !== undefined ? { spans: leftSpans } : {}),
+            },
+          }
+          : {}),
+        ...(right !== undefined
+          ? {
+            right: {
+              text: right,
+              kind: 'add' as const,
+              newNo: i + 1,
+              ...(rightSpans !== undefined ? { spans: rightSpans } : {}),
+            },
+          }
+          : {}),
       })
     }
     sections.push({ path: diff.path, pairs })
@@ -153,8 +239,50 @@ function buildSplit(diffs: DiffHunk[]): {
  */
 function contentLines(text: string): string[] {
   if (text === '') return []
-  const body = text.endsWith('\n') ? text.slice(0, -1) : text
-  return body.split('\n')
+  const endsWithNewline = text.endsWith('\n')
+  const body = endsWithNewline ? text.slice(0, -1) : text
+  return body.length === 0 ? [''] : body.split('\n')
+}
+
+function renderUnifiedLine(row: DiffRow): ReactNode {
+  if (row.kind !== 'del' && row.kind !== 'add') return row.text
+  return (
+    <>
+      <span className={css.gutter} aria-hidden="true" data-diff-gutter="">
+        <span className={css.gutterOld}>{row.oldNo ?? ''}</span>
+        <span className={css.gutterNew}>{row.newNo ?? ''}</span>
+      </span>
+      <span className={css.lineText} data-diff-highlight={row.spans !== undefined ? 'true' : undefined}>
+        {renderLineBody(row.text, row.spans)}
+      </span>
+    </>
+  )
+}
+
+function renderSplitSide(
+  side: {
+    text: string
+    kind: 'del' | 'add'
+    oldNo?: number
+    newNo?: number
+    spans?: readonly HighlightSpan[]
+  } | undefined,
+  emptyClass: string,
+): ReactNode {
+  if (side === undefined) {
+    return <div className={clsx(css.line, emptyClass)}>{'\u00a0'}</div>
+  }
+  return (
+    <div className={clsx(css.line, side.kind === 'del' ? css.del : css.add)}>
+      <span className={css.gutter} aria-hidden="true" data-diff-gutter="">
+        <span className={css.gutterOld}>{side.oldNo ?? ''}</span>
+        <span className={css.gutterNew}>{side.newNo ?? ''}</span>
+      </span>
+      <span className={css.lineText} data-diff-highlight={side.spans !== undefined ? 'true' : undefined}>
+        {renderLineBody(side.text, side.spans)}
+      </span>
+    </div>
+  )
 }
 
 /**
@@ -187,15 +315,21 @@ export function DiffBlock({
   maxLines = DEFAULT_DIFF_MAX_LINES,
   className,
   layout: layoutProp = 'unified',
+  wrap: wrapProp = false,
 }: DiffBlockProps) {
-  const { rows, added, removed, files } = useMemo(() => buildRows(diffs), [diffs])
-  const split = useMemo(() => buildSplit(diffs), [diffs])
+  // Re-build when a lazy grammar finishes loading (same seat as ReadBlock).
+  const loaded = useSyncExternalStore(subscribeGrammarLoaded, grammarLoadCount, grammarLoadCount)
+  const { rows, added, removed, files } = useMemo(() => buildRows(diffs), [diffs, loaded])
+  const split = useMemo(() => buildSplit(diffs), [diffs, loaded])
   const [layout, setLayout] = useState<DiffLayout>(layoutProp)
+  const [wrap, setWrap] = useState(wrapProp)
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
   const leftRef = useRef<HTMLDivElement | null>(null)
   const rightRef = useRef<HTMLDivElement | null>(null)
   const syncing = useRef(false)
+
+  useEffect(() => { setWrap(wrapProp) }, [wrapProp])
 
   const onCopy = useCallback(() => {
     if (copied) return
@@ -209,6 +343,9 @@ export function DiffBlock({
   const onToggle = useCallback(() => { setExpanded(value => !value) }, [])
   const onToggleLayout = useCallback(() => {
     setLayout(value => (value === 'unified' ? 'split' : 'unified'))
+  }, [])
+  const onToggleWrap = useCallback(() => {
+    setWrap((value) => !value)
   }, [])
 
   const syncScroll = useCallback((source: 'left' | 'right') => {
@@ -238,6 +375,7 @@ export function DiffBlock({
       className={clsx(css.block, className)}
       data-diff=""
       data-diff-layout={layout}
+      data-diff-wrap={wrap ? 'true' : undefined}
     >
       <div className={css.toolbar}>
         <button
@@ -249,6 +387,17 @@ export function DiffBlock({
           onClick={onToggleLayout}
         >
           {layout === 'split' ? '统一' : '分栏'}
+        </button>
+        <button
+          type="button"
+          className={css.layoutButton}
+          aria-pressed={wrap}
+          aria-label={wrap ? '关闭自动换行' : '开启自动换行'}
+          title={wrap ? '不换行' : '换行'}
+          data-diff-tool="wrap"
+          onClick={onToggleWrap}
+        >
+          {wrap ? '不换行' : '换行'}
         </button>
         <button type="button" className={css.copyButton} onClick={onCopy}>
           {copied ? '复制成功' : '复制'}
@@ -267,12 +416,9 @@ export function DiffBlock({
                   onScroll={sIndex === 0 ? () => { syncScroll('left') } : undefined}
                 >
                   {section.pairs.map((pair, i) => (
-                    <div
-                      key={i}
-                      className={clsx(css.line, pair.left ? css.del : css.splitEmpty)}
-                    >
-                      {pair.left?.text ?? '\u00a0'}
-                    </div>
+                    <Fragment key={i}>
+                      {renderSplitSide(pair.left, css.splitEmpty)}
+                    </Fragment>
                   ))}
                 </div>
                 <div
@@ -282,12 +428,9 @@ export function DiffBlock({
                   onScroll={sIndex === 0 ? () => { syncScroll('right') } : undefined}
                 >
                   {section.pairs.map((pair, i) => (
-                    <div
-                      key={i}
-                      className={clsx(css.line, pair.right ? css.add : css.splitEmpty)}
-                    >
-                      {pair.right?.text ?? '\u00a0'}
-                    </div>
+                    <Fragment key={i}>
+                      {renderSplitSide(pair.right, css.splitEmpty)}
+                    </Fragment>
                   ))}
                 </div>
               </div>
@@ -297,7 +440,9 @@ export function DiffBlock({
       ) : (
         <div className={css.body}>
           {head.map((row, index) => (
-            <div key={index} className={clsx(css.line, ROW_CLASS[row.kind])}>{row.text}</div>
+            <div key={index} className={clsx(css.line, ROW_CLASS[row.kind])}>
+              {renderUnifiedLine(row)}
+            </div>
           ))}
           {hidden > 0 && (
             <button
@@ -311,7 +456,9 @@ export function DiffBlock({
             </button>
           )}
           {tail.map((row, index) => (
-            <div key={index} className={clsx(css.line, ROW_CLASS[row.kind])}>{row.text}</div>
+            <div key={index} className={clsx(css.line, ROW_CLASS[row.kind])}>
+              {renderUnifiedLine(row)}
+            </div>
           ))}
         </div>
       )}

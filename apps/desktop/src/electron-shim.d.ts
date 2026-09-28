@@ -19,6 +19,8 @@ declare module "electron" {
     show?: boolean;
     title?: string;
     icon?: string;
+    frame?: boolean;
+    titleBarStyle?: "default" | "hidden" | "hiddenInset";
     webPreferences?: WebPreferences;
   }
 
@@ -26,14 +28,23 @@ declare module "electron" {
     constructor(options?: BrowserWindowConstructorOptions);
     static getAllWindows(): BrowserWindow[];
     static getFocusedWindow(): BrowserWindow | null;
+    static fromWebContents(webContents: unknown): BrowserWindow | null;
     isDestroyed(): boolean;
     isMinimized(): boolean;
+    isMaximized(): boolean;
+    minimize(): void;
+    maximize(): void;
+    unmaximize(): void;
     restore(): void;
     show(): void;
     focus(): void;
+    close(): void;
     setTitle(title: string): void;
     once(event: "ready-to-show", listener: () => void): this;
-    on(event: "closed", listener: () => void): this;
+    on(
+      event: "closed" | "maximize" | "unmaximize",
+      listener: () => void,
+    ): this;
     loadURL(url: string): Promise<void>;
     readonly webContents: {
       setWindowOpenHandler(handler: () => { action: "deny" | "allow" }): void;
@@ -42,6 +53,7 @@ declare module "electron" {
         listener: (event: { preventDefault(): void }, url: string) => void,
       ): void;
       send(channel: string, ...args: unknown[]): void;
+      reload(): void;
     };
   }
 
@@ -102,7 +114,7 @@ declare module "electron" {
     handle(
       channel: string,
       listener: (
-        event: unknown,
+        event: { readonly sender: unknown },
         ...args: unknown[]
       ) => unknown | Promise<unknown>,
     ): void;

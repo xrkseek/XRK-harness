@@ -12,6 +12,12 @@
   transition: grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
+/* Frameless Desktop: reserve the custom titlebar strip. */
+.frame[data-desktop-chrome] {
+  --xrk-desktop-chrome-height: 36px;
+  padding-top: var(--xrk-desktop-chrome-height);
+}
+
 /* Dragging writes widths at pointer cadence; easing them would detach the
    column from the handle. */
 .frame[data-dragging] {
@@ -75,6 +81,10 @@
   /* Rides the same curve as the tracks so the pill stays on the moving
      border during collapse/expand; paused while dragging (frame rule). */
   transition: left var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.frame[data-desktop-chrome] .handle {
+  top: var(--xrk-desktop-chrome-height, 36px);
 }
 
 .frame[data-dragging] .handle {

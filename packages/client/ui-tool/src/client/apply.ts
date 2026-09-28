@@ -8,6 +8,7 @@ import { askQuestionToolview } from './tool/toolviews/ask-question-row.tsx'
 import { bashToolviewSample } from './tool/toolviews/bash-sample.tsx'
 import { fileMutationToolview } from './tool/toolviews/file-mutation-row.tsx'
 import { imageGenToolview } from './tool/toolviews/image-gen-row.tsx'
+import { presentToolview } from './tool/toolviews/present-row.tsx'
 import { readToolview } from './tool/toolviews/read-row.tsx'
 import { readImageToolview } from './tool/toolviews/read-image-row.tsx'
 import { searchToolview } from './tool/toolviews/search-row.tsx'
@@ -46,6 +47,7 @@ export function apply(ctx: ClientContext): void {
   ctx.plugin(imageGenToolview)
   ctx.plugin(videoGenToolview)
   ctx.plugin(fileMutationToolview)
+  ctx.plugin(presentToolview)
   ctx.plugin(searchToolview)
   ctx.plugin(webToolview)
   ctx.plugin(todoToolview)

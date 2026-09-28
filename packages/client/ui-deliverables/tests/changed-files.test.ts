@@ -36,4 +36,29 @@ describe("diffHunkFromWorkspaceFileDiff", () => {
       }),
     ).toBeNull();
   });
+
+  it("feeds DiffBlock an empty newText for whole-file delete", () => {
+    const hunk = diffHunkFromWorkspaceFileDiff({
+      kind: "text",
+      path: "gone.ts",
+      display: "gone.ts",
+      before: true,
+      after: false,
+      coarse: true,
+      hunks: [
+        {
+          oldStart: 1,
+          oldLines: 1,
+          newStart: 1,
+          newLines: 0,
+          lines: ["-gone"],
+        },
+      ],
+    });
+    expect(hunk).toEqual({
+      path: "gone.ts",
+      oldText: "gone\n",
+      newText: "",
+    });
+  });
 });

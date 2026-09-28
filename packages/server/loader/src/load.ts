@@ -1,4 +1,4 @@
-import { access, realpath } from "node:fs/promises";
+import { access, realpath, stat } from "node:fs/promises";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@xrkseek/core-tools";
 import type {
@@ -203,7 +203,10 @@ export async function loadPluginModule(
 ): Promise<RegisteredPlugin> {
   // realpath avoids Windows 8.3 short paths that break Vite/Vitest dynamic import
   const resolved = await realpath(entryPath);
-  const href = pathToFileURL(resolved).href;
+  // mtime query busts Node ESM cache after on-disk update/hot-reload so the
+  // same entry path re-imports fresh code (stable mtime → same URL → cache hit).
+  const { mtimeMs } = await stat(resolved);
+  const href = `${pathToFileURL(resolved).href}?mtime=${mtimeMs}`;
   const mod = await importHref(href);
 
   if (typeof mod.createPlugin === "function") {

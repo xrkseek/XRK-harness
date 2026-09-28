@@ -5,13 +5,10 @@
  * Cross-platform: never `shell: true`. Windows `.cmd` shims go through
  * `ComSpec /d /s /c` with quoted argv so spaces / Unicode paths stay intact.
  */
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
 
 export interface PluginMutateResult {
   readonly ok: boolean;
@@ -19,6 +16,12 @@ export interface PluginMutateResult {
   readonly stderr: string;
   readonly error?: string;
 }
+
+/** Live CLI stream chunk for Settings TerminalBlock (Face remote-event). */
+export type PluginMutateChunk = {
+  readonly stream: "stdout" | "stderr";
+  readonly text: string;
+};
 
 export interface CliInvocation {
   readonly command: string;
@@ -134,31 +137,82 @@ function looksLikeMissingCommand(err: {
   );
 }
 
-async function execPluginCli(
+async function spawnPluginCli(
   invocation: CliInvocation,
   args: readonly string[],
   options: {
     readonly cwd: string;
     readonly env: NodeJS.ProcessEnv;
+    readonly onChunk?: (chunk: PluginMutateChunk) => void;
   },
 ): Promise<{ stdout: string; stderr: string }> {
   const plan = planCliInvocation(invocation, args, process.platform, options.env);
-  const { stdout, stderr } = await execFileAsync(plan.file, [...plan.args], {
-    cwd: options.cwd,
-    env: options.env,
-    timeout: 180_000,
-    maxBuffer: 4 * 1024 * 1024,
-    encoding: "utf8",
-    shell: false,
-    windowsHide: true,
-    ...(plan.windowsVerbatimArguments
-      ? { windowsVerbatimArguments: true }
-      : {}),
+  return new Promise((resolve, reject) => {
+    const child = spawn(plan.file, [...plan.args], {
+      cwd: options.cwd,
+      env: options.env,
+      shell: false,
+      windowsHide: true,
+      ...(plan.windowsVerbatimArguments
+        ? { windowsVerbatimArguments: true }
+        : {}),
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      if (!settled) {
+        settled = true;
+        reject(
+          Object.assign(new Error("plugin mutate timed out after 180s"), {
+            stdout,
+            stderr,
+            code: "ETIMEDOUT",
+          }),
+        );
+      }
+    }, 180_000);
+
+    child.stdout?.on("data", (buf: Buffer | string) => {
+      const text = String(buf);
+      stdout += text;
+      options.onChunk?.({ stream: "stdout", text });
+    });
+    child.stderr?.on("data", (buf: Buffer | string) => {
+      const text = String(buf);
+      stderr += text;
+      options.onChunk?.({ stream: "stderr", text });
+    });
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      reject(
+        Object.assign(err, {
+          stdout,
+          stderr,
+          code: (err as NodeJS.ErrnoException).code,
+        }),
+      );
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      reject(
+        Object.assign(new Error(`plugin mutate exited with code ${code ?? 1}`), {
+          stdout,
+          stderr,
+          code: code ?? 1,
+        }),
+      );
+    });
   });
-  return {
-    stdout: String(stdout ?? ""),
-    stderr: String(stderr ?? ""),
-  };
 }
 
 export async function runPluginMutate(options: {
@@ -167,13 +221,21 @@ export async function runPluginMutate(options: {
   readonly pluginsDir: string;
   readonly cwd?: string;
   readonly env?: NodeJS.ProcessEnv;
+  /** Forwarded as `xrkh plugin add --registry` (npm pack mirror). */
+  readonly registry?: string;
+  /** Optional live stdout/stderr chunks (Settings TerminalBlock). */
+  readonly onChunk?: (chunk: PluginMutateChunk) => void;
 }): Promise<PluginMutateResult> {
   const spec = options.spec.trim();
   if (!spec) {
     return { ok: false, stdout: "", stderr: "", error: "missing spec" };
   }
   const sub = options.action === "add" ? "add" : "remove";
-  const args = ["plugin", sub, spec] as const;
+  const registry = options.registry?.trim();
+  const args: string[] =
+    sub === "add" && registry
+      ? ["plugin", "add", "--registry", registry, spec]
+      : ["plugin", sub, spec];
   const env = {
     ...(options.env ?? process.env),
     XRK_PLUGINS_DIR: path.resolve(options.pluginsDir),
@@ -187,9 +249,10 @@ export async function runPluginMutate(options: {
   for (let i = 0; i < candidates.length; i++) {
     const invocation = candidates[i]!;
     try {
-      const { stdout, stderr } = await execPluginCli(invocation, args, {
+      const { stdout, stderr } = await spawnPluginCli(invocation, args, {
         cwd,
         env,
+        ...(options.onChunk !== undefined ? { onChunk: options.onChunk } : {}),
       });
       return { ok: true, stdout, stderr };
     } catch (err) {

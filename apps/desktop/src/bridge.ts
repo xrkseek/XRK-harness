@@ -46,5 +46,30 @@ export function createXrkDesktopBridgeApi(
         };
       },
     },
+    window: {
+      minimize: async () => {
+        await ipc.invoke(DESKTOP_IPC.windowMinimize);
+      },
+      toggleMaximize: async () => {
+        await ipc.invoke(DESKTOP_IPC.windowMaximizeToggle);
+      },
+      close: async () => {
+        await ipc.invoke(DESKTOP_IPC.windowClose);
+      },
+      isMaximized: () =>
+        ipc.invoke(DESKTOP_IPC.windowIsMaximized) as Promise<boolean>,
+      subscribeMaximized: (listener) => {
+        const handle = (_event: unknown, maximized: unknown): void => {
+          listener(maximized === true);
+        };
+        ipc.on(DESKTOP_IPC.windowMaximized, handle);
+        return () => {
+          ipc.off(DESKTOP_IPC.windowMaximized, handle);
+        };
+      },
+      reload: async () => {
+        await ipc.invoke(DESKTOP_IPC.windowReload);
+      },
+    },
   };
 }

@@ -598,17 +598,7 @@ describe('ConfigurablePluginsTabController', () => {
 describe('McpCardController', () => {
   it('projects connected overlay read-only and saves servers in one mutate', async () => {
     const host = stubSettingsScope<McpSettings>()
-    host.set.mockImplementation((_field, value) => {
-      host.publish({
-        value: {
-          servers: value as McpSettings['servers'],
-          connected: [{ id: 'mcp:demo', serverName: 'demo', kind: 'tools', toolCount: 2 }],
-          note: 'restart note',
-        },
-        user: { servers: value },
-      })
-      return Promise.resolve()
-    })
+    acceptWrites(host)
     const controller = new McpCardController(host.scope)
     host.publish({
       status: 'ready',
@@ -629,16 +619,19 @@ describe('McpCardController', () => {
     expect(face.hooks.mcpCard.getSnapshot()).toMatchObject({
       dirty: true,
       rowInvalid: false,
-      connected: [],
+      rows: [{ serverName: 'fs', status: 'idle' }],
     })
 
     face.save()
-    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledOnce() })
-    expect(host.set).toHaveBeenCalledWith('servers', [{
-      serverName: 'fs',
-      command: 'npx',
-      args: ['-y', 'mcp-server'],
-    }])
+    // Save writes Allow first (default on for a non-empty list), then servers.
+    await vi.waitFor(() => {
+      expect(host.set).toHaveBeenCalledWith('allowConnect', true)
+      expect(host.set).toHaveBeenCalledWith('servers', [{
+        serverName: 'fs',
+        command: 'npx',
+        args: ['-y', 'mcp-server'],
+      }])
+    })
     expect(face.hooks.mcpCard.getSnapshot().dirty).toBe(false)
   })
 

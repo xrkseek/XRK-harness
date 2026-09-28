@@ -8,6 +8,8 @@ import type { NS } from './locales.ts'
 
 export type DeliverablesInjected = ProducedFilesInjected & {
   loadFileDiff: LoadFileDiff
+  /** Open Status-column Changes tab for this turn (optional in unit tests). */
+  openOverviewReview?: (index: number, seq: number) => void
 }
 
 export type DeliverablesTailProps =
@@ -23,7 +25,7 @@ export function DeliverablesTail(props: DeliverablesTailProps) {
 }
 
 function Deliverables({
-  matched, openFile, t, loadFileDiff, isLoopback, openNativePath, useHostDescription,
+  matched, openFile, t, loadFileDiff, openOverviewReview, isLoopback, openNativePath, useHostDescription,
 }: Pick<TurnTailOwnerProps, 'openFile'> & {
   matched: DeliverablesMatch
 } & PropsLocale<typeof NS> & InjectFace<DeliverablesInjected>) {
@@ -33,6 +35,13 @@ function Deliverables({
         changes={matched.changes}
         loadFileDiff={loadFileDiff}
         openFile={openFile}
+        {...(openOverviewReview
+          ? {
+            openOverviewReview: (index: number) => {
+              openOverviewReview(index, matched.changes!.seq)
+            },
+          }
+          : {})}
         t={t}
       />
     )}

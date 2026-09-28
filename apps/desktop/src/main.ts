@@ -259,6 +259,15 @@ async function bootstrapDesktopUpdates(): Promise<void> {
       }
       await coordinator.install();
     },
+    windowFromEvent: (event) => {
+      const sender = (event as { sender?: Parameters<
+        typeof BrowserWindow.fromWebContents
+      >[0] } | null)?.sender;
+      if (sender === undefined || sender === null) return undefined;
+      const win = BrowserWindow.fromWebContents(sender);
+      if (win === null || win.isDestroyed()) return undefined;
+      return win;
+    },
   });
 
   installDesktopApplicationMenu({

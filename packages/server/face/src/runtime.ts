@@ -177,18 +177,36 @@ export interface CreateFaceRuntimeOptions {
   /** Inject native folder chooser (tests). Default `pickNativeDirectory`. */
   readonly pickNativeDirectory?: (signal: AbortSignal) => Promise<string | null>;
   /** Host wires `xrkh plugin remove` for Settings inventory. */
-  readonly removeUserPlugin?: (
-    spec: string,
-  ) => Promise<{ readonly ok: boolean; readonly error?: string }>;
-  /** Host wires `xrkh plugin add` for Settings inventory update. */
+  readonly removeUserPlugin?: (spec: string) => Promise<{
+    readonly ok: boolean;
+    readonly error?: string;
+    readonly stdout?: string;
+    readonly stderr?: string;
+  }>;
+  /** Host wires `xrkh plugin add` for Settings inventory update / install. */
   readonly updateUserPlugin?: (
     spec: string,
-  ) => Promise<{ readonly ok: boolean; readonly error?: string }>;
+    options?: {
+      readonly registry?: string;
+      readonly onChunk?: (chunk: {
+        readonly stream: "stdout" | "stderr";
+        readonly text: string;
+      }) => void;
+    },
+  ) => Promise<{
+    readonly ok: boolean;
+    readonly error?: string;
+    readonly stdout?: string;
+    readonly stderr?: string;
+  }>;
   /**
    * Live-reconcile process plugins after inventory soft-disable / remove /
-   * update (Host). Client boot still needs a page reload.
+   * update (Host). Pass `reloadIds` to remount already-live ids. Client boot
+   * still needs a page reload.
    */
-  readonly syncManagedProcessPlugins?: () => Promise<void>;
+  readonly syncManagedProcessPlugins?: (options?: {
+    readonly reloadIds?: readonly string[];
+  }) => Promise<void>;
   /** Durable image store (default none → image RPCs unavailable). */
   readonly attachments?: AttachmentStore;
   /** Standing tool registry (preset layer) when no live agent is remembered. */

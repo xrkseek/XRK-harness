@@ -1068,7 +1068,7 @@ const MCP_SETTINGS_NOTE_RESTART =
   "Servers and Allow connect save to ~/.xrk/host-settings.json and apply on the next Host spawn.";
 
 const MCP_SETTINGS_NOTE_LIVE =
-  "Save with Allow connect mounts servers one-by-one (row status shows Connecting). Host start does not auto-spawn the Settings list — turn Allow off to keep the list only.";
+  "Save with Allow connect mounts servers one-by-one (row status shows Connecting). Allow already on remounts live (Host boot / Settings open) — turn Allow off and save to keep the list only.";
 
 function mcpApplies(runtime: FaceRuntime): "live" | "restart" {
   return typeof runtime.syncMcpServers === "function" ? "live" : "restart";
@@ -1107,6 +1107,80 @@ function mcpConnected(runtime: FaceRuntime): readonly {
 function mcpAllowFromRuntime(runtime: FaceRuntime): boolean {
   const raw = runtime.settingsNamespaces.ensure("mcp").user.allowConnect;
   return raw === true;
+}
+
+/** In-flight idle remount per Face runtime (boot + describe share one pass). */
+const mcpIdleEnsureInflight = new WeakMap<FaceRuntime, Promise<void>>();
+
+/**
+ * When Allow is on and every desired server is still idle, kick
+ * `syncMcpServers` once. Host boot and `settings.describe` share this so a
+ * stuck file-sourced list remounts without Desktop restart or a re-save.
+ */
+export function ensureMcpLiveIfIdle(runtime: FaceRuntime): void {
+  if (mcpIdleEnsureInflight.has(runtime)) return;
+  if (typeof runtime.syncMcpServers !== "function") return;
+  if (!mcpAllowFromRuntime(runtime)) return;
+  let servers: FaceMcpServerDraft[];
+  try {
+    servers = mcpServersFromRuntime(runtime);
+  } catch {
+    return;
+  }
+  if (servers.length === 0) return;
+
+  const overlay = runtime.mcpSyncOverlay;
+  if ((overlay.connecting ?? []).length > 0) return;
+  const connected = new Set(mcpConnected(runtime).map((c) => c.serverName));
+  const parked = new Set(overlay.parked);
+  const failed = new Set(
+    overlay.connectFailures.map((f) => f.serverName),
+  );
+  const desired = servers.map((s) => s.serverName);
+  const allIdle = desired.every(
+    (name) =>
+      !connected.has(name) && !parked.has(name) && !failed.has(name),
+  );
+  if (!allIdle) return;
+
+  // Mark progress before the async remount so the same describe/boot response
+  // (and concurrent callers) see "connecting" instead of idle.
+  const first = desired[0];
+  runtime.mcpSyncOverlay = {
+    connectFailures: overlay.connectFailures,
+    parked: overlay.parked,
+    connecting: first !== undefined ? [first] : [],
+  };
+
+  const sync = runtime.syncMcpServers;
+  const run = (async () => {
+    try {
+      const synced = await sync(servers, { allowConnect: true });
+      runtime.mcpSyncOverlay = {
+        connectFailures: synced.failures,
+        parked: synced.parked ?? [],
+        connecting: [],
+      };
+      const slot = runtime.settingsNamespaces.ensure("mcp");
+      publishRemoteEvent(runtime.bus, "settings/document-updated", [
+        "mcp",
+        slot.revision,
+      ]);
+    } catch (err) {
+      runtime.mcpSyncOverlay = {
+        ...runtime.mcpSyncOverlay,
+        connecting: [],
+      };
+      console.warn(
+        `[face] mcp idle ensure failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    } finally {
+      mcpIdleEnsureInflight.delete(runtime);
+    }
+  })();
+  mcpIdleEnsureInflight.set(runtime, run);
 }
 
 function mcpDescribeBase(
@@ -1151,6 +1225,8 @@ function mcpMutateRejected(ops: readonly FaceSettingsPathOp[]): string | undefin
 export async function settingsDescribeFace(
   runtime: FaceRuntime,
 ): Promise<FaceRpcResult<unknown>> {
+  // File-sourced idle list: remount without re-save / Desktop restart.
+  ensureMcpLiveIfIdle(runtime);
   const namespaces: FaceSettingsNamespaceView[] = [
     runtime.settingsNamespaces.view(
       "ui",
@@ -1488,6 +1564,7 @@ export function formatMcpInventoryText(
   runtime: FaceRuntime,
   options: { readonly verbose?: boolean } = {},
 ): string {
+  ensureMcpLiveIfIdle(runtime);
   let servers: FaceMcpServerDraft[] = [];
   try {
     servers = mcpServersFromRuntime(runtime);

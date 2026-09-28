@@ -478,10 +478,16 @@ export class McpCardController {
     const imported = rowsFromMcpPaste(raw)
     if (imported.length === 0) return 'invalid'
     const snapshot = this.scope.getSnapshot()
-    this.rows = mergeRowsByName(this.rows, imported).map(row =>
-      enrichRowStatus(row, snapshot, this.oauthByServer))
     // Paste implies connect (DSH: configured servers come up live).
     this.allowConnect = true
+    // Status badges use scope allow; stage as allow-on so paste rows show idle
+    // (to-be-connected) rather than parked before Save.
+    const statusSnap = {
+      ...snapshot,
+      value: { ...(snapshot.value ?? {}), allowConnect: true },
+    }
+    this.rows = mergeRowsByName(this.rows, imported).map(row =>
+      enrichRowStatus(row, statusSnap, this.oauthByServer))
     this.touchLocal()
     this.failed = false
     this.publish()

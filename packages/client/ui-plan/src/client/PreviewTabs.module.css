@@ -40,26 +40,43 @@
   color: var(--dsw-alias-label-primary);
 }
 
-/* Segmented tab bar: a soft track with a raised active segment. */
+/* Segmented tab bar: single row, scroll if the column is very narrow. */
 .tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 2px;
   padding: 2px;
+  max-width: 100%;
+  overflow-x: auto;
   background: var(--dsw-alias-bg-skeleton);
   border-radius: 9px;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
   border: none;
   border-radius: 7px;
-  padding: 3px 10px;
+  padding: 3px 8px;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
+  white-space: nowrap;
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.tabIcon {
+  flex: none;
+  opacity: 0.85;
 }
 
 .tab:hover {
@@ -353,11 +370,10 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
 }
 
-.itemRow,
-.graphEdge {
+.itemRow {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -369,20 +385,298 @@
   transition: background 120ms ease;
 }
 
-.itemRow:hover,
-.graphEdge:hover {
+.itemRow:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* Live rows (running jobs / subagents / tasks) get a small state dot. */
-.itemRow[data-live]::before {
-  content: '';
-  align-self: center;
+.jobItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.jobLine {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.jobTrigger {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.jobTrigger:hover,
+.jobTrigger:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.jobTrigger:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--dsw-alias-brand-primary);
+}
+
+.jobChevron {
   flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--dsw-alias-state-business-primary);
+  opacity: 0.55;
+  transition: transform 120ms ease;
+}
+
+.jobChevronOpen {
+  flex: none;
+  opacity: 0.85;
+  transform: rotate(180deg);
+  transition: transform 120ms ease;
+}
+
+.jobKill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.jobKill:hover,
+.jobKill:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.jobKillArmed {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 14%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.jobKillLabel {
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.jobPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0 0 2px 18px;
+}
+
+.jobNotice {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.jobNoticeError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.graphNode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base));
+}
+
+.graphNodeMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.graphNodeTitle {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--dsw-alias-label-primary);
+  word-break: break-word;
+}
+
+.graphNodeMeta {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.graphRole {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.16);
+}
+
+.graphEdge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 16px;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.graphArrow {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+}
+
+.kindChip {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+.kindChip[data-kind='spawn'] {
+  color: #6d28d9;
+  background: rgba(139, 92, 246, 0.18);
+}
+
+.kindChip[data-kind='message'] {
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.kindChip[data-kind='tool'] {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.2);
+}
+
+.kindChip[data-kind='parent'],
+.kindChip[data-kind='child'],
+.kindChip[data-kind='delegate'] {
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.16);
+}
+
+.modelRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 8px 6px;
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.modelRowHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+}
+
+.modelBar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-skeleton);
+  overflow: hidden;
+}
+
+.modelBarFill {
+  height: 100%;
+  border-radius: inherit;
+  background: #3b82f6;
+}
+
+.modelBarFill[data-tone='0'] { background: #3b82f6; }
+.modelBarFill[data-tone='1'] { background: #8b5cf6; }
+.modelBarFill[data-tone='2'] { background: #14b8a6; }
+.modelBarFill[data-tone='3'] { background: #f59e0b; }
+.modelBarFill[data-tone='4'] { background: #22c55e; }
+.modelBarFill[data-tone='5'] { background: #ef4444; }
+
+.windowTrack {
+  position: relative;
+  height: 8px;
+  margin: 6px 0 2px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.windowFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #f59e0b 70%, #ef4444);
+  min-width: 2px;
+}
+
+.barLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 2px 0 6px;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.barLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.barLegendSwatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--dsw-alias-label-secondary);
+}
+
+.barLegendSwatch[data-cat='system'] { background: #6b7280; }
+.barLegendSwatch[data-cat='tools'] { background: #8b5cf6; }
+.barLegendSwatch[data-cat='user'] { background: #3b82f6; }
+.barLegendSwatch[data-cat='inject'] { background: #14b8a6; }
+.barLegendSwatch[data-cat='assistant'] { background: #22c55e; }
+.barLegendSwatch[data-cat='tool'] { background: #f59e0b; }
+
+/* Live rows keep stronger title color; StateDot marks run state in markup. */
+.itemRow[data-live] .itemTitle {
+  color: var(--dsw-alias-label-primary);
 }
 
 .itemTitle {
@@ -391,14 +685,8 @@
   word-break: break-word;
 }
 
-.itemMeta,
-.graphKind,
-.graphLabel {
+.itemMeta {
   color: var(--dsw-alias-label-secondary);
-}
-
-.itemRow[data-live] .itemTitle {
-  color: var(--dsw-alias-label-primary);
 }
 
 .spillOpen {
@@ -481,11 +769,6 @@
   align-self: flex-start;
 }
 
-.graphKind {
-  font-size: 11px;
-  opacity: 0.8;
-}
-
 .barTrack {
   display: flex;
   height: 6px;
@@ -514,31 +797,6 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.trend {
-  margin-top: 8px;
-}
-
-.trendBars {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 44px;
-  margin: 6px 0 4px;
-}
-
-.trendBar {
-  flex: 1;
-  min-width: 4px;
-  border-radius: 2px 2px 0 0;
-  background: var(--dsw-alias-label-secondary);
-  opacity: 0.75;
-  transition: opacity 120ms ease;
-}
-
-.trendBar:hover {
-  opacity: 1;
-}
-
 .open {
   border: none;
   border-radius: 999px;
@@ -565,7 +823,6 @@
   .teamAction,
   .itemRow,
   .graphEdge,
-  .trendBar,
   .open {
     transition: none;
   }

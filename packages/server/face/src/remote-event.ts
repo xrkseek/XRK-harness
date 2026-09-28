@@ -12,6 +12,7 @@ export const FACE_HOST_REMOTE_EVENTS = [
   "commands/change",
   "credentials/updated",
   "llm/adapters-updated",
+  "plugin-inventory/install-log",
   "settings/document-updated",
 ] as const;
 

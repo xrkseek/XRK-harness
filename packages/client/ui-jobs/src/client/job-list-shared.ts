@@ -93,14 +93,3 @@ export type JobListActions = {
   killJob(jobId: string): void
   backgroundJob(jobId: string): void
 }
-
-export type JobRowStyle = {
-  row: string
-  rowSettled: string
-  rowDot: string
-  kind: string
-  label: string
-  status: string
-  duration: string
-  action: string
-}

@@ -40,6 +40,7 @@ import {
   type ShellShortcutOverrides,
 } from './shell-shortcuts.ts'
 import type { createLayoutStore } from './stores.ts'
+import { DesktopChrome, hasDesktopChrome } from './DesktopChrome.tsx'
 import css from './AppFrame.module.css'
 
 /** Injected by ui-layout: publish shell insets for floating workbench plugins. */
@@ -408,6 +409,8 @@ export function AppFrame({
     if (tracking && shift <= -72) actions.toggleSidebar()
   }, [actions])
 
+  const desktopChrome = hasDesktopChrome()
+
   return (
     <div
       ref={frameRef}
@@ -432,7 +435,9 @@ export function AppFrame({
       data-dragging={dragging || undefined}
       data-phone={phone || undefined}
       data-drawer-swiping={drawerShift !== 0 || undefined}
+      data-desktop-chrome={desktopChrome || undefined}
     >
+      {desktopChrome ? <DesktopChrome t={t} /> : null}
       <div
         className={css.sidebarCol}
         style={phone ? { width: drawerWidth } : undefined}

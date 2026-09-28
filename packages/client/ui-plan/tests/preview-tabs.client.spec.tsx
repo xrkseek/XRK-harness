@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Session Status tabs: Face session.status + live plan/todos + office RPC. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import { zh } from '../src/client/locales.ts'
@@ -236,7 +236,7 @@ describe('PreviewTabs', () => {
     expect(screen.getByText('进行中')).toBeTruthy()
   })
 
-  it('falls back to the preview RPC where plan mode is not composed', async () => {
+  it('folds plan · Office flags into the Status session card', async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url.includes('plan.preview')) {
@@ -262,28 +262,39 @@ describe('PreviewTabs', () => {
       />,
     )
     await waitFor(() => {
-      expect(screen.getByText('会话')).toBeTruthy()
+      expect(screen.getByLabelText('会话')).toBeTruthy()
     })
-    fireEvent.click(screen.getByRole('tab', { name: '任务' }))
-    expect(screen.getByText(/尚无站立计划/)).toBeTruthy()
-    fireEvent.click(screen.getByRole('tab', { name: '计划' }))
+    // Expand the session card (starts collapsed).
+    fireEvent.click(within(screen.getByLabelText('会话')).getByRole('button'))
     await waitFor(() => {
       expect(screen.getByText('计划模式')).toBeTruthy()
     })
     expect(screen.getByText('是')).toBeTruthy()
-    fireEvent.click(screen.getByRole('tab', { name: 'Office' }))
     expect(screen.getByText('已配置')).toBeTruthy()
     expect(screen.getAllByText('否').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('tab', { name: '任务' }))
+    expect(screen.getByText(/尚无站立计划/)).toBeTruthy()
+    expect(screen.queryByRole('tab', { name: '计划' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Office' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '关闭概况栏' }))
     expect(closeDetails).toHaveBeenCalledTimes(1)
   })
 
-  it('rides the live plan projection instead of the mount-time snapshot', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ ok: false })))
+  it('rides the live plan projection on the Status session card', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('session.status')) {
+        return jsonResponse({ result: { ok: true, value: sampleStatus } })
+      }
+      return jsonResponse({ ok: false })
+    }))
     const { state, useProjection } = fakeProjections({ plan: { active: false, pending: false } })
     const props = { sessionId: 's1', closeDetails: vi.fn(), t, useProjection } as PreviewTabsProps
     const view = render(<PreviewTabs {...props} />)
-    fireEvent.click(screen.getByRole('tab', { name: '计划' }))
+    await waitFor(() => {
+      expect(screen.getByLabelText('会话')).toBeTruthy()
+    })
+    fireEvent.click(within(screen.getByLabelText('会话')).getByRole('button'))
     await waitFor(() => {
       expect(screen.getByText('计划模式')).toBeTruthy()
     })
@@ -355,7 +366,7 @@ describe('PreviewTabs', () => {
     // Status keeps the slim summary (counts + inject sources), not event rows.
     expect(screen.getAllByText(/skill-catalog:catalog/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/overflow/).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/被遮蔽 tokens 1200/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/被遮蔽 tokens 1,?200/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/修剪 1/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/落盘 1/).length).toBeGreaterThan(0)
     expect(screen.queryByText('prune · spill')).toBeNull()
@@ -419,6 +430,74 @@ describe('PreviewTabs', () => {
     expect(openSpillPath).toHaveBeenCalledWith(
       '/home/u/.xrk/spill/tool-outputs/s_c.txt',
     )
+  })
+
+  it('exposes a Changes tab that stays empty until workspaceChanges arrive', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('session.status')) {
+        return jsonResponse({ result: { ok: true, value: sampleStatus } })
+      }
+      return jsonResponse({ ok: false })
+    }))
+    render(
+      <PreviewTabs
+        {...({
+          sessionId: 's1',
+          closeDetails: vi.fn(),
+          loadFileDiff: vi.fn(async () => null),
+          openChangedFile: vi.fn(),
+          t,
+          useProjection: fakeProjections({}).useProjection,
+        } as PreviewTabsProps)}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: '改动' })).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('tab', { name: '改动' }))
+    expect(screen.getByText(/本会话尚无改动摘要/)).toBeTruthy()
+  })
+
+  it('expands a Status job row to peek output and two-press kills', async () => {
+    const statusWithJob = {
+      ...sampleStatus,
+      jobs: [{ id: 'job-1', status: 'running', label: 'sleep 5' }],
+    }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('session.status')) {
+        return jsonResponse({ result: { ok: true, value: statusWithJob } })
+      }
+      return jsonResponse({ ok: false })
+    }))
+    const peekJobOutput = vi.fn(async () => ({ text: 'partial\n', truncated: false }))
+    const killJob = vi.fn()
+    render(
+      <PreviewTabs
+        {...({
+          sessionId: 's1',
+          closeDetails: vi.fn(),
+          peekJobOutput,
+          killJob,
+          t,
+          useProjection: fakeProjections({}).useProjection,
+        } as PreviewTabsProps)}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('sleep 5')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '展开 sleep 5 的输出' }))
+    await waitFor(() => {
+      expect(peekJobOutput).toHaveBeenCalledWith('job-1')
+    })
+    expect(await screen.findByText('partial')).toBeTruthy()
+    const stop = screen.getByRole('button', { name: '停止 sleep 5' })
+    fireEvent.click(stop)
+    expect(killJob).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '确认停止' }))
+    expect(killJob).toHaveBeenCalledWith('job-1')
   })
 
   it('exposes cold resume and merge actions on Teams task rows', async () => {
