@@ -155,6 +155,13 @@ describe('PluginInventorySettingsTab', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toBe(en.toastRemoved.replace('{name}', 'better-sidebar'))
     })
+    await waitFor(() => {
+      const hint = view.container.querySelector('[data-client-refresh-hint]')
+      expect(hint).toBeTruthy()
+      expect(hint!.textContent).toContain(en.clientRefreshHint)
+      // Failed-fiber banner also exposes refresh — assert the hint row's button.
+      expect(hint!.querySelector('button')?.textContent).toBe(en.refreshPage)
+    })
 
     const globalEntries = (): number =>
       view.container.querySelectorAll('[data-plugin-scope="global"] [data-plugin-entry]').length

@@ -26,7 +26,10 @@ export {
   DEFAULT_MAX_ELEMENTS,
   DEFAULT_MAX_SNAPSHOT_CHARS,
   buildCaptureResult,
+  formatActResult,
   formatAxSnapshot,
+  formatCaptureEnvelope,
+  formatComputerUseGuidance,
   formatWindowsList,
 } from "./format.js";
 export { mapKeysToSendKeys, escapeSendKeys } from "./keys.js";
@@ -137,7 +140,7 @@ export function createDefaultComputerUseAccess(
       providerName: "background",
       unavailableMessage: installed
         ? unavailableMessage
-        : "Error: background input backend unavailable (not installed).",
+        : "Error: background helper unavailable — set XRK_COMPUTER_USE_BACKGROUND.",
     };
   }
   if (resolved === "uia" && process.platform === "win32") {

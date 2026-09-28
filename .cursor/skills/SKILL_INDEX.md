@@ -24,6 +24,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **Settings / 模型 / MCP 设置 UI** | rule `xrk-client-face-ui` |
 | **Face wire ↔ client Zod / session.list** | rule `xrk-face-client-wire` |
 | Session / meter / compaction | `xrk-meter-session` |
+| **Desktop / Web 事件载波**（host SSE · MCP/子代理实时） | `xrk-desktop-events` · rule `xrk-desktop-events` · [host-face](../../docs/host-face.md) |
 | 写 / 改文档 | `xrk-docs-audience` |
 | 发行说明 | `xrk-release-notes` |
 | Node ≥26 / 门禁 | rule `xrk-node26` |
@@ -39,7 +40,9 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **`xrk-community-plugins`** | 社区 client · `xrk.host.json` · dsh-compat 层级 |
 | **`xrk-workspace-skills`** | 产品 skill 写法 · frontmatter |
 | `xrk-meter-session` | Meter / compaction / TokenUsage |
+| **`xrk-desktop-events`** | Web vs Desktop mux/host 载波；禁 stub host SSE |
 | rule `xrk-face-client-wire` | Face 发射字段与 apiproxy Zod 同批扩展；list 按行容错 |
+| rule `xrk-desktop-events` | Desktop 必须开 `xrk-app://stream` host SSE |
 | `xrk-docs-audience` | 教科书身份与双语 |
 | `xrk-release-notes` | `docs/releases/**` 文体 |
 

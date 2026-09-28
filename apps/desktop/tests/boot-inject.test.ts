@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -6,6 +6,7 @@ import {
   injectDesktopBootIntoHtml,
   loadDesktopBootManifest,
   maybeInjectDesktopBootHtml,
+  mergeDesktopBootManifests,
 } from "../src/boot-inject.js";
 
 describe("desktop boot inject", () => {
@@ -38,6 +39,57 @@ describe("desktop boot inject", () => {
         raw,
       ).equals(raw),
     ).toBe(true);
-    expect(loadDesktopBootManifest(root)?.rev).toBe("cap");
+  });
+
+  it("merges community overlay entries onto product boot", () => {
+    const product = mkdtempSync(join(tmpdir(), "xrk-desktop-boot-prod-"));
+    const overlay = mkdtempSync(join(tmpdir(), "xrk-desktop-boot-ov-"));
+    writeFileSync(
+      join(product, "boot.json"),
+      JSON.stringify({
+        rev: "prod",
+        entries: [
+          {
+            id: "@xrkseek/client-runtime",
+            url: "/plugins/@xrkseek/client-runtime/client.js",
+            rev: "1",
+          },
+        ],
+      }),
+      "utf8",
+    );
+    writeFileSync(
+      join(overlay, "boot.json"),
+      JSON.stringify({
+        rev: "ov",
+        entries: [
+          {
+            id: "dsh-niulai-pet",
+            url: "/plugins/dsh-niulai-pet/client.js",
+            rev: "0.4.13",
+          },
+        ],
+      }),
+      "utf8",
+    );
+    const merged = mergeDesktopBootManifests(
+      loadDesktopBootManifest(product)!,
+      loadDesktopBootManifest(overlay),
+    );
+    expect(merged.rev).toBe("prod+ov");
+    expect(merged.entries.map((e) => e.id)).toEqual([
+      "@xrkseek/client-runtime",
+      "dsh-niulai-pet",
+    ]);
+
+    const raw = Buffer.from("<html><head></head><body></body></html>", "utf8");
+    const html = maybeInjectDesktopBootHtml(
+      product,
+      join(product, "index.html"),
+      raw,
+      { overlayRoot: overlay },
+    ).toString("utf8");
+    expect(html).toContain("dsh-niulai-pet");
+    expect(html).toContain("@xrkseek/client-runtime");
   });
 });

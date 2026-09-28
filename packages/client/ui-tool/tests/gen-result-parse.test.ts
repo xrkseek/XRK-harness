@@ -103,12 +103,45 @@ describe('imageGenCardModel', () => {
       '--- image 1 ---',
       'mime=image/png bytes=42',
       'attachmentId=sha256:abc',
-      'image_base64=AAAA',
+      'use=Shown in chat. Re-inspect: read_image file_path=<attachmentId>. Not a disk path.',
     ].join('\n')))
     expect(model?.label).toBe('1 image')
     expect(model?.images).toHaveLength(1)
     expect(model?.images[0]?.attachment.attachmentId).toBe('sha256:abc')
     expect(model?.text).not.toContain('image_base64=')
+  })
+
+  it('prefers durable image ContentBlocks over text parse', () => {
+    const block: ToolResultNode = {
+      kind: 'tool-result',
+      seq: 1,
+      time: 0,
+      callId: 'c1',
+      call: { name: 'image_generate', argsRaw: '{"prompt":"x"}' },
+      callTime: 0,
+      isError: false,
+      callView: null,
+      resultView: null,
+      subCalls: [],
+      content: [
+        { type: 'text', text: 'provider=memory images=1\nattachmentId=sha256:from-text' },
+        {
+          type: 'image',
+          attachment: {
+            attachmentId: 'sha256:from-block',
+            mediaType: 'image/png',
+            bytes: 42,
+            width: 64,
+            height: 32,
+            name: 'image_generate_1.png',
+          },
+        },
+      ],
+    }
+    const model = imageGenCardModel(block)
+    expect(model?.images).toHaveLength(1)
+    expect(model?.images[0]?.attachment.attachmentId).toBe('sha256:from-block')
+    expect(model?.images[0]?.attachment.width).toBe(64)
   })
 
   it('returns null without attachmentId', () => {

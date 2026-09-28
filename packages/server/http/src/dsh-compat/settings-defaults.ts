@@ -2,7 +2,7 @@
  * Default documents for DSH Cordis `*-settings` namespaces.
  * Keeps community settings panels from rendering empty on first open.
  */
-import { MNEMON_SETTINGS_DEFAULTS, MNEMON_UI_SETTINGS_DEFAULTS } from "./mnemon.js";
+import { MNEMON_SETTINGS_DEFAULTS, MNEMON_UI_SETTINGS_DEFAULTS, MNEMON_VIEW_SETTINGS_DEFAULTS } from "./mnemon.js";
 
 const VISION_ROUTER = {
   enabled: false,
@@ -104,6 +104,7 @@ export const DSH_SETTINGS_DEFAULTS: Readonly<
 > = {
   mnemon: MNEMON_SETTINGS_DEFAULTS,
   "mnemon-ui": MNEMON_UI_SETTINGS_DEFAULTS,
+  "mnemon-view": MNEMON_VIEW_SETTINGS_DEFAULTS,
   "vision-router": VISION_ROUTER,
   costMeter: COST_METER,
   tokenLedger: {
@@ -122,6 +123,7 @@ export const DSH_SETTINGS_DEFAULTS: Readonly<
       pi: false,
       grok: false,
     },
+    pasteToPath: true,
   },
   modsearch: {
     enabled: true,
@@ -171,6 +173,13 @@ export const DSH_SETTINGS_DEFAULTS: Readonly<
   pocket: { enabled: true, sync: false },
   autoReview: { enabled: false },
   poisonGuard: { enabled: false, rules: [] },
+  "web-search-free": {
+    provider: "ddg",
+    lang: "zh",
+    keyStorage: "credentials",
+    safeSearch: "off",
+    bingMarket: "zh-CN",
+  },
 };
 
 export function dshSettingsDefaults(

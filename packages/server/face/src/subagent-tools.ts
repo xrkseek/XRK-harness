@@ -12,6 +12,7 @@ import {
   DEFAULT_MAX_DEPTH,
   resolveAgentPresetProfile,
 } from "./presets-catalog.js";
+import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 import { resolveSessionCwd } from "./session-cwd.js";
 import {
   ExternalAgentError,
@@ -90,8 +91,21 @@ export function resolveSubagentQuota(
     loopValue.maxActiveSubagents >= 1
       ? Math.min(16, Math.floor(loopValue.maxActiveSubagents))
       : DEFAULT_MAX_ACTIVE_CHILDREN;
-  const presetId = runtime.sessionAgentPresets.get(sessionId);
+  const presetId = effectiveSessionAgentPreset(runtime, sessionId);
   const profile = resolveAgentPresetProfile(presetId);
+  if (profile.subagents.mode === "off") {
+    const depth = subagentDepth(runtime, sessionId);
+    const active = countActiveChildren(runtime, sessionId);
+    const delegated = runtime.subagents.listDelegated(sessionId).length;
+    return {
+      depth,
+      maxDepth: 0,
+      active,
+      maxActive: 0,
+      delegated,
+      slotsFree: 0,
+    };
+  }
   const maxDepth =
     profile.subagents.maxDepth !== undefined
       ? Math.min(faceDepth, profile.subagents.maxDepth)
@@ -361,6 +375,20 @@ function createSubagentTool(
         task_name?: string;
         output_schema?: unknown;
       };
+      // Defense in depth: Host should not bind this tool when the badge is
+      // Frugal/minimal/shell. If a stale AgentHandle still carries it, refuse.
+      const badge = effectiveSessionAgentPreset(
+        options.runtime,
+        options.parentSessionId,
+      );
+      if (resolveAgentPresetProfile(badge).subagents.mode === "off") {
+        return {
+          content:
+            `subagent: session badge "${badge}" has subagents off ` +
+            "(Frugal / Minimal / Shell). Switch to Shallow or XRK Harness for a new session.",
+          isError: true,
+        };
+      }
       const prompt = String(a.prompt ?? "").trim();
       if (!prompt) {
         return { content: "subagent: empty prompt", isError: true };

@@ -159,6 +159,10 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
   }
 
   private async read(generation: number): Promise<void> {
+    // Coalesce: a newer load/write already invalidated this generation — skip
+    // the wire call so a storm of settings/document-updated (MCP overlay ticks)
+    // does not serialize dozens of describes behind a stale connecting snapshot.
+    if (generation !== this.readGeneration) return
     let response: Awaited<ReturnType<SettingsFace['settings']['describe']>>
     try {
       response = await this.api.settings.describe({})
@@ -184,19 +188,19 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
   private accept(view: SettingsNamespaceView, publish: boolean, writable?: boolean): void {
     const decoded = publish ? this.decode(view) : undefined
     this.store.update((draft) => {
+      // Always track Host revision/layers so the next write fences correctly,
+      // even when a superseded read must not publish its section value.
       draft.revision = view.revision
       draft.base = view.base
       draft.user = view.user
       if (writable !== undefined) draft.writable = writable
       if (!publish) return
       if (decoded === undefined) {
-        // Schema mismatch must not leave the scope stuck on `loading` forever
-        // (PluginCard treats non-ready as invisible — e.g. MCP toolCount type).
+        // Keep last-good value/status (and first-load `loading`) — a schema
+        // mismatch must not wipe a working MCP/settings card to empty.
         console.warn(
-          `[settings] namespace "${this.spec.namespace}" failed schema decode; card hidden until Host value matches schema`,
+          `[settings] namespace "${this.spec.namespace}" failed schema decode; keeping last published section`,
         )
-        draft.status = 'unavailable'
-        draft.value = undefined
         return
       }
       draft.status = 'ready'

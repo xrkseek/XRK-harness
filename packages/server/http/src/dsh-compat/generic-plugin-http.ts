@@ -3,14 +3,36 @@
  * API-shaped paths return honest JSON. Unmatched platform bundles fall through to webDist.
  */
 import { createReadStream, statSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "./underlying/http-json.js";
+import { createXrkDocStore } from "./underlying/doc-store.js";
 import { DSH_COMPAT_ADAPTER, tag } from "./meta.js";
 
 export interface PluginAssetOptions {
   readonly pluginsDir?: string;
+  readonly xrkHome?: string;
 }
+
+interface AgentTeamRow {
+  id: string;
+  name: string;
+  plan?: string;
+  status: string;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface AgentTeamsDoc {
+  teams: AgentTeamRow[];
+}
+
+const AGENT_TEAMS_STORE = createXrkDocStore<AgentTeamsDoc>(
+  ["dsh-agent-teams", "teams.json"],
+  { teams: [] },
+);
 
 function pluginDir(
   pluginsDir: string | undefined,
@@ -121,8 +143,16 @@ export async function handlePluginAssetHttp(
 ): Promise<boolean> {
   if (!pathname.startsWith("/plugins/")) return false;
   const method = (req.method ?? "GET").toUpperCase();
+  let mutateBody: Record<string, unknown> = {};
   if (method === "POST" || method === "PUT" || method === "PATCH") {
-    await readBody(req);
+    try {
+      const raw = await readBody(req);
+      mutateBody = raw.trim()
+        ? (JSON.parse(raw) as Record<string, unknown>)
+        : {};
+    } catch {
+      mutateBody = {};
+    }
   }
 
   const { pluginId, tail } = parsePluginPath(pathname);
@@ -141,6 +171,78 @@ export async function handlePluginAssetHttp(
       targetResolved === baseResolved
     ) {
       if (tryServePluginFile(res, abs, method)) return true;
+    }
+  }
+
+  // @nanmicoder/dsh-agent-teams — persisted team catalog (run/halt stay local).
+  if (
+    pluginId === "dsh-agent-teams" ||
+    pluginId.endsWith("/dsh-agent-teams")
+  ) {
+    const xrkHome = options.xrkHome;
+    if (tail === "state" || tail.startsWith("state?")) {
+      const url = new URL(req.url ?? "/", "http://127.0.0.1");
+      const archived = url.searchParams.get("archived") === "1";
+      const teams = AGENT_TEAMS_STORE.read(xrkHome).data.teams.filter((t) =>
+        archived ? t.archived : !t.archived,
+      );
+      sendJson(res, 200, {
+        teams,
+        ...(archived ? { archived: true } : {}),
+        adapter: DSH_COMPAT_ADAPTER,
+      });
+      return true;
+    }
+    if (tail === "plan" && method === "POST") {
+      const body = mutateBody;
+      const now = new Date().toISOString();
+      const id =
+        typeof body.id === "string" && body.id ? body.id : randomUUID();
+      const row: AgentTeamRow = {
+        id,
+        name:
+          typeof body.name === "string"
+            ? body.name
+            : `team-${id.slice(0, 8)}`,
+        ...(typeof body.plan === "string" ? { plan: body.plan } : {}),
+        status: "planned",
+        archived: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      AGENT_TEAMS_STORE.patch(xrkHome, (doc) => ({
+        teams: [...doc.teams.filter((t) => t.id !== id), row],
+      }));
+      sendJson(res, 200, {
+        ok: true,
+        team: row,
+        teams: AGENT_TEAMS_STORE.read(xrkHome).data.teams.filter(
+          (t) => !t.archived,
+        ),
+        adapter: DSH_COMPAT_ADAPTER,
+      });
+      return true;
+    }
+    if (tail === "halt" && method === "POST") {
+      const body = mutateBody;
+      const id = typeof body.id === "string" ? body.id : "";
+      const now = new Date().toISOString();
+      AGENT_TEAMS_STORE.patch(xrkHome, (doc) => ({
+        teams: doc.teams.map((t) =>
+          !id || t.id === id
+            ? { ...t, status: "halted", updatedAt: now }
+            : t,
+        ),
+      }));
+      sendJson(res, 200, {
+        ok: true,
+        teams: AGENT_TEAMS_STORE.read(xrkHome).data.teams.filter(
+          (t) => !t.archived,
+        ),
+        path: pathname,
+        adapter: DSH_COMPAT_ADAPTER,
+      });
+      return true;
     }
   }
 

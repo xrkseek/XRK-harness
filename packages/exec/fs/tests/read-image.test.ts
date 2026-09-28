@@ -147,4 +147,49 @@ describe("createReadImageTool region", () => {
       cropOffset: { x: 10, y: 12 },
     });
   });
+
+  it("loads Host attachment ids without a workspace path", async () => {
+    const stored = {
+      attachmentId: "sha256:deadbeef",
+      mediaType: "image/png" as const,
+      bytes: 12,
+      width: 8,
+      height: 6,
+      name: "image_generate_1.png",
+    };
+    const readImage = vi.fn(async () => ({
+      ref: stored,
+      data: new Uint8Array([1, 2, 3]),
+    }));
+    const saveImage = vi.fn(async () => ({
+      ...stored,
+      attachmentId: "sha256:reread",
+    }));
+    const tool = createReadImageTool({
+      fs: {
+        stat: async () => {
+          throw new Error("fs should not run for attachment ids");
+        },
+        readBytes: async () => {
+          throw new Error("fs should not run for attachment ids");
+        },
+      },
+      attachments: mockAttachments({ readImage, saveImage }),
+    });
+    for (const filePath of [
+      "sha256:deadbeef",
+      "attachment:sha256:deadbeef",
+    ]) {
+      const result = await tool.execute({ file_path: filePath });
+      expect(result.isError).toBeFalsy();
+      expect(Array.isArray(result.content)).toBe(true);
+      if (!Array.isArray(result.content)) throw new Error("expected blocks");
+      const text = result.content.find((b) => b.type === "text");
+      expect(text && "text" in text ? text.text : "").toContain(
+        "attachment:sha256:deadbeef",
+      );
+      expect(result.meta).toMatchObject({ path: "attachment:sha256:deadbeef" });
+    }
+    expect(readImage).toHaveBeenCalled();
+  });
 });

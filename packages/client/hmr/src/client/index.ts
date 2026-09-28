@@ -63,6 +63,7 @@
  */
 import type { Context } from '@xrkseek/cordis'
 import type { Entry, Loader } from '@xrkseek/cordis-plugin-loader'
+import type { WebBootGraph } from '@xrkseek/client-modules'
 import type { PluginsEventFrame } from '../events.ts'
 import { EVENTS_ENDPOINT } from '../events.ts'
 
@@ -139,6 +140,27 @@ export function apply(ctx: Context): void {
     await entry.fiber?.await()
   }
 
+  /**
+   * Soft-remount graph deltas: adopt new boot rows, prefetch + loader.create
+   * for ids missing from the entry tree. Connect-time snapshots are no-ops
+   * (every row already has an entry). Removals stay for a later page reload —
+   * dispose order across inject edges is not safe to invent here.
+   */
+  async function applyGraph(graph: WebBootGraph): Promise<void> {
+    for (const row of graph.entries) {
+      modLoader.adopt({ id: row.id, url: row.url, rev: row.rev })
+      if (findEntry(loader, row.id) !== undefined) continue
+      await modLoader.prefetch(row.id)
+      const id = await loader.create({ name: row.id })
+      const entry = loader.resolve(id)
+      if (entry.fiber === undefined) {
+        ctx.logger.error(`client-hmr: soft remount of "${row.id}" left the entry fiberless`)
+        continue
+      }
+      await entry.fiber.await()
+    }
+  }
+
   // Serialize reloads: frames can arrive faster than a swap completes, and
   // interleaved dispose/execute chains would corrupt the single-slot handoff.
   let queue: Promise<void> = Promise.resolve()
@@ -151,10 +173,10 @@ export function apply(ctx: Context): void {
         })
         break
       case 'graph':
-        // Connect-time snapshot, unused. The loader's cached graph rev
-        // goes stale after rebuilds — harmless, since prefetch hits the
-        // network anyway (host serves bundles no-cache); graph rev refresh
-        // lands with the reconnect-handshake mechanism.
+        queue = queue.then(() => applyGraph(frame.graph)).catch((error: unknown) => {
+          ctx.logger.error('client-hmr: soft remount from graph frame failed')
+          ctx.logger.error(error)
+        })
         break
       default:
         // Merge-extensible frame union: unknown frame types from newer hosts

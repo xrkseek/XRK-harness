@@ -8,7 +8,7 @@
 
 | 工具 | 作用 |
 |------|------|
-| `image_generate` | 文生图；若 Provider 支持 edit，可传 `image_url` / `reference_image_urls` / `reference_attachment_ids` 做图生图编辑。返回 PNG base64（工具文本截断）；有 `AttachmentStore` 时另给 `attachmentId` |
+| `image_generate` | 文生图；若 Provider 支持 edit，可传 `image_url` / `reference_image_urls` / `reference_attachment_ids` 做图生图编辑。有 `AttachmentStore` 时：聊天展开预览图，文本给 `attachmentId=sha256:…`（可再 `read_image`）；无 store 时诚实说明不可持久化 |
 
 ### 参数
 
@@ -60,7 +60,7 @@ Text-to-image / image-to-image seam: `@xrkseek/exec-image-gen`. Model tool `imag
 
 | Tool | Role |
 |------|------|
-| `image_generate` | Text-to-image; with edit-capable Provider also accepts `image_url` / `reference_image_urls` / `reference_attachment_ids`. Returns PNG base64 (truncated) and optional `attachmentId`. |
+| `image_generate` | Text-to-image; with edit-capable Provider also accepts `image_url` / `reference_image_urls` / `reference_attachment_ids`. With `AttachmentStore`: chat gallery + `attachmentId=sha256:…` (re-inspect via `read_image`); without store, fails open that bytes are not durable. |
 
 No refs → OpenAI `images/generations`; with refs → `images/edits`. FAL/xAI follow the same tool surface via their Providers.
 

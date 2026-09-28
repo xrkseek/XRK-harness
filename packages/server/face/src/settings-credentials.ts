@@ -1143,29 +1143,12 @@ export function ensureMcpLiveIfIdle(runtime: FaceRuntime): void {
   );
   if (!allIdle) return;
 
-  // Mark progress before the async remount so the same describe/boot response
-  // (and concurrent callers) see "connecting" instead of idle.
-  const first = desired[0];
-  runtime.mcpSyncOverlay = {
-    connectFailures: overlay.connectFailures,
-    parked: overlay.parked,
-    connecting: first !== undefined ? [first] : [],
-  };
-
+  // Claim the gate before awaiting so concurrent describe/boot cannot start a
+  // second remount. Host onConnectProgress owns the connecting overlay.
   const sync = runtime.syncMcpServers;
   const run = (async () => {
     try {
-      const synced = await sync(servers, { allowConnect: true });
-      runtime.mcpSyncOverlay = {
-        connectFailures: synced.failures,
-        parked: synced.parked ?? [],
-        connecting: [],
-      };
-      const slot = runtime.settingsNamespaces.ensure("mcp");
-      publishRemoteEvent(runtime.bus, "settings/document-updated", [
-        "mcp",
-        slot.revision,
-      ]);
+      await sync(servers, { allowConnect: true });
     } catch (err) {
       runtime.mcpSyncOverlay = {
         ...runtime.mcpSyncOverlay,
@@ -1420,12 +1403,16 @@ export async function settingsMutateFace(
       });
       connectFailures = synced.failures;
       parked = synced.parked ?? [];
+      // Persist settle into Face overlay so the next describe (and mutate
+      // response) sees failures/parked even when sync is a thin test double
+      // that does not push Host lastMcpReconcileOverlay.
       runtime.mcpSyncOverlay = {
         connectFailures,
         parked,
         connecting: [],
       };
     }
+    // Publish so other clients pick up the new servers/allow revision.
     publishRemoteEvent(runtime.bus, "settings/document-updated", [
       ns,
       result.view.revision,

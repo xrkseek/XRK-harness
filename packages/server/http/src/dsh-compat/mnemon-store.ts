@@ -84,3 +84,48 @@ export function getMnemonDocument(
     MNEMON_DOCS.read(xrkHome).data.documents.find((d) => d.id === id) ?? null
   );
 }
+
+/** Soft-archive (forget) — keeps the row for capacity / pack export. */
+export function archiveMnemonDocument(
+  xrkHome: string | undefined,
+  id: string,
+): MnemonDocument | null {
+  const now = new Date().toISOString();
+  let row: MnemonDocument | null = null;
+  MNEMON_DOCS.patch(xrkHome, (store) => {
+    const idx = store.documents.findIndex((d) => d.id === id);
+    if (idx < 0) return store;
+    const prev = store.documents[idx]!;
+    row = { ...prev, archived: true, updatedAt: now };
+    const documents = [...store.documents];
+    documents[idx] = row;
+    return { documents };
+  });
+  return row;
+}
+
+/** Hard delete — used by body-delete when client asks for removal. */
+export function deleteMnemonDocument(
+  xrkHome: string | undefined,
+  id: string,
+): boolean {
+  let removed = false;
+  MNEMON_DOCS.patch(xrkHome, (store) => {
+    const next = store.documents.filter((d) => d.id !== id);
+    removed = next.length !== store.documents.length;
+    return { documents: next };
+  });
+  return removed;
+}
+
+/** Import pack rows (merge by id). */
+export function importMnemonDocuments(
+  xrkHome: string | undefined,
+  rows: readonly Record<string, unknown>[],
+): MnemonDocument[] {
+  const imported: MnemonDocument[] = [];
+  for (const raw of rows) {
+    imported.push(upsertMnemonDocument(xrkHome, raw));
+  }
+  return imported;
+}

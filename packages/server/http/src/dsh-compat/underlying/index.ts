@@ -13,7 +13,16 @@ export {
   type XrkDocStore,
 } from "./doc-store.js";
 export {
+  patchPluginSurface,
+  pluginSurfaceStore,
+  readPluginSurface,
+  sanitizePluginSurfaceId,
+  type PluginSurfaceBucket,
+  type PluginSurfaceDoc,
+} from "./plugin-surface-store.js";
+export {
   readBody,
+  readBodyBuffer,
   rpcErr,
   rpcOk,
   sendJson,

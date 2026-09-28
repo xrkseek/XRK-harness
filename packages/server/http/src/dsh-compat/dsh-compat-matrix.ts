@@ -124,14 +124,15 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
   {
     id: "wallpaper-skin-market",
     coverage: "full",
-    genericModule: "wallpaper.ts · skin-market.ts · xrk-json-store",
-    note: "Wallpaper settings + skin-market activation revision docs",
+    genericModule:
+      "wallpaper.ts · skin-market.ts · skin-assets.ts · skin-discover.ts · dsh-skins.ts · skin-center.ts · xrk-json-store",
+    note: "Wallpaper settings + skin-market + /api/dsh/skins + /api/skin-center/v2 + /skin-assets/<id>/<hash> staged artwork",
   },
   {
     id: "market-inventory",
     coverage: "bridge",
     genericModule: "market.ts → xrk/plugin-services",
-    note: "dsh-market → XRK inventory / CLI deferred",
+    note: "dsh-market install/update/uninstall → runPluginMutate; updates map empty; maintenance still CLI-deferred",
   },
   {
     id: "tokenledger-usage",

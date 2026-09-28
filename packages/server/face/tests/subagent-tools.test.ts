@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import { createToolRegistry } from "@xrkseek/core-tools";
 import { createFaceRuntime } from "../src/runtime.js";
@@ -53,12 +56,17 @@ describe("subagent tools", () => {
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-depth-")),
       drain: drain(),
       resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
     });
     const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
     const child = runtime.ensureSession("child");
+    runtime.sessionAgentPresets.set(child, "harness");
     const grand = runtime.ensureSession("grand");
+    runtime.sessionAgentPresets.set(grand, "harness");
     runtime.subagents.attach({
       parentSessionId: parent,
       childSessionId: child,
@@ -158,6 +166,7 @@ describe("subagent tools", () => {
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-active-")),
       drain: {
         wake() {},
         async cancel() {},
@@ -167,8 +176,10 @@ describe("subagent tools", () => {
         async run() {},
       },
       resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
     });
     const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
     const childA = runtime.ensureSession("child-a");
     const childB = runtime.ensureSession("child-b");
     runtime.subagents.attach({
@@ -195,5 +206,26 @@ describe("subagent tools", () => {
     const out = await tools.get("subagent")!.execute({ prompt: "third" });
     expect(out.isError).toBe(true);
     expect(out.content).toMatch(/max active children/);
+  });
+
+  it("refuses spawn when the session badge has subagents off", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-frugal-")),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "frugal",
+    });
+    const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "frugal");
+    const tools = createToolRegistry();
+    // Simulate a stale AgentHandle that still carries the tool.
+    bindSubagentTools(tools, { runtime, parentSessionId: parent });
+    const out = await tools.get("subagent")!.execute({ prompt: "nope" });
+    expect(out.isError).toBe(true);
+    expect(out.content).toMatch(/subagents off/);
+    expect(out.content).toMatch(/frugal/);
   });
 });

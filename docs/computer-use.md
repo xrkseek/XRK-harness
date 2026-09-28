@@ -14,7 +14,7 @@ Harness 默认登记模型工具 `computer_use`；无 Provider 时工具仍可�
 |----|------|
 | Definition | `ComputerUseService`（`capture` · `act` · `listWindows`） |
 | Provider | `memory` · Windows `uia`（`XRK_COMPUTER_USE=1`）· `background`（`XRK_COMPUTER_USE=background`，助手未安装则 `unavailable`）；或 Host 注入。同一注册表同时只占一个名字 |
-| Consumer | `createComputerUseTools` → `computer_use`（action 判别：capture / click / type / key / scroll / list_windows；capture `mode=vision|som` 经 `saveScreenshot` 进附件）。不登记到 `browser_*` |
+| Consumer | `createComputerUseTools` → `computer_use`（Codex 环：list_windows → capture → click/type/key/scroll → 再 capture；`mode=vision|som` 经 `saveScreenshot` 内联图；可选 `coordinate=[x,y]` 像素点）。不登记到 `browser_*` |
 
 ## 启用
 
@@ -26,9 +26,9 @@ Harness 默认登记模型工具 `computer_use`；无 Provider 时工具仍可�
 | `computerUseTools: service` | 注入自定义 Provider |
 | `computerUseTools: false` | 不登记工具 |
 
-Windows UIA 走 Invoke / ValuePattern / SendKeys（`key`）/ ScrollPattern 或滚轮回退（`scroll`）。后台输入是旁边的 `background` Provider，不是把 UIA 改成 SPI，也不并进 `browser_*`。
+Windows UIA 走 Invoke / ValuePattern / SendKeys（`key`）/ ScrollPattern 或滚轮回退（`scroll`）。`mode=background` 把 `act` 交给 `XRK_COMPUTER_USE_BACKGROUND` 助手；`capture` 仍用 UIA。
 
-`capture` 的 `mode`：`ax`（默认，仅无障碍树）· `vision`（窗口 PNG + AX）· `som`（PNG 上叠加 1-based 元素序号 + AX）。真截图由 UIA Provider 用 `CopyFromScreen` 产出；Harness 经 `AttachmentStore.saveImage` 与 `browser_vision` 同缝把图交给多模态模型。无附件仓时若已有 PNG，工具诚实失败。cua-driver 全桌面 SPI **未做**。
+`capture` 的 `mode`：`ax`（默认，仅无障碍树）· `vision`（窗口 PNG + AX）· `som`（PNG 上叠加 1-based 元素序号 + AX）。真截图由 UIA Provider 用 `CopyFromScreen` 产出；Harness 经 `AttachmentStore.saveImage` 与 `browser_vision` 同缝把图交给多模态模型。无附件仓时若已有 PNG，工具诚实失败。
 
 ## 与 browser_* 分工
 
@@ -57,7 +57,7 @@ Harness registers the model tool `computer_use` by default; without a Provider t
 |-------|---------|
 | Definition | `ComputerUseService` (`capture` · `act` · `listWindows`) |
 | Provider | `memory` · Windows `uia` (`XRK_COMPUTER_USE=1`) · `background` (`XRK_COMPUTER_USE=background`; missing helper returns `unavailable`); or Host inject. The registry holds one name at a time |
-| Consumer | `createComputerUseTools` → `computer_use` (action discriminator: capture / click / type / key / scroll / list_windows; capture `mode=vision|som` stores via `saveScreenshot`). Not registered on `browser_*` |
+| Consumer | `createComputerUseTools` → `computer_use` (Codex loop: list_windows → capture → click/type/key/scroll → capture again; `mode=vision|som` stores via `saveScreenshot`; optional `coordinate=[x,y]` pixel click). Not registered on `browser_*` |
 
 ## Enable
 
@@ -69,9 +69,9 @@ Harness registers the model tool `computer_use` by default; without a Provider t
 | `computerUseTools: service` | Inject a custom Provider |
 | `computerUseTools: false` | Do not register the tool |
 
-Windows UIA uses Invoke / ValuePattern / SendKeys (`key`) / ScrollPattern or mouse-wheel fallback (`scroll`). Background input is the separate `background` provider; it does not turn UIA into an SPI and it is not part of `browser_*`.
+Windows UIA uses Invoke / ValuePattern / SendKeys (`key`) / ScrollPattern or mouse-wheel fallback (`scroll`). `mode=background` sends `act` to the `XRK_COMPUTER_USE_BACKGROUND` helper; `capture` stays on UIA.
 
-`capture` `mode`: `ax` (default, accessibility tree only) · `vision` (window PNG + AX) · `som` (PNG with 1-based index labels + AX). Real screenshots come from the UIA Provider via `CopyFromScreen`; Harness stores them through `AttachmentStore.saveImage` on the same seam as `browser_vision` so a multimodal model can see the desktop. If a PNG is present but no attachment store is wired, the tool fails honestly. Full cua-driver desktop SPI is **not** shipped.
+`capture` `mode`: `ax` (default, accessibility tree only) · `vision` (window PNG + AX) · `som` (PNG with 1-based index labels + AX). Real screenshots come from the UIA Provider via `CopyFromScreen`; Harness stores them through `AttachmentStore.saveImage` on the same seam as `browser_vision` so a multimodal model can see the desktop. If a PNG is present but no attachment store is wired, the tool fails honestly.
 
 ## vs browser_*
 

@@ -79,6 +79,7 @@ import {
   resolveSessionCwd,
   canonicalAgentPresetId,
   resolveAgentPresetProfile,
+  effectiveSessionAgentPreset,
   DEFAULT_MAX_DEPTH,
   DEFAULT_MAX_ACTIVE_CHILDREN,
   tryHandleFaceHttp,
@@ -746,10 +747,13 @@ export function createHostManager(): HostManager {
             onConnectProgress: async ({ phase, serverName }) => {
               if (mcpClosed) return;
               const prev = lastMcpReconcileOverlay;
+              const connecting = new Set(prev?.connecting ?? []);
+              if (phase === "connecting") connecting.add(serverName);
+              else connecting.delete(serverName);
               lastMcpReconcileOverlay = {
                 connectFailures: prev?.connectFailures ?? [],
                 parked: prev?.parked ?? [],
-                connecting: phase === "connecting" ? [serverName] : [],
+                connecting: [...connecting],
               };
               // Live row badges: refresh connected plugins + push overlay mid-serial.
               notifyMcpOverlay();
@@ -1080,7 +1084,12 @@ export function createHostManager(): HostManager {
         const parentSessionId = lineage.parentOf(sessionId);
         const sessionRoot =
           sessionCwdBox.get?.(sessionId) ?? config.runtime.workspaceRoot;
-        const agentPreset = sessionPresetBox.get?.(sessionId);
+        const agentPreset =
+          sessionPresetBox.get?.(sessionId) ??
+          (faceBox.runtime
+            ? effectiveSessionAgentPreset(faceBox.runtime, sessionId)
+            : undefined) ??
+          config.runtime.preset;
         const wsId = faceRuntime.workspaces.workspaceIdOf(sessionId);
         const wsRow = wsId ? faceRuntime.workspaces.get(wsId) : undefined;
         return agentCache.resolve(
@@ -1248,7 +1257,7 @@ export function createHostManager(): HostManager {
             // ask_user / exit_plan_mode: Face resolveAgent rebinds once.
             if (agent.tools && faceBox.runtime) {
               const profile = resolveAgentPresetProfile(
-                agentPreset ?? config.runtime.preset,
+                agentPreset,
                 config.runtime.preset,
               );
               if (profile.subagents.mode === "on") {
@@ -1479,24 +1488,38 @@ export function createHostManager(): HostManager {
                 (e) => !isPluginSoftDisabledAt(e.id, disabledIds, packageIndex),
               ),
             };
-      const boot = applyXrkProductBootPolicy(
-        ensureXrkPlatformClientBootEntries(
-          mergeWebBootManifests(
-            resolveWebBootManifest(config.runtime.webDist),
-            filteredOverlay,
+      // Mutable live boot: soft-disable / install rewrites pluginsDir web/boot.json.
+      // HTML inject and inventory must re-read the overlay, or a browser reload
+      // after install still serves the start-of-process graph (needsRestart ghost).
+      const liveBoot = {
+        current: applyXrkProductBootPolicy(
+          ensureXrkPlatformClientBootEntries(
+            mergeWebBootManifests(
+              resolveWebBootManifest(config.runtime.webDist),
+              filteredOverlay,
+            ),
+            config.runtime.webDist,
           ),
-          config.runtime.webDist,
         ),
-      );
-      // Mutable like facePlugins: soft-disable / remove rewrite boot.json, so
-      // inventory must re-read overlay or removed clients stay as active ghosts.
+      };
+      // Same array reference is passed to webStatic.extraRoots — must update in
+      // place when the first client install creates `{pluginsDir}/web` mid-process,
+      // or reload injects the new boot row while `/plugins/<id>/client.js` 404s.
+      const liveExtraRoots: string[] = webOverlay ? [webOverlay] : [];
       const faceWebPlugins: { id: string }[] = [];
       const refreshFaceWebPlugins = async () => {
         if (!config.runtime.webDist) {
           faceWebPlugins.splice(0, faceWebPlugins.length);
+          liveExtraRoots.splice(0, liveExtraRoots.length);
+          liveBoot.current = {
+            rev: liveBoot.current.rev,
+            entries: [],
+          };
           return;
         }
         const overlayRoot = await resolveWebPluginOverlay(resolvedPluginsDir);
+        liveExtraRoots.splice(0, liveExtraRoots.length);
+        if (overlayRoot) liveExtraRoots.push(overlayRoot);
         const nextOverlay = overlayRoot
           ? loadBootManifestFromWebDist(overlayRoot)
           : undefined;
@@ -1520,13 +1543,14 @@ export function createHostManager(): HostManager {
             config.runtime.webDist,
           ),
         );
+        liveBoot.current = nextBoot;
         faceWebPlugins.splice(
           0,
           faceWebPlugins.length,
           ...nextBoot.entries.map((e) => ({ id: e.id })),
         );
       };
-      faceWebPlugins.push(...boot.entries.map((e) => ({ id: e.id })));
+      faceWebPlugins.push(...liveBoot.current.entries.map((e) => ({ id: e.id })));
       const hostWireRef: { ctx?: DshCompatOptions } = {};
       const syncCordisHostApplied = () => {
         hostPublic.cordisHostApplied = listHostAppliedPackages().map(
@@ -2509,10 +2533,11 @@ export function createHostManager(): HostManager {
           ? {
               webStatic: {
                 root: config.runtime.webDist,
-                ...(webOverlay ? { extraRoots: [webOverlay] } : {}),
+                // Live array: refreshFaceWebPlugins mutates after first client install.
+                extraRoots: liveExtraRoots,
                 transformIndex: (html: string) =>
                   injectMobileAccessShellIntoHtml(
-                    injectBootIntoHtml(html, boot),
+                    injectBootIntoHtml(html, liveBoot.current),
                   ),
               },
             }

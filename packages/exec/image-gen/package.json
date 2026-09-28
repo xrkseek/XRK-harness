@@ -15,7 +15,8 @@
   ],
   "dependencies": {
     "@xrkseek/attachment": "workspace:*",
-    "@xrkseek/core-tools": "workspace:*"
+    "@xrkseek/core-tools": "workspace:*",
+    "@xrkseek/protocol": "workspace:*"
   },
   "license": "MIT",
   "repository": {

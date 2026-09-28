@@ -529,14 +529,20 @@ function CatalogDropdown({
     : catalog
 
   useEffect(() => {
-    if (
-      variant !== 'switcher'
-      || catalog !== undefined
-      || requestedInitialCatalog.current === rootSessionId
-    ) return
+    if (requestedInitialCatalog.current === rootSessionId) return
+    if (catalog !== undefined && catalog.entries.length > 0) return
+    // Switcher always needs a catalog pull when none exists yet.
+    // Count variant also pulls when the catalog is still missing (select may
+    // not have run yet) or summaries already advertise descendants but the
+    // catalog is empty — otherwise the header chip stays hidden through a
+    // whole spawn until the user re-selects the parent.
+    const needsPull = variant === 'switcher'
+      ? catalog === undefined
+      : catalog === undefined || descendants.count > 0
+    if (!needsPull) return
     requestedInitialCatalog.current = rootSessionId
     refresh(rootSessionId)
-  }, [catalog, refresh, rootSessionId, variant])
+  }, [catalog, descendants.count, refresh, rootSessionId, variant])
 
   const observeCatalog = (parentSessionId: SessionId, next: boolean): void => {
     if (next) observedCatalogs.current.add(parentSessionId)

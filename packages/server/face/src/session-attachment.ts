@@ -4,21 +4,53 @@
 
 import type { AttachmentStore } from "@xrkseek/attachment";
 import { isAttachmentError } from "@xrkseek/attachment";
-import type { SessionEvent } from "@xrkseek/protocol";
-import { listFileRefs, listImageRefs } from "@xrkseek/protocol";
+import type { MessageContent, SessionEvent } from "@xrkseek/protocol";
+import {
+  asContentBlocks,
+  listFileRefs,
+  listImageRefs,
+} from "@xrkseek/protocol";
 
+/** `attachmentId=sha256:…` lines from older text-only tool envelopes. */
+const ATTACHMENT_ID_LINE =
+  /(?:^|\s)attachmentId=(sha256:[a-f0-9]+)(?:\s|$)/gim;
+
+function collectIdsFromContent(
+  content: MessageContent,
+  ids: Set<string>,
+): void {
+  for (const ref of listImageRefs(content)) {
+    ids.add(ref.attachmentId);
+  }
+  for (const ref of listFileRefs(content)) {
+    ids.add(ref.attachmentId);
+  }
+  const text =
+    typeof content === "string"
+      ? content
+      : asContentBlocks(content)
+          .filter((b) => b.type === "text")
+          .map((b) => b.text)
+          .join("\n");
+  for (const match of text.matchAll(ATTACHMENT_ID_LINE)) {
+    const id = match[1];
+    if (id) ids.add(id);
+  }
+}
+
+/**
+ * Attachment ids the UI may fetch for this session: user uploads, prompt admits,
+ * and tool results (image_generate / read_image / MCP screenshots).
+ */
 export function referencedAttachmentIds(
   events: readonly SessionEvent[],
 ): ReadonlySet<string> {
   const ids = new Set<string>();
   for (const ev of events) {
     if (ev.type === "user/message" || ev.type === "prompt/admitted") {
-      for (const ref of listImageRefs(ev.content)) {
-        ids.add(ref.attachmentId);
-      }
-      for (const ref of listFileRefs(ev.content)) {
-        ids.add(ref.attachmentId);
-      }
+      collectIdsFromContent(ev.content, ids);
+    } else if (ev.type === "tool/result") {
+      collectIdsFromContent(ev.result.content, ids);
     }
   }
   return ids;

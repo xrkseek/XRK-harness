@@ -266,6 +266,11 @@ export class SessionRuntime implements ISessions {
   /** The provide channel (roster, materialization rules, current projection) — shared with the test runtime's double. */
   private readonly provideChannel: SessionProvideChannel
   /**
+   * Staged agent-preset from the new-session chip; consumed by {@link create}
+   * when the caller does not pass `agentPreset` explicitly.
+   */
+  private createAgentPresetProvider: (() => string | undefined) | undefined
+  /**
    * The staged session id — follows `list.current` exactly, holding its last
    * defined value across masked gaps (a transiently absent selection blanks
    * `current` without moving the stage, so reconnect re-pulls and removals
@@ -419,6 +424,15 @@ export class SessionRuntime implements ISessions {
   }
 
   /**
+   * Hero-chip staged pick for the next {@link create}. Workspace connect and
+   * New Session read this so the create RPC pins harness/frugal at birth
+   * instead of always falling through to Settings default.
+   */
+  setCreateAgentPresetProvider(provider: (() => string | undefined) | undefined): void {
+    this.createAgentPresetProvider = provider
+  }
+
+  /**
    * Clear the current selection so the layout shows the no-session empty
    * state (new-session affordance and the workspace preselection flow).
    * Wipes the persisted selection too — a reload stays on empty until the
@@ -488,8 +502,18 @@ export class SessionRuntime implements ISessions {
    * @returns the new session id.
    * @throws {SessionCreateError} with the requested id.
    */
-  async create(opts: { workspaceId?: WorkspaceId; cwd?: string; sessionId?: SessionId; localCwd?: string } = {}): Promise<SessionId> {
-    const result = await this.manager.create(opts)
+  async create(opts: {
+    workspaceId?: WorkspaceId
+    cwd?: string
+    sessionId?: SessionId
+    localCwd?: string
+    agentPreset?: string
+  } = {}): Promise<SessionId> {
+    const staged = opts.agentPreset ?? this.createAgentPresetProvider?.()
+    const result = await this.manager.create({
+      ...opts,
+      ...(staged !== undefined && staged.trim() !== '' ? { agentPreset: staged.trim() } : {}),
+    })
     if (!result.ok) throw new SessionCreateError(result.error, opts.sessionId)
     this.projectList()
     return result.value.sessionId

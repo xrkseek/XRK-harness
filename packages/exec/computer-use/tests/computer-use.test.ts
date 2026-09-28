@@ -76,7 +76,7 @@ describe("createComputerUseTools", () => {
     const [tool] = createComputerUseTools({ env: {} });
     const result = await tool!.execute({ action: "capture" });
     expect(result.isError).toBe(true);
-    expect(String(result.content)).toContain("computer-use");
+    expect(String(result.content)).toContain("computer_use");
   });
 
   it("capture via memory Provider", async () => {
@@ -117,6 +117,14 @@ describe("createComputerUseTools", () => {
     expect(blocks.some((b) => b.type === "text" && b.text?.includes("mode: vision"))).toBe(
       true,
     );
+    expect(
+      blocks.some(
+        (b) =>
+          b.type === "text" &&
+          b.text?.includes("attachmentId=sha256:cu-shot") &&
+          b.text?.includes("not a disk path"),
+      ),
+    ).toBe(true);
     expect(
       blocks.some(
         (b) => b.type === "image" && b.attachment?.attachmentId === "sha256:cu-shot",
@@ -560,9 +568,58 @@ describe("escapeSendKeys", () => {
 });
 
 describe("COMPUTER_USE_PROMPT_TEXT", () => {
-  it("splits native GUI from browser_*", () => {
+  it("splits native GUI from browser_* with Codex-style loop", () => {
     expect(COMPUTER_USE_PROMPT_TEXT).toContain("browser_open");
     expect(COMPUTER_USE_PROMPT_TEXT).toContain("native");
-    expect(COMPUTER_USE_PROMPT_TEXT).toMatch(/key\/scroll|click\/type\/key\/scroll/);
+    expect(COMPUTER_USE_PROMPT_TEXT).toContain("list_windows");
+    expect(COMPUTER_USE_PROMPT_TEXT).toContain("coordinate");
+    expect(COMPUTER_USE_PROMPT_TEXT).toMatch(/click|type|key|scroll/);
+  });
+
+  it("omits browser_* when those tools are not in the catalog", async () => {
+    const { formatComputerUseGuidance } = await import("../src/format.js");
+    const text = formatComputerUseGuidance(["computer_use"]);
+    expect(text).toContain("list_windows");
+    expect(text).not.toContain("browser_open");
+  });
+});
+
+describe("formatCaptureEnvelope / formatActResult", () => {
+  it("labels inline screenshot and next act step", async () => {
+    const { formatActResult, formatCaptureEnvelope } = await import(
+      "../src/format.js"
+    );
+    const text = formatCaptureEnvelope({
+      snapshotText: "app: X\nwindow: Y\nmode: vision\nelements:\n  [1] [button] OK",
+      mode: "vision",
+      attachmentId: "sha256:abc",
+      elementCount: 1,
+    });
+    expect(text).toContain("attachmentId=sha256:abc");
+    expect(text).toContain("not a disk path");
+    expect(text).toContain("next=click|type");
+
+    const act = formatActResult({
+      ok: true,
+      action: "click",
+      message: "clicked [1] OK",
+      delivery: "memory",
+    });
+    expect(act).toContain("ok=true");
+    expect(act).toContain("capture again");
+  });
+});
+
+describe("coordinate click", () => {
+  it("clicks screen pixels without element index", async () => {
+    const svc = createMemoryComputerUseProvider();
+    const [tool] = createComputerUseTools({ service: svc });
+    const result = await tool!.execute({
+      action: "click",
+      coordinate: [120, 80],
+    });
+    expect(result.isError).toBeFalsy();
+    expect(String(result.content)).toContain("coordinate (120,80)");
+    expect(String(result.content)).toContain("next=capture again");
   });
 });

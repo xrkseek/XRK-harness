@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import {
-  IconAgentPresetOutline16,
   IconBranchOutline16,
   IconChecklistOutline14,
   IconChevronDownOutline14,
@@ -16,6 +15,7 @@ import {
   TerminalBlock,
 } from '@xrkseek/client-ui-primitives'
 import { OverviewChangesPanel, type OverviewChangesTurn } from './OverviewChangesPanel.tsx'
+import { SubagentGraphBoard } from './SubagentGraphBoard.tsx'
 import type { StateDotState } from '@xrkseek/client-ui-primitives'
 import {
   loadPreviewTabs,
@@ -385,7 +385,7 @@ function StatusJobsList({
                   setExpandedId((current) => (current === job.id ? undefined : job.id))
                 }}
               >
-                <StateDot state={live ? 'ongoing' : 'success'} size={8} />
+                <StateDot state={live ? 'ongoing' : 'done'} size={8} />
                 <IconChevronDownOutline14
                   size={10}
                   className={expanded ? css.jobChevronOpen : css.jobChevron}
@@ -634,9 +634,19 @@ function StatusPanel({
       setTeamActionError((prev) => ({ ...prev, [taskId]: message }))
     }
   }
-  const costUsd = status.cost.cost.toFixed(4)
+  const badge = status.badge.trim().toLowerCase()
+  // Session tool-surface badges (docs/profiles.md): only shallow/harness expose
+  // nested agents. Still show the surface when live children or a team graph
+  // already exist — otherwise a Frugal/default badge after a desynced spawn
+  // (or a missed pin) hid the Overview graph while tools had already run.
+  const showSubagentSurface =
+    badge === 'harness'
+    || badge === 'shallow'
+    || badge === 'server'
+    || status.subagents.live.length > 0
+    || status.subagents.graph.nodes.length > 0
   return (
-    <div className={css.statusRoot}>
+    <div className={css.statusRoot} data-status-badge={status.badge || undefined}>
       <div className={css.summary} aria-label={t('preview.summary')}>
         <div className={css.summaryMain}>
           <StateDot
@@ -652,17 +662,17 @@ function StatusPanel({
             <b>{runningJobs.length}</b>
             {t('preview.summary.jobs')}
           </span>
-          <span className={css.summaryStat}>
-            <b>{liveSubs.length}</b>
-            {t('preview.summary.subs')}
-          </span>
+          {showSubagentSurface
+            ? (
+              <span className={css.summaryStat}>
+                <b>{status.subagents.live.length}</b>
+                {t('preview.summary.subs')}
+              </span>
+            )
+            : null}
           <span className={css.summaryStat}>
             <b>{current.total}</b>
             {t('preview.summary.tokens')}
-          </span>
-          <span className={css.summaryStat}>
-            <b>${costUsd}</b>
-            {t('preview.summary.cost')}
           </span>
         </div>
         <div className={css.summaryActions}>
@@ -694,18 +704,22 @@ function StatusPanel({
           <span className={css.label}>{t('preview.status.fleetJobs')}</span>
           <span>{status.fleet.runningJobs}</span>
         </div>
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.fleetSubs')}</span>
-          <span>
-            {status.fleet.runningSubagents} · {t('preview.slot')} {status.fleet.slotsFree}
-            {status.fleet.queuedInbox > 0
-              ? ` · ${t('preview.inbox')} ${status.fleet.queuedInbox}`
-              : ''}
-            {status.fleet.channelAlerts > 0
-              ? ` · ${t('preview.status.channels')} ${status.fleet.channelAlerts}`
-              : ''}
-          </span>
-        </div>
+        {showSubagentSurface
+          ? (
+            <div className={css.row}>
+              <span className={css.label}>{t('preview.status.fleetSubs')}</span>
+              <span>
+                {status.fleet.runningSubagents} · {t('preview.slot')} {status.fleet.slotsFree}
+                {status.fleet.queuedInbox > 0
+                  ? ` · ${t('preview.inbox')} ${status.fleet.queuedInbox}`
+                  : ''}
+                {status.fleet.channelAlerts > 0
+                  ? ` · ${t('preview.status.channels')} ${status.fleet.channelAlerts}`
+                  : ''}
+              </span>
+            </div>
+          )
+          : null}
       </SectionCard>
 
       <SectionCard
@@ -774,6 +788,9 @@ function StatusPanel({
         </div>
       </SectionCard>
 
+      {showSubagentSurface
+        ? (
+          <>
       <SectionCard
         t={t}
         label={t('preview.status.subagents')}
@@ -796,53 +813,17 @@ function StatusPanel({
           ? <div className={css.empty}>{t('preview.status.subagentsEmpty')}</div>
           : (
             <>
-              {status.subagents.graph.nodes.length > 0
-                ? (
-                  <>
-                    <h4 className={css.sectionTitle}>{t('preview.status.subagentGraph')}</h4>
-                    <ul className={css.graphList}>
-                      {status.subagents.graph.nodes.map((n) => (
-                        <li key={`node:${n.id}`} className={css.graphNode}>
-                          <StateDot
-                            state={n.activity === 'running' ? 'ongoing' : 'success'}
-                            size={8}
-                          />
-                          <IconAgentPresetOutline16 size={14} className={css.tabIcon} />
-                          <div className={css.graphNodeMain}>
-                            <span className={css.graphNodeTitle}>{n.label}</span>
-                            <span className={css.graphNodeMeta}>
-                              {n.depth !== undefined ? `d=${n.depth}` : null}
-                              {n.activity
-                                ? `${n.depth !== undefined ? ' · ' : ''}${n.activity}`
-                                : null}
-                            </span>
-                          </div>
-                          {n.role ? <span className={css.graphRole}>{n.role}</span> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )
-                : null}
-              {status.subagents.graph.edges.length > 0
-                ? (
-                  <ul className={css.graphList}>
-                    {status.subagents.graph.edges.map((e) => {
-                      const from = status.subagents.graph.nodes.find((n) => n.id === e.from)
-                      const to = status.subagents.graph.nodes.find((n) => n.id === e.to)
-                      return (
-                        <li key={`${e.kind}:${e.from}:${e.to}`} className={css.graphEdge}>
-                          <span className={css.kindChip} data-kind={e.kind}>{e.kind}</span>
-                          <span className={css.itemTitle}>{from?.label ?? e.from}</span>
-                          <IconChevronRightOutline14 size={12} className={css.graphArrow} />
-                          <span className={css.itemTitle}>{to?.label ?? e.to}</span>
-                          {e.label ? <span className={css.itemMeta}>{e.label}</span> : null}
-                        </li>
-                      )
-                    })}
-                  </ul>
-                )
-                : null}
+              <h4 className={css.sectionTitle}>{t('preview.status.subagentGraph')}</h4>
+              <SubagentGraphBoard
+                sessionId={status.sessionId}
+                rootLabel={t('preview.status.session')}
+                nodes={status.subagents.graph.nodes}
+                edges={status.subagents.graph.edges}
+                live={status.subagents.live}
+                emptyLabel={t('preview.status.subagentsEmpty')}
+                runningLabel={t('preview.status.subagentRunning')}
+                idleLabel={t('preview.status.subagentIdle')}
+              />
               {status.subagents.live.length > 0
                 ? (
                   <>
@@ -851,12 +832,14 @@ function StatusPanel({
                       {status.subagents.live.map((s) => (
                         <li key={s.id} className={css.itemRow} data-live={s.activity === 'running' || undefined}>
                           <StateDot
-                            state={s.activity === 'running' ? 'ongoing' : 'success'}
+                            state={s.activity === 'running' ? 'ongoing' : 'done'}
                             size={8}
                           />
                           <span className={css.itemTitle}>{s.label ?? s.id}</span>
                           <span className={css.itemMeta}>
-                            {s.activity}
+                            {s.activity === 'running'
+                              ? t('preview.status.subagentRunning')
+                              : t('preview.status.subagentIdle')}
                             {s.liveTool ? ` · tool:${s.liveTool}` : s.liveText ? ` · ${s.liveText}` : ` · ${s.mode}`}
                             {(s.queued ?? 0) > 0 || (s.steering ?? 0) > 0
                               ? ` · ${t('preview.status.subagentQueue')} q=${s.queued ?? 0}/steer=${s.steering ?? 0}`
@@ -1059,6 +1042,9 @@ function StatusPanel({
             </ul>
           )}
       </SectionCard>
+          </>
+        )
+        : null}
 
       <SectionCard
         t={t}
@@ -1309,84 +1295,6 @@ function StatusPanel({
           : null}
         <p className={css.note} role="note">{t('preview.status.timelineBrowseHint')}</p>
       </SectionCard>
-
-      {(() => {
-        const tokenTotal = status.cost.input + status.cost.output
-          + status.cost.cacheRead + status.cost.cacheWrite + status.cost.reasoning
-        const byProvider = Object.entries(status.cost.byProviderModel)
-        const byModelFallback = Object.entries(status.cost.byModel).map(([key, b]) => [key, b] as const)
-        const source = byProvider.length > 0 ? byProvider : byModelFallback
-        const modelRows = source
-          .map(([key, b]) => ({
-            key,
-            input: b.input,
-            output: b.output,
-            cost: b.cost,
-            tokens: b.input + b.output + b.cacheRead + b.cacheWrite + b.reasoning,
-          }))
-          .sort((a, b) => b.tokens - a.tokens || b.cost - a.cost)
-          .slice(0, 8)
-        const maxTokens = Math.max(1, ...modelRows.map((row) => row.tokens))
-        return (
-          <SectionCard
-            t={t}
-            label={t('preview.status.cost')}
-            title={t('preview.status.cost')}
-            signal={collapseSignal}
-            defaultOpen={modelRows.length > 0}
-            meta={tokenTotal > 0
-              ? `${tokenTotal.toLocaleString()} tok`
-              : `$${status.cost.cost.toFixed(4)}`}
-          >
-            <p className={css.note} role="note">{t('preview.status.costSourceNote')}</p>
-            <div className={css.row}>
-              <span className={css.label}>{t('preview.status.costTokens')}</span>
-              <span>
-                in {status.cost.input.toLocaleString()} · out {status.cost.output.toLocaleString()}
-                {status.cost.cacheRead ? ` · cacheR ${status.cost.cacheRead.toLocaleString()}` : ''}
-                {status.cost.reasoning ? ` · reason ${status.cost.reasoning.toLocaleString()}` : ''}
-              </span>
-            </div>
-            <div className={css.row}>
-              <span className={css.label}>{t('preview.status.costTokensTotal')}</span>
-              <span>
-                {tokenTotal.toLocaleString()}
-                {status.cost.cost > 0 ? ` · $${status.cost.cost.toFixed(4)}` : ''}
-              </span>
-            </div>
-            {modelRows.length > 0
-              ? (
-                <>
-                  <h4 className={css.sectionTitle}>{t('preview.status.costByModel')}</h4>
-                  <ul className={css.itemList}>
-                    {modelRows.map((row, index) => (
-                      <li key={row.key} className={css.modelRow}>
-                        <div className={css.modelRowHead}>
-                          <span className={css.itemTitle}>{row.key}</span>
-                          <span className={css.itemMeta}>
-                            {row.tokens.toLocaleString()} tok
-                            {row.cost > 0 ? ` · $${row.cost.toFixed(4)}` : ''}
-                          </span>
-                        </div>
-                        <div className={css.modelBar} aria-hidden>
-                          <div
-                            className={css.modelBarFill}
-                            data-tone={String(index % 6)}
-                            style={{ width: `${Math.max(4, Math.round((row.tokens / maxTokens) * 100))}%` }}
-                          />
-                        </div>
-                        <span className={css.itemMeta}>
-                          in {row.input.toLocaleString()} · out {row.output.toLocaleString()}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )
-              : <div className={css.empty}>{t('preview.status.costEmpty')}</div>}
-          </SectionCard>
-        )
-      })()}
 
       <SectionCard
         t={t}
@@ -1675,10 +1583,11 @@ function RolloutViewerPanel({
 /**
  * Session Status / overview for the layout details column.
  * Default tab is Status (fleet · session · jobs · live contextTimeline ·
- * session cost detail · channels), fed by Face `session.status` — the same
- * snapshot as slash `/status`. Plan / Office flags fold into the session card;
- * Context / rollout / todos remain secondary tabs. Host-wide billing stays out
- * of this column (doctor / export cost.json).
+ * channels), fed by Face `session.status` — the same snapshot as slash
+ * `/status`. Plan / Office flags fold into the session card; Context /
+ * rollout / todos remain secondary tabs. Host-wide billing and session
+ * cost cards stay out of this column (doctor / export cost.json). Subagent /
+ * Teams sections appear only for harness / shallow / server badges.
  */
 export function PreviewTabs({
   sessionId,
@@ -1695,6 +1604,7 @@ export function PreviewTabs({
   changesReview,
   t,
   useProjection,
+  useSessions,
 }: PreviewTabsProps) {
   const [tab, setTab] = useState<PreviewTabId>('status')
   const [loaded, setLoaded] = useState<PreviewTabLoad>({
@@ -1713,6 +1623,56 @@ export function PreviewTabs({
   ) as OverviewChangesTurn[] | null | undefined
   const office = loaded.office
   const status = loaded.status
+  // Live catalog / jobs / running bits — re-pull Face session.status so Overview
+  // state machines (fleet · graph · live · jobs · delivery · teams · compaction)
+  // stay in lockstep with Host frames. Fingerprint activity and job status, not
+  // just membership — otherwise a child/job finishing never bumps the tick.
+  const catalogRev = useSessions((s) => {
+    const catalog = s.subagentsByParent[sessionId]
+    if (catalog === undefined) return ''
+    const rows = catalog.entries
+      .filter((entry): entry is Extract<typeof entry, { kind: 'child' }> => entry.kind === 'child')
+      .map((entry) => `${entry.id}:${entry.activity ?? ''}`)
+    return `${catalog.state}:${catalog.entries.length}:${rows.join(',')}`
+  })
+  const jobsRev = useSessions((s) => {
+    const jobs = s.jobsBySession[sessionId] ?? []
+    return jobs.map((job) => `${job.id}:${job.status}`).join(',')
+  })
+  // Badge pin must re-pull session.status — otherwise Overview keeps frugal after
+  // the seat/chip already switched the session to harness.
+  const agentPresetRev = useSessions((s) => s.byId[sessionId]?.agentPreset ?? '')
+  const parentRunning = useSessions((s) => s.byId[sessionId]?.running ?? false)
+  const childRunning = useSessions((s) => {
+    const catalog = s.subagentsByParent[sessionId]
+    if (catalog?.entries.some(
+      (entry) => entry.kind === 'child' && entry.activity === 'running',
+    )) return true
+    // SessionListState rows use `parentId` (projected from wire `parentSessionId`).
+    return Object.values(s.byId).some(
+      (row) => row?.origin === 'subagent' && row.parentId === sessionId && row.running,
+    )
+  })
+  const jobsBusy = useSessions((s) => {
+    const jobs = s.jobsBySession[sessionId] ?? []
+    return jobs.some((job) => job.status === 'running' || job.status === 'stopping')
+  })
+  const fleetBusy = parentRunning
+    || childRunning
+    || jobsBusy
+    || (status?.subagents.live.some((row) => row.activity === 'running') ?? false)
+    || (status?.jobs.some((job) => (
+      job.status === 'running'
+      || job.status === 'stopping'
+      || job.status === 'active'
+    )) ?? false)
+    || (status?.delivery.turnActive ?? false)
+    || ((status?.delivery.queued ?? 0) > 0)
+    || ((status?.delivery.steering ?? 0) > 0)
+    || (status?.compaction.phase === 'busy')
+    || (status?.teamTasks.some((task) => (
+      task.status === 'in_progress' || task.status === 'paused' || task.status === 'pending'
+    )) ?? false)
 
   const reviewFocus = useSyncExternalStore(
     (onStoreChange) => changesReview?.subscribe(onStoreChange) ?? (() => {}),
@@ -1728,8 +1688,28 @@ export function PreviewTabs({
   }, [reviewFocus?.revision])
 
   useEffect(() => {
-    let alive = true
+    setStatusTick((n) => n + 1)
+  }, [catalogRev, jobsRev, agentPresetRev, parentRunning, childRunning, jobsBusy])
+
+  // While any linked state machine is busy, poll session.status so graph dots,
+  // fleet health, delivery, and team rows flip without waiting for membership.
+  useEffect(() => {
+    if (!fleetBusy) return
+    const timer = window.setInterval(() => {
+      setStatusTick((n) => n + 1)
+    }, 1_200)
+    return () => { window.clearInterval(timer) }
+  }, [fleetBusy, sessionId])
+
+  // Reset the column only when the session identity changes — statusTick
+  // polls must keep the previous board painted until the next snapshot lands.
+  useEffect(() => {
     setReady(false)
+    setLoaded({ plan: null, office: null, status: null })
+  }, [sessionId])
+
+  useEffect(() => {
+    let alive = true
     void loadPreviewTabs(sessionId).then((next) => {
       if (!alive) return
       setLoaded(next)

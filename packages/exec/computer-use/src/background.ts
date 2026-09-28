@@ -22,7 +22,7 @@ export interface BackgroundInputOptions {
 }
 
 const UNAVAILABLE =
-  "background input backend unavailable (not installed). memory and uia are unchanged. Not browser_*.";
+  "background helper unavailable — set Credentials XRK_COMPUTER_USE_BACKGROUND to an installed helper binary.";
 
 function unavailable(): never {
   throw new ComputerUseError(UNAVAILABLE, "COMPUTER_USE_UNAVAILABLE");
@@ -92,7 +92,7 @@ export function createBackgroundInputProvider(
     async capture() {
       if (!installed) unavailable();
       throw new ComputerUseError(
-        "background input has no accessibility tree; use the uia provider for capture",
+        "background helper does not support capture — use mode=uia",
         "COMPUTER_USE_UNAVAILABLE",
       );
     },

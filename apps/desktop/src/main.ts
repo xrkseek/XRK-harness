@@ -183,10 +183,17 @@ const ownsDesktopInstance = startDesktopMain(app, {
     // Register `xrk-app://` before Host finishes so Chromium never falls through
     // to the OS “get an app for this link” dialog. Static webRoot serves until
     // fetchApp is wired; Face/API then go through the private Host carrier.
+    const xrkHome = resolveDesktopHarnessHome({
+      isPackaged: app.isPackaged,
+      desktopAppRoot: DESKTOP_APP_ROOT,
+    });
+    // Always point at the overlay path — missing dir is a soft 404 until install.
+    const overlayRoot = path.join(xrkHome, "plugins", "web");
     let fetchApp: ((request: Request) => Promise<Response>) | undefined;
     protocol.handle(DESKTOP_PROTOCOL_SCHEME, (request) =>
       handleDesktopProtocolRequest(request, {
         webRoot,
+        overlayRoot,
         ...(fetchApp !== undefined ? { fetchApp } : {}),
       }),
     );

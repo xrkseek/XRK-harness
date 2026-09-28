@@ -438,6 +438,29 @@ Start-Sleep -Milliseconds 30
 `.trim();
 }
 
+/** Absolute screen-pixel click (Codex vision path when no AX element). */
+function clickCoordinateScript(x: number, y: number): string {
+  return `${PS_PRELUDE}
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class XrkClickAt {
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, int data, UIntPtr extra);
+  public const uint LEFTDOWN = 0x0002;
+  public const uint LEFTUP = 0x0004;
+}
+"@
+$x = ${Math.trunc(x)}
+$y = ${Math.trunc(y)}
+[void][XrkClickAt]::SetCursorPos($x, $y)
+[void][XrkClickAt]::mouse_event([XrkClickAt]::LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 30
+[void][XrkClickAt]::mouse_event([XrkClickAt]::LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+"clicked-coordinate:$x,$y"
+`.trim();
+}
+
 /**
  * ValuePattern first, then clipboard paste (CJK-safe), then escaped SendKeys.
  * Raw SendKeys mangles `+^%~()` and drops non-ASCII, so the caller passes both
@@ -846,9 +869,23 @@ export function createWindowsUiAutomationProvider(
           delivery: "uia",
         };
       }
+      if (
+        request.action === "click" &&
+        request.coordinate !== undefined &&
+        request.element === undefined
+      ) {
+        const [x, y] = request.coordinate;
+        const out = await run(clickCoordinateScript(x, y), signal);
+        return {
+          ok: true,
+          action: "click",
+          message: out || `clicked-coordinate:${x},${y}`,
+          delivery: "uia",
+        };
+      }
       if (request.element === undefined) {
         throw new ComputerUseError(
-          "element index is required",
+          "element index is required (or pass coordinate=[x,y] for pixel click)",
           "COMPUTER_USE_BAD_ARGS",
         );
       }

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * dsh-skin-market catalog + runtime state.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -9,18 +9,17 @@ import {
 } from "../xrk/plugin-services.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { httpMethod, isMutatingMethod, parseJsonBody } from "./underlying/http-kit.js";
+import {
+  discoverInstalledSkins,
+  isSkinPackageName,
+  SKIN_NAME_HINTS,
+} from "./skin-discover.js";
+
+export { SKIN_NAME_HINTS, isSkinPackageName };
 
 export interface SkinMarketOptions extends XrkPluginServicesOptions {
   readonly xrkHome?: string;
 }
-
-const SKIN_NAME_HINTS = [
-  "skin",
-  "dream-skin",
-  "liang-intensity",
-  "whale-girl",
-  "theme",
-];
 
 interface SkinMarketState {
   activeSkinId: string | null;
@@ -45,36 +44,46 @@ function loadState(options: SkinMarketOptions): SkinMarketState {
   return SKIN_MARKET_STORE.read(options.xrkHome).data;
 }
 
-function isSkinPlugin(id: string): boolean {
-  const lower = id.toLowerCase();
-  return SKIN_NAME_HINTS.some((h) => lower.includes(h));
-}
-
 function buildCatalog(options: SkinMarketOptions): unknown[] {
-  const inv = readXrkPluginInventory(options);
-  return inv.present
-    .filter(isSkinPlugin)
-    .map((id) => ({
-      id,
-      name: id,
-      version: inv.installedMap[id]?.version ?? "0.0.0",
-      description: `Installed skin plugin (${id})`,
-      source: "xrk-inventory",
+  const discovered = discoverInstalledSkins(options);
+  if (discovered.length > 0) {
+    return discovered.map((skin) => ({
+      id: skin.id,
+      name: skin.name,
+      version: skin.version,
+      description: skin.tagline ?? `Installed skin (${skin.packageName})`,
+      package: skin.packageName,
+      source: "xrk-skin-json",
+      ...(skin.accent ? { accent: skin.accent } : {}),
     }));
+  }
+  // Fallback: inventory name hints when no skin.json staged yet.
+  const inv = readXrkPluginInventory(options);
+  return inv.present.filter(isSkinPackageName).map((id) => ({
+    id,
+    name: id,
+    version: inv.installedMap[id]?.version ?? "0.0.0",
+    description: `Installed skin plugin (${id})`,
+    source: "xrk-inventory",
+  }));
 }
 
 function buildStatePayload(options: SkinMarketOptions): Record<string, unknown> {
   const inv = readXrkPluginInventory(options);
   const stored = loadState(options);
-  const catalogIds = new Set(buildCatalog(options).map((s) => (s as { id: string }).id));
+  const catalogIds = new Set(
+    buildCatalog(options).map((s) => (s as { id: string }).id),
+  );
   const skins = stored.skins.length
     ? stored.skins
     : stored.activeSkinId && catalogIds.has(stored.activeSkinId)
-      ? [{
-          skinId: stored.activeSkinId,
-          primary: true,
-          activation: "active",
-        }]
+      ? [
+          {
+            skinId: stored.activeSkinId,
+            primary: true,
+            activation: "active",
+          },
+        ]
       : [];
   return {
     skins,

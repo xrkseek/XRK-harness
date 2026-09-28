@@ -3,7 +3,9 @@
  * Packaged Desktop Host Face-pipe smoke (ADR-0008).
  *
  * Proves the failure modes that broke the installer UI:
- *   - unread mux SSE must not starve unary `host.describe`
+ *   - unread mux + host SSE must not starve unary `host.describe`
+ *   - both event buses open on `xrk-app://stream` (shell needs host for
+ *     settings/document-updated and host/session-*)
  *   - cancelling SSE must not poison the next unary
  *
  * Usage:
@@ -107,13 +109,25 @@ try {
   }
   process.stdout.write("smoke-packaged-host: mux SSE open (unread)\n");
 
+  const hostBus = await host.fetch(new Request("xrk-app://stream/api/events.host"));
+  if (
+    !hostBus.ok ||
+    !(hostBus.headers.get("content-type") ?? "").includes("event-stream")
+  ) {
+    fail(
+      `host SSE bad: HTTP ${String(hostBus.status)} ${hostBus.headers.get("content-type")}`,
+    );
+  }
+  process.stdout.write("smoke-packaged-host: host SSE open (unread)\n");
+
   const description = await unary(host, "host.describe");
   process.stdout.write(
-    `smoke-packaged-host: describe while SSE ok version=${String(description?.version ?? "?")}\n`,
+    `smoke-packaged-host: describe while dual SSE ok version=${String(description?.version ?? "?")}\n`,
   );
 
   await mux.body?.cancel();
-  process.stdout.write("smoke-packaged-host: mux cancelled\n");
+  await hostBus.body?.cancel();
+  process.stdout.write("smoke-packaged-host: mux+host cancelled\n");
 
   await unary(host, "host.describe");
   process.stdout.write("smoke-packaged-host: describe after cancel ok\n");

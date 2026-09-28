@@ -71,6 +71,11 @@ export interface ISessions {
    * @param agentPreset - the preset id the host confirmed.
    */
   noteAgentPreset(sessionId: SessionId, agentPreset: string): void
+  /**
+   * Register the hero-chip staged pick so {@link create} / workspace connect
+   * pins that badge at birth. Pass `undefined` to clear.
+   */
+  setCreateAgentPresetProvider(provider: (() => string | undefined) | undefined): void
   /** Clear the current selection into the no-session view state. */
   clear(): void
   /**

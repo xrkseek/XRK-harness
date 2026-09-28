@@ -1,4 +1,9 @@
+/**
+ * Model-facing computer_use envelopes — short loop, clear next step.
+ */
+
 import type {
+  ComputerUseActResult,
   ComputerUseCaptureResult,
   ComputerUseElement,
   ComputerUseWindow,
@@ -6,6 +11,12 @@ import type {
 
 export const DEFAULT_MAX_ELEMENTS = 80;
 export const DEFAULT_MAX_SNAPSHOT_CHARS = 20_000;
+
+export type ToolNameSet = ReadonlySet<string> | Iterable<string>;
+
+function asSet(available: ToolNameSet): ReadonlySet<string> {
+  return available instanceof Set ? available : new Set(available);
+}
 
 export function formatAxSnapshot(options: {
   readonly app: string;
@@ -42,14 +53,63 @@ export function formatAxSnapshot(options: {
   return text;
 }
 
+/**
+ * Append guidance after a capture (inline image vs AX-only).
+ */
+export function formatCaptureEnvelope(options: {
+  readonly snapshotText: string;
+  readonly mode: ComputerUseCaptureResult["mode"];
+  readonly attachmentId?: string;
+  readonly elementCount: number;
+}): string {
+  const lines = [options.snapshotText.trimEnd()];
+  if (options.attachmentId) {
+    lines.push(`attachmentId=${options.attachmentId}`);
+    lines.push(
+      "use=Screenshot inline in this result. Act by [index] from elements: — attachmentId is not a disk path.",
+    );
+  } else if (options.mode === "ax") {
+    lines.push(
+      "use=AX tree. Prefer mode=vision|som when pixels help. Act with element=<index>.",
+    );
+  } else {
+    lines.push(
+      "use=No screenshot bytes. Act with element=<index>, or re-capture mode=vision|som.",
+    );
+  }
+  lines.push(
+    `next=click|type|key|scroll using element 1..${Math.max(options.elementCount, 0)}; then capture again.`,
+  );
+  return lines.join("\n");
+}
+
 export function formatWindowsList(windows: readonly ComputerUseWindow[]): string {
-  if (windows.length === 0) return "windows: (none)";
+  if (windows.length === 0) {
+    return [
+      "windows: (none)",
+      "use=Launch the target app, then capture.",
+    ].join("\n");
+  }
   const lines = ["windows:"];
   for (const w of windows) {
     const pid = w.pid !== undefined ? ` pid=${w.pid}` : "";
     const app = w.app ? ` app=${w.app}` : "";
     lines.push(`  - ${w.title || "(untitled)"}${app}${pid}`);
   }
+  lines.push(
+    "use=Pass a title fragment as capture app=…, then act by element index.",
+  );
+  return lines.join("\n");
+}
+
+export function formatActResult(result: ComputerUseActResult): string {
+  const lines = [
+    `ok=${result.ok}`,
+    `action=${result.action}`,
+    `delivery=${result.delivery}`,
+    `message=${result.message}`,
+    "next=capture again before the next click/type — indices go stale after UI changes.",
+  ];
   return lines.join("\n");
 }
 
@@ -80,13 +140,40 @@ export function buildCaptureResult(options: {
   };
 }
 
-export const COMPUTER_USE_PROMPT_TEXT =
-  "Use computer_use only for native host GUI apps (Notepad, Explorer, IDE chrome, OS dialogs) " +
-  "via an accessibility tree + input Provider. Prefer action=capture (mode=ax for tree-only; " +
-  "mode=vision or mode=som for a desktop screenshot the vision model can see, with AX indices — " +
-  "som also annotates index labels on the image) then click/type/key/scroll by element index " +
-  "(key/scroll may omit element to target the focused window). " +
-  "Do NOT use computer_use for web pages — use browser_open / browser_snapshot / browser_act " +
-  "(and browser_vision when a page screenshot is needed). " +
-  "Windows delivery is UIA (Invoke/ValuePattern/SendKeys/ScrollPattern), not full background SPI; " +
-  "enable with Settings → Plugins → Computer use or XRK_COMPUTER_USE=1.";
+/**
+ * System prompt for `computer_use`; empty when the tool is not in the catalog.
+ * Mentions browser_* only while those tools are also available.
+ */
+export function formatComputerUseGuidance(available: ToolNameSet): string {
+  const names = asSet(available);
+  if (!names.has("computer_use")) return "";
+  const lines = [
+    "Desktop GUI (native apps):",
+    "- Loop: `list_windows` → `capture` → `click`/`type`/`key`/`scroll` by element index → `capture` to verify.",
+    "- `capture mode=ax` = accessibility tree; `vision`/`som` adds an inline screenshot (`attachmentId=sha256:…`, not a path).",
+    "- Prefer element indices from the last capture. Optional `coordinate=[x,y]` for pixel click when vision is active.",
+  ];
+  if (
+    names.has("browser_open") ||
+    names.has("browser_snapshot") ||
+    names.has("browser_act") ||
+    names.has("browser_vision")
+  ) {
+    lines.push(
+      "- Web pages: `browser_open` / `browser_snapshot` / `browser_act` / `browser_vision` — not `computer_use`.",
+    );
+  }
+  lines.push(
+    "- Enable: Settings → Plugins → Computer use, or `XRK_COMPUTER_USE=1` (Windows UIA).",
+  );
+  return lines.join("\n");
+}
+
+/** Full-surface default (computer_use + browser_* present). */
+export const COMPUTER_USE_PROMPT_TEXT = formatComputerUseGuidance([
+  "computer_use",
+  "browser_open",
+  "browser_snapshot",
+  "browser_act",
+  "browser_vision",
+]);

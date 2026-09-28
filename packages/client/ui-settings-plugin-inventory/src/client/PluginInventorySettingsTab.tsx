@@ -411,7 +411,7 @@ export function PluginInventorySettingsTab({
     void runManaged(
       removeTarget.entryId,
       () => remove(removeTarget.entryId),
-      { notice: t('toastRemoved', { name }) },
+      { notice: t('toastRemoved', { name }), clientRefresh: true },
     )
   }
 

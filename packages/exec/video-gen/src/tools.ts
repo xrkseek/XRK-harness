@@ -376,8 +376,8 @@ export function createVideoGenTools(
               attachmentId ? `attachmentId=${attachmentId}` : "",
               fileName ? `file=${fileName}` : "",
               attachmentId
-                ? ""
-                : "note=no AttachmentStore is wired; the MP4 is not persisted and cannot be returned inline.",
+                ? "use=Host file attachment (not a workspace path). Open via session.attachment / present when you have a saved path."
+                : "use=No AttachmentStore — MP4 not persisted; enable Host attachments.",
             ]
               .filter(Boolean)
               .join("\n"),

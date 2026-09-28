@@ -12,6 +12,17 @@
 4. 未实现 → `ok: false` + 稳定 `error.code`（禁止假成功）
 5. 终端薄壳：`xrkh tui` 挂本机 Host（unary + `/api/events.mux`），流式文本 + 工具轨 + `/status`（复用 `session.status`）
 
+## Web / Desktop 载波
+
+Face 仍是 **mux + host** 双总线；壳只换物理载波：
+
+| 壳 | Unary | mux | host |
+|----|-------|-----|------|
+| Web（http/https） | `fetch` 同源 | WebSocket `/api/events.mux` | WebSocket `/api/events.host` |
+| Desktop（`xrk-app:`） | `fetch` → `xrk-app://app` | SSE → `xrk-app://stream/api/events.mux` | SSE → `xrk-app://stream/api/events.host` |
+
+Desktop 把长连接放到 **`xrk-app://stream`**，与 unary 的 **`xrk-app://app`** 分 Chromium 自定义协议连接池，因此 **mux 与 host 两条 SSE 都要开**。host 帧包括 `host/session-added` · `host/session-status` · `host/remote-event`（如 `settings/document-updated`）；壳经 `ctx.remote.$dispatch` 驱动 Settings / MCP 徽章与子代理顶栏·Overview。缺 host 下行时这些面只能靠刷新或切会话才能对齐。
+
 ## WebSocket 心跳
 
 mux / host 升级后的套接字由 Host 发 **Ping** 控制帧（默认间隔 **2s**）。连续 **5** 次未收到 Pong 则 `terminate`（DSH gateway 为 2 次；Face mux 与工具/投影共事件循环且无 per-stream uplink 字节窗，故放宽以免误杀）。实现：`ws-heartbeat.ts`。写出走 `ws-send-queue.ts`：JSON 帧串行等 `send` 回调（对齐 DSH gateway 的 Promise 链写出）；超软顶**丢帧不掐线**（DSH 对 uplink 超顶是 fail 逻辑流，不是掐物理套接字）。Agent loop 流式期间约 **16ms** 让出；同一 text / reasoning / tool-call run 的**首片立即落库**，后续片段合并到下一次让出，mux seq 仍连续。
@@ -104,7 +115,7 @@ Policy：`XRK_POLICY_FILE` → `provider.use`；ask → `approval/*` + `session.
 mode: queue | steer → admit（slash → recipe / skill 写入 user）→ wake drain（非阻塞）→ mux 流式
 ```
 
-含图：须 `attachments` + `inputModalities` 含 `image`；先 `saveImages` 再 admit（失败不入账）。Host Face 默认 `text+image`。官方 DeepSeek 适配器未声明 `image` → loop 仍 `UnsupportedContentError`。`session.attachment` 仅返回本 session 事件引用过的 id。
+含图：须 `attachments` + `inputModalities` 含 `image`；先 `saveImages` 再 admit（失败不入账）。Host Face 默认 `text+image`。官方 DeepSeek 适配器未声明 `image` → loop 仍 `UnsupportedContentError`。`session.attachment` 仅返回本 session 事件引用过的 id（`user/message` · `prompt/admitted` · `tool/result` 的 image/file block，以及文本信封里的 `attachmentId=`）。
 
 ## `session.fork`
 
@@ -141,6 +152,17 @@ mode: queue | steer → admit（slash → recipe / skill 写入 user）→ wake 
 3. Auth: `XRK_API_KEY` (Bearer / `x-api-key`); product-shell same-origin loopback may omit headers
 4. Unimplemented → `ok: false` + stable `error.code` (no fake success)
 5. Thin terminal shell: `xrkh tui` attaches to a local Host (unary + `/api/events.mux`) for streamed text + tool rail + `/status` (reuses `session.status`)
+
+## Web / Desktop carriers
+
+Face still exposes **mux + host** buses; only the physical carrier changes per shell:
+
+| Shell | Unary | mux | host |
+|-------|-------|-----|------|
+| Web (http/https) | same-origin `fetch` | WebSocket `/api/events.mux` | WebSocket `/api/events.host` |
+| Desktop (`xrk-app:`) | `fetch` → `xrk-app://app` | SSE → `xrk-app://stream/api/events.mux` | SSE → `xrk-app://stream/api/events.host` |
+
+Desktop places long-lived streams on **`xrk-app://stream`**, separate from unary **`xrk-app://app`**, so Chromium’s custom-protocol connection pools do not collide — **both mux and host SSE must stay open**. Host frames include `host/session-added`, `host/session-status`, and `host/remote-event` (e.g. `settings/document-updated`); the shell fans those through `ctx.remote.$dispatch` into Settings / MCP badges and the subagent header · Overview. Without the host downlink those surfaces only converge after a refresh or session switch.
 
 ## WebSocket heartbeats
 
@@ -234,7 +256,7 @@ Policy: `XRK_POLICY_FILE` → `provider.use`; ask → `approval/*` + `session.re
 mode: queue | steer → admit (slash → recipe / skill into user) → wake drain (non-blocking) → mux stream
 ```
 
-With images: require `attachments` and `inputModalities` including `image`; `saveImages` then admit (failure does not ledger). Host Face defaults to `text+image`. Official DeepSeek adapters that omit `image` still hit `UnsupportedContentError` in the loop. `session.attachment` returns only ids referenced by this session’s events.
+With images: require `attachments` and `inputModalities` including `image`; `saveImages` then admit (failure does not ledger). Host Face defaults to `text+image`. Official DeepSeek adapters that omit `image` still hit `UnsupportedContentError` in the loop. `session.attachment` returns only ids referenced by this session’s events (`user/message` · `prompt/admitted` · `tool/result` image/file blocks, plus `attachmentId=` text envelopes).
 
 ## `session.fork`
 

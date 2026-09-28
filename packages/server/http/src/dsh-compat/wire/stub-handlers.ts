@@ -13,7 +13,10 @@ import {
   honestReady,
 } from "../honest-envelope.js";
 import { hostIncomplete, tag } from "../meta.js";
-
+import {
+  patchPluginSurface,
+  readPluginSurface,
+} from "../underlying/plugin-surface-store.js";
 
 export const EMPTY_PRESET_CATALOG = Object.freeze({
   defaultId: "",
@@ -41,11 +44,49 @@ export function imOfflineSnapshot(): Record<string, unknown> {
   );
 }
 
+export interface StubRpcOptions {
+  readonly xrkHome?: string;
+  /** RPC channel name (e.g. `/dsh-foo`) used as surface id. */
+  readonly channel?: string;
+}
+
+function surfaceId(channel: string | undefined, feature: string): string {
+  const raw = (channel ?? feature).replace(/^\//, "").trim();
+  return raw || feature || "plugin";
+}
+
+function extractWritePatch(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  if (
+    payload.value &&
+    typeof payload.value === "object" &&
+    !Array.isArray(payload.value)
+  ) {
+    return payload.value as Record<string, unknown>;
+  }
+  if (
+    payload.document &&
+    typeof payload.document === "object" &&
+    !Array.isArray(payload.document)
+  ) {
+    return payload.document as Record<string, unknown>;
+  }
+  const {
+    action: _a,
+    expectedRevision: _e,
+    ops: _o,
+    ...rest
+  } = payload;
+  return rest;
+}
+
 export function stubRpcHandler(
   kind: string,
   endpoint: string,
-  _payload: Record<string, unknown>,
+  payload: Record<string, unknown>,
   feature = "plugin",
+  options: StubRpcOptions = {},
 ): unknown {
   if (kind === "im-offline") {
     if (
@@ -58,22 +99,66 @@ export function stubRpcHandler(
     return honestHostActionUnavailable("im", endpoint);
   }
   if (kind === "generic") {
+    const id = surfaceId(options.channel, feature);
+    const xrkHome = options.xrkHome;
     if (
       endpoint === "get" ||
       endpoint === "describe" ||
       endpoint === "status" ||
       endpoint === "status-summary" ||
+      endpoint === "view" ||
       endpoint === ""
     ) {
-      return honestReady({ value: {}, writable: false });
+      const surface = readPluginSurface(xrkHome, id);
+      return honestReady({
+        value: surface.settings,
+        settings: surface.settings,
+        config: surface.config,
+        state: surface.state,
+        revision: surface.revision,
+        writable: true,
+        feature,
+        channel: options.channel,
+      });
     }
-    if (endpoint === "set" || endpoint === "apply" || endpoint === "patch") {
-      return hostIncomplete(feature, {
-        ok: false,
-        code: "STUB_WRITE_NOOP",
-        endpoint,
-        message:
-          "No underlying provider for this channel; writes are not persisted.",
+    if (
+      endpoint === "set" ||
+      endpoint === "apply" ||
+      endpoint === "patch" ||
+      endpoint === "mutate" ||
+      endpoint === "save"
+    ) {
+      const patch = extractWritePatch(payload);
+      const ops = Array.isArray(payload.ops) ? payload.ops : [];
+      const fromOps: Record<string, unknown> = {};
+      for (const raw of ops) {
+        if (!raw || typeof raw !== "object") continue;
+        const op = raw as Record<string, unknown>;
+        const path = Array.isArray(op.path)
+          ? (op.path as unknown[]).map(String)
+          : [];
+        if (
+          (op.op === "set" || op.value !== undefined) &&
+          path.length === 1 &&
+          path[0]
+        ) {
+          fromOps[path[0]] = op.value;
+        }
+      }
+      const merged = { ...fromOps, ...patch };
+      const next =
+        Object.keys(merged).length > 0
+          ? patchPluginSurface(xrkHome, id, "settings", merged, "merge")
+          : readPluginSurface(xrkHome, id);
+      return honestReady({
+        ok: true,
+        value: next.settings,
+        settings: next.settings,
+        revision: next.revision,
+        writable: true,
+        feature,
+        channel: options.channel,
+        persisted: Object.keys(merged).length > 0,
       });
     }
     return hostIncomplete(feature, {
@@ -97,7 +182,9 @@ function prefixMatcher(prefix: string): (pathname: string) => boolean {
   return (p) => p === prefix || p.startsWith(norm);
 }
 
-export function stubHttpProvider(route: PluginHostHttpRoute): HostProviderPartial {
+export function stubHttpProvider(
+  route: PluginHostHttpRoute,
+): HostProviderPartial {
   const feature =
     typeof route.options?.feature === "string"
       ? route.options.feature

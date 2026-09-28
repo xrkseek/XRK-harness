@@ -88,6 +88,18 @@ export interface CreateReadImageToolOptions {
   readonly routeAllowsImage?: () => boolean;
 }
 
+/** Host attachment id (`sha256:…`) or `attachment:<id>` — not a workspace path. */
+export function parseAttachmentFilePath(filePath: string): string | undefined {
+  const raw = filePath.trim();
+  if (!raw) return undefined;
+  if (raw.toLowerCase().startsWith("attachment:")) {
+    const id = raw.slice("attachment:".length).trim();
+    return id || undefined;
+  }
+  if (/^sha256:[a-f0-9]+$/i.test(raw)) return raw;
+  return undefined;
+}
+
 export function createReadImageTool(
   options: CreateReadImageToolOptions,
 ): ToolDefinition {
@@ -95,7 +107,8 @@ export function createReadImageTool(
   return {
     name: "read_image",
     description:
-      "Read a PNG/JPEG/WebP/GIF file and return the image as a durable attachment. " +
+      "Read a PNG/JPEG/WebP/GIF from a workspace path OR a Host attachment id " +
+      "(sha256:… / attachment:sha256:… from image_generate). " +
       "Large images are normalized before the next model request. " +
       "Optional region [x1,y1,x2,y2] crops in original-image pixels before downscaling " +
       "(full-resolution zoom into small text or fine detail).",
@@ -104,7 +117,9 @@ export function createReadImageTool(
       properties: {
         file_path: {
           type: "string",
-          description: "Workspace-relative path to the image file.",
+          description:
+            "Workspace-relative image path, or attachment id " +
+            "(sha256:… or attachment:sha256:…).",
         },
         region: {
           type: "array",
@@ -143,40 +158,66 @@ export function createReadImageTool(
         }
         region = parsed;
       }
-      const mediaType = imageMediaTypeForPath(filePath);
-      if (mediaType === undefined) {
-        return {
-          content: `cannot read "${filePath}": read_image only accepts PNG/JPEG/WebP/GIF paths`,
-          isError: true,
-        };
-      }
-      if (!attachments.imageLimits.mediaTypes.includes(mediaType)) {
-        return {
-          content: `cannot read "${filePath}": ${mediaType} images are not accepted`,
-          isError: true,
-        };
-      }
       if (routeAllowsImage && !routeAllowsImage()) {
         return {
           content: `cannot read "${filePath}" as an image: current model route does not declare image input`,
           isError: true,
         };
       }
+
+      const attachmentId = parseAttachmentFilePath(filePath);
       try {
-        const stat = await fs.stat(filePath);
-        if (!stat.isFile) {
-          return {
-            content: `cannot read "${filePath}": not a regular file`,
-            isError: true,
-          };
-        }
-        const byteCap = Math.min(
-          attachments.imageLimits.maxImageBytes,
-          attachments.imageLimits.maxMessageImageBytes,
-        );
-        let data = await fs.readBytes(filePath, byteCap);
-        let saveMediaType: ImageMediaType = mediaType;
+        let data: Uint8Array;
+        let saveMediaType: ImageMediaType;
+        let displayPath: string;
+        let name: string | undefined;
         let cropOffset: { x: number; y: number } | undefined;
+
+        if (attachmentId !== undefined) {
+          const stored = await attachments.readImage(attachmentId);
+          data = stored.data;
+          saveMediaType = stored.ref.mediaType;
+          displayPath = `attachment:${stored.ref.attachmentId}`;
+          name = stored.ref.name ?? stored.ref.attachmentId;
+          if (!attachments.imageLimits.mediaTypes.includes(saveMediaType)) {
+            return {
+              content: `cannot read "${filePath}": ${saveMediaType} images are not accepted`,
+              isError: true,
+            };
+          }
+        } else {
+          const mediaType = imageMediaTypeForPath(filePath);
+          if (mediaType === undefined) {
+            return {
+              content:
+                `cannot read "${filePath}": read_image accepts PNG/JPEG/WebP/GIF paths ` +
+                `or attachment ids (sha256:… / attachment:sha256:…)`,
+              isError: true,
+            };
+          }
+          if (!attachments.imageLimits.mediaTypes.includes(mediaType)) {
+            return {
+              content: `cannot read "${filePath}": ${mediaType} images are not accepted`,
+              isError: true,
+            };
+          }
+          const stat = await fs.stat(filePath);
+          if (!stat.isFile) {
+            return {
+              content: `cannot read "${filePath}": not a regular file`,
+              isError: true,
+            };
+          }
+          const byteCap = Math.min(
+            attachments.imageLimits.maxImageBytes,
+            attachments.imageLimits.maxMessageImageBytes,
+          );
+          data = await fs.readBytes(filePath, byteCap);
+          saveMediaType = mediaType;
+          displayPath = filePath;
+          name = basename(filePath);
+        }
+
         if (region !== undefined) {
           const cropped = await attachments.cropImageRegion!(data, region);
           data = cropped.data;
@@ -186,10 +227,10 @@ export function createReadImageTool(
         const ref = await attachments.saveImage({
           data,
           mediaType: saveMediaType,
-          name: basename(filePath),
+          name: name ?? "image",
         });
         const value: ImageReadValue = {
-          path: filePath,
+          path: displayPath,
           image: {
             attachmentId: ref.attachmentId,
             mediaType: ref.mediaType,

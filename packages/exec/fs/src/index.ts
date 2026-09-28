@@ -84,6 +84,7 @@ export {
   createReadImageTool,
   formatImageReadOutput,
   imageMediaTypeForPath,
+  parseAttachmentFilePath,
   type CreateReadImageToolOptions,
   type ImageReadValue,
   type ReadImageFs,

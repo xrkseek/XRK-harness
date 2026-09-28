@@ -27,13 +27,17 @@ export function sendJson(
   res.end(data);
 }
 
-export function readBody(req: IncomingMessage): Promise<string> {
+export function readBodyBuffer(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     req.on("data", (c) => chunks.push(Buffer.from(c)));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
+}
+
+export function readBody(req: IncomingMessage): Promise<string> {
+  return readBodyBuffer(req).then((buf) => buf.toString("utf8"));
 }
 
 export function rpcOk(rpcId: string, value: unknown): unknown {

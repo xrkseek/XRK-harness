@@ -447,10 +447,22 @@ export {
 export {
   peekSettingsYamlSection,
   resetLastGoodConfigCaches,
+  resolveDefaultAgentPreset,
   resolveHarnessHome,
   settingsYamlPath,
   validateSettingsNamespace,
 } from "./settings-document.js";
+export {
+  effectiveSessionAgentPreset,
+  pinSessionAgentPreset,
+  unpinSessionAgentPreset,
+} from "./session-agent-preset.js";
+export {
+  clearSessionAgentPreset,
+  loadSessionAgentPresets,
+  saveSessionAgentPreset,
+  sessionAgentPresetsPath,
+} from "./session-agent-preset-store.js";
 export {
   FaceApprovalBroker,
   approvalRequestedFrame,

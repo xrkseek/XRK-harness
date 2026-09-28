@@ -153,6 +153,35 @@ describe("desktop custom protocol", () => {
       { webRoot },
     );
     expect(await staticApp.text()).toBe("web");
+
+    const overlayRoot = tempRoot({
+      "boot.json": JSON.stringify({
+        rev: "ov",
+        entries: [
+          {
+            id: "dsh-niulai-pet",
+            url: "/plugins/dsh-niulai-pet/client.js",
+            rev: "1",
+          },
+        ],
+      }),
+      "plugins/dsh-niulai-pet/client.js": "/* pet */",
+    });
+    const productWithBoot = tempRoot({
+      "index.html": "<html><head></head><body>web</body></html>",
+      "boot.json": JSON.stringify({ rev: "prod", entries: [] }),
+    });
+    const withOverlay = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/index.html"),
+      { webRoot: productWithBoot, overlayRoot },
+    );
+    const html = await withOverlay.text();
+    expect(html).toContain("dsh-niulai-pet");
+    const pet = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/plugins/dsh-niulai-pet/client.js"),
+      { webRoot: productWithBoot, overlayRoot },
+    );
+    expect(await pet.text()).toBe("/* pet */");
   });
 
   it("guards navigation to non-protocol URLs", () => {

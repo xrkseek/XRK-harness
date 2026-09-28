@@ -344,7 +344,13 @@ export function apply(ctx: ClientContext): void {
     label: () => t('configurableTab'),
     locale: NS,
     inject: () => configurable.inject(),
-    children: { 'settings.plugin.item': { kind: 'keyed', scope: 'root' } },
+    children: {
+      'settings.plugin.item': { kind: 'keyed', scope: 'root' },
+      // DSH community clients (modlens · voice · …) also inject here; declare
+      // so `slots.inject` resolves. Cards users see still come from
+      // `settings.plugin.item` (modlens dual-registers both).
+      'plugins.bundle.config': { kind: 'keyed', scope: 'root' },
+    },
   }, ConfigurablePluginsTab))
 
   // Advanced: classifier / memory-embed / low-traffic Host knobs (not the everyday plugin cards).

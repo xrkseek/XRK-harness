@@ -51,7 +51,7 @@ Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。�
 
 实现包：`presets/minimal` · `presets/harness`。`presets/server` **不是**第三套工具表，只导出 Host `AgentFactory`（内部调用 harness，并按会话徽章套用 profile）。
 
-**Session 是什么**：侧栏里的一条对话线程（有 id、事件日志、可选子代理）。创建时钉上 `agentPreset`；已跑着的会话保持开始时的工具面。
+**Session 是什么**：侧栏里的一条对话线程（有 id、事件日志、可选子代理）。创建时钉上 `agentPreset`（内存 + `~/.xrk/session-agent-presets.json`）；已跑着的会话保持开始时的工具面，Host 重启与会话 LRU 驱逐不丢徽章。Frugal / Minimal / Shell **不绑定**子代理工具；误绑时工具执行也会拒绝。
 
 ## Host CLI 入口
 
@@ -179,7 +179,7 @@ Runtime caps for **concurrent live children** and **delegation depth** live unde
 
 Implementation packages: `presets/minimal` · `presets/harness`. `presets/server` is **not** a third tool table; it only exports the Host `AgentFactory` (calls harness and applies the session badge profile).
 
-**What a Session is**: one conversation thread in the sidebar (id, event log, optional subagents). `agentPreset` is pinned at create time; running sessions keep the tool surface they started with.
+**What a Session is**: one conversation thread in the sidebar (id, event log, optional subagents). `agentPreset` is pinned at create time (memory + `~/.xrk/session-agent-presets.json`); running sessions keep the tool surface they started with across Host restart and session LRU eviction. Frugal / Minimal / Shell do **not** bind subagent tools; a stale bind still refuses at execute time.
 
 ## Host CLI entry
 

@@ -698,6 +698,11 @@ export class TestSessions implements ISessions {
     this.stubs.get('noteAgentPreset')?.(sessionId, agentPreset)
   }
 
+  setCreateAgentPresetProvider(provider: (() => string | undefined) | undefined): void {
+    this.record('setCreateAgentPresetProvider', [provider])
+    this.stubs.get('setCreateAgentPresetProvider')?.(provider)
+  }
+
   /** Clear the current selection into the no-session view state. */
   clear(): void {
     this.record('clear', [])

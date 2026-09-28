@@ -56,13 +56,29 @@ user-invocable: false
 1. 读 community-plugins + dsh-compat README。  
 2. 新 RPC：优先扩 capability table / bridge，**不要** embed Cordis Host（ADR-0002）。  
 3. 补 http 测或 fixture 条目。  
-4. 同步 `docs/community-plugins.md` · `status.md`（已实现 vs 待补）。
+4. 同步 `docs/community-plugins.md`（**已适配社区包清单**）· `status.md`（已实现 vs 待补）。
 
 ## 常见陷阱
 
 - 按**包名**堆适配器 — Harness 按**路径与 RPC 形状**接线。  
 - 对上游第三方仓提 PR — **禁止**（产品身份规则；ADR-0002）。  
-- 把 maintainer `.cursor` 笔记当社区包规格。
+- 把 maintainer `.cursor` 笔记当社区包规格。  
+- **Client 半部装完「没反应」**：列表会标 `needsRestart`；Desktop 热刷新只重载渲染页，**不会**重挂 `webPlugins` — 首次装 client 包要整应用 / Host 重启。  
+- **启停 / 删除 / 重载 / 更新**：与安装一样引导刷新（toast + `clientRefreshHint` 横幅 + 待重启标签上的刷新按钮）；卸载必须传 `clientRefresh: true`（否则条目标没了看不见 `needsRestart`）。  
+- **Settings 卡看不见**：社区包常双注册 `settings.plugin.item` + `plugins.bundle.config`。Configurable 标签页在 Host `describe` 之后派发**全部已注册** `settings.plugin.item` 键（含 Face 未列出的自托管键，如 `modlens`）；`plugins.bundle.config` 已声明供 inject，配置面仍走 Settings 卡。  
+- **`@liustack/modlens` 粘贴无反应**：client 先 `GET /modlens/paste?model=`，要 `{ takeover: true }` 才劫持粘贴；关 `pasteToPath` 时 Host 回 404。二进制 `POST /modlens/paste` → `{ path }`。  
+- **`dsh-niulai-pet`**：client-only 桌宠（`createRoot` 挂 body，非 `shell.overlay`）；Settings 卡键 `niulai-pet`；语音停喊要 `GET /niulai-kws/*`（Host 白名单伺服 staged `kws/`）— 装包时 `installClientBundle` 需拷贝 `kws/` 资产目录。  
+- **皮肤包**（`@smalltailqwq/dsh-client-ui-skin-*` · `dsh-dream-skin` · `@linxin666/dsh-skins` · `dsh-client-ui-aqua`）：
+  - client 用相对 URL `skin-assets/<skinId>/<hash>.webp` → Host `/skin-assets/*`（staged `assets/runtime/` + `skin.json` id）。
+  - 装包时拷贝 `assets/` · `preview/` · `locale/` · `skins/` · `skin.json`。
+  - 管理器：`/api/dsh/skins`（deep-whale-manager）· `/api/skin-manager` · `/api/skin-center/v2|*`（linxin skin-center）— 共用 `skin-discover` 扫描 staged `skin.json`。
+  - **aqua / open-sea / liang-intensity**：client-only（Settings 卡 / body 装饰）；无 Host HTTP；装后重启即可。
+  - 缺图即「渲染异常」；管理页 404 即缺上述 HTTP 能力。
+- **inject remap**：`@deepseek-ai/dsh-api-remotes` → `@xrkseek/xrk-api-remotes`（`remap-inject` + `dsh-require-remap` 同表）；缺映射会装上但 shell require 失败。
+- **`dshmarket` 装/更/卸**：`POST /dsh-market/install|update|uninstall` → `runPluginMutate`（与 Settings 清单同路径）。Discover 只传 github `url`——Host 用 awesome catalog 把 `url` 映射成 `npm`（避免把 `@scope/pkg` 当本地路径、或裸 git URL 装坏已适配包）。`XRK_MARKET_MUTATE_NPM=0` 仅本地路径。`GET /updates` 空对象。
+- **火插件形状**（非裸 stub）：`/api/pet/*` · `/api/billing/*` · `POST /mcp-connector/api`（连接可 upsert）· `/plugins/dsh-agent-teams/state|plan|halt` · `/token-usage-stats` · `/api/dsh-skills-manager/*`（扫描 + enable/trash）· `/api/task-board` CRUD · `/api/dsh-ssh/hosts` · `/api/dsh-codex-ui/preferences` · `/api/pair/*` · `/api/michengai/*` · `/api/install` · `/server-deck/api/*` · `/univer-api/*` · `/scene-frame|scene-anim` · `/api/dsh-context/detail` → `{ ok, value }` · `/api/dsh-free-search-settings/*` · `/api/code-server/*`（与 `/code-server/*` 同形）· `/_dsh/dsh-email/settings`（save/serialize；IMAP deferred）。  
+- **底层 persist**：`/_dsh/<pkg>/{settings,config,state}` 与 `/dsh-*/api/{config,state}` → `~/.xrk/community-surfaces/<id>/`（`plugin-surface-store`）；settings mutate 支持嵌套 `path`；`xrk-stub-rpc` generic set/get 同落盘；遗留 `/dsh-pet-7340/config` 专用 store。  
+- **本机社区镜像（搜索/适配）**：`node scripts/dsh-community-mirror.mjs` → `~/.xrk/community-plugin-mirror/`（catalog.json · index.json · packs/）。`--search=hud` 本地搜；全量 pack 可 resume（单包失败不中断整轮）。
 
 ## 相关
 

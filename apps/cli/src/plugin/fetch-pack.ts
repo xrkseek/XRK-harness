@@ -68,6 +68,7 @@ export function fetchPackage(
 
   const looksLikePath =
     !/^(git\+|github:|https?:|npm:)/i.test(anchored) &&
+    !/^@[^/]+\/[^@]+(?:@.+)?$/.test(anchored) &&
     (path.isAbsolute(bare) ||
       bare.startsWith(".") ||
       /[/\\]/.test(bare));

@@ -111,8 +111,70 @@ describe("mnemon document engine", () => {
       "turn-activities",
       { xrkHome: home },
       { turnId: "t-9" },
-    ) as { incomplete?: string[]; items?: unknown[] };
+    ) as { incomplete?: string[]; items?: unknown[]; cursor?: number; activities?: unknown[] };
     expect(turns.incomplete).toBeUndefined();
-    expect(turns.items).toHaveLength(1);
+    expect(turns.cursor).toBe(0);
+    expect(Array.isArray(turns.activities)).toBe(true);
+  });
+
+  it("snapshot, capacity-plan, archive, and forget persist", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-mnemon-cap-"));
+    temps.push(home);
+    handleMnemonWrite(
+      "document",
+      { id: "keep", title: "Keep", body: "long enough ".repeat(20) },
+      { xrkHome: home },
+    );
+    handleMnemonWrite(
+      "document",
+      { id: "drop", title: "Drop", body: "archive me" },
+      { xrkHome: home },
+    );
+
+    const snap = handleMnemonRead("snapshot", { xrkHome: home }) as {
+      documents?: Array<{ id: string; status: string }>;
+      activeBytes?: number;
+    };
+    expect(snap.documents?.map((d) => d.id).sort()).toEqual(["drop", "keep"]);
+    expect(snap.activeBytes).toBeGreaterThan(0);
+
+    const plan = handleMnemonRead(
+      "capacity-plan",
+      { xrkHome: home },
+      { projected: 100, limit: 10 },
+    ) as {
+      fits?: boolean;
+      candidates?: Array<{ id: string }>;
+    };
+    expect(plan.fits).toBe(false);
+    expect(plan.candidates?.some((c) => c.id === "drop")).toBe(true);
+
+    const archived = handleMnemonWrite(
+      "forget",
+      { id: "drop" },
+      { xrkHome: home },
+    ) as { action?: string; document?: { archived?: boolean } };
+    expect(archived.action).toBe("forgotten");
+    expect(archived.document?.archived).toBe(true);
+
+    const after = handleMnemonRead("documents", { xrkHome: home }) as Array<{
+      id: string;
+    }>;
+    expect(after.map((d) => d.id)).toEqual(["keep"]);
+
+    const placement = handleMnemonRead(
+      "prepare-body-placement",
+      { xrkHome: home },
+      { name: "space-a", description: "notes" },
+    ) as { candidates?: Array<{ id: string }>; prompt?: string };
+    expect(placement.candidates?.[0]?.id).toBe("mnemon-native");
+    expect(placement.prompt).toContain("space-a");
+
+    const finalized = handleMnemonRead(
+      "finalize-placement",
+      { xrkHome: home },
+      { prepared: placement },
+    ) as { providerId?: string };
+    expect(finalized.providerId).toBe("mnemon-native");
   });
 });

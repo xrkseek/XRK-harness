@@ -11,6 +11,11 @@ import {
   createXrkPluginPublicHandler,
 } from "../src/index.js";
 import { readXrkPluginInventory } from "../src/xrk/plugin-services.js";
+import {
+  buildMarketCatalogHint,
+  isLocalPluginSpec,
+  resolveMarketPluginSpec,
+} from "../src/dsh-compat/market.js";
 
 const temps: string[] = [];
 const FIXTURE_SUITE = path.join(
@@ -476,28 +481,179 @@ describe("dsh-compat adapters", () => {
     });
   });
 
-  it("rejects remote dsh-market install as deferred CLI handoff", async () => {
-    const handler = compatHandler();
-    await withPublicHandler(handler, async (base) => {
-      const res = await fetch(`${base}/dsh-market/install`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ method: "install", spec: "dsh-poison-guard" }),
-      });
-      const body = (await res.json()) as {
-        ok: boolean;
-        accepted: boolean;
-        deferred: boolean;
-        cli?: string;
-        incomplete?: string[];
-      };
-      expect(body.ok).toBe(false);
-      expect(body.accepted).toBe(false);
-      expect(body.deferred).toBe(true);
-      expect(body.incomplete).toContain("market-host");
-      expect(body.cli).toContain("plugin add");
-      expect(body.cli).toContain("dsh-poison-guard");
+  it("resolveMarketPluginSpec prefers npm and maps github url via catalog", () => {
+    const hint = buildMarketCatalogHint({
+      plugins: [
+        {
+          name: "modlens",
+          url: "https://github.com/liustack/modlens",
+          npm: "@liustack/modlens",
+        },
+        {
+          name: "dsh-wallet",
+          url: "https://github.com/example/dsh-wallet",
+          npm: "dsh-wallet",
+        },
+      ],
     });
+    expect(
+      resolveMarketPluginSpec(
+        { url: "https://github.com/liustack/modlens", version: "1.2.3" },
+        hint,
+      ),
+    ).toBe("@liustack/modlens@1.2.3");
+    expect(
+      resolveMarketPluginSpec({ name: "dsh-wallet", version: "9.0.0" }, hint),
+    ).toBe("dsh-wallet@9.0.0");
+    expect(resolveMarketPluginSpec({ npm: "@scope/pkg", version: "9.0.0" })).toBe(
+      "@scope/pkg@9.0.0",
+    );
+    expect(
+      resolveMarketPluginSpec({
+        url: "https://github.com/org/repo/tree/main/packages/foo",
+      }),
+    ).toBe("github:org/repo#main&path:/packages/foo");
+    expect(resolveMarketPluginSpec({ spec: "already@2", version: "9" })).toBe(
+      "already@2",
+    );
+    expect(isLocalPluginSpec("@liustack/modlens")).toBe(false);
+    expect(isLocalPluginSpec("C:\\\\tmp\\\\plugin")).toBe(true);
+  });
+
+  it("defers remote dsh-market install when XRK_MARKET_MUTATE_NPM=0", async () => {
+    const prev = process.env.XRK_MARKET_MUTATE_NPM;
+    process.env.XRK_MARKET_MUTATE_NPM = "0";
+    try {
+      const handler = compatHandler();
+      await withPublicHandler(handler, async (base) => {
+        const res = await fetch(`${base}/dsh-market/install`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ method: "install", spec: "dsh-poison-guard" }),
+        });
+        const body = (await res.json()) as {
+          ok: boolean;
+          accepted: boolean;
+          deferred: boolean;
+          cli?: string;
+          incomplete?: string[];
+        };
+        expect(body.ok).toBe(false);
+        expect(body.accepted).toBe(false);
+        expect(body.deferred).toBe(true);
+        expect(body.incomplete).toContain("market-host");
+        expect(body.cli).toContain("plugin add");
+        expect(body.cli).toContain("dsh-poison-guard");
+      });
+    } finally {
+      if (prev === undefined) delete process.env.XRK_MARKET_MUTATE_NPM;
+      else process.env.XRK_MARKET_MUTATE_NPM = prev;
+    }
+  });
+
+  it("mutates remote dsh-market install/update/uninstall via stub CLI", async () => {
+    const stubDir = mkdtempSync(path.join(tmpdir(), "xrk-market-stub-"));
+    temps.push(stubDir);
+    const stubJs = path.join(stubDir, "xrkh-stub.mjs");
+    writeFileSync(
+      stubJs,
+      `
+import fs from "node:fs";
+import path from "node:path";
+const args = process.argv.slice(2);
+const dir = process.env.XRK_PLUGINS_DIR;
+if (!dir) { console.error("no XRK_PLUGINS_DIR"); process.exit(2); }
+const invPath = path.join(dir, ".xrk-plugins.json");
+let inv = { rev: 1, packages: {} };
+try { inv = JSON.parse(fs.readFileSync(invPath, "utf8")); } catch {}
+const sub = args[1];
+const spec = args[2] ?? "";
+const name = spec.startsWith("@")
+  ? (spec.match(/^(@[^/]+\\/[^@]+)/)?.[1] ?? spec)
+  : spec.split("@")[0];
+if (sub === "add") {
+  inv.packages[name] = { name, version: "1.0.0", kind: "client", source: spec };
+  fs.mkdirSync(path.join(dir, "web", "plugins", ...name.split("/")), { recursive: true });
+} else if (sub === "remove") {
+  delete inv.packages[name];
+}
+fs.writeFileSync(invPath, JSON.stringify(inv));
+process.exit(0);
+`,
+    );
+    const pluginsDir = mkdtempSync(path.join(tmpdir(), "xrk-market-plugins-"));
+    temps.push(pluginsDir);
+    writeFileSync(
+      path.join(pluginsDir, ".xrk-plugins.json"),
+      JSON.stringify({ rev: 1, packages: {} }),
+    );
+    const prevBin = process.env.XRK_HARNESS_BIN;
+    const prevNpm = process.env.XRK_MARKET_MUTATE_NPM;
+    process.env.XRK_HARNESS_BIN = stubJs;
+    delete process.env.XRK_MARKET_MUTATE_NPM;
+    try {
+      const handler = createDshCompatPublicHandler({ pluginsDir });
+      await withPublicHandler(handler, async (base) => {
+        const install = await fetch(`${base}/dsh-market/install`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            url: "dsh-hot-example",
+            version: "2.0.0",
+          }),
+        });
+        const installed = (await install.json()) as {
+          ok: boolean;
+          mutated?: boolean;
+          deferred?: boolean;
+          installed?: string[];
+          spec?: string;
+        };
+        expect(install.status).toBe(200);
+        expect(installed.deferred).toBe(false);
+        expect(installed.ok).toBe(true);
+        expect(installed.mutated).toBe(true);
+        expect(installed.spec).toBe("dsh-hot-example@2.0.0");
+        expect(installed.installed).toContain("dsh-hot-example");
+
+        const update = await fetch(`${base}/dsh-market/update`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "dsh-hot-example" }),
+        });
+        const updated = (await update.json()) as {
+          ok: boolean;
+          action?: string;
+          deferred?: boolean;
+        };
+        expect(updated.ok).toBe(true);
+        expect(updated.deferred).toBe(false);
+        expect(updated.action).toBe("update");
+
+        const uninstall = await fetch(`${base}/dsh-market/uninstall`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "dsh-hot-example" }),
+        });
+        const removed = (await uninstall.json()) as {
+          ok: boolean;
+          installed?: string[];
+        };
+        expect(removed.ok).toBe(true);
+        expect(removed.installed ?? []).not.toContain("dsh-hot-example");
+
+        const updates = await fetch(`${base}/dsh-market/updates`);
+        const updatesBody = (await updates.json()) as {
+          updates: Record<string, unknown> | unknown[];
+        };
+        expect(updatesBody.updates).toEqual({});
+      });
+    } finally {
+      if (prevBin === undefined) delete process.env.XRK_HARNESS_BIN;
+      else process.env.XRK_HARNESS_BIN = prevBin;
+      if (prevNpm === undefined) delete process.env.XRK_MARKET_MUTATE_NPM;
+      else process.env.XRK_MARKET_MUTATE_NPM = prevNpm;
+    }
   });
 
   it("persists mnemon documents via write RPC", async () => {
@@ -1940,6 +2096,22 @@ describe("dsh-compat adapters", () => {
       expect(slug.status).toBe(200);
       expect(slugBody.ok).toBe(true);
       expect(slugBody.plugin).toBe("whale-girl");
+
+      const nested = await fetch(`${base}/dsh-whale-girl/api/state`);
+      const nestedBody = (await nested.json()) as {
+        ok: boolean;
+        balance: number;
+        plugin: string;
+      };
+      expect(nested.status).toBe(200);
+      expect(nestedBody.ok).toBe(true);
+      expect(nestedBody.plugin).toBe("dsh-whale-girl");
+      expect(nestedBody.balance).toBe(0);
+
+      const providers = await (
+        await fetch(`${base}/dsh-whale-girl/api/providers`)
+      ).json() as { providers: unknown[] };
+      expect(Array.isArray(providers.providers)).toBe(true);
     });
   });
 
@@ -1985,6 +2157,196 @@ describe("dsh-compat adapters", () => {
       expect(res.headers.get("content-type")).toContain("javascript");
       const body = await res.text();
       expect(body).toContain("export const x=1");
+    });
+  });
+
+  it("serves community skin rasters under /skin-assets/<id>/<hash>", async () => {
+    const pluginsDir = mkdtempSync(path.join(tmpdir(), "xrk-skin-asset-dir-"));
+    temps.push(pluginsDir);
+    const pkgRoot = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "@smalltailqwq",
+      "dsh-client-ui-skin-maid-atelier",
+    );
+    const hash =
+      "405917afdb68d725624bbf7e4f1619a35fc4004039b7d553c5528ca5f65308d3.webp";
+    mkdirSync(path.join(pkgRoot, "assets", "runtime"), { recursive: true });
+    writeFileSync(path.join(pkgRoot, "client.js"), "// maid\n");
+    writeFileSync(
+      path.join(pkgRoot, "skin.json"),
+      JSON.stringify({ id: "maid-atelier", name: "Maid Atelier" }),
+    );
+    writeFileSync(path.join(pkgRoot, "assets", "runtime", hash), "webp-bytes");
+    const handler = compatHandler({ pluginsDir });
+    await withPublicHandler(handler, async (base) => {
+      const ok = await fetch(`${base}/skin-assets/maid-atelier/${hash}`);
+      expect(ok.status).toBe(200);
+      expect(ok.headers.get("content-type")).toContain("image/webp");
+      expect(await ok.text()).toBe("webp-bytes");
+
+      const miss = await fetch(
+        `${base}/skin-assets/maid-atelier/0000000000000000000000000000000000000000000000000000000000000000.webp`,
+      );
+      expect(miss.status).toBe(404);
+
+      const traversal = await fetch(
+        `${base}/skin-assets/maid-atelier/../skin.json`,
+      );
+      expect(traversal.status).toBe(404);
+    });
+  });
+
+  it("serves /api/dsh/skins catalog + switch and /api/skin-center/v2", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-dsh-skins-"));
+    temps.push(root);
+    const pluginsDir = path.join(root, "plugins");
+    const home = path.join(root, "home");
+    const pkgRoot = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "@smalltailqwq",
+      "dsh-client-ui-skin-maid-atelier",
+    );
+    mkdirSync(pkgRoot, { recursive: true });
+    writeFileSync(path.join(pkgRoot, "client.js"), "// maid\n");
+    writeFileSync(
+      path.join(pkgRoot, "skin.json"),
+      JSON.stringify({
+        id: "maid-atelier",
+        name: "Maid Atelier",
+        nameEn: "Maid Atelier",
+        bodyAttr: "data-dsh-maid-atelier",
+        package: "@smalltailqwq/dsh-client-ui-skin-maid-atelier",
+        wiring: { id: "ui-skin-maid-atelier" },
+        dshCompatibility: "0.1.7rc2",
+      }),
+    );
+    const centerRoot = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "@linxin666",
+      "dsh-client-ui-skin-center",
+    );
+    const bundled = path.join(centerRoot, "skins", "blue-fantasy");
+    mkdirSync(bundled, { recursive: true });
+    writeFileSync(path.join(centerRoot, "client.js"), "// center\n");
+    writeFileSync(
+      path.join(bundled, "skin.json"),
+      JSON.stringify({
+        id: "blue-fantasy",
+        name: "Blue Fantasy",
+        version: "0.2.0",
+        contributes: { stylesheet: "skin.css" },
+      }),
+    );
+    writeFileSync(path.join(bundled, "skin.css"), "body{color:blue}");
+    mkdirSync(path.join(bundled, "assets"), { recursive: true });
+    writeFileSync(path.join(bundled, "assets", "art.jpg"), "jpg");
+
+    const handler = compatHandler({ pluginsDir, xrkHome: home });
+    await withPublicHandler(handler, async (base) => {
+      const catalog = await (
+        await fetch(`${base}/api/dsh/skins`)
+      ).json() as {
+        ok: boolean;
+        skins: Array<{ id: string; bodyAttr: string }>;
+        desktopIcon: { enabled: boolean };
+      };
+      expect(catalog.ok).toBe(true);
+      expect(catalog.desktopIcon.enabled).toBe(false);
+      expect(catalog.skins.some((s) => s.id === "maid-atelier")).toBe(true);
+      expect(
+        catalog.skins.find((s) => s.id === "maid-atelier")?.bodyAttr,
+      ).toBe("data-dsh-maid-atelier");
+
+      const switched = await fetch(`${base}/api/dsh/skins`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ target: "maid-atelier" }),
+      });
+      const switchBody = (await switched.json()) as {
+        ok: boolean;
+        activeSkinId: string;
+      };
+      expect(switchBody.ok).toBe(true);
+      expect(switchBody.activeSkinId).toBe("maid-atelier");
+
+      const versions = await fetch(`${base}/api/dsh/skins`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "local-versions" }),
+      });
+      const versionBody = (await versions.json()) as {
+        ok: boolean;
+        versions: unknown[];
+      };
+      expect(versionBody.ok).toBe(true);
+      expect(Array.isArray(versionBody.versions)).toBe(true);
+
+      const list = await (
+        await fetch(`${base}/api/skin-manager/list`)
+      ).json() as { skins: unknown[]; active: string | null };
+      expect(list.active).toBe("maid-atelier");
+      expect(Array.isArray(list.skins)).toBe(true);
+
+      const centerCatalog = await (
+        await fetch(`${base}/api/skin-center/v2/catalog`)
+      ).json() as {
+        skins: Array<{ manifest: { id: string } }>;
+      };
+      expect(
+        centerCatalog.skins.some((s) => s.manifest.id === "blue-fantasy"),
+      ).toBe(true);
+      expect(
+        centerCatalog.skins.some((s) => s.manifest.id === "maid-atelier"),
+      ).toBe(true);
+
+      const activeGet = await (
+        await fetch(`${base}/api/skin-center/v2/active`)
+      ).json() as { ok: boolean; active: string | null };
+      expect(activeGet.ok).toBe(true);
+
+      const activePost = await fetch(`${base}/api/skin-center/v2/active`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ active: "blue-fantasy" }),
+      });
+      const activeBody = (await activePost.json()) as {
+        ok: boolean;
+        active: string;
+      };
+      expect(activeBody.ok).toBe(true);
+      expect(activeBody.active).toBe("blue-fantasy");
+
+      const css = await fetch(
+        `${base}/api/skin-center/v2/skins/blue-fantasy/stylesheet`,
+      );
+      expect(css.status).toBe(200);
+      expect(await css.text()).toContain("color:blue");
+
+      const verify = await fetch(`${base}/api/skin-center/v2/verify`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ autoRepair: true }),
+      });
+      const verifyBody = (await verify.json()) as {
+        ok: boolean;
+        total: number;
+        valid: number;
+      };
+      expect(verifyBody.ok).toBe(true);
+      expect(verifyBody.total).toBeGreaterThan(0);
+      expect(verifyBody.valid).toBe(verifyBody.total);
+
+      const we = await (
+        await fetch(`${base}/api/skin-center/we/inventory`)
+      ).json() as { ok: boolean; wallpapers: unknown[] };
+      expect(we.ok).toBe(true);
+      expect(Array.isArray(we.wallpapers)).toBe(true);
     });
   });
 

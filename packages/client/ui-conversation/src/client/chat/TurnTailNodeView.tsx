@@ -11,9 +11,10 @@ type TurnTailNodeViewProps = ChatNodeViewProps<'turn-tail'>
 
 /**
  * Turn-local feature tail + message actions.
- * Copy / feedback / branch only after the session is idle — while the agent
- * is still running, completed-turn footers must not sit above live tool rows
- * (stricter than DSH, matches product: actions appear when the run finishes).
+ * Completed-turn footers stay mounted across later turns — hiding them while
+ * `session.running` made every prior turn lose copy / feedback / usage as soon
+ * as the next round started. Branch/restore still use `hasLaterChatNode` /
+ * `branchUnavailable` so mid-history forks stay gated.
  */
 export const TurnTailNodeView = memo(function TurnTailNodeView({
   node, openFile, forkAt, restoreAt, renderSlot, renderSlotChain, t, useSession,
@@ -21,7 +22,6 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   const data = node.data
   const hasLaterChatNode = useSession(snapshot =>
     snapshot.chat.locations.getTurn(data.turn).at(-1) !== node.key)
-  const sessionRunning = useSession(snapshot => snapshot.running === true)
   const turn = node.location.kind === 'turn' || node.location.kind === 'step'
     ? node.location.turn
     : undefined
@@ -33,45 +33,42 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   const runMs = turn.start === undefined || turn.end === undefined
     ? undefined
     : Math.max(0, turn.end.time - turn.start.time)
-  // Interruption-frozen partials carry no messageId, so they address no
-  // durable message and contribute no per-message actions.
+  // Interruption-frozen partials carry no messageId — copy / branch / usage
+  // still render; feedback (needs a durable id) stays off.
   const messageId = closing.finalNode.messageId
-  const showMessageActions = !sessionRunning
-  const assistantActions = !showMessageActions || messageId === undefined
+  const assistantActions = messageId === undefined
     ? null
     : renderSlot('conversation.chat.assistant-actions', { messageId })
   const actionsUnavailable = data.branchUnavailable || hasLaterChatNode
   return (
     <div className={css.root} data-turn-tail={data.turn} data-time-hover-root>
       {tail}
-      {showMessageActions ? (
-        <MessageIconActions
-          text={assistantText(closing.blocks)}
-          time={closing.time}
-          clock="end"
-          onBranch={() => { forkAt(closing.finalNode.seq) }}
-          onRestore={() => { restoreAt(closing.finalNode.seq) }}
-          branchUnavailable={actionsUnavailable}
-          className={css.actions}
-          extraActions={assistantActions}
-          usageAction={data.tokenUsage === undefined && runMs === undefined
-            ? undefined
-            : (
-              <>
-                {data.tokenUsage !== undefined && <TurnUsagePanel usage={data.tokenUsage} t={t} />}
-                {runMs !== undefined && (
-                  <TurnTimePanel
-                    runMs={runMs}
-                    tokensPerSecond={data.tokensPerSecond}
-                    ttftMs={data.ttftMs}
-                    t={t}
-                  />
-                )}
-              </>
-            )}
-          t={t}
-        />
-      ) : null}
+      <MessageIconActions
+        text={assistantText(closing.blocks)}
+        time={closing.time}
+        clock="end"
+        onBranch={() => { forkAt(closing.finalNode.seq) }}
+        onRestore={() => { restoreAt(closing.finalNode.seq) }}
+        branchUnavailable={actionsUnavailable}
+        className={css.actions}
+        extraActions={assistantActions}
+        usageAction={data.tokenUsage === undefined && runMs === undefined
+          ? undefined
+          : (
+            <>
+              {data.tokenUsage !== undefined && <TurnUsagePanel usage={data.tokenUsage} t={t} />}
+              {runMs !== undefined && (
+                <TurnTimePanel
+                  runMs={runMs}
+                  tokensPerSecond={data.tokensPerSecond}
+                  ttftMs={data.ttftMs}
+                  t={t}
+                />
+              )}
+            </>
+          )}
+        t={t}
+      />
     </div>
   )
 })

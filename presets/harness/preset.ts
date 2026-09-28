@@ -45,7 +45,7 @@ import {
   type WebAccess,
 } from "@xrkseek/exec-web";
 import {
-  COMPUTER_USE_PROMPT_TEXT,
+  formatComputerUseGuidance,
   createComputerUseTools,
   createDefaultComputerUseAccess,
   type ComputerUseService,
@@ -889,6 +889,9 @@ export function createHarnessComposition(
     for (const tool of createComputerUseTools({
       ...(service ? { service } : {}),
       ...(options.computerUseEnv ? { env: options.computerUseEnv } : {}),
+      ...(options.computerUseProduct
+        ? { product: options.computerUseProduct }
+        : {}),
       ...(options.attachments
         ? {
             saveScreenshot: (png) =>
@@ -1235,10 +1238,7 @@ export function createHarnessComposition(
     prompts.register({
       id: "tool:computer_use",
       order: 116,
-      content: () =>
-        availableToolNames().has("computer_use")
-          ? COMPUTER_USE_PROMPT_TEXT
-          : "",
+      content: () => formatComputerUseGuidance(availableToolNames()),
     });
   }
   if (options.voiceTools !== false) {

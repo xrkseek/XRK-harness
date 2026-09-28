@@ -201,4 +201,36 @@ describe('hmr node half', () => {
     await vi.waitFor(() => { expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a', 'pkg-a']) }, { timeout: 3_000 })
     await fiber.dispose()
   })
+
+  it('broadcasts a graph frame on onGraphChanged while SSE clients are connected', async () => {
+    const bundle = join(dir, 'g.js')
+    writeFileSync(bundle, 'v1')
+    const clientModuleHost = fakeClientModuleHost(new Map([['pkg-g', bundle]]))
+    const routes: WebRoute[] = []
+    const fiber = await mount(clientModuleHost, fakeHttpServer(routes))
+    const route = routes[0]!
+    expect(route.kind).toBe('exact')
+
+    const chunks: string[] = []
+    const res = {
+      writeHead: vi.fn(),
+      write: (chunk: string) => { chunks.push(chunk); return true },
+      on: vi.fn((event: string, cb: () => void) => {
+        if (event === 'close') {
+          // keep connection open for the graph push
+          void cb
+        }
+        return res
+      }),
+      destroy: vi.fn(),
+    } as unknown as import('node:http').ServerResponse
+
+    route.handler({ method: 'GET' } as never, res)
+    expect(chunks.some((c) => c.includes('"type":"graph"'))).toBe(true)
+    chunks.length = 0
+
+    clientModuleHost.fireGraphChanged()
+    expect(chunks.some((c) => c.includes('"type":"graph"') && c.includes('pkg-g'))).toBe(true)
+    await fiber.dispose()
+  })
 })

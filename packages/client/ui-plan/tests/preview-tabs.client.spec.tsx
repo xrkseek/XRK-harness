@@ -18,6 +18,19 @@ afterEach(() => {
 
 const t = makeTranslate(zh, commonZh)
 
+/** Session-list stub — Overview re-pulls status when catalog/running flips. */
+function useSessionsStub(): PreviewTabsProps['useSessions'] {
+  return (select) => select({
+    ids: [],
+    byId: {},
+    current: undefined,
+    phase: 'ready',
+    subagentsByParent: {},
+    jobsBySession: {},
+    currentAddress: undefined,
+  } as never)
+}
+
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -223,6 +236,7 @@ describe('PreviewTabs', () => {
           closeDetails: vi.fn(),
           t,
           useProjection,
+          useSessions: useSessionsStub(),
         } as PreviewTabsProps)}
       />,
     )
@@ -259,6 +273,7 @@ describe('PreviewTabs', () => {
           closeDetails,
           t,
           useProjection: fakeProjections({}).useProjection,
+          useSessions: useSessionsStub(),
         } as PreviewTabsProps)}
       />,
     )
@@ -290,7 +305,9 @@ describe('PreviewTabs', () => {
       return jsonResponse({ ok: false })
     }))
     const { state, useProjection } = fakeProjections({ plan: { active: false, pending: false } })
-    const props = { sessionId: 's1', closeDetails: vi.fn(), t, useProjection } as PreviewTabsProps
+    const props = {
+      sessionId: 's1', closeDetails: vi.fn(), t, useProjection, useSessions: useSessionsStub(),
+    } as PreviewTabsProps
     const view = render(<PreviewTabs {...props} />)
     await waitFor(() => {
       expect(screen.getByLabelText('会话')).toBeTruthy()
@@ -358,6 +375,7 @@ describe('PreviewTabs', () => {
           closeDetails: vi.fn(),
           t,
           useProjection,
+          useSessions: useSessionsStub(),
         } as PreviewTabsProps)}
       />,
     )
@@ -417,6 +435,7 @@ describe('PreviewTabs', () => {
           openSpillPath,
           t,
           useProjection,
+          useSessions: useSessionsStub(),
         } as PreviewTabsProps)}
       />,
     )
@@ -450,6 +469,7 @@ describe('PreviewTabs', () => {
           openChangedFile: vi.fn(),
           t,
           useProjection: fakeProjections({}).useProjection,
+          useSessions: useSessionsStub(),
         } as PreviewTabsProps)}
       />,
     )
@@ -458,6 +478,144 @@ describe('PreviewTabs', () => {
     })
     fireEvent.click(screen.getByRole('tab', { name: '改动' }))
     expect(screen.getByText(/本会话尚无改动摘要/)).toBeTruthy()
+  })
+
+  it('re-pulls session.status when jobsBySession status flips', async () => {
+    let jobs: { id: string; status: string; kind: string; label: string; startedAt: number }[] = [
+      { id: 'job-1', status: 'running', kind: 'bash', label: 'sleep', startedAt: 1 },
+    ]
+    const useSessionsLive: PreviewTabsProps['useSessions'] = (select) => select({
+      ids: [],
+      byId: {},
+      current: undefined,
+      phase: 'ready',
+      subagentsByParent: {},
+      jobsBySession: { s1: jobs },
+      currentAddress: undefined,
+    } as never)
+
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('session.status')) {
+        return jsonResponse({ result: { ok: true, value: sampleStatus } })
+      }
+      return jsonResponse({ ok: false })
+    })
+    vi.stubGlobal('fetch', fetchImpl)
+
+    const { rerender } = render(
+      <PreviewTabs
+        {...({
+          sessionId: 's1',
+          closeDetails: vi.fn(),
+          t,
+          useProjection: fakeProjections({}).useProjection,
+          useSessions: useSessionsLive,
+        } as PreviewTabsProps)}
+      />,
+    )
+    await waitFor(() => {
+      expect(fetchImpl.mock.calls.some((c) => String(c[0]).includes('session.status'))).toBe(true)
+    })
+    const before = fetchImpl.mock.calls.filter((c) => String(c[0]).includes('session.status')).length
+
+    jobs = [{ id: 'job-1', status: 'completed', kind: 'bash', label: 'sleep', startedAt: 1 }]
+    rerender(
+      <PreviewTabs
+        {...({
+          sessionId: 's1',
+          closeDetails: vi.fn(),
+          t,
+          useProjection: fakeProjections({}).useProjection,
+          useSessions: useSessionsLive,
+        } as PreviewTabsProps)}
+      />,
+    )
+    await waitFor(() => {
+      expect(
+        fetchImpl.mock.calls.filter((c) => String(c[0]).includes('session.status')).length,
+      ).toBeGreaterThan(before)
+    })
+  })
+
+  it('re-pulls session.status when a byId child flips running via parentId', async () => {
+    let byId: Record<string, {
+      id: string
+      displayTitle: string
+      running: boolean
+      blank: boolean
+      updatedAt: number
+      origin?: 'subagent'
+      parentId?: string
+    }> = {
+      s1: {
+        id: 's1', displayTitle: 's1', running: false, blank: false, updatedAt: 1,
+      },
+      child: {
+        id: 'child',
+        displayTitle: 'child',
+        running: false,
+        blank: false,
+        updatedAt: 1,
+        origin: 'subagent',
+        parentId: 's1',
+      },
+    }
+    const useSessionsLive: PreviewTabsProps['useSessions'] = (select) => select({
+      ids: ['s1'],
+      byId,
+      current: 's1',
+      phase: 'ready',
+      subagentsByParent: {},
+      jobsBySession: {},
+      currentAddress: undefined,
+    } as never)
+
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('session.status')) {
+        return jsonResponse({ result: { ok: true, value: sampleStatus } })
+      }
+      return jsonResponse({ ok: false })
+    })
+    vi.stubGlobal('fetch', fetchImpl)
+
+    const { rerender } = render(
+      <PreviewTabs
+        {...({
+          sessionId: 's1',
+          closeDetails: vi.fn(),
+          t,
+          useProjection: fakeProjections({}).useProjection,
+          useSessions: useSessionsLive,
+        } as PreviewTabsProps)}
+      />,
+    )
+    await waitFor(() => {
+      expect(fetchImpl.mock.calls.some((c) => String(c[0]).includes('session.status'))).toBe(true)
+    })
+    const before = fetchImpl.mock.calls.filter((c) => String(c[0]).includes('session.status')).length
+
+    byId = {
+      ...byId,
+      child: { ...byId.child!, running: true },
+    }
+    rerender(
+      <PreviewTabs
+        {...({
+          sessionId: 's1',
+          closeDetails: vi.fn(),
+          t,
+          useProjection: fakeProjections({}).useProjection,
+          useSessions: useSessionsLive,
+        } as PreviewTabsProps)}
+      />,
+    )
+    await waitFor(() => {
+      expect(
+        fetchImpl.mock.calls.filter((c) => String(c[0]).includes('session.status')).length,
+      ).toBeGreaterThan(before)
+    })
   })
 
   it('expands a Status job row to peek output and two-press kills', async () => {
@@ -483,6 +641,7 @@ describe('PreviewTabs', () => {
           killJob,
           t,
           useProjection: fakeProjections({}).useProjection,
+          useSessions: useSessionsStub(),
         } as PreviewTabsProps)}
       />,
     )
@@ -504,6 +663,7 @@ describe('PreviewTabs', () => {
   it('exposes cold resume and merge actions on Teams task rows', async () => {
     const statusWithTask = {
       ...sampleStatus,
+      badge: 'harness',
       teamTasks: [
         {
           id: 't1',
@@ -536,6 +696,7 @@ describe('PreviewTabs', () => {
           mergeTeamWorktree,
           t,
           useProjection,
+          useSessions: useSessionsStub(),
         } as PreviewTabsProps)}
       />,
     )

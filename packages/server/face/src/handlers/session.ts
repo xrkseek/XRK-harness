@@ -35,6 +35,10 @@ import {
 } from "../permissions.js";
 import { resolveDefaultAgentPreset } from "../settings-document.js";
 import {
+  effectiveSessionAgentPreset,
+  pinSessionAgentPreset,
+} from "../session-agent-preset.js";
+import {
   modelSelectionFromPrefix,
   prefixHasImageContent,
   resolveForkCut,
@@ -121,7 +125,8 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       ? undefined
       : runtime.workspaces.attachSession(sessionId, attach.workspaceId);
   if (agentPreset) {
-    runtime.sessionAgentPresets.set(
+    pinSessionAgentPreset(
+      runtime,
       sessionId,
       canonicalAgentPresetId(agentPreset),
     );
@@ -129,7 +134,8 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     const parentPreset = parentSessionId
       ? runtime.sessionAgentPresets.get(parentSessionId)
       : undefined;
-    runtime.sessionAgentPresets.set(
+    pinSessionAgentPreset(
+      runtime,
       sessionId,
       parentPreset ??
         canonicalAgentPresetId(resolveDefaultAgentPreset(runtime)),
@@ -207,7 +213,7 @@ export const sessionList: FaceHandler = async (runtime) => {
     const cwd = resolveSessionCwd(runtime, sessionId);
     const wsId = runtime.workspaces.workspaceIdOf(sessionId);
     const wsRow = wsId ? runtime.workspaces.get(wsId) : undefined;
-    const agentPreset = runtime.sessionAgentPresets.get(sessionId);
+    const agentPreset = effectiveSessionAgentPreset(runtime, sessionId);
     const lineage = runtime.subagents.getByChild(sessionId);
     return {
       sessionId,
@@ -217,7 +223,7 @@ export const sessionList: FaceHandler = async (runtime) => {
       cwd,
       ...(wsId ? { workspaceId: wsId } : {}),
       ...(wsRow?.title ? { workspaceTitle: wsRow.title } : {}),
-      ...(agentPreset ? { agentPreset } : {}),
+      agentPreset,
       ...(lineage
         ? {
             parentSessionId: lineage.parentSessionId,
@@ -624,9 +630,10 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
   // resolvable; durable knob events after the cut are already excluded.
   const parentPreset = runtime.sessionAgentPresets.get(sessionId);
   if (parentPreset) {
-    runtime.sessionAgentPresets.set(child.id, parentPreset);
+    pinSessionAgentPreset(runtime, child.id, parentPreset);
   } else {
-    runtime.sessionAgentPresets.set(
+    pinSessionAgentPreset(
+      runtime,
       child.id,
       canonicalAgentPresetId(resolveDefaultAgentPreset(runtime)),
     );

@@ -1,5 +1,5 @@
 /**
- * Desktop `xrk-app://` WebApiClient carrier knobs (stream base + host placeholder).
+ * Desktop `xrk-app://` WebApiClient carrier knobs (stream base + dual SSE).
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,7 +12,7 @@ class ProbeClient extends WebApiClient {
   }
   protected override doFetch(input: URL, init?: RequestInit): Promise<Response> {
     this.fetches.push(`${init?.method ?? "GET"} ${input.href}`);
-    if (input.pathname.includes("events.mux")) {
+    if (input.pathname.includes("events.mux") || input.pathname.includes("events.host")) {
       return Promise.resolve(
         new Response(": connected\n\n", {
           status: 200,
@@ -61,7 +61,7 @@ describe("WebApiClient Desktop carrier", () => {
     );
   });
 
-  it("does not open a second long-lived host SSE on xrk-app", async () => {
+  it("opens host SSE on the stream origin so remote-events reach the shell", async () => {
     Object.defineProperty(globalThis, "location", {
       value: { origin: "xrk-app://app", protocol: "xrk-app:", hostname: "app" },
       configurable: true,
@@ -73,11 +73,14 @@ describe("WebApiClient Desktop carrier", () => {
       opened = true;
     });
     const iter = host[Symbol.asyncIterator]();
-    void iter.next();
+    const first = iter.next();
+    await Promise.race([first, new Promise((r) => setTimeout(r, 50))]);
     await vi.waitFor(() => {
       expect(opened).toBe(true);
     });
-    expect(client.fetches.every((f) => !f.includes("events.host"))).toBe(true);
+    expect(client.fetches.some((f) => f.includes("xrk-app://stream/api/events.host"))).toBe(
+      true,
+    );
     ac.abort();
   });
 });

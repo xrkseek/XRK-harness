@@ -104,6 +104,7 @@ describe('ui-settings-plugins apply', () => {
     expect(tab.options).toMatchObject({ id: 'configurable', order: 0 })
     expect(resolveSlotLabel(tab.options.label)).toBe('插件配置')
     expect(slots.spec('settings.plugin.item')).toMatchObject({ kind: 'keyed', scope: 'root' })
+    expect(slots.spec('plugins.bundle.config')).toMatchObject({ kind: 'keyed', scope: 'root' })
   })
 
 
@@ -188,9 +189,10 @@ describe('ui-settings-plugins apply', () => {
       ])
   })
 
-  it('dispatches the served namespaces its cards claim, and no others', async () => {
-    // ui-theme is served but belongs to another surface, and a deployment
-    // composing no bash executor may omit `bash` entirely.
+  it('dispatches every registered card after the Host answers once', async () => {
+    // Face may serve only a subset (and namespaces other surfaces own, like
+    // ui-theme). Community / first-party cards still list once registered —
+    // filtering to Face alone hid self-hosted keys such as `modlens`.
     const { ctx, slots } = await bench(['agent-loop', 'ui-theme', 'mcp'])
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
@@ -199,7 +201,12 @@ describe('ui-settings-plugins apply', () => {
     const face = (tab.inject as unknown as () => ConfigurablePluginsTabFace)()
     await vi.waitFor(() => {
       expect(face.hooks.configurablePlugins.getSnapshot().namespaces)
-        .toEqual(['mcp', 'agent-loop'])
+        .toEqual([
+          'mcp', 'web-search', 'bash', 'agent-loop', 'workspace-inject',
+          'session-telemetry', 'sandbox', 'computer-use', 'browser', 'voice',
+          'image-gen', 'video-gen', 'video-analyze', 'curated-memory',
+          'a2a-inbound', 'external-agent', 'cron',
+        ])
     })
   })
 
@@ -278,6 +285,7 @@ describe('ui-settings-plugins apply', () => {
     expect(slots.entries('settings.section')).toHaveLength(0)
     expect(slots.spec('settings.plugins.tab')).toBeUndefined()
     expect(slots.spec('settings.plugin.item')).toBeUndefined()
+    expect(slots.spec('plugins.bundle.config')).toBeUndefined()
     expect(slots.spec('settings.plugin.advanced.item')).toBeUndefined()
   })
 })

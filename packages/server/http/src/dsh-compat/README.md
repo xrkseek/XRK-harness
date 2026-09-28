@@ -46,11 +46,20 @@ This directory is the XRK **first-party** Host-side community adapter (`@xrkseek
 |-----------|------|
 | Path / JSON files | `underlying/json-store` |
 | Revision documents | `xrk-json-store` · `underlying/doc-store` |
+| Per-plugin surface (config/state/settings) | `underlying/plugin-surface-store` → `~/.xrk/community-surfaces/<id>/` |
 | HTTP JSON | `underlying/http-json` · `http-kit` |
 | Mobile-access gate | `underlying/mobile-gate-kit` |
 | Public claim | `underlying/public-handler` |
-| Settings | `persisted-settings-store` |
+| Settings | `persisted-settings-store` · nested path ops in `settings-store` |
 | Honest responses | `honest-envelope` |
+| Generic `/_dsh/<pkg>/…` | `generic-dsh-http`（settings/config/state 可持久化） |
+| Community slug `/dsh-*/api/{config,state}` | `community-root-http`（同上 surface store） |
+| Legacy `/dsh-pet-7340/*` | `dsh-pet-legacy`（config 持久化；whisper/chat 离线） |
+| Unmatched RPC generic set/get | `wire/stub-handlers` → surface store |
+| Mnemon document engine | `mnemon` · `mnemon-store` · `mnemon-engine`（CRUD · archive · snapshot/capacity/placement） |
+| Git graph `/git/*` | `git-graph`（复用 `sidebar-git` · 真实 git log/graph） |
+| Free-search raw | `free-search` → `@xrkseek/exec-web` DuckDuckGo（无钥） |
+| SSH `/test` | `dsh-ssh` TCP connect probe（非 SSH 握手） |
 
 **写法 / Conventions**：`createXrkDocStore` → `patch` / `read`；mutating POST 仅用 `parseJsonBody`；缺口用 `honest-envelope`；`adapter-providers` 不写业务规则。
 

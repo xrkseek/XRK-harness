@@ -30,9 +30,11 @@ describe("session status snapshot", () => {
     expect(snap.plan).toBe("off");
     expect(snap.jobs).toEqual([]);
     expect(snap.subagents.live).toEqual([]);
-    expect(snap.subagents.quota.maxDepth).toBeGreaterThanOrEqual(1);
-    expect(snap.subagents.quota.maxActive).toBeGreaterThanOrEqual(1);
-    expect(snap.subagents.quota.slotsFree).toBe(snap.subagents.quota.maxActive);
+    // Bare create pins the settings/CLI default (minimal) — subagents off → zero caps.
+    expect(snap.badge).toBe("minimal");
+    expect(snap.subagents.quota.maxDepth).toBe(0);
+    expect(snap.subagents.quota.maxActive).toBe(0);
+    expect(snap.subagents.quota.slotsFree).toBe(0);
     expect(snap.channels.im.length).toBeGreaterThan(0);
 
     const text = formatSessionStatusText(snap);
@@ -87,6 +89,20 @@ describe("session status snapshot", () => {
       expect(body).toContain("jobs:");
       expect(body).toContain("channels:");
     }
+  });
+
+  it("reports positive subagent caps for harness badges", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "harness",
+    });
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const snap = buildSessionStatusSnapshot(runtime, sessionId);
+    expect(snap.badge).toBe("harness");
+    expect(snap.subagents.quota.maxDepth).toBeGreaterThanOrEqual(1);
+    expect(snap.subagents.quota.maxActive).toBeGreaterThanOrEqual(1);
+    expect(snap.subagents.quota.slotsFree).toBe(snap.subagents.quota.maxActive);
   });
 
   it("folds prune→summary pipeline and delivery mutex into Status", async () => {

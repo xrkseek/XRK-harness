@@ -12,6 +12,8 @@ import {
 import { handleImChannelRpc } from "../src/dsh-compat/im-channels.js";
 import { handleModsearchRpc } from "../src/dsh-compat/modsearch.js";
 import { handleNoemaRpc } from "../src/dsh-compat/noema.js";
+import { createSettingsDocStore } from "../src/dsh-compat/settings-store.js";
+import { stubRpcHandler } from "../src/dsh-compat/wire/stub-handlers.js";
 
 const temps: string[] = [];
 
@@ -19,6 +21,49 @@ afterEach(() => {
   for (const d of temps.splice(0)) {
     rmSync(d, { recursive: true, force: true });
   }
+});
+
+describe("settings-store nested path ops", () => {
+  it("set/unset nested paths without clobbering siblings", () => {
+    const store = createSettingsDocStore("demo", { a: { x: 1 } });
+    store.applyOps([
+      { op: "set", path: ["a", "y"], value: 2 },
+      { op: "set", path: ["b", "c"], value: "ok" },
+    ]);
+    expect(store.user()).toMatchObject({ a: { y: 2 }, b: { c: "ok" } });
+    expect(store.value()).toMatchObject({ a: { y: 2 }, b: { c: "ok" } });
+
+    store.applyOps([{ op: "unset", path: ["b", "c"] }]);
+    expect(store.user().b).toEqual({});
+    expect(store.user().a).toMatchObject({ y: 2 });
+  });
+});
+
+describe("stub-rpc generic writes persist", () => {
+  it("set/get round-trip via plugin surface store", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-stub-rpc-"));
+    temps.push(home);
+    const set = stubRpcHandler(
+      "generic",
+      "set",
+      { value: { enabled: true, level: 2 } },
+      "poison-guard",
+      { xrkHome: home, channel: "/dsh-poison-guard" },
+    ) as { writable?: boolean; persisted?: boolean; value?: Record<string, unknown> };
+    expect(set.writable).toBe(true);
+    expect(set.persisted).toBe(true);
+    expect(set.value).toMatchObject({ enabled: true, level: 2 });
+
+    const got = stubRpcHandler(
+      "generic",
+      "get",
+      {},
+      "poison-guard",
+      { xrkHome: home, channel: "/dsh-poison-guard" },
+    ) as { value?: Record<string, unknown>; writable?: boolean };
+    expect(got.writable).toBe(true);
+    expect(got.value).toMatchObject({ enabled: true, level: 2 });
+  });
 });
 
 async function withPublicHandler(

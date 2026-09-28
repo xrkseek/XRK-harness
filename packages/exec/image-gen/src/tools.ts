@@ -1,6 +1,10 @@
 import type { AttachmentStore } from "@xrkseek/attachment";
 import type { ToolDefinition, ToolResultContent } from "@xrkseek/core-tools";
-import { IMAGE_GEN_PROMPT_TEXT } from "./format.js";
+import type { ContentBlock } from "@xrkseek/protocol";
+import {
+  formatImageGenImageLines,
+  IMAGE_GEN_PROMPT_TEXT,
+} from "./format.js";
 import { resolveImageGenReferenceImages } from "./references.js";
 import {
   buildImageGenToolDescription,
@@ -15,7 +19,7 @@ import {
   type ImageGenSize,
 } from "./types.js";
 
-export { IMAGE_GEN_PROMPT_TEXT };
+export { IMAGE_GEN_PROMPT_TEXT, formatImageGenImageLines };
 
 export function imageGenUnavailableMessage(
   env: NodeJS.ProcessEnv = process.env,
@@ -213,9 +217,12 @@ export function createImageGenTools(
         ];
         if (result.note) lines.push(`note=${result.note}`);
 
+        const imageBlocks: ContentBlock[] = [];
         for (let i = 0; i < result.images.length; i += 1) {
           const img = result.images[i]!;
           let attachmentId: string | undefined;
+          let width: number | undefined;
+          let height: number | undefined;
           if (attachments) {
             const ref = await attachments.saveImage({
               data: img.bytes,
@@ -223,18 +230,43 @@ export function createImageGenTools(
               name: `image_generate_${i + 1}.png`,
             });
             attachmentId = ref.attachmentId;
+            width = ref.width;
+            height = ref.height;
+            imageBlocks.push({
+              type: "image",
+              attachment: {
+                attachmentId: ref.attachmentId,
+                mediaType: ref.mediaType,
+                bytes: ref.bytes,
+                width: ref.width,
+                height: ref.height,
+                ...(ref.name !== undefined ? { name: ref.name } : {}),
+                ...(ref.originalDimensions !== undefined
+                  ? { originalDimensions: { ...ref.originalDimensions } }
+                  : {}),
+              },
+            });
           }
-          const b64 = Buffer.from(img.bytes).toString("base64");
-          const preview =
-            b64.length > 96 ? `${b64.slice(0, 96)}…(${b64.length} chars)` : b64;
-          lines.push(`--- image ${i + 1} ---`);
-          lines.push(`mime=${img.mimeType} bytes=${img.bytes.byteLength}`);
-          if (img.revisedPrompt) lines.push(`revised_prompt=${img.revisedPrompt}`);
-          if (img.url) lines.push(`url=${img.url}`);
-          if (attachmentId) lines.push(`attachmentId=${attachmentId}`);
-          lines.push(`image_base64=${preview}`);
+          lines.push(
+            ...formatImageGenImageLines({
+              index: i + 1,
+              mimeType: img.mimeType,
+              bytes: img.bytes.byteLength,
+              ...(width !== undefined ? { width } : {}),
+              ...(height !== undefined ? { height } : {}),
+              ...(attachmentId ? { attachmentId } : {}),
+              ...(img.revisedPrompt ? { revisedPrompt: img.revisedPrompt } : {}),
+              ...(img.url ? { url: img.url } : {}),
+            }),
+          );
         }
-        return { content: lines.join("\n") };
+        const text = lines.join("\n");
+        if (imageBlocks.length === 0) {
+          return { content: text };
+        }
+        return {
+          content: [{ type: "text" as const, text }, ...imageBlocks],
+        };
       } catch (err) {
         return fail(err);
       }

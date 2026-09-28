@@ -1,13 +1,12 @@
 /**
  * The configurable-plugins tab's card list.
  *
- * The tab dispatches its slot by settings namespace, so what it renders is
- * the intersection of two ledgers: the namespaces the Host serves and the
- * cards registered into `settings.plugin.item`. A served namespace no card
- * claims renders nothing — another surface owns it, or this deployment ships
- * no browser half for it — and a card whose namespace the Host does not serve
- * is never dispatched, so a plugin this deployment did not compose leaves no
- * trace and does not count toward the empty line.
+ * The tab dispatches its slot by settings namespace. First-party cards are the
+ * intersection of Face `settings.describe` namespaces and registered
+ * `settings.plugin.item` keys. Community cards (e.g. `@liustack/modlens`)
+ * register keys Face never advertises — they self-host config over dsh-compat
+ * HTTP — so any registered key that is not a Face-served first-party namespace
+ * is still dispatched when its card is present.
  */
 
 import type { IApiClient } from '@xrkseek/client-connection/client'
@@ -24,12 +23,10 @@ export interface ConfigurablePluginsTabState {
    */
   loaded: boolean
   /**
-   * Namespaces to dispatch, in the order their cards registered, narrowed to
-   * those the Host serves. Card registration order rather than the Host's
-   * description order: the latter follows plugin activation, which async
-   * settings injection can reorder between boots, and a settings page whose
-   * cards move between visits is worse than one whose order a registrant
-   * chose.
+   * Namespaces to dispatch, in card registration order. After the Host answers
+   * once every registered `settings.plugin.item` key is listed — Face-served
+   * first-party cards and community self-keys alike. Order follows registrants,
+   * not Face `describe` (async injection can reorder Host namespaces).
    */
   namespaces: string[]
 }
@@ -42,11 +39,9 @@ export interface ConfigurablePluginsTabFace {
   }
 }
 
-/** Reads the served namespaces and pairs them with the cards that claim them. */
+/** Reads Host describe once, then pairs every registered card with the tab. */
 export class ConfigurablePluginsTabController {
   private readonly store = createSnapshotStore<ConfigurablePluginsTabState>({ loaded: false, namespaces: [] })
-  /** Last Host answer; kept so a slot mutation republishes without a wire read. */
-  private served: readonly string[] = []
   private loaded = false
   private generation = 0
   private disposed = false
@@ -66,7 +61,7 @@ export class ConfigurablePluginsTabController {
   }
 
   /**
-   * Re-read the served namespaces from the Host and republish.
+   * Wait for one successful Host `settings.describe`, then republish.
    * @returns settlement after the read, or immediately once disposed.
    */
   async load(): Promise<void> {
@@ -81,7 +76,6 @@ export class ConfigurablePluginsTabController {
       return
     }
     if (this.isDisposed() || generation !== this.generation || !response.result.ok) return
-    this.served = response.result.value.namespaces.map(view => view.ns)
     this.loaded = true
     this.publish()
   }
@@ -107,9 +101,16 @@ export class ConfigurablePluginsTabController {
   }
 
   private publish(): void {
-    const served = new Set(this.served)
-    const namespaces = this.entries().flatMap(entry =>
-      entry.options.key !== undefined && served.has(entry.options.key) ? [entry.options.key] : [])
+    // After the Host answers once: dispatch every registered card key.
+    // Face-served first-party namespaces still register cards here; community
+    // plugins (modlens · modsearch · wallet · …) register keys Face never
+    // lists — they self-host config via dsh-compat HTTP, so filtering to Face
+    // alone left those cards mounted but never rendered ("装了没反应").
+    const namespaces = !this.loaded
+      ? []
+      : this.entries().flatMap((entry) =>
+          entry.options.key !== undefined ? [entry.options.key] : [],
+        ).filter((key, index, all) => all.indexOf(key) === index)
     const previous = this.store.getSnapshot()
     // Every settings-document commit re-reads, and most of them change nothing
     // this section shows. An observable source must keep its snapshot

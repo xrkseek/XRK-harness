@@ -86,6 +86,15 @@ export function createMemoryComputerUseProvider(
     },
     async act(request: ComputerUseActRequest): Promise<ComputerUseActResult> {
       if (request.action === "click") {
+        if (request.coordinate !== undefined && request.element === undefined) {
+          const [x, y] = request.coordinate;
+          return {
+            ok: true,
+            action: "click",
+            message: `clicked coordinate (${x},${y})`,
+            delivery: "memory",
+          };
+        }
         const el = requireElement(request.element);
         return {
           ok: true,

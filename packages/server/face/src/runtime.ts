@@ -105,6 +105,10 @@ import {
   sessionModelsPath,
 } from "./session-model-store.js";
 import {
+  loadSessionAgentPresets,
+  sessionAgentPresetsPath,
+} from "./session-agent-preset-store.js";
+import {
   createPermissionRequestGate,
   createShellLifecycleHooks,
   defaultShellHookPaths,
@@ -310,6 +314,17 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     const persisted = loadSessionModelSelections(sessionModelsPath(productHome));
     for (const [id, sel] of persisted) sessionModels.set(id, sel);
   }
+  {
+    // Tool-surface badges must survive LRU eviction + Host restart the same
+    // way session models do. Clearing them on eviction made Status show
+    // "(default)" / hide subagent Overview while createAgent fell back to the
+    // Host CLI preset (often harness) and rebound `subagent` tools — Frugal
+    // sessions could spawn children with no header badge and no Overview graph.
+    const persisted = loadSessionAgentPresets(
+      sessionAgentPresetsPath(productHome),
+    );
+    for (const [id, badge] of persisted) sessionAgentPresets.set(id, badge);
+  }
   const shellHooksConfig = loadShellHooksConfig(
     defaultShellHookPaths(options.workspaceRoot, productHome),
   );
@@ -375,7 +390,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       wireIds.clear(sessionId);
       inboxWire.clear(sessionId);
       costMeterRoutes.delete(sessionId);
-      sessionAgentPresets.delete(sessionId);
+      // Keep sessionAgentPresets — pinned badge is tiny and disk-backed; dropping
+      // it here desyncs Overview / header from the tools createAgent binds.
       sessionCwds.delete(sessionId);
       sessionHasImage.delete(sessionId);
       sessionImageScanned.delete(sessionId);

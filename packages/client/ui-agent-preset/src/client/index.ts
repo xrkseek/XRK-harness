@@ -115,6 +115,13 @@ export function apply(ctx: ClientContext): void {
       scope.sessions.noteAgentPreset(sessionId as never, agentPreset)
     })
 
+    // Birth pin: workspace connect / New Session create() reads the staged
+    // chip so Settings default (frugal) does not overwrite a harness pick.
+    scope.sessions.setCreateAgentPresetProvider(() => seat.peekStaged())
+    scope.effect(() => () => {
+      scope.sessions.setCreateAgentPresetProvider(undefined)
+    }, 'ui-agent-preset: create-agent-preset provider')
+
     const seatInjected = (): AgentPresetSeatInjected => ({
       hooks: { agentPresetSeat: seat.store },
       load: () => seat.load(),

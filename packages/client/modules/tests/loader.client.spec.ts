@@ -256,6 +256,16 @@ describe('failure modes', () => {
     await expect(b.loader.prefetch('nope')).rejects.toThrow('prefetch("nope") — not a graph entry')
   })
 
+  it('adopt upserts a graph row so a late-installed plugin can prefetch', async () => {
+    const b = bench([], { late: () => ({ ok: true }) })
+    await expect(b.loader.prefetch('late')).rejects.toThrow('not a graph entry')
+    b.loader.adopt({ id: 'late', url: '/plugins/late/client.js?rev=1', rev: '1' })
+    await b.loader.prefetch('late')
+    expect(b.fetched).toEqual(['/plugins/late/client.js?rev=1'])
+    const exports = await b.loader.import('late', '', {})
+    expect((exports as { ok: boolean }).ok).toBe(true)
+  })
+
   it('a duplicate graph entry is loud at construction', () => {
     expect(() => bench([row('a'), row('a')])).toThrow('duplicate graph entry "a"')
   })

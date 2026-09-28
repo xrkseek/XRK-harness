@@ -1,17 +1,26 @@
 /**
  * Inject `window.__XRK_BOOT__` into product index.html for static `xrk-app://` serve.
  * Mirrors `@xrkseek/server-http` boot-inject (keep lean; Desktop does not depend on server-http).
+ * When Host Fetch is unset, merge `{pluginsDir}/web/boot.json` so community clients still boot.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-export interface DesktopWebBootManifest {
+export interface DesktopWebBootEntry {
+  readonly id: string;
+  readonly url: string;
   readonly rev: string;
-  readonly entries: readonly unknown[];
+  readonly inject?: readonly string[];
+  readonly immediately?: boolean;
 }
 
-/** Load assembled `boot.json` next to the Web dist root. */
+export interface DesktopWebBootManifest {
+  readonly rev: string;
+  readonly entries: readonly DesktopWebBootEntry[];
+}
+
+/** Load assembled `boot.json` under a web root (product dist or plugins overlay). */
 export function loadDesktopBootManifest(
   webRoot: string,
 ): DesktopWebBootManifest | undefined {
@@ -26,6 +35,25 @@ export function loadDesktopBootManifest(
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Merge overlay entries onto a base graph (extra `id` replaces base).
+ * Same shape as server-http `mergeWebBootManifests`.
+ */
+export function mergeDesktopBootManifests(
+  base: DesktopWebBootManifest,
+  extra?: DesktopWebBootManifest,
+): DesktopWebBootManifest {
+  if (extra === undefined) return base;
+  const byId = new Map(base.entries.map((e) => [e.id, e]));
+  for (const entry of extra.entries) {
+    byId.set(entry.id, entry);
+  }
+  return {
+    rev: extra.rev ? `${base.rev}+${extra.rev}` : base.rev,
+    entries: [...byId.values()],
+  };
 }
 
 /** Insert boot script before `</head>` (or prepend). */
@@ -45,18 +73,32 @@ export function injectDesktopBootIntoHtml(
   return script + stripped;
 }
 
+export interface MaybeInjectDesktopBootHtmlOptions {
+  /** `{pluginsDir}/web` — community `boot.json` overlay (Host-down static path). */
+  readonly overlayRoot?: string;
+}
+
 /**
- * When serving `index.html` from the product Web root, inject boot.json.
- * Non-HTML or missing boot → return body unchanged.
+ * When serving `index.html` from the product Web root, inject boot.json
+ * (product + optional community overlay). Non-HTML or missing boot → body unchanged.
  */
 export function maybeInjectDesktopBootHtml(
   webRoot: string,
   filePath: string,
   body: Buffer,
+  options: MaybeInjectDesktopBootHtmlOptions = {},
 ): Buffer {
   if (path.basename(filePath).toLowerCase() !== "index.html") return body;
-  const manifest = loadDesktopBootManifest(webRoot);
-  if (manifest === undefined) return body;
+  const base = loadDesktopBootManifest(webRoot);
+  const overlay =
+    options.overlayRoot !== undefined
+      ? loadDesktopBootManifest(options.overlayRoot)
+      : undefined;
+  if (base === undefined && overlay === undefined) return body;
+  const manifest = mergeDesktopBootManifests(
+    base ?? { rev: "empty", entries: [] },
+    overlay,
+  );
   const html = injectDesktopBootIntoHtml(body.toString("utf8"), manifest);
   return Buffer.from(html, "utf8");
 }

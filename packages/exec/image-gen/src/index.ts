@@ -31,7 +31,7 @@ export {
   resolveFalImageModel,
   type FalImageModelEntry,
 } from "./catalog.js";
-export { IMAGE_GEN_PROMPT_TEXT } from "./format.js";
+export { IMAGE_GEN_PROMPT_TEXT, formatImageGenImageLines } from "./format.js";
 export {
   createMemoryImageGenProvider,
   minimalPngBytes,

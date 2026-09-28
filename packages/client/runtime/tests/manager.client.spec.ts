@@ -458,6 +458,98 @@ describe('subagent catalogs', () => {
     }
   })
 
+  it('seeds the selected parent catalog on subagent session-added without waiting for re-select', async () => {
+    vi.useFakeTimers()
+    try {
+      const api = new FakeApiClient()
+      const manager = new SessionManager(api, fakeRemote())
+      manager.handleHostEnvelope({
+        rpcId: 'parent' as never,
+        payload: { type: 'host/session-added', sessionId: S1, blank: false },
+      })
+      manager.select(S1)
+      await Promise.resolve()
+      const baseline = api.callsOf('subagent.list').length
+
+      manager.handleHostEnvelope({
+        rpcId: 'child' as never,
+        payload: {
+          type: 'host/session-added',
+          sessionId: S2,
+          parentSessionId: S1,
+          origin: 'subagent',
+          blank: false,
+        },
+      })
+      expect(manager.getListSnapshot().subagentsByParent[S1]?.entries).toMatchObject([
+        { kind: 'child', id: S2, mode: 'continuable', activity: 'running' },
+      ])
+      await vi.advanceTimersByTimeAsync(50)
+      expect(api.callsOf('subagent.list').length).toBeGreaterThan(baseline)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rematches the selected parent catalog when the parent goes idle', async () => {
+    vi.useFakeTimers()
+    try {
+      const api = new FakeApiClient()
+      const manager = new SessionManager(api, fakeRemote())
+      manager.handleHostEnvelope({
+        rpcId: 'parent' as never,
+        payload: { type: 'host/session-added', sessionId: S1, blank: false },
+      })
+      manager.select(S1)
+      await Promise.resolve()
+      // Drain the select() refresh so idle rematch is a distinct list call.
+      await vi.advanceTimersByTimeAsync(50)
+      await Promise.resolve()
+      const baseline = api.callsOf('subagent.list').length
+
+      manager.handleHostEnvelope({
+        rpcId: 'busy' as never,
+        payload: { type: 'host/session-status', sessionId: S1, running: true },
+      })
+      manager.handleHostEnvelope({
+        rpcId: 'idle' as never,
+        payload: { type: 'host/session-status', sessionId: S1, running: false },
+      })
+      await vi.advanceTimersByTimeAsync(50)
+      expect(api.callsOf('subagent.list').length).toBe(baseline + 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rematches the selected parent catalog when an unknown child starts running mid-turn', async () => {
+    vi.useFakeTimers()
+    try {
+      const api = new FakeApiClient()
+      const manager = new SessionManager(api, fakeRemote())
+      manager.handleHostEnvelope({
+        rpcId: 'parent' as never,
+        payload: { type: 'host/session-added', sessionId: S1, blank: false },
+      })
+      manager.select(S1)
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(50)
+      await Promise.resolve()
+      const baseline = api.callsOf('subagent.list').length
+
+      // Missed host/session-added: child never entered summaries/catalog, but
+      // its drain published running:true while the parent is still selected.
+      manager.handleHostEnvelope({
+        rpcId: 'child-run' as never,
+        payload: { type: 'host/session-status', sessionId: S2, running: true },
+      })
+      await vi.advanceTimersByTimeAsync(50)
+      expect(api.callsOf('subagent.list').length).toBe(baseline + 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('marks a loaded parent row expandable only for a direct subagent publication', async () => {
     const api = new FakeApiClient()
     const root = 'fk-root' as SessionId

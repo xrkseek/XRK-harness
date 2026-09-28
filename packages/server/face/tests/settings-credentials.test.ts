@@ -881,8 +881,8 @@ describe("Face settings U2", () => {
     ).namespaces.find((n) => n.ns === "mcp");
     expect(mcp?.value.allowConnect).toBe(true);
     expect(mcp?.value.parked).toEqual([]);
-    // Face marks connecting before awaiting Host reconcile (no re-save needed).
-    expect(mcp?.value.connecting).toEqual(["deferred"]);
+    // Host onConnectProgress owns connecting — Face only kicks remount.
+    expect(mcp?.value.connecting).toEqual([]);
     expect(mcp?.value.connected).toEqual([]);
     expect(syncMcpServers).toHaveBeenCalledOnce();
   });

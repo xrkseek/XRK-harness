@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 // ChatView behavior: flow derivation, streaming isolation (Profiler counts),
 // Tool seat ownership and selection handoff — driven through a scripted
 // ObservableSnapshot fake, no wire or Tool presentation plugin.
@@ -692,7 +692,7 @@ describe('ChatView', () => {
     expect(branchButtons.map(button => button.getAttribute('aria-disabled'))).toEqual([null, null])
   })
 
-  it('withholds assistant IconActions while the session is still running', () => {
+  it('keeps completed-turn IconActions while a later turn is still running', () => {
     const h = makeHarness({
       running: true,
       runningCalls: [runningCall('a')],
@@ -706,12 +706,14 @@ describe('ChatView', () => {
       turnEnds: new Map([[1, 3]]),
     })
     const view = render(<h.ChatView {...h.props} />)
-    // While the agent run is live, hide every assistant footer (copy / feedback /
-    // branch) so a settled turn-1 bar cannot sit above turn-2's live tool rows.
-    // User bubbles keep copy alone.
-    expect(view.getAllByRole('button', { name: '复制' })).toHaveLength(2)
+    // Turn 1 already ended — its copy / feedback / usage bar stays. Turn 2 has
+    // no turn/end yet, so only the two user bubbles plus turn-1's assistant
+    // footer expose copy. Hiding every footer while `running` was the bug that
+    // wiped prior turns as soon as the next round started.
+    expect(view.getAllByRole('button', { name: '复制' })).toHaveLength(3)
     expect(view.getByText('mid-turn text')).toBeTruthy()
-    // Session idle: settled turn tails reclaim their action seats.
+    expect(view.getByText('previous answer')).toBeTruthy()
+    // Session idle: turn 2 settles and gains its own action seat.
     act(() => { h.set({ running: false, runningCalls: [], turnEnds: new Map([[1, 3], [2, 6]]) }) })
     expect(view.getAllByRole('button', { name: '复制' })).toHaveLength(4)
   })

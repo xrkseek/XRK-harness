@@ -218,6 +218,55 @@ describe("plugin add/remove/list", () => {
     expect(body.http[0]!.prefix).toBe("/sidebar/");
   });
 
+  it("stages kws/assets/static/skins dirs and skin.json next to client.js", () => {
+    const home = tempDir("xrk-plug-kws-");
+    const env = { XRK_HOME: home };
+    const pluginsDir = resolvePluginsDir(env);
+    const dir = path.join(home, "niulai-fixture");
+    mkdirSync(path.join(dir, "lib"), { recursive: true });
+    mkdirSync(path.join(dir, "kws"), { recursive: true });
+    mkdirSync(path.join(dir, "assets"), { recursive: true });
+    mkdirSync(path.join(dir, "skins", "demo"), { recursive: true });
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify(
+        {
+          name: "dsh-niulai-pet",
+          version: "1.0.0",
+          dsh: { client: { inject: [] } },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(path.join(dir, "lib", "client.js"), "export {};\n");
+    writeFileSync(path.join(dir, "kws", "engine.wasm"), "wasm");
+    writeFileSync(path.join(dir, "assets", "pet.png"), "png");
+    writeFileSync(
+      path.join(dir, "skins", "demo", "skin.json"),
+      JSON.stringify({ id: "demo", name: "Demo" }),
+    );
+    writeFileSync(
+      path.join(dir, "skin.json"),
+      JSON.stringify({ id: "niulai-pet" }),
+    );
+
+    addPlugin(dir, {
+      env,
+      pluginsDir,
+      io: { log: () => {}, warn: () => {} },
+    });
+
+    const dest = path.join(pluginsDir, "web", "plugins", "dsh-niulai-pet");
+    expect(existsSync(path.join(dest, "client.js"))).toBe(true);
+    expect(existsSync(path.join(dest, "kws", "engine.wasm"))).toBe(true);
+    expect(existsSync(path.join(dest, "assets", "pet.png"))).toBe(true);
+    expect(existsSync(path.join(dest, "skin.json"))).toBe(true);
+    expect(existsSync(path.join(dest, "skins", "demo", "skin.json"))).toBe(
+      true,
+    );
+  });
+
   it("pruneEmptyParents removes an empty scoped parent", () => {
     const root = tempDir("xrk-prune-");
     const pluginsRoot = path.join(root, "web", "plugins");

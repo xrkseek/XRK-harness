@@ -8,6 +8,7 @@
  */
 import {
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -21,6 +22,16 @@ import type { ClassifiedPackage } from "./classify.js";
 import { clientInstallDir } from "./inventory.js";
 
 const CLIENT_CHUNK_RE = /^client-(.+)\.js$/;
+
+/** Extra package dirs community clients fetch over Host HTTP (e.g. niulai KWS · skin artwork). */
+const EXTRA_ASSET_DIRS = [
+  "kws",
+  "assets",
+  "static",
+  "preview",
+  "locale",
+  "skins",
+] as const;
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -88,6 +99,15 @@ function stageLazyChunks(root: string, destDir: string): void {
   }
 }
 
+/** Copy known static asset folders (KWS wasm · public assets) next to client.js. */
+function stageExtraAssetDirs(root: string, destDir: string): void {
+  for (const name of EXTRA_ASSET_DIRS) {
+    const src = path.join(root, name);
+    if (!existsSync(src)) continue;
+    cpSync(src, path.join(destDir, name), { recursive: true });
+  }
+}
+
 export function installClientBundle(
   pluginsDir: string,
   classified: ClassifiedPackage,
@@ -104,10 +124,16 @@ export function installClientBundle(
     copyFileSync(license, path.join(destDir, "LICENSE"));
   }
   stageLazyChunks(classified.root, destDir);
+  stageExtraAssetDirs(classified.root, destDir);
   stageHostModule(classified.root, destDir);
   const pkgJson = path.join(classified.root, "package.json");
   if (existsSync(pkgJson)) {
     copyFileSync(pkgJson, path.join(destDir, "package.json"));
+  }
+  // Skin packs resolve `/skin-assets/<id>/…` via Host using this id map.
+  const skinJson = path.join(classified.root, "skin.json");
+  if (existsSync(skinJson)) {
+    copyFileSync(skinJson, path.join(destDir, "skin.json"));
   }
   stageHostManifest(classified.root, destDir);
 }

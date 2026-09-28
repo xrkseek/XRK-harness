@@ -29,6 +29,7 @@ import type { AgentTeamTask } from "./agent-team-tasks.js";
 import { costMeterGetState } from "./cost-meter-store.js";
 import { resolveSubagentQuota } from "./subagent-tools.js";
 import { isChildSessionActive } from "./external-agent-runtime.js";
+import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 
 export interface SessionStatusJobRow {
   readonly id: string;
@@ -812,8 +813,7 @@ export function buildSessionStatusSnapshot(
   sessionId: string,
 ): SessionStatusSnapshot {
   const events = readSessionEvents(runtime.store, sessionId);
-  const badge =
-    runtime.sessionAgentPresets.get(sessionId) ?? "(default)";
+  const badge = effectiveSessionAgentPreset(runtime, sessionId);
   const permission = permissionSelectFromEvents(events).currentValue;
   const plan = foldPlanMode(events) ? "on" : "off";
   const model = resolveSessionModelSelection(runtime, sessionId);

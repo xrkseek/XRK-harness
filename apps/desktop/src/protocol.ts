@@ -43,6 +43,11 @@ export interface DesktopProtocolHandlerOptions {
   /** Optional Electron shell renderer assets (`xrk-app://shell/...`). */
   readonly shellRoot?: string;
   /**
+   * `{pluginsDir}/web` community overlay — merged into static boot inject and
+   * used as `/plugins/*` fallthrough when Host Fetch is unset.
+   */
+  readonly overlayRoot?: string;
+  /**
    * When set, `xrk-app://app/...` is forwarded to the Desktop Host Fetch carrier.
    * When unset, `app` is served from {@link webRoot} (static MVP / tests).
    */
@@ -74,6 +79,7 @@ export function resolveDesktopAssetPath(
 export async function serveDesktopStaticAsset(
   root: string,
   request: Request,
+  options: { readonly overlayRoot?: string } = {},
 ): Promise<Response> {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response(null, { status: 405 });
@@ -92,7 +98,11 @@ export async function serveDesktopStaticAsset(
     }
     const fileBody = await readFile(target);
     // Static MVP: Host Fetch is unset — still inject __XRK_BOOT__ like server-http.
-    const body = maybeInjectDesktopBootHtml(root, target, fileBody);
+    const body = maybeInjectDesktopBootHtml(root, target, fileBody, {
+      ...(options.overlayRoot !== undefined
+        ? { overlayRoot: options.overlayRoot }
+        : {}),
+    });
     return new Response(body, {
       headers: {
         "content-type": MIME[path.extname(target)] ?? "application/octet-stream",
@@ -188,6 +198,10 @@ export async function handleDesktopProtocolRequest(
   if (url.protocol !== `${scheme}:`) {
     return new Response(null, { status: 400 });
   }
+  const staticOpts =
+    options.overlayRoot !== undefined
+      ? { overlayRoot: options.overlayRoot }
+      : {};
   if (url.hostname === "shell") {
     if (options.shellRoot === undefined) {
       return new Response(null, { status: 404 });
@@ -209,7 +223,7 @@ export async function handleDesktopProtocolRequest(
         if (url.hostname !== "app") {
           return new Response(null, { status: 404 });
         }
-        return serveDesktopStaticAsset(options.webRoot, request);
+        return serveDesktopStaticAsset(options.webRoot, request, staticOpts);
       }
       return new Response(null, { status: 503 });
     }
@@ -218,14 +232,18 @@ export async function handleDesktopProtocolRequest(
   if (url.hostname !== "app") {
     return new Response(null, { status: 404 });
   }
-  // Packaged first-party plugins first; community clients live in Host overlay.
-  if (
-    options.fetchApp !== undefined &&
-    url.pathname.startsWith("/plugins/")
-  ) {
+  // Packaged first-party plugins first; community clients live in Host overlay
+  // (or local overlayRoot when Host Fetch is unset).
+  if (url.pathname.startsWith("/plugins/")) {
     const fromDisk = await serveDesktopStaticAsset(options.webRoot, request);
     if (fromDisk.status !== 404) return fromDisk;
-    return options.fetchApp(request);
+    if (options.fetchApp !== undefined) {
+      return options.fetchApp(request);
+    }
+    if (options.overlayRoot !== undefined) {
+      return serveDesktopStaticAsset(options.overlayRoot, request);
+    }
+    return fromDisk;
   }
-  return serveDesktopStaticAsset(options.webRoot, request);
+  return serveDesktopStaticAsset(options.webRoot, request, staticOpts);
 }

@@ -181,8 +181,15 @@ export function apply(ctx: Context, config: Config): void {
       const line = sseData({ type: 'rebuilt', id, rev })
       for (const res of connections) res.write(line)
     })
+    // Membership / rev changes (install · soft-disable) push a full graph so
+    // the browser half can soft-remount new entries without a page reload.
+    const unsubscribeGraph = ctx.clientModules.onGraphChanged(() => {
+      const line = sseData({ type: 'graph', graph: ctx.clientModules.graph() })
+      for (const res of connections) res.write(line)
+    })
     return () => {
       unsubscribe()
+      unsubscribeGraph()
       disposeRoute()
       for (const res of connections) res.destroy()
       connections.clear()

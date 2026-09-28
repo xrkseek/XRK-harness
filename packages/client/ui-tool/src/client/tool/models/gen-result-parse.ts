@@ -1,6 +1,7 @@
 /**
  * Parse text envelopes from `image_generate` / `video_generate` tool results.
- * Protocol stays text-only (`attachmentId=` / `file=` / `jobId=` lines).
+ * Prefer durable image ContentBlocks when present; text still carries
+ * `attachmentId=` / `file=` / `jobId=` lines for the model and older sessions.
  */
 
 /** One generated image stanza (optional metadata beside attachmentId). */

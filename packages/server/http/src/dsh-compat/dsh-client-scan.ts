@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const QUOTED_PATH =
-  /["'`](\/(?:api\/[a-zA-Z0-9._/-]+|api-[a-zA-Z0-9._/-]+|wallet\/api\/[a-zA-Z0-9._/-]+|_dsh\/[a-zA-Z0-9._/-]+|dsh-[a-zA-Z0-9._/-]+|sidebar\/[a-zA-Z0-9._/-]+|modlens[/?a-zA-Z0-9._-]*|modsearch[/?a-zA-Z0-9._-]*|auto-review[/?a-zA-Z0-9._-]*|api\/harness\/connector[/?a-zA-Z0-9._/-]*|\.well-known\/[a-zA-Z0-9._/-]+|dream-skin\/[a-zA-Z0-9._/-]+|wallpaper-engine[/?a-zA-Z0-9._-]*|tongflow\/[a-zA-Z0-9._/-]+|mobile-access\/[a-zA-Z0-9._/-]+|plugins\/[a-zA-Z0-9._/-]+|projects[/?a-zA-Z0-9._-]*|Looks[/?a-zA-Z0-9._/-]*|Materials[/?a-zA-Z0-9._/-]*))["'`]/g;
+  /["'`](\/(?:api\/[a-zA-Z0-9._/-]+|api-[a-zA-Z0-9._/-]+|wallet\/api\/[a-zA-Z0-9._/-]+|_dsh\/[a-zA-Z0-9._/-]+|dsh-[a-zA-Z0-9._/-]+|sidebar\/[a-zA-Z0-9._/-]+|modlens[/?a-zA-Z0-9._-]*|modsearch[/?a-zA-Z0-9._-]*|niulai-kws[/?a-zA-Z0-9._-]*|auto-review[/?a-zA-Z0-9._-]*|api\/harness\/connector[/?a-zA-Z0-9._/-]*|\.well-known\/[a-zA-Z0-9._/-]+|dream-skin\/[a-zA-Z0-9._/-]+|wallpaper-engine[/?a-zA-Z0-9._-]*|tongflow\/[a-zA-Z0-9._/-]+|mobile-access\/[a-zA-Z0-9._/-]+|plugins\/[a-zA-Z0-9._/-]+|skin-assets\/[a-zA-Z0-9._/-]+|projects[/?a-zA-Z0-9._-]*|Looks[/?a-zA-Z0-9._/-]*|Materials[/?a-zA-Z0-9._/-]*))["'`]/g;
 
 const BACKTICK_PATH =
   /`(\/(?:api\/[a-zA-Z0-9._/-]+|api-[a-zA-Z0-9._/-]+|_dsh\/[a-zA-Z0-9._/-]+|dsh-[a-zA-Z0-9._/-]+|sidebar\/[a-zA-Z0-9._/-]+|modlens[/?a-zA-Z0-9._-]*|\.well-known\/[a-zA-Z0-9._/-]+))`/g;
@@ -29,6 +29,10 @@ const SLOT_REGISTER =
 
 const RPC_CHANNEL =
   /["'`](\/(?:dsh-)?[a-zA-Z][a-zA-Z0-9_-]*(?:\/[a-zA-Z0-9_$./-]+)?)["'`]/g;
+
+/** Relative skin artwork URLs: `skin-assets/<id>/…` (resolved via document.baseURI). */
+const RELATIVE_SKIN_ASSET =
+  /(?:["'`])(skin-assets\/[a-zA-Z0-9._-]+)\//g;
 
 function normalizeHttpPath(raw: string): string {
   const noQuery = raw.split("?")[0] ?? raw;
@@ -83,6 +87,9 @@ export function scanClientHostSurface(pkgRoot: string): ClientHostSurface {
     if (!p.startsWith("/")) continue;
     if (p.includes("-settings")) continue;
     http.add(p);
+  }
+  for (const match of text.matchAll(RELATIVE_SKIN_ASSET)) {
+    http.add(normalizeHttpPath(`/${match[1]!}`));
   }
 
   for (const match of text.matchAll(FETCH_PATH)) {

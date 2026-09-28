@@ -113,7 +113,6 @@ describe('SettingsScopeController', () => {
 
   it('suppresses a superseded read of an unexposed namespace', async () => {
     const describeCall = vi.fn()
-      .mockResolvedValueOnce(ok({ writable: true, hasDocument: true, namespaces: [] }))
       .mockResolvedValueOnce(described({ preference: 'dark' }, 1))
     const scope = new SettingsScopeController<UiTestSettings>(
       { settings: { describe: describeCall } } as never,
@@ -124,8 +123,31 @@ describe('SettingsScopeController', () => {
     const stale = scope.load()
     const fresh = scope.load()
     await Promise.all([stale, fresh])
+    // Coalesce drops the superseded queued read before the wire call, so an
+    // intermediate "unexposed" snapshot never publishes as unavailable.
+    expect(describeCall).toHaveBeenCalledOnce()
     expect(statuses).not.toContain('unavailable')
     expect(scope.getSnapshot()).toMatchObject({ status: 'ready', value: { preference: 'dark' } })
+  })
+
+  it('coalesces a document-updated storm into one trailing describe', async () => {
+    const first = deferred<ReturnType<typeof described>>()
+    const describeCall = vi.fn()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(described({ preference: 'system' }, 9))
+    const scope = new SettingsScopeController<UiTestSettings>(
+      { settings: { describe: describeCall } } as never,
+      { namespace: 'ui-test' },
+    )
+    const inflight = scope.load()
+    await vi.waitFor(() => { expect(describeCall).toHaveBeenCalledOnce() })
+    for (let i = 0; i < 12; i++) void scope.load()
+    first.resolve(described({ preference: 'dark' }, 1))
+    await inflight
+    await vi.waitFor(() => {
+      expect(scope.getSnapshot()).toMatchObject({ value: { preference: 'system' }, revision: 9 })
+    })
+    expect(describeCall).toHaveBeenCalledTimes(2)
   })
 
   it('reports an unexposed namespace as unavailable and recovers when it reappears', async () => {
@@ -370,7 +392,6 @@ describe('SettingsScopeBinder.bind', () => {
     const initial = deferred<ReturnType<typeof described>>()
     const describeCall = vi.fn()
       .mockReturnValueOnce(initial.promise)
-      .mockResolvedValueOnce(described({ preference: 'light' }, 2))
       .mockResolvedValueOnce(described({ preference: 'system' }, 3))
     const ctx = new Context()
     ctx.provide('connection', {
@@ -392,14 +413,16 @@ describe('SettingsScopeBinder.bind', () => {
     ctx.remote.$dispatch('settings/document-updated', ['ui-test', 0])
     ctx.emit('connection/reset')
     initial.resolve(described({ preference: 'dark' }, 1))
-    await vi.waitFor(() => { expect(describeCall).toHaveBeenCalledTimes(3) })
+    // Coalesce: superseded queued reads skip the wire — only the trailing
+    // invalidation after the in-flight initial describe hits describe again.
+    await vi.waitFor(() => { expect(describeCall).toHaveBeenCalledTimes(2) })
     await vi.waitFor(() => {
       expect(scope.getSnapshot()).toMatchObject({ value: { preference: 'system' }, revision: 3 })
     })
     await fiber.dispose()
     ctx.remote.$dispatch('settings/document-updated', ['ui-test', 0])
     await Promise.resolve()
-    expect(describeCall).toHaveBeenCalledTimes(3)
+    expect(describeCall).toHaveBeenCalledTimes(2)
   })
 
   it('binds a remote browser in memory mode without starting a settings read', async () => {

@@ -357,8 +357,10 @@ describe('the new-session chip controller', () => {
 
     await controller.select('minimal')
 
-    // The host enforces the same rule; the chip simply never asks.
+    // The host enforces the same rule; the chip simply never asks — and must
+    // not keep showing the abandoned stage as if the session switched.
     expect(writes).toEqual([])
+    expect(controller.store.getSnapshot().current).toBe('harness')
   })
 
   it('drops the stage when the session already runs it', async () => {
@@ -371,7 +373,7 @@ describe('the new-session chip controller', () => {
     expect(writes).toEqual([])
   })
 
-  it('falls back to the default when the host refuses the switch', async () => {
+  it('falls back to the session badge when the host refuses the switch', async () => {
     const controller = chip(
       ROSTER, { id: 's1', blank: true, agentPreset: 'harness' }, { failSelect: 'already started' })
     await controller.load()
@@ -383,7 +385,7 @@ describe('the new-session chip controller', () => {
     expect(controller.store.getSnapshot()).toMatchObject({ current: 'harness', error: 'already started' })
   })
 
-  it('falls back to the default when the switch never reaches the host', async () => {
+  it('falls back to the session badge when the switch never reaches the host', async () => {
     const controller = chip(
       ROSTER, { id: 's1', blank: true, agentPreset: 'harness' }, { throwOn: 'select' })
     await controller.load()
@@ -394,6 +396,13 @@ describe('the new-session chip controller', () => {
       .toMatchObject({ current: 'harness', busy: false, error: 'socket closed' })
   })
 
+  it('exposes peekStaged for session.create birth pin', async () => {
+    const controller = chip(ROSTER, undefined, {})
+    await controller.load()
+    expect(controller.peekStaged()).toBeUndefined()
+    controller.stage('minimal')
+    expect(controller.peekStaged()).toBe('minimal')
+  })
   it('ignores a pick while a switch is in flight', async () => {
     const writes: Recorded[] = []
     const controller = chip(ROSTER, { id: 's1', blank: true, agentPreset: 'harness' }, { writes })

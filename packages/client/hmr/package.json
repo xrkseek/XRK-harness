@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/client-hmr",
-  "description": "Dev-only hot-reload driver for script-loaded client entries: SSE rebuilt frames â†?invalidate/prefetch â†?fiber swap through the vendored Loader entry",
+  "description": "Dev-only hot-reload driver for script-loaded client entries: SSE rebuilt frames -> invalidate/prefetch -> fiber swap through the vendored Loader entry",
   "version": "0.1.0-rc.8",
   "repository": {
     "type": "git",

@@ -32,6 +32,18 @@ describe("formatFsRoutingPrompt", () => {
   it("returns empty when no fs tools remain", () => {
     expect(formatFsRoutingPrompt(["bash", "web_search"])).toBe("");
   });
+
+  it("mentions read_image and present when those tools are available", () => {
+    const text = formatFsRoutingPrompt([
+      "read_file",
+      "read_image",
+      "present",
+      "write_file",
+    ]);
+    expect(text).toContain("`read_image`");
+    expect(text).toContain("attachment:sha256");
+    expect(text).toContain("`present`");
+  });
 });
 
 describe("formatShellRoutingPrompt", () => {

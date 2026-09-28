@@ -16,13 +16,19 @@ import {
 } from "./mnemon-engine.js";
 import { resolveCompatHome } from "./underlying/json-store.js";
 import {
+  archiveMnemonDocument,
   countMnemonDocuments,
+  deleteMnemonDocument,
   getMnemonDocument,
+  importMnemonDocuments,
   listAllMnemonDocuments,
   listMnemonDocuments,
   upsertMnemonDocument,
   type MnemonDocument,
 } from "./mnemon-store.js";
+
+/** Soft active-byte cap for capacity-plan (document engine, not Mnemon CLI). */
+const DOCUMENTS_ACTIVE_LIMIT_BYTES = 32 * 1024 * 1024;
 
 export interface MnemonStatusOptions {
   readonly xrkHome?: string;
@@ -193,6 +199,12 @@ export const MNEMON_UI_SETTINGS_DEFAULTS: Record<string, unknown> = {
   saveAction: true,
 };
 
+/** View-protocol settings (`/dsh-mnemon-view-settings`, ns `mnemon-view`). */
+export const MNEMON_VIEW_SETTINGS_DEFAULTS: Record<string, unknown> = {
+  displayMode: "sidebar",
+  entry: "sidebar",
+};
+
 /** Engine RPCs over stored documents (keyword search · mention graph · bodies). */
 const MNEMON_ENGINE_ENDPOINTS = new Set([
   "entities",
@@ -202,7 +214,6 @@ const MNEMON_ENGINE_ENDPOINTS = new Set([
   "bodies",
   "body-directory",
   "runtime-memory",
-  "turn-activities",
 ]);
 
 /** Provider catalog shape expected by dsh-mnemon settings (`catalog.providers.map`). */
@@ -341,26 +352,186 @@ function queryMnemonEngine(
       }));
     return { ok: true, endpoint, engine, items };
   }
-  const turnId =
-    typeof payload.turnId === "string"
-      ? payload.turnId
-      : typeof payload.turn === "string"
-        ? payload.turn
+  return { ok: true, endpoint, engine, items: [] };
+}
+
+function docBytes(doc: MnemonDocument): number {
+  return (
+    Buffer.byteLength(doc.body, "utf8") + Buffer.byteLength(doc.title, "utf8")
+  );
+}
+
+function snapshotDocument(doc: MnemonDocument) {
+  const status = doc.archived ? "archived" : "active";
+  const filename = `${doc.id}.md`;
+  return {
+    id: doc.id,
+    title: doc.title || doc.id,
+    description: doc.body.slice(0, 240),
+    status,
+    filename,
+    relativePath: `documents/${status}/${filename}`,
+    sourcePaths: [] as string[],
+    memoryBodyIds: doc.archived ? ([] as string[]) : [doc.id],
+    revision: 1,
+    contentHash: `${doc.updatedAt}:${docBytes(doc)}`,
+    sizeBytes: docBytes(doc),
+    ...(doc.archived ? { archivedAt: doc.updatedAt } : {}),
+    updatedAt: doc.updatedAt,
+    createdAt: doc.createdAt,
+    body: doc.body,
+  };
+}
+
+function buildDocumentsSnapshot(home: string | undefined) {
+  const docs = listAllMnemonDocuments(home);
+  const documents = docs.map(snapshotDocument);
+  const activeBytes = documents
+    .filter((d) => d.status === "active")
+    .reduce((sum, d) => sum + d.sizeBytes, 0);
+  return {
+    version: 1,
+    documents,
+    items: documents.filter((d) => d.status === "active"),
+    activeBytes,
+    limitBytes: DOCUMENTS_ACTIVE_LIMIT_BYTES,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function buildCapacityPlan(
+  home: string | undefined,
+  payload: Record<string, unknown>,
+) {
+  const snapshot = buildDocumentsSnapshot(home);
+  const projected =
+    typeof payload.projected === "number" && Number.isFinite(payload.projected)
+      ? Math.max(0, Math.floor(payload.projected))
+      : snapshot.activeBytes;
+  const limit =
+    typeof payload.limit === "number" && Number.isFinite(payload.limit)
+      ? Math.max(1, Math.floor(payload.limit))
+      : DOCUMENTS_ACTIVE_LIMIT_BYTES;
+  const candidates = snapshot.documents
+    .filter((d) => d.status === "active")
+    .slice()
+    .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+  return {
+    fits: projected <= limit,
+    projected,
+    limit,
+    candidates,
+    revision: snapshot.documents.length,
+  };
+}
+
+function buildMaintenancePlan(
+  home: string | undefined,
+  payload: Record<string, unknown>,
+) {
+  const counts = countMnemonDocuments(home);
+  const active = listMnemonDocuments(home);
+  const revision =
+    typeof payload.expectedRevision === "number"
+      ? Math.floor(payload.expectedRevision)
+      : counts.active + counts.archived;
+  const over =
+    counts.bytes > DOCUMENTS_ACTIVE_LIMIT_BYTES ||
+    payload.force === true;
+  return {
+    revision,
+    requiresMaintenance: over,
+    entries: over
+      ? active
+          .slice()
+          .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
+          .slice(0, 12)
+          .map((doc) => ({
+            id: doc.id,
+            title: doc.title,
+            sizeBytes: docBytes(doc),
+            updatedAt: doc.updatedAt,
+          }))
+      : [],
+  };
+}
+
+function buildPrepareBodyPlacement(payload: Record<string, unknown>) {
+  const name =
+    typeof payload.name === "string" && payload.name.trim()
+      ? payload.name.trim()
+      : "memory-body";
+  const description =
+    typeof payload.description === "string" ? payload.description : "";
+  return {
+    prompt: `Place memory body "${name}"`,
+    selectorBrief: description.slice(0, 400) || "default mnemon-native provider",
+    candidates: [{ id: "mnemon-native", label: "mnemon" }],
+    name,
+    description,
+  };
+}
+
+function buildFinalizePlacement(payload: Record<string, unknown>) {
+  const prepared =
+    payload.prepared && typeof payload.prepared === "object"
+      ? (payload.prepared as Record<string, unknown>)
+      : {};
+  const selection =
+    payload.selection && typeof payload.selection === "object"
+      ? (payload.selection as Record<string, unknown>)
+      : {};
+  const providerId =
+    typeof selection.providerId === "string" && selection.providerId.trim()
+      ? selection.providerId.trim()
+      : "mnemon-native";
+  return {
+    providerId,
+    reason:
+      typeof selection.reason === "string" && selection.reason.trim()
+        ? selection.reason.trim()
+        : "compat-default",
+    confidence:
+      typeof selection.confidence === "string" ? selection.confidence : "high",
+    prepared,
+  };
+}
+
+function buildMetadataSample(
+  home: string | undefined,
+  payload: Record<string, unknown>,
+) {
+  const id =
+    typeof payload.memoryBodyId === "string"
+      ? payload.memoryBodyId
+      : typeof payload.id === "string"
+        ? payload.id
         : "";
-  const items = turnId
-    ? docs
-        .filter(
-          (doc) =>
-            !doc.archived && `${doc.title}\n${doc.body}`.includes(turnId),
-        )
-        .map((doc) => ({
-          id: doc.id,
-          title: doc.title,
-          turnId,
-          updatedAt: doc.updatedAt,
-        }))
+  const doc = id ? getMnemonDocument(home, id) : null;
+  const evidence = doc
+    ? [
+        {
+          category: "document",
+          entities: collectMnemonEntities([doc]).map((e) => e.label),
+          content: `${doc.title}\n${doc.body}`.slice(0, 1200),
+        },
+      ]
     : [];
-  return { ok: true, endpoint: "turn-activities", engine, turnId, items };
+  return {
+    memoryBodyId: id || "unknown",
+    evidence,
+  };
+}
+
+/** Client turn-activity projection — `{ cursor, activities }` (rpcOk wraps as value). */
+function buildTurnActivities(payload: Record<string, unknown>) {
+  const sessionId =
+    typeof payload.sessionId === "string" ? payload.sessionId : "";
+  return {
+    cursor: 0,
+    activities: [] as Array<{ turn: number; sessionId?: string }>,
+    sessionId,
+  };
 }
 
 export function handleMnemonRead(
@@ -376,6 +547,37 @@ export function handleMnemonRead(
   if (endpoint === "documents" || endpoint === "list") {
     return listMnemonDocuments(home);
   }
+  if (endpoint === "snapshot") {
+    return buildDocumentsSnapshot(home);
+  }
+  if (endpoint === "capacity-plan") {
+    return buildCapacityPlan(home, payload);
+  }
+  if (endpoint === "maintenance-plan") {
+    return buildMaintenancePlan(home, payload);
+  }
+  if (endpoint === "prepare-body-placement") {
+    return buildPrepareBodyPlacement(payload);
+  }
+  if (endpoint === "finalize-placement") {
+    return buildFinalizePlacement(payload);
+  }
+  if (endpoint === "metadata-sample") {
+    return buildMetadataSample(home, payload);
+  }
+  if (endpoint === "turn-activities" || endpoint === "turn-activity") {
+    const snap = buildTurnActivities(payload);
+    if (endpoint === "turn-activity") {
+      const turn =
+        typeof payload.turn === "number"
+          ? payload.turn
+          : Number(payload.turn);
+      return (
+        snap.activities.find((activity) => activity.turn === turn) ?? null
+      );
+    }
+    return snap;
+  }
   if (MNEMON_ENGINE_ENDPOINTS.has(endpoint)) {
     return queryMnemonEngine(endpoint, listAllMnemonDocuments(home), payload);
   }
@@ -384,7 +586,8 @@ export function handleMnemonRead(
   }
   if (endpoint === "document") {
     const id = typeof payload.id === "string" ? payload.id : "";
-    return id ? getMnemonDocument(home, id) : null;
+    const doc = id ? getMnemonDocument(home, id) : null;
+    return doc ? snapshotDocument(doc) : null;
   }
   if (endpoint === "task-agent-models") {
     return buildMnemonTaskAgentModels();
@@ -424,10 +627,103 @@ export function handleMnemonWrite(
     endpoint === "document" ||
     endpoint === "document-upsert" ||
     endpoint === "upsert" ||
-    endpoint === "save"
+    endpoint === "save" ||
+    endpoint === "write" ||
+    endpoint === "body-create" ||
+    endpoint === "body-update" ||
+    endpoint === "body-merge"
   ) {
-    const doc = upsertMnemonDocument(home, payload);
-    return { ok: true, document: doc };
+    if (
+      endpoint === "document" &&
+      (payload.action === "archive" || payload.action === "forget")
+    ) {
+      const id =
+        typeof payload.id === "string"
+          ? payload.id
+          : typeof payload.documentId === "string"
+            ? payload.documentId
+            : "";
+      const archived = id ? archiveMnemonDocument(home, id) : null;
+      return {
+        ok: Boolean(archived),
+        action: archived ? "forgotten" : "missing",
+        document: archived,
+        maintenance: { memoryBodyIds: archived ? [archived.id] : [] },
+      };
+    }
+    const request =
+      payload.request && typeof payload.request === "object"
+        ? (payload.request as Record<string, unknown>)
+        : payload;
+    const doc = upsertMnemonDocument(home, {
+      ...request,
+      ...(typeof request.name === "string" && !request.title
+        ? { title: request.name }
+        : {}),
+      ...(typeof request.description === "string" && !request.body
+        ? { body: request.description }
+        : {}),
+    });
+    return { ok: true, document: doc, action: "written" };
+  }
+  if (
+    endpoint === "archive" ||
+    endpoint === "forget" ||
+    endpoint === "body-delete" ||
+    endpoint === "delete"
+  ) {
+    const id =
+      typeof payload.id === "string"
+        ? payload.id
+        : typeof payload.documentId === "string"
+          ? payload.documentId
+          : typeof payload.memoryBodyId === "string"
+            ? payload.memoryBodyId
+            : "";
+    if (endpoint === "body-delete" || endpoint === "delete") {
+      const removed = id ? deleteMnemonDocument(home, id) : false;
+      return {
+        ok: removed,
+        action: removed ? "forgotten" : "missing",
+        id,
+        summary: removed ? "" : "document not found",
+      };
+    }
+    const archived = id ? archiveMnemonDocument(home, id) : null;
+    return {
+      ok: Boolean(archived),
+      action: archived ? "forgotten" : "missing",
+      document: archived,
+      summary: archived ? "" : "document not found",
+      maintenance: { memoryBodyIds: archived ? [archived.id] : [] },
+    };
+  }
+  if (endpoint === "import") {
+    const rows = Array.isArray(payload.documents)
+      ? (payload.documents as Record<string, unknown>[])
+      : Array.isArray(payload.items)
+        ? (payload.items as Record<string, unknown>[])
+        : [];
+    const documents = importMnemonDocuments(home, rows);
+    return {
+      ok: true,
+      mode: "merge",
+      imported: documents.length,
+      documents,
+    };
+  }
+  if (endpoint === "link") {
+    return {
+      ok: true,
+      action: "linked",
+      from:
+        typeof payload.from === "string"
+          ? payload.from
+          : typeof payload.id === "string"
+            ? payload.id
+            : "",
+      to: typeof payload.to === "string" ? payload.to : "",
+    };
   }
   if (endpoint === "pack" || endpoint === "export") {
     return {

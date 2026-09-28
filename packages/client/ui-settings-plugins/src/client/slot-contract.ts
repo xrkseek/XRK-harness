@@ -1,22 +1,26 @@
 /**
- * The `settings.plugin.item` slot type — one plugin's card inside the
- * configurable-plugins tab, keyed by the settings namespace the card edits.
- * Options: `key` (the namespace). A card draws its own internals; the tab only
- * decides which namespaces to dispatch and stacks what comes back.
+ * Plugin configuration slots this package declares.
  *
- * Keying on the namespace is what lets a plugin distributed outside this
- * repository contribute a card: it registers its own settings namespace on the
- * Host and its own card under that key in the browser, and the tab pairs the
- * two without ever learning what the namespace means.
+ * - `settings.plugin.item` — Settings → Plugins → Configurable cards, keyed by
+ *   the settings namespace (or community self-key, e.g. `modlens`).
+ * - `plugins.bundle.config` — DSH-shaped keyed seat community clients also
+ *   inject into (`@liustack/modlens` dual-registers here). Declared so
+ *   `slots.inject` resolves; XRK surfaces the Settings card via
+ *   `settings.plugin.item` rather than a separate Plugins-manager page.
  *
- * TYPE HOME RATIONALE: the tab declares this slot at runtime, and a plugin
- * registering its own card already depends on this package for the slot's
- * declaration. The type therefore lives with its declarer.
+ * TYPE HOME RATIONALE: the tab declares these slots at runtime; community
+ * packages register through `ctx.slots` without importing this package.
  */
 declare module '@xrkseek/client-ui-slots' {
   interface SlotMap {
     /** One plugin's card inside the plugin configuration section (see module JSDoc). */
     'settings.plugin.item': { kind: 'keyed'; scope: 'root'; owner: SettingsPluginItemOwnerProps }
+    /**
+     * Bundle-owned configuration keyed by npm package name (DSH Plugins page
+     * contract). Community clients inject here; XRK declares the seat so inject
+     * does not wait forever.
+     */
+    'plugins.bundle.config': { kind: 'keyed'; scope: 'root'; owner: PluginBundleConfigOwnerProps }
   }
 }
 
@@ -24,4 +28,10 @@ declare module '@xrkseek/client-ui-slots' {
 export interface SettingsPluginItemOwnerProps {
   /** Marker field: card owner props are intentionally empty. */
   children?: never
+}
+
+/** Owner share for a DSH-shaped bundle config entry (`view: 'page'` on detail). */
+export interface PluginBundleConfigOwnerProps {
+  /** `page` = full form; `summary` = one-liner (XRK Configurable tab uses `page`). */
+  readonly view: 'summary' | 'page'
 }

@@ -224,6 +224,13 @@ export interface ClientModuleLoader {
    * @param id - entry name to invalidate.
    */
   invalidate(id: string): void
+  /**
+   * Upsert one boot-graph row so a later {@link prefetch}/{@link import} can
+   * resolve it (HMR soft remount when Host pushes a graph delta after install).
+   * Does not load the bundle or create a Loader entry — callers do that.
+   * @param row - module-table view of the boot entry.
+   */
+  adopt(row: BootModuleRow): void
 }
 
 /** Options for {@link ClientModuleSystem} (assembled by the web shell kernel at boot). */

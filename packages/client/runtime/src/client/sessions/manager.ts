@@ -534,10 +534,20 @@ export class SessionManager {
    * @returns the create result.
    */
   async create(
-    opts: { workspaceId?: WorkspaceId; cwd?: string; sessionId?: SessionId; localCwd?: string } = {},
-  ): Promise<RpcResult<{ sessionId: SessionId }>> {
+    opts: {
+      workspaceId?: WorkspaceId
+      cwd?: string
+      sessionId?: SessionId
+      localCwd?: string
+      /** Catalog badge to pin at birth (seat staged pick). */
+      agentPreset?: string
+    } = {},
+  ): Promise<RpcResult<{ sessionId: SessionId; agentPreset?: string }>> {
     try {
-      const shared = opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }
+      const shared = {
+        ...(opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }),
+        ...(opts.agentPreset === undefined ? {} : { agentPreset: opts.agentPreset }),
+      }
       const payload = opts.workspaceId !== undefined
         ? { workspaceId: opts.workspaceId, ...shared }
         : { ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }), ...shared }
@@ -807,6 +817,10 @@ export class SessionManager {
         this.sessions.get(frame.sessionId)?.handleBlank(frame.blank)
         if (frame.origin === 'subagent' && frame.parentSessionId !== undefined) {
           this.markCatalogParentExpandable(frame.parentSessionId)
+          // Seed the parent's catalog so the header chip / openChild work before
+          // list RPC returns (and when a delayed refresh would otherwise leave
+          // the surface empty until the user re-selects the parent).
+          this.noteCatalogChild(frame.parentSessionId, frame.sessionId)
         }
         if (frame.parentSessionId !== undefined
           && (this.selected === frame.parentSessionId || this.openCatalogs.has(frame.parentSessionId))) {
@@ -865,6 +879,34 @@ export class SessionManager {
         this.recordMutation({ kind: 'status', sessionId: frame.sessionId, running: frame.running })
         this.sessions.get(frame.sessionId)?.handleRunning(frame.running)
         this.updateCatalogActivity(frame.sessionId, frame.running)
+        // Parent turn settled: rematch catalog (covers missed session-added on
+        // Desktop / host-stream races — select alone was the prior workaround).
+        if (!frame.running && this.selected === frame.sessionId) {
+          this.scheduleCatalogRefresh(frame.sessionId)
+        }
+        // New child may appear in summaries before any catalog row exists;
+        // activity-only updates cannot invent membership.
+        const childSummary = this.summaries.find(s => s.sessionId === frame.sessionId)
+        if (childSummary?.origin === 'subagent' && childSummary.parentSessionId !== undefined
+          && (this.selected === childSummary.parentSessionId
+            || this.openCatalogs.has(childSummary.parentSessionId))) {
+          const parentCatalog = this.catalogs.get(childSummary.parentSessionId)
+          const known = parentCatalog?.entries.some(
+            entry => entry.kind === 'child' && entry.id === frame.sessionId,
+          ) ?? false
+          if (!known) this.scheduleCatalogRefresh(childSummary.parentSessionId)
+        }
+        // Missed host/session-added (Desktop host-stream race): a foreign session
+        // starts running while we are looking at a parent that does not yet list
+        // it — pull that parent's catalog mid-turn so the header chip / Overview
+        // do not wait for parent idle.
+        if (frame.running && this.selected !== undefined && frame.sessionId !== this.selected) {
+          const parentCatalog = this.catalogs.get(this.selected)
+          const known = parentCatalog?.entries.some(
+            entry => entry.kind === 'child' && entry.id === frame.sessionId,
+          ) ?? false
+          if (!known) this.scheduleCatalogRefresh(this.selected)
+        }
         return
       }
       case 'host/agent-error': {
@@ -921,7 +963,10 @@ export class SessionManager {
 
   /** Debounce membership refetches while one parent catalog is selected or open. */
   private scheduleCatalogRefresh(parentSessionId: SessionId): void {
-    if (this.catalogDebounce.has(parentSessionId)) return
+    // Trailing edge: keep resetting so a burst of session-added frames still
+    // lands one pull after the last membership change (not only the first).
+    const prior = this.catalogDebounce.get(parentSessionId)
+    if (prior !== undefined) clearTimeout(prior)
     const timer = setTimeout(() => {
       this.catalogDebounce.delete(parentSessionId)
       // The in-flight response predates the membership frame that scheduled
@@ -934,6 +979,31 @@ export class SessionManager {
       void this.refreshSubagents(parentSessionId)
     }, 50)
     this.catalogDebounce.set(parentSessionId, timer)
+  }
+
+  /**
+   * Seed one direct child into the parent's catalog so the header chip and
+   * openChild work before list RPC returns (and without waiting for re-select).
+   */
+  private noteCatalogChild(parentSessionId: SessionId, childSessionId: SessionId): void {
+    const previous = this.catalogs.get(parentSessionId)
+    const entries = previous?.entries ?? []
+    if (entries.some(entry => entry.kind === 'child' && entry.id === childSessionId)) return
+    const nextEntry = {
+      kind: 'child' as const,
+      id: childSessionId,
+      mode: 'continuable' as const,
+      label: 'subagent',
+      activity: 'running' as const,
+      hasChildren: false,
+    }
+    this.catalogs.set(parentSessionId, {
+      entries: [nextEntry, ...entries],
+      parentAvailable: previous?.parentAvailable ?? true,
+      state: previous?.state === 'error' ? 'ready' : (previous?.state ?? 'ready'),
+      error: null,
+    })
+    this.notifier.markDirty()
   }
 
   /** Apply one Agent-driver transition to loaded and in-flight catalogs. */

@@ -9,6 +9,7 @@ import {
   resolveAgentPresetProfile,
 } from "../presets-catalog.js";
 import { resolveDefaultAgentPreset } from "../settings-document.js";
+import { pinSessionAgentPreset } from "../session-agent-preset.js";
 import { buildFaceModelCatalog, routeServed } from "../model-catalog.js";
 import {
   listDeclaredPiAiProviders,
@@ -126,7 +127,7 @@ export const agentPresetSelect: FaceHandler = async (runtime, _rpcId, payload) =
       error: { code: "session-not-found", message: sessionId },
     };
   }
-  runtime.sessionAgentPresets.set(sessionId, canonicalAgentPresetId(agentPreset));
+  pinSessionAgentPreset(runtime, sessionId, agentPreset);
   await runtime.invalidateAgent?.(sessionId);
   publishRemoteEvent(runtime.bus, "agent-preset/selected", [
     sessionId,

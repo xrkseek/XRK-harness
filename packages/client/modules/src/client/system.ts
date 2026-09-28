@@ -186,6 +186,20 @@ export class ClientModuleSystem implements ClientModuleLoader {
   }
 
   async import(specifier: string): Promise<unknown> {
+    // Shell-own statics populate loadCache on first import (styles inventory
+    // stays empty — they never inject <style data-plugin>).
+    if (this.statics.has(specifier)) {
+      const cached = this.loadCache.get(specifier)
+      if (cached !== undefined) return cached.exports
+      const exports = this.statics.get(specifier)
+      this.loadCache.set(specifier, {
+        id: specifier,
+        exports,
+        styles: [],
+        edges: new Set(),
+      })
+      return exports
+    }
     const direct = this.lookupRequire(specifier)
     if (direct !== undefined) return direct
     const mapped = remapDshClientRequire(specifier)
@@ -195,11 +209,6 @@ export class ClientModuleSystem implements ClientModuleLoader {
     }
     const existing = this.loadCache.get(specifier)
     if (existing !== undefined) return existing.exports
-    if (this.statics.has(specifier)) {
-      const exports = this.statics.get(specifier)
-      this.loadCache.set(specifier, { id: specifier, exports, styles: [], edges: new Set() })
-      return exports
-    }
     const id = this.graphIdFor(specifier)
     if (!this.factories.has(id)) {
       const row = this.graphRows.get(id)
@@ -229,5 +238,10 @@ export class ClientModuleSystem implements ClientModuleLoader {
   invalidate(id: string): void {
     this.factories.delete(id)
     this.loadCache.delete(id)
+  }
+
+  adopt(row: BootModuleRow): void {
+    if (this.statics.has(row.id)) return
+    this.graphRows.set(row.id, { id: row.id, url: row.url, rev: row.rev })
   }
 }

@@ -289,6 +289,57 @@ describe("http webStatic", () => {
 
     await http.close();
   });
+
+  it("picks up overlay files after mutating live extraRoots", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-web-"));
+    const overlay = await mkdtemp(path.join(tmpdir(), "xrk-overlay-live-"));
+    await writeFile(
+      path.join(dir, "index.html"),
+      "<!doctype html><html><head></head><body>app</body></html>",
+      "utf8",
+    );
+    const liveExtraRoots: string[] = [];
+    const store = createMemorySessionStore();
+    newSession(store);
+    const http = createHttpServer({
+      host: "127.0.0.1",
+      port: 0,
+      apiKey: "secret",
+      corsOrigin: "*",
+      rateLimitPerMinute: 1000,
+      store,
+      ensureSession: (id) => id ?? store.list()[0]!,
+      resolveAgent: async (sessionId) =>
+        createMinimalComposition({
+          workspaceRoot: process.cwd(),
+          sessionStore: store,
+          sessionId,
+          assemble: true,
+          llm: createReplayAdapter([{ content: "x" }]),
+        }).createAgent(),
+      webStatic: {
+        root: dir,
+        extraRoots: liveExtraRoots,
+      },
+    });
+
+    const { port } = await http.listen();
+    const base = `http://127.0.0.1:${port}`;
+
+    const before = await fetch(`${base}/plugins/dsh-niulai-pet/client.js`);
+    expect(before.status).toBe(404);
+
+    const pluginDir = path.join(overlay, "plugins", "dsh-niulai-pet");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(path.join(pluginDir, "client.js"), "/* niulai */", "utf8");
+    liveExtraRoots.push(overlay);
+
+    const after = await fetch(`${base}/plugins/dsh-niulai-pet/client.js`);
+    expect(after.status).toBe(200);
+    expect(await after.text()).toBe("/* niulai */");
+
+    await http.close();
+  });
 });
 
 describe("http without webStatic", () => {

@@ -307,9 +307,9 @@ export class Session implements SessionFace {
     if (this.blankBit) {
       this.engageFromContent()
     }
-    // Desktop `xrk-app://` cannot open a second host SSE (Chromium custom-protocol
-    // pool); `host/session-status` is absent there. Optimistic running mirrors
-    // cancel's optimistic idle so Stop / thinking chrome arm before turn/start.
+    // Optimistic running mirrors cancel's optimistic idle so Stop / thinking
+    // chrome arm before turn/start (Desktop also gets host/session-status via
+    // the `xrk-app://stream` host SSE; optimism still covers the race).
     this.handleRunning(true)
     return result
   }

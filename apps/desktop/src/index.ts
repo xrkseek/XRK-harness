@@ -303,7 +303,9 @@ export {
   injectDesktopBootIntoHtml,
   loadDesktopBootManifest,
   maybeInjectDesktopBootHtml,
+  mergeDesktopBootManifests,
   type DesktopWebBootManifest,
+  type MaybeInjectDesktopBootHtmlOptions,
 } from "./boot-inject.js";
 export {
   DESKTOP_BRIDGE_PROTOCOL_VERSION,

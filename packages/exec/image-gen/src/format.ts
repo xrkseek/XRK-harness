@@ -1,9 +1,43 @@
+/**
+ * Model-facing image_generate envelopes — short, location-clear (Codex-style).
+ */
+
 export const IMAGE_GEN_PROMPT_TEXT = [
   "Image generation:",
-  "- Use `image_generate` for text-to-image and (when the Provider advertises it) image edit / i2i.",
-  "- Put a complete visual prompt in `prompt`. Optional `size` and `n`.",
-  "- Edit / i2i: pass `image_url` and/or `reference_image_urls` and/or `reference_attachment_ids` (Host attachments preferred).",
-  "- Schema is capability-gated: if the active Provider is text-only, reference args are omitted.",
-  "- Returns PNG bytes as base64; when AttachmentStore is wired, also an attachment id.",
-  "- Without Settings Image gen / `XRK_IMAGE_GEN=1` (+ key) / `memory`, the tool stays visible and fails honestly.",
+  "- Call `image_generate` with a full visual `prompt` (optional `size` / `n`). Edit/i2i when the Provider allows refs.",
+  "- Result: chat shows the image; text gives `attachmentId=sha256:…`. That id is the durable address — not a filesystem path.",
+  "- Re-inspect or zoom: `read_image` with `file_path` set to that id (or `attachment:<id>`). Do not search `~/.xrk` or invent paths.",
+  "- Reuse as edit input: `reference_attachment_ids` / `image_url=attachment:<id>`.",
 ].join("\n");
+
+/** One generated image row in the model-visible tool text. */
+export function formatImageGenImageLines(input: {
+  readonly index: number;
+  readonly mimeType: string;
+  readonly bytes: number;
+  readonly width?: number;
+  readonly height?: number;
+  readonly attachmentId?: string;
+  readonly revisedPrompt?: string;
+  readonly url?: string;
+}): string[] {
+  const lines: string[] = [`--- image ${input.index} ---`];
+  const size =
+    input.width !== undefined && input.height !== undefined
+      ? ` ${input.width}x${input.height}`
+      : "";
+  lines.push(`mime=${input.mimeType} bytes=${input.bytes}${size}`);
+  if (input.revisedPrompt) lines.push(`revised_prompt=${input.revisedPrompt}`);
+  if (input.url) lines.push(`url=${input.url}`);
+  if (input.attachmentId) {
+    lines.push(`attachmentId=${input.attachmentId}`);
+    lines.push(
+      "use=Shown in chat. Re-inspect: read_image file_path=<attachmentId>. Not a disk path.",
+    );
+  } else {
+    lines.push(
+      "use=No AttachmentStore — image not durable; enable Host attachments for chat preview.",
+    );
+  }
+  return lines;
+}

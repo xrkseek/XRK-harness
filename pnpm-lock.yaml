@@ -2574,6 +2574,9 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+      '@xrkseek/protocol':
+        specifier: workspace:*
+        version: link:../../protocol
 
   packages/exec/lsp:
     dependencies:
@@ -3175,6 +3178,9 @@ importers:
       '@xrkseek/core-session':
         specifier: workspace:*
         version: link:../../core/session
+      '@xrkseek/exec-web':
+        specifier: workspace:*
+        version: link:../../exec/web
       '@xrkseek/im-gateway-contract':
         specifier: workspace:*
         version: link:../../im-gateway-contract

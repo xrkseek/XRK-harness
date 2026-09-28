@@ -30,13 +30,62 @@ export type CommunityHttpCoverage =
  */
 export type CommunitySeatCoverage = "shell-seat" | "missing-seat";
 
-/** Seats declared by the product shell (ui-layout AppFrame children). */
+/**
+ * Slot names the product shell declares (layout seats + Settings / Plugins
+ * contribution seats community clients inject into). Names outside this set
+ * surface as `missing-seat` so DSH global-panel shapes fail the audit instead
+ * of dying silently inside SlotCore's "not declared" throw.
+ */
 const XRK_SHELL_SEATS = new Set([
   "root",
   "sidebar",
+  "sidebar.footer.action",
+  "sidebar.settings",
+  "sidebar.workspaces",
   "conversation",
+  "conversation.view",
+  "conversation.chat.node",
+  "conversation.chat.turnTail",
+  "conversation.chat.assistant-actions",
+  "conversation.chat.commandview",
+  "conversation.session",
+  "conversation.session.header",
+  "conversation.session.header.actions",
+  "conversation.session.header.utilities",
+  "conversation.session.header.lineage",
+  "conversation.composer",
+  "conversation.composer.bar",
+  "conversation.composer.dock",
+  "conversation.input.dock",
+  "conversation.input.left",
+  "conversation.input.right",
+  "conversation.input.overlay",
+  "conversation.input.model",
+  "conversation.input.plan",
+  "conversation.input.attachments",
+  "conversation.hero.brand.mark",
+  "conversation.hero.workspace",
+  "conversation.hero.agentPreset",
   "details",
   "shell.overlay",
+  "settings.section",
+  "settings.plugins.tab",
+  "settings.plugin.item",
+  "settings.plugin.advanced.item",
+  "settings.general.item",
+  "settings.trigger",
+  "settings.close",
+  "settings.action",
+  "settings.header",
+  "settings.onboarding",
+  "settings.dreamSkin.item",
+  "settings.undo.item",
+  // DSH Plugins-page seats — declared by ui-settings-plugins configurable tab
+  // so community dual-register (e.g. @liustack/modlens) can inject.
+  "plugins.bundle.config",
+  "plugins.bundle.activation",
+  "plugins.row.config",
+  "plugins.item",
 ]);
 
 export function classifyCommunitySeat(seat: string): CommunitySeatCoverage {
@@ -68,9 +117,10 @@ export function classifyCommunityHttpPath(pathname: string): CommunityHttpCovera
   if (p === "/sidebar" || p.startsWith("/sidebar/")) return "host-sidebar";
   // Community clients probe npm registries with `/{pkg}/latest` (e.g. dsh-context).
   if (isNpmRegistryLatestPath(p)) return "npm-registry";
+  // Explicit capability prefixes beat community-root short-slug claims.
+  if (httpCapabilityForPath(p)) return "capability";
   if (isCommunityRootPath(p)) return "community-root";
   if (p.startsWith("/dev/") || p.includes("/absolute/")) return "dev-placeholder";
-  if (httpCapabilityForPath(p)) return "capability";
   if (p.startsWith("/_dsh/")) return "dsh-generic";
   if (p.includes("-settings")) return "settings-rpc";
   return "missing";

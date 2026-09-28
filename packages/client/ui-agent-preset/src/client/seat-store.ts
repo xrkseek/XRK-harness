@@ -120,6 +120,14 @@ export class AgentPresetSeatController {
   }
 
   /**
+   * Staged pick waiting for create / apply (undefined when none).
+   * Workspace connect reads this so `session.create` pins at birth.
+   */
+  peekStaged(): string | undefined {
+    return this.staged
+  }
+
+  /**
    * Stage a pick WITHOUT the immediate apply, for a flow that starts the
    * receiving session after the pick (the settings section's creator entry).
    * `select()`'s immediate apply would meet the still-current running session
@@ -152,10 +160,21 @@ export class AgentPresetSeatController {
     const staged = this.staged
     const session = this.currentSession()
     if (staged === undefined || session === undefined) return
-    // A started session's history was produced under its own composition; the
-    // host refuses the swap, so the stage is no longer meaningful.
-    if (!session.blank || session.agentPreset === staged) {
+    // Already composed under this badge — consume the stage quietly.
+    if (session.agentPreset === staged) {
       this.staged = undefined
+      this.set({ current: staged, error: null })
+      return
+    }
+    // A started session's history was produced under its own composition; the
+    // host refuses the swap. Keep the chip honest: show the session's real
+    // badge, not the abandoned stage.
+    if (!session.blank) {
+      this.staged = undefined
+      this.set({
+        current: session.agentPreset ?? this.fallback,
+        error: null,
+      })
       return
     }
     this.set({ busy: true, error: null })
@@ -163,15 +182,24 @@ export class AgentPresetSeatController {
       const response = await this.api.agentPresets.select({ sessionId: session.id, agentPreset: staged })
       this.staged = undefined
       if (!response.result.ok) {
-        this.set({ busy: false, error: response.result.error.message, current: this.fallback })
+        this.set({
+          busy: false,
+          error: response.result.error.message,
+          current: session.agentPreset ?? this.fallback,
+        })
         return
       }
-      // Consumed: the next new session opens on the deployment default again.
+      // Consumed: keep showing the pinned badge for this session (not the
+      // deployment default — Overview / header must stay in lockstep).
       this.set({ busy: false, current: response.result.value.agentPreset })
       this.onApplied?.(session.id, response.result.value.agentPreset)
     } catch (error) {
       this.staged = undefined
-      this.set({ busy: false, error: messageOf(error), current: this.fallback })
+      this.set({
+        busy: false,
+        error: messageOf(error),
+        current: session.agentPreset ?? this.fallback,
+      })
     }
   }
 }

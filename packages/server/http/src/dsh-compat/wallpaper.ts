@@ -1,5 +1,6 @@
-﻿/**
- * dsh-plugin-wallpaper-engine file-backed settings + inventory.
+/**
+ * dsh-plugin-wallpaper-engine file-backed settings + inventory + scene stubs.
+ * `/scene-frame/*` · `/scene-anim/*` return a stable placeholder (no ffmpeg).
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createHash } from "node:crypto";
@@ -14,6 +15,12 @@ import { parseJsonBody } from "./underlying/http-kit.js";
 export interface WallpaperOptions {
   readonly xrkHome?: string;
 }
+
+/** 1×1 PNG — keeps <img src="/scene-frame/…"> from breaking. */
+const PLACEHOLDER_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 const DEFAULT_SETTINGS = {
   scrim: 0.25,
@@ -100,14 +107,61 @@ function uploadIdFor(bytes: Buffer, ext: string): string {
   return `up-${hash}${ext}`;
 }
 
+function sendPlaceholderPng(res: ServerResponse, method: string): void {
+  res.writeHead(200, {
+    "content-type": "image/png",
+    "content-length": String(PLACEHOLDER_PNG.length),
+    "cache-control": "no-store",
+  });
+  if (method === "HEAD") {
+    res.end();
+    return;
+  }
+  res.end(PLACEHOLDER_PNG);
+}
+
+export function isWallpaperHttpPath(pathname: string): boolean {
+  return (
+    pathname.startsWith("/wallpaper-engine") ||
+    pathname === "/scene-anim" ||
+    pathname.startsWith("/scene-anim/") ||
+    pathname === "/scene-frame" ||
+    pathname.startsWith("/scene-frame/")
+  );
+}
+
 export async function handleWallpaperHttp(
   req: IncomingMessage,
   res: ServerResponse,
   pathname: string,
   options: WallpaperOptions,
 ): Promise<boolean> {
-  if (!pathname.startsWith("/wallpaper-engine")) return false;
+  if (!isWallpaperHttpPath(pathname)) return false;
   const method = (req.method ?? "GET").toUpperCase();
+
+  if (
+    pathname === "/scene-frame" ||
+    pathname.startsWith("/scene-frame/") ||
+    pathname === "/scene-anim" ||
+    pathname.startsWith("/scene-anim/")
+  ) {
+    // No scene.pkg ffmpeg pipeline — return a stable still so media tags settle.
+    sendPlaceholderPng(res, method);
+    return true;
+  }
+
+  if (pathname.startsWith("/wallpaper-engine/scene-anim-progress/")) {
+    const token = pathname.slice("/wallpaper-engine/scene-anim-progress/".length);
+    sendJson(res, 200, {
+      ok: true,
+      percent: 100,
+      progress: 100,
+      done: true,
+      token: token.split("?")[0] || token,
+      note: "Scene anim render is not embedded; progress reports complete.",
+    });
+    return true;
+  }
 
   if (pathname === "/wallpaper-engine/settings") {
     if (method === "GET" || method === "HEAD") {

@@ -21,6 +21,45 @@ export interface SettingsDocStore {
   replaceUser(patch: Record<string, unknown>): void;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+/** Apply one path-addressed set/unset (mirrors `@xrkseek/settings` wire ops). */
+function applyPathOp(
+  section: Record<string, unknown>,
+  path: readonly string[],
+  kind: "set" | "unset",
+  value?: unknown,
+): Record<string, unknown> {
+  const [head, ...rest] = path;
+  if (head === undefined) {
+    if (kind === "unset") return {};
+    return isPlainObject(value) ? { ...value } : section;
+  }
+  if (rest.length === 0) {
+    if (kind === "set") return { ...section, [head]: value };
+    const { [head]: _removed, ...kept } = section;
+    return kept;
+  }
+  const child = section[head];
+  if (!isPlainObject(child)) {
+    if (kind === "unset") return section;
+    return {
+      ...section,
+      [head]: applyPathOp({}, rest, kind, value),
+    };
+  }
+  return {
+    ...section,
+    [head]: applyPathOp(child, rest, kind, value),
+  };
+}
+
 export function createSettingsDocStore(
   ns: string,
   defaults: Record<string, unknown> = {},
@@ -48,24 +87,22 @@ export function createSettingsDocStore(
             ? [op.key]
             : [];
         if (op.op === "unset" || op.op === "clear") {
-          if (path.length === 1) {
-            const next = { ...user };
-            delete next[path[0]!];
-            user = next;
-          } else if (path.length === 0 && typeof op.key === "string") {
+          if (path.length === 0 && typeof op.key === "string") {
             const next = { ...user };
             delete next[op.key];
             user = next;
+          } else if (path.length > 0) {
+            user = applyPathOp(user, path, "unset");
           }
           continue;
         }
         if (op.op === "set" || op.op === "merge" || op.value !== undefined) {
-          if (path.length === 1) {
-            user = { ...user, [path[0]!]: op.value };
+          if (path.length > 0) {
+            user = applyPathOp(user, path, "set", op.value);
           } else if (typeof op.key === "string") {
             user = { ...user, [op.key]: op.value };
-          } else if (op.value && typeof op.value === "object" && !Array.isArray(op.value)) {
-            user = { ...user, ...(op.value as Record<string, unknown>) };
+          } else if (isPlainObject(op.value)) {
+            user = { ...user, ...op.value };
           }
         }
       }

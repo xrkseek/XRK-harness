@@ -2,6 +2,7 @@ import type { FaceRuntime } from "../context.js";
 import type { HostFrame } from "../types.js";
 import { resolveSessionCwd } from "../session-cwd.js";
 import { sessionListHints } from "@xrkseek/core-session";
+import { effectiveSessionAgentPreset } from "../session-agent-preset.js";
 
 /**
  * DSH `sessionListFields` + `sessionBlank` for `host/session-added`.
@@ -14,14 +15,14 @@ export function sessionAddedFrame(
   const hints = sessionListHints(runtime.store, sessionId);
   const blank = !hints.hasTurnStart && !hints.hasCommandRun;
   const cwd = resolveSessionCwd(runtime, sessionId);
-  const agentPreset = runtime.sessionAgentPresets.get(sessionId);
+  const agentPreset = effectiveSessionAgentPreset(runtime, sessionId);
   const lineage = runtime.subagents.getByChild(sessionId);
   return {
     type: "host/session-added",
     sessionId,
     blank,
     cwd,
-    ...(agentPreset ? { agentPreset } : {}),
+    agentPreset,
     ...(lineage
       ? {
           parentSessionId: lineage.parentSessionId,

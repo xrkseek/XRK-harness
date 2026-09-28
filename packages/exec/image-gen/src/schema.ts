@@ -80,12 +80,14 @@ export function buildImageGenToolDescription(caps: ImageGenCapabilities): string
       "Generate or edit an image via the Host image Provider. " +
       "Text-only prompt → text-to-image; with image_url / reference_image_urls / " +
       `reference_attachment_ids (≤${caps.maxReferenceImages}) → image edit. ` +
-      "Returns PNG base64 (truncated in tool text) and optional attachment id."
+      "Chat shows the image; result text gives attachmentId=sha256:… " +
+      "(re-inspect with read_image; not a filesystem path)."
     );
   }
   return (
     "Generate an image from a text prompt via the Host text-to-image Provider. " +
     "This Provider does not accept reference images. " +
-    "Returns PNG as base64 (truncated in tool text) and optional attachment id."
+    "Chat shows the image; result text gives attachmentId=sha256:… " +
+    "(re-inspect with read_image; not a filesystem path)."
   );
 }

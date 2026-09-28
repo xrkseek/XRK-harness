@@ -503,13 +503,19 @@ describe('ConfigurablePluginsTabController', () => {
       .toEqual(['agent-loop', 'bash'])
   })
 
-  it('never dispatches a card whose namespace this deployment does not serve', async () => {
+  it('still dispatches a community card whose key Face never serves', async () => {
+    // @liustack/modlens registers key `modlens` without a Face settings ns —
+    // filtering to Face alone left the card mounted but never rendered.
     const settings = settingsApi(['bash'])
-    const controller = new ConfigurablePluginsTabController(settings.api, () => ledger('bash', 'mcp'))
+    const controller = new ConfigurablePluginsTabController(
+      settings.api,
+      () => ledger('bash', 'modlens'),
+    )
 
     await controller.load()
 
-    expect(controller.inject().hooks.configurablePlugins.getSnapshot().namespaces).toEqual(['bash'])
+    expect(controller.inject().hooks.configurablePlugins.getSnapshot().namespaces)
+      .toEqual(['bash', 'modlens'])
   })
 
   it('takes a card registered after the read without asking the Host again', async () => {
@@ -572,7 +578,8 @@ describe('ConfigurablePluginsTabController', () => {
     const stale = controller.load()
 
     await controller.load()
-    expect(controller.inject().hooks.configurablePlugins.getSnapshot().namespaces).toEqual(['bash'])
+    expect(controller.inject().hooks.configurablePlugins.getSnapshot().namespaces)
+      .toEqual(['bash', 'agent-loop'])
     slow.resolve({
       rpcId: 's-0',
       result: { ok: true, value: { writable: true, hasDocument: true, namespaces: [
@@ -581,17 +588,18 @@ describe('ConfigurablePluginsTabController', () => {
     })
     await stale
 
-    expect(controller.inject().hooks.configurablePlugins.getSnapshot().namespaces).toEqual(['bash'])
+    expect(controller.inject().hooks.configurablePlugins.getSnapshot().namespaces)
+      .toEqual(['bash', 'agent-loop'])
   })
 
-  it('reports the Host answered even when it serves nothing this tab shows', async () => {
+  it('reports the Host answered and still lists registered cards Face did not serve', async () => {
     const settings = settingsApi(['ui-theme'])
     const controller = new ConfigurablePluginsTabController(settings.api, () => ledger('bash'))
 
     await controller.load()
 
     expect(controller.inject().hooks.configurablePlugins.getSnapshot())
-      .toEqual({ loaded: true, namespaces: [] })
+      .toEqual({ loaded: true, namespaces: ['bash'] })
   })
 })
 

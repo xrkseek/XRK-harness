@@ -8,6 +8,7 @@
  * 2. Cancelling an SSE body must not throw into the next Face write
  * 3. `xrk-app://stream` must map onto the in-process Face HTTP authority
  * 4. Stacked dispatch → pipe must keep unary alive while SSE stays open
+ * 5. mux **and** host SSE both open on `stream` without starving unary
  */
 
 import { createServer } from "node:http";
@@ -132,6 +133,90 @@ describe("Face transport regressions", () => {
     expect(seen).toEqual([
       "GET http://desktop.local/api/events.mux",
       "POST http://desktop.local/api/host.describe",
+    ]);
+
+    await runtime.dispose();
+  });
+
+  it("maps host SSE onto xrk-app://stream alongside mux without blocking unary", async () => {
+    const seen: string[] = [];
+    const request = new PassThrough();
+    const response = new PassThrough();
+    const { starts, ended, bodies, waitForEnd } = collectEnds(response);
+
+    const runtime = startDesktopHostPipeRuntime(
+      async (req) => {
+        const url = new URL(req.url);
+        seen.push(`${req.method} ${url.protocol}//${url.host}${url.pathname}`);
+        if (
+          url.pathname === "/api/events.mux" ||
+          url.pathname === "/api/events.host"
+        ) {
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new TextEncoder().encode(": connected\n\n"));
+              },
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "text/event-stream; charset=utf-8" },
+            },
+          );
+        }
+        return new Response(JSON.stringify({ ok: true, path: url.pathname }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+      { request, response },
+    );
+
+    await writeDesktopPipeFrame(
+      request,
+      encodeDesktopRequestStart(1, {
+        url: "xrk-app://stream/api/events.mux",
+        method: "GET",
+        headers: [],
+        hasBody: false,
+      }),
+    );
+    await writeDesktopPipeFrame(
+      request,
+      encodeDesktopRequestStart(2, {
+        url: "xrk-app://stream/api/events.host",
+        method: "GET",
+        headers: [],
+        hasBody: false,
+      }),
+    );
+    await writeDesktopPipeFrame(
+      request,
+      encodeDesktopRequestStart(3, {
+        url: "xrk-app://app/api/settings.describe",
+        method: "POST",
+        headers: [["content-type", "application/json"]],
+        hasBody: true,
+      }),
+    );
+    await writeDesktopPipeFrame(
+      request,
+      encodeDesktopRequestData(3, Buffer.from("{}")),
+    );
+    await writeDesktopPipeFrame(request, encodeDesktopRequestEnd(3));
+
+    await waitForEnd(3);
+    expect(starts).toEqual(expect.arrayContaining([1, 2, 3]));
+    expect(ended.has(1)).toBe(false);
+    expect(ended.has(2)).toBe(false);
+    expect(JSON.parse(bodies.get(3)!.toString("utf8"))).toEqual({
+      ok: true,
+      path: "/api/settings.describe",
+    });
+    expect(seen).toEqual([
+      "GET http://desktop.local/api/events.mux",
+      "GET http://desktop.local/api/events.host",
+      "POST http://desktop.local/api/settings.describe",
     ]);
 
     await runtime.dispose();

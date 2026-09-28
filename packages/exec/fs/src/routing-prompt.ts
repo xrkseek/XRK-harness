@@ -24,6 +24,11 @@ export function formatFsRoutingPrompt(available: ToolNameSet): string {
       "- Inspect: prefer `read_file` (use offset/limit on large files) over cat/head/sed.",
     );
   }
+  if (names.has("read_image")) {
+    lines.push(
+      "- Images: `read_image` for workspace PNG/JPEG/WebP/GIF paths, or `sha256:…` / `attachment:sha256:…` ids from `image_generate` (not a disk hunt).",
+    );
+  }
   if (names.has("apply_edit") || names.has("write_file") || names.has("apply_patch")) {
     lines.push(
       "- Edit: prefer `apply_edit` for a unique snippet; `apply_patch` for multi-file / structured hunks; `write_file` only to create or fully replace.",
@@ -39,13 +44,20 @@ export function formatFsRoutingPrompt(available: ToolNameSet): string {
       "- Read a path in this turn before `apply_edit` / `write_file` / `apply_patch` Update|Delete (write-intent).",
     );
   }
+  if (names.has("present")) {
+    lines.push(
+      "- Deliverables: after creating user-facing files (including via bash), call `present` with their paths before the final reply.",
+    );
+  }
   if (
     names.has("glob") ||
     names.has("grep") ||
     names.has("read_file") ||
+    names.has("read_image") ||
     names.has("apply_edit") ||
     names.has("write_file") ||
-    names.has("apply_patch")
+    names.has("apply_patch") ||
+    names.has("present")
   ) {
     lines.push(
       "- Paths may be workspace-relative or absolute under the workspace root.",
@@ -65,6 +77,9 @@ export function formatShellRoutingPrompt(available: ToolNameSet): string {
     );
     lines.push(
       "- Use `bash` for builds, git, package managers, and one-shot commands.",
+    );
+    lines.push(
+      "- Screenshots / downloads from tools: write under the workspace (or an absolute path you control), then `read_image` / `present` that path — do not assume Desktop or Host cwd.",
     );
   }
   const hasTerminal =

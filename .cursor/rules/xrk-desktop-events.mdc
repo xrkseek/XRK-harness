@@ -1,0 +1,20 @@
+---
+description: Desktop 必须开 host SSE（xrk-app://stream）；禁止 placeholder 吞 host 帧
+globs: packages/client/connection/**/*,apps/desktop/**/*,apps/desktop-host/**/*,packages/client/runtime/src/client/**/*
+alwaysApply: false
+xrk-inject: false
+---
+
+# 笔记 · Desktop host 事件总线
+
+Desktop（`xrk-app:`）**必须**同时打开：
+
+- unary：`xrk-app://app`
+- mux SSE + **host SSE**：`xrk-app://stream`
+
+`WebApiClient.openHost` **禁止**空 placeholder（永不 yield）。断 host 会同时弄坏：
+
+- `settings/document-updated` → MCP / Settings 卡「连接中」
+- `host/session-added` · `host/session-status` → 子代理顶栏 / Overview 要刷新才更新
+
+池隔离靠 **hostname 分源**（`app` vs `stream`），不是关掉 host。细节 skill：`xrk-desktop-events`。

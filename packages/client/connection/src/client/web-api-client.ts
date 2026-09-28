@@ -53,29 +53,14 @@ export class WebApiClient extends AbstractApiClient {
     onOpen?: () => void,
   ): AsyncIterable<RpcRequest<HostFrame>> {
     if (this.usesSseDownlink()) {
-      // Electron custom-protocol origins allow very few concurrent fetches.
-      // Two long-lived SSE streams (mux+host) starve unary `host.describe`
-      // and freeze the UI on 「连接中」. Mux alone carries session traffic;
-      // host-bus frames (`host/session-status`, …) are unavailable here —
-      // Session arms/clears `running` from turn/start|end + prompt optimism.
-      return this.openPlaceholderDownlink(signal, onOpen)
+      // Same sibling origin as mux (`xrk-app://stream`). Unary stays on
+      // `xrk-app://app`, so two long-lived SSEs no longer starve describe.
+      // Without this stream, host/session-* and settings/document-updated never
+      // reach the shell — MCP badges and subagent header/Overview stay stale
+      // until a manual refresh or session switch.
+      return this.readSse(HOST_EVENTS_PATH, signal, hostFrameSchema, onOpen)
     }
     return this.readWebSocket(HOST_EVENTS_PATH, signal, hostFrameSchema, onOpen)
-  }
-
-  /**
-   * Satisfies the connection handshake's host-stream onOpen without a second
-   * long-lived custom-protocol fetch (see {@link openHost}).
-   */
-  private async *openPlaceholderDownlink(
-    signal: AbortSignal,
-    onOpen?: () => void,
-  ): AsyncGenerator<RpcRequest<HostFrame>> {
-    onOpen?.()
-    if (signal.aborted) return
-    await new Promise<void>((resolve) => {
-      signal.addEventListener('abort', () => resolve(), { once: true })
-    })
   }
 
   private async *readWebSocket<F extends MuxFrame | HostFrame>(

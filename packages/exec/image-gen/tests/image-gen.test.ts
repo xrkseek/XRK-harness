@@ -59,10 +59,17 @@ describe("exec-image-gen", () => {
     });
     const out = await tool!.execute({ prompt: "logo" });
     expect(out.isError).toBeFalsy();
-    expect(out.content).toMatch(/provider=memory/);
-    expect(out.content).toMatch(/modality=text/);
-    expect(out.content).toMatch(/attachmentId=/);
-    expect(out.content).toMatch(/image_base64=/);
+    expect(Array.isArray(out.content)).toBe(true);
+    const blocks = out.content as { type: string; text?: string; attachment?: { attachmentId: string } }[];
+    const text = blocks.find((b) => b.type === "text")?.text ?? "";
+    expect(text).toMatch(/provider=memory/);
+    expect(text).toMatch(/modality=text/);
+    expect(text).toMatch(/attachmentId=/);
+    expect(text).toMatch(/read_image/);
+    expect(text).not.toMatch(/image_base64=/);
+    expect(blocks.some((b) => b.type === "image" && b.attachment?.attachmentId)).toBe(
+      true,
+    );
   });
 
   it("dynamic schema omits edit args for text-only Provider", () => {
@@ -105,8 +112,15 @@ describe("exec-image-gen", () => {
       reference_attachment_ids: [saved.attachmentId],
     });
     expect(out.isError).toBeFalsy();
-    expect(out.content).toMatch(/modality=image/);
-    expect(out.content).toMatch(/refs=1/);
+    const editText =
+      typeof out.content === "string"
+        ? out.content
+        : (out.content as { type: string; text?: string }[])
+            .filter((b) => b.type === "text")
+            .map((b) => b.text ?? "")
+            .join("\n");
+    expect(editText).toMatch(/modality=image/);
+    expect(editText).toMatch(/refs=1/);
   });
 
   it("tools reject refs when Provider is text-only", async () => {
