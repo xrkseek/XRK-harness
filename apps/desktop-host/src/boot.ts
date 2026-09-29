@@ -1,7 +1,9 @@
 /**
- * Boot XRK Host via createHostManager (compose / Face / serve stack) with listen disabled.
- * Renderer reaches Face through `xrk-app://` + framed pipes (ADR-0008 / DSH posture):
- * no product or loopback Web listen.
+ * Boot XRK Host via createHostManager (compose / Face / serve stack) on
+ * **127.0.0.1 loopback** ([ADR-0008](../../../docs/adr/0008-desktop-shell-private-host.md)).
+ *
+ * Same posture as DSH Desktop: Electron loads `http://127.0.0.1:<port>`;
+ * Node IPC is lifecycle-only. No Electron framed Face pipes (ConPTY-safe).
  */
 
 import { readFileSync } from "node:fs";
@@ -20,6 +22,8 @@ export const DESKTOP_HOST_PACKAGE_NAME =
 export interface BootedDesktopHost {
   readonly instance: HostInstance;
   readonly hostVersion: string;
+  /** Loopback Face origin, e.g. `http://127.0.0.1:43129`. */
+  readonly origin: string;
   fetch(request: Request): Promise<Response>;
   dispose(): Promise<void>;
 }
@@ -62,7 +66,7 @@ export function declareDesktopRuntimeSurface(
 }
 
 /**
- * Spawn the standard Host composition without binding a TCP listen socket.
+ * Spawn the standard Host composition listening on 127.0.0.1 (ephemeral port).
  * Declares native path capabilities (`XRK_NATIVE_OPEN`) and runtime surface
  * (`XRK_SURFACE=desktop`) so Face / inject match the Electron shell.
  */
@@ -89,7 +93,10 @@ export async function bootXrkDesktopHost(options: {
     patch: {
       ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
       webDist,
-      listen: false,
+      // DSH Desktop posture: loopback only — never 0.0.0.0.
+      host: "127.0.0.1",
+      port: 0,
+      listen: true,
       preset: "harness",
     },
   });
@@ -108,6 +115,9 @@ export async function bootXrkDesktopHost(options: {
       runtime: {
         ...config.runtime,
         sessionsDir,
+        host: "127.0.0.1",
+        port: 0,
+        listen: true,
       },
     },
     factory,
@@ -127,9 +137,19 @@ export async function bootXrkDesktopHost(options: {
     },
   );
 
+  const port = instance.health().port;
+  if (typeof port !== "number" || port <= 0) {
+    await instance.stop();
+    throw new Error(
+      `${DESKTOP_HOST_PACKAGE_NAME}: Host did not bind a loopback port`,
+    );
+  }
+  const origin = `http://127.0.0.1:${String(port)}`;
+
   return {
     instance,
     hostVersion: packageVersion(),
+    origin,
     fetch: (request) => instance.http.fetch(request),
     dispose: () => instance.stop(),
   };

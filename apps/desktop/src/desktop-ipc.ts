@@ -40,6 +40,13 @@ export interface RegisterDesktopIpcOptions {
   installUpdate?: () => Promise<void>;
   /** Resolve the BrowserWindow that owns an IPC event (Electron `event`). */
   windowFromEvent?: (event: unknown) => DesktopIpcWindow | undefined;
+  /**
+   * Whether Desktop Host Fetch is already attached (preload `whenHostReady`).
+   * Default: always false until main wires {@link markDesktopHostFetchReady}.
+   */
+  isHostReady?: () => boolean;
+  /** Current Host bring-up phase for splash hints. */
+  getHostPhase?: () => "starting" | "attaching" | "ready";
 }
 
 const idleUpdate: DesktopUpdateState = { phase: "idle" };
@@ -101,5 +108,12 @@ export function registerDesktopIpcHandlers(
   });
   ipcMain.handle(DESKTOP_IPC.windowReload, (event) => {
     winOf(event)?.webContents.reload();
+  });
+
+  ipcMain.handle(DESKTOP_IPC.hostReadyGet, (): boolean => {
+    return options.isHostReady?.() === true;
+  });
+  ipcMain.handle(DESKTOP_IPC.hostPhaseGet, (): "starting" | "attaching" | "ready" => {
+    return options.getHostPhase?.() ?? "starting";
   });
 }

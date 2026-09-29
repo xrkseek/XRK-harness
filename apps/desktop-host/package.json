@@ -29,6 +29,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@xrkseek/harness-cli": "workspace:*",
     "@xrkseek/harness-desktop": "workspace:*",
     "@xrkseek/preset-server": "workspace:*",
     "@xrkseek/server-config": "workspace:*",

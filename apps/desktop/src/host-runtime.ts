@@ -3,6 +3,7 @@
  * Packaged layout under `process.resourcesPath`:
  *   runtime/node — bundled upstream Node
  *   host/        — `pnpm deploy` of `@xrkseek/harness-desktop-host`
+ *                  (includes `@xrkseek/harness-cli` for Settings plugin mutate)
  *   web/         — assembled product Web (readable by Host Node; not asar)
  */
 
@@ -17,19 +18,10 @@ export interface DesktopHostRuntimePaths {
   readonly entry: string;
   readonly webDist: string;
   /**
-   * Absolute path to `xrkh` / harness-cli `dist/bin.js` when resolvable.
-   * Host sets `XRK_HARNESS_BIN` so Settings plugin install/update can spawn CLI.
+   * Absolute path to bundled `harness-cli` `dist/bin.js`.
+   * Host always sets `XRK_HARNESS_BIN` — Settings plugin mutate never relies on PATH.
    */
-  readonly harnessCliBin?: string;
-}
-
-function resolveHarnessCliBin(
-  candidates: readonly string[],
-): string | undefined {
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
-  return undefined;
+  readonly harnessCliBin: string;
 }
 
 function assertFile(filePath: string, label: string): string {
@@ -45,6 +37,30 @@ function assertDirWithIndex(dir: string, label: string): string {
     throw new Error(`xrk desktop: ${label} missing index.html at ${dir}`);
   }
   return dir;
+}
+
+/** Canonical install: `{host}/node_modules/@xrkseek/harness-cli/dist/bin.js`. */
+export function harnessCliBinBesideHost(projectDir: string): string {
+  return path.join(
+    projectDir,
+    "node_modules",
+    "@xrkseek",
+    "harness-cli",
+    "dist",
+    "bin.js",
+  );
+}
+
+function assertHarnessCliBin(
+  candidates: readonly string[],
+): string {
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    "xrk desktop: bundled harness-cli missing " +
+      `(expected @xrkseek/harness-cli beside Host; tried ${candidates.join(", ")})`,
+  );
 }
 
 /**
@@ -80,23 +96,15 @@ export function resolvePackagedDesktopHostRuntime(
     "deployed Host server-host (node_modules must ship outside asar)",
   );
   const webDist = assertDirWithIndex(path.join(root, "web"), "product Web");
-  const harnessCliBin = resolveHarnessCliBin([
-    path.join(
-      projectDir,
-      "node_modules",
-      "@xrkseek",
-      "harness-cli",
-      "dist",
-      "bin.js",
-    ),
-    path.join(root, "cli", "dist", "bin.js"),
+  const harnessCliBin = assertHarnessCliBin([
+    harnessCliBinBesideHost(projectDir),
   ]);
   return {
     nodeExecutable,
     projectDir,
     entry,
     webDist,
-    ...(harnessCliBin ? { harnessCliBin } : {}),
+    harnessCliBin,
   };
 }
 
@@ -137,8 +145,8 @@ export function resolveUnpackagedDesktopHostRuntime(
       path.resolve(appRoot, "..", "web", "dist"),
       "apps/web/dist",
     );
-  const harnessCliBin = resolveHarnessCliBin([
-    path.join(projectDir, "node_modules", "@xrkseek", "harness-cli", "dist", "bin.js"),
+  const harnessCliBin = assertHarnessCliBin([
+    harnessCliBinBesideHost(projectDir),
     path.resolve(appRoot, "..", "cli", "dist", "bin.js"),
   ]);
   return {
@@ -146,6 +154,6 @@ export function resolveUnpackagedDesktopHostRuntime(
     projectDir,
     entry,
     webDist,
-    ...(harnessCliBin ? { harnessCliBin } : {}),
+    harnessCliBin,
   };
 }

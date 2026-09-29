@@ -3,11 +3,12 @@
  *
  * - Run under **bundled upstream Node** (not Electron's Node)
  * - Compose this repo's Host / Face / assembled Web (`apps/web/dist`)
- * - **No** listen socket; Fetch over framed pipes (fds 3/4) + IPC lifecycle
+ * - **Listen** on `127.0.0.1:<ephemeral>` (DSH Desktop posture)
+ * - Node IPC: ready (with `origin`) / fatal / shutdown — **no** Face framed pipes
  * - **Forbidden:** Cordis `boot` / overlay apply, `*.cordis*.yml`, embedding a Cordis Host
  *
  * Package `@xrkseek/harness-desktop-host` is private and not on public npm.
- * Electron spawn: `node dist/index.js <projectDir>` with stdio pipes + IPC.
+ * Electron spawn: `node dist/index.js <projectDir>` with stdio logs + IPC.
  */
 
 import path from "node:path";
@@ -22,7 +23,6 @@ import {
   DESKTOP_HOST_PACKAGE_NAME,
   type BootedDesktopHost,
 } from "./boot.js";
-import { startDesktopHostPipeRuntime } from "./pipe-runtime.js";
 
 export { DESKTOP_HOST_PACKAGE_NAME } from "./boot.js";
 export {
@@ -31,11 +31,6 @@ export {
   declareDesktopRuntimeSurface,
   type BootedDesktopHost,
 } from "./boot.js";
-export {
-  startDesktopHostPipeRuntime,
-  type DesktopHostPipeFetch,
-  type DesktopHostPipeRuntime,
-} from "./pipe-runtime.js";
 
 /** Reserved profile name owned by Desktop (CLI must refuse). */
 export const DESKTOP_HOST_PROFILE_NAME = "desktop" as const;
@@ -54,22 +49,15 @@ export const DESKTOP_HOST_COMPOSITION = {
 
 export {
   DESKTOP_HOST_PROTOCOL_VERSION,
-  DESKTOP_PIPE_CHUNK_BYTES,
-  DESKTOP_REQUEST_PIPE_FD,
-  DESKTOP_RESPONSE_PIPE_FD,
-  DesktopHostRequestDecoder,
-  encodeDesktopResponseData,
-  encodeDesktopResponseEnd,
-  encodeDesktopResponseError,
-  encodeDesktopResponseStart,
-  iterDesktopPipeChunks,
-  writeDesktopPipeFrame,
-  type DesktopHostRequestFrame,
-} from "./wire.js";
+  type DesktopHostCommand,
+  type DesktopHostEvent,
+} from "@xrkseek/harness-desktop";
 
 export interface DesktopHostController {
   readonly hostVersion: string;
   readonly protocolVersion: typeof DESKTOP_HOST_PROTOCOL_VERSION;
+  /** Loopback Face origin for Electron `loadURL`. */
+  readonly origin: string;
   readonly fetch: BootedDesktopHost["fetch"];
   dispose(): Promise<void>;
 }
@@ -93,7 +81,7 @@ function sendIpc(event: DesktopHostEvent): void {
 }
 
 /**
- * Boot Host (listen disabled) and register Fetch on framed pipes.
+ * Boot Host on 127.0.0.1 and expose Fetch for tests / diagnostics.
  * When `fetch` is injected, skips Host spawn (unit tests).
  */
 export async function startDesktopHost(options: {
@@ -102,8 +90,7 @@ export async function startDesktopHost(options: {
   readonly workspaceRoot?: string;
   readonly fetch?: BootedDesktopHost["fetch"];
   readonly hostVersion?: string;
-  readonly request?: import("node:stream").Readable;
-  readonly response?: import("node:stream").Writable;
+  readonly origin?: string;
 }): Promise<DesktopHostController> {
   const booted =
     options.fetch === undefined
@@ -128,30 +115,29 @@ export async function startDesktopHost(options: {
       return booted.fetch(request);
     });
   const hostVersion = options.hostVersion ?? booted?.hostVersion ?? "0.0.0";
-  const pipes = startDesktopHostPipeRuntime(fetch, {
-    ...(options.request !== undefined ? { request: options.request } : {}),
-    ...(options.response !== undefined ? { response: options.response } : {}),
-  });
+  const origin =
+    options.origin ??
+    booted?.origin ??
+    (() => {
+      throw new Error(
+        `${DESKTOP_HOST_PACKAGE_NAME}: loopback origin required`,
+      );
+    })();
 
   let disposed = false;
   const dispose = async (): Promise<void> => {
     if (disposed) return;
     disposed = true;
-    await pipes.dispose();
     await booted?.dispose();
   };
 
   return {
     hostVersion,
     protocolVersion: DESKTOP_HOST_PROTOCOL_VERSION,
+    origin,
     fetch,
     dispose,
   };
-}
-
-/** True after child entry can accept pipe Fetch (module loaded + API present). */
-export function isDesktopHostReady(): boolean {
-  return true;
 }
 
 function isDirectEntry(): boolean {
@@ -170,7 +156,7 @@ async function main(): Promise<void> {
   const projectDir = process.argv[2];
   if (projectDir === undefined || process.send === undefined) {
     throw new Error(
-      `${DESKTOP_HOST_PACKAGE_NAME}: expected project directory, byte pipes, and a Node IPC channel`,
+      `${DESKTOP_HOST_PACKAGE_NAME}: expected project directory and a Node IPC channel`,
     );
   }
 
@@ -179,9 +165,23 @@ async function main(): Promise<void> {
 
   const stop = (): Promise<void> => {
     stopping ??= (async () => {
-      await controller?.dispose();
-      if (process.connected) process.disconnect();
-      process.exitCode = process.exitCode ?? 0;
+      const disposeBudget = setTimeout(() => {
+        process.exit(process.exitCode ?? 0);
+      }, 8_000);
+      disposeBudget.unref?.();
+      try {
+        await controller?.dispose();
+      } finally {
+        clearTimeout(disposeBudget);
+      }
+      if (process.connected) {
+        try {
+          process.disconnect();
+        } catch {
+          // channel already gone
+        }
+      }
+      process.exit(process.exitCode ?? 0);
     })();
     return stopping;
   };
@@ -192,6 +192,7 @@ async function main(): Promise<void> {
       type: "ready",
       protocolVersion: DESKTOP_HOST_PROTOCOL_VERSION,
       hostVersion: controller.hostVersion,
+      origin: controller.origin,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

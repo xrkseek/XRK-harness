@@ -1,8 +1,9 @@
 /**
  * Electron process entry ([ADR-0008](../../../docs/adr/0008-desktop-shell-private-host.md)).
  *
- * Wires: single-instance · window lifecycle · `xrk-app://` · private Host over
- * framed pipes (same Face as `xrkh web`) · narrow preload · update coordinator.
+ * Wires: single-instance · window lifecycle · private Host on **127.0.0.1
+ * loopback** (DSH Desktop posture) · narrow preload · update coordinator.
+ * `xrk-app://` remains for splash / static until Host ready.
  */
 
 import path from "node:path";
@@ -17,15 +18,24 @@ import {
   shell,
 } from "electron";
 import { registerDesktopIpcHandlers } from "./desktop-ipc.js";
+import {
+  getDesktopHostPhase,
+  isDesktopHostFetchReady,
+  markDesktopHostFetchReady,
+  publishDesktopHostFailed,
+  publishDesktopHostPhase,
+  resetDesktopHostFetchReady,
+  scheduleDesktopHostFetchAttach,
+} from "./desktop-host-attach.js";
 import { startDesktopMain } from "./desktop-bootstrap.js";
 import {
   attachDesktopNavigationGuard,
   desktopAppIndexUrl,
+  desktopLoopbackIndexUrl,
   DESKTOP_PROTOCOL_PRIVILEGES,
   DESKTOP_PROTOCOL_SCHEME,
   handleDesktopProtocolRequest,
 } from "./protocol.js";
-import { fetchDesktopHostFromProtocol } from "./protocol-host-fetch.js";
 import {
   DESKTOP_WEB_PREFERENCES,
   DESKTOP_WINDOW_DEFAULTS,
@@ -39,7 +49,7 @@ import {
   runDesktopManualUpdateCheck,
 } from "./desktop-update-shell.js";
 import { resolveDesktopLocale } from "./locale.js";
-import type { DesktopUpdateState } from "./ipc.js";
+import { DESKTOP_IPC, type DesktopUpdateState } from "./ipc.js";
 import { DesktopUpdateCoordinator } from "./update-coordinator.js";
 import {
   DesktopUpdateSchedule,
@@ -112,10 +122,21 @@ function broadcastUpdate(state: DesktopUpdateState): DesktopUpdateState {
   return publishDesktopUpdateState(BrowserWindow.getAllWindows(), state);
 }
 
+function loadAllWindowsOnHostOrigin(origin: string): void {
+  const url = desktopLoopbackIndexUrl(origin, { platform: process.platform });
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed()) continue;
+    void window.loadURL(url);
+  }
+}
+
 let desktopHost: DesktopHostProcess | undefined;
+/** Set on will-quit so Host exit does not auto-restart into a dying app. */
+let desktopQuitting = false;
 
 async function startDesktopHostCarrier(
   webRoot: string,
+  hooks: { readonly onSpawned?: () => void } = {},
 ): Promise<DesktopHostProcess | undefined> {
   try {
     const runtime = app.isPackaged
@@ -133,10 +154,11 @@ async function startDesktopHostCarrier(
       env: {
         XRK_HOME: xrkHome,
         XRK_WEB_DIST: runtime.webDist,
-        ...(runtime.harnessCliBin
-          ? { XRK_HARNESS_BIN: runtime.harnessCliBin }
-          : {}),
+        // Bundled harness-cli — Settings plugin mutate never falls back to PATH.
+        XRK_HARNESS_BIN: runtime.harnessCliBin,
+        XRK_SURFACE: "desktop",
       },
+      ...(hooks.onSpawned !== undefined ? { onSpawned: hooks.onSpawned } : {}),
     });
     await host.start();
     desktopHost = host;
@@ -156,6 +178,7 @@ async function startDesktopHostCarrier(
 const ownsDesktopInstance = startDesktopMain(app, {
   createWindow: () => createMainBrowserWindow(),
   loadPrimary: (window) => {
+    // Splash on custom protocol until Host loopback is ready (DSH: wait then load).
     void (window as BrowserWindow).loadURL(
       desktopAppIndexUrl(DESKTOP_PROTOCOL_SCHEME, { platform: process.platform }),
     );
@@ -180,44 +203,69 @@ const ownsDesktopInstance = startDesktopMain(app, {
       return;
     }
 
-    // Register `xrk-app://` before Host finishes so Chromium never falls through
-    // to the OS “get an app for this link” dialog. Static webRoot serves until
-    // fetchApp is wired; Face/API then go through the private Host carrier.
+    // Keep `xrk-app://` for splash / overlay assets while Host starts.
     const xrkHome = resolveDesktopHarnessHome({
       isPackaged: app.isPackaged,
       desktopAppRoot: DESKTOP_APP_ROOT,
     });
     // Always point at the overlay path — missing dir is a soft 404 until install.
     const overlayRoot = path.join(xrkHome, "plugins", "web");
-    let fetchApp: ((request: Request) => Promise<Response>) | undefined;
     protocol.handle(DESKTOP_PROTOCOL_SCHEME, (request) =>
       handleDesktopProtocolRequest(request, {
         webRoot,
         overlayRoot,
-        ...(fetchApp !== undefined ? { fetchApp } : {}),
       }),
     );
 
-    const host = await startDesktopHostCarrier(webRoot);
-    if (host !== undefined) {
-      // Defer into a timer so Chromium's protocol.handle wait does not nest
-      // Host pipe I/O on the same turn (Electron custom-scheme deadlock).
-      fetchApp = (request) =>
-        new Promise((resolve, reject) => {
-          setTimeout(() => {
-            void fetchDesktopHostFromProtocol(host, request).then(
-              resolve,
-              reject,
-            );
-          }, 0);
-        });
-    }
+    resetDesktopHostFetchReady();
+    const liveWindows = (): Electron.WebContents[] =>
+      BrowserWindow.getAllWindows()
+        .filter((win) => !win.isDestroyed())
+        .map((win) => win.webContents);
+    scheduleDesktopHostFetchAttach({
+      start: (hooks) => startDesktopHostCarrier(webRoot, hooks),
+      onPhase: (phase) => {
+        publishDesktopHostPhase(phase, DESKTOP_IPC.hostPhase, liveWindows());
+      },
+      attach: (host) => {
+        const origin = host.faceOrigin;
+        if (origin === undefined) {
+          publishDesktopHostFailed(
+            DESKTOP_IPC.hostFailed,
+            liveWindows(),
+            "Desktop Host ready without loopback origin",
+          );
+          return;
+        }
+        loadAllWindowsOnHostOrigin(origin);
+        markDesktopHostFetchReady(
+          DESKTOP_IPC.hostReady,
+          DESKTOP_IPC.hostPhase,
+          liveWindows(),
+        );
+      },
+      detach: () => {
+        desktopHost = undefined;
+      },
+      restartMaxAttempts: 5,
+      restartDelayMs: 750,
+      shouldAbortRestart: () => desktopQuitting,
+      onFailed: (error) => {
+        publishDesktopHostFailed(
+          DESKTOP_IPC.hostFailed,
+          liveWindows(),
+          error.message,
+        );
+      },
+    });
   },
 });
 
 app.on("will-quit", () => {
+  desktopQuitting = true;
   const host = desktopHost;
   desktopHost = undefined;
+  resetDesktopHostFetchReady();
   if (host !== undefined) {
     void host.stop().catch((error: unknown) => {
       console.error(error);
@@ -286,6 +334,8 @@ async function bootstrapDesktopUpdates(): Promise<void> {
       if (win === null || win.isDestroyed()) return undefined;
       return win;
     },
+    isHostReady: () => isDesktopHostFetchReady(),
+    getHostPhase: () => getDesktopHostPhase(),
   });
 
   installDesktopApplicationMenu({

@@ -170,6 +170,20 @@ export function createElectronBuilderConfig(
           `xrk desktop afterPack: Host deps missing after copy (${hostMarker})`,
         );
       }
+      const harnessCliBin = join(
+        hostDest,
+        "node_modules",
+        "@xrkseek",
+        "harness-cli",
+        "dist",
+        "bin.js",
+      );
+      if (!existsSync(harnessCliBin)) {
+        throw new Error(
+          `xrk desktop afterPack: harness-cli missing after copy (${harnessCliBin}); ` +
+            "Settings plugin install/update/remove needs XRK_HARNESS_BIN",
+        );
+      }
       if (!updateUrl) return;
       const yml = [
         "provider: generic",

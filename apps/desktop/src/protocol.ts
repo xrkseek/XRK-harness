@@ -125,8 +125,19 @@ export function isDesktopProtocolUrl(
   }
 }
 
+/** True when URL is the Desktop Host loopback Face (127.0.0.1 only). */
+export function isDesktopLoopbackUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    return parsed.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Block navigations that leave the custom protocol (open handlers stay deny-all elsewhere).
+ * Block navigations that leave the product surface (custom protocol or Host loopback).
  */
 export function attachDesktopNavigationGuard(
   webContents: {
@@ -138,7 +149,8 @@ export function attachDesktopNavigationGuard(
   scheme: string = DESKTOP_PROTOCOL_SCHEME,
 ): void {
   webContents.on("will-navigate", (event, url) => {
-    if (!isDesktopProtocolUrl(url, scheme)) event.preventDefault();
+    if (isDesktopProtocolUrl(url, scheme) || isDesktopLoopbackUrl(url)) return;
+    event.preventDefault();
   });
 }
 
@@ -146,7 +158,7 @@ export function attachDesktopNavigationGuard(
 export const DESKTOP_TITLEBAR_INSET_PX = 36
 
 /**
- * Primary product URL for the main window.
+ * Primary product URL for the main window (custom-protocol splash / legacy).
  * Stamps `dsh-desktop-*` query params so community workbenches
  * (`xrkh-better-sidebar`) yield the custom titlebar via their public contract.
  */
@@ -168,21 +180,75 @@ export function desktopAppIndexUrl(
 }
 
 /**
+ * Product UI URL on the Host loopback origin (DSH Desktop posture).
+ * Same `dsh-desktop-*` query stamps as {@link desktopAppIndexUrl}.
+ */
+export function desktopLoopbackIndexUrl(
+  origin: string,
+  options?: {
+    readonly platform?: NodeJS.Platform
+    readonly titlebarInset?: number
+  },
+): string {
+  const platform = options?.platform ?? process.platform
+  const inset = options?.titlebarInset ?? DESKTOP_TITLEBAR_INSET_PX
+  const url = new URL("/index.html", origin.replace(/\/$/u, ""))
+  url.searchParams.set("dsh-desktop-mode", "advanced")
+  url.searchParams.set("dsh-desktop-platform", platform)
+  url.searchParams.set("dsh-desktop-titlebar-inset", String(inset))
+  return url.href
+}
+
+/**
+ * True when a pathname looks like a packaged Web static asset (hashed `/assets/*`
+ * or a common static extension). Host fallthrough must not SPA-fake these misses.
+ */
+export function isDesktopStaticAssetPath(pathname: string): boolean {
+  if (pathname === "/assets" || pathname.startsWith("/assets/")) return true;
+  return /\.(?:js|mjs|cjs|css|map|woff2?|ttf|otf|png|jpe?g|gif|svg|ico|webp|html)$/iu.test(
+    pathname,
+  );
+}
+
+/**
  * Paths that must hit the Desktop Host Fetch carrier (not static webRoot).
- * `/api/*` = Face RPC; `/sidebar/*` = workbench / plan preview / better-sidebar;
- * product entry + boot = Host-merged first-party + ~/.xrk community clients.
+ * `/api/*` = Face RPC; `/sidebar/*` = workbench; `/boot.json` = Host-merged boot;
+ * dsh-compat surfaces (`/modlens`, `/_dsh/`, …) = community Host HTTP.
+ *
+ * Product entry (`/` · `/index.html`) stays on packaged disk for first paint —
+ * Host Fetch is optional and must not block the shell window.
+ *
+ * When Host Fetch is up, {@link handleDesktopProtocolRequest} also forwards every
+ * other non-static path (and all non-GET/HEAD) — this list is the early / Host-down set.
  */
 export function isDesktopHostForwardPath(pathname: string): boolean {
   if (pathname === "/api" || pathname.startsWith("/api/")) return true;
   if (pathname === "/sidebar" || pathname.startsWith("/sidebar/")) return true;
-  if (pathname === "/" || pathname === "/index.html") return true;
   if (pathname === "/boot.json") return true;
+  // High-traffic dsh-compat prefixes (avoid a wasted static miss on every probe).
+  if (pathname === "/modlens" || pathname.startsWith("/modlens/")) return true;
+  if (pathname === "/modsearch" || pathname.startsWith("/modsearch/")) return true;
+  if (pathname === "/niulai-kws" || pathname.startsWith("/niulai-kws/")) return true;
+  if (pathname === "/auto-review" || pathname.startsWith("/auto-review/")) return true;
+  if (pathname === "/skin-assets" || pathname.startsWith("/skin-assets/")) return true;
+  if (pathname.startsWith("/_dsh/")) return true;
   return false;
+}
+
+function isMutatingMethod(method: string): boolean {
+  const m = method.toUpperCase();
+  return m !== "GET" && m !== "HEAD";
 }
 
 /**
  * Route one `xrk-app://` request: `shell` → shellRoot, Host routes → Fetch,
  * else static `webRoot` (with `/plugins/*` Host fallthrough for community clients).
+ *
+ * Host-up contract (fetchApp set):
+ * - known Host surfaces + mutating methods → Host immediately
+ * - `/plugins/*` → packaged disk, then Host, then overlay
+ * - static asset paths → disk only (honest 404)
+ * - everything else → Host (community roots · unlisted dsh-compat · …)
  */
 export async function handleDesktopProtocolRequest(
   request: Request,
@@ -208,18 +274,36 @@ export async function handleDesktopProtocolRequest(
     }
     return serveDesktopStaticAsset(options.shellRoot, request);
   }
-  // Face/API / sidebar / product entry must hit the Host carrier. Accept any
-  // app-owned hostname so the renderer can put long-lived SSE on
+
+  const fetchApp = options.fetchApp;
+  const hostUp = fetchApp !== undefined;
+
+  // First paint: product HTML from packaged webRoot even while Host is warming
+  // (static boot inject still merges overlayRoot). Face / boot.json / sidebar wait.
+  if (
+    url.hostname === "app" &&
+    (url.pathname === "/" || url.pathname === "/index.html") &&
+    (request.method === "GET" || request.method === "HEAD")
+  ) {
+    const indexUrl =
+      url.pathname === "/"
+        ? new URL("/index.html", request.url).href
+        : request.url;
+    return serveDesktopStaticAsset(
+      options.webRoot,
+      new Request(indexUrl, { method: request.method, headers: request.headers }),
+      staticOpts,
+    );
+  }
+
+  // Face/API / sidebar / boot must hit the Desktop Host Fetch carrier.
+  // Accept any app-owned hostname so the renderer can put long-lived SSE on
   // `xrk-app://stream` (separate Chromium connection pool from unary
   // `xrk-app://app`).
   if (isDesktopHostForwardPath(url.pathname)) {
-    if (options.fetchApp === undefined) {
-      // Static MVP / tests: only product entry can fall through to webRoot.
-      if (
-        url.pathname === "/" ||
-        url.pathname === "/index.html" ||
-        url.pathname === "/boot.json"
-      ) {
+    if (!hostUp) {
+      // Host-down: serve packaged boot.json so the shell can mount before Face.
+      if (url.pathname === "/boot.json") {
         if (url.hostname !== "app") {
           return new Response(null, { status: 404 });
         }
@@ -227,23 +311,40 @@ export async function handleDesktopProtocolRequest(
       }
       return new Response(null, { status: 503 });
     }
-    return options.fetchApp(request);
+    return fetchApp(request);
   }
+
   if (url.hostname !== "app") {
     return new Response(null, { status: 404 });
   }
+
+  // Mutating verbs are never static files — do not let serveDesktopStaticAsset
+  // answer 405 before Host (e.g. POST /dsh-market/install).
+  if (hostUp && isMutatingMethod(request.method)) {
+    return fetchApp(request);
+  }
+
   // Packaged first-party plugins first; community clients live in Host overlay
   // (or local overlayRoot when Host Fetch is unset).
   if (url.pathname.startsWith("/plugins/")) {
     const fromDisk = await serveDesktopStaticAsset(options.webRoot, request);
     if (fromDisk.status !== 404) return fromDisk;
-    if (options.fetchApp !== undefined) {
-      return options.fetchApp(request);
-    }
+    if (hostUp) return fetchApp(request);
     if (options.overlayRoot !== undefined) {
       return serveDesktopStaticAsset(options.overlayRoot, request);
     }
     return fromDisk;
   }
+
+  // Hashed /assets and extensioned statics stay on disk (honest miss = 404).
+  if (isDesktopStaticAssetPath(url.pathname)) {
+    return serveDesktopStaticAsset(options.webRoot, request, staticOpts);
+  }
+
+  // Host-up: every remaining path is a Host surface (community root, unlisted
+  // dsh-compat prefix, …). Skip a wasted static 404 round-trip.
+  if (hostUp) return fetchApp(request);
+
+  // Host-down static MVP: try disk; miss stays 404.
   return serveDesktopStaticAsset(options.webRoot, request, staticOpts);
 }

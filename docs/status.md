@@ -2,7 +2,7 @@
 
 > **读者**：全员（对外说话以本页为准）
 
-三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.4.12**（`0.4.x` 补丁线，接管 `@latest`；上一补丁 **v0.4.11**；上一正式线 **v0.3.11**；上一轮预览末号 **v0.2.7**；旧正式文稿 **v0.1.31**）。**本页主路径表当前均为能跑**；扩展能力节另列已补 / 暂缓（标 **未做** 不得当作已支持）。
+三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.5.0**（`0.5.x` 正式线，接管 `@latest`；上一预览终态 **v0.4.12**；上一正式线 **v0.3.11**；上一轮预览末号 **v0.2.7**；旧正式文稿 **v0.1.31**）。**本页主路径表当前均为能跑**；扩展能力节另列已补 / 暂缓（标 **未做** 不得当作已支持）。
 
 XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在会话、工具管道、子代理与壳交互上的长处；落点以本仓契约与代码为准。
 
@@ -49,14 +49,14 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | `@` 目录 Tab / 行 chevron drill + 面包屑（Enter 插入 folder chip） | **能跑** |
 | Composer 富文本（Lexical） | **能跑**：`DraftEditor` + chip DecoratorNode + keymap（IME / modified-Enter 放行 / Shift+Tab=`tabBack`）+ `data-composer-composing` 占位抑制；keymap-routing · InputBar IME/placeholder/focus 测绿 |
 | 提交 echo（`PendingSubmission`） | **能跑**：`beginSubmission` 同步插本地回显；ChatView / QueueDock `data-submission-echo`；同帧按 `rpcId` 与 durable user/queue 去重；折叠条保留「发送中…」 |
-| 任意类型文件上传 · 侧栏预览 · 可继续子代理排队/Steer/Stop · Open in · feedback | **能跑**（见主路径表与 [v0.4.4](./releases/v0.4.4.md)；`pnpm test:web` **21/21**）；用户气泡文件卡经 `conversation.message.files` → `MessageFileCard`（块序混排；槽空时内联回退） |
+| 任意类型文件上传 · 侧栏预览 · 可继续子代理排队/Steer/Stop · Open in · feedback | **能跑**（见主路径表与 [v0.4.4](./releases/v0.4.4.md)；`pnpm test:web` **21/21**）；用户气泡文件卡经 `conversation.message.files` → `MessageFileCard`；工具结果 `type: "file"` 经 `tool.call.files` 同卡（块序混排；槽空时内联回退） |
 | 右侧工作台（文件树 / 预览 / 终端 / 浏览器） | **能跑**：流内 `details`=Status；浮动工作台=Host `/sidebar/*` + 社区 `xrkh-better-sidebar`；首方薄壳 `@xrkseek/client-ui-workbench`（树+预览 · 会话头「文件」入口 · 有 `ctx.betterSidebar` 时面板让位、按钮仍唤醒社区侧栏）。**不**迁 dsh dockkit 为默认右栏（见 [sidebar-workbench](./sidebar-workbench.md)） |
 | 侧栏 Office/URL/子代理/计划预览 **契约**（protocol 载荷 · policy `host.open`/`sidebar.*`/`office.connect` · Face bridge 可选缝） | **能跑**（见 [policy](./policy.md) · `@xrkseek/protocol` `sidebar-previews`） |
 | 侧栏 Host policy 闸门（`/sidebar` · `host.open`/`sidebar.embed`/`sidebar.fs`） | **能跑**（`ask`→Face 审批缝 / 无缝→`policy-ask`；见 [policy](./policy.md)） |
 | `/office` `office.connect` 闸门 | **能跑**（configure/reconnect/test/remove；status 不门禁；见 [policy](./policy.md)） |
 | Office/计划完整预览 UI 页签 | **能跑**（详情栏计划 / Office 页签读已有 `plan.preview` 与 `/office` status；不新增协议字段） |
 | `subagents.preview` / `plan.preview` Host RPC | **能跑**（`SidebarFaceBridge` + `/sidebar/api/*`；复用 Face 投影 / 子代理链路，不复制 history） |
-| Desktop 整包 | **未稳**（ADR-0008：`package:desktop` 流水线 + **代码签名闸门**已开——Windows SafeNet token / macOS identity+notarize；壳侧 **检查更新 / 定时轮询 / 安装重启** 已接 electron-updater；`XRK_DESKTOP_PACKAGE=1` 产包需 optional electron-builder；`pnpm clean:desktop` 清产物；公开频道上传仍待凭据） |
+| Desktop 整包 | **能跑**（ADR-0008：`package:desktop` 产 **`win-x64` · `mac-arm64` · `mac-x64`**；内嵌 Host + 组装 Web；`desktop-host-attach` 先壳后 Host；壳侧 **检查更新 / 定时轮询 / 安装重启** 已接 electron-updater；未签名包可本地安装使用；Windows SafeNet / macOS notarize 与公开 COS 上传仍凭据门控） |
 
 #### 底层能力差距
 
@@ -76,7 +76,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | Policy 热重载 · YAML/TOML ruleset | JSON / YAML / TOML 同构 v1（`loadPolicyRulesetFile` 按扩展名解码 → `parsePolicyRuleset` → `composeHostPolicyEngine`；热重载共用）；无第二引擎 | JSON · YAML · TOML **能跑**（见 [policy](./policy.md)） |
 | Host 侧栏 / open / Office policy 闸门 | `/sidebar`：`host.open` · `sidebar.embed` · `sidebar.fs`；`/office`：`office.connect`（mutation）；无 `XRK_POLICY_FILE` 时 Host 注入默认引擎；`kind:policy` 插件规则在刷新时并入（文件规则优先）；`ask`→Face `requestHostGate`，无缝→`policy-ask` | **能跑** |
 | 交互式浏览器工具（`browser_*`） | `browser_open` / `browser_snapshot` / `browser_act`（`click`·`type`·**`scroll`·`press`·`back`**；默认 HTTP 快照 · `@eN`；Settings → Plugins → Browser 或 `XRK_BROWSER_CDP_URL` 时走 Chrome DevTools）；`browser_vision` 截图进附件；**`browser_vault_list` / `browser_vault_fill`**（Face 凭证不透明句柄；密钥永不进 tool result）；**会话级 runtime 共享** · `tool/result.error.code` | **能跑**（见 [web-tools](./web-tools.md)） |
-| Desktop 产品入口 | 默认入口仍是 `xrkh web` / CLI。阶段 **first-wave-package**：`pnpm package:desktop` 校验/产包（**`win-x64` · `mac-arm64` · `mac-x64`**）；`pnpm upload:desktop` 校验/镜像上传更新频道；`pnpm dev:desktop` 仍为开发投影。`isDesktopProductReady()===true`；`installerShipped===true`（安装包仍非 day-1 入口） | **未稳**（ADR-0008；公开 COS HTTPS PUT / 实网签名发版仍凭据门控） |
+| Desktop 产品入口 | Desktop 安装包与 `pnpm package:desktop` / `dev:desktop` / `start:desktop` **能跑**（`isDesktopProductReady()===true` · `installerShipped===true`；内嵌 Host 读 `~/.xrk`）；跨平台无 Electron 时默认仍是 `xrkh web` / CLI；`pnpm upload:desktop` 校验更新频道 | **能跑**（ADR-0008；公开 COS HTTPS PUT / 实网签名频道仍凭据门控，不影响本机安装包可用性） |
 | Agent Teams / 协作图 | 子代理委托之上的图 + **任务板**：`delegates`/`peer` 边；spawn 角色模板；`output_schema`；queue|steer；takeover；**managed worktree** 分配/回收/owner 元数据并绑定 `teamTasks.worktree*`；**`mergeIntoParent`（ff-only 合回主仓）**；Status Overview **任务板 UI**（按状态排序 · worktree · `externalResume` · 打开/暂停/恢复 · **冷恢复** · **合回主仓**→`worktree.merge`）；协作图厚化：`unlink`/`remove` · `neighbors`/`depth` · Status 节点 `activity`/`depth` · 模型面 **`team_graph`**（view/link/unlink/role/announce） | **能跑** |
 | WorkflowEngine · Ralph | Cordis 抽象 `WorkflowEngine` + **`InProcessWorkflowEngine`** + **`IsolatingWorkflowEngine`**（worker 隔离；`createAgent` 回桥；**`await tools.name(args)`** 与 Code Mode 同形，经 Host Face 工具表回桥；禁 `run_code`/`workflow`/`ralph` 嵌套）；**Host 默认挂载 Isolating**（`hostPublic.workflowEngine`）；Face **`ralph`**（`maxResultChars`）；Cordis `tool-workflow` 消费方仍需组合挂载 | Face `ralph` **能跑**；Host Isolating + tools.* **能跑**；完整沙箱 Node PTC 进程隔离 **未做** |
 | Code Mode / 程序内调工具 | `--presentation code`：`run_code` + `await tools.<name>(args)` 经 bridge 重入 composition pipeline（AsyncFunction）；无 bridge 仍 Worker/SSH snippet | **能跑**（实验；见 [code-mode](./code-mode.md)） |
@@ -92,9 +92,12 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | 模型面 session 召回 | Face 工具 **`session_search` / `session_read` / `session_trace`**（cwd 权威 · FTS/扫描 · 字节预算快照 · 子代理谱系）；`@session` prepare 按 `maxReferenceBytes`（默认 64KiB）注入不可信召回 | **能跑** |
 | 跨产品 Session Format 互通 | 角色 JSONL ↔ XRK 事件（`importSessionInterchange` / `exportSessionInterchange`）；`@xrkseek/session-format` 相邻迁移链（sqlite schema 0→1→2→3）+ 制品探测；导入落到 `chat-import/inbox`，**不**写入 `sessions.db`；**互通 ≠ Session Format V3**（ADR-0009，探测到外国 Format 头则拒绝） | **能跑** |
 | Python SDK | `sdks/python` 的 HTTP `HarnessClient`（health · sessions · admit · turn · chat · chat/stream）以及 `StdioHarnessClient`（拉起本机 `xrkh acp` 做 stdio JSON-RPC 轮次）；不是第二宿主（ADR-0001） | **能跑** |
-| 插件运行时热卸载成对检查 | `reconcileManagedProcessPlugins` 支持 `reloadIds` + ESM `?mtime=`（install/update/reload 热挂载）；返回 `pairing`（unload 与 register 成对）；`kind:host` 路由按当前注册表现场重建；Settings 安装结算 TerminalBlock + 刷新页面 CTA；**client 半部**：Host 热改 `liveBoot` + `extraRoots`（首装创建 `plugins/web` 后无需重启 Host 即可 `/plugins/*`），浏览器仍需硬刷新（产品 boot 省略 HMR） | **能跑**（浏览器 client 半部仍需硬刷新；无产品内 soft remount） |
-| Desktop 自绘标题栏 | frameless 壳 + `DesktopChrome`（拖拽 · 刷新 · 窗控）· `xrkDesktop.window` IPC | **能跑**（需 Desktop 重建吃 Host/UI） |
-| Desktop host 事件下行 | `xrk-app://stream` 同时开 mux + **host** SSE；unary 在 `xrk-app://app`；`host/session-*` · `host/remote-event`（Settings/MCP）实时到壳 | **能跑**（见 [host-face](./host-face.md)「Web / Desktop 载波」） |
+| 插件运行时热卸载成对检查 | `reconcileManagedProcessPlugins` 支持 `reloadIds` + ESM `?mtime=`（install/update/reload 热挂载）；返回 `pairing`（unload 与 register 成对）；`kind:host` 路由按当前注册表现场重建；Settings 安装 UI session 跨模态开关保留 TerminalBlock / 装完刷新 CTA；**client 半部**：Host 热改 `liveBoot` + `extraRoots`（首装创建 `plugins/web` 后无需重启 Host 即可 `/plugins/*`），浏览器仍需硬刷新（产品 boot 省略 HMR） | **能跑**（浏览器 client 半部仍需硬刷新；无产品内 soft remount） |
+| Desktop 自绘标题栏 | frameless 壳 + `DesktopChrome`（拖拽 · 刷新 · 窗控；**不含**会话日志）· `xrkDesktop.window` IPC；会话工具在 `conversation.session.header.utilities` | **能跑**（需 Desktop 重建吃 Host/UI；见 [host-face](./host-face.md)「壳 chrome」） |
+| 壳连接进度指示 | `ConnectionState` + `ConnectionPhase` + `sessions.phase`；转圈至会话列表 `ready`；Desktop 默认 `describeBeforeStreams` | **能跑**（Web / Desktop 共用；见 [host-face](./host-face.md)「连接进度」） |
+| Desktop 内置 harness-cli | Host 旁 `@xrkseek/harness-cli`；启动恒设 `XRK_HARNESS_BIN`（独占，不回落 PATH 全局 `xrkh`）；Settings 装/更/删插件 | **能跑**（需 Desktop 重建；缺 CLI 则 Host 起不来） |
+| Desktop host 事件下行 | loopback 同源 WebSocket mux + host；unary 同 origin；`host/session-*` · `host/remote-event` 实时到壳 | **能跑**（见 [host-face](./host-face.md)「Web / Desktop 载波」） |
+| Desktop Face 载波 | Host listen **`127.0.0.1:<ephemeral>`**；Electron `loadURL`；`xrk-app://` 仅闪屏；无 Face 分帧管道 | **能跑**（ADR-0008 / DSH；见 [host-face](./host-face.md)） |
 | GenUI 浏览器端 runtime bundle | `/dsh-genui/runtime.js`：DOM mount · custom elements · 可选 Host preview；库 CRUD / npm **能跑** | **能跑**（见 [community-plugins.md](./community-plugins.md)） |
 | Mnemon 真记忆引擎 | 文档 CRUD **能跑**；`search` / `graph` / `bodies` 走文档 keyword + `[[wiki]]` / `#tag` 图（不是向量库） | **能跑** |
 | 策展记忆 | `memory`：`{XRK_HOME}/memories` 冻进系统提示；工具 add/replace/remove/**list**；回合后启发式笔记；会话结束 **leased Phase1** + 可选 **Phase2 LLM**（单飞 · Status `curatedMemory`）；与 Mnemon 分开 | **能跑**（见 [curated-memory](./curated-memory.md)；Settings → Plugins → 策展记忆） |
@@ -114,8 +117,8 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | A2A 出站 / 入站 | `@xrkseek/a2a`：出站 `a2a_discover/call/list/history`（`SendMessage`，method-not-found 时回退 `message/send`）；**入站** Settings `a2a-inbound` / `XRK_A2A_INBOUND`：Agent Card + `POST /a2a` → Face 注入；入站方法别名 `SendMessage`/`message/send` + **tasks get/list/cancel**（内存 TaskStore）；`xrkh doctor` `a2a-inbound`；无 SSE/push/subscribe；完整 PTC SDK **未做** | **能跑**（入站 opt-in · tasks 查询） |
 | 外部 Agent 运行时委托 | `subagent.runtime`：`in-process`（默认）· `acp` · `app-server` · `claude-code`；Settings Plugins `external-agent` 或 env；`acp`/`app-server` 支持 `run_in_background` + follow-up/interrupt；**冷 resume sidecar**（`external-agent-handles.json` · Status `ext:…/cold` · app-server `thread/resume` / ACP `session/load`）；`claude-code` 仍 one-shot print | **能跑**（见 [external-agent.md](./external-agent.md)） |
 | 语音 Host | `text_to_speech` · `voice_transcribe` · `voice_session`；Provider：memory / OpenAI HTTP；Settings → Voice（缺钥 UI 告警 · `describeVoiceAccess` / doctor 同源文案）；mic/WebRTC 在客户端；**唤醒词未做** | **能跑**（见 [voice.md](./voice.md)；`XRK_VOICE` CI 旁路；唤醒后置） |
-| 图像生成 | `image_generate`；结果 content=`[text,image…]` + 聊天预览；`attachmentId` 可再 `read_image`；Provider：memory / OpenAI / FAL（满编 catalog） / xAI / OpenRouter / DeepInfra（仅 t2i） / Krea / Meta Muse（仅 t2i）；可选 AttachmentStore；**文生图 + 图生图/编辑**（schema 按 `capabilities()`） | **能跑**（见 [image-gen.md](./image-gen.md)；Hermes 主路径矩阵） |
-| 视频生成 | `video_generate`；异步作业；Provider：memory / OpenAI / FAL（满编 family） / xAI / OpenRouter / DeepInfra；**文生视频 + 图生视频/首帧**；**edit/extend**（OpenAI · xAI）+ `action=catalog` | **能跑**（见 [video-gen.md](./video-gen.md)；Hermes 主路径矩阵） |
+| 图像生成 | `image_generate`；结果 content=`[text,image…]` + 助手气泡图库；**工具行**折叠可选缩略图、展开为预览卡（信封作 meta）；`attachmentId` 可再 `read_image`；Provider：memory / OpenAI / FAL（满编 catalog） / xAI / OpenRouter / DeepInfra（仅 t2i） / Krea / Meta Muse（仅 t2i）；可选 AttachmentStore；**文生图 + 图生图/编辑**（schema 按 `capabilities()`） | **能跑**（见 [image-gen.md](./image-gen.md)；Hermes 主路径矩阵） |
+| 视频生成 | `video_generate`；异步作业；完成后工具行展开为**文件/媒体卡**（无内嵌播放器）；Provider：memory / OpenAI / FAL（满编 family） / xAI / OpenRouter / DeepInfra；**文生视频 + 图生视频/首帧**；**edit/extend**（OpenAI · xAI）+ `action=catalog` | **能跑**（见 [video-gen.md](./video-gen.md)；Hermes 主路径矩阵） |
 | 视频理解 | `video_analyze`；整段视频 URL/工作区路径 → 多模态 LLM 文本分析（Hermes；**不抽帧**）；与 `browser_vision` / `video_generate` / `read_image` 分界；Provider：memory / OpenAI-compatible `video_url` | **能跑**（见 [video-analyze.md](./video-analyze.md)；Settings → Plugins → Video analyze；`XRK_VIDEO_ANALYZE` CI 旁路） |
 | 回合回退 · 工作区快照 | `WorkspaceCheckpointStore`：影子 git；Host 每轮前自动 snapshot；Face `session.checkpoint.*` · `/rollback` · 消息 Restore；与 `session.fork` / fork-cut（仅血缘）分界见 [turn-rewind.md](./turn-rewind.md) | **能跑**（需 `git`；`XRK_CHECKPOINTS=0` 关闭自动快照） |
 | MCP HTTP · OAuth 设备码 | `loginWithDeviceCode` + `McpDeviceTokenStore`（RFC 8628：`authorization_pending` / `slow_down` 续等，`access_denied` / `expired_token` 立即失败；原子落盘 `~/.xrk/mcp-tokens/<server>.json` · best-effort 0600 · 到期前 refresh）；端点缺失时按 RFC 9728 / RFC 8414 发现；`auth` 只挂在 HTTP transport；CLI `xrkh mcp login/status/logout/list/path`；Settings MCP 卡经 Face `mcp.oauth.login|status|logout` 同路径（pending：取消 / 复制码 / 自动打开验证页；已登录：到期与 refresh 徽标；IdP 无设备码 → 诚实错误；**auth-code+PKCE 未做**） | **能跑**（见 [modules/mcp.md](./modules/mcp.md)、[configuration.md](./configuration.md)；需 IdP 支持设备码） |
@@ -129,38 +132,30 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | 图生图 / 图生视频 · 参考图编辑 | `image_generate` 参考图编辑 + `video_generate` 首帧 i2v / edit / extend / family catalog；**平台缝** `ToolDefinition.dynamicSchema`；**Provider 矩阵** memory · openai · fal · xai · openrouter · deepinfra · krea · meta-ai（视频至 deepinfra） | **能跑**（P0 多模态生成 + Hermes 主路径 Provider 体量） |
 | 图片 token 估算 / 请求图缩放 | `@xrkseek/attachment`：`estimateImageTokens` / `requestImageTokenDimensions`（DeepSeek V41 发布算法）+ `requestImageDimensions` / `longEdgeDimensions`；soft-budget 按附件宽高计 vision token；DeepSeek 路由 `resolveDeepSeekRequestImagePolicy(model, source)` 按 token 网格投影 `maxPixels` 再经 local request-image 降质；`request-image-bound` 仍有 20MB base64 上限 | **能跑** |
 | Vision region crop | `read_image.region` + `AttachmentStore.cropImageRegion`（Hermes `[x1,y1,x2,y2]`，裁剪在 admission normalize 前；本地仓 sharp；输出披露 crop offset） | **能跑** |
-
 | 会话级模型选择持久化 | `~/.xrk/session-models.json` sidecar；`/model` 写入并 Host 重启回灌 | **能跑** |
 | 模型模态声明编辑面 | `FaceModelEntry.inputModalities` + Settings 勾选；`createAdapter` 透传 catalog；Custom text-only 可拦图 | **能跑** |
-| diff 审阅体量 | `DiffBlock` 统一/分栏 + 同步滚动；`ChangedFiles` 流内审阅 + hover；概况栏 **「改动」页签** 持久审阅（`ctx.changesReview`；不迁 dsh 右栏 dockkit，见 [sidebar-workbench](./sidebar-workbench.md)） | **能跑** |
-| 轨迹展示分级 | `ui-trajectory` compact / detailed 双档（紧凑时折叠 turn·calls；非虚构四档） | **能跑** |
+| diff 审阅体量 | `DiffBlock` 统一/分栏 + 同步滚动；`ChangedFiles` 流内审阅 + hover；概况栏 **「改动」页签** 持久审阅（`ctx.changesReview`；见 [sidebar-workbench](./sidebar-workbench.md)） | **能跑** |
+| 轨迹展示分级 | `ui-trajectory` compact / detailed 双档（紧凑时折叠 turn·calls） | **能跑** |
 | 快捷键查看 / 搜索 / 自定义 / 恢复 | `Ctrl+/`（⌘+/）ShortcutsPanel：查看 + 搜索 + 点按改键 + 单条/全部恢复默认（`localStorage` `xrk.shortcuts.v1` 仅存覆盖；发送/换行固定） | **能跑** |
 | 定时任务运行记录 | `cron/executions.jsonl` 有界账本（≤1000）+ `cronjob` action=`runs`；重启保留 | **能跑** |
 | 时间上下文注入 | `XRK_TIME_CONTEXT_REFRESH_MS`（默认 60s）；follow-up 经 workspace block 刷新 | **能跑** |
-| 归档筛选 / 置顶 | 侧栏视图选项三态：隐藏已归档 / 全部 / 仅已归档（`ArchiveViewMode`；cwd 回挂 Face 已剥离的 membership）；Settings 归档页仍为搜索 + Unarchive；**置顶**：Face `pinnedSessionIds`（与 archive 互斥、newest-first）+ `workspace.pinSession`/`unpinSession` + `host/pinned-sessions-changed`；侧栏菜单置顶/取消置顶，`sectionMembers` 置顶领先 | **能跑** |
+| 归档筛选 / 置顶 | 侧栏三态 `ArchiveViewMode`；Settings 归档页搜索 + Unarchive；Face `pinnedSessionIds` + `workspace.pinSession`/`unpinSession` + `host/pinned-sessions-changed` | **能跑** |
 | 模型切换等待提示 | 切换中「准备中 · 减少等待…」+ 键盘 paneFocus / 搜索虚拟高亮 + `<mark>` 命中 + cell `:focus-visible` | **能跑** |
+| Desktop 首屏与 Host 并行 | `xrk-app://` 先出闪屏；Host ready 后 `loadURL` 回环 Face | **能跑**（见 [host-face](./host-face.md)） |
 
-### 缺口分阶段方案（对 DSH 0.1.7-rc.1/rc.2 · Hermes · Codex 参考）
+### 待补（社区兼容）
 
-- **P1 · 多模态生成打通**（对齐 Hermes `image_gen`/`video_gen`）：
-  1. ~~`image_generate` 增 `reference_images`/`image_url` + `edit`~~ **已落地**（动态 schema · OpenAI edits · attachment ids）；
-  2. ~~`video_generate` 增 `first_frame`/`reference_images`（i2v）+ edit/extend + family catalog~~ **已落地**；
-  3. 参考图走 AttachmentStore（工具面与 `read_image`/拖拽共用 intake）— 图/视频侧均已接。
-- **P2 · Vision 深度**：~~`read_image.region` crop + `video_analyze`~~ **已厚**（与 `browser_vision` 统一 intake 仍为超越项）。
-- **P2 · 图片 token / 请求图缩放**：~~V41 `estimateImageTokens` + DeepSeek request policy + soft-budget~~ **已厚**。
-- **P2 · 成本与模态**：~~`FaceModelEntry` + Settings 模态 + 会话 `/model` 持久~~ **已落地**。
-- **P2 · UI 体量**：~~diff 分栏 + 同步滚动~~ · ~~流内文件选择器审阅面~~ · ~~轨迹 compact/detailed~~ · ~~快捷键查看/搜索/自定义/恢复（Ctrl+/）~~ · ~~cron 跑史~~ · ~~时间注入（默认 60s）~~ **已落地**（hover 预览仍后置）。
-- **P3 · 打磨**：~~归档筛选三态~~ **已落地**；~~会话置顶（Face persist · 互斥 archive）~~ **已落地**；~~模型切换等待提示~~ **已落地**；~~Focus/语义高亮~~ **已落地**（composer ModelSelect）。
-- **P4 · 社区插件兼容面**（真源 `DSH_COMPAT_KNOWN_GAPS`，已诚实化）：
-  1. `web-panel-global-registry`：DSH 0.1.5+ 全局面板 `sidebar.panellist` / `main` seat 落点（需产品壳 slot 扩展，非 dsh-compat 本体；当前审计面已把 panellist 标记为 `missing-seat`，社区 client 的 `slots.register` 形状会被扫描诚实暴露，不会静默假装支持）；
-  2. `cordis-dual-half-inspect`：官方 `cordis_inspect_list`/`cordis_inspect_query` + mount/dispose 生命周期，按"不嵌入第三方 Host 内核"边界保持 honest-stub；
-  3. `third-party-di`：全量第三方 DI 非产品目标，未知 service 引用返回诚实 envelope。
+真源 `DSH_COMPAT_KNOWN_GAPS`：
+
+1. `web-panel-global-registry`：全局面板 `sidebar.panellist` / `main` 需产品壳 seat（非 dsh-compat 本体；审计标 `missing-seat`）。
+2. `cordis-dual-half-inspect`：不嵌第三方 Host 内核；fiber 保持 honest-stub。
+3. `third-party-di`：未知 service 回诚实 envelope。
 
 ## 正式使用
 
 | 层级 | 能做什么 | 前置 |
 | --- | --- | --- |
-| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.4.12** 当前 `@latest`（上一补丁 **v0.4.11**；上一正式线 **v0.3.11**；上一轮预览末号 **v0.2.7**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
+| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.5.0** 当前 `@latest`（上一预览终态 **v0.4.12**；上一正式线 **v0.3.11**；上一轮预览末号 **v0.2.7**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
 | **B — 浏览器硬刷** | `pnpm test:web`（不进 `pnpm check`） | Chromium；完整 `apps/web/dist` |
 | **C — 上架** | npmjs + GitHub Release（`@xrkseek/harness-cli`） | `pnpm release`；见 [publishing.md](./publishing.md) |
 
@@ -184,7 +179,7 @@ core* / 能力叶 → kernel | protocol | compose
 
 > **Audience**: Everyone (this page is the public capability truth)
 
-Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.4.12** (`0.4.x` patch line, owning `@latest`; previous patch **v0.4.11**; previous formal line **v0.3.11**; previous preview line end **v0.2.7**; legacy formal notes **v0.1.31**). **Main-path rows on this page are Working today**; the extended-capabilities section lists filled / deferred items (**Not done** must not be treated as supported).
+Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.5.0** (`0.5.x` formal line, owning `@latest`; prior preview close **v0.4.12**; previous formal line **v0.3.11**; previous preview line end **v0.2.7**; legacy formal notes **v0.1.31**). **Main-path rows on this page are Working today**; the extended-capabilities section lists filled / deferred items (**Not done** must not be treated as supported).
 
 XRK-Harness is an independently developed stack. It absorbs strengths from Codex and peer agent harnesses in session, tool pipeline, subagent, and shell UX; contracts and code in this repo are authoritative.
 
@@ -231,15 +226,19 @@ Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CL
 | `@` directory Tab / row-chevron drill + breadcrumb (Enter inserts folder chip) | **Working** |
 | Composer rich text (Lexical) | **Working**: `DraftEditor` + chip DecoratorNode + keymap (IME / modified-Enter passthrough / Shift+Tab=`tabBack`) + `data-composer-composing` placeholder suppress; keymap-routing · InputBar IME/placeholder/focus specs green |
 | Submission echo (`PendingSubmission`) | **Working**: `beginSubmission` inserts a local echo; ChatView / QueueDock `data-submission-echo`; same-render `rpcId` handoff vs durable user/queue; collapsed dock keeps “Sending…” |
-| Arbitrary file upload · sidebar preview · continuable subagent queue/Steer/Stop · Open in · feedback | **Working** (see main-path table and [v0.4.4](./releases/v0.4.4.md); `pnpm test:web` **21/21**); user-bubble file cards via `conversation.message.files` → `MessageFileCard` (block order; inline fallback when the slot is empty) |
+| Arbitrary file upload · sidebar preview · continuable subagent queue/Steer/Stop · Open in · feedback | **Working** (see main-path table and [v0.4.4](./releases/v0.4.4.md); `pnpm test:web` **21/21**); user-bubble file cards via `conversation.message.files` → `MessageFileCard`; tool-result `type: "file"` via `tool.call.files` (same cards; block order; inline fallback when the slot is empty) |
 | Right workbench (tree / preview / terminal / browser) | **Working**: in-flow `details`=Status; floating workbench=Host `/sidebar/*` + community `xrkh-better-sidebar`; first-party thin shell `@xrkseek/client-ui-workbench` (tree+preview · session-header **Files** entry · panel yields when `ctx.betterSidebar` is set, button still wakes the community side card). **No** dsh dockkit as the default rightbar (see [sidebar-workbench](./sidebar-workbench.md)) |
 | Sidebar Office/URL/subagent/plan preview **contract** (protocol payloads · policy `host.open`/`sidebar.*`/`office.connect` · optional Face bridge seams) | **Working** (see [policy](./policy.md) · `@xrkseek/protocol` `sidebar-previews`) |
 | Sidebar Host policy gates (`/sidebar` · `host.open`/`sidebar.embed`/`sidebar.fs`) | **Working** (`ask`→Face approval seam / no seam→`policy-ask`; see [policy](./policy.md)) |
 | `/office` `office.connect` gate | **Working** (configure/reconnect/test/remove; status ungated; see [policy](./policy.md)) |
 | Full Office/plan preview UI tabs | **Working** (details-column Plan / Office tabs read existing `plan.preview` and `/office` status; no new protocol fields) |
 | `subagents.preview` / `plan.preview` Host RPC | **Working** (`SidebarFaceBridge` + `/sidebar/api/*`; reuses Face projection / subagent links — no history copy) |
-| Desktop full package | **Unstable** (ADR-0008: `package:desktop` pipeline + **code-signing gates** open — Windows SafeNet token / macOS identity+notarize; shell **check-for-updates / scheduled poll / install-restart** wired to electron-updater; `XRK_DESKTOP_PACKAGE=1` needs optional electron-builder; `pnpm clean:desktop` clears artifacts; public update upload still credential-gated) |
-| Desktop host event downlink | `xrk-app://stream` opens mux **and** host SSE; unary on `xrk-app://app`; `host/session-*` · `host/remote-event` (Settings/MCP) reach the shell live | **Working** (see [host-face](./host-face.md) “Web / Desktop carriers”) |
+| Desktop full package | **Working** (ADR-0008: `package:desktop` produces **`win-x64` · `mac-arm64` · `mac-x64`**; embedded Host + assembled Web; `desktop-host-attach` paints shell before Host; shell **check-for-updates / scheduled poll / install-restart** on electron-updater; unsigned local installers usable; Windows SafeNet / macOS notarize and public COS upload remain credential-gated) |
+| Desktop custom titlebar | frameless shell + `DesktopChrome` (drag · reload · window controls; **no** session-log) · `xrkDesktop.window` IPC; session utilities on `conversation.session.header.utilities` | **Working** (rebuild Desktop for Host/UI; see [host-face](./host-face.md) “Shell chrome”) |
+| Shell connection progress | `ConnectionState` + `ConnectionPhase` + `sessions.phase`; spinner until session list `ready`; Desktop defaults `describeBeforeStreams` | **Working** (shared Web / Desktop; see [host-face](./host-face.md) “Connection progress”) |
+| Desktop bundled harness-cli | `@xrkseek/harness-cli` beside Host; startup always sets exclusive `XRK_HARNESS_BIN` (no PATH fallback to global `xrkh`); Settings plugin install/update/remove | **Working** (rebuild Desktop; missing CLI fails Host start) |
+| Desktop host event downlink | loopback same-origin WebSocket mux + host; unary same origin; `host/session-*` · `host/remote-event` reach the shell live | **Working** (see [host-face](./host-face.md) “Web / Desktop carriers”) |
+| Desktop Face carrier | Host listens **`127.0.0.1:<ephemeral>`**; Electron `loadURL`; `xrk-app://` splash only; no Face framed pipes | **Working** (ADR-0008 / DSH; see [host-face](./host-face.md)) |
 
 #### Underlying capability gaps
 
@@ -259,7 +258,7 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | Policy hot reload · YAML/TOML rulesets | JSON / YAML / TOML isomorphic v1 (`loadPolicyRulesetFile` decodes by extension → `parsePolicyRuleset` → `composeHostPolicyEngine`; hot reload shared); no second engine | JSON · YAML · TOML **Working** (see [policy](./policy.md)) |
 | Host sidebar / open / Office policy gates | `/sidebar`: `host.open` · `sidebar.embed` · `sidebar.fs`; `/office`: `office.connect` (mutations); Host injects the default engine when no `XRK_POLICY_FILE`; `kind:policy` plugin rules merge on refresh (file rules first); `ask`→Face `requestHostGate`, no seam→`policy-ask` | **Working** |
 | Interactive browser tools (`browser_*`) | `browser_open` / `browser_snapshot` / `browser_act` (`click`·`type`·**`scroll`·`press`·`back`**; HTTP snapshot by default · `@eN`; Chrome DevTools via Settings → Plugins → Browser or `XRK_BROWSER_CDP_URL`); `browser_vision` stores a screenshot; **`browser_vault_list` / `browser_vault_fill`** (opaque Face credential handles; secrets never in tool results); **session-scoped runtime share** · typed `tool/result.error.code` | **Working** (see [web-tools](./web-tools.md)) |
-| Desktop product entry | Default entry remains `xrkh web` / CLI. Phase **first-wave-package**: `pnpm package:desktop` validates/produces (**`win-x64` · `mac-arm64` · `mac-x64`**); `pnpm upload:desktop` validates/mirrors the update channel; `pnpm dev:desktop` remains the development projection. `isDesktopProductReady()===true`; `installerShipped===true` (installer is still not the day-1 entry) | **Unstable** (ADR-0008; live COS HTTPS PUT / signed public ship remain credential-gated) |
+| Desktop product entry | Desktop installer and `pnpm package:desktop` / `dev:desktop` / `start:desktop` are **Working** (`isDesktopProductReady()===true` · `installerShipped===true`; embedded Host reads `~/.xrk`); without Electron the cross-platform default remains `xrkh web` / CLI; `pnpm upload:desktop` validates the update channel | **Working** (ADR-0008; live COS HTTPS PUT / signed public channel stay credential-gated and do not block local installer use) |
 | Agent Teams / collab graph | Graph on top of subagent delegation **plus task board**: `delegates`/`peer` edges; spawn roles; `output_schema`; queue|steer; takeover; **managed worktree** allocate/reclaim/owner metadata bound to `teamTasks.worktree*`; **`mergeIntoParent` (ff-only fold-back)**; Status Overview **task-board UI** (status-sorted · worktree · `externalResume` · open/pause/resume · **cold resume** · **merge to parent** → `worktree.merge`); collab-graph thicken: `unlink`/`remove` · `neighbors`/`depth` · Status node `activity`/`depth` · model **`team_graph`** (view/link/unlink/role/announce) | **Working** |
 | WorkflowEngine · Ralph | Cordis abstract `WorkflowEngine` + **`InProcessWorkflowEngine`** + **`IsolatingWorkflowEngine`** (worker isolation; `createAgent` bridge; **`await tools.name(args)`** Code Mode shape via Host Face tool table; blocks nested `run_code`/`workflow`/`ralph`); **Host mounts Isolating by default** (`hostPublic.workflowEngine`); Face **`ralph`** (`maxResultChars`); Cordis `tool-workflow` consumer still needs composition mount | Face `ralph` **Working**; Host Isolating + tools.* **Working**; full sandboxed Node PTC process confinement **Not done** |
 | Code Mode / tools-in-code | `--presentation code`: `run_code` + `await tools.<name>(args)` re-enters the composition pipeline via bridge (AsyncFunction); without a bridge, Worker/SSH snippet only | **Working** (experimental; see [code-mode](./code-mode.md)) |
@@ -275,7 +274,7 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | Model-facing session recall | Face tools **`session_search` / `session_read` / `session_trace`** (cwd authority · FTS/scan · byte-budget snapshot · subagent lineage); `@session` prepare injects untrusted recall under `maxReferenceBytes` (default 64KiB) | **Working** |
 | Cross-product Session Format interop | Role JSONL ↔ XRK events (`importSessionInterchange` / `exportSessionInterchange`); `@xrkseek/session-format` adjacent migration chain (sqlite schema 0→1→2→3) + artifact detect; import lands in `chat-import/inbox`, **not** `sessions.db`; **interop ≠ Session Format V3** (ADR-0009 — foreign Format headers refused) | **Working** |
 | Python SDK | `sdks/python`: HTTP `HarnessClient` (health · sessions · admit · turn · chat · chat/stream) and `StdioHarnessClient` (spawns local `xrkh acp` for stdio JSON-RPC turns); not a second host (ADR-0001) | **Working** |
-| Plugin runtime unload pairing checks | `reconcileManagedProcessPlugins` supports `reloadIds` + ESM `?mtime=` (install/update/reload hot mount); returns `pairing` (unload pairs with register); `kind:host` routes rebuild from the live registry; Settings install settles with TerminalBlock + refresh CTA; **client half**: Host live-updates `liveBoot` + `extraRoots` (first install that creates `plugins/web` no longer needs a Host restart for `/plugins/*`); browser still needs a hard refresh (product boot omits HMR) | **Working** (browser client half still needs a hard refresh; no in-product soft remount) |
+| Plugin runtime unload pairing checks | `reconcileManagedProcessPlugins` supports `reloadIds` + ESM `?mtime=` (install/update/reload hot mount); returns `pairing` (unload pairs with register); `kind:host` routes rebuild from the live registry; Settings install UI session keeps TerminalBlock / post-install refresh CTA across modal remount; **client half**: Host live-updates `liveBoot` + `extraRoots` (first install that creates `plugins/web` no longer needs a Host restart for `/plugins/*`); browser still needs a hard refresh (product boot omits HMR) | **Working** (browser client half still needs a hard refresh; no in-product soft remount) |
 | GenUI browser runtime bundle | `/dsh-genui/runtime.js`: DOM mount · custom elements · optional Host preview; library CRUD / npm **Working** | **Working** (see [community-plugins.md](./community-plugins.md)) |
 | Mnemon real memory engine | Document CRUD **Working**; `search` / `graph` / `bodies` run on documents (keyword + `[[wiki]]` / `#tag` graph; not a vector store) | **Working** |
 | Curated memory | `memory`: frozen `MEMORY.md` / `USER.md`; tool add/replace/remove/**list**; after-turn heuristics; session-end **leased Phase1** + optional **Phase2 LLM** (single-flight · Status `curatedMemory`). Separate from Mnemon | **Working** (see [curated-memory](./curated-memory.md); Settings → Plugins → Curated memory) |
@@ -295,8 +294,8 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | A2A outbound / inbound | `@xrkseek/a2a`: outbound `a2a_discover/call/list/history` (`SendMessage`, fallback `message/send` on method-not-found); **inbound** Settings `a2a-inbound` / `XRK_A2A_INBOUND`: Agent Card + `POST /a2a` → Face inject; method aliases `SendMessage`/`message/send` + **tasks get/list/cancel** (in-memory TaskStore); `xrkh doctor` `a2a-inbound`; no SSE/push/subscribe; full PTC SDK **Not done** | **Working** (inbound opt-in · tasks query) |
 | External agent-runtime delegation | `subagent.runtime`: `in-process` (default) · `acp` · `app-server` · `claude-code`; Settings Plugins `external-agent` or env; `acp`/`app-server` support `run_in_background` + follow-up/interrupt; **cold resume sidecar** (`external-agent-handles.json` · Status `ext:…/cold` · app-server `thread/resume` / ACP `session/load`); `claude-code` remains one-shot print | **Working** (see [external-agent.md](./external-agent.md)) |
 | Voice host | `text_to_speech` · `voice_transcribe` · `voice_session`; Providers: memory / OpenAI HTTP; Settings → Voice (missing-key UI warning · shared `describeVoiceAccess` / doctor copy); mic/WebRTC on client; **wake word not shipped** | **Working** (see [voice.md](./voice.md); `XRK_VOICE` CI bypass; wake deferred) |
-| Image generation | `image_generate`; result content=`[text,image…]` + chat gallery; `attachmentId` re-inspectable via `read_image`; Providers: memory / OpenAI / FAL (full catalog) / xAI / OpenRouter / DeepInfra (t2i-only) / Krea / Meta Muse (t2i-only); optional AttachmentStore; **text-to-image + image edit** (schema from `capabilities()`) | **Working** (see [image-gen.md](./image-gen.md); Hermes main-path matrix) |
-| Video generation | `video_generate`; async job lifecycle; Providers: memory / OpenAI / FAL (full families) / xAI / OpenRouter / DeepInfra; **text-to-video + image-to-video / first frame**; **edit/extend** (OpenAI · xAI) + `action=catalog` | **Working** (see [video-gen.md](./video-gen.md); Hermes main-path matrix) |
+| Image generation | `image_generate`; result content=`[text,image…]` + assistant-bubble gallery; **tool row** optional collapsed thumb + expanded preview card (envelope as meta); `attachmentId` re-inspectable via `read_image`; Providers: memory / OpenAI / FAL (full catalog) / xAI / OpenRouter / DeepInfra (t2i-only) / Krea / Meta Muse (t2i-only); optional AttachmentStore; **text-to-image + image edit** (schema from `capabilities()`) | **Working** (see [image-gen.md](./image-gen.md); Hermes main-path matrix) |
+| Video generation | `video_generate`; async job lifecycle; settled tool row shows a **file/media card** (no in-chat player); Providers: memory / OpenAI / FAL (full families) / xAI / OpenRouter / DeepInfra; **text-to-video + image-to-video / first frame**; **edit/extend** (OpenAI · xAI) + `action=catalog` | **Working** (see [video-gen.md](./video-gen.md); Hermes main-path matrix) |
 | Video analysis | `video_analyze`; whole-clip URL/workspace path → multimodal LLM text (Hermes; **no frame extract**); distinct from `browser_vision` / `video_generate` / `read_image`; Providers: memory / OpenAI-compatible `video_url` | **Working** (see [video-analyze.md](./video-analyze.md); Settings → Plugins → Video analyze; `XRK_VIDEO_ANALYZE` CI bypass) |
 | Turn rewind · workspace snapshots | `WorkspaceCheckpointStore`: shadow git; Host auto-snapshots before each turn; Face `session.checkpoint.*` · `/rollback` · message Restore; distinct from `session.fork` / fork-cut (lineage only) — see [turn-rewind.md](./turn-rewind.md) | **Working** (needs `git`; `XRK_CHECKPOINTS=0` disables auto-snapshot) |
 | MCP HTTP · OAuth device code | `loginWithDeviceCode` + `McpDeviceTokenStore` (RFC 8628: keeps waiting on `authorization_pending` / `slow_down`, fails immediately on `access_denied` / `expired_token`; atomic write to `~/.xrk/mcp-tokens/<server>.json` · best-effort 0600 · refresh before expiry); endpoints discovered per RFC 9728 / RFC 8414 when unknown; `auth` attaches to the HTTP transport only; CLI `xrkh mcp login/status/logout/list/path`; Settings MCP card uses Face `mcp.oauth.login|status|logout` on the same path (pending: cancel / copy code / auto-open verify URI; signed-in: expiry + refresh badge; IdP without device code → honest error; **auth-code+PKCE not done**) | **Working** (see [modules/mcp.md](./modules/mcp.md) · [configuration.md](./configuration.md); needs an IdP with device-code support) |
@@ -310,38 +309,30 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | Image-to-image / image-to-video · reference-image editing | `image_generate` reference edit + `video_generate` first-frame i2v / edit / extend / family catalog; **platform seam** `ToolDefinition.dynamicSchema`; **Provider matrix** memory · openai · fal · xai · openrouter · deepinfra · krea · meta-ai (video through deepinfra) | **Working** (P0 multimodal generation + Hermes main-path Provider volume) |
 | Image token estimation / request-image resizing | `@xrkseek/attachment`: `estimateImageTokens` / `requestImageTokenDimensions` (DeepSeek V41 published calculator) + `requestImageDimensions` / `longEdgeDimensions`; soft-budget prices vision tokens from attachment dims; DeepSeek route `resolveDeepSeekRequestImagePolicy(model, source)` projects `maxPixels` from the token grid then local request-image downscales; `request-image-bound` keeps the 20 MB base64 safety net | **Working** |
 | Vision region crop | `read_image.region` + `AttachmentStore.cropImageRegion` (Hermes `[x1,y1,x2,y2]`, crop before admission normalize; local store via sharp; tool text discloses crop offset) | **Working** |
-
 | Session-level model selection persistence | `~/.xrk/session-models.json` sidecar; `/model` writes and Host restart rehydrates | **Working** |
 | Model modality declaration editing surface | `FaceModelEntry.inputModalities` + Settings checkboxes; `createAdapter` passes catalog through; custom text-only can block images | **Working** |
-| Diff review surface | `DiffBlock` unified/split + sync scroll; `ChangedFiles` in-stream + hover; Status **Changes** tab for persistent review (`ctx.changesReview`; no dsh right-bar dockkit — see [sidebar-workbench](./sidebar-workbench.md)) | **Working** |
-| Trajectory display levels | `ui-trajectory` compact / detailed (compact folds turns·calls; not a fictional four-level) | **Working** |
+| Diff review surface | `DiffBlock` unified/split + sync scroll; `ChangedFiles` in-stream + hover; Status **Changes** tab for persistent review (`ctx.changesReview`; see [sidebar-workbench](./sidebar-workbench.md)) | **Working** |
+| Trajectory display levels | `ui-trajectory` compact / detailed (compact folds turns·calls) | **Working** |
 | Keyboard-shortcut view / search / customize / reset | `Ctrl+/` (⌘+/) ShortcutsPanel: view + search + click-to-rebind + per-row / reset-all (device-local `localStorage` `xrk.shortcuts.v1` overrides only; submit/newline fixed) | **Working** |
 | Scheduled-task run history | `cron/executions.jsonl` bounded ledger (≤1000) + `cronjob` action=`runs`; survives restart | **Working** |
 | Time-context injection | `XRK_TIME_CONTEXT_REFRESH_MS` (default 60s); follow-ups refresh via workspace block | **Working** |
-| Archive filter / pin | Sidebar view-options tri-state: hide archived / all / archived-only (`ArchiveViewMode`; cwd reattach when Face strips membership); Settings archive page remains search + Unarchive; **pin not done** | **Partial** (filter Working · pin P3) |
+| Archive filter / pin | Sidebar `ArchiveViewMode` tri-state; Settings archive search + Unarchive; Face `pinnedSessionIds` + `workspace.pinSession`/`unpinSession` + `host/pinned-sessions-changed` | **Working** |
 | Model-switch waiting hint | in-menu "Preparing · reduced wait…" + keyboard paneFocus / search virtual highlight + `<mark>` hit + cell `:focus-visible` | **Working** |
+| Desktop first paint ∥ Host | `xrk-app://` splash first; Host ready then `loadURL` loopback Face | **Working** (see [host-face](./host-face.md)) |
 
-### Gap roadmap (vs DSH 0.1.7-rc.1/rc.2 · Hermes · Codex references)
+### Remaining gaps (community compat)
 
-- **P1 · Multimodal generation wiring** (aligns Hermes `image_gen`/`video_gen`):
-  1. ~~`image_generate` refs + edit~~ **landed** (dynamic schema · OpenAI edits · attachment ids);
-  2. ~~`video_generate` first_frame / refs (i2v) + edit/extend + family catalog~~ **landed**;
-  3. AttachmentStore intake shared with `read_image`/drag — image and video sides done.
-- **P2 · Vision depth**: ~~`read_image.region` crop + `video_analyze`~~ **thick** (unified intake with `browser_vision` remains a stretch goal).
-- **P2 · Image tokens / request-image resize**: ~~V41 `estimateImageTokens` + DeepSeek request policy + soft-budget~~ **thick**.
-- **P2 · Cost & modality**: ~~`FaceModelEntry` + Settings modalities + session `/model` persist~~ **landed**.
-- **P2 · UI density**: ~~side-by-side diff + sync scroll~~ · ~~in-stream file-selector review pane~~ · ~~trajectory compact/detailed~~ · ~~shortcut view/search/customize/reset (Ctrl+/)~~ · ~~cron run history~~ · ~~time-context (default 60s)~~ **landed** (hover preview still deferred).
-- **P3 · Polish**: ~~archive filter tri-state~~ **landed**; ~~pin~~ **landed**; ~~model-switch waiting hint~~ **landed**; ~~focus / semantic highlight~~ **landed** (composer ModelSelect).
-- **P4 · Community-plugin compatibility surface** (truth source `DSH_COMPAT_KNOWN_GAPS`, now honest):
-  1. `web-panel-global-registry`: DSH 0.1.5+ global panels `sidebar.panellist` / `main` need a product-shell seat (a shell slot extension, not dsh-compat itself); the audit surface already marks panellist `missing-seat`, so community `slots.register` shapes are surfaced honestly instead of silently claimed;
-  2. `cordis-dual-half-inspect`: official `cordis_inspect_list` / `cordis_inspect_query` + mount/dispose lifecycle stays honest-stub under the "no third-party Host kernel embedding" boundary;
-  3. `third-party-di`: full third-party DI is not a product goal; unknown service references get an honest envelope.
+Truth source: `DSH_COMPAT_KNOWN_GAPS`:
+
+1. `web-panel-global-registry`: global-panel seats `sidebar.panellist` / `main` need a product-shell seat (not dsh-compat itself; audit marks `missing-seat`).
+2. `cordis-dual-half-inspect`: no third-party Host kernel embed; fiber stays honest-stub.
+3. `third-party-di`: unknown services get an honest envelope.
 
 ## Formal use levels
 
 | Level | What you can do | Prerequisites |
 | --- | --- | --- |
-| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.4.12** is the current `@latest` (previous patch **v0.4.11**; previous formal line **v0.3.11**; previous preview line end **v0.2.7**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
+| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.5.0** is the current `@latest` (prior preview close **v0.4.12**; previous formal line **v0.3.11**; previous preview line end **v0.2.7**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
 | **B — Browser soak** | `pnpm test:web` (not part of `pnpm check`) | Chromium; full `apps/web/dist` |
 | **C — Publish** | npmjs + GitHub Release (`@xrkseek/harness-cli`) | `pnpm release`; see [publishing.md](./publishing.md) |
 

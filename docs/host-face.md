@@ -19,24 +19,61 @@ Face 仍是 **mux + host** 双总线；壳只换物理载波：
 | 壳 | Unary | mux | host |
 |----|-------|-----|------|
 | Web（http/https） | `fetch` 同源 | WebSocket `/api/events.mux` | WebSocket `/api/events.host` |
-| Desktop（`xrk-app:`） | `fetch` → `xrk-app://app` | SSE → `xrk-app://stream/api/events.mux` | SSE → `xrk-app://stream/api/events.host` |
+| Desktop（loopback） | `fetch` → `http://127.0.0.1:<port>` | WebSocket（同 origin；与 `xrkh web` 同构） | WebSocket（同 origin） |
 
-Desktop 把长连接放到 **`xrk-app://stream`**，与 unary 的 **`xrk-app://app`** 分 Chromium 自定义协议连接池，因此 **mux 与 host 两条 SSE 都要开**。host 帧包括 `host/session-added` · `host/session-status` · `host/remote-event`（如 `settings/document-updated`）；壳经 `ctx.remote.$dispatch` 驱动 Settings / MCP 徽章与子代理顶栏·Overview。缺 host 下行时这些面只能靠刷新或切会话才能对齐。
+Desktop 产品页在 Host IPC `ready`（含 `origin`）后由 Electron `loadURL` 到 **`127.0.0.1` 回环**（ADR-0008 / DSH Desktop）；`xrk-app://` 仅作启动闪屏 / 静态壳。不再经 Electron 分帧 Face 管道（Win32 ConPTY 会继承那些 HANDLE）。host 帧含 `host/session-added` · `host/session-status` · `host/remote-event`（如 `settings/document-updated`）；壳经 `ctx.remote.$dispatch` 驱动 Settings / MCP 徽章与子代理顶栏·Overview。
+
+### Desktop 启动与 Face 绑定
+
+| 阶段 | 行为 |
+|------|------|
+| 首屏 | 注册 `xrk-app://` 后立刻开窗；闪屏 / 静态资源走打包 Web 盘（不阻塞 Host） |
+| Host IPC `ready` 后 | `loadURL(http://127.0.0.1:<port>/index.html?…)`；Face / 侧栏 / 社区 HTTP 走同源 Host listen |
+
+产品页落在 Host 伺服的 Web dist 上（与 `xrkh web` 同路径语义）。`xrk-app://` 协议处理器仍可服务闪屏与 overlay 探测资源。
+
+### 产品壳静态边界
+
+同源静态伺服（Web 与 Desktop 打包 Web 根）把 **Host 面**交给 Host / 公开路由应答，包括磁盘上无对应文件时。Host 面包括：`/sidebar/*` · `/plugins/*` · 社区兼容器能力前缀（如 `/modlens` · `/_dsh/` · `/skin-assets`；真源 `dsh-compat` 能力表）。
+
+### 壳 chrome（Web 与 Desktop 共用 client）
+
+| 面 | 落点 | 契约 |
+|----|------|------|
+| Desktop 标题栏 | `DesktopChrome`（frameless）：拖拽区 · 刷新 · 窗控（Darwin 用系统红绿灯，不画第二套） | **不含**会话日志 / 插件工具按钮 |
+| 会话工具（含会话日志导出） | `conversation.session.header.utilities`（会话页头流内右侧） | Web / Desktop 同一 slot；不钉在标题栏 |
+| 连接指示器 | Settings 触发行旁 `ConnectionIndicator` | 见下「连接进度」 |
+
+### 连接进度（`ConnectionState` · `ConnectionPhase` · `sessions.phase`）
+
+壳连接环路（`@xrkseek/client-connection`）对外两路可观察量：
+
+1. **`connectionState`**：`undefined`（首启）→ `connected` / `reconnecting`
+2. **`connectionPhase`**（握手细粒度）：`handshake:describe` → `handshake:streams` →（成功后清空）· 重试时 `retry:backoff`
+
+Desktop（`xrk-app:`）默认 **`describeBeforeStreams`**：先 unary `host.describe`，再开 mux/host 事件流，避免 Host Fetch 未就绪时空转。Web 同源可立即双开。
+
+指示器**保持转圈**直到：
+
+- 线缆握手完成（`connectionState === 'connected'`），**且**
+- 会话列表首拉完成（runtime `sessions.phase === 'ready'`）
+
+文案键（`settings` 字典）：`connection.phase.describe` · `streams` · `sessions` · `backoff` · `initial`。映射真源：`packages/client/ui-settings-general` 的 `connection-chrome.ts`（Web / Desktop 同一 SettingsRoot）。
 
 ## WebSocket 心跳
 
-mux / host 升级后的套接字由 Host 发 **Ping** 控制帧（默认间隔 **2s**）。连续 **5** 次未收到 Pong 则 `terminate`（DSH gateway 为 2 次；Face mux 与工具/投影共事件循环且无 per-stream uplink 字节窗，故放宽以免误杀）。实现：`ws-heartbeat.ts`。写出走 `ws-send-queue.ts`：JSON 帧串行等 `send` 回调（对齐 DSH gateway 的 Promise 链写出）；超软顶**丢帧不掐线**（DSH 对 uplink 超顶是 fail 逻辑流，不是掐物理套接字）。Agent loop 流式期间约 **16ms** 让出；同一 text / reasoning / tool-call run 的**首片立即落库**，后续片段合并到下一次让出，mux seq 仍连续。
+mux / host 升级后的套接字由 Host 发 **Ping** 控制帧（默认间隔 **2s**）。连续 **5** 次未收到 Pong 则 `terminate`。实现：`ws-heartbeat.ts`。写出走 `ws-send-queue.ts`：JSON 帧串行，等上一帧 `send` 回调后再发下一帧；待发量超软顶时**丢帧并 warn，不掐线**。Agent loop 流式期间约 **16ms** 让出；同一 text / reasoning / tool-call run 的**首片立即落库**，后续片段合并到下一次让出，mux seq 仍连续。
 
-### 背压边界（等价物，非 DSH 双向流释放窗口）
+### 发送背压
 
-`ws-send-queue.ts` 的 `createWsSendQueue` 是 Face 侧**唯一发送背压**：帧经 Promise 链串行，等上一帧 `ws.send` 回调（数据已交内核发送缓冲）才发下一帧；待发帧数 / UTF-8 字节超软顶或单帧过大时**丢弃新帧并打一次 warn**，**不** `terminate` 对端（0.4.11 超顶掐线会在每次工具突发后逼客户端重连）。写失败只标记队列关闭、不再入队。**它不是** TCP 窗口级背压，也不代表客户端已消费——只约束「Host → socket」的写节奏，防止 Think / 工具突发把 TCP 缓冲与 Ping 定时器挤在同一事件循环。与之配套的**对端节奏**是 Agent loop 约 **16ms** 一次的事件循环让出（见上），两者合起来构成「发送节奏 + 让出节奏」的双重保护，等价于 DSH 双向流的释放窗口，但**没有** DSH 式逐字节/逐帧窗口计数语义。
+`createWsSendQueue`（`ws-send-queue.ts`）是 Face 侧发送背压：帧经 Promise 链串行；待发帧数 / UTF-8 字节超软顶或单帧过大时丢弃新帧（打一次 warn），对端保持连接。写失败只关闭队列、不再入队。该队列约束「Host → socket」写节奏，不是 TCP 窗口，也不表示客户端已消费。配套节奏：Agent loop 约 **16ms** 事件循环让出（见上）。
 
 **seq 游标**：每帧 `session/event` 携带该会话独立的 `FaceMuxSeq`（1-based，`last` 未 `next` 时为 `0`）。壳以 **seq 空洞 = 断线补洞** 为唯一检测信号（禁止跳号）。水位推进路径：
 - 实时推送：`runtime` append 时 `seq.next(id)` 逐帧递增（`toMuxSessionEvent` 每帧带 seq）。
-- 回放：`session.history` 返回页内最大 `event.seq` 后 `seq.ensureAtLeast(sessionId, maxWireSeq)` 一次跳齐，避免按 `next` 空转 O(maxSeq)；`session.history` / `turnOutline.seq` / `fork atSeq` / checkpoint `atSeq` 全部对齐此 mux 时钟（不是日志下标，见 [session-log.md](./session-log.md) 位置类型）。
+- 回放：`session.history` 返回页内最大 `event.seq` 后 `seq.ensureAtLeast(sessionId, maxWireSeq)` 一次跳齐；`session.history` / `turnOutline.seq` / `fork atSeq` / checkpoint `atSeq` 全部对齐此 mux 时钟（不是日志下标，见 [session-log.md](./session-log.md) 位置类型）。
 - 重连：`session/subscribed` 带 `lastSeq` 基线；壳从 `lastSeq+1` 起用 `session.history` 补洞，Host 侧 `ensureAtLeast` 保证水位单调。
 
-边界结论：**释放窗口 = 帧级 send 回调 + 16ms 让出**，**断线信号 = seq 空洞**；二者都是 Face mux 自有的等价物，不继承 DSH 的双向流窗口计数。
+**释放窗口** = 帧级 send 回调 + 16ms 让出；**断线信号** = seq 空洞。
 
 ## Face mux 序号
 
@@ -160,24 +197,61 @@ Face still exposes **mux + host** buses; only the physical carrier changes per s
 | Shell | Unary | mux | host |
 |-------|-------|-----|------|
 | Web (http/https) | same-origin `fetch` | WebSocket `/api/events.mux` | WebSocket `/api/events.host` |
-| Desktop (`xrk-app:`) | `fetch` → `xrk-app://app` | SSE → `xrk-app://stream/api/events.mux` | SSE → `xrk-app://stream/api/events.host` |
+| Desktop (loopback) | `fetch` → `http://127.0.0.1:<port>` | WebSocket (same origin; same as `xrkh web`) | WebSocket (same origin) |
 
-Desktop places long-lived streams on **`xrk-app://stream`**, separate from unary **`xrk-app://app`**, so Chromium’s custom-protocol connection pools do not collide — **both mux and host SSE must stay open**. Host frames include `host/session-added`, `host/session-status`, and `host/remote-event` (e.g. `settings/document-updated`); the shell fans those through `ctx.remote.$dispatch` into Settings / MCP badges and the subagent header · Overview. Without the host downlink those surfaces only converge after a refresh or session switch.
+After Host IPC `ready` (includes `origin`), Electron `loadURL`s the product onto **`127.0.0.1` loopback** (ADR-0008 / DSH Desktop). `xrk-app://` remains splash / static shell only. Framed Electron Face pipes are retired (Win32 ConPTY inherited those HANDLEs). Host frames include `host/session-added`, `host/session-status`, and `host/remote-event` (e.g. `settings/document-updated`); the shell fans those through `ctx.remote.$dispatch` into Settings / MCP badges and the subagent header · Overview.
+
+### Desktop bring-up and Face attach
+
+| Phase | Behavior |
+|-------|----------|
+| First paint | Register `xrk-app://`, then open the window; splash / static from the packaged Web root (Host does not block) |
+| After Host IPC `ready` | `loadURL(http://127.0.0.1:<port>/index.html?…)`; Face / sidebar / community HTTP ride the same-origin Host listen |
+
+The product page is served from the Host web dist (same path semantics as `xrkh web`). The `xrk-app://` protocol handler may still serve splash and overlay probe assets.
+
+### Product-shell static boundary
+
+Same-origin static serving (Web and Desktop packaged Web root) leaves **Host-owned** paths to Host / public routes, including when no matching file exists on disk. Host-owned paths include `/sidebar/*`, `/plugins/*`, and community capability prefixes (e.g. `/modlens`, `/_dsh/`, `/skin-assets`; source: the dsh-compat capability table).
+
+### Shell chrome (shared Web + Desktop client)
+
+| Surface | Placement | Contract |
+|---------|-----------|----------|
+| Desktop titlebar | `DesktopChrome` (frameless): drag region · reload · window controls (Darwin uses system traffic lights; no second control set) | **No** session-log / plugin utility buttons |
+| Session utilities (incl. session-log export) | `conversation.session.header.utilities` (in-flow session header, right edge) | Same slot on Web and Desktop; not pinned to the titlebar |
+| Connection indicator | `ConnectionIndicator` beside the Settings trigger | See “Connection progress” below |
+
+### Connection progress (`ConnectionState` · `ConnectionPhase` · `sessions.phase`)
+
+The shell connect loop (`@xrkseek/client-connection`) exposes two observables:
+
+1. **`connectionState`**: `undefined` (first boot) → `connected` / `reconnecting`
+2. **`connectionPhase`** (handshake detail): `handshake:describe` → `handshake:streams` → (cleared on success) · `retry:backoff` while retrying
+
+Desktop (`xrk-app:`) defaults to **`describeBeforeStreams`**: unary `host.describe` before opening mux/host event streams, so the loop does not spin while Host Fetch is still attaching. Same-origin Web may open both streams immediately.
+
+The indicator **keeps spinning** until:
+
+- the wire handshake finishes (`connectionState === 'connected'`), **and**
+- the first session-list pull finishes (runtime `sessions.phase === 'ready'`)
+
+Copy keys (`settings` dictionary): `connection.phase.describe` · `streams` · `sessions` · `backoff` · `initial`. Mapping source: `connection-chrome.ts` in `packages/client/ui-settings-general` (same SettingsRoot on Web and Desktop).
 
 ## WebSocket heartbeats
 
-After mux / host upgrade, the Host sends **Ping** control frames (default interval **2s**). After **5** consecutive missed Pongs the peer is `terminate`d (DSH gateway uses 2; Face mux shares the Host event loop with tools/projections and has no per-stream uplink byte window, so the allowance is wider). Implementation: `ws-heartbeat.ts`. Writes go through `ws-send-queue.ts`: JSON frames serialize on the `send` callback (same Promise-chain pattern as the DSH gateway); over the soft cap frames are **dropped**, not terminated (DSH fails the logical uplink stream on inbox overflow — it does not kill the physical socket for outbound pressure). The agent loop yields about every **16ms** while streaming; the first fragment of a text / reasoning / tool-call run is durable immediately and later fragments coalesce until the next yield. Mux seq stays contiguous.
+After mux / host upgrade, the Host sends **Ping** control frames (default interval **2s**). After **5** consecutive missed Pongs the peer is `terminate`d. Implementation: `ws-heartbeat.ts`. Writes go through `ws-send-queue.ts`: JSON frames serialize on the previous `send` callback; over the soft cap, frames are **dropped** (one warn) without terminating the peer. The agent loop yields about every **16ms** while streaming; the first fragment of a text / reasoning / tool-call run is durable immediately and later fragments coalesce until the next yield. Mux seq stays contiguous.
 
-### Backpressure boundary (equivalents, not a DSH bidirectional-stream release window)
+### Send backpressure
 
-`createWsSendQueue` in `ws-send-queue.ts` is the **only send-side backpressure** on the Face side: frames are serialized on a Promise chain — the next frame waits for the previous `ws.send` callback (data handed to the kernel send buffer). When pending frame count / UTF-8 bytes exceed the soft cap, or a single frame alone exceeds the byte budget, the new frame is **dropped** (one warn) and the peer stays up — 0.4.11’s over-budget `terminate` forced a reconnect after every tool burst. A write failure only closes the queue (no further enqueues). It is **not** TCP-window-level backpressure and does not mean the client consumed anything — it only paces “Host → socket” writes so Think / tool bursts cannot starve the TCP buffer and Ping timer on one event loop. The matching peer-side pacing is the agent loop’s ~**16ms** event-loop yield (above). Together they form “send pacing + yield pacing”, the equivalent of a DSH bidirectional-stream release window, but **without** DSH-style per-byte/per-frame window counting.
+`createWsSendQueue` (`ws-send-queue.ts`) is Face send-side backpressure: frames serialize on a Promise chain; when pending frame count / UTF-8 bytes exceed the soft cap, or a single frame alone exceeds the byte budget, the new frame is dropped (one warn) and the peer stays up. A write failure only closes the queue. The queue paces “Host → socket” writes — it is not TCP-window backpressure and does not mean the client consumed the frame. Matching peer pacing: the agent loop’s ~**16ms** event-loop yield (above).
 
 **Seq cursor**: every `session/event` frame carries a per-session `FaceMuxSeq` (1-based; `last` is `0` before any `next`). The shell treats a **seq hole as the reconnect signal** (gaps are forbidden). Watermark advancement:
 - Live push: `runtime` append calls `seq.next(id)` per frame (`toMuxSessionEvent` stamps every frame).
-- Replay: `session.history` computes the page-max `event.seq`, then `seq.ensureAtLeast(sessionId, maxWireSeq)` jumps the watermark in one step instead of walking `next` O(maxSeq); `session.history` / `turnOutline.seq` / `fork atSeq` / checkpoint `atSeq` all align to this mux clock (not log indices — see position types in [session-log.md](./session-log.md)).
+- Replay: `session.history` computes the page-max `event.seq`, then `seq.ensureAtLeast(sessionId, maxWireSeq)` jumps the watermark once; `session.history` / `turnOutline.seq` / `fork atSeq` / checkpoint `atSeq` all align to this mux clock (not log indices — see [session-log.md](./session-log.md)).
 - Reconnect: `session/subscribed` carries a `lastSeq` baseline; the shell backfills from `lastSeq+1` via `session.history`, and Host-side `ensureAtLeast` keeps the watermark monotonic.
 
-Boundary conclusion: **release window = per-frame send callback + 16ms yield**; **disconnect signal = seq hole**. Both are Face-mux-native equivalents — they do not inherit DSH’s bidirectional-stream window accounting.
+**Release window** = per-frame send callback + 16ms yield; **disconnect signal** = seq hole.
 
 ## Face mux sequence
 

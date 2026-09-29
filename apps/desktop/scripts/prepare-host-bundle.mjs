@@ -87,4 +87,20 @@ if (!existsSync(serverHost)) {
   process.exit(1);
 }
 
+// Settings plugin add/remove/update spawn this via XRK_HARNESS_BIN (host-runtime).
+const harnessCliBin = path.join(
+  modulesRoot,
+  "@xrkseek",
+  "harness-cli",
+  "dist",
+  "bin.js",
+);
+if (!existsSync(harnessCliBin)) {
+  process.stderr.write(
+    `prepare-host-bundle: missing ${path.relative(ROOT, harnessCliBin)} ` +
+      `(desktop-host must depend on @xrkseek/harness-cli)\n`,
+  );
+  process.exit(1);
+}
+
 process.stdout.write(`prepare-host-bundle: ${path.relative(ROOT, out)}\n`);

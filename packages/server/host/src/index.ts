@@ -52,6 +52,7 @@ import {
   runPluginMutate,
   type HarnessHttpServer,
   type DshCompatOptions,
+  type PluginMutateResult,
   ensureXrkPlatformClientBootEntries,
   injectBootIntoHtml,
   injectMobileAccessShellIntoHtml,
@@ -511,6 +512,25 @@ export interface HostManager {
   list(): readonly HostInstance[];
   stop(id: string): Promise<void>;
   stopAll(): Promise<void>;
+}
+
+/** Face `removeUserPlugin` / `updateUserPlugin` — prefer composed mutate error over bare stderr. */
+function facePluginMutateResult(result: PluginMutateResult): {
+  readonly ok: boolean;
+  readonly error?: string;
+  readonly stdout: string;
+  readonly stderr: string;
+} {
+  return {
+    ok: result.ok,
+    ...(result.error
+      ? { error: result.error }
+      : !result.ok && result.stderr
+        ? { error: result.stderr }
+        : {}),
+    stdout: result.stdout,
+    stderr: result.stderr,
+  };
 }
 
 export function createHostManager(): HostManager {
@@ -1606,14 +1626,7 @@ export function createHostManager(): HostManager {
             spec,
             pluginsDir: resolvedPluginsDir,
           });
-          return {
-            ok: result.ok,
-            ...(result.error || result.stderr
-              ? { error: result.error ?? result.stderr }
-              : {}),
-            stdout: result.stdout,
-            stderr: result.stderr,
-          };
+          return facePluginMutateResult(result);
         },
         updateUserPlugin: async (spec, options) => {
           const result = await runPluginMutate({
@@ -1627,14 +1640,7 @@ export function createHostManager(): HostManager {
               ? { onChunk: options.onChunk }
               : {}),
           });
-          return {
-            ok: result.ok,
-            ...(result.error || (!result.ok && result.stderr)
-              ? { error: result.error ?? result.stderr }
-              : {}),
-            stdout: result.stdout,
-            stderr: result.stderr,
-          };
+          return facePluginMutateResult(result);
         },
         syncManagedProcessPlugins: async (options) => {
           if (!managedPluginsRootReady()) return;
@@ -2467,6 +2473,9 @@ export function createHostManager(): HostManager {
         resolveAgent,
         drain,
         tryHandlePublic: chainPublicHandlers(
+          // Desktop PTY SSE must run before createSidebarPublicHandler — the
+          // sidebar JSON-RPC surface would otherwise 405 GET /sidebar/api/pty/stream.
+          (req, res) => sidebarPtyHttp.handle?.(req, res) === true,
           createA2aInboundPublicHandler({
             host: config.runtime.host,
             port: config.runtime.port,
@@ -2543,6 +2552,8 @@ export function createHostManager(): HostManager {
             }
           : {}),
         tryHandleExtraApi: (req, res) => {
+          // Backup if a future reorder puts SPA before public PTY (primary is
+          // the tryHandlePublic head hook above).
           if (sidebarPtyHttp.handle?.(req, res) === true) return true;
           // Host cron read API first (`/api/cron/*`), then Face extras.
           const cronApi = createCronApiHandler({

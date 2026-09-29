@@ -14,6 +14,16 @@ export const DESKTOP_IPC = {
   windowIsMaximized: "xrk-desktop:window-is-maximized",
   windowMaximized: "xrk-desktop:window-maximized",
   windowReload: "xrk-desktop:window-reload",
+  /** True once Desktop Host Fetch is attached to `xrk-app://` (Face ready). */
+  hostReadyGet: "xrk-desktop:host-ready-get",
+  /** Push when Host Fetch attaches (renderer may await before Face connect). */
+  hostReady: "xrk-desktop:host-ready",
+  /** Push when Host spawn/ready fails (renderer fails splash loud). */
+  hostFailed: "xrk-desktop:host-failed",
+  /** Current Host bring-up phase (`starting` | `attaching` | `ready`). */
+  hostPhaseGet: "xrk-desktop:host-phase-get",
+  /** Push Host bring-up phase for splash hints. */
+  hostPhase: "xrk-desktop:host-phase",
 } as const;
 
 /** Renderer bridge marker (≠ Host framed-pipe protocol version). */

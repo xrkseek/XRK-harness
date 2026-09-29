@@ -5,10 +5,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   attachDesktopNavigationGuard,
   desktopAppIndexUrl,
+  desktopLoopbackIndexUrl,
   DESKTOP_PROTOCOL_PRIVILEGES,
   DESKTOP_PROTOCOL_SCHEME,
   handleDesktopProtocolRequest,
+  isDesktopHostForwardPath,
+  isDesktopLoopbackUrl,
   isDesktopProtocolUrl,
+  isDesktopStaticAssetPath,
   resolveDesktopAssetPath,
   serveDesktopStaticAsset,
 } from "../src/protocol.js";
@@ -122,12 +126,21 @@ describe("desktop custom protocol", () => {
     expect(fetchApp).toHaveBeenCalledOnce();
 
     fetchApp.mockClear();
-    const indexViaHost = await handleDesktopProtocolRequest(
+    // Product HTML paints from disk even when Host Fetch is up (first paint).
+    const indexFromDisk = await handleDesktopProtocolRequest(
       new Request("xrk-app://app/index.html"),
       { webRoot, fetchApp },
     );
-    expect(indexViaHost.status).toBe(201);
-    expect(fetchApp).toHaveBeenCalledOnce();
+    expect(await indexFromDisk.text()).toBe("web");
+    expect(fetchApp).not.toHaveBeenCalled();
+
+    fetchApp.mockClear();
+    const rootFromDisk = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/"),
+      { webRoot, fetchApp },
+    );
+    expect(await rootFromDisk.text()).toBe("web");
+    expect(fetchApp).not.toHaveBeenCalled();
 
     fetchApp.mockClear();
     const staticCss = await handleDesktopProtocolRequest(
@@ -182,11 +195,74 @@ describe("desktop custom protocol", () => {
       { webRoot: productWithBoot, overlayRoot },
     );
     expect(await pet.text()).toBe("/* pet */");
+
+    // @liustack/modlens probes Host before mounting settings.plugin.item;
+    // static webRoot must not answer 404 and skip the Configurable card.
+    fetchApp.mockClear();
+    const modlens = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/modlens/config"),
+      { webRoot, fetchApp },
+    );
+    expect(modlens.status).toBe(201);
+    expect(fetchApp).toHaveBeenCalledOnce();
+
+    fetchApp.mockClear();
+    const communityRoot = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/whale-girl"),
+      { webRoot, fetchApp },
+    );
+    expect(communityRoot.status).toBe(201);
+    expect(fetchApp).toHaveBeenCalledOnce();
+
+    fetchApp.mockClear();
+    const missingAsset = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/assets/missing.css"),
+      { webRoot, fetchApp },
+    );
+    expect(missingAsset.status).toBe(404);
+    expect(fetchApp).not.toHaveBeenCalled();
+
+    // Mutating Host verbs must not hit serveDesktopStaticAsset's 405 gate
+    // (market install · modlens config save · pty input).
+    fetchApp.mockClear();
+    const marketPost = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/dsh-market/install", {
+        method: "POST",
+        body: "{}",
+      }),
+      { webRoot, fetchApp },
+    );
+    expect(marketPost.status).toBe(201);
+    expect(fetchApp).toHaveBeenCalledOnce();
+
+    fetchApp.mockClear();
+    const unlistedGet = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/dsh-market/updates"),
+      { webRoot, fetchApp },
+    );
+    expect(unlistedGet.status).toBe(201);
+    expect(fetchApp).toHaveBeenCalledOnce();
   });
 
-  it("guards navigation to non-protocol URLs", () => {
+  it("classifies Host forward vs static asset paths", () => {
+    expect(isDesktopHostForwardPath("/modlens/config")).toBe(true);
+    expect(isDesktopHostForwardPath("/_dsh/genui/x")).toBe(true);
+    expect(isDesktopHostForwardPath("/assets/app.css")).toBe(false);
+    expect(isDesktopStaticAssetPath("/assets/app.css")).toBe(true);
+    expect(isDesktopStaticAssetPath("/modlens/config")).toBe(false);
+  });
+
+  it("guards navigation to non-protocol / non-loopback URLs", () => {
     expect(isDesktopProtocolUrl("xrk-app://app/index.html")).toBe(true);
     expect(isDesktopProtocolUrl("https://evil.example/")).toBe(false);
+    expect(isDesktopLoopbackUrl("http://127.0.0.1:43129/index.html")).toBe(true);
+    expect(isDesktopLoopbackUrl("http://localhost:43129/")).toBe(false);
+    expect(isDesktopLoopbackUrl("https://evil.example/")).toBe(false);
+    expect(
+      desktopLoopbackIndexUrl("http://127.0.0.1:43129", { platform: "win32" }),
+    ).toMatch(
+      /^http:\/\/127\.0\.0\.1:43129\/index\.html\?.*dsh-desktop-mode=advanced/,
+    );
 
     const preventDefault = vi.fn();
     let listener:
@@ -201,6 +277,8 @@ describe("desktop custom protocol", () => {
     expect(preventDefault).toHaveBeenCalledOnce();
     preventDefault.mockClear();
     listener?.({ preventDefault }, "xrk-app://app/index.html");
+    expect(preventDefault).not.toHaveBeenCalled();
+    listener?.({ preventDefault }, "http://127.0.0.1:43129/index.html");
     expect(preventDefault).not.toHaveBeenCalled();
   });
 });

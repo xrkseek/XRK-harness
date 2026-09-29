@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Packaged Desktop Host Face-pipe smoke (ADR-0008).
+ * Packaged Desktop Host loopback Face smoke (ADR-0008).
  *
  * Proves the failure modes that broke the installer UI:
  *   - unread mux + host SSE must not starve unary `host.describe`
- *   - both event buses open on `xrk-app://stream` (shell needs host for
- *     settings/document-updated and host/session-*)
+ *   - both event buses open on the Host loopback origin
  *   - cancelling SSE must not poison the next unary
+ *   - sidebar PTY open must not kill the Host (ConPTY / no Face pipes)
  *
  * Usage:
  *   node apps/desktop/scripts/smoke-packaged-host.mjs \
@@ -136,6 +136,65 @@ try {
   process.stdout.write(
     `smoke-packaged-host: session.list ok items=${String(sessions?.items?.length ?? 0)}\n`,
   );
+
+  // Desktop terminal rides HTTP SSE (no WS upgrade). Opening ConPTY must not
+  // kill Host — unary Face must still work while the PTY stream is live.
+  const ptyUrl = new URL("xrk-app://stream/sidebar/api/pty/stream");
+  ptyUrl.searchParams.set("sessionId", "smoke-pty");
+  ptyUrl.searchParams.set("tab", "t1");
+  ptyUrl.searchParams.set("cwd", xrkHome);
+  const ptyStream = await Promise.race([
+    host.fetch(new Request(ptyUrl)),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("pty stream open timed out")), 20_000);
+    }),
+  ]);
+  if (!ptyStream.ok) {
+    fail(`pty stream HTTP ${String(ptyStream.status)}`);
+  }
+  const ptyCt = ptyStream.headers.get("content-type") ?? "";
+  if (!ptyCt.includes("event-stream") && !ptyCt.includes("text/event-stream")) {
+    fail(`pty stream bad content-type: ${ptyCt}`);
+  }
+  process.stdout.write("smoke-packaged-host: pty SSE open\n");
+
+  // Read until first data/keepalive or timeout — proves ConPTY started.
+  const ptyReader = ptyStream.body?.getReader();
+  if (ptyReader) {
+    const decoder = new TextDecoder();
+    let sawBytes = false;
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline && !sawBytes) {
+      const next = await Promise.race([
+        ptyReader.read(),
+        new Promise((resolve) => {
+          setTimeout(() => resolve({ done: true, value: undefined }), 2_000);
+        }),
+      ]);
+      if (next.value && next.value.byteLength > 0) {
+        const text = decoder.decode(next.value, { stream: true });
+        if (text.includes("data:") || text.includes(": connected") || text.includes(": keepalive")) {
+          sawBytes = true;
+          process.stdout.write(
+            `smoke-packaged-host: pty SSE first chunk (${String(text.length)} chars)\n`,
+          );
+        }
+      }
+      if (next.done && !sawBytes) break;
+    }
+    if (!sawBytes) {
+      fail("pty stream produced no SSE bytes (ConPTY / Host likely died)");
+    }
+  }
+
+  await unary(host, "host.describe");
+  process.stdout.write("smoke-packaged-host: describe while pty SSE ok\n");
+
+  await ptyStream.body?.cancel().catch(() => undefined);
+  process.stdout.write("smoke-packaged-host: pty SSE cancelled\n");
+
+  await unary(host, "host.describe");
+  process.stdout.write("smoke-packaged-host: describe after pty cancel ok\n");
 
   await Promise.race([
     host.stop(),

@@ -30,6 +30,11 @@ const DESKTOP_IPC = {
   windowIsMaximized: "xrk-desktop:window-is-maximized",
   windowMaximized: "xrk-desktop:window-maximized",
   windowReload: "xrk-desktop:window-reload",
+  hostReadyGet: "xrk-desktop:host-ready-get",
+  hostReady: "xrk-desktop:host-ready",
+  hostFailed: "xrk-desktop:host-failed",
+  hostPhaseGet: "xrk-desktop:host-phase-get",
+  hostPhase: "xrk-desktop:host-phase",
 };
 const DESKTOP_BRIDGE_PROTOCOL_VERSION = 1;
 
@@ -80,9 +85,78 @@ const api = {
 
 contextBridge.exposeInMainWorld("xrkDesktop", api);
 
-// Desktop owns the private Host. Face is same-origin xrk-app:// + framed pipes.
+function whenHostReady() {
+  return new Promise((resolve, reject) => {
+    const cleanup = (onReady, onFailed) => {
+      ipcRenderer.off(DESKTOP_IPC.hostReady, onReady);
+      ipcRenderer.off(DESKTOP_IPC.hostFailed, onFailed);
+    };
+    void ipcRenderer.invoke(DESKTOP_IPC.hostReadyGet).then((ready) => {
+      if (ready === true) {
+        setHostPhase("ready");
+        resolve();
+        return;
+      }
+      const onReady = () => {
+        cleanup(onReady, onFailed);
+        setHostPhase("ready");
+        resolve();
+      };
+      const onFailed = (_event, message) => {
+        cleanup(onReady, onFailed);
+        reject(
+          new Error(
+            typeof message === "string" && message.trim() !== ""
+              ? message
+              : "Desktop Host failed to start",
+          ),
+        );
+      };
+      ipcRenderer.on(DESKTOP_IPC.hostReady, onReady);
+      ipcRenderer.on(DESKTOP_IPC.hostFailed, onFailed);
+    });
+  });
+}
+
+let hostPhase = "starting";
+const hostPhaseListeners = new Set();
+
+function isHostPhase(value) {
+  return value === "starting" || value === "attaching" || value === "ready";
+}
+
+function setHostPhase(phase) {
+  if (hostPhase === phase) return;
+  hostPhase = phase;
+  for (const listener of hostPhaseListeners) listener(phase);
+}
+
+ipcRenderer.on(DESKTOP_IPC.hostPhase, (_event, phase) => {
+  if (isHostPhase(phase)) setHostPhase(phase);
+});
+
+void ipcRenderer.invoke(DESKTOP_IPC.hostPhaseGet).then((phase) => {
+  if (isHostPhase(phase)) setHostPhase(phase);
+});
+
+function getHostPhase() {
+  return hostPhase;
+}
+
+function subscribeHostPhase(listener) {
+  hostPhaseListeners.add(listener);
+  return () => {
+    hostPhaseListeners.delete(listener);
+  };
+}
+
+// Desktop owns the private Host. Product Face is loopback HTTP after ready;
+// xrk-app:// is splash/static. whenHostReady gates Face connect until origin is live.
 contextBridge.exposeInMainWorld("__XRK_TRANSPORT__", {
   ownsHost: true,
+  whenHostReady,
+  getHostPhase,
+  subscribeHostPhase,
 });
 `;
 

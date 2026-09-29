@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -41,5 +42,14 @@ describe("desktop product entry (ADR-0008)", () => {
     expect(result.stdout).toMatch(/defaultEntry=cli-web/);
     expect(result.stdout).toMatch(/installerShipped=true/);
     expect(result.stdout).toMatch(/upload:desktop/);
+  });
+
+  it("package-desktop refreshes product Web before electron-builder produce", () => {
+    const source = readFileSync(
+      path.join(ROOT, "scripts", "package-desktop.mjs"),
+      "utf8",
+    );
+    expect(source).toContain("ensureFreshProductShell");
+    expect(source).toContain('pnpm", ["run", "build:desktop"]');
   });
 });

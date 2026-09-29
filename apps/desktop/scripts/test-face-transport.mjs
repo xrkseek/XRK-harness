@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Desktop Face transport regression lane (pipe / dispatch / protocol / client).
+ * Desktop Face transport regression lane (loopback Host · protocol · client).
  *
  *   node apps/desktop/scripts/test-face-transport.mjs
  */
@@ -11,11 +11,9 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 const suites = [
-  "apps/desktop-host/tests/face-transport.regression.test.ts",
-  "apps/desktop-host/tests/pipe-runtime.test.ts",
   "apps/desktop/tests/host-process.test.ts",
-  "apps/desktop/tests/protocol-host-fetch.test.ts",
   "apps/desktop/tests/protocol.test.ts",
+  "apps/desktop/tests/desktop-host-attach.test.ts",
   "packages/server/http/tests/fetch-dispatch.test.ts",
   "packages/client/connection/tests/web-api-desktop.test.ts",
 ];

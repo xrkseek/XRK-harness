@@ -1,35 +1,17 @@
 /**
- * Upstream-Node child lifecycle and streaming Fetch carrier over framed pipes (ADR-0008).
+ * Upstream-Node Desktop Host child: lifecycle IPC + loopback Face Fetch (ADR-0008).
+ *
+ * DSH Desktop posture — Host listens on 127.0.0.1; Electron loads that origin.
+ * No Electron framed Face pipes (Win32 ConPTY must not inherit them).
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
-import { Readable, Writable } from "node:stream";
 import {
   DESKTOP_HOST_PROTOCOL_VERSION,
-  DESKTOP_PIPE_CHUNK_BYTES,
-  DESKTOP_REQUEST_PIPE_FD,
-  DESKTOP_RESPONSE_PIPE_FD,
-  DesktopHostResponseDecoder,
-  encodeDesktopRequestCancel,
-  encodeDesktopRequestData,
-  encodeDesktopRequestEnd,
-  encodeDesktopRequestStart,
-  writeDesktopPipeFrame,
   type DesktopHostCommand,
   type DesktopHostEvent,
-  type DesktopHostResponseFrame,
 } from "./host-protocol.js";
-
-interface PendingResponse {
-  readonly resolve: (response: Response) => void;
-  readonly reject: (error: Error) => void;
-  responseStarted: boolean;
-  uploadOpen: boolean;
-  controller?: ReadableStreamDefaultController<Uint8Array>;
-  requestReader?: ReadableStreamDefaultReader<Uint8Array>;
-  removeAbort?: () => void;
-}
 
 export interface DesktopHostProcessOptions {
   /** Optional loopback inspector port for development. */
@@ -44,12 +26,24 @@ export interface DesktopHostProcessOptions {
    * Use for product knobs Host reads (`XRK_HOME`, `XRK_WEB_DIST`, …).
    */
   readonly env?: NodeJS.ProcessEnv;
+  /**
+   * Fired once the child is spawned — before IPC `ready`.
+   * Splash uses this to advance past sticky "Starting Host…" into wiring.
+   */
+  readonly onSpawned?: () => void;
+  /**
+   * Fail `start()` if the child never sends IPC `ready` (default 120s).
+   * `0` disables the timeout.
+   */
+  readonly readyTimeoutMs?: number;
 }
 
 /** Ready facts reported by one Desktop Host child. */
 export interface DesktopHostReady {
   readonly protocolVersion: typeof DESKTOP_HOST_PROTOCOL_VERSION;
   readonly hostVersion: string;
+  /** Loopback Face origin for `BrowserWindow.loadURL`. */
+  readonly origin: string;
 }
 
 function isDesktopHostEvent(message: unknown): message is DesktopHostEvent {
@@ -61,7 +55,11 @@ function isDesktopHostEvent(message: unknown): message is DesktopHostEvent {
     case "ready":
       return (
         candidate.protocolVersion === DESKTOP_HOST_PROTOCOL_VERSION &&
-        typeof candidate.hostVersion === "string"
+        typeof candidate.hostVersion === "string" &&
+        typeof candidate.origin === "string" &&
+        /^https?:\/\/127\.0\.0\.1(?::\d+)?$/u.test(
+          (candidate.origin as string).replace(/\/$/u, ""),
+        )
       );
     case "fatal":
       return typeof candidate.message === "string";
@@ -107,6 +105,10 @@ function childEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     Object.entries(process.env).filter(
       ([name]) =>
         name !== "NODE_OPTIONS" &&
+        // Upstream Node Host must not inherit Electron's process identity —
+        // native addons (node-pty / ConPTY) crash the child when
+        // ELECTRON_RUN_AS_NODE / related vars leak from the shell main.
+        !/^ELECTRON_/u.test(name) &&
         !/^XRK_DESKTOP_/u.test(name) &&
         !/^(?:npm|pnpm|corepack)_/iu.test(name),
     ),
@@ -129,12 +131,8 @@ function defaultHostEntry(projectDir: string): string {
 /** One Desktop Host running under a bundled (or test) upstream Node.js executable. */
 export class DesktopHostProcess {
   private child: ChildProcess | undefined;
-  private requestPipe: Writable | undefined;
-  private responsePipe: Readable | undefined;
-  private readonly responseDecoder = new DesktopHostResponseDecoder();
-  private requestWriteTail: Promise<void> = Promise.resolve();
-  private nextStreamId = 1;
-  private readonly pending = new Map<number, PendingResponse>();
+  /** Loopback Face origin from IPC `ready`. */
+  private origin: string | undefined;
   private readyResolve!: (ready: DesktopHostReady) => void;
   private readyReject!: (error: Error) => void;
   private readonly readyPromise = new Promise<DesktopHostReady>(
@@ -148,6 +146,11 @@ export class DesktopHostProcess {
   private readonly inspectPort: number | undefined;
   private readonly entry: string;
   private readonly childEnvironment: NodeJS.ProcessEnv | undefined;
+  private readonly onSpawned: (() => void) | undefined;
+  private readonly readyTimeoutMs: number;
+  private readyTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Set by {@link stop} so attach logic can skip auto-restart on quit. */
+  private stopRequested = false;
 
   constructor(
     private readonly node: string,
@@ -157,11 +160,32 @@ export class DesktopHostProcess {
     this.inspectPort = options.inspectPort;
     this.entry = options.entry ?? defaultHostEntry(projectDir);
     this.childEnvironment = options.env;
+    this.onSpawned = options.onSpawned;
+    this.readyTimeoutMs = options.readyTimeoutMs ?? 120_000;
   }
 
-  /** Start the child once; resolve after IPC `ready`. */
+  /** True after {@link stop} was called (intentional teardown, not a crash). */
+  get stopWasRequested(): boolean {
+    return this.stopRequested;
+  }
+
+  /** Loopback Face origin after {@link start} resolves; `undefined` before ready. */
+  get faceOrigin(): string | undefined {
+    return this.origin;
+  }
+
+  /**
+   * Resolves when the Host child exits (crash, shutdown, or never-started).
+   * Safe to await after {@link start}; if start never ran, resolves immediately.
+   */
+  waitForExit(): Promise<void> {
+    return this.exitPromise ?? Promise.resolve();
+  }
+
+  /** Start the child once; resolve after IPC `ready` (includes loopback `origin`). */
   async start(): Promise<DesktopHostReady> {
     if (this.child !== undefined) return this.readyPromise;
+    // Logs + IPC only — no Face framed pipes (fds 3/4).
     const child = spawn(
       this.node,
       [
@@ -174,45 +198,16 @@ export class DesktopHostProcess {
       {
         cwd: this.projectDir,
         env: childEnv(this.childEnvironment),
-        stdio: ["ignore", "pipe", "pipe", "pipe", "pipe", "ipc"],
+        stdio: ["ignore", "pipe", "pipe", "ipc"],
+        windowsHide: true,
       },
     );
-    const requestPipe = child.stdio[DESKTOP_REQUEST_PIPE_FD];
-    const responsePipe = child.stdio[DESKTOP_RESPONSE_PIPE_FD];
-    if (
-      !(requestPipe instanceof Writable) ||
-      !(responsePipe instanceof Readable)
-    ) {
-      child.kill("SIGTERM");
-      throw new Error(
-        "xrk desktop host did not expose the required byte pipes and IPC channel",
-      );
-    }
     this.child = child;
-    this.requestPipe = requestPipe;
-    this.responsePipe = responsePipe;
     child.stderr?.setEncoding("utf8");
     child.stderr?.on("data", (chunk: string) => {
       this.stderr += chunk;
     });
     child.stdout?.pipe(process.stdout);
-    responsePipe.on("data", (chunk: Buffer) => {
-      this.acceptResponseBytes(chunk);
-    });
-    responsePipe.once("end", () => {
-      try {
-        this.responseDecoder.finish();
-        this.fail(new Error("xrk desktop host response pipe ended"));
-      } catch (error) {
-        this.fail(errorOf(error, "xrk desktop host response pipe failed"));
-      }
-    });
-    requestPipe.once("error", (error) => {
-      this.fail(error);
-    });
-    responsePipe.once("error", (error) => {
-      this.fail(error);
-    });
     child.on("message", (message: unknown) => {
       if (!isDesktopHostEvent(message)) {
         this.fail(new Error("xrk desktop host sent an invalid IPC event"));
@@ -222,8 +217,17 @@ export class DesktopHostProcess {
       this.handleMessage(message);
     });
     child.on("error", (error) => {
-      // Shutdown races commonly surface as EPIPE after the channel is gone.
       if (!isIpcClosedError(error)) this.fail(error);
+    });
+    child.on("disconnect", () => {
+      this.fail(new Error("xrk desktop host IPC disconnected"));
+      if (this.stopRequested) return;
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        // already gone
+      }
     });
     this.exitPromise = new Promise<void>((resolve) => {
       child.once("exit", (code) => {
@@ -239,78 +243,59 @@ export class DesktopHostProcess {
         resolve();
       });
     });
+    if (this.readyTimeoutMs > 0) {
+      this.readyTimer = setTimeout(() => {
+        const suffix =
+          this.stderr.trim() === "" ? "" : `: ${this.stderr.trim()}`;
+        this.fail(
+          new Error(
+            `xrk desktop host ready timed out after ${String(this.readyTimeoutMs)}ms${suffix}`,
+          ),
+        );
+        child.kill("SIGTERM");
+      }, this.readyTimeoutMs);
+      this.readyTimer.unref?.();
+    }
+    try {
+      this.onSpawned?.();
+    } catch (error) {
+      this.fail(errorOf(error, "xrk desktop host onSpawned failed"));
+    }
     return this.readyPromise;
   }
 
-  /** Forward one Fetch request to the child without buffering its body. */
+  /**
+   * Forward one Fetch to the Host loopback origin (smoke / protocol bridge).
+   * Rewrites `xrk-app://…` paths onto `http://127.0.0.1:<port>/…`.
+   */
   async fetch(request: Request): Promise<Response> {
-    await this.start();
+    const ready = await this.start();
     const child = this.child;
-    if (
-      child === undefined ||
-      !child.connected ||
-      this.requestPipe === undefined
-    ) {
+    if (child === undefined || !child.connected || this.origin === undefined) {
       throw new Error("xrk desktop host is unavailable");
     }
-    if (this.nextStreamId > 0xffff_ffff) {
-      throw new Error("xrk desktop host exhausted its request stream ids");
+    const incoming = new URL(request.url);
+    const pathWithQuery = `${incoming.pathname}${incoming.search}`;
+    const target = new URL(pathWithQuery, ready.origin);
+    const init: RequestInit = {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+      signal: request.signal,
+    };
+    if (request.body !== null) {
+      (init as RequestInit & { duplex: "half" }).duplex = "half";
     }
-    const streamId = this.nextStreamId++;
-    const method = request.method.toUpperCase();
-    const hasBody =
-      method !== "GET" && method !== "HEAD" && request.body !== null;
-    return new Promise<Response>((resolve, reject) => {
-      const pending: PendingResponse = {
-        resolve,
-        reject,
-        responseStarted: false,
-        uploadOpen: hasBody,
-      };
-      const abort = (): void => {
-        if (!this.pending.has(streamId)) return;
-        const error = errorOf(request.signal.reason, "request aborted");
-        pending.uploadOpen = false;
-        void pending.requestReader?.cancel(error).catch(() => undefined);
-        this.enqueueRequestFrame(encodeDesktopRequestCancel(streamId)).catch(
-          (pipeError: unknown) => {
-            this.fail(errorOf(pipeError, "xrk desktop request pipe failed"));
-          },
-        );
-        if (pending.controller === undefined) pending.reject(error);
-        else pending.controller.error(error);
-        this.finishPending(streamId, false);
-      };
-      if (request.signal.aborted) {
-        reject(errorOf(request.signal.reason, "request aborted"));
-        return;
-      }
-      request.signal.addEventListener("abort", abort, { once: true });
-      pending.removeAbort = () => {
-        request.signal.removeEventListener("abort", abort);
-      };
-      this.pending.set(streamId, pending);
-      this.pumpRequest(streamId, request, hasBody).catch((error: unknown) => {
-        this.failPending(
-          streamId,
-          errorOf(error, "xrk desktop request upload failed"),
-        );
-      });
-    });
+    return globalThis.fetch(new Request(target, init));
   }
 
   /** Request graceful teardown, then wait for child exit. */
   async stop(): Promise<void> {
+    this.stopRequested = true;
     const child = this.child;
     if (child === undefined) return;
-    this.responsePipe?.resume();
     try {
       if (child.connected) this.send({ type: "shutdown" });
-    } catch {
-      // already gone
-    }
-    try {
-      this.requestPipe?.destroy();
     } catch {
       // already gone
     }
@@ -323,84 +308,13 @@ export class DesktopHostProcess {
       }
     }
     this.child = undefined;
-    this.requestPipe = undefined;
-    this.responsePipe = undefined;
   }
 
-  private async pumpRequest(
-    streamId: number,
-    request: Request,
-    hasBody: boolean,
-  ): Promise<void> {
-    await this.enqueueRequestFrame(
-      encodeDesktopRequestStart(streamId, {
-        url: request.url,
-        method: request.method.toUpperCase(),
-        headers: [...request.headers.entries()],
-        hasBody,
-      }),
-    );
-    if (!hasBody) return;
-    const body = request.body;
-    if (body === null) {
-      throw new Error("xrk desktop request body disappeared before upload");
-    }
-    const reader = body.getReader();
-    const pending = this.pending.get(streamId);
-    if (pending === undefined) {
-      await reader.cancel();
-      return;
-    }
-    pending.requestReader = reader;
-    try {
-      for (;;) {
-        const next = await reader.read();
-        if (next.done) break;
-        for (
-          let offset = 0;
-          offset < next.value.byteLength;
-          offset += DESKTOP_PIPE_CHUNK_BYTES
-        ) {
-          if (!this.pending.has(streamId)) return;
-          await this.enqueueRequestFrame(
-            encodeDesktopRequestData(
-              streamId,
-              next.value.subarray(offset, offset + DESKTOP_PIPE_CHUNK_BYTES),
-            ),
-          );
-        }
-      }
-      const live = this.pending.get(streamId);
-      if (live !== undefined) {
-        await this.enqueueRequestFrame(encodeDesktopRequestEnd(streamId));
-        live.uploadOpen = false;
-      }
-    } finally {
-      reader.releaseLock();
-      const live = this.pending.get(streamId);
-      if (live?.requestReader === reader) delete live.requestReader;
-    }
-  }
-
-  private enqueueRequestFrame(frame: Buffer): Promise<void> {
-    const write = this.requestWriteTail.then(async () => {
-      const pipe = this.requestPipe;
-      if (pipe === undefined || pipe.destroyed) {
-        throw new Error("xrk desktop host request pipe is unavailable");
-      }
-      await writeDesktopPipeFrame(pipe, frame);
-    });
-    this.requestWriteTail = write.catch(() => undefined);
-    return write;
-  }
-
-  private send(message: DesktopHostCommand): void {
+  private send(message: DesktopHostCommand | DesktopHostEvent): void {
     const child = this.child;
     if (child === undefined || !child.connected) {
       throw new Error("xrk desktop host IPC is unavailable");
     }
-    // Callback form: Channel-closed EPIPE must not become an unhandled 'error'
-    // event (Node emits that when send has no callback).
     try {
       child.send(message, (error) => {
         if (error !== null && !isIpcClosedError(error)) {
@@ -413,158 +327,19 @@ export class DesktopHostProcess {
     }
   }
 
-  private acceptResponseBytes(chunk: Buffer): void {
-    try {
-      for (const frame of this.responseDecoder.push(chunk)) {
-        this.handleResponseFrame(frame);
-      }
-    } catch (error) {
-      this.fail(errorOf(error, "xrk desktop host response pipe failed"));
-      this.child?.kill("SIGTERM");
-    }
-  }
-
-  private handleResponseFrame(frame: DesktopHostResponseFrame): void {
-    const pending = this.pending.get(frame.streamId);
-    if (pending === undefined) {
-      if (frame.streamId >= this.nextStreamId) {
-        throw new Error(
-          `xrk desktop host responded for unknown stream ${String(frame.streamId)}`,
-        );
-      }
-      return;
-    }
-    switch (frame.type) {
-      case "start": {
-        if (pending.responseStarted) {
-          throw new Error(
-            `xrk desktop host started stream ${String(frame.streamId)} twice`,
-          );
-        }
-        pending.responseStarted = true;
-        let body: ReadableStream<Uint8Array> | null = null;
-        if (frame.hasBody) {
-          body = new ReadableStream<Uint8Array>({
-            start: (controller) => {
-              pending.controller = controller;
-            },
-            cancel: (reason) => {
-              this.cancelResponse(frame.streamId, reason);
-            },
-          });
-        }
-        pending.resolve(
-          new Response(body, {
-            status: frame.status,
-            headers: new Headers(
-              frame.headers.map(
-                ([name, value]) => [name, value] as [string, string],
-              ),
-            ),
-          }),
-        );
-        return;
-      }
-      case "data": {
-        const controller = pending.controller;
-        if (!pending.responseStarted || controller === undefined) {
-          this.failPending(
-            frame.streamId,
-            new Error(
-              `xrk desktop host sent body data before a body start for stream ${String(frame.streamId)}`,
-            ),
-          );
-          return;
-        }
-        // Never pause the shared response pipe for one slow consumer. If the
-        // renderer already cancelled this body, drop the stream — do not throw
-        // through acceptResponseBytes (that kills the whole Host child).
-        try {
-          controller.enqueue(frame.data);
-        } catch {
-          this.cancelResponse(frame.streamId, new Error("response consumer closed"));
-        }
-        return;
-      }
-      case "end":
-        if (!pending.responseStarted) {
-          this.failPending(
-            frame.streamId,
-            new Error(
-              `xrk desktop host ended stream ${String(frame.streamId)} before its response start`,
-            ),
-          );
-          return;
-        }
-        try {
-          pending.controller?.close();
-        } catch {
-          /* consumer already cancelled */
-        }
-        this.finishPending(frame.streamId, true);
-        return;
-      case "error":
-        this.failPending(frame.streamId, new Error(frame.message));
-        return;
-      default:
-        frame satisfies never;
-    }
-  }
-
-  private cancelResponse(streamId: number, reason: unknown): void {
-    const pending = this.pending.get(streamId);
-    if (pending === undefined) return;
-    pending.uploadOpen = false;
-    void pending.requestReader?.cancel(reason).catch(() => undefined);
-    this.enqueueRequestFrame(encodeDesktopRequestCancel(streamId)).catch(
-      (error: unknown) => {
-        this.fail(errorOf(error, "xrk desktop request pipe failed"));
-      },
-    );
-    this.finishPending(streamId, false);
-  }
-
-  private failPending(streamId: number, error: Error): void {
-    const pending = this.pending.get(streamId);
-    if (pending === undefined) return;
-    pending.uploadOpen = false;
-    void pending.requestReader?.cancel(error).catch(() => undefined);
-    if (pending.controller === undefined) pending.reject(error);
-    else {
-      try {
-        pending.controller.error(error);
-      } catch {
-        pending.reject(error);
-      }
-    }
-    this.enqueueRequestFrame(encodeDesktopRequestCancel(streamId)).catch(
-      (pipeError: unknown) => {
-        this.fail(errorOf(pipeError, "xrk desktop request pipe failed"));
-      },
-    );
-    this.finishPending(streamId, false);
-  }
-
-  private finishPending(streamId: number, cancelOpenUpload: boolean): void {
-    const pending = this.pending.get(streamId);
-    if (pending === undefined) return;
-    if (cancelOpenUpload && pending.uploadOpen) {
-      pending.uploadOpen = false;
-      void pending.requestReader?.cancel().catch(() => undefined);
-      this.enqueueRequestFrame(encodeDesktopRequestCancel(streamId)).catch(
-        (error: unknown) => {
-          this.fail(errorOf(error, "xrk desktop request pipe failed"));
-        },
-      );
-    }
-    pending.removeAbort?.();
-    this.pending.delete(streamId);
-  }
-
   private handleMessage(message: DesktopHostEvent): void {
     switch (message.type) {
       case "ready":
-        this.readyResolve(message);
+        if (this.readyTimer !== undefined) {
+          clearTimeout(this.readyTimer);
+          this.readyTimer = undefined;
+        }
+        this.origin = message.origin.replace(/\/$/u, "");
+        this.readyResolve({
+          protocolVersion: message.protocolVersion,
+          hostVersion: message.hostVersion,
+          origin: this.origin,
+        });
         return;
       case "fatal":
         this.fail(new Error(message.message));
@@ -575,20 +350,10 @@ export class DesktopHostProcess {
   }
 
   private fail(error: Error): void {
-    this.readyReject(error);
-    for (const pending of this.pending.values()) {
-      void pending.requestReader?.cancel(error).catch(() => undefined);
-      if (pending.controller === undefined) pending.reject(error);
-      else {
-        try {
-          pending.controller.error(error);
-        } catch {
-          pending.reject(error);
-        }
-      }
-      pending.removeAbort?.();
+    if (this.readyTimer !== undefined) {
+      clearTimeout(this.readyTimer);
+      this.readyTimer = undefined;
     }
-    this.pending.clear();
-    this.responsePipe?.resume();
+    this.readyReject(error);
   }
 }

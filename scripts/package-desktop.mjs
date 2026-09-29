@@ -12,6 +12,10 @@
  * Unsigned Windows: XRK_DESKTOP_UNSIGNED=1
  * Auto-update feed origin: XRK_DESKTOP_UPDATE_*_ORIGIN (app-update.yml)
  * After produce: writes package-complete-*.json; upload via `pnpm upload:desktop`
+ * Produce always runs `pnpm build:desktop` first (host + client:bundle + web:assemble).
+ * There is no skip-shell-build escape hatch — stale Web was the usual packaging bug.
+ * On Windows, if NSIS fails with "Can't open output file" under a non-ASCII path,
+ * run from an ASCII junction (e.g. mklink /J C:\xrk-h <repo>).
  */
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
@@ -248,6 +252,25 @@ const required = [
   path.join(ROOT, "apps", "desktop-host", "dist", "index.js"),
   path.join(ROOT, "apps", "web", "dist", "index.html"),
 ];
+
+/**
+ * Always refresh Desktop + product Web before electron-builder.
+ * Stale `apps/web/dist` (client CSS/JS) otherwise ships yesterday's shell.
+ */
+function ensureFreshProductShell() {
+  process.stdout.write("package-desktop: build:desktop (host + client + web)…\n");
+  const build = spawnSync("pnpm", ["run", "build:desktop"], {
+    cwd: ROOT,
+    stdio: "inherit",
+    shell: true,
+  });
+  if ((build.status ?? 1) !== 0) process.exit(build.status ?? 1);
+}
+
+if (produce) {
+  ensureFreshProductShell();
+}
+
 for (const file of required) {
   if (!existsSync(file)) {
     process.stderr.write(
@@ -285,7 +308,7 @@ function ensureProduceArtifacts() {
   );
   if ((prepHost.status ?? 1) !== 0) process.exit(prepHost.status ?? 1);
 
-  process.stdout.write("package-desktop: smoke packaged Host Face pipe…\n");
+  process.stdout.write("package-desktop: smoke packaged Host loopback Face…\n");
   const smokeHome = path.join(paths.root, "smoke-host-home");
   const nodeExe = path.join(
     paths.runtime,

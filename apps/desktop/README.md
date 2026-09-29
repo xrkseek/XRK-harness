@@ -4,7 +4,7 @@
 
 私有 Electron 桌面壳（workspace `apps/desktop`）。包名 **`@xrkseek/harness-desktop`**，**`private: true`**，不进公共 npm。产品能力在 [status.md](../../docs/status.md) 为 **未稳**（第一波打包流水线已开；公开发版/更新频道待凭据）。架构决策：[ADR-0008](../../docs/adr/0008-desktop-shell-private-host.md)。
 
-桌面壳包裹已组装的 XRK Web UI；**不开**产品 Web 监听端口。私有 Host（`@xrkseek/harness-desktop-host`）在上游 Node 子进程中组合本仓 Host / Face；`xrk-app://` 提供静态资源与 Fetch 入口；分帧管道承载请求/响应；Node IPC **仅**生命周期。
+桌面壳包裹已组装的 XRK Web UI。私有 Host（`@xrkseek/harness-desktop-host`）在上游 Node 子进程中 **listen `127.0.0.1:<ephemeral>`**（DSH Desktop）；Electron 在 IPC `ready` 后 `loadURL` 该 origin。`xrk-app://` 仅闪屏/静态；Node IPC **仅**生命周期（无 Face 分帧管道）。
 
 **一体体验（相对 Codex / Hermes / dsh 的组合优势）**：一个安装身份 = 壳 + Desktop Host + Web dist + **同源 Face**——Session 事件 SSOT、Status（本会话 costUsage + 跨会话 cost-meter）、Settings 诚实卡族、`session.export` 的 `cost.json`（含 `dailyTrend`）、`xrkh doctor` 的 `cost-ledger` 探针，共享 `~/.xrk`，**不是**平行账本或 Cordis 嵌入 Host。日常入口仍以 CLI / Web 为准，直到 status 升「能跑」。
 
@@ -14,7 +14,7 @@
 |------|------|----------|
 | **发布身份** | 壳 · Desktop Host · Web dist · 插件依赖图 · 内置 Node/pnpm（及日后 seed）同一 Desktop 发布号 | 禁止「仅壳 / 仅 runtime」分轨；CLI npm 线（`@xrkseek/harness-cli`）**不是** Desktop 身份的一部分 |
 | **运行时** | 打包后用捆绑上游 Node + 钉死 pnpm；开发投影可用调用方 Node（须文档标明） | 系统 pnpm / 用户 npm 配置不进产品执行路径 |
-| **通信** | 无产品 listen；`xrk-app://` + 分帧管道；IPC 仅生命周期 | 不回退到「本机 HTTP serve 第二入口」 |
+| **通信** | Host 仅 listen **`127.0.0.1`**；Electron `loadURL` 回环；IPC 仅生命周期 | 无 Face 分帧管道；禁止绑 `0.0.0.0` |
 | **状态归属** | 共享 `~/.xrk` 产品数据；隔离 desktop profile · lock · `node_modules` · 桌面 pnpm store | CLI **不得**启动/改写 `profiles/desktop`；单实例锁为主 owner |
 | **激活** | staging → 健康检查 → 日记激活 → rollback / recover | `DesktopProfileTransactionManager`；≠ 离线 seed 已可装 |
 | **更新** | 更新单元 = 壳 + runtime + seed 同版；MVP = **整包** + generic `app-update.yml`；`upload:desktop` 校验 + 本地镜像 | 差分块 / COS HTTPS PUT **二期** |
@@ -102,7 +102,7 @@ pnpm --filter @xrkseek/harness-desktop clean:build
 
 Private Electron desktop shell (workspace `apps/desktop`). Package **`@xrkseek/harness-desktop`**, **`private: true`**. Status in [status.md](../../docs/status.md) is **Unstable** (release packaging pipeline open; public ship / update channel credential-gated). Architecture: [ADR-0008](../../docs/adr/0008-desktop-shell-private-host.md).
 
-The shell wraps the assembled XRK Web UI and opens **no** product Web listen port. The private Host (`@xrkseek/harness-desktop-host`) composes this repo’s Host / Face under an upstream-Node child; `xrk-app://` serves static assets and Fetch; framed pipes carry request/response bodies; Node IPC is **lifecycle-only**. Same-origin Host = same Face/session semantics as `xrkh web`.
+The shell wraps the assembled XRK Web UI. The private Host (`@xrkseek/harness-desktop-host`) listens on **`127.0.0.1:<ephemeral>`** (DSH Desktop posture); Electron `loadURL`s that origin after IPC `ready`. `xrk-app://` is splash / static only; Node IPC is **lifecycle-only** (no Face framed pipes). Same-origin Host = same Face/session semantics as `xrkh web`.
 
 **Integrated experience (vs Codex / Hermes / dsh combo)**: one install identity = shell + Desktop Host + Web dist + **same-origin Face** — Session-event SSOT, Status (session `costUsage` + cross-session cost-meter), honest Settings cards, `session.export` `cost.json` (with `dailyTrend`), and `xrkh doctor` `cost-ledger` probe, sharing `~/.xrk` — **not** a parallel ledger or Cordis-embedded Host. Day-to-day entry stays CLI / Web until status promotes to **Working**.
 
@@ -112,7 +112,7 @@ The shell wraps the assembled XRK Web UI and opens **no** product Web listen por
 |----------|---------|---------------|
 | **Release identity** | Shell · Desktop Host · Web dist · plugin graph · bundled Node/pnpm (and seed later) share one Desktop release number | No “shell-only / runtime-only” split tracks; the public CLI line (`@xrkseek/harness-cli`) is **not** part of Desktop identity |
 | **Runtime** | Packaged builds use bundled upstream Node + pinned pnpm; development projection may use caller Node (must be documented) | System pnpm / user npm config stay off the product execution path |
-| **Transport** | No product listen; `xrk-app://` + framed pipes; IPC lifecycle-only | No fallback to a local HTTP `serve` second entry |
+| **Transport** | Host listen **`127.0.0.1` only**; Electron `loadURL` loopback; IPC lifecycle-only | No Face framed pipes; never bind `0.0.0.0` |
 | **State ownership** | Share `~/.xrk` product data; isolate desktop profile · lock · `node_modules` · desktop pnpm store | CLI **must not** start/mutate `profiles/desktop`; single-instance lock is the primary owner |
 | **Activation** | staging → health check → journaled activate → rollback / recover | `DesktopProfileTransactionManager`; ≠ offline seed installable |
 | **Updates** | Update unit = shell + runtime + seed, same version; MVP = **full-package** + generic `app-update.yml`; `upload:desktop` validates + filesystem mirror | Blockmap differential / COS HTTPS PUT **phase 2** |

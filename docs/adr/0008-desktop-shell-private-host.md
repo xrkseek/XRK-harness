@@ -4,13 +4,13 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-10
-- **Updated:** 2026-09-26
+- **Updated:** 2026-09-29
 - **Tags:** desktop, electron, host, packaging, auto-update
 - **Related:** [ADR-0001](./0001-typescript-only-host.md) · [ADR-0002](./0002-no-embed-upstream.md) · [status.md](../status.md) · [apps/desktop/README.md](../../apps/desktop/README.md)
 
 ## 背景
 
-XRK-Harness 为自研产品栈；设计吸收 Codex 与业界 agent harness 在壳与 Host 交互上的长处，落点以本仓契约与代码为准。打包流水线对标 deepseek-harness `electron-builder`（unsigned 闸门 · 凭据签名 · generic 更新源 · build 时 `--publish never`）。
+XRK-Harness 为自研产品栈；设计吸收 Codex 与业界 agent harness 在壳与 Host 交互上的长处，落点以本仓契约与代码为准。打包流水线对标 deepseek-harness `electron-builder`（unsigned 闸门 · 凭据签名 · generic 更新源 · build 时 `--publish never`）。Desktop Face 载波对标 **DSH Desktop**（`127.0.0.1` 回环），避免 Electron 分帧管道与 Win32 ConPTY 的 HANDLE 继承冲突。
 
 产品入口今日为 Web（`xrkh web` / `serve`）与 CLI（`@xrkseek/harness-cli`）。Electron 桌面载体由 workspace **`apps/desktop`**（`@xrkseek/harness-desktop`，**`private: true`**）与 **`apps/desktop-host`**（`@xrkseek/harness-desktop-host`，**private**）承载。
 
@@ -22,8 +22,8 @@ XRK-Harness 为自研产品栈；设计吸收 Codex 与业界 agent harness 在�
 
 | 部件 | 职责 | 落点 |
 | --- | --- | --- |
-| **Electron 壳** | 窗口 · 单实例锁 · `xrk-app://` · 分帧管道 · 窄 preload · 更新协调 | `apps/desktop` |
-| **私有 Desktop Host** | 上游 Node 子进程；组合本仓 Host / Face / 已组装 Web；**无**监听 socket；**无** Cordis boot | `apps/desktop-host` |
+| **Electron 壳** | 窗口 · 单实例锁 · `xrk-app://` 闪屏 · loopback `loadURL` · 窄 preload · 更新协调 | `apps/desktop` |
+| **私有 Desktop Host** | 上游 Node 子进程；组合本仓 Host / Face / 已组装 Web；**listen `127.0.0.1` only**；**无** Cordis boot | `apps/desktop-host` |
 | **产品数据** | 会话 · 设置 · 凭据 · 工作区 | `~/.xrk`（`XRK_HOME`） |
 | **Desktop 可执行图** | profile · lock · `node_modules` · 内置 Node/pnpm store | `~/.xrk/profiles/desktop` · `~/.xrk/desktop/…` |
 
@@ -35,12 +35,12 @@ XRK-Harness 为自研产品栈；设计吸收 Codex 与业界 agent harness 在�
 
 | 通道 | 决策 |
 | --- | --- |
-| 产品 Web listen | **不开** — 无 `http(s)://127.0.0.1:…` 第二入口 |
-| 自定义协议 | **`xrk-app://`** — 静态资源与 Renderer→Host Fetch |
-| 分帧字节管道 | 壳 ↔ Host 主数据面（协议版本 · stream id · 背压 · cancel） |
-| Node IPC | **仅** ready / fatal / shutdown 等生命周期信号 |
+| 产品 Web listen | **Desktop：仅 `127.0.0.1` 回环**（与 DSH Desktop 同构；**不**绑 `0.0.0.0` / 不暴露局域网） |
+| 自定义协议 | **`xrk-app://`** — 可选 splash / 静态过渡；**产品 UI 以 Host 回环 origin 为准** |
+| 分帧字节管道 | **退役**（曾为 Face 主数据面；Windows ConPTY 会继承 Electron 管道 HANDLE 并切断 Host） |
+| Node IPC | **仅** ready（含 `origin`）/ fatal / shutdown 等生命周期信号 |
 
-规则：不得回退「先 listen 再连 localhost」；Face wire 经协议 + 管道投影，不另起平行 REST 真源。**同源 Host** = 与 `xrkh web` 同一 compose/Face 语义，仅载体不同。
+规则：Desktop Face = 回环 HTTP，与 `xrkh web` 同一 compose/Face 语义，仅载体不同；**禁止**把 Host 绑到非 loopback。CLI / `xrkh web` 仍可 listen 或按既有配置。
 
 ### 渲染安全
 
@@ -72,14 +72,15 @@ XRK-Harness 为自研产品栈；设计吸收 Codex 与业界 agent harness 在�
 ### 明确不做
 
 - 不把 Desktop 并入公共 `@xrkseek/harness-cli` 包表面。
-- 不以本机 Web listen 为 Desktop 产品通信。
+- 不把 Desktop Host 绑到非 loopback（局域网 / `0.0.0.0`）。
+- 不以 Electron 分帧管道做产品 Face 数据面（Windows ConPTY 会继承 HANDLE）。
 - 不在本波实现 Linux、16 分片归档或实网 COS HTTPS PUT（本地文件系统镜像上传已开）。
 - 日常配置仍优先 **Settings UI**。
 
 ## 后果
 
-- [status.md](../status.md)：**未稳**（发布矩阵打包 + 更新上传 CI 可校验；公开签名发版与实网 COS 仍凭据门控）→ **能跑**（至少一平台可分发安装包 + 更新频道接通）。
-- 实现与测例须守：无产品 listen · IPC 不传业务 · CLI 拒绝 desktop profile · 同号发布绑定 · 默认入口不为安装包。
+- [status.md](../status.md)：打包 + 更新上传流水线可校验；Desktop Face = **`127.0.0.1` 回环**（对标 DSH Desktop）。
+- 实现与测例须守：loopback-only listen · IPC 不传业务 · CLI 拒绝 desktop profile · 同号发布绑定 · 默认入口不为安装包。
 - 根脚本：`pnpm build:desktop` · `pnpm dev:desktop` · `pnpm start:desktop` · `pnpm package:desktop` · `pnpm upload:desktop` · `pnpm clean:desktop`。
 
 ## 开放项
@@ -91,13 +92,17 @@ XRK-Harness 为自研产品栈；设计吸收 Codex 与业界 agent harness 在�
 
 ---
 
+> **Updated 2026-09-29**：Desktop Face 从 Electron 分帧管道改为 **`127.0.0.1` 回环 HTTP**（对标 dataelement/dsh-desktop）。管道方案下 Win32 ConPTY 会继承 Face/IPC HANDLE，一开终端就切断 Host。
+
+---
+
 # ADR-0008: Desktop shell and private Host carrier
 
 > **Audience**: Maintainers · Contributors
 
 - **Status:** Accepted
 - **Date:** 2026-09-10
-- **Updated:** 2026-09-26
+- **Updated:** 2026-09-29
 - **Tags:** desktop, electron, host, packaging, auto-update
 - **Related:** [ADR-0001](./0001-typescript-only-host.md) · [ADR-0002](./0002-no-embed-upstream.md) · [status.md](../status.md) · [apps/desktop/README.md](../../apps/desktop/README.md)
 
@@ -107,18 +112,19 @@ XRK-Harness is an independently developed stack. Packaging follows deepseek-harn
 
 Product entries today are Web (`xrkh web` / `serve`) and CLI. The Electron carrier lives in **`apps/desktop`** and **`apps/desktop-host`** (both private).
 
-## Decision (packaging delta 2026-09-26)
+## Decision (packaging + Face carrier 2026-09-29)
 
 - Release matrix **`win-x64` / `mac-arm64` / `mac-x64`** packaging pipeline is **open** (`pnpm package:desktop`; produce with `XRK_DESKTOP_PACKAGE=1`). `mac-x64` may build on Apple Silicon (Rosetta) or Intel Mac. `win-arm64` / `linux-*` remain deferred.
 - Default product entry remains **CLI/Web**; installer is never day-1 `xrkh` entry.
 - Unsigned Windows via `XRK_DESKTOP_UNSIGNED=1`; signing/notarize when `XRK_DESKTOP_WINDOWS_*` / `XRK_DESKTOP_MACOS_*` present.
 - Auto-update MVP: full-package + generic provider (`app-update.yml`; **omitted for unsigned**); Main wires `DesktopUpdateCoordinator` + schedule + application-menu check; `pnpm upload:desktop` validates artifacts + `package-complete-*.json` and mirrors to a local filesystem transport (live COS HTTPS PUT remains phase 2); `pnpm clean:desktop` clears artifacts/mirrors.
 - `installerShipped=true` once the update upload CI path exists; day-1 entry stays `cli-web`.
-- Same-origin Host: Desktop Host composes the same Face/session stack as `xrkh web` (protocol + pipes, no listen).
+- **Desktop Face carrier: `http://127.0.0.1:<ephemeral>`** (DSH Desktop posture). Node IPC carries only lifecycle (`ready` includes `origin`). Framed Electron Face pipes are retired — Win32 ConPTY inherited those HANDLEs and killed Host on first terminal open.
 - `isDesktopProductReady()` means packaging + update-upload pipeline ready.
 - Builder identity lives in one `DESKTOP_BUILDER_CONFIG` (no draft alias); upload credentials stay scrubbed from package-prep subprocesses.
 
 ## Consequences
 
-- status: **Unstable** until a distributable signed/notarized artifact + live update channel land; do not claim Working without them.
-- See Chinese section above for the full composition / transport / security decisions (unchanged).
+- status tracks packaging + update-upload; Desktop Face is loopback-only.
+- See Chinese section above for composition / transport / security decisions.
+- Implementation must keep: loopback-only listen · IPC lifecycle-only · CLI refuses desktop profile · same release identity · default entry is not the installer.
