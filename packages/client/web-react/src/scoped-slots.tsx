@@ -419,6 +419,7 @@ function standardProps(
         useSessions: observableHook(host.sessions.list),
         useWorkspaces: observableHook(host.workspaces.list),
         useConnectionState: observableHook(host.connection.state),
+        useConnectionPhase: observableHook(host.connection.phase),
       },
       session: new WeakMap(),
       sessionMaybe: new WeakMap(),

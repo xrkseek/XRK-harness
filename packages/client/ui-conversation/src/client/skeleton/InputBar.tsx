@@ -37,6 +37,9 @@ import {
 } from '../input/editor/view-binding.ts'
 import { resolveSubmitMode } from '../input/resolve-submit-mode.ts'
 import { attachmentErrorText, imageSizeText } from '../image-labels.ts'
+import {
+  pathReferenceInsert, resolveDroppedDirectories,
+} from '../drop-path-intake.ts'
 import { ContextMeter } from './ContextMeter.tsx'
 import { PermissionSelect } from './PermissionSelect.tsx'
 import css from './InputBar.module.css'
@@ -305,6 +308,31 @@ export const InputBar = memo(function InputBar({
 
   const canAcceptDrop = !locked && !machineBusy && addImages !== undefined && subagent === null
 
+  const intakeDirectories = useCallback((directories: readonly File[]): void => {
+    if (directories.length === 0) return
+    if (locked || machineBusy) return
+    if (subagent !== null) {
+      showToast(t('file.subagentUnsupported'))
+      return
+    }
+    if (keyboard === undefined) {
+      showToast(t('file.folderNeedsDesktop'))
+      return
+    }
+    const { resolved, unresolved } = resolveDroppedDirectories(directories)
+    for (const entry of resolved) {
+      const insert = pathReferenceInsert(entry.path, entry.kind)
+      if (insert === undefined) continue
+      if (!keyboard.insertPathReference(insert)) {
+        showToast(t('file.folderInsertFailed'))
+        return
+      }
+    }
+    if (unresolved.length > 0) {
+      showToast(t('file.folderNeedsDesktop'))
+    }
+  }, [keyboard, locked, machineBusy, showToast, subagent, t])
+
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const onPickFiles = (e: ChangeEvent<HTMLInputElement>): void => {
     const picked = e.target.files === null ? [] : [...e.target.files]
@@ -476,6 +504,7 @@ export const InputBar = memo(function InputBar({
           attachments,
           canAcceptDrop,
           onAddImages: intakeImages,
+          onAddDirectories: intakeDirectories,
           onRemoveImage: (id) => { removeImage?.(id) },
           uploads: fileUploads ?? {},
           onRetryFile: (id) => { retryFile?.(id) },

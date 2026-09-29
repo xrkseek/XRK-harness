@@ -144,8 +144,128 @@ describe('imageGenCardModel', () => {
     expect(model?.images[0]?.attachment.width).toBe(64)
   })
 
+  it('keeps valid image blocks when a sibling image part is malformed', () => {
+    const block: ToolResultNode = {
+      kind: 'tool-result',
+      seq: 1,
+      time: 0,
+      callId: 'c1',
+      call: { name: 'image_generate', argsRaw: '{"prompt":"x"}' },
+      callTime: 0,
+      isError: false,
+      callView: null,
+      resultView: null,
+      subCalls: [],
+      content: [
+        { type: 'text', text: 'provider=memory images=2\nattachmentId=sha256:good' },
+        {
+          type: 'image',
+          attachment: {
+            attachmentId: 'sha256:good',
+            mediaType: 'image/png',
+            bytes: 42,
+            width: 1254.0,
+            height: 1254,
+            name: 'ok.png',
+            originalDimensions: { width: 1254, height: 1254 },
+          },
+        },
+        {
+          type: 'image',
+          attachment: {
+            attachmentId: '',
+            mediaType: 'image/png',
+            bytes: 1,
+            width: 1,
+            height: 1,
+          },
+        },
+      ],
+    }
+    const model = imageGenCardModel(block)
+    expect(model?.images).toHaveLength(1)
+    expect(model?.images[0]?.attachment.attachmentId).toBe('sha256:good')
+  })
+
+  it('parses attachmentId from text when image blocks are absent', () => {
+    const model = imageGenCardModel(settledImage([
+      'provider=memory delivery=inline images=1',
+      '--- image 1 ---',
+      'mime=image/png bytes=2882592 1254x1254',
+      'attachmentId=sha256:50cd1befaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      'use=Shown in chat. Re-inspect: read_image file_path=<attachmentId>. Not a disk path.',
+    ].join('\n')))
+    expect(model?.images).toHaveLength(1)
+    expect(model?.images[0]?.attachment.bytes).toBe(2882592)
+  })
+
   it('returns null without attachmentId', () => {
     expect(imageGenCardModel(settledImage('provider=memory images=0'))).toBeNull()
+  })
+})
+
+describe('videoFileCardModel', () => {
+  it('builds a file card from video_generate attachmentId lines', async () => {
+    const { videoFileCardModel } = await import('../src/client/tool/models/file-card-model.ts')
+    const block: ToolResultNode = {
+      kind: 'tool-result',
+      seq: 2,
+      time: 0,
+      callId: 'c2',
+      call: { name: 'video_generate', argsRaw: '{"action":"generate"}' },
+      callTime: 0,
+      isError: false,
+      callView: null,
+      resultView: null,
+      subCalls: [],
+      content: [{
+        type: 'text',
+        text: [
+          'jobId=job_1',
+          'status=completed',
+          'attachmentId=sha256:vid',
+          'file=clip.mp4',
+          'mime=video/mp4 bytes=2048',
+        ].join('\n'),
+      }],
+    }
+    const card = videoFileCardModel(block)
+    expect(card?.label).toBe('1 video')
+    expect(card?.files[0]?.attachment.name).toBe('clip.mp4')
+    expect(card?.files[0]?.attachment.attachmentId).toBe('sha256:vid')
+  })
+})
+
+describe('fileCardModel', () => {
+  it('collects type:file ContentBlocks', async () => {
+    const { fileCardModel } = await import('../src/client/tool/models/file-card-model.ts')
+    const block: ToolResultNode = {
+      kind: 'tool-result',
+      seq: 3,
+      time: 0,
+      callId: 'c3',
+      call: { name: 'some_tool', argsRaw: '{}' },
+      callTime: 0,
+      isError: false,
+      callView: null,
+      resultView: null,
+      subCalls: [],
+      content: [
+        { type: 'text', text: 'wrote report' },
+        {
+          type: 'file',
+          attachment: {
+            attachmentId: 'sha256:doc',
+            name: 'report.md',
+            bytes: 120,
+            mediaType: 'text/markdown',
+          },
+        },
+      ],
+    }
+    const card = fileCardModel(block)
+    expect(card?.label).toBe('1 file')
+    expect(card?.files[0]?.attachment.name).toBe('report.md')
   })
 })
 

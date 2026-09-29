@@ -5,10 +5,16 @@
  *
  * Darwin uses Electron `hiddenInset` traffic lights — custom min/max/close are
  * omitted so a second control set is not painted over the system lights.
+ *
+ * Window controls stay fixed to the viewport top-right (like a normal OS
+ * window) so community sidebar layout-push cannot shove them off the edge.
  */
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { IconCloseOutline16, IconRefreshOutline16 } from '@xrkseek/client-ui-primitives'
+import {
+  IconCloseOutline16,
+  IconRefreshOutline16,
+} from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import css from './DesktopChrome.module.css'
 

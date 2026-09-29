@@ -123,6 +123,11 @@ export interface ComposerKeyboard {
   /** Insert pasted plain text over the current editor selection (reference-placeholder-sanitized). */
   paste(text: string): void
   /**
+   * Insert one path/folder reference chip at the caret (dropped directory → `@path/`).
+   * Phase-gated like other mutations; does not require a trigger-token span CAS.
+   */
+  insertPathReference(ref: ReferenceInsert): boolean
+  /**
    * The live selection as a detect-coordinate span (menu-launcher synthetic
    * hits replace it on pick); an absent selection answers a collapsed span at
    * the document end.

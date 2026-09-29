@@ -30,9 +30,20 @@ function sniffMime(
   return "image/png";
 }
 
+/** Inline data URLs larger than this truncate model tool JSON (INCOMPLETE_TOOL_CALL). */
+const MAX_DATA_URL_CHARS = 8_192;
+
 function parseDataUrl(url: string): ImageGenSourceImage {
+  const trimmed = url.trim();
+  if (trimmed.length > MAX_DATA_URL_CHARS) {
+    throw new ImageGenError(
+      "data:image base64 in tool args is too large and truncates the call. " +
+        "Use reference_attachment_ids (or image_url=attachment:<id>) for chat attachments / prior image_generate results.",
+      "IMAGE_GEN_BAD_ARGS",
+    );
+  }
   const match = /^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/iu.exec(
-    url.trim(),
+    trimmed,
   );
   if (!match) {
     throw new ImageGenError(

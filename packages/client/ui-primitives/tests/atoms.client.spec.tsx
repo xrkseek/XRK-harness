@@ -486,8 +486,19 @@ describe('ConnectionIndicator', () => {
     expect(reconnect).toHaveBeenCalledOnce()
 
     rerender(<ConnectionIndicator state="connecting" {...labels} />)
+    const connecting = screen.getByRole('button', { name: 'Connecting, restart now' })
+    expect(connecting.textContent).toContain('Connecting...')
+    expect(connecting.className).toContain('progress')
+
+    rerender(
+      <ConnectionIndicator
+        state="connecting"
+        {...labels}
+        phaseLabel="Contacting host"
+      />,
+    )
     expect(screen.getByRole('button', { name: 'Connecting, restart now' }).textContent)
-      .toContain('Connecting...')
+      .toContain('Contacting host')
 
     rerender(<ConnectionIndicator state="recovered" {...labels} />)
     expect(screen.queryByRole('button')).toBeNull()

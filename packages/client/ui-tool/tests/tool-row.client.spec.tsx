@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 
 import type { RunningToolCall, ToolResultNode } from '@xrkseek/client-runtime/client'
 import { makeTranslate } from '@xrkseek/client-test-runtime'
@@ -409,6 +409,104 @@ describe('ToolRow', () => {
     expect(outputOnly.queryByText('IN')).toBeNull()
     expect(outputOnly.getByText('OUT')).toBeTruthy()
     expect(outputOnly.getByText('only out')).toBeTruthy()
+  })
+})
+
+describe('ToolRow media cards', () => {
+  const imageAttachment = {
+    attachmentId: 'sha256:abc' as const,
+    mediaType: 'image/png' as const,
+    bytes: 42,
+    width: 64,
+    height: 32,
+    name: 'gen.png',
+  }
+
+  it('shows image card chrome without loadImage (no IN/OUT fallback)', () => {
+    const view = render(
+      <ToolRow
+        t={t}
+        variant="others"
+        toolName="image_generate"
+        icon={<span />}
+        title="Image generation"
+        summary="a prompt"
+        body={null}
+        output={null}
+        image={{
+          label: '1 image',
+          images: [{ attachment: imageAttachment }],
+          text: 'provider=memory images=1',
+        }}
+        state="ok"
+      />,
+    )
+    fireEvent.click(view.getByRole('button'))
+    expect(view.container.querySelector('[data-tool-media="image"]')).not.toBeNull()
+    expect(view.getByText('1 image')).toBeTruthy()
+    expect(view.getByText('provider=memory images=1')).toBeTruthy()
+    expect(view.getByRole('status').textContent).toContain('gen.png')
+    expect(view.queryByText('OUT')).toBeNull()
+    expect(view.queryByText('IN')).toBeNull()
+  })
+
+  it('renders collapsed thumb when loadImage resolves', async () => {
+    const loadImage = vi.fn(async () => 'blob:thumb')
+    const view = render(
+      <ToolRow
+        t={t}
+        variant="others"
+        toolName="image_generate"
+        icon={<span />}
+        title="Image generation"
+        summary="a prompt"
+        body={null}
+        image={{
+          label: '1 image',
+          images: [{ attachment: imageAttachment }],
+          text: '',
+        }}
+        loadImage={loadImage}
+        state="ok"
+      />,
+    )
+    expect(view.container.querySelector('[data-tool-thumb]')).not.toBeNull()
+    await waitFor(() => {
+      expect(view.container.querySelector('img[data-tool-thumb]')?.getAttribute('src')).toBe('blob:thumb')
+    })
+  })
+
+  it('shows file card chrome for settled file material', () => {
+    const view = render(
+      <ToolRow
+        t={t}
+        variant="others"
+        toolName="some_tool"
+        icon={<span />}
+        title="Tool call"
+        summary="report"
+        body={null}
+        output={null}
+        files={{
+          label: '1 file',
+          files: [{
+            attachment: {
+              attachmentId: 'sha256:doc' as never,
+              name: 'report.md',
+              bytes: 120,
+              mediaType: 'text/markdown',
+            },
+          }],
+          text: 'wrote report',
+        }}
+        state="ok"
+      />,
+    )
+    fireEvent.click(view.getByRole('button'))
+    expect(view.container.querySelector('[data-tool-media="file"]')).not.toBeNull()
+    expect(view.getByText('1 file')).toBeTruthy()
+    expect(view.getByText('report.md')).toBeTruthy()
+    expect(view.queryByText('OUT')).toBeNull()
   })
 })
 

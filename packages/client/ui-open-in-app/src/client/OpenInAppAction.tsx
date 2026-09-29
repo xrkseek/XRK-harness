@@ -4,12 +4,12 @@ import {
 } from '@xrkseek/client-ui-primitives'
 import type { ObservableSnapshot } from '@xrkseek/client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import type {} from '@xrkseek/client-ui-conversation/client'
+import type {} from '@xrkseek/client-ui-layout/client'
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import { NS, type OpenInAppKey } from './locales.ts'
 import css from './OpenInAppAction.module.css'
 
-/** Browser operations and state injected into the Session Header contribution. */
+/** Browser operations and state injected into the Overview tools contribution. */
 export interface OpenInAppActionInjected {
   hooks: {
     openInAppApps: ObservableSnapshot<readonly string[] | null>
@@ -21,9 +21,9 @@ export interface OpenInAppActionInjected {
   choose: (appId: string) => void
 }
 
-/** Full props for the Session-header open-in-app split button. */
+/** Full props for the Overview open-in-app split button. */
 export type OpenInAppActionProps =
-  PropsRuntime<'conversation.session.header.utilities'>
+  PropsRuntime<'details.status.utilities'>
   & PropsLocale<typeof NS>
   & InjectFace<OpenInAppActionInjected>
 
@@ -45,9 +45,9 @@ const APP_LABEL_KEY: Record<string, OpenInAppKey | undefined> = {
 const BUSY_DRESS_DELAY_MS = 250
 
 /**
- * Session-header split button: open the session workspace in a probed app.
+ * Overview tools split button: open the session workspace in a probed app.
  * Renders nothing until Face reported apps, the session has a cwd, and the
- * page is loopback with `canOpenPath`.
+ * page is a privileged surface with `canOpenPath`.
  */
 export function OpenInAppAction(props: OpenInAppActionProps): ReactNode {
   const {

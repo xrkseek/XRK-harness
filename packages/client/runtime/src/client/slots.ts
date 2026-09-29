@@ -431,7 +431,10 @@ export class SlotRegistry extends Service {
         provideInfo: sessions.currentProvideInfo,
       },
       workspaces: { list: workspaces.list },
-      connection: { state: connection.connectionState },
+      connection: {
+        state: connection.connectionState,
+        phase: connection.connectionPhase,
+      },
       get locale() { return service._locale },
     }
     return this._host

@@ -14,13 +14,34 @@
   font-weight: 500;
   line-height: 18px;
   white-space: nowrap;
-  transition: background-color 160ms ease-out, color 160ms ease-out;
+  transition:
+    background-color var(--ds-transition-duration-fast, 160ms) ease-out,
+    color var(--ds-transition-duration-fast, 160ms) ease-out;
 }
 
 .warning {
   background: var(--dsw-alias-state-warn-tertiary);
   color: var(--dsw-alias-state-warn-label);
   cursor: pointer;
+}
+
+.progress {
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+}
+
+.progress:active {
+  background: color-mix(
+    in srgb,
+    var(--dsw-alias-state-business-tertiary),
+    var(--dsw-alias-state-business-primary) 10%
+  );
+}
+
+.progress:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
 }
 
 .warning:active {
@@ -46,6 +67,10 @@
   place-items: center;
   width: 14px;
   height: 14px;
+}
+
+.iconSpinner {
+  animation: connection-indicator-spin 1s linear infinite;
 }
 
 .label {
@@ -75,6 +100,14 @@
   visibility: visible;
 }
 
+.progress:is(:hover, :focus-visible) .stateLabel {
+  visibility: hidden;
+}
+
+.progress:is(:hover, :focus-visible) .hoverLabel {
+  visibility: visible;
+}
+
 .dots {
   display: inline-block;
   width: 1.5em;
@@ -99,9 +132,17 @@
   66.66%, 100% { visibility: visible; }
 }
 
+@keyframes connection-indicator-spin {
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .secondDot,
   .thirdDot {
+    animation: none;
+  }
+
+  .iconSpinner {
     animation: none;
   }
 }

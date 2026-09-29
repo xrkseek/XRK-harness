@@ -86,6 +86,16 @@ declare module '@xrkseek/client-ui-slots' {
      */
     'details': { kind: 'single'; scope: 'session'; owner: DetailsOwnerProps }
     /**
+     * Session tools hosted inside the Status / Overview column (export log,
+     * open workspace in an app). Kept out of the conversation header so the
+     * title strip stays for navigation / inspect toggles only.
+     */
+    'details.status.utilities': {
+      kind: 'list'
+      scope: 'session'
+      owner: DetailsOwnerProps
+    }
+    /**
      * Frame-wide floating layer, above every column and outside their scroll
      * containers. Deliberately generic and unowned by any feature: a badge, a
      * toast stack or a status pill all belong here, and entries order among

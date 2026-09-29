@@ -46,6 +46,7 @@ export function ImageGenRow({
       title="Image generation"
       summary={summary}
       body={null}
+      // Gallery owns the envelope; never dump JSON / attachmentId lines as OUT.
       output={image === null ? model.output : null}
       errorSummary={model.errorSummary}
       image={image}

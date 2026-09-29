@@ -43,6 +43,11 @@ import type { createLayoutStore } from './stores.ts'
 import { DesktopChrome, hasDesktopChrome } from './DesktopChrome.tsx'
 import css from './AppFrame.module.css'
 
+/** Presence-only HTML `inert` (React 18 warns on boolean `inert={true}`). */
+function htmlInert(active: boolean): { inert?: '' } {
+  return active ? { inert: '' } : {}
+}
+
 /** Injected by ui-layout: publish shell insets for floating workbench plugins. */
 export interface AppFrameInjected {
   /** Push solved insets to `ctx.layout.insets` + the CSS contract. */
@@ -65,7 +70,7 @@ function CenterColumn(props: { children?: ReactNode; inert?: boolean }) {
     <div
       className={css.centerCol}
       data-pane="conversation"
-      inert={props.inert || undefined}
+      {...htmlInert(props.inert === true)}
     >
       {props.children}
     </div>
@@ -414,17 +419,14 @@ export function AppFrame({
   }, [actions])
 
   const desktopChrome = hasDesktopChrome()
-
   // Publish chrome height on <html> so floating workbenches (better-sidebar)
   // can align without reading frame-scoped CSS variables.
   useEffect(() => {
     if (!desktopChrome) return
     const root = document.documentElement
     root.style.setProperty('--xrk-desktop-chrome-height', '36px')
-    root.setAttribute('data-xrk-desktop-chrome', '')
     return () => {
       root.style.removeProperty('--xrk-desktop-chrome-height')
-      root.removeAttribute('data-xrk-desktop-chrome')
     }
   }, [desktopChrome])
 
@@ -480,11 +482,7 @@ export function AppFrame({
         })}
       </div>
       <>
-        {/* Both column occupants stay at fixed tree positions from first
-            paint — no loading gate: a bare status line reads worse than
-            the shell's own pending rendering. The conversation
-            is session-maybe; the strict details entry naturally renders
-            empty while no session is current. */}
+        {/* Phone drawer: inert the conversation so taps do not leak under the sheet. */}
         <CenterColumn inert={drawerOpen}>{renderSlot('conversation', {})}</CenterColumn>
         <DetailsColumn>{renderSlot('details', {})}</DetailsColumn>
       </>

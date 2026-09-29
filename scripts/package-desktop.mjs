@@ -354,11 +354,11 @@ if ((result.status ?? 1) !== 0) {
 // electron-builder / pnpm filter may prune the workspace root; restore so
 // subsequent test/dev commands keep vitest and other root tools.
 process.stdout.write("package-desktop: restore workspace node_modules…\n");
-const restore = spawnSync("pnpm", ["install"], {
+const restore = spawnSync("pnpm", ["install", "--prod=false"], {
   cwd: ROOT,
   stdio: "inherit",
   shell: true,
-  env: { ...process.env, CI: "true" },
+  env: { ...process.env, CI: "true", NODE_ENV: "development" },
 });
 if ((restore.status ?? 1) !== 0) {
   process.stderr.write(

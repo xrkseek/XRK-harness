@@ -6,11 +6,11 @@
  * `scripts/emit-preload.mjs` — keep that generator in sync with this file.
  */
 
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { createXrkDesktopBridgeApi } from "./bridge.js";
-import { DESKTOP_IPC } from "./ipc.js";
+import { DESKTOP_IPC, type XrkDesktopApi } from "./ipc.js";
 
-const api = createXrkDesktopBridgeApi({
+const bridge = createXrkDesktopBridgeApi({
   invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
   on: (channel, listener) => {
     ipcRenderer.on(channel, listener);
@@ -19,6 +19,20 @@ const api = createXrkDesktopBridgeApi({
     ipcRenderer.off(channel, listener);
   },
 });
+
+const api: XrkDesktopApi = {
+  ...bridge,
+  files: {
+    pathForFile: (file: File): string | undefined => {
+      try {
+        const path = webUtils.getPathForFile(file);
+        return typeof path === "string" && path.trim() !== "" ? path : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+  },
+};
 
 contextBridge.exposeInMainWorld("xrkDesktop", api);
 

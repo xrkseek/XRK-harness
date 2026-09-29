@@ -180,6 +180,7 @@ export interface SlotRendererHost {
   /** Wire-side connection state backing the useConnectionState standard hook. */
   connection: {
     state: HostObservable<import('@xrkseek/client-connection/client').ConnectionState | undefined>
+    phase: HostObservable<import('@xrkseek/client-connection/client').ConnectionPhase | undefined>
   }
   /**
    * Installed locale face backing the `t` standard seat (absent until the

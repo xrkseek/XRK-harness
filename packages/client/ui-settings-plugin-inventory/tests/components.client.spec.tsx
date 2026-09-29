@@ -7,8 +7,18 @@ import type {
   PluginInventorySettingsTabProps,
 } from '../src/client/PluginInventorySettingsTab.tsx'
 import { en, type PluginInventoryLocaleKey } from '../src/client/locales.ts'
+import { resetPluginInstallUiSessionForTests } from '../src/client/plugin-install-ui-session.ts'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  resetPluginInstallUiSessionForTests()
+  try {
+    globalThis.localStorage?.removeItem('xrk.pluginInstall.registry')
+    globalThis.localStorage?.removeItem('xrk.pluginInstall.registryCustom')
+  } catch {
+    /* jsdom / private mode */
+  }
+})
 
 type Snapshot = Awaited<ReturnType<PluginInventorySettingsTabInjected['list']>>
 const t = ((key: PluginInventoryLocaleKey, params?: Record<string, string>): string => {
@@ -38,6 +48,9 @@ function props(
       output: '',
       exitCode: 0,
     })),
+    ...(overrides.subscribeInstallLog !== undefined
+      ? { subscribeInstallLog: overrides.subscribeInstallLog }
+      : {}),
   } as PluginInventorySettingsTabProps
 }
 
@@ -297,20 +310,73 @@ describe('PluginInventorySettingsTab', () => {
     expect(container.querySelector('[data-kind="client"]')).toBeTruthy()
   })
 
-  it('contains a synchronous Remote failure and ignores a result after unmount', async () => {
-    const syncFailure = vi.fn(() => { throw new Error('namespace unavailable') }) as PluginInventorySettingsTabInjected['list']
-    const failed = render(<PluginInventorySettingsTab {...props(syncFailure)} />)
-    expect((await screen.findByRole('alert')).textContent).toBe(en.error)
-    failed.unmount()
+  it('keeps install TerminalBlock and refresh hint after Settings remount', async () => {
+    const deferred = Promise.withResolvers<{
+      command: string
+      output: string
+      exitCode: number
+    }>()
+    let pushLog: ((text: string) => void) | undefined
+    const install = vi.fn(async (_spec: string, _reg?: string, requestId?: string) => {
+      void requestId
+      return deferred.promise
+    })
+    const subscribeInstallLog = vi.fn((requestId: string, onText: (text: string) => void) => {
+      expect(requestId).toMatch(/^install-/)
+      pushLog = onText
+      return () => { pushLog = undefined }
+    })
+    // No needsRestart rows — refresh hint must come from the install session.
+    const snap = {
+      ...SNAPSHOT,
+      entries: SNAPSHOT.entries.filter((entry) => entry.needsRestart !== true),
+    }
 
-    const deferred = Promise.withResolvers<Snapshot>()
-    const pending = render(<PluginInventorySettingsTab {...props(() => deferred.promise)} />)
-    pending.unmount()
-    await act(async () => { deferred.resolve(SNAPSHOT) })
+    const first = render(
+      <PluginInventorySettingsTab
+        {...props(async () => snap, { install, subscribeInstallLog })}
+      />,
+    )
+    await screen.findByText(en.globalTitle)
+    fireEvent.change(screen.getByLabelText(en.installPlaceholder), {
+      target: { value: '@remount/pkg' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: en.install }))
+    await waitFor(() => {
+      expect(first.container.querySelector('[data-install-log]')).toBeTruthy()
+    })
+    expect(subscribeInstallLog).toHaveBeenCalled()
+    act(() => { pushLog?.('fetching\n') })
+    expect(first.container.textContent).toContain('fetching')
+    first.unmount()
 
-    const deferredFailure = Promise.withResolvers<Snapshot>()
-    const pendingFailure = render(<PluginInventorySettingsTab {...props(() => deferredFailure.promise)} />)
-    pendingFailure.unmount()
-    await act(async () => { deferredFailure.reject(new Error('late failure')) })
+    const second = render(
+      <PluginInventorySettingsTab
+        {...props(async () => snap, { install, subscribeInstallLog })}
+      />,
+    )
+    await screen.findByText(en.globalTitle)
+    expect(second.container.querySelector('[data-install-log]')).toBeTruthy()
+    expect(second.container.textContent).toContain('fetching')
+    expect(second.container.textContent).toContain(en.installLogRunning)
+
+    deferred.resolve({
+      command: 'xrkh plugin add @remount/pkg',
+      output: 'fetching\nok\n',
+      exitCode: 0,
+    })
+    await waitFor(() => {
+      expect(second.container.querySelector('[data-client-refresh-hint]')).toBeTruthy()
+    })
+    expect(second.container.textContent).toContain(en.installSuccessHint)
+    second.unmount()
+
+    const third = render(
+      <PluginInventorySettingsTab {...props(async () => snap, { install })} />,
+    )
+    await screen.findByText(en.globalTitle)
+    expect(third.container.querySelector('[data-client-refresh-hint]')).toBeTruthy()
+    expect(third.container.querySelector('[data-install-log]')).toBeTruthy()
+    expect(third.container.textContent).toContain('fetching')
   })
 })

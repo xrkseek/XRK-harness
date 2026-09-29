@@ -10,9 +10,52 @@ import { ImageLightbox } from '../ImageLightbox.tsx'
 import { attachmentRailLabels, dropOverlayLabels, fileCardLabels, lightboxLabels } from './labels.ts'
 import css from './ComposerAttachments.module.css'
 
+/**
+ * Split a drop into ordinary files vs directories using `webkitGetAsEntry`.
+ * When entry metadata is unavailable (jsdom / plain FileList), every item
+ * stays in `files` — same as the legacy FileList-only path.
+ */
+function fileListOf(dataTransfer: DataTransfer): File[] {
+  try {
+    const list = dataTransfer.files
+    if (list == null) return []
+    return Array.from(list)
+  } catch {
+    return []
+  }
+}
+
+function partitionDataTransfer(dataTransfer: DataTransfer): {
+  readonly files: readonly File[]
+  readonly directories: readonly File[]
+} {
+  const allFiles = fileListOf(dataTransfer)
+  const items = dataTransfer.items
+  if (items === undefined || items.length === 0) {
+    return { files: allFiles, directories: [] }
+  }
+  const files: File[] = []
+  const directories: File[] = []
+  let classified = 0
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i]
+    if (item === undefined || item.kind !== 'file') continue
+    const entry =
+      typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null
+    if (entry === null) continue
+    classified += 1
+    const file = item.getAsFile() ?? allFiles[i]
+    if (file === undefined) continue
+    if (entry.isDirectory) directories.push(file)
+    else files.push(file)
+  }
+  if (classified === 0) return { files: allFiles, directories: [] }
+  return { files, directories }
+}
+
 /** Draft-image rail, document drop target, and original-image preview slot entry. */
 export function ComposerAttachments({
-  attachments, canAcceptDrop, onAddImages, onRemoveImage, dropLimits, uploads, onRetryFile, t,
+  attachments, canAcceptDrop, onAddImages, onAddDirectories, onRemoveImage, dropLimits, uploads, onRetryFile, t,
 }: ComposerAttachmentsProps) {
   const [preview, setPreview] = useState<ComposerImageAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -43,7 +86,11 @@ export function ComposerAttachments({
       const dataTransfer = fileTransfer(event)
       if (dataTransfer === null) return
       event.preventDefault()
-      dataTransfer.dropEffect = canAcceptDrop ? 'copy' : 'none'
+      try {
+        dataTransfer.dropEffect = canAcceptDrop ? 'copy' : 'none'
+      } catch {
+        // jsdom DataTransferPolyfill may expose a read-only dropEffect.
+      }
     }
     const onDragLeave = (event: globalThis.DragEvent): void => {
       if (fileTransfer(event) === null) return
@@ -58,7 +105,12 @@ export function ComposerAttachments({
       if (dataTransfer === null) return
       event.preventDefault()
       reset()
-      if (canAcceptDrop) onAddImages([...dataTransfer.files])
+      if (!canAcceptDrop) return
+      const partitioned = partitionDataTransfer(dataTransfer)
+      if (partitioned.directories.length > 0 && onAddDirectories !== undefined) {
+        onAddDirectories(partitioned.directories)
+      }
+      if (partitioned.files.length > 0) onAddImages(partitioned.files)
     }
     document.addEventListener('dragenter', onDragEnter)
     document.addEventListener('dragover', onDragOver)
@@ -72,7 +124,7 @@ export function ComposerAttachments({
       document.removeEventListener('drop', onDrop)
       window.removeEventListener('dragend', reset)
     }
-  }, [canAcceptDrop, onAddImages])
+  }, [canAcceptDrop, onAddDirectories, onAddImages])
 
   const renderItem = useCallback((attachment: ComposerAttachment) => {
     if (attachment.kind === 'image') {

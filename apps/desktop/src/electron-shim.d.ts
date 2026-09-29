@@ -101,6 +101,11 @@ declare module "electron" {
     exposeInMainWorld(apiKey: string, api: unknown): void;
   };
 
+  /** Renderer-safe path for a File from drag/drop or `<input type="file">`. */
+  export const webUtils: {
+    getPathForFile(file: File): string;
+  };
+
   export const ipcRenderer: {
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
     on(

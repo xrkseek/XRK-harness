@@ -41,7 +41,8 @@ const ToolCall = memo(function ToolCall({
     >
       {renderSlot('tool.call.toolview', owner, {
         entryKey: toolName,
-        fallback: <GenericToolCard {...owner} t={t} />,
+        // Tree-authorized images/files slots reach the keyed-miss fallback.
+        fallback: <GenericToolCard {...owner} t={t} renderSlot={renderSlot} />,
       })}
       {children}
     </div>

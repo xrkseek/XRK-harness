@@ -20,9 +20,21 @@ export interface ConnectionConfig {
    * first starves unary and freezes the UI on 「连接中」.
    */
   describeBeforeStreams?: boolean
+  /**
+   * Optional gate before each handshake (Desktop: wait until Host Fetch is
+   * attached so first paint does not burn into retry:backoff).
+   */
+  waitUntil?: () => Promise<void>
 }
 
-const CONNECTION_DEFAULTS: Required<ConnectionConfig> = {
+/** Resolved tunables; `waitUntil` stays optional (Desktop Host gate only). */
+type ConnectionConfigResolved = Required<
+  Omit<ConnectionConfig, 'waitUntil'>
+> & {
+  waitUntil?: ConnectionConfig['waitUntil']
+}
+
+const CONNECTION_DEFAULTS: ConnectionConfigResolved = {
   backoffBaseMs: 500,
   backoffFactor: 2,
   backoffMaxMs: 10_000,
@@ -46,6 +58,16 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
  *  'reconnecting' the moment the generation fails (covers the whole backoff+retry span). */
 export type ConnectionState = 'connected' | 'reconnecting'
 
+/**
+ * Fine-grained handshake progress for product chrome (spinner labels).
+ * Parallel to {@link ConnectionState} — does not replace it.
+ */
+export type ConnectionPhase =
+  | 'handshake:host'
+  | 'handshake:describe'
+  | 'handshake:streams'
+  | 'retry:backoff'
+
 /** Frame sink callbacks: the Controller owns the physical streams; business dispatch belongs to
  *  SessionManager. */
 export interface ConnectionSinks {
@@ -56,6 +78,8 @@ export interface ConnectionSinks {
   /** Coarse state transitions (deduplicated: fires only on change). The initial pre-connect
    *  span reports nothing — the UI treats "no state yet" as connecting, not as an outage. */
   onStateChange?: (state: ConnectionState) => void
+  /** Handshake / backoff progress (deduplicated). Cleared (`undefined`) when connected or stopped. */
+  onPhaseChange?: (phase: ConnectionPhase | undefined) => void
 }
 
 /**
@@ -73,7 +97,8 @@ export class ConnectionController {
   private running = false
   private immediateRetry = false
   private lastState: ConnectionState | null = null
-  private readonly config: Required<ConnectionConfig>
+  private lastPhase: ConnectionPhase | undefined | null = null
+  private readonly config: ConnectionConfigResolved
 
   constructor(
     private readonly api: IApiClient,
@@ -97,6 +122,7 @@ export class ConnectionController {
     this.current = null
     this.retryIdle?.abort()
     this.retryIdle = null
+    this.emitPhase(undefined)
   }
 
   /** Reset backoff and replace the current generation or retry delay immediately. */
@@ -152,11 +178,17 @@ export class ConnectionController {
       const startPumps = (): void => {
         if (pumpsStarted) return
         pumpsStarted = true
+        this.emitPhase('handshake:streams')
         void this.pumpStream(this.api.events.mux({}, ac.signal, muxOpened), this.sinks.onMuxEnvelope, settleFailed)
         void this.pumpStream(this.api.events.host({}, ac.signal, hostOpened), this.sinks.onHostEnvelope, settleFailed)
       }
 
       try {
+        if (this.config.waitUntil) {
+          this.emitPhase('handshake:host')
+          await this.config.waitUntil()
+          if (ac.signal.aborted) throw new Error('generation aborted while waiting for host')
+        }
         // Strict readiness handshake: describe proves unary reachability, onOpen
         // proves each physical stream is established before any frame —
         // only then may onConnected fire, so the resync it triggers cannot outrun the
@@ -164,6 +196,7 @@ export class ConnectionController {
         // (see ConnectionConfig.streamOpenTimeoutMs).
         const timeout = new AbortController()
         let description: Awaited<ReturnType<IApiClient['host']['describe']>>
+        this.emitPhase('handshake:describe')
         if (this.config.describeBeforeStreams) {
           // Unary first — avoid custom-protocol SSE occupying the only fetch slot.
           description = await this.api.host.describe({})
@@ -183,6 +216,7 @@ export class ConnectionController {
         }
         if (ac.signal.aborted) throw new Error('generation aborted during readiness handshake')
         this.attempt = 0
+        this.emitPhase(undefined)
         this.emitState('connected')
         // A state sink may synchronously stop this controller. Do not publish
         // a description for a generation that no longer exists afterward.
@@ -198,6 +232,7 @@ export class ConnectionController {
       await failed
       if (!this.isRunning()) return
       this.emitState('reconnecting')
+      this.emitPhase('retry:backoff')
       const immediate = this.immediateRetry
       this.immediateRetry = false
       if (immediate) {
@@ -222,6 +257,13 @@ export class ConnectionController {
     if (this.lastState === state) return
     this.lastState = state
     this.callSink(() => this.sinks.onStateChange?.(state))
+  }
+
+  /** Deduplicated handshake-phase emission (sink isolation applies). */
+  private emitPhase(phase: ConnectionPhase | undefined): void {
+    if (Object.is(this.lastPhase, phase)) return
+    this.lastPhase = phase
+    this.callSink(() => this.sinks.onPhaseChange?.(phase))
   }
 
   private async pumpStream<F extends { type: string }>(

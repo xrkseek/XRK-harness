@@ -23,35 +23,45 @@ const SEAT_CONTENT: Record<string, string> = {
 }
 
 type ConnectionSnapshot = Parameters<Parameters<SettingsRootComponentProps['useConnectionState']>[0]>[0]
+type ConnectionPhaseSnapshot = Parameters<Parameters<SettingsRootComponentProps['useConnectionPhase']>[0]>[0]
 
 const t: SettingsRootComponentProps['t'] = (key) => en[key as SettingsKey]
 
-function mount({
-  wide = true,
-  connectionState = 'connected' as ConnectionSnapshot,
-  onboardingActive = true,
-  rows = [
-    { id: 'general', order: 0, label: 'General' },
-    { id: 'models', order: 10, label: 'Models' },
-    { id: 'agent-presets', order: 20, label: 'Agent presets' },
-  ],
-  steps = [
-    { id: 'welcome', order: -100 },
-    { id: 'credential', order: 0 },
-  ],
-}: {
+function mount(options: {
   wide?: boolean
   connectionState?: ConnectionSnapshot
+  connectionPhase?: ConnectionPhaseSnapshot
+  sessionsPhase?: 'pending' | 'ready'
   onboardingActive?: boolean
   rows?: Row[]
   steps?: Step[]
 } = {}) {
+  const {
+    wide = true,
+    onboardingActive = true,
+    sessionsPhase = 'ready',
+    rows = [
+      { id: 'general', order: 0, label: 'General' },
+      { id: 'models', order: 10, label: 'Models' },
+      { id: 'agent-presets', order: 20, label: 'Agent presets' },
+    ],
+    steps = [
+      { id: 'welcome', order: -100 },
+      { id: 'credential', order: 0 },
+    ],
+  } = options
   // Mutable row source standing in for the bound useSections hook; bump()
   // plays a ledger change through the same observable contract.
   let current = rows
-  let currentConnectionState = connectionState
+  // Default connected unless the caller explicitly passes connectionState
+  // (including `undefined` for first-boot chrome).
+  let currentConnectionState: ConnectionSnapshot =
+    'connectionState' in options ? options.connectionState : 'connected'
+  let currentConnectionPhase: ConnectionPhaseSnapshot =
+    'connectionPhase' in options ? options.connectionPhase : undefined
   const listeners = new Set<() => void>()
   const connectionListeners = new Set<() => void>()
+  const phaseListeners = new Set<() => void>()
   const reconnect = vi.fn()
   const renderSlot = vi.fn(
     ((key: string, _owner: unknown, opts?: { only?: string }) => {
@@ -60,9 +70,9 @@ function mount({
     }) as SettingsRootComponentProps['renderSlot'],
   )
   const useSessions = ((select: (state: unknown) => unknown) => select(onboardingActive
-    ? { phase: 'ready', current: undefined, byId: {} }
+    ? { phase: sessionsPhase, current: undefined, byId: {} }
     : {
-      phase: 'ready',
+      phase: sessionsPhase,
       current: 'active-session',
       byId: { 'active-session': { blank: false } },
     })) as never
@@ -81,6 +91,15 @@ function mount({
         return () => { connectionListeners.delete(listener) }
       }, [])
       return select(currentConnectionState)
+    },
+    useConnectionPhase: (select) => {
+      const [, force] = useState(0)
+      useEffect(() => {
+        const listener = () => { force(n => n + 1) }
+        phaseListeners.add(listener)
+        return () => { phaseListeners.delete(listener) }
+      }, [])
+      return select(currentConnectionPhase)
     },
     useOnboardingSteps: select => select(steps),
     useSections: (select) => {
@@ -107,7 +126,13 @@ function mount({
       for (const fn of [...connectionListeners]) fn()
     })
   }
-  return { view, renderSlot, bump, listeners, reconnect, setConnectionState }
+  const setConnectionPhase = (next: typeof currentConnectionPhase) => {
+    act(() => {
+      currentConnectionPhase = next
+      for (const fn of [...phaseListeners]) fn()
+    })
+  }
+  return { view, renderSlot, bump, listeners, reconnect, setConnectionState, setConnectionPhase }
 }
 
 function openPanel() {
@@ -137,19 +162,45 @@ describe('SettingsRoot trigger', () => {
     expect(screen.queryByRole('button', { name: 'Connecting, restart now' })).toBeNull()
 
     mounted.setConnectionState('reconnecting')
+    mounted.setConnectionPhase('retry:backoff')
     const indicator = screen.getByRole('button', { name: 'Connecting, restart now' })
-    expect(indicator.textContent).toContain('Connecting')
+    expect(indicator.textContent).toContain('Waiting to retry')
+    expect(indicator.className).toContain('progress')
     expect(indicator.hasAttribute('title')).toBe(false)
     expect(indicator.querySelector('svg')).toBeTruthy()
     fireEvent.click(indicator)
     expect(mounted.reconnect).toHaveBeenCalledOnce()
 
     mounted.setConnectionState('connected')
+    mounted.setConnectionPhase(undefined)
     expect(screen.getByRole('status', { name: 'Connected' })).toBeTruthy()
     act(() => { vi.advanceTimersByTime(1_999) })
     expect(screen.getByRole('status', { name: 'Connected' })).toBeTruthy()
     act(() => { vi.advanceTimersByTime(1) })
     expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('shows first-boot connecting chrome with handshake phase labels', () => {
+    const mounted = mount({
+      connectionState: undefined,
+      connectionPhase: 'handshake:describe',
+    })
+    const indicator = screen.getByRole('button', { name: 'Connecting, restart now' })
+    expect(indicator.textContent).toContain('Contacting host')
+    expect(indicator.className).toContain('progress')
+    mounted.setConnectionPhase('handshake:streams')
+    expect(screen.getByRole('button', { name: 'Connecting, restart now' }).textContent)
+      .toContain('Opening event streams')
+  })
+
+  it('keeps the spinner while the session list is still pending after wire connect', () => {
+    mount({
+      connectionState: 'connected',
+      sessionsPhase: 'pending',
+    })
+    const indicator = screen.getByRole('button', { name: 'Connecting, restart now' })
+    expect(indicator.textContent).toContain('Loading sessions')
+    expect(indicator.className).toContain('progress')
   })
 
   it('keeps the reconnect indicator out of the collapsed rail', () => {

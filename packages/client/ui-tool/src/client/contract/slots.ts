@@ -1,7 +1,7 @@
 /** Tool UI slot declarations and their composed component props. */
 import type { HostDescriptionSource } from '@xrkseek/client-connection/client'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@xrkseek/client-ui-slots'
-import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import type { ToolCallBlock } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import type {} from '@xrkseek/client-locale/client'
@@ -10,6 +10,14 @@ import type {} from '@xrkseek/client-locale/client'
 export interface ToolImagesOwnerProps {
   images: readonly { readonly attachment: ImageAttachmentRef }[]
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
+  align: 'start' | 'end'
+  /** Force compact tiles (collapsed tool-row thumb). */
+  compact?: boolean
+}
+
+/** Owner currency of the Tool file-card slot (same shape as message files). */
+export interface ToolFilesOwnerProps {
+  files: readonly { readonly attachment: FileAttachmentRef }[]
   align: 'start' | 'end'
 }
 
@@ -32,9 +40,15 @@ declare module '@xrkseek/client-ui-slots' {
     'tool.call.toolview': { kind: 'keyed'; scope: 'session'; owner: ToolCallOwnerProps }
     /**
      * Durable images of a settled image-bearing Tool call. Declared as a child
-     * of the `read_image` toolview; the attachment plugin fills the gallery.
+     * of the tool-call chat node (and of image toolviews); the attachment
+     * plugin fills the gallery.
      */
     'tool.call.images': { kind: 'single'; scope: 'session'; owner: ToolImagesOwnerProps }
+    /**
+     * Durable file / video cards of a settled Tool call. Attachment plugin
+     * reuses MessageFileGallery.
+     */
+    'tool.call.files': { kind: 'single'; scope: 'session'; owner: ToolFilesOwnerProps }
   }
 }
 
@@ -74,7 +88,7 @@ export type ToolHostInfoInjected = {
 
 /** Full props of the Tool call-tree renderer registered as a `tool-call` Chat Node. */
 export type ToolTreeProps = PropsRuntime<'conversation.chat.node', 'tool-call'>
-  & PropsRenderSlots<'tool.call.toolview'>
+  & PropsRenderSlots<'tool.call.toolview' | 'tool.call.images' | 'tool.call.files'>
   & PropsLocale<'conversation'>
   & InjectFace<ToolHostInfoInjected>
 

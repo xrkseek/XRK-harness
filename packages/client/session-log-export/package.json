@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/client-session-log-export",
-  "description": "Web Session-log export header action and shared download dialog (ZIP via Face /api/session.export)",
+  "description": "Web Session-log export Overview action and shared download dialog (ZIP via Face /api/session.export)",
   "version": "0.1.0-rc.8",
   "repository": {
     "type": "git",
@@ -32,7 +32,7 @@
         "@xrkseek/client-locale",
         "@xrkseek/client-runtime",
         "@xrkseek/client-ui-commands",
-        "@xrkseek/client-ui-conversation"
+        "@xrkseek/client-ui-layout"
       ],
       "platform": "web"
     }
@@ -47,7 +47,7 @@
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-ui-commands": "workspace:^",
-    "@xrkseek/client-ui-conversation": "workspace:^",
+    "@xrkseek/client-ui-layout": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
@@ -58,7 +58,7 @@
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-ui-commands": "workspace:^",
-    "@xrkseek/client-ui-conversation": "workspace:^",
+    "@xrkseek/client-ui-layout": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",

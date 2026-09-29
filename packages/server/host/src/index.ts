@@ -1804,7 +1804,8 @@ export function createHostManager(): HostManager {
           loop.maxSteps > 0
             ? Math.floor(loop.maxSteps)
             : undefined;
-        const autoContinueOnMaxTokens = loop.autoContinueOnMaxTokens === true;
+        // Schema default is true; treat omit as on so Settings UI "开" matches Host.
+        const autoContinueOnMaxTokens = loop.autoContinueOnMaxTokens !== false;
         const autoContinueMaxRoundsRaw = loop.autoContinueMaxRounds;
         const autoContinueMaxRounds =
           typeof autoContinueMaxRoundsRaw === "number" &&

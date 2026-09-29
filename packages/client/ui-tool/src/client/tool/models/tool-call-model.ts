@@ -140,6 +140,27 @@ function firstLine(text: string): string {
   return nl === -1 ? text : text.slice(0, nl)
 }
 
+/** Collapse inlined data:image payloads so tool rows never dump megabyte base64. */
+function redactDataUrls(text: string): string {
+  return text.replace(
+    /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]{64,}/g,
+    'data:image/…;base64,[redacted]',
+  )
+}
+
+function redactArgsValue(value: unknown): unknown {
+  if (typeof value === 'string') return redactDataUrls(value)
+  if (Array.isArray(value)) return value.map(redactArgsValue)
+  if (typeof value === 'object' && value !== null) {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = redactArgsValue(v)
+    }
+    return out
+  }
+  return value
+}
+
 function pickString(args: Record<string, unknown>, keys: readonly string[]): string | undefined {
   for (const key of keys) {
     const v = args[key]
@@ -174,14 +195,21 @@ export function relativizeToCwd(text: string, cwd: string | undefined): string {
 
 function deriveSummary(variant: ToolRowVariant, argsRaw: string): string {
   const parsed = parseArgs(argsRaw)
-  if (typeof parsed !== 'object' || parsed === null) return firstLine(argsRaw)
+  if (typeof parsed !== 'object' || parsed === null) {
+    return firstLine(redactDataUrls(argsRaw))
+  }
   const args = parsed as Record<string, unknown>
   const picked = pickString(args, SUMMARY_KEYS[variant])
-  if (picked !== undefined) return firstLine(picked)
+  if (picked !== undefined) return firstLine(redactDataUrls(picked))
   for (const v of Object.values(args)) {
-    if (typeof v === 'string' && v !== '') return firstLine(v)
+    if (typeof v === 'string' && v !== '' && !v.startsWith('data:image/')) {
+      return firstLine(v)
+    }
   }
-  return firstLine(argsRaw)
+  for (const v of Object.values(args)) {
+    if (typeof v === 'string' && v !== '') return firstLine(redactDataUrls(v))
+  }
+  return firstLine(redactDataUrls(argsRaw))
 }
 
 /** Path keys only — never `url` (web_fetch lands on the read variant). */
@@ -239,14 +267,14 @@ function formatPresentSummary(paths: readonly string[]): string | undefined {
 function deriveBody(variant: ToolRowVariant, argsRaw: string): string | null {
   if (argsRaw === '') return null
   const parsed = parseArgs(argsRaw)
-  if (parsed === undefined) return argsRaw
+  if (parsed === undefined) return redactDataUrls(argsRaw)
   // The code row's expanded body IS the program (monospace via the row's
   // variant styling), not the args JSON envelope around it.
   if (variant === 'code' && typeof parsed === 'object' && parsed !== null) {
     const code = (parsed as Record<string, unknown>).code
     if (typeof code === 'string' && code !== '') return code
   }
-  return JSON.stringify(parsed, null, 2)
+  return JSON.stringify(redactArgsValue(parsed), null, 2)
 }
 
 /**

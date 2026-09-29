@@ -6,8 +6,9 @@ import {
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 
 /**
- * Owns the once-per-page availability read, the persisted last choice, and
- * Face `host.openInApp` launches. Every Session header shares one truth.
+ * Owns the once-per-connected-generation availability read, the persisted last
+ * choice, and Face `host.openInApp` launches. Desktop must wait for Host Fetch
+ * — a probe during splash would empty the catalog forever.
  */
 export class OpenInAppController {
   /** Installed app ids in Host menu order; null until Face answered. */
@@ -18,13 +19,31 @@ export class OpenInAppController {
   })
 
   private loading: Promise<void> | undefined
+  private loadedWhileConnected = false
 
   /**
    * @param connection - Face API carrier.
    */
   constructor(private readonly connection: ConnectionHandle) {}
 
-  /** Read availability once per controller life. */
+  /**
+   * Probe Face when the privileged surface is connected and `canOpenPath`.
+   * No-ops during splash / reconnect; re-runs after a failed probe.
+   */
+  syncFromConnection(): void {
+    if (!this.connection.isLoopback) return
+    if (this.connection.connectionState.getSnapshot() !== 'connected') {
+      this.loadedWhileConnected = false
+      return
+    }
+    if (this.connection.hostDescription.getSnapshot()?.canOpenPath !== true) return
+    if (this.loadedWhileConnected) return
+    this.loadedWhileConnected = true
+    this.loading = undefined
+    void this.load()
+  }
+
+  /** Read availability (awaits the in-flight probe when present). */
   load(): Promise<void> {
     this.loading ??= this.run()
     return this.loading
@@ -55,7 +74,8 @@ export class OpenInAppController {
         apps = response.result.value.apps.filter(id => typeof id === 'string')
       }
     } catch {
-      // Unreachable Host → no button.
+      // Unreachable Host → allow the next connect/describe sync to retry.
+      this.loadedWhileConnected = false
     }
     this.apps.set(apps)
   }

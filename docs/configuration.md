@@ -241,7 +241,7 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `bash` | `timeoutMs` · `maxOutputBytes`（默认 **64_000**） | 下次 agent 重建后作用于 `bash` 捕获上限 |
 | `agent-loop` | `maxParallelToolCalls` | 下次 agent 重建后限制同一步并行 settle 池上限 |
 | `agent-loop` | `maxSteps` | 单次用户 turn 的 LLM 步数上限（默认 32） |
-| `agent-loop` | `autoContinueOnMaxTokens` · `autoContinueMaxRounds` | 达输出 token 上限时是否自动续写（默认关）及每 turn 续写上限（默认 2） |
+| `agent-loop` | `autoContinueOnMaxTokens` · `autoContinueMaxRounds` | 达输出 token 上限时是否自动续写（**默认开**）及每 turn 续写上限（默认 2） |
 | `agent-loop` | `toolSettle` | `parallel`（默认，按 `isConcurrencySafe`）或 `serial` |
 | `agent-loop` | `llmRetryMaxRetries` | 步内 provider 重试上限（默认 5；`0` 关闭） |
 | `agent-loop` | `toolOrder` | 工具线序（Plugins 卡；恰好一个 `' '` rest）；留空 = 字典序 |
@@ -548,7 +548,7 @@ Settings → Plugins mutates these runtime namespaces:
 | `bash` | `timeoutMs` · `maxOutputBytes` (default **64_000**) | Applies to bash capture cap after the next agent rebuild |
 | `agent-loop` | `maxParallelToolCalls` | Caps the parallel settle pool for one step after the next agent rebuild |
 | `agent-loop` | `maxSteps` | Max LLM steps per user turn (default 32) |
-| `agent-loop` | `autoContinueOnMaxTokens` · `autoContinueMaxRounds` | Auto-resume when the model hits its output token cap (default off) and per-turn continuation cap (default 2) |
+| `agent-loop` | `autoContinueOnMaxTokens` · `autoContinueMaxRounds` | Auto-resume when the model hits its output token cap (**default on**) and per-turn continuation cap (default 2) |
 | `agent-loop` | `toolSettle` | `parallel` (default, by `isConcurrencySafe`) or `serial` |
 | `agent-loop` | `llmRetryMaxRetries` | In-step provider retry cap (default 5; `0` disables) |
 | `agent-loop` | `toolOrder` | Tool line order (Plugins card; exactly one `' '` rest); blank = lexicographic |

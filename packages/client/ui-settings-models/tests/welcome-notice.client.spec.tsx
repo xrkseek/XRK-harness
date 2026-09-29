@@ -54,6 +54,7 @@ function mount(version?: string, mutateImpl: () => Promise<unknown> = () => Prom
     useSessions: unusedHook,
     useWorkspaces: unusedHook,
     useConnectionState: unusedHook,
+    useConnectionPhase: unusedHook,
     controller,
     useWelcome: bindSnapshotSelector(controller.store),
     t: key => zh[key],

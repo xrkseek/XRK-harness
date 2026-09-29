@@ -7,7 +7,7 @@
 | 轨道 | 用途 | 落点 |
 |------|------|------|
 | 流内 `details` | 会话 **Status**（子代理 · jobs · timeline · cost · 通道；与 `/status` 同源）· **改动审阅** · 任务 / 上下文 / 轨迹 | `@xrkseek/client-ui-plan`（`ctx.changesReview` 由 ui-deliverables 提供） |
-| 浮动工作台 | 文件树 · 预览 · 终端 · 浏览器 · git | Host **`/sidebar/*`** + 社区 **`xrkh-better-sidebar`**（建议 ≥ 0.18.9） |
+| 浮动工作台 | 文件树 · 预览 · 终端 · 浏览器 · git | Host **`/sidebar/*`** + 社区 **`xrkh-better-sidebar`**（建议 ≥ 0.18.20） |
 | 首方薄壳 | 无社区侧栏时的 Host 文件树 + 预览；`ctx.workbench` | `@xrkseek/client-ui-workbench` |
 
 ## 契约
@@ -27,7 +27,7 @@
 安装社区侧栏：
 
 ```bash
-xrkh plugin add xrkh-better-sidebar@0.18.9
+xrkh plugin add xrkh-better-sidebar@0.18.20
 ```
 
 ---
@@ -41,7 +41,7 @@ The product shell splits the right side into two tracks; it does not port the fu
 | Track | Role | Owner |
 |-------|------|--------|
 | In-flow `details` | Session **Status** (subagents · jobs · timeline · cost · channels; same as `/status`) · **Changes review** · todos / context / rollout | `@xrkseek/client-ui-plan` (`ctx.changesReview` from ui-deliverables) |
-| Floating workbench | File tree · preview · terminal · browser · git | Host **`/sidebar/*`** + community **`xrkh-better-sidebar`** (prefer ≥ 0.18.9) |
+| Floating workbench | File tree · preview · terminal · browser · git | Host **`/sidebar/*`** + community **`xrkh-better-sidebar`** (prefer ≥ 0.18.20) |
 | First-party thin shell | Host tree + preview when no community sidebar; `ctx.workbench` | `@xrkseek/client-ui-workbench` |
 
 ## Contract
@@ -61,5 +61,5 @@ The product shell splits the right side into two tracks; it does not port the fu
 Install the community sidebar:
 
 ```bash
-xrkh plugin add xrkh-better-sidebar@0.18.9
+xrkh plugin add xrkh-better-sidebar@0.18.20
 ```

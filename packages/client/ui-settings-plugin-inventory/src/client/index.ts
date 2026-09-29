@@ -9,6 +9,7 @@ import { PluginInventorySettingsTab, type PluginInventorySettingsTabInjected } f
 import { en, zh, type PluginInventoryLocaleKey } from './locales.ts'
 
 export type { PluginInventorySettingsTabInjected, PluginInventorySettingsTabProps } from './PluginInventorySettingsTab.tsx'
+export type { PluginInstallLog } from './plugin-install-ui-session.ts'
 export type { PluginInventoryLocaleKey } from './locales.ts'
 
 declare module '@xrkseek/client-ui-slots' {

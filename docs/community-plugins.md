@@ -166,7 +166,7 @@ community client.js
 
 ## 侧栏插件契约（Host 原生，client 只挂 UI）
 
-标准侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.18.9**）注入 `lib/client.js`。`/sidebar/*` 由 Host `createSidebarPublicHandler` 挂载；插件 host 半包不占用该路径。
+标准侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.18.20**）注入 `lib/client.js`。`/sidebar/*` 由 Host `createSidebarPublicHandler` 挂载；插件 host 半包不占用该路径。
 
 概况栏（`details`）默认 **Status**（子代理图 · jobs · live `contextTimeline` · cost · channels），与 `/status` / Face `session.status` 同源。概况栏与侧栏工作台可同时开：壳发布 `LayoutInsets`（`--xrk-layout-inset-*`）。产品切分见 [sidebar-workbench](./sidebar-workbench.md)。
 
@@ -436,7 +436,7 @@ If skin artwork 404s after install: confirm staged `assets/` · `skin.json`, the
 
 ## Sidebar plugin contract (Host owns; client UI only)
 
-Standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.18.9**) injects `lib/client.js`. `/sidebar/*` is mounted by Host `createSidebarPublicHandler`; a plugin host half does not occupy that path.
+Standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.18.20**) injects `lib/client.js`. `/sidebar/*` is mounted by Host `createSidebarPublicHandler`; a plugin host half does not occupy that path.
 
 The session **Status** column (`details`) defaults to the subagent graph · jobs · live `contextTimeline` · cost · channels (same source as `/status` / Face `session.status`). Status and the sidebar workbench may stay open together via `LayoutInsets` (`--xrk-layout-inset-*`). Product cut: [sidebar-workbench](./sidebar-workbench.md).
 

@@ -4,33 +4,28 @@
 // DisclosureRow chrome with the whole row as the expand toggle (click /
 // Enter / Space, icon→chevron hover preview). The collapsed row is always
 // one line; every row with body, output, or a card material (terminal, diff,
-// read, search, web) is expandable; the summary stays inline while open.
-// The expanded body — an IN/OUT gutter-labeled card (figma 1249:35657) for
-// text input/output, the run_code program through CodeBlock, or a card
-// primitive (TerminalBlock, DiffBlock, ReadBlock, SearchBlock, WebBlock) for a
-// call that declared that render intent — lives in a max-height scroll
-// container so a long payload scrolls internally instead of taking over the
-// message flow. Every card kind starts collapsed, so a run of tool calls stays
-// scannable; the details panel is the single-call full-height reading surface.
-// Expand state is component-local view state. File-tool summaries are path
-// links that open through the host (stopPropagation keeps the two gestures
-// independent); an error row's collapsed summary is the failure's first line in
-// the error color.
+// read, search, web, image, files) is expandable; the summary stays inline while open.
+// Media cards (image gallery / file cards) replace IN/OUT when present.
+// Expand state is component-local view state.
 
-import { useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   CodeBlock, DiffBlock, DisclosureRow, IconInspectOutline12, ReadBlock, SearchBlock, StateDot, TerminalBlock, WebBlock,
 } from '@xrkseek/client-ui-primitives'
 import type { WebBlockProps } from '@xrkseek/client-ui-primitives'
 import type { TranslateNS, PropsRenderSlots } from '@xrkseek/client-ui-slots'
+import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import { CHAT_DIFF_MAX_LINES, type DiffCardModel } from '../models/diff-card-model.ts'
+import type { FileCardModel } from '../models/file-card-model.ts'
 import type { ImageCardModel } from '../models/image-card-model.ts'
 import { CHAT_READ_MAX_LINES, type ReadCardModel } from '../models/read-card-model.ts'
 import { CHAT_SEARCH_MAX_LINES, type SearchCardModel } from '../models/search-card-model.ts'
 import { terminalBlockLabels, type TerminalCardModel } from '../models/terminal-card-model.ts'
 import type { ToolRowState, ToolRowVariant } from '../models/tool-call-model.ts'
 import css from './ToolRow.module.css'
+
+type MediaRenderSlot = PropsRenderSlots<'tool.call.images' | 'tool.call.files'>['renderSlot']
 
 export interface ToolRowProps {
   /** The render site's conversation locale seat (terminal/code body copy). */
@@ -42,78 +37,36 @@ export interface ToolRowProps {
   icon: ReactNode
   title: string
   summary: string
-  /**
-   * Trailing summary fragment rendered outside the ellipsized summary text, so
-   * a narrow row clips the summary before this. For a fragment whose whole
-   * value is surviving that clip — the todo row's parallel-active count.
-   * null/absent = the summary is the whole collapsed content. Dropped on an
-   * error row, whose collapsed summary is the failure line instead.
-   */
   summarySuffix?: string | null | undefined
   /** Expanded-body input text; null = no input section. */
   body: string | null
   /** Flattened result text for the expanded Output section; null/absent = no output section. */
   output?: string | null | undefined
-  /** Error first line shown as the collapsed summary on an error row; null/absent = keep `summary`. */
   errorSummary?: string | null | undefined
-  /**
-   * Terminal-card material for a call whose render intent is a terminal card
-   * (derived by `terminalCardModel`); it replaces the text sections when
-   * present. A call carries at most one card kind, so the card props below are
-   * mutually exclusive.
-   */
   terminal?: TerminalCardModel | null | undefined
-  /**
-   * Diff-card material for a call whose render intent is a diff card (derived by
-   * `diffCardModel`); it replaces the text body when present, the same way
-   * `terminal` does.
-   */
   diff?: DiffCardModel | null | undefined
-  /**
-   * Read-card material for a call whose render intent is a read card (derived by
-   * `readCardModel`); it replaces the text body with the file's line-numbered,
-   * syntax-highlighted window when present.
-   */
   read?: ReadCardModel | null | undefined
   /**
-   * Image-card material for `read_image` (derived by `imageCardModel`). Rendered
-   * through `tool.call.images` when renderSlot + loadImage are supplied.
+   * Image-card material. Rendered through `tool.call.images` when loadImage is
+   * available; otherwise label + meta still show (never fall back to IN/OUT).
    */
   image?: ImageCardModel | null | undefined
-  /** Dispatch the image gallery through the tool-owned `tool.call.images` slot. */
-  renderSlot?: PropsRenderSlots<'tool.call.images'>['renderSlot'] | undefined
-  /** Session-authorized image URL loader for the gallery slot. */
-  loadImage?: ((attachment: import('@xrkseek/xrk-attachment').ImageAttachmentRef) => Promise<string>) | undefined
   /**
-   * Search-card material for a call whose render intent is a search card
-   * (derived by `searchCardModel`); it replaces the text body with grouped
-   * matches or a path list when present.
+   * File / video card material. Rendered through `tool.call.files` when the
+   * slot is filled; otherwise a text list of names under the label.
    */
+  files?: FileCardModel | null | undefined
+  /** Dispatch image/file galleries through tool-owned slots. */
+  renderSlot?: MediaRenderSlot | undefined
+  loadImage?: ((attachment: ImageAttachmentRef) => Promise<string>) | undefined
   search?: SearchCardModel | null | undefined
-  /**
-   * Web-card material for a call whose render intent is a web card (derived by
-   * `webCardModel`); it replaces the text body with the retrieval's citation
-   * list or fetched-source card when present.
-   */
   web?: WebBlockProps | null | undefined
   state: ToolRowState
-  /**
-   * Filesystem path from tool args; when set with onOpenFile, the summary
-   * renders as a hover-underline link that opens the host default app.
-   */
   filePath?: string | undefined
-  /** Open the path with the host OS default application (already cwd-resolved). */
   onOpenFile?: ((path: string) => void) | undefined
-  /**
-   * Jump to this call in the trajectory view: a hover-revealed Inspect pill
-   * over the expanded body. Absent = no affordance.
-   */
   inspect?: (() => void) | undefined
 }
 
-/** Leading-slot state substitution: the tool icon yields to the terminal state
- *  semantic (error = red, interrupted = amber halo). Running keeps the icon —
- *  the row sweep (CSS on data-state) carries the in-flight signal. */
 function leadingFor(state: ToolRowState, icon: ReactNode): ReactNode {
   switch (state) {
     case 'error': return <StateDot state="error" />
@@ -122,10 +75,6 @@ function leadingFor(state: ToolRowState, icon: ReactNode): ReactNode {
   }
 }
 
-/** Visually hidden run-state label: the StateDot and the CSS sweep are both
- *  aria-hidden / colour-only, so assistive technology needs this text to know a
- *  row is running, failed, or interrupted. null in the ok state (the icon and
- *  summary already describe a settled row). */
 function stateStatus(state: ToolRowState, t: TranslateNS<'conversation'>): string | null {
   switch (state) {
     case 'running': return t('row.running')
@@ -133,6 +82,37 @@ function stateStatus(state: ToolRowState, t: TranslateNS<'conversation'>): strin
     case 'stopped': return t('row.stopped')
     default: return null
   }
+}
+
+/** Compact collapsed-row thumb for the first durable image (Codex/Cursor peek). */
+function CollapsedThumb({
+  attachment,
+  loadImage,
+}: {
+  attachment: ImageAttachmentRef
+  loadImage: (attachment: ImageAttachmentRef) => Promise<string>
+}) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    let alive = true
+    void loadImage(attachment).then(
+      (next) => { if (alive) setUrl(next) },
+      () => { /* peek is best-effort */ },
+    )
+    return () => { alive = false }
+  }, [attachment, loadImage])
+  if (url === null) {
+    return <span className={css.thumbPlaceholder} aria-hidden data-tool-thumb="" />
+  }
+  return (
+    <img
+      className={css.thumb}
+      src={url}
+      alt=""
+      data-tool-thumb=""
+      draggable={false}
+    />
+  )
 }
 
 export function ToolRow({
@@ -150,6 +130,7 @@ export function ToolRow({
   diff,
   read,
   image,
+  files,
   renderSlot,
   loadImage,
   search,
@@ -163,30 +144,27 @@ export function ToolRow({
   const terminalBody = terminal ?? null
   const diffBody = diff ?? null
   const readBody = read ?? null
-  const imageBody = image !== undefined && image !== null && renderSlot !== undefined && loadImage !== undefined
-    ? image
-    : null
+  // Image / file cards own the expanded surface whenever material exists —
+  // even without loadImage / renderSlot (show label + meta / name list).
+  const imageBody = image ?? null
+  const filesBody = files ?? null
   const searchBody = search ?? null
   const webBody = web ?? null
   const outputText = output ?? null
-  // A card replaces the text body; a call carries at most one card kind, so the
-  // card props are mutually exclusive. Any of them, or a text body/output,
-  // makes the row expandable.
-  const card = terminalBody ?? diffBody ?? readBody ?? imageBody ?? searchBody ?? webBody
+  const card = terminalBody ?? diffBody ?? readBody ?? imageBody ?? filesBody ?? searchBody ?? webBody
   const expandable = body !== null || outputText !== null || card !== null
   const open = expanded && expandable
-  // The run-state label AT needs: the StateDot and the running sweep are both
-  // aria-hidden / colour-only, so a stopped or running row is otherwise silent.
   const status = stateStatus(state, t)
-  // An error row's collapsed summary IS the failure: the first error line in
-  // the error color outranks both the args summary and a terminal description.
   const failureLine = state === 'error' ? errorSummary ?? null : null
   const summaryText = failureLine ?? summary
-  // The failure line replaces the summary wholesale, so a suffix derived from
-  // the call args has nothing left to sit beside.
   const suffix = failureLine === null ? summarySuffix ?? null : null
-  // The failure line is error prose, not the path: no open-file affordance.
   const fileLink = filePath !== undefined && onOpenFile !== undefined && failureLine === null
+  const thumbAttachment = !open
+    && state === 'ok'
+    && imageBody !== null
+    && loadImage !== undefined
+    ? imageBody.images[0]?.attachment
+    : undefined
   const toggleExpand = () => {
     setExpanded(v => !v)
   }
@@ -194,19 +172,10 @@ export function ToolRow({
     event.stopPropagation()
     if (filePath !== undefined) onOpenFile?.(filePath)
   }
-  // Keep Enter/Space on the focused path link from bubbling to the row's
-  // keydown handler, which would preventDefault() the key and toggle expand
-  // instead of activating the link — the keyboard analogue of openFile's
-  // stopPropagation. The native button still fires its own onClick from the key.
   const fileLinkKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'Enter' || event.key === ' ') event.stopPropagation()
   }
-  // The code variant's program renders through CodeBlock (shiki), so only its
-  // output joins the IN/OUT card; every other variant's input does too.
   const cardBody = variant === 'code' ? null : body
-  // The state substitution rides the idle icon slot, so an expandable error
-  // row keeps DisclosureRow's icon→chevron hover preview (its default) instead
-  // of losing it with the icon.
   return (
     <div className={css.root} data-variant={variant} data-tool={toolName} data-state={state}>
       {status !== null && <span className={css.visuallyHidden}>{status}</span>}
@@ -222,33 +191,38 @@ export function ToolRow({
         expandOnRowClick
         keepContentWhenOpen
         onToggle={toggleExpand}
-        collapsedContent={summaryText !== '' && (
-          /* An empty summary drops the separator with it (a row that is only
-             its title shows no trailing dot). */
+        collapsedContent={(
+          (thumbAttachment !== undefined && loadImage !== undefined) || summaryText !== ''
+        ) ? (
           <>
-            <span className={css.sep} aria-hidden />
-            {fileLink ? (
-              <button
-                type="button"
-                className={css.fileLink}
-                onClick={openFile}
-                onKeyDown={fileLinkKeyDown}
-              >
-                {summaryText}
-              </button>
-            ) : (
-              <span
-                className={clsx(css.summary, failureLine !== null && css.errorSummary)}
-              >
-                {summaryText}
-              </span>
+            {thumbAttachment !== undefined && loadImage !== undefined
+              ? <CollapsedThumb attachment={thumbAttachment} loadImage={loadImage} />
+              : null}
+            {summaryText !== '' && (
+              <>
+                <span className={css.sep} aria-hidden />
+                {fileLink ? (
+                  <button
+                    type="button"
+                    className={css.fileLink}
+                    onClick={openFile}
+                    onKeyDown={fileLinkKeyDown}
+                  >
+                    {summaryText}
+                  </button>
+                ) : (
+                  <span
+                    className={clsx(css.summary, failureLine !== null && css.errorSummary)}
+                  >
+                    {summaryText}
+                  </span>
+                )}
+                {suffix !== null && <span className={css.summarySuffix}>{suffix}</span>}
+              </>
             )}
-            {suffix !== null && <span className={css.summarySuffix}>{suffix}</span>}
           </>
-        )}
+        ) : false}
       >
-        {/* The wrapper (sibling of the header row, so clicks inside never
-            toggle it) carries the expanded body and the Inspect pill below. */}
         <div className={css.bodyWrap}>
           {terminalBody !== null
             ? (
@@ -265,59 +239,85 @@ export function ToolRow({
                 ? <ReadBlock {...readBody} maxLines={CHAT_READ_MAX_LINES} className={css.readBody} />
                 : imageBody !== null
                   ? (
-                    <div className={css.imageBody}>
+                    <div className={css.imageBody} data-tool-media="image">
                       <div className={css.imageLabel}>{imageBody.label}</div>
-                      {renderSlot !== undefined && loadImage !== undefined && renderSlot('tool.call.images', {
-                        images: imageBody.images,
-                        loadImage,
-                        align: 'start',
-                      })}
-                      <div className={css.imageMeta}>{imageBody.text}</div>
+                      {renderSlot !== undefined && loadImage !== undefined
+                        ? renderSlot('tool.call.images', {
+                          images: imageBody.images,
+                          loadImage,
+                          align: 'start',
+                        })
+                        : (
+                          <div className={css.mediaFallback} role="status">
+                            {imageBody.images.map((entry) => entry.attachment.name
+                              ?? entry.attachment.attachmentId).join(' · ')}
+                          </div>
+                        )}
+                      {imageBody.text !== ''
+                        ? <div className={css.imageMeta}>{imageBody.text}</div>
+                        : null}
                     </div>
                   )
-                : searchBody !== null
-                  ? (
-                    <>
-                      <SearchBlock {...searchBody.card} maxLines={CHAT_SEARCH_MAX_LINES} className={css.searchBody} />
-                      {/* A capped search's recovery locator lives only in the result
-                          text; show it below the card so the dropped rows survive. */}
-                      {searchBody.recovery !== undefined && (
-                        <div className={css.searchRecovery}>{searchBody.recovery}</div>
-                      )}
-                    </>
-                  )
-                    : webBody !== null
-                    ? <WebBlock {...webBody} className={css.webBody} />
-                    : (
-                      <>
-                        {variant === 'code' && body !== null && (
-                          <div className={css.bodyScroll}>
-                            <CodeBlock code={body} lang="typescript" copyLabel={t('copy')} copiedLabel={t('copied')} className={css.codeBody} />
-                          </div>
-                        )}
-                        {(cardBody !== null || outputText !== null) && (
-                          <div className={css.ioCard}>
-                            {cardBody !== null && (
-                              <div className={css.ioSection}>
-                                <span className={css.ioLabel}>IN</span>
-                                <span className={css.ioText}>{cardBody}</span>
+                  : filesBody !== null
+                    ? (
+                      <div className={css.imageBody} data-tool-media="file">
+                        <div className={css.imageLabel}>{filesBody.label}</div>
+                        {renderSlot !== undefined
+                          ? renderSlot('tool.call.files', {
+                            files: filesBody.files,
+                            align: 'start',
+                          })
+                          : (
+                            <div className={css.mediaFallback} role="status">
+                              {filesBody.files.map((entry) => entry.attachment.name).join(' · ')}
+                            </div>
+                          )}
+                        {filesBody.text !== ''
+                          ? <div className={css.imageMeta}>{filesBody.text}</div>
+                          : null}
+                      </div>
+                    )
+                    : searchBody !== null
+                      ? (
+                        <>
+                          <SearchBlock {...searchBody.card} maxLines={CHAT_SEARCH_MAX_LINES} className={css.searchBody} />
+                          {searchBody.recovery !== undefined && (
+                            <div className={css.searchRecovery}>{searchBody.recovery}</div>
+                          )}
+                        </>
+                      )
+                      : webBody !== null
+                        ? <WebBlock {...webBody} className={css.webBody} />
+                        : (
+                          <>
+                            {variant === 'code' && body !== null && (
+                              <div className={css.bodyScroll}>
+                                <CodeBlock code={body} lang="typescript" copyLabel={t('copy')} copiedLabel={t('copied')} className={css.codeBody} />
                               </div>
                             )}
-                            {cardBody !== null && outputText !== null && (
-                              <span className={css.ioDivider} aria-hidden />
-                            )}
-                            {outputText !== null && (
-                              <div className={css.ioSection}>
-                                <span className={css.ioLabel}>OUT</span>
-                                <span className={css.ioText} data-error={state === 'error' || undefined}>
-                                  {outputText}
-                                </span>
+                            {(cardBody !== null || outputText !== null) && (
+                              <div className={css.ioCard}>
+                                {cardBody !== null && (
+                                  <div className={css.ioSection}>
+                                    <span className={css.ioLabel}>IN</span>
+                                    <span className={css.ioText}>{cardBody}</span>
+                                  </div>
+                                )}
+                                {cardBody !== null && outputText !== null && (
+                                  <span className={css.ioDivider} aria-hidden />
+                                )}
+                                {outputText !== null && (
+                                  <div className={css.ioSection}>
+                                    <span className={css.ioLabel}>OUT</span>
+                                    <span className={css.ioText} data-error={state === 'error' || undefined}>
+                                      {outputText}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             )}
-                          </div>
+                          </>
                         )}
-                      </>
-                    )}
           {inspect !== undefined && (
             <button
               type="button"

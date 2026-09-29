@@ -1,16 +1,21 @@
-/* Full-bleed thin titlebar above the shell — window controls sit on the right. */
+/* Full-bleed thin titlebar — fixed to the viewport so community sidebar
+   layout-push on #root cannot shove min/max/close off the OS window edge.
+   z-index above better-sidebar panel-host (25) and toggle cluster (45);
+   splash uses BootWindowChrome at 110 until AppFrame mounts this chrome. */
 .chrome {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 30;
+  width: 100%;
+  z-index: 55;
   display: flex;
   align-items: stretch;
   height: var(--xrk-desktop-chrome-height, 36px);
   pointer-events: none;
   background: color-mix(in srgb, var(--dsw-alias-bg-base) 92%, transparent);
   border-bottom: 1px solid var(--dsw-alias-border-l2);
+  box-sizing: border-box;
 }
 
 .trafficPad {
@@ -51,11 +56,20 @@
   color: var(--dsw-alias-label-tertiary);
   background: transparent;
   cursor: pointer;
+  transition:
+    color 140ms ease-out,
+    background-color 140ms ease-out;
 }
 
 .action:hover {
   color: var(--dsw-alias-label-secondary);
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action {
+    transition: none;
+  }
 }
 
 .action:focus-visible {

@@ -41,6 +41,10 @@ import {
 } from '@xrkseek/client-ui-primitives'
 
 import type { ConnectionIndicatorState } from '@xrkseek/client-ui-primitives'
+import {
+  connectionChromeBusy,
+  connectionChromePhaseKey,
+} from './connection-chrome.ts'
 
 import type { SettingsRootComponentProps, SettingsSectionRow } from './shell-contract.ts'
 
@@ -270,7 +274,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
 
   const {
 
-    wide, reconnect, useConnectionState, useSections, useOnboardingSteps, useSessions, renderSlot, t,
+    wide, reconnect, useConnectionState, useConnectionPhase, useSections, useOnboardingSteps, useSessions, renderSlot, t,
 
   } = props
 
@@ -311,6 +315,8 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
   const rows = useSections(s => s)
 
   const connectionState = useConnectionState(state => state)
+
+  const connectionPhase = useConnectionPhase(state => state)
 
   const previousConnectionState = useRef(connectionState)
 
@@ -382,19 +388,38 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
 
 
 
-  // Wire state is connected | reconnecting; map outage → connecting chrome.
+  // Spinner stays up through wire handshake and first session-list ready
+  // (shared Web + Desktop; see connection-chrome.ts).
+
+  const sessionsPhase = useSessions(state => state.phase)
+
+  const chromeFacts = {
+
+    connectionState,
+
+    connectionPhase,
+
+    sessionsPhase,
+
+    showRecovery,
+
+  }
 
   let connectionIndicator: ConnectionIndicatorState | undefined
 
-  if (connectionState === 'reconnecting') {
-
-    connectionIndicator = 'connecting'
-
-  } else if (showRecovery) {
+  if (showRecovery) {
 
     connectionIndicator = 'recovered'
 
+  } else if (connectionChromeBusy(chromeFacts)) {
+
+    connectionIndicator = 'connecting'
+
   }
+
+  const phaseKey = connectionChromePhaseKey(chromeFacts)
+
+  const phaseLabel = phaseKey === undefined ? t('connection.phase.initial') : t(phaseKey)
 
 
 
@@ -433,6 +458,8 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           reconnectLabel={t('connection.retry')}
 
           connectingLabel={t('connection.connecting')}
+
+          phaseLabel={connectionIndicator === 'connecting' ? phaseLabel : undefined}
 
           recoveredLabel={t('connection.connected')}
 

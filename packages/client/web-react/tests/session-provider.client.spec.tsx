@@ -58,7 +58,7 @@ function makeHost(bodies: { root: (rp: (key: string, owner: object) => React.Rea
       provideInfo: provide,
     },
     workspaces: { list: observable<unknown>({ items: [] }) },
-    connection: { state: observable<undefined>(undefined) },
+    connection: { state: observable<undefined>(undefined), phase: observable<undefined>(undefined) },
   }
   return {
     host,

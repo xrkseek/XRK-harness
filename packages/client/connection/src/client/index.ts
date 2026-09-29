@@ -5,7 +5,7 @@
  */
 import type { Context } from '@xrkseek/cordis'
 import type { HostDescription, IApiClient } from './api.ts'
-import { ConnectionController, type ConnectionConfig, type ConnectionSinks, type ConnectionState } from './connection.ts'
+import { ConnectionController, type ConnectionConfig, type ConnectionPhase, type ConnectionSinks, type ConnectionState } from './connection.ts'
 import { FixtureApiClient } from './fixture.ts'
 import { WebApiClient } from './web-api-client.ts'
 import { createWebConnectionRpc } from './rpc.ts'
@@ -38,7 +38,7 @@ export {
 
 // Connection loop types are public through ConnectionHandle.start; the
 // controller remains package-internal.
-export type { ConnectionConfig, ConnectionSinks, ConnectionState }
+export type { ConnectionConfig, ConnectionPhase, ConnectionSinks, ConnectionState }
 export type { ClientConnectionRpc } from '../rpc.ts'
 
 /**
@@ -48,6 +48,11 @@ export type { ClientConnectionRpc } from '../rpc.ts'
 export interface XrkClientTransportHooks {
   /** When true, `isLoopback` is true regardless of page hostname (desktop owns Host). */
   readonly ownsHost?: boolean
+  /**
+   * Desktop: resolve once Host Fetch is attached to xrk-app://.
+   * Connection waits here so first paint does not burn into retry:backoff.
+   */
+  whenHostReady?: () => Promise<void>
   /**
    * Optional Face HTTP origin override for non-page carriers. When unset,
    * unary uses `location.origin` (Desktop: `xrk-app://app`).
@@ -75,6 +80,14 @@ export interface ConnectionStateSource {
   subscribe(listener: () => void): () => void
 }
 
+/** Observable handshake / backoff phase for spinner labels. */
+export interface ConnectionPhaseSource {
+  /** Latest phase; undefined when connected or before the loop starts. */
+  getSnapshot(): ConnectionPhase | undefined
+  /** Subscribe to phase transitions (deduplicated). */
+  subscribe(listener: () => void): () => void
+}
+
 /** Required services (none — this is the wire root). */
 export const inject: string[] = []
 
@@ -95,6 +108,8 @@ export interface ConnectionHandle {
   readonly hostDescription: HostDescriptionSource
   /** Coarse reconnect/connected state for product chrome. */
   readonly connectionState: ConnectionStateSource
+  /** Handshake / backoff phase for spinner labels (parallel to connectionState). */
+  readonly connectionPhase: ConnectionPhaseSource
   /** Generic logical RPC channels over the same Connection transport. */
   readonly rpc: ClientConnectionRpc
   /**
@@ -125,8 +140,10 @@ export function apply(ctx: Context): void {
   let controller: ConnectionController | undefined
   let description: HostDescription | undefined
   let connectionState: ConnectionState | undefined
+  let connectionPhase: ConnectionPhase | undefined
   const descriptionListeners = new Set<() => void>()
   const stateListeners = new Set<() => void>()
+  const phaseListeners = new Set<() => void>()
   const publishDescription = (next: HostDescription | undefined): void => {
     if (Object.is(description, next)) return
     description = next
@@ -146,6 +163,17 @@ export function apply(ctx: Context): void {
         listener()
       } catch (error) {
         console.error('[web-runtime] connection-state listener threw:', error)
+      }
+    }
+  }
+  const publishPhase = (next: ConnectionPhase | undefined): void => {
+    if (Object.is(connectionPhase, next)) return
+    connectionPhase = next
+    for (const listener of [...phaseListeners]) {
+      try {
+        listener()
+      } catch (error) {
+        console.error('[web-runtime] connection-phase listener threw:', error)
       }
     }
   }
@@ -169,6 +197,13 @@ export function apply(ctx: Context): void {
         return () => { stateListeners.delete(listener) }
       },
     },
+    connectionPhase: {
+      getSnapshot: () => connectionPhase,
+      subscribe: (listener) => {
+        phaseListeners.add(listener)
+        return () => { phaseListeners.delete(listener) }
+      },
+    },
     rpc,
     reconnect() {
       controller?.reconnect()
@@ -178,6 +213,11 @@ export function apply(ctx: Context): void {
       started = true
       const describeBeforeStreams =
         config?.describeBeforeStreams ?? pageLocation?.protocol === 'xrk-app:'
+      const waitUntil =
+        config?.waitUntil
+        ?? (pageLocation?.protocol === 'xrk-app:' && transport?.whenHostReady
+          ? () => transport.whenHostReady!()
+          : undefined)
       controller = new ConnectionController(api, {
         ...sinks,
         onConnected: (next) => {
@@ -194,7 +234,11 @@ export function apply(ctx: Context): void {
           publishState(state)
           sinks.onStateChange?.(state)
         },
-      }, { ...(config ?? {}), describeBeforeStreams })
+        onPhaseChange: (phase) => {
+          publishPhase(phase)
+          sinks.onPhaseChange?.(phase)
+        },
+      }, { ...(config ?? {}), describeBeforeStreams, ...(waitUntil ? { waitUntil } : {}) })
       controller.start()
       return {
         stop: () => {
@@ -202,6 +246,7 @@ export function apply(ctx: Context): void {
           controller = undefined
           publishDescription(undefined)
           publishState(undefined)
+          publishPhase(undefined)
         },
       }
     },

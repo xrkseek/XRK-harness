@@ -9,7 +9,9 @@
   background: var(--dsw-alias-bg-base);
   /* Collapse/expand animates the tracks on the deepsuite sider curve
      (--ds-ease-in-out / --ds-transition-duration-slow, ui-theme base.css). */
-  transition: grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+  transition: grid-template-columns
+    var(--ds-transition-duration-slow, 380ms)
+    var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
 /* Frameless Desktop: thin titlebar above the whole shell (all columns). */
@@ -81,7 +83,9 @@
   touch-action: none;
   /* Rides the same curve as the tracks so the pill stays on the moving
      border during collapse/expand; paused while dragging (frame rule). */
-  transition: left var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+  transition: left
+    var(--ds-transition-duration-slow, 380ms)
+    var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
 .frame[data-desktop-chrome] .handle {
@@ -114,8 +118,8 @@
      column, the strip itself, or a drag. */
   opacity: 0;
   transition:
-    opacity var(--ds-transition-duration-slow) var(--ds-ease-in-out),
-    background var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+    opacity var(--ds-transition-duration-slow, 380ms) var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1)),
+    background var(--ds-transition-duration-slow, 380ms) var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
 .detailsCol:hover ~ .handle[data-side='details']::after,

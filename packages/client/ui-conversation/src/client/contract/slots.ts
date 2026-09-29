@@ -60,6 +60,11 @@ export interface ComposerAttachmentsOwnerProps {
   canAcceptDrop: boolean
   /** Add one dropped batch through the composer's validation path. */
   onAddImages: (files: readonly File[]) => void
+  /**
+   * Dropped directories (OS folders): insert as `@path/` chips — never FileReader
+   * uploads. Absent when the composer cannot accept path mentions.
+   */
+  onAddDirectories?: (directories: readonly File[]) => void
   /** Remove one draft attachment through the conversation service. */
   onRemoveImage: (id: DraftAttachmentId) => void
   /** Display-ready limits for the drop invitation. */

@@ -154,7 +154,7 @@ function makeHost() {
       provideInfo: provide,
     },
     workspaces: { list: workspaces },
-    connection: { state: connectionState },
+    connection: { state: connectionState, phase: observable<undefined>(undefined) },
   }
   return {
     host,

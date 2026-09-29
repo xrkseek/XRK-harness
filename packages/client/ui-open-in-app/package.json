@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/client-ui-open-in-app",
-  "description": "Web Session-header Open In… split button (Face host.listOpenInApps / host.openInApp)",
+  "description": "Web Overview Open In… split button (Face host.listOpenInApps / host.openInApp)",
   "version": "0.1.0-rc.8",
   "repository": {
     "type": "git",
@@ -32,7 +32,7 @@
         "@xrkseek/client-connection",
         "@xrkseek/client-locale",
         "@xrkseek/client-runtime",
-        "@xrkseek/client-ui-conversation"
+        "@xrkseek/client-ui-layout"
       ],
       "platform": "web"
     }
@@ -49,7 +49,7 @@
     "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
-    "@xrkseek/client-ui-conversation": "workspace:^",
+    "@xrkseek/client-ui-layout": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
@@ -59,7 +59,7 @@
     "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/client-locale": "workspace:^",
     "@xrkseek/client-runtime": "workspace:^",
-    "@xrkseek/client-ui-conversation": "workspace:^",
+    "@xrkseek/client-ui-layout": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",

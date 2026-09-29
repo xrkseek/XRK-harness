@@ -1,4 +1,4 @@
-/** Bilingual copy for the Session-header Open In control. */
+/** Bilingual copy for the Overview Open In control. */
 
 export const NS = 'open-in-app' as const
 

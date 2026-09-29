@@ -52,18 +52,20 @@ export function buildImageGenToolParameters(
     properties.image_url = {
       type: "string",
       description:
-        "Primary reference image for edit / i2i: https URL, data:image/…;base64,…, or attachment:<attachmentId>.",
+        "Primary reference for edit / i2i: prefer attachment:<attachmentId> or https URL. " +
+        "Do NOT paste data:image/…;base64,… (truncates the tool call). Use reference_attachment_ids instead.",
     };
     properties.reference_image_urls = {
       type: "array",
       items: { type: "string" },
-      description: `Additional reference image URLs (same schemes as image_url). Max ${caps.maxReferenceImages} sources total.`,
+      description:
+        `Additional https / attachment:<id> refs (same rules as image_url; no base64 data URLs). Max ${caps.maxReferenceImages} sources total.`,
     };
     properties.reference_attachment_ids = {
       type: "array",
       items: { type: "string" },
       description:
-        "Host AttachmentStore image ids to use as edit references (preferred over fetching URLs when already attached).",
+        "Preferred edit references: Host AttachmentStore image ids from chat attachments or prior image_generate results.",
     };
   }
 
@@ -78,8 +80,9 @@ export function buildImageGenToolDescription(caps: ImageGenCapabilities): string
   if (imageGenSupportsEdit(caps)) {
     return (
       "Generate or edit an image via the Host image Provider. " +
-      "Text-only prompt → text-to-image; with image_url / reference_image_urls / " +
-      `reference_attachment_ids (≤${caps.maxReferenceImages}) → image edit. ` +
+      "Text-only prompt → text-to-image; for edit prefer reference_attachment_ids " +
+      `(or image_url=attachment:<id> / https; ≤${caps.maxReferenceImages}). ` +
+      "Never paste data:image base64 into args (call truncates). " +
       "Chat shows the image; result text gives attachmentId=sha256:… " +
       "(re-inspect with read_image; not a filesystem path)."
     );

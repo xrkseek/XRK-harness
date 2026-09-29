@@ -17,8 +17,11 @@
  * await the prefetch tier, THEN adopt the modules entry and create one
  * loader entry per plugin-view row plus the shell-own app-shell assembly
  * entry → loader.await() + a full fiber sweep (all ACTIVE, else fail
- * listing who/what/which service) → flip the settled signal so AppRoot
- * switches to the real UI in one pass.
+ * listing who/what/which service) → wait for Desktop Host Fetch (when
+ * present), connection handshake phases, and the first session-list ready →
+ * flip the settled signal so AppRoot's HARNESS splash switches to the real UI
+ * in one pass (no empty shell flash). Progressive splash hints track that
+ * chain (plugins → Host → Face streams → sessions).
  *
  * Entry creation waits for the whole immediately tier: materialization runs
  * synchronous cross-package require edges (e.g. locale → runtime/client) that
@@ -44,8 +47,56 @@ import * as AppShell from './app-shell.ts'
 import { APP_SHELL_ID } from './app-shell.ts'
 import { AppRoot } from './AppRoot.tsx'
 import { getStaticModules } from './seed.ts'
+import {
+  BOOT_HOST_TIP_INTERVAL_MS,
+  bootConnectionHint,
+  bootHostPhaseHint,
+  bootPluginHint,
+  bootSessionsHint,
+  resolveBootLang,
+  type BootHostPhase,
+  type BootLang,
+} from './boot-hints.ts'
+import { clearBooting, stampBooting } from './boot-stamp.ts'
 import { STATE_LABELS, createLoaderStatusStore, createSignal } from './loader-status.ts'
 import './base.css'
+
+/** Minimal connection face the product-ready gate reads (no value-import of the plugin). */
+type BootConnectionFace = {
+  readonly connectionState: {
+    getSnapshot: () => 'connected' | 'reconnecting' | undefined
+    subscribe: (fn: () => void) => () => void
+  }
+  readonly connectionPhase: {
+    getSnapshot: () =>
+      | 'handshake:host'
+      | 'handshake:describe'
+      | 'handshake:streams'
+      | 'retry:backoff'
+      | undefined
+    subscribe: (fn: () => void) => () => void
+  }
+}
+
+/** Wait until `done` is true, re-checking on every source notification. */
+function waitUntilReady(
+  sources: ReadonlyArray<{ subscribe: (fn: () => void) => () => void }>,
+  done: () => boolean,
+  onTick?: () => void,
+): Promise<void> {
+  if (done()) return Promise.resolve()
+  return new Promise((resolve) => {
+    const check = (): void => {
+      onTick?.()
+      if (!done()) return
+      for (const unsub of unsubs) unsub()
+      resolve()
+    }
+    const unsubs = sources.map((source) => source.subscribe(check))
+    // Race: the predicate may flip between the initial check and subscribe.
+    check()
+  })
+}
 
 /** Module transport hook the shell passes through (jsdom tests replace the <script> path). */
 export type BootSeams = Pick<ClientModuleSystemOptions, 'loadBundle'>
@@ -71,6 +122,10 @@ export class AppWebEntry {
   private readonly status = createLoaderStatusStore()
   private readonly settled = createSignal(false)
   private readonly error = createSignal<string | undefined>(undefined)
+  private readonly hint = createSignal(bootPluginHint({}, resolveBootLang()))
+  private readonly bootLang = createSignal<BootLang>(resolveBootLang())
+  /** While true, status transitions refresh the plugin-tier splash hint. */
+  private pluginHintActive = true
   // Assigned by run() before any private method or settled-gated closure reads them.
   private ctx!: Context
   private modules!: ClientModuleSystem
@@ -112,11 +167,16 @@ export class AppWebEntry {
     ;(globalThis as XrkWindow).__XRK_MODULES__ = this.modules
 
     this.root = createRoot(this.el)
+    // Stamp before plugin fibers so body-portaled FABs stay hidden on first paint.
+    stampBooting(this.bootLang.getSnapshot())
+    void this.primeBootLang()
     this.root.render(
       <AppRoot
         settled={this.settled}
         status={this.status}
         error={this.error}
+        hint={this.hint}
+        lang={this.bootLang}
         renderApp={() => {
           const shell = this.ctx.get('appShell')
           // Unreachable after a clean settle (the app-shell entry is in every graph).
@@ -134,7 +194,10 @@ export class AppWebEntry {
     this.ctx = new Context()
     try {
       await this.runPluginBoot(prefetching)
+      this.adoptProductLocale()
+      await this.awaitProductReady()
       this.settled.set(true)
+      clearBooting()
     } catch (reason) {
       // Stay on the loading page; surface the sweep report (fail loud).
       console.error(reason)
@@ -144,7 +207,128 @@ export class AppWebEntry {
 
   /** Unmount the shell (loading page or settled UI). */
   dispose(): void {
+    clearBooting()
     this.root?.unmount()
+  }
+
+  /** Prefer Desktop shell locale, then navigator (before locale plugin). */
+  private async primeBootLang(): Promise<void> {
+    const desktop = (globalThis as {
+      xrkDesktop?: { locale?: () => Promise<{ readonly id?: string }> }
+    }).xrkDesktop
+    let desktopLocaleId: string | undefined
+    if (typeof desktop?.locale === 'function') {
+      try {
+        const snap = await desktop.locale()
+        desktopLocaleId = snap.id
+      } catch {
+        /* ignore — fall through to navigator */
+      }
+    }
+    this.setBootLang(resolveBootLang({ desktopLocaleId }))
+  }
+
+  /** After plugins activate, adopt product Settings language when present. */
+  private adoptProductLocale(): void {
+    const locale = this.ctx.get('locale') as
+      | { getLocale?: () => { active?: string } }
+      | undefined
+    const productLocaleId = locale?.getLocale?.().active
+    if (productLocaleId === undefined) return
+    this.setBootLang(resolveBootLang({ productLocaleId }))
+  }
+
+  private setBootLang(lang: BootLang): void {
+    if (this.bootLang.getSnapshot() === lang) {
+      if (this.pluginHintActive) this.refreshPluginHint()
+      return
+    }
+    this.bootLang.set(lang)
+    if (!this.settled.getSnapshot()) stampBooting(lang)
+    if (this.pluginHintActive) this.refreshPluginHint()
+  }
+
+  /** Project loader status onto the splash hint during the plugin tier. */
+  private refreshPluginHint(): void {
+    if (!this.pluginHintActive) return
+    this.hint.set(bootPluginHint(this.status.getSnapshot(), this.bootLang.getSnapshot()))
+  }
+
+  /**
+   * Keep the HARNESS splash up until Face can paint a real session list.
+   * Chain: Desktop Host phases (spawn → wire Fetch) → Face handshake
+   * (describe / streams) → `sessions.list.phase === 'ready'`. Hints step
+   * through each stage; copy follows {@link bootLang} (zh/en).
+   */
+  private async awaitProductReady(): Promise<void> {
+    this.pluginHintActive = false
+    const lang = (): BootLang => this.bootLang.getSnapshot()
+
+    const transport = (globalThis as XrkWindow & {
+      __XRK_TRANSPORT__?: {
+        whenHostReady?: () => Promise<void>
+        getHostPhase?: () => BootHostPhase
+        subscribeHostPhase?: (listener: (phase: BootHostPhase) => void) => () => void
+      }
+    }).__XRK_TRANSPORT__
+
+    let hostAttached = false
+    if (typeof transport?.whenHostReady === 'function') {
+      const startedAt = Date.now()
+      let phase: BootHostPhase = transport.getHostPhase?.() ?? 'starting'
+      const paintHostHint = (): void => {
+        if (hostAttached) return
+        const next = bootHostPhaseHint(phase, lang(), {
+          elapsedMs: Date.now() - startedAt,
+        })
+        if (this.hint.getSnapshot() === next) return
+        this.hint.set(next)
+      }
+      paintHostHint()
+      const unsubPhase = transport.subscribeHostPhase?.((next) => {
+        phase = next
+        paintHostHint()
+      })
+      // Tick a bit under the bucket width so the first rotation is not late.
+      const tipTimer = setInterval(paintHostHint, Math.max(400, BOOT_HOST_TIP_INTERVAL_MS / 2))
+      try {
+        await transport.whenHostReady()
+      } finally {
+        clearInterval(tipTimer)
+        unsubPhase?.()
+      }
+      hostAttached = true
+    }
+
+    const connection = this.ctx.get('connection') as BootConnectionFace | undefined
+    if (connection !== undefined && connection.connectionState.getSnapshot() !== 'connected') {
+      this.hint.set(bootConnectionHint(connection.connectionPhase.getSnapshot(), {
+        hostAttached: true,
+        lang: lang(),
+      }))
+      await waitUntilReady(
+        [connection.connectionState, connection.connectionPhase],
+        () => connection.connectionState.getSnapshot() === 'connected',
+        () => {
+          if (connection.connectionState.getSnapshot() === 'connected') return
+          this.hint.set(bootConnectionHint(connection.connectionPhase.getSnapshot(), {
+            hostAttached: true,
+            lang: lang(),
+          }))
+        },
+      )
+    }
+
+    const sessions = this.ctx.get('sessions') as
+      | { list: { getSnapshot: () => { phase: string }; subscribe: (fn: () => void) => () => void } }
+      | undefined
+    if (sessions === undefined) return
+
+    this.hint.set(bootSessionsHint(lang()))
+    await waitUntilReady(
+      [sessions.list],
+      () => sessions.list.getSnapshot().phase === 'ready',
+    )
   }
 
   /** Prefetch the immediately tier (factory registration only; failures defer to the import path). */
@@ -179,6 +363,7 @@ export class AppWebEntry {
       const entry = fiber.entry
       if (entry === undefined || entry.fiber === undefined) return
       this.status.set(entry.options.name, STATE_LABELS[entry.fiber.state])
+      this.refreshPluginHint()
     })
 
     // Barrier before any entry exists: entry creation materializes bundles,
@@ -200,11 +385,13 @@ export class AppWebEntry {
     // same entry lifecycle so the sweep and status cover it uniformly.
     await Promise.all(rows.map(async (name) => {
       this.status.set(name, 'loading')
+      this.refreshPluginHint()
       const id = await loader.create({ name })
       // A failed import leaves the entry fiberless (Entry._init logs and
       // returns); project it as failed — no fiber means no status event.
       if (loader.resolve(id).fiber === undefined) {
         this.status.set(name, 'failed')
+        this.refreshPluginHint()
       }
     }))
 

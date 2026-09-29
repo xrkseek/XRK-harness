@@ -114,6 +114,7 @@ describe("desktop preload bridge", () => {
     expect(api.protocolVersion).toBe(DESKTOP_BRIDGE_PROTOCOL_VERSION);
     expect(api.platform).toBe(process.platform);
     expect("plugins" in api).toBe(false);
+    expect(api.files.pathForFile(new File([], "x"))).toBeUndefined();
     const locale = await api.locale();
     expect(locale.id).toBe("zh-CN");
     expect(locale.messages.checkUpdatesMenu).toContain("检查更新");

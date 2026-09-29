@@ -72,4 +72,12 @@ export interface XrkDesktopApi {
     subscribe(listener: (state: DesktopUpdateState) => void): () => void;
   };
   readonly window: XrkDesktopWindowApi;
+  /**
+   * Local filesystem helpers for the sandboxed renderer.
+   * `pathForFile` uses Electron `webUtils.getPathForFile` (must stay in preload).
+   */
+  readonly files: {
+    /** Absolute OS path for a dropped/picked File, or undefined when unavailable. */
+    pathForFile(file: File): string | undefined;
+  };
 }

@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { PluginEntryId, PluginInventorySnapshot } from '@xrkseek/xrk-api-remotes/client'
 import {
   Button,
@@ -17,14 +17,18 @@ import {
 } from '@xrkseek/client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type { PluginInventoryLocaleKey } from './locales.ts'
+import {
+  clearPluginInstallSettledUi,
+  getPluginInstallUiSnapshot,
+  markPluginClientRefreshHint,
+  runPluginInstallUi,
+  setPluginInstallUiError,
+  subscribePluginInstallUi,
+  type PluginInstallLog,
+} from './plugin-install-ui-session.ts'
 import css from './PluginInventorySettingsTab.module.css'
 
-/** Settled CLI mutate log for Settings TerminalBlock (install / update). */
-export type PluginInstallLog = {
-  readonly command: string
-  readonly output: string
-  readonly exitCode: number
-}
+export type { PluginInstallLog } from './plugin-install-ui-session.ts'
 
 /** npm registry preset for the Manager install row (persisted in localStorage). */
 export type InstallRegistryChoice = 'default' | 'npm' | 'npmmirror' | 'custom'
@@ -125,35 +129,6 @@ function refreshClientHalf(): void {
     return
   }
   globalThis.location?.reload()
-}
-
-function installLogFromError(
-  error: unknown,
-  spec: string,
-  registry?: string,
-): PluginInstallLog | null {
-  if (error !== null && typeof error === 'object' && 'installLog' in error) {
-    const log = (error as { installLog?: unknown }).installLog
-    if (
-      log !== null &&
-      typeof log === 'object' &&
-      typeof (log as PluginInstallLog).command === 'string' &&
-      typeof (log as PluginInstallLog).output === 'string' &&
-      typeof (log as PluginInstallLog).exitCode === 'number'
-    ) {
-      return log as PluginInstallLog
-    }
-  }
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return {
-      command: registry
-        ? `xrkh plugin add --registry ${registry} ${spec}`
-        : `xrkh plugin add ${spec}`,
-      output: error.message,
-      exitCode: 1,
-    }
-  }
-  return null
 }
 
 type PluginInventoryEntry = PluginInventorySnapshot['entries'][number]
@@ -292,12 +267,21 @@ export function PluginInventorySettingsTab({
   const [actionError, setActionError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ seq: number; text: string } | null>(null)
   const [installSpec, setInstallSpec] = useState('')
-  const [installBusy, setInstallBusy] = useState(false)
   const [installGuideOpen, setInstallGuideOpen] = useState(false)
-  const [installError, setInstallError] = useState<string | null>(null)
-  const [installSuccess, setInstallSuccess] = useState(false)
-  const [clientRefreshHint, setClientRefreshHint] = useState(false)
-  const [installLog, setInstallLog] = useState<PluginInstallLog | null>(null)
+  const installUi = useSyncExternalStore(
+    subscribePluginInstallUi,
+    getPluginInstallUiSnapshot,
+    getPluginInstallUiSnapshot,
+  )
+  const {
+    busy: installBusy,
+    error: installError,
+    success: installSuccess,
+    clientRefreshHint,
+    log: installLog,
+    activeSpec,
+    okSpec,
+  } = installUi
   const storedRegistry = useMemo(() => readStoredRegistry(), [])
   const [registryChoice, setRegistryChoice] = useState<InstallRegistryChoice>(storedRegistry.choice)
   const [registryCustom, setRegistryCustom] = useState(storedRegistry.custom)
@@ -361,7 +345,7 @@ export function PluginInventorySettingsTab({
   useEffect(() => {
     if (state.status !== 'ready') return
     if (state.snapshot.entries.some(entry => entry.needsRestart === true)) {
-      setClientRefreshHint(true)
+      markPluginClientRefreshHint()
     }
   }, [state])
 
@@ -376,6 +360,20 @@ export function PluginInventorySettingsTab({
     setToast({ seq: toastSeq.current, text })
   }
 
+  // Toast + inventory refresh on busy→ok while this mount is alive (including
+  // remount mid-install). Settled-while-closed still shows TerminalBlock /
+  // refresh hint from the durable session without replaying the toast.
+  const wasInstallBusy = useRef(installBusy)
+  useEffect(() => {
+    const finishedOk = wasInstallBusy.current && !installBusy && installSuccess
+    wasInstallBusy.current = installBusy
+    if (!finishedOk) return
+    setInstallSpec('')
+    if (okSpec.length > 0) showToast(t('toastInstalled', { name: okSpec }))
+    setState({ status: 'loading' })
+    setRequest(value => value + 1)
+  }, [installBusy, installSuccess, okSpec, t])
+
   const runManaged = async (
     entryId: PluginInventoryEntry['entryId'],
     action: () => Promise<void>,
@@ -388,7 +386,7 @@ export function PluginInventorySettingsTab({
       setRemoveTarget(null)
       setMenuEntryId(null)
       if (options.notice !== undefined) showToast(options.notice)
-      if (options.clientRefresh === true) setClientRefreshHint(true)
+      if (options.clientRefresh === true) markPluginClientRefreshHint()
       if (options.refresh !== false) {
         setState({ status: 'loading' })
         setRequest(value => value + 1)
@@ -419,56 +417,18 @@ export function PluginInventorySettingsTab({
     const spec = installSpec.trim()
     if (!spec || installBusy) return
     if (registryChoice === 'custom' && registryCustom.trim().length === 0) {
-      setInstallError(t('registryCustomRequired'))
+      setPluginInstallUiError(t('registryCustomRequired'))
       return
     }
     const registry = resolveInstallRegistry(registryChoice, registryCustom)
     persistRegistry(registryChoice, registryCustom)
-    const command = registry
-      ? `xrkh plugin add --registry ${registry} ${spec}`
-      : `xrkh plugin add ${spec}`
-    const requestId = `install-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-    setInstallBusy(true)
-    setInstallError(null)
-    setInstallSuccess(false)
-    setInstallLog({
-      command,
-      output: '',
-      exitCode: 0,
+    await runPluginInstallUi({
+      spec,
+      ...(registry !== undefined ? { registry } : {}),
+      install,
+      ...(subscribeInstallLog !== undefined ? { subscribeInstallLog } : {}),
+      fallbackError: t('actionFailed'),
     })
-    const unsub = subscribeInstallLog?.(requestId, (text) => {
-      setInstallLog((prev) => (
-        prev === null
-          ? { command, output: text, exitCode: 0 }
-          : { ...prev, output: prev.output + text }
-      ))
-    })
-    try {
-      const log = registry !== undefined
-        ? await install(spec, registry, requestId)
-        : await install(spec, undefined, requestId)
-      setInstallLog(log)
-      setInstallSpec('')
-      setInstallSuccess(true)
-      setClientRefreshHint(true)
-      showToast(t('toastInstalled', { name: spec }))
-      setState({ status: 'loading' })
-      setRequest(value => value + 1)
-    } catch (error) {
-      setInstallLog((prev) => {
-        const fromError = installLogFromError(error, spec, registry)
-        if (fromError === null) return prev
-        // Keep streamed body when the error payload has no richer log.
-        if (prev !== null && prev.output.length > 0 && fromError.output.length <= prev.output.length) {
-          return { ...fromError, output: prev.output, exitCode: 1 }
-        }
-        return fromError
-      })
-      setInstallError(error instanceof Error ? error.message : t('actionFailed'))
-    } finally {
-      unsub?.()
-      setInstallBusy(false)
-    }
   }
 
   const filters: { readonly id: CatalogFilter; readonly label: string }[] = [
@@ -507,9 +467,7 @@ export function PluginInventorySettingsTab({
                 spellCheck={false}
                 onChange={(event) => {
                   setInstallSpec(event.currentTarget.value)
-                  setInstallError(null)
-                  setInstallSuccess(false)
-                  setInstallLog(null)
+                  clearPluginInstallSettledUi()
                 }}
               />
             </label>
@@ -592,9 +550,7 @@ export function PluginInventorySettingsTab({
                         aria-label={t('installGuideFillAria', { example: item.example })}
                         onClick={() => {
                           setInstallSpec(item.example)
-                          setInstallError(null)
-                          setInstallSuccess(false)
-                          setInstallLog(null)
+                          clearPluginInstallSettledUi()
                         }}
                       >
                         {t('installGuideFill')}
@@ -630,7 +586,12 @@ export function PluginInventorySettingsTab({
             ? (
               <div className={css.installLog} data-install-log>
                 <TerminalBlock
-                  command={installLog?.command ?? `xrkh plugin add ${installSpec.trim()}`}
+                  command={
+                    installLog?.command
+                    ?? (activeSpec
+                      ? `xrkh plugin add ${activeSpec}`
+                      : `xrkh plugin add ${installSpec.trim()}`)
+                  }
                   output={installLog?.output ?? ''}
                   exitCode={installBusy ? undefined : installLog?.exitCode}
                   running={installBusy}

@@ -5,6 +5,7 @@ import type {} from '@xrkseek/client-ui-tool/client'
 import { ComposerAttachments } from './ComposerAttachments.tsx'
 import { MessageFiles } from './MessageFiles.tsx'
 import { MessageImages } from './MessageImages.tsx'
+import { ToolFiles } from './ToolFiles.tsx'
 
 /** Slot registry required by this presentation plugin. */
 export const inject = ['slots']
@@ -28,4 +29,9 @@ export function apply(ctx: ClientContext): void {
     name: 'tool.call.images',
     locale: 'conversation',
   }, MessageImages))
+  // Tool file / video cards reuse MessageFileGallery.
+  ctx.slots.inject('tool.call.files', () => ctx.slots.register({
+    name: 'tool.call.files',
+    locale: 'conversation',
+  }, ToolFiles))
 }

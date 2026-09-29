@@ -1,4 +1,8 @@
-import { IconCheckOutline16, IconWarningOutline16 } from './icons/index.tsx'
+import {
+  IconCheckOutline16,
+  IconLoadingOutline16,
+  IconWarningOutline16,
+} from './icons/index.tsx'
 import css from './ConnectionIndicator.module.css'
 
 /** Visual state rendered by {@link ConnectionIndicator}. */
@@ -13,6 +17,7 @@ export type ConnectionIndicatorState =
  * @param props.disconnectedLabel - localized outage text.
  * @param props.reconnectLabel - localized action text shown on hover or focus.
  * @param props.connectingLabel - localized retry text followed by the attempt dots.
+ * @param props.phaseLabel - optional handshake stage label (replaces connectingLabel when set).
  * @param props.recoveredLabel - localized recovery confirmation.
  * @param props.reconnectActionLabel - accessible label for the outage action.
  * @param props.restartActionLabel - accessible label for replacing an active attempt.
@@ -24,6 +29,7 @@ export function ConnectionIndicator({
   disconnectedLabel,
   reconnectLabel,
   connectingLabel,
+  phaseLabel,
   recoveredLabel,
   reconnectActionLabel,
   restartActionLabel,
@@ -33,18 +39,20 @@ export function ConnectionIndicator({
   disconnectedLabel: string
   reconnectLabel: string
   connectingLabel: string
+  phaseLabel?: string
   recoveredLabel: string
   reconnectActionLabel: string
   restartActionLabel: string
   onReconnect: () => void
 }) {
   if (state === undefined) return null
+  const connectingText = phaseLabel?.trim() ? phaseLabel.trim() : connectingLabel
   const sizeLabels = (
     <>
       <span className={css.sizeLabel} aria-hidden="true">{disconnectedLabel}</span>
       <span className={css.sizeLabel} aria-hidden="true">{reconnectLabel}</span>
       <span className={css.sizeLabel} aria-hidden="true">
-        {connectingLabel}<span className={css.dots}>...</span>
+        {connectingText}<span className={css.dots}>...</span>
       </span>
       <span className={css.sizeLabel} aria-hidden="true">{recoveredLabel}</span>
     </>
@@ -65,19 +73,23 @@ export function ConnectionIndicator({
   return (
     <button
       type="button"
-      className={`${css.indicator} ${css.warning}`}
+      className={`${css.indicator} ${connecting ? css.progress : css.warning}`}
       data-phase={state}
       aria-label={connecting ? restartActionLabel : reconnectActionLabel}
       onClick={onReconnect}
     >
-      <span className={css.icon} aria-hidden="true"><IconWarningOutline16 size={14} /></span>
+      <span className={`${css.icon} ${connecting ? css.iconSpinner : ''}`} aria-hidden="true">
+        {connecting
+          ? <IconLoadingOutline16 size={14} />
+          : <IconWarningOutline16 size={14} />}
+      </span>
       <span className={css.label}>
         {sizeLabels}
         <span className={css.stateLabel}>
           {connecting
             ? (
               <>
-                {connectingLabel}
+                {connectingText}
                 <span className={css.dots} aria-hidden="true">
                   <span>.</span>
                   <span className={css.secondDot}>.</span>

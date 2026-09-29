@@ -1,0 +1,164 @@
+/* Splash-time Desktop chrome — above the HARNESS splash (z=100) so window
+   controls stay usable while Host / sessions gate. Same geometry as
+   ui-layout DesktopChrome; CSS glyphs only (no plugin icon package). */
+
+.chrome {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 110;
+  display: flex;
+  align-items: stretch;
+  height: var(--xrk-desktop-chrome-height, 36px);
+  pointer-events: none;
+  background: color-mix(in srgb, var(--dsw-alias-bg-base, #f4f4f5) 92%, transparent);
+  border-bottom: 1px solid var(--dsw-alias-border-l2, rgb(0 0 0 / 14%));
+  box-sizing: border-box;
+}
+
+.trafficPad {
+  flex: none;
+  width: 78px;
+  pointer-events: none;
+}
+
+.drag {
+  flex: 1 1 auto;
+  min-width: 0;
+  -webkit-app-region: drag;
+  app-region: drag;
+  pointer-events: auto;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px 0 4px;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  pointer-events: auto;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--dsw-alias-label-tertiary, #8a8f96);
+  background: transparent;
+  cursor: pointer;
+}
+
+.action:hover {
+  color: var(--dsw-alias-label-secondary, #5c6168);
+  background: var(--dsw-alias-interactive-bg-hover, rgb(0 0 0 / 6%));
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-focus, var(--dsw-alias-border-l2, rgb(0 0 0 / 14%)));
+  outline-offset: 0;
+}
+
+.close:hover {
+  color: #fff;
+  background: #e81123;
+}
+
+.minimizeGlyph,
+.maximizeGlyph,
+.restoreGlyph,
+.reloadGlyph,
+.closeGlyph {
+  display: block;
+  box-sizing: border-box;
+}
+
+.minimizeGlyph {
+  width: 10px;
+  height: 1px;
+  background: currentColor;
+}
+
+.maximizeGlyph {
+  width: 10px;
+  height: 10px;
+  border: 1px solid currentColor;
+}
+
+.restoreGlyph {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border: 1px solid currentColor;
+  margin: 1px 0 0 1px;
+}
+
+.restoreGlyph::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid currentColor;
+  border-bottom: 0;
+  border-left: 0;
+}
+
+/* Simple circular arrow (reload) without icon packages. */
+.reloadGlyph {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  position: relative;
+}
+
+.reloadGlyph::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-bottom: 4px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.closeGlyph {
+  position: relative;
+  width: 10px;
+  height: 10px;
+}
+
+.closeGlyph::before,
+.closeGlyph::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1.5px;
+  height: 10px;
+  background: currentColor;
+  border-radius: 1px;
+}
+
+.closeGlyph::before {
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.closeGlyph::after {
+  transform: translateX(-50%) rotate(-45deg);
+}

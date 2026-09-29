@@ -4,6 +4,8 @@
  * header Status toggle (`conversation.session.header.actions`), and the
  * details column with session Status (subagents · jobs · timeline · cost ·
  * channels; Face `session.status` ≡ `/status`) plus todos / plan / Office tabs.
+ * Session tools (export log · open workspace in app) contribute to
+ * `details.status.utilities` inside Overview — not the conversation header.
  * Plan mode is entered through the command source; while the projection's
  * effective target is plan mode the chip renders and executes /plan off through
  * `command.execute`, otherwise the seat stays empty. Status loads via Face
@@ -99,6 +101,9 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('details', () => ctx.slots.register({
     name: 'details',
     locale: NS,
+    children: {
+      'details.status.utilities': { kind: 'list', scope: 'session' },
+    },
     inject: (sessionId: SessionId) => ({
       closeDetails: () => { ctx.layout.closeDetails() },
       openSpillPath: async (path: string) => {

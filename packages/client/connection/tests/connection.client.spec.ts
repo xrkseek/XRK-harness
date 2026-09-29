@@ -234,18 +234,59 @@ describe('connection lifecycle', () => {
       return gate.promise
     }
     let connected = 0
+    const phases: Array<string | undefined> = []
     const controller = new ConnectionController(
       api,
-      { onConnected: () => { connected++ } },
+      {
+        onConnected: () => { connected++ },
+        onPhaseChange: (phase) => { phases.push(phase) },
+      },
       { ...FAST, describeBeforeStreams: true },
     )
     controller.start()
     try {
       await vi.waitFor(() => { expect(describeCalls).toBe(1) })
       expect(api.openMuxCount).toBe(0)
+      expect(phases).toEqual(['handshake:describe'])
       gate.resolve(ok({ version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true }))
       await vi.waitFor(() => { expect(connected).toBe(1) })
       expect(api.openMuxCount).toBe(1)
+      expect(phases).toEqual(['handshake:describe', 'handshake:streams', undefined])
+    } finally {
+      controller.stop()
+    }
+  })
+
+  it('waits on waitUntil before describe and reports handshake:host', async () => {
+    const api = new FakeApiClient()
+    let describeCalls = 0
+    api.onDescribe = () => {
+      describeCalls++
+      return Promise.resolve(ok({ version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true }))
+    }
+    let releaseHost!: () => void
+    const hostGate = new Promise<void>((resolve) => { releaseHost = resolve })
+    const phases: Array<string | undefined> = []
+    let connected = 0
+    const controller = new ConnectionController(
+      api,
+      {
+        onConnected: () => { connected++ },
+        onPhaseChange: (phase) => { phases.push(phase) },
+      },
+      {
+        ...FAST,
+        waitUntil: () => hostGate,
+      },
+    )
+    controller.start()
+    try {
+      await vi.waitFor(() => { expect(phases).toContain('handshake:host') })
+      expect(describeCalls).toBe(0)
+      releaseHost()
+      await vi.waitFor(() => { expect(connected).toBe(1) })
+      expect(describeCalls).toBe(1)
+      expect(phases[0]).toBe('handshake:host')
     } finally {
       controller.stop()
     }

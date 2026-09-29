@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@xrkseek/client-ui-slots'
 import {
   IconBranchOutline16,
   IconChecklistOutline14,
@@ -98,6 +98,7 @@ export interface PreviewTabsInjected {
 
 export type PreviewTabsProps =
   PropsRuntime<'details'>
+  & PropsRenderSlots<'details.status.utilities'>
   & InjectFace<PreviewTabsInjected>
   & PropsLocale<'plan'>
 
@@ -645,37 +646,48 @@ function StatusPanel({
     || badge === 'server'
     || status.subagents.live.length > 0
     || status.subagents.graph.nodes.length > 0
+  const turnActive = status.delivery.turnActive
+  const queued = status.delivery.queued
+  const steering = status.delivery.steering
+  const summaryBusy =
+    turnActive
+    || runningJobs.length > 0
+    || liveSubs.length > 0
+    || queued > 0
+    || steering > 0
+    || status.compaction.phase === 'busy'
+  const summaryBeat = summaryBusy
+    ? (turnActive
+      ? t('preview.summary.beat.turn')
+      : runningJobs.length > 0
+        ? t('preview.summary.beat.jobs')
+        : liveSubs.length > 0
+          ? t('preview.summary.beat.subs')
+          : t('preview.summary.beat.busy'))
+    : t('preview.summary.beat.idle')
   return (
     <div className={css.statusRoot} data-status-badge={status.badge || undefined}>
-      <div className={css.summary} aria-label={t('preview.summary')}>
-        <div className={css.summaryMain}>
-          <StateDot
-            state={healthDotState(status.fleet.health)}
-            size={12}
-          />
-          <span className={css.summaryHealth}>
-            {t(`preview.status.fleetHealth.${status.fleet.health}`)}
-          </span>
-        </div>
-        <div className={css.summaryStats}>
-          <span className={css.summaryStat}>
-            <b>{runningJobs.length}</b>
-            {t('preview.summary.jobs')}
-          </span>
-          {showSubagentSurface
-            ? (
-              <span className={css.summaryStat}>
-                <b>{status.subagents.live.length}</b>
-                {t('preview.summary.subs')}
+      <div
+        className={css.summary}
+        data-health={status.fleet.health}
+        data-busy={summaryBusy || undefined}
+        aria-label={t('preview.summary')}
+      >
+        <div className={css.summaryTop}>
+          <div className={css.summaryMain}>
+            <StateDot
+              state={healthDotState(status.fleet.health)}
+              size={12}
+            />
+            <div className={css.summaryTitles}>
+              <span className={css.summaryHealth}>
+                {t(`preview.status.fleetHealth.${status.fleet.health}`)}
               </span>
-            )
-            : null}
-          <span className={css.summaryStat}>
-            <b>{current.total}</b>
-            {t('preview.summary.tokens')}
-          </span>
-        </div>
-        <div className={css.summaryActions}>
+              <span className={css.summaryBeat} data-live={summaryBusy || undefined}>
+                {summaryBeat}
+              </span>
+            </div>
+          </div>
           <button
             type="button"
             className={css.summaryToggle}
@@ -689,6 +701,47 @@ function StatusPanel({
           >
             {allOpen ? t('preview.collapseAll') : t('preview.expandAll')}
           </button>
+        </div>
+        <div className={css.summaryStats}>
+          <span
+            className={css.summaryStat}
+            data-hot={runningJobs.length > 0 || undefined}
+          >
+            <b key={`jobs-${runningJobs.length}`}>{runningJobs.length}</b>
+            <span className={css.summaryStatLabel}>{t('preview.summary.jobs')}</span>
+          </span>
+          {showSubagentSurface
+            ? (
+              <span
+                className={css.summaryStat}
+                data-hot={liveSubs.length > 0 || undefined}
+              >
+                <b key={`subs-${liveSubs.length}`}>{liveSubs.length}</b>
+                <span className={css.summaryStatLabel}>{t('preview.summary.subs')}</span>
+              </span>
+            )
+            : null}
+          {turnActive || queued > 0 || steering > 0
+            ? (
+              <span
+                className={css.summaryStat}
+                data-hot=""
+              >
+                <b key={`queue-${turnActive}-${queued}-${steering}`}>
+                  {turnActive ? '●' : queued + steering}
+                </b>
+                <span className={css.summaryStatLabel}>
+                  {turnActive
+                    ? t('preview.summary.turn')
+                    : t('preview.summary.queue')}
+                </span>
+              </span>
+            )
+            : null}
+          <span className={css.summaryStat}>
+            <b key={`tok-${current.total}`}>{current.total.toLocaleString()}</b>
+            <span className={css.summaryStatLabel}>{t('preview.summary.tokens')}</span>
+          </span>
         </div>
       </div>
 
@@ -1605,6 +1658,7 @@ export function PreviewTabs({
   t,
   useProjection,
   useSessions,
+  renderSlot = (() => null) as PreviewTabsProps['renderSlot'],
 }: PreviewTabsProps) {
   const [tab, setTab] = useState<PreviewTabId>('status')
   const [loaded, setLoaded] = useState<PreviewTabLoad>({
@@ -1786,6 +1840,9 @@ export function PreviewTabs({
         >
           <IconCloseFill14 size={14} />
         </button>
+      </div>
+      <div className={css.tools} aria-label={t('preview.status.tools')}>
+        {renderSlot('details.status.utilities', {})}
       </div>
       <div className={css.body} role="tabpanel">
         {tab === 'status'

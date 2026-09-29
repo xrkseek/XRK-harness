@@ -405,6 +405,19 @@ export class SessionInputShell implements SessionInput {
   }
 
   /**
+   * Insert one path/folder chip at the caret (folder drop). Phase-gated; no
+   * trigger-token draftRev CAS (the caret moves after each successful insert).
+   */
+  insertPathReference(ref: ReferenceInsert): boolean {
+    if (this.disposed) return false
+    const phase = this.core.state.phase
+    if (phase !== 'plain' && phase !== 'claimed') return false
+    const caret = this.caretSpan()
+    const tail = this.projection.detectText.slice(caret.end, caret.end + 1)
+    return this.draftEditor.insertReference(caret, ref, tail)
+  }
+
+  /**
    * Consume one command token after business success (scoped consume-token
    * event listener body). Span guard: revision CAS then splice; bare-token
    * guard: trimmed-draft equality then clear.

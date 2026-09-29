@@ -32,6 +32,10 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     children: {
       'tool.call.toolview': { kind: 'keyed', scope: 'session' },
+      // Authorize media slots for the GenericToolCard keyed-miss fallback
+      // (keyed toolviews like image_generate declare their own children).
+      'tool.call.images': { kind: 'single', scope: 'session' },
+      'tool.call.files': { kind: 'single', scope: 'session' },
     },
     inject: toolInject,
   }, ToolCallTree))

@@ -144,8 +144,12 @@ const AgentLoopConfig = Schema.object({
   maxParallelToolCalls: Schema.number().step(1).min(1),
   /** Max LLM steps per user turn (tool rounds). Harness/server default 32. */
   maxSteps: Schema.number().step(1).min(1).default(32),
-  /** Resume automatically when a model stops at its output token cap. */
-  autoContinueOnMaxTokens: Schema.boolean().default(false),
+  /**
+   * Resume automatically when a model stops at its output token cap.
+   * Product default on: a truncated mid-task reply should keep going without
+   * a manual nudge (Settings can still turn it off).
+   */
+  autoContinueOnMaxTokens: Schema.boolean().default(true),
   /** Maximum automatic continuations per turn (independent of maxSteps). */
   autoContinueMaxRounds: Schema.number().step(1).min(1).max(10).default(2),
   /**
@@ -510,7 +514,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       schema: schemasteryJson(AgentLoopConfig) as FaceSchemaEnvelope,
       base: {
         maxSteps: 32,
-        autoContinueOnMaxTokens: false,
+        autoContinueOnMaxTokens: true,
         autoContinueMaxRounds: 2,
         toolSettle: "parallel",
         llmRetryMaxRetries: 5,

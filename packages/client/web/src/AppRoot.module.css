@@ -1,47 +1,158 @@
-/* Boot page styles are self-contained: the theme base stylesheets are linked
-   by the shell, but the loading page must render acceptably even before/without
-   them, so this file uses tokens with neutral fallbacks (the one sanctioned
-   fallback site — plugin packages must not do this). */
+/* Boot page: self-contained. Theme tokens with neutral fallbacks so the
+   splash stays correct before plugin CSS arrives (the one sanctioned
+   fallback site — plugin packages must not do this).
+   Motion is intentional and quiet: wordmark settle, dual-ring spin,
+   hint crossfade. Reduced-motion collapses to a static mark. */
 
 .boot {
-  height: 100%;
+  /* Cover the viewport above body-portaled plugin chrome (panel-host z=25). */
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  isolation: isolate;
   display: grid;
   place-items: center;
-  background: var(--dsw-alias-bg-base, #f9fafb);
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgb(255 255 255 / 70%), transparent 55%),
+    radial-gradient(90% 70% at 50% 120%, rgb(20 22 26 / 4%), transparent 50%),
+    var(--dsw-alias-bg-base, #f4f4f5);
+}
+
+.ambient {
+  position: absolute;
+  inset: auto;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(20 22 26 / 6%), transparent 68%);
+  filter: blur(2px);
+  animation: xrk-boot-breathe 3.6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .card {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
+  animation: xrk-boot-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .wordmark {
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--dsw-alias-label-primary, #0f1115);
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  color: var(--dsw-alias-label-primary, #14161a);
+  animation: xrk-boot-mark 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.spinnerWrap {
+  position: relative;
+  width: 28px;
+  height: 28px;
+}
+
+.spinnerRing,
+.spinnerCore {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.spinnerRing {
+  border: 1.5px solid transparent;
+  border-top-color: var(--dsw-alias-label-secondary, #5c6168);
+  border-right-color: var(--dsw-alias-border-l2, rgb(0 0 0 / 14%));
+  animation: xrk-boot-spin 1.05s cubic-bezier(0.55, 0.15, 0.35, 0.85) infinite;
+}
+
+.spinnerCore {
+  inset: 6px;
+  border: 1.5px solid transparent;
+  border-bottom-color: var(--dsw-alias-label-tertiary, #8a8f96);
+  border-left-color: var(--dsw-alias-border-l2, rgb(0 0 0 / 10%));
+  animation: xrk-boot-spin 0.7s linear infinite reverse;
 }
 
 .hint {
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  letter-spacing: 0.01em;
+  color: var(--dsw-alias-label-tertiary, #8a8f96);
+  min-height: 18px;
+  text-align: center;
+  animation: xrk-boot-hint 280ms ease-out both;
 }
 
-.spinner {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 2px solid var(--dsw-alias-border-l2, rgb(0 0 0 / 10%));
-  border-top-color: var(--dsw-alias-brand-primary, #3964fe);
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
+@keyframes xrk-boot-spin {
   to { transform: rotate(360deg); }
+}
+
+@keyframes xrk-boot-breathe {
+  0%, 100% { transform: scale(0.92); opacity: 0.55; }
+  50% { transform: scale(1.08); opacity: 0.9; }
+}
+
+@keyframes xrk-boot-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes xrk-boot-mark {
+  from {
+    opacity: 0;
+    letter-spacing: 0.32em;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.14em;
+    transform: translateY(0);
+  }
+}
+
+@keyframes xrk-boot-hint {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient,
+  .card,
+  .wordmark,
+  .hint,
+  .spinnerRing,
+  .spinnerCore {
+    animation: none;
+  }
+
+  .ambient {
+    opacity: 0.45;
+  }
+
+  .spinnerRing,
+  .spinnerCore {
+    border-color: var(--dsw-alias-border-l2, rgb(0 0 0 / 14%));
+    opacity: 0.75;
+  }
 }
 
 .failed {
@@ -49,18 +160,20 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  text-align: center;
 }
 
 .failedTitle {
   font-size: 14px;
   line-height: 22px;
   font-weight: 600;
-  color: var(--dsw-alias-label-primary, #0f1115);
+  color: var(--dsw-alias-label-primary, #14161a);
 }
 
 .failedItem {
   font-family: var(--ds-font-family-code, ui-monospace, 'SF Mono', Menlo, Consolas, 'Courier New');
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-secondary, #61666b);
+  color: var(--dsw-alias-label-secondary, #5c6168);
+  word-break: break-word;
 }

@@ -4,9 +4,9 @@ import { SessionLogDownloadDialog, type SessionLogDownloadDialogProps } from './
 import css from './HeaderAction.module.css'
 
 /**
- * Render the Session Header export capsule and its shared result dialog.
+ * Render the Overview export capsule and its shared result dialog.
  * @param props - Session runtime, download controller, and localized dialog copy.
- * @returns the persistent Header action and Session-scoped dialog.
+ * @returns the Overview tools action and Session-scoped dialog.
  */
 export function SessionLogDownloadHeaderAction(props: SessionLogDownloadDialogProps): ReactNode {
   const { sessionId, useSessionLogDownload, request, t } = props

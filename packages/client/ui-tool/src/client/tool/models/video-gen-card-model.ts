@@ -1,14 +1,20 @@
 /**
- * Display helpers for `video_generate` text results (no in-chat video player).
+ * Display helpers for `video_generate` text results.
  */
 import type { ToolCallBlock } from './tool-call-model.ts'
-import { resultText } from './tool-call-model.ts'
 import {
   parseVideoGenResultText,
   type ParsedVideoGenResult,
 } from './gen-result-parse.ts'
 
 export type { ParsedVideoGenResult }
+
+function textFromContent(content: readonly { type: string; text?: string }[]): string {
+  return content
+    .filter((part) => part.type === 'text' && typeof part.text === 'string')
+    .map((part) => part.text as string)
+    .join('\n')
+}
 
 /**
  * Parse a settled `video_generate` result for row summary / cleaned output.
@@ -18,7 +24,7 @@ export function videoGenResultModel(block: ToolCallBlock): ParsedVideoGenResult 
   if (!('kind' in block)) return null
   const callName = block.call?.name
   if (callName !== undefined && callName !== 'video_generate') return null
-  return parseVideoGenResultText(resultText(block))
+  return parseVideoGenResultText(textFromContent(block.content))
 }
 
 /** Truncate prompt / command text for the collapsed summary. */

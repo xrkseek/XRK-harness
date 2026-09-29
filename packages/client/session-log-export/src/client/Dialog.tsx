@@ -1,10 +1,11 @@
 import type { ObservableSnapshot, SessionId } from '@xrkseek/client-runtime/client'
 import { Button, Modal } from '@xrkseek/client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
+import type {} from '@xrkseek/client-ui-layout/client'
 import type { SessionLogDownloadState } from './controller.ts'
 import { NS } from './locales.ts'
 
-/** Browser operations and state injected into the Session Header contribution. */
+/** Browser operations and state injected into the Overview tools contribution. */
 export interface SessionLogDownloadDialogInjected {
   hooks: { sessionLogDownload: ObservableSnapshot<SessionLogDownloadState> }
   request: (sessionId: SessionId) => Promise<void>
@@ -12,7 +13,7 @@ export interface SessionLogDownloadDialogInjected {
 }
 
 export type SessionLogDownloadDialogProps =
-  PropsRuntime<'conversation.session.header.utilities'>
+  PropsRuntime<'details.status.utilities'>
   & PropsLocale<typeof NS>
   & InjectFace<SessionLogDownloadDialogInjected>
 

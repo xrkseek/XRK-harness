@@ -46,6 +46,17 @@ body {
   overflow-x: clip;
 }
 
+/* While splash owns the viewport, hide body-portaled workbench hosts
+   (better-sidebar panel-host + toggle cluster activate before settled).
+   Kernel stamp is synchronous (boot.tsx + AppRoot layout effect) so FABs
+   never flash above the HARNESS gate. */
+html[data-xrk-booting] [data-dsh-panel-host],
+html[data-xrk-booting] [data-dsh-toggle-cluster] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
 /* Form controls don't inherit the body font (UA sheets pin their families —
    Chrome buttons fall back to Arial, textareas to monospace), so the app
    stack is re-applied to them explicitly, as upstream's global reset does. */

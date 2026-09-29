@@ -1,20 +1,23 @@
-// GenericToolCard: the default tool row — classifies the tool into a visual
-// variant and renders the summary row. Supplied by the Tool call tree as the
-// keyed atomic-view slot's render-site fallback (an
-// unregistered tool name lands here); registrants may also compose it as a
-// base, feeding the same owner payload through.
-
+/** Generic Tool call card: variant-aware ToolRow over a frozen call slice. */
 import type { ReactNode } from 'react'
 import {
-  IconApiOutline14, IconBrowseOutline16, IconCodeOutline16, IconEditOutline16, IconSearchOutline16, IconSparkle16,
+  IconApiOutline14,
+  IconBrowseOutline16,
+  IconCodeOutline16,
+  IconEditOutline16,
+  IconSearchOutline16,
+  IconSparkle16,
 } from '@xrkseek/client-ui-primitives'
 import type { ToolCallOwnerProps, ToolTreeProps } from '../../contract/slots.ts'
-import { readCardModel } from '../models/read-card-model.ts'
 import { diffCardModel } from '../models/diff-card-model.ts'
+import { fileCardModel, videoFileCardModel } from '../models/file-card-model.ts'
+import { imageCardModel } from '../models/image-card-model.ts'
+import { imageGenCardModel } from '../models/image-gen-card-model.ts'
+import { readCardModel } from '../models/read-card-model.ts'
 import { searchCardModel } from '../models/search-card-model.ts'
 import { terminalCardModel, terminalFailed } from '../models/terminal-card-model.ts'
-import { webCardModel } from '../models/web-card-model.ts'
 import { toolRowModel, type ToolRowVariant } from '../models/tool-call-model.ts'
+import { webCardModel } from '../models/web-card-model.ts'
 import { ToolRow } from '../components/ToolRow.tsx'
 
 /** Variant leading icons (figma table); all glyphs render at 14 inside the 16px leading box. */
@@ -28,24 +31,31 @@ const VARIANT_ICONS: Record<ToolRowVariant, ReactNode> = {
   others: <IconSparkle16 size={14} />,
 }
 
-/** Card props: the owner payload plus the render site's locale seat (plain prop). */
+/** Card props: owner payload + locale; optional tree renderSlot for media galleries. */
 export interface GenericToolCardProps extends ToolCallOwnerProps {
   t: ToolTreeProps['t']
+  /** Tree-authorized `tool.call.images` / `tool.call.files` when used as keyed-miss fallback. */
+  renderSlot?: ToolTreeProps['renderSlot'] | undefined
 }
 
-export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect, t }: GenericToolCardProps) {
+export function GenericToolCard({
+  toolName, block, cwd, home, openFile, inspect, loadImage, renderSlot, t,
+}: GenericToolCardProps) {
   const model = toolRowModel(toolName, block, cwd, home)
   const terminal = terminalCardModel(block, cwd)
   const read = readCardModel(block, cwd, home)
   const diff = diffCardModel(block)
   const search = searchCardModel(block)
   const web = webCardModel(block)
-  // A failing exit status is the terminal card's own error signal (the call
-  // itself settles isError:false), surfaced as the row's red state dot.
+  // Media even on the keyed-miss fallback: prefer gen cards, then read_image,
+  // then generic file ContentBlocks / video envelopes.
+  const image = imageGenCardModel(block) ?? imageCardModel(block, cwd, home)
+  const files = videoFileCardModel(block) ?? fileCardModel(block)
   const state = model.state === 'ok' && terminal !== null && terminalFailed(terminal)
     ? 'error'
     : model.state
   const singleFile = model.filePath !== undefined
+  const hasMedia = image !== null || files !== null
   return (
     <ToolRow
       t={t}
@@ -53,21 +63,19 @@ export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect,
       toolName={toolName}
       icon={VARIANT_ICONS[model.variant]}
       title={model.title}
-      // A terminal presenter's description is the contract's above-card text, so
-      // it outranks the args-derived summary here exactly as it does in BashRow;
-      // a search result view's replacement title outranks it the same way.
       summary={terminal?.description ?? search?.title ?? model.summary}
-      // Single-file tools never expose an args body — the path link is the only
-      // args interaction. A card is not an args body: a read/write/edit row is
-      // single-file AND carries a card, so the card expands under the path link.
-      body={singleFile ? null : model.body}
-      output={model.output}
+      body={singleFile || hasMedia ? null : model.body}
+      output={hasMedia ? null : model.output}
       errorSummary={model.errorSummary}
       terminal={terminal}
       diff={diff}
       read={read}
       search={search}
       web={web}
+      image={image}
+      files={files}
+      renderSlot={renderSlot}
+      loadImage={loadImage}
       state={state}
       filePath={model.filePath}
       onOpenFile={singleFile ? openFile : undefined}

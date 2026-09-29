@@ -157,6 +157,10 @@ declare module '@xrkseek/client-ui-slots' {
     useConnectionState: SnapshotSelectorHook<
       import('@xrkseek/client-connection/client').ConnectionState | undefined
     >
+    /** Handshake / backoff phase for connection spinner labels. */
+    useConnectionPhase: SnapshotSelectorHook<
+      import('@xrkseek/client-connection/client').ConnectionPhase | undefined
+    >
   }
 }
 

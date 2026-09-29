@@ -73,5 +73,9 @@ export function createXrkDesktopBridgeApi(
         await ipc.invoke(DESKTOP_IPC.windowReload);
       },
     },
+    // Filled by preload with `webUtils.getPathForFile` (File cannot cross IPC).
+    files: {
+      pathForFile: () => undefined,
+    },
   };
 }
