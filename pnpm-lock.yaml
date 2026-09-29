@@ -512,9 +512,9 @@ importers:
       '@xrkseek/client-ui-commands':
         specifier: workspace:^
         version: link:../ui-commands
-      '@xrkseek/client-ui-layout':
+      '@xrkseek/client-ui-conversation':
         specifier: workspace:^
-        version: link:../ui-layout
+        version: link:../ui-conversation
       '@xrkseek/client-ui-primitives':
         specifier: workspace:^
         version: link:../ui-primitives
