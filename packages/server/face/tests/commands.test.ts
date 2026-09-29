@@ -811,6 +811,7 @@ describe("pluginInventory/list", () => {
           kind: "process",
         },
       ],
+      agentPresets: expect.any(Array),
     });
   });
 
@@ -849,6 +850,7 @@ describe("pluginInventory/list", () => {
           kind: "cordis",
         },
       ],
+      agentPresets: expect.any(Array),
     });
   });
 });

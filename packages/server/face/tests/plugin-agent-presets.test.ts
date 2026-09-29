@@ -1,3 +1,6 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   compositionRowsForProfile,
@@ -27,6 +30,8 @@ describe("plugin agentPresets composition inventory", () => {
 
   it("lists every catalog badge and marks the Face default", () => {
     const store = createMemorySessionStore();
+    // Empty productDir so ~/.xrk/settings.yaml cannot override defaultAgentPreset.
+    const productDir = mkdtempSync(path.join(tmpdir(), "xrk-face-presets-"));
     const runtime = createFaceRuntime({
       store,
       resolveAgent: async () => {
@@ -34,6 +39,7 @@ describe("plugin agentPresets composition inventory", () => {
       },
       drain: { abort: () => undefined, isRunning: () => false },
       workspaceRoot: process.cwd(),
+      productDir,
       defaultAgentPreset: "frugal",
       skipDefaultProjections: true,
     });

@@ -278,7 +278,7 @@ describe("video_generate tool", () => {
     });
     const out = await tool!.execute({ action: "content", job_id: "job-1" });
     expect(out.isError).toBeFalsy();
-    expect(out.content).toMatch(/no AttachmentStore is wired/);
+    expect(out.content).toMatch(/No AttachmentStore/);
   });
 
   it("content reports not_ready for an unfinished job", async () => {
@@ -321,7 +321,8 @@ describe("video_generate tool", () => {
 
   it("exposes a model-facing prompt block", () => {
     expect(VIDEO_GEN_PROMPT_TEXT).toMatch(/video_generate/);
-    expect(VIDEO_GEN_PROMPT_TEXT).toMatch(/asynchronous/i);
+    expect(VIDEO_GEN_PROMPT_TEXT).toMatch(/action=start/);
+    expect(VIDEO_GEN_PROMPT_TEXT).toMatch(/status.*wait|wait.*status/i);
   });
 });
 
