@@ -277,6 +277,7 @@ describe("external agent runtime", () => {
       workspaceRoot: process.cwd(),
       drain: drain(),
       resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
     });
     const parent = runtime.ensureSession("parent");
     const tools = createToolRegistry();
@@ -332,6 +333,7 @@ describe("external agent runtime", () => {
       workspaceRoot: process.cwd(),
       drain: drain(),
       resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
     });
     const parent = runtime.ensureSession("parent");
     const tools = createToolRegistry();
@@ -352,6 +354,7 @@ describe("external agent runtime", () => {
       workspaceRoot: process.cwd(),
       drain: drain(),
       resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
     });
     const parent = runtime.ensureSession("parent");
     const tools = createToolRegistry();
@@ -441,6 +444,7 @@ describe("external agent runtime", () => {
       workspaceRoot: process.cwd(),
       drain: drain(),
       resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
     });
     const parent = runtime.ensureSession("parent");
     const tools = createToolRegistry();

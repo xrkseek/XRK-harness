@@ -59,6 +59,7 @@ describe("golden/fan-out", () => {
       workspaceRoot: process.cwd(),
       drain: drain(active),
       resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
     });
     const parent = runtime.ensureSession("eval-fanout-parent");
     const childA = runtime.ensureSession("eval-fanout-a");

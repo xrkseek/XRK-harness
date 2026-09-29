@@ -16,6 +16,8 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Prepare Desktop brand icons
+        run: node ./apps/desktop/scripts/prepare-brand-icons.mjs
       - run: pnpm check
 
   desktop:

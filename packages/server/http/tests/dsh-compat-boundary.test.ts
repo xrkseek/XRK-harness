@@ -45,6 +45,7 @@ const FORBIDDEN_MAIN_PACKAGES = [
 /** Infrastructure whitelist dsh-compat may import externally (extraction peers). */
 const DSH_COMPAT_ALLOWED_EXTERNAL = [
   "@xrkseek/core-session",
+  "@xrkseek/exec-web",
   "@xrkseek/im-gateway-contract",
   "@xrkseek/policy",
   "@xrkseek/server-loader",

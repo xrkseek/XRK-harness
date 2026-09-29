@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync, existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -74,6 +75,18 @@ describe("resolveDesktopWebRoot", () => {
 
   it("defaults unpackaged to apps/web/dist when present", () => {
     const monorepoWeb = path.resolve(DESKTOP_APP_ROOT, "..", "web", "dist");
+    const index = path.join(monorepoWeb, "index.html");
+    // `apps/web/dist` is gitignored; CI `check` does not assemble product Web.
+    if (!existsSync(index)) {
+      expect(() =>
+        resolveDesktopWebRoot({
+          isPackaged: false,
+          desktopAppRoot: DESKTOP_APP_ROOT,
+          env: {},
+        }),
+      ).toThrow(/index\.html/u);
+      return;
+    }
     expect(
       resolveDesktopWebRoot({
         isPackaged: false,
@@ -86,6 +99,12 @@ describe("resolveDesktopWebRoot", () => {
 
 describe("desktop brand icons", () => {
   it("ships build/icon.png and build/icon.ico from the product plate", () => {
+    // Icons are gitignored under apps/desktop/build/; generate from logo-plate.
+    spawnSync(
+      process.execPath,
+      [path.join(DESKTOP_APP_ROOT, "scripts", "prepare-brand-icons.mjs")],
+      { cwd: path.resolve(DESKTOP_APP_ROOT, "..", ".."), stdio: "pipe" },
+    );
     const build = resolveDesktopBuildResourcesDir(DESKTOP_APP_ROOT);
     expect(resolveDesktopWindowIconPath({ platform: "win32", desktopAppRoot: DESKTOP_APP_ROOT })).toBe(
       path.join(build, "icon.ico"),

@@ -59,19 +59,52 @@ export interface CommunityRootOptions {
   readonly xrkHome?: string;
 }
 
-/** First path segment + optional nested tail under a `dsh-*` community slug. */
+/**
+ * First path segment + optional nested community surface under a `dsh-*` slug.
+ *
+ * Nested trees must NOT claim Cordis / settings RPC (`/dsh-foo-settings/get`,
+ * `/dsh-pocket/pocket.status`) — those go to the RPC registry after HTTP
+ * matches. Only `api/…` and staged static assets are community-root under
+ * nested `dsh-*` paths.
+ */
 export function isCommunityRootPath(pathname: string): boolean {
   const m = /^\/([a-z][a-z0-9-]*)(\/.*)?$/.exec(pathname);
   if (!m) return false;
   const slug = m[1]!;
   if (RESERVED_ROOT.has(slug)) return false;
-  const nested = Boolean(m[2]);
-  // Exact `/slug` stays open for short aliases (`/whale-girl`). Nested
-  // `/slug/…` trees are only claimed for `dsh-*` packs so arbitrary
-  // `/totally-unknown/custom-api` remains an honest Host gap.
+  const nested = m[2];
+  // Exact `/slug` stays open for short aliases (`/whale-girl`).
   if (!nested) return true;
-  return slug.startsWith("dsh-");
+  // Nested `/slug/…` only for `dsh-*` packs; keep non-dsh nested as Host gaps.
+  if (!slug.startsWith("dsh-")) return false;
+  const tail = nested.slice(1);
+  if (tail === "api" || tail.startsWith("api/")) return true;
+  // Staged assets only — Cordis RPC methods may contain dots (`pocket.status`).
+  const base = tail.split("/").pop() ?? "";
+  return COMMUNITY_ASSET_EXT.has(path.extname(base).toLowerCase());
 }
+
+const COMMUNITY_ASSET_EXT = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".gif",
+  ".svg",
+  ".mp3",
+  ".wav",
+  ".js",
+  ".mjs",
+  ".css",
+  ".json",
+  ".html",
+  ".ico",
+  ".woff",
+  ".woff2",
+  ".ttf",
+  ".map",
+]);
+
 
 function contentType(file: string): string {
   switch (path.extname(file).toLowerCase()) {

@@ -93,12 +93,16 @@ describe("desktop host runtime paths", () => {
   it("resolves unpackaged monorepo host when HOST_NODE is set", () => {
     const nodeBin = process.execPath;
     const appRoot = join(process.cwd(), "apps", "desktop");
+    // Product Web dist is gitignored; CI check may not assemble it — inject a fixture.
+    const webDist = mkdtempSync(join(tmpdir(), "xrk-desktop-web-fx-"));
+    writeFileSync(join(webDist, "index.html"), "<html></html>\n", "utf8");
     const runtime = resolveUnpackagedDesktopHostRuntime({
       desktopAppRoot: appRoot,
+      webDist,
       env: { [DESKTOP_HOST_NODE_ENV]: nodeBin },
     });
     expect(runtime.entry).toContain(join("desktop-host", "dist", "index.js"));
-    expect(runtime.webDist).toContain(join("web", "dist"));
+    expect(runtime.webDist).toBe(webDist);
     expect(runtime.harnessCliBin.length).toBeGreaterThan(0);
   });
 });
