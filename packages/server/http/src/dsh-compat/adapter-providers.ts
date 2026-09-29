@@ -99,6 +99,7 @@ import {
   handleRemoteWebUiHttp,
   isRemoteWebUiPath,
 } from "./remote-web-ui.js";
+import { handleDshUpdateHttp, isDshUpdatePath } from "./dsh-update.js";
 import { handleUniverApiHttp, isUniverApiPath } from "./univer-api.js";
 import {
   handleMcpConnectorHttp,
@@ -502,6 +503,18 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
         handle: (req, res, pathname) =>
           handleRemoteWebUiHttp(req, res, pathname, {
             ...(ctx.xrkHome ? { xrkHome: ctx.xrkHome } : {}),
+          }),
+      },
+    ],
+  }),
+
+  "xrk-dsh-update": (ctx) => ({
+    http: [
+      {
+        match: isDshUpdatePath,
+        handle: (req, res, pathname) =>
+          handleDshUpdateHttp(req, res, pathname, {
+            ...(ctx.pluginsDir ? { pluginsDir: ctx.pluginsDir } : {}),
           }),
       },
     ],

@@ -177,7 +177,7 @@ xrkh plugin path
 
 | 子命令 | 作用 |
 |--------|------|
-| `add <spec…>` | `npm pack` 拉包；识别 `xrk.client`/`dsh.client`（写 `web/` 叠加，inject 里 `@deepseek-ai/dsh-client-*` → `@xrkseek/client-*`）与进程 manifest；client 半部同时复制 **`xrk.host.json`**（或 `package.json` → `xrkseek.host` / `dsh.host`）；若该 id 曾在 Settings 停用，会清 soft-disable 并重写 boot |
+| `add <spec…>` | `npm pack` 拉包；识别 `xrk.client`/`dsh.client`（写 `web/` 叠加，inject 里 `@deepseek-ai/dsh-client-*` → `@xrkseek/client-*`、`@deepseek-ai/cordis` → `@xrkseek/cordis`）与进程 manifest；client 半部同时复制 **`xrk.host.json`**（或 `package.json` → `xrkseek.host` / `dsh.host`）；若该 id 曾在 Settings 停用，会清 soft-disable 并重写 boot |
 | `remove <name…>` | 按 `.xrk-plugins.json` 删文件、清 soft-disable 标记并重写 `web/boot.json`；空 `@scope` 父目录会一并 prune |
 | `reconcile` | 以 inventory 为真源：删 `web/plugins` 孤儿目录、重写 `web/boot.json`（跳过 soft-disable；全空则删 boot） |
 | `list` / `path` | 清单与根路径（`list` 对停用项附加 `disabled`） |
@@ -416,7 +416,7 @@ xrkh plugin path
 
 | Subcommand | Behavior |
 |------------|----------|
-| `add <spec…>` | Fetch via `npm pack`; detect `xrk.client`/`dsh.client` (write `web/` overlay; inject remaps `@deepseek-ai/dsh-client-*` → `@xrkseek/client-*`) and process manifests; for the client half also copy **`xrk.host.json`** (or `package.json` → `xrkseek.host` / `dsh.host`); clears a prior Settings soft-disable for that id and rewrites boot |
+| `add <spec…>` | Fetch via `npm pack`; detect `xrk.client`/`dsh.client` (write `web/` overlay; inject remaps `@deepseek-ai/dsh-client-*` → `@xrkseek/client-*` and `@deepseek-ai/cordis` → `@xrkseek/cordis`) and process manifests; for the client half also copy **`xrk.host.json`** (or `package.json` → `xrkseek.host` / `dsh.host`); clears a prior Settings soft-disable for that id and rewrites boot |
 | `remove <name…>` | Delete per `.xrk-plugins.json` inventory, clear soft-disable markers, and rewrite `web/boot.json`; prune empty `@scope` parents |
 | `reconcile` | Inventory as source of truth: remove orphan `web/plugins` dirs, rewrite `web/boot.json` (skip soft-disabled; delete boot when empty) |
 | `list` / `path` | Inventory and root path (`list` appends `disabled` for soft-disabled rows) |

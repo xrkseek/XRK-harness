@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 <img src="./docs/assets/logo-plate.png" alt="XRK Harness" width="128" />
 

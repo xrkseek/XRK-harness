@@ -908,3 +908,19 @@ export const IconArchiveOutline20 = ({ size = 20, className }: IconProps) => (
     <path d="M12.7962 12.5661V11.0832H7.20548V12.5661L12.7962 12.5661Z" fill="currentColor" />
   </svg>
 )
+
+/**
+ * DSH Fluent-size names (`Regular` ≈ 16px, `Medium` ≈ 14px). Community
+ * `client.js` (e.g. `@linxin666/dsh-web-all` footer seats) requires these
+ * identifiers from `@deepseek-ai/dsh-client-ui-primitives`; without the
+ * aliases React throws Element type is invalid and the slot crash face stays open.
+ */
+export const IconBranchOutlineRegular = IconBranchOutline16
+export const IconCheckOutlineMedium = IconCheckOutline14
+export const IconChevronDownOutlineMedium = IconChevronDownOutline14
+export const IconCloseOutlineRegular = IconCloseOutline16
+export const IconCopyOutlineRegular = IconCopyOutline16
+export const IconDownloadOutlineRegular = IconDownloadOutline16
+export const IconRefreshOutlineRegular = IconRefreshOutline16
+export const IconSearchOutlineRegular = IconSearchOutline16
+export const IconStopFillRegular = IconStopFill16

@@ -184,6 +184,19 @@ describe('require resolution', () => {
     expect(exports.runtimeClient.marker).toBe('runtime')
   })
 
+  it('remaps require("@deepseek-ai/cordis") onto the @xrkseek/cordis seed', async () => {
+    const cordis = { Context: 'ctx' }
+    const b = bench([row('community')], {
+      community: req => ({ cordis: req('@deepseek-ai/cordis') }),
+    }, {
+      seed: { '@xrkseek/cordis': cordis },
+    })
+    const exports = await b.loader.import('community', '', {}) as {
+      cordis: { Context: string }
+    }
+    expect(exports.cordis).toBe(cordis)
+  })
+
   it('remaps import("@deepseek-ai/dsh-client-runtime/client") onto graph rows', async () => {
     const b = bench([row('@xrkseek/client-runtime')], {
       '@xrkseek/client-runtime': req => ({ marker: 'runtime' }),

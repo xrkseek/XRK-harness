@@ -151,6 +151,19 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 2. `cordis-dual-half-inspect`：不嵌第三方 Host 内核；fiber 保持 honest-stub。
 3. `third-party-di`：未知 service 回诚实 envelope。
 
+### 对照 DSH 0.2.0-rc（跟进）
+
+对照上游 [v0.2.0-rc.2](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.0-rc.2) / [rc.1](https://github.com/deepseek-ai/deepseek-harness/releases#release-dsh-v0.2.0-rc.1)。只记本仓缺口；已对齐项不重复。
+
+| 上游点 | 本仓 | 状态 |
+| --- | --- | --- |
+| Desktop 菜单栏管理/安装 CLI（无独立 Node/pnpm） | Desktop 已内嵌 harness-cli 于 Host；**无**菜单栏「Manage xrkh command」shim | **未做** |
+| GUI 启动加载 login-shell 环境 | Desktop/macOS·Linux 图形入口环境继承 | **未做** |
+| 异步问答（超时后 Agent 继续） | 无实验开关 | **未做** |
+| 合集 Settings 卡（`plugins.bundle.config`） | 座位已声明；Configurable 只派发 `settings.plugin.item` | **未做**（渲染） |
+| 模型选择器搜索 / 键盘 | `ui-model-selection` ModelSelect | **能跑** |
+| 侧栏用本地应用打开文件夹并记忆 | `host.openPath` + Open in App；记忆面弱于上游 | **未稳** |
+
 ## 正式使用
 
 | 层级 | 能做什么 | 前置 |
@@ -327,6 +340,19 @@ Truth source: `DSH_COMPAT_KNOWN_GAPS`:
 1. `web-panel-global-registry`: global-panel seats `sidebar.panellist` / `main` need a product-shell seat (not dsh-compat itself; audit marks `missing-seat`).
 2. `cordis-dual-half-inspect`: no third-party Host kernel embed; fiber stays honest-stub.
 3. `third-party-di`: unknown services get an honest envelope.
+
+### vs DSH 0.2.0-rc (follow-up)
+
+Against upstream [v0.2.0-rc.2](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.0-rc.2) / [rc.1](https://github.com/deepseek-ai/deepseek-harness/releases#release-dsh-v0.2.0-rc.1). Gaps only; already-aligned items omitted.
+
+| Upstream | This repo | Status |
+| --- | --- | --- |
+| Desktop menu-bar manage/install CLI (no separate Node/pnpm) | Desktop embeds harness-cli beside Host; **no** “Manage xrkh command” menu shim | **Not done** |
+| Load login-shell env on GUI launch | Desktop macOS/Linux graphical entry env inheritance | **Not done** |
+| Async questions (Agent continues after wait timeout) | No experimental switch | **Not done** |
+| Aggregator Settings cards (`plugins.bundle.config`) | Seat declared; Configurable only dispatches `settings.plugin.item` | **Not done** (render) |
+| Model picker search / keyboard | `ui-model-selection` ModelSelect | **Working** |
+| Open folder in local app + remember choice | `host.openPath` + Open in App; weaker memory than upstream | **Unstable** |
 
 ## Formal use levels
 

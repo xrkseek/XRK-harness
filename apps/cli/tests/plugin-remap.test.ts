@@ -20,6 +20,7 @@ describe("remapInject", () => {
     expect(remapInjectId("@deepseek-ai/dsh-api-gateway")).toBe(
       "@xrkseek/xrk-api-gateway",
     );
+    expect(remapInjectId("@deepseek-ai/cordis")).toBe("@xrkseek/cordis");
     expect(remapInjectId("@xrkseek/client-locale")).toBe(
       "@xrkseek/client-locale",
     );

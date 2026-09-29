@@ -67,6 +67,9 @@ export const DSH_HTTP_CAPABILITIES: readonly DshHttpCapability[] = [
   { prefix: "/api/dsh-web-ui-settings", provider: "xrk-remote-web-ui" },
   { prefix: "/api/session/uploadFileBinary", provider: "xrk-remote-web-ui" },
   { prefix: "/remote", provider: "xrk-remote-web-ui" },
+  // dsh-update / dsh-web-all footer panel — must beat the honest HTTP catch-all
+  // (catch-all JSON lacks `packages` and crashes ResultBody).
+  { prefix: "/api/update", provider: "xrk-dsh-update" },
   { prefix: "/token-usage-stats", provider: "xrk-token-usage-stats" },
   { prefix: "/api/token-usage-stats", provider: "xrk-token-usage-stats" },
   { prefix: "/ask", provider: "xrk-code-server" },

@@ -115,7 +115,7 @@ community client.js
 | `@linxin666/dsh-ssh` | full | `/api/dsh-ssh/hosts` CRUD 持久化（`~/.xrk/dsh-ssh`）· import `~/.ssh/config`；`/test` TCP 探测；exec/tunnel 诚实无 SSH 引擎；缺 panellist / `main` |
 | `@linxin666/dsh-client-ui-git-graph` | host-ok | `/git/*` status · branches · graph · switch · worktrees（真实 git）；缺 `conversation.input.selector.context` |
 | `@linxin666/dsh-remote-web-ui` | full | `/api/pair/status|start|claim|…` · `/api/dsh-web-ui-settings` 持久化；`remote.mux` 需 WS；缺 panellist |
-| `@linxin666/dsh-web-all` | host-ok | 合集：task-board · ssh · pet · remote · skin-center 等同表路径 |
+| `@linxin666/dsh-web-all` | host-ok | 合集：task-board · ssh · pet · remote · skin-center 等同表路径；`GET /api/update/status` · `POST /api/update/run`（客户端形状；不跑 DSH profile `pnpm update`）；client `require("@deepseek-ai/cordis")` 映射到 `@xrkseek/cordis` 种子；Fluent 图标名（`IconDownloadOutlineRegular` 等）在 `@xrkseek/client-ui-primitives` 上有同字形别名 |
 | `@michengai/dsh-automation` | full | `/api/michengai/dsh-automation/update` 探针 · `/tasks` 日程持久化；缺 `sidebar.schedule` seat |
 | `@michengai/dsh-codex-ui` | full | `/api/dsh-codex-ui/preferences` 持久化 · `dependencies` 目录；缺 `settings.general.footer` |
 | `@michengai/dsh-archive-manager` | full | `/api/michengai/dsh-archive-manager/*` 归档列表持久化 · update 探针 |
@@ -385,7 +385,7 @@ Packages in the tables below have **Host HTTP/RPC wired** (or are client-only wi
 | `@linxin666/dsh-ssh` | full | `/api/dsh-ssh/hosts` CRUD persisted (`~/.xrk/dsh-ssh`) · import `~/.ssh/config`; `/test` TCP probe; exec/tunnel honest without SSH engine; missing panellist / `main` |
 | `@linxin666/dsh-client-ui-git-graph` | host-ok | `/git/*` status · branches · graph · switch · worktrees (real git); missing `conversation.input.selector.context` |
 | `@linxin666/dsh-remote-web-ui` | full | `/api/pair/status|start|claim|…` · `/api/dsh-web-ui-settings` persisted; `remote.mux` needs WS; missing panellist |
-| `@linxin666/dsh-web-all` | host-ok | Bundle: task-board · ssh · pet · remote · skin-center (same paths as above) |
+| `@linxin666/dsh-web-all` | host-ok | Bundle: task-board · ssh · pet · remote · skin-center (same paths as above); `GET /api/update/status` · `POST /api/update/run` (client-shaped; no DSH profile `pnpm update`); client `require("@deepseek-ai/cordis")` remaps onto the `@xrkseek/cordis` seed; Fluent icon ids (`IconDownloadOutlineRegular`, …) are aliased on `@xrkseek/client-ui-primitives` |
 | `@michengai/dsh-automation` | full | `/api/michengai/dsh-automation/update` probe · `/tasks` schedule persisted; missing `sidebar.schedule` seat |
 | `@michengai/dsh-codex-ui` | full | `/api/dsh-codex-ui/preferences` persisted · `dependencies` catalog; missing `settings.general.footer` |
 | `@michengai/dsh-archive-manager` | full | `/api/michengai/dsh-archive-manager/*` archive list persisted · update probe |

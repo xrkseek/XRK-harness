@@ -9,6 +9,7 @@ export interface RemapInjectResult {
 }
 
 const EXACT: Readonly<Record<string, string>> = {
+  "@deepseek-ai/cordis": "@xrkseek/cordis",
   "@deepseek-ai/dsh-client-runtime": "@xrkseek/client-runtime",
   "@deepseek-ai/dsh-client-locale": "@xrkseek/client-locale",
   "@deepseek-ai/dsh-client-ui-slots": "@xrkseek/client-ui-slots",

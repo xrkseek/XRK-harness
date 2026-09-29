@@ -14,10 +14,27 @@ const icons = Object.fromEntries(
   Object.entries(primitives).filter(([name]) => name.startsWith('Icon')),
 ) as Record<string, (p: primitives.IconProps) => React.JSX.Element>
 const iconNames = Object.keys(icons)
+const dshFluentAliases = iconNames.filter((name) => /(?:Regular|Medium)$/.test(name))
+const glyphNames = iconNames.filter((name) => !/(?:Regular|Medium)$/.test(name))
 
 describe('ic_ds_ icon set', () => {
-  it('exports the full icon set (46 deepsuite + 20 figma extracts + four product glyphs outside those sets)', () => {
-    expect(iconNames.length).toBe(70)
+  it('exports the full icon set (glyph exports; Fluent-size aliases counted separately)', () => {
+    expect(glyphNames.length).toBe(74)
+  })
+
+  it('aliases DSH Fluent-size icon names onto the same glyphs', () => {
+    expect(dshFluentAliases.sort()).toEqual([
+      'IconBranchOutlineRegular',
+      'IconCheckOutlineMedium',
+      'IconChevronDownOutlineMedium',
+      'IconCloseOutlineRegular',
+      'IconCopyOutlineRegular',
+      'IconDownloadOutlineRegular',
+      'IconRefreshOutlineRegular',
+      'IconSearchOutlineRegular',
+      'IconStopFillRegular',
+    ])
+    expect(primitives.IconDownloadOutlineRegular).toBe(primitives.IconDownloadOutline16)
   })
 
   it.each(iconNames)('%s renders an svg with currentColor fills and no hardcoded palette', (name) => {

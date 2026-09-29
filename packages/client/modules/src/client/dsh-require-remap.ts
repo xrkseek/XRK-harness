@@ -1,11 +1,13 @@
 /**
  * Map community DSH client require / inject ids onto XRK shell module ids.
  * Used by {@link ClientModuleSystem} so `require("@deepseek-ai/dsh-client-*")`
- * hits the same seed / graph rows as `@xrkseek/client-*` (plugin `apply`
- * aliases are too late — factories require during materialization).
+ * and `require("@deepseek-ai/cordis")` hit the same seed / graph rows as
+ * `@xrkseek/client-*` / `@xrkseek/cordis` (plugin `apply` aliases are too
+ * late — factories require during materialization).
  */
 
 const EXACT: Readonly<Record<string, string>> = {
+  "@deepseek-ai/cordis": "@xrkseek/cordis",
   "@deepseek-ai/dsh-client-runtime": "@xrkseek/client-runtime",
   "@deepseek-ai/dsh-client-locale": "@xrkseek/client-locale",
   "@deepseek-ai/dsh-client-ui-slots": "@xrkseek/client-ui-slots",
