@@ -1240,9 +1240,9 @@ importers:
       '@xrkseek/client-runtime':
         specifier: workspace:^
         version: link:../runtime
-      '@xrkseek/client-ui-layout':
+      '@xrkseek/client-ui-conversation':
         specifier: workspace:^
-        version: link:../ui-layout
+        version: link:../ui-conversation
       '@xrkseek/client-ui-primitives':
         specifier: workspace:^
         version: link:../ui-primitives
