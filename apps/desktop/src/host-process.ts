@@ -58,7 +58,7 @@ function isDesktopHostEvent(message: unknown): message is DesktopHostEvent {
         typeof candidate.hostVersion === "string" &&
         typeof candidate.origin === "string" &&
         /^https?:\/\/127\.0\.0\.1(?::\d+)?$/u.test(
-          (candidate.origin as string).replace(/\/$/u, ""),
+          candidate.origin.replace(/\/$/u, ""),
         )
       );
     case "fatal":

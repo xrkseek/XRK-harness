@@ -10,7 +10,7 @@ import {
   type XrkPluginServicesOptions,
 } from "../xrk/plugin-services.js";
 
-export interface SkinDiscoverOptions extends XrkPluginServicesOptions {}
+export type SkinDiscoverOptions = XrkPluginServicesOptions;
 
 /** Heuristic package-name hints when `skin.json` is absent. */
 export const SKIN_NAME_HINTS = [

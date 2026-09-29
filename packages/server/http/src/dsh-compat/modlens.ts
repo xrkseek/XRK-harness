@@ -332,7 +332,7 @@ export async function handleModlensHttp(
       return true;
     }
 
-    let body: Record<string, unknown> = {};
+    let body: Record<string, unknown>;
     try {
       body = JSON.parse(raw.toString("utf8") || "{}") as Record<string, unknown>;
     } catch {

@@ -94,7 +94,7 @@ function scanSkillDir(
   flags: Record<string, SkillFlags>,
 ): SkillRow[] {
   if (!existsSync(abs)) return [];
-  let entries: string[] = [];
+  let entries: string[];
   try {
     entries = readdirSync(abs);
   } catch {

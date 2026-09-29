@@ -882,8 +882,8 @@ export function attachSidebarPtyUpgrades(
         : undefined;
     const cwd =
       queryCwd && queryCwd.length > 0 ? queryCwd : options.defaultCwd;
-    let cols = 80;
-    let rows = 24;
+    const cols = 80;
+    const rows = 24;
     let slot: PtySlot | undefined;
     let anonymous = false;
 

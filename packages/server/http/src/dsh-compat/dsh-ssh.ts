@@ -411,7 +411,7 @@ export async function handleDshSshHttp(
       });
       return true;
     }
-    let text = "";
+    let text: string;
     try {
       text = readFileSync(configPath, "utf8");
     } catch {
