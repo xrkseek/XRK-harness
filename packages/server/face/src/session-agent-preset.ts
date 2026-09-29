@@ -2,7 +2,6 @@
  * Session agent-preset pin helpers — keep memory map + disk sidecar aligned.
  */
 
-import { resolveXrkHome } from "@xrkseek/server-config";
 import type { FaceRuntime } from "./context.js";
 import { canonicalAgentPresetId } from "./presets-catalog.js";
 import { resolveDefaultAgentPreset } from "./settings-document.js";
@@ -12,14 +11,18 @@ import {
   sessionAgentPresetsPath,
 } from "./session-agent-preset-store.js";
 
-/** Resolve harness home the same way settings / model sidecars do. */
-function productHomeOf(runtime: FaceRuntime): string {
-  if (runtime.productDir?.trim()) return runtime.productDir.trim();
-  return resolveXrkHome();
+/**
+ * Durable sidecar only when Face has an explicit harness home (`productDir`, as
+ * Host sets) — never invent writes into ambient `~/.xrk` from Face unit tests
+ * that omit isolation (same rule as workspaces.json).
+ */
+function durablePresetHome(runtime: FaceRuntime): string | undefined {
+  const home = runtime.productDir?.trim();
+  return home ? home : undefined;
 }
 
 /**
- * Pin a catalog badge on a session (memory + disk).
+ * Pin a catalog badge on a session (memory + disk when durable).
  * Survives LRU eviction and Host restart.
  */
 export function pinSessionAgentPreset(
@@ -31,7 +34,8 @@ export function pinSessionAgentPreset(
   if (!id) return;
   const badge = canonicalAgentPresetId(agentPreset);
   runtime.sessionAgentPresets.set(id, badge);
-  saveSessionAgentPreset(sessionAgentPresetsPath(productHomeOf(runtime)), id, badge);
+  const home = durablePresetHome(runtime);
+  if (home) saveSessionAgentPreset(sessionAgentPresetsPath(home), id, badge);
 }
 
 /** Drop a pinned badge when the session is durably removed. */
@@ -42,7 +46,8 @@ export function unpinSessionAgentPreset(
   const id = sessionId.trim();
   if (!id) return;
   runtime.sessionAgentPresets.delete(id);
-  clearSessionAgentPreset(sessionAgentPresetsPath(productHomeOf(runtime)), id);
+  const home = durablePresetHome(runtime);
+  if (home) clearSessionAgentPreset(sessionAgentPresetsPath(home), id);
 }
 
 /**
