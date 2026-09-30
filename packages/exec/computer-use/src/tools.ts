@@ -39,7 +39,7 @@ export function computerUseUnavailableMessage(
     );
   }
   return (
-    "Error: no computer-use Provider. Enable Settings → Plugins → Computer use " +
+    "Error: no computer_use Provider. Enable Settings → Plugins → Computer use " +
     "or inject a ComputerUseService (Windows: XRK_COMPUTER_USE=1)."
   );
 }
