@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/harness-cli",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "private": true,
   "description": "XRK Harness CLI - primary bin xrkh (also xrk-harness). run / serve / web / plugin.",
   "type": "module",
@@ -9,6 +9,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./home-seeds": {
+      "types": "./dist/user-skill-seeds.d.ts",
+      "import": "./dist/user-skill-seeds.js",
+      "default": "./dist/user-skill-seeds.js"
     }
   },
   "files": [

@@ -82,6 +82,8 @@ import { bindSettingsTools } from "./settings-agent-tools.js";
 import { bindSessionQueryTools } from "./session-query-tools.js";
 import { bindGoalTools } from "./goal-tools.js";
 import { bindCanvasTools } from "./canvas-tools.js";
+import { FacePresenceStore } from "./presence-store.js";
+import { bindPresenceTools } from "./presence-tools.js";
 import { bindProposeSkillTool } from "./propose-skill.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import { hydrateWorkspaceRegistry } from "./workspace-store.js";
@@ -367,6 +369,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const messageFeedback = new FaceMessageFeedbackStore();
   const goals = new FaceGoalStore(options.goalPersistPath);
   const canvases = new FaceCanvasStore(productHome);
+  const presence = new FacePresenceStore();
   const wireIds = new FaceWireIdMaps();
   const toolArgMaps = new FaceToolArgMaps();
   const inboxWire = new FaceInboxWireMaps(admitRpcMap);
@@ -398,6 +401,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       sessionCwds.delete(sessionId);
       sessionHasImage.delete(sessionId);
       sessionImageScanned.delete(sessionId);
+      presence.forget(sessionId);
       void onResidentEvict.fn?.(sessionId);
     });
   }
@@ -637,6 +641,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         sessionId,
       });
       bindCanvasTools(agent.tools, {
+        runtime: runtimeBox.current!,
+        sessionId,
+      });
+      bindPresenceTools(agent.tools, {
         runtime: runtimeBox.current!,
         sessionId,
       });
@@ -928,6 +936,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       : {}),
     goals,
     canvases,
+    presence,
     wireIds,
     inboxWire,
     loadSlashRecipes,

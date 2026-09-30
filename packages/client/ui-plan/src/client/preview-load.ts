@@ -146,6 +146,13 @@ export interface SessionStatusView {
       readonly message: string
     }[]
   }
+  /** Sticky Overview emotion ball from `presence_set` (optional). */
+  readonly presence?: {
+    readonly emotionId: string
+    readonly tips?: string
+    readonly source: 'tool'
+    readonly updatedAt: number
+  }
   readonly timeline: {
     readonly total: number
     readonly system: number
@@ -698,6 +705,23 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       alerts: channelAlerts,
     }
 
+  const presenceRaw = v.presence
+  let presence: SessionStatusView['presence']
+  if (presenceRaw && typeof presenceRaw === 'object') {
+    const emotionId = str((presenceRaw as { emotionId?: unknown }).emotionId)
+    const updatedAt = num((presenceRaw as { updatedAt?: unknown }).updatedAt)
+    const source = str((presenceRaw as { source?: unknown }).source)
+    if (emotionId && updatedAt !== undefined && source === 'tool') {
+      const tips = str((presenceRaw as { tips?: unknown }).tips)
+      presence = {
+        emotionId,
+        source: 'tool',
+        updatedAt,
+        ...(tips ? { tips } : {}),
+      }
+    }
+  }
+
   const teamTasksRaw = v.teamTasks
   const teamTasks = Array.isArray(teamTasksRaw)
     ? teamTasksRaw.flatMap((row) => {
@@ -778,6 +802,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     cost,
     billing,
     fleet,
+    ...(presence ? { presence } : {}),
     timeline,
     compaction,
     delivery,

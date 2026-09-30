@@ -8,6 +8,9 @@ import {
   ensureUserSkillSeeds,
   ensureUserStandingSeeds,
   ensureUserRecipeSeeds,
+  establishProductHomeSeeds,
+  formatHomeSeedDoctorDetail,
+  formatHomeSeedLogLines,
 } from "../src/user-skill-seeds.js";
 
 /** Build a fake bundled-seed root: `{ seedRoot }/<name>/<file>`. */
@@ -224,28 +227,62 @@ describe("ensureUserSkillSeeds", () => {
       expect(res.installed).toEqual([]);
       expect(res.refreshed).toEqual([]);
       expect(res.skipped).toEqual([]);
-      expect(res.homeSkills).toBe(path.join(home, "skills"));
+      expect(res.targetDir).toBe(path.join(home, "skills"));
     });
   });
 
-  it("seeds a thin AGENTS.md and recipes under home", async () => {
+  it("seeds AGENTS.md (refreshable) and SOUL.md (create-once) under home", async () => {
     const home = await mkdtemp(path.join(os.tmpdir(), "xrk-home-seed-"));
     try {
       const all = await ensureUserHomeSeeds(home);
       expect(all.standing.installed).toContain("AGENTS.md");
-      expect(await readFile(path.join(home, "AGENTS.md"), "utf8")).toContain(
-        "XRK-Harness",
+      expect(all.standing.installed).toContain("SOUL.md");
+      const agents = await readFile(path.join(home, "AGENTS.md"), "utf8");
+      expect(agents).toContain("XRK-Harness");
+      expect(agents).toContain("YAGNI");
+      expect(agents).toContain("## Craft");
+      expect(await readFile(path.join(home, "SOUL.md"), "utf8")).toContain(
+        "presence_set",
       );
       expect(all.recipes.installed.length).toBeGreaterThan(0);
       expect(existsSync(path.join(home, "recipes", "plan-build.yaml"))).toBe(
         true,
       );
-      expect(existsSync(path.join(home, "SOUL.md"))).toBe(false);
       expect(existsSync(path.join(home, "IDENTITY.md"))).toBe(false);
 
       const again = await ensureUserStandingSeeds(home);
       expect(again.installed).toEqual([]);
-      expect(again.skipped).toContain("AGENTS.md");
+      expect(again.skipped).toEqual(
+        expect.arrayContaining(["AGENTS.md", "SOUL.md"]),
+      );
+
+      await writeFile(path.join(home, "SOUL.md"), "# my soul\n", "utf8");
+      const third = await ensureUserStandingSeeds(home);
+      expect(third.refreshed).not.toContain("SOUL.md");
+      expect(third.installed).not.toContain("SOUL.md");
+      expect(await readFile(path.join(home, "SOUL.md"), "utf8")).toBe(
+        "# my soul\n",
+      );
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("establishProductHomeSeeds logs install/refresh lines", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "xrk-home-seed-log-"));
+    try {
+      const lines: string[] = [];
+      const seeded = await establishProductHomeSeeds(home, (msg) => {
+        lines.push(msg);
+      });
+      expect(seeded.standing.installed).toEqual(
+        expect.arrayContaining(["AGENTS.md", "SOUL.md"]),
+      );
+      expect(lines.some((l) => l.includes("standing") && l.includes("AGENTS.md"))).toBe(
+        true,
+      );
+      expect(formatHomeSeedLogLines(home, seeded).length).toBe(lines.length);
+      expect(formatHomeSeedDoctorDetail(home, seeded)).toContain("standing:AGENTS.md");
     } finally {
       await rm(home, { recursive: true, force: true });
     }

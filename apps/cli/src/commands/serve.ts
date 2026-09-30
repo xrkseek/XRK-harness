@@ -22,7 +22,7 @@ import {
   ensureProductWebDist,
   repoRoot,
 } from "../product-paths.js";
-import { ensureUserHomeSeeds } from "../user-skill-seeds.js";
+import { establishProductHomeSeeds } from "../user-skill-seeds.js";
 import { createCliLogger, resolveLogLevel, type CliLogger } from "../log.js";
 import { clearHostLock, writeHostLock } from "../host-lock.js";
 import { forceFreeXrkPort } from "../port.js";
@@ -107,18 +107,9 @@ async function runServeInner(
 ): Promise<number> {
   // Product establish: seed system data (~/.xrk), never the workspace.
   const home = resolveXrkHome();
-  const seeded = await ensureUserHomeSeeds(home);
-  const note = (label: string, r: { installed: readonly string[]; refreshed: readonly string[] }) => {
-    if (r.installed.length > 0) {
-      log.info(`home ${label}: ${r.installed.join(", ")} → ${home}`);
-    }
-    if (r.refreshed.length > 0) {
-      log.info(`home ${label} refreshed: ${r.refreshed.join(", ")}`);
-    }
-  };
-  note("skills", seeded.skills);
-  note("standing", seeded.standing);
-  note("recipes", seeded.recipes);
+  await establishProductHomeSeeds(home, (msg) => {
+    log.info(msg);
+  });
 
   const patch: Record<string, unknown> = {
     ...args.patch,

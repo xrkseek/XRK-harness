@@ -41,6 +41,7 @@ import type { ManagedWorktreeManager } from "./managed-worktree.js";
 import type { FaceMessageFeedbackStore } from "./message-feedback.js";
 import type { FaceGoalStore } from "./goal-store.js";
 import type { FaceCanvasStore } from "./canvas-store.js";
+import type { FacePresenceStore } from "./presence-store.js";
 import type { FaceWireIdMaps } from "./adapt/wire-ids.js";
 import type { FaceInboxWireMaps } from "./adapt/inbox-wire.js";
 import type {
@@ -151,6 +152,8 @@ export interface FaceRuntime {
   readonly goals: FaceGoalStore;
   /** Workspace-scoped Canvas documents (`{XRK_HOME}/canvases/<workspaceId>/`). */
   readonly canvases: FaceCanvasStore;
+  /** Per-session Overview emotion-ball sticky state (`presence_set`). */
+  readonly presence: FacePresenceStore;
   /** Session-scoped turn/step numbers for DSH wire events. */
   readonly wireIds: FaceWireIdMaps;
   /** Session-scoped inbox splice projectors for live mux. */

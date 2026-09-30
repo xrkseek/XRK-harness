@@ -13,8 +13,10 @@ import { createHostManager, type HostInstance } from "@xrkseek/server-host";
 import {
   defaultSessionsDir,
   loadHostConfig,
+  resolveXrkHome,
 } from "@xrkseek/server-config";
 import { createServerAgentFactory } from "@xrkseek/preset-server";
+import { establishProductHomeSeeds } from "@xrkseek/harness-cli/home-seeds";
 
 export const DESKTOP_HOST_PACKAGE_NAME =
   "@xrkseek/harness-desktop-host" as const;
@@ -69,6 +71,7 @@ export function declareDesktopRuntimeSurface(
  * Spawn the standard Host composition listening on 127.0.0.1 (ephemeral port).
  * Declares native path capabilities (`XRK_NATIVE_OPEN`) and runtime surface
  * (`XRK_SURFACE=desktop`) so Face / inject match the Electron shell.
+ * Establishes `{XRK_HOME}` seeds (same pass as `xrkh web` / `serve`).
  */
 export async function bootXrkDesktopHost(options: {
   readonly projectDir: string;
@@ -77,6 +80,12 @@ export async function bootXrkDesktopHost(options: {
 }): Promise<BootedDesktopHost> {
   declareDesktopNativeOpenCapabilities();
   declareDesktopRuntimeSurface();
+
+  // Same product establish as CLI serve — update Desktop → open → seeds land.
+  const home = resolveXrkHome();
+  await establishProductHomeSeeds(home, (msg) => {
+    process.stderr.write(`${DESKTOP_HOST_PACKAGE_NAME}: ${msg}\n`);
+  });
 
   const webDist =
     options.webDist?.trim() ||

@@ -321,6 +321,16 @@ export interface SessionStatusSnapshot {
   readonly billing: SessionStatusBilling;
   /** Subagent / job / channel health glance. */
   readonly fleet: SessionStatusFleet;
+  /**
+   * Sticky Overview emotion ball when AI called `presence_set`.
+   * Absent → client derives from delivery / fleet activity.
+   */
+  readonly presence?: {
+    readonly emotionId: string;
+    readonly tips?: string;
+    readonly source: "tool";
+    readonly updatedAt: number;
+  };
   readonly timeline: SessionStatusTimeline;
   /** Prune → summary stage fold + live busy phase. */
   readonly compaction: SessionStatusCompaction;
@@ -1008,6 +1018,16 @@ export function buildSessionStatusSnapshot(
       }
     : undefined;
 
+  const presenceRow = runtime.presence.get(sessionId);
+  const presence = presenceRow
+    ? {
+        emotionId: presenceRow.emotionId,
+        source: presenceRow.source,
+        updatedAt: presenceRow.updatedAt,
+        ...(presenceRow.tips ? { tips: presenceRow.tips } : {}),
+      }
+    : undefined;
+
   return {
     sessionId,
     badge,
@@ -1023,6 +1043,7 @@ export function buildSessionStatusSnapshot(
     cost,
     billing,
     fleet,
+    ...(presence ? { presence } : {}),
     timeline,
     compaction,
     delivery,
@@ -1042,6 +1063,16 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
     `cwd: ${snap.cwd}`,
     `events: ${snap.events}`,
   ];
+
+  if (snap.presence) {
+    lines.push(
+      `presence: ${snap.presence.emotionId}` +
+        (snap.presence.tips ? ` (${snap.presence.tips})` : "") +
+        ` [tool @ ${snap.presence.updatedAt}]`,
+    );
+  } else {
+    lines.push("presence: (auto — Overview derives from delivery/fleet)");
+  }
 
   const runningJobs = snap.jobs.filter((j) => j.status === "running");
   lines.push(

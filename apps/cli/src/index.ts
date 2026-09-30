@@ -13,6 +13,22 @@ import { jsonFlagRequested, writeJsonError } from "./json-stream.js";
 import { readCliVersion } from "./product-paths.js";
 
 export { helpText, parseArgs, readCliVersion };
+export {
+  ensureUserHomeSeeds,
+  ensureUserStandingSeeds,
+  ensureUserSkillSeeds,
+  ensureUserRecipeSeeds,
+  establishProductHomeSeeds,
+  formatHomeSeedLogLines,
+  formatHomeSeedDoctorDetail,
+  bundledStandingSeedsRoot,
+  bundledSkillSeedsRoot,
+  bundledRecipeSeedsRoot,
+  type EnsureUserHomeSeedsResult,
+  type EnsureUserSkillSeedsResult,
+  type FlatSeedPolicy,
+} from "./user-skill-seeds.js";
+
 
 /**
  * Commands that host an agent runtime → the surface the model should assume.

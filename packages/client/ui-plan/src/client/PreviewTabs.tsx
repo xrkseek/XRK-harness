@@ -10,12 +10,14 @@ import {
   IconDataOutline16,
   IconGaugeOutline16,
   IconStopFill16,
+  IconThinkOutline16,
   StateDot,
   TerminalBlock,
 } from '@xrkseek/client-ui-primitives'
 import { OverviewChangesPanel, type OverviewChangesTurn } from './OverviewChangesPanel.tsx'
 import { OverviewCanvasPanel } from './OverviewCanvasPanel.tsx'
 import { SubagentGraphBoard } from './SubagentGraphBoard.tsx'
+import { PresenceBall, derivePresenceEmotion } from './PresenceBall.tsx'
 import {
   getCanvasFocusSnapshot,
   subscribeCanvasFocus,
@@ -725,13 +727,26 @@ function StatusPanel({
     status.channels.process.length > 0
     || wiredIm.length > 0
     || status.channels.alerts.length > 0
-  const hasFleetDetail =
-    status.fleet.health !== 'ok'
-    || status.fleet.alerts.length > 0
-    || status.fleet.channelAlerts > 0
-    || status.fleet.queuedInbox > 0
-    || status.fleet.runningJobs > 0
-    || status.fleet.runningSubagents > 0
+  const presenceEmotion = derivePresenceEmotion({
+    ...(status.presence ? { presence: status.presence } : {}),
+    turnActive,
+    runningJobs: runningJobs.length,
+    runningSubs: liveSubs.length,
+    fleetHealth: status.fleet.health,
+  })
+  const presenceTip = presenceEmotion.tips
+    ?? (presenceEmotion.tipKey
+      ? t(`preview.status.presenceTip.${presenceEmotion.tipKey}`)
+      : undefined)
+  const presenceNameKey = `preview.status.emotion.${presenceEmotion.emotionId}` as const
+  const presenceName = (() => {
+    const named = t(presenceNameKey as 'preview.status.emotion.02')
+    // Missing dictionary keys often echo the key back — fall back explicitly.
+    if (named === presenceNameKey || named.startsWith('preview.status.emotion.')) {
+      return t('preview.status.emotion.fallback', { id: presenceEmotion.emotionId })
+    }
+    return named
+  })()
 
   return (
     <div className={css.statusRoot} data-status-badge={status.badge || undefined}>
@@ -741,148 +756,121 @@ function StatusPanel({
         data-busy={summaryBusy || undefined}
         aria-label={t('preview.summary')}
       >
-        <div className={css.summaryTop}>
-          <div className={css.summaryMain}>
-            <StateDot
-              state={healthDotState(status.fleet.health)}
-              size={8}
-            />
-            <div className={css.summaryTitles}>
-              <span className={css.summaryHealth}>
-                {t(`preview.status.fleetHealth.${status.fleet.health}`)}
-              </span>
-              <span className={css.summaryBeat} data-live={summaryBusy || undefined}>
-                {summaryBeat}
-              </span>
-              <div className={css.summaryMeta}>
-                {status.badge
-                  ? <span className={css.summaryChip}>{status.badge}</span>
-                  : null}
-                {status.model.model
-                  ? (
-                    <span
-                      className={css.summaryChip}
-                      title={`${status.model.provider}/${status.model.model}`}
-                    >
-                      {status.model.model}
-                    </span>
-                  )
-                  : null}
+        <div className={css.summaryBody}>
+          <div className={css.summaryTop}>
+            <div className={css.summaryMain}>
+              <StateDot
+                state={healthDotState(status.fleet.health)}
+                size={8}
+              />
+              <div className={css.summaryTitles}>
+                <span className={css.summaryHealth}>
+                  {t(`preview.status.fleetHealth.${status.fleet.health}`)}
+                </span>
+                <span className={css.summaryBeat} data-live={summaryBusy || undefined}>
+                  {summaryBeat}
+                </span>
+                <div className={css.summaryMeta}>
+                  {status.badge
+                    ? <span className={css.summaryChip}>{status.badge}</span>
+                    : null}
+                  {status.model.model
+                    ? (
+                      <span
+                        className={css.summaryChip}
+                        title={`${status.model.provider}/${status.model.model}`}
+                      >
+                        {status.model.model}
+                      </span>
+                    )
+                    : null}
+                </div>
               </div>
             </div>
+            <button
+              type="button"
+              className={css.summaryToggle}
+              onClick={() => {
+                setAllOpen((prev) => {
+                  const next = !prev
+                  setCollapseVersion((n) => n + 1)
+                  return next
+                })
+              }}
+            >
+              {allOpen ? t('preview.collapseAll') : t('preview.expandAll')}
+            </button>
           </div>
-          <button
-            type="button"
-            className={css.summaryToggle}
-            onClick={() => {
-              setAllOpen((prev) => {
-                const next = !prev
-                setCollapseVersion((n) => n + 1)
-                return next
-              })
-            }}
-          >
-            {allOpen ? t('preview.collapseAll') : t('preview.expandAll')}
-          </button>
-        </div>
-        <div className={css.summaryStats}>
-          {runningJobs.length > 0
-            ? (
-              <span className={css.summaryStat} data-hot="">
-                <b key={`jobs-${runningJobs.length}`}>{runningJobs.length}</b>
-                <span className={css.summaryStatLabel}>{t('preview.summary.jobs')}</span>
-              </span>
-            )
-            : null}
-          {showSubagentSurface && liveSubs.length > 0
-            ? (
-              <span className={css.summaryStat} data-hot="">
-                <b key={`subs-${liveSubs.length}`}>{liveSubs.length}</b>
-                <span className={css.summaryStatLabel}>{t('preview.summary.subs')}</span>
-              </span>
-            )
-            : null}
-          {turnActive || queued > 0 || steering > 0
-            ? (
-              <span
-                className={css.summaryStat}
-                data-hot=""
-              >
-                <b key={`queue-${turnActive}-${queued}-${steering}`}>
-                  {turnActive ? '1' : queued + steering}
-                </b>
-                <span className={css.summaryStatLabel}>
-                  {turnActive
-                    ? t('preview.summary.turn')
-                    : t('preview.summary.queue')}
+          <div className={css.summaryStats}>
+            {runningJobs.length > 0
+              ? (
+                <span className={css.summaryStat} data-hot="">
+                  <b key={`jobs-${runningJobs.length}`}>{runningJobs.length}</b>
+                  <span className={css.summaryStatLabel}>{t('preview.summary.jobs')}</span>
                 </span>
-              </span>
-            )
-            : null}
-          <span className={css.summaryStat}>
-            <b key={`tok-${current.total}`}>{current.total.toLocaleString()}</b>
-            <span className={css.summaryStatLabel}>{t('preview.summary.tokens')}</span>
-          </span>
-          {status.cost.cost > 0
-            ? (
-              <span className={css.summaryStat}>
-                <b key={`cost-${status.cost.cost}`}>
-                  {status.cost.cost < 0.01
-                    ? status.cost.cost.toFixed(4)
-                    : status.cost.cost.toFixed(3)}
-                </b>
-                <span className={css.summaryStatLabel}>{t('preview.summary.cost')}</span>
-              </span>
-            )
-            : null}
+              )
+              : null}
+            {showSubagentSurface && liveSubs.length > 0
+              ? (
+                <span className={css.summaryStat} data-hot="">
+                  <b key={`subs-${liveSubs.length}`}>{liveSubs.length}</b>
+                  <span className={css.summaryStatLabel}>{t('preview.summary.subs')}</span>
+                </span>
+              )
+              : null}
+            {turnActive || queued > 0 || steering > 0
+              ? (
+                <span
+                  className={css.summaryStat}
+                  data-hot=""
+                >
+                  <b key={`queue-${turnActive}-${queued}-${steering}`}>
+                    {turnActive ? '1' : queued + steering}
+                  </b>
+                  <span className={css.summaryStatLabel}>
+                    {turnActive
+                      ? t('preview.summary.turn')
+                      : t('preview.summary.queue')}
+                  </span>
+                </span>
+              )
+              : null}
+            <span className={css.summaryStat}>
+              <b key={`tok-${current.total}`}>{current.total.toLocaleString()}</b>
+              <span className={css.summaryStatLabel}>{t('preview.summary.tokens')}</span>
+            </span>
+            {status.cost.cost > 0
+              ? (
+                <span className={css.summaryStat}>
+                  <b key={`cost-${status.cost.cost}`}>
+                    {status.cost.cost < 0.01
+                      ? status.cost.cost.toFixed(4)
+                      : status.cost.cost.toFixed(3)}
+                  </b>
+                  <span className={css.summaryStatLabel}>{t('preview.summary.cost')}</span>
+                </span>
+              )
+              : null}
+          </div>
         </div>
       </div>
 
-      {hasFleetDetail
-        ? (
-          <SectionCard
-            t={t}
-            label={t('preview.status.fleet')}
-            title={t('preview.status.fleet')}
-            signal={collapseSignal}
-            defaultOpen
-            meta={t(`preview.status.fleetHealth.${status.fleet.health}`)}
-          >
-            <div className={css.row}>
-              <span className={css.label}>{t('preview.status.fleetJobs')}</span>
-              <span>{status.fleet.runningJobs}</span>
-            </div>
-            {showSubagentSurface
-              ? (
-                <div className={css.row}>
-                  <span className={css.label}>{t('preview.status.fleetSubs')}</span>
-                  <span>
-                    {status.fleet.runningSubagents} · {t('preview.slot')} {status.fleet.slotsFree}
-                    {status.fleet.queuedInbox > 0
-                      ? ` · ${t('preview.inbox')} ${status.fleet.queuedInbox}`
-                      : ''}
-                    {status.fleet.channelAlerts > 0
-                      ? ` · ${t('preview.status.channels')} ${status.fleet.channelAlerts}`
-                      : ''}
-                  </span>
-                </div>
-              )
-              : null}
-            {status.fleet.alerts.length > 0
-              ? (
-                <ul className={css.itemList}>
-                  {status.fleet.alerts.slice(0, 6).map((alert) => (
-                    <li key={alert.id} className={css.itemRow}>
-                      <span className={css.itemTitle}>[{alert.severity}]</span>
-                      <span className={css.itemMeta}>{alert.message}</span>
-                    </li>
-                  ))}
-                </ul>
-              )
-              : null}
-          </SectionCard>
-        )
-        : null}
+      <SectionCard
+        t={t}
+        label={t('preview.status.presence')}
+        title={t('preview.status.presence')}
+        signal={collapseSignal}
+        defaultOpen
+        meta={presenceName}
+      >
+        <PresenceBall
+          emotion={presenceEmotion}
+          emotionName={presenceName}
+          tipText={presenceTip}
+          loadingLabel={t('preview.status.presenceLoading')}
+          errorLabel={t('preview.status.presenceError')}
+        />
+      </SectionCard>
 
       {showSubagentSurface
         ? (
@@ -1831,15 +1819,16 @@ export function PreviewTabs({
     setStatusTick((n) => n + 1)
   }, [catalogRev, jobsRev, agentPresetRev, parentRunning, childRunning, jobsBusy])
 
-  // While any linked state machine is busy, poll session.status so graph dots,
-  // fleet health, delivery, and team rows flip without waiting for membership.
+  // While any linked state machine is busy — or Overview Status is open —
+  // soft-poll session.status so presence / delivery / fleet flip without a
+  // membership bump (presence_set is sticky outside the turn latch).
   useEffect(() => {
-    if (!fleetBusy) return
+    if (!fleetBusy && tab !== 'status') return
     const timer = window.setInterval(() => {
       setStatusTick((n) => n + 1)
-    }, 1_200)
+    }, tab === 'status' && !fleetBusy ? 2_000 : 1_200)
     return () => { window.clearInterval(timer) }
-  }, [fleetBusy, sessionId])
+  }, [fleetBusy, sessionId, tab])
 
   // Soft hop keeps prior paint; hard remount starts empty (no blanking flicker).
   useEffect(() => {

@@ -126,6 +126,22 @@ export {
   type BindCanvasToolsOptions,
 } from "./canvas-tools.js";
 export {
+  FacePresenceStore,
+  type SessionPresenceState,
+} from "./presence-store.js";
+export {
+  PRESENCE_EMOTION_CATALOG,
+  formatPresenceEmotionToolHint,
+  isKnownPresenceEmotionId,
+  presenceEmotionById,
+  type PresenceEmotionEntry,
+  type PresenceEmotionGroup,
+} from "./presence-emotions.js";
+export {
+  bindPresenceTools,
+  type BindPresenceToolsOptions,
+} from "./presence-tools.js";
+export {
   bindProposeSkillTool,
   proposeSkillQuestions,
   PROPOSE_SKILL_APPROVE_LABEL,

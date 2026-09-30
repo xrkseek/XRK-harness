@@ -397,6 +397,13 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
 }
 
+.summaryBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
 .summaryTop {
   display: flex;
   align-items: flex-start;
