@@ -196,8 +196,8 @@ export class AppWebEntry {
       await this.runPluginBoot(prefetching)
       this.adoptProductLocale()
       await this.awaitProductReady()
+      // AppRoot keeps the splash over the first product paint, then clearBooting.
       this.settled.set(true)
-      clearBooting()
     } catch (reason) {
       // Stay on the loading page; surface the sweep report (fail loud).
       console.error(reason)

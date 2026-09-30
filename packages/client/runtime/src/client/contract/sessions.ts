@@ -101,6 +101,12 @@ export interface ISessions {
    */
   fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId>
   /**
+   * Permanently delete an archived session (durable log + list row).
+   * @param sessionId - archived session to delete.
+   * @throws when the Host rejects the delete.
+   */
+  delete(sessionId: SessionId): Promise<void>
+  /**
    * Register a per-session standard-props provider (hooks become `use<Name>`
    * selector hooks on the render side; props spread verbatim).
    * @param descriptor - static member roster plus per-session resolver.

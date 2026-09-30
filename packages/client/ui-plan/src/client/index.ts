@@ -32,6 +32,7 @@ import { peekJobOutput as defaultPeekJobOutput } from './job-output-peek.ts'
 import { en, zh, type PlanKey } from './locales.ts'
 
 export type { PlanKey } from './locales.ts'
+export { openCanvasInOverview } from './canvas-focus.ts'
 
 declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -54,7 +55,7 @@ export interface PlanChipInjected {
 
 /** Required services: slots, commands Remote, locale, layout, Host openPath, sessions. */
 export const inject = [
-  'slots', 'remote', 'remote.commands', 'remote.changes', 'locale', 'layout',
+  'slots', 'remote', 'remote.commands', 'remote.changes', 'remote.canvas', 'locale', 'layout',
   'connection', 'sessions',
 ]
 
@@ -131,6 +132,16 @@ export function apply(ctx: ClientContext): void {
         void connection.api.host.openPath({
           path: resolveWorkspacePath(cwd, path),
         })
+      },
+      listCanvases: async (signal: AbortSignal) => {
+        const result = await ctx.remote.canvas.list({ sessionId }, signal)
+        if (!result.ok) throw new Error(result.error.message)
+        return result.value
+      },
+      getCanvas: async (id: string, signal: AbortSignal) => {
+        const result = await ctx.remote.canvas.get({ sessionId, id }, signal)
+        if (!result.ok) throw new Error(result.error.message)
+        return result.value.canvas
       },
       // Soft face: deliverables may load after plan; resolve live on each call.
       changesReview: {

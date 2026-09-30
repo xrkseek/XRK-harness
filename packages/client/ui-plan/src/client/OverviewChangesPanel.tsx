@@ -119,6 +119,7 @@ export function OverviewChangesPanel({
   )
 
   const [seq, setSeq] = useState<number | undefined>(undefined)
+  const [pinned, setPinned] = useState(false)
   const [fileIndex, setFileIndex] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
   const [diff, setDiff] = useState<WorkspaceFileDiff | null | undefined>(undefined)
@@ -128,8 +129,15 @@ export function OverviewChangesPanel({
     if (focus !== null) {
       setSeq(focus.seq)
       setFileIndex(focus.index)
+      setPinned(true)
     }
   }, [focus?.revision])
+
+  useEffect(() => {
+    if (pinned) return
+    const latest = turns[turns.length - 1]
+    if (latest !== undefined) setSeq(latest.seq)
+  }, [turns, pinned])
 
   const activeTurn = turns.find((row) => row.seq === seq) ?? turns[turns.length - 1]
   const safeIndex = activeTurn !== undefined && activeTurn.files[fileIndex] !== undefined
@@ -191,6 +199,7 @@ export function OverviewChangesPanel({
                 value={String(activeTurn.seq)}
                 aria-label={t('preview.changes.selectTurn')}
                 onChange={(event) => {
+                  setPinned(true)
                   setSeq(Number(event.currentTarget.value))
                   setFileIndex(0)
                 }}

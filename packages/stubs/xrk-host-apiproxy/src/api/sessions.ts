@@ -397,4 +397,12 @@ export interface SessionsApi {
    */
   cancel(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{ accepted: true }>>
 
+  /**
+   * Permanently deletes an archived session: drops the durable log, clears
+   * workspace archive/membership, and publishes `host/session-removed`.
+   * Non-archived ids fail with `session-not-archived`. Unknown ids fail with
+   * `session-not-found`.
+   */
+  delete(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{ deleted: true }>>
+
 }

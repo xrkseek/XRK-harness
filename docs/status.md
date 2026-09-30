@@ -50,7 +50,8 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | Composer 富文本（Lexical） | **能跑**：`DraftEditor` + chip DecoratorNode + keymap（IME / modified-Enter 放行 / Shift+Tab=`tabBack`）+ `data-composer-composing` 占位抑制；keymap-routing · InputBar IME/placeholder/focus 测绿 |
 | 提交 echo（`PendingSubmission`） | **能跑**：`beginSubmission` 同步插本地回显；ChatView / QueueDock `data-submission-echo`；同帧按 `rpcId` 与 durable user/queue 去重；折叠条保留「发送中…」 |
 | 任意类型文件上传 · 侧栏预览 · 可继续子代理排队/Steer/Stop · Open in · feedback | **能跑**（见主路径表与 [v0.4.4](./releases/v0.4.4.md)；`pnpm test:web` **21/21**）；用户气泡文件卡经 `conversation.message.files` → `MessageFileCard`；工具结果 `type: "file"` 经 `tool.call.files` 同卡（块序混排；槽空时内联回退） |
-| 右侧工作台（文件树 / 预览 / 终端 / 浏览器） | **能跑**：流内 `details`=Status；浮动工作台=Host `/sidebar/*` + 社区 `xrkh-better-sidebar`；首方薄壳 `@xrkseek/client-ui-workbench`（树+预览 · 会话头「文件」入口 · 有 `ctx.betterSidebar` 时面板让位、按钮仍唤醒社区侧栏）。**不**迁 dsh dockkit 为默认右栏（见 [sidebar-workbench](./sidebar-workbench.md)） |
+| 右侧工作台（文件树 / 预览 / 终端 / 浏览器） | **能跑**：流内 `details`=Status · 改动 · **Canvas**；浮动工作台=Host `/sidebar/*` + 社区 **`xrkh-better-sidebar`**（**设置 → 插件** 推荐一键安装）。聊天 `openFile` 唤醒 `betterSidebar` 后走 `workspaces.openPath`；未装则系统打开。**不**迁 dsh dockkit 为默认右栏（见 [sidebar-workbench](./sidebar-workbench.md)） |
+| Overview Canvas（工作区看板） | Face `canvas_*` 工具 + `canvas.list`/`canvas.get`；文档落 `{XRK_HOME}/canvases/<workspaceId>/<id>.json`（跨会话保留）；概况 **Canvas** 页签列表 + 声明式播放（markdown/table/kpi/series）；skill **`xrk-canvas`** | **能跑** |
 | 侧栏 Office/URL/子代理/计划预览 **契约**（protocol 载荷 · policy `host.open`/`sidebar.*`/`office.connect` · Face bridge 可选缝） | **能跑**（见 [policy](./policy.md) · `@xrkseek/protocol` `sidebar-previews`） |
 | 侧栏 Host policy 闸门（`/sidebar` · `host.open`/`sidebar.embed`/`sidebar.fs`） | **能跑**（`ask`→Face 审批缝 / 无缝→`policy-ask`；见 [policy](./policy.md)） |
 | `/office` `office.connect` 闸门 | **能跑**（configure/reconnect/test/remove；status 不门禁；见 [policy](./policy.md)） |
@@ -139,7 +140,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | 快捷键查看 / 搜索 / 自定义 / 恢复 | `Ctrl+/`（⌘+/）ShortcutsPanel：查看 + 搜索 + 点按改键 + 单条/全部恢复默认（`localStorage` `xrk.shortcuts.v1` 仅存覆盖；发送/换行固定） | **能跑** |
 | 定时任务运行记录 | `cron/executions.jsonl` 有界账本（≤1000）+ `cronjob` action=`runs`；重启保留 | **能跑** |
 | 时间上下文注入 | `XRK_TIME_CONTEXT_REFRESH_MS`（默认 60s）；follow-up 经 workspace block 刷新 | **能跑** |
-| 归档筛选 / 置顶 | 侧栏三态 `ArchiveViewMode`；Settings 归档页搜索 + Unarchive；Face `pinnedSessionIds` + `workspace.pinSession`/`unpinSession` + `host/pinned-sessions-changed` | **能跑** |
+| 归档筛选 / 置顶 | 侧栏三态 `ArchiveViewMode`；Settings 归档页搜索 + Unarchive + 永久删除（`session.delete`，仅已归档）；Face `pinnedSessionIds` + `workspace.pinSession`/`unpinSession` + `host/pinned-sessions-changed` | **能跑** |
 | 模型切换等待提示 | 切换中「准备中 · 减少等待…」+ 键盘 paneFocus / 搜索虚拟高亮 + `<mark>` 命中 + cell `:focus-visible` | **能跑** |
 | Desktop 首屏与 Host 并行 | `xrk-app://` 先出闪屏；Host ready 后 `loadURL` 回环 Face | **能跑**（见 [host-face](./host-face.md)） |
 
@@ -240,7 +241,8 @@ Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CL
 | Composer rich text (Lexical) | **Working**: `DraftEditor` + chip DecoratorNode + keymap (IME / modified-Enter passthrough / Shift+Tab=`tabBack`) + `data-composer-composing` placeholder suppress; keymap-routing · InputBar IME/placeholder/focus specs green |
 | Submission echo (`PendingSubmission`) | **Working**: `beginSubmission` inserts a local echo; ChatView / QueueDock `data-submission-echo`; same-render `rpcId` handoff vs durable user/queue; collapsed dock keeps “Sending…” |
 | Arbitrary file upload · sidebar preview · continuable subagent queue/Steer/Stop · Open in · feedback | **Working** (see main-path table and [v0.4.4](./releases/v0.4.4.md); `pnpm test:web` **21/21**); user-bubble file cards via `conversation.message.files` → `MessageFileCard`; tool-result `type: "file"` via `tool.call.files` (same cards; block order; inline fallback when the slot is empty) |
-| Right workbench (tree / preview / terminal / browser) | **Working**: in-flow `details`=Status; floating workbench=Host `/sidebar/*` + community `xrkh-better-sidebar`; first-party thin shell `@xrkseek/client-ui-workbench` (tree+preview · session-header **Files** entry · panel yields when `ctx.betterSidebar` is set, button still wakes the community side card). **No** dsh dockkit as the default rightbar (see [sidebar-workbench](./sidebar-workbench.md)) |
+| Right workbench (tree / preview / terminal / browser) | **Working**: in-flow `details`=Status · Changes · **Canvas**; floating workbench=Host `/sidebar/*` + community **`xrkh-better-sidebar`** (recommended one-click Install from **Settings → Plugins**). Chat `openFile` wakes `betterSidebar` then `workspaces.openPath`; without it, OS open. **No** dsh dockkit as the default rightbar (see [sidebar-workbench](./sidebar-workbench.md)) |
+| Overview Canvas (workspace boards) | Face `canvas_*` tools + `canvas.list`/`canvas.get`; docs under `{XRK_HOME}/canvases/<workspaceId>/<id>.json` (survive sessions); Overview **Canvas** tab list + declarative player (markdown/table/kpi/series); skill **`xrk-canvas`** | **Working** |
 | Sidebar Office/URL/subagent/plan preview **contract** (protocol payloads · policy `host.open`/`sidebar.*`/`office.connect` · optional Face bridge seams) | **Working** (see [policy](./policy.md) · `@xrkseek/protocol` `sidebar-previews`) |
 | Sidebar Host policy gates (`/sidebar` · `host.open`/`sidebar.embed`/`sidebar.fs`) | **Working** (`ask`→Face approval seam / no seam→`policy-ask`; see [policy](./policy.md)) |
 | `/office` `office.connect` gate | **Working** (configure/reconnect/test/remove; status ungated; see [policy](./policy.md)) |
@@ -329,7 +331,7 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | Keyboard-shortcut view / search / customize / reset | `Ctrl+/` (⌘+/) ShortcutsPanel: view + search + click-to-rebind + per-row / reset-all (device-local `localStorage` `xrk.shortcuts.v1` overrides only; submit/newline fixed) | **Working** |
 | Scheduled-task run history | `cron/executions.jsonl` bounded ledger (≤1000) + `cronjob` action=`runs`; survives restart | **Working** |
 | Time-context injection | `XRK_TIME_CONTEXT_REFRESH_MS` (default 60s); follow-ups refresh via workspace block | **Working** |
-| Archive filter / pin | Sidebar `ArchiveViewMode` tri-state; Settings archive search + Unarchive; Face `pinnedSessionIds` + `workspace.pinSession`/`unpinSession` + `host/pinned-sessions-changed` | **Working** |
+| Archive filter / pin | Sidebar `ArchiveViewMode` tri-state; Settings archive search + Unarchive + permanent delete (`session.delete`, archived only); Face `pinnedSessionIds` + `workspace.pinSession`/`unpinSession` + `host/pinned-sessions-changed` | **Working** |
 | Model-switch waiting hint | in-menu "Preparing · reduced wait…" + keyboard paneFocus / search virtual highlight + `<mark>` hit + cell `:focus-visible` | **Working** |
 | Desktop first paint ∥ Host | `xrk-app://` splash first; Host ready then `loadURL` loopback Face | **Working** (see [host-face](./host-face.md)) |
 

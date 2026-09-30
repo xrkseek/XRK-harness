@@ -1,4 +1,6 @@
-// image_generate toolview: gallery via tool.call.images when attachmentId= is present.
+// image_generate toolview: gallery via tool.call.images when attachmentId= is
+// present on the result, and reference attachment ids from i2i args so the
+// source image is visible alongside the prompt / generated output.
 
 import type { Context } from '@xrkseek/cordis'
 import { IconBrowseOutline16 } from '@xrkseek/client-ui-primitives'

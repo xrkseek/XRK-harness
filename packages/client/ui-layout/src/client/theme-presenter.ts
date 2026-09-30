@@ -55,12 +55,12 @@ export class ThemePresenter {
     if (!this.themeColorMeta.isConnected) document.head.append(this.themeColorMeta)
   }
 
-  /** Retract root color-scheme, the palette attribute, token variables, the font-size axis, and the owned metadata node. */
+  /** Retract presenter-owned token variables and theme-color meta only.
+   * Leave `color-scheme` / `data-ds-dark-theme` / font-size axis alone so a
+   * fiber remount (or settle gap before the next apply) cannot flash the
+   * Host boot palette back to the UA light default. */
   dispose(): void {
-    document.documentElement.style.removeProperty('color-scheme')
     const body = document.body
-    body.removeAttribute(DARK_ATTRIBUTE)
-    body.style.removeProperty(CONTENT_FONT_SIZE_VARIABLE)
     for (const name of this.appliedTokens) body.style.removeProperty(name)
     this.appliedTokens = []
     this.themeColorMeta.remove()

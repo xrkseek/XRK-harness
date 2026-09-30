@@ -131,7 +131,8 @@ describe('DiffBlock wrap', () => {
     const diffs: DiffHunk[] = [{ path: 'a.ts', oldText: 'one\ntwo', newText: 'one\nthree' }]
     const { container } = render(<DiffBlock diffs={diffs} />)
     const gutters = [...container.querySelectorAll('[data-diff-gutter]')]
-    expect(gutters.map(node => node.textContent)).toEqual(['1', '2', '1', '2'])
+    // Sign rides in the gutter next to the number (`1-`, `2+`, …).
+    expect(gutters.map(node => node.textContent)).toEqual(['1-', '2-', '1+', '2+'])
   })
 })
 

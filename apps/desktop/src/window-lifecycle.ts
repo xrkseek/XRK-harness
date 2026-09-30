@@ -9,6 +9,9 @@ export const DESKTOP_WINDOW_DEFAULTS = {
   minWidth: 880,
   minHeight: 600,
   show: false,
+  // Light splash floor (override with dark via boot-appearance when preference
+  // resolves to dark — Chromium default white during Host-ready loadURL is harsher).
+  backgroundColor: "#f4f4f5",
   // Product chrome draws drag + (on Windows) min/max/close in the renderer.
   // Darwin uses hiddenInset traffic lights instead of custom caption buttons.
   frame: false,

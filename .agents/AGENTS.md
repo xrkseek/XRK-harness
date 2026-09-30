@@ -25,6 +25,7 @@
 
 1. 结构 → **`xrk-harness-architecture`**
 2. 挂/改 MCP 或 Settings → **`xrk-capability-attach`**（全局工具）
+3. 工作区 Canvas / 概况看板 → **`xrk-canvas`**（`canvas_*`；磁盘 `{XRK_HOME}/canvases/<workspaceId>/`）
 3. 配模型 → **`xrk-models-settings`**
 4. 先计划 → **`/plan`** · **`xrk-plan-build`** · `exit_plan_mode`
 5. 委派 → **`xrk-delegate`**

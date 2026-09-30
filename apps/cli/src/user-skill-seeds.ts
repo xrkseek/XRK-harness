@@ -1,14 +1,11 @@
 /**
- * On product establish (serve/web), install packaged skills into
- * `{XRK_HOME}/skills/` — system data only (Cursor-style home defaults).
- * Never writes the workspace.
+ * On product establish (serve/web), mirror bundled seeds into `{XRK_HOME}` —
+ * system defaults only (never the workspace).
  *
- * Refresh policy (fingerprint copy into ~/.xrk):
- * - Install when missing (new bundled seeds always land).
- * - Re-install only when the home copy is still byte-identical to the seed we
- *   originally wrote (tracked in `.seed-manifest.json`).
- * - Any user edit wins forever — we never clobber it.
- * - Copies that predate the manifest are left alone (provenance unknown).
+ * Refresh policy: compare `.seed-manifest.json` to the bundled fingerprint.
+ * When they differ (or home copy is missing), rewrite from the bundle.
+ * User custom skills / AGENTS.md belong in the workspace `.agents/` (or
+ * `.xrk/`), not by editing these home seed copies.
  */
 import {
   access,
@@ -37,10 +34,19 @@ export function bundledRecipeSeedsRoot(): string {
   return path.join(cliPackageRoot(), "seeds", "recipes");
 }
 
-/** Records, per skill name, the fingerprint of the seed we last wrote home. */
+/** Per-name fingerprint of the bundled seed last written into home. */
 const SEED_MANIFEST_NAME = ".seed-manifest.json";
 
 type SeedManifest = Record<string, string>;
+
+export interface EnsureUserSkillSeedsResult {
+  readonly homeSkills: string;
+  readonly installed: readonly string[];
+  /** Home copies replaced because the bundled fingerprint moved. */
+  readonly refreshed: readonly string[];
+  /** Already matching the current bundled fingerprint. */
+  readonly skipped: readonly string[];
+}
 
 async function pathExists(p: string): Promise<boolean> {
   try {
@@ -82,6 +88,15 @@ async function fingerprintDir(dir: string): Promise<string | undefined> {
   return createHash("sha256").update(entries.join("\n")).digest("hex");
 }
 
+async function fingerprintFile(file: string): Promise<string | undefined> {
+  try {
+    const buf = await readFile(file);
+    return createHash("sha256").update(buf).digest("hex");
+  } catch {
+    return undefined;
+  }
+}
+
 async function readManifest(file: string): Promise<SeedManifest> {
   try {
     const parsed: unknown = JSON.parse(await readFile(file, "utf8"));
@@ -98,19 +113,16 @@ async function readManifest(file: string): Promise<SeedManifest> {
   }
 }
 
-export interface EnsureUserSkillSeedsResult {
-  readonly homeSkills: string;
-  readonly installed: readonly string[];
-  /** Stale-but-pristine home copies replaced by a newer bundled seed. */
-  readonly refreshed: readonly string[];
-  readonly skipped: readonly string[];
+async function writeManifest(
+  file: string,
+  manifest: SeedManifest,
+): Promise<void> {
+  await writeFile(file, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 }
 
 /**
- * Ensure `{XRK_HOME}/skills/<name>/` for each bundled seed (create home skills dir).
+ * Ensure `{XRK_HOME}/skills/<name>/` mirrors each bundled seed.
  * Call from app start (`xrkh web` / `serve`) — not from workspace tooling.
- *
- * `seedRoot` is injectable for tests; production uses the CLI-bundled seeds.
  */
 export async function ensureUserSkillSeeds(
   xrkHome: string = resolveXrkHome(),
@@ -135,79 +147,35 @@ export async function ensureUserSkillSeeds(
   const manifest = await readManifest(manifestFile);
   let manifestDirty = false;
 
-  const writeSeed = async (name: string): Promise<void> => {
-    const dest = path.join(homeSkills, name);
-    // `cp` merges into an existing tree; remove first so stale files cannot
-    // survive a refresh.
-    await rm(dest, { recursive: true, force: true });
-    await cp(path.join(seedRoot, name), dest, { recursive: true });
-  };
-
   for (const name of names) {
     const dest = path.join(homeSkills, name);
     const skillMd = path.join(dest, "SKILL.md");
     const seedFingerprint = await fingerprintDir(path.join(seedRoot, name));
-
-    if (!(await pathExists(skillMd))) {
-      await writeSeed(name);
-      if (seedFingerprint) {
-        manifest[name] = seedFingerprint;
-        manifestDirty = true;
-      }
-      installed.push(name);
-      continue;
-    }
-
-    const recorded = manifest[name];
-    // No manifest entry → predates fingerprinting; provenance unknown, so the
-    // existing "never overwrite" behaviour is preserved.
-    if (!recorded) {
+    if (!seedFingerprint) {
       skipped.push(name);
       continue;
     }
-    // Bundled seed unchanged since we wrote it → nothing to do.
-    if (recorded === seedFingerprint) {
+
+    const present = await pathExists(skillMd);
+    if (present && manifest[name] === seedFingerprint) {
       skipped.push(name);
       continue;
     }
-    // Seed moved on. Refresh only if the home copy is still exactly what we
-    // wrote; a user edit (or any local drift) wins forever.
-    const homeFingerprint = await fingerprintDir(dest);
-    if (homeFingerprint === recorded) {
-      await writeSeed(name);
-      if (seedFingerprint) {
-        manifest[name] = seedFingerprint;
-        manifestDirty = true;
-      }
-      refreshed.push(name);
-      continue;
-    }
-    skipped.push(name);
+
+    await rm(dest, { recursive: true, force: true });
+    await cp(path.join(seedRoot, name), dest, { recursive: true });
+    manifest[name] = seedFingerprint;
+    manifestDirty = true;
+    if (present) refreshed.push(name);
+    else installed.push(name);
   }
 
-  if (manifestDirty) {
-    await writeFile(
-      manifestFile,
-      `${JSON.stringify(manifest, null, 2)}\n`,
-      "utf8",
-    );
-  }
-
+  if (manifestDirty) await writeManifest(manifestFile, manifest);
   return { homeSkills, installed, refreshed, skipped };
 }
 
-async function fingerprintFile(file: string): Promise<string | undefined> {
-  try {
-    const buf = await readFile(file);
-    return createHash("sha256").update(buf).digest("hex");
-  } catch {
-    return undefined;
-  }
-}
-
 /**
- * Seed flat files from `seedRoot` into `destDir` with the same refresh policy
- * as skills (manifest beside dest; never clobber user edits).
+ * Seed flat files from `seedRoot` into `destDir` (same fingerprint policy).
  */
 async function ensureFlatFileSeeds(
   destDir: string,
@@ -242,45 +210,24 @@ async function ensureFlatFileSeeds(
       continue;
     }
 
-    if (!(await pathExists(dest))) {
-      await writeFile(dest, await readFile(src));
-      manifest[name] = seedFingerprint;
-      manifestDirty = true;
-      installed.push(name);
-      continue;
-    }
-
-    const recorded = manifest[name];
-    if (!recorded) {
+    const present = await pathExists(dest);
+    if (present && manifest[name] === seedFingerprint) {
       skipped.push(name);
       continue;
     }
-    if (recorded === seedFingerprint) {
-      skipped.push(name);
-      continue;
-    }
-    if ((await fingerprintFile(dest)) === recorded) {
-      await writeFile(dest, await readFile(src));
-      manifest[name] = seedFingerprint;
-      manifestDirty = true;
-      refreshed.push(name);
-      continue;
-    }
-    skipped.push(name);
+
+    await writeFile(dest, await readFile(src));
+    manifest[name] = seedFingerprint;
+    manifestDirty = true;
+    if (present) refreshed.push(name);
+    else installed.push(name);
   }
 
-  if (manifestDirty) {
-    await writeFile(
-      manifestFile,
-      `${JSON.stringify(manifest, null, 2)}\n`,
-      "utf8",
-    );
-  }
-
+  if (manifestDirty) await writeManifest(manifestFile, manifest);
   return { homeSkills: destDir, installed, refreshed, skipped };
 }
 
-/** Codex-style global `AGENTS.md` only (`~/.xrk/AGENTS.md`). */
+/** Global `AGENTS.md` only (`~/.xrk/AGENTS.md`). Workspace overrides → `.agents/`. */
 export async function ensureUserStandingSeeds(
   xrkHome: string = resolveXrkHome(),
   seedRoot: string = bundledStandingSeedsRoot(),

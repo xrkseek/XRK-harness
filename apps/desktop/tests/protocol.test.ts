@@ -6,6 +6,7 @@ import {
   attachDesktopNavigationGuard,
   desktopAppIndexUrl,
   desktopLoopbackIndexUrl,
+  desktopSplashUrl,
   DESKTOP_PROTOCOL_PRIVILEGES,
   DESKTOP_PROTOCOL_SCHEME,
   handleDesktopProtocolRequest,
@@ -47,6 +48,18 @@ describe("desktop custom protocol", () => {
     expect(
       desktopAppIndexUrl(DESKTOP_PROTOCOL_SCHEME, { platform: "win32" }),
     ).toContain("dsh-desktop-platform=win32");
+    expect(desktopSplashUrl()).toMatch(
+      /^xrk-app:\/\/app\/desktop-splash\.html\?.*dsh-desktop-mode=advanced/,
+    );
+    expect(
+      desktopSplashUrl(DESKTOP_PROTOCOL_SCHEME, { platform: "darwin" }),
+    ).toContain("dsh-desktop-platform=darwin");
+    expect(
+      desktopSplashUrl(DESKTOP_PROTOCOL_SCHEME, {
+        platform: "win32",
+        colorScheme: "dark",
+      }),
+    ).toContain("dsh-desktop-color-scheme=dark");
   });
 
   it("serves version-matched static assets and refuses traversal", async () => {
@@ -263,6 +276,12 @@ describe("desktop custom protocol", () => {
     ).toMatch(
       /^http:\/\/127\.0\.0\.1:43129\/index\.html\?.*dsh-desktop-mode=advanced/,
     );
+    expect(
+      desktopLoopbackIndexUrl("http://127.0.0.1:43129", {
+        platform: "win32",
+        colorScheme: "dark",
+      }),
+    ).toContain("dsh-desktop-color-scheme=dark");
 
     const preventDefault = vi.fn();
     let listener:

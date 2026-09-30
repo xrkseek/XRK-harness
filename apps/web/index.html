@@ -7,8 +7,90 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <title>XRK Harness</title>
+    <!-- First paint before JS: same dual-ring floor as AppRoot (no overlay layers).
+         Host injectBootTheme sets body[data-ds-dark-theme] before this paints;
+         dark rules below cover the gap until design-platform tokens load. -->
+    <style>
+      html, body, #root { height: 100%; margin: 0; }
+      body { background: #f4f4f5; color: #14161a; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+      body[data-ds-dark-theme] { background: #151517; color: #e8e8ea; color-scheme: dark; }
+      #xrk-boot-skeleton {
+        position: fixed; inset: 0; z-index: 99;
+        display: grid; place-items: center; pointer-events: none;
+        background:
+          radial-gradient(120% 80% at 50% -10%, rgb(255 255 255 / 70%), transparent 55%),
+          radial-gradient(90% 70% at 50% 120%, rgb(20 22 26 / 4%), transparent 50%),
+          #f4f4f5;
+      }
+      body[data-ds-dark-theme] #xrk-boot-skeleton {
+        background:
+          radial-gradient(120% 80% at 50% -10%, rgb(255 255 255 / 6%), transparent 55%),
+          radial-gradient(90% 70% at 50% 120%, rgb(0 0 0 / 35%), transparent 50%),
+          #151517;
+      }
+      #xrk-boot-skeleton[hidden] { display: none; }
+      #xrk-boot-skeleton .card {
+        display: flex; flex-direction: column; align-items: center; gap: 16px;
+      }
+      #xrk-boot-skeleton .mark {
+        font-size: 15px; font-weight: 650; letter-spacing: 0.14em; line-height: 1;
+      }
+      #xrk-boot-skeleton .spin { position: relative; width: 28px; height: 28px; }
+      #xrk-boot-skeleton .ring,
+      #xrk-boot-skeleton .core {
+        position: absolute; inset: 0; border-radius: 50%; box-sizing: border-box;
+        border: 1.5px solid transparent;
+      }
+      #xrk-boot-skeleton .ring {
+        border-top-color: #5c6168; border-right-color: rgb(0 0 0 / 14%);
+        animation: xrk-skel-spin 1.05s cubic-bezier(0.55, 0.15, 0.35, 0.85) infinite;
+      }
+      #xrk-boot-skeleton .core {
+        inset: 6px; border-bottom-color: #8a8f96; border-left-color: rgb(0 0 0 / 10%);
+        animation: xrk-skel-spin 0.7s linear infinite reverse;
+      }
+      body[data-ds-dark-theme] #xrk-boot-skeleton .ring {
+        border-top-color: #c4c4cc; border-right-color: rgb(255 255 255 / 12%);
+      }
+      body[data-ds-dark-theme] #xrk-boot-skeleton .core {
+        border-bottom-color: #9a9aa3; border-left-color: rgb(255 255 255 / 10%);
+      }
+      @keyframes xrk-skel-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        #xrk-boot-skeleton .ring,
+        #xrk-boot-skeleton .core { animation: none; border-color: rgb(0 0 0 / 14%); opacity: 0.75; }
+        body[data-ds-dark-theme] #xrk-boot-skeleton .ring,
+        body[data-ds-dark-theme] #xrk-boot-skeleton .core {
+          border-color: rgb(255 255 255 / 12%);
+        }
+      }
+    </style>
   </head>
   <body>
+    <!--
+      Desktop remount may stamp ?dsh-desktop-color-scheme= before Host inject
+      BootTheme lands; Host inject (when present) already set colorScheme /
+      data-ds-dark-theme and this script no-ops.
+    -->
+    <script>
+(() => {
+  if (document.documentElement.style.colorScheme) return;
+  var q = new URLSearchParams(location.search || "").get("dsh-desktop-color-scheme");
+  var dark = q === "dark";
+  if (q !== "dark" && q !== "light") {
+    dark = typeof matchMedia !== "undefined"
+      && matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  document.body.toggleAttribute("data-ds-dark-theme", dark);
+})();
+    </script>
+    <div id="xrk-boot-skeleton" aria-hidden="true">
+      <div class="card">
+        <div class="mark">HARNESS</div>
+        <div class="spin" aria-hidden="true"><div class="ring"></div><div class="core"></div></div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

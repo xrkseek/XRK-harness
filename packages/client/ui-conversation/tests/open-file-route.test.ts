@@ -1,31 +1,31 @@
-/** Unit tests for chat → workbench / workspaces open routing. */
+/** Unit tests for chat → community / workspaces open routing. */
 import { describe, expect, it, vi } from 'vitest'
 import { routeChatOpenFile } from '../src/client/open-file-route.ts'
 
 describe('routeChatOpenFile', () => {
-  it('stops at workbench when openPath returns true', async () => {
+  it('opens via workspaces.openPath', async () => {
     const openWorkspace = vi.fn(async () => {})
-    await routeChatOpenFile('/a.ts', { openPath: () => true }, openWorkspace)
-    expect(openWorkspace).not.toHaveBeenCalled()
-  })
-
-  it('falls through to workspaces.openPath when workbench refuses', async () => {
-    const openWorkspace = vi.fn(async () => {})
-    await routeChatOpenFile('/a.ts', { openPath: () => false }, openWorkspace)
+    await routeChatOpenFile('/a.ts', openWorkspace)
     expect(openWorkspace).toHaveBeenCalledWith('/a.ts')
   })
 
-  it('falls through when workbench is absent', async () => {
-    const openWorkspace = vi.fn(async () => {})
-    await routeChatOpenFile('/a.ts', undefined, openWorkspace)
-    expect(openWorkspace).toHaveBeenCalledWith('/a.ts')
-  })
-
-  it('wakes community before workspaces when workbench refuses', async () => {
+  it('wakes community before workspaces', async () => {
     const openWorkspace = vi.fn(async () => {})
     const wake = vi.fn()
-    await routeChatOpenFile('/a.ts', { openPath: () => false }, openWorkspace, wake)
+    await routeChatOpenFile('/a.ts', openWorkspace, wake)
     expect(wake).toHaveBeenCalledWith('/a.ts')
     expect(openWorkspace).toHaveBeenCalledWith('/a.ts')
+  })
+
+  it('skips community and workspaces for attachment ids', async () => {
+    const openWorkspace = vi.fn(async () => {})
+    const wake = vi.fn()
+    await routeChatOpenFile(
+      'sha256:614b7f3194c587139769f70801d2cb8578192c1a3dc704c244f82013c379ac16',
+      openWorkspace,
+      wake,
+    )
+    expect(wake).not.toHaveBeenCalled()
+    expect(openWorkspace).not.toHaveBeenCalled()
   })
 })

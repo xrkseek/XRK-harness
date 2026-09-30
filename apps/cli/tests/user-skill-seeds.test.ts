@@ -41,7 +41,7 @@ async function withTempDirs(
 }
 
 describe("ensureUserSkillSeeds", () => {
-  it("creates home skills on establish and skips existing SKILL.md", async () => {
+  it("creates home skills on establish and skips when fingerprint matches", async () => {
     const home = await mkdtemp(path.join(os.tmpdir(), "xrk-skill-seed-"));
     try {
       const first = await ensureUserSkillSeeds(home);
@@ -60,17 +60,15 @@ describe("ensureUserSkillSeeds", () => {
       );
       expect(await readFile(skillPath, "utf8")).toContain("xrk-capability-attach");
 
-      await writeFile(skillPath, "user-edited\n", "utf8");
       const second = await ensureUserSkillSeeds(home);
       expect(second.installed).not.toContain("xrk-capability-attach");
       expect(second.skipped).toContain("xrk-capability-attach");
-      expect(await readFile(skillPath, "utf8")).toBe("user-edited\n");
     } finally {
       await rm(home, { recursive: true, force: true });
     }
   });
 
-  it("refreshes a pristine home copy when the bundled seed changes", async () => {
+  it("refreshes home when the bundled seed fingerprint changes", async () => {
     await withTempDirs(async (home, seeds) => {
       await makeSeedRoot(seeds, { demo: { "SKILL.md": skillMd("demo", "v1") } });
       const dest = path.join(home, "skills", "demo", "SKILL.md");
@@ -80,7 +78,6 @@ describe("ensureUserSkillSeeds", () => {
       expect(first.refreshed).toEqual([]);
       expect(await readFile(dest, "utf8")).toContain("v1");
 
-      // The CLI ships a newer generation of the same seed.
       await writeFile(
         path.join(seeds, "demo", "SKILL.md"),
         skillMd("demo", "v2"),
@@ -92,7 +89,6 @@ describe("ensureUserSkillSeeds", () => {
       expect(second.refreshed).toEqual(["demo"]);
       expect(await readFile(dest, "utf8")).toContain("v2");
 
-      // Idempotent: an unchanged bundle is a no-op.
       const third = await ensureUserSkillSeeds(home, seeds);
       expect(third.installed).toEqual([]);
       expect(third.refreshed).toEqual([]);
@@ -100,7 +96,7 @@ describe("ensureUserSkillSeeds", () => {
     });
   });
 
-  it("never clobbers a user edit, even when the seed changes", async () => {
+  it("rewrites a drifted home copy — user customs belong in .agents", async () => {
     await withTempDirs(async (home, seeds) => {
       await makeSeedRoot(seeds, { demo: { "SKILL.md": skillMd("demo", "v1") } });
       await ensureUserSkillSeeds(home, seeds);
@@ -114,15 +110,13 @@ describe("ensureUserSkillSeeds", () => {
       );
 
       const second = await ensureUserSkillSeeds(home, seeds);
-      expect(second.refreshed).toEqual([]);
-      expect(second.skipped).toContain("demo");
-      expect(await readFile(dest, "utf8")).toBe("user-edited\n");
+      expect(second.refreshed).toEqual(["demo"]);
+      expect(await readFile(dest, "utf8")).toContain("v2");
     });
   });
 
-  it("leaves a pre-manifest home copy alone (provenance unknown)", async () => {
+  it("adopts a pre-manifest home copy onto the current bundle", async () => {
     await withTempDirs(async (home, seeds) => {
-      // Simulate an install written by an older CLI: no `.seed-manifest.json`.
       const dir = path.join(home, "skills", "demo");
       await mkdir(dir, { recursive: true });
       await writeFile(
@@ -133,12 +127,8 @@ describe("ensureUserSkillSeeds", () => {
       await makeSeedRoot(seeds, { demo: { "SKILL.md": skillMd("demo", "v2") } });
 
       const res = await ensureUserSkillSeeds(home, seeds);
-      expect(res.installed).toEqual([]);
-      expect(res.refreshed).toEqual([]);
-      expect(res.skipped).toContain("demo");
-      expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toContain(
-        "ancient",
-      );
+      expect(res.refreshed).toEqual(["demo"]);
+      expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toContain("v2");
     });
   });
 
@@ -151,7 +141,6 @@ describe("ensureUserSkillSeeds", () => {
       const legacy = path.join(home, "skills", "demo", "legacy.md");
       expect(existsSync(legacy)).toBe(true);
 
-      // Newer bundle no longer ships `legacy.md`.
       await rm(path.join(seeds, "demo", "legacy.md"), { force: true });
       await writeFile(
         path.join(seeds, "demo", "SKILL.md"),
@@ -165,7 +154,7 @@ describe("ensureUserSkillSeeds", () => {
     });
   });
 
-  it("installs a newly bundled skill without touching existing ones", async () => {
+  it("installs a newly bundled skill without touching matching ones", async () => {
     await withTempDirs(async (home, seeds) => {
       await makeSeedRoot(seeds, { demo: { "SKILL.md": skillMd("demo", "v1") } });
       await ensureUserSkillSeeds(home, seeds);
@@ -201,11 +190,11 @@ describe("ensureUserSkillSeeds", () => {
       >;
       expect(Object.keys(parsed)).toEqual(["demo"]);
       expect(typeof parsed.demo).toBe("string");
-      expect((parsed.demo as string)).toHaveLength(64); // sha256 hex
+      expect((parsed.demo as string)).toHaveLength(64);
     });
   });
 
-  it("survives a corrupt manifest without touching home copies", async () => {
+  it("rewrites home after a corrupt manifest when the seed moved", async () => {
     await withTempDirs(async (home, seeds) => {
       await makeSeedRoot(seeds, { demo: { "SKILL.md": skillMd("demo", "v1") } });
       await ensureUserSkillSeeds(home, seeds);
@@ -222,12 +211,10 @@ describe("ensureUserSkillSeeds", () => {
       );
 
       const res = await ensureUserSkillSeeds(home, seeds);
-      // Unreadable manifest → unknown provenance → leave the home copy alone.
-      expect(res.refreshed).toEqual([]);
-      expect(res.skipped).toContain("demo");
+      expect(res.refreshed).toEqual(["demo"]);
       expect(
         await readFile(path.join(home, "skills", "demo", "SKILL.md"), "utf8"),
-      ).toContain("v1");
+      ).toContain("v2");
     });
   });
 
@@ -247,13 +234,12 @@ describe("ensureUserSkillSeeds", () => {
       const all = await ensureUserHomeSeeds(home);
       expect(all.standing.installed).toContain("AGENTS.md");
       expect(await readFile(path.join(home, "AGENTS.md"), "utf8")).toContain(
-        "Global preferences",
+        "XRK-Harness",
       );
       expect(all.recipes.installed.length).toBeGreaterThan(0);
       expect(existsSync(path.join(home, "recipes", "plan-build.yaml"))).toBe(
         true,
       );
-      // No persona stack dumped into home.
       expect(existsSync(path.join(home, "SOUL.md"))).toBe(false);
       expect(existsSync(path.join(home, "IDENTITY.md"))).toBe(false);
 
@@ -265,7 +251,7 @@ describe("ensureUserSkillSeeds", () => {
     }
   });
 
-  it("refreshes a pristine recipe when the bundle changes", async () => {
+  it("refreshes a recipe when the bundle fingerprint changes", async () => {
     await withTempDirs(async (home, seeds) => {
       const seedRecipes = path.join(seeds, "recipes");
       await mkdir(seedRecipes, { recursive: true });

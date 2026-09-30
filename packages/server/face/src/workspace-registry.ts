@@ -165,6 +165,34 @@ export class FaceWorkspaceRegistry {
   }
 
   /**
+   * Drop one session from archive, pin, membership, and every workspace order
+   * bucket. Idempotent for an unknown id. Used by durable `session.delete`.
+   */
+  forgetSession(sessionId: string): {
+    archivedSessionIds: string[];
+    pinnedSessionIds: string[];
+  } {
+    this.archived.delete(sessionId);
+    this.pinned = this.pinned.filter((id) => id !== sessionId);
+    const ws = this.membership.get(sessionId);
+    if (ws !== undefined) {
+      this.membership.delete(sessionId);
+      this.removeFromOrder(ws, sessionId);
+      const row = this.workspaces.get(ws);
+      if (row) row.updatedAt = new Date().toISOString();
+    }
+    return {
+      archivedSessionIds: [...this.archived],
+      pinnedSessionIds: [...this.pinned],
+    };
+  }
+
+  /** Whether one session sits in the registry-global archive set. */
+  isArchived(sessionId: string): boolean {
+    return this.archived.has(sessionId);
+  }
+
+  /**
    * Pin one session to the front of the registry-global pin order (newest
    * first). Unarchives first when needed so pin and archive stay exclusive.
    */

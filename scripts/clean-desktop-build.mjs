@@ -50,11 +50,14 @@ if (existsSync(targetsRoot)) {
     removable.push(
       path.join(root, "artifacts"),
       path.join(root, "unsigned-artifacts"),
+      // Pack pipeline intermediate: full Host node_modules tree (~hundreds of MB).
+      path.join(root, "host-bundle"),
       path.join(root, "package-plan.json"),
       path.join(root, "upload-plan.json"),
       path.join(root, "package-set"),
       path.join(root, "seed"),
       path.join(root, "node-extract"),
+      path.join(root, "packed-first-party"),
     );
     if (values.all) removable.push(path.join(root, "runtime"));
   }

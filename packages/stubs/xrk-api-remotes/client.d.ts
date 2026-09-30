@@ -190,6 +190,42 @@ declare module '@xrkseek/xrk-typert-protocol' {
         signal?: AbortSignal,
       ) => Promise<RemoteResult<{ readonly diff: WorkspaceFileDiff | null }>>
     }
+    canvas: {
+      list: (
+        args: {
+          readonly sessionId?: SessionId
+          readonly agentId?: SessionId
+        },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{
+        readonly workspaceId: string
+        readonly generation: number
+        readonly items: readonly {
+          readonly id: string
+          readonly title: string
+          readonly revision: number
+          readonly updatedAt: string
+        }[]
+      }>>
+      get: (
+        args: {
+          readonly sessionId?: SessionId
+          readonly agentId?: SessionId
+          readonly id: string
+        },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{
+        readonly workspaceId: string
+        readonly canvas: {
+          readonly id: string
+          readonly title: string
+          readonly revision: number
+          readonly createdAt: string
+          readonly updatedAt: string
+          readonly sections: readonly unknown[]
+        } | null
+      }>>
+    }
   }
 }
 

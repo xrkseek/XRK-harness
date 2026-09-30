@@ -23,6 +23,7 @@ import {
   markPluginClientRefreshHint,
   runPluginInstallUi,
   setPluginInstallUiError,
+  setPluginMutateLog,
   subscribePluginInstallUi,
   type PluginInstallLog,
 } from './plugin-install-ui-session.ts'
@@ -41,6 +42,8 @@ const REGISTRY_URLS = {
   npmmirror: 'https://registry.npmmirror.com/',
 } as const
 
+const RECOMMENDED_PLUGIN_SPEC = 'xrkh-better-sidebar'
+
 /** Registration-side Remote face used by the section. */
 export interface PluginInventorySettingsTabInjected {
   /** Read a current Host inventory snapshot. */
@@ -50,7 +53,7 @@ export interface PluginInventorySettingsTabInjected {
   /** Remove a managed plugin from the CLI inventory. */
   remove: (entryId: PluginEntryId) => Promise<void>
   /** Reinstall / bump a managed plugin from its install source. */
-  update: (entryId: PluginEntryId) => Promise<void>
+  update: (entryId: PluginEntryId) => Promise<PluginInstallLog | undefined>
   /** Remount a managed process plugin from disk without reinstalling. */
   reload: (entryId: PluginEntryId) => Promise<void>
   /** Open the managed plugin install folder in the OS. */
@@ -431,6 +434,28 @@ export function PluginInventorySettingsTab({
     })
   }
 
+  const runRecommendedInstall = async (): Promise<void> => {
+    if (installBusy || busyId !== null) return
+    setInstallSpec(RECOMMENDED_PLUGIN_SPEC)
+    clearPluginInstallSettledUi()
+    const registry = resolveInstallRegistry(registryChoice, registryCustom)
+    persistRegistry(registryChoice, registryCustom)
+    await runPluginInstallUi({
+      spec: RECOMMENDED_PLUGIN_SPEC,
+      ...(registry !== undefined ? { registry } : {}),
+      install,
+      ...(subscribeInstallLog !== undefined ? { subscribeInstallLog } : {}),
+      fallbackError: t('actionFailed'),
+    })
+  }
+
+  const hasRecommendedInstalled = state.status === 'ready'
+    && state.snapshot.entries.some((entry) =>
+      entry.moduleName === RECOMMENDED_PLUGIN_SPEC
+      || entry.source?.includes(RECOMMENDED_PLUGIN_SPEC) === true
+      || String(entry.entryId).includes(RECOMMENDED_PLUGIN_SPEC),
+    )
+
   const filters: { readonly id: CatalogFilter; readonly label: string }[] = [
     { id: 'all', label: t('filterAll') },
     { id: 'custom', label: t('filterCustom') },
@@ -522,6 +547,27 @@ export function PluginInventorySettingsTab({
               : null}
           </div>
           <p className={css.installHint}>{t('installHint')}</p>
+          {!hasRecommendedInstalled
+            ? (
+              <div className={css.recommendRow} data-plugin-recommend={RECOMMENDED_PLUGIN_SPEC}>
+                <div className={css.recommendCopy}>
+                  <strong>{t('installRecommended', { name: RECOMMENDED_PLUGIN_SPEC })}</strong>
+                  <span>{t('installRecommendedHint')}</span>
+                </div>
+                <button
+                  type="button"
+                  className={css.recommendButton}
+                  disabled={installBusy || busyId !== null}
+                  aria-label={t('installRecommendedAria', { name: RECOMMENDED_PLUGIN_SPEC })}
+                  onClick={() => { void runRecommendedInstall() }}
+                >
+                  {installBusy && activeSpec === RECOMMENDED_PLUGIN_SPEC
+                    ? t('actionBusy')
+                    : t('install')}
+                </button>
+              </div>
+            )
+            : null}
           <button
             type="button"
             className={css.guideToggle}
@@ -836,6 +882,7 @@ export function PluginInventorySettingsTab({
                     data-managed={managed ? 'true' : undefined}
                     data-needs-restart={needsRestart ? 'true' : undefined}
                     data-open={open ? 'true' : undefined}
+                    data-busy={busy ? 'true' : undefined}
                     data-kind={entry.kind ?? 'unknown'}
                   >
                     <div className={css.cardHead}>
@@ -949,11 +996,22 @@ export function PluginInventorySettingsTab({
                               return
                             }
                             if (id === 'update') {
-                              void runManaged(
-                                entry.entryId,
-                                () => update(entry.entryId),
-                                { notice: t('toastUpdated', { name }), clientRefresh: true },
-                              )
+                              void (async () => {
+                                setBusyId(entry.entryId)
+                                setActionError(null)
+                                try {
+                                  const log = await update(entry.entryId)
+                                  if (log !== undefined) setPluginMutateLog(log)
+                                  showToast(t('toastUpdated', { name }))
+                                  markPluginClientRefreshHint()
+                                  setState({ status: 'loading' })
+                                  setRequest(value => value + 1)
+                                } catch (error) {
+                                  setActionError(error instanceof Error ? error.message : t('actionFailed'))
+                                } finally {
+                                  setBusyId(null)
+                                }
+                              })()
                               return
                             }
                             if (id === 'toggle') {

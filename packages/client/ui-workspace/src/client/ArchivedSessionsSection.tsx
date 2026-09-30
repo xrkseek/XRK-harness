@@ -1,11 +1,11 @@
 /**
  * Archived-session Settings page: the registry-global archive set joined with
  * the loaded Session summaries, newest archive first, filtered by one search
- * box, with one Unarchive action per row. An archive entry whose Session is
- * gone has no row and no action; the set itself stays host-owned.
+ * box, with Unarchive and permanent Delete per row. An archive entry whose
+ * Session is gone has no row and no action; the set itself stays host-owned.
  */
 import { useMemo, useState, type ReactNode } from 'react'
-import { Button, IconSearchOutline16 } from '@xrkseek/client-ui-primitives'
+import { Button, IconSearchOutline16, Modal } from '@xrkseek/client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type { SessionId } from '@xrkseek/client-runtime/client'
 import { relativeTime } from './tree.ts'
@@ -18,6 +18,11 @@ export interface ArchivedSessionsSectionInjected {
    * @param sessionId - Session to unarchive.
    */
   unarchive: (sessionId: SessionId) => Promise<void>
+  /**
+   * Permanently delete one archived Session (durable log).
+   * @param sessionId - Session to delete.
+   */
+  deleteSession: (sessionId: SessionId) => Promise<void>
 }
 
 /** Full component props assembled by the Settings slot renderer. */
@@ -56,11 +61,14 @@ function matches(row: ArchivedRow, normalizedQuery: string): boolean {
  * @returns the settings page element tree.
  */
 export function ArchivedSessionsSection(props: ArchivedSessionsSectionProps): ReactNode {
-  const { t, unarchive, useSessions, useWorkspaces } = props
+  const { t, unarchive, deleteSession, useSessions, useWorkspaces } = props
   const sessions = useSessions(state => state)
   const workspaces = useWorkspaces(state => state.items)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
   const [query, setQuery] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<ArchivedRow | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const ungrouped = t('ungrouped')
   const summaries = sessions.byId
 
@@ -96,6 +104,26 @@ export function ArchivedSessionsSection(props: ArchivedSessionsSectionProps): Re
   const visible = rows.filter(row => matches(row, query.trim().toLowerCase()))
   const archived = archivedSessionIds.length > 0
 
+  const closeDelete = (): void => {
+    if (deleting) return
+    setDeleteTarget(null)
+    setDeleteError(null)
+  }
+
+  const confirmDelete = (): void => {
+    if (deleting || deleteTarget === null) return
+    setDeleting(true)
+    setDeleteError(null)
+    const target = deleteTarget
+    deleteSession(target.id).then(() => {
+      setDeleteTarget(null)
+      setDeleting(false)
+    }, (reason: unknown) => {
+      setDeleting(false)
+      setDeleteError(reason instanceof Error ? reason.message : String(reason))
+    })
+  }
+
   return (
     <div className={css.section}>
       <div className={css.search}>
@@ -121,22 +149,61 @@ export function ArchivedSessionsSection(props: ArchivedSessionsSectionProps): Re
                   {[row.workspace, timeLabel(row.updatedAt, now, t)].join(' · ')}
                 </span>
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                aria-label={t('unarchiveNamed', { title: row.title })}
-                onClick={() => {
-                  unarchive(row.id).catch((reason: unknown) => {
-                    console.warn('session unarchive rejected:', reason)
-                  })
-                }}
-              >
-                {t('unarchive')}
-              </Button>
+              <span className={css.actions}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label={t('unarchiveNamed', { title: row.title })}
+                  onClick={() => {
+                    unarchive(row.id).catch((reason: unknown) => {
+                      console.warn('session unarchive rejected:', reason)
+                    })
+                  }}
+                >
+                  {t('unarchive')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={css.deleteAction}
+                  aria-label={t('deleteNamed', { title: row.title })}
+                  onClick={() => {
+                    setDeleteError(null)
+                    setDeleteTarget(row)
+                  }}
+                >
+                  {t('delete')}
+                </Button>
+              </span>
             </li>
           ))}
         </ul>
       ) : null}
+      <Modal
+        open={deleteTarget !== null}
+        onClose={closeDelete}
+        closeLabel={t('close')}
+        title={t('delete.title')}
+        {...deleteTarget === null
+          ? {}
+          : { description: t('delete.desc', { title: deleteTarget.title }) }}
+        footer={(
+          <>
+            <Button variant="outline" disabled={deleting} onClick={closeDelete}>{t('cancel')}</Button>
+            <Button
+              variant="outline"
+              className={css.deleteAction}
+              disabled={deleting}
+              onClick={confirmDelete}
+            >
+              {t('delete')}
+            </Button>
+          </>
+        )}
+      >
+        {deleting ? <div className={css.deleteStatus} role="status">{t('delete.pending')}</div> : null}
+        {deleteError !== null ? <div className={css.deleteError} role="alert">{deleteError}</div> : null}
+      </Modal>
     </div>
   )
 }

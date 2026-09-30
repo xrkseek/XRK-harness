@@ -14,6 +14,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeTheme,
   protocol,
   shell,
 } from "electron";
@@ -29,8 +30,14 @@ import {
 } from "./desktop-host-attach.js";
 import { startDesktopMain } from "./desktop-bootstrap.js";
 import {
+  desktopSplashBackgroundColor,
+  resolveDesktopColorScheme,
+  resolveDesktopThemePreference,
+  type DesktopColorScheme,
+} from "./boot-appearance.js";
+import {
   attachDesktopNavigationGuard,
-  desktopAppIndexUrl,
+  desktopSplashUrl,
   desktopLoopbackIndexUrl,
   DESKTOP_PROTOCOL_PRIVILEGES,
   DESKTOP_PROTOCOL_SCHEME,
@@ -86,10 +93,24 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
+/** Resolve splash floor from durable Settings (Host not up yet). */
+function resolveBootColorScheme(): DesktopColorScheme {
+  const xrkHome = resolveDesktopHarnessHome({
+    isPackaged: app.isPackaged,
+    desktopAppRoot: DESKTOP_APP_ROOT,
+  });
+  return resolveDesktopColorScheme(
+    resolveDesktopThemePreference(xrkHome),
+    nativeTheme.shouldUseDarkColors,
+  );
+}
+
 function createMainBrowserWindow(): BrowserWindow {
   const icon = resolveDesktopWindowIconPath({ platform: process.platform });
+  const colorScheme = resolveBootColorScheme();
   const window = new BrowserWindow({
     ...DESKTOP_WINDOW_DEFAULTS,
+    backgroundColor: desktopSplashBackgroundColor(colorScheme),
     ...desktopWindowPlatformOptions(process.platform),
     title: desktopWindowTitle(),
     ...(icon !== undefined ? { icon } : {}),
@@ -123,7 +144,10 @@ function broadcastUpdate(state: DesktopUpdateState): DesktopUpdateState {
 }
 
 function loadAllWindowsOnHostOrigin(origin: string): void {
-  const url = desktopLoopbackIndexUrl(origin, { platform: process.platform });
+  const url = desktopLoopbackIndexUrl(origin, {
+    platform: process.platform,
+    colorScheme: resolveBootColorScheme(),
+  });
   for (const window of BrowserWindow.getAllWindows()) {
     if (window.isDestroyed()) continue;
     void window.loadURL(url);
@@ -178,9 +202,13 @@ async function startDesktopHostCarrier(
 const ownsDesktopInstance = startDesktopMain(app, {
   createWindow: () => createMainBrowserWindow(),
   loadPrimary: (window) => {
-    // Splash on custom protocol until Host loopback is ready (DSH: wait then load).
+    // Static dual-ring + chrome — do not boot React/plugins before Host is ready.
+    // Stamp color scheme so splash matches Settings dark/light (not OS alone).
     void (window as BrowserWindow).loadURL(
-      desktopAppIndexUrl(DESKTOP_PROTOCOL_SCHEME, { platform: process.platform }),
+      desktopSplashUrl(DESKTOP_PROTOCOL_SCHEME, {
+        platform: process.platform,
+        colorScheme: resolveBootColorScheme(),
+      }),
     );
   },
   getWindowCount: () => BrowserWindow.getAllWindows().length,
@@ -237,12 +265,14 @@ const ownsDesktopInstance = startDesktopMain(app, {
           );
           return;
         }
-        loadAllWindowsOnHostOrigin(origin);
+        // Ready before loadURL so the remounted page's whenHostReady resolves
+        // on first invoke (no Host tip ladder on the second boot).
         markDesktopHostFetchReady(
           DESKTOP_IPC.hostReady,
           DESKTOP_IPC.hostPhase,
           liveWindows(),
         );
+        loadAllWindowsOnHostOrigin(origin);
       },
       detach: () => {
         desktopHost = undefined;

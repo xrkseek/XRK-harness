@@ -81,6 +81,10 @@ const FACE_REMOTES: FaceRemoteSpec = {
   changes: {
     fileDiff: 'args',
   },
+  canvas: {
+    list: 'args',
+    get: 'args',
+  },
 }
 
 /** Required service: the Face Client Remote contribution mount. */

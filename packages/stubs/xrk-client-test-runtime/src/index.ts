@@ -742,6 +742,20 @@ export class TestSessions implements ISessions {
   }
 
   /**
+   * Record a durable delete and drop the fixture row when present.
+   * @param sessionId - session to delete.
+   */
+  async delete(sessionId: SessionId): Promise<void> {
+    this.record('delete', [sessionId])
+    const stub = this.stubs.get('delete')
+    if (stub !== undefined) {
+      await stub(sessionId)
+      return
+    }
+    await this.remove(sessionId)
+  }
+
+  /**
    * Register a per-session standard-props provider on the production channel.
    * @param descriptor - static member roster plus per-session resolver.
    * @returns disposer removing the provider.

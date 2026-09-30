@@ -159,8 +159,9 @@ export function ToolRow({
   const summaryText = failureLine ?? summary
   const suffix = failureLine === null ? summarySuffix ?? null : null
   const fileLink = filePath !== undefined && onOpenFile !== undefined && failureLine === null
+  // Peek while running too — i2i rows carry reference thumbs before the result lands.
   const thumbAttachment = !open
-    && state === 'ok'
+    && (state === 'ok' || state === 'running')
     && imageBody !== null
     && loadImage !== undefined
     ? imageBody.images[0]?.attachment
@@ -241,18 +242,36 @@ export function ToolRow({
                   ? (
                     <div className={css.imageBody} data-tool-media="image">
                       <div className={css.imageLabel}>{imageBody.label}</div>
-                      {renderSlot !== undefined && loadImage !== undefined
-                        ? renderSlot('tool.call.images', {
-                          images: imageBody.images,
-                          loadImage,
-                          align: 'start',
-                        })
-                        : (
-                          <div className={css.mediaFallback} role="status">
-                            {imageBody.images.map((entry) => entry.attachment.name
-                              ?? entry.attachment.attachmentId).join(' · ')}
-                          </div>
-                        )}
+                      {(() => {
+                        const results = imageBody.images.filter((entry) => entry.role !== 'reference')
+                        const references = imageBody.images.filter((entry) => entry.role === 'reference')
+                        const split = results.length > 0 && references.length > 0
+                        const renderGallery = (
+                          entries: typeof imageBody.images,
+                        ) => (renderSlot !== undefined && loadImage !== undefined
+                          ? renderSlot('tool.call.images', {
+                            images: entries.map((entry) => ({ attachment: entry.attachment })),
+                            loadImage,
+                            align: 'start',
+                          })
+                          : (
+                            <div className={css.mediaFallback} role="status">
+                              {entries.map((entry) => entry.attachment.name
+                                ?? entry.attachment.attachmentId).join(' · ')}
+                            </div>
+                          ))
+                        if (!split) {
+                          return renderGallery(imageBody.images)
+                        }
+                        return (
+                          <>
+                            <div className={css.imageSection}>{t('image.result')}</div>
+                            {renderGallery(results)}
+                            <div className={css.imageSection}>{t('image.reference')}</div>
+                            {renderGallery(references)}
+                          </>
+                        )
+                      })()}
                       {imageBody.text !== ''
                         ? <div className={css.imageMeta}>{imageBody.text}</div>
                         : null}

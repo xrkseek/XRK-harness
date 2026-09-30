@@ -6,7 +6,7 @@
  * Workspaces through the global useWorkspaces hook, and each declares its
  * own `single` directory-flow child hole for the composed picker package's
  * client half (see the contract module doc). Also contributes the archived-
- * session Settings page (unarchive). Export discipline:
+ * session Settings page (unarchive + permanent delete). Export discipline:
  * packages/client/AGENTS.md.
  */
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
@@ -133,6 +133,7 @@ export function apply(ctx: ClientContext): void {
   })
   const archivedInjected = (): ArchivedSessionsSectionInjected => ({
     unarchive: sessionId => ctx.workspaces.unarchiveSession(sessionId),
+    deleteSession: sessionId => ctx.sessions.delete(sessionId),
   })
   // Each registration declares its directory-flow child in the same call;
   // slot injection follows both the owner and declaration HMR lifetimes.

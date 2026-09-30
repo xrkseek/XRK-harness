@@ -2,6 +2,7 @@
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import type {} from '@xrkseek/client-ui-tool/client'
+import { AttachmentPreview } from './AttachmentPreview.tsx'
 import { ComposerAttachments } from './ComposerAttachments.tsx'
 import { MessageFiles } from './MessageFiles.tsx'
 import { MessageImages } from './MessageImages.tsx'
@@ -34,4 +35,9 @@ export function apply(ctx: ClientContext): void {
     name: 'tool.call.files',
     locale: 'conversation',
   }, ToolFiles))
+  // Chat openFile for sha256 / attachment: ids → lightbox (not better-sidebar).
+  ctx.slots.inject('conversation.attachment.preview', () => ctx.slots.register({
+    name: 'conversation.attachment.preview',
+    locale: 'conversation',
+  }, AttachmentPreview))
 }

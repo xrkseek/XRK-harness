@@ -81,6 +81,7 @@ import {
 import { bindSettingsTools } from "./settings-agent-tools.js";
 import { bindSessionQueryTools } from "./session-query-tools.js";
 import { bindGoalTools } from "./goal-tools.js";
+import { bindCanvasTools } from "./canvas-tools.js";
 import { bindProposeSkillTool } from "./propose-skill.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import { hydrateWorkspaceRegistry } from "./workspace-store.js";
@@ -97,6 +98,7 @@ import {
 } from "./managed-worktree.js";
 import { FaceMessageFeedbackStore } from "./message-feedback.js";
 import { FaceGoalStore } from "./goal-store.js";
+import { FaceCanvasStore } from "./canvas-store.js";
 import { FaceWireIdMaps } from "./adapt/wire-ids.js";
 import { configureCostMeterHome } from "./cost-meter-store.js";
 import { resolveXrkHome } from "@xrkseek/server-config";
@@ -364,6 +366,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   );
   const messageFeedback = new FaceMessageFeedbackStore();
   const goals = new FaceGoalStore(options.goalPersistPath);
+  const canvases = new FaceCanvasStore(productHome);
   const wireIds = new FaceWireIdMaps();
   const toolArgMaps = new FaceToolArgMaps();
   const inboxWire = new FaceInboxWireMaps(admitRpcMap);
@@ -630,6 +633,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         parentSessionId: sessionId,
       });
       bindGoalTools(agent.tools, {
+        runtime: runtimeBox.current!,
+        sessionId,
+      });
+      bindCanvasTools(agent.tools, {
         runtime: runtimeBox.current!,
         sessionId,
       });
@@ -920,6 +927,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       ? { feedbackSlicesDir: options.feedbackSlicesDir }
       : {}),
     goals,
+    canvases,
     wireIds,
     inboxWire,
     loadSlashRecipes,

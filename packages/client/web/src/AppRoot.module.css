@@ -2,7 +2,10 @@
    splash stays correct before plugin CSS arrives (the one sanctioned
    fallback site — plugin packages must not do this).
    Motion is intentional and quiet: wordmark settle, dual-ring spin,
-   hint crossfade. Reduced-motion collapses to a static mark. */
+   hint crossfade. Reduced-motion collapses to a static mark.
+   Dark: injectBootTheme sets body[data-ds-dark-theme] before modules load,
+   but --dsw-* aliases live in design-platform.css — without dark fallbacks
+   here, var(..., #f4f4f5) paints a white splash over a dark preference. */
 
 .boot {
   /* Cover the viewport above body-portaled plugin chrome (panel-host z=25). */
@@ -19,6 +22,13 @@
     var(--dsw-alias-bg-base, #f4f4f5);
 }
 
+:global(body[data-ds-dark-theme]) .boot {
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgb(255 255 255 / 6%), transparent 55%),
+    radial-gradient(90% 70% at 50% 120%, rgb(0 0 0 / 35%), transparent 50%),
+    var(--dsw-alias-bg-base, #151517);
+}
+
 .ambient {
   position: absolute;
   inset: auto;
@@ -30,6 +40,10 @@
   animation: xrk-boot-breathe 3.6s ease-in-out infinite;
   pointer-events: none;
   z-index: 0;
+}
+
+:global(body[data-ds-dark-theme]) .ambient {
+  background: radial-gradient(circle, rgb(255 255 255 / 5%), transparent 68%);
 }
 
 .card {
@@ -49,6 +63,10 @@
   letter-spacing: 0.14em;
   color: var(--dsw-alias-label-primary, #14161a);
   animation: xrk-boot-mark 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+:global(body[data-ds-dark-theme]) .wordmark {
+  color: var(--dsw-alias-label-primary, #e8e8ea);
 }
 
 .spinnerWrap {
@@ -72,12 +90,22 @@
   animation: xrk-boot-spin 1.05s cubic-bezier(0.55, 0.15, 0.35, 0.85) infinite;
 }
 
+:global(body[data-ds-dark-theme]) .spinnerRing {
+  border-top-color: var(--dsw-alias-label-secondary, #c4c4cc);
+  border-right-color: var(--dsw-alias-border-l2, rgb(255 255 255 / 12%));
+}
+
 .spinnerCore {
   inset: 6px;
   border: 1.5px solid transparent;
   border-bottom-color: var(--dsw-alias-label-tertiary, #8a8f96);
   border-left-color: var(--dsw-alias-border-l2, rgb(0 0 0 / 10%));
   animation: xrk-boot-spin 0.7s linear infinite reverse;
+}
+
+:global(body[data-ds-dark-theme]) .spinnerCore {
+  border-bottom-color: var(--dsw-alias-label-tertiary, #9a9aa3);
+  border-left-color: var(--dsw-alias-border-l2, rgb(255 255 255 / 10%));
 }
 
 .hint {
@@ -88,6 +116,10 @@
   min-height: 18px;
   text-align: center;
   animation: xrk-boot-hint 280ms ease-out both;
+}
+
+:global(body[data-ds-dark-theme]) .hint {
+  color: var(--dsw-alias-label-tertiary, #9a9aa3);
 }
 
 @keyframes xrk-boot-spin {
@@ -153,6 +185,11 @@
     border-color: var(--dsw-alias-border-l2, rgb(0 0 0 / 14%));
     opacity: 0.75;
   }
+
+  :global(body[data-ds-dark-theme]) .spinnerRing,
+  :global(body[data-ds-dark-theme]) .spinnerCore {
+    border-color: var(--dsw-alias-border-l2, rgb(255 255 255 / 12%));
+  }
 }
 
 .failed {
@@ -170,10 +207,18 @@
   color: var(--dsw-alias-label-primary, #14161a);
 }
 
+:global(body[data-ds-dark-theme]) .failedTitle {
+  color: var(--dsw-alias-label-primary, #e8e8ea);
+}
+
 .failedItem {
   font-family: var(--ds-font-family-code, ui-monospace, 'SF Mono', Menlo, Consolas, 'Courier New');
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-secondary, #5c6168);
   word-break: break-word;
+}
+
+:global(body[data-ds-dark-theme]) .failedItem {
+  color: var(--dsw-alias-label-secondary, #c4c4cc);
 }

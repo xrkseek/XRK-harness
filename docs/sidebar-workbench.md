@@ -1,65 +1,53 @@
-# 侧栏工作台（Host + 首方 / 社区）
+# 侧栏工作台（Host + 社区）
 
 > **读者**：集成者 · 贡献者
 
-产品壳把「右侧」拆成两条轨道，不迁移 dsh 的 `ui-dockkit` / `ui-sidebar-right` 族整树：
+产品壳把「右侧」拆成两条轨道：
 
 | 轨道 | 用途 | 落点 |
 |------|------|------|
-| 流内 `details` | 会话 **Status**（子代理 · jobs · timeline · cost · 通道；与 `/status` 同源）· **改动审阅** · 任务 / 上下文 / 轨迹 | `@xrkseek/client-ui-plan`（`ctx.changesReview` 由 ui-deliverables 提供） |
+| 流内 `details` | 会话 **Status**（子代理 · jobs · timeline · cost · 通道；与 `/status` 同源）· **改动审阅** · **Canvas**（工作区看板）· 任务 / 上下文 | `@xrkseek/client-ui-plan`（`ctx.changesReview` 由 ui-deliverables 提供；Canvas 经 Face `canvas.list`/`get`） |
 | 浮动工作台 | 文件树 · 预览 · 终端 · 浏览器 · git | Host **`/sidebar/*`** + 社区 **`xrkh-better-sidebar`**（建议 ≥ 0.18.20） |
-| 首方薄壳 | 无社区侧栏时的 Host 文件树 + 预览；`ctx.workbench` | `@xrkseek/client-ui-workbench` |
+
+浮动文件/终端工作台由社区插件提供，不在首方壳内置。推荐在 **设置 → 插件** 从目录安装 `xrkh-better-sidebar`（卡片可见，点安装即可）。
 
 ## 契约
 
 - Host 拥有 `/sidebar/api/*` · `/sidebar/file` · PTY / agent-opens WS（见 [community-plugins](./community-plugins.md) · [http-api](./http-api.md)）。
 - 壳发布 `LayoutInsets`（`--xrk-layout-inset-details` 等），浮动层用 CSS 变量让位 Status 栏。
-- 聊天 `openFile`：先 `ctx.workbench.openPath`；返回 false 则唤醒社区（`openTab` 可带 path）再 `workspaces.openPath`。
-- 社区插件若占用工作台，应提供 `ctx.betterSidebar`，首方面板让位。
+- 聊天 `openFile`：有 `ctx.betterSidebar` 时先 `openTab`（可带 path），再 `workspaces.openPath`；未装社区侧栏时走系统打开。
+- 社区插件若占用工作台，应提供 `ctx.betterSidebar`。
 
 ## 边界（首方）
 
 - 不迁 `ui-dockkit` 分栏引擎作产品默认右栏。
-- `details` 不作为工具 Detail / 文件预览列（职责已由 Status / 工作台承担）。
-- 首方薄壳**不含**：终端 · 浏览器 · git UI · 多级展开树 · Office 预览（这些由社区 `xrkh-better-sidebar` 或 Host API 承载）。**已含**：Host 文件树 + Markdown / 代码（Shiki）/ JSON / 图片 / PDF / 音视频预览。
-- 打开入口：会话头 **文件** 按钮 → 无社区时 `ctx.workbench.show()`；有 `ctx.betterSidebar` 时面板让位、按钮仍可见并调用社区 `openTab`（可带 `path`）；聊天路径 → `workbench.openPath`，失败则唤醒社区 editor + `workspaces.openPath`。
-
-安装社区侧栏：
-
-```bash
-xrkh plugin add xrkh-better-sidebar@0.18.20
-```
+- `details` 不作为工具 Detail / 文件预览列（职责已由 Status / 社区工作台承担）。
+- 终端 · 浏览器 · git UI · 多级展开树 · Office 预览由社区 `xrkh-better-sidebar` 或 Host API 承载。
 
 ---
 
-# Sidebar workbench (Host + first-party / community)
+# Sidebar workbench (Host + community)
 
 > **Audience**: Integrators · Contributors
 
-The product shell splits the right side into two tracks; it does not port the full dsh `ui-dockkit` / `ui-sidebar-right` tree:
+The product shell splits the right side into two tracks:
 
 | Track | Role | Owner |
 |-------|------|--------|
-| In-flow `details` | Session **Status** (subagents · jobs · timeline · cost · channels; same as `/status`) · **Changes review** · todos / context / rollout | `@xrkseek/client-ui-plan` (`ctx.changesReview` from ui-deliverables) |
+| In-flow `details` | Session **Status** (subagents · jobs · timeline · cost · channels; same as `/status`) · **Changes review** · **Canvas** (workspace boards) · todos / context | `@xrkseek/client-ui-plan` (`ctx.changesReview` from ui-deliverables; Canvas via Face `canvas.list`/`get`) |
 | Floating workbench | File tree · preview · terminal · browser · git | Host **`/sidebar/*`** + community **`xrkh-better-sidebar`** (prefer ≥ 0.18.20) |
-| First-party thin shell | Host tree + preview when no community sidebar; `ctx.workbench` | `@xrkseek/client-ui-workbench` |
+
+Floating file/terminal chrome is a community plugin, not first-party. Install **`xrkh-better-sidebar`** from **Settings → Plugins** (catalog card; click Install).
 
 ## Contract
 
 - Host owns `/sidebar/api/*` · `/sidebar/file` · PTY / agent-opens WS (see [community-plugins](./community-plugins.md) · [http-api](./http-api.md)).
 - The shell publishes `LayoutInsets` (`--xrk-layout-inset-details`, …); floating chrome offsets with those CSS variables.
-- Chat `openFile`: try `ctx.workbench.openPath` first; on false, wake community (`openTab` with path when present) then `workspaces.openPath`.
-- Community workbenches should provide `ctx.betterSidebar` so the builtin panel yields.
+- Chat `openFile`: when `ctx.betterSidebar` is present, call `openTab` (optional `path`) then `workspaces.openPath`; without the community sidebar, open via the OS.
+- Community workbenches should provide `ctx.betterSidebar`.
 
 ## Boundaries (first-party)
 
 - No product-default `ui-dockkit` docking engine.
-- `details` is not a tool Detail / file-preview column (that role belongs to Status / workbench).
-- The thin shell **does not** ship: terminal · browser · git UI · deep expandable tree · Office preview (those stay on community `xrkh-better-sidebar` or Host APIs). It **does** ship Host file tree + Markdown / Shiki code / JSON / image / PDF / AV preview.
-- Open entry: session-header **Files** → `ctx.workbench.show()` when no community sidebar; with `ctx.betterSidebar` the panel yields but the button stays and calls community `openTab` (optional `path`); chat paths → `workbench.openPath`, else wake community editor + `workspaces.openPath`.
-
-Install the community sidebar:
-
-```bash
-xrkh plugin add xrkh-better-sidebar@0.18.20
-```
+- `details` is not a tool Detail / file-preview column (that role belongs to Status / the community workbench).
+- Terminal · browser · git UI · deep expandable tree · Office preview stay on community `xrkh-better-sidebar` or Host APIs.

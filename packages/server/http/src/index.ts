@@ -669,7 +669,10 @@ export {
   mergeWebBootManifests,
   ensureXrkPlatformClientBootEntries,
   bootInjectScript,
+  bootThemeInjectScript,
   injectBootIntoHtml,
+  injectBootThemeIntoHtml,
+  type BootThemePreference,
   type WebBootEntry,
   type WebBootManifest,
 } from "./boot-inject.js";

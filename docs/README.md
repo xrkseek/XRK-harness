@@ -96,7 +96,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [plugin-development.md](./plugin-development.md) | 进程插件 |
 | [plugin-loader.md](./plugin-loader.md) | 插件 discover / load |
 | [community-plugins.md](./community-plugins.md) | 社区插件 Host 契约 |
-| [sidebar-workbench.md](./sidebar-workbench.md) | 右侧工作台：Status · Host `/sidebar/*` · 首方薄壳 / 社区侧栏 |
+| [sidebar-workbench.md](./sidebar-workbench.md) | 右侧工作台：Status · Host `/sidebar/*` · 社区侧栏 |
 | [im-gateway-sidecar.md](./im-gateway-sidecar.md) | IM Host↔sidecar 契约 · mock 样板（非厂商矩阵） |
 
 ### LLM
@@ -253,7 +253,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [plugin-development.md](./plugin-development.md) | Process plugins |
 | [plugin-loader.md](./plugin-loader.md) | Discover / load |
 | [community-plugins.md](./community-plugins.md) | Community Host contracts |
-| [sidebar-workbench.md](./sidebar-workbench.md) | Right workbench: Status · Host `/sidebar/*` · first-party shell / community sidebar |
+| [sidebar-workbench.md](./sidebar-workbench.md) | Right workbench: Status · Host `/sidebar/*` · community sidebar |
 | [im-gateway-sidecar.md](./im-gateway-sidecar.md) | IM Host↔sidecar contract · mock sample (not a vendor matrix) |
 
 ### LLM

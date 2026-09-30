@@ -177,7 +177,9 @@ export class ThemeRuntime {
   constructor(ctx: Context, host: SettingsScope<ThemeSettings>) {
     this.ctx = ctx
     this.host = host
-    this.preference = DEFAULT_PREFERENCE
+    // Match Host injectBootTheme first paint (same idea as bootstrapFontSize) so
+    // ThemePresenter does not briefly apply `system`→light and wipe dark splash.
+    this.preference = bootstrapPreference()
     // Non-browser runs (node e2e booting the client tree) have no matchMedia.
     this.media = typeof matchMedia === 'undefined' ? undefined : matchMedia('(prefers-color-scheme: dark)')
     this.snapshot = this.buildSnapshot()
@@ -376,6 +378,21 @@ function bootstrapFontSize(): number {
   const raw = document.body.style.getPropertyValue('--dsh-content-font-size')
   const parsed = Number.parseInt(raw, 10)
   return coerceFontSize(parsed)
+}
+
+/**
+ * Read the color scheme Host injectBootTheme stamped before plugins ran.
+ * Without this, ThemeRuntime defaults to `system` and ThemePresenter can
+ * clear `data-ds-dark-theme` for one paint while settings still load —
+ * white flash over a dark Settings preference when the OS scheme is light.
+ */
+function bootstrapPreference(): ThemePreference {
+  /* v8 ignore next -- documentless / node e2e */
+  if (typeof document === 'undefined') return DEFAULT_PREFERENCE
+  const scheme = document.documentElement.style.colorScheme
+  if (scheme === 'dark' || scheme === 'light') return scheme
+  if (document.body.hasAttribute('data-ds-dark-theme')) return 'dark'
+  return DEFAULT_PREFERENCE
 }
 
 /** Accept a Host-backed font size or fall back when older docs omit the field. */

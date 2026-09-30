@@ -28,6 +28,11 @@ export interface SessionStore {
   /** True if `get(id)` would succeed. */
   has(id: string): boolean;
   append(id: string, event: SessionEvent): SessionEvent;
+  /**
+   * Permanently drop one session log (memory and durable rows when present).
+   * Idempotent for an unknown id. Optional on lightweight test doubles.
+   */
+  delete?(id: string): void;
   list(): readonly string[];
   /**
    * Half-open event range `[fromSeq, toSeqExclusive)`.

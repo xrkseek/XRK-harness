@@ -64,18 +64,34 @@
 .gutter {
   display: inline-grid;
   flex: 0 0 auto;
-  grid-template-columns: 2.25rem 2.25rem;
-  gap: 4px;
-  margin-right: 10px;
+  grid-template-columns: 2.25rem 2.25rem 1ch;
+  gap: 2px;
+  margin-right: 8px;
   color: var(--dsw-alias-label-tertiary);
   font-variant-numeric: tabular-nums;
   text-align: right;
   user-select: none;
+  align-items: baseline;
+}
+
+/* Unified + split panes: one line-number column beside the +/- sign so create
+   / single-side rows do not leave an empty dual-gutter gap. */
+.gutter[data-sides='one'] {
+  grid-template-columns: 2.75ch 1ch;
+  gap: 4px;
+  margin-right: 10px;
 }
 
 .gutterOld,
-.gutterNew {
+.gutterNew,
+.gutterNo {
   min-width: 0;
+}
+
+.sign {
+  text-align: center;
+  font-weight: 650;
+  line-height: inherit;
 }
 
 .lineText {
@@ -157,24 +173,22 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* The diff's own meaning-carrying colors: removed on the error token, added on
-   the success token. A `- `/`+ ` prefix is drawn here so a copied line and the
-   shown line agree, and so the sign reads without relying on color alone. */
-.del::before {
-  content: '- ';
-  color: var(--dsw-alias-state-error-primary);
-}
-
+/* Meaning-carrying colors: body text + gutter sign (sign sits in the gutter
+   grid next to the line number — not a ::before that floated before the dual
+   gutter and looked like a distant + column). */
 .del {
   color: var(--dsw-alias-state-error-primary);
 }
 
-.add::before {
-  content: '+ ';
-  color: var(--dsw-alias-state-success-primary);
+.del .sign {
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .add {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.add .sign {
   color: var(--dsw-alias-state-success-primary);
 }
 

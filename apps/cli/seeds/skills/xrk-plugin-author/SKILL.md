@@ -1,24 +1,38 @@
 ---
 name: xrk-plugin-author
 description: >-
-  写 XRK-Harness 进程插件：xrk.plugin.json、createPlugin、tools/prompt/commands。
-  用户说「写插件」「脚手架」「plugin.mjs」时使用。
+  Scaffold an XRK process plugin (xrk.plugin.json + createPlugin) for
+  tools/prompt/commands. Use when the user says 「写插件」「脚手架」
+  「plugin.mjs」「extensions 插件」— after kind is decided (see xrk-plugin-kind).
 ---
 
-# 进程插件教练
+# 进程插件
 
-## 步骤
+进程插件 = 本机目录里的 `xrk.plugin.json` + 入口模块，经 Host **restart** 后进工具面。  
+不确定形态时先读 **`xrk-plugin-kind`**（默认往往是 MCP，不是本 skill）。
 
-1. 插件落盘 **`extensions/<plugin-id>/`**（monorepo 工作区）
-2. 不确定 kind → **`xrk-plugin-kind`**
-3. 最小目录：`xrk.plugin.json` + `plugin.mjs`（形状见 `docs/plugin-development.md`）
-4. 试跑：`XRK_PLUGINS_DIR=./extensions xrkh web` 或 `plugin add` + `restart`
-5. 斜杠一键 → **`/plugin-scaffold`**（`.agents/recipes/`）
+```
+- [ ] 1. 确认 kind：`tools` | `prompt` | `commands`
+- [ ] 2. 落盘目录：用户指定路径；常见 `extensions/<plugin-id>/`
+- [ ] 3. 写 `xrk.plugin.json`（id / kind / 入口）与 `createPlugin` 实现，id 一致
+- [ ] 4. 装载：`xrkh plugin add <dir>` 或 `XRK_PLUGINS_DIR=<父目录> xrkh web`
+- [ ] 5. **`xrkh restart`**（或等价重启 Host）→ **`xrk-plugin-verify`**
+```
 
-## tools 模板
+## 最小形状
 
-见 `docs/plugin-development.md` 最小 `createPlugin` 示例。
+- `xrk.plugin.json`：声明 `id`、`kind`、入口文件  
+- 入口：`createPlugin` 导出；`tools` kind 注册可调用工具  
+- 细节以当前产品文档 **插件开发** 为准；不确定就打开文档对照，不要臆造字段
+
+斜杠一键脚手架若环境提供 `/plugin-scaffold` → 可用，再人工核对 id/kind。
 
 ## 边界
 
-改动经 `restart` 生效（无热重载）；只停已识别 XRK Host；密钥走 Credentials，不进插件代码。
+| 做 | 不做 |
+|----|------|
+| 密钥走 Credentials | 把 API key 写进插件源码 |
+| 改完 restart 再生效 | 假设热重载 |
+| 工具描述写清参数与失败语义 | 空 description / 万能 catch |
+
+装完验证 → **`xrk-plugin-verify`**。

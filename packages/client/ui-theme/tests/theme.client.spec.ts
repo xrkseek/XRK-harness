@@ -44,6 +44,22 @@ describe('ThemeRuntime', () => {
     }
   })
 
+  it('seeds the initial preference from Host inject color-scheme / dark attribute', () => {
+    document.documentElement.style.colorScheme = 'dark'
+    try {
+      expect(make().theme.getTheme().preference).toBe('dark')
+      expect(make().theme.getTheme().active.colorScheme).toBe('dark')
+    } finally {
+      document.documentElement.style.removeProperty('color-scheme')
+    }
+    document.body.setAttribute('data-ds-dark-theme', '')
+    try {
+      expect(make().theme.getTheme().preference).toBe('dark')
+    } finally {
+      document.body.removeAttribute('data-ds-dark-theme')
+    }
+  })
+
   it('setFontSize switches, writes through the scope, and republishes; same value is a no-op', () => {
     const { theme, events, host } = make()
     theme.setFontSize(17)

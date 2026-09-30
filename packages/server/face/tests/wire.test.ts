@@ -10,6 +10,8 @@ describe("face wire paths", () => {
     expect(faceMethodFromPath("/api/respond")).toBeUndefined();
     expect(faceMethodFromPath("/api/face/respond")).toBeUndefined();
     expect(faceMethodFromPath("/api/commands/execute")).toBe("commands/execute");
+    expect(faceMethodFromPath("/api/canvas/list")).toBe("canvas/list");
+    expect(faceMethodFromPath("/api/canvas/get")).toBe("canvas/get");
     expect(isFaceRespondPath("/api/respond")).toBe(true);
     expect(isFaceRespondPath("/api/session.prompt")).toBe(false);
   });

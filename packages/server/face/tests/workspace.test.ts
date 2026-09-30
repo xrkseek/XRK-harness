@@ -608,4 +608,61 @@ describe("Face workspace U2", () => {
     expect(v.archivedSessionIds).toEqual([]);
     expect(v.pinnedSessionIds).toEqual([sessionId]);
   });
+
+  it("session.delete requires archive then wipes the durable log", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-del-"));
+    const store = createMemorySessionStore();
+    const hostFrames: { type: string }[] = [];
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    runtime.bus.subscribeHost((_rpcId, frame) => {
+      hostFrames.push({ type: frame.type });
+    });
+
+    const sess = await dispatchFaceMethod(runtime, "session.create", "d1", {});
+    expect(sess.result.ok).toBe(true);
+    if (!sess.result.ok) return;
+    const sessionId = (sess.result.value as { sessionId: string }).sessionId;
+
+    const liveDelete = await dispatchFaceMethod(runtime, "session.delete", "d2", {
+      sessionId,
+    });
+    expect(liveDelete.result.ok).toBe(false);
+    if (!liveDelete.result.ok) {
+      expect(
+        { code: liveDelete.result.error.code, message: liveDelete.result.error.message },
+        "live delete rejection",
+      ).toEqual({
+        code: "session-not-archived",
+        message: "only archived sessions can be deleted",
+      });
+    }
+    expect(store.has(sessionId)).toBe(true);
+
+    const archived = await dispatchFaceMethod(
+      runtime,
+      "workspace.archiveSession",
+      "d3",
+      { sessionId },
+    );
+    expect(archived.result.ok).toBe(true);
+
+    const deleted = await dispatchFaceMethod(runtime, "session.delete", "d4", {
+      sessionId,
+    });
+    expect(deleted.result.ok).toBe(true);
+    expect(store.has(sessionId)).toBe(false);
+    expect(runtime.workspaces.isArchived(sessionId)).toBe(false);
+    expect(hostFrames.some((f) => f.type === "host/session-removed")).toBe(true);
+    expect(
+      hostFrames.some((f) => f.type === "host/archived-sessions-changed"),
+    ).toBe(true);
+  });
 });

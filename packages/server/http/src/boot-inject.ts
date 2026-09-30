@@ -176,3 +176,46 @@ export function injectBootIntoHtml(
   }
   return script + stripped;
 }
+
+/** Built-in appearance preference embedded into index before the SPA boots. */
+export type BootThemePreference = "light" | "dark" | "system";
+
+const DEFAULT_BOOT_FONT_SIZE_PX = 14;
+
+/**
+ * Synchronous theme bootstrap for the pre-plugin interval (parity with
+ * `@xrkseek/client-ui-theme` injectBootTheme). Desktop Host has no Cordis
+ * `webServer.tapIndex`, so Host must stamp `data-ds-dark-theme` here —
+ * otherwise AppRoot splash keeps light CSS fallbacks during "Summoning plugins…".
+ */
+export function bootThemeInjectScript(
+  preference: BootThemePreference = "system",
+  fontSize: number = DEFAULT_BOOT_FONT_SIZE_PX,
+): string {
+  return `<script>(() => {
+  const preference = ${JSON.stringify(preference)}
+  const systemDark = preference === 'system'
+    && typeof matchMedia !== 'undefined'
+    && matchMedia('(prefers-color-scheme: dark)').matches
+  const dark = preference === 'dark' || systemDark
+  document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+  document.body.toggleAttribute('data-ds-dark-theme', dark)
+  document.body.style.setProperty('--dsh-content-font-size', ${JSON.stringify(`${fontSize}px`)})
+})()</script>`;
+}
+
+/**
+ * Insert the theme bootstrap immediately after the opening body tag, before
+ * the shell mount and module script.
+ */
+export function injectBootThemeIntoHtml(
+  html: string,
+  preference: BootThemePreference = "system",
+  fontSize: number = DEFAULT_BOOT_FONT_SIZE_PX,
+): string {
+  const script = bootThemeInjectScript(preference, fontSize);
+  const body = /<body(?:\s[^>]*)?>/i.exec(html);
+  if (body === null) return `${html}${script}`;
+  const at = body.index + body[0].length;
+  return `${html.slice(0, at)}${script}${html.slice(at)}`;
+}

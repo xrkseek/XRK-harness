@@ -76,9 +76,8 @@ declare module '@xrkseek/client-ui-slots' {
      * The right details column track. Product seats session Status
      * (`ui-plan` PreviewTabs: Status ≡ `/status` · todos / plan / Office).
      * File preview / explorer / terminal / browser use Host `/sidebar/*` +
-     * community `xrkh-better-sidebar`, with first-party fallback
-     * `@xrkseek/client-ui-workbench` (`ctx.workbench`, yields when
-     * `ctx.betterSidebar` is set). See docs/sidebar-workbench.md.
+     * community `xrkh-better-sidebar` (install from Settings → Plugins).
+     * See docs/sidebar-workbench.md.
      * Absent an occupant the column renders nothing; default preference is closed.
      *
      * No owner props: the framework injects the session id and hooks for the

@@ -46,6 +46,12 @@ body {
   overflow-x: clip;
 }
 
+/* Match body so an empty #root between splash lift and AppFrame paint is not
+   a transparent hole onto the Electron window's light default. */
+#root {
+  background: var(--dsw-alias-bg-base);
+}
+
 /* While splash owns the viewport, hide body-portaled workbench hosts
    (better-sidebar panel-host + toggle cluster activate before settled).
    Kernel stamp is synchronous (boot.tsx + AppRoot layout effect) so FABs

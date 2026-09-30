@@ -3,9 +3,12 @@ import {
   parseImageGenResultText,
   parseVideoGenResultText,
 } from '../src/client/tool/models/gen-result-parse.ts'
-import { imageGenCardModel } from '../src/client/tool/models/image-gen-card-model.ts'
+import {
+  imageGenCardModel,
+  referenceAttachmentIdsFromArgs,
+} from '../src/client/tool/models/image-gen-card-model.ts'
 import { videoGenResultModel } from '../src/client/tool/models/video-gen-card-model.ts'
-import type { ToolResultNode } from '@xrkseek/client-runtime/client'
+import type { RunningToolCall, ToolResultNode } from '@xrkseek/client-runtime/client'
 
 describe('parseImageGenResultText', () => {
   it('strips image_base64 and collects attachmentIds', () => {
@@ -201,6 +204,77 @@ describe('imageGenCardModel', () => {
 
   it('returns null without attachmentId', () => {
     expect(imageGenCardModel(settledImage('provider=memory images=0'))).toBeNull()
+  })
+
+  it('parses i2i reference ids from args', () => {
+    expect(referenceAttachmentIdsFromArgs(JSON.stringify({
+      prompt: 'edit',
+      reference_attachment_ids: ['sha256:aaa', 'attachment:sha256:bbb'],
+      image_url: 'https://example.com/x.png',
+      reference_image_urls: ['attachment:sha256:aaa', 'sha256:ccc'],
+    }))).toEqual(['sha256:aaa', 'sha256:bbb', 'sha256:ccc'])
+  })
+
+  it('shows reference thumbs while image_generate is still running', () => {
+    const running: RunningToolCall = {
+      callId: 'c1',
+      name: 'image_generate',
+      argsRaw: JSON.stringify({
+        prompt: 'redesign as logo',
+        reference_attachment_ids: ['sha256:abcdef0123456789'],
+      }),
+      turn: 1,
+      step: 1,
+      time: 0,
+      callView: null,
+      subCalls: [],
+    }
+    const model = imageGenCardModel(running)
+    expect(model?.label).toBe('1 reference')
+    expect(model?.images).toHaveLength(1)
+    expect(model?.images[0]?.attachment.attachmentId).toBe('sha256:abcdef0123456789')
+  })
+
+  it('places result images ahead of references when both exist', () => {
+    const block: ToolResultNode = {
+      kind: 'tool-result',
+      seq: 1,
+      time: 0,
+      callId: 'c1',
+      call: {
+        name: 'image_generate',
+        argsRaw: JSON.stringify({
+          prompt: 'edit',
+          reference_attachment_ids: ['sha256:abcdef0123456789'],
+        }),
+      },
+      callTime: 0,
+      isError: false,
+      callView: null,
+      resultView: null,
+      subCalls: [],
+      content: [
+        { type: 'text', text: 'provider=memory images=1' },
+        {
+          type: 'image',
+          attachment: {
+            attachmentId: 'sha256:fedcba9876543210',
+            mediaType: 'image/png',
+            bytes: 42,
+            width: 64,
+            height: 64,
+            name: 'out.png',
+          },
+        },
+      ],
+    }
+    const model = imageGenCardModel(block)
+    expect(model?.label).toBe('1 image · 1 reference')
+    expect(model?.images.map((entry) => entry.attachment.attachmentId)).toEqual([
+      'sha256:fedcba9876543210',
+      'sha256:abcdef0123456789',
+    ])
+    expect(model?.images.map((entry) => entry.role)).toEqual(['result', 'reference'])
   })
 })
 

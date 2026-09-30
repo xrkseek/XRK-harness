@@ -65,6 +65,7 @@ describe('imageCardModel', () => {
           height: 10,
           name: 'ui.png',
         },
+        role: 'result',
       }],
     })
   })
@@ -101,6 +102,17 @@ describe('imageCardModel', () => {
       isError: true,
       content: [{ type: 'text', text: 'nope' }],
     }))).toBeNull()
+  })
+
+  it('abbreviates attachment ids in the card label', () => {
+    const id = 'sha256:614b7f3194c587139769f70801d2cb8578192c1a3dc704c244f82013c379ac16'
+    const model = imageCardModel(settled({
+      content: imageContent,
+      meta: { path: `attachment:${id}` },
+      call: { name: 'read_image', argsRaw: JSON.stringify({ file_path: id }) },
+    }))
+    expect(model?.label).toBe('sha256:614b7f…ac16')
+    expect(model?.images[0]?.role).toBe('result')
   })
 })
 

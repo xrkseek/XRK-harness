@@ -55,6 +55,7 @@ import {
   type PluginMutateResult,
   ensureXrkPlatformClientBootEntries,
   injectBootIntoHtml,
+  injectBootThemeIntoHtml,
   injectMobileAccessShellIntoHtml,
   loadBootManifestFromWebDist,
   mergeWebBootManifests,
@@ -577,11 +578,15 @@ export function createHostManager(): HostManager {
         : path.join(resolveXrkHome(), "plugins");
       const managedPluginsRootReady = () => existsSync(resolvedPluginsDir);
 
+      // Desktop shell: listen + IPC ready first; process plugins catch up in
+      // background so Electron can remount onto loopback without waiting for
+      // every extension ESM graph (Cursor-like first paint).
+      const deferManagedPlugins =
+        String(process.env.XRK_SURFACE ?? "").trim() === "desktop";
+
       let loadedPluginIds: string[] = [];
-      if (managedPluginsRootReady()) {
-        // Single path with Settings soft-disable: discover+load enabled,
-        // skip soft-disabled (never mcp:*). Optional load failures warn;
-        // required failures throw (abort spawn).
+      const loadManagedPlugins = async (): Promise<void> => {
+        if (!managedPluginsRootReady()) return;
         const bootPlugins = await reconcileManagedProcessPlugins(
           loader,
           resolvedPluginsDir,
@@ -592,6 +597,13 @@ export function createHostManager(): HostManager {
             `plugin load failed (${failure.id}): ${failure.message}`,
           );
         }
+      };
+      if (!deferManagedPlugins) {
+        await loadManagedPlugins();
+      } else if (managedPluginsRootReady()) {
+        log?.info(
+          "desktop surface: deferring process-plugin reconcile until after HTTP listen",
+        );
       }
 
       // File rules first, then kind:policy plugins. Delegate so a later
@@ -2545,10 +2557,27 @@ export function createHostManager(): HostManager {
                 root: config.runtime.webDist,
                 // Live array: refreshFaceWebPlugins mutates after first client install.
                 extraRoots: liveExtraRoots,
-                transformIndex: (html: string) =>
-                  injectMobileAccessShellIntoHtml(
-                    injectBootIntoHtml(html, liveBoot.current),
-                  ),
+                transformIndex: (html: string) => {
+                  // Match client-ui-theme / Face ui-theme fontSize bounds (12–17).
+                  const themeNs = faceRuntime.settingsNamespaces.view(
+                    "ui-theme",
+                  ).value as { fontSize?: unknown };
+                  const fontRaw = themeNs?.fontSize;
+                  const fontSize =
+                    typeof fontRaw === "number" &&
+                    Number.isInteger(fontRaw) &&
+                    fontRaw >= 12 &&
+                    fontRaw <= 17
+                      ? fontRaw
+                      : 14;
+                  return injectMobileAccessShellIntoHtml(
+                    injectBootThemeIntoHtml(
+                      injectBootIntoHtml(html, liveBoot.current),
+                      faceRuntime.uiSettings.theme,
+                      fontSize,
+                    ),
+                  );
+                },
               },
             }
           : {}),
@@ -2614,6 +2643,19 @@ export function createHostManager(): HostManager {
         log?.info(`listening ${config.runtime.host}:${addr.port}`);
       } else {
         log?.info("http stack ready (listen disabled — pipe / fetch transport)");
+      }
+      if (deferManagedPlugins) {
+        void loadManagedPlugins()
+          .then(() => {
+            rebuildPolicyEngine();
+            log?.info(
+              `desktop process plugins ready (${String(loadedPluginIds.length)})`,
+            );
+          })
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            log?.warn(`desktop process-plugin reconcile failed: ${message}`);
+          });
       }
       {
         // Env/config specs auto-connect after HTTP (CI/headless).

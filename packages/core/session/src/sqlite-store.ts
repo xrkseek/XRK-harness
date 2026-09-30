@@ -520,6 +520,21 @@ export function createPersistentSessionStore(
       return sessionIds.has(id);
     },
 
+    delete(id: string): void {
+      assertWritable();
+      const sid = assertSafeId(id);
+      if (!sessionIds.has(sid)) return;
+      flushPending();
+      db.prepare("DELETE FROM search_fts WHERE session_id = ?").run(sid);
+      db.prepare("DELETE FROM events WHERE session_id = ?").run(sid);
+      db.prepare("DELETE FROM sessions WHERE id = ?").run(sid);
+      sessionIds.delete(sid);
+      sessions.delete(sid);
+      nextSeqBySession.delete(sid);
+      const idx = residentOrder.indexOf(sid);
+      if (idx >= 0) residentOrder.splice(idx, 1);
+    },
+
     append(id: string, event: SessionEvent): SessionEvent {
       assertWritable();
       if (!sessionIds.has(id)) {

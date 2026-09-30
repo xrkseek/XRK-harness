@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   attachDesktopWindowLifecycle,
   bindDesktopMainWindowClosed,
+  DESKTOP_WINDOW_DEFAULTS,
   focusOrRecreatePrimaryWindow,
   showDesktopWindowWhenReady,
   type DesktopShellWindow,
@@ -21,6 +22,10 @@ function fakeWindow(overrides: Partial<DesktopShellWindow> = {}): DesktopShellWi
 }
 
 describe("desktop window lifecycle", () => {
+  it("uses splash-floor backgroundColor", () => {
+    expect(DESKTOP_WINDOW_DEFAULTS.backgroundColor).toBe("#f4f4f5");
+  });
+
   it("focuses an existing primary window", () => {
     const window = fakeWindow({ isMinimized: () => true });
     focusOrRecreatePrimaryWindow({

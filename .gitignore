@@ -66,3 +66,5 @@ apps/cli/product-web/
 !/extensions/example-channel/**
 !/extensions/dsh-compat/
 !/extensions/dsh-compat/**
+
+session-agent-presets.json

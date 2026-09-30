@@ -84,16 +84,20 @@ describe('ThemePresenter', () => {
     expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('17px')
   })
 
-  it('dispose removes color-scheme, the attribute, the font-size axis, and every applied variable, sparing foreign inline styles', () => {
+  it('dispose removes presenter-owned tokens and theme-color meta, sparing boot palette + foreign styles', () => {
     document.body.style.setProperty('--foreign', 'kept')
+    document.documentElement.style.colorScheme = 'dark'
+    document.body.setAttribute(DARK_ATTRIBUTE, '')
     const presenter = new ThemePresenter()
     presenter.apply(snapshot('dark', { '--dsw-alias-bg': '#111' }))
     const meta = themeColorMeta()
     presenter.dispose()
-    expect(document.documentElement.style.colorScheme).toBe('')
-    expect(document.body.hasAttribute(DARK_ATTRIBUTE)).toBe(false)
+    // Boot / next-presenter palette must survive the fiber remount gap.
+    expect(document.documentElement.style.colorScheme).toBe('dark')
+    expect(document.body.hasAttribute(DARK_ATTRIBUTE)).toBe(true)
+    // apply() wrote the snapshot font size; dispose leaves that axis alone.
+    expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('14px')
     expect(document.body.style.getPropertyValue('--dsw-alias-bg')).toBe('')
-    expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('')
     expect(document.body.style.getPropertyValue('--foreign')).toBe('kept')
     expect(meta?.isConnected).toBe(false)
   })

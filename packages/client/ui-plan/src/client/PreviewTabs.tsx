@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@xrkseek/client-ui-slots'
 import {
-  IconBranchOutline16,
+  IconBrowseOutline16,
   IconChecklistOutline14,
   IconChevronDownOutline14,
-  IconChevronRightOutline14,
   IconCloseFill14,
   IconCodeOutline16,
   IconDataOutline16,
@@ -15,7 +14,12 @@ import {
   TerminalBlock,
 } from '@xrkseek/client-ui-primitives'
 import { OverviewChangesPanel, type OverviewChangesTurn } from './OverviewChangesPanel.tsx'
+import { OverviewCanvasPanel } from './OverviewCanvasPanel.tsx'
 import { SubagentGraphBoard } from './SubagentGraphBoard.tsx'
+import {
+  getCanvasFocusSnapshot,
+  subscribeCanvasFocus,
+} from './canvas-focus.ts'
 import type { StateDotState } from '@xrkseek/client-ui-primitives'
 import {
   loadPreviewTabs,
@@ -23,6 +27,14 @@ import {
   type SessionStatusView,
 } from './preview-load.ts'
 import { peekJobOutput as defaultPeekJobOutput } from './job-output-peek.ts'
+import {
+  OVERVIEW_PAINT_TABS,
+  readOverviewScroll,
+  readOverviewSessionUi,
+  takeOverviewMountPaint,
+  writeOverviewSessionUi,
+  type OverviewPaintTab,
+} from './overview-paint.ts'
 import css from './PreviewTabs.module.css'
 
 /**
@@ -32,7 +44,7 @@ import css from './PreviewTabs.module.css'
  */
 const DETAILS_INSET_ATTR = 'data-xrk-layout-details'
 
-export type PreviewTabId = 'status' | 'context' | 'rollout' | 'todos' | 'changes'
+export type PreviewTabId = 'status' | 'context' | 'todos' | 'changes' | 'canvas'
 
 /** Injected by ui-plan: close the layout details column; open spill paths; Teams actions. */
 export interface PreviewTabsInjected {
@@ -79,7 +91,7 @@ export interface PreviewTabsInjected {
     index: number,
     signal: AbortSignal,
   ) => Promise<import('@xrkseek/xrk-api-remotes/client').WorkspaceFileDiff | null>
-  /** Open a changed file path (Host openPath / workbench). */
+  /** Open a changed file path (Host openPath / community sidebar). */
   openChangedFile?: (path: string) => void
   /**
    * Optional `ctx.changesReview` face — turn-tail cards open this tab via
@@ -94,6 +106,29 @@ export interface PreviewTabsInjected {
     } | null
     subscribe: (listener: () => void) => () => void
   }
+  /** Face `canvas.list` for the Overview Canvas tab. */
+  listCanvases?: (signal: AbortSignal) => Promise<{
+    readonly workspaceId: string
+    readonly generation: number
+    readonly items: readonly {
+      readonly id: string
+      readonly title: string
+      readonly revision: number
+      readonly updatedAt: string
+    }[]
+  }>
+  /** Face `canvas.get` for the Overview Canvas player. */
+  getCanvas?: (
+    id: string,
+    signal: AbortSignal,
+  ) => Promise<{
+    readonly id: string
+    readonly title: string
+    readonly revision: number
+    readonly createdAt: string
+    readonly updatedAt: string
+    readonly sections: readonly unknown[]
+  } | null>
 }
 
 export type PreviewTabsProps =
@@ -181,7 +216,11 @@ function SectionCard({
 }
 
 function Flag({ on, yes, no }: { on: boolean; yes: string; no: string }) {
-  return <span>{on ? yes : no}</span>
+  return (
+    <span className={css.flag} data-on={on ? 'true' : 'false'}>
+      {on ? yes : no}
+    </span>
+  )
 }
 
 type TodoRow = { content: string; status: string }
@@ -665,6 +704,35 @@ function StatusPanel({
           ? t('preview.summary.beat.subs')
           : t('preview.summary.beat.busy'))
     : t('preview.summary.beat.idle')
+
+  // Hide empty / duplicate Status cards — the hero already carries health +
+  // zero counts; only surface sections that have something to inspect.
+  const hasSubagentGraph =
+    status.subagents.graph.nodes.length > 0 || status.subagents.live.length > 0
+  const hasTeamTasks = status.teamTasks.length > 0
+  const hasJobs = status.jobs.length > 0
+  const hasDeliveryActivity =
+    turnActive || queued > 0 || steering > 0 || status.delivery.compactBlockedByTurn
+  const hasCompactionSignal =
+    status.compaction.phase === 'busy'
+    || status.compaction.pipeline !== 'none'
+    || status.compaction.stages.length > 0
+    || status.compaction.pruneCount > 0
+    || status.compaction.summaryCount > 0
+    || status.compaction.spillCount > 0
+    || (status.compaction.spillPaths?.length ?? 0) > 0
+  const hasChannels =
+    status.channels.process.length > 0
+    || wiredIm.length > 0
+    || status.channels.alerts.length > 0
+  const hasFleetDetail =
+    status.fleet.health !== 'ok'
+    || status.fleet.alerts.length > 0
+    || status.fleet.channelAlerts > 0
+    || status.fleet.queuedInbox > 0
+    || status.fleet.runningJobs > 0
+    || status.fleet.runningSubagents > 0
+
   return (
     <div className={css.statusRoot} data-status-badge={status.badge || undefined}>
       <div
@@ -677,7 +745,7 @@ function StatusPanel({
           <div className={css.summaryMain}>
             <StateDot
               state={healthDotState(status.fleet.health)}
-              size={12}
+              size={8}
             />
             <div className={css.summaryTitles}>
               <span className={css.summaryHealth}>
@@ -686,6 +754,21 @@ function StatusPanel({
               <span className={css.summaryBeat} data-live={summaryBusy || undefined}>
                 {summaryBeat}
               </span>
+              <div className={css.summaryMeta}>
+                {status.badge
+                  ? <span className={css.summaryChip}>{status.badge}</span>
+                  : null}
+                {status.model.model
+                  ? (
+                    <span
+                      className={css.summaryChip}
+                      title={`${status.model.provider}/${status.model.model}`}
+                    >
+                      {status.model.model}
+                    </span>
+                  )
+                  : null}
+              </div>
             </div>
           </div>
           <button
@@ -703,19 +786,17 @@ function StatusPanel({
           </button>
         </div>
         <div className={css.summaryStats}>
-          <span
-            className={css.summaryStat}
-            data-hot={runningJobs.length > 0 || undefined}
-          >
-            <b key={`jobs-${runningJobs.length}`}>{runningJobs.length}</b>
-            <span className={css.summaryStatLabel}>{t('preview.summary.jobs')}</span>
-          </span>
-          {showSubagentSurface
+          {runningJobs.length > 0
             ? (
-              <span
-                className={css.summaryStat}
-                data-hot={liveSubs.length > 0 || undefined}
-              >
+              <span className={css.summaryStat} data-hot="">
+                <b key={`jobs-${runningJobs.length}`}>{runningJobs.length}</b>
+                <span className={css.summaryStatLabel}>{t('preview.summary.jobs')}</span>
+              </span>
+            )
+            : null}
+          {showSubagentSurface && liveSubs.length > 0
+            ? (
+              <span className={css.summaryStat} data-hot="">
                 <b key={`subs-${liveSubs.length}`}>{liveSubs.length}</b>
                 <span className={css.summaryStatLabel}>{t('preview.summary.subs')}</span>
               </span>
@@ -728,7 +809,7 @@ function StatusPanel({
                 data-hot=""
               >
                 <b key={`queue-${turnActive}-${queued}-${steering}`}>
-                  {turnActive ? '●' : queued + steering}
+                  {turnActive ? '1' : queued + steering}
                 </b>
                 <span className={css.summaryStatLabel}>
                   {turnActive
@@ -742,114 +823,78 @@ function StatusPanel({
             <b key={`tok-${current.total}`}>{current.total.toLocaleString()}</b>
             <span className={css.summaryStatLabel}>{t('preview.summary.tokens')}</span>
           </span>
+          {status.cost.cost > 0
+            ? (
+              <span className={css.summaryStat}>
+                <b key={`cost-${status.cost.cost}`}>
+                  {status.cost.cost < 0.01
+                    ? status.cost.cost.toFixed(4)
+                    : status.cost.cost.toFixed(3)}
+                </b>
+                <span className={css.summaryStatLabel}>{t('preview.summary.cost')}</span>
+              </span>
+            )
+            : null}
         </div>
       </div>
 
-      <SectionCard
-        t={t}
-        label={t('preview.status.fleet')}
-        title={t('preview.status.fleet')}
-        signal={collapseSignal}
-        defaultOpen
-        meta={t(`preview.status.fleetHealth.${status.fleet.health}`)}
-      >
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.fleetJobs')}</span>
-          <span>{status.fleet.runningJobs}</span>
-        </div>
-        {showSubagentSurface
-          ? (
+      {hasFleetDetail
+        ? (
+          <SectionCard
+            t={t}
+            label={t('preview.status.fleet')}
+            title={t('preview.status.fleet')}
+            signal={collapseSignal}
+            defaultOpen
+            meta={t(`preview.status.fleetHealth.${status.fleet.health}`)}
+          >
             <div className={css.row}>
-              <span className={css.label}>{t('preview.status.fleetSubs')}</span>
-              <span>
-                {status.fleet.runningSubagents} · {t('preview.slot')} {status.fleet.slotsFree}
-                {status.fleet.queuedInbox > 0
-                  ? ` · ${t('preview.inbox')} ${status.fleet.queuedInbox}`
-                  : ''}
-                {status.fleet.channelAlerts > 0
-                  ? ` · ${t('preview.status.channels')} ${status.fleet.channelAlerts}`
-                  : ''}
-              </span>
+              <span className={css.label}>{t('preview.status.fleetJobs')}</span>
+              <span>{status.fleet.runningJobs}</span>
             </div>
-          )
-          : null}
-      </SectionCard>
-
-      <SectionCard
-        t={t}
-        label={t('preview.status.session')}
-        title={t('preview.status.session')}
-        signal={collapseSignal}
-        defaultOpen={false}
-      >
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.badge')}</span>
-          <span>{status.badge}</span>
-        </div>
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.permission')}</span>
-          <span>{status.permission}</span>
-        </div>
-        {plan !== null
-          ? (
-            <>
-              <div className={css.row}>
-                <span className={css.label}>{t('preview.plan.active')}</span>
-                <Flag on={plan.active} yes={t('preview.yes')} no={t('preview.no')} />
-              </div>
-              <div className={css.row}>
-                <span className={css.label}>{t('preview.plan.pending')}</span>
-                <Flag on={plan.pending} yes={t('preview.yes')} no={t('preview.no')} />
-              </div>
-            </>
-          )
-          : (
-            <div className={css.row}>
-              <span className={css.label}>{t('preview.status.plan')}</span>
-              <span>{status.plan}</span>
-            </div>
-          )}
-        {office !== null
-          ? (
-            <>
-              <div className={css.row}>
-                <span className={css.label}>{t('preview.office.configured')}</span>
-                <Flag on={office.configured} yes={t('preview.yes')} no={t('preview.no')} />
-              </div>
-              <div className={css.row}>
-                <span className={css.label}>{t('preview.office.connected')}</span>
-                <Flag on={office.connected} yes={t('preview.yes')} no={t('preview.no')} />
-              </div>
-            </>
-          )
-          : null}
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.theme')}</span>
-          <span>{status.theme}</span>
-        </div>
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.model')}</span>
-          <span>{status.model.provider}/{status.model.model}</span>
-        </div>
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.cwd')}</span>
-          <span className={css.mono}>{status.cwd}</span>
-        </div>
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.status.events')}</span>
-          <span>{status.events}</span>
-        </div>
-      </SectionCard>
+            {showSubagentSurface
+              ? (
+                <div className={css.row}>
+                  <span className={css.label}>{t('preview.status.fleetSubs')}</span>
+                  <span>
+                    {status.fleet.runningSubagents} · {t('preview.slot')} {status.fleet.slotsFree}
+                    {status.fleet.queuedInbox > 0
+                      ? ` · ${t('preview.inbox')} ${status.fleet.queuedInbox}`
+                      : ''}
+                    {status.fleet.channelAlerts > 0
+                      ? ` · ${t('preview.status.channels')} ${status.fleet.channelAlerts}`
+                      : ''}
+                  </span>
+                </div>
+              )
+              : null}
+            {status.fleet.alerts.length > 0
+              ? (
+                <ul className={css.itemList}>
+                  {status.fleet.alerts.slice(0, 6).map((alert) => (
+                    <li key={alert.id} className={css.itemRow}>
+                      <span className={css.itemTitle}>[{alert.severity}]</span>
+                      <span className={css.itemMeta}>{alert.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              )
+              : null}
+          </SectionCard>
+        )
+        : null}
 
       {showSubagentSurface
         ? (
           <>
+      {hasSubagentGraph
+        ? (
       <SectionCard
         t={t}
         label={t('preview.status.subagents')}
         title={t('preview.status.subagents')}
         signal={collapseSignal}
-        defaultOpen={false}
+        defaultOpen
         meta={(
           <>
             {liveSubs.length}/{status.subagents.live.length} live ·{' '}
@@ -862,10 +907,7 @@ function StatusPanel({
           </>
         )}
       >
-        {status.subagents.graph.nodes.length === 0 && status.subagents.live.length === 0
-          ? <div className={css.empty}>{t('preview.status.subagentsEmpty')}</div>
-          : (
-            <>
+        <>
               <h4 className={css.sectionTitle}>{t('preview.status.subagentGraph')}</h4>
               <SubagentGraphBoard
                 sessionId={status.sessionId}
@@ -876,6 +918,18 @@ function StatusPanel({
                 emptyLabel={t('preview.status.subagentsEmpty')}
                 runningLabel={t('preview.status.subagentRunning')}
                 idleLabel={t('preview.status.subagentIdle')}
+                {...(openTeamChild
+                  ? {
+                    onOpenNode: (nodeId: string) => {
+                      if (nodeId === status.sessionId) return
+                      void runTeamAction(nodeId, () => openTeamChild({
+                        parentSessionId: status.sessionId,
+                        childSessionId: nodeId,
+                        mode: 'continuable',
+                      }))
+                    },
+                  }
+                  : {})}
               />
               {status.subagents.live.length > 0
                 ? (
@@ -914,9 +968,12 @@ function StatusPanel({
                 )
                 : null}
             </>
-          )}
       </SectionCard>
+        )
+        : null}
 
+      {hasTeamTasks
+        ? (
       <SectionCard
         t={t}
         label={t('preview.status.teamTasks')}
@@ -931,23 +988,50 @@ function StatusPanel({
           </>
         )}
       >
-        {status.teamTasks.length === 0
-          ? <div className={css.empty}>{t('preview.status.teamTasksEmpty')}</div>
-          : (
-            <ul className={css.itemList}>
+            <ul className={css.teamTaskList}>
               {[...status.teamTasks]
                 .sort((a, b) => teamTaskStatusRank(a.status) - teamTaskStatusRank(b.status))
-                .map((task) => (
+                .map((task) => {
+                  const canOpen = Boolean(openTeamChild && task.childSessionId)
+                  const openChild = () => {
+                    if (!openTeamChild || !task.childSessionId) return
+                    void runTeamAction(task.id, () => openTeamChild({
+                      parentSessionId: status.sessionId,
+                      childSessionId: task.childSessionId!,
+                      mode: 'continuable',
+                    }))
+                  }
+                  return (
                 <li
                   key={task.id}
-                  className={css.itemRow}
+                  className={css.teamTaskCard}
                   data-live={task.status === 'in_progress' || task.status === 'paused' || undefined}
+                  data-status={task.status}
                 >
-                  <div className={css.teamTaskBody}>
-                    <span className={css.itemTitle}>{task.title}</span>
+                  <div
+                    className={canOpen ? css.teamTaskMain : css.teamTaskBody}
+                    {...(canOpen
+                      ? {
+                        role: 'button' as const,
+                        tabIndex: 0,
+                        onClick: openChild,
+                        onKeyDown: (event: KeyboardEvent) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            openChild()
+                          }
+                        },
+                      }
+                      : {})}
+                  >
+                    <div className={css.teamTaskHead}>
+                      <span className={css.itemTitle}>{task.title}</span>
+                      <span className={css.teamTaskBadge} data-status={task.status}>
+                        {task.status}
+                      </span>
+                    </div>
                     <span className={css.itemMeta}>
-                      {task.status}
-                      {task.role ? ` · ${task.role}` : ''}
+                      {task.role ? `${task.role}` : 'worker'}
                       {task.humanOwned ? ` · ${t('preview.status.teamTasksHuman')}` : ''}
                       {task.externalResume
                         ? ` · ${t('preview.status.subagentExternal')}:${
@@ -1010,23 +1094,6 @@ function StatusPanel({
                   {task.childSessionId || task.worktreeId
                     ? (
                       <div className={css.teamTaskActions}>
-                        {openTeamChild && task.childSessionId
-                          ? (
-                            <button
-                              type="button"
-                              className={css.teamAction}
-                              onClick={() => {
-                                void runTeamAction(task.id, () => openTeamChild({
-                                  parentSessionId: status.sessionId,
-                                  childSessionId: task.childSessionId!,
-                                  mode: 'continuable',
-                                }))
-                              }}
-                            >
-                              {t('preview.status.teamTasksOpen')}
-                            </button>
-                          )
-                          : null}
                         {pauseTeamChild
                           && task.childSessionId
                           && (task.status === 'in_progress' || task.status === 'pending')
@@ -1091,14 +1158,18 @@ function StatusPanel({
                     )
                     : null}
                 </li>
-              ))}
+                  )
+                })}
             </ul>
-          )}
       </SectionCard>
+        )
+        : null}
           </>
         )
         : null}
 
+      {hasJobs
+        ? (
       <SectionCard
         t={t}
         label={t('preview.status.jobs')}
@@ -1114,7 +1185,11 @@ function StatusPanel({
           {...(killJob ? { killJob } : {})}
         />
       </SectionCard>
+        )
+        : null}
 
+      {hasCompactionSignal
+        ? (
       <SectionCard
         t={t}
         label={t('preview.status.compaction')}
@@ -1185,7 +1260,11 @@ function StatusPanel({
           )
           : null}
       </SectionCard>
+        )
+        : null}
 
+      {hasDeliveryActivity
+        ? (
       <SectionCard
         t={t}
         label={t('preview.status.delivery')}
@@ -1230,6 +1309,8 @@ function StatusPanel({
           ? <p className={css.note} role="note">{status.delivery.note}</p>
           : null}
       </SectionCard>
+        )
+        : null}
 
       <SectionCard
         t={t}
@@ -1349,6 +1430,8 @@ function StatusPanel({
         <p className={css.note} role="note">{t('preview.status.timelineBrowseHint')}</p>
       </SectionCard>
 
+      {hasChannels
+        ? (
       <SectionCard
         t={t}
         label={t('preview.status.channels')}
@@ -1362,9 +1445,6 @@ function StatusPanel({
           </>
         )}
       >
-        {status.channels.process.length === 0 && wiredIm.length === 0
-          ? <div className={css.empty}>{t('preview.status.channelsEmpty')}</div>
-          : (
             <ul className={css.itemList}>
               {status.channels.process.map((p) => (
                 <li key={`${p.pluginId}:${p.channelId}`} className={css.itemRow}>
@@ -1379,7 +1459,6 @@ function StatusPanel({
                 </li>
               ))}
             </ul>
-          )}
         {status.channels.note.trim()
           ? <p className={css.note} role="note">{status.channels.note.trim()}</p>
           : null}
@@ -1395,6 +1474,81 @@ function StatusPanel({
             </ul>
           )
           : null}
+      </SectionCard>
+        )
+        : null}
+
+      <SectionCard
+        t={t}
+        label={t('preview.status.session')}
+        title={t('preview.status.session')}
+        signal={collapseSignal}
+        defaultOpen={false}
+      >
+        <div className={css.row}>
+          <span className={css.label}>{t('preview.status.badge')}</span>
+          <span className={css.valueChip}>{status.badge}</span>
+        </div>
+        <div className={css.row}>
+          <span className={css.label}>{t('preview.status.permission')}</span>
+          <span
+            className={css.valueChip}
+            data-tone={/danger|full-access/i.test(status.permission) ? 'warn' : undefined}
+          >
+            {status.permission}
+          </span>
+        </div>
+        {plan !== null
+          ? (
+            <>
+              <div className={css.row}>
+                <span className={css.label}>{t('preview.plan.active')}</span>
+                <Flag on={plan.active} yes={t('preview.yes')} no={t('preview.no')} />
+              </div>
+              <div className={css.row}>
+                <span className={css.label}>{t('preview.plan.pending')}</span>
+                <Flag on={plan.pending} yes={t('preview.yes')} no={t('preview.no')} />
+              </div>
+            </>
+          )
+          : (
+            <div className={css.row}>
+              <span className={css.label}>{t('preview.status.plan')}</span>
+              <span>{status.plan}</span>
+            </div>
+          )}
+        {office !== null
+          ? (
+            <>
+              <div className={css.row}>
+                <span className={css.label}>{t('preview.office.configured')}</span>
+                <Flag on={office.configured} yes={t('preview.yes')} no={t('preview.no')} />
+              </div>
+              <div className={css.row}>
+                <span className={css.label}>{t('preview.office.connected')}</span>
+                <Flag on={office.connected} yes={t('preview.yes')} no={t('preview.no')} />
+              </div>
+            </>
+          )
+          : null}
+        <div className={css.row}>
+          <span className={css.label}>{t('preview.status.theme')}</span>
+          <span>{status.theme}</span>
+        </div>
+        <div className={css.row}>
+          <span className={css.label}>{t('preview.status.model')}</span>
+          <span className={css.valueChip} title={`${status.model.provider}/${status.model.model}`}>
+            {status.model.provider}/{status.model.model}
+          </span>
+        </div>
+        <div className={css.row}>
+          <span className={css.label}>{t('preview.status.cwd')}</span>
+          <span className={css.mono}>{status.cwd}</span>
+        </div>
+        <div className={css.row}>
+          <span className={css.label}>{t('preview.status.events')}</span>
+          <span className={css.valueStrong}>{status.events}</span>
+        </div>
       </SectionCard>
 
       <p className={css.note} role="note">{t('preview.status.sameAsSlash')}</p>
@@ -1504,143 +1658,15 @@ function ContextBrowserPanel({
   )
 }
 
-type RolloutView = {
-  readonly counts: {
-    readonly nodes: number
-    readonly edges: number
-    readonly spawn: number
-    readonly message: number
-    readonly tool: number
-  }
-  readonly sessions: readonly string[]
-  readonly edges: readonly {
-    readonly kind: string
-    readonly from: string
-    readonly to: string
-    readonly label?: string
-  }[]
-}
-
-function RolloutViewerPanel({
-  sessionId,
-  t,
-}: {
-  sessionId: string
-  t: PreviewTabsProps['t']
-}) {
-  const [state, setState] = useState<RolloutView | null>(null)
-  const [error, setError] = useState(false)
-  useEffect(() => {
-    let alive = true
-    setError(false)
-    void fetch('/api/session.rolloutTrace', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        type: 'client-request',
-        rpcId: 'preview-rollout',
-        payload: { sessionId },
-      }),
-    })
-      .then(async (res) => res.json() as Promise<unknown>)
-      .then((body) => {
-        if (!alive) return
-        const envelope = body as { result?: { ok?: unknown; value?: unknown } }
-        const value = envelope.result?.ok === true ? envelope.result.value : null
-        if (!value || typeof value !== 'object') {
-          setError(true)
-          setState(null)
-          return
-        }
-        const counts = (value as { counts?: RolloutView['counts'] }).counts
-        const sessions = (value as { sessions?: unknown }).sessions
-        const edges = (value as { edges?: unknown }).edges
-        if (!counts || !Array.isArray(sessions) || !Array.isArray(edges)) {
-          setError(true)
-          setState(null)
-          return
-        }
-        setState({
-          counts,
-          sessions: sessions.map(String),
-          edges: edges.flatMap((row) => {
-            if (!row || typeof row !== 'object') return []
-            const kind = String((row as { kind?: unknown }).kind ?? '')
-            const from = String((row as { from?: unknown }).from ?? '')
-            const to = String((row as { to?: unknown }).to ?? '')
-            if (!kind || !from || !to) return []
-            const label = (row as { label?: unknown }).label
-            return [{
-              kind,
-              from,
-              to,
-              ...(typeof label === 'string' && label ? { label } : {}),
-            }]
-          }),
-        })
-      })
-      .catch(() => {
-        if (!alive) return
-        setError(true)
-        setState(null)
-      })
-    return () => { alive = false }
-  }, [sessionId])
-
-  if (error) return <div className={css.empty}>{t('preview.rolloutUnavailable')}</div>
-  if (!state) return <div className={css.empty}>{t('preview.loading')}</div>
-  return (
-    <div className={css.statusRoot}>
-      <SectionCard
-        t={t}
-        label={t('preview.rollout')}
-        title={t('preview.rollout')}
-        meta={t('preview.rolloutHint')}
-      >
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.rolloutCounts')}</span>
-          <span className={css.itemMeta}>
-            <span className={css.kindChip} data-kind="spawn">spawn {state.counts.spawn}</span>
-            {' '}
-            <span className={css.kindChip} data-kind="message">msg {state.counts.message}</span>
-            {' '}
-            <span className={css.kindChip} data-kind="tool">tool {state.counts.tool}</span>
-            {' · '}
-            {state.counts.nodes}n/{state.counts.edges}e
-          </span>
-        </div>
-        <div className={css.row}>
-          <span className={css.label}>{t('preview.rolloutSessions')}</span>
-          <span className={css.mono}>{state.sessions.slice(0, 6).join(', ') || '—'}</span>
-        </div>
-        {state.edges.length === 0
-          ? <div className={css.empty}>{t('preview.rolloutEmpty')}</div>
-          : (
-            <ul className={css.graphList}>
-              {state.edges.slice(0, 24).map((edge, i) => (
-                <li key={`${edge.kind}-${edge.from}-${edge.to}-${i}`} className={css.graphEdge}>
-                  <span className={css.kindChip} data-kind={edge.kind}>{edge.kind}</span>
-                  <span className={css.itemTitle}>{edge.from}</span>
-                  <IconChevronRightOutline14 size={12} className={css.graphArrow} />
-                  <span className={css.itemTitle}>{edge.to}</span>
-                  {edge.label ? <span className={css.itemMeta}>{edge.label}</span> : null}
-                </li>
-              ))}
-            </ul>
-          )}
-      </SectionCard>
-    </div>
-  )
-}
-
 /**
  * Session Status / overview for the layout details column.
  * Default tab is Status (fleet · session · jobs · live contextTimeline ·
  * channels), fed by Face `session.status` — the same snapshot as slash
  * `/status`. Plan / Office flags fold into the session card; Context /
- * rollout / todos remain secondary tabs. Host-wide billing and session
- * cost cards stay out of this column (doctor / export cost.json). Subagent /
- * Teams sections appear only for harness / shallow / server badges.
+ * Changes / todos remain secondary tabs. Trajectory lives on the chat
+ * column, not here. Host-wide billing and session cost cards stay out of
+ * this column (doctor / export cost.json). Subagent / Teams sections appear
+ * only for harness / shallow / server badges.
  */
 export function PreviewTabs({
   sessionId,
@@ -1655,19 +1681,63 @@ export function PreviewTabs({
   loadFileDiff,
   openChangedFile,
   changesReview,
+  listCanvases,
+  getCanvas,
   t,
   useProjection,
   useSessions,
   renderSlot = (() => null) as PreviewTabsProps['renderSlot'],
 }: PreviewTabsProps) {
-  const [tab, setTab] = useState<PreviewTabId>('status')
-  const [loaded, setLoaded] = useState<PreviewTabLoad>({
-    plan: null,
-    office: null,
-    status: null,
+  const parentId = useSessions((s) => s.byId[sessionId]?.parentId)
+  const mountPaint = takeOverviewMountPaint(sessionId, parentId)
+  const [tab, setTab] = useState<PreviewTabId>(() => mountPaint?.tab ?? 'status')
+  const [loaded, setLoaded] = useState<PreviewTabLoad>(() => (
+    mountPaint?.loaded ?? { plan: null, office: null, status: null }
+  ))
+  const [ready, setReady] = useState(() => mountPaint?.loaded?.status != null)
+  // Soft hop borrows another Session's paint until this Session's load lands.
+  const [paintSessionId, setPaintSessionId] = useState<string | null>(() => {
+    if (mountPaint?.loaded?.status == null) return null
+    const own = readOverviewSessionUi(sessionId)
+    return own?.loaded?.status != null ? sessionId : '__soft__'
   })
-  const [ready, setReady] = useState(false)
   const [statusTick, setStatusTick] = useState(0)
+  const [boundSessionId, setBoundSessionId] = useState(sessionId)
+  const bodyRef = useRef<HTMLDivElement | null>(null)
+  const tabsRef = useRef<HTMLDivElement | null>(null)
+  const scrollRestored = useRef(false)
+  const tabRef = useRef(tab)
+  tabRef.current = tab
+
+  // Same instance, new Session (details slot may keep the tree): adopt remembered chrome.
+  if (boundSessionId !== sessionId) {
+    setBoundSessionId(sessionId)
+    setTab(mountPaint?.tab ?? 'status')
+    setLoaded(mountPaint?.loaded ?? { plan: null, office: null, status: null })
+    setReady(mountPaint?.loaded?.status != null)
+    const own = readOverviewSessionUi(sessionId)
+    setPaintSessionId(
+      mountPaint?.loaded?.status == null
+        ? null
+        : own?.loaded?.status != null ? sessionId : '__soft__',
+    )
+    scrollRestored.current = false
+  }
+
+  const selectTab = (next: PreviewTabId): void => {
+    if (next === tabRef.current) return
+    const el = bodyRef.current
+    if (el !== null && scrollRestored.current) {
+      writeOverviewSessionUi(sessionId, {
+        tab: tabRef.current as OverviewPaintTab,
+        scrollTop: el.scrollTop,
+        parentId,
+      })
+    }
+    setTab(next)
+    writeOverviewSessionUi(sessionId, { tab: next as OverviewPaintTab, parentId })
+  }
+
   const plan = useProjection('plan') ?? loaded.plan
   // Face `todos` standing plan — keyed through host projections; cast keeps
   // this package free of a hard dependency on the todo stub types package.
@@ -1677,6 +1747,9 @@ export function PreviewTabs({
   ) as OverviewChangesTurn[] | null | undefined
   const office = loaded.office
   const status = loaded.status
+  const softPending = paintSessionId !== null && paintSessionId !== sessionId
+  // Soft hop or cold load — same quiet chrome (top sweep + muted body).
+  const paintPending = softPending || !ready
   // Live catalog / jobs / running bits — re-pull Face session.status so Overview
   // state machines (fleet · graph · live · jobs · delivery · teams · compaction)
   // stay in lockstep with Host frames. Fingerprint activity and job status, not
@@ -1737,9 +1810,22 @@ export function PreviewTabs({
     () => null,
   )
 
+  const canvasFocus = useSyncExternalStore(
+    subscribeCanvasFocus,
+    () => {
+      const next = getCanvasFocusSnapshot()
+      return next !== null && next.sessionId === sessionId ? next : null
+    },
+    () => null,
+  )
+
   useEffect(() => {
-    if (reviewFocus !== null) setTab('changes')
+    if (reviewFocus !== null) selectTab('changes')
   }, [reviewFocus?.revision])
+
+  useEffect(() => {
+    if (canvasFocus !== null) selectTab('canvas')
+  }, [canvasFocus?.revision])
 
   useEffect(() => {
     setStatusTick((n) => n + 1)
@@ -1755,22 +1841,101 @@ export function PreviewTabs({
     return () => { window.clearInterval(timer) }
   }, [fleetBusy, sessionId])
 
-  // Reset the column only when the session identity changes — statusTick
-  // polls must keep the previous board painted until the next snapshot lands.
-  useEffect(() => {
-    setReady(false)
-    setLoaded({ plan: null, office: null, status: null })
-  }, [sessionId])
-
+  // Soft hop keeps prior paint; hard remount starts empty (no blanking flicker).
   useEffect(() => {
     let alive = true
     void loadPreviewTabs(sessionId).then((next) => {
       if (!alive) return
       setLoaded(next)
       setReady(true)
+      setPaintSessionId(sessionId)
+      writeOverviewSessionUi(sessionId, { parentId, loaded: next })
     })
     return () => { alive = false }
-  }, [sessionId, statusTick])
+  }, [sessionId, statusTick, parentId])
+
+  // Persist scroll for the active tab before the next Session/tab restores.
+  useLayoutEffect(() => {
+    const el = bodyRef.current
+    if (el === null) return
+    return () => {
+      writeOverviewSessionUi(sessionId, {
+        tab: tabRef.current as OverviewPaintTab,
+        scrollTop: el.scrollTop,
+        parentId,
+      })
+    }
+  }, [sessionId, parentId, tab])
+
+  // Restore after Session/tab bind, and again once content is ready (height exists).
+  useLayoutEffect(() => {
+    const el = bodyRef.current
+    if (el === null) return
+    scrollRestored.current = false
+    const y = readOverviewScroll(sessionId, tab as OverviewPaintTab)
+    el.scrollTop = y
+    // Content may grow after paint — re-apply once the browser lays out.
+    let raf2 = 0
+    const raf1 = window.requestAnimationFrame(() => {
+      raf2 = window.requestAnimationFrame(() => {
+        if (bodyRef.current !== null) bodyRef.current.scrollTop = y
+        scrollRestored.current = true
+      })
+    })
+    return () => {
+      window.cancelAnimationFrame(raf1)
+      window.cancelAnimationFrame(raf2)
+    }
+  }, [sessionId, tab, ready])
+
+  // Keep the selected tab chip in view when the rail is horizontally clipped.
+  useLayoutEffect(() => {
+    const rail = tabsRef.current
+    if (rail === null) return
+    const selected = rail.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+    selected?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [tab])
+
+  useEffect(() => {
+    const el = bodyRef.current
+    if (el === null) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const onScroll = (): void => {
+      if (!scrollRestored.current) return
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        writeOverviewSessionUi(sessionId, {
+          tab: tabRef.current as OverviewPaintTab,
+          scrollTop: el.scrollTop,
+          parentId,
+        })
+      }, 80)
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.clearTimeout(timer)
+      el.removeEventListener('scroll', onScroll)
+    }
+  }, [sessionId, parentId])
+
+  const onTabListKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') {
+      return
+    }
+    event.preventDefault()
+    const order = OVERVIEW_PAINT_TABS
+    const index = order.indexOf(tab as OverviewPaintTab)
+    const at = index < 0 ? 0 : index
+    let next = at
+    if (event.key === 'ArrowRight') next = (at + 1) % order.length
+    else if (event.key === 'ArrowLeft') next = (at - 1 + order.length) % order.length
+    else if (event.key === 'Home') next = 0
+    else next = order.length - 1
+    selectTab(order[next]!)
+    const rail = tabsRef.current
+    const buttons = rail?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    buttons?.[next]?.focus()
+  }
 
   const refreshStatus = () => { setStatusTick((n) => n + 1) }
 
@@ -1778,15 +1943,28 @@ export function PreviewTabs({
   const changeTurns = Array.isArray(workspaceChanges) ? workspaceChanges : []
 
   return (
-    <aside className={css.root} aria-label={t('preview.tabs')} data-xrk-overview="" data-xrk-status="">
+    <aside
+      className={css.root}
+      aria-label={t('preview.tabs')}
+      data-xrk-overview=""
+      data-xrk-status=""
+      data-pending={paintPending || undefined}
+    >
       <div className={css.header}>
-        <div className={css.tabs} role="tablist" aria-label={t('preview.tabs')}>
+        <div
+          ref={tabsRef}
+          className={css.tabs}
+          role="tablist"
+          aria-label={t('preview.tabs')}
+          onKeyDown={onTabListKeyDown}
+        >
             <button
               type="button"
               role="tab"
               className={css.tab}
               aria-selected={tab === 'status'}
-              onClick={() => { setTab('status') }}
+              tabIndex={tab === 'status' ? 0 : -1}
+              onClick={() => { selectTab('status') }}
             >
               <IconGaugeOutline16 size={12} className={css.tabIcon} />
               {t('preview.status')}
@@ -1796,7 +1974,8 @@ export function PreviewTabs({
               role="tab"
               className={css.tab}
               aria-selected={tab === 'changes'}
-              onClick={() => { setTab('changes') }}
+              tabIndex={tab === 'changes' ? 0 : -1}
+              onClick={() => { selectTab('changes') }}
             >
               <IconCodeOutline16 size={12} className={css.tabIcon} />
               {t('preview.changes')}
@@ -1806,7 +1985,8 @@ export function PreviewTabs({
               role="tab"
               className={css.tab}
               aria-selected={tab === 'context'}
-              onClick={() => { setTab('context') }}
+              tabIndex={tab === 'context' ? 0 : -1}
+              onClick={() => { selectTab('context') }}
             >
               <IconDataOutline16 size={12} className={css.tabIcon} />
               {t('preview.context')}
@@ -1815,21 +1995,23 @@ export function PreviewTabs({
               type="button"
               role="tab"
               className={css.tab}
-              aria-selected={tab === 'rollout'}
-              onClick={() => { setTab('rollout') }}
+              aria-selected={tab === 'todos'}
+              tabIndex={tab === 'todos' ? 0 : -1}
+              onClick={() => { selectTab('todos') }}
             >
-              <IconBranchOutline16 size={12} className={css.tabIcon} />
-              {t('preview.rollout')}
+              <IconChecklistOutline14 size={12} className={css.tabIcon} />
+              {t('preview.todos')}
             </button>
             <button
               type="button"
               role="tab"
               className={css.tab}
-              aria-selected={tab === 'todos'}
-              onClick={() => { setTab('todos') }}
+              aria-selected={tab === 'canvas'}
+              tabIndex={tab === 'canvas' ? 0 : -1}
+              onClick={() => { selectTab('canvas') }}
             >
-              <IconChecklistOutline14 size={12} className={css.tabIcon} />
-              {t('preview.todos')}
+              <IconBrowseOutline16 size={12} className={css.tabIcon} />
+              {t('preview.canvas')}
             </button>
         </div>
         <button
@@ -1844,7 +2026,13 @@ export function PreviewTabs({
       <div className={css.tools} aria-label={t('preview.status.tools')}>
         {renderSlot('details.status.utilities', {})}
       </div>
-      <div className={css.body} role="tabpanel">
+      <div
+        ref={bodyRef}
+        className={css.body}
+        role="tabpanel"
+        data-pending={paintPending || undefined}
+      >
+        <div key={`${sessionId}:${tab}`} className={css.pane}>
         {tab === 'status'
           ? status === null
             ? <div className={css.empty}>{emptyCopy}</div>
@@ -1889,9 +2077,22 @@ export function PreviewTabs({
                   {...(openSpillPath ? { openSpillPath } : {})}
                 />
               )
-            : tab === 'rollout'
-              ? <RolloutViewerPanel sessionId={sessionId} t={t} />
-              : todos === null || todos.length === 0
+            : tab === 'canvas'
+              ? listCanvases === undefined || getCanvas === undefined
+                ? <div className={css.empty}>{t('preview.canvas.unavailable')}</div>
+                : (
+                  <OverviewCanvasPanel
+                    sessionId={sessionId}
+                    listCanvases={listCanvases}
+                    getCanvas={getCanvas}
+                    focusFace={{
+                      getSnapshot: getCanvasFocusSnapshot,
+                      subscribe: subscribeCanvasFocus,
+                    }}
+                    t={t}
+                  />
+                )
+            : todos === null || todos.length === 0
                 ? <div className={css.empty}>{t('preview.todos.empty')}</div>
                 : (
                   <ul className={css.todoList}>
@@ -1903,6 +2104,7 @@ export function PreviewTabs({
                     ))}
                   </ul>
                 )}
+        </div>
       </div>
     </aside>
   )

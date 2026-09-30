@@ -287,6 +287,17 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+.imageSection {
+  margin: 8px 0 4px;
+  overflow-wrap: anywhere;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.imageSection:first-of-type {
+  margin-top: 0;
+}
+
 .imageMeta {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

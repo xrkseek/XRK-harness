@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>XRK Harness</title>
+    <!--
+      Desktop first paint only: dual-ring + frameless chrome while Host boots.
+      Host ready → Electron loadURL loopback index.html (one product boot).
+      Color scheme from ?dsh-desktop-color-scheme=light|dark (main resolves
+      ui-theme.preference before first paint — not OS alone).
+    -->
+    <style>
+      :root {
+        --splash-bg: #f4f4f5;
+        --splash-fg: #14161a;
+        --splash-hint: #8a8f96;
+        --splash-ring: #5c6168;
+        --splash-ring-dim: rgb(0 0 0 / 14%);
+        --splash-core: #8a8f96;
+        --splash-core-dim: rgb(0 0 0 / 10%);
+        --splash-glow-top: rgb(255 255 255 / 70%);
+        --splash-glow-bot: rgb(20 22 26 / 4%);
+        --splash-ambient: rgb(20 22 26 / 6%);
+        --chrome-bg: color-mix(in srgb, #f4f4f5 92%, transparent);
+        --chrome-border: rgb(0 0 0 / 14%);
+        --chrome-fg: #8a8f96;
+        --chrome-fg-hover: #5c6168;
+        --chrome-hover-bg: rgb(0 0 0 / 6%);
+      }
+      html[data-color-scheme="dark"] {
+        --splash-bg: #151517;
+        --splash-fg: #e8e8ea;
+        --splash-hint: #9a9aa3;
+        --splash-ring: #c4c4cc;
+        --splash-ring-dim: rgb(255 255 255 / 12%);
+        --splash-core: #9a9aa3;
+        --splash-core-dim: rgb(255 255 255 / 10%);
+        --splash-glow-top: rgb(255 255 255 / 6%);
+        --splash-glow-bot: rgb(0 0 0 / 35%);
+        --splash-ambient: rgb(255 255 255 / 5%);
+        --chrome-bg: color-mix(in srgb, #151517 92%, transparent);
+        --chrome-border: rgb(255 255 255 / 12%);
+        --chrome-fg: #9a9aa3;
+        --chrome-fg-hover: #c4c4cc;
+        --chrome-hover-bg: rgb(255 255 255 / 8%);
+      }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: grid; place-items: center; overflow: hidden;
+        background:
+          radial-gradient(120% 80% at 50% -10%, var(--splash-glow-top), transparent 55%),
+          radial-gradient(90% 70% at 50% 120%, var(--splash-glow-bot), transparent 50%),
+          var(--splash-bg);
+        color: var(--splash-fg);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        color-scheme: light;
+      }
+      html[data-color-scheme="dark"] body { color-scheme: dark; }
+
+      /* Frameless chrome — same geometry as BootWindowChrome / DesktopChrome. */
+      .chrome {
+        position: fixed; top: 0; left: 0; right: 0; width: 100%;
+        z-index: 110; display: flex; align-items: stretch; height: 36px;
+        pointer-events: none;
+        background: var(--chrome-bg);
+        border-bottom: 1px solid var(--chrome-border);
+        box-sizing: border-box;
+      }
+      .trafficPad { flex: none; width: 78px; pointer-events: none; }
+      .drag {
+        flex: 1 1 auto; min-width: 0;
+        -webkit-app-region: drag; app-region: drag;
+        pointer-events: auto;
+      }
+      .actions {
+        display: flex; flex: none; align-items: center; gap: 2px;
+        padding: 0 8px 0 4px;
+        -webkit-app-region: no-drag; app-region: no-drag;
+        pointer-events: auto;
+      }
+      .action {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 28px; height: 28px; margin: 0; padding: 0; border: 0;
+        border-radius: 6px; color: var(--chrome-fg); background: transparent;
+        cursor: pointer;
+      }
+      .action:hover {
+        color: var(--chrome-fg-hover);
+        background: var(--chrome-hover-bg);
+      }
+      .action.close:hover { color: #fff; background: #e81123; }
+      .minimizeGlyph { display: block; width: 10px; height: 1px; background: currentColor; }
+      .maximizeGlyph {
+        display: block; width: 10px; height: 10px; box-sizing: border-box;
+        border: 1px solid currentColor;
+      }
+      .restoreGlyph {
+        position: relative; display: block; width: 8px; height: 8px;
+        box-sizing: border-box; border: 1px solid currentColor; margin: 1px 0 0 1px;
+      }
+      .restoreGlyph::before {
+        content: ''; position: absolute; top: -3px; right: -3px;
+        width: 8px; height: 8px; box-sizing: border-box;
+        border: 1px solid currentColor; border-bottom: 0; border-left: 0;
+      }
+      .reloadGlyph {
+        display: block; width: 12px; height: 12px; box-sizing: border-box;
+        border: 1.5px solid currentColor; border-right-color: transparent;
+        border-radius: 50%; position: relative;
+      }
+      .reloadGlyph::after {
+        content: ''; position: absolute; top: -2px; right: 0;
+        width: 0; height: 0;
+        border-left: 3px solid transparent; border-right: 3px solid transparent;
+        border-bottom: 4px solid currentColor; transform: rotate(45deg);
+      }
+      .closeGlyph {
+        position: relative; display: block; width: 10px; height: 10px;
+      }
+      .closeGlyph::before, .closeGlyph::after {
+        content: ''; position: absolute; left: 50%; top: 0;
+        width: 1.5px; height: 10px; background: currentColor; border-radius: 1px;
+      }
+      .closeGlyph::before { transform: translateX(-50%) rotate(45deg); }
+      .closeGlyph::after { transform: translateX(-50%) rotate(-45deg); }
+
+      .card {
+        position: relative; z-index: 1;
+        display: flex; flex-direction: column; align-items: center; gap: 16px;
+        animation: rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .ambient {
+        position: absolute; width: 220px; height: 220px; border-radius: 50%;
+        background: radial-gradient(circle, var(--splash-ambient), transparent 68%);
+        filter: blur(2px); animation: breathe 3.6s ease-in-out infinite; pointer-events: none;
+      }
+      .mark {
+        font-size: 15px; font-weight: 650; letter-spacing: 0.14em; line-height: 1;
+        animation: mark 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .spin { position: relative; width: 28px; height: 28px; }
+      .ring, .core {
+        position: absolute; inset: 0; border-radius: 50%; box-sizing: border-box;
+        border: 1.5px solid transparent;
+      }
+      .ring {
+        border-top-color: var(--splash-ring); border-right-color: var(--splash-ring-dim);
+        animation: spin 1.05s cubic-bezier(0.55, 0.15, 0.35, 0.85) infinite;
+      }
+      .core {
+        inset: 6px; border-bottom-color: var(--splash-core); border-left-color: var(--splash-core-dim);
+        animation: spin 0.7s linear infinite reverse;
+      }
+      .hint {
+        font-size: 12px; line-height: 18px; color: var(--splash-hint);
+        min-height: 18px; max-width: 280px; text-align: center;
+        letter-spacing: 0.01em;
+        transition: opacity 220ms ease, transform 220ms ease;
+      }
+      .hint.is-swap { opacity: 0; transform: translateY(4px); }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes breathe {
+        0%, 100% { transform: scale(0.92); opacity: 0.55; }
+        50% { transform: scale(1.08); opacity: 0.9; }
+      }
+      @keyframes rise {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes mark {
+        from { opacity: 0; letter-spacing: 0.32em; transform: translateY(4px); }
+        to { opacity: 1; letter-spacing: 0.14em; transform: translateY(0); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .ambient, .ring, .core, .card, .mark, .hint { animation: none; transition: none; }
+        .ambient { opacity: 0.45; }
+        .ring, .core { border-color: var(--splash-ring-dim); opacity: 0.75; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chrome" data-desktop-chrome="" data-boot-chrome="" id="chrome" hidden>
+      <div class="trafficPad" id="trafficPad" hidden aria-hidden="true"></div>
+      <div class="drag" id="drag"></div>
+      <div class="actions">
+        <button type="button" class="action" id="btnReload" aria-label="Reload" title="Reload">
+          <span class="reloadGlyph" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="action" id="btnMinimize" aria-label="Minimize" title="Minimize">
+          <span class="minimizeGlyph" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="action" id="btnMaximize" aria-label="Maximize" title="Maximize">
+          <span class="maximizeGlyph" id="maximizeGlyph" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="action close" id="btnClose" aria-label="Close" title="Close">
+          <span class="closeGlyph" aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+    <div class="ambient" aria-hidden="true"></div>
+    <div class="card" role="status" aria-live="polite" aria-busy="true">
+      <div class="mark">HARNESS</div>
+      <div class="spin" aria-hidden="true"><div class="ring"></div><div class="core"></div></div>
+      <div class="hint" id="hint"></div>
+    </div>
+    <script>
+(function () {
+  var params = new URLSearchParams(location.search || "");
+  var scheme = params.get("dsh-desktop-color-scheme");
+  if (scheme !== "dark" && scheme !== "light") {
+    scheme = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)
+      ? "dark" : "light";
+  }
+  document.documentElement.setAttribute("data-color-scheme", scheme);
+  document.documentElement.style.colorScheme = scheme;
+
+  var platform = params.get("dsh-desktop-platform") || "";
+  var zh = /^(zh)([-_]|$)/i.test(navigator.language || "");
+  var labels = zh
+    ? { reload: "刷新", minimize: "最小化", maximize: "最大化", restore: "还原", close: "关闭" }
+    : { reload: "Reload", minimize: "Minimize", maximize: "Maximize", restore: "Restore", close: "Close" };
+
+  var api = window.xrkDesktop && window.xrkDesktop.window;
+  var chrome = document.getElementById("chrome");
+  if (api && chrome) {
+    chrome.hidden = false;
+    chrome.setAttribute("data-platform", platform || "unknown");
+    var darwin = platform === "darwin";
+    var traffic = document.getElementById("trafficPad");
+    var btnMin = document.getElementById("btnMinimize");
+    var btnMax = document.getElementById("btnMaximize");
+    var btnClose = document.getElementById("btnClose");
+    var btnReload = document.getElementById("btnReload");
+    var maxGlyph = document.getElementById("maximizeGlyph");
+    if (darwin) {
+      if (traffic) traffic.hidden = false;
+      if (btnMin) btnMin.hidden = true;
+      if (btnMax) btnMax.hidden = true;
+      if (btnClose) btnClose.hidden = true;
+    }
+    function setMax(maximized) {
+      if (!btnMax || !maxGlyph) return;
+      btnMax.setAttribute("aria-label", maximized ? labels.restore : labels.maximize);
+      btnMax.title = maximized ? labels.restore : labels.maximize;
+      maxGlyph.className = maximized ? "restoreGlyph" : "maximizeGlyph";
+    }
+    if (btnReload) {
+      btnReload.setAttribute("aria-label", labels.reload);
+      btnReload.title = labels.reload;
+      btnReload.addEventListener("click", function () { void api.reload(); });
+    }
+    if (btnMin) {
+      btnMin.setAttribute("aria-label", labels.minimize);
+      btnMin.title = labels.minimize;
+      btnMin.addEventListener("click", function () { void api.minimize(); });
+    }
+    if (btnMax) {
+      btnMax.addEventListener("click", function () { void api.toggleMaximize(); });
+      void api.isMaximized().then(setMax);
+      if (typeof api.subscribeMaximized === "function") {
+        api.subscribeMaximized(setMax);
+      }
+    }
+    if (btnClose) {
+      btnClose.setAttribute("aria-label", labels.close);
+      btnClose.title = labels.close;
+      btnClose.addEventListener("click", function () { void api.close(); });
+    }
+    var drag = document.getElementById("drag");
+    if (drag) {
+      drag.addEventListener("dblclick", function () { void api.toggleMaximize(); });
+    }
+  }
+
+  var tips = zh
+    ? [
+        "正在唤醒 Host…",
+        "正在戳醒 Host 进程…",
+        "Host 正在拼装内核…",
+        "双环不停，舞台就位…",
+        "还在炖着，马上出锅…",
+        "再吸一口气，就要开场了…",
+      ]
+    : [
+        "Waking Host…",
+        "Poking the Host process…",
+        "Host is assembling the stack…",
+        "Same dual rings, stage is set…",
+        "Still cooking — almost savory…",
+        "One more breath, then showtime…",
+      ];
+  var el = document.getElementById("hint");
+  if (!el) return;
+  var i = 0;
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.textContent = tips[0];
+  if (reduce || tips.length < 2) return;
+  setInterval(function () {
+    el.classList.add("is-swap");
+    setTimeout(function () {
+      i = (i + 1) % tips.length;
+      el.textContent = tips[i];
+      el.classList.remove("is-swap");
+    }, 220);
+  }, 2000);
+})();
+    </script>
+  </body>
+</html>

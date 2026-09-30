@@ -1,26 +1,30 @@
-/* Status-column Changes review tab. */
+/* Overview Changes — editorial, matches Status chrome. */
+
 .root {
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
-  padding: 4px 2px 12px;
+  padding: 0 0 8px;
 }
 
 .meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
+  gap: 6px 10px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 85%, transparent);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .stat {
   display: inline-flex;
   gap: 6px;
   font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
 }
 
 .added { color: var(--dsw-alias-state-success-primary); }
@@ -28,20 +32,20 @@
 
 .turnPick select {
   max-width: 100%;
-  height: 28px;
+  height: 26px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
-  padding: 0 8px;
-  background: var(--dsw-alias-bg-layer-1);
+  border-radius: 5px;
+  padding: 0 6px;
+  background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .reviewBar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -58,12 +62,23 @@
   margin: 0;
   padding: 4px 8px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--dsw-alias-bg-layer-1);
   color: inherit;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.selectorButton:hover {
+  border-color: color-mix(in srgb, var(--dsw-alias-label-primary) 14%, var(--dsw-alias-border-l2));
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.selectorButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-text-primary);
+  outline-offset: 1px;
 }
 
 .selectorPath {
@@ -101,13 +116,13 @@
   flex: none;
   gap: 6px;
   font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--dsw-alias-label-tertiary);
 }
 
 .status {
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 11px;
+  line-height: 16px;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -117,36 +132,55 @@
 
 .note {
   margin: 0;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 11px;
+  line-height: 16px;
   color: var(--dsw-alias-label-secondary);
-}
-
-.diff {
-  min-width: 0;
 }
 
 .openFile {
   align-self: flex-start;
-  margin: 0;
-  padding: 6px 10px;
+  margin: 2px 0 0;
+  padding: 5px 9px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
-  color: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-label-secondary);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 14px;
   cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
 
 .openFile:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-label-primary) 14%, var(--dsw-alias-border-l2));
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent);
+}
+
+.openFile:focus-visible {
+  outline: 2px solid var(--dsw-alias-text-primary);
+  outline-offset: 1px;
+}
+
+.diff {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 90%, transparent);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-layer-1);
 }
 
 .empty {
-  padding: 16px 4px;
-  font-size: 13px;
-  line-height: 20px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-height: 140px;
+  padding: 36px 16px;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  letter-spacing: 0.01em;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -160,4 +194,12 @@
   clip: rect(0, 0, 0, 0);
   border: 0;
   white-space: nowrap;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .selectorButton,
+  .openFile {
+    transition: none;
+  }
 }

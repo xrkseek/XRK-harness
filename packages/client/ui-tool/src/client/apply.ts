@@ -41,9 +41,9 @@ export function apply(ctx: ClientContext): void {
   }, ToolCallTree))
 
   // conversation.details.tool / ToolDetails registration removed: the right
-  // Detail column is demoted; inspect stays on trajectory; file preview is
-  // first-party `ctx.workbench.openPath` or community better-sidebar via
-  // `workspaces.openPath` (see routeChatOpenFile in ui-conversation).
+  // Detail column is demoted; inspect stays on trajectory; file open wakes
+  // community better-sidebar then `workspaces.openPath`
+  // (see routeChatOpenFile in ui-conversation).
 
   ctx.plugin(bashToolviewSample)
   ctx.plugin(readToolview)

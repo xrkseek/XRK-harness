@@ -192,6 +192,10 @@ export function createMemorySessionStore(): SessionStore {
       return sessions.has(id);
     },
 
+    delete(id: string): void {
+      sessions.delete(id);
+    },
+
     append(id: string, event: SessionEvent): SessionEvent {
       const events = sessions.get(id);
       if (!events) {

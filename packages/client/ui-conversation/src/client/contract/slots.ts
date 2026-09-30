@@ -116,6 +116,16 @@ export interface MessageFilesOwnerProps {
 /** Slot-backed file-card renderer used by chat nodes without importing attachment UI. */
 export type RenderMessageFiles = (owner: MessageFilesOwnerProps) => ReactNode
 
+/** One-shot attachment lightbox when chat openFile targets a Host attachment id. */
+export interface AttachmentPreviewOwnerProps {
+  /** Durable image to preview. */
+  attachment: ImageAttachmentRef
+  /** Session-authorized loader (same as message galleries). */
+  loadImage: (attachment: ImageAttachmentRef) => Promise<string>
+  /** Dismiss the lightbox. */
+  onClose: () => void
+}
+
 declare module '@xrkseek/client-ui-slots' {
   interface SlotMap {
     /**
@@ -183,6 +193,16 @@ declare module '@xrkseek/client-ui-slots' {
     'conversation.message.images': { kind: 'single'; scope: 'session'; owner: MessageImagesOwnerProps }
     /** Optional renderer for durable message file cards (non-image attachments). */
     'conversation.message.files': { kind: 'single'; scope: 'session'; owner: MessageFilesOwnerProps }
+    /**
+     * One-shot attachment lightbox for chat openFile when the target is a
+     * Host attachment id (`sha256:…`), not a workspace path. Declared by the
+     * chat view; the attachment plugin fills ImageLightbox.
+     */
+    'conversation.attachment.preview': {
+      kind: 'single'
+      scope: 'session'
+      owner: AttachmentPreviewOwnerProps
+    }
     /**
      * The chat view's per-command row hole: keyed dispatch on the command
      * name (`command/run.name`; a run-less cross-window node has none and
@@ -887,7 +907,12 @@ export interface ChatViewInjected {
 /** Full chat-view component props: runtime & its Tool/command/tail render shares & store & injected & locale seat. */
 export type ChatViewSlotProps =
   PropsRuntime<'conversation.view'>
-  & PropsRenderSlots<'conversation.chat.node' | 'conversation.message.images' | 'conversation.message.files'>
+  & PropsRenderSlots<
+    | 'conversation.chat.node'
+    | 'conversation.message.images'
+    | 'conversation.message.files'
+    | 'conversation.attachment.preview'
+  >
   & PropsStore<ChatStore> & ChatViewInjected & PropsLocale<'conversation'>
 
 /** Full props of the attachment plugin's composer entry. */
@@ -899,6 +924,10 @@ export type MessageImagesProps = PropsRuntime<'conversation.message.images'> & P
 
 /** Full props of the attachment plugin's message-file entry. */
 export type MessageFilesProps = PropsRuntime<'conversation.message.files'> & PropsLocale<'conversation'>
+
+/** Full props of the attachment plugin's one-shot attachment lightbox. */
+export type AttachmentPreviewProps =
+  PropsRuntime<'conversation.attachment.preview'> & PropsLocale<'conversation'>
 
 /**
  * Injected share of the details slot: the panel is otherwise a pure reader of

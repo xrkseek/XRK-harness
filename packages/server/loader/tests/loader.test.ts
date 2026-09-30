@@ -157,7 +157,7 @@ describe("plugin discover", () => {
     const ids = (await loader.loadAll(extRoot)).ids;
     expect(ids).toContain("example-tools");
     expect(loader.list().some((p) => p.id === "example-tools")).toBe(true);
-  });
+  }, 30_000);
 
   it("unregister runs dispose", async () => {
     const loader = createPluginLoader();

@@ -2590,6 +2590,16 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         agent.cancel({ kind: 'user' }, { keepInbox: true })
         return Promise.resolve(ok(request, { accepted: true as const }))
       },
+
+      // Durable session delete is Face Host-owned (`session.delete` on
+      // `@xrkseek/server-face`). This Cordis proxy has no persistence wipe.
+      delete(request) {
+        return Promise.resolve(err(request, {
+          code: 'session-delete-unsupported',
+          message: 'session.delete is not available on this deployment',
+          details: { sessionId: request.payload.sessionId },
+        }))
+      },
     },
 
     subagents: {

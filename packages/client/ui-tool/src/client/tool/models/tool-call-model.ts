@@ -10,6 +10,10 @@
 // contract only forwards it (type-definition authority stays with the layer
 // that produces the values).
 import type { ToolCallBlock, ToolResultNode } from '@xrkseek/client-runtime/client'
+import {
+  formatAttachmentSummary,
+  isAttachmentAddress,
+} from '@xrkseek/client-runtime/src/client/workspaces/path.ts'
 import { abbreviateHomePath } from '@xrkseek/client-ui-primitives'
 
 export type { ToolCallBlock } from '@xrkseek/client-runtime/client'
@@ -223,7 +227,15 @@ function deriveFilePath(variant: ToolRowVariant, argsRaw: string): string | unde
   const parsed = parseArgs(argsRaw)
   if (typeof parsed !== 'object' || parsed === null) return undefined
   const picked = pickString(parsed as Record<string, unknown>, FILE_PATH_KEYS)
-  return picked === undefined ? undefined : firstLine(picked)
+  if (picked === undefined) return undefined
+  // Attachment ids stay openable: chat openFile opens a lightbox, not the sidebar.
+  return firstLine(picked)
+}
+
+/** Display spelling for path-like summaries (attachment ids abbreviated). */
+function displayPathSummary(text: string, cwd?: string, home?: string): string {
+  if (isAttachmentAddress(text)) return formatAttachmentSummary(text)
+  return abbreviateHomePath(relativizeToCwd(text, cwd), home)
 }
 
 /** Paths from `present` args.files (model-declared deliverables). */
@@ -302,10 +314,10 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   if (toolName === 'present') {
     const paths = presentArgsPaths(argsRaw)
     const resolved = paths.length > 0 ? paths : callViewPaths(block)
-    const displayPaths = resolved.map(path => abbreviateHomePath(relativizeToCwd(path, cwd), home))
+    const displayPaths = resolved.map(path => displayPathSummary(path, cwd, home))
     const presentSummary = formatPresentSummary(displayPaths)
     const base = presentSummary
-      ?? (argsRaw === '' ? block.callId : abbreviateHomePath(relativizeToCwd(firstLine(argsRaw), cwd), home))
+      ?? (argsRaw === '' ? block.callId : displayPathSummary(firstLine(argsRaw), cwd, home))
     const output = done ? (resultText(block) || null) : null
     const errorSummary = state === 'error' && output !== null ? firstLine(output) : null
     return {
@@ -323,7 +335,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
 
   const base = argsRaw === ''
     ? block.callId
-    : abbreviateHomePath(relativizeToCwd(deriveSummary(variant, argsRaw), cwd), home)
+    : displayPathSummary(deriveSummary(variant, argsRaw), cwd, home)
   const summary = variant === 'others' && toolName !== '' && toolTitle === undefined
     ? `${toolName} · ${base}`
     : base

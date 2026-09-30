@@ -285,6 +285,7 @@ export {
 export {
   attachDesktopNavigationGuard,
   desktopAppIndexUrl,
+  desktopSplashUrl,
   desktopLoopbackIndexUrl,
   DESKTOP_PROTOCOL_PRIVILEGES,
   handleDesktopProtocolRequest,
@@ -304,6 +305,17 @@ export {
   type DesktopWebBootManifest,
   type MaybeInjectDesktopBootHtmlOptions,
 } from "./boot-inject.js";
+export {
+  DESKTOP_SPLASH_BG_DARK,
+  DESKTOP_SPLASH_BG_LIGHT,
+  desktopSplashBackgroundColor,
+  readThemePreferenceFromHostSettingsJson,
+  readThemePreferenceFromSettingsYaml,
+  resolveDesktopColorScheme,
+  resolveDesktopThemePreference,
+  type DesktopColorScheme,
+  type DesktopThemePreference,
+} from "./boot-appearance.js";
 export {
   DESKTOP_BRIDGE_PROTOCOL_VERSION,
   DESKTOP_IPC,

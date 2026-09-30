@@ -14,6 +14,9 @@
  * and details tracks so the conversation is full-bleed; the sidebar becomes a
  * drawer overlay (always wide) and details a full-screen sheet. Narrow tablet
  * viewports (PHONE_MAX..SIDEBAR_AUTO_COLLAPSE) keep the compact rail.
+ *
+ * Overview width is a shell habit (`detailsLast`); open/closed is per-Session
+ * so opening Overview on A does not force-open B. Parent↔child hops keep it open.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -24,6 +27,11 @@ import {
   SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT,
 } from './columns.ts'
 import type { LayoutInsets } from './layout-insets.ts'
+import {
+  isOverviewOpenSoftHop,
+  readDetailsOpen,
+  rememberDetailsOpen,
+} from './details-open-memory.ts'
 import {
   SHELL_SHORTCUT_DEFS,
   comboFromEvent,
@@ -148,7 +156,16 @@ export function AppFrame({
     const current = s.current
     return current !== undefined && s.byId[current]?.blank === false ? current : undefined
   })
+  const detailsParentId = useSessions((s) => {
+    const id = s.current
+    if (id === undefined) return undefined
+    return s.byId[id]?.parentId
+  })
   const frameRef = useRef<HTMLDivElement | null>(null)
+  const detailsSessionRef = useRef<string | undefined>(undefined)
+  const detailsParentRef = useRef<string | undefined>(undefined)
+  const panelsDetailsRef = useRef(panels.details)
+  panelsDetailsRef.current = panels.details
   const [viewport, setViewport] = useState(() => window.innerWidth)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [shortcutsFilter, setShortcutsFilter] = useState('')
@@ -242,14 +259,44 @@ export function AppFrame({
     return () => { window.removeEventListener('keydown', onKey, true) }
   }, [applyOverrides, runShellAction, t])
 
-  const lastSession = useRef(detailsSession)
+  // Overview width (`detailsLast`) is a shell habit like the sidebar.
+  // Open/closed is per-Session — opening A must not force-open B. Parent↔child
+  // soft hops keep the column open so delegation does not slam it shut.
   useLayoutEffect(() => {
-    if (detailsSession === undefined) return
-    if (lastSession.current !== undefined && lastSession.current !== detailsSession) {
-      actions.closeDetails()
+    const prevId = detailsSessionRef.current
+    const prevParent = detailsParentRef.current
+    const nextId = detailsSession
+    const openNow = panelsDetailsRef.current > 0
+
+    if (prevId !== undefined && prevId !== nextId) {
+      rememberDetailsOpen(prevId, openNow)
     }
-    lastSession.current = detailsSession
-  }, [actions, detailsSession])
+    detailsSessionRef.current = nextId
+    detailsParentRef.current = detailsParentId
+
+    if (nextId === undefined || prevId === nextId) return
+
+    const remembered = readDetailsOpen(nextId)
+    if (remembered === true) {
+      if (!openNow) actions.openDetails()
+      return
+    }
+    if (remembered === false) {
+      if (openNow) actions.closeDetails()
+      return
+    }
+    // Never visited this Session.
+    if (
+      openNow
+      && prevId !== undefined
+      && isOverviewOpenSoftHop(prevId, prevParent, nextId, detailsParentId)
+    ) {
+      rememberDetailsOpen(nextId, true)
+      return
+    }
+    if (openNow) actions.closeDetails()
+    rememberDetailsOpen(nextId, false)
+  }, [actions, detailsParentId, detailsSession])
 
   // Track the frame's own box (not the window): rAF-throttled ResizeObserver.
   useEffect(() => {

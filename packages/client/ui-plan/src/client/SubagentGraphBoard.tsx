@@ -3,6 +3,7 @@
  * with live activity dots (running chase / idle done).
  */
 import { useMemo } from 'react'
+import type { KeyboardEvent } from 'react'
 import { StateDot, type StateDotState } from '@xrkseek/client-ui-primitives'
 import css from './SubagentGraphBoard.module.css'
 
@@ -39,6 +40,8 @@ export interface SubagentGraphBoardProps {
   readonly emptyLabel: string
   readonly runningLabel: string
   readonly idleLabel: string
+  /** Open a child session when a non-root node is activated. */
+  readonly onOpenNode?: (nodeId: string) => void
 }
 
 const COL_W = 148
@@ -219,6 +222,7 @@ export function SubagentGraphBoard({
   emptyLabel,
   runningLabel,
   idleLabel,
+  onOpenNode,
 }: SubagentGraphBoardProps) {
   const merged = useMemo(
     () => mergeGraph(sessionId, rootLabel, nodes, edges, live),
@@ -287,14 +291,31 @@ export function SubagentGraphBoard({
                 ? liveRow.liveText
                 : runningLabel)
             : idleLabel
+          const clickable = onOpenNode !== undefined && node.id !== sessionId
           return (
             <div
               key={node.id}
-              className={running ? `${css.node} ${css.nodeLive}` : css.node}
+              className={[
+                running ? `${css.node} ${css.nodeLive}` : css.node,
+                clickable ? css.nodeClickable : '',
+              ].filter(Boolean).join(' ')}
               style={{ left: pos.x, top: pos.y, width: NODE_W, height: NODE_H }}
               data-activity={node.activity ?? 'inactive'}
               data-depth={pos.depth}
               title={`${node.label} · ${meta}`}
+              {...(clickable
+                ? {
+                  role: 'button' as const,
+                  tabIndex: 0,
+                  onClick: () => { onOpenNode(node.id) },
+                  onKeyDown: (event: KeyboardEvent) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      onOpenNode(node.id)
+                    }
+                  },
+                }
+                : {})}
             >
               <StateDot state={activityDot(node.activity)} size={8} />
               <div className={css.nodeText}>

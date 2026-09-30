@@ -1,6 +1,13 @@
 /** Pure image-card derivation from raw result content and metadata. @module */
 import type { ImageAttachmentRef, ImageMediaType } from '@xrkseek/xrk-attachment'
+import {
+  formatAttachmentSummary,
+  isAttachmentAddress,
+} from '@xrkseek/client-runtime/src/client/workspaces/path.ts'
 import { abbreviateHomePath, relativizeToCwd, type ToolCallBlock } from './tool-call-model.ts'
+
+/** Role of one gallery tile relative to an image_generate / read_image card. */
+export type ImageCardRole = 'result' | 'reference'
 
 /**
  * The image-card material one settled call contributes: the display label plus
@@ -9,8 +16,14 @@ import { abbreviateHomePath, relativizeToCwd, type ToolCallBlock } from './tool-
 export interface ImageCardModel {
   /** Card label: the read path, shortened the way every other card's is. */
   label: string
-  /** The durable images this result returned, in result order. */
-  images: readonly { readonly attachment: ImageAttachmentRef }[]
+  /**
+   * Durable images in display order. Results precede references so the
+   * collapsed tool-row thumb peeks a generated image when both exist.
+   */
+  images: readonly {
+    readonly attachment: ImageAttachmentRef
+    readonly role?: ImageCardRole
+  }[]
   /**
    * The model-facing envelope text, for the line under the gallery.
    * Taken from the result's own text block rather than the row's flattened
@@ -110,6 +123,11 @@ function fullyRendered(content: readonly unknown[]): boolean {
   })
 }
 
+function displayImagePath(path: string, sessionCwd?: string, home?: string): string {
+  if (isAttachmentAddress(path)) return formatAttachmentSummary(path)
+  return abbreviateHomePath(relativizeToCwd(path, sessionCwd), home)
+}
+
 /**
  * Derive a settled image card after validating the call head, persisted
  * metadata (or its argument fallback), and the model-facing image envelope.
@@ -132,8 +150,8 @@ export function imageCardModel(
   const text = imageTexts(block.content)
   if (text === null) return null
   return {
-    label: abbreviateHomePath(relativizeToCwd(path, sessionCwd), home),
-    images: refs.map(ref => ({ attachment: ref })),
+    label: displayImagePath(path, sessionCwd, home),
+    images: refs.map(ref => ({ attachment: ref, role: 'result' as const })),
     text,
   }
 }

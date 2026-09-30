@@ -127,14 +127,24 @@ describe('AppRoot', () => {
     expect(queryByTestId('real-ui')).toBeNull()
   })
 
-  it('stamps data-xrk-booting until settled and clears after', () => {
-    const { settled } = mount()
+  it('stamps data-xrk-booting until settled and clears after product paint', async () => {
+    const { settled, getByTestId } = mount()
     expect(document.documentElement.hasAttribute('data-xrk-booting')).toBe(true)
     act(() => { settled.set(true) })
+    // Splash still covers while the first product frame commits.
+    expect(document.documentElement.hasAttribute('data-xrk-booting')).toBe(true)
+    expect(getByTestId('real-ui')).toBeTruthy()
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => { resolve() })
+        })
+      })
+    })
     expect(document.documentElement.hasAttribute('data-xrk-booting')).toBe(false)
   })
 
-  it('renders Desktop window chrome on splash when xrkDesktop.window exists', () => {
+  it('renders Desktop window chrome on splash when xrkDesktop.window exists', async () => {
     const calls: string[] = []
     ;(globalThis as {
       xrkDesktop?: {
@@ -164,14 +174,32 @@ describe('AppRoot', () => {
     expect(getByLabelText('Minimize')).toBeTruthy()
     expect(getByLabelText('Close')).toBeTruthy()
     act(() => { settled.set(true) })
+    // Splash (and boot chrome) stay until the product paint reveal.
+    expect(getByLabelText('Reload')).toBeTruthy()
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => { resolve() })
+        })
+      })
+    })
     expect(queryByLabelText('Reload')).toBeNull()
   })
 
-  it('flipping settled switches to the real UI in one pass', () => {
+  it('flipping settled switches to the real UI in one pass', async () => {
     const { settled, getByTestId, queryByText, counts } = mount()
     act(() => { settled.set(true) })
+    // Product UI mounts under the splash this commit.
     expect(getByTestId('real-ui')).toBeTruthy()
-    expect(queryByText('HARNESS')).toBeNull()
+    expect(queryByText('HARNESS')).toBeTruthy()
     expect(counts()).toBe(1)
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => { resolve() })
+        })
+      })
+    })
+    expect(queryByText('HARNESS')).toBeNull()
   })
 })

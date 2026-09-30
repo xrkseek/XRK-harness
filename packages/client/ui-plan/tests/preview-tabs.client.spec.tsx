@@ -1,19 +1,25 @@
 // @vitest-environment jsdom
 /** Session Status tabs: Face session.status + live plan/todos + office RPC. */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import { zh } from '../src/client/locales.ts'
 import { PreviewOpenButton, PreviewTabs, type PreviewTabsProps } from '../src/client/PreviewTabs.tsx'
 import { parseOfficePreview, parsePlanPreview, parseSessionStatus } from '../src/client/preview-load.ts'
+import { resetOverviewSessionUiForTests } from '../src/client/overview-paint.ts'
 
 /** Matches ui-layout `LAYOUT_INSET_ATTR.details` (no cross-plugin value import). */
 const DETAILS_INSET_ATTR = 'data-xrk-layout-details'
 
+beforeEach(() => {
+  resetOverviewSessionUiForTests()
+})
+
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  resetOverviewSessionUiForTests()
 })
 
 const t = makeTranslate(zh, commonZh)
@@ -391,8 +397,9 @@ describe('PreviewTabs', () => {
     expect(screen.queryByText('prune · spill')).toBeNull()
     expect(screen.queryByText('compact · overflow')).toBeNull()
     expect(screen.getByText(/完整事件与 spill 预览见/)).toBeTruthy()
-    expect(screen.getByLabelText('压缩分阶')).toBeTruthy()
-    expect(screen.getByLabelText('队列 / 回合')).toBeTruthy()
+    // Idle compaction / delivery cards stay hidden — only surface when busy.
+    expect(screen.queryByLabelText('压缩分阶')).toBeNull()
+    expect(screen.queryByLabelText('队列 / 回合')).toBeNull()
 
     fireEvent.click(screen.getByRole('tab', { name: '上下文' }))
     await waitFor(() => {

@@ -50,6 +50,18 @@ export function apply(ctx: ClientContext): void {
   const update: PluginInventorySettingsTabInjected['update'] = async (entryId) => {
     const result = await ctx.remote.pluginInventory.update(entryId as PluginEntryId)
     if (!result.ok) throwRemote('pluginInventory.update', result)
+    if (
+      typeof result.value.command === 'string'
+      && typeof result.value.output === 'string'
+      && typeof result.value.exitCode === 'number'
+    ) {
+      return {
+        command: result.value.command,
+        output: result.value.output,
+        exitCode: result.value.exitCode,
+      }
+    }
+    return undefined
   }
   const reload: PluginInventorySettingsTabInjected['reload'] = async (entryId) => {
     const result = await ctx.remote.pluginInventory.reload(entryId as PluginEntryId)

@@ -6,6 +6,10 @@
  * the factory (exclusive use: the framework instantiates per entry), AppFrame
  * derives its PropsStore share from the return type, and the service face
  * receives the bound actions through the registration's inject hook.
+ *
+ * Overview (details) width is a shell habit like the sidebar: drag size is
+ * remembered across close/reopen. Open/closed is Session-scoped in AppFrame —
+ * Session switches do not keep a forced-open column on every Session.
  */
 import { defineStore, type EngineStoreHandle } from '@xrkseek/client-runtime/client'
 import {
@@ -19,8 +23,15 @@ import {
  * (viewport < SIDEBAR_AUTO_COLLAPSE) so toggleSidebar can pick semantics, and
  * `narrowExpanded` is the manual override that re-expands the auto-collapsed
  * sidebar over the squeezed center without rewriting the width preference.
+ * `detailsLast` is the last non-zero Overview width (drag habit).
  */
-type LayoutState = { sidebar: number; details: number; narrow: boolean; narrowExpanded: boolean }
+type LayoutState = {
+  sidebar: number
+  details: number
+  detailsLast: number
+  narrow: boolean
+  narrowExpanded: boolean
+}
 
 /**
  * Annotation twin of the actions literal below (the export needs a declared
@@ -36,21 +47,24 @@ type LayoutActions = {
 }
 
 /**
- * Create the layout panel store handle. The preference IS the width, so
- * closing a panel forgets its drag width — reopening restores the contract
- * default. Actions are the complete write set: drag writes clamp
- * into the panel's contract range and never cross the open/closed line;
- * open/close transitions write 0 / the default explicitly. Below the
- * auto-collapse breakpoint (AppFrame feeds setNarrow) the sidebar toggle
- * flips the narrowExpanded override instead of the preference.
+ * Create the layout panel store handle.
  * @returns the store handle (spec + type + identity + factory in one).
  */
 export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutActions>  {
   const handle = defineStore({
-    init: (): LayoutState => ({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false }),
+    init: (): LayoutState => ({
+      sidebar: SIDEBAR_DEFAULT,
+      details: 0,
+      detailsLast: DETAILS_DEFAULT,
+      narrow: false,
+      narrowExpanded: false,
+    }),
     actions: {
       setSidebar: (d, px: number) => { d.sidebar = clampWidth(px, SIDEBAR_MIN, SIDEBAR_MAX) },
-      setDetails: (d, px: number) => { d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX) },
+      setDetails: (d, px: number) => {
+        d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX)
+        d.detailsLast = d.details
+      },
       // Narrow toggles flip only the override: the width preference survives
       // untouched, so re-widening restores the pre-squeeze layout.
       toggleSidebar: (d) => {
@@ -64,8 +78,13 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
         d.narrow = narrow
         d.narrowExpanded = false
       },
-      openDetails: (d) => { if (d.details === 0) d.details = DETAILS_DEFAULT },
-      closeDetails: (d) => { d.details = 0 },
+      openDetails: (d) => {
+        if (d.details === 0) d.details = d.detailsLast
+      },
+      closeDetails: (d) => {
+        if (d.details > 0) d.detailsLast = d.details
+        d.details = 0
+      },
     },
   })
   return handle

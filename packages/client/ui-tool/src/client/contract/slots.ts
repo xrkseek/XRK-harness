@@ -8,7 +8,11 @@ import type {} from '@xrkseek/client-locale/client'
 
 /** Owner currency of the Tool image gallery slot (same shape as message images). */
 export interface ToolImagesOwnerProps {
-  images: readonly { readonly attachment: ImageAttachmentRef }[]
+  images: readonly {
+    readonly attachment: ImageAttachmentRef
+    /** Presentation-only name (e.g. reference vs result). */
+    readonly label?: string
+  }[]
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
   align: 'start' | 'end'
   /** Force compact tiles (collapsed tool-row thumb). */

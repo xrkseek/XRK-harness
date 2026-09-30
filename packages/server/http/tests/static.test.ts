@@ -7,6 +7,7 @@ import {
   createHttpServer,
   ensureXrkPlatformClientBootEntries,
   injectBootIntoHtml,
+  injectBootThemeIntoHtml,
   mergeWebBootManifests,
   resolveStaticPath,
   XRK_OMIT_CLIENT_PLUGIN_IDS,
@@ -36,6 +37,17 @@ describe("boot inject", () => {
     expect(out).toContain("__XRK_BOOT__");
     expect(out).toContain("@xrkseek/client-runtime");
     expect(out.indexOf("__XRK_BOOT__")).toBeLessThan(out.indexOf("</head>"));
+  });
+
+  it("injects theme bootstrap immediately after <body>", () => {
+    const html =
+      '<html><body class="app"><div id="root"></div></body></html>';
+    const out = injectBootThemeIntoHtml(html, "dark", 13);
+    expect(out.indexOf("<script>")).toBeGreaterThan(out.indexOf('<body class="app">'));
+    expect(out.indexOf("<script>")).toBeLessThan(out.indexOf('<div id="root">'));
+    expect(out).toContain('"dark"');
+    expect(out).toContain("data-ds-dark-theme");
+    expect(out).toContain("13px");
   });
 
   it("mergeWebBootManifests lets extra ids replace", () => {

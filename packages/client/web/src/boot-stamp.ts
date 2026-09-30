@@ -5,16 +5,22 @@
  */
 export const BOOTING_ATTR = 'data-xrk-booting' as const
 
-/** Stamp `<html data-xrk-booting>` (+ optional lang) while the splash owns the viewport. */
+/**
+ * Stamp `<html data-xrk-booting>` (+ optional lang) while the splash owns the viewport.
+ * Leave `#xrk-boot-skeleton` visible until {@link clearBooting}: AppRoot (z=100)
+ * covers it; hiding early leaves a blank `#root` frame on remount.
+ */
 export function stampBooting(lang?: 'zh' | 'en'): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   root.setAttribute(BOOTING_ATTR, '')
   if (lang !== undefined) root.setAttribute('lang', lang === 'zh' ? 'zh-CN' : 'en')
+  document.getElementById('xrk-boot-skeleton')?.removeAttribute('hidden')
 }
 
 /** Clear the boot stamp once the product UI is settled. */
 export function clearBooting(): void {
   if (typeof document === 'undefined') return
   document.documentElement.removeAttribute(BOOTING_ATTR)
+  document.getElementById('xrk-boot-skeleton')?.setAttribute('hidden', '')
 }

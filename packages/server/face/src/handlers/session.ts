@@ -37,6 +37,7 @@ import { resolveDefaultAgentPreset } from "../settings-document.js";
 import {
   effectiveSessionAgentPreset,
   pinSessionAgentPreset,
+  unpinSessionAgentPreset,
 } from "../session-agent-preset.js";
 import {
   modelSelectionFromPrefix,
@@ -530,6 +531,95 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
     timeoutMs: SESSION_CANCEL_JOIN_MS,
   });
   return { ok: true, value: { accepted: true } };
+};
+
+/**
+ * Permanently delete an archived session: cancel any drain, drop the durable
+ * log, forget workspace archive/membership, clear per-session Face caches,
+ * and publish `host/session-removed` so list surfaces converge.
+ */
+export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
+  const sessionId = String(asRecord(payload).sessionId ?? "").trim();
+  if (!sessionId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "sessionId required" },
+    };
+  }
+  if (!runtime.store.has(sessionId)) {
+    return {
+      ok: false,
+      error: { code: "session-not-found", message: sessionId },
+    };
+  }
+  if (!runtime.workspaces.isArchived(sessionId)) {
+    return {
+      ok: false,
+      error: {
+        code: "session-not-archived",
+        message: "only archived sessions can be deleted",
+        details: { sessionId },
+      },
+    };
+  }
+  if (typeof runtime.store.delete !== "function") {
+    return {
+      ok: false,
+      error: {
+        code: "session-delete-unsupported",
+        message: "session store does not support delete",
+      },
+    };
+  }
+
+  // Stop the turn before wiping the log so a racing drain cannot re-append.
+  await sessionCancel(runtime, `delete-${sessionId}`, {
+    sessionId,
+    cascade: true,
+  });
+
+  try {
+    await runtime.onSessionFinalize?.(sessionId);
+  } catch {
+    /* Host Phase1 is best-effort */
+  }
+
+  runtime.externalAgents.detach(sessionId);
+  try {
+    await runtime.invalidateAgent?.(sessionId);
+  } catch {
+    /* ignore */
+  }
+
+  runtime.store.delete(sessionId);
+  const sets = runtime.workspaces.forgetSession(sessionId);
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
+
+  runtime.listProjectionCache.forget(sessionId);
+  runtime.wireIds.clear(sessionId);
+  runtime.inboxWire.clear(sessionId);
+  runtime.sessionModels.delete(sessionId);
+  runtime.sessionCwds.delete(sessionId);
+  runtime.sessionHasImage.delete(sessionId);
+  runtime.sessionImageScanned.delete(sessionId);
+  unpinSessionAgentPreset(runtime, sessionId);
+  runtime.goals.forget(sessionId);
+  runtime.agentTeams.removeNode(sessionId);
+
+  runtime.bus.publishHost({
+    type: "host/session-removed",
+    sessionId,
+  });
+  runtime.bus.publishHost({
+    type: "host/archived-sessions-changed",
+    archivedSessionIds: sets.archivedSessionIds,
+  });
+  runtime.bus.publishHost({
+    type: "host/pinned-sessions-changed",
+    pinnedSessionIds: sets.pinnedSessionIds,
+  });
+
+  return { ok: true, value: { deleted: true as const } };
 };
 
 export const sessionModels: FaceHandler = async (runtime, _rpcId, payload) => {

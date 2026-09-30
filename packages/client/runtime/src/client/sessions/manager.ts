@@ -614,6 +614,29 @@ export class SessionManager {
   }
 
   /**
+   * Contract session.delete for an archived session. On success, drop the
+   * local list row immediately (host/session-removed will echo the same).
+   * @param sessionId - archived session to permanently delete.
+   */
+  async delete(sessionId: SessionId): Promise<RpcResult<{ deleted: true }>> {
+    try {
+      const { result } = await this.api.sessions.delete({ sessionId })
+      if (result.ok) {
+        this.recordMutation({ kind: 'remove', sessionId })
+        this.sessions.get(sessionId)?.handleRemoved()
+        this.pendingBuffers.delete(sessionId)
+        this.pendingInteractions.delete(sessionId)
+        this.jobsBySession.delete(sessionId)
+        this.projectionStores.delete(sessionId)
+        this.drop(sessionId)
+      }
+      return result
+    } catch (error) {
+      return transportError(error)
+    }
+  }
+
+  /**
    * Insert-or-enrich a locally synthesized summary: a new id prepends; an
    * existing entry only gains fields it lacks (the session-added frame and the
    * create() echo race — whichever lands second must fill the placeholder's

@@ -54,6 +54,7 @@ import {
 import {
   sessionCancel,
   sessionCreate,
+  sessionDelete,
   sessionFork,
   sessionHistory,
   sessionList,
@@ -134,6 +135,7 @@ import {
   sessionReferenceResolverCandidates,
 } from "./handlers/references.js";
 import { changesFileDiff } from "./handlers/changes.js";
+import { canvasGet, canvasList } from "./handlers/canvas.js";
 
 const HANDLERS: Record<string, FaceHandler> = {
   "host.describe": hostDescribe,
@@ -149,6 +151,7 @@ const HANDLERS: Record<string, FaceHandler> = {
   "session.search": sessionSearch,
   "session.prompt": sessionPrompt,
   "session.cancel": sessionCancel,
+  "session.delete": sessionDelete,
   "session.models": sessionModels,
   "session.selectModel": sessionSelectModel,
   "session.rename": sessionRename,
@@ -264,6 +267,10 @@ const HANDLERS: Record<string, FaceHandler> = {
   "sessionReferenceResolver/candidates": sessionReferenceResolverCandidates,
   "changes.fileDiff": changesFileDiff,
   "changes/fileDiff": changesFileDiff,
+  "canvas.list": canvasList,
+  "canvas/list": canvasList,
+  "canvas.get": canvasGet,
+  "canvas/get": canvasGet,
 };
 
 export function getHandler(method: string): FaceHandler | undefined {

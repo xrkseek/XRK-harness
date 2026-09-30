@@ -298,6 +298,12 @@ export class FaceGoalStore {
     return { ok: true, value: { id: ref.id, revision: ref.revision } };
   }
 
+  /** Drop any standing goal for a durable session delete (no CAS). */
+  forget(sessionId: string): void {
+    if (!this.bySession.delete(sessionId)) return;
+    this.publish(sessionId);
+  }
+
   private startRound(sessionId: string, goal: MutableGoal, content: string): void {
     const runtime = this.requireRuntime();
     goal.roundsStarted += 1;

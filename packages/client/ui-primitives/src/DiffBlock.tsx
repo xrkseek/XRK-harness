@@ -246,11 +246,13 @@ function contentLines(text: string): string[] {
 
 function renderUnifiedLine(row: DiffRow): ReactNode {
   if (row.kind !== 'del' && row.kind !== 'add') return row.text
+  const sign = row.kind === 'add' ? '+' : '-'
+  const lineNo = row.kind === 'add' ? (row.newNo ?? '') : (row.oldNo ?? '')
   return (
     <>
-      <span className={css.gutter} aria-hidden="true" data-diff-gutter="">
-        <span className={css.gutterOld}>{row.oldNo ?? ''}</span>
-        <span className={css.gutterNew}>{row.newNo ?? ''}</span>
+      <span className={css.gutter} aria-hidden="true" data-diff-gutter="" data-sides="one">
+        <span className={css.gutterNo}>{lineNo}</span>
+        <span className={css.sign}>{sign}</span>
       </span>
       <span className={css.lineText} data-diff-highlight={row.spans !== undefined ? 'true' : undefined}>
         {renderLineBody(row.text, row.spans)}
@@ -272,11 +274,13 @@ function renderSplitSide(
   if (side === undefined) {
     return <div className={clsx(css.line, emptyClass)}>{'\u00a0'}</div>
   }
+  const lineNo = side.oldNo ?? side.newNo ?? ''
+  const sign = side.kind === 'add' ? '+' : '-'
   return (
     <div className={clsx(css.line, side.kind === 'del' ? css.del : css.add)}>
-      <span className={css.gutter} aria-hidden="true" data-diff-gutter="">
-        <span className={css.gutterOld}>{side.oldNo ?? ''}</span>
-        <span className={css.gutterNew}>{side.newNo ?? ''}</span>
+      <span className={css.gutter} aria-hidden="true" data-diff-gutter="" data-sides="one">
+        <span className={css.gutterNo}>{lineNo}</span>
+        <span className={css.sign}>{sign}</span>
       </span>
       <span className={css.lineText} data-diff-highlight={side.spans !== undefined ? 'true' : undefined}>
         {renderLineBody(side.text, side.spans)}

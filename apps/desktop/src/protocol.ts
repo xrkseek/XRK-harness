@@ -158,6 +158,32 @@ export function attachDesktopNavigationGuard(
 export const DESKTOP_TITLEBAR_INSET_PX = 36
 
 /**
+ * Lightweight Desktop first-paint splash (static dual-ring + chrome; no React).
+ * Host ready then remounts onto {@link desktopLoopbackIndexUrl}.
+ * `colorScheme` paints dark/light before Host injectBootTheme exists.
+ */
+export function desktopSplashUrl(
+  scheme: string = DESKTOP_PROTOCOL_SCHEME,
+  options?: {
+    readonly platform?: NodeJS.Platform
+    readonly titlebarInset?: number
+    readonly colorScheme?: "light" | "dark"
+  },
+): string {
+  const platform = options?.platform ?? process.platform
+  const inset = options?.titlebarInset ?? DESKTOP_TITLEBAR_INSET_PX
+  const params = new URLSearchParams({
+    "dsh-desktop-mode": "advanced",
+    "dsh-desktop-platform": platform,
+    "dsh-desktop-titlebar-inset": String(inset),
+  })
+  if (options?.colorScheme !== undefined) {
+    params.set("dsh-desktop-color-scheme", options.colorScheme)
+  }
+  return `${scheme}://app/desktop-splash.html?${params.toString()}`
+}
+
+/**
  * Primary product URL for the main window (custom-protocol splash / legacy).
  * Stamps `dsh-desktop-*` query params so community workbenches
  * (`xrkh-better-sidebar`) yield the custom titlebar via their public contract.
@@ -182,12 +208,15 @@ export function desktopAppIndexUrl(
 /**
  * Product UI URL on the Host loopback origin (DSH Desktop posture).
  * Same `dsh-desktop-*` query stamps as {@link desktopAppIndexUrl}.
+ * Optional `colorScheme` covers the gap when Host theme inject is absent
+ * (index.html fallback script + AppRoot dark CSS).
  */
 export function desktopLoopbackIndexUrl(
   origin: string,
   options?: {
     readonly platform?: NodeJS.Platform
     readonly titlebarInset?: number
+    readonly colorScheme?: "light" | "dark"
   },
 ): string {
   const platform = options?.platform ?? process.platform
@@ -196,6 +225,9 @@ export function desktopLoopbackIndexUrl(
   url.searchParams.set("dsh-desktop-mode", "advanced")
   url.searchParams.set("dsh-desktop-platform", platform)
   url.searchParams.set("dsh-desktop-titlebar-inset", String(inset))
+  if (options?.colorScheme !== undefined) {
+    url.searchParams.set("dsh-desktop-color-scheme", options.colorScheme)
+  }
   return url.href
 }
 

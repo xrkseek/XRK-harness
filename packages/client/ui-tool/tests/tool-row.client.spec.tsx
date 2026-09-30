@@ -158,6 +158,26 @@ describe('tool-call-model', () => {
     expect(toolRowModel('bash', running()).filePath).toBeUndefined()
   })
 
+  it('keeps attachment ids as open targets and abbreviates the summary', () => {
+    const id = 'sha256:614b7f3194c587139769f70801d2cb8578192c1a3dc704c244f82013c379ac16'
+    const byId = toolRowModel('read_image', running({
+      name: 'read_image',
+      argsRaw: JSON.stringify({ file_path: id }),
+    }))
+    expect(byId.filePath).toBe(id)
+    expect(byId.summary).toBe('sha256:614b7f…ac16')
+    const prefixed = toolRowModel('read_image', running({
+      name: 'read_image',
+      argsRaw: JSON.stringify({ file_path: `attachment:${id}` }),
+    }))
+    expect(prefixed.filePath).toBe(`attachment:${id}`)
+    expect(prefixed.summary).toBe('sha256:614b7f…ac16')
+    expect(toolRowModel('read_image', running({
+      name: 'read_image',
+      argsRaw: JSON.stringify({ file_path: 'shots/ui.png' }),
+    })).filePath).toBe('shots/ui.png')
+  })
+
   it('resolveWorkspacePath joins relative paths under cwd and passes absolute through', () => {
     expect(resolveWorkspacePath('/w', 'src/a.ts')).toBe('/w/src/a.ts')
     expect(resolveWorkspacePath('/w/', '/abs/a.ts')).toBe('/abs/a.ts')

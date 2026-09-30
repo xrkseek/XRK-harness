@@ -414,6 +414,7 @@ export function apply(ctx: Context): void {
       'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: CHAT_NODE_INJECT },
       'conversation.message.images': { kind: 'single', scope: 'session' },
       'conversation.message.files': { kind: 'single', scope: 'session' },
+      'conversation.attachment.preview': { kind: 'single', scope: 'session' },
     },
     store: chatStore,
     inject: (sessionId: SessionId, actions: BoundActions<typeof chatStore>): ChatViewInjected => {
@@ -421,21 +422,17 @@ export function apply(ctx: Context): void {
       const scoped = scopedConversation(sessions, sessionId)
       return {
         // Demoted Detail column: Status lives in `details` via ui-plan.
-        // File preview: first-party `ctx.workbench` (Host `/sidebar/*` panel)
-        // or community `xrkh-better-sidebar` wrapping `workspaces.openPath`.
+        // File open: community `xrkh-better-sidebar` (when present) + OS
+        // `workspaces.openPath` — no first-party floating Files panel.
         openDetails: (_target) => {},
         fileMentions: owner => ctx.get('chatFileMentions')?.forClosing(owner),
         openFile: (path) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
           const resolved = resolveWorkspacePath(cwd, path)
-          const workbench = ctx.get('workbench') as { openPath?(p: string): boolean } | undefined
           return routeChatOpenFile(
             resolved,
-            workbench,
             (p) => workspaces.openPath(p),
             (p) => {
-              // When the builtin panel has yielded, also seed the community
-              // editor tab (wrap of workspaces.openPath may still run).
               const face = ctx.get('betterSidebar') as {
                 openTab?(seed: { type: string; path?: string }): void
               } | undefined

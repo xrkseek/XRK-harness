@@ -36,14 +36,14 @@
 | `recipes/*.yaml` | `/id` 斜杠配方 |
 | `skills/*/SKILL.md` | Skill 目录 |
 
-**Identity 产品决策（保持薄）**：默认只种薄 `AGENTS.md`。人设语气用可选 `SOUL.md` / `IDENTITY.md`；「用户是谁」的事实真源是策展 `memories/USER.md`（见 [curated-memory.md](./curated-memory.md)）。不自动种 Honcho 式用户建模，也不自动种匿名用户 id 文件。
+**Identity 产品决策（保持薄）**：默认只种人格向薄 `AGENTS.md`（对标 Codex 全局说明：语气、做事方式、边界）。更深的人设语气用可选 `SOUL.md` / `IDENTITY.md`；「用户是谁」的事实真源是策展 `memories/USER.md`（见 [curated-memory.md](./curated-memory.md)）。不自动种 Honcho 式用户建模，也不自动种匿名用户 id 文件。
 
 ## Skills（运行时）
 
 | 机制 | 行为 |
 |------|------|
 | 多根导入 | 已存在的目录自动扫；缺则跳过（不 mkdir） |
-| **CLI 用户种子** | **`xrkh web` / `serve` 启动时**写入 **`~/.xrk`**：`skills/*`、薄 `AGENTS.md`（对标 Codex 全局说明）、`recipes/*`。缺才装、指纹未改则刷新；用户改过的副本原样保留。工作区不自动 mkdir `.xrk` |
+| **CLI 用户种子** | **`xrkh web` / `serve` 启动时**镜像到 **`~/.xrk`**：`skills/*`、人格向薄 **`AGENTS.md`**（对标 Codex 全局说明）、`recipes/*`。与 bundled 指纹不一致或缺文件 → 覆盖写入。用户自建 skill / 改人格写工作区 **`.agents/`**（或 `.xrk/`），不要改 home 默认种子。工作区不自动 mkdir `.xrk` |
 | `disable-model-invocation: true` | 不进 catalog、`skill` 工具拒绝 |
 | `user-invocable: false` | `/skill-name` 不展开 |
 | 非法布尔 frontmatter | **整 skill 丢弃**（fail-closed） |
@@ -89,6 +89,7 @@ Spec 形态：`./path` · `file:` / `link:` 本地目录；`github:owner/repo` �
 | 产品 skill（`.agents/skills/`） | 用途 |
 |------------|------|
 | **`xrk-capability-attach`** | 挂 MCP / 接外部工具（默认路径） |
+| **`xrk-canvas`** | 工作区 Canvas 看板（`canvas_*` · 概况 Canvas 页签） |
 | **`xrk-models-settings`** | 配模型：手动 ID、获取列表、对话搜索 |
 | **`xrk-create-skill`** | 写 skill / standing（对标 Cursor · Codex 渐进披露） |
 | **`xrk-plan-build`** | Plan → Build（`exit_plan_mode`，同会话） |
@@ -146,14 +147,14 @@ Optional directories; **never auto-created**. Common files:
 | `recipes/*.yaml` | `/id` slash recipes |
 | `skills/*/SKILL.md` | Skill trees |
 
-**Identity product decision (stay thin)**: seed only the thin `AGENTS.md`. Optional `SOUL.md` / `IDENTITY.md` for tone/persona; factual “who the user is” lives in curated `memories/USER.md` ([curated-memory.md](./curated-memory.md)). No automatic Honcho-style user modeling and no auto-seeded anonymous-user-id file.
+**Identity product decision (stay thin)**: seed only a persona-shaped thin `AGENTS.md` (Codex-style global guidance: voice, working agreements, boundaries). Optional `SOUL.md` / `IDENTITY.md` for a stronger tone; factual “who the user is” lives in curated `memories/USER.md` ([curated-memory.md](./curated-memory.md)). No automatic Honcho-style user modeling and no auto-seeded anonymous-user-id file.
 
 ## Skills (runtime)
 
 | Mechanism | Behavior |
 |------|------|
 | Multi-root import | Scan existing dirs; skip missing (no mkdir) |
-| **CLI user seeds** | On **`xrkh web` / `serve`**, write under **`~/.xrk`**: `skills/*`, a thin `AGENTS.md` (Codex-style global preferences), and `recipes/*`. Install when missing; refresh pristine copies; never overwrite user edits. **Never** mkdir workspace `.xrk` |
+| **CLI user seeds** | On **`xrkh web` / `serve`**, mirror under **`~/.xrk`**: `skills/*`, a thin persona-shaped `AGENTS.md` (Codex-style global guidance), and `recipes/*`. Rewrite when the bundled fingerprint differs or the home copy is missing. Author custom skills / persona in workspace **`.agents/`** (or `.xrk/`), not by editing home seed copies. **Never** mkdir workspace `.xrk` |
 | `disable-model-invocation: true` | Out of catalog; `skill` tool rejects |
 | `user-invocable: false` | `/skill-name` does not expand |
 | Illegal boolean frontmatter | **Whole skill discarded** (fail-closed) |
@@ -199,6 +200,7 @@ When this repository is the workspace, plugins live under **`extensions/<plugin-
 | Product skill (`.agents/skills/`) | Purpose |
 |------------|------|
 | **`xrk-capability-attach`** | Attach MCP / external tools (default path) |
+| **`xrk-canvas`** | Workspace Canvas boards (`canvas_*` · Overview Canvas tab) |
 | **`xrk-models-settings`** | Models: manual ID, provider fetch, chat search |
 | **`xrk-create-skill`** | Author skills / standing (Cursor + Codex progressive disclosure) |
 | **`xrk-plan-build`** | Plan → Build (`exit_plan_mode`, same session) |

@@ -16,6 +16,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ConversationTimelineSnapshot } from '@xrkseek/client-runtime/client'
 import type { ChatSnapshot, QueuedMessage } from '@xrkseek/client-runtime/client'
+import {
+  formatAttachmentSummary,
+  normalizeAttachmentId,
+} from '@xrkseek/client-runtime/client'
+import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import { Button, IconChevronDownOutline14, Modal } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageFiles, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble, PendingSubmissionBubble } from './MessageItem.tsx'
@@ -256,11 +261,27 @@ export function ChatView({
   const selectedCallId = useStore(s => s.selection?.callId)
   const [fileOpenError, setFileOpenError] = useState<{ path: string; message: string } | null>(null)
   const [fileOpenBusy, setFileOpenBusy] = useState(false)
+  /** Host attachment id open → lightbox (not better-sidebar). */
+  const [attachmentPreview, setAttachmentPreview] = useState<ImageAttachmentRef | null>(null)
   // Close/retry must ignore a settlement that started before the latest
   // gesture; otherwise a cancelled in-flight refusal reopens the dialog.
   const fileOpenRequest = useRef(0)
 
   const requestOpenFile = useCallback((path: string) => {
+    const attachmentId = normalizeAttachmentId(path)
+    if (attachmentId !== undefined) {
+      setFileOpenError(null)
+      setFileOpenBusy(false)
+      setAttachmentPreview({
+        attachmentId: attachmentId as ImageAttachmentRef['attachmentId'],
+        mediaType: 'image/png',
+        bytes: 1,
+        width: 1,
+        height: 1,
+        name: formatAttachmentSummary(attachmentId),
+      })
+      return
+    }
     const id = ++fileOpenRequest.current
     setFileOpenBusy(true)
     void openFile(path).then(
@@ -282,6 +303,10 @@ export function ChatView({
       },
     )
   }, [openFile, t])
+
+  const closeAttachmentPreview = useCallback(() => {
+    setAttachmentPreview(null)
+  }, [])
 
   const closeFileOpenError = useCallback(() => {
     fileOpenRequest.current += 1
@@ -841,6 +866,11 @@ export function ChatView({
           </div>
         )}
       </div>
+      {attachmentPreview !== null && renderSlot('conversation.attachment.preview', {
+        attachment: attachmentPreview,
+        loadImage,
+        onClose: closeAttachmentPreview,
+      })}
       {fileOpenError !== null && (
         <FileOpenErrorDialog
           path={fileOpenError.path}

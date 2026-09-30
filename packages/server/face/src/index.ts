@@ -111,6 +111,21 @@ export {
 } from "./goal-round-driver.js";
 export { bindGoalTools, type BindGoalToolsOptions } from "./goal-tools.js";
 export {
+  FaceCanvasStore,
+  canvasesRoot,
+  isValidCanvasId,
+  normalizeSections,
+  parseCanvasDocument,
+  type CanvasDocument,
+  type CanvasSection,
+  type CanvasSummary,
+} from "./canvas-store.js";
+export {
+  bindCanvasTools,
+  canvasWorkspaceIdForSession,
+  type BindCanvasToolsOptions,
+} from "./canvas-tools.js";
+export {
   bindProposeSkillTool,
   proposeSkillQuestions,
   PROPOSE_SKILL_APPROVE_LABEL,

@@ -86,14 +86,15 @@ describe('ui-layout client apply', () => {
     expect(document.body.hasAttribute('data-ds-dark-theme')).toBe(true)
     expect(document.head.querySelector('meta[name="theme-color"]')).toBe(themeColorMeta)
     await fiber.dispose()
-    expect(document.documentElement.style.colorScheme).toBe('')
-    expect(document.body.hasAttribute('data-ds-dark-theme')).toBe(false)
+    // Palette stamps survive so a remount gap cannot flash UA light.
+    expect(document.documentElement.style.colorScheme).toBe('dark')
+    expect(document.body.hasAttribute('data-ds-dark-theme')).toBe(true)
     expect(themeColorMeta?.isConnected).toBe(false)
     // Listener is off: further theme changes no longer reach the document.
     theme.setTheme('light')
     theme.setTheme('dark')
-    expect(document.documentElement.style.colorScheme).toBe('')
-    expect(document.body.hasAttribute('data-ds-dark-theme')).toBe(false)
+    expect(document.documentElement.style.colorScheme).toBe('dark')
+    expect(document.body.hasAttribute('data-ds-dark-theme')).toBe(true)
   })
 
   it('teardown unwinds the service, the root registration, and the child declarations', async () => {

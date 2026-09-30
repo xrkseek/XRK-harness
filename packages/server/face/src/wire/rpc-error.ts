@@ -9,6 +9,7 @@ export const FACE_RPC_ERROR_CODES = [
   "bad-request",
   "cancelled",
   "session-not-found",
+  "session-not-archived",
   "model-unavailable",
   "session-conflict",
   "invalid-time-zone",
@@ -103,6 +104,23 @@ export function mapFaceRpcError(
           sessionId:
             typeof hint?.sessionId === "string" ? hint.sessionId : message,
         },
+      };
+
+    case "session-not-archived":
+      return {
+        code: "session-not-archived",
+        message,
+        details: {
+          sessionId:
+            typeof hint?.sessionId === "string" ? hint.sessionId : message,
+        },
+      };
+
+    case "session-delete-unsupported":
+      return {
+        code: "internal",
+        message: `${code}: ${message}`,
+        details: {},
       };
 
     case "unsupported-modality":

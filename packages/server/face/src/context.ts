@@ -40,6 +40,7 @@ import type { AgentTeamTaskBoard } from "./agent-team-tasks.js";
 import type { ManagedWorktreeManager } from "./managed-worktree.js";
 import type { FaceMessageFeedbackStore } from "./message-feedback.js";
 import type { FaceGoalStore } from "./goal-store.js";
+import type { FaceCanvasStore } from "./canvas-store.js";
 import type { FaceWireIdMaps } from "./adapt/wire-ids.js";
 import type { FaceInboxWireMaps } from "./adapt/inbox-wire.js";
 import type {
@@ -148,6 +149,8 @@ export interface FaceRuntime {
   readonly feedbackSlicesDir?: string;
   /** Per-session Goal sidecar (projection key `goal`). */
   readonly goals: FaceGoalStore;
+  /** Workspace-scoped Canvas documents (`{XRK_HOME}/canvases/<workspaceId>/`). */
+  readonly canvases: FaceCanvasStore;
   /** Session-scoped turn/step numbers for DSH wire events. */
   readonly wireIds: FaceWireIdMaps;
   /** Session-scoped inbox splice projectors for live mux. */

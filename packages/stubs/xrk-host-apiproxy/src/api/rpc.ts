@@ -33,6 +33,8 @@ export interface RpcErrorDetailsMap {
   'bad-request': { issues: ZodIssue[] }
   'cancelled': {}
   'session-not-found': { sessionId: SessionId }
+  /** `session.delete` refused because the session is not in the archive set. */
+  'session-not-archived': { sessionId: SessionId }
   'model-unavailable': { provider: string; model: string }
   /**
    * Host / Face / sidebar policy gate refused the action (`deny`, or `ask`

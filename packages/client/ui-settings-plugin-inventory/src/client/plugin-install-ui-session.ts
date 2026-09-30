@@ -86,6 +86,19 @@ export function clearPluginInstallSettledUi(): void {
   });
 }
 
+/** Show a settled CLI mutate log (update / remove) without an install toast. */
+export function setPluginMutateLog(log: PluginInstallLog): void {
+  if (state.busy) return;
+  patch({
+    log,
+    error: null,
+    success: false,
+    activeSpec: "",
+    okSpec: "",
+    clientRefreshHint: true,
+  });
+}
+
 /** Validation / soft errors that do not start a Host mutate. */
 export function setPluginInstallUiError(message: string): void {
   if (state.busy) return;
