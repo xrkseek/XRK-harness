@@ -6,7 +6,7 @@
  */
 
 import type { ImageAttachmentRef, ImageMediaType } from '@xrkseek/xrk-attachment'
-import { isAttachmentAddress } from '@xrkseek/client-runtime/src/client/workspaces/path.ts'
+import { isAttachmentAddress } from '@xrkseek/client-runtime/client'
 import type { ToolCallBlock } from './tool-call-model.ts'
 import type { ImageCardModel } from './image-card-model.ts'
 import { parseImageGenResultText } from './gen-result-parse.ts'

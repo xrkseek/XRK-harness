@@ -1,4 +1,4 @@
-import { isAttachmentAddress } from '@xrkseek/client-runtime/src/client/workspaces/path.ts'
+import { isAttachmentAddress } from '@xrkseek/client-runtime/client'
 
 /**
  * Chat file-open routing: wake community sidebar when present, then

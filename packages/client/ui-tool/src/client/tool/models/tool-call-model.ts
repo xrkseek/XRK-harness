@@ -13,7 +13,7 @@ import type { ToolCallBlock, ToolResultNode } from '@xrkseek/client-runtime/clie
 import {
   formatAttachmentSummary,
   isAttachmentAddress,
-} from '@xrkseek/client-runtime/src/client/workspaces/path.ts'
+} from '@xrkseek/client-runtime/client'
 import { abbreviateHomePath } from '@xrkseek/client-ui-primitives'
 
 export type { ToolCallBlock } from '@xrkseek/client-runtime/client'

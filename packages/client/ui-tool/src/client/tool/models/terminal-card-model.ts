@@ -8,7 +8,7 @@
  * are derived once.
  * @module
  */
-import { resolveWorkspacePath } from '@xrkseek/client-runtime/src/client/workspaces/path.ts'
+import { resolveWorkspacePath } from '@xrkseek/client-runtime/client'
 import type { TerminalBlockLabels, TerminalBlockProps } from '@xrkseek/client-ui-primitives'
 import type { TranslateNS } from '@xrkseek/client-ui-slots'
 import type { ToolCallBlock } from './tool-call-model.ts'

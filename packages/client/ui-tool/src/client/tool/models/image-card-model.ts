@@ -3,7 +3,7 @@ import type { ImageAttachmentRef, ImageMediaType } from '@xrkseek/xrk-attachment
 import {
   formatAttachmentSummary,
   isAttachmentAddress,
-} from '@xrkseek/client-runtime/src/client/workspaces/path.ts'
+} from '@xrkseek/client-runtime/client'
 import { abbreviateHomePath, relativizeToCwd, type ToolCallBlock } from './tool-call-model.ts'
 
 /** Role of one gallery tile relative to an image_generate / read_image card. */
