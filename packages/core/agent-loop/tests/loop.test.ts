@@ -4,6 +4,7 @@ import {
   deriveMessages,
   admitPrompt,
   listPendingAdmits,
+  sessionHasOpenTurn,
 } from "@xrkseek/core-session";
 import { createStdTools, createToolRegistry } from "@xrkseek/core-tools";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
@@ -701,5 +702,66 @@ describe("runTurn", () => {
     expect(
       msgs.some((m) => m.role === "assistant" && m.content === "should-not-run"),
     ).toBe(false);
+  });
+
+  it("closes the turn on unknown mid-turn errors (false-idle guard)", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    const llm = {
+      id: "boom",
+      async chat() {
+        throw new TypeError("provider socket melted");
+      },
+    };
+    await expect(
+      runTurn({
+        sessionId: session.id,
+        userText: "go",
+        store,
+        llm,
+        tools,
+      }),
+    ).rejects.toThrow(/provider socket melted/);
+    const events = store.get(session.id).events;
+    expect(events.some((e) => e.type === "turn/start")).toBe(true);
+    const end = events.find((e) => e.type === "turn/end");
+    expect(end?.type === "turn/end" && end.reason.kind).toBe("aborted");
+    expect(sessionHasOpenTurn(events)).toBe(false);
+  });
+
+  it("repairs orphan open turns before starting a new turn", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    store.append(session.id, {
+      type: "turn/start",
+      ts: 1,
+      turnId: "orphan-a",
+    });
+    store.append(session.id, {
+      type: "turn/start",
+      ts: 2,
+      turnId: "orphan-b",
+    });
+    expect(sessionHasOpenTurn(store.get(session.id).events)).toBe(true);
+
+    const tools = createToolRegistry();
+    const llm = createReplayAdapter([{ content: "ok" }]);
+    await runTurn({
+      sessionId: session.id,
+      userText: "continue",
+      store,
+      llm,
+      tools,
+    });
+
+    const events = store.get(session.id).events;
+    expect(sessionHasOpenTurn(events)).toBe(false);
+    const interrupted = events.filter(
+      (e) => e.type === "turn/end" && e.reason.kind === "interrupted",
+    );
+    expect(interrupted.map((e) => (e.type === "turn/end" ? e.turnId : ""))).toEqual(
+      expect.arrayContaining(["orphan-a", "orphan-b"]),
+    );
   });
 });

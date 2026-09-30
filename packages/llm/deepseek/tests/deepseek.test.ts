@@ -33,17 +33,21 @@ describe("deepseek adapter", () => {
     expect(isOfficialDeepSeekBaseUrl("https://gateway.example/v1")).toBe(false);
   });
 
-  it("catalog declares in-history only for deepseek-flash", () => {
+  it("catalog declares in-history for deepseek-flash and retired Flash aliases", () => {
     expect(resolveDeepSeekSystemPromptUpdate("deepseek-flash")).toBe(
       "in-history",
     );
     expect(resolveDeepSeekSystemPromptUpdate("deepseek-v4-flash")).toBe(
-      undefined,
+      "in-history",
     );
     expect(
       DEEPSEEK_DEFAULT_CATALOG.find((m) => m.id === "deepseek-flash")
         ?.systemPromptUpdate,
     ).toBe("in-history");
+    expect(DEEPSEEK_DEFAULT_CATALOG.map((m) => m.id)).toEqual([
+      "deepseek-flash",
+      "deepseek-v4-pro",
+    ]);
   });
 
   it("defaults baseUrl and model; bearer auth", async () => {
@@ -105,8 +109,9 @@ describe("deepseek adapter", () => {
     expect(out.content).toBe("gw");
   });
 
-  it("declares image on official host for vision-exp catalog model", () => {
+  it("treats retired Flash aliases as image-capable (compat routing)", () => {
     expect(isDeepSeekVisionModel(DEEPSEEK_VISION_EXP_MODEL)).toBe(true);
+    expect(isDeepSeekVisionModel("deepseek-v4-flash")).toBe(true);
     expect(
       resolveDeepSeekInputModalities({
         baseUrl: DEEPSEEK_DEFAULT_BASE_URL,
@@ -118,7 +123,7 @@ describe("deepseek adapter", () => {
       model: DEEPSEEK_VISION_EXP_MODEL,
     });
     expect(llm.inputModalities).toEqual(["text", "image"]);
-    expect(DEEPSEEK_DEFAULT_CATALOG.map((m) => m.id)).toContain(
+    expect(DEEPSEEK_DEFAULT_CATALOG.map((m) => m.id)).not.toContain(
       DEEPSEEK_VISION_EXP_MODEL,
     );
   });
@@ -137,7 +142,7 @@ describe("deepseek adapter", () => {
         baseUrl: DEEPSEEK_DEFAULT_BASE_URL,
         model: "deepseek-v4-flash",
       }),
-    ).toEqual(["text"]);
+    ).toEqual(["text", "image"]);
     expect(
       resolveDeepSeekInputModalities({
         baseUrl: DEEPSEEK_DEFAULT_BASE_URL,

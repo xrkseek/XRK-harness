@@ -205,21 +205,46 @@ describe('JobListAction dismissal', () => {
     const trigger = screen.getByRole('button', { name: '1 个后台任务运行中' })
     fireEvent.click(trigger)
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    expect(document.body.querySelector('[data-job-list-portal]')).not.toBeNull()
 
-    fireEvent.keyDown(trigger.parentElement!, { key: 'Escape' })
+    fireEvent.keyDown(document, { key: 'Escape' })
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
     expect(document.activeElement).toBe(trigger)
+    expect(document.body.querySelector('[data-job-list-portal]')).toBeNull()
   })
 
   it('ignores other keys and a closed-list Escape', () => {
     render(<JobListAction {...props([job()])} />)
     const trigger = screen.getByRole('button', { name: '1 个后台任务运行中' })
-    fireEvent.keyDown(trigger.parentElement!, { key: 'Escape' })
+    fireEvent.keyDown(document, { key: 'Escape' })
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
 
     fireEvent.click(trigger)
-    fireEvent.keyDown(trigger.parentElement!, { key: 'ArrowDown' })
+    fireEvent.keyDown(document, { key: 'ArrowDown' })
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('portals above the Overview strip and clamps away from details inset', () => {
+    document.documentElement.style.setProperty('--xrk-layout-inset-details', '320px')
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+    render(
+      <div style={{ position: 'absolute', left: 980, top: 40 }}>
+        <JobListAction {...props([job()])} />
+      </div>,
+    )
+    const trigger = screen.getByRole('button', { name: '1 个后台任务运行中' })
+    // Trigger sits against the Overview edge — end-align would spill into details.
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      x: 980, y: 40, left: 980, top: 40, right: 1100, bottom: 68,
+      width: 120, height: 28, toJSON: () => ({}),
+    } as DOMRect)
+    fireEvent.click(trigger)
+    const portal = document.body.querySelector('[data-job-list-portal]') as HTMLElement
+    expect(portal).not.toBeNull()
+    expect(portal.parentElement).toBe(document.body)
+    // Clamped so the 420px card stays left of details (1200 - 320 - 12 - 420).
+    expect(Number.parseFloat(portal.style.left)).toBe(1200 - 320 - 12 - 420)
   })
 
   it('closes on an outside pointer press but not on one inside', () => {

@@ -208,9 +208,10 @@ export const pluginInventoryRemove: FaceHandler = async (runtime, _rpcId, payloa
 };
 
 /** Reinstall / bump a managed plugin from its inventory source (or name@latest). */
-export const pluginInventoryUpdate: FaceHandler = async (runtime, _rpcId, payload) => {
+export const pluginInventoryUpdate: FaceHandler = async (runtime, rpcId, payload) => {
   const args = remoteArgs(payload);
   const entryId = String(args.entryId ?? "").trim();
+  const requestId = String(args.requestId ?? rpcId).trim() || rpcId;
   if (!entryId) {
     return { ok: false, error: { code: "invalid-payload", message: "entryId required" } };
   }
@@ -240,7 +241,17 @@ export const pluginInventoryUpdate: FaceHandler = async (runtime, _rpcId, payloa
     entry.moduleName,
   );
   const spec = resolveManagedPluginUpdateSpec(entryId, source);
-  const result = await runtime.updateUserPlugin(spec);
+  const onChunk = (chunk: {
+    readonly stream: "stdout" | "stderr";
+    readonly text: string;
+  }): void => {
+    publishRemoteEvent(runtime.bus, "plugin-inventory/install-log", [
+      requestId,
+      chunk.stream,
+      chunk.text,
+    ]);
+  };
+  const result = await runtime.updateUserPlugin(spec, { onChunk });
   const log = mutateLogFromResult(`xrkh plugin add ${spec}`, result);
   if (!result.ok) {
     return {

@@ -40,7 +40,7 @@ export const OPENAI_CHAT_BRANDS: readonly BrandEntry[] = [
     path: "/chat/completions",
     authMode: "bearer",
     apiKeyEnv: "OPENCODE_GO_API_KEY",
-    defaultModel: "deepseek-v4-flash",
+    defaultModel: "deepseek-flash",
     notes: "OPENCODE_API_KEY accepted as env fallback",
   },
   {

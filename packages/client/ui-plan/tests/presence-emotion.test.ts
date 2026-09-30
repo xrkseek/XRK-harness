@@ -1,14 +1,19 @@
-import { describe, expect, it } from 'vitest'
-import { derivePresenceEmotion } from '../src/client/PresenceBall.tsx'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  PRESENCE_TOOL_TTL_MS,
+  derivePresenceEmotion,
+  playPresenceAccent,
+} from '../src/client/PresenceBall.tsx'
 
 describe('derivePresenceEmotion', () => {
-  it('prefers sticky tool presence', () => {
+  it('prefers fresh sticky tool presence', () => {
     expect(derivePresenceEmotion({
-      presence: { emotionId: '10', tips: 'yay', source: 'tool' },
+      presence: { emotionId: '10', tips: 'yay', source: 'tool', updatedAt: 1_000 },
       turnActive: true,
       runningJobs: 2,
       runningSubs: 1,
       fleetHealth: 'critical',
+      nowMs: 1_000 + 1_000,
     })).toEqual({
       emotionId: '10',
       tips: 'yay',
@@ -16,12 +21,49 @@ describe('derivePresenceEmotion', () => {
     })
   })
 
-  it('maps activity to auto tip keys', () => {
+  it('expires sticky tool presence after TTL', () => {
+    expect(derivePresenceEmotion({
+      presence: { emotionId: '10', tips: 'yay', source: 'tool', updatedAt: 1_000 },
+      turnActive: false,
+      runningJobs: 0,
+      runningSubs: 0,
+      fleetHealth: 'ok',
+      nowMs: 1_000 + PRESENCE_TOOL_TTL_MS + 1,
+      phase: 0,
+    })).toMatchObject({ emotionId: '02', tipKey: 'ambient', source: 'auto' })
+  })
+
+  it('ignores sleep sticky while the session is busy', () => {
+    expect(derivePresenceEmotion({
+      presence: { emotionId: '00', tips: 'napping', source: 'tool', updatedAt: 5_000 },
+      turnActive: true,
+      runningJobs: 0,
+      runningSubs: 0,
+      fleetHealth: 'ok',
+      nowMs: 5_000,
+      phase: 0,
+    })).toMatchObject({ emotionId: '30', tipKey: 'turn', source: 'auto' })
+  })
+
+  it('lets local click pulse win over tool and activity', () => {
+    expect(derivePresenceEmotion({
+      presence: { emotionId: '32', tips: 'busy', source: 'tool', updatedAt: 5_000 },
+      turnActive: true,
+      runningJobs: 0,
+      runningSubs: 0,
+      fleetHealth: 'ok',
+      nowMs: 5_000,
+      local: { emotionId: '10' },
+    })).toMatchObject({ emotionId: '10', tipKey: 'local', source: 'local' })
+  })
+
+  it('maps activity to auto tip keys and rotates work moods', () => {
     expect(derivePresenceEmotion({
       turnActive: false,
       runningJobs: 0,
       runningSubs: 0,
       fleetHealth: 'ok',
+      phase: 0,
     }).emotionId).toBe('02')
 
     expect(derivePresenceEmotion({
@@ -29,7 +71,16 @@ describe('derivePresenceEmotion', () => {
       runningJobs: 0,
       runningSubs: 0,
       fleetHealth: 'ok',
+      phase: 0,
     })).toMatchObject({ emotionId: '30', tipKey: 'turn', source: 'auto' })
+
+    expect(derivePresenceEmotion({
+      turnActive: true,
+      runningJobs: 0,
+      runningSubs: 0,
+      fleetHealth: 'ok',
+      phase: 1,
+    })).toMatchObject({ emotionId: '32', tipKey: 'turn', source: 'auto' })
 
     expect(derivePresenceEmotion({
       turnActive: false,
@@ -58,5 +109,127 @@ describe('derivePresenceEmotion', () => {
       runningSubs: 0,
       fleetHealth: 'critical',
     })).toMatchObject({ emotionId: '34', tipKey: 'critical' })
+  })
+
+  it('listens when queue/steer is waiting without an active turn', () => {
+    expect(derivePresenceEmotion({
+      turnActive: false,
+      runningJobs: 0,
+      runningSubs: 0,
+      fleetHealth: 'ok',
+      queued: 1,
+    })).toMatchObject({ emotionId: '35', tipKey: 'listen', source: 'auto' })
+
+    expect(derivePresenceEmotion({
+      turnActive: false,
+      runningJobs: 0,
+      runningSubs: 0,
+      fleetHealth: 'ok',
+      steering: 2,
+    })).toMatchObject({ emotionId: '35', tipKey: 'listen' })
+
+    // Active turn still wins over inbox.
+    expect(derivePresenceEmotion({
+      turnActive: true,
+      runningJobs: 0,
+      runningSubs: 0,
+      fleetHealth: 'ok',
+      queued: 3,
+      phase: 0,
+    })).toMatchObject({ tipKey: 'turn' })
+  })
+
+  it('shows compact mood when compaction is busy and nothing else is', () => {
+    expect(derivePresenceEmotion({
+      turnActive: false,
+      runningJobs: 0,
+      runningSubs: 0,
+      fleetHealth: 'ok',
+      compactionBusy: true,
+    })).toMatchObject({ emotionId: '36', tipKey: 'compact', source: 'auto' })
+  })
+
+  it('surfaces recent tool errors above ambient / idle', () => {
+    expect(derivePresenceEmotion({
+      turnActive: false,
+      runningJobs: 0,
+      runningSubs: 0,
+      fleetHealth: 'ok',
+      toolError: { name: 'bash' },
+      idleMs: 200_000,
+    })).toMatchObject({ emotionId: '34', tipKey: 'toolError', source: 'auto', tips: 'bash' })
+  })
+
+  it('enters standby then sleep on long quiet idle', () => {
+    expect(derivePresenceEmotion({
+      turnActive: false,
+      runningJobs: 0,
+      runningSubs: 0,
+      fleetHealth: 'ok',
+      idleMs: 45_000,
+    })).toMatchObject({ emotionId: '06', tipKey: 'standby', source: 'auto' })
+
+    expect(derivePresenceEmotion({
+      turnActive: false,
+      runningJobs: 0,
+      runningSubs: 0,
+      fleetHealth: 'ok',
+      idleMs: 120_000,
+    })).toMatchObject({ emotionId: '00', tipKey: 'sleep', source: 'auto' })
+  })
+})
+
+describe('playPresenceAccent', () => {
+  function fakeBall() {
+    return {
+      setEmotion: vi.fn(),
+      setGaze: vi.fn(),
+      handleAIMessage: vi.fn(),
+      setActive: vi.fn(),
+      destroy: vi.fn(),
+      bounce: vi.fn(),
+      spin: vi.fn(),
+      burst: vi.fn(),
+    }
+  }
+
+  it('bounces on session tipKey edges, not quiet phase rotation', () => {
+    const ball = fakeBall()
+    playPresenceAccent(
+      ball,
+      { emotionId: '30', tipKey: 'turn', source: 'auto' },
+      { emotionId: '02', tipKey: 'ambient', source: 'auto' },
+    )
+    expect(ball.bounce).toHaveBeenCalledOnce()
+
+    ball.bounce.mockClear()
+    playPresenceAccent(
+      ball,
+      { emotionId: '32', tipKey: 'turn', source: 'auto' },
+      { emotionId: '30', tipKey: 'turn', source: 'auto' },
+    )
+    expect(ball.bounce).not.toHaveBeenCalled()
+  })
+
+  it('celebrates when work settles back to ambient', () => {
+    const ball = fakeBall()
+    playPresenceAccent(
+      ball,
+      { emotionId: '02', tipKey: 'ambient', source: 'auto' },
+      { emotionId: '30', tipKey: 'turn', source: 'auto' },
+    )
+    expect(ball.burst).toHaveBeenCalled()
+    expect(ball.bounce).toHaveBeenCalled()
+  })
+
+  it('bursts on celebrate sticky ids', () => {
+    const ball = fakeBall()
+    playPresenceAccent(
+      ball,
+      { emotionId: '33', source: 'tool' },
+      null,
+    )
+    expect(ball.burst).toHaveBeenCalled()
+    expect(ball.bounce).toHaveBeenCalled()
   })
 })

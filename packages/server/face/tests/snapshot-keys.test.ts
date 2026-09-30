@@ -15,6 +15,11 @@ describe("session history projection keys", () => {
     ]);
   });
 
+  it("history tail carries workspaceChanges for cold reopen", () => {
+    expect(SESSION_HISTORY_PROJECTION_KEYS).toContain("workspaceChanges");
+    expect(sessionHistoryTailProjectionKeys()).toContain("workspaceChanges");
+  });
+
   it("historyPageIncludesProjections is false for loadOlder", () => {
     expect(historyPageIncludesProjections(undefined)).toBe(true);
     expect(historyPageIncludesProjections(0)).toBe(false);

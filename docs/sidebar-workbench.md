@@ -15,7 +15,8 @@
 
 - Host 拥有 `/sidebar/api/*` · `/sidebar/file` · PTY / agent-opens WS（见 [community-plugins](./community-plugins.md) · [http-api](./http-api.md)）。
 - 壳发布 `LayoutInsets`（`--xrk-layout-inset-details` 等），浮动层用 CSS 变量让位 Status 栏。
-- 聊天 `openFile`：有 `ctx.betterSidebar` 时先 `openTab`（可带 path），再 `workspaces.openPath`；未装社区侧栏时走系统打开。
+- 概况栏开合与宽度按**会话**记住（`localStorage`），刷新后仍在；与 `xrkh-better-sidebar` 工作台状态互不影响。
+- 聊天 / Overview「改动」开文件：有 `ctx.betterSidebar` 时先 `openTab`（可带 path），再 Host `openPath`；未装社区侧栏时只走系统打开。
 - 社区插件若占用工作台，应提供 `ctx.betterSidebar`。
 
 ## 边界（首方）
@@ -43,7 +44,8 @@ Floating file/terminal chrome is a community plugin, not first-party. Install **
 
 - Host owns `/sidebar/api/*` · `/sidebar/file` · PTY / agent-opens WS (see [community-plugins](./community-plugins.md) · [http-api](./http-api.md)).
 - The shell publishes `LayoutInsets` (`--xrk-layout-inset-details`, …); floating chrome offsets with those CSS variables.
-- Chat `openFile`: when `ctx.betterSidebar` is present, call `openTab` (optional `path`) then `workspaces.openPath`; without the community sidebar, open via the OS.
+- Overview open bit and width are **per Session** (localStorage) and survive reload; independent of `xrkh-better-sidebar` workbench state.
+- Chat / Overview Changes open-file: when `ctx.betterSidebar` is present, call `openTab` (optional `path`) then Host `openPath`; without the community sidebar, open via the OS only.
 - Community workbenches should provide `ctx.betterSidebar`.
 
 ## Boundaries (first-party)

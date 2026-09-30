@@ -9,6 +9,7 @@ import {
   createTitleProjectionUnit,
   FaceTitleController,
   installDefaultFaceProjections,
+  sessionHistoryTailProjectionKeys,
 } from "../src/projections/index.js";
 import { createFaceRuntime } from "../src/runtime.js";
 
@@ -312,6 +313,34 @@ describe("createFaceRuntime projection wire", () => {
       { ...summary1b, seq: 2 },
       { ...summary2, seq: 3 },
     ]);
+  });
+
+  it("workspaceChanges: cold snapshot folds without prior drive (history reopen)", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const summary = {
+      turnId: "t1",
+      cwd: "/w",
+      files: [{ path: "a.ts", display: "a.ts", added: 1, deleted: 0 }],
+      total: 1,
+      added: 1,
+      deleted: 0,
+    };
+    store.append(session.id, {
+      type: "workspace/changes",
+      ts: 1,
+      turnId: "t1",
+      summary,
+    });
+    // Fresh registry — Host restart / LRU evict: no cells, no drive.
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    installDefaultFaceProjections(registry);
+    const snap = registry.snapshot(session.id, {
+      keys: [...sessionHistoryTailProjectionKeys()],
+    });
+    expect(snap.values.workspaceChanges).toEqual([{ ...summary, seq: 1 }]);
   });
 
   it("Face patched append publishes session/projection todos and keeps them across turn/start", () => {

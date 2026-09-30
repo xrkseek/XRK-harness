@@ -1,30 +1,21 @@
 /**
  * Client-side merge of Face `workspaceChanges` into SessionProjectionMap.
- * Authoritative fold lives on Face; this types `useProjection('workspaceChanges')`.
+ *
+ * The authoritative declare lives on `@xrkseek/xrk-host-apiproxy` sessions
+ * contract; importing that emitted .d.ts does not land the merge for this
+ * package's tsc emit. Mirror the key here (same shape) so Overview /
+ * useProjection('workspaceChanges') is typed.
  */
+import type { WorkspaceChangesProjected } from '@xrkseek/xrk-host-apiproxy/api'
 
 declare module '@xrkseek/xrk-session-projection/types' {
   interface SessionProjectionMap {
     /**
-     * Turn-end changed-files summaries (DSH workspace/changes).
+     * Per-turn changed-files summaries (Overview `#改动` / deliverables).
      * Each row carries Face `seq` for `changes.fileDiff`.
      */
-    workspaceChanges: readonly {
-      readonly turnId: string
-      readonly cwd: string
-      readonly seq: number
-      readonly files: readonly {
-        readonly path: string
-        readonly display: string
-        readonly added: number
-        readonly deleted: number
-        readonly binary?: true
-        readonly oversized?: true
-      }[]
-      readonly total: number
-      readonly added: number
-      readonly deleted: number
-      readonly snapshot?: { readonly before: string; readonly after: string }
-    }[]
+    workspaceChanges: readonly WorkspaceChangesProjected[]
   }
 }
+
+export {}

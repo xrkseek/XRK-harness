@@ -1,5 +1,5 @@
 import { scheduler } from "node:timers/promises";
-import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, promotePendingSteers, pruneOversizedToolResults, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, promotePendingSteers, pruneOversizedToolResults, repairOpenTurnEvents, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   isMetadataOnlyUserMessage,
@@ -266,7 +266,7 @@ export interface RunTurnInput {
         }[];
       }>;
   /**
-   * Session working directory for turn-end `workspace/changes` summaries.
+   * Session working directory for live / turn-end `workspace/changes` summaries.
    * Omit → `process.cwd()`. Face/Host pass the session project root.
    */
   readonly cwd?: string;
@@ -676,8 +676,15 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     );
   }
 
-  // Fail-before-retry: settle abandoned tools from a prior crash/abort so the
-  // model never sees open tool_calls without results (and we never replay side effects).
+  // Fail-before-retry: close orphan open turns left by a prior false-idle /
+  // crash (every turn/start without turn/end), then settle any dangling tools
+  // so the model never sees open tool_calls without results.
+  for (const ev of repairOpenTurnEvents(
+    readSessionEvents(input.store, input.sessionId),
+    now,
+  )) {
+    append(input.store, input.sessionId, ev);
+  }
   const prior = settleDanglingTools(input.store, input.sessionId, { now });
   toolFailed += prior.settled.length;
 
@@ -686,19 +693,38 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     ts: now(),
     turnId,
   });
-  /** Per-tool FileDiff captures for turn-end `workspace/changes`. */
+  /** Per-tool FileDiff captures; refreshed into `workspace/changes` as tools settle. */
   const turnFileDiffs: FileDiff[] = [];
   const workspaceCwd = input.cwd ?? process.cwd();
+  /** Skip redundant append when the capture set has not grown since the last emit. */
+  let lastEmittedDiffCount = -1;
   const emitWorkspaceChanges = (): void => {
-    appendWorkspaceChangesFromDiffs({
-      store: input.store,
-      sessionId: input.sessionId,
-      turnId,
-      cwd: workspaceCwd,
-      diffs: turnFileDiffs,
-      now,
-    });
+    if (turnFileDiffs.length === 0 || turnFileDiffs.length === lastEmittedDiffCount) {
+      return;
+    }
+    if (
+      appendWorkspaceChangesFromDiffs({
+        store: input.store,
+        sessionId: input.sessionId,
+        turnId,
+        cwd: workspaceCwd,
+        diffs: turnFileDiffs,
+        now,
+      })
+    ) {
+      lastEmittedDiffCount = turnFileDiffs.length;
+    }
   };
+
+  let activeStepId: string | undefined;
+  /** Sticky: once any step hits max-tokens, the turn ends that way (DSH). */
+  let turnEndReason: TurnEndReason = { kind: "completed" };
+  /** Consecutive auto-continues injected this turn (0 when disabled). */
+  let autoContinueRounds = 0;
+  const autoContinueMaxRounds =
+    input.autoContinueMaxRounds ?? 2;
+
+  try {
   if (input.beforeUserMessage) {
     await input.beforeUserMessage({
       store: input.store,
@@ -742,15 +768,6 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     });
   }
 
-  let activeStepId: string | undefined;
-  /** Sticky: once any step hits max-tokens, the turn ends that way (DSH). */
-  let turnEndReason: TurnEndReason = { kind: "completed" };
-  /** Consecutive auto-continues injected this turn (0 when disabled). */
-  let autoContinueRounds = 0;
-  const autoContinueMaxRounds =
-    input.autoContinueMaxRounds ?? 2;
-
-  try {
   while (steps < maxSteps) {
     if (input.signal?.aborted) {
       throw new DOMException("aborted", "AbortError");
@@ -1288,6 +1305,9 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       batchSafety.push(...outcome.safetyNotices);
     }
 
+    // Live Overview / deliverables: same-turn replace as each tool batch settles.
+    emitWorkspaceChanges();
+
     if (settleAborted || input.signal?.aborted) {
       throw new DOMException("aborted", "AbortError");
     }
@@ -1393,6 +1413,19 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
             code,
           },
         },
+      });
+    } else {
+      // Unknown failure after turn/start: still close the turn so drain idle
+      // cannot leave an open turn (false-idle /「熔断」UX — send looks idle
+      // while history still has turn/start without turn/end).
+      emitWorkspaceChanges();
+      finalizeCancelledTurn({
+        store: input.store,
+        sessionId: input.sessionId,
+        turnId,
+        ...(activeStepId !== undefined ? { stepId: activeStepId } : {}),
+        now,
+        cancelCause: { kind: "legacy" },
       });
     }
     throw err;

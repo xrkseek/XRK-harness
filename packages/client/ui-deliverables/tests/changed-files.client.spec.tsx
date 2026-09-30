@@ -93,6 +93,26 @@ describe('ChangedFiles review navigation', () => {
     expect(document.querySelector('[data-changes-review]')).toBeNull()
   })
 
+  it('file rows open Overview review when openOverviewReview is wired', async () => {
+    const openOverviewReview = vi.fn()
+    const { container } = render(
+      <ChangedFiles
+        changes={changes}
+        loadFileDiff={vi.fn(async () => null)}
+        openFile={vi.fn()}
+        openOverviewReview={openOverviewReview}
+        t={t}
+      />,
+    )
+    const list = container.querySelector('[data-changed-files] ul')
+    expect(list).toBeTruthy()
+    await act(async () => {
+      fireEvent.click(within(list as HTMLElement).getByLabelText('View diff for b.ts'))
+    })
+    expect(openOverviewReview).toHaveBeenCalledWith(1)
+    expect(document.querySelector('[data-changes-review]')).toBeNull()
+  })
+
   it('switches the review file via the selector menu', async () => {
     const loadFileDiff = vi.fn(async (_seq: number, index: number) =>
       textDiff(index === 0 ? 'a.ts' : 'b.ts', index === 0 ? '+hello' : '+world'))

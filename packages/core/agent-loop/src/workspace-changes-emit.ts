@@ -1,7 +1,8 @@
 /**
- * Turn-end `workspace/changes`: accumulate per-tool FileDiff views, then
- * append one summary via {@link summarizeFileDiffs} (DSH deliverables shape;
- * XRK embeds the summary on the SessionEvent).
+ * Live + turn-end `workspace/changes`: accumulate per-tool FileDiff views, then
+ * append/replace one summary via {@link summarizeFileDiffs} (DSH deliverables
+ * shape; XRK embeds the summary on the SessionEvent). Face projection keeps
+ * one row per turnId (same-turn replace), so mid-turn emits refresh Overview.
  */
 import type { SessionStore } from "@xrkseek/core-session";
 import type { FileDiff, ToolDefinition } from "@xrkseek/core-tools";

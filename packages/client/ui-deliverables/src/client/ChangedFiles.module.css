@@ -65,11 +65,20 @@
 }
 .stat {
   display: inline-flex;
-  gap: 6px;
+  align-items: baseline;
+  gap: 4px;
   font-family: var(--ds-font-family-code);
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.added,
+.deleted {
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
 }
 .added { color: var(--dsw-alias-state-success-primary); }
 .deleted { color: var(--dsw-alias-state-error-primary); }
@@ -82,8 +91,8 @@
 .row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-start;
+  gap: 8px;
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
@@ -117,9 +126,12 @@
 .counts {
   display: inline-flex;
   flex: none;
-  gap: 6px;
+  align-items: baseline;
+  gap: 4px;
   white-space: nowrap;
   color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
 .review {
   display: flex;
@@ -131,12 +143,13 @@
 .reviewBar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 .selector {
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
+  max-width: min(100%, 28rem);
 }
 .selectorButton {
   display: inline-flex;
@@ -179,18 +192,20 @@
 .reviewCounts {
   display: inline-flex;
   flex: none;
-  gap: 6px;
+  align-items: baseline;
+  gap: 4px;
   font-family: var(--ds-font-family-code);
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
 .menuItem {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
   min-width: 0;
 }
@@ -204,10 +219,15 @@
 .menuCounts {
   display: inline-flex;
   flex: none;
-  gap: 6px;
+  align-items: baseline;
+  gap: 4px;
+  margin-inline-start: 0;
   color: var(--dsw-alias-label-tertiary);
   font-family: var(--ds-font-family-code);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 .reviewStatus {
   font-size: 12px;

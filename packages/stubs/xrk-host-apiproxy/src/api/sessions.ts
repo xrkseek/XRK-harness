@@ -40,6 +40,12 @@ declare module '@xrkseek/xrk-session-projection/types' {
      * loaded window only).
      */
     turnOutline: readonly TurnOutlineEntry[]
+    /**
+     * Per-turn changed-files summaries (Overview `#改动` / deliverables).
+     * Each row carries Face `seq` for `changes.fileDiff`. Folded on history
+     * tail reopen; same-turn replace last-wins.
+     */
+    workspaceChanges: readonly WorkspaceChangesProjected[]
   }
 }
 
@@ -53,6 +59,25 @@ export interface TurnOutlineEntry {
   readonly prompt: string
   /** Bounded final-response preview; `''` until turn/end commits assistant text. */
   readonly response: string
+}
+
+/** One turn's changed-files card on the wire (Face `workspaceChanges` view). */
+export interface WorkspaceChangesProjected {
+  readonly turnId: string
+  readonly cwd: string
+  readonly seq: number
+  readonly files: readonly {
+    readonly path: string
+    readonly display: string
+    readonly added: number
+    readonly deleted: number
+    readonly binary?: true
+    readonly oversized?: true
+  }[]
+  readonly total: number
+  readonly added: number
+  readonly deleted: number
+  readonly snapshot?: { readonly before: string; readonly after: string }
 }
 
 /** Persisted hints used to summarize a cold Session without reading a large log. */

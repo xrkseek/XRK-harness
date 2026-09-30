@@ -991,7 +991,7 @@ describe('connected generation', () => {
     api.onHistory = () => Promise.resolve(ok({
       events: entries(plainTurn(0, 0, 'a', 'b')) as never[],
       hasMore: false,
-      modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      modelSelection: { provider: 'deepseek-official', model: 'deepseek-flash' },
     }))
     const manager = new SessionManager(api, fakeRemote())
     const openedSession = manager.get(S1)

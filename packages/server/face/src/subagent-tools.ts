@@ -33,6 +33,8 @@ import {
   type SubagentWorktree,
 } from "./subagent-worktree.js";
 import type { ManagedWorktreeLease } from "./managed-worktree.js";
+import { resolveSessionModelSelection } from "./model-catalog.js";
+import { selectSessionModel } from "./select-session-model.js";
 import {
   appendOutputContract,
   buildOutputSchemaRetryMessage,
@@ -271,6 +273,49 @@ function countActiveChildren(
   return n;
 }
 
+/**
+ * Optional LLM target for a freshly created child.
+ * `model` alone inherits the parent's current provider; `provider` alone is rejected.
+ */
+async function applySubagentModelOverride(
+  runtime: FaceRuntime,
+  args: {
+    readonly parentSessionId: string;
+    readonly childSessionId: string;
+    readonly provider?: string;
+    readonly model?: string;
+    readonly reasoningEffort?: string;
+  },
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const providerRaw = args.provider?.trim() ?? "";
+  const modelRaw = args.model?.trim() ?? "";
+  const effortRaw = args.reasoningEffort?.trim() ?? "";
+  if (!providerRaw && !modelRaw && !effortRaw) return { ok: true };
+  if (!modelRaw) {
+    return {
+      ok: false,
+      message:
+        "subagent: model is required when overriding provider or reasoning_effort",
+    };
+  }
+  const provider =
+    providerRaw
+    || resolveSessionModelSelection(runtime, args.parentSessionId).provider;
+  const selected = await selectSessionModel(runtime, {
+    sessionId: args.childSessionId,
+    provider,
+    model: modelRaw,
+    ...(effortRaw ? { reasoningEffort: effortRaw } : {}),
+  });
+  if (!selected.ok) {
+    return {
+      ok: false,
+      message: `subagent model: ${selected.error.message}`,
+    };
+  }
+  return { ok: true };
+}
+
 function createSubagentTool(
   options: BindSubagentToolsOptions,
 ): ToolDefinition {
@@ -290,6 +335,7 @@ function createSubagentTool(
       "Optional role (worker|researcher|reviewer|lead) prefixes a role reminder; " +
       "optional output_schema appends an OUTPUT CONTRACT and validates the final JSON; " +
       "optional task_id / task_name register the work on the Agent Teams task board. " +
+      "Optional provider / model / reasoning_effort pin the child's LLM (model alone keeps the parent provider). " +
       "Optional runtime: omit or in-process (default Face child); acp / app-server / claude-code spawn an external subprocess. " +
       "acp / app-server support run_in_background + followup_task / send_message / wait_agent / interrupt_agent on the same list surface; claude-code remains one-shot print.",
     parameters: {
@@ -338,6 +384,21 @@ function createSubagentTool(
           description:
             "Optional JSON Schema for the child's FINAL answer (Hermes OUTPUT CONTRACT). Validated after the turn; one correction turn on failure for foreground waits.",
         },
+        provider: {
+          type: "string",
+          description:
+            "Optional LLM provider route for the child (e.g. deepseek). Pair with model; when omitted, inherits the parent session's provider.",
+        },
+        model: {
+          type: "string",
+          description:
+            "Optional model id for the child. When set, pins this child's session.selectModel route (does not change other sessions).",
+        },
+        reasoning_effort: {
+          type: "string",
+          description:
+            "Optional reasoning effort for the child when the selected model advertises efforts.",
+        },
         runtime: {
           type: "string",
           description:
@@ -374,6 +435,9 @@ function createSubagentTool(
         task_id?: string;
         task_name?: string;
         output_schema?: unknown;
+        provider?: string;
+        model?: string;
+        reasoning_effort?: string;
       };
       // Defense in depth: Host should not bind this tool when the badge is
       // Frugal/minimal/shell. If a stale AgentHandle still carries it, refuse.
@@ -478,6 +542,18 @@ function createSubagentTool(
             const childId = String(
               (created.result.value as { sessionId: string }).sessionId,
             );
+            const modelPin = await applySubagentModelOverride(options.runtime, {
+              parentSessionId: options.parentSessionId,
+              childSessionId: childId,
+              ...(typeof a.provider === "string" ? { provider: a.provider } : {}),
+              ...(typeof a.model === "string" ? { model: a.model } : {}),
+              ...(typeof a.reasoning_effort === "string"
+                ? { reasoningEffort: a.reasoning_effort }
+                : {}),
+            });
+            if (!modelPin.ok) {
+              return { content: modelPin.message, isError: true };
+            }
             const taskTitle =
               String(a.task_name ?? "").trim() || label;
             const task = options.runtime.agentTeamTasks.open({
@@ -748,6 +824,19 @@ function createSubagentTool(
         childId = String(
           (created.result.value as { sessionId: string }).sessionId,
         );
+      }
+      const modelPin = await applySubagentModelOverride(options.runtime, {
+        parentSessionId: options.parentSessionId,
+        childSessionId: childId,
+        ...(typeof a.provider === "string" ? { provider: a.provider } : {}),
+        ...(typeof a.model === "string" ? { model: a.model } : {}),
+        ...(typeof a.reasoning_effort === "string"
+          ? { reasoningEffort: a.reasoning_effort }
+          : {}),
+      });
+      if (!modelPin.ok) {
+        dropIsolated();
+        return { content: modelPin.message, isError: true };
       }
       if (isolated) {
         options.runtime.sessionCwds.set(childId, isolated.path);

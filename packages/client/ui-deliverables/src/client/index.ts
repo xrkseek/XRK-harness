@@ -36,7 +36,7 @@ export { ChangesReviewView } from './ChangesReviewView.tsx'
 export { ChangesReviewController } from './changes-review-controller.ts'
 export { diffHunkFromWorkspaceFileDiff } from './workspace-file-diff-hunk.ts'
 export { DeliverablesTail, selectDeliverables } from './Deliverables.tsx'
-export { producedForClosing, changesForClosing } from './turn-deliverables.ts'
+export { producedForClosing, changesForClosing, collectChangesTurnsFromTimeline } from './turn-deliverables.ts'
 
 export const inject = [
   'slots', 'locale', 'conversationEvents', 'connection', 'sessions',

@@ -35,7 +35,7 @@ Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deri
 | `approval/policy` | `policy`（ask\|never） | **Log-only** — `never` 时审批自动放行 |
 | `plan/mode` | `active` | **Log-only** — Face `plan` 投影 · `/plan`；last-wins，缺省 inactive |
 | `feedback/record` | `text` | **Log-only** — `/feedback`；不进 `deriveMessages`；捕获壳无专用卡（wire `ignorable`） |
-| `workspace/changes` | `turnId` + `summary`（文件列表 / 行增减） | **Log-only** — `runTurn` 从工具 FileDiff 累积 `summarizeFileDiffs` 后、在 `turn/end` 前自动 append；Face `workspaceChanges` 投影（同 turn 后写覆盖）；逐文件 hunk 走 Face unary `changes.fileDiff`（`sessionId`+`seq`+`index` → `WorkspaceFileDiff`，不进日志） |
+| `workspace/changes` | `turnId` + `summary`（文件列表 / 行增减） | **Log-only** — `runTurn` 从工具 FileDiff 累积后，在**每批工具 settle 后**与 `turn/end` 前 append（同 turn 多次写入；Face `workspaceChanges` 投影同 turnId 后写覆盖）；逐文件 hunk 走 Face unary `changes.fileDiff`（`sessionId`+`seq`+`index` → `WorkspaceFileDiff`，不进日志） |
 | `image/offload` | `targets[]`（`seq` + `imageIndexes`） | **Log-only 选择** — 永久省略输入图出现位置；`seq` = 日志 0-based 下标（`user/message` / `tool/result`）；`imageIndexes` 为内容内深度优先图片下标。源消息事件不变；`deriveMessages` 投影 `ImageBlock.offloaded: true`（含 compaction 窗口：按绝对 `seq` 映射切片）。恢复 / 分叉种子前缀保留选择 |
 
 ## 结束原因：`aborted` vs `interrupted`
@@ -124,7 +124,7 @@ Window compaction: [session-compaction.md](./session-compaction.md).
 | `approval/policy` | `policy` (ask\|never) | **Log-only** — `never` auto-allows approvals |
 | `plan/mode` | `active` | **Log-only** — Face `plan` projection · `/plan`; last-wins, default inactive |
 | `feedback/record` | `text` | **Log-only** — `/feedback`; not in `deriveMessages`; capture shell has no dedicated card (wire `ignorable`) |
-| `workspace/changes` | `turnId` + `summary` (file list / line counts) | **Log-only** — `runTurn` accumulates tool FileDiffs via `summarizeFileDiffs` and appends before `turn/end`; Face `workspaceChanges` projection (same-turn last write wins); per-file hunks via Face unary `changes.fileDiff` (`sessionId`+`seq`+`index` → `WorkspaceFileDiff`, not in the log) |
+| `workspace/changes` | `turnId` + `summary` (file list / line counts) | **Log-only** — `runTurn` accumulates tool FileDiffs and appends **after each tool batch settles** and again before `turn/end` (same-turn multi-write; Face `workspaceChanges` projection last-write-wins per turnId); per-file hunks via Face unary `changes.fileDiff` (`sessionId`+`seq`+`index` → `WorkspaceFileDiff`, not in the log) |
 | `image/offload` | `targets[]` (`seq` + `imageIndexes`) | **Log-only selection** — permanently omit input-image occurrences; `seq` is the 0-based log index (`user/message` / `tool/result`); `imageIndexes` are depth-first image indexes in that content. Source message events stay unchanged; `deriveMessages` projects `ImageBlock.offloaded: true` (including after a compaction window: absolute `seq` maps into the slice). Restore / fork seed prefixes keep the selection |
 
 ## End reasons: aborted vs interrupted

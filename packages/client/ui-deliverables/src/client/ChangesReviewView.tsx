@@ -22,8 +22,11 @@ function Counts({
   added, deleted, t,
 }: { added: number; deleted: number } & PropsLocale<typeof NS>) {
   return <>
-    <span className={css.added}>{t('changes.added', { count: GROUPED.format(added) })}</span>
-    <span className={css.deleted}>{t('changes.deleted', { count: GROUPED.format(deleted) })}</span>
+    {added > 0 ? <span className={css.added}>{t('changes.added', { count: GROUPED.format(added) })}</span> : null}
+    {deleted > 0 ? <span className={css.deleted}>{t('changes.deleted', { count: GROUPED.format(deleted) })}</span> : null}
+    {added <= 0 && deleted <= 0
+      ? <span className={css.added}>{t('changes.added', { count: '0' })}</span>
+      : null}
   </>
 }
 
@@ -143,7 +146,7 @@ export function ChangesReviewView({
       {diff === undefined && <span className={css.reviewStatus}>{t('changes.loading')}</span>}
       {error !== undefined && <span className={css.reviewStatus} data-error="true">{error}</span>}
       {diff === null && error === undefined && (
-        <span className={css.reviewStatus}>{t('changes.unavailable')}</span>
+        <span className={css.reviewStatus}>{t('changes.missing')}</span>
       )}
       {diff?.kind === 'binary' && <span className={css.reviewStatus}>{t('changes.binary')}</span>}
       {diff?.kind === 'oversized' && <span className={css.reviewStatus}>{t('changes.oversized')}</span>}

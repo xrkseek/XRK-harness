@@ -69,7 +69,10 @@ describe("pluginInventory/update", () => {
       { args: { entryId: "side-tools" } },
     );
     expect(result.ok).toBe(true);
-    expect(updateUserPlugin).toHaveBeenCalled();
+    expect(updateUserPlugin).toHaveBeenCalledWith(
+      "side-tools@latest",
+      expect.objectContaining({ onChunk: expect.any(Function) }),
+    );
     expect(syncManagedProcessPlugins).toHaveBeenCalledWith({
       reloadIds: expect.arrayContaining(["side-tools"]),
     });

@@ -39,28 +39,12 @@ export const DEFAULT_DEEPSEEK_MODELS: ReadonlyArray<{
     inputModalities: ["text", "image"],
   },
   {
-    id: "deepseek-v4-flash",
-    name: "DeepSeek V4 Flash",
-    description: "",
-    contextWindow: 1_000_000,
-    maxTokens: 384_000,
-    inputModalities: ["text"],
-  },
-  {
     id: "deepseek-v4-pro",
     name: "DeepSeek V4 Pro",
     description: "",
     contextWindow: 1_000_000,
     maxTokens: 384_000,
     inputModalities: ["text"],
-  },
-  {
-    id: "deepseek-v4-flash-vision-exp",
-    name: "DeepSeek V4 Flash Vision Exp",
-    description: "",
-    contextWindow: 1_000_000,
-    maxTokens: 384_000,
-    inputModalities: ["text", "image"],
   },
 ];
 

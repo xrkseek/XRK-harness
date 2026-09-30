@@ -1104,7 +1104,7 @@ describe("Face credentials U2", () => {
     expect(effectiveHostApiKey(rt)).toBe("");
   });
 
-  it("session.models reads llm-deepseek models[] and selectModel persists agent-default-model", async () => {
+  it("session.models reads llm-deepseek models[] and selectModel persists session-models sidecar only", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-model-cat-"));
     await writeFile(
       path.join(dir, "settings.yaml"),
@@ -1115,6 +1115,8 @@ describe("Face credentials U2", () => {
         "  models:",
         "    - id: deepseek-v4-flash",
         "      name: DeepSeek Flash",
+        "    - id: deepseek-chat",
+        "      name: DeepSeek Chat",
         "agent-default-model:",
         "  provider: deepseek",
         "  model: deepseek-v4-flash",
@@ -1143,7 +1145,10 @@ describe("Face credentials U2", () => {
       groups: { id: string; models: { id: string; name: string }[] }[];
     };
     const deepseek = catalog.groups.find((g) => g.id === "deepseek");
-    expect(deepseek?.models.map((m) => m.id)).toEqual(["deepseek-v4-flash"]);
+    expect(deepseek?.models.map((m) => m.id)).toEqual([
+      "deepseek-v4-flash",
+      "deepseek-chat",
+    ]);
     expect(deepseek?.models.some((m) => m.id === "default")).toBe(false);
     expect(deepseek?.models.some((m) => m.id === "deepseek-flash")).toBe(false);
     expect(catalog.current.model).toBe("deepseek-v4-flash");
@@ -1161,13 +1166,19 @@ describe("Face credentials U2", () => {
     const sel = await dispatchFaceMethod(rt, "session.selectModel", "mc3", {
       sessionId,
       provider: "deepseek",
-      model: "deepseek-v4-flash",
+      model: "deepseek-chat",
     });
     expect(sel.result.ok).toBe(true);
+    // Global Settings default must stay untouched (other sessions must not remount).
     const yaml = await readFile(path.join(dir, "settings.yaml"), "utf8");
-    expect(yaml).toContain("agent-default-model:");
-    expect(yaml).toContain("provider: deepseek");
     expect(yaml).toContain("model: deepseek-v4-flash");
+    expect(yaml).not.toMatch(/agent-default-model:[\s\S]*model: deepseek-chat/);
+    const sidecar = await readFile(
+      path.join(dir, "session-models.json"),
+      "utf8",
+    );
+    expect(sidecar).toContain(sessionId);
+    expect(sidecar).toContain("deepseek-chat");
 
     const modelsAfter = await dispatchFaceMethod(rt, "session.models", "mc4", {
       sessionId,
@@ -1175,8 +1186,12 @@ describe("Face credentials U2", () => {
     expect(modelsAfter.result.ok).toBe(true);
     if (!modelsAfter.result.ok) return;
     expect(
-      (modelsAfter.result.value as { routable: boolean }).routable,
+      (modelsAfter.result.value as { routable: boolean; current: { model: string } })
+        .routable,
     ).toBe(true);
+    expect(
+      (modelsAfter.result.value as { current: { model: string } }).current.model,
+    ).toBe("deepseek-chat");
   });
 
   it("defaults deepseek catalog and agent model to deepseek-flash when unset", async () => {
@@ -1207,7 +1222,14 @@ describe("Face credentials U2", () => {
     };
     const deepseek = catalog.groups.find((g) => g.id === "deepseek");
     expect(deepseek?.models.map((m) => m.id)[0]).toBe("deepseek-flash");
-    expect(deepseek?.models.map((m) => m.id)).toContain("deepseek-v4-flash");
+    expect(deepseek?.models.map((m) => m.id)).toEqual([
+      "deepseek-flash",
+      "deepseek-v4-pro",
+    ]);
+    expect(deepseek?.models.map((m) => m.id)).not.toContain("deepseek-v4-flash");
+    expect(deepseek?.models.map((m) => m.id)).not.toContain(
+      "deepseek-v4-flash-vision-exp",
+    );
     expect(catalog.current).toEqual({
       provider: "deepseek",
       model: "deepseek-flash",

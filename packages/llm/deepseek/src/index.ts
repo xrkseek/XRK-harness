@@ -35,8 +35,14 @@ export const DEEPSEEK_DEFAULT_MODEL = "deepseek-flash";
 /** Stable alias kept for callers that name the V41 Flash id explicitly. */
 export const DEEPSEEK_FLASH_MODEL = DEEPSEEK_DEFAULT_MODEL;
 
-/** Experimental vision model on the official host (DSH catalog). */
+/** Experimental vision model id (retired — kept for legacy request modality). */
 export const DEEPSEEK_VISION_EXP_MODEL = "deepseek-v4-flash-vision-exp";
+
+/** Retired Flash ids that DeepSeek still accepts as aliases of `deepseek-flash`. */
+export const DEEPSEEK_LEGACY_FLASH_ALIASES = [
+  "deepseek-v4-flash",
+  DEEPSEEK_VISION_EXP_MODEL,
+] as const;
 
 export type DeepSeekInputModality = "text" | "image";
 
@@ -56,9 +62,9 @@ export interface DeepSeekCatalogModel {
 }
 
 /**
- * Default discovery catalog (DSH `DEFAULT_MODELS`):
- * V41 Flash (text+image, in-history) · V4 Flash · V4 Pro · V4 Flash Vision Exp.
- * An explicit `llm-deepseek.models` list in Settings replaces this default set.
+ * Default discovery catalog after V4.1-Flash:
+ * `deepseek-flash` (text+image, in-history) · `deepseek-v4-pro` (text).
+ * Retired Flash / Vision-Exp aliases are omitted from Settings seed.
  */
 export const DEEPSEEK_DEFAULT_CATALOG: readonly DeepSeekCatalogModel[] = [
   {
@@ -70,44 +76,34 @@ export const DEEPSEEK_DEFAULT_CATALOG: readonly DeepSeekCatalogModel[] = [
     systemPromptUpdate: "in-history",
   },
   {
-    id: "deepseek-v4-flash",
-    name: "DeepSeek V4 Flash",
-    contextWindow: 1_000_000,
-    maxTokens: 384_000,
-    inputModalities: ["text"],
-  },
-  {
     id: "deepseek-v4-pro",
     name: "DeepSeek V4 Pro",
     contextWindow: 1_000_000,
     maxTokens: 384_000,
     inputModalities: ["text"],
   },
-  {
-    id: DEEPSEEK_VISION_EXP_MODEL,
-    name: "DeepSeek V4 Flash Vision Exp",
-    contextWindow: 1_000_000,
-    maxTokens: 384_000,
-    inputModalities: ["text", "image"],
-  },
 ];
 
-/** True when the model id is an official image-capable catalog entry. */
+/** True when the model id is image-capable (canonical Flash or retired Flash aliases). */
 export function isDeepSeekVisionModel(model: string): boolean {
   const id = model.trim();
-  return id === DEEPSEEK_FLASH_MODEL || id === DEEPSEEK_VISION_EXP_MODEL;
+  if (id === DEEPSEEK_FLASH_MODEL) return true;
+  return (DEEPSEEK_LEGACY_FLASH_ALIASES as readonly string[]).includes(id);
 }
 
 /**
- * Resolve catalog `systemPromptUpdate` for a model id (exact catalog match).
- * Only built-in `deepseek-flash` declares `in-history` by default.
+ * Resolve catalog `systemPromptUpdate` for a model id.
+ * Canonical Flash and retired Flash aliases get `in-history`.
  */
 export function resolveDeepSeekSystemPromptUpdate(
   model: string,
 ): "in-history" | undefined {
   const id = model.trim();
-  const row = DEEPSEEK_DEFAULT_CATALOG.find((m) => m.id === id);
-  return row?.systemPromptUpdate;
+  if (id === DEEPSEEK_FLASH_MODEL) return "in-history";
+  if ((DEEPSEEK_LEGACY_FLASH_ALIASES as readonly string[]).includes(id)) {
+    return "in-history";
+  }
+  return DEEPSEEK_DEFAULT_CATALOG.find((m) => m.id === id)?.systemPromptUpdate;
 }
 
 /**

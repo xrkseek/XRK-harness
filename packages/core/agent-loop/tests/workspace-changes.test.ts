@@ -83,8 +83,9 @@ describe("runTurn workspace/changes", () => {
 
     const events = store.get(session.id).events;
     const changes = events.filter((e) => e.type === "workspace/changes");
-    expect(changes).toHaveLength(1);
-    const ev = changes[0]!;
+    // Mid-turn batch emit + final refresh (Face projection keeps one row per turnId).
+    expect(changes.length).toBeGreaterThanOrEqual(1);
+    const ev = changes[changes.length - 1]!;
     expect(ev.type).toBe("workspace/changes");
     if (ev.type !== "workspace/changes") return;
     expect(ev.summary.cwd).toBe("/work");
@@ -93,9 +94,12 @@ describe("runTurn workspace/changes", () => {
     expect(ev.summary.added).toBeGreaterThan(0);
 
     const endAt = events.findIndex((e) => e.type === "turn/end");
-    const changesAt = events.findIndex((e) => e.type === "workspace/changes");
-    expect(changesAt).toBeGreaterThan(-1);
-    expect(changesAt).toBeLessThan(endAt);
+    const firstChangesAt = events.findIndex((e) => e.type === "workspace/changes");
+    expect(firstChangesAt).toBeGreaterThan(-1);
+    expect(firstChangesAt).toBeLessThan(endAt);
+    // Live: first summary lands after tool/result, before the next assistant step.
+    const firstToolResultAt = events.findIndex((e) => e.type === "tool/result");
+    expect(firstChangesAt).toBeGreaterThan(firstToolResultAt);
 
     // Log-only — not model-visible.
     const msgs = deriveMessages(events);
@@ -232,11 +236,98 @@ describe("runTurn workspace/changes", () => {
 
     const events = store.get(session.id).events;
     const changes = events.filter((e) => e.type === "workspace/changes");
-    expect(changes).toHaveLength(1);
-    const ev = changes[0]!;
+    expect(changes.length).toBeGreaterThanOrEqual(1);
+    const ev = changes[changes.length - 1]!;
     if (ev.type !== "workspace/changes") return;
     expect(ev.summary.total).toBe(2);
     expect(ev.summary.files.map((f) => f.path)).toEqual(["a.txt", "b.txt"]);
+  });
+
+  it("emits workspace/changes mid-turn as soon as a diff tool settles", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    tools.register({
+      name: "write_file",
+      description: "w",
+      parameters: { type: "object" },
+      presentResult: (args, result) => {
+        if (result.isError) return undefined;
+        const a = args as { path?: string; content?: string };
+        return {
+          card: "diff",
+          title: "Write",
+          diffs: [
+            {
+              path: String(a.path ?? "x.txt"),
+              oldText: null,
+              newText: String(a.content ?? ""),
+            },
+          ],
+        };
+      },
+      async execute() {
+        return { content: "ok" };
+      },
+    });
+    let releaseSecond: (() => void) | undefined;
+    const secondGate = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    let step = 0;
+    const llm: LlmAdapter = {
+      id: "live-changes",
+      async chat() {
+        throw new Error("stream-only fixture");
+      },
+      async *stream(): AsyncIterable<LlmStreamEvent> {
+        step += 1;
+        if (step === 1) {
+          yield {
+            type: "done",
+            content: "wrote",
+            toolCalls: [
+              {
+                id: "c1",
+                name: "write_file",
+                arguments: { path: "live.txt", content: "now\n" },
+              },
+            ],
+          };
+          return;
+        }
+        await secondGate;
+        yield { type: "done", content: "done" };
+      },
+    };
+
+    const turnP = runTurn({
+      sessionId: session.id,
+      userText: "write",
+      store,
+      llm,
+      tools,
+      cwd: "/work",
+    });
+
+    const deadline = Date.now() + 2000;
+    while (Date.now() < deadline) {
+      if (store.get(session.id).events.some((e) => e.type === "workspace/changes")) break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    const mid = store.get(session.id).events;
+    expect(mid.some((e) => e.type === "workspace/changes")).toBe(true);
+    expect(mid.some((e) => e.type === "turn/end")).toBe(false);
+    releaseSecond?.();
+    await turnP;
+
+    const events = store.get(session.id).events;
+    const changes = events.filter((e) => e.type === "workspace/changes");
+    expect(changes.length).toBeGreaterThanOrEqual(1);
+    const last = changes[changes.length - 1]!;
+    if (last.type === "workspace/changes") {
+      expect(last.summary.files[0]?.path).toBe("live.txt");
+    }
   });
 
   it("still emits workspace/changes when the turn aborts after a diff tool", async () => {

@@ -66,6 +66,45 @@
   display: none;
 }
 
+/* Persistent presence chrome — outside the tab pane so tab switches never remount. */
+.presenceRail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: none;
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 70%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dsw-alias-bg-layer-1) 55%, transparent) 0%,
+      var(--dsw-alias-bg-base) 100%
+    );
+}
+
+.presenceRailHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.presenceRailTitle {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.presenceRailHint {
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0.85;
+}
+
 /* Quiet segmented control — single row; scroll when the column is too narrow. */
 .tabs {
   display: flex;
@@ -175,7 +214,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 10px;
+  padding: 14px 12px 12px;
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-primary);
@@ -321,43 +360,54 @@
 .todoList {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 4px 0 8px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .todoItem {
   display: grid;
-  grid-template-columns: 64px 1fr;
-  gap: 8px;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
   align-items: start;
-  padding: 6px 4px;
-  border-radius: 6px;
-  border-bottom: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 55%, transparent);
-  transition: background 100ms ease;
-}
-
-.todoItem:last-child {
-  border-bottom: none;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 70%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 72%, transparent);
+  transition: background 120ms ease, border-color 120ms ease;
 }
 
 .todoItem:hover {
-  background: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 4%, var(--dsw-alias-bg-layer-1));
+  border-color: color-mix(in srgb, var(--dsw-alias-border-l2) 100%, transparent);
+}
+
+.todoItem[data-status='in_progress'] {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 35%, var(--dsw-alias-border-l2));
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 6%, var(--dsw-alias-bg-layer-1));
 }
 
 .todoStatus {
   font-size: 10px;
   line-height: 16px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 90%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 60%, transparent);
 }
 
 .todoItem[data-status='in_progress'] .todoStatus {
-  color: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-state-business-primary);
   font-weight: 600;
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, transparent);
+}
+
+.todoItem[data-status='completed'] .todoStatus {
+  color: var(--dsw-alias-state-success-primary);
 }
 
 .todoItem[data-status='completed'] .todoContent {
@@ -370,6 +420,7 @@
   font-size: 12px;
   line-height: 18px;
   word-break: break-word;
+  padding-top: 1px;
 }
 
 .statusRoot {
@@ -480,10 +531,13 @@
 }
 
 .summaryStats {
+  /* Cap is three cells (TS). Incomplete last row centers via justify-content. */
+  container-type: inline-size;
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   align-items: stretch;
-  gap: 0;
+  row-gap: 10px;
   width: 100%;
   margin: 0;
   padding-top: 12px;
@@ -492,25 +546,26 @@
 
 .summaryStat {
   display: flex;
-  flex: 1 1 64px;
+  flex: 1 1 33.333%;
+  box-sizing: border-box;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 1px;
   min-width: 0;
-  padding: 0 12px;
+  max-width: 33.333%;
+  padding: 0 10px;
   border: none;
   border-radius: 0;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
-  white-space: nowrap;
+  text-align: center;
 }
 
-.summaryStat:first-child {
-  padding-left: 0;
-}
-
-.summaryStat + .summaryStat {
-  border-left: 1px solid var(--dsw-alias-border-l2);
+/* Column rules only while three cells still share one row (no 2+1 wrap). */
+@container (min-width: 240px) {
+  .summaryStat:not(:first-child) {
+    box-shadow: inset 1px 0 0 var(--dsw-alias-border-l2);
+  }
 }
 
 .summaryStat[data-hot] b {
@@ -524,6 +579,10 @@
   letter-spacing: -0.02em;
   color: var(--dsw-alias-label-primary);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .summaryStatLabel {
@@ -533,6 +592,10 @@
   font-weight: 400;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .summaryToggle {
@@ -702,9 +765,9 @@
 .jobTrigger {
   display: flex;
   flex: 1;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
   margin: 0;
   padding: 4px 6px;
@@ -1000,7 +1063,21 @@
 .itemTitle {
   font-weight: 500;
   min-width: 0;
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jobTrigger .itemTitle {
+  flex: 1 1 auto;
+}
+
+.jobTrigger .itemMeta {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .itemMeta {

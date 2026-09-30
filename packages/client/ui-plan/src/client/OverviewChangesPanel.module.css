@@ -1,91 +1,134 @@
-/* Overview Changes — editorial, matches Status chrome. */
+/* Overview Changes — same chrome family as Status; theme-safe pick menus. */
 
 .root {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
   min-width: 0;
-  padding: 0 0 8px;
+  padding: 0 0 12px;
 }
 
-.meta {
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 88%, transparent);
+}
+
+.toolbarMain {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  padding-bottom: 9px;
-  border-bottom: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 85%, transparent);
-  font-size: 11px;
-  line-height: 16px;
-  color: var(--dsw-alias-label-tertiary);
+  gap: 10px 12px;
+  min-width: 0;
 }
 
-.stat {
+.turnOnly {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: 0.01em;
+  color: var(--dsw-alias-label-primary);
+}
+
+.stat,
+.fileCounts,
+.menuSecondary {
   display: inline-flex;
+  align-items: baseline;
   gap: 6px;
   font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
 }
 
-.added { color: var(--dsw-alias-state-success-primary); }
-.deleted { color: var(--dsw-alias-state-error-primary); }
-
-.turnPick select {
-  max-width: 100%;
-  height: 26px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 5px;
-  padding: 0 6px;
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-size: 11px;
+.added {
+  color: var(--dsw-alias-state-success-primary);
 }
 
-.reviewBar {
+.deleted {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.body {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 14px;
+}
+
+.fileRow {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 10px 12px;
   min-width: 0;
 }
 
-.selector {
+.pick {
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
+  max-width: min(100%, 28rem);
 }
 
-.selectorButton {
+.pickTrigger {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   max-width: 100%;
   margin: 0;
-  padding: 4px 8px;
+  padding: 6px 10px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
+  border-radius: 7px;
   background: var(--dsw-alias-bg-layer-1);
-  color: inherit;
+  color: var(--dsw-alias-label-primary);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
   cursor: pointer;
   transition: border-color 120ms ease, background 120ms ease;
 }
 
-.selectorButton:hover {
-  border-color: color-mix(in srgb, var(--dsw-alias-label-primary) 14%, var(--dsw-alias-border-l2));
+.pickTrigger:hover {
+  border-color: color-mix(in srgb, var(--dsw-alias-label-primary) 16%, var(--dsw-alias-border-l2));
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.selectorButton:focus-visible {
+.pickTrigger:focus-visible {
   outline: 2px solid var(--dsw-alias-text-primary);
   outline-offset: 1px;
 }
 
-.selectorPath {
+.pickTrigger[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--dsw-alias-label-secondary) 40%, var(--dsw-alias-border-l2));
+}
+
+.pickLabel {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pickChevron {
+  flex: none;
+  opacity: 0.55;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.pickTrigger:hover .pickChevron,
+.pickChevron[data-open] {
+  opacity: 0.9;
+}
+
+.pickChevron[data-open] {
+  transform: rotate(180deg);
 }
 
 .menuItem {
@@ -93,36 +136,23 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  width: 100%;
   min-width: 0;
 }
 
-.menuPath {
+.menuPrimary {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.menuCounts {
-  display: inline-flex;
-  flex: none;
-  gap: 6px;
-  font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  font-size: 11px;
-}
-
-.reviewCounts {
-  display: inline-flex;
-  flex: none;
-  gap: 6px;
-  font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  font-size: 11px;
-  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
 }
 
 .status {
-  font-size: 11px;
-  line-height: 16px;
+  font-size: 12px;
+  line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -132,22 +162,30 @@
 
 .note {
   margin: 0;
-  font-size: 11px;
-  line-height: 16px;
+  font-size: 12px;
+  line-height: 18px;
   color: var(--dsw-alias-label-secondary);
+}
+
+/* DiffBlock owns surface; strip outer double-frame + default margin. */
+.diff {
+  min-width: 0;
+  margin: 0 !important;
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .openFile {
   align-self: flex-start;
   margin: 2px 0 0;
-  padding: 5px 9px;
+  padding: 6px 11px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
+  border-radius: 7px;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   font: inherit;
-  font-size: 11px;
-  line-height: 14px;
+  font-size: 12px;
+  line-height: 16px;
   cursor: pointer;
   transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
@@ -163,14 +201,6 @@
   outline-offset: 1px;
 }
 
-.diff {
-  min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 90%, transparent);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--dsw-alias-bg-layer-1);
-}
-
 .empty {
   display: grid;
   place-items: center;
@@ -184,21 +214,9 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.visuallyHidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  border: 0;
-  white-space: nowrap;
-}
-
-
 @media (prefers-reduced-motion: reduce) {
-  .selectorButton,
+  .pickTrigger,
+  .pickChevron,
   .openFile {
     transition: none;
   }

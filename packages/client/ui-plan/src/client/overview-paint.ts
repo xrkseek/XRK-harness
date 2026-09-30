@@ -3,6 +3,8 @@
  * Same habit as community sidebar: leave a Session, come back — chrome is where you left it.
  * Shell width / open lives in the layout store (global); this map is Session-scoped content chrome.
  */
+// Leaf import: the client barrel touches `window` (slots); this module is unit-tested in Node.
+import { isSessionLineageHop } from '@xrkseek/client-runtime/client'
 import type { PreviewTabLoad } from './preview-load.ts'
 
 export type OverviewPaintTab = 'status' | 'context' | 'todos' | 'changes' | 'canvas'
@@ -35,18 +37,6 @@ let lastVisited: string | undefined
 export function resetOverviewSessionUiForTests(): void {
   bySession.clear()
   lastVisited = undefined
-}
-
-function isSoftHop(
-  fromId: string,
-  fromParentId: string | undefined,
-  toId: string,
-  toParentId: string | undefined,
-): boolean {
-  if (fromId === toId) return false
-  if (fromParentId === toId || toParentId === fromId) return true
-  if (fromParentId !== undefined && fromParentId === toParentId) return true
-  return false
 }
 
 function scrollOf(
@@ -152,7 +142,7 @@ export function takeOverviewMountPaint(
   if (prevId === undefined || prevId === sessionId) return own ?? null
   const prev = bySession.get(prevId)
   if (prev?.loaded?.status == null) return own ?? null
-  if (!isSoftHop(prevId, prev.parentId, sessionId, parentId)) return own ?? null
+  if (!isSessionLineageHop(prevId, prev.parentId, sessionId, parentId)) return own ?? null
 
   const tab = own?.tab ?? 'status'
   const scrollByTab = own?.scrollByTab ?? {}

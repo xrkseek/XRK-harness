@@ -1,8 +1,15 @@
 /**
- * Overview presence ball — EmotionBall (aora-bot) in the Status Presence section.
- * One instance per Session; window mouse gaze + AI `presence_set` / activity-derived emotion.
+ * Overview presence ball — EmotionBall under Status utilities (all tabs).
+ * Lifecycle is client-owned (ambient + activity rotation); AI `presence_set`
+ * is a timed accent, not permanent control. Click pulses a short local mood.
+ * Session delivery / fleet edges drive bounce · spin · burst so the ball
+ * reacts like a companion, not a static LED.
  */
 import { useEffect, useRef, useState } from 'react'
+import {
+  PRESENCE_SLEEP_MS,
+  PRESENCE_STANDBY_MS,
+} from './presence-session-cues.ts'
 import css from './PresenceBall.module.css'
 
 const SCRIPT_BASE = '/presence/emotion-ball'
@@ -11,19 +18,44 @@ const SCRIPT_ORDER = ['rings.js', 'emotions.js', 'ball.js', 'engine.js'] as cons
 /** Emotions that get a short celebrate FX when AI sticky-sets them. */
 const CELEBRATE_IDS = new Set(['10', '33'])
 
+/** AI sticky expires so ambient / activity can reclaim the ball. */
+export const PRESENCE_TOOL_TTL_MS = 90_000
+
+/** Sleep / power-off must not win while the session is actually working. */
+const SLEEP_WHILE_BUSY = new Set(['00', '06', '41'])
+
+/** Rotate while a turn is live — use the agent-work catalog, not sleep. */
+const WORK_TURN_IDS = ['30', '32', '16', '36', '37', '39'] as const
+
+/** Quiet ambient tour when nothing is running (life + light emotion). */
+const AMBIENT_IDS = ['02', '03', '04', '02', '10', '11', '02', '04', '14', '19'] as const
+
+/** User click pulse — playful set, then hand back to auto. */
+const CLICK_IDS = ['10', '13', '03', '33', '14', '11', '19', '07'] as const
+
+const PHASE_MS = 8_000
+const LOCAL_PULSE_MS = 4_500
+
 export type PresenceAutoTip =
   | 'critical'
+  | 'toolError'
   | 'turn'
   | 'jobs'
   | 'subs'
   | 'warn'
+  | 'listen'
+  | 'compact'
+  | 'standby'
+  | 'sleep'
+  | 'ambient'
+  | 'local'
 
 export type PresenceEmotion = {
   readonly emotionId: string
   readonly tips?: string
   /** Auto-derived tip key; UI translates via `preview.status.presenceTip.*`. */
   readonly tipKey?: PresenceAutoTip
-  readonly source: 'tool' | 'auto'
+  readonly source: 'tool' | 'auto' | 'local'
 }
 
 type EmotionBallHandle = {
@@ -34,6 +66,7 @@ type EmotionBallHandle = {
   spin?: (n?: number) => void
   burst?: (n?: number) => void
   bounce?: () => void
+  resetIdle?: () => void
   destroy: () => void
 }
 
@@ -42,7 +75,12 @@ type EmotionBallNs = {
     el: HTMLElement,
     opts?: {
       emotion?: string
-      idle?: boolean
+      idle?: boolean | {
+        standbyAfter?: number
+        sleepAfter?: number
+        standbyId?: string
+        sleepId?: string
+      }
       lite?: boolean
       eyeScale?: number
       shape?: string
@@ -87,33 +125,113 @@ function loadEmotionBallScripts(): Promise<void> {
   return scriptsPromise
 }
 
+function pickRotated(ids: readonly string[], phase: number): string {
+  const len = ids.length
+  if (len === 0) return '02'
+  const i = ((phase % len) + len) % len
+  return ids[i]!
+}
+
 /**
- * Derive Overview emotion when AI has not sticky-set one.
- * Mirrors delivery / fleet activity so the ball stays alive without tool spam.
+ * Resolve Overview emotion.
+ * Priority: local click → fresh AI sticky → fleet critical → recent tool error →
+ * delivery / compaction / jobs → long-idle sleep/standby → ambient tour.
+ * Client owns sleep (engine idle stays off so phase rotation cannot fight it).
  */
 export function derivePresenceEmotion(input: {
   readonly presence?: {
     readonly emotionId: string
     readonly tips?: string
     readonly source: 'tool'
+    readonly updatedAt?: number
   }
   readonly turnActive: boolean
   readonly runningJobs: number
   readonly runningSubs: number
   readonly fleetHealth: 'ok' | 'warn' | 'critical'
+  /** Admits waiting while the latch is free — listen / wait-for-user beat. */
+  readonly queued?: number
+  readonly steering?: number
+  /** Context compaction pipeline running. */
+  readonly compactionBusy?: boolean
+  /** Recent tool-result failure cue (client timeline). */
+  readonly toolError?: boolean | { readonly name?: string }
+  /** Ms since last session activity (busy / poke / sticky). */
+  readonly idleMs?: number
+  /** Wall clock for sticky TTL (tests inject). */
+  readonly nowMs?: number
+  /** Integer phase for work / ambient rotation. */
+  readonly phase?: number
+  /** Short user click pulse. */
+  readonly local?: {
+    readonly emotionId: string
+    readonly tips?: string
+  }
 }): PresenceEmotion {
-  if (input.presence?.emotionId) {
+  if (input.local?.emotionId) {
     return {
-      emotionId: input.presence.emotionId,
-      source: 'tool',
-      ...(input.presence.tips ? { tips: input.presence.tips } : {}),
+      emotionId: input.local.emotionId,
+      source: 'local',
+      tipKey: 'local',
+      ...(input.local.tips ? { tips: input.local.tips } : {}),
     }
   }
+
+  const busy =
+    input.turnActive
+    || input.runningJobs > 0
+    || input.runningSubs > 0
+    || input.compactionBusy === true
+  const now = input.nowMs ?? Date.now()
+  const phase = input.phase ?? 0
+  const inbox =
+    (input.queued ?? 0) > 0
+    || (input.steering ?? 0) > 0
+  const idleMs = typeof input.idleMs === 'number' && Number.isFinite(input.idleMs)
+    ? Math.max(0, input.idleMs)
+    : 0
+  const toolError = input.toolError === true
+    || (typeof input.toolError === 'object' && input.toolError !== null)
+
+  if (input.presence?.emotionId) {
+    const updatedAt = input.presence.updatedAt
+    const age = typeof updatedAt === 'number' ? now - updatedAt : 0
+    const stale = typeof updatedAt === 'number' && age > PRESENCE_TOOL_TTL_MS
+    const sleepClash = busy && SLEEP_WHILE_BUSY.has(input.presence.emotionId)
+    if (!stale && !sleepClash) {
+      return {
+        emotionId: input.presence.emotionId,
+        source: 'tool',
+        ...(input.presence.tips ? { tips: input.presence.tips } : {}),
+      }
+    }
+  }
+
   if (input.fleetHealth === 'critical') {
     return { emotionId: '34', tipKey: 'critical', source: 'auto' }
   }
+  // Tool failures beat work rotation so Overview reacts to "Unknown tool" etc.
+  if (toolError) {
+    const name = typeof input.toolError === 'object' ? input.toolError.name : undefined
+    return {
+      emotionId: '34',
+      tipKey: 'toolError',
+      source: 'auto',
+      ...(name ? { tips: name } : {}),
+    }
+  }
   if (input.turnActive) {
-    return { emotionId: '30', tipKey: 'turn', source: 'auto' }
+    return {
+      emotionId: pickRotated(WORK_TURN_IDS, phase),
+      tipKey: 'turn',
+      source: 'auto',
+    }
+  }
+  if (inbox) {
+    return { emotionId: '35', tipKey: 'listen', source: 'auto' }
+  }
+  if (input.compactionBusy) {
+    return { emotionId: '36', tipKey: 'compact', source: 'auto' }
   }
   if (input.runningJobs > 0) {
     return { emotionId: '40', tipKey: 'jobs', source: 'auto' }
@@ -124,39 +242,233 @@ export function derivePresenceEmotion(input: {
   if (input.fleetHealth === 'warn') {
     return { emotionId: '13', tipKey: 'warn', source: 'auto' }
   }
-  return { emotionId: '02', source: 'auto' }
+  if (!busy && idleMs >= PRESENCE_SLEEP_MS) {
+    return { emotionId: '00', tipKey: 'sleep', source: 'auto' }
+  }
+  if (!busy && idleMs >= PRESENCE_STANDBY_MS) {
+    return { emotionId: '06', tipKey: 'standby', source: 'auto' }
+  }
+  return {
+    emotionId: pickRotated(AMBIENT_IDS, phase),
+    tipKey: 'ambient',
+    source: 'auto',
+  }
 }
 
-function playAccent(ball: EmotionBallHandle, emotionId: string, source: PresenceEmotion['source']): void {
-  if (source !== 'tool') return
-  if (CELEBRATE_IDS.has(emotionId)) {
-    ball.burst?.(18)
+/**
+ * Motion accents for sticky AI · click · session tipKey edges.
+ * Phase rotation within the same tipKey stays quiet (no spam bounce).
+ */
+export function playPresenceAccent(
+  ball: EmotionBallHandle,
+  next: PresenceEmotion,
+  prev: PresenceEmotion | null,
+): void {
+  if (next.source === 'local') {
+    ball.bounce?.()
+    ball.spin?.(1)
+    return
+  }
+  if (next.source === 'tool') {
+    if (CELEBRATE_IDS.has(next.emotionId)) {
+      ball.burst?.(18)
+      ball.bounce?.()
+      return
+    }
+    if (next.emotionId === '21' || next.emotionId === '38') {
+      ball.spin?.(2)
+      return
+    }
+    if (
+      prev === null
+      || prev.source !== 'tool'
+      || prev.emotionId !== next.emotionId
+    ) {
+      ball.bounce?.()
+    }
+    return
+  }
+
+  const prevKey = prev?.tipKey
+  const nextKey = next.tipKey
+  if (!nextKey || nextKey === prevKey) return
+
+  if (
+    nextKey === 'turn'
+    || nextKey === 'jobs'
+    || nextKey === 'subs'
+    || nextKey === 'listen'
+    || nextKey === 'compact'
+  ) {
     ball.bounce?.()
     return
   }
-  if (emotionId === '21' || emotionId === '38') {
+  if (nextKey === 'critical' || nextKey === 'warn' || nextKey === 'toolError') {
     ball.spin?.(2)
+    return
+  }
+  if (nextKey === 'sleep' || nextKey === 'standby') {
+    return
+  }
+  if (
+    nextKey === 'ambient'
+    && prevKey
+    && (prevKey === 'sleep' || prevKey === 'standby')
+  ) {
+    ball.bounce?.()
+    return
+  }
+  if (
+    nextKey === 'ambient'
+    && prevKey
+    && prevKey !== 'ambient'
+    && prevKey !== 'local'
+  ) {
+    ball.burst?.(10)
+    ball.bounce?.()
   }
 }
 
+export function presenceDisplay(
+  emotion: PresenceEmotion,
+  t: (key: string, params?: Record<string, string>) => string,
+): { name: string; tip?: string } {
+  const nameKey = `preview.status.emotion.${emotion.emotionId}`
+  const named = t(nameKey)
+  const name =
+    named === nameKey || named.startsWith('preview.status.emotion.')
+      ? t('preview.status.emotion.fallback', { id: emotion.emotionId })
+      : named
+  const tipFromKey = emotion.tipKey
+    ? t(`preview.status.presenceTip.${emotion.tipKey}`)
+    : undefined
+  // tipKey copy + optional raw accent (e.g. failed tool name) — never drop i18n.
+  const tip =
+    tipFromKey && emotion.tips && emotion.tips !== tipFromKey
+      ? `${tipFromKey} · ${emotion.tips}`
+      : (emotion.tips ?? tipFromKey)
+  return tip ? { name, tip } : { name }
+}
+
 export function PresenceBall({
-  emotion,
-  emotionName,
-  tipText,
+  presence,
+  turnActive,
+  runningJobs,
+  runningSubs,
+  fleetHealth,
+  queued = 0,
+  steering = 0,
+  compactionBusy = false,
+  toolError,
+  activityAt = 0,
+  t,
   loadingLabel,
   errorLabel,
+  clickHint,
 }: {
-  readonly emotion: PresenceEmotion
-  readonly emotionName: string
-  readonly tipText?: string
+  readonly presence?: {
+    readonly emotionId: string
+    readonly tips?: string
+    readonly source: 'tool'
+    readonly updatedAt?: number
+  }
+  readonly turnActive: boolean
+  readonly runningJobs: number
+  readonly runningSubs: number
+  readonly fleetHealth: 'ok' | 'warn' | 'critical'
+  readonly queued?: number
+  readonly steering?: number
+  readonly compactionBusy?: boolean
+  /** Recent tool-result failure from the conversation timeline. */
+  readonly toolError?: boolean | { readonly name?: string }
+  /**
+   * Wall clock of last transcript / sticky beat (seeds idle when Overview
+   * opens on an already-quiet session).
+   */
+  readonly activityAt?: number
+  readonly t: (key: string, params?: Record<string, string>) => string
   readonly loadingLabel: string
   readonly errorLabel: string
+  /** Accessible hint for click-to-play. */
+  readonly clickHint?: string
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const lastAccentRef = useRef<string>('')
+  const prevEmotionRef = useRef<PresenceEmotion | null>(null)
+  const clickIndexRef = useRef(0)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
+  const [phase, setPhase] = useState(0)
+  const [local, setLocal] = useState<{ emotionId: string; tips?: string } | undefined>(undefined)
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  const [lastActivityAt, setLastActivityAt] = useState(() => Math.max(Date.now(), activityAt))
+
+  const sessionBusy =
+    turnActive
+    || runningJobs > 0
+    || runningSubs > 0
+    || compactionBusy
+    || queued > 0
+    || steering > 0
+    || toolError === true
+    || (typeof toolError === 'object' && toolError !== null)
+    || Boolean(local)
+
+  // Keep the idle clock honest: live beats + transcript activityAt.
+  useEffect(() => {
+    const stamp = Math.max(activityAt, sessionBusy ? Date.now() : 0)
+    if (stamp <= 0) return
+    setLastActivityAt((prev) => (stamp > prev ? stamp : prev))
+  }, [
+    activityAt,
+    sessionBusy,
+    presence?.updatedAt,
+    turnActive,
+    runningJobs,
+    runningSubs,
+    compactionBusy,
+    queued,
+    steering,
+    toolError,
+    local,
+  ])
+
+  const idleMs = Math.max(0, nowMs - lastActivityAt)
+
+  const emotion = derivePresenceEmotion({
+    ...(presence ? { presence } : {}),
+    turnActive,
+    runningJobs,
+    runningSubs,
+    fleetHealth,
+    queued,
+    steering,
+    compactionBusy,
+    ...(toolError !== undefined ? { toolError } : {}),
+    idleMs,
+    nowMs,
+    phase,
+    ...(local ? { local } : {}),
+  })
+  const display = presenceDisplay(emotion, t)
+  const resting = emotion.tipKey === 'sleep' || emotion.tipKey === 'standby'
+
+  // Ambient / work rotation — client lifecycle independent of AI sticky.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setPhase((n) => n + 1)
+      setNowMs(Date.now())
+    }, PHASE_MS)
+    return () => { window.clearInterval(id) }
+  }, [])
+
+  // Expire local pulse.
+  useEffect(() => {
+    if (!local) return
+    const id = window.setTimeout(() => { setLocal(undefined) }, LOCAL_PULSE_MS)
+    return () => { window.clearTimeout(id) }
+  }, [local])
 
   useEffect(() => {
     const el = mountRef.current
@@ -166,11 +478,17 @@ export function PresenceBall({
       () => {
         if (cancelled || !mountRef.current || !window.EmotionBall?.create) return
         mountRef.current.replaceChildren()
-        // Tool-driven mood gets full FX; auto stays lite for Overview perf.
+        // idle:false — engine must not auto-sleep over activity / sticky labels.
+        // Full FX when AI sticky / click / busy; lite only for quiet ambient / rest.
+        const lite =
+          emotion.source === 'auto'
+          && (emotion.tipKey === 'ambient'
+            || emotion.tipKey === 'sleep'
+            || emotion.tipKey === 'standby')
         const ball = window.EmotionBall.create(mountRef.current, {
           emotion: emotion.emotionId,
-          idle: true,
-          lite: emotion.source !== 'tool',
+          idle: false,
+          lite,
           eyeScale: 1.2,
           shape: 'blob',
         })
@@ -196,17 +514,22 @@ export function PresenceBall({
   useEffect(() => {
     const ball = ballRef.current
     if (!ball || !ready) return
-    if (tipText) {
-      ball.handleAIMessage({ emotionId: emotion.emotionId, tips: tipText })
+    const tip = display.tip
+    if (tip && emotion.source === 'tool') {
+      ball.handleAIMessage({ emotionId: emotion.emotionId, tips: tip })
     } else {
       ball.setEmotion(emotion.emotionId)
     }
-    const accentKey = `${emotion.source}:${emotion.emotionId}:${tipText ?? ''}`
+    // Sleep / standby own the quiet clock — do not poke the engine awake.
+    if (!resting) ball.resetIdle?.()
+    const accentKey = `${emotion.source}:${emotion.emotionId}:${emotion.tipKey ?? ''}:${tip ?? ''}`
     if (accentKey !== lastAccentRef.current) {
+      const prev = prevEmotionRef.current
       lastAccentRef.current = accentKey
-      playAccent(ball, emotion.emotionId, emotion.source)
+      playPresenceAccent(ball, emotion, prev)
+      prevEmotionRef.current = emotion
     }
-  }, [emotion.emotionId, emotion.source, tipText, ready])
+  }, [emotion, display.tip, ready, resting])
 
   // Gaze from the whole window — not just the stage hitbox — so eyes track
   // the cursor anywhere on the product shell relative to the ball center.
@@ -242,23 +565,39 @@ export function PresenceBall({
     }
   }, [ready])
 
+  const onStageActivate = (): void => {
+    const id = pickRotated(CLICK_IDS, clickIndexRef.current)
+    clickIndexRef.current += 1
+    const stamp = Date.now()
+    setLocal({ emotionId: id })
+    setNowMs(stamp)
+    setLastActivityAt(stamp)
+  }
+
   return (
-    <div className={css.root} data-overview-presence="" data-source={emotion.source}>
-      <div
+    <div
+      className={css.root}
+      data-overview-presence=""
+      data-source={emotion.source}
+    >
+      <button
+        type="button"
         className={css.stage}
         data-ready={ready ? '' : undefined}
         data-source={emotion.source}
+        aria-label={clickHint ?? display.name}
+        onClick={onStageActivate}
       >
-        <div ref={mountRef} className={css.mount} />
+        <div ref={mountRef} className={css.mount} aria-hidden />
         {!ready && !error ? <div className={css.loading}>{loadingLabel}</div> : null}
         {error ? <div className={css.error}>{errorLabel}: {error}</div> : null}
-      </div>
+      </button>
       <div className={css.meta}>
         <div className={css.row}>
-          <span className={css.emotion}>{emotionName}</span>
+          <span className={css.emotion}>{display.name}</span>
           <span className={css.id}>{emotion.emotionId}</span>
         </div>
-        {tipText ? <p className={css.tips}>{tipText}</p> : null}
+        {display.tip ? <p className={css.tips}>{display.tip}</p> : null}
       </div>
     </div>
   )

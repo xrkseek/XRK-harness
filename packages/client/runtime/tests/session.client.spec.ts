@@ -239,7 +239,7 @@ describe('open', () => {
     gate.resolve(ok({
       events: entries(page) as never[],
       hasMore: false,
-      modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      modelSelection: { provider: 'deepseek-official', model: 'deepseek-flash' },
     }))
     await opening
     const seqs = session.getSnapshot().nodes.map(n => n.seq)
@@ -438,7 +438,7 @@ describe('paging', () => {
     gate.resolve(ok({
       events: entries(plainTurn(0, 0, 'a', 'b')) as never[],
       hasMore: false,
-      modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      modelSelection: { provider: 'deepseek-official', model: 'deepseek-flash' },
     }))
     await Promise.all([first, second])
     expect(api.callsOf('session.history')).toHaveLength(2) // open + one page, not two
@@ -930,7 +930,7 @@ describe('remaining branches', () => {
         { event: ev.toolResult(7, 1, 'h1', 'done'), view: { for: 'result', view: { card: 'generic', title: '历史果' } } },
       ] as never[],
       hasMore: false,
-      modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      modelSelection: { provider: 'deepseek-official', model: 'deepseek-flash' },
     }))
     await session.open()
     expect(chatEvents(session.getSnapshot()).slice(-2).map(item => item.view)).toEqual([

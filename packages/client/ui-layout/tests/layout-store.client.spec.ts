@@ -114,13 +114,13 @@ describe('createLayoutStore', () => {
     })
   })
 
-  it('closeDetails remembers width in detailsLast for the next open', () => {
+  it('restoreDetailsChrome applies per-Session open + width', () => {
     const { store, actions } = createLayoutStore().create()
+    actions.restoreDetailsChrome({ open: true, width: 480 })
+    expect(store.getSnapshot()).toMatchObject({ details: 480, detailsLast: 480 })
+    actions.restoreDetailsChrome({ open: false, width: 400 })
+    expect(store.getSnapshot()).toMatchObject({ details: 0, detailsLast: 400 })
     actions.openDetails()
-    actions.setDetails(480)
-    actions.closeDetails()
-    expect(store.getSnapshot()).toMatchObject({ details: 0, detailsLast: 480 })
-    actions.openDetails()
-    expect(store.getSnapshot().details).toBe(480)
+    expect(store.getSnapshot().details).toBe(400)
   })
 })

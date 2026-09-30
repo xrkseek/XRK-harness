@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   getPluginInstallUiSnapshot,
   resetPluginInstallUiSessionForTests,
+  runPluginCliMutateUi,
   runPluginInstallUi,
   subscribePluginInstallUi,
 } from "../src/client/plugin-install-ui-session.ts";
@@ -36,6 +37,7 @@ describe("plugin-install-ui-session", () => {
 
     await Promise.resolve();
     expect(getPluginInstallUiSnapshot().busy).toBe(true);
+    expect(getPluginInstallUiSnapshot().kind).toBe("install");
     expect(getPluginInstallUiSnapshot().log?.command).toContain("@fixture/pkg");
     unsubA();
 
@@ -56,8 +58,54 @@ describe("plugin-install-ui-session", () => {
 
     expect(getPluginInstallUiSnapshot().busy).toBe(false);
     expect(getPluginInstallUiSnapshot().success).toBe(true);
+    expect(getPluginInstallUiSnapshot().kind).toBe("install");
     expect(getPluginInstallUiSnapshot().clientRefreshHint).toBe(true);
     expect(seen.some(Boolean)).toBe(true);
+  });
+
+  it("runs update mutates with busy kind and live log", async () => {
+    const deferred = Promise.withResolvers<{
+      command: string;
+      output: string;
+      exitCode: number;
+    }>();
+    let pushLog: ((text: string) => void) | undefined;
+    const run = runPluginCliMutateUi({
+      kind: "update",
+      spec: "xrkh-better-sidebar",
+      command: "xrkh plugin add xrkh-better-sidebar@latest",
+      run: async () => deferred.promise,
+      subscribeInstallLog: (_id, onText) => {
+        pushLog = onText;
+        return () => {
+          pushLog = undefined;
+        };
+      },
+    });
+
+    await Promise.resolve();
+    expect(getPluginInstallUiSnapshot()).toMatchObject({
+      busy: true,
+      kind: "update",
+      activeSpec: "xrkh-better-sidebar",
+    });
+    pushLog?.("fetching…\n");
+    expect(getPluginInstallUiSnapshot().log?.output).toContain("fetching");
+
+    deferred.resolve({
+      command: "xrkh plugin add xrkh-better-sidebar@latest",
+      output: "fetching…\nok\n",
+      exitCode: 0,
+    });
+    await run;
+
+    expect(getPluginInstallUiSnapshot()).toMatchObject({
+      busy: false,
+      success: true,
+      kind: "update",
+      okSpec: "xrkh-better-sidebar",
+      clientRefreshHint: true,
+    });
   });
 
   it("preserves success refresh hint across resets of settled log only via clear", async () => {
@@ -78,7 +126,6 @@ describe("plugin-install-ui-session", () => {
     clearPluginInstallSettledUi();
     expect(getPluginInstallUiSnapshot().success).toBe(false);
     expect(getPluginInstallUiSnapshot().log).toBeNull();
-    // Refresh CTA must survive field edits after a finished install.
     expect(getPluginInstallUiSnapshot().clientRefreshHint).toBe(true);
   });
 });

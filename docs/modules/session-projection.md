@@ -54,7 +54,7 @@ Face 封装：`createFaceProjectionRegistry` ≡ `createSessionProjectionRegistr
 | --- | --- |
 | `session.list`（已加载） | `title` · `sessionListMetadata` |
 | `session.list`（冷） | list-checkpoint 文件列；miss / 解析残缺 → 仅 `listHints`（禁止静默半截错状态） |
-| `session.history` 尾页 | 轻量 meter/stats · **`turnOutline`** + `contextTimeline` / `contextHeaders` |
+| `session.history` 尾页 | 轻量 meter/stats · **`turnOutline`** · **`workspaceChanges`** + `contextTimeline` / `contextHeaders` |
 | `session.history` + `beforeSeq` | **无** `projections` 块 |
 | SQLite LRU 淘汰 | 先 remember list checkpoint（磁盘 I/O best-effort，内存行保留），再 `evictSession`；remember 失败则跳过淘汰 |
 
@@ -79,6 +79,10 @@ Face 封装：`createFaceProjectionRegistry` ≡ `createSessionProjectionRegistr
 | `turn/end` | 推：提交 `response` |
 
 载体：`session.history` **尾页**基线 + live mux。`beforeSeq` 的 loadOlder 页**不**带 `projections`。键类型在 `@xrkseek/xrk-host-apiproxy`（`TurnOutlineEntry`）；壳包镜像 declare-merge 供 tsc emit。
+
+## Face 默认键：`workspaceChanges`
+
+整段日志的回合改动摘要（Overview `#改动`）。冷打开靠 history 尾页基线 fold；live mux 同 turnId 后写覆盖。对话 turnTail **另**从事件嵌入摘要 fold 改动卡（与投影并行）；Overview 在投影为空时回退 conversation timeline。逐文件 hunk 走 Face unary `changes.fileDiff`（重建失败返回 `null` → 壳文案「内容已不可用」）。
 
 ## 相关
 
@@ -142,7 +146,7 @@ Face wrapper: `createFaceProjectionRegistry` ≡ `createSessionProjectionRegistr
 | --- | --- |
 | `session.list` (loaded) | `title` · `sessionListMetadata` |
 | `session.list` (cold) | list-checkpoint file column; miss / corrupt parse → `listHints` only (never partial silent wrong) |
-| `session.history` tail | light meter/stats · **`turnOutline`** + `contextTimeline` / `contextHeaders` |
+| `session.history` tail | light meter/stats · **`turnOutline`** · **`workspaceChanges`** + `contextTimeline` / `contextHeaders` |
 | `session.history` with `beforeSeq` | **no** `projections` block |
 | SQLite LRU eviction | remember list checkpoint (I/O best-effort, in-memory retained), then `evictSession`; remember failure skips eviction |
 
@@ -167,6 +171,10 @@ Push rules:
 | `turn/end` | Push: commit `response` |
 
 Carriers: `session.history` **tail** baseline + live mux. loadOlder pages with `beforeSeq` omit the whole `projections` block. Wire type: `@xrkseek/xrk-host-apiproxy` (`TurnOutlineEntry`); shell packages mirror declare-merge for tsc emit.
+
+## Face default key: `workspaceChanges`
+
+Whole-log turn change summaries (Overview `#Changes`). Cold reopen folds from the history-tail baseline; live mux last-write-wins per turnId. Chat turnTail **also** folds embedded `workspace/changes` summaries (parallel to the projection); Overview falls back to the conversation timeline when the projection is empty. Per-file hunks via Face unary `changes.fileDiff` (`null` when rebuild fails → shell “no longer available” copy).
 
 ## Related
 

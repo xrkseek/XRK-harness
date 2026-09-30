@@ -10,17 +10,13 @@ import {
 import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
-import {
-  saveAgentDefaultModel,
-  type FaceModelSelection,
-} from "./model-catalog.js";
+import type { FaceModelSelection } from "./model-catalog.js";
 import {
   saveSessionModelSelection,
   sessionModelsPath,
 } from "./session-model-store.js";
 import { resolveXrkHome } from "@xrkseek/server-config";
 import { resolveLlmForSelection } from "./llm-resolve.js";
-import { publishRemoteEvent } from "./remote-event.js";
 
 function sessionHasImageContent(
   runtime: FaceRuntime,
@@ -146,14 +142,8 @@ export async function selectSessionModel(
   } catch {
     /* disk persist best-effort */
   }
-  try {
-    await saveAgentDefaultModel(runtime, selected);
-    publishRemoteEvent(runtime.bus, "settings/document-updated", [
-      "agent-default-model",
-      runtime.settingsNamespaces.ensure("agent-default-model").revision,
-    ]);
-  } catch {
-    /* session selection still applies */
-  }
+  // Per-session only — do NOT write Settings `agent-default-model` here.
+  // That publish used to fan out `settings/document-updated` → Host
+  // `invalidateAgents()` and remount / cut other sessions mid-flight.
   return { ok: true, value: { selected } };
 }

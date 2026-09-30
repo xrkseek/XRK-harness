@@ -1,7 +1,8 @@
 /**
- * Durable plugin-install UI session for Settings → Plugins → All.
- * Survives Settings modal unmount so an in-flight TerminalBlock / post-install
+ * Durable plugin CLI mutate UI session for Settings → Plugins → All.
+ * Survives Settings modal unmount so an in-flight TerminalBlock / post-mutate
  * refresh hint is still there when the user comes back.
+ * Shared by install and update so both get busy + live log + chase spinner.
  */
 
 /** Settled CLI mutate log for Settings TerminalBlock (install / update). */
@@ -11,12 +12,17 @@ export type PluginInstallLog = {
   readonly exitCode: number;
 };
 
+/** Which CLI mutate started the current / last success session. */
+export type PluginMutateKind = "install" | "update";
+
 export type PluginInstallUiState = {
   readonly busy: boolean;
   /** Spec shown while busy / on the TerminalBlock before settle. */
   readonly activeSpec: string;
-  /** Last successfully installed spec (for remount-safe toast / list refresh). */
+  /** Last successfully completed spec (toast / list refresh). */
   readonly okSpec: string;
+  /** Mutate kind for toast copy after busy→ok. */
+  readonly kind: PluginMutateKind | null;
   readonly log: PluginInstallLog | null;
   readonly error: string | null;
   readonly success: boolean;
@@ -28,6 +34,7 @@ const EMPTY: PluginInstallUiState = {
   busy: false,
   activeSpec: "",
   okSpec: "",
+  kind: null,
   log: null,
   error: null,
   success: false,
@@ -73,7 +80,8 @@ export function clearPluginInstallSettledUi(): void {
     state.log === null &&
     state.error === null &&
     state.success === false &&
-    state.activeSpec === ""
+    state.activeSpec === "" &&
+    state.kind === null
   ) {
     return;
   }
@@ -83,10 +91,11 @@ export function clearPluginInstallSettledUi(): void {
     success: false,
     activeSpec: "",
     okSpec: "",
+    kind: null,
   });
 }
 
-/** Show a settled CLI mutate log (update / remove) without an install toast. */
+/** Show a settled CLI mutate log without a success toast (legacy / remove). */
 export function setPluginMutateLog(log: PluginInstallLog): void {
   if (state.busy) return;
   patch({
@@ -95,6 +104,7 @@ export function setPluginMutateLog(log: PluginInstallLog): void {
     success: false,
     activeSpec: "",
     okSpec: "",
+    kind: null,
     clientRefreshHint: true,
   });
 }
@@ -108,14 +118,13 @@ export function setPluginInstallUiError(message: string): void {
   });
 }
 
-export type RunPluginInstallUiOptions = {
+export type RunPluginCliMutateUiOptions = {
+  readonly kind: PluginMutateKind;
+  /** Display / toast name (package id or short title). */
   readonly spec: string;
-  readonly registry?: string;
-  readonly install: (
-    spec: string,
-    registry?: string,
-    requestId?: string,
-  ) => Promise<PluginInstallLog>;
+  /** Prompt line shown on the TerminalBlock while streaming. */
+  readonly command: string;
+  readonly run: (requestId: string) => Promise<PluginInstallLog>;
   readonly subscribeInstallLog?: (
     requestId: string,
     onText: (text: string) => void,
@@ -124,10 +133,9 @@ export type RunPluginInstallUiOptions = {
   readonly fallbackError?: string;
 };
 
-function installLogFromError(
+function logFromError(
   error: unknown,
-  spec: string,
-  registry?: string,
+  command: string,
 ): PluginInstallLog | null {
   if (error !== null && typeof error === "object" && "installLog" in error) {
     const log = (error as { installLog?: unknown }).installLog;
@@ -143,9 +151,7 @@ function installLogFromError(
   }
   if (error instanceof Error && error.message.trim().length > 0) {
     return {
-      command: registry
-        ? `xrkh plugin add --registry ${registry} ${spec}`
-        : `xrkh plugin add ${spec}`,
+      command,
       output: error.message,
       exitCode: 1,
     };
@@ -154,11 +160,11 @@ function installLogFromError(
 }
 
 /**
- * Start (or no-op if already busy) a CLI install. Log streaming continues after
+ * Start (or no-op if already busy) a CLI mutate. Log streaming continues after
  * Settings unmount until settle.
  */
-export async function runPluginInstallUi(
-  options: RunPluginInstallUiOptions,
+export async function runPluginCliMutateUi(
+  options: RunPluginCliMutateUiOptions,
 ): Promise<void> {
   const spec = options.spec.trim();
   if (!spec || state.busy) return;
@@ -167,13 +173,12 @@ export async function runPluginInstallUi(
   logUnsub?.();
   logUnsub = undefined;
 
-  const command = options.registry
-    ? `xrkh plugin add --registry ${options.registry} ${spec}`
-    : `xrkh plugin add ${spec}`;
-  const requestId = `install-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const command = options.command.trim() || `xrkh plugin add ${spec}`;
+  const requestId = `${options.kind}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
   patch({
     busy: true,
+    kind: options.kind,
     activeSpec: spec,
     okSpec: "",
     error: null,
@@ -193,12 +198,13 @@ export async function runPluginInstallUi(
   });
 
   try {
-    const log = await options.install(spec, options.registry, requestId);
+    const log = await options.run(requestId);
     if (generation !== runGeneration) return;
     patch({
       log,
       success: true,
       okSpec: spec,
+      kind: options.kind,
       clientRefreshHint: true,
       busy: false,
       activeSpec: "",
@@ -207,7 +213,7 @@ export async function runPluginInstallUi(
   } catch (error) {
     if (generation !== runGeneration) return;
     const prev = getPluginInstallUiSnapshot().log;
-    const fromError = installLogFromError(error, spec, options.registry);
+    const fromError = logFromError(error, command);
     let nextLog = prev;
     if (fromError !== null) {
       nextLog =
@@ -235,6 +241,44 @@ export async function runPluginInstallUi(
       }
     }
   }
+}
+
+export type RunPluginInstallUiOptions = {
+  readonly spec: string;
+  readonly registry?: string;
+  readonly install: (
+    spec: string,
+    registry?: string,
+    requestId?: string,
+  ) => Promise<PluginInstallLog>;
+  readonly subscribeInstallLog?: (
+    requestId: string,
+    onText: (text: string) => void,
+  ) => () => void;
+  readonly fallbackError?: string;
+};
+
+/** Install wrapper over {@link runPluginCliMutateUi}. */
+export async function runPluginInstallUi(
+  options: RunPluginInstallUiOptions,
+): Promise<void> {
+  const spec = options.spec.trim();
+  if (!spec) return;
+  const command = options.registry
+    ? `xrkh plugin add --registry ${options.registry} ${spec}`
+    : `xrkh plugin add ${spec}`;
+  await runPluginCliMutateUi({
+    kind: "install",
+    spec,
+    command,
+    run: (requestId) => options.install(spec, options.registry, requestId),
+    ...(options.subscribeInstallLog !== undefined
+      ? { subscribeInstallLog: options.subscribeInstallLog }
+      : {}),
+    ...(options.fallbackError !== undefined
+      ? { fallbackError: options.fallbackError }
+      : {}),
+  });
 }
 
 /** Test-only reset. */

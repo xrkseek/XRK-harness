@@ -51,7 +51,7 @@
   }
 
   /* 弹跳：4 段递减抛物线（高度 48/28/14/6，时长 0.5/0.382/0.27/0.177s） */
-  var BOUNCE_SEGS = [{ h: 48, d: 0.5 }, { h: 28, d: 0.382 }, { h: 14, d: 0.27 }, { h: 6, d: 0.177 }];
+  var BOUNCE_SEGS = [{ h: 58, d: 0.5 }, { h: 32, d: 0.382 }, { h: 16, d: 0.27 }, { h: 7, d: 0.177 }];
   var BOUNCE_TOTAL = BOUNCE_SEGS.reduce(function (s, q) { return s + q.d; }, 0);
 
   function hexToRgb(hex) {

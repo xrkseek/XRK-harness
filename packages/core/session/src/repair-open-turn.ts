@@ -69,41 +69,46 @@ function foldStepStreamChunks(
   return { content, reasoning, toolCalls };
 }
 
-function findOpenTurnId(events: readonly SessionEvent[]): string | undefined {
-  const ended = new Set<string>();
-  let lastOpen: string | undefined;
+/**
+ * Every `turn/start` without a matching `turn/end`, in start order.
+ * Unlike a "latest only" cursor, this keeps earlier orphans visible after a
+ * later turn completes (false-idle / abandoned-turn residue).
+ */
+export function listOpenTurnIds(
+  events: readonly SessionEvent[],
+): readonly string[] {
+  const open = new Set<string>();
+  const order: string[] = [];
   for (const ev of events) {
-    if (ev.type === "turn/start") lastOpen = ev.turnId;
-    if (ev.type === "turn/end") {
-      ended.add(ev.turnId);
-      if (ev.turnId === lastOpen) lastOpen = undefined;
+    if (ev.type === "turn/start") {
+      if (!open.has(ev.turnId)) order.push(ev.turnId);
+      open.add(ev.turnId);
+    } else if (ev.type === "turn/end") {
+      open.delete(ev.turnId);
     }
   }
-  if (lastOpen !== undefined && ended.has(lastOpen)) return undefined;
-  return lastOpen;
+  return order.filter((id) => open.has(id));
 }
 
-/** True when the log has a `turn/start` with no matching `turn/end`. */
+/** True when the log has any `turn/start` with no matching `turn/end`. */
 export function sessionHasOpenTurn(events: readonly SessionEvent[]): boolean {
-  return findOpenTurnId(events) !== undefined;
+  return listOpenTurnIds(events).length > 0;
 }
 
 function findOpenStepId(
   events: readonly SessionEvent[],
   turnId: string,
 ): string | undefined {
-  const ended = new Set<string>();
-  let lastOpen: string | undefined;
+  const open: string[] = [];
   for (const ev of events) {
     if (!("turnId" in ev) || ev.turnId !== turnId) continue;
-    if (ev.type === "step/start") lastOpen = ev.stepId;
+    if (ev.type === "step/start") open.push(ev.stepId);
     if (ev.type === "step/end") {
-      ended.add(ev.stepId);
-      if (ev.stepId === lastOpen) lastOpen = undefined;
+      const idx = open.lastIndexOf(ev.stepId);
+      if (idx >= 0) open.splice(idx, 1);
     }
   }
-  if (lastOpen !== undefined && ended.has(lastOpen)) return undefined;
-  return lastOpen;
+  return open[open.length - 1];
 }
 
 function stepHasAssistantMessage(
@@ -119,23 +124,43 @@ function stepHasAssistantMessage(
   );
 }
 
-/**
- * Events to append after a crash left a turn/step open in durable storage.
- * Settles dangling tools (including toolCalls folded from stream chunks),
- * folds streamed prefix, closes step/turn with `reason: { kind: "interrupted" }`.
- */
-export function repairOpenTurnEvents(
+function stepHasEnd(
   events: readonly SessionEvent[],
-  now: () => number = Date.now,
-): SessionEvent[] {
-  const turnId = findOpenTurnId(events);
-  if (turnId === undefined) return [];
+  turnId: string,
+  stepId: string,
+): boolean {
+  return events.some(
+    (e) =>
+      e.type === "step/end" && e.turnId === turnId && e.stepId === stepId,
+  );
+}
 
-  const out: SessionEvent[] = [];
-  const ts = () => now();
+function turnHasEnd(events: readonly SessionEvent[], turnId: string): boolean {
+  return events.some((e) => e.type === "turn/end" && e.turnId === turnId);
+}
 
-  const pushSettlements = (log: readonly SessionEvent[]): void => {
-    for (const d of listDanglingToolCalls(log)) {
+function closeOneOpenTurn(
+  events: readonly SessionEvent[],
+  turnId: string,
+  openTurnIds: ReadonlySet<string>,
+  out: SessionEvent[],
+  ts: () => number,
+): void {
+  const log = (): readonly SessionEvent[] => [...events, ...out];
+
+  const pushSettlements = (): void => {
+    for (const d of listDanglingToolCalls(log())) {
+      if (!openTurnIds.has(d.turnId)) continue;
+      // Already settled in `out` this repair pass.
+      if (
+        out.some(
+          (e) =>
+            e.type === "tool/result" &&
+            e.result.toolCallId === d.call.id,
+        )
+      ) {
+        continue;
+      }
       const settled = danglingSettlement(d);
       out.push({
         type: "tool/result",
@@ -153,13 +178,12 @@ export function repairOpenTurnEvents(
     }
   };
 
-  // First pass: settle calls already on the durable log.
-  pushSettlements(events);
+  pushSettlements();
 
-  const stepId = findOpenStepId(events, turnId);
-  if (stepId !== undefined) {
-    if (!stepHasAssistantMessage(events, turnId, stepId)) {
-      const folded = foldStepStreamChunks(events, turnId, stepId);
+  const stepId = findOpenStepId(log(), turnId);
+  if (stepId !== undefined && !stepHasEnd(log(), turnId, stepId)) {
+    if (!stepHasAssistantMessage(log(), turnId, stepId)) {
+      const folded = foldStepStreamChunks(log(), turnId, stepId);
       if (
         folded.content.trim() ||
         folded.reasoning.trim() ||
@@ -179,9 +203,7 @@ export function repairOpenTurnEvents(
             : {}),
           interrupted: true,
         });
-        // Second pass: settle toolCalls introduced by the folded assistant
-        // (Codex-style: missing outputs must sit adjacent before close).
-        pushSettlements([...events, ...out]);
+        pushSettlements();
       }
     }
     out.push({
@@ -192,12 +214,37 @@ export function repairOpenTurnEvents(
     });
   }
 
-  out.push({
-    type: "turn/end",
-    ts: ts(),
-    turnId,
-    reason: { kind: "interrupted" },
-  });
+  if (!turnHasEnd(log(), turnId)) {
+    out.push({
+      type: "turn/end",
+      ts: ts(),
+      turnId,
+      reason: { kind: "interrupted" },
+    });
+  }
+}
+
+/**
+ * Events to append after a crash left one or more turns/steps open in durable
+ * storage. Settles dangling tools (including toolCalls folded from stream
+ * chunks), folds streamed prefixes, closes every open step/turn with
+ * `reason: { kind: "interrupted" }` (newest open turn first).
+ */
+export function repairOpenTurnEvents(
+  events: readonly SessionEvent[],
+  now: () => number = Date.now,
+): SessionEvent[] {
+  const openIds = listOpenTurnIds(events);
+  if (openIds.length === 0) return [];
+
+  const openSet = new Set(openIds);
+  const out: SessionEvent[] = [];
+  const ts = () => now();
+
+  // Newest first: close the abandoned in-flight turn before older orphans.
+  for (const turnId of [...openIds].reverse()) {
+    closeOneOpenTurn(events, turnId, openSet, out, ts);
+  }
 
   return out;
 }

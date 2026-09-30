@@ -372,7 +372,11 @@ export {
   type TextChunkRow,
   type ToolCallChunkRow,
 } from "./chunk-pack.js";
-export { repairOpenTurnEvents, sessionHasOpenTurn } from "./repair-open-turn.js";
+export {
+  listOpenTurnIds,
+  repairOpenTurnEvents,
+  sessionHasOpenTurn,
+} from "./repair-open-turn.js";
 export { extractEventSearchText, extractSessionSearchTexts } from "./search-text.js";
 export { writeTextFileAtomicSync } from "./atomic-write.js";
 

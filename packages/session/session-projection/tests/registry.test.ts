@@ -176,4 +176,62 @@ describe("createSessionProjectionRegistry", () => {
     });
     expect(registry.snapshot("s1").values.count).toBe(2);
   });
+
+  it("catch-up folds undriven log growth before snapshot and drive", () => {
+    const events: SessionEvent[] = [];
+    const registry = createSessionProjectionRegistry({
+      getEvents: () => events,
+    });
+    registry.register({
+      key: "count",
+      stateVersion: 1,
+      init: () => ({ n: 0 }),
+      apply(state, event) {
+        if (event.type !== "user/message") return state;
+        return { n: state.n + 1 };
+      },
+      wire: {
+        view: (s) => s.n,
+        parse: (v) => Number(v),
+      },
+    });
+
+    const first = userMessage(1, "a");
+    events.push(first);
+    registry.drive("s1", first, 1);
+    expect(registry.snapshot("s1").values.count).toBe(1);
+
+    // Simulate SQLite open-turn repair: append without drive.
+    events.push(userMessage(2, "repair"));
+    expect(registry.snapshot("s1").values.count).toBe(2);
+
+    const live = userMessage(3, "live");
+    events.push(live);
+    registry.drive("s1", live, 3);
+    expect(registry.snapshot("s1").values.count).toBe(3);
+  });
+
+  it("drops cells when getEvents returns a new log identity", () => {
+    let events: SessionEvent[] = [userMessage(1, "old")];
+    const registry = createSessionProjectionRegistry({
+      getEvents: () => events,
+    });
+    registry.register({
+      key: "count",
+      stateVersion: 1,
+      init: () => ({ n: 0 }),
+      apply(state, event) {
+        if (event.type !== "user/message") return state;
+        return { n: state.n + 1 };
+      },
+      wire: {
+        view: (s) => s.n,
+        parse: (v) => Number(v),
+      },
+    });
+    expect(registry.snapshot("s1").values.count).toBe(1);
+
+    events = [userMessage(1, "one"), userMessage(2, "two")];
+    expect(registry.snapshot("s1").values.count).toBe(2);
+  });
 });

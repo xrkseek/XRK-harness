@@ -222,7 +222,7 @@ describe('AppFrame', () => {
     expect(slotCalls.map(c => c.key)).toContain('details')
   })
 
-  it('remembers Overview open per Session; unrelated switch closes if never opened', () => {
+  it('remembers Overview open + width per Session; reload restores both', () => {
     sessionMeta.current = {
       's-test': {},
       's-next': {},
@@ -232,6 +232,8 @@ describe('AppFrame', () => {
 
     act(() => { instance.actions.openDetails() })
     expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 360])
+    act(() => { instance.actions.setDetails(480) })
+    expect(instance.getSnapshot().details).toBe(480)
 
     // Unrelated Session that never opened Overview → close.
     selectedSession.current = 's-next' as SessionId
@@ -239,11 +241,31 @@ describe('AppFrame', () => {
     expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 0])
     expect(instance.getSnapshot().details).toBe(0)
 
-    // Return to the Session that had Overview open → restore.
+    // Open Overview on the second Session at a different width.
+    act(() => { instance.actions.openDetails() })
+    act(() => { instance.actions.setDetails(400) })
+    expect(instance.getSnapshot().details).toBe(400)
+
+    // Return to the first Session → restore its open bit and its own width.
     selectedSession.current = 's-test' as SessionId
     act(() => { rerenderFrame() })
-    expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 360])
-    expect(instance.getSnapshot().details).toBe(360)
+    expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 480])
+    expect(instance.getSnapshot().details).toBe(480)
+
+    // Back to the second Session → 400, not 480.
+    selectedSession.current = 's-next' as SessionId
+    act(() => { rerenderFrame() })
+    expect(instance.getSnapshot().details).toBe(400)
+  })
+
+  it('rehydrates Overview open + width from localStorage on first paint', () => {
+    localStorage.setItem(
+      'xrk.layout.overview.v1',
+      JSON.stringify({ 's-test': { open: true, width: 440 } }),
+    )
+    const { frame, instance } = mountFrame()
+    expect(instance.getSnapshot().details).toBe(440)
+    expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 440])
   })
 
   it('keeps Overview open across parent ↔ child delegation hops', () => {

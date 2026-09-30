@@ -228,4 +228,26 @@ describe("subagent tools", () => {
     expect(out.content).toMatch(/subagents off/);
     expect(out.content).toMatch(/frugal/);
   });
+
+  it("advertises provider/model pin fields on the subagent tool schema", () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-model-schema-")),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
+    });
+    const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
+    const tools = createToolRegistry();
+    bindSubagentTools(tools, { runtime, parentSessionId: parent });
+    const def = tools.get("subagent")!;
+    const props = (def.parameters as { properties: Record<string, unknown> }).properties;
+    expect(props.provider).toBeTruthy();
+    expect(props.model).toBeTruthy();
+    expect(props.reasoning_effort).toBeTruthy();
+    expect(def.description).toMatch(/provider \/ model/);
+  });
 });

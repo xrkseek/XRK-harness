@@ -194,12 +194,18 @@ export function createSessionProjectionRegistry(
   const eventLogCache = new Map<string, readonly SessionEvent[]>();
 
   function eventsFor(sessionId: string): readonly SessionEvent[] {
-    let events = eventLogCache.get(sessionId);
-    if (events === undefined) {
-      events = options.getEvents(sessionId);
-      eventLogCache.set(sessionId, events);
+    const fresh = options.getEvents(sessionId);
+    const cached = eventLogCache.get(sessionId);
+    if (cached === fresh) return fresh;
+    // New log identity (reload without {@link evictSession}) — drop stale cells.
+    if (cached !== undefined) {
+      for (const registration of registrations.values()) {
+        registration.cells.delete(sessionId);
+      }
+      sidecars.delete(sessionId);
     }
-    return events;
+    eventLogCache.set(sessionId, fresh);
+    return fresh;
   }
 
   function buildCell(
@@ -218,15 +224,37 @@ export function createSessionProjectionRegistry(
     };
   }
 
+  /** Fold `[fromSeqExclusive, throughSeq]` (Face 1-based) onto an existing cell. */
+  function catchUpCell(
+    def: ErasedDefinition,
+    cell: UnitCell,
+    events: readonly SessionEvent[],
+    throughSeq: number,
+  ): void {
+    const from = cell.observedSeq;
+    if (from >= throughSeq) return;
+    for (let seq = from + 1; seq <= throughSeq; seq++) {
+      const event = events[seq - 1];
+      if (event === undefined) break;
+      cell.state = def.apply(cell.state, event, seq);
+      cell.observedSeq = seq;
+    }
+  }
+
   function cellFor(
     registration: Registration,
     sessionId: string,
   ): UnitCell {
+    const events = eventsFor(sessionId);
     let cell = registration.cells.get(sessionId);
     if (cell === undefined) {
-      cell = buildCell(registration.def, eventsFor(sessionId));
+      cell = buildCell(registration.def, events);
       registration.cells.set(sessionId, cell);
+      return cell;
     }
+    // Hydrate repairs (and any other undriven append) grow the log without
+    // `drive` — catch up before serving snapshot / checkpoint.
+    catchUpCell(registration.def, cell, events, events.length);
     return cell;
   }
 
@@ -276,13 +304,16 @@ export function createSessionProjectionRegistry(
 
     drive(sessionId, event, seq) {
       eventLogCache.delete(sessionId);
+      const all = eventsFor(sessionId);
       for (const registration of registrations.values()) {
         let cell = registration.cells.get(sessionId);
         if (cell === undefined) {
-          const all = eventsFor(sessionId);
-          const prefix = all.slice(0, seq - 1);
-          cell = buildCell(registration.def, prefix);
+          cell = buildCell(registration.def, all.slice(0, seq - 1));
           registration.cells.set(sessionId, cell);
+        } else {
+          // Close gaps when the store inserted events without `drive`
+          // (SQLite open-turn repair on hydrate).
+          catchUpCell(registration.def, cell, all, seq - 1);
         }
         const next = registration.def.apply(cell.state, event, seq);
         const changed = !Object.is(next, cell.state);

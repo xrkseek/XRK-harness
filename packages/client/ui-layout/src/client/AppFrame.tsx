@@ -15,8 +15,9 @@
  * drawer overlay (always wide) and details a full-screen sheet. Narrow tablet
  * viewports (PHONE_MAX..SIDEBAR_AUTO_COLLAPSE) keep the compact rail.
  *
- * Overview width is a shell habit (`detailsLast`); open/closed is per-Session
- * so opening Overview on A does not force-open B. Parent↔child hops keep it open.
+ * Overview open + width are per-Session (localStorage); unrelated Sessions
+ * do not share a forced-open column or each other's drag width. Parent↔child
+ * hops keep the column open.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -28,9 +29,8 @@ import {
 } from './columns.ts'
 import type { LayoutInsets } from './layout-insets.ts'
 import {
-  isOverviewOpenSoftHop,
-  readDetailsOpen,
   rememberDetailsOpen,
+  selectDetailsOpenMemory,
 } from './details-open-memory.ts'
 import {
   SHELL_SHORTCUT_DEFS,
@@ -259,44 +259,60 @@ export function AppFrame({
     return () => { window.removeEventListener('keydown', onKey, true) }
   }, [applyOverrides, runShellAction, t])
 
-  // Overview width (`detailsLast`) is a shell habit like the sidebar.
-  // Open/closed is per-Session — opening A must not force-open B. Parent↔child
-  // soft hops keep the column open so delegation does not slam it shut.
+  // Overview open + width: per-Session memory (sidebar `panelOpen` / `setSession`).
+  // Survives reload via localStorage; lineage hops keep an open column.
   useLayoutEffect(() => {
     const prevId = detailsSessionRef.current
     const prevParent = detailsParentRef.current
     const nextId = detailsSession
     const openNow = panelsDetailsRef.current > 0
-
-    if (prevId !== undefined && prevId !== nextId) {
-      rememberDetailsOpen(prevId, openNow)
-    }
+    const widthNow = openNow
+      ? panelsDetailsRef.current
+      : (panels.detailsLast > 0 ? panels.detailsLast : panelsDetailsRef.current)
     detailsSessionRef.current = nextId
     detailsParentRef.current = detailsParentId
-
     if (nextId === undefined || prevId === nextId) return
 
-    const remembered = readDetailsOpen(nextId)
-    if (remembered === true) {
-      if (!openNow) actions.openDetails()
+    const { action, width } = selectDetailsOpenMemory({
+      fromId: prevId,
+      fromParentId: prevParent,
+      toId: nextId,
+      toParentId: detailsParentId,
+      openNow,
+      widthNow,
+    })
+    if (action === 'open') {
+      actions.restoreDetailsChrome({ open: true, width })
+    } else if (action === 'close') {
+      actions.restoreDetailsChrome({ open: false, width })
+    } else if (openNow && panelsDetailsRef.current !== width) {
+      // keep-open across hops / restore: still adopt this Session's width.
+      actions.restoreDetailsChrome({ open: true, width })
+    } else if (!openNow) {
+      // keep-closed: refresh detailsLast so the next open uses this Session's size.
+      actions.restoreDetailsChrome({ open: false, width })
+    }
+  }, [actions, detailsParentId, detailsSession, panels.detailsLast])
+
+  // Mirror sidebar `reduce`: write open + width on toggle/drag for the settled Session
+  // (skip the hop frame — layout effect already recorded leave / seed).
+  const openSyncSessionRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const id = detailsSession
+    if (id === undefined) {
+      openSyncSessionRef.current = undefined
       return
     }
-    if (remembered === false) {
-      if (openNow) actions.closeDetails()
+    if (openSyncSessionRef.current !== id) {
+      openSyncSessionRef.current = id
       return
     }
-    // Never visited this Session.
-    if (
-      openNow
-      && prevId !== undefined
-      && isOverviewOpenSoftHop(prevId, prevParent, nextId, detailsParentId)
-    ) {
-      rememberDetailsOpen(nextId, true)
+    if (panels.details > 0) {
+      rememberDetailsOpen(id, true, panels.details)
       return
     }
-    if (openNow) actions.closeDetails()
-    rememberDetailsOpen(nextId, false)
-  }, [actions, detailsParentId, detailsSession])
+    rememberDetailsOpen(id, false)
+  }, [detailsSession, panels.details])
 
   // Track the frame's own box (not the window): rAF-throttled ResizeObserver.
   useEffect(() => {

@@ -31,7 +31,7 @@ const GROUPS = [{
   name: 'DeepSeek',
   models: [
     {
-      id: 'deepseek-v4-flash',
+      id: 'deepseek-flash',
       name: 'DeepSeek-V4-Flash',
       reasoning: {
         efforts: [
@@ -60,7 +60,7 @@ const GROUPS = [{
 /** Boot the plugin over fake faces + a stateful fake host (current moves on selectModel). */
 async function bench() {
   const ctx = new Context()
-  let current: ModelSelection = { provider: 'deepseek-official', model: 'deepseek-v4-flash' }
+  let current: ModelSelection = { provider: 'deepseek-official', model: 'deepseek-flash' }
   const calls = { models: 0, select: 0 }
   ctx.provide('connection', { api: { sessions: {
     models: () => {
@@ -216,13 +216,13 @@ describe('ui-model-selection dual entry', () => {
     b.mint('s1')
     const face = b.seat().inject!(sid('s1'))
     await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
-    b.setHostCurrent({ provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+    b.setHostCurrent({ provider: 'deepseek-official', model: 'deepseek-flash' })
 
     b.ctx.emit('connection/reset')
     expect(face.directory.getSnapshot()).toMatchObject({ current: null, status: 'loading' })
     await Promise.resolve()
     expect(face.directory.getSnapshot()).toMatchObject({
-      current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      current: { provider: 'deepseek-official', model: 'deepseek-flash' },
       status: 'ready',
     })
   })

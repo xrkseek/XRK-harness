@@ -47,9 +47,35 @@ export function apply(ctx: ClientContext): void {
     const result = await ctx.remote.pluginInventory.remove(entryId as PluginEntryId)
     if (!result.ok) throwRemote('pluginInventory.remove', result)
   }
-  const update: PluginInventorySettingsTabInjected['update'] = async (entryId) => {
-    const result = await ctx.remote.pluginInventory.update(entryId as PluginEntryId)
-    if (!result.ok) throwRemote('pluginInventory.update', result)
+  const update: PluginInventorySettingsTabInjected['update'] = async (entryId, requestId) => {
+    const result = await ctx.remote.pluginInventory.update(entryId as PluginEntryId, requestId)
+    if (!result.ok) {
+      const details = result.error.details as {
+        command?: unknown
+        output?: unknown
+        exitCode?: unknown
+      } | undefined
+      const log =
+        details !== undefined &&
+        typeof details.command === 'string' &&
+        typeof details.output === 'string' &&
+        typeof details.exitCode === 'number'
+          ? {
+            command: details.command,
+            output: details.output,
+            exitCode: details.exitCode,
+          }
+          : {
+            command: `xrkh plugin add ${entryId}@latest`,
+            output: result.error.message,
+            exitCode: 1,
+          }
+      const error = new Error(`${result.error.code}: ${result.error.message}`) as Error & {
+        installLog: typeof log
+      }
+      error.installLog = log
+      throw error
+    }
     if (
       typeof result.value.command === 'string'
       && typeof result.value.output === 'string'

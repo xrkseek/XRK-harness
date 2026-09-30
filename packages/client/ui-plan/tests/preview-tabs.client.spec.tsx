@@ -655,6 +655,8 @@ describe('PreviewTabs', () => {
     await waitFor(() => {
       expect(screen.getByText('sleep 5')).toBeTruthy()
     })
+    // Jobs card starts collapsed; expand it so the peek control is reachable.
+    fireEvent.click(screen.getByRole('button', { name: /后台任务/ }))
     fireEvent.click(screen.getByRole('button', { name: '展开 sleep 5 的输出' }))
     await waitFor(() => {
       expect(peekJobOutput).toHaveBeenCalledWith('job-1')

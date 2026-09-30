@@ -7,7 +7,7 @@ import type { ProjectionSnapshot } from "@xrkseek/session-projection";
  * |---------|------|-------------|
  * | `session.list` | loaded | {@link SESSION_LIST_PROJECTION_KEYS} live fold |
  * | `session.list` | cold | list-checkpoint cache · else hints-only (corrupt/partial parse → miss) |
- * | `session.history` tail | `beforeSeq` absent | light + {@link SESSION_CONTEXT_PROJECTION_KEYS} |
+ * | `session.history` tail | `beforeSeq` absent | light (incl. `workspaceChanges`) + {@link SESSION_CONTEXT_PROJECTION_KEYS} |
  * | `session.history` older | `beforeSeq` set | **none** — no `projections` block |
  * | mux | live events | `session/projection` push frames |
  *
@@ -33,6 +33,7 @@ export const SESSION_HISTORY_PROJECTION_KEYS = [
   "plan",
   "sessionStats",
   "turnOutline",
+  "workspaceChanges",
   "tokenUsage",
   "costUsage",
   "contextPressure",

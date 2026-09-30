@@ -17,7 +17,7 @@
 import type {} from '@xrkseek/xrk-api-remotes/client'
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
-import { resolveWorkspacePath } from '@xrkseek/client-runtime/client'
+import { resolveWorkspacePath, routeWorkspaceOpenFile } from '@xrkseek/client-runtime/client'
 // Type-only: pulls the ui-conversation SlotMap merge (the input.plan seat).
 import type {} from '@xrkseek/client-ui-conversation/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -28,6 +28,8 @@ import type {} from '@xrkseek/client-ui-layout/client'
 import type {} from '@xrkseek/xrk-plan-mode/client'
 import { PlanChip } from './PlanModeControl.tsx'
 import { PreviewOpenButton, PreviewTabs, type PreviewTabsInjected } from './PreviewTabs.tsx'
+import { changeTurnsFallbackSnapshot } from './change-turns-fallback.ts'
+import { presenceSessionCuesSnapshot } from './presence-session-cues.ts'
 import { peekJobOutput as defaultPeekJobOutput } from './job-output-peek.ts'
 import { en, zh, type PlanKey } from './locales.ts'
 
@@ -53,10 +55,10 @@ export interface PlanChipInjected {
   exitPlanMode: () => Promise<string | null>
 }
 
-/** Required services: slots, commands Remote, locale, layout, Host openPath, sessions. */
+/** Required services: slots, commands Remote, locale, layout, workspaces, sessions. */
 export const inject = [
   'slots', 'remote', 'remote.commands', 'remote.changes', 'remote.canvas', 'locale', 'layout',
-  'connection', 'sessions',
+  'connection', 'sessions', 'workspaces',
 ]
 
 /**
@@ -127,11 +129,26 @@ export function apply(ctx: ClientContext): void {
         }
         return result.value.diff
       },
-      openChangedFile: (path: string) => {
+      openChangedFile: async (path: string) => {
         const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
-        void connection.api.host.openPath({
-          path: resolveWorkspacePath(cwd, path),
-        })
+        const resolved = resolveWorkspacePath(cwd, path)
+        // Same contract as chat openFile: wake xrkh-better-sidebar when present,
+        // else (and always after wake) Host openPath / OS.
+        await routeWorkspaceOpenFile(
+          resolved,
+          async (p) => {
+            const response = await connection.api.host.openPath({ path: p })
+            if (!response.result.ok) {
+              throw new Error(`path open failed: ${response.result.error.message}`)
+            }
+          },
+          (p) => {
+            const face = ctx.get('betterSidebar') as {
+              openTab?(seed: { type: string; path?: string }): void
+            } | undefined
+            face?.openTab?.({ type: 'editor', path: p })
+          },
+        )
       },
       listCanvases: async (signal: AbortSignal) => {
         const result = await ctx.remote.canvas.list({ sessionId }, signal)
@@ -152,6 +169,30 @@ export function apply(ctx: ClientContext): void {
         subscribe: (listener) => {
           const face = ctx.get('changesReview') as PreviewTabsInjected['changesReview'] | undefined
           return face?.subscribe(listener) ?? (() => {})
+        },
+      },
+      changeTurnsFallback: {
+        getSnapshot: () => {
+          const binding = ctx.sessions.binding(sessionId)
+          const timeline = binding?.session.getSnapshot().chat.timeline
+          return changeTurnsFallbackSnapshot(sessionId, timeline)
+        },
+        subscribe: (listener) => {
+          const binding = ctx.sessions.binding(sessionId)
+          if (binding === undefined) return () => {}
+          return binding.session.subscribe(listener)
+        },
+      },
+      presenceCues: {
+        getSnapshot: () => {
+          const binding = ctx.sessions.binding(sessionId)
+          const nodes = binding?.session.getSnapshot().nodes
+          return presenceSessionCuesSnapshot(sessionId, nodes, Date.now())
+        },
+        subscribe: (listener) => {
+          const binding = ctx.sessions.binding(sessionId)
+          if (binding === undefined) return () => {}
+          return binding.session.subscribe(listener)
         },
       },
       openTeamChild: async (input: {

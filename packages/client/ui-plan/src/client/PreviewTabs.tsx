@@ -17,7 +17,7 @@ import {
 import { OverviewChangesPanel, type OverviewChangesTurn } from './OverviewChangesPanel.tsx'
 import { OverviewCanvasPanel } from './OverviewCanvasPanel.tsx'
 import { SubagentGraphBoard } from './SubagentGraphBoard.tsx'
-import { PresenceBall, derivePresenceEmotion } from './PresenceBall.tsx'
+import { PresenceBall } from './PresenceBall.tsx'
 import {
   getCanvasFocusSnapshot,
   subscribeCanvasFocus,
@@ -37,6 +37,7 @@ import {
   writeOverviewSessionUi,
   type OverviewPaintTab,
 } from './overview-paint.ts'
+import { EMPTY_PRESENCE_SESSION_CUES } from './presence-session-cues.ts'
 import css from './PreviewTabs.module.css'
 
 /**
@@ -47,6 +48,8 @@ import css from './PreviewTabs.module.css'
 const DETAILS_INSET_ATTR = 'data-xrk-layout-details'
 
 export type PreviewTabId = 'status' | 'context' | 'todos' | 'changes' | 'canvas'
+
+const EMPTY_CHANGE_TURNS: readonly OverviewChangesTurn[] = []
 
 /** Injected by ui-plan: close the layout details column; open spill paths; Teams actions. */
 export interface PreviewTabsInjected {
@@ -93,8 +96,8 @@ export interface PreviewTabsInjected {
     index: number,
     signal: AbortSignal,
   ) => Promise<import('@xrkseek/xrk-api-remotes/client').WorkspaceFileDiff | null>
-  /** Open a changed file path (Host openPath / community sidebar). */
-  openChangedFile?: (path: string) => void
+  /** Open a changed file path (community better-sidebar + workspaces.openPath). */
+  openChangedFile?: (path: string) => void | Promise<void>
   /**
    * Optional `ctx.changesReview` face — turn-tail cards open this tab via
    * soft get (no hard dependency on ui-deliverables).
@@ -106,6 +109,25 @@ export interface PreviewTabsInjected {
       readonly index: number
       readonly revision: number
     } | null
+    subscribe: (listener: () => void) => () => void
+  }
+  /**
+   * Conversation-timeline harvest of embedded `workspace/changes` cards.
+   * Used when Face `workspaceChanges` is empty (reconnect truncate / seed lag).
+   */
+  changeTurnsFallback?: {
+    getSnapshot: () => readonly OverviewChangesTurn[]
+    subscribe: (listener: () => void) => () => void
+  }
+  /**
+   * Transcript cues for Overview presence (tool errors · last activity).
+   * Soft face — Overview still works when the session binding is absent.
+   */
+  presenceCues?: {
+    getSnapshot: () => {
+      readonly toolError?: { readonly name?: string }
+      readonly activityAt: number
+    }
     subscribe: (listener: () => void) => () => void
   }
   /** Face `canvas.list` for the Overview Canvas tab. */
@@ -727,26 +749,42 @@ function StatusPanel({
     status.channels.process.length > 0
     || wiredIm.length > 0
     || status.channels.alerts.length > 0
-  const presenceEmotion = derivePresenceEmotion({
-    ...(status.presence ? { presence: status.presence } : {}),
-    turnActive,
-    runningJobs: runningJobs.length,
-    runningSubs: liveSubs.length,
-    fleetHealth: status.fleet.health,
-  })
-  const presenceTip = presenceEmotion.tips
-    ?? (presenceEmotion.tipKey
-      ? t(`preview.status.presenceTip.${presenceEmotion.tipKey}`)
-      : undefined)
-  const presenceNameKey = `preview.status.emotion.${presenceEmotion.emotionId}` as const
-  const presenceName = (() => {
-    const named = t(presenceNameKey as 'preview.status.emotion.02')
-    // Missing dictionary keys often echo the key back — fall back explicitly.
-    if (named === presenceNameKey || named.startsWith('preview.status.emotion.')) {
-      return t('preview.status.emotion.fallback', { id: presenceEmotion.emotionId })
-    }
-    return named
-  })()
+  // Hero strip: at most three cells so a wrapped last row stays centered.
+  // Prefer live activity (≤2), then always keep context total.
+  type SummaryStat = { key: string; hot?: true; value: string; label: string }
+  const summaryActivity: SummaryStat[] = []
+  if (runningJobs.length > 0) {
+    summaryActivity.push({
+      key: `jobs-${runningJobs.length}`,
+      hot: true,
+      value: String(runningJobs.length),
+      label: t('preview.summary.jobs'),
+    })
+  }
+  if (showSubagentSurface && liveSubs.length > 0) {
+    summaryActivity.push({
+      key: `subs-${liveSubs.length}`,
+      hot: true,
+      value: String(liveSubs.length),
+      label: t('preview.summary.subs'),
+    })
+  }
+  if (turnActive || queued > 0 || steering > 0) {
+    summaryActivity.push({
+      key: `queue-${turnActive}-${queued}-${steering}`,
+      hot: true,
+      value: turnActive ? '1' : String(queued + steering),
+      label: turnActive ? t('preview.summary.turn') : t('preview.summary.queue'),
+    })
+  }
+  const summaryStats: SummaryStat[] = [
+    ...summaryActivity.slice(0, 2),
+    {
+      key: `tok-${current.total}`,
+      value: current.total.toLocaleString(),
+      label: t('preview.summary.tokens'),
+    },
+  ]
 
   return (
     <div className={css.statusRoot} data-status-badge={status.badge || undefined}>
@@ -801,76 +839,20 @@ function StatusPanel({
               {allOpen ? t('preview.collapseAll') : t('preview.expandAll')}
             </button>
           </div>
-          <div className={css.summaryStats}>
-            {runningJobs.length > 0
-              ? (
-                <span className={css.summaryStat} data-hot="">
-                  <b key={`jobs-${runningJobs.length}`}>{runningJobs.length}</b>
-                  <span className={css.summaryStatLabel}>{t('preview.summary.jobs')}</span>
-                </span>
-              )
-              : null}
-            {showSubagentSurface && liveSubs.length > 0
-              ? (
-                <span className={css.summaryStat} data-hot="">
-                  <b key={`subs-${liveSubs.length}`}>{liveSubs.length}</b>
-                  <span className={css.summaryStatLabel}>{t('preview.summary.subs')}</span>
-                </span>
-              )
-              : null}
-            {turnActive || queued > 0 || steering > 0
-              ? (
-                <span
-                  className={css.summaryStat}
-                  data-hot=""
-                >
-                  <b key={`queue-${turnActive}-${queued}-${steering}`}>
-                    {turnActive ? '1' : queued + steering}
-                  </b>
-                  <span className={css.summaryStatLabel}>
-                    {turnActive
-                      ? t('preview.summary.turn')
-                      : t('preview.summary.queue')}
-                  </span>
-                </span>
-              )
-              : null}
-            <span className={css.summaryStat}>
-              <b key={`tok-${current.total}`}>{current.total.toLocaleString()}</b>
-              <span className={css.summaryStatLabel}>{t('preview.summary.tokens')}</span>
-            </span>
-            {status.cost.cost > 0
-              ? (
-                <span className={css.summaryStat}>
-                  <b key={`cost-${status.cost.cost}`}>
-                    {status.cost.cost < 0.01
-                      ? status.cost.cost.toFixed(4)
-                      : status.cost.cost.toFixed(3)}
-                  </b>
-                  <span className={css.summaryStatLabel}>{t('preview.summary.cost')}</span>
-                </span>
-              )
-              : null}
+          <div className={css.summaryStats} data-count={summaryStats.length}>
+            {summaryStats.map((stat) => (
+              <span
+                key={stat.key}
+                className={css.summaryStat}
+                {...(stat.hot ? { 'data-hot': '' } : {})}
+              >
+                <b>{stat.value}</b>
+                <span className={css.summaryStatLabel}>{stat.label}</span>
+              </span>
+            ))}
           </div>
         </div>
       </div>
-
-      <SectionCard
-        t={t}
-        label={t('preview.status.presence')}
-        title={t('preview.status.presence')}
-        signal={collapseSignal}
-        defaultOpen
-        meta={presenceName}
-      >
-        <PresenceBall
-          emotion={presenceEmotion}
-          emotionName={presenceName}
-          tipText={presenceTip}
-          loadingLabel={t('preview.status.presenceLoading')}
-          errorLabel={t('preview.status.presenceError')}
-        />
-      </SectionCard>
 
       {showSubagentSurface
         ? (
@@ -1163,7 +1145,7 @@ function StatusPanel({
         label={t('preview.status.jobs')}
         title={t('preview.status.jobs')}
         signal={collapseSignal}
-        defaultOpen
+        defaultOpen={false}
         meta={`${runningJobs.length}/${status.jobs.length} running`}
       >
         <StatusJobsList
@@ -1669,6 +1651,8 @@ export function PreviewTabs({
   loadFileDiff,
   openChangedFile,
   changesReview,
+  changeTurnsFallback,
+  presenceCues,
   listCanvases,
   getCanvas,
   t,
@@ -1798,6 +1782,12 @@ export function PreviewTabs({
     () => null,
   )
 
+  const presenceCue = useSyncExternalStore(
+    (onStoreChange) => presenceCues?.subscribe(onStoreChange) ?? (() => {}),
+    () => presenceCues?.getSnapshot() ?? EMPTY_PRESENCE_SESSION_CUES,
+    () => EMPTY_PRESENCE_SESSION_CUES,
+  )
+
   const canvasFocus = useSyncExternalStore(
     subscribeCanvasFocus,
     () => {
@@ -1819,16 +1809,15 @@ export function PreviewTabs({
     setStatusTick((n) => n + 1)
   }, [catalogRev, jobsRev, agentPresetRev, parentRunning, childRunning, jobsBusy])
 
-  // While any linked state machine is busy — or Overview Status is open —
-  // soft-poll session.status so presence / delivery / fleet flip without a
-  // membership bump (presence_set is sticky outside the turn latch).
+  // Soft-poll session.status so presence / delivery / fleet flip without a
+  // membership bump (presence_set is sticky outside the turn latch). Presence
+  // rail is always mounted across tabs, so poll even when Status is not selected.
   useEffect(() => {
-    if (!fleetBusy && tab !== 'status') return
     const timer = window.setInterval(() => {
       setStatusTick((n) => n + 1)
-    }, tab === 'status' && !fleetBusy ? 2_000 : 1_200)
+    }, fleetBusy ? 1_200 : 2_500)
     return () => { window.clearInterval(timer) }
-  }, [fleetBusy, sessionId, tab])
+  }, [fleetBusy, sessionId])
 
   // Soft hop keeps prior paint; hard remount starts empty (no blanking flicker).
   useEffect(() => {
@@ -1929,7 +1918,13 @@ export function PreviewTabs({
   const refreshStatus = () => { setStatusTick((n) => n + 1) }
 
   const emptyCopy = ready ? t('preview.unavailable') : t('preview.loading')
-  const changeTurns = Array.isArray(workspaceChanges) ? workspaceChanges : []
+  const projectedTurns = Array.isArray(workspaceChanges) ? workspaceChanges : []
+  const fallbackTurns = useSyncExternalStore(
+    (onStoreChange) => changeTurnsFallback?.subscribe(onStoreChange) ?? (() => {}),
+    () => changeTurnsFallback?.getSnapshot() ?? EMPTY_CHANGE_TURNS,
+    () => EMPTY_CHANGE_TURNS,
+  )
+  const changeTurns = projectedTurns.length > 0 ? projectedTurns : fallbackTurns
 
   return (
     <aside
@@ -2015,6 +2010,39 @@ export function PreviewTabs({
       <div className={css.tools} aria-label={t('preview.status.tools')}>
         {renderSlot('details.status.utilities', {})}
       </div>
+      {status !== null
+        ? (
+          <div
+            className={css.presenceRail}
+            data-overview-presence-rail=""
+            aria-label={t('preview.status.presence')}
+          >
+            <div className={css.presenceRailHead}>
+              <span className={css.presenceRailTitle}>{t('preview.status.presence')}</span>
+              <span className={css.presenceRailHint}>{t('preview.status.presenceClick')}</span>
+            </div>
+            <PresenceBall
+              {...(status.presence ? { presence: status.presence } : {})}
+              turnActive={status.delivery.turnActive}
+              runningJobs={status.jobs.filter((j) => j.status === 'running').length}
+              runningSubs={status.subagents.live.filter((s) => s.activity === 'running').length}
+              fleetHealth={status.fleet.health}
+              queued={status.delivery.queued}
+              steering={status.delivery.steering}
+              compactionBusy={status.compaction.phase === 'busy'}
+              {...(presenceCue.toolError ? { toolError: presenceCue.toolError } : {})}
+              activityAt={Math.max(
+                presenceCue.activityAt,
+                status.presence?.updatedAt ?? 0,
+              )}
+              t={t as (key: string, params?: Record<string, string>) => string}
+              loadingLabel={t('preview.status.presenceLoading')}
+              errorLabel={t('preview.status.presenceError')}
+              clickHint={t('preview.status.presenceClick')}
+            />
+          </div>
+        )
+        : null}
       <div
         ref={bodyRef}
         className={css.body}
@@ -2044,7 +2072,7 @@ export function PreviewTabs({
             )
           : tab === 'changes'
             ? loadFileDiff === undefined || openChangedFile === undefined
-              ? <div className={css.empty}>{t('preview.changes.empty')}</div>
+              ? <div className={css.empty}>{t('preview.changes.capability')}</div>
               : (
                 <OverviewChangesPanel
                   sessionId={sessionId}

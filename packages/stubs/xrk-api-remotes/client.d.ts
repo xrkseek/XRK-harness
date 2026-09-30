@@ -136,6 +136,8 @@ declare module '@xrkseek/xrk-typert-protocol' {
       ) => Promise<RemoteResult<{ entryId: PluginEntryId; removed: true }>>
       update: (
         entryId: PluginEntryId,
+        /** Correlates live `plugin-inventory/install-log` chunks. */
+        requestId?: string,
       ) => Promise<RemoteResult<{
         entryId: PluginEntryId
         updated: true

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { SessionEvent } from "@xrkseek/protocol";
-import { repairOpenTurnEvents } from "../src/repair-open-turn.js";
+import {
+  listOpenTurnIds,
+  repairOpenTurnEvents,
+  sessionHasOpenTurn,
+} from "../src/repair-open-turn.js";
 
 describe("repairOpenTurnEvents", () => {
   it("returns empty when the last turn is closed", () => {
@@ -9,6 +13,7 @@ describe("repairOpenTurnEvents", () => {
       { type: "turn/end", ts: 2, turnId: "t1", reason: { kind: "completed" } },
     ];
     expect(repairOpenTurnEvents(events)).toEqual([]);
+    expect(sessionHasOpenTurn(events)).toBe(false);
   });
 
   it("closes dangling turn with folded stream prefix", () => {
@@ -90,5 +95,41 @@ describe("repairOpenTurnEvents", () => {
       "c-stream",
     );
     expect(result?.type === "tool/result" && result.result.isError).toBe(true);
+  });
+
+  it("closes every orphan turn after a later turn completed (false-idle residue)", () => {
+    const events: SessionEvent[] = [
+      { type: "turn/start", ts: 1, turnId: "orphan-old" },
+      { type: "step/start", ts: 2, turnId: "orphan-old", stepId: "s-old" },
+      { type: "turn/start", ts: 3, turnId: "orphan-mid" },
+      { type: "turn/start", ts: 4, turnId: "done" },
+      {
+        type: "turn/end",
+        ts: 5,
+        turnId: "done",
+        reason: { kind: "completed" },
+      },
+    ];
+    expect(listOpenTurnIds(events)).toEqual(["orphan-old", "orphan-mid"]);
+    expect(sessionHasOpenTurn(events)).toBe(true);
+
+    const repaired = repairOpenTurnEvents(events, () => 100);
+    const ends = repaired.filter((e) => e.type === "turn/end");
+    expect(ends.map((e) => (e.type === "turn/end" ? e.turnId : ""))).toEqual([
+      "orphan-mid",
+      "orphan-old",
+    ]);
+    expect(
+      repaired.some(
+        (e) =>
+          e.type === "step/end" &&
+          e.turnId === "orphan-old" &&
+          e.stepId === "s-old",
+      ),
+    ).toBe(true);
+
+    const merged = [...events, ...repaired];
+    expect(listOpenTurnIds(merged)).toEqual([]);
+    expect(sessionHasOpenTurn(merged)).toBe(false);
   });
 });

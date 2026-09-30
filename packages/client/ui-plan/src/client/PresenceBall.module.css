@@ -4,56 +4,81 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 8px 4px 12px;
+  padding: 2px 2px 4px;
 }
 
 .stage {
   position: relative;
-  width: min(100%, 240px);
-  aspect-ratio: 1;
-  border-radius: 16px;
+  /* Taller than wide so bounce parabolas keep headroom (engine ≈48 SVG units). */
+  width: min(100%, 216px);
+  aspect-ratio: 4 / 5;
+  margin: 0;
+  padding: 0;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 80%, transparent);
   background:
     radial-gradient(
-      ellipse 78% 62% at 50% 36%,
+      ellipse 78% 58% at 50% 42%,
       color-mix(in srgb, var(--dsw-alias-label-secondary) 14%, transparent),
       transparent 72%
     ),
     radial-gradient(
-      ellipse 100% 80% at 50% 100%,
+      ellipse 100% 70% at 50% 100%,
       color-mix(in srgb, var(--dsw-alias-bg-base) 70%, transparent),
       transparent 55%
     ),
     var(--dsw-alias-bg-layer-1);
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 80%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
   overflow: hidden;
-  /* Gaze listens on window; stage is display-only. */
-  pointer-events: none;
+  cursor: pointer;
+  /* Gaze listens on window; button still receives click for local pulse. */
+  appearance: none;
+  -webkit-appearance: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
 }
 
-.stage[data-source='tool'] {
+.stage:hover {
+  border-color: color-mix(in srgb, var(--dsw-alias-label-secondary) 36%, var(--dsw-alias-border-l2));
+}
+
+.stage:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.stage[data-source='tool'],
+.stage[data-source='local'] {
   border-color: color-mix(in srgb, var(--dsw-alias-label-secondary) 42%, var(--dsw-alias-border-l2));
 }
 
 .mount {
-  width: 100%;
-  height: 100%;
+  /* Extra top inset = bounce runway; resting pose sits slightly low. */
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  top: 14%;
+  bottom: 5%;
+  pointer-events: none;
 }
 
 .mount :global(svg) {
   width: 100%;
   height: 100%;
   display: block;
+  overflow: visible;
 }
 
 .meta {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   width: 100%;
   max-width: 28ch;
   text-align: center;
+  padding: 0 4px 2px;
 }
 
 .row {
@@ -65,7 +90,7 @@
 }
 
 .emotion {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.2;

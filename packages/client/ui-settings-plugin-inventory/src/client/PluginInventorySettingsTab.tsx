@@ -21,9 +21,9 @@ import {
   clearPluginInstallSettledUi,
   getPluginInstallUiSnapshot,
   markPluginClientRefreshHint,
+  runPluginCliMutateUi,
   runPluginInstallUi,
   setPluginInstallUiError,
-  setPluginMutateLog,
   subscribePluginInstallUi,
   type PluginInstallLog,
 } from './plugin-install-ui-session.ts'
@@ -53,7 +53,7 @@ export interface PluginInventorySettingsTabInjected {
   /** Remove a managed plugin from the CLI inventory. */
   remove: (entryId: PluginEntryId) => Promise<void>
   /** Reinstall / bump a managed plugin from its install source. */
-  update: (entryId: PluginEntryId) => Promise<PluginInstallLog | undefined>
+  update: (entryId: PluginEntryId, requestId?: string) => Promise<PluginInstallLog | undefined>
   /** Remount a managed process plugin from disk without reinstalling. */
   reload: (entryId: PluginEntryId) => Promise<void>
   /** Open the managed plugin install folder in the OS. */
@@ -284,6 +284,7 @@ export function PluginInventorySettingsTab({
     log: installLog,
     activeSpec,
     okSpec,
+    kind: mutateKind,
   } = installUi
   const storedRegistry = useMemo(() => readStoredRegistry(), [])
   const [registryChoice, setRegistryChoice] = useState<InstallRegistryChoice>(storedRegistry.choice)
@@ -364,18 +365,29 @@ export function PluginInventorySettingsTab({
   }
 
   // Toast + inventory refresh on busy→ok while this mount is alive (including
-  // remount mid-install). Settled-while-closed still shows TerminalBlock /
-  // refresh hint from the durable session without replaying the toast.
+  // remount mid-install / mid-update). Settled-while-closed still shows
+  // TerminalBlock / refresh hint from the durable session without replaying toast.
   const wasInstallBusy = useRef(installBusy)
   useEffect(() => {
     const finishedOk = wasInstallBusy.current && !installBusy && installSuccess
     wasInstallBusy.current = installBusy
     if (!finishedOk) return
-    setInstallSpec('')
-    if (okSpec.length > 0) showToast(t('toastInstalled', { name: okSpec }))
+    if (mutateKind === 'update') {
+      if (okSpec.length > 0) showToast(t('toastUpdated', { name: okSpec }))
+    } else {
+      setInstallSpec('')
+      if (okSpec.length > 0) showToast(t('toastInstalled', { name: okSpec }))
+    }
     setState({ status: 'loading' })
     setRequest(value => value + 1)
-  }, [installBusy, installSuccess, okSpec, t])
+  }, [installBusy, installSuccess, mutateKind, okSpec, t])
+
+  // Bring the live TerminalBlock into view when a CLI mutate starts.
+  useEffect(() => {
+    if (!installBusy) return
+    const logEl = rootRef.current?.querySelector('[data-install-log]')
+    logEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [installBusy])
 
   const runManaged = async (
     entryId: PluginInventoryEntry['entryId'],
@@ -883,6 +895,7 @@ export function PluginInventorySettingsTab({
                     data-needs-restart={needsRestart ? 'true' : undefined}
                     data-open={open ? 'true' : undefined}
                     data-busy={busy ? 'true' : undefined}
+                    aria-busy={busy || undefined}
                     data-kind={entry.kind ?? 'unknown'}
                   >
                     <div className={css.cardHead}>
@@ -925,15 +938,28 @@ export function PluginInventorySettingsTab({
                           ) : null}
                         </span>
                         <span className={css.cardTrailing}>
-                          {entry.enabled ? (
-                            <span
-                              className={css.statusDot}
-                              data-phase={entry.fiberPhase ?? 'unobserved'}
-                              role="img"
-                              aria-label={status}
-                              title={status}
-                            />
-                          ) : null}
+                          {busy
+                            ? (
+                              <span
+                                className={css.busyIndicator}
+                                role="status"
+                                aria-label={t('actionBusy')}
+                                title={t('actionBusy')}
+                              >
+                                <StateDot state="ongoing" size={12} />
+                              </span>
+                            )
+                            : entry.enabled
+                              ? (
+                                <span
+                                  className={css.statusDot}
+                                  data-phase={entry.fiberPhase ?? 'unobserved'}
+                                  role="img"
+                                  aria-label={status}
+                                  title={status}
+                                />
+                              )
+                              : null}
                           <span className={css.configTag} data-enabled={entry.enabled ? 'true' : 'false'}>
                             {configuration}
                           </span>
@@ -956,7 +982,7 @@ export function PluginInventorySettingsTab({
                                 aria-haspopup="menu"
                                 aria-expanded={menuEntryId === entry.entryId}
                                 aria-label={t('moreActions', { name: title })}
-                                disabled={busy}
+                                disabled={busy || installBusy}
                                 onClick={(event) => {
                                   event.stopPropagation()
                                   setRemoveTarget(null)
@@ -969,16 +995,16 @@ export function PluginInventorySettingsTab({
                               </button>
                             )}
                             items={[
-                              { id: 'edit', label: t('edit'), disabled: busy },
-                              { id: 'reload', label: t('reload'), disabled: busy },
-                              { id: 'update', label: t('update'), disabled: busy },
+                              { id: 'edit', label: t('edit'), disabled: busy || installBusy },
+                              { id: 'reload', label: t('reload'), disabled: busy || installBusy },
+                              { id: 'update', label: t('update'), disabled: busy || installBusy },
                               {
                                 id: 'toggle',
                                 label: entry.enabled ? t('disable') : t('enable'),
-                                disabled: busy,
+                                disabled: busy || installBusy,
                               },
                               { type: 'separator', id: 'remove-sep' },
-                              { id: 'remove', label: t('remove'), danger: true, disabled: busy },
+                              { id: 'remove', label: t('remove'), danger: true, disabled: busy || installBusy },
                             ]}
                             onSelect={(id) => {
                               setMenuEntryId(null)
@@ -997,15 +1023,27 @@ export function PluginInventorySettingsTab({
                             }
                             if (id === 'update') {
                               void (async () => {
+                                if (installBusy || busyId !== null) return
+                                setMenuEntryId(null)
                                 setBusyId(entry.entryId)
                                 setActionError(null)
                                 try {
-                                  const log = await update(entry.entryId)
-                                  if (log !== undefined) setPluginMutateLog(log)
-                                  showToast(t('toastUpdated', { name }))
-                                  markPluginClientRefreshHint()
-                                  setState({ status: 'loading' })
-                                  setRequest(value => value + 1)
+                                  await runPluginCliMutateUi({
+                                    kind: 'update',
+                                    spec: title,
+                                    command: `xrkh plugin add ${entry.entryId}@latest`,
+                                    run: async (requestId) => {
+                                      const log = await update(entry.entryId, requestId)
+                                      if (log === undefined) {
+                                        throw new Error(t('actionFailed'))
+                                      }
+                                      return log
+                                    },
+                                    ...(subscribeInstallLog !== undefined
+                                      ? { subscribeInstallLog }
+                                      : {}),
+                                    fallbackError: t('actionFailed'),
+                                  })
                                 } catch (error) {
                                   setActionError(error instanceof Error ? error.message : t('actionFailed'))
                                 } finally {

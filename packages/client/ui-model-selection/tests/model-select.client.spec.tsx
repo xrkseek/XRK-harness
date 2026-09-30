@@ -31,12 +31,12 @@ const reasoning = {
 
 function state(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryState {
   return {
-    current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+    current: { provider: 'deepseek-official', model: 'deepseek-flash' },
     routable: true,
     groups: [{
       id: 'deepseek-official',
       name: 'DeepSeek',
-      models: [{ id: 'deepseek-v4-flash', name: 'DeepSeek Chat', reasoning }],
+      models: [{ id: 'deepseek-flash', name: 'DeepSeek Chat', reasoning }],
     }],
     failures: [],
     status: 'ready',
@@ -64,10 +64,10 @@ describe('ModelSelect reasoning effort', () => {
     />)
 
     const trigger = screen.getByRole('button', {
-      name: '选择模型，当前 DeepSeek Chat，推理等级 High',
+      name: '选择模型，当前 DeepSeek Chat，思考强度 High',
     })
     fireEvent.click(trigger)
-    fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /思考强度/ }))
     expect(screen.getAllByRole('menuitemradio').map(item => item.textContent))
       .toEqual(['Off', 'High', 'MaxLargest budget'])
 
@@ -75,10 +75,10 @@ describe('ModelSelect reasoning effort', () => {
     await waitFor(() => {
       expect(select).toHaveBeenCalledWith({
         provider: 'deepseek-official',
-        model: 'deepseek-v4-flash',
+        model: 'deepseek-flash',
         reasoningEffort: 'max',
       })
-      expect(trigger.getAttribute('aria-label')).toBe('选择模型，当前 DeepSeek Chat，推理等级 Max')
+      expect(trigger.getAttribute('aria-label')).toBe('选择模型，当前 DeepSeek Chat，思考强度 Max')
     })
   })
 
@@ -105,11 +105,11 @@ describe('ModelSelect reasoning effort', () => {
     />)
 
     fireEvent.click(screen.getByRole('button', {
-      name: '选择模型，当前 Model，推理等级 Default',
+      name: '选择模型，当前 Model，思考强度 默认',
     }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /思考强度/ }))
     expect(screen.getAllByRole('menuitemradio').map(item => item.textContent))
-      .toEqual(['Default', 'Standard'])
+      .toEqual(['默认', 'Standard'])
   })
 
   it('prompts for a selection when the current model is no longer advertised', () => {
@@ -129,7 +129,7 @@ describe('ModelSelect reasoning effort', () => {
     const trigger = screen.getByRole('button', { name: '选择模型' })
     expect(trigger.textContent).toContain('选择模型')
     fireEvent.click(trigger)
-    expect(screen.queryByRole('menuitem', { name: /推理等级/ })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /思考强度/ })).toBeNull()
     fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
     expect(screen.queryByText('removed-model')).toBeNull()
     expect(screen.getByRole('menuitemradio', { name: 'DeepSeek Chat' })).toBeTruthy()
@@ -140,7 +140,7 @@ describe('ModelSelect reasoning effort', () => {
       id: 'deepseek-official',
       name: 'DeepSeek',
       models: [
-        { id: 'deepseek-v4-flash', name: 'DeepSeek Chat', reasoning },
+        { id: 'deepseek-flash', name: 'DeepSeek Chat', reasoning },
         { id: 'deepseek-v4-pro', name: 'DeepSeek Reasoner' },
       ],
     }]
@@ -184,7 +184,7 @@ describe('ModelSelect reasoning effort', () => {
       id: 'deepseek-official',
       name: 'DeepSeek',
       models: [
-        { id: 'deepseek-v4-flash', name: 'DeepSeek Chat', reasoning },
+        { id: 'deepseek-flash', name: 'DeepSeek Chat', reasoning },
         { id: 'deepseek-v4-pro', name: 'DeepSeek Reasoner' },
       ],
     }]
@@ -322,7 +322,7 @@ describe('ModelSelect reasoning effort', () => {
       t={t}
     />)
     fireEvent.click(screen.getByRole('button', { name: /选择模型/ }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /思考强度/ }))
     const rows = screen.getAllByRole('menuitemradio')
     expect(rows[1]!.getAttribute('aria-checked')).toBe('true')
     expect(document.activeElement).toBe(rows[1])

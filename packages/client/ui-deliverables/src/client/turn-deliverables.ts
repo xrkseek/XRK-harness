@@ -129,6 +129,27 @@ export function changesForClosing(
   return data.changes
 }
 
+/**
+ * Harvest every turn's embedded `workspace/changes` card from the conversation
+ * timeline — Overview fallback when Face `workspaceChanges` projection is empty
+ * (reconnect truncate flash / cold seed lag).
+ */
+export function collectChangesTurnsFromTimeline(timeline: {
+  readonly turnOrder: readonly number[]
+  readonly turns: ReadonlyMap<
+    number,
+    { readonly data: { get(key: 'deliverables'): DeliverablesTurnData | undefined } }
+  >
+}): readonly ChangesTurnData[] {
+  const out: ChangesTurnData[] = []
+  for (const turnNum of timeline.turnOrder) {
+    const changes = timeline.turns.get(turnNum)?.data.get('deliverables')?.changes
+    if (changes === undefined || changes.files.length === 0) continue
+    out.push(changes)
+  }
+  return out
+}
+
 /** Match for the combined turn-tail deliverables entry. */
 export interface DeliverablesMatch {
   readonly changes: ChangesTurnData | null

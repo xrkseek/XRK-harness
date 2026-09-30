@@ -33,8 +33,11 @@ function Counts({
   added, deleted, t,
 }: { added: number; deleted: number } & PropsLocale<typeof NS>) {
   return <>
-    <span className={css.added}>{t('changes.added', { count: GROUPED.format(added) })}</span>
-    <span className={css.deleted}>{t('changes.deleted', { count: GROUPED.format(deleted) })}</span>
+    {added > 0 ? <span className={css.added}>{t('changes.added', { count: GROUPED.format(added) })}</span> : null}
+    {deleted > 0 ? <span className={css.deleted}>{t('changes.deleted', { count: GROUPED.format(deleted) })}</span> : null}
+    {added <= 0 && deleted <= 0
+      ? <span className={css.added}>{t('changes.added', { count: '0' })}</span>
+      : null}
   </>
 }
 
@@ -91,7 +94,7 @@ function ChangedFilePreview({
       {diff === undefined && <span className={css.previewStatus}>{t('changes.loading')}</span>}
       {error !== undefined && <span className={css.previewStatus} data-error="true">{error}</span>}
       {diff === null && error === undefined && (
-        <span className={css.previewStatus}>{t('changes.unavailable')}</span>
+        <span className={css.previewStatus}>{t('changes.missing')}</span>
       )}
       {diff?.kind === 'binary' && <span className={css.previewStatus}>{t('changes.binary')}</span>}
       {diff?.kind === 'oversized' && <span className={css.previewStatus}>{t('changes.oversized')}</span>}
@@ -106,9 +109,9 @@ function ChangedFilePreview({
 }
 
 /**
- * Render one turn's changed files. Opening review shows a single pane with a
- * file selector Menu (thick file navigation); DiffBlock keeps unified/split.
- * Hover (500ms) peeks a compact unified diff without opening the pane.
+ * Render one turn's changed files. Header + rows open the Status Changes tab
+ * when `openOverviewReview` is wired (D-01); otherwise rows open an inline
+ * review pane. Hover (500ms) peeks a compact unified diff without opening.
  */
 export function ChangedFiles({
   changes, loadFileDiff, openFile, openOverviewReview, t,
@@ -127,8 +130,12 @@ export function ChangedFiles({
     reviewing && changes.files[reviewIndex] !== undefined ? reviewIndex : 0
 
   const openReview = useCallback((index: number) => {
+    if (openOverviewReview !== undefined) {
+      openOverviewReview(index)
+      return
+    }
     setReviewIndex(index)
-  }, [])
+  }, [openOverviewReview])
 
   const onHeaderClick = useCallback(() => {
     if (openOverviewReview !== undefined) {

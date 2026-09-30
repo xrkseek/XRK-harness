@@ -1,7 +1,4 @@
-/* Todo strip in the composer context stack (Figma 1236:32276): tip surface,
-   status icons + secondary item labels. Its visible card aligns with the
-   GoalBar and the Queue panel inside their shared dock column: 12px radius,
-   36px collapsed row, 12px side padding, 14px tertiary leading glyph. */
+/* Todo strip above the composer: quiet glass card, status chips, compact rows. */
 
 .root {
   box-sizing: border-box;
@@ -24,14 +21,17 @@
     var(--dsh-composer-dock-inset) -
     var(--dsh-composer-dock-inset)
   );
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
-  background: var(--dsw-specific-tip);
-  /* Elevated surface: `--dsw-specific-tip` is the same dark rung as the menu
-     surface, and `.list` scrolls inside this card, so the thumb takes the l2
-     elevation tokens. Declared here because the elevation belongs to the
-     surface, and the custom properties inherit down to `.list` (see ui-theme
-     styles/scrollbar.css for the rebinding contract). */
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l1) 88%, transparent);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--dsw-specific-tip) 92%, var(--dsw-alias-label-primary) 4%) 0%,
+      var(--dsw-specific-tip) 55%
+    );
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent),
+    0 8px 24px color-mix(in srgb, var(--dsw-alias-bg-base) 35%, transparent);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
@@ -39,34 +39,50 @@
 .body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 6px;
+  padding: 5px 10px 6px;
 }
 
 .header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
+  min-height: 32px;
   padding: 0;
   border: none;
   background: transparent;
   text-align: left;
   cursor: pointer;
+  border-radius: 8px;
+}
+
+.header:hover .title {
+  color: var(--dsw-alias-label-primary);
+}
+
+.header:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 50%, transparent);
+  outline-offset: 1px;
 }
 
 .lead {
   display: grid;
   flex: none;
   place-items: center;
-  color: var(--dsw-alias-label-tertiary);
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  color: var(--dsw-alias-label-secondary);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
 }
 
 .title {
   flex: none;
   font-size: 13px;
-  line-height: 24px;
-  font-weight: 500;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -74,8 +90,8 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 12px;
+  line-height: 18px;
   font-weight: 400;
   color: var(--dsw-alias-label-tertiary);
   text-overflow: ellipsis;
@@ -86,18 +102,22 @@
   display: grid;
   flex: none;
   place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
   color: var(--dsw-alias-label-tertiary);
 }
 
 .list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
   margin: 0;
-  padding: 0;
+  padding: 2px 0 4px;
   list-style: none;
   max-height: 180px;
   overflow-y: auto;
+  border-top: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 65%, transparent);
 }
 
 .item {
@@ -105,9 +125,25 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
+  padding: 5px 6px;
+  border-radius: 8px;
   font-size: 13px;
   line-height: 20px;
   color: var(--dsw-alias-label-secondary);
+}
+
+.item:hover {
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent);
+}
+
+.item[data-status='in_progress'] {
+  color: var(--dsw-alias-label-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, transparent);
+}
+
+.item[data-status='completed'] .content {
+  color: var(--dsw-alias-label-tertiary);
+  text-decoration: line-through;
 }
 
 .glyph {

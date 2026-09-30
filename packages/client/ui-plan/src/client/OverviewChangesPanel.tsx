@@ -1,17 +1,17 @@
 /**
- * Status-column Changes review tab — persistent counterpart to the turn-tail
- * ChangedFiles card (D-01). Does not import ui-deliverables; mirrors its
- * DiffBlock + fileDiff wire via inject.
+ * Status-column Changes review — persistent counterpart to the turn-tail
+ * ChangedFiles card (D-01). Does not import ui-deliverables; shares the
+ * DiffHunk transform via ui-primitives.
  */
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   DiffBlock,
   IconChevronDownOutline14,
   Menu,
+  diffHunkFromWorkspaceFileDiff,
 } from '@xrkseek/client-ui-primitives'
 import type { WorkspaceFileDiff } from '@xrkseek/xrk-api-remotes/client'
 import type { TranslateNS } from '@xrkseek/client-ui-slots'
-import type { PlanKey } from './locales.ts'
 import css from './OverviewChangesPanel.module.css'
 
 type PlanTranslate = TranslateNS<'plan'>
@@ -49,42 +49,84 @@ type ChangesReviewFace = {
 }
 
 function Counts({
-  added, deleted, t,
+  added,
+  deleted,
+  t,
 }: {
   added: number
   deleted: number
   t: PlanTranslate
-}) {
-  return <>
-    <span className={css.added}>{t('preview.changes.added', { count: GROUPED.format(added) })}</span>
-    <span className={css.deleted}>{t('preview.changes.deleted', { count: GROUPED.format(deleted) })}</span>
-  </>
+}): ReactNode {
+  return (
+    <>
+      {added > 0
+        ? <span className={css.added}>{t('preview.changes.added', { count: GROUPED.format(added) })}</span>
+        : null}
+      {deleted > 0
+        ? <span className={css.deleted}>{t('preview.changes.deleted', { count: GROUPED.format(deleted) })}</span>
+        : null}
+      {added <= 0 && deleted <= 0
+        ? <span className={css.added}>{t('preview.changes.added', { count: '0' })}</span>
+        : null}
+    </>
+  )
 }
 
-function diffHunk(diff: WorkspaceFileDiff): { path: string; oldText: string | null; newText: string } | null {
-  if (diff.kind !== 'text') return null
-  const oldLines: string[] = []
-  const newLines: string[] = []
-  for (const hunk of diff.hunks) {
-    for (const line of hunk.lines) {
-      const body = line.slice(1)
-      if (line.startsWith('-')) oldLines.push(body)
-      else if (line.startsWith('+')) newLines.push(body)
-      else {
-        oldLines.push(body)
-        newLines.push(body)
-      }
-    }
-  }
-  return {
-    path: diff.path,
-    oldText: diff.before
-      ? `${oldLines.join('\n')}${oldLines.length > 0 ? '\n' : ''}`
-      : null,
-    newText: diff.after
-      ? `${newLines.join('\n')}${newLines.length > 0 ? '\n' : ''}`
-      : '',
-  }
+function fileStatusLabel(
+  file: Pick<OverviewChangesFile, 'added' | 'deleted' | 'binary' | 'oversized'>,
+  t: PlanTranslate,
+): ReactNode {
+  if (file.binary === true) return t('preview.changes.binary')
+  if (file.oversized === true) return t('preview.changes.oversized')
+  return <Counts t={t} added={file.added} deleted={file.deleted} />
+}
+
+/** Shared pill trigger for turn / file pick menus (theme-safe, not native select). */
+function PickTrigger({
+  open,
+  label,
+  title,
+  ariaLabel,
+  onClick,
+  reviewFile,
+}: {
+  open: boolean
+  label: ReactNode
+  title?: string
+  ariaLabel: string
+  onClick: () => void
+  reviewFile?: string
+}): ReactNode {
+  return (
+    <button
+      type="button"
+      className={css.pickTrigger}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      aria-label={ariaLabel}
+      title={title}
+      onClick={onClick}
+      {...(reviewFile !== undefined ? { 'data-review-file': reviewFile } : {})}
+    >
+      <span className={css.pickLabel}>{label}</span>
+      <IconChevronDownOutline14 className={css.pickChevron} data-open={open ? '' : undefined} />
+    </button>
+  )
+}
+
+function MenuRow({
+  primary,
+  secondary,
+}: {
+  primary: ReactNode
+  secondary: ReactNode
+}): ReactNode {
+  return (
+    <span className={css.menuItem}>
+      <span className={css.menuPrimary}>{primary}</span>
+      <span className={css.menuSecondary}>{secondary}</span>
+    </span>
+  )
 }
 
 /**
@@ -121,7 +163,8 @@ export function OverviewChangesPanel({
   const [seq, setSeq] = useState<number | undefined>(undefined)
   const [pinned, setPinned] = useState(false)
   const [fileIndex, setFileIndex] = useState(0)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [turnMenuOpen, setTurnMenuOpen] = useState(false)
+  const [fileMenuOpen, setFileMenuOpen] = useState(false)
   const [diff, setDiff] = useState<WorkspaceFileDiff | null | undefined>(undefined)
   const [error, setError] = useState<string | undefined>(undefined)
 
@@ -172,7 +215,9 @@ export function OverviewChangesPanel({
     return <div className={css.empty}>{t('preview.changes.empty')}</div>
   }
 
-  const hunk = diff !== undefined && diff !== null ? diffHunk(diff) : null
+  const hunk = diff !== undefined && diff !== null
+    ? diffHunkFromWorkspaceFileDiff(diff)
+    : null
   const textNote = diff?.kind === 'text'
     ? (!diff.before
       ? 'preview.changes.created' as const
@@ -186,92 +231,110 @@ export function OverviewChangesPanel({
 
   return (
     <div className={css.root} data-overview-changes data-changes-review>
-      <div className={css.meta}>
-        <span>{t('preview.changes.turn', { turn: activeTurn.turnId })}</span>
-        <span className={css.stat}>
-          <Counts t={t} added={activeTurn.added} deleted={activeTurn.deleted} />
-        </span>
-        {turns.length > 1
-          ? (
-            <label className={css.turnPick}>
-              <span className={css.visuallyHidden}>{t('preview.changes.selectTurn')}</span>
-              <select
-                value={String(activeTurn.seq)}
-                aria-label={t('preview.changes.selectTurn')}
-                onChange={(event) => {
+      <header className={css.toolbar}>
+        <div className={css.toolbarMain}>
+          {turns.length > 1
+            ? (
+              <Menu
+                className={css.pick}
+                open={turnMenuOpen}
+                dense
+                compact
+                portal
+                align="start"
+                onClose={() => { setTurnMenuOpen(false) }}
+                selectedId={String(activeTurn.seq)}
+                onSelect={(id) => {
                   setPinned(true)
-                  setSeq(Number(event.currentTarget.value))
+                  setSeq(Number(id))
                   setFileIndex(0)
+                  setTurnMenuOpen(false)
+                  setFileMenuOpen(false)
                 }}
-              >
-                {turns.map((row) => (
-                  <option key={row.seq} value={row.seq}>
-                    {t('preview.changes.turnOption', {
-                      turn: row.turnId,
-                      count: String(row.total),
-                    })}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )
-          : null}
-      </div>
+                items={turns.map((row) => ({
+                  id: String(row.seq),
+                  label: (
+                    <MenuRow
+                      primary={row.turnId}
+                      secondary={t('preview.changes.fileCount', { count: String(row.total) })}
+                    />
+                  ),
+                }))}
+                anchor={
+                  <PickTrigger
+                    open={turnMenuOpen}
+                    ariaLabel={t('preview.changes.selectTurn')}
+                    title={activeTurn.turnId}
+                    label={t('preview.changes.turn', { turn: activeTurn.turnId })}
+                    onClick={() => {
+                      setTurnMenuOpen((v) => !v)
+                      setFileMenuOpen(false)
+                    }}
+                  />
+                }
+              />
+            )
+            : (
+              <span className={css.turnOnly}>
+                {t('preview.changes.turn', { turn: activeTurn.turnId })}
+              </span>
+            )}
+          <span className={css.stat} aria-label={t('preview.changes.turn', { turn: activeTurn.turnId })}>
+            <Counts t={t} added={activeTurn.added} deleted={activeTurn.deleted} />
+          </span>
+        </div>
+      </header>
+
       {activeFile === undefined
         ? <div className={css.empty}>{t('preview.changes.unavailable')}</div>
         : (
-          <>
-            <div className={css.reviewBar}>
+          <div className={css.body}>
+            <div className={css.fileRow}>
               <Menu
-                className={css.selector}
-                open={menuOpen}
+                className={css.pick}
+                open={fileMenuOpen}
                 dense
+                compact
+                portal
                 align="start"
-                onClose={() => { setMenuOpen(false) }}
+                onClose={() => { setFileMenuOpen(false) }}
                 selectedId={String(safeIndex)}
                 onSelect={(id) => {
                   setFileIndex(Number(id))
-                  setMenuOpen(false)
+                  setFileMenuOpen(false)
                 }}
                 items={activeTurn.files.map((entry, at) => ({
                   id: String(at),
                   label: (
-                    <span className={css.menuItem}>
-                      <span className={css.menuPath}>{entry.display}</span>
-                      <span className={css.menuCounts}>
-                        {entry.binary === true ? t('preview.changes.binary')
-                          : entry.oversized === true ? t('preview.changes.oversized')
-                            : <Counts t={t} added={entry.added} deleted={entry.deleted} />}
-                      </span>
-                    </span>
+                    <MenuRow
+                      primary={entry.display}
+                      secondary={fileStatusLabel(entry, t)}
+                    />
                   ),
                 }))}
                 anchor={
-                  <button
-                    type="button"
-                    className={css.selectorButton}
-                    aria-haspopup="menu"
-                    aria-expanded={menuOpen}
-                    aria-label={t('preview.changes.selectFile')}
+                  <PickTrigger
+                    open={fileMenuOpen}
+                    ariaLabel={t('preview.changes.selectFile')}
                     title={activeFile.display}
-                    data-review-file={activeFile.path}
-                    onClick={() => { setMenuOpen((value) => !value) }}
-                  >
-                    <span className={css.selectorPath}>{activeFile.display}</span>
-                    <IconChevronDownOutline14 />
-                  </button>
+                    label={activeFile.display}
+                    reviewFile={activeFile.path}
+                    onClick={() => {
+                      setFileMenuOpen((v) => !v)
+                      setTurnMenuOpen(false)
+                    }}
+                  />
                 }
               />
-              <span className={css.reviewCounts}>
-                {activeFile.binary === true ? t('preview.changes.binary')
-                  : activeFile.oversized === true ? t('preview.changes.oversized')
-                    : <Counts t={t} added={activeFile.added} deleted={activeFile.deleted} />}
+              <span className={css.fileCounts}>
+                {fileStatusLabel(activeFile, t)}
               </span>
             </div>
+
             {diff === undefined && <span className={css.status}>{t('preview.changes.loading')}</span>}
             {error !== undefined && <span className={css.status} data-error="true">{error}</span>}
             {diff === null && error === undefined && (
-              <span className={css.status}>{t('preview.changes.unavailable')}</span>
+              <span className={css.status}>{t('preview.changes.missing')}</span>
             )}
             {diff?.kind === 'binary' && <span className={css.status}>{t('preview.changes.binary')}</span>}
             {diff?.kind === 'oversized' && <span className={css.status}>{t('preview.changes.oversized')}</span>}
@@ -288,7 +351,7 @@ export function OverviewChangesPanel({
             >
               {t('preview.changes.previewFile', { name: activeFile.display })}
             </button>
-          </>
+          </div>
         )}
     </div>
   )

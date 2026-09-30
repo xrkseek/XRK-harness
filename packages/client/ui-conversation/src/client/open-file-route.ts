@@ -1,17 +1,7 @@
-import { isAttachmentAddress } from '@xrkseek/client-runtime/client'
+import { routeWorkspaceOpenFile } from '@xrkseek/client-runtime/client'
 
 /**
- * Chat file-open routing: wake community sidebar when present, then
- * `workspaces.openPath`. Without `xrkh-better-sidebar`, Host opens via OS.
- *
- * Attachment ids (`sha256:…` / `attachment:…`) are not filesystem paths.
+ * Chat file-open routing — shared `routeWorkspaceOpenFile` (community
+ * `xrkh-better-sidebar` wake + `workspaces.openPath`).
  */
-export async function routeChatOpenFile(
-  resolvedPath: string,
-  openWorkspace: (path: string) => Promise<void>,
-  wakeCommunity?: (path: string) => void,
-): Promise<void> {
-  if (isAttachmentAddress(resolvedPath)) return
-  wakeCommunity?.(resolvedPath)
-  await openWorkspace(resolvedPath)
-}
+export const routeChatOpenFile = routeWorkspaceOpenFile

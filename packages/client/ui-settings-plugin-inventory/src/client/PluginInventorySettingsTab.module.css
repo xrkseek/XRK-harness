@@ -626,8 +626,16 @@
 }
 
 .card[data-busy='true'] {
-  opacity: 0.62;
-  transform: scale(0.995);
+  opacity: 0.78;
+}
+
+.busyIndicator {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
 }
 
 .card[data-open='true'] {

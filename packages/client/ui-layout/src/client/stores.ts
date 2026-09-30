@@ -7,9 +7,9 @@
  * derives its PropsStore share from the return type, and the service face
  * receives the bound actions through the registration's inject hook.
  *
- * Overview (details) width is a shell habit like the sidebar: drag size is
- * remembered across close/reopen. Open/closed is Session-scoped in AppFrame —
- * Session switches do not keep a forced-open column on every Session.
+ * Overview (details) open + width are Session-scoped in AppFrame
+ * (`details-open-memory`, localStorage). `detailsLast` is the live shell
+ * preference for the *current* Session only — not a cross-Session habit.
  */
 import { defineStore, type EngineStoreHandle } from '@xrkseek/client-runtime/client'
 import {
@@ -23,7 +23,7 @@ import {
  * (viewport < SIDEBAR_AUTO_COLLAPSE) so toggleSidebar can pick semantics, and
  * `narrowExpanded` is the manual override that re-expands the auto-collapsed
  * sidebar over the squeezed center without rewriting the width preference.
- * `detailsLast` is the last non-zero Overview width (drag habit).
+ * `detailsLast` is the last non-zero Overview width for the active Session.
  */
 type LayoutState = {
   sidebar: number
@@ -44,6 +44,11 @@ type LayoutActions = {
   setNarrow: (draft: LayoutState, narrow: boolean) => void
   openDetails: (draft: LayoutState) => void
   closeDetails: (draft: LayoutState) => void
+  /** Apply per-Session Overview chrome (open bit + remembered width). */
+  restoreDetailsChrome: (
+    draft: LayoutState,
+    chrome: { readonly open: boolean; readonly width: number },
+  ) => void
 }
 
 /**
@@ -84,6 +89,10 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
       closeDetails: (d) => {
         if (d.details > 0) d.detailsLast = d.details
         d.details = 0
+      },
+      restoreDetailsChrome: (d, chrome) => {
+        d.detailsLast = clampWidth(chrome.width, DETAILS_MIN, DETAILS_MAX)
+        d.details = chrome.open ? d.detailsLast : 0
       },
     },
   })
