@@ -68,9 +68,9 @@ async function walkFiles(
   absDir: string,
   rootAbs: string,
   out: string[],
-  maxResults: number,
+  cap: number,
 ): Promise<void> {
-  if (out.length >= maxResults) return;
+  if (out.length >= cap) return;
   let entries;
   try {
     entries = await readdir(absDir, { withFileTypes: true });
@@ -78,11 +78,11 @@ async function walkFiles(
     return;
   }
   for (const ent of entries) {
-    if (out.length >= maxResults) return;
+    if (out.length >= cap) return;
     if (ent.name === ".git" || ent.name === "node_modules") continue;
     const abs = path.join(absDir, ent.name);
     if (ent.isDirectory()) {
-      await walkFiles(abs, rootAbs, out, maxResults);
+      await walkFiles(abs, rootAbs, out, cap);
       continue;
     }
     if (ent.isFile()) {
@@ -93,7 +93,9 @@ async function walkFiles(
 }
 
 /**
- * List files under `root` matching `pattern` (posix paths relative to root).
+ * Collect files under `root` matching `pattern` (posix paths relative to root).
+ * Walks with a generous traversal cap so later-sorted paths aren't missed;
+ * only the returned list is cut at `maxResults`.
  */
 export async function globUnderRoot(
   root: string,
@@ -106,7 +108,10 @@ export async function globUnderRoot(
     throw new Error("glob pattern required");
   }
   const all: string[] = [];
-  await walkFiles(rootAbs, rootAbs, all, Math.max(maxResults * 4, 2000));
+  // Walk cap decoupled from maxResults: a 200-result request must still see
+  // every file (the old Math.max(maxResults*4, 2000) truncated the walk at
+  // 2000 entries, silently dropping later paths like README.md).
+  await walkFiles(rootAbs, rootAbs, all, 100_000);
   const matched: string[] = [];
   for (const rel of all) {
     if (matchGlob(rel, pattern)) {
@@ -155,7 +160,8 @@ export async function grepUnderRoot(
     files = [rel];
   } else if (st.isDirectory()) {
     const gathered: string[] = [];
-    await walkFiles(scopeAbs, rootAbs, gathered, 5000);
+    // Walk cap decoupled from maxResults: same truncation fix as globUnderRoot.
+    await walkFiles(scopeAbs, rootAbs, gathered, 100_000);
     files = gathered;
   }
 
