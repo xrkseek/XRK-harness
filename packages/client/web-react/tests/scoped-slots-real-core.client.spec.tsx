@@ -43,6 +43,10 @@ function hostOver(core: SlotCore): SlotRendererHost {
     workspaces: {
       list: { getSnapshot: () => ({}), subscribe: () => () => {} },
     },
+    connection: {
+      state: { getSnapshot: () => undefined, subscribe: () => () => {} },
+      phase: { getSnapshot: () => undefined, subscribe: () => () => {} },
+    },
   }
 }
 

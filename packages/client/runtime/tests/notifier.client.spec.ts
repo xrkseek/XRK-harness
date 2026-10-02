@@ -104,6 +104,7 @@ describe('Notifier', () => {
   })
 
   it('falls back to microtask batching when animation frames are unavailable', async () => {
+    vi.stubGlobal('requestAnimationFrame', undefined)
     let notifications = 0
     const notifier = new Notifier(() => undefined)
     notifier.subscribe(() => { notifications++ })
