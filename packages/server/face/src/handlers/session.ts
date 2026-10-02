@@ -549,13 +549,14 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
       ).catch(() => undefined);
     }
   }
-  // 4) Bounded drain join: the latch keeps its entry on timeout, so a
-  //    message admitted during teardown still drains once the stuck chain
-  //    settles (wake accumulates on the stopping entry).
-  await runtime.drain.cancel(sessionId, {
+  // 4) Bounded drain join in the background. Returning accepted here unblocks
+  //    the client Stop click immediately; Host already published running:false
+  //    and aborted the turn. The latch keeps its entry on timeout so a message
+  //    admitted during teardown still drains once the stuck chain settles.
+  void runtime.drain.cancel(sessionId, {
     cause: { kind: "user" },
     timeoutMs: SESSION_CANCEL_JOIN_MS,
-  });
+  }).catch(() => undefined);
   return { ok: true, value: { accepted: true } };
 };
 

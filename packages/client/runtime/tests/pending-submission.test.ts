@@ -16,6 +16,12 @@ function ok<T>(value: T) {
   return { rpcId: RpcId('fake'), result: { ok: true as const, value } }
 }
 
+function hold<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => { resolve = r })
+  return { promise, resolve }
+}
+
 function bareApi(onPrompt?: (payload: unknown) => Promise<unknown>): {
   api: IApiClient
   prompts: unknown[]
@@ -27,11 +33,13 @@ function bareApi(onPrompt?: (payload: unknown) => Promise<unknown>): {
         prompts.push(payload)
         return onPrompt?.(payload) ?? Promise.resolve(ok({ accepted: true as const }))
       },
+      cancel: () => Promise.resolve(ok({ accepted: true as const })),
       history: () => Promise.resolve(ok({ events: [], hasMore: false })),
     },
     subagents: {
       prompt: () => Promise.resolve(ok({ messageId: 'm' as never })),
       history: () => Promise.resolve(ok({ events: [], hasMore: false })),
+      interrupt: () => Promise.resolve(ok({ accepted: true as const })),
     },
   } as unknown as IApiClient
   return { api, prompts }
@@ -77,15 +85,33 @@ describe('beginSubmission', () => {
     session.beginSubmission({ mode: 'queue', text: '排队', attachments: [] })
     session.beginSubmission({ mode: 'steer', text: '纠偏', attachments: [] })
     // The local running bit races Host's `turn/end` broadcast. Guessing `queued`
-    // parked a submit that Host admitted straight into a new turn in neither
-    // ChatView (queued echoes are skipped) nor QueueDock (nothing was mirrored)
-    // — "my message vanished and still looks queued". Host-authoritative
-    // placement arrives via `observeSubmissionQueue` instead.
+    // from running alone parked a submit that Host admitted straight into a new
+    // turn in neither ChatView (queued echoes are skipped) nor QueueDock
+    // (nothing was mirrored) — "my message vanished and still looks queued".
+    // Host-authoritative placement arrives via `observeSubmissionQueue` instead,
+    // except when Host's queue mirror already has a backlog (see next test).
     expect(session.getSnapshot().pendingSubmissions.map(({ text, placement }) => ({ text, placement }))).toEqual([
       { text: '空闲', placement: 'transcript' },
       { text: '排队', placement: 'transcript' },
       { text: '纠偏', placement: 'steering' },
     ])
+  })
+
+  it('starts as queued when Host already has a backlog (no transcript→dock flash)', () => {
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    session.handleMuxEnvelope(RpcId('q0'), queueFrame(SID, [{
+      id: 'qi-0',
+      rpcId: 'other-req',
+      body: '已在排',
+    }]))
+    expect(session.getSnapshot().queue).toHaveLength(1)
+    const handle = session.beginSubmission({ mode: 'queue', text: '跟进排', attachments: [] })
+    expect(session.getSnapshot().pendingSubmissions).toMatchObject([{
+      requestId: handle.requestId,
+      placement: 'queued',
+      text: '跟进排',
+    }])
   })
 
   it('keeps a submit visible in the transcript when Host never queues it', () => {
@@ -139,6 +165,29 @@ describe('beginSubmission', () => {
     expect(session.getSnapshot().running).toBe(false)
     await session.prompt([{ type: 'text', text: 'hi' }], 'queue')
     expect(session.getSnapshot().running).toBe(true)
+  })
+
+  it('cancel clears running before the cancel RPC settles', async () => {
+    const release = hold<ReturnType<typeof ok<{ accepted: true }>>>()
+    const api = {
+      sessions: {
+        prompt: () => Promise.resolve(ok({ accepted: true as const })),
+        cancel: () => release.promise,
+        history: () => Promise.resolve(ok({ events: [], hasMore: false })),
+      },
+      subagents: {
+        prompt: () => Promise.resolve(ok({ messageId: 'm' as never })),
+        history: () => Promise.resolve(ok({ events: [], hasMore: false })),
+      },
+    } as unknown as IApiClient
+    const session = new Session(SID, api, remotes())
+    await session.prompt([{ type: 'text', text: 'hi' }], 'queue')
+    expect(session.getSnapshot().running).toBe(true)
+    const pending = session.cancel()
+    expect(session.getSnapshot().running).toBe(false)
+    release.resolve(ok({ accepted: true as const }))
+    await expect(pending).resolves.toEqual({ ok: true, value: { accepted: true } })
+    expect(session.getSnapshot().running).toBe(false)
   })
 
   it('turn/end on mux clears running without host/session-status', async () => {

@@ -217,16 +217,21 @@ export class Session implements SessionFace {
     const requestId = brandRpcId(randomUuid()) as SessionRequestId
     this.pendingSubmissions = [...this.pendingSubmissions, {
       requestId,
-      // Optimistic transcript: the click has to be visible immediately and in
+      // Optimistic transcript by default: the click must paint immediately in
       // exactly one place. Deriving `queued` from the local running bit raced
       // Host — a queue-mode submit that Host admitted straight into a new turn
       // never produced a queue row, so the echo sat unrendered in both
       // ChatView (queued echoes are skipped) and QueueDock (nothing mirrored)
-      // until durable `user/message` retired it. A read-only symptom of that:
-      // "my message vanished, it looks like it is still queued".
-      // `observeSubmissionQueue` demotes it once the Host queue confirms, and
-      // `handoffDroppedQueueSubmissions` promotes it back on FIFO claim.
-      placement: input.mode === 'steer' ? 'steering' : 'transcript',
+      // until durable `user/message` retired it.
+      // Exception: when Host already has a backlog, the next submit will queue —
+      // starting as transcript then demoting via `observeSubmissionQueue`
+      // flashes the bubble into the dock ("sent, then queued"). Mirror Host's
+      // backlog immediately so the dock is the first paint.
+      placement: input.mode === 'steer'
+        ? 'steering'
+        : this.queueMirror.snapshot().length > 0
+          ? 'queued'
+          : 'transcript',
       time: Date.now(),
       text: input.text,
       attachments: input.attachments,
@@ -393,6 +398,11 @@ export class Session implements SessionFace {
       this.notifier.markDirty()
       return result
     }
+    // Optimistic idle BEFORE the RPC. Host joins a stuck drain for up to a
+    // few seconds after abort, and mux-only carriers never see the early
+    // host/session-status publish — waiting here pinned Stop / 「处理中」
+    // for the whole join (comment below used to claim the opposite).
+    this.handleRunning(false)
     let result: RpcResult<{ accepted: true }>
     try {
       result = address !== undefined
@@ -404,10 +414,6 @@ export class Session implements SessionFace {
     if (!result.ok) {
       this.promptError = { op: 'stop', error: result.error }
       this.notifier.markDirty()
-    } else {
-      // Optimistic idle: host/session-status follows after drain settles; the
-      // composer stop control should not wait on a slow tool tail.
-      this.handleRunning(false)
     }
     return result
   }
