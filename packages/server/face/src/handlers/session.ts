@@ -5,7 +5,13 @@ import {
   sessionEventCount,
   withdrawAdmit,
 } from "@xrkseek/core-session";
-import { type MessageContent, type SessionEvent, flattenText } from "@xrkseek/protocol";
+import {
+  type AgentCancelCause,
+  type MessageContent,
+  type SessionEvent,
+  flattenText,
+  parseTurnEndCancelCause,
+} from "@xrkseek/protocol";
 import {
   FACE_AGENT_PRESET_IDS,
   canonicalAgentPresetId,
@@ -504,6 +510,18 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   return { ok: true, value: { accepted: true } };
 };
 
+/**
+ * Resolve cancel cause from Face payload; bare Stop defaults to `user`.
+ * Live `agent.abort` only accepts {@link AgentCancelCause} — `legacy` is a
+ * durable turn/end fallback, so map it to `user` for the latch.
+ */
+function cancelCauseFromPayload(payload: unknown): AgentCancelCause {
+  const raw = asRecord(payload).cause;
+  if (raw === undefined) return { kind: "user" };
+  const cause = parseTurnEndCancelCause(raw);
+  return cause.kind === "legacy" ? { kind: "user" } : cause;
+}
+
 export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
   const sessionId = String(asRecord(payload).sessionId ?? "");
   if (!sessionId) {
@@ -512,6 +530,7 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
       error: { code: "invalid-payload", message: "sessionId required" },
     };
   }
+  const cause = cancelCauseFromPayload(payload);
   // 1) Optimistic running:false — published *before* the drain join so a
   //    stuck tool (git snapshot, hung LLM call) can never pin the UI to
   //    "running" forever. publishDrainIdle re-publishes false after the
@@ -526,7 +545,7 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
   // same abort signal path via continueTurn).
   try {
     const agent = await runtime.resolveAgent(sessionId);
-    agent.abort({ kind: "user" });
+    agent.abort(cause);
   } catch {
     /* ignore */
   }
@@ -535,17 +554,25 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
   //    owned them), which resurfaces as Stop needing multiple clicks and
   //    floating "background job finished" toasts.
   killLiveSessionJobs(runtime.shell, sessionId);
-  // 3) Cascade to delegated children (fire-and-forget). A stopped parent
-  //    must not leave orphaned subagents draining: each child cancel is
-  //    itself a sessionCancel — optimistic running:false + bounded join —
-  //    and the tree walk is depth-bounded by the subagent registry.
+  // 3) Cascade to delegated children (fire-and-forget) — **user Stop only**.
+  //    A parent turn that completes on its own must NOT cancel background
+  //    children (they keep draining and still report natural / abnormal idle).
+  //    Manual parent Stop: stop the tree, stamp cause.kind "parent", and
+  //    suppressOwnedSubagentCompletion *before* child cancel so cancel→idle
+  //    does not steer a "finished a turn" notice with truncated body back
+  //    (interrupt_agent already suppresses; Stop cascade must match).
   const cascade = asRecord(payload).cascade !== false;
   if (cascade) {
     for (const link of runtime.subagents.listDelegated(sessionId)) {
+      runtime.suppressOwnedSubagentCompletion(link.childSessionId);
       void sessionCancel(
         runtime,
         `tool-sa-c-${link.childSessionId}`,
-        { sessionId: link.childSessionId, cascade: true },
+        {
+          sessionId: link.childSessionId,
+          cascade: true,
+          cause: { kind: "parent" },
+        },
       ).catch(() => undefined);
     }
   }
@@ -554,7 +581,7 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
   //    and aborted the turn. The latch keeps its entry on timeout so a message
   //    admitted during teardown still drains once the stuck chain settles.
   void runtime.drain.cancel(sessionId, {
-    cause: { kind: "user" },
+    cause,
     timeoutMs: SESSION_CANCEL_JOIN_MS,
   }).catch(() => undefined);
   return { ok: true, value: { accepted: true } };

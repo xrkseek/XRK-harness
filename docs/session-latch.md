@@ -24,7 +24,7 @@ Promise 门闩（无代数效应运行时）。决策见 [ADR-0003](./adr/0003-s
 
 - **cancel 期间的 wake 不丢**：teardown 尚在 flight 时到达的消息，会在 drain settle 后用**全新 entry 续跑**（`force=false`），不会滞留在队列里。
 - `cancel(opts?)` 支持 `cause`（作为 drain `AbortSignal.reason`）、`timeoutMs`（有界 join；超时只让 RPC 先返回，不丢队列）、`onAbort`（abort 已发出回调）。
-- **级联**：`session.cancel` 先乐观发布 `running:false`（即使工具卡死，UI 也不会停留在运行态），abort agent turn，再把 delegated 子代理逐个 fire-and-forget 取消，最后有界 join drain。
+- **级联（仅用户 Stop / `session.cancel`）**：先乐观发布 `running:false`，abort 本会话 turn，再 fire-and-forget 取消 delegated 子代理（子因标 `cause.kind: "parent"`，并先 `suppressOwnedSubagentCompletion` —— **手动停父 = 子跟着停且不回传**）。父会话**自然** `turn/end` **不**级联、不截断后台子会话；子继续跑，自然 idle 或**异常截断**时仍 steer 回传父会话（异常文案见 `formatSubagentCompletionNotice`）。
 
 **Host**（`createHostManager`）持有 hub；drain body = 循环 `continueTurn()` 直到无 pending admit。实现为纯 Promise Map。
 
@@ -92,7 +92,7 @@ One `AgentHandle` allows **at most one** concurrent `continueTurn`:
 
 - **A `wake` during cancel is not swallowed**: a message arriving while teardown is still in flight re-drains **on a fresh entry** (`force=false`) once the drain settles — never stranded in the queue.
 - `cancel(opts?)` accepts `cause` (surfaced as the drain `AbortSignal.reason`), `timeoutMs` (bounded join; a timeout only lets the RPC return early, it does not drop the queue), and `onAbort` (fired once the abort signal is raised).
-- **Cascade**: `session.cancel` first publishes an optimistic `running:false` (even a stuck tool cannot hold the UI in the running state), aborts the agent turn, fire-and-forget cancels each delegated child, then does a bounded drain join.
+- **Cascade (user Stop / `session.cancel` only)**: publish optimistic `running:false`, abort this session's turn, then fire-and-forget cancel each delegated child (`cause.kind: "parent"`, after `suppressOwnedSubagentCompletion` — **manual parent Stop stops children and does not steer a completion notice back**). A parent turn that **ends on its own** does **not** cascade or truncate background children; they keep running and still steer the parent on natural idle or **abnormal** child truncation (`formatSubagentCompletionNotice`).
 
 **Host** (`createHostManager`) owns the hub; drain body = loop `continueTurn()` until no pending admit. Implementation is a pure Promise Map.
 

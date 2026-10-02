@@ -69,6 +69,58 @@ describe("subagent completion delivery", () => {
     );
   });
 
+  it("steers a long idle answer without the old 2k hard clip", async () => {
+    const store = createMemorySessionStore();
+    const admits: string[] = [];
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: idleFaceDrain,
+      resolveAgent: async (sessionId) =>
+        ({
+          admit: (content) => {
+            admits.push(String(content));
+            return admitPrompt(store, sessionId, content);
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => true,
+          abort() {},
+          setApprovalHandler() {},
+        }) as never,
+    });
+
+    const parent = await dispatchFaceMethod(runtime, "session.create", "p", {});
+    if (!parent.result.ok) throw new Error("parent create failed");
+    const parentId = (parent.result.value as { sessionId: string }).sessionId;
+
+    const child = await dispatchFaceMethod(runtime, "session.create", "c", {
+      parentSessionId: parentId,
+      label: "writer",
+    });
+    if (!child.result.ok) throw new Error("child create failed");
+    const childId = (child.result.value as { sessionId: string }).sessionId;
+
+    const long = `body-${"x".repeat(3500)}`;
+    store.append(childId, {
+      type: "assistant/message",
+      ts: 1,
+      turnId: "t1",
+      stepId: "s1",
+      content: long,
+    });
+
+    runtime.onSessionDrainStatus(childId, false);
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+
+    expect(admits).toHaveLength(1);
+    expect(admits[0]).toContain(long);
+    expect(admits[0]).not.toMatch(/\n…\n\nFollow up/);
+  });
+
   it("skips one-shot children", async () => {
     const store = createMemorySessionStore();
     const admits: string[] = [];
@@ -358,5 +410,129 @@ describe("subagent completion delivery", () => {
     });
     expect(admits).toHaveLength(1);
     expect(admits[0]!.content).toContain("should not steer after interrupt");
+  });
+
+  it("parent session.cancel suppresses child completion steer (manual Stop)", async () => {
+    // Manual parent Stop must cascade-cancel children without steering a
+    // "finished a turn" notice back — natural parent turn/end does not cancel
+    // children at all (separate path); abnormal child idle still notifies.
+    const store = createMemorySessionStore();
+    const admits: string[] = [];
+    const aborts: { sessionId: string; cause: unknown }[] = [];
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: idleFaceDrain,
+      resolveAgent: async (sessionId) =>
+        ({
+          admit: (content) => {
+            admits.push(String(content));
+            return admitPrompt(store, sessionId, content);
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => false,
+          abort(cause?: unknown) {
+            aborts.push({ sessionId, cause });
+          },
+          setApprovalHandler() {},
+        }) as never,
+    });
+
+    const parent = await dispatchFaceMethod(runtime, "session.create", "p", {});
+    if (!parent.result.ok) throw new Error("parent create failed");
+    const parentId = (parent.result.value as { sessionId: string }).sessionId;
+    const child = await dispatchFaceMethod(runtime, "session.create", "c", {
+      parentSessionId: parentId,
+      label: "bg-worker",
+    });
+    if (!child.result.ok) throw new Error("child create failed");
+    const childId = (child.result.value as { sessionId: string }).sessionId;
+
+    store.append(childId, {
+      type: "assistant/message",
+      ts: 1,
+      turnId: "t1",
+      stepId: "s1",
+      content: "truncated mid-sentence should not steer on parent Stop",
+      interrupted: true,
+    });
+
+    const cancel = await dispatchFaceMethod(runtime, "session.cancel", "x", {
+      sessionId: parentId,
+    });
+    expect(cancel.result.ok).toBe(true);
+    // Cascade runs fire-and-forget; give the child cancel a tick, then simulate
+    // the cancel→idle race that used to re-admit a completion notice.
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+    runtime.onSessionDrainStatus(childId, false);
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+
+    expect(admits).toHaveLength(0);
+    expect(aborts.some((a) => a.sessionId === childId && (a.cause as { kind?: string })?.kind === "parent")).toBe(
+      true,
+    );
+  });
+
+  it("still steers parent when child ends abnormally without suppress", async () => {
+    const store = createMemorySessionStore();
+    const admits: string[] = [];
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: idleFaceDrain,
+      resolveAgent: async (sessionId) =>
+        ({
+          admit: (content) => {
+            admits.push(String(content));
+            return admitPrompt(store, sessionId, content);
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => false,
+          abort() {},
+          setApprovalHandler() {},
+        }) as never,
+    });
+
+    const parent = await dispatchFaceMethod(runtime, "session.create", "p", {});
+    if (!parent.result.ok) throw new Error("parent create failed");
+    const parentId = (parent.result.value as { sessionId: string }).sessionId;
+    const child = await dispatchFaceMethod(runtime, "session.create", "c", {
+      parentSessionId: parentId,
+      label: "fragile",
+    });
+    if (!child.result.ok) throw new Error("child create failed");
+    const childId = (child.result.value as { sessionId: string }).sessionId;
+
+    store.append(childId, {
+      type: "assistant/message",
+      ts: 1,
+      turnId: "t1",
+      stepId: "s1",
+      content: "half written before crash",
+      interrupted: true,
+    });
+    store.append(childId, {
+      type: "turn/end",
+      ts: 2,
+      turnId: "t1",
+      reason: { kind: "aborted", reason: { kind: "legacy" } },
+    });
+
+    runtime.onSessionDrainStatus(childId, false);
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+
+    expect(admits).toHaveLength(1);
+    expect(admits[0]).toContain("ended abnormally");
+    expect(admits[0]).toContain("half written before crash");
   });
 });

@@ -136,4 +136,58 @@ describe("formatSubagentCompletionNotice", () => {
       "background subagent `child-3` (thinker) finished a turn. Follow up with send_message, interrupt_agent when done, or list_agents.",
     );
   });
+
+  it("marks abnormal abort and still includes truncated preview", () => {
+    const text = formatSubagentCompletionNotice(
+      {
+        parentSessionId: "parent",
+        childSessionId: "child-4",
+        mode: "continuable",
+        label: "worker",
+      },
+      [
+        {
+          type: "assistant/message",
+          ts: 1,
+          turnId: "t1",
+          stepId: "s1",
+          content: "partial answer cut mid-sen",
+          interrupted: true,
+        },
+        {
+          type: "turn/end",
+          ts: 2,
+          turnId: "t1",
+          reason: { kind: "aborted", reason: { kind: "hook", reason: "budget" } },
+        },
+      ],
+    );
+    expect(text).toContain("ended abnormally (aborted by hook: budget)");
+    expect(text).toContain("partial answer cut mid-sen");
+    expect(text).not.toContain("finished a turn");
+  });
+
+  it("keeps a long bound answer body instead of a 2k hard clip", () => {
+    const long = "x".repeat(3500);
+    const text = formatSubagentCompletionNotice(
+      {
+        parentSessionId: "parent",
+        childSessionId: "child-5",
+        mode: "continuable",
+        label: "writer",
+      },
+      [
+        {
+          type: "assistant/message",
+          ts: 1,
+          turnId: "t1",
+          stepId: "s1",
+          content: long,
+        },
+      ],
+      long,
+    );
+    expect(text).toContain(long);
+    expect(text).not.toContain("\n…\n\nFollow up");
+  });
 });

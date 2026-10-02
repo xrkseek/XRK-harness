@@ -4,13 +4,14 @@ import {
   listPendingAdmits,
   readSessionEvents,
 } from "@xrkseek/core-session";
-import {
-  boundToolResultContent,
-  parseSpillLocator,
-} from "@xrkseek/core-agent-loop";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
 import { lastAssistantBodyText } from "./adapt/subagent-notice.js";
+import {
+  boundChildAnswer,
+  SUBAGENT_ANSWER_INLINE_BYTES,
+} from "./adapt/subagent-answer-bound.js";
+export { boundChildAnswer, SUBAGENT_ANSWER_INLINE_BYTES };
 import {
   DEFAULT_MAX_ACTIVE_CHILDREN,
   DEFAULT_MAX_DEPTH,
@@ -310,41 +311,6 @@ function countActiveChildren(
 }
 
 /**
- * Inline ceiling for one child's answer before it goes to a file (UTF-8
- * bytes). Well under the loop-level tool-result ceiling (64_000) so a spilled
- * answer never spills twice; CJK ≈ 3 bytes/char leaves ~4k chars inline.
- */
-export const SUBAGENT_ANSWER_INLINE_BYTES = 12_000;
-
-/** Imperative lead so the parent reads the file instead of re-asking. */
-const SPILL_READ_HINT =
-  "The child's full answer is on disk. Read it with read_file (or grep) " +
-  "before you answer — do not re-ask the child to restate it in fewer words.";
-
-/**
- * Long child answers become a file the parent can read: the tool result keeps a
- * head/tail preview plus the path (same spill store the loop uses, so the
- * locator lands under `~/.xrk/spill/tool-outputs` — a Host-readable root).
- * Short answers pass through untouched.
- */
-export function boundChildAnswer(
-  parentSessionId: string,
-  childSessionId: string,
-  text: string,
-): string {
-  if (!text || parseSpillLocator(text)) return text;
-  const bound = boundToolResultContent({
-    sessionId: parentSessionId,
-    callId: `subagent-${childSessionId}`,
-    toolName: "subagent",
-    content: text,
-    maxInlineBytes: SUBAGENT_ANSWER_INLINE_BYTES,
-  });
-  const body = typeof bound.content === "string" ? bound.content : text;
-  return bound.spilled ? `${SPILL_READ_HINT}\n\n${body}` : body;
-}
-
-/**
  * Optional LLM target for a freshly created child.
  * `model` alone inherits the parent's current provider; `provider` alone is rejected.
  */
@@ -409,8 +375,10 @@ function createSubagentTool(
       "Optional provider / model / reasoning_effort pin the child's LLM (model alone keeps the parent provider). " +
       "Optional runtime: omit or in-process (default Face child); acp / app-server / claude-code spawn an external subprocess. " +
       "acp / app-server support run_in_background + followup_task / send_message / wait_agent / interrupt_agent on the same list surface; claude-code remains one-shot print. " +
-      "A long answer is written to a file: the result then carries a read_file path plus a head/tail preview. " +
-      "Read that path (or grep it) to get the full answer — never re-ask the child to restate it in fewer words.",
+      "The child's answer is returned inline in this tool result when short. " +
+      "Only when the UTF-8 body exceeds ~12KB does Face spill it under ~/.xrk/spill/tool-outputs/ " +
+      "and replace the body with a path + head/tail preview — then read_file that path. " +
+      "An empty or missing tool-outputs directory means nothing spilled; the full answer is already in this result (or the session event log), not on disk.",
     parameters: {
       type: "object",
       properties: {
@@ -1503,7 +1471,7 @@ function createWaitAgentTool(
       "Wait until listed child subagents become idle (Codex wait_agent targets). " +
       "Returns each child's final status and last assistant text when idle. " +
       "Prefer longer timeouts (minutes) over busy-polling with list_agents. " +
-      "A long answer is written to a file: the result then carries a read_file path plus a head/tail preview — read the path, do not re-ask the child for a shorter version.",
+      "Answer sizing matches subagent (inline when short; spill only over ~12KB).",
     parameters: {
       type: "object",
       properties: {

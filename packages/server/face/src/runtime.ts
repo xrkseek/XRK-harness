@@ -49,6 +49,7 @@ import {
   formatSubagentCompletionNotice,
   lastAssistantBodyText,
 } from "./adapt/subagent-notice.js";
+import { boundChildAnswer } from "./adapt/subagent-answer-bound.js";
 import { validateOutputAgainstSchema } from "./agent-team-output.js";
 import { toQueueItems } from "./queue.js";
 import type {
@@ -562,13 +563,16 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         const followup = idle && spent < JOB_COMPLETION_MAX_WAKES;
         if (followup) spentWakes.set(parentId, spent + 1);
         const events = readEvents(childSessionId);
+        const preview = lastAssistantBodyText(events);
+        const answer = preview
+          ? boundChildAnswer(link.parentSessionId, childSessionId, preview)
+          : "";
         const receipt = parent.admit(
-          formatSubagentCompletionNotice(link, events),
+          formatSubagentCompletionNotice(link, events, answer),
           { delivery: "steer" },
         );
         noticeAdmitIds.add(receipt.admitId);
         subagentIdleFailCount.delete(childSessionId);
-        const preview = lastAssistantBodyText(events);
         const schema = agentTeamTasks.outputSchemaForChild(childSessionId);
         let schemaValid: boolean | undefined;
         let schemaErrors: readonly string[] | undefined;
