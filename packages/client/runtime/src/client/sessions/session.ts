@@ -228,19 +228,18 @@ export class Session implements SessionFace {
     const requestId = brandRpcId(randomUuid()) as SessionRequestId
     this.pendingSubmissions = [...this.pendingSubmissions, {
       requestId,
-      // Optimistic transcript by default: the click must paint immediately in
-      // exactly one place. Deriving `queued` from the local running bit raced
-      // Host — a queue-mode submit that Host admitted straight into a new turn
-      // never produced a queue row, so the echo sat unrendered in both
-      // ChatView (queued echoes are skipped) and QueueDock (nothing mirrored)
-      // until durable `user/message` retired it.
-      // Exception: when Host already has a backlog, the next submit will queue —
-      // starting as transcript then demoting via `observeSubmissionQueue`
-      // flashes the bubble into the dock ("sent, then queued"). Mirror Host's
-      // backlog immediately so the dock is the first paint.
+      // Steer always docks as steering. Queue placement must paint in ONE
+      // place on the first frame:
+      // - Host already has a backlog → mirror it as `queued` (otherwise
+      //   transcript→dock demotion flashes "sent, then queued").
+      // - Local turn is already running with an empty Host mirror → still
+      //   start as `queued`. QueueDock paints pre-admit local queued echoes;
+      //   starting as `transcript` then demoting on Host admit was the
+      //   busy-send flash. (Idle / Host-admits-straight-into-a-new-turn stays
+      //   `transcript` so the echo is never parked only in the dock.)
       placement: input.mode === 'steer'
         ? 'steering'
-        : this.queueMirror.snapshot().length > 0
+        : (this.queueMirror.snapshot().length > 0 || this.running)
           ? 'queued'
           : 'transcript',
       time: Date.now(),
@@ -1026,6 +1025,11 @@ export class Session implements SessionFace {
     const next = this.pendingSubmissions.map((echo) => {
       const row = byRpc.get(echo.requestId)
       if (row === undefined) return echo
+      // Never demote a transcript echo into the dock. Host may briefly queue an
+      // idle admit before FIFO claim; QueueDock already skips host rows whose
+      // rpcId is already inChat (local transcript). Demoting caused the
+      // empty-session "flash in queue then jump to chat" on first send.
+      if (echo.placement === 'transcript') return echo
       // Host `context` rows are not a client echo surface — treat as queued.
       const placement: PendingSubmission['placement'] =
         row.placement === 'steering' ? 'steering' : 'queued'

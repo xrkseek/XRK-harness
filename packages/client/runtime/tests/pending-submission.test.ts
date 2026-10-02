@@ -77,22 +77,19 @@ describe('beginSubmission', () => {
     }])
   })
 
-  it('starts every non-steer echo in the transcript, whatever the local running bit says', () => {
+  it('starts as queued while a local turn is running (no transcript→dock flash)', () => {
     const { api } = bareApi()
     const session = new Session(SID, api, remotes())
     session.beginSubmission({ mode: 'queue', text: '空闲', attachments: [] })
     session.handleRunning(true)
     session.beginSubmission({ mode: 'queue', text: '排队', attachments: [] })
     session.beginSubmission({ mode: 'steer', text: '纠偏', attachments: [] })
-    // The local running bit races Host's `turn/end` broadcast. Guessing `queued`
-    // from running alone parked a submit that Host admitted straight into a new
-    // turn in neither ChatView (queued echoes are skipped) nor QueueDock
-    // (nothing was mirrored) — "my message vanished and still looks queued".
-    // Host-authoritative placement arrives via `observeSubmissionQueue` instead,
-    // except when Host's queue mirror already has a backlog (see next test).
+    // QueueDock paints pre-admit local `queued` echoes, so busy submits can
+    // dock on the first frame. Idle / Host-admits-straight-into-turn still
+    // starts as `transcript` (see the first insert above before running).
     expect(session.getSnapshot().pendingSubmissions.map(({ text, placement }) => ({ text, placement }))).toEqual([
       { text: '空闲', placement: 'transcript' },
-      { text: '排队', placement: 'transcript' },
+      { text: '排队', placement: 'queued' },
       { text: '纠偏', placement: 'steering' },
     ])
   })
@@ -114,18 +111,36 @@ describe('beginSubmission', () => {
     }])
   })
 
-  it('keeps a submit visible in the transcript when Host never queues it', () => {
+  it('keeps idle first-send as transcript when Host briefly queues it (no dock flash)', () => {
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    const handle = session.beginSubmission({ mode: 'queue', text: '首发', attachments: [] })
+    expect(session.getSnapshot().pendingSubmissions[0]?.placement).toBe('transcript')
+    session.handleMuxEnvelope(RpcId('q0'), queueFrame(SID, [{
+      id: 'qi-0',
+      rpcId: handle.requestId,
+      body: '首发',
+    }]))
+    expect(session.getSnapshot().pendingSubmissions).toMatchObject([{
+      requestId: handle.requestId,
+      placement: 'transcript',
+      text: '首发',
+    }])
+  })
+
+  it('keeps a busy submit in the dock when Host never queues it', () => {
     const { api } = bareApi()
     const session = new Session(SID, api, remotes())
     session.handleRunning(true)
     const handle = session.beginSubmission({ mode: 'queue', text: '直入', attachments: [] })
-    // Host drains the admit directly into a turn: the queue frame carries no
-    // row for this rpcId, so the echo must stay transcript until the durable
-    // `user/message` stamps it.
+    // Busy submits dock first (QueueDock paints local queued echoes). Host may
+    // drain the admit straight into a turn with an empty queue frame — do not
+    // promote to transcript here (that reintroduced the sent→queued flash);
+    // durable `user/message` still retires the echo.
     session.handleMuxEnvelope(RpcId('q1'), queueFrame(SID, []))
     expect(session.getSnapshot().pendingSubmissions).toMatchObject([{
       requestId: handle.requestId,
-      placement: 'transcript',
+      placement: 'queued',
       text: '直入',
     }])
   })
