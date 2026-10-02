@@ -130,6 +130,50 @@ export function throwHttpLlmError(
 }
 
 /**
+ * `AbortSignal.abort({ kind: "user" })` (and parent / disposed / hook) stores
+ * a plain cancel cause as `signal.reason`. `throwIfAborted()` and some fetch
+ * stacks rethrow that object — not a DOMException — so adapters must not
+ * classify it as TRANSPORT (which the retry policy then retries as if the
+ * model flake).
+ */
+export function isAgentCancelCause(value: unknown): boolean {
+  if (value === null || typeof value !== "object" || !("kind" in value)) {
+    return false;
+  }
+  const kind = (value as { kind?: unknown }).kind;
+  if (
+    kind === "user" ||
+    kind === "parent" ||
+    kind === "disposed" ||
+    kind === "legacy"
+  ) {
+    return true;
+  }
+  return (
+    kind === "hook" &&
+    typeof (value as { reason?: unknown }).reason === "string"
+  );
+}
+
+function formatAgentCancelCause(value: {
+  readonly kind: string;
+  readonly reason?: string;
+}): string {
+  switch (value.kind) {
+    case "user":
+      return "aborted by user";
+    case "parent":
+      return "aborted by parent";
+    case "disposed":
+      return "aborted: session disposed";
+    case "hook":
+      return `aborted by hook: ${value.reason ?? ""}`;
+    default:
+      return "aborted";
+  }
+}
+
+/**
  * Human-readable text for an unknown throw. Plain `String(err)` collapses
  * plain objects to `[object Object]`, which then shows up in the retry
  * disclosure as `anthropic: [object Object]`. Prefer Error.message, then
@@ -142,6 +186,9 @@ export function describeUnknownError(err: unknown): string {
     return trimmed === "" || trimmed === "[object Object]"
       ? "unknown error"
       : trimmed;
+  }
+  if (isAgentCancelCause(err)) {
+    return formatAgentCancelCause(err as { kind: string; reason?: string });
   }
   if (err instanceof Error) {
     const message = err.message.trim();
@@ -173,6 +220,16 @@ export function classifyCaughtLlmError(err: unknown, label: string): never {
   if (err instanceof LlmError) throw err;
   if (err instanceof DOMException && err.name === "AbortError") {
     throw new LlmError(`${label}: aborted`, "ABORTED", { cause: err });
+  }
+  // Node abort with typed reason: fetch / throwIfAborted may surface the
+  // plain `{ kind: "user" }` object. Map to ABORTED so Stop never schedules
+  // llm/retry (TRANSPORT would burn the 1/5…5/5 backoff UI).
+  if (isAgentCancelCause(err)) {
+    throw new LlmError(
+      `${label}: ${formatAgentCancelCause(err as { kind: string; reason?: string })}`,
+      "ABORTED",
+      { cause: err },
+    );
   }
   if (err instanceof Error && err.name === "TimeoutError") {
     throw new LlmError(`${label}: timeout`, "TIMEOUT", { cause: err });

@@ -371,6 +371,7 @@ export {
   classifyCaughtLlmError,
   describeUnknownError,
   httpErrorCode,
+  isAgentCancelCause,
   isLlmError,
   isQuotaExceededError,
   parseRetryAfterMs,

@@ -3,6 +3,7 @@ import {
   EmptyResponseError,
   IncompleteToolCallError,
   LlmError,
+  classifyCaughtLlmError,
   computeRetryDelayMs,
   failureFromUnknown,
   httpErrorCode,
@@ -125,12 +126,33 @@ describe("deterministic failures are not retried", () => {
       ),
     ).toBe(false);
     expect(
+      isRetryableFailure(failureFromUnknown({ kind: "user" })),
+    ).toBe(false);
+    expect(failureFromUnknown({ kind: "user" })).toMatchObject({
+      code: "ABORTED",
+      message: "aborted by user",
+    });
+    expect(
       isRetryableFailure({
         message: "x",
         code: "INVALID_REQUEST",
         status: 400,
       }),
     ).toBe(false);
+  });
+
+  it("classifies typed AbortSignal.reason as ABORTED (not TRANSPORT)", () => {
+    try {
+      classifyCaughtLlmError({ kind: "user" }, "openai-compatible");
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(LlmError);
+      expect(err).toMatchObject({
+        code: "ABORTED",
+        message: "openai-compatible: aborted by user",
+      });
+      expect(isRetryableFailure(failureFromUnknown(err))).toBe(false);
+    }
   });
 
   it("retries an abnormal tool-call truncation", () => {

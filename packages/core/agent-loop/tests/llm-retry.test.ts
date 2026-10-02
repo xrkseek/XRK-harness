@@ -211,6 +211,35 @@ describe("invokeLlmWithRetry", () => {
     expect(calls).toBe(0);
   });
 
+  it("does not retry a TRANSPORT LlmError when the signal is already aborted", async () => {
+    // openai-compatible used to wrap AbortSignal.reason `{ kind: "user" }` as
+    // TRANSPORT (`openai-compatible: {"kind":"user"}`), which then scheduled
+    // llm/retry after Stop. Abort must short-circuit before retry events.
+    const store = createMemorySessionStore();
+    const session = store.create("stop-wrap");
+    const ac = new AbortController();
+    await expect(
+      invokeLlmWithRetry({
+        invoke: async () => {
+          ac.abort({ kind: "user" });
+          throw new LlmError(
+            'openai-compatible: {"kind":"user"}',
+            "TRANSPORT",
+          );
+        },
+        flushChunk: () => {},
+        store,
+        sessionId: session.id,
+        turnId: "t",
+        stepId: "s",
+        now: () => 1,
+        signal: ac.signal,
+        policy: resolveRetryPolicy({}),
+      }),
+    ).rejects.toEqual({ kind: "user" });
+    expect(store.get(session.id).events).toHaveLength(0);
+  });
+
   it("retries a stream idle timeout, then succeeds", async () => {
     const store = createMemorySessionStore();
     const session = store.create("idle-timeout");

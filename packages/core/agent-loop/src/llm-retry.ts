@@ -74,6 +74,11 @@ export async function invokeLlmWithRetry(input: {
         // Live-flushed prefix is already in the session log for cancel finalize.
         throw err;
       }
+      // Adapter may wrap AbortSignal.reason (`{ kind: "user" }`) into a
+      // TRANSPORT LlmError before we see it. Never schedule llm/retry after Stop.
+      if (input.signal?.aborted) {
+        throw input.signal.reason ?? new DOMException("aborted", "AbortError");
+      }
       // Overflow has its own prune/compact path outside retry.
       if (isContextOverflowError(err)) throw err;
       if (policy === false) throw err;

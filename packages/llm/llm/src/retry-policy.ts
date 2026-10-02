@@ -3,6 +3,7 @@
  */
 import {
   describeUnknownError,
+  isAgentCancelCause,
   isLlmError,
   type LlmError,
   type LlmFailure,
@@ -69,8 +70,9 @@ function errorCode(err: unknown): string | undefined {
   if (isLlmError(err)) return (err as LlmError).code;
   // A cancel is control flow, not a failure: it carries no `code`, so it would
   // read as UNKNOWN and burn the full retry budget after the user hit stop.
-  // Same DOMException rule `classifyCaughtLlmError` uses.
+  // Same DOMException / typed-cause rules `classifyCaughtLlmError` uses.
   if (err instanceof DOMException && err.name === "AbortError") return "ABORTED";
+  if (isAgentCancelCause(err)) return "ABORTED";
   if (
     err &&
     typeof err === "object" &&
