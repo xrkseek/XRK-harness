@@ -17,7 +17,7 @@ import { turnErrorDefinition } from '../src/client/conversation-nodes/turn-error
 import { turnMaxTokensDefinition } from '../src/client/conversation-nodes/turn-max-tokens.ts'
 import { turnTailDefinition } from '../src/client/conversation-nodes/turn-tail.ts'
 import type {
-  AssistantChatData, ManualCompactionChatData, RetryChatData, ToolChatData, TurnTailChatData,
+  AssistantChatData, ManualCompactionChatData, ToolChatData, TurnTailChatData,
 } from '../src/client/contract/chat-nodes.ts'
 
 const DEFINITIONS: readonly ConversationNodeDefinition[] = [
@@ -726,8 +726,9 @@ describe('built-in conversation node Definitions', () => {
       }),
     ])
     const retryNode = node(snapshot(retry), 'model-retry')
-    const retryData = retryNode?.data as RetryChatData
-    expect(retryData.attempts.map(attempt => attempt.retryState)).toEqual(['started', 'cancelled'])
+    // Exhausted chain: last attempt cancelled during close — suppress the
+    // cancelled-retry tombstone; the turn-error row carries the failure.
+    expect(retryNode).toBeUndefined()
     expect(node(snapshot(retry), 'turn-error')?.data).toMatchObject({
       kind: 'turn-error',
       turn: 1,
@@ -968,8 +969,8 @@ describe('built-in conversation node Definitions', () => {
     ], false)
     value.flush()
 
-    const retry = node(snapshot(value), 'model-retry')
-    expect((retry?.data as RetryChatData).attempts).toHaveLength(2)
+    // Last attempt cancelled on close — suppress the tombstone; turn-error remains.
+    expect(node(snapshot(value), 'model-retry')).toBeUndefined()
     expect(node(snapshot(value), 'turn-error')?.data).toMatchObject({
       kind: 'turn-error',
       seq: 7,
@@ -981,8 +982,8 @@ describe('built-in conversation node Definitions', () => {
 
   it('keeps a single turn-tail when Stop cancels an in-flight llm/retry after file diffs', () => {
     // Screenshot repro: tools write files → empty model response schedules
-    // llm/retry → user hits Stop. The cancelled-retry banner sits above the
-    // ChangedFiles card; two full turn-tails (card + chips + 用时) must not
+    // llm/retry → user hits Stop. The never-started cancel must not paint a
+    // retry banner; two full turn-tails (card + chips + 用时) must not
     // materialize for the same turn.
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),
@@ -1030,9 +1031,8 @@ describe('built-in conversation node Definitions', () => {
     const tails = [...snap.nodes.values()].filter(candidate => candidate.kind === 'turn-tail')
     expect(tails).toHaveLength(1)
     expect(snap.order.filter(key => snap.nodes.get(key)?.kind === 'turn-tail')).toHaveLength(1)
-    expect(node(snap, 'model-retry')?.data).toMatchObject({
-      current: expect.objectContaining({ retryState: 'cancelled' }),
-    })
+    // Stop during backoff: never-started cancel must not leave a retry banner.
+    expect(node(snap, 'model-retry')).toBeUndefined()
   })
 
   it('materializes a max-tokens notice and keeps completed and error turns clean', () => {

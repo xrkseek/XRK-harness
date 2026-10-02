@@ -254,6 +254,12 @@ export interface SessionSummary {
    */
   agentPreset?: string
   /**
+   * Client-local: the blank New Session still holds an unsent composer draft.
+   * Never produced by Face list; the manager sets it from Session.setDraft so
+   * the sidebar can keep the row visible after navigation away.
+   */
+  hasDraft?: boolean
+  /**
    * Projection baseline for this row, with zero log loads: attached sessions
    * read the registry's live watermark cut; cold sessions read the persisted
    * projection cache's stored rows — as stale as that session's last durable

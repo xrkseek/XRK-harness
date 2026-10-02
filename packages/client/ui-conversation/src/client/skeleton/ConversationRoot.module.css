@@ -83,6 +83,7 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
+  flex: 1;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -94,8 +95,20 @@
   min-width: 0;
 }
 
+/* Leaf crumb (current session / switcher) must stay readable; ancestors shrink. */
+.crumbSeg:last-child {
+  flex: none;
+  max-width: min(280px, 55%);
+}
+
+.crumbSeg:not(:last-child) {
+  flex: 0 1 auto;
+  min-width: 48px;
+}
+
 .crumbSep {
   /* figma: "/" separators are 14px caption gray (75:7903), one tint lighter than crumb text. */
+  flex: none;
   color: var(--dsw-alias-label-caption);
   font-size: 14px;
   line-height: 20px;
@@ -114,6 +127,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.crumbSeg:not(:last-child) .crumb {
+  max-width: 160px;
 }
 
 .crumbSubagent {
@@ -136,6 +153,7 @@
   flex: none;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .headerUtilities {

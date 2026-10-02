@@ -1048,7 +1048,8 @@ describe('MessageItem arms', () => {
       }}
       />,
     )
-    expect(view.getByRole('status').textContent).toBe('模型请求重试已取消（1/2） · 4s')
+    // Never-started cancel: no status tombstone after user abort.
+    expect(view.queryByRole('status')).toBeNull()
   })
 
 })

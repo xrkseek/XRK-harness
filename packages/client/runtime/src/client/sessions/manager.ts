@@ -75,6 +75,9 @@ type SessionListMutation =
   | { kind: 'activity'; sessionId: SessionId; updatedAt: number }
   /** Local first-send flip: the sender clears blank without waiting for a host frame. */
   | { kind: 'engaged'; sessionId: SessionId }
+  /** Local composer draft bit: blank New Session rows with unsent text stay visible. */
+  | { kind: 'draft'; sessionId: SessionId; hasDraft: boolean }
+
 
 /** Stable identity of a frame retained until an uninstantiated Session can consume it. */
 function bufferedRequestKey(envelope: RpcRequest<MuxFrame>): string | undefined {
@@ -316,6 +319,11 @@ export class SessionManager {
       // session surfaces (lists filter on blank) before any host frame lands.
       onEngaged: (engaged) => {
         this.recordMutation({ kind: 'engaged', sessionId: engaged.sessionId })
+      },
+      // A New Session that still holds an unsent draft stays on the sidebar
+      // after the user navigates away (the row returns until cleared).
+      onDraftChange: (session) => {
+        this.recordMutation({ kind: 'draft', sessionId: session.sessionId, hasDraft: session.draft !== '' })
       },
       projections: this.projectionStore(sessionId),
       ...this.conversation === undefined ? {} : { conversation: this.conversation },
@@ -1158,7 +1166,7 @@ export class SessionManager {
         && prev.origin === entry.origin && prev.title === entry.title && prev.depth === entry.depth
         && prev.pendingInteraction === entry.pendingInteraction
         && prev.projectionValues === entry.projectionValues
-        && prev.completed === entry.completed
+        && prev.completed === entry.completed && prev.hasDraft === entry.hasDraft
       ) return prev
       this.entryCache.set(entry.sessionId, entry)
       return entry
@@ -1230,6 +1238,11 @@ function applyMutation(summaries: readonly SessionSummary[], mutation: SessionLi
     case 'engaged':
       return summaries.map(summary => summary.sessionId === mutation.sessionId && summary.blank
         ? { ...summary, blank: false }
+        : summary)
+    case 'draft':
+      return summaries.map(summary => summary.sessionId === mutation.sessionId
+        && summary.hasDraft !== mutation.hasDraft
+        ? { ...summary, hasDraft: mutation.hasDraft }
         : summary)
   }
 }

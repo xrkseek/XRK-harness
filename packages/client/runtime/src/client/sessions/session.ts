@@ -57,6 +57,15 @@ export interface SessionOptions {
    */
   onEngaged?(session: Session): void
   /**
+   * Local unsent composer draft boundary flip: fires when the draft crosses
+   * into or out of emptiness. The manager mirrors it into the list row so a
+   * New Session that still holds text stays visible on the sidebar after the
+   * user navigates away — the row remains, clickable to return, until the
+   * draft is cleared or the session engages.
+   */
+  onDraftChange?(session: Session): void
+
+  /**
    * Manager-owned projection value store to adopt (frames route through the
    * manager and values outlive instantiation); omitted, the Session owns a
    * private store (bare object-layer construction).
@@ -125,6 +134,8 @@ export class Session implements SessionFace {
   private firstPromptPendingTurn = false
   /** Empty-log mirror (see ConversationSnapshot.blank); unknown bare sessions begin conservatively blank. */
   private blankBit = true
+  /** Local unsent composer draft (UI-side only; the host log never sees it). */
+  private draftText = ''
   private removed = false
   private promptError: PromptError | null = null
   private lastAgentError: string | null = null
@@ -728,6 +739,27 @@ export class Session implements SessionFace {
     if (blank && (this.promptAttempted || this.running)) return
     this.blankBit = blank
     this.notifier.markDirty()
+  }
+
+  /**
+   * Local composer draft text mirrored from the input shell. Crossing into or
+   * out of emptiness notifies the manager so a blank New Session with unsent
+   * text stays on the sidebar after navigation away.
+   */
+  get draft(): string {
+    return this.draftText
+  }
+
+  /**
+   * Mirror the composer draft (see {@link ISession.setDraft}).
+   * @param draft - current composer text; empty clears the sidebar bit.
+   */
+  setDraft(draft: string): void {
+    if (draft === this.draftText) return
+    const wasEmpty = this.draftText === ''
+    const nowEmpty = draft === ''
+    this.draftText = draft
+    if (wasEmpty !== nowEmpty) this.options.onDraftChange?.(this)
   }
 
   /**

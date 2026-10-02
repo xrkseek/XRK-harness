@@ -92,6 +92,26 @@ describe('deriveGroups', () => {
     expect(strayGroups.map(group => group.key)).toEqual(['first'])
   })
 
+  it('keeps a non-current blank session visible when it still holds a draft', () => {
+    const current = summary('current', 6)
+    const draftedBlank = { ...summary('drafted-blank', 5), blank: true, hasDraft: true }
+    const emptyBlank = { ...summary('empty-blank', 4), blank: true }
+    const sessions = {
+      ...list(current, draftedBlank, emptyBlank),
+      current: current.id,
+    }
+    const groups = deriveGroups(
+      sessions,
+      [workspace('first', ['current', 'drafted-blank', 'empty-blank'])],
+      noArchive,
+      view(['first']),
+    )
+    expect(groups[0]!.sessions.map(session => session.id)).toEqual([
+      draftedBlank.id,
+      current.id,
+    ])
+  })
+
   it('projects the completion reminder into session and search rows (absent = false)', () => {
     const done = { ...summary('done', 3), completed: true }
     const plain = summary('plain', 2)

@@ -134,6 +134,13 @@ export interface ISession {
    * @returns the admission result, or the Remote face's error branch.
    */
   command(line: string): Promise<RemoteResult<{ matched: boolean }>>
+  /**
+   * Mirror the composer draft into this session so a blank New Session that
+   * still holds unsent text stays visible (and clickable) on the sidebar
+   * after the user navigates away.
+   * @param draft - current composer text (empty clears the sidebar bit).
+   */
+  setDraft(draft: string): void
 }
 
 /**

@@ -61,12 +61,15 @@ export interface SessionSummary {
   /** Finished while not selected and not yet opened — the sidebar's green "done" reminder. Absent = false. */
   completed?: boolean
   /**
-   * Empty-log bit (host summary derivation mirror). New Session reuses a blank
-   * one targeting the same workspace. Filtering stays with the consumer: the
-   * store carries every row, while the Workspace browser shows only the
-   * selected blank entry.
+   * Empty-log bit: provisional New Session rows. Lists hide non-current blanks
+   * unless {@link hasDraft} keeps them reachable.
    */
   blank: boolean
+  /**
+   * Client-local: blank New Session still holds an unsent composer draft
+   * (sidebar keeps the row visible after navigation away).
+   */
+  hasDraft?: boolean
   updatedAt: number
   /** Current host-computed projection values retained by the object layer. */
   projectionValues?: Readonly<Partial<SessionProjectionMap>>
@@ -178,6 +181,42 @@ function displayTitleOf(title: string | undefined, cwd: string | undefined, id: 
     const base = workspaceTitleOf(cwd)
     if (base !== '') return base
   }
+  return id
+}
+
+/**
+ * Catalog spawn labels are often a task stub (`subagent`, a list index like
+ * `1`). Prefer the durable session title when the label is too weak to read
+ * as a breadcrumb.
+ */
+function isWeakSubagentLabel(label: string): boolean {
+  const trimmed = label.trim()
+  if (trimmed.length === 0) return true
+  if (trimmed === 'subagent' || trimmed === 'subagent-task') return true
+  // Pure numeric stubs from numbered task lists ("1", "02").
+  if (/^\d{1,3}$/u.test(trimmed)) return true
+  return false
+}
+
+/**
+ * Resolve the breadcrumb title for an addressed subagent child.
+ * @param label - optional catalog / spawn label.
+ * @param sessionTitle - durable title from the session list, when known.
+ * @param id - child session id fallback.
+ */
+export function subagentDisplayTitle(
+  label: string | undefined,
+  sessionTitle: string | undefined,
+  id: SessionId,
+): string {
+  const fromLabel = label?.trim()
+  const fromSession = sessionTitle?.trim()
+  if (fromSession !== undefined && fromSession !== ''
+    && (fromLabel === undefined || isWeakSubagentLabel(fromLabel))) {
+    return fromSession
+  }
+  if (fromLabel !== undefined && fromLabel !== '') return fromLabel
+  if (fromSession !== undefined && fromSession !== '') return fromSession
   return id
 }
 
@@ -721,6 +760,7 @@ export class SessionRuntime implements ISessions {
         ...(entry.projectionValues === undefined
           ? {}
           : { projectionValues: entry.projectionValues }),
+        ...(entry.hasDraft === undefined ? {} : { hasDraft: entry.hasDraft }),
         ...(entry.title !== undefined ? { title: entry.title } : {}),
         ...(entry.cwd !== undefined ? { cwd: entry.cwd } : {}),
         ...(entry.parentSessionId !== undefined ? { parentId: entry.parentSessionId } : {}),
@@ -737,8 +777,12 @@ export class SessionRuntime implements ISessions {
         const child = subagentsByParent[address.parentSessionId]?.entries
           .find(entry => entry.kind === 'child' && entry.id === childId)
         if (child?.kind !== 'child') break
-        const displayTitle = child.label ?? childId
         const summary = byId[childId]
+        const displayTitle = subagentDisplayTitle(
+          child.label,
+          summary?.title,
+          childId,
+        )
         if (summary === undefined) {
           byId[childId] = {
             id: childId,

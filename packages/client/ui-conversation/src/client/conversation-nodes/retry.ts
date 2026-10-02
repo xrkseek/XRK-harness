@@ -83,6 +83,10 @@ export const retryDefinition: ConversationNodeDefinition<RetryState> = {
         : attempt)
     const current = attempts.at(-1)
     if (current === undefined) return null
+    // User Stop during backoff: the attempt never left `scheduled`, so a
+    // "retry cancelled" tombstone is noise next to the turn-end abort. Drop
+    // the row; turn-error / interrupted chrome already cover the outcome.
+    if (current.retryState === 'cancelled') return null
     const data: RetryChatData = { attempts, current }
     return chatNode(context, 'model-retry', attempts[0]?.seq ?? current.seq, data)
   },

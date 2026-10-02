@@ -665,9 +665,8 @@ describe('ChatView', () => {
     act(() => {
       h.set({ nodes: [user(1, 'try'), { ...retry(6), retryState: 'cancelled' }], running: true })
     })
-    const cancelledDisclosure = view.container.querySelector('details') as HTMLDetailsElement
-    expect(cancelledDisclosure.dataset.active).toBeUndefined()
-    expect(within(cancelledDisclosure).getByRole('status').textContent).toContain('重试已取消')
+    // User Stop during backoff: cancelled never-started rows render nothing.
+    expect(view.container.querySelector('details')).toBeNull()
   })
 
   it('renders terminal turn failures inline with their durable message and optional code', () => {

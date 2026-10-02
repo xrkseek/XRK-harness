@@ -502,9 +502,17 @@ function CatalogDropdown({
   const currentEntry = currentSessionId === undefined
     ? undefined
     : catalog?.entries.find(entry => entry.kind === 'child' && entry.id === currentSessionId)
-  const switcherDisplayTitle = currentEntry?.kind === 'child'
-    ? currentEntry.label ?? currentEntry.id
-    : displayTitle
+  // Prefer the session breadcrumb title when the catalog label is a stub
+  // (`1`, `subagent`); otherwise the switcher repeats a useless spawn tag.
+  const catalogLabel = currentEntry?.kind === 'child' ? currentEntry.label?.trim() : undefined
+  const weakCatalogLabel = catalogLabel === undefined
+    || catalogLabel === ''
+    || catalogLabel === 'subagent'
+    || catalogLabel === 'subagent-task'
+    || /^\d{1,3}$/u.test(catalogLabel)
+  const switcherDisplayTitle = !weakCatalogLabel && catalogLabel !== undefined
+    ? catalogLabel
+    : (displayTitle ?? currentSessionId ?? rootSessionId)
   const healthy = catalog?.entries.filter(entry => entry.kind === 'child') ?? []
   const descendants = useMemo(
     () => indexSubagentDescendants(summaries).get(rootSessionId) ?? NO_DESCENDANTS,
@@ -827,7 +835,7 @@ export function SubagentHeaderLineage({
   if (parentId === undefined) {
     return (
       <CatalogDropdown
-        key={lineageSessionId}
+        key={`${lineageSessionId}:count`}
         rootSessionId={lineageSessionId}
         variant="count"
         separator
@@ -838,7 +846,7 @@ export function SubagentHeaderLineage({
   return (
     <>
       <CatalogDropdown
-        key={lineageSessionId}
+        key={`${lineageSessionId}:switcher`}
         rootSessionId={parentId}
         currentSessionId={lineageSessionId}
         variant="switcher"
@@ -848,7 +856,7 @@ export function SubagentHeaderLineage({
       />
       {openTitle === undefined && (
         <CatalogDropdown
-          key={lineageSessionId}
+          key={`${lineageSessionId}:count`}
           rootSessionId={lineageSessionId}
           variant="count"
           {...shared}

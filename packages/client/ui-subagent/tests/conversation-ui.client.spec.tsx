@@ -693,7 +693,30 @@ describe('SubagentHeaderLineage', () => {
     }
     render(<SubagentHeaderLineage {...input} />)
 
-    expect(screen.getByRole('button', { name: `切换子代理：${CHILD}` })).toBeTruthy()
+    // Weak/missing catalog label must not clobber the session breadcrumb title.
+    expect(screen.getByRole('button', { name: '切换子代理：summary title' })).toBeTruthy()
+  })
+
+  it('prefers the session title over a numeric catalog stub', () => {
+    const input = {
+      ...props(catalog({ entries: [{
+        kind: 'child', id: CHILD, mode: 'continuable', label: '1',
+        activity: 'running', hasChildren: false,
+      }] }), {}, {
+        [CHILD]: {
+          ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' as const,
+          title: '正在扫描项目文件', displayTitle: '正在扫描项目文件',
+        },
+      }),
+      sessionId: CHILD,
+      lineageSessionId: CHILD,
+      displayTitle: '正在扫描项目文件',
+    }
+    render(<SubagentHeaderLineage {...input} />)
+
+    expect(screen.getByRole('button', { name: '切换子代理：正在扫描项目文件' })).toBeTruthy()
+    expect(within(screen.getByRole('button', { name: '切换子代理：正在扫描项目文件' }))
+      .getByText('正在扫描项目文件')).toBeTruthy()
   })
 
   it('keeps an ancestor switcher muted and omits its descendant count', () => {

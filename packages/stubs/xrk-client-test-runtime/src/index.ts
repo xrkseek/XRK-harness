@@ -865,6 +865,7 @@ export class TestSessions implements ISessions {
         requestId: `req-${fixture.id}-${Math.random().toString(36).slice(2, 8)}`,
         abandon: vi.fn(),
       })),
+      setDraft: overrides.setDraft ?? vi.fn(),
       projections: {
         faceOf: (key: string) => this.cellOf(record, key),
       },

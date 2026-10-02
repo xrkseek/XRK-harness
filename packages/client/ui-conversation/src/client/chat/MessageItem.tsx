@@ -134,11 +134,9 @@ function ModelRetryItem({ node, active, t }: {
 
   const label = active
     ? t('message.retry.active')
-    : node.retryState === 'cancelled'
-      ? t('message.retry.cancelled')
-      : node.retryState === 'started'
-        ? t('message.retry.started')
-        : t('message.retry.scheduled')
+    : node.retryState === 'started'
+      ? t('message.retry.started')
+      : t('message.retry.scheduled')
   const seconds = active ? remainingSeconds : scheduledSeconds
 
   return (
@@ -505,6 +503,8 @@ export const CompactionNodeView = memo(function CompactionNodeView({ node, t }: 
 /** Correlated retry-chain keyed Chat renderer. */
 export const RetryNodeView = memo(function RetryNodeView({ node, t }: ChatNodeViewProps<'model-retry'>) {
   const data = node.data
+  // Match buildViewNode: a never-started cancel is not a durable status row.
+  if (data.current.retryState === 'cancelled') return null
   return <ModelRetryItem node={data.current} active={data.current.retryState === 'scheduled'} t={t} />
 })
 

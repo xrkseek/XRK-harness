@@ -330,7 +330,14 @@ export function apply(ctx: Context): void {
       return {
         views,
         releaseSessionImages: (id) => { conversation.releaseSessionImages(id) },
-        bindDraftMirror: write => inputHub.shell(sessionId).bindMirror(write),
+        bindDraftMirror: write => inputHub.shell(sessionId).bindMirror((text) => {
+          // Mirror the composer draft to the session layer too, so a blank
+          // New Session holding an unsent draft stays visible (and clickable)
+          // on the sidebar after the user navigates away. The session's
+          // onDraftChange flips a list-row bit the Workspace tree reads.
+          sessions.binding(sessionId)?.session.setDraft(text)
+          write(text)
+        }),
       }
     },
   }, ConversationSession)

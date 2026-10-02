@@ -138,7 +138,10 @@ function sessionVisible(
   mode: ArchiveViewMode = 'hidden',
 ): boolean {
   if (session.origin === 'subagent') return false
-  if (session.blank && session.id !== current) return false
+  // Blank sessions are the workspace's provisional New Session row: only the
+  // current one shows — unless it still holds an unsent draft, in which case
+  // the row stays so the user can navigate back and finish it.
+  if (session.blank && session.id !== current && !session.hasDraft) return false
   const isArchived = archived.has(session.id)
   if (mode === 'hidden') return !isArchived
   if (mode === 'archived-only') return isArchived
