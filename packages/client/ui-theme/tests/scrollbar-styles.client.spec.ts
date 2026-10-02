@@ -11,7 +11,6 @@
  */
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 /** One flattened CSS rule: its comma-separated selector parts and its declarations in source order. */
@@ -20,9 +19,10 @@ interface CssRule {
   declarations: [property: string, value: string][]
 }
 
-const STYLES = new URL('../src/styles/', import.meta.url)
-const PACKAGES_DIR = fileURLToPath(new URL('../../../', import.meta.url))
-const read = (name: string): string => readFileSync(fileURLToPath(new URL(name, STYLES)), 'utf8')
+// import.meta.dirname: under this lane `import.meta.url` is not always file:.
+const STYLES = join(import.meta.dirname, '../src/styles')
+const PACKAGES_DIR = join(import.meta.dirname, '../../..')
+const read = (name: string): string => readFileSync(join(STYLES, name), 'utf8')
 
 const platformCss = read('design-platform.css')
 const scrollbarCss = read('scrollbar.css')
@@ -258,7 +258,7 @@ for (const file of packageStylesheets()) {
     let rebindsElevation = false
     const ruleSurfaces: string[] = []
     for (const [property, value] of rule.declarations) {
-      if (property.startsWith(INDIRECTION_PREFIX) && file !== fileURLToPath(new URL('scrollbar.css', STYLES))) {
+      if (property.startsWith(INDIRECTION_PREFIX) && file !== join(STYLES, 'scrollbar.css')) {
         rebinds = true
         if (value !== HIDDEN_THUMB) rebindsElevation = true
       }
@@ -391,7 +391,7 @@ describe('scrollbar.css width variable', () => {
     expect(defined).toContain(WIDTH_VARIABLE)
     const readers: string[] = []
     for (const file of packageStylesheets()) {
-      if (file === fileURLToPath(new URL('scrollbar.css', STYLES))) continue
+      if (file === join(STYLES, 'scrollbar.css')) continue
       for (const rule of parseRules(readFileSync(file, 'utf8'))) {
         for (const [property, value] of rule.declarations) {
           for (const name of varReferences(value)) {

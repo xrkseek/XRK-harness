@@ -338,10 +338,10 @@ describe("Face workspace U2", () => {
     );
     expect(reordered.result.ok).toBe(true);
     if (reordered.result.ok) {
-      const items = (
-        reordered.result.value as { items: { workspaceId: string }[] }
-      ).items;
-      expect(items[0]?.workspaceId).toBe(extraId);
+      const workspaceIds = (
+        reordered.result.value as { workspaceIds: string[] }
+      ).workspaceIds;
+      expect(workspaceIds[0]).toBe(extraId);
     }
 
     const deleted = await dispatchFaceMethod(runtime, "workspace.delete", "d", {
@@ -607,6 +607,67 @@ describe("Face workspace U2", () => {
     };
     expect(v.archivedSessionIds).toEqual([]);
     expect(v.pinnedSessionIds).toEqual([sessionId]);
+  });
+
+  it("persists pinnedWorkspaceIds across Face rebuild", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-wspin-"));
+    const productDir = path.join(root, ".xrk");
+    const store = createMemorySessionStore();
+    const first = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(first, "workspace.create", "w1", {
+      path: root,
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    // Default workspace already owns root; create returns it or a sibling.
+    const listed0 = await dispatchFaceMethod(first, "workspace.list", "w2", {});
+    expect(listed0.result.ok).toBe(true);
+    if (!listed0.result.ok) return;
+    const items0 = (listed0.result.value as { items: { workspaceId: string }[] }).items;
+    const target =
+      items0.find((w) => w.workspaceId !== "ws_default")?.workspaceId ??
+      items0[0]?.workspaceId;
+    expect(target).toBeTruthy();
+    if (!target) return;
+
+    const pinned = await dispatchFaceMethod(first, "workspace.pinWorkspace", "w3", {
+      workspaceId: target,
+    });
+    expect(pinned.result.ok).toBe(true);
+    if (!pinned.result.ok) return;
+    expect(
+      (pinned.result.value as { pinnedWorkspaceIds: string[] }).pinnedWorkspaceIds,
+    ).toEqual([target]);
+    expect(
+      (pinned.result.value as { workspaceIds: string[] }).workspaceIds[0],
+    ).toBe(target);
+
+    const second = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const listed = await dispatchFaceMethod(second, "workspace.list", "w4", {});
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) return;
+    const v = listed.result.value as {
+      pinnedWorkspaceIds: string[];
+      items: { workspaceId: string }[];
+    };
+    expect(v.pinnedWorkspaceIds).toEqual([target]);
+    expect(v.items[0]?.workspaceId).toBe(target);
   });
 
   it("session.delete requires archive then wipes the durable log", async () => {

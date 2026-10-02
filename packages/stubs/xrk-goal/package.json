@@ -55,6 +55,7 @@
     "@xrkseek/xrk-brand": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/xrk-llm": "workspace:^",
+    "@xrkseek/xrk-scope": "workspace:^",
     "@xrkseek/xrk-session": "workspace:^",
     "@xrkseek/xrk-typert-protocol": "workspace:^",
     "@xrkseek/cordis": "workspace:^"
@@ -69,6 +70,7 @@
     "@xrkseek/xrk-brand": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/xrk-llm": "workspace:^",
+    "@xrkseek/xrk-scope": "workspace:^",
     "@xrkseek/xrk-session": "workspace:^",
     "@xrkseek/xrk-typert-protocol": "workspace:^",
     "@xrkseek/cordis": "workspace:^"

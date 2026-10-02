@@ -367,7 +367,7 @@ describe('track', () => {
     expect(controller.menu.getSnapshot().groups.map(g => g.source)).toEqual(['subagent'])
   })
 
-  it('all sources settling empty auto-closes; a later settle of a gone generation is silent', async () => {
+  it('all sources settling empty keep the menu open for the empty UI', async () => {
     const cmd = deferredSource('/', 'command')
     const skill = deferredSource('/', 'skill')
     const { controller } = controllerBench([cmd.source, skill.source])
@@ -377,7 +377,8 @@ describe('track', () => {
     expect(controller.menu.getSnapshot().open).toBe(true)
     skill.pending[0]!.resolve([])
     await tick()
-    expect(controller.menu.getSnapshot().open).toBe(false)
+    expect(controller.menu.getSnapshot().open).toBe(true)
+    expect(controller.menu.getSnapshot().highlight).toBeNull()
   })
 
   it('a rejecting source logs and silently drops its group', async () => {
@@ -449,6 +450,31 @@ describe('programmatic source launcher', () => {
     await tick()
     expect(controller.launcher.getSnapshot()).toBeNull()
     expect(controller.menu.getSnapshot().groups.map(group => group.source)).toEqual(['command', 'skill'])
+  })
+
+  it('a launcher-opened menu survives the track its own focus produces', async () => {
+    const command = readySource('/', 'command', [{ name: 'goal' }])
+    const { controller } = controllerBench([command.source])
+    controller.toggleSource('command', {
+      trigger: '/',
+      query: '',
+      quoted: false,
+      position: 'leading',
+      span: { start: 0, end: 0, draftRev: 0 },
+    })
+    expect(controller.menu.getSnapshot().open).toBe(true)
+
+    // Driving the menu with the keyboard focuses the editor, and Lexical's
+    // deferred selection restore re-tracks an empty draft: the menu stays.
+    controller.track('', 0, { tier: 'plain' }, 0)
+    await tick()
+    expect(controller.menu.getSnapshot().open).toBe(true)
+
+    // Typing takes the ordinary path.
+    controller.track('/g', 2, { tier: 'plain' }, 1)
+    await tick()
+    expect(controller.menu.getSnapshot().open).toBe(true)
+    expect(controller.launcher.getSnapshot()).toBeNull()
   })
 })
 

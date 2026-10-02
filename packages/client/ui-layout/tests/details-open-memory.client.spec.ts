@@ -2,7 +2,7 @@
 /**
  * Per-Session Overview chrome memory: open bit + width, localStorage reload.
  */
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DETAILS_DEFAULT } from '@xrkseek/client-ui-layout/src/client/columns.ts'
 import {
   readDetailsChrome,
@@ -14,17 +14,23 @@ import {
 const KEY = 'xrk.layout.overview.v1'
 
 beforeEach(() => {
+  vi.useFakeTimers()
   localStorage.clear()
   resetDetailsOpenMemoryForTests()
 })
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('details-open-memory', () => {
-  it('remembers open + width per Session and rehydrates after reset', () => {
+  it('remembers open + width per Session and rehydrates after reset', async () => {
     rememberDetailsOpen('a', true, 480)
     rememberDetailsOpen('b', false, 400)
     expect(readDetailsChrome('a')).toEqual({ open: true, width: 480 })
     expect(readDetailsChrome('b')).toEqual({ open: false, width: 400 })
 
+    await vi.advanceTimersByTimeAsync(600)
     const raw = localStorage.getItem(KEY)
     expect(raw).not.toBeNull()
 

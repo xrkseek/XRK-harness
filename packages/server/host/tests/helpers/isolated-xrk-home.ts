@@ -7,6 +7,10 @@ import path from "node:path";
  * developer's `~/.xrk/host-settings.json` MCP servers (can hang tests).
  * Also disable workspace checkpoints: drain snapshots race git against the
  * monorepo workspace and can exceed vitest's default 5s timeout.
+ *
+ * `XRK_SURFACE` is cleared for the same reason: the Desktop surface defers the
+ * managed process-plugin reconcile until after HTTP listen, so a developer's
+ * Desktop shell would otherwise hand spawn an empty `loadedPluginIds`.
  */
 export async function withIsolatedXrkHome<T>(
   run: (xrkHome: string) => Promise<T>,
@@ -16,8 +20,10 @@ export async function withIsolatedXrkHome<T>(
   const prevMcp = process.env.XRK_MCP_SERVERS;
   const prevAllow = process.env.XRK_MCP_ALLOW;
   const prevCheckpoints = process.env.XRK_CHECKPOINTS;
+  const prevSurface = process.env.XRK_SURFACE;
   process.env.XRK_HOME = xrkHome;
   process.env.XRK_CHECKPOINTS = "0";
+  delete process.env.XRK_SURFACE;
   delete process.env.XRK_MCP_SERVERS;
   delete process.env.XRK_MCP_ALLOW;
   try {
@@ -31,6 +37,8 @@ export async function withIsolatedXrkHome<T>(
     else process.env.XRK_MCP_ALLOW = prevAllow;
     if (prevCheckpoints === undefined) delete process.env.XRK_CHECKPOINTS;
     else process.env.XRK_CHECKPOINTS = prevCheckpoints;
+    if (prevSurface === undefined) delete process.env.XRK_SURFACE;
+    else process.env.XRK_SURFACE = prevSurface;
   }
 }
 

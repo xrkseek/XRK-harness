@@ -4,6 +4,7 @@ import {
   buildSessionStatusSnapshot,
   formatSessionStatusText,
 } from "../src/session-status.js";
+import { formatPermissionStatusLabel } from "../src/permissions.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import {
   admittingAgentResolve,
@@ -167,5 +168,180 @@ describe("session status snapshot", () => {
     expect(busy.delivery.compactBlockedByTurn).toBe(true);
     expect(busy.delivery.queueAcceptedWhileBusy).toBe(true);
     expect(formatSessionStatusText(busy)).toContain("compact↔turn exclusive");
+  });
+
+  it("keeps a two-level delegation live while only the grandchild drains", async () => {
+    const store = createMemorySessionStore();
+    const draining = new Set<string>();
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+      drain: {
+        wake() {},
+        async cancel() {},
+        isActive: (sessionId: string) => draining.has(sessionId),
+      },
+    });
+    const create = async (requestId: string): Promise<string> => {
+      const created = await dispatchFaceMethod(
+        runtime,
+        "session.create",
+        requestId,
+        {},
+      );
+      if (!created.result.ok) throw new Error("create");
+      return (created.result.value as { sessionId: string }).sessionId;
+    };
+    const root = await create("c3");
+    const layer1 = await create("c4");
+    const layer2 = await create("c5");
+    runtime.subagents.attach({
+      parentSessionId: root,
+      childSessionId: layer1,
+      mode: "continuable",
+      label: "layer 1",
+    });
+    runtime.subagents.attach({
+      parentSessionId: layer1,
+      childSessionId: layer2,
+      mode: "continuable",
+      label: "layer 2",
+    });
+    store.append(layer2, { type: "turn/start", ts: 1, turnId: "t2" });
+    // layer1 already parked after handing the task down; only layer2 runs.
+    draining.add(layer2);
+
+    const snap = buildSessionStatusSnapshot(runtime, root);
+    const byId = new Map(snap.subagents.live.map((s) => [s.id, s]));
+    expect([...byId.keys()].sort()).toEqual([layer1, layer2].sort());
+    expect(byId.get(layer2)?.activity).toBe("running");
+    expect(byId.get(layer1)?.activity).toBe("running");
+    expect(snap.subagents.graph.nodes.find((n) => n.id === layer2)?.activity).toBe(
+      "running",
+    );
+
+    draining.clear();
+    const settled = buildSessionStatusSnapshot(runtime, root);
+    expect(settled.subagents.live.every((s) => s.activity === "inactive")).toBe(true);
+  });
+
+  it("keeps graph-only delegation nodes live when the registry lost the link", async () => {
+    const store = createMemorySessionStore();
+    const draining = new Set<string>();
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+      drain: {
+        wake() {},
+        async cancel() {},
+        isActive: (sessionId: string) => draining.has(sessionId),
+      },
+    });
+    const create = async (requestId: string): Promise<string> => {
+      const created = await dispatchFaceMethod(
+        runtime,
+        "session.create",
+        requestId,
+        {},
+      );
+      if (!created.result.ok) throw new Error("create");
+      return (created.result.value as { sessionId: string }).sessionId;
+    };
+    const root = await create("c6");
+    const child = await create("c7");
+    // Durable team graph survived, the in-memory registry link did not.
+    runtime.agentTeams.recordDelegation({
+      parentSessionId: root,
+      childSessionId: child,
+      mode: "one-shot",
+      label: "one-shot task",
+    });
+    store.append(child, { type: "turn/start", ts: 1, turnId: "t3" });
+    draining.add(child);
+
+    const snap = buildSessionStatusSnapshot(runtime, root);
+    expect(snap.subagents.graph.nodes.find((n) => n.id === child)?.activity).toBe(
+      "running",
+    );
+    expect(snap.subagents.live.map((s) => s.id)).toContain(child);
+    expect(snap.subagents.live[0]?.mode).toBe("delegated");
+    expect(snap.subagents.live[0]?.label).toBe("one-shot task");
+
+    // The session's own node reads its turn — a running turn must not render
+    // as the "no activity → done" fallback clients apply to the root node.
+    draining.clear();
+    draining.add(root);
+    const own = buildSessionStatusSnapshot(runtime, root);
+    expect(own.subagents.graph.nodes.find((n) => n.id === root)?.activity).toBe(
+      "running",
+    );
+
+    draining.clear();
+    const idle = buildSessionStatusSnapshot(runtime, root);
+    for (const id of [root, child]) {
+      expect(idle.subagents.graph.nodes.find((n) => n.id === id)?.activity).toBe(
+        "inactive",
+      );
+    }
+  });
+
+  it("reports the whole tree when the board is opened on a child", async () => {
+    const store = createMemorySessionStore();
+    const draining = new Set<string>();
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+      drain: {
+        wake() {},
+        async cancel() {},
+        isActive: (sessionId: string) => draining.has(sessionId),
+      },
+    });
+    const create = async (requestId: string): Promise<string> => {
+      const created = await dispatchFaceMethod(
+        runtime,
+        "session.create",
+        requestId,
+        {},
+      );
+      if (!created.result.ok) throw new Error("create");
+      return (created.result.value as { sessionId: string }).sessionId;
+    };
+    const root = await create("c8");
+    const first = await create("c9");
+    const second = await create("c10");
+    const third = await create("c11");
+    for (const [index, child] of [first, second, third].entries()) {
+      runtime.agentTeams.recordDelegation({
+        parentSessionId: root,
+        childSessionId: child,
+        mode: "one-shot",
+        label: `one-shot ${index}`,
+      });
+    }
+    // One-shot preview: the board is showing the tree from `first`, which has
+    // no delegated children of its own.
+    draining.add(second);
+
+    const snap = buildSessionStatusSnapshot(runtime, first);
+    // `live` stays this session's own descendants — none here.
+    expect(snap.subagents.live).toEqual([]);
+    const activityOf = (id: string): string | undefined =>
+      snap.subagents.graph.nodes.find((n) => n.id === id)?.activity;
+    expect(activityOf(second)).toBe("running");
+    // The parent reads running through the sibling that is still draining.
+    expect(activityOf(root)).toBe("running");
+    expect(activityOf(first)).toBe("inactive");
+    expect(activityOf(third)).toBe("inactive");
+  });
+
+  it("formats Auto permission as Auto review / Approve for me", () => {
+    // Codex status chrome: reviewer label "Approve for me"; DSH product "Auto review".
+    expect(formatPermissionStatusLabel("auto")).toBe(
+      "Auto review (Approve for me) · no sandbox · per-call review",
+    );
+    expect(formatPermissionStatusLabel("workspace-write")).toBe(
+      "workspace-write",
+    );
   });
 });

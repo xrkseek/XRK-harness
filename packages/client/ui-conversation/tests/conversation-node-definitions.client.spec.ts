@@ -521,11 +521,51 @@ describe('built-in conversation node Definitions', () => {
       }, { surfaceOp: 'append' }),
     ])
 
-    expect(node(snapshot(value), 'context')?.data).toMatchObject({
+    const contextNode = node(snapshot(value), 'context')
+    expect(contextNode?.data).toMatchObject({
       kind: 'context',
       provenance: { role: 'inject', label: 'demo-skill' },
       form: 'instructions',
     })
+    expect(contextNode?.visibility).toBe('hidden')
+  })
+
+  it('hides ordinary context inject chrome; keeps notice and catalog rows', () => {
+    const value = assembler([
+      at(1, 'user/message', {
+        ...textMessage('frag', '<external_learning_loop>nudge</external_learning_loop>'),
+        source: {
+          kind: 'context-fragment',
+          form: 'fragment',
+          fragmentId: 'additional_context.learning_loop',
+          fragmentKind: 'additional_context',
+        },
+      }, { surfaceOp: 'append' }),
+      at(2, 'user/message', {
+        ...textMessage('notice-row', 'tools updated'),
+        source: { kind: 'plugin', plugin: 'tool-jobs', form: 'notice', summary: 'added 1 tool' },
+      }, { surfaceOp: 'append' }),
+      at(3, 'user/message', {
+        ...textMessage('catalog-row', 'skills'),
+        source: {
+          kind: 'skill-catalog',
+          form: 'catalog',
+          entries: [{ name: 'demo' }],
+        },
+      }, { surfaceOp: 'append' }),
+    ])
+    const current = snapshot(value)
+    const byForm = new Map(
+      [...current.nodes.values()]
+        .filter(candidate => candidate.kind === 'context')
+        .map(candidate => [(candidate.data as { form?: string | null }).form ?? null, candidate]),
+    )
+    expect(byForm.get('fragment')?.visibility).toBe('hidden')
+    expect(current.order).not.toContain(byForm.get('fragment')?.key)
+    expect(byForm.get('notice')?.visibility).toBe('visible')
+    expect(current.order).toContain(byForm.get('notice')?.key)
+    expect(byForm.get('catalog')?.visibility).toBe('visible')
+    expect(current.order).toContain(byForm.get('catalog')?.key)
   })
 
   it('associates each direct message with its immediately following session recall', () => {

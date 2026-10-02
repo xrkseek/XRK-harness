@@ -50,7 +50,7 @@ describe("continueTurn + admit", () => {
     expect(agent.pendingAdmits()).toHaveLength(0);
     expect(deriveMessages(store.get(session.id).events)).toEqual([
       { role: "user", content: "queued hello" },
-      { role: "assistant", content: "ack", toolCalls: [] },
+      { role: "assistant", content: "ack" },
     ]);
   });
 

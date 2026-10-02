@@ -50,6 +50,16 @@ describe('LocaleRuntime', () => {
     expect(t('missing.key')).toBe('missing.key')
   })
 
+  it('resolveText picks active locale then falls back to en', () => {
+    const { svc } = make()
+    expect(svc.getLocale().active).toBe('zh')
+    expect(svc.resolveText('literal')).toBe('literal')
+    expect(svc.resolveText({ en: 'Allow it?', zh: '允许吗？' })).toBe('允许吗？')
+    expect(svc.resolveText({ en: 'English only' })).toBe('English only')
+    svc.setLocale('en')
+    expect(svc.resolveText({ en: 'Allow it?', zh: '允许吗？' })).toBe('Allow it?')
+  })
+
   it('falls through to the common vocabulary after the namespace misses (production keys)', () => {
     const { svc } = make()
     // The shipped common pair is registered by apply; the bench registers it

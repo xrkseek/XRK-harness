@@ -3,7 +3,7 @@
  * Exercises selection persistence through the real SlotRegistry store axis;
  * component stubs cannot prove per-session identity or disposal.
  */
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@xrkseek/client-runtime/client'
 import { SlotTestRuntime } from '@xrkseek/client-test-runtime'
 import { createChatStore } from '../src/client/stores.ts'
@@ -87,12 +87,14 @@ describe('selection survives on the store seat', () => {
   })
 
   it('session death buries the instance and its persisted draft', async () => {
+    vi.useFakeTimers()
     const b = await bench()
     await b.runtime.sessions.add({ id: 's1' })
 
     const doomed = storeFor(b, 'conversation.session', sid('s1'))
     doomed.actions.setDraft('to be buried')
     doomed.actions.select({ turnSeq: 1 })
+    await vi.advanceTimersByTimeAsync(200)
     expect(localStorage.getItem('xrk.conversation.chat.s1')).not.toBeNull()
 
     // TestSessions.remove drives the same public slot lifecycle contract the
@@ -106,5 +108,6 @@ describe('selection survives on the store seat', () => {
     expect(reborn).not.toBe(doomed)
     expect(reborn.store.getSnapshot()).toEqual({ selection: null, draft: '', view: null, inspect: null })
     await b.runtime.dispose()
+    vi.useRealTimers()
   })
 })

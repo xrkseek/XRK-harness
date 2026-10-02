@@ -47,6 +47,7 @@ function props(
     fileMentions: vi.fn(),
     // No Host connection in this account; home-path abbreviation is not under test.
     useHostDescription: selector => selector(undefined),
+    useToolsDefaultExpanded: selector => selector(false),
     t,
   } as unknown as ToolTreeProps
 }
@@ -80,5 +81,30 @@ describe('ToolCallTree', () => {
     expect(view.container.querySelector('[data-chat-call-id="parent:code:1"]')?.hasAttribute('data-selected')).toBe(false)
     expect(view.container.querySelector('[data-chat-call-id="parent:code:1:code:1"]')?.getAttribute('data-selected')).toBe('true')
     expect(nests).toHaveLength(2)
+  })
+
+  it('forces GenericToolCard for AUTO_REVIEW_DENIED and skips keyed toolview', () => {
+    const keyed = vi.fn(() => <div data-testid="keyed-bash">keyed bash</div>)
+    const block: ToolResultNode = {
+      ...root('deny1', { name: 'bash', argsRaw: '{"command":"rm -rf /"}' }),
+      isError: true,
+      content: [],
+      error: {
+        name: 'AutoReviewDeniedError',
+        code: 'AUTO_REVIEW_DENIED',
+        reason: 'destructive-pattern',
+      },
+    }
+    const treeProps = props(block)
+    const renderSlot = vi.fn((
+      _key: string,
+      _owner: object,
+      options?: { fallback?: React.ReactNode },
+    ) => options?.fallback ?? keyed()) as unknown as ToolTreeProps['renderSlot']
+    const view = render(<ToolCallTree {...treeProps} renderSlot={renderSlot} />)
+    expect(view.queryByTestId('keyed-bash')).toBeNull()
+    expect(renderSlot).not.toHaveBeenCalled()
+    expect(view.container.querySelector('[data-variant="bash"]')).not.toBeNull()
+    expect(view.getByText('自动审查已拒绝')).toBeTruthy()
   })
 })

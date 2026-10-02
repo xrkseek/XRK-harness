@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   canonicalizeCombo,
+  clearShortcutOverridesCache,
   comboFromEvent,
   conflictsFor,
   effectiveCombo,
@@ -27,6 +28,10 @@ function memoryStorage(seed: Record<string, string> = {}): Storage {
     setItem(key: string, value: string) { map.set(key, String(value)) },
   }
 }
+
+beforeEach(() => {
+  clearShortcutOverridesCache()
+})
 
 describe('shell-shortcuts', () => {
   it('canonicalizes mod/ctrl aliases and formats for display', () => {

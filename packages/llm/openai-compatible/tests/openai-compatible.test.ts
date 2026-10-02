@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { ContextOverflowError, UnsupportedContentError } from "@xrkseek/llm";
+import {
+  ContextOverflowError,
+  UnsupportedContentError,
+  failureFromUnknown,
+  isRetryableFailure,
+} from "@xrkseek/llm";
 import {
   buildOpenAiCompatibleEndpoint,
   createOpenAiCompatibleAdapter,
@@ -324,7 +329,42 @@ describe("openai-compatible adapter", () => {
     });
   });
 
-  it("rejects truncated tool JSON when finish is not max-tokens", async () => {
+  it("treats stop+truncated tool JSON as max-tokens keep/drop", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      enableStream: false,
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: "cut",
+                  tool_calls: [
+                    {
+                      id: "c1",
+                      type: "function",
+                      function: { name: "echo", arguments: '{"text":' },
+                    },
+                  ],
+                },
+                finish_reason: "stop",
+              },
+            ],
+          }),
+          { status: 200 },
+        )) as unknown as typeof fetch,
+    });
+    const out = await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(out.finishReason).toBe("max-tokens");
+    expect(out.toolCalls).toBeUndefined();
+    expect(out.content).toBe("cut");
+  });
+
+  it("rejects truncated tool JSON when finish claims tool-calls", async () => {
     const llm = createOpenAiCompatibleAdapter({
       baseUrl: "https://api.example.com/v1",
       model: "m",
@@ -344,7 +384,7 @@ describe("openai-compatible adapter", () => {
                     },
                   ],
                 },
-                finish_reason: "stop",
+                finish_reason: "tool_calls",
               },
             ],
           }),
@@ -823,5 +863,135 @@ describe("deepseek thinking wire", () => {
       name: "UnsupportedReasoningEffortError",
       code: "UNSUPPORTED_REASONING_EFFORT",
     });
+  });
+});
+
+describe("openai-compatible stream failure boundary", () => {
+  /** SSE body that delivers one delta, then dies like a destroyed socket. */
+  function dyingStreamResponse(failure: Error): Response {
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+            ),
+          );
+          controller.error(failure);
+        },
+      }),
+      { status: 200, headers: { "content-type": "text/event-stream" } },
+    );
+  }
+
+  it("classifies a mid-body socket death as retryable TRANSPORT", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        dyingStreamResponse(new TypeError("terminated"))) as unknown as typeof fetch,
+    });
+    // Bare TypeError used to escape the adapter unclassified and reach the
+    // retry loop with no code at all.
+    const collect = async (): Promise<unknown> => {
+      const events = [];
+      for await (const ev of llm.stream!({
+        messages: [{ role: "user", content: "hi" }],
+      })) {
+        events.push(ev);
+      }
+      return events;
+    };
+    await expect(collect()).rejects.toMatchObject({
+      name: "LlmError",
+      code: "TRANSPORT",
+      message: "openai-compatible: terminated",
+    });
+    expect(isRetryableFailure(failureFromUnknown(
+      await collect().catch((err: unknown) => err),
+    ))).toBe(true);
+  });
+
+  it("keeps a user cancel aborting instead of retrying", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        dyingStreamResponse(
+          new DOMException("aborted", "AbortError"),
+        )) as unknown as typeof fetch,
+    });
+    const err = await (async () => {
+      for await (const _ of llm.stream!({
+        messages: [{ role: "user", content: "hi" }],
+      })) {
+        /* drain */
+      }
+    })().catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: "ABORTED" });
+    expect(isRetryableFailure(failureFromUnknown(err))).toBe(false);
+  });
+
+  it("leaves end-of-stream finish errors classified, not transport", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        new Response(
+          'data: {"choices":[{"delta":{"content":"cut"},"finish_reason":"content_filter"}]}\n\ndata: [DONE]\n\n',
+          { status: 200, headers: { "content-type": "text/event-stream" } },
+        )) as unknown as typeof fetch,
+    });
+    await expect(
+      (async () => {
+        for await (const _ of llm.stream!({
+          messages: [{ role: "user", content: "hi" }],
+        })) {
+          /* drain */
+        }
+      })(),
+    ).rejects.toMatchObject({
+      name: "ProviderFinishError",
+      code: "CONTENT_FILTER",
+    });
+  });
+
+  it("turns a silent body into a retryable TIMEOUT, not a hang", async () => {
+    // Registry-built adapters never pass `timeoutMs`, so before the idle
+    // watchdog a body that simply stopped talking hung the whole turn with no
+    // error for the retry loop to see.
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      idleTimeoutMs: 25,
+      fetch: (async () => {
+        // One delta, then a body that never enqueues and never errors.
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+                ),
+              );
+            },
+          }),
+          { status: 200, headers: { "content-type": "text/event-stream" } },
+        );
+      }) as unknown as typeof fetch,
+    });
+    const err = await (async () => {
+      for await (const _ of llm.stream!({
+        messages: [{ role: "user", content: "hi" }],
+      })) {
+        /* drain */
+      }
+    })().catch((e: unknown) => e);
+    expect(err).toMatchObject({
+      name: "LlmError",
+      code: "TIMEOUT",
+      message: "openai-compatible: idle timeout waiting for stream",
+    });
+    expect(isRetryableFailure(failureFromUnknown(err))).toBe(true);
   });
 });

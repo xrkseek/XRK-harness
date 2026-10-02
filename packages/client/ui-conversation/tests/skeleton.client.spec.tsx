@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 // ConversationRoot skeleton behavior: the ONE resident composer across the
 // hero (blank session) and active phases — same textarea DOM node, machine-
 // owned draft, and the hero workspace picker (switching = retargetWorkspace).
@@ -13,6 +13,7 @@ import type {
   ConversationSnapshot, SessionId, SessionListState, WorkspaceId, WorkspaceListState, WorkspaceView,
 } from '@xrkseek/client-runtime/client'
 import type { ConversationRootProps } from '../src/client/skeleton/ConversationRoot.tsx'
+import { clearWidthPreferenceCache, ConversationRoot } from '../src/client/skeleton/ConversationRoot.tsx'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { en as commonEn } from '@xrkseek/client-locale/src/locales/en.ts'
@@ -20,7 +21,6 @@ import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import { createChatStore } from '../src/client/stores.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
 import { en, zh } from '../src/client/locales.ts'
-import { ConversationRoot } from '../src/client/skeleton/ConversationRoot.tsx'
 import { ConversationSession, ConversationSessionHeader } from '../src/client/skeleton/ConversationSession.tsx'
 import { HeroShell } from '../src/client/skeleton/EmptyHero.tsx'
 import type { HeroShellProps } from '../src/client/skeleton/EmptyHero.tsx'
@@ -66,6 +66,7 @@ afterEach(() => {
   resizeObservers.length = 0
 })
 beforeEach(() => {
+  clearWidthPreferenceCache()
   // Node ≥26 vitest forks omit the Web Storage globals unless configured;
   // keep a tiny in-memory map so width-preference tests can round-trip.
   if (typeof globalThis.localStorage?.clear !== 'function') {
@@ -99,7 +100,7 @@ function workspace(id = 'w1'): WorkspaceView {
 }
 
 const workspaceState = (items: readonly WorkspaceView[]): WorkspaceListState => ({
-  items, archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+  items, archivedSessionIds: [], pinnedSessionIds: [], pinnedWorkspaceIds: [], state: 'idle', phase: 'ready', error: null,
   baselinesReady: true, recentWorkspaceId: undefined,
 })
 
@@ -601,16 +602,19 @@ describe('ConversationRoot resident composer', () => {
     expect(b.view.container.querySelector('[data-width-handle="right"]')).not.toBeNull()
     // Seed a dragged preference (the pointer-capture gesture is covered in the
     // browser; jsdom's PointerEvent path is uneven across Node/React versions).
+    // Legacy key still migrates into the versioned xrk key on first read.
     localStorage.setItem('dsh.conversation.contentWidth', '970')
+    clearWidthPreferenceCache()
     act(() => { fireResize(root) })
     expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('970px')
-    expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('970')
+    expect(localStorage.getItem('xrk.conversation.contentWidth.v1')).toBe('970')
+    expect(localStorage.getItem('dsh.conversation.contentWidth')).toBeNull()
     // Window shrinks: the displayed width re-clamps (900 − 176 = 724) but the
     // preference stays.
     Object.defineProperty(root, 'offsetWidth', { value: 900, configurable: true })
     act(() => { fireResize(root) })
     expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('724px')
-    expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('970')
+    expect(localStorage.getItem('xrk.conversation.contentWidth.v1')).toBe('970')
   })
 
   it('hero phase renders no width handles (no transcript to size)', () => {
@@ -621,6 +625,7 @@ describe('ConversationRoot resident composer', () => {
   it('mounts without crashing when storage is disabled (private mode / sandboxed iframe)', () => {
     // Durable storage can throw SecurityError under storage policies; the
     // skeleton must degrade to the adaptive clamp instead of dying at mount.
+    clearWidthPreferenceCache()
     const throwingStorage = {
       getItem: () => { throw new DOMException('Access is denied for this document.', 'SecurityError') },
       setItem: () => { throw new DOMException('Access is denied for this document.', 'SecurityError') },
@@ -640,6 +645,7 @@ describe('ConversationRoot resident composer', () => {
       expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('')
     } finally {
       vi.stubGlobal('localStorage', previous)
+      clearWidthPreferenceCache()
     }
   })
 })

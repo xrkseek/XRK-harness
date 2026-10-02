@@ -84,7 +84,7 @@ describe("createProviderRegistry", () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 
-  it("openai and deepseek-flash declare image; v4-flash stays text-only; vision-exp declares image", () => {
+  it("openai and deepseek-flash declare image; v4-pro stays text-only; vision-exp declares image", () => {
     const reg = createProviderRegistry();
     const openai = reg.createAdapter(
       reg.resolve({ provider: "openai", model: "m" }),
@@ -94,8 +94,8 @@ describe("createProviderRegistry", () => {
       reg.resolve({ provider: "deepseek" }),
       {},
     );
-    const v4Flash = reg.createAdapter(
-      reg.resolve({ provider: "deepseek", model: "deepseek-v4-flash" }),
+    const v4Pro = reg.createAdapter(
+      reg.resolve({ provider: "deepseek", model: "deepseek-v4-pro" }),
       {},
     );
     const vision = reg.createAdapter(
@@ -108,8 +108,15 @@ describe("createProviderRegistry", () => {
     expect(openai.inputModalities).toEqual(["text", "image"]);
     expect(deepseek.inputModalities).toEqual(["text", "image"]);
     expect(deepseek.systemPromptUpdate).toBe("in-history");
-    expect(v4Flash.inputModalities).toEqual(["text"]);
-    expect(v4Flash.systemPromptUpdate).toBeUndefined();
+    expect(v4Pro.inputModalities).toEqual(["text"]);
+    expect(v4Pro.systemPromptUpdate).toBeUndefined();
+    // Retired Flash aliases are served by the vision-capable Flash backend.
+    expect(
+      reg.createAdapter(
+        reg.resolve({ provider: "deepseek", model: "deepseek-v4-flash" }),
+        {},
+      ).inputModalities,
+    ).toEqual(["text", "image"]);
     expect(vision.inputModalities).toEqual(["text", "image"]);
   });
 

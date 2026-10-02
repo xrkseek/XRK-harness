@@ -74,4 +74,19 @@ describe('ComposerSubmissionPolicy', () => {
     const policy = new ComposerSubmissionPolicy(host.scope)
     expect(policy.busyEnter.getSnapshot()).toBe('steer')
   })
+
+  it('adopts toolsDefaultExpanded and writes it through the scope', () => {
+    const host = stubSettingsScope<ConversationSettings>()
+    const policy = new ComposerSubmissionPolicy(host.scope)
+    expect(policy.toolsDefaultExpanded.getSnapshot()).toBe(false)
+    host.publish({
+      status: 'ready',
+      value: { busyEnter: 'queue', toolsDefaultExpanded: true },
+      revision: 1,
+      writable: true,
+    })
+    expect(policy.toolsDefaultExpanded.getSnapshot()).toBe(true)
+    policy.setToolsDefaultExpanded(false)
+    expect(host.set).toHaveBeenCalledWith('toolsDefaultExpanded', false)
+  })
 })

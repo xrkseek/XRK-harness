@@ -53,11 +53,13 @@
                      },
     "peerDependencies":  {
                              "@xrkseek/cordis":  "workspace:^",
-                             "@xrkseek/xrk-invariants":  "workspace:^"
+                             "@xrkseek/xrk-invariants":  "workspace:^",
+                             "@xrkseek/xrk-scope":  "workspace:^"
                          },
     "devDependencies":  {
                             "@xrkseek/cordis":  "workspace:^",
                             "@xrkseek/xrk-invariants":  "workspace:^",
+                            "@xrkseek/xrk-scope":  "workspace:^",
                             "@xrkseek/xrk-user-approval":  "workspace:^",
                             "@xrkseek/xrk-user-questions":  "workspace:^"
                         },

@@ -1,30 +1,24 @@
-/** Unit tests for chat → community / workspaces open routing. */
 import { describe, expect, it, vi } from 'vitest'
 import { routeChatOpenFile } from '../src/client/open-file-route.ts'
 
 describe('routeChatOpenFile', () => {
-  it('opens via workspaces.openPath', async () => {
+  it('wakes community sidebar with an editor tab before openPath', async () => {
     const openWorkspace = vi.fn(async () => {})
-    await routeChatOpenFile('/a.ts', openWorkspace)
-    expect(openWorkspace).toHaveBeenCalledWith('/a.ts')
+    const openTab = vi.fn()
+    await routeChatOpenFile('/w/a.ts', openWorkspace, (p) => {
+      // Same seed shape as chat / Overview openFile (side workbench, not bottom).
+      openTab({ type: 'editor', path: p })
+    })
+    expect(openTab).toHaveBeenCalledTimes(1)
+    expect(openTab).toHaveBeenCalledWith({ type: 'editor', path: '/w/a.ts' })
+    expect(openWorkspace).toHaveBeenCalledTimes(1)
+    expect(openWorkspace).toHaveBeenCalledWith('/w/a.ts')
   })
 
-  it('wakes community before workspaces', async () => {
+  it('skips attachment addresses', async () => {
     const openWorkspace = vi.fn(async () => {})
     const wake = vi.fn()
-    await routeChatOpenFile('/a.ts', openWorkspace, wake)
-    expect(wake).toHaveBeenCalledWith('/a.ts')
-    expect(openWorkspace).toHaveBeenCalledWith('/a.ts')
-  })
-
-  it('skips community and workspaces for attachment ids', async () => {
-    const openWorkspace = vi.fn(async () => {})
-    const wake = vi.fn()
-    await routeChatOpenFile(
-      'sha256:614b7f3194c587139769f70801d2cb8578192c1a3dc704c244f82013c379ac16',
-      openWorkspace,
-      wake,
-    )
+    await routeChatOpenFile('attachment:abc', openWorkspace, wake)
     expect(wake).not.toHaveBeenCalled()
     expect(openWorkspace).not.toHaveBeenCalled()
   })

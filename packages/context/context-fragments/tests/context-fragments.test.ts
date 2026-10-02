@@ -3,7 +3,6 @@ import {
   appendContextFragments,
   createAdditionalContextFragment,
   createContextFragmentPipeline,
-  createGuardianReviewProvider,
   createRecapFragment,
   createStaticAdditionalContextProvider,
   formatAdditionalContextBody,
@@ -106,39 +105,5 @@ describe("context-fragments", () => {
     expect(frag.kind).toBe("recap");
     expect(frag.text).toMatch(/Catch-up context/);
     expect(frag.text).toContain("did stuff");
-  });
-
-  it("createGuardianReviewProvider emits turn-start and post-tool fragments", async () => {
-    const pipeline = createContextFragmentPipeline({ budgetChars: 4000 });
-    pipeline.register(createGuardianReviewProvider());
-    const out = await pipeline.collect("turn-start", {
-      sessionId: "s1",
-      turnId: "t1",
-    });
-    expect(out.fragments).toHaveLength(1);
-    expect(out.fragments[0]?.id).toBe("additional_context.guardian_review");
-    expect(out.fragments[0]?.phase).toBe("turn-start");
-    expect(out.fragments[0]?.text).toMatch(/Guardian review/);
-    expect(out.fragments[0]?.text).toMatch(/untrusted/);
-    const post = await pipeline.collect("post-tool", {
-      sessionId: "s1",
-      turnId: "t1",
-    });
-    expect(post.fragments).toHaveLength(1);
-    expect(post.fragments[0]?.phase).toBe("post-tool");
-    expect(post.fragments[0]?.text).toMatch(/post-tool/);
-    expect(post.fragments[0]?.text).toMatch(/untrusted/);
-  });
-
-  it("createGuardianReviewProvider can stay turn-start only", async () => {
-    const pipeline = createContextFragmentPipeline({ budgetChars: 4000 });
-    pipeline.register(
-      createGuardianReviewProvider({ phases: ["turn-start"] }),
-    );
-    const post = await pipeline.collect("post-tool", {
-      sessionId: "s1",
-      turnId: "t1",
-    });
-    expect(post.fragments).toHaveLength(0);
   });
 });

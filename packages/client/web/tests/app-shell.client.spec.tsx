@@ -25,6 +25,14 @@ async function bench() {
   ctx.provide('sessions', new TestSessions(stabilize, ctx))
   ctx.provide('workspaces', new TestWorkspaces(stabilize))
   ctx.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
+  // renderSlot('root') requires a connection face; SlotTestRuntime fills this,
+  // but this bench mounts the production installer on a bare Context.
+  ctx.provide('connection', {
+    api: {},
+    isLoopback: false,
+    connectionState: { getSnapshot: () => 'connected', subscribe: () => () => {} },
+    connectionPhase: { getSnapshot: () => undefined, subscribe: () => () => {} },
+  })
   const fiber = ctx.plugin({ inject: [...AppShell.inject], apply: AppShell.apply })
   await fiber.await()
   return { ctx, slots, fiber }

@@ -171,6 +171,7 @@ function sessionsDouble(state: {
       summary.agentPreset = agentPreset
       for (const fn of listeners) fn()
     },
+    setCreateAgentPresetProvider: (_provider?: (() => string | undefined) | undefined) => {},
     /** Push a list change the way the runtime's store does. */
     notify: () => { for (const fn of listeners) fn() },
   }

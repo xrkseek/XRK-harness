@@ -201,7 +201,10 @@ describe('scope tree', () => {
 })
 
 describe('current selection (migrated from ui-layout, arbitrated into the list snapshot)', () => {
-  afterEach(() => { vi.unstubAllGlobals() })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
 
   it('open() writes list.current; unknown ids fail loud', async () => {
     const b = bench()
@@ -223,10 +226,14 @@ describe('current selection (migrated from ui-layout, arbitrated into the list s
     })
     const b = bench()
     await feedList(b, [{ id: 's1' }])
+    vi.useFakeTimers()
     b.svc.open(sid('s1'))
+    await vi.advanceTimersByTimeAsync(200)
     expect(storage.get('xrk.sessions.current')).toContain('s1')
     b.svc.clear()
+    await vi.advanceTimersByTimeAsync(200)
     expect(b.svc.list.getSnapshot().current).toBeUndefined()
+    vi.useRealTimers()
     // Persisted wipe: a fresh service with the same storage stays on empty.
     const again = bench()
     await feedList(again, [{ id: 's1' }])
@@ -251,8 +258,11 @@ describe('current selection (migrated from ui-layout, arbitrated into the list s
     })
     const first = bench()
     await feedList(first, [{ id: 's1' }])
+    vi.useFakeTimers()
     first.svc.open(sid('s1'))
+    await vi.advanceTimersByTimeAsync(200)
     expect(storage.get('xrk.sessions.current')).toContain('s1')
+    vi.useRealTimers()
     // A fresh boot (same storage) recovers the selection once the list holds the session.
     const second = bench()
     await feedList(second, [{ id: 's1' }])

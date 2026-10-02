@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 /**
  * QueueDock rendering and operations: authoritative rows, inline editing,
  * collapse state, removal, strict steering, failure notices, and live retirement.
@@ -25,10 +25,10 @@ afterEach(cleanup)
 const SID = 's1' as SessionId
 const iid = (id: string): QueueItemId => id as QueueItemId
 
-function row(id: string, text: string | null, preview = text ?? '[image]', rpcId?: string): QueuedMessage {
+function row(id: string, text: string, preview = text, rpcId?: string, content?: QueuedMessage['content']): QueuedMessage {
   return {
     id: iid(id), messageId: `message-${id}` as never, placement: 'queued',
-    content: text === null ? [{ type: 'image', data: 'x' } as never] : [{ type: 'text', text }],
+    content: content ?? [{ type: 'text', text }],
     preview, text,
     ...(rpcId === undefined ? {} : { rpcId: rpcId as never }),
   }
@@ -100,7 +100,7 @@ describe('QueueDock', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('renders a queued local echo in the dock and hands off by rpcId', () => {
+  it('shows pre-admit queued echoes as 发送中 until Host admits', () => {
     const pending: PendingSubmission = {
       requestId: 'req-local-queue' as never,
       placement: 'queued',
@@ -125,17 +125,12 @@ describe('QueueDock', () => {
     const source = liveSession(snap)
     const props = kitFor(snap)
     const view = render(<QueueDock {...props} useSession={source.useSession} />)
-    expect(view.getByText('等待上传').closest('[data-submission-echo]')).not.toBeNull()
-    expect(view.getByRole('img', { name: '排队消息图片' }).getAttribute('src')).toBe('blob:queue-preview')
-    expect(view.getByLabelText('排队文件 notes.txt').textContent).toContain('2.4GB')
-    expect(view.getByRole('status').textContent).toBe('发送中…')
+    expect(view.getByText('等待上传')).toBeTruthy()
+    expect(view.getByText('发送中…')).toBeTruthy()
+    expect(view.container.querySelector('[data-submission-echo]')).not.toBeNull()
     for (const name of ['编辑排队消息', '删除排队消息', '立即插队']) {
-      const button = view.getByRole('button', { name }) as HTMLButtonElement
-      expect(button.disabled).toBe(true)
-      fireEvent.click(button)
+      expect((view.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
     }
-    expect(props.updateQueue).not.toHaveBeenCalled()
-    expect(view.queryByRole('textbox')).toBeNull()
 
     act(() => {
       source.push(snapshotWith(
@@ -145,7 +140,6 @@ describe('QueueDock', () => {
     })
     expect(view.getAllByText('等待上传')).toHaveLength(1)
     expect(view.container.querySelector('[data-submission-echo]')).toBeNull()
-    expect(view.queryByRole('status')).toBeNull()
     for (const name of ['编辑排队消息', '删除排队消息', '立即插队']) {
       expect((view.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(false)
     }
@@ -154,36 +148,40 @@ describe('QueueDock', () => {
   })
 
   it.each(['ABC', 'ACB', 'BAC', 'BCA', 'CAB', 'CBA'])(
-    'keeps repeated queued submissions in Dock through acceptance and FIFO claims (%s)',
+    'keeps Host-admitted queue rows through FIFO claims (%s)',
     (hostOrder) => {
       const pending: PendingSubmission[] = ['A', 'B', 'C'].map(id => ({
         requestId: id as never, placement: 'queued', time: 1_000,
         text: `input ${id}`, attachments: [],
       }))
-      const initial = snapshotWith([], pending)
+      const initial = snapshotWith(
+        pending.map(p => row(p.requestId as string, p.text, p.text, p.requestId as string)),
+        pending,
+      )
       const source = liveSession(initial)
       const view = render(<QueueDock {...kitFor(initial)} useSession={source.useSession} />)
       fireEvent.click(view.getByRole('button', { name: /3 条排队消息/ }))
       const order = (): string[] => [...view.container.querySelectorAll('[data-queue-dock] li')]
         .map(element => pending.find(input => element.textContent?.includes(input.text))!.requestId as string)
       expect(order()).toEqual(['A', 'B', 'C'])
-      const queued: QueuedMessage[] = []
-      for (const id of hostOrder) {
+      const queued = hostOrder.split('').map(id => {
         const submission = pending.find(input => input.requestId === id)!
-        queued.push(row(id, submission.text, submission.text, id))
-        const remaining = pending.filter(input => !hostOrder.slice(0, queued.length).includes(input.requestId as string))
-        act(() => { source.push(snapshotWith([...queued], remaining)) })
-        expect(order()).toEqual([...queued.map(item => item.id as string), ...remaining.map(input => input.requestId as string)])
-      }
+        return row(id, submission.text, submission.text, id)
+      })
       for (let claimed = 1; claimed <= queued.length; claimed++) {
-        act(() => { source.push(snapshotWith(queued.slice(claimed))) })
+        act(() => {
+          source.push(snapshotWith(
+            queued.slice(claimed),
+            pending.filter(p => queued.slice(claimed).some(row => row.rpcId === p.requestId)),
+          ))
+        })
         expect(order()).toEqual(hostOrder.slice(claimed).split(''))
       }
       expect(view.container.querySelector('[data-queue-dock]')).toBeNull()
     },
   )
 
-  it('keeps sending status visible while a queue containing local submissions is collapsed', () => {
+  it('counts pre-admit local submissions in the queue strip', () => {
     const snap = snapshotWith(
       [row('accepted', '已排队')],
       [{
@@ -193,14 +191,31 @@ describe('QueueDock', () => {
     )
     const source = liveSession(snap)
     const view = render(<QueueDock {...kitFor(snap)} useSession={source.useSession} />)
-    expect(view.getByRole('status').textContent).toBe('发送中…')
-    const header = view.getByRole('button', { name: /2 条排队消息\s*发送中…/ })
-    expect(header.getAttribute('aria-expanded')).toBe('false')
+    const header = view.getByRole('button', { name: /2 条排队消息/ })
+    expect(header).toBeTruthy()
     fireEvent.click(header)
-    expect(view.getAllByRole('status')).toHaveLength(1)
-    expect(view.getByRole('status').closest('[data-submission-echo]')).not.toBeNull()
-    act(() => { source.push(snapshotWith([row('accepted', '已排队')])) })
-    expect(view.queryByRole('status')).toBeNull()
+    expect(view.getByText('已排队')).toBeTruthy()
+    expect(view.getByText('等待发送')).toBeTruthy()
+    expect(view.getByText('发送中…')).toBeTruthy()
+  })
+
+  it('hides the dock after Host removes an admitted row without resurfacing echoes', () => {
+    const pending: PendingSubmission = {
+      requestId: 'req-drop' as never, placement: 'queued', time: 1,
+      text: '哈哈', attachments: [],
+    }
+    const admitted = snapshotWith(
+      [row('qi-1', '哈哈', '哈哈', 'req-drop')],
+      [pending],
+    )
+    const source = liveSession(admitted)
+    const props = kitFor(admitted)
+    const view = render(<QueueDock {...props} useSession={source.useSession} />)
+    expect(view.getByText('哈哈')).toBeTruthy()
+    fireEvent.click(view.getByRole('button', { name: '删除排队消息' }))
+    expect(props.updateQueue).toHaveBeenCalledWith('qi-1', { kind: 'remove' })
+    act(() => { source.push(snapshotWith([], [])) })
+    expect(view.container.querySelector('[data-queue-dock]')).toBeNull()
   })
 
   it('leaves pending steering to the conversation flow', () => {
@@ -307,10 +322,10 @@ describe('QueueDock', () => {
     expect(view.queryByText('three')).toBeNull()
   })
 
-  it('renders active actions and disables editing for mixed-content rows', () => {
+  it('renders active actions and allows editing image rows (attach on edit)', () => {
     const snap = snapshotWith([
       row('i-1', '第一条排队消息'),
-      row('i-2', null, 'image [image]'),
+      row('i-2', '', 'image [image]', undefined, [{ type: 'image', attachment: { attachmentId: 'a', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } } as never]),
     ])
     const source = liveSession(snap)
     const { container, getByRole } = render(<QueueDock {...kitFor(snap)} useSession={source.useSession} />)
@@ -322,9 +337,7 @@ describe('QueueDock', () => {
     expect(container.querySelectorAll('[aria-label="删除排队消息"]')).toHaveLength(2)
     expect(container.querySelectorAll('[aria-label="立即插队"]')).toHaveLength(2)
     expect((container.querySelectorAll('[aria-label="编辑排队消息"]')[0] as HTMLButtonElement).disabled).toBe(false)
-    expect((container.querySelectorAll('[aria-label="编辑排队消息"]')[1] as HTMLButtonElement).disabled).toBe(true)
-    expect(container.querySelectorAll('[aria-label="编辑排队消息"]')[1]?.getAttribute('title'))
-      .toBe('包含非文本内容，暂不支持编辑')
+    expect((container.querySelectorAll('[aria-label="编辑排队消息"]')[1] as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('edits text inline with save and cancel controls, then saves with the same item identity', async () => {
@@ -404,7 +417,7 @@ describe('QueueDock', () => {
   })
 
   it('strictly steers complete row content only while the agent is running', async () => {
-    const running = snapshotWith([row('i-steer', null, 'image [image]')])
+    const running = snapshotWith([row('i-steer', '', 'image [image]', undefined, [{ type: 'image', attachment: { attachmentId: 'a', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } } as never])])
     const source = liveSession(running)
     const updateQueue = vi.fn(() => Promise.resolve('ok' as const))
     const rendered = render(

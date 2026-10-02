@@ -5,11 +5,13 @@
  * inside it, and flat, grouped, and search views keep their intended rhythm.
  */
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const css = readFileSync(fileURLToPath(new URL('../src/client/WorkspaceBrowser.module.css', import.meta.url)), 'utf8')
-const rowsCss = readFileSync(fileURLToPath(new URL('../src/client/rows/Rows.module.css', import.meta.url)), 'utf8')
+// import.meta.dirname: under this lane `import.meta.url` is not always file:.
+const HERE = import.meta.dirname
+const css = readFileSync(path.join(HERE, '../src/client/WorkspaceBrowser.module.css'), 'utf8')
+const rowsCss = readFileSync(path.join(HERE, '../src/client/rows/Rows.module.css'), 'utf8')
 
 /**
  * Declarations of one selector rule, keyed by property with whitespace collapsed.

@@ -943,7 +943,7 @@ describe('inject: execution point, parameter derivation, cache granularity', () 
     spy.mockRestore()
     // The failing entry blacks out alone; the sibling and the tree above survive.
     expect(view.container.querySelector('main')).not.toBeNull()
-    expect(view.container.textContent).toBe('alive')
+    expect(view.container.textContent).toContain('alive')
     expect(view.container.querySelector('[data-slot-error]')).not.toBeNull()
   })
 

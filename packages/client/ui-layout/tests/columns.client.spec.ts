@@ -40,12 +40,13 @@ describe('computeColumns', () => {
   })
 
   it('step 2: details shrinks first, center pinned at min', () => {
-    // Default trio exceeds 1250; details concedes first.
-    const cols = computeColumns(1250, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT))
+    // Default trio is 1240; one pixel under that, details concedes first.
+    const viewport = SIDEBAR_DEFAULT + DETAILS_DEFAULT + CENTER_MIN - 1
+    const cols = computeColumns(viewport, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT))
     expect(cols).toEqual({
       sidebar: SIDEBAR_DEFAULT,
       center: CENTER_MIN,
-      details: 1250 - SIDEBAR_DEFAULT - CENTER_MIN,
+      details: viewport - SIDEBAR_DEFAULT - CENTER_MIN,
     })
   })
 
@@ -57,10 +58,11 @@ describe('computeColumns', () => {
   })
 
   it('step 3: details auto-closes when its min still starves center — sidebar holds its preference', () => {
-    const cols = computeColumns(1210, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT))
+    const viewport = SIDEBAR_DEFAULT + DETAILS_MIN + CENTER_MIN - 1
+    const cols = computeColumns(viewport, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT))
     expect(cols).toEqual({
       sidebar: SIDEBAR_DEFAULT,
-      center: 1210 - SIDEBAR_DEFAULT,
+      center: viewport - SIDEBAR_DEFAULT,
       details: 0,
     })
   })
@@ -134,7 +136,7 @@ describe('resolveShellTracks / phoneDrawerWidth', () => {
 
   it('phoneDrawerWidth prefers the contract default and leaves a scrim gap', () => {
     expect(phoneDrawerWidth(390)).toBe(SIDEBAR_DEFAULT)
-    expect(phoneDrawerWidth(280)).toBe(SIDEBAR_MIN)
+    expect(phoneDrawerWidth(280)).toBe(280 - 48)
     expect(phoneDrawerWidth(200)).toBe(SIDEBAR_MIN)
   })
 })

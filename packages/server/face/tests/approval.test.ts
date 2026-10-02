@@ -107,6 +107,64 @@ describe("Face approval ask/respond", () => {
     ).toBe(true);
   });
 
+  it("mux carries displayReason while approval/asked stays English-only", async () => {
+    const store = createMemorySessionStore();
+    const mux: unknown[] = [];
+    const runtime = await isolatedRuntime(store);
+    runtime.bus.subscribeMux((_id, frame) => mux.push(frame));
+
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "minimal",
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const displayReason = {
+      en: "Auto review denied this call: sensitive-tool",
+      zh: "Auto review 拒绝了此调用：敏感工具，需确认",
+    };
+    const pendingPromise = runtime.approvals.request(
+      sessionId,
+      {
+        call: { id: "call_dr", name: "bash", arguments: { command: "ls" } },
+        args: { command: "ls" },
+      },
+      'Auto review denied tool "bash": sensitive-tool',
+      displayReason,
+    );
+
+    await new Promise((r) => setTimeout(r, 20));
+    const pending = runtime.approvals.listPending(sessionId)[0]!;
+    expect(pending.reason).toBe('Auto review denied tool "bash": sensitive-tool');
+    expect(pending.displayReason).toEqual(displayReason);
+
+    const asked = store.get(sessionId).events.find((e) => e.type === "approval/asked");
+    expect(asked?.type).toBe("approval/asked");
+    if (asked?.type === "approval/asked") {
+      expect(asked.reason).toBe('Auto review denied tool "bash": sensitive-tool');
+      expect(asked).not.toHaveProperty("displayReason");
+    }
+
+    const requested = mux.find(
+      (f) =>
+        typeof f === "object" &&
+        f !== null &&
+        (f as { type?: string }).type === "approval/requested",
+    ) as
+      | {
+          type: "approval/requested";
+          reason?: string;
+          displayReason?: { en: string; zh?: string };
+        }
+      | undefined;
+    expect(requested?.reason).toBe('Auto review denied tool "bash": sensitive-tool');
+    expect(requested?.displayReason).toEqual(displayReason);
+
+    runtime.approvals.respond(sessionId, pending.approvalId, "allow");
+    await expect(pendingPromise).resolves.toBe(true);
+  });
+
   it("deny skips tool body", async () => {
     const store = createMemorySessionStore();
     const runtime = await isolatedRuntime(store);

@@ -1,10 +1,16 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment node
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   changeTurnsFallbackSnapshot,
   harvestChangeTurns,
+  resetWorkspaceChangesTurnsCacheForTests,
 } from '../src/client/change-turns-fallback.ts'
 
 describe('changeTurnsFallbackSnapshot', () => {
+  beforeEach(() => {
+    resetWorkspaceChangesTurnsCacheForTests()
+  })
+
   it('returns a stable empty reference when the timeline has no changes', () => {
     const timeline = { turnOrder: [1] as const, turns: new Map() }
     const a = changeTurnsFallbackSnapshot('s1', timeline)

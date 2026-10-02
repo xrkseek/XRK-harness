@@ -28,4 +28,14 @@ describe("BootGate", () => {
     gate.register("only", "active");
     expect(gate.getSnapshot().phase).toBe("settled");
   });
+
+  it("getSnapshot returns the same reference until the next mutation", () => {
+    const gate = new BootGate();
+    gate.register("a", "loading");
+    const a = gate.getSnapshot();
+    const b = gate.getSnapshot();
+    expect(a).toBe(b);
+    gate.mark("a", "active");
+    expect(gate.getSnapshot()).not.toBe(a);
+  });
 });

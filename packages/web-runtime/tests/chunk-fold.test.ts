@@ -136,4 +136,29 @@ describe("ChunkFold", () => {
     fold.reset();
     expect(fold.getSnapshot()).toEqual({ nodes: [], partialText: "" });
   });
+
+  it("getSnapshot returns the same reference until the next mutation", () => {
+    const fold = new ChunkFold();
+    fold.push(
+      ev({
+        type: "user/message",
+        ts: 1,
+        turnId: "t1",
+        content: "hi",
+      }),
+    );
+    const a = fold.getSnapshot();
+    const b = fold.getSnapshot();
+    expect(a).toBe(b);
+    fold.push(
+      ev({
+        type: "assistant/chunk",
+        ts: 2,
+        turnId: "t1",
+        stepId: "s1",
+        text: "x",
+      }),
+    );
+    expect(fold.getSnapshot()).not.toBe(a);
+  });
 });

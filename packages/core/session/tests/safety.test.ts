@@ -56,12 +56,24 @@ describe("mistake tracker", () => {
     const hit = m.onTurnToolStats({ ok: 0, failed: 1 });
     expect(hit?.action).toBe("stop");
     expect(hit?.atLimit).toBe(true);
+    // Counter clears so the next user message is not immediately blocked.
+    expect(m.consecutive).toBe(0);
   });
 
-  it("forceAtLimit jumps to max", () => {
+  it("forceAtLimit jumps to max then clears for the next message", () => {
     const m = createMistakeTracker({ maxConsecutiveMistakes: 6 });
     const r = m.record({ reason: "tool_loop_hard", forceAtLimit: true });
     expect(r.action).toBe("stop");
-    expect(r.consecutive).toBe(6);
+    expect(r.atLimit).toBe(true);
+    expect(m.consecutive).toBe(0);
+  });
+
+  it("clears the streak after a text-only successful turn", () => {
+    const m = createMistakeTracker({ maxConsecutiveMistakes: 3 });
+    m.record({ reason: "api_error" });
+    m.record({ reason: "api_error" });
+    expect(m.consecutive).toBe(2);
+    m.onTurnToolStats({ ok: 0, failed: 0 });
+    expect(m.consecutive).toBe(0);
   });
 });

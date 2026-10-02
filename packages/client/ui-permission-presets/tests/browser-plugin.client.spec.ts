@@ -28,6 +28,7 @@ const SELECT: PermissionSelect = {
     { value: 'read-only', name: 'read-only', description: 'Reads only.' },
     { value: 'workspace-write', name: 'workspace-write' },
     { value: 'danger-full-access', name: 'danger-full-access' },
+    { value: 'auto', name: 'auto' },
   ],
   currentValue: 'workspace-write',
 }
@@ -120,20 +121,32 @@ describe('ui-permission browser plugin', () => {
     b.values.set(sid('s1'), { ...SELECT, options: [...SELECT.options, { value: 'custom', name: 'Custom' }], currentValue: 'custom' })
     expect(c.available(proj)).toBe(true)
     const options = await c.ui.options(proj, new AbortController().signal)
-    expect(options.map(option => option.id)).toEqual(['read-only', 'workspace-write', 'danger-full-access'])
+    expect(options.map(option => option.id)).toEqual(['read-only', 'workspace-write', 'danger-full-access', 'auto'])
     expect(options.every(option => option.active !== true)).toBe(true)
     b.values.set(sid('s1'), SELECT)
     const again = await c.ui.options(proj, new AbortController().signal)
     expect(again.find(option => option.id === 'workspace-write')?.active).toBe(true)
     expect(again.find(option => option.id === 'read-only')?.detail).toBe('Reads only.')
-    // Kebab-case names title-case; non-kebab host-configured names pass through.
-    expect(again.map(option => option.label)).toEqual(['Read Only', 'Workspace Write', 'Full access'])
+    expect(again.find(option => option.id === 'auto')?.detail)
+      .toBe('Run without a sandbox after an experimental same-model review of every native tool call and PTC inner call.')
+    // Built-ins use product labels; Auto review keeps the DSH product name.
+    expect(again.map(option => option.label)).toEqual(['Read Only', 'Workspace Write', 'Full access', 'Auto review'])
     expect(again.find(option => option.id === 'danger-full-access')?.confirmation).toEqual({
       title: 'Enable Full access?',
       description: accessEn['confirm.description'],
       acknowledgeLabel: 'I understand the risks and want to continue',
       cancelLabel: 'Cancel',
       confirmLabel: 'Enable Full access',
+    })
+    expect(again.find(option => option.id === 'auto')).toMatchObject({
+      badge: 'EXP',
+      confirmation: {
+        title: 'Enable Auto review (experimental)?',
+        description: accessEn['auto.confirm.description'],
+        acknowledgeLabel: 'I understand these risks and want to continue',
+        cancelLabel: 'Cancel',
+        confirmLabel: 'Enable Auto review',
+      },
     })
     b.values.set(sid('s1'), { ...SELECT, options: [{ value: 'plain', name: 'Ask Every Time' }] })
     const passthrough = await c.ui.options(proj, new AbortController().signal)

@@ -29,10 +29,12 @@ describe("host.openPath + skill.list", () => {
   });
 
   it("treats Win / macOS / Linux as desktop openers", () => {
-    expect(canOpenNativePath("win32")).toBe(true);
-    expect(canOpenNativePath("darwin")).toBe(true);
-    expect(canOpenNativePath("linux")).toBe(true);
-    expect(canOpenNativePath("freebsd")).toBe(false);
+    // Pass an explicit env so a Desktop Host shell (XRK_NATIVE_OPEN=1 in the
+    // parent process) cannot flip the negative assertion.
+    expect(canOpenNativePath("win32", {})).toBe(true);
+    expect(canOpenNativePath("darwin", {})).toBe(true);
+    expect(canOpenNativePath("linux", {})).toBe(true);
+    expect(canOpenNativePath("freebsd", {})).toBe(false);
   });
 
   it("XRK_NATIVE_OPEN forces canOpenPath true (Desktop Host declaration)", () => {

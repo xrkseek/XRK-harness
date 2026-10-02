@@ -11,6 +11,11 @@ import {
   admittingAgentResolve,
   createBareFaceRuntime,
 } from "./helpers/bare-runtime.js";
+import {
+  migrateAutoSessionsToFullAccess,
+  pinInitialPermission,
+} from "../src/permissions.js";
+import { createFacePermissionAutoGate } from "../src/permission-auto.js";
 
 function bareRuntime(store = createMemorySessionStore()) {
   return createBareFaceRuntime({
@@ -43,6 +48,265 @@ describe("Face permission presets", () => {
       "workspace-write",
       "danger-full-access",
     ]);
+  });
+
+  it("registerAuto publishes auto in catalog; unload withdraws it", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    expect(
+      (
+        runtime.projections.snapshot(sessionId).values.permissions as {
+          options: { value: string }[];
+        }
+      ).options.map((o) => o.value),
+    ).not.toContain("auto");
+
+    const without = await dispatchFaceMethod(runtime, "commands/execute", "x0", {
+      args: { agentId: sessionId, line: "/permission auto" },
+    });
+    expect(without.result.ok).toBe(true);
+    if (without.result.ok) {
+      expect(without.result.value).toMatchObject({
+        result: {
+          kind: "error",
+          text: expect.stringMatching(/unknown preset "auto"/),
+        },
+      });
+    }
+
+    let admissions = 0;
+    const stop = runtime.permissionAuto.registerAuto(
+      () => {
+        admissions += 1;
+      },
+      {
+        migrateAway: () => {
+          migrateAutoSessionsToFullAccess(runtime.store, runtime.permissionAuto);
+        },
+      },
+    );
+    expect(runtime.permissionAuto.catalogNames()).toEqual([
+      "read-only",
+      "workspace-write",
+      "danger-full-access",
+      "auto",
+    ]);
+    expect(
+      (
+        runtime.projections.snapshot(sessionId).values.permissions as {
+          options: { value: string }[];
+        }
+      ).options.map((o) => o.value),
+    ).toContain("auto");
+
+    expect(() => runtime.permissionAuto.registerAuto(() => {})).toThrow(
+      /already registered/,
+    );
+
+    const switched = await dispatchFaceMethod(runtime, "commands/execute", "ea", {
+      args: { agentId: sessionId, line: "/permission auto" },
+    });
+    expect(switched.result.ok).toBe(true);
+    if (switched.result.ok) {
+      expect(switched.result.value).toMatchObject({
+        result: { kind: "success", text: "permission mode auto" },
+      });
+    }
+    expect(admissions).toBe(1);
+
+    const events = runtime.store.get(sessionId).events;
+    const lastPreset = [...events].reverse().find((e) => e.type === "permission/preset");
+    const lastSandbox = [...events].reverse().find((e) => e.type === "sandbox/mode");
+    const lastApproval = [...events].reverse().find((e) => e.type === "approval/policy");
+    expect(lastPreset).toMatchObject({ type: "permission/preset", preset: "auto" });
+    expect(lastSandbox).toMatchObject({
+      type: "sandbox/mode",
+      mode: "danger-full-access",
+    });
+    expect(lastApproval).toMatchObject({
+      type: "approval/policy",
+      policy: "ask",
+    });
+    expect(
+      runtime.projections.snapshot(sessionId).values.permissions,
+    ).toMatchObject({ currentValue: "auto" });
+
+    // Auto↔Full share danger-full-access sandbox: write identity + only the
+    // approval policy that changes (DSH shared-bundle switch).
+    const beforeFull = runtime.store.get(sessionId).events.length;
+    await dispatchFaceMethod(runtime, "commands/execute", "ef", {
+      args: { agentId: sessionId, line: "/permission danger-full-access" },
+    });
+    const autoToFull = runtime.store
+      .get(sessionId)
+      .events.slice(beforeFull)
+      .filter(
+        (e) =>
+          e.type === "permission/preset" ||
+          e.type === "sandbox/mode" ||
+          e.type === "approval/policy",
+      )
+      .map((e) =>
+        e.type === "permission/preset"
+          ? [e.type, (e as { preset: string }).preset]
+          : e.type === "sandbox/mode"
+            ? [e.type, (e as { mode: string }).mode]
+            : [e.type, (e as { policy: string }).policy],
+      );
+    expect(autoToFull).toEqual([
+      ["permission/preset", "danger-full-access"],
+      ["approval/policy", "never"],
+    ]);
+    expect(
+      runtime.projections.snapshot(sessionId).values.permissions,
+    ).toMatchObject({ currentValue: "danger-full-access" });
+
+    const beforeAuto = runtime.store.get(sessionId).events.length;
+    await dispatchFaceMethod(runtime, "commands/execute", "ea2", {
+      args: { agentId: sessionId, line: "/permission auto" },
+    });
+    expect(admissions).toBe(2);
+    const fullToAuto = runtime.store
+      .get(sessionId)
+      .events.slice(beforeAuto)
+      .filter(
+        (e) =>
+          e.type === "permission/preset" ||
+          e.type === "sandbox/mode" ||
+          e.type === "approval/policy",
+      )
+      .map((e) =>
+        e.type === "permission/preset"
+          ? [e.type, (e as { preset: string }).preset]
+          : e.type === "sandbox/mode"
+            ? [e.type, (e as { mode: string }).mode]
+            : [e.type, (e as { policy: string }).policy],
+      );
+    expect(fullToAuto).toEqual([
+      ["permission/preset", "auto"],
+      ["approval/policy", "ask"],
+    ]);
+    expect(
+      runtime.projections.snapshot(sessionId).values.permissions,
+    ).toMatchObject({ currentValue: "auto" });
+
+    // Auto identity survives an approval=never pin (delegated child); current
+    // stays auto until Full is selected.
+    runtime.store.append(sessionId, {
+      type: "approval/policy",
+      ts: Date.now(),
+      policy: "never",
+    });
+    expect(
+      runtime.projections.snapshot(sessionId).values.permissions,
+    ).toMatchObject({ currentValue: "auto" });
+
+    // Dispose: migrate Auto → Full, abort lifecycle, then withdraw catalog.
+    const life = runtime.permissionAuto.lifecycle()!;
+    expect(life.signal.aborted).toBe(false);
+    stop();
+    expect(life.signal.aborted).toBe(true);
+    expect(runtime.permissionAuto.isLive()).toBe(false);
+    expect(runtime.permissionAuto.isAccepting()).toBe(false);
+    expect(
+      runtime.projections.snapshot(sessionId).values.permissions,
+    ).toMatchObject({ currentValue: "danger-full-access" });
+    expect(
+      (
+        runtime.projections.snapshot(sessionId).values.permissions as {
+          options: { value: string }[];
+        }
+      ).options.map((o) => o.value),
+    ).not.toContain("auto");
+
+    const afterUnload = await dispatchFaceMethod(
+      runtime,
+      "commands/execute",
+      "x1",
+      { args: { agentId: sessionId, line: "/permission auto" } },
+    );
+    expect(afterUnload.result.ok).toBe(true);
+    if (afterUnload.result.ok) {
+      expect(afterUnload.result.value).toMatchObject({
+        result: {
+          kind: "error",
+          text: expect.stringMatching(/unknown preset "auto"/),
+        },
+      });
+    }
+  });
+
+  it("rejects restoring a seeded Auto session without live integration", () => {
+    const store = createMemorySessionStore();
+    const session = store.create("seed-auto");
+    store.append(session.id, {
+      type: "permission/preset",
+      ts: 1,
+      preset: "auto",
+    });
+    store.append(session.id, {
+      type: "sandbox/mode",
+      ts: 2,
+      mode: "danger-full-access",
+    });
+    store.append(session.id, {
+      type: "approval/policy",
+      ts: 3,
+      policy: "ask",
+    });
+    expect(() =>
+      pinInitialPermission(store, session.id, "workspace-write"),
+    ).toThrow(/cannot restore preset "auto"/);
+
+    const gate = createFacePermissionAutoGate();
+    let admissions = 0;
+    gate.registerAuto(() => {
+      admissions += 1;
+    });
+    pinInitialPermission(store, session.id, "workspace-write", {
+      autoGate: gate,
+    });
+    expect(admissions).toBe(1);
+  });
+
+  it("closes admission before migrateAway observers can re-select Auto", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    let sawClosedAdmit = false;
+    const stop = runtime.permissionAuto.registerAuto(
+      () => {
+        /* admit */
+      },
+      {
+        migrateAway: () => {
+          migrateAutoSessionsToFullAccess(runtime.store, runtime.permissionAuto);
+          try {
+            runtime.permissionAuto.admit();
+          } catch {
+            sawClosedAdmit = true;
+          }
+        },
+      },
+    );
+
+    await dispatchFaceMethod(runtime, "commands/execute", "ea", {
+      args: { agentId: sessionId, line: "/permission auto" },
+    });
+    expect(
+      runtime.projections.snapshot(sessionId).values.permissions,
+    ).toMatchObject({ currentValue: "auto" });
+
+    stop();
+    expect(sawClosedAdmit).toBe(true);
+    expect(
+      runtime.projections.snapshot(sessionId).values.permissions,
+    ).toMatchObject({ currentValue: "danger-full-access" });
   });
 
   it("/permission switches preset; empty reports current; unknown errors", async () => {
@@ -288,5 +552,115 @@ describe("Face permission presets", () => {
     expect(body).toHaveBeenCalled();
     expect(out.result.content).toBe("ran");
     expect(runtime.approvals.listPending(sessionId)).toHaveLength(0);
+  });
+});
+
+/**
+ * Loop checklist: Auto is session-catalog-only while registerAuto is live;
+ * Settings defaultPreset never offers auto; dispose migrates to Full access.
+ */
+describe("Auto catalog / Settings defaultPreset / dispose migrate", () => {
+  it("omits auto from catalogNames until registerAuto; withdraws on dispose", () => {
+    const gate = createFacePermissionAutoGate();
+    expect(gate.isLive()).toBe(false);
+    expect(gate.catalogNames()).toEqual([
+      "read-only",
+      "workspace-write",
+      "danger-full-access",
+    ]);
+    expect(gate.catalogNames()).not.toContain("auto");
+
+    const stop = gate.registerAuto(() => {});
+    expect(gate.isLive()).toBe(true);
+    expect(gate.catalogNames()).toEqual([
+      "read-only",
+      "workspace-write",
+      "danger-full-access",
+      "auto",
+    ]);
+
+    stop();
+    expect(gate.isLive()).toBe(false);
+    expect(gate.catalogNames()).not.toContain("auto");
+  });
+
+  it("Settings defaultPreset rejects auto (schema has no auto)", async () => {
+    const runtime = bareRuntime();
+    const rejected = await dispatchFaceMethod(runtime, "settings.mutate", "pa", {
+      ns: "permission",
+      ops: [{ op: "set", path: ["defaultPreset"], value: "auto" }],
+    });
+    expect(rejected.result.ok).toBe(false);
+    if (!rejected.result.ok) {
+      expect(rejected.result.error.code).toBe("settings-rejected");
+    }
+
+    // Even with session-catalog Auto live, Settings still list configured presets only.
+    runtime.permissionAuto.registerAuto(() => {});
+    const ok = await dispatchFaceMethod(runtime, "settings.mutate", "pw", {
+      ns: "permission",
+      ops: [{ op: "set", path: ["defaultPreset"], value: "workspace-write" }],
+    });
+    expect(ok.result.ok).toBe(true);
+
+    const stillRejected = await dispatchFaceMethod(
+      runtime,
+      "settings.mutate",
+      "pa2",
+      {
+        ns: "permission",
+        ops: [{ op: "set", path: ["defaultPreset"], value: "auto" }],
+      },
+    );
+    expect(stillRejected.result.ok).toBe(false);
+  });
+
+  it("dispose migrateAway moves Auto sessions to danger-full-access", async () => {
+    const runtime = bareRuntime();
+    const a = await dispatchFaceMethod(runtime, "session.create", "a", {});
+    const b = await dispatchFaceMethod(runtime, "session.create", "b", {});
+    if (!a.result.ok || !b.result.ok) throw new Error("create");
+    const sessionA = (a.result.value as { sessionId: string }).sessionId;
+    const sessionB = (b.result.value as { sessionId: string }).sessionId;
+
+    const stop = runtime.permissionAuto.registerAuto(
+      () => {
+        /* admit */
+      },
+      {
+        migrateAway: () => {
+          migrateAutoSessionsToFullAccess(runtime.store, runtime.permissionAuto);
+        },
+      },
+    );
+
+    await dispatchFaceMethod(runtime, "commands/execute", "ea", {
+      args: { agentId: sessionA, line: "/permission auto" },
+    });
+    // sessionB stays on the default (workspace-write) — must not be rewritten.
+    expect(
+      runtime.projections.snapshot(sessionA).values.permissions,
+    ).toMatchObject({ currentValue: "auto" });
+    expect(
+      runtime.projections.snapshot(sessionB).values.permissions,
+    ).toMatchObject({ currentValue: "workspace-write" });
+
+    stop();
+
+    expect(runtime.permissionAuto.isLive()).toBe(false);
+    expect(runtime.permissionAuto.catalogNames()).not.toContain("auto");
+    expect(
+      runtime.projections.snapshot(sessionA).values.permissions,
+    ).toMatchObject({ currentValue: "danger-full-access" });
+    expect(
+      runtime.projections.snapshot(sessionB).values.permissions,
+    ).toMatchObject({ currentValue: "workspace-write" });
+    expect(
+      (
+        runtime.projections.snapshot(sessionA).values.permissions as {
+          options: { value: string }[];
+        }
+      ).options.map((o) => o.value),
+    ).not.toContain("auto");
   });
 });

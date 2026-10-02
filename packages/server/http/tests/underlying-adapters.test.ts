@@ -443,6 +443,100 @@ describe("auto-review underlying", () => {
       expect(body.status).toBe("offline");
     });
   });
+
+  it("readAutoReviewStats mirrors tool-pre recordAllow/Deny", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-autoreview-stats-"));
+    temps.push(root);
+    const home = path.join(root, "home");
+    const {
+      readAutoReviewStats,
+      recordAutoReviewAllow,
+      recordAutoReviewDeny,
+      recordAutoReviewFallback,
+    } = await import("../src/dsh-compat/auto-review-http.js");
+    expect(readAutoReviewStats({ xrkHome: home })).toEqual({
+      allows: 0,
+      denies: 0,
+      verdictsUsed: 0,
+      failuresUsed: 0,
+      fallbacks: 0,
+      neverRejects: 0,
+      avgDurationMs: 0,
+      recentDenies: [],
+    });
+    recordAutoReviewAllow({ xrkHome: home }, 10);
+    recordAutoReviewDeny({ xrkHome: home }, "bash", 30);
+    recordAutoReviewFallback({ xrkHome: home }, 20);
+    const snap = readAutoReviewStats({ xrkHome: home });
+    expect(snap.allows).toBe(1);
+    expect(snap.denies).toBe(1);
+    expect(snap.neverRejects).toBe(1);
+    expect(snap.fallbacks).toBe(1);
+    expect(snap.verdictsUsed).toBe(3);
+    expect(snap.avgDurationMs).toBe(20);
+    expect(snap.recentDenies).toHaveLength(1);
+    expect(snap.recentDenies[0]?.toolName).toBe("bash");
+  });
+
+  it("approve with Face bridge responds allow and notes when missing", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-autoreview-approve-"));
+    temps.push(root);
+    const home = path.join(root, "home");
+    const { handleAutoReviewHttp } = await import(
+      "../src/dsh-compat/auto-review-http.js"
+    );
+    const calls: Array<{ index: number; sessionId?: string }> = [];
+    await withPublicHandler(
+      async (req, res) => {
+        const url = new URL(req.url ?? "/", "http://127.0.0.1");
+        return handleAutoReviewHttp(req, res, url.pathname, {
+          xrkHome: home,
+          approvePending: (args) => {
+            calls.push(args);
+            if (args.sessionId === "s1" && args.index === 0) {
+              return {
+                allowed: true,
+                note: 'allowed pending auto-review for tool "bash"',
+                toolName: "bash",
+              };
+            }
+            return {
+              allowed: false,
+              note: "no pending auto-review approval to allow",
+            };
+          },
+        });
+      },
+      async (base) => {
+        const okRes = await fetch(`${base}/auto-review/approve`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ index: 0, sessionId: "s1" }),
+        });
+        const okBody = (await okRes.json()) as {
+          approved?: boolean;
+          note?: string;
+          allows?: number;
+        };
+        expect(okBody.approved).toBe(true);
+        expect(okBody.note).toMatch(/allowed pending auto-review/);
+        expect(okBody.allows).toBe(1);
+        expect(calls).toEqual([{ index: 0, sessionId: "s1" }]);
+
+        const miss2 = await fetch(`${base}/auto-review/approve`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ index: 0, sessionId: "missing" }),
+        });
+        const missBody = (await miss2.json()) as {
+          approved?: boolean;
+          note?: string;
+        };
+        expect(missBody.approved).toBe(false);
+        expect(missBody.note).toMatch(/no pending auto-review approval/);
+      },
+    );
+  });
 });
 
 describe("im channel underlying", () => {

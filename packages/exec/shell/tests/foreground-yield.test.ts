@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   createBashTools,
   createLocalShell,
@@ -17,15 +20,22 @@ const FAST = `${NODE_CMD} -e 'console.log("hi")'`;
 // the pwsh -Command wrapper, but the shell's own exit status always does.
 const FAIL = "exit 3";
 
-function makeShell() {
+function makeShell(backend: "pwsh" | "cmd" = "pwsh") {
   return createLocalShell({
     subprocess: createLocalSubprocess(),
     maxConcurrentJobs: 8,
+    ...(backend === "cmd" ? { backend: "cmd" as const } : {}),
   });
 }
 
 function bashTool(shell: ReturnType<typeof makeShell>, yieldMs: number) {
   return createBashTools(shell, { foregroundYieldMs: yieldMs }).find(
+    (t) => t.name === "bash",
+  )!;
+}
+
+function bashToolWithBudget(shell: ReturnType<typeof makeShell>, yieldMs: number, maxOutputBytes: number) {
+  return createBashTools(shell, { foregroundYieldMs: yieldMs, maxOutputBytes }).find(
     (t) => t.name === "bash",
   )!;
 }
@@ -48,6 +58,36 @@ describe("bash foreground yield semantics", () => {
       expect(failed.isError).toBeUndefined();
     } finally {
       await shell.dispose();
+    }
+  });
+
+  it("keeps the stderr error head when over-budget output is truncated", async () => {
+    // A real script file sidesteps cmd/pwsh quote-stripping so the error text
+    // is deterministic. backend "cmd" keeps the invoke simple on win32.
+    const dir = mkdtempSync(join(tmpdir(), "xrk-shell-budget-"));
+    const scriptPath = join(dir, "noisy.js");
+    writeFileSync(
+      scriptPath,
+      [
+        "for(let i=0;i<2000;i++) console.log('pad-pad-pad-pad-pad');",
+        "console.error('npm ERR! code E409');",
+        "process.exit(1);",
+      ].join("\n"),
+    );
+    const shell = makeShell("cmd");
+    try {
+      const bash = bashToolWithBudget(shell, 5_000, 180);
+      // No quotes around the path: cmd.exe /c quote-replay mangles a quoted
+      // absolute path into `cwd + "path"`. TEMP has no spaces, so bare works.
+      const out = await bash.execute({ command: `node ${scriptPath}` });
+      const content = String(out.content);
+      expect(content).toContain("npm ERR! code E409");
+      expect(content).toContain("[stderr]");
+      expect(content).toContain("[output truncated]");
+      expect(content).toContain("[exit code: 1]");
+    } finally {
+      await shell.dispose();
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 

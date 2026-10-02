@@ -36,7 +36,7 @@ describe('permission settings store', () => {
       currentValue: 'read-only',
       options: [
         { id: 'read-only', label: 'Read Only' },
-        { id: 'workspace-write', label: 'Workspace' },
+        { id: 'workspace-write', label: 'Workspace Write' },
       ],
     })
     const single = {
@@ -59,6 +59,31 @@ describe('permission settings store', () => {
     }
     expect(permissionDefaultOf(view('read-only', 0, undescribed)).options)
       .toEqual([{ id: 'read-only', label: 'Read Only' }])
+  })
+
+  it('strips Auto from Settings defaultPreset options (session-only)', () => {
+    const withAuto = {
+      uid: 6,
+      refs: {
+        1: { type: 'const', value: 'read-only' },
+        2: { type: 'const', value: 'workspace-write' },
+        3: { type: 'const', value: 'danger-full-access' },
+        4: { type: 'const', value: 'auto' },
+        5: { type: 'union', list: [1, 2, 3, 4] },
+        6: { type: 'object', dict: { defaultPreset: 5 } },
+      },
+    }
+    expect(permissionDefaultOf(view('workspace-write', 0, withAuto))).toEqual({
+      currentValue: 'workspace-write',
+      options: [
+        { id: 'read-only', label: 'Read Only' },
+        { id: 'workspace-write', label: 'Workspace Write' },
+        { id: 'danger-full-access', label: 'Full access' },
+      ],
+    })
+    expect(() => permissionDefaultOf(view('auto', 0, withAuto))).toThrow(
+      /does not advertise/,
+    )
   })
 
   it('rejects malformed values and dynamic enums at the wire boundary', () => {

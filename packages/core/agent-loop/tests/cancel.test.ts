@@ -4,6 +4,11 @@ import { deriveMessages } from "@xrkseek/core-session";
 import type { LlmAdapter, LlmChatRequest, LlmStreamEvent } from "@xrkseek/llm";
 import { createToolRegistry } from "@xrkseek/core-tools";
 import { runTurn } from "../src/index.js";
+import {
+  formatAbortReason,
+  isAbortError,
+  isAgentCancelCause,
+} from "../src/cancel-finalize.js";
 
 function createHangStreamAdapter(partial: string): LlmAdapter {
   return {
@@ -13,14 +18,19 @@ function createHangStreamAdapter(partial: string): LlmAdapter {
     },
     async *stream(request: LlmChatRequest): AsyncIterable<LlmStreamEvent> {
       if (request.signal?.aborted) {
-        throw new DOMException("aborted", "AbortError");
+        // Mirror Node throwIfAborted: rethrow the plain cancel cause when set.
+        throw request.signal.reason ?? new DOMException("aborted", "AbortError");
       }
       const head = partial.slice(0, Math.max(1, Math.floor(partial.length / 2)));
       const tail = partial.slice(head.length);
       if (head) yield { type: "text-delta", index: 0, text: head };
       if (tail) yield { type: "text-delta", index: 0, text: tail };
       await new Promise<void>((_resolve, reject) => {
-        const onAbort = () => reject(new DOMException("aborted", "AbortError"));
+        const onAbort = () => {
+          reject(
+            request.signal?.reason ?? new DOMException("aborted", "AbortError"),
+          );
+        };
         if (request.signal?.aborted) {
           onAbort();
           return;
@@ -75,5 +85,50 @@ describe("cancel mid-stream prefix finalize (DSH rc.8)", () => {
     expect(assistantMsgs).toEqual([
       { role: "assistant", content: "partial reply" },
     ]);
+  });
+
+  it("user cancel cause ends as aborted, never turn/end error [object Object]", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const ac = new AbortController();
+    const llm = createHangStreamAdapter("partial reply");
+
+    const turnP = runTurn({
+      sessionId: session.id,
+      userText: "go",
+      store,
+      llm,
+      tools: createToolRegistry(),
+      signal: ac.signal,
+    });
+
+    await new Promise((r) => setTimeout(r, 20));
+    ac.abort({ kind: "user" });
+    await expect(turnP).rejects.toEqual({ kind: "user" });
+
+    const turnEnd = store.get(session.id).events.find((e) => e.type === "turn/end");
+    expect(turnEnd?.type === "turn/end" && turnEnd.reason).toEqual({
+      kind: "aborted",
+      reason: { kind: "user" },
+    });
+    // Must not look like a terminal failure chrome row.
+    expect(
+      turnEnd?.type === "turn/end" && turnEnd.reason.kind === "error",
+    ).toBe(false);
+  });
+});
+
+describe("isAbortError / formatAbortReason", () => {
+  it("recognizes plain cancel causes and AbortError Errors", () => {
+    const ac = new AbortController();
+    ac.abort({ kind: "user" });
+    expect(isAgentCancelCause({ kind: "user" })).toBe(true);
+    expect(isAbortError({ kind: "user" }, ac.signal)).toBe(true);
+    expect(isAbortError(ac.signal.reason, ac.signal)).toBe(true);
+    const named = new Error("[object Object]");
+    named.name = "AbortError";
+    expect(isAbortError(named, ac.signal)).toBe(true);
+    expect(formatAbortReason({ kind: "user" })).toBe("aborted by user");
+    expect(formatAbortReason({ kind: "user" })).not.toBe("[object Object]");
   });
 });

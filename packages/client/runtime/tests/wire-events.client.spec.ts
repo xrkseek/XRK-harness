@@ -7,12 +7,12 @@
 import { Context } from '@xrkseek/cordis'
 import { describe, expect, it } from 'vitest'
 import type { ConnectionHandle, ConnectionSinks } from '@xrkseek/xrk-api-remotes/client'
-import TypertRegistry from '@xrkseek/xrk-typert-registry'
+import * as TypertRegistry from '@xrkseek/xrk-typert-registry/client'
 // Type-only: the api-remotes facade carries both the allowlist's selection seat
 // and the owner packages' `./types` declarations, which together give `$on` its
 // key face and per-event listener signatures.
 import type {} from '@xrkseek/xrk-api-remotes/client'
-import * as RuntimeClient from '../src/client/index.ts'
+import { apply as runtimeApply, inject as runtimeInject } from '../src/client/index.ts'
 import { FakeApiClient, fakeRemote } from './fake-api.client.ts'
 
 /**
@@ -76,7 +76,7 @@ async function mount(): Promise<Bench> {
   }
   ctx.reflect.provide('connection', handle)
   ctx.reflect.provide('remote.commands', fakeRemote().commands)
-  await ctx.plugin(RuntimeClient).await()
+  await ctx.plugin({ inject: [...runtimeInject], apply: runtimeApply }).await()
   return bench
 }
 

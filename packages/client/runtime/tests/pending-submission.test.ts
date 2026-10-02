@@ -3,7 +3,8 @@
  * state, and abandon/observed retirement.
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { IApiClient, SessionId } from '@xrkseek/xrk-api-remotes/client'
+import { createUserMessage } from '@xrkseek/xrk-llm'
+import type { IApiClient, MuxFrame, SessionId } from '@xrkseek/xrk-api-remotes/client'
 import { RpcId } from '@xrkseek/xrk-host-apiproxy/api'
 import { Session } from '../src/client/sessions/session.ts'
 import type { SessionRemotes } from '../src/client/sessions/remotes.ts'
@@ -68,18 +69,39 @@ describe('beginSubmission', () => {
     }])
   })
 
-  it('derives placement from running state and delivery mode', () => {
+  it('starts every non-steer echo in the transcript, whatever the local running bit says', () => {
     const { api } = bareApi()
     const session = new Session(SID, api, remotes())
     session.beginSubmission({ mode: 'queue', text: '空闲', attachments: [] })
     session.handleRunning(true)
     session.beginSubmission({ mode: 'queue', text: '排队', attachments: [] })
     session.beginSubmission({ mode: 'steer', text: '纠偏', attachments: [] })
+    // The local running bit races Host's `turn/end` broadcast. Guessing `queued`
+    // parked a submit that Host admitted straight into a new turn in neither
+    // ChatView (queued echoes are skipped) nor QueueDock (nothing was mirrored)
+    // — "my message vanished and still looks queued". Host-authoritative
+    // placement arrives via `observeSubmissionQueue` instead.
     expect(session.getSnapshot().pendingSubmissions.map(({ text, placement }) => ({ text, placement }))).toEqual([
       { text: '空闲', placement: 'transcript' },
-      { text: '排队', placement: 'queued' },
+      { text: '排队', placement: 'transcript' },
       { text: '纠偏', placement: 'steering' },
     ])
+  })
+
+  it('keeps a submit visible in the transcript when Host never queues it', () => {
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    session.handleRunning(true)
+    const handle = session.beginSubmission({ mode: 'queue', text: '直入', attachments: [] })
+    // Host drains the admit directly into a turn: the queue frame carries no
+    // row for this rpcId, so the echo must stay transcript until the durable
+    // `user/message` stamps it.
+    session.handleMuxEnvelope(RpcId('q1'), queueFrame(SID, []))
+    expect(session.getSnapshot().pendingSubmissions).toMatchObject([{
+      requestId: handle.requestId,
+      placement: 'transcript',
+      text: '直入',
+    }])
   })
 
   it('abandon retires the echo as failed exactly once', () => {
@@ -150,4 +172,117 @@ describe('beginSubmission', () => {
     expect(session.getSnapshot().pendingSubmissions).toEqual([])
     expect(onRetire).toHaveBeenCalledWith({ reason: 'failed' })
   })
+
+  it('Host FIFO claim hands queued echo to transcript (no claim→durable hole)', () => {
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    session.handleRunning(true)
+    const onRetire = vi.fn()
+    const handle = session.beginSubmission({
+      mode: 'queue', text: '跟进', attachments: [], onRetire,
+    })
+    session.handleMuxEnvelope(RpcId('q1'), queueFrame(SID, [{
+      id: 'qi-1',
+      rpcId: handle.requestId,
+      body: '跟进',
+    }]))
+    expect(session.getSnapshot().pendingSubmissions[0]?.placement).toBe('queued')
+
+    // Promote empties Host queue — keep echo as transcript until durable stamp.
+    session.handleMuxEnvelope(RpcId('q2'), queueFrame(SID, []))
+    expect(session.getSnapshot().queue).toEqual([])
+    expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
+    expect(session.getSnapshot().pendingSubmissions[0]).toMatchObject({
+      requestId: handle.requestId,
+      placement: 'transcript',
+      text: '跟进',
+    })
+    expect(onRetire).not.toHaveBeenCalled()
+  })
+
+  it('explicit Host queue remove retires the admitted local echo', async () => {
+    const { api } = bareApi()
+    const updateQueue = vi.fn(async () => ok({ accepted: true as const }))
+    const session = new Session(SID, {
+      ...api,
+      sessions: { ...api.sessions, updateQueue },
+    }, remotes())
+    session.handleRunning(true)
+    const onRetire = vi.fn()
+    const handle = session.beginSubmission({
+      mode: 'queue', text: '哈哈', attachments: [], onRetire,
+    })
+    session.handleMuxEnvelope(RpcId('q1'), queueFrame(SID, [{
+      id: 'qi-1',
+      rpcId: handle.requestId,
+      body: '哈哈',
+    }]))
+    const result = await session.updateQueue('qi-1' as never, { kind: 'remove' })
+    expect(result.ok).toBe(true)
+    expect(onRetire).toHaveBeenCalledWith({ reason: 'failed' })
+    expect(session.getSnapshot().pendingSubmissions).toEqual([])
+  })
+
+  it('session/subscribed mirror clear does not retire still-queued echoes', () => {
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    session.handleRunning(true)
+    const handle = session.beginSubmission({ mode: 'queue', text: '重连', attachments: [] })
+    session.handleMuxEnvelope(RpcId('q1'), queueFrame(SID, [{
+      id: 'qi-1',
+      rpcId: handle.requestId,
+      body: '重连',
+    }]))
+    session.handleMuxEnvelope(RpcId('sub'), {
+      type: 'session/subscribed',
+      sessionId: SID,
+      lastSeq: 1,
+    })
+    expect(session.getSnapshot().queue).toEqual([])
+    expect(session.getSnapshot().pendingSubmissions.map(echo => echo.requestId)).toEqual([handle.requestId])
+
+    session.handleMuxEnvelope(RpcId('q2'), queueFrame(SID, [{
+      id: 'qi-1',
+      rpcId: handle.requestId,
+      body: '重连',
+    }]))
+    expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
+    expect(session.getSnapshot().queue).toHaveLength(1)
+  })
+  it('turn/end keeps running when Host queue still has work', async () => {
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    await session.open()
+    session.handleRunning(true)
+    const handle = session.beginSubmission({ mode: 'queue', text: 'next', attachments: [] })
+    session.handleMuxEnvelope(RpcId('q1'), queueFrame(SID, [{
+      id: 'qi-1',
+      rpcId: handle.requestId,
+      body: 'next',
+    }]))
+    session.handleMuxEnvelope(RpcId('ev'), {
+      type: 'session/event',
+      sessionId: SID,
+      event: ev.turnEnd(1, 1),
+    })
+    expect(session.getSnapshot().running).toBe(true)
+  })
 })
+
+function queueFrame(
+  sessionId: SessionId,
+  items: readonly { id: string; rpcId: string; body: string }[],
+): MuxFrame {
+  return {
+    type: 'session/queue',
+    sessionId,
+    items: items.map(item => ({
+      id: item.id as never,
+      placement: 'queued' as const,
+      message: createUserMessage({
+        content: [{ type: 'text', text: item.body }],
+        source: { kind: 'user', rpcId: item.rpcId as never },
+      }),
+    })),
+  }
+}

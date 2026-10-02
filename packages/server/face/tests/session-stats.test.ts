@@ -198,4 +198,116 @@ describe("Face sessionStats projection", () => {
     const stats = registry.snapshot(session.id).values.sessionStats;
     expect(stats).toMatchObject({ turns: 1, steps: 1, llmMs: 0, ttftSteps: 0 });
   });
+
+  it("opens the first-token boundary on reasoning, not on the trailing tool call", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    registry.register(createSessionStatsProjectionUnit());
+
+    store.append(session.id, { type: "turn/start", ts: 100, turnId: "t1" });
+    store.append(session.id, {
+      type: "step/start",
+      ts: 110,
+      turnId: "t1",
+      stepId: "s1",
+    });
+    store.append(session.id, {
+      type: "assistant/chunk",
+      ts: 1110,
+      turnId: "t1",
+      stepId: "s1",
+      text: "thinking...",
+      kind: "reasoning",
+    });
+    store.append(session.id, {
+      type: "assistant/chunk",
+      ts: 6100,
+      turnId: "t1",
+      stepId: "s1",
+      text: '{"path":"a.cs"}',
+      kind: "tool-call",
+      toolCallId: "call_1",
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 6200,
+      turnId: "t1",
+      stepId: "s1",
+      content: "",
+      usage: { inputTokens: 20, outputTokens: 8192, reasoningTokens: 8000 },
+    });
+    store.append(session.id, {
+      type: "step/end",
+      ts: 6210,
+      turnId: "t1",
+      stepId: "s1",
+    });
+    driveAll(registry, session.id, store);
+
+    // Reasoning is generated output and outputTokens already counts it, so the
+    // boundary lands on the reasoning delta: TTFT covers the thinking start
+    // (1000ms), not the whole 5990ms up to the tool call. Excluding reasoning
+    // read the same turn as 5990ms TTFT and a 100ms decode window over 8192
+    // tokens — 81920 tok/s.
+    expect(registry.snapshot(session.id).values.sessionStats).toMatchObject({
+      ttftMs: 1000,
+      ttftSteps: 1,
+      decodeMs: 5090,
+      decodeTokens: 8192,
+    });
+  });
+
+  it("drops decode windows too short to time a model stream", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    registry.register(createSessionStatsProjectionUnit());
+
+    store.append(session.id, { type: "turn/start", ts: 100, turnId: "t1" });
+    store.append(session.id, {
+      type: "step/start",
+      ts: 110,
+      turnId: "t1",
+      stepId: "s1",
+    });
+    store.append(session.id, {
+      type: "assistant/chunk",
+      ts: 140,
+      turnId: "t1",
+      stepId: "s1",
+      text: "hi",
+      kind: "text",
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 142,
+      turnId: "t1",
+      stepId: "s1",
+      content: "hi",
+      usage: { inputTokens: 12, outputTokens: 1836 },
+    });
+    store.append(session.id, {
+      type: "step/end",
+      ts: 150,
+      turnId: "t1",
+      stepId: "s1",
+    });
+    driveAll(registry, session.id, store);
+
+    // A 2ms window measures write batching, not decode speed: 1836 tokens over
+    // it reads as 918000 tok/s. The step still contributes model time and TTFT
+    // — only the throughput sample is withheld.
+    expect(registry.snapshot(session.id).values.sessionStats).toMatchObject({
+      llmMs: 32,
+      ttftMs: 30,
+      ttftSteps: 1,
+      decodeMs: 0,
+      decodeTokens: 0,
+    });
+  });
 });

@@ -19,10 +19,12 @@ function fail(
 
 describe("pickNativeDirectory", () => {
   it("treats Win / macOS / Linux as desktop pickers", () => {
-    expect(canPickNativeDirectory("win32")).toBe(true);
-    expect(canPickNativeDirectory("darwin")).toBe(true);
-    expect(canPickNativeDirectory("linux")).toBe(true);
-    expect(canPickNativeDirectory("freebsd")).toBe(false);
+    // Pass an explicit env so a Desktop Host shell (XRK_NATIVE_OPEN=1 in the
+    // parent process) cannot flip the negative assertion.
+    expect(canPickNativeDirectory("win32", {})).toBe(true);
+    expect(canPickNativeDirectory("darwin", {})).toBe(true);
+    expect(canPickNativeDirectory("linux", {})).toBe(true);
+    expect(canPickNativeDirectory("freebsd", {})).toBe(false);
   });
 
   it("XRK_NATIVE_OPEN forces pick capability (Desktop Host declaration)", () => {

@@ -75,7 +75,7 @@ describe('queue snapshot intake', () => {
       {
         id: 'q-image', placement: 'queued',
         content: [{ type: 'text', text: 'hi' }, { type: 'image', data: 'x' }],
-        preview: 'hi [image]', text: null,
+        preview: 'hi [image]', text: 'hi',
       },
     ])
   })

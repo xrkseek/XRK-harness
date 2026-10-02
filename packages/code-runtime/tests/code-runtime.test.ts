@@ -10,6 +10,7 @@ import {
   runCodeWithTools,
 } from "../src/index.js";
 import {
+  createToolPipeline,
   createToolRegistry,
   type ToolDefinition,
 } from "@xrkseek/core-tools";
@@ -159,5 +160,34 @@ describe("code-runtime", () => {
     });
     expect(unknown.isError).toBe(true);
     expect(String(unknown.content)).toMatch(/unknown tool/);
+  });
+
+  it("nested tools.* re-enter the pipeline with parentCallId (PTC inner)", async () => {
+    const registry = createToolRegistry();
+    registry.register(echoTool());
+    let seenParent: string | undefined;
+    const pipeline = createToolPipeline();
+    pipeline.onPre(async (ctx) => {
+      seenParent = ctx.parentCallId;
+      return { action: "continue", args: ctx.args };
+    });
+    const bridge = createRegistryCodeToolBridge(registry, { pipeline });
+    const tool = createRunCodeTool(
+      createWorkerCodeRuntime({ timeoutMs: 3000 }),
+      bridge,
+    );
+    const out = await tool.execute(
+      { source: `return await tools.echo_tool({ text: "nested" })` },
+      undefined,
+      {
+        callId: "outer-run-code",
+        emitToolEvent() {},
+        concludeTurn() {},
+        deferContext() {},
+      },
+    );
+    expect(out.isError).toBeUndefined();
+    expect(String(out.content)).toContain("echo:nested");
+    expect(seenParent).toBe("outer-run-code");
   });
 });

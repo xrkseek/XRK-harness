@@ -23,7 +23,7 @@ import {
   fitProducedFiles, ProducedFiles, type ProducedFilesProps,
 } from '../src/client/ProducedFiles.tsx'
 import {
-  basename, deliverablesDefinition, producedFileMentions, producedForClosing, selectDeliverables, selectProducedFiles,
+  basename, deliverablesDefinition, fileLanesForClosing, producedFileMentions, producedForClosing, selectDeliverables, selectProducedFiles,
   type DeliverablesTurnData,
 } from '../src/client/turn-deliverables.ts'
 import { apply, inject } from '../src/client/index.ts'
@@ -201,9 +201,35 @@ describe('produced-file Turn data', () => {
       result(11, 'locationless'),
     ])
 
+    expect(fileLanesForClosing(deliverablesOf(value))).toEqual({
+      created: ['out/index.html', 'out/app.css'],
+      modified: ['notes.md'],
+      deleted: [],
+    })
     expect(producedForClosing(deliverablesOf(value))).toEqual([
-      'out/index.html', 'out/app.css', 'notes.md',
+      'out/index.html', 'out/app.css',
     ])
+  })
+
+  it('drops created-then-deleted paths from the created lane', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      call(2, 'write', diff('.tmp-commit-msg.txt')),
+      result(3, 'write'),
+      call(4, 'rm', {
+        card: 'diff',
+        title: 'Delete',
+        diffs: [{ path: '.tmp-commit-msg.txt', oldText: 'x', newText: '' }],
+        locations: [{ path: '.tmp-commit-msg.txt' }],
+      }),
+      result(5, 'rm'),
+    ])
+    expect(fileLanesForClosing(deliverablesOf(value))).toEqual({
+      created: [],
+      modified: [],
+      deleted: ['.tmp-commit-msg.txt'],
+    })
+    expect(producedForClosing(deliverablesOf(value))).toEqual([])
   })
 
   it('folds workspace/changes into turn deliverables for the changed-files card', () => {
@@ -244,7 +270,8 @@ describe('produced-file Turn data', () => {
     })
     expect(selectDeliverables(tailOwner(data, 3))).toEqual({
       changes: data!.changes,
-      produced: [],
+      produced: ['a.ts'],
+      lanes: { created: ['a.ts'], modified: [], deleted: [] },
     })
   })
 
@@ -384,7 +411,7 @@ describe('ProducedFiles row', () => {
     const view = render(
       <ProducedFiles matched={paths} openFile={openFile} {...capability(true, true, openNativePath)} t={t} />,
     )
-    expect(view.getByText('产物')).toBeTruthy()
+    expect(view.getByText('产出')).toBeTruthy()
     const row = view.container.querySelector('[data-produced-files-row]')
     if (!(row instanceof HTMLElement)) throw new Error('produced row missing')
     // Two preview chips (+ two action chevrons when canOpenPath).
@@ -548,6 +575,7 @@ describe('plugin registration', () => {
       fileDiff: async () => ({ ok: true, value: { diff: null } }),
     } as never)
     ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
+    ctx.provide('layout', { openDetails: () => {}, closeDetails: () => {} } as never)
     await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
 
     const fiber = ctx.plugin({ inject: [...inject], apply })

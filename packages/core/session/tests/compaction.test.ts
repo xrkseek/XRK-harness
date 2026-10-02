@@ -200,4 +200,59 @@ describe("deriveMessages compaction window", () => {
     // full log still intact
     expect(events.filter((e) => e.type === "user/message")).toHaveLength(2);
   });
+
+  it("re-surfaces image blocks from the shadowed prefix after compaction", () => {
+    const store = createMemorySessionStore();
+    const s = store.create("c-vision");
+    const attachment = {
+      attachmentId: "sha256:pic",
+      mediaType: "image/png" as const,
+      bytes: 4,
+      width: 1,
+      height: 1,
+    };
+    store.append(s.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t0",
+      content: [
+        { type: "text", text: "see this" },
+        { type: "image", attachment },
+      ],
+    });
+    store.append(s.id, {
+      type: "assistant/message",
+      ts: 2,
+      turnId: "t0",
+      stepId: "s0",
+      content: "ok",
+    });
+    store.append(s.id, {
+      type: "context/compaction",
+      ts: 3,
+      reason: "auto",
+      summary: "## Objective\n- demo",
+      recent: "",
+    });
+    store.append(s.id, {
+      type: "user/message",
+      ts: 4,
+      turnId: "t1",
+      content: "what was in the image?",
+    });
+
+    const windowed = deriveMessages(store.get(s.id).events);
+    expect(windowed[0]?.content).toContain("context compacted");
+    const withImage = windowed.find(
+      (m) =>
+        m.role === "user" &&
+        typeof m.content !== "string" &&
+        m.content.some((b) => b.type === "image"),
+    );
+    expect(withImage).toBeDefined();
+    expect(windowed.at(-1)).toEqual({
+      role: "user",
+      content: "what was in the image?",
+    });
+  });
 });

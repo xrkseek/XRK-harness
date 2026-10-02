@@ -39,6 +39,7 @@
   "peerDependencies": {
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/xrk-llm": "workspace:^",
+    "@xrkseek/xrk-scope": "workspace:^",
     "@xrkseek/xrk-session": "workspace:^",
     "@xrkseek/xrk-typert-protocol": "workspace:^",
     "@xrkseek/cordis": "workspace:^"
@@ -46,6 +47,7 @@
   "devDependencies": {
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/xrk-llm": "workspace:^",
+    "@xrkseek/xrk-scope": "workspace:^",
     "@xrkseek/xrk-session": "workspace:^",
     "@xrkseek/xrk-typert-protocol": "workspace:^",
     "@xrkseek/cordis": "workspace:^"

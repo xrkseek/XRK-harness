@@ -44,12 +44,14 @@
     "@xrkseek/xrk-brand": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/xrk-llm": "workspace:^",
+    "@xrkseek/xrk-scope": "workspace:^",
     "@xrkseek/cordis": "workspace:^"
   },
   "devDependencies": {
     "@xrkseek/xrk-brand": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/xrk-llm": "workspace:^",
+    "@xrkseek/xrk-scope": "workspace:^",
     "@xrkseek/cordis": "workspace:^"
   },
   "private": true

@@ -230,6 +230,48 @@ describe('tool-call-model', () => {
     expect(toolRowModel('bash', running()).errorSummary).toBeNull()
   })
 
+  it('surfaces structured Auto-review denials for the tool row', () => {
+    const denied = result({
+      content: [],
+      isError: true,
+      error: {
+        name: 'AutoReviewDeniedError',
+        code: 'AUTO_REVIEW_DENIED',
+        reason: 'destructive-pattern',
+      },
+    })
+    expect(toolRowModel('bash', denied).autoReviewDenial).toEqual({ reason: 'destructive-pattern' })
+    expect(toolRowModel('bash', result({ content: [], isError: true, error: { name: 'ToolError', code: 'denied' } }))
+      .autoReviewDenial).toBeNull()
+  })
+
+  it('GenericToolCard renders AUTO_REVIEW_DENIED identity (forced denial card)', () => {
+    const denied = result({
+      content: [],
+      isError: true,
+      error: {
+        name: 'AutoReviewDeniedError',
+        code: 'AUTO_REVIEW_DENIED',
+        reason: 'destructive-pattern',
+      },
+      call: { name: 'bash', argsRaw: '{"command":"rm -rf /"}' },
+    })
+    const view = render(<GenericToolCard {...{
+      callId: denied.callId,
+      toolName: 'bash',
+      block: denied,
+      openFile: vi.fn(),
+      t,
+    }} />)
+    // Collapsed: denial replaces the ordinary error summary.
+    expect(view.getByText('自动审查已拒绝')).toBeTruthy()
+    expect(view.container.querySelector('[data-variant="bash"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-state="error"]')).not.toBeNull()
+    // Expanded OUT line is the localized "not executed" reason.
+    fireEvent.click(view.getByRole('button'))
+    expect(view.getByText(/工具未执行。原因：destructive-pattern/)).toBeTruthy()
+  })
+
   it('gives Cordis lifecycle tools action titles over their generic variants', () => {
     expect(toolRowModel('cordis_runtime_inspect', running({
       name: 'cordis_runtime_inspect',

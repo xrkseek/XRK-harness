@@ -298,6 +298,104 @@ describe("Face session.fork", () => {
     }
   });
 
+  it("beforeSeq edit-resubmit prefers the parent's live model over the seed prefix", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "minimal",
+    });
+    if (!created.result.ok) return;
+    const parentId = (created.result.value as { sessionId: string }).sessionId;
+
+    appendCompletedTurn(store, parentId, 1, "prior", {
+      provider: "broken-provider",
+      model: "broken-model",
+    });
+    // Failed follow-up user message (edit target). Wire seq = events.length
+    // after append (1-based); edit-resubmit uses beforeSeq = seq - 1.
+    store.append(parentId, {
+      type: "user/message",
+      ts: 200,
+      turnId: "t-fail",
+      content: "retry me",
+    });
+    const editSeq = store.get(parentId).events.length;
+    // Composer recovery: operator switched away from the broken route.
+    runtime.sessionModels.set(parentId, {
+      provider: "recovery-provider",
+      model: "recovery-model",
+      reasoningEffort: "low",
+    });
+
+    const forked = await dispatchFaceMethod(runtime, "session.fork", "f-edit", {
+      sessionId: parentId,
+      beforeSeq: editSeq - 1,
+      newSessionId: "fork-edit-resubmit",
+    });
+    expect(forked.result.ok).toBe(true);
+    if (!forked.result.ok) return;
+    expect(runtime.sessionModels.get("fork-edit-resubmit")).toEqual({
+      provider: "recovery-provider",
+      model: "recovery-model",
+      reasoningEffort: "low",
+    });
+    // Prefix alone would still name the broken route — live must win.
+    const childEvents = store.get("fork-edit-resubmit").events;
+    expect(modelSelectionFromPrefix(childEvents)).toEqual({
+      provider: "broken-provider",
+      model: "broken-model",
+    });
+  });
+
+  it("beforeSeq falls back to the seed prefix when the parent has no live override", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "minimal",
+    });
+    if (!created.result.ok) return;
+    const parentId = (created.result.value as { sessionId: string }).sessionId;
+
+    appendCompletedTurn(store, parentId, 1, "prior", {
+      provider: "prefix-provider",
+      model: "prefix-model",
+    });
+    store.append(parentId, {
+      type: "user/message",
+      ts: 200,
+      turnId: "t-edit",
+      content: "edit me",
+    });
+    const editSeq = store.get(parentId).events.length;
+    runtime.sessionModels.delete(parentId);
+
+    const forked = await dispatchFaceMethod(runtime, "session.fork", "f-prefix", {
+      sessionId: parentId,
+      beforeSeq: editSeq - 1,
+      newSessionId: "fork-edit-prefix",
+    });
+    expect(forked.result.ok).toBe(true);
+    if (!forked.result.ok) return;
+    expect(runtime.sessionModels.get("fork-edit-prefix")).toEqual({
+      provider: "prefix-provider",
+      model: "prefix-model",
+    });
+  });
+
   it("rejects fork when the log has no completed turn", async () => {
     const store = createMemorySessionStore();
     const runtime = createFaceRuntime({

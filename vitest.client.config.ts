@@ -77,8 +77,17 @@ function stubSourceAliases(): [string, string][] {
     const pkgName = packageName(path.join(dir, name, "package.json"));
     if (!pkgName) continue;
     const src = path.join(dir, name, "src");
-    if (!fs.existsSync(path.join(src, "index.ts"))) continue;
-    entries.push([pkgName, path.join(src, "index.ts")]);
+    if (!fs.existsSync(src)) continue;
+    const rootEntry = path.join(src, "index.ts");
+    if (fs.existsSync(rootEntry)) {
+      entries.push([pkgName, rootEntry]);
+    }
+    // Face Client halves often live at `src/client/index.ts` with no package-root
+    // `src/index.ts` (Host root stays an empty `index.js` stub).
+    const clientEntry = path.join(src, "client", "index.ts");
+    if (fs.existsSync(clientEntry)) {
+      entries.push([`${pkgName}/client`, clientEntry]);
+    }
     for (const file of fs.readdirSync(src)) {
       if (!file.endsWith(".ts") || file === "index.ts") continue;
       entries.push([`${pkgName}/${file.slice(0, -".ts".length)}`, path.join(src, file)]);
@@ -136,6 +145,15 @@ function longestFirst(map: Record<string, string>): Record<string, string> {
 
 export default defineConfig({
   ...config,
+  test: {
+    ...config.test,
+    // mergeConfig concatenates `include`; this lane must not inherit the unit
+    // `*.test.ts` sweep (those files expect Node, not jsdom).
+    include: [
+      "packages/client/**/tests/**/*.client.spec.ts",
+      "packages/client/**/tests/**/*.client.spec.tsx",
+    ],
+  },
   resolve: {
     ...config.resolve,
     alias: longestFirst((config.resolve?.alias as Record<string, string>) ?? {}),

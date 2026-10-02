@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createMemorySessionStore } from "@xrkseek/core-session";
@@ -249,5 +249,94 @@ describe("subagent tools", () => {
     expect(props.model).toBeTruthy();
     expect(props.reasoning_effort).toBeTruthy();
     expect(def.description).toMatch(/provider \/ model/);
+  });
+
+  it("spills an oversized child answer to a file the parent can read", async () => {
+    const prevHome = process.env.XRK_HOME;
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-sa-spill-"));
+    process.env.XRK_HOME = home;
+    try {
+      const store = createMemorySessionStore();
+      const runtime = createFaceRuntime({
+        store,
+        workspaceRoot: process.cwd(),
+        productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-spill-dir-")),
+        drain: drain(),
+        resolveAgent: async () => stubAgent(),
+        defaultAgentPreset: "harness",
+      });
+      const parent = runtime.ensureSession("parent");
+      runtime.sessionAgentPresets.set(parent, "harness");
+      const child = runtime.ensureSession("child");
+      runtime.subagents.attach({
+        parentSessionId: parent,
+        childSessionId: child,
+        mode: "continuable",
+        label: "c",
+      });
+      const fat = "结论段落。".repeat(4_000);
+      store.append(child, {
+        type: "assistant/message",
+        ts: Date.now(),
+        turnId: "t1",
+        stepId: "s1",
+        content: fat,
+      } as never);
+
+      const tools = createToolRegistry();
+      bindSubagentTools(tools, { runtime, parentSessionId: parent });
+      const out = await tools.get("wait_agent")!.execute({
+        agent_id: child,
+        timeout_ms: 1_000,
+      });
+      const text = String(out.content);
+      expect(text).toContain("read_file");
+      expect(text).toContain("middle omitted");
+      const locator = text.match(/stored at: (.+?)\. Retrieve/)?.[1];
+      expect(locator).toBeTruthy();
+      expect(locator!.replace(/\\/g, "/")).toContain("/spill/tool-outputs/");
+      expect(readFileSync(locator!, "utf8")).toBe(fat);
+    } finally {
+      if (prevHome === undefined) delete process.env.XRK_HOME;
+      else process.env.XRK_HOME = prevHome;
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a short child answer inline", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-short-")),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
+    });
+    const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
+    const child = runtime.ensureSession("child");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: child,
+      mode: "continuable",
+      label: "c",
+    });
+    store.append(child, {
+      type: "assistant/message",
+      ts: Date.now(),
+      turnId: "t1",
+      stepId: "s1",
+      content: "结论只有一行。",
+    } as never);
+
+    const tools = createToolRegistry();
+    bindSubagentTools(tools, { runtime, parentSessionId: parent });
+    const out = await tools.get("wait_agent")!.execute({
+      agent_id: child,
+      timeout_ms: 1_000,
+    });
+    expect(String(out.content)).toContain("结论只有一行。");
+    expect(String(out.content)).not.toContain("read_file");
   });
 });

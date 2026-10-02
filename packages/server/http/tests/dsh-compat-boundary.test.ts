@@ -11,7 +11,9 @@
  * 2. dsh-compat internals never reverse-depend on main-project business
  *    packages (server-face / server-host / client-* / apps/*). Its external
  *    package surface is a small infrastructure whitelist (core-session,
- *    im-gateway-contract, policy, server-loader, xrk-home-paths) — exactly the
+ *    im-gateway-contract, policy, server-loader, xrk-home-paths) plus the
+ *    contract-only layer the auto-review adapters need (llm adapter types,
+ *    protocol message types, core-tools tool definitions) — exactly the
  *    peer/inject surface PACKAGE.md names for extracting `@xrkseek/dsh-compat`.
  *
  * The scan is static (source text), so it runs without a build and fails on
@@ -45,9 +47,12 @@ const FORBIDDEN_MAIN_PACKAGES = [
 /** Infrastructure whitelist dsh-compat may import externally (extraction peers). */
 const DSH_COMPAT_ALLOWED_EXTERNAL = [
   "@xrkseek/core-session",
+  "@xrkseek/core-tools",
   "@xrkseek/exec-web",
   "@xrkseek/im-gateway-contract",
+  "@xrkseek/llm",
   "@xrkseek/policy",
+  "@xrkseek/protocol",
   "@xrkseek/server-loader",
   "@xrkseek/xrk-home-paths",
 ];

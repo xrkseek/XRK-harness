@@ -721,6 +721,10 @@ describe("runTurn", () => {
         store,
         llm,
         tools,
+        // A bare socket death is retryable by default (the retry policy is a
+        // blacklist), so the default budget would sleep through ~31s of real
+        // backoff. This test is about the turn closing, not about retrying.
+        llmRetry: { maxRetries: 0 },
       }),
     ).rejects.toThrow(/provider socket melted/);
     const events = store.get(session.id).events;

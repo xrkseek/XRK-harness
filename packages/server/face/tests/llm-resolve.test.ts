@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import { createFaceRuntime } from "../src/runtime.js";
 import { resolveLlmForSession } from "../src/llm-resolve.js";
+import { buildFaceModelCatalog } from "../src/model-catalog.js";
 import type { FaceDrain } from "../src/context.js";
 
 function drain(): FaceDrain {
@@ -26,11 +27,11 @@ describe("resolveLlmForSession", () => {
         "llm-deepseek:",
         "  baseURL: https://api.deepseek.com",
         "  models:",
-        "    - id: deepseek-v4-flash",
+        "    - id: deepseek-v4-pro",
         "      name: DeepSeek Chat",
         "agent-default-model:",
         "  provider: deepseek",
-        "  model: deepseek-v4-flash",
+        "  model: deepseek-v4-pro",
         "",
       ].join("\n"),
       "utf8",
@@ -57,11 +58,11 @@ describe("resolveLlmForSession", () => {
     expect(resolved).toBeDefined();
     expect(resolved!.selection).toEqual({
       provider: "deepseek",
-      model: "deepseek-v4-flash",
+      model: "deepseek-v4-pro",
     });
     expect(resolved!.adapter.id).toMatch(/^session:/);
     expect(resolved!.binding.baseUrl).toBe("https://api.deepseek.com");
-    expect(resolved!.binding.model).toBe("deepseek-v4-flash");
+    expect(resolved!.binding.model).toBe("deepseek-v4-pro");
     // Face intake may be text+image; official DeepSeek adapter stays text-only.
     expect(resolved!.adapter.inputModalities).toEqual(["text"]);
   });
@@ -74,10 +75,10 @@ describe("resolveLlmForSession", () => {
         "llm-deepseek:",
         "  baseURL: https://api.deepseek.com",
         "  models:",
-        "    - id: deepseek-v4-flash",
+        "    - id: deepseek-v4-pro",
         "agent-default-model:",
         "  provider: deepseek",
-        "  model: deepseek-v4-flash",
+        "  model: deepseek-v4-pro",
         "",
       ].join("\n"),
       "utf8",
@@ -181,5 +182,54 @@ describe("resolveLlmForSession", () => {
     } finally {
       if (prev !== undefined) process.env.DEEPSEEK_API_KEY = prev;
     }
+  });
+});
+
+describe("buildFaceModelCatalog DeepSeek reasoning", () => {
+  it("exposes thinking intensity efforts for DeepSeek catalog models", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-catalog-effort-"));
+    await writeFile(
+      path.join(dir, "settings.yaml"),
+      [
+        "llm-deepseek:",
+        "  baseURL: https://api.deepseek.com",
+        "  reasoningEffort: max",
+        "  models:",
+        "    - id: deepseek-v4-flash",
+        "      name: DeepSeek Chat",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(dir, ".credentials.yaml"),
+      "DEEPSEEK_API_KEY: sk-test-key\n",
+      "utf8",
+    );
+
+    const rt = createFaceRuntime({
+      store: createMemorySessionStore(),
+      workspaceRoot: dir,
+      productDir: dir,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+
+    const { groups } = buildFaceModelCatalog(rt);
+    const deepseek = groups.find((group) => group.id === "deepseek");
+    expect(deepseek?.models[0]).toMatchObject({
+      id: "deepseek-v4-flash",
+      reasoning: {
+        defaultEffort: "max",
+        efforts: [
+          { id: "off", name: "Off" },
+          { id: "low", name: "Low" },
+          { id: "high", name: "High" },
+          { id: "max", name: "Max" },
+        ],
+      },
+    });
   });
 });

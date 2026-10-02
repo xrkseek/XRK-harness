@@ -88,6 +88,191 @@ describe("tool pipeline", () => {
     expect(out.result.content).toBe("ok");
   });
 
+  it("defer-ask runs downstream pre; downstream deny wins without asking", async () => {
+    const body = vi.fn(async () => ({ content: "nope" }));
+    const asked = vi.fn(async () => true);
+    const reg = createToolRegistry();
+    reg.register({
+      name: "probe",
+      description: "p",
+      parameters: {},
+      execute: body,
+    });
+    const pipeline = createToolPipeline();
+    pipeline.prependPre(async () => ({
+      action: "defer-ask",
+      reason: "Auto review denied tool \"probe\": not authorized",
+    }));
+    pipeline.onPre(async () => ({
+      action: "deny",
+      reason: "downstream guard",
+    }));
+    pipeline.setApprovalHandler(asked);
+    const out = await runToolDetailed({
+      registry: reg,
+      call: { id: "1", name: "probe", arguments: {} },
+      pipeline,
+    });
+    expect(asked).not.toHaveBeenCalled();
+    expect(body).not.toHaveBeenCalled();
+    expect(out.skippedBody).toBe(true);
+    expect(out.result.content).toBe("downstream guard");
+  });
+
+  it("defer-ask asks only when downstream continues", async () => {
+    const body = vi.fn(async () => ({ content: "ran" }));
+    const asked = vi.fn(async () => true);
+    const reg = createToolRegistry();
+    reg.register({
+      name: "probe",
+      description: "p",
+      parameters: {},
+      execute: body,
+    });
+    const pipeline = createToolPipeline();
+    pipeline.prependPre(async () => ({
+      action: "defer-ask",
+      reason: "reviewer deny",
+    }));
+    pipeline.onPre(async (ctx) => ({ action: "continue", args: ctx.args }));
+    pipeline.setApprovalHandler(asked);
+    const out = await runToolDetailed({
+      registry: reg,
+      call: { id: "1", name: "probe", arguments: {} },
+      pipeline,
+    });
+    expect(asked).toHaveBeenCalledOnce();
+    expect(asked.mock.calls[0]?.[1]).toBe("reviewer deny");
+    expect(body).toHaveBeenCalled();
+    expect(out.result.content).toBe("ran");
+  });
+
+  it("locks auto-review prependPre ahead of soft onPre (even when soft registers first)", async () => {
+    // Harness contract: soft floors use onPre; Guardian uses prependPre so
+    // classify / defer-ask always runs before hardline · policy · hooks.
+    const order: string[] = [];
+    const body = vi.fn(async () => ({ content: "ran" }));
+    const reg = createToolRegistry();
+    reg.register({
+      name: "probe",
+      description: "p",
+      parameters: {},
+      execute: body,
+    });
+    const pipeline = createToolPipeline();
+    // Soft floors registered first (as harness does for hardline/policy).
+    pipeline.onPre(async (ctx) => {
+      order.push("soft-hardline");
+      return { action: "continue", args: ctx.args };
+    });
+    pipeline.onPre(async (ctx) => {
+      order.push("soft-policy");
+      return { action: "continue", args: ctx.args };
+    });
+    // Guardian prepend after soft registration — must still win the race.
+    pipeline.prependPre(async (ctx) => {
+      order.push("auto-review");
+      return { action: "continue", args: ctx.args };
+    });
+    await runToolDetailed({
+      registry: reg,
+      call: { id: "1", name: "probe", arguments: {} },
+      pipeline,
+    });
+    expect(order).toEqual(["auto-review", "soft-hardline", "soft-policy"]);
+    expect(body).toHaveBeenCalled();
+  });
+
+  it("onPre-after-soft would break the Guardian lock (negative control)", async () => {
+    // Documents why harness must not switch auto-review to onPre.
+    const order: string[] = [];
+    const body = vi.fn(async () => ({ content: "ran" }));
+    const reg = createToolRegistry();
+    reg.register({
+      name: "probe",
+      description: "p",
+      parameters: {},
+      execute: body,
+    });
+    const pipeline = createToolPipeline();
+    pipeline.onPre(async (ctx) => {
+      order.push("soft");
+      return { action: "continue", args: ctx.args };
+    });
+    pipeline.onPre(async (ctx) => {
+      order.push("auto-review-mistaken-onPre");
+      return { action: "continue", args: ctx.args };
+    });
+    await runToolDetailed({
+      registry: reg,
+      call: { id: "1", name: "probe", arguments: {} },
+      pipeline,
+    });
+    expect(order).toEqual(["soft", "auto-review-mistaken-onPre"]);
+  });
+
+  it("defer-ask forwards displayReason to the approval handler", async () => {
+    const body = vi.fn(async () => ({ content: "ran" }));
+    const asked = vi.fn(async () => true);
+    const reg = createToolRegistry();
+    reg.register({
+      name: "probe",
+      description: "p",
+      parameters: {},
+      execute: body,
+    });
+    const pipeline = createToolPipeline();
+    const displayReason = {
+      en: "Auto review denied this call: sensitive-tool",
+      zh: "Auto review 拒绝了此调用：敏感工具，需确认",
+    };
+    pipeline.prependPre(async () => ({
+      action: "defer-ask",
+      reason: 'Auto review denied tool "probe": sensitive-tool',
+      displayReason,
+    }));
+    pipeline.setApprovalHandler(asked);
+    await runToolDetailed({
+      registry: reg,
+      call: { id: "1", name: "probe", arguments: {} },
+      pipeline,
+    });
+    expect(asked).toHaveBeenCalledOnce();
+    expect(asked.mock.calls[0]?.[1]).toBe(
+      'Auto review denied tool "probe": sensitive-tool',
+    );
+    expect(asked.mock.calls[0]?.[2]).toEqual(displayReason);
+  });
+
+  it("defer-ask yields to a later immediate ask", async () => {
+    const body = vi.fn(async () => ({ content: "ran" }));
+    const asked = vi.fn(async (_ctx, reason: string) => {
+      expect(reason).toBe("downstream ask");
+      return true;
+    });
+    const reg = createToolRegistry();
+    reg.register({
+      name: "probe",
+      description: "p",
+      parameters: {},
+      execute: body,
+    });
+    const pipeline = createToolPipeline();
+    pipeline.prependPre(async () => ({
+      action: "defer-ask",
+      reason: "reviewer deny",
+    }));
+    pipeline.onPre(async () => ({ action: "ask", reason: "downstream ask" }));
+    pipeline.setApprovalHandler(asked);
+    await runToolDetailed({
+      registry: reg,
+      call: { id: "1", name: "probe", arguments: {} },
+      pipeline,
+    });
+    expect(asked).toHaveBeenCalledOnce();
+    expect(body).toHaveBeenCalled();
+  });
+
   it("guard deny means body zero calls", async () => {
     const body = vi.fn(async () => ({ content: "nope" }));
     const reg = createToolRegistry();

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { FaceCanvasStore } from "../src/canvas-store.js";
+import { FaceCanvasStore, normalizeSections } from "../src/canvas-store.js";
 import { createToolRegistry } from "@xrkseek/core-tools";
 import { bindCanvasTools } from "../src/canvas-tools.js";
 import type { FaceRuntime } from "../src/context.js";
@@ -54,6 +54,77 @@ describe("FaceCanvasStore", () => {
     expect(store.delete("ws_a", "one")).toBe(true);
     expect(store.get("ws_a", "two")?.title).toBe("Two");
     expect(store.list("ws_a").map((r) => r.id)).toEqual(["two"]);
+  });
+
+  it("preserves kpi tone and callout sections", () => {
+    const store = new FaceCanvasStore(home());
+    const doc = store.upsert("ws", {
+      id: "cold-start",
+      title: "Desktop cold start",
+      sections: [
+        {
+          kind: "kpi",
+          items: [
+            { label: "Electron + Host", value: "~0.3s", tone: "neutral" },
+            { label: "empty XRK_HOME", value: "~0.8s", tone: "good" },
+            { label: "real ~/.xrk", value: "~6.1s", tone: "warn" },
+            { label: "before fix", value: "~9.5s", tone: "bad" },
+          ],
+        },
+        {
+          kind: "callout",
+          title: "Root cause (before fix)",
+          tone: "warn",
+          body: "Main awaited Host IPC ready inside onReady before createWindow.",
+        },
+        {
+          kind: "series",
+          title: "readyMs",
+          tone: "accent",
+          points: [
+            { x: "proxy", y: 656 },
+            { x: "cron", y: 5921 },
+          ],
+        },
+      ],
+    });
+    expect(doc.sections[0]).toMatchObject({
+      kind: "kpi",
+      items: [
+        { label: "Electron + Host", tone: "neutral" },
+        { label: "empty XRK_HOME", tone: "good" },
+        { label: "real ~/.xrk", tone: "warn" },
+        { label: "before fix", tone: "bad" },
+      ],
+    });
+    expect(doc.sections[1]).toMatchObject({
+      kind: "callout",
+      title: "Root cause (before fix)",
+      tone: "warn",
+    });
+    expect(doc.sections[2]).toMatchObject({
+      kind: "series",
+      tone: "accent",
+    });
+    const cleaned = normalizeSections([
+      { kind: "kpi", items: [{ label: "x", value: "1", tone: "purple" }] },
+    ]);
+    expect(cleaned[0]).toMatchObject({
+      kind: "kpi",
+      items: [{ label: "x", value: "1" }],
+    });
+    if (cleaned[0]?.kind === "kpi") {
+      expect(cleaned[0].items[0]?.tone).toBeUndefined();
+    }
+  });
+
+  it("accepts kind md as markdown alias", () => {
+    const sections = normalizeSections([
+      { kind: "md", body: "## Title\n\n- a\n- b" },
+    ]);
+    expect(sections).toEqual([
+      { kind: "markdown", body: "## Title\n\n- a\n- b" },
+    ]);
   });
 
   it("bumps revision on upsert", () => {

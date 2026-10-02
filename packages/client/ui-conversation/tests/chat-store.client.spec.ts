@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
 /** Chat-store actions, scoped persistence, and instance isolation. */
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createChatStore } from '../src/client/stores.ts'
 
 const KEY = 'xrk.conversation.chat'
 
 beforeEach(() => {
+  vi.useFakeTimers()
   localStorage.clear()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('createChatStore', () => {
@@ -35,11 +40,12 @@ describe('createChatStore', () => {
     expect(store.store.getSnapshot().inspect).toBeNull()
   })
 
-  it('persists per scope key and rehydrates a fresh instance', () => {
+  it('persists per scope key and rehydrates a fresh instance', async () => {
     const handle = createChatStore()
     const s1 = handle.create('sess-1')
     s1.actions.setDraft('draft for one')
     s1.actions.select({ turnSeq: 1 })
+    await vi.advanceTimersByTimeAsync(200)
 
     // Scope-suffixed key: each session persists separately.
     expect(localStorage.getItem(`${KEY}.sess-1`)).not.toBeNull()
@@ -55,11 +61,15 @@ describe('createChatStore', () => {
     expect(other.store.getSnapshot().draft).toBe('')
   })
 
-  it('clearPersisted removes the scope entry (session-death cleanup hook)', () => {
+  it('clearPersisted removes the scope entry (session-death cleanup hook)', async () => {
     const store = createChatStore().create('sess-9')
     store.actions.setDraft('doomed')
+    await vi.advanceTimersByTimeAsync(200)
     expect(localStorage.getItem(`${KEY}.sess-9`)).not.toBeNull()
     store.clearPersisted()
+    expect(localStorage.getItem(`${KEY}.sess-9`)).toBeNull()
+    // A cancelled debounce must not resurrect the key after clear.
+    await vi.advanceTimersByTimeAsync(200)
     expect(localStorage.getItem(`${KEY}.sess-9`)).toBeNull()
   })
 

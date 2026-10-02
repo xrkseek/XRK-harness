@@ -27,6 +27,19 @@ const ORPHAN_PARENT_SCRIPT =
   `spawn(process.execPath,['-e',${JSON.stringify(BLOCK_SCRIPT)}],{stdio:'inherit'});` +
   "setTimeout(()=>{},30000);";
 
+/**
+ * Child that exits with a nonzero code after spawning a grandchild that keeps
+ * the inherited stdout pipe open for ~5s: natural exit + orphaned pipe, which
+ * `close` waits on — the exit-settle grace must cover it. The grace (2s) is
+ * well below the grandchild's 5s lifetime, so a passing assertion under 4.5s
+ * can only be satisfied by the exit-grace path, not by `close`.
+ */
+const ORPHAN_EXIT_SCRIPT =
+  "const {spawn}=require('child_process');" +
+  `spawn(process.execPath,['-e','setTimeout(()=>{},5000);'],{stdio:'inherit'});` +
+  "process.stderr.write('BOOM');" +
+  "process.exit(7);";
+
 describe("createLocalSubprocess", () => {
   it("gives stdin-reading commands immediate EOF instead of an open pipe", async () => {
     const subprocess = createLocalSubprocess();
@@ -70,6 +83,25 @@ describe("createLocalSubprocess", () => {
       expect(result.killed).toBe(true);
     },
     // POSIX settles via the 5s grace; win32 taskkill /T closes the pipe sooner.
+    20_000,
+  );
+
+  it(
+    "settles a natural exit while an orphaned grandchild still holds the stdout pipe",
+    async () => {
+      const subprocess = createLocalSubprocess();
+      const startedAt = Date.now();
+      const result = await subprocess.spawn([NODE, "-e", ORPHAN_EXIT_SCRIPT]);
+      // The child exited with code 7 and wrote BOOM before exiting; the
+      // grandchild keeps the pipe open for ~5s. Without the exit-settle grace
+      // this would hang until `close` (~5s) — and forever for a resident
+      // grandchild. The exit grace (2s) must settle it promptly.
+      expect(result.exitCode).toBe(7);
+      expect(result.stderr).toContain("BOOM");
+      expect(result.killed).toBe(false);
+      // 2s grace + margin; well under the grandchild's 5s pipe hold.
+      expect(Date.now() - startedAt).toBeLessThan(4_500);
+    },
     20_000,
   );
 

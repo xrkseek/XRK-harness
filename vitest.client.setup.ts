@@ -22,6 +22,14 @@
  * which never see a `window` at all.
  */
 
+import { expect } from "vitest";
+
+declare module "vitest" {
+  interface Assertion<T = unknown> {
+    toHaveBeenCalledExactlyOnceWith(...args: unknown[]): T;
+  }
+}
+
 /** @returns whether `value` behaves like a Web Storage instance. */
 function isStorage(value: unknown): boolean {
   return typeof (value as Storage | null)?.clear === "function";
@@ -155,3 +163,25 @@ if (typeof window !== "undefined") {
     defineGlobal("DataTransfer", DataTransferPolyfill);
   }
 }
+
+/**
+ * Jest-extended matcher used by command / input-trigger spy specs. Vitest
+ * ships `toHaveBeenCalledOnce` + `toHaveBeenCalledWith` separately; this
+ * lane's specs assert both in one call.
+ */
+expect.extend({
+  toHaveBeenCalledExactlyOnceWith(received: { mock?: { calls: unknown[][] } }, ...expected: unknown[]) {
+    const calls = received.mock?.calls;
+    if (!Array.isArray(calls)) {
+      return { pass: false, message: () => "expected a mock function" };
+    }
+    const pass = calls.length === 1 && this.equals(calls[0], expected);
+    return {
+      pass,
+      message: () =>
+        pass
+          ? `expected not to be called exactly once with ${this.utils.printExpected(expected)}`
+          : `expected exactly one call with ${this.utils.printExpected(expected)}, received ${this.utils.printReceived(calls)}`,
+    };
+  },
+});

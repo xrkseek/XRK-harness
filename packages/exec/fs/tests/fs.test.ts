@@ -170,7 +170,10 @@ describe("FsService", () => {
     expect(
       (await grepTool.execute({ pattern: "findme" })).content,
     ).toContain("readme.txt:1:");
-  });
+    // The case seeds a 2 500-entry directory; the walk itself is the point,
+    // but the default 5 s budget is tight when the whole lane runs in
+    // parallel on Windows.
+  }, 30_000);
 
   it("read_file may open absolute paths under hostReadableRoots", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-ws-"));

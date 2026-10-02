@@ -8,8 +8,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ConnectionHandle } from '@xrkseek/xrk-api-remotes/client'
 import type { ConnectionSinks } from '@xrkseek/xrk-api-remotes/client'
 import { SESSION_SEARCH_RESULT_LIMIT } from '@xrkseek/xrk-host-apiproxy/api'
-import TypertRegistry from '@xrkseek/xrk-typert-registry'
-import * as RuntimeClient from '../src/client/index.ts'
+import * as TypertRegistry from '@xrkseek/xrk-typert-registry/client'
+import { apply as runtimeApply, inject as runtimeInject } from '../src/client/index.ts'
 import type { ConversationNodeDefinition } from '../src/client/contract/conversation.ts'
 import { Session } from '../src/client/sessions/session.ts'
 import type { SessionRuntime } from '../src/client/sessions/service.ts'
@@ -25,6 +25,8 @@ interface Bench {
 
 async function mount(): Promise<Bench> {
   const ctx = new Context()
+  // Face Client Typert lives at `@xrkseek/xrk-typert-registry/client` (package
+  // root is an empty Host stub). Namespace form exposes `.apply` for cordis.
   await ctx.plugin(TypertRegistry)
   const api = new FakeApiClient()
   const bench: Bench = { ctx, api, sinks: undefined, stopped: 0 }
@@ -47,7 +49,7 @@ async function mount(): Promise<Bench> {
   ctx.reflect.provide('connection', handle)
   ctx.reflect.provide('remote', {})
   ctx.reflect.provide('remote.commands', fakeRemote().commands)
-  await ctx.plugin(RuntimeClient).await()
+  await ctx.plugin({ inject: [...runtimeInject], apply: runtimeApply }).await()
   return bench
 }
 

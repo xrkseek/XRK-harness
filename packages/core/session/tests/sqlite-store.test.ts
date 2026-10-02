@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createPersistentSessionStore,
+  forkSession,
   SESSION_DB_FILENAME,
   SESSION_SCHEMA_VERSION,
   SessionsDirInUseError,
@@ -494,5 +495,30 @@ describe("createPersistentSessionStore", () => {
     expect(b.isLoaded?.(id)).toBe(true);
     expect(b.readEvents(id)).toBe(b.eventsRef(id));
     expect(() => b.readEvents(id, -1)).toThrow(TypeError);
+  });
+
+  it("seed commits the fork prefix in one transaction and reloads", () => {
+    const dir = tempDir();
+    const a = track(createPersistentSessionStore(dir));
+    const src = a.create("src").id;
+    for (let i = 0; i < 20; i++) {
+      a.append(src, {
+        type: "user/message",
+        ts: i + 1,
+        turnId: "t",
+        content: `m${i}`,
+      });
+    }
+    a.flush();
+    const child = forkSession(a, src, 12, "forked");
+    expect(child.events).toHaveLength(12);
+    expect(a.readEvents(child.id)).toHaveLength(12);
+    a.close();
+
+    const b = track(createPersistentSessionStore(dir));
+    expect(b.readEvents("forked")).toHaveLength(12);
+    expect(
+      b.readEvents("forked").map((e) => ("content" in e ? e.content : undefined)),
+    ).toEqual(Array.from({ length: 12 }, (_, i) => `m${i}`));
   });
 });

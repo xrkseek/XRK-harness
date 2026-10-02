@@ -307,4 +307,22 @@ describe("forkSession", () => {
     expect(child.events).toHaveLength(3);
     expect(store.get("src").events).toHaveLength(6);
   });
+
+  it("prefers store.seed over create+append", () => {
+    const store = createMemorySessionStore();
+    store.create("src");
+    for (const ev of sampleTurn()) {
+      store.append("src", ev);
+    }
+    let seedCalls = 0;
+    const seeded = store.seed!.bind(store);
+    store.seed = (id, events) => {
+      seedCalls += 1;
+      return seeded(id, events);
+    };
+    const child = forkSession(store, "src", 4, "via-seed");
+    expect(seedCalls).toBe(1);
+    expect(child.id).toBe("via-seed");
+    expect(child.events).toHaveLength(4);
+  });
 });

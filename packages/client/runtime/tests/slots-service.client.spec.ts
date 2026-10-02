@@ -87,6 +87,7 @@ function captureHost(bench: Bench, children?: object): SlotRendererHost {
   bench.erased.register({ name: 'root', ...(children !== undefined ? { children } : {}) }, C)
   bench.ctx.reflect.provide('sessions', fakeSessions())
   bench.ctx.reflect.provide('workspaces', fakeWorkspaces())
+  bench.ctx.reflect.provide('connection', fakeConnection())
   bench.erased.renderSlot('root', {})
   if (host === undefined) throw new Error('renderer never received the host')
   return host
@@ -96,6 +97,17 @@ function captureHost(bench: Bench, children?: object): SlotRendererHost {
 function fakeWorkspaces() {
   const state = { items: [], phase: 'ready' as const }
   return { list: { getSnapshot: () => state, subscribe: () => () => undefined } }
+}
+
+/** Minimal connection face for the renderer host contract (state + phase feeds). */
+function fakeConnection() {
+  const idle = { getSnapshot: () => undefined, subscribe: () => () => undefined }
+  return {
+    api: {},
+    isLoopback: false,
+    connectionState: { getSnapshot: () => 'connected', subscribe: () => () => undefined },
+    connectionPhase: idle,
+  }
 }
 
 /** Minimal sessions face for the host contract (list observable + current provide projection). */
@@ -406,6 +418,7 @@ describe('declaration injection', () => {
     bench.erased.install({ renderRoot: (value: SlotRendererHost) => { host = value; return null } })
     bench.ctx.reflect.provide('sessions', fakeSessions())
     bench.ctx.reflect.provide('workspaces', fakeWorkspaces())
+    bench.ctx.reflect.provide('connection', fakeConnection())
     const disposeFrame = bench.erased.register({
       name: 'root', children: { 't.host': { kind: 'single', scope: 'root' } },
     }, C)
@@ -458,6 +471,7 @@ describe('renderer install seam', () => {
     bench.erased.register({ name: 'root' }, C)
     bench.ctx.reflect.provide('sessions', fakeSessions())
     bench.ctx.reflect.provide('workspaces', fakeWorkspaces())
+    bench.ctx.reflect.provide('connection', fakeConnection())
     expect(bench.erased.renderSlot('root', {})).toBe('tree')
     expect(renderRoot).toHaveBeenCalledTimes(1)
   })
@@ -468,6 +482,15 @@ describe('renderer install seam', () => {
     bench.erased.register({ name: 'root' }, C)
     bench.ctx.reflect.provide('sessions', fakeSessions())
     expect(() => bench.erased.renderSlot('root', {})).toThrow(/workspaces service mounted/)
+  })
+
+  it('fails before rendering when the connection object layer is absent', async () => {
+    const bench = await boot()
+    bench.erased.install({ renderRoot: () => null })
+    bench.erased.register({ name: 'root' }, C)
+    bench.ctx.reflect.provide('sessions', fakeSessions())
+    bench.ctx.reflect.provide('workspaces', fakeWorkspaces())
+    expect(() => bench.erased.renderSlot('root', {})).toThrow(/connection service mounted/)
   })
 })
 
@@ -596,6 +619,7 @@ describe('entry-unload cascade', () => {
     })
     bench.ctx.reflect.provide('sessions', fakeSessions())
     bench.ctx.reflect.provide('workspaces', fakeWorkspaces())
+    bench.ctx.reflect.provide('connection', fakeConnection())
     // The declarer here is NOT the root occupant: root stays occupied by a
     // separate entry so disposing the declarer only kills its children.
     const disposeRoot = bench.erased.register({ name: 'root' }, C)

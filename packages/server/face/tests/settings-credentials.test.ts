@@ -528,6 +528,52 @@ describe("Face settings U2", () => {
     if (!bad.result.ok) {
       expect(bad.result.error.code).toBe("settings-rejected");
     }
+
+    // DSH: General Settings never offer Auto (session-catalog only).
+    const autoAsDefault = await dispatchFaceMethod(rt, "settings.mutate", "pa", {
+      ns: "permission",
+      ops: [{ op: "set", path: ["defaultPreset"], value: "auto" }],
+    });
+    expect(autoAsDefault.result.ok).toBe(false);
+    if (!autoAsDefault.result.ok) {
+      expect(autoAsDefault.result.error.code).toBe("settings-rejected");
+    }
+  });
+
+  it("permission Settings schema enumerates configured presets only (no auto)", async () => {
+    const rt = runtime();
+    // Even with Guardian Auto live for the session catalog…
+    rt.permissionAuto.registerAuto(() => {});
+    const desc = await dispatchFaceMethod(rt, "settings.describe", "ps", {});
+    expect(desc.result.ok).toBe(true);
+    if (!desc.result.ok) return;
+    const permission = (
+      desc.result.value as {
+        namespaces: {
+          ns: string;
+          value: { defaultPreset: string };
+          schema: {
+            uid: number;
+            refs: Record<string, { type?: string; value?: string; list?: number[] }>;
+          };
+        }[];
+      }
+    ).namespaces.find((n) => n.ns === "permission");
+    expect(permission).toBeDefined();
+    if (!permission) return;
+    expect(permission.value.defaultPreset).toBe("workspace-write");
+    const refs = permission.schema.refs;
+    const union = refs["4"];
+    expect(union?.type).toBe("union");
+    const constValues = (union?.list ?? [])
+      .map((id) => refs[String(id)]?.value)
+      .filter((v): v is string => typeof v === "string");
+    expect(constValues).toEqual([
+      "read-only",
+      "workspace-write",
+      "danger-full-access",
+    ]);
+    expect(constValues).not.toContain("auto");
   });
 
   it("describe lists MCP connected overlay; mutate persists desired servers", async () => {

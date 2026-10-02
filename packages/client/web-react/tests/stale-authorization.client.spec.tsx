@@ -49,6 +49,10 @@ function makeHost() {
     workspaces: {
       list: { getSnapshot: () => ({}), subscribe: () => () => {} },
     },
+    connection: {
+      state: { getSnapshot: () => undefined, subscribe: () => () => {} },
+      phase: { getSnapshot: () => undefined, subscribe: () => () => {} },
+    },
   }
   return {
     host,

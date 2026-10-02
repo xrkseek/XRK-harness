@@ -41,7 +41,7 @@ afterEach(() => {
 // Keyless create() persists under the bare declared key; clear between cases
 // so one harness's selection cannot rehydrate into the next.
 beforeEach(() => {
-  localStorage.clear()
+  globalThis.localStorage?.clear?.()
 })
 
 function escapeRegExp(value: string): string {
@@ -155,7 +155,7 @@ function emptySessions() {
 
 function emptyWorkspaces() {
   const store = createSnapshotStore<WorkspaceListState>({
-    items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+    items: [], archivedSessionIds: [], pinnedSessionIds: [], pinnedWorkspaceIds: [], state: 'idle', phase: 'ready', error: null,
     baselinesReady: true, recentWorkspaceId: undefined,
   })
   return bindSnapshotSelector(store)
@@ -304,6 +304,8 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     chatScroll,
     forkAt,
     restoreAt,
+    editAt: vi.fn(),
+    deleteAt: vi.fn(),
     // Absent-service default; mention tests override with a real resolver.
     fileMentions: () => undefined,
     // Mirrors the real lookup chain (conversation namespace, then common).
@@ -585,20 +587,37 @@ describe('ChatView', () => {
     expect(view.container.querySelector('[data-submission-echo]')).toBeNull()
   })
 
-  it('keeps queued submission echoes out of the conversation flow', () => {
+  it('leaves queued submission echoes to QueueDock', () => {
     const h = makeHarness({
       pendingSubmissions: [{
         requestId: 'req-queued-only' as RpcId,
         placement: 'queued',
         time: 1,
-        text: '只在 Dock',
+        text: '短跟进',
         attachments: [],
       }],
       running: true,
     })
     const view = render(<h.ChatView {...h.props} />)
-    expect(view.queryByText('只在 Dock')).toBeNull()
+    expect(view.queryByText('短跟进')).toBeNull()
     expect(view.container.querySelector('[data-submission-echo]')).toBeNull()
+  })
+
+  it('badges a local steer submission echo as 插队中', () => {
+    const h = makeHarness({
+      pendingSubmissions: [{
+        requestId: 'req-local-steer' as RpcId,
+        placement: 'steering',
+        time: 1,
+        text: '打断一下',
+        attachments: [],
+      }],
+      running: true,
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const echo = view.getByText('打断一下').closest('[data-submission-echo]')
+    expect(echo).not.toBeNull()
+    expect(within(echo as HTMLElement).getByRole('status').textContent).toBe('插队中')
   })
 
   it('animates only the latest unresolved model retry', () => {
@@ -1080,6 +1099,26 @@ describe('ChatView', () => {
     })
     const view = render(<h.ChatView {...h.props} />)
     expect(view.queryByRole('status')).toBeNull()
+  })
+
+  it('does not force the waiting label from a transcript echo while Think is live', () => {
+    const h = makeHarness({
+      running: true,
+      pendingSubmissions: [{
+        requestId: 'req-transcript-echo' as RpcId,
+        placement: 'transcript',
+        time: 1,
+        text: '刚发出',
+        attachments: [],
+      }],
+      partial: { turn: 1, step: 0, blocks: [{ kind: 'reasoning', text: 'plan step one' }] },
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByText('刚发出').closest('[data-submission-echo]')).not.toBeNull()
+    const waiting = view.queryAllByRole('status').find(el => (
+      !el.closest('[data-submission-echo]') && !el.closest('[data-pending-steering]')
+    ))
+    expect(waiting).toBeUndefined()
   })
 
   it('keeps an idle waiting phrase while the turn runs with no live surface yet', () => {

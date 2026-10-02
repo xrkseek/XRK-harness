@@ -211,8 +211,11 @@ export class FakeApiClient implements IApiClient {
   onWorkspaceDelete: (payload: unknown) => Promise<RpcResponse<{ deleted: true }>> =
     () => Promise.resolve(ok({ deleted: true }))
 
-  onWorkspaceInsertBefore: (payload: unknown) => Promise<RpcResponse<{ workspaceIds: WorkspaceId[] }>> =
-    () => Promise.resolve(ok({ workspaceIds: [] }))
+  onWorkspaceInsertBefore: (payload: unknown) => Promise<RpcResponse<{
+    workspaceIds: WorkspaceId[]
+    pinnedWorkspaceIds?: WorkspaceId[]
+  }>> =
+    () => Promise.resolve(ok({ workspaceIds: [], pinnedWorkspaceIds: [] }))
 
   onWorkspaceInsertSessionBefore: (payload: unknown) => Promise<RpcResponse<{ workspace: WorkspaceView }>> =
     () => Promise.resolve(ok({ workspace: fakeWorkspace('fk-ws') }))
@@ -241,6 +244,21 @@ export class FakeApiClient implements IApiClient {
   onWorkspaceUnpinSession: (payload: unknown) => Promise<RpcResponse<{ pinnedSessionIds: SessionId[] }>> =
     () => Promise.resolve(ok({ pinnedSessionIds: [] as SessionId[] }))
 
+  onWorkspacePinWorkspace: (payload: unknown) => Promise<RpcResponse<{
+    pinnedWorkspaceIds: WorkspaceId[]
+    workspaceIds: WorkspaceId[]
+  }>> =
+    payload => Promise.resolve(ok({
+      pinnedWorkspaceIds: [(payload as { workspaceId: WorkspaceId }).workspaceId],
+      workspaceIds: [(payload as { workspaceId: WorkspaceId }).workspaceId],
+    }))
+
+  onWorkspaceUnpinWorkspace: (payload: unknown) => Promise<RpcResponse<{
+    pinnedWorkspaceIds: WorkspaceId[]
+    workspaceIds: WorkspaceId[]
+  }>> =
+    () => Promise.resolve(ok({ pinnedWorkspaceIds: [] as WorkspaceId[], workspaceIds: [] as WorkspaceId[] }))
+
   readonly workspace: IApiClient['workspace'] = {
     list: (payload: unknown) => this.record('workspace.list', payload, this.onWorkspaceList(payload).then(response => (
       response.result.ok
@@ -251,6 +269,7 @@ export class FakeApiClient implements IApiClient {
             value: {
               archivedSessionIds: [] as never[],
               pinnedSessionIds: [] as never[],
+              pinnedWorkspaceIds: [] as never[],
               ...response.result.value,
             },
           },
@@ -272,6 +291,10 @@ export class FakeApiClient implements IApiClient {
       this.record('workspace.pinSession', payload, this.onWorkspacePinSession(payload)),
     unpinSession: (payload: unknown) =>
       this.record('workspace.unpinSession', payload, this.onWorkspaceUnpinSession(payload)),
+    pinWorkspace: (payload: unknown) =>
+      this.record('workspace.pinWorkspace', payload, this.onWorkspacePinWorkspace(payload)),
+    unpinWorkspace: (payload: unknown) =>
+      this.record('workspace.unpinWorkspace', payload, this.onWorkspaceUnpinWorkspace(payload)),
   }
 
   // Payloads stay `unknown` (lint-lane note above); response rows are the real

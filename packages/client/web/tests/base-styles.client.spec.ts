@@ -5,13 +5,15 @@
  * tokens.
  */
 import { existsSync, readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+// import.meta.dirname: under this lane `import.meta.url` is not always file:.
+const HERE = import.meta.dirname
 const THEME_PACKAGE = '@xrkseek/client-ui-theme'
-const baseCss = readFileSync(fileURLToPath(new URL('../src/base.css', import.meta.url)), 'utf8')
+const baseCss = readFileSync(path.join(HERE, '../src/base.css'), 'utf8')
 const themeManifest = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../../ui-theme/package.json', import.meta.url)), 'utf8'),
+  readFileSync(path.join(HERE, '../../ui-theme/package.json'), 'utf8'),
 ) as { exports: Record<string, string>; files: string[] }
 
 /**
@@ -35,15 +37,14 @@ function importOrder(css: string): string[] {
  */
 function resolveThemeSheet(specifier: string): string {
   const name = specifier.slice(`${THEME_PACKAGE}/styles/`.length)
-  return fileURLToPath(new URL(`../../ui-theme/src/styles/${name}`, import.meta.url))
+  return path.join(HERE, `../../ui-theme/src/styles/${name}`)
 }
 
 const imports = importOrder(baseCss)
 
 describe('web shell base.css', () => {
-  it('publishes theme sheets from the built artifact plane', () => {
-    expect(themeManifest.exports['./styles/*']).toBe('./lib/styles/*')
-    expect(themeManifest.files).toContain('lib/styles')
+  it('publishes theme sheets from the package styles plane', () => {
+    expect(themeManifest.exports['./styles/*']).toBe('./src/styles/*')
   })
 
   it('imports every sheet from the theme package and each one exists', () => {

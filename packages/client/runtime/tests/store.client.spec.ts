@@ -10,6 +10,7 @@ const init = (): State => ({ a: { n: 1 }, b: { list: ['x'] } })
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 describe('createSnapshotStore', () => {
@@ -57,6 +58,7 @@ describe('createSnapshotStore', () => {
   })
 
   it('falls back to microtask batching in raf mode without requestAnimationFrame', async () => {
+    vi.stubGlobal('requestAnimationFrame', undefined)
     const store = createSnapshotStore(init(), { flush: 'raf' })
     const spy = vi.fn()
     store.subscribe(spy)
@@ -96,7 +98,8 @@ describe('createSnapshotStore', () => {
     expect(() => { (store.getSnapshot().a).n = 9 }).toThrow()
   })
 
-  it('rehydrates primitive state whole, not spread into index keys', () => {
+  it('rehydrates primitive state whole, not spread into index keys', async () => {
+    vi.useFakeTimers()
     const backing = new Map<string, string>()
     vi.stubGlobal('localStorage', {
       getItem: (k: string) => backing.get(k) ?? null,
@@ -105,11 +108,14 @@ describe('createSnapshotStore', () => {
     })
     const store = createSnapshotStore<string>('', { persist: { name: 'spec-draft' } })
     store.set('hello')
+    await vi.advanceTimersByTimeAsync(200)
     const revived = createSnapshotStore<string>('', { persist: { name: 'spec-draft' } })
     expect(revived.getSnapshot()).toBe('hello')
+    vi.useRealTimers()
   })
 
-  it('persists to localStorage under the given name and rehydrates', () => {
+  it('persists to localStorage under the given name and rehydrates', async () => {
+    vi.useFakeTimers()
     const backing = new Map<string, string>()
     vi.stubGlobal('localStorage', {
       getItem: (k: string) => backing.get(k) ?? null,
@@ -118,9 +124,35 @@ describe('createSnapshotStore', () => {
     })
     const store = createSnapshotStore(init(), { persist: { name: 'spec-store' } })
     store.update((d) => { d.a.n = 42 })
+    expect(backing.has('spec-store')).toBe(false)
+    await vi.advanceTimersByTimeAsync(200)
     expect(backing.has('spec-store')).toBe(true)
     const revived = createSnapshotStore(init(), { persist: { name: 'spec-store' } })
     expect(revived.getSnapshot().a.n).toBe(42)
+    vi.useRealTimers()
+  })
+
+  it('coalesces rapid persist writes and skips identical payloads', async () => {
+    vi.useFakeTimers()
+    const backing = new Map<string, string>()
+    const setItem = vi.fn((k: string, v: string) => { backing.set(k, v) })
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => backing.get(k) ?? null,
+      setItem,
+      removeItem: (k: string) => { backing.delete(k) },
+    })
+    const store = createSnapshotStore({ draft: '' }, { persist: { name: 'spec-coalesce' } })
+    store.set({ draft: 'a' })
+    store.set({ draft: 'ab' })
+    store.set({ draft: 'abc' })
+    expect(setItem).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(200)
+    expect(setItem).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(backing.get('spec-coalesce')!)).toEqual({ draft: 'abc' })
+    store.set({ draft: 'abc' })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(setItem).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
   })
 })
 
@@ -161,7 +193,8 @@ describe('defineStore', () => {
     expect(b.store.getSnapshot().draft).toBe('')
   })
 
-  it('suffixes the persist key with the scope key: per-session persistence plus clearPersisted cleanup', () => {
+  it('suffixes the persist key with the scope key: per-session persistence plus clearPersisted cleanup', async () => {
+    vi.useFakeTimers()
     const backing = new Map<string, string>()
     vi.stubGlobal('localStorage', {
       getItem: (k: string) => backing.get(k) ?? null,
@@ -176,6 +209,7 @@ describe('defineStore', () => {
     handle.create('s1').actions.setDraft('one')
     handle.create('s2').actions.setDraft('two')
     handle.create().actions.setDraft('root')
+    await vi.advanceTimersByTimeAsync(200)
     expect(JSON.parse(backing.get('spec.chat.s1')!)).toEqual({ draft: 'one' })
     expect(JSON.parse(backing.get('spec.chat.s2')!)).toEqual({ draft: 'two' })
     expect(JSON.parse(backing.get('spec.chat')!)).toEqual({ draft: 'root' })
@@ -186,6 +220,7 @@ describe('defineStore', () => {
     expect(backing.has('spec.chat.s1')).toBe(false)
     expect(backing.has('spec.chat.s2')).toBe(true)
     expect(backing.has('spec.chat')).toBe(true)
+    vi.useRealTimers()
   })
 
   it('clearPersisted is a no-op without a persist declaration or without storage', () => {

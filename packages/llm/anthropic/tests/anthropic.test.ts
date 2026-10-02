@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { failureFromUnknown, isRetryableFailure } from "@xrkseek/llm";
 import {
   ANTHROPIC_DEFAULT_BASE_URL,
   createAnthropicAdapter,
@@ -176,5 +177,38 @@ describe("anthropic adapter", () => {
         cacheWriteTokens: 10,
       },
     });
+  });
+
+  it("turns a silent body into a retryable TIMEOUT, not a hang", async () => {
+    const llm = createAnthropicAdapter({
+      apiKey: "k",
+      idleTimeoutMs: 25,
+      fetch: (async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"hi"}}\n\n',
+                ),
+              );
+            },
+          }),
+          { status: 200, headers: { "content-type": "text/event-stream" } },
+        )) as unknown as typeof fetch,
+    });
+    const err = await (async () => {
+      for await (const _ of llm.stream!({
+        messages: [{ role: "user", content: "hi" }],
+      })) {
+        /* drain */
+      }
+    })().catch((e: unknown) => e);
+    expect(err).toMatchObject({
+      name: "LlmError",
+      code: "TIMEOUT",
+      message: "anthropic: idle timeout waiting for stream",
+    });
+    expect(isRetryableFailure(failureFromUnknown(err))).toBe(true);
   });
 });

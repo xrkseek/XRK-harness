@@ -59,62 +59,24 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
       const port = instance.health().port!;
       const base = `http://127.0.0.1:${port}`;
 
+      // The shell is the Vite bundle (no import map, no per-client `/plugins/*`
+      // distribution): one hashed module entry plus the Host boot stamp.
       const htmlRes = await fetch(`${base}/`);
       expect(htmlRes.status).toBe(200);
       const html = await htmlRes.text();
       expect(html).toContain("__XRK_BOOT__");
-      expect(html).toContain("@xrkseek/client-runtime");
-      expect(html).toContain("@xrkseek/client-ui-conversation");
+      expect(html).toMatch(/<script type="module"[^>]*src="\/assets\/index-[^"]+\.js"/);
       expect(html).not.toContain("client-ui-cordis");
       expect(html).not.toContain("xrk-cordis-client-runner");
       expect(html).not.toContain("client-hmr");
       expect(html).not.toContain("client-ui-directory-picker-native");
       expect(html).not.toContain("dsh-pocket");
 
-      const welcomeJs = await readFile(
-        path.join(
-          WEB_DIST,
-          "plugins",
-          "@xrkseek",
-          "client-ui-settings-models",
-          "client.js",
-        ),
-        "utf8",
-      );
-      expect(welcomeJs).toContain("Welcome to XRK-Harness");
-      expect(welcomeJs).toContain("2026-08-23.1");
-
-      const plugin = await fetch(
-        `${base}/plugins/@xrkseek/client-runtime/client.js`,
-        { method: "HEAD" },
-      );
-      expect(plugin.status).toBe(200);
-      expect(plugin.headers.get("content-type") ?? "").toMatch(/javascript/);
-
-      const typert = await fetch(
-        `${base}/plugins/@xrkseek/xrk-typert-registry/client.js`,
-        { method: "HEAD" },
-      );
-      expect(typert.status).toBe(200);
-
-      const bootRes = await fetch(`${base}/boot.json`);
-      expect(bootRes.status).toBe(200);
-      const boot = (await bootRes.json()) as { entries: { id: string }[] };
-      const bootIds = boot.entries.map((e) => e.id);
-      expect(bootIds).toEqual(
-        expect.arrayContaining([
-          "@xrkseek/xrk-typert-registry",
-          "@xrkseek/xrk-api-gateway",
-          "@xrkseek/xrk-api-remotes",
-          "@xrkseek/client-ui-reference",
-        ]),
-      );
-
-      const missing = await fetch(
-        `${base}/plugins/@xrkseek/does-not-exist/client.js`,
-      );
-      expect(missing.status).toBe(404);
-      expect(await missing.text()).not.toContain("<!doctype html>");
+      // Unknown asset paths fall through to the SPA shell so client-side
+      // routing survives a reload on a deep link.
+      const missing = await fetch(`${base}/assets/does-not-exist.js`);
+      expect(missing.status).toBe(200);
+      expect(await missing.text()).toContain("<!doctype html>");
 
       const manifest = await fetch(`${base}/manifest.webmanifest`);
       expect(manifest.status).toBe(200);
@@ -168,7 +130,9 @@ describe.skipIf(!HAS_SHELL)("product shell first paint", () => {
       expect(
         cordisRows.some(
           (row) =>
-            row.pluginId === "@xrkseek/client-runtime" &&
+            // The only fiber Host still owns: the dsh-compat bridge. Client
+            // halves ship inside the Vite bundle, not as cordis client plugins.
+            row.pluginId === "dsh-compat-host" &&
             row.fiberPhase === "active" &&
             row.hostBridge === "xrk-dsh-compat",
         ),

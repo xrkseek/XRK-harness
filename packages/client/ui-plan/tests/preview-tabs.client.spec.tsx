@@ -221,6 +221,78 @@ describe('preview envelopes', () => {
 })
 
 describe('PreviewTabs', () => {
+  it('renders Status with harness self-node graph without update-depth thrash', async () => {
+    const errors: unknown[] = []
+    const onError = (event: ErrorEvent) => { errors.push(event.error ?? event.message) }
+    window.addEventListener('error', onError)
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('session.status')) {
+        return jsonResponse({
+          result: {
+            ok: true,
+            value: {
+              ...sampleStatus,
+              badge: 'harness',
+              subagents: {
+                ...sampleStatus.subagents,
+                graph: {
+                  nodes: [{ id: 's1', label: 's1', role: 'observer', depth: 0 }],
+                  edges: [],
+                },
+              },
+              channels: {
+                ...sampleStatus.channels,
+                im: [
+                  { channelId: 'telegram', displayName: 'Telegram', wired: 'discover' },
+                  { channelId: 'discord', displayName: 'Discord', wired: 'discover' },
+                ],
+                alerts: [
+                  { id: 'a1', severity: 'info', message: 'stub' },
+                ],
+              },
+              compaction: {
+                ...sampleStatus.compaction,
+                pipeline: 'summary',
+                stages: ['prune'],
+                pruneCount: 1,
+                summaryCount: 1,
+                lastReason: 'auto',
+                lastShadowedTokens: 100,
+              },
+              fleet: {
+                ...sampleStatus.fleet,
+                channelAlerts: 1,
+                alerts: [{ id: 'a1', severity: 'info', message: 'stub' }],
+              },
+            },
+          },
+        })
+      }
+      return jsonResponse({ ok: false })
+    }))
+    const { useProjection } = fakeProjections({})
+    render(
+      <PreviewTabs
+        {...({
+          sessionId: 's1',
+          closeDetails: vi.fn(),
+          t,
+          useProjection,
+          useSessions: useSessionsStub(),
+          openTeamChild: vi.fn(),
+        } as PreviewTabsProps)}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('会话')).toBeTruthy()
+    })
+    expect(document.querySelector('[data-subagent-graph]')).toBeTruthy()
+    window.removeEventListener('error', onError)
+    const depth = errors.filter((e) => String(e).includes('Maximum update depth') || String(e).includes('#185'))
+    expect(depth).toEqual([])
+  })
+
   it('defaults to Status and shows standing todos after switching tabs', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
@@ -328,11 +400,35 @@ describe('PreviewTabs', () => {
     expect(screen.getByText('是')).toBeTruthy()
   })
 
-  it('binds live contextTimeline summary on Status; event rows live on Context', async () => {
+  it('Status uses Face timeline summary; Context tab binds live contextTimeline events', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url.includes('session.status')) {
-        return jsonResponse({ result: { ok: true, value: sampleStatus } })
+        return jsonResponse({
+          result: {
+            ok: true,
+            value: {
+              ...sampleStatus,
+              timeline: {
+                ...sampleStatus.timeline,
+                total: 95,
+                system: 10,
+                tools: 5,
+                user: 20,
+                inject: 8,
+                assistant: 40,
+                tool: 12,
+                requestCount: 1,
+                eventCount: 3,
+                injectSources: ['skill-catalog:catalog'],
+                lastCompactReason: 'overflow',
+                lastShadowedTokens: 1200,
+                spillCount: 1,
+                pruneCount: 1,
+              },
+            },
+          },
+        })
       }
       return jsonResponse({ ok: false })
     }))

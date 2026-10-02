@@ -493,7 +493,7 @@ describe('WorkspaceRuntime', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-idle'])
     api.onWorkspaceList = () => Promise.resolve(ok({
-      items: [], archivedSessionIds: [sid('s-open')], pinnedSessionIds: [],
+      items: [], archivedSessionIds: [sid('s-open')], pinnedSessionIds: [], pinnedWorkspaceIds: [],
     }) as never)
     await workspaces.refresh()
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-open'])
@@ -522,12 +522,12 @@ describe('WorkspaceRuntime', () => {
     } as never)
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(sessions.list.getSnapshot().current).toBeUndefined()
-    gate.resolve(ok({ items: [], archivedSessionIds: [], pinnedSessionIds: [] }))
+    gate.resolve(ok({ items: [], archivedSessionIds: [], pinnedSessionIds: [], pinnedWorkspaceIds: [] }))
     await hydration
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-open'])
     // The next (fresh) baseline is authoritative again.
     api.onWorkspaceList = () => Promise.resolve(ok({
-      items: [], archivedSessionIds: [], pinnedSessionIds: [],
+      items: [], archivedSessionIds: [], pinnedSessionIds: [], pinnedWorkspaceIds: [],
     }) as never)
     await workspaces.refresh()
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual([])
