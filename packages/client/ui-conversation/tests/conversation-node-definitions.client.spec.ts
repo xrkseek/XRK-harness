@@ -979,6 +979,62 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 
+  it('keeps a single turn-tail when Stop cancels an in-flight llm/retry after file diffs', () => {
+    // Screenshot repro: tools write files → empty model response schedules
+    // llm/retry → user hits Stop. The cancelled-retry banner sits above the
+    // ChangedFiles card; two full turn-tails (card + chips + 用时) must not
+    // materialize for the same turn.
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: {
+          ...assistantMessage('a1', ''),
+          content: [{ type: 'tool-call', id: 'c1', name: 'write', arguments: '{}' }],
+        },
+      }, { surfaceOp: 'append' }),
+      at(4, 'tool/call', {
+        turn: 1, step: 1, callId: 'c1', name: 'write', arguments: '{}',
+      }),
+      at(5, 'tool/result', {
+        turn: 1, step: 1, message: toolResult('c1', 'ok'),
+      }, { surfaceOp: 'append' }),
+      at(6, 'llm/retry', {
+        retryId: 'retry-stop',
+        turn: 1,
+        step: 1,
+        provider: 'fake',
+        mode: 'normal',
+        policyKey: 'fake-normal',
+        retry: 1,
+        maxRetries: 5,
+        delayMs: 976,
+        failure: { code: 'EMPTY_RESPONSE', message: 'empty model response' },
+      }),
+      // Cancel finalize: interrupted assistant (optional) + step/end + turn/end.
+      at(7, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: assistantMessage('a1-cut', 'partial'),
+        interrupted: true,
+      }, { surfaceOp: 'append' }),
+      at(8, 'step/end', { turn: 1, step: 1 }),
+      at(9, 'turn/end', {
+        turn: 1,
+        reason: { kind: 'aborted', reason: { kind: 'user' } },
+      }),
+    ])
+    const snap = snapshot(value)
+    const tails = [...snap.nodes.values()].filter(candidate => candidate.kind === 'turn-tail')
+    expect(tails).toHaveLength(1)
+    expect(snap.order.filter(key => snap.nodes.get(key)?.kind === 'turn-tail')).toHaveLength(1)
+    expect(node(snap, 'model-retry')?.data).toMatchObject({
+      current: expect.objectContaining({ retryState: 'cancelled' }),
+    })
+  })
+
   it('materializes a max-tokens notice and keeps completed and error turns clean', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),

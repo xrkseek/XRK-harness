@@ -38,6 +38,30 @@ async function bench(readAttachment?: SessionFace['readAttachment']) {
   return { runtime, fiber, root, scoped, hub, shell, prompt, updateQueue, cancel, loadOlder }
 }
 
+/** jsdom in this lane has no `URL.createObjectURL`; assign stubs instead of spyOn. */
+function stubObjectUrls(createImpl: () => string) {
+  const created = vi.fn(createImpl)
+  const revoked = vi.fn()
+  const holder = URL as unknown as {
+    createObjectURL?: (blob: Blob) => string
+    revokeObjectURL?: (url: string) => void
+  }
+  const prevCreate = holder.createObjectURL
+  const prevRevoke = holder.revokeObjectURL
+  holder.createObjectURL = created
+  holder.revokeObjectURL = revoked
+  return {
+    created,
+    revoked,
+    restore() {
+      if (prevCreate === undefined) delete holder.createObjectURL
+      else holder.createObjectURL = prevCreate
+      if (prevRevoke === undefined) delete holder.revokeObjectURL
+      else holder.revokeObjectURL = prevRevoke
+    },
+  }
+}
+
 describe('ConversationController', () => {
   it('routes operations through the public Session binding', async () => {
     const b = await bench()
@@ -84,10 +108,49 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
+  it('keeps a distinct echo preview blob until the pending submission retires', async () => {
+    const b = await bench()
+    let minted = 0
+    const urls = stubObjectUrls(() => `blob:preview-${++minted}`)
+    try {
+      const file = new File([new Uint8Array(4)], 'image.png', { type: 'image/png' })
+      if (typeof file.arrayBuffer !== 'function') {
+        Object.defineProperty(File.prototype, 'arrayBuffer', {
+          configurable: true,
+          value() {
+            return Promise.resolve(new Uint8Array(4).buffer)
+          },
+        })
+      }
+      const [attachment] = b.root.createDraftImages([file])
+      if (attachment === undefined || attachment.kind !== 'image') throw new Error('draft image missing')
+      const session = b.runtime.sessions.binding('s1')!.session
+      const outcome = await b.root.sendSession(session, '带图插队', [attachment.id], 'steer')
+      expect(outcome).toEqual({ kind: 'success' })
+      expect(urls.revoked).toHaveBeenCalledWith('blob:preview-1')
+      expect(urls.revoked).not.toHaveBeenCalledWith('blob:preview-2')
+      const begin = vi.mocked(session.beginSubmission)
+      const input = begin.mock.calls.at(-1)?.[0]
+      expect(input?.attachments).toEqual([
+        expect.objectContaining({
+          type: 'image',
+          value: expect.objectContaining({ previewUrl: 'blob:preview-2', name: 'image.png' }),
+        }),
+      ])
+      input?.onRetire?.({ reason: 'observed', attachments: [] })
+      expect(urls.revoked).not.toHaveBeenCalledWith('blob:preview-2')
+      await vi.waitFor(() => {
+        expect(urls.revoked).toHaveBeenCalledWith('blob:preview-2')
+      })
+    } finally {
+      urls.restore()
+    }
+    await b.runtime.dispose()
+  })
+
   it('releases draft previews when their session scope is disposed', async () => {
     const b = await bench()
-    const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:draft-1')
-    const revoked = vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined)
+    const urls = stubObjectUrls(() => 'blob:draft-1')
     try {
       const [attachment] = b.root.createDraftImages([
         new File([new Uint8Array(4)], 'a.png', { type: 'image/png' }),
@@ -96,24 +159,23 @@ describe('ConversationController', () => {
       b.root.input.for(b.runtime.sessions.scope('s1')!).addImages([attachment.id])
       await b.runtime.sessions.remove('s1')
       expect(b.root.draftImages([attachment.id])).toEqual([])
-      expect(revoked).toHaveBeenCalledWith('blob:draft-1')
+      expect(urls.revoked).toHaveBeenCalledWith('blob:draft-1')
     } finally {
-      created.mockRestore()
-      revoked.mockRestore()
+      urls.restore()
     }
     await b.runtime.dispose()
   })
 
   it('routes non-image MIME types to file drafts; only images allocate previews', async () => {
     const b = await bench()
-    const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview')
+    const urls = stubObjectUrls(() => 'blob:preview')
     const drafts = b.root.createDraftImages([
       new File([Uint8Array.of(1)], 'valid.png', { type: 'image/png' }),
       new File([Uint8Array.of(2)], 'note.svg', { type: 'image/svg+xml' }),
     ])
     expect(drafts.map(d => d.kind)).toEqual(['image', 'file'])
-    expect(created).toHaveBeenCalledTimes(1)
-    created.mockRestore()
+    expect(urls.created).toHaveBeenCalledTimes(1)
+    urls.restore()
     await b.runtime.dispose()
   })
 

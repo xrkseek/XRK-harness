@@ -38,6 +38,9 @@ const config = mergeConfig(
         "packages/client/ui-settings-plugins/tests/info-cards.client.spec.ts",
       ],
       environment: "jsdom",
+      // Same jsdom repairs as the client lane (Lexical Range geometry,
+      // DataTransfer, PointerEvent) — composer setDraft otherwise throws.
+      setupFiles: ["./vitest.client.setup.ts"],
     },
     resolve: {
       alias: {
