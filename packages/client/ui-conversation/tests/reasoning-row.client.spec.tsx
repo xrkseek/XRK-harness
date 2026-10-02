@@ -97,18 +97,30 @@ describe('ReasoningRow', () => {
     expect(row.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('expanded Think drops the inline summary and renders plain prose, no IN card', () => {
+  it('keeps expand open across remounts when persistKey is set', () => {
     const view = render(
       <AssistantMarkdown
         t={t}
+        thinkPersistKey="1:0"
+        blocks={[{ kind: 'reasoning', text: 'Inspect the session\nCheck persistence' }]}
+        streaming
+        renderMessageImages={renderMessageImages}
+      />,
+    )
+    fireEvent.click(view.getByText('思考'))
+    expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('true')
+
+    view.unmount()
+    const again = render(
+      <AssistantMarkdown
+        t={t}
+        thinkPersistKey="1:0"
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nCheck persistence' }]}
         streaming={false}
         renderMessageImages={renderMessageImages}
       />,
     )
-    fireEvent.click(view.getByText('思考'))
-    expect(view.getAllByText(/Inspect the session/)).toHaveLength(1)
-    expect(view.queryByText('IN')).toBeNull()
-    expect(view.container.querySelector('[class*="ioCard"]')).toBeNull()
+    expect(again.getByRole('button').getAttribute('aria-expanded')).toBe('true')
+    expect(again.getByText(/Check persistence/)).toBeTruthy()
   })
 })

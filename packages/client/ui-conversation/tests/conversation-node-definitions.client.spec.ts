@@ -1035,6 +1035,73 @@ describe('built-in conversation node Definitions', () => {
     expect(node(snap, 'model-retry')).toBeUndefined()
   })
 
+  it('hides a painted model-retry on Stop without freezing later turns', () => {
+    // Live path: llm/retry flushes first (banner visible), then turn/end
+    // cancels it. Returning null used to throw "withdrew materialized target"
+    // and leave the session snapshot stuck — Host still ran follow-up prompts
+    // but ChatView showed nothing until refresh.
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'llm/retry', {
+        retryId: 'retry-live-stop',
+        turn: 1,
+        step: 1,
+        provider: 'fake',
+        mode: 'normal',
+        policyKey: 'fake-normal',
+        retry: 1,
+        maxRetries: 5,
+        delayMs: 500,
+        failure: { code: 'EMPTY_RESPONSE', message: 'empty model response' },
+      }),
+    ])
+    expect(node(snapshot(value), 'model-retry')?.visibility).toBe('visible')
+
+    expect(() => {
+      value.append(at(4, 'step/end', { turn: 1, step: 1 }))
+      value.append(at(5, 'turn/end', {
+        turn: 1,
+        reason: { kind: 'aborted', reason: { kind: 'user' } },
+      }))
+      value.flush()
+    }).not.toThrow()
+
+    const afterStop = snapshot(value)
+    const retryAfter = node(afterStop, 'model-retry')
+    expect(retryAfter?.visibility).toBe('hidden')
+    expect(afterStop.order.filter(key => afterStop.nodes.get(key)?.kind === 'model-retry')).toHaveLength(0)
+
+    value.append(at(6, 'turn/start', { turn: 2 }))
+    value.append(at(7, 'step/start', { turn: 2, step: 1 }))
+    value.append(at(8, 'user/message', {
+      ...textMessage('follow-up', 'next prompt'),
+      source: { kind: 'user' },
+    }, { surfaceOp: 'append' }))
+    value.append(at(9, 'assistant/message', {
+      turn: 2, step: 1, message: assistantMessage('a2', 'visible again'),
+    }, { surfaceOp: 'append' }))
+    value.append(at(10, 'step/end', { turn: 2, step: 1 }))
+    value.append(at(11, 'turn/end', { turn: 2, reason: { kind: 'completed' } }))
+    value.flush()
+
+    const followUp = snapshot(value)
+    expect(followUp.order.some(key => {
+      const candidate = followUp.nodes.get(key)
+      return candidate?.kind === 'user'
+        && (candidate.data as { content?: unknown }).content !== undefined
+        && JSON.stringify(candidate.data).includes('next prompt')
+    })).toBe(true)
+    expect(followUp.order.some(key => {
+      const candidate = followUp.nodes.get(key)
+      return candidate?.kind === 'assistant-step'
+        && JSON.stringify(candidate.data).includes('visible again')
+    })).toBe(true)
+    // Aborted turn 1 + completed turn 2 each own one tail — not a duplicate
+    // footer for the same turn.
+    expect(followUp.order.filter(key => followUp.nodes.get(key)?.kind === 'turn-tail')).toHaveLength(2)
+  })
+
   it('materializes a max-tokens notice and keeps completed and error turns clean', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),

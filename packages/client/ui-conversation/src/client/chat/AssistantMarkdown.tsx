@@ -23,6 +23,8 @@ export interface AssistantMarkdownProps {
   streaming: boolean
   /** Frozen partial of an aborted turn: rendered with a stopped marker. */
   interrupted?: boolean | undefined
+  /** Stable Think expand key (turn:step); keeps open state across remounts. */
+  thinkPersistKey?: string | undefined
   /** Render consecutive image blocks through the attachment slot. */
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
   /** Resolved prose file mentions for this Assistant's closing turn. */
@@ -33,7 +35,7 @@ export interface AssistantMarkdownProps {
 
 /** Reasoning block as the Think variant summary row (figma 39:28304). */
 export const AssistantMarkdown = memo(function AssistantMarkdown({
-  blocks, streaming, interrupted, renderMessageImages, mentions, t,
+  blocks, streaming, interrupted, thinkPersistKey, renderMessageImages, mentions, t,
 }: AssistantMarkdownProps) {
   // Stable per locale revision (t identity changes on switch): a fresh object
   // per render would rebuild MarkdownText's component table every chunk.
@@ -63,7 +65,15 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
         )
         break
       case 'reasoning':
-        rendered.push(<ReasoningRow key={i} text={block.text} running={streaming && i === last} t={t} />)
+        rendered.push(
+          <ReasoningRow
+            key={i}
+            text={block.text}
+            running={streaming && i === last}
+            persistKey={thinkPersistKey === undefined ? undefined : `${thinkPersistKey}:${i}`}
+            t={t}
+          />,
+        )
         break
       case 'image': {
         // Consecutive image blocks share one gallery so several images tile

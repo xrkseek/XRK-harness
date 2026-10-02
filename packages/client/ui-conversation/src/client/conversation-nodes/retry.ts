@@ -83,11 +83,20 @@ export const retryDefinition: ConversationNodeDefinition<RetryState> = {
         : attempt)
     const current = attempts.at(-1)
     if (current === undefined) return null
-    // User Stop during backoff: the attempt never left `scheduled`, so a
-    // "retry cancelled" tombstone is noise next to the turn-end abort. Drop
-    // the row; turn-error / interrupted chrome already cover the outcome.
-    if (current.retryState === 'cancelled') return null
     const data: RetryChatData = { attempts, current }
+    // User Stop during backoff: the attempt never left `scheduled`, so a
+    // "retry cancelled" tombstone is noise next to the turn-end abort.
+    // Never-shown cancels stay omitted. Already-painted rows must hide —
+    // returning null after a visible materialization throws in the assembler
+    // ("withdrew materialized target") and freezes the session snapshot, so
+    // later user turns run on the Host but stay invisible until refresh.
+    if (current.retryState === 'cancelled') {
+      const previous = context.current.get('chat')
+      if (previous === undefined || previous === null) return null
+      return chatNode(context, 'model-retry', attempts[0]?.seq ?? current.seq, data, {
+        visibility: 'hidden',
+      })
+    }
     return chatNode(context, 'model-retry', attempts[0]?.seq ?? current.seq, data)
   },
 }

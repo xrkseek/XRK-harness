@@ -503,7 +503,8 @@ export const CompactionNodeView = memo(function CompactionNodeView({ node, t }: 
 /** Correlated retry-chain keyed Chat renderer. */
 export const RetryNodeView = memo(function RetryNodeView({ node, t }: ChatNodeViewProps<'model-retry'>) {
   const data = node.data
-  // Match buildViewNode: a never-started cancel is not a durable status row.
+  // Match buildViewNode: cancelled attempts are omitted or order-hidden; never
+  // paint a "retry cancelled" tombstone next to turn-end abort chrome.
   if (data.current.retryState === 'cancelled') return null
   return <ModelRetryItem node={data.current} active={data.current.retryState === 'scheduled'} t={t} />
 })

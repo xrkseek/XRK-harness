@@ -759,6 +759,25 @@ describe('ChatView', () => {
     expect(view.getByRole('button', { name: /用时 19秒/ })).toBeTruthy()
   })
 
+  it('history-settled turns keep a single turn-tail action bar (no duplicate 用时)', () => {
+    // Refresh / history reload used to show two identical copy/赞/用时 rows under
+    // the last tool — Chromium content-visibility ghosts on .flowItem, not two
+    // assembler nodes. Pin one [data-turn-tail] and one duration pill.
+    const h = makeHarness({
+      nodes: [
+        user(1, 'hi'),
+        assistant(2, 'final answer'),
+        toolResult(3, 'ok'),
+      ],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 520_000 }]]),
+      turnEnds: new Map([[1, 4]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.container.querySelectorAll('[data-turn-tail]')).toHaveLength(1)
+    expect(view.getAllByRole('button', { name: /用时/ })).toHaveLength(1)
+    expect(view.getAllByRole('button', { name: '在新对话中分支' })).toHaveLength(1)
+  })
+
   it('the settled footer appends first-step ttft and turn decode throughput', () => {
     const first: AssistantMessageNode = {
       kind: 'assistant', seq: 2, time: 2_000, turn: 1, step: 1, blocks: [{ kind: 'text', text: 'mid' }],

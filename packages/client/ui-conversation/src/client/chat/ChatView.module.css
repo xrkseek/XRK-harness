@@ -60,32 +60,13 @@
   }
 }
 
-/* Settled-flow identity boundary. It is neutral today and becomes the natural
-   measurement/mount unit for a virtualizer without changing the column gap. */
+/* Settled-flow identity boundary. Neutral today; natural virtualizer unit
+   later without changing the column gap. Do NOT use content-visibility:auto
+   here — Chromium skip/unskip has painted durable ghost copies of turn-tail
+   footers (改动 card + copy/赞/用时) after Stop and after history reload,
+   even when turn-tail rows opted back into content-visibility:visible. */
 .flowItem {
   min-width: 0;
-  /* Defer layout/paint for off-screen transcript rows (Vercel
-     rendering-content-visibility). Intrinsic size is a soft estimate —
-     variable-height tool cards still measure once they enter the viewport.
-     Paint containment clips child outlines that extend outside this box —
-     user-bubble staging rings must use inset outline-offset (MessageItem). */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 96px;
-}
-
-/* Streaming tail: keep live measurement so content-visibility does not thrash
-   against bottom-follow while the open assistant step grows every frame. */
-.flowItem[data-live] {
-  content-visibility: visible;
-  contain-intrinsic-size: none;
-}
-
-/* Turn-tail footers carry ChangedFiles + chips + actions — far taller than the
-   96px intrinsic guess. Skipping them under content-visibility has painted a
-   second "ghost" copy of the same 改动 card after Stop (Chromium skip/unskip). */
-.flowItem[data-chat-flow-kind='turn-tail'] {
-  content-visibility: visible;
-  contain-intrinsic-size: none;
 }
 
 /* A keyed renderer may intentionally decline its row after dispatch (the

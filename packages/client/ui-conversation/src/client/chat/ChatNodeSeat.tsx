@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react'
 import { JsonBlock } from '@xrkseek/client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatViewSlotProps } from '../contract/slots.ts'
 import type { ChatNode } from '../contract/chat-nodes.ts'
+import { usePostStreamLive } from './use-post-stream-live.ts'
 import css from './ChatView.module.css'
 
 interface ChatNodeSeatProps extends ChatNodeOwnerProps {
@@ -41,6 +42,11 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     node, selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, deleteAt, loadImage,
     renderMessageImages, renderMessageFiles, fileMentions,
   ])
+  const streamingAssistant = routedNode?.kind === 'assistant-step'
+    && (routedNode.data as { readonly status?: string }).status === 'running'
+  // Grace after settle: flipping off `data-live` the same frame as streaming
+  // ends lets content-visibility:auto blank an expanded Think row briefly.
+  const postStreamLive = usePostStreamLive(streamingAssistant === true)
   if (routedNode === undefined || owner === null) return null
   const location = routedNode.location
   const turn = location.kind === 'turn' || location.kind === 'step'
@@ -53,9 +59,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   // Running assistants need live layout for scroll-follow. Turn-tails also: Stop
   // materializes a tall ChangedFiles card in one paint, and content-visibility
   // auto/skip has left a second ghost copy of that card in Chromium.
-  const live = (routedNode.kind === 'assistant-step'
-    && (routedNode.data as { readonly status?: string }).status === 'running')
-    || routedNode.kind === 'turn-tail'
+  const live = postStreamLive || routedNode.kind === 'turn-tail'
   return (
     <div
       className={css.flowItem}
