@@ -119,16 +119,11 @@ export function buildVideoGenToolDescription(
   } else {
     parts.push("This Provider is text-to-video only (no first-frame input).");
   }
-  if (caps.supportsEdit) {
-    parts.push("action=edit: rewrite an existing completed video (job_id + prompt).");
-  }
-  if (caps.supportsExtend) {
+  if (caps.supportsEdit || caps.supportsExtend) {
     parts.push(
-      "action=extend: continue a completed video (job_id + prompt; optional seconds).",
+      "action=edit / extend: rewrite or continue a completed video (job_id + prompt; optional seconds).",
     );
   }
-  parts.push(
-    "The MP4 is saved to the Host attachment store when one is wired; video bytes are never inlined into tool text.",
-  );
+  parts.push("MP4 bytes are never inlined into tool text.");
   return parts.join(" ");
 }

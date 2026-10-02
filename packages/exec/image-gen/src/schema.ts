@@ -80,20 +80,15 @@ export function buildImageGenToolDescription(caps: ImageGenCapabilities): string
   if (imageGenSupportsEdit(caps)) {
     return (
       "Generate or edit an image via the Host image Provider. " +
-      "Text-only prompt → text-to-image; for edit prefer reference_attachment_ids " +
+      "Text-only prompt → text-to-image; for edit pass reference_attachment_ids " +
       `(or image_url=attachment:<id> / https; ≤${caps.maxReferenceImages}). ` +
       "Never paste data:image base64 into args (call truncates). " +
-      "Chat shows the image; result text gives attachmentId=sha256:… " +
-      "(re-inspect with read_image; not a filesystem path). " +
-      "The id is content-addressed: it deterministically maps to one stored object " +
-      "under `{XRK_HOME}/attachments/v1/objects/` (first 2 hex chars = directory, " +
-      "full sha256 = filename) — derivable from the id alone, no disk hunt."
+      "Result text gives attachmentId=sha256:… — re-inspect with read_image."
     );
   }
   return (
     "Generate an image from a text prompt via the Host text-to-image Provider. " +
     "This Provider does not accept reference images. " +
-    "Chat shows the image; result text gives attachmentId=sha256:… " +
-    "(re-inspect with read_image; not a filesystem path)."
+    "Result text gives attachmentId=sha256:… — re-inspect with read_image."
   );
 }

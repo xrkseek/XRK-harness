@@ -63,16 +63,15 @@ export function createSettingsGetTool(options: SettingsToolsOptions): ToolDefini
   return {
     name: SETTINGS_GET,
     description:
-      "Read Host Settings (global product config under ~/.xrk — same namespaces as Settings UI). " +
-      "Omit ns to list namespaces; pass ns (e.g. mcp, bash, llm-deepseek, permission, agent-presets) for the current value. " +
-      "Does not return credential secret values.",
+      "Read Host Settings (global ~/.xrk — same namespaces as Settings UI). " +
+      "Omit ns to list namespaces. Does not return credential secret values.",
     parameters: {
       type: "object",
       properties: {
         ns: {
           type: "string",
           description:
-            "Settings namespace (mcp, bash, locale, ui-theme, permission, agent-presets, agent-default-model, llm-deepseek, llm-pi-ai, agent-loop, …). Omit to list.",
+            "Settings namespace (e.g. mcp, bash, llm-deepseek). Omit to list.",
         },
       },
     },
@@ -119,13 +118,9 @@ export function createSettingsMutateTool(
     name: SETTINGS_MUTATE,
     description:
       "Change Host Settings (global ~/.xrk — same as Settings UI). " +
-      "Args shape: { ns, ops:[{ op:\"set\"|\"unset\", path:[...], value? }] }. " +
-      "Examples: ns=ui-theme ops=[{op:\"set\",path:[\"preference\"],value:\"dark\"}]; " +
-      "ns=mcp ops=[{op:\"set\",path:[\"servers\"],value:[{serverName,command,args?}]}] " +
-      "(Cursor-style {name:{command,args}} maps also accepted); " +
-      "also mcp.allowConnect, bash.maxOutputBytes, permission.defaultPreset, llm-deepseek.baseURL, agent-presets.default. " +
-      "Secrets: Credentials UI / credentials tools — not API keys in mcp.servers env (proxy env only). " +
-      "Most namespaces apply live; MCP waits for remount/connect; connect failures return isError.",
+      "Ops shape: [{ op:\"set\"|\"unset\", path:[...], value? }] under ns. " +
+      "Secrets go through Credentials, not API keys in mcp.servers env. " +
+      "Most namespaces apply live; MCP waits for remount/connect.",
     parameters: {
       type: "object",
       properties: {

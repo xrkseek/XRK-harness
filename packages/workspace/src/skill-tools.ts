@@ -28,7 +28,7 @@ export function createSkillTools(
     {
       name: "skill",
       description:
-        "Load the full instructions for an available skill. Call this with the exact skill name from the session skill catalog before acting on a task that names or clearly matches that skill.",
+        "Load the full instructions for an available skill. Call with the exact skill name from the session skill catalog.",
       parameters: {
         type: "object",
         properties: {

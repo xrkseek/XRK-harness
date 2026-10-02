@@ -37,11 +37,9 @@ export function createPresentTool(
     name: "present",
     description:
       "Declare existing files as final deliverables the user asked to receive. " +
-      "When a file you create or update is an output the user asked for — including files created " +
-      "through Bash, scripts, or downloads — call present after writing it and before your final response. " +
-      "Mentioning the path in your reply does not replace this call. The files must already exist. " +
-      "Relative paths resolve against the workspace root; absolute paths may name files under the " +
-      "workspace root or Host-readable roots. Their contents are not copied; the user opens the current source files.",
+      "Call present after writing a file (including files created through Bash, scripts, or downloads) " +
+      "and before your final response; mentioning the path in your reply does not replace this call. " +
+      "Relative paths resolve against the workspace root; contents are not copied.",
     parameters: {
       type: "object",
       properties: {

@@ -57,18 +57,11 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
   }> = {
     name: "memory",
     description:
-      "Save durable facts that should appear in every future session "
-      + "(preferences, lasting conventions, who the user is). "
-      + "Do NOT store session WIP, standing plans, todo checklists, or handoff notes "
-      + "for unfinished work — use `todo_write` for those (they stay in this session only). "
-      + "Actions: add, replace, remove, list. Prefer one `operations` batch when several entries change. "
-      + "Use list before replace/remove when you need the exact on-disk wording. "
-      + "target `memory` is agent notes (MEMORY.md under {XRK_HOME}/memories); "
-      + "target `user` is the curated user profile (memories/USER.md — not standing "
-      + "~/.xrk/USER.md or IDENTITY.md). "
-      + "replace and remove need `old_text` (a unique substring). "
-      + "Writes are saved to disk but do not change the system prompt of the current session. "
-      + "Not Mnemon documents, and not a search tool.",
+      "Save durable facts for future sessions (preferences, lasting conventions, who the user is). "
+      + "Do NOT store session WIP or todo checklists — use `todo_write` for those. "
+      + "Actions: add, replace, remove, list, or one atomic `operations` batch. "
+      + "replace/remove need `old_text` (a unique substring). "
+      + "Writes hit disk immediately; do not change this session's system prompt.",
     parameters: {
       type: "object",
       properties: {

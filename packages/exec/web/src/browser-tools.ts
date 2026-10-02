@@ -69,8 +69,7 @@ export function createBrowserTools(
   const openTool: ToolDefinition<{ url: string }> = {
     name: "browser_open",
     description:
-      "Open an HTTP(S) URL in the interactive browser session and return a compact element snapshot with @eN refs. " +
-      "Prefer web_fetch for one-shot reads; use browser_* when you need to click or type.",
+      "Open an HTTP(S) URL in the interactive browser session and return a compact element snapshot with @eN refs.",
     parameters: {
       type: "object",
       properties: {
@@ -97,7 +96,7 @@ export function createBrowserTools(
     name: "browser_snapshot",
     description:
       "Snapshot the current browser page as an interactive element list with @eN refs for browser_act. " +
-      "full=true includes page text. Call browser_open first.",
+      "full=true includes page text.",
     parameters: {
       type: "object",
       properties: {
@@ -130,8 +129,7 @@ export function createBrowserTools(
     name: "browser_act",
     description:
       "Act on the browser session. click/type need a snapshot ref (@eN). " +
-      "scroll (up|down), press (key e.g. Enter/Tab), and back need CDP for scroll/press; " +
-      "back also works on the HTTP history stack. Prefer web_fetch for one-shot reads.",
+      "scroll/press need CDP; back also works on the HTTP history stack.",
     parameters: {
       type: "object",
       properties: {
@@ -211,8 +209,8 @@ export function createBrowserTools(
     name: "browser_vision",
     description:
       "Capture a screenshot of the current graphical browser page for vision. " +
-      "Returns the @eN snapshot text plus an image. Fails when there is no graphical browser " +
-      "(HTTP snapshot) or the screenshot cannot be stored. Does not substitute the accessibility tree.",
+      "Returns the @eN snapshot text plus an image. " +
+      "Fails without a graphical browser (HTTP snapshot); does not substitute the accessibility tree.",
     parameters: {
       type: "object",
       properties: {

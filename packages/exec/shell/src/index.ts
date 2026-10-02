@@ -979,19 +979,16 @@ export function createBashTools(
   );
   const dialect =
     process.platform === "win32"
-      ? "PowerShell (pwsh). Prefer PowerShell syntax (`Get-ChildItem`, `$env:NAME`, `Set-Location`). Use workdir instead of cd when possible."
-      : "bash. Use POSIX shell syntax.";
+      ? "PowerShell (pwsh)."
+      : "bash.";
   return [
     {
       name: "bash",
       description:
-        `Run a shell command via ${dialect} ` +
-        "Default cwd is the session workspace root (not the Host process cwd) — " +
-        "`pwd` / `Get-Location` should show the workspace. Prefer relative paths; " +
-        "set workdir only when another directory is required. " +
-        `Foreground waits up to ${Math.round(yieldMs / 1000)}s (yield): if the command is still running then, the call returns its job id and the process keeps running — ` +
-        "call job_output(wait:true) to keep waiting (each wait extends the deadline, so long tasks never die on a timeout), job_kill to stop, or leave it in background. " +
-        "Set background=true to start a job and return its id immediately. " +
+        `Run a shell command via ${dialect} in the session workspace. ` +
+        `Foreground waits up to ${Math.round(yieldMs / 1000)}s (yield); if the command is still running the call returns a job id and the process keeps running — ` +
+        "use job_output(wait:true) to keep waiting, job_kill to stop. " +
+        "Set background=true to return the job id immediately. " +
         "timeout_ms sets a hard kill deadline for this call.",
       parameters: {
         type: "object",

@@ -46,7 +46,7 @@ export function createLspTools(
     {
       name: "lsp",
       description:
-        "Query a language server for precise code navigation. operation is one of goToDefinition, findReferences, goToImplementation, hover. line and character are one-based UTF-16 cursor coordinates. findReferences includes the declaration.",
+        "Query a language server for precise code navigation. line and character are one-based UTF-16 cursor coordinates. findReferences includes the declaration.",
       parameters: {
         type: "object",
         properties: {

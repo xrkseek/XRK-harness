@@ -104,10 +104,9 @@ export function createStdTools(
     {
       name: "ask_user",
       description:
-        "Ask the user a concise question when you need confirmation, a choice, or missing information. " +
-        "Prefer `questions` (stable ids, optional options / multi_select / detail). " +
-        "`question` is a single free-text shortcut. " +
-        "Do not set `intent` for ordinary asks — plan-review intent is reserved for exit_plan_mode.",
+        "Ask the user a question when you need confirmation, a choice, or missing information. " +
+        "Use `questions` (stable ids, optional options / multi_select / detail) or `question` (free-text shortcut). " +
+        "Do not set `intent` on ordinary asks — reserved for exit_plan_mode.",
       parameters: {
         type: "object",
         properties: {
@@ -249,10 +248,8 @@ export function createStdTools(
 }
 
 const EXIT_DESCRIPTION =
-  "Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. " +
-  "Send the COMPLETE plan as markdown, starting with a # heading that names it. " +
-  "The user may approve (carry out the plan from your next step) or keep " +
-  "planning — their feedback comes back in the tool result; revise and present again.";
+  "Use only in plan mode. Present your complete plan as markdown, starting with a # heading that names it. " +
+  "On approval, leave plan mode and carry it out. On feedback, revise and present again.";
 
 /** The plan's first markdown heading (any level), or undefined when it has none. */
 export function firstPlanHeading(plan: string): string | undefined {

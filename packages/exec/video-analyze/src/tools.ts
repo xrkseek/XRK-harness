@@ -78,10 +78,9 @@ export function createVideoAnalyzeTools(
   }> = {
     name: "video_analyze",
     description:
-      "Analyze a video from a URL or local workspace path using a multimodal AI model. " +
-      "Sends the whole video (not individual frames) to a video-capable model for understanding — " +
-      "captions, scenes, motion, overlays. Use for video files; for images use read_image; " +
-      "for live browser pages use browser_vision; for creating videos use video_generate. " +
+      "Analyze a video (URL or local workspace path) with a video-capable multimodal model — " +
+      "captions, scenes, motion, overlays. Sends the whole clip, not individual frames. " +
+      "For images use read_image; for live pages use browser_vision. " +
       "Supports mp4, webm, mov, avi, mkv, mpeg. Large videos (>20 MB) may be slow; max ~50 MB.",
     parameters: {
       type: "object",

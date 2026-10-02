@@ -89,9 +89,8 @@ export function createCronTools(scheduler: CronScheduler): ToolDefinition[] {
   const tool: ToolDefinition<Record<string, unknown>> = {
     name: "cronjob",
     description:
-      "Manage Host scheduled tasks. action=create|list|pause|resume|run|remove|runs. " +
+      "Manage Host scheduled tasks: create|list|pause|resume|run|remove|runs. " +
       "create needs schedule_kind (every|at|cron) and run_kind (agent|script). " +
-      "action=runs lists recent execution ledger rows (optional id + limit). " +
       "Results can POST to a webhook or append to a file.",
     parameters: {
       type: "object",

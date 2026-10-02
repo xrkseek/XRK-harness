@@ -161,8 +161,7 @@ export function createProposeSkillTool(options: {
     description:
       "Propose a reusable product skill (SKILL.md) after a complex task. " +
       "Pass name, description, and markdown body (lessons / procedure — not a chat log). " +
-      "The user must approve before anything is written under .agents/skills. " +
-      "Prefer patching an existing umbrella skill via a clearer name only when truly new.",
+      "The user must approve before anything is written under .agents/skills.",
     parameters: {
       type: "object",
       properties: {

@@ -117,8 +117,7 @@ export function createComputerUseTools(
     name: "computer_use",
     description:
       "Native desktop GUI. Loop: list_windows → capture → click/type/key/scroll by element index → capture. " +
-      "capture mode=ax|vision|som (vision/som inline screenshot + attachmentId). " +
-      "Optional coordinate=[x,y]. Web pages: browser_*.",
+      "capture mode=ax|vision|som (vision/som add an inline screenshot). Web pages: browser_*.",
     parameters: {
       type: "object",
       properties: {

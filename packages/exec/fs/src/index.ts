@@ -352,11 +352,9 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
     {
       name: "read_file",
       description:
-        "Read a UTF-8 file with 1-based line numbers (`N|line`). Prefer this over shell cat/head. " +
+        "Read a UTF-8 file with 1-based line numbers (`N|line`). " +
         "PDF, DOCX, XLSX, and ipynb are converted to text inside this tool. " +
-        "Use offset/limit for large files. Path may be workspace-relative or absolute under the workspace root " +
-        "(uploaded attachment paths from the conversation are also readable). " +
-        "Line endings are normalized to LF in the tool output.",
+        "Use offset/limit for large files. Path may be workspace-relative or absolute under the workspace root.",
       parameters: {
         type: "object",
         properties: {
@@ -400,8 +398,7 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
     {
       name: "write_file",
       description:
-        "Create or fully overwrite a UTF-8 file. Prefer `apply_edit` for surgical changes. " +
-        "Read the path in this turn first (write-intent). Path may be workspace-relative or absolute under the workspace root.",
+        "Create or fully overwrite a UTF-8 file. Read the path in this turn first (write-intent).",
       parameters: {
         type: "object",
         properties: {
@@ -428,9 +425,7 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       name: "apply_edit",
       description:
         "Replace a unique old_content snippet with content (literal substring edit). " +
-        "Read the path in this turn first (write-intent). Paths may be workspace-relative or absolute under the workspace root. " +
-        "Line endings are matched in LF space and preserved on write. Use replace_all when the snippet appears more than once. " +
-        "For whole-file overwrite prefer write_file.",
+        "Use replace_all when the snippet appears more than once. For whole-file overwrite prefer write_file.",
       parameters: {
         type: "object",
         properties: {
@@ -468,12 +463,9 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
     {
       name: "apply_patch",
       description:
-        "Apply a multi-file Codex-format patch (`*** Begin Patch` … `*** End Patch` with " +
-        "`*** Add File` / `*** Update File` / `*** Delete File` hunks). Prefer this for large or " +
-        "multi-file edits; use `apply_edit` for a single unique snippet. " +
-        "Update/Delete paths must be read in this turn first (write-intent). " +
-        "Paths are workspace-relative (or absolute under the workspace root). " +
-        "Works in the session cwd — including managed subagent worktrees.",
+        "Apply a multi-file Codex-format patch (`*** Begin Patch` … `*** End Patch`). " +
+        "Use for large or multi-file edits; `apply_edit` for a single unique snippet. " +
+        "Update/Delete paths must be read in this turn first (write-intent).",
       parameters: {
         type: "object",
         properties: {
@@ -529,9 +521,8 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
     {
       name: "glob",
       description:
-        "List workspace-relative file paths matching a glob. Prefer this over shell find/ls. " +
-        "`*.ts` matches basenames at any depth; use `**/*.ts` or a path prefix for directory scoping. " +
-        "Optional path scopes under a subdirectory.",
+        "List workspace-relative file paths matching a glob. " +
+        "`*.ts` matches basenames at any depth; use `**/*.ts` or a path prefix for directory scoping.",
       parameters: {
         type: "object",
         properties: {
@@ -576,7 +567,7 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
     {
       name: "grep",
       description:
-        "Search UTF-8 files with a JS RegExp (path:line:text). Prefer this over shell rg/grep. " +
+        "Search UTF-8 files with a JS RegExp (path:line:text). " +
         "Optional path scopes a file/dir; glob filters file names (e.g. **/*.ts). Default cap ~200 hits.",
       parameters: {
         type: "object",
