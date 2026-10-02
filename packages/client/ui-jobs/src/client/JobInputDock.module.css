@@ -93,7 +93,8 @@
   margin: 0;
   padding: 0 4px 4px;
   list-style: none;
-  max-height: 140px;
+  /* Tall enough for one expanded TerminalBlock; the panel inside scrolls. */
+  max-height: min(42vh, 380px);
   overflow-y: auto;
   /* Capped job list: an overscroll at its bottom must not pull the
      surrounding dock or the page along with it. */

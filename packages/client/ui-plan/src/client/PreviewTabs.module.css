@@ -233,8 +233,8 @@
 .teamAction:focus-visible,
 .summaryToggle:focus-visible,
 .presenceCollapse:focus-visible {
-  outline: 2px solid var(--dsw-alias-text-primary);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-brand-primary);
 }
 
 .close {
@@ -262,7 +262,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 14px 12px 12px;
+  padding: 12px 12px 12px;
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-primary);
@@ -482,8 +482,8 @@
 .summary {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 13px 13px 11px;
+  gap: 10px;
+  padding: 12px 12px 10px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 11px;
   background: var(--dsw-alias-bg-layer-1);
@@ -499,7 +499,7 @@
 .summaryBody {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   min-width: 0;
 }
 

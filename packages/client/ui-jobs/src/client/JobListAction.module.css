@@ -278,8 +278,12 @@
   padding: 6px;
   border-radius: 8px;
   background: var(--dsw-alias-bg-base);
-  max-height: 220px;
+  max-height: min(36vh, 320px);
   overflow: auto;
+  overscroll-behavior: contain;
+  /* TerminalBlock reads this for its OUTPUT scroller; without a cap the
+     card grows and the list/panel fight over which surface owns the wheel. */
+  --dsl-terminal-output-max-height: min(28vh, 260px);
 }
 
 .notice {

@@ -1,0 +1,10 @@
+/* Turn-tail deliverables: one stack so the changes card and file lanes
+   share a tight rhythm instead of stacking TurnTail gap + lane margin. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  /* Tight group: changes card +「改动/产出/删除」lanes read as one block. */
+  gap: 6px;
+  min-width: 0;
+}
