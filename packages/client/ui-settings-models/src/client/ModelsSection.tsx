@@ -241,9 +241,9 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
     return (
       <div className={styles['section']}>
         <p className={styles['error']}>{`${t('loadFailed')}: ${errorText}`}</p>
-        <button type="button" className={styles['secondaryButton']} onClick={() => { void controller.load() }}>
+        <Button variant="outline" onClick={() => { void controller.load() }}>
           {t('retry')}
-        </button>
+        </Button>
       </div>
     )
   }
@@ -346,9 +346,9 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                       : null}
                 </span>
                 <span className={styles['rowActions']}>
-                  <button
-                    type="button"
-                    className={styles['secondaryButton']}
+                  <Button
+                    variant="outline"
+                    size="sm"
                     aria-label={providerCopy(t('editProvider'), target)}
                     onClick={() => {
                       setSavedTarget(undefined)
@@ -361,11 +361,12 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                     }}
                   >
                     {t('edit')}
-                  </button>
+                  </Button>
                   {row.removable
                     ? (
-                      <button
-                        type="button"
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className={styles['dangerButton']}
                         aria-label={providerCopy(t('removeProvider'), target)}
                         disabled={!state.writable}
@@ -376,7 +377,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                         }}
                       >
                         {t('remove')}
-                      </button>
+                      </Button>
                     )
                     : null}
                 </span>
@@ -456,9 +457,10 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
               // and equal-width so they read as siblings and line up with the
               // rows above, rather than two pills of different lengths.
               <div className={styles['addActions']}>
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
                   className={styles['addButton']}
+                  icon={<IconPlusOutline16 size={14} />}
                   disabled={addable.length === 0 || !state.writable}
                   onClick={() => {
                     const first = addable[0]
@@ -470,13 +472,12 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                     setEditing(targetOf(first))
                   }}
                 >
-                  {/* Same glyph as the composer's attach button. */}
-                  <IconPlusOutline16 size={14} />
                   {t('add')}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="outline"
                   className={styles['addButton']}
+                  icon={<IconPlusOutline16 size={14} />}
                   disabled={protocols.length === 0 || !state.writable}
                   onClick={() => {
                     setSavedTarget(undefined)
@@ -485,9 +486,8 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                     setDeclaring(true)
                   }}
                 >
-                  <IconPlusOutline16 size={14} />
                   {t('customAdd')}
-                </button>
+                </Button>
               </div>
             )}
       </div>

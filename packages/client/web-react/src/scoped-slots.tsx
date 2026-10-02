@@ -892,7 +892,11 @@ function renderOutletContent(
         })
         continue
       }
-      if (matched !== null) {
+      // Decline both `null` and `undefined`: a selector that returns
+      // `undefined` used to elect with `matched: undefined`, and chain
+      // components that read `matched.lanes` / `matched.modified` crashed
+      // the entry (xrkh-better-sidebar turnTail: reading 'modified').
+      if (matched != null) {
         elected = guarded(entry, entryKeyOf(entry), { ...ownerProps, matched })
         break
       }

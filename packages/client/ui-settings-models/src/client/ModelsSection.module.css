@@ -127,64 +127,14 @@
 /* `box-sizing` on every control here: the app has no global border-box reset,
    so without it the outlined variants stand 2px taller than the filled ones
    they sit beside (Cancel next to Apply, Edit next to Delete). */
-.primaryButton,
-.secondaryButton,
 .addButton {
   box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 36px;
-  padding: 0 14px;
-  border: none;
-  border-radius: 18px;
-  font: inherit;
-  font-size: 14px;
-  line-height: 22px;
-  cursor: pointer;
-}
-
-.primaryButton {
-  background: var(--dsw-alias-button-primary-fill);
-  color: var(--dsw-alias-label-primary-foreground);
-}
-
-.primaryButton:hover:not(:disabled) {
-  background: var(--dsw-alias-button-primary-hover);
-}
-
-.secondaryButton,
-.addButton {
-  border: 1px solid var(--dsw-alias-border-l2);
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-}
-
-.secondaryButton:hover:not(:disabled),
-.addButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.secondaryButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
 }
 
 .dangerButton {
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 36px;
-  padding: 0 14px;
-  border: none;
-  border-radius: 18px;
+  border-color: transparent;
   background: transparent;
   color: var(--dsw-alias-state-error-primary);
-  font: inherit;
-  font-size: 14px;
-  line-height: 22px;
-  cursor: pointer;
 }
 
 .dangerButton:hover:not(:disabled) {
@@ -192,7 +142,6 @@
 }
 
 /* Provider-row controls take the dense capsule (Button `.sm`). */
-.rowActions .secondaryButton,
 .rowActions .dangerButton {
   height: 28px;
   padding: 0 10px;
@@ -201,20 +150,14 @@
   line-height: 18px;
 }
 
-.primaryButton:disabled,
-.secondaryButton:disabled,
 .dangerButton:disabled,
-.addButton:disabled,
 .linkButton:disabled,
 .addModelButton:disabled {
   opacity: 0.4;
   cursor: default;
 }
 
-.primaryButton:focus-visible,
-.secondaryButton:focus-visible,
 .dangerButton:focus-visible,
-.addButton:focus-visible,
 .linkButton:focus-visible,
 .addModelButton:focus-visible,
 .iconButton:focus-visible,

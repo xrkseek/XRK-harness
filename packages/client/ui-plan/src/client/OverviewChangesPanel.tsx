@@ -350,7 +350,7 @@ export function OverviewChangesPanel({
               ? <p className={css.note} role="note">{t(textNote)}</p>
               : null}
             {showDiff && hunk !== null
-              ? <DiffBlock diffs={[hunk]} className={css.diff} layout="split" />
+              ? <DiffBlock diffs={[hunk]} className={css.diff} layout="split" hidePath />
               : null}
             <button
               type="button"

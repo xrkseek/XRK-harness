@@ -154,7 +154,7 @@ export function ChangesReviewView({
         ? <p className={css.diffNote} role="note">{t(textNote)}</p>
         : null}
       {showDiff && hunk !== null
-        ? <DiffBlock diffs={[hunk]} className={css.diff} layout="split" />
+        ? <DiffBlock diffs={[hunk]} className={css.diff} layout="split" hidePath />
         : null}
       <button type="button" className={css.openFile}
         onClick={() => { openFile(activeFile.path) }}>

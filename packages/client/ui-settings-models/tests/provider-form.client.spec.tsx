@@ -1160,7 +1160,7 @@ describe('hand-declared providers', () => {
   })
 
   it('normalizes surrounding whitespace before interrogating and storing a base URL', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok([{ id: 'm' }])))
+    const discover = vi.fn(() => Promise.resolve(ok({ models: [{ id: 'm' }] })))
     const { mutate, onClose } = mountCard({}, { discover })
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
     fireEvent.change(screen.getByLabelText(en.baseUrl), {
