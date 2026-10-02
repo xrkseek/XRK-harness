@@ -435,7 +435,7 @@ describe('ToolRow', () => {
     expect(view.container.querySelector('[class*="fileLink"]')).toBeNull()
   })
 
-  it('the expanded body carries a hover Inspect pill that fires the callback', () => {
+  it('the expanded body carries an Inspect pill that fires the callback', () => {
     const inspect = vi.fn()
     const view = render(<ToolRow {...rowProps} inspect={inspect} />)
     // Collapsed: no pill.

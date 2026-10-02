@@ -4,7 +4,7 @@
 
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
-  IconChevronDownOutline14, IconInspectOutline12, IconSkillOutline16, StateDot,
+  IconChevronDownOutline14, IconSkillOutline16, InspectAction, StateDot,
 } from '@xrkseek/client-ui-primitives'
 import type { ToolCallViewProps } from '@xrkseek/client-ui-tool/client'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
@@ -159,10 +159,7 @@ export function SkillRow({ block, inspect, t }: SkillRowProps) {
             <pre className={css.instructions} data-error={model.state === 'error' || undefined}>{model.output}</pre>
           </section>
           {inspect !== undefined ? (
-            <button type="button" className={css.inspectButton} onClick={inspect}>
-              <IconInspectOutline12 />
-              Inspect
-            </button>
+            <InspectAction onClick={inspect} />
           ) : null}
         </div>
       ) : null}

@@ -161,34 +161,6 @@
   margin: 6px 0;
 }
 
-.inspectButton {
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: 4px;
-  margin: 4px 0 2px 4px;
-  padding: 2px 8px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 999px;
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
-  line-height: 16px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 100ms ease;
-}
-
-.card:hover .inspectButton,
-.inspectButton:focus-visible {
-  opacity: 1;
-}
-
-.inspectButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
-  color: var(--dsw-alias-label-primary);
-}
-
 .visuallyHidden {
   position: absolute;
   width: 1px;
@@ -205,8 +177,7 @@
   }
 
   .iconIdle,
-  .chevronHover,
-  .inspectButton {
+  .chevronHover {
     transition: none;
   }
 }

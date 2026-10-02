@@ -1,0 +1,61 @@
+/* Trajectory Inspect pill — always visible under expanded tool/skill bodies. */
+
+.root {
+  position: relative;
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  min-height: 24px;
+  margin: 4px 0 2px 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  /* Base background, not bg-overlay: overlay reads too heavy for a quiet
+     in-flow affordance over terminal / code surfaces. */
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, transform 100ms ease;
+}
+
+/* Dense-desktop hit target ≥40px without growing the visible pill. */
+.root::before {
+  content: '';
+  position: absolute;
+  inset: -8px -6px;
+}
+
+.root:hover {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+  color: var(--dsw-alias-label-primary);
+}
+
+.root:active {
+  transform: scale(0.96);
+}
+
+.root:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-brand-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root {
+    transition: none;
+  }
+
+  .root:active {
+    transform: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .root::before {
+    inset: -10px -8px;
+  }
+}

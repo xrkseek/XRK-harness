@@ -17,7 +17,7 @@ import { useState, type KeyboardEvent } from 'react'
 import type { Context } from '@xrkseek/cordis'
 import clsx from 'clsx'
 import {
-  IconApiOutline14, IconChevronDownOutline14, IconInspectOutline12, StateDot, TerminalBlock,
+  IconApiOutline14, IconChevronDownOutline14, InspectAction, StateDot, TerminalBlock,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
@@ -120,8 +120,7 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
         </span>
       </div>
       {open && (
-        /* Same hover-Inspect posture as ToolRow's expanded body, replicated
-           locally per the registrant posture. */
+        /* Inspect pill under the expanded body (always visible). */
         <div className={css.bodyWrap}>
           {terminal !== null
             ? (
@@ -154,10 +153,7 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
               </div>
             )}
           {inspect !== undefined && (
-            <button type="button" className={css.inspectButton} onClick={inspect}>
-              <IconInspectOutline12 />
-              Inspect
-            </button>
+            <InspectAction onClick={inspect} />
           )}
         </div>
       )}

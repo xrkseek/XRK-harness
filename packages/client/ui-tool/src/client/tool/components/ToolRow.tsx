@@ -12,7 +12,7 @@
 import { useEffect, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  CodeBlock, DiffBlock, DisclosureRow, IconInspectOutline12, ReadBlock, SearchBlock, StateDot, TerminalBlock, WebBlock,
+  CodeBlock, DiffBlock, DisclosureRow, InspectAction, ReadBlock, SearchBlock, StateDot, TerminalBlock, WebBlock,
 } from '@xrkseek/client-ui-primitives'
 import type { WebBlockProps } from '@xrkseek/client-ui-primitives'
 import type { TranslateNS, PropsRenderSlots } from '@xrkseek/client-ui-slots'
@@ -341,14 +341,7 @@ export function ToolRow({
                           </>
                         )}
           {inspect !== undefined && (
-            <button
-              type="button"
-              className={css.inspectButton}
-              onClick={inspect}
-            >
-              <IconInspectOutline12 />
-              Inspect
-            </button>
+            <InspectAction onClick={inspect} />
           )}
         </div>
       </DisclosureRow>

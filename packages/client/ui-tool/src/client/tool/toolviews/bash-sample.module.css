@@ -189,46 +189,11 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-/* Hover-revealed Inspect pill under the expanded terminal's bottom-left 閳?
-   ToolRow's .bodyWrap/.inspectButton treatment, replicated per the registrant
-   posture: real flow (it reserves its line), revealed by hovering anywhere on
-   the tool call 閳?title row included 閳?or by keyboard focus. */
+/* Expanded body under the bash summary (Inspect lives in ui-primitives). */
 .bodyWrap {
   display: flex;
   flex-direction: column;
 }
-
-.inspectButton {
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: 4px;
-  margin: 4px 0 2px 4px;
-  padding: 2px 8px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 999px;
-  /* Base background, not bg-overlay: the overlay token reads too heavy. */
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
-  line-height: 16px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 100ms ease;
-}
-
-.card:hover .inspectButton,
-.inspectButton:focus-visible {
-  opacity: 1;
-}
-
-/* Solid hover fill: the pill floats over terminal output, so a translucent
-   hover token would let the text underneath bleed through. */
-.inspectButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
-  color: var(--dsw-alias-label-primary);
-}
-
 
 .visuallyHidden {
   position: absolute;
