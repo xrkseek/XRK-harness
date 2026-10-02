@@ -15,15 +15,16 @@
   border-radius: var(--dsl-diff-radius);
 }
 
-/* Toolbar: layout toggle + copy, top-right over the body (no empty banner). */
+/* Toolbar sits in normal flow above the body — never overlays the path
+   header or the first code lines (Overview / review cards used to collide
+   「统一 / 换行 / 复制」 with absolute paths and 「本轮新建的文件」). */
 .toolbar {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  z-index: 1;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
+  padding: 8px 12px 0;
+  z-index: 1;
 }
 
 .layoutButton,
@@ -119,14 +120,15 @@
   overflow-x: hidden;
 }
 
-/* A file header: the path in the primary tone, set apart by weight. The toolbar
-   floats over this first row's top-right corner, so reserve space at the
-   line's end for it — a long path scrolls under the controls otherwise. */
+/* A file header: the path in the primary tone, set apart by weight. Long
+   absolute paths ellipsis so they cannot shove the card chrome. */
 .path {
   color: var(--dsw-alias-label-primary);
   font-weight: 600;
-  /* Room for layout + wrap + copy toolbar over the first path row. */
-  padding-right: 148px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Side-by-side columns (DSH ReviewTab split subset). */

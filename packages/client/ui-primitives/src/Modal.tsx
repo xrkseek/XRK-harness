@@ -91,8 +91,17 @@ export function Modal({
     // no focusable content still needs the container itself as a stop, which
     // is why it carries tabIndex={-1}.
     const stops = dialog ? tabbable(dialog) : []
+    // Prefer an explicit autoFocus control (footer Cancel, etc.) over the
+    // chrome close button, which is otherwise the first tabbable stop.
+    // Button sets data-autofocus when autoFocus is true; React alone may leave
+    // neither the HTML attribute nor a reliable IDL property in jsdom.
+    const autoFocused = stops.find((el) => (
+      el.hasAttribute('data-autofocus')
+      || el.hasAttribute('autofocus')
+      || (el as HTMLButtonElement | HTMLInputElement).autofocus === true
+    ))
     const firstField = stops.find((el) => TEXT_ENTRY.test(el.tagName))
-    ;(firstField ?? stops[0] ?? dialog)?.focus()
+    ;(autoFocused ?? firstField ?? stops[0] ?? dialog)?.focus()
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { onCloseRef.current(); return }

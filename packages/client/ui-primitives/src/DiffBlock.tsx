@@ -58,6 +58,12 @@ export interface DiffBlockProps {
    * so indentation stays readable; the toolbar can toggle at runtime.
    */
   wrap?: boolean | undefined
+  /**
+   * When the surrounding chrome already names the file (Overview / turn-tail
+   * review picker), hide the in-diff path header so the basename is not drawn
+   * twice — especially loud for newly created single-file reviews.
+   */
+  hidePath?: boolean | undefined
 }
 
 /** A single rendered body line and its role, so the height cap slices a flat list. */
@@ -119,7 +125,10 @@ const ROW_CLASS: Record<DiffRow['kind'], string | undefined> = {
  * @param diffs - the hunks to render.
  * @returns the body rows, the +/- totals, and the distinct-file count.
  */
-function buildRows(diffs: DiffHunk[]): { rows: DiffRow[]; added: number; removed: number; files: number } {
+function buildRows(
+  diffs: DiffHunk[],
+  hidePath = false,
+): { rows: DiffRow[]; added: number; removed: number; files: number } {
   const rows: DiffRow[] = []
   const paths = new Set<string>()
   let added = 0
@@ -130,7 +139,7 @@ function buildRows(diffs: DiffHunk[]): { rows: DiffRow[]; added: number; removed
   for (const diff of diffs) {
     paths.add(diff.path)
     if (diff.path !== prevPath) {
-      rows.push({ kind: 'path', text: diff.path })
+      if (!hidePath) rows.push({ kind: 'path', text: diff.path })
       oldNo = 0
       newNo = 0
     } else {
@@ -320,10 +329,14 @@ export function DiffBlock({
   className,
   layout: layoutProp = 'unified',
   wrap: wrapProp = false,
+  hidePath = false,
 }: DiffBlockProps) {
   // Re-build when a lazy grammar finishes loading (same seat as ReadBlock).
   const loaded = useSyncExternalStore(subscribeGrammarLoaded, grammarLoadCount, grammarLoadCount)
-  const { rows, added, removed, files } = useMemo(() => buildRows(diffs), [diffs, loaded])
+  const { rows, added, removed, files } = useMemo(
+    () => buildRows(diffs, hidePath),
+    [diffs, loaded, hidePath],
+  )
   const split = useMemo(() => buildSplit(diffs), [diffs, loaded])
   const [layout, setLayout] = useState<DiffLayout>(layoutProp)
   const [wrap, setWrap] = useState(wrapProp)
@@ -411,7 +424,7 @@ export function DiffBlock({
         <div className={css.splitBody}>
           {split.sections.map((section, sIndex) => (
             <div key={sIndex} className={css.splitSection}>
-              <div className={clsx(css.line, css.path)}>{section.path}</div>
+              {!hidePath && <div className={clsx(css.line, css.path)}>{section.path}</div>}
               <div className={css.splitColumns}>
                 <div
                   ref={sIndex === 0 ? leftRef : undefined}

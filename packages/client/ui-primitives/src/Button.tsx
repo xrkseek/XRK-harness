@@ -15,15 +15,23 @@ export type ButtonVariant = 'primary' | 'ghost' | 'outline' | 'toolbar'
  * @param props.icon - optional leading 16px icon node.
  * @returns the button element; native button attributes pass through.
  */
-export function Button({ variant = 'ghost', size = 'md', icon, className, children, ...rest }: {
+export function Button({ variant = 'ghost', size = 'md', icon, className, children, autoFocus, ...rest }: {
   variant?: ButtonVariant
   size?: 'md' | 'sm'
   icon?: ReactNode
   className?: string | undefined
   children?: ReactNode
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
+  // Mirror autoFocus onto data-autofocus so Modal can prefer this control over
+  // the chrome close button. React's autoFocus often leaves no HTML attribute
+  // (and no reliable IDL) in jsdom, so attribute sniffing alone is not enough.
   return (
-    <button type="button" className={clsx(css.button, css[variant], css[size], className)} {...rest}>
+    <button
+      type="button"
+      className={clsx(css.button, css[variant], css[size], className)}
+      {...(autoFocus ? { autoFocus: true, 'data-autofocus': '' } : {})}
+      {...rest}
+    >
       {icon != null && <span className={css.icon}>{icon}</span>}
       {children}
     </button>
