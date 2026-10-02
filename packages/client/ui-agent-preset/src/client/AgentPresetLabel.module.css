@@ -3,14 +3,14 @@
 .label {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   max-width: 180px;
-  padding: 0 2px 0 0;
-  height: 22px;
-  border-radius: 6px;
+  padding: 0 10px;
+  height: 24px;
+  border-radius: 999px;
   background: var(--dsw-alias-fill-tsp-secondary);
   font-size: 12px;
-  line-height: 22px;
+  line-height: 24px;
   color: var(--dsw-alias-label-secondary);
   white-space: nowrap;
   overflow: hidden;
