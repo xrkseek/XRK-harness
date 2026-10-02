@@ -359,6 +359,29 @@ export function validateSettingsNamespace(
     const fontErr = validateFaceFontSize(fontSize);
     if (fontErr) return fontErr;
   }
+  if (ns === "ui-presence") {
+    const shape = merged.shape;
+    if (
+      shape !== undefined &&
+      shape !== "blob" &&
+      shape !== "wedge" &&
+      shape !== "gem"
+    ) {
+      return `unknown presence shape: ${String(shape)}`;
+    }
+    const color = merged.color;
+    if (
+      color !== undefined &&
+      color !== "cream" &&
+      color !== "mist" &&
+      color !== "peach" &&
+      color !== "sage" &&
+      color !== "lilac" &&
+      color !== "slate"
+    ) {
+      return `unknown presence color: ${String(color)}`;
+    }
+  }
   if (ns === "ssh-remote") {
     const host = String(merged.host ?? "").trim();
     const workspace = String(merged.workspace ?? "").trim();

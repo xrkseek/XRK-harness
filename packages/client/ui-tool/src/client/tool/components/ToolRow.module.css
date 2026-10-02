@@ -142,10 +142,8 @@
 .bodyScroll {
   max-height: 260px;
   overflow-y: auto;
-  /* Tool output scrolls inside its own surface so the bar never crosses the
-     rounded card; contain stops an edge overscroll from dragging the log
-     behind it. */
-  overscroll-behavior: contain;
+  /* Scroll inside the card; at the edge, chain into the conversation log. */
+  overscroll-behavior: auto;
 }
 
 /* Expanded input/output card (figma 1249:35657): the code-block surface and
@@ -172,9 +170,8 @@
   padding: 12px 16px;
   max-height: 150px;
   overflow-y: auto;
-  /* IN/OUT sections cap and scroll independently; contain each so a section
-     edge drag cannot chain into the surrounding tool card or the log. */
-  overscroll-behavior: contain;
+  /* IN/OUT sections cap and scroll independently; edge scroll chains out. */
+  overscroll-behavior: auto;
 }
 
 /* Card-internal scrollbar: a 2px transparent border clips the thumb inward so

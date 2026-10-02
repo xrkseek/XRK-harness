@@ -322,12 +322,16 @@
     this.ball = EB.createBall(el, Object.assign({}, opts, {
       lite: opts.lite != null ? opts.lite : opts.autostart === false
     }));
-    this._seed = Math.random() * 100;
+    /* Deterministic when caller passes seed (per-session companion); else random. */
+    this._seed = opts.seed != null && isFinite(Number(opts.seed))
+      ? Number(opts.seed)
+      : Math.random() * 100;
     this._events = {};
     this._gaze = { x: 0, y: 0, tx: 0, ty: 0 };
     this._style = { sketch: 0 };
+    /* Dark eyes by default — white pupils wash out warm body fills on light chrome. */
     this._theme = opts.color
-      ? { body: opts.color, eyes: opts.eyeColor || '#FFFFFF' }
+      ? { body: opts.color, eyes: opts.eyeColor || '#1A1A1A' }
       : null;
     this._eyeScale = opts.eyeScale || 1;
     this._lastTick = 0;

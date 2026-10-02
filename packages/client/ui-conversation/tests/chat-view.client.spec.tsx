@@ -524,7 +524,10 @@ describe('ChatView', () => {
       })
     })
     expect(view.getAllByText('interrupt now')).toHaveLength(1)
-    expect(view.container.querySelector('[data-pending-steering]')).toBeNull()
+    // Durable steer still shows「插队中」while the open turn has not ended.
+    const durableWhileRunning = view.getByText('interrupt now').closest('[data-pending-steering]')
+    expect(durableWhileRunning).not.toBeNull()
+    expect(within(durableWhileRunning as HTMLElement).getByRole('status').textContent).toBe('插队中')
     // Only the durable steering bubble: the turn is still running, so its
     // assistant narration owns no footer yet, and a steering bubble never
     // carries a branch action.
@@ -535,6 +538,7 @@ describe('ChatView', () => {
     act(() => {
       h.set({ running: false, turnEnds: new Map([[1, 3]]) })
     })
+    expect(view.container.querySelector('[data-pending-steering]')).toBeNull()
     // The Turn Tail belongs to the closed Turn, independently of a later
     // steering bubble's placement in the Chat list.
     const branchButtons = view.getAllByRole('button', { name: '在新对话中分支' })

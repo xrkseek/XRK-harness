@@ -5,12 +5,65 @@
  * Session delivery / fleet edges drive bounce · spin · burst so the ball
  * reacts like a companion, not a static LED.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  DEFAULT_PRESENCE_COLOR,
+  DEFAULT_PRESENCE_SHAPE,
+  resolvePresencePaint,
+  type PresenceColor,
+  type PresencePaint,
+  type PresenceShape,
+} from '../presence-settings.ts'
 import {
   PRESENCE_SLEEP_MS,
   PRESENCE_STANDBY_MS,
 } from './presence-session-cues.ts'
+import type { PresenceSettingsRuntime } from './presence-settings-runtime.ts'
 import css from './PresenceBall.module.css'
+
+/** Set by ui-plan apply when Host settingsScope is available. */
+let presenceSettingsRuntime: PresenceSettingsRuntime | undefined
+
+/** Wire the Host-backed presence prefs into PresenceBall. */
+export function bindPresenceSettingsRuntime(runtime: PresenceSettingsRuntime): void {
+  presenceSettingsRuntime = runtime
+}
+
+function usePresenceShape(): PresenceShape {
+  return useSyncExternalStore(
+    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
+    () => presenceSettingsRuntime?.getShape() ?? DEFAULT_PRESENCE_SHAPE,
+    () => DEFAULT_PRESENCE_SHAPE,
+  )
+}
+
+function usePresenceColor(): PresenceColor {
+  return useSyncExternalStore(
+    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
+    () => presenceSettingsRuntime?.getColor() ?? DEFAULT_PRESENCE_COLOR,
+    () => DEFAULT_PRESENCE_COLOR,
+  )
+}
+
+/** Follow `body[data-ds-dark-theme]` so light/dark palette paints stay in sync. */
+function useChromeDark(): boolean {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof document === 'undefined') return () => {}
+      const obs = new MutationObserver(onStoreChange)
+      obs.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
+      return () => { obs.disconnect() }
+    },
+    () => typeof document !== 'undefined' && document.body.hasAttribute('data-ds-dark-theme'),
+    () => false,
+  )
+}
+
+function usePresencePaint(): PresencePaint {
+  const color = usePresenceColor()
+  const dark = useChromeDark()
+  return resolvePresencePaint(color, dark)
+}
 
 const SCRIPT_BASE = '/presence/emotion-ball'
 const SCRIPT_ORDER = ['rings.js', 'emotions.js', 'ball.js', 'engine.js'] as const
@@ -84,8 +137,29 @@ type EmotionBallNs = {
       lite?: boolean
       eyeScale?: number
       shape?: string
+      color?: string
+      eyeColor?: string
+      seed?: number
     },
   ) => EmotionBallHandle
+}
+
+export type SessionBallPersona = {
+  /** Stable engine seed so motion differs per session (color is Settings-owned). */
+  readonly seed: number
+}
+
+/** FNV-1a → stable per-session engine seed (shape + color are Settings-owned). */
+export function sessionBallPersona(sessionId: string): SessionBallPersona {
+  let h = 2166136261
+  for (let i = 0; i < sessionId.length; i += 1) {
+    h ^= sessionId.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  const u = h >>> 0
+  return {
+    seed: (u % 10_000) / 100,
+  }
 }
 
 declare global {
@@ -351,6 +425,7 @@ export function presenceDisplay(
 }
 
 export function PresenceBall({
+  sessionId,
   presence,
   turnActive,
   runningJobs,
@@ -362,11 +437,14 @@ export function PresenceBall({
   toolError,
   activityAt = 0,
   compact = false,
+  density = 'rail',
   t,
   loadingLabel,
   errorLabel,
   clickHint,
 }: {
+  /** Stable session key — picks a distinct ball shape / color / motion seed. */
+  readonly sessionId?: string
   readonly presence?: {
     readonly emotionId: string
     readonly tips?: string
@@ -391,12 +469,20 @@ export function PresenceBall({
    * Compact chip: small stage + one-line label (Overview presence collapsed).
    */
   readonly compact?: boolean
+  /**
+   * Compact density: `rail` (Overview) vs `header` (session title row — taller
+   * chip is out-of-flow so Overview open/close does not reflow chrome).
+   */
+  readonly density?: 'rail' | 'header'
   readonly t: (key: string, params?: Record<string, string>) => string
   readonly loadingLabel: string
   readonly errorLabel: string
   /** Accessible hint for click-to-play. */
   readonly clickHint?: string
 }) {
+  const persona = sessionBallPersona(sessionId ?? 'default')
+  const shape = usePresenceShape()
+  const paint = usePresencePaint()
   const mountRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const lastAccentRef = useRef<string>('')
@@ -486,7 +572,10 @@ export function PresenceBall({
           idle: false,
           lite,
           eyeScale: 1.2,
-          shape: 'blob',
+          shape,
+          color: paint.body,
+          eyeColor: paint.eyes,
+          seed: persona.seed,
         })
         ballRef.current = ball
         setReady(true)
@@ -502,10 +591,11 @@ export function PresenceBall({
       cancelled = true
       ballRef.current?.destroy()
       ballRef.current = null
+      setReady(false)
     }
-    // Mount once per component instance (Session remount remounts this tree).
+    // Remount when Settings shape/color, chrome scheme, or session seed changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [shape, paint.body, paint.eyes, persona.seed])
 
   useEffect(() => {
     const ball = ballRef.current
@@ -585,6 +675,10 @@ export function PresenceBall({
     setLocal({ emotionId: id })
     setNowMs(stamp)
     setLastActivityAt(stamp)
+    // Bounce first so the click always shows motion even if emotion is unchanged.
+    const ball = ballRef.current
+    ball?.bounce?.()
+    ball?.resetIdle?.()
   }
 
   return (
@@ -593,6 +687,7 @@ export function PresenceBall({
       data-overview-presence=""
       data-source={emotion.source}
       data-compact={compact ? '' : undefined}
+      data-density={compact ? density : undefined}
     >
       <button
         type="button"
@@ -600,10 +695,18 @@ export function PresenceBall({
         data-ready={ready ? '' : undefined}
         data-source={emotion.source}
         aria-label={clickHint ?? display.name}
+        aria-busy={!ready && !error ? true : undefined}
+        title={!ready && !error ? loadingLabel : undefined}
         onClick={onStageActivate}
       >
-        <div ref={mountRef} className={css.mount} aria-hidden />
-        {!ready && !error ? <div className={css.loading}>{loadingLabel}</div> : null}
+        <div ref={mountRef} className={css.mount} data-ready={ready ? '' : undefined} aria-hidden />
+        {!ready && !error
+          ? (
+              <div className={css.loading} role="status" aria-label={loadingLabel}>
+                <span className={css.spinner} aria-hidden />
+              </div>
+            )
+          : null}
         {error ? <div className={css.error}>{errorLabel}: {error}</div> : null}
       </button>
       <div className={css.meta}>

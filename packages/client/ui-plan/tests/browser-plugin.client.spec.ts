@@ -26,6 +26,7 @@ async function bench() {
     children: {
       'conversation.input.plan': { kind: 'single', scope: 'session' },
       'conversation.session.header.actions': { kind: 'list', scope: 'session' },
+      'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
       'details': { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
@@ -41,21 +42,27 @@ async function bench() {
     open: vi.fn(),
     list: { getSnapshot: () => ({ byId: {} }) },
   }
-  ctx.provide('remote', { commands: commandsRemote, changes: { fileDiff: vi.fn() } })
+  ctx.provide('remote', {
+    commands: commandsRemote,
+    changes: { fileDiff: vi.fn() },
+    canvas: { list: vi.fn(), get: vi.fn() },
+  })
   ctx.provide('remote.commands', commandsRemote)
   ctx.provide('remote.changes', { fileDiff: vi.fn() })
+  ctx.provide('remote.canvas', { list: vi.fn(), get: vi.fn() })
   ctx.provide('locale', new LocaleRuntime(ctx))
   ctx.provide('layout', layout)
   ctx.provide('connection', connection)
   ctx.provide('sessions', sessions)
+  ctx.provide('workspaces', { connectWorkspace: vi.fn() })
   return { ctx, slots, execute, layout }
 }
 
 describe('ui-plan browser apply', () => {
   it('declares every service it binds', () => {
     expect(inject).toEqual([
-      'slots', 'remote', 'remote.commands', 'remote.changes', 'locale', 'layout',
-      'connection', 'sessions',
+      'slots', 'remote', 'remote.commands', 'remote.changes', 'remote.canvas', 'locale', 'layout',
+      'connection', 'sessions', 'workspaces',
     ])
   })
 
@@ -66,9 +73,10 @@ describe('ui-plan browser apply', () => {
   it('waits until conversation declares the plan seat', async () => {
     const ctx = new Context()
     await ctx.plugin(SlotRegistry).await()
-    ctx.provide('remote', { commands: {}, changes: {} })
+    ctx.provide('remote', { commands: {}, changes: {}, canvas: {} })
     ctx.provide('remote.commands', {})
     ctx.provide('remote.changes', {})
+    ctx.provide('remote.canvas', {})
     ctx.provide('locale', new LocaleRuntime(ctx))
     ctx.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn(), toggleSidebar: vi.fn() })
     ctx.provide('connection', { api: { host: { openPath: vi.fn() } } })
@@ -79,11 +87,17 @@ describe('ui-plan browser apply', () => {
       open: vi.fn(),
       list: { getSnapshot: () => ({ byId: {} }) },
     })
+    ctx.provide('workspaces', { connectWorkspace: vi.fn() })
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     expect(ctx.slots.entries('conversation.input.plan')).toHaveLength(0)
     ctx.slots.register({
-      name: 'root', children: { 'conversation.input.plan': { kind: 'single', scope: 'session' } },
+      name: 'root', children: {
+        'conversation.input.plan': { kind: 'single', scope: 'session' },
+        'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
+        'conversation.session.header.actions': { kind: 'list', scope: 'session' },
+        'details': { kind: 'single', scope: 'session' },
+      },
     } as never, () => null)
     await Promise.resolve()
     expect(ctx.slots.entries('conversation.input.plan')).toHaveLength(1)
@@ -130,5 +144,16 @@ describe('ui-plan browser apply', () => {
     face.closePreview()
     expect(b.layout.closeDetails).toHaveBeenCalledTimes(1)
     await fiber.dispose()
+  })
+
+  it('registers the presence dock on header utilities', async () => {
+    const b = await bench()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const dock = b.slots.entries('conversation.session.header.utilities')
+      .find(e => e.options.id === 'presence')
+    expect(dock).toBeDefined()
+    await fiber.dispose()
+    expect(b.slots.entries('conversation.session.header.utilities')).toHaveLength(0)
   })
 })

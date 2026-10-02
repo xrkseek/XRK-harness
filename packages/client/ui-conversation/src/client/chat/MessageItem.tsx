@@ -443,9 +443,13 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, rende
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, editAt, deleteAt, renderMessageImages, renderMessageFiles, t,
+  node, editAt, deleteAt, renderMessageImages, renderMessageFiles, useSession, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
+  const running = useSession(s => s.running)
+  // Durable steering lands before the open turn yields; keep「插队中」until
+  // that turn ends so the badge does not vanish when the Host queue row clears.
+  const pendingSteer = node.kind === 'steering' && running
   const text = useMemo(() => {
     const parts: string[] = []
     for (const block of data.content) {
@@ -464,6 +468,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       renderMessageImages={renderMessageImages}
       renderMessageFiles={renderMessageFiles}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
+      pending={pendingSteer}
       editing={editing}
       t={t}
       actions={copyText => (

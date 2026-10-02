@@ -39,9 +39,8 @@
   padding: 12px 16px;
   max-height: 150px;
   overflow-y: auto;
-  /* Same capped IN/OUT scroller as the full tool row, contained for the same
-     reason. */
-  overscroll-behavior: contain;
+  /* Same capped IN/OUT scroller as the full tool row; edge scroll chains out. */
+  overscroll-behavior: auto;
 }
 
 .ioSection::-webkit-scrollbar-thumb {

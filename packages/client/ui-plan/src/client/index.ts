@@ -1,11 +1,13 @@
 /**
  * Plan control plugin, browser half: occupies the composer's named
  * `conversation.input.plan` seat with an active-state status chip, a session
- * header Status toggle (`conversation.session.header.actions`), and the
- * details column with session Status (subagents · jobs · timeline · cost ·
- * channels; Face `session.status` ≡ `/status`) plus todos / plan / Office tabs.
- * Session tools (export log · open workspace in app) contribute to
- * `details.status.utilities` inside Overview — not the conversation header.
+ * header Status toggle (`conversation.session.header.actions`), compact
+ * PresenceBall dock in `conversation.session.header.utilities` while Overview
+ * is closed, and the details column with session Status (subagents · jobs ·
+ * timeline · cost · channels; Face `session.status` ≡ `/status`) plus todos /
+ * plan / Office tabs. Session tools (export log · open workspace in app)
+ * contribute to `details.status.utilities` inside Overview — not the
+ * conversation header.
  * Plan mode is entered through the command source; while the projection's
  * effective target is plan mode the chip renders and executes /plan off through
  * `command.execute`, otherwise the seat stays empty. Status loads via Face
@@ -18,15 +20,27 @@ import type {} from '@xrkseek/xrk-api-remotes/client'
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
 import { resolveWorkspacePath, routeWorkspaceOpenFile } from '@xrkseek/client-runtime/client'
+import type { BoundActions } from '@xrkseek/client-ui-slots'
 // Type-only: pulls the ui-conversation SlotMap merge (the input.plan seat).
 import type {} from '@xrkseek/client-ui-conversation/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@xrkseek/client-locale/client'
 // Type-only: pulls ctx.layout so the preview column can open and close.
 import type {} from '@xrkseek/client-ui-layout/client'
+// Type-only: ctx.settingsScope (Host user-settings namespaces).
+import type {} from '@xrkseek/client-ui-settings/client'
 // Type-only: pulls the `plan` SessionProjectionMap merge for useProjection.
 import type {} from '@xrkseek/xrk-plan-mode/client'
+import {
+  PRESENCE_SETTINGS_NAMESPACE,
+  type PresenceSettings,
+} from '../presence-settings.ts'
 import { PlanChip } from './PlanModeControl.tsx'
+import { bindPresenceSettingsRuntime } from './PresenceBall.tsx'
+import { PresenceDock } from './PresenceDock.tsx'
+import { PresenceShapeRow, type PresenceShapeRowInjected } from './PresenceShapeRow.tsx'
+import { PresenceSettingsRuntime } from './presence-settings-runtime.ts'
+import { createPresenceShapeRowStore } from './presence-settings-store.ts'
 import { PreviewOpenButton, PreviewTabs, type PreviewTabsInjected } from './PreviewTabs.tsx'
 import { peekJobOutput as defaultPeekJobOutput } from './job-output-peek.ts'
 import { createOverviewSessionSoftFaces } from './overview-session-faces.ts'
@@ -54,10 +68,10 @@ export interface PlanChipInjected {
   exitPlanMode: () => Promise<string | null>
 }
 
-/** Required services: slots, commands Remote, locale, layout, workspaces, sessions. */
+/** Required services: slots, commands Remote, locale, layout, workspaces, sessions, settings. */
 export const inject = [
   'slots', 'remote', 'remote.commands', 'remote.changes', 'remote.canvas', 'locale', 'layout',
-  'connection', 'sessions', 'workspaces',
+  'connection', 'sessions', 'workspaces', 'settingsScope',
 ]
 
 /**
@@ -67,6 +81,41 @@ export const inject = [
 export function apply(ctx: ClientContext): void {
   const connection = ctx.get('connection') as ConnectionHandle
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-plan: dictionaries')
+
+  const presenceHost = ctx.settingsScope.bind<PresenceSettings>({
+    namespace: PRESENCE_SETTINGS_NAMESPACE,
+  })
+  const presenceSettings = new PresenceSettingsRuntime(presenceHost)
+  bindPresenceSettingsRuntime(presenceSettings)
+
+  const presencePrefsStore = createPresenceShapeRowStore()
+  let presencePrefsBound: BoundActions<typeof presencePrefsStore> | undefined
+  const syncPresencePrefs = (): void => {
+    presencePrefsBound?.sync(
+      presenceSettings.getShape(),
+      presenceSettings.getColor(),
+      presenceSettings.getRevision(),
+    )
+  }
+  presenceSettings.subscribe(() => { syncPresencePrefs() })
+  const presencePrefsInjected = (
+    actions: BoundActions<typeof presencePrefsStore>,
+  ): PresenceShapeRowInjected => {
+    presencePrefsBound = actions
+    syncPresencePrefs()
+    return {
+      setShape: (shape) => { presenceSettings.setShape(shape) },
+      setColor: (color) => { presenceSettings.setColor(color) },
+    }
+  }
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'presence-shape',
+    order: 12,
+    store: presencePrefsStore,
+    locale: NS,
+    inject: presencePrefsInjected,
+  }, PresenceShapeRow))
 
   ctx.slots.inject('conversation.input.plan', () => ctx.slots.register({
     name: 'conversation.input.plan',
@@ -98,6 +147,26 @@ export function apply(ctx: ClientContext): void {
       }),
     }, PreviewOpenButton),
     'ui-plan: status header toggle',
+  )
+
+  // Compact emotion ball on the main header while Overview is closed; the
+  // details rail takes over when the column opens (single WebGL instance).
+  ctx.slots.inject(
+    'conversation.session.header.utilities',
+    () => ctx.slots.register({
+      name: 'conversation.session.header.utilities',
+      id: 'presence',
+      order: 10,
+      locale: NS,
+      inject: (sessionId: SessionId) => {
+        const soft = createOverviewSessionSoftFaces(
+          sessionId,
+          (id) => ctx.sessions.binding(id),
+        )
+        return { presenceCues: soft.presenceCues }
+      },
+    }, PresenceDock),
+    'ui-plan: presence dock',
   )
 
   ctx.slots.inject('details', () => ctx.slots.register({

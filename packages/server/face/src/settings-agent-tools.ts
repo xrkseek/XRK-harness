@@ -111,7 +111,8 @@ export function bindSettingsTools(
   });
 
   for (const tool of bound) {
-    if (tools.get(tool.name)) tools.replace(tool);
-    else tools.register(tool);
+    // Same identity rule as presence_set — see presence-tools.ts.
+    if (tools.get(tool.name)) continue;
+    tools.register(tool);
   }
 }

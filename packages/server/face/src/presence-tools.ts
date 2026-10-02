@@ -14,8 +14,11 @@ export interface BindPresenceToolsOptions {
 }
 
 function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
-  if (tools.get(tool.name)) tools.replace(tool);
-  else tools.register(tool);
+  // Keep the first instance. resolveAgent rebinds Face tools every open;
+  // replace() minting a new object identity makes materializeTools settle
+  // return "Stale tool call: presence_set" mid-turn.
+  if (tools.get(tool.name)) return;
+  tools.register(tool);
 }
 
 function readArgs(args: unknown): Record<string, unknown> {

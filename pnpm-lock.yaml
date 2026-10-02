@@ -1317,6 +1317,13 @@ importers:
         version: 18.3.1(react@18.3.1)
 
   packages/client/ui-plan:
+    dependencies:
+      '@xrkseek/schemastery':
+        specifier: workspace:^
+        version: link:../../schemastery
+      clsx:
+        specifier: ^2.0.0
+        version: 2.1.1
     devDependencies:
       '@testing-library/react':
         specifier: ^16.1.0
@@ -1345,6 +1352,9 @@ importers:
       '@xrkseek/client-ui-primitives':
         specifier: workspace:^
         version: link:../ui-primitives
+      '@xrkseek/client-ui-settings':
+        specifier: workspace:^
+        version: link:../ui-settings
       '@xrkseek/client-ui-slots':
         specifier: workspace:^
         version: link:../ui-slots

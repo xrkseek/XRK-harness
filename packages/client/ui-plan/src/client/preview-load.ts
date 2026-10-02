@@ -805,12 +805,30 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
   }
 }
 
+/** Face unary `session.status` only (presence dock / light poll). */
+export async function loadSessionStatus(
+  sessionId: string,
+  fetchImpl: typeof fetch = globalThis.fetch,
+  rpcId = 'presence-dock-status',
+): Promise<SessionStatusView | null> {
+  const statusBody = await fetchImpl('/api/session.status', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      type: 'client-request',
+      rpcId,
+      payload: { sessionId },
+    }),
+  }).then(async (res) => res.json() as Promise<unknown>).catch(() => null)
+  return parseSessionStatus(statusBody)
+}
+
 /** Fetch plan · Office · Status. A failed request becomes null; other tabs still render. */
 export async function loadPreviewTabs(
   sessionId: string,
   fetchImpl: typeof fetch = globalThis.fetch,
 ): Promise<PreviewTabLoad> {
-  const [planBody, officeBody, statusBody] = await Promise.all([
+  const [planBody, officeBody, status] = await Promise.all([
     fetchImpl('/sidebar/api/plan.preview', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -826,19 +844,11 @@ export async function loadPreviewTabs(
         payload: {},
       }),
     }).then(async (res) => res.json() as Promise<unknown>).catch(() => null),
-    fetchImpl('/api/session.status', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        type: 'client-request',
-        rpcId: 'preview-status',
-        payload: { sessionId },
-      }),
-    }).then(async (res) => res.json() as Promise<unknown>).catch(() => null),
+    loadSessionStatus(sessionId, fetchImpl, 'preview-status'),
   ])
   return {
     plan: parsePlanPreview(planBody),
     office: parseOfficePreview(officeBody),
-    status: parseSessionStatus(statusBody),
+    status,
   }
 }

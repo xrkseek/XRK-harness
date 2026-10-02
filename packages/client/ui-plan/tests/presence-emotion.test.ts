@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  DEFAULT_PRESENCE_COLOR,
+  PRESENCE_COLOR_PALETTES,
+  resolvePresencePaint,
+} from '../src/presence-settings.ts'
+import {
   PRESENCE_TOOL_TTL_MS,
   derivePresenceEmotion,
   playPresenceAccent,
+  sessionBallPersona,
 } from '../src/client/PresenceBall.tsx'
 
 describe('derivePresenceEmotion', () => {
@@ -176,6 +182,39 @@ describe('derivePresenceEmotion', () => {
       fleetHealth: 'ok',
       idleMs: 120_000,
     })).toMatchObject({ emotionId: '00', tipKey: 'sleep', source: 'auto' })
+  })
+})
+
+describe('sessionBallPersona', () => {
+  it('is stable for a session id and differs across sessions (seed only; shape/color are Settings)', () => {
+    const a = sessionBallPersona('session-alpha')
+    const b = sessionBallPersona('session-beta')
+    expect(sessionBallPersona('session-alpha')).toEqual(a)
+    expect(a.seed).not.toEqual(b.seed)
+    expect(a.seed).toBeGreaterThanOrEqual(0)
+    expect(a.seed).toBeLessThan(100)
+  })
+})
+
+describe('resolvePresencePaint', () => {
+  it('defaults cream to warm body + dark eyes (not pure white)', () => {
+    const paint = resolvePresencePaint(DEFAULT_PRESENCE_COLOR, false)
+    expect(paint.body.toUpperCase()).toBe('#F3F0EA')
+    expect(paint.eyes.toUpperCase()).toBe('#1A1A1A')
+    expect(paint.body.toUpperCase()).not.toBe('#FFFFFF')
+  })
+
+  it('picks the dark-mode companion tint', () => {
+    const light = resolvePresencePaint('mist', false)
+    const dark = resolvePresencePaint('mist', true)
+    expect(light).toEqual(PRESENCE_COLOR_PALETTES.mist.light)
+    expect(dark).toEqual(PRESENCE_COLOR_PALETTES.mist.dark)
+    expect(dark.body).not.toEqual(light.body)
+  })
+
+  it('uses light eyes on slate dark so pupils stay visible', () => {
+    const paint = resolvePresencePaint('slate', true)
+    expect(paint.eyes.toUpperCase()).toBe('#F0EEE8')
   })
 })
 

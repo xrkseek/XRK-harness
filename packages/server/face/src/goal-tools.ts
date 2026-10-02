@@ -8,8 +8,9 @@ import type { FaceRuntime } from "./context.js";
 import type { GoalRef, GoalView } from "./goal-store.js";
 
 function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
-  if (tools.get(tool.name)) tools.replace(tool);
-  else tools.register(tool);
+  // Same identity rule as presence_set — see presence-tools.ts.
+  if (tools.get(tool.name)) return;
+  tools.register(tool);
 }
 
 function compactGoal(goal: GoalView | undefined): unknown {

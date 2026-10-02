@@ -17,8 +17,9 @@ export interface BindCanvasToolsOptions {
 }
 
 function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
-  if (tools.get(tool.name)) tools.replace(tool);
-  else tools.register(tool);
+  // Same identity rule as presence_set — see presence-tools.ts.
+  if (tools.get(tool.name)) return;
+  tools.register(tool);
 }
 
 function workspaceIdForSession(runtime: FaceRuntime, sessionId: string): string {

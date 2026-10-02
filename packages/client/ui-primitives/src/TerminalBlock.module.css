@@ -149,10 +149,9 @@
   font: var(--dsl-terminal-font);
   overflow-x: auto;
   overflow-y: auto;
-  /* The output is the terminal only scroller (vertical cap + horizontal pre),
-     so both axes are contained: an edge drag stops here instead of chaining
-     into the transcript. */
-  overscroll-behavior: contain;
+  /* Cap + scroll inside the card; at the edge, chain into the transcript so
+     nested bash / tool windows do not trap the wheel. */
+  overscroll-behavior: auto;
 }
 
 /* Both output scrollbars (vertical cap, horizontal pre overflow) float 2px

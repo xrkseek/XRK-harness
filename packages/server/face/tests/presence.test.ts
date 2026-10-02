@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
-import { createToolRegistry } from "@xrkseek/core-tools";
+import { createToolRegistry, materializeTools } from "@xrkseek/core-tools";
 import { FacePresenceStore } from "../src/presence-store.js";
 import { bindPresenceTools } from "../src/presence-tools.js";
 import {
@@ -53,6 +53,25 @@ describe("presence_set tool", () => {
     const cleared = await tool!.execute({ emotionId: "auto" });
     expect(cleared.isError).toBeFalsy();
     expect(shared.presence.get("sess-a")).toBeUndefined();
+  });
+
+  it("keeps materialize identity across resolveAgent rebinds", async () => {
+    const shared = createBareFaceRuntime();
+    const tools = createToolRegistry();
+    bindPresenceTools(tools, { runtime: shared, sessionId: "sess-b" });
+    const table = materializeTools(tools);
+    // Second bind must not mint a new ToolDefinition (stale settle).
+    bindPresenceTools(tools, { runtime: shared, sessionId: "sess-b" });
+    const settled = await table.settle({
+      call: {
+        id: "c1",
+        name: "presence_set",
+        arguments: { emotionId: "03", tips: "突然被问心情" },
+      },
+    });
+    expect(settled.result.content).not.toContain("Stale tool call");
+    expect(settled.result.isError).toBeFalsy();
+    expect(shared.presence.get("sess-b")?.emotionId).toBe("03");
   });
 });
 

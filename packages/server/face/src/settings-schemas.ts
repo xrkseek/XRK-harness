@@ -400,6 +400,19 @@ const UiConversationConfig = Schema.object({
   toolsDefaultExpanded: Schema.boolean().default(false),
 });
 
+/** Companion body shape + named palette in session header / Status rail (client ui-plan). */
+const UiPresenceConfig = Schema.object({
+  shape: Schema.union(["blob", "wedge", "gem"]).default("blob"),
+  color: Schema.union([
+    "cream",
+    "mist",
+    "peach",
+    "sage",
+    "lilac",
+    "slate",
+  ]).default("cream"),
+});
+
 /**
  * Settings base for `llm-pi-ai`: zero-config routes only.
  * Registry brands surface via `llm.providers` as the Settings add directory.
@@ -447,6 +460,12 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       ns: "ui-theme",
       schema: FACE_THEME_SCHEMA,
       base: { preference: "system", fontSize: FACE_FONT_SIZE_DEFAULT },
+      applies: "live",
+    },
+    {
+      ns: "ui-presence",
+      schema: schemasteryJson(UiPresenceConfig) as FaceSchemaEnvelope,
+      base: { shape: "blob", color: "cream" },
       applies: "live",
     },
     {

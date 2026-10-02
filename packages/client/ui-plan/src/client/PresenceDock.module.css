@@ -1,0 +1,96 @@
+/*
+ * Header presence: taller chip out of titleRow height flow.
+ * Seat keeps a width reservation while visible so left chrome does not jump;
+ * exit collapses that width on the same duration as the fade (no hard cut).
+ */
+
+.seat {
+  position: relative;
+  box-sizing: border-box;
+  flex: none;
+  align-self: center;
+  width: min(220px, 46vw);
+  height: 0;
+  z-index: 2;
+  /* Match shell / better-sidebar motion so Overview open and dock handoff share a curve. */
+  transition: width var(--xrkh-sidebar-motion-duration, var(--ds-transition-duration-slow, 380ms))
+    var(--xrkh-sidebar-motion-ease, var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1)));
+}
+
+.seat[data-phase='exit'],
+.seat[data-phase='gone'] {
+  width: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.dock {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: min(220px, 46vw);
+  height: 48px;
+  overflow: hidden;
+  transform: translateY(-50%);
+}
+
+.dock :global([data-overview-presence]) {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+}
+
+.seat[data-phase='enter'] .dock {
+  animation: presenceDockIn
+    var(--xrkh-sidebar-motion-duration, var(--ds-transition-duration-slow, 380ms))
+    var(--xrkh-sidebar-motion-ease, var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1)))
+    both;
+}
+
+.seat[data-phase='exit'] .dock {
+  animation: presenceDockOut
+    var(--xrkh-sidebar-motion-duration, var(--ds-transition-duration-slow, 380ms))
+    var(--xrkh-sidebar-motion-ease, var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1)))
+    both;
+  pointer-events: none;
+}
+
+@keyframes presenceDockIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0) scale(1);
+  }
+}
+
+@keyframes presenceDockOut {
+  from {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-50%) translateX(10px) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seat {
+    transition: none;
+  }
+
+  .seat[data-phase='enter'] .dock,
+  .seat[data-phase='exit'] .dock {
+    animation: none;
+  }
+
+  .seat[data-phase='exit'] .dock {
+    opacity: 0;
+  }
+}

@@ -33,6 +33,7 @@
         "@xrkseek/client-locale",
         "@xrkseek/client-ui-conversation",
         "@xrkseek/client-ui-layout",
+        "@xrkseek/client-ui-settings",
         "@xrkseek/client-connection"
       ],
       "platform": "web"
@@ -51,6 +52,7 @@
     "@xrkseek/client-ui-conversation": "workspace:^",
     "@xrkseek/client-ui-layout": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
+    "@xrkseek/client-ui-settings": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/xrk-commands": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
@@ -68,15 +70,21 @@
     "@xrkseek/client-ui-conversation": "workspace:^",
     "@xrkseek/client-ui-layout": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
+    "@xrkseek/client-ui-settings": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/client-web-react": "workspace:^",
     "@xrkseek/cordis": "workspace:^",
+    "@xrkseek/schemastery": "workspace:^",
     "@xrkseek/xrk-api-remotes": "workspace:^",
     "@xrkseek/xrk-commands": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/xrk-plan-mode": "workspace:^",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
+  },
+  "dependencies": {
+    "@xrkseek/schemastery": "workspace:^",
+    "clsx": "^2.0.0"
   },
   "files": [
     "lib/index.js",

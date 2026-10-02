@@ -84,6 +84,21 @@
       color-mix(in srgb, var(--dsw-alias-bg-layer-1) 55%, transparent) 0%,
       var(--dsw-alias-bg-base) 100%
     );
+  /* Soft land after header dock exits (mount already delayed by handoff ms). */
+  animation: presenceRailIn 260ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@keyframes presenceRailIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
 }
 
 .presenceRail[data-collapsed] {
@@ -1379,7 +1394,8 @@
 @media (prefers-reduced-motion: reduce) {
   .root[data-pending]::before,
   .pane,
-  .sectionBody:not([hidden]) {
+  .sectionBody:not([hidden]),
+  .presenceRail {
     animation: none;
   }
 

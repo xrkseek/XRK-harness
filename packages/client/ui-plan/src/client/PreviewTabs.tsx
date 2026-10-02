@@ -23,6 +23,8 @@ import { OverviewChangesPanel, type OverviewChangesTurn } from './OverviewChange
 import { OverviewCanvasPanel } from './OverviewCanvasPanel.tsx'
 import { SubagentGraphBoard } from './SubagentGraphBoard.tsx'
 import { PresenceBall } from './PresenceBall.tsx'
+import { useOverviewOpen } from './overview-open.ts'
+import { PRESENCE_RAIL_HANDOFF_MS } from './presence-handoff.ts'
 import {
   getCanvasFocusSnapshot,
   subscribeCanvasFocus,
@@ -1661,6 +1663,11 @@ export function PreviewTabs({
   const [statusTick, setStatusTick] = useState(0)
   const [boundSessionId, setBoundSessionId] = useState(sessionId)
   const [presenceCollapsed, setPresenceCollapsed] = useState(readPresenceCollapsed)
+  // Details column stays mounted at width 0 — only paint the ball while open
+  // so the header PresenceDock can own the engine when Overview is closed.
+  const overviewOpen = useOverviewOpen()
+  const [presenceRailReady, setPresenceRailReady] = useState(() => overviewOpen)
+  const overviewWasOpen = useRef(overviewOpen)
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const tabsRef = useRef<HTMLDivElement | null>(null)
   const scrollRestored = useRef(false)
@@ -1767,6 +1774,24 @@ export function PreviewTabs({
     () => presenceCues?.getSnapshot() ?? EMPTY_PRESENCE_SESSION_CUES,
     () => EMPTY_PRESENCE_SESSION_CUES,
   )
+
+  // Wait for header dock exit before mounting the Overview ball (closed → open).
+  useEffect(() => {
+    const wasOpen = overviewWasOpen.current
+    overviewWasOpen.current = overviewOpen
+    if (!overviewOpen) {
+      setPresenceRailReady(false)
+      return
+    }
+    if (wasOpen) {
+      setPresenceRailReady(true)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setPresenceRailReady(true)
+    }, PRESENCE_RAIL_HANDOFF_MS)
+    return () => { window.clearTimeout(timer) }
+  }, [overviewOpen])
 
   const canvasFocus = useSyncExternalStore(
     subscribeCanvasFocus,
@@ -1996,7 +2021,7 @@ export function PreviewTabs({
       <div className={css.tools} aria-label={t('preview.status.tools')}>
         {renderSlot('details.status.utilities', {})}
       </div>
-      {status !== null
+      {overviewOpen && presenceRailReady && status !== null
         ? (
           <div
             className={css.presenceRail}
@@ -2028,6 +2053,7 @@ export function PreviewTabs({
               </button>
             </div>
             <PresenceBall
+              sessionId={sessionId}
               {...(status.presence ? { presence: status.presence } : {})}
               turnActive={status.delivery.turnActive}
               runningJobs={status.jobs.filter((j) => j.status === 'running').length}
