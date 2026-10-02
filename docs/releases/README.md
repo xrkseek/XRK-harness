@@ -4,7 +4,7 @@
 
 版本约定：`MAJOR.MINOR.PATCH` 里 **MINOR（第二位）奇偶**——**奇数正式**（如 `0.3.x` · `0.5.x`）、**偶数预览**（如 `0.2.x` · `0.4.x`）。**不是** PATCH（第三位）。
 
-**本版**：`MINOR=5` 正式线以 **v0.5.7** 为当前包号（即将接管 npm `@latest`；发布前仍为 v0.5.6）。`0.4.x` 预览线已于 **v0.4.12** 收口。
+**本版**：`MINOR=5` 正式线以 **v0.5.7** 为当前包号（npm `@latest`）。`0.4.x` 预览线已于 **v0.4.12** 收口。
 
 | 档                  | 版本                                    | 说明                                                                 |
 | ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
@@ -24,7 +24,7 @@
 
 | 用途           | 命令                                                            |
 | -------------- | --------------------------------------------------------------- |
-| 当前（推荐）   | `npm i -g @xrkseek/harness-cli@latest`（本版发布后 = v0.5.7）后 `xrkh web` |
+| 当前（推荐）   | `npm i -g @xrkseek/harness-cli@latest`（= v0.5.7）后 `xrkh web` |
 | 精确锁版本     | `npm i -g @xrkseek/harness-cli@0.5.7` 后 `xrkh web`             |
 | 回退上一正式线 | `npm i -g @xrkseek/harness-cli@0.3.11` 后 `xrkh web`             |
 
@@ -38,7 +38,7 @@
 
 Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = formal** (e.g. `0.3.x` · `0.5.x`), **even = preview** (e.g. `0.2.x` · `0.4.x`). **Not** the PATCH digit.
 
-**This release**: the `MINOR=5` formal line is at **v0.5.7** as the current package number (about to take over npm `@latest`; still v0.5.6 until published). The `0.4.x` preview line closed at **v0.4.12**.
+**This release**: the `MINOR=5` formal line is at **v0.5.7** as the current package number (npm `@latest`). The `0.4.x` preview line closed at **v0.4.12**.
 
 | Line                      | Version                                   | Notes                                                                                          |
 | ------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -56,7 +56,7 @@ Succession: preview close [v0.4.12](./v0.4.12.md) → [v0.5.0](./v0.5.0.md) → 
 
 | Use                           | Command                                                              |
 | ----------------------------- | -------------------------------------------------------------------- |
-| Current (recommended)         | `npm i -g @xrkseek/harness-cli@latest` (= v0.5.7 once published) then `xrkh web` |
+| Current (recommended)         | `npm i -g @xrkseek/harness-cli@latest` (= v0.5.7) then `xrkh web` |
 | Pin exactly                   | `npm i -g @xrkseek/harness-cli@0.5.7` then `xrkh web`               |
 | Roll back previous formal     | `npm i -g @xrkseek/harness-cli@0.3.11` then `xrkh web`               |
 
