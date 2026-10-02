@@ -129,7 +129,21 @@ describe("FsService", () => {
     await writeFile(path.join(root, "src", "b.md"), "nope\n", "utf8");
     await writeFile(path.join(root, "readme.txt"), "hello findme\n", "utf8");
 
+    // Regression: a file sorted late by readdir must still be found even when
+    // the directory holds more entries than the old hard-coded walk cap (2000).
+    const deep = path.join(root, "bulk");
+    await mkdir(deep, { recursive: true });
+    for (let i = 0; i < 2500; i += 1) {
+      await writeFile(path.join(deep, `f${String(i).padStart(4, "0")}.txt`), "x\n", "utf8");
+    }
+    await writeFile(path.join(deep, "zz-target.md"), "target\n", "utf8");
+
     const fs = createFsLocalProvider({ root });
+    expect(await fs.glob("*.txt")).toEqual(["readme.txt"]);
+    expect(await fs.glob("bulk/*.md")).toEqual(["bulk/zz-target.md"]);
+    expect(await fs.grep("target", { path: "bulk" })).toEqual([
+      { path: "bulk/zz-target.md", line: 1, text: "target" },
+    ]);
     expect(await fs.glob("**/*.ts")).toEqual(["src/a.ts"]);
     expect(await fs.glob("*.txt")).toEqual(["readme.txt"]);
 
