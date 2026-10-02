@@ -38,6 +38,7 @@ import {
   subscribeEditStaging,
   subscribeResubmitIntent,
 } from '../chat/resubmit-intent.ts'
+import { isComposerAgentActive } from '../chat/flow-waiting.ts'
 import {
   focusDraftEditor, installDraftFilePicker, installDraftKeymap, installDraftWheel,
   keepDraftFocus, revealDraftSelection,
@@ -52,14 +53,6 @@ import { PermissionSelect } from './PermissionSelect.tsx'
 import css from './InputBar.module.css'
 
 export type InputBarProps = ComposerBarProps
-
-function blockHasVisibleContent(block: { kind: string; text?: string }): boolean {
-  if (block.kind === 'tool-call') return false
-  if (block.kind === 'text' || block.kind === 'reasoning') {
-    return typeof block.text === 'string' && block.text.trim() !== ''
-  }
-  return true
-}
 
 export const InputBar = memo(function InputBar({
   useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages, retryFile,
@@ -77,8 +70,12 @@ export const InputBar = memo(function InputBar({
   const commandMenuOpen = useMenuLauncher(source => source === 'command')
   const promptError = useSession(s => s.promptError) ?? null
   const running = useSession(s => s.running) ?? false
-  const partial = useSession(s => s.partial) ?? null
-  const runningCallCount = useSession(s => s.runningCalls.length) ?? 0
+  // Boolean latch — do not select `partial` itself (new identity every chunk).
+  const agentActive = useSession(s => isComposerAgentActive({
+    running: s.running ?? false,
+    runningCallCount: s.runningCalls.length,
+    partial: s.partial ?? null,
+  }))
   const subagent = useSession(s => s.subagent) ?? null
   const removed = useSession(s => s.removed) ?? false
   const reconnecting = useConnectionState(state => state === 'reconnecting')
@@ -137,9 +134,8 @@ export const InputBar = memo(function InputBar({
   })
   // Keep Send↔Stop aligned with an open turn tail: optimistic cancel clears
   // `running` before partial/tool rows settle (DSH drain-latch posture).
-  const agentActive = running
-    || runningCallCount > 0
-    || (partial !== null && partial.blocks.some(blockHasVisibleContent))
+  // `agentActive` is selected above as one boolean so chunk flushes do not
+  // re-render the composer.
   // Transient error banner (machine notices, image-intake rejections, and
   // prompt failures): the seq keys the Toast so an identical repeated message
   // restarts the hold-then-fade cycle instead of reusing the faded one.

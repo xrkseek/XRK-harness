@@ -216,28 +216,6 @@ export class ConversationController extends Service implements IConversation {
       throw new Error('conversation.sendSession: one or more draft attachments are no longer available')
     }
     const uploads = this.fileUploads.getSnapshot()
-    const pendingAttachments = attachments.map((attachment) => {
-      if (attachment.kind === 'image') {
-        return {
-          type: 'image' as const,
-          value: {
-            previewUrl: attachment.previewUrl,
-            ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
-            ...(attachment.width === undefined ? {} : { width: attachment.width }),
-            ...(attachment.height === undefined ? {} : { height: attachment.height }),
-          },
-        }
-      }
-      return {
-        type: 'file' as const,
-        value: {
-          attachmentId: `echo:${attachment.id}` as AttachmentId,
-          name: attachment.file.name || 'file',
-          bytes: attachment.file.size,
-          ...(attachment.file.type === '' ? {} : { mediaType: attachment.file.type }),
-        },
-      }
-    })
     const serializeParts = async (): Promise<Parameters<SessionFace['prompt']>[0]> => {
       const content = await Promise.all(attachments.map(async (attachment) => {
         if (attachment.kind === 'image') {
@@ -264,10 +242,57 @@ export class ConversationController extends Service implements IConversation {
       this.releaseDraftImages(attachments)
       return { kind: 'success' }
     }
+    // Echo previews must not share the draft object URL. Admission success
+    // revokes the composer draft immediately (so the rail can drop it), but a
+    // steer/queue bubble stays mounted until the durable node lands — revoking
+    // the URL the echo still paints produces a broken-image tile (alt falls
+    // back to `image.png`) for the whole 「插队中」 window.
+    const echoPreviewUrls: string[] = []
+    const pendingAttachments = attachments.map((attachment) => {
+      if (attachment.kind === 'image') {
+        const previewUrl = URL.createObjectURL(attachment.file)
+        this.createdImageUrls.add(previewUrl)
+        echoPreviewUrls.push(previewUrl)
+        return {
+          type: 'image' as const,
+          value: {
+            previewUrl,
+            ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
+            ...(attachment.width === undefined ? {} : { width: attachment.width }),
+            ...(attachment.height === undefined ? {} : { height: attachment.height }),
+          },
+        }
+      }
+      return {
+        type: 'file' as const,
+        value: {
+          attachmentId: `echo:${attachment.id}` as AttachmentId,
+          name: attachment.file.name || 'file',
+          bytes: attachment.file.size,
+          ...(attachment.file.type === '' ? {} : { mediaType: attachment.file.type }),
+        },
+      }
+    })
+    const releaseEchoPreviews = (): void => {
+      for (const url of echoPreviewUrls) {
+        if (!this.createdImageUrls.delete(url)) continue
+        revokePreview(url)
+      }
+      echoPreviewUrls.length = 0
+    }
     const submission = session.beginSubmission({
       mode,
       text,
       attachments: pendingAttachments,
+      onRetire: (retirement) => {
+        if (retirement.reason === 'failed') {
+          releaseEchoPreviews()
+          return
+        }
+        // ChatView keeps the echo (and Host-row previewMemory) for one paint
+        // after the durable node arrives; revoke on the next frame.
+        void nextPaint().then(() => { releaseEchoPreviews() })
+      },
     })
     let parts: Parameters<SessionFace['prompt']>[0]
     try {
@@ -282,7 +307,10 @@ export class ConversationController extends Service implements IConversation {
       throw new DOMException('The operation was aborted.', 'AbortError')
     }
     const result = await session.prompt(parts, mode, signal, submission.requestId)
-    if (!result.ok) return { kind: 'error' }
+    if (!result.ok) {
+      releaseEchoPreviews()
+      return { kind: 'error' }
+    }
     this.releaseDraftImages(attachments)
     return { kind: 'success' }
   }

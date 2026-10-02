@@ -1,73 +1,69 @@
-/* Figma .FileContainerText 1:791: the wrapper uses the shared dock inset
-   inside the composer card around the inset panel. */
+/* Queue strip: same glass card as TodoPanel, independent of the composer card. */
 
-.dock {
+.root {
   box-sizing: border-box;
   flex: none;
+  overflow: hidden;
+  margin: 0 auto;
   width: calc(
     100% -
     var(--dsh-composer-side-clearance) -
     var(--dsh-composer-side-clearance) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset) -
     var(--dsh-composer-dock-inset) -
     var(--dsh-composer-dock-inset)
   );
   max-width: calc(
     var(--dsh-composer-card-max-width) -
     var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset) -
     var(--dsh-composer-dock-inset)
   );
-  /* Cancel the stack gap after this item and tuck 3px under the input card
-     (square bottom), reading as one attached surface. */
-  margin: 0 auto calc(0px - var(--dsh-composer-stack-gap) - 3px);
-  /* Horizontal padding completes the shared dock inset (this wrapper only
-     subtracts two insets from its width); no vertical padding, so the visual
-     gap above the panel stays the uniform stack gap. */
-  padding: 0 var(--dsh-composer-dock-inset);
-}
-
-.panel {
-  position: relative;
-  overflow: hidden;
-  width: 100%;
-  padding: 2px 0;
-  border-radius: 12px 12px 0 0;
-  background: var(--dsw-specific-tip);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l1) 88%, transparent);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--dsw-specific-tip) 92%, var(--dsw-alias-label-primary) 4%) 0%,
+      var(--dsw-specific-tip) 55%
+    );
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent),
+    0 8px 24px color-mix(in srgb, var(--dsw-alias-bg-base) 35%, transparent);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
-.panel::after {
-  position: absolute;
-  inset: 0;
-  border: 1px solid var(--dsw-alias-border-l1);
-  /* The input card's own top border closes the shape below. */
-  border-bottom: none;
-  border-radius: inherit;
-  content: '';
-  pointer-events: none;
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 5px 10px 6px;
 }
 
 .header {
-  box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  height: 36px;
-  /* Right inset 12px puts the chevron on the same vertical line as the Todo
-     header's chevron (12px body padding there). */
-  padding: 4px 12px;
+  min-height: 32px;
+  padding: 0;
   border: none;
-  border-radius: 8px;
   background: transparent;
-  color: var(--dsw-alias-label-primary);
   text-align: left;
   cursor: pointer;
+  border-radius: 8px;
+}
+
+.header:hover .title {
+  color: var(--dsw-alias-label-primary);
 }
 
 .header:focus-visible {
-  outline: 2px solid var(--dsw-alias-label-tertiary);
-  outline-offset: -2px;
+  outline: 2px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 50%, transparent);
+  outline-offset: 1px;
 }
 
 .header:disabled {
@@ -78,77 +74,120 @@
   display: grid;
   flex: none;
   place-items: center;
-  color: var(--dsw-alias-label-tertiary);
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  color: var(--dsw-alias-label-secondary);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
+}
+
+.title {
+  flex: none;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--dsw-alias-label-primary);
 }
 
 .count {
   flex: 1 1 auto;
   min-width: 0;
-  font-family: Inter, var(--dsw-font-family);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 24px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chevron {
   display: grid;
   flex: none;
   place-items: center;
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
   color: var(--dsw-alias-label-tertiary);
 }
 
 .list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 2px 0 4px;
+  list-style: none;
   max-height: 180px;
   overflow-y: auto;
-  /* Queue items scroll in a capped dock; an overscroll past the last item
-     must not scroll the conversation the dock is anchored over. */
   overscroll-behavior: contain;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  border-top: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 65%, transparent);
 }
 
 .row {
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  height: 36px;
-  padding: 4px 5px 4px 12px;
+  gap: 8px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 4px 5px 6px;
   border-radius: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
 }
 
-.row + .row {
-  box-shadow: inset 0 1px 0 var(--dsw-alias-border-l1);
+.row:hover {
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent);
+}
+
+.row[data-status='sending'] {
+  color: var(--dsw-alias-label-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, transparent);
+}
+
+.glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.glyphSending {
+  color: var(--dsw-alias-state-business-primary);
+  animation: queue-progress-spin 1s linear infinite;
+}
+
+@keyframes queue-progress-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .preview,
 .editor {
   flex: 1 1 auto;
   min-width: 0;
-  font: var(--dsw-font-xs-13);
-  font-family: Inter, var(--dsw-font-family);
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .preview {
   overflow: hidden;
-  color: var(--dsw-alias-label-primary-dimmed);
+  color: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
-  word-break: break-word;
-}
-
-.pendingRow .attachments {
-  flex-shrink: 1;
 }
 
 .status {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
+  line-height: 18px;
   white-space: nowrap;
 }
 
@@ -157,46 +196,47 @@
   flex: none;
   gap: 4px;
   min-width: 0;
-  max-width: 55%;
+  max-width: 42%;
   overflow: hidden;
 }
 
 .thumb {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   object-fit: cover;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 4px;
+  border-radius: 6px;
+  outline: 1px solid oklch(1 0 0 / 0.1);
+  outline-offset: -1px;
   background: var(--dsw-alias-bg-base);
 }
 
 .file {
   display: inline-flex;
-  flex: 0 1 180px;
+  flex: 0 1 160px;
   align-items: center;
   gap: 4px;
   box-sizing: border-box;
-  min-width: 74px;
-  height: 24px;
+  min-width: 72px;
+  height: 22px;
   padding: 0 6px;
   overflow: hidden;
-  border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 6px;
-  background: var(--dsw-alias-bg-base);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
 }
 
 .fileIcon {
   display: inline-flex;
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .fileName {
   min-width: 0;
   overflow: hidden;
   color: var(--dsw-alias-label-primary-dimmed);
-  font: var(--dsw-font-xs-13);
+  font-size: 12px;
+  line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -210,12 +250,12 @@
 
 .editor {
   box-sizing: border-box;
-  height: 28px;
+  height: 26px;
   padding: 0 8px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 45%, var(--dsw-alias-border-l2));
+  border-radius: 7px;
   outline: none;
-  background: var(--dsw-alias-bg-base);
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 70%, transparent);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -227,33 +267,35 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 10px;
+  gap: 2px;
+  margin-left: auto;
 }
 
 .action {
   display: grid;
   flex: none;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: none;
-  border-radius: 999px;
+  border-radius: 7px;
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
 }
 
 .action:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);
+  color: var(--dsw-alias-label-secondary);
 }
 
 .action:focus-visible {
-  outline: 2px solid var(--dsw-alias-label-tertiary);
-  outline-offset: -2px;
+  outline: 2px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 50%, transparent);
+  outline-offset: 0;
 }
 
 .action:disabled {
   cursor: default;
-  opacity: 0.45;
+  opacity: 0.4;
 }

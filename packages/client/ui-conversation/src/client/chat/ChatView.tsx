@@ -28,7 +28,7 @@ import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import { Button, IconChevronDownOutline14, Modal } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageFiles, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble, PendingSubmissionBubble, previewAttachmentsOf } from './MessageItem.tsx'
-import { shouldShowFlowWaiting } from './flow-waiting.ts'
+import { shouldShowFlowWaiting, hasActiveTurnSurface } from './flow-waiting.ts'
 import { shouldFollowContentGrowth } from './follow-growth.ts'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
 import { ResubmitConfirm } from './ResubmitConfirm.tsx'
@@ -297,7 +297,6 @@ export function ChatView({
 }: ChatViewSlotProps) {
   const order = useSession(s => s.chat.order)
   const nodeStore = useSession(s => s.chat.nodes)
-  const timeline = useSession(s => s.chat.timeline)
   const turnNavigationItems = useSession(s => s.chat.navigation.items())
   const turnOutline = useProjection('turnOutline')
   const railItems = useMemo(
@@ -305,8 +304,10 @@ export function ChatView({
     [turnNavigationItems, turnOutline],
   )
   const inbox = useSession(s => s.queue)
-  const partial = useSession(s => s.partial)
-  const runningCallCount = useSession(s => s.runningCalls.length)
+  // Stable during token deltas — seats observe node content themselves.
+  const turnSurfaceActive = useSession(s =>
+    hasActiveTurnSurface(s.partial, s.runningCalls.length, s.chat.timeline))
+  const runningTurnStart = useSession(s => runningTurnStartTime(s.chat.timeline))
   // Workspace root off the session list row: path summaries display relative to it.
   const cwd = useSessions(s => s.byId[sessionId]?.cwd)
   const running = useSession(s => s.running)
@@ -462,7 +463,6 @@ export function ChatView({
     owner => renderSlot('conversation.message.files', owner),
     [renderSlot],
   )
-  const runningTurnStart = useMemo(() => runningTurnStartTime(timeline), [timeline])
 
   const listRef = useRef<HTMLDivElement | null>(null)
   const columnRef = useRef<HTMLDivElement | null>(null)
@@ -513,18 +513,17 @@ export function ChatView({
     break
   }
   const lastDurable = lastDurableKey === null ? undefined : nodeStore.get(lastDurableKey)
+  // Steer waits only — transcript echoes must not force the shimmer while
+  // Think/tools are live (that was the blue-label flicker on every send).
+  const pendingSteerCount = pendingInputs.filter((input) => (
+    input.kind === 'steer'
+    || (input.kind === 'echo' && input.submission.placement === 'steering')
+  )).length
   const showFlowWaiting = shouldShowFlowWaiting({
     running,
-    partial,
-    runningCallCount,
-    timeline,
-    // Steer waits only — transcript echoes must not force the shimmer while
-    // Think/tools are live (that was the blue-label flicker on every send).
-    pendingSteerCount: pendingInputs.filter((input) => (
-      input.kind === 'steer'
-      || (input.kind === 'echo' && input.submission.placement === 'steering')
-    )).length,
+    pendingSteerCount,
     tailKind: lastDurable?.kind,
+    turnSurfaceActive,
   })
   const lastPending = pendingInputs[pendingInputs.length - 1]
   const lastSteeringId = lastPending === undefined
@@ -808,26 +807,13 @@ export function ChatView({
     const scrollport = scrollerOf(local)
     lastScrollHeightRef.current = scrollport.scrollHeight
     const composer = scrollport.querySelector<HTMLElement>('[data-composer-seat]')
-    let followRaf = 0
     const observer = new ResizeObserver(() => {
       followRef.current?.()
-      // Second frame: sticky dock height / --dsh-composer-height can settle
-      // one paint after the first ResizeObserver callback.
-      if (typeof requestAnimationFrame !== 'undefined') {
-        if (followRaf !== 0) cancelAnimationFrame(followRaf)
-        followRaf = requestAnimationFrame(() => {
-          followRaf = 0
-          followRef.current?.()
-        })
-      }
       activeTurnRef.current?.()
     })
     observer.observe(column)
     if (composer !== null) observer.observe(composer)
-    return () => {
-      if (followRaf !== 0) cancelAnimationFrame(followRaf)
-      observer.disconnect()
-    }
+    return () => { observer.disconnect() }
   }, [])
 
   // A failed/empty page leaves the head unchanged. Once the request leaves

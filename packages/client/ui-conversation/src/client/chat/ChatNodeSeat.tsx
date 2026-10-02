@@ -50,6 +50,12 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   // keyed-slot entry passed alongside that same Node. TypeScript does not
   // distribute an object containing a union into a union of objects itself.
   const routedOwner = { ...owner, node: routedNode } as RoutedChatNodeOwner
+  // Running assistants need live layout for scroll-follow. Turn-tails also: Stop
+  // materializes a tall ChangedFiles card in one paint, and content-visibility
+  // auto/skip has left a second ghost copy of that card in Chromium.
+  const live = (routedNode.kind === 'assistant-step'
+    && (routedNode.data as { readonly status?: string }).status === 'running')
+    || routedNode.kind === 'turn-tail'
   return (
     <div
       className={css.flowItem}
@@ -57,6 +63,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       data-chat-flow-key={routedNode.key}
       data-chat-flow-kind={routedNode.kind}
       data-chat-turn={turn}
+      data-live={live || undefined}
     >
       {renderSlot('conversation.chat.node', routedOwner, {
         entryKey: routedNode.kind,

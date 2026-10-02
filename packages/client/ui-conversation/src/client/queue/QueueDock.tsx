@@ -90,6 +90,31 @@ type EditingState = {
   /** New uploads staged for this edit (not yet admitted). */
   readonly files: readonly File[]
 }
+/** Pending: dashed ring matching TodoPanel's unstarted glyph. */
+function PendingGlyph() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="6.4" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2.4 2.4" />
+    </svg>
+  )
+}
+
+/** Sending: business-blue ring fading out; CSS spins the svg. */
+function SendingGlyph() {
+  const gradientId = useId()
+  return (
+    <svg width={14} height={14} viewBox="0 0 14 14" fill="none" aria-hidden="true" className={css.glyphSending}>
+      <defs>
+        <linearGradient id={gradientId} x1="2.5" y1="12" x2="10.5" y2="3.5" gradientUnits="userSpaceOnUse">
+          <stop stopColor="currentColor" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <circle cx="7" cy="7" r="6.4" stroke={`url(#${gradientId})`} strokeWidth="1.2" />
+    </svg>
+  )
+}
+
 function QueueFile({ attachment, label }: { attachment: FileAttachmentRef; label: string }) {
   return (
     <span className={css.file} aria-label={label} title={attachment.name}>
@@ -238,29 +263,31 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
   }
 
   return (
-    <div className={css.dock} data-queue-dock>
-      {rowCount > 1 && (
+    <section className={css.root} data-queue-dock aria-label={t('queue.title')}>
+      <div className={css.body}>
         <button
           type="button"
           className={css.header}
           aria-controls={listId}
-          aria-expanded={expanded}
-          disabled={interactionActive}
+          aria-expanded={listVisible}
+          disabled={interactionActive || rowCount === 1}
           onClick={() => { setCollapsed(value => !value) }}
         >
           <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>
+          <span className={css.title}>{t('queue.title')}</span>
           <span className={css.count}>{t('queue.count', { n: rowCount })}</span>
-          <span className={css.chevron} aria-hidden>
-            {expanded ? <IconChevronDownOutline14 /> : <IconChevronUpOutline14 />}
-          </span>
+          {rowCount > 1 && (
+            <span className={css.chevron} aria-hidden>
+              {collapsed && !interactionActive ? <IconChevronUpOutline14 /> : <IconChevronDownOutline14 />}
+            </span>
+          )}
         </button>
-      )}
-      <ul id={listId} className={css.list} hidden={!listVisible}>
+        <ul id={listId} className={css.list} hidden={!listVisible}>
         {listVisible && dockRows.map(entry => (
           entry.kind === 'local'
             ? (
-              <li key={`local:${entry.submission.requestId}`} className={`${css.row} ${css.pendingRow}`} data-submission-echo>
-                {rowCount === 1 && <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>}
+              <li key={`local:${entry.submission.requestId}`} className={css.row} data-status="sending" data-submission-echo>
+                <span className={css.glyph} aria-hidden><SendingGlyph /></span>
                 <LocalEchoAttachments submission={entry.submission} t={t} />
                 <span className={css.preview}>{entry.submission.text}</span>
                 <span className={css.status} role="status">{t('queue.sending')}</span>
@@ -283,7 +310,6 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
               <HostQueueRow
                 key={entry.row.id}
                 row={entry.row}
-                rowCount={rowCount}
                 queueMutable={queueMutable}
                 running={running}
                 editing={editing}
@@ -298,8 +324,9 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
               />
             )
         ))}
-      </ul>
-    </div>
+        </ul>
+      </div>
+    </section>
   )
 }
 
@@ -338,7 +365,6 @@ function LocalEchoAttachments({
 
 function HostQueueRow({
   row,
-  rowCount,
   queueMutable,
   running,
   editing,
@@ -352,7 +378,6 @@ function HostQueueRow({
   t,
 }: {
   row: QueueRow
-  rowCount: number
   queueMutable: boolean
   running: boolean
   editing: EditingState | null
@@ -377,7 +402,7 @@ function HostQueueRow({
         void applyAction(row.id, { kind: 'steer' }, t('queue.steerFailed'))
       }}
     >
-      {rowCount === 1 && <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>}
+      <span className={css.glyph} aria-hidden><PendingGlyph /></span>
       {editing?.id === row.id
         ? (
           <>

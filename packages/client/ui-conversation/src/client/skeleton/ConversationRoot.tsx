@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import type { WorkspaceId } from '@xrkseek/client-runtime/client'
 import type { ConversationSlotProps, InputZone } from '../contract/slots.ts'
+import { conversationShellEqual } from './conversation-shell.ts'
 import { HeroGlow, HeroShell, WorkspaceChip, workspaceLabel } from './EmptyHero.tsx'
 import css from './ConversationRoot.module.css'
 
@@ -195,14 +196,14 @@ export function ConversationRoot({
   sessionId, useSession, useSessions, useWorkspaces, useInput, useComposerBlock,
   renderSlot, renderSlotChain, selectWorkspace, t,
 }: ConversationRootProps) {
-  const openState = useSession(s => s.openState)
-  const composerPhase = useSession(s => s.composerPhase)
-  const pending = useSession(s => s.pending) ?? []
-  const session = useSession(s => s)
+  const session = useSession(s => s, conversationShellEqual)
+  const openState = session?.openState
+  const composerPhase = session?.composerPhase
+  const pending = session?.pending ?? []
   const inputState = useInput(s => s)
   const cwd = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.cwd)
   const summaryBlank = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.blank)
-  const liveBlank = useSession(s => s.blank)
+  const liveBlank = session?.blank
   const provenBlank = summaryBlank === true || liveBlank === true
   const workspaces = useWorkspaces(s => s)
   // A plugin this package cannot import (ui-model-selection) says this session cannot

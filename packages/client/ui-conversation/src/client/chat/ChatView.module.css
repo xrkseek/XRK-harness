@@ -73,6 +73,21 @@
   contain-intrinsic-size: auto 96px;
 }
 
+/* Streaming tail: keep live measurement so content-visibility does not thrash
+   against bottom-follow while the open assistant step grows every frame. */
+.flowItem[data-live] {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
+/* Turn-tail footers carry ChangedFiles + chips + actions — far taller than the
+   96px intrinsic guess. Skipping them under content-visibility has painted a
+   second "ghost" copy of the same 改动 card after Stop (Chromium skip/unskip). */
+.flowItem[data-chat-flow-kind='turn-tail'] {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
 /* A keyed renderer may intentionally decline its row after dispatch (the
    completed-turn tail does this when it owns neither actions nor extensions).
    An empty flex item must not consume the column gap. */

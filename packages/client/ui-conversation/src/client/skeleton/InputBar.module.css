@@ -102,10 +102,12 @@
 
 /* The draft surface suppresses its own outline because the card above is its
    visual boundary: a native ring on the inner field would draw a box inside a
-   box. The card answers focus instead 閳?the same contract ui-primitives/Input
-   and QuestionComposer already use, so focus reads identically everywhere.
+   box. The card answers focus with the brand stroke + halo ONLY while a
+   past-message edit is staged in this bar: an ordinary draft's caret already
+   says where the box is live, and painting the resting border white on every
+   click into the composer reads as a stray outline (product call, 2026-10).
    Halo rides box-shadow so it never moves the layout. */
-.card:focus-within {
+.root:has([data-edit-staging]) .card:focus-within {
   border-color: var(--dsw-alias-brand-primary);
   box-shadow:
     var(--dsw-shadow-lv2),

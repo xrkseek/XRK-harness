@@ -8,12 +8,17 @@ function blockHasVisibleContent(block: AssistantBlock): boolean {
   return true
 }
 
+/** Whether a streaming partial still has painter-visible Think/text (not tool-only). */
+export function hasVisiblePartialContent(partial: PartialAssistant | null): boolean {
+  return partial !== null && partial.blocks.some(blockHasVisibleContent)
+}
+
 /** Open-step streaming partial with visible Think/text; empty pre-token blocks are not live. */
 export function isActiveStreamingPartial(
   partial: PartialAssistant | null,
   timeline: ConversationTimelineSnapshot,
 ): boolean {
-  if (partial === null || !partial.blocks.some(blockHasVisibleContent)) return false
+  if (partial === null || !hasVisiblePartialContent(partial)) return false
   const turn = timeline.turns.get(partial.turn)
   if (turn === undefined || turn.status !== 'open') return false
   const step = turn.steps.find(item => item.step === partial.step)
@@ -32,10 +37,33 @@ export function hasActiveTurnSurface(
 }
 
 /**
+ * Composer Stop latch: Host `running`, in-flight tools, or a visible streaming
+ * partial. Selected as one boolean so InputBar does not re-render on every
+ * assistant chunk (partial identity changes each animation-frame flush).
+ */
+export function isComposerAgentActive(input: {
+  readonly running: boolean
+  readonly runningCallCount: number
+  readonly partial: PartialAssistant | null
+}): boolean {
+  return input.running
+    || input.runningCallCount > 0
+    || hasVisiblePartialContent(input.partial)
+}
+
+/**
  * Flow-tail waiting (`turnStatus.*`), DSH-aligned with drain `running` + live surface:
  * show in vacuum (pre-Think, step gap, steer queue/tail); hide during tools or live Think.
+ *
+ * Prefer the precomputed `turnSurfaceActive` latch when callers already selected
+ * it (avoids re-deriving from a per-chunk `partial` identity in ChatView).
  */
 export function shouldShowFlowWaiting(input: {
+  readonly running: boolean
+  readonly pendingSteerCount: number
+  readonly tailKind: string | undefined
+  readonly turnSurfaceActive: boolean
+} | {
   readonly running: boolean
   readonly partial: PartialAssistant | null
   readonly runningCallCount: number
@@ -46,5 +74,8 @@ export function shouldShowFlowWaiting(input: {
   if (!input.running) return false
   if (input.pendingSteerCount > 0) return true
   if (input.tailKind === 'steering') return true
-  return !hasActiveTurnSurface(input.partial, input.runningCallCount, input.timeline)
+  const surfaceActive = 'turnSurfaceActive' in input
+    ? input.turnSurfaceActive
+    : hasActiveTurnSurface(input.partial, input.runningCallCount, input.timeline)
+  return !surfaceActive
 }
